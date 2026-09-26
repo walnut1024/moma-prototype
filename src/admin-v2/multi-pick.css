@@ -1,0 +1,25 @@
+.mp-panel{width:320px;max-width:calc(100vw - 24px);padding:8px 0 0;gap:0;border:1px solid #dce4f0;border-radius:7px;box-shadow:0 12px 28px #213c6420}
+.mp-command{padding:0;border-radius:0}
+.mp-command [data-slot=command-input-wrapper]{padding:4px 12px 9px}
+.mp-command [data-slot=command-input-wrapper]>div{border:1px solid #dce4f0;background:#f8faff}
+.mp-select-all,.mp-toolbar,.mp-footer{display:flex;align-items:center}
+.mp-select-all{width:calc(100% - 24px);min-height:36px;margin:0 12px;padding:0 8px;gap:9px;border:0;border-radius:4px;background:#f5f8fe;text-align:left;font-size:12px;cursor:pointer}
+.mp-select-all:disabled{opacity:.6;cursor:default}
+.mp-box{display:inline-flex;flex:none;width:16px;height:16px;align-items:center;justify-content:center;border:1px solid #b8c4d6;border-radius:4px;background:#fff;color:#fff}
+.mp-box[data-checked=true]{border-color:#2563eb;background:#2563eb}
+.mp-box svg{width:12px;height:12px;stroke-width:3}
+.mp-toolbar{gap:8px;min-height:37px;margin:0 12px;border-bottom:1px solid #e9eef6;color:#63718a;font-size:11px}
+.mp-toolbar b{color:#2563eb}
+.mp-toolbar button{border:0;background:transparent;color:#2563eb;font-size:11px;cursor:pointer}
+.mp-toolbar button:first-of-type{margin-left:auto}
+.mp-toolbar button[aria-pressed=true]{border-radius:4px;background:#edf3ff}
+.mp-toolbar button:disabled{color:#a2adc0;cursor:default}
+.mp-list{max-height:264px;min-height:48px;overflow-y:auto;scrollbar-width:thin}
+.mp-list [data-slot=command-group]{padding:4px 8px}
+.mp-list [data-slot=command-item]{min-height:32px;gap:9px;padding:4px 7px;border-radius:4px;font-size:12px;cursor:pointer}
+.mp-list [data-slot=command-item][data-checked=true]{background:#f6f9ff}
+.mp-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mp-footer{justify-content:space-between;gap:8px;min-height:53px;padding:8px 12px;border-top:1px solid #e9eef6;color:#63718a;font-size:11px}
+.mp-footer>div{display:flex;gap:8px}
+.mp-footer button{min-width:72px;height:30px;font-size:11px}
+.mp-footer button[data-variant=default]{border-color:#2563eb;background:#2563eb;color:#fff}

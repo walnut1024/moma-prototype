@@ -1,0 +1,2 @@
+.us-kpi-grid{grid-template-columns:repeat(7,minmax(0,1fr));min-width:1260px}
+.us-breadcrumb-link{color:#315fdf}.us-breadcrumb-link:hover{text-decoration:underline}.us-breadcrumb-meta,.us-detail-period{font-size:12px;color:#64748b}.us-detail-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.us-detail-page .ua-panel{min-width:0}

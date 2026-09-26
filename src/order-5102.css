@@ -1,0 +1,402 @@
+.legacy-service-order {
+  min-width: 1120px;
+  min-height: 100vh;
+  padding: 16px 20px 86px;
+  background: #f4f6f9;
+}
+.service-order-title {
+  height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+  border-radius: 8px;
+  background: #fff;
+}
+.service-order-title button {
+  border: 0;
+  background: none;
+  color: #3978ec;
+}
+.service-order-title h1 {
+  margin: 0;
+  font-size: 16px;
+}
+.service-order-title span {
+  margin-left: auto;
+  color: #87909e;
+}
+.service-order-panel,
+.order-meta {
+  margin-top: 14px;
+  padding: 16px 20px;
+  border-radius: 9px;
+  background: #fff;
+}
+.billing-choice {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+.billing-choice > strong {
+  width: 110px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+.billing-choice > strong small {
+  display: block;
+  margin-top: 5px;
+  color: #3978ec;
+  font-weight: 400;
+}
+.billing-choice > button {
+  width: 194px;
+  height: 66px;
+  padding: 10px 14px;
+  border: 1px solid #dce2ea;
+  border-radius: 4px;
+  background: #fff;
+  text-align: left;
+  color: #313946;
+}
+.billing-choice > button.active {
+  border-color: #3978ec;
+  box-shadow: inset 0 0 0 1px #3978ec;
+}
+.billing-choice button b,
+.billing-choice button small {
+  display: block;
+}
+.billing-choice button b {
+  margin-bottom: 7px;
+  color: #3978ec;
+  font-weight: 500;
+}
+.billing-choice button small {
+  color: #7b8492;
+}
+.rate-tip {
+  margin: 9px 0 14px 110px;
+  color: #7b8492;
+}
+.service-filter {
+  display: grid;
+  grid-template-columns:
+    110px repeat(3, minmax(140px, 1fr)) minmax(170px, 1fr)
+    auto;
+  gap: 8px;
+  align-items: center;
+}
+.service-filter > strong i,
+.order-meta > strong i {
+  color: #ed5d55;
+  font-style: normal;
+}
+.service-filter select,
+.service-filter label {
+  height: 34px;
+  border: 1px solid #dce2ea;
+  background: #fff;
+}
+.service-filter select {
+  padding: 0 9px;
+  color: #687282;
+}
+.service-filter label {
+  display: flex;
+  align-items: center;
+}
+.service-filter label input {
+  width: 100%;
+  height: 32px;
+  padding: 0 9px;
+  border: 0;
+  outline: 0;
+}
+.service-filter .hide-ordered {
+  border: 0;
+  white-space: nowrap;
+}
+.service-filter .hide-ordered input {
+  width: auto;
+}
+.service-order-table {
+  max-height: 390px;
+  margin-top: 12px;
+  overflow: auto;
+  border-top: 1px solid #e7ebf1;
+}
+.service-order-row {
+  display: grid;
+  grid-template-columns:
+    42px minmax(210px, 1.4fr) 120px 100px 90px minmax(190px, 1.25fr)
+    minmax(150px, 1fr);
+  min-width: 950px;
+  align-items: center;
+  border-bottom: 1px solid #edf0f4;
+}
+.service-order-row.head {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  height: 38px;
+  background: #f2f4f8;
+  font-weight: 600;
+}
+.service-order-row:not(.head) {
+  min-height: 54px;
+}
+.service-order-row > span {
+  min-width: 0;
+  padding: 7px 10px;
+}
+.service-order-row span b {
+  display: inline-block;
+  max-width: 82%;
+  overflow: hidden;
+  color: #59616d;
+  font-weight: 400;
+  text-overflow: ellipsis;
+}
+.service-order-row span em {
+  margin-left: 6px;
+  padding: 1px 5px;
+  background: #eef5ff;
+  color: #3474e9;
+  font-size: 10px;
+  font-style: normal;
+}
+.service-order-row span small {
+  display: block;
+  line-height: 18px;
+}
+.scenario-detail,
+.agreements button,
+.billing-detail {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #3478eb;
+  font-size: 12px;
+  cursor: pointer;
+}
+.scenario-detail {
+  margin-top: 2px;
+}
+.service-order-row .price {
+  color: #ef645c;
+}
+.service-order-row .subscribed,
+.service-order-row .available {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+.service-order-row .subscribed {
+  background: #f0f1f3;
+  color: #8e96a2;
+}
+.service-order-row .available {
+  background: #eaf8ec;
+  color: #46a45f;
+}
+.selected-count {
+  padding: 10px 0;
+  color: #6f7886;
+}
+.selected-count b {
+  color: #3978ec;
+}
+.order-meta {
+  display: grid;
+  grid-template-columns: 120px 190px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+.order-meta p {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  color: #7d8795;
+}
+.order-meta label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.agreements {
+  grid-column: 2/4;
+  color: #3978ec;
+}
+.agreements button + button {
+  margin-left: 10px;
+}
+.service-order-footer {
+  position: sticky;
+  z-index: 4;
+  bottom: 0;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 14px -18px -18px;
+  padding: 0 32px;
+  background: #fff;
+  box-shadow: 0 -4px 14px #27344b12;
+}
+.service-order-footer div {
+  font-size: 13px;
+}
+.service-order-footer div b {
+  margin: 0 12px;
+  color: #ef564f;
+  font-size: 20px;
+}
+.service-order-footer div small {
+  display: block;
+  margin-top: 5px;
+  color: #8a93a0;
+}
+.service-order-footer .billing-detail {
+  position: absolute;
+  left: 250px;
+  bottom: 13px;
+}
+.service-order-footer > button {
+  height: 36px;
+  padding: 0 26px;
+  border: 0;
+  border-radius: 3px;
+  background: #3478eb;
+  color: #fff;
+}
+.service-order-footer > button:disabled {
+  background: #b7c5df;
+}
+.order-confirm-backdrop {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #1e253044;
+}
+.order-confirm-backdrop > div {
+  position: relative;
+  width: 480px;
+  padding: 24px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 50px #2632472b;
+}
+.order-confirm-backdrop .close {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  border: 0;
+  background: none;
+  font-size: 22px;
+}
+.order-confirm-backdrop h2 {
+  margin: 0 0 10px;
+  font-size: 19px;
+}
+.order-confirm-backdrop p {
+  color: #7a8492;
+}
+.order-confirm-backdrop dl {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  margin: 18px 0;
+  background: #f6f8fb;
+}
+.order-confirm-backdrop dt,
+.order-confirm-backdrop dd {
+  margin: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e7ebf1;
+}
+.order-confirm-backdrop dt {
+  color: #78818f;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.confirm-actions button,
+.order-success button {
+  height: 34px;
+  padding: 0 18px;
+  border: 1px solid #dce2ea;
+  background: #fff;
+}
+.confirm-actions .primary,
+.order-success button {
+  border-color: #3478eb;
+  background: #3478eb;
+  color: #fff;
+}
+.order-success {
+  text-align: center;
+}
+.order-success > svg {
+  margin: 10px;
+  color: #43aa68;
+}
+.order-success h2 {
+  margin-top: 6px;
+}
+@media (max-width: 1300px) {
+  .service-filter {
+    grid-template-columns: 110px repeat(3, minmax(130px, 1fr)) minmax(
+        160px,
+        1fr
+      );
+  }
+  .service-filter .hide-ordered {
+    grid-column: 2/3;
+  }
+}
+.orders-current.legacy-page {
+  min-width: 0;
+  padding: 0;
+  background: #f7f8fc;
+  color: #182033;
+}
+.orders-current > .legacy-panel {
+  margin: 20px 28px 32px;
+  padding: 18px 20px 0;
+  border: 1px solid #e4e8ef;
+  border-radius: 8px;
+}
+.orders-current .legacy-order-tools {
+  height: auto;
+  min-height: 36px;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 18px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #edf0f5;
+}
+.orders-current .legacy-order-tools button,
+.orders-current .legacy-order-tools label {
+  height: 40px;
+  border: 1px solid #dce2ee;
+  border-radius: 5px;
+  font-size: 13px;
+}
+.orders-current .legacy-order-tools .legacy-primary {
+  background: #3568f9;
+  border-color: #3568f9;
+}
+.orders-current .legacy-order-tools > button { margin-left: 0; }
+.orders-current .legacy-order-tools label { width: 280px; }
+.orders-current .legacy-order-table { border-top: 0; }
+.orders-current .legacy-order-row.head { background: #f7f8fc; }
+.orders-current .legacy-pager { min-height: 58px; height: auto; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .orders-current > .legacy-panel { margin: 16px; padding: 14px 14px 0; }
+  .orders-current .legacy-order-tools label { margin-left: 0; }
+}

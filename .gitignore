@@ -1,0 +1,24 @@
+# Local dependencies and generated files
+node_modules/
+dist/
+output/
+artifacts/
+.playwright-cli/
+.wrangler/
+.sites-checkout/
+*.log
+.DS_Store
+
+# Local configuration and credentials
+.env*
+!.env.example
+.dev.vars*
+.npmrc
+.openai/
+
+# Internal planning and review material
+AGENTS.md
+CONTEXT.md
+design-qa.md
+usage-statistics-*-audit.md
+docs/

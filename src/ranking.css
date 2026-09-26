@@ -1,0 +1,30 @@
+.ranking-page .stacked-bar {
+  border: 0;
+  outline: none;
+}
+
+.ranking-page .stacked-bar:hover,
+.ranking-page .stacked-bar:focus {
+  opacity: .82;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #6688ff;
+}
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 3;
+  top: 12px;
+  left: clamp(145px, var(--tip-x), calc(100% - 145px));
+  width: 270px;
+  padding: 12px;
+  border: 1px solid #e3e6ec;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px #1f2b421f;
+  transform: translateX(-50%);
+}
+
+.chart-tooltip > b { display: block; margin-bottom: 8px; font-size: 12px; }
+.chart-tooltip > span { display: grid; grid-template-columns: 8px 1fr auto; align-items: center; gap: 7px; height: 22px; color: #343945; font-size: 11px; }
+.chart-tooltip > span i { width: 5px; height: 14px; border-radius: 3px; }
+.chart-tooltip strong { font-weight: 600; }
+.chart-tooltip em { display: flex; justify-content: space-between; margin-top: 7px; padding-top: 8px; border-top: 1px solid #eceef2; color: #303642; font-size: 11px; font-style: normal; }

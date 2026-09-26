@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createLogRecords, defaultLogFilters, filterLogRecords, logJSON, logsCSV, shanghaiDate } from '../src/call-log-data.mjs';
+
+test('call logs keep billing scopes, inclusive dates, missing usage and export data consistent', () => {
+  const today = '2026-09-19';
+  const rows = createLogRecords(today);
+  const filtered = filterLogRecords(rows, '按量付费', defaultLogFilters, today);
+  assert.equal(filtered.length, 21);
+  assert.ok(filtered.every(row => row.billing === '按量付费' && row.time >= '2026-09-13'));
+  const oneDay = filterLogRecords(rows, 'Token Plan', { ...defaultLogFilters, range: 'custom', start: today, end: today }, today);
+  assert.equal(oneDay.length, 3);
+  assert.ok(oneDay.filter(row => row.keyId).every(row => row.keyId.startsWith('key_tp_')));
+  assert.equal(filterLogRecords(rows, '按量付费', { ...defaultLogFilters, key: 'key_tp_prod' }, today).length, 0);
+  const all = filterLogRecords(rows, '全部', defaultLogFilters, today);
+  assert.equal(all.length, 63);
+  assert.equal(filterLogRecords(rows, '全部', { ...defaultLogFilters, billing: '资源包' }, today).length, 21);
+  const failed = oneDay.find(row => row.status === 403);
+  const raw = JSON.parse(logJSON(failed));
+  assert.equal(raw.total_tokens, null);
+  assert.equal(raw.first_output_duration, null);
+  assert.equal(raw.duration, 22);
+  assert.equal(raw.error_code, 'Model.AccessDenied');
+  const matched = filterLogRecords(rows, 'Token Plan', { ...defaultLogFilters, query: ` ${failed.id.toUpperCase()} `, source: '模型体验', status: '403' }, today);
+  assert.equal(matched.length, 1);
+  assert.equal(JSON.parse(logJSON(oneDay[1])).total_tokens, oneDay[1].input + oneDay[1].output);
+  assert.equal(shanghaiDate(new Date('2026-09-18T16:00:00Z')), today);
+  const csv = logsCSV([{ ...failed, keyName: '团队,"A"', model: '=1+1' }]);
+  assert.ok(csv.startsWith('\ufeff'));
+  assert.ok(csv.includes('"团队,""A"""'));
+  assert.ok(csv.includes('"\'=1+1"'));
+  assert.ok(csv.includes(',"","","","","22","403"'));
+});
