@@ -3,7 +3,7 @@ import { Activity, Boxes, CirclePlus, SlidersHorizontal } from "lucide-react";
 
 const uid = prefix => `${prefix}-${Date.now()}`;
 const info = { lifecycle: ["版本与生命周期", "维护版本、验证状态、默认版本和弃用计划。", Boxes], capability: ["能力与规格", "按模型模态配置上下文、输出和推理能力。", SlidersHorizontal], validation: ["模型验证", "在兼容端点运行模拟测试并保存逐项结果。", Activity] };
-function Head({ id }) { const [title, desc, Icon] = info[id]; return <div className="v2-page-head inference-head"><div><span>业务运营 / 模型中心</span><h1><Icon/>{title}</h1><p>{desc}</p></div></div>; }
+function Head({ id }) { const [title, desc, Icon] = info[id]; return <div className="v2-page-head inference-head"><div><span>模型运营 / 模型仓库</span><h1><Icon/>{title}</h1><p>{desc}</p></div></div>; }
 function Status({ value }) { return <em className={`v2-status ${["失败", "验证失败", "已弃用"].includes(value) ? "warn" : ""}`}>{value}</em>; }
 
 function Lifecycle({ state, dispatch }) {

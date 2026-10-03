@@ -10,7 +10,7 @@ function Modal({ title, onClose, children }) {
 }
 
 function Header({ title, description, icon: Icon, action }) {
-  return <div className="v2-page-head inference-head"><div><span>服务运维 / 模型推理</span><h1><Icon/>{title}</h1><p>{description}</p></div>{action}</div>;
+  return <div className="v2-page-head inference-head"><div><span>Token 生产</span><h1><Icon/>{title}</h1><p>{description}</p></div>{action}</div>;
 }
 
 function State({ value }) { return <em className={`v2-status ${["维护中", "失败", "停止"].includes(value) ? "warn" : ""}`}>{value}</em>; }
@@ -39,7 +39,7 @@ function ObservabilityChart({ deployments, metric }) {
 export function ModelObservability({ state }) {
   const running = state.deployments.filter(item => item.status !== "停止"), [selected, setSelected] = useState(running.map(item => item.id)), [metric, setMetric] = useState("GPU 利用率");
   const visible = useMemo(() => running.filter(item => selected.includes(item.id)), [running, selected]);
-  return <div className="v2-page"><Header title="模型观测" icon={Activity} description="按部署实例对比资源与推理性能，图表每个部署对应独立序列。"/><section className="observability-controls"><label>监控指标<select value={metric} onChange={event => setMetric(event.target.value)}><option>GPU 利用率</option><option>请求吞吐</option><option>P95 延迟</option></select></label><fieldset><legend>Deployment ID（多选）</legend>{running.map(item => <label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={() => setSelected(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/>{item.deploymentId}</label>)}</fieldset></section><section className="v2-panel observability-panel"><header><div><b>{metric}趋势</b><span>近 24 小时 · {visible.length} 个部署</span></div></header>{visible.length ? <ObservabilityChart deployments={visible} metric={metric}/> : <div className="v2-empty">请选择至少一个部署</div>}</section><section className="inference-kpis"><article><Activity/><span>平均 GPU 利用率<b>67.8%</b></span></article><article><GaugeIcon/><span>总吞吐<b>186 req/s</b></span></article><article><Server/><span>P95 延迟<b>428 ms</b></span></article></section></div>;
+  return <div className="v2-page"><Header title="生产观测" icon={Activity} description="按部署实例对比资源与推理性能，图表每个部署对应独立序列。"/><section className="observability-controls"><label>监控指标<select value={metric} onChange={event => setMetric(event.target.value)}><option>GPU 利用率</option><option>请求吞吐</option><option>P95 延迟</option></select></label><fieldset><legend>Deployment ID（多选）</legend>{running.map(item => <label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={() => setSelected(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/>{item.deploymentId}</label>)}</fieldset></section><section className="v2-panel observability-panel"><header><div><b>{metric}趋势</b><span>近 24 小时 · {visible.length} 个部署</span></div></header>{visible.length ? <ObservabilityChart deployments={visible} metric={metric}/> : <div className="v2-empty">请选择至少一个部署</div>}</section><section className="inference-kpis"><article><Activity/><span>平均 GPU 利用率<b>67.8%</b></span></article><article><GaugeIcon/><span>总吞吐<b>186 req/s</b></span></article><article><Server/><span>P95 延迟<b>428 ms</b></span></article></section></div>;
 }
 
 function GaugeIcon() { return <Activity/>; }

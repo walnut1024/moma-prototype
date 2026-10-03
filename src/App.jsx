@@ -2603,7 +2603,7 @@ function PrototypeApp({ version }) {
         return;
       }
       if (!is5102 && location.hash.startsWith("#/admin") && !location.hash.startsWith("#/admin-2")) {
-        location.hash = "/admin-2/dashboard";
+        location.hash = "/admin-2/workbench";
         return;
       }
       setAdmin(modeFromHash());
@@ -2617,7 +2617,7 @@ function PrototypeApp({ version }) {
     setAdmin(nextMode);
     if (mode === "front")
       history.replaceState(null, "", location.pathname + location.search);
-    else location.hash = versionAdmin === "legacy" ? "/admin" : "/admin-2/dashboard";
+    else location.hash = versionAdmin === "legacy" ? "/admin" : "/admin-2/workbench";
   };
   const toggleFilter = (group, value) =>
     setFilters((current) => ({

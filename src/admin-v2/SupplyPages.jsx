@@ -3,13 +3,13 @@ import { Boxes, Building2, CloudCog, CirclePlus, Search, X } from "lucide-react"
 
 const uid = prefix => `${prefix}-${Date.now()}`;
 const pageMeta = {
-  catalog: ["模型目录", "统一维护对外 Model ID、模态、能力和目录可见性。", Boxes],
-  providers: ["服务商管理", "纳管三方模型服务和自有算力供给主体。", Building2],
+  catalog: ["模型仓库", "统一维护对外 Model ID、模态、能力和目录可见性。", Boxes],
+  providers: ["渠道管理", "纳管三方模型服务和自有算力供给主体。", Building2],
   endpoints: ["服务端点", "配置协议、虚构凭证、模型映射、容量与健康状态。", CloudCog],
   "supply-quota": ["供给额度与采购价", "按版本维护供给价格、容量、余额和生效时间。", CloudCog],
 };
 
-function Head({ pageId, onNew }) { const [title, description, Icon] = pageMeta[pageId]; return <div className="v2-page-head inference-head"><div><span>{pageId === "catalog" ? "业务运营 / 模型中心" : "服务运维 / 服务供给"}</span><h1><Icon/>{title}</h1><p>{description}</p></div><button className="v2-primary" onClick={onNew}><CirclePlus/> 新建</button></div>; }
+function Head({ pageId, onNew }) { const [title, description, Icon] = pageMeta[pageId]; return <div className="v2-page-head inference-head"><div><span>{pageId === "catalog" ? "模型运营 / 模型仓库" : "模型运营 / 渠道管理"}</span><h1><Icon/>{title}</h1><p>{description}</p></div><button className="v2-primary" onClick={onNew}><CirclePlus/> 新建</button></div>; }
 function Status({ value }) { return <em className={`v2-status ${["停用", "需关注", "草稿"].includes(value) ? "warn" : ""}`}>{value}</em>; }
 function Field({ label, name, children, ...props }) { return <label>{label}{children || <input name={name} {...props}/>}</label>; }
 

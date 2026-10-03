@@ -5,7 +5,7 @@ import { simulateRequest } from "./domain";
 const uid = prefix => `${prefix}-${Date.now()}`;
 const meta = { routes: ["路由策略", "配置模型到端点的加权或优先级选路。", GitBranch], limits: ["限流与并发", "按租户、项目、Key、模型或端点设置有效上限。", Gauge], fallback: ["熔断与回退", "配置超时、错误率阈值和无环回退链。", Shield], cache: ["缓存策略", "按权限上下文控制缓存、TTL 和命中统计。", Layers], releases: ["配置版本与发布", "校验配置差异，发布或生成可追溯的回滚版本。", Rocket] };
 const collection = { routes: "routes", limits: "limits", fallback: "fallbacks", cache: "caches", releases: "releases" };
-function Header({ pageId, onNew }) { const [title, desc, Icon] = meta[pageId]; return <div className="v2-page-head inference-head"><div><span>服务运维 / 网关路由</span><h1><Icon/>{title}</h1><p>{desc}</p></div>{pageId !== "releases" && <button className="v2-primary" onClick={onNew}>＋ 新建</button>}</div>; }
+function Header({ pageId, onNew }) { const [title, desc, Icon] = meta[pageId]; return <div className="v2-page-head inference-head"><div><span>网关管理</span><h1><Icon/>{title}</h1><p>{desc}</p></div>{pageId !== "releases" && <button className="v2-primary" onClick={onNew}>＋ 新建</button>}</div>; }
 function State({ value }) { return <em className={`v2-status ${["草稿", "校验失败", "已停用"].includes(value) ? "warn" : ""}`}>{value}</em>; }
 
 function Editor({ pageId, state, dispatch, close }) {

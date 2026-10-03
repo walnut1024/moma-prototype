@@ -5,7 +5,7 @@ import { simulateRequest } from "./domain";
 
 const stamp = value => value?.slice(0,16).replace("T"," ") || "—";
 const uid = prefix => `${prefix}-${Date.now()}`;
-const title = { goods:"商品与套餐",prices:"价格管理",orders:"订单与订阅",listing:"上架与展示",announcements:"公告与服务通知",metering:"计量明细",ledger:"账户与额度流水",bills:"客户账单",settlement:"服务商对账与结算",adjustments:"退款与调账",artifacts:"模型制品与镜像","request-security":"请求安全策略","data-policy":"数据使用策略",abuse:"访问与滥用防护","security-events":"安全事件",admins:"后台人员与角色",audit:"操作审计",approvals:"审批与变更规则",integrations:"通知与集成",settings:"基础配置","customer-analysis":"客户分析","model-analysis":"模型分析","supply-analysis":"供给分析","profit-analysis":"收入与成本" };
+const title = { goods:"商品与套餐",prices:"价格管理",orders:"订单与订阅",listing:"模型广场",announcements:"公告与服务通知",metering:"计量明细",ledger:"账户与额度流水",bills:"客户账单",settlement:"服务商对账与结算",adjustments:"退款与调账",artifacts:"模型制品与镜像","request-security":"请求安全策略","data-policy":"数据使用策略",abuse:"访问与滥用防护","security-events":"安全事件",admins:"后台人员与角色",audit:"操作审计",approvals:"审批与变更规则",integrations:"通知与集成",settings:"基础配置","customer-analysis":"客户分析","model-analysis":"模型分析","supply-analysis":"供给分析","profit-analysis":"收入与成本" };
 const configs = {
   goods:{collection:"products",cols:[["code","商品编码"],["name","商品名称"],["billingMode","计费方式"],["price","基础价格"],["status","状态"]],fields:[["code","商品编码"],["name","商品名称"],["billingMode","计费方式"],["price","基础价格","number"]]},
   prices:{collection:"prices",cols:[["id","价格版本"],["item","计费项"],["unit","单位"],["amount","单价"],["effectiveAt","生效时间"],["status","状态"]],fields:[["item","计费项"],["unit","单位"],["amount","单价","number"],["effectiveAt","生效时间","date"]]},
