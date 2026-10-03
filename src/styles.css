@@ -467,7 +467,7 @@ header {
     white-space: nowrap;
   }
 }
-aside {
+.app-shell > aside {
   position: fixed;
   z-index: 10;
   top: 48px;
@@ -481,17 +481,17 @@ aside {
   background: #fff;
   border-right: 1px solid #e7eaf0;
 }
-aside h3 {
+.app-shell > aside h3 {
   margin: 0 0 15px;
   font-size: 17px;
 }
-aside small {
+.app-shell > aside small {
   display: block;
   color: #a0a7b2;
   font-size: 12px;
   margin: 15px 6px 6px;
 }
-aside button {
+.app-shell > aside button {
   width: 100%;
   text-align: left;
   background: transparent;
@@ -500,7 +500,7 @@ aside button {
   padding: 11px 12px;
   color: #222;
 }
-aside button.active {
+.app-shell > aside button.active {
   background: #f1f2fb;
   color: #2878ee;
   font-weight: 600;
@@ -2309,16 +2309,26 @@ h1 em {
 }
 .route-table {
   margin-top: 16px;
+  overflow-x: auto;
 }
 .route-row {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 2fr 1.45fr 1.7fr;
+  min-width: 900px;
   min-height: 44px;
   align-items: center;
 }
+.route-status { display: inline-block; padding: 3px 8px; border-radius: 4px; background: #e7f8ea; color: #22964e; font-size: 12px; font-weight: 500; }
 .route-row span {
   padding: 0 20px;
 }
+.route-row .route-row-actions {
+  display: flex;
+  gap: 12px;
+  white-space: nowrap;
+  padding: 0 10px;
+}
+.route-row-actions button { padding: 0; }
 .route-table-head {
   height: 44px;
   background: #eff1f7;
@@ -2449,6 +2459,20 @@ h1 em {
 .route-modal .modal-actions {
   margin-top: 14px;
 }
+.route-form-error { margin: 4px 0 0 !important; color: #c93636 !important; font-size: 12px; }
+.route-api-dialog { max-height: min(820px, calc(100vh - 32px)); overflow-y: auto; gap: 16px; }
+.route-api-dialog [data-slot="dialog-title"] { font-size: 20px; }
+.route-api-dialog section { padding: 16px; border-radius: 8px; background: #f8faff; }
+.route-api-dialog section h3 { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+.route-api-dialog section p { margin: 0 0 12px; color: #67758b; }
+.route-api-alert { padding: 12px 14px; border: 1px solid #9cb9ff; border-radius: 8px; background: #eaf1ff; color: #344767; }
+.route-api-code-head, .route-api-value { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.route-api-code-head { margin-top: 16px; color: #42536d; }
+.route-api-dialog pre { max-height: 270px; overflow: auto; margin: 4px 0 12px; padding: 16px; border-radius: 6px; background: #f0f2f5; color: #245e4a; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.route-api-value { padding: 8px 0; border-top: 1px solid #e1e7f0; }
+.route-api-value span { min-width: 0; overflow-wrap: anywhere; }
+.route-copy-status { min-height: 16px; color: #3568f9; font-size: 12px; }
+.route-delete-dialog [data-slot="dialog-title"] { font-size: 18px; }
 .api-key-page {
   min-width: 0;
   min-height: calc(100vh - 48px);
@@ -3305,3 +3329,4 @@ h1 em {
 .api-key-search-menu strong, .api-key-search-menu small { display: block; }
 .api-key-search-menu small { margin-top: 2px; overflow-wrap: anywhere; color: #71809b; font-size: 11px; }
 .api-key-search-menu p { padding: 8px 10px; color: #71809b; font-size: 12px; }
+.cl-view-row{display:flex;justify-content:flex-end;padding:8px 0;border-bottom:1px solid #edf0f5}

@@ -43,6 +43,9 @@ test('day/week limits are inclusive and weeks use Monday boundaries with partial
  assert.equal(validAnalyticsRange('2025-09-23','2026-09-23','week',now),false);
  assert.equal(validAnalyticsRange('2026-09-23','2026-09-23','day',now),true);
  assert.equal(validAnalyticsRange('2026-09-23','2026-09-24','day',now),false);
+ assert.equal(validAnalyticsRange('2026-08-24','2026-09-23','day',now,31),true);
+ assert.equal(validAnalyticsRange('2026-08-23','2026-09-23','day',now,31),false);
+ assert.equal(validAnalyticsRange('2026-09-24','2026-09-23','day',now,31),false);
  const buckets=weeklyBuckets([],'2025-12-31','2026-01-12',now);
  assert.deepEqual(buckets.map(b=>b.days),[5,7,1]);assert.deepEqual(buckets.map(b=>b.partial),[true,false,true]);
  const row=(date,input)=>({createdAt:date+'T12:00:00+08:00',usage:{input},endpointId:'s'});

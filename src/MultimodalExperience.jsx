@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { ArrowUp, CirclePlus } from 'lucide-react';
+import { ArrowUp, ChevronDown, CirclePlus } from 'lucide-react';
+import ModelSelectDialog from './ModelSelectDialog';
 import './experience.css';
 import './experience-refinements.css';
 
@@ -10,6 +11,11 @@ const examples = [
   { title: '影视分镜分析', desc: '拆解视频分镜，并描述分镜的具体信息', image: '/assets/mm-pastry-chef.jpg', prompt: '请对这段视频进行影视分镜分析：逐镜头说明景别、机位、构图、镜头运动、时长、人物动作、光线与声音，分析镜头衔接和叙事作用，最后给出可执行的优化建议。' },
 ];
 
+const models = [
+  { name: 'Qwen/Qwen3.5-VL', type: 'multimodal', subscribed: true, billing: '按量计费', desc: '支持理解文字、图片和视频。' },
+  { name: 'ZHIPU/GLM-4.6V', type: 'multimodal', subscribed: false, billing: '按量计费', desc: '支持图文理解与视觉问答。' },
+];
+
 export default function MultimodalExperience() {
   const editor = useRef();
   const input = useRef();
@@ -17,6 +23,8 @@ export default function MultimodalExperience() {
   const [count, setCount] = useState(0);
   const [hasContent, setHasContent] = useState(false);
   const [result, setResult] = useState('');
+  const [model, setModel] = useState(models[0].name);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
 
   function sync() {
     const text = editor.current?.innerText.replace(/\u00a0/g, ' ').trim() || '';
@@ -76,7 +84,7 @@ export default function MultimodalExperience() {
       <form className="pg-composer mm-composer" onSubmit={submit} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); attach(event.dataTransfer.files); }}>
         <div ref={editor} className="mm-rich-input" contentEditable role="textbox" aria-label="多模态理解输入" aria-multiline="true" data-placeholder="输入问题，并添加图片或视频进行理解" suppressContentEditableWarning onInput={sync} onClick={event => { const button = event.target.closest('.mm-inline-attachment button'); if (!button) return; const chip = button.closest('.mm-inline-attachment'); const item = files.current.get(chip.dataset.attachmentId); if (item?.url.startsWith('blob:')) URL.revokeObjectURL(item.url); files.current.delete(chip.dataset.attachmentId); chip.remove(); sync(); }}/>
         <input ref={input} hidden multiple type="file" accept="image/*,video/*" onChange={event => { attach(event.target.files); event.target.value = ''; }}/>
-        <div className="pg-toolbar"><button className="pg-add pg-add-icon" type="button" aria-label="添加图片或视频" onClick={() => input.current.click()}><CirclePlus size={24}/></button><div className="pg-primary-actions"><span className="pg-count">{count}/6000</span><label className="mm-model"><span className="sr-only">选择模型</span><select aria-label="选择模型"><option>Qwen/Qwen3.5-VL</option><option>ZHIPU/GLM-4.6V</option></select></label><button className="pg-send" type="submit" aria-label="开始理解" disabled={!hasContent}><ArrowUp size={20}/></button></div></div>
+        <div className="pg-toolbar"><button className="pg-add pg-add-icon" type="button" aria-label="添加图片或视频" onClick={() => input.current.click()}><CirclePlus size={24}/></button><div className="pg-primary-actions"><span className="pg-count">{count}/6000</span><div className="pg-model-picker"><button className="pg-model" type="button" aria-label="选择模型" aria-haspopup="dialog" aria-expanded={modelPickerOpen} onClick={() => setModelPickerOpen(true)}><span>{model}</span><ChevronDown size={15} aria-hidden="true"/></button><ModelSelectDialog open={modelPickerOpen} models={models} value={model} onApply={setModel} onClose={() => setModelPickerOpen(false)}/></div><button className="pg-send" type="submit" aria-label="开始理解" disabled={!hasContent}><ArrowUp size={20}/></button></div></div>
       </form>
       <p className="pg-quota-note">AI 回复可能存在偏差，使用前请自行核实。使用本服务会消耗已订购额度，具体以用量记录为准。</p>
       {!result && <div className="mm-examples" aria-label="多模态理解推荐提示词">{examples.map(item => <button type="button" key={item.title} onClick={() => choose(item)}><strong>{item.title}</strong><small>{item.desc}</small><img src={item.image} alt="" loading="lazy"/></button>)}</div>}

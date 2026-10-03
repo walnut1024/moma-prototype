@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { Info } from 'lucide-react';
-import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { DateRange } from './AnalyticsFilters';
@@ -8,10 +7,12 @@ import { formatUsageNumber, usagePreset } from './usage-analysis';
 import { filterAnalytics } from './analytics';
 import { userDemo, userMetrics } from './user-analysis';
 import UserCallDetails from './UserCallDetails';
+import SavedFilterViews from '../components/SavedFilterViews';
+import { FilterPresets, FilterReset, FilterToolbar, FilterViewRow, TIME_PRESETS } from '../components/FilterControls';
 import './usage-analysis.css';
 import './user-analysis.css';
 
-const presets = [['today', '今日'], ['yesterday', '昨日'], ['7d', '近 7 天'], ['30d', '近 30 天']];
+const presets = TIME_PRESETS;
 const cards = [
   ['registered', '注册用户数', '截至所选区间结束时，已注册的去重用户 ID 总数。'],
   ['added', '新增注册', '所选区间内完成注册的去重用户 ID 数。'],
@@ -33,19 +34,22 @@ function change(current, previous) {
 }
 
 export default function UserAnalysisPage({ state }) {
-  const [clock] = useState(() => Date.now());
+  const [clock, setClock] = useState(() => Date.now());
   const [period, setPeriod] = useState('today');
   const [range, setRange] = useState(() => usagePreset('today'));
+  const [detailDraft, setDetailDraft] = useState({model:'',customer:''}), [detailFilter, setDetailFilter] = useState({model:'',customer:''});
   const data = useMemo(() => userDemo(clock), [clock]);
   const metrics = useMemo(() => userMetrics(data, range, clock), [data, range, clock]);
   const rows = useMemo(() => filterAnalytics(state, { start: range.start, end: range.end }), [state, range]);
-  const selectPeriod = value => { setPeriod(value); setRange(usagePreset(value, clock)); };
+  const selectPeriod = value => { const current = Date.now(); setClock(current); setPeriod(value); setRange(usagePreset(value, current)); };
+  const timeGroup = { label:'时间', text:`${presets.find(([id]) => id === period)?.[1] || '自定义'}（${range.start} — ${range.end}）`, scope:'全页' };
+  const detailGroups = [{label:'模型',text:detailFilter.model || '全部模型',scope:'仅调用明细'}, {label:'客户',text:state.tenants.find(item => item.id === detailFilter.customer)?.name || detailFilter.customer || '全部客户',scope:'仅调用明细'}];
   return <TooltipProvider><div className="ua-page us-page">
-    <Card className="ua-filters"><CardContent><div className="ua-filter-scroll"><div className="ua-filter-controls">
-      <div className="ua-segments" role="group" aria-label="时间筛选">{presets.map(([id, label]) => <Button key={id} variant={period === id ? 'default' : 'outline'} onClick={() => selectPeriod(id)}>{label}</Button>)}</div>
+    <Card className="ua-filters"><CardContent><div className="ua-filter-scroll"><FilterToolbar className="ua-filter-controls">
+      <FilterPresets className="ua-segments" label="时间筛选" value={period} onChange={selectPeriod} items={presets}/>
       <DateRange label="自定义" start={range.start} end={range.end} allowLongRange rangeHint="单日按小时，其余按日，最多 365 天" onChange={value => { setRange(value); setPeriod('custom'); }}/>
-      <Button className="ua-reset" variant="ghost" size="sm" onClick={() => selectPeriod('today')}>重置筛选</Button>
-    </div></div></CardContent></Card>
+      <FilterReset onClick={() => selectPeriod('today')}/>
+    </FilterToolbar></div></CardContent><CardContent className="ua-view-row"><FilterViewRow><SavedFilterViews scope="admin-user-analysis" value={{period,range,detailFilter}} onApply={view => { if (!view) return; const current = Date.now(); setClock(current); setPeriod(view.period || 'custom'); setRange(view.period === 'custom' && view.range?.start && view.range?.end ? view.range : usagePreset(view.period || 'today', current)); setDetailFilter(view.detailFilter || {model:'',customer:''}); setDetailDraft(view.detailFilter || {model:'',customer:''}); }} groups={[timeGroup,...detailGroups]} currentGroups={[timeGroup]} saveDescription="保存全页时间和调用明细的模型、客户条件。模型／客户仅影响调用明细，不影响上方用户指标。视图仅在当前浏览器生效。"/></FilterViewRow></CardContent></Card>
     <Card className="ua-kpis"><CardContent><div className="ua-kpi-grid us-kpi-grid">{cards.map(([key, title, note]) => {
       const daily = key === 'dau' || key === 'mau';
       const value = daily ? (metrics?.[key].at(-1) ?? 0) : (metrics?.current[key] ?? 0);
@@ -53,6 +57,6 @@ export default function UserAnalysisPage({ state }) {
       const delta = change(value, before);
       return <div className="ua-kpi" key={key}><div className="ua-kpi-label">{title}<Help label={title}>{note}</Help></div><strong>{formatUsageNumber(value)}</strong>{daily && <small>企业 {formatUsageNumber(metrics?.[`${key}ByType`].企业.at(-1) ?? 0)}　个人 {formatUsageNumber(metrics?.[`${key}ByType`].个人.at(-1) ?? 0)}</small>}<small title={`对比${comparisonLabel[period]}`}>环比 {delta.amount}　{delta.rate}</small></div>;
     })}</div></CardContent></Card>
-    <UserCallDetails state={state} rows={rows} start={range.start} end={range.end}/>
+    <UserCallDetails state={state} rows={rows} start={range.start} end={range.end} draft={detailDraft} onDraftChange={setDetailDraft} query={detailFilter} onQueryChange={setDetailFilter} conditionGroups={detailGroups}/>
   </div></TooltipProvider>;
 }

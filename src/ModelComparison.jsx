@@ -17,7 +17,7 @@ const answers = {
   'DeepSeek/DeepSeek-V4-Flash': '快速建议：先定义结果，再补充必要背景，最后指定格式与篇幅。信息越明确，输出越稳定。',
 };
 
-export default function ModelComparison({ onBack, onNavigate }) {
+export default function ModelComparison({ onBack }) {
   const [columns, setColumns] = useState([createColumn(1, catalog[0].name), createColumn(2, catalog[1].name)]);
   const [sync, setSync] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -46,7 +46,7 @@ export default function ModelComparison({ onBack, onNavigate }) {
     try { await navigator.clipboard.writeText(text); setNotice('已复制结果'); } catch { setNotice('复制失败，请手动选择文本'); }
   }
   return <section className="compare-page">
-    <header className="compare-heading"><div><h1>模型对比</h1><p>向多个文本模型发送同一问题，直观比较回答质量、速度与参数差异</p></div><div className="compare-head-actions"><button type="button" onClick={onBack}><ArrowLeft size={16} aria-hidden="true"/>返回单模型</button><label><span>同步输入</span><input type="checkbox" checked={sync} onChange={event => setSync(event.target.checked)}/><i aria-hidden="true"/></label><button type="button" onClick={() => { setColumns([createColumn(1, catalog[0].name), createColumn(2, catalog[1].name)]); setNotice('已重置对比'); }}>重置</button><div className="compare-picker"><button type="button" className="compare-add" aria-haspopup="dialog" aria-expanded={pickerOpen} onClick={() => setPickerOpen(true)}><Plus size={16} aria-hidden="true"/>添加模型</button><ModelSelectDialog open={pickerOpen} models={catalog} value={columns.map(column => column.model)} multiple min={2} max={3} onApply={applyModels} onClose={() => setPickerOpen(false)} onSubscribe={() => onNavigate?.('模型订购')}/></div></div></header>
+    <header className="compare-heading"><div><h1>模型对比</h1><p>向多个文本模型发送同一问题，直观比较回答质量、速度与参数差异</p></div><div className="compare-head-actions"><button type="button" onClick={onBack}><ArrowLeft size={16} aria-hidden="true"/>返回单模型</button><label><span>同步输入</span><input type="checkbox" checked={sync} onChange={event => setSync(event.target.checked)}/><i aria-hidden="true"/></label><button type="button" onClick={() => { setColumns([createColumn(1, catalog[0].name), createColumn(2, catalog[1].name)]); setNotice('已重置对比'); }}>重置</button><div className="compare-picker"><button type="button" className="compare-add" aria-haspopup="dialog" aria-expanded={pickerOpen} onClick={() => setPickerOpen(true)}><Plus size={16} aria-hidden="true"/>添加模型</button><ModelSelectDialog open={pickerOpen} models={catalog} value={columns.map(column => column.model)} multiple min={2} max={3} onApply={applyModels} onClose={() => setPickerOpen(false)}/></div></div></header>
     <div className={`compare-grid columns-${columns.length}`}>
       {columns.map((column, index) => {
         const model = catalog.find(item => item.name === column.model);

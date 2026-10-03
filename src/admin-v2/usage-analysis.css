@@ -58,12 +58,6 @@
 .ua-back-top:hover{background:#f5f7fb;color:#185bd3}
 .ua-panel [data-slot=card-header]{min-height:48px}
 .ua-panel [data-slot=card-content]{min-width:0}
-.ua-series-trigger{width:30px;height:30px;color:#526783}
-.ua-series-picker{width:190px;padding:10px 12px;display:grid;gap:8px;font-size:12px}
-.ua-series-picker strong{font-size:12px;font-weight:600;margin-bottom:2px}
-.ua-series-option{display:flex;align-items:center;gap:8px;cursor:pointer;white-space:nowrap}
-.ua-series-option i{width:16px;height:3px;border-radius:3px;margin-left:2px}
-.ua-series-option span{flex:1}
 .ua-echart{width:100%;min-width:0}
 .ua-rank-scale{display:flex;align-items:center;gap:4px}
 .ua-ranking [data-slot=card-header] .ua-segments button{min-width:48px}
@@ -94,9 +88,8 @@
 .ua-chart-actions{display:flex;align-items:center;gap:8px}
 .ua-chart-actions .ua-segments button{min-width:48px}
 .ua-chart-empty{height:250px;display:flex;align-items:center;justify-content:center;color:#65758d;font-size:12px;margin:0}
-.ua-series-picker{width:250px;max-height:360px;overflow-y:auto}
-.ua-series-option span{overflow:hidden;text-overflow:ellipsis}
 .ua-ranking-dialog{width:min(1100px,calc(100vw - 48px));max-width:1100px!important;max-height:calc(100vh - 48px);display:flex;flex-direction:column;overflow:hidden}
 .ua-expanded-controls{display:flex;justify-content:space-between;gap:12px;flex:0 0 auto;flex-wrap:wrap}
 .ua-expanded-scroll{height:min(340px,42vh);min-height:180px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .ua-expanded-scroll .ua-echart{min-width:0}
+.ua-view-row{display:flex;justify-content:flex-end;padding-top:0!important}

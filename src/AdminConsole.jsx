@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import SharedMetricChart from "./components/MetricChart";
+import { TimeSeriesChart as SharedMetricChart } from "./components/AnalyticsCharts";
 import { ChevronDown, ChevronRight, Plus, RefreshCw, Search, X } from "lucide-react";
 import "./admin.css";
 

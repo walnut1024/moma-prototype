@@ -1,5 +1,7 @@
+import { FilterPagination } from "./components/FilterControls";
 import { useEffect, useMemo, useState } from "react";
 import UsageStatistics from "./components/UsageStatistics";
+import OrganizationMembers from "./OrganizationMembers";
 import "./styles.css";
 import "./version-index.css";
 import "./legacy-5102.css";
@@ -49,6 +51,7 @@ import {
   Settings,
   ShoppingCart,
   Store,
+  Users,
   Video,
 } from "lucide-react";
 
@@ -315,31 +318,59 @@ const prototypeVersions = [
   },
 ];
 
-function SmartRoute() {
+const routeApiUrl = "https://zhenze-huhehaote.cmecloud.cn/v1/chat/completions";
+
+function SmartRoute({ versionId, onNavigate }) {
+  const storageKey = `moma-smart-routes:${versionId}`;
   const [creating, setCreating] = useState(false),
+    [editingId, setEditingId] = useState(null),
+    [apiRoute, setApiRoute] = useState(null),
+    [deleting, setDeleting] = useState(null),
+    [copyNotice, setCopyNotice] = useState(""),
     [query, setQuery] = useState(""),
+    [page, setPage] = useState(1), [size, setSize] = useState(10),
     [name, setName] = useState(""),
     [strategy, setStrategy] = useState("效果优先"),
     [models, setModels] = useState([]),
     [agreed, setAgreed] = useState(false),
-    [routes, setRoutes] = useState([]);
+    [routes, setRoutes] = useState(() => {
+      try {
+        const stored = localStorage.getItem(storageKey);
+        if (stored !== null) {
+          const saved = JSON.parse(stored);
+          if (Array.isArray(saved)) return saved;
+        }
+      } catch { /* Keep the prototype usable if browser storage is unavailable. */ }
+      return versionId === "moma_5.11.0_estack" ? [{ id: "route-demo-001", name: "demo-route", strategy: "效果优先", models: ["Kimi-K3", "DeepSeek-V4-Pro"], status: "正常", creator: "estack-yy", time: new Date().toLocaleString("sv-SE", { timeZone: "Asia/Shanghai", hour12: false }) }] : [];
+    });
+  useEffect(() => { try { localStorage.setItem(storageKey, JSON.stringify(routes)); } catch { /* Preview remains usable without persistence. */ } }, [routes, storageKey]);
   const candidates = orderedRouteModels(strategy);
+  const filteredRoutes=routes.filter(route=>route.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const current=Math.min(page,Math.max(1,Math.ceil(filteredRoutes.length/size)));
+  const visibleRoutes=versionId === "moma_5.11.0_estack" ? filteredRoutes.slice((current-1)*size,current*size) : filteredRoutes;
+  const duplicateName = routes.some(route => route.name === name && route.id !== editingId);
+  const openForm = route => {
+    setEditingId(route?.id ?? null);
+    setName(route?.name ?? "");
+    setStrategy(route?.strategy ?? "效果优先");
+    setModels(route?.models ?? []);
+    setAgreed(!!route);
+    setCreating(true);
+  };
+  const closeForm = () => { setCreating(false); setEditingId(null); };
   const submit = () => {
-    if (name.length < 2 || !agreed || !models.length) return;
-    setRoutes([
-      {
-        name,
-        strategy,
-        status: "创建中",
-        creator: "PaaS_bdpt_test_yeyaogang2022",
-        time: "2026-09-13 18:30:00",
-      },
-      ...routes,
-    ]);
-    setCreating(false);
+    if (name.length < 2 || name.length > 50 || duplicateName || !models.length || !editingId && !agreed) return;
+    if (editingId) setRoutes(routes.map(route => route.id === editingId ? { ...route, name, strategy, models } : route));
+    else setRoutes([{ id: `route-${crypto.randomUUID()}`, name, strategy, models, status: "正常", creator: "estack-yy", time: new Date().toLocaleString("sv-SE", { timeZone: "Asia/Shanghai", hour12: false }) }, ...routes]);
+    closeForm();
     setName("");
     setModels([]);
     setAgreed(false);
+  };
+  const curl = apiRoute ? `curl --location '${routeApiUrl}' \\\n  --header 'Authorization: Bearer <API_KEY>' \\\n  --header 'Content-Type: application/json' \\\n  --data '${JSON.stringify({ model: apiRoute.id, messages: [{ role: "user", content: "你好，请介绍一下你自己" }], stream: true })}'` : "";
+  const copy = async (value, label) => {
+    try { await navigator.clipboard.writeText(value); setCopyNotice(`${label}已复制`); }
+    catch { setCopyNotice("复制失败，请手动选择文本复制"); }
   };
   return (
     <div className="route-page">
@@ -382,12 +413,12 @@ function SmartRoute() {
       </div>
       <section className="route-list">
         <div className="route-tools">
-          <button className="primary" onClick={() => setCreating(true)}>
+          <button className="primary" onClick={() => openForm(null)}>
             ＋ 新建智能路由
           </button>
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setPage(1); }}
             placeholder="按名称搜索"
           />
         </div>
@@ -400,42 +431,36 @@ function SmartRoute() {
             <span>创建时间</span>
             <span>操作</span>
           </div>
-          {routes
-            .filter((r) => r.name.includes(query))
-            .map((r) => (
-              <div className="route-row" key={r.name}>
+          {visibleRoutes.map((r) => (
+              <div className="route-row" key={r.id}>
                 <span>{r.name}</span>
                 <span>{r.strategy}</span>
-                <span>{r.status}</span>
+                <span><b className="route-status">{r.status}</b></span>
                 <span>{r.creator}</span>
                 <span>{r.time}</span>
-                <span>
-                  <button className="link">查看</button>
+                <span className="route-row-actions">
+                  <button className="link" onClick={() => { setCopyNotice(""); setApiRoute(r); }}>API 调用</button>
+                  <button className="link" onClick={() => openForm(r)}>编辑</button>
+                  <button className="link" onClick={() => setDeleting(r)}>删除</button>
                 </span>
               </div>
             ))}
-          {!routes.length && (
+          {!filteredRoutes.length && (
             <div className="route-no-data">
-              暂无数据，您可以{" "}
-              <button onClick={() => setCreating(true)}>立即创建</button>
+              {routes.length ? "没有匹配的智能路由" : <>暂无数据，您可以 <button onClick={() => openForm(null)}>立即创建</button></>}
             </div>
           )}
         </div>
-        <footer>
-          共{routes.length}条记录　{" "}
-          <select>
-            <option>10条/页</option>
-          </select>
-          　 1
-        </footer>
+        <>{versionId === "moma_5.11.0_estack" ? <FilterPagination total={filteredRoutes.length} page={current} size={size} onPageChange={setPage} onSizeChange={setSize}/> : <footer>共{routes.length}条记录　<select><option>10条/页</option></select>　 1</footer>}</>
+
       </section>
       {creating && (
-        <div className="modal route-modal" onClick={() => setCreating(false)}>
-          <div onClick={(e) => e.stopPropagation()}>
-            <button className="close" onClick={() => setCreating(false)}>
+        <div className="modal route-modal" onClick={closeForm}>
+          <div role="dialog" aria-modal="true" aria-labelledby="smart-route-form-title" onClick={(e) => e.stopPropagation()}>
+            <button className="close" aria-label="关闭" onClick={closeForm}>
               ×
             </button>
-            <h2>智能模型路由</h2>
+            <h2 id="smart-route-form-title">{editingId ? "编辑智能路由" : "智能模型路由"}</h2>
             <p>
               根据您的业务目标，自动为您调度最优模型组合，实现效果、成本与效率的完美平衡
             </p>
@@ -449,10 +474,12 @@ function SmartRoute() {
                 onChange={(e) =>
                   setName(e.target.value.replace(/[^\w:.-]/g, ""))
                 }
+                maxLength={50}
                 placeholder="路由名称只能由字母、数字、连字符、下划线、冒号、点组成，长度在2-50之间"
               />
               <small>{name.length}/50</small>
             </label>
+            {duplicateName && <p className="route-form-error" role="alert">路由名称已存在</p>}
             <div className="route-form-label">路由策略</div>
             <div className="strategy-options">
               {[
@@ -503,7 +530,7 @@ function SmartRoute() {
                 </label>
               ))}
             </div>
-            <label className="agreement">
+            {!editingId && <label className="agreement">
               <input
                 type="checkbox"
                 checked={agreed}
@@ -511,20 +538,32 @@ function SmartRoute() {
               />{" "}
               我已阅读并同意 <a>《产品销售协议》</a>、
               <a>《模型服务平台MoMA服务使用声明》</a>
-            </label>
+            </label>}
             <div className="modal-actions">
-              <button onClick={() => setCreating(false)}>取消</button>
+              <button onClick={closeForm}>取消</button>
               <button
                 className="primary"
-                disabled={name.length < 2 || !models.length || !agreed}
+                disabled={name.length < 2 || duplicateName || !models.length || !editingId && !agreed}
                 onClick={submit}
               >
-                确定
+                {editingId ? "保存" : "确定"}
               </button>
             </div>
           </div>
         </div>
       )}
+      <Dialog open={!!apiRoute} onOpenChange={open => { if (!open) setApiRoute(null); }}>
+        <DialogContent className="route-api-dialog sm:max-w-3xl">
+          <DialogHeader><DialogTitle>API 调用</DialogTitle><DialogDescription>通过 API Key 调用“{apiRoute?.name}”智能路由。</DialogDescription></DialogHeader>
+          <div className="route-api-alert">以下为接入示例；请求地址和权限以实际开通的服务为准。API Key 请妥善保管，避免公开共享。</div>
+          <section><h3>1 获取 API Key</h3><p>在 API Key 管理中创建或选择已有密钥。</p><Button variant="outline" onClick={() => { setApiRoute(null); onNavigate("API Key 管理"); }}>前往 API Key 管理</Button></section>
+          <section><h3>2 调用智能路由</h3><p>在请求体的 <code>model</code> 字段填写该路由的接入点 ID。</p><div className="route-api-code-head"><span>Curl · 流式请求示例</span><Button variant="ghost" size="sm" onClick={() => copy(curl, "Curl 示例")}><Copy size={15}/>复制</Button></div><pre>{curl}</pre><div className="route-api-value"><span>接入点：<code>{apiRoute?.id}</code></span><Button variant="ghost" size="sm" onClick={() => copy(apiRoute?.id ?? "", "接入点")}>复制</Button></div><div className="route-api-value"><span>示例请求地址：<code>{routeApiUrl}</code></span><Button variant="ghost" size="sm" onClick={() => copy(routeApiUrl, "请求地址")}>复制</Button></div></section>
+          <span role="status" className="route-copy-status">{copyNotice}</span>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!deleting} onOpenChange={open => { if (!open) setDeleting(null); }}>
+        <DialogContent className="route-delete-dialog sm:max-w-md"><DialogHeader><DialogTitle>确认删除该智能路由吗？</DialogTitle><DialogDescription>“{deleting?.name}”删除后不可恢复，请谨慎操作。</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleting(null)}>取消</Button><Button onClick={() => { setRoutes(routes.filter(route => route.id !== deleting?.id)); setDeleting(null); }}>删除</Button></DialogFooter></DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1400,7 +1439,7 @@ function ModelOrderList({
     [agreed, setAgreed] = useState(false),
     [confirming, setConfirming] = useState(false),
     [ordered, setOrdered] = useState(false),
-    [detail, setDetail] = useState(null);
+    [detail, setDetail] = useState(null), [page, setPage] = useState(1), [size, setSize] = useState(10);
   const allRows = [
     [
       "AICC-doubao-seedance-2.0",
@@ -1557,9 +1596,15 @@ function ModelOrderList({
       "—",
     ],
   ];
-  const rows = allRows.filter((row) =>
-    row[0].toLowerCase().includes(query.toLowerCase()),
-  );
+  const subscriptions = {
+    "按资源包计费": [["通用模型资源包", "自营", "资源包", "移动云", "1000 万 Token", "¥100 / 包", "已订购", "2026-09-15", "2027-09-15"]],
+    "Token Plan订阅": [["办公团队套餐", "自营", "Token Plan", "移动云", "月度额度", "¥99 / 月", "已订购", "2026-09-15", "2026-10-15"], ["研发团队套餐", "自营", "Token Plan", "移动云", "月度额度", "¥199 / 月", "已订购", "2026-09-20", "2026-10-20"]],
+    "Coding Plan订阅": [["研发助手 Coding Plan", "自营", "Coding Plan", "移动云", "月度编程套餐", "¥199 / 月", "已订购", "2026-09-15", "2026-10-15"]],
+  };
+  const rows = (historical || tab === "按Token用量计费" ? allRows : subscriptions[tab] || []).filter(row => row[0].toLowerCase().includes(query.trim().toLowerCase()));
+  const current = Math.min(page, Math.max(1, Math.ceil(rows.length / size)));
+  const visibleRows = historical ? rows : rows.slice((current - 1) * size, current * size);
+  const changeTab = value => { setTab(value); setQuery(""); setPage(1); };
   const openOrder = (name) =>
     window.open(
       `/${versionId}/order/serviceOrder?serviceType=presetModelService${name ? `&model=${encodeURIComponent(name)}` : ""}`,
@@ -1672,7 +1717,7 @@ function ModelOrderList({
             <label>
               <input
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => { setQuery(e.target.value); setPage(1); }}
                 placeholder="按模型名称搜索"
               />
               <Search size={15} />
@@ -1922,7 +1967,7 @@ function ModelOrderList({
   }
   return (
     <div className={`legacy-page legacy-orders${historical ? "" : " orders-current us-page"}`}>
-      {!historical ? <div className="us-title"><div><h1>模型订购</h1><p>查看付费模型订购情况</p></div></div> : <section className="legacy-hero">
+      {!historical ? <div className="us-title"><div><h1>模型订购</h1><p>查看付费模型订购情况{!historical && " · 演示订购记录"}</p></div></div> : <section className="legacy-hero">
         <span>
           <ShoppingCart />
         </span>
@@ -1933,10 +1978,10 @@ function ModelOrderList({
               帮助中心 <ExternalLink size={13} />
             </a>
           </h1>
-          <p>查看付费模型订购情况</p>
+          <p>查看付费模型订购情况{!historical && " · 演示订购记录"}</p>
         </div>
       </section>}
-      {!historical ? <div className="us-page"><Tabs value={tab} onValueChange={setTab}>
+      {!historical ? <div className="us-page"><Tabs value={tab} onValueChange={changeTab}>
         <TabsList variant="line" className="us-tabs" aria-label="模型订购计费方式">
           {["按Token用量计费", "按资源包计费", "Token Plan订阅", "Coding Plan订阅"].map(type => <TabsTrigger key={type} value={type}>{type}</TabsTrigger>)}
         </TabsList>
@@ -1971,8 +2016,8 @@ function ModelOrderList({
           <label>
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="请按模型名称搜索"
+              onChange={(e) => { setQuery(e.target.value); setPage(1); }}
+              placeholder={tab === "按Token用量计费" ? "请按模型名称搜索" : "搜索套餐或资源包名称"}
             />
             <Search size={15} />
           </label>
@@ -1984,8 +2029,8 @@ function ModelOrderList({
           <div className="legacy-order-row head">
             {[
               "",
-              "模型名称",
-              "模型类别",
+              historical || tab === "按Token用量计费" ? "模型名称" : "套餐 / 资源包名称",
+              historical ? "模型类别" : "类型",
               "模型服务商",
               "资费场景",
               "目录价",
@@ -1997,7 +2042,7 @@ function ModelOrderList({
               <span key={i}>{i === 0 ? <input type="checkbox" /> : x}</span>
             ))}
           </div>
-          {rows.map((row) => (
+          {visibleRows.map((row) => (
             <div className="legacy-order-row" key={row[0]}>
               <span>
                 <input type="checkbox" />
@@ -2025,7 +2070,8 @@ function ModelOrderList({
             </div>
           ))}
         </div>
-        <footer className="legacy-pager">
+        {!historical && !rows.length && <div className="v2-empty">暂无符合条件的订购记录</div>}
+        {!historical ? <FilterPagination total={rows.length} page={current} size={size} onPageChange={setPage} onSizeChange={setSize}/> : <footer className="legacy-pager">
           <span>
             共74条记录　{" "}
             <select>
@@ -2035,7 +2081,7 @@ function ModelOrderList({
           <span>
             ‹　<b>1</b>　2　3　…　8　›　前往 <input defaultValue="1" /> 页
           </span>
-        </footer>
+        </footer>}
       </section>
     </div>
   );
@@ -2584,7 +2630,10 @@ function PrototypeApp({ version }) {
         (is5102 || !["按量付费", "Token Plan"].includes(item)) &&
         (!is5102 || !["模型排行", "语音模型"].includes(item)),
     );
-  const [activePage, setActivePage] = useState("模型广场"),
+  const [activePage, setActivePage] = useState(() => {
+    const requestedPage = new URLSearchParams(location.search).get("page");
+    return requestedPage === "model-order" ? "模型订购" : !is5102 && requestedPage === "organization-members" ? "组织及成员" : "模型广场";
+  }),
     [admin, setAdmin] = useState(modeFromHash),
     [textCompare, setTextCompare] = useState(false),
     [visualKind, setVisualKind] = useState("image"),
@@ -2654,11 +2703,13 @@ function PrototypeApp({ version }) {
         .filter((m) => {
           const data = meta(m);
           return (
-            m.name.toLowerCase().includes(query.toLowerCase()) &&
+            m.name.toLowerCase().includes(query.trim().toLowerCase()) &&
             Object.entries(filters).every(
               ([group, value]) =>
                 !value ||
-                (group === "series"
+                (group === "context"
+                  ? parseFloat(m.context) <= Number(value)
+                  : group === "series"
                   ? m.series === value
                   : Array.isArray(data[group])
                     ? data[group].includes(value)
@@ -2684,7 +2735,7 @@ function PrototypeApp({ version }) {
       {value}
     </button>
   );
-  const resetFilters = () => setFilters({});
+  const resetFilters = () => { setFilters({}); setQuery(""); };
   return (
     <div className={`app-shell ${is5102 ? "version-5102" : ""}`}>
       <header>
@@ -2789,6 +2840,7 @@ function PrototypeApp({ version }) {
               <div>
                 <small>系统管理</small>
                 <button className={activePage === "API Key 管理" ? "active" : ""} onClick={() => setActivePage("API Key 管理")}><KeyRound aria-hidden="true" />API Key</button>
+                <button className={activePage === "组织及成员" ? "active" : ""} onClick={() => setActivePage("组织及成员")}><Users aria-hidden="true" />组织及成员</button>
               </div>
             </>
           )}
@@ -2802,14 +2854,13 @@ function PrototypeApp({ version }) {
         ) : admin === "v2" ? (
           <AdminConsoleV2 />
         ) : activePage === "智能路由" ? (
-          <SmartRoute />
+          <SmartRoute key={is5102 ? "moma_5.10.2_estack" : "moma_5.11.0_estack"} versionId={is5102 ? "moma_5.10.2_estack" : "moma_5.11.0_estack"} onNavigate={setActivePage} />
         ) : activePage === "模型排行" ? (
           <ModelRanking />
         ) : activePage === "文本生成" || activePage === "语言模型" ? (
           textCompare ? (
             <ModelComparison
               onBack={() => setTextCompare(false)}
-              onNavigate={setActivePage}
             />
           ) : (
             <TextExperience
@@ -2825,26 +2876,22 @@ function PrototypeApp({ version }) {
             kind={visualKind}
             groupLabel="视觉模型"
             onKindChange={setVisualKind}
-            onNavigate={setActivePage}
           />
         ) : activePage === "图片生成" ? (
           <ModelExperience
             key="image"
             kind="image"
-            onNavigate={setActivePage}
           />
         ) : activePage === "视频生成" ? (
           <ModelExperience
             key="video"
             kind="video"
-            onNavigate={setActivePage}
           />
         ) : activePage === "语音生成" || activePage === "语音模型" ? (
           <ModelExperience
             key="voice"
             kind="voice"
             groupLabel={is5102 ? "语音生成" : "语音模型"}
-            onNavigate={setActivePage}
           />
         ) : activePage === "模型订购" ? (
           <ModelOrderList versionId={version.id} historical={is5102} />
@@ -2852,6 +2899,8 @@ function PrototypeApp({ version }) {
           <ApiKeys key={activePage} billing={activePage} />
         ) : activePage === "API Key 管理" ? (
           <UnifiedApiKeys />
+        ) : activePage === "组织及成员" && !is5102 ? (
+          <OrganizationMembers />
         ) : activePage.startsWith("API Key 管理·") ? (
           <ApiKeys key={activePage} billing={activePage.split("·")[1]} />
         ) : activePage === "调用观测" ? (
@@ -2913,7 +2962,7 @@ function PrototypeApp({ version }) {
                   <h3>模型筛选</h3>
                   <button
                     onClick={resetFilters}
-                    disabled={!Object.values(filters).some(Boolean)}
+                    disabled={!query.trim() && !Object.values(filters).some(Boolean)}
                   >
                     重置
                   </button>
@@ -2941,7 +2990,7 @@ function PrototypeApp({ version }) {
                     option("output", x),
                   )}
                 </FilterSection>
-                <FilterSection title="上下文">
+                <FilterSection title={`上下文上限：${filters.context || 1024}K`}>
                   <div className="range-values">
                     <span>4K</span>
                     <span>1M</span>
@@ -2951,8 +3000,9 @@ function PrototypeApp({ version }) {
                     type="range"
                     min="4"
                     max="1024"
-                    defaultValue="1024"
-                    aria-label="上下文长度"
+                    value={filters.context || 1024}
+                    onChange={event => setFilters(current => ({...current, context:Number(event.target.value)}))}
+                    aria-label="上下文长度上限"
                   />
                 </FilterSection>
                 <FilterSection title="模型作者" count={filters.author ? 1 : 0}>

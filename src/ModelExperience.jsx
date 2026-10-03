@@ -257,7 +257,7 @@ const promptCatalog = {
   ],
 };
 
-function ModelPicker({ model, options, onChange, onSubscribe, speech = false }) {
+function ModelPicker({ model, options, onChange, speech = false }) {
   const [open, setOpen] = useState(false);
   const selected =
     options.find((option) => option.name === model) || options[0];
@@ -281,7 +281,6 @@ function ModelPicker({ model, options, onChange, onSubscribe, speech = false }) 
         value={model}
         onApply={onChange}
         onClose={() => setOpen(false)}
-        onSubscribe={onSubscribe}
       />
     </div>
   );
@@ -291,7 +290,6 @@ export default function ModelExperience({
   kind = "text",
   groupLabel,
   onKindChange,
-  onNavigate,
   onCompare,
 }) {
   const [mode, setMode] = useState("语音识别");
@@ -1503,7 +1501,6 @@ export default function ModelExperience({
                 speech={asr}
                 options={models}
                 onChange={changeModel}
-                onSubscribe={() => onNavigate?.("模型订购")}
               />
               <button
                 className="pg-send"

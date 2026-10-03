@@ -2,7 +2,7 @@ import { apiKeyOptions } from './api-key-data.mjs';
 import { shanghaiDate } from './call-log-data.mjs';
 
 export const usageModels = {
-  文本模型: ['DeepSeek-V4-Pro', 'Qwen3.7-Max', 'GLM-5.2', 'Kimi-K3', 'MiniMax-M3'],
+  文本模型: ['DeepSeek-V4-Pro', 'DeepSeek-V4-Flash', 'DeepSeek-V4-Flash-0731', 'Qwen3.7-Max', 'Qwen3-32B', 'Qwen3.5-27B', 'Qwen3.5-9B', 'Qwen3.5-35B-A3B', 'Qwen3.5-397B-A17B', 'GLM-5.1', 'GLM-5.2', 'Kimi-K2.6', 'Kimi-K2.7-Code', 'Kimi-K3', 'MiniMax-M3', 'qwen3-max', 'qwen3.5-flash', 'qwen3.5-plus', 'qwen3.6-flash', 'qwen3.6-plus', 'qwen3.7-plus'],
   视觉理解: ['Qwen-VL', 'GLM-VL'],
   多模态模型: ['Qwen-Omni', 'GLM-Omni'],
   图片生成: ['Qwen-Image', 'Seedream', 'HY-Image'],
@@ -11,6 +11,30 @@ export const usageModels = {
   语音识别: ['Qwen-Audio-ASR-Flash'],
   向量模型: ['BGE-M3'],
   重排模型: ['BGE-Reranker-V2-M3'],
+};
+const tier32 = ['0＜输入长度≤32K', '32K＜输入长度≤128K', '128K＜输入长度≤252K'];
+const tier128 = ['0＜输入长度≤128K', '128K＜输入长度≤256K'];
+const tier256 = ['0＜输入长度≤256K', '256K＜输入长度≤1M'];
+const tier1M = ['0＜输入长度≤128K', '128K＜输入长度≤256K', '256K＜输入长度≤1M'];
+export const languageMetering = {
+  'DeepSeek-V4-Pro': { cache: true },
+  'DeepSeek-V4-Flash-0731': { cache: true },
+  'Qwen3.7-Max': { cache: true, explicit: true },
+  'Qwen3-32B': { modes: true },
+  'Qwen3.5-35B-A3B': { tiers: tier128, modes: true },
+  'Qwen3.5-397B-A17B': { tiers: tier128 },
+  'GLM-5.1': { tiers: ['0＜输入长度≤32K', '32K＜输入长度≤200K'], cache: true },
+  'GLM-5.2': { cache: true },
+  'Kimi-K2.6': { cache: true, cachedInput: true },
+  'Kimi-K2.7-Code': { cache: true, cachedInput: true },
+  'Kimi-K3': { cache: true, cachedInput: true },
+  'MiniMax-M3': { tiers: ['0＜输入长度≤512K', '512K＜输入长度≤1M'], cache: true },
+  'qwen3-max': { tiers: tier32, cache: true, explicit: true, cachedInput: true },
+  'qwen3.5-flash': { tiers: tier1M, explicit: true },
+  'qwen3.5-plus': { tiers: tier1M, explicit: true },
+  'qwen3.6-flash': { tiers: tier256, explicit: true },
+  'qwen3.6-plus': { tiers: tier256, explicit: true },
+  'qwen3.7-plus': { tiers: tier256, cache: true, explicit: true, cachedInput: true },
 };
 export const usageModelGroups = [
   { id: '语言模型', name: '语言模型', types: ['文本模型'] },
@@ -123,6 +147,49 @@ function peakTpm(minuteMaps) {
   for (const minutes of minuteMaps) for (const [minute, tokens] of minutes) totals.set(minute, (totals.get(minute) || 0) + tokens);
   return [...totals.values()].reduce((peak, tokens) => Math.max(peak, tokens), 0);
 }
+// ponytail: fixed demo proportions; replace with request-level metering facts when connected.
+function splitTokens(total, count) {
+  const weights = count === 2 ? [.84, .16] : [.72, .2, .08];
+  let assigned = 0;
+  return weights.slice(0, count).map((weight, index) => {
+    const amount = index === count - 1 ? total - assigned : Math.floor(total * weight);
+    assigned += amount;
+    return amount;
+  });
+}
+function addLanguageBreakdown(sample, profile) {
+  const cacheTotal = (sample.cache ?? 0) + (sample.cacheRead ?? 0);
+  if (profile.cachedInput && !profile.tiers) {
+    sample.cachedInput = cacheTotal;
+    sample.uncachedInput = sample.input - cacheTotal;
+  }
+  if (!profile.tiers) {
+    if (profile.modes) {
+      sample.thinkingModeOutput = Math.floor(sample.output * .65);
+      sample.plainModeOutput = sample.output - sample.thinkingModeOutput;
+    }
+    return;
+  }
+  const count = profile.tiers.length;
+  const input = splitTokens(sample.input, count);
+  const output = splitTokens(sample.output, count);
+  const cache = cacheTotal ? splitTokens(cacheTotal, count) : [];
+  const created = sample.cacheCreate == null ? [] : splitTokens(sample.cacheCreate, count);
+  const explicit = sample.cacheRead == null ? [] : splitTokens(sample.cacheRead, count);
+  const cachedInput = profile.cachedInput ? splitTokens(profile.explicit ? sample.cache : cacheTotal, count) : [];
+  for (let i = 0; i < count; i++) {
+    sample[`tier${i}Input`] = input[i];
+    sample[`tier${i}Output`] = output[i];
+    if (cache.length) sample[`tier${i}Cache`] = cache[i];
+    if (created.length) sample[`tier${i}Create`] = created[i];
+    if (explicit.length) sample[`tier${i}Explicit`] = explicit[i];
+    if (cachedInput.length) sample[`tier${i}CachedInput`] = cachedInput[i];
+    if (profile.modes) {
+      sample[`tier${i}ThinkingOutput`] = Math.floor(output[i] * .65);
+      sample[`tier${i}PlainOutput`] = output[i] - sample[`tier${i}ThinkingOutput`];
+    }
+  }
+}
 function add(target, sample) {
   for (const [key, value] of Object.entries(sample)) {
     if (key === 'latencySamples') target.latencySamples.push(...value);
@@ -158,28 +225,31 @@ function derived(row) {
     result.outputMinute = row.observedMinutes ? row.output / row.observedMinutes : null;
     result.outputPerRequest = row.requests ? row.output / row.requests : null;
   }
-  if (row.cache !== undefined) {
-    result.cacheReadTotal = row.cache + row.cacheRead;
+  if (row.cache !== undefined || row.cacheRead !== undefined) {
+    result.cacheReadTotal = (row.cache ?? 0) + (row.cacheRead ?? 0);
     result.cacheReadMinute = row.observedMinutes ? result.cacheReadTotal / row.observedMinutes : null;
-    result.cacheCreateMinute = row.observedMinutes ? row.cacheCreate / row.observedMinutes : null;
-    result.explicitReadMinute = row.observedMinutes ? row.cacheRead / row.observedMinutes : null;
-    result.cacheRate = row.input ? row.cache / row.input * 100 : null;
-    result.explicitRate = row.input ? row.cacheRead / row.input * 100 : null;
-    result.ttft = row.success ? row.ttftDuration / row.success : null;
-    result.outputSecond = result.outputMinute / 60;
+    if (row.cacheCreate !== undefined) result.cacheCreateMinute = row.observedMinutes ? row.cacheCreate / row.observedMinutes : null;
+    if (row.cacheRead !== undefined) {
+      result.explicitReadMinute = row.observedMinutes ? row.cacheRead / row.observedMinutes : null;
+      result.explicitRate = row.input ? row.cacheRead / row.input * 100 : null;
+    }
+    if (row.cache !== undefined) result.cacheRate = row.input ? row.cache / row.input * 100 : null;
   }
+  if (row.ttftDuration !== undefined) result.ttft = row.success ? row.ttftDuration / row.success : null;
+  if (result.outputMinute !== undefined) result.outputSecond = result.outputMinute == null ? null : result.outputMinute / 60;
   return result;
 }
 // Deterministic five-minute prototype samples. Coarser graphs aggregate the same samples.
-export function usageData({ billing, type, dimension = 'Model ID', targets = [], start, end, minutes = 60, now = new Date(), source = 'standard', apiKeyId = null }) {
+export function usageData({ billing, type, dimension = 'Model ID', targets = [], modelIds = null, apiKeyIds = null, start, end, minutes = 60, now = new Date(), source = 'standard', apiKeyId = null }) {
   const begin = Date.parse(`${start}T00:00:00+08:00`);
   const availableUntil = now.getTime() - (source === 'aicc' ? 3 * 3600000 : 0);
   const finish = Math.min(Date.parse(`${end}T00:00:00+08:00`) + 86400000, availableUntil);
-  if (!usageModels[type] || ![5, 60, 1440].includes(minutes) || !Number.isFinite(begin) || !Number.isFinite(finish) || begin >= finish || finish - begin > 31 * 86400000) return { buckets: [], summary: derived(empty()), minuteTokens: new Map(), availableUntil };
+  if (!usageModels[type] || ![5, 10, 60, 1440].includes(minutes) || !Number.isFinite(begin) || !Number.isFinite(finish) || begin >= finish || finish - begin > 31 * 86400000) return { buckets: [], summary: derived(empty()), minuteTokens: new Map(), availableUntil };
   const models = usageModels[type];
   const keys = usageKeys(billing);
   const sourceFactor = { 按量付费: 1, 'Token Plan': .61, 资源包: .38 }[billing] * (source === 'aicc' ? .43 : 1);
   const buckets = new Map();
+  const modelBuckets = new Map();
   const minuteTokens = new Map();
   const summary = empty();
   for (let time = begin; time + 300000 <= finish; time += 300000) {
@@ -188,6 +258,8 @@ export function usageData({ billing, type, dimension = 'Model ID', targets = [],
     models.forEach((model, m) => keys.forEach((key, k) => {
       if (apiKeyId !== null && apiKeyId !== key) return;
       if (targets.length && !targets.includes(dimension === 'Model ID' ? model : key)) return;
+      if (modelIds !== null && !modelIds.includes(model)) return;
+      if (apiKeyIds !== null && !apiKeyIds.includes(key)) return;
       const phase = time / 3600000 + m * 2 + k;
       const weight = (.7 + .3 * Math.sin(phase / 3)) * sourceFactor * (models.length - m) / models.length * (k ? .24 : .76);
       const requests = Math.max(0, Math.round(30 * weight));
@@ -199,7 +271,14 @@ export function usageData({ billing, type, dimension = 'Model ID', targets = [],
       if (success) Object.assign(sample, { latencyMin: duration * .7, latencyMax: duration * 1.3 });
       if (['文本模型', '视觉理解'].includes(type)) {
         const input = success * 14040, output = success * 160;
-        Object.assign(sample, { input, output, total: input + output, cache: Math.floor(input * .55), cacheCreate: Math.floor(input * .08), cacheRead: Math.floor(input * .14), paidInput: Math.floor(input * .95), paidOutput: output, thinking: success * 60, nonThinking: success * 100, ttftDuration: success * duration * .12 });
+        Object.assign(sample, { input, output, total: input + output, paidInput: Math.floor(input * .95), paidOutput: output, thinking: success * 60, nonThinking: success * 100, ttftDuration: success * duration * .12 });
+        const profile = type === '文本模型' ? languageMetering[model] ?? {} : { cache: true, explicit: true };
+        if (profile.cache) sample.cache = Math.floor(input * .18);
+        if (profile.explicit) {
+          sample.cacheCreate = Math.floor(input * .08);
+          sample.cacheRead = Math.floor(input * .12);
+        }
+        if (type === '文本模型') addLanguageBreakdown(sample, profile);
         if (success) Object.assign(sample, { ttftMin: duration * .08, ttftMax: duration * .18 });
       } else if (type === '多模态模型') {
         Object.assign(sample, { textIn: success * 400, imageIn: success * 240, videoIn: success * 600, audioIn: success * 800, textOut: success * 120, audioOut: success * 360 });
@@ -222,6 +301,16 @@ export function usageData({ billing, type, dimension = 'Model ID', targets = [],
         }
       }
       add(row, sample);
+      const modelTime = begin + Math.floor((time - begin) / (minutes * 60000)) * minutes * 60000;
+      const byModel = modelBuckets.get(modelTime) || new Map();
+      const modelRow = byModel.get(model) || {};
+      for (const [field, value] of Object.entries(sample)) if (typeof value === 'number') {
+        if (field.endsWith('Min')) modelRow[field] = Math.min(modelRow[field] ?? Infinity, value);
+        else if (field.endsWith('Max')) modelRow[field] = Math.max(modelRow[field] ?? -Infinity, value);
+        else modelRow[field] = (modelRow[field] ?? 0) + value;
+      }
+      byModel.set(model, modelRow);
+      modelBuckets.set(modelTime, byModel);
     }));
     add(summary, row);
     const bucketTime = begin + Math.floor((time - begin) / (minutes * 60000)) * minutes * 60000;
@@ -231,7 +320,7 @@ export function usageData({ billing, type, dimension = 'Model ID', targets = [],
   }
   const summaryResult = derived(summary);
   summaryResult.peakTpm = peakTpm([minuteTokens]);
-  return { buckets: [...buckets.values()].map(derived), summary: summaryResult, minuteTokens, availableUntil };
+  return { buckets: [...buckets.values()].map(bucket => ({ ...derived(bucket), modelUsage: Object.fromEntries([...(modelBuckets.get(bucket.time) || [])].map(([model, row]) => [model, derived({ ...row, observedMinutes: bucket.observedMinutes, modelNames: new Set([model]), latencySamples: [] })])) })), summary: summaryResult, minuteTokens, availableUntil };
 }
 export function selectedUsageTypes(groups, modelIds = null) {
   return usageModelGroups.filter(group => groups === null || groups.includes(group.id))
@@ -248,8 +337,10 @@ function combineSelectedUsage(rows) {
     if (total !== undefined) { result.total = (result.total || 0) + total; tokenRequests += row.requests; }
     if (row.input !== undefined) inputRequests += row.requests;
     if (row.output !== undefined) outputRequests += row.requests;
-    for (const key of ['input', 'output', 'paidInput', 'paidOutput', 'cache', 'cacheRead', 'cacheCreate', 'images', 'audio', 'characters'])
+    for (const key of ['input', 'output', 'paidInput', 'paidOutput', 'cache', 'cacheRead', 'cacheCreate', 'images', 'audio', 'characters', 'cachedInput', 'uncachedInput', 'thinkingModeOutput', 'plainModeOutput'])
       if (row[key] !== undefined) result[key] = (result[key] || 0) + row[key];
+    for (const [key, value] of Object.entries(row))
+      if (/^tier\d/.test(key)) result[key] = (result[key] || 0) + value;
   }
   if (result.total !== undefined) {
     result.average = tokenRequests ? result.total / tokenRequests : null;
@@ -263,11 +354,11 @@ function combineSelectedUsage(rows) {
     result.outputMinute = result.observedMinutes ? result.output / result.observedMinutes : null;
     result.outputPerRequest = outputRequests ? result.output / outputRequests : null;
   }
-  if (result.cache !== undefined) {
-    result.cacheReadTotal = result.cache + (result.cacheRead || 0);
+  if (result.cache !== undefined || result.cacheRead !== undefined) {
+    result.cacheReadTotal = (result.cache || 0) + (result.cacheRead || 0);
     result.cacheReadMinute = result.observedMinutes ? result.cacheReadTotal / result.observedMinutes : null;
-    result.cacheCreateMinute = result.observedMinutes ? result.cacheCreate / result.observedMinutes : null;
-    result.explicitReadMinute = result.observedMinutes ? result.cacheRead / result.observedMinutes : null;
+    if (result.cacheCreate !== undefined) result.cacheCreateMinute = result.observedMinutes ? result.cacheCreate / result.observedMinutes : null;
+    if (result.cacheRead !== undefined) result.explicitReadMinute = result.observedMinutes ? result.cacheRead / result.observedMinutes : null;
   }
   return result;
 }
@@ -277,9 +368,34 @@ export function selectedUsageData({ groups = ['语言模型'], modelIds = null, 
   const times = [...new Set(results.flatMap(result => result.buckets.map(row => row.time)))].sort((a, b) => a - b);
   const summary = combineSelectedUsage(results.map(result => result.summary));
   summary.peakTpm = peakTpm(results.map(result => result.minuteTokens));
-  return { types, summary, buckets: times.map(time => ({ time, ...combineSelectedUsage(results.flatMap(result => result.buckets.filter(row => row.time === time))) })), availableUntil: results[0]?.availableUntil ?? options.now.getTime() };
+  return { types, summary, buckets: times.map(time => {
+    const rows = results.flatMap(result => result.buckets.filter(row => row.time === time));
+    return { time, ...combineSelectedUsage(rows), modelUsage: Object.assign({}, ...rows.map(row => row.modelUsage)) };
+  }), availableUntil: results[0]?.availableUntil ?? options.now.getTime() };
 }
-export function selectedMeteringView(types) {
+function languageSeries(model, title) {
+  const profile = languageMetering[model] ?? {};
+  const tiers = profile.tiers ?? [];
+  const shortTier = tier => tier.replace('0＜输入长度≤', '≤').replace('＜输入长度≤', '–');
+  const byTier = (suffix, label) => tiers.map((tier, index) => ({ key: `tier${index}${suffix}`, label: shortTier(tier), fullLabel: `${tier} · ${label}` }));
+  if (title === '输入 Token 数') {
+    if (tiers.length) return byTier('Input', '输入');
+    if (profile.cachedInput) return [{ key: 'uncachedInput', label: '缓存未命中输入' }, { key: 'cachedInput', label: '缓存命中输入' }];
+  }
+  if (title === '输出 Token 数') {
+    if (tiers.length && profile.modes) return tiers.flatMap((tier, index) => [
+      { key: `tier${index}ThinkingOutput`, label: `${shortTier(tier)}·思考`, fullLabel: `${tier} · 思考模式输出` },
+      { key: `tier${index}PlainOutput`, label: `${shortTier(tier)}·非思考`, fullLabel: `${tier} · 非思考模式输出` },
+    ]);
+    if (tiers.length) return byTier('Output', '输出');
+    if (profile.modes) return [{ key: 'thinkingModeOutput', label: '思考模式输出' }, { key: 'plainModeOutput', label: '非思考模式输出' }];
+  }
+  if (title === '读缓存总 Token 数' && tiers.length) return byTier(profile.cachedInput ? 'CachedInput' : 'Cache', profile.cachedInput ? '输入缓存命中' : '缓存读取');
+  if (title === '写入缓存总 Token 数' && tiers.length) return byTier('Create', '显式缓存创建');
+  if (title === '区间内命中显式缓存总 Token 数' && tiers.length) return byTier('Explicit', '显式缓存命中');
+  return null;
+}
+export function selectedMeteringView(types, modelIds = null) {
   const tokenKeys = new Set();
   for (const type of types) {
     if (['文本模型', '视觉理解'].includes(type)) meteringView('文本模型').charts.forEach(([, [key]]) => tokenKeys.add(key));
@@ -288,7 +404,20 @@ export function selectedMeteringView(types) {
     else if (type === '视频生成') ['total', 'tpm'].forEach(key => tokenKeys.add(key));
   }
   const extras = [['图片生成', 'images', '图片生成量'], ['语音识别', 'audio', '识别音频时长'], ['语音合成', 'characters', '合成字符数']].filter(([type]) => types.includes(type));
-  return { summary: tokenKeys.size ? ['total', 'input', 'output', 'average'] : extras.map(([, key]) => key), nonTokenSummary: extras.map(([, key]) => key), charts: [...meteringView('文本模型').charts.filter(([, [key]]) => tokenKeys.has(key)), ...extras.map(([, key, title]) => [title, [key]])] };
+  const singleLanguageModel = types.length === 1 && types[0] === '文本模型' && modelIds?.length === 1 ? modelIds[0] : null;
+  const profile = singleLanguageModel ? languageMetering[singleLanguageModel] ?? {} : null;
+  const charts = meteringView('文本模型').charts.filter(([, [key]]) => tokenKeys.has(key)).filter(([, [key]]) => {
+    if (!profile) return true;
+    if (key === 'cacheReadTotal' && profile.cachedInput && !profile.tiers) return false;
+    if (['cacheReadMinute', 'cacheReadTotal'].includes(key)) return !!profile.cache;
+    if (['cacheCreateMinute', 'cacheCreate', 'explicitReadMinute', 'cacheRead'].includes(key)) return !!profile.explicit;
+    return true;
+  }).map(([title, keys, options]) => {
+    if (!profile) return [title, keys, options];
+    const series = languageSeries(singleLanguageModel, title);
+    return series ? [title === '读缓存总 Token 数' && profile.cachedInput && profile.tiers ? '输入缓存命中 Token 数' : title, series.map(item => item.key), { series }] : [title, keys, options];
+  });
+  return { summary: tokenKeys.size ? ['total', 'input', 'output', 'average'] : extras.map(([, key]) => key), nonTokenSummary: extras.map(([, key]) => key), charts: [...charts, ...extras.map(([, key, title]) => [title, [key]])] };
 }
 export function usageNumber(value) {
   if (value === null || value === undefined) return '—';
@@ -301,8 +430,12 @@ export function bucketLabel(time) {
 }
 export function usageCSV(data, view, billing, type) {
   const columns = [...new Set([...view.summary, ...view.charts.flatMap(([, keys, options]) => [...keys, ...Object.values(options?.variants ?? {}).flat()])])];
+  const labels = Object.fromEntries(view.charts.flatMap(([, , options]) => options?.series?.map(({ key, label, fullLabel }) => [key, fullLabel ?? label]) ?? []));
   const quote = value => `"${String(value).replaceAll('"', '""')}"`;
-  return '\ufeff' + [['计费来源', '模型类型', '时间（北京时间）', ...columns.map(key => `${fields[key][0]}（${fields[key][1]}）`)], ...data.buckets.map(row => [billing, type, bucketLabel(row.time), ...columns.map(key => row[key] ?? '')])].map(row => row.map(quote).join(',')).join('\n');
+  const perModel = data.types !== undefined;
+  const models = [...new Set(data.buckets.flatMap(row => Object.keys(row.modelUsage || {})))];
+  const rows = perModel ? data.buckets.flatMap(row => models.map(model => [billing, type, model, bucketLabel(row.time), ...columns.map(key => row.modelUsage?.[model]?.[key] ?? '')])) : data.buckets.map(row => [billing, type, bucketLabel(row.time), ...columns.map(key => row[key] ?? '')]);
+  return '\ufeff' + [['计费来源', '模型类型', ...(perModel ? ['模型 ID'] : []), '时间（北京时间）', ...columns.map(key => `${labels[key] ?? fields[key]?.[0] ?? key}（${fields[key]?.[1] ?? 'Token'}）`)], ...rows].map(row => row.map(quote).join(',')).join('\n');
 }
 
 export function observationData(options) {

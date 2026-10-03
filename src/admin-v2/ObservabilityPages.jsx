@@ -1,31 +1,47 @@
-import { useEffect, useMemo, useState } from "react";
-import SharedMetricChart from "../components/MetricChart";
+import { useEffect, useState } from "react";
+import { TimeSeriesChart as SharedMetricChart } from "../components/AnalyticsCharts";
 import { Download, Search, X } from "lucide-react";
-import { groupRequests, percentile, usageTotal } from "./observability";
-import { MultiPick } from "./AnalyticsFilters";
+import { groupRequests, percentile, usageTotal, beijingTime, monitoringWindow } from "./observability";
+import { DateRange, MultiPick } from "./AnalyticsFilters";
 
-const stamp = value => value.slice(0, 16).replace("T", " ");
+import { FilterToolbar, FilterPresets, FilterReset, FilterPagination } from "../components/FilterControls";
+import { SelectedConditions } from "../components/SavedFilterViews";
+import { filterAnalytics, matchesSelection, tokens } from "./analytics";
+import { usagePreset } from "./usage-analysis";
+
+const stamp = beijingTime;
+const typeNames = {text:"语言模型",multimodal:"多模态理解",image:"图片生成",video:"视频生成",audio:"语音模型",embedding:"向量模型",rerank:"排序模型"};
 const labelOf = (state, field, id) => field === "modelId" ? state.models.find(x => x.id === id)?.modelId : field === "keyId" ? state.apiKeys.find(x => x.id === id)?.keyId : state.endpoints.find(x => x.id === id)?.endpointId;
 const hiddenByPolicy = (state, request) => state.securityPolicies.some(policy => policy.category === "数据策略" && policy.status === "已启用" && policy.scope === request.tenantId && policy.action === "不留存");
-const metricValue = (metric, rows) => metric === "请求数" ? rows.length : metric === "失败率" ? (rows.length ? rows.filter(x => x.httpStatus >= 400).length / rows.length * 100 : 0) : metric === "P95 延迟" ? (percentile(rows.map(x => x.durationMs), .95) || 0) : rows.reduce((sum, x) => sum + (metric === "生成任务数" ? x.usage.tasks || 0 : metric === "生成秒数" ? x.usage.seconds || 0 : metric === "向量数" ? x.usage.vectors || 0 : usageTotal(x.usage)), 0);
+const metricValue = (metric, rows) => metric === "请求数" ? rows.length : metric === "失败率" ? (rows.length ? rows.filter(x => x.httpStatus >= 400).length / rows.length * 100 : 0) : metric === "P95 延迟" ? (percentile(rows.map(x => x.durationMs), .95) || 0) : rows.reduce((sum, x) => sum + (metric === "生成任务数" ? x.usage.tasks || 0 : metric === "生成秒数" ? x.usage.seconds || 0 : metric === "向量数" ? x.usage.vectors || 0 : tokens(x)), 0);
 const metricsFor = types => [...new Set(["请求数", ...(types.some(type => ["text","multimodal"].includes(type)) ? ["Token 数"] : []), ...(types.includes("video") || types.includes("image") ? ["生成任务数"] : []), ...(types.includes("video") || types.includes("audio") ? ["生成秒数"] : []), ...(types.includes("embedding") ? ["向量数"] : []), "P95 延迟", "失败率"])];
 function PageHead({ title, text, action }) { return <div className="v2-page-head"><div><span>服务运维 / 监控运维</span><h1>{title}</h1><p>{text}</p></div>{action}</div>; }
 function Status({ value }) { return <em className={`v2-status ${["待确认", "处理中", "高", "未达标"].includes(value) ? "warn" : ""}`}>{value}</em>; }
 
-function MetricChart({ state, requests, groupBy, selected, metric }) {
-  const hours = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`);
-  const series = groupRequests(requests, groupBy, selected).slice(0, 8).map(group => ({ label: labelOf(state, groupBy, group.key) || group.key, values: hours.map((_, hour) => { const rows = group.requests.filter(x => new Date(x.createdAt).getHours() === hour); return rows.length ? Number(metricValue(metric, rows).toFixed(2)) : null; }) }));
-  return <SharedMetricChart labels={hours} series={series} height={420} label={metric} unit={metric === "失败率" ? "%" : metric.includes("延迟") ? "ms" : metric === "Token 数" ? "Token" : metric === "生成秒数" ? "秒" : "次"} />;
+function MetricChart({ state, requests, buckets, groupBy, selected, metric }) {
+  const series = groupRequests(requests, groupBy, selected).map(group => ({ label: labelOf(state, groupBy, group.key) || group.key, values: buckets.map(bucket => {
+    const rows = group.requests.filter(x => Date.parse(x.createdAt) >= bucket.start && Date.parse(x.createdAt) < bucket.end);
+    return rows.length ? Number(metricValue(metric, rows).toFixed(2)) : null;
+  }) }));
+  return <SharedMetricChart labels={buckets.map(bucket => stamp(new Date(bucket.start).toISOString()).slice(5))} series={series} height={420} label={metric} unit={metric === "失败率" ? "%" : metric.includes("延迟") ? "ms" : metric === "Token 数" ? "Token" : metric === "生成秒数" ? "秒" : metric === "向量数" ? "个" : "次"} />;
 }
 
 export function Monitoring({ state }) {
-  const [groupBy, setGroupBy] = useState("modelId"), [selected, setSelected] = useState(null), [metric, setMetric] = useState("Token 数");
-  useEffect(() => setSelected(null), [groupBy]);
-  const items = (groupBy === "modelId" ? state.models : groupBy === "keyId" ? state.apiKeys : state.endpoints).map(x => ({ id: x.id, label: labelOf(state, groupBy, x.id) }));
+  const [groupBy, setGroupBy] = useState("modelId"), [selected, setSelected] = useState(null), [metric, setMetric] = useState("Token 数"), [days, setDays] = useState('1');
+  const items = (groupBy === "modelId" ? state.models : groupBy === "keyId" ? state.apiKeys : state.endpoints).map(x => ({ id: x.id, name: labelOf(state, groupBy, x.id) }));
   const modelTypes = groupBy === "modelId" && selected !== null ? state.models.filter(x => selected.includes(x.id)).map(x => x.type) : state.models.map(x => x.type), metrics = metricsFor(modelTypes);
   useEffect(() => { if (!metrics.includes(metric)) setMetric(metrics[0]); }, [metrics.join("|"), metric]);
-  const ranked = useMemo(() => groupRequests(state.requests, groupBy).map(group => ({ id: group.key, value: group.requests.reduce((s, x) => s + usageTotal(x.usage), 0) })).sort((a,b) => b.value-a.value).slice(0,10), [state.requests, groupBy]);
-  return <div className="v2-page"><PageHead title="服务监控" text="按模型、Key 或端点对比调用质量；模型类型变化时自动切换可用指标。"/><section className="ops-filters"><select aria-label="统计维度" value={groupBy} onChange={e => setGroupBy(e.target.value)}><option value="modelId">按 Model ID</option><option value="keyId">按 Key ID</option><option value="endpointId">按 Endpoint ID</option></select><MultiPick label={groupBy === "modelId" ? "Model ID" : groupBy === "keyId" ? "Key ID" : "Endpoint ID"} items={items.map(item => ({id:item.id,name:item.label}))} value={selected} onChange={setSelected}/><select aria-label="监控指标" value={metric} onChange={e => setMetric(e.target.value)}>{metrics.map(value => <option key={value}>{value}</option>)}</select><button className="active">近 24 小时</button><button>近 7 天</button><span>粒度：1 小时</span></section><section className="ops-monitor"><aside><header>用量 Top 10<small>按统一计量单位</small></header><div>{ranked.map((item, i) => <button key={item.id} onClick={() => setSelected([item.id])} className={selected?.includes(item.id) ? "active" : ""}><i>{String(i+1).padStart(2,"0")}</i><span>{labelOf(state, groupBy, item.id)}</span><b>{(item.value/1000).toFixed(1)} K</b></button>)}</div></aside><article><header><b>{metric}趋势</b><span>{selected===null ? "全部对象（最多展示 8 条）" : `已选 ${selected.length} 项`}</span></header><MetricChart state={state} requests={state.requests} groupBy={groupBy} selected={selected} metric={metric}/></article></section></div>;
+  const window = monitoringWindow(state.requests, Number(days));
+  const requests = window.rows.filter(row => matchesSelection(selected, row[groupBy]));
+  const ranked = groupRequests(requests, groupBy).map(group => ({ id: group.key, value: metricValue(metric, group.requests) })).sort((a,b) => b.value-a.value).slice(0,10);
+  return <div className="v2-page"><PageHead title="服务监控" text="按模型、Key 或端点对比调用质量，趋势与排行使用相同的时间和对象范围。"/><FilterToolbar className="ops-filters">
+    <FilterPresets value={days} onChange={setDays} items={[['1','近 24 小时'],['7','近 7 天']]}/>
+    <select aria-label="统计维度" value={groupBy} onChange={e => { setGroupBy(e.target.value); setSelected(null); }}><option value="modelId">按 Model ID</option><option value="keyId">按 Key ID</option><option value="endpointId">按 Endpoint ID</option></select>
+    <MultiPick label={groupBy === "modelId" ? "Model ID" : groupBy === "keyId" ? "Key ID" : "Endpoint ID"} items={items} value={selected} onChange={setSelected}/>
+    <select aria-label="监控指标" value={metric} onChange={e => setMetric(e.target.value)}>{metrics.map(value => <option key={value}>{value}</option>)}</select><span>粒度：1 小时 · 北京时间</span>
+    <FilterReset onClick={() => { setDays('1'); setGroupBy('modelId'); setSelected(null); setMetric('Token 数'); }}/>
+  </FilterToolbar><SelectedConditions groups={[{label:'时间',text:days === '1' ? '近 24 小时' : '近 7 天'},{label:'统计维度',text:{modelId:'模型',keyId:'Key',endpointId:'端点'}[groupBy]},{label:'对象',items:selected === null ? null : selected.map(id=>labelOf(state,groupBy,id)||id),all:'全部'},{label:'监控指标',text:metric}]}/>
+  <section className="ops-monitor"><aside><header>{metric} Top 10<small>当前筛选范围</small></header><div>{ranked.map((item, i) => <button key={item.id} onClick={() => setSelected([item.id])} className={selected?.includes(item.id) ? "active" : ""}><i>{String(i+1).padStart(2,"0")}</i><span>{labelOf(state, groupBy, item.id)}</span><b>{item.value.toLocaleString('zh-CN',{maximumFractionDigits:2})}</b></button>)}{!ranked.length && <p className="v2-empty">暂无符合条件的数据</p>}</div></aside><article><header><b>{metric}趋势</b><span>{selected===null ? "全部对象 · 可在图表设置中选择" : `已选 ${selected.length} 项`}</span></header><MetricChart state={state} requests={requests} buckets={window.buckets} groupBy={groupBy} selected={selected} metric={metric}/></article></section></div>;
 }
 
 function Detail({ request, state, close }) {
@@ -34,11 +50,33 @@ function Detail({ request, state, close }) {
 }
 
 export function Logs({ state }) {
-  const scope = new URLSearchParams(location.hash.split("?")[1] || "");
-  const [query,setQuery]=useState(""),[model,setModel]=useState(""),[key,setKey]=useState(""),[source,setSource]=useState(""),[status,setStatus]=useState(""),[detail,setDetail]=useState(null);
-  const rows = state.requests.filter(x => (!scope.get("failed") || x.httpStatus>=400) && (!scope.get("model") || scope.get("model").split(",").includes(x.modelId)) && (!scope.get("tenant") || scope.get("tenant").split(",").includes(x.tenantId)) && (!scope.get("provider") || scope.get("provider").split(",").includes(state.endpoints.find(e=>e.id===x.endpointId)?.providerId)) && (!scope.get("type") || state.models.find(m=>m.id===x.modelId)?.type===scope.get("type")) && (!scope.get("start") || new Date(Date.parse(x.createdAt)+8*3600000).toISOString().slice(0,10)>=scope.get("start")) && (!scope.get("end") || new Date(Date.parse(x.createdAt)+8*3600000).toISOString().slice(0,10)<=scope.get("end")) && (!query || x.requestId.includes(query)) && (!model || x.modelId===model) && (!key || x.keyId===key) && (!source || x.source===source) && (!status || String(x.httpStatus)===status));
-  const exportCsv = () => { const body = [["Request ID","创建时间","Model ID","Key ID","来源","用量","状态","首包延迟","总延迟"], ...rows.map(x => [x.requestId,x.createdAt,labelOf(state,"modelId",x.modelId),labelOf(state,"keyId",x.keyId),x.source,hiddenByPolicy(state,x)?"按策略不留存":usageTotal(x.usage),x.httpStatus,x.ttftMs ?? "",x.durationMs])].map(row => row.join(",")).join("\n"); const link=document.createElement("a"); link.href=URL.createObjectURL(new Blob([`\ufeff${body}`],{type:"text/csv"})); link.download="调用日志.csv"; link.click(); URL.revokeObjectURL(link.href); };
-  return <div className="v2-page"><PageHead title="调用日志与链路" text="查询近 14 天调用记录，并从鉴权、限流、路由追踪到计量结果。" action={<button className="v2-primary" onClick={exportCsv}><Download/> 导出</button>}/>{scope.get("failed")&&<div className="v2-system-alert">来自调用分析：仅查看 {scope.get("start")} 至 {scope.get("end")} 的失败请求<button onClick={()=>{location.hash="/admin-2/logs"}}>清除分析条件</button></div>}<section className="ops-filters logs"><label><Search/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="精确搜索 Request ID"/></label><select value={model} onChange={e=>setModel(e.target.value)}><option value="">全部 Model ID</option>{state.models.map(x=><option value={x.id} key={x.id}>{x.modelId}</option>)}</select><select value={key} onChange={e=>setKey(e.target.value)}><option value="">全部 Key ID</option>{state.apiKeys.map(x=><option value={x.id} key={x.id}>{x.keyId}</option>)}</select><select value={source} onChange={e=>setSource(e.target.value)}><option value="">全部来源</option><option>API 调用</option><option>网页端调用</option></select><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">全部状态</option><option>200</option><option>504</option></select></section><section className="v2-list"><div className="v2-table"><table><thead><tr><th>Request ID</th><th>创建时间</th><th>Model ID</th><th>请求来源</th><th>Key ID</th><th>用量</th><th>首包延迟</th><th>延迟</th><th>状态</th><th>操作</th></tr></thead><tbody>{rows.slice(0,50).map(x=><tr key={x.id}><td><code>{x.requestId}</code></td><td>{stamp(x.createdAt)}</td><td>{labelOf(state,"modelId",x.modelId)}</td><td>{x.source}</td><td>{labelOf(state,"keyId",x.keyId)}</td><td>{hiddenByPolicy(state,x)?"按策略不留存":usageTotal(x.usage).toLocaleString()}</td><td>{x.ttftMs ? `${x.ttftMs} ms` : "—"}</td><td>{x.durationMs} ms</td><td><Status value={String(x.httpStatus)}/></td><td><button onClick={()=>setDetail(x)}>详情</button></td></tr>)}</tbody></table></div><footer>共 {rows.length} 条，当前展示前 {Math.min(50,rows.length)} 条</footer></section>{detail&&<Detail request={detail} state={state} close={()=>setDetail(null)}/>}</div>;
+  const defaults = () => ({ ...usagePreset('today'), preset:'today', model:null, tenant:null, provider:null, keys:null, type:'', source:'', status:'', failed:false, query:'' });
+  const [filters,setFilters]=useState(() => {
+    const scope=new URLSearchParams(location.hash.split('?')[1]||'');
+    const values=defaults();
+    for(const field of ['model','tenant','provider']) if(scope.has(field)) values[field]=scope.get(field)==='__none__'?[]:scope.get(field)?scope.get(field).split(',').filter(Boolean):null;
+    for(const field of ['start','end','type']) if(scope.get(field)) values[field]=scope.get(field);
+    if(scope.has('start')||scope.has('end')) values.preset='custom';
+    values.failed=scope.get('failed')==='1';
+    return values;
+  });
+  const [detail,setDetail]=useState(null),[page,setPage]=useState(1),[size,setSize]=useState(50);
+  const update = changes => {setFilters(current=>({...current,...changes}));setPage(1)};
+  const rows=filterAnalytics(state,{...filters,source:''}).filter(row => matchesSelection(filters.keys,row.keyId) && (!filters.failed||row.httpStatus>=400) && (!filters.source||row.source===filters.source) && (!filters.status||String(row.httpStatus)===filters.status) && row.requestId.toLowerCase().includes(filters.query.trim().toLowerCase()));
+  const current=Math.min(page,Math.max(1,Math.ceil(rows.length/size)));
+  const groups=[{label:'时间',text:`${{today:'今日',yesterday:'昨日','7d':'近 7 天','30d':'近 30 天'}[filters.preset]||'自定义'}（${filters.start} — ${filters.end}）`},
+    ...[['model','模型',state.models.map(x=>({id:x.id,name:x.modelId}))],['tenant','客户',state.tenants],['provider','供应商',state.providers],['keys','Key ID',state.apiKeys.map(x=>({id:x.id,name:x.keyId}))]].map(([field,label,items])=>({label,items:filters[field]===null?null:filters[field].map(id=>items.find(x=>x.id===id)?.name||id),all:`全部${label}`})),
+    {label:'模型类型',text:typeNames[filters.type]||filters.type||'全部'},{label:'请求来源',text:filters.source||'全部'},{label:'状态',text:filters.status||'全部'},{label:'请求结果',text:filters.failed?'仅失败请求':'全部'},{label:'Request ID',text:filters.query.trim()||'全部'}];
+  const exportCsv=()=>{const body=[['Request ID','创建时间（北京时间）','Model ID','Key ID','来源','用量','状态'],...rows.map(x=>[x.requestId,stamp(x.createdAt),labelOf(state,'modelId',x.modelId),labelOf(state,'keyId',x.keyId),x.source,hiddenByPolicy(state,x)?'按策略不留存':usageTotal(x.usage),x.httpStatus])].map(row=>row.join(',')).join('\n');const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([`\ufeff${body}`],{type:'text/csv'}));link.download='调用日志.csv';link.click();URL.revokeObjectURL(link.href)};
+  return <div className="v2-page"><PageHead title="调用日志与链路" text="查询当前筛选范围内的调用记录，时间均为北京时间。" action={<button className="v2-primary" onClick={exportCsv}><Download/> 导出</button>}/>
+    <FilterToolbar className="ops-filters logs"><FilterPresets value={filters.preset} onChange={preset=>update({...usagePreset(preset),preset})}/><DateRange start={filters.start} end={filters.end} allowLongRange onChange={range=>update({...range,preset:'custom'})}/>
+    <label><Search/><input value={filters.query} onChange={e=>update({query:e.target.value})} placeholder="搜索 Request ID"/></label>
+    {[['model','模型',state.models.map(x=>({id:x.id,name:x.modelId}))],['tenant','客户',state.tenants],['provider','供应商',state.providers],['keys','Key ID',state.apiKeys.map(x=>({id:x.id,name:x.keyId}))]].map(([field,label,items])=><MultiPick key={field} label={label} items={items} value={filters[field]} onChange={value=>update({[field]:value})}/>)}
+    <select aria-label="模型类型" value={filters.type} onChange={e=>update({type:e.target.value})}><option value="">全部模型类型</option>{[...new Set(state.models.map(x=>x.type))].map(type=><option key={type} value={type}>{typeNames[type]||type}</option>)}</select>
+    <select aria-label="请求来源" value={filters.source} onChange={e=>update({source:e.target.value})}><option value="">全部来源</option>{[...new Set(state.requests.map(x=>x.source))].map(source=><option key={source}>{source}</option>)}</select>
+    <select aria-label="请求状态" value={filters.failed?'failed':filters.status} onChange={e=>update({failed:e.target.value==='failed',status:e.target.value==='failed'?'':e.target.value})}><option value="">全部状态</option><option value="failed">仅失败请求</option>{[...new Set(state.requests.map(x=>String(x.httpStatus)))].sort().map(status=><option key={status}>{status}</option>)}</select>
+    <FilterReset onClick={()=>{setFilters(defaults());setPage(1);location.hash='/admin-2/logs'}}/></FilterToolbar><SelectedConditions groups={groups}/>
+    <section className="v2-list"><div className="v2-table"><table><thead><tr><th>Request ID</th><th>创建时间（北京时间）</th><th>Model ID</th><th>请求来源</th><th>Key ID</th><th>用量</th><th>首包延迟</th><th>延迟</th><th>状态</th><th>操作</th></tr></thead><tbody>{rows.slice((current-1)*size,current*size).map(x=><tr key={x.id}><td><code>{x.requestId}</code></td><td>{stamp(x.createdAt)}</td><td>{labelOf(state,'modelId',x.modelId)}</td><td>{x.source}</td><td>{labelOf(state,'keyId',x.keyId)}</td><td>{hiddenByPolicy(state,x)?'按策略不留存':usageTotal(x.usage).toLocaleString()}</td><td>{x.ttftMs?`${x.ttftMs} ms`:'—'}</td><td>{x.durationMs} ms</td><td><Status value={String(x.httpStatus)}/></td><td><button onClick={()=>setDetail(x)}>详情</button></td></tr>)}{!rows.length&&<tr><td colSpan={10}><div className="v2-empty">没有符合条件的调用记录</div></td></tr>}</tbody></table></div><FilterPagination total={rows.length} page={current} size={size} onPageChange={setPage} onSizeChange={setSize}/></section>{detail&&<Detail request={detail} state={state} close={()=>setDetail(null)}/>}</div>;
 }
 
 export function Alerts({ state, dispatch, navigate }) {

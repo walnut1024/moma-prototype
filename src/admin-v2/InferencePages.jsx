@@ -1,5 +1,6 @@
+import { deploymentSeries, deploymentSummary } from "./observability";
 import { useEffect, useMemo, useState } from "react";
-import SharedMetricChart from "../components/MetricChart";
+import { TimeSeriesChart as SharedMetricChart } from "../components/AnalyticsCharts";
 import { Activity, Boxes, CirclePlus, Cpu, Search, Server, X } from "lucide-react";
 
 const uid = prefix => `${prefix}-${Date.now()}`;
@@ -33,13 +34,14 @@ export function ModelDeployments({ state, dispatch }) {
 
 function ObservabilityChart({ deployments, metric }) {
   const hours = Array.from({ length: 13 }, (_, index) => `${String(index * 2).padStart(2, "0")}:00`);
-  return <SharedMetricChart labels={hours} series={deployments.map((item, line) => ({ label: item.name, values: hours.map((_, index) => Math.round((Math.sin(index * .8 + line) + 1.4) * (metric === "GPU 利用率" ? 26 : metric === "P95 延迟" ? 180 : 42) + line * 9)) }))} height={360} label={metric} unit={metric === "GPU 利用率" ? "%" : metric === "P95 延迟" ? "ms" : ""} />;
+  return <SharedMetricChart labels={hours} series={deployments.map(item => ({ label: item.name, values: deploymentSeries(item, metric) }))} height={360} label={metric} unit={metric === "GPU 利用率" ? "%" : metric === "P95 延迟" ? "ms" : ""} />;
 }
 
 export function ModelObservability({ state }) {
   const running = state.deployments.filter(item => item.status !== "停止"), [selected, setSelected] = useState(running.map(item => item.id)), [metric, setMetric] = useState("GPU 利用率");
   const visible = useMemo(() => running.filter(item => selected.includes(item.id)), [running, selected]);
-  return <div className="v2-page"><Header title="生产观测" icon={Activity} description="按部署实例对比资源与推理性能，图表每个部署对应独立序列。"/><section className="observability-controls"><label>监控指标<select value={metric} onChange={event => setMetric(event.target.value)}><option>GPU 利用率</option><option>请求吞吐</option><option>P95 延迟</option></select></label><fieldset><legend>Deployment ID（多选）</legend>{running.map(item => <label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={() => setSelected(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/>{item.deploymentId}</label>)}</fieldset></section><section className="v2-panel observability-panel"><header><div><b>{metric}趋势</b><span>近 24 小时 · {visible.length} 个部署</span></div></header>{visible.length ? <ObservabilityChart deployments={visible} metric={metric}/> : <div className="v2-empty">请选择至少一个部署</div>}</section><section className="inference-kpis"><article><Activity/><span>平均 GPU 利用率<b>67.8%</b></span></article><article><GaugeIcon/><span>总吞吐<b>186 req/s</b></span></article><article><Server/><span>P95 延迟<b>428 ms</b></span></article></section></div>;
+  const summary = deploymentSummary(visible);
+  return <div className="v2-page"><Header title="生产观测" icon={Activity} description="按部署实例对比资源与推理性能，图表每个部署对应独立序列。"/><section className="observability-controls"><label>监控指标<select value={metric} onChange={event => setMetric(event.target.value)}><option>GPU 利用率</option><option>请求吞吐</option><option>P95 延迟</option></select></label><fieldset><legend>Deployment ID（多选）</legend>{running.map(item => <label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={() => setSelected(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}/>{item.deploymentId}</label>)}</fieldset></section><section className="v2-panel observability-panel"><header><div><b>{metric}趋势</b><span>近 24 小时 · {visible.length} 个部署 · 演示样本</span></div></header>{visible.length ? <ObservabilityChart deployments={visible} metric={metric}/> : <div className="v2-empty">请选择至少一个部署</div>}</section><section className="inference-kpis"><article><Activity/><span>平均 GPU 利用率<b>{summary.gpu === null ? "—" : `${summary.gpu.toFixed(1)}%`}</b></span></article><article><GaugeIcon/><span>总吞吐<b>{summary.throughput === null ? "—" : `${summary.throughput.toFixed(1)} req/s`}</b></span></article><article><Server/><span>P95 延迟<b>{summary.p95 === null ? "—" : `${summary.p95} ms`}</b></span></article></section></div>;
 }
 
 function GaugeIcon() { return <Activity/>; }

@@ -1,70 +1,85 @@
-import { Check, Search, SquareArrowOutUpRight, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Search, SquareArrowOutUpRight, X } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
+import { Button } from './components/ui/button';
+import { Checkbox } from './components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from './components/ui/dialog';
+import { Input } from './components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
+import { chooseModel, filterModels, modelCategory, modelSupplier } from './model-selection.mjs';
 import './model-select-dialog.css';
 
-const categoryName = type => ({ text: '文本', multimodal: '多模态', image: '图片', video: '视频', voice: '语音' }[type] || '文本');
-
-export default function ModelSelectDialog({ open, models, value, multiple = false, min = 1, max = 1, onApply, onClose, onSubscribe }) {
-  const dialog = useRef();
-  const initial = Array.isArray(value) ? value : [value];
-  const [selected, setSelected] = useState(initial);
-  const [active, setActive] = useState(initial[0] || models[0]?.name);
+export default function ModelSelectDialog({ open, models, value, multiple = false, min = 1, max = 1, onApply, onClose }) {
+  const selectionId = useId();
+  const [selected, setSelected] = useState([]);
   const [query, setQuery] = useState('');
+  const [supplierQuery, setSupplierQuery] = useState('');
   const [category, setCategory] = useState('全部');
   const [provider, setProvider] = useState('全部供应商');
   const [billing, setBilling] = useState('全部计费');
+  const [subscribedOnly, setSubscribedOnly] = useState(true);
 
   useEffect(() => {
-    const node = dialog.current;
-    if (open && !node.open) {
-      setSelected(Array.isArray(value) ? value : [value]);
-      setActive((Array.isArray(value) ? value[0] : value) || models[0]?.name);
-      setQuery(''); setCategory('全部'); setProvider('全部供应商'); setBilling('全部计费');
-      node.showModal();
-    } else if (!open && node?.open) node.close();
+    if (!open) return;
+    const names = Array.isArray(value) ? value : [value];
+    setSelected(names.filter(name => models.some(model => model.name === name && model.subscribed)));
+    setQuery(''); setSupplierQuery(''); setCategory('全部');
+    setProvider('全部供应商'); setBilling('全部计费'); setSubscribedOnly(true);
   }, [open, value, models]);
 
-  const categories = useMemo(() => ['全部', ...new Set(models.map(model => categoryName(model.type)))], [models]);
-  const providers = useMemo(() => ['全部供应商', ...new Set(models.map(model => model.name.split('/')[0]))], [models]);
-  const visible = models.filter(model => {
-    const matchesQuery = model.name.toLowerCase().includes(query.trim().toLowerCase());
-    return matchesQuery && (category === '全部' || categoryName(model.type) === category) && (provider === '全部供应商' || model.name.startsWith(`${provider}/`)) && (billing === '全部计费' || model.billing === billing);
-  });
-  const detail = models.find(model => model.name === active) || visible[0] || models[0];
+  const categories = ['全部', ...new Set(models.map(model => modelCategory(model.type)))];
+  const providers = ['全部供应商', ...new Set(models.map(modelSupplier))];
+  const filters = { query, category, provider, billing, subscribedOnly };
+  const visible = filterModels(models, filters);
+  const supplierCounts = filterModels(models, { ...filters, provider: '全部供应商' });
+  const categoryCounts = filterModels(models, { ...filters, category: '全部' });
+  const orderUrl = `/${location.pathname.split('/').filter(Boolean)[0]}/?page=model-order`;
+  const validSelection = selected.length >= min && selected.length <= max;
 
-  function choose(model) {
-    setActive(model.name);
-    if (!model.subscribed && !multiple) return;
-    if (!multiple) return setSelected([model.name]);
-    setSelected(items => items.includes(model.name) ? items.length > min ? items.filter(name => name !== model.name) : items : items.length < max && model.subscribed ? [...items, model.name] : items);
-  }
+  function choose(model) { setSelected(items => chooseModel(items, model, multiple, max)); }
 
-  function close() { dialog.current?.close(); onClose(); }
-
-  return <dialog ref={dialog} className="model-select-dialog" aria-label={multiple ? '选择对比模型' : '选择模型'} onCancel={event => { event.preventDefault(); close(); }}>
-    <div className="model-select-shell">
-      <header>
-        <div className="model-select-title"><h2>{multiple ? '添加对比模型' : '选择模型'}</h2><p>选择适合当前任务的模型与计费方式</p></div>
-        <label><Search size={17} aria-hidden="true"/><input autoFocus aria-label="搜索模型" placeholder="搜索模型名称" value={query} onChange={event => setQuery(event.target.value)}/><kbd>ESC</kbd></label>
-        <button type="button" aria-label="关闭模型选择" onClick={close}><X size={20}/></button>
-        <div className="model-select-filters">
-          <select aria-label="模型供应商" value={provider} onChange={event => setProvider(event.target.value)}>{providers.map(item => <option key={item}>{item}</option>)}</select>
-          <select aria-label="计费方式" value={billing} onChange={event => setBilling(event.target.value)}><option>全部计费</option><option>Token Plan</option><option>按量计费</option></select>
-        </div>
+  return <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
+    <DialogContent className="model-select-dialog" showCloseButton={false}>
+      <header className="model-select-heading">
+        <div><DialogTitle>{multiple ? '添加对比模型' : '选择模型'}</DialogTitle><DialogDescription>按供应商和模型类型查找</DialogDescription></div>
+        <Button type="button" variant="ghost" size="icon" aria-label="关闭模型选择" onClick={onClose}><X size={20}/></Button>
       </header>
-      <main>
-        <nav aria-label="模型分类">{categories.map(item => <button type="button" className={category === item ? 'active' : ''} key={item} onClick={() => setCategory(item)}><span>{item}</span><small>{item === '全部' ? models.length : models.filter(model => categoryName(model.type) === item).length}</small></button>)}</nav>
-        <section className="model-select-list" aria-label="模型列表">{visible.length ? visible.map(model => {
-          const checked = selected.includes(model.name);
-          return <button type="button" key={model.name} className={active === model.name ? 'active' : ''} aria-pressed={checked} onClick={() => choose(model)}><span><strong>{model.name}</strong><small>{model.desc || `${categoryName(model.type)}生成模型`}</small><i className={model.subscribed ? 'subscribed' : 'unsubscribed'}>{model.subscribed ? '已订购' : '未订购'}</i><i className={model.billing === 'Token Plan' ? 'plan' : 'metered'}>{model.billing}</i></span>{checked && <Check size={18} aria-hidden="true"/>}</button>;
-        }) : <p>没有匹配的模型</p>}</section>
-        <aside>{detail && <><div className="model-detail-top"><div><h2>{detail.name}</h2><span className="model-type-badge">{categoryName(detail.type)}模型</span><span className={detail.subscribed ? 'model-state-badge subscribed' : 'model-state-badge unsubscribed'}>{detail.subscribed ? '已订购' : '未订购'}</span><span className={detail.billing === 'Token Plan' ? 'model-state-badge plan' : 'model-state-badge metered'}>{detail.billing}</span></div>{!detail.subscribed && <button type="button" onClick={() => { close(); onSubscribe?.(); }}>前往订购<SquareArrowOutUpRight size={16} aria-hidden="true"/></button>}</div><p>{detail.desc || '适用于当前模型体验场景，选择后可查看生成效果。'}</p>{(detail.context || detail.output) && <dl>{detail.context && <div><dt>上下文</dt><dd>{detail.context}</dd></div>}{detail.output && <div><dt>最大输出</dt><dd>{detail.output}</dd></div>}</dl>}</>}</aside>
-      </main>
-      <footer>
-        <div>{selected.map(name => <button type="button" key={name} onClick={() => multiple && selected.length > min && setSelected(items => items.filter(item => item !== name))}>{name}{multiple && <X size={13}/>}</button>)}</div>
-        <button type="button" onClick={close}>取消</button>
-        <button type="button" className="primary" disabled={selected.length < min} onClick={() => { onApply(multiple ? selected : selected[0]); close(); }}>应用{multiple ? `（${selected.length} 个模型）` : ''}</button>
-      </footer>
-    </div>
-  </dialog>;
+      <div className="model-select-body">
+        <aside className="model-select-suppliers" aria-label="模型供应商">
+          <h3>供应商</h3>
+          <label className="model-select-search"><Search size={16} aria-hidden="true"/><Input aria-label="搜索供应商" placeholder="搜索供应商" value={supplierQuery} onChange={event => setSupplierQuery(event.target.value)}/></label>
+          <nav aria-label="供应商筛选">{providers.filter(item => item.toLowerCase().includes(supplierQuery.trim().toLowerCase())).map(item => {
+            const count = item === '全部供应商' ? supplierCounts.length : supplierCounts.filter(model => modelSupplier(model) === item).length;
+            return <Button type="button" variant="ghost" className={provider === item ? 'active' : ''} aria-pressed={provider === item} key={item} onClick={() => setProvider(item)}><span>{item}</span><small>{count}</small></Button>;
+          })}</nav>
+          {providers.every(item => !item.toLowerCase().includes(supplierQuery.trim().toLowerCase())) && <p className="model-select-supplier-empty">无匹配供应商</p>}
+        </aside>
+        <section className="model-select-results" aria-label="模型目录">
+          <div className="model-select-toolbar">
+            <label className="model-select-search"><Search size={17} aria-hidden="true"/><Input autoFocus aria-label="搜索模型" placeholder="搜索模型名称" value={query} onChange={event => setQuery(event.target.value)}/></label>
+            <Select value={billing} onValueChange={setBilling}><SelectTrigger className="model-select-billing" aria-label="计费方式"><SelectValue/></SelectTrigger><SelectContent>{['全部计费', ...new Set(models.map(model => model.billing))].map(item => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
+            <label className="model-select-subscribed"><Checkbox checked={subscribedOnly} onCheckedChange={checked => setSubscribedOnly(checked === true)}/>仅看已订购</label>
+          </div>
+          <div className="model-select-categories"><Tabs value={category} onValueChange={setCategory}><TabsList variant="line" aria-label="模型类型筛选">{categories.map(item => <TabsTrigger key={item} value={item}>{item}<small>{item === '全部' ? categoryCounts.length : categoryCounts.filter(model => modelCategory(model.type) === item).length}</small></TabsTrigger>)}</TabsList></Tabs><span aria-live="polite">共 {visible.length} 个模型</span></div>
+          <div className="model-select-table-scroll">
+            <table className="model-select-table" aria-label="模型列表">
+              <colgroup><col className="model-col-select"/><col/><col className="model-col-type"/><col className="model-col-billing"/><col className="model-col-status"/></colgroup>
+              <thead><tr><th scope="col"><span className="sr-only">选择</span></th><th scope="col">模型名称</th><th scope="col">类型</th><th scope="col">计费方式</th><th scope="col">订购状态</th></tr></thead>
+              <tbody>{visible.map(model => {
+                const checked = selected.includes(model.name);
+                const disabled = !model.subscribed || (multiple && !checked && selected.length >= max);
+                return <tr key={model.name} data-selected={checked} data-unavailable={!model.subscribed} onClick={() => !disabled && choose(model)}>
+                  <td><input type={multiple ? 'checkbox' : 'radio'} name={selectionId} checked={checked} disabled={disabled} aria-label={`选择 ${model.name}`} onClick={event => event.stopPropagation()} onChange={() => choose(model)}/></td>
+                  <td><span className="model-select-name" title={[model.name, model.desc].filter(Boolean).join('：')}>{model.name}</span></td><td>{modelCategory(model.type)}</td><td>{model.billing}</td>
+                  <td>{model.subscribed ? <span className="model-select-status">已订购</span> : <a href={orderUrl} target="_blank" rel="noopener noreferrer" aria-label={`去订购 ${model.name}（在新页签打开）`} onClick={event => event.stopPropagation()}>去订购<SquareArrowOutUpRight size={14} aria-hidden="true"/></a>}</td>
+                </tr>;
+              })}</tbody>
+            </table>
+            {!visible.length && <div className="model-select-empty"><p>没有匹配的模型</p><Button type="button" variant="link" onClick={() => { setQuery(''); setSupplierQuery(''); setProvider('全部供应商'); setCategory('全部'); setBilling('全部计费'); setSubscribedOnly(false); }}>清除筛选，查看全部模型</Button></div>}
+          </div>
+        </section>
+      </div>
+      <footer className="model-select-footer"><div className="model-select-current">{multiple ? <><span>已选 {selected.length} 个模型（{min}–{max} 个）</span>{selected.map(name => <Button type="button" variant="outline" size="xs" key={name} aria-label={`移除 ${name}`} onClick={() => setSelected(items => items.filter(item => item !== name))}>{name}<X size={12}/></Button>)}</> : <><span>已选：</span><strong title={selected[0]}>{selected[0] || '请选择模型'}</strong></>}</div><Button type="button" variant="outline" onClick={onClose}>取消</Button><Button type="button" className="model-select-apply" disabled={!validSelection} onClick={() => { onApply(multiple ? selected : selected[0]); onClose(); }}>应用</Button></footer>
+    </DialogContent>
+  </Dialog>;
 }

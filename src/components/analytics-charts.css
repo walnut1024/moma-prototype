@@ -1,0 +1,19 @@
+.unified-chart{min-width:0;color:#263247;font-variant-numeric:tabular-nums}
+.unified-chart-canvas{min-width:0;width:100%}
+.unified-chart-tools{display:flex;justify-content:flex-end;align-items:center;gap:8px;min-height:32px;margin-bottom:6px;color:#64748b;font-size:12px}
+.unified-chart-tools [data-slot=button]{width:30px;height:30px;border-radius:6px;box-shadow:none}
+.unified-chart-picker{width:320px;max-width:calc(100vw - 24px);max-height:var(--radix-popover-content-available-height);overflow:hidden;padding:12px;gap:10px;font-size:12px}
+.unified-chart-picker>strong,.unified-chart-picker>input,.unified-chart-picker-actions,.unified-chart-picker>small{flex-shrink:0}
+.unified-chart-picker>small{color:#64748b;line-height:1.5}
+.unified-chart-picker-actions{display:flex;justify-content:space-between}
+.unified-chart-options{min-height:0;max-height:240px;overflow:auto}
+.unified-chart-options>label{display:flex;align-items:center;gap:8px;min-height:32px;cursor:pointer}
+.unified-chart-options>label>i{width:18px;height:3px;flex:none}
+.unified-chart-options>label>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Only chart surfaces share this treatment; forms and KPI cards keep their own density. */
+:is(.us-chart,.ops-monitor>article,.adm-charts>article,[data-slot=card]:has(.unified-chart),[data-slot=card]:has(.unified-chart-canvas)){border:1px solid #e4eaf3;border-radius:6px;background:#fff;box-shadow:none;min-width:0}
+:is(.ua-page,.an-page,.ov-page) [data-slot=card]:has(.unified-chart) [data-slot=card-title],.us-page .us-chart h3{font-size:16px;font-weight:600;line-height:24px;color:#17243b}
+:is(.ua-page,.an-page,.ov-page) [data-slot=card]:has(.unified-chart){padding:0;gap:0}
+:is(.ua-page,.an-page,.ov-page) [data-slot=card]:has(.unified-chart) [data-slot=card-header]{padding:16px 18px 8px;min-height:48px}
+:is(.ua-page,.an-page,.ov-page) [data-slot=card]:has(.unified-chart) [data-slot=card-content]{padding:0 18px 16px}
+.front-main .us-page .us-chart{padding:16px 18px}

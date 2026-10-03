@@ -1,3 +1,4 @@
+import { usagePreset } from "./admin-v2/usage-analysis.js";
 export const defaultLogFilters = { range: '7', billing: '', model: '', key: '', source: '', status: '', resource: '', query: '', start: '', end: '' };
 export const logStatuses = {
   200: ['成功', '', ''],
@@ -38,9 +39,14 @@ export function createLogRecords(today = shanghaiDate()) {
   );
 }
 
+export function logPeriod(range, today = shanghaiDate()) {
+  return usagePreset({ '1': 'today', yesterday:'yesterday', '7':'7d', '30':'30d' }[range], Date.parse(`${today}T12:00:00+08:00`));
+}
+
 export function filterLogRecords(records, billing, filters, today = shanghaiDate()) {
-  const start = filters.range === 'custom' ? filters.start : new Date(Date.parse(`${today}T00:00:00Z`) - (Number(filters.range) - 1) * 86400000).toISOString().slice(0, 10);
-  const end = filters.range === 'custom' ? filters.end : today;
+  const period = billing === '全部' && filters.range !== 'custom' ? logPeriod(filters.range, today) : null;
+  const start = period ? period.start : filters.range === 'custom' ? filters.start : new Date(Date.parse(`${today}T00:00:00Z`) - (Number(filters.range) - 1) * 86400000).toISOString().slice(0, 10);
+  const end = period ? period.end : filters.range === 'custom' ? filters.end : today;
   return records.filter(row => (billing === '全部' ? !filters.billing || row.billing === filters.billing : row.billing === billing) &&
     (!start || row.time.slice(0, 10) >= start) && (!end || row.time.slice(0, 10) <= end) &&
     (!filters.model || row.model === filters.model) && (!filters.key || row.keyId === filters.key) &&

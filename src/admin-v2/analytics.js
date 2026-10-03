@@ -67,9 +67,9 @@ export function dailyTokenSupply(state, filters) {
   return days.slice(1).map((day, i) => ({ ...day, days:1, partial:day.label===dayOf(Date.now()).slice(5), change: day.label!==dayOf(Date.now()).slice(5)&&days[i].total > 0 ? (day.total / days[i].total - 1) * 100 : null }));
 }
 
-export function validAnalyticsRange(start, end, granularity = 'day', now = Date.now()) {
+export function validAnalyticsRange(start, end, granularity = 'day', now = Date.now(), maxDays = granularity === 'week' ? 365 : 30) {
   const days = (Date.parse(end) - Date.parse(start)) / 86400000 + 1;
-  return Number.isFinite(days) && days >= 1 && days <= (granularity === 'week' ? 365 : 30) && end <= dayOf(now);
+  return Number.isFinite(days) && days >= 1 && days <= maxDays && end <= dayOf(now);
 }
 export function weeklyBuckets(rows, start, end, now = Date.now()) {
   const from = Date.parse(`${start}T00:00:00+08:00`), until = Date.parse(`${end}T00:00:00+08:00`) + 86400000;

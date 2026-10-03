@@ -132,7 +132,6 @@ function ModelPicker({ value, onChange }) {
           setOpen(false);
         }}
         onClose={() => setOpen(false)}
-        onSubscribe={() => {}}
       />
     </div>
   );

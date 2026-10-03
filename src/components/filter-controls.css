@@ -1,0 +1,21 @@
+.filter-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0}
+.filter-toolbar>*,.filter-field{min-width:0}
+.filter-presets{display:inline-flex;align-items:center;flex:none;white-space:nowrap}
+.filter-presets button{height:34px;min-width:46px;padding:0 10px;border-radius:0;font-size:12px;box-shadow:none}
+.filter-presets button:first-child{border-radius:5px 0 0 5px}
+.filter-presets button:last-child{border-radius:0 5px 5px 0}
+.filter-presets button+button{border-left:0}
+.filter-presets button[data-variant=default]{background:#3568f9;border-color:#3568f9;color:#fff}
+.filter-presets button:focus-visible{position:relative;z-index:1}
+.filter-field{display:inline-flex;align-items:center;gap:5px;flex:none;color:#71809b;font-size:12px;white-space:nowrap}
+.filter-field>span{flex:none}
+.filter-view-row{display:flex;align-items:center;width:100%;min-width:0}
+.filter-toolbar [data-slot=button],.filter-toolbar [data-slot=select-trigger]{height:34px;font-size:12px}
+.filter-toolbar .filter-date-trigger{flex:none;width:auto;gap:6px;white-space:nowrap}
+.filter-toolbar .filter-date-trigger svg{width:14px;height:14px}
+.filter-toolbar .filter-reset[data-slot=button]{height:34px;color:#71809b;min-width:auto;border:0;background:transparent;box-shadow:none}
+.filter-toolbar .filter-presets button[data-variant=default]{background:#3568f9;border-color:#3568f9;color:#fff}
+.filter-date-popover [data-slot=calendar]{padding:12px 0}
+.filter-pagination,.filter-pagination>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.filter-pagination{justify-content:space-between;padding:12px 0;font-size:12px;color:#54647c}
+.filter-pagination select{height:30px;border:1px solid #dce2ec;border-radius:5px;background:white;padding:0 8px}

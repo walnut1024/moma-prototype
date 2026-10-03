@@ -10,10 +10,20 @@ test('模型请求趋势按模型拆分且与总请求数一致', () => {
   assert.deepEqual(Object.keys(selected.summary.modelRequests), ['GLM-5.2']);
   assert.equal(meteringView('文本模型').charts[0][0], '总 Token 数');
 });
+test('模型用量趋势逐模型拆线，与汇总守恒且导出保留模型 ID', () => {
+  const data = selectedUsageData({ ...options, groups: ['语言模型'], start: '2026-09-19', minutes: 60 });
+  const models = Object.keys(data.buckets[0].modelUsage);
+  assert.ok(models.length > 1);
+  for (const row of data.buckets) for (const key of ['total', 'input', 'output'])
+    assert.equal(Object.values(row.modelUsage).reduce((sum, model) => sum + (model[key] || 0), 0), row[key]);
+  assert.equal(data.buckets[0].modelUsage['DeepSeek-V4-Flash'].cacheReadTotal, undefined);
+  const csv = usageCSV(data, selectedMeteringView(data.types), options.billing, '语言模型');
+  assert.ok(csv.includes('模型 ID') && csv.includes('GLM-5.2'));
+});
 test('用量图表包含 14 项且速率、缓存与单次平均由同一窗口原始量计算', () => {
   const titles = meteringView('文本模型').charts.map(([title]) => title);
   assert.deepEqual(titles, ['总 Token 数', '输入 Token 数', '输出 Token 数', '每分钟总 Token 数（TPM）', '每分钟输入 Token 数（TPM）', '每分钟输出 Token 数（TPM）', '每分钟读缓存 Token 数', '每分钟写入缓存 Token 数', '读缓存总 Token 数', '写入缓存总 Token 数', '每分钟读显式缓存 Token 数', '区间内命中显式缓存总 Token 数', '平均输入 Token（TPR）', '平均输出 Token（TPR）']);
-  for (const minutes of [5, 60, 1440]) {
+  for (const minutes of [5, 10, 60, 1440]) {
     const { summary, buckets } = usageData({ ...options, minutes });
     for (const row of [summary, ...buckets]) {
       assert.equal(row.tpm, row.total / row.observedMinutes);
@@ -68,7 +78,7 @@ test('用量汇总、筛选、粒度和导出保持同一统计口径', () => {
   assert.ok(data.summary.requests > 0);
   assert.equal(data.summary.total, data.summary.input + data.summary.output);
   assert.ok(data.summary.cache <= data.summary.input);
-  for (const minutes of [5, 60, 1440]) {
+  for (const minutes of [5, 10, 60, 1440]) {
     const result = usageData({ ...options, minutes });
     for (const field of ['requests', 'total', 'input', 'output', 'cache']) {
       assert.equal(result.summary[field], data.summary[field]);
@@ -86,6 +96,19 @@ test('用量汇总、筛选、粒度和导出保持同一统计口径', () => {
     assert.ok(usageCSV(sample, usageViews[type], options.billing, type).includes('北京时间'));
     assert.equal(usageCSV(sample, usageViews[type], options.billing, type).split('\n').length, sample.buckets.length + 1);
   }
+});
+
+test('单日十分钟与多日小时聚合只改变图表点数，不改变计量总量', () => {
+  const day = { ...options, start: '2026-09-17', end: '2026-09-17' };
+  const tenMinutes = selectedUsageData({ ...day, groups: ['语言模型'], minutes: 10 });
+  const oneHour = selectedUsageData({ ...day, groups: ['语言模型'], minutes: 60 });
+  assert.equal(tenMinutes.buckets.length, 144);
+  assert.equal(oneHour.buckets.length, 24);
+  assert.equal(tenMinutes.summary.total, oneHour.summary.total);
+  assert.equal(tenMinutes.summary.peakTpm, oneHour.summary.peakTpm);
+  assert.equal(tenMinutes.buckets.reduce((sum, row) => sum + row.total, 0), oneHour.summary.total);
+  const twoDays = selectedUsageData({ ...options, start: '2026-09-17', end: '2026-09-18', groups: ['语言模型'], minutes: 60 });
+  assert.equal(twoDays.buckets.length, 48);
 });
 
 test('模型指标遵守计量能力，状态与拆分守恒', () => {
@@ -151,6 +174,10 @@ test('调用观测跨模型与计费方式汇总，并保持计量和性能边�
  assert.ok(all.summary.ttft > 0);
  const selected = observationData({...options,billing:'全部',dimension:'Model ID',targets:['DeepSeek-V4-Pro']});
  assert.ok(selected.summary.ttft>0);
+ const key = usageKeys('按量付费')[0];
+ const combined = observationData({...options,billing:'全部',modelIds:['DeepSeek-V4-Pro'],apiKeyIds:[key]});
+ assert.equal(combined.summary.requests,usageData({...options,billing:'按量付费',targets:['DeepSeek-V4-Pro'],apiKeyId:key}).summary.requests);
+ assert.equal(observationData({...options,billing:'全部',modelIds:[]}).summary.requests,0);
  const embed = observationData({...options,billing:'全部',dimension:'Model ID',type:'向量模型',targets:['BGE-M3']});
  assert.equal(embed.summary.ttft,undefined);
  assert.equal(observationData({...options,billing:'Token Plan',dimension:'API Key',targets:[usageKeys('按量付费')[0]]}).summary.requests,0);
@@ -176,4 +203,29 @@ test('用量统计 API Key 与模型交叉筛选，分 Key 汇总等于全部', 
   assert.ok(parts[0].summary.requests > 0 && parts[0].summary.requests < all.summary.requests);
   assert.equal(selectedUsageData({ ...config, apiKeyId: 'missing' }).summary.requests, 0);
   assert.equal(parts[0].summary.total, usageData({ ...options, targets: ['GLM-5.2'], apiKeyId: usageKeys(options.billing)[0] }).summary.total);
+});
+
+test('语言模型计量分项直接作为同图多条线，且与筛选后的总量守恒', () => {
+  const settings = { ...options, start: '2026-09-19', end: '2026-09-19' };
+  const check = (model, title, count, totalKey) => {
+    const data = selectedUsageData({ ...settings, groups: ['语言模型'], modelIds: [model] });
+    const chart = selectedMeteringView(['文本模型'], [model]).charts.find(([name]) => name === title);
+    assert.equal(chart[1].length, count, `${model}: ${title}`);
+    assert.equal(chart[2]?.variants, undefined);
+    assert.equal(chart[1].reduce((sum, key) => sum + data.summary[key], 0), data.summary[totalKey]);
+    assert.ok(usageCSV(data, selectedMeteringView(['文本模型'], [model]), settings.billing, model).includes(chart[2].series[0].fullLabel ?? chart[2].series[0].label));
+  };
+  check('Qwen3.5-35B-A3B', '输入 Token 数', 2, 'input');
+  check('Qwen3.5-35B-A3B', '输出 Token 数', 4, 'output');
+  check('Qwen3-32B', '输出 Token 数', 2, 'output');
+  check('Kimi-K3', '输入 Token 数', 2, 'input');
+  check('GLM-5.1', '读缓存总 Token 数', 2, 'cacheReadTotal');
+  check('MiniMax-M3', '输出 Token 数', 2, 'output');
+  check('qwen3-max', '写入缓存总 Token 数', 3, 'cacheCreate');
+  check('qwen3.7-plus', '区间内命中显式缓存总 Token 数', 2, 'cacheRead');
+  const ordinary = selectedMeteringView(['文本模型'], ['DeepSeek-V4-Flash']);
+  assert.deepEqual(ordinary.charts.find(([title]) => title === '输入 Token 数')[1], ['input']);
+  assert.ok(ordinary.charts.every(([title]) => !title.includes('夜间')));
+  assert.ok(ordinary.charts.every(([title]) => !title.includes('缓存')));
+  assert.deepEqual(selectedMeteringView(['文本模型'], ['GLM-5.1', 'MiniMax-M3']).charts.find(([title]) => title === '输入 Token 数')[1], ['input']);
 });

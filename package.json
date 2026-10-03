@@ -8,7 +8,7 @@
     "build": "vite build && node scripts/prepare-sites-build.mjs",
     "lint": "oxlint src worker scripts vite.config.mjs tests/*.test.mjs",
     "preview": "vite preview",
-    "test": "npm run test:admin && npm run test:usage && npm run test:sites && node --test tests/route-models.test.mjs",
+    "test": "npm run test:admin && npm run test:usage && npm run test:sites && node --test tests/route-models.test.mjs tests/model-selection.test.mjs tests/chart-style.test.mjs",
     "test:admin": "node --test tests/admin-v2-*.test.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "test:usage": "node --test tests/usage-statistics.test.mjs"
