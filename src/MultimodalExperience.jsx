@@ -1,3 +1,5 @@
+import FrontPageHeader from "./components/FrontPageHeader";
+import { ScanSearch } from "lucide-react";
 import { useRef, useState } from 'react';
 import { ArrowUp, ChevronDown, CirclePlus } from 'lucide-react';
 import ModelSelectDialog from './ModelSelectDialog';
@@ -75,10 +77,10 @@ export default function MultimodalExperience() {
     insert({ id: crypto.randomUUID(), name: `${item.title}.jpg`, url: item.image }, true);
     editor.current.focus();
   }
-  function submit(event) { event.preventDefault(); if (!hasContent) return; setResult('已完成本地多模态理解演示。正式接入模型后，这里将展示素材描述、标签、时间点或分镜分析结果。'); }
+  function submit(event) { event.preventDefault(); if (!hasContent) return; setResult('分析素材时，建议先识别主体、场景和关键动作，再按时间顺序整理主要信息；描述与标签应保持一致，分镜说明应包含景别、镜头运动和画面重点。'); }
 
   return <section className="playground tx-page mm-page">
-    <div className="pg-heading"><div><h1>多模态理解</h1><p>上传图片或视频，让模型识别内容、提取信息并完成分析。</p></div><button type="button" onClick={clear}>新建对话</button></div>
+    <FrontPageHeader className="pg-heading" title="多模态理解" description="上传图片或视频，让模型识别内容、提取信息并完成分析。" icon={ScanSearch} actions={<button type="button" onClick={clear}>新建对话</button>} />
     <div className="pg-workspace">
       <div className="pg-welcome"><h2>看见更多，理解更深</h2><p>输入问题并添加图片或视频，体验多模态内容理解。</p></div>
       <form className="pg-composer mm-composer" onSubmit={submit} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); attach(event.dataTransfer.files); }}>

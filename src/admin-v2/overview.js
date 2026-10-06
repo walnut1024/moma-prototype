@@ -1,67 +1,92 @@
 import { dayOf } from './analytics.js';
-const DAY = 86400000, OFFSET = 8 * 3600000;
-
+import { userDemo } from './user-analysis.js';
+const DAY = 86400000, HOUR = 3600000, OFFSET = 8 * HOUR;
+export const overviewPresets = [['day', '今日'], ['week', '近 7 天'], ['month', '近 30 天']];
+export const compactCount = new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 2 }).format;
+export const overviewDateTime = time => new Date(time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
 export function overviewPeriods(now = Date.now()) {
-  const date = new Date(now + OFFSET);
-  const midnight = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) - OFFSET;
-  const rolling = days => {
-    const start = midnight - (days - 1) * DAY;
-    const range = `${dayOf(start).replaceAll('-', '/')}～${dayOf(midnight).replaceAll('-', '/')}`;
-    return { id: days === 7 ? 'week' : 'month', label: `近 ${days} 天`, range, comparison: `对比前 ${days} 天同期`, start, end: now, previousStart: start - days * DAY, previousEnd: now - days * DAY };
-  };
-  return [
-    { id:'day', label:'本日', comparison:'对比昨日同期', start:midnight, end:now, previousStart:midnight-DAY, previousEnd:now-DAY },
-    rolling(7),
-    rolling(30),
-  ];
-}
-// Deterministic, rolling demo aggregates. These never write to the shared business store.
-const HOUR=3600000;
-const noise=seed=>{const value=Math.sin(seed*12.9898)*43758.5453;return value-Math.floor(value)};
-export function overviewDemo(now=Date.now()) {
-  const periods=overviewPeriods(now), today=periods[0].start;
-  const start=Math.min(periods[2].previousStart,today-29*DAY);
-  const hours=[];
-  for(let at=start;at<now;at+=HOUR) {
-    const hour=new Date(at+OFFSET).getUTCHours(), day=Math.floor((at+OFFSET)/DAY);
-    const load=.38+1.1*Math.exp(-(((hour-14)/6)**2)), growth=1+(at-start)/DAY*.006;
-    const total=Math.round(4800000*load*growth*(.85+noise(day)*.3)*(.92+noise(at/HOUR)*.16));
-    const share=.62+noise(day+5)*.1;
-    hours.push({at,total,self:Math.round(total*share),calls:Math.round(total/(1080+noise(day+7)*240)),share,
-      response:780+noise(at/HOUR+2)*320,ttft:210+noise(at/HOUR+3)*180,tpot:20+noise(at/HOUR+4)*18});
-  }
-  const aggregate=(from,to)=>{
-    const result={total:0,self:0,partner:0,unknown:0,calls:0,selfCalls:0,partnerCalls:0,unknownCalls:0,successfulCalls:0,responseSum:0,ttftSum:0,tpotSum:0,responseMax:0,ttftMax:0,tpotMax:0};
-    for(const h of hours) {
-      const fraction=Math.max(0,Math.min(to,h.at+HOUR)-Math.max(from,h.at))/HOUR;
-      if(!fraction)continue;
-      const calls=Math.round(h.calls*fraction),total=Math.round(h.total*fraction),self=Math.round(h.self*fraction),selfCalls=Math.round(calls*h.share);
-      result.total+=total;result.self+=self;result.partner+=total-self;result.calls+=calls;result.selfCalls+=selfCalls;result.partnerCalls+=calls-selfCalls;
-      result.successfulCalls+=Math.round(calls*(.9988+noise(h.at/HOUR+8)*.0009));
-      for(const key of ['response','ttft','tpot']){result[key+'Sum']+=h[key]*calls;if(calls)result[key+'Max']=Math.max(result[key+'Max'],Math.round(h[key]*(key==='tpot'?3.8:5.2)))}
-    }
-    return result;
-  };
-  const trend=(length,step,first)=>Array.from({length},(_,i)=>{const at=first+i*step;return {at,label:new Date(at+OFFSET).toISOString().slice(5,step===HOUR?16:10).replace('T',' '),...aggregate(at,Math.min(at+step,now))}});
-  const periodData=periods.map(p=>({...p,...aggregate(p.start,p.end),previous:aggregate(p.previousStart,p.previousEnd)}));
-  const current=periodData[0], quality=key=>({avg:current.calls?current[key+'Sum']/current.calls:null,max:current.calls?current[key+'Max']:null,count:current.calls});
-  const userTrend=Array.from({length:30},(_,i)=>{
-    const at=today-(29-i)*DAY, day=Math.floor((at+OFFSET)/DAY), progress=Math.min(1,(now-at)/DAY);
-    return {label:dayOf(at).slice(5),registered:Math.floor((104+i*1.7+noise(day)*35)*progress),cancelled:Math.floor((5+noise(day+1)*10)*progress),active:Math.floor((1840+i*25+noise(day+2)*430)*progress)};
+  const midnight = Date.parse(`${dayOf(now)}T00:00:00+08:00`);
+  return overviewPresets.map(([id, label], i) => {
+    const days = [1, 7, 30][i], start = midnight - (days - 1) * DAY;
+    return { id, label, start, end: now, previousStart: start - days * DAY, previousEnd: now - days * DAY,
+      range: `${dayOf(start)} — ${dayOf(now)}`, comparison: days === 1 ? '对比昨日同期' : `对比前 ${days} 天同期` };
   });
-  const currentUsers=userTrend.at(-1);
-  return {periods:periodData,success:current.calls?current.successfulCalls/current.calls*100:null,response:quality('response'),ttft:quality('ttft'),tpot:quality('tpot'),
-    dayTrend:trend(30,DAY,today-29*DAY),hourTrend:trend(72,HOUR,Math.floor(now/HOUR)*HOUR-71*HOUR),userTrend,
-    users:{registered:12400+userTrend.reduce((n,d)=>n+d.registered,0),dau:currentUsers.active,mau:8942,added:currentUsers.registered,cancelled:currentUsers.cancelled}};
 }
-export function overviewRanking(period,kind) {
-  const names=kind==='user'?['用户 A-1024','用户 B-2086','用户 C-3012','用户 D-4068','用户 E-5019','用户 F-6032','用户 G-7025','用户 H-8091','用户 I-9036','用户 J-1088']:['DeepSeek-V4-Pro','Qwen3.8-Max','GLM-5.2','Kimi-K3','DeepSeek-V4-Flash','Qwen3.5-Plus','GLM-5.3','MiniMax-H3','BGE-M3','Qwen-Audio'];
-  // Top 10 represents 80% of the platform; the remainder belongs to other objects.
-  const weights=names.map((_,i)=>(11-i)*(0.8+noise(period.start/DAY+i+(kind==='user'?20:60))*.4));
-  const selfWeights=weights.map((w,i)=>w*(.25+noise(i+42)*1.5)),partnerWeights=weights.map((w,i)=>w*(.25+noise(i+73)*1.5));
-  const selfSum=selfWeights.reduce((a,b)=>a+b,0),partnerSum=partnerWeights.reduce((a,b)=>a+b,0);
-  return names.map((name,i)=>{const selfFactor=selfWeights[i]/selfSum*.8,partnerFactor=partnerWeights[i]/partnerSum*.8,self=Math.round(period.self*selfFactor),partner=Math.round(period.partner*partnerFactor);return {id:kind+'-'+i,name,self,partner,unknown:0,total:self+partner,calls:Math.round(period.selfCalls*selfFactor+period.partnerCalls*partnerFactor)}}).sort((a,b)=>b.total-a.total);
-}
-export const overviewDate = time => dayOf(time);
+const noise = seed => { const n = Math.sin(seed * 12.9898) * 43758.5453; return n - Math.floor(n); };
+const models = ['DeepSeek-V4-Pro', 'Qwen3.8-Max', 'GLM-5.2', 'Kimi-K3', 'DeepSeek-V4-Flash', 'Qwen3.5-Plus', 'GLM-5.3', 'MiniMax-H3', 'BGE-M3', 'Qwen3.5-VL', 'Qwen3-Embedding', 'GLM-4.6V'];
+const customers = Array.from({ length: 32 }, (_, i) => ({ id: `tenant-demo-${1001 + i}`, name: `客户 ${String.fromCharCode(65 + Math.floor(i / 10))}-${1001 + i}` }));
+const empty = () => ({ total: 0, calls: 0, successfulCalls: 0, self: 0, partner: 0 });
+const add = (target, row) => { for (const key of ['total', 'calls', 'successfulCalls', 'self', 'partner']) target[key] += row[key]; };
+const sort = rows => rows.sort((a, b) => b.total - a.total || a.id.localeCompare(b.id));
+export const overviewChange = (value, previous) => previous > 0 ? (value / previous - 1) * 100 : null;
 
-export const compactCount = new Intl.NumberFormat('zh-CN',{notation:'compact',maximumFractionDigits:2}).format;
+// Registered identity stock at the cutoff, independent of tenant call activity.
+export function overviewRegistrations(users, end) {
+  const registered = [...new Map(users.filter(user => user.at < end).map(user => [user.id, user])).values()];
+  return { total: registered.length, enterprise: registered.filter(user => user.type === '企业').length, personal: registered.filter(user => user.type === '个人').length };
+}
+
+// Identity logins use calendar-month MAU, independent of the usage-period picker.
+export function overviewMonthlyActive({ users, logins }, end) {
+  const date = new Date(end + OFFSET);
+  const year = date.getUTCFullYear(), month = date.getUTCMonth();
+  const start = Date.UTC(year, month, 1) - OFFSET;
+  const previousStart = Date.UTC(year, month - 1, 1) - OFFSET;
+  const previousEnd = Math.min(start, previousStart + end - start);
+  const identities = new Map(users.map(user => [user.id, user]));
+  const count = (from, to) => new Set(logins.filter(event => {
+    const user = identities.get(event.userId);
+    return user && user.at <= event.at && event.at >= from && event.at < to;
+  }).map(event => event.userId)).size;
+  return { start, end, total: count(start, end), previousStart, previousEnd, previousTotal: count(previousStart, previousEnd) };
+}
+
+// Isolated deterministic demonstration facts, grouped by Beijing hour, tenant and public model.
+// Every summary, trend, ranking and detail uses these same facts; no identity/login inference.
+function aggregate(start, end, hourly) {
+  const summary = empty(), tenants = new Map(), modelMap = new Map(), pairs = new Map(), buckets = new Map();
+  const step = hourly ? HOUR : DAY;
+  for (let at = start; at < end; at += step) buckets.set(at, { at, label: hourly ? new Date(at + OFFSET).toISOString().slice(11, 16) : dayOf(at).slice(5), ...empty() });
+  for (let at = start; at < end; at += HOUR) {
+    const hour = new Date(at + OFFSET).getUTCHours(), day = Math.floor((at + OFFSET) / DAY);
+    const fraction = Math.min(HOUR, end - at) / HOUR;
+    for (let c = 0; c < customers.length; c++) {
+      // Smaller tenants have intermittent use. Period customer counts are deduplicated, not summed daily.
+      if (c > 10 && noise(day * 17 + c) < .58) continue;
+      for (let slot = 0; slot < 2; slot++) {
+        const m = (c + slot * 5 + Math.floor(day / 4)) % models.length;
+        const seed = at / HOUR + c * 113 + m * 19;
+        const load = .25 + Math.exp(-(((hour - 14) / 6) ** 2));
+        const calls = Math.floor((32 - c) * 12 * load * (.65 + noise(seed)) * fraction);
+        if (!calls) continue;
+        const successfulCalls = calls - Math.round(calls * (.002 + noise(seed + 1) * .012));
+        const total = successfulCalls * Math.round(500 + noise(day + m) * 1900);
+        const self = Math.round(total * (.25 + noise(m + c) * .6));
+        const row = { total, calls, successfulCalls, self, partner: total - self };
+        const customer = customers[c], model = { id: `model-demo-${m}`, name: models[m] };
+        if (!tenants.has(customer.id)) tenants.set(customer.id, { ...customer, ...empty(), modelIds: new Set() });
+        if (!modelMap.has(model.id)) modelMap.set(model.id, { ...model, ...empty(), customerIds: new Set() });
+        const key = `${customer.id}/${model.id}`;
+        if (!pairs.has(key)) pairs.set(key, { customerId: customer.id, customerName: customer.name, modelId: model.id, modelName: model.name, ...empty() });
+        const bucketAt = start + Math.floor((at - start) / step) * step;
+        for (const target of [summary, tenants.get(customer.id), modelMap.get(model.id), pairs.get(key), buckets.get(bucketAt)]) add(target, row);
+        if (successfulCalls) { tenants.get(customer.id).modelIds.add(model.id); modelMap.get(model.id).customerIds.add(customer.id); }
+      }
+    }
+  }
+  return { ...summary, activeCustomers: [...tenants.values()].filter(r => r.successfulCalls > 0).length,
+    success: summary.calls ? summary.successfulCalls / summary.calls * 100 : null,
+    customers: sort([...tenants.values()].map(({ modelIds, ...row }) => ({ ...row, modelCount: modelIds.size }))),
+    models: sort([...modelMap.values()].map(({ customerIds, ...row }) => ({ ...row, customerCount: customerIds.size }))),
+    pairs: [...pairs.values()], trend: [...buckets.values()] };
+}
+export function overviewDemo(now = Date.now(), periodId = 'day') {
+  const period = overviewPeriods(now).find(p => p.id === periodId) || overviewPeriods(now)[0];
+  const current = aggregate(period.start, period.end, period.id === 'day');
+  const previous = aggregate(period.previousStart, period.previousEnd, period.id === 'day');
+  const previousCustomers = new Map(previous.customers.map(row => [row.id, row]));
+  const identities = userDemo(now);
+  return { ...current, registrations: overviewRegistrations(identities.users, period.end), monthlyActive: overviewMonthlyActive(identities, period.end), period,
+    previous: { ...previous, registrations: overviewRegistrations(identities.users, period.previousEnd) },
+    customers: current.customers.map(row => ({ ...row, change: overviewChange(row.total, previousCustomers.get(row.id)?.total || 0) })) };
+}

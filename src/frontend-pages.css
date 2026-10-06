@@ -1,0 +1,65 @@
+/* Current tenant frontend shares the approved white title panel. */
+.front-main > :is(.content,.route-page,.ranking-page,.us-page,.legacy-page,.org-page,.playground,.compare-page,.operation-page){padding:16px;background:#f4f7fb;min-width:0}
+.front-main .front-page-header{display:flex;align-items:center;justify-content:space-between;gap:20px;width:100%;height:auto;min-height:88px;margin:0 0 12px;padding:16px 20px;border:1px solid #e4eaf3;border-radius:6px;background:#fff;flex-shrink:0;text-align:left;color:#253047}
+.front-main .front-page-header-copy{min-width:0}
+.front-main .front-page-header h1{display:flex;align-items:center;gap:9px;margin:0;font-size:20px;font-weight:600;line-height:28px;letter-spacing:0}
+.front-main .front-page-header-icon{width:20px;height:20px;flex-shrink:0}
+.front-main .front-page-header p{display:block;margin:6px 0 0;font-size:12px;line-height:20px;color:#64758f;overflow-wrap:anywhere}
+.front-main .front-page-header-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.front-main .front-page-header-actions button{height:32px;font-size:12px}
+.pg-heading .front-page-header-actions>button{border:1px solid #bdceff;background:#f8faff;color:#2864ef;border-radius:8px;padding:11px 18px;white-space:nowrap}
+.front-main .pg-heading .front-page-header-actions>button{padding:0 12px;border-color:#dce3ef;border-radius:6px}
+.version-5102 .front-page-header-icon{display:none}
+.front-main .us-page .us-tabs{padding:0 12px;height:42px;border:1px solid #e4eaf3;border-bottom-color:#e4eaf3;border-radius:6px;background:#fff;margin-bottom:12px}
+.front-main .us-page .us-content,.front-main .api-key-unified .api-key-billing-panel{padding:0}
+.front-main .api-key-unified .api-key-page{padding:0;border-color:#e4eaf3;border-radius:6px}
+.front-main .api-key-unified .api-key-tools{margin:0;padding:10px 12px;border-bottom:1px solid #edf1f6;min-height:54px;gap:8px}
+.front-main .api-key-unified .api-key-tools :is(.primary,label,button){height:34px;font-size:12px}
+.front-main .api-key-unified .api-key-tools button:not(.primary){width:34px;height:34px}
+.front-main .api-key-unified .api-key-tools>div{gap:8px}
+.front-main .api-key-unified .api-key-table{margin:0;overflow-x:auto}
+.front-main .api-key-unified .api-key-row{min-width:960px}
+.front-main .api-key-unified .api-key-head{min-height:38px;background:#f8faff;color:#586982}
+.front-main .api-key-unified .api-key-row:not(.api-key-head){min-height:64px}
+.front-main .api-key-unified .api-key-row>span{padding:7px 12px;font-size:12px}
+.front-main .api-key-unified .api-key-row small{font-size:11px}
+.front-main :is(.api-key-page,.cl-panel)>.filter-pagination{padding:12px;min-height:58px;border-top:1px solid #e4eaf3}
+.front-main .cl-page.us-page>.cl-panel{margin:0;padding:0;border-color:#e4eaf3;border-radius:6px}
+.front-main .cl-filters{padding:10px 12px;gap:8px;border-bottom:0}
+.front-main .cl-filters .filter-field{flex:1 1 180px;min-width:180px}
+.front-main .cl-filters .filter-field select{flex:1;min-width:0;width:100%;max-width:none;font-size:12px}
+.front-main .us-page .cl-filters :is(button,select,input){height:34px;font-size:12px}
+.front-main .cl-filters .filter-field>span{font-size:11px;color:#586982}
+.front-main .cl-view-row{margin:0 12px;padding:7px 0;border-block:1px solid #edf1f6}
+.front-main .cl-table-tools{padding:8px 12px;font-size:12px}
+.front-main .cl-table th{height:38px;background:#f8faff;color:#586982;padding:8px 10px}
+.front-main .cl-table td{height:56px;padding:8px 10px;border-color:#e4eaf3}
+.front-main .us-page .cl-table :is(th,td){font-size:12px}
+.front-main .cl-table-scroll{max-height:max(280px,calc(100dvh - 440px))}
+.front-main .front-members-workspace{height:calc(100dvh - 48px);min-height:650px}
+.front-main .front-members-workspace>.front-page-header{margin-bottom:12px}
+.front-main .content>.front-page-header+.featured .title-row{justify-content:flex-end;margin-bottom:10px}
+.front-main .route-guide{margin-top:0;border:1px solid #e4eaf3;border-radius:6px;padding-top:12px;height:116px}
+.front-main .metric-tabs{border:1px solid #e4eaf3;border-radius:6px}
+.front-main .pg-heading.front-page-header{position:static}
+.front-main .playground .pg-heading-actions{gap:8px}
+.front-main .compare-page{height:calc(100dvh - 48px)}
+.front-main .compare-grid{min-height:0}
+.front-main .operation-panel{border:1px solid #e4eaf3;border-radius:6px;background:#fff;overflow:hidden}
+.front-main .operation-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid #edf1f6}
+.front-main .operation-filters .operation-search{flex:1;min-width:180px;max-width:340px}
+.front-main .operation-filters input{height:34px;font-size:12px}
+.front-main .operation-dates{display:flex;align-items:center;gap:6px;font-size:12px;color:#586982}
+.front-main .operation-dates input{width:140px}
+.front-main .operation-table-scroll{max-height:max(280px,calc(100dvh - 290px));overflow:auto}
+.front-main .operation-table{font-size:12px;min-width:680px}
+.front-main .operation-table:has(.operation-empty){min-width:0}
+.front-main .operation-table th{position:sticky;top:0;z-index:1;background:#f8faff;height:38px;color:#586982}
+.front-main .operation-table td{height:48px;padding:10px 12px;white-space:normal}
+.front-main .operation-table th{padding:8px 12px}
+.front-main .operation-table td:first-child{white-space:nowrap;font-variant-numeric:tabular-nums}
+.front-main .operation-empty{padding:64px 20px;text-align:center;color:#64758f}
+.front-main .operation-empty p{margin-top:8px}
+.front-main .operation-panel .filter-pagination{padding:12px;border-top:1px solid #e4eaf3}
+.front-main .operation-error{padding:10px 12px;color:var(--destructive)}
+@media(max-width:760px){.front-main > :is(.content,.route-page,.ranking-page,.us-page,.legacy-page,.org-page,.playground,.compare-page,.operation-page){padding:8px}.front-main .front-page-header{padding:14px;gap:12px;align-items:flex-start;flex-wrap:wrap}.front-main .front-page-header h1{font-size:18px}.front-main .front-page-header-actions{margin-left:auto}.front-main .operation-dates{flex-wrap:wrap}.front-main .operation-dates input{width:130px}.front-main .api-key-unified .api-key-tools>div{flex-wrap:wrap}.front-main .cl-filters .filter-field{flex-basis:140px}}

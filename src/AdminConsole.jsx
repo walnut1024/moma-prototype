@@ -1,3 +1,4 @@
+import { maskApiKey } from "./api-key-utils.mjs";
 import { useMemo, useState } from "react";
 import { TimeSeriesChart as SharedMetricChart } from "./components/AnalyticsCharts";
 import { ChevronDown, ChevronRight, Plus, RefreshCw, Search, X } from "lucide-react";
@@ -51,7 +52,7 @@ function ModelPage({ open }) {
 
 const simpleTables = {
   image: { title: "镜像管理", tabs: ["镜像实例", "基础镜像", "官方镜像"], columns: ["镜像实例 ID", "镜像名称", "镜像类型", "资源池", "状态", "现网是否可见", "更新时间", "操作"], rows: [["img-2041", "moma-text-runtime:v5", "部署基础镜像", "南京一池", "已启用", "可见", "2026-09-12 11:20:08", "详情"], ["img-1938", "vllm-cu128:latest", "微调基础镜像", "苏州智算池", "已启用", "不可见", "2026-09-10 08:14:52", "详情"]] },
-  rate: { title: "流量管理", columns: ["用户名称", "项目", "API Key 名称", "API Key", "流量限制", "操作"], rows: [["江苏政务云", "moma-prod", "api-key-prod", "sk-***8L2", "100,000 tokens/分钟 · 1,000 次/分钟", "编辑　删除"], ["研发测试组", "moma-test", "api-key-test", "sk-***A71", "10,000 tokens/天", "编辑　删除"]] },
+  rate: { title: "流量管理", columns: ["用户名称", "项目", "Key 名称", "API Key", "流量限制", "操作"], rows: [["江苏政务云", "moma-prod", "api-key-prod", maskApiKey("sk-***8L2"), "100,000 tokens/分钟 · 1,000 次/分钟", "编辑　删除"], ["研发测试组", "moma-test", "api-key-test", maskApiKey("sk-***A71"), "10,000 tokens/天", "编辑　删除"]] },
   cluster: { title: "集群管理", columns: ["IP", "节点名称", "主机类型", "规格类型", "GPU 类型", "所属分组", "是否占有", "操作"], rows: [["10.25.18.12", "gpu-node-01", "物理机", "8卡", "H20", "推理生产组", "是", "编辑　删除"], ["10.25.18.18", "gpu-node-07", "云主机", "4卡", "L20", "弹性资源组", "否", "编辑　删除"]] },
   group: { title: "节点分组", columns: ["分组名称", "标签", "主 GPU 型号", "成员数", "可用", "状态", "操作"], rows: [["推理生产组", "生产", "H20", "32", "28", "启用", "成员　编辑"], ["弹性资源组", "弹性", "L20", "16", "11", "启用", "成员　编辑"]] },
   provider: { title: "模型服务商管理", columns: ["服务商归属", "服务商英文名称", "服务商中文名称", "服务地址", "是否外部供应商", "操作"], rows: [["OpenAI 兼容服务", "cmss", "中国移动", "https://moma.cmecloud.cn/v1", "否", "编辑　删除"], ["OpenAI 兼容服务", "tokenhub", "TokenHub", "https://api.tokenhub.cn/v1", "是", "编辑　删除"], ["OpenAI 兼容服务", "jslt", "江苏联通", "https://llm.jslt.cn/v1", "是", "编辑　删除"]] },

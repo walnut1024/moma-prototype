@@ -34,7 +34,7 @@ export function SelectedConditions({ groups, label = '已选条件' }) {
   return <div className="sfv-current"><span className="sfv-label">{label}</span>{groups.map(group => <ConditionChip key={`${group.label}-${group.text}`} group={group}/>)}</div>;
 }
 
-export default function SavedFilterViews({ scope, value, onApply, summary = '', conditions, groups, currentGroups = groups, saveDescription = '核对当前筛选条件并命名。视图仅在当前浏览器生效。', showCurrent = true, disabled = false, legacyKey }) {
+export default function SavedFilterViews({ scope, value, onApply, summary = '', conditions, groups, currentGroups = groups, saveDescription = '核对当前筛选条件并命名，保存后可快速应用。', showCurrent = true, disabled = false, legacyKey, notify }) {
   const key = `moma-5110-filter-views:${scope}`;
   const [views, setViews] = useState(() => {
     try {
@@ -52,21 +52,21 @@ export default function SavedFilterViews({ scope, value, onApply, summary = '', 
   }, [pending, value]);
   const persist = next => {
     try { localStorage.setItem(key, JSON.stringify(next)); setViews(next); setError(''); return true; }
-    catch { setError('浏览器存储不可用，视图未保存'); return false; }
+    catch { if (notify) notify.error('视图保存失败，请稍后重试'); else setError('视图保存失败，请稍后重试'); return false; }
   };
   const save = () => {
     const label = name.trim();
     if (!label) return;
     if (views.some(view => view.name === label)) { setError('名称已存在，请使用其他名称'); return; }
     const id = crypto.randomUUID();
-    if (persist([...views, { id, name: label, value }])) { setCreating(false); setName(''); setApplied({ id, name: label, signature: signature(value) }); }
+    if (persist([...views, { id, name: label, value }])) { setCreating(false); setName(''); setApplied({ id, name: label, signature: signature(value) }); notify?.success('筛选视图已保存'); }
   };
   const currentConditions = (conditions ?? summary.split(' · ')).filter(Boolean);
   const activeGroups = currentGroups || currentConditions.map(text => ({ text }));
   const viewLabel = applied ? `${applied.name}${signature(value) === applied.signature ? '' : ' · 已修改'}` : '当前筛选';
   return <div className={`sfv-actions${showCurrent ? ' sfv-with-current' : ''}`}>
     {showCurrent && <SelectedConditions groups={activeGroups}/>}
-    <div className="sfv-controls"><Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button type="button" variant="outline" className="sfv-view-trigger" aria-label={`视图：${viewLabel}`}><span>视图：{viewLabel}</span><ChevronDown size={15}/></Button></PopoverTrigger><PopoverContent align="end" className="w-80"><div className="flex flex-col gap-2">{views.map(view => <div key={view.id} className="flex items-center gap-2"><Button type="button" className="flex-1 justify-start truncate" variant="ghost" onClick={() => { onApply(view.value); setOpen(false); setPending({ id: view.id, name: view.name }); }}>{view.name}</Button><Button type="button" variant="ghost" size="icon" aria-label={`删除视图 ${view.name}`} onClick={() => { if (persist(views.filter(item => item.id !== view.id)) && applied?.id === view.id) setApplied(null); }}><Trash2 size={15}/></Button></div>)}{!views.length && <p className="text-sm text-muted-foreground">暂无视图，请先设置筛选条件。</p>}{error && <p role="alert">{error}</p>}</div></PopoverContent></Popover>
+    <div className="sfv-controls"><Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button type="button" variant="outline" className="sfv-view-trigger" aria-label={`视图：${viewLabel}`}><span>视图：{viewLabel}</span><ChevronDown size={15}/></Button></PopoverTrigger><PopoverContent align="end" className="w-80"><div className="flex flex-col gap-2">{views.map(view => <div key={view.id} className="flex items-center gap-2"><Button type="button" className="flex-1 justify-start truncate" variant="ghost" onClick={() => { onApply(view.value); setOpen(false); setPending({ id: view.id, name: view.name }); notify?.success(`已应用视图：${view.name}`); }}>{view.name}</Button><Button type="button" variant="ghost" size="icon" aria-label={`删除视图 ${view.name}`} onClick={() => { if (persist(views.filter(item => item.id !== view.id))) { if (applied?.id === view.id) setApplied(null); notify?.success("筛选视图已删除"); } }}><Trash2 size={15}/></Button></div>)}{!views.length && <p className="text-sm text-muted-foreground">暂无视图，请先设置筛选条件。</p>}{error && <p role="alert">{error}</p>}</div></PopoverContent></Popover>
     <Button type="button" variant="outline" disabled={disabled} onClick={() => { setError(''); setCreating(true); }}><Bookmark size={15}/>保存为视图</Button></div>
     <Dialog open={creating} onOpenChange={setCreating}><DialogContent><DialogHeader><DialogTitle>保存为视图</DialogTitle><DialogDescription>{saveDescription}</DialogDescription></DialogHeader><div className="sfv-dialog-summary">{groups ? groups.map(group => <div key={group.label} className="sfv-dialog-group"><strong>{group.label}{group.scope && <small>{group.scope}</small>}</strong>{Array.isArray(group.items) && group.items.length > 0 ? <div><span>已选 {group.items.length} 个</span>{group.items.length > 5 ? <details><summary>{group.items[0]} 等 · 查看全部</summary><ul>{group.items.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul></details> : <ul>{group.items.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>}</div> : <span>{'items' in group ? group.items === null ? group.all || '全部' : '未选择' : group.text}</span>}</div>) : currentConditions.join('；')}</div><label htmlFor={`saved-view-${scope}`}>视图名称</label><Input id={`saved-view-${scope}`} maxLength={40} placeholder="输入视图名称" value={name} onChange={event => setName(event.target.value)}/>{error && <p role="alert">{error}</p>}<div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setCreating(false)}>取消</Button><Button type="button" disabled={!name.trim() || disabled} onClick={save}>保存视图</Button></div></DialogContent></Dialog>
   </div>;

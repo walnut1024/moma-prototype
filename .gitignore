@@ -22,3 +22,20 @@ CONTEXT.md
 design-qa.md
 usage-statistics-*-audit.md
 docs/
+
+# Local release snapshots and review evidence
+outputs/
+usage-statistics-*-review.md
+
+# Office documents and presentation exports
+*.[pP][pP][tT]
+*.[pP][pP][tT][xX]
+*.[pP][pP][sS]
+*.[pP][pP][sS][xX]
+*.[pP][oO][tT][xX]
+*.[kK][eE][yY]
+*.[dD][oO][cC]
+*.[dD][oO][cC][xX]
+*.[xX][lL][sS]
+*.[xX][lL][sS][xX]
+*.[pP][dD][fF]

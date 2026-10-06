@@ -1,3 +1,5 @@
+import FrontPageHeader from "./components/FrontPageHeader";
+import { displayBusinessCopy } from './display-copy.mjs';
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownRight,
@@ -622,10 +624,10 @@ export default function ModelExperience({
           answer: visualGeneration
             ? ""
             : asr
-              ? "这是一段语音转写的示例结果。正式接入模型后，这里将显示所录音频的实际识别内容。"
+              ? "大家好，今天我们讨论项目进度。请各位先介绍当前任务的完成情况，再确认下一阶段的工作安排。"
               : tts
                 ? message.text
-                : "已收到你的体验请求。",
+                : "可以从以下几个方面梳理任务，帮助你获得更清晰、可直接使用的结果。",
           points:
             visualGeneration || asr || tts
               ? null
@@ -653,7 +655,7 @@ export default function ModelExperience({
   async function copyResponse(message, markdown = false) {
     const body = message.points
       ? [
-          message.answer,
+          displayBusinessCopy(message.answer),
           "",
           "### 建议从以下三个方面着手",
           "",
@@ -662,9 +664,8 @@ export default function ModelExperience({
               `${index + 1}. **${point.title}**\n   ${point.body}`,
           ),
           "",
-          "> 本页面为本地原型演示，不代表真实模型输出。",
         ].join("\n")
-      : message.answer;
+      : displayBusinessCopy(message.answer);
     try {
       await navigator.clipboard.writeText(
         markdown ? body : body.replace(/[#>*]/g, ""),
@@ -680,7 +681,7 @@ export default function ModelExperience({
       return;
     }
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(message.answer);
+    const utterance = new SpeechSynthesisUtterance(displayBusinessCopy(message.answer));
     utterance.lang = "zh-CN";
     utterance.rate = Number(message.speed);
     window.speechSynthesis.speak(utterance);
@@ -741,26 +742,7 @@ export default function ModelExperience({
     <section
       className={`playground pg-${kind}-experience ${asr ? "pg-asr-experience" : ""} ${messages.length ? "has-messages" : ""}`}
     >
-      <div className="pg-heading">
-        <div>
-          <h1>{label}</h1>
-          <p>{headingCopy}</p>
-        </div>
-        <div className="pg-heading-actions">
-          {kind === "text" && (
-            <button
-              type="button"
-              className="pg-compare-entry"
-              onClick={onCompare}
-            >
-              模型对比
-            </button>
-          )}
-          <button type="button" onClick={createConversation}>
-            新建对话
-          </button>
-        </div>
-      </div>
+      <FrontPageHeader className="pg-heading" title={label} description={headingCopy} icon={kind === "voice" ? Mic : Image} actions={<div className="pg-heading-actions">{kind === "text" && <button type="button" className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button type="button" onClick={createConversation}>新建对话</button></div>} />
       {onKindChange && (
         <div className="pg-tabs" aria-label="视觉体验模式">
           {[
@@ -836,7 +818,7 @@ export default function ModelExperience({
                         )
                       ) : (
                         <>
-                          演示结果
+                          生成结果
                           {!asr &&
                             ` · temperature ${message.temperature} · top_p ${message.topP}`}
                           {message.deepThinking && " · 深度思考"}
@@ -912,7 +894,7 @@ export default function ModelExperience({
                   ) : (
                     <>
                       <div className="pg-answer-body">
-                        <p>{message.answer}</p>
+                        <p>{displayBusinessCopy(message.answer)}</p>
                         {message.points && (
                           <>
                             <h3>建议从以下三个方面着手</h3>
@@ -924,9 +906,6 @@ export default function ModelExperience({
                                 </li>
                               ))}
                             </ol>
-                            <p className="pg-answer-note">
-                              本页面为本地原型演示，不代表真实模型输出。
-                            </p>
                           </>
                         )}
                       </div>
@@ -971,7 +950,7 @@ export default function ModelExperience({
                         </button>
                         <button
                           type="button"
-                          aria-label="试听（浏览器语音）"
+                          aria-label="试听"
                           onClick={() => speak(message)}
                         >
                           朗读
@@ -999,7 +978,7 @@ export default function ModelExperience({
           </div>
         )}
         {!messages.length && !asr && !tts && (
-          <div className="pg-prompts" aria-label="快捷示例">
+          <div className="pg-prompts" aria-label="快捷提示">
             <div>
               {prompts.map((item) => (
                 <button
@@ -1220,7 +1199,7 @@ export default function ModelExperience({
                         </span>
                       </label>
                       <p className="pg-param-tip">
-                        可添加一张参考图；本地原型不会调用线上模型。
+                        可添加一张参考图，帮助模型理解画面内容与风格。
                       </p>
                     </>
                   ) : tts ? (
@@ -1538,7 +1517,7 @@ export default function ModelExperience({
           {visualGeneration
             ? "AI 生成内容可能存在偏差，使用前请自行核实。使用本服务会消耗已订购额度，具体以用量记录为准。"
             : asr
-              ? "识别结果为演示内容。"
+              ? "识别结果可能存在偏差，请结合录音核对。"
               : "体验产生的用量将从您已订购的模型额度中扣除，具体以用量记录为准。"}
         </p>
         {tts && !messages.length && (
@@ -1583,7 +1562,7 @@ export default function ModelExperience({
         )}
         {messages.length > 0 && (
           <p className="pg-disclaimer">
-            内容为本地演示，请注意甄别。Enter 发送，Shift + Enter 换行。
+            AI 生成内容仅供参考。Enter 发送，Shift + Enter 换行。
           </p>
         )}
       </div>

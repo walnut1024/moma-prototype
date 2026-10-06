@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip';
 import { Fragment, useState } from 'react';
 import { Download, ArrowUpDown, ChevronDown, ChevronRight } from 'lucide-react';
@@ -7,7 +8,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '../components/ui/popover';
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '../components/ui/command';
-import { FilterToolbar, FilterReset } from '../components/FilterControls';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES, FilterToolbar, FilterReset } from '../components/FilterControls';
 import { SelectedConditions } from '../components/SavedFilterViews';
 import { customerModelDetails } from './analytics';
 import { formatUsageNumber } from './usage-analysis';
@@ -34,7 +35,7 @@ function DetailPick({ label, value, onChange, options }) {
   </Command></PopoverContent></Popover>;
 }
 export default function UserCallDetails({ state, rows, start, end, draft, onDraftChange, query, onQueryChange, conditionGroups }) {
-  const [sort,setSort]=useState({key:'total',direction:-1}), [page,setPage]=useState(0), [size,setSize]=useState(20), [expanded,setExpanded]=useState(null);
+  const [sort,setSort]=useState({key:'total',direction:-1}), [page,setPage]=useState(0), [size,setSize]=useState(DEFAULT_PAGE_SIZE), [expanded,setExpanded]=useState(null);
   const details=customerModelDetails(state,rows,start,end);
   const modelOptions=[{value:'',label:'全部模型'},...[...new Set(state.models.map(model=>model.name))].sort((a,b)=>a.localeCompare(b,'zh-CN')).map(value=>({value,label:value}))];
   const customerOptions=[{value:'',label:'全部客户'},...[...new Map(state.tenants.map(row=>[row.id,{value:row.id,label:`${row.name} · ${row.id}`}])).values()].sort((a,b)=>a.label.localeCompare(b.label,'zh-CN'))];
@@ -45,11 +46,13 @@ export default function UserCallDetails({ state, rows, start, end, draft, onDraf
   });
   const pages=Math.max(1,Math.ceil(data.length/size)), current=Math.min(page,pages-1);
   function exportCsv() {
+    try {
     const escape=value=>'"'+String(value??'—').replaceAll('"','""')+'"';
     const exportColumns=[...columns,['unit','计量单位'],...detailColumns];
     const csv=[exportColumns.map(([,label])=>label),...data.map(r=>exportColumns.map(([key])=>key==='success'&&r.success!=null?`${r.success.toFixed(2)}%`:r[key]))].map(row=>row.map(escape).join(',')).join('\r\n');
     const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));
-    const link=document.createElement('a');link.href=url;link.download=`客户模型调用明细_${start}_${end}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    const link=document.createElement('a');link.href=url;link.download=`客户模型调用明细_${start}_${end}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000); toast.success("已开始下载调用明细");
+    } catch { toast.error("导出失败，请重试"); }
   }
   return <Card className="an-call-details"><CardHeader><CardTitle>调用明细</CardTitle></CardHeader><CardContent>
     <form className="an-detail-search" onSubmit={e=>{e.preventDefault();onQueryChange(draft);setPage(0)}}><FilterToolbar>
@@ -64,6 +67,6 @@ export default function UserCallDetails({ state, rows, start, end, draft, onDraf
       {data.slice(current*size,(current+1)*size).map(r=><Fragment key={r.id}><TableRow>{columns.map(([key])=><TableCell key={key}>{key==='success'?<StatusBar row={r}/>:key==='customer'?<a className="an-customer-link" href={`#/admin-2/customer-usage-detail?customer=${encodeURIComponent(r.customerId)}&start=${start}&end=${end}`} onClick={()=>window.scrollTo(0,0)}>{r.customer}</a>:key==='total'?<><span>{r.total==null?'—':`${display(r.total)} ${r.unit}`}</span>{r.pending>0&&<small className="an-pending">{r.pending} 条待确认</small>}</>:display(r[key])}</TableCell>)}<TableCell><Button type="button" variant="ghost" size="sm" aria-expanded={expanded===r.id} aria-label={`${r.customer} ${r.model} 调用详情`} onClick={()=>setExpanded(expanded===r.id?null:r.id)}><ChevronRight className={expanded===r.id?'an-expanded':''}/></Button></TableCell></TableRow>{expanded===r.id&&<TableRow className="an-expanded-row"><TableCell colSpan={columns.length+1}><div className="an-detail-fields">{detailColumns.filter(([key])=>!['maxInput','avgInput','maxOutput','avgOutput'].includes(key)||r.unit==='Token').filter(([key])=>!['ttft','maxTtft','ttftSamples'].includes(key)||r.ttftSamples>0).map(([key,label])=><div key={key}><span>{label}</span><strong>{display(r[key])}{['dailyUsage','endUsage'].includes(key)&&r[key]!=null?` ${r.unit}`:''}</strong></div>)}</div></TableCell></TableRow>}</Fragment>)}
       {!data.length&&<TableRow><TableCell colSpan={columns.length+1}>暂无匹配记录，请调整模型、客户或上方日期筛选。</TableCell></TableRow>}
     </TableBody></Table></div>
-    <div className="an-pagination"><span>共 {data.length} 条</span><Select value={String(size)} onValueChange={v=>{setSize(Number(v));setPage(0)}}><SelectTrigger aria-label="调用明细每页条数"><SelectValue/></SelectTrigger><SelectContent>{[20,50,100].map(n=><SelectItem key={n} value={String(n)}>{n} 条 / 页</SelectItem>)}</SelectContent></Select><Button variant="outline" disabled={!current} onClick={()=>setPage(current-1)}>上一页</Button><span>{current+1} / {pages}</span><Button variant="outline" disabled={current+1>=pages} onClick={()=>setPage(current+1)}>下一页</Button></div>
+    <div className="an-pagination"><span>共 {data.length} 条</span><Select value={String(size)} onValueChange={v=>{setSize(Number(v));setPage(0)}}><SelectTrigger aria-label="调用明细每页条数"><SelectValue/></SelectTrigger><SelectContent>{PAGE_SIZES.map(n=><SelectItem key={n} value={String(n)}>{n} 条 / 页</SelectItem>)}</SelectContent></Select><Button variant="outline" disabled={!current} onClick={()=>setPage(current-1)}>上一页</Button><span>{current+1} / {pages}</span><Button variant="outline" disabled={current+1>=pages} onClick={()=>setPage(current+1)}>下一页</Button></div>
   </CardContent></Card>;
 }

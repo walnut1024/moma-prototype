@@ -1,5 +1,7 @@
 import { commitAdminState } from "./store.js";
 import { usageTotal } from "./observability.js";
+import { enterpriseGrant, enterpriseTokenUsage } from './enterprise.js';
+import { availableSupplies, activeSupplySalePrice } from "./model-management.js";
 
 const now = () => new Date().toISOString();
 const id = prefix => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -16,12 +18,18 @@ export function activateOrder(state, orderId) {
   ] }, "平台管理员");
 }
 
-export function simulateRequest(state, { requestId, keyId, modelId, usage = { input: 1000, cached: 0, output: 200 }, forceTimeout = false, cacheKey = "demo-prompt" }) {
+export function simulateRequest(state, { requestId, keyId, modelId, usage = { input: 1000, cached: 0, output: 200 }, forceTimeout = false, cacheKey = "demo-prompt", requirements = {} }) {
   if (state.requests.some(item => item.requestId === requestId)) return { state, request: state.requests.find(item => item.requestId === requestId), duplicate: true };
   const key = state.apiKeys.find(item => item.id === keyId), model = state.models.find(item => item.id === modelId), tenant = key && state.tenants.find(item => item.id === key.tenantId), project = key && state.projects.find(item => item.id === key.projectId), grant = key && state.grants.find(item => item.subjectId === key.id), route = state.routes.find(item => item.modelId === modelId && item.status === "已生效");
-  let httpStatus = 200, error = "", endpointId = route?.targets[0]?.endpointId || state.endpoints.find(item => item.modelIds.includes(modelId))?.id;
+  const candidates = availableSupplies(state, modelId, requirements), candidateIds = candidates.map(supply => supply.endpointId);
+  const tenantGrant = enterpriseGrant(state, key?.tenantId), tenantQuantity = enterpriseTokenUsage(model, usage);
+  let httpStatus = 200, error = "", endpointId = route ? route.targets.find(target => candidateIds.includes(target.endpointId))?.endpointId : candidates[0]?.endpointId;
   if (!key || key.status !== "有效" || !tenant || tenant.status === "停用" || !project || project.status === "停用") [httpStatus, error] = [401, "auth_rejected"];
   else if (!key.modelIds.includes(modelId)) [httpStatus, error] = [403, "model_not_authorized"];
+  else if (tenantGrant && !tenantGrant.modelIds.includes(modelId)) [httpStatus, error] = [403, 'enterprise_model_not_authorized'];
+  else if (tenantGrant && tenantGrant.limit - tenantGrant.used < tenantQuantity) [httpStatus, error] = [402, 'enterprise_quota_exhausted'];
+  else if (!model || model.callsEnabled === false) [httpStatus, error] = [403, "model_call_disabled"];
+  else if (model.openScope === 'selected' && !model.tenantIds.includes(key.tenantId)) [httpStatus, error] = [403, "model_scope_rejected"];
   else if (!grant || grant.limit - grant.used < usageTotal(usage)) [httpStatus, error] = [402, "quota_exhausted"];
   else if (state.limits.some(item => item.scopeType === "key" && item.scopeId === key.id && item.status === "已启用")) [httpStatus, error] = [429, "rate_limit_exceeded"];
   else if (!endpointId) [httpStatus, error] = [503, "no_available_endpoint"];
@@ -29,15 +37,21 @@ export function simulateRequest(state, { requestId, keyId, modelId, usage = { in
   if (cacheHit && usage.input) usage = { ...usage, cached: usage.input };
   if (!error && forceTimeout) {
     attempts.push({ endpointId, durationMs: 3000, error: "upstream_timeout" });
-    const fallback = state.fallbacks.find(item => item.routeId === route?.id && item.status === "已启用"), next = fallback?.chain.find(candidate => candidate !== endpointId && state.endpoints.find(ep => ep.id === candidate)?.status === "运行中");
+    const fallback = state.fallbacks.find(item => item.routeId === route?.id && item.status === "已启用"), next = fallback?.chain.find(candidate => candidate !== endpointId && candidateIds.includes(candidate));
     if (next) endpointId = next; else [httpStatus, error] = [504, "fallback_unavailable"];
   }
   attempts.push({ endpointId: endpointId || null, durationMs: error ? 0 : 680, error: error || null });
   const request = { id: id("request"), requestId, tenantId: key?.tenantId || null, projectId: key?.projectId || null, keyId: key?.id || keyId, modelId, versionId: model?.defaultVersionId || null, endpointId: endpointId || null, releaseId: state.releases.find(item => item.status === "当前生效")?.id || null, source: "API 调用", attempts, usage, cacheKey, cacheHit, httpStatus, ttftMs: httpStatus === 200 && model?.capabilities.streaming ? 220 : null, durationMs: httpStatus === 200 ? attempts.reduce((sum, item) => sum + item.durationMs, 0) : 0, createdAt: now(), updatedAt: now() };
   const changes = [{ type: "add", collection: "requests", record: request }];
+  const fulfilledSupply = candidates.find(supply => supply.endpointId === endpointId);
+  const price = fulfilledSupply && activeSupplySalePrice(state, modelId, fulfilledSupply.id);
+  request.supplyId = fulfilledSupply?.id || null;
+  request.priceVersionId = price?.id || null;
+  request.priceSnapshot = price ? { ...price } : null;
   if (httpStatus === 200 && grant) {
     const quantity = usageTotal(usage), nextUsed = grant.used + quantity;
     changes.push({ type: "update", collection: "grants", id: grant.id, changes: { used: nextUsed } }, { type: "add", collection: "ledger", record: { id: id("ledger"), accountId: key.id, sourceId: `request:${requestId}`, type: "调用扣减", delta: -quantity, balance: grant.limit - nextUsed, reason: requestId, status: "已完成" } });
+    if (tenantGrant && tenantQuantity) changes.push({ type: 'update', collection: 'grants', id: tenantGrant.id, changes: { used: tenantGrant.used + tenantQuantity } }, { type: 'add', collection: 'ledger', record: { id: id('enterprise-ledger'), accountId: tenant.id, sourceId: `enterprise-request:${requestId}`, type: '企业额度扣减', delta: -tenantQuantity, balance: tenantGrant.limit - tenantGrant.used - tenantQuantity, reason: requestId, status: '已完成' } });
   }
   return { state: commitAdminState(state, { type: "batch", objectId: requestId, changes }, "平台管理员"), request, changes, duplicate: false };
 }

@@ -69,7 +69,7 @@ export function logJSON(row) {
 
 export function logsCSV(rows) {
   const escape = value => `"${String(value ?? '').replace(/^[=+@-]/, "'$&").replaceAll('"', '""')}"`;
-  const values = [['Request ID', '计费类型', '请求时间', '模型', '请求来源', 'API Key 名称', 'API Key ID', '所属套餐/资源包', '输入 Token', '输出 Token', '总 Token', '首 Token 耗时(ms)', '总耗时(ms)', '状态码'],
+  const values = [['Request ID', '计费类型', '请求时间', '模型', '请求来源', 'Key 名称', 'Key ID', '所属套餐/资源包', '输入 Token', '输出 Token', '总 Token', '首 Token 耗时(ms)', '总耗时(ms)', '状态码'],
     ...rows.map(r => [r.id, r.billing, r.time, r.model, r.source, r.keyName, r.keyId, r.resource, r.input, r.output, r.total, r.first, r.duration, r.status])];
   return '\ufeff' + values.map(row => row.map(escape).join(',')).join('\r\n');
 }

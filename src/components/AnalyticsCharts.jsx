@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts/core';
-import { LineChart, BarChart } from 'echarts/charts';
+import { LineChart, BarChart, PieChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 import { SlidersHorizontal } from 'lucide-react';
@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { chartPalette, chartColor, chartAxis, chartNumber, defaultChartSeries } from './chart-style.mjs';
 import './analytics-charts.css';
 
-echarts.use([LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, SVGRenderer]);
+echarts.use([LineChart, BarChart, PieChart, GridComponent, TooltipComponent, LegendComponent, SVGRenderer]);
 const muted = '#64748b', grid = '#e4eaf3';
 const safe = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 
@@ -74,4 +74,20 @@ export function RankingChart({ rows, metric, unit, collection, scale, onChoose }
     series: [{ type: 'bar', data: rows.map(row => scale === 'log' ? Math.log10(row[metric] + 1) : row[metric]), barWidth: 10, showBackground: true, backgroundStyle: { color: '#edf1f8', borderRadius: 2 }, itemStyle: { color: chartPalette[0], borderRadius: 2 }, label: { show: true, position: 'right', distance: 8, color: '#34425b', fontSize: 12, formatter: ({ dataIndex }) => { const value = rows[dataIndex][metric]; return value >= 1e8 ? `${chartNumber(value / 1e8)}亿` : value >= 1e4 ? `${chartNumber(value / 1e4)}万` : chartNumber(value); } } }],
   };
   return <Chart option={option} height={Math.max(140, rows.length * 28 + 20)} label={`用量排行，显示 ${rows.length} 个对象，点击条形查看明细`} onClick={event => { if (rows[event.dataIndex]) onChoose(rows[event.dataIndex].id); }} />;
+}
+
+export function DonutChart({ rows, unit = '', label, height = 200, centerValue, centerLabel }) {
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  const option = {
+    animation: false,
+    tooltip: { trigger: 'item', confine: true, backgroundColor: '#fff', borderColor: grid, textStyle: { color: '#263247', fontSize: 12 }, formatter: item => `${safe(item.name)}：<b>${chartNumber(item.value)} ${safe(unit)}</b><br/>占比 ${total ? (item.value / total * 100).toFixed(1) + '%' : '—'}` },
+    series: [{ type: 'pie', radius: ['64%', '84%'], center: ['50%', '50%'], startAngle: 90, padAngle: 3, stillShowZeroSum: false,
+      label: { show: false }, labelLine: { show: false },
+      itemStyle: { borderRadius: 7 }, emphasis: { scaleSize: 5 },
+      data: rows.map((row, index) => ({ name: row.label, value: row.value, itemStyle: { color: row.color || chartPalette[index % chartPalette.length] } })) }],
+  };
+  return <div className="unified-donut" style={{ position: 'relative' }}>
+    <Chart option={option} height={height} label={`${label}：${rows.map(row => `${row.label} ${chartNumber(row.value)} ${unit}，占比 ${total ? (row.value / total * 100).toFixed(1) + '%' : '—'}`).join('；')}`}/>
+    <div className="unified-donut-center" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', gap: 4 }}><strong style={{ fontSize: 20, fontWeight: 650, color: '#202b3e' }}>{centerValue}</strong><span style={{ fontSize: 12, color: muted }}>{centerLabel}</span></div>
+  </div>;
 }

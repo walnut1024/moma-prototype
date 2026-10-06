@@ -1,4 +1,11 @@
-import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { useEffect, useRef, useState } from "react";
+import { enterpriseTransaction } from "./enterprise.js";
+import { individualSeed, individualTransaction } from "./individual-users.js";
+import { modelManagementSeed, modelTransaction } from "./model-management.js";
+import { providerTransaction } from "./provider-management.js";
+import { enterpriseOrganizationSeed } from "./enterprise-organization-demo.js";
+import { adminAccountTransaction } from './admin-accounts.js';
 
 export const STORAGE_KEY = "moma.adminV2.v1";
 const now = "2026-09-15T10:30:00+08:00";
@@ -33,14 +40,24 @@ export function createAdminSeed() {
   const validations = modelVersions.map((version, index) => record(`validation-${index + 1}`, { modelVersionId: version.id, endpointId: ["endpoint-ds", "endpoint-glm", "endpoint-kimi"][index % 3], cases: ["协议兼容", "流式响应", "基础推理"], passed: version.validationStatus === "通过", result: version.validationStatus, durationMs: 820 + index * 130, status: "已完成" }));
   const providers = [record("provider-cmss", { name: "江苏移动", sourceType: "thirdParty", contact: "模型运营组", contractEnd: "2027-12-31", status: "已启用" }), record("provider-tokenhub", { name: "TokenHub", sourceType: "thirdParty", contact: "供应商接口人", contractEnd: "2027-06-30", status: "已启用" }), record("provider-self", { name: "自有算力", sourceType: "selfHosted", contact: "平台运维组", contractEnd: null, status: "已启用" })];
   const endpoints = [record("endpoint-ds", { endpointId: "ep-ds-v4-prod", name: "DeepSeek 生产端点", providerId: "provider-cmss", protocol: "OpenAI", baseUrl: "https://demo.invalid/v1", credentialRef: "mock-credential-a", modelIds: ["model-1"], capacity: 18000, health: 99.99, status: "运行中" }), record("endpoint-glm", { endpointId: "ep-glm-self", name: "GLM 自有推理", providerId: "provider-self", protocol: "OpenAI", baseUrl: "https://self.demo.invalid/v1", credentialRef: "mock-credential-b", modelIds: ["model-2", "model-1"], capacity: 12000, health: 99.95, status: "运行中" }), record("endpoint-kimi", { endpointId: "ep-kimi-k3", name: "Kimi 聚合端点", providerId: "provider-tokenhub", protocol: "OpenAI", baseUrl: "https://hub.demo.invalid/v1", credentialRef: "mock-credential-c", modelIds: ["model-3"], capacity: 6000, health: 98.72, status: "需关注" })];
+  models.forEach((model, index) => Object.assign(model, { maker: ['DeepSeek', '智谱', '月之暗面'][index] || '未填写', description: model.name + ' 模型服务', listingStatus: index < 2 ? '已上架' : '草稿', callsEnabled: model.status === '运行中', openScope: 'all', tenantIds: [] }));
+  const initialSupplyPrices = [];
+  const { modelSupplies, modelSalePrices } = modelManagementSeed(models, endpoints, initialSupplyPrices, providers);
+  models.filter(model => !modelVersions.some(version => version.modelId === model.id)).forEach(model => modelVersions.push(record(model.defaultVersionId, { modelId: model.id, version: 'v1.0', capabilities: model.capabilities, validationStatus: '通过', isDefault: true, status: '已发布' })));
   const clusters = [record("cluster-nj-a", { clusterId: "inference-nj-a", name: "南京智算一池", zone: "南京", gpuType: "H20", totalGpu: 64, allocatedGpu: 36, nodes: 8, status: "运行中" }), record("cluster-sz-a", { clusterId: "inference-sz-a", name: "苏州智算一池", zone: "苏州", gpuType: "L40S", totalGpu: 32, allocatedGpu: 24, nodes: 4, status: "运行中" }), record("cluster-nj-test", { clusterId: "inference-nj-test", name: "南京验证集群", zone: "南京", gpuType: "A800", totalGpu: 16, allocatedGpu: 4, nodes: 2, status: "维护中" })];
   const artifacts = [record("artifact-vllm", { name: "vLLM CUDA 运行时", type: "运行时镜像", version: "v5.1", digest: "sha256:81dd3093a102", size: "18.6 GB", validation: "通过", status: "可运行" }), record("artifact-ds", { name: "DeepSeek-V4-Pro 权重", type: "模型制品", version: "v4.0", digest: "sha256:deepseekv4", size: "412 GB", validation: "通过", status: "可运行" }), record("artifact-base", { name: "CUDA 12.8 基础镜像", type: "基础镜像", version: "2026.09", digest: "sha256:cuda128", size: "8.2 GB", validation: "通过", status: "可运行" })];
   const deployments = [record("deployment-ds", { deploymentId: "deploy-deepseek-v4", name: "DeepSeek-V4-Pro 生产服务", modelId: "model-1", clusterId: "cluster-nj-a", artifactId: "artifact-ds", replicas: 4, gpuPerReplica: 4, endpointId: "endpoint-ds", status: "运行中" }), record("deployment-glm", { deploymentId: "deploy-glm-52", name: "GLM-5.2 生产服务", modelId: "model-2", clusterId: "cluster-sz-a", artifactId: "artifact-vllm", replicas: 2, gpuPerReplica: 4, endpointId: "endpoint-glm", status: "运行中" }), record("deployment-bge", { deploymentId: "deploy-bge-m3", name: "BGE-M3 向量服务", modelId: "model-6", clusterId: "cluster-nj-a", artifactId: "artifact-vllm", replicas: 2, gpuPerReplica: 2, endpointId: null, status: "部署中" })];
   const supplyPrices = [record("supply-price-ds", { priceId: "sp-ds-v4-202609", providerId: "provider-cmss", modelId: "model-1", inputPrice: 1000000, cachedPrice: 200000, outputPrice: 2000000, capacity: 18000, balance: 860000000, effectiveAt: "2026-09-01", status: "生效中" }), record("supply-price-glm", { priceId: "sp-glm-52-202609", providerId: "provider-self", modelId: "model-2", inputPrice: 700000, cachedPrice: 150000, outputPrice: 1400000, capacity: 12000, balance: 420000000, effectiveAt: "2026-09-01", status: "生效中" })];
+  supplyPrices.forEach(price => { price.supplyId = modelSupplies.find(supply => supply.modelId === price.modelId && endpoints.find(endpoint => endpoint.id === supply.endpointId)?.providerId === price.providerId)?.id; price.unit = '元/百万 Token'; });
+  supplyPrices.push(...initialSupplyPrices);
   const tenants = [record("tenant-gov", { name: "江苏政务云", type: "政府", ownerId: "user-zhang", status: "正常" }), record("tenant-nanjing", { name: "南京智算中心", type: "企业", ownerId: "user-li", status: "正常" }), record("tenant-demo", { name: "企业体验租户", type: "企业", ownerId: "user-chen", status: "需关注" }), ...["苏州工业园区", "无锡城市大脑", "常州制造云", "南通政务中心", "扬州智慧医疗", "徐州交通集团", "盐城教育云", "泰州能源集团", "镇江金融云"].map((name, index) => record(`tenant-usage-${index + 1}`, { name, type: index % 3 === 0 ? "政府" : "企业", ownerId: `user-usage-${index + 1}`, status: "正常" }))];
   const projects = tenants.flatMap((tenant, tenantIndex) => [1, 2].map(projectIndex => record(`project-${tenantIndex + 1}-${projectIndex}`, { tenantId: tenant.id, name: `${tenant.name}${projectIndex === 1 ? "生产" : "测试"}项目`, ownerId: tenant.ownerId, budget: projectIndex === 1 ? 500000000 : 100000000, status: "正常" })));
   const apiKeys = Array.from({ length: 200 }, (_, index) => { const project = projects[index % projects.length], number = String(index + 1).padStart(3, "0"); return record(`key-${number}`, { keyId: `ak-demo-${number}-81dd3093`, name: `api-key-${number}`, tenantId: project.tenantId, projectId: project.id, secretPreview: `sk-****${number}`, modelIds: (index < projects.length * 2 ? models : models.slice(0, 2 + index % 4)).map(model => model.id), status: index % 17 === 0 ? "停用" : "有效", lastUsedAt: index % 9 === 0 ? null : now }); });
-  const memberships = tenants.map((tenant, index) => record(`member-${index + 1}`, { userId: tenant.ownerId, name: ["张敏", "李晨", "陈曦"][index] || `${tenant.name}管理员`, tenantId: tenant.id, projectIds: projects.filter(item => item.tenantId === tenant.id).map(item => item.id), role: index ? "项目管理员" : "租户管理员", status: "正常" }));
+  const memberships = tenants.map((tenant, index) => record(`member-${index + 1}`, { userId: tenant.ownerId, name: ["张敏", "李晨", "陈曦"][index] || `${tenant.name}管理员`, tenantId: tenant.id, projectIds: projects.filter(item => item.tenantId === tenant.id).map(item => item.id), role: "租户管理员", status: "正常" }));
+  const users = memberships.map(member => record(member.userId, { name: member.name, login: member.userId.replace(/^user-/, ''), email: '', status: '正常', initialized: true }));
+  users.push(record('user-unassigned', { name: '王晓', login: 'wangxiao', email: 'wangxiao@example.com', status: '正常', initialized: true }));
+  const organizations = tenants.map(tenant => record('org-' + tenant.id, { tenantId: tenant.id, parentId: null, name: tenant.name, status: '正常' }));
+  for (const [collection, examples] of Object.entries(enterpriseOrganizationSeed())) ({ organizations, users, memberships })[collection].push(...examples);
   const grants = apiKeys.slice(0, 12).map((key, index) => record(`grant-${index + 1}`, { subjectType: "key", subjectId: key.id, modelIds: key.modelIds, period: index % 3 === 0 ? "day" : "month", limit: index % 3 === 0 ? 10000000 : 100000000, used: (index + 1) * 420000, expiresAt: "2027-09-15", status: "生效中" }));
   const ledger = grants.map((grant, index) => record(`ledger-${index + 1}`, { accountId: grant.subjectId, sourceId: grant.id, type: "额度发放", delta: grant.limit, balance: grant.limit - grant.used, reason: "初始授权", status: "已完成" }));
   const routes = [record("route-deepseek", { routeId: "route-deepseek-prod", name: "DeepSeek 生产路由", modelId: "model-1", targets: [{ endpointId: "endpoint-ds", weight: 70 }, { endpointId: "endpoint-glm", weight: 30 }], mode: "加权", status: "已生效", releaseId: "release-2" }), record("route-glm", { routeId: "route-glm-prod", name: "GLM 优先级路由", modelId: "model-2", targets: [{ endpointId: "endpoint-glm", weight: 100 }], mode: "优先级", status: "已生效", releaseId: "release-2" })];
@@ -82,44 +99,68 @@ export function createAdminSeed() {
   const settlements = [record("settlement-001", { settlementNo: "SET-202609-CMSS", providerId: "provider-cmss", period: "2026-09", platformAmount: 984, providerAmount: 981.5, difference: 2.5, status: "待确认" })];
   const adjustments = [record("adjustment-001", { adjustmentNo: "ADJ-202609-001", billId: "bill-001", amount: -8.4, reason: "重复计量冲正", status: "待审批" })];
   const announcements = [record("notice-001", { title: "国庆假期服务保障通知", audience: "全部租户", channel: "站内信", effectiveAt: "2026-09-30", status: "草稿" })];
-  const securityPolicies = [record("security-pii", { name: "政务敏感信息防护", category: "请求内容", scope: "输入与输出", action: "阻断并审计", hits: 128, status: "已启用" }), record("security-abuse", { name: "高频 Key 防刷", category: "访问防护", scope: "API 网关", action: "限流", hits: 1204, status: "已启用" }), record("security-retention", { name: "政务数据不留存", category: "数据策略", scope: "tenant-gov", action: "不留存", hits: 0, status: "已启用" })];
-  const securityEvents = [record("security-event-001", { eventNo: "SEC-202609-001", policyId: "security-pii", requestId: "request-0019", keyId: "key-127", severity: "高", assignee: "安全管理员", conclusion: "", status: "待处置" })];
   const admins = [record("admin-001", { account: "estack-yy", name: "平台管理员", role: "平台管理员", scope: "全平台", status: "已启用" }), record("admin-002", { account: "ops-wang", name: "王运维", role: "运维人员", scope: "服务运维", status: "已启用" })];
   const approvals = [record("approval-001", { name: "大额调账审批", condition: "金额绝对值 ≥ ¥5", approverRole: "财务人员", status: "已启用" })];
-  const integrations = [record("integration-001", { name: "生产告警群", type: "飞书 Webhook", target: "ops-demo", events: "高等级告警", lastResult: "模拟成功", status: "已启用" })];
-  return { version: 1, revision: 1, updatedAt: now, models, modelVersions, validations, providers, endpoints, supplyPrices, clusters, artifacts, deployments, tenants, projects, memberships, apiKeys, grants, ledger, routes, limits, fallbacks, releases, caches, requests, alerts, incidents, products, prices, orders, bills, settlements, adjustments, announcements, securityPolicies, securityEvents, admins, approvals, integrations, audits: [], currentRole: "平台管理员", settings: { environmentLabel: "演示环境", timezone: "Asia/Shanghai", retentionDays: 90, defaultTpm: 1000000 } };
+  const integrations = [record("integration-001", { name: "生产告警群", type: "飞书 Webhook", target: "ops-demo", events: "高等级告警", lastResult: "检查通过", status: "已启用" })];
+  const personal = individualSeed();
+  for (const [collection, examples] of Object.entries(personal)) ({ users, tenants, projects, apiKeys, grants, products, orders })[collection].push(...examples);
+  return { version: 1, revision: 1, updatedAt: now, models, modelSupplies, modelSalePrices, modelVersions, validations, providers, endpoints, supplyPrices, clusters, artifacts, deployments, tenants, projects, memberships, users, organizations, apiKeys, grants, ledger, routes, limits, fallbacks, releases, caches, requests, alerts, incidents, products, prices, orders, bills, settlements, adjustments, announcements, admins, approvals, integrations, audits: [], currentRole: "平台管理员", settings: { environmentLabel: "运营中心", timezone: "Asia/Shanghai", retentionDays: 90, defaultTpm: 1000000 } };
 }
 
 export function parseAdminState(raw) {
   if (!raw) return createAdminSeed();
   const value = JSON.parse(raw);
-  if (value?.version !== 1 || !Array.isArray(value.models) || !Array.isArray(value.apiKeys)) throw new Error("演示数据格式不兼容");
+  if (value?.version !== 1 || !Array.isArray(value.models) || !Array.isArray(value.apiKeys)) throw new Error("数据格式不兼容");
   const seed = createAdminSeed();
-  const restored = { ...seed, ...value, ...Object.fromEntries(["modelVersions", "validations", "clusters", "artifacts", "deployments", "supplyPrices", "memberships", "grants", "ledger", "routes", "limits", "fallbacks", "releases", "caches", "requests", "alerts", "incidents", "products", "prices", "orders", "bills", "settlements", "adjustments", "announcements", "securityPolicies", "securityEvents", "admins", "approvals", "integrations"].map(key => [key, Array.isArray(value[key]) ? value[key] : seed[key]])) };
+  const restored = { ...seed, ...value, ...Object.fromEntries(["modelSupplies", "modelSalePrices", "users", "organizations", "modelVersions", "validations", "clusters", "artifacts", "deployments", "supplyPrices", "memberships", "grants", "ledger", "routes", "limits", "fallbacks", "releases", "caches", "requests", "alerts", "incidents", "products", "prices", "orders", "bills", "settlements", "adjustments", "announcements", "admins", "approvals", "integrations"].map(key => [key, Array.isArray(value[key]) ? value[key] : seed[key]])) };
+  const newExamples = seed.models.filter(model => model.id.startsWith('catalog-demo-') && !value.models.some(saved => saved.id === model.id));
   for (const key of ['models', 'modelVersions', 'tenants', 'projects']) restored[key] = [...restored[key], ...seed[key].filter(item => !restored[key].some(saved => saved.id === item.id))];
+  const exampleIds = new Set(newExamples.map(model => model.id));
+  const carrierProviderIds = new Set(['mobile', 'unicom', 'telecom'].map(key => `catalog-provider-${key}`));
+  const carrierEndpointIds = new Set(seed.endpoints.filter(item => carrierProviderIds.has(item.providerId) && restored.models.some(model => item.modelIds.includes(model.id))).map(item => item.id));
+  for (const key of ['modelSupplies', 'modelSalePrices', 'endpoints']) restored[key] = [...restored[key], ...seed[key].filter(item => ((key === 'endpoints' ? item.modelIds.some(id => exampleIds.has(id)) : exampleIds.has(item.modelId)) || (key === 'endpoints' ? carrierEndpointIds.has(item.id) : key === 'modelSupplies' && carrierEndpointIds.has(item.endpointId))) && !restored[key].some(saved => saved.id === item.id))];
+  restored.providers = [...restored.providers, ...seed.providers.filter(provider => (newExamples.length && provider.id.startsWith('catalog-provider-') || carrierProviderIds.has(provider.id)) && !restored.providers.some(saved => saved.id === provider.id))];
   restored.apiKeys = restored.apiKeys.map(key => {
     const index = seed.apiKeys.findIndex(item => item.id === key.id);
     return index >= 0 && index < seed.projects.length * 2 && key.updatedAt === now ? { ...key, modelIds: seed.apiKeys[index].modelIds } : key;
   });
   restored.requests = [...restored.requests.filter(item => !item.id?.startsWith('usage-demo-')), ...seed.requests.filter(item => item.id.startsWith('usage-demo-'))];
+  // Add explicitly labeled personal-account examples without replacing edited records.
+  for (const [collection, examples] of Object.entries(individualSeed())) restored[collection].push(...examples.filter(example => !restored[collection].some(item => item.id === example.id)));
+  // Enrich the demo enterprise without resetting saved accounts or their assignments.
+  if (restored.tenants.some(tenant => tenant.id === 'tenant-gov') && restored.organizations.some(org => org.id === 'org-tenant-gov' && org.tenantId === 'tenant-gov')) {
+    for (const [collection, examples] of Object.entries(enterpriseOrganizationSeed())) restored[collection].push(...examples.filter(example => !restored[collection].some(item => item.id === example.id)));
+  }
   return restored;
 }
 
 export function canMutate(role, action) {
+  if (action.type === 'adminAccount') return role === '平台管理员';
+  if (action.type === 'providerOperation') return ['平台管理员', '运维人员'].includes(role);
+  if (action.type === "individual") return ["平台管理员", "运营人员"].includes(role);
+  if (action.type === 'modelOperation') return ['平台管理员', '运营人员'].includes(role) || (role === '财务人员' && ['priceDraft', 'pricePublish', 'procurement'].includes(action.operation));
+  if (action.type === "enterprise") return ["平台管理员", "运营人员"].includes(role);
   if (action.type === "setRole" || role === "平台管理员") return true;
   if (role === "只读观察员") return false;
   const collection = action.collection || action.changes?.[0]?.collection || (action.type === "setSettings" ? "settings" : "");
   const allowed = {
-    运营人员: ["models","modelVersions","validations","tenants","projects","memberships","apiKeys","grants","products","prices","orders","announcements"],
+    运营人员: ["models","modelVersions","validations","tenants","projects","memberships","users","organizations","apiKeys","grants","products","prices","orders","announcements"],
     运维人员: ["providers","endpoints","supplyPrices","clusters","artifacts","deployments","routes","limits","fallbacks","releases","caches","alerts","incidents","integrations"],
     财务人员: ["prices","orders","ledger","bills","settlements","adjustments"],
-    安全管理员: ["securityPolicies","securityEvents","apiKeys"],
+    安全管理员: ["apiKeys"],
   };
   return allowed[role]?.includes(collection) || false;
 }
 
 export function commitAdminState(state, action, actor = state.currentRole) {
+  const isEnterprise = ['enterprise', 'individual', 'adminAccount'].includes(action.type);
+  if (action.type !== 'adminAccount' && (action.collection === 'admins' || Array.isArray(action.changes) && action.changes.some(change => change.collection === 'admins'))) throw new Error('后台账号须通过账号管理操作');
   if (!canMutate(actor, action)) throw new Error(`${actor}无权执行此操作`);
+  if (action.type === "enterprise") action = enterpriseTransaction(state, action);
+  if (action.type === "individual") action = individualTransaction(state, action, actor);
+  if (action.type === "modelOperation") action = modelTransaction(state, action);
+  if (action.type === 'providerOperation') action = providerTransaction(state, action);
+  if (action.type === 'adminAccount') action = adminAccountTransaction(state, action);
   const next = structuredClone(state), timestamp = new Date().toISOString();
   if (action.type === "setRole") next.currentRole = action.role;
   else if (action.type === "setSettings") next.settings = { ...next.settings, ...action.changes };
@@ -145,17 +186,125 @@ export function commitAdminState(state, action, actor = state.currentRole) {
     }
   } else throw new Error("未知操作");
   next.revision += 1; next.updatedAt = timestamp;
-  if (action.type !== "setRole") next.audits.unshift(record(`audit-${next.revision}`, { actor, action: action.type, objectId: action.record?.id || action.id || action.objectId || "batch", result: "成功", before: null, after: action.record || action.changes }));
+  if (action.type !== "setRole") next.audits.unshift(record(`audit-${next.revision}`, { createdAt: timestamp, updatedAt: timestamp, actor, action: action.label || action.type, objectId: action.record?.id || action.id || action.objectId || "batch", result: "成功", before: isEnterprise ? action.changes.filter(change => change.type === 'update').map(change => ({ collection: change.collection, id: change.id, values: Object.fromEntries(Object.keys(change.changes).map(key => [key, state[change.collection].find(item => item.id === change.id)?.[key]])) })) : null, after: action.record || action.changes }));
+  return next;
+}
+
+export function persistAdminAction(state, action, storage) {
+  if (state.storageError) throw new Error('数据读取失败，请先恢复数据');
+  const raw = storage.getItem(STORAGE_KEY);
+  if (raw && JSON.parse(raw).revision !== state.revision) throw new Error('数据已变化，请载入新版本后重试');
+  const next = commitAdminState(state, action);
+  storage.setItem(STORAGE_KEY, JSON.stringify(next));
+  return next;
+}
+
+export function persistModelAction(state, action, storage) {
+  if (action.type !== 'modelOperation') throw new Error('此入口仅支持模型操作');
+  if (state.storageError) throw new Error('数据读取失败，请先恢复数据');
+  const raw = storage.getItem(STORAGE_KEY);
+  if (raw && JSON.parse(raw).revision !== state.revision) throw new Error('数据已变化，请载入新版本后重试；当前输入保留');
+  const next = commitAdminState(state, action);
+  storage.setItem(STORAGE_KEY, JSON.stringify(next));
+  return next;
+}
+
+export function persistProviderAction(state, action, storage, expectedRevision = state.revision) {
+  if (action.type !== 'providerOperation') throw new Error('此入口仅支持供应商操作');
+  if (state.storageError) throw new Error('数据读取失败，请先恢复数据');
+  const raw = storage.getItem(STORAGE_KEY);
+  if (state.revision !== expectedRevision || (raw && JSON.parse(raw).revision !== expectedRevision)) throw new Error('数据已变化，请载入新版本后重试；当前输入保留');
+  const next = commitAdminState(state, action);
+  storage.setItem(STORAGE_KEY, JSON.stringify(next));
+  return next;
+}
+
+export function persistEnterpriseAction(state, action, storage, expectedRevision = state.revision) {
+  if (action.type !== 'enterprise') throw new Error('此入口仅支持企业操作');
+  if (state.storageError) throw new Error('数据读取失败，请先恢复数据');
+  const raw = storage.getItem(STORAGE_KEY);
+  if (expectedRevision !== state.revision || (raw && JSON.parse(raw).revision !== state.revision)) throw new Error('数据已变化，请载入新版本后重试；当前输入保留');
+  const next = commitAdminState(state, action);
+  storage.setItem(STORAGE_KEY, JSON.stringify(next));
+  return next;
+}
+
+export function persistIndividualAction(state, action, storage, expectedRevision = state.revision) {
+  if (action.type !== 'individual') throw new Error('此入口仅支持个人用户操作');
+  if (state.storageError) throw new Error('数据读取失败，请先恢复数据');
+  const raw = storage.getItem(STORAGE_KEY);
+  if (expectedRevision !== state.revision || (raw && JSON.parse(raw).revision !== state.revision)) throw new Error('数据已变化，请载入新版本后重试；当前输入保留');
+  const next = commitAdminState(state, action);
+  storage.setItem(STORAGE_KEY, JSON.stringify(next));
+  return next;
+}
+
+export function persistAdminAccountAction(state, action, storage, expectedRevision = state.revision) {
+  if (action.type !== 'adminAccount') throw new Error('此入口仅支持后台账号操作');
+  if (state.storageError) throw new Error('数据读取失败，请先恢复数据');
+  const raw = storage.getItem(STORAGE_KEY);
+  if (state.revision !== expectedRevision || (raw && JSON.parse(raw).revision !== expectedRevision)) throw new Error('数据已变化，请载入新版本后重试；当前输入保留');
+  const next = commitAdminState(state, action);
+  storage.setItem(STORAGE_KEY, JSON.stringify(next));
   return next;
 }
 
 export function useAdminStore() {
   const [state, setState] = useState(() => { try { return parseAdminState(localStorage.getItem(STORAGE_KEY)); } catch (error) { return { ...createAdminSeed(), storageError: error.message }; } });
   const [conflict, setConflict] = useState(false);
-  useEffect(() => { if (!state.storageError) localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }, [state]);
+  const currentState = useRef(state);
+  currentState.current = state;
+  useEffect(() => { if (!state.storageError) { try { if (!localStorage.getItem(STORAGE_KEY)) localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { toast.error('数据保存失败，请检查浏览器存储'); } } }, [state]);
   useEffect(() => { const onStorage = event => { if (event.key !== STORAGE_KEY || !event.newValue) return; try { const incoming = parseAdminState(event.newValue); if (incoming.revision > state.revision) setConflict(true); } catch { setConflict(true); } }; addEventListener("storage", onStorage); return () => removeEventListener("storage", onStorage); }, [state.revision]);
-  const dispatch = action => setState(current => { try { return commitAdminState(current, action); } catch (error) { queueMicrotask(() => globalThis.alert?.(error.message)); return current; } });
-  const recover = () => { const fresh = createAdminSeed(); localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh)); setState(fresh); setConflict(false); };
-  const reload = () => { try { setState(parseAdminState(localStorage.getItem(STORAGE_KEY))); setConflict(false); } catch (error) { setState(current => ({ ...current, storageError: error.message })); } };
-  return { state, dispatch, recover, reload, conflict };
+  const dispatch = action => {
+    try {
+      if (conflict) throw new Error('检测到数据冲突，请载入新版本后重试');
+      const next = persistAdminAction(currentState.current, action, localStorage);
+      currentState.current = next; setState(next);
+      if (action.type !== 'setRole' && action.feedback !== false) {
+        const names = { clusters: '集群', deployments: '模型部署', artifacts: '制品', routes: '路由策略', limits: '限流规则', fallbacks: '回退策略', caches: '缓存策略', releases: '配置版本', alerts: '告警', incidents: '事件', products: '商品', orders: '订单', announcements: '公告', settlements: '结算单', adjustments: '调账', bills: '账单', prices: '价格' };
+        const collection = action.collection || action.changes?.[0]?.collection;
+        const status = action.changes?.status;
+        toast.success(action.feedback || `${names[collection] || '配置'}${status?.startsWith('已') ? status : action.type === 'add' ? '已新建' : '已更新'}`);
+      }
+      return next;
+    } catch (error) { toast.error(error.message); return null; }
+  };
+  const transact = action => {
+    if (conflict) throw new Error('检测到数据冲突，请载入新版本后重试；当前输入保留');
+    const next = persistEnterpriseAction(currentState.current, action, localStorage, state.revision);
+    currentState.current = next;
+    setState(next);
+    return next;
+  };
+  const transactModel = action => {
+    if (conflict) throw new Error('检测到数据冲突，请载入新版本后重试；当前输入保留');
+    const next = persistModelAction(state, action, localStorage);
+    setState(next);
+    return next;
+  };
+  const transactIndividual = action => {
+    if (conflict) throw new Error('检测到数据冲突，请载入新版本后重试；当前输入保留');
+    const next = persistIndividualAction(currentState.current, action, localStorage, state.revision);
+    currentState.current = next;
+    setState(next);
+    return next;
+  };
+  const recover = () => { try { const fresh = createAdminSeed(); localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh)); currentState.current = fresh; setState(fresh); setConflict(false); toast.success("数据已恢复"); } catch { toast.error("数据恢复失败，请检查浏览器存储"); } };
+  const transactProvider = action => {
+    if (conflict) throw new Error('检测到数据冲突，请载入新版本后重试；当前输入保留');
+    const next = persistProviderAction(currentState.current, action, localStorage, state.revision);
+    currentState.current = next;
+    setState(next);
+    return next;
+  };
+  const reload = () => { try { const fresh = parseAdminState(localStorage.getItem(STORAGE_KEY)); currentState.current = fresh; setState(fresh); setConflict(false); toast.success("已载入最新数据"); } catch (error) { toast.error(error.message); setState(current => ({ ...current, storageError: error.message })); } };
+  const transactAdminAccount = (action, expectedRevision) => {
+    if (conflict) throw new Error('检测到数据冲突，请载入新版本后重试；当前输入保留');
+    const next = persistAdminAccountAction(currentState.current, action, localStorage, expectedRevision);
+    currentState.current = next;
+    setState(next);
+    return next;
+  };
+  return { state, dispatch, transact, transactModel, transactIndividual, transactProvider, transactAdminAccount, recover, reload, conflict };
 }

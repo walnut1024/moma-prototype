@@ -3330,3 +3330,18 @@ h1 em {
 .api-key-search-menu small { margin-top: 2px; overflow-wrap: anywhere; color: #71809b; font-size: 11px; }
 .api-key-search-menu p { padding: 8px 10px; color: #71809b; font-size: 12px; }
 .cl-view-row{display:flex;justify-content:flex-end;padding:8px 0;border-bottom:1px solid #edf0f5}
+
+/* Admin context controls share the platform's fixed banner. */
+.app-shell > .admin-banner .top-actions { gap: 16px; }
+.admin-banner-controls { display: flex; align-items: center; gap: 16px; }
+.admin-banner-controls > div:empty { display: none; }
+.admin-banner-field { display: flex; align-items: center; gap: 8px; color: #cbd3df; font-size: 12px; white-space: nowrap; }
+.admin-banner-field [data-slot="select-trigger"] { height: 30px; min-width: 90px; border-color: #ffffff26; background: #252525; color: #cbd3df; font-size: 12px; box-shadow: none; }
+.admin-banner-role [data-slot="select-trigger"] { min-width: 132px; }
+.admin-banner-field [data-slot="select-trigger"]:hover,
+.admin-banner-field [data-slot="select-trigger"][data-state="open"] { border-color: #72a5ff; color: #fff; }
+.admin-banner-field [data-slot="select-trigger"] svg { color: #8f9aab; }
+@media (max-width: 760px) {
+  .app-shell > .admin-banner .top-actions, .admin-banner-controls { gap: 12px; }
+  .admin-banner-field > span { display: none; }
+}

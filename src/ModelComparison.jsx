@@ -1,3 +1,5 @@
+import FrontPageHeader from "./components/FrontPageHeader";
+import { Columns3 } from "lucide-react";
 import { ArrowLeft, BrainCircuit, Copy, Plus, Send, SlidersHorizontal, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import ModelSelectDialog from './ModelSelectDialog';
@@ -46,7 +48,7 @@ export default function ModelComparison({ onBack }) {
     try { await navigator.clipboard.writeText(text); setNotice('已复制结果'); } catch { setNotice('复制失败，请手动选择文本'); }
   }
   return <section className="compare-page">
-    <header className="compare-heading"><div><h1>模型对比</h1><p>向多个文本模型发送同一问题，直观比较回答质量、速度与参数差异</p></div><div className="compare-head-actions"><button type="button" onClick={onBack}><ArrowLeft size={16} aria-hidden="true"/>返回单模型</button><label><span>同步输入</span><input type="checkbox" checked={sync} onChange={event => setSync(event.target.checked)}/><i aria-hidden="true"/></label><button type="button" onClick={() => { setColumns([createColumn(1, catalog[0].name), createColumn(2, catalog[1].name)]); setNotice('已重置对比'); }}>重置</button><div className="compare-picker"><button type="button" className="compare-add" aria-haspopup="dialog" aria-expanded={pickerOpen} onClick={() => setPickerOpen(true)}><Plus size={16} aria-hidden="true"/>添加模型</button><ModelSelectDialog open={pickerOpen} models={catalog} value={columns.map(column => column.model)} multiple min={2} max={3} onApply={applyModels} onClose={() => setPickerOpen(false)}/></div></div></header>
+    <FrontPageHeader className="compare-heading" title="模型对比" description="向多个文本模型发送同一问题，直观比较回答质量、速度与参数差异" icon={Columns3} actions={<div className="compare-head-actions"><button type="button" onClick={onBack}><ArrowLeft size={16} aria-hidden="true"/>返回单模型</button><label><span>同步输入</span><input type="checkbox" checked={sync} onChange={event => setSync(event.target.checked)}/><i aria-hidden="true"/></label><button type="button" onClick={() => { setColumns([createColumn(1, catalog[0].name), createColumn(2, catalog[1].name)]); setNotice('已重置对比'); }}>重置</button><div className="compare-picker"><button type="button" className="compare-add" aria-haspopup="dialog" aria-expanded={pickerOpen} onClick={() => setPickerOpen(true)}><Plus size={16} aria-hidden="true"/>添加模型</button><ModelSelectDialog open={pickerOpen} models={catalog} value={columns.map(column => column.model)} multiple min={2} max={3} onApply={applyModels} onClose={() => setPickerOpen(false)}/></div></div>} />
     <div className={`compare-grid columns-${columns.length}`}>
       {columns.map((column, index) => {
         const model = catalog.find(item => item.name === column.model);

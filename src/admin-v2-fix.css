@@ -1,7 +1,7 @@
 .admin-v2 header { position: static !important; inset: auto !important; z-index: auto !important; background: #fff; color: #202733; }
 .admin-v2 .v2-sidebar { position: sticky; inset: auto; top: 0; z-index: auto; width: auto; padding: 0; }
 .admin-v2 .v2-drawer { position: absolute; inset: 0 0 auto auto; width: 520px; padding: 0; }
-.admin-v2 .v2-role { height: 30px; border: 1px solid #dfe4ec; border-radius: 4px; background: #fff; color: #344054; padding: 0 28px 0 10px; }
+
 .admin-v2 .v2-environment { color: #667085; font-size: 12px; }
 .v2-system-alert { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 18px 0; padding: 10px 12px; border: 1px solid #b9d1ff; background: #edf4ff; color: #245bb5; font-size: 13px; }
 .v2-system-alert.error { border-color: #ffd1d1; background: #fff2f1; color: #b42318; }
@@ -206,17 +206,10 @@
 .v2-module-tabs button.active{border-bottom-color:#2468e8;color:#185bd3;font-weight:600}
 
 /* Admin navigation follows the operator's functional modules. */
-.admin-v2 .v2-workbench-entry{width:100%;border:0;border-bottom:1px solid #dde2ea;background:#fff;text-align:left;cursor:pointer;color:#202733}
+.admin-v2{--v2-navigation-header-height:42px}
+.admin-v2 .v2-content>header{height:var(--v2-navigation-header-height)}
 .admin-v2 .v2-sidebar button:focus-visible{outline:2px solid #2468e8;outline-offset:-2px}
-.admin-v2 .v2-workbench-metric{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:20px;border:1px solid #dde2ea;border-radius:6px;background:#fff;text-align:left;cursor:pointer}
-.admin-v2 .v2-workbench-metric strong{font-size:28px}
-.admin-v2 .v2-workbench-metric small{color:#2468e8}
-.admin-v2 .v2-workbench-shortcuts{padding:16px}
-.admin-v2 .v2-workbench-shortcuts h2{margin:0 0 12px;font-size:16px}
-.admin-v2 .v2-workbench-shortcuts>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.admin-v2 .v2-workbench-shortcuts button{display:flex;align-items:center;gap:8px;padding:12px;border:1px solid #e5e9f0;border-radius:4px;background:#fff;cursor:pointer}
-.admin-v2 .v2-workbench-shortcuts button>svg:last-child{margin-left:auto}
-.admin-v2 .v2-workbench-shortcuts>button{width:100%;margin-top:8px;text-align:left}
+.admin-v2 .v2-sidebar nav{padding:8px 8px 16px}
+.admin-v2 .v2-sidebar nav section>small{margin:9px 10px 3px;line-height:18px}
+.admin-v2 .v2-sidebar nav section>div>button{height:32px;padding:6px 10px;font-size:13px;line-height:20px}
 .admin-v2 .v2-sidebar{top:48px;height:calc(100vh - 48px)}
-.admin-v2 .v2-workbench-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
-@media(max-width:1100px){.admin-v2 .v2-workbench-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}

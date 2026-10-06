@@ -1,3 +1,6 @@
+import FrontPageHeader from "./components/FrontPageHeader";
+import { Languages } from "lucide-react";
+import { displayBusinessCopy } from './display-copy.mjs';
 import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -96,7 +99,7 @@ const recommendations = [
   ],
   [
     "产品翻译",
-    "请将下面的中文产品发布邮件翻译成自然、专业的英文。保留原有段落和项目符号，产品名与技术术语不翻译；语气正式但不生硬，适合发送给海外企业客户。翻译后另附一份术语对照表，并标出原文中可能存在歧义、需要确认的表达。\n\n邮件主题：MoMA 智能路由 2.0 正式发布\n\n尊敬的客户：\n\n您好！我们很高兴地宣布，MoMA 智能路由 2.0 将于 2026 年 10 月 8 日正式上线。本次升级进一步优化了多模型调度能力，帮助企业在保障生成质量的同时降低模型调用成本。\n\n本次更新包括：\n- 新增效果优先、成本优先和平衡模式三种路由策略；\n- 支持按请求内容、响应时延和模型可用性自动选择模型；\n- 新增调用链路追踪与成本分析面板；\n- 支持通过现有 API Key 直接调用，无需修改鉴权方式。\n\n现有客户可在 MoMA 控制台免费体验 30 天。若您希望获取产品演示、迁移建议或专属报价，请回复本邮件联系我们的客户成功团队。\n\n感谢您一直以来对 MoMA 的支持！\n\nMoMA 产品团队",
+    "请将下面的中文产品发布邮件翻译成自然、专业的英文。保留原有段落和项目符号，产品名与技术术语不翻译；语气正式但不生硬，适合发送给海外企业客户。翻译后另附一份术语对照表，并标出原文中可能存在歧义、需要确认的表达。\n\n邮件主题：MoMA 智能路由 2.0 正式发布\n\n尊敬的客户：\n\n您好！我们很高兴地宣布，MoMA 智能路由 2.0 将于 2026 年 10 月 8 日正式上线。本次升级进一步优化了多模型调度能力，帮助企业在保障生成质量的同时降低模型调用成本。\n\n本次更新包括：\n- 新增效果优先、成本优先和平衡模式三种路由策略；\n- 支持按请求内容、响应时延和模型可用性自动选择模型；\n- 新增调用链路追踪与成本分析面板；\n- 支持通过现有 API Key 直接调用，无需修改鉴权方式。\n\n现有客户可在 MoMA 控制台免费体验 30 天。若您希望获取产品咨询、迁移建议或专属报价，请回复本邮件联系我们的客户成功团队。\n\n感谢您一直以来对 MoMA 的支持！\n\nMoMA 产品团队",
   ],
 ];
 
@@ -224,7 +227,7 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
           id: pendingId,
           question,
           status: "success",
-          answer: `这是基于“${question.slice(0, 32)}${question.length > 32 ? "…" : ""}”生成的示例结果。`,
+          answer: `关于“${question.slice(0, 32)}${question.length > 32 ? "…" : ""}”，可以按以下思路组织内容：`,
           points: [
             "先明确目标、对象与使用场景，避免回答停留在泛泛描述。",
             "按关键信息、判断依据与可执行建议组织内容，便于快速阅读。",
@@ -426,7 +429,7 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
       historySlot,
     );
 
-  const answerText = (item) => [item.answer, ...(item.points || [])].join("\n");
+  const answerText = (item) => [displayBusinessCopy(item.answer), ...(item.points || []).map(displayBusinessCopy)].join("\n");
   return (
     <section
       className={`playground tx-page ${conversationActive ? "has-messages tx-conversation" : ""}`}
@@ -442,22 +445,7 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
           <button onClick={requestBlank}>新建对话</button>
         </div>
       ) : (
-        <div className="pg-heading">
-          <div>
-            <h1>{title}</h1>
-            <p>
-              文本生成模型用于理解和生成文字；多模态模型还可以理解图片、视频等内容。
-            </p>
-          </div>
-          <div className="pg-heading-actions">
-            {onCompare && (
-              <button className="pg-compare-entry" onClick={onCompare}>
-                模型对比
-              </button>
-            )}
-            <button onClick={requestBlank}>新建对话</button>
-          </div>
-        </div>
+        <FrontPageHeader className="pg-heading" title={title} icon={Languages} description="文本生成模型用于理解和生成文字；多模态模型还可以理解图片、视频等内容。" actions={<div className="pg-heading-actions">{onCompare && <button className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button onClick={requestBlank}>新建对话</button></div>} />
       )}
       <div className="pg-workspace">
         {conversationActive ? (
@@ -512,11 +500,11 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
                     </div>
                   ) : (
                     <div className="pg-answer-body">
-                      <p>{item.answer}</p>
+                      <p>{displayBusinessCopy(item.answer)}</p>
                       {item.points && (
                         <ol>
                           {item.points.map((point) => (
-                            <li key={point}>{point}</li>
+                            <li key={point}>{displayBusinessCopy(point)}</li>
                           ))}
                         </ol>
                       )}

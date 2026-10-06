@@ -44,7 +44,7 @@ export const apiKeySamples = [
       ip: "办公网段",
     },
     {
-      name: "产品演示",
+      name: "产品应用",
       id: "ak-20260908-7de0551bca84a3f926",
       key: "sk-E3s7yU1iO5p9Ad2f8Gh4",
       created: "2026-09-08 09:32:56",
@@ -82,4 +82,3 @@ export function apiKeyOptions(billing) {
  const index = ["按量付费", "Token Plan", "资源包"].indexOf(billing);
  return apiKeySamples.map(key => ({ ...key, id: `${key.id}-${index}`, key: `${key.key}-${index}` }));
 }
-export const maskApiKey = value => value.length > 12 ? `${value.slice(0, 8)}*****${value.slice(-4)}` : value;

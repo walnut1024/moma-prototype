@@ -1,4 +1,9 @@
-import { FilterPagination } from "./components/FilterControls";
+import FrontPageHeader from "./components/FrontPageHeader";
+import AuthExperience, { AuthBanner, usePrototypeAuth } from "./AuthExperience";
+import OperationRecords from "./OperationRecords";
+import { displaySmartRouteName } from './display-copy.mjs';
+import { MODEL_ORDER_BILLING_TYPES, MODEL_ORDER_COLUMNS } from './model-order-display.mjs';
+import { DEFAULT_PAGE_SIZE, FilterPagination } from "./components/FilterControls";
 import { useEffect, useMemo, useState } from "react";
 import UsageStatistics from "./components/UsageStatistics";
 import OrganizationMembers from "./OrganizationMembers";
@@ -42,6 +47,7 @@ import {
   Images,
   Info,
   KeyRound,
+  History,
   Languages,
   ReceiptText,
   RefreshCw,
@@ -58,7 +64,8 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./components/ui/dialog";
 import { Button } from "./components/ui/button";
 import { apiKeySamples } from "./api-key-data.mjs";
-import { parseIpAllowlist } from "./api-key-utils.mjs";
+import { maskApiKey, parseIpAllowlist } from "./api-key-utils.mjs";
+import "./frontend-pages.css";
 
 const A = "/assets/";
 const models = [
@@ -328,7 +335,7 @@ function SmartRoute({ versionId, onNavigate }) {
     [deleting, setDeleting] = useState(null),
     [copyNotice, setCopyNotice] = useState(""),
     [query, setQuery] = useState(""),
-    [page, setPage] = useState(1), [size, setSize] = useState(10),
+    [page, setPage] = useState(1), [size, setSize] = useState(DEFAULT_PAGE_SIZE),
     [name, setName] = useState(""),
     [strategy, setStrategy] = useState("效果优先"),
     [models, setModels] = useState([]),
@@ -341,17 +348,17 @@ function SmartRoute({ versionId, onNavigate }) {
           if (Array.isArray(saved)) return saved;
         }
       } catch { /* Keep the prototype usable if browser storage is unavailable. */ }
-      return versionId === "moma_5.11.0_estack" ? [{ id: "route-demo-001", name: "demo-route", strategy: "效果优先", models: ["Kimi-K3", "DeepSeek-V4-Pro"], status: "正常", creator: "estack-yy", time: new Date().toLocaleString("sv-SE", { timeZone: "Asia/Shanghai", hour12: false }) }] : [];
+      return versionId === "moma_5.11.0_estack" ? [{ id: "route-demo-001", name: "primary-route", strategy: "效果优先", models: ["Kimi-K3", "DeepSeek-V4-Pro"], status: "正常", creator: "estack-yy", time: new Date().toLocaleString("sv-SE", { timeZone: "Asia/Shanghai", hour12: false }) }] : [];
     });
   useEffect(() => { try { localStorage.setItem(storageKey, JSON.stringify(routes)); } catch { /* Preview remains usable without persistence. */ } }, [routes, storageKey]);
   const candidates = orderedRouteModels(strategy);
-  const filteredRoutes=routes.filter(route=>route.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const filteredRoutes=routes.filter(route=>displaySmartRouteName(route).toLowerCase().includes(query.trim().toLowerCase()));
   const current=Math.min(page,Math.max(1,Math.ceil(filteredRoutes.length/size)));
-  const visibleRoutes=versionId === "moma_5.11.0_estack" ? filteredRoutes.slice((current-1)*size,current*size) : filteredRoutes;
-  const duplicateName = routes.some(route => route.name === name && route.id !== editingId);
+  const visibleRoutes=filteredRoutes.slice((current-1)*size,current*size);
+  const duplicateName = routes.some(route => displaySmartRouteName(route) === name && route.id !== editingId);
   const openForm = route => {
     setEditingId(route?.id ?? null);
-    setName(route?.name ?? "");
+    setName(displaySmartRouteName(route));
     setStrategy(route?.strategy ?? "效果优先");
     setModels(route?.models ?? []);
     setAgreed(!!route);
@@ -374,7 +381,7 @@ function SmartRoute({ versionId, onNavigate }) {
   };
   return (
     <div className="route-page">
-      <div className="route-head">
+      {versionId === "moma_5.11.0_estack" ? <FrontPageHeader title="智能路由" description="根据输入请求的内容、上下文、性能需求或成本等因素，自动选择最优模型，实现AI资源的高效配置" icon={Route} /> : <div className="route-head">
         <img src={`${A}routeIcon-23840893.svg`} />
         <div>
           <h1>
@@ -385,7 +392,7 @@ function SmartRoute({ versionId, onNavigate }) {
           </p>
         </div>
         <b>操作引导</b>
-      </div>
+      </div>}
       <div className="route-guide">
         <b>操作引导</b>
         <div>
@@ -433,7 +440,7 @@ function SmartRoute({ versionId, onNavigate }) {
           </div>
           {visibleRoutes.map((r) => (
               <div className="route-row" key={r.id}>
-                <span>{r.name}</span>
+                <span>{displaySmartRouteName(r)}</span>
                 <span>{r.strategy}</span>
                 <span><b className="route-status">{r.status}</b></span>
                 <span>{r.creator}</span>
@@ -451,7 +458,7 @@ function SmartRoute({ versionId, onNavigate }) {
             </div>
           )}
         </div>
-        <>{versionId === "moma_5.11.0_estack" ? <FilterPagination total={filteredRoutes.length} page={current} size={size} onPageChange={setPage} onSizeChange={setSize}/> : <footer>共{routes.length}条记录　<select><option>10条/页</option></select>　 1</footer>}</>
+        <FilterPagination total={filteredRoutes.length} page={current} size={size} onPageChange={setPage} onSizeChange={setSize}/>
 
       </section>
       {creating && (
@@ -554,15 +561,15 @@ function SmartRoute({ versionId, onNavigate }) {
       )}
       <Dialog open={!!apiRoute} onOpenChange={open => { if (!open) setApiRoute(null); }}>
         <DialogContent className="route-api-dialog sm:max-w-3xl">
-          <DialogHeader><DialogTitle>API 调用</DialogTitle><DialogDescription>通过 API Key 调用“{apiRoute?.name}”智能路由。</DialogDescription></DialogHeader>
-          <div className="route-api-alert">以下为接入示例；请求地址和权限以实际开通的服务为准。API Key 请妥善保管，避免公开共享。</div>
+          <DialogHeader><DialogTitle>API 调用</DialogTitle><DialogDescription>通过 API Key 调用“{displaySmartRouteName(apiRoute)}”智能路由。</DialogDescription></DialogHeader>
+          <div className="route-api-alert">请求地址和权限以已开通的服务为准。API Key 请妥善保管，避免公开共享。</div>
           <section><h3>1 获取 API Key</h3><p>在 API Key 管理中创建或选择已有密钥。</p><Button variant="outline" onClick={() => { setApiRoute(null); onNavigate("API Key 管理"); }}>前往 API Key 管理</Button></section>
-          <section><h3>2 调用智能路由</h3><p>在请求体的 <code>model</code> 字段填写该路由的接入点 ID。</p><div className="route-api-code-head"><span>Curl · 流式请求示例</span><Button variant="ghost" size="sm" onClick={() => copy(curl, "Curl 示例")}><Copy size={15}/>复制</Button></div><pre>{curl}</pre><div className="route-api-value"><span>接入点：<code>{apiRoute?.id}</code></span><Button variant="ghost" size="sm" onClick={() => copy(apiRoute?.id ?? "", "接入点")}>复制</Button></div><div className="route-api-value"><span>示例请求地址：<code>{routeApiUrl}</code></span><Button variant="ghost" size="sm" onClick={() => copy(routeApiUrl, "请求地址")}>复制</Button></div></section>
+          <section><h3>2 调用智能路由</h3><p>在请求体的 <code>model</code> 字段填写该路由的接入点 ID。</p><div className="route-api-code-head"><span>Curl · 流式调用</span><Button variant="ghost" size="sm" onClick={() => copy(curl, "调用代码")}><Copy size={15}/>复制</Button></div><pre>{curl}</pre><div className="route-api-value"><span>接入点：<code>{apiRoute?.id}</code></span><Button variant="ghost" size="sm" onClick={() => copy(apiRoute?.id ?? "", "接入点")}>复制</Button></div><div className="route-api-value"><span>请求地址：<code>{routeApiUrl}</code></span><Button variant="ghost" size="sm" onClick={() => copy(routeApiUrl, "请求地址")}>复制</Button></div></section>
           <span role="status" className="route-copy-status">{copyNotice}</span>
         </DialogContent>
       </Dialog>
       <Dialog open={!!deleting} onOpenChange={open => { if (!open) setDeleting(null); }}>
-        <DialogContent className="route-delete-dialog sm:max-w-md"><DialogHeader><DialogTitle>确认删除该智能路由吗？</DialogTitle><DialogDescription>“{deleting?.name}”删除后不可恢复，请谨慎操作。</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleting(null)}>取消</Button><Button onClick={() => { setRoutes(routes.filter(route => route.id !== deleting?.id)); setDeleting(null); }}>删除</Button></DialogFooter></DialogContent>
+        <DialogContent className="route-delete-dialog sm:max-w-md"><DialogHeader><DialogTitle>确认删除该智能路由吗？</DialogTitle><DialogDescription>“{displaySmartRouteName(deleting)}”删除后不可恢复，请谨慎操作。</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleting(null)}>取消</Button><Button onClick={() => { setRoutes(routes.filter(route => route.id !== deleting?.id)); setDeleting(null); }}>删除</Button></DialogFooter></DialogContent>
       </Dialog>
     </div>
   );
@@ -570,7 +577,7 @@ function SmartRoute({ versionId, onNavigate }) {
 
 function UnifiedApiKeys() {
   return <div className="api-key-unified us-page">
-    <div className="us-title"><div><h1>API Key 管理</h1><p>管理不同计费方式下的调用凭证与访问权限</p></div></div>
+    <FrontPageHeader title="API Key 管理" description="管理不同计费方式下的调用凭证与访问权限" icon={KeyRound} />
     <Tabs defaultValue="按量付费">
       <TabsList variant="line" className="us-tabs" aria-label="API Key 计费方式">
         {billingTypes.map(type => <TabsTrigger key={type} value={type}>{type}</TabsTrigger>)}
@@ -581,8 +588,6 @@ function UnifiedApiKeys() {
 }
 
 function ApiKeys({ billing, hideHeading = false }) {
-  const maskKey = (value) =>
-    value.length > 12 ? `${value.slice(0, 8)}*****${value.slice(-4)}` : value;
   const initial = apiKeySamples;
   const editModels = [
     ["AITC-MiniMax-M2.5", "文本模型"],
@@ -605,6 +610,7 @@ function ApiKeys({ billing, hideHeading = false }) {
   const [keys, setKeys] = useState(() => initial.map(key => ({ ...key, models: key.scope === "无限制" ? null : editModels.slice(0, parseInt(key.scope)).map(([model]) => model), ips: key.ip === "办公网段" ? ["192.168.1.0/24"] : key.ip.includes("个 IP") ? Array.from({length: parseInt(key.ip)}, (_, i) => `10.0.1.${100 + i}`) : [], id: `${key.id}-${billingTypes.indexOf(billing)}`, key: `${key.key}-${billingTypes.indexOf(billing)}` }))),
     [query, setQuery] = useState(""),
     [selectedSearchId, setSelectedSearchId] = useState(null),
+    [page, setPage] = useState(1), [size, setSize] = useState(DEFAULT_PAGE_SIZE),
     [searchOpen, setSearchOpen] = useState(false),
     [activeSuggestion, setActiveSuggestion] = useState(0),
     [panel, setPanel] = useState(null),
@@ -678,7 +684,10 @@ function ApiKeys({ billing, hideHeading = false }) {
       .catch(() => { setCopiedValue(""); setCopied("复制失败，请允许剪贴板访问后重试"); });
   const suggestions = keys.filter((k) => `${k.name} ${k.id}`.toLowerCase().includes(query.trim().toLowerCase()));
   const filteredKeys = selectedSearchId ? keys.filter((k) => k.id === selectedSearchId) : suggestions;
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredKeys.length / size)));
+  const visibleKeys = filteredKeys.slice((currentPage - 1) * size, currentPage * size);
   const chooseSuggestion = (key) => {
+    setPage(1);
     setSelectedSearchId(key.id);
     setQuery(key.name);
     setSearchOpen(false);
@@ -701,20 +710,20 @@ function ApiKeys({ billing, hideHeading = false }) {
               <Search size={16} />
               <input
                 role="combobox"
-                aria-label="搜索 Key 名称或 Track ID"
+                aria-label="搜索 Key 名称或 Key ID"
                 aria-autocomplete="list"
                 aria-expanded={searchOpen}
                 aria-controls={`api-key-suggestions-${billingTypes.indexOf(billing)}`}
                 value={query}
                 onFocus={() => setSearchOpen(true)}
-                onChange={(e) => { setQuery(e.target.value); setSelectedSearchId(null); setActiveSuggestion(0); setSearchOpen(true); }}
+                onChange={(e) => { setQuery(e.target.value); setPage(1); setSelectedSearchId(null); setActiveSuggestion(0); setSearchOpen(true); }}
                 onKeyDown={(e) => {
                   if (e.key === "Escape") setSearchOpen(false);
                   if (e.key === "ArrowDown") { e.preventDefault(); setSearchOpen(true); setActiveSuggestion((activeSuggestion + 1) % Math.max(suggestions.length, 1)); }
                   if (e.key === "ArrowUp") { e.preventDefault(); setActiveSuggestion((activeSuggestion - 1 + Math.max(suggestions.length, 1)) % Math.max(suggestions.length, 1)); }
                   if (e.key === "Enter" && searchOpen && suggestions.length) { e.preventDefault(); chooseSuggestion(suggestions[activeSuggestion]); }
                 }}
-                placeholder="搜索 Key 名称或 Track ID"
+                placeholder="搜索 Key 名称或 Key ID"
               />
             </label>
             {searchOpen && <div className="api-key-search-menu" id={`api-key-suggestions-${billingTypes.indexOf(billing)}`} role="listbox" aria-label="Key 搜索建议">
@@ -734,7 +743,7 @@ function ApiKeys({ billing, hideHeading = false }) {
       <div className="api-key-table">
         <div className="api-key-row api-key-head">
           {[
-            "Key 名称/Track ID",
+            "Key 名称/Key ID",
             "API Key",
             "状态",
             "访问范围",
@@ -744,7 +753,7 @@ function ApiKeys({ billing, hideHeading = false }) {
             <span key={x}>{x}</span>
           ))}
         </div>
-        {filteredKeys
+        {visibleKeys
           .map((k) => (
             <div className="api-key-row" key={k.id}>
               <span className="api-key-identity">
@@ -753,9 +762,9 @@ function ApiKeys({ billing, hideHeading = false }) {
                   {k.id}
                   <button
                     className="inline-action"
-                    aria-label={copiedValue === k.id ? "Track ID 已复制到剪贴板" : "复制 Track ID"}
-                    title={copiedValue === k.id ? "已复制到剪贴板" : "复制 Track ID"}
-                    onClick={() => copyText(k.id, "Track ID")}
+                    aria-label={copiedValue === k.id ? "Key ID 已复制到剪贴板" : "复制 Key ID"}
+                    title={copiedValue === k.id ? "已复制到剪贴板" : "复制 Key ID"}
+                    onClick={() => copyText(k.id, "Key ID")}
                   >
                     {copiedValue === k.id ? <Check size={14} className="copy-success" /> : <Copy size={14} />}
                   </button>
@@ -763,7 +772,7 @@ function ApiKeys({ billing, hideHeading = false }) {
                 <small>创建于 {k.created}</small>
               </span>
               <span className="api-key-value">
-                {maskKey(k.key)}
+                {maskApiKey(k.key)}
                 <button
                   className="inline-action"
                   aria-label={copiedValue === k.key ? "API Key 已复制到剪贴板" : "复制 API Key"}
@@ -812,9 +821,9 @@ function ApiKeys({ billing, hideHeading = false }) {
         <DialogContent className="key-action-dialog sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{action?.kind === "models" ? "可访问模型" : action?.kind === "ip" ? "IP 白名单" : action?.kind === "reset" ? "重置 API Key" : "删除 API Key"}</DialogTitle>
-            <DialogDescription>{action?.key.name} · {action?.kind === "models" ? "查看此 Key 允许访问的模型" : action?.kind === "ip" ? "仅允许白名单来源调用；留空表示不限制。原型配置不拦截真实请求。" : action?.kind === "reset" ? "重置后旧密钥立即失效，请及时替换业务系统中的密钥。Key ID、额度和访问权限保持不变。" : "删除后该 Key 将无法继续调用，且不可恢复。"}</DialogDescription>
+            <DialogDescription>{action?.key.name} · {action?.kind === "models" ? "查看此 Key 允许访问的模型" : action?.kind === "ip" ? "仅允许白名单来源调用；留空表示不限制。" : action?.kind === "reset" ? "重置后旧密钥立即失效，请及时替换业务系统中的密钥。Key ID、额度和访问权限保持不变。" : "删除后该 Key 将无法继续调用，且不可恢复。"}</DialogDescription>
           </DialogHeader>
-          {action?.kind === "models" && <><input aria-label="搜索可访问模型" className="key-dialog-input" placeholder="搜索模型名称" value={scopeQuery} onChange={e => setScopeQuery(e.target.value)} /><div className="key-model-list">{(action.key.models === null ? editModels.map(([model]) => model) : action.key.models).filter(model => model.toLowerCase().includes(scopeQuery.toLowerCase())).map(model => <div key={model}>{model}</div>)}{!(action.key.models === null ? editModels.map(([model]) => model) : action.key.models).some(model => model.toLowerCase().includes(scopeQuery.toLowerCase())) && <div>没有匹配的模型</div>}</div><small>{action.key.models === null ? "可访问全部模型，包含后续新增模型；此处展示原型模型目录。" : `共 ${action.key.models.length} 个模型`}</small></>}
+          {action?.kind === "models" && <><input aria-label="搜索可访问模型" className="key-dialog-input" placeholder="搜索模型名称" value={scopeQuery} onChange={e => setScopeQuery(e.target.value)} /><div className="key-model-list">{(action.key.models === null ? editModels.map(([model]) => model) : action.key.models).filter(model => model.toLowerCase().includes(scopeQuery.toLowerCase())).map(model => <div key={model}>{model}</div>)}{!(action.key.models === null ? editModels.map(([model]) => model) : action.key.models).some(model => model.toLowerCase().includes(scopeQuery.toLowerCase())) && <div>没有匹配的模型</div>}</div><small>{action.key.models === null ? "可访问全部模型，包含后续新增模型。" : `共 ${action.key.models.length} 个模型`}</small></>}
           {action?.kind === "ip" && <label className="key-ip-field">IPv4 地址 / CIDR 网段<textarea aria-label="IP 白名单" rows={5} value={ipList} onChange={e => { setIpList(e.target.value); setFormError(""); }} placeholder={"例如：10.0.1.100\n192.168.1.0/24"}/><small>多个地址用逗号或换行分隔，重复项自动合并。</small>{formError && <span role="alert" className="key-error">{formError}</span>}</label>}
           <DialogFooter><Button variant="outline" onClick={() => setAction(null)}>{action?.kind === "models" ? "关闭" : "取消"}</Button>{action?.kind !== "models" && <Button variant={action?.kind === "delete" ? "destructive" : "default"} onClick={() => {
             const target = action.key.id;
@@ -825,14 +834,7 @@ function ApiKeys({ billing, hideHeading = false }) {
           }}>{action?.kind === "ip" ? "保存" : action?.kind === "reset" ? "确认重置" : "确认删除"}</Button>}</DialogFooter>
         </DialogContent>
       </Dialog>
-      <div className="api-key-footer">
-        <span>共 {filteredKeys.length} 条</span>
-        <span>
-          10 条 / 页　 <button disabled>‹</button>
-          <b>1</b>
-          <button disabled>›</button>
-        </span>
-      </div>
+      <FilterPagination total={filteredKeys.length} page={currentPage} size={size} onPageChange={setPage} onSizeChange={setSize}/>
       {panel && (
         <div className="drawer-backdrop" onClick={() => setPanel(null)}>
           <aside
@@ -1001,7 +1003,7 @@ function ApiKeys({ billing, hideHeading = false }) {
                       </>
                     )}
                   </section>
-                  <section className="edit-section"><h3>IP 白名单</h3><label><span>允许的来源</span><div><textarea aria-label="编辑 IP 白名单" value={ipList} onChange={e => setIpList(e.target.value)} placeholder="IPv4 或 CIDR 网段，用逗号或换行分隔；留空不限制"/><small>原型配置，不拦截真实请求。</small></div></label></section>
+                  <section className="edit-section"><h3>IP 白名单</h3><label><span>允许的来源</span><div><textarea aria-label="编辑 IP 白名单" value={ipList} onChange={e => setIpList(e.target.value)} placeholder="IPv4 或 CIDR 网段，用逗号或换行分隔；留空不限制"/></div></label></section>
                   <section className="edit-section access-edit">
                     <h3>可访问范围</h3>
                     <label>
@@ -1237,10 +1239,7 @@ function ModelRanking() {
   });
   return (
     <div className="ranking-page">
-      <div className="ranking-hero">
-        <h1>模型排行榜</h1>
-        <p>从调用趋势、性能与稳定性，多维了解模型表现</p>
-      </div>
+      <FrontPageHeader title="模型排行榜" description="从调用趋势、性能与稳定性，多维了解模型表现" icon={ChartNoAxesCombined} />
       <div className="metric-tabs">
         {["模型调用量", "模型性能", "模型稳定性"].map((x) => (
           <button
@@ -1439,7 +1438,7 @@ function ModelOrderList({
     [agreed, setAgreed] = useState(false),
     [confirming, setConfirming] = useState(false),
     [ordered, setOrdered] = useState(false),
-    [detail, setDetail] = useState(null), [page, setPage] = useState(1), [size, setSize] = useState(10);
+    [detail, setDetail] = useState(null), [page, setPage] = useState(1), [size, setSize] = useState(DEFAULT_PAGE_SIZE);
   const allRows = [
     [
       "AICC-doubao-seedance-2.0",
@@ -1603,7 +1602,7 @@ function ModelOrderList({
   };
   const rows = (historical || tab === "按Token用量计费" ? allRows : subscriptions[tab] || []).filter(row => row[0].toLowerCase().includes(query.trim().toLowerCase()));
   const current = Math.min(page, Math.max(1, Math.ceil(rows.length / size)));
-  const visibleRows = historical ? rows : rows.slice((current - 1) * size, current * size);
+  const visibleRows = rows.slice((current - 1) * size, current * size);
   const changeTab = value => { setTab(value); setQuery(""); setPage(1); };
   const openOrder = (name) =>
     window.open(
@@ -1855,7 +1854,7 @@ function ModelOrderList({
                   setDetail({
                     title,
                     content:
-                      "本原型展示协议阅读交互；正式条款以移动云官网发布内容为准。",
+                      "服务条款以移动云官网发布内容为准。",
                   })
                 }
               >
@@ -1967,7 +1966,7 @@ function ModelOrderList({
   }
   return (
     <div className={`legacy-page legacy-orders${historical ? "" : " orders-current us-page"}`}>
-      {!historical ? <div className="us-title"><div><h1>模型订购</h1><p>查看付费模型订购情况{!historical && " · 演示订购记录"}</p></div></div> : <section className="legacy-hero">
+      {!historical ? <FrontPageHeader title="模型订购" description="查看付费模型订购情况" icon={ShoppingCart} /> : <section className="legacy-hero">
         <span>
           <ShoppingCart />
         </span>
@@ -1978,12 +1977,12 @@ function ModelOrderList({
               帮助中心 <ExternalLink size={13} />
             </a>
           </h1>
-          <p>查看付费模型订购情况{!historical && " · 演示订购记录"}</p>
+          <p>查看付费模型订购情况</p>
         </div>
       </section>}
       {!historical ? <div className="us-page"><Tabs value={tab} onValueChange={changeTab}>
         <TabsList variant="line" className="us-tabs" aria-label="模型订购计费方式">
-          {["按Token用量计费", "按资源包计费", "Token Plan订阅", "Coding Plan订阅"].map(type => <TabsTrigger key={type} value={type}>{type}</TabsTrigger>)}
+          {Object.values(MODEL_ORDER_BILLING_TYPES).map(type => <TabsTrigger key={type} value={type}>{type}</TabsTrigger>)}
         </TabsList>
       </Tabs></div> : <nav className="legacy-tabs">
         {(historical
@@ -2031,13 +2030,7 @@ function ModelOrderList({
               "",
               historical || tab === "按Token用量计费" ? "模型名称" : "套餐 / 资源包名称",
               historical ? "模型类别" : "类型",
-              "模型服务商",
-              "资费场景",
-              "目录价",
-              "订购状态",
-              "订购时间",
-              "到期时间",
-              "操作",
+              ...MODEL_ORDER_COLUMNS.slice(1),
             ].map((x, i) => (
               <span key={i}>{i === 0 ? <input type="checkbox" /> : x}</span>
             ))}
@@ -2071,17 +2064,7 @@ function ModelOrderList({
           ))}
         </div>
         {!historical && !rows.length && <div className="v2-empty">暂无符合条件的订购记录</div>}
-        {!historical ? <FilterPagination total={rows.length} page={current} size={size} onPageChange={setPage} onSizeChange={setSize}/> : <footer className="legacy-pager">
-          <span>
-            共74条记录　{" "}
-            <select>
-              <option>10条/页</option>
-            </select>
-          </span>
-          <span>
-            ‹　<b>1</b>　2　3　…　8　›　前往 <input defaultValue="1" /> 页
-          </span>
-        </footer>}
+        <FilterPagination total={rows.length} page={current} size={size} onPageChange={setPage} onSizeChange={setSize}/>
       </section>
     </div>
   );
@@ -2561,17 +2544,17 @@ function VersionIndex() {
           <img src={`${A}jiangSuZhengWu.png`} />
           <span>模型服务平台 MoMA 政企版</span>
         </div>
-        <span>原型版本</span>
+        <span>平台版本</span>
       </header>
       <main className="version-main">
         <div className="version-intro">
           <small>PROTOTYPE ARCHIVE</small>
-          <h1>原型版本</h1>
+          <h1>平台版本</h1>
           <p>
-            选择版本进入对应的独立原型。每个版本保留当时的界面、交互与产品范围。
+            选择平台版本，查看对应的功能与服务。
           </p>
         </div>
-        <section className="version-table-wrap" aria-label="原型版本列表">
+        <section className="version-table-wrap" aria-label="版本列表">
           <table className="version-table">
             <thead>
               <tr>
@@ -2595,7 +2578,7 @@ function VersionIndex() {
                   </td>
                   <td>
                     <a className="version-entry" href={`/${version.id}/`}>
-                      进入原型 <ArrowRight aria-hidden="true" />
+                      进入平台 <ArrowRight aria-hidden="true" />
                     </a>
                   </td>
                 </tr>
@@ -2632,9 +2615,10 @@ function PrototypeApp({ version }) {
     );
   const [activePage, setActivePage] = useState(() => {
     const requestedPage = new URLSearchParams(location.search).get("page");
-    return requestedPage === "model-order" ? "模型订购" : !is5102 && requestedPage === "organization-members" ? "组织及成员" : "模型广场";
+    return requestedPage === "model-order" ? "模型订购" : !is5102 ? ({ "organization-members": "组织及成员", "operation-records": "操作记录", "api-keys": "API Key 管理", "call-logs": "调用日志", "usage-statistics": "用量统计" }[requestedPage] || "模型广场") : "模型广场";
   }),
     [admin, setAdmin] = useState(modeFromHash),
+    [adminBannerTarget, setAdminBannerTarget] = useState(null),
     [textCompare, setTextCompare] = useState(false),
     [visualKind, setVisualKind] = useState("image"),
     [featured, setFeatured] = useState(true),
@@ -2642,6 +2626,7 @@ function PrototypeApp({ version }) {
     [filters, setFilters] = useState({}),
     [selected, setSelected] = useState(null),
     [sortMode, setSortMode] = useState("latest");
+  const auth = usePrototypeAuth();
   useEffect(() => {
     if (is5102 && activePage === "模型排行") setActivePage("模型广场");
   }, [is5102, activePage]);
@@ -2652,7 +2637,7 @@ function PrototypeApp({ version }) {
         return;
       }
       if (!is5102 && location.hash.startsWith("#/admin") && !location.hash.startsWith("#/admin-2")) {
-        location.hash = "/admin-2/workbench";
+        location.hash = "/admin-2/dashboard";
         return;
       }
       setAdmin(modeFromHash());
@@ -2666,7 +2651,7 @@ function PrototypeApp({ version }) {
     setAdmin(nextMode);
     if (mode === "front")
       history.replaceState(null, "", location.pathname + location.search);
-    else location.hash = versionAdmin === "legacy" ? "/admin" : "/admin-2/workbench";
+    else location.hash = versionAdmin === "legacy" ? "/admin" : "/admin-2/dashboard";
   };
   const toggleFilter = (group, value) =>
     setFilters((current) => ({
@@ -2737,8 +2722,8 @@ function PrototypeApp({ version }) {
   );
   const resetFilters = () => { setFilters({}); setQuery(""); };
   return (
-    <div className={`app-shell ${is5102 ? "version-5102" : ""}`}>
-      <header>
+    <div className={`app-shell ${is5102 ? "version-5102" : ""} ${auth.route ? "auth-shell" : ""} ${auth.route ? "auth-enterprise-shell" : ""}`}>
+      <header className={admin === "v2" ? "admin-banner" : undefined}>
         <div className="brand-mark">
           <img src={`${A}jiangSuZhengWu.png`} />
           <span>
@@ -2750,12 +2735,18 @@ function PrototypeApp({ version }) {
           </span>
         </div>
         <div className="top-actions">
+          {admin === "v2" && (
+            <div className="admin-banner-controls" ref={setAdminBannerTarget}>
+              <div data-admin-deployment />
+              <div data-admin-role />
+            </div>
+          )}
           <div className="version-switch">
             <Select
               value={version.id}
               onValueChange={(value) => location.assign(`/${value}/`)}
             >
-              <SelectTrigger size="sm" aria-label="切换原型版本">
+              <SelectTrigger size="sm" aria-label="切换版本">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent position="popper" align="end">
@@ -2778,10 +2769,10 @@ function PrototypeApp({ version }) {
               返回前台
             </button>
           )}
-          <div className="user">estack-yy</div>
+          {is5102 ? <div className="user">estack-yy</div> : <AuthBanner auth={auth} showToast={admin === "front"} />}
         </div>
       </header>
-      {admin === "front" && (
+      {admin === "front" && !auth.route && (
         <aside>
           <h3>模型服务平台</h3>
           {versionNav.map(([group, item], i) => {
@@ -2841,6 +2832,7 @@ function PrototypeApp({ version }) {
                 <small>系统管理</small>
                 <button className={activePage === "API Key 管理" ? "active" : ""} onClick={() => setActivePage("API Key 管理")}><KeyRound aria-hidden="true" />API Key</button>
                 <button className={activePage === "组织及成员" ? "active" : ""} onClick={() => setActivePage("组织及成员")}><Users aria-hidden="true" />组织及成员</button>
+                <button className={activePage === "操作记录" ? "active" : ""} onClick={() => setActivePage("操作记录")}><History aria-hidden="true" />操作记录</button>
               </div>
             </>
           )}
@@ -2849,10 +2841,12 @@ function PrototypeApp({ version }) {
         </aside>
       )}
       <main className={admin !== "front" ? "admin-main" : is5102 ? "" : "front-main"}>
-        {admin === "legacy" ? (
+        {auth.route ? (
+          <AuthExperience key={auth.route} auth={auth} />
+        ) : admin === "legacy" ? (
           <AdminConsole />
         ) : admin === "v2" ? (
-          <AdminConsoleV2 />
+          <AdminConsoleV2 bannerTarget={adminBannerTarget} />
         ) : activePage === "智能路由" ? (
           <SmartRoute key={is5102 ? "moma_5.10.2_estack" : "moma_5.11.0_estack"} versionId={is5102 ? "moma_5.10.2_estack" : "moma_5.11.0_estack"} onNavigate={setActivePage} />
         ) : activePage === "模型排行" ? (
@@ -2899,6 +2893,8 @@ function PrototypeApp({ version }) {
           <ApiKeys key={activePage} billing={activePage} />
         ) : activePage === "API Key 管理" ? (
           <UnifiedApiKeys />
+        ) : activePage === "操作记录" && !is5102 ? (
+          <OperationRecords />
         ) : activePage === "组织及成员" && !is5102 ? (
           <OrganizationMembers />
         ) : activePage.startsWith("API Key 管理·") ? (
@@ -2922,16 +2918,17 @@ function PrototypeApp({ version }) {
           <CallLogs key={activePage} billing={activePage.split("·")[1]} />
         ) : (
           <div className="content">
+            {!is5102 && <FrontPageHeader title="模型广场" description="探索精选模型，按任务、能力与服务商查找可用模型" icon={Store} actions={<Button variant="outline" onClick={() => setFeatured(value => !value)}>{featured ? "隐藏精选模型" : "展开精选模型"}</Button>} />}
             {featured ? (
               <section className="featured">
-                <div className="title-row">
+                {is5102 && <div className="title-row">
                   <h1>
                     模型市场 <em>探索精选模型</em>
                   </h1>
                   <button onClick={() => setFeatured(false)}>
                     <img src={`${A}look-e200be1b.svg`} /> 隐藏精选模型
                   </button>
-                </div>
+                </div>}
                 <div className="hero-grid">
                   {hero.map((m) => (
                     <article key={m.name} onClick={() => setSelected(m)}>
@@ -2948,14 +2945,14 @@ function PrototypeApp({ version }) {
                   ))}
                 </div>
               </section>
-            ) : (
+            ) : is5102 ? (
               <button
                 className="show-featured"
                 onClick={() => setFeatured(true)}
               >
                 展开精选模型
               </button>
-            )}
+            ) : null}
             <section className="catalog">
               <div className="filters">
                 <div className="filter-heading">

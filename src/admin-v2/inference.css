@@ -1,0 +1,37 @@
+/* Token production shares the enterprise header and usage-analysis card anatomy. */
+.tp-page{min-width:0;--primary:#3568f9;--border:#e4eaf3;--ring:#3568f9}
+.tp-page .ent-page-head h1 svg{width:16px;height:16px;color:#263247}
+.tp-page .ent-page-head>[data-slot=button]{height:34px;flex:none}
+.tp-page .ua-kpis .tp-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:12px 0;overflow:visible}
+.tp-kpis>div{display:flex;flex-direction:column;gap:3px;padding:2px 12px 5px;border-right:1px solid #e8edf5;min-width:0}
+.tp-kpis>div:last-child{border-right:0}.tp-kpis span{color:#53647d;font-size:12px}
+.tp-kpis strong{font-size:clamp(18px,1.2vw,25px);font-weight:650;line-height:1.25;white-space:nowrap}
+.tp-clusters .ent-toolbar{min-height:54px;margin:0}.tp-clusters .ent-search{width:320px}
+.tp-page .cluster-grid{grid-template-columns:repeat(3,minmax(0,1fr));padding:12px;gap:12px}
+.tp-page .cluster-grid>article{border-color:#e4eaf3;border-radius:6px;padding:14px;background:#fff;min-width:0}
+.tp-page .cluster-grid header b{font-size:12px;font-weight:650}.tp-page .cluster-grid small{font-size:11px;color:#66748b;font-family:ui-monospace,monospace;overflow-wrap:anywhere}
+.tp-page .cluster-grid dl{margin:16px 0;gap:12px}.tp-page .cluster-grid dd{font-size:12px}.tp-page .cluster-grid dt,.tp-page .cluster-grid footer{color:#66748b}
+.tp-page .cluster-grid footer button{height:26px;padding:0;font-size:11px;color:#3568f9}.tp-page .cluster-grid label i{border-radius:3px}.tp-page .cluster-grid label i span{background:#3568f9}
+.tp-page .v2-status{display:inline-flex;align-items:center;gap:5px;padding:0;border:0;background:none;font-size:11px;font-style:normal;color:#198754;white-space:nowrap}
+.tp-page .v2-status:before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}.tp-page .v2-status.warn{background:none;color:#9b6b20}
+.tp-table-scroll{min-width:0;overflow-x:auto}.tp-deployments table{min-width:1100px;font-size:12px;white-space:nowrap}
+.tp-deployments th{height:38px;padding:8px 12px;background:#f8faff;color:#586982;font-size:11px;font-weight:500;border-bottom:1px solid #e4eaf3}
+.tp-deployments td{height:48px;padding:8px 12px;border-bottom:1px solid #e8edf5}.tp-deployments tbody tr:last-child td{border-bottom:0}
+.tp-deployments .tp-id{font-family:ui-monospace,monospace;font-size:11px;color:#66748b}.tp-deployments .tp-name{font-weight:650}
+.tp-deployments td button{height:26px;padding:0;margin-right:14px;font-size:11px;color:#3568f9}.tp-list-footer{padding:10px 12px;border-top:1px solid #e4eaf3;color:#67778f;font-size:11px}
+.tp-page .tp-filters{display:flex;align-items:center;gap:12px;margin:0;flex-wrap:wrap;min-height:32px}
+.tp-page .filter-field.ua-select{flex-direction:row;align-items:center;gap:7px}.tp-page .ua-filters{box-shadow:none}
+.tp-page .tp-empty{text-align:center;height:100px;color:#66748b}.tp-page .ua-panel [data-slot=card-header]>small{margin:0}
+.tp-dialog{max-width:680px!important;padding:0;gap:0;--primary:#3568f9;--border:#e4eaf3;--ring:#3568f9}
+.tp-dialog [data-slot=dialog-header]{padding:16px 20px;border-bottom:1px solid #e4eaf3}.tp-dialog [data-slot=dialog-title]{font-size:14px;font-weight:650}
+.tp-dialog .inference-form{padding:20px;gap:16px}.tp-dialog .inference-form label{color:#586982;font-size:12px}
+.tp-dialog .inference-form input,.tp-dialog .inference-form select{height:34px;border-color:#e4eaf3;border-radius:5px;font-size:12px;box-shadow:none}
+.tp-dialog .inference-form footer button{height:32px;font-size:12px;border-radius:5px}.tp-dialog .inference-form footer [data-variant=default]{background:#3568f9;color:#fff;border-color:#3568f9}
+body:has(.tp-page),.app:has(.tp-page),.admin-console:has(.tp-page),.admin-v2:has(.tp-page){min-width:0}
+@media(max-width:1250px){.tp-page .cluster-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tp-kpis strong{font-size:21px}}
+@media(max-width:900px){.tp-page .cluster-grid{grid-template-columns:1fr}.tp-page .ent-toolbar{flex-wrap:wrap}.tp-page .ent-search{width:100%;min-width:0}.tp-kpis strong{font-size:18px}}
+@media(max-width:600px){.tp-page .ua-kpis .tp-kpis{grid-template-columns:1fr;gap:12px}.tp-kpis>div{border-right:0}.tp-dialog .inference-form{grid-template-columns:1fr}.tp-page .ent-page-head{align-items:flex-start;flex-wrap:wrap}}
+
+.tp-dialog [data-slot=dialog-header]{display:flex;flex-direction:row;align-items:center;justify-content:space-between}.tp-dialog [data-slot=dialog-header]>button{width:26px;height:26px}.tp-dialog{max-height:calc(100vh - 40px);overflow-y:auto;border-radius:6px}body:has(.tp-dialog) [data-slot=dialog-overlay]{backdrop-filter:none;background:#17233866}
+.tp-artifacts>[data-slot=tabs-list]{height:44px;width:100%;justify-content:flex-start;gap:20px;padding:0 12px;border-bottom:1px solid #e4eaf3}.tp-artifacts [data-slot=tabs-trigger]{font-size:12px;flex:none;padding:0 4px}.tp-artifacts>[data-slot=tabs-content]{margin:0}.tp-artifacts table{min-width:850px}.tp-artifacts code{font-size:11px;color:#66748b}
+.admin-v2:has(.tp-page) .v2-module-tabs{border-color:#e4eaf3;border-radius:6px}.admin-v2:has(.tp-page) .v2-module-tabs button{height:38px;padding:0 12px;font-size:12px}

@@ -2,14 +2,14 @@ export const ORGANIZATION_STORAGE_KEY = "moma-organization:moma_5.11.0_estack";
 export const roles = ["企业管理员", "部门管理员", "普通成员", "财务审计"];
 export const statuses = ["已加入", "待加入", "已停用"];
 export const platformAccounts = [
-  { name: "林雨", account: "linyu@example.com" },
-  { name: "周然", account: "zhouran@example.com" },
+  { name: "林雨", account: "linyu@example.com", phone: "13800000101" },
+  { name: "周然", account: "zhouran@example.com", phone: "13800000102" },
   { name: "何川", account: "hechuan@example.com" },
 ];
 
 export function createOrganization() {
   const departments = [
-    { id: "root", name: "示例科技有限公司", parentId: null, ownerId: "m1", description: "企业组织" },
+    { id: "root", name: "云启科技有限公司", parentId: null, ownerId: "m1", description: "企业组织" },
     { id: "research", name: "研发中心", parentId: "root", ownerId: "m2", description: "负责模型应用研发与技术平台建设" },
     { id: "algorithm", name: "算法部", parentId: "research", ownerId: "m3", description: "负责算法研究与模型评测" },
     { id: "application", name: "应用开发部", parentId: "research", ownerId: "m6", description: "负责业务应用开发" },
@@ -37,7 +37,7 @@ export function createOrganization() {
     ["梁禾", "lianghe@example.com", "research"],
   ];
   return { departments, members: rows.map(([name, account, departmentId, role = "普通成员", status = "已加入"], i) => ({
-    id: `m${i + 1}`, name, account, departmentId, role, status,
+    id: `m${i + 1}`, name, account, phone: String(13900000101 + i), departmentId, role, status,
     scopeId: role === "部门管理员" ? departmentId : null, includeChildren: role === "部门管理员",
     source: "平台账号", joinedAt: status === "待加入" ? null : "2026-10-01 09:00", invitedAt: "2026-10-01 09:00",
   })), audit: [] };
@@ -63,6 +63,27 @@ export function departmentPath(departments, id) {
     current = departments.find(d => d.id === current.parentId);
   }
   return names.join(" / ");
+}
+
+// Local fixtures only; phone entry does not verify ownership or provision an identity.
+export function normalizeMemberPhone(value) {
+  const phone = String(value ?? "").trim().replace(/^'(?=\+)/, "").replace(/[\s()-]/g, "");
+  return /^\+861[3-9]\d{9}$/.test(phone) ? phone.slice(3) : phone;
+}
+
+export function memberPhoneError(value) {
+  const phone = normalizeMemberPhone(value);
+  if (!phone) return "请填写手机号";
+  return !phone.startsWith("+86") && /^(?:1[3-9]\d{9}|\+[1-9]\d{7,14})$/.test(phone) ? "" : "手机号格式错误，请填写 11 位大陆手机号或带 +国家区号的号码";
+}
+
+export function maskMemberPhone(value) {
+  const phone = normalizeMemberPhone(value);
+  return phone ? `${phone.slice(0, 3)}****${phone.slice(-4)}` : "未填写";
+}
+
+export function displayMemberAccount(value) {
+  return memberPhoneError(value) ? value : maskMemberPhone(value);
 }
 
 // Pure local-demo mutations. These do not provision accounts or enforce gateway permissions.
@@ -94,10 +115,15 @@ export function changeOrganization(state, action, stamp = new Date().toLocaleStr
     departments = departments.filter(d => d.id !== action.id);
     description = `删除部门：${department.name}`;
   } else if (action.type === "member.save") {
-    const draft = { ...action.member, name: action.member.name.trim(), account: action.member.account.trim().toLowerCase() };
+    const draft = { ...action.member, name: action.member.name.trim(), phone: normalizeMemberPhone(action.member.phone), account: (action.member.account || normalizeMemberPhone(action.member.phone)).trim().toLowerCase() };
     const existing = members.find(m => m.id === draft.id);
+    const phoneError = memberPhoneError(draft.phone);
+    if (phoneError) fail(phoneError);
+    const identity = !existing && draft.source === "平台账号" ? platformAccounts.find(a => a.account === draft.account) : null;
+    if (identity?.phone && normalizeMemberPhone(identity.phone) !== draft.phone) fail("手机号与平台账号登记号码不一致");
     if (!draft.name || draft.name.length > 30 || !draft.account) fail("请填写成员姓名及登录账号");
-    if (!existing && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.account)) fail("请输入有效的邮箱账号");
+    if (!existing && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.account) && draft.account !== draft.phone && !platformAccounts.some(a => a.account === draft.account)) fail("请输入有效的邮箱账号");
+    if (members.some(m => m.id !== draft.id && normalizeMemberPhone(m.phone) === draft.phone)) fail("该手机号已在企业中，请直接调整现有成员");
     if (members.some(m => m.id !== draft.id && m.account.toLowerCase() === draft.account)) fail("该账号已在企业中，请直接调整现有成员");
     requireDepartment(draft.departmentId);
     if (!roles.includes(draft.role) || !statuses.includes(draft.status)) fail("成员角色或状态无效");
@@ -107,7 +133,7 @@ export function changeOrganization(state, action, stamp = new Date().toLocaleStr
     } else { draft.scopeId = null; draft.includeChildren = false; }
     if (existing && draft.account !== existing.account.toLowerCase()) fail("登录账号不能在组织内修改");
     members = existing ? members.map(m => m.id === draft.id ? draft : m) : [...members, { ...draft, joinedAt: draft.status === "已加入" ? stamp : null, invitedAt: stamp }];
-    description = `${existing ? "编辑成员" : draft.status === "待加入" ? "邀请成员（模拟）" : "添加已有账号"}：${draft.name}；${draft.role}；${departmentPath(departments, draft.departmentId)}`;
+    description = `${existing ? "编辑成员" : draft.status === "待加入" ? "邀请成员" : "添加已有账号"}：${draft.name}；${draft.role}；${departmentPath(departments, draft.departmentId)}`;
   } else {
     const targets = members.filter(m => action.ids?.includes(m.id));
     if (!targets.length || targets.length !== action.ids.length) fail("请选择有效成员");
@@ -128,7 +154,7 @@ export function changeOrganization(state, action, stamp = new Date().toLocaleStr
     } else if (action.type === "member.accept" || action.type === "member.reinvite") {
       if (targets.some(m => m.status !== "待加入")) fail("只能操作待加入成员的邀请");
       members = members.map(m => targetIds.has(m.id) ? action.type === "member.accept" ? { ...m, status: "已加入", joinedAt: stamp } : { ...m, invitedAt: stamp } : m);
-      description = `${action.type === "member.accept" ? "模拟接受邀请" : "重新邀请（模拟）"}：${targets.map(m => m.name).join("、")}`;
+      description = `${action.type === "member.accept" ? "确认加入" : "重新邀请"}：${targets.map(m => m.name).join("、")}`;
     } else fail("不支持的操作");
   }
   if (!members.some(m => m.role === "企业管理员" && m.status === "已加入")) fail("企业至少保留一位已加入的企业管理员");

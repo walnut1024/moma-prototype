@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { useMemo, useState } from 'react';
 import { Info } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
@@ -49,7 +50,7 @@ export default function UserAnalysisPage({ state }) {
       <FilterPresets className="ua-segments" label="时间筛选" value={period} onChange={selectPeriod} items={presets}/>
       <DateRange label="自定义" start={range.start} end={range.end} allowLongRange rangeHint="单日按小时，其余按日，最多 365 天" onChange={value => { setRange(value); setPeriod('custom'); }}/>
       <FilterReset onClick={() => selectPeriod('today')}/>
-    </FilterToolbar></div></CardContent><CardContent className="ua-view-row"><FilterViewRow><SavedFilterViews scope="admin-user-analysis" value={{period,range,detailFilter}} onApply={view => { if (!view) return; const current = Date.now(); setClock(current); setPeriod(view.period || 'custom'); setRange(view.period === 'custom' && view.range?.start && view.range?.end ? view.range : usagePreset(view.period || 'today', current)); setDetailFilter(view.detailFilter || {model:'',customer:''}); setDetailDraft(view.detailFilter || {model:'',customer:''}); }} groups={[timeGroup,...detailGroups]} currentGroups={[timeGroup]} saveDescription="保存全页时间和调用明细的模型、客户条件。模型／客户仅影响调用明细，不影响上方用户指标。视图仅在当前浏览器生效。"/></FilterViewRow></CardContent></Card>
+    </FilterToolbar></div></CardContent><CardContent className="ua-view-row"><FilterViewRow><SavedFilterViews notify={toast} scope="admin-user-analysis" value={{period,range,detailFilter}} onApply={view => { if (!view) return; const current = Date.now(); setClock(current); setPeriod(view.period || 'custom'); setRange(view.period === 'custom' && view.range?.start && view.range?.end ? view.range : usagePreset(view.period || 'today', current)); setDetailFilter(view.detailFilter || {model:'',customer:''}); setDetailDraft(view.detailFilter || {model:'',customer:''}); }} groups={[timeGroup,...detailGroups]} currentGroups={[timeGroup]} saveDescription="保存全页时间和调用明细的模型、客户条件。模型／客户仅影响调用明细，不影响上方用户指标。保存后可快速应用已保存的筛选条件。"/></FilterViewRow></CardContent></Card>
     <Card className="ua-kpis"><CardContent><div className="ua-kpi-grid us-kpi-grid">{cards.map(([key, title, note]) => {
       const daily = key === 'dau' || key === 'mau';
       const value = daily ? (metrics?.[key].at(-1) ?? 0) : (metrics?.current[key] ?? 0);

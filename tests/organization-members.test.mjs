@@ -69,7 +69,7 @@ test("duplicate member accounts are case insensitive and management scope is req
 
 test("invitation acceptance and cancellation preserve operation history", () => {
   const state = createOrganization();
-  const invited = act(state, { type: "member.save", member: { id: "new", name: "新成员", account: "new@example.com", departmentId: "algorithm", role: "普通成员", status: "待加入", source: "邀请加入" } });
+  const invited = act(state, { type: "member.save", member: { id: "new", name: "新成员", phone: "13600000001", account: "new@example.com", departmentId: "algorithm", role: "普通成员", status: "待加入", source: "邀请加入" } });
   assert.equal(invited.members.find(m => m.id === "new").joinedAt, null);
   const accepted = act(invited, { type: "member.accept", ids: ["new"] });
   assert.equal(accepted.members.find(m => m.id === "new").status, "已加入");
