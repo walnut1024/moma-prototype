@@ -1,0 +1,12 @@
+import { useRef,useState } from 'react';
+import { Button } from '../components/ui/button';
+import { Textarea } from '../components/ui/textarea';
+import { downloadModelCsv } from './model-import';
+import { SUPPLY_HEADERS,parseSupplyImport } from './supply-import';
+import { GridTable,Row,Cell,Notice } from './ModelOperationsUI';
+export default function SupplyBatchImport({state,provider,ops,onDone}){
+  const [text,setText]=useState(''),[preview,setPreview]=useState(false),[skip,setSkip]=useState(false);const file=useRef(null);
+  let rows=[],error='';if(preview){try{rows=parseSupplyImport(state,provider.id,text);}catch(issue){error=issue.message;}}
+  const valid=rows.filter(row=>!row.error),bad=rows.length-valid.length;
+  return <section className="mo-surface mo-pad"><div className="mo-section-heading"><h2>{preview?'校验结果':'上传或粘贴'}</h2><Button variant="outline" onClick={()=>downloadModelCsv('供应商模型接入模板.csv',[SUPPLY_HEADERS])}>下载模板</Button></div><p className="mo-muted">最多 500 条，UTF-8 CSV 不超过 10 MB。模型编码和接入名称须已存在，采购价按所填单位保存。导入后逐条验证并启用。</p>{!preview?<><input type="file" accept=".csv" aria-label="上传供给文件" hidden ref={file} onChange={async e=>{const selected=e.target.files?.[0];e.target.value='';if(!selected)return;if(selected.size>10485760){ops.setError('文件超过 10 MB');return;}try{setText(await selected.text());ops.dirty(true);}catch{ops.setError('读取文件失败，请重试');}}}/><Button variant="outline" onClick={()=>file.current.click()}>选择 CSV 文件</Button><Textarea aria-label="粘贴供给信息" rows={8} placeholder={SUPPLY_HEADERS.join('\t')} value={text} onChange={e=>{setText(e.target.value);ops.dirty(true);}}/></>:<><Notice>共 {rows.length} 条，可导入 {valid.length} 条，问题 {bad} 条。</Notice><GridTable headings={['行号','模型编码','上游 Model ID','校验结果']}>{rows.map(row=><Row key={row.row}><Cell>{row.row}</Cell><Cell>{row.cells[0]}</Cell><Cell>{row.cells[2]}</Cell><Cell>{row.error||'可导入'}</Cell></Row>)}</GridTable>{bad>0&&<label className="mo-check"><input type="checkbox" checked={skip} onChange={e=>setSkip(e.target.checked)}/>跳过 {bad} 条问题记录</label>}</>}{error&&<Notice error>{error}</Notice>}<div className="mo-footer"><Button variant="outline" onClick={()=>preview?setPreview(false):ops.proceed(onDone)}>{preview?'返回修改':'取消'}</Button><Button disabled={!ops.can||!text.trim()||preview&&(!valid.length||bad>0&&!skip)} onClick={()=>{if(!preview){setPreview(true);return;}if(ops.run('supplyImport',{providerId:provider.id,rows:valid.map(row=>row.data)}))onDone();}}>{preview?'确认导入':'校验预览'}</Button></div></section>;
+}

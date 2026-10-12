@@ -60,6 +60,18 @@ export function usagePreset(preset, now = Date.now()) {
   return { start: addDays(today, -days), end: addDays(today, -1) };
 }
 
+export const operationsPresets = [['yesterday', '昨日'], ['7d', '近 7 天'], ['30d', '近 30 天']];
+
+export function operationsPeriod(period, range, now = Date.now()) {
+  const yesterday = usagePreset('yesterday', now);
+  if (period === 'custom' && range?.start && range?.end) {
+    const completed = { start: range.start, end: range.end > yesterday.end ? yesterday.end : range.end };
+    if (usageWindow(completed, now)) return { period: 'custom', range: completed };
+  }
+  const preset = operationsPresets.some(([id]) => id === period) ? period : 'yesterday';
+  return { period: preset, range: usagePreset(preset, now) };
+}
+
 export function usageWindow(range, now = Date.now()) {
   const start = dayStart(range.start);
   const end = Math.min(dayStart(range.end) + DAY, now);

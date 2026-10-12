@@ -4,16 +4,16 @@ import { overviewPeriods, overviewDemo, overviewChange, overviewRegistrations, o
 import { userDemo, userMetrics } from '../src/admin-v2/user-analysis.js';
 const time = value => Date.parse(value + '+08:00');
 const sum = (rows, key) => rows.reduce((n, r) => n + r[key], 0);
-test('overview periods use Beijing calendar boundaries and equal elapsed comparison progress', () => {
+test('overview periods use completed Beijing calendar days and equal complete comparison periods', () => {
   const periods = overviewPeriods(time('2026-09-23T16:40:00'));
-  assert.equal(periods[0].previousEnd, time('2026-09-22T16:40:00'));
-  assert.equal(periods[1].start, time('2026-09-17T00:00:00'));
-  assert.equal(periods[1].previousEnd, time('2026-09-16T16:40:00'));
-  assert.equal(periods[2].start, time('2026-08-25T00:00:00'));
-  assert.equal(periods[2].previousStart, time('2026-07-26T00:00:00'));
+  assert.equal(periods[0].previousEnd, time('2026-09-22T00:00:00'));
+  assert.equal(periods[1].start, time('2026-09-16T00:00:00'));
+  assert.equal(periods[1].previousEnd, time('2026-09-16T00:00:00'));
+  assert.equal(periods[2].start, time('2026-08-24T00:00:00'));
+  assert.equal(periods[2].previousStart, time('2026-07-25T00:00:00'));
   for (const p of periods) assert.equal(p.end - p.start, p.previousEnd - p.previousStart);
-  assert.equal(overviewPeriods(time('2024-03-31T12:00:00'))[2].previousStart, time('2024-02-01T00:00:00'));
-  assert.equal(overviewPeriods(time('2026-01-01T08:00:00'))[1].start, time('2025-12-26T00:00:00'));
+  assert.equal(overviewPeriods(time('2024-03-31T12:00:00'))[2].previousStart, time('2024-01-31T00:00:00'));
+  assert.equal(overviewPeriods(time('2026-01-01T08:00:00'))[1].start, time('2025-12-25T00:00:00'));
 });
 test('all overview scopes reconcile summary, supply, chart, customer/model lists and details', () => {
   const now = time('2026-10-04T16:40:00');
@@ -40,17 +40,18 @@ test('all overview scopes reconcile summary, supply, chart, customer/model lists
       }
       for (const customer of scope.customers) assert.equal(sum(scope.pairs.filter(p => p.customerId === customer.id), 'total'), customer.total);
     }
-    assert.equal(data.trend.length, id === 'day' ? 17 : id === 'week' ? 7 : 30);
+    assert.equal(data.trend.length, id === 'day' ? 24 : id === 'week' ? 7 : 30);
     for (const row of data.customers) assert.equal(row.change, overviewChange(row.total, data.previous.customers.find(r => r.id === row.id)?.total || 0));
   }
   const day = overviewDemo(now, 'day'), month = overviewDemo(now, 'month');
   assert.equal(month.trend.at(-1).total, day.total);
   assert.equal(month.trend.at(-1).calls, day.calls);
 });
-test('empty midnight scope and zero comparison base remain explicit', () => {
+test('midnight still reports complete yesterday and zero comparison base remains explicit', () => {
   const data = overviewDemo(time('2026-10-04T00:00:00'));
-  assert.equal(data.total, 0); assert.equal(data.calls, 0); assert.equal(data.activeCustomers, 0);
-  assert.equal(data.success, null); assert.deepEqual(data.customers, []); assert.deepEqual(data.models, []);
+  assert.ok(data.total > 0); assert.ok(data.calls > 0); assert.ok(data.activeCustomers > 0);
+  assert.equal(data.trend.length, 24);
+  assert.equal(data.total, overviewDemo(time('2026-10-04T16:40:00')).total);
   assert.equal(overviewChange(42, 0), null); assert.equal(overviewChange(0, 10), -100);
   assert.equal(compactCount(18600972), '1860.1万'); assert.equal(compactCount(100000000), '1亿');
 });
@@ -68,7 +69,7 @@ test('registration stock deduplicates identity IDs and excludes records at or af
 });
 test('overview user composition reconciles identity stock and user analysis for all periods', () => {
   const now = time('2026-10-04T16:40:00'), identities = userDemo(now);
-  const userPage = userMetrics(identities, { start: '2026-10-04', end: '2026-10-04' }, now);
+  const userPage = userMetrics(identities, { start: '2026-10-03', end: '2026-10-03' }, now);
   for (const id of ['day', 'week', 'month']) {
     const data = overviewDemo(now, id);
     assert.equal(data.registrations.total, userPage.current.registered);
@@ -79,7 +80,7 @@ test('overview user composition reconciles identity stock and user analysis for 
     for (const stock of [data.registrations, data.previous.registrations]) assert.equal(stock.total, stock.enterprise + stock.personal);
   }
   const midnight = overviewDemo(time('2026-10-04T00:00:00'));
-  assert.equal(midnight.calls, 0);
+  assert.ok(midnight.calls > 0);
   assert.ok(midnight.registrations.total > 0);
 });
 test('monthly activity counts login identities once within the Beijing natural month', () => {
@@ -107,7 +108,7 @@ test('monthly activity counts login identities once within the Beijing natural m
   assert.equal(activity.start, time('2026-10-01T00:00:00'));
   assert.equal(activity.previousStart, time('2026-09-01T00:00:00'));
   assert.equal(activity.previousEnd, time('2026-09-05T12:00:00'));
-  assert.equal(overviewMonthlyActive(identities, activity.start).total, 0);
+  assert.equal(overviewMonthlyActive(identities, activity.start).total, 1);
   assert.equal(overviewMonthlyActive({ users: [], logins: [] }, end).total, 0);
 });
 test('monthly comparison handles year boundaries and shorter previous months', () => {

@@ -4,16 +4,16 @@ import { Info } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { DateRange } from './AnalyticsFilters';
-import { formatUsageNumber, usagePreset } from './usage-analysis';
+import { formatUsageNumber, usagePreset, operationsPresets, operationsPeriod } from './usage-analysis';
 import { filterAnalytics } from './analytics';
 import { userDemo, userMetrics } from './user-analysis';
 import UserCallDetails from './UserCallDetails';
 import SavedFilterViews from '../components/SavedFilterViews';
-import { FilterPresets, FilterReset, FilterToolbar, FilterViewRow, TIME_PRESETS } from '../components/FilterControls';
+import { FilterPresets, FilterReset, FilterToolbar, FilterViewRow, } from '../components/FilterControls';
 import './usage-analysis.css';
 import './user-analysis.css';
 
-const presets = TIME_PRESETS;
+const presets = operationsPresets;
 const cards = [
   ['registered', '注册用户数', '截至所选区间结束时，已注册的去重用户 ID 总数。'],
   ['added', '新增注册', '所选区间内完成注册的去重用户 ID 数。'],
@@ -23,7 +23,7 @@ const cards = [
   ['mau', 'MAU', '所选区间结束时，北京时间自然月内成功登录的去重用户数；不累加 DAU。'],
   ['keys', 'API Key 数量', '截至所选区间结束时，已创建的 API Key 数量；按归属用户筛选。'],
 ];
-const comparisonLabel = { today: '昨日同期', yesterday: '前日', '7d': '前 7 天', '30d': '前 30 天', custom: '上个等长周期' };
+const comparisonLabel = { yesterday: '前日', '7d': '前 7 天', '30d': '前 30 天', custom: '上个等长周期' };
 
 function Help({ label, children }) {
   return <Tooltip><TooltipTrigger asChild><button className="ua-help" type="button" aria-label={`${label}说明`}><Info size={13}/></button></TooltipTrigger><TooltipContent>{children}</TooltipContent></Tooltip>;
@@ -36,8 +36,8 @@ function change(current, previous) {
 
 export default function UserAnalysisPage({ state }) {
   const [clock, setClock] = useState(() => Date.now());
-  const [period, setPeriod] = useState('today');
-  const [range, setRange] = useState(() => usagePreset('today'));
+  const [period, setPeriod] = useState('yesterday');
+  const [range, setRange] = useState(() => usagePreset('yesterday'));
   const [detailDraft, setDetailDraft] = useState({model:'',customer:''}), [detailFilter, setDetailFilter] = useState({model:'',customer:''});
   const data = useMemo(() => userDemo(clock), [clock]);
   const metrics = useMemo(() => userMetrics(data, range, clock), [data, range, clock]);
@@ -48,9 +48,9 @@ export default function UserAnalysisPage({ state }) {
   return <TooltipProvider><div className="ua-page us-page">
     <Card className="ua-filters"><CardContent><div className="ua-filter-scroll"><FilterToolbar className="ua-filter-controls">
       <FilterPresets className="ua-segments" label="时间筛选" value={period} onChange={selectPeriod} items={presets}/>
-      <DateRange label="自定义" start={range.start} end={range.end} allowLongRange rangeHint="单日按小时，其余按日，最多 365 天" onChange={value => { setRange(value); setPeriod('custom'); }}/>
-      <FilterReset onClick={() => selectPeriod('today')}/>
-    </FilterToolbar></div></CardContent><CardContent className="ua-view-row"><FilterViewRow><SavedFilterViews notify={toast} scope="admin-user-analysis" value={{period,range,detailFilter}} onApply={view => { if (!view) return; const current = Date.now(); setClock(current); setPeriod(view.period || 'custom'); setRange(view.period === 'custom' && view.range?.start && view.range?.end ? view.range : usagePreset(view.period || 'today', current)); setDetailFilter(view.detailFilter || {model:'',customer:''}); setDetailDraft(view.detailFilter || {model:'',customer:''}); }} groups={[timeGroup,...detailGroups]} currentGroups={[timeGroup]} saveDescription="保存全页时间和调用明细的模型、客户条件。模型／客户仅影响调用明细，不影响上方用户指标。保存后可快速应用已保存的筛选条件。"/></FilterViewRow></CardContent></Card>
+      <DateRange presets={presets} latestDay={usagePreset('yesterday', clock).end} label="自定义" start={range.start} end={range.end} allowLongRange rangeHint="单日按小时，其余按日，最多 365 天" onChange={value => { setRange(value); setPeriod('custom'); }}/>
+      <FilterReset onClick={() => selectPeriod('yesterday')}/>
+    </FilterToolbar></div></CardContent><CardContent className="ua-view-row"><FilterViewRow><SavedFilterViews notify={toast} scope="admin-user-analysis" value={{period,range,detailFilter}} onApply={view => { if (!view) return; const current = Date.now(); setClock(current); const restored = operationsPeriod(view.period, view.range, current); setPeriod(restored.period); setRange(restored.range); setDetailFilter(view.detailFilter || {model:'',customer:''}); setDetailDraft(view.detailFilter || {model:'',customer:''}); }} groups={[timeGroup,...detailGroups]} currentGroups={[timeGroup]} saveDescription="保存全页时间和调用明细的模型、客户条件。模型／客户仅影响调用明细，不影响上方用户指标。保存后可快速应用已保存的筛选条件。"/></FilterViewRow></CardContent></Card>
     <Card className="ua-kpis"><CardContent><div className="ua-kpi-grid us-kpi-grid">{cards.map(([key, title, note]) => {
       const daily = key === 'dau' || key === 'mau';
       const value = daily ? (metrics?.[key].at(-1) ?? 0) : (metrics?.current[key] ?? 0);

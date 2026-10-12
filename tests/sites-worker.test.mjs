@@ -61,6 +61,18 @@ test("does not turn missing API or write requests into the app shell", async () 
   }
 });
 
+test("uses the independent 5.12.0 shell for its nested routes", async () => {
+  const calls = [];
+  await worker.fetch(new Request('https://example.test/moma_5.12.0_estack/order/serviceOrder', {
+    headers: { accept: 'text/html' },
+  }), { ASSETS: { fetch: async request => {
+    const pathname = new URL(request.url).pathname;
+    calls.push(pathname);
+    return new Response('', { status: calls.length === 1 ? 404 : 200 });
+  } } });
+  assert.deepEqual(calls, ['/moma_5.12.0_estack/order/serviceOrder', '/moma_5.12.0_estack/index.html']);
+});
+
 test("emits the files required by Sites packaging", async () => {
   await access(new URL("../dist/client/index.html", import.meta.url));
   await access(new URL("../dist/server/index.js", import.meta.url));

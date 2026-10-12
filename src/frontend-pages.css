@@ -36,6 +36,13 @@
 .front-main .cl-table td{height:56px;padding:8px 10px;border-color:#e4eaf3}
 .front-main .us-page .cl-table :is(th,td){font-size:12px}
 .front-main .cl-table-scroll{max-height:max(280px,calc(100dvh - 440px))}
+.front-main .cl-table-note{padding:0 12px 8px;color:#586982;font-size:11px}
+.front-main .cl-audit-table :is(th,td){padding-inline:8px}
+.front-main .cl-audit-table .cl-numeric{text-align:right;font-variant-numeric:tabular-nums}
+.front-main .cl-audit-table th:nth-child(n+7):not(:last-child){text-align:right}
+.cl-request-link{padding:0;border:0;background:none;color:#2168ed;cursor:pointer}
+.cl-request-link:hover{text-decoration:underline;text-underline-offset:3px}
+.cl-request-link:focus-visible{outline:2px solid #2168ed;outline-offset:3px;border-radius:2px}
 .front-main .front-members-workspace{height:calc(100dvh - 48px);min-height:650px}
 .front-main .front-members-workspace>.front-page-header{margin-bottom:12px}
 .front-main .content>.front-page-header+.featured .title-row{justify-content:flex-end;margin-bottom:10px}

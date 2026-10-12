@@ -15,8 +15,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { DateRange, MultiPick } from './AnalyticsFilters';
 import SavedFilterViews from '../components/SavedFilterViews';
-import { FilterPresets, FilterReset, FilterToolbar, FilterViewRow, TIME_PRESETS } from '../components/FilterControls';
-import { formatUsageNumber as amount, usageBuckets, usageCallBuckets, usageCategory, usageFacts, usageGroups, usageMeter, usageModelTypes, usagePreset, usageRates, usageSupplier, usageSuppliers, usageTotals } from './usage-analysis';
+import { FilterPresets, FilterReset, FilterToolbar, FilterViewRow, } from '../components/FilterControls';
+import { formatUsageNumber as amount, usageBuckets, usageCallBuckets, usageCategory, usageFacts, usageGroups, usageMeter, usageModelTypes, usagePreset, operationsPresets, operationsPeriod, usageRates, usageSupplier, usageSuppliers, usageTotals } from './usage-analysis';
 import { defaultCardOrder, moveCard, normalizeCardOrder } from './usage-card-order';
 import './usage-analysis.css';
 
@@ -24,7 +24,7 @@ const percent = (value, total) => total > 0 ? `${(value / total * 100).toFixed(2
 const kpiAmount = value => value > 0 && value < 0.01 ? '<0.01' : amount(value);
 const delta = (current, before, comparable, hasPrior) => !comparable ? hasPrior ? '计量待确认' : '上期无记录' : before === 0 ? '上期为 0' : `${current >= before ? '+' : ''}${((current / before - 1) * 100).toFixed(2)}%`;
 const labelFor = (collection, id) => collection.find(item => item.id === id)?.name || (id === '__unknown__' ? '未归属' : id);
-const presets = TIME_PRESETS;
+const presets = operationsPresets;
 const sources = [{ id: 'selfHosted', name: '自产' }, { id: 'thirdParty', name: '引入' }, { id: 'unknown', name: '未知来源' }];
 const otherUsage = row => Object.entries(row.units).map(([unit, value]) => `${amount(value)} ${unit}`).join(' · ') || '—';
 const cardOrderKey = 'moma:usage-analysis:card-order:v1';
@@ -78,8 +78,9 @@ function csvCell(value) { return `"${String(value ?? '').replaceAll('"', '""')}"
 export default function UsageAnalysisPage({ state }) {
   const route = new URLSearchParams(location.hash.split('?')[1] || '');
   const [clock, setClock] = useState(() => Date.now());
-  const [period, setPeriod] = useState(() => route.has('start') && route.has('end') ? 'custom' : 'today');
-  const [range, setRange] = useState(() => route.has('start') && route.has('end') ? { start: route.get('start'), end: route.get('end') } : usagePreset('today'));
+  const initial = operationsPeriod(route.has('start') && route.has('end') ? 'custom' : 'yesterday', { start: route.get('start'), end: route.get('end') });
+  const [period, setPeriod] = useState(initial.period);
+  const [range, setRange] = useState(initial.range);
   const [filters, setFilters] = useState(() => ({ types: null, suppliers: null, tenant: route.has('tenant') ? [route.get('tenant')] : null, model: route.has('model') ? [route.get('model')] : null, source: '' }));
   const [detailMode, setDetailMode] = useState('tenantId'), [query, setQuery] = useState(''), [page, setPage] = useState(0), [size, setSize] = useState(DEFAULT_PAGE_SIZE), [inspect, setInspect] = useState(null), [sort, setSort] = useState('total');
   const [navOpen, setNavOpen] = useState(true), [activeSection, setActiveSection] = useState('usage-token-trend');
@@ -137,13 +138,13 @@ export default function UsageAnalysisPage({ state }) {
     { label: '供给来源', text: sources.find(source => source.id === filters.source)?.name || '全部' },
     { label: '客户', items: filters.tenant?.map(id => labelFor(state.tenants, id)) ?? null },
   ];
-  const compareName = period === 'today' ? '昨日同时段' : period === 'yesterday' ? '前日' : period === '7d' ? '前 7 天' : period === '30d' ? '前 30 天' : '上一等长周期';
+  const compareName = period === 'yesterday' ? '前日' : period === '7d' ? '前 7 天' : period === '30d' ? '前 30 天' : '上一等长周期';
   const kpis = [
     { title: 'Token调用总量', value: tokenApplicable ? totals.total : null, before: priorTotals.total, note: 'Total Token Usage（Token 调用总量）：所选时段已确认的输入与输出 Token 合计。缓存不重复计数；张、秒、字符等其他单位不计入。', comparable },
     { title: '模型调用次数', value: current.length, before: prior.length, suffix: ' 次', note: '所选时段的入口模型请求数，包含成功与失败请求；按请求 ID 去重，上游重试不重复计数。', comparable: prior.length > 0 },
-    { title: '日均Token调用量', value: tokenApplicable ? rates?.averageTpd ?? null : null, before: priorRates?.averageTpd, note: 'TPD 全称 Token Per Day（每日 Token 数）。日均 Token 调用量＝所选时段 Token 调用总量 ÷ 北京时间自然日数，含无调用日；今日按 1 日计算，不预测全天。', comparable },
+    { title: '日均Token调用量', value: tokenApplicable ? rates?.averageTpd ?? null : null, before: priorRates?.averageTpd, note: 'TPD 全称 Token Per Day（每日 Token 数）。日均 Token 调用量＝所选时段 Token 调用总量 ÷ 北京时间自然日数，含无调用日；按完整自然日计算，不预测未来用量。', comparable },
     { title: '每分钟 Token 调用量峰值', value: tokenApplicable ? rates?.peakTpm ?? null : null, before: priorRates?.peakTpm, note: 'TPM 全称 Tokens Per Minute（每分钟 Token 数）。峰值是所选时段内单个自然分钟的最大已确认 Token 用量；按请求发生时间聚合，不使用图表的小时／日采样值。', comparable },
-    { title: '每分钟 Token 调用量均值', value: tokenApplicable ? rates?.averageTpm ?? null : null, before: priorRates?.averageTpm, note: 'TPM 全称 Tokens Per Minute（每分钟 Token 数）。均值＝所选时段已确认 Token 调用总量 ÷ 实际经过的分钟数，包含无调用分钟；今日只计算至当前时刻。', comparable },
+    { title: '每分钟 Token 调用量均值', value: tokenApplicable ? rates?.averageTpm ?? null : null, before: priorRates?.averageTpm, note: 'TPM 全称 Tokens Per Minute（每分钟 Token 数）。均值＝所选时段已确认 Token 调用总量 ÷ 实际经过的分钟数，包含无调用分钟；每日按完整 1440 分钟计算。', comparable },
   ];
   const categories = usageModelTypes.filter(type => filters.types === null || filters.types.includes(type.id));
   const tokenOptions = [{ id: 'total', total: true, label: '总 Token', color: '#3568f9' }, ...categories.filter(type => selectedModels.some(model => type.types.includes(model.type) && usageMeter(model).unit === 'Token') || tokenRows.some(row => row.category === type.id)).map(type => ({ ...type, label: type.name }))];
@@ -167,8 +168,8 @@ export default function UsageAnalysisPage({ state }) {
     'usage-model-call-rank': { title: '模型调用次数 Top 10 模型', rows: models, total: current.length, collection: state.models, metric: 'calls', limits: [30, 50], onChoose: id => inspectGroup(models, state.models, id) },
   };
   return <TooltipProvider><div className="ua-page">
-    <Card className="ua-filters"><CardContent><div className="ua-filter-scroll"><FilterToolbar className="ua-filter-controls"><FilterPresets className="ua-segments" label="统计时间范围" value={period} onChange={choosePeriod} items={presets}/><DateRange label="自定义" start={range.start} end={range.end} granularity={usageWindow?.weekly ? 'week' : 'day'} allowLongRange onChange={value => { setPeriod('custom'); setRange(value); setPage(0); }}/><span className="ua-filter-divider"/><div className="ua-select"><span>模型类型</span><MultiPick label="模型类型" value={filters.types} onChange={value => setFilter('types', value)} items={usageModelTypes}/></div><div className="ua-select"><span>供应商</span><MultiPick label="供应商" value={filters.suppliers} onChange={value => setFilter('suppliers', value)} items={usageSuppliers}/></div><div className="ua-select"><span>模型 ID</span><MultiPick label="模型 ID" value={filters.model} onChange={value => setFilter('model', value)} searchPlaceholder="搜索模型，如 DeepSeek-V4-Pro" items={availableModels.map(model => ({ ...model, searchText: model.modelId }))}/></div><label className="ua-select"><span>供给来源</span><Select value={filters.source || 'all'} onValueChange={value => setFilter('source', value === 'all' ? '' : value)}><SelectTrigger aria-label="供给来源"><SelectValue/></SelectTrigger><SelectContent><SelectGroup>{[{ id: 'all', name: '全部' }, ...sources.slice(0, 2)].map(source => <SelectItem key={source.id} value={source.id}>{source.name}</SelectItem>)}</SelectGroup></SelectContent></Select></label>{filters.tenant && <Button variant="outline" size="sm" onClick={() => setFilter('tenant', null)}>客户：{filters.tenant.map(id => labelFor(state.tenants, id)).join('、')} ×</Button>}<FilterReset onClick={() => { setFilters({ types: null, suppliers: null, tenant: null, model: null, source: '' }); choosePeriod('today'); }}/></FilterToolbar></div></CardContent><CardContent className="ua-view-row"><FilterViewRow><SavedFilterViews notify={toast} scope="admin-usage-analysis" value={{period,range,filters}} onApply={view => { if (!view?.filters) return; const current = Date.now(); setClock(current); setPeriod(view.period || 'custom'); setRange(view.period === 'custom' && view.range?.start && view.range?.end ? view.range : usagePreset(view.period || 'today', current)); setFilters(view.filters); setPage(0); }} groups={viewGroups} disabled={!usageWindow}/></FilterViewRow></CardContent></Card>
-    {!usageWindow ? <p role="alert">请选择有效日期范围：不超过 365 天，且不能晚于今天。</p> : <>
+    <Card className="ua-filters"><CardContent><div className="ua-filter-scroll"><FilterToolbar className="ua-filter-controls"><FilterPresets className="ua-segments" label="统计时间范围" value={period} onChange={choosePeriod} items={presets}/><DateRange presets={presets} latestDay={usagePreset('yesterday', clock).end} label="自定义" start={range.start} end={range.end} granularity={usageWindow?.weekly ? 'week' : 'day'} allowLongRange onChange={value => { setPeriod('custom'); setRange(value); setPage(0); }}/><span className="ua-filter-divider"/><div className="ua-select"><span>模型类型</span><MultiPick label="模型类型" value={filters.types} onChange={value => setFilter('types', value)} items={usageModelTypes}/></div><div className="ua-select"><span>供应商</span><MultiPick label="供应商" value={filters.suppliers} onChange={value => setFilter('suppliers', value)} items={usageSuppliers}/></div><div className="ua-select"><span>模型 ID</span><MultiPick label="模型 ID" value={filters.model} onChange={value => setFilter('model', value)} searchPlaceholder="搜索模型，如 DeepSeek-V4-Pro" items={availableModels.map(model => ({ ...model, searchText: model.modelId }))}/></div><label className="ua-select"><span>供给来源</span><Select value={filters.source || 'all'} onValueChange={value => setFilter('source', value === 'all' ? '' : value)}><SelectTrigger aria-label="供给来源"><SelectValue/></SelectTrigger><SelectContent><SelectGroup>{[{ id: 'all', name: '全部' }, ...sources.slice(0, 2)].map(source => <SelectItem key={source.id} value={source.id}>{source.name}</SelectItem>)}</SelectGroup></SelectContent></Select></label>{filters.tenant && <Button variant="outline" size="sm" onClick={() => setFilter('tenant', null)}>客户：{filters.tenant.map(id => labelFor(state.tenants, id)).join('、')} ×</Button>}<FilterReset onClick={() => { setFilters({ types: null, suppliers: null, tenant: null, model: null, source: '' }); choosePeriod('yesterday'); }}/></FilterToolbar></div></CardContent><CardContent className="ua-view-row"><FilterViewRow><SavedFilterViews notify={toast} scope="admin-usage-analysis" value={{period,range,filters}} onApply={view => { if (!view?.filters) return; const current = Date.now(); setClock(current); const restored = operationsPeriod(view.period, view.range, current); setPeriod(restored.period); setRange(restored.range); setFilters(view.filters); setPage(0); }} groups={viewGroups} disabled={!usageWindow}/></FilterViewRow></CardContent></Card>
+    {!usageWindow ? <p role="alert">请选择有效日期范围：不超过 365 天，且不能晚于昨日。</p> : <>
       <Card className="ua-kpis"><CardContent><div className="ua-kpi-grid">{kpis.map(({ title, value, before, suffix, note, comparable: canCompare }) => <div className="ua-kpi" key={title}><div className="ua-kpi-label">{title}<Help label={title}>{note}</Help></div><strong>{kpiAmount(value)}{value !== null && suffix}</strong>{value === null ? <small>所选模型不按 Token 计量</small> : canCompare && <small>较{compareName}　{delta(value, before, true, true)}</small>}</div>)}</div></CardContent></Card>
       <div className={`ua-content-layout${navOpen ? '' : ' is-nav-collapsed'}`}>
         <div className="ua-content-sections">

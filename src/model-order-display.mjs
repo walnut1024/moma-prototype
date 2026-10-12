@@ -1,7 +1,6 @@
 // Shared terminology for the frontend catalogue and management subscription view.
 export const MODEL_ORDER_BILLING_TYPES = {
   payg: '按Token用量计费',
-  package: '按资源包计费',
   plan: 'Token Plan订阅',
   coding: 'Coding Plan订阅',
 };

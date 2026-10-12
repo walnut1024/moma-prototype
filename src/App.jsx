@@ -1,13 +1,14 @@
 import FrontPageHeader from "./components/FrontPageHeader";
 import AuthExperience, { AuthBanner, usePrototypeAuth } from "./AuthExperience";
-import OperationRecords from "./OperationRecords";
 import { displaySmartRouteName } from './display-copy.mjs';
+import { modelOrderRows, orderBillingScene } from './model-billing-data.mjs';
 import { MODEL_ORDER_BILLING_TYPES, MODEL_ORDER_COLUMNS } from './model-order-display.mjs';
 import { DEFAULT_PAGE_SIZE, FilterPagination } from "./components/FilterControls";
 import { useEffect, useMemo, useState } from "react";
 import UsageStatistics from "./components/UsageStatistics";
-import OrganizationMembers from "./OrganizationMembers";
+import "./organization-members.css";
 import "./styles.css";
+import "./token-plan-keys.css";
 import "./version-index.css";
 import "./legacy-5102.css";
 import "./order-5102.css";
@@ -47,7 +48,6 @@ import {
   Images,
   Info,
   KeyRound,
-  History,
   Languages,
   ReceiptText,
   RefreshCw,
@@ -57,13 +57,14 @@ import {
   Settings,
   ShoppingCart,
   Store,
-  Users,
   Video,
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./components/ui/dialog";
 import { Button } from "./components/ui/button";
-import { apiKeySamples } from "./api-key-data.mjs";
+import { apiKeyOptions } from "./api-key-data.mjs";
+import { tokenPlanSubscriptions } from "./token-plan-data.mjs";
+import { Input } from "./components/ui/input";
 import { maskApiKey, parseIpAllowlist } from "./api-key-utils.mjs";
 import "./frontend-pages.css";
 
@@ -291,7 +292,7 @@ const nav = [
   ["API Key", "按量付费"],
   ["", "Token Plan"],
 ];
-const billingTypes = ["按量付费", "Token Plan", "资源包"];
+const billingTypes = ["按量付费", "Token Plan"];
 const navIcons5102 = {
   模型广场: Store,
   智能路由: Route,
@@ -310,11 +311,17 @@ const usageIcons5102 = {
 };
 const prototypeVersions = [
   {
-    id: "moma_5.11.0_estack",
+    id: "moma_5.12.0_estack",
     state: "当前版本",
+    releaseDate: "10月8日",
+    changes: "基于 5.11.0 复制，独立迭代。",
+  },
+  {
+    id: "moma_5.11.0_estack",
+    state: "历史版本",
     releaseDate: "待定",
     changes:
-      "新增模型排行、语音模型、资源包与 Coding Plan；完善模型体验、订单管理、API Key、用量统计和调用日志。",
+      "新增模型排行、语音模型与 Coding Plan；完善模型体验、订单管理、API Key、用量统计和调用日志。",
   },
   {
     id: "moma_5.10.2_estack",
@@ -582,13 +589,36 @@ function UnifiedApiKeys() {
       <TabsList variant="line" className="us-tabs" aria-label="API Key 计费方式">
         {billingTypes.map(type => <TabsTrigger key={type} value={type}>{type}</TabsTrigger>)}
       </TabsList>
-      {billingTypes.map(type => <TabsContent key={type} value={type} forceMount className="api-key-billing-panel"><ApiKeys billing={type} hideHeading /></TabsContent>)}
+      {billingTypes.map(type => <TabsContent key={type} value={type} forceMount className="api-key-billing-panel">{type === "Token Plan" ? <TokenPlanApiKeys /> : <ApiKeys billing={type} hideHeading />}</TabsContent>)}
     </Tabs>
   </div>;
 }
 
-function ApiKeys({ billing, hideHeading = false }) {
-  const initial = apiKeySamples;
+function TokenPlanApiKeys() {
+  const [planId, setPlanId] = useState(tokenPlanSubscriptions[0]?.id || "");
+  const [planQuery, setPlanQuery] = useState("");
+  const selectedPlan = tokenPlanSubscriptions.find(plan => plan.id === planId);
+  const visiblePlans = tokenPlanSubscriptions.filter(plan => `${plan.name} ${plan.id}`.toLowerCase().includes(planQuery.trim().toLowerCase()));
+  if (!selectedPlan) return <div className="v2-empty">暂无 Token Plan 订阅，<a href="?page=model-order">前往模型订购</a></div>;
+  return <div className="token-plan-workspace">
+    <nav className="token-plan-sidebar" aria-label="已购 Token Plan">
+      <h2>已购套餐</h2>
+      <div className="token-plan-search"><Search size={16} aria-hidden="true" /><Input aria-label="搜索套餐名称或订阅编号" placeholder="搜索套餐名称或编号" value={planQuery} onChange={e => setPlanQuery(e.target.value)} /></div>
+      <div className="token-plan-list">
+        {visiblePlans.map(plan => <Button key={plan.id} variant="ghost" className="token-plan-item" aria-label={`选择套餐：${plan.name} ${plan.id}`} aria-pressed={plan.id === planId} onClick={() => setPlanId(plan.id)}>
+          <strong>{plan.name}</strong><span>{plan.id}</span><small>{plan.startAt} 至 {plan.endAt}</small>
+        </Button>)}
+        {!visiblePlans.length && <p className="token-plan-empty" role="status">没有匹配的套餐</p>}
+      </div>
+    </nav>
+    <div className="token-plan-detail">
+      {tokenPlanSubscriptions.map(plan => <div key={plan.id} hidden={plan.id !== planId}><ApiKeys billing="Token Plan" subscription={plan} hideHeading /></div>)}
+    </div>
+  </div>;
+}
+
+function ApiKeys({ billing, subscription, hideHeading = false }) {
+  const keyScope = subscription?.id ?? billingTypes.indexOf(billing);
   const editModels = [
     ["AITC-MiniMax-M2.5", "文本模型"],
     ["Kimi/Kimi-K3", "多模态模型"],
@@ -607,7 +637,7 @@ function ApiKeys({ billing, hideHeading = false }) {
     ["Kimi/Kimi-K2.6", "多模态模型"],
     ["BGE/BGE-M3", "向量模型"],
   ];
-  const [keys, setKeys] = useState(() => initial.map(key => ({ ...key, models: key.scope === "无限制" ? null : editModels.slice(0, parseInt(key.scope)).map(([model]) => model), ips: key.ip === "办公网段" ? ["192.168.1.0/24"] : key.ip.includes("个 IP") ? Array.from({length: parseInt(key.ip)}, (_, i) => `10.0.1.${100 + i}`) : [], id: `${key.id}-${billingTypes.indexOf(billing)}`, key: `${key.key}-${billingTypes.indexOf(billing)}` }))),
+  const [keys, setKeys] = useState(() => apiKeyOptions(billing, subscription).map(key => ({ ...key, models: key.scope === "无限制" ? null : editModels.slice(0, parseInt(key.scope)).map(([model]) => model), ips: key.ip === "办公网段" ? ["192.168.1.0/24"] : key.ip.includes("个 IP") ? Array.from({length: parseInt(key.ip)}, (_, i) => `10.0.1.${100 + i}`) : [] }))),
     [query, setQuery] = useState(""),
     [selectedSearchId, setSelectedSearchId] = useState(null),
     [page, setPage] = useState(1), [size, setSize] = useState(DEFAULT_PAGE_SIZE),
@@ -617,7 +647,7 @@ function ApiKeys({ billing, hideHeading = false }) {
     [name, setName] = useState(""),
     [desc, setDesc] = useState(""),
     [ipList, setIpList] = useState(""),
-    [quotaEnabled, setQuotaEnabled] = useState(true),
+    [quotaEnabled, setQuotaEnabled] = useState(false),
     [quotaType, setQuotaType] = useState("日"),
     [quota, setQuota] = useState("10000"),
     [tpmEnabled, setTpmEnabled] = useState(true),
@@ -641,7 +671,9 @@ function ApiKeys({ billing, hideHeading = false }) {
     setIpList((key?.ips || []).join("\n"));
     setFormError("");
     setSelectedModels(key?.models || []);
-    setQuotaType(kind === "edit" ? "不限额度" : "日");
+    setQuotaEnabled(Boolean(key?.quota));
+    setQuotaType(key?.quota?.type || (kind === "edit" ? "不限额度" : "日"));
+    setQuota(String(key?.quota?.limit || 10000));
     setModelScope(key?.models ? "限定范围" : "全选");
   };
   const save = () => {
@@ -649,13 +681,18 @@ function ApiKeys({ billing, hideHeading = false }) {
     let ips;
     try { ips = parseIpAllowlist(ipList); } catch (error) { setFormError(error.message); return; }
     if (modelScope === "限定范围" && !selectedModels.length) { setFormError("请至少选择一个模型"); return; }
+    const limited = !subscription && (panel.kind === "create" ? quotaEnabled : quotaType !== "不限额度");
+    const limit = Number(quota);
+    if (limited && (!Number.isSafeInteger(limit) || limit <= 0)) { setFormError("额度上限须为大于 0 的整数"); return; }
     const access = { ips, models: modelScope === "全选" ? null : selectedModels };
+    if (!subscription) access.quota = limited ? { type: quotaType, limit, used: panel.key?.quota?.type === quotaType ? panel.key.quota.used : 0 } : null;
     if (panel.kind === "create")
       setKeys([
         {
           name: name.trim(),
           id: `ak-${Date.now()}`,
           key: `sk-${crypto.randomUUID().replaceAll("-", "")}`,
+          ...(subscription ? { subscriptionId: subscription.id } : {}),
           ...access,
           created: new Date().toLocaleString("sv-SE"),
           desc,
@@ -699,9 +736,12 @@ function ApiKeys({ billing, hideHeading = false }) {
         <span>{billing}</span>
       </div>}
       <div className="api-key-tools">
+        <div className="api-key-tools-leading">
+        {subscription && <h2 className="token-plan-title" title={subscription.name}>{subscription.name}</h2>}
         <button className="primary" onClick={() => openPanel("create")}>
           创建 API Key
         </button>
+        </div>
         <div>
           <div className="api-key-search" onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget)) setSearchOpen(false);
@@ -713,7 +753,7 @@ function ApiKeys({ billing, hideHeading = false }) {
                 aria-label="搜索 Key 名称或 Key ID"
                 aria-autocomplete="list"
                 aria-expanded={searchOpen}
-                aria-controls={`api-key-suggestions-${billingTypes.indexOf(billing)}`}
+                aria-controls={`api-key-suggestions-${keyScope}`}
                 value={query}
                 onFocus={() => setSearchOpen(true)}
                 onChange={(e) => { setQuery(e.target.value); setPage(1); setSelectedSearchId(null); setActiveSuggestion(0); setSearchOpen(true); }}
@@ -726,7 +766,7 @@ function ApiKeys({ billing, hideHeading = false }) {
                 placeholder="搜索 Key 名称或 Key ID"
               />
             </label>
-            {searchOpen && <div className="api-key-search-menu" id={`api-key-suggestions-${billingTypes.indexOf(billing)}`} role="listbox" aria-label="Key 搜索建议">
+            {searchOpen && <div className="api-key-search-menu" id={`api-key-suggestions-${keyScope}`} role="listbox" aria-label="Key 搜索建议">
               <button role="option" aria-selected={!query} onClick={() => { setQuery(""); setSelectedSearchId(null); setSearchOpen(false); }}>全部 Key</button>
               {suggestions.map((key, index) => <button key={key.id} role="option" aria-selected={selectedSearchId === key.id} className={index === activeSuggestion ? "is-active" : ""} onClick={() => chooseSuggestion(key)}><strong>{key.name}</strong><small>{key.id}</small></button>)}
               {!suggestions.length && <p>没有匹配的 Key</p>}
@@ -746,8 +786,7 @@ function ApiKeys({ billing, hideHeading = false }) {
             "Key 名称/Key ID",
             "API Key",
             "状态",
-            "访问范围",
-            "安全与额度",
+            ...(subscription ? ["访问权限"] : ["访问范围", "安全与额度"]),
             "操作",
           ].map((x) => (
             <span key={x}>{x}</span>
@@ -791,19 +830,20 @@ function ApiKeys({ billing, hideHeading = false }) {
                   <i />
                 </button>
               </span>
-              <span>
+              <span className={subscription ? "api-key-security" : undefined}>
                 {k.models === null ? <span className="key-unrestricted">无限制</span> : <button className="key-scope-link" onClick={() => { setAction({ kind: "models", key: k }); setScopeQuery(""); }}>{k.models.length} 个模型</button>}
+                {subscription && <small><button className="key-ip-link" onClick={() => { setAction({ kind: "ip", key: k }); setIpList(k.ips.join("\n")); setFormError(""); }}>IP 白名单：{k.ips.length ? `${k.ips.length} 项` : "不限制"}</button>{k.desc ? ` · ${k.desc}` : ""}</small>}
               </span>
-              <span className="api-key-security">
-                <b>每日 {k.quota || "0 / 10 K"} tokens</b>
-                <i className="quota-bar">
-                  <i style={{ width: `${k.progress || 0}%` }} />
-                </i>
+              {!subscription && <span className="api-key-security">
+                <b>{k.quota ? `${k.quota.type === "日" ? "每日" : k.quota.type === "月" ? "每月" : "总额度"} ${k.quota.used.toLocaleString("zh-CN")} / ${k.quota.limit.toLocaleString("zh-CN")} Tokens` : "不限额度"}</b>
+                {k.quota && <i className="quota-bar">
+                  <i style={{ width: `${Math.min(100, k.quota.used / k.quota.limit * 100)}%` }} />
+                </i>}
                 <small>
                   <button className="key-ip-link" onClick={() => { setAction({ kind: "ip", key: k }); setIpList(k.ips.join("\n")); setFormError(""); }}>IP 白名单：{k.ips.length ? `${k.ips.length} 项` : "不限制"}</button>
                   {k.desc ? ` · ${k.desc}` : ""}
                 </small>
-              </span>
+              </span>}
               <span className="api-key-actions">
                 <button onClick={() => openPanel("edit", k)}>编辑</button>
                 <button onClick={() => setAction({ kind: "reset", key: k })}>重置</button>
@@ -812,6 +852,7 @@ function ApiKeys({ billing, hideHeading = false }) {
             </div>
           ))}
       </div>
+      {!visibleKeys.length && <div className="v2-empty">{query ? "没有匹配的 API Key" : "暂无 API Key"}</div>}
       {copied && (
         <div className="copy-toast" role="status">
           {copied}
@@ -848,6 +889,7 @@ function ApiKeys({ billing, hideHeading = false }) {
               </button>
             </header>
             <div className="drawer-form">
+              {subscription && <div className="token-plan-drawer-context">所属 Token Plan<strong>{subscription.name}</strong><small>订阅编号：{subscription.id}</small></div>}
               {panel.kind === "edit" ? (
                 <>
                   <section className="edit-section">
@@ -877,7 +919,7 @@ function ApiKeys({ billing, hideHeading = false }) {
                       />
                     </label>
                   </section>
-                  <section className="edit-section">
+                  {!subscription && <section className="edit-section">
                     <h3>
                       额度限制{" "}
                       <small>
@@ -1002,7 +1044,7 @@ function ApiKeys({ billing, hideHeading = false }) {
                         </label>
                       </>
                     )}
-                  </section>
+                  </section>}
                   <section className="edit-section"><h3>IP 白名单</h3><label><span>允许的来源</span><div><textarea aria-label="编辑 IP 白名单" value={ipList} onChange={e => setIpList(e.target.value)} placeholder="IPv4 或 CIDR 网段，用逗号或换行分隔；留空不限制"/></div></label></section>
                   <section className="edit-section access-edit">
                     <h3>可访问范围</h3>
@@ -1108,7 +1150,7 @@ function ApiKeys({ billing, hideHeading = false }) {
                       }
                     />
                   </label>
-                  <div className="quota-label">
+                  {!subscription && <div className="quota-label">
                     <span>额度限制</span>
                     <button
                       className={`switch ${quotaEnabled ? "on" : ""}`}
@@ -1120,8 +1162,8 @@ function ApiKeys({ billing, hideHeading = false }) {
                     <small>
                       开启后，该 API Key 的 token 用量达到配额上限将停止服务。
                     </small>
-                  </div>
-                  {quotaEnabled && (
+                  </div>}
+                  {!subscription && quotaEnabled && (
                     <section className="quota-settings">
                       <div className="quota-warning">
                         切换限额策略或修改生效日后，历史用量将清零，并按新规则重新累积。
@@ -1439,168 +1481,9 @@ function ModelOrderList({
     [confirming, setConfirming] = useState(false),
     [ordered, setOrdered] = useState(false),
     [detail, setDetail] = useState(null), [page, setPage] = useState(1), [size, setSize] = useState(DEFAULT_PAGE_SIZE);
-  const allRows = [
-    [
-      "AICC-doubao-seedance-2.0",
-      "合营",
-      "视觉模型",
-      "火山引擎",
-      "共 4 个资费场景",
-      "56 ~ 102 元/百万tokens",
-      "未订购",
-      "—",
-      "—",
-    ],
-    [
-      "AITC-DeepSeek-V4-flash",
-      "自营",
-      "文本模型",
-      "移动云",
-      "AITC-DeepSeek-V4-flash-输入\nAITC-DeepSeek-V4-flash-输出",
-      "2 元/百万tokens\n4 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:42",
-      "362天后到期\n2027-09-14 21:21:42",
-    ],
-    [
-      "CosyVoice",
-      "自营",
-      "语音模型",
-      "移动云",
-      "处理字符数资费",
-      "2 元/万字符",
-      "使用中",
-      "2026-09-14 21:21:47",
-      "362天后到期\n2027-09-14 21:21:47",
-    ],
-    [
-      "DeepSeek-R1,DeepSeek-R1-0528",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入tokens\n输出tokens",
-      "4 元/百万tokens\n16 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:36",
-      "362天后到期\n2027-09-14 21:21:36",
-    ],
-    [
-      "DeepSeek-R1-Distill-Llama-70B",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入/输出tokens",
-      "4.13 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:39",
-      "362天后到期\n2027-09-14 21:21:39",
-    ],
-    [
-      "DeepSeek-R1-Distill-Llama-8B",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入/输出tokens",
-      "0.42 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:31",
-      "362天后到期\n2027-09-14 21:21:31",
-    ],
-    [
-      "DeepSeek-R1-Distill-Qwen-14B",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入/输出tokens",
-      "0.7 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:35",
-      "362天后到期\n2027-09-14 21:21:35",
-    ],
-    [
-      "DeepSeek-R1-Distill-Qwen-32B",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入/输出tokens",
-      "1.26 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:34",
-      "362天后到期\n2027-09-14 21:21:34",
-    ],
-    [
-      "DeepSeek-V2-Lite-Chat",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入/输出tokens",
-      "1.33 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:35",
-      "362天后到期\n2027-09-14 21:21:35",
-    ],
-    [
-      "DeepSeek-V3.2,DeepSeek-V3,DeepSeek-V3.1",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入tokens\n输出tokens",
-      "2 元/百万tokens\n8 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:33",
-      "362天后到期\n2027-09-14 21:21:33",
-    ],
-    [
-      "deepseek-v3.2",
-      "合营",
-      "文本模型",
-      "优刻得科技股份有限公司",
-      "DeepSeek-V3.2-输入\nDeepSeek-V3.2-输出\nDeepSeek-V3.2-缓存",
-      "2 元/百万tokens\n3 元/百万tokens\n0.4 元/百万tokens",
-      "未订购",
-      "—",
-      "—",
-    ],
-    [
-      "GLM-5.1",
-      "合营",
-      "文本模型",
-      "智谱 AI",
-      "共 6 个资费场景",
-      "1.3 ~ 28 元/百万tokens",
-      "未订购",
-      "—",
-      "—",
-    ],
-    [
-      "GLM-5.3-Flash",
-      "合营",
-      "多模态模型",
-      "智谱 AI",
-      "共 3 个资费场景",
-      "0.23 ~ 2.8 元/百万tokens",
-      "未订购",
-      "—",
-      "—",
-    ],
-    [
-      "Kimi-K2.6",
-      "合营",
-      "多模态模型",
-      "月之暗面",
-      "共 3 个资费场景",
-      "1.1 ~ 27 元/百万tokens",
-      "未订购",
-      "—",
-      "—",
-    ],
-  ];
-  const subscriptions = {
-    "按资源包计费": [["通用模型资源包", "自营", "资源包", "移动云", "1000 万 Token", "¥100 / 包", "已订购", "2026-09-15", "2027-09-15"]],
-    "Token Plan订阅": [["办公团队套餐", "自营", "Token Plan", "移动云", "月度额度", "¥99 / 月", "已订购", "2026-09-15", "2026-10-15"], ["研发团队套餐", "自营", "Token Plan", "移动云", "月度额度", "¥199 / 月", "已订购", "2026-09-20", "2026-10-20"]],
-    "Coding Plan订阅": [["研发助手 Coding Plan", "自营", "Coding Plan", "移动云", "月度编程套餐", "¥199 / 月", "已订购", "2026-09-15", "2026-10-15"]],
-  };
-  const rows = (historical || tab === "按Token用量计费" ? allRows : subscriptions[tab] || []).filter(row => row[0].toLowerCase().includes(query.trim().toLowerCase()));
+  const allRows = historical ? modelOrderRows : modelOrderRows.map(row => row.map((value, index) => index === 4 ? orderBillingScene(row) : value));
+  const subscriptions = tokenPlanSubscriptions.map(plan => [`${plan.name}\n${plan.id}`, "自营", "Token Plan", "移动云", "月度额度", plan.price, "已订购", plan.startAt, plan.endAt]);
+  const rows = (historical || tab === "按Token用量计费" ? allRows : subscriptions).filter(row => row[0].toLowerCase().includes(query.trim().toLowerCase()));
   const current = Math.min(page, Math.max(1, Math.ceil(rows.length / size)));
   const visibleRows = rows.slice((current - 1) * size, current * size);
   const changeTab = value => { setTab(value); setQuery(""); setPage(1); };
@@ -1636,9 +1519,7 @@ function ModelOrderList({
     const feeLabel =
       tab === "按Token用量计费"
         ? "按实际使用量收费"
-        : tab === "按资源包计费"
-          ? "按资源包额度抵扣"
-          : "按套餐额度抵扣";
+        : "按套餐额度抵扣";
     const resetSelection = (nextTab) => {
       setTab(nextTab);
       setSelectedOrders([]);
@@ -1656,18 +1537,10 @@ function ModelOrderList({
             <strong>
               计费方式<small>模型计费说明</small>
             </strong>
-            {(historical
-              ? [
+            {[
                   ["按Token用量计费", "按实际使用量Token收费"],
                   ["Token Plan订阅", "个人和团队的AI服务套餐"],
-                ]
-              : [
-                  ["按Token用量计费", "按实际使用量Token收费"],
-                  ["按资源包计费", "有效期内包含一定数量的额度"],
-                  ["Token Plan订阅", "个人和团队的AI服务套餐"],
-                  ["Coding Plan订阅", "AI编程订阅套餐"],
-                ]
-            ).map(([x, description]) => (
+                ].map(([x, description]) => (
               <button
                 className={tab === x ? "active" : ""}
                 onClick={() => resetSelection(x)}
@@ -1875,11 +1748,7 @@ function ModelOrderList({
                   content:
                     tab === "按Token用量计费"
                       ? "按照模型实际 Token 使用量和对应目录价计费。"
-                      : tab === "按资源包计费"
-                        ? "优先抵扣已购资源包额度，额度不足时按产品规则处理。"
-                        : tab === "Token Plan订阅"
-                          ? "优先使用 Token Plan 套餐额度，超出部分按产品规则计费。"
-                          : "使用 Coding Plan 套餐额度抵扣 AI 编程模型用量。",
+                      : "优先使用 Token Plan 套餐额度，超出部分按产品规则计费。",
                 })
               }
             >
@@ -1982,18 +1851,10 @@ function ModelOrderList({
       </section>}
       {!historical ? <div className="us-page"><Tabs value={tab} onValueChange={changeTab}>
         <TabsList variant="line" className="us-tabs" aria-label="模型订购计费方式">
-          {Object.values(MODEL_ORDER_BILLING_TYPES).map(type => <TabsTrigger key={type} value={type}>{type}</TabsTrigger>)}
+          {[MODEL_ORDER_BILLING_TYPES.payg, MODEL_ORDER_BILLING_TYPES.plan].map(type => <TabsTrigger key={type} value={type}>{type}</TabsTrigger>)}
         </TabsList>
       </Tabs></div> : <nav className="legacy-tabs">
-        {(historical
-          ? ["按Token用量计费", "Token Plan订阅"]
-          : [
-              "按Token用量计费",
-              "按资源包计费",
-              "Token Plan订阅",
-              "Coding Plan订阅",
-            ]
-        ).map((x) => (
+        {["按Token用量计费", "Token Plan订阅"].map((x) => (
           <button
             className={tab === x ? "active" : ""}
             onClick={() => setTab(x)}
@@ -2016,7 +1877,7 @@ function ModelOrderList({
             <input
               value={query}
               onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-              placeholder={tab === "按Token用量计费" ? "请按模型名称搜索" : "搜索套餐或资源包名称"}
+              placeholder={tab === "按Token用量计费" ? "请按模型名称搜索" : "搜索套餐名称或订阅编号"}
             />
             <Search size={15} />
           </label>
@@ -2028,7 +1889,7 @@ function ModelOrderList({
           <div className="legacy-order-row head">
             {[
               "",
-              historical || tab === "按Token用量计费" ? "模型名称" : "套餐 / 资源包名称",
+              historical || tab === "按Token用量计费" ? "模型名称" : "套餐名称 / 订阅编号",
               historical ? "模型类别" : "类型",
               ...MODEL_ORDER_COLUMNS.slice(1),
             ].map((x, i) => (
@@ -2041,7 +1902,8 @@ function ModelOrderList({
                 <input type="checkbox" />
               </span>
               <span>
-                <b>{row[0]}</b>
+                <b>{row[0].split("\n")[0]}</b>
+                {row[0].includes("\n") && <small>{row[0].split("\n")[1]}</small>}
                 <em>{row[1]}</em>
               </span>
               {row.slice(2).map((cell, j) => (
@@ -2225,7 +2087,7 @@ function UsageStatistics5102() {
             <p>
               2、7月与8月的数据请分别按单月查询；其他月份跨月查询最长支持31天。
             </p>
-            <p>3、资源包、Token Plan、Coding Plan 用量请前往对应页面查看。</p>
+            <p>3、Token Plan、Coding Plan 用量请前往对应页面查看。</p>
           </div>
         </div>
         <div className="legacy-filter-grid">
@@ -2609,13 +2471,14 @@ function PrototypeApp({ version }) {
     ])
     .filter(
       ([, item]) =>
-        item !== "视频生成" &&
+        item !== "视频生成" && item !== "语音模型" &&
+        (is5102 || item !== "多模态理解") &&
         (is5102 || !["按量付费", "Token Plan"].includes(item)) &&
         (!is5102 || !["模型排行", "语音模型"].includes(item)),
     );
   const [activePage, setActivePage] = useState(() => {
     const requestedPage = new URLSearchParams(location.search).get("page");
-    return requestedPage === "model-order" ? "模型订购" : !is5102 ? ({ "organization-members": "组织及成员", "operation-records": "操作记录", "api-keys": "API Key 管理", "call-logs": "调用日志", "usage-statistics": "用量统计" }[requestedPage] || "模型广场") : "模型广场";
+    return requestedPage === "model-order" ? "模型订购" : !is5102 ? ({ "api-keys": "API Key 管理", "call-logs": "调用日志", "usage-statistics": "用量统计" }[requestedPage] || "模型广场") : "模型广场";
   }),
     [admin, setAdmin] = useState(modeFromHash),
     [adminBannerTarget, setAdminBannerTarget] = useState(null),
@@ -2797,9 +2660,7 @@ function PrototypeApp({ version }) {
           {is5102 ? (
             <div>
               <small>用量统计</small>
-              {billingTypes
-                .filter((x) => x !== "资源包")
-                .map((billing) => {
+              {billingTypes.map((billing) => {
                   const page = `用量统计·${billing}`;
                   const NavIcon = usageIcons5102[billing];
                   return (
@@ -2825,14 +2686,11 @@ function PrototypeApp({ version }) {
                   <ChartNoAxesCombined aria-hidden="true" />
                   用量统计
                 </button>
-                <button className={activePage === "调用观测" ? "active" : ""} onClick={() => setActivePage("调用观测")}><Activity aria-hidden="true" />调用观测</button>
                 <button className={activePage === "调用日志" ? "active" : ""} onClick={() => setActivePage("调用日志")}><FileText aria-hidden="true" />调用日志</button>
               </div>
               <div>
                 <small>系统管理</small>
                 <button className={activePage === "API Key 管理" ? "active" : ""} onClick={() => setActivePage("API Key 管理")}><KeyRound aria-hidden="true" />API Key</button>
-                <button className={activePage === "组织及成员" ? "active" : ""} onClick={() => setActivePage("组织及成员")}><Users aria-hidden="true" />组织及成员</button>
-                <button className={activePage === "操作记录" ? "active" : ""} onClick={() => setActivePage("操作记录")}><History aria-hidden="true" />操作记录</button>
               </div>
             </>
           )}
@@ -2858,64 +2716,32 @@ function PrototypeApp({ version }) {
             />
           ) : (
             <TextExperience
+              imageUploadEnabled={!is5102}
               title="语言模型"
               onCompare={is5102 ? undefined : () => setTextCompare(true)}
             />
           )
-        ) : activePage === "多模态理解" ? (
+        ) : is5102 && activePage === "多模态理解" ? (
           <MultimodalExperience />
         ) : activePage === "视觉模型" ? (
           <ModelExperience
-            key={visualKind}
-            kind={visualKind}
+            key={is5102 ? visualKind : "image"}
+            kind={is5102 ? visualKind : "image"}
             groupLabel="视觉模型"
-            onKindChange={setVisualKind}
-          />
-        ) : activePage === "图片生成" ? (
-          <ModelExperience
-            key="image"
-            kind="image"
-          />
-        ) : activePage === "视频生成" ? (
-          <ModelExperience
-            key="video"
-            kind="video"
-          />
-        ) : activePage === "语音生成" || activePage === "语音模型" ? (
-          <ModelExperience
-            key="voice"
-            kind="voice"
-            groupLabel={is5102 ? "语音生成" : "语音模型"}
+            onKindChange={is5102 ? setVisualKind : undefined}
           />
         ) : activePage === "模型订购" ? (
           <ModelOrderList versionId={version.id} historical={is5102} />
-        ) : activePage === "按量付费" || activePage === "Token Plan" ? (
+        ) : is5102 && (activePage === "按量付费" || activePage === "Token Plan") ? (
           <ApiKeys key={activePage} billing={activePage} />
         ) : activePage === "API Key 管理" ? (
           <UnifiedApiKeys />
-        ) : activePage === "操作记录" && !is5102 ? (
-          <OperationRecords />
-        ) : activePage === "组织及成员" && !is5102 ? (
-          <OrganizationMembers />
-        ) : activePage.startsWith("API Key 管理·") ? (
-          <ApiKeys key={activePage} billing={activePage.split("·")[1]} />
-        ) : activePage === "调用观测" ? (
-          <UsageStatistics key="observation" observation />
         ) : activePage === "用量统计" ? (
           <UsageStatistics />
         ) : activePage === "调用日志" ? (
           <CallLogs />
-        ) : activePage.startsWith("用量统计·") ? (
-          is5102 ? (
-            <UsageStatistics5102 />
-          ) : (
-            <UsageStatistics
-              key={activePage}
-              billing={activePage.split("·")[1]}
-            />
-          )
-        ) : activePage.startsWith("调用日志·") ? (
-          <CallLogs key={activePage} billing={activePage.split("·")[1]} />
+        ) : is5102 && activePage.startsWith("用量统计·") ? (
+          <UsageStatistics5102 />
         ) : (
           <div className="content">
             {!is5102 && <FrontPageHeader title="模型广场" description="探索精选模型，按任务、能力与服务商查找可用模型" icon={Store} actions={<Button variant="outline" onClick={() => setFeatured(value => !value)}>{featured ? "隐藏精选模型" : "展开精选模型"}</Button>} />}

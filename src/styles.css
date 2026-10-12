@@ -3332,8 +3332,14 @@ h1 em {
 .cl-view-row{display:flex;justify-content:flex-end;padding:8px 0;border-bottom:1px solid #edf0f5}
 
 /* Admin context controls share the platform's fixed banner. */
-.app-shell > .admin-banner .top-actions { gap: 16px; }
-.admin-banner-controls { display: flex; align-items: center; gap: 16px; }
+.app-shell > .admin-banner { gap: 16px; padding-right: 16px; }
+.app-shell > .admin-banner .brand-mark { min-width: 0; flex: 1; }
+.app-shell > .admin-banner .brand-mark img { flex: none; }
+.app-shell > .admin-banner .brand-mark span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell > .admin-banner .top-actions { gap: 10px; min-width: 0; max-width: calc(100% - 48px); overflow-x: auto; scrollbar-width: thin; scrollbar-color: #66748b #252525; }
+.app-shell > .admin-banner .top-actions > * { flex-shrink: 0; }
+.app-shell > .admin-banner .top-actions > button { white-space: nowrap; padding-inline: 8px; }
+.admin-banner-controls { display: flex; align-items: center; gap: 10px; }
 .admin-banner-controls > div:empty { display: none; }
 .admin-banner-field { display: flex; align-items: center; gap: 8px; color: #cbd3df; font-size: 12px; white-space: nowrap; }
 .admin-banner-field [data-slot="select-trigger"] { height: 30px; min-width: 90px; border-color: #ffffff26; background: #252525; color: #cbd3df; font-size: 12px; box-shadow: none; }
@@ -3341,7 +3347,15 @@ h1 em {
 .admin-banner-field [data-slot="select-trigger"]:hover,
 .admin-banner-field [data-slot="select-trigger"][data-state="open"] { border-color: #72a5ff; color: #fff; }
 .admin-banner-field [data-slot="select-trigger"] svg { color: #8f9aab; }
-@media (max-width: 760px) {
-  .app-shell > .admin-banner .top-actions, .admin-banner-controls { gap: 12px; }
+@media (max-width: 1280px) {
   .admin-banner-field > span { display: none; }
 }
+
+/* Current tenant actions share the existing business blue; historical UI stays independent. */
+.app-shell:not(.version-5102):not(.auth-shell) .front-main { --primary: #3568f9; --ring: #3568f9; }
+.app-shell:not(.version-5102):has(> .front-main) :is(.primary, .pg-send) { background: #3568f9; border-color: #3568f9; }
+.app-shell:not(.version-5102):has(> .front-main) :is(.primary, .pg-send):hover:not(:disabled) { background: #2858d9; border-color: #2858d9; }
+
+.app-shell:not(.version-5102) .front-main .playground { --experience-accent: #3568f9; }
+
+body:has(.app-shell:not(.version-5102) > .front-main) :is(.model-select-dialog, .key-action-dialog) { --experience-accent: #3568f9; --primary: #3568f9; --ring: #3568f9; }

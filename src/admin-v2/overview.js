@@ -1,15 +1,15 @@
 import { dayOf } from './analytics.js';
 import { userDemo } from './user-analysis.js';
 const DAY = 86400000, HOUR = 3600000, OFFSET = 8 * HOUR;
-export const overviewPresets = [['day', '今日'], ['week', '近 7 天'], ['month', '近 30 天']];
+export const overviewPresets = [['day', '昨日'], ['week', '近 7 天'], ['month', '近 30 天']];
 export const compactCount = new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 2 }).format;
 export const overviewDateTime = time => new Date(time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
 export function overviewPeriods(now = Date.now()) {
   const midnight = Date.parse(`${dayOf(now)}T00:00:00+08:00`);
   return overviewPresets.map(([id, label], i) => {
-    const days = [1, 7, 30][i], start = midnight - (days - 1) * DAY;
-    return { id, label, start, end: now, previousStart: start - days * DAY, previousEnd: now - days * DAY,
-      range: `${dayOf(start)} — ${dayOf(now)}`, comparison: days === 1 ? '对比昨日同期' : `对比前 ${days} 天同期` };
+    const days = [1, 7, 30][i], start = midnight - days * DAY;
+    return { id, label, start, end: midnight, previousStart: start - days * DAY, previousEnd: midnight - days * DAY,
+      range: `${dayOf(start)} — ${dayOf(midnight - 1)}`, comparison: days === 1 ? '对比前日' : `对比前 ${days} 天` };
   });
 }
 const noise = seed => { const n = Math.sin(seed * 12.9898) * 43758.5453; return n - Math.floor(n); };
@@ -28,7 +28,7 @@ export function overviewRegistrations(users, end) {
 
 // Identity logins use calendar-month MAU, independent of the usage-period picker.
 export function overviewMonthlyActive({ users, logins }, end) {
-  const date = new Date(end + OFFSET);
+  const date = new Date(end - 1 + OFFSET);
   const year = date.getUTCFullYear(), month = date.getUTCMonth();
   const start = Date.UTC(year, month, 1) - OFFSET;
   const previousStart = Date.UTC(year, month - 1, 1) - OFFSET;

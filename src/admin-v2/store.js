@@ -136,7 +136,7 @@ export function parseAdminState(raw) {
 
 export function canMutate(role, action) {
   if (action.type === 'adminAccount') return role === '平台管理员';
-  if (action.type === 'providerOperation') return ['平台管理员', '运维人员'].includes(role);
+  if (action.type === 'providerOperation') return ['平台管理员', '运营人员'].includes(role);
   if (action.type === "individual") return ["平台管理员", "运营人员"].includes(role);
   if (action.type === 'modelOperation') return ['平台管理员', '运营人员'].includes(role) || (role === '财务人员' && ['priceDraft', 'pricePublish', 'procurement'].includes(action.operation));
   if (action.type === "enterprise") return ["平台管理员", "运营人员"].includes(role);
@@ -144,8 +144,8 @@ export function canMutate(role, action) {
   if (role === "只读观察员") return false;
   const collection = action.collection || action.changes?.[0]?.collection || (action.type === "setSettings" ? "settings" : "");
   const allowed = {
-    运营人员: ["models","modelVersions","validations","tenants","projects","memberships","users","organizations","apiKeys","grants","products","prices","orders","announcements"],
-    运维人员: ["providers","endpoints","supplyPrices","clusters","artifacts","deployments","routes","limits","fallbacks","releases","caches","alerts","incidents","integrations"],
+    运营人员: ["providers","endpoints","supplyPrices","models","modelVersions","validations","tenants","projects","memberships","users","organizations","apiKeys","grants","products","prices","orders","announcements"],
+    运维人员: ["clusters","artifacts","deployments","routes","limits","fallbacks","releases","caches","alerts","incidents","integrations"],
     财务人员: ["prices","orders","ledger","bills","settlements","adjustments"],
     安全管理员: ["apiKeys"],
   };

@@ -1,6 +1,7 @@
 # Local dependencies and generated files
 node_modules/
 dist/
+public/moma_5.12.0_estack/
 output/
 artifacts/
 .playwright-cli/

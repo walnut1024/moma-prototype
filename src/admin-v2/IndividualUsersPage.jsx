@@ -67,11 +67,11 @@ function SubscriptionDetails({ state, tenantId }) {
   const unknown = entries.filter(item => !item.billingType).length;
   const currentPage = Math.min(page, Math.ceil(records.length / size) || 1);
   const quantity = (value, unit) => value == null || String(value).trim() === '' || !Number.isFinite(Number(value)) ? '未记录' : number(value) + (unit ? ' ' + unit : '（单位未记录）');
-  const columns = ['模型 / 套餐 / 资源包名称', '计费方式', ...MODEL_ORDER_COLUMNS];
+  const columns = ['模型 / 套餐名称', '计费方式', ...MODEL_ORDER_COLUMNS];
   return <>
     <div className="iu-subscriptions">
         <FilterToolbar className="iu-subscription-toolbar">
-          <div className="ent-search"><Search size={16}/><Input aria-label="搜索订购记录" value={query} placeholder="搜索模型、套餐、资源包或订单编号" onChange={event => { setQuery(event.target.value); setPage(1); }}/></div>
+          <div className="ent-search"><Search size={16}/><Input aria-label="搜索订购记录" value={query} placeholder="搜索模型、套餐或订单编号" onChange={event => { setQuery(event.target.value); setPage(1); }}/></div>
           <div className="iu-billing-filter"><span id="iu-billing-label">计费方式</span><Select value={billing} onValueChange={value => { setBilling(value); setQuery(''); setPage(1); }}><SelectTrigger aria-labelledby="iu-billing-label" size="sm"><SelectValue/></SelectTrigger><SelectContent><SelectGroup><SelectItem value="all">全部计费方式</SelectItem>{Object.entries(individualBillingTypes).map(([id, label]) => <SelectItem key={id} value={id}>{label}</SelectItem>)}</SelectGroup></SelectContent></Select></div>
           <div className="iu-order-filter"><span id="iu-order-status-label">订购状态</span><Select value={status} onValueChange={value => { setStatus(value); setPage(1); }}><SelectTrigger aria-labelledby="iu-order-status-label" size="sm"><SelectValue/></SelectTrigger><SelectContent><SelectGroup><SelectItem value="all">全部状态</SelectItem>{statuses.map(value => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectGroup></SelectContent></Select></div>
           <FilterReset onClick={() => { setBilling('all'); setStatus('all'); setQuery(''); setPage(1); }}/>

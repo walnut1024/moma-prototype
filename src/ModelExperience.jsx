@@ -3,7 +3,6 @@ import { displayBusinessCopy } from './display-copy.mjs';
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownRight,
-  ArrowRight,
   ArrowUp,
   BrainCircuit,
   ChevronDown,
@@ -133,27 +132,8 @@ const modelCatalog = {
       billing: "按量计费",
     },
   ],
-  tts: [
-    {
-      name: "Alibaba/CosyVoice",
-      icon: 6,
-      type: "voice",
-      subscribed: true,
-      billing: "Token Plan",
-    },
-  ],
-};
 
-const voiceCatalog = [
-  { id: "longxiaochun_v2", name: "龙小淳", desc: "温柔知性女声", icon: 1 },
-  { id: "longcheng_v2", name: "龙橙", desc: "沉稳磁性男声", icon: 2 },
-  { id: "longhua_v2", name: "龙华", desc: "新闻主播音色", icon: 3 },
-  { id: "longshu_v2", name: "龙书", desc: "自然叙事男声", icon: 4 },
-  { id: "longxiaobai_v2", name: "龙小白", desc: "活泼元气女声", icon: 5 },
-  { id: "longan_v2", name: "龙安", desc: "专业客服女声", icon: 6 },
-  { id: "longyue_v2", name: "龙悦", desc: "清新甜美女声", icon: 1 },
-  { id: "longlao_v2", name: "龙老", desc: "浑厚评书男声", icon: 2 },
-];
+};
 
 const videoProfiles = {
   "Qwen/Wan2.7-R2V": {
@@ -294,7 +274,7 @@ export default function ModelExperience({
   onKindChange,
   onCompare,
 }) {
-  const [mode, setMode] = useState("语音识别");
+
   const [model, setModel] = useState(
     kind === "text"
       ? "DeepSeek/DeepSeek-V4-Pro"
@@ -328,11 +308,7 @@ export default function ModelExperience({
     thinkingBudget: "4000",
     showStop: false,
   });
-  const [speed, setSpeed] = useState("1");
-  const [pitch, setPitch] = useState("1");
-  const [volume, setVolume] = useState("50");
-  const [voice, setVoice] = useState("longxiaochun_v2");
-  const [format, setFormat] = useState("mp3");
+
   const [language, setLanguage] = useState("auto");
   const [removeFillers, setRemoveFillers] = useState(false);
   const [imageSize, setImageSize] = useState("1024 × 1024");
@@ -357,8 +333,7 @@ export default function ModelExperience({
   const recordLimit = useRef(null);
   const recordStarted = useRef(0);
   const recordSession = useRef(0);
-  const asr = kind === "voice" && mode === "语音识别";
-  const tts = kind === "voice" && !asr;
+  const asr = kind === "voice";
   const visualGeneration = kind === "image" || kind === "video";
   const upload = kind === "text" || visualGeneration;
   const label =
@@ -369,8 +344,8 @@ export default function ModelExperience({
         ? "图片生成"
         : kind === "video"
           ? "视频生成"
-          : "语音生成");
-  const models = modelCatalog[kind === "voice" ? (asr ? "asr" : "tts") : kind];
+          : "语音识别");
+  const models = modelCatalog[kind === "voice" ? "asr" : kind];
   const videoProfile = videoProfiles[model];
   const prompts = promptCatalog[kind] || [];
   useEffect(() => {
@@ -428,11 +403,7 @@ export default function ModelExperience({
     setText("");
     setFile(null);
     setError("");
-    setSpeed("1");
-    setPitch("1");
-    setVolume("50");
-    setVoice("longxiaochun_v2");
-    setFormat("mp3");
+
     setLanguage("auto");
     setRemoveFillers(false);
   }
@@ -593,18 +564,12 @@ export default function ModelExperience({
       text: text.trim() || (kind === "text" && file ? "请分析这个文件" : ""),
       file: file?.name,
       model,
-      mode,
       temperature,
       topP,
       systemPrompt,
       stop,
       thinkingBudget,
       deepThinking,
-      speed,
-      pitch,
-      volume,
-      voice,
-      format,
       language,
       removeFillers,
       imageSize,
@@ -625,11 +590,9 @@ export default function ModelExperience({
             ? ""
             : asr
               ? "大家好，今天我们讨论项目进度。请各位先介绍当前任务的完成情况，再确认下一阶段的工作安排。"
-              : tts
-                ? message.text
-                : "可以从以下几个方面梳理任务，帮助你获得更清晰、可直接使用的结果。",
+              : "可以从以下几个方面梳理任务，帮助你获得更清晰、可直接使用的结果。",
           points:
-            visualGeneration || asr || tts
+            visualGeneration || asr
               ? null
               : [
                   {
@@ -683,32 +646,21 @@ export default function ModelExperience({
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(displayBusinessCopy(message.answer));
     utterance.lang = "zh-CN";
-    utterance.rate = Number(message.speed);
     window.speechSynthesis.speak(utterance);
   }
-  function previewVoice(item) {
-    if (!window.speechSynthesis) {
-      setError("当前浏览器不支持音色试听。");
-      return;
-    }
-    setVoice(item.id);
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(
-      `你好，我是${item.name}，欢迎体验语音合成。`,
-    );
-    utterance.lang = "zh-CN";
-    window.speechSynthesis.speak(utterance);
-  }
+
   const headingCopy =
     groupLabel === "视觉模型"
-      ? "视觉模型支持图片与视频内容生成，可按创作目标切换模式。"
+      ? onKindChange
+        ? "视觉模型支持图片与视频内容生成，可按创作目标切换模式。"
+        : "描述画面或添加参考图，使用图片生成模型完成创作。"
       : kind === "text"
         ? "文本生成模型用于理解和生成文字；多模态模型还可以理解图片、视频等内容。"
         : kind === "image"
           ? "图片生成模型是能够根据文字描述或参考图创作图片的人工智能模型。"
           : kind === "video"
             ? "视频生成模型是能够根据文字描述或参考图创作视频的人工智能模型。"
-            : "语音模型可以把文字转换成声音，也可以识别和理解语音内容。";
+            : "使用语音识别模型，将录音内容转换为文字。";
   const welcomeTitle =
     kind === "text"
       ? "有什么可以帮你？"
@@ -716,9 +668,7 @@ export default function ModelExperience({
         ? "把想象，变成画面"
         : kind === "video"
           ? "让创意，动起来"
-          : asr
-            ? "让声音，成为文字"
-            : "让文字，被听见";
+          : "让声音，成为文字";
   const welcomeCopy =
     kind === "text"
       ? "输入文字完成问答、创作和分析，也可添加图片或视频进行理解。"
@@ -726,12 +676,8 @@ export default function ModelExperience({
         ? "描述画面，或添加参考图，生成你的第一张作品。"
         : kind === "video"
           ? "描述镜头，或添加参考图，生成一段视频。"
-          : asr
-            ? "最长录音 60 秒，试听后开始识别。"
-            : "输入一段文字，体验自然流畅的语音表达。";
-  const placeholder = tts
-    ? "输入需要合成的文本…"
-    : kind === "text"
+          : "最长录音 60 秒，试听后开始识别。";
+  const placeholder = kind === "text"
       ? "输入问题，或添加图片、视频进行分析"
       : kind === "image"
         ? "描述画面主体、风格、光线与构图…"
@@ -765,35 +711,9 @@ export default function ModelExperience({
           ))}
         </div>
       )}
-      {kind === "voice" && (
-        <div className="pg-tabs" aria-label="语音体验模式">
-          {["语音识别", "语音合成"].map((value) => (
-            <button
-              type="button"
-              aria-pressed={mode === value}
-              key={value}
-              onClick={() => {
-                reset();
-                setMode(value);
-                setModel(
-                  value === "语音识别"
-                    ? "Alibaba/SenseVoice"
-                    : "Alibaba/CosyVoice",
-                );
-              }}
-            >
-              {value === "语音识别" ? (
-                <Mic size={16} aria-hidden="true" />
-              ) : (
-                <Volume2 size={16} aria-hidden="true" />
-              )}
-              {value}
-            </button>
-          ))}
-        </div>
-      )}
+
       <div
-        className={`pg-workspace ${tts && !messages.length ? "pg-tts-workspace" : ""}`}
+        className="pg-workspace"
       >
         {messages.length ? (
           <div className="pg-history" aria-live="polite">
@@ -955,14 +875,7 @@ export default function ModelExperience({
                         >
                           朗读
                         </button>
-                        {message.mode === "语音合成" && kind === "voice" && (
-                          <button
-                            type="button"
-                            onClick={() => window.speechSynthesis?.cancel()}
-                          >
-                            停止播放
-                          </button>
-                        )}
+
                       </div>
                     </>
                   )}
@@ -977,7 +890,7 @@ export default function ModelExperience({
             <p>{welcomeCopy}</p>
           </div>
         )}
-        {!messages.length && !asr && !tts && (
+        {!messages.length && !asr && (
           <div className="pg-prompts" aria-label="快捷提示">
             <div>
               {prompts.map((item) => (
@@ -1087,15 +1000,13 @@ export default function ModelExperience({
                 <div className="pg-settings-panel">
                   <header>
                     <div>
-                      <strong>生成参数</strong>
+                      <strong>{asr ? "识别参数" : "生成参数"}</strong>
                       <small>
                         {kind === "image"
                           ? "对应图片生成接口"
                           : kind === "video"
                             ? "对应视频生成接口"
-                            : tts
-                              ? "对应 CosyVoice 合成接口"
-                              : asr
+                            : asr
                                 ? "对应 SenseVoice 识别接口"
                                 : "调整模型的输出风格"}
                       </small>
@@ -1201,86 +1112,6 @@ export default function ModelExperience({
                       <p className="pg-param-tip">
                         可添加一张参考图，帮助模型理解画面内容与风格。
                       </p>
-                    </>
-                  ) : tts ? (
-                    <>
-                      <div className="pg-api-grid">
-                        <label>
-                          <span>发音人</span>
-                          <select
-                            aria-label="发音人"
-                            value={voice}
-                            onChange={(e) => setVoice(e.target.value)}
-                          >
-                            <option value="longxiaochun_v2">龙小淳</option>
-                            <option value="longcheng_v2">龙橙</option>
-                            <option value="longhua_v2">龙华</option>
-                            <option value="longshu_v2">龙书</option>
-                          </select>
-                          <small>voice</small>
-                        </label>
-                        <label>
-                          <span>输出格式</span>
-                          <select
-                            aria-label="输出格式"
-                            value={format}
-                            onChange={(e) => setFormat(e.target.value)}
-                          >
-                            <option value="mp3">MP3</option>
-                            <option value="wav">WAV</option>
-                            <option value="pcm">PCM</option>
-                          </select>
-                          <small>format</small>
-                        </label>
-                      </div>
-                      <label className="pg-param">
-                        <span>
-                          <b>语速</b>
-                          <output>{speed} 倍</output>
-                        </span>
-                        <small>rate · 0.5–2.0</small>
-                        <input
-                          aria-label="语速"
-                          type="range"
-                          min="0.5"
-                          max="2"
-                          step="0.1"
-                          value={speed}
-                          onChange={(e) => setSpeed(e.target.value)}
-                        />
-                      </label>
-                      <label className="pg-param">
-                        <span>
-                          <b>音调</b>
-                          <output>{pitch} 倍</output>
-                        </span>
-                        <small>pitch · 0.5–2.0</small>
-                        <input
-                          aria-label="音调"
-                          type="range"
-                          min="0.5"
-                          max="2"
-                          step="0.1"
-                          value={pitch}
-                          onChange={(e) => setPitch(e.target.value)}
-                        />
-                      </label>
-                      <label className="pg-param">
-                        <span>
-                          <b>音量</b>
-                          <output>{volume}</output>
-                        </span>
-                        <small>volume · 0–100</small>
-                        <input
-                          aria-label="音量"
-                          type="range"
-                          min="0"
-                          max="100"
-                          step="1"
-                          value={volume}
-                          onChange={(e) => setVolume(e.target.value)}
-                        />
-                      </label>
                     </>
                   ) : asr ? (
                     <>
@@ -1487,9 +1318,7 @@ export default function ModelExperience({
                 aria-label={
                   asr
                     ? "开始识别"
-                    : tts
-                      ? "生成语音"
-                      : kind === "image"
+                    : kind === "image"
                         ? "生成图片"
                         : kind === "video"
                           ? "生成视频"
@@ -1502,13 +1331,9 @@ export default function ModelExperience({
               >
                 {busy ? (
                   (asr ? "识别中…" : "生成中…")
-                ) : asr ? "开始识别" : visualGeneration || (tts && !messages.length) ? (
+                ) : asr ? "开始识别" : visualGeneration ? (
                   <ArrowUp size={20} aria-hidden="true" />
-                ) : tts ? (
-                  "生成语音"
-                ) : (
-                  "发送"
-                )}
+                ) : "发送"}
               </button>
             </div>
           </div>
@@ -1520,36 +1345,7 @@ export default function ModelExperience({
               ? "识别结果可能存在偏差，请结合录音核对。"
               : "体验产生的用量将从您已订购的模型额度中扣除，具体以用量记录为准。"}
         </p>
-        {tts && !messages.length && (
-          <section
-            className="pg-voice-library"
-            aria-labelledby="voice-library-title"
-          >
-            <header>
-              <h3 id="voice-library-title">音色库</h3>
-              <button type="button">
-                查看更多 <ArrowRight size={17} aria-hidden="true" />
-              </button>
-            </header>
-            <div>
-              {voiceCatalog.map((item) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  aria-pressed={voice === item.id}
-                  onClick={() => previewVoice(item)}
-                >
-                  <img src={`/assets/model-${item.icon}.jpg`} alt="" />
-                  <span>
-                    <strong>{item.name}</strong>
-                    <small>{item.desc}</small>
-                  </span>
-                  <Play size={15} aria-hidden="true" />
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
+
         {error && (
           <p role="status" className="pg-feedback">
             {error}

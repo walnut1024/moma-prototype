@@ -21,5 +21,5 @@ test('filter repairs preserve date boundaries, stable deployment samples and emp
   assert.deepEqual(logPeriod('7','2026-09-30'),{start:'2026-09-23',end:'2026-09-29'});
   assert.deepEqual(logPeriod('yesterday','2026-09-30'),{start:'2026-09-29',end:'2026-09-29'});
   const rows=filterLogRecords(createLogRecords('2026-09-30'),'全部',{...defaultLogFilters,range:'yesterday'},'2026-09-30');
-  assert.equal(rows.length,9); assert.ok(rows.every(row=>row.time.startsWith('2026-09-29')));
+  assert.equal(rows.length,6); assert.ok(rows.every(row=>row.time.startsWith('2026-09-29')));
 });

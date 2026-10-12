@@ -93,10 +93,10 @@ test('disable impact reports routes, fallback references and models that lose al
 
 test('provider operations reject every unauthorized role and do not bypass cross-provider ownership', () => {
   const state = createAdminSeed();
-  for (const role of ['运营人员', '财务人员', '安全管理员', '只读观察员']) {
+  for (const role of ['运维人员', '财务人员', '安全管理员', '只读观察员']) {
     assert.throws(() => commitAdminState(state, { type: 'providerOperation', operation: 'testConnection', objectId: 'endpoint-ds', data: { scenario: '成功' } }, role), /无权/);
   }
-  assert.doesNotThrow(() => commitAdminState(state, { type: 'providerOperation', operation: 'testConnection', objectId: 'endpoint-ds', data: { scenario: '成功' } }, '运维人员'));
+  assert.doesNotThrow(() => commitAdminState(state, { type: 'providerOperation', operation: 'testConnection', objectId: 'endpoint-ds', data: { scenario: '成功' } }, '运营人员'));
   assert.throws(() => act(state, 'connection', 'endpoint-ds', { ...config, providerId: 'provider-self' }), /不属于/);
 });
 

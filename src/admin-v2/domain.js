@@ -1,3 +1,4 @@
+import { MODEL_ORDER_BILLING_TYPES } from '../model-order-display.mjs';
 import { commitAdminState } from "./store.js";
 import { usageTotal } from "./observability.js";
 import { enterpriseGrant, enterpriseTokenUsage } from './enterprise.js';
@@ -6,16 +7,27 @@ import { availableSupplies, activeSupplySalePrice } from "./model-management.js"
 const now = () => new Date().toISOString();
 const id = prefix => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-export function activateOrder(state, orderId) {
+export function orderActivationCommand(state, orderId) {
   const order = state.orders.find(item => item.id === orderId);
   if (!order) throw new Error("订单不存在");
-  if (order.status === "已开通") return state;
+  if (order.status === "已开通") return null;
+  if (order.status !== '待开通') throw new Error('仅待开通订单可以开通');
+  const product = state.products.find(item => item.id === order.productId);
+  const billingType = order.billingType || product?.billingType;
+  if (billingType && !Object.hasOwn(MODEL_ORDER_BILLING_TYPES, billingType)) throw new Error('该计费方式不支持开通');
+  const payg = (order.billingType || product?.billingType) === 'payg' || product?.billingMode === '按量付费';
+  if (!payg && (!Number.isFinite(order.entitlement) || order.entitlement <= 0)) throw new Error('订单额度未记录或无效，不能发放权益');
+  const unit = order.quotaUnit || product?.quotaUnit || (product?.code?.startsWith('TOKEN-') ? 'Token' : null);
+  if (!payg && !unit) throw new Error('订单额度单位未记录，不能发放权益');
   const sourceId = `entitlement:${order.id}`;
-  if (state.ledger.some(item => item.sourceId === sourceId)) return commitAdminState(state, { type: "update", collection: "orders", id: order.id, changes: { status: "已开通" } }, "平台管理员");
-  return commitAdminState(state, { type: "batch", objectId: order.orderNo, changes: [
-    { type: "update", collection: "orders", id: order.id, changes: { status: "已开通", timeline: [...order.timeline, "权益发放"] } },
-    { type: "add", collection: "ledger", record: { id: id("ledger"), accountId: order.tenantId, sourceId, type: "订购权益", delta: order.entitlement, balance: order.entitlement, reason: order.orderNo, status: "已完成" } },
-  ] }, "平台管理员");
+  const changes = [{ type: 'update', collection: 'orders', id: order.id, changes: { status: '已开通', timeline: [...(order.timeline ?? []), payg ? '服务开通' : '权益发放'] } }];
+  if (!payg && !state.ledger.some(item => item.sourceId === sourceId)) changes.push({ type: 'add', collection: 'ledger', record: { id: id('ledger'), accountId: order.tenantId, sourceId, type: '订购权益', delta: order.entitlement, balance: order.entitlement, unit, reason: order.orderNo, status: '已完成' } });
+  return { type: 'batch', objectId: order.orderNo, changes };
+}
+
+export function activateOrder(state, orderId) {
+  const command = orderActivationCommand(state, orderId);
+  return command ? commitAdminState(state, command, '平台管理员') : state;
 }
 
 export function simulateRequest(state, { requestId, keyId, modelId, usage = { input: 1000, cached: 0, output: 200 }, forceTimeout = false, cacheKey = "demo-prompt", requirements = {} }) {

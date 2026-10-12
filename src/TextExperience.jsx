@@ -15,6 +15,8 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  ImagePlus,
+  Image as ImageIcon,
   RefreshCw,
   SlidersHorizontal,
   Square,
@@ -25,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import ModelSelectDialog from "./ModelSelectDialog";
+import { IMAGE_ACCEPT, supportsImageInput, imageInputError } from "./text-image-input.mjs";
 import "./experience.css";
 import "./experience-refinements.css";
 
@@ -56,6 +59,7 @@ const models = [
   },
   {
     name: "Moonshot/Kimi-K3",
+    inputModalities: ["text", "image"],
     icon: 2,
     type: "text",
     subscribed: true,
@@ -64,6 +68,7 @@ const models = [
   },
   {
     name: "Qwen/Qwen3.5-VL",
+    inputModalities: ["text", "image"],
     icon: 4,
     type: "multimodal",
     subscribed: true,
@@ -72,6 +77,7 @@ const models = [
   },
   {
     name: "ZHIPU/GLM-4.6V",
+    inputModalities: ["text", "image"],
     icon: 3,
     type: "multimodal",
     subscribed: false,
@@ -131,7 +137,7 @@ function ModelPicker({ value, onChange }) {
         models={models}
         value={value}
         onApply={(next) => {
-          onChange(next);
+          if (onChange(next) === false) return;
           setOpen(false);
         }}
         onClose={() => setOpen(false)}
@@ -140,8 +146,14 @@ function ModelPicker({ value, onChange }) {
   );
 }
 
-export default function TextExperience({ onCompare, title = "文本生成" }) {
+export default function TextExperience({ onCompare, title = "文本生成", imageUploadEnabled = false }) {
   const [model, setModel] = useState(models[0].name);
+  const [images, setImages] = useState([]);
+  const [readingImages, setReadingImages] = useState(false);
+  const imageInput = useRef();
+  const imageUrls = useRef(new Set());
+  const imageReadVersion = useRef(0);
+  const currentModel = useRef(model);
   const [text, setText] = useState("");
   const [messages, setMessages] = useState([]);
   const [conversations, setConversations] = useState(loadHistory);
@@ -163,6 +175,54 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
   const end = useRef();
   const newDialog = useRef();
   const textarea = useRef();
+  const [historySlot, setHistorySlot] = useState(null);
+  useEffect(() => setHistorySlot(document.getElementById("text-history-slot")), []);
+
+  currentModel.current = model;
+  const selectedModel = models.find(item => item.name === model);
+  const canUploadImages = imageUploadEnabled && supportsImageInput(selectedModel);
+  useEffect(() => () => {
+    imageReadVersion.current++;
+    imageUrls.current.forEach(url => URL.revokeObjectURL(url));
+  }, []);
+  const removeImage = (image) => {
+    URL.revokeObjectURL(image.url);
+    imageUrls.current.delete(image.url);
+    setImages(current => current.filter(item => item.url !== image.url));
+  };
+  const changeModel = (next) => {
+    if ((images.length || readingImages) && !supportsImageInput(models.find(item => item.name === next))) {
+      setNotice("请先移除已添加的图片，再切换到不支持图片输入的模型。");
+      return false;
+    }
+    setModel(next);
+    setNotice("");
+  };
+  const attachImages = async (files) => {
+    const selected = Array.from(files);
+    if (!selected.length || readingImages || busy) return;
+    const error = imageInputError(selectedModel, selected, images.length);
+    if (error) { setNotice(error); return; }
+    setReadingImages(true);
+    const readVersion = imageReadVersion.current;
+    const next = [];
+    try {
+      for (const file of selected) {
+        const url = URL.createObjectURL(file);
+        next.push({ name: file.name, url });
+        const preview = new window.Image();
+        preview.src = url;
+        await preview.decode();
+      }
+      if (currentModel.current !== model || imageReadVersion.current !== readVersion) throw new Error("draft changed");
+      next.forEach(image => imageUrls.current.add(image.url));
+      setImages(current => [...current, ...next]);
+      setNotice("");
+    } catch {
+      next.forEach(image => URL.revokeObjectURL(image.url));
+      if (imageReadVersion.current === readVersion) setNotice("图片无法读取，请重新选择图片。");
+    } finally { if (imageReadVersion.current === readVersion) setReadingImages(false); }
+  };
 
   const activeConversation = conversations.find(
     (item) => item.id === conversationId,
@@ -171,10 +231,10 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
 
   useEffect(() => () => clearTimeout(timer.current), []);
   useEffect(() => {
-    localStorage.setItem(
+    try { localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify(conversations.slice(0, 20)),
-    );
+      JSON.stringify(conversations.slice(0, 20), (key, value) => key === "images" ? value.map(image => ({ name: image.name })) : value),
+    ); } catch { setNotice("对话记录无法保存，请检查浏览器存储空间。"); }
   }, [conversations]);
   useEffect(() => {
     if (conversationActive) end.current?.scrollIntoView({ behavior: "smooth" });
@@ -194,13 +254,13 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
       title:
         previous?.title || nextMessages[0]?.question.slice(0, 22) || "新对话",
       updatedAt: Date.now(),
-      messages: nextMessages,
       model,
       deepThinking,
       temperature,
       topP,
       systemPrompt,
       ...previous,
+      messages: nextMessages,
       ...patch,
     };
     setConversations((current) =>
@@ -235,7 +295,7 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
           ],
         };
     const next = pendingMessages.map((item) =>
-      item.id === pendingId ? result : item,
+      item.id === pendingId ? { ...item, ...result } : item,
     );
     setMessages(next);
     persist(id, next);
@@ -244,18 +304,22 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
 
   const send = (prompt = text) => {
     const question = prompt.trim();
-    if (!question || busy) return;
+    if ((!question && !images.length) || busy || readingImages) return;
+    if (images.length && !canUploadImages) { setNotice("当前模型不支持图片输入。"); return; }
     const id = conversationId || crypto.randomUUID();
     const pendingId = crypto.randomUUID();
-    const pending = { id: pendingId, question, status: "loading" };
+    const pending = { id: pendingId, question, images, status: "loading" };
     const next = [...(conversationId ? messages : []), pending];
     setConversationId(id);
     setHome(false);
     setMessages(next);
     setText("");
+    setImages([]);
+    setNotice("");
     setBusy(true);
     persist(id, next, {
-      title: question.replace("模拟调用失败：", "").slice(0, 22),
+      model,
+      title: question.replace("模拟调用失败：", "").slice(0, 22) || images[0]?.name || "图片问答",
     });
     timer.current = setTimeout(
       () =>
@@ -305,6 +369,7 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
   };
 
   const selectConversation = (item) => {
+    if (images.length || readingImages) { setNotice("请先发送或移除已添加的图片，再打开历史对话。"); return; }
     clearTimeout(timer.current);
     setBusy(false);
     setConversationId(item.id);
@@ -319,6 +384,11 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
   };
 
   const blank = () => {
+    imageReadVersion.current++;
+    setReadingImages(false);
+    images.forEach(image => URL.revokeObjectURL(image.url));
+    images.forEach(image => imageUrls.current.delete(image.url));
+    setImages([]);
     clearTimeout(timer.current);
     setBusy(false);
     setConversationId("");
@@ -329,7 +399,7 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
     setMenu("");
   };
   const requestBlank = () => {
-    if (text.trim() || busy || messages.length) newDialog.current?.showModal();
+    if (text.trim() || images.length || readingImages || busy || messages.length) newDialog.current?.showModal();
     else blank();
   };
   const choosePrompt = (prompt) => setText(prompt);
@@ -362,7 +432,6 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
     if (conversationId === item.id) blank();
   };
 
-  const historySlot = document.getElementById("text-history-slot");
   const history =
     historySlot &&
     createPortal(
@@ -445,14 +514,14 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
           <button onClick={requestBlank}>新建对话</button>
         </div>
       ) : (
-        <FrontPageHeader className="pg-heading" title={title} icon={Languages} description="文本生成模型用于理解和生成文字；多模态模型还可以理解图片、视频等内容。" actions={<div className="pg-heading-actions">{onCompare && <button className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button onClick={requestBlank}>新建对话</button></div>} />
+        <FrontPageHeader className="pg-heading" title={title} icon={Languages} description={imageUploadEnabled ? "语言模型用于问答、创作和翻译；支持图片输入的模型还可进行图文理解。" : "文本生成模型用于理解和生成文字；多模态模型还可以理解图片、视频等内容。"} actions={<div className="pg-heading-actions">{onCompare && <button className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button onClick={requestBlank}>新建对话</button></div>} />
       )}
       <div className="pg-workspace">
         {conversationActive ? (
           <div className="pg-history tx-message-list">
             {messages.map((item, index) => (
               <article key={item.id}>
-                <div className="pg-question">{item.question}</div>
+                <div className="pg-question">{item.images?.length > 0 && <div className="tx-image-list">{item.images.map((image, i) => <span key={i}>{image.url ? <img src={image.url} alt={image.name} /> : <><ImageIcon size={18} /><small>{image.name}</small></>}</span>)}</div>}{item.question}</div>
                 <div className="pg-answer">
                   <div className="pg-answer-meta">
                     <strong>{model}</strong>
@@ -562,7 +631,7 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
           <>
             <div className="pg-welcome">
               <h2>有什么可以帮你？</h2>
-              <p>输入文字完成问答、创作和翻译，也可添加图片或视频进行理解。</p>
+              <p>{imageUploadEnabled ? (canUploadImages ? "输入文字，或上传图片进行问答、创作和翻译。" : "输入文字完成问答、创作和翻译。") : "输入文字完成问答、创作和翻译，也可添加图片或视频进行理解。"}</p>
             </div>
             <div className="tx-suggestions">
               {recommendations.map(([label, prompt]) => (
@@ -582,12 +651,13 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
             send();
           }}
         >
+          {images.length > 0 && <div className="tx-image-list" aria-label="已添加的图片">{images.map(image => <span key={image.url}><img src={image.url} alt={image.name} /><button type="button" aria-label={`移除图片 ${image.name}`} onClick={() => removeImage(image)} disabled={readingImages}><X size={14} /></button></span>)}</div>}
           <textarea
             ref={textarea}
             aria-label="输入消息"
             value={text}
             onChange={(event) => setText(event.target.value)}
-            placeholder="输入问题，或添加图片、视频进行分析"
+            placeholder={imageUploadEnabled ? (canUploadImages ? "输入问题，或上传图片进行分析" : "输入问题") : "输入问题，或添加图片、视频进行分析"}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -595,15 +665,18 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
               }
             }}
           />
+          {imageUploadEnabled && <input ref={imageInput} type="file" hidden multiple accept={IMAGE_ACCEPT} onChange={event => { attachImages(event.target.files); event.target.value = ""; }} />}
           <div className="pg-toolbar">
-            <button
+            {(!imageUploadEnabled || canUploadImages) && <button
               className="pg-add pg-add-icon"
               type="button"
-              aria-label="添加附件"
-              title="添加附件"
+              aria-label={imageUploadEnabled ? "上传图片" : "添加附件"}
+              title={imageUploadEnabled ? "上传图片（JPG、PNG、WebP、GIF；最多 4 张，每张 5 MB）" : "添加附件"}
+              disabled={readingImages || busy}
+              onClick={imageUploadEnabled ? () => imageInput.current?.click() : undefined}
             >
-              <Plus size={21} />
-            </button>
+              {imageUploadEnabled ? <ImagePlus size={21} /> : <Plus size={21} />}
+            </button>}
             <div className="pg-text-tools">
               <button
                 type="button"
@@ -625,7 +698,7 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
             </div>
             <div className="pg-primary-actions">
               <span className="pg-count">{text.length}/6000</span>
-              <ModelPicker value={model} onChange={setModel} />
+              <ModelPicker value={model} onChange={changeModel} />
               {busy ? (
                 <button
                   className="pg-send"
@@ -640,7 +713,7 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
                   className="pg-send"
                   type="submit"
                   aria-label="发送"
-                  disabled={!text.trim()}
+                  disabled={(!text.trim() && !images.length) || readingImages}
                 >
                   <ArrowUp size={18} />
                 </button>
@@ -656,7 +729,7 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
 
       <dialog className="pg-new-dialog" ref={newDialog}>
         <h2>新建对话？</h2>
-        <p>当前草稿、生成状态或对话内容不会删除，仍可从历史记录恢复。</p>
+        <p>{images.length ? "确认后将移除未发送的图片；已发送的对话仍可从历史记录恢复。" : "当前草稿、生成状态或对话内容不会删除，仍可从历史记录恢复。"}</p>
         <div>
           <button onClick={() => newDialog.current?.close()}>取消</button>
           <button
@@ -737,7 +810,7 @@ export default function TextExperience({ onCompare, title = "文本生成" }) {
       )}
       {notice && (
         <div className="copy-toast" role="status">
-          <Check size={15} />
+          {notice === "已复制" && <Check size={15} />}
           {notice}
         </div>
       )}

@@ -1,4 +1,5 @@
 import { toast } from 'sonner';
+import { canMutate } from './store';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/table';
 import { useEffect, useState } from 'react';
 import { AlertCircle, ArrowRight, Building2, CheckCircle2, ChevronLeft, ChevronRight, CircleHelp, Cloud, Link2, Plus, RotateCcw, Search, Server, ShieldCheck, Unplug, Settings2, Play, X } from 'lucide-react';
@@ -175,7 +176,7 @@ export default function ProviderManagement({ state, transact, conflict }) {
   const [editing, setEditing] = useState(null);
   useEffect(() => { const sync = () => setParams(new URLSearchParams(location.hash.split('?')[1] || '')); addEventListener('hashchange', sync); return () => removeEventListener('hashchange', sync); }, []);
   const change = patch => { const next = new URLSearchParams(params); Object.entries(patch).forEach(([key, value]) => value == null || value === '' ? next.delete(key) : next.set(key, value)); setParams(next); location.hash = '/admin-2/providers' + (next.size ? '?' + next : '');  };
-  const can = ['平台管理员', '运维人员'].includes(state.currentRole) && !conflict && !state.storageError;
+  const can = canMutate(state.currentRole, { type: 'providerOperation' }) && !conflict && !state.storageError;
   const providerId = params.get('provider'), provider = state.providers.find(item => item.id === providerId);
   const run = (operation, objectId, data = {}) => { try { transact({ type: 'providerOperation', operation, objectId, data }); toast.success('配置状态已更新'); } catch (error) { toast.error(error.message); } };
   const saved = (kind, next, statusProvider) => {

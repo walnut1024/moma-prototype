@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { usageData, usageKeys, usageCSV, usageViews, observationData, observationView, meteringView, usageModels, usageModelGroups, usagePeriod, selectedUsageData, selectedUsageTypes, selectedMeteringView } from '../src/usage-data.mjs';
+import { usageData, usageKeys, usageCSV, usageKeyOptions, observationData, observationView, usageModels, usageModelGroups, usagePeriod, selectedUsageData, selectedUsageTypes, selectedMeteringView } from '../src/usage-data.mjs';
+const singleView = type => selectedMeteringView([type]);
 const options = { billing: '按量付费', type: '文本模型', start: '2026-09-17', end: '2026-09-19', now: new Date('2026-09-19T12:00:00+08:00') };
 test('模型请求趋势按模型拆分且与总请求数一致', () => {
   const data = usageData(options);
@@ -8,7 +9,7 @@ test('模型请求趋势按模型拆分且与总请求数一致', () => {
   assert.ok(data.buckets.every(row => Object.values(row.modelRequests).reduce((sum, count) => sum + count, 0) === row.requests));
   const selected = usageData({ ...options, targets: ['GLM-5.2'] });
   assert.deepEqual(Object.keys(selected.summary.modelRequests), ['GLM-5.2']);
-  assert.equal(meteringView('文本模型').charts[0][0], '总 Token 数');
+  assert.equal(singleView('文本模型').charts[0][0], '总消耗 Tokens');
 });
 test('模型用量趋势逐模型拆线，与汇总守恒且导出保留模型 ID', () => {
   const data = selectedUsageData({ ...options, groups: ['语言模型'], start: '2026-09-19', minutes: 60 });
@@ -20,9 +21,9 @@ test('模型用量趋势逐模型拆线，与汇总守恒且导出保留模型 I
   const csv = usageCSV(data, selectedMeteringView(data.types), options.billing, '语言模型');
   assert.ok(csv.includes('模型 ID') && csv.includes('GLM-5.2'));
 });
-test('用量图表包含 14 项且速率、缓存与单次平均由同一窗口原始量计算', () => {
-  const titles = meteringView('文本模型').charts.map(([title]) => title);
-  assert.deepEqual(titles, ['总 Token 数', '输入 Token 数', '输出 Token 数', '每分钟总 Token 数（TPM）', '每分钟输入 Token 数（TPM）', '每分钟输出 Token 数（TPM）', '每分钟读缓存 Token 数', '每分钟写入缓存 Token 数', '读缓存总 Token 数', '写入缓存总 Token 数', '每分钟读显式缓存 Token 数', '区间内命中显式缓存总 Token 数', '平均输入 Token（TPR）', '平均输出 Token（TPR）']);
+test('输入输出与缓存计费项分别展示，观测速率仍使用同一原始量', () => {
+  const titles = singleView('文本模型').charts.map(([title]) => title);
+  assert.deepEqual(titles, ['总消耗 Tokens', '输入 Tokens', '输出 Tokens', '缓存 Tokens']);
   for (const minutes of [5, 10, 60, 1440]) {
     const { summary, buckets } = usageData({ ...options, minutes });
     for (const row of [summary, ...buckets]) {
@@ -37,8 +38,8 @@ test('用量图表包含 14 项且速率、缓存与单次平均由同一窗口�
       assert.equal(row.outputPerRequest, row.output / row.requests);
     }
   }
-  assert.ok(meteringView('多模态模型').charts.every(([, [key]]) => !key.toLowerCase().includes('cache')));
-  assert.deepEqual(meteringView('向量模型').charts.map(([title]) => title), ['输入 Token 数', '每分钟输入 Token 数（TPM）', '平均输入 Token（TPR）']);
+  assert.ok(singleView('多模态模型').charts.every(([, [key]]) => !key.toLowerCase().includes('cache')));
+  assert.deepEqual(singleView('向量模型').charts.map(([title]) => title), ['总消耗 Tokens', '输入 Tokens']);
 });
 test('时间快捷项按北京时间取值，多类型与模型 ID 筛选不混用计量单位', () => {
   const clock = new Date('2026-09-25T00:30:00+08:00');
@@ -46,9 +47,10 @@ test('时间快捷项按北京时间取值，多类型与模型 ID 筛选不混�
   assert.deepEqual(usagePeriod('yesterday', clock), { start: '2026-09-24', end: '2026-09-24' });
   assert.deepEqual(usagePeriod('7d', clock), { start: '2026-09-18', end: '2026-09-24' });
   assert.deepEqual(usagePeriod('30d', clock), { start: '2026-08-26', end: '2026-09-24' });
-  assert.deepEqual(usageModelGroups.map(group => group.name), ['语言模型', '多模态理解', '视觉模型', '语音模型', '向量模型', '排序模型']);
+  assert.deepEqual(usageModelGroups.map(group => group.name), ['语言模型', '多模态理解', '视觉模型', '语音模型']);
+  assert.deepEqual(selectedUsageTypes(['向量模型', '排序模型']), []);
   const all = selectedUsageData({ ...options, groups: null });
-  const parts = Object.keys(usageModels).map(type => usageData({ ...options, type }));
+  const parts = usageModelGroups.flatMap(group => group.types).map(type => usageData({ ...options, type }));
   assert.equal(all.summary.requests, parts.reduce((sum, data) => sum + data.summary.requests, 0));
   assert.equal(all.summary.total, parts.reduce((sum, data) => sum + (data.summary.total ?? data.summary.metered ?? data.summary.input ?? 0), 0));
   assert.equal(all.summary.images, parts.reduce((sum, data) => sum + (data.summary.images || 0), 0));
@@ -58,7 +60,8 @@ test('时间快捷项按北京时间取值，多类型与模型 ID 筛选不混�
   assert.deepEqual(selected.types, ['文本模型', '图片生成']);
   assert.equal(selected.summary.total, usageData({ ...options, type: '文本模型', targets: ['GLM-5.2'] }).summary.total);
   assert.equal(selected.summary.images, usageData({ ...options, type: '图片生成', targets: ['Qwen-Image'] }).summary.images);
-  assert.ok(selectedMeteringView(selected.types).charts.some(([title]) => title === '图片生成量'));
+  assert.ok(selectedMeteringView(selected.types).charts.some(([title, keys]) => title === '图片生成用量' && keys[0] === 'images'));
+  assert.ok(selectedMeteringView(selected.types).charts.every(([, , config]) => !config.variants));
   assert.deepEqual(selectedUsageTypes(['视觉模型'], ['Qwen-Image']), ['图片生成']);
   assert.equal(selectedUsageData({ ...options, groups: ['视觉模型'], modelIds: [] }).summary.requests, 0);
 });
@@ -90,19 +93,24 @@ test('用量汇总、筛选、粒度和导出保持同一统计口径', () => {
   assert.equal(usageData({ ...options, billing: 'Token Plan', dimension: 'API Key', targets: [usageKeys('按量付费')[0]] }).summary.requests, 0);
   assert.notEqual(usageData({ ...options, billing: 'Token Plan' }).summary.total, data.summary.total);
   assert.equal(usageData({ ...options, start: '2026-09-20' }).buckets.length, 0);
-  for (const type of Object.keys(usageViews)) {
+  for (const type of Object.keys(usageModels)) {
     const sample = usageData({ ...options, type });
     assert.ok(sample.summary.requests > 0);
-    assert.ok(usageCSV(sample, usageViews[type], options.billing, type).includes('北京时间'));
-    assert.equal(usageCSV(sample, usageViews[type], options.billing, type).split('\n').length, sample.buckets.length + 1);
+    assert.ok(usageCSV(sample, singleView(type), options.billing, type).includes('北京时间'));
+    assert.equal(usageCSV(sample, singleView(type), options.billing, type).split('\n').length, sample.buckets.length + 1);
   }
 });
 
-test('单日十分钟与多日小时聚合只改变图表点数，不改变计量总量', () => {
+test('所有类别用量最小按小时聚合，单日与多日计量总量保持一致', () => {
   const day = { ...options, start: '2026-09-17', end: '2026-09-17' };
   const tenMinutes = selectedUsageData({ ...day, groups: ['语言模型'], minutes: 10 });
   const oneHour = selectedUsageData({ ...day, groups: ['语言模型'], minutes: 60 });
-  assert.equal(tenMinutes.buckets.length, 144);
+  assert.equal(tenMinutes.buckets.length, 24);
+  assert.deepEqual(tenMinutes.buckets.map(row => row.time), oneHour.buckets.map(row => row.time));
+  for (const group of usageModelGroups) {
+    const hourly = selectedUsageData({ ...day, groups: [group.id], minutes: 10 });
+    for (let i=1; i<hourly.buckets.length; i++) assert.equal(hourly.buckets[i].time - hourly.buckets[i-1].time, 3600000);
+  }
   assert.equal(oneHour.buckets.length, 24);
   assert.equal(tenMinutes.summary.total, oneHour.summary.total);
   assert.equal(tenMinutes.summary.peakTpm, oneHour.summary.peakTpm);
@@ -112,14 +120,14 @@ test('单日十分钟与多日小时聚合只改变图表点数，不改变计�
 });
 
 test('模型指标遵守计量能力，状态与拆分守恒', () => {
-  for (const type of Object.keys(usageViews)) {
+  for (const type of Object.keys(usageModels)) {
     const { summary: s } = usageData({ ...options, type });
     assert.equal(s.requests, s.success + s.failure);
     assert.equal(s.requests, s.status2 + s.status4 + s.status5 + s.statusOther);
     assert.equal(s.failureRate, s.failure / s.requests * 100);
     assert.equal(s.latency, s.duration / s.success);
     assert.ok(s.latencyMin <= s.latency && s.latency <= s.latencyMax);
-    const configured = [...usageViews[type].summary, ...usageViews[type].charts.flatMap(([, keys, config]) => [...keys, ...Object.values(config?.variants ?? {}).flat()])];
+    const configured = [...singleView(type).summary, ...singleView(type).charts.flatMap(([, keys, config]) => [...keys, ...Object.values(config?.variants ?? {}).flat()])];
     for (const key of configured) assert.ok(Number.isFinite(s[key]), `${type}: ${key}`);
     if (['语音合成', '语音识别', '图片生成'].includes(type)) {
       for (const key of ['input', 'output', 'total', 'tpm', 'ttft', 'cache']) assert.equal(s[key], undefined, `${type}: ${key}`);
@@ -181,7 +189,7 @@ test('调用观测跨模型与计费方式汇总，并保持计量和性能边�
  const embed = observationData({...options,billing:'全部',dimension:'Model ID',type:'向量模型',targets:['BGE-M3']});
  assert.equal(embed.summary.ttft,undefined);
  assert.equal(observationData({...options,billing:'Token Plan',dimension:'API Key',targets:[usageKeys('按量付费')[0]]}).summary.requests,0);
- for(const type of Object.keys(usageModels)) assert.ok(!meteringView(type).charts.some(([title])=>['响应时延','首 Token 时延','调用状态分布'].includes(title)));
+ for(const type of Object.keys(usageModels)) assert.ok(!singleView(type).charts.some(([title])=>['响应时延','首 Token 时延','调用状态分布'].includes(title)));
  assert.ok(usageCSV(all,observationView,'全部','全部模型类型').includes('P95'));
 });
 
@@ -205,27 +213,72 @@ test('用量统计 API Key 与模型交叉筛选，分 Key 汇总等于全部', 
   assert.equal(parts[0].summary.total, usageData({ ...options, targets: ['GLM-5.2'], apiKeyId: usageKeys(options.billing)[0] }).summary.total);
 });
 
-test('语言模型计量分项直接作为同图多条线，且与筛选后的总量守恒', () => {
+test('每个指标对应一条汇总曲线，计费档位与缓存写入仍可导出', () => {
   const settings = { ...options, start: '2026-09-19', end: '2026-09-19' };
-  const check = (model, title, count, totalKey) => {
+  for (const model of ['Qwen3.5-35B-A3B', 'GLM-5.1', 'qwen3-max']) {
     const data = selectedUsageData({ ...settings, groups: ['语言模型'], modelIds: [model] });
-    const chart = selectedMeteringView(['文本模型'], [model]).charts.find(([name]) => name === title);
-    assert.equal(chart[1].length, count, `${model}: ${title}`);
-    assert.equal(chart[2]?.variants, undefined);
-    assert.equal(chart[1].reduce((sum, key) => sum + data.summary[key], 0), data.summary[totalKey]);
-    assert.ok(usageCSV(data, selectedMeteringView(['文本模型'], [model]), settings.billing, model).includes(chart[2].series[0].fullLabel ?? chart[2].series[0].label));
-  };
-  check('Qwen3.5-35B-A3B', '输入 Token 数', 2, 'input');
-  check('Qwen3.5-35B-A3B', '输出 Token 数', 4, 'output');
-  check('Qwen3-32B', '输出 Token 数', 2, 'output');
-  check('Kimi-K3', '输入 Token 数', 2, 'input');
-  check('GLM-5.1', '读缓存总 Token 数', 2, 'cacheReadTotal');
-  check('MiniMax-M3', '输出 Token 数', 2, 'output');
-  check('qwen3-max', '写入缓存总 Token 数', 3, 'cacheCreate');
-  check('qwen3.7-plus', '区间内命中显式缓存总 Token 数', 2, 'cacheRead');
-  const ordinary = selectedMeteringView(['文本模型'], ['DeepSeek-V4-Flash']);
-  assert.deepEqual(ordinary.charts.find(([title]) => title === '输入 Token 数')[1], ['input']);
-  assert.ok(ordinary.charts.every(([title]) => !title.includes('夜间')));
-  assert.ok(ordinary.charts.every(([title]) => !title.includes('缓存')));
-  assert.deepEqual(selectedMeteringView(['文本模型'], ['GLM-5.1', 'MiniMax-M3']).charts.find(([title]) => title === '输入 Token 数')[1], ['input']);
+    const view = selectedMeteringView(data.types, [model]);
+    for (const [, keys] of view.charts) assert.equal(keys.length, 1);
+    for (const row of [data.summary, ...data.buckets]) assert.equal(row.total, row.input + row.output);
+    const tierInput = view.exportKeys.filter(key => /^tier\d+Input$/.test(key));
+    for (const row of [data.summary, ...data.buckets]) assert.equal(tierInput.reduce((sum,key)=>sum+row[key],0), row.input);
+    const csv = usageCSV(data, view, options.billing, '语言模型');
+    assert.ok(csv.includes('输入长度'));
+    if (model === 'qwen3-max') { assert.ok(view.exportKeys.includes('cacheCreate')); assert.ok(csv.includes('缓存写入 Token')); }
+  }
+  assert.deepEqual(selectedMeteringView(['文本模型'], ['DeepSeek-V4-Flash']).summary, ['total', 'input', 'output']);
+});
+
+test('计费曲线不重复累计缓存，CSV 导出模型趋势与筛选范围且单位分离', () => {
+  const data = selectedUsageData({ ...options, start: '2026-09-19', groups: null });
+  for (const row of [data.summary, ...data.buckets]) {
+    assert.equal(row.uncachedInput + row.cacheReadTotal, row.input);
+    assert.equal(row.cache + row.cacheRead, row.cacheReadTotal);
+  }
+  const models = [...new Set(data.buckets.flatMap(row => Object.keys(row.modelUsage)))];
+  const view = selectedMeteringView(data.types);
+  const csv = usageCSV(data, view, options.billing, '全部', { ...options, apiKeyId: usageKeys(options.billing)[0] });
+  assert.equal(csv.split('\n').length, data.buckets.length * models.length + 1);
+  assert.ok(csv.includes('Key ID') && csv.includes('2026-09-17') && csv.includes('缓存命中 Token（Token）'));
+  assert.ok(csv.includes('成功生成图片（张）') && csv.includes('识别音频时长（秒）') && csv.includes('合成字符数（字符）'));
+  assert.ok(csv.includes(String(data.buckets[0].modelUsage['GLM-5.2'].input)));
+  assert.equal(data.details, undefined);
+  assert.equal(data.buckets[0].modelUsage['Qwen-Image'].input, undefined);
+  assert.deepEqual(selectedMeteringView(['向量模型']).summary, ['total', 'input']);
+  assert.deepEqual(selectedMeteringView(['语音识别']).summary, ['audio']);
+  assert.deepEqual(selectedMeteringView(['视频生成']).charts[1][1], ['metered']);
+});
+
+test('Token Plan 按购买订阅独立筛选，同名套餐不混用 Key 且分订阅汇总守恒', () => {
+  const settings = { ...options, billing: 'Token Plan', start: '2026-10-10', end: '2026-10-10', now: new Date('2026-10-11T00:00:00+08:00'), groups: ['语言模型'], modelIds: ['GLM-5.2'] };
+  const subscriptions = [...new Set(usageKeyOptions('Token Plan').map(key => key.subscriptionId))];
+  const all = selectedUsageData(settings);
+  const parts = subscriptions.map(subscriptionId => selectedUsageData({ ...settings, subscriptionId }));
+  assert.equal(parts.reduce((sum, part) => sum + part.summary.total, 0), all.summary.total);
+  assert.equal(parts.reduce((sum, part) => sum + part.summary.requests, 0), all.summary.requests);
+  parts.forEach(part => assert.ok(part.summary.requests > 0));
+  const foreignKey = usageKeyOptions('Token Plan', subscriptions[2])[0].id;
+  assert.equal(selectedUsageData({ ...settings, subscriptionId: subscriptions[0], apiKeyId: foreignKey }).summary.requests, 0);
+  assert.equal(selectedUsageData({ ...settings, start: '2026-09-19', end: '2026-09-19', subscriptionId: subscriptions[2] }).summary.requests, 0);
+  assert.equal(selectedUsageData({ ...settings, subscriptionId: 'missing' }).summary.requests, 0);
+  assert.ok(usageCSV(parts[2], selectedMeteringView(parts[2].types, settings.modelIds), settings.billing, '语言模型', { ...settings, subscriptionId: subscriptions[2] }).includes(subscriptions[2]));
+  assert.equal(parts[0].summary.remainingQuota, undefined);
+});
+
+
+test('每个语言模型只显示可采集的计费分项，零值与缺失值保持区别', () => {
+  const settings = { ...options, start: '2026-09-19', end: '2026-09-19', groups: ['语言模型'] };
+  for (const model of usageModels['文本模型']) {
+    const data = selectedUsageData({ ...settings, modelIds: [model] });
+    const view = selectedMeteringView(data.types, [model]);
+    for (const [title, keys] of view.charts) {
+      for (const key of keys) assert.ok(Number.isFinite(data.summary[key]), model + ': ' + key);
+      const totalKey = { '总消耗 Tokens': 'total', '输入 Tokens': 'input', '输出 Tokens': 'output', '缓存 Tokens': 'cacheReadTotal' }[title];
+      for (const row of [data.summary, ...data.buckets]) assert.equal(keys.reduce((sum, key) => sum + row[key], 0), row[totalKey], model + ': ' + title);
+    }
+  }
+  const ordinary = selectedUsageData({ ...settings, modelIds: ['DeepSeek-V4-Flash'] });
+  assert.equal(ordinary.summary.cacheReadTotal, undefined);
+  assert.equal(ordinary.summary.cacheCreate, undefined);
+  assert.equal(ordinary.summary.input, ordinary.summary.uncachedInput);
 });

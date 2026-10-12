@@ -1,0 +1,20 @@
+.us-metering .us-charts{grid-template-columns:repeat(2,minmax(0,1fr))}
+.us-metering .us-chart{position:relative;display:flex;flex-direction:column}
+.us-metering .us-chart-head{min-height:32px;padding-right:160px}
+.us-metering .unified-chart{margin-top:auto}
+.us-metering .unified-chart-tools{position:absolute;top:16px;right:18px;margin:0}
+.us-metering .unified-chart-tools>span{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.us-metering .us-subscription{display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px;margin-bottom:8px;padding:10px 12px;border:1px solid #e4eaf3;border-radius:6px;background:#fff;color:#71809b;font-size:12px}
+.us-subscription .filter-field{gap:8px}
+.us-subscription [data-slot=select-trigger]{height:34px;max-width:100%;font-size:12px}
+.us-quota-facts{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-left:auto}
+.us-quota-facts b{margin-left:6px;color:#263247;font-weight:600}
+@media(max-width:1100px){.us-quota-facts{margin-left:0}.us-metering .us-overview-groups{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.us-metering .us-charts{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:700px){.us-subscription .filter-field{width:100%;min-width:0}.us-subscription [data-slot=select-trigger]{min-width:0;flex:1}}
+.us-metering .us-overview-groups{row-gap:16px}
+.us-metering .us-overview-group:only-child{grid-column:1/-1}
+
+.us-billing-pending{margin:0 0 8px;padding:10px 12px;border:1px solid #e4eaf3;border-radius:6px;background:#fff;color:#71809b;font-size:12px;line-height:1.6}
+
+.us-metering .us-overview-group>small{display:block;margin-top:6px;color:#71809b;font-size:12px}

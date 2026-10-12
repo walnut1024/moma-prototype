@@ -8,7 +8,9 @@ export default {
     }
 
     const indexUrl = new URL(request.url);
-    indexUrl.pathname = "/index.html";
+    indexUrl.pathname = indexUrl.pathname.startsWith("/moma_5.12.0_estack/")
+      ? "/moma_5.12.0_estack/index.html"
+      : "/index.html";
     indexUrl.search = "";
     return env.ASSETS.fetch(new Request(indexUrl, request));
   },

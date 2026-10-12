@@ -9,7 +9,7 @@ import { individualOrders, individualOrderDisplay } from '../src/admin-v2/indivi
 const target = 'personal-demo-001';
 
 test('personal subscriptions use the frontend billing categories including Coding Plan', () => {
-  assert.deepEqual(Object.values(MODEL_ORDER_BILLING_TYPES), ['按Token用量计费', '按资源包计费', 'Token Plan订阅', 'Coding Plan订阅']);
+  assert.deepEqual(Object.values(MODEL_ORDER_BILLING_TYPES), ['按Token用量计费', 'Token Plan订阅', 'Coding Plan订阅']);
   assert.deepEqual(MODEL_ORDER_COLUMNS, ['类型', '模型服务商', '资费场景', '目录价', '订购状态', '订购时间', '到期时间', '操作']);
   const state = createAdminSeed();
   state.orders = state.orders.filter(order => order.tenantId !== target);
@@ -159,25 +159,27 @@ test('batch freeze is one checked transaction, scoped to the exact personal acco
   assert.equal(state.tenants.find(item => item.id === ids[0]).status, '正常');
 });
 
-test('personal subscriptions use owned order facts and keep unsupported billing types visible', async () => {
+test('personal subscriptions use owned order facts and hide retired billing types without deleting records', async () => {
   const { individualOrders } = await import('../src/admin-v2/individual-users.js');
   const state = createAdminSeed();
   state.orders = state.orders.filter(order => order.tenantId !== target);
   assert.equal(individualOrders(state, target).length, 0);
-  state.products.push({id:'package-example', billingType:'package', name:'示例资源包'});
+  state.products.push({id:'package-example', billingType:'package', name:'历史已停用商品'});
   state.orders.push({id:'payg-example',tenantId:target, productId:'product-payg'}, {id:'plan-example',tenantId:target, productId:'product-plan'}, {id:'package-example-order',tenantId:target, productId:'package-example'}, {id:'unknown-example',tenantId:target,productId:'missing'});
   const rows = individualOrders(state,target);
-  assert.deepEqual(rows.map(item => item.billingType), ['payg','plan','package',null]);
+  assert.deepEqual(rows.map(item => item.billingType), ['payg','plan',null]);
+  assert.ok(state.orders.some(order => order.id === 'package-example-order'));
+  assert.ok(state.products.some(product => product.id === 'package-example'));
   assert.ok(rows.every(item => item.order.tenantId === target));
   assert.ok(!rows.some(item => item.order.id === 'order-001'));
   assert.equal(rows[1].order.used, undefined);
 });
 
 
-test('personal prototype includes four billing types, lifecycle states and isolated owners', () => {
+test('personal prototype includes supported billing types, lifecycle states and isolated owners', () => {
   const state = createAdminSeed(), rows = individualOrders(state, target);
   assert.equal(rows.length, 24);
-  assert.deepEqual(new Set(rows.slice(0, 8).map(row => row.billingType)), new Set(['payg','package','plan','coding']));
+  assert.deepEqual(new Set(rows.slice(0, 8).map(row => row.billingType)), new Set(['payg','plan','coding']));
   assert.deepEqual(new Set(rows.map(row => row.order.status)), new Set(['已开通','待生效','已到期','已取消']));
   assert.ok(rows.every(row => row.order.demo && row.product.demo && row.order.modelIds.every(id => state.models.some(model => model.id === id))));
   assert.ok(rows.every(row => Date.parse(row.order.createdAt) <= Date.parse(row.order.startAt) && Date.parse(row.order.startAt) < Date.parse(row.order.endAt)));
@@ -192,12 +194,12 @@ test('restoring an existing browser adds missing personal sample orders without 
   const saved = state.orders.find(order => order.id === 'personal-order-demo-001-01');
   saved.status = '已取消'; saved.catalogPrice = '保留订单价格';
   state.orders = state.orders.filter(order => order.id !== 'personal-order-demo-001-02');
-  state.products = state.products.filter(product => product.id !== 'personal-product-demo-text');
+  state.products = state.products.filter(product => product.id !== 'personal-product-demo-token-basic');
   const restored = parseAdminState(JSON.stringify(state));
   assert.equal(individualOrders(restored,target).length, 24);
   assert.equal(restored.orders.find(order => order.id === saved.id).catalogPrice,'保留订单价格');
   assert.equal(restored.orders.find(order => order.id === saved.id).status,'已取消');
-  assert.ok(restored.products.some(product => product.id === 'personal-product-demo-text'));
+  assert.ok(restored.products.some(product => product.id === 'personal-product-demo-token-basic'));
   const again = parseAdminState(JSON.stringify(restored));
   assert.equal(again.orders.length,restored.orders.length);
   assert.deepEqual(again.orders,restored.orders);

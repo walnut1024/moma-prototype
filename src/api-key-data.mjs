@@ -6,8 +6,7 @@ export const apiKeySamples = [
       created: "2026-09-14 17:10:13",
       enabled: true,
       scope: "无限制",
-      quota: "0 / 10 K",
-      progress: 0,
+      quota: null,
       ip: "不限制",
     },
     {
@@ -17,8 +16,7 @@ export const apiKeySamples = [
       created: "2026-09-13 14:26:08",
       enabled: true,
       scope: "12 个模型",
-      quota: "3.2 K / 10 K",
-      progress: 32,
+      quota: { type: "日", limit: 10000, used: 3200 },
       ip: "2 个 IP",
     },
     {
@@ -28,8 +26,7 @@ export const apiKeySamples = [
       created: "2026-09-12 10:08:42",
       enabled: true,
       scope: "6 个模型",
-      quota: "1.8 K / 5 K",
-      progress: 36,
+      quota: { type: "日", limit: 5000, used: 1800 },
       ip: "不限制",
     },
     {
@@ -39,8 +36,7 @@ export const apiKeySamples = [
       created: "2026-09-10 16:45:19",
       enabled: false,
       scope: "无限制",
-      quota: "6.6 K / 20 K",
-      progress: 33,
+      quota: null,
       ip: "办公网段",
     },
     {
@@ -50,8 +46,7 @@ export const apiKeySamples = [
       created: "2026-09-08 09:32:56",
       enabled: true,
       scope: "4 个模型",
-      quota: "860 / 2 K",
-      progress: 43,
+      quota: null,
       ip: "不限制",
     },
     {
@@ -61,8 +56,7 @@ export const apiKeySamples = [
       created: "2026-09-05 11:20:31",
       enabled: true,
       scope: "3 个模型",
-      quota: "8.1 K / 10 K",
-      progress: 81,
+      quota: null,
       ip: "4 个 IP",
     },
     {
@@ -72,13 +66,12 @@ export const apiKeySamples = [
       created: "2026-09-01 18:05:47",
       enabled: false,
       scope: "8 个模型",
-      quota: "12 K / 50 K",
-      progress: 24,
+      quota: null,
       ip: "不限制",
     },
   ];
 
-export function apiKeyOptions(billing) {
- const index = ["按量付费", "Token Plan", "资源包"].indexOf(billing);
- return apiKeySamples.map(key => ({ ...key, id: `${key.id}-${index}`, key: `${key.key}-${index}` }));
+export function apiKeyOptions(billing, subscription) {
+ const scope = subscription?.id ?? ["按量付费", "Token Plan"].indexOf(billing);
+ return apiKeySamples.map((key, index) => ({ ...key, quota: key.quota ? { ...key.quota } : null, id: subscription ? `ak-${scope}-${index + 1}` : `${key.id}-${scope}`, key: `${key.key}-${scope}`, ...(subscription ? { subscriptionId: subscription.id, created: `${subscription.startAt} ${key.created.slice(11)}` } : {}) }));
 }

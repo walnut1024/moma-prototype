@@ -4,8 +4,8 @@ export const ADMIN_ROLES = ['运营人员', '运维人员', '平台管理员'];
 export const ADMIN_ROLE_LABELS = { 运营人员: '运营管理员', 运维人员: '运维管理员', 平台管理员: '系统管理员' };
 export const ROLE_DESCRIPTIONS = {
   平台管理员: '管理后台账号及平台业务配置。',
-  运营人员: '管理模型、客户及业务运营。',
-  运维人员: '管理供应服务、集群、部署和网关配置。',
+  运营人员: '管理模型、模型供应、客户及业务运营。',
+  运维人员: '管理调用分析、集群、部署和网关配置。',
 };
 
 export function generateAdminPassword() {

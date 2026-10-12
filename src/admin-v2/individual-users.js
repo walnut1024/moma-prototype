@@ -36,8 +36,6 @@ export function individualSeed() {
   const products = [
     { id: 'personal-product-demo-ds', name: 'DeepSeek 按量服务', billingType: 'payg', modelIds: ['model-1'], tariffScenario: '输入 Token\n输出 Token', catalogPrice: '2 元/百万 Token\n4 元/百万 Token' },
     { id: 'personal-product-demo-glm', name: 'GLM 按量服务', billingType: 'payg', modelIds: ['model-2'], tariffScenario: '输入 Token\n输出 Token', catalogPrice: '3 元/百万 Token\n6 元/百万 Token' },
-    { id: 'personal-product-demo-text', name: '通用模型资源包 · 1000万 Token', billingType: 'package', modelIds: ['model-1', 'model-2'], tariffScenario: '输入及输出 Token', catalogPrice: '99 元/包', entitlement: 10000000, quotaUnit: 'Token' },
-    { id: 'personal-product-demo-image', name: '图像生成资源包 · 1000张', billingType: 'package', modelIds: ['model-12'], tariffScenario: '图像生成', catalogPrice: '129 元/包', entitlement: 1000, quotaUnit: '张' },
     { id: 'personal-product-demo-token-basic', name: 'Token Plan · 标准版', billingType: 'plan', modelIds: ['model-1', 'model-2'], tariffScenario: '月度 Token 额度', catalogPrice: '699 元/月', entitlement: 100000000, quotaUnit: 'Token' },
     { id: 'personal-product-demo-token-pro', name: 'Token Plan · 专业版', billingType: 'plan', modelIds: ['model-1', 'model-2', 'model-7'], tariffScenario: '月度 Token 额度', catalogPrice: '1699 元/月', entitlement: 300000000, quotaUnit: 'Token' },
     { id: 'personal-product-demo-coding-lite', name: 'Coding Plan · Lite', billingType: 'coding', modelIds: ['model-1', 'model-2'], tariffScenario: '月度编程请求额度', catalogPrice: '99 元/月', entitlement: 600, quotaUnit: '次' },
@@ -49,15 +47,15 @@ export function individualSeed() {
     const createdAt = `2026-10-${period === 'future' ? '03' : '01'}T09:00:00+08:00`;
     orders.push({ id: `personal-order-demo-${tenantId.slice(-3)}-${String(sequence).padStart(2, '0')}`, orderNo: `ORD-P-${tenantId.slice(-3)}-2026${month}-${String(sequence).padStart(2, '0')}`, tenantId, productId: product.id, billingType: product.billingType, providerName: product.providerName, catalogPrice: product.catalogPrice, tariffScenario: product.tariffScenario, modelIds: product.modelIds, entitlement: product.entitlement, quotaUnit: product.quotaUnit, used, status, createdAt, updatedAt: createdAt, startAt: `2026-${period === 'future' ? '11' : '10'}-01T10:00:00+08:00`, endAt: period === 'past' ? '2026-10-03T23:59:59+08:00' : `2026-${month}-${month === '11' ? '30' : '31'}T23:59:59+08:00`, demo: true });
   };
-  // Four billing types appear together on the first page; history exercises pagination.
-  const firstPage = [0, 2, 4, 7, 1, 3, 5, 6];
+  // Supported billing types share the first page; history exercises pagination.
+  const firstPage = [0, 2, 4, 5, 1, 3, 2, 4];
   firstPage.forEach((index, sequence) => addOrder('personal-demo-001', products[index], sequence + 1, 'current', '已开通', products[index].entitlement == null ? undefined : Math.round(products[index].entitlement * [0.25, 0.48, 0, 0.72][sequence % 4])));
   for (let index = 0; index < 16; index++) {
     const product = products[index % products.length], future = index < 4, cancelled = index >= 12;
     addOrder('personal-demo-001', product, index + 9, future ? 'future' : 'past', future ? '待生效' : cancelled ? '已取消' : '已到期', product.entitlement == null ? undefined : future || cancelled ? 0 : product.entitlement);
   }
-  addOrder('personal-demo-002', products[6], 1, 'current', '已开通', 126);
-  addOrder('personal-demo-002', products[7], 2, 'past', '已到期', 1200);
+  addOrder('personal-demo-002', products[4], 1, 'current', '已开通', 126);
+  addOrder('personal-demo-002', products[5], 2, 'past', '已到期', 1200);
   addOrder('personal-demo-003', products[2], 1, 'current', '已开通', 2800000);
   addOrder('personal-demo-003', products[3], 2, 'future', '待生效', 0);
   return { users, tenants, projects, apiKeys, grants, products, orders };
@@ -106,9 +104,10 @@ export function individualOrders(state, tenantId) {
   return state.orders.filter(order => order.tenantId === tenantId).map(order => {
     const product = state.products.find(item => item.id === order.productId);
     const explicit = order.billingType || product?.billingType;
+    if (explicit === 'package') return null;
     const billingType = explicit ? Object.hasOwn(individualBillingTypes, explicit) ? explicit : null : product?.billingMode === '按量付费' ? 'payg' : product?.code?.startsWith('TOKEN-') ? 'plan' : product?.code?.startsWith('CODING-') ? 'coding' : null;
     return { order, product, billingType };
-  });
+  }).filter(Boolean);
 }
 
 export function individualOrderDisplay(state, { order, product, billingType }) {
@@ -123,7 +122,7 @@ export function individualOrderDisplay(state, { order, product, billingType }) {
   return {
     name: billingType === 'payg' && modelIds.length ? modelNames : product?.name || '商品未记录',
     modelNames,
-    type: order.modelType || product?.modelType || ({ package: '资源包', plan: 'Token Plan', coding: 'Coding Plan' })[billingType] || [...new Set(models.map(model => modelTypes[model?.type] || '未记录'))].join('、') || '未记录',
+    type: order.modelType || product?.modelType || ({ plan: 'Token Plan', coding: 'Coding Plan' })[billingType] || [...new Set(models.map(model => modelTypes[model?.type] || '未记录'))].join('、') || '未记录',
     provider: order.providerName || product?.providerName || state.providers.find(provider => provider.id === providerId)?.name || '未记录',
     tariff: order.tariffScenario || product?.tariffScenario || '未记录',
     catalogPrice,

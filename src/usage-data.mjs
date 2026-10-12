@@ -1,48 +1,14 @@
 import { apiKeyOptions } from './api-key-data.mjs';
+import { tokenPlanSubscriptions } from './token-plan-data.mjs';
 import { shanghaiDate } from './call-log-data.mjs';
 
-export const usageModels = {
-  文本模型: ['DeepSeek-V4-Pro', 'DeepSeek-V4-Flash', 'DeepSeek-V4-Flash-0731', 'Qwen3.7-Max', 'Qwen3-32B', 'Qwen3.5-27B', 'Qwen3.5-9B', 'Qwen3.5-35B-A3B', 'Qwen3.5-397B-A17B', 'GLM-5.1', 'GLM-5.2', 'Kimi-K2.6', 'Kimi-K2.7-Code', 'Kimi-K3', 'MiniMax-M3', 'qwen3-max', 'qwen3.5-flash', 'qwen3.5-plus', 'qwen3.6-flash', 'qwen3.6-plus', 'qwen3.7-plus'],
-  视觉理解: ['Qwen-VL', 'GLM-VL'],
-  多模态模型: ['Qwen-Omni', 'GLM-Omni'],
-  图片生成: ['Qwen-Image', 'Seedream', 'HY-Image'],
-  视频生成: ['MiniMax-H3', 'Wan3.0-Video', 'Seedance-2.0'],
-  语音合成: ['Qwen-Audio-TTS'],
-  语音识别: ['Qwen-Audio-ASR-Flash'],
-  向量模型: ['BGE-M3'],
-  重排模型: ['BGE-Reranker-V2-M3'],
-};
-const tier32 = ['0＜输入长度≤32K', '32K＜输入长度≤128K', '128K＜输入长度≤252K'];
-const tier128 = ['0＜输入长度≤128K', '128K＜输入长度≤256K'];
-const tier256 = ['0＜输入长度≤256K', '256K＜输入长度≤1M'];
-const tier1M = ['0＜输入长度≤128K', '128K＜输入长度≤256K', '256K＜输入长度≤1M'];
-export const languageMetering = {
-  'DeepSeek-V4-Pro': { cache: true },
-  'DeepSeek-V4-Flash-0731': { cache: true },
-  'Qwen3.7-Max': { cache: true, explicit: true },
-  'Qwen3-32B': { modes: true },
-  'Qwen3.5-35B-A3B': { tiers: tier128, modes: true },
-  'Qwen3.5-397B-A17B': { tiers: tier128 },
-  'GLM-5.1': { tiers: ['0＜输入长度≤32K', '32K＜输入长度≤200K'], cache: true },
-  'GLM-5.2': { cache: true },
-  'Kimi-K2.6': { cache: true, cachedInput: true },
-  'Kimi-K2.7-Code': { cache: true, cachedInput: true },
-  'Kimi-K3': { cache: true, cachedInput: true },
-  'MiniMax-M3': { tiers: ['0＜输入长度≤512K', '512K＜输入长度≤1M'], cache: true },
-  'qwen3-max': { tiers: tier32, cache: true, explicit: true, cachedInput: true },
-  'qwen3.5-flash': { tiers: tier1M, explicit: true },
-  'qwen3.5-plus': { tiers: tier1M, explicit: true },
-  'qwen3.6-flash': { tiers: tier256, explicit: true },
-  'qwen3.6-plus': { tiers: tier256, explicit: true },
-  'qwen3.7-plus': { tiers: tier256, cache: true, explicit: true, cachedInput: true },
-};
+import { usageModels, billingUsageModels, languageMetering, modelBillingItems } from './model-billing-data.mjs';
+export { usageModels, billingUsageModels, languageMetering };
 export const usageModelGroups = [
   { id: '语言模型', name: '语言模型', types: ['文本模型'] },
   { id: '多模态理解', name: '多模态理解', types: ['多模态模型'] },
   { id: '视觉模型', name: '视觉模型', types: ['视觉理解', '图片生成', '视频生成'] },
   { id: '语音模型', name: '语音模型', types: ['语音合成', '语音识别'] },
-  { id: '向量模型', name: '向量模型', types: ['向量模型'] },
-  { id: '排序模型', name: '排序模型', types: ['重排模型'] },
 ];
 export const fields = {
   successRate: ['成功率', '%', '成功次数 ÷ 请求次数。'],
@@ -54,7 +20,7 @@ export const fields = {
   average: ['平均单次请求 Token', 'Token/次', '已确认 Token 总量 ÷ 有 Token 计量的请求数，包含这些模型的失败请求。'],
   paidInput: ['付费输入 Token', 'Token', '服务商记录的需计费输入 Token；缓存折扣不等于免费。'],
   paidOutput: ['付费输出 Token', 'Token', '需计费的输出 Token，包含付费思考及非思考输出。'],
-  cacheCreate: ['显式缓存创建', 'Token', '显式写入缓存的 Token，不能与缓存读取量相加当作输入总量。'],
+  cacheCreate: ['缓存写入 Token', 'Token', '已记录的显式缓存写入量，按模型的缓存写入计费项统计。'],
   cacheRead: ['显式缓存命中', 'Token', '读取显式缓存的输入 Token，已包含在输入总量中。'],
   cacheRate: ['隐式缓存命中率', '%', '隐式缓存命中 Token ÷ 输入 Token。'],
   explicitRate: ['显式缓存命中率', '%', '显式缓存命中 Token ÷ 输入 Token，与隐式缓存分别统计。'],
@@ -67,7 +33,10 @@ export const fields = {
   inputMinute: ['每分钟输入 Token', 'Token/分钟', '时间桶内输入 Token ÷ 已观测分钟数，包含无请求分钟。'],
   cacheReadMinute: ['每分钟读缓存 Token', 'Token/分钟', '时间桶内隐式与显式缓存命中 Token 之和 ÷ 已观测分钟数；命中量已包含在输入 Token 中。'],
   cacheCreateMinute: ['每分钟写入缓存 Token', 'Token/分钟', '时间桶内已记录的显式缓存写入 Token ÷ 已观测分钟数；未记录的隐式写入不计入。'],
-  cacheReadTotal: ['读缓存总 Token', 'Token', '时间桶内隐式与显式缓存命中 Token 之和，已包含在输入 Token 中。'],
+  cacheReadTotal: ['缓存命中 Token', 'Token', '隐式与显式缓存命中 Token 之和，已包含在输入 Token 中，不重复相加。'],
+  uncachedInput: ['输入 Token（不含缓存）', 'Token', '输入 Token 减去已记录的缓存读取 Token，与缓存命中输入互斥。'],
+  thinkingModeOutput: ['思考模式输出', 'Token', '思考模式请求的输出 Token，按模型的模式计费项统计。'],
+  plainModeOutput: ['非思考模式输出', 'Token', '非思考模式请求的输出 Token，与思考模式输出互斥。'],
   explicitReadMinute: ['每分钟读显式缓存 Token', 'Token/分钟', '时间桶内显式缓存命中 Token ÷ 已观测分钟数。'],
   inputPerRequest: ['平均输入 Token（TPR）', 'Token/次', '本页 TPR 指 Tokens Per Request；已确认输入 Token ÷ 有输入 Token 计量的请求数，包含这些模型的失败请求。'],
   outputPerRequest: ['平均输出 Token（TPR）', 'Token/次', '本页 TPR 指 Tokens Per Request；已确认输出 Token ÷ 有输出 Token 计量的请求数，包含这些模型的失败请求。'],
@@ -102,34 +71,14 @@ export const fields = {
   latency: ['平均响应时延', '秒', '成功请求总耗时 ÷ 成功次数；异步任务按提交到完成计，不是音视频内容时长。'],
 };
 const calls = ['调用次数趋势', ['success', 'failure']];
-const latency = ['响应时延', ['latency'], { variants: { 平均: ['latency'], 最小: ['latencyMin'], 最大: ['latencyMax'] } }];
-const throughput = ['吞吐趋势', ['rpm'], { variants: { RPM: ['rpm'], TPM: ['tpm'] } }];
 const status = ['调用状态分布', ['status2', 'status4', 'status5', 'statusOther'], { defaultType: 'bar', stacked: true }];
-const common = [latency, throughput, status];
-const tokenSummary = ['total', 'input', 'output', 'average'];
-const llm = { summary: tokenSummary, charts: [calls,
-  ['Token 用量趋势', ['input', 'output', 'cache'], { variants: { 总量: ['input', 'output', 'cache'], 付费: ['paidInput', 'paidOutput'] } }], ...common,
-  ['缓存 Token 趋势', ['cache', 'cacheCreate', 'cacheRead']],
-  ['缓存命中率', ['cacheRate', 'explicitRate']],
-  ['付费输出构成', ['thinking', 'nonThinking'], { defaultType: 'bar', stacked: true }],
-  ['首 Token 时延', ['ttft'], { variants: { 平均: ['ttft'], 最小: ['ttftMin'], 最大: ['ttftMax'] } }],
-  ['输出吞吐', ['outputMinute'], { variants: { 每分钟: ['outputMinute'], 每秒: ['outputSecond'] } }],
-] };
-const inputOnly = { summary: ['input', 'average'], charts: [calls, ['输入 Token 趋势', ['input']], ...common] };
-const nonToken = (title, key) => ({ summary: [key, 'latency'], charts: [calls, [title, [key]], latency, ['吞吐趋势', ['rpm']], status] });
-export const usageViews = {
-  文本模型: llm,
-  视觉理解: llm,
-  多模态模型: { summary: tokenSummary, charts: [calls, ['Token 用量趋势', ['input', 'output']], ...common, ['输入模态用量', ['textIn', 'imageIn', 'videoIn', 'audioIn']], ['输出模态用量', ['textOut', 'audioOut']]] },
-  图片生成: nonToken('图片生成趋势', 'images'),
-  视频生成: { summary: ['metered', 'average'], charts: [calls, ['视频计量趋势', ['videoNormal', 'video1080', 'noVideoNormal', 'noVideo1080']], ...common] },
-  语音合成: nonToken('合成字符数趋势', 'characters'),
-  语音识别: nonToken('识别音频时长趋势', 'audio'),
-  向量模型: inputOnly,
-  重排模型: inputOnly,
-};
+export function usageKeyOptions(billing, subscriptionId = null) {
+  if (billing !== 'Token Plan') return apiKeyOptions(billing);
+  return tokenPlanSubscriptions.filter(plan => subscriptionId === null || plan.id === subscriptionId)
+    .flatMap(plan => apiKeyOptions(billing, plan));
+}
 export function usageKeys(billing) {
-  return apiKeyOptions(billing).map(key => key.id);
+  return usageKeyOptions(billing).map(key => key.id);
 }
 export function dateRange(days, now = new Date()) {
   const end = shanghaiDate(now);
@@ -147,7 +96,7 @@ function peakTpm(minuteMaps) {
   for (const minutes of minuteMaps) for (const [minute, tokens] of minutes) totals.set(minute, (totals.get(minute) || 0) + tokens);
   return [...totals.values()].reduce((peak, tokens) => Math.max(peak, tokens), 0);
 }
-// ponytail: fixed demo proportions; replace with request-level metering facts when connected.
+// shortcut: fixed demo proportions; replace with request-level metering facts when connected.
 function splitTokens(total, count) {
   const weights = count === 2 ? [.84, .16] : [.72, .2, .08];
   let assigned = 0;
@@ -173,14 +122,18 @@ function addLanguageBreakdown(sample, profile) {
   const count = profile.tiers.length;
   const input = splitTokens(sample.input, count);
   const output = splitTokens(sample.output, count);
-  const cache = cacheTotal ? splitTokens(cacheTotal, count) : [];
+  const cache = sample.cache !== undefined || sample.cacheRead !== undefined ? splitTokens(cacheTotal, count) : [];
   const created = sample.cacheCreate == null ? [] : splitTokens(sample.cacheCreate, count);
   const explicit = sample.cacheRead == null ? [] : splitTokens(sample.cacheRead, count);
   const cachedInput = profile.cachedInput ? splitTokens(profile.explicit ? sample.cache : cacheTotal, count) : [];
   for (let i = 0; i < count; i++) {
     sample[`tier${i}Input`] = input[i];
     sample[`tier${i}Output`] = output[i];
-    if (cache.length) sample[`tier${i}Cache`] = cache[i];
+    if (cache.length) {
+      sample[`tier${i}Cache`] = cache[i];
+      sample[`tier${i}UncachedInput`] = input[i] - cache[i];
+      if (sample.cache !== undefined) sample[`tier${i}Implicit`] = cache[i] - (explicit[i] ?? 0);
+    }
     if (created.length) sample[`tier${i}Create`] = created[i];
     if (explicit.length) sample[`tier${i}Explicit`] = explicit[i];
     if (cachedInput.length) sample[`tier${i}CachedInput`] = cachedInput[i];
@@ -214,10 +167,12 @@ function derived(row) {
   result.rpm = row.observedMinutes ? row.requests / row.observedMinutes : null;
   const tokens = row.total ?? row.metered ?? row.input;
   if (tokens !== undefined) {
+    result.total = tokens;
     result.average = row.requests ? tokens / row.requests : null;
     result.tpm = row.observedMinutes ? tokens / row.observedMinutes : null;
   }
   if (row.input !== undefined) {
+    result.uncachedInput = row.input - ((row.cache ?? 0) + (row.cacheRead ?? 0));
     result.inputMinute = row.observedMinutes ? row.input / row.observedMinutes : null;
     result.inputPerRequest = row.requests ? row.input / row.requests : null;
   }
@@ -240,14 +195,16 @@ function derived(row) {
   return result;
 }
 // Deterministic five-minute prototype samples. Coarser graphs aggregate the same samples.
-export function usageData({ billing, type, dimension = 'Model ID', targets = [], modelIds = null, apiKeyIds = null, start, end, minutes = 60, now = new Date(), source = 'standard', apiKeyId = null }) {
+export function usageData({ billing, type, dimension = 'Model ID', targets = [], modelIds = null, apiKeyIds = null, start, end, minutes = 60, now = new Date(), source = 'standard', apiKeyId = null, subscriptionId = null, catalog = usageModels }) {
   const begin = Date.parse(`${start}T00:00:00+08:00`);
   const availableUntil = now.getTime() - (source === 'aicc' ? 3 * 3600000 : 0);
   const finish = Math.min(Date.parse(`${end}T00:00:00+08:00`) + 86400000, availableUntil);
-  if (!usageModels[type] || ![5, 10, 60, 1440].includes(minutes) || !Number.isFinite(begin) || !Number.isFinite(finish) || begin >= finish || finish - begin > 31 * 86400000) return { buckets: [], summary: derived(empty()), minuteTokens: new Map(), availableUntil };
-  const models = usageModels[type];
-  const keys = usageKeys(billing);
-  const sourceFactor = { 按量付费: 1, 'Token Plan': .61, 资源包: .38 }[billing] * (source === 'aicc' ? .43 : 1);
+  if (!catalog[type] || ![5, 10, 60, 1440].includes(minutes) || !Number.isFinite(begin) || !Number.isFinite(finish) || begin >= finish || finish - begin > 31 * 86400000) return { buckets: [], summary: derived(empty()), minuteTokens: new Map(), availableUntil };
+  const models = catalog[type];
+  const keyOptions = usageKeyOptions(billing);
+  const keys = keyOptions.map(key => key.id);
+  const subscriptions = new Map(tokenPlanSubscriptions.map(plan => [plan.id, plan]));
+  const sourceFactor = { 按量付费: 1, 'Token Plan': .61 }[billing] * (source === 'aicc' ? .43 : 1);
   const buckets = new Map();
   const modelBuckets = new Map();
   const minuteTokens = new Map();
@@ -256,6 +213,12 @@ export function usageData({ billing, type, dimension = 'Model ID', targets = [],
     const row = empty();
     row.observedMinutes = 5;
     models.forEach((model, m) => keys.forEach((key, k) => {
+      const credential = keyOptions[k];
+      if (subscriptionId !== null && credential.subscriptionId !== subscriptionId) return;
+      if (credential.subscriptionId) {
+        const plan = subscriptions.get(credential.subscriptionId);
+        if (time < Date.parse(plan.startAt + 'T00:00:00+08:00') || time >= Date.parse(plan.endAt + 'T00:00:00+08:00')) return;
+      }
       if (apiKeyId !== null && apiKeyId !== key) return;
       if (targets.length && !targets.includes(dimension === 'Model ID' ? model : key)) return;
       if (modelIds !== null && !modelIds.includes(model)) return;
@@ -318,14 +281,19 @@ export function usageData({ billing, type, dimension = 'Model ID', targets = [],
     add(bucket, row);
     buckets.set(bucketTime, bucket);
   }
+  if (buckets.size) {
+    const ids = models.filter(id => (modelIds === null || modelIds.includes(id)) && modelBillingItems[id]);
+    for (const item of new Set(ids.flatMap(id => modelBillingItems[id]))) summary[item] ??= 0;
+    for (const bucket of buckets.values()) for (const item of new Set(ids.flatMap(id => modelBillingItems[id]))) bucket[item] ??= 0;
+  }
   const summaryResult = derived(summary);
   summaryResult.peakTpm = peakTpm([minuteTokens]);
   return { buckets: [...buckets.values()].map(bucket => ({ ...derived(bucket), modelUsage: Object.fromEntries([...(modelBuckets.get(bucket.time) || [])].map(([model, row]) => [model, derived({ ...row, observedMinutes: bucket.observedMinutes, modelNames: new Set([model]), latencySamples: [] })])) })), summary: summaryResult, minuteTokens, availableUntil };
 }
-export function selectedUsageTypes(groups, modelIds = null) {
+export function selectedUsageTypes(groups, modelIds = null, catalog = usageModels) {
   return usageModelGroups.filter(group => groups === null || groups.includes(group.id))
     .flatMap(group => group.types)
-    .filter(type => modelIds === null || usageModels[type].some(id => modelIds.includes(id)));
+    .filter(type => modelIds === null || catalog[type].some(id => modelIds.includes(id)));
 }
 function combineSelectedUsage(rows) {
   const result = { requests: 0, success: 0, failure: 0, models: 0, observedMinutes: 0 };
@@ -337,7 +305,7 @@ function combineSelectedUsage(rows) {
     if (total !== undefined) { result.total = (result.total || 0) + total; tokenRequests += row.requests; }
     if (row.input !== undefined) inputRequests += row.requests;
     if (row.output !== undefined) outputRequests += row.requests;
-    for (const key of ['input', 'output', 'paidInput', 'paidOutput', 'cache', 'cacheRead', 'cacheCreate', 'images', 'audio', 'characters', 'cachedInput', 'uncachedInput', 'thinkingModeOutput', 'plainModeOutput'])
+    for (const key of ['input', 'output', 'paidInput', 'paidOutput', 'cache', 'cacheRead', 'cacheReadTotal', 'cacheCreate', 'images', 'audio', 'characters', 'cachedInput', 'thinkingModeOutput', 'plainModeOutput', 'textIn', 'imageIn', 'videoIn', 'audioIn', 'textOut', 'audioOut', 'videoNormal', 'video1080', 'noVideoNormal', 'noVideo1080', 'metered'])
       if (row[key] !== undefined) result[key] = (result[key] || 0) + row[key];
     for (const [key, value] of Object.entries(row))
       if (/^tier\d/.test(key)) result[key] = (result[key] || 0) + value;
@@ -347,6 +315,7 @@ function combineSelectedUsage(rows) {
     result.tpm = result.observedMinutes ? result.total / result.observedMinutes : null;
   }
   if (result.input !== undefined) {
+    result.uncachedInput = result.input - ((result.cache ?? 0) + (result.cacheRead ?? 0));
     result.inputMinute = result.observedMinutes ? result.input / result.observedMinutes : null;
     result.inputPerRequest = inputRequests ? result.input / inputRequests : null;
   }
@@ -362,80 +331,108 @@ function combineSelectedUsage(rows) {
   }
   return result;
 }
-export function selectedUsageData({ groups = ['语言模型'], modelIds = null, ...options }) {
-  const types = selectedUsageTypes(groups, modelIds);
-  const results = types.map(type => usageData({ ...options, type, dimension: 'Model ID', targets: modelIds === null ? [] : usageModels[type].filter(id => modelIds.includes(id)) }));
+export function selectedUsageData({ groups = ['语言模型'], modelIds = null, catalog = usageModels, ...options }) {
+  const types = selectedUsageTypes(groups, modelIds, catalog);
+  const results = types.map(type => usageData({ ...options, minutes: Math.max(60, options.minutes ?? 60), type, catalog, modelIds: catalog[type].filter(id => modelBillingItems[id] && (modelIds === null || modelIds.includes(id))) }));
   const times = [...new Set(results.flatMap(result => result.buckets.map(row => row.time)))].sort((a, b) => a - b);
   const summary = combineSelectedUsage(results.map(result => result.summary));
   summary.peakTpm = peakTpm(results.map(result => result.minuteTokens));
-  return { types, summary, buckets: times.map(time => {
+  const data = { types, summary, buckets: times.map(time => {
     const rows = results.flatMap(result => result.buckets.filter(row => row.time === time));
     return { time, ...combineSelectedUsage(rows), modelUsage: Object.assign({}, ...rows.map(row => row.modelUsage)) };
   }), availableUntil: results[0]?.availableUntil ?? options.now.getTime() };
+  // No calls in an observed bucket means zero for every applicable billing split.
+  const view = selectedMeteringView(types, modelIds, catalog);
+  const keys = [...view.summary, ...view.exportKeys];
+  if (data.buckets.length) for (const row of [summary, ...data.buckets]) {
+    if (row.requests === 0) for (const key of keys) row[key] ??= 0;
+  }
+  return data;
 }
 function languageSeries(model, title) {
   const profile = languageMetering[model] ?? {};
   const tiers = profile.tiers ?? [];
   const shortTier = tier => tier.replace('0＜输入长度≤', '≤').replace('＜输入长度≤', '–');
-  const byTier = (suffix, label) => tiers.map((tier, index) => ({ key: `tier${index}${suffix}`, label: shortTier(tier), fullLabel: `${tier} · ${label}` }));
-  if (title === '输入 Token 数') {
+  const byTier = (suffix, label) => tiers.map((tier, index) => ({ key: 'tier' + index + suffix, label: shortTier(tier) + ' · ' + label, fullLabel: tier + ' · ' + label }));
+  if (title === '输入 Tokens') {
     if (tiers.length) return byTier('Input', '输入');
-    if (profile.cachedInput) return [{ key: 'uncachedInput', label: '缓存未命中输入' }, { key: 'cachedInput', label: '缓存命中输入' }];
   }
-  if (title === '输出 Token 数') {
+  if (title === '输出 Tokens') {
     if (tiers.length && profile.modes) return tiers.flatMap((tier, index) => [
-      { key: `tier${index}ThinkingOutput`, label: `${shortTier(tier)}·思考`, fullLabel: `${tier} · 思考模式输出` },
-      { key: `tier${index}PlainOutput`, label: `${shortTier(tier)}·非思考`, fullLabel: `${tier} · 非思考模式输出` },
+      { key: 'tier' + index + 'ThinkingOutput', label: shortTier(tier) + ' · 思考模式', fullLabel: tier + ' · 思考模式输出' },
+      { key: 'tier' + index + 'PlainOutput', label: shortTier(tier) + ' · 非思考模式', fullLabel: tier + ' · 非思考模式输出' },
     ]);
     if (tiers.length) return byTier('Output', '输出');
     if (profile.modes) return [{ key: 'thinkingModeOutput', label: '思考模式输出' }, { key: 'plainModeOutput', label: '非思考模式输出' }];
   }
-  if (title === '读缓存总 Token 数' && tiers.length) return byTier(profile.cachedInput ? 'CachedInput' : 'Cache', profile.cachedInput ? '输入缓存命中' : '缓存读取');
-  if (title === '写入缓存总 Token 数' && tiers.length) return byTier('Create', '显式缓存创建');
-  if (title === '区间内命中显式缓存总 Token 数' && tiers.length) return byTier('Explicit', '显式缓存命中');
+  if (title === '缓存 Tokens' && tiers.length) return [
+    ...(profile.cache ? byTier(profile.explicit ? 'Implicit' : 'Cache', '隐式缓存读取') : []),
+    ...(profile.explicit ? byTier('Explicit', '显式缓存读取') : []),
+  ];
+  if (title === '缓存写入 Token' && tiers.length) return byTier('Create', '显式缓存写入');
   return null;
 }
-export function selectedMeteringView(types, modelIds = null) {
-  const tokenKeys = new Set();
-  for (const type of types) {
-    if (['文本模型', '视觉理解'].includes(type)) meteringView('文本模型').charts.forEach(([, [key]]) => tokenKeys.add(key));
-    else if (type === '多模态模型') ['total', 'input', 'output', 'tpm', 'inputMinute', 'outputMinute', 'inputPerRequest', 'outputPerRequest'].forEach(key => tokenKeys.add(key));
-    else if (['向量模型', '重排模型'].includes(type)) ['total', 'input', 'tpm', 'inputMinute', 'inputPerRequest'].forEach(key => tokenKeys.add(key));
-    else if (type === '视频生成') ['total', 'tpm'].forEach(key => tokenKeys.add(key));
+export function selectedMeteringView(types, modelIds = null, catalog = usageModels) {
+  const models = types.flatMap(type => catalog[type] || []).filter(id => modelIds === null || modelIds.includes(id));
+  const pending = models.filter(id => !modelBillingItems[id]);
+  const configured = models.filter(id => modelBillingItems[id]);
+  const charts = [], summary = [], applicable = {}, hints = {}, exportKeys = [], exportLabels = {};
+  const cache = configured.some(id => modelBillingItems[id].includes('cacheReadTotal'));
+  for (const item of ['input', 'output', 'cacheReadTotal', 'cacheCreate', 'metered', 'images', 'audio', 'characters']) {
+    const ids = configured.filter(id => modelBillingItems[id].includes(item));
+    if (!ids.length) continue;
+    const key = item;
+    const title = ({ input: '输入 Tokens', output: '输出 Tokens', cacheReadTotal: '缓存 Tokens', images: '图片生成用量', audio: '语音识别用量', characters: '语音合成用量', metered: '视频生成 Token' })[key] ?? fields[key][0];
+    exportKeys.push(key);
+    let series = [{ key, label: title }];
+    if (ids.length === 1 && configured.length === 1) {
+      series = languageSeries(ids[0], title) ?? series;
+      if (types.includes('多模态模型') && !cache && ['input', 'output'].includes(item)) {
+        series = (item === 'input' ? ['textIn', 'imageIn', 'videoIn', 'audioIn'] : ['textOut', 'audioOut']).map(key => ({ key, label: fields[key][0] }));
+      }
+      if (item === 'cacheReadTotal') series = languageSeries(ids[0], title) ?? [
+        ...(languageMetering[ids[0]]?.cache ? [{ key: 'cache', label: '隐式缓存命中' }] : []),
+        ...(languageMetering[ids[0]]?.explicit ? [{ key: 'cacheRead', label: '显式缓存命中' }] : []),
+      ];
+      if (!series.length) series = [{ key, label: title }];
+      if (item === 'metered') series = ['videoNormal', 'video1080', 'noVideoNormal', 'noVideo1080'].map(key => ({ key, label: fields[key][0] }));
+    }
+    exportKeys.push(...series.map(part => part.key));
+    for (const part of series) exportLabels[part.key] = part.fullLabel ?? part.label;
+    if (item === 'cacheCreate') continue;
+    summary.push(key);
+    applicable[key] = ids;
+    const note = item === 'input' ? '模型接收的 Token 数，包含缓存命中。' : item === 'output' ? '模型生成的 Token 数。' : item === 'cacheReadTotal' ? '命中的缓存 Token 数，已包含在输入中。' : fields[key][2];
+    hints[key] = note;
+    charts.push([title, [key], { series: [{ key, label: title }], note, models: ids }]);
   }
-  const extras = [['图片生成', 'images', '图片生成量'], ['语音识别', 'audio', '识别音频时长'], ['语音合成', 'characters', '合成字符数']].filter(([type]) => types.includes(type));
-  const singleLanguageModel = types.length === 1 && types[0] === '文本模型' && modelIds?.length === 1 ? modelIds[0] : null;
-  const profile = singleLanguageModel ? languageMetering[singleLanguageModel] ?? {} : null;
-  const charts = meteringView('文本模型').charts.filter(([, [key]]) => tokenKeys.has(key)).filter(([, [key]]) => {
-    if (!profile) return true;
-    if (key === 'cacheReadTotal' && profile.cachedInput && !profile.tiers) return false;
-    if (['cacheReadMinute', 'cacheReadTotal'].includes(key)) return !!profile.cache;
-    if (['cacheCreateMinute', 'cacheCreate', 'explicitReadMinute', 'cacheRead'].includes(key)) return !!profile.explicit;
-    return true;
-  }).map(([title, keys, options]) => {
-    if (!profile) return [title, keys, options];
-    const series = languageSeries(singleLanguageModel, title);
-    return series ? [title === '读缓存总 Token 数' && profile.cachedInput && profile.tiers ? '输入缓存命中 Token 数' : title, series.map(item => item.key), { series }] : [title, keys, options];
-  });
-  return { summary: tokenKeys.size ? ['total', 'input', 'output', 'average'] : extras.map(([, key]) => key), nonTokenSummary: extras.map(([, key]) => key), charts: [...charts, ...extras.map(([, key, title]) => [title, [key]])] };
+  const tokenModels = configured.filter(id => modelBillingItems[id].some(item => ['input', 'output', 'metered'].includes(item)));
+  if (tokenModels.length) {
+    summary.unshift('total');
+    applicable.total = tokenModels;
+    hints.total = tokenModels.some(id => modelBillingItems[id].includes('metered')) ? '模型计量的 Token 总量，缓存不重复计入。' : '输入与输出之和，缓存不重复计入。';
+    charts.unshift(['总消耗 Tokens', ['total'], { series: [{ key: 'total', label: '总消耗 Tokens' }], note: hints.total, models: tokenModels }]);
+  }
+  return { summary, charts, applicable, hints, pending, exportKeys, exportLabels };
 }
 export function usageNumber(value) {
   if (value === null || value === undefined) return '—';
-  if (Math.abs(value) >= 1e9) return `${(value / 1e9).toFixed(2)} B`;
-  if (Math.abs(value) >= 1e6) return `${(value / 1e6).toFixed(2)} M`;
+  if (Math.abs(value) >= 1e8) return `${(value / 1e8).toFixed(2)} 亿`;
+  if (Math.abs(value) >= 1e4) return `${(value / 1e4).toFixed(2)} w`;
   return value.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
 }
 export function bucketLabel(time) {
   return new Date(time + 8 * 3600000).toISOString().slice(5, 16).replace('T', ' ');
 }
-export function usageCSV(data, view, billing, type) {
-  const columns = [...new Set([...view.summary, ...view.charts.flatMap(([, keys, options]) => [...keys, ...Object.values(options?.variants ?? {}).flat()])])];
-  const labels = Object.fromEntries(view.charts.flatMap(([, , options]) => options?.series?.map(({ key, label, fullLabel }) => [key, fullLabel ?? label]) ?? []));
+export function usageCSV(data, view, billing, type, scope = {}) {
+  const columns = [...new Set([...view.summary, ...(view.exportKeys ?? []), ...view.charts.flatMap(([, keys, options]) => [...keys, ...Object.values(options?.variants ?? {}).flat()])])];
+  const labels = { ...view.exportLabels, ...Object.fromEntries(view.charts.flatMap(([, , options]) => options?.series?.map(({ key, label, fullLabel }) => [key, fullLabel ?? label]) ?? [])) };
   const quote = value => `"${String(value).replaceAll('"', '""')}"`;
   const perModel = data.types !== undefined;
   const models = [...new Set(data.buckets.flatMap(row => Object.keys(row.modelUsage || {})))];
-  const rows = perModel ? data.buckets.flatMap(row => models.map(model => [billing, type, model, bucketLabel(row.time), ...columns.map(key => row.modelUsage?.[model]?.[key] ?? '')])) : data.buckets.map(row => [billing, type, bucketLabel(row.time), ...columns.map(key => row[key] ?? '')]);
-  return '\ufeff' + [['计费来源', '模型类型', ...(perModel ? ['模型 ID'] : []), '时间（北京时间）', ...columns.map(key => `${labels[key] ?? fields[key]?.[0] ?? key}（${fields[key]?.[1] ?? 'Token'}）`)], ...rows].map(row => row.map(quote).join(',')).join('\n');
+  const scopeValues = perModel ? [scope.subscriptionId ?? '', scope.apiKeyId ?? '全部 Key', scope.start ?? '', scope.end ?? ''] : [];
+  const rows = perModel ? data.buckets.flatMap(row => models.map(model => [billing, type, model, ...scopeValues, bucketLabel(row.time), ...columns.map(key => row.modelUsage?.[model]?.[key] ?? '')])) : data.buckets.map(row => [billing, type, bucketLabel(row.time), ...columns.map(key => row[key] ?? '')]);
+  return '\ufeff' + [['计费来源', '模型类型', ...(perModel ? ['模型 ID', '订阅编号', 'Key ID', '开始日期（北京时间）', '结束日期（北京时间）'] : []), '时间（北京时间）', ...columns.map(key => `${(view.summary.includes(key) ? fields[key]?.[0] : labels[key]) ?? fields[key]?.[0] ?? key}（${fields[key]?.[1] ?? 'Token'}）`)], ...rows].map(row => row.map(quote).join(',')).join('\n');
 }
 
 export function observationData(options) {
@@ -464,28 +461,3 @@ export function observationData(options) {
   return { summary: combine(results.map(result => result.summary)), buckets: times.map(time => ({ ...combine(results.flatMap(result => result.buckets.filter(row => row.time === time))), time })) };
 }
 export const observationView = { summary: ['requests','successRate','failure','latency','latencyP95'], charts: [calls, ['失败率趋势',['failureRate']], ['响应时延',['latency','latencyP95'],{variants:{'平均 / P95':['latency','latencyP95'],最小:['latencyMin'],最大:['latencyMax']}}], ['请求速率',['rpm']], status] };
-export function meteringView(type) {
-  const view = usageViews[type];
-  if (['文本模型', '视觉理解', '多模态模型', '向量模型', '重排模型'].includes(type)) {
-    const charts = [
-      ['总 Token 数', ['total']],
-      ['输入 Token 数', ['input']],
-      ['输出 Token 数', ['output']],
-      ['每分钟总 Token 数（TPM）', ['tpm']],
-      ['每分钟输入 Token 数（TPM）', ['inputMinute']],
-      ['每分钟输出 Token 数（TPM）', ['outputMinute']],
-      ['每分钟读缓存 Token 数', ['cacheReadMinute']],
-      ['每分钟写入缓存 Token 数', ['cacheCreateMinute']],
-      ['读缓存总 Token 数', ['cacheReadTotal']],
-      ['写入缓存总 Token 数', ['cacheCreate']],
-      ['每分钟读显式缓存 Token 数', ['explicitReadMinute']],
-      ['区间内命中显式缓存总 Token 数', ['cacheRead']],
-      ['平均输入 Token（TPR）', ['inputPerRequest']],
-      ['平均输出 Token（TPR）', ['outputPerRequest']],
-    ];
-    const available = type === '文本模型' || type === '视觉理解' ? charts : charts.filter(([, [key]]) => type === '多模态模型' ? !key.toLowerCase().includes('cache') && !['explicitReadMinute'].includes(key) : ['input', 'inputMinute', 'inputPerRequest'].includes(key));
-    return { summary: view.summary, charts: available };
-  }
-  const excluded = new Set(['响应时延','吞吐趋势','调用状态分布','首 Token 时延','输出吞吐']);
-  return {summary:view.summary.filter(key => key !== 'latency'),charts:view.charts.filter(([title]) => !excluded.has(title)).map(([title,keys,options]) => title === '调用次数趋势' ? ['模型请求次数趋势',['requests']] : [title,keys,options])};
-}

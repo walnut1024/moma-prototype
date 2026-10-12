@@ -3,6 +3,37 @@ import assert from "node:assert/strict";
 import { createAdminSeed } from "../src/admin-v2/store.js";
 import { activateOrder, applyAdjustment, simulateRequest } from "../src/admin-v2/domain.js";
 
+test('订单缺少历史记录时可开通，按量不发额度，套餐保留单位并且幂等', () => {
+  for (const billingType of ['payg', 'plan', 'coding']) {
+    let state = createAdminSeed();
+    const fixture = state.orders.find(order => order.billingType === billingType);
+    const order = { ...fixture, status: '待开通' };
+    state.orders = state.orders.map(item => item.id === order.id ? order : item);
+    const before = state.ledger.length;
+    state = activateOrder(state, order.id);
+    const saved = state.orders.find(item => item.id === order.id);
+    assert.equal(saved.status, '已开通');
+    assert.equal(saved.timeline.length, 1);
+    assert.equal(state.ledger.length, before + (billingType === 'payg' ? 0 : 1));
+    if (billingType !== 'payg') assert.equal(state.ledger.find(item => item.sourceId === `entitlement:${order.id}`).unit, order.quotaUnit);
+    assert.equal(saved.amount, undefined);
+    assert.strictEqual(activateOrder(state, order.id), state);
+  }
+  const state = createAdminSeed(), order = state.orders.find(item => item.billingType === 'plan');
+  order.status = '待开通'; delete order.entitlement;
+  assert.throws(() => activateOrder(state, order.id), /额度未记录/);
+  assert.equal(order.status, '待开通');
+});
+
+test('removed billing cannot issue new entitlements and preserves its stored order', () => {
+  const state = createAdminSeed();
+  const order = { ...state.orders.find(item => item.billingType === 'plan'), id: 'retired-order', billingType: 'package', status: '待开通' };
+  state.orders.push(order);
+  const before = JSON.stringify(state);
+  assert.throws(() => activateOrder(state, order.id), /不支持开通/);
+  assert.equal(JSON.stringify(state), before);
+});
+
 test("订单开通和请求提交均幂等，失败请求不扣额度", () => {
   let state=createAdminSeed(), order=state.orders[0];
   state=activateOrder(state,order.id); const ledgerCount=state.ledger.length; state=activateOrder(state,order.id); assert.equal(state.ledger.length,ledgerCount);

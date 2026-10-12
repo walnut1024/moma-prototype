@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>AdminPageBoundary 回归检查</title>
+<div id="root"></div><pre id="result">运行中</pre>
+<script type="module">
+import React, { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { flushSync } from 'react-dom';
+import AdminPageBoundary from '../src/admin-v2/AdminPageBoundary.jsx';
+let broken = true;
+function Content() { if (broken) throw new Error('intentional-boundary-check'); return React.createElement('p', null, '内容加载成功'); }
+function Check() {
+  const [page, setPage] = useState('broken');
+  return React.createElement(React.Fragment, null,
+    React.createElement('button', { id: 'navigate', onClick: () => { broken = false; setPage('healthy'); } }, '切换页面'),
+    React.createElement(AdminPageBoundary, { key: page }, React.createElement(Content)));
+}
+const root = createRoot(document.getElementById('root'));
+const assert = (ok, message) => { if (!ok) throw new Error(message); };
+try {
+  flushSync(() => root.render(React.createElement(Check)));
+  assert(document.querySelector('[role="alert"]')?.textContent.includes('页面加载失败'), '缺少失败提示');
+  assert(document.getElementById('navigate'), '页面异常损坏了外部导航');
+  broken = false;
+  flushSync(() => document.querySelector('[role="alert"] button').click());
+  assert(!document.querySelector('[role="alert"]') && document.getElementById('root').textContent.includes('内容加载成功'), '重试未恢复内容');
+  broken = true;
+  flushSync(() => root.render(React.createElement(Check, { key: 'second-failure' })));
+  assert(document.querySelector('[role="alert"]'), '第二次异常未被拦截');
+  flushSync(() => document.getElementById('navigate').click());
+  assert(!document.querySelector('[role="alert"]') && document.getElementById('root').textContent.includes('内容加载成功'), '切换页面未重置错误边界');
+  document.getElementById('result').dataset.status = 'passed';
+  document.getElementById('result').textContent = 'PASS：异常降级、导航保留、重试恢复、切页重置';
+} catch (error) {
+  document.getElementById('result').dataset.status = 'failed';
+  document.getElementById('result').textContent = `FAIL：${error.message}`;
+  throw error;
+}
+</script></html>

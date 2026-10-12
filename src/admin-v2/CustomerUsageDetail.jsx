@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { customerModelDetails, filterAnalytics } from './analytics';
-import { formatUsageNumber, usageMeter, usagePreset, usageValue, usageWindow } from './usage-analysis';
+import { formatUsageNumber, usageMeter, operationsPeriod, usageValue } from './usage-analysis';
 import './usage-analysis.css';
 import './user-analysis.css';
 
@@ -10,9 +10,8 @@ const amount = value => value == null ? '—' : formatUsageNumber(value);
 export default function CustomerUsageDetail({ state }) {
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
   const tenant = state.tenants.find(item => item.id === params.get('customer'));
-  const today = usagePreset('today');
   const requested = { start: params.get('start'), end: params.get('end') };
-  const { start, end } = usageWindow(requested) ? requested : today;
+  const { range: { start, end } } = operationsPeriod('custom', requested);
   const rows = tenant ? filterAnalytics(state, { start, end, tenant: [tenant.id] }) : [];
   const models = customerModelDetails(state, rows, start, end);
   const tokenModels = models.filter(model => model.unit === 'Token' && model.total != null);
