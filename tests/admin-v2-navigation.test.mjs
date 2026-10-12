@@ -19,7 +19,7 @@ test('运营与运维的导航及全部已注册页面严格隔离', () => {
   assert.deepEqual(availableWorkspaces('运维人员'), ['maintenance']);
   assert.deepEqual(availableWorkspaces('未知角色'), []);
   assert.deepEqual(sections.filter(group => group.workspace === 'operations').map(group => group.id), ['overview', 'analytics', 'models']);
-  assert.deepEqual(sections.filter(group => group.workspace === 'maintenance').map(group => group.id), ['runtime', 'gateway']);
+  assert.deepEqual(sections.filter(group => group.workspace === 'maintenance').map(group => group.id), ['runtime', 'model-monitoring', 'gateway']);
   for (const id of Object.keys(pages)) {
     assert.equal(canAccessPage('平台管理员', id), true, id);
     assert.equal(canAccessPage('运营人员', id), pageWorkspace(id) === 'operations', id);

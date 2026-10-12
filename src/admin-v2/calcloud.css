@@ -1,0 +1,53 @@
+.cc-page { display: grid; gap: 12px; min-width: 0; color: #24334d; }
+body:has(.cc-page), .admin-v2:has(.cc-page) { min-width: 0; }
+.cc-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px; background: white; border: 1px solid #dfe7f3; border-radius: 8px; }
+.cc-head h1 { margin: 0; font-size: 19px; font-weight: 650; }
+.cc-head p { margin: 6px 0 0; color: #526681; font-size: 12px; }
+.cc-actions, .cc-toolbar, .cc-form-footer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cc-surface { background: white; border: 1px solid #dfe7f3; border-radius: 8px; min-width: 0; overflow: hidden; }
+.cc-toolbar { padding: 16px; border-bottom: 1px solid #e5ebf5; align-items: end; }
+.cc-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 13px; }
+.cc-field > span, .cc-field > label { color: #425874; }
+.cc-field b { color: #be3434; font-weight: 400; }
+.cc-toolbar .cc-field { width: 174px; }
+.cc-toolbar [data-slot=select-trigger] { width: 100%; }
+.cc-table { min-width: 760px; font-size: 13px; }
+.cc-table th { background: #f6f8fc; padding: 12px 16px; color: #425874; }
+.cc-table td { padding: 14px 16px; vertical-align: middle; white-space: normal; }
+.cc-table td small { display: block; margin-top: 5px; color: #526681; font-size: 11px; }
+.cc-table .cc-empty { text-align: center; height: 160px; color: #526681; }
+.cc-form { display: grid; gap: 16px; }
+.cc-form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.cc-wide { grid-column: 1/-1; }
+.cc-form [data-slot=select-trigger] { width: 100%; }
+.cc-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.cc-form-footer { justify-content: flex-end; padding-top: 12px; border-top: 1px solid #e5ebf5; }
+.cc-error { margin: 0; font-size: 13px; color: #af2f31; }
+.cc-dialog { width: min(680px,calc(100vw - 32px)); max-width: none!important; max-height: 88dvh; overflow-y: auto; }
+.cc-dialog-wide { width: min(940px,calc(100vw - 32px)); }
+.cc-dialog::selection, .cc-page::selection { background: #dce8ff; color: #182c50; }
+.cc-editor { padding: 20px; }
+.cc-editor h2 { font-size: 15px; font-weight: 600; margin: 20px 0 4px; }
+.cc-editor > h2:first-child { margin-top: 0; }
+.cc-inline-list { display: grid; gap: 12px; }
+.cc-inline-row { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)) auto; gap: 8px; align-items: end; }
+.cc-binding { padding: 14px 0; border-bottom: 1px solid #e5ebf5; }
+.cc-binding:first-child { border-top: 1px solid #e5ebf5; }
+.cc-binding summary { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.cc-binding details { margin-top: 12px; }
+.cc-binding .cc-form-grid { padding-top: 12px; }
+.cc-flags { display: flex; gap: 20px; flex-wrap: wrap; }
+.cc-icon-preview { width: 40px; height: 40px; object-fit: contain; }
+.cc-metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); margin: 0; padding: 18px 0; background: white; border: 1px solid #dfe7f3; border-radius: 8px; }
+.cc-metrics > div { padding: 0 20px; border-right: 1px solid #e5ebf5; }
+.cc-metrics > div:last-child { border: 0; }
+.cc-metrics dt { display: flex; align-items: center; font-size: 12px; color: #425874; min-height: 28px; }
+.cc-metrics dd { margin: 8px 0 0; font-size: 25px; color: #121a2b; font-weight: 650; font-variant-numeric: tabular-nums; }
+.cc-charts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.cc-chart { border: 1px solid #dfe7f3; border-radius: 8px; background: white; padding: 18px 18px 8px; min-width: 0; }
+.cc-chart h2 { display: flex; gap: 4px; align-items: center; min-height: 30px; margin: 0 0 10px; font-size: 14px; font-weight: 650; }
+.cc-tooltip { max-width: 290px; line-height: 1.6; }
+.cc-storage { padding: 12px 16px; display: flex; align-items: center; gap: 12px; background: #fff4df; color: #734805; }
+.cc-context { margin: 0; padding: 0 4px; font-size: 12px; color: #526681; }
+.cc-price { white-space: nowrap; line-height: 1.7; }
+@media(max-width:800px) { .cc-charts { grid-template-columns: 1fr; } .cc-form-grid { grid-template-columns: 1fr; } .cc-head { align-items: start; flex-direction: column; } .cc-inline-row { grid-template-columns: 1fr 1fr; } .cc-metrics { grid-template-columns: 1fr 1fr; row-gap: 16px; } .cc-toolbar .cc-field { width: min(100%,220px); } }

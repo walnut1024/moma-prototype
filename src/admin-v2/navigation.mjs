@@ -5,16 +5,29 @@ export const sections = [
   { id: "analytics", workspace: "operations", title: "运营分析", items: [
     { id: "usage", label: "用量统计", children: [["usage-analysis", "用量统计"]] },
     { id: "users-analysis", label: "用户分析", children: [["user-analysis", "用户分析"]] },
+    { id: "cost-analysis", label: "成本分析", children: [["cost-analysis", "成本分析"]] },
+    { id: "customer-analysis", label: "客户分析", children: [["customer-analysis", "客户分析"]] },
+    { id: "provider-analysis", label: "服务商分析", children: [["provider-analysis", "服务商分析"]] },
+    { id: "model-analysis", label: "模型分析", children: [["model-analysis", "模型分析"]] },
   ]},
   { id: "models", workspace: "operations", title: "模型运营", items: [
     { id: "warehouse", label: "模型管理", children: [["listing", "模型管理"]] },
     { id: "channels", label: "模型供应", children: [["providers", "模型供应"]] },
+    { id: "base-models", label: "基础模型管理", children: [["base-models", "基础模型管理"]] },
+    { id: "model-providers", label: "模型服务商管理", children: [["model-providers", "模型服务商管理"]] },
   ]},
   { id: "runtime", workspace: "maintenance", title: "运行分析", items: [
     { id: "calls", label: "调用分析", children: [["call-analysis", "调用分析"]] },
   ]},
+  { id: "model-monitoring", workspace: "maintenance", title: "模型观测", items: [
+    { id: "business-call-statistics", label: "业务调用统计", children: [["business-call-statistics", "业务调用统计"]] },
+    { id: "performance-statistics", label: "性能吞吐统计", children: [["performance-statistics", "性能吞吐统计"]] },
+    { id: "error-statistics", label: "错误与异常统计", children: [["error-statistics", "错误与异常统计"]] },
+  ]},
   { id: "gateway", workspace: "maintenance", title: "网关管理", items: [
     { id: "gateway", label: "网关配置", children: [["routes", "路由策略"], ["limits", "限流与并发"], ["fallback", "熔断与回退"], ["cache", "缓存策略"], ["releases", "配置版本与发布"], ["monitoring", "服务监控"], ["logs", "请求日志"], ["alerts", "告警管理"], ["incidents", "事件处理"], ["sla", "服务质量报告"]] },
+    { id: "traffic-management", label: "流量管理", children: [["traffic-management", "流量管理"]] },
+    { id: "model-routing", label: "模型路由管理", children: [["model-routing", "模型路由管理"]] },
   ]},
 ];
 
