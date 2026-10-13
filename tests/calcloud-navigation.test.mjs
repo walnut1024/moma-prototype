@@ -9,6 +9,8 @@ test('11个参考功能为独立导航、独立地址，不改变现有页面或
   for (const [workspace, ids] of [['operations', operations], ['maintenance', maintenance]]) for (const id of ids) {
     const entries=sections.flatMap(section=>section.items).filter(item=>item.children.some(([child])=>child===id));
     assert.equal(entries.length,1,id);assert.equal(entries[0].children.length,1,id);
+    assert.ok(entries[0].label.endsWith("（旧）"),id);
+    assert.equal(pages[id].label,entries[0].label,id);
     assert.equal(pageWorkspace(id),workspace);assert.equal(pageFromHash(`#/admin-2/${id}`, '平台管理员'),id);
     assert.equal(canAccessPage('平台管理员', id),true);
     assert.equal(canAccessPage('运营人员', id),workspace==='operations');
