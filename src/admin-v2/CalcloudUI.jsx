@@ -17,7 +17,7 @@ import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import { CALCLOUD_STORAGE_KEY, createCalcloudSeed, calcloudTransaction } from './calcloud-domain.mjs';
 
 export const number = value => Number.isFinite(value) ? value.toLocaleString('zh-CN', { maximumFractionDigits: 2 }) : '—';
-export const money = value => Number.isFinite(value) ? `¥${value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}` : '—';
+export const money = (value,precision=6) => Number.isFinite(value) ? `¥${value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: precision })}` : '—';
 export const priceNumber = value => Number.isFinite(value) ? value.toLocaleString('zh-CN',{maximumFractionDigits:6}) : '—';
 export const time = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—';
 export function Field({ label, required, children, wide }) {
@@ -57,7 +57,7 @@ export function Metrics({ items }) {
   return <dl className="cc-metrics">{items.map(([label, value, hint]) => <div key={label}><dt>{label}{hint && <Hint label={label}>{hint}</Hint>}</dt><dd>{value}</dd></div>)}</dl>;
 }
 export function Trend({ title, labels, series, unit, hint, type = 'line', zoom = true }) {
-  return <section className="cc-chart"><h2>{title}{hint && <Hint label={title}>{hint}</Hint>}</h2><TimeSeriesChart labels={labels} series={series} unit={unit} label={title} type={type} zoom={zoom} height={280}/></section>;
+  return <section className="cc-chart"><h2>{title}{hint && <Hint label={title}>{hint}</Hint>}</h2>{labels.length&&series.some(s=>s.values.some(Number.isFinite))?<TimeSeriesChart labels={labels} series={series} unit={unit} label={title} type={type} zoom={zoom} height={280}/>:<p className="cc-empty cc-chart-empty">暂无数据</p>}</section>;
 }
 export function ModelSwitch({label,value,disabled,onChange}) {
   return <Button type="button" variant="ghost" size="sm" role="switch" aria-label={label} aria-checked={!!value} disabled={disabled} className="cc-switch" onClick={()=>onChange(!value)}><span/><span className="sr-only">{value?'已开启':'已关闭'}</span></Button>;
@@ -76,6 +76,7 @@ function readConfig(state) {
   if (data?.version !== 1 || !['models', 'providers', 'routes', 'traffic'].every(key => Array.isArray(data[key]) && data[key].every(r => r && typeof r.id === 'string') && new Set(data[key].map(r => r.id)).size === data[key].length)) throw new Error('配置格式不正确，原记录已保留');
   if (!data.models.every(m => typeof m.name === 'string' && Array.isArray(m.tags) && Array.isArray(m.bindings) && m.bindings.every(b => Array.isArray(b.inputs) && Array.isArray(b.outputs) && Array.isArray(b.features) && b.custom && b.prices) && m.examples) || !data.routes.every(r => Array.isArray(r.headers) && Array.isArray(r.query) && Array.isArray(r.targets) && Array.isArray(r.fallback)) || !data.providers.every(p => typeof p.code === 'string')) throw new Error('配置字段不完整，原记录已保留');
   if (data.priceVersions !== undefined && (!Array.isArray(data.priceVersions) || !data.priceVersions.every(p => p && typeof p.id === 'string' && typeof p.modelId === 'string' && typeof p.providerId === 'string' && ['cost','sale'].includes(p.kind) && Number.isFinite(Date.parse(p.effectiveAt)) && ['inputPrice','cachedPrice','outputPrice'].every(key => p[key] === null || Number.isFinite(p[key]) && p[key] >= 0)))) throw new Error('历史价格格式不正确，原记录已保留');
+  if(data.userTokenQuotas!==undefined&&(!Array.isArray(data.userTokenQuotas)||!data.userTokenQuotas.every(q=>typeof q.ownerId==='string'&&q.ownerId&&Number.isSafeInteger(q.totalLimit)&&q.totalLimit>0&&q.totalLimit<=999999999999999)||new Set(data.userTokenQuotas.map(q=>q.ownerId)).size!==data.userTokenQuotas.length))throw new Error('用户额度格式不正确，原记录已保留');
   return { data, raw };
 }
 export function useCalcloudConfig(state) {

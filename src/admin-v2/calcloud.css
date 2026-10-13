@@ -83,3 +83,5 @@ body:has(.cc-page), .admin-v2:has(.cc-page) { min-width: 0; }
 .cc-inline-row [data-slot=select-trigger] { width: 100%; }
 
 .cc-detail-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.cc-detail-fields dt{color:#526681;font-size:12px}.cc-detail-fields dd{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}.cc-rich-content pre{white-space:pre-wrap;background:#f6f8fc;padding:12px}.cc-rich-content table{border-collapse:collapse;width:100%}.cc-rich-content td,.cc-rich-content th{border:1px solid #dfe7f3;padding:8px}.cc-time-popover{width:min(600px,calc(100vw - 32px))}
+
+.cc-page .cc-chart-empty{min-height:280px;display:grid;place-items:center;}

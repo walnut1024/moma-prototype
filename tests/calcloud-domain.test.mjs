@@ -168,3 +168,78 @@ test('既有配置的当前价格展示联动，不把缺失的历史生效时�
  assert.equal(row.purchase.inputPrice,3123456);
  assert.deepEqual(linked.supplyPrices,state.supplyPrices);
 });
+
+test('用户总额度按明确项目管理员共享，编辑Key不重设额度，旧演示字段保留',async()=>{
+ const {projectQuotaOwner}=await import('../src/admin-v2/calcloud-domain.mjs');
+ const state=createAdminSeed(),config=createCalcloudSeed(state),key=state.apiKeys[1];
+ const owner=projectQuotaOwner(state,key.projectId),projects=state.projects.filter(p=>projectQuotaOwner(state,p.id)===owner);
+ assert.ok(projects.length>1);
+ const rule={id:'shared-quota',projectId:key.projectId,keyId:key.id,tokenEnabled:true,tokenPeriod:'分钟',tokenLimit:1000,totalEnabled:true,totalLimit:50000};
+ const saved=calcloudTransaction(config,{collection:'traffic',operation:'save',record:rule},state);
+ assert.equal(saved.userTokenQuotas.length,1);assert.equal(saved.userTokenQuotas[0].ownerId,owner);
+ assert.equal(saved.traffic.find(r=>r.id===rule.id).totalLimit,undefined);
+ const sharedKey=state.apiKeys.find(k=>k.projectId===projects[0].id&&!saved.traffic.some(r=>r.keyId===k.id));
+ const next=calcloudTransaction(saved,{collection:'traffic',operation:'save',record:{...rule,id:'shared-quota-2',keyId:sharedKey.id,projectId:sharedKey.projectId,totalLimit:70000}},state);
+ assert.equal(next.userTokenQuotas.length,1);assert.equal(next.userTokenQuotas[0].totalLimit,70000);
+ const retained=calcloudTransaction(next,{collection:'traffic',operation:'save',record:{...rule,totalEnabled:false,totalLimit:''}},state);
+ assert.deepEqual(retained.userTokenQuotas,next.userTokenQuotas);
+ const legacy={...config.traffic[0],totalEnabled:true,totalLimit:12000};config.traffic[0]=legacy;
+ const kept=calcloudTransaction(config,{collection:'traffic',operation:'save',record:{...legacy,totalEnabled:false,totalLimit:''}},state);
+ assert.equal(kept.traffic.find(r=>r.id===legacy.id).totalLimit,12000);
+ assert.throws(()=>calcloudTransaction(config,{collection:'traffic',operation:'save',record:{...rule,tokenLimit:1e15}},state),/999999999999999/);
+ const unknown={...state,projects:state.projects.map(p=>({...p,managerId:'',ownerId:''}))};
+ assert.throws(()=>calcloudTransaction(config,{collection:'traffic',operation:'save',record:rule},unknown),/管理员身份/);
+});
+
+test('源表单边界：未来模型日期、路由身份锁定与零权重，绑定允许为空',async()=>{
+ const {bindingContext}=await import('../src/admin-v2/calcloud-domain.mjs');
+ const state=createAdminSeed(),config=createCalcloudSeed(state),m={...config.models[0],updatedAt:'2026-10-13T10:00:00+08:00',icon:'test',precision:'BF16',tags:['文本'],series:'测试',description:'说明',bindings:[]};
+ assert.equal(calcloudTransaction(config,{collection:'models',operation:'save',record:m},state,'2026-10-13T00:00:00Z').models.find(v=>v.id===m.id).bindings.length,0);
+ assert.throws(()=>calcloudTransaction(config,{collection:'models',operation:'save',record:{...m,updatedAt:'2026-10-14T00:00:00+08:00'}},state,'2026-10-13T00:00:00Z'),/不能晚于今天/);
+ assert.deepEqual(bindingContext({functionType:'NO_CALL',input:1,output:1},32768),{functionType:'NO_CALL',context:32768,step:4096,input:16384,output:16384});
+ const route=structuredClone(config.routes.find(r=>r.targets.length>1));assert.ok(route);
+ route.targets[0].percent=0;route.targets[1].percent=100;
+ assert.equal(calcloudTransaction(config,{collection:'routes',operation:'save',record:route},state).routes.find(r=>r.id===route.id).targets[0].percent,0);
+ assert.throws(()=>calcloudTransaction(config,{collection:'routes',operation:'save',record:{...route,name:'renamed'}},state),/不可修改/);
+ assert.throws(()=>calcloudTransaction(config,{collection:'routes',operation:'save',record:{...route,pathMatch:'精确匹配'}},state),/路径匹配/);
+});
+
+test('价格保存按分钟生效，同分钟后保存版本取最新；空趋势与长范围不伪造或漏计',async()=>{
+ const {calcloudAnalyticsState}=await import('../src/admin-v2/calcloud-domain.mjs');
+ const state=createAdminSeed(),config=createCalcloudSeed(state),m={...config.models.find(m=>m.bindings.length),icon:'test',precision:'BF16',tags:['文本'],series:'测试',description:'说明',updatedAt:'2026-10-13T09:00:00+08:00'};
+ const first=calcloudTransaction(config,{collection:'models',operation:'save',record:m},state,'2026-10-13T10:00:12+08:00');
+ const same=calcloudTransaction(first,{collection:'models',operation:'save',record:m},state,'2026-10-13T10:00:20+08:00');
+ assert.equal(same.priceVersions.length,first.priceVersions.length*2);
+ assert.equal(same.priceVersions[0].effectiveAt,'2026-10-13T02:00:00.000Z');
+ const changed={...m,bindings:m.bindings.map(b=>({...b,prices:{...b.prices,costInput:3.123456}}))};
+ const last=calcloudTransaction(same,{collection:'models',operation:'save',record:changed},state,'2026-10-13T10:00:30+08:00');
+ const view=calcloudAnalyticsState(state,last),history=calcloudCostHistory(view,{rows:[]},m.id,m.bindings[0].providerId);
+ assert.equal(history[0].purchase.inputPrice,3123456);
+ const empty={from:0,to:60000,rows:[]};assert.deepEqual(calcloudBuckets(empty),[]);
+ const duration=400*86400000,lastAt=duration-1,buckets=calcloudBuckets({from:0,to:duration,rows:[{at:lastAt,token:true,input:10,output:2,total:12,cached:0}]});
+ assert.equal(buckets.reduce((n,b)=>n+b.calls,0),1);assert.equal(buckets.at(-1).end,duration);
+});
+
+test('实际观测响应窗口：近7日完整日、近3日完整小时、5分钟含当前分钟',async()=>{
+ const {observationWindow}=await import('../src/admin-v2/calcloud-domain.mjs'),clock=Date.parse('2026-10-13T14:25:30+08:00');
+ const seven=observationWindow('7d',clock,null,'operational');assert.equal(seven.from,Date.parse('2026-10-06T00:00:00+08:00'));assert.equal(seven.to,Date.parse('2026-10-13T00:00:00+08:00'));
+ const three=observationWindow('3d',clock,null,'operational');assert.equal(three.from,Date.parse('2026-10-10T00:00:00+08:00'));assert.equal(three.to,Date.parse('2026-10-13T14:00:00+08:00'));
+ const state=factsState(),five=observationWindow('5m',clock,null,'operational'),facts=calcloudFacts({...state,requests:[]},five,{},clock),bins=calcloudBuckets(facts);
+ assert.equal(bins.length,5);assert.equal(bins[0].label,'10-13 14:21');assert.equal(bins.at(-1).label,'10-13 14:25');assert.equal(bins.at(-1).minutes,1);
+ assert.equal(calcloudBuckets(calcloudFacts({...state,requests:[]},three,{},clock)).length,86);
+ const custom=observationWindow('custom',clock,{start:'2026-10-12T09:00:00+08:00',end:'2026-10-12T11:00:00+08:00'},'operational');assert.equal(calcloudBuckets(calcloudFacts({...state,requests:[]},custom,{},clock)).length,1);
+ assert.equal(calcloudSummary([{httpStatus:200,token:true,input:1,output:1,total:2,userId:'u',attempts:[{error:'upstream_timeout'}]}]).timeout,1);
+});
+
+test('遗留默认日期包含今日；自定义业务/分类按日期，趋势保留时分秒',async()=>{
+ const {calcloudPeriod,calcloudCalendarWindow}=await import('../src/admin-v2/calcloud-domain.mjs'),clock=Date.parse('2026-10-13T14:25:30+08:00');
+ assert.deepEqual(calcloudPeriod('7d',clock),{start:'2026-10-07',end:'2026-10-13'});assert.deepEqual(calcloudPeriod('30d',clock),{start:'2026-09-14',end:'2026-10-13'});
+ assert.deepEqual(calcloudPeriod('yesterday',clock),{start:'2026-10-12',end:'2026-10-12'});
+ const selected={from:Date.parse('2026-10-12T09:00:00+08:00'),to:Date.parse('2026-10-12T11:00:00+08:00')},state=factsState();state.requests=[request({createdAt:'2026-10-12T08:00:00+08:00',httpStatus:504})];
+ assert.equal(calcloudFacts(state,selected,{},clock).rows.length,0);assert.equal(calcloudFacts(state,calcloudCalendarWindow(selected),{},clock).rows.length,1);
+});
+
+ test('服务商和模型按日补零，含今日的日期范围不会丢失桶终点',()=>{
+ const clock=Date.parse('2026-10-13T14:25:30+08:00'),facts=calcloudFacts({...factsState(),requests:[]},{start:'2026-10-07',end:'2026-10-13',bucketMs:86400000},{},clock);
+ assert.equal(facts.to,clock);const bins=calcloudBuckets(facts);assert.equal(bins.length,7);assert.equal(bins.at(-1).label,'10-13');assert.ok(bins.every(b=>b.calls===0&&b.total===0));
+ });
