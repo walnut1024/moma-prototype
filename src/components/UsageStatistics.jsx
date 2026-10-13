@@ -91,7 +91,6 @@ export default function UsageStatistics({ observation = false }) {
   const selectedTypes = selectedUsageTypes(groups, modelIds, billingUsageModels);
   const modelOptions = usageModelGroups.filter(group => group.id === category).flatMap(group => group.types.flatMap(type => billingUsageModels[type].map(id => ({ id, name: id }))));
   const [now, setNow] = useState(() => new Date());
-  const [autoRefresh, setAutoRefresh] = useState(0);
   const [range, setRange] = useState(() => observation ? dateRange(1) : usagePeriod('today'));
   const [preset, setPreset] = useState(observation ? '1' : 'today'), [minutes, setMinutes] = useState('60');
   const [notice, setNotice] = useState('');
@@ -110,19 +109,12 @@ export default function UsageStatistics({ observation = false }) {
     const link = document.createElement('a'); link.href = url; link.download = `${billing}-${label}-${range.start}-${range.end}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); setNotice(observation ? '已导出当前筛选范围的调用趋势' : '已导出当前筛选范围的计量趋势');
   }
   const changeBilling = value => { setBilling(value); setApiKeyId(null); setKeySearch(''); };
-  const refreshUsage = automatic => {
+  const refreshUsage = () => {
     const next = new Date();
     setNow(next);
     if (preset !== 'custom') setRange(observation ? observationPeriod(preset, next) : usagePeriod(preset, next));
-    setNotice(automatic ? '用量已自动刷新' : '用量已刷新');
+    setNotice('用量已刷新');
   };
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const timer = window.setInterval(() => refreshUsage(true), autoRefresh * 1000);
-    return () => window.clearInterval(timer);
-  }, [autoRefresh, now, preset, observation]);
-  const refreshTime = value => value.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
-  const autoLabel = { 30: '30 秒', 60: '1 分钟', 300: '5 分钟' }[autoRefresh];
   const savedValue = observation
     ? { category, visual, audio, modelIds, apiKeyIds, preset, range, minutes }
     : { category, billing, subscriptionId, modelIds, apiKeyId, preset, range };
@@ -162,7 +154,7 @@ export default function UsageStatistics({ observation = false }) {
     const current = new Date(); setNow(current); setPreset(observation ? '1' : 'today'); setRange(observation ? observationPeriod('1', current) : usagePeriod('today', current));
     setCategory(observation ? '文本模型' : '语言模型'); setBilling(observation ? '全部' : '按量付费'); setVisual('视觉理解'); setAudio('语音合成'); setApiKeyIds(null); setMinutes('60'); setModelIds(null); setApiKeyId(null); setKeySearch(''); setKeyPickerOpen(false); setSubscriptionId(tokenPlanSubscriptions[0].id);
   };
-  return <TooltipProvider><div className={observation ? "us-page us-observation" : "us-page us-metering"}><FrontPageHeader title={observation ? "调用观测" : "用量统计"} description={observation ? "查看调用成功率、响应时延与运行趋势" : "查看输入、输出及缓存等计费分项的用量"} icon={observation ? Activity : ChartNoAxesCombined} />
+  return <TooltipProvider><div className={observation ? "us-page us-observation" : "us-page us-metering"}><FrontPageHeader title={observation ? "调用观测" : "用量统计"} description={observation ? "查看调用成功率、响应时延与运行趋势" : "查看输入、输出及缓存等计费分项的用量"} icon={observation ? Activity : ChartNoAxesCombined} actions={!observation && <ToggleGroup type="single" value={billing} onValueChange={value => value && changeBilling(value)} variant="outline" size="sm" className="us-segmented" aria-label="计费方式">{['按量付费', 'Token Plan'].map(value => <ToggleGroupItem key={value} value={value}>{value}</ToggleGroupItem>)}</ToggleGroup>} />
     <Tabs value={category} onValueChange={value => { if (observation) changeType(value, setCategory); else { setCategory(value); setModelIds(null); } }}><TabsList variant="line" className="us-tabs">{(observation ? observationCategories : usageModelGroups.map(group => [group.id, group.id])).map(([id, label]) => <TabsTrigger key={id} value={id}>{label}</TabsTrigger>)}</TabsList>
     <TabsContent value={category} className="us-content">
       <div className="us-filter-panel"><FilterToolbar className="us-filters">
@@ -172,9 +164,9 @@ export default function UsageStatistics({ observation = false }) {
         {observation && category === '音频模型' && <Choice label="音频任务类型" value={audio} onChange={value => changeType(value, setAudio)} options={['语音合成', '语音识别'].map(x => [x, x])} />}
         <FilterField label="模型 ID"><MultiPick key={category} label="模型 ID" value={modelIds} onChange={setModelIds} items={observation ? observationModels : modelOptions} searchPlaceholder="搜索模型，如 DeepSeek-V4-Pro" /></FilterField>
         {observation ? <FilterField label="API Key"><MultiPick label="API Key" value={apiKeyIds} onChange={setApiKeyIds} items={observationKeys} searchPlaceholder="搜索 API Key 名称或 ID" /></FilterField> : <FilterField label="API Key"><Popover open={keyPickerOpen} onOpenChange={setKeyPickerOpen}><PopoverTrigger asChild><Button variant="outline" aria-label="API Key 筛选" title={selectedKey?.id}>{selectedKey?.name ?? '全部 Key'}<ChevronDown size={14}/></Button></PopoverTrigger><PopoverContent align="start" className="us-key-picker"><Input aria-label="搜索 API Key" placeholder="搜索 Key 名称或 Key ID" value={keySearch} onChange={e => setKeySearch(e.target.value)}/><div role="listbox" aria-label="API Key 选项"><button role="option" aria-selected={apiKeyId === null} onClick={() => { setApiKeyId(null); setKeyPickerOpen(false); }}>全部 Key</button>{keyOptions.filter(key => `${key.name} ${key.id}`.toLowerCase().includes(keySearch.trim().toLowerCase())).map(key => <Tooltip key={key.id}><TooltipTrigger asChild><button role="option" aria-selected={apiKeyId === key.id} onClick={() => { setApiKeyId(key.id); setKeyPickerOpen(false); }}>{maskApiKey(key.key)} ({key.name})<small>{key.id}</small></button></TooltipTrigger><TooltipContent>{key.id}</TooltipContent></Tooltip>)}{!keyOptions.some(key => `${key.name} ${key.id}`.toLowerCase().includes(keySearch.trim().toLowerCase())) && <p>无匹配的 API Key</p>}</div></PopoverContent></Popover></FilterField>}
-        {observation ? <FilterField label="统计粒度"><Choice label="统计粒度" value={minutes} onChange={setMinutes} options={[["5", "5 分钟"], ["60", "1 小时"], ["1440", "1 天"]]} /></FilterField> : <FilterField label="数据范围"><ToggleGroup type="single" value={billing} onValueChange={value => value && changeBilling(value)} variant="outline" size="sm" className="us-segmented" aria-label="数据范围">{['按量付费', 'Token Plan'].map(value => <ToggleGroupItem key={value} value={value}>{value}</ToggleGroupItem>)}</ToggleGroup></FilterField>}
+        {observation ? <FilterField label="统计粒度"><Choice label="统计粒度" value={minutes} onChange={setMinutes} options={[["5", "5 分钟"], ["60", "1 小时"], ["1440", "1 天"]]} /></FilterField> : null}
         <FilterReset onClick={resetFilters}/>
-        <div className="us-actions"><div className={observation ? '' : 'us-refresh-group'}><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" aria-label={observation ? '立即刷新调用观测' : '立即刷新用量'} onClick={() => refreshUsage(false)}><RefreshCw /></Button></TooltipTrigger><TooltipContent>立即刷新</TooltipContent></Tooltip>{!observation && <Popover><PopoverTrigger asChild><Button variant="outline" className={autoRefresh ? 'us-refresh-settings is-active' : 'us-refresh-settings'} aria-label={`自动刷新设置${autoLabel ? `，每 ${autoLabel}` : '，已关闭'}`}><span>{autoLabel ? `自动 · ${autoLabel}` : '自动刷新'}</span><ChevronDown size={14} /></Button></PopoverTrigger><PopoverContent className="us-refresh-popover" align="end"><strong>自动刷新</strong><p>按设定频率更新当前筛选结果</p><fieldset><legend className="sr-only">自动刷新频率</legend>{[[0, '关闭'], [30, '每 30 秒'], [60, '每 1 分钟'], [300, '每 5 分钟']].map(([seconds, label]) => <label key={seconds}><input type="radio" name="usage-auto-refresh" checked={autoRefresh === seconds} onChange={() => { setAutoRefresh(seconds); if (seconds) refreshUsage(false); }} />{label}</label>)}</fieldset><small>上次刷新：{refreshTime(now)}{autoRefresh > 0 && <> · 下次刷新：{refreshTime(new Date(now.getTime() + autoRefresh * 1000))}</>}</small></PopoverContent></Popover>}</div><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" aria-label={observation ? '导出调用观测' : '导出用量'} disabled={!!error || !data.summary.requests} onClick={exportData}><Download /></Button></TooltipTrigger><TooltipContent>{observation ? '导出当前趋势' : '导出当前计量趋势'}</TooltipContent></Tooltip></div>
+        <div className="us-actions"><div><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" aria-label={observation ? '立即刷新调用观测' : '立即刷新用量'} onClick={refreshUsage}><RefreshCw /></Button></TooltipTrigger><TooltipContent>立即刷新</TooltipContent></Tooltip></div><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" aria-label={observation ? '导出调用观测' : '导出用量'} disabled={!!error || !data.summary.requests} onClick={exportData}><Download /></Button></TooltipTrigger><TooltipContent>{observation ? '导出当前趋势' : '导出当前计量趋势'}</TooltipContent></Tooltip></div>
       </FilterToolbar>
       <FilterViewRow className="us-view-row"><SavedFilterViews scope={observation ? 'tenant-observation' : 'tenant-usage'} value={savedValue} onApply={applySaved} groups={viewGroups} disabled={!!error}/></FilterViewRow></div>
       {!observation && billing === 'Token Plan' && <div className="us-subscription">
