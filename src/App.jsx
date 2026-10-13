@@ -2790,6 +2790,7 @@ function PrototypeApp({ version }) {
                     重置
                   </button>
                 </div>
+                {is5102 && (
                 <FilterSection title="任务分类" count={filters.task ? 1 : 0}>
                   {[
                     "多模态",
@@ -2803,6 +2804,7 @@ function PrototypeApp({ version }) {
                     "3D",
                   ].map((x) => option("task", x))}
                 </FilterSection>
+                )}
                 <FilterSection title="输入" count={filters.input ? 1 : 0}>
                   {["文本", "图像", "音频", "视频"].map((x) =>
                     option("input", x),
