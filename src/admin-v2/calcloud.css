@@ -50,4 +50,34 @@ body:has(.cc-page), .admin-v2:has(.cc-page) { min-width: 0; }
 .cc-storage { padding: 12px 16px; display: flex; align-items: center; gap: 12px; background: #fff4df; color: #734805; }
 .cc-context { margin: 0; padding: 0 4px; font-size: 12px; color: #526681; }
 .cc-price { white-space: nowrap; line-height: 1.7; }
+.cc-drawer { position: fixed; top: 0!important; right: 0!important; left: auto!important; transform: none!important; translate: none!important; height: 100dvh; max-height: 100dvh; border-radius: 0; width: min(680px,100vw); }
+.cc-drawer.cc-dialog-wide { width: min(940px,100vw); }
+.cc-drawer { display: flex; flex-direction: column; }
+.cc-drawer .cc-form { display: flex; flex-direction: column; flex: 1; }
+.cc-drawer .cc-form-footer { margin-top: auto; }
+.cc-switch { width: 36px; height: 20px; padding: 2px!important; border-radius: 999px; background: #c3cad6!important; }
+.cc-switch[aria-checked=true] { background: #286bff!important; }
+.cc-switch > span:first-child { display: block; width: 16px; height: 16px; border-radius: 50%; background: white; margin-right: auto; }
+.cc-switch[aria-checked=true] > span:first-child { margin-left: auto; margin-right: 0; }
+.cc-picker-trigger { width: 100%; justify-content: space-between; height: auto; min-height: 32px; text-align: left; }
+.cc-picker-trigger > span { white-space: normal; }
+.cc-picker { width: min(330px,calc(100vw - 32px)); }
+.cc-rich-text { border: 1px solid #dfe7f3; border-radius: 6px; overflow: hidden; }
+.cc-rich-tools { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; background: #f6f8fc; }
+.cc-rich-content { min-height: 150px; padding: 12px; outline-offset: -2px; }
+.cc-rich-content h1 { font-size: 24px; font-weight: 700; }
+.cc-rich-content h2 { font-size: 20px; font-weight: 650; }
+.cc-rich-content h3 { font-size: 17px; font-weight: 600; }
+.cc-rich-content ul { list-style: disc; padding-left: 24px; }
+.cc-rich-content ol { list-style: decimal; padding-left: 24px; }
+.cc-rich-content blockquote { border-left: 3px solid #dfe7f3; padding-left: 12px; }
+.cc-rich-content a { text-decoration: underline; color: #286bff; }
+.cc-rich-content img { max-width: 100%; }
+.cc-rich-tools input { width: auto; flex: 1; min-width: 150px; }
+.cc-secret, .cc-donut-values { display: flex; align-items: center; gap: 8px; }
+.cc-donut-values { flex-wrap: wrap; justify-content: center; font-size: 12px; padding: 8px; }
+.cc-donut-values span { display: flex; gap: 6px; align-items: center; }
 @media(max-width:800px) { .cc-charts { grid-template-columns: 1fr; } .cc-form-grid { grid-template-columns: 1fr; } .cc-head { align-items: start; flex-direction: column; } .cc-inline-row { grid-template-columns: 1fr 1fr; } .cc-metrics { grid-template-columns: 1fr 1fr; row-gap: 16px; } .cc-toolbar .cc-field { width: min(100%,220px); } }
+
+.cc-rank-scroll { height: 316px; overflow-y: auto; }
+.cc-inline-row [data-slot=select-trigger] { width: 100%; }

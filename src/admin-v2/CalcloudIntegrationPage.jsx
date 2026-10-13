@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useCalcloudConfig } from './CalcloudUI';
 import { TooltipProvider } from '../components/ui/tooltip';
 import { BaseModelsPage, ModelProvidersPage, TrafficManagementPage, ModelRoutingPage } from './CalcloudConfigPages';
@@ -10,7 +11,8 @@ function ConfigurationPage({ Component, state, params }) {
   const store = useCalcloudConfig(state);
   return <>{store.banner}{store.config && <Component {...store} state={state} params={params}/>}</>;
 }
-export default function CalcloudIntegrationPage({ page, state, params }) {
+export default function CalcloudIntegrationPage({ page, state, params, observation }) {
+  useEffect(()=>{window.scrollTo({top:0,behavior:'instant'});document.querySelector('.v2-content > main')?.scrollTo({top:0});},[page.id,params.get('edit')]);
   const Config = configPages[page.id], Analytics = analyticsPages[page.id];
-  return <TooltipProvider><div className="cc-page" aria-label={`${page.label}页面`}>{Config ? <ConfigurationPage Component={Config} state={state} params={params}/> : <Analytics state={state}/>}</div></TooltipProvider>;
+  return <TooltipProvider><div className="cc-page" aria-label={`${page.label}页面`}>{Config ? <ConfigurationPage Component={Config} state={state} params={params}/> : <Analytics state={state} observation={observation}/>}</div></TooltipProvider>;
 }

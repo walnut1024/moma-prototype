@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts/core';
 import { LineChart, BarChart, PieChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
+import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 import { SlidersHorizontal } from 'lucide-react';
 import { Button } from './ui/button';
@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { chartPalette, chartColor, chartAxis, chartNumber, defaultChartSeries } from './chart-style.mjs';
 import './analytics-charts.css';
 
-echarts.use([LineChart, BarChart, PieChart, GridComponent, TooltipComponent, LegendComponent, SVGRenderer]);
+echarts.use([LineChart, BarChart, PieChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, SVGRenderer]);
 const muted = '#64748b', grid = '#e4eaf3';
 const safe = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 
@@ -35,7 +35,7 @@ function Chart({ option, height, label, onClick, onLegend }) {
   return <div className="ua-echart unified-chart-canvas" ref={element} style={{ height }} role="img" aria-label={label} />;
 }
 
-export function TimeSeriesChart({ labels, series, pointDetails, unit = '', label, axisUnit, tickScale, height = 250, valueFormatter, type = 'line', stacked = false, domain, tickFormatter, overview = false, className = '' }) {
+export function TimeSeriesChart({ labels, series, pointDetails, unit = '', label, axisUnit, tickScale, height = 250, valueFormatter, type = 'line', stacked = false, domain, tickFormatter, overview = false, className = '', zoom = false }) {
   const [choice, setChoice] = useState(null), [query, setQuery] = useState('');
   const signature = series.map(item => item.label).join('\u0000');
   const selected = choice?.signature === signature ? choice.names : defaultChartSeries(series);
@@ -50,7 +50,8 @@ export function TimeSeriesChart({ labels, series, pointDetails, unit = '', label
   const option = {
     animation: false,
     color: series.map(chartColor),
-    grid: { top: 66, left: 8, right: 16, bottom: 12, containLabel: true },
+    grid: { top: 66, left: 8, right: 16, bottom: zoom ? 50 : 12, containLabel: true },
+    dataZoom: zoom ? [{type:'slider',height:18,bottom:4,start:0,end:100,filterMode:'none'},{type:'inside',filterMode:'none'}] : [],
     legend: { type: 'scroll', data: legendNames, top: 0, right: 8, left: 8, selected: Object.fromEntries(series.map(item => [item.label, selected.includes(item.label)])), icon: 'rect', itemWidth: 18, itemHeight: 3, inactiveColor: '#a1aab8', pageTextStyle: { color: muted }, textStyle: { color: muted, fontSize: 12 } },
     tooltip: { trigger: 'axis', confine: true, axisPointer: { type: type === 'bar' ? 'shadow' : 'line', lineStyle: { color: '#b8c7e8', type: 'dashed' } }, backgroundColor: '#fff', borderColor: grid, extraCssText: 'max-height:60vh;overflow-y:auto;border-radius:6px;box-shadow:0 4px 16px #17243b12', textStyle: { color: '#263247', fontSize: 12 }, formatter: items => `<div>${safe(items[0]?.axisValueLabel)}${temporal ? ' · 北京时间' : ''}</div>${[...items].sort((a,b) => (Number.isFinite(b.value) ? b.value : -Infinity) - (Number.isFinite(a.value) ? a.value : -Infinity)).map(item => `<div>${item.marker} ${safe(item.seriesName)}：<b>${safe(formatter(item.value))}${Number.isFinite(item.value) ? ` ${safe(unit)}` : ''}</b></div>`).join('')}${pointDetails?.[items[0]?.dataIndex] ? `<div style="margin-top:8px;border-top:1px solid #e4eaf3;padding-top:8px">各模型用量</div>${pointDetails[items[0].dataIndex].map(item => `<div>${safe(item.label)}：<b>${safe(formatter(item.value))}${Number.isFinite(item.value) ? ` ${safe(unit)}` : ''}</b></div>`).join('')}` : ''}` },
     xAxis: { type: 'category', data: labels, boundaryGap: type === 'bar', axisTick: { show: false }, axisLine: { lineStyle: { color: '#dce4ee' } }, axisLabel: { color: muted, fontSize: 12, hideOverlap: true, formatter: value => singleDay ? value.slice(6) : overview && /^\d{2}-\d{2}$/.test(value) ? value.replace('-', '/') : value, interval: labels.length > 16 ? Math.ceil(labels.length / 6) - 1 : 'auto' } },
@@ -73,7 +74,7 @@ export function RankingChart({ rows, metric, unit, collection, scale, onChoose }
     yAxis: { type: 'category', data: names, inverse: true, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: muted, fontSize: 12, width: 116, overflow: 'truncate', margin: 10 } },
     series: [{ type: 'bar', data: rows.map(row => scale === 'log' ? Math.log10(row[metric] + 1) : row[metric]), barWidth: 10, showBackground: true, backgroundStyle: { color: '#edf1f8', borderRadius: 2 }, itemStyle: { color: chartPalette[0], borderRadius: 2 }, label: { show: true, position: 'right', distance: 8, color: '#34425b', fontSize: 12, formatter: ({ dataIndex }) => { const value = rows[dataIndex][metric]; return value >= 1e8 ? `${chartNumber(value / 1e8)}亿` : value >= 1e4 ? `${chartNumber(value / 1e4)}万` : chartNumber(value); } } }],
   };
-  return <Chart option={option} height={Math.max(140, rows.length * 28 + 20)} label={`用量排行，显示 ${rows.length} 个对象，点击条形查看明细`} onClick={event => { if (rows[event.dataIndex]) onChoose(rows[event.dataIndex].id); }} />;
+  return <Chart option={option} height={Math.max(140, rows.length * 28 + 20)} label={`用量排行，显示 ${rows.length} 个对象${onChoose?'，点击条形查看明细':''}`} onClick={onChoose ? event => { if (rows[event.dataIndex]) onChoose(rows[event.dataIndex].id); } : undefined} />;
 }
 
 export function DonutChart({ rows, unit = '', label, height = 200, centerValue, centerLabel }) {

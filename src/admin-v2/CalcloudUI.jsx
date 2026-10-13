@@ -1,10 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Info, RefreshCw, X } from 'lucide-react';
+import { Info, RefreshCw, X, ChevronsUpDown, Check as CheckIcon } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Checkbox } from '../components/ui/checkbox';
+import { Popover, PopoverTrigger, PopoverContent } from '../components/ui/popover';
+import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from '../components/ui/command';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
@@ -36,8 +38,8 @@ export function DataTable({ columns, rows, empty = '暂无符合条件的记录'
   const current = Math.min(page, Math.max(1, Math.ceil(rows.length / size)));
   return <><Table className="cc-table"><TableHeader><TableRow>{columns.map(([label]) => <TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{rows.slice((current - 1) * size, current * size).map(row => <TableRow key={row.id}>{columns.map(([label, render]) => <TableCell key={label}>{render(row)}</TableCell>)}</TableRow>)}{!rows.length && <TableRow><TableCell colSpan={columns.length} className="cc-empty">{empty}</TableCell></TableRow>}</TableBody></Table><FilterPagination total={rows.length} page={current} size={size} onPageChange={setPage} onSizeChange={setSize}/></>;
 }
-export function Modal({ title, description = '完成配置后保存。', open, close, children, wide }) {
-  return <Dialog open={open} onOpenChange={v => { if (!v) close(); }}><DialogContent showCloseButton={false} className={`cc-dialog${wide ? ' cc-dialog-wide' : ''}`}><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>{children}<Button type="button" variant="ghost" size="icon-sm" className="absolute top-2 right-2" aria-label="关闭弹窗" onClick={close}><X/></Button></DialogContent></Dialog>;
+export function Modal({ title, description = '完成配置后保存。', open, close, children, wide, drawer }) {
+  return <Dialog open={open} onOpenChange={v => { if (!v) close(); }}><DialogContent showCloseButton={false} className={`cc-dialog${wide ? ' cc-dialog-wide' : ''}${drawer ? ' cc-drawer' : ''}`}><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>{children}<Button type="button" variant="ghost" size="icon-sm" className="absolute top-2 right-2" aria-label="关闭弹窗" onClick={close}><X/></Button></DialogContent></Dialog>;
 }
 export function FormFooter({ close, error, saving }) {
   return <><p className="cc-error" role={error ? 'alert' : undefined}>{error}</p><div className="cc-form-footer"><Button type="button" variant="outline" onClick={close}>取消</Button><Button type="submit" disabled={saving}>保存</Button></div></>;
@@ -51,8 +53,16 @@ export function Hint({ label, children }) {
 export function Metrics({ items }) {
   return <dl className="cc-metrics">{items.map(([label, value, hint]) => <div key={label}><dt>{label}{hint && <Hint label={label}>{hint}</Hint>}</dt><dd>{value}</dd></div>)}</dl>;
 }
-export function Trend({ title, labels, series, unit, hint, type = 'line' }) {
-  return <section className="cc-chart"><h2>{title}{hint && <Hint label={title}>{hint}</Hint>}</h2><TimeSeriesChart labels={labels} series={series} unit={unit} label={title} type={type} height={250}/></section>;
+export function Trend({ title, labels, series, unit, hint, type = 'line', zoom = true }) {
+  return <section className="cc-chart"><h2>{title}{hint && <Hint label={title}>{hint}</Hint>}</h2><TimeSeriesChart labels={labels} series={series} unit={unit} label={title} type={type} zoom={zoom} height={280}/></section>;
+}
+export function ModelSwitch({label,value,disabled,onChange}) {
+  return <Button type="button" variant="ghost" size="sm" role="switch" aria-label={label} aria-checked={!!value} disabled={disabled} className="cc-switch" onClick={()=>onChange(!value)}><span/><span className="sr-only">{value?'已开启':'已关闭'}</span></Button>;
+}
+export function PickValues({label,values,options,onChange,multiple=false,creatable=false}) {
+  const [open,setOpen]=useState(false),[query,setQuery]=useState('');
+  const entries=[...new Set([...options,...values])].filter(Boolean),select=value=>{onChange(multiple?(values.includes(value)?values.filter(v=>v!==value):[...values,value]):[value]);if(!multiple)setOpen(false);};
+  return <Popover open={open} onOpenChange={v=>{setOpen(v);setQuery('');}}><PopoverTrigger asChild><Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label={label} className="cc-picker-trigger"><span>{values.length?values.join('、'):`请选择${label}`}</span><ChevronsUpDown size={14}/></Button></PopoverTrigger><PopoverContent className="cc-picker" align="start"><Command><CommandInput placeholder={`搜索${label}`} value={query} onValueChange={setQuery}/><CommandList><CommandEmpty>无匹配选项</CommandEmpty>{entries.map(v=><CommandItem key={v} value={v} onSelect={()=>select(v)}><CheckIcon className={values.includes(v)?'opacity-100':'opacity-0'}/>{v}</CommandItem>)}{creatable&&query.trim()&&!entries.includes(query.trim())&&<CommandItem value={query} onSelect={()=>select(query.trim())}>添加“{query.trim()}”</CommandItem>}</CommandList></Command><Button type="button" variant="ghost" size="sm" onClick={()=>{onChange([]);setOpen(false);}}>清空选择</Button></PopoverContent></Popover>;
 }
 export function Refresh({ onClick }) { return <Button type="button" variant="outline" size="icon" aria-label="刷新" onClick={onClick}><RefreshCw/></Button>; }
 
