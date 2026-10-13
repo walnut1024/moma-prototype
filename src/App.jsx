@@ -2737,7 +2737,7 @@ function PrototypeApp({ version }) {
         ) : activePage === "API Key 管理" ? (
           <UnifiedApiKeys />
         ) : activePage === "用量统计" ? (
-          <UsageStatistics />
+          <UsageStatistics key={tenantAccess.userType} userType={tenantAccess.userType} />
         ) : activePage === "调用日志" ? (
           <CallLogs />
         ) : is5102 && activePage.startsWith("用量统计·") ? (

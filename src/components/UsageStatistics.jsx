@@ -73,8 +73,9 @@ function UsageOverview({ summary, view, days }) {
     </div>;
   })}</div>;
 }
-export default function UsageStatistics({ observation = false }) {
-  const [billing, setBilling] = useState(observation ? '全部' : '按量付费');
+export default function UsageStatistics({ observation = false, userType = 'enterprise' }) {
+  const defaultBilling = observation ? '全部' : userType === 'personal' ? 'Token Plan' : '按量付费';
+  const [billing, setBilling] = useState(defaultBilling);
   const [category, setCategory] = useState(observation ? '文本模型' : '语言模型');
   const [visual, setVisual] = useState('视觉理解'), [audio, setAudio] = useState('语音合成');
   const type = category === '视觉模型' ? visual : category === '音频模型' ? audio : category;
@@ -141,7 +142,7 @@ export default function UsageStatistics({ observation = false }) {
       setMinutes(['5', '60', '1440'].includes(value.minutes) ? value.minutes : '60');
       setPreset(value.preset || '3'); setRange(value.preset === 'custom' ? customRange : observationPeriod(value.preset || '3', current));
     } else {
-      const nextBilling = ['按量付费', 'Token Plan'].includes(value.billing) ? value.billing : '按量付费';
+      const nextBilling = ['按量付费', 'Token Plan'].includes(value.billing) ? value.billing : defaultBilling;
       const planId = tokenPlanSubscriptions.some(plan => plan.id === value.subscriptionId) ? value.subscriptionId : tokenPlanSubscriptions[0].id;
       setCategory(value.category); setBilling(nextBilling); setSubscriptionId(planId);
       setModelIds(value.modelIds === null || Array.isArray(value.modelIds) ? value.modelIds : null);
@@ -152,7 +153,7 @@ export default function UsageStatistics({ observation = false }) {
   const datePicker = <DateRange start={range.start} end={range.end} maxDays={31} label={observation ? '自定义' : ''} presets={observation ? undefined : usageTimePresets} onChange={value => { setRange(value); setPreset('custom'); }}/>;
   const resetFilters = () => {
     const current = new Date(); setNow(current); setPreset(observation ? '1' : 'today'); setRange(observation ? observationPeriod('1', current) : usagePeriod('today', current));
-    setCategory(observation ? '文本模型' : '语言模型'); setBilling(observation ? '全部' : '按量付费'); setVisual('视觉理解'); setAudio('语音合成'); setApiKeyIds(null); setMinutes('60'); setModelIds(null); setApiKeyId(null); setKeySearch(''); setKeyPickerOpen(false); setSubscriptionId(tokenPlanSubscriptions[0].id);
+    setCategory(observation ? '文本模型' : '语言模型'); setBilling(defaultBilling); setVisual('视觉理解'); setAudio('语音合成'); setApiKeyIds(null); setMinutes('60'); setModelIds(null); setApiKeyId(null); setKeySearch(''); setKeyPickerOpen(false); setSubscriptionId(tokenPlanSubscriptions[0].id);
   };
   return <TooltipProvider><div className={observation ? "us-page us-observation" : "us-page us-metering"}><FrontPageHeader title={observation ? "调用观测" : "用量统计"} description={observation ? "查看调用成功率、响应时延与运行趋势" : "查看输入、输出及缓存等计费分项的用量"} icon={observation ? Activity : ChartNoAxesCombined} actions={!observation && <ToggleGroup type="single" value={billing} onValueChange={value => value && changeBilling(value)} variant="outline" size="sm" className="us-segmented" aria-label="计费方式">{['按量付费', 'Token Plan'].map(value => <ToggleGroupItem key={value} value={value}>{value}</ToggleGroupItem>)}</ToggleGroup>} />
     <Tabs value={category} onValueChange={value => { if (observation) changeType(value, setCategory); else { setCategory(value); setModelIds(null); } }}><TabsList variant="line" className="us-tabs">{(observation ? observationCategories : usageModelGroups.map(group => [group.id, group.id])).map(([id, label]) => <TabsTrigger key={id} value={id}>{label}</TabsTrigger>)}</TabsList>
