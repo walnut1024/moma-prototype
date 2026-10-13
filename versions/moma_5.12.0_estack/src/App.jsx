@@ -3015,7 +3015,6 @@ function PrototypeApp({ version }) {
         ) : (
           <div className="content">
             {!is5102 && <FrontPageHeader title="模型广场" description="探索精选模型，按任务、能力与服务商查找可用模型" icon={Store} actions={<Button variant="outline" onClick={() => setFeatured(value => !value)}>{featured ? "隐藏精选模型" : "展开精选模型"}</Button>} />}
-            {!is5102 && catalogueToolbar}
             {featured ? (
               <section className="featured">
                 {is5102 && <div className="title-row">
@@ -3050,6 +3049,7 @@ function PrototypeApp({ version }) {
                 展开精选模型
               </button>
             ) : null}
+            {!is5102 && catalogueToolbar}
             <section className={is5102 ? "catalog" : `catalog catalogue-layout ${compactFilters || !filtersExpanded ? 'catalogue-collapsed' : ''}`}>
               {is5102 ? catalogueFilters : !compactFilters && <div hidden={!filtersExpanded}>{catalogueFilters}</div>}
               <div className="results">
