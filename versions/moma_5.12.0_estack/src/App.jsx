@@ -55,6 +55,8 @@ import {
   Route,
   ScanSearch,
   Search,
+  SlidersHorizontal,
+  X,
   Settings,
   ShoppingCart,
   Store,
@@ -62,7 +64,7 @@ import {
   Video,
 } from "lucide-react";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./components/ui/dialog";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./components/ui/dialog";
 import { Button } from "./components/ui/button";
 import { apiKeyOptions } from "./api-key-data.mjs";
 import { tokenPlanSubscriptions } from "./token-plan-data.mjs";
@@ -2655,6 +2657,14 @@ function PrototypeApp({ version }) {
     [filters, setFilters] = useState({}),
     [selected, setSelected] = useState(null),
     [sortMode, setSortMode] = useState("latest");
+  const [compactFilters, setCompactFilters] = useState(() => window.matchMedia('(max-width: 900px)').matches);
+  const [filtersExpanded, setFiltersExpanded] = useState(() => !window.matchMedia('(max-width: 900px)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 900px)');
+    const change = () => { setCompactFilters(media.matches); setFiltersExpanded(!media.matches); };
+    media.addEventListener('change', change);
+    return () => media.removeEventListener('change', change);
+  }, []);
   const auth = usePrototypeAuth();
   useEffect(() => {
     if (is5102 && activePage === "模型排行") setActivePage("模型广场");
@@ -2717,7 +2727,7 @@ function PrototypeApp({ version }) {
         .filter((m) => {
           const data = meta(m);
           return (
-            m.name.toLowerCase().includes(query.trim().toLowerCase()) &&
+            [m.name, m.modelId, m.id].some(value => String(value ?? '').toLowerCase().includes(query.trim().toLowerCase())) &&
             Object.entries(filters).every(
               ([group, value]) =>
                 !value ||
@@ -2750,6 +2760,84 @@ function PrototypeApp({ version }) {
     </button>
   );
   const resetFilters = () => { setFilters({}); setQuery(""); };
+  const catalogueFilters = (<div className="filters" id="catalogue-filters">
+                <div className="filter-heading">
+                  <h3>模型筛选</h3>
+                  <button
+                    onClick={resetFilters}
+                    disabled={!query.trim() && !Object.values(filters).some(Boolean)}
+                  >
+                    重置
+                  </button>
+                </div>
+                <FilterSection title="任务分类" count={filters.task ? 1 : 0}>
+                  {[
+                    "多模态",
+                    "文本与代码",
+                    "图像",
+                    "视频",
+                    "音频",
+                    "音乐",
+                    "向量",
+                    "重排",
+                    "3D",
+                  ].map((x) => option("task", x))}
+                </FilterSection>
+                <FilterSection title="输入" count={filters.input ? 1 : 0}>
+                  {["文本", "图像", "音频", "视频"].map((x) =>
+                    option("input", x),
+                  )}
+                </FilterSection>
+                <FilterSection title="输出" count={filters.output ? 1 : 0}>
+                  {["文本", "图像", "音频", "视频"].map((x) =>
+                    option("output", x),
+                  )}
+                </FilterSection>
+                <FilterSection title={`上下文上限：${filters.context || 1024}K`}>
+                  <div className="range-values">
+                    <span>4K</span>
+                    <span>1M</span>
+                  </div>
+                  <input
+                    className="filter-range"
+                    type="range"
+                    min="4"
+                    max="1024"
+                    value={filters.context || 1024}
+                    onChange={event => setFilters(current => ({...current, context:Number(event.target.value)}))}
+                    aria-label="上下文长度上限"
+                  />
+                </FilterSection>
+                <FilterSection title="模型作者" count={filters.author ? 1 : 0}>
+                  {[
+                    "阿里巴巴",
+                    "深度求索",
+                    "月之暗面",
+                    "智谱 AI",
+                    "稀宇科技",
+                  ].map((x) => option("author", x))}
+                </FilterSection>
+                <FilterSection
+                  title="推理服务商"
+                  count={filters.provider ? 1 : 0}
+                >
+                  {["移动云", "联通", "电信"].map((x) => option("provider", x))}
+                </FilterSection>
+              </div>);
+  const filterLabels = {task:'任务分类', input:'输入', output:'输出', context:'上下文上限', author:'模型作者', provider:'推理服务商', series:'模型系列'};
+  const activeFilters = Object.entries(filters).filter(([, value]) => Boolean(value));
+  const removeFilter = group => setFilters(current => { const next = {...current}; delete next[group]; return next; });
+  const filterToggle = <Button variant="outline" aria-expanded={filtersExpanded} aria-controls="catalogue-filters" onClick={compactFilters ? undefined : () => setFiltersExpanded(value => !value)}><SlidersHorizontal/>{filtersExpanded ? '收起筛选' : '展开筛选'}{activeFilters.length > 0 && ' · ' + activeFilters.length}</Button>;
+  const catalogueToolbar = <section className="catalogue-tools" aria-label="模型查找">
+    <div className="catalogue-toolbar">
+      {compactFilters ? <Dialog open={filtersExpanded} onOpenChange={setFiltersExpanded}><DialogTrigger asChild>{filterToggle}</DialogTrigger><DialogContent className="catalogue-filter-drawer"><DialogHeader><DialogTitle>模型筛选</DialogTitle><DialogDescription className="sr-only">选择筛选条件查找模型</DialogDescription></DialogHeader>{catalogueFilters}</DialogContent></Dialog> : filterToggle}
+      <div className="catalogue-search"><Search aria-hidden="true"/><Input aria-label="搜索模型" value={query} placeholder="搜索模型名称或模型 ID" onChange={event => { setQuery(event.target.value); if(event.target.value.trim())setFeatured(false); }}/>{query && <Button variant="ghost" size="icon" aria-label="清除搜索" onClick={() => setQuery('')}><X/></Button>}</div>
+      <span className="catalogue-count" role="status">{query.trim() || activeFilters.length ? '找到 ' : '模型 '}{visible.length} 个</span>
+      <Select value={sortMode} onValueChange={setSortMode}><SelectTrigger aria-label="模型排序"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="latest">最新</SelectItem><SelectItem value="recommended">推荐</SelectItem></SelectContent></Select>
+    </div>
+    {(query.trim() || activeFilters.length > 0) && <div className="catalogue-conditions" aria-label="已选条件"><span>已选条件</span>{query.trim() && <Button variant="outline" size="sm" aria-label="移除搜索条件" onClick={() => setQuery('')}>搜索：{query.trim()}<X/></Button>}{activeFilters.map(([group,value]) => <Button key={group} variant="outline" size="sm" aria-label={'移除' + (filterLabels[group] || group) + '条件'} onClick={() => removeFilter(group)}>{filterLabels[group] || group}：{value}{group === 'context' ? 'K' : ''}<X/></Button>)}<Button variant="ghost" size="sm" onClick={resetFilters}>清空</Button></div>}
+  </section>;
+
   return (
     <div className={`app-shell ${is5102 ? "version-5102" : ""} ${auth.route ? "auth-shell" : ""} ${auth.route ? "auth-enterprise-shell" : ""}`}>
       <header className={admin === "v2" ? "admin-banner" : undefined}>
@@ -2927,6 +3015,7 @@ function PrototypeApp({ version }) {
         ) : (
           <div className="content">
             {!is5102 && <FrontPageHeader title="模型广场" description="探索精选模型，按任务、能力与服务商查找可用模型" icon={Store} actions={<Button variant="outline" onClick={() => setFeatured(value => !value)}>{featured ? "隐藏精选模型" : "展开精选模型"}</Button>} />}
+            {!is5102 && catalogueToolbar}
             {featured ? (
               <section className="featured">
                 {is5102 && <div className="title-row">
@@ -2961,72 +3050,10 @@ function PrototypeApp({ version }) {
                 展开精选模型
               </button>
             ) : null}
-            <section className="catalog">
-              <div className="filters">
-                <div className="filter-heading">
-                  <h3>模型筛选</h3>
-                  <button
-                    onClick={resetFilters}
-                    disabled={!query.trim() && !Object.values(filters).some(Boolean)}
-                  >
-                    重置
-                  </button>
-                </div>
-                <FilterSection title="任务分类" count={filters.task ? 1 : 0}>
-                  {[
-                    "多模态",
-                    "文本与代码",
-                    "图像",
-                    "视频",
-                    "音频",
-                    "音乐",
-                    "向量",
-                    "重排",
-                    "3D",
-                  ].map((x) => option("task", x))}
-                </FilterSection>
-                <FilterSection title="输入" count={filters.input ? 1 : 0}>
-                  {["文本", "图像", "音频", "视频"].map((x) =>
-                    option("input", x),
-                  )}
-                </FilterSection>
-                <FilterSection title="输出" count={filters.output ? 1 : 0}>
-                  {["文本", "图像", "音频", "视频"].map((x) =>
-                    option("output", x),
-                  )}
-                </FilterSection>
-                <FilterSection title={`上下文上限：${filters.context || 1024}K`}>
-                  <div className="range-values">
-                    <span>4K</span>
-                    <span>1M</span>
-                  </div>
-                  <input
-                    className="filter-range"
-                    type="range"
-                    min="4"
-                    max="1024"
-                    value={filters.context || 1024}
-                    onChange={event => setFilters(current => ({...current, context:Number(event.target.value)}))}
-                    aria-label="上下文长度上限"
-                  />
-                </FilterSection>
-                <FilterSection title="模型作者" count={filters.author ? 1 : 0}>
-                  {[
-                    "阿里巴巴",
-                    "深度求索",
-                    "月之暗面",
-                    "智谱 AI",
-                    "稀宇科技",
-                  ].map((x) => option("author", x))}
-                </FilterSection>
-                <FilterSection
-                  title="推理服务商"
-                  count={filters.provider ? 1 : 0}
-                >
-                  {["移动云", "联通", "电信"].map((x) => option("provider", x))}
-                </FilterSection>
-              </div>
+            <section className={is5102 ? "catalog" : `catalog catalogue-layout ${compactFilters || !filtersExpanded ? 'catalogue-collapsed' : ''}`}>
+              {is5102 ? catalogueFilters : !compactFilters && <div hidden={!filtersExpanded}>{catalogueFilters}</div>}
               <div className="results">
+                {is5102 && (
                 <div className="toolbar">
                   <h3>
                     模型{" "}
@@ -3054,6 +3081,7 @@ function PrototypeApp({ version }) {
                     </label>
                   </div>
                 </div>
+                )}
                 <div className="cards">
                   {visible.map((m) => {
                     const data = meta(m),
@@ -3101,7 +3129,7 @@ function PrototypeApp({ version }) {
                     );
                   })}
                 </div>
-                {!visible.length && <div className="empty">暂无匹配模型</div>}
+                {!visible.length && <div className="empty">未找到符合条件的模型{!is5102 && <Button variant="link" onClick={resetFilters}>清空条件</Button>}</div>}
               </div>
             </section>
           </div>

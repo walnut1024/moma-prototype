@@ -3359,3 +3359,24 @@ h1 em {
 .app-shell:not(.version-5102) .front-main .playground { --experience-accent: #3568f9; }
 
 body:has(.app-shell:not(.version-5102) > .front-main) :is(.model-select-dialog, .key-action-dialog) { --experience-accent: #3568f9; --primary: #3568f9; --ring: #3568f9; }
+
+/* Model catalogue search and collapsible filters, 5.12.0 only. */
+.catalogue-tools{margin-top:16px;padding:12px;background:#fff;border:1px solid #e4eaf3;border-radius:6px}
+.catalogue-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.catalogue-search{display:flex;align-items:center;position:relative;flex:1;min-width:200px}
+.catalogue-search>svg{position:absolute;left:10px;width:16px;height:16px;color:#71809b;pointer-events:none}
+.catalogue-search input{padding-left:34px;padding-right:36px}
+.catalogue-search>button{position:absolute;right:2px}
+.catalogue-count{min-width:94px;color:#526681;font-size:12px;white-space:nowrap}
+.catalogue-toolbar>[data-slot=select-trigger]{width:110px}
+.catalogue-conditions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #edf0f5;font-size:12px;color:#71809b}
+.catalogue-conditions button{max-width:100%;height:auto;min-height:28px;white-space:normal;overflow-wrap:anywhere;text-align:left}
+.catalogue-conditions svg{width:12px;height:12px;flex-shrink:0}
+.catalogue-layout{margin-top:24px}
+.catalogue-layout.catalogue-collapsed{grid-template-columns:minmax(0,1fr)}
+.catalogue-filter-drawer[data-slot=dialog-content]{inset:0 auto 0 0;--tw-translate-x:0px;--tw-translate-y:0px;transform:none;translate:none;width:min(320px,90vw);height:100dvh;max-width:none;border-radius:0;display:flex;flex-direction:column;overflow:auto}
+.catalogue-filter-drawer .filters{border:0;padding:0}
+@media(max-width:900px){.catalogue-layout{grid-template-columns:minmax(0,1fr)}.catalogue-toolbar{gap:8px}.catalogue-search{order:3;flex-basis:100%;min-width:0}.catalogue-count{margin-left:auto;min-width:0}.catalogue-toolbar>[data-slot=select-trigger]{width:100px}}
+
+body:has(.catalogue-tools){min-width:0}
+.content:has(.catalogue-tools){min-width:0}
