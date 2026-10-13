@@ -1,20 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Input } from '../components/ui/input';
+import { Popover, PopoverTrigger, PopoverContent } from '../components/ui/popover';
 import { Button } from '../components/ui/button';
 import { DateRange } from './AnalyticsFilters';
 import { FilterPresets } from '../components/FilterControls';
 import { DonutChart, RankingChart } from '../components/AnalyticsCharts';
 import { chartPalette } from '../components/chart-style.mjs';
 import { usagePreset, operationsPresets } from './usage-analysis';
-import { CALCLOUD_TYPES, calcloudFacts, calcloudSummary, calcloudBuckets, calcloudGroups, calcloudCosts, calcloudCostHistory, beijingDay } from './calcloud-domain.mjs';
-import { PageHead, Field, TextField, Choice, Metrics, Trend, DataTable, Modal, Refresh, Hint, number, money, time } from './CalcloudUI';
+import { CALCLOUD_TYPES, calcloudFacts, calcloudSummary, calcloudBuckets, calcloudGroups, calcloudCosts, calcloudCostHistory, beijingDay, observationWindow } from './calcloud-domain.mjs';
+import { PageHead, Field, TextField, Choice, Metrics, Trend, DataTable, Modal, Refresh, Hint, number, money, time, priceNumber } from './CalcloudUI';
 
 const tokenHint='仅汇总按Token计量且已记录的用量；缓存命中已包含在输入中。缺失计量显示“—”。';
 const errorHint='非2xx请求占比；缺少响应状态时不计算。';
 const series=(label,values)=>({label,values});
 const percent=value=>Number.isFinite(value)?`${number(value)}%`:'—';
-const priceLabel=p=>p&&p.unit==='元/百万 Token'?<div className="cc-price">输入 {number(Number.isFinite(p.inputPrice)?p.inputPrice/1e6:null)}<br/>缓存 {number(Number.isFinite(p.cachedPrice)?p.cachedPrice/1e6:null)}<br/>输出 {number(Number.isFinite(p.outputPrice)?p.outputPrice/1e6:null)}</div>:'—';
-function DateControls({range,preset,setRange,choose,observation=false}) {
-  return <><FilterPresets value={preset} onChange={choose} items={observation?[['5m','5分钟'],['today','今日'],['3d','近3日'],['7d','近7日']]:operationsPresets}/><DateRange start={range.start} end={range.end} presets={observation?[['today','今日']]:operationsPresets} latestDay={observation?undefined:usagePreset('yesterday').end} maxDays={observation?30:365} rangeHint={observation?'最长30天，记录截至当前时刻':'按北京时间完整自然日统计'} onChange={setRange}/></>;
+const priceLabel=p=>p&&p.unit==='元/百万 Token'?<div className="cc-price">输入 {priceNumber(Number.isFinite(p.inputPrice)?p.inputPrice/1e6:null)}<br/>缓存 {priceNumber(Number.isFinite(p.cachedPrice)?p.cachedPrice/1e6:null)}<br/>输出 {priceNumber(Number.isFinite(p.outputPrice)?p.outputPrice/1e6:null)}</div>:'—';
+function DateControls({range,preset,setRange,choose}) {
+  return <><FilterPresets value={preset} onChange={choose} items={operationsPresets}/><DateRange start={range.start} end={range.end} presets={operationsPresets} latestDay={usagePreset('yesterday').end} maxDays={365} rangeHint="按北京时间完整自然日统计" onChange={setRange}/></>;
 }
 function usePeriod() {
   const [range,setRange]=useState(()=>usagePreset('yesterday')),[preset,setPreset]=useState('yesterday');
@@ -27,12 +29,18 @@ function useObservedFacts(state,observation) {
   const {selection,setSelection}=observation;
   const {preset,clock,custom}=selection;
   useEffect(()=>{setSelection(v=>({...v,clock:Date.now()}));},[setSelection]);
-  const today=beijingDay(clock),range=custom||{start:preset==='3d'?beijingDay(clock-2*86400000):preset==='7d'?beijingDay(clock-6*86400000):today,end:today};
-  const facts=useMemo(()=>calcloudFacts(state,preset==='5m'?{from:clock-300000,to:clock}:range,{},clock),[state,clock,preset,custom]);
-  return {facts,buckets:calcloudBuckets(facts),summary:calcloudSummary(facts.rows),clock,range,preset,choose:id=>setSelection({clock:Date.now(),custom:null,preset:id}),setRange:r=>setSelection({custom:r,preset:'custom',clock:Date.now()}),refresh:()=>setSelection(v=>({...v,clock:Date.now()}))};
+  const window=observationWindow(preset,clock,custom),range={start:beijingDay(window.from),end:beijingDay(window.to)};
+  const facts=useMemo(()=>calcloudFacts(state,window,{},clock),[state,window.from,window.to,clock]);
+  return {facts,buckets:calcloudBuckets(facts),summary:calcloudSummary(facts.rows),clock,range,preset,custom,choose:id=>setSelection({clock:Date.now(),custom:null,preset:id}),setRange:r=>setSelection({custom:r,preset:'custom',clock:Date.now()}),refresh:()=>setSelection(v=>({...v,clock:Date.now()}))};
+}
+function ObservationTime({observed}) {
+  const [open,setOpen]=useState(false),[draft,setDraft]=useState({}),[error,setError]=useState('');
+  const stamp=at=>new Date(at+8*3600000).toISOString().slice(0,19);
+  const show=v=>{setOpen(v);if(v){const w=observationWindow(observed.preset,observed.clock,observed.custom);setDraft({start:stamp(w.from),end:stamp(w.to)});setError('');}};
+  return <Popover open={open} onOpenChange={show}><PopoverTrigger asChild><Button variant="outline" aria-label="自定义时间范围">自定义{observed.preset==='custom'?' · '+time(observed.custom.start)+' — '+time(observed.custom.end):''}</Button></PopoverTrigger><PopoverContent align="start" className="cc-time-popover"><div className="cc-form-grid">{[['start','开始时间'],['end','结束时间']].map(([key,label])=><Field key={key} label={label} required><Input aria-label={label} type="datetime-local" step="1" value={draft[key]||''} onInput={e=>{const value=e.currentTarget.value;setDraft(d=>({...d,[key]:value}));}} onChange={e=>{const value=e.target.value;setDraft(d=>({...d,[key]:value}));}}/></Field>)}</div>{error&&<p className="cc-error" role="alert">{error}</p>}<div className="cc-form-footer"><Button variant="outline" onClick={()=>setOpen(false)}>取消</Button><Button onClick={()=>{try{const value={start:draft.start+'+08:00',end:draft.end+'+08:00'};observationWindow('custom',Date.now(),value);observed.setRange(value);setOpen(false);}catch(e){setError(e.message);}}}>应用时间</Button></div></PopoverContent></Popover>;
 }
 function ObservationControls({observed}) {
-  return <><section className="cc-surface"><div className="cc-toolbar"><DateControls {...observed} observation/><Refresh onClick={observed.refresh}/></div></section><p className="cc-context">北京时间 · 截至 {time(new Date(observed.clock).toISOString())} · {observed.preset==='5m'?'按分钟汇总':observed.buckets[0]?.minutes<=60?'按小时汇总':'按日汇总'}</p></>;
+  return <><section className="cc-surface"><div className="cc-toolbar"><FilterPresets value={observed.preset} onChange={observed.choose} items={[['5m','5分钟'],['today','今日'],['3d','近3日'],['7d','近7日']]}/><ObservationTime observed={observed}/><Refresh onClick={observed.refresh}/></div></section><p className="cc-context">北京时间 · 截至 {time(new Date(observed.clock).toISOString())} · {observed.preset==='5m'?'按分钟汇总':observed.buckets[0]?.minutes<=60?'按小时汇总':'按日汇总'}</p></>;
 }
 export function BusinessCallStatisticsPage({state,observation}) {
   const o=useObservedFacts(state,observation),s=o.summary,models=calcloudGroups(o.facts.rows,'modelId',state.models);
@@ -49,14 +57,14 @@ export function ErrorStatisticsPage({state,observation}) {
   const o=useObservedFacts(state,observation),s=o.summary,labels=o.buckets.map(b=>b.label);
   return <><PageHead title="错误与异常统计" note="查看失败、错误率、超时及错误类型。"/><ObservationControls observed={o}/><div className="cc-charts">
     <Trend title="调用失败总次数" labels={labels} unit="次" series={[series('失败次数',o.buckets.map(b=>b.failed))]}/><Trend title="整体错误率" labels={labels} unit="%" hint={errorHint} series={[series('错误率',o.buckets.map(b=>b.errorRate))]}/><Trend title="超时请求次数" labels={labels} unit="次" hint="状态408、504或请求尝试明确记录timeout。" series={[series('超时次数',o.buckets.map(b=>b.timeout))]}/>
-    <section className="cc-chart"><h2>错误类型分布<Hint label="错误类型">按已记录的非2xx响应状态分类。</Hint></h2><DonutChart label="错误类型分布" unit="次" rows={[{label:'4xx',value:s.four},{label:'5xx',value:s.five},{label:'其他',value:s.other}]} height={250}/></section>
+    <section className="cc-chart"><h2>错误类型分布<Hint label="错误类型">按已记录的非2xx响应状态分类。</Hint></h2><DonutChart centerValue={number(s.failed)} centerLabel="错误总数" label="错误类型分布" unit="次" rows={[{label:'4xx',value:s.four},{label:'5xx',value:s.five},{label:'其他',value:s.other}]} height={250}/><div className="cc-donut-values"><span>4xx错误 <strong>{number(s.four)}</strong></span><span>5xx错误 <strong>{number(s.five)}</strong></span><span>其他错误 <strong>{number(s.other)}</strong></span></div></section>
   </div></>;
 }
 export function CustomerAnalysisPage({state}) {
   const period=usePeriod(),[query,setQuery]=useState(''),[applied,setApplied]=useState({range:period.range,query:''});
-  const facts=calcloudFacts(state,applied.range),groups=calcloudGroups(facts.rows,'userId',state.users).filter(c=>`${c.id} ${c.name}`.toLowerCase().includes(applied.query.toLowerCase()));
+  const facts=calcloudFacts(state,applied.range),groups=calcloudGroups(facts.rows,'userId',state.users).filter(c=>c.name.toLowerCase().includes(applied.query.toLowerCase()));
   const reset=()=>{period.reset();setQuery('');setApplied({range:usagePreset('yesterday'),query:''});};
-  return <><PageHead title="客户分析" note="按用户查看调用量、Token消耗与错误率。"/><PeriodToolbar period={period} apply={()=>setApplied({range:period.range,query})} reset={reset}><TextField label="用户名或用户ID" value={query} onChange={setQuery}/></PeriodToolbar><section className="cc-surface"><DataTable key={JSON.stringify(applied)} rows={groups} columns={[
+  return <><PageHead title="客户分析" note="按用户查看调用量、Token消耗与错误率。"/><PeriodToolbar period={period} apply={()=>setApplied({range:period.range,query})} reset={reset}><TextField label="用户名" value={query} onChange={setQuery}/></PeriodToolbar><section className="cc-surface"><DataTable key={JSON.stringify(applied)} rows={groups} columns={[
     ['用户ID',c=>c.id],['用户名称',c=>c.name],['调用总次数',c=>number(c.calls)],['输入Tokens',c=>number(c.input)],['输出Tokens',c=>number(c.output)],['总Tokens',c=>number(c.total)],['错误率',c=>percent(c.errorRate)]
   ]}/></section><p className="cc-context">{applied.range.start} — {applied.range.end} · 北京时间完整自然日 · 未归属用户的调用 {number(facts.rows.filter(r=>!r.userId).length)} 次 · Token用量仅统计按Token计量的模型</p></>;
 }
@@ -75,8 +83,8 @@ export function ModelAnalysisPage({state}) {
   const knownTokens=groups.every(g=>g.total!=null);
   return <><PageHead title="模型分析" note="查看模型在各服务商的调用趋势、Token消耗和错误分布。"/><PeriodToolbar period={period} reset={reset}><Field label="模型类型"><Choice label="模型类型" value={type} all options={Object.entries(CALCLOUD_TYPES)} onChange={v=>{setType(v);setModel(state.models.find(m=>!v||m.type===v)?.id||'');}}/></Field><Field label="模型名称"><Choice label="模型" value={model} options={state.models.filter(m=>!type||m.type===type)} onChange={setModel}/></Field></PeriodToolbar><div className="cc-charts">
     <Trend title="各服务商调用次数" labels={labels} unit="次" series={curves('calls')}/><Trend title="各服务商Token消耗" labels={labels} unit="Token" hint={tokenHint} series={curves('total')}/>
-    <section className="cc-chart"><h2>调用占比</h2><DonutChart label="调用占比" rows={groups.map(g=>({label:g.name,value:g.calls}))} unit="次" height={280}/><div className="cc-donut-values">{groups.map(g=><span key={g.id}>{g.name} <strong>{number(g.calls)}</strong></span>)}</div></section>
-    <section className="cc-chart"><h2>Token消耗占比<Hint label="Token占比">计量不完整时不计算占比。</Hint></h2>{knownTokens?<><DonutChart label="Token消耗占比" rows={groups.map(g=>({label:g.name,value:g.total}))} unit="Token" height={280}/><div className="cc-donut-values">{groups.map(g=><span key={g.id}>{g.name} <strong>{number(g.total)}</strong></span>)}</div></>:<p className="cc-empty">缺少完整Token计量，暂无法计算占比。</p>}</section>
+    <section className="cc-chart"><h2>调用占比</h2><DonutChart centerValue={number(groups.reduce((n,g)=>n+g.calls,0))} centerLabel="调用总次数" label="调用占比" rows={groups.map(g=>({label:g.name,value:g.calls}))} unit="次" height={280}/><div className="cc-donut-values">{groups.map(g=><span key={g.id}>{g.name} <strong>{number(g.calls)}</strong></span>)}</div></section>
+    <section className="cc-chart"><h2>Token消耗占比<Hint label="Token占比">计量不完整时不计算占比。</Hint></h2>{knownTokens?<><DonutChart centerValue={number(groups.reduce((n,g)=>n+g.total,0))} centerLabel="Token总量" label="Token消耗占比" rows={groups.map(g=>({label:g.name,value:g.total}))} unit="Token" height={280}/><div className="cc-donut-values">{groups.map(g=><span key={g.id}>{g.name} <strong>{number(g.total)}</strong></span>)}</div></>:<p className="cc-empty">缺少完整Token计量，暂无法计算占比。</p>}</section>
     <Trend title="各服务商调用失败次数" labels={labels} unit="次" series={curves('failed')}/><Trend title="各服务商错误率" labels={labels} unit="%" hint={errorHint} series={curves('errorRate')}/>
   </div></>;
 }
@@ -86,10 +94,10 @@ export function CostAnalysisPage({state}) {
   const reset=()=>{period.reset();setModel('');setProvider('');setApplied({range:usagePreset('yesterday'),model:'',provider:''});};
   const history=detail?calcloudCostHistory(state,facts,detail.modelId,detail.providerId):[];
   return <><PageHead title="成本分析" note="按调用时生效的采购价与目录价计算收入和利润。"/><PeriodToolbar period={period} apply={()=>setApplied({range:period.range,model,provider})} reset={reset}><Field label="模型名称"><Choice label="模型" value={model} all options={state.models} onChange={setModel}/></Field><Field label="模型服务商"><Choice label="服务商" value={provider} all options={state.providers} onChange={setProvider}/></Field></PeriodToolbar><Metrics items={[
-    ['调用总次数',number(facts.rows.length)],['收入',money(sum('income')),'按调用时的目录价计算；未记录历史价格时显示“—”。'],['利润',money(sum('profit')),'收入减采购成本；缺少任一历史价格时不计算。']
+    ['总调用量',number(calcloudSummary(facts.rows).total),'未命中输入、缓存命中与输出Token用量之和。'],['总收入',money(sum('income')),'按调用时的目录价计算；未记录历史价格时显示“—”。'],['总利润',money(sum('profit')),'收入减采购成本；缺少任一历史价格时不计算。']
   ]}/><section className="cc-surface"><DataTable key={JSON.stringify(applied)} rows={rows} columns={[
-    ['模型名称',r=>r.name],['服务商名称',r=>r.provider],['模型接入时间',r=>time(r.createdAt)],['模型成本价（元/百万Tokens）',r=>priceLabel(r.purchase)],['模型目录价（元/百万Tokens）',r=>priceLabel(r.sale)],['调用量',r=><>输入 {number(r.input)}<small>缓存命中 {number(r.cached)}</small><small>输出 {number(r.output)}</small></>],['利润',r=>money(r.profit)],['操作',r=><Button variant="ghost" size="sm" onClick={()=>setDetail(r)}>详情</Button>]
-  ]}/></section><p className="cc-context">历史计量、价格缺失或计费单位不适用时显示“—”；不使用当前价格追算历史费用。</p><Modal title="成本详情" description={detail?`${detail.name} · ${detail.provider} · ${applied.range.start} — ${applied.range.end}`:''} open={!!detail} close={()=>setDetail(null)} wide><DataTable rows={history} columns={[
-    ['价格生效区间',r=><>{time(new Date(r.effectiveFrom).toISOString())}<small>{r.effectiveTo?`至 ${time(new Date(r.effectiveTo).toISOString())}`:'至今'}</small></>],['成本价格（元/百万Tokens）',r=>priceLabel(r.purchase)],['目录价格（元/百万Tokens）',r=>priceLabel(r.sale)],['周期内利润',r=>money(r.profit)]
+    ['模型名称',r=>r.name],['服务商名称',r=>r.provider],['模型接入时间',r=>time(r.createdAt)],['模型成本价（元/百万Tokens）',r=>priceLabel(r.purchase)],['模型目录价（元/百万Tokens）',r=>priceLabel(r.sale)],['调用量',r=><>未命中输入 {number(r.uncached)}<small>缓存命中 {number(r.cached)}</small><small>输出 {number(r.output)}</small></>],['利润',r=>money(r.profit)],['操作',r=><Button variant="ghost" size="sm" onClick={()=>setDetail(r)}>详情</Button>]
+  ]}/></section><p className="cc-context">历史计量、价格缺失或计费单位不适用时显示“—”；不使用当前价格追算历史费用。</p><Modal title="成本详情" description={detail?`${detail.name} · ${detail.provider} · 全部历史价格版本`:''} open={!!detail} close={()=>setDetail(null)} wide><DataTable rows={history} columns={[
+    ['价格生效区间',r=><>{time(new Date(r.effectiveFrom).toISOString())}<small>{r.effectiveTo?`至 ${time(new Date(r.effectiveTo).toISOString())}`:'至今'}</small></>],['成本价格（元/百万Tokens）',r=>priceLabel(r.purchase)],['周期内利润',r=>money(r.profit)]
   ]}/><div className="cc-form-footer"><Button variant="outline" onClick={()=>setDetail(null)}>关闭</Button></div></Modal></>;
 }

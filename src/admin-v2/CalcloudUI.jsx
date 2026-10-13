@@ -1,9 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Info, RefreshCw, X, ChevronsUpDown, Check as CheckIcon } from 'lucide-react';
+import { Info, RefreshCw, X, ChevronsUpDown, Check as CheckIcon, Eye, EyeOff, Copy } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group';
+import { maskApiKey } from '../api-key-utils.mjs';
 import { Checkbox } from '../components/ui/checkbox';
 import { Popover, PopoverTrigger, PopoverContent } from '../components/ui/popover';
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from '../components/ui/command';
@@ -15,7 +17,8 @@ import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import { CALCLOUD_STORAGE_KEY, createCalcloudSeed, calcloudTransaction } from './calcloud-domain.mjs';
 
 export const number = value => Number.isFinite(value) ? value.toLocaleString('zh-CN', { maximumFractionDigits: 2 }) : '—';
-export const money = value => Number.isFinite(value) ? `¥${value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : '—';
+export const money = value => Number.isFinite(value) ? `¥${value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}` : '—';
+export const priceNumber = value => Number.isFinite(value) ? value.toLocaleString('zh-CN',{maximumFractionDigits:6}) : '—';
 export const time = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—';
 export function Field({ label, required, children, wide }) {
   return <div className={`cc-field${wide ? ' cc-wide' : ''}`}><span>{label}{required && <b aria-label="必填"> *</b>}</span>{children}</div>;
@@ -24,8 +27,8 @@ export function TextField({ label, value, onChange, required, ...props }) {
   const id = useId();
   return <div className="cc-field"><label htmlFor={id}>{label}{required && <b> *</b>}</label><Input id={id} value={value ?? ''} onChange={e => onChange(e.target.value)} required={required} {...props}/></div>;
 }
-export function Choice({ label, value, options, onChange, all = false, disabled }) {
-  return <Select value={value || (all ? '__all' : '')} onValueChange={v => onChange(v === '__all' ? '' : v)} disabled={disabled}><SelectTrigger aria-label={label}><SelectValue placeholder={`请选择${label}`}/></SelectTrigger><SelectContent>{all && <SelectItem value="__all">全部{label}</SelectItem>}{options.map(item => { const [id, name] = Array.isArray(item) ? item : [item.id, item.name]; return <SelectItem key={id} value={String(id)}>{name}</SelectItem>; })}</SelectContent></Select>;
+export function Choice({ label, value, options, onChange, all = false, disabled, disabledValues=[] }) {
+  return <Select value={value || (all ? '__all' : '')} onValueChange={v => onChange(v === '__all' ? '' : v)} disabled={disabled}><SelectTrigger aria-label={label}><SelectValue placeholder={`请选择${label}`}/></SelectTrigger><SelectContent>{all && <SelectItem value="__all">全部{label}</SelectItem>}{options.map(item => { const [id, name] = Array.isArray(item) ? item : [item.id, item.name]; return <SelectItem key={id} value={String(id)} disabled={disabledValues.includes(id)}>{name}</SelectItem>; })}</SelectContent></Select>;
 }
 export function Check({ label, value, onChange }) {
   const id = useId(); return <div className="cc-check"><Checkbox id={id} checked={!!value} onCheckedChange={v => onChange(v === true)}/><label htmlFor={id}>{label}</label></div>;
@@ -72,6 +75,7 @@ function readConfig(state) {
   const data = JSON.parse(raw);
   if (data?.version !== 1 || !['models', 'providers', 'routes', 'traffic'].every(key => Array.isArray(data[key]) && data[key].every(r => r && typeof r.id === 'string') && new Set(data[key].map(r => r.id)).size === data[key].length)) throw new Error('配置格式不正确，原记录已保留');
   if (!data.models.every(m => typeof m.name === 'string' && Array.isArray(m.tags) && Array.isArray(m.bindings) && m.bindings.every(b => Array.isArray(b.inputs) && Array.isArray(b.outputs) && Array.isArray(b.features) && b.custom && b.prices) && m.examples) || !data.routes.every(r => Array.isArray(r.headers) && Array.isArray(r.query) && Array.isArray(r.targets) && Array.isArray(r.fallback)) || !data.providers.every(p => typeof p.code === 'string')) throw new Error('配置字段不完整，原记录已保留');
+  if (data.priceVersions !== undefined && (!Array.isArray(data.priceVersions) || !data.priceVersions.every(p => p && typeof p.id === 'string' && typeof p.modelId === 'string' && typeof p.providerId === 'string' && ['cost','sale'].includes(p.kind) && Number.isFinite(Date.parse(p.effectiveAt)) && ['inputPrice','cachedPrice','outputPrice'].every(key => p[key] === null || Number.isFinite(p[key]) && p[key] >= 0)))) throw new Error('历史价格格式不正确，原记录已保留');
   return { data, raw };
 }
 export function useCalcloudConfig(state) {
@@ -103,4 +107,12 @@ export function useDraftGuard(dirty, discard) {
   }, [dirty]);
   const guard = <Modal title="放弃未保存的修改？" description="离开后，本次修改不会保存。" open={!!pending} close={() => setPending(null)}><DialogFooter><Button variant="outline" onClick={() => setPending(null)}>继续编辑</Button><Button onClick={() => { const action = pending; setPending(null); discard(); allowed.current = true; action(); setTimeout(() => { allowed.current = false; }, 0); }}>放弃修改</Button></DialogFooter></Modal>;
   return { proceed, guard };
+}
+
+export function BooleanChoice({label,value,onChange}) {
+  return <Field label={label} required><ToggleGroup type="single" variant="outline" size="sm" aria-label={label} value={value===true?'yes':value===false?'no':''} onValueChange={v=>{if(v)onChange(v==='yes');}}><ToggleGroupItem value="yes" aria-label={label+'：是'}>是</ToggleGroupItem><ToggleGroupItem value="no" aria-label={label+'：否'}>否</ToggleGroupItem></ToggleGroup></Field>;
+}
+export function KeyValue({value}) {
+  const [visible,setVisible]=useState(false),available=typeof value==='string'&&value.length>0&&!/[*•]/.test(value);
+  return <div className="cc-secret"><span>{visible&&available?value:maskApiKey(value)}</span><Button variant="ghost" size="icon-sm" aria-label={visible?'隐藏API Key':'显示API Key'} disabled={!available} onClick={()=>setVisible(v=>!v)}>{visible?<EyeOff/>:<Eye/>}</Button><Button variant="ghost" size="icon-sm" aria-label="复制API Key" disabled={!available} onClick={async()=>{try {await navigator.clipboard.writeText(value);toast.success('已复制API Key');}catch{toast.error('复制失败，请重试');}}}><Copy/></Button></div>;
 }

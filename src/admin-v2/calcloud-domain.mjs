@@ -6,7 +6,8 @@ export const CALCLOUD_PAGE_IDS = ['base-models','cost-analysis','customer-analys
 export const CALCLOUD_TYPES = { text:'语言模型',multimodal:'多模态模型',image:'视觉模型',video:'视觉模型',audio:'语音模型',embedding:'向量模型',rerank:'排序模型' };
 export const CALCLOUD_PERIODS = ['分钟','日','月'];
 export const MATCH_MODES = ['前缀匹配','精确匹配','正则匹配'];
-export const emptyBinding = providerId => ({providerId,inputs:['TEXT'],outputs:['TEXT'],features:['Function Call','结构化输出','联网搜索'],custom:{},prices:{},needsSubscription:false,preset:false});
+export const emptyBinding = providerId => ({providerId,inputs:providerId?['TEXT']:[],outputs:providerId?['TEXT']:[],features:['Function Call','结构化输出','联网搜索'],custom:{context:16384,step:2048,input:8192,output:8192,functionType:'NO_CALL',online:false,api:false},prices:{costInput:3,costCached:1,costOutput:5,saleInput:4,saleCached:2,saleOutput:6},needsSubscription:false,preset:false});
+export const modelSubtypes = value => (value||'').split('、').filter(Boolean);
 const displayPrice = value => Number.isFinite(value) ? value / 1e6 : null;
 const nowText = () => new Date().toISOString();
 
@@ -19,7 +20,7 @@ export function createCalcloudSeed(state) {
   })}));
   const routes=state.routes.filter(r=>models.some(m=>m.id===r.modelId)).map(r=>({id:r.id,name:r.routeId||r.id,pathMatch:'前缀匹配',path:'/v1/chat/completions',ignoreCase:true,headers:[],query:[],targets:r.targets.map(t=>({providerId:state.endpoints.find(e=>e.id===t.endpointId)?.providerId,mappings:[{modelId:r.modelId,condition:'精确匹配',targetName:state.models.find(m=>m.id===r.modelId)?.modelId||''}],percent:t.weight})).filter(t=>providers.some(p=>p.id===t.providerId)),fallbackEnabled:false,fallbackCodes:[],fallback:[],updatedAt:r.updatedAt}));
   const traffic=state.limits.filter(l=>l.scopeType==='key').flatMap(l=>{const key=state.apiKeys.find(k=>k.id===l.scopeId);return key?[{id:l.id,projectId:key.projectId,keyId:key.id,tokenEnabled:l.tpm>0,tokenPeriod:'分钟',tokenLimit:l.tpm||1000,requestEnabled:l.rpm>0,requestPeriod:'分钟',requestLimit:l.rpm||1000,totalEnabled:false,totalLimit:10000}]:[];});
-  return {version:1,providers,models,routes,traffic};
+  return {version:1,providers,models,routes,traffic,priceVersions:[]};
 }
 
 export function validateIcon({size,width,height,type}) {
@@ -49,6 +50,8 @@ export function calcloudTransaction(current, command, state, now=nowText()) {
   if (collection==='providers') {
     if (!value.name?.trim()||!value.code?.trim()||!value.ownership||!value.credential?.trim()) throw new Error('请填写服务商归属、中英文名称和API Key');
     if (value.ownership!=='OpenAI/OpenAI兼容服务') throw new Error('服务商归属须为OpenAI/OpenAI兼容服务');
+    if (existing && ['ownership','code','name'].some(key=>value[key]!==existing[key])) throw new Error('服务商归属及中英文名称创建后不可修改');
+    if (value.code.length>200||value.name.length>100||value.baseUrl.length>500||value.credential.length>500) throw new Error('服务商字段超过长度限制');
     if ((value.description||'').length>500) throw new Error('服务商描述不能超过500个字符');
     if (!/^[a-zA-Z0-9_.-]+$/.test(value.code)) throw new Error('英文名称仅支持字母、数字、点、下划线和连字符');
     let url;try {url=new URL(value.baseUrl);} catch {throw new Error('请填写有效的API Base URL');}
@@ -56,6 +59,8 @@ export function calcloudTransaction(current, command, state, now=nowText()) {
     if (rows.some(r=>r.id!==value.id&&r.code.toLowerCase()===value.code.toLowerCase())) throw new Error('服务商英文名称已存在');
   }
   if (collection==='models') {
+    if (existing&&value.name!==existing.name) throw new Error('模型名称创建后不可修改');
+    if (!['agent','mcp','upload'].every(key=>typeof value[key]==='boolean')) throw new Error('请选择是否支持Agent、MCP及上传文件');
     if (!/^[A-Za-z0-9_.:-]{2,50}$/.test(value.name||'')) throw new Error('模型名称须为2–50个字母、数字、连字符、下划线、冒号或点');
     if (!value.type||!value.series?.trim()||!value.description?.trim()||value.description.length>1000||!value.tags?.length||!value.precision?.trim()||!value.icon) throw new Error('请填写图标、标签、类型、系列、简介和精度');
     if (!Number.isFinite(Date.parse(value.updatedAt))) throw new Error('请填写模型更新时间');
@@ -68,12 +73,14 @@ export function calcloudTransaction(current, command, state, now=nowText()) {
     }
   }
   if (collection==='traffic') {
+    if (existing&&value.keyId!==existing.keyId) throw new Error('API Key创建规则后不可修改');
     const key=state.apiKeys.find(k=>k.id===value.keyId);
     if (!state.projects.some(p=>p.id===value.projectId)||!key||key.projectId!==value.projectId) throw new Error('API Key必须属于所选项目空间');
     if (rows.some(r=>r.id!==value.id&&r.keyId===value.keyId)) throw new Error('该API Key已有规则，请编辑现有规则');
     if (!value.tokenEnabled&&!value.requestEnabled&&!value.totalEnabled) throw new Error('请至少启用一种限制');
     for (const prefix of ['token','request','total']) if (value[prefix+'Enabled']&&!positive(value[prefix+'Limit'])) throw new Error('额度和请求次数须为正整数');
-    for (const prefix of ['token','request']) if (value[prefix+'Enabled']&&!CALCLOUD_PERIODS.includes(value[prefix+'Period'])) throw new Error('请选择分钟、日或月周期');
+    if (value.tokenEnabled&&!CALCLOUD_PERIODS.includes(value.tokenPeriod)) throw new Error('请选择分钟、日或月周期');
+    if (value.requestEnabled&&value.requestPeriod!=='分钟') throw new Error('请求限流仅支持分钟周期');
   }
   if (collection==='routes') {
     if (!/^[a-z0-9](?:[a-z0-9.-]{0,61}[a-z0-9])?$/.test(value.name||'')) throw new Error('名称须为1–63个小写字母、数字、点或连字符，首尾不能为特殊字符');
@@ -95,6 +102,19 @@ export function calcloudTransaction(current, command, state, now=nowText()) {
     }
     if (value.pathMatch==='正则匹配') try {new RegExp(value.path);} catch {throw new Error('路径正则表达式无效');}
   }
+  if (collection==='models') {
+    const versions=[];
+    for (const binding of value.bindings) {
+      const prior=existing?.bindings.find(b=>b.providerId===binding.providerId);
+      const numeric=v=>v==null||v===''?null:Number(v);
+      if (prior&&['costInput','costCached','costOutput','saleInput','saleCached','saleOutput'].every(key=>numeric(prior.prices[key])===numeric(binding.prices[key]))) continue;
+      for (const kind of ['cost','sale']) {
+        const price=key=>binding.prices[kind+key]==null||binding.prices[kind+key]===''?null:Math.round(Number(binding.prices[kind+key])*1e6);
+        versions.push({id:"cc-price-"+value.id+"-"+binding.providerId+"-"+kind+"-"+now,modelId:value.id,providerId:binding.providerId,kind,unit:"元/百万 Token",status:"生效中",effectiveAt:now,inputPrice:price("Input"),cachedPrice:price("Cached"),outputPrice:price("Output")});
+      }
+    }
+    next.priceVersions=[...(current.priceVersions||[]),...versions];
+  }
   if (collection!=='models') value.updatedAt=now;
   value.createdAt=existing?.createdAt||now;
   if (existing) next[collection]=rows.map(r=>r.id===value.id?value:r);else rows.unshift(value);
@@ -104,7 +124,7 @@ export function calcloudTransaction(current, command, state, now=nowText()) {
 export function calcloudFacts(state,range,filters={},now=Date.now()) {
   const from=range.from??Date.parse(range.start+'T00:00:00+08:00');
   const to=Math.min(range.to??Date.parse(range.end+'T00:00:00+08:00')+86400000,now);
-  const models=new Map(state.models.map(m=>[m.id,m])), endpoints=new Map(state.endpoints.map(e=>[e.id,e]));
+  const models=new Map([...(state.historicalModels||[]),...state.models].map(m=>[m.id,m])), endpoints=new Map(state.endpoints.map(e=>[e.id,e]));
   const unique=new Map();
   for (const r of state.requests) {
     const at=Date.parse(r.createdAt),m=models.get(r.modelId),providerId=endpoints.get(r.endpointId)?.providerId;
@@ -144,32 +164,63 @@ export function pricedUsage(row,quote) {
   return parts.reduce((sum,[amount,price])=>sum+amount*(price??0),0)/1e12;
 }
 export function calcloudCosts(state,facts,filter={}) {
-  const history=(collection,modelId,providerId,at,supplyId)=>collection.filter(p=>p.modelId===modelId&&(!providerId||p.providerId===providerId)&&(!p.supplyId||p.supplyId===supplyId)&&['生效中','已发布'].includes(p.status)&&Date.parse(p.effectiveAt)<=at).sort((a,b)=>Number(!!b.supplyId)-Number(!!a.supplyId)||Date.parse(b.effectiveAt)-Date.parse(a.effectiveAt))[0];
+  const history=(collection,modelId,providerId,at,supplyId)=>collection.filter(p=>p.modelId===modelId&&(!p.providerId||!providerId||p.providerId===providerId)&&(!p.supplyId||p.supplyId===supplyId)&&['生效中','已发布'].includes(p.status)&&Date.parse(p.effectiveAt)<=at).sort((a,b)=>Date.parse(b.effectiveAt)-Date.parse(a.effectiveAt)||Number(!!b.supplyId)-Number(!!a.supplyId))[0];
   const groups=new Map();for (const r of facts.rows) {const key=JSON.stringify([r.modelId,r.providerId]);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);}
   for (const supply of state.modelSupplies) {const providerId=state.endpoints.find(e=>e.id===supply.endpointId)?.providerId;if(providerId&&!groups.has(JSON.stringify([supply.modelId,providerId]))) groups.set(JSON.stringify([supply.modelId,providerId]),[]);}
   const collect=values=>values.every(Number.isFinite)?values.reduce((a,b)=>a+b,0):null;
   return [...groups].map(([id,rows])=>{
     const [modelId,providerId]=JSON.parse(id),model=state.models.find(m=>m.id===modelId),provider=state.providers.find(p=>p.id===providerId);
     const supplyId=state.modelSupplies.find(s=>s.modelId===modelId&&state.endpoints.find(e=>e.id===s.endpointId)?.providerId===providerId)?.id;
-    const amounts=rows.map(row=>{const supply=state.modelSupplies.find(s=>s.modelId===modelId&&s.endpointId===row.endpointId)?.id;return {income:pricedUsage(row,row.priceSnapshot||history(state.modelSalePrices,modelId,null,row.at,supply)),cost:pricedUsage(row,row.procurementPriceSnapshot||history(state.supplyPrices,modelId,providerId,row.at,supply))};});
+    const currentPrices=state.configuredPrices?.find(p=>p.modelId===modelId&&p.providerId===providerId);
+    const amounts=rows.map(row=>{const supply=state.modelSupplies.find(s=>s.modelId===modelId&&s.endpointId===row.endpointId)?.id;return {income:pricedUsage(row,row.priceSnapshot||history(state.modelSalePrices,modelId,providerId,row.at,supply)),cost:pricedUsage(row,row.procurementPriceSnapshot||history(state.supplyPrices,modelId,providerId,row.at,supply))};});
     const income=collect(amounts.map(a=>a.income)),cost=collect(amounts.map(a=>a.cost));
-    return {id,modelId,providerId,name:model?.name||modelId,provider:provider?.name||providerId,createdAt:model?.createdAt,rows,...calcloudSummary(rows),income,cost,profit:income!==null&&cost!==null?income-cost:null,purchase:history(state.supplyPrices,modelId,providerId,facts.to-1,supplyId),sale:history(state.modelSalePrices,modelId,null,facts.to-1,supplyId)};
+    return {id,modelId,providerId,name:model?.name||modelId,provider:provider?.name||providerId,createdAt:history(state.supplyPrices,modelId,providerId,Date.now(),supplyId)?.effectiveAt||model?.createdAt,rows,...calcloudSummary(rows),uncached:rows.length&&!rows.some(r=>r.token)?null:collect(rows.filter(r=>r.token).map(r=>Number.isFinite(r.input)&&Number.isFinite(r.cached)&&r.cached<=r.input?r.input-r.cached:null)),income,cost,profit:income!==null&&cost!==null?income-cost:null,purchase:currentPrices?.cost||history(state.supplyPrices,modelId,providerId,Date.now(),supplyId),sale:currentPrices?.sale||history(state.modelSalePrices,modelId,providerId,Date.now(),supplyId)};
   }).filter(r=>(!filter.model||r.modelId===filter.model)&&(!filter.provider||r.providerId===filter.provider));
 }
 
 // Price intervals follow actual price-version boundaries, independent of chart time buckets.
 export function calcloudCostHistory(state,facts,modelId,providerId) {
   const supplies=state.modelSupplies.filter(s=>s.modelId===modelId&&state.endpoints.find(e=>e.id===s.endpointId)?.providerId===providerId).map(s=>s.id);
-  const prices=[...state.supplyPrices.filter(p=>p.providerId===providerId),...state.modelSalePrices].filter(p=>p.modelId===modelId&&(!p.supplyId||supplies.includes(p.supplyId))&&['生效中','已发布'].includes(p.status)&&Number.isFinite(Date.parse(p.effectiveAt)));
+  const prices=[...state.supplyPrices.filter(p=>p.providerId===providerId),...state.modelSalePrices.filter(p=>!p.providerId||p.providerId===providerId)].filter(p=>p.modelId===modelId&&(!p.supplyId||supplies.includes(p.supplyId))&&['生效中','已发布'].includes(p.status)&&Number.isFinite(Date.parse(p.effectiveAt)));
   const boundaries=[...new Set(prices.map(p=>Date.parse(p.effectiveAt)))].sort((a,b)=>a-b);
-  const relevant=facts.rows.filter(r=>r.modelId===modelId&&r.providerId===providerId);
+  const relevant=calcloudFacts(state,{from:boundaries[0],to:Date.now()}).rows.filter(r=>r.modelId===modelId&&r.providerId===providerId);
   if (!boundaries.length) return [];
   return boundaries.flatMap((start,index)=>{
-    const end=boundaries[index+1]??Infinity,from=Math.max(start,facts.from),to=Math.min(end,facts.to);
+    const end=boundaries[index+1]??Infinity,from=start,to=Math.min(end,Date.now());
     if (from>=to) return [];
     const rows=relevant.filter(r=>r.at>=from&&r.at<to);
     const summary=calcloudCosts(state,{rows,from,to:to-1},{model:modelId,provider:providerId})[0];
-    return summary?[{...summary,id:`${modelId}:${providerId}:${start}`,effectiveFrom:start,effectiveTo:Number.isFinite(end)?end:null}]:[];
+    return summary?[{...summary,purchase:state.supplyPrices.filter(p=>p.modelId===modelId&&p.providerId===providerId&&Date.parse(p.effectiveAt)<=start).sort((a,b)=>Date.parse(b.effectiveAt)-Date.parse(a.effectiveAt))[0],id:`${modelId}:${providerId}:${start}`,effectiveFrom:start,effectiveTo:Number.isFinite(end)?end:null}]:[];
   }).reverse();
 }
 export const beijingDay=dayOf;
+
+// The legacy pages share their configured catalogue and price versions without mutating the original workspaces.
+export function calcloudAnalyticsState(state,config) {
+  const endpoints=[...state.endpoints];
+  const modelSupplies=config.models.flatMap(model=>model.bindings.flatMap(binding=>{
+    const existing=state.modelSupplies.filter(s=>s.modelId===model.id&&state.endpoints.find(e=>e.id===s.endpointId)?.providerId===binding.providerId);
+    if(existing.length)return existing;
+    let endpoint=endpoints.find(e=>e.providerId===binding.providerId);
+    if(!endpoint){endpoint={id:'cc-endpoint-'+binding.providerId,providerId:binding.providerId};endpoints.push(endpoint);}
+    return [{id:'cc-supply-'+model.id+'-'+binding.providerId,modelId:model.id,endpointId:endpoint.id}];
+  }));
+  const versions=config.priceVersions||[];
+  const configuredPrices=config.models.flatMap(model=>model.bindings.map(binding=>{
+    const quote=prefix=>({unit:'元/百万 Token',...Object.fromEntries(['Input','Cached','Output'].map(key=>[key.toLowerCase()+'Price',binding.prices[prefix+key]==null||binding.prices[prefix+key]===''?null:Math.round(Number(binding.prices[prefix+key])*1e6)]))});
+    return {modelId:model.id,providerId:binding.providerId,cost:quote('cost'),sale:quote('sale')};
+  }));
+  return {...state,configuredPrices,historicalModels:state.models,models:config.models.map(model=>({...state.models.find(m=>m.id===model.id),...model})),providers:config.providers,endpoints,modelSupplies,supplyPrices:[...state.supplyPrices,...versions.filter(v=>v.kind==='cost')],modelSalePrices:[...state.modelSalePrices,...versions.filter(v=>v.kind==='sale')]};
+}
+
+export function observationWindow(preset,clock,custom) {
+  if(preset==='custom') {
+    const from=Date.parse(custom?.start),to=Date.parse(custom?.end);
+    if(!Number.isFinite(from)||!Number.isFinite(to)||from>=to||to>clock)throw new Error('请选择有效且不晚于当前时刻的时间范围');
+    return {from,to};
+  }
+  const midnight=Date.parse(dayOf(clock)+'T00:00:00+08:00');
+  return {from:preset==='5m'?clock-300000:midnight-(preset==='3d'?2:preset==='7d'?6:0)*86400000,to:clock};
+}
+
+export const calcloudKeyValue = key => key?.secret || (key?.keyId?.startsWith('ak-demo-')?'sk-local-fixture-'+key.keyId:key?.secretPreview);

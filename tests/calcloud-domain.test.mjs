@@ -18,7 +18,7 @@ test('独立配置不修改原状态；角色和引用删除保护生效',()=>{
 });
 test('模型基本字段、图标及绑定价格必须校验',()=>{
   const state=createAdminSeed(),config=createCalcloudSeed(state);
-  const m={id:'new',name:'Test-Model',icon:'data:image/png;base64,abc',tags:['推理'],type:'text',series:'Test',precision:'BF16',description:'测试',updatedAt:'2026-10-10T12:00:00+08:00',bindings:[emptyBinding(config.providers[0].id)]};
+  const m={agent:false,mcp:false,upload:false,id:'new',name:'Test-Model',icon:'data:image/png;base64,abc',tags:['推理'],type:'text',series:'Test',precision:'BF16',description:'测试',updatedAt:'2026-10-10T12:00:00+08:00',bindings:[emptyBinding(config.providers[0].id)]};
   assert.equal(calcloudTransaction(config,{collection:'models',operation:'save',record:m},state).models[0].id,'new');
   assert.throws(()=>calcloudTransaction(config,{collection:'models',operation:'save',record:{...m,bindings:[...m.bindings,...m.bindings]}},state),/不同/);
   assert.throws(()=>calcloudTransaction(config,{collection:'models',operation:'save',record:{...m,bindings:[{...m.bindings[0],prices:{costInput:-1}}]}},state),/非负/);
@@ -100,4 +100,71 @@ test('每个服务的多条名称映射、降级响应码与单个降级服务�
  assert.throws(()=>calcloudTransaction(config,{collection:'routes',operation:'save',record:{...route,fallbackCodes:[]}},state),/响应码/);
  assert.throws(()=>calcloudTransaction(config,{collection:'routes',operation:'save',record:{...route,targets:[{...target,mappings:[]}] }},state),/映射规则/);
  assert.throws(()=>calcloudTransaction(config,{collection:'models',operation:'delete',id:model.id},state),/停用/);
+});
+
+test('配置目录与统计选择对象联动，历史调用与原状态保留',async()=>{
+  const {calcloudAnalyticsState}=await import('../src/admin-v2/calcloud-domain.mjs');
+  const state=createAdminSeed(),before=JSON.stringify(state),config=createCalcloudSeed(state);
+  const provider={id:'p-config',code:'config',name:'配置服务商',ownership:'OpenAI/OpenAI兼容服务',baseUrl:'https://config.invalid/v1',credential:'fixture-only',description:''};
+  let next=calcloudTransaction(config,{collection:'providers',operation:'save',record:provider},state);
+  const model={id:'m-config',name:'Configured-Model',type:'text',series:'Configured',description:'模型说明',precision:'BF16',icon:'data:image/png;base64,abc',tags:['文本'],agent:false,mcp:false,upload:false,updatedAt:'2026-10-13T00:00:00Z',bindings:[emptyBinding(provider.id)]};
+  next=calcloudTransaction(next,{collection:'models',operation:'save',record:model},state,'2026-10-13T00:00:00Z');
+  const view=calcloudAnalyticsState(state,next);
+  assert.equal(view.models.find(m=>m.id===model.id).name,model.name);
+  assert.equal(view.providers.find(p=>p.id===provider.id).name,provider.name);
+  assert.ok(view.modelSupplies.some(s=>s.modelId===model.id));
+  assert.equal(view.requests,state.requests);assert.equal(JSON.stringify(state),before);
+  assert.equal(view.supplyPrices.find(p=>p.modelId===model.id).inputPrice,3000000);
+  assert.equal(view.modelSalePrices.find(p=>p.modelId===model.id).inputPrice,4000000);
+});
+test('身份锁定、必选能力与请求限流周期在事务层拒绝绕过',()=>{
+  const state=createAdminSeed(),config=createCalcloudSeed(state),provider=config.providers[0],model=config.models[0],rule=config.traffic[0];
+  assert.throws(()=>calcloudTransaction(config,{collection:'providers',operation:'save',record:{...provider,name:'被改名'}},state),/不可修改/);
+  assert.throws(()=>calcloudTransaction(config,{collection:'models',operation:'save',record:{...model,name:'Renamed'}},state),/不可修改/);
+  assert.throws(()=>calcloudTransaction(config,{collection:'models',operation:'save',record:{...model,agent:null}},state),/请选择/);
+  assert.throws(()=>calcloudTransaction(config,{collection:'traffic',operation:'save',record:{...rule,keyId:state.apiKeys.find(k=>k.id!==rule.keyId).id}},state),/不可修改/);
+  assert.throws(()=>calcloudTransaction(config,{collection:'traffic',operation:'save',record:{...rule,requestEnabled:true,requestPeriod:'月'}},state),/仅支持分钟/);
+});
+test('价格修改追加版本，单日筛选仍显示完整价格历史，未命中输入不重复缓存',async()=>{
+  const {calcloudAnalyticsState}=await import('../src/admin-v2/calcloud-domain.mjs');
+  const state=factsState(),old={modelId:'m',providerId:'p',unit:'元/百万 Token',status:'生效中',effectiveAt:'2026-10-01T00:00:00+08:00',inputPrice:2000000,outputPrice:4000000,cachedPrice:500000};
+  state.supplyPrices=[{...old,inputPrice:1000000}];state.modelSalePrices=[old];
+  const config={version:1,providers:[{id:'p',name:'P'}],models:[{id:'m',name:'M',bindings:[{...emptyBinding('p'),prices:{costInput:1,costOutput:2,costCached:.25,saleInput:2,saleOutput:4,saleCached:.5}}]}],routes:[],traffic:[],priceVersions:[]};
+  const model={...config.models[0],name:'M',type:'text',series:'M',precision:'BF16',description:'说明',icon:'test',tags:['文本'],agent:false,mcp:false,upload:false,updatedAt:'2026-10-11T00:00:00+08:00',bindings:[{...config.models[0].bindings[0],prices:{costInput:1,costOutput:2,costCached:.25,saleInput:4,saleOutput:4,saleCached:.5}}]};
+  // M is intentionally invalid: the model name must have two characters.
+  model.name='MM';config.models[0].name='MM';
+  const next=calcloudTransaction(config,{collection:'models',operation:'save',record:model},{...state,currentRole:'平台管理员'},'2026-10-11T12:00:00+08:00');
+  assert.equal(next.priceVersions.length,2);assert.equal(config.priceVersions.length,0);
+  const view=calcloudAnalyticsState(state,next),facts=calcloudFacts(view,{start:'2026-10-12',end:'2026-10-12'});
+  const history=calcloudCostHistory(view,facts,'m','p');assert.equal(history.length,2);assert.equal(history[1].calls,1);
+  const row=calcloudCosts(view,calcloudFacts(view,{start:'2026-10-11',end:'2026-10-11'}))[0];assert.equal(row.uncached,600000);assert.equal(row.cached,400000);assert.equal(row.total,1100000);assert.equal(row.income,1.8);
+});
+test('观测自定义保留时分秒，快捷范围与参考前端一致',async()=>{
+  const {observationWindow}=await import('../src/admin-v2/calcloud-domain.mjs');const clock=Date.parse('2026-10-13T12:34:56+08:00');
+  const custom={start:'2026-10-12T09:01:02+08:00',end:'2026-10-12T10:03:04+08:00'};
+  assert.deepEqual(observationWindow('custom',clock,custom),{from:Date.parse(custom.start),to:Date.parse(custom.end)});
+  assert.equal(observationWindow('7d',clock).from,Date.parse('2026-10-07T00:00:00+08:00'));
+  assert.equal(observationWindow('5m',clock).to-observationWindow('5m',clock).from,300000);
+  assert.throws(()=>observationWindow('custom',clock,{start:custom.end,end:custom.start}),/时间范围/);
+  assert.throws(()=>observationWindow('custom',clock,{start:custom.start,end:'2026-10-14T00:00:00+08:00'}),/时间范围/);
+});
+
+test('非Token计量不伪造输入零值；本地演示Key可显示，未知掩码不补造凭证',async()=>{
+ const {calcloudKeyValue}=await import('../src/admin-v2/calcloud-domain.mjs');
+ const state=factsState();state.requests=[request({usage:{unit:'张',total:1},inputTokens:null,outputTokens:null})];
+ const facts=calcloudFacts(state,{start:'2026-10-11',end:'2026-10-11'});
+ assert.equal(calcloudCosts(state,facts)[0].uncached,null);
+ assert.equal(calcloudCosts(state,{...facts,rows:[]})[0].uncached,0);
+ assert.equal(calcloudKeyValue({keyId:'ak-demo-001'}),'sk-local-fixture-ak-demo-001');
+ assert.equal(calcloudKeyValue({keyId:'unknown',secretPreview:'sk-****'}),'sk-****');
+});
+
+test('既有配置的当前价格展示联动，不把缺失的历史生效时间补造成历史费用',async()=>{
+ const {calcloudAnalyticsState}=await import('../src/admin-v2/calcloud-domain.mjs');
+ const state=createAdminSeed(),config=createCalcloudSeed(state),model=config.models.find(m=>m.bindings.length);
+ model.bindings[0].prices.costInput=3.123456;
+ const linked=calcloudAnalyticsState(state,config),facts=calcloudFacts(linked,{start:'2026-10-12',end:'2026-10-12'});
+ const row=calcloudCosts(linked,facts).find(r=>r.modelId===model.id&&r.providerId===model.bindings[0].providerId);
+ assert.equal(row.purchase.inputPrice,3123456);
+ assert.deepEqual(linked.supplyPrices,state.supplyPrices);
 });
