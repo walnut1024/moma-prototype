@@ -57,7 +57,7 @@ export function PerformanceStatisticsPage({state,observation}) {
 export function ErrorStatisticsPage({state,observation}) {
   const o=useObservedFacts(state,observation,'errors'),s=o.breakdown,labels=o.buckets.map(b=>b.label);
   return <><PageHead title="错误与异常统计" note="查看失败、错误率、超时及错误类型。"/><ObservationControls observed={o}/><div className="cc-charts">
-    <Trend title="调用失败总次数" labels={labels} unit="次" series={[series('失败次数',o.buckets.map(b=>b.failed))]}/><Trend title="整体错误率" labels={labels} unit="%" hint={errorHint} series={[series('错误率',o.buckets.map(b=>b.calls?b.errorRate:0))]}/><section className="cc-chart"><h2>超时请求次数<Hint label="超时口径">参考系统超时数大于失败数，判定阈值或来源字段尚未确认。</Hint></h2><p className="cc-empty cc-chart-empty">超时口径待确认</p></section>
+    <Trend title="调用失败总次数" labels={labels} unit="次" series={[series('失败次数',o.buckets.map(b=>b.failed))]}/><Trend title="整体错误率" labels={labels} unit="%" hint={errorHint} series={[series('错误率',o.buckets.map(b=>b.calls?b.errorRate:0))]}/><Trend title="超时请求次数" labels={labels} unit="次" series={[series('超时请求次数',o.buckets.map(b=>b.timeout))]}/>
     <section className="cc-chart"><h2>错误类型分布<Hint label="错误类型">按已记录的非2xx响应状态分类；自定义时按所选日期汇总。</Hint></h2><DonutChart centerValue={number(s.failed)} centerLabel="错误总数" label="错误类型分布" unit="次" rows={[{label:'4xx',value:s.four},{label:'5xx',value:s.five},{label:'其他',value:s.other}]} height={250}/><div className="cc-donut-values"><span>4xx错误 <strong>{number(s.four)}</strong></span><span>5xx错误 <strong>{number(s.five)}</strong></span><span>其他错误 <strong>{number(s.other)}</strong></span></div></section>
   </div></>;
 }
