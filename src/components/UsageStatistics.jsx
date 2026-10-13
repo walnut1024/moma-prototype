@@ -20,6 +20,8 @@ import './usage-statistics.css';
 import './usage-simple.css';
 import { maskApiKey } from '../api-key-utils.mjs';
 
+const usageTimePresets = [['today', '当日'], ['7d', '近 7 天'], ['30d', '近 30 天']];
+
 function Choice({ label, value, onChange, options }) {
   return <Select value={value} onValueChange={onChange}><SelectTrigger aria-label={label}><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{options.map(([id, text]) => <SelectItem key={id} value={id}>{text}</SelectItem>)}</SelectGroup></SelectContent></Select>;
 }
@@ -124,7 +126,7 @@ export default function UsageStatistics({ observation = false }) {
   const savedValue = observation
     ? { category, visual, audio, modelIds, apiKeyIds, preset, range, minutes }
     : { category, billing, subscriptionId, modelIds, apiKeyId, preset, range };
-  const periodName = observation ? ({ '1': '今日', yesterday: '昨日', '3': '近 3 天', '7': '近 7 天', '30': '近 30 天' }[preset] || '自定义') : ({ today: '今日', yesterday: '昨日', '7d': '近 7 天', '30d': '近 30 天' }[preset] || '自定义');
+  const periodName = observation ? ({ '1': '今日', yesterday: '昨日', '3': '近 3 天', '7': '近 7 天', '30': '近 30 天' }[preset] || '自定义') : ({ today: '当日', yesterday: '昨日', '7d': '近 7 天', '30d': '近 30 天' }[preset] || '自定义');
   const viewGroups = [
     { label: '模型类别', text: observation ? observationCategories.find(([id]) => id === category)?.[1] || category : category },
     ...(type === category ? [] : [{ label: '任务类型', text: type }]),
@@ -155,7 +157,7 @@ export default function UsageStatistics({ observation = false }) {
       setRange(value.preset === 'custom' ? customRange : usagePeriod(value.preset || 'today', current));
     }
   };
-  const datePicker = <DateRange start={range.start} end={range.end} maxDays={31} onChange={value => { setRange(value); setPreset('custom'); }}/>;
+  const datePicker = <DateRange start={range.start} end={range.end} maxDays={31} label={observation ? '自定义' : ''} presets={observation ? undefined : usageTimePresets} onChange={value => { setRange(value); setPreset('custom'); }}/>;
   const resetFilters = () => {
     const current = new Date(); setNow(current); setPreset(observation ? '1' : 'today'); setRange(observation ? observationPeriod('1', current) : usagePeriod('today', current));
     setCategory(observation ? '文本模型' : '语言模型'); setBilling(observation ? '全部' : '按量付费'); setVisual('视觉理解'); setAudio('语音合成'); setApiKeyIds(null); setMinutes('60'); setModelIds(null); setApiKeyId(null); setKeySearch(''); setKeyPickerOpen(false); setSubscriptionId(tokenPlanSubscriptions[0].id);
@@ -164,7 +166,7 @@ export default function UsageStatistics({ observation = false }) {
     <Tabs value={category} onValueChange={value => { if (observation) changeType(value, setCategory); else { setCategory(value); setModelIds(null); } }}><TabsList variant="line" className="us-tabs">{(observation ? observationCategories : usageModelGroups.map(group => [group.id, group.id])).map(([id, label]) => <TabsTrigger key={id} value={id}>{label}</TabsTrigger>)}</TabsList>
     <TabsContent value={category} className="us-content">
       <div className="us-filter-panel"><FilterToolbar className="us-filters">
-        <FilterPresets value={preset} onChange={value => { const current = new Date(); setNow(current); setPreset(value); setRange(observation ? observationPeriod(value, current) : usagePeriod(value, current)); }} items={observation ? [['1', '今日'], ['yesterday', '昨日'], ['7', '近 7 天'], ['30', '近 30 天']] : undefined} />
+        <FilterPresets value={preset} onChange={value => { const current = new Date(); setNow(current); setPreset(value); setRange(observation ? observationPeriod(value, current) : usagePeriod(value, current)); }} items={observation ? [['1', '今日'], ['yesterday', '昨日'], ['7', '近 7 天'], ['30', '近 30 天']] : usageTimePresets} />
         {datePicker}
         {observation && category === '视觉模型' && <Choice label="视觉任务类型" value={visual} onChange={value => changeType(value, setVisual)} options={['视觉理解', '图片生成', '视频生成'].map(x => [x, x])} />}
         {observation && category === '音频模型' && <Choice label="音频任务类型" value={audio} onChange={value => changeType(value, setAudio)} options={['语音合成', '语音识别'].map(x => [x, x])} />}
