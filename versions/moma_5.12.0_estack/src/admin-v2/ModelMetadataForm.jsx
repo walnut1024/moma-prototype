@@ -31,10 +31,10 @@ export function CapabilityFields({ value, type, onChange, disabled, catalogue = 
   </div>;
 }
 const contextLabel = value => value % 1024 === 0 ? `${value / 1024}K` : value.toLocaleString('zh-CN');
-export default function ModelMetadataForm({ model, initial, can = true, run, dirty = () => {}, onSaved, onSubmit: save, onDraftChange, onSaveProgress, title = "模型资料", submitLabel, startEditing = false, onCancel }) {
-  const [form, setForm] = useState(() => blankModel(model || initial)), [error, setError] = useState(''), [editing, setEditing] = useState(startEditing || !model), [uploading, setUploading] = useState(false);
+export default function ModelMetadataForm({ model, initial, can = true, run, dirty = () => {}, onSaved, onSubmit: save, onDraftChange, onSaveProgress, title = "模型资料", submitLabel, startEditing = false, readOnly = false, onCancel }) {
+  const [form, setForm] = useState(() => blankModel(model || initial)), [error, setError] = useState(''), [editing, setEditing] = useState(!readOnly && (startEditing || !model)), [uploading, setUploading] = useState(false);
   const editTrigger = useRef(null), logoInput = useRef(null), wasEditing = useRef(false), uploadVersion = useRef(0);
-  const editable = editing && can;
+  const editable = editing && can && !readOnly;
   useEffect(() => { onDraftChange?.(form); }, [form, onDraftChange]);
   useEffect(() => { if (wasEditing.current && !editing) editTrigger.current?.focus(); wasEditing.current = editing; }, [editing]);
   useEffect(() => () => { uploadVersion.current++; }, []);
@@ -86,11 +86,11 @@ export default function ModelMetadataForm({ model, initial, can = true, run, dir
   });
   const heading = (title, hint) => <div className="mm-basic-section-heading"><h3>{title}</h3>{editing && <span>{hint}</span>}</div>;
   return <form className={`mm-form mm-basic-form${editing ? '' : ' mm-basic-view'}`} onSubmit={submit}>
-    <div className="mm-section-heading"><h2>{title}</h2>{model && !editing && <Button ref={editTrigger} type="button" variant="outline" disabled={!can} onClick={() => { setForm(blankModel(model || initial)); setEditing(true); }}>编辑</Button>}</div>
+    {(title || model && !editing && !readOnly) && <div className="mm-section-heading">{title && <h2>{title}</h2>}{model && !editing && !readOnly && <Button ref={editTrigger} type="button" variant="outline" disabled={!can} onClick={() => { setForm(blankModel(model || initial)); setEditing(true); }}>编辑</Button>}</div>}
     {heading('基础信息', '标有 * 的信息必填，其余为非必填项')}
     <div className="mm-basic-grid">
       <Field label={'模型名称' + (editing ? ' *' : '')}>{editing ? <Input aria-label="模型名称" required autoFocus={Boolean(model)} value={form.name} disabled={!editable} onChange={event => change('name', event.target.value)}/> : fact(form.name)}</Field>
-      <Field label={'模型编码' + (editing ? ' *' : '')}>{editing ? <Input aria-label="模型编码" required disabled={Boolean(model) || !editable} value={form.modelId} placeholder="例如 glm-5.3" onChange={event => change('modelId', event.target.value)}/> : fact(form.modelId)}</Field>
+      <Field label={'模型编码' + (editing ? ' *' : '')} hint="模型唯一业务编码，创建后不可修改；模型名称仅用于展示。">{editing ? <Input aria-label="模型编码" required readOnly={Boolean(model)} disabled={!editable} value={form.modelId} placeholder="例如 glm-5.3" onChange={event => change('modelId', event.target.value)}/> : fact(form.modelId)}</Field>
       {fields(PRESENTATION_FIELDS.filter(item => item.key === 'author'))}
       <Field label={'模型类型' + (editing ? ' *' : '')}>{editing ? <><Choice label="模型类型" disabled={!editable} value={modelCategory(form.type)} options={Object.entries(MODEL_CATEGORIES)} onChange={value => change('type', value === 'visual' ? 'image' : value)}/>{modelCategory(form.type) === 'visual' && <Choice label="视觉任务类型" disabled={!editable} value={form.type} options={['image', 'video'].map(type => [type, MODEL_TYPES[type]])} onChange={value => change('type', value)}/>}</> : fact(MODEL_CATEGORIES[modelCategory(form.type)])}</Field>
       {fields(COMMON_FIELDS.filter(item => item.key === 'tasks'))}{fields(PRESENTATION_FIELDS.filter(item => item.key === 'logo'))}

@@ -37,7 +37,20 @@ test('model creation and metadata workflows retain the correct parent', () => {
   assert.deepEqual(labels(rows), ['模型运营', '模型管理', '添加模型']);
   assert.equal(params(rows[1]).get('q'), 'GLM');
   for (const key of ['draft', 'step', 'provider', 'catalogue']) assert.equal(params(rows[1]).has(key), false);
-  assert.deepEqual(labels(build('model-templates', 'view=templateImport')), ['模型运营', '模型资料', '批量导入模型资料']);
+  assert.deepEqual(labels(build('model-templates', 'view=templateImport')), ['模型运营', '模型资料库', '批量导入模型资料']);
+});
+
+test('model library editor shows the current model name and keeps identity out of the list link', () => {
+  const query = 'view=template&template=catalog-demo-kimi&returnModel=catalog-demo-kimi&q=Kimi&page=2';
+  const rows = build('model-templates', query, { model: 'Kimi K3' });
+  assert.deepEqual(labels(rows), ['模型运营', '模型资料库', 'Kimi K3']);
+  assert.equal(rows.at(-1).href, undefined);
+  assert.equal(params(rows[1]).get('q'), 'Kimi');
+  assert.equal(params(rows[1]).get('page'), '2');
+  for (const key of ['view', 'template', 'returnModel']) assert.equal(params(rows[1]).has(key), false);
+  assert.equal(build('model-templates', query, { model: '更新后的名称' }).at(-1).label, '更新后的名称');
+  assert.equal(build('model-templates', query).at(-1).label, '模型资料不存在');
+  assert.equal(build('model-templates', 'view=template').at(-1).label, '新建模型资料');
 });
 
 test('deployment list, detail and editor have explicit hierarchy and preserve filters', () => {

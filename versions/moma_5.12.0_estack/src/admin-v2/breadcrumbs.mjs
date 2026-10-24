@@ -8,7 +8,7 @@ export function adminBreadcrumbs(active, params, names = {}) {
     Object.entries(patch).forEach(([key, value]) => value == null ? next.delete(key) : next.set(key, value));
     return `#/admin-2/${id}${next.size ? '?' + next : ''}`;
   };
-  const detailKeys = ['model', 'provider', 'view', 'tab', 'step', 'template', 'return', 'supply', 'endpoint', 'connection', 'deployment', 'chosen', 'draft', 'catalogue', 'origin', 'onboarding'];
+  const detailKeys = ['model', 'provider', 'view', 'tab', 'step', 'template', 'return', 'supply', 'endpoint', 'connection', 'deployment', 'chosen', 'draft', 'catalogue', 'origin', 'onboarding', 'returnModel', 'returnDraft', 'library', 'code'];
   const listHref = href(active, {}, detailKeys);
   const crumbs = [{ label: page.group }];
   const add = (label, target) => crumbs.push({ label, ...(target ? { href: target } : {}) });
@@ -19,8 +19,8 @@ export function adminBreadcrumbs(active, params, names = {}) {
     if (view === 'new') add('添加供应商');
     else if (view === 'profile') add('编辑供应商资料');
   } else if (['listing', 'model-templates'].includes(active)) {
-    add(active === 'listing' ? '模型管理' : '模型资料', params.has('model') || view && view !== 'templates' ? listHref : null);
-    if (view === 'template') add(params.has('template') ? '编辑模型资料' : '新建模型资料');
+    add(active === 'listing' ? '模型管理' : '模型资料库', params.has('model') || view && view !== 'templates' ? listHref : null);
+    if (view === 'template') add(params.has('template') ? names.model || '模型资料不存在' : '新建模型资料');
     else if (['import', 'templateImport'].includes(view)) add(view === 'import' ? '批量导入模型' : '批量导入模型资料');
     else if (view === 'add') add('添加模型');
     else if (params.has('model')) {

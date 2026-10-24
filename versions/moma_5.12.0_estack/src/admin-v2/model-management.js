@@ -198,7 +198,8 @@ export function modelTransaction(state, action) {
     const fields = { modelId, name: data.name.trim(), maker: profile.author || data.maker || model?.maker || '', description: data.description.trim(), type: data.type, usageUnit: data.usageUnit, profile, capabilities: declaredCapabilities };
     if (model) {
       changes.push(update('models', model.id, fields));
-      if (model.type !== fields.type || JSON.stringify(model.capabilities) !== JSON.stringify(fields.capabilities) || ['tasks', 'inputModalities', 'outputModalities', 'resultTypes'].some(key => JSON.stringify(model.profile?.[key]) !== JSON.stringify(fields.profile[key]))) {
+      const previousProfile = normalizeModelProfile(model.profile, model.type, model.usageUnit);
+      if (model.type !== fields.type || JSON.stringify(capabilities(model.capabilities, model.type, true)) !== JSON.stringify(fields.capabilities) || ['version', 'tasks', 'inputModalities', 'outputModalities', 'resultTypes', 'reasoning', 'structured'].some(key => JSON.stringify(previousProfile[key] || []) !== JSON.stringify(fields.profile[key] || []))) {
         state.modelSupplies.filter(supply => supply.modelId === model.id && supply.status !== '已移除').forEach(supply => changes.push(update('modelSupplies', supply.id, { status: '已停用', validationStatus: '待验证', verifiedAt: null, validationCases: [] })));
       }
       if (state.modelVersions.some(version => version.id === model.defaultVersionId)) changes.push(update('modelVersions', model.defaultVersionId, { capabilities: fields.capabilities }));

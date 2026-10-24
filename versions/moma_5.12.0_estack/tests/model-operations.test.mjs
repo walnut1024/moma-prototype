@@ -13,25 +13,26 @@ function connected(){
  let state=op(createAdminSeed(),'providerRegistration',{provider:newProvider,connections:[connection]});
  const provider=state.providers.find(item=>item.code===newProvider.code),endpoint=state.endpoints.find(item=>item.providerId===provider.id);
  state=op(state,'provider',{operation:'cataloguePrice',objectId:provider.id,values:{modelId:'upstream-v1',scenarios:[{name:'输入',unit:'百万 Token',currency:'CNY',listPrice:'1'},{name:'输出',unit:'百万 Token',currency:'CNY',listPrice:'2'}]}});
- state=op(state,'saveOnboarding',{providerId:provider.id,catalogueModelId:'upstream-v1',endpointId:endpoint.id,model:modelInput,step:'metadata'});
+ state=op(state,'templateSave',modelInput);const libraryId=state.audits[0].objectId;
+ state=op(state,'saveOnboarding',{providerId:provider.id,catalogueModelId:'upstream-v1',endpointId:endpoint.id,libraryId,confirmedIdentity:true,model:modelInput,step:'metadata'});
  const draftId=state.audits[0].objectId;
- state=op(state,'onboardModel',{draftId,model:modelInput});
+ state=op(state,'onboardModel',{draftId});
  const id=state.audits[0].objectId,supply=modelSupplies(state,id)[0];state=op(state,'verifySupply',{id:supply.id},id);
  return {state,id,supply:modelSupplies(state,id)[0],draftId};
 }
 const priced=(state,id,supply,amount='3')=>({supplyId:supply.id,items:priceItems(activeSupplyPrice(state,supply.id),state.models.find(m=>m.id===id)).map(item=>({...item,amount})),sourceVersion:procurementVersion(activeSupplyPrice(state,supply.id)),expectedSaleVersion:latestSaleRevision(state,supply.id)});
 
 test('template creation is metadata-only and importing does not add operating models',()=>{let s=createAdminSeed(),n=s.models.length,c=s.modelSupplies.length;s=op(s,'templateSave',modelInput);assert.equal(s.models.length,n);assert.equal(s.modelSupplies.length,c);assert.equal(s.modelTemplates[0].profile.author,'模型作者');assert.equal(s.modelTemplates[0].listingStatus,undefined);assert.throws(()=>op(s,'templateSave',modelInput),/已存在/);});
-test('template update requires explicit apply and never overwrites sale prices',()=>{let s=legacy(createAdminSeed(),'create',modelInput),model=s.models[0];s=op(s,'templateFromModel',{},model.id);const template=s.modelTemplates[0];s={...s,models:s.models.map(m=>m.id===model.id?{...m,templateId:template.id,templateRevision:template.revision}:m)};const before=structuredClone(s.modelSalePrices);s=op(s,'templateSave',{...template,name:'更新模板名称'});assert.equal(s.models.find(m=>m.id===model.id).name,model.name);s=op(s,'applyTemplate',{},model.id);assert.equal(s.models.find(m=>m.id===model.id).name,'更新模板名称');assert.deepEqual(s.modelSalePrices,before);});
+test('model library edits the same operating record without a template copy or manual synchronization',async()=>{const {modelLibrary,libraryRecord}=await import('../src/admin-v2/model-operations.js');let s=createAdminSeed();const model=s.models.find(m=>m.id==='catalog-demo-kimi'),template=s.modelTemplates.find(t=>t.modelId===model.modelId),prices=structuredClone(s.modelSalePrices),supplies=structuredClone(s.modelSupplies);s=op(s,'templateSave',{...model,id:template.id,name:'统一模型名称'});assert.equal(s.models.find(m=>m.id===model.id).name,'统一模型名称');assert.equal(s.models.find(m=>m.id===model.id).id,model.id);assert.equal(s.models.find(m=>m.id===model.id).modelId,model.modelId);assert.deepEqual(s.modelOnboardings,createAdminSeed().modelOnboardings);assert.equal(libraryRecord(s,template.id).id,model.id);assert.equal(modelLibrary(s).filter(m=>m.modelId===model.modelId).length,1);assert.equal(s.modelTemplates.find(t=>t.id===template.id).name,template.name);assert.deepEqual(s.modelSalePrices,prices);assert.deepEqual(s.modelSupplies,supplies);assert.throws(()=>op(s,'applyTemplate',{},model.id),/未知/);});
 test('supplier code collision is rejected across existing seeded providers',()=>{assert.throws(()=>op(createAdminSeed(),'providerRegistration',{provider:{...newProvider,code:'bailian'}}),/不可重复/);});
 test('editing shared endpoint invalidates all model validations and keeps costs',()=>{let {state,id,supply}=connected();const ep=state.endpoints.find(ep=>ep.id===supply.endpointId),cost=structuredClone(state.supplyPrices);state=op(state,'provider',{operation:'connection',objectId:ep.id,values:{...ep,baseUrl:'https://changed.example.invalid/v1'}});assert.equal(state.modelSupplies.find(s=>s.id===supply.id).validationStatus,'待验证');assert.equal(availableSupplies(state,id).length,0);assert.deepEqual(state.supplyPrices,cost);});
 test('permission, stale revision and storage errors prevent commits without resetting data',()=>{const s=createAdminSeed();assert.throws(()=>commitAdminState({...s,currentRole:'运维人员'},{type:'modelOperations',operation:'templateSave',data:modelInput}),/无权/);const storage={getItem:()=>JSON.stringify({...s,revision:s.revision+1}),setItem:()=>assert.fail('must not write')};assert.throws(()=>persistModelAction(s,{type:'modelOperations',operation:'templateSave',data:modelInput},storage),/数据已变化/);const broken={getItem:()=>JSON.stringify(s),setItem:()=>{throw new Error('quota');}};assert.throws(()=>persistModelAction(s,{type:'modelOperations',operation:'templateSave',data:modelInput},broken),/quota/);assert.ok(!s.modelTemplates.some(t=>t.modelId===modelInput.modelId));});
 test('old saved data keeps IDs, pricing and user edits; new template collection is separate',()=>{const s=createAdminSeed();delete s.modelTemplates;s.models[0].name='用户自定义名称';const restored=parseAdminState(JSON.stringify(s));assert.equal(restored.models[0].name,'用户自定义名称');assert.deepEqual(restored.modelSalePrices,s.modelSalePrices);assert.equal(restored.modelTemplates.length,createAdminSeed().modelTemplates.length);assert.match(STORAGE_KEY,/5120/);});
 
 test('metadata modality change invalidates existing verification without altering prices',()=>{let {state,id,supply}=connected();const model=state.models.find(item=>item.id===id),before=structuredClone(state.supplyPrices);state=legacy(state,'basic',{...model,profile:{...model.profile,inputModalities:['文本','图片']}},id);assert.equal(state.modelSupplies.find(item=>item.id===supply.id).validationStatus,'待验证');assert.deepEqual(state.supplyPrices,before);});
-test('saving a missing model as template gives a recoverable domain error',()=>assert.throws(()=>op(createAdminSeed(),'templateFromModel',{},'missing'),/模型不存在/));
+test('saving a missing library record gives a recoverable domain error',()=>assert.throws(()=>op(createAdminSeed(),'templateSave',{...modelInput,id:'missing'}),/模型资料不存在/));
 
-test('model templates are a dedicated operations page with matching role boundaries', async()=>{const {sections,canAccessPage,pageFromHash}=await import('../src/admin-v2/navigation.mjs');const group=sections.find(item=>item.id==='models');assert.deepEqual(group.items.map(item=>item.label),['模型管理','模型资料','供应商','资费字典']);assert.equal(pageFromHash('#/admin-2/model-templates?view=template','运营人员'),'model-templates');assert.equal(canAccessPage('运营人员','model-templates'),true);assert.equal(canAccessPage('运维人员','model-templates'),false);});
+test('model templates are a dedicated operations page with matching role boundaries', async()=>{const {sections,canAccessPage,pageFromHash}=await import('../src/admin-v2/navigation.mjs');const group=sections.find(item=>item.id==='models');assert.deepEqual(group.items.map(item=>item.label),['模型管理','模型资料库','供应商','资费字典']);assert.equal(pageFromHash('#/admin-2/model-templates?view=template','运营人员'),'model-templates');assert.equal(canAccessPage('运营人员','model-templates'),true);assert.equal(canAccessPage('运维人员','model-templates'),false);});
 
 test('real model catalogue has unique codes and editable sourced metadata without invented shared limits',()=>{
   const state=createAdminSeed();
@@ -300,4 +301,42 @@ test('supplier model URLs use explicit endpoints and the OpenAI chat request pat
  supply.endpoint.baseUrl='https://service.example.invalid/v1/chat/completions';assert.equal(supplyModelUrl(supply,{type:'text'}),supply.endpoint.baseUrl);
  assert.equal(supplyModelUrl(supply,{type:'video'}),'');
  assert.equal(supplyModelUrl({upstreamModelId:'missing'}),'');
+});
+
+test('library capability changes require confirmation, while supplier and price records stay independent',()=>{
+ let {state,id,supply}=connected();const model=state.models.find(m=>m.id===id),before=structuredClone(state),data={...model,id,capabilities:{...model.capabilities,context:16384}};
+ assert.throws(()=>op(state,'templateSave',data),/请确认能力变更/);assert.deepEqual(state,before);
+ state=op(state,'templateSave',{...data,confirmCapabilities:true});
+ assert.equal(state.models.find(m=>m.id===id).capabilities.context,16384);
+ assert.equal(state.modelSupplies.find(s=>s.id===supply.id).validationStatus,'待验证');
+ assert.equal(state.modelSupplies.find(s=>s.id===supply.id).status,'已停用');
+ assert.deepEqual(state.modelSalePrices,before.modelSalePrices);assert.deepEqual(state.supplyPrices,before.supplyPrices);assert.deepEqual(state.endpoints,before.endpoints);
+ assert.equal(state.models.find(m=>m.id===id).openScope,model.openScope);
+});
+
+test('a library record remains one editable authority after supplier onboarding',async()=>{
+ const {libraryRecord,modelLibrary}=await import('../src/admin-v2/model-operations.js');let {state,id}=connected();const model=state.models.find(m=>m.id===id),libraryId=model.templateId;
+ assert.ok(libraryId);assert.equal(libraryRecord(state,libraryId).id,id);assert.equal(modelLibrary(state).filter(m=>m.modelId===model.modelId).length,1);
+ state=op(state,'templateSave',{...model,id:libraryId,description:'统一维护后的模型介绍'});
+ assert.equal(state.models.find(m=>m.id===id).description,'统一维护后的模型介绍');
+ assert.equal(libraryRecord(state,libraryId).description,'统一维护后的模型介绍');
+ assert.equal(state.modelTemplates.find(m=>m.id===libraryId).description,modelInput.description);
+ const draft=state.modelOnboardings.find(d=>d.modelId===id);state=op(state,'saveOnboarding',{...draft,libraryId:id,step:'price'});
+ assert.equal(state.modelOnboardings.find(d=>d.id===draft.id).supplyId,draft.supplyId);
+ assert.equal(state.modelOnboardings.find(d=>d.id===draft.id).modelId,id);
+});
+
+test('onboarding cannot bypass the library with a standalone editable metadata payload',()=>{
+ let {state,id,draftId}=connected();const draft=state.modelOnboardings.find(d=>d.id===draftId),model=state.models.find(m=>m.id===id);
+ state=op(state,'saveOnboarding',{...draft,targetRevision:model.updatedAt,step:'metadata'});const before=structuredClone(state);
+ assert.throws(()=>op(state,'onboardModel',{draftId,model:{...model,name:'独立副本'} }),/资料库维护/);assert.deepEqual(state,before);
+ assert.throws(()=>op(state,'templateSave',{...modelInput,modelId:model.modelId}),/已存在/);
+ assert.throws(()=>op(state,'templateFromModel',{},id),/未知/);
+});
+
+test('saving a master from onboarding atomically retains its reference and draft progress',()=>{
+ let {state,id,draftId}=connected();const model=state.models.find(m=>m.id===id),draft=state.modelOnboardings.find(d=>d.id===draftId);
+ state=op(state,'templateSave',{...model,id,description:'上架期间更新资料',onboardingId:draftId});
+ const saved=state.modelOnboardings.find(d=>d.id===draftId);assert.equal(saved.libraryId,id);assert.equal(saved.modelId,id);assert.equal(saved.supplyId,draft.supplyId);
+ const before=structuredClone(state);assert.throws(()=>op(state,'templateSave',{...modelInput,modelId:'another-master',onboardingId:'missing'}),/上架进度/);assert.deepEqual(state,before);
 });

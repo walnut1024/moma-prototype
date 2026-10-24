@@ -8,7 +8,7 @@ export const sections = [
   ]},
   { id: "models", workspace: "operations", title: "模型运营", items: [
     { id: "warehouse", label: "模型管理", children: [["listing", "模型管理"]] },
-    { id: "model-templates", label: "模型资料", children: [["model-templates", "模型资料"]] },
+    { id: "model-templates", label: "模型资料库", children: [["model-templates", "模型资料库"]] },
     { id: "channels", label: "供应商", children: [["providers", "供应商"]] },
     { id: "tariff-dictionary", label: "资费字典", children: [["tariff-dictionary", "资费字典"]] },
   ]},

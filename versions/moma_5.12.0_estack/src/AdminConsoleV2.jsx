@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogTitle } from './components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import { sections, pages, WORKSPACES, WORKSPACE_HOME, availableWorkspaces, pageWorkspace, canAccessPage, pageFromHash } from './admin-v2/navigation.mjs';
 import { adminBreadcrumbs } from './admin-v2/breadcrumbs.mjs';
+import { libraryRecord } from './admin-v2/model-operations';
 import OperationsOverview from './admin-v2/OperationsOverview';
 import { useEffect, useRef, useState } from "react";
 import AnalyticsPages from "./admin-v2/AnalyticsPages";
@@ -75,7 +76,7 @@ export default function AdminConsoleV2({ bannerTarget }) {
   const detailProvider = active === "providers" ? state.providers.find(item => item.id === detailParams.get("provider")) : null;
   const activeModule = sections.flatMap(group => group.items).find(item => item.id === page.area);
   const detailTenant = active === 'customer-usage-detail' ? state.tenants.find(item => item.id === new URLSearchParams(location.hash.split('?')[1] || '').get('customer')) : null;
-  const detailModel = active === 'listing' ? state.models.find(item => item.id === detailParams.get('model')) : null;
+  const detailModel = detailParams.get('view') === 'template' && ['listing', 'model-templates'].includes(active) ? libraryRecord(state, detailParams.get('template')) : active === 'listing' ? state.models.find(item => item.id === detailParams.get('model')) : null;
   const enterpriseDetailId = active === 'tenants' ? detailParams.get('enterprise') : null;
   const detailEnterprise = enterpriseDetailId ? state.tenants.find(item => item.id === enterpriseDetailId && ['企业', '政府'].includes(item.type) && (detailParams.get('scenario') !== 'private' || privateEnterprise(state)?.id === item.id)) : null;
   const individualDetailId = active === 'individual-users' ? detailParams.get('user') : null;
