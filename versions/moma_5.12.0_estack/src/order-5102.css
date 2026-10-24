@@ -400,3 +400,10 @@
   .orders-current > .legacy-panel { margin: 16px; padding: 14px 14px 0; }
   .orders-current .legacy-order-tools label { margin-left: 0; }
 }
+
+.service-order-title nav ol{display:flex;align-items:center;gap:8px;margin:0;padding:0;list-style:none;font-size:12px}
+.service-order-title nav li{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.service-order-title nav span{margin:0;font-size:12px;color:var(--muted-foreground)}
+.service-order-title nav a{color:#3563ff;text-decoration:none;text-underline-offset:4px}
+.service-order-title nav a:hover{text-decoration:underline}
+.service-order-title nav a:focus-visible{outline:2px solid #3563ff;outline-offset:3px;border-radius:2px}

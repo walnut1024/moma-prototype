@@ -1,5 +1,6 @@
 // Shared gate for supplier configuration, model verification and routing candidates.
-export const connectionFingerprint = endpoint => JSON.stringify([endpoint.baseUrl, endpoint.protocol, endpoint.credentialRef, endpoint.capacity, endpoint.timeoutSeconds]);
+export const connectionFingerprint = endpoint => JSON.stringify([endpoint.baseUrl, endpoint.protocol, endpoint.credentialRef, endpoint.capacity, endpoint.timeoutSeconds, ...(endpoint.apiKeys?.length ? [endpoint.apiKeys.map(key => key.fingerprint)] : [])]);
+export const connectionCredentialsReady = (endpoint, provider) => Boolean(endpoint && (provider?.sourceType === 'selfHosted' || endpoint.credentialRef || endpoint.apiKeys?.length));
 export const connectionTestCurrent = endpoint => Boolean(endpoint && endpoint.connectionTest?.fingerprint === connectionFingerprint(endpoint));
 export const connectionTestPassed = endpoint => connectionTestCurrent(endpoint) && endpoint.connectionTest.result === '通过';
 export function connectionBlockReason(endpoint, provider) {

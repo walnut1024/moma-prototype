@@ -51,7 +51,7 @@ function OtherAnalyticsPages({pageId,state}) {
   ];
   const lengths=inputLengthDistribution(rows);
   return <TooltipProvider><div className="enterprise-page ua-page ca-page">
-  <div className="ent-page-head"><div><h1><Activity size={16}/>调用分析</h1><p>查看请求成功率、响应耗时与调用趋势，定位失败请求。</p></div></div>
+  <div className="ent-page-head"><div><h1><Activity size={16}/>调用数据</h1><p>查看请求成功率、响应耗时与调用趋势，定位失败请求。</p></div></div>
   <Card className="ua-filters"><CardContent><div className="ua-filter-scroll"><FilterToolbar className="ua-filter-controls">
     <FilterPresets className="ua-segments" value={period} onChange={choosePeriod}/>
     <DateRange granularity={granularity} start={filters.start} end={filters.end} latest={latest} onChange={range=>{setPeriod('custom');setFilters(f=>({...f,...range}));setPage(0)}}/>

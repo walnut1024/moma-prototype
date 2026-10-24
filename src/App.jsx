@@ -15,6 +15,8 @@ import "./order-5102.css";
 import "./ranking.css";
 import ModelExperience from "./ModelExperience";
 import CallLogs from "./CallLogs";
+import { toast } from "sonner";
+import { TENANT_USER_TYPE_KEY, tenantUserAccess } from "./tenant-user-type.mjs";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import TextExperience from "./TextExperience";
 import MultimodalExperience from "./MultimodalExperience";
@@ -56,6 +58,7 @@ import {
   Search,
   Settings,
   ShoppingCart,
+  ShieldCheck,
   Store,
   Video,
 } from "lucide-react";
@@ -298,8 +301,10 @@ const navIcons5102 = {
   智能路由: Route,
   模型排行: Activity,
   语言模型: Languages,
+  文本生成: Languages,
   多模态理解: ScanSearch,
   视觉模型: Images,
+  图片生成: Images,
   语音模型: AudioLines,
   模型订购: ShoppingCart,
   按量付费: KeyRound,
@@ -2465,7 +2470,7 @@ function PrototypeApp({ version }) {
   const versionNav = nav
     .map(([group, item]) => [
       group,
-      { 文本生成: "语言模型", 图片生成: "视觉模型", 语音生成: "语音模型" }[
+      (is5102 ? { 文本生成: "语言模型", 图片生成: "视觉模型", 语音生成: "语音模型" } : { 语音生成: "语音模型" })[
         item
       ] || item,
     ])
@@ -2478,7 +2483,7 @@ function PrototypeApp({ version }) {
     );
   const [activePage, setActivePage] = useState(() => {
     const requestedPage = new URLSearchParams(location.search).get("page");
-    return requestedPage === "model-order" ? "模型订购" : !is5102 ? ({ "api-keys": "API Key 管理", "call-logs": "调用日志", "usage-statistics": "用量统计" }[requestedPage] || "模型广场") : "模型广场";
+    return requestedPage === "model-order" ? "模型订购" : !is5102 ? ({ "api-keys": "API Key 管理", "account-certification": "账号认证", "call-logs": "调用日志", "usage-statistics": "用量统计" }[requestedPage] || "模型广场") : "模型广场";
   }),
     [admin, setAdmin] = useState(modeFromHash),
     [adminBannerTarget, setAdminBannerTarget] = useState(null),
@@ -2490,6 +2495,38 @@ function PrototypeApp({ version }) {
     [selected, setSelected] = useState(null),
     [sortMode, setSortMode] = useState("latest");
   const auth = usePrototypeAuth();
+  const [previewUserType, setPreviewUserType] = useState(() => {
+    try { return localStorage.getItem(TENANT_USER_TYPE_KEY) === 'personal' ? 'personal' : 'enterprise'; }
+    catch { return 'enterprise'; }
+  });
+  const tenantAccess = tenantUserAccess(auth.state, previewUserType);
+  const callLogsAllowed = !auth.storageError && tenantAccess.canViewCallLogs;
+  const changeUserType = value => {
+    if (!['personal', 'enterprise'].includes(value)) return;
+    try {
+      if (auth.user) {
+        const target = value === 'personal'
+          ? auth.spaces.find(space => space.id === 'personal')
+          : auth.spaces.find(space => space.id === auth.state.activeSpace && space.id !== 'personal') || auth.spaces.find(space => space.id !== 'personal');
+        if (!target) return;
+        auth.commit({ ...auth.state, activeSpace: target.id });
+      } else {
+        localStorage.setItem(TENANT_USER_TYPE_KEY, value);
+        setPreviewUserType(value);
+      }
+      toast.success(value === 'personal' ? '已切换为个人用户' : '已切换为政企用户');
+    } catch (error) { toast.error(auth.user && error.message ? error.message : '用户类型未能保存，请检查浏览器存储后重试。'); }
+  };
+  useEffect(() => {
+    if (!callLogsAllowed && activePage === '调用日志') {
+      setActivePage('模型广场');
+      const query = new URLSearchParams(location.search);
+      if (query.get('page') === 'call-logs') {
+        query.delete('page');
+        history.replaceState(null, '', location.pathname + (query.size ? '?' + query : '') + location.hash);
+      }
+    }
+  }, [callLogsAllowed, activePage]);
   useEffect(() => {
     if (is5102 && activePage === "模型排行") setActivePage("模型广场");
   }, [is5102, activePage]);
@@ -2632,6 +2669,15 @@ function PrototypeApp({ version }) {
               返回前台
             </button>
           )}
+          {!is5102 && admin === 'front' && !auth.route && <div className="version-switch user-type-switch">
+            <Select value={tenantAccess.userType} onValueChange={changeUserType} disabled={Boolean(auth.storageError) || Boolean(auth.user && !auth.spaces.length)}>
+              <SelectTrigger size="sm" aria-label="切换用户类型"><SelectValue /></SelectTrigger>
+              <SelectContent position="popper" align="end"><SelectGroup>
+                <SelectItem value="enterprise" disabled={Boolean(auth.user && !auth.spaces.some(space => space.id !== 'personal'))}>政企用户</SelectItem>
+                <SelectItem value="personal" disabled={Boolean(auth.user && !auth.spaces.some(space => space.id === 'personal'))}>个人用户</SelectItem>
+              </SelectGroup></SelectContent>
+            </Select>
+          </div>}
           {is5102 ? <div className="user">estack-yy</div> : <AuthBanner auth={auth} showToast={admin === "front"} />}
         </div>
       </header>
@@ -2652,7 +2698,7 @@ function PrototypeApp({ version }) {
                   }}
                 >
                   {NavIcon && <NavIcon aria-hidden="true" />}
-                  {item}
+                  {item === "模型排行" ? <span>模型排行<span className="nav-custom-note">（雄安定制）</span></span> : item}
                 </button>
               </div>
             );
@@ -2686,15 +2732,16 @@ function PrototypeApp({ version }) {
                   <ChartNoAxesCombined aria-hidden="true" />
                   用量统计
                 </button>
-                <button className={activePage === "调用日志" ? "active" : ""} onClick={() => setActivePage("调用日志")}><FileText aria-hidden="true" />调用日志</button>
+                {callLogsAllowed && <button className={activePage === "调用日志" ? "active" : ""} onClick={() => setActivePage("调用日志")}><FileText aria-hidden="true" />调用日志</button>}
               </div>
               <div>
-                <small>系统管理</small>
+                <small>账号管理</small>
                 <button className={activePage === "API Key 管理" ? "active" : ""} onClick={() => setActivePage("API Key 管理")}><KeyRound aria-hidden="true" />API Key</button>
+                <button className={activePage === "账号认证" ? "active" : ""} onClick={() => setActivePage("账号认证")}><ShieldCheck aria-hidden="true" />账号认证</button>
               </div>
             </>
           )}
-          {(activePage === "文本生成" || activePage === "语言模型") &&
+          {is5102 && activePage === "语言模型" &&
             !textCompare && <div id="text-history-slot" />}
         </aside>
       )}
@@ -2717,28 +2764,30 @@ function PrototypeApp({ version }) {
           ) : (
             <TextExperience
               imageUploadEnabled={!is5102}
-              title="语言模型"
+              title={is5102 ? "语言模型" : "文本生成"}
               onCompare={is5102 ? undefined : () => setTextCompare(true)}
             />
           )
         ) : is5102 && activePage === "多模态理解" ? (
           <MultimodalExperience />
-        ) : activePage === "视觉模型" ? (
+        ) : activePage === "视觉模型" || activePage === "图片生成" ? (
           <ModelExperience
             key={is5102 ? visualKind : "image"}
             kind={is5102 ? visualKind : "image"}
-            groupLabel="视觉模型"
+            groupLabel={is5102 ? "视觉模型" : "图片生成"}
             onKindChange={is5102 ? setVisualKind : undefined}
           />
         ) : activePage === "模型订购" ? (
           <ModelOrderList versionId={version.id} historical={is5102} />
         ) : is5102 && (activePage === "按量付费" || activePage === "Token Plan") ? (
           <ApiKeys key={activePage} billing={activePage} />
+        ) : activePage === "账号认证" && !is5102 ? (
+          <AuthExperience auth={{ ...auth, route: "account", close: () => setActivePage("模型广场") }} accountTitle="账号认证" />
         ) : activePage === "API Key 管理" ? (
           <UnifiedApiKeys />
         ) : activePage === "用量统计" ? (
           <UsageStatistics key={tenantAccess.userType} userType={tenantAccess.userType} />
-        ) : activePage === "调用日志" ? (
+        ) : activePage === "调用日志" && callLogsAllowed ? (
           <CallLogs />
         ) : is5102 && activePage.startsWith("用量统计·") ? (
           <UsageStatistics5102 />

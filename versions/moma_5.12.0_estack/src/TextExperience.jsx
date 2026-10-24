@@ -1,7 +1,6 @@
 import FrontPageHeader from "./components/FrontPageHeader";
 import { Languages } from "lucide-react";
 import { displayBusinessCopy } from './display-copy.mjs';
-import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowDownRight,
@@ -12,8 +11,6 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
-  MoreHorizontal,
-  Pencil,
   Plus,
   ImagePlus,
   Image as ImageIcon,
@@ -22,7 +19,6 @@ import {
   Square,
   ThumbsDown,
   ThumbsUp,
-  Trash2,
   Volume2,
   X,
 } from "lucide-react";
@@ -167,16 +163,11 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
   const [systemPrompt, setSystemPrompt] = useState("");
   const [ratings, setRatings] = useState({});
   const [expanded, setExpanded] = useState({});
-  const [menu, setMenu] = useState("");
-  const [renaming, setRenaming] = useState("");
-  const [renameValue, setRenameValue] = useState("");
   const [notice, setNotice] = useState("");
   const timer = useRef();
   const end = useRef();
   const newDialog = useRef();
   const textarea = useRef();
-  const [historySlot, setHistorySlot] = useState(null);
-  useEffect(() => setHistorySlot(document.getElementById("text-history-slot")), []);
 
   currentModel.current = model;
   const selectedModel = models.find(item => item.name === model);
@@ -368,21 +359,6 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     );
   };
 
-  const selectConversation = (item) => {
-    if (images.length || readingImages) { setNotice("请先发送或移除已添加的图片，再打开历史对话。"); return; }
-    clearTimeout(timer.current);
-    setBusy(false);
-    setConversationId(item.id);
-    setMessages(item.messages);
-    setModel(item.model);
-    setDeepThinking(Boolean(item.deepThinking));
-    setTemperature(item.temperature || "0.7");
-    setTopP(item.topP || "0.8");
-    setSystemPrompt(item.systemPrompt || "");
-    setHome(false);
-    setMenu("");
-  };
-
   const blank = () => {
     imageReadVersion.current++;
     setReadingImages(false);
@@ -396,7 +372,6 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     setText("");
     setDeepThinking(false);
     setHome(true);
-    setMenu("");
   };
   const requestBlank = () => {
     if (text.trim() || images.length || readingImages || busy || messages.length) newDialog.current?.showModal();
@@ -412,98 +387,11 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     speechSynthesis.cancel();
     speechSynthesis.speak(new SpeechSynthesisUtterance(value));
   };
-  const saveRename = (id) => {
-    const title = renameValue.trim();
-    if (title)
-      setConversations((current) =>
-        current
-          .map((item) =>
-            item.id === id ? { ...item, title, updatedAt: Date.now() } : item,
-          )
-          .sort((a, b) => b.updatedAt - a.updatedAt),
-      );
-    setRenaming("");
-  };
-  const deleteConversation = (item) => {
-    if (!window.confirm(`确认删除“${item.title}”吗？删除后不可恢复。`)) return;
-    setConversations((current) =>
-      current.filter((value) => value.id !== item.id),
-    );
-    if (conversationId === item.id) blank();
-  };
-
-  const history =
-    historySlot &&
-    createPortal(
-      <section className="tx-history-nav" aria-label="历史记录">
-        <div>
-          <span>历史记录</span>
-          <small>{conversations.length}/20</small>
-        </div>
-        {conversations.length ? (
-          conversations.map((item) => (
-            <div
-              className={`tx-history-item ${item.id === conversationId ? "selected" : ""}`}
-              key={item.id}
-            >
-              {renaming === item.id ? (
-                <input
-                  autoFocus
-                  value={renameValue}
-                  onChange={(event) => setRenameValue(event.target.value)}
-                  onBlur={() => saveRename(item.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") saveRename(item.id);
-                    if (event.key === "Escape") setRenaming("");
-                  }}
-                />
-              ) : (
-                <button
-                  title={item.title}
-                  onClick={() => selectConversation(item)}
-                >
-                  {item.title}
-                </button>
-              )}
-              <button
-                aria-label="更多操作"
-                onClick={() => setMenu(menu === item.id ? "" : item.id)}
-              >
-                <MoreHorizontal size={15} />
-              </button>
-              {menu === item.id && (
-                <div className="tx-history-menu">
-                  <button
-                    onClick={() => {
-                      setRenaming(item.id);
-                      setRenameValue(item.title);
-                      setMenu("");
-                    }}
-                  >
-                    <Pencil size={13} />
-                    重命名
-                  </button>
-                  <button onClick={() => deleteConversation(item)}>
-                    <Trash2 size={13} />
-                    删除
-                  </button>
-                </div>
-              )}
-            </div>
-          ))
-        ) : (
-          <p>暂无对话</p>
-        )}
-      </section>,
-      historySlot,
-    );
-
   const answerText = (item) => [displayBusinessCopy(item.answer), ...(item.points || []).map(displayBusinessCopy)].join("\n");
   return (
     <section
       className={`playground tx-page ${conversationActive ? "has-messages tx-conversation" : ""}`}
     >
-      {history}
       {conversationActive ? (
         <div className="tx-topbar">
           <button onClick={blank}>
@@ -514,7 +402,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
           <button onClick={requestBlank}>新建对话</button>
         </div>
       ) : (
-        <FrontPageHeader className="pg-heading" title={title} icon={Languages} description={imageUploadEnabled ? "语言模型用于问答、创作和翻译；支持图片输入的模型还可进行图文理解。" : "文本生成模型用于理解和生成文字；多模态模型还可以理解图片、视频等内容。"} actions={<div className="pg-heading-actions">{onCompare && <button className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button onClick={requestBlank}>新建对话</button></div>} />
+        <FrontPageHeader className="pg-heading" title={title} icon={Languages} description={imageUploadEnabled ? "文本生成用于问答、创作和翻译；支持图片输入的模型还可进行图文理解。" : "文本生成模型用于理解和生成文字；多模态模型还可以理解图片、视频等内容。"} actions={<div className="pg-heading-actions">{onCompare && <button className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button onClick={requestBlank}>新建对话</button></div>} />
       )}
       <div className="pg-workspace">
         {conversationActive ? (

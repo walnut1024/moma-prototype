@@ -2,7 +2,7 @@ import { dayOf } from './analytics.js';
 import { usageMeter, usageValue } from './usage-analysis.js';
 
 export const CALCLOUD_STORAGE_KEY = 'moma.5110.calcloud-config.v1';
-export const CALCLOUD_PAGE_IDS = ['base-models','cost-analysis','customer-analysis','provider-analysis','model-analysis','model-providers','business-call-statistics','performance-statistics','error-statistics','traffic-management','model-routing'];
+export const CALCLOUD_PAGE_IDS = ['base-models','cost-analysis','provider-analysis','model-analysis','model-providers','business-call-statistics','performance-statistics','error-statistics','traffic-management','model-routing'];
 export const CALCLOUD_TYPES = { text:'语言模型',multimodal:'多模态模型',image:'视觉模型',video:'视觉模型',audio:'语音模型',embedding:'向量模型',rerank:'排序模型' };
 export const CALCLOUD_PERIODS = ['分钟','日','月'];
 export const MATCH_MODES = ['前缀匹配','精确匹配','正则匹配'];

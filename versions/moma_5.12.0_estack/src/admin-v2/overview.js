@@ -1,16 +1,31 @@
 import { dayOf } from './analytics.js';
 import { userDemo } from './user-analysis.js';
 const DAY = 86400000, HOUR = 3600000, OFFSET = 8 * HOUR;
-export const overviewPresets = [['day', '昨日'], ['week', '近 7 天'], ['month', '近 30 天']];
+export const overviewPresets = [['today', '今日'], ['day', '昨日'], ['week', '近 7 天'], ['month', '近 30 天']];
 export const compactCount = new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 2 }).format;
 export const overviewDateTime = time => new Date(time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
 export function overviewPeriods(now = Date.now()) {
   const midnight = Date.parse(`${dayOf(now)}T00:00:00+08:00`);
-  return overviewPresets.map(([id, label], i) => {
-    const days = [1, 7, 30][i], start = midnight - days * DAY;
-    return { id, label, start, end: midnight, previousStart: start - days * DAY, previousEnd: midnight - days * DAY,
-      range: `${dayOf(start)} — ${dayOf(midnight - 1)}`, comparison: days === 1 ? '对比前日' : `对比前 ${days} 天` };
+  return overviewPresets.map(([id, label]) => {
+    const days = { today: 1, day: 1, week: 7, month: 30 }[id];
+    const start = id === 'today' ? midnight : midnight - days * DAY;
+    const end = id === 'today' ? now : midnight;
+    return { id, label, start, end, previousStart: start - days * DAY, previousEnd: end - days * DAY,
+      hourly: days === 1, partial: id === 'today',
+      range: `${dayOf(start)} — ${dayOf(Math.max(start, end - 1))}`,
+      comparison: id === 'today' ? '对比昨日同时段' : days === 1 ? '对比前日' : `对比前 ${days} 天` };
   });
+}
+export function overviewPeriod(now, id, range) {
+  if (id !== 'custom') return overviewPeriods(now).find(period => period.id === id) || null;
+  const parse = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? Date.parse(`${value}T00:00:00+08:00`) : NaN;
+  const start = parse(range?.start), last = parse(range?.end);
+  const days = (last - start) / DAY + 1;
+  if (!Number.isFinite(days) || days < 1 || days > 365 || dayOf(start) !== range.start || dayOf(last) !== range.end || range.end > dayOf(now)) return null;
+  const end = Math.min(last + DAY, now), partial = end < last + DAY;
+  return { id, label: '自定义', start, end, hourly: days === 1, partial,
+    previousStart: start - days * DAY, previousEnd: end - days * DAY,
+    range: `${range.start} — ${range.end}`, comparison: partial ? '对比上一等长周期同时段' : '对比上一等长周期' };
 }
 const noise = seed => { const n = Math.sin(seed * 12.9898) * 43758.5453; return n - Math.floor(n); };
 const models = ['DeepSeek-V4-Pro', 'Qwen3.8-Max', 'GLM-5.2', 'Kimi-K3', 'DeepSeek-V4-Flash', 'Qwen3.5-Plus', 'GLM-5.3', 'MiniMax-H3', 'BGE-M3', 'Qwen3.5-VL', 'Qwen3-Embedding', 'GLM-4.6V'];
@@ -80,13 +95,14 @@ function aggregate(start, end, hourly) {
     models: sort([...modelMap.values()].map(({ customerIds, ...row }) => ({ ...row, customerCount: customerIds.size }))),
     pairs: [...pairs.values()], trend: [...buckets.values()] };
 }
-export function overviewDemo(now = Date.now(), periodId = 'day') {
-  const period = overviewPeriods(now).find(p => p.id === periodId) || overviewPeriods(now)[0];
-  const current = aggregate(period.start, period.end, period.id === 'day');
-  const previous = aggregate(period.previousStart, period.previousEnd, period.id === 'day');
+export function overviewDemo(now = Date.now(), periodId = 'day', range) {
+  const period = overviewPeriod(now, periodId, range);
+  if (!period) throw new RangeError('无效统计时间范围');
+  const current = aggregate(period.start, period.end, period.hourly);
+  const previous = aggregate(period.previousStart, period.previousEnd, period.hourly);
   const previousCustomers = new Map(previous.customers.map(row => [row.id, row]));
   const identities = userDemo(now);
-  return { ...current, registrations: overviewRegistrations(identities.users, period.end), monthlyActive: overviewMonthlyActive(identities, period.end), period,
+  return { ...current, registrations: overviewRegistrations(identities.users, period.end), monthlyActive: overviewMonthlyActive(identities, Date.parse(`${dayOf(now)}T00:00:00+08:00`)), period,
     previous: { ...previous, registrations: overviewRegistrations(identities.users, period.previousEnd) },
     customers: current.customers.map(row => ({ ...row, change: overviewChange(row.total, previousCustomers.get(row.id)?.total || 0) })) };
 }

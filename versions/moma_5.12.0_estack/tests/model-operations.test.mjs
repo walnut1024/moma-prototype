@@ -1,36 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createAdminSeed,commitAdminState,persistModelAction,STORAGE_KEY,parseAdminState} from '../src/admin-v2/store.js';
-import {modelSupplies,activeSupplyPrice,activeSupplySalePrice,availableSupplies} from '../src/admin-v2/model-management.js';
-import {parseSupplyImport,SUPPLY_HEADERS} from '../src/admin-v2/supply-import.js';
+import {modelSupplies,activeSupplyPrice,activeSupplySalePrice,availableSupplies,priceItems,procurementVersion,latestSaleRevision,publicationChecks} from '../src/admin-v2/model-management.js';
+import {salesSelectionVersion} from '../src/admin-v2/model-operations.js';
 import {normalizeModelProfile,requireModelBasics} from '../src/admin-v2/model-profile.js';
 const op=(state,operation,data={},modelId)=>commitAdminState(state,{type:'modelOperations',operation,data,modelId});
 const legacy=(state,operation,data,modelId)=>commitAdminState(state,{type:'modelOperation',operation,data,modelId});
 const modelInput={modelId:'new-language',name:'测试语言模型',description:'用于文本生成。',type:'text',profile:{author:'模型作者',tasks:['对话'],inputModalities:['文本'],outputModalities:['文本']},capabilities:{context:8192,output:1024,streaming:false,tools:false}};
-const newProvider={name:'测试供应商',code:'test-provider',sourceType:'thirdParty',integrationType:'其他兼容服务',contact:'',description:''};
+const newProvider={catalogModelIds:['upstream-v1'],name:'测试供应商',code:'test-provider',sourceType:'thirdParty',integrationType:'其他兼容服务',contact:'',description:''};
 const connection={name:'测试接入',protocol:'OpenAI',baseUrl:'https://test.example.invalid/v1',credentialRef:'env:TEST_API_KEY',timeoutSeconds:60,capacity:''};
-function connected(){let state=op(createAdminSeed(),'addModel',{model:modelInput}),id=state.audits[0].objectId;state=op(state,'connectSupply',{provider:newProvider,connection,upstreamModelId:'upstream-v1',capabilities:modelInput.capabilities,procurement:{unit:'元/百万 Token',inputPrice:'1',outputPrice:'2'},verify:true},id);return {state,id,supply:modelSupplies(state,id)[0]};}
+function connected(){
+ let state=op(createAdminSeed(),'providerRegistration',{provider:newProvider,connections:[connection]});
+ const provider=state.providers.find(item=>item.code===newProvider.code),endpoint=state.endpoints.find(item=>item.providerId===provider.id);
+ state=op(state,'provider',{operation:'cataloguePrice',objectId:provider.id,values:{modelId:'upstream-v1',scenarios:[{name:'输入',unit:'百万 Token',currency:'CNY',listPrice:'1'},{name:'输出',unit:'百万 Token',currency:'CNY',listPrice:'2'}]}});
+ state=op(state,'saveOnboarding',{providerId:provider.id,catalogueModelId:'upstream-v1',endpointId:endpoint.id,model:modelInput,step:'metadata'});
+ const draftId=state.audits[0].objectId;
+ state=op(state,'onboardModel',{draftId,model:modelInput});
+ const id=state.audits[0].objectId,supply=modelSupplies(state,id)[0];state=op(state,'verifySupply',{id:supply.id},id);
+ return {state,id,supply:modelSupplies(state,id)[0],draftId};
+}
+const priced=(state,id,supply,amount='3')=>({supplyId:supply.id,items:priceItems(activeSupplyPrice(state,supply.id),state.models.find(m=>m.id===id)).map(item=>({...item,amount})),sourceVersion:procurementVersion(activeSupplyPrice(state,supply.id)),expectedSaleVersion:latestSaleRevision(state,supply.id)});
+
 test('template creation is metadata-only and importing does not add operating models',()=>{let s=createAdminSeed(),n=s.models.length,c=s.modelSupplies.length;s=op(s,'templateSave',modelInput);assert.equal(s.models.length,n);assert.equal(s.modelSupplies.length,c);assert.equal(s.modelTemplates[0].profile.author,'模型作者');assert.equal(s.modelTemplates[0].listingStatus,undefined);assert.throws(()=>op(s,'templateSave',modelInput),/已存在/);});
-test('template-based creation is unlisted, linked, and rejects duplicate catalogue codes',()=>{let s=createAdminSeed();s=op(s,'addModel',{templateId:'template-glm-5'});assert.equal(s.models[0].listingStatus,'已下架');assert.equal(s.models[0].templateRevision,1);assert.throws(()=>op(s,'addModel',{templateId:'template-glm-5'}),/已添加/);assert.throws(()=>op(s,'addModel',{templateId:'template-kimi-k3'}),/已添加/);});
-test('template update requires explicit apply and never overwrites sale prices',()=>{let s=op(createAdminSeed(),'addModel',{templateId:'template-glm-5'}),model=s.models[0],template=s.modelTemplates.find(t=>t.id===model.templateId);const before=structuredClone(s.modelSalePrices);s=op(s,'templateSave',{...template,name:'更新模板名称'});assert.equal(s.models.find(m=>m.id===model.id).name,model.name);s=op(s,'applyTemplate',{},model.id);assert.equal(s.models.find(m=>m.id===model.id).name,'更新模板名称');assert.deepEqual(s.modelSalePrices,before);});
-test('inline provider + endpoint + supply + cost commits as one operation and registers call ID',()=>{const {state,id,supply}=connected();assert.equal(supply.callId,'test-provider/new-language');assert.equal(availableSupplies(state,id).length,1);assert.equal(supply.salesEnabled,false);assert.equal(activeSupplyPrice(state,supply.id).inputPrice,1000000);assert.equal(activeSupplySalePrice(state,id,supply.id),undefined);assert.equal(state.revision,3);});
-test('invalid inline connection cannot partially create a provider or mapping',()=>{const s=op(createAdminSeed(),'addModel',{model:modelInput}),before=JSON.stringify(s);assert.throws(()=>op(s,'connectSupply',{provider:newProvider,connection:{...connection,baseUrl:'http://public.example.com'},upstreamModelId:'a',capabilities:modelInput.capabilities},s.models[0].id),/HTTPS/);assert.equal(JSON.stringify(s),before);});
+test('template update requires explicit apply and never overwrites sale prices',()=>{let s=legacy(createAdminSeed(),'create',modelInput),model=s.models[0];s=op(s,'templateFromModel',{},model.id);const template=s.modelTemplates[0];s={...s,models:s.models.map(m=>m.id===model.id?{...m,templateId:template.id,templateRevision:template.revision}:m)};const before=structuredClone(s.modelSalePrices);s=op(s,'templateSave',{...template,name:'更新模板名称'});assert.equal(s.models.find(m=>m.id===model.id).name,model.name);s=op(s,'applyTemplate',{},model.id);assert.equal(s.models.find(m=>m.id===model.id).name,'更新模板名称');assert.deepEqual(s.modelSalePrices,before);});
 test('supplier code collision is rejected across existing seeded providers',()=>{assert.throws(()=>op(createAdminSeed(),'providerRegistration',{provider:{...newProvider,code:'bailian'}}),/不可重复/);});
-test('failed connection verification preserves configuration but cannot enable supply',()=>{let {state,id,supply}=connected();state=op(state,'verifySupply',{id:supply.id,scenario:'鉴权失败'},id);assert.equal(availableSupplies(state,id).length,0);assert.ok(state.modelSupplies.find(s=>s.id===supply.id));assert.throws(()=>op(state,'saveSales',{prices:[{supplyId:supply.id,unit:'元/百万 Token',inputPrice:'3',outputPrice:'4'}],selected:[supply.id],publish:true},id),/验证/);});
-test('sale price and procurement remain independent, explicit free price works',()=>{let {state,id,supply}=connected();const before=structuredClone(state.supplyPrices);state=op(state,'saveSales',{prices:[{supplyId:supply.id,unit:'元/百万 Token',inputPrice:'0',outputPrice:'0'}],selected:[supply.id],publish:true},id);assert.equal(state.models.find(m=>m.id===id).listingStatus,'已上架');assert.deepEqual(state.supplyPrices,before);assert.equal(activeSupplySalePrice(state,id,supply.id).inputPrice,0);const sale=structuredClone(state.modelSalePrices);state=legacy(state,'procurement',{supplyId:supply.id,unit:'元/百万 Token',inputPrice:'2',outputPrice:'3'},id);assert.deepEqual(state.modelSalePrices,sale);});
-test('price unit mismatch and blank values are rejected atomically',()=>{const {state,id,supply}=connected();const before=JSON.stringify(state);for(const price of [{unit:'元/张',inputPrice:'1',outputPrice:'2'},{unit:'元/百万 Token',inputPrice:'',outputPrice:'2'}])assert.throws(()=>op(state,'saveSales',{prices:[{...price,supplyId:supply.id}],selected:[supply.id]},id));assert.equal(JSON.stringify(state),before);});
-test('partial price saves preserve draft, exclude unfinished supply, and keep model unlisted',()=>{let {state,id,supply}=connected();state=op(state,'saveSales',{prices:[{supplyId:supply.id,unit:'元/百万 Token',inputPrice:'1.5',outputPrice:''}],selected:[supply.id],allowIncomplete:true},id);assert.equal(state.models.find(m=>m.id===id).listingStatus,'已下架');assert.equal(state.modelSupplies.find(s=>s.id===supply.id).salesEnabled,false);assert.equal(state.modelSalePrices[0].status,'草稿');});
-test('scheduled repricing keeps current price until effective time and creates immutable versions',()=>{let {state,id,supply}=connected();state=op(state,'saveSales',{prices:[{supplyId:supply.id,unit:'元/百万 Token',inputPrice:'2',outputPrice:'4'}],selected:[supply.id]},id);const first=activeSupplySalePrice(state,id,supply.id);const when=new Date(Date.now()+86400000).toISOString();state=op(state,'saveSales',{prices:[{supplyId:supply.id,unit:'元/百万 Token',inputPrice:'3',outputPrice:'6',effectiveAt:when}],selected:[supply.id]},id);assert.equal(activeSupplySalePrice(state,id,supply.id).id,first.id);assert.equal(activeSupplySalePrice(state,id,supply.id,Date.parse(when)+1).inputPrice,3000000);});
 test('editing shared endpoint invalidates all model validations and keeps costs',()=>{let {state,id,supply}=connected();const ep=state.endpoints.find(ep=>ep.id===supply.endpointId),cost=structuredClone(state.supplyPrices);state=op(state,'provider',{operation:'connection',objectId:ep.id,values:{...ep,baseUrl:'https://changed.example.invalid/v1'}});assert.equal(state.modelSupplies.find(s=>s.id===supply.id).validationStatus,'待验证');assert.equal(availableSupplies(state,id).length,0);assert.deepEqual(state.supplyPrices,cost);});
-test('same provider cannot have two active mappings for same platform model',()=>{const {state,id,supply}=connected();assert.throws(()=>op(state,'connectSupply',{providerId:supply.provider.id,endpointId:supply.endpointId,upstreamModelId:'other',capabilities:modelInput.capabilities},id),/已关联/);});
-test('procurement import identifies in-batch duplicate without overwriting saved mappings',()=>{let s=op(createAdminSeed(),'addModel',{model:modelInput});s=op(s,'providerRegistration',{provider:newProvider,connection});const p=s.providers.find(p=>p.code==='test-provider');const row=['new-language','测试接入','upstream','元/百万 Token','1','2','8192','1024'];const text=[SUPPLY_HEADERS,row,row].map(r=>r.join('\t')).join('\n');const rows=parseSupplyImport(s,p.id,text);assert.equal(rows[0].error,null);assert.match(rows[1].error,/已关联/);assert.equal(modelSupplies(s,s.models[0].id).length,0);});
 test('permission, stale revision and storage errors prevent commits without resetting data',()=>{const s=createAdminSeed();assert.throws(()=>commitAdminState({...s,currentRole:'运维人员'},{type:'modelOperations',operation:'templateSave',data:modelInput}),/无权/);const storage={getItem:()=>JSON.stringify({...s,revision:s.revision+1}),setItem:()=>assert.fail('must not write')};assert.throws(()=>persistModelAction(s,{type:'modelOperations',operation:'templateSave',data:modelInput},storage),/数据已变化/);const broken={getItem:()=>JSON.stringify(s),setItem:()=>{throw new Error('quota');}};assert.throws(()=>persistModelAction(s,{type:'modelOperations',operation:'templateSave',data:modelInput},broken),/quota/);assert.ok(!s.modelTemplates.some(t=>t.modelId===modelInput.modelId));});
 test('old saved data keeps IDs, pricing and user edits; new template collection is separate',()=>{const s=createAdminSeed();delete s.modelTemplates;s.models[0].name='用户自定义名称';const restored=parseAdminState(JSON.stringify(s));assert.equal(restored.models[0].name,'用户自定义名称');assert.deepEqual(restored.modelSalePrices,s.modelSalePrices);assert.equal(restored.modelTemplates.length,createAdminSeed().modelTemplates.length);assert.match(STORAGE_KEY,/5120/);});
 
 test('metadata modality change invalidates existing verification without altering prices',()=>{let {state,id,supply}=connected();const model=state.models.find(item=>item.id===id),before=structuredClone(state.supplyPrices);state=legacy(state,'basic',{...model,profile:{...model.profile,inputModalities:['文本','图片']}},id);assert.equal(state.modelSupplies.find(item=>item.id===supply.id).validationStatus,'待验证');assert.deepEqual(state.supplyPrices,before);});
 test('saving a missing model as template gives a recoverable domain error',()=>assert.throws(()=>op(createAdminSeed(),'templateFromModel',{},'missing'),/模型不存在/));
 
-test('model templates are a dedicated operations page with matching role boundaries', async()=>{const {sections,canAccessPage,pageFromHash}=await import('../src/admin-v2/navigation.mjs');const group=sections.find(item=>item.id==='models');assert.deepEqual(group.items.map(item=>item.label),['模型管理','模型资料','供应商']);assert.equal(pageFromHash('#/admin-2/model-templates?view=template','运营人员'),'model-templates');assert.equal(canAccessPage('运营人员','model-templates'),true);assert.equal(canAccessPage('运维人员','model-templates'),false);});
+test('model templates are a dedicated operations page with matching role boundaries', async()=>{const {sections,canAccessPage,pageFromHash}=await import('../src/admin-v2/navigation.mjs');const group=sections.find(item=>item.id==='models');assert.deepEqual(group.items.map(item=>item.label),['模型管理','模型资料','供应商','资费字典']);assert.equal(pageFromHash('#/admin-2/model-templates?view=template','运营人员'),'model-templates');assert.equal(canAccessPage('运营人员','model-templates'),true);assert.equal(canAccessPage('运维人员','model-templates'),false);});
 
 test('real model catalogue has unique codes and editable sourced metadata without invented shared limits',()=>{
   const state=createAdminSeed();
@@ -57,12 +58,12 @@ test('supplier catalogue is independent of platform mappings and persists normal
   const provider=state.providers.find(item=>item.code==='deepseek');
   assert.deepEqual(provider.catalogModelIds,['deepseek-flash','deepseek-v4-pro']);
   assert.ok(provider.catalogueSource.startsWith('https://'));
-  state=op(state,'provider',{operation:'profile',objectId:provider.id,values:{...provider,catalogModelIds:[' deepseek-flash ','deepseek-flash','','deepseek-v4-pro']}});
-  assert.deepEqual(state.providers.find(item=>item.id===provider.id).catalogModelIds,['deepseek-flash','deepseek-v4-pro']);
+  state=op(state,'provider',{operation:'catalogueImport',objectId:provider.id,values:{mode:'batch',text:' deepseek-flash \ndeepseek-flash\n\ndeepseek-v4-pro\ncustom-model'}});
+  assert.deepEqual(state.providers.find(item=>item.id===provider.id).catalogModelIds,['deepseek-flash','deepseek-v4-pro','custom-model']);
   const cleared={...state,modelSupplies:[]};
-  assert.deepEqual(cleared.providers.find(item=>item.id===provider.id).catalogModelIds,provider.catalogModelIds);
-  assert.throws(()=>op(state,'provider',{operation:'profile',objectId:provider.id,values:{...provider,catalogModelIds:['bad model']}}),/有效 Model ID/);
-  assert.throws(()=>op(state,'provider',{operation:'profile',objectId:provider.id,values:{...provider,catalogModelIds:'deepseek-flash'}}),/Model ID 列表/);
+  assert.deepEqual(cleared.providers.find(item=>item.id===provider.id).catalogModelIds,['deepseek-flash','deepseek-v4-pro','custom-model']);
+  assert.throws(()=>op(state,'provider',{operation:'catalogueImport',objectId:provider.id,values:{mode:'batch',text:'bad model'}}),/有效 Model ID/);
+  assert.throws(()=>op(state,'provider',{operation:'catalogueImport',objectId:provider.id,values:{mode:'batch',text:['deepseek-flash']}}),/请输入/);
 });
 
 test('real supplier fixtures use official URLs and connection transactions accept only OpenAI',()=>{
@@ -106,7 +107,7 @@ test('carrier providers have independent catalogues and unverified connections w
 test('tenant model categories separate multimodal understanding from visual generation and keep type-specific fields', async () => {
   const { MODEL_TYPES, MODEL_CATEGORIES, modelCategory, priceUnits } = await import('../src/admin-v2/model-management.js');
   const { specificationFields } = await import('../src/admin-v2/model-profile.js');
-  assert.deepEqual(MODEL_CATEGORIES, { text: '语言模型', multimodal: '多模态理解', visual: '视觉模型', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' });
+  assert.deepEqual(MODEL_CATEGORIES, { text: '语言模型', multimodal: '视觉理解', visual: '视觉生成', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' });
   assert.equal(modelCategory('multimodal'), 'multimodal');
   assert.equal(modelCategory('image'), 'visual');
   assert.equal(modelCategory('video'), 'visual');
@@ -147,4 +148,156 @@ test('recent templates have sourced release dates and K3 remains vision-capable 
   assert.equal(k3.profile.releaseDate, '2026-07-16');
   assert.deepEqual(k3.profile.inputModalities, ['文本', '图片', '视频']);
   assert.equal(state.modelTemplates.find(item => item.modelId === 'SenseVoiceSmall').profile.releaseDate, undefined);
+});
+
+test('catalogue onboarding references complete costs without creating a second procurement record',()=>{
+ const {state,id,supply}=connected();assert.equal(supply.callId,'test-provider/new-language');assert.equal(supply.catalogueModelId,'upstream-v1');assert.equal(supply.salesEnabled,false);assert.equal(state.models.find(m=>m.id===id).listingStatus,'已下架');assert.equal(availableSupplies(state,id).length,1);assert.deepEqual(priceItems(activeSupplyPrice(state,supply.id),state.models.find(m=>m.id===id)).map(i=>i.amount),[1000000,2000000]);assert.ok(!state.supplyPrices.some(p=>p.supplyId===supply.id));
+});
+test('same catalogue model and relation are reused across entry points',()=>{
+ let {state,id,supply,draftId}=connected();const counts=[state.models.length,state.modelSupplies.length];state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),targetRevision:state.models.find(m=>m.id===id).updatedAt});state=op(state,'onboardModel',{draftId,model:state.models.find(m=>m.id===id)});assert.deepEqual([state.models.length,state.modelSupplies.length],counts);assert.equal(state.modelOnboardings.find(d=>d.id===draftId).supplyId,supply.id);
+});
+test('blank and zero stay distinct; missing procurement never means zero cost',()=>{
+ let {state,id,supply}=connected();assert.throws(()=>op(state,'reprice',priced(state,id,supply,''),id),/必填/);state=op(state,'reprice',priced(state,id,supply,'0'),id);assert.ok(activeSupplySalePrice(state,id,supply.id).items.every(item=>item.amount===0));const provider=supply.provider;state=op(state,'provider',{operation:'cataloguePrice',objectId:provider.id,values:{modelId:'upstream-v1',scenarios:[{name:'输入',unit:'百万 Token',currency:'CNY',listPrice:''}]}});assert.throws(()=>op(state,'reprice',priced(state,id,supply),id),/采购价缺失/);
+});
+test('repricing changes only prices, preserving sales, listing, scope and immutable history',()=>{
+ let {state,id,supply}=connected();const before=structuredClone({models:state.models,supplies:state.modelSupplies,costs:state.supplyPrices,providers:state.providers});state=op(state,'reprice',priced(state,id,supply),id);const first=structuredClone(activeSupplySalePrice(state,id,supply.id));state=op(state,'reprice',{...priced(state,id,supply,'4'),effectiveAt:new Date(Date.now()+86400000).toISOString()},id);assert.deepEqual({models:state.models,supplies:state.modelSupplies,costs:state.supplyPrices,providers:state.providers},before);assert.equal(activeSupplySalePrice(state,id,supply.id).id,first.id);assert.deepEqual(state.modelSalePrices.find(p=>p.id===first.id),first);assert.equal(activeSupplySalePrice(state,id,supply.id,Date.now()+86400001).items[0].amount,4000000);assert.throws(()=>op(state,'reprice',{...priced(state,id,supply),selected:[supply.id]},id),/只允许/);
+});
+test('all tier, condition, unit, currency, spec, night and cache rows survive repricing',()=>{
+ let {state,id,supply}=connected();const scenarios=[['输入 0–32K','白天','百万 Token','CNY'],['输入 32K–128K','夜间 00:00–08:00','百万 Token','CNY'],['缓存读取','缓存命中','百万 Token','USD'],['图片生成 1024×1024','规格 A','张','CNY']].map(([name,condition,unit,currency],index)=>({name,condition,unit,currency,listPrice:String(index)}));state=op(state,'provider',{operation:'cataloguePrice',objectId:supply.provider.id,values:{modelId:'upstream-v1',scenarios}});const data=priced(state,id,supply);state=op(state,'reprice',data,id);assert.deepEqual(activeSupplySalePrice(state,id,supply.id).items.map(({amount,...item})=>item),scenarios.map(({listPrice,...item})=>item));assert.throws(()=>op(state,'reprice',{...priced(state,id,supply),items:data.items.slice(1)},id),/完整计费项/);
+});
+test('supplier changes prompt review without changing published sale versions',()=>{
+ let {state,id,supply}=connected();state=op(state,'reprice',priced(state,id,supply),id);const sales=structuredClone(state.modelSalePrices),stale=priced(state,id,supply);state=op(state,'provider',{operation:'catalogueDiscount',objectId:supply.provider.id,values:{modelId:'upstream-v1',discountFactor:'0.8'}});assert.deepEqual(state.modelSalePrices,sales);assert.equal(activeSupplyPrice(state,supply.id).items[0].amount,800000);assert.throws(()=>op(state,'reprice',stale,id),/报价已变化/);
+});
+test('concurrent sale revisions are rejected even after loading the latest store',()=>{
+ let {state,id,supply}=connected();const draft=priced(state,id,supply);state=op(state,'reprice',draft,id);assert.throws(()=>op(state,'reprice',draft,id),/并发修订/);
+});
+test('partial progress survives refresh and cannot accidentally publish',()=>{
+ let {state,id,supply,draftId}=connected();const draft=state.modelOnboardings.find(d=>d.id===draftId);state=op(state,'saveOnboarding',{...draft,prices:priced(state,id,supply,'').items,sourceVersion:procurementVersion(activeSupplyPrice(state,supply.id)),expectedSaleVersion:latestSaleRevision(state,supply.id),step:'price'});const restored=parseAdminState(JSON.stringify(state));assert.equal(restored.modelOnboardings.find(d=>d.id===draftId).prices[0].amount,'');assert.throws(()=>op(restored,'completeOnboarding',{draftId,publish:true}),/必填/);assert.equal(restored.models.find(m=>m.id===id).listingStatus,'已下架');
+});
+test('final confirmation selects only current supply and ignores an unselected incomplete backup',()=>{
+ let {state,id,supply,draftId}=connected();state.modelSupplies.push({...supply,id:'unused-backup',endpointId:state.endpoints.find(ep=>ep.providerId!==supply.provider.id).id,salesEnabled:false,status:'已停用'});const data=priced(state,id,supply);state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),prices:data.items,sourceVersion:data.sourceVersion,expectedSaleVersion:data.expectedSaleVersion,salesVersion:salesSelectionVersion(state,id),step:'review'});state=op(state,'completeOnboarding',{draftId,publish:true});assert.equal(state.models.find(m=>m.id===id).listingStatus,'已上架');assert.equal(state.modelSupplies.find(s=>s.id==='unused-backup').salesEnabled,false);assert.ok(publicationChecks(state,state.models.find(m=>m.id===id)).every(c=>c.passed));
+});
+test('uncertain identity requires explicit confirmation; missing connection retains saved progress',()=>{
+ let {state,id}=connected();state=op(state,'providerRegistration',{provider:{...newProvider,name:'第二家',code:'second-provider'},connections:[connection]});const provider=state.providers.find(p=>p.code==='second-provider'),ep=state.endpoints.find(e=>e.providerId===provider.id);state=op(state,'saveOnboarding',{providerId:provider.id,catalogueModelId:'upstream-v1',endpointId:ep.id,targetModelId:id,targetRevision:state.models.find(m=>m.id===id).updatedAt});let draftId=state.audits[0].objectId;assert.throws(()=>op(state,'onboardModel',{draftId,model:state.models.find(m=>m.id===id)}),/身份和版本/);state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),confirmedIdentity:true});state=op(state,'onboardModel',{draftId,model:state.models.find(m=>m.id===id)});assert.equal(modelSupplies(state,id).length,2);assert.equal(state.models.filter(m=>m.id===id).length,1);
+ const draft={providerId:provider.id,catalogueModelId:'upstream-v1',endpointId:''};state=op(state,'saveOnboarding',draft);draftId=state.audits[0].objectId;assert.throws(()=>op(state,'onboardModel',{draftId,model:modelInput}),/连接/);assert.ok(state.modelOnboardings.some(d=>d.id===draftId));
+});
+test('failed verification and stale metadata never partially change models or prices',()=>{
+ let {state,id,supply,draftId}=connected();state=op(state,'verifySupply',{id:supply.id,scenario:'鉴权失败'},id);assert.equal(availableSupplies(state,id).length,0);const data=priced(state,id,supply);state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),prices:data.items,sourceVersion:data.sourceVersion});const before=JSON.stringify(state);assert.throws(()=>op(state,'completeOnboarding',{draftId,publish:true}),/验证/);assert.equal(JSON.stringify(state),before);state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),targetRevision:'outdated'});assert.throws(()=>op(state,'onboardModel',{draftId,model:state.models.find(m=>m.id===id)}),/资料已有并发修订/);
+});
+
+test('same platform model keeps each supplier sale independent',()=>{
+ let {state,id,supply:first}=connected();state=op(state,'reprice',priced(state,id,first,'3'),id);const firstPrice=structuredClone(activeSupplySalePrice(state,id,first.id));
+ state=op(state,'providerRegistration',{provider:{...newProvider,name:'独立供应商',code:'independent'},connections:[connection]});const provider=state.providers.find(p=>p.code==='independent'),endpoint=state.endpoints.find(e=>e.providerId===provider.id);
+ state=op(state,'provider',{operation:'cataloguePrice',objectId:provider.id,values:{modelId:'upstream-v1',scenarios:[{name:'输入',unit:'百万 Token',currency:'CNY',listPrice:'0'}]}});
+ state=op(state,'saveOnboarding',{providerId:provider.id,catalogueModelId:'upstream-v1',endpointId:endpoint.id,targetModelId:id,targetRevision:state.models.find(m=>m.id===id).updatedAt,confirmedIdentity:true});const draftId=state.audits[0].objectId;state=op(state,'onboardModel',{draftId,model:state.models.find(m=>m.id===id)});const second=modelSupplies(state,id).find(s=>s.provider.id===provider.id);state=op(state,'reprice',priced(state,id,second,'9'),id);assert.deepEqual(activeSupplySalePrice(state,id,first.id),firstPrice);assert.equal(activeSupplySalePrice(state,id,second.id).items[0].amount,9000000);assert.equal(state.models.filter(m=>m.id===id).length,1);
+});
+test('concurrent sales selection and incomplete selected supplies block final confirmation atomically',()=>{
+ let {state,id,supply,draftId}=connected();const price=priced(state,id,supply);state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),prices:price.items,sourceVersion:price.sourceVersion,expectedSaleVersion:price.expectedSaleVersion});
+ state.modelSupplies.find(s=>s.id===supply.id).salesEnabled=true;const before=JSON.stringify(state);assert.throws(()=>op(state,'completeOnboarding',{draftId,publish:true}),/销售供给已有并发修订/);assert.equal(JSON.stringify(state),before);
+});
+test('new onboarding and repricing preserve permissions and failed persistence without mutating input',()=>{
+ const {state,id,supply,draftId}=connected(),before=JSON.stringify(state);const actions=[{type:'modelOperations',operation:'reprice',modelId:id,data:priced(state,id,supply)},{type:'modelOperations',operation:'saveOnboarding',data:{...state.modelOnboardings.find(d=>d.id===draftId),step:'review'}}];
+ for(const action of actions){assert.throws(()=>commitAdminState(state,action,'运维人员'),/无权/);assert.throws(()=>persistModelAction(state,action,{getItem:()=>JSON.stringify(state),setItem:()=>{throw Error('write failed');}}),/write failed/);assert.equal(JSON.stringify(state),before);}
+});
+test('catalogue quote versions identify the source of published sale snapshots',()=>{
+ let {state,id,supply}=connected();state=op(state,'reprice',priced(state,id,supply),id);const sale=activeSupplySalePrice(state,id,supply.id);assert.match(sale.sourceLabel,/测试供应商 \/ upstream-v1/);assert.equal(JSON.parse(sale.sourceVersion).discountFactor,1000000);const old=structuredClone(sale);state=op(state,'provider',{operation:'catalogueDiscount',objectId:supply.provider.id,values:{modelId:'upstream-v1',discountFactor:'0.8'}});assert.equal(JSON.parse(procurementVersion(activeSupplyPrice(state,supply.id))).discountFactor,800000);assert.deepEqual(state.modelSalePrices.find(p=>p.id===sale.id),old);
+});
+test('markup preserves precision, zero and missing cost; change percentage handles free rates',async()=>{
+ const {markedUpItems,saleChange,billingItemKey}=await import('../src/admin-v2/provider-catalogue-pricing.js');const cost=[{name:'夜间输入',condition:'32K–128K',unit:'百万 Token',currency:'CNY',amount:1},{name:'缓存读取',unit:'百万 Token',currency:'USD',amount:0}];const draft=markedUpItems(cost,'50');assert.equal(draft[0].amount,'0.000002');assert.equal(draft[1].amount,'0');assert.equal(billingItemKey(draft[0]),billingItemKey(cost[0]));assert.throws(()=>markedUpItems([{...cost[0],amount:null}],'20'),/不能按零成本/);assert.throws(()=>markedUpItems(cost,''),/加价比例/);assert.throws(()=>markedUpItems(cost,'10001'),/范围/);assert.equal(saleChange(0,'1'),'免费 → 收费');assert.equal(saleChange(0,'0'),'0.00%');assert.equal(saleChange(null,'0'),'—');
+});
+
+test('supplier model sale, unlisting and service stop have separate effects',()=>{
+ let {state,id,supply}=connected();
+ state=op(state,'reprice',priced(state,id,supply),id);
+ const prices=structuredClone(state.modelSalePrices),endpoints=structuredClone(state.endpoints);
+ state=op(state,'publishSupply',{id:supply.id},id);
+ assert.equal(state.modelSupplies.find(s=>s.id===supply.id).salesEnabled,true);
+ assert.equal(state.models.find(m=>m.id===id).listingStatus,'已上架');
+ state=op(state,'unlistSupply',{id:supply.id},id);
+ assert.equal(state.modelSupplies.find(s=>s.id===supply.id).salesEnabled,false);
+ assert.equal(availableSupplies(state,id).length,1);
+ assert.equal(state.models.find(m=>m.id===id).listingStatus,'已下架');
+ assert.equal(state.models.find(m=>m.id===id).callsEnabled,true);
+ state=op(state,'stopSupply',{id:supply.id},id);
+ assert.equal(availableSupplies(state,id).length,0);
+ assert.equal(state.models.find(m=>m.id===id).callsEnabled,false);
+ assert.equal(state.modelSupplies.find(s=>s.id===supply.id).status,'已停用');
+ state=op(state,'publishSupply',{id:supply.id},id);
+ assert.equal(state.models.find(m=>m.id===id).callsEnabled,true);
+ assert.deepEqual(state.modelSalePrices,prices);
+ assert.deepEqual(state.endpoints,endpoints);
+});
+
+test('supplier lifecycle affects only its own supply and keeps other suppliers selling',()=>{
+ let state=createAdminSeed();const model=state.models.find(m=>m.id==='catalog-demo-kimi'),supplies=modelSupplies(state,model.id),target=supplies[0];
+ const others=state.modelSupplies.filter(s=>s.id!==target.id),prices=structuredClone(state.modelSalePrices);
+ state=op(state,'stopSupply',{id:target.id},model.id);
+ assert.deepEqual(state.modelSupplies.filter(s=>s.id!==target.id),others);
+ assert.equal(state.models.find(m=>m.id===model.id).listingStatus,'已上架');
+ assert.equal(state.models.find(m=>m.id===model.id).callsEnabled,true);
+ assert.ok(availableSupplies(state,model.id).length>0);
+ assert.deepEqual(state.modelSalePrices,prices);
+});
+
+test('supplier listing rejects missing price, unverified supply, foreign IDs and read-only role atomically',()=>{
+ let {state,id,supply}=connected();const before=structuredClone(state);
+ assert.throws(()=>op(state,'publishSupply',{id:supply.id},id),/完整/);
+ assert.deepEqual(state,before);
+ state=op(state,'reprice',priced(state,id,supply),id);
+ state=legacy(state,'verify',{id:supply.id,result:'失败'},id);
+ assert.throws(()=>op(state,'publishSupply',{id:supply.id},id),/验证通过/);
+ assert.throws(()=>op(state,'stopSupply',{id:supply.id},'model-1'),/不存在/);
+ assert.throws(()=>commitAdminState({...state,currentRole:'运维人员'},{type:'modelOperations',operation:'stopSupply',data:{id:supply.id},modelId:id}),/无权/);
+});
+
+test('supplier connectivity preview never enables a stopped service or changes saved records',async()=>{
+ const {supplyConnectivityTest,supplySalesStatus}=await import('../src/admin-v2/model-operations.js');
+ let {state,id,supply}=connected();state=op(state,'stopSupply',{id:supply.id},id);const before=structuredClone(state);
+ for(const [scenario,status] of [['success',200],['unauthorized',401],['unavailable',404],['timeout',null]]){
+  const result=supplyConnectivityTest(state,{modelId:id,supplyId:supply.id,prompt:'OK',scenario});assert.equal(result.status,status);assert.equal(result.simulated,true);
+ }
+ assert.deepEqual(state,before);assert.equal(supplySalesStatus(modelSupplies(state,id)[0]),'停止服务');
+ assert.throws(()=>supplyConnectivityTest(state,{modelId:id,supplyId:supply.id,prompt:' ',scenario:'success'}),/测试内容/);
+ const noKey=structuredClone(state);noKey.endpoints.find(ep=>ep.id===supply.endpointId).credentialRef='';
+ assert.throws(()=>supplyConnectivityTest(noKey,{modelId:id,supplyId:supply.id,prompt:'OK',scenario:'success'}),/凭证/);
+ assert.equal(supplySalesStatus({status:'已启用',salesEnabled:true}),'上架售卖');
+ assert.equal(supplySalesStatus({status:'已启用',salesEnabled:false}),'下架停售');
+});
+
+test('existing subscriber calls survive unlisting and fail after the final supply stops',async()=>{
+ const {simulateRequest}=await import('../src/admin-v2/domain.js');
+ let {state,id,supply}=connected();state=op(state,'reprice',priced(state,id,supply),id);state=op(state,'publishSupply',{id:supply.id},id);
+ const key=state.apiKeys.find(k=>k.status==='有效'&&state.grants.some(g=>g.subjectId===k.id));key.modelIds.push(id);state.limits=state.limits.filter(l=>l.scopeId!==key.id);
+ const call=()=>simulateRequest(state,{requestId:crypto.randomUUID(),keyId:key.id,modelId:id}).request;
+ assert.equal(call().httpStatus,200);
+ state=op(state,'unlistSupply',{id:supply.id},id);assert.equal(call().httpStatus,200);
+ state=op(state,'stopSupply',{id:supply.id},id);assert.notEqual(call().httpStatus,200);
+});
+
+test('floor discount is one versioned percentage per supplier and never changes prices or other sales settings',async()=>{
+ const {floorDiscountDisplay,parseFloorDiscount,supplyModelUrl}=await import('../src/admin-v2/model-management.js');
+ let {state,id,supply}=connected();const modelBefore=structuredClone(state.models.find(m=>m.id===id)),suppliesBefore=structuredClone(state.modelSupplies),costsBefore=structuredClone(state.supplyPrices);
+ state=op(state,'reprice',{...priced(state,id,supply),floorDiscountPercent:'40'},id);
+ const first=activeSupplySalePrice(state,id,supply.id);assert.equal(first.floorDiscountBps,4000);assert.equal(floorDiscountDisplay(first),'40%');
+ state=op(state,'reprice',priced(state,id,supply,'4'),id);assert.equal(activeSupplySalePrice(state,id,supply.id).floorDiscountBps,4000);
+ state=op(state,'reprice',{...priced(state,id,supply,'4'),floorDiscountPercent:'0'},id);assert.equal(floorDiscountDisplay(activeSupplySalePrice(state,id,supply.id)),'0%');
+ state=op(state,'reprice',{...priced(state,id,supply,'4'),floorDiscountPercent:''},id);assert.equal(floorDiscountDisplay(activeSupplySalePrice(state,id,supply.id)),'—');
+ assert.equal(state.modelSalePrices.find(p=>p.id===first.id).floorDiscountBps,4000);
+ assert.deepEqual(state.models.find(m=>m.id===id),modelBefore);assert.deepEqual(state.modelSupplies,suppliesBefore);assert.deepEqual(state.supplyPrices,costsBefore);
+ for(const value of ['-1','100.01','40.123','Infinity','40%'])assert.throws(()=>op(state,'reprice',{...priced(state,id,supply),floorDiscountPercent:value},id),/底线折扣/);
+ assert.equal(parseFloorDiscount('100'),10000);assert.equal(parseFloorDiscount('40.25'),4025);
+ assert.equal(supplyModelUrl(supply,{type:'text'}),supply.endpoint.baseUrl+'/chat/completions');
+});
+
+test('supplier model URLs use explicit endpoints and the OpenAI chat request path',async()=>{
+ const {supplyModelUrl}=await import('../src/admin-v2/model-management.js');
+ const supply={upstreamModelId:'model-v1',endpoint:{baseUrl:'https://service.example.invalid/api/v3'},provider:{catalogModels:[{modelId:'model-v1',endpoint:'/api/v3/chat/completions?variant=V1'}]}};
+ assert.equal(supplyModelUrl(supply),'https://service.example.invalid/api/v3/chat/completions?variant=V1');
+ supply.provider.catalogModels[0].endpoint='https://other.example.invalid/Models/Invoke?mode=Chat';assert.equal(supplyModelUrl(supply),'https://other.example.invalid/Models/Invoke?mode=Chat');
+ supply.provider.catalogModels=[];assert.equal(supplyModelUrl(supply),'');
+ supply.endpoint.protocol='OpenAI';assert.equal(supplyModelUrl(supply,{type:'text'}),supply.endpoint.baseUrl+'/chat/completions');
+ supply.endpoint.baseUrl+='/' ;assert.equal(supplyModelUrl(supply,{type:'text'}),'https://service.example.invalid/api/v3/chat/completions');
+ supply.endpoint.baseUrl='https://service.example.invalid/v1/chat/completions';assert.equal(supplyModelUrl(supply,{type:'text'}),supply.endpoint.baseUrl);
+ assert.equal(supplyModelUrl(supply,{type:'video'}),'');
+ assert.equal(supplyModelUrl({upstreamModelId:'missing'}),'');
 });

@@ -8,7 +8,9 @@ import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
-import { overviewDemo, overviewPresets, overviewDateTime, overviewChange, compactCount } from './overview';
+import { overviewDemo, overviewPeriod, overviewPresets, overviewDateTime, overviewChange, compactCount } from './overview';
+import { DateRange } from './AnalyticsFilters';
+import { dayOf } from './analytics';
 import './analytics.css';
 import './overview.css';
 const number = value => value == null ? '—' : value.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
@@ -26,12 +28,13 @@ function UsageTable({ rows, kind, total, onSelect, label }) {
 }
 export default function OperationsOverview() {
   const [now, setNow] = useState(() => Date.now()), [periodId, setPeriodId] = useState('day');
+  const [customRange, setCustomRange] = useState(null);
   const [detail, setDetail] = useState(null);
-  const data = useMemo(() => overviewDemo(now, periodId), [now, periodId]);
+  const data = useMemo(() => overviewDemo(now, periodId, customRange), [now, periodId, customRange]);
   const { period, previous } = data;
-  const choosePeriod = id => { setPeriodId(id); setNow(Date.now()); setDetail(null); };
+  const choosePeriod = (id, range = null) => { const current = Date.now(); if (!overviewPeriod(current, id, range)) { toast.error('请选择不晚于今天且不超过 365 天的日期范围'); return; } setPeriodId(id); setCustomRange(range); setNow(current); setDetail(null); };
   const tokenChange = overviewChange(data.total, previous.total), monthlyActive = data.monthlyActive;
-  const comparisonNote = period.id === 'day' ? '与前日完整自然日比较。' : `与前 ${period.id === 'week' ? 7 : 30} 天的完整周期比较。`;
+  const comparisonNote = `${period.comparison}：${overviewDateTime(period.previousStart)} 至 ${overviewDateTime(period.previousEnd)}。`;
   const topCustomers = data.customers.slice(0, 10), topModels = data.models.slice(0, 10);
   const selected = detail?.id ? data[detail.kind === 'customer' ? 'customers' : 'models'].find(r => r.id === detail.id) : null;
   const related = selected ? data.pairs.filter(row => detail.kind === 'customer' ? row.customerId === selected.id : row.modelId === selected.id).sort((a, b) => b.total - a.total) : [];
@@ -45,16 +48,16 @@ export default function OperationsOverview() {
   const openList = kind => setDetail({ kind });
   const openRow = (kind, row) => setDetail({ kind, id: row.id });
   return <TooltipProvider><div className="an-page ov-page">
-    <Card className="ov-filters"><CardContent><FilterToolbar><span className="ov-filter-label">统计时间</span><FilterPresets value={periodId} items={overviewPresets} onChange={choosePeriod}/><span className="ov-date">{period.range} · 北京时间</span><div className="ov-filter-actions"><FilterReset onClick={() => choosePeriod('day')}/><Button variant="outline" size="sm" onClick={() => { setNow(Date.now()); toast.success("数据已刷新"); }}><RefreshCw/>刷新</Button></div></FilterToolbar></CardContent><CardContent className="ov-view-row"><SavedFilterViews notify={toast} scope="admin-overview-operations" value={{periodId}} onApply={view => { if (overviewPresets.some(([id]) => id === view?.periodId)) choosePeriod(view.periodId); }} groups={[{label:'统计时间',text:period.label,scope:'用量指标、趋势、供给和排行；月活固定按昨日所在自然月统计'}]} saveDescription="保存用量统计时间；月活始终按昨日所在自然月统计。快捷时间在应用时按当前日期重新计算。"/><span className="ov-updated">更新于 {new Date(now).toLocaleTimeString('zh-CN', { timeZone:'Asia/Shanghai', hour12:false })}</span></CardContent></Card>
+    <Card className="ov-filters"><CardContent><FilterToolbar><span className="ov-filter-label">统计时间</span><FilterPresets value={periodId} items={overviewPresets} onChange={choosePeriod}><DateRange start={dayOf(period.start)} end={dayOf(Math.max(period.start, period.end - 1))} trigger={<Button type="button" variant={periodId === 'custom' ? 'default' : 'outline'} aria-label="自定义日期范围" aria-pressed={periodId === 'custom'}>{periodId === 'custom' ? period.range : '自定义'}</Button>} presets={[]} allowLongRange rangeHint="单次最多 365 天；单日按小时，多日按天汇总" onChange={range => choosePeriod('custom', range)}/></FilterPresets><span className="ov-date">北京时间</span><div className="ov-filter-actions"><FilterReset onClick={() => choosePeriod('day')}/><Button variant="outline" size="sm" onClick={() => { setNow(Date.now()); toast.success("数据已刷新"); }}><RefreshCw/>刷新</Button></div></FilterToolbar></CardContent><CardContent className="ov-view-row"><SavedFilterViews notify={toast} scope="admin-overview-operations" value={{periodId, customRange}} onApply={view => choosePeriod(view?.periodId, view?.customRange)} groups={[{label:'统计时间',text:period.id === 'custom' ? `自定义（${period.range}）` : period.label,scope:'用量指标、趋势、供给和排行；月活固定按昨日所在自然月统计'}]} saveDescription="保存用量统计时间；月活始终按昨日所在自然月统计。快捷时间在应用时按当前日期重新计算，自定义保存具体日期。"/><span className="ov-updated">更新于 {new Date(now).toLocaleTimeString('zh-CN', { timeZone:'Asia/Shanghai', hour12:false })}</span></CardContent></Card>
     <div className="ov-kpis">{metrics.map(item => <Card key={item.label}><CardContent><div className="ov-kpi-label"><span className="ov-kpi-name">{item.label}</span><Help label={item.label}><div className="ov-kpi-explanation"><p>{item.note}</p><p>{item.comparisonNote || comparisonNote}{item.changeNote || '上期为 0 时，变化显示“—”。'}</p>{item.monthly && <div className="ov-tooltip-periods"><p>统计月：{overviewDateTime(monthlyActive.start)} 至 {overviewDateTime(monthlyActive.end)}</p><p>上一月：{overviewDateTime(monthlyActive.previousStart)} 至 {overviewDateTime(monthlyActive.previousEnd)}</p></div>}</div></Help></div><div className="ov-value"><strong>{item.value}</strong><span>{item.unit}</span></div>{item.breakdown && <div className="ov-user-breakdown"><span>企业 <b>{number(item.breakdown.enterprise)}</b></span><span>个人 <b>{number(item.breakdown.personal)}</b></span></div>}<div className="ov-comparison"><span>{item.comparison || period.comparison}</span><Change value={item.change} unit={item.changeUnit}/></div></CardContent></Card>)}</div>
     <div className="ov-middle">
       {[
         { key: 'total', title: 'Token 用量趋势', label: 'Token 用量', unit: 'Token', change: tokenChange },
         { key: 'calls', title: '模型请求趋势', label: '模型请求次数', unit: '次', change: overviewChange(data.calls, previous.calls) },
       ].map(chart => <Card className="ov-trend" key={chart.key}><CardHeader><CardTitle>{chart.title}</CardTitle></CardHeader><CardContent>
-        <p className="ov-caption">{period.label} · {period.id === 'day' ? '按小时汇总' : '按天汇总'}</p>
+        <p className="ov-caption">{period.label} · {period.hourly ? '按小时汇总' : '按天汇总'}</p>
         {data.trend.length ? <TimeSeriesChart labels={data.trend.map(row => row.label)} series={[{ label: chart.label, values: data.trend.map(row => row[chart.key]), color:'#3568f9' }]} unit={chart.unit} label={chart.title} height={225}/> : <p className="ov-empty ov-chart-empty">本期暂无调用记录</p>}
-        <p className="ov-trend-summary">{period.comparison} <Change value={chart.change}/> · 截至昨日 · 完整自然日</p>
+        <p className="ov-trend-summary">{period.comparison} <Change value={chart.change}/> · {period.partial ? '截至当前时刻 · 非完整自然日' : '完整自然日'}</p>
       </CardContent></Card>)}
     </div>
     <div className="ov-rankings">{[['customer','客户',topCustomers],['model','模型',topModels]].map(([kind,label,rows]) => <Card className="ov-ranking" key={kind}><CardHeader><CardTitle>{label}用量 Top 10</CardTitle><Button variant="ghost" size="sm" aria-label={`查看全部${label}用量`} onClick={() => openList(kind)}>查看全部<ArrowRight/></Button></CardHeader><CardContent><p className="ov-caption">{kind === 'customer' ? `前 10 名客户合计占平台用量 ${percent(topCustomers.reduce((n,r) => n+r.total,0),data.total)}` : '按对外模型汇总 · 多个供应商合并统计'}</p><UsageTable rows={rows} kind={kind} total={data.total} onSelect={row => openRow(kind,row)} label={`${label}用量 Top 10`}/></CardContent></Card>)}

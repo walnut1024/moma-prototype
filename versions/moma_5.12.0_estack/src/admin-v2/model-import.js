@@ -6,8 +6,8 @@ export const MODEL_IMPORT_LIMIT = 500;
 export const MODEL_IMPORT_HEADERS = ['模型ID', '模型展示名称', '模型类型', '支持任务', '输入模态', '输出模态', '结果类型', '上下文大小（Token）', '最大输出（Token）', '简短介绍'];
 export const MODEL_IMPORT_TEMPLATE = [MODEL_IMPORT_HEADERS,
   ['catalog/chat-001', '智能对话', '语言模型', '对话', '文本', '文本', '', '32768', '8192', '面向知识问答和文本生成。'],
-  ['catalog/image-001', '图像创作', '视觉模型', '文生图', '文本、图片', '图片', '', '', '', '根据文本和参考图生成图像。'],
-  ['catalog/video-001', '视频创作', '视觉模型', '文生视频', '文本、图片', '视频', '', '', '', '根据文本和参考图生成视频。'],
+  ['catalog/image-001', '图像创作', MODEL_CATEGORIES.visual, '文生图', '文本、图片', '图片', '', '', '', '根据文本和参考图生成图像。'],
+  ['catalog/video-001', '视频创作', MODEL_CATEGORIES.visual, '文生视频', '文本、图片', '视频', '', '', '', '根据文本和参考图生成视频。'],
 ];
 export function modelRowsFromCells(cells) {
   const rows = cells.map(row => row.map(cell => String(cell ?? '').trim())).filter(row => row.some(Boolean));
@@ -28,8 +28,8 @@ export function validateModelRows(state, rows) {
     const data = { modelId, name, description, type: Object.keys(MODEL_CATEGORIES).find(key => MODEL_CATEGORIES[key] === category), usageUnit: tasks.includes('语音合成') ? '字符' : '秒', profile: { tasks }, capabilities: { streaming: null, tools: null, context, output: maxOutput } };
     try {
       if (data.type === 'visual') {
-        data.type = ['image', 'video', 'multimodal'].find(key => tasks.length && tasks.every(value => TASK_OPTIONS[key].includes(value)) && (key !== 'multimodal' || tasks.some(value => ['图像理解', '视频理解'].includes(value))));
-        if (!data.type) throw new Error('视觉模型的支持任务需属于图像生成、视频生成或多模态理解中的一类');
+        data.type = ['image', 'video'].find(key => tasks.length && tasks.every(value => TASK_OPTIONS[key].includes(value)));
+        if (!data.type) throw new Error('视觉生成的支持任务需属于图像生成或视频生成中的一类');
       }
       for (const value of [context, maxOutput]) if (value && (!Number.isSafeInteger(Number(value)) || Number(value) < 1)) throw new Error('Token 大小需为正整数');
       for (const [key, raw, choices, label] of [['inputModalities', input, INPUT_MODALITY_OPTIONS, '输入模态'], ['outputModalities', output, OUTPUT_MODALITY_OPTIONS, '输出模态'], ['resultTypes', result, RESULT_TYPE_OPTIONS, '结果类型']]) {

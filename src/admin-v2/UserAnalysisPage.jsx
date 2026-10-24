@@ -5,9 +5,11 @@ import { Card, CardContent } from '../components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { DateRange } from './AnalyticsFilters';
 import { formatUsageNumber, usagePreset, operationsPresets, operationsPeriod } from './usage-analysis';
-import { filterAnalytics } from './analytics';
 import { userDemo, userMetrics } from './user-analysis';
-import UserCallDetails from './UserCallDetails';
+import { CustomerAnalysis } from './CalcloudAnalyticsPages';
+import { useCalcloudConfig } from './CalcloudUI';
+import { calcloudAnalyticsState } from './calcloud-domain.mjs';
+import './calcloud.css';
 import SavedFilterViews from '../components/SavedFilterViews';
 import { FilterPresets, FilterReset, FilterToolbar, FilterViewRow, } from '../components/FilterControls';
 import './usage-analysis.css';
@@ -21,7 +23,6 @@ const cards = [
   ['active', '活跃用户数', '所选区间内发生 API Key 调用的去重用户 ID 数。'],
   ['dau', 'DAU', '所选区间结束时，北京时间当日成功登录的去重用户数。'],
   ['mau', 'MAU', '所选区间结束时，北京时间自然月内成功登录的去重用户数；不累加 DAU。'],
-  ['keys', 'API Key 数量', '截至所选区间结束时，已创建的 API Key 数量；按归属用户筛选。'],
 ];
 const comparisonLabel = { yesterday: '前日', '7d': '前 7 天', '30d': '前 30 天', custom: '上个等长周期' };
 
@@ -38,19 +39,18 @@ export default function UserAnalysisPage({ state }) {
   const [clock, setClock] = useState(() => Date.now());
   const [period, setPeriod] = useState('yesterday');
   const [range, setRange] = useState(() => usagePreset('yesterday'));
-  const [detailDraft, setDetailDraft] = useState({model:'',customer:''}), [detailFilter, setDetailFilter] = useState({model:'',customer:''});
+  const store = useCalcloudConfig(state);
+  const customerState = useMemo(() => store.config ? calcloudAnalyticsState(state, store.config) : null, [state, store.config]);
   const data = useMemo(() => userDemo(clock), [clock]);
   const metrics = useMemo(() => userMetrics(data, range, clock), [data, range, clock]);
-  const rows = useMemo(() => filterAnalytics(state, { start: range.start, end: range.end }), [state, range]);
   const selectPeriod = value => { const current = Date.now(); setClock(current); setPeriod(value); setRange(usagePreset(value, current)); };
   const timeGroup = { label:'时间', text:`${presets.find(([id]) => id === period)?.[1] || '自定义'}（${range.start} — ${range.end}）`, scope:'全页' };
-  const detailGroups = [{label:'模型',text:detailFilter.model || '全部模型',scope:'仅调用明细'}, {label:'客户',text:state.tenants.find(item => item.id === detailFilter.customer)?.name || detailFilter.customer || '全部客户',scope:'仅调用明细'}];
   return <TooltipProvider><div className="ua-page us-page">
     <Card className="ua-filters"><CardContent><div className="ua-filter-scroll"><FilterToolbar className="ua-filter-controls">
       <FilterPresets className="ua-segments" label="时间筛选" value={period} onChange={selectPeriod} items={presets}/>
       <DateRange presets={presets} latestDay={usagePreset('yesterday', clock).end} label="自定义" start={range.start} end={range.end} allowLongRange rangeHint="单日按小时，其余按日，最多 365 天" onChange={value => { setRange(value); setPeriod('custom'); }}/>
       <FilterReset onClick={() => selectPeriod('yesterday')}/>
-    </FilterToolbar></div></CardContent><CardContent className="ua-view-row"><FilterViewRow><SavedFilterViews notify={toast} scope="admin-user-analysis" value={{period,range,detailFilter}} onApply={view => { if (!view) return; const current = Date.now(); setClock(current); const restored = operationsPeriod(view.period, view.range, current); setPeriod(restored.period); setRange(restored.range); setDetailFilter(view.detailFilter || {model:'',customer:''}); setDetailDraft(view.detailFilter || {model:'',customer:''}); }} groups={[timeGroup,...detailGroups]} currentGroups={[timeGroup]} saveDescription="保存全页时间和调用明细的模型、客户条件。模型／客户仅影响调用明细，不影响上方用户指标。保存后可快速应用已保存的筛选条件。"/></FilterViewRow></CardContent></Card>
+    </FilterToolbar></div></CardContent><CardContent className="ua-view-row"><FilterViewRow><SavedFilterViews notify={toast} scope="admin-user-analysis" value={{period,range}} onApply={view => { if (!view) return; const current = Date.now(); setClock(current); const restored = operationsPeriod(view.period, view.range, current); setPeriod(restored.period); setRange(restored.range); }} groups={[timeGroup]} currentGroups={[timeGroup]} saveDescription="保存全页时间范围，同时用于用户指标和客户分析。"/></FilterViewRow></CardContent></Card>
     <Card className="ua-kpis"><CardContent><div className="ua-kpi-grid us-kpi-grid">{cards.map(([key, title, note]) => {
       const daily = key === 'dau' || key === 'mau';
       const value = daily ? (metrics?.[key].at(-1) ?? 0) : (metrics?.current[key] ?? 0);
@@ -58,6 +58,6 @@ export default function UserAnalysisPage({ state }) {
       const delta = change(value, before);
       return <div className="ua-kpi" key={key}><div className="ua-kpi-label">{title}<Help label={title}>{note}</Help></div><strong>{formatUsageNumber(value)}</strong>{daily && <small>企业 {formatUsageNumber(metrics?.[`${key}ByType`].企业.at(-1) ?? 0)}　个人 {formatUsageNumber(metrics?.[`${key}ByType`].个人.at(-1) ?? 0)}</small>}<small title={`对比${comparisonLabel[period]}`}>环比 {delta.amount}　{delta.rate}</small></div>;
     })}</div></CardContent></Card>
-    <UserCallDetails state={state} rows={rows} start={range.start} end={range.end} draft={detailDraft} onDraftChange={setDetailDraft} query={detailFilter} onQueryChange={setDetailFilter} conditionGroups={detailGroups}/>
+    <div className="cc-page us-customer-analysis">{store.banner}{customerState && <CustomerAnalysis state={customerState} range={range}/>}</div>
   </div></TooltipProvider>;
 }

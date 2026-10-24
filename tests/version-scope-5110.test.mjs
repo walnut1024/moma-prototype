@@ -33,5 +33,20 @@ test('5.11.0 移除全部 Token 生产页面，5.12.0 仍可访问', () => {
     assert.equal(access5120('平台管理员', id), true);
     assert.equal(access5120('运维人员', id), true);
   }
-  for (const id of ['call-analysis', 'routes']) assert.equal(canAccessPage('运维人员', id), true);
+  for (const id of ['call-analysis', 'traffic-management', 'model-routing']) assert.equal(canAccessPage('运维人员', id), true);
+});
+
+
+test('5.11.0 移除网关配置全部页签，旧地址回职责首页且5.12.0保持', () => {
+  assert.ok(sections.every(section => section.items.every(item => item.id !== 'gateway')));
+  for (const id of ['routes', 'limits', 'fallback', 'cache', 'releases', 'monitoring', 'logs', 'alerts', 'incidents', 'sla']) {
+    assert.equal(Object.hasOwn(pages, id), false);
+    for (const role of ['平台管理员', '运营人员', '运维人员']) {
+      assert.equal(canAccessPage(role, id), false);
+      assert.equal(pageFromHash(`#/admin-2/${id}?tab=existing`, role), role === '运维人员' ? 'call-analysis' : 'dashboard');
+    }
+    assert.equal(Object.hasOwn(pages5120, id), true);
+    assert.equal(access5120('运维人员', id), true);
+  }
+  for (const id of ['traffic-management', 'model-routing']) assert.equal(canAccessPage('运维人员', id), true);
 });

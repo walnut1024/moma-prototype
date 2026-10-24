@@ -182,7 +182,7 @@
 .mm-dialog.mm-drawer{translate:none}
 .mm-sales-price>.mm-field:first-of-type{grid-template-columns:84px minmax(180px,250px);align-items:center;margin-bottom:16px}
 .mm-procurement .mm-table-scroll{border:1px solid var(--mm-line);border-radius:4px}
-.mm-dialog.mm-leave-dialog{width:420px;z-index:60}
+.mm-dialog.mm-leave-dialog{width:420px}
 .mm-leave-dialog .mm-form-footer{margin-top:4px}
 
 .mm-workbench .mm-table tbody tr:hover td{background:#f5f7fb}

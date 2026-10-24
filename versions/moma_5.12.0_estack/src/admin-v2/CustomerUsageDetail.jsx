@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { Button } from '../components/ui/button';
 import { customerModelDetails, filterAnalytics } from './analytics';
 import { formatUsageNumber, usageMeter, operationsPeriod, usageValue } from './usage-analysis';
 import './usage-analysis.css';
@@ -22,6 +23,7 @@ export default function CustomerUsageDetail({ state }) {
     return value.complete ? `${amount(value.total)} ${meter.unit}` : '待确认';
   };
   const recent = [...rows].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 10);
+  if (!tenant) return <section className="ent-panel admin-page-error"><h1>客户不存在</h1><p>该客户记录不可用，请返回用户数据重新选择。</p><Button asChild><a href="#/admin-2/user-analysis">返回用户数据</a></Button></section>;
   return <div className="ua-page us-detail-page">
     {tenant && <>
       <Card className="ua-kpis"><CardContent><div className="ua-kpi-grid us-detail-kpis">

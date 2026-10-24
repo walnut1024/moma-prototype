@@ -21,7 +21,6 @@ const cards = [
   ['active', '活跃用户数', '所选区间内发生 API Key 调用的去重用户 ID 数。'],
   ['dau', 'DAU', '所选区间结束时，北京时间当日成功登录的去重用户数。'],
   ['mau', 'MAU', '所选区间结束时，北京时间自然月内成功登录的去重用户数；不累加 DAU。'],
-  ['keys', 'API Key 数量', '截至所选区间结束时，已创建的 API Key 数量；按归属用户筛选。'],
 ];
 const comparisonLabel = { yesterday: '前日', '7d': '前 7 天', '30d': '前 30 天', custom: '上个等长周期' };
 

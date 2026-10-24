@@ -2,11 +2,35 @@ import { normalizeModelProfile, requireModelBasics } from './model-profile.js';
 import { addCatalogueExamples } from './model-catalogue-examples.js';
 import { catalogueMetadata } from './real-model-catalogue.js';
 import { connectionFingerprint, connectionTestPassed, connectionBlockReason } from './connection-state.js';
+import { providerCataloguePrice } from './moma-catalogue-prices.js';
+import { cataloguePurchasePrice, billingItemKey, parseSaleAmount } from './provider-catalogue-pricing.js';
 
-export const MODEL_TYPES = { text: '语言模型', multimodal: '多模态理解', image: '图像生成', video: '视频生成', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
-export const MODEL_CATEGORIES = { text: '语言模型', multimodal: '多模态理解', visual: '视觉模型', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
+export const MODEL_TYPES = { text: '语言模型', multimodal: '视觉理解', image: '图像生成', video: '视频生成', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
+export const MODEL_CATEGORIES = { text: '语言模型', multimodal: '视觉理解', visual: '视觉生成', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
+export const MODEL_CATEGORY_DESCRIPTIONS = {
+  text: '以对话、写作和推理为主，也可理解图片、视频。',
+  multimodal: '以图片、视频分析为主，如识图、图表解读和视频问答。',
+  visual: '生成或编辑图片、视频。',
+  audio: '将语音转成文字，或将文字转成语音。',
+  embedding: '将内容转成向量，用于查找相似内容。',
+  rerank: '按相关程度重新排列检索结果。',
+};
 export const modelCategory = type => ['image', 'video'].includes(type) ? 'visual' : type;
 export const modelCode = model => model.modelId;
+export function supplyModelUrl(supply, model) {
+  const path = supply.provider?.catalogModels?.find(item => item.modelId === (supply.catalogueModelId || supply.upstreamModelId))?.endpoint?.trim();
+  const base = supply.endpoint?.baseUrl?.trim() || '';
+  if (path) { try { return new URL(path, base || undefined).href; } catch { return ''; } }
+  if (base && supply.endpoint?.protocol === 'OpenAI' && ['text', 'multimodal'].includes(model?.type)) return base.endsWith('/chat/completions') ? base : base.replace(/\/$/, '') + '/chat/completions';
+  return '';
+}
+export function parseFloorDiscount(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  if (!/^\d+(?:\.\d{1,2})?$/.test(text) || Number(text) > 100) throw new Error('底线折扣须为 0–100 的百分比，最多两位小数');
+  return Math.round(Number(text) * 100);
+}
+export const floorDiscountDisplay = price => Number.isInteger(price?.floorDiscountBps) && price.floorDiscountBps >= 0 && price.floorDiscountBps <= 10000 ? `${price.floorDiscountBps / 100}%` : '—';
 export function modelSupplierRows(model, supplies) {
   const groups = new Map();
   for (const supply of supplies) {
@@ -35,36 +59,34 @@ export const hasOutputPrice = (model, unit = priceUnits(model)[0]) => ['text', '
 export const moneyDisplay = value => value == null ? '—' : (value / 1000000).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
 export const displayTime = value => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—';
 
-export function activeModelPrice(state, modelId, at = Date.now()) {
-  return state.modelSalePrices.filter(price => price.modelId === modelId && !price.supplyId && price.status === '已发布' && Date.parse(price.effectiveAt) <= at).sort((a, b) => Date.parse(b.effectiveAt) - Date.parse(a.effectiveAt) || b.version - a.version)[0];
-}
-
-// Selling quotes are independent of procurement costs; a supply quote overrides the model default.
+// Each supply has independent immutable selling-price versions.
 export function activeSupplySalePrice(state, modelId, supplyId, at = Date.now()) {
   return state.modelSalePrices.filter(price => price.modelId === modelId && price.supplyId === supplyId && price.status === '已发布' && Date.parse(price.effectiveAt) <= at).sort((a, b) => Date.parse(b.effectiveAt) - Date.parse(a.effectiveAt) || b.version - a.version)[0];
 }
-export function modelSaleQuotes(state, model, at = Date.now()) {
-  const available = new Set(availableSupplies(state, model.id).map(supply => supply.id));
-  return modelSupplies(state, model.id).map(supply => ({ supply, available: available.has(supply.id), price: activeSupplySalePrice(state, model.id, supply.id, at) }));
-}
-export function modelSaleSummary(state, model, at = Date.now()) {
-  const quotes = modelSaleQuotes(state, model, at), active = quotes.filter(quote => quote.available), groups = new Map();
-  const prices = active.map(quote => quote.price).filter(Boolean);
-  // Models without a live supply can still show their configured default, without claiming availability.
-  if (!active.length && activeModelPrice(state, model.id, at)) prices.push(activeModelPrice(state, model.id, at));
-  for (const price of prices) {
-    const group = groups.get(price.unit) || { unit: price.unit, input: [], output: [], cached: [], cacheWrite: [] };
-    group.input.push(price.inputPrice);
-    if (price.outputPrice != null) group.output.push(price.outputPrice);
-    if (price.cachedPrice != null) group.cached.push(price.cachedPrice);
-    if (price.cacheWritePrice != null) group.cacheWrite.push(price.cacheWritePrice);
-    groups.set(price.unit, group);
+export function activeSupplyPrice(state, supplyId, at = Date.now()) {
+  const supply = state.modelSupplies.find(item => item.id === supplyId);
+  if (supply?.catalogueModelId) {
+    const endpoint = state.endpoints.find(item => item.id === supply.endpointId);
+    const provider = state.providers.find(item => item.id === endpoint?.providerId);
+    const quote = provider && providerCataloguePrice(provider, supply.catalogueModelId);
+    const items = (quote?.scenarios || []).map(({ listPrice, purchasePrice, ...item }) => ({ ...item, amount: cataloguePurchasePrice(listPrice, quote.discountFactor, purchasePrice) }));
+    return { items, sourceVersion: JSON.stringify(quote ? { modelId: supply.catalogueModelId, discountFactor: quote.discountFactor, scenarios: quote.scenarios } : null), sourceLabel: `${provider?.name || '供应商已失效'} / ${supply.catalogueModelId}`, catalogueModelId: supply.catalogueModelId };
   }
-  return { quotes, groups: [...groups.values()], missing: active.filter(quote => !quote.price).length, priced: prices.length > 0, defaultOnly: active.length === 0 };
+  return state.supplyPrices.filter(price => price.supplyId === supplyId && price.status === '生效中' && Date.parse(price.effectiveAt) <= at).sort((a, b) => Date.parse(b.effectiveAt) - Date.parse(a.effectiveAt))[0];
 }
 
-export function activeSupplyPrice(state, supplyId, at = Date.now()) {
-  return state.supplyPrices.filter(price => price.supplyId === supplyId && price.status === '生效中' && Date.parse(price.effectiveAt) <= at).sort((a, b) => Date.parse(b.effectiveAt) - Date.parse(a.effectiveAt))[0];
+export function priceItems(price, model) {
+  if (!price) return [];
+  if (Array.isArray(price.items)) return price.items;
+  // Historical snapshots keep their original fields and IDs; only their presentation is expanded.
+  return [['inputPrice', hasOutputPrice(model, price.unit) ? '输入' : '单价'], ...(hasOutputPrice(model, price.unit) ? [['outputPrice', '输出']] : []), ...['cachedPrice', 'cacheWritePrice'].filter(key => price[key] != null).map(key => [key, key === 'cachedPrice' ? '缓存读取' : '缓存写入'])].map(([key, name]) => ({ name, unit: price.unit, currency: 'CNY', amount: price[key] ?? null }));
+}
+export const procurementVersion = price => price?.sourceVersion || price?.id || '';
+export const latestSaleRevision = (state, supplyId) => state.modelSalePrices.filter(price => price.supplyId === supplyId).sort((a, b) => b.version - a.version)[0]?.id || '';
+export const procurementLabel = price => price?.sourceLabel || (price ? `历史采购快照 ${price.priceId || price.id} · ${displayTime(price.effectiveAt)}` : '采购价待配置');
+export function supplyPriceReady(state, model, supplyId) {
+  const cost = priceItems(activeSupplyPrice(state, supplyId), model), sale = priceItems(activeSupplySalePrice(state, model.id, supplyId), model);
+  return cost.length > 0 && cost.every(item => item.amount != null && sale.some(row => billingItemKey(row) === billingItemKey(item) && row.amount != null));
 }
 export function modelSupplies(state, modelId) {
   return state.modelSupplies.filter(supply => supply.modelId === modelId && supply.status !== '已移除').map(supply => {
@@ -78,13 +100,24 @@ export function availableSupplies(state, modelId, requirements = {}) {
 export function publicationChecks(state, model) {
   const eligible = availableSupplies(state, model.id, model.capabilities).filter(supply => supply.salesEnabled);
   const selected = modelSupplies(state, model.id).filter(supply => supply.salesEnabled);
-  const pricesReady = eligible.length > 0 && selected.length === eligible.length && eligible.every(supply => { const cost = activeSupplyPrice(state, supply.id); const price = activeSupplySalePrice(state, model.id, supply.id); return cost && price && cost.unit === price.unit && price.inputPrice != null && (!hasOutputPrice(model, price.unit) || price.outputPrice != null) && priceUnits(model).includes(price.unit); });
+  const pricesReady = eligible.length > 0 && selected.length === eligible.length && eligible.every(supply => supplyPriceReady(state, model, supply.id));
   return [
     { label: '展示内容完整', passed: Boolean(model.name?.trim() && model.description?.trim()), tab: 'basic' },
     { label: '至少一家供应商已验证并纳入销售', passed: eligible.length > 0, tab: 'supplies' },
     { label: '供给满足模型声明的能力', passed: availableSupplies(state, model.id, model.capabilities).length > 0, tab: 'supplies' },
     { label: '销售价格与计量规则完整', passed: pricesReady, tab: 'pricing' },
     { label: '开放范围明确', passed: model.openScope === 'all' || (model.openScope === 'selected' && model.tenantIds?.length > 0 && model.tenantIds.every(id => state.tenants.some(tenant => tenant.id === id))), tab: 'publication' },
+    ...selected.flatMap(supply => {
+      const name = `${supply.provider?.name || '供应商已失效'} / ${supply.upstreamModelId}`;
+      const costs = priceItems(activeSupplyPrice(state, supply.id), model), sales = priceItems(activeSupplySalePrice(state, model.id, supply.id), model);
+      const missingCost = costs.filter(item => item.amount == null).map(item => item.name);
+      const missingSale = costs.filter(item => !sales.some(row => billingItemKey(row) === billingItemKey(item) && row.amount != null)).map(item => item.name);
+      return [
+        ...(!eligible.some(item => item.id === supply.id) ? [{ label: `${name}：请核对连接、供给验证与声明能力`, passed: false, tab: 'supplies' }] : []),
+        ...(!costs.length || missingCost.length ? [{ label: `${name}：采购价待配置${missingCost.length ? '（' + missingCost.join('、') + '）' : ''}`, passed: false, tab: 'pricing' }] : []),
+        ...(missingSale.length ? [{ label: `${name}：售价待配置（${missingSale.join('、')}）`, passed: false, tab: 'pricing' }] : []),
+      ];
+    }),
   ];
 }
 export function supplyState(state, model) {
@@ -127,14 +160,6 @@ export function modelManagementSeed(models, endpoints, supplyPrices, providers) 
   return { modelSupplies, modelSalePrices: modelSalePrices.filter(price => price.supplyId) };
 }
 
-function money(value, required = true) {
-  if (value == null || String(value).trim() === '') {
-    if (required) throw new Error('适用价格必填；免费价格请填写 0');
-    return null;
-  }
-  if (!/^\d+(?:\.\d{1,6})?$/.test(String(value)) || !Number.isFinite(Number(value)) || !Number.isSafeInteger(Math.round(Number(value) * 1000000))) throw new Error('价格必须为非负数，最多六位小数');
-  return Math.round(Number(value) * 1000000);
-}
 function capabilities(value = {}, type, catalogue = false) {
   const supplied = key => value[key] != null && value[key] !== '';
   if (['text', 'multimodal', 'embedding', 'rerank'].includes(type) && (!catalogue || supplied('context')) && (!Number.isSafeInteger(Number(value.context)) || Number(value.context) < 1)) throw new Error('上下文上限必须为正整数');
@@ -189,7 +214,7 @@ export function modelTransaction(state, action) {
     if (!endpoint) throw new Error('请选择有效接入渠道');
     if (!data.upstreamModelId?.trim() || /\s/.test(data.upstreamModelId)) throw new Error('上游模型 ID 必填且不能包含空格');
     if (state.modelSupplies.some(item => item.id !== supply?.id && item.modelId === model.id && item.endpointId === endpoint.id && item.status !== '已移除')) throw new Error('该渠道已关联此模型');
-    const fields = { modelId: model.id, endpointId: endpoint.id, upstreamModelId: data.upstreamModelId.trim(), capabilities: capabilities(data.capabilities, model.type), validationStatus: '待验证', verifiedAt: null, validationCases: [], status: '已停用' };
+    const fields = { modelId: model.id, endpointId: endpoint.id, upstreamModelId: data.upstreamModelId.trim(), capabilities: capabilities(data.capabilities, model.type, true), validationStatus: '待验证', verifiedAt: null, validationCases: [], status: '已停用' };
     changes.push(supply ? update('modelSupplies', supply.id, fields) : add('modelSupplies', { id: uid('supply'), ...fields }));
     if (!endpoint.modelIds.includes(model.id)) changes.push(update('endpoints', endpoint.id, { modelIds: [...endpoint.modelIds, model.id] }));
   } else if (['verify', 'enableSupply', 'disableSupply', 'removeSupply'].includes(operation)) {
@@ -203,23 +228,23 @@ export function modelTransaction(state, action) {
       const passed = data.result === '通过' && connectionTestPassed(endpoint);
       changes.push(update('modelSupplies', supply.id, { validationStatus: passed ? '通过' : '失败', verifiedAt: at, validationCases: ['协议兼容', '基础推理', ...(supply.capabilities.streaming ? ['流式响应'] : []), ...(supply.capabilities.tools ? ['工具调用'] : [])].map(name => ({ name, passed })), ...(passed ? {} : { status: '已停用' }) }));
     } else changes.push(update('modelSupplies', supply.id, { status: { enableSupply: '已启用', disableSupply: '已停用', removeSupply: '已移除' }[operation] }));
-  } else if (['priceDraft', 'pricePublish', 'procurement'].includes(operation)) {
-    if (!priceUnits(model).includes(data.unit)) throw new Error('计价单位与模型类型不匹配');
+  } else if (['priceDraft', 'pricePublish'].includes(operation)) {
+    if (!Array.isArray(data.items)) throw new Error('请按完整计费项设置售价');
+    const supply = modelSupplies(state, model.id).find(item => item.id === data.supplyId);
+    if (!supply) throw new Error('供应服务不存在');
+    const cost = activeSupplyPrice(state, supply.id), required = priceItems(cost, model);
+    if (data.expectedSaleVersion !== latestSaleRevision(state, supply.id)) throw new Error('售价已有并发修订，请载入最新售价并核对草稿');
+    if (!required.length || required.some(item => item.amount == null)) throw new Error('采购价缺失，请补齐供应商目录报价');
+    if (data.sourceVersion !== procurementVersion(cost)) throw new Error('供应商报价已变化，请核对完整计费项与售价后重试');
+    if (data.items.length !== required.length || new Set(data.items.map(billingItemKey)).size !== required.length || required.some(item => !data.items.some(row => billingItemKey(row) === billingItemKey(item)))) throw new Error('售价须包含与采购价一致的完整计费项、单位和适用条件');
+    const items = required.map(item => ({ name: item.name, condition: item.condition || '', unit: item.unit, currency: item.currency || 'CNY', amount: parseSaleAmount(data.items.find(row => billingItemKey(row) === billingItemKey(item)).amount, operation !== 'priceDraft') }));
     const effectiveAt = data.effectiveAt ? new Date(data.effectiveAt).toISOString() : at;
     if (data.effectiveAt && Date.parse(effectiveAt) <= Date.now()) throw new Error('定时生效时间必须晚于当前时间');
-    const isDraft = operation === 'priceDraft';
-    const saleSupply = operation !== 'procurement' && data.supplyId ? modelSupplies(state, model.id).find(item => item.id === data.supplyId) : null;
-    if (operation !== 'procurement' && !saleSupply) throw new Error('供应服务不存在');
-    const fields = { modelId: model.id, unit: data.unit, inputPrice: money(data.inputPrice, !isDraft), outputPrice: money(data.outputPrice, !isDraft && hasOutputPrice(model, data.unit)), cachedPrice: money(data.cachedPrice, false), cacheWritePrice: money(data.cacheWritePrice, false), effectiveAt, status: isDraft ? '草稿' : operation === 'procurement' ? '生效中' : '已发布' };
-    if (operation === 'procurement') {
-      const supply = modelSupplies(state, model.id).find(item => item.id === data.supplyId);
-      if (!supply) throw new Error('供应服务不存在');
-      changes.push(add('supplyPrices', { id: uid('procurement'), priceId: uid('sp'), supplyId: supply.id, providerId: supply.provider.id, ...fields }));
-    } else {
-      const version = Math.max(0, ...state.modelSalePrices.filter(price => price.modelId === model.id).map(price => price.version)) + 1;
-      if (!isDraft && state.modelSalePrices.some(price => price.modelId === model.id && (price.supplyId || null) === (data.supplyId || null) && price.status === '已发布' && price.effectiveAt === effectiveAt)) throw new Error('该生效时间已有价格版本');
-      changes.push(add('modelSalePrices', { id: uid('sale'), version, supplyId: saleSupply?.id || null, ...fields }));
-    }
+    if (data.effectiveAt && !activeSupplySalePrice(state, model.id, supply.id)) throw new Error('首次设置售价须立即生效');
+    if (state.modelSalePrices.some(price => price.supplyId === supply.id && price.status === '已发布' && price.effectiveAt === effectiveAt)) throw new Error('该生效时间已有价格版本');
+    const version = Math.max(0, ...state.modelSalePrices.filter(price => price.modelId === model.id).map(price => price.version)) + 1;
+    const floorDiscountBps = data.floorDiscountPercent === undefined ? activeSupplySalePrice(state, model.id, supply.id)?.floorDiscountBps : parseFloorDiscount(data.floorDiscountPercent);
+    changes.push(add('modelSalePrices', { id: uid('sale'), modelId: model.id, supplyId: supply.id, items, ...(floorDiscountBps == null ? {} : { floorDiscountBps }), version, sourceVersion: procurementVersion(cost), sourceLabel: procurementLabel(cost), effectiveAt, status: operation === 'priceDraft' ? '草稿' : '已发布' }));
   } else if (operation === 'scope') {
     if (!['all', 'selected'].includes(data.openScope) || (data.openScope === 'selected' && (!data.tenantIds?.length || data.tenantIds.some(id => !state.tenants.some(tenant => tenant.id === id))))) throw new Error('请选择有效的开放客户');
     changes.push(update('models', model.id, { openScope: data.openScope, tenantIds: data.openScope === 'selected' ? [...new Set(data.tenantIds)] : [] }));
@@ -231,6 +256,6 @@ export function modelTransaction(state, action) {
     const fields = { publish: { listingStatus: '已上架', visibility: '公开', callsEnabled: true, status: '运行中' }, unlist: { listingStatus: '已下架', visibility: '内部', callsEnabled: false, status: '停用' } }[operation];
     changes.push(update('models', model.id, fields));
   } else throw new Error('未知模型操作');
-  const labels = { create: '创建模型', basic: '编辑模型', supply: '保存供应服务', verify: '验证供应服务', enableSupply: '启用供应服务', disableSupply: '停用供应服务', removeSupply: '移除供应服务', priceDraft: '保存价格草稿', pricePublish: '发布销售价格', procurement: '更新采购价格', scope: '设置开放范围', publish: '模型上架', unlist: '模型下架' };
+  const labels = { create: '创建模型', basic: '编辑模型', supply: '保存供应服务', verify: '验证供应服务', enableSupply: '启用供应服务', disableSupply: '停用供应服务', removeSupply: '移除供应服务', priceDraft: '保存价格草稿', pricePublish: '发布销售价格', scope: '设置开放范围', publish: '模型上架', unlist: '模型下架' };
   return { type: 'batch', label: labels[operation], objectId, changes };
 }

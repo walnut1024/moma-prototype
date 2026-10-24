@@ -1,5 +1,8 @@
-.us-kpi-grid{grid-template-columns:repeat(7,minmax(0,1fr));min-width:1260px}
+.ua-page .us-kpi-grid{grid-template-columns:repeat(6,minmax(0,1fr));min-width:900px}
 .admin-v2 .us-page .an-call-details table{font-size:12px}
 .admin-v2 .us-page .an-call-details th{height:38px;background:#f8faff;color:#586982;font-size:11px;font-weight:500}
 .admin-v2 .us-page .an-call-details td{font-size:12px}
 .us-breadcrumb-link{color:#315fdf}.us-breadcrumb-link:hover{text-decoration:underline}.us-breadcrumb-meta,.us-detail-period{font-size:12px;color:#64748b}.us-detail-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.us-detail-page .ua-panel{min-width:0}
+
+.us-customer-analysis h2{margin:0;padding:16px 16px 8px;font-size:14px;font-weight:600}
+.us-customer-analysis .cc-context{padding:0 16px 12px}

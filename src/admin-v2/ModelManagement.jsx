@@ -214,7 +214,7 @@ function Supplies({ state, model, can, action, tab }) {
     </tr>)}</tbody></table>{!supplies.length && <div className="mm-empty">尚未接入供应服务。添加渠道映射后，先验证再启用。</div>}</div>
     <div className="mm-notice info"><Info/><span>工具调用请求仅可使用已验证支持该能力的供应服务。</span></div>
     {selected && <div className="mm-source-detail"><h3>{selected.provider?.name} / {selected.endpoint?.name}</h3><div className="mm-detail-columns"><div><h4>能力与限制</h4><dl><dt>流式响应</dt><dd>{selected.capabilities.streaming ? '支持' : '不支持'}</dd><dt>工具调用</dt><dd>{selected.capabilities.tools ? '支持' : '不支持'}</dd><dt>上下文上限</dt><dd>{selected.capabilities.context?.toLocaleString() || '不适用'}{selected.capabilities.context && ' Token'}</dd><dt>最大输出</dt><dd>{selected.capabilities.output?.toLocaleString() || '不适用'}{selected.capabilities.output && ' Token'}</dd><dt>采购价格</dt><dd><Button variant="link" onClick={() => tab('pricing')}>前往价格配置<ArrowRight/></Button></dd></dl></div><div><h4>接入验证</h4><dl><dt>最近验证</dt><dd>{displayTime(selected.verifiedAt)}</dd>{selected.validationCases?.map(item => <div className="mm-dl-row" key={item.name}><dt>{item.name}</dt><dd><Status value={item.passed ? '通过' : '失败'}/></dd></div>)}</dl>{!selected.validationCases?.length && <p>尚未运行验证</p>}</div></div></div>}
-    </section><div className="mm-surface mm-route-row"><span>当前路由策略：{route?.mode || '未配置'}</span><a href="#/admin-2/routes">前往网关管理<ArrowRight/></a></div></>;
+    </section><div className="mm-surface mm-route-row"><span>当前路由策略：{route?.mode || '未配置'}</span></div></>;
 }
 
 function PriceFields({ model, form, change, disabled, procurement = false }) {

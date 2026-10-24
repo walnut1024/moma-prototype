@@ -5,7 +5,7 @@ import { normalizeAdminLogin } from './admin-v2/admin-accounts.js';
 export const AUTH_STORAGE_KEY = 'moma-auth-prototype-5120-v1';
 export const AUTH_INVITE = Object.freeze({ id: 'invite-jiangsu', phone: '13800138000', enterpriseId: 'auth-jiangsu', enterprise: '江苏政务云', inviter: '张明', department: '研发中心', role: '普通成员', expiresAt: '2026-12-31T23:59:59+08:00' });
 export const emptyAuthState = () => ({ accounts: [], memberships: [], applications: [], currentUserId: null, activeSpace: 'personal' });
-export const authRoute = hash => /^#\/auth\/(login|register|enterprise|invite|application|activate|password|flows)(?:\?|$)/.exec(hash)?.[1] || null;
+export const authRoute = hash => /^#\/auth\/(login|register|account|enterprise|invite|application|activate|password)(?:\?|$)/.exec(hash)?.[1] || null;
 export const currentAuthUser = state => state.accounts.find(account => account.id === state.currentUserId) || null;
 export const authPhone = value => {
   const phone = normalizeMemberPhone(value), error = memberPhoneError(phone);
@@ -94,7 +94,7 @@ export function applicationErrors(data, step = 3, policy = AUTH_ENTERPRISE_LOGIN
     if (!data.industry) errors.industry = '请选择所属行业';
   }
   if (step !== 1) {
-    if (!data.contactName?.trim() || data.contactName.trim().length > 40) errors.contactName = '请填写 40 字以内的管理员姓名';
+    if (!data.contactName?.trim() || data.contactName.trim().length > 40) errors.contactName = '请填写 40 字以内的申请人姓名';
     if (!policy.includes(data.contactType)) errors.contactType = '当前项目不支持此登录方式';
     try { normalizeAuthLogin(data.contactIdentity, 'enterprise', [data.contactType]); } catch (error) { errors.contactIdentity = error.message; }
   }
@@ -117,6 +117,51 @@ export function submitAuthApplication(state, data, verification, applicationId =
   const application = { ...previous, ...values, countryRegion: '中国', id: previous?.id || `APP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, status: '待处理', createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
   // Application intake never creates an identity, session, subject or membership.
   return { ...state, applications: previous ? state.applications.map(item => item.id === applicationId ? application : item) : [...state.applications, application] };
+}
+
+export function realNameErrors({ name = '', idNumber = '', consent = false }) {
+  const errors = {};
+  if (!name.trim() || name.trim().length > 40) errors.name = '请填写真实姓名（不超过 40 字）';
+  const id = idNumber.trim().toUpperCase();
+  if (!/^[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dX]$/.test(id)) errors.idNumber = '请填写有效的 18 位居民身份证号码';
+  else {
+    const weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
+    const sum = weights.reduce((total, weight, index) => total + Number(id[index]) * weight, 0);
+    const year = Number(id.slice(6, 10)), month = Number(id.slice(10, 12)), day = Number(id.slice(12, 14));
+    const date = new Date(year, month - 1, day);
+    if ('10X98765432'[sum % 11] !== id[17] || date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day || date > new Date()) errors.idNumber = '身份证号码格式或校验位不正确';
+  }
+  if (consent !== true) errors.consent = '请确认信息真实并授权身份核验';
+  return errors;
+}
+
+export function submitRealNameCertification(state, data) {
+  const user = currentAuthUser(state);
+  if (!user || user.status !== '正常') throw new Error('请先登录有效账号');
+  const errors = realNameErrors(data);
+  if (Object.keys(errors).length) throw new Error(Object.values(errors)[0]);
+  if (['审核中', '已认证'].includes(user.realNameCertification?.status)) throw new Error('已有实人认证记录，请查看认证状态');
+  // Only a masked document number is retained; identity verification is not connected.
+  const realNameCertification = { name: data.name.trim(), maskedId: '**************' + data.idNumber.trim().toUpperCase().slice(-4), status: '审核中', submittedAt: new Date().toISOString() };
+  return { ...state, accounts: state.accounts.map(account => account.id === user.id ? { ...account, realNameCertification } : account) };
+}
+
+export function submitEnterpriseCertification(state, data, applicationId = null) {
+  const user = currentAuthUser(state);
+  if (!user || user.status !== '正常' || user.activation || !user.phone) throw new Error('请先登录有效的手机号账号');
+  const values = Object.fromEntries(['subjectType', 'companyName', 'taxId', 'province', 'city', 'industry', 'contactName', 'authorizationRole', 'authorizationNote'].map(key => [key, String(data[key] || '').trim()]));
+  values.contactType = 'phone'; values.contactIdentity = authPhone(user.phone); values.taxId = values.taxId.toUpperCase();
+  const errors = applicationErrors(values, 3, ['phone']);
+  if (Object.keys(errors).length) throw new Error(Object.values(errors)[0]);
+  if (!['legal-representative', 'authorized-agent'].includes(values.authorizationRole)) throw new Error('请选择申请人身份');
+  if (values.authorizationNote.length > 300 || (values.authorizationRole === 'authorized-agent' && !values.authorizationNote)) throw new Error('请填写授权说明（不超过 300 字）');
+  if (data.authorized !== true) throw new Error('请确认有权代表该单位提交认证');
+  const previous = applicationId && state.applications.find(item => item.id === applicationId);
+  if (applicationId && (!previous || previous.applicantUserId !== user.id)) throw new Error('无权修改该认证申请');
+  if (previous && previous.status !== '需补充') throw new Error('当前认证申请不能修改');
+  if (state.applications.some(item => item.id !== applicationId && item.taxId === values.taxId && item.status !== '已关闭')) throw new Error('该主体已有认证申请，请查看认证记录');
+  const record = { ...previous, ...values, authorized: true, applicantUserId: user.id, purpose: 'enterprise-certification', countryRegion: '中国', id: previous?.id || `APP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, status: '待处理', createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+  return { ...state, applications: previous ? state.applications.map(item => item.id === previous.id ? record : item) : [...state.applications, record] };
 }
 
 export function queryAuthApplication(state, id, verification) {

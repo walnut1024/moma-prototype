@@ -11,8 +11,8 @@ export function FilterToolbar({ children, className = '' }) {
   return <div className={`filter-toolbar ${className}`.trim()} role="group" aria-label="筛选条件">{children}</div>;
 }
 
-export function FilterPresets({ label = '时间筛选', value, onChange, items = TIME_PRESETS, className = '' }) {
-  return <div className={`filter-presets ${className}`.trim()} role="group" aria-label={label}>{items.map(([id, text]) => <Button key={id} type="button" variant={value === id ? 'default' : 'outline'} aria-pressed={value === id} onClick={() => onChange(id)}>{text}</Button>)}</div>;
+export function FilterPresets({ label = '时间筛选', value, onChange, items = TIME_PRESETS, children, className = '' }) {
+  return <div className={`filter-presets ${className}`.trim()} role="group" aria-label={label}>{items.map(([id, text]) => <Button key={id} type="button" variant={value === id ? 'default' : 'outline'} aria-pressed={value === id} onClick={() => onChange(id)}>{text}</Button>)}{children}</div>;
 }
 
 export function FilterReset({ onClick }) {

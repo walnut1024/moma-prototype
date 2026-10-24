@@ -1,3 +1,4 @@
+import { AdminUIContext } from './components/admin-ui-context';
 import FrontPageHeader from "./components/FrontPageHeader";
 import AuthExperience, { AuthBanner, usePrototypeAuth } from "./AuthExperience";
 import OperationRecords from "./OperationRecords";
@@ -17,7 +18,8 @@ import ModelExperience from "./ModelExperience";
 import CallLogs from "./CallLogs";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import TextExperience from "./TextExperience";
-import MultimodalExperience from "./MultimodalExperience";
+import { toast } from "sonner";
+import { TENANT_USER_TYPE_KEY, tenantUserAccess } from "./tenant-user-type.mjs";
 import ModelComparison from "./ModelComparison";
 import AdminConsole from "./AdminConsole";
 import AdminConsoleV2 from "./AdminConsoleV2";
@@ -53,12 +55,12 @@ import {
   ReceiptText,
   RefreshCw,
   Route,
-  ScanSearch,
   Search,
   SlidersHorizontal,
   X,
   Settings,
   ShoppingCart,
+  ShieldCheck,
   Store,
   Users,
   Video,
@@ -277,17 +279,10 @@ const models = [
     task: ["视频", "多模态"],
   },
 ];
-const hero = [
-  { ...models[0], bg: "firstBg-ef3f07b8.png", type: "文本生成" },
-  { ...models[1], bg: "secondBg-c502c3d3.png", type: "多模态生成" },
-  { ...models[2], bg: "thirdBg-6b946aba.png", type: "文本生成" },
-  { ...models[3], bg: "forthBg-982e3d97.png", type: "文本生成" },
-];
 const nav = [
   ["模型市场", "模型广场"],
   ["", "智能路由"],
   ["模型体验", "文本生成"],
-  ["", "多模态理解"],
   ["", "图片生成"],
   ["", "视频生成"],
   ["", "语音生成"],
@@ -300,10 +295,10 @@ const navIcons5102 = {
   模型广场: Store,
   智能路由: Route,
   模型排行: Activity,
-  语言模型: Languages,
-  多模态理解: ScanSearch,
-  视觉模型: Images,
-  语音模型: AudioLines,
+  文本生成: Languages,
+  图片生成: Images,
+  视频生成: Video,
+  语音识别: AudioLines,
   模型订购: ShoppingCart,
   按量付费: KeyRound,
   "Token Plan": Calculator,
@@ -1682,7 +1677,7 @@ function ModelOrderList({
     return (
       <div className="legacy-page legacy-service-order">
         <div className="service-order-title">
-          <button onClick={closeOrder}>‹ 返回</button>
+          <nav aria-label="面包屑"><ol><li><a href={`/${versionId}/?page=model-order`} onClick={event => { if (!standalone) { event.preventDefault(); closeOrder(); } }}>模型订购</a></li><li><span aria-hidden="true">/</span><span aria-current="page">订购模型服务</span></li></ol></nav>
           <h1>【订购】模型服务平台MoMA</h1>
           <span>产品介绍　|　帮助文档　|　产品控制台</span>
         </div>
@@ -2634,25 +2629,22 @@ function PrototypeApp({ version }) {
   const versionNav = nav
     .map(([group, item]) => [
       group,
-      { 文本生成: "语言模型", 图片生成: "视觉模型", 语音生成: "语音模型" }[
+      { 语音生成: "语音识别" }[
         item
       ] || item,
     ])
     .filter(
       ([, item]) =>
-        item !== "视频生成" &&
         (is5102 || !["按量付费", "Token Plan"].includes(item)) &&
         (!is5102 || !["模型排行", "语音模型"].includes(item)),
     );
   const [activePage, setActivePage] = useState(() => {
     const requestedPage = new URLSearchParams(location.search).get("page");
-    return requestedPage === "model-order" ? "模型订购" : !is5102 ? ({ "organization-members": "组织及成员", "operation-records": "操作记录", "api-keys": "API Key 管理", "call-logs": "调用日志", "usage-statistics": "用量统计" }[requestedPage] || "模型广场") : "模型广场";
+    return requestedPage === "model-order" ? "模型订购" : !is5102 ? ({ "organization-members": "组织及成员", "operation-records": "操作记录", "api-keys": "API Key 管理", "account-certification": "账号认证", "call-logs": "调用日志", "usage-statistics": "用量统计" }[requestedPage] || "模型广场") : "模型广场";
   }),
     [admin, setAdmin] = useState(modeFromHash),
     [adminBannerTarget, setAdminBannerTarget] = useState(null),
     [textCompare, setTextCompare] = useState(false),
-    [visualKind, setVisualKind] = useState("image"),
-    [featured, setFeatured] = useState(true),
     [query, setQuery] = useState(""),
     [filters, setFilters] = useState({}),
     [selected, setSelected] = useState(null),
@@ -2666,6 +2658,38 @@ function PrototypeApp({ version }) {
     return () => media.removeEventListener('change', change);
   }, []);
   const auth = usePrototypeAuth();
+  const [previewUserType, setPreviewUserType] = useState(() => {
+    try { return localStorage.getItem(TENANT_USER_TYPE_KEY) === 'personal' ? 'personal' : 'enterprise'; }
+    catch { return 'enterprise'; }
+  });
+  const tenantAccess = tenantUserAccess(auth.state, previewUserType);
+  const enterprisePagesAllowed = !auth.storageError && tenantAccess.canViewOrganization;
+  const changeUserType = value => {
+    if (!['personal', 'enterprise'].includes(value)) return;
+    try {
+      if (auth.user) {
+        const target = value === 'personal'
+          ? auth.spaces.find(space => space.id === 'personal')
+          : auth.spaces.find(space => space.id === auth.state.activeSpace && space.id !== 'personal') || auth.spaces.find(space => space.id !== 'personal');
+        if (!target) return;
+        auth.commit({ ...auth.state, activeSpace: target.id });
+      } else {
+        localStorage.setItem(TENANT_USER_TYPE_KEY, value);
+        setPreviewUserType(value);
+      }
+      toast.success(value === 'personal' ? '已切换为个人用户' : '已切换为政企用户');
+    } catch (error) { toast.error(auth.user && error.message ? error.message : '用户类型未能保存，请检查浏览器存储后重试。'); }
+  };
+  useEffect(() => {
+    if (!enterprisePagesAllowed && ['组织及成员', '操作记录', '调用日志'].includes(activePage)) {
+      setActivePage('模型广场');
+      const query = new URLSearchParams(location.search);
+      if (['organization-members', 'operation-records', 'call-logs'].includes(query.get('page'))) {
+        query.delete('page');
+        history.replaceState(null, '', location.pathname + (query.size ? '?' + query : '') + location.hash);
+      }
+    }
+  }, [enterprisePagesAllowed, activePage]);
   useEffect(() => {
     if (is5102 && activePage === "模型排行") setActivePage("模型广场");
   }, [is5102, activePage]);
@@ -2831,7 +2855,7 @@ function PrototypeApp({ version }) {
   const catalogueToolbar = <section className="catalogue-tools" aria-label="模型查找">
     <div className="catalogue-toolbar">
       {compactFilters ? <Dialog open={filtersExpanded} onOpenChange={setFiltersExpanded}><DialogTrigger asChild>{filterToggle}</DialogTrigger><DialogContent className="catalogue-filter-drawer"><DialogHeader><DialogTitle>模型筛选</DialogTitle><DialogDescription className="sr-only">选择筛选条件查找模型</DialogDescription></DialogHeader>{catalogueFilters}</DialogContent></Dialog> : filterToggle}
-      <div className="catalogue-search"><Search aria-hidden="true"/><Input aria-label="搜索模型" value={query} placeholder="搜索模型名称或模型 ID" onChange={event => { setQuery(event.target.value); if(event.target.value.trim())setFeatured(false); }}/>{query && <Button variant="ghost" size="icon" aria-label="清除搜索" onClick={() => setQuery('')}><X/></Button>}</div>
+      <div className="catalogue-search"><Search aria-hidden="true"/><Input aria-label="搜索模型" value={query} placeholder="搜索模型名称或模型 ID" onChange={event => { setQuery(event.target.value); }}/>{query && <Button variant="ghost" size="icon" aria-label="清除搜索" onClick={() => setQuery('')}><X/></Button>}</div>
       <span className="catalogue-count" role="status">{query.trim() || activeFilters.length ? '找到 ' : '模型 '}{visible.length} 个</span>
       <Select value={sortMode} onValueChange={setSortMode}><SelectTrigger aria-label="模型排序"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="latest">最新</SelectItem><SelectItem value="recommended">推荐</SelectItem></SelectContent></Select>
     </div>
@@ -2839,7 +2863,7 @@ function PrototypeApp({ version }) {
   </section>;
 
   return (
-    <div className={`app-shell ${is5102 ? "version-5102" : ""} ${auth.route ? "auth-shell" : ""} ${auth.route ? "auth-enterprise-shell" : ""}`}>
+    <AdminUIContext.Provider value={admin === "v2"}><div className={`app-shell ${is5102 ? "version-5102" : ""} ${auth.route ? "auth-shell" : ""} ${auth.route ? "auth-enterprise-shell" : ""}`}>
       <header className={admin === "v2" ? "admin-banner" : undefined}>
         <div className="brand-mark">
           <img src={`${A}jiangSuZhengWu.png`} />
@@ -2886,6 +2910,15 @@ function PrototypeApp({ version }) {
               返回前台
             </button>
           )}
+          {admin === 'front' && !auth.route && <div className="version-switch user-type-switch">
+            <Select value={tenantAccess.userType} onValueChange={changeUserType} disabled={Boolean(auth.storageError) || Boolean(auth.user && !auth.spaces.length)}>
+              <SelectTrigger size="sm" aria-label="切换用户类型"><SelectValue /></SelectTrigger>
+              <SelectContent position="popper" align="end"><SelectGroup>
+                <SelectItem value="enterprise" disabled={Boolean(auth.user && !auth.spaces.some(space => space.id !== 'personal'))}>政企用户</SelectItem>
+                <SelectItem value="personal" disabled={Boolean(auth.user && !auth.spaces.some(space => space.id === 'personal'))}>个人用户</SelectItem>
+              </SelectGroup></SelectContent>
+            </Select>
+          </div>}
           {is5102 ? <div className="user">estack-yy</div> : <AuthBanner auth={auth} showToast={admin === "front"} />}
         </div>
       </header>
@@ -2901,7 +2934,7 @@ function PrototypeApp({ version }) {
                   className={activePage === item ? "active" : ""}
                   onClick={() => {
                     setActivePage(item);
-                    if (item === "文本生成" || item === "语言模型")
+                    if (item === "文本生成")
                       setTextCompare(false);
                   }}
                 >
@@ -2942,18 +2975,17 @@ function PrototypeApp({ version }) {
                   用量统计
                 </button>
                 <button className={activePage === "调用观测" ? "active" : ""} onClick={() => setActivePage("调用观测")}><Activity aria-hidden="true" />调用观测</button>
-                <button className={activePage === "调用日志" ? "active" : ""} onClick={() => setActivePage("调用日志")}><FileText aria-hidden="true" />调用日志</button>
+                {enterprisePagesAllowed && <button className={activePage === "调用日志" ? "active" : ""} onClick={() => setActivePage("调用日志")}><FileText aria-hidden="true" />调用日志</button>}
               </div>
               <div>
-                <small>系统管理</small>
+                <small>账号管理</small>
                 <button className={activePage === "API Key 管理" ? "active" : ""} onClick={() => setActivePage("API Key 管理")}><KeyRound aria-hidden="true" />API Key</button>
-                <button className={activePage === "组织及成员" ? "active" : ""} onClick={() => setActivePage("组织及成员")}><Users aria-hidden="true" />组织及成员</button>
-                <button className={activePage === "操作记录" ? "active" : ""} onClick={() => setActivePage("操作记录")}><History aria-hidden="true" />操作记录</button>
+                {enterprisePagesAllowed && <button className={activePage === "组织及成员" ? "active" : ""} onClick={() => setActivePage("组织及成员")}><Users aria-hidden="true" />组织及成员</button>}
+                {enterprisePagesAllowed && <button className={activePage === "操作记录" ? "active" : ""} onClick={() => setActivePage("操作记录")}><History aria-hidden="true" />操作记录</button>}
+                <button className={activePage === "账号认证" ? "active" : ""} onClick={() => setActivePage("账号认证")}><ShieldCheck aria-hidden="true" />账号认证</button>
               </div>
             </>
           )}
-          {(activePage === "文本生成" || activePage === "语言模型") &&
-            !textCompare && <div id="text-history-slot" />}
         </aside>
       )}
       <main className={admin !== "front" ? "admin-main" : is5102 ? "" : "front-main"}>
@@ -2967,7 +2999,7 @@ function PrototypeApp({ version }) {
           <SmartRoute key={is5102 ? "moma_5.10.2_estack" : "moma_5.12.0_estack"} versionId={is5102 ? "moma_5.10.2_estack" : "moma_5.12.0_estack"} onNavigate={setActivePage} />
         ) : activePage === "模型排行" ? (
           <ModelRanking />
-        ) : activePage === "文本生成" || activePage === "语言模型" ? (
+        ) : activePage === "文本生成" ? (
           textCompare ? (
             <ModelComparison
               onBack={() => setTextCompare(false)}
@@ -2975,80 +3007,44 @@ function PrototypeApp({ version }) {
           ) : (
             <TextExperience
               imageUploadEnabled
-              title="语言模型"
+              title="文本生成"
               onCompare={is5102 ? undefined : () => setTextCompare(true)}
             />
           )
-        ) : activePage === "多模态理解" ? (
-          <MultimodalExperience />
-        ) : activePage === "视觉模型" ? (
+        ) : activePage === "图片生成" || activePage === "视频生成" ? (
           <ModelExperience
-            key={visualKind}
-            kind={visualKind}
-            groupLabel="视觉模型"
-            onKindChange={setVisualKind}
+            key={activePage}
+            kind={activePage === "图片生成" ? "image" : "video"}
+            groupLabel={activePage}
           />
-        ) : activePage === "语音模型" ? (
+        ) : activePage === "语音识别" ? (
           <ModelExperience
             key="voice"
             kind="voice"
-            groupLabel="语音模型"
+            groupLabel="语音识别"
           />
         ) : activePage === "模型订购" ? (
           <ModelOrderList versionId={version.id} historical={is5102} />
         ) : is5102 && (activePage === "按量付费" || activePage === "Token Plan") ? (
           <ApiKeys key={activePage} billing={activePage} />
+        ) : activePage === "账号认证" && !is5102 ? (
+          <AuthExperience auth={{ ...auth, route: "account", close: () => setActivePage("模型广场") }} accountTitle="账号认证" />
         ) : activePage === "API Key 管理" ? (
           <UnifiedApiKeys />
-        ) : activePage === "操作记录" && !is5102 ? (
+        ) : activePage === "操作记录" && !is5102 && enterprisePagesAllowed ? (
           <OperationRecords />
-        ) : activePage === "组织及成员" && !is5102 ? (
+        ) : activePage === "组织及成员" && !is5102 && enterprisePagesAllowed ? (
           <OrganizationMembers />
         ) : activePage === "调用观测" ? (
           <UsageStatistics key="observation" observation />
         ) : activePage === "用量统计" ? (
           <UsageStatistics />
-        ) : activePage === "调用日志" ? (
+        ) : activePage === "调用日志" && enterprisePagesAllowed ? (
           <CallLogs />
         ) : is5102 && activePage.startsWith("用量统计·") ? (
           <UsageStatistics5102 />
         ) : (
           <div className="content">
-            {!is5102 && <FrontPageHeader title="模型广场" description="探索精选模型，按任务、能力与服务商查找可用模型" icon={Store} actions={<Button variant="outline" onClick={() => setFeatured(value => !value)}>{featured ? "隐藏精选模型" : "展开精选模型"}</Button>} />}
-            {featured ? (
-              <section className="featured">
-                {is5102 && <div className="title-row">
-                  <h1>
-                    模型市场 <em>探索精选模型</em>
-                  </h1>
-                  <button onClick={() => setFeatured(false)}>
-                    <img src={`${A}look-e200be1b.svg`} /> 隐藏精选模型
-                  </button>
-                </div>}
-                <div className="hero-grid">
-                  {hero.map((m) => (
-                    <article key={m.name} onClick={() => setSelected(m)}>
-                      <div
-                        className="hero-image"
-                        style={{ backgroundImage: `url(${A}${m.bg})` }}
-                      >
-                        <strong>{m.name}</strong>
-                        <span>{m.type}</span>
-                      </div>
-                      <h2>{m.name}</h2>
-                      <p>{m.desc}</p>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            ) : is5102 ? (
-              <button
-                className="show-featured"
-                onClick={() => setFeatured(true)}
-              >
-                展开精选模型
-              </button>
-            ) : null}
             {!is5102 && catalogueToolbar}
             <section className={is5102 ? "catalog" : `catalog catalogue-layout ${compactFilters || !filtersExpanded ? 'catalogue-collapsed' : ''}`}>
               {is5102 ? catalogueFilters : !compactFilters && <div hidden={!filtersExpanded}>{catalogueFilters}</div>}
@@ -3057,9 +3053,7 @@ function PrototypeApp({ version }) {
                 <div className="toolbar">
                   <h3>
                     模型{" "}
-                    {query || Object.values(filters).some(Boolean)
-                      ? visible.length
-                      : 61}
+                    {visible.length}
                     个 <img src={`${A}refresh-3e0d92ae.svg`} />
                   </h3>
                   <div>
@@ -3076,7 +3070,7 @@ function PrototypeApp({ version }) {
                       <input
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="请输入模型名称"
+                        aria-label="搜索模型名称" placeholder="请输入模型名称"
                       />
                     </label>
                   </div>
@@ -3154,7 +3148,7 @@ function PrototypeApp({ version }) {
           </div>
         </div>
       )}
-    </div>
+    </div></AdminUIContext.Provider>
   );
 }
 

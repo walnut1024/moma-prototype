@@ -3359,3 +3359,7 @@ h1 em {
 .app-shell:not(.version-5102) .front-main .playground { --experience-accent: #3568f9; }
 
 body:has(.app-shell:not(.version-5102) > .front-main) :is(.model-select-dialog, .key-action-dialog) { --experience-accent: #3568f9; --primary: #3568f9; --ring: #3568f9; }
+
+.app-shell > aside .nav-custom-note { font-size: 11px; }
+
+.user-type-switch [data-slot="select-trigger"] { min-width: 112px; }

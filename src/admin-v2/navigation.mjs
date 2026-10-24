@@ -6,7 +6,6 @@ export const sections = [
     { id: "usage", label: "用量统计", children: [["usage-analysis", "用量统计"]] },
     { id: "users-analysis", label: "用户分析", children: [["user-analysis", "用户分析"]] },
     { id: "cost-analysis", label: "成本分析（旧）", children: [["cost-analysis", "成本分析（旧）"]] },
-    { id: "customer-analysis", label: "客户分析（旧）", children: [["customer-analysis", "客户分析（旧）"]] },
     { id: "provider-analysis", label: "服务商分析（旧）", children: [["provider-analysis", "服务商分析（旧）"]] },
     { id: "model-analysis", label: "模型分析（旧）", children: [["model-analysis", "模型分析（旧）"]] },
   ]},
@@ -25,7 +24,6 @@ export const sections = [
     { id: "error-statistics", label: "错误与异常统计（旧）", children: [["error-statistics", "错误与异常统计（旧）"]] },
   ]},
   { id: "gateway", workspace: "maintenance", title: "网关管理", items: [
-    { id: "gateway", label: "网关配置", children: [["routes", "路由策略"], ["limits", "限流与并发"], ["fallback", "熔断与回退"], ["cache", "缓存策略"], ["releases", "配置版本与发布"], ["monitoring", "服务监控"], ["logs", "请求日志"], ["alerts", "告警管理"], ["incidents", "事件处理"], ["sla", "服务质量报告"]] },
     { id: "traffic-management", label: "流量管理（旧）", children: [["traffic-management", "流量管理（旧）"]] },
     { id: "model-routing", label: "模型路由管理（旧）", children: [["model-routing", "模型路由管理（旧）"]] },
   ]},

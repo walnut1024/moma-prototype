@@ -61,13 +61,12 @@ export function ErrorStatisticsPage({state,observation}) {
     <section className="cc-chart"><h2>错误类型分布<Hint label="错误类型">按已记录的非2xx响应状态分类；自定义时按所选日期汇总。</Hint></h2><DonutChart centerValue={number(s.failed)} centerLabel="错误总数" label="错误类型分布" unit="次" rows={[{label:'4xx',value:s.four},{label:'5xx',value:s.five},{label:'其他',value:s.other}]} height={250}/><div className="cc-donut-values"><span>4xx错误 <strong>{number(s.four)}</strong></span><span>5xx错误 <strong>{number(s.five)}</strong></span><span>其他错误 <strong>{number(s.other)}</strong></span></div></section>
   </div></>;
 }
-export function CustomerAnalysisPage({state}) {
-  const period=usePeriod(),[query,setQuery]=useState(''),[applied,setApplied]=useState({range:period.range,query:''});
-  const facts=calcloudFacts(state,applied.range),groups=calcloudGroups(facts.rows,'userId',state.users).filter(c=>c.name.toLowerCase().includes(applied.query.toLowerCase()));
-  const reset=()=>{period.reset();setQuery('');setApplied({range:calcloudPeriod('7d'),query:''});};
-  return <><PageHead title="客户分析" note="按用户查看调用量、Token消耗与错误率。"/><PeriodToolbar period={period} apply={()=>setApplied({range:period.range,query})} reset={reset}><TextField label="用户名" value={query} onChange={setQuery}/></PeriodToolbar><section className="cc-surface"><DataTable key={JSON.stringify(applied)} rows={groups} columns={[
+export function CustomerAnalysis({state,range}) {
+  const [query,setQuery]=useState(''),[appliedQuery,setAppliedQuery]=useState('');
+  const facts=calcloudFacts(state,range),groups=calcloudGroups(facts.rows,'userId',state.users).filter(c=>c.name.toLowerCase().includes(appliedQuery.trim().toLowerCase()));
+  return <><section className="cc-surface"><h2>客户分析</h2><p className="cc-context">按用户查看调用量、Token 消耗与错误率，使用上方时间范围。</p><div className="cc-toolbar"><TextField label="用户名" value={query} onChange={setQuery}/><Button onClick={()=>setAppliedQuery(query)}>查询</Button><Button variant="outline" onClick={()=>{setQuery('');setAppliedQuery('');}}>重置</Button></div><DataTable key={JSON.stringify({range,appliedQuery})} rows={groups} columns={[
     ['用户ID',c=>c.id],['用户名称',c=>c.name],['调用总次数',c=>number(c.calls)],['输入Tokens',c=>number(c.input)],['输出Tokens',c=>number(c.output)],['总Tokens',c=>number(c.total)],['错误率',c=>percent(c.errorRate)]
-  ]}/></section><p className="cc-context">{applied.range.start} — {applied.range.end} · 北京时间 · 今日截至当前时刻 · 未归属用户的调用 {number(facts.rows.filter(r=>!r.userId).length)} 次 · Token用量仅统计按Token计量的模型</p></>;
+  ]}/><p className="cc-context">{range.start} — {range.end} · 北京时间 · 未归属用户的调用 {number(facts.rows.filter(r=>!r.userId).length)} 次 · Token 用量仅统计按 Token 计量的模型</p></section></>;
 }
 export function ProviderAnalysisPage({state}) {
   const period=usePeriod(),[provider,setProvider]=useState(()=>state.providers[0]?.id||'');
@@ -95,7 +94,7 @@ export function CostAnalysisPage({state}) {
   const reset=()=>{period.reset();setModel('');setProvider('');setApplied({range:calcloudPeriod('30d'),model:'',provider:''});};
   const history=detail?calcloudCostHistory(state,facts,detail.modelId,detail.providerId):[];
   return <><PageHead title="成本分析" note="按调用时生效的采购价与目录价计算收入和利润。"/><PeriodToolbar period={period} apply={()=>setApplied({range:period.range,model,provider})} reset={reset}><Field label="模型名称"><Choice label="模型" value={model} all options={state.models} onChange={setModel}/></Field><Field label="模型服务商"><Choice label="服务商" value={provider} all options={state.providers} onChange={setProvider}/></Field></PeriodToolbar><Metrics items={[
-    ['总调用量',number(calcloudSummary(facts.rows).total),'未命中输入、缓存命中与输出Token用量之和。'],['总收入',money(sum('income'),2),'按调用时的目录价计算；未记录历史价格时显示“—”。'],['总利润',money(sum('profit'),2),'收入减采购成本；缺少任一历史价格时不计算。']
+    ['总调用量',number(calcloudSummary(facts.rows).total),'未命中输入、缓存命中与输出Token用量之和。'],['总收入',money(sum('income'),2),'按调用时的目录价计算；未记录历史价格时显示“—”。']
   ]}/><section className="cc-surface"><DataTable key={JSON.stringify(applied)} rows={rows} columns={[
     ['模型名称',r=>r.name],['服务商名称',r=>r.provider],['模型接入时间',r=>time(r.createdAt)],['模型成本价（元/百万Tokens）',r=>priceLabel(r.purchase)],['模型目录价（元/百万Tokens）',r=>priceLabel(r.sale)],['调用量',r=><>未命中输入 {number(r.uncached)}<small>缓存命中 {number(r.cached)}</small><small>输出 {number(r.output)}</small></>],['利润',r=>money(r.profit)],['操作',r=><Button variant="ghost" size="sm" onClick={()=>setDetail(r)}>详情</Button>]
   ]}/></section><p className="cc-context">历史计量、价格缺失或计费单位不适用时显示“—”；不使用当前价格追算历史费用。</p><Modal title="成本详情" description={detail?`${detail.name} · ${detail.provider} · 全部历史价格版本`:''} open={!!detail} close={()=>setDetail(null)} wide><DataTable rows={history} columns={[

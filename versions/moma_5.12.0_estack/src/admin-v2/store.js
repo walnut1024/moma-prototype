@@ -1,3 +1,5 @@
+import { DEFAULT_SUPPLIERS } from './moma-provider.js';
+import { tariffDictionarySeed } from './tariff-dictionary.js';
 import { CARRIER_PROVIDERS, realProvider } from './real-provider-catalogue.js';
 import { toast } from "sonner";
 import { useEffect, useRef, useState } from "react";
@@ -90,7 +92,11 @@ export function createAdminSeed() {
     providers.push(record(provider.id, { ...structuredClone(provider), contact: '', contractEnd: null, status: '已启用' }));
     endpoints.push(record('endpoint-' + provider.code, { endpointId: 'ep-' + provider.code, name: provider.name + ' 接入', providerId: provider.id, protocol: 'OpenAI', baseUrl: provider.baseUrl, credentialRef: '', modelIds: [], status: '停用', connectionTest: null }));
   });
-  return { modelTemplates: templateSeed(models), version: 1, revision: 1, updatedAt: now, models, modelSupplies, modelSalePrices, modelVersions, validations, providers, endpoints, supplyPrices, clusters, artifacts, deployments, tenants, projects, memberships, users, organizations, apiKeys, grants, ledger, routes, limits, fallbacks, releases, caches, requests, alerts, incidents, products, prices, orders, bills, settlements, adjustments, announcements, admins, approvals, integrations, audits: [], currentRole: "平台管理员", settings: { environmentLabel: "运营中心", timezone: "Asia/Shanghai", retentionDays: 90, defaultTpm: 1000000 } };
+  DEFAULT_SUPPLIERS.forEach(provider => {
+    providers.push(record(provider.id, { ...structuredClone(provider), contact: '', contractEnd: null, status: '已启用' }));
+    endpoints.push(record('endpoint-' + provider.code, { endpointId: 'ep-' + provider.code, name: provider.name + ' 接入', providerId: provider.id, protocol: 'OpenAI', baseUrl: provider.baseUrl, credentialRef: '', modelIds: [], status: '停用', connectionTest: null }));
+  });
+  return { modelOnboardings: [], tariffDictionary: tariffDictionarySeed(), modelTemplates: templateSeed(models), version: 1, revision: 1, updatedAt: now, models, modelSupplies, modelSalePrices, modelVersions, validations, providers, endpoints, supplyPrices, clusters, artifacts, deployments, tenants, projects, memberships, users, organizations, apiKeys, grants, ledger, routes, limits, fallbacks, releases, caches, requests, alerts, incidents, products, prices, orders, bills, settlements, adjustments, announcements, admins, approvals, integrations, audits: [], currentRole: "平台管理员", settings: { environmentLabel: "运营中心", timezone: "Asia/Shanghai", retentionDays: 90, defaultTpm: 1000000 } };
 }
 
 export function parseAdminState(raw) {
@@ -98,7 +104,7 @@ export function parseAdminState(raw) {
   const value = JSON.parse(raw);
   if (value?.version !== 1 || !Array.isArray(value.models) || !Array.isArray(value.apiKeys)) throw new Error("数据格式不兼容");
   const seed = createAdminSeed();
-  const restored = { ...seed, ...value, ...Object.fromEntries(["modelTemplates", "modelSupplies", "modelSalePrices", "users", "organizations", "modelVersions", "validations", "clusters", "artifacts", "deployments", "supplyPrices", "memberships", "grants", "ledger", "routes", "limits", "fallbacks", "releases", "caches", "requests", "alerts", "incidents", "products", "prices", "orders", "bills", "settlements", "adjustments", "announcements", "admins", "approvals", "integrations"].map(key => [key, Array.isArray(value[key]) ? value[key] : seed[key]])) };
+  const restored = { ...seed, ...value, ...Object.fromEntries(["modelOnboardings", "tariffDictionary", "modelTemplates", "modelSupplies", "modelSalePrices", "users", "organizations", "modelVersions", "validations", "clusters", "artifacts", "deployments", "supplyPrices", "memberships", "grants", "ledger", "routes", "limits", "fallbacks", "releases", "caches", "requests", "alerts", "incidents", "products", "prices", "orders", "bills", "settlements", "adjustments", "announcements", "admins", "approvals", "integrations"].map(key => [key, Array.isArray(value[key]) ? value[key] : seed[key]])) };
   const newExamples = seed.models.filter(model => model.id.startsWith('catalog-demo-') && !value.models.some(saved => saved.id === model.id));
   for (const key of ['models', 'modelVersions', 'tenants', 'projects']) restored[key] = [...restored[key], ...seed[key].filter(item => !restored[key].some(saved => saved.id === item.id))];
   const exampleIds = new Set(newExamples.map(model => model.id));
@@ -106,6 +112,10 @@ export function parseAdminState(raw) {
   const carrierEndpointIds = new Set(seed.endpoints.filter(item => carrierProviderIds.has(item.providerId) && restored.models.some(model => item.modelIds.includes(model.id))).map(item => item.id));
   for (const key of ['modelSupplies', 'modelSalePrices', 'endpoints']) restored[key] = [...restored[key], ...seed[key].filter(item => ((key === 'endpoints' ? item.modelIds.some(id => exampleIds.has(id)) : exampleIds.has(item.modelId)) || (key === 'endpoints' ? carrierEndpointIds.has(item.id) : key === 'modelSupplies' && carrierEndpointIds.has(item.endpointId))) && !restored[key].some(saved => saved.id === item.id))];
   restored.providers = [...restored.providers, ...seed.providers.filter(provider => (newExamples.length && provider.id.startsWith('catalog-provider-') || carrierProviderIds.has(provider.id)) && !restored.providers.some(saved => saved.id === provider.id))];
+  for (const key of ['providers', 'endpoints']) {
+    const ids = DEFAULT_SUPPLIERS.map(provider => key === 'providers' ? provider.id : 'endpoint-' + provider.code);
+    restored[key] = [...restored[key], ...seed[key].filter(item => ids.includes(item.id) && !restored[key].some(saved => saved.id === item.id))];
+  }
   restored.apiKeys = restored.apiKeys.map(key => {
     const index = seed.apiKeys.findIndex(item => item.id === key.id);
     return index >= 0 && index < seed.projects.length * 2 && key.updatedAt === now ? { ...key, modelIds: seed.apiKeys[index].modelIds } : key;
@@ -143,6 +153,7 @@ export function canMutate(role, action) {
 export function commitAdminState(state, action, actor = state.currentRole) {
   const isEnterprise = ['enterprise', 'individual', 'adminAccount'].includes(action.type);
   if (action.type !== 'adminAccount' && (action.collection === 'admins' || Array.isArray(action.changes) && action.changes.some(change => change.collection === 'admins'))) throw new Error('后台账号须通过账号管理操作');
+  if (action.type !== 'modelOperations' && (action.collection === 'tariffDictionary' || Array.isArray(action.changes) && action.changes.some(change => change.collection === 'tariffDictionary'))) throw new Error('资费字典须通过字典维护操作');
   if (!canMutate(actor, action)) throw new Error(`${actor}无权执行此操作`);
   if (action.type === "enterprise") action = enterpriseTransaction(state, action);
   if (action.type === "individual") action = individualTransaction(state, action, actor);
@@ -172,7 +183,10 @@ export function commitAdminState(state, action, actor = state.currentRole) {
       } else {
         const index = next[change.collection].findIndex(item => item.id === change.id);
         if (index < 0) throw new Error("记录不存在");
-        next[change.collection][index] = { ...next[change.collection][index], ...change.changes, updatedAt: timestamp };
+        if (change.type === 'remove') {
+          if (change.collection !== 'tariffDictionary') throw new Error('不支持删除此集合');
+          next[change.collection].splice(index, 1);
+        } else next[change.collection][index] = { ...next[change.collection][index], ...change.changes, updatedAt: timestamp };
       }
     }
   } else throw new Error("未知操作");

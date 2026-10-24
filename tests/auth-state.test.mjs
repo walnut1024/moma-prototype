@@ -59,7 +59,7 @@ test('application intake is independent of identity creation and query requires 
   assert.equal(applicationErrors(data, 2, ['phone']).contactType, '当前项目不支持此登录方式');
   assert.equal(applicationErrors({ ...data, province: '' }, 1).province, '请选择省份');
   assert.deepEqual(applicationErrors({ ...data, contactName: '', contactIdentity: '' }, 1), {});
-  assert.equal(applicationErrors({ contactType: 'phone' }, 2).contactName, '请填写 40 字以内的管理员姓名');
+  assert.equal(applicationErrors({ contactType: 'phone' }, 2).contactName, '请填写 40 字以内的申请人姓名');
   assert.throws(() => queryAuthApplication(applied, record.id, { ...verification, challenge: null }), /先获取/);
   const queryProof = { ...verification, challenge: { ...challenge, purpose: 'application' } };
   assert.equal(queryAuthApplication(applied, record.id, queryProof).id, record.id);
