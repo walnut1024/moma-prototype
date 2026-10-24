@@ -1,0 +1,2775 @@
+{
+  "source": "公有云MoMA_按Token用量计费_资源规格清单_v5-20260920.xlsx",
+  "sheet": "按Token用量计费-资源规格清单",
+  "models": [
+    {
+      "catalogueId": "AICC-Doubao-Seedance-2.0",
+      "model": "AICC-doubao-seedance-2.0",
+      "operation": "合营",
+      "supplier": "火山引擎",
+      "status": "售罄",
+      "range": "B2:H5",
+      "rows": [
+        [
+          2,
+          "不含视频输入",
+          "Token 用量（无视频输入，480p/720p）",
+          "百万 Token",
+          "92"
+        ],
+        [
+          3,
+          "含视频输入",
+          "Token 用量（含视频输入，480p/720p）",
+          "百万 Token",
+          "56"
+        ],
+        [
+          4,
+          "不含视频输入-1080p",
+          "Token 用量（无视频输入，1080p）",
+          "百万 Token",
+          "102"
+        ],
+        [
+          5,
+          "含视频输入-1080p",
+          "Token 用量（含视频输入，1080p）",
+          "百万 Token",
+          "62"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "aitc-deepseek-v4-flash",
+      "model": "AITC-DeepSeek-V4-flash",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B6:H7",
+      "rows": [
+        [
+          6,
+          "AITC-DeepSeek-V4-flash-输入",
+          "输入 Token",
+          "百万 Token",
+          "2"
+        ],
+        [
+          7,
+          "AITC-DeepSeek-V4-flash-输出",
+          "输出 Token",
+          "百万 Token",
+          "4"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "CosyVoice",
+      "model": "CosyVoice",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B8:H8",
+      "rows": [
+        [
+          8,
+          "处理字符数资费",
+          "语音合成字符数",
+          "万字符",
+          "2"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "DeepSeek-R1",
+      "model": "DeepSeek-R1",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B9:H10",
+      "rows": [
+        [
+          9,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "4"
+        ],
+        [
+          10,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "16"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "DeepSeek-R1-0528",
+      "model": "DeepSeek-R1-0528",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B11:H12",
+      "rows": [
+        [
+          11,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "4"
+        ],
+        [
+          12,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "16"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "DeepSeek-R1-Distill-Llama-70B",
+      "model": "DeepSeek-R1-Distill-Llama-70B",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B13:H13",
+      "rows": [
+        [
+          13,
+          "tokens资费",
+          "Token 用量",
+          "百万 Token",
+          "4.13"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "DeepSeek-R1-Distill-Llama-8B",
+      "model": "DeepSeek-R1-Distill-Llama-8B",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B14:H14",
+      "rows": [
+        [
+          14,
+          "tokens资费",
+          "Token 用量",
+          "百万 Token",
+          "0.42"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "DeepSeek-R1-Distill-Qwen-14B",
+      "model": "DeepSeek-R1-Distill-Qwen-14B",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B15:H15",
+      "rows": [
+        [
+          15,
+          "tokens资费",
+          "Token 用量",
+          "百万 Token",
+          "0.7"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "DeepSeek-R1-Distill-Qwen-32B",
+      "model": "DeepSeek-R1-Distill-Qwen-32B",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B16:H16",
+      "rows": [
+        [
+          16,
+          "tokens资费",
+          "Token 用量",
+          "百万 Token",
+          "1.26"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "DeepSeek-V2-Lite-Chat",
+      "model": "DeepSeek-V2-Lite-Chat",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B17:H17",
+      "rows": [
+        [
+          17,
+          "tokens资费",
+          "Token 用量",
+          "百万 Token",
+          "1.33"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "DeepSeek-V3.2",
+      "model": "DeepSeek-V3.2",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B18:H19",
+      "rows": [
+        [
+          18,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "2"
+        ],
+        [
+          19,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "8"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "DeepSeek-V3",
+      "model": "DeepSeek-V3",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B20:H21",
+      "rows": [
+        [
+          20,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "2"
+        ],
+        [
+          21,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "8"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "DeepSeek-V3-0324",
+      "model": "DeepSeek-V3-0324",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B22:H23",
+      "rows": [
+        [
+          22,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "2"
+        ],
+        [
+          23,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "8"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "DeepSeek-V3.1",
+      "model": "DeepSeek-V3.1",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B24:H25",
+      "rows": [
+        [
+          24,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "2"
+        ],
+        [
+          25,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "8"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "deepseek-v3.2",
+      "model": "deepseek-v3.2",
+      "operation": "合营",
+      "supplier": "优刻得科技股份有限公司",
+      "status": "可订购",
+      "range": "B26:H28",
+      "rows": [
+        [
+          26,
+          "DeepSeek-V3.2-输入",
+          "输入 Token",
+          "百万 Token",
+          "2"
+        ],
+        [
+          27,
+          "DeepSeek-V3.2-输出",
+          "输出 Token",
+          "百万 Token",
+          "3"
+        ],
+        [
+          28,
+          "DeepSeek-V3.2-缓存",
+          "缓存读取 Token",
+          "百万 Token",
+          "0.4"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "DeepSeek-V4-Flash",
+      "model": "DeepSeek-V4-Flash",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B29:H32",
+      "rows": [
+        [
+          29,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "1"
+        ],
+        [
+          30,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "2"
+        ],
+        [
+          31,
+          "输入tokens-夜间",
+          "输入 Token（夜间）",
+          "百万 Token",
+          "0.5"
+        ],
+        [
+          32,
+          "输出tokens-夜间",
+          "输出 Token（夜间）",
+          "百万 Token",
+          "1.0"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "DeepSeek-V4-Flash-0731",
+      "model": "DeepSeek-V4-Flash-0731",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B33:H36",
+      "rows": [
+        [
+          33,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "1"
+        ],
+        [
+          34,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "2"
+        ],
+        [
+          35,
+          "输入tokens-夜间",
+          "输入 Token（夜间）",
+          "百万 Token",
+          "0.5"
+        ],
+        [
+          36,
+          "输出tokens-夜间",
+          "输出 Token（夜间）",
+          "百万 Token",
+          "1.0"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "GLM-5.1",
+      "model": "GLM-5.1",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B37:H42",
+      "rows": [
+        [
+          37,
+          "GLM-5.1-输入长度(0,32K]输入",
+          "输入 Token（输入长度 (0,32K]）",
+          "百万 Token",
+          "6.0"
+        ],
+        [
+          38,
+          "GLM-5.1-输入长度(0,32K]输出",
+          "输出 Token（输入长度 (0,32K]）",
+          "百万 Token",
+          "24.0"
+        ],
+        [
+          39,
+          "GLM-5.1-输入长度(0,32K]缓存命中",
+          "缓存读取 Token（输入长度 (0,32K]）",
+          "百万 Token",
+          "1.3"
+        ],
+        [
+          40,
+          "GLM-5.1-输入长度(32K,200K]输入",
+          "输入 Token（输入长度 (32K,200K]）",
+          "百万 Token",
+          "8.0"
+        ],
+        [
+          41,
+          "GLM-5.1-输入长度(32K,200K]输出",
+          "输出 Token（输入长度 (32K,200K]）",
+          "百万 Token",
+          "28.0"
+        ],
+        [
+          42,
+          "GLM-5.1-输入长度(32K,200K]缓存命中",
+          "缓存读取 Token（输入长度 (32K,200K]）",
+          "百万 Token",
+          "2.0"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "ZHIPU/GLM-5.1",
+      "model": "GLM-5.1",
+      "operation": "合营",
+      "supplier": "智谱 AI",
+      "status": "可订购",
+      "range": "B43:H48",
+      "rows": [
+        [
+          43,
+          "GLM-5.1-输入长度(0,32K]输入",
+          "输入 Token（输入长度 (0,32K]）",
+          "百万 Token",
+          "6.0"
+        ],
+        [
+          44,
+          "GLM-5.1-输入长度(0,32K]输出",
+          "输出 Token（输入长度 (0,32K]）",
+          "百万 Token",
+          "24.0"
+        ],
+        [
+          45,
+          "GLM-5.1-输入长度(0,32K]缓存命中",
+          "缓存读取 Token（输入长度 (0,32K]）",
+          "百万 Token",
+          "1.3"
+        ],
+        [
+          46,
+          "GLM-5.1-输入长度(32K,200K]输入",
+          "输入 Token（输入长度 (32K,200K]）",
+          "百万 Token",
+          "8.0"
+        ],
+        [
+          47,
+          "GLM-5.1-输入长度(32K,200K]输出",
+          "输出 Token（输入长度 (32K,200K]）",
+          "百万 Token",
+          "28.0"
+        ],
+        [
+          48,
+          "GLM-5.1-输入长度(32K,200K]缓存命中",
+          "缓存读取 Token（输入长度 (32K,200K]）",
+          "百万 Token",
+          "2.0"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "GLM-5.2",
+      "model": "GLM-5.2",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B49:H51",
+      "rows": [
+        [
+          49,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "8"
+        ],
+        [
+          50,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "28"
+        ],
+        [
+          51,
+          "缓存命中",
+          "缓存读取 Token",
+          "百万 Token",
+          "2"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "ZHIPU/GLM-5.2",
+      "model": "GLM-5.2",
+      "operation": "合营",
+      "supplier": "智谱 AI",
+      "status": "可订购",
+      "range": "B52:H54",
+      "rows": [
+        [
+          52,
+          "GLM-5.2-输入",
+          "输入 Token",
+          "百万 Token",
+          "8"
+        ],
+        [
+          53,
+          "GLM-5.2-输出",
+          "输出 Token",
+          "百万 Token",
+          "28"
+        ],
+        [
+          54,
+          "GLM-5.2-缓存命中",
+          "缓存读取 Token",
+          "百万 Token",
+          "2"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "zhipu/glm-5.3-flash",
+      "model": "GLM-5.3-Flash",
+      "operation": "合营",
+      "supplier": "智谱 AI",
+      "status": "可订购",
+      "range": "B55:H57",
+      "rows": [
+        [
+          55,
+          "GLM-5.3-Flash-输入（原价）",
+          "输入 Token",
+          "百万 Token",
+          "0.80"
+        ],
+        [
+          56,
+          "GLM-5.3-Flash-输出（原价）",
+          "输出 Token",
+          "百万 Token",
+          "2.80"
+        ],
+        [
+          57,
+          "GLM-5.3-Flash-缓存命中（原价）",
+          "缓存读取 Token",
+          "百万 Token",
+          "0.23"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "ZHIPU/GLM-5.3",
+      "model": "GLM-5.3",
+      "operation": "合营",
+      "supplier": "智谱 AI",
+      "status": "可订购",
+      "range": "B58:H60",
+      "rows": [
+        [
+          58,
+          "GLM-5.3-输入",
+          "输入 Token",
+          "百万 Token",
+          "8"
+        ],
+        [
+          59,
+          "GLM-5.3-输出",
+          "输出 Token",
+          "百万 Token",
+          "28"
+        ],
+        [
+          60,
+          "GLM-5.3-缓存命中",
+          "缓存读取 Token",
+          "百万 Token",
+          "2"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "kimi/kimi-k2.6",
+      "model": "Kimi-K2.6",
+      "operation": "合营",
+      "supplier": "月之暗面",
+      "status": "可订购",
+      "range": "B61:H63",
+      "rows": [
+        [
+          61,
+          "Kimi-K2.6-输入(缓存命中)",
+          "缓存读取 Token",
+          "百万 Token",
+          "1.1"
+        ],
+        [
+          62,
+          "Kimi-K2.6-输入(缓存未命中)",
+          "输入 Token",
+          "百万 Token",
+          "6.5"
+        ],
+        [
+          63,
+          "Kimi-K2.6-输出",
+          "输出 Token",
+          "百万 Token",
+          "27.0"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "kimi/kimi-k2.7-code",
+      "model": "Kimi-K2.7-Code",
+      "operation": "合营",
+      "supplier": "月之暗面",
+      "status": "可订购",
+      "range": "B64:H66",
+      "rows": [
+        [
+          64,
+          "Kimi-K2.7-code-输入(缓存命中)",
+          "缓存读取 Token",
+          "百万 Token",
+          "1.3"
+        ],
+        [
+          65,
+          "Kimi-K2.7-code-输入(缓存未命中)",
+          "输入 Token",
+          "百万 Token",
+          "6.5"
+        ],
+        [
+          66,
+          "Kimi-K2.7-code-输出",
+          "输出 Token",
+          "百万 Token",
+          "27.0"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Kimi/miKimi-K3",
+      "model": "Kimi-K3",
+      "operation": "合营",
+      "supplier": "月之暗面",
+      "status": "可订购",
+      "range": "B67:H69",
+      "rows": [
+        [
+          67,
+          "Kimi-K3-输入(缓存命中)",
+          "缓存读取 Token",
+          "百万 Token",
+          "2"
+        ],
+        [
+          68,
+          "Kimi-K3-输入(缓存未命中)",
+          "输入 Token",
+          "百万 Token",
+          "20"
+        ],
+        [
+          69,
+          "Kimi-K3-输出",
+          "输出 Token",
+          "百万 Token",
+          "100"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "minimax/minimax-h3-max",
+      "model": "MiniMax-H3-Max",
+      "operation": "合营",
+      "supplier": "稀宇科技",
+      "status": "可订购",
+      "range": "B70:H71",
+      "rows": [
+        [
+          70,
+          "视频输出（480P）",
+          "视频输出时长（480P）",
+          "秒",
+          "0.33"
+        ],
+        [
+          71,
+          "视频输出（768P）",
+          "视频输出时长（768P）",
+          "秒",
+          "0.5"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "minimax/MiniMax-H3",
+      "model": "MiniMax-H3",
+      "operation": "合营",
+      "supplier": "稀宇科技",
+      "status": "可订购",
+      "range": "B72:H76",
+      "rows": [
+        [
+          72,
+          "视频输入（768P）",
+          "视频输入时长（输出分辨率 768P）",
+          "秒",
+          "0.5"
+        ],
+        [
+          73,
+          "视频输出（768P）",
+          "视频输出时长（768P）",
+          "秒",
+          "0.5"
+        ],
+        [
+          74,
+          "视频输入（2K）",
+          "视频输入时长（输出分辨率 2K）",
+          "秒",
+          "0.8"
+        ],
+        [
+          75,
+          "视频输出（2K）",
+          "视频输出时长（2K）",
+          "秒",
+          "0.8"
+        ],
+        [
+          76,
+          "图片输入",
+          "图像输入（按张）",
+          "张",
+          "0.2"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "MiniMax-M2.5",
+      "model": "MiniMax-M2.5",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B77:H78",
+      "rows": [
+        [
+          77,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "2.1"
+        ],
+        [
+          78,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "8.4"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "minimax/minimax-m3",
+      "model": "MiniMax-M3",
+      "operation": "合营",
+      "supplier": "稀宇科技",
+      "status": "可订购",
+      "range": "B79:H84",
+      "rows": [
+        [
+          79,
+          "MiniMax-M3输入Token范围（大于0小于等于512K）输入",
+          "输入 Token（输入长度 (0,512K]）",
+          "百万 Token",
+          "2.10"
+        ],
+        [
+          80,
+          "MiniMax-M3输入Token范围（大于0小于等于512K）输出",
+          "输出 Token（输入长度 (0,512K]）",
+          "百万 Token",
+          "8.40"
+        ],
+        [
+          81,
+          "MiniMax-M3输入Token范围（大于0小于等于512K）缓存读取",
+          "缓存读取 Token（输入长度 (0,512K]）",
+          "百万 Token",
+          "0.42"
+        ],
+        [
+          82,
+          "MiniMax-M3输入Token范围（大于512K小于等于1M）输入",
+          "输入 Token（输入长度 (512K,1M]）",
+          "百万 Token",
+          "4.20"
+        ],
+        [
+          83,
+          "MiniMax-M3输入Token范围（大于512K小于等于1M）输出",
+          "输出 Token（输入长度 (512K,1M]）",
+          "百万 Token",
+          "16.80"
+        ],
+        [
+          84,
+          "MiniMax-M3输入Token范围（大于512K小于等于1M）缓存读取",
+          "缓存读取 Token（输入长度 (512K,1M]）",
+          "百万 Token",
+          "0.84"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "QwQ-32B",
+      "model": "QwQ-32B",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B85:H86",
+      "rows": [
+        [
+          85,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "2"
+        ],
+        [
+          86,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "6"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen2.5-14B-Instruct",
+      "model": "Qwen2.5-14B-Instruct",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B87:H88",
+      "rows": [
+        [
+          87,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "1"
+        ],
+        [
+          88,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "3"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen2.5-14B-Instruct-1M",
+      "model": "Qwen2.5-14B-Instruct-1M",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B89:H90",
+      "rows": [
+        [
+          89,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "1"
+        ],
+        [
+          90,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "3"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen2.5-32B-Instruct",
+      "model": "Qwen2.5-32B-Instruct",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B91:H92",
+      "rows": [
+        [
+          91,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "2"
+        ],
+        [
+          92,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "6"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen2.5-72B-Instruct",
+      "model": "Qwen2.5-72B-Instruct",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B93:H94",
+      "rows": [
+        [
+          93,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "4"
+        ],
+        [
+          94,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "12"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen2.5-72B-Instruct-64K",
+      "model": "Qwen2.5-72B-Instruct-64K",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B95:H96",
+      "rows": [
+        [
+          95,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "4"
+        ],
+        [
+          96,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "12"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen2.5-7B-Instruct",
+      "model": "Qwen2.5-7B-Instruct",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B97:H98",
+      "rows": [
+        [
+          97,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "0.5"
+        ],
+        [
+          98,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "1.0"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen2.5-VL-32B-Instruct",
+      "model": "Qwen2.5-VL-32B-Instruct",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B99:H100",
+      "rows": [
+        [
+          99,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "8"
+        ],
+        [
+          100,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "24"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen2.5-VL-72B-Instruct",
+      "model": "Qwen2.5-VL-72B-Instruct",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B101:H102",
+      "rows": [
+        [
+          101,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "16"
+        ],
+        [
+          102,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "48"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen2.5-VL-7B-Instruct",
+      "model": "Qwen2.5-VL-7B-Instruct",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B103:H104",
+      "rows": [
+        [
+          103,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "2"
+        ],
+        [
+          104,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "5"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen3-32B",
+      "model": "Qwen3-32B",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B105:H107",
+      "rows": [
+        [
+          105,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "2"
+        ],
+        [
+          106,
+          "输出tokens（思考模式）",
+          "输出 Token（思考）",
+          "百万 Token",
+          "20"
+        ],
+        [
+          107,
+          "输出tokens（非思考模式）",
+          "输出 Token（非思考）",
+          "百万 Token",
+          "8"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen3.5-27B",
+      "model": "Qwen3.5-27B",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B108:H111",
+      "rows": [
+        [
+          108,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "0.60"
+        ],
+        [
+          109,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "4.80"
+        ],
+        [
+          110,
+          "输入tokens-夜间",
+          "输入 Token（夜间）",
+          "百万 Token",
+          "0.24"
+        ],
+        [
+          111,
+          "输出tokens-夜间",
+          "输出 Token（夜间）",
+          "百万 Token",
+          "1.92"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen3.5-35B-A3B",
+      "model": "Qwen3.5-35B-A3B",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B112:H117",
+      "rows": [
+        [
+          112,
+          "Qwen3.5-35B-A3B-输入长度(0,128K]输入",
+          "输入 Token（输入长度 (0,128K]）",
+          "百万 Token",
+          "0.4"
+        ],
+        [
+          113,
+          "Qwen3.5-35B-A3B-输入长度(0,128K]输出（非思考模式）",
+          "输出 Token（输入长度 (0,128K]，非思考）",
+          "百万 Token",
+          "3.2"
+        ],
+        [
+          114,
+          "Qwen3.5-35B-A3B-输入长度(0,128K]输出（思考模式）",
+          "输出 Token（输入长度 (0,128K]，思考）",
+          "百万 Token",
+          "3.2"
+        ],
+        [
+          115,
+          "Qwen3.5-35B-A3B-输入长度(128K,256K]输入",
+          "输入 Token（输入长度 (128K,256K]）",
+          "百万 Token",
+          "1.6"
+        ],
+        [
+          116,
+          "Qwen3.5-35B-A3B-输入长度(128K,256K]输出（非思考模式）",
+          "输出 Token（输入长度 (128K,256K]，非思考）",
+          "百万 Token",
+          "12.8"
+        ],
+        [
+          117,
+          "Qwen3.5-35B-A3B-输入长度(128K,256K]输出（思考模式）",
+          "输出 Token（输入长度 (128K,256K]，思考）",
+          "百万 Token",
+          "12.8"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen3.5-397B-A17B",
+      "model": "Qwen3.5-397B-A17B",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B118:H125",
+      "rows": [
+        [
+          118,
+          "Qwen3.5-397B-A17B输入Token范围(0,128K]输入",
+          "输入 Token（输入长度 (0,128K]）",
+          "百万 Token",
+          "1.20"
+        ],
+        [
+          119,
+          "Qwen3.5-397B-A17B输入Token范围(0,128K]输出",
+          "输出 Token（输入长度 (0,128K]）",
+          "百万 Token",
+          "7.20"
+        ],
+        [
+          120,
+          "Qwen3.5-397B-A17B输入Token范围(128K,256K]输入",
+          "输入 Token（输入长度 (128K,256K]）",
+          "百万 Token",
+          "3.00"
+        ],
+        [
+          121,
+          "Qwen3.5-397B-A17Bb输入Token范围(128K,256K]输出",
+          "输出 Token（输入长度 (128K,256K]）",
+          "百万 Token",
+          "18.00"
+        ],
+        [
+          122,
+          "0＜输入长度≤128K输入-夜间",
+          "输入 Token（输入长度 (0,128K]，夜间）",
+          "百万 Token",
+          "0.48"
+        ],
+        [
+          123,
+          "0＜输入长度≤128K输出-夜间",
+          "输出 Token（输入长度 (0,128K]，夜间）",
+          "百万 Token",
+          "2.88"
+        ],
+        [
+          124,
+          "128K＜输入长度≤256K输入-夜间",
+          "输入 Token（输入长度 (128K,256K]，夜间）",
+          "百万 Token",
+          "1.20"
+        ],
+        [
+          125,
+          "128K＜输入长度≤256K输出-夜间",
+          "输出 Token（输入长度 (128K,256K]，夜间）",
+          "百万 Token",
+          "7.20"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen3.5-4B",
+      "model": "Qwen3.5-4B",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B126:H127",
+      "rows": [
+        [
+          126,
+          "Qwen3.5-4B-输入",
+          "输入 Token",
+          "百万 Token",
+          "0.5"
+        ],
+        [
+          127,
+          "Qwen3.5-4B-输出",
+          "输出 Token",
+          "百万 Token",
+          "2.0"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "Qwen3.5-9B",
+      "model": "Qwen3.5-9B",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B128:H131",
+      "rows": [
+        [
+          128,
+          "输入tokens",
+          "输入 Token",
+          "百万 Token",
+          "0.5"
+        ],
+        [
+          129,
+          "输出tokens",
+          "输出 Token",
+          "百万 Token",
+          "4.0"
+        ],
+        [
+          130,
+          "输入tokens-夜间",
+          "输入 Token（夜间）",
+          "百万 Token",
+          "0.35"
+        ],
+        [
+          131,
+          "输出tokens-夜间",
+          "输出 Token（夜间）",
+          "百万 Token",
+          "2.80"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "SenseVoice",
+      "model": "SenseVoice",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B132:H132",
+      "rows": [
+        [
+          132,
+          "处理语音时长资费",
+          "音频输入时长（按秒）",
+          "秒",
+          "0.0007"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "BGE-Base-ZH-V1.5",
+      "model": "BGE-Base-ZH-V1.5",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B133:H133",
+      "rows": [
+        [
+          133,
+          "tokens资费",
+          "Token 用量",
+          "百万 Token",
+          "0.5"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "BGE-M3",
+      "model": "BGE-M3",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B134:H134",
+      "rows": [
+        [
+          134,
+          "tokens资费",
+          "Token 用量",
+          "百万 Token",
+          "0.5"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "BGE-Reranker-V2-M3",
+      "model": "BGE-Reranker-V2-M3",
+      "operation": "自营",
+      "supplier": "移动云",
+      "status": "可订购",
+      "range": "B135:H135",
+      "rows": [
+        [
+          135,
+          "tokens资费",
+          "Token 用量",
+          "百万 Token",
+          "0.5"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "cosyvoice-v3.5-flash",
+      "model": "cosyvoice-v3.5-flash",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B136:H136",
+      "rows": [
+        [
+          136,
+          "cosyvoice-v3.5-flash-2026-02-27 输入",
+          "语音合成字符数",
+          "万字符",
+          "0.8"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "fun-asr",
+      "model": "fun-asr",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B137:H137",
+      "rows": [
+        [
+          137,
+          "fun-asr 输入",
+          "音频输入时长（按秒）",
+          "秒",
+          "0.00022"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "fun-asr-flash-8k-realtime",
+      "model": "Fun-ASR-Flash-8K-Realtime",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B138:H138",
+      "rows": [
+        [
+          138,
+          "fun-asr-flash-8k-realtime输入",
+          "音频输入时长（按秒）",
+          "秒",
+          "0.00022"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "fun-asr-realtime",
+      "model": "fun-asr-realtime",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B139:H139",
+      "rows": [
+        [
+          139,
+          "fun-asr-realtime 输入",
+          "音频输入时长（按秒）",
+          "秒",
+          "0.00033"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "gui-plus",
+      "model": "GUI-Plus",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B140:H141",
+      "rows": [
+        [
+          140,
+          "gui-plus 输入",
+          "输入 Token",
+          "百万 Token",
+          "1.5"
+        ],
+        [
+          141,
+          "gui-plus 输出",
+          "输出 Token",
+          "百万 Token",
+          "4.5"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "happyhorse-1.0-video-edit",
+      "model": "Happyhorse-1.0-Video-Edit",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B142:H143",
+      "rows": [
+        [
+          142,
+          "happyhorse-1.0-video-edit-720p",
+          "视频处理时长（720P）",
+          "秒",
+          "0.9"
+        ],
+        [
+          143,
+          "happyhorse-1.0-video-edit-1080p",
+          "视频处理时长（1080P）",
+          "秒",
+          "1.6"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "happyhorse-1.1-i2v",
+      "model": "Happyhorse-1.1-I2V",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B144:H146",
+      "rows": [
+        [
+          144,
+          "happyhorse-1.1-i2v-720p",
+          "视频输出时长（720P）",
+          "秒",
+          "0.9"
+        ],
+        [
+          145,
+          "happyhorse-1.1-i2v-1080p",
+          "视频输出时长（1080P）",
+          "秒",
+          "1.2"
+        ],
+        [
+          146,
+          "happyhorse-1.1-i2v-480p",
+          "视频输出时长（480P）",
+          "秒",
+          "0.45"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "happyhorse-1.1-r2v",
+      "model": "Happyhorse-1.1-R2V",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B147:H149",
+      "rows": [
+        [
+          147,
+          "happyhorse-1.1-r2v-720p",
+          "视频输出时长（720P）",
+          "秒",
+          "0.9"
+        ],
+        [
+          148,
+          "happyhorse-1.1-r2v-1080p",
+          "视频输出时长（1080P）",
+          "秒",
+          "1.2"
+        ],
+        [
+          149,
+          "happyhorse-1.1-r2v-480p",
+          "视频输出时长（480P）",
+          "秒",
+          "0.45"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "happyhorse-1.1-t2v",
+      "model": "Happyhorse-1.1-T2V",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B150:H152",
+      "rows": [
+        [
+          150,
+          "happyhorse-1.1-t2v-720p",
+          "视频输出时长（720P）",
+          "秒",
+          "0.9"
+        ],
+        [
+          151,
+          "happyhorse-1.1-t2v-1080p",
+          "视频输出时长（1080P）",
+          "秒",
+          "1.2"
+        ],
+        [
+          152,
+          "happyhorse-1.1-t2v-480p",
+          "视频输出时长（480P）",
+          "秒",
+          "0.45"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen-audio-3.0-asr-flash",
+      "model": "qwen-audio-3.0-asr-flash",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B153:H153",
+      "rows": [
+        [
+          153,
+          "qwen-audio-3.0-asr-flash-输入",
+          "音频输入时长（按秒）",
+          "秒",
+          "0.00022"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen-audio-3.0-asr-flash-streaming",
+      "model": "qwen-audio-3.0-asr-flash-streaming",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B154:H154",
+      "rows": [
+        [
+          154,
+          "qwen-audio-3.0-asr-flash-streaming-输入",
+          "音频输入时长（按秒）",
+          "秒",
+          "0.00033"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen-audio-3.0-tts-flash",
+      "model": "qwen-audio-3.0-tts-flash",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B155:H155",
+      "rows": [
+        [
+          155,
+          "qwen-audio-3.0-tts-flash-输入",
+          "语音合成字符数",
+          "万字符",
+          "1"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen-image-2.0-pro",
+      "model": "Qwen-Image-2.0-Pro",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B156:H156",
+      "rows": [
+        [
+          156,
+          "qwen-image-2.0-pro 输出",
+          "图像输出（按张）",
+          "张",
+          "0.5"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen-mt-flash",
+      "model": "Qwen-MT-Flash",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B157:H158",
+      "rows": [
+        [
+          157,
+          "qwen-mt-flash输入",
+          "输入 Token",
+          "百万 Token",
+          "0.70"
+        ],
+        [
+          158,
+          "qwen-mt-flash输出",
+          "输出 Token",
+          "百万 Token",
+          "1.95"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen-mt-plus",
+      "model": "Qwen-MT-Plus",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B159:H160",
+      "rows": [
+        [
+          159,
+          "qwen-mt-plus输入",
+          "输入 Token",
+          "百万 Token",
+          "1.8"
+        ],
+        [
+          160,
+          "qwen-mt-plus输出",
+          "输出 Token",
+          "百万 Token",
+          "5.4"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3-asr-flash",
+      "model": "qwen3-asr-flash",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B161:H161",
+      "rows": [
+        [
+          161,
+          "qwen3-asr-flash 输入",
+          "音频输入时长（按秒）",
+          "秒",
+          "0.00022"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3-asr-flash-realtime",
+      "model": "Qwen3-ASR-Flash-Realtime",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B162:H162",
+      "rows": [
+        [
+          162,
+          "qwen3-asr-flash-realtime输入",
+          "音频输入时长（按秒）",
+          "秒",
+          "0.00033"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3-livetranslate-flash",
+      "model": "Qwen3-LiveTranslate-Flash",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B163:H166",
+      "rows": [
+        [
+          163,
+          "qwen3-livetranslate-flash音频输入",
+          "音频输入 Token",
+          "百万 Token",
+          "10"
+        ],
+        [
+          164,
+          "qwen3-livetranslate-flash视频输入",
+          "视频输入 Token",
+          "百万 Token",
+          "4"
+        ],
+        [
+          165,
+          "qwen3-livetranslate-flash音频输出",
+          "音频输出 Token",
+          "百万 Token",
+          "40"
+        ],
+        [
+          166,
+          "qwen3-livetranslate-flash文本输出",
+          "输出 Token",
+          "百万 Token",
+          "10"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3-livetranslate-flash-realtime",
+      "model": "Qwen3-LiveTranslate-Flash-Realtime",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B167:H170",
+      "rows": [
+        [
+          167,
+          "qwen3-livetranslate-flash音频输入",
+          "音频输入 Token",
+          "百万 Token",
+          "10"
+        ],
+        [
+          168,
+          "qwen3-livetranslate-flash视频输入",
+          "视频输入 Token",
+          "百万 Token",
+          "4"
+        ],
+        [
+          169,
+          "qwen3-livetranslate-flash音频输出",
+          "音频输出 Token",
+          "百万 Token",
+          "40"
+        ],
+        [
+          170,
+          "qwen3-livetranslate-flash文本输出",
+          "输出 Token",
+          "百万 Token",
+          "10"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3-max",
+      "model": "Qwen3-Max",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B171:H185",
+      "rows": [
+        [
+          171,
+          "输入Token范围（大于0小于等于32K）输入",
+          "输入 Token（输入长度 (0,32K]）",
+          "百万 Token",
+          "2.500"
+        ],
+        [
+          172,
+          "输入Token范围（大于0小于等于32K）输入（缓存命中）",
+          "缓存读取 Token（输入长度 (0,32K]）",
+          "百万 Token",
+          "0.500"
+        ],
+        [
+          173,
+          "输入Token范围（大于0小于等于32K）显式缓存创建",
+          "缓存写入 Token（输入长度 (0,32K]，显式缓存）",
+          "百万 Token",
+          "3.125"
+        ],
+        [
+          174,
+          "输入Token范围（大于0小于等于32K）显式缓存命中",
+          "缓存读取 Token（输入长度 (0,32K]，显式缓存）",
+          "百万 Token",
+          "0.250"
+        ],
+        [
+          175,
+          "输入Token范围（大于0小于等于32K）输出",
+          "输出 Token（输入长度 (0,32K]）",
+          "百万 Token",
+          "10.000"
+        ],
+        [
+          176,
+          "输入Token范围（大于32K小于等于128K）输入",
+          "输入 Token（输入长度 (32K,128K]）",
+          "百万 Token",
+          "4.000"
+        ],
+        [
+          177,
+          "输入Token范围（大于32K小于等于128K）输入（缓存命中）",
+          "缓存读取 Token（输入长度 (32K,128K]）",
+          "百万 Token",
+          "0.800"
+        ],
+        [
+          178,
+          "输入Token范围（大于32K小于等于128K）显式缓存创建",
+          "缓存写入 Token（输入长度 (32K,128K]，显式缓存）",
+          "百万 Token",
+          "5.000"
+        ],
+        [
+          179,
+          "输入Token范围（大于32K小于等于128K）显式缓存命中",
+          "缓存读取 Token（输入长度 (32K,128K]，显式缓存）",
+          "百万 Token",
+          "0.400"
+        ],
+        [
+          180,
+          "输入Token范围（大于32K小于等于128K）输出",
+          "输出 Token（输入长度 (32K,128K]）",
+          "百万 Token",
+          "16.000"
+        ],
+        [
+          181,
+          "输入Token范围（大于128K小于等于252K）输入",
+          "输入 Token（输入长度 (128K,252K]）",
+          "百万 Token",
+          "7.000"
+        ],
+        [
+          182,
+          "输入Token范围（大于128K小于等于252K）输入（缓存命中）",
+          "缓存读取 Token（输入长度 (128K,252K]）",
+          "百万 Token",
+          "1.400"
+        ],
+        [
+          183,
+          "输入Token范围（大于128K小于等于252K）显式缓存创建",
+          "缓存写入 Token（输入长度 (128K,252K]，显式缓存）",
+          "百万 Token",
+          "8.750"
+        ],
+        [
+          184,
+          "输入Token范围（大于128K小于等于252K）显式缓存命中",
+          "缓存读取 Token（输入长度 (128K,252K]，显式缓存）",
+          "百万 Token",
+          "0.700"
+        ],
+        [
+          185,
+          "输入Token范围（大于128K小于等于252K）输出",
+          "输出 Token（输入长度 (128K,252K]）",
+          "百万 Token",
+          "28.000"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3-omni-flash",
+      "model": "Qwen3-Omni-Flash",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B186:H191",
+      "rows": [
+        [
+          186,
+          "qwen3-omni-flash文本输入",
+          "输入 Token",
+          "百万 Token",
+          "1.8"
+        ],
+        [
+          187,
+          "qwen3-omni-flash音频输入",
+          "音频输入 Token",
+          "百万 Token",
+          "15.8"
+        ],
+        [
+          188,
+          "qwen3-omni-flash图片/视频输入",
+          "图像及视频输入 Token",
+          "百万 Token",
+          "3.3"
+        ],
+        [
+          189,
+          "qwen3-omni-flash（仅纯文本输入）文本输出",
+          "输出 Token（纯文本输入）",
+          "百万 Token",
+          "6.9"
+        ],
+        [
+          190,
+          "qwen3-omni-flash（多模态输入）音频输出",
+          "音频输出 Token（多模态输入）",
+          "百万 Token",
+          "12.7"
+        ],
+        [
+          191,
+          "qwen3-omni-flash文本+音频输出",
+          "输出 Token（文本及音频）",
+          "百万 Token",
+          "62.6"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3-tts-flash",
+      "model": "qwen3-tts-flash",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B192:H192",
+      "rows": [
+        [
+          192,
+          "qwen3-tts-flash 输入",
+          "语音合成字符数",
+          "万字符",
+          "0.8"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3-vl-plus",
+      "model": "Qwen3-VL-Plus",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B193:H207",
+      "rows": [
+        [
+          193,
+          "输入Token范围（大于0小于等于32K）输入",
+          "输入 Token（输入长度 (0,32K]）",
+          "百万 Token",
+          "1.000"
+        ],
+        [
+          194,
+          "输入Token范围（大于0小于等于32K）输入（缓存命中）",
+          "缓存读取 Token（输入长度 (0,32K]）",
+          "百万 Token",
+          "0.200"
+        ],
+        [
+          195,
+          "输入Token范围（大于0小于等于32K）显式缓存创建",
+          "缓存写入 Token（输入长度 (0,32K]，显式缓存）",
+          "百万 Token",
+          "1.250"
+        ],
+        [
+          196,
+          "输入Token范围（大于0小于等于32K）显式缓存命中",
+          "缓存读取 Token（输入长度 (0,32K]，显式缓存）",
+          "百万 Token",
+          "0.100"
+        ],
+        [
+          197,
+          "输入Token范围（大于0小于等于32K）输出",
+          "输出 Token（输入长度 (0,32K]）",
+          "百万 Token",
+          "10.000"
+        ],
+        [
+          198,
+          "输入Token范围（大于32K小于等于128K）输入",
+          "输入 Token（输入长度 (32K,128K]）",
+          "百万 Token",
+          "1.500"
+        ],
+        [
+          199,
+          "输入Token范围（大于32K小于等于128K）输入（缓存命中）",
+          "缓存读取 Token（输入长度 (32K,128K]）",
+          "百万 Token",
+          "0.300"
+        ],
+        [
+          200,
+          "输入Token范围（大于32K小于等于128K）显式缓存创建",
+          "缓存写入 Token（输入长度 (32K,128K]，显式缓存）",
+          "百万 Token",
+          "1.875"
+        ],
+        [
+          201,
+          "输入Token范围（大于32K小于等于128K）显式缓存命中",
+          "缓存读取 Token（输入长度 (32K,128K]，显式缓存）",
+          "百万 Token",
+          "0.150"
+        ],
+        [
+          202,
+          "输入Token范围（大于32K小于等于128K）输出",
+          "输出 Token（输入长度 (32K,128K]）",
+          "百万 Token",
+          "15.000"
+        ],
+        [
+          203,
+          "输入Token范围（大于128K小于等于256K）输入",
+          "输入 Token（输入长度 (128K,256K]）",
+          "百万 Token",
+          "3.000"
+        ],
+        [
+          204,
+          "输入Token范围（大于128K小于等于256K）输入（缓存命中）",
+          "缓存读取 Token（输入长度 (128K,256K]）",
+          "百万 Token",
+          "0.600"
+        ],
+        [
+          205,
+          "输入Token范围（大于128K小于等于256K）显式缓存创建",
+          "缓存写入 Token（输入长度 (128K,256K]，显式缓存）",
+          "百万 Token",
+          "3.750"
+        ],
+        [
+          206,
+          "输入Token范围（大于128K小于等于256K）显式缓存命中",
+          "缓存读取 Token（输入长度 (128K,256K]，显式缓存）",
+          "百万 Token",
+          "0.300"
+        ],
+        [
+          207,
+          "输入Token范围（大于128K小于等于256K）输出",
+          "输出 Token（输入长度 (128K,256K]）",
+          "百万 Token",
+          "30.000"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3.5-flash",
+      "model": "Qwen3.5-Flash",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B208:H219",
+      "rows": [
+        [
+          208,
+          "qwen3.5-flash 输入Token范围 (0,128K]输入",
+          "输入 Token（输入长度 (0,128K]）",
+          "百万 Token",
+          "0.20"
+        ],
+        [
+          209,
+          "qwen3.5-flash 输入Token范围 (0,128K]显式缓存创建",
+          "缓存写入 Token（输入长度 (0,128K]，显式缓存）",
+          "百万 Token",
+          "0.25"
+        ],
+        [
+          210,
+          "qwen3.5-flash 输入Token范围 (0,128K]显式缓存命中",
+          "缓存读取 Token（输入长度 (0,128K]，显式缓存）",
+          "百万 Token",
+          "0.02"
+        ],
+        [
+          211,
+          "qwen3.5-flash 输入Token范围 (0,128K]输出",
+          "输出 Token（输入长度 (0,128K]）",
+          "百万 Token",
+          "2.00"
+        ],
+        [
+          212,
+          "qwen3.5-flash 输入Token范围 (128K,256K]输入",
+          "输入 Token（输入长度 (128K,256K]）",
+          "百万 Token",
+          "0.80"
+        ],
+        [
+          213,
+          "qwen3.5-flash 输入Token范围 (128K,256K]显式缓存创建",
+          "缓存写入 Token（输入长度 (128K,256K]，显式缓存）",
+          "百万 Token",
+          "1.00"
+        ],
+        [
+          214,
+          "qwen3.5-flash 输入Token范围 (128K,256K]显式缓存命中",
+          "缓存读取 Token（输入长度 (128K,256K]，显式缓存）",
+          "百万 Token",
+          "0.08"
+        ],
+        [
+          215,
+          "qwen3.5-flash 输入Token范围 (128K,256K]输出",
+          "输出 Token（输入长度 (128K,256K]）",
+          "百万 Token",
+          "8.00"
+        ],
+        [
+          216,
+          "qwen3.5-flash 输入Token范围 (256K,1M]输入",
+          "输入 Token（输入长度 (256K,1M]）",
+          "百万 Token",
+          "1.20"
+        ],
+        [
+          217,
+          "qwen3.5-flash 输入Token范围 (256K,1M]显式缓存创建",
+          "缓存写入 Token（输入长度 (256K,1M]，显式缓存）",
+          "百万 Token",
+          "1.50"
+        ],
+        [
+          218,
+          "qwen3.5-flash 输入Token范围 (256K,1M]显式缓存命中",
+          "缓存读取 Token（输入长度 (256K,1M]，显式缓存）",
+          "百万 Token",
+          "0.12"
+        ],
+        [
+          219,
+          "qwen3.5-flash 输入Token范围 (256K,1M]输出",
+          "输出 Token（输入长度 (256K,1M]）",
+          "百万 Token",
+          "12.00"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3.5-omni-flash",
+      "model": "qwen3.5-omni-flash",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B220:H223",
+      "rows": [
+        [
+          220,
+          "qwen3.5-omni-flash 音频输入",
+          "音频输入 Token",
+          "百万 Token",
+          "18.0"
+        ],
+        [
+          221,
+          "qwen3.5-omni-flash 文本图片视频输入",
+          "文本、图像及视频输入 Token",
+          "百万 Token",
+          "2.2"
+        ],
+        [
+          222,
+          "qwen3.5-omni-flash 文本输出",
+          "输出 Token",
+          "百万 Token",
+          "13.3"
+        ],
+        [
+          223,
+          "qwen3.5-omni-flash 文本+音频 输出",
+          "输出 Token（文本及音频）",
+          "百万 Token",
+          "72.0"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3.5-omni-flash-realtime",
+      "model": "qwen3.5-omni-flash-realtime",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B224:H227",
+      "rows": [
+        [
+          224,
+          "qwen3.5-omni-flash 音频输入",
+          "音频输入 Token",
+          "百万 Token",
+          "18.0"
+        ],
+        [
+          225,
+          "qwen3.5-omni-flash 文本图片视频输入",
+          "文本、图像及视频输入 Token",
+          "百万 Token",
+          "2.2"
+        ],
+        [
+          226,
+          "qwen3.5-omni-flash 文本输出",
+          "输出 Token",
+          "百万 Token",
+          "13.3"
+        ],
+        [
+          227,
+          "qwen3.5-omni-flash 文本+音频 输出",
+          "输出 Token（文本及音频）",
+          "百万 Token",
+          "72.0"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3.5-omni-plus",
+      "model": "qwen3.5-omni-plus",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B228:H231",
+      "rows": [
+        [
+          228,
+          "qwen3.5-omni-plus 音频输入",
+          "音频输入 Token",
+          "百万 Token",
+          "53"
+        ],
+        [
+          229,
+          "qwen3.5-omni-plus 文本图片视频输入",
+          "文本、图像及视频输入 Token",
+          "百万 Token",
+          "7"
+        ],
+        [
+          230,
+          "qwen3.5-omni-plus 文本输出",
+          "输出 Token",
+          "百万 Token",
+          "40"
+        ],
+        [
+          231,
+          "qwen3.5-omni-plus 文本+音频 输出",
+          "输出 Token（文本及音频）",
+          "百万 Token",
+          "213"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3.5-omni-plus-realtime",
+      "model": "qwen3.5-omni-plus-realtime",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B232:H235",
+      "rows": [
+        [
+          232,
+          "qwen3.5-omni-plus 音频输入",
+          "音频输入 Token",
+          "百万 Token",
+          "53"
+        ],
+        [
+          233,
+          "qwen3.5-omni-plus 文本图片视频输入",
+          "文本、图像及视频输入 Token",
+          "百万 Token",
+          "7"
+        ],
+        [
+          234,
+          "qwen3.5-omni-plus 文本输出",
+          "输出 Token",
+          "百万 Token",
+          "40"
+        ],
+        [
+          235,
+          "qwen3.5-omni-plus 文本+音频 输出",
+          "输出 Token（文本及音频）",
+          "百万 Token",
+          "213"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3.5-plus",
+      "model": "Qwen3.5-Plus",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B236:H247",
+      "rows": [
+        [
+          236,
+          "输入Token范围（大于0小于等于128K）输入",
+          "输入 Token（输入长度 (0,128K]）",
+          "百万 Token",
+          "0.80"
+        ],
+        [
+          237,
+          "输入Token范围（大于0小于等于128K）显式缓存创建",
+          "缓存写入 Token（输入长度 (0,128K]，显式缓存）",
+          "百万 Token",
+          "1.00"
+        ],
+        [
+          238,
+          "输入Token范围（大于0小于等于128K）显式缓存命中",
+          "缓存读取 Token（输入长度 (0,128K]，显式缓存）",
+          "百万 Token",
+          "0.08"
+        ],
+        [
+          239,
+          "输入Token范围（大于0小于等于128K）输出",
+          "输出 Token（输入长度 (0,128K]）",
+          "百万 Token",
+          "4.80"
+        ],
+        [
+          240,
+          "输入Token范围（大于128K小于等于256K）输入",
+          "输入 Token（输入长度 (128K,256K]）",
+          "百万 Token",
+          "2.00"
+        ],
+        [
+          241,
+          "输入Token范围（大于128K小于等于256K）显式缓存创建",
+          "缓存写入 Token（输入长度 (128K,256K]，显式缓存）",
+          "百万 Token",
+          "2.50"
+        ],
+        [
+          242,
+          "输入Token范围（大于128K小于等于256K）显式缓存命中",
+          "缓存读取 Token（输入长度 (128K,256K]，显式缓存）",
+          "百万 Token",
+          "0.20"
+        ],
+        [
+          243,
+          "输入Token范围（大于128K小于等于256K）输出",
+          "输出 Token（输入长度 (128K,256K]）",
+          "百万 Token",
+          "12.00"
+        ],
+        [
+          244,
+          "输入Token范围（大于256K小于等于1M）输入",
+          "输入 Token（输入长度 (256K,1M]）",
+          "百万 Token",
+          "4.00"
+        ],
+        [
+          245,
+          "输入Token范围（大于256K小于等于1M）显式缓存创建",
+          "缓存写入 Token（输入长度 (256K,1M]，显式缓存）",
+          "百万 Token",
+          "5.00"
+        ],
+        [
+          246,
+          "输入Token范围（大于256K小于等于1M）显式缓存命中",
+          "缓存读取 Token（输入长度 (256K,1M]，显式缓存）",
+          "百万 Token",
+          "0.40"
+        ],
+        [
+          247,
+          "输入Token范围（大于256K小于等于1M）输出",
+          "输出 Token（输入长度 (256K,1M]）",
+          "百万 Token",
+          "24.00"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3.6-flash",
+      "model": "Qwen3.6-Flash",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B248:H255",
+      "rows": [
+        [
+          248,
+          "qwen3.6-flash 输入Token范围 (0,256K]输入",
+          "输入 Token（输入长度 (0,256K]）",
+          "百万 Token",
+          "1.20"
+        ],
+        [
+          249,
+          "qwen3.6-flash 输入Token范围 (0,256K]显式缓存创建",
+          "缓存写入 Token（输入长度 (0,256K]，显式缓存）",
+          "百万 Token",
+          "1.50"
+        ],
+        [
+          250,
+          "qwen3.6-flash 输入Token范围 (0,256K]显式缓存命中",
+          "缓存读取 Token（输入长度 (0,256K]，显式缓存）",
+          "百万 Token",
+          "0.12"
+        ],
+        [
+          251,
+          "qwen3.6-flash 输入Token范围 (0,256K]输出",
+          "输出 Token（输入长度 (0,256K]）",
+          "百万 Token",
+          "7.20"
+        ],
+        [
+          252,
+          "qwen3.6-flash 输入Token范围 (256K,1M]输入",
+          "输入 Token（输入长度 (256K,1M]）",
+          "百万 Token",
+          "4.80"
+        ],
+        [
+          253,
+          "qwen3.6-flash 输入Token范围 (256K,1M]显式缓存创建",
+          "缓存写入 Token（输入长度 (256K,1M]，显式缓存）",
+          "百万 Token",
+          "6.00"
+        ],
+        [
+          254,
+          "qwen3.6-flash 输入Token范围 (256K,1M]显式缓存命中",
+          "缓存读取 Token（输入长度 (256K,1M]，显式缓存）",
+          "百万 Token",
+          "0.48"
+        ],
+        [
+          255,
+          "qwen3.6-flash 输入Token范围 (256K,1M]输出",
+          "输出 Token（输入长度 (256K,1M]）",
+          "百万 Token",
+          "28.80"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3.6-plus",
+      "model": "Qwen3.6-Plus",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B256:H263",
+      "rows": [
+        [
+          256,
+          "qwen3.6-plus 输入Token范围 (0,256K]输入",
+          "输入 Token（输入长度 (0,256K]）",
+          "百万 Token",
+          "2.0"
+        ],
+        [
+          257,
+          "qwen3.6-plus 输入Token范围 (0,256K]显式缓存创建",
+          "缓存写入 Token（输入长度 (0,256K]，显式缓存）",
+          "百万 Token",
+          "2.5"
+        ],
+        [
+          258,
+          "qwen3.6-plus 输入Token范围 (0,256K]显式缓存命中",
+          "缓存读取 Token（输入长度 (0,256K]，显式缓存）",
+          "百万 Token",
+          "0.2"
+        ],
+        [
+          259,
+          "qwen3.6-plus 输入Token范围 (0,256K]输出",
+          "输出 Token（输入长度 (0,256K]）",
+          "百万 Token",
+          "12.0"
+        ],
+        [
+          260,
+          "qwen3.6-plus 输入Token范围 (256K,1M]输入",
+          "输入 Token（输入长度 (256K,1M]）",
+          "百万 Token",
+          "8.0"
+        ],
+        [
+          261,
+          "qwen3.6-plus 输入Token范围 (256K,1M]显式缓存创建",
+          "缓存写入 Token（输入长度 (256K,1M]，显式缓存）",
+          "百万 Token",
+          "10.0"
+        ],
+        [
+          262,
+          "qwen3.6-plus 输入Token范围 (256K,1M]显式缓存命中",
+          "缓存读取 Token（输入长度 (256K,1M]，显式缓存）",
+          "百万 Token",
+          "0.8"
+        ],
+        [
+          263,
+          "qwen3.6-plus 输入Token范围 (256K,1M]输出",
+          "输出 Token（输入长度 (256K,1M]）",
+          "百万 Token",
+          "48.0"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3.7-max",
+      "model": "Qwen3.7-Max",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B264:H268",
+      "rows": [
+        [
+          264,
+          "qwen3.7-max 输入",
+          "输入 Token",
+          "百万 Token",
+          "12.0"
+        ],
+        [
+          265,
+          "qwen3.7-max 输入（缓存命中）",
+          "缓存读取 Token",
+          "百万 Token",
+          "2.4"
+        ],
+        [
+          266,
+          "qwen3.7-max 显式缓存创建",
+          "缓存写入 Token（显式缓存）",
+          "百万 Token",
+          "15.0"
+        ],
+        [
+          267,
+          "qwen3.7-max 显式缓存命中",
+          "缓存读取 Token（显式缓存）",
+          "百万 Token",
+          "1.2"
+        ],
+        [
+          268,
+          "qwen3.7-max 输出",
+          "输出 Token",
+          "百万 Token",
+          "36.0"
+        ]
+      ]
+    },
+    {
+      "catalogueId": "qwen3.7-plus",
+      "model": "Qwen3.7-Plus",
+      "operation": "合营",
+      "supplier": "通义实验室",
+      "status": "可订购",
+      "range": "B269:H278",
+      "rows": [
+        [
+          269,
+          "qwen3.7-plus 输入Token范围 (0,256K]输入",
+          "输入 Token（输入长度 (0,256K]）",
+          "百万 Token",
+          "2.0"
+        ],
+        [
+          270,
+          "qwen3.7-plus 输入Token范围 (0,256K]输入（缓存命中）",
+          "缓存读取 Token（输入长度 (0,256K]）",
+          "百万 Token",
+          "0.4"
+        ],
+        [
+          271,
+          "qwen3.7-plus 输入Token范围 (0,256K]显式缓存创建",
+          "缓存写入 Token（输入长度 (0,256K]，显式缓存）",
+          "百万 Token",
+          "2.5"
+        ],
+        [
+          272,
+          "qwen3.7-plus 输入Token范围 (0,256K]显式缓存命中",
+          "缓存读取 Token（输入长度 (0,256K]，显式缓存）",
+          "百万 Token",
+          "0.2"
+        ],
+        [
+          273,
+          "qwen3.7-plus 输入Token范围 (0,256K]输出",
+          "输出 Token（输入长度 (0,256K]）",
+          "百万 Token",
+          "8.0"
+        ],
+        [
+          274,
+          "qwen3.7-plus 输入Token范围 (256K,1M]输入",
+          "输入 Token（输入长度 (256K,1M]）",
+          "百万 Token",
+          "6.0"
+        ],
+        [
+          275,
+          "qwen3.7-plus 输入Token范围 (256K,1M]输入（缓存命中）",
+          "缓存读取 Token（输入长度 (256K,1M]）",
+          "百万 Token",
+          "1.2"
+        ],
+        [
+          276,
+          "qwen3.7-plus 输入Token范围 (256K,1M]显式缓存创建",
+          "缓存写入 Token（输入长度 (256K,1M]，显式缓存）",
+          "百万 Token",
+          "7.5"
+        ],
+        [
+          277,
+          "qwen3.7-plus 输入Token范围 (256K,1M]显式缓存命中",
+          "缓存读取 Token（输入长度 (256K,1M]，显式缓存）",
+          "百万 Token",
+          "0.6"
+        ],
+        [
+          278,
+          "qwen3.7-plus 输入Token范围 (256K,1M]输出",
+          "输出 Token（输入长度 (256K,1M]）",
+          "百万 Token",
+          "24.0"
+        ]
+      ]
+    }
+  ]
+}
