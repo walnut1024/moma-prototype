@@ -7,7 +7,7 @@ const identity = { tenantId: 'tenant-gov', userId: 'user-zhang' };
 const projectId = 'project-1-1';
 const now = Date.parse('2026-10-24T10:00:00+08:00');
 const execute = (state, operation, values = {}, actor = identity, target = projectId) => commitAdminState(state, { type: 'workspace', operation, identity: actor, projectId: target, values, now });
-const settings = (state, extra = {}) => ({ ...state.projects.find(item => item.id === projectId), budget: '', ...extra });
+const budgetSettings = (state, extra = {}) => { const project = state.projects.find(item => item.id === projectId); return { budget: '', budgetPeriod: project.budgetPeriod, warningPercent: project.warningPercent, overageAction: project.overageAction, logBodies: project.logBodies, ...extra }; };
 const keyValues = { name: '业务调用', modelIds: ['model-1'], budget: '', budgetPeriod: 'month', fingerprint: 'a'.repeat(64), secretPreview: 'sk-*****abcd' };
 const request = (state, extra = {}) => execute(state, 'request', { requestId: crypto.randomUUID(), prompt: '请介绍项目预算管理', modelId: 'model-1', keyId: `experience-${projectId}`, maxOutput: 1024, ...extra });
 function withMember(role = '成员') {
@@ -32,10 +32,49 @@ test('project creation atomically creates owner membership and a managed Key, wi
 test('member and read-only permissions block cross-account access and unauthorized writes', () => {
   const { state, actor } = withMember();
   assert.deepEqual(visibleProjects(state, actor).map(item => item.id), [projectId]);
-  assert.throws(() => execute(state, 'settings', settings(state), actor), /无权/);
+  assert.throws(() => execute(state, 'profile', { name: '项目新名称' }, actor), /无权/);
   assert.throws(() => assertProject(state, actor, 'project-2-1'), /无法访问/);
   const readOnly = withMember('只读'); assert.throws(() => execute(readOnly.state, 'createKey', keyValues, readOnly.actor), /无权/);
   assert.throws(() => execute(state, 'member', { userId: 'user-li', role: '成员' }), /当前账户/);
+});
+test('profile and budget saves update only their own fields and audit the corresponding project changes', () => {
+  let state = createAdminSeed();
+  state = execute(state, 'budget', budgetSettings(state, { budget: '12.000001', budgetPeriod: 'total', warningPercent: 65, overageAction: 'warn', logBodies: true }));
+  const budgetFields = ['moneyBudget', 'budgetPeriod', 'warningPercent', 'overageAction', 'logBodies'];
+  const savedBudget = Object.fromEntries(budgetFields.map(field => [field, state.projects.find(item => item.id === projectId)[field]]));
+  state = execute(state, 'profile', { name: '  政务模型生产项目  ', description: '正式业务调用', budget: '0', warningPercent: 1, logBodies: false });
+  let project = state.projects.find(item => item.id === projectId);
+  assert.equal(project.name, '政务模型生产项目'); assert.equal(project.description, '正式业务调用');
+  assert.deepEqual(Object.fromEntries(budgetFields.map(field => [field, project[field]])), savedBudget);
+  assert.equal(state.audits[0].action, '更新项目基本信息');
+  assert.deepEqual(Object.keys(state.audits[0].before[0].values).sort(), ['description', 'name']);
+  state = execute(state, 'budget', budgetSettings(state, { budget: '0', logBodies: false, name: '不得覆盖的名称', description: '不得覆盖的说明' }));
+  project = state.projects.find(item => item.id === projectId);
+  assert.equal(project.name, '政务模型生产项目'); assert.equal(project.description, '正式业务调用'); assert.equal(project.moneyBudget, 0); assert.equal(project.logBodies, false);
+  assert.equal(state.audits[0].action, '更新项目预算与日志'); assert.equal(state.audits[0].tenantId, identity.tenantId); assert.equal(state.audits[0].projectId, projectId);
+  assert.deepEqual(Object.keys(state.audits[0].before[0].values).sort(), budgetFields.toSorted());
+});
+test('split project settings retain validation and reject the removed whole-project settings operation', () => {
+  const state = createAdminSeed(), before = JSON.stringify(state);
+  const otherName = state.projects.find(item => item.tenantId === identity.tenantId && item.id !== projectId).name;
+  for (const values of [{ name: ' ' }, { name: '字'.repeat(51) }, { name: otherName }, { name: '有效项目', description: '字'.repeat(201) }]) assert.throws(() => execute(state, 'profile', values), /名称|说明/);
+  for (const values of [{ budget: '-1' }, { budget: '1.0000001' }, { budgetPeriod: 'week' }, { warningPercent: 0 }, { warningPercent: 101 }, { warningPercent: 1.5 }, { overageAction: 'ignore' }]) assert.throws(() => execute(state, 'budget', budgetSettings(state, values)));
+  assert.throws(() => execute(state, 'settings', {}), /未知项目操作/);
+  assert.equal(JSON.stringify(state), before);
+});
+test('both project settings sections require current project administrator access', () => {
+  const commands = [['profile', { name: '权限校验项目' }], ['budget', { budget: '0', budgetPeriod: 'month', warningPercent: 80, overageAction: 'stop', logBodies: false }]];
+  for (const role of ['成员', '只读']) {
+    const { state, actor } = withMember(role);
+    for (const [operation, values] of commands) assert.throws(() => execute(state, operation, values, actor), /无权/);
+  }
+  const { state, actor } = withMember('管理员');
+  for (const [operation, values] of commands) {
+    assert.doesNotThrow(() => execute(state, operation, values, actor));
+    assert.throws(() => execute(state, operation, values, actor, 'project-2-1'), /无法访问/);
+  }
+  state.projectMemberships.find(item => item.id === 'wpm').status = '已移除';
+  for (const [operation, values] of commands) assert.throws(() => execute(state, operation, values, actor), /无法访问/);
 });
 test('owner transfer protects the owner and current membership, and grants no foreign membership', () => {
   let { state, actor } = withMember('管理员');
@@ -62,17 +101,17 @@ test('a request, exact money charge and immutable price snapshot share project, 
   assert.throws(() => request(next, { requestId: row.requestId }), /重复/);
 });
 test('project and Key budgets, expiry and disabled models reject requests without charging', () => {
-  let state = createAdminSeed(); state = execute(state, 'settings', settings(state, { budget: '0' }));
+  let state = createAdminSeed(); state = execute(state, 'budget', budgetSettings(state, { budget: '0' }));
   let result = request(state).requests[0]; assert.equal(result.errorCode, 'project_budget_exhausted'); assert.equal(result.customerCharge, 0);
-  state = execute(state, 'settings', settings(state, { budget: '' })); state = execute(state, 'createKey', { ...keyValues, budget: '0' });
+  state = execute(state, 'budget', budgetSettings(state, { budget: '' })); state = execute(state, 'createKey', { ...keyValues, budget: '0' });
   result = request(state, { keyId: state.apiKeys[0].id }).requests[0]; assert.equal(result.errorCode, 'key_budget_exhausted');
   const key = state.apiKeys[0]; key.expiresAt = '2020-01-01T00:00:00Z'; result = request(state, { keyId: key.id }).requests[0]; assert.equal(result.errorCode, 'key_expired');
   state = execute(state, 'model', { modelId: 'model-1', enabled: false, rpm: '', tpm: '' }); result = request(state).requests[0]; assert.equal(result.errorCode, 'model_not_authorized');
 });
 test('warning-only budget does not stop usage, and changing a period never deletes historical records', () => {
-  let state = createAdminSeed(); state = execute(state, 'settings', settings(state, { budget: '0', overageAction: 'warn' })); state = request(state);
+  let state = createAdminSeed(); state = execute(state, 'budget', budgetSettings(state, { budget: '0', overageAction: 'warn' })); state = request(state);
   assert.equal(state.requests[0].httpStatus, 200); const count = state.requests.length;
-  state = execute(state, 'settings', settings(state, { budgetPeriod: 'total', budget: '' })); assert.equal(state.requests.length, count);
+  state = execute(state, 'budget', budgetSettings(state, { budgetPeriod: 'total', budget: '' })); assert.equal(state.requests.length, count);
 });
 test('project RPM and TPM count the current minute, and invalid limits never save', () => {
   let state = createAdminSeed(); state = execute(state, 'model', { modelId: 'model-1', enabled: true, rpm: '1', tpm: '1000' }); state = request(state);
@@ -81,7 +120,7 @@ test('project RPM and TPM count the current minute, and invalid limits never sav
 });
 test('body capture affects only new requests; members cannot view another member calls', () => {
   let { state, actor } = withMember(); state = request(state); const old = state.requests[0];
-  state = execute(state, 'settings', settings(state, { logBodies: true })); state = request(state); assert.equal(state.requests[0].bodyRecorded, true); assert.ok(state.requests[0].requestBody);
+  state = execute(state, 'budget', budgetSettings(state, { logBodies: true })); state = request(state); assert.equal(state.requests[0].bodyRecorded, true); assert.ok(state.requests[0].requestBody);
   assert.equal(old.requestBody, undefined); assert.ok(!visibleRequests(state, state.projects.find(item => item.id === projectId), actor).some(row => row.userId === identity.userId));
 });
 test('delete requires exact confirmation and preserves history while disabling every associated Key', () => {

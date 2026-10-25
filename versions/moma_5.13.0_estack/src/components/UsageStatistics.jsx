@@ -116,8 +116,8 @@ export default function UsageStatistics({ observation = false, workspace }) {
   const modelOptions = workspace ? workspace.state.models.filter(model => selectedTypes.includes(usageType(model))).map(model=>({id:model.id,name:model.name})) : usageModelGroups.filter(group => group.id === category).flatMap(group => group.types.flatMap(type => usageModels[type].map(id => ({ id, name: id }))));
   const [now, setNow] = useState(() => new Date());
   const [autoRefresh, setAutoRefresh] = useState(0);
-  const [range, setRange] = useState(() => observation ? dateRange(1) : usagePeriod('today'));
-  const [preset, setPreset] = useState(observation ? '1' : 'today'), [minutes, setMinutes] = useState('60');
+  const [range, setRange] = useState(() => observation ? dateRange(1) : workspace?.initialDays ? dateRange(Number(workspace.initialDays)) : usagePeriod('today'));
+  const [preset, setPreset] = useState(observation ? '1' : workspace?.initialDays && workspace.initialDays !== '1' ? 'custom' : 'today'), [minutes, setMinutes] = useState('60');
   const [notice, setNotice] = useState('');
   const observationModels = workspace ? workspace.state.models.filter(model=>usageType(model)===type).map(model=>({id:model.id,name:model.name})) : observation ? usageModels[type].map(id => ({ id, name: id })) : [];
   const observationKeys = workspace ? keyOptions.map(key=>({id:key.id,name:key.name,searchText:key.id})) : ['按量付费', 'Token Plan'].flatMap(source => apiKeyOptions(source).map(key => ({ id: key.id, name: `${key.name}（${source}）`, searchText: key.id })));

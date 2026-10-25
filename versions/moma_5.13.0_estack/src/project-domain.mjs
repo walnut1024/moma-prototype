@@ -136,12 +136,14 @@ export function workspaceTransaction(state, command) {
         names.add(route.name);
       }
       changes.push(update('projects',projectId,{smartRoutes:values.routes.map(route=>({id:route.id,name:route.name,strategy:route.strategy,modelIds:route.modelIds,status:route.status,creator:identity.name || identity.userId,time:route.time}))}));
-    } else if (operation === 'settings') {
+    } else if (operation === 'profile') {
       const name = String(values.name || '').trim();
       if (name.length < 2 || name.length > 50 || state.projects.some(item => item.id !== projectId && item.tenantId === identity.tenantId && item.status !== '已删除' && item.name === name)) fail('项目名称须为 2–50 字且不能重名');
       if (String(values.description || '').length > 200) fail('项目说明最多 200 字');
+      changes.push(update('projects', projectId, { name, description: values.description || '' }));
+    } else if (operation === 'budget') {
       if (!['month', 'total'].includes(values.budgetPeriod) || !['stop', 'warn'].includes(values.overageAction) || !Number.isInteger(Number(values.warningPercent)) || Number(values.warningPercent) < 1 || Number(values.warningPercent) > 100) fail('请填写有效的预算周期、阈值和超额动作');
-      changes.push(update('projects', projectId, { name, description: values.description || '', moneyBudget: parseMoney(values.budget), budgetPeriod: values.budgetPeriod, warningPercent: Number(values.warningPercent), overageAction: values.overageAction, logBodies: Boolean(values.logBodies) }));
+      changes.push(update('projects', projectId, { moneyBudget: parseMoney(values.budget), budgetPeriod: values.budgetPeriod, warningPercent: Number(values.warningPercent), overageAction: values.overageAction, logBodies: Boolean(values.logBodies) }));
     } else if (operation === 'model') {
       if (!accountModels(state, project.tenantId).some(model => model.id === values.modelId)) fail('模型不在账户授权范围');
       for (const name of ['rpm', 'tpm']) if (values[name] !== '' && values[name] != null && (!Number.isSafeInteger(Number(values[name])) || Number(values[name]) < 1)) fail('RPM / TPM 须为正整数，留空继承');
@@ -184,7 +186,7 @@ export function workspaceTransaction(state, command) {
     } else if (operation === 'request') return requestTransaction(state, command, project);
     else fail('未知项目操作');
   }
-  const labels = { routes:'配置项目路由', order:'订购产品', organization: '维护组织及成员', bootstrap: '建立账户空间', create: '创建项目', settings: '更新项目设置', model: '配置项目模型', member: '更新项目成员', transfer: '交接负责人', leave: '退出项目', delete: '删除项目', createKey: '创建 API Key', editKey: '编辑 API Key', keyStatus: '启停 API Key', deleteKey: '删除 API Key', rotateKey: '轮换 API Key' };
+  const labels = { routes:'配置项目路由', order:'订购产品', organization: '维护组织及成员', bootstrap: '建立账户空间', create: '创建项目', profile: '更新项目基本信息', budget: '更新项目预算与日志', model: '配置项目模型', member: '更新项目成员', transfer: '交接负责人', leave: '退出项目', delete: '删除项目', createKey: '创建 API Key', editKey: '编辑 API Key', keyStatus: '启停 API Key', deleteKey: '删除 API Key', rotateKey: '轮换 API Key' };
   return { type: 'batch', objectId, label: labels[operation], changes, workspaceActor: identity.userId, workspaceTenantId: identity.tenantId, workspaceProjectId: projectId || (operation === 'create' ? objectId : null) };
 }
 function requestTransaction(state, command, project) {
