@@ -15,7 +15,7 @@ function load() {
   catch { return { records: [], error: '操作记录读取失败，请刷新后重试。' }; }
 }
 
-export default function OperationRecords({ records: suppliedRecords, title = '操作记录', description = '查看组织架构、成员归属与管理权限的变更记录' }) {
+export default function OperationRecords({ embedded = false, records: suppliedRecords, title = '操作记录', description = '查看组织架构、成员归属与管理权限的变更记录' }) {
   const [data, setData] = useState(() => suppliedRecords ? { records: [], error: '' } : load());
   const [detail, setDetail] = useState(null);
   const [filters, setFilters] = useState({ query: '', start: '', end: '' });
@@ -32,7 +32,7 @@ export default function OperationRecords({ records: suppliedRecords, title = '�
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   return <div className="operation-page">
-    <FrontPageHeader title={title} description={description} icon={History} />
+    <>{embedded ? <p className="pc-muted">{description}</p> : <FrontPageHeader title={title} description={description} icon={History} />}</>
     <section className="operation-panel" aria-label="操作记录列表">
       <div className="operation-filters">
         <Input className="operation-search" aria-label="搜索操作记录" placeholder="搜索操作人、操作内容" value={filters.query} onChange={event => update({ query: event.target.value })} />

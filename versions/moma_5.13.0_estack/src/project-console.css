@@ -117,7 +117,20 @@
 .tx-page .tx-service { position:absolute; top:0; left:0; right:0; }
 .pc-media-service { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:8px; padding:10px 20px; font-size:12px; color:#586982; }
 .pc-media-service select { max-width:100%; padding:6px 8px; border:1px solid #e4eaf3; border-radius:6px; background:white; }
+.pc-management { gap:18px; min-width:0; }
+.pc-management > [data-slot=tabs-list] { width:100%; justify-content:flex-start; border-bottom:1px solid #e4eaf3; padding:0 0 6px; overflow-x:auto; height:42px; }
+.pc-management > [data-slot=tabs-list] [data-slot=tabs-trigger] { flex:none; min-width:72px; padding-inline:18px; }
+.pc-management > [data-slot=tabs-list] [data-state=active] { color:#315fe8; }
+.pc-management > [data-slot=tabs-list] [data-state=active]::after { background:#315fe8; opacity:1; }
+.pc-management > [data-slot=tabs-content] { min-width:0; }
+.pc-management > [data-slot=tabs-content] > .front-page-header { margin-bottom:16px; }
+.pc-management > [data-slot=tabs-content] > .front-page-header h1 { font-size:16px; }
+.pc-management .operation-page, .pc-management .org-page { margin:0; }
+.pc-management .operation-page > .front-page-header h1, .pc-management .org-page > .front-page-header h1 { font-size:16px; }
+.pc-overview-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
 .pc-main .model-card h4 button { white-space:normal; overflow-wrap:anywhere; text-align:left; }
 .pc-main .model-card h4 img, .pc-main .model-card .modalities svg { flex-shrink:0; }
 .pc-main .model-card .modalities { display:block; line-height:1.6; }
 .pc-main .model-card .modalities svg { display:inline-block; vertical-align:middle; margin:0 6px; }
+.pc-management > [data-slot=tabs-content] > .front-page-header { background:transparent; border:0; padding:0; }
+.pc-management .operation-page > .pc-muted { margin:0 0 12px; }

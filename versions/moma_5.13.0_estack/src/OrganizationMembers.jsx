@@ -132,7 +132,7 @@ export default function OrganizationMembers({ workspace }) {
   };
 
   return <div className="org-page front-members-workspace">
-    <FrontPageHeader title="组织及成员" description="维护企业组织架构、成员归属与管理权限" icon={Users} />
+    {!workspace?.embedded && <FrontPageHeader title="组织及成员" description="维护企业组织架构、成员归属与管理权限" icon={Users} />}
     {storageError && <div className="org-demo-note" role="alert"><strong>数据保存失败，本次修改无法保存，请稍后重试。</strong></div>}
     {notice && <div className="org-notice" role="status">{notice}<Button variant="ghost" size="xs" onClick={() => setNotice("")}>关闭</Button></div>}
     <div className="org-workspace">
