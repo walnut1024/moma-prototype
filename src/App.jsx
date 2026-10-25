@@ -315,10 +315,9 @@ const usageIcons5102 = {
   "Token Plan": ReceiptText,
 };
 const prototypeVersions = [
-  { id: "moma_5.13.0_estack", state: "当前版本", releaseDate: "10月24日", changes: "项目空间、模型接入与项目使用管理。" },
   {
     id: "moma_5.12.0_estack",
-    state: "历史版本",
+    state: "当前版本",
     releaseDate: "10月8日",
     changes: "基于 5.11.0 复制，独立迭代。",
   },
