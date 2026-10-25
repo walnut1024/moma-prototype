@@ -1,3 +1,4 @@
+import { projectUsageData, usageType } from '../project-view-data.mjs';
 import FrontPageHeader from "./FrontPageHeader";
 import { Activity, ChartNoAxesCombined } from "lucide-react";
 import { useEffect, useMemo, useState } from 'react';
@@ -88,7 +89,7 @@ function OverviewGroup({ label, hint, value, unit, details }) {
 }
 function UsageOverview({ summary, view, days }) {
   const tokenSupported = view.charts.some(([, keys]) => keys.some(key => ['total', 'input', 'tpm'].includes(key)));
-  const tokenTotal = tokenSupported ? summary.total ?? 0 : null;
+  const tokenTotal = tokenSupported ? summary.total ?? (summary.requests ? null : 0) : null;
   const groups = [
     { label: 'Token调用总量', hint: '所选时段已计量的 Token 总量；张、秒、字符等其他单位不计入。', value: tokenTotal, unit: 'Token' },
     { label: '模型调用次数', hint: '所选时段的模型请求数，包含成功与失败请求。', value: summary.requests, unit: '次' },
@@ -98,7 +99,7 @@ function UsageOverview({ summary, view, days }) {
   ];
   return <><div className="us-overview-groups" style={{ '--overview-count': groups.length }}>{groups.map(group => <OverviewGroup key={group.label} {...group} />)}</div>{view.nonTokenSummary?.length > 0 && <Metrics title="其他计量" keys={view.nonTokenSummary} summary={summary} />}</>;
 }
-export default function UsageStatistics({ observation = false }) {
+export default function UsageStatistics({ observation = false, workspace }) {
   const [billing, setBilling] = useState(observation ? '全部' : '按量付费');
   const [category, setCategory] = useState(observation ? '文本模型' : '语言模型');
   const [visual, setVisual] = useState('视觉理解'), [audio, setAudio] = useState('语音合成');
@@ -108,24 +109,25 @@ export default function UsageStatistics({ observation = false }) {
   const [apiKeyIds, setApiKeyIds] = useState(null);
   const [keySearch, setKeySearch] = useState('');
   const [keyPickerOpen, setKeyPickerOpen] = useState(false);
-  const keyOptions = apiKeyOptions(billing);
+  const keyOptions = workspace ? workspace.state.apiKeys.filter(key => key.projectId === workspace.project.id).map(key => ({...key,key:key.secretPreview})) : apiKeyOptions(billing);
   const selectedKey = keyOptions.find(key => key.id === apiKeyId);
   const groups = useMemo(() => [category], [category]);
-  const selectedTypes = selectedUsageTypes(groups, modelIds);
-  const modelOptions = usageModelGroups.filter(group => group.id === category).flatMap(group => group.types.flatMap(type => usageModels[type].map(id => ({ id, name: id }))));
+  const selectedTypes = selectedUsageTypes(groups, workspace ? null : modelIds);
+  const modelOptions = workspace ? workspace.state.models.filter(model => selectedTypes.includes(usageType(model))).map(model=>({id:model.id,name:model.name})) : usageModelGroups.filter(group => group.id === category).flatMap(group => group.types.flatMap(type => usageModels[type].map(id => ({ id, name: id }))));
   const [now, setNow] = useState(() => new Date());
   const [autoRefresh, setAutoRefresh] = useState(0);
   const [range, setRange] = useState(() => observation ? dateRange(1) : usagePeriod('today'));
   const [preset, setPreset] = useState(observation ? '1' : 'today'), [minutes, setMinutes] = useState('60');
   const [notice, setNotice] = useState('');
-  const observationModels = observation ? usageModels[type].map(id => ({ id, name: id })) : [];
-  const observationKeys = ['按量付费', 'Token Plan'].flatMap(source => apiKeyOptions(source).map(key => ({ id: key.id, name: `${key.name}（${source}）`, searchText: key.id })));
+  const observationModels = workspace ? workspace.state.models.filter(model=>usageType(model)===type).map(model=>({id:model.id,name:model.name})) : observation ? usageModels[type].map(id => ({ id, name: id })) : [];
+  const observationKeys = workspace ? keyOptions.map(key=>({id:key.id,name:key.name,searchText:key.id})) : ['按量付费', 'Token Plan'].flatMap(source => apiKeyOptions(source).map(key => ({ id: key.id, name: `${key.name}（${source}）`, searchText: key.id })));
   const streaming = observation && ['文本模型', '视觉理解'].includes(type);
-  const view = observation ? { ...observationView, charts: [...observationView.charts, ...(streaming ? [['首 Token 时延', ['ttft']], ['输出吞吐', ['outputSecond']]] : [])] } : selectedMeteringView(selectedTypes, modelIds);
+  const originalView = observation ? { ...observationView, charts: [...observationView.charts, ...(streaming ? [['首 Token 时延', ['ttft']], ['输出吞吐', ['outputSecond']]] : [])] } : selectedMeteringView(selectedTypes, workspace ? null : modelIds);
+  const view = workspace && !observation && selectedTypes.includes('视频生成') ? {...originalView,nonTokenSummary:[...(originalView.nonTokenSummary || []),'seconds'],charts:[...originalView.charts.filter(([title])=>!title.includes('视频')),['视频时长趋势',['seconds']]]} : originalView;
   const rangeDays = (Date.parse(range.end) - Date.parse(range.start)) / 86400000 + 1;
   const error = !Number.isFinite(rangeDays) || rangeDays < 1 ? '请选择有效的起止日期。' : rangeDays > 31 ? '单次最多查看 31 天，请缩小日期范围。' : !observation && !selectedTypes.length ? '请选择至少一个模型 ID。' : '';
   const bucketMinutes = observation ? Number(minutes) : rangeDays === 1 ? 10 : 60;
-  const data = useMemo(() => observation ? observationData({ billing, type, modelIds, apiKeyIds, ...range, minutes: bucketMinutes, now }) : selectedUsageData({ billing, groups, modelIds, apiKeyId, ...range, minutes: bucketMinutes, now }), [observation, billing, type, groups, modelIds, apiKeyId, apiKeyIds, range, bucketMinutes, now]);
+  const data = useMemo(() => workspace ? projectUsageData({ records:workspace.records,state:workspace.state,...range,minutes:bucketMinutes,now,billing,types:observation?[type]:selectedTypes,modelIds,keyIds:observation?apiKeyIds:apiKeyId?[apiKeyId]:null }) : observation ? observationData({ billing, type, modelIds, apiKeyIds, ...range, minutes: bucketMinutes, now }) : selectedUsageData({ billing, groups, modelIds, apiKeyId, ...range, minutes: bucketMinutes, now }), [workspace?.state.revision, workspace?.project.id, observation, billing, type, groups, modelIds, apiKeyId, apiKeyIds, range, bucketMinutes, now]);
   const changeType = (value, setter) => { setter(value); setModelIds(null); };
   function exportData() {
     const label = observation ? type : category;
@@ -152,7 +154,7 @@ export default function UsageStatistics({ observation = false }) {
   const periodName = observation ? ({ '1': '今日', yesterday: '昨日', '3': '近 3 天', '7': '近 7 天', '30': '近 30 天' }[preset] || '自定义') : ({ today: '今日', yesterday: '昨日', '7d': '近 7 天', '30d': '近 30 天' }[preset] || '自定义');
   const viewGroups = [
     { label: '模型类别', text: observation ? observationCategories.find(([id]) => id === category)?.[1] || category : category },
-    ...(type === category ? [] : [{ label: '任务类型', text: type }]),
+    ...(type === category || !observation ? [] : [{ label: '任务类型', text: type }]),
     { label: '时间', text: `${periodName}（${range.start} — ${range.end}）` },
     ...(observation ? [{ label: '统计粒度', text: { '5': '5 分钟', '60': '1 小时', '1440': '1 天' }[minutes] }] : [{ label: '计费方式', text: billing }]),
     { label: '模型 ID', items: modelIds === null ? null : modelIds, all: '全部模型' },
@@ -196,9 +198,9 @@ export default function UsageStatistics({ observation = false }) {
         <FilterReset onClick={resetFilters}/>
         <div className="us-actions"><div className={observation ? '' : 'us-refresh-group'}><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" aria-label={observation ? '立即刷新调用观测' : '立即刷新用量'} onClick={() => refreshUsage(false)}><RefreshCw /></Button></TooltipTrigger><TooltipContent>立即刷新</TooltipContent></Tooltip>{!observation && <Popover><PopoverTrigger asChild><Button variant="outline" className={autoRefresh ? 'us-refresh-settings is-active' : 'us-refresh-settings'} aria-label={`自动刷新设置${autoLabel ? `，每 ${autoLabel}` : '，已关闭'}`}><span>{autoLabel ? `自动 · ${autoLabel}` : '自动刷新'}</span><ChevronDown size={14} /></Button></PopoverTrigger><PopoverContent className="us-refresh-popover" align="end"><strong>自动刷新</strong><p>按设定频率更新当前筛选结果</p><fieldset><legend className="sr-only">自动刷新频率</legend>{[[0, '关闭'], [30, '每 30 秒'], [60, '每 1 分钟'], [300, '每 5 分钟']].map(([seconds, label]) => <label key={seconds}><input type="radio" name="usage-auto-refresh" checked={autoRefresh === seconds} onChange={() => { setAutoRefresh(seconds); if (seconds) refreshUsage(false); }} />{label}</label>)}</fieldset><small>上次刷新：{refreshTime(now)}{autoRefresh > 0 && <> · 下次刷新：{refreshTime(new Date(now.getTime() + autoRefresh * 1000))}</>}</small></PopoverContent></Popover>}</div><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" aria-label={observation ? '导出调用观测' : '导出用量'} disabled={!!error || !data.summary.requests} onClick={exportData}><Download /></Button></TooltipTrigger><TooltipContent>导出当前趋势</TooltipContent></Tooltip></div>
       </FilterToolbar>
-      <FilterViewRow className="us-view-row"><SavedFilterViews scope={observation ? 'tenant-observation' : 'tenant-usage'} value={savedValue} onApply={applySaved} groups={viewGroups} disabled={!!error}/></FilterViewRow></div>
-      {!observation && billing === 'Token Plan' && <div className="us-quota us-metering-quota"><span>本月 · 全部模型</span><span>已用 <strong>586.21 M</strong> / 1 B Token</span><Progress value={58.621} aria-label="本月套餐额度使用率" /><span>剩余 <strong>413.79 M</strong></span></div>}
-      {error ? <p className="us-error" role="alert">{error}</p> : <><section className="us-summary">{observation ? <Metrics keys={view.summary} summary={data.summary} /> : <UsageOverview summary={data.summary} view={view} days={rangeDays} />}</section>
+      <FilterViewRow className="us-view-row"><SavedFilterViews scope={(workspace ? workspace.identity.userId + ':' + workspace.project.id + ':' : '') + (observation ? 'tenant-observation' : 'tenant-usage')} value={savedValue} onApply={applySaved} groups={viewGroups} disabled={!!error}/></FilterViewRow></div>
+      {!workspace && !observation && billing === 'Token Plan' && <div className="us-quota us-metering-quota"><span>本月 · 全部模型</span><span>已用 <strong>586.21 M</strong> / 1 B Token</span><Progress value={58.621} aria-label="本月套餐额度使用率" /><span>剩余 <strong>413.79 M</strong></span></div>}
+      {workspace && <p className="us-foot">当前筛选费用：{data.summary.charge == null ? '未完整记录' : '¥' + (data.summary.charge / 1e6).toFixed(6)} · 缺失计量显示 —</p>}{error ? <p className="us-error" role="alert">{error}</p> : <><section className="us-summary">{observation ? <Metrics keys={view.summary} summary={data.summary} /> : <UsageOverview summary={data.summary} view={view} days={rangeDays} />}</section>
       <div className="us-chart-layout"><div className="us-charts">{view.charts.map(([title, keys, options], index) => <Trend key={`${type}-${title}`} id={`usage-chart-${index}`} title={title} keys={keys} options={options} data={data} scaled={!observation} language={!observation && category === '语言模型'} />)}</div><ChartNavigation key={view.charts.map(([title]) => title).join('|')} charts={view.charts} type={category} /></div></>}
       <div className="us-foot"><span role="status">{notice}</span><span>北京时间</span></div>
     </TabsContent></Tabs>

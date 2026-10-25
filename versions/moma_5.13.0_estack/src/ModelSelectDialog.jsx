@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
 import { chooseModel, filterModels, modelCategory, modelSupplier } from './model-selection.mjs';
 import './model-select-dialog.css';
 
-export default function ModelSelectDialog({ open, models, value, multiple = false, min = 1, max = 1, onApply, onClose }) {
+export default function ModelSelectDialog({ open, models, value, multiple = false, min = 1, max = 1, onApply, onClose, projectScoped = false }) {
   const selectionId = useId();
   const [selected, setSelected] = useState([]);
   const [query, setQuery] = useState('');
@@ -58,20 +58,20 @@ export default function ModelSelectDialog({ open, models, value, multiple = fals
           <div className="model-select-toolbar">
             <label className="model-select-search"><Search size={17} aria-hidden="true"/><Input autoFocus aria-label="搜索模型" placeholder="搜索模型名称" value={query} onChange={event => setQuery(event.target.value)}/></label>
             <Select value={billing} onValueChange={setBilling}><SelectTrigger className="model-select-billing" aria-label="计费方式"><SelectValue/></SelectTrigger><SelectContent>{['全部计费', ...new Set(models.map(model => model.billing))].map(item => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
-            <label className="model-select-subscribed"><Checkbox checked={subscribedOnly} onCheckedChange={checked => setSubscribedOnly(checked === true)}/>仅看已订购</label>
+            <label className="model-select-subscribed"><Checkbox checked={subscribedOnly} onCheckedChange={checked => setSubscribedOnly(checked === true)}/>{projectScoped ? '仅看已开通' : '仅看已订购'}</label>
           </div>
           <div className="model-select-categories"><Tabs value={category} onValueChange={setCategory}><TabsList variant="line" aria-label="模型类型筛选">{categories.map(item => <TabsTrigger key={item} value={item}>{item}<small>{item === '全部' ? categoryCounts.length : categoryCounts.filter(model => modelCategory(model.type) === item).length}</small></TabsTrigger>)}</TabsList></Tabs><span aria-live="polite">共 {visible.length} 个模型</span></div>
           <div className="model-select-table-scroll">
             <table className="model-select-table" aria-label="模型列表">
               <colgroup><col className="model-col-select"/><col/><col className="model-col-type"/><col className="model-col-billing"/><col className="model-col-status"/></colgroup>
-              <thead><tr><th scope="col"><span className="sr-only">选择</span></th><th scope="col">模型名称</th><th scope="col">类型</th><th scope="col">计费方式</th><th scope="col">订购状态</th></tr></thead>
+              <thead><tr><th scope="col"><span className="sr-only">选择</span></th><th scope="col">模型名称</th><th scope="col">类型</th><th scope="col">计费方式</th><th scope="col">{projectScoped ? '项目状态' : '订购状态'}</th></tr></thead>
               <tbody>{visible.map(model => {
                 const checked = selected.includes(model.name);
                 const disabled = !model.subscribed || (multiple && !checked && selected.length >= max);
                 return <tr key={model.name} data-selected={checked} data-unavailable={!model.subscribed} onClick={() => !disabled && choose(model)}>
                   <td><input type={multiple ? 'checkbox' : 'radio'} name={selectionId} checked={checked} disabled={disabled} aria-label={`选择 ${model.name}`} onClick={event => event.stopPropagation()} onChange={() => choose(model)}/></td>
                   <td><span className="model-select-name" title={[model.name, model.desc].filter(Boolean).join('：')}>{model.label || model.name}</span></td><td>{modelCategory(model.type)}</td><td>{model.billing}</td>
-                  <td>{model.subscribed ? <span className="model-select-status">已订购</span> : <a href={orderUrl} target="_blank" rel="noopener noreferrer" aria-label={`去订购 ${model.name}（在新页签打开）`} onClick={event => event.stopPropagation()}>去订购<SquareArrowOutUpRight size={14} aria-hidden="true"/></a>}</td>
+                  <td>{model.subscribed ? <span className="model-select-status">{projectScoped ? '已开通' : '已订购'}</span> : <a href={orderUrl} target="_blank" rel="noopener noreferrer" aria-label={`去订购 ${model.name}（在新页签打开）`} onClick={event => event.stopPropagation()}>去订购<SquareArrowOutUpRight size={14} aria-hidden="true"/></a>}</td>
                 </tr>;
               })}</tbody>
             </table>
@@ -79,7 +79,7 @@ export default function ModelSelectDialog({ open, models, value, multiple = fals
           </div>
         </section>
       </div>
-      <footer className="model-select-footer"><div className="model-select-current">{multiple ? <><span>已选 {selected.length} 个模型（{min}–{max} 个）</span>{selected.map(name => <Button type="button" variant="outline" size="xs" key={name} aria-label={`移除 ${name}`} onClick={() => setSelected(items => items.filter(item => item !== name))}>{name}<X size={12}/></Button>)}</> : <><span>已选：</span><strong title={selected[0]}>{selected[0] || '请选择模型'}</strong></>}</div><Button type="button" variant="outline" onClick={onClose}>取消</Button><Button type="button" className="model-select-apply" disabled={!validSelection} onClick={() => { onApply(multiple ? selected : selected[0]); onClose(); }}>应用</Button></footer>
+      <footer className="model-select-footer"><div className="model-select-current">{multiple ? <><span>已选 {selected.length} 个模型（{min}–{max} 个）</span>{selected.map(name => <Button type="button" variant="outline" size="xs" key={name} aria-label={`移除 ${name}`} onClick={() => setSelected(items => items.filter(item => item !== name))}>{name}<X size={12}/></Button>)}</> : <><span>已选：</span><strong title={selected[0]}>{models.find(model => model.name === selected[0])?.label || selected[0] || '请选择模型'}</strong></>}</div><Button type="button" variant="outline" onClick={onClose}>取消</Button><Button type="button" className="model-select-apply" disabled={!validSelection} onClick={() => { onApply(multiple ? selected : selected[0]); onClose(); }}>应用</Button></footer>
     </DialogContent>
   </Dialog>;
 }

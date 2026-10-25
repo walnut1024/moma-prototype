@@ -158,7 +158,7 @@ export function enterpriseTransaction(state, command) {
       changes.push({ type: 'update', collection: 'memberships', id: member.id, changes: { status: member.status === '停用' ? '正常' : '停用' } });
     } else if (operation === 'toggle-key') {
       const key = state.apiKeys.find(item => item.id === command.keyId && item.tenantId === tenantId && state.projects.some(project => project.id === item.projectId && project.tenantId === tenantId));
-      if (!key || !['有效', '停用'].includes(key.status)) throw new Error('Key 不存在、已撤销或归属异常');
+      if (!key || key.managed || !['有效', '停用'].includes(key.status)) throw new Error('Key 不存在、已撤销或归属异常');
       if (tenant.status === '停用' && key.status === '停用') throw new Error('请先解冻企业账号，再启用 Key');
       changes.push({ type: 'update', collection: 'apiKeys', id: key.id, changes: { status: key.status === '停用' ? '有效' : '停用' } });
     } else if (operation === 'configure-grant') {

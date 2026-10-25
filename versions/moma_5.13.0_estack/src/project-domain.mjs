@@ -1,4 +1,6 @@
-import { activeSupplySalePrice, modelSupplies, priceItems } from './admin-v2/model-management.js';
+import { organizationChanges } from './project-organization.mjs';
+import { parseIpAllowlist } from './api-key-utils.mjs';
+import { activeSupplySalePrice, availableSupplies, priceItems } from './admin-v2/model-management.js';
 import { callModelId } from './admin-v2/model-operations.js';
 
 const uid = prefix => `${prefix}-${crypto.randomUUID()}`;
@@ -26,6 +28,7 @@ export function workspaceSeed(state) {
   return state;
 }
 export function workspaceIdentity(auth, userType) {
+  if (auth.storageError) return null;
   if (!auth.user) return userType === 'personal' ? { userId: 'user-personal-demo-001', tenantId: 'personal-demo-001', name: '林间风', tenantName: '个人空间', personal: true } : { userId: 'user-zhang', tenantId: 'tenant-gov', name: '张敏', tenantName: '江苏政务云', admin: true };
   const space = auth.spaces.find(item => item.id === auth.state.activeSpace);
   if (!space) return null;
@@ -46,16 +49,17 @@ export function projectRole(state, project, identity) {
 }
 export const visibleProjects = (state, identity) => state.projects.filter(project => project.status !== '已删除' && projectRole(state, project, identity));
 export function accountModels(state, tenantId) {
-  const grant = state.grants.find(item => item.subjectType === 'tenant' && item.subjectId === tenantId && item.status !== '停用');
+  const grant = state.grants.find(item => item.subjectType === 'tenant' && item.subjectId === tenantId);
+  if (grant?.status === '停用') return [];
   return state.models.filter(model => (!grant || grant.modelIds.includes(model.id)) && (model.openScope !== 'selected' || model.tenantIds?.includes(tenantId)));
 }
 export function modelOffers(state, model) {
-  return modelSupplies(state, model.id).filter(supply => supply.status === '已启用' && supply.salesEnabled && supply.provider?.status === '已启用' && supply.endpoint?.status === '运行中').map(supply => ({ ...supply, callId: supply.callId || callModelId(supply.provider, model), price: activeSupplySalePrice(state, model.id, supply.id), items: priceItems(activeSupplySalePrice(state, model.id, supply.id), model) }));
+  return availableSupplies(state, model.id).filter(supply => supply.status === '已启用' && supply.salesEnabled && supply.provider?.status === '已启用' && supply.endpoint?.status === '运行中').map(supply => ({ ...supply, callId: supply.callId || callModelId(supply.provider, model), price: activeSupplySalePrice(state, model.id, supply.id), items: priceItems(activeSupplySalePrice(state, model.id, supply.id), model) }));
 }
 export const projectModels = (state, project) => accountModels(state, project.tenantId).filter(model => state.projectModelGrants.some(grant => grant.projectId === project.id && grant.modelId === model.id && grant.enabled) && model.callsEnabled !== false && modelOffers(state, model).length);
 export function effectiveLimit(state, project, modelId, kind) {
   const local = state.projectModelGrants.find(grant => grant.projectId === project.id && grant.modelId === modelId)?.[kind];
-  const rules = state.limits.filter(rule => rule.status === '已启用' && ((rule.scopeType === 'tenant' && rule.scopeId === project.tenantId) || (rule.scopeType === 'model' && rule.scopeId === modelId)));
+  const rules = state.limits.filter(rule => rule.status === '已启用' && ((rule.scopeType === 'tenant' && rule.scopeId === project.tenantId) || (rule.scopeType === 'model' && rule.scopeId === modelId) || (rule.scopeType === 'project' && rule.scopeId === project.id)));
   const values = [local, ...rules.map(rule => rule[kind])].filter(value => Number.isFinite(value) && value > 0);
   return values.length ? Math.min(...values) : null;
 }
@@ -80,16 +84,30 @@ function keyFields(state, project, values, now) {
   const subscriptionId = values.subscriptionId || null;
   if (subscriptionId) {
     const order = state.orders.find(item => item.id === subscriptionId && item.tenantId === project.tenantId && item.status === '已开通');
-    const product = state.products.find(item => item.id === order?.productId && item.code?.startsWith('TOKEN-'));
+    const product = state.products.find(item => item.id === order?.productId && productBillingType(item) === 'plan');
     if (!product || values.modelIds.some(id => !product.modelIds.includes(id))) fail('Token Plan 不属于当前账户、尚未开通或不包含所选模型');
+    for (const modelId of values.modelIds) activeSubscription(state, project, subscriptionId, modelId, now);
   }
-  return { name, description: values.description || '', modelIds: [...new Set(values.modelIds)], subscriptionId, moneyBudget: subscriptionId ? null : parseMoney(values.budget), budgetPeriod: values.budgetPeriod, expiresAt };
+  return { name, ips: parseIpAllowlist(values.ips || ''), description: values.description || '', modelIds: [...new Set(values.modelIds)], subscriptionId, moneyBudget: subscriptionId ? null : parseMoney(values.budget), budgetPeriod: values.budgetPeriod, expiresAt };
 }
 export function workspaceTransaction(state, command) {
   const { operation, identity, projectId, values = {}, now = Date.now() } = command;
   const changes = [];
   let objectId = projectId || identity?.tenantId;
-  if (operation === 'bootstrap') {
+  if (operation === 'order') {
+    if (!accountAdmin(state, identity)) fail('仅账户管理员可订购');
+    if (!Array.isArray(values.productIds) || !values.productIds.length) fail('请选择产品');
+    for (const id of new Set(values.productIds)) {
+      const product = state.products.find(item => item.id === id && item.status === '已上架');
+      if (!product || !product.modelIds?.every(id => accountModels(state,identity.tenantId).some(model=>model.id===id))) fail('产品不在当前账户可订购范围');
+      if (state.orders.some(item=>item.tenantId===identity.tenantId && item.productId===id && !['已取消','已到期'].includes(item.status))) fail('已有订单，请勿重复提交');
+      const payg=productBillingType(product)==='payg';
+      changes.push(add('orders',{id:uid('order'),orderNo:'ORD-'+crypto.randomUUID().slice(0,8),tenantId:identity.tenantId,productId:id,amount:product.price || 0,entitlement:0,used:0,status:payg?'生效中':'待支付',timeline:['订单创建',...(payg?['服务开通']:[])],createdAt:new Date(now).toISOString()}));
+    }
+  } else if (operation === 'organization') {
+    if (!accountAdmin(state, identity) || identity.personal) fail('仅企业账户管理员可维护组织及成员');
+    changes.push(...organizationChanges(state, identity, values));
+  } else if (operation === 'bootstrap') {
     if (!identity?.userId || !identity?.tenantId) fail('请先选择可访问空间');
     const tenant = state.tenants.find(item => item.id === identity.tenantId);
     if (tenant?.status === '停用') fail('当前账户空间已停用');
@@ -109,8 +127,16 @@ export function workspaceTransaction(state, command) {
     changes.push(add('projectMemberships', { id: uid('pm'), projectId: objectId, userId: identity.userId, role: '管理员', status: '正常' }));
     changes.push(add('apiKeys', { id: `experience-${objectId}`, keyId: `experience-${objectId}`, name: '在线体验', projectId: objectId, tenantId: identity.tenantId, createdBy: identity.userId, managed: true, status: '有效', modelIds: null, secretPreview: '系统托管', moneyBudget: null, budgetPeriod: 'month' }));
   } else {
-    const project = assertProject(state, identity, projectId, !['createKey', 'editKey', 'keyStatus', 'deleteKey', 'leave', 'request'].includes(operation), true);
-    if (operation === 'settings') {
+    const project = assertProject(state, identity, projectId, !['createKey', 'editKey', 'keyStatus', 'deleteKey', 'rotateKey', 'leave', 'request'].includes(operation), operation !== 'leave');
+    if (operation === 'routes') {
+      if (!Array.isArray(values.routes)) fail('路由配置无效');
+      const allowed=projectModels(state,project).map(model=>model.id), names=new Set();
+      for(const route of values.routes) {
+        if (!route.id || typeof route.name!=='string' || route.name.trim().length<2 || route.name.length>50 || names.has(route.name) || !Array.isArray(route.modelIds) || !route.modelIds.length || route.modelIds.some(id=>!allowed.includes(id))) fail('路由名称须唯一，候选模型须在项目可用范围内');
+        names.add(route.name);
+      }
+      changes.push(update('projects',projectId,{smartRoutes:values.routes.map(route=>({id:route.id,name:route.name,strategy:route.strategy,modelIds:route.modelIds,status:route.status,creator:identity.name || identity.userId,time:route.time}))}));
+    } else if (operation === 'settings') {
       const name = String(values.name || '').trim();
       if (name.length < 2 || name.length > 50 || state.projects.some(item => item.id !== projectId && item.tenantId === identity.tenantId && item.status !== '已删除' && item.name === name)) fail('项目名称须为 2–50 字且不能重名');
       if (String(values.description || '').length > 200) fail('项目说明最多 200 字');
@@ -148,16 +174,17 @@ export function workspaceTransaction(state, command) {
       if (!/^[a-f0-9]{64}$/.test(values.fingerprint || '') || !/^sk-\*{5}[a-f0-9]{4}$/.test(values.secretPreview || '')) fail('密钥生成失败，请重试');
       objectId = uid('key');
       changes.push(add('apiKeys', { id: objectId, keyId: objectId, projectId, tenantId: project.tenantId, createdBy: identity.userId, ...fields, fingerprint: values.fingerprint, secretPreview: values.secretPreview, status: '有效' }));
-    } else if (['editKey', 'keyStatus', 'deleteKey'].includes(operation)) {
+    } else if (['editKey', 'keyStatus', 'deleteKey', 'rotateKey'].includes(operation)) {
       const key = state.apiKeys.find(item => item.id === values.id && item.projectId === projectId && item.status !== '已删除');
       if (!key || key.managed) fail('系统托管 Key 不支持此操作');
       if (projectRole(state, project, identity) !== '管理员' && key.createdBy !== identity.userId) fail('只能管理本人创建的 Key');
-      changes.push(update('apiKeys', key.id, operation === 'editKey' ? keyFields(state, project, values, now) : { status: operation === 'deleteKey' ? '已删除' : key.status === '有效' ? '停用' : '有效' }));
+      if (operation === 'rotateKey' && (!/^[a-f0-9]{64}$/.test(values.fingerprint || '') || !/^sk-\*{5}[a-f0-9]{4}$/.test(values.secretPreview || ''))) fail('密钥生成失败');
+      changes.push(update('apiKeys', key.id, operation === 'rotateKey' ? { fingerprint: values.fingerprint, secretPreview: values.secretPreview, rotatedAt: new Date(now).toISOString() } : operation === 'editKey' ? keyFields(state, project, values, now) : { status: operation === 'deleteKey' ? '已删除' : key.status === '有效' ? '停用' : '有效' }));
       objectId = key.id;
     } else if (operation === 'request') return requestTransaction(state, command, project);
     else fail('未知项目操作');
   }
-  const labels = { bootstrap: '建立账户空间', create: '创建项目', settings: '更新项目设置', model: '配置项目模型', member: '更新项目成员', transfer: '交接负责人', leave: '退出项目', delete: '删除项目', createKey: '创建 API Key', editKey: '编辑 API Key', keyStatus: '启停 API Key', deleteKey: '删除 API Key' };
+  const labels = { routes:'配置项目路由', order:'订购产品', organization: '维护组织及成员', bootstrap: '建立账户空间', create: '创建项目', settings: '更新项目设置', model: '配置项目模型', member: '更新项目成员', transfer: '交接负责人', leave: '退出项目', delete: '删除项目', createKey: '创建 API Key', editKey: '编辑 API Key', keyStatus: '启停 API Key', deleteKey: '删除 API Key', rotateKey: '轮换 API Key' };
   return { type: 'batch', objectId, label: labels[operation], changes, workspaceActor: identity.userId, workspaceTenantId: identity.tenantId, workspaceProjectId: projectId || (operation === 'create' ? objectId : null) };
 }
 function requestTransaction(state, command, project) {
@@ -171,40 +198,85 @@ function requestTransaction(state, command, project) {
   const usage = { input: 128, output: 256, cached: 0 };
   const answer = `已收到：${String(values.prompt || '').slice(0, 120)}\n\n建议先明确目标和使用场景，再整理关键事实与执行步骤。对具体结论请结合业务资料核验。`;
   try {
-    if (!String(values.prompt || '').trim() || String(values.prompt).length > 6000) fail('体验内容须为 1–6000 字', 'invalid_prompt');
+    if ((!String(values.prompt || '').trim() && !values.attachments?.length) || String(values.prompt || '').length > 6000) fail('体验内容须为 1–6000 字', 'invalid_prompt');
     if (project.status !== '正常') fail('项目已停用', 'project_disabled');
     if (!key || key.status !== '有效') fail('Key 不可用', 'key_disabled');
     if (!key.managed && key.createdBy !== identity.userId && projectRole(state, project, identity) !== '管理员') fail('Key 不属于当前用户', 'key_forbidden');
     if (key.expiresAt && Date.parse(key.expiresAt) <= now) fail('Key 已过期', 'key_expired');
     if (!projectModels(state, project).some(item => item.id === values.modelId) || key.modelIds && !key.modelIds.includes(values.modelId)) fail('模型未开通或不在 Key 允许范围', 'model_not_authorized');
     if (!supply) fail('模型服务当前不可用', 'model_unavailable');
-    if (!['text', 'multimodal'].includes(model.type)) fail('当前体验仅支持文本输出模型', 'unsupported_task');
+    if (['text','multimodal'].includes(model.type) && values.attachments?.length && !model.profile?.inputModalities?.some(value => ['图片', '图像'].includes(value))) fail('模型不支持图片输入', 'invalid_parameters');
     const maxOutput = Number(values.maxOutput || 1024);
     if (!Number.isSafeInteger(maxOutput) || maxOutput < 1 || maxOutput > (model.capabilities?.output || 32768) || !Number.isFinite(Number(values.temperature ?? 0.7)) || !Number.isFinite(Number(values.topP ?? 0.8)) || Number(values.temperature ?? 0.7) < 0 || Number(values.temperature ?? 0.7) > 2 || Number(values.topP ?? 0.8) < 0 || Number(values.topP ?? 0.8) > 1) fail('推理参数超出模型范围', 'invalid_parameters');
     usage.output = Math.min(256, maxOutput);
-    const input = supply.items.find(item => /输入/.test(item.name) && !/缓存/.test(item.name)), output = supply.items.find(item => /输出/.test(item.name));
-    if (!input || !output || [input, output].some(item => !Number.isSafeInteger(item.amount) || item.currency !== 'CNY' || !/百万.*Token/i.test(item.unit))) fail('当前服务没有可计算的人民币 Token 售价', 'price_unconfigured');
-    charge = Number((BigInt(input.amount) * BigInt(usage.input) + BigInt(output.amount) * BigInt(usage.output) + 999999n) / 1000000n);
+    if (['text','multimodal','embedding','rerank'].includes(model.type)) {
+      const input=supply.items.find(item=>/输入/.test(item.name)&&!/缓存/.test(item.name)), output=supply.items.find(item=>/输出/.test(item.name));
+      if (!input || !output || [input,output].some(item=>!Number.isSafeInteger(item.amount)||item.currency!=='CNY'||!/百万.*Token/i.test(item.unit))) fail('当前服务没有可计算的人民币 Token 售价','price_unconfigured');
+      charge=Number((BigInt(input.amount)*BigInt(usage.input)+BigInt(output.amount)*BigInt(usage.output)+999999n)/1000000n);
+    } else {
+      const mediaType=model.type==='audio' ? (model.profile?.tasks?.includes('语音识别')?'asr':'tts') : model.type;
+      const metric={image:'images',video:'seconds',tts:'characters',asr:'seconds'}[mediaType];
+      const quantity=Number(values.quantity);
+      if(!metric || !Number.isSafeInteger(quantity) || quantity<1 || quantity>10000) fail('计量数量无效','invalid_parameters');
+      const unit={image:/张|图/,video:/秒/,tts:/字符/,asr:/秒|分钟/}[mediaType];
+      const price=supply.items.find(item=>unit.test(item.unit));
+      if(!price || !Number.isSafeInteger(price.amount) || price.currency!=='CNY') fail('当前服务计价单位未配置','price_unconfigured');
+      const divisor=/百万/.test(price.unit)?1000000:/万/.test(price.unit)?10000:/千/.test(price.unit)?1000:/分钟/.test(price.unit)?60:1;
+      charge=Math.ceil(price.amount*quantity/divisor);
+      if(!Number.isSafeInteger(charge)) fail('费用超出范围','invalid_parameters');
+      delete usage.input; delete usage.output; delete usage.cached; usage[metric]=quantity;
+    }
+    if (key.subscriptionId && (!Number.isFinite(usage.input) || !Number.isFinite(usage.output))) fail('当前套餐不支持此计量方式','subscription_unavailable');
+    if (key.subscriptionId) { const order = activeSubscription(state, project, key.subscriptionId, model.id, now); if ((order.used || 0) + usage.input + usage.output > order.entitlement) fail('Token Plan 剩余额度不足', 'subscription_exhausted'); charge = 0; }
     if (project.moneyBudget != null && project.overageAction === 'stop' && currentSpend(state, project, now) + charge > project.moneyBudget) fail('项目预算不足，请调整预算后重试', 'project_budget_exhausted');
     if (key.moneyBudget != null && currentSpend(state, key, now) + charge > key.moneyBudget) fail('Key 预算不足', 'key_budget_exhausted');
     const recent = state.requests.filter(row => row.projectId === project.id && row.modelId === model.id && Date.parse(row.createdAt) <= now && Date.parse(row.createdAt) > now - 60000 && row.httpStatus === 200);
     const rpm = effectiveLimit(state, project, model.id, 'rpm'), tpm = effectiveLimit(state, project, model.id, 'tpm');
-    if (rpm && recent.length >= rpm || tpm && recent.reduce((sum, row) => sum + (row.usage.input || 0) + (row.usage.output || 0), usage.input + usage.output) > tpm) fail('达到项目模型 RPM / TPM 上限', 'rate_limit_exceeded');
+    if (rpm && recent.length >= rpm || tpm && recent.reduce((sum, row) => sum + (row.usage.input || 0) + (row.usage.output || 0), (usage.input || 0) + (usage.output || 0)) > tpm) fail('达到项目模型 RPM / TPM 上限', 'rate_limit_exceeded');
     for (const rule of state.limits.filter(item => item.status === '已启用')) {
       const field = { tenant: 'tenantId', project: 'projectId', key: 'keyId', model: 'modelId' }[rule.scopeType];
       const object = { tenantId: project.tenantId, projectId: project.id, keyId: key.id, modelId: model.id };
       if (!field || object[field] !== rule.scopeId) continue;
       const rows = state.requests.filter(row => row[field] === rule.scopeId && row.httpStatus === 200 && Date.parse(row.createdAt) <= now && Date.parse(row.createdAt) > now - 60000);
-      if (rule.rpm && rows.length >= rule.rpm || rule.tpm && rows.reduce((sum, row) => sum + (row.usage?.input || 0) + (row.usage?.output || 0), usage.input + usage.output) > rule.tpm) fail('达到上层限流规则：' + rule.name, 'rate_limit_exceeded');
+      if (rule.rpm && rows.length >= rule.rpm || rule.tpm && rows.reduce((sum, row) => sum + (row.usage?.input || 0) + (row.usage?.output || 0), (usage.input || 0) + (usage.output || 0)) > rule.tpm) fail('达到上层限流规则：' + rule.name, 'rate_limit_exceeded');
     }
   } catch (caught) { error = caught; }
-  const record = { id: uid('request'), requestId: values.requestId, tenantId: project.tenantId, projectId: project.id, userId: identity.userId, keyId: key?.id || null, modelId: values.modelId, supplyId: supply?.id || null, endpointId: supply?.endpointId || null, callModelId: supply?.callId || null, source: values.source || '模型体验', workspace: true, createdAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString(), httpStatus: error ? error.code === 'rate_limit_exceeded' ? 429 : 403 : 200, errorCode: error?.code || null, errorMessage: error?.message || null, usage: error ? {} : usage, customerCharge: error ? 0 : charge, priceSnapshot: error ? null : structuredClone(supply.price), ttftMs: error ? null : 220, durationMs: error ? 0 : 680, attempts: error ? [] : [{ endpointId: supply.endpointId, durationMs: 680, error: null }], bodyRecorded: project.logBodies, ...(project.logBodies ? { requestBody: values.prompt, responseBody: error ? null : answer } : {}) };
+  const record = { id: uid('request'), requestId: values.requestId, tenantId: project.tenantId, projectId: project.id, userId: identity.userId, keyId: key?.id || null, modelId: values.modelId, supplyId: supply?.id || null, endpointId: supply?.endpointId || null, callModelId: supply?.callId || null, source: values.source || '模型体验', workspace: true, createdAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString(), httpStatus: error ? requestErrorStatus(error.code) : 200, errorCode: error?.code || null, errorMessage: error?.message || null, usage: error ? {} : usage, customerCharge: error ? 0 : charge, priceSnapshot: error ? null : structuredClone(supply.price), ttftMs: error || !['text','multimodal'].includes(model?.type) ? null : 220, durationMs: error ? 0 : 680, attempts: error ? [] : [{ endpointId: supply.endpointId, durationMs: 680, error: null }], billing: key?.subscriptionId ? 'Token Plan' : '按量付费', subscriptionId: key?.subscriptionId || null, quotaDebit: !error && key?.subscriptionId ? usage.input + usage.output : 0, parameters: { temperature: Number(values.temperature ?? 0.7), topP: Number(values.topP ?? 0.8), maxOutput: Number(values.maxOutput || 1024), deepThinking: Boolean(values.deepThinking) }, attachmentCount: values.attachments?.length || 0, contextMessages: values.messages?.length || 0, stages: [{ name: '调用校验', result: error ? '拒绝' : '通过' }, { name: '上游尝试', result: error ? '未执行' : '成功' }], bodyRecorded: project.logBodies, ...(project.logBodies ? { requestBody: JSON.stringify({ prompt: values.prompt || '', systemPrompt: values.systemPrompt || '', messages: values.messages || [], attachments: (values.attachments || []).map(item => ({ name: item.name })) }), responseBody: error ? null : answer } : {}) };
   const changes = [add('requests', record)];
+  if (key?.subscriptionId && !error) { const order = state.orders.find(item => item.id === key.subscriptionId); changes.push(update('orders', order.id, { used: (order.used || 0) + usage.input + usage.output })); }
   if (key && !error) changes.push(update('apiKeys', key.id, { lastUsedAt: record.createdAt }));
-  return { type: 'batch', objectId: record.requestId, label: error ? '体验请求被拒绝' : '模型体验', changes, workspaceActor: identity.userId, workspaceTenantId: identity.tenantId, workspaceProjectId: project.id, requestResult: { ...record, answer: error ? null : answer } };
+  return { type: 'batch', objectId: record.requestId, workspaceResult: error ? '失败' : '成功', label: error ? '体验请求被拒绝' : '模型体验', changes, workspaceActor: identity.userId, workspaceTenantId: identity.tenantId, workspaceProjectId: project.id, requestResult: { ...record, answer: error ? null : answer } };
 }
 export function visibleRequests(state, project, identity) {
   const role = projectRole(state, project, identity);
   if (!role) return [];
   return state.requests.filter(row => row.projectId === project.id && (role !== '成员' || row.userId === identity.userId));
 }
+
+export function requestErrorStatus(code) { return ['invalid_prompt', 'invalid_parameters', 'unsupported_task'].includes(code) ? 400 : code === 'rate_limit_exceeded' ? 429 : ['model_unavailable', 'price_unconfigured'].includes(code) ? 503 : 403; }
+export function activeSubscription(state, project, id, modelId, now = Date.now()) {
+  const order = state.orders.find(item => item.id === id && item.tenantId === project.tenantId);
+  const product = state.products.find(item => item.id === order?.productId && productBillingType(item) === 'plan');
+  if (!order || order.status !== '已开通' || order.startAt && Date.parse(order.startAt) > now || order.expiresAt && Date.parse(order.expiresAt) <= now || !product?.modelIds.includes(modelId)) fail('Token Plan 未生效、已到期或不包含所选模型', 'subscription_unavailable');
+  if (!Number.isSafeInteger(order.entitlement) || order.entitlement < 0 || !Number.isSafeInteger(order.used ?? 0) || (order.used ?? 0) < 0) fail('Token Plan 额度信息不完整', 'subscription_unavailable');
+  return order;
+}
+export function effectiveKeyModels(state, key) {
+  const project = state.projects.find(item => item.id === key.projectId && item.status !== '已删除');
+  return project ? projectModels(state, project).filter(model => key.managed || key.modelIds?.includes(model.id)) : [];
+}
+export function keyAvailability(state, key, now = Date.now()) {
+  if (key.status !== '有效') return key.status;
+  if (key.expiresAt && Date.parse(key.expiresAt) <= now) return '已过期';
+  if (key.moneyBudget != null && currentSpend(state, key, now) >= key.moneyBudget) return '预算耗尽';
+  const project = state.projects.find(item=>item.id===key.projectId);
+  if (!project || project.status !== '正常') return '项目不可用';
+  if (project.moneyBudget != null && project.overageAction === 'stop' && currentSpend(state,project,now)>=project.moneyBudget) return '项目预算耗尽';
+  const models=effectiveKeyModels(state,key);
+  if (!models.length) return '无可用模型';
+  if (key.subscriptionId) { try { const order=activeSubscription(state,project,key.subscriptionId,models[0].id,now); if ((order.used || 0)>=order.entitlement) return '套餐额度耗尽'; } catch { return '套餐不可用'; } }
+  return '可调用';
+}
+export const visibleCatalogue = (state, tenantId) => accountModels(state, tenantId).filter(model => model.visibility === '公开' && model.listingStatus === '已上架');
+
+export const productBillingType = product => product?.billingType || (product?.billingMode === '按量付费' || product?.code?.startsWith('PAYG-') ? 'payg' : product?.code?.startsWith('TOKEN-') ? 'plan' : product?.code?.startsWith('CODING-') ? 'coding' : null);

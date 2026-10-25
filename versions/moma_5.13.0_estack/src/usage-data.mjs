@@ -45,6 +45,7 @@ export const usageModelGroups = [
   { id: '排序模型', name: '排序模型', types: ['重排模型'] },
 ];
 export const fields = {
+  seconds: ['生成视频时长', '秒', '成功生成的视频时长。'],
   successRate: ['成功率', '%', '成功次数 ÷ 请求次数。'],
   latencyP95: ['P95 响应时延', '秒', '95% 的成功请求响应耗时不超过此值，按请求样本计算。'],
   models: ['调用模型数', '个', '所选范围内实际产生请求的去重模型数。'],

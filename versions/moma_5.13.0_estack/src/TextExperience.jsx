@@ -117,7 +117,7 @@ const loadHistory = (storageKey = STORAGE_KEY) => {
   }
 };
 
-function ModelPicker({ value, onChange, models = defaultModels }) {
+function ModelPicker({ value, onChange, models = defaultModels, projectScoped = false }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="pg-model-picker">
@@ -132,7 +132,7 @@ function ModelPicker({ value, onChange, models = defaultModels }) {
         <span>{models.find(item => item.name === value)?.label || value}</span>
         <ChevronDown size={15} />
       </button>
-      <ModelSelectDialog
+      <ModelSelectDialog projectScoped={projectScoped}
         open={open}
         models={models}
         value={value}
@@ -180,6 +180,9 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
   const textarea = useRef();
 
   currentModel.current = model;
+  const [serviceId, setServiceId] = useState(runtime?.initialSupply || '');
+  const services = runtime?.offers?.(model) || [];
+  const service = services.find(item=>item.id===serviceId) || services[0];
   const selectedModel = models.find(item => item.name === model);
   const canUploadImages = imageUploadEnabled && supportsImageInput(selectedModel);
   useEffect(() => () => {
@@ -257,6 +260,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
       id,
       title:
         previous?.title || nextMessages[0]?.question.slice(0, 22) || "新对话",
+      ...previous,
       updatedAt: Date.now(),
       model,
       deepThinking,
@@ -264,7 +268,6 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
       topP,
       maxOutput,
       systemPrompt,
-      ...previous,
       messages: nextMessages,
       ...patch,
     };
@@ -300,7 +303,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
           ],
         };
     if (runtime) {
-      const response = runtime.request({ model, prompt: question, temperature, topP, maxOutput });
+      const response = runtime.request({ model, supplyId:service?.id, prompt: question, temperature, topP, maxOutput, systemPrompt, deepThinking, attachments: pendingMessages.find(item => item.id === pendingId)?.images || [], messages: pendingMessages.filter(item => item.id !== pendingId).map(item => ({ question: item.question, answer: item.answer })) });
       result = response.status === 'success' ? { id: pendingId, question, status: 'success', answer: response.answer, points: [], requestId: response.requestId, charge: response.customerCharge } : { id: pendingId, question, status: 'error', code: response.errorCode || 'request_rejected', message: response.errorMessage, raw: response.errorMessage, requestId: response.requestId };
       if (response.status !== 'success') { setText(question); setNotice(response.errorMessage); }
       else setNotice('Request ID：' + response.requestId + ' · 费用：¥' + (response.customerCharge / 1000000).toFixed(6));
@@ -432,7 +435,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
       ) : (
         <FrontPageHeader className="pg-heading" title={title} icon={Languages} description={imageUploadEnabled ? "文本生成用于问答、创作和翻译；支持图片输入的模型还可进行图文理解。" : "文本生成模型用于理解和生成文字；多模态模型还可以理解图片、视频等内容。"} actions={<div className="pg-heading-actions">{onCompare && <button className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button onClick={() => { setHistoryOpen(true); setResumeRecord(null); }}>历史会话</button><button onClick={requestBlank}>新建对话</button></div>} />
       )}
-      <div className="pg-workspace">
+      <div className="pg-workspace">{runtime && <label className="tx-service">销售服务<select aria-label="体验销售服务" value={service?.id || ''} onChange={event=>setServiceId(event.target.value)} disabled={busy}>{services.map(item=><option key={item.id} value={item.id}>{item.provider.name} · {item.callId}</option>)}</select><small>按此服务价格计费</small></label>}
         {conversationActive ? (
           <div className="pg-history tx-message-list">
             {messages.map((item, index) => (
@@ -615,7 +618,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
             </div>
             <div className="pg-primary-actions">
               <span className="pg-count">{text.length}/6000</span>
-              <ModelPicker models={models} value={model} onChange={changeModel} />
+              <ModelPicker projectScoped={Boolean(runtime)} models={models} value={model} onChange={changeModel} />
               {busy ? (
                 <button
                   className="pg-send"

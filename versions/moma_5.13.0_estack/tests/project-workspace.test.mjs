@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAdminSeed, commitAdminState, persistAdminAction, STORAGE_KEY } from '../src/admin-v2/store.js';
-import { assertProject, currentSpend, modelOffers, parseMoney, projectModels, visibleProjects, visibleRequests } from '../src/project-domain.mjs';
+import { productBillingType, assertProject, currentSpend, modelOffers, parseMoney, projectModels, visibleProjects, visibleRequests } from '../src/project-domain.mjs';
 
 const identity = { tenantId: 'tenant-gov', userId: 'user-zhang' };
 const projectId = 'project-1-1';
@@ -117,4 +117,63 @@ test('Token Plan Key ownership and subscribed model range remain independent of 
   assert.equal(next.apiKeys[0].subscriptionId, 'order-001'); assert.equal(next.apiKeys[0].projectId, projectId);
   assert.throws(() => execute(state, 'createKey', { ...keyValues, subscriptionId: 'order-002' }), /Token Plan/);
   assert.throws(() => execute(state, 'createKey', { ...keyValues, subscriptionId: 'order-001', modelIds: ['model-2'] }), /Token Plan/);
+});
+
+test('repair: unreadable auth never falls back to the preview administrator', async () => {
+  const {workspaceIdentity}=await import('../src/project-domain.mjs');
+  assert.equal(workspaceIdentity({storageError:'blocked',user:null},'enterprise'),null);
+});
+test('repair: read-only members may leave, and membership changes reach the account directory', () => {
+  const {state,actor}=withMember('只读');
+  const next=execute(state,'leave',{},actor);
+  assert.equal(next.projectMemberships.find(item=>item.id==='wpm').status,'已退出');
+  const changed=execute(state,'organization',{type:'member.status',ids:[actor.userId],status:'已停用'},identity,null);
+  assert.equal(changed.memberships.find(item=>item.id==='wm').status,'已停用');
+  assert.throws(()=>execute(changed,'createKey',keyValues,actor));
+});
+test('repair: managed keys have effective models without dereferencing null, and failed validations remove supply', async () => {
+  const {effectiveKeyModels}=await import('../src/project-domain.mjs');
+  const state=createAdminSeed();
+  assert.ok(effectiveKeyModels(state,state.apiKeys.find(item=>item.id===`experience-${projectId}`)).length);
+  state.modelSupplies.filter(item=>item.modelId==='model-1').forEach(item=>{item.validationStatus='失败';});
+  assert.equal(modelOffers(state,state.models.find(item=>item.id==='model-1')).length,0);
+});
+test('repair: Token Plan debits quota once and does not charge PAYG; expiry and exhaustion reject', () => {
+  let state=createAdminSeed();
+  state=execute(state,'createKey',{...keyValues,subscriptionId:'order-001'});
+  const key=state.apiKeys[0], before=state.orders.find(item=>item.id==='order-001');
+  const next=request(state,{keyId:key.id});
+  assert.equal(next.requests[0].customerCharge,0);assert.equal(next.requests[0].quotaDebit,384);
+  assert.equal(next.orders.find(item=>item.id===before.id).used,(before.used||0)+384);
+  for(const patch of [{expiresAt:'2020-01-01T00:00:00Z'},{entitlement:1}]) {
+    const broken=structuredClone(state);Object.assign(broken.orders.find(item=>item.id===before.id),patch);
+    const rejected=request(broken,{keyId:key.id});assert.equal(rejected.requests[0].httpStatus,403);assert.equal(rejected.requests[0].customerCharge,0);
+  }
+});
+test('repair: request metadata preserves context and failed attempts do not invent an upstream call', () => {
+  const state=createAdminSeed();
+  const result=request(state,{systemPrompt:'秘密系统提示',messages:[{role:'user',content:'秘密历史'}],deepThinking:true});
+  assert.equal(result.requests[0].contextMessages,1);assert.equal(result.requests[0].parameters.deepThinking,true);assert.equal(result.requests[0].requestBody,undefined);
+  const failed=request(state,{prompt:''});assert.equal(failed.requests[0].httpStatus,400);assert.deepEqual(failed.requests[0].attempts,[]);assert.equal(failed.requests[0].stages[1].result,'未执行');assert.equal(failed.audits[0].result,'失败');
+});
+test('repair: image-only calls, media units and usage boundaries remain coherent', async () => {
+  let state=createAdminSeed();state=execute(state,'model',{modelId:'catalog-demo-image',enabled:true,rpm:'',tpm:''});
+  const next=request(state,{modelId:'catalog-demo-image',prompt:'',attachments:[{name:'参考.png'}],quantity:2});
+  assert.equal(next.requests[0].httpStatus,200);assert.deepEqual(next.requests[0].usage,{images:2});assert.equal(next.requests[0].customerCharge,400000);
+  const {projectUsageData}=await import('../src/project-view-data.mjs');
+  const data=projectUsageData({state:next,records:[next.requests[0]],start:'2026-10-24',end:'2026-10-24',now:new Date('2026-10-25T00:00:00+08:00')});
+  assert.equal(data.summary.requests,1);assert.equal(data.summary.images,2);assert.equal(data.summary.total,null);assert.ok(data.buckets.every(item=>typeof item.time==='number'));assert.equal(data.buckets.reduce((sum,item)=>sum+item.requests,0),1);
+});
+test('repair: project routes cannot reference unauthorized models and orders are account scoped', () => {
+  const state=createAdminSeed();assert.throws(()=>execute(state,'routes',{routes:[{id:'r',name:'测试路由',modelIds:['no-model']}]}));
+  const next=execute(state,'routes',{routes:[{id:'r',name:'测试路由',modelIds:['model-1'],strategy:'效果优先'}]});assert.deepEqual(next.projects.find(item=>item.id===projectId).smartRoutes[0].modelIds,['model-1']);
+  assert.throws(()=>execute(state,'order',{productIds:['product-plan']},identity,null),/重复/);
+});
+
+test('product billing classification accepts shared explicit types and catalogue codes', () => {
+  assert.equal(productBillingType({billingType:'plan'}),'plan');
+  assert.equal(productBillingType({code:'TOKEN-100M'}),'plan');
+  assert.equal(productBillingType({billingMode:'按量付费'}),'payg');
+  assert.equal(productBillingType({code:'CODING-TEAM'}),'coding');
+  assert.equal(productBillingType({billingType:'package',code:'TOKEN-OLD'}),'package');
 });

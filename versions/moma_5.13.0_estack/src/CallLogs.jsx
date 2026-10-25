@@ -44,7 +44,7 @@ function LogDetail({ log, onClose }) {
     try { await navigator.clipboard.writeText(text); setNotice('已复制'); }
     catch { setNotice('复制失败，请选中文本后手动复制'); }
   }
-  const [status, error, suggestion] = logStatuses[log.status];
+  const [status, error, suggestion] = logStatuses[log.status] || ['未知状态', log.errorCode || '', log.errorMessage || ''];
   const json = logJSON(log);
   return <dialog ref={dialog} className={`cl-drawer ${expanded ? 'cl-expanded' : ''}`} aria-labelledby="cl-detail-title" onCancel={onClose} onClick={event => { if (event.target === event.currentTarget && event.clientX < event.currentTarget.getBoundingClientRect().left) onClose(); }}>
     <div className="cl-drawer-head"><div><h2 id="cl-detail-title">请求详情</h2><p>{log.billing} · {log.source}</p></div><div className="cl-actions"><IconAction label={expanded ? '收起详情' : '展开详情'} icon={expanded ? Minimize2 : Maximize2} onClick={() => setExpanded(!expanded)} /><IconAction label="关闭详情" icon={X} onClick={onClose} /></div></div>
@@ -53,10 +53,10 @@ function LogDetail({ log, onClose }) {
       <div className="cl-tabbar"><Tabs.List aria-label="详情视图"><Tabs.Trigger value="overview">概览</Tabs.Trigger><Tabs.Trigger value="json">JSON</Tabs.Trigger></Tabs.List>{tab === 'json' && <div className="cl-actions"><IconAction label="自动换行" icon={WrapText} aria-pressed={wrap} onClick={() => setWrap(!wrap)} /><IconAction label="复制 JSON" icon={Copy} onClick={() => copy(json)} /><IconAction label="下载 JSON" icon={Download} onClick={() => saveFile(json, `${log.id}.json`, 'application/json;charset=utf-8')} /></div>}</div>
       <Tabs.Content value="overview" className="cl-detail-scroll">
         <section className={`cl-result ${log.status === 200 ? '' : 'cl-error'}`}><strong><span className="cl-dot" />{log.status} · {status}</strong>{error && <><code>{error}</code><p>{suggestion}</p></>}</section>
-        <section className="cl-detail-section"><h3>请求与归属</h3><dl>{[['请求开始时间', log.time], ['请求结束时间', log.finishedAt ?? '—'], ['模型 ID', log.model], ['请求来源', log.source], ['计费方式', log.billing], ['服务名称 / ID', [log.endpointName, log.endpointId].filter(Boolean).join(' / ') || '—'], ['套餐', log.resource || '—'], ['套餐 ID', log.resourceId ?? '—'], ['Key 名称/Key ID', log.keyName ? `${log.keyName}（${log.keyId}）` : '不适用'], ['API Key', maskApiKey(log.apiKey)], ['客户端 IP', log.clientIp ?? '—'], ['调用方式', log.stream ? '流式' : '非流式']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section>
+        <section className="cl-detail-section"><h3>请求与归属</h3><dl>{[['项目', log.projectName || '—'], ['调用人', log.userName || '—'], ['费用', log.charge == null ? '—' : '¥' + (log.charge / 1e6).toFixed(6)], ['套餐扣减', log.quotaDebit ?? '—'], ['请求开始时间', log.time], ['请求结束时间', log.finishedAt ?? '—'], ['模型 ID', log.model], ['请求来源', log.source], ['计费方式', log.billing], ['服务名称 / ID', [log.endpointName, log.endpointId].filter(Boolean).join(' / ') || '—'], ['套餐', log.resource || '—'], ['套餐 ID', log.resourceId ?? '—'], ['Key 名称/Key ID', log.keyName ? `${log.keyName}（${log.keyId}）` : '不适用'], ['API Key', log.apiKey === '系统托管' ? '系统托管' : maskApiKey(log.apiKey)], ['客户端 IP', log.clientIp ?? '—'], ['调用方式', log.stream == null ? '—' : log.stream ? '流式' : '非流式']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section>
         <section className="cl-detail-section"><h3>Token 用量</h3><dl className="cl-metrics">{[['输入 Tokens', log.input], ['输出 Tokens', log.output], ['缓存命中 Tokens', log.cache], ['总 Tokens', log.total], ['思考 Tokens', log.thinking]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{number(value)}</dd></div>)}</dl><p className="cl-muted">总 Tokens = 输入 + 输出；缓存命中已包含在输入中，不重复累加。{log.billing === 'Token Plan' && 'Token 用量不等同于套餐额度扣减。'}缺失字段显示 —。</p></section>
-        <section className="cl-detail-section"><h3>时延与完成状态</h3><dl className="cl-metrics"><div><dt>首 Token 时延</dt><dd>{duration(log.first)}</dd></div><div><dt>总时延</dt><dd>{duration(log.duration)}</dd></div><div><dt>每 Token 输出时延</dt><dd>{duration(log.tpot)}</dd></div></dl><dl><div><dt>是否超时</dt><dd>{log.isTimeout == null ? '—' : log.isTimeout ? '是' : '否'}</dd></div><div><dt>是否取消</dt><dd>{log.isCanceled == null ? '—' : log.isCanceled ? '是' : '否'}</dd></div></dl></section>
-        <details className="cl-more"><summary>接口与客户端</summary><dl><div><dt>接口路径</dt><dd>/v1/chat/completions</dd></div><div><dt>协议</dt><dd>{log.stream ? 'SSE' : 'HTTP'}</dd></div><div><dt>User-Agent</dt><dd>{log.userAgent ?? '—'}</dd></div></dl></details>
+        <section className="cl-detail-section"><h3>其他计量</h3><dl>{[['图片张数',log.usage?.images],['音视频秒数',log.usage?.seconds],['合成字符数',log.usage?.characters]].map(([name,value])=><div key={name}><dt>{name}</dt><dd>{number(value)}</dd></div>)}</dl></section><section className="cl-detail-section"><h3>时延与完成状态</h3><dl className="cl-metrics"><div><dt>首 Token 时延</dt><dd>{duration(log.first)}</dd></div><div><dt>总时延</dt><dd>{duration(log.duration)}</dd></div><div><dt>每 Token 输出时延</dt><dd>{duration(log.tpot)}</dd></div></dl><dl><div><dt>是否超时</dt><dd>{log.isTimeout == null ? '—' : log.isTimeout ? '是' : '否'}</dd></div><div><dt>是否取消</dt><dd>{log.isCanceled == null ? '—' : log.isCanceled ? '是' : '否'}</dd></div></dl></section>
+        <details className="cl-more"><summary>调度过程</summary>{(log.stages || []).map((stage, index) => <p key={index}>{stage.name}：{stage.result}</p>)}</details><details className="cl-more"><summary>接口与客户端</summary><dl><div><dt>接口路径</dt><dd>{log.api ?? (log.projectId ? '未记录' : '/v1/chat/completions')}</dd></div><div><dt>协议</dt><dd>{log.stream ? 'SSE' : 'HTTP'}</dd></div><div><dt>User-Agent</dt><dd>{log.userAgent ?? '—'}</dd></div></dl></details>
         <details className="cl-more"><summary>请求与响应内容</summary><dl><div><dt>请求内容</dt><dd>{log.requestBody ?? '未采集'}</dd></div><div><dt>响应内容</dt><dd>{log.responseBody ?? '未采集'}</dd></div></dl></details>
       </Tabs.Content>
       <Tabs.Content value="json" className="cl-detail-scroll cl-json-panel"><JSONCode text={json} wrap={wrap} /></Tabs.Content>
@@ -65,15 +65,16 @@ function LogDetail({ log, onClose }) {
   </dialog>;
 }
 
-export default function CallLogs({ billing = '全部' }) {
+export default function CallLogs({ billing = '全部', records: suppliedRecords, scopeId = 'tenant-call-logs', initialRequest = '' }) {
   const [today] = useState(shanghaiDate);
-  const [records] = useState(() => createLogRecords(today));
+  const [sampleRecords] = useState(() => suppliedRecords ? [] : createLogRecords(today));
+  const records = suppliedRecords || sampleRecords;
   const defaults = billing === '全部' ? { ...defaultLogFilters, range:'1' } : defaultLogFilters;
   const [draft, setDraft] = useState(defaults);
   const [filters, setFilters] = useState(defaults);
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
-  const [selected, setSelected] = useState(null);
+  const [selected, setSelected] = useState(() => records.find(row => row.id === initialRequest) || null);
   const [notice, setNotice] = useState('');
   const [dateError, setDateError] = useState('');
   const unified = billing === '全部';
@@ -112,7 +113,7 @@ export default function CallLogs({ billing = '全部' }) {
         {!unified && draft.range === 'custom' && <div className="cl-date-range"><label>开始日期<input type="date" max={draft.end || today} value={draft.start} onInput={e => update('start', e.currentTarget.value)} required /></label><span>—</span><label>结束日期<input type="date" min={draft.start} max={today} value={draft.end} onInput={e => update('end', e.currentTarget.value)} required /></label><small>北京时间 UTC+8</small></div>}
         {dateError && <p role="alert" className="cl-date-error">{dateError}</p>}
       </form>
-      {unified && <div className="cl-view-row"><SavedFilterViews scope="tenant-call-logs" saveDescription="保存当前已应用的时间、计费方式、模型、套餐、API Key、请求来源、状态和 Request ID 条件；查询草稿不包含在视图中。保存后可快速应用已保存的筛选条件。" value={filters} onApply={value => { if (!value || !['1','yesterday','7','30','custom'].includes(value.range) || value.range === 'custom' && !validAnalyticsRange(value.start,value.end,'day',Date.now(),31)) return; const next = restoreLogFilters(value, defaults, records); setFilters(next); setDraft(next); setPage(1); setDateError(''); }} summary={viewConditions.join(' · ')} preview={viewPreview} conditions={viewConditions}/></div>}
+      {unified && <div className="cl-view-row"><SavedFilterViews scope={scopeId} saveDescription="保存当前已应用的时间、计费方式、模型、套餐、API Key、请求来源、状态和 Request ID 条件；查询草稿不包含在视图中。保存后可快速应用已保存的筛选条件。" value={filters} onApply={value => { if (!value || !['1','yesterday','7','30','custom'].includes(value.range) || value.range === 'custom' && !validAnalyticsRange(value.start,value.end,'day',Date.now(),31)) return; const next = restoreLogFilters(value, defaults, records); setFilters(next); setDraft(next); setPage(1); setDateError(''); }} summary={viewConditions.join(' · ')} preview={viewPreview} conditions={viewConditions}/></div>}
       <div className="cl-table-tools"><span>请求记录 <b>{filtered.length}</b></span><span className="cl-feedback" role="status">{notice}</span><IconAction label="导出筛选结果" icon={Download} disabled={!filtered.length} onClick={() => { saveFile(logsCSV(filtered), `${unified ? '' : `${billing}-`}调用日志.csv`, 'text/csv;charset=utf-8'); setNotice(`已导出 ${filtered.length} 条记录`); }} /></div>
       <div className="cl-table-note">单位：Tokens / ms；缓存命中包含在输入中，缺失字段显示 —。</div>
       <div className="cl-table-scroll" tabIndex={0} aria-label="调用日志表格，可横向滚动"><table className="cl-table cl-audit-table"><thead><tr>{['请求时间', 'Request ID', '模型 ID', '服务 / 套餐', 'API Key', '状态码', '输入 Tokens', '输出 Tokens', '缓存命中 Tokens', '首 Token 时延', '总时延', '操作'].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>
@@ -121,8 +122,8 @@ export default function CallLogs({ billing = '全部' }) {
           <td><div className="cl-id"><button type="button" className="cl-request-link" title={log.id} aria-label={`查看请求 ${log.id}`} onClick={() => setSelected(log)}><code>{log.id.slice(0, 8)}…{log.id.slice(-4)}</code></button><IconAction label={`复制 Request ID ${log.id}`} icon={Copy} size="icon-xs" onClick={() => copyId(log.id)} /></div></td>
           <td>{log.model}</td>
           <td>{log.resource || log.endpointName || '—'}<small>{log.billing}{(log.resourceId || log.endpointId) && ` · ${log.resourceId || log.endpointId}`}</small></td>
-          <td><code>{maskApiKey(log.apiKey)}</code></td>
-          <td><span className={`cl-status ${log.status === 200 ? 'cl-success' : 'cl-failed'}`} title={logStatuses[log.status][0]}>{log.status}</span></td>
+          <td><code>{log.apiKey === '系统托管' ? '系统托管' : maskApiKey(log.apiKey)}</code></td>
+          <td><span className={`cl-status ${log.status === 200 ? 'cl-success' : 'cl-failed'}`} title={logStatuses[log.status]?.[0] || '未知状态'}>{log.status}</span></td>
           {[log.input, log.output, log.cache].map((value, index) => <td className="cl-numeric" key={index} title={value == null ? '本次请求未返回此用量字段' : undefined}>{number(value)}</td>)}
           <td className="cl-numeric" title="首 Token 时延，单位 ms">{number(log.first)}</td><td className="cl-numeric" title="请求端到端时延，单位 ms">{number(log.duration)}</td>
           <td><IconAction label={`查看请求详情 ${log.id}`} icon={Eye} onClick={() => setSelected(log)} /></td>

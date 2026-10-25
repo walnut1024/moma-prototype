@@ -7,13 +7,14 @@
     "dev": "vite",
     "build": "npm run build:5.13.0 && npm run build:5.12.0 && vite build && node scripts/prepare-sites-build.mjs",
     "build:5.12.0": "vite build --config versions/moma_5.12.0_estack/vite.config.mjs",
-    "lint": "oxlint src worker scripts vite.config.mjs tests/*.test.mjs",
+    "lint": "oxlint src worker scripts vite.config.mjs tests/*.test.mjs versions/moma_5.13.0_estack/src versions/moma_5.13.0_estack/tests",
     "preview": "vite preview",
-    "test": "npm run test:admin && npm run test:usage && npm run test:sites && node --test tests/route-models.test.mjs tests/model-selection.test.mjs tests/chart-style.test.mjs tests/version-copy.test.mjs",
+    "test": "npm run test:admin && npm run test:usage && npm run test:sites && node --test tests/route-models.test.mjs tests/model-selection.test.mjs tests/chart-style.test.mjs tests/version-copy.test.mjs && npm run test:5.13.0",
     "test:admin": "node --test tests/admin-v2-*.test.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "test:usage": "node --test tests/usage-statistics.test.mjs tests/billing-usage.test.mjs",
-    "build:5.13.0": "vite build --config versions/moma_5.13.0_estack/vite.config.mjs"
+    "build:5.13.0": "vite build --config versions/moma_5.13.0_estack/vite.config.mjs",
+    "test:5.13.0": "node --test versions/moma_5.13.0_estack/tests/*.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

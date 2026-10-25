@@ -199,7 +199,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
     }
   } else throw new Error("未知操作");
   next.revision += 1; next.updatedAt = timestamp;
-  if (action.type !== "setRole") next.audits.unshift(record(`audit-${next.revision}`, { createdAt: timestamp, updatedAt: timestamp, actor: action.workspaceActor || actor, tenantId: action.workspaceTenantId, projectId: action.workspaceProjectId, action: action.label || action.type, objectId: action.record?.id || action.id || action.objectId || "batch", result: "成功", before: isEnterprise ? action.changes.filter(change => change.type === 'update').map(change => ({ collection: change.collection, id: change.id, values: Object.fromEntries(Object.keys(change.changes).map(key => [key, state[change.collection].find(item => item.id === change.id)?.[key]])) })) : null, after: action.record || action.changes }));
+  if (action.type !== "setRole") next.audits.unshift(record(`audit-${next.revision}`, { createdAt: timestamp, updatedAt: timestamp, actor: action.workspaceActor || actor, tenantId: action.workspaceTenantId, projectId: action.workspaceProjectId, action: action.label || action.type, objectId: action.record?.id || action.id || action.objectId || "batch", result: action.workspaceResult || "成功", before: (isEnterprise || action.workspaceActor) ? action.changes.filter(change => change.type === 'update').map(change => ({ collection: change.collection, id: change.id, values: Object.fromEntries(Object.keys(change.changes).map(key => [key, state[change.collection].find(item => item.id === change.id)?.[key]])) })) : null, after: action.record || action.changes }));
   return next;
 }
 

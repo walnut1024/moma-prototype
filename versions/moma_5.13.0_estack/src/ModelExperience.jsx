@@ -274,12 +274,13 @@ function ModelPicker({ model, options, onChange, speech = false }) {
         onClick={() => setOpen(true)}
       >
         {speech && <Volume2 size={18} aria-hidden="true" />}
-        <span>{speech ? selected.name.split("/").reverse().join(" · ") : selected.name}</span>
+        <span>{selected?.label || (speech ? selected?.name.split("/").reverse().join(" · ") : selected?.name) || '暂无可用模型'}</span>
         <ChevronDown size={15} aria-hidden="true" />
       </button>
       <ModelSelectDialog
         open={open}
         models={options}
+        projectScoped={options.some(item=>item.label)}
         value={model}
         onApply={onChange}
         onClose={() => setOpen(false)}
@@ -293,10 +294,11 @@ export default function ModelExperience({
   groupLabel,
   onKindChange,
   onCompare,
+  runtime,
 }) {
   const [mode, setMode] = useState("语音识别");
   const [model, setModel] = useState(
-    kind === "text"
+    runtime ? runtime.models[0]?.name || "" : kind === "text"
       ? "DeepSeek/DeepSeek-V4-Pro"
       : kind === "image"
         ? "Qwen/Qwen-Image-3.0-Pro"
@@ -370,8 +372,12 @@ export default function ModelExperience({
         : kind === "video"
           ? "视频生成"
           : "语音生成");
-  const models = modelCatalog[kind === "voice" ? (asr ? "asr" : "tts") : kind];
-  const videoProfile = videoProfiles[model];
+  useEffect(() => { runtime?.onDirty(Boolean(text.trim() || file || busy)); }, [text,file,busy]);
+  useEffect(() => () => runtime?.onDirty(false), []);
+  const models = runtime?.models || modelCatalog[kind === "voice" ? (asr ? "asr" : "tts") : kind];
+  const [serviceId,setServiceId]=useState('');
+  const services=runtime?.offers?.(model) || [], service=services.find(item=>item.id===serviceId) || services[0];
+  const videoProfile = videoProfiles[model] || videoProfiles["Qwen/Wan2.7-R2V"];
   const prompts = promptCatalog[kind] || [];
   useEffect(() => {
     if (!file) {
@@ -380,7 +386,7 @@ export default function ModelExperience({
     }
     const value = URL.createObjectURL(file);
     setUrl(value);
-    return () => URL.revokeObjectURL(value);
+  return () => URL.revokeObjectURL(value);
   }, [file]);
   useEffect(
     () => () => {
@@ -459,7 +465,7 @@ export default function ModelExperience({
   function changeModel(value) {
     setModel(value);
     if (kind === "video") {
-      const profile = videoProfiles[value];
+      const profile = videoProfiles[value] || videoProfiles["Qwen/Wan2.7-R2V"];
       setVideoMode(profile.modes[0]);
       setResolution(profile.resolutions[0]);
       setAspect(profile.aspects[0]);
@@ -584,10 +590,11 @@ export default function ModelExperience({
   }
   function send(event) {
     event?.preventDefault();
-    if (busy || !model || (asr && !file) || (!asr && !text.trim() && !file))
+    if (runtime?.disabled || busy || !model || (asr && !file) || (!asr && !text.trim() && !file))
       return;
     setError("");
     setNotice("");
+
     setBusy(true);
     const message = {
       text: text.trim() || (kind === "text" && file ? "请分析这个文件" : ""),
@@ -617,6 +624,7 @@ export default function ModelExperience({
     };
     // ponytail: local mock response only; replace with model API when integration is requested.
     timer.current = setTimeout(() => {
+    if(runtime) { const result=runtime.request({model,supplyId:service?.id,prompt:text.trim() || file?.name || '',attachments:file?[{name:file.name}]:[],temperature:Number(temperature),topP:Number(topP),systemPrompt,quantity:kind==='image'?Number(imageCount):kind==='video'?parseInt(duration):asr?Math.max(1,recordSeconds):text.length}); if(result.status!=='success'){setError(result.errorMessage || '请求未完成');setBusy(false);return;} message.requestId=result.requestId;message.customerCharge=result.customerCharge; }
       setMessages((items) => [
         ...items,
         {
@@ -738,11 +746,13 @@ export default function ModelExperience({
         : kind === "video"
           ? "描述镜头内容、运动方式与氛围…"
           : "输入问题";
+    if (runtime && !models.length) return <div className="pc-surface pc-empty"><h1>当前项目没有可用的{groupLabel}模型</h1><p>请先在项目模型中开通模型，并确认销售服务及价格可用。</p></div>;
   return (
     <section
       className={`playground pg-${kind}-experience ${asr ? "pg-asr-experience" : ""} ${messages.length ? "has-messages" : ""}`}
     >
       <FrontPageHeader className="pg-heading" title={label} description={headingCopy} icon={kind === "voice" ? Mic : Image} actions={<div className="pg-heading-actions">{kind === "text" && <button type="button" className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button type="button" onClick={createConversation}>新建对话</button></div>} />
+      {runtime && <label className="pc-media-service">销售服务<select aria-label="体验销售服务" value={service?.id || ''} onChange={event=>setServiceId(event.target.value)} disabled={busy}>{services.map(item=><option key={item.id} value={item.id}>{item.provider.name} · {item.callId}</option>)}</select></label>}
       {onKindChange && (
         <div className="pg-tabs" aria-label="视觉体验模式">
           {[
@@ -808,7 +818,7 @@ export default function ModelExperience({
                 </div>
                 <div className="pg-answer">
                   <div className="pg-answer-meta">
-                    <strong>{message.model}</strong>
+                    <strong>{models.find(item=>item.name===message.model)?.label || message.model}</strong>{message.requestId && <button onClick={()=>runtime?.openRequest(message.requestId)}>Request ID：{message.requestId} · ¥{(message.customerCharge/1e6).toFixed(6)}</button>}
                     <small>
                       {visualGeneration ? (
                         kind === "image" ? (
@@ -1026,7 +1036,7 @@ export default function ModelExperience({
           )}
           {asr && <SpeechRecorder
             file={file} url={url} recording={recording} requesting={requestingMic}
-            seconds={recordSeconds} stream={microphone.current} disabled={busy}
+            seconds={recordSeconds} stream={microphone.current} disabled={busy || runtime?.disabled}
             onStart={startRecording} onStop={stopRecording} onRemove={() => setFile(null)}
           />}
           {!asr && upload && file && (
@@ -1497,7 +1507,7 @@ export default function ModelExperience({
                 }
                 title={asr ? "开始识别" : undefined}
                 disabled={
-                  busy || (asr && !file) || (!asr && !text.trim() && !file)
+                  runtime?.disabled || busy || (asr && !file) || (!asr && !text.trim() && !file)
                 }
               >
                 {busy ? (
@@ -1515,7 +1525,7 @@ export default function ModelExperience({
         </form>
         <p className="pg-quota-note">
           {visualGeneration
-            ? "AI 生成内容可能存在偏差，使用前请自行核实。使用本服务会消耗已订购额度，具体以用量记录为准。"
+            ? "AI 生成内容可能存在偏差，使用前请自行核实。体验费用归入当前项目，具体以用量记录为准。"
             : asr
               ? "识别结果可能存在偏差，请结合录音核对。"
               : "体验产生的用量将从您已订购的模型额度中扣除，具体以用量记录为准。"}

@@ -34,7 +34,8 @@ export function usePrototypeAuth() {
     addEventListener('hashchange', sync);
     return () => removeEventListener('hashchange', sync);
   }, []);
-  const navigate = (target, params = '') => {
+  const navigate = (target, params = '', confirmed = false) => {
+    if (!confirmed) { const proceed = () => navigate(target, params, true); if (window.dispatchEvent(new CustomEvent('moma-project-navigation', { cancelable: true, detail: proceed }))) proceed(); return; }
     if (!authRoute(location.hash)) returnTo.current = location.hash;
     location.hash = `/auth/${target}${params}`;
   };
@@ -53,7 +54,8 @@ export function AuthBanner({ auth, showToast }) {
   const [open, setOpen] = useState(false), [spacesOpen, setSpacesOpen] = useState(false);
   const currentSpace = auth.spaces.find(space => space.id === auth.state.activeSpace);
   const navigate = route => { setOpen(false); auth.navigate(route); };
-  const switchSpace = space => {
+  const switchSpace = (space, confirmed = false) => {
+    if (!confirmed) { const proceed = () => switchSpace(space, true); if (window.dispatchEvent(new CustomEvent('moma-project-navigation', { cancelable: true, detail: proceed }))) proceed(); return; }
     try { auth.commit({ ...auth.state, activeSpace: space.id }); setSpacesOpen(false); toast.success(`已切换至${space.name}`); }
     catch (error) { toast.error(error.message); }
   };
@@ -65,7 +67,7 @@ export function AuthBanner({ auth, showToast }) {
       {auth.user && <div className="auth-menu-profile"><b>{auth.user.name}</b><span>{auth.user.phone ? maskMemberPhone(auth.user.phone) : auth.user.email}</span></div>}
       <Button variant="ghost" onClick={() => navigate('account')}><UserRound data-icon="inline-start" />账号中心</Button>
       <Button variant="ghost" onClick={() => { setOpen(false); auth.navigate('invite', `?token=${AUTH_INVITE.id}`); }}><Users data-icon="inline-start" />加入企业</Button>
-      {auth.user && <>{auth.user.phone ? <Button variant="ghost" onClick={() => navigate('password')}><KeyRound data-icon="inline-start" />设置登录密码</Button> : <p className="auth-form-note">密码重置请联系企业管理员</p>}<Button variant="ghost" onClick={() => { try { auth.commit({ ...auth.state, currentUserId: null }); setOpen(false); auth.navigate('login'); toast.success('已退出登录'); } catch (error) { toast.error(error.message); } }}><LogOut data-icon="inline-start" />退出登录</Button></>}
+      {auth.user && <>{auth.user.phone ? <Button variant="ghost" onClick={() => navigate('password')}><KeyRound data-icon="inline-start" />设置登录密码</Button> : <p className="auth-form-note">密码重置请联系企业管理员</p>}<Button variant="ghost" onClick={() => { const proceed=()=>{try { auth.commit({ ...auth.state,currentUserId:null });setOpen(false);auth.navigate('login', '', true);toast.success('已退出登录'); }catch(error){toast.error(error.message);}}; if(window.dispatchEvent(new CustomEvent('moma-project-navigation',{cancelable:true,detail:proceed})))proceed(); }}><LogOut data-icon="inline-start" />退出登录</Button></>}
     </PopoverContent></Popover>
   </div>;
 }

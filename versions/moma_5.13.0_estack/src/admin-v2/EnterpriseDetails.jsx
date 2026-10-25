@@ -1,4 +1,4 @@
-import { money, currentSpend } from '../project-domain.mjs';
+import { money, currentSpend, effectiveKeyModels, keyAvailability } from '../project-domain.mjs';
 import { maskApiKey } from '../api-key-utils.mjs';
 import { Fragment, useState } from 'react';
 import EnterpriseMembers from './EnterpriseMembers';
@@ -7,7 +7,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { DEFAULT_PAGE_SIZE, FilterPagination } from '../components/FilterControls';
-import { enterpriseAdmins, enterpriseDisplayValue, enterpriseGrant, enterpriseMetadataFields } from './enterprise';
+import { enterpriseAdmins, enterpriseDisplayValue, enterpriseMetadataFields } from './enterprise';
 
 export const enterpriseTabs = { info: '基本信息', members: '组织及成员', projects: '项目空间', keys: 'API Key' };
 const time = value => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—';
@@ -19,13 +19,13 @@ function Table({ columns, rows, empty = '暂无数据' }) {
 }
 function ScopeList({ state, tenant, projects, keys, params, navigate, Status, askKey, canWrite, Modal }) {
   const [query, setQuery] = useState(''), [page, setPage] = useState(1), [size, setSize] = useState(DEFAULT_PAGE_SIZE), [inspect, setInspect] = useState(null);
-  const grant = enterpriseGrant(state, tenant.id), projectId = params.get('project') || '';
+  const projectId = params.get('project') || '';
   const selectedProject = projects.find(project => project.id === projectId);
   const rows = keys.filter(key => (!projectId || key.projectId === projectId) && `${key.name} ${key.keyId}`.toLowerCase().includes(query.trim().toLowerCase()));
   const current = Math.max(1, Math.min(page, Math.ceil(rows.length / size) || 1));
-  const effectiveModels = key => state.models.filter(model => key.modelIds.includes(model.id) && (!grant || grant.modelIds.includes(model.id)));
+  const effectiveModels = key => effectiveKeyModels(state, key);
   return <><div className="ent-section-head"><div><h2>API Key</h2><p>查看企业所属凭证及模型范围；企业账号冻结或项目停用会拦截调用，Key 自身状态单独保留。</p></div></div><div className="ent-toolbar"><Input aria-label="搜索企业 Key" placeholder="Key 名称或完整 ID" value={query} onChange={e => { setQuery(e.target.value); setPage(1); }}/><select aria-label="所属项目" value={projectId} onChange={e => { navigate({ project: e.target.value }); setPage(1); }}><option value="">全部项目</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select><span className="ent-count">{rows.length} 个 Key</span></div>
-    {projectId && !selectedProject ? <p className="ent-error">所选项目不属于当前企业，请选择有效项目。</p> : <Table columns={['Key 名称/Key ID', 'API Key', '所属项目', '授权交集', 'Key 状态', '操作']} empty="暂无匹配的 Key。企业管理员可在前台创建。" rows={rows.slice((current - 1) * size, current * size).map(key => ({ id: key.id, cells: [<span>{key.name}<small>{key.keyId}</small></span>, maskApiKey(key.secretPreview), projects.find(project => project.id === key.projectId)?.name || '归属异常', <button className="ent-link" onClick={() => setInspect(key)}>{effectiveModels(key).length} 个</button>, <Status value={key.status}/>, <div className="ent-row-actions"><button className="ent-link" onClick={() => setInspect(key)}>详情</button>{['有效', '停用'].includes(key.status) && <button className="ent-link" disabled={!canWrite || (tenant.status === '停用' && key.status === '停用')} onClick={() => askKey(key)}>{key.status === '停用' ? '启用' : '停用'}</button>}</div>] }))}/>}
+    {projectId && !selectedProject ? <p className="ent-error">所选项目不属于当前企业，请选择有效项目。</p> : <Table columns={['Key 名称/Key ID', 'API Key', '所属项目', '授权交集', 'Key 状态', '操作']} empty="暂无匹配的 Key。企业管理员可在前台创建。" rows={rows.slice((current - 1) * size, current * size).map(key => ({ id: key.id, cells: [<span>{key.name}<small>{key.keyId}</small></span>, key.managed ? '系统托管' : maskApiKey(key.secretPreview), projects.find(project => project.id === key.projectId)?.name || '归属异常', <button className="ent-link" onClick={() => setInspect(key)}>{effectiveModels(key).length} 个</button>, <Status value={keyAvailability(state,key)}/>, <div className="ent-row-actions"><button className="ent-link" onClick={() => setInspect(key)}>详情</button>{!key.managed && ['有效', '停用'].includes(key.status) && <button className="ent-link" disabled={!canWrite || (tenant.status === '停用' && key.status === '停用')} onClick={() => askKey(key)}>{key.status === '停用' ? '启用' : '停用'}</button>}</div>] }))}/>}
     <FilterPagination total={rows.length} page={current} size={size} onPageChange={setPage} onSizeChange={value => { setSize(value); setPage(1); }}/>
     {inspect && <Modal title="API Key 详情" description={`${tenant.name} · ${inspect.name}`} close={() => setInspect(null)}><div className="ent-result"><dl className="ent-facts"><dt>Key ID</dt><dd>{inspect.keyId}</dd><dt>所属项目</dt><dd>{projects.find(project => project.id === inspect.projectId)?.name || '归属异常'}</dd><dt>Key 状态</dt><dd>{inspect.status}</dd><dt>调用条件</dt><dd>{tenant.status === '停用' ? '企业账号已冻结，调用被拒绝' : projects.find(project => project.id === inspect.projectId)?.status === '停用' ? '项目已停用，调用被拒绝' : '需同时满足 Key 状态、模型开放范围、额度与网关规则'}</dd><dt>最近调用</dt><dd>{time(inspect.lastUsedAt)}</dd><dt>有效模型范围</dt><dd>{effectiveModels(inspect).map(model => model.name).join('、') || '无'}</dd></dl><p className="ent-hint">此处展示企业授权与 Key 授权的交集；模型自身开放规则仍会参与调用校验。</p></div><div className="ent-modal-footer"><Button onClick={() => setInspect(null)}>关闭</Button></div></Modal>}
   </>;

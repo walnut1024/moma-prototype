@@ -96,3 +96,28 @@
 .pc-history-list [data-slot=button] { min-height: 56px; justify-content: space-between; gap: 12px; text-align: left; }
 .pc-history-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc-history-list small { color: #586982; font-size: 11px; flex-shrink: 0; }
+.pc-nav > div > small { display:block; margin:16px 10px 6px; color:#586982; }
+.pc-main > .content, .pc-main > .us-page, .pc-main > .operation-page, .pc-main > .org-page { margin:0; }
+.pc-main .model-card { cursor:default; }
+.pc-main .model-card footer { display:flex; justify-content:space-between; align-items:center; }
+.pc-main .model-card .context { white-space:normal; line-height:1.6; }
+.pc-main .catalogue-toolbar > input { flex:1; min-width:180px; max-width:420px; }
+@media(max-width:900px) { .pc-main .catalogue-layout:not(.catalogue-collapsed) { grid-template-columns:160px minmax(0,1fr); } }
+.pc-main .model-card { height:auto; min-height:320px; display:flex; flex-direction:column; }
+.pc-main .model-card footer { position:static; margin-top:auto; min-height:42px; flex-wrap:wrap; }
+.pc-main .model-card h4 { height:auto; min-height:40px; }
+.pc-main .model-card h4 button { font-size:16px; }
+.pc-main .catalogue-toolbar { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.pc-main .catalogue-toolbar h3 { margin:0; white-space:nowrap; }
+.pc-main .catalogue-toolbar > input { width:auto; }
+.pc-main .catalogue-toolbar select { height:32px; border:1px solid #e4eaf3; border-radius:6px; padding:0 8px; }
+.tx-service { display:flex; align-items:center; gap:10px; padding:10px 18px; font-size:12px; color:#586982; }
+.tx-service select { min-width:0; max-width:420px; padding:6px 8px; border:1px solid #e4eaf3; border-radius:6px; background:white; }
+.tx-page .pg-workspace:has(.tx-service) { position:relative; padding-top:44px; }
+.tx-page .tx-service { position:absolute; top:0; left:0; right:0; }
+.pc-media-service { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:8px; padding:10px 20px; font-size:12px; color:#586982; }
+.pc-media-service select { max-width:100%; padding:6px 8px; border:1px solid #e4eaf3; border-radius:6px; background:white; }
+.pc-main .model-card h4 button { white-space:normal; overflow-wrap:anywhere; text-align:left; }
+.pc-main .model-card h4 img, .pc-main .model-card .modalities svg { flex-shrink:0; }
+.pc-main .model-card .modalities { display:block; line-height:1.6; }
+.pc-main .model-card .modalities svg { display:inline-block; vertical-align:middle; margin:0 6px; }

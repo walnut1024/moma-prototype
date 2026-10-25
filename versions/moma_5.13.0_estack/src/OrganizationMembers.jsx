@@ -1,3 +1,5 @@
+import { accountOrganization } from './project-organization.mjs';
+import { accountAdmin } from './project-domain.mjs';
 import FrontPageHeader from "./components/FrontPageHeader";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from "./components/FilterControls";
 import { displayBusinessCopy } from './display-copy.mjs';
@@ -37,16 +39,20 @@ function RoleFields({ form, setForm, departments }) {
   </>;
 }
 
-export default function OrganizationMembers() {
-  const [data, setData] = useState(() => {
+export default function OrganizationMembers({ workspace }) {
+  const [localData, setData] = useState(() => {
+    if (workspace) return null;
     try {
       const saved = JSON.parse(localStorage.getItem(ORGANIZATION_STORAGE_KEY));
       if (saved?.departments?.length && Array.isArray(saved.members) && Array.isArray(saved.audit)) return saved;
     } catch { /* Browser preview can start without saved data. */ }
     return createOrganization();
   });
+  const data = workspace ? accountOrganization(workspace.state, workspace.identity) : localData;
+  const writable = !workspace || accountAdmin(workspace.state,workspace.identity);
   const [storageError, setStorageError] = useState(false);
   useEffect(() => {
+    if (workspace) return;
     try { localStorage.setItem(ORGANIZATION_STORAGE_KEY, JSON.stringify(data)); setStorageError(false); }
     catch { setStorageError(true); }
   }, [data]);
@@ -80,14 +86,15 @@ export default function OrganizationMembers() {
   const checked = members.filter(m => selectedMembers.includes(m.id));
   const departmentOptions = [{ value: "unassigned", label: "未分配部门" }, ...departments.map(d => ({ value: d.id, label: departmentPath(departments, d.id) }))];
   const selectDepartment = id => { setSelectedDepartment(id); setSelectedMembers([]); setPage(1); };
-  const open = (nextModal, nextForm = {}) => { setModal(nextModal); setForm(nextForm); setError(""); };
-  const close = () => { setModal(null); setError(""); };
+  const open = (nextModal, nextForm = {}) => { if (!writable && nextModal.type !== 'detail') { setNotice('仅账户管理员可以修改组织与成员'); return; } setModal(nextModal); setForm(nextForm); setError(""); };
+  const close = () => { workspace?.onDirty(false); setModal(null); setError(""); };
   const commit = (action, success) => {
     try {
-      setData(changeOrganization(data, { ...action, logId: crypto.randomUUID() }));
+      if (workspace) { if (!workspace.run('organization', action, null)) throw new Error('保存失败，请查看页面错误'); } else setData(changeOrganization(data, { ...action, logId: crypto.randomUUID() }));
       setSelectedMembers([]); setNotice(success); close(); return true;
     } catch (e) { setError(e.message); return false; }
   };
+  useEffect(()=>()=>workspace?.onDirty(false),[]);
   const newDepartment = parentId => open({ type: "department", title: "新建部门" }, { id: `d-${crypto.randomUUID()}`, name: "", parentId: parentId || department?.id || "root", ownerId: "none", description: "", grantAdmin: false });
   const editDepartment = d => open({ type: "department", title: "部门设置" }, { ...d, ownerId: d.ownerId || "none", grantAdmin: false });
   const addMember = () => {
@@ -152,7 +159,7 @@ export default function OrganizationMembers() {
         <Table className="org-member-table"><TableHeader><TableRow><TableHead><Checkbox aria-label="选择当前页全部成员" checked={visible.length > 0 && visible.every(m => selectedMembers.includes(m.id)) ? true : visible.some(m => selectedMembers.includes(m.id)) ? "indeterminate" : false} disabled={!visible.length} onCheckedChange={value => setSelectedMembers(value ? [...new Set([...selectedMembers, ...visible.map(m => m.id)])] : selectedMembers.filter(id => !visible.some(m => m.id === id)))} /></TableHead>{["成员", "手机号", "登录账号", "主部门", "管理角色", "状态", "操作"].map(label => <TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader>
           <TableBody>{visible.map(m => <TableRow key={m.id} data-state={selectedMembers.includes(m.id) ? "selected" : undefined}>
             <TableCell><Checkbox aria-label={`选择${m.name}`} checked={selectedMembers.includes(m.id)} onCheckedChange={value => setSelectedMembers(value ? [...selectedMembers, m.id] : selectedMembers.filter(id => id !== m.id))} /></TableCell>
-            <TableCell><button className="org-member-name" onClick={() => open({ type: "detail", title: "成员详情", member: m })}><span className="org-avatar">{m.name.slice(-2)}</span><span>{m.name}{m.id === "m1" && <small>当前账号</small>}</span></button></TableCell>
+            <TableCell><button className="org-member-name" onClick={() => open({ type: "detail", title: "成员详情", member: m })}><span className="org-avatar">{m.name.slice(-2)}</span><span>{m.name}{m.id === (workspace?.identity.userId || "m1") && <small>当前账号</small>}</span></button></TableCell>
             <TableCell className="org-phone">{maskMemberPhone(m.phone)}</TableCell><TableCell className="org-account">{displayMemberAccount(m.account)}</TableCell>
             <TableCell title={departmentPath(departments, m.departmentId)}>{departments.find(d => d.id === m.departmentId)?.name || "未分配部门"}</TableCell>
             <TableCell><span className="org-role">{m.role !== "普通成员" && <ShieldCheck />}{m.role}</span>{m.role === "部门管理员" && <small className="org-cell-sub" title={roleScope(m)}>{departments.find(d => d.id === m.scopeId)?.name}{m.includeChildren ? " · 含子部门" : " · 仅本部门"}</small>}</TableCell>
@@ -165,7 +172,7 @@ export default function OrganizationMembers() {
     </div>
     {batchOpen && <OrganizationMemberBatch data={data} initialDepartment={department?.id || "unassigned"} onClose={() => setBatchOpen(false)} onApply={(rows, mode, defaultDepartment) => {
       const outcome = applyMemberBatch(data, rows, mode, defaultDepartment, () => crypto.randomUUID());
-      try { localStorage.setItem(ORGANIZATION_STORAGE_KEY, JSON.stringify(outcome.state)); }
+      try { if (workspace) { if (!workspace.run('organization', { type:'member.batch', rows, mode, defaultDepartment }, null)) throw new Error('保存失败'); } else localStorage.setItem(ORGANIZATION_STORAGE_KEY, JSON.stringify(outcome.state)); }
       catch { throw new Error("成员保存失败，请释放浏览器存储空间后重试，本次未添加成员"); }
       setData(outcome.state); setSelectedMembers([]); setPage(1);
       return outcome.results;
@@ -173,7 +180,7 @@ export default function OrganizationMembers() {
     <Dialog open={!!modal} onOpenChange={value => { if (!value) close(); }}><DialogContent className={`org-dialog ${modal?.type === "confirm" ? "org-confirm" : modal?.type === "member" && modal.isNew ? "org-add-dialog" : "org-drawer"}`}>
       <DialogHeader><DialogTitle>{modal?.title}</DialogTitle><DialogDescription>{modal?.type === "confirm" ? modal.description : "企业组织及成员"}</DialogDescription></DialogHeader>
       <div className="org-dialog-body">
-        {modal?.type === "department" && <form id="org-edit-form" onSubmit={submit} className="org-form">
+        {modal?.type === "department" && <form onChange={()=>workspace?.onDirty(true)} id="org-edit-form" onSubmit={submit} className="org-form">
           <label className="org-field"><span>部门名称 <b>*</b></span><Input aria-label="部门名称" placeholder="输入部门名称" maxLength={30} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></label>
           <Choice label="上级部门" value={form.parentId} onChange={parentId => setForm({ ...form, parentId })} options={departments.filter(d => !descendantIds(departments, form.id).has(d.id)).map(d => ({ value: d.id, label: departmentPath(departments, d.id) }))} />
           <Choice label="部门负责人" value={form.ownerId} onChange={ownerId => setForm({ ...form, ownerId, grantAdmin: false })} options={[{ value: "none", label: "暂不设置" }, ...members.filter(m => m.status === "已加入").map(m => ({ value: m.id, label: `${m.name} · ${m.account}` }))]} />

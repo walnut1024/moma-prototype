@@ -28,7 +28,7 @@ export default function EnterpriseMembers({ state, tenant, projects, canWrite, s
   const inspect = members.find(member => member.id === inspectId), inspectUser = inspect && userFor(inspect);
   const select = value => { setSelection(value); setPage(1); };
   const reset = () => { setQuery(''); setRole('all'); setStatus('all'); setPage(1); };
-  const projectScope = member => isEnterpriseAdmin(member, tenant) ? '企业全部项目' : projects.filter(project => member.projectIds?.includes(project.id)).map(project => project.name).join('、') || '未分配项目';
+  const projectScope = member => isEnterpriseAdmin(member, tenant) ? '企业全部项目' : projects.filter(project => state.projectMemberships.some(link => link.projectId === project.id && link.userId === member.userId && link.status === '正常')).map(project => project.name).join('、') || '未分配项目';
   const canToggle = member => canWrite && tenant.status !== '停用' && !(validAdmins.some(admin => admin.id === member.id) && validAdmins.length <= 1) && !(member.status === '停用' && userFor(member)?.status !== '正常');
   const pathFor = member => organizationFor(member) ? departmentPath(organizations, member.organizationId) : '未登记部门归属';
   const tree = (node, depth = 0, visited = new Set()) => {
