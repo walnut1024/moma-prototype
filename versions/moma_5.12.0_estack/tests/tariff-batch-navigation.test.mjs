@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { appendCommonTariffScenarios, tariffDictionarySeed } from '../src/admin-v2/tariff-dictionary.js';
-import { sections, pageFromHash, pageWorkspace, canAccessPage } from '../src/admin-v2/navigation.mjs';
+import { sections, pages, pageFromHash, pageWorkspace, canAccessPage } from '../src/admin-v2/navigation.mjs';
 
 const unit = '百万 Token', currency = 'CNY', state = { tariffDictionary: tariffDictionarySeed() };
 const blank = { name: '', unit: '', currency, listPrice: '' };
@@ -34,11 +34,16 @@ test('empty, unavailable, duplicate-only and over-capacity selections never part
   assert.deepEqual(full, snapshot);
 });
 
-test('tariff dictionary is an independent model-operations navigation item with normal workspace permissions', () => {
+test('materials management groups the model library and tariff dictionary with normal workspace permissions', () => {
   const models = sections.find(item => item.id === 'models');
-  assert.deepEqual(models.items.map(item => item.children[0][0]), ['listing', 'model-templates', 'providers', 'tariff-dictionary']);
+  assert.deepEqual(models.items.map(item => item.children[0][0]), ['providers', 'model-templates', 'listing']);
+  assert.deepEqual(models.items.find(item => item.id === 'materials').children, [['model-templates', '模型资料库'], ['tariff-dictionary', '资费字典']]);
   assert.equal(pageFromHash('#/admin-2/tariff-dictionary?tab=unit', '平台管理员'), 'tariff-dictionary');
   assert.equal(pageWorkspace('tariff-dictionary'), 'operations');
+  for (const id of ['model-templates', 'tariff-dictionary']) {
+    assert.equal(pages[id].area, 'materials');
+    assert.equal(pages[id].areaLabel, '资料管理');
+  }
   assert.equal(canAccessPage('平台管理员', 'tariff-dictionary'), true);
   assert.equal(canAccessPage('运营人员', 'tariff-dictionary'), true);
   for (const role of ['运维人员', '只读观察员', '财务人员']) assert.equal(canAccessPage(role, 'tariff-dictionary'), false);

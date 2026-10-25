@@ -79,7 +79,7 @@ export function CataloguePriceEditor({ state, provider, modelId, ops, close, man
       </Row>)}</GridTable>
     </div>
     {ops.error && <p role="alert" className="supplier-key-error">{ops.error}</p>}
-    <div className="supplier-price-footer"><span>{adding ? '保存到当前供应商目录；添加到模型管理及上架需另行配置。' : '修改目录价、采购价与计费项，采购折扣系数保持不变。'}</span><Button variant="outline" type="button" onClick={cancel}>取消</Button><Button type="submit" disabled={!ops.can}>{adding ? '保存模型' : '保存目录价'}</Button></div>
+    <div className="supplier-price-footer"><span>{adding ? '保存到当前供应商目录；添加到服务管理及上架需另行配置。' : '修改目录价、采购价与计费项，采购折扣系数保持不变。'}</span><Button variant="outline" type="button" onClick={cancel}>取消</Button><Button type="submit" disabled={!ops.can}>{adding ? '保存模型' : '保存目录价'}</Button></div>
   </form></Modal>;
 }
 
@@ -114,10 +114,10 @@ export default function ProviderCatalogue({ state, provider, ops, manageDictiona
         <Cell>{item ? <span className="supplier-catalogue-item" title={item.name + (item.condition ? `（${item.condition}）` : '')}>{item.name}{item.condition ? `（${item.condition}）` : ''}</span> : pending}</Cell><Cell className="supplier-price-number">{amount(item?.listPrice, item?.currency)}</Cell><Cell>{item?.unit || '—'}</Cell>
         {index === 0 && <Cell className="supplier-price-number" rowSpan={scenes.length}>{entry.discountFactor / 1000000}</Cell>}
         <Cell className="supplier-price-number">{amount(cataloguePurchasePrice(item?.listPrice, entry?.discountFactor, item?.purchasePrice), item?.currency)}</Cell>
-        {index === 0 && <Cell className="supplier-catalogue-action" rowSpan={scenes.length}><div className="supplier-catalogue-actions"><Button variant="link" size="sm" disabled={!ops.can && !match.supply} aria-label={(match.supply ? '查看模型：' : '添加到模型管理：') + id} onClick={() => ops.proceed(() => {
+        {index === 0 && <Cell className="supplier-catalogue-action" rowSpan={scenes.length}><div className="supplier-catalogue-actions"><Button variant="link" size="sm" disabled={!ops.can && !match.supply} aria-label={(match.supply ? '查看模型：' : '添加到服务管理：') + id} onClick={() => ops.proceed(() => {
           const next = new URLSearchParams(match.supply ? { model: match.model.id, tab: 'supplies' } : { view: 'add', step: 'select', provider: provider.id, catalogue: id, origin: location.hash });
           location.hash = '#/admin-2/listing?' + next;
-        })}>{match.supply ? '查看模型' : '添加到模型管理'}</Button>{[['connection', connections.length ? '编辑接入地址' : '配置接入地址'], ['discount', '修改折扣系数'], ['price', '修改目录价']].map(([kind, label]) => <Button key={kind} variant="link" size="sm" disabled={!ops.can} aria-label={`${label}：${id}`} onClick={event => { trigger.current = event.currentTarget; ops.setError(''); setEditing({ modelId: id, kind }); }}>{label}</Button>)}</div></Cell>}
+        })}>{match.supply ? '查看模型' : '添加到服务管理'}</Button>{[['connection', connections.length ? '编辑接入地址' : '配置接入地址'], ['discount', '修改折扣系数'], ['price', '修改目录价']].map(([kind, label]) => <Button key={kind} variant="link" size="sm" disabled={!ops.can} aria-label={`${label}：${id}`} onClick={event => { trigger.current = event.currentTarget; ops.setError(''); setEditing({ modelId: id, kind }); }}>{label}</Button>)}</div></Cell>}
       </Row>)}</Fragment>;
     })}</GridTable>
     {editing && (editing.kind === 'connection' ? <CatalogueConnectionEditor key={editing.modelId} state={state} provider={provider} modelId={editing.modelId} ops={ops} close={close}/> : editing.kind === 'discount' ? <CatalogueDiscountEditor key={editing.modelId} provider={provider} modelId={editing.modelId} ops={ops} close={close}/> : <CataloguePriceEditor key={editing.modelId} state={state} provider={provider} modelId={editing.modelId} ops={ops} close={close} manageDictionary={manageDictionary}/>)}

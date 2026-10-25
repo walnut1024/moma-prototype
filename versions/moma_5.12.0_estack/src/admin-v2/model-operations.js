@@ -1,4 +1,4 @@
-import { modelTransaction, modelCode, modelSupplies, availableSupplies, supplyPriceReady, supplyModelUrl } from './model-management.js';
+import { modelTransaction, modelCode, modelSupplies, availableSupplies, supplyPriceReady, supplyModelUrl, latestSaleRevision } from './model-management.js';
 import { modelProfileDraft } from './model-profile.js';
 import { tariffDictionaryTransaction } from './tariff-dictionary.js';
 import { providerTransaction, providerCode, modelConnectivityPreview, PROTOCOLS } from './provider-management.js';
@@ -77,7 +77,40 @@ export function operationsTransaction(state, action) {
   const providerOp = (operation, objectId, data) => apply(providerTransaction(working, { operation, objectId, data }));
   const { operation, data = {}, modelId } = action;
   let objectId = modelId, label;
-  if (['templateSave', 'templateImport'].includes(operation)) {
+  if (['saveSupplierBatch', 'prepareSupplierBatch', 'publishSupplierBatch'].includes(operation)) {
+    const provider = working.providers.find(item => item.id === data.providerId);
+    if (!provider) throw new Error('供应商不存在');
+    if (!Array.isArray(data.items) || !data.items.length || data.items.length > 100) throw new Error('每批请选择 1–100 个目录模型');
+    if (new Set(data.items.map(item => item.catalogueModelId)).size !== data.items.length) throw new Error('同一批次不能重复选择目录模型');
+    for (const entry of data.items) {
+      if (!providerCatalogueIds(provider).includes(entry.catalogueModelId)) throw new Error('目录模型不属于当前供应商，请重新选择');
+      const draft = working.modelOnboardings.find(item => item.providerId === provider.id && item.catalogueModelId === entry.catalogueModelId && item.status !== '已完成');
+      if (entry.draftId ? draft?.id !== entry.draftId : draft) throw new Error(`${entry.catalogueModelId} 的配置进度已变化，请重新载入`);
+      if (operation === 'publishSupplierBatch') {
+        if (!draft || entry.draftRevision !== draft.updatedAt) throw new Error('配置进度已变化，请重新检查');
+        if (draft.listingScope) modelOp('scope', draft.modelId, draft.listingScope);
+        modelOp('enableSupply', draft.modelId, { id: draft.supplyId });
+        apply(operationsTransaction(working, { operation: 'completeOnboarding', data: { draftId: draft.id, publish: true } }));
+        continue;
+      }
+      const master = libraryRecord(working, entry.libraryId);
+      if (operation === 'prepareSupplierBatch' && (!master || master.updatedAt !== entry.libraryRevision)) throw new Error('模型资料未选择或已有修订，请重新核对主档');
+      const saved = apply(operationsTransaction(working, { operation: 'saveOnboarding', data: {
+        ...entry, id: draft?.id, providerId: provider.id,
+        targetModelId: working.models.some(item => item.id === master?.id) ? master.id : '', targetRevision: master?.updatedAt || '',
+      } }));
+      if (operation === 'saveSupplierBatch') continue;
+      const onboarded = apply(operationsTransaction(working, { operation: 'onboardModel', data: { draftId: saved.objectId } }));
+      const current = working.modelOnboardings.find(item => item.id === saved.objectId);
+      modelTransaction(working, { operation: 'pricePublish', modelId: onboarded.objectId, data: { supplyId: current.supplyId, items: entry.prices, sourceVersion: entry.sourceVersion, expectedSaleVersion: entry.expectedSaleVersion } });
+      if (entry.listingScope) modelTransaction(working, { operation: 'scope', modelId: onboarded.objectId, data: entry.listingScope });
+      // Preparing verifies the mapping; service and sales are enabled only on final confirmation.
+      modelOp('verify', onboarded.objectId, { id: current.supplyId, result: '通过' });
+      update('modelOnboardings', current.id, { step: 'review', targetModelId: onboarded.objectId, libraryRevision: '', expectedSaleVersion: latestSaleRevision(working, current.supplyId) });
+    }
+    objectId = provider.id;
+    label = `${{ saveSupplierBatch: '保存批量配置进度', prepareSupplierBatch: '保存配置并检查', publishSupplierBatch: '批量上架供应商模型' }[operation]} ${data.items.length} 个`;
+  } else if (['templateSave', 'templateImport'].includes(operation)) {
     const onboarding = data.onboardingId && working.modelOnboardings.find(item => item.id === data.onboardingId && item.status !== '已完成');
     if (data.onboardingId && !onboarding) throw new Error('上架进度不存在或已完成，请重新进入资料库维护');
     const entries = operation === 'templateImport' ? data.models : [data];
@@ -104,13 +137,15 @@ export function operationsTransaction(state, action) {
     label = operation === 'templateImport' ? `导入 ${entries.length} 个模型资料` : '保存模型资料';
   } else if (operation === 'saveOnboarding') {
     const current = working.modelOnboardings.find(item => item.id === data.id);
-    if (current?.status === '已完成') throw new Error('此配置已完成，请进入模型管理');
+    if (current?.status === '已完成') throw new Error('此配置已完成，请进入服务管理');
     const provider = working.providers.find(item => item.id === data.providerId);
     if (!provider || !providerCatalogueIds(provider).includes(data.catalogueModelId)) throw new Error('请选择有效的供应商目录模型');
     if (data.libraryId && !libraryRecord(working, data.libraryId)) throw new Error('模型资料不存在，请重新选择资料库记录');
     if (data.endpointId && !working.endpoints.some(item => item.id === data.endpointId && item.providerId === provider.id)) throw new Error('连接不属于当前供应商');
     const fields = { providerId: provider.id, catalogueModelId: data.catalogueModelId, endpointId: data.endpointId || '', targetModelId: data.targetModelId || '', targetRevision: data.targetRevision || '', expectedSaleVersion: data.expectedSaleVersion || '', confirmedIdentity: data.confirmedIdentity === true, model: data.model || null, prices: data.prices || [], sourceVersion: data.sourceVersion || '', ...(Array.isArray(data.selected) ? { selected: [...new Set(data.selected)] } : {}), step: ['select', 'metadata', 'price', 'review'].includes(data.step) ? data.step : 'select', status: '配置中' };
     fields.libraryId = data.libraryId || '';
+    fields.libraryRevision = data.libraryRevision ?? current?.libraryRevision ?? '';
+    fields.listingScope = data.listingScope === undefined ? current?.listingScope ?? null : data.listingScope;
     if (current && (current.providerId !== fields.providerId || current.catalogueModelId !== fields.catalogueModelId || current.targetModelId !== fields.targetModelId || libraryRecord(working, current.libraryId)?.id !== libraryRecord(working, fields.libraryId)?.id)) Object.assign(fields, { modelId: null, supplyId: null, prices: [], sourceVersion: '', expectedSaleVersion: '' });
     fields.salesVersion = data.salesVersion ?? current?.salesVersion ?? (current?.modelId ? salesSelectionVersion(working, current.modelId) : null);
     objectId = current?.id || 'onboarding-' + crypto.randomUUID();

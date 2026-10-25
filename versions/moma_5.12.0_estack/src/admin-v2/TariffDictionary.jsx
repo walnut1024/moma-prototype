@@ -11,10 +11,11 @@ import { Field } from './ModelMetadataForm';
 import { GridTable, Row, Cell, Modal, Status, Notice, useOperations } from './ModelOperationsUI';
 import { TARIFF_KINDS, tariffDictionaryEntries, tariffDictionaryId } from './tariff-dictionary';
 import './supplier-workbench.css';
+import MaterialsHeader from './MaterialsHeader';
 
 export function TariffDictionaryPage(props) {
   const ops = useOperations(props, 'tariff-dictionary');
-  return <div className="mo-workbench supplier-workbench"><div className="supplier-heading"><div><h1>资费字典</h1><p>统一维护计费项、计价单位和货币，供所有供应商复用。</p></div></div><TariffDictionary state={props.state} ops={ops}/>{ops.error && <Notice error>{ops.error}</Notice>}{ops.leaveDialog}</div>;
+  return <div className="mo-workbench supplier-workbench"><MaterialsHeader active="tariff-dictionary" ops={ops}/><TariffDictionary state={props.state} ops={ops}/>{ops.error && <Notice error>{ops.error}</Notice>}{ops.leaveDialog}</div>;
 }
 
 export function TariffChoice({ label, kind, value, options, entries = [], disabled, onChange }) {

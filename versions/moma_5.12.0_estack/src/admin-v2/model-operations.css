@@ -54,9 +54,9 @@ body:has(.mo-workbench){min-width:0}
 
 .mo-onboarding .mo-surface>.mo-footer{position:sticky;bottom:0;background:#fff;z-index:2;padding:14px 0}.mo-sales-selection{display:flex;flex-direction:column;gap:8px;margin:12px 0 18px}.mo-sales-selection .mo-check{margin:0;padding:4px 0}.mo-sales-selection legend{font-size:13px;font-weight:600;margin-bottom:6px}
 
-.admin-v2 .mo-supply-prices-table .mo-supply-url{display:block;margin-top:6px;white-space:normal;overflow-wrap:anywhere;color:#586982}
+:is(.admin-v2,.mo-model-supplier-workspace) .mo-supply-prices-table .mo-supply-url{display:block;margin-top:6px;white-space:normal;overflow-wrap:anywhere;color:#586982}
 .mo-dialog .mo-supply-confirm{gap:16px;margin:16px 0}.mo-dialog .mo-supply-confirm>div:last-child{grid-column:1/-1}.mo-dialog .mo-supply-confirm dd{margin:4px 0 0;overflow-wrap:anywhere}
-.admin-v2 .mo-supply-prices-table .mo-supply-url .mo-copy{align-items:flex-start;min-width:0}.admin-v2 .mo-supply-prices-table .mo-supply-url code{white-space:normal;overflow-wrap:anywhere;min-width:0}.admin-v2 .mo-supply-prices-table .mo-supply-url button{flex:none}
+:is(.admin-v2,.mo-model-supplier-workspace) .mo-supply-prices-table .mo-supply-url .mo-copy{align-items:flex-start;min-width:0}:is(.admin-v2,.mo-model-supplier-workspace) .mo-supply-prices-table .mo-supply-url code{white-space:normal;overflow-wrap:anywhere;min-width:0}:is(.admin-v2,.mo-model-supplier-workspace) .mo-supply-prices-table .mo-supply-url button{flex:none}
 
 .admin-v2 .mo-catalogue-trigger{width:100%;min-width:0;justify-content:space-between}.admin-v2 .mo-catalogue-trigger>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mo-catalogue-picker{width:var(--radix-popover-trigger-width);max-width:calc(100vw - 32px);padding:0}.mo-catalogue-picker [cmdk-list]{max-height:260px;overflow-y:auto}.mo-catalogue-picker [cmdk-item]{align-items:flex-start}.mo-catalogue-picker [cmdk-item]>span{min-width:0;white-space:normal;overflow-wrap:anywhere}.mo-catalogue-picker [cmdk-item]>svg{margin-left:auto;flex:none}
@@ -65,3 +65,66 @@ body:has(.mo-workbench){min-width:0}
 .admin-v2 .mo-library-identity>div{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%}
 .admin-v2 .mo-library-identity code{white-space:normal;overflow-wrap:anywhere;font-size:11px}
 .admin-v2 .mo-library-identity p{flex:1 1 320px;margin:0;color:#586982;line-height:1.6}
+.admin-v2 .mo-perspective-switch{border:1px solid #586982;border-radius:8px;overflow:visible;gap:0}
+.admin-v2 .mo-perspective-switch [role="radio"]{width:32px;height:32px;min-width:32px;padding:0;border:0;border-radius:0;background:#fff;color:#586982;box-shadow:none}
+.admin-v2 .mo-perspective-switch [role="radio"]:first-child{border-radius:7px 0 0 7px}
+.admin-v2 .mo-perspective-switch [role="radio"]:last-child{border-radius:0 7px 7px 0}
+.admin-v2 .mo-perspective-switch [aria-checked="true"]{background:#edf3ff;color:#315fe8}
+.admin-v2 .mo-perspective-switch [role="radio"]:focus-visible{outline:2px solid #315fe8;outline-offset:2px;z-index:1}
+.admin-v2 .mo-perspective-label{font-weight:600;color:#263247}
+.admin-v2 .mo-supplier-listing{display:grid;grid-template-columns:200px minmax(0,1fr);gap:8px;align-items:start;min-width:0}
+.admin-v2 .mo-supplier-navigation{min-width:0;background:#fff;border:1px solid #e4eaf3;border-radius:6px;padding:12px}
+.admin-v2 .mo-supplier-nav-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.admin-v2 .mo-supplier-nav-heading span,.admin-v2 .mo-supplier-catalogue-heading span{font-size:11px;color:#586982}
+.admin-v2 .mo-supplier-navigation .mo-search{min-width:0;width:100%;margin-bottom:8px}
+.admin-v2 .mo-supplier-navigation nav{display:flex;flex-direction:column;gap:4px;max-height:calc(100dvh - 280px);overflow:auto}
+.admin-v2 .mo-supplier-navigation nav button{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;min-height:58px;height:auto;padding:10px 8px;white-space:normal;text-align:left}
+.admin-v2 .mo-supplier-navigation nav button[aria-current="true"]{background:#edf3ff;color:#315fe8}
+.admin-v2 .mo-supplier-navigation nav small{font-size:11px;color:#586982}
+.admin-v2 .mo-supplier-catalogue{min-width:0}
+.admin-v2 .mo-supplier-catalogue-heading{display:flex;gap:8px;align-items:center;padding:12px;border-bottom:1px solid #e8edf5;flex-wrap:wrap}
+.admin-v2 .mo-supplier-catalogue-heading>div{margin-right:auto}
+.admin-v2 .mo-supplier-catalogue-heading h2{font-size:14px}
+.admin-v2 .mo-supplier-catalogue .mo-toolbar{padding:12px;gap:8px}
+.admin-v2 .mo-supplier-catalogue .mo-toolbar .mo-search{min-width:220px;flex:1;width:auto}
+.admin-v2 .mo-supplier-selection{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 12px;background:#edf3ff;font-size:12px;color:#263247}
+.admin-v2 .mo-supplier-model-table{min-width:980px}
+.admin-v2 .mo-supplier-model-table th:first-child,.admin-v2 .mo-supplier-model-table td:first-child{width:44px;min-width:44px}
+.admin-v2 .mo-supplier-model-table th:last-child{position:sticky;right:0;background:#f8faff;z-index:2}
+.admin-v2 .mo-supplier-model-table tr:not(.mo-supplier-select-all) td:last-child{position:sticky;right:0;background:#fff;min-width:100px;z-index:1}
+.admin-v2 .mo-supplier-model-table td{vertical-align:top}
+.admin-v2 .mo-supplier-model-table code{font-size:11px;overflow-wrap:anywhere;white-space:normal}
+.admin-v2 .mo-supplier-model-table td:nth-child(2){min-width:170px;max-width:270px}
+.admin-v2 .mo-supplier-model-table td:nth-child(2)>button{display:block;height:auto;white-space:normal;text-align:left;padding:0}
+.admin-v2 .mo-supplier-select-all td{font-size:11px;background:#f8faff;color:#586982}
+.admin-v2 .mo-model-list-workbench .mo-supplier-model-table .mo-supplier-select-all td:last-child{position:static}
+.admin-v2 .mo-pending{color:#8a5d18;overflow-wrap:anywhere}
+.admin-v2 .mo-supplier-batch .mo-batch-tools{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px}
+.admin-v2 .mo-batch-tools .mm-field{max-width:140px}
+.admin-v2 .mo-batch-tools p{flex:1 1 320px;color:#586982;font-size:12px}
+.admin-v2 .mo-batch-scope{padding:16px 0;border-bottom:1px solid #e8edf5;margin-bottom:8px}
+.admin-v2 .mo-batch-scope p{font-size:12px;color:#586982}
+.admin-v2 .mo-batch-models{max-height:calc(100dvh - 420px);min-height:220px;overflow:auto;padding-right:8px}
+.admin-v2 .mo-batch-models>details{border-bottom:1px solid #e8edf5;padding:12px 0}
+.admin-v2 .mo-batch-models>details>summary{display:flex;align-items:center;gap:16px;cursor:pointer;flex-wrap:wrap;color:#263247}
+.admin-v2 .mo-batch-models>details>summary>svg{width:16px;height:16px;flex:none;color:#315fe8;transition:transform 120ms ease-out}
+.admin-v2 .mo-batch-models>details[open]>summary>svg{transform:rotate(180deg)}
+.admin-v2 .mo-batch-models>details>summary strong{min-width:160px;max-width:320px;overflow-wrap:anywhere}
+.admin-v2 .mo-batch-models>details>summary span{font-size:11px;color:#586982}
+.admin-v2 .mo-batch-model-body{padding:0 0 12px 16px}
+.admin-v2 .mo-batch-model-body .mo-row-actions{margin:12px 0}
+.admin-v2 .mo-batch-model-body .mo-billing-table{min-width:740px}
+.admin-v2 .mo-supplier-batch>.mo-table-scroll{max-height:calc(100dvh - 370px);overflow:auto;margin-top:16px}
+.admin-v2 .mo-supplier-batch>.mo-table-scroll thead{position:sticky;top:0;z-index:1;background:#f8faff}
+@media(max-width:1050px){.admin-v2 .mo-supplier-listing{grid-template-columns:170px minmax(0,1fr)}.admin-v2 .mo-batch-model-body .mo-form-grid{grid-template-columns:minmax(0,1fr)}}
+
+.admin-ui-portal.mo-dialog.mo-drawer.wide{width:min(1680px,calc(100vw - 48px))}
+.admin-ui-portal .mo-model-supplier-workspace{display:grid;gap:16px;min-width:0}
+.admin-ui-portal .mo-model-drawer-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.admin-ui-portal .mo-model-drawer-actions>.mo-status{margin-right:auto}
+.admin-ui-portal .mo-model-supplier-workspace .mo-detail-tabs{border:0;border-bottom:1px solid #e8edf5;border-radius:0;padding:0}
+.admin-v2 .mo-model-table th:last-child,.admin-v2 .mo-model-table td:last-child{min-width:250px}
+
+.admin-v2 .mo-materials-header{display:grid;gap:8px;min-width:0}
+.admin-v2 .mo-materials-tabs{width:100%;height:40px;justify-content:flex-start;gap:24px}
+.admin-v2 .mo-materials-tabs [role="tab"]{flex:none}
