@@ -1,4 +1,5 @@
 import { pages, sections } from './navigation.mjs';
+import { TARIFF_KINDS } from './tariff-dictionary.js';
 
 export function adminBreadcrumbs(active, params, names = {}) {
   const page = pages[active];
@@ -26,6 +27,10 @@ export function adminBreadcrumbs(active, params, names = {}) {
     else if (['import', 'templateImport'].includes(view)) add(view === 'import' ? '批量导入模型' : '批量导入模型资料');
     else if (view === 'add') add('添加模型');
     else if (view === 'supplier-batch') add('批量配置与上架');
+  } else if (active === 'tariff-dictionary') {
+    const tab = params.get('tab');
+    add('资料管理', '#/admin-2/model-templates');
+    add(TARIFF_KINDS[Object.hasOwn(TARIFF_KINDS, tab) ? tab : 'scenario']);
   } else if (active === 'deployments') {
     add('模型部署', params.has('deployment') || view === 'create' ? href(active, {}, ['deployment', 'view', 'tab']) : null);
     if (params.has('deployment')) add(names.deployment || '部署不存在', view === 'edit' ? href(active, { view: null, tab: 'overview' }) : null);

@@ -8,7 +8,7 @@ import { connectionBlockReason } from './connection-state.js';
 import { commitAdminState } from './store.js';
 
 export const LISTING_PREFERENCES_KEY = 'moma:5120:model-management:views';
-export const LISTING_FILTER_KEYS = ['q', 'type', 'status', 'attention', 'provider', 'page', 'size', 'supplier', 'supplierQ', 'catalogueQ', 'catalogueType', 'catalogueStatus', 'cataloguePage', 'catalogueSize'];
+export const LISTING_FILTER_KEYS = ['q', 'type', 'mode', 'model', 'status', 'attention', 'provider', 'page', 'size', 'supplier', 'supplierQ', 'catalogueQ', 'catalogueType', 'catalogueStatus', 'cataloguePage', 'catalogueSize'];
 export function listingAddress(params, perspective) {
   const query = new URLSearchParams();
   for (const key of LISTING_FILTER_KEYS) if (params.has(key)) query.set(key, params.get(key));

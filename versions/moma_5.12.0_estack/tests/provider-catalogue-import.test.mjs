@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createAdminSeed, commitAdminState, persistModelAction, parseAdminState } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseSeed, commitAdminState, persistModelAction, parseAdminState } from '../src/admin-v2/store.js';
 import { providerCatalogueIds } from '../src/admin-v2/moma-provider.js';
 
 const action = (text, mode = 'batch', objectId = 'provider-moma') => ({ type: 'modelOperations', operation: 'provider', data: { operation: 'catalogueImport', objectId, values: { text, mode } } });
@@ -15,7 +15,7 @@ test('batch imports append independently, preserve pricing and reload without ch
   state = persistModelAction(state, { type: 'modelOperations', operation: 'provider', data: { operation: 'cataloguePrice', objectId: 'provider-moma', values: price } }, storage);
   const priced = structuredClone(provider(state));
   state = persistModelAction(state, action('Model/Alpha\r\nModel/Beta\n\nModel/Beta\nmodel/alpha'), storage);
-  assert.deepEqual(provider(state).catalogModelIds, [...providerCatalogueIds(seed.providers.find(p => p.id === 'provider-moma')), 'Model/Alpha', 'Model/Beta', 'model/alpha']);
+  assert.deepEqual(provider(state).catalogModelIds, [...providerCatalogueIds(seed.providers.find(p => p.id === 'provider-moma')), 'Model/Alpha', 'Model/Beta']);
   assert.deepEqual(provider(state).catalogPricing, priced.catalogPricing);
   assert.deepEqual(parseAdminState(saved).providers, state.providers);
   for (const collection of ['models', 'endpoints', 'modelSupplies', 'supplyPrices', 'modelSalePrices', 'apiKeys']) assert.deepEqual(state[collection], seed[collection]);
@@ -51,3 +51,5 @@ test('imports retain role, revision and storage-failure protections without chan
   assert.throws(() => persistModelAction(seed, input, { getItem: () => before, setItem: () => { throw new Error('quota'); } }), /quota/);
   assert.equal(JSON.stringify(seed), before);
 });
+
+function createAdminSeed() { const state = baseSeed(); state.modelTemplates.push(...["Model/Alpha","Model/Beta","Keep/Model","Test/Model"].map(code => ({ id: "test-library-" + code, modelId: code, name: code, type: "text", capabilities: {}, profile: {} }))); return state; }

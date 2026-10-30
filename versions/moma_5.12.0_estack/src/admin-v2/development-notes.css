@@ -1,0 +1,7 @@
+.development-notes-trigger { color: #8a5d18; vertical-align: middle; margin-left: 4px; }
+.development-notes { font-size: 13px; line-height: 1.65; }
+.development-notes h3 { font-size: 14px; font-weight: 600; margin: 16px 0 4px; }
+.development-notes p { margin: 0; }
+.development-notes ul { list-style: disc; padding-left: 20px; margin: 4px 0; }
+.development-notes li + li { margin-top: 4px; }
+.development-notes .development-notes-label { color: #8a5d18; background: #fff8e8; padding: 8px 12px; border-radius: 6px; }

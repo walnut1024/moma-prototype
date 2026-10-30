@@ -118,6 +118,36 @@ export function requireModelBasics(profile) {
   if (!profile.outputModalities?.length && !profile.resultTypes?.length) throw new Error('请选择输出模态或结果类型');
 }
 
+export const SERVICE_OUTPUT_MODALITIES = [...INPUT_MODALITY_OPTIONS, '向量', '相关性分数', '排序结果', '结构化数据'];
+export function modelAuthors(state) {
+  return [...new Set([...state.models, ...state.modelTemplates].map(model => model.profile?.author || model.maker).filter(value => typeof value === 'string' && value.trim()).map(value => value.trim()))].sort((a,b) => a.localeCompare(b,'zh-CN'));
+}
+export function serviceModelDraft(model) {
+  const profile = modelProfileDraft(model), context = model?.capabilities?.context;
+  const contextUnit = context && context % 1048576 === 0 ? 'M' : 'K';
+  return { name:model?.name || '', modelId:model?.modelId || '', type:model?.type || '', author:profile.author || model?.maker || '', releaseDate:profile.releaseDate || '', inputModalities:profile.inputModalities || [], outputModalities:[...new Set([...(profile.outputModalities || []), ...(profile.resultTypes || []).filter(value=>SERVICE_OUTPUT_MODALITIES.includes(value))])], context:context ? String(context / (contextUnit==='M'?1048576:1024)) : '', contextUnit, description:model?.description || '' };
+}
+export function serviceMetadataReady(model) {
+  const data=serviceModelDraft(model);
+  return Boolean(data.name.trim() && data.modelId.trim() && data.type && data.author.trim() && /^\d{4}-\d{2}-\d{2}$/.test(data.releaseDate) && data.inputModalities.length && data.outputModalities.length && data.description.trim());
+}
+export function normalizeServiceModel(state, data, existing) {
+  const text = (value,label,max) => { if(typeof value!=='string' || !value.trim() || value.length>max) throw new Error(`${label}必填，最多 ${max} 字符`); return value.trim(); };
+  const name=text(data.name,'模型名称',100), modelId=existing?.modelId || text(data.modelId,'模型 ID',80);
+  if(!existing && !/^[a-zA-Z][a-zA-Z0-9]*(?:-[a-zA-Z0-9]+)*$/.test(modelId)) throw new Error('模型 ID 仅支持英文字母、数字和中划线，须以字母开头，中划线不能连续或结尾');
+  const author=text(data.author,'模型作者',100);
+  if(!modelAuthors(state).includes(author)) throw new Error('请选择已有模型作者');
+  const releaseDate=text(data.releaseDate,'发布时间',10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(releaseDate) || Number.isNaN(Date.parse(releaseDate)) || new Date(releaseDate).toISOString().slice(0,10)!==releaseDate) throw new Error('请选择有效的发布时间');
+  const selected=(value,options,label)=>{if(!Array.isArray(value) || !value.length || value.some(item=>!options.includes(item))) throw new Error(`请选择有效的${label}`); return [...new Set(value)];};
+  const inputModalities=selected(data.inputModalities,INPUT_MODALITY_OPTIONS,'输入模态'), outputs=selected(data.outputModalities,SERVICE_OUTPUT_MODALITIES,'输出模态');
+  if(!['K','M'].includes(data.contextUnit)) throw new Error('上下文单位请选择 K 或 M');
+  const amount=String(data.context ?? '').trim();
+  const context=amount ? Number(amount) * (data.contextUnit==='M'?1048576:1024) : null;
+  if(amount && (!/^\d+(?:\.\d+)?$/.test(amount) || !Number.isSafeInteger(context) || context<=0)) throw new Error('上下文须为正数，换算后的 Token 数必须为有效整数');
+  return {name,modelId,type:data.type,maker:author,description:text(data.description,'模型简介',1000),usageUnit:existing?.usageUnit,profile:{...existing?.profile,author,releaseDate,inputModalities,outputModalities:outputs.filter(value=>INPUT_MODALITY_OPTIONS.includes(value)),resultTypes:outputs.filter(value=>!INPUT_MODALITY_OPTIONS.includes(value))},capabilities:{...existing?.capabilities,context}};
+}
+
 export function modelKeySpecs(model) {
   const profile = modelProfileDraft(model), specs = [];
   const add = (label, value, unit = '') => { if (value != null && value !== '') specs.push({ label, value: String(value), unit }); };

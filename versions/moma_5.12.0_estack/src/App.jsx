@@ -2924,7 +2924,6 @@ function PrototypeApp({ version }) {
       </header>
       {admin === "front" && !auth.route && (
         <aside>
-          <h3>模型服务平台</h3>
           {versionNav.map(([group, item], i) => {
             const NavIcon = navIcons5102[item];
             return (

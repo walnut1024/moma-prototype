@@ -8,8 +8,8 @@ export const sections = [
   ]},
   { id: "models", workspace: "operations", title: "模型运营", items: [
     { id: "channels", label: "供应管理", children: [["providers", "供应管理"]] },
-    { id: "materials", label: "资料管理", children: [["model-templates", "模型资料库"], ["tariff-dictionary", "资费字典"]] },
     { id: "warehouse", label: "服务管理", children: [["listing", "服务管理"]] },
+    { id: "materials", label: "资料管理", children: [["model-templates", "模型资料库"], ["tariff-dictionary", "计费项"]] },
   ]},
   { id: "customers", workspace: "operations", title: "用户管理", items: [
     { id: "enterprise", label: "政企用户", children: [["tenants", "政企用户"]] },
@@ -29,6 +29,9 @@ export const sections = [
   ]},
   { id: "platform", title: "平台管理", items: [
     { id: "accounts", label: "账号管理", children: [["admins", "账号管理"]] },
+  ]},
+  { id: "getting-started", workspace: "operations", title: "入门指导", items: [
+    { id: "getting-started", label: "运营入门", children: [["getting-started", "运营入门"]] },
   ]},
 ];
 

@@ -1,6 +1,18 @@
+import { providerKeyGroupKeys } from './provider-key-groups.js';
+
 // Shared gate for supplier configuration, model verification and routing candidates.
-export const connectionFingerprint = endpoint => JSON.stringify([endpoint.baseUrl, endpoint.protocol, endpoint.credentialRef, endpoint.capacity, endpoint.timeoutSeconds, ...(endpoint.apiKeys?.length ? [endpoint.apiKeys.map(key => key.fingerprint)] : [])]);
-export const connectionCredentialsReady = (endpoint, provider) => Boolean(endpoint && (provider?.sourceType === 'selfHosted' || endpoint.credentialRef || endpoint.apiKeys?.length));
+export const connectionFingerprint = endpoint => JSON.stringify([endpoint.baseUrl, endpoint.protocol, endpoint.credentialRef, endpoint.capacity, endpoint.timeoutSeconds, ...(endpoint.apiKeys?.length ? [endpoint.apiKeys.map(key => key.fingerprint)] : []), ...(endpoint.authMode ? [endpoint.authMode, endpoint.apiKeyId, endpoint.credentialVersion] : []), ...(endpoint.authMode === 'group' ? [endpoint.keyGroupId] : [])]);
+export function connectionKeys(endpoint, provider, includeDisabled = false) {
+  if (!endpoint) return [];
+  if (endpoint.authMode === 'group') {
+    const keys = providerKeyGroupKeys(provider || {}, endpoint.keyGroupId, true);
+    return includeDisabled ? keys : keys[0] && keys[0].status !== 'disabled' ? [keys[0]] : [];
+  }
+  const id = endpoint.authMode === 'inherit' ? provider?.defaultApiKeyId : endpoint.apiKeyId;
+  const keys = endpoint.authMode ? endpoint.authMode === 'none' ? [] : (provider?.apiKeys || []).filter(key => key.id === id) : (endpoint.apiKeys || []).map(key => provider?.apiKeys?.find(current => current.id === key.id) || key);
+  return includeDisabled ? keys : keys.filter(key => key.status !== 'disabled');
+}
+export const connectionCredentialsReady = (endpoint, provider) => Boolean(endpoint && (endpoint.authMode ? endpoint.authMode === 'none' || connectionKeys(endpoint, provider).length : provider?.sourceType === 'selfHosted' || endpoint.credentialRef || connectionKeys(endpoint, provider).length));
 export const connectionTestCurrent = endpoint => Boolean(endpoint && endpoint.connectionTest?.fingerprint === connectionFingerprint(endpoint));
 export const connectionTestPassed = endpoint => connectionTestCurrent(endpoint) && endpoint.connectionTest.result === '通过';
 export function connectionBlockReason(endpoint, provider) {

@@ -57,39 +57,40 @@ test('preparation checks all billing items while leaving sales, endpoint and ser
   assert.deepEqual(next.endpoints.filter(item => item.providerId !== providerId), state.endpoints.filter(item => item.providerId !== providerId));
 });
 
-test('final batch confirmation publishes independent prices and only the selected supplier models', () => {
-  const { state, providerId } = prepared(), other = structuredClone(state.modelSupplies.filter(item => !state.modelOnboardings.some(draft => draft.supplyId === item.id)));
-  const next = op(state, 'publishSupplierBatch', { providerId, items: publication(state, providerId) });
-  const drafts = next.modelOnboardings.filter(item => item.providerId === providerId);
-  assert.ok(drafts.every(item => item.status === '已完成'));
+test('final batch confirmation without service modes rejects all publication effects atomically', () => {
+  const { state, providerId } = prepared(), before=structuredClone(state);
+  assert.throws(()=>op(state, 'publishSupplierBatch', { providerId, items: publication(state, providerId) }),/服务模式/);
+  assert.deepEqual(state,before);
+  const drafts = state.modelOnboardings.filter(item => item.providerId === providerId);
+  assert.ok(drafts.every(item => item.status !== '已完成'));
   for (const draft of drafts) {
-    assert.equal(next.models.find(item => item.id === draft.modelId).listingStatus, '已上架');
-    assert.equal(next.modelSupplies.find(item => item.id === draft.supplyId).salesEnabled, true);
-    const price = next.modelSalePrices.find(item => item.supplyId === draft.supplyId);
-    assert.deepEqual(price.items.map(item => item.amount), [1200000, 2400000]);
-    assert.equal(price.sourceVersion, draft.sourceVersion);
+    assert.equal(state.models.find(item => item.id === draft.modelId).listingStatus, '已下架');
+    assert.equal(state.modelSupplies.find(item => item.id === draft.supplyId).salesEnabled, false);
+    assert.ok(!state.modelSalePrices.some(item => item.supplyId === draft.supplyId));
+    assert.deepEqual(draft.prices.map(item => Number(item.amount)), [1.2, 2.4]);
   }
-  assert.deepEqual(next.modelSupplies.filter(item => other.some(old => old.id === item.id)), other);
-  assert.throws(() => op(next, 'publishSupplierBatch', { providerId, items: publication(state, providerId) }), /进度已变化/);
 });
 
 test('a prepared batch can return to configuration and recheck without losing new-model prices', () => {
   const { state, providerId } = prepared();
   const entries = supplierListingRows(state, state.providers.find(item => item.id === providerId)).map(row => supplierBatchEntry(state, row));
   const checked = op(state, 'prepareSupplierBatch', { providerId, items: entries });
-  const published = op(checked, 'publishSupplierBatch', { providerId, items: publication(checked, providerId) });
-  assert.equal(published.models.length, state.models.length);
-  assert.ok(published.modelOnboardings.filter(item => item.providerId === providerId).every(item => item.status === '已完成' && item.prices.length === 2));
+  const before=structuredClone(checked);
+  assert.throws(()=>op(checked, 'publishSupplierBatch', { providerId, items: publication(checked, providerId) }),/服务模式/);
+  assert.deepEqual(checked,before);assert.equal(checked.models.length, state.models.length);
+  assert.ok(checked.modelOnboardings.filter(item => item.providerId === providerId).every(item => item.status !== '已完成' && item.prices.length === 2));
+  assert.deepEqual(checked.modelOnboardings.filter(item=>item.providerId===providerId).map(item=>item.prices),state.modelOnboardings.filter(item=>item.providerId===providerId).map(item=>item.prices));
 });
 
-test('scope changes apply only on final confirmation and published batches do not overwrite other models', () => {
+test('failed final confirmation leaves proposed scopes in drafts without changing any existing model', () => {
   const { state, providerId, entries } = fixture(), tenantId = state.tenants[0].id;
   const prepared = op(state, 'prepareSupplierBatch', { providerId, items: entries.map(entry => ({ ...entry, listingScope: { openScope: 'selected', tenantIds: [tenantId] } })) });
   const drafts = prepared.modelOnboardings.filter(item => item.providerId === providerId);
   assert.ok(drafts.every(draft => prepared.models.find(model => model.id === draft.modelId).openScope === 'all'));
-  const published = op(prepared, 'publishSupplierBatch', { providerId, items: publication(prepared, providerId) });
-  assert.ok(drafts.every(draft => published.models.find(model => model.id === draft.modelId).openScope === 'selected'));
-  assert.deepEqual(published.models.filter(model => state.models.some(old => old.id === model.id)), state.models);
+  const before=structuredClone(prepared);
+  assert.throws(()=>op(prepared, 'publishSupplierBatch', { providerId, items: publication(prepared, providerId) }),/服务模式/);
+  assert.deepEqual(prepared,before);assert.ok(drafts.every(draft=>draft.listingScope.openScope==='selected' && draft.listingScope.tenantIds[0]===tenantId));
+  assert.deepEqual(prepared.models.filter(model => state.models.some(old => old.id === model.id)), state.models);
 });
 
 test('bad identities, foreign connections, duplicate entries and invalid prices reject the whole batch atomically', () => {
@@ -109,21 +110,26 @@ test('preview separates ready and blocked rows without mutating records; readine
   assert.throws(() => op({ ...prepared, currentRole: '运维人员' }, 'publishSupplierBatch', { providerId, items }), /无权/);
 });
 
-test('procurement edits and price revisions block publication until the operator rechecks', () => {
+test('rechecking procurement revisions preserves updated draft prices while the service mode still blocks publication', () => {
   const { state, providerId } = prepared(); const entries = publication(state, providerId);
   const changed = op(state, 'provider', { operation: 'cataloguePrice', objectId: providerId, values: { modelId: 'batch-model-a', scenarios: [{ name: '输入', unit: '百万 Token', currency: 'CNY', listPrice: '3' }, { name: '输出', unit: '百万 Token', currency: 'CNY', listPrice: '2' }] } });
   const before = structuredClone(changed);
   assert.throws(() => op(changed, 'publishSupplierBatch', { providerId, items: entries }), /报价已变化/); assert.deepEqual(changed, before);
   const refreshed = supplierListingRows(changed, changed.providers.find(item => item.id === providerId)).map(row => ({ ...supplierBatchEntry(changed, { ...row, draft: null }), draftId: row.draft.id, prices: markedUpItems(row.costs, '20') }));
   const rechecked = op(changed, 'prepareSupplierBatch', { providerId, items: refreshed });
-  const published = op(rechecked, 'publishSupplierBatch', { providerId, items: publication(rechecked, providerId) });
-  assert.ok(published.modelOnboardings.filter(item => item.providerId === providerId).every(item => item.status === '已完成'));
+  const recheckedBefore=structuredClone(rechecked);
+  assert.throws(()=>op(rechecked, 'publishSupplierBatch', { providerId, items: publication(rechecked, providerId) }),/服务模式/);
+  assert.deepEqual(rechecked,recheckedBefore);
+  const drafts=rechecked.modelOnboardings.filter(item=>item.providerId===providerId);
+  assert.ok(drafts.every(item=>item.status!=='已完成' && rechecked.models.find(model=>model.id===item.modelId).listingStatus==='已下架'));
+  assert.deepEqual(drafts.find(item=>item.catalogueModelId==='batch-model-a').prices.map(item=>Number(item.amount)),[3.6,2.4]);
 });
 
 test('view preferences and selections are version-scoped, preserve separate filters and tolerate unavailable storage', () => {
   const values = new Map(), storage = { getItem: key => values.get(key), setItem: (key, value) => values.set(key, value) }, provider = { id: 'p', catalogModelIds: ['a', 'b'] };
   const address = listingAddress(new URLSearchParams('q=Qwen&page=3&model=private&view=price&supplier=p'), 'models');
-  assert.equal(new URLSearchParams(address.split('?')[1]).has('model'), false);
+  assert.equal(new URLSearchParams(address.split('?')[1]).get('model'), 'private');
+  assert.equal(new URLSearchParams(address.split('?')[1]).has('view'), false);
   rememberListing(storage, { perspective: 'suppliers', models: { address, scrollY: 500 } });
   rememberCatalogueSelection(storage, provider, ['a', 'foreign', 'a']);
   assert.deepEqual(selectedCatalogueIds(storage, provider), ['a']); assert.equal(listingPreferences(storage).models.address, address);

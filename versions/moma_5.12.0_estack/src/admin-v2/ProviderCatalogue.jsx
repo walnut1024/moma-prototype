@@ -1,125 +1,57 @@
+import SupplyModelPicker from './SupplyModelPicker';
+import { supplyModelRecord } from './supply-models';
 import { Fragment, useRef, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { PlugZap, BadgeDollarSign, Link, KeyRound, Pencil, Trash2, PackageMinus } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Checkbox } from '../components/ui/checkbox';
-import { Popover, PopoverTrigger, PopoverContent } from '../components/ui/popover';
-import { Choice, Field } from './ModelMetadataForm';
-import { MODEL_TYPES } from './model-management';
-import { GridTable, Row, Cell, Modal } from './ModelOperationsUI';
-import { catalogueMoneyDisplay, cataloguePriceDraft, cataloguePurchasePrice, cataloguePurchasePriceInput } from './provider-catalogue-pricing';
-import { tariffDictionaryEntries, tariffOptions, appendCommonTariffScenarios, tariffScenarioUnit } from './tariff-dictionary';
-import { TariffChoice } from './TariffDictionary';
-import { catalogueModelMatch } from './model-operations';
-import { providerCatalogueIds, providerCatalogueModel } from './moma-provider';
-import { providerCataloguePrice, isPayAsYouGoPrice } from './moma-catalogue-prices';
-import CatalogueConnectionEditor from './CatalogueConnectionEditor';
-import { catalogueConnections } from './provider-model-connections';
-import { connectionCredentialsReady, connectionTestPassed } from './connection-state';
-import { displayTime } from './model-management';
-import { PROTOCOLS } from './provider-management';
+import { Table, TableHeader, TableBody, TableHead } from '../components/ui/table';
+import { Row, Cell, Modal, Notice, SearchBox, CopyId } from './ModelOperationsUI';
+import { displayedCatalogueIds, providerCatalogueModel } from './moma-provider';
+import { catalogueChannels, channelAddresses } from './provider-channels';
+import { catalogueMoneyDisplay } from './provider-catalogue-pricing';
+import { supplierChannelResources, supplierChannelCode, supplierChannelName, supplierCredentialIssues } from './supplier-resources';
+import { SupplierAssociationDialog, SupplierChannelDialog } from './SupplierResourceDialogs';
+import SupplierChannelTest from './SupplierChannelTest';
 
-const blankScenario = () => ({ name: '', listPrice: '', unit: '', currency: 'CNY' });
 const pending = <span className="supplier-key-pending">待配置</span>;
-const amount = (value, currency) => value == null ? pending : `${currency && currency !== 'CNY' ? currency + ' ' : ''}${catalogueMoneyDisplay(value)}`;
-
-function CommonScenarioBatch({ state, names, rows, currency, disabled, onAdd }) {
-  const [open, setOpen] = useState(false), [selected, setSelected] = useState([]), [query, setQuery] = useState(''), [error, setError] = useState('');
-  const existing = new Set(rows.map(item => item.name.trim().toLowerCase()));
-  const visible = names.filter(name => [name, tariffDictionaryEntries(state).find(item => item.kind === 'scenario' && item.name === name)?.englishName].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
-  return <Popover open={open} onOpenChange={next => { setOpen(next); setSelected([]); setQuery(''); setError(''); }}><PopoverTrigger asChild><Button type="button" size="sm" disabled={disabled}><Plus data-icon="inline-start"/>批量添加常用计费项</Button></PopoverTrigger><PopoverContent align="end" className="supplier-bulk-scenarios"><strong>选择常用计费项</strong><Input aria-label="搜索常用计费项" placeholder="搜索常用计费项" value={query} onChange={event => setQuery(event.target.value)}/><fieldset className="supplier-bulk-options"><legend className="sr-only">选择要添加的计费项</legend>{visible.map(name => {
-    const added = existing.has(name.toLowerCase());
-    return <label key={name}><Checkbox aria-label={`批量选择 ${name}`} checked={added || selected.includes(name)} disabled={disabled || added} onCheckedChange={checked => { setSelected(checked === true ? [...selected, name] : selected.filter(item => item !== name)); setError(''); }}/><span>{name}<small className="supplier-tariff-english">{tariffScenarioUnit(state, name) || '单位待配置'}</small></span>{added && <small>已添加</small>}</label>;
-  })}{!visible.length && <p>没有匹配的常用计费项。</p>}</fieldset><small className="supplier-price-hint">新增行按计费项带出计价单位，未配置或已停用的单位需手动选择。已添加的同名计费项会跳过。</small>{error && <p role="alert" className="supplier-key-error">{error}</p>}<div className="supplier-key-actions"><Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>取消选择</Button><Button type="button" size="sm" disabled={disabled || !selected.length} onClick={() => {
-    try { onAdd(appendCommonTariffScenarios(rows, selected, state, currency)); setOpen(false); } catch (issue) { setError(issue.message); }
-  }}>添加 {selected.length} 行</Button></div></PopoverContent></Popover>;
+const channelActions = [['test', '测试连接', PlugZap], ['price', '渠道售价', BadgeDollarSign], ['address', 'API 地址', Link], ['credentials', 'API 密钥', KeyRound], ['info', '渠道信息', Pencil], ['unlink', '删除', Trash2]];
+function ChannelAddress({ value }) {
+  const clipped = value.length > 42, origin = value.match(/^https?:\/\/[^/]+/)?.[0];
+  return <div className="supplier-channel-address supplier-address-text" title={value}><span className="supplier-url-head">{clipped ? origin || value.slice(0, 20) : value}</span>{clipped && <span className="supplier-url-tail">…{value.slice(value.lastIndexOf('/', value.lastIndexOf('/') - 1))}</span>}</div>;
 }
 
-export function CataloguePriceEditor({ state, provider, modelId, ops, close, manageDictionary, adding = false }) {
-  const names = tariffOptions(state, 'scenario').filter(name => provider.id !== 'provider-moma' || isPayAsYouGoPrice({ name }));
-  const units = tariffOptions(state, 'unit').filter(unit => provider.id !== 'provider-moma' || isPayAsYouGoPrice({ unit }));
-  const [value, setValue] = useState(() => {
-    const draft = cataloguePriceDraft(adding ? undefined : providerCataloguePrice(provider, modelId));
-    return { ...draft, scenarios: draft.scenarios.length ? draft.scenarios : [blankScenario()] };
-  });
-  const [newModelId, setModelId] = useState('');
-  const [protocol, setProtocol] = useState('OpenAI'), [baseUrl, setBaseUrl] = useState('');
-  const [modelType, setModelType] = useState('text');
-  const [endpoint, setEndpoint] = useState('');
-  const change = next => { setValue(next); ops.dirty(true); ops.setError(''); };
-  const scenario = (index, patch) => change({ ...value, scenarios: value.scenarios.map((item, i) => i === index ? { ...item, ...patch } : item) });
-  const preview = item => {
-    try { return cataloguePurchasePriceInput(item, value.discountFactor); }
-    catch { return ''; }
-  };
-  const cancel = () => ops.proceed(close);
-  return <Modal wide title={adding ? '添加模型' : '修改目录价'} description={adding ? provider.name : modelId} onClose={cancel}><form className={`supplier-price-form${adding ? ' supplier-catalogue-add-form' : ''}`} noValidate onSubmit={event => {
-    event.preventDefault();
-    if (ops.run('provider', { operation: adding ? 'catalogueAdd' : 'cataloguePrice', objectId: provider.id, values: { scenarios: value.scenarios, modelId: adding ? newModelId : modelId, ...(adding ? { modelType, endpoint, protocol, baseUrl, discountFactor: value.discountFactor } : {}) } })) close();
-  }}>
-    <div className="supplier-price-body">
-      {adding && <div className="supplier-catalogue-add-fields">
-        <Field label="供应商"><Input aria-label="供应商" readOnly tabIndex={-1} value={provider.name}/></Field>
-        <Field label="模型ID *" hint="区分大小写，最多 200 字。"><Input aria-label="模型ID" required autoCapitalize="none" autoComplete="off" spellCheck={false} maxLength={200} placeholder="请输入模型ID" value={newModelId} disabled={!ops.can} onChange={event => { setModelId(event.target.value); ops.dirty(true); ops.setError(''); }}/></Field>
-        <Field label="模型类型 *"><Choice label="模型类型" value={modelType} options={Object.entries(MODEL_TYPES)} disabled={!ops.can} onChange={type => { setModelType(type); ops.dirty(true); ops.setError(''); }}/></Field>
-        <Field label="Endpoint *" hint="填写以 / 开头的接口路径或完整 HTTP/HTTPS 地址。"><Input aria-label="Endpoint" required autoCapitalize="none" autoComplete="off" spellCheck={false} maxLength={2048} placeholder="/v1/chat/completions 或 https://api.example.com/v1/chat/completions" value={endpoint} disabled={!ops.can} onChange={event => { setEndpoint(event.target.value); ops.dirty(true); ops.setError(''); }}/></Field>
-        <Field label="协议 *"><Choice label="协议" value={protocol} options={PROTOCOLS.map(value => [value, value])} disabled={!ops.can} onChange={value => { setProtocol(value); ops.dirty(true); ops.setError(''); }}/></Field>
-        <Field label="接入地址（Base URL）*" hint={provider.sourceType === 'selfHosted' ? '填写完整 HTTP / HTTPS 服务地址。' : '填写完整 HTTPS 服务地址。'}><Input aria-label="接入地址（Base URL）" required autoCapitalize="none" autoComplete="off" spellCheck={false} maxLength={2048} placeholder="https://api.example.com/v1" value={baseUrl} disabled={!ops.can} onChange={event => { setBaseUrl(event.target.value); ops.dirty(true); ops.setError(''); }}/></Field>
-        <Field label="采购折扣系数" hint="默认 1；0–1，最多 6 位小数。采购价默认按目录价 × 折扣系数计算，可手动修改。"><Input aria-label="采购折扣系数" inputMode="decimal" placeholder="1" value={value.discountFactor} disabled={!ops.can} onChange={event => change({ ...value, discountFactor: event.target.value })}/></Field>
-      </div>}
-      <div className="supplier-price-scenes-heading"><h3>计费项</h3><div className="supplier-row-actions"><Button variant="ghost" size="sm" type="button" onClick={manageDictionary}>维护资费字典</Button><Button variant="outline" size="sm" type="button" disabled={!ops.can || value.scenarios.length >= 100} onClick={() => change({ ...value, scenarios: [...value.scenarios, blankScenario()] })}>添加自定义计费项</Button><CommonScenarioBatch state={state} names={names} rows={value.scenarios} currency={blankScenario().currency} disabled={!ops.can} onAdd={scenarios => change({ ...value, scenarios })}/></div></div>
-      <p className="supplier-price-hint">{adding ? '至少填写一条计费项；计费项、目录价和计价单位必填，免费请填 0。' : '按供应商报价选择适用计费项，长度档位、时段等差异请在资费字典中维护为独立计费项。新报价采用人民币，历史外币报价保留币种标识，不进行汇率换算。'}</p>
-      <p id="catalogue-purchase-hint" className="supplier-price-hint">采购价默认按目录价 × 采购折扣系数计算，可手动修改，最多 6 位小数；手动值不随目录价或折扣变化，清空后恢复自动计算。</p>
-      <GridTable className="supplier-price-input-table" headings={['计费项', '目录价（单位：元）', '计价单位', '采购价（单位：元）', '操作']} empty={!value.scenarios.length} emptyMessage="尚无计费项，请选择常用项或添加自定义项配置价格。">{value.scenarios.map((item, index) => <Row key={index}>
-        <Cell><TariffChoice label={`第 ${index + 1} 条计费项`} kind="scenario" options={names} entries={tariffDictionaryEntries(state).filter(item => item.kind === 'scenario').map(item => ({ ...item, description: tariffScenarioUnit(state, item.name) || '单位待配置' }))} value={item.name} disabled={!ops.can} onChange={name => scenario(index, { name, unit: tariffScenarioUnit(state, name) })}/>{item.condition && <Input className="supplier-price-condition-input" aria-label={`第 ${index + 1} 条适用条件`} placeholder="适用条件（选填）" maxLength={160} value={item.condition || ''} disabled={!ops.can} onChange={event => scenario(index, { condition: event.target.value })}/>}</Cell>
-        <Cell>{item.currency && item.currency !== 'CNY' && <small>{item.currency}</small>}<Input aria-label={`第 ${index + 1} 条目录价`} inputMode="decimal" placeholder={adding ? '必填，免费填 0' : '待配置'} value={item.listPrice} disabled={!ops.can} onChange={event => scenario(index, { listPrice: event.target.value })}/></Cell>
-        <Cell><TariffChoice label={`第 ${index + 1} 条计价单位`} kind="unit" options={units} entries={tariffDictionaryEntries(state).filter(item => item.kind === 'unit')} value={item.unit} disabled={!ops.can} onChange={unit => scenario(index, { unit })}/></Cell>
-        <Cell className="supplier-price-number"><Input aria-label={`第 ${index + 1} 条采购价`} aria-describedby="catalogue-purchase-hint" inputMode="decimal" placeholder="自动计算，可手动填写" value={preview(item)} disabled={!ops.can} onChange={event => scenario(index, { purchasePrice: event.target.value })} onBlur={() => { if (item.purchasePrice === '') scenario(index, { purchasePrice: undefined }); }}/></Cell>
-        <Cell><Button type="button" size="icon-sm" variant="ghost" aria-label={`移除第 ${index + 1} 条计费项`} disabled={!ops.can} onClick={() => change({ ...value, scenarios: value.scenarios.filter((_, i) => i !== index) })}><Trash2/></Button></Cell>
-      </Row>)}</GridTable>
-    </div>
-    {ops.error && <p role="alert" className="supplier-key-error">{ops.error}</p>}
-    <div className="supplier-price-footer"><span>{adding ? '保存到当前供应商目录；添加到服务管理及上架需另行配置。' : '修改目录价、采购价与计费项，采购折扣系数保持不变。'}</span><Button variant="outline" type="button" onClick={cancel}>取消</Button><Button type="submit" disabled={!ops.can}>{adding ? '保存模型' : '保存目录价'}</Button></div>
-  </form></Modal>;
-}
-
-function CatalogueDiscountEditor({ provider, modelId, ops, close }) {
-  const [discountFactor, setDiscount] = useState(() => cataloguePriceDraft(providerCataloguePrice(provider, modelId)).discountFactor);
-  const cancel = () => ops.proceed(close);
-  return <Modal title="修改折扣系数" description={modelId} onClose={cancel}><form className="supplier-key-form" noValidate onSubmit={event => {
-    event.preventDefault();
-    if (ops.run('provider', { operation: 'catalogueDiscount', objectId: provider.id, values: { modelId, discountFactor } })) close();
-  }}>
-    <Field label="采购折扣系数" hint="此模型所有计费项共用。0–1，最多 6 位小数；例如 0.8 为八折，1 为原价。默认 1 为原价，留空保存时按 1。"><Input aria-label="采购折扣系数" aria-invalid={Boolean(ops.error)} aria-describedby={ops.error ? 'catalogue-discount-error' : undefined} inputMode="decimal" placeholder="例如 0.8" value={discountFactor} disabled={!ops.can} onChange={event => { setDiscount(event.target.value); ops.dirty(true); ops.setError(''); }}/></Field>
-    <p className="supplier-price-hint">仅修改采购折扣系数，目录价与计费项保持不变。自动采购价随折扣重新计算，手动填写的采购价保留。</p>
-    {ops.error && <p role="alert" id="catalogue-discount-error" className="supplier-key-error">{ops.error}</p>}
-    <div className="supplier-key-actions"><Button variant="outline" type="button" onClick={cancel}>取消</Button><Button type="submit" disabled={!ops.can}>保存折扣系数</Button></div>
-  </form></Modal>;
-}
-
-export default function ProviderCatalogue({ state, provider, ops, manageDictionary, onStop }) {
-  const [editing, setEditing] = useState(null), [query, setQuery] = useState(''), trigger = useRef(null);
-  const ids = providerCatalogueIds(provider), visible = ids.filter(id => id.toLowerCase().includes(query.trim().toLowerCase()));
-  const close = () => { setEditing(null); ops.setError(''); requestAnimationFrame(() => trigger.current?.focus()); };
-  return <>
-    <div className="supplier-toolbar"><Input type="search" aria-label="搜索目录模型" placeholder="搜索模型名称 / Model ID" value={query} onChange={event => setQuery(event.target.value)}/><span className="supplier-key-pending">{visible.length} / {ids.length} 个模型</span></div>
-    <GridTable className="supplier-catalogue-table" headings={['Model ID / 模型', '接入地址 / 协议', '计费项', '目录价（单位：元）', '计价单位', '采购折扣系数', '采购价（单位：元）', '操作']} empty={!visible.length} emptyMessage={ids.length ? '没有匹配的模型，请调整搜索条件。' : '尚未登记模型，请添加 Model ID。'}>{visible.map(id => {
-      const connections = catalogueConnections(state, provider, id);
-      let match;
-      try { match = catalogueModelMatch(state, provider.id, id); } catch { match = {}; }
-      const entry = providerCataloguePrice(provider, id), scenes = entry?.scenarios.length ? entry.scenarios : [null], catalogue = providerCatalogueModel(provider, id);
-      return <Fragment key={id}>{scenes.map((item, index) => <Row key={index}>
-        {index === 0 && <Cell className="supplier-catalogue-identity" rowSpan={scenes.length}><code>{id}</code>{catalogue && <><small>{MODEL_TYPES[catalogue.type]}</small><small className="supplier-url" title={catalogue.endpoint}>{catalogue.endpoint}</small></>}</Cell>}
-        {index === 0 && <Cell className="supplier-catalogue-connection" rowSpan={scenes.length}>{connections.length ? connections.map(endpoint => <div className="supplier-model-connection" key={endpoint.id}><small>{endpoint.protocol} · {endpoint.status === '运行中' ? '已启用' : endpoint.status === '需关注' ? '需关注' : '已停用'}</small><code className="supplier-url">{endpoint.baseUrl}</code><small>{connectionTestPassed(endpoint) ? '检查通过' : endpoint.connectionTest?.result === '失败' ? '检查失败' : '待检查'} · {displayTime(endpoint.connectionTest?.testedAt)}</small>{endpoint.connectionTest?.result === '失败' && <small>{endpoint.connectionTest.message}</small>}<div className="supplier-row-actions"><Button variant="link" size="sm" disabled={!ops.can} onClick={() => connectionCredentialsReady(endpoint, provider) ? ops.run('checkConnection', { endpointId: endpoint.id }) : ops.go({ tab: 'api-keys' })}>{connectionCredentialsReady(endpoint, provider) ? '检查并启用' : '配置 API Key'}</Button>{['运行中', '需关注'].includes(endpoint.status) && <Button variant="link" size="sm" disabled={!ops.can} onClick={() => onStop(endpoint)}>停用</Button>}</div></div>) : pending}</Cell>}
-        <Cell>{item ? <span className="supplier-catalogue-item" title={item.name + (item.condition ? `（${item.condition}）` : '')}>{item.name}{item.condition ? `（${item.condition}）` : ''}</span> : pending}</Cell><Cell className="supplier-price-number">{amount(item?.listPrice, item?.currency)}</Cell><Cell>{item?.unit || '—'}</Cell>
-        {index === 0 && <Cell className="supplier-price-number" rowSpan={scenes.length}>{entry.discountFactor / 1000000}</Cell>}
-        <Cell className="supplier-price-number">{amount(cataloguePurchasePrice(item?.listPrice, entry?.discountFactor, item?.purchasePrice), item?.currency)}</Cell>
-        {index === 0 && <Cell className="supplier-catalogue-action" rowSpan={scenes.length}><div className="supplier-catalogue-actions"><Button variant="link" size="sm" disabled={!ops.can && !match.supply} aria-label={(match.supply ? '查看模型：' : '添加到服务管理：') + id} onClick={() => ops.proceed(() => {
-          const next = new URLSearchParams(match.supply ? { model: match.model.id, tab: 'supplies' } : { view: 'add', step: 'select', provider: provider.id, catalogue: id, origin: location.hash });
-          location.hash = '#/admin-2/listing?' + next;
-        })}>{match.supply ? '查看模型' : '添加到服务管理'}</Button>{[['connection', connections.length ? '编辑接入地址' : '配置接入地址'], ['discount', '修改折扣系数'], ['price', '修改目录价']].map(([kind, label]) => <Button key={kind} variant="link" size="sm" disabled={!ops.can} aria-label={`${label}：${id}`} onClick={event => { trigger.current = event.currentTarget; ops.setError(''); setEditing({ modelId: id, kind }); }}>{label}</Button>)}</div></Cell>}
-      </Row>)}</Fragment>;
-    })}</GridTable>
-    {editing && (editing.kind === 'connection' ? <CatalogueConnectionEditor key={editing.modelId} state={state} provider={provider} modelId={editing.modelId} ops={ops} close={close}/> : editing.kind === 'discount' ? <CatalogueDiscountEditor key={editing.modelId} provider={provider} modelId={editing.modelId} ops={ops} close={close}/> : <CataloguePriceEditor key={editing.modelId} state={state} provider={provider} modelId={editing.modelId} ops={ops} close={close} manageDictionary={manageDictionary}/>)}
-  </>;
+export default function ProviderCatalogue({ state, provider, ops, entries }) {
+  const [query, setQuery] = useState(''), [editing, setEditing] = useState(null), [libraryId, setLibraryId] = useState('');
+  const trigger = useRef(null), ids = provider ? displayedCatalogueIds(provider, state) : [], resources = provider ? supplierChannelResources(state, provider) : [];
+  const visible = entries || ids.filter(id => `${id} ${supplyModelRecord(state, provider, id)?.name || providerCatalogueModel(provider, id)?.name || ''}`.toLowerCase().includes(query.toLowerCase().trim())).map(modelId => ({ provider, modelId }));
+  const credentialIssues = provider ? supplierCredentialIssues(state, provider, ids) : [];
+  const open = (event, kind, modelId, associationId, owner) => ops.proceed(() => { trigger.current = event.currentTarget; ops.setError(''); setLibraryId(supplyModelRecord(state, owner, modelId)?.id || ''); setEditing({ kind, modelId, associationId, providerId: owner.id }); });
+  const close = () => { setEditing(null); ops.setError(''); requestAnimationFrame(() => trigger.current?.isConnected && trigger.current.focus()); };
+  const editingProvider = editing && state.providers.find(row => row.id === editing.providerId);
+  const edited = editingProvider && catalogueChannels(state, editingProvider, editing.modelId).find(row => row.id === editing.associationId);
+  return <TooltipProvider>
+    {!entries && <div className="supplier-toolbar supplier-resource-toolbar"><SearchBox value={query} placeholder="搜索模型名称 / Model ID" onChange={setQuery}/></div>}
+    {!entries && !resources.length && <div className="supplier-resource-notice"><Notice>当前供应商尚未配置供应渠道。创建渠道并关联模型后，才能进行连接测试及对外服务关联。</Notice></div>}
+    {credentialIssues.map(({channel, modelIds}) => <div key={channel.id} className="supplier-resource-notice"><Notice error>已关联渠道「{supplierChannelCode(channel)} · {supplierChannelName(provider, channel)}」缺少可用 API 凭证，影响 {modelIds.length} 个模型。配置凭证后，请先测试并启用渠道，再检测和启用模型关联。<Button variant="link" onClick={() => ops.go({ tab: 'api-keys', credentialChannel: channel.id })}>前往配置密钥</Button></Notice></div>)}
+    <div className="mo-table-scroll"><Table className="supplier-model-resource-table"><colgroup>{Array.from({ length: 8 }, (_, index) => <col key={index}/>)}</colgroup><TableHeader><Row>{[entries ? '供应商' : '模型名称', '渠道名称/ID', 'API 地址', '上游模型 ID', '计费项', '渠道售价', '计价单位', '操作'].map(label => <TableHead key={label} scope="col">{label}</TableHead>)}</Row></TableHeader><TableBody>
+      {visible.map(({ provider, modelId: id }) => {
+        const model = supplyModelRecord(state, provider, id) || providerCatalogueModel(provider, id), channels = catalogueChannels(state, provider, id).filter(row => row.endpointId);
+        const rows = channels.length ? channels : [null], modelSpan = rows.reduce((sum, row) => sum + Math.max(1, row?.pricing.scenarios.length || 0), 0);
+        return <Fragment key={provider.id + id}>{rows.map((association, channelIndex) => {
+          const prices = association?.pricing.scenarios.length ? association.pricing.scenarios : [null], endpoint = association?.endpoint;
+          return <Fragment key={association?.id || 'empty'}>{prices.map((price, index) => <Row key={index} data-supplier-model={id} data-resource-id={endpoint?.id} className={channelIndex === 0 && index === 0 ? 'supplier-model-start' : index === 0 ? 'supplier-channel-start' : 'supplier-billing-row'}>
+            {(entries || channelIndex === 0) && index === 0 && <Cell rowSpan={entries ? prices.length : modelSpan} className="supplier-catalogue-identity">{entries ? <Button variant="link" className="supplier-owner-link" onClick={() => ops.go({ perspective: 'suppliers', provider: provider.id, tab: 'catalogue', resource: null })}>{provider.name}</Button> : <><strong>{model?.name || id}</strong>{model?.name !== (model?.modelId || id) && <code>{model?.modelId || id}</code>}<Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon-sm" disabled={!ops.can} aria-label={'关联模型资料：' + id} onClick={event => open(event, 'linkModel', id, null, provider)}><Link/></Button></TooltipTrigger><TooltipContent>{supplyModelRecord(state, provider, id)?.name || '关联模型资料'}</TooltipContent></Tooltip></>}</Cell>}
+            {index === 0 && <><Cell rowSpan={prices.length} className="supplier-resource-name">{endpoint ? <><strong>{supplierChannelName(provider, endpoint)}</strong><code>{supplierChannelCode(endpoint)}</code></> : '—'}</Cell><Cell rowSpan={prices.length} className="supplier-catalogue-connection">{association ? channelAddresses(provider, association).map(address => <div className="supplier-protocol-address" key={address.protocol}><small>{address.protocol === 'OpenAI' ? 'OpenAI 兼容接口' : address.protocol}</small><ChannelAddress value={address.baseUrl}/></div>) : '—'}</Cell><Cell rowSpan={prices.length}>{association ? <CopyId value={association.upstreamModelId} label="上游模型 ID"/> : '—'}</Cell></>}
+            {price ? <><Cell>{price.name}{price.condition && <small>{price.condition}</small>}</Cell><Cell className="supplier-price-number">{price.listPrice == null ? pending : `${price.currency === 'CNY' ? '¥' : price.currency + ' '}${catalogueMoneyDisplay(price.listPrice)}`}</Cell><Cell>{price.unit || '—'}</Cell></> : <Cell colSpan={3}>{association ? pending : <span className="supplier-key-pending">待配置渠道</span>}</Cell>}
+            {index === 0 && <Cell rowSpan={prices.length} className="supplier-catalogue-operation-cell">{association && <div className="supplier-catalogue-actions">{channelActions.map(([kind, label, Icon]) => <Tooltip key={kind}><TooltipTrigger asChild><Button variant="ghost" size="icon-sm" disabled={!ops.can} aria-label={label + '：' + id + ' / ' + association.endpointId} onClick={event => open(event, kind, id, association.id, provider)}><Icon aria-hidden="true"/></Button></TooltipTrigger><TooltipContent>{label}</TooltipContent></Tooltip>)}</div>}{!channels.length && <div className="supplier-catalogue-actions supplier-catalogue-model-actions"><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon-sm" disabled={!ops.can} aria-label={'移除供应模型：' + id} onClick={event => open(event, 'deleteModel', id, null, provider)}><PackageMinus aria-hidden="true"/></Button></TooltipTrigger><TooltipContent>移除供应模型</TooltipContent></Tooltip></div>}</Cell>}
+          </Row>)}</Fragment>;
+        })}</Fragment>;
+      })}
+    </TableBody></Table>{!visible.length && <div className="mo-empty" role="status">{ids.length ? '没有匹配的模型，请调整搜索条件。' : '尚未添加供应模型。'}</div>}</div>
+    {editing?.kind === 'linkModel' && <Modal title="关联模型资料" description={editingProvider.name + ' · ' + editing.modelId} onClose={() => ops.proceed(close)}><SupplyModelPicker ops={ops} state={state} value={libraryId} disabled={!ops.can} onChange={id => { setLibraryId(id); ops.dirty(true); ops.setError(''); }}/><p>当前供应模型的全部渠道将归入所选模型。渠道配置、价格及已上线服务保持不变。</p>{ops.error && <Notice error>{ops.error}</Notice>}<div className="supplier-key-actions"><Button variant="outline" onClick={() => ops.proceed(close)}>取消</Button><Button disabled={!ops.can || !libraryId} onClick={() => { if (ops.run('provider', { operation: 'supplierModelLink', objectId: editingProvider.id, values: { modelId: editing.modelId, libraryId, confirmed: true } })) close(); }}>确认关联</Button></div></Modal>}
+    {editing?.kind === 'price' && <SupplierAssociationDialog key={editing.modelId + editing.associationId} state={state} provider={editingProvider} modelId={editing.modelId} association={edited} ops={ops} close={close}/>}
+    {['address', 'credentials', 'info'].includes(editing?.kind) && edited && <SupplierChannelDialog key={editing.kind + edited.endpointId} state={state} provider={editingProvider} endpoint={edited.endpoint} mode={editing.kind} ops={ops} close={close}/>}
+    {editing?.kind === 'test' && edited && <SupplierChannelTest state={state} provider={editingProvider} association={edited} ops={ops} close={close}/>}
+    {['unlink', 'deleteModel'].includes(editing?.kind) && <Modal title={editing.kind === 'unlink' ? '删除模型渠道' : '移除供应模型'} description={editing.kind === 'unlink' && edited ? `${editing.modelId} · ${supplierChannelName(editingProvider, edited.endpoint)}` : editing.modelId} onClose={close}><p>{editing.kind === 'unlink' ? '删除当前模型与此渠道的关联，渠道资源及其他模型的关联保留。' : '仅移除当前供应商的模型供应关系；模型资料、其他供应商的关系及价格历史保留。'}如仍被服务或路由引用，请先解除服务映射。</p>{editing.kind === 'unlink' && !edited && <Notice error>当前模型渠道已变化，请关闭后重新选择。</Notice>}{ops.error && <Notice error>{ops.error}</Notice>}<div className="supplier-key-actions"><Button variant="outline" onClick={close}>取消</Button><Button variant="destructive" disabled={!ops.can || editing.kind === 'unlink' && !edited} onClick={() => { if (ops.run('provider', { operation: editing.kind === 'unlink' ? 'supplierAssociationRemove' : 'catalogueRemove', objectId: editingProvider.id, values: { modelId: editing.modelId, endpointId: edited?.endpointId, associationId: edited?.id, confirmed: true } })) close(); }}>确认{editing.kind === 'unlink' ? '删除' : '移除供应模型'}</Button></div></Modal>}
+  </TooltipProvider>;
 }

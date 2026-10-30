@@ -3,6 +3,8 @@ import { commitAdminState } from "./store.js";
 import { usageTotal } from "./observability.js";
 import { enterpriseGrant, enterpriseTokenUsage } from './enterprise.js';
 import { availableSupplies, activeSupplySalePrice } from "./model-management.js";
+import { activeModelSalePrice, activeProviderPrice } from './service-workspace.js';
+import { routingServices, serviceRoute, activeRouteVersion } from './service-routing.js';
 
 const now = () => new Date().toISOString();
 const id = prefix => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -30,10 +32,13 @@ export function activateOrder(state, orderId) {
   return command ? commitAdminState(state, command, '平台管理员') : state;
 }
 
-export function simulateRequest(state, { requestId, keyId, modelId, usage = { input: 1000, cached: 0, output: 200 }, forceTimeout = false, cacheKey = "demo-prompt", requirements = {} }) {
+export function simulateRequest(state, { requestId, keyId, modelId: requestedModelId, usage = { input: 1000, cached: 0, output: 200 }, forceTimeout = false, cacheKey = "demo-prompt", requirements = {} }) {
+  const service=routingServices(state).find(item=>item.mode==='provider' && item.callId && item.callId===requestedModelId);
+  const modelId=service?.modelId || state.models.find(item=>item.id===requestedModelId || item.modelId===requestedModelId)?.id || requestedModelId;
   if (state.requests.some(item => item.requestId === requestId)) return { state, request: state.requests.find(item => item.requestId === requestId), duplicate: true };
   const key = state.apiKeys.find(item => item.id === keyId), model = state.models.find(item => item.id === modelId), tenant = key && state.tenants.find(item => item.id === key.tenantId), project = key && state.projects.find(item => item.id === key.projectId), grant = key && state.grants.find(item => item.subjectId === key.id), route = state.routes.find(item => item.modelId === modelId && item.status === "已生效");
-  const candidates = availableSupplies(state, modelId, requirements), candidateIds = candidates.map(supply => supply.endpointId);
+  const mapped=service && activeRouteVersion(serviceRoute(state,service.id))?.config.channels.filter(item=>item.enabled).map(item=>item.supplyId);
+  const candidates = availableSupplies(state, modelId, requirements).filter(supply=>!service || supply.provider?.id===service.providerId && mapped?.includes(supply.id)), candidateIds = candidates.map(supply => supply.endpointId);
   const tenantGrant = enterpriseGrant(state, key?.tenantId), tenantQuantity = enterpriseTokenUsage(model, usage);
   let httpStatus = 200, error = "", endpointId = route ? route.targets.find(target => candidateIds.includes(target.endpointId))?.endpointId : candidates[0]?.endpointId;
   if (!key || key.status !== "有效" || !tenant || tenant.status === "停用" || !project || project.status === "停用") [httpStatus, error] = [401, "auth_rejected"];
@@ -41,6 +46,8 @@ export function simulateRequest(state, { requestId, keyId, modelId, usage = { in
   else if (tenantGrant && !tenantGrant.modelIds.includes(modelId)) [httpStatus, error] = [403, 'enterprise_model_not_authorized'];
   else if (tenantGrant && tenantGrant.limit - tenantGrant.used < tenantQuantity) [httpStatus, error] = [402, 'enterprise_quota_exhausted'];
   else if (!model || model.callsEnabled === false) [httpStatus, error] = [403, "model_call_disabled"];
+  else if (model.serviceMode==='provider' && !service) [httpStatus,error]=[403,'provider_service_required'];
+  else if (service && !activeProviderPrice(state,modelId,service.providerId)) [httpStatus,error]=[503,'provider_price_unavailable'];
   else if (model.openScope === 'selected' && !model.tenantIds.includes(key.tenantId)) [httpStatus, error] = [403, "model_scope_rejected"];
   else if (!grant || grant.limit - grant.used < usageTotal(usage)) [httpStatus, error] = [402, "quota_exhausted"];
   else if (state.limits.some(item => item.scopeType === "key" && item.scopeId === key.id && item.status === "已启用")) [httpStatus, error] = [429, "rate_limit_exceeded"];
@@ -56,7 +63,9 @@ export function simulateRequest(state, { requestId, keyId, modelId, usage = { in
   const request = { id: id("request"), requestId, tenantId: key?.tenantId || null, projectId: key?.projectId || null, keyId: key?.id || keyId, modelId, versionId: model?.defaultVersionId || null, endpointId: endpointId || null, releaseId: state.releases.find(item => item.status === "当前生效")?.id || null, source: "API 调用", attempts, usage, cacheKey, cacheHit, httpStatus, ttftMs: httpStatus === 200 && model?.capabilities.streaming ? 220 : null, durationMs: httpStatus === 200 ? attempts.reduce((sum, item) => sum + item.durationMs, 0) : 0, createdAt: now(), updatedAt: now() };
   const changes = [{ type: "add", collection: "requests", record: request }];
   const fulfilledSupply = candidates.find(supply => supply.endpointId === endpointId);
-  const price = fulfilledSupply && activeSupplySalePrice(state, modelId, fulfilledSupply.id);
+  const price = fulfilledSupply && (model.serviceMode === 'standard' ? activeModelSalePrice(state,modelId) : model.serviceMode==='provider' ? activeProviderPrice(state,modelId,service?.providerId) : activeSupplySalePrice(state, modelId, fulfilledSupply.id));
+  request.callId=service?.callId || model?.modelId || requestedModelId;
+  request.providerId=fulfilledSupply?.provider?.id || null;
   request.supplyId = fulfilledSupply?.id || null;
   request.priceVersionId = price?.id || null;
   request.priceSnapshot = price ? { ...price } : null;

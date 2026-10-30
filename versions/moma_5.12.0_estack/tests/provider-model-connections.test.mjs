@@ -26,7 +26,7 @@ test('catalogue address is explicit, model-scoped, persisted and leaves prices, 
   const reused = configure(seed, { endpointId: existing.id, baseUrl: existing.baseUrl + '/' });
   assert.deepEqual(reused.endpoints, seed.endpoints);
   assert.equal(catalogueConnections(reused, reused.providers.find(p => p.id === providerId), modelId)[0].id, existing.id);
-  assert.throws(() => run(saved, 'checkConnection', { endpointId: endpoints[0].id }), /API Key/);
+  assert.throws(() => run(saved, 'checkConnection', { endpointId: endpoints[0].id }), /API 密钥/);
 });
 
 test('keys can be maintained separately; shared address edits require confirmation and invalidate checks', async () => {
@@ -47,22 +47,20 @@ test('keys can be maintained separately; shared address edits require confirmati
   assert.equal(changed.apiKeys.length, 1);
   assert.equal(catalogueConnections(state, owner(), 'DeepSeek-V3')[0].baseUrl, changed.baseUrl);
   state = commitAdminState(state, action('connectionKeys', { apiKeys: [], credentialRef: '', endpointId: ep.id, confirmed: true }));
-  assert.throws(() => run(state, 'checkConnection', { endpointId: ep.id }), /API Key/);
+  assert.throws(() => run(state, 'checkConnection', { endpointId: ep.id }), /API 密钥/);
   assert.ok(!JSON.stringify(state).includes('sk-local-only-model-key-0001'));
 });
 
-test('existing exact supply links are shown, ambiguous links stay explicit, and confirmed rebinding preserves old endpoints', () => {
+test('existing parallel supplies remain independent and cannot collapse through the single-address editor', () => {
   let state = createAdminSeed();
   const provider = state.providers.find(p => p.id === providerId), first = state.endpoints.find(e => e.providerId === providerId), second = { ...first, id: 'second-model-connection', baseUrl: 'https://second.example.invalid/v1' };
   state = { ...state, endpoints: [...state.endpoints, second], modelSupplies: [...state.modelSupplies, { id: 'linked-one', modelId: 'model-1', endpointId: first.id, catalogueModelId: modelId, status: '已启用', validationStatus: '通过' }, { id: 'linked-two', modelId: 'model-1', endpointId: second.id, upstreamModelId: modelId, status: '已启用', validationStatus: '通过' }] };
   assert.equal(catalogueConnections(state, provider, modelId).length, 2);
   assert.throws(() => configure(state, { endpointId: second.id, baseUrl: second.baseUrl }), /确认/);
-  const saved = configure(state, { endpointId: second.id, baseUrl: second.baseUrl, confirmed: true });
-  assert.equal(saved.endpoints.length, state.endpoints.length);
-  assert.deepEqual(saved.endpoints.find(e => e.id === first.id), first);
-  assert.equal(saved.modelSupplies.find(s => s.id === 'linked-one').endpointId, second.id);
-  assert.equal(saved.modelSupplies.find(s => s.id === 'linked-one').validationStatus, '待验证');
-  assert.equal(catalogueConnections(saved, saved.providers.find(p => p.id === providerId), modelId).length, 1);
+  const before = structuredClone(state);
+  assert.throws(() => configure(state, { endpointId: second.id, baseUrl: second.baseUrl, confirmed: true }), /管理渠道/);
+  assert.deepEqual(state, before);
+  assert.equal(catalogueConnections(state, provider, modelId).length, 2);
 });
 
 test('invalid URL, cross-supplier reference, unknown model, permission, revision and storage failures never partially save', () => {

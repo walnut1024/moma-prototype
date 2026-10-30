@@ -1,5 +1,15 @@
-.ua-page .us-kpi-grid{grid-template-columns:repeat(6,minmax(0,1fr));min-width:900px}
+.admin-v2 :is(.us-page,.us-detail-page) .ua-kpis [data-slot=card-content]{padding:16px;overflow:visible}
+.admin-v2 :is(.us-page,.us-detail-page) .ua-kpi-grid{display:grid;gap:16px;min-width:0}
+.admin-v2 .us-page .us-kpi-grid{grid-template-columns:repeat(6,minmax(0,1fr))}
+.admin-v2 .us-detail-page .us-detail-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+.admin-v2 :is(.us-page,.us-detail-page) .ua-kpi{display:flex;flex-direction:column;gap:8px;min-width:0;font-variant-numeric:tabular-nums}
+.admin-v2 :is(.us-page,.us-detail-page) .ua-kpi-label{display:flex;align-items:center;gap:4px;min-height:20px;font-size:12px;line-height:1.5;color:var(--muted-foreground)}
+.admin-v2 :is(.us-page,.us-detail-page) .ua-kpi>strong{display:block;font-size:28px;font-weight:600;line-height:1.25;overflow-wrap:anywhere}
+.admin-v2 :is(.us-page,.us-detail-page) .ua-kpi>small{display:block;font-size:11px;line-height:1.5;color:var(--muted-foreground)}
+.admin-v2 :is(.us-page,.us-detail-page) .ua-kpi>small:last-child{margin-top:auto}
+@media(max-width:1100px){.admin-v2 .us-page .us-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.admin-v2 .us-detail-page .us-detail-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.admin-v2 .us-page .us-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .admin-v2 .us-page .an-call-details table{font-size:12px}
 .admin-v2 .us-page .an-call-details th{height:38px;background:#f8faff;color:#586982;font-size:11px;font-weight:500}
 .admin-v2 .us-page .an-call-details td{font-size:12px}
-.us-breadcrumb-link{color:#315fdf}.us-breadcrumb-link:hover{text-decoration:underline}.us-breadcrumb-meta,.us-detail-period{font-size:12px;color:#64748b}.us-detail-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.us-detail-page .ua-panel{min-width:0}
+.us-breadcrumb-link{color:#315fdf}.us-breadcrumb-link:hover{text-decoration:underline}.us-breadcrumb-meta,.us-detail-period{font-size:12px;color:#64748b}.us-detail-page .ua-panel{min-width:0}

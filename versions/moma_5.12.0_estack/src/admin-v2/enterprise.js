@@ -158,8 +158,8 @@ export function enterpriseTransaction(state, command) {
       changes.push({ type: 'update', collection: 'memberships', id: member.id, changes: { status: member.status === '停用' ? '正常' : '停用' } });
     } else if (operation === 'toggle-key') {
       const key = state.apiKeys.find(item => item.id === command.keyId && item.tenantId === tenantId && state.projects.some(project => project.id === item.projectId && project.tenantId === tenantId));
-      if (!key || !['有效', '停用'].includes(key.status)) throw new Error('Key 不存在、已撤销或归属异常');
-      if (tenant.status === '停用' && key.status === '停用') throw new Error('请先解冻企业账号，再启用 Key');
+      if (!key || !['有效', '停用'].includes(key.status)) throw new Error('API 密钥不存在、已撤销或归属异常');
+      if (tenant.status === '停用' && key.status === '停用') throw new Error('请先解冻企业账号，再启用 API 密钥');
       changes.push({ type: 'update', collection: 'apiKeys', id: key.id, changes: { status: key.status === '停用' ? '有效' : '停用' } });
     } else if (operation === 'configure-grant') {
       if (tenant.status === '停用') throw new Error('请先解冻企业账号，再配置授权额度');
@@ -175,5 +175,5 @@ export function enterpriseTransaction(state, command) {
       changes.push({ type: 'add', collection: 'ledger', record: { id: requireId('ledger'), accountId: tenantId, sourceId: requireId('ledger'), type: '企业授权额度调整', delta: limit - (grant?.limit || 0), balance: limit - used, reason, status: '已完成' } });
     } else throw new Error('未知企业操作');
   }
-  return { type: 'batch', objectId: tenantId || ids.tenant, label: ({ create: '创建企业并开通管理员', 'add-admin': '添加企业管理员', edit: '编辑企业信息', 'toggle-tenant': tenant?.status === '停用' ? '解冻企业账号' : '冻结企业账号', 'toggle-admin': '变更管理员状态', 'toggle-key': '变更企业 Key 状态', 'configure-grant': '配置企业授权与额度' })[operation], changes };
+  return { type: 'batch', objectId: tenantId || ids.tenant, label: ({ create: '创建企业并开通管理员', 'add-admin': '添加企业管理员', edit: '编辑企业信息', 'toggle-tenant': tenant?.status === '停用' ? '解冻企业账号' : '冻结企业账号', 'toggle-admin': '变更管理员状态', 'toggle-key': '变更企业 API 密钥状态', 'configure-grant': '配置企业授权与额度' })[operation], changes };
 }

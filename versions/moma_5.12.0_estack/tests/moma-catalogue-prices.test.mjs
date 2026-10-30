@@ -74,7 +74,7 @@ test('full catalogue reading preserves stored subsets, custom models and explici
   provider.catalogPricing = [{ modelId: 'ZHIPU/GLM-5.1', discountFactor: 0, scenarios: [{ name: '用户旧报价', unit: '张', currency: 'USD', listPrice: 0 }] }];
   const before = JSON.stringify(state);
   assert.equal(providerCatalogueIds(provider).length, 92);
-  assert.equal(supplierDirectory(state)[0].catalogModelIds.length, 92);
+  assert.deepEqual(supplierDirectory(state).find(item => item.id === provider.id).catalogModelIds, ['DeepSeek-V4-Flash-0731', 'Kimi/miKimi-K3', 'AICC-Doubao-Seedance-2.0', 'custom/model']);
   assert.deepEqual(providerCataloguePrice(provider, 'ZHIPU/GLM-5.1'), provider.catalogPricing[0]);
   assert.equal(providerCataloguePrice(provider, 'qwen-image-2.0-pro').scenarios[0].listPrice, 500000);
   assert.equal(providerCataloguePrice({ ...provider, id: 'provider-custom' }, 'qwen-image-2.0-pro'), undefined);

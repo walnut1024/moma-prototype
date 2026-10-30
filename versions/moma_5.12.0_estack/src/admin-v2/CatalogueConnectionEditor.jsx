@@ -32,7 +32,7 @@ export default function CatalogueConnectionEditor({ state, provider, modelId, op
     {selected !== 'choose' && <>
       <Field label="协议 *"><Choice label="协议" value={protocol} options={PROTOCOLS.map(value => [value, value])} disabled={!ops.can} onChange={value => { setProtocol(value); dirty(); }}/></Field>
       <Field label="接入地址（Base URL）*" hint={provider.sourceType === 'selfHosted' ? '填写完整 HTTP / HTTPS 服务地址。' : '填写完整 HTTPS 服务地址。'}><Input aria-label="接入地址（Base URL）" value={baseUrl} disabled={!ops.can} placeholder="https://api.example.com/v1" onChange={event => { setBaseUrl(event.target.value); dirty(); }}/></Field>
-      <Notice>{connectionCredentialsReady(endpoint, provider) ? '此接入已配置凭证，保存后可在目录检查并启用。' : provider.sourceType === 'selfHosted' ? '自有推理服务可不配置 API Key。' : '保存后请前往 API Key 页签配置凭证，再检查并启用。'}</Notice>
+      <Notice>{connectionCredentialsReady(endpoint, provider) ? '此接入已配置凭证，保存后可在目录检查并启用。' : provider.sourceType === 'selfHosted' ? '自有推理服务可不配置 API 密钥。' : '保存后请前往 API 密钥页签配置凭证，再检查并启用。'}</Notice>
     </>}
     {related.length > 0 && <Notice>此地址还被 {related.length} 个目录模型使用：{related.join('、')}。修改协议或地址会影响这些模型。</Notice>}
     {impact && <label className="supplier-check"><Checkbox checked={confirmed} onCheckedChange={checked => setConfirmed(checked === true)}/>我已确认接入变更及关联模型需要重新验证</label>}

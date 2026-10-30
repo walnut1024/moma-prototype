@@ -1,7 +1,7 @@
 import { enterpriseDisplayValue, validateDemoAdminCode } from './enterprise.js';
 import { MODEL_ORDER_BILLING_TYPES } from '../model-order-display.mjs';
 
-export const individualTabs = { info: '基本信息', projects: '项目空间', keys: 'API Key', entitlements: '订购详情' };
+export const individualTabs = { info: '基本信息', projects: '项目空间', keys: 'API 密钥', entitlements: '订购详情' };
 export const individualAccounts = state => state.tenants.filter(tenant => tenant.type === '个人').map(tenant => ({ tenant, user: state.users.find(user => user.id === tenant.ownerId) }));
 export const individualName = ({ tenant, user }) => user?.nickname || tenant.name || '未设置昵称';
 export const individualStatus = tenant => tenant.status === '停用' ? '已冻结' : tenant.status === '正常' ? '正常' : tenant.status;

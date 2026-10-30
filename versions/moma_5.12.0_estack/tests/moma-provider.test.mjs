@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createAdminSeed, parseAdminState } from '../src/admin-v2/store.js';
 import { MOMA_PROVIDER, DEFAULT_SUPPLIERS, supplierDirectory } from '../src/admin-v2/moma-provider.js';
+const directoryNames = ['月之暗面 Kimi', 'DeepSeek 官方', '火山方舟', '中国移动 MoMA', '智谱'];
 
 test('supplier directory includes MoMA, Zhipu and DeepSeek with their registered catalogues', () => {
   const state = createAdminSeed();
-  const [provider] = supplierDirectory(state);
-  assert.deepEqual(supplierDirectory(state).map(item => item.name), ['中国移动 MoMA', '智谱', 'DeepSeek']);
+  const provider = supplierDirectory(state).find(item => item.id === MOMA_PROVIDER.id);
+  assert.deepEqual(supplierDirectory(state).map(item => item.name), directoryNames);
   const snapshot = structuredClone(state);
-  const [, zhipu, deepseek] = supplierDirectory(state);
+  const zhipu = supplierDirectory(state).find(item => item.id === 'provider-zhipu-direct'), deepseek = state.providers.find(item => item.id === 'provider-deepseek-direct');
   assert.equal(zhipu, state.providers.find(item => item.id === 'provider-zhipu-direct'));
   assert.equal(deepseek, state.providers.find(item => item.id === 'provider-deepseek-direct'));
   assert.deepEqual(zhipu.catalogModelIds, ['glm-5.3']);
@@ -24,9 +25,10 @@ test('supplier directory includes MoMA, Zhipu and DeepSeek with their registered
   assert.deepEqual(state, snapshot);
   assert.equal(provider.code, 'moma');
   assert.equal(provider.baseUrl, 'https://moma.cmecloud.cn/v1');
-  assert.equal(provider.catalogModelIds.length, 91);
-  assert.equal(new Set(provider.catalogModelIds).size, 91);
-  assert.ok(provider.catalogModelIds.includes('ZHIPU/GLM-5.3'));
+  assert.equal(provider.catalogModelIds.length, 3);
+  assert.equal(new Set(provider.catalogModelIds).size, 3);
+  assert.ok(provider.catalogModelIds.includes('Kimi/miKimi-K3'));
+  assert.equal(state.providers.find(item => item.id === provider.id).catalogModelIds.length, 91);
   const endpoint = state.endpoints.find(item => item.providerId === provider.id);
   assert.equal(endpoint.baseUrl, provider.baseUrl);
   assert.equal(endpoint.status, '停用');
@@ -44,7 +46,7 @@ test('saved data gains independent default suppliers without replacing renamed h
   saved.providers[0].name = '已编辑的原供应商';
   const raw = JSON.stringify(saved);
   const restored = parseAdminState(raw);
-  assert.deepEqual(supplierDirectory(restored).map(item => item.name), ['中国移动 MoMA', '智谱', 'DeepSeek']);
+  assert.deepEqual(supplierDirectory(restored).map(item => item.name), directoryNames);
   for (const key of ['providers', 'endpoints']) {
     for (const item of saved[key]) assert.deepEqual(restored[key].find(record => record.id === item.id), item);
   }
@@ -66,5 +68,5 @@ test('supplier edits and newly registered suppliers survive reload without dupli
   for (const id of DEFAULT_SUPPLIERS.map(item => item.id)) assert.equal(restored.providers.filter(item => item.id === id).length, 1);
   assert.deepEqual(restored.providers.find(item => item.id === MOMA_PROVIDER.id), provider);
   assert.deepEqual(supplierDirectory(restored).find(item => item.id === zhipu.id), zhipu);
-  assert.deepEqual(supplierDirectory(restored).map(item => item.name), ['中国移动 MoMA', '智谱', 'DeepSeek', '新增供应商']);
+  assert.deepEqual(supplierDirectory(restored).map(item => item.name), [...directoryNames, '新增供应商']);
 });

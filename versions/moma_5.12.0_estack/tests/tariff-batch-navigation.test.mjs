@@ -34,11 +34,12 @@ test('empty, unavailable, duplicate-only and over-capacity selections never part
   assert.deepEqual(full, snapshot);
 });
 
-test('materials management groups the model library and tariff dictionary with normal workspace permissions', () => {
+test('materials management keeps model-library and tariff routes with normal workspace permissions', () => {
   const models = sections.find(item => item.id === 'models');
-  assert.deepEqual(models.items.map(item => item.children[0][0]), ['providers', 'model-templates', 'listing']);
-  assert.deepEqual(models.items.find(item => item.id === 'materials').children, [['model-templates', '模型资料库'], ['tariff-dictionary', '资费字典']]);
-  assert.equal(pageFromHash('#/admin-2/tariff-dictionary?tab=unit', '平台管理员'), 'tariff-dictionary');
+  assert.deepEqual(models.items.map(item => item.children[0][0]), ['providers', 'listing', 'model-templates']);
+  assert.deepEqual(models.items.find(item => item.id === 'materials').children, [['model-templates', '模型资料库'], ['tariff-dictionary', '计费项']]);
+  for (const tab of ['scenario', 'unit', 'currency', 'invalid']) assert.equal(pageFromHash(`#/admin-2/tariff-dictionary?tab=${tab}`, '平台管理员'), 'tariff-dictionary');
+  assert.equal(pages['tariff-dictionary'].label, '计费项');
   assert.equal(pageWorkspace('tariff-dictionary'), 'operations');
   for (const id of ['model-templates', 'tariff-dictionary']) {
     assert.equal(pages[id].area, 'materials');

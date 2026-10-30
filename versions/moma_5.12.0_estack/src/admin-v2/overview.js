@@ -60,9 +60,11 @@ export function overviewMonthlyActive({ users, logins }, end) {
 // Every summary, trend, ranking and detail uses these same facts; no identity/login inference.
 function aggregate(start, end, hourly) {
   const summary = empty(), tenants = new Map(), modelMap = new Map(), pairs = new Map(), buckets = new Map();
+  let peakHourlyTokens = end > start ? 0 : null;
   const step = hourly ? HOUR : DAY;
   for (let at = start; at < end; at += step) buckets.set(at, { at, label: hourly ? new Date(at + OFFSET).toISOString().slice(11, 16) : dayOf(at).slice(5), ...empty() });
   for (let at = start; at < end; at += HOUR) {
+    let hourlyTokens = 0;
     const hour = new Date(at + OFFSET).getUTCHours(), day = Math.floor((at + OFFSET) / DAY);
     const fraction = Math.min(HOUR, end - at) / HOUR;
     for (let c = 0; c < customers.length; c++) {
@@ -76,6 +78,7 @@ function aggregate(start, end, hourly) {
         if (!calls) continue;
         const successfulCalls = calls - Math.round(calls * (.002 + noise(seed + 1) * .012));
         const total = successfulCalls * Math.round(500 + noise(day + m) * 1900);
+        hourlyTokens += total;
         const self = Math.round(total * (.25 + noise(m + c) * .6));
         const row = { total, calls, successfulCalls, self, partner: total - self };
         const customer = customers[c], model = { id: `model-demo-${m}`, name: models[m] };
@@ -88,21 +91,26 @@ function aggregate(start, end, hourly) {
         if (successfulCalls) { tenants.get(customer.id).modelIds.add(model.id); modelMap.get(model.id).customerIds.add(customer.id); }
       }
     }
+    peakHourlyTokens = Math.max(peakHourlyTokens, hourlyTokens);
   }
-  return { ...summary, activeCustomers: [...tenants.values()].filter(r => r.successfulCalls > 0).length,
+  return { ...summary, peakHourlyTokens, activeCustomers: [...tenants.values()].filter(r => r.successfulCalls > 0).length,
     success: summary.calls ? summary.successfulCalls / summary.calls * 100 : null,
     customers: sort([...tenants.values()].map(({ modelIds, ...row }) => ({ ...row, modelCount: modelIds.size }))),
     models: sort([...modelMap.values()].map(({ customerIds, ...row }) => ({ ...row, customerCount: customerIds.size }))),
     pairs: [...pairs.values()], trend: [...buckets.values()] };
 }
+export function overviewRates(total, start, end) {
+  if (end <= start) return {averageTpd:null};
+  const days = Math.floor((end - 1 + OFFSET) / DAY) - Math.floor((start + OFFSET) / DAY) + 1;
+  return {averageTpd:total / days};
+}
+
 export function overviewDemo(now = Date.now(), periodId = 'day', range) {
   const period = overviewPeriod(now, periodId, range);
   if (!period) throw new RangeError('无效统计时间范围');
   const current = aggregate(period.start, period.end, period.hourly);
   const previous = aggregate(period.previousStart, period.previousEnd, period.hourly);
-  const previousCustomers = new Map(previous.customers.map(row => [row.id, row]));
   const identities = userDemo(now);
-  return { ...current, registrations: overviewRegistrations(identities.users, period.end), monthlyActive: overviewMonthlyActive(identities, Date.parse(`${dayOf(now)}T00:00:00+08:00`)), period,
-    previous: { ...previous, registrations: overviewRegistrations(identities.users, period.previousEnd) },
-    customers: current.customers.map(row => ({ ...row, change: overviewChange(row.total, previousCustomers.get(row.id)?.total || 0) })) };
+  return { ...current, rates:overviewRates(current.total,period.start,period.end), registrations: overviewRegistrations(identities.users, period.end), monthlyActive: overviewMonthlyActive(identities, Date.parse(`${dayOf(now)}T00:00:00+08:00`)), period,
+    previous: { ...previous, rates:overviewRates(previous.total,period.previousStart,period.previousEnd), registrations: overviewRegistrations(identities.users, period.previousEnd) } };
 }

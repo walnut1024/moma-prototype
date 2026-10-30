@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createAdminSeed, commitAdminState, persistModelAction, parseAdminState } from '../src/admin-v2/store.js';
-import { providerApiKeysDraft, PROVIDER_API_KEY_LIMIT, maskProviderApiKey, providerModelConnectivityTest, MODEL_CONNECTIVITY_SCENARIOS } from '../src/admin-v2/provider-management.js';
+import { providerApiKeysDraft, providerApiKeyId, PROVIDER_API_KEY_LIMIT, maskProviderApiKey, providerModelConnectivityTest, MODEL_CONNECTIVITY_SCENARIOS } from '../src/admin-v2/provider-management.js';
 
 const first = 'sk-test-only-provider-key-0001', second = 'sk-test-only-provider-key-0002', third = 'sk-test-only-provider-key-0003';
 const action = (values, objectId = 'provider-moma') => ({ type: 'modelOperations', operation: 'provider', data: { operation: 'addApiKeys', objectId, values } });
@@ -22,6 +22,11 @@ test('batch keys persist atomically in primary/backup order using only masked me
   assert.equal(keys.length, 3);
   assert.deepEqual(keys.slice(0, 2), initial);
   assert.equal(new Set(keys.map(k => k.id)).size, 3);
+  assert.ok(keys.every(key => /^[a-f0-9]{8}$/.test(key.id)));
+  const legacy = { id: 'provider-key-a8ab224f-f6db-4d2e-b21a-998efc931062' };
+  assert.equal(providerApiKeyId(legacy), 'a8ab224f');
+  assert.equal(legacy.id, 'provider-key-a8ab224f-f6db-4d2e-b21a-998efc931062');
+  assert.equal(providerApiKeyId({ id: 'KEY-001' }), 'KEY-001');
   assert.deepEqual(keys.map(k => k.maskedKey), ['sk-t••••••••0001', 'sk-t••••••••0002', 'sk-t••••••••0003']);
   assert.ok(keys.every(k => /^[a-f0-9]{64}$/.test(k.fingerprint)));
   for (const secret of [first, second, third]) assert.ok(!saved.includes(secret));
@@ -33,22 +38,22 @@ test('batch keys persist atomically in primary/backup order using only masked me
 });
 
 test('duplicates within the batch or supplier reject the entire save; other suppliers stay independent', async () => {
-  await assert.rejects(providerApiKeysDraft([first, ` ${first} `]), /相同的 API Key/);
+  await assert.rejects(providerApiKeysDraft([first, ` ${first} `]), /相同的 API 密钥/);
   const draft = await providerApiKeysDraft([first]);
   const state = commitAdminState(createAdminSeed(), action(draft)), before = JSON.stringify(state);
-  assert.throws(() => commitAdminState(state, action(draft)), /相同的 API Key/);
-  assert.throws(() => commitAdminState(state, action({ apiKeys: [...draft.apiKeys, ...draft.apiKeys] })), /相同的 API Key/);
+  assert.throws(() => commitAdminState(state, action(draft)), /相同的 API 密钥/);
+  assert.throws(() => commitAdminState(state, action({ apiKeys: [...draft.apiKeys, ...draft.apiKeys] })), /相同的 API 密钥/);
   assert.throws(() => commitAdminState(state, action(draft, 'missing')), /供应商不存在/);
   const other = state.providers.find(p => p.id !== 'provider-moma');
   const next = commitAdminState(state, action(draft, other.id));
   assert.equal(next.providers.find(p => p.id === other.id).apiKeys.length, 1);
   const mixed = await providerApiKeysDraft([second, first]);
-  assert.throws(() => commitAdminState(state, action(mixed)), /相同的 API Key/);
+  assert.throws(() => commitAdminState(state, action(mixed)), /相同的 API 密钥/);
   assert.equal(JSON.stringify(state), before);
 });
 
 test('invalid input and malformed or unmasked batch payloads never commit', async () => {
-  for (const value of ['short', 'sk-key with spaces', 'sk-key\nnew-line', '密钥密钥密钥密钥密钥密钥', 'a'.repeat(513)]) await assert.rejects(providerApiKeysDraft([first, value]), /第 2 条 API Key/);
+  for (const value of ['short', 'sk-key with spaces', 'sk-key\nnew-line', '密钥密钥密钥密钥密钥密钥', 'a'.repeat(513)]) await assert.rejects(providerApiKeysDraft([first, value]), /第 2 条 API 密钥/);
   for (const values of [[], ['', '  ']]) await assert.rejects(providerApiKeysDraft(values), /至少输入/);
   const state = createAdminSeed(), before = JSON.stringify(state), draft = await providerApiKeysDraft([first]);
   for (const values of [{}, { apiKeys: [] }, { apiKeys: [null] }, { apiKeys: [...draft.apiKeys, { ...draft.apiKeys[0], maskedKey: first }] }, { apiKeys: [{ ...draft.apiKeys[0], fingerprint: '' }] }]) assert.throws(() => commitAdminState(state, action(values)), /配置无效/);
@@ -96,7 +101,7 @@ test('model previews reject invalid identities, model-address links and request 
   const state = commitAdminState(createAdminSeed(), action(await providerApiKeysDraft([first])));
   const provider = state.providers.find(item => item.id === 'provider-moma'), endpoint = state.endpoints.find(item => item.providerId === provider.id), key = provider.apiKeys[0];
   const request = { providerId: provider.id, keyId: key.id, endpointId: endpoint.id, modelId: 'DeepSeek-R1', upstreamId: 'DeepSeek-R1', prompt: '请回复 OK', scenario: 'success' };
-  assert.throws(() => providerModelConnectivityTest(state, { ...request, keyId: 'missing' }), /API Key 不存在/);
+  assert.throws(() => providerModelConnectivityTest(state, { ...request, keyId: 'missing' }), /API 密钥不存在/);
   assert.throws(() => providerModelConnectivityTest(state, { ...request, endpointId: state.endpoints.find(item => item.providerId !== provider.id).id }), /当前供应商/);
   for (const patch of [{ baseUrl: 'bad' }, { baseUrl: 'http://example.com/v1' }, { baseUrl: 'https://user:pass@example.com' }, { baseUrl: 'https://example.com?key=secret' }, { protocol: 'invalid' }]) {
     const invalid = { ...state, endpoints: state.endpoints.map(item => item.id === endpoint.id ? { ...item, ...patch } : item) };
@@ -108,7 +113,7 @@ test('model previews reject invalid identities, model-address links and request 
   assert.equal(providerModelConnectivityTest(addressState, { ...request, keyId: addressKey.id }).result, '通过');
   const linked = { ...addressState, providers: addressState.providers.map(item => item.id === provider.id ? { ...item, catalogConnections: [{ modelId: request.modelId, endpointId: endpoint.id }] } : item), endpoints: [...addressState.endpoints, { ...endpoint, id: 'other-address', apiKeys: [] }] };
   assert.throws(() => providerModelConnectivityTest(linked, { ...request, endpointId: 'other-address' }), /模型不匹配/);
-  assert.throws(() => providerModelConnectivityTest(linked, { ...request, keyId: addressKey.id, endpointId: 'other-address' }), /API Key 不存在/);
+  assert.throws(() => providerModelConnectivityTest(linked, { ...request, keyId: addressKey.id, endpointId: 'other-address' }), /API 密钥不存在/);
 });
 
 test('all result previews expose distinct success, authentication, model and timeout feedback', async () => {
@@ -124,4 +129,31 @@ test('all result previews expose distinct success, authentication, model and tim
     if (scenario !== 'success') { assert.ok(result.response.error.code); assert.ok(result.hint); }
   }
   assert.equal(JSON.stringify(state), before);
+});
+
+test('catalogue tests can use existing credential references or self-hosted access without inventing a key', () => {
+  const state = createAdminSeed(), provider = state.providers.find(item => item.id === 'provider-moma');
+  const endpoint = state.endpoints.find(item => item.providerId === provider.id);
+  const request = { providerId: provider.id, endpointId: endpoint.id, modelId: 'DeepSeek-R1', upstreamId: 'DeepSeek-R1', prompt: 'OK', scenario: 'success' };
+  assert.throws(() => providerModelConnectivityTest(state, request), /API 密钥不存在/);
+  const referenced = { ...state, endpoints: state.endpoints.map(item => item.id === endpoint.id ? { ...item, credentialRef: 'env:MODEL_KEY' } : item) };
+  assert.equal(providerModelConnectivityTest(referenced, request).status, 200);
+  assert.throws(() => providerModelConnectivityTest(referenced, { ...request, keyId: 'missing' }), /API 密钥不存在/);
+  const hosted = { ...state, providers: state.providers.map(item => item.id === provider.id ? { ...item, sourceType: 'selfHosted' } : item) };
+  const before = JSON.stringify(hosted);
+  assert.equal(providerModelConnectivityTest(hosted, request).result, '通过');
+  assert.equal(JSON.stringify(hosted), before);
+});
+
+test('short generated IDs avoid collisions with the visible prefix of existing UUIDs', async t => {
+  const seed = createAdminSeed(), provider = seed.providers.find(row => row.id === 'provider-moma');
+  const old = (await providerApiKeysDraft([first])).apiKeys[0];
+  provider.apiKeys = [{ ...old, id: 'provider-key-12345678-1234-1234-1234-123456789abc', name: '原密钥' }];
+  const draft = await providerApiKeysDraft([second]), random = crypto.randomUUID.bind(crypto);
+  let calls = 0;
+  t.mock.method(crypto, 'randomUUID', () => ++calls === 1 ? '12345678-aaaa-bbbb-cccc-123456789abc' : random());
+  const next = commitAdminState(seed, action(draft)), keys = next.providers.find(row => row.id === provider.id).apiKeys;
+  assert.notEqual(keys[1].id, '12345678');
+  assert.match(keys[1].id, /^[a-f0-9]{8}$/);
+  assert.deepEqual(keys[0], provider.apiKeys[0]);
 });

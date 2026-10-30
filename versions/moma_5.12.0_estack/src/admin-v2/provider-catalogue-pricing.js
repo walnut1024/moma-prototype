@@ -32,7 +32,7 @@ export function normalizeCataloguePrice(draft) {
     const key = JSON.stringify([name, unit, currency, condition.trim()]);
     if (seen.has(key)) throw new Error('同一计费项、计价单位、货币和适用条件不可重复');
     seen.add(key);
-    const purchasePrice = decimal(item.purchasePrice, '采购价');
+    const purchasePrice = decimal(item.purchasePrice, '平台成本');
     return { name, unit, currency, ...(condition.trim() ? { condition: condition.trim() } : {}), listPrice: decimal(item.listPrice, '供应商目录价'), ...(purchasePrice == null ? {} : { purchasePrice }) };
   });
   return { modelId: draft.modelId, discountFactor, scenarios };
@@ -44,7 +44,7 @@ export function cataloguePriceDraft(entry) {
 
 export function cataloguePurchasePrice(listPrice, discountFactor, purchasePrice) {
   if (purchasePrice != null) {
-    if (!Number.isSafeInteger(purchasePrice) || purchasePrice < 0) throw new Error('采购价无效');
+    if (!Number.isSafeInteger(purchasePrice) || purchasePrice < 0) throw new Error('平台成本无效');
     return purchasePrice;
   }
   if (listPrice == null) return null;

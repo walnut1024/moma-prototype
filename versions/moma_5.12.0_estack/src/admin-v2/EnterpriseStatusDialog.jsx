@@ -12,7 +12,7 @@ export default function EnterpriseStatusDialog({ state, confirmation, apply, clo
   const target = state[collection].find(item => item.id === targetId);
   const disabling = target?.status !== '停用';
   const action = key || member ? disabling ? '停用' : '启用' : disabling ? '冻结' : '解冻';
-  const type = key ? 'API Key' : member ? '企业管理员' : '企业账号';
+  const type = key ? 'API 密钥' : member ? '企业管理员' : '企业账号';
   const scope = `${collection}:${targetId}:${action}`;
   const [challenge, setChallenge] = useState(null), [code, setCode] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false), [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -44,7 +44,7 @@ export default function EnterpriseStatusDialog({ state, confirmation, apply, clo
     <form onSubmit={submit} className="ent-status-form">
       <div className="ent-status-body">
         <dl className="ent-status-object"><dt>操作对象</dt><dd><strong>{target?.name || (key || member || tenant).name}</strong><small>{!key && !member ? 'user_id：' : ''}{key ? key.keyId : targetId}</small></dd>{(key || member) && <><dt>所属企业</dt><dd>{tenant.name}<small>user_id：{tenant.id}</small></dd></>}<dt>操作角色</dt><dd>{state.currentRole}</dd></dl>
-        <div className={`ent-status-impact ${disabling ? 'is-warning' : ''}`}><strong>{disabling ? `${action}影响` : '恢复范围'}</strong><p>{key ? disabling ? '该 Key 的后续调用将被拒绝；其他 Key 不受影响。' : '恢复当前 Key，可在有效授权与额度范围内调用。' : member ? disabling ? '该管理员不能再进入或管理当前企业；其他企业成员关系保留。' : '恢复该人员在当前企业的管理员权限。' : disabling ? '冻结后，该企业访问和所属 Key 调用将被拒绝；历史记录保留。管理员在其他企业的登录身份及成员关系不受影响。' : '解冻后恢复企业访问；已单独停用的管理员、项目和 Key 保持原状态。'}</p>{!key && !member && <span>{projectCount} 个项目 · {keyCount} 个 API Key</span>}</div>
+        <div className={`ent-status-impact ${disabling ? 'is-warning' : ''}`}><strong>{disabling ? `${action}影响` : '恢复范围'}</strong><p>{key ? disabling ? '该 API 密钥的后续调用将被拒绝；其他 API 密钥不受影响。' : '恢复当前 API 密钥，可在有效授权与额度范围内调用。' : member ? disabling ? '该管理员不能再进入或管理当前企业；其他企业成员关系保留。' : '恢复该人员在当前企业的管理员权限。' : disabling ? '冻结后，该企业访问和所属 API 密钥调用将被拒绝；历史记录保留。管理员在其他企业的登录身份及成员关系不受影响。' : '解冻后恢复企业访问；已单独停用的管理员、项目和 API 密钥保持原状态。'}</p>{!key && !member && <span>{projectCount} 个项目 · {keyCount} 个 API 密钥</span>}</div>
         {disabling && <section className="ent-verification"><div className="ent-verification-title"><ShieldCheck size={16}/><h3>管理员校验</h3></div><label className="ent-field"><span>管理员校验码 <span aria-hidden="true">*</span></span><div className="ent-code-controls"><Input autoFocus aria-label="管理员校验码" aria-invalid={Boolean(error)} autoComplete="off" inputMode="numeric" maxLength={6} value={code} placeholder="请输入 6 位校验码" onChange={event => { setCode(event.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}/><Button type="button" variant="outline" disabled={Boolean(cooldown)} onClick={getCode}>{cooldown ? `${cooldown}s 后重新获取` : challenge ? '重新获取' : '获取校验码'}</Button></div></label>{challenge && <div className={`ent-demo-code ${expired ? 'is-expired' : ''}`} role="status">{expired ? '校验码已过期，请重新获取。' : <>校验码：<b>{challenge.code}</b><span>5 分钟有效，仅用于本次操作</span></>}</div>}</section>}
         {error && <p className="ent-error" role="alert">{error}</p>}
 

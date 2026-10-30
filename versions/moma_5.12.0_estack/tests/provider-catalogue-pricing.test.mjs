@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createAdminSeed, commitAdminState, persistModelAction, parseAdminState } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseSeed, commitAdminState, persistModelAction, parseAdminState } from '../src/admin-v2/store.js';
 import { normalizeCataloguePrice, cataloguePriceDraft, cataloguePurchasePrice, catalogueMoneyDisplay } from '../src/admin-v2/provider-catalogue-pricing.js';
 import { providerCataloguePrice } from '../src/admin-v2/moma-catalogue-prices.js';
 
@@ -175,3 +175,5 @@ test('all suppliers and added models default to one without changing explicit di
     assert.deepEqual(entry.scenarios, []);
   }
 });
+
+function createAdminSeed() { const state = baseSeed(); state.modelTemplates.push(...["New/Model","Pending/Model","Added/One","Added/Two"].map(code => ({ id: "test-library-" + code, modelId: code, name: code, type: "text", capabilities: {}, profile: {} }))); return state; }

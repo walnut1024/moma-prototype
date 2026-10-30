@@ -25,8 +25,11 @@ test('supplier and history drawers stay on model management without a detail bre
   }
 });
 
-test('tariff dictionary belongs to materials management in breadcrumbs', () => {
-  assert.deepEqual(build('tariff-dictionary', 'tab=unit'), [{ label: '模型运营' }, { label: '资料管理', href: '#/admin-2/model-templates' }, { label: '资费字典' }]);
+test('tariff categories are direct materials-management children in breadcrumbs', () => {
+  for (const [tab, label] of [['scenario', '计费项'], ['unit', '计价单位'], ['currency', '货币']]) {
+    assert.deepEqual(build('tariff-dictionary', `tab=${tab}`), [{ label: '模型运营' }, { label: '资料管理', href: '#/admin-2/model-templates' }, { label }]);
+  }
+  for (const query of ['', 'tab=invalid', 'tab=constructor', 'tab=__proto__']) assert.deepEqual(labels(build('tariff-dictionary', query)), ['模型运营', '资料管理', '计费项']);
 });
 
 test('model creation and metadata workflows retain the correct parent', () => {

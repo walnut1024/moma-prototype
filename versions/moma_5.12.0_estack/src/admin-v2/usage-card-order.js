@@ -1,9 +1,5 @@
-import { usageModelTypes } from './usage-analysis.js';
-
 export const defaultCardOrder = {
-  overview: ['usage-token-trend', 'usage-call-trend'],
-  categories: usageModelTypes.map(type => `usage-${type.id}`),
-  rankings: ['usage-customer-token-rank', 'usage-model-token-rank', 'usage-customer-call-rank', 'usage-model-call-rank'],
+  overview: ['usage-token-trend', 'usage-call-trend', 'usage-model-share', 'usage-volume-share', 'usage-distribution'],
 };
 
 export function normalizeCardOrder(saved) {

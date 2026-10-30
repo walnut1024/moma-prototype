@@ -21,29 +21,21 @@ export const usageModelTypes = [
 ];
 export const tokenModelTypes = usageModelTypes.filter(type => ['text', 'multimodal', 'embedding', 'rerank'].includes(type.id));
 export const usageCategory = type => usageModelTypes.find(item => item.types.includes(type))?.id;
-export const usageSuppliers = [
-  { id: 'deepseek', name: '深度求索（DeepSeek）' }, { id: 'zhipu', name: '智谱（Zhipu）' },
-  { id: 'alibaba', name: '阿里（Qwen）' }, { id: 'moonshot', name: '月之暗面（Kimi）' },
-  { id: 'minimax', name: 'MiniMax' }, { id: 'bytedance', name: '字节跳动（豆包）' },
-  { id: 'tencent', name: '腾讯（混元）' }, { id: 'baidu', name: '百度（文心）' },
-  { id: 'baichuan', name: '百川智能' }, { id: 'lingyi', name: '零一万物（Yi）' },
-  { id: 'baai', name: '智源研究院（BGE）' }, { id: 'shanghai-ai', name: '上海人工智能实验室（InternLM）' },
-  { id: 'blackforest', name: 'Black Forest Labs（FLUX）' },
-  { id: 'openai', name: 'OpenAI' }, { id: 'anthropic', name: 'Anthropic' },
-  { id: 'google', name: 'Google（Gemini）' }, { id: 'meta', name: 'Meta（Llama）' },
-  { id: 'other', name: '其他供应商' },
-];
-export function usageSupplier(model) {
-  if (model?.supplierId) return model.supplierId;
-  const id = (model?.modelId || model?.name || '').toLowerCase();
-  if (/^(qwen|gte|sensevoice|cosyvoice|wan-)/.test(id)) return 'alibaba';
-  return [
-    [/^deepseek/, 'deepseek'], [/^glm/, 'zhipu'], [/^kimi/, 'moonshot'], [/^minimax/, 'minimax'],
-    [/^doubao/, 'bytedance'], [/^hunyuan/, 'tencent'], [/^ernie/, 'baidu'],
-    [/^baichuan/, 'baichuan'], [/^yi-/, 'lingyi'], [/^bge/, 'baai'],
-    [/^internlm/, 'shanghai-ai'], [/^flux/, 'blackforest'], [/^gpt-/, 'openai'],
-    [/^claude/, 'anthropic'], [/^gemini/, 'google'], [/^llama/, 'meta'],
-  ].find(([pattern]) => pattern.test(id))?.[1] || 'other';
+export function usageFilterOptions(state) {
+  const models = state.models.map(model => ({ id: model.id, name: model.name || model.modelId || model.id, code: model.modelId || model.id, groupId: usageCategory(model.type) }));
+  const channels = new Map(state.endpoints.map(item => [item.id, { id: item.id, name: item.name || item.id, code: item.channelCode || item.endpointId || item.id, groupId: item.providerId || '__unknown__' }]));
+  const users = new Map();
+  for (const row of state.requests) {
+    const channelId = row.endpointId || '__unknown__';
+    if (!channels.has(channelId)) channels.set(channelId, { id: channelId, name: row.endpointId || '未归属渠道', groupId: '__unknown__' });
+    const userId = row.userId || '__unknown__';
+    users.set(userId, { id: userId, name: row.userId || '未归属用户' });
+  }
+  const providers = new Map(state.providers.map(item => [item.id, { id: item.id, name: item.name || item.id, code: item.code || item.providerCode || item.id }]));
+  for (const channel of channels.values()) {
+    if (!providers.has(channel.groupId)) providers.set(channel.groupId, { id: channel.groupId, name: channel.groupId === '__unknown__' ? '未归属供应商' : channel.groupId });
+  }
+  return { models, channels: [...channels.values()], providers: [...providers.values()], users: [...users.values()] };
 }
 export function usageMeter(model, row) {
   const fallback = ['text', 'multimodal', 'embedding', 'rerank'].includes(model?.type) ? 'Token' : model?.type === 'image' ? '张' : model?.type === 'audio' && Number.isFinite(row?.usage?.characters) ? '字符' : '秒';
@@ -61,14 +53,15 @@ export function usagePreset(preset, now = Date.now()) {
 }
 
 export const operationsPresets = [['yesterday', '昨日'], ['7d', '近 7 天'], ['30d', '近 30 天']];
+export const usagePresets = [['today', '今日'], ...operationsPresets];
 
-export function operationsPeriod(period, range, now = Date.now()) {
-  const yesterday = usagePreset('yesterday', now);
+export function operationsPeriod(period, range, now = Date.now(), allowToday = false) {
+  const latest = usagePreset(allowToday ? 'today' : 'yesterday', now);
   if (period === 'custom' && range?.start && range?.end) {
-    const completed = { start: range.start, end: range.end > yesterday.end ? yesterday.end : range.end };
-    if (usageWindow(completed, now)) return { period: 'custom', range: completed };
+    const bounded = { start: range.start, end: range.end > latest.end ? latest.end : range.end };
+    if (usageWindow(bounded, now)) return { period: 'custom', range: bounded };
   }
-  const preset = operationsPresets.some(([id]) => id === period) ? period : 'yesterday';
+  const preset = (allowToday ? usagePresets : operationsPresets).some(([id]) => id === period) ? period : 'yesterday';
   return { period: preset, range: usagePreset(preset, now) };
 }
 
@@ -76,7 +69,7 @@ export function usageWindow(range, now = Date.now()) {
   const start = dayStart(range.start);
   const end = Math.min(dayStart(range.end) + DAY, now);
   const days = Math.round((dayStart(range.end) - start) / DAY) + 1;
-  if (!Number.isFinite(start) || !Number.isFinite(end) || days < 1 || days > 365 || end <= start) return null;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || days < 1 || days > 365 || end < start || (end === start && days !== 1)) return null;
   return { start, end, days, priorStart: start - days * DAY, priorEnd: end - days * DAY, hourly: days === 1, weekly: days > 30 };
 }
 
@@ -98,24 +91,29 @@ export function usageFacts(state, range, filters, now = Date.now()) {
   const window = usageWindow(range, now);
   if (!window) return null;
   const models = new Map(state.models.map(item => [item.id, item]));
+  const endpoints = new Map(state.endpoints.map(item => [item.id, item]));
   const requests = new Map();
   for (const row of state.requests) {
     const at = Date.parse(row.createdAt);
     if (!Number.isFinite(at) || at < window.priorStart || at >= window.end || at > now) continue;
-    const model = models.get(row.modelId);
-    const modelType = model?.type;
-    if (!usageCategory(modelType) || (filters.types !== null && !filters.types.includes(usageCategory(modelType)))) continue;
-    if (filters.suppliers != null && !filters.suppliers.includes(usageSupplier(model))) continue;
-    if (filters.tenant !== null && !filters.tenant.includes(row.tenantId)) continue;
-    if (filters.model !== null && !filters.model.includes(row.modelId)) continue;
-    const source = usageSource(state, row);
-    if (filters.source && source !== filters.source) continue;
     const key = row.requestId || row.id;
     if (!key) continue;
     const existing = requests.get(key);
     if (!existing || Date.parse(existing.updatedAt || existing.createdAt) <= Date.parse(row.updatedAt || row.createdAt)) requests.set(key, row);
   }
-  const facts = [...requests.values()].map(row => { const model = models.get(row.modelId), meter = usageMeter(model, row); return { ...row, modelType: model.type, category: usageCategory(model.type), unit: meter.unit, at: Date.parse(row.createdAt), source: usageSource(state, row), value: usageValue(row, meter.fields) }; });
+  const facts = [...requests.values()].filter(row => {
+    const model = models.get(row.modelId);
+    const modelType = model?.type;
+    if (!usageCategory(modelType) || (filters.types !== null && !filters.types.includes(usageCategory(modelType)))) return false;
+    const providerId = endpoints.get(row.endpointId)?.providerId || '__unknown__';
+    if ((filters.channels != null || filters.providers?.length) && !filters.channels?.includes(row.endpointId || '__unknown__') && !filters.providers?.includes(providerId)) return false;
+    if (filters.user != null && !filters.user.includes(row.userId || '__unknown__')) return false;
+    if (filters.tenant !== null && !filters.tenant.includes(row.tenantId)) return false;
+    if (filters.model !== null && !filters.model.includes(row.modelId)) return false;
+    const source = usageSource(state, row);
+    if (filters.source && source !== filters.source) return false;
+    return true;
+  }).map(row => { const model = models.get(row.modelId), meter = usageMeter(model, row); return { ...row, providerId: endpoints.get(row.endpointId)?.providerId || '__unknown__', modelType: model.type, category: usageCategory(model.type), unit: meter.unit, at: Date.parse(row.createdAt), source: usageSource(state, row), value: usageValue(row, meter.fields) }; });
   return { window, current: facts.filter(row => row.at >= window.start && row.at < window.end), prior: facts.filter(row => row.at >= window.priorStart && row.at < window.priorEnd) };
 }
 

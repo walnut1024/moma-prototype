@@ -43,7 +43,7 @@ test('third-party keys are mandatory per connection; self-hosted HTTP may omit k
 
 test('required identity, source, connections and optional minimum-length notes are checked on save', async () => {
   const seed = createAdminSeed(), connections = [await connection()];
-  for (const [patch, message] of [[{ name: '' }, /供应商名称/], [{ code: '' }, /英文编码/], [{ sourceType: '' }, /供给类型/], [{ description: '备'.repeat(139) }, /不少于 140/]]) assert.throws(() => run(seed, 'providerRegistration', { provider: { ...provider, ...patch }, connections }), message);
+  for (const [patch, message] of [[{ name: '' }, /供应商名称/], [{ code: '' }, /英文编码/], [{ sourceType: '' }, /供给类型/], [{ description: '备'.repeat(2001) }, /最多 2000/]]) assert.throws(() => run(seed, 'providerRegistration', { provider: { ...provider, ...patch }, connections }), message);
   for (const missing of [undefined, []]) assert.throws(() => run(seed, 'providerRegistration', { provider, connections: missing }), /至少添加/);
   await assert.rejects(() => connection(undefined, ['duplicate-key-0001', 'duplicate-key-0001']), /相同/);
   await assert.rejects(() => connection(undefined, ['short']), /12–512/);

@@ -6,12 +6,51 @@ import { providerCataloguePrice } from '../src/admin-v2/moma-catalogue-prices.js
 import { canonicalMomaScenarios } from '../src/admin-v2/moma-billing-items.js';
 import { activeSupplyPrice, activeSupplySalePrice, procurementVersion, latestSaleRevision } from '../src/admin-v2/model-management.js';
 
-const modelId = 'Purchase/Editable';
+const modelId = 'Purchase-Editable';
 const row = { name: '输入 Token', unit: '百万 Token', currency: 'CNY', listPrice: '4' };
-const draft = { protocol: 'OpenAI', baseUrl: 'https://catalogue.example.invalid/v1', modelId, modelType: 'text', endpoint: '/v1/chat/completions', discountFactor: '0.8', scenarios: [row, { ...row, name: '输出 Token', purchasePrice: '2.9' }, { ...row, name: '缓存读取 Token', purchasePrice: '0' }] };
+const draft = { protocol: 'OpenAI', apiUrl: 'https://catalogue.example.invalid/v1/chat/completions', modelId, modelType: 'text', channelName: '国内渠道', modelName: '模型显示名称', discountFactor: '0.8', scenarios: [row, { ...row, name: '输出 Token', purchasePrice: '2.9' }, { ...row, name: '缓存读取 Token', purchasePrice: '0' }] };
 const action = (operation, values) => ({ type: 'modelOperations', operation: 'provider', data: { operation, objectId: 'provider-moma', values } });
 const quote = state => providerCataloguePrice(state.providers.find(item => item.id === 'provider-moma'), modelId);
 const effective = entry => entry.scenarios.map(item => cataloguePurchasePrice(item.listPrice, entry.discountFactor, item.purchasePrice));
+
+test('platform cost maintenance changes only cost overrides and retains supplier prices, discount, identity and history', () => {
+  const state = commitAdminState(createAdminSeed(), action('catalogueAdd', draft)), before = structuredClone(state), current = quote(state);
+  const scenarios = cataloguePriceDraft(current).scenarios.map(item => ({ ...item, listPrice: '999', purchasePrice: '1.234567' }));
+  const next = commitAdminState(state, action('catalogueCost', { modelId, discountFactor: '0.1', scenarios }));
+  assert.equal(quote(next).discountFactor, current.discountFactor);
+  assert.deepEqual(quote(next).scenarios.map(({ purchasePrice, ...item }) => item), current.scenarios.map(({ purchasePrice, ...item }) => item));
+  assert.deepEqual(effective(quote(next)), [1234567, 1234567, 1234567]);
+  assert.equal(next.audits[0].action, '修改平台成本');
+  for (const key of ['models', 'modelSupplies', 'supplyPrices', 'modelSalePrices', 'endpoints', 'routes', 'serviceRoutes']) assert.deepEqual(next[key], state[key]);
+  assert.deepEqual(state, before);
+});
+
+test('clearing a platform-cost override restores calculation while zero remains an explicit manual value', () => {
+  const state = commitAdminState(createAdminSeed(), action('catalogueAdd', draft));
+  const scenarios = cataloguePriceDraft(quote(state)).scenarios.map((item, index) => ({ ...item, purchasePrice: index ? '0' : '' }));
+  const next = commitAdminState(state, action('catalogueCost', { modelId, scenarios }));
+  assert.deepEqual(effective(quote(next)), [3200000, 0, 0]);
+  assert.equal(Object.hasOwn(quote(next).scenarios[0], 'purchasePrice'), false);
+  const discounted = commitAdminState(next, action('catalogueDiscount', { modelId, discountFactor: '0.5' }));
+  assert.deepEqual(effective(quote(discounted)), [2000000, 0, 0]);
+});
+
+test('stale or malformed platform cost rows reject atomically without changing the supplier directory', () => {
+  const state = commitAdminState(createAdminSeed(), action('catalogueAdd', draft)), before = structuredClone(state);
+  const rows = cataloguePriceDraft(quote(state)).scenarios;
+  for (const scenarios of [null, rows.slice(1), [rows[0], rows[0], rows[2]], [null, ...rows.slice(1)], rows.map((item, index) => index ? item : { ...item, unit: '千次' }), rows.map(item => ({ ...item, purchasePrice: '-1' }))]) assert.throws(() => commitAdminState(state, action('catalogueCost', { modelId, scenarios })));
+  assert.deepEqual(state, before);
+});
+
+test('platform-cost edits keep operator permissions, concurrent revision and failed-storage protection', () => {
+  const state = commitAdminState(createAdminSeed(), action('catalogueAdd', draft));
+  const edit = action('catalogueCost', { modelId, scenarios: cataloguePriceDraft(quote(state)).scenarios.map(item => ({ ...item, purchasePrice: '2' })) });
+  const before = JSON.stringify(state);
+  assert.throws(() => commitAdminState({ ...state, currentRole: '运维人员' }, edit), /无权/);
+  assert.throws(() => persistModelAction(state, edit, { getItem: () => JSON.stringify({ ...state, revision: state.revision + 1 }), setItem: () => assert.fail('must not write') }), /数据已变化/);
+  assert.throws(() => persistModelAction(state, edit, { getItem: () => before, setItem: () => { throw new Error('quota'); } }), /quota/);
+  assert.equal(JSON.stringify(state), before);
+});
 
 test('purchase defaults calculate exactly before a billing item is selected, while manual values including zero stay editable', () => {
   assert.equal(cataloguePurchasePriceInput({ listPrice: '4' }, '0.8'), '3.2');
@@ -54,9 +93,9 @@ test('manual price equal to the default remains manual after a later discount ch
 test('invalid manual money and failed commits never create partial records', () => {
   const seed = createAdminSeed(), before = JSON.stringify(seed);
   for (const purchasePrice of ['-1', 'NaN', '1e3', '0.1234567', '9007199254.740992', 1]) {
-    assert.throws(() => commitAdminState(seed, action('catalogueAdd', { ...draft, scenarios: [{ ...row, purchasePrice }] })), /采购价/);
+    assert.throws(() => commitAdminState(seed, action('catalogueAdd', { ...draft, scenarios: [{ ...row, purchasePrice }] })), /平台成本/);
   }
-  for (const value of [-1, 0.1, NaN, Number.MAX_SAFE_INTEGER + 1]) assert.throws(() => cataloguePurchasePrice(1, 1, value), /采购价/);
+  for (const value of [-1, 0.1, NaN, Number.MAX_SAFE_INTEGER + 1]) assert.throws(() => cataloguePurchasePrice(1, 1, value), /平台成本/);
   assert.throws(() => commitAdminState(seed, action('catalogueAdd', { ...draft, scenarios: [{ ...row, listPrice: '', purchasePrice: '1' }] })), /目录价/);
   assert.throws(() => commitAdminState({ ...seed, currentRole: '运维人员' }, action('catalogueAdd', draft)), /无权/);
   assert.throws(() => persistModelAction(seed, action('catalogueAdd', draft), { getItem: () => JSON.stringify({ ...seed, revision: seed.revision + 1 }), setItem: () => assert.fail('must not write') }), /数据已变化/);

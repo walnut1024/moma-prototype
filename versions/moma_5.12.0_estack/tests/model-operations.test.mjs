@@ -32,7 +32,7 @@ test('old saved data keeps IDs, pricing and user edits; new template collection 
 test('metadata modality change invalidates existing verification without altering prices',()=>{let {state,id,supply}=connected();const model=state.models.find(item=>item.id===id),before=structuredClone(state.supplyPrices);state=legacy(state,'basic',{...model,profile:{...model.profile,inputModalities:['文本','图片']}},id);assert.equal(state.modelSupplies.find(item=>item.id===supply.id).validationStatus,'待验证');assert.deepEqual(state.supplyPrices,before);});
 test('saving a missing library record gives a recoverable domain error',()=>assert.throws(()=>op(createAdminSeed(),'templateSave',{...modelInput,id:'missing'}),/模型资料不存在/));
 
-test('model templates are a dedicated operations page with matching role boundaries', async()=>{const {sections,canAccessPage,pageFromHash}=await import('../src/admin-v2/navigation.mjs');const group=sections.find(item=>item.id==='models');assert.deepEqual(group.items.map(item=>item.label),['供应管理','资料管理','服务管理']);assert.equal(pageFromHash('#/admin-2/model-templates?view=template','运营人员'),'model-templates');assert.equal(canAccessPage('运营人员','model-templates'),true);assert.equal(canAccessPage('运维人员','model-templates'),false);});
+test('model templates are a dedicated operations page with matching role boundaries', async()=>{const {sections,canAccessPage,pageFromHash}=await import('../src/admin-v2/navigation.mjs');const group=sections.find(item=>item.id==='models');assert.deepEqual(group.items.map(item=>item.label),['供应管理','服务管理','资料管理']);assert.equal(pageFromHash('#/admin-2/model-templates?view=template','运营人员'),'model-templates');assert.equal(canAccessPage('运营人员','model-templates'),true);assert.equal(canAccessPage('运维人员','model-templates'),false);});
 
 test('real model catalogue has unique codes and editable sourced metadata without invented shared limits',()=>{
   const state=createAdminSeed();
@@ -56,6 +56,7 @@ test('real model catalogue has unique codes and editable sourced metadata withou
 
 test('supplier catalogue is independent of platform mappings and persists normalized IDs',()=>{
   let state=createAdminSeed();
+  state.modelTemplates.push({id:'test-custom',modelId:'custom-model',name:'Custom',type:'text',capabilities:{}});
   const provider=state.providers.find(item=>item.code==='deepseek');
   assert.deepEqual(provider.catalogModelIds,['deepseek-flash','deepseek-v4-pro']);
   assert.ok(provider.catalogueSource.startsWith('https://'));
@@ -67,18 +68,19 @@ test('supplier catalogue is independent of platform mappings and persists normal
   assert.throws(()=>op(state,'provider',{operation:'catalogueImport',objectId:provider.id,values:{mode:'batch',text:['deepseek-flash']}}),/请输入/);
 });
 
-test('real supplier fixtures use official URLs and connection transactions accept only OpenAI',()=>{
+test('real supplier fixtures use official URLs and accept OpenAI, Anthropic and dedicated protocols',()=>{
   const state=createAdminSeed();
   assert.equal(new Set(state.providers.map(provider=>provider.code)).size,state.providers.length);
   assert.ok(state.providers.some(provider=>provider.name==='硅基流动'));
   for(const endpoint of state.endpoints){
     const provider=state.providers.find(item=>item.id===endpoint.providerId);
-    assert.equal(endpoint.baseUrl,provider.baseUrl);
-    assert.equal(endpoint.protocol,'OpenAI');
+    if (provider.baseUrl) assert.equal(endpoint.baseUrl,provider.baseUrl);
+    assert.ok(['OpenAI','Anthropic','其他'].includes(endpoint.protocol));
     assert.doesNotMatch(endpoint.baseUrl,/invalid/);
   }
   const endpoint=state.endpoints[0];
-  assert.throws(()=>op(state,'provider',{operation:'connection',objectId:endpoint.id,values:{...endpoint,protocol:'Anthropic'}}),/接入协议/);
+  assert.doesNotThrow(()=>op(state,'provider',{operation:'connection',objectId:endpoint.id,values:{...endpoint,protocol:'Anthropic',timeoutSeconds:60}}));
+  assert.throws(()=>op(state,'provider',{operation:'connection',objectId:endpoint.id,values:{...endpoint,protocol:'unknown',timeoutSeconds:60}}),/接入协议/);
   for(const supply of state.modelSupplies){
     const endpoint=state.endpoints.find(item=>item.id===supply.endpointId);
     const provider=state.providers.find(item=>item.id===endpoint.providerId);
@@ -175,8 +177,10 @@ test('concurrent sale revisions are rejected even after loading the latest store
 test('partial progress survives refresh and cannot accidentally publish',()=>{
  let {state,id,supply,draftId}=connected();const draft=state.modelOnboardings.find(d=>d.id===draftId);state=op(state,'saveOnboarding',{...draft,prices:priced(state,id,supply,'').items,sourceVersion:procurementVersion(activeSupplyPrice(state,supply.id)),expectedSaleVersion:latestSaleRevision(state,supply.id),step:'price'});const restored=parseAdminState(JSON.stringify(state));assert.equal(restored.modelOnboardings.find(d=>d.id===draftId).prices[0].amount,'');assert.throws(()=>op(restored,'completeOnboarding',{draftId,publish:true}),/必填/);assert.equal(restored.models.find(m=>m.id===id).listingStatus,'已下架');
 });
-test('final confirmation selects only current supply and ignores an unselected incomplete backup',()=>{
- let {state,id,supply,draftId}=connected();state.modelSupplies.push({...supply,id:'unused-backup',endpointId:state.endpoints.find(ep=>ep.providerId!==supply.provider.id).id,salesEnabled:false,status:'已停用'});const data=priced(state,id,supply);state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),prices:data.items,sourceVersion:data.sourceVersion,expectedSaleVersion:data.expectedSaleVersion,salesVersion:salesSelectionVersion(state,id),step:'review'});state=op(state,'completeOnboarding',{draftId,publish:true});assert.equal(state.models.find(m=>m.id===id).listingStatus,'已上架');assert.equal(state.modelSupplies.find(s=>s.id==='unused-backup').salesEnabled,false);assert.ok(publicationChecks(state,state.models.find(m=>m.id===id)).every(c=>c.passed));
+test('onboarding can save the selected supply and prices but cannot publish before choosing a service mode',()=>{
+ let {state,id,supply,draftId}=connected();state.modelSupplies.push({...supply,id:'unused-backup',endpointId:state.endpoints.find(ep=>ep.providerId!==supply.provider.id).id,salesEnabled:false,status:'已停用'});const data=priced(state,id,supply);state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),prices:data.items,sourceVersion:data.sourceVersion,expectedSaleVersion:data.expectedSaleVersion,salesVersion:salesSelectionVersion(state,id),step:'review'});
+ const before=structuredClone(state);assert.throws(()=>op(state,'completeOnboarding',{draftId,publish:true}),/服务模式/);assert.deepEqual(state,before);
+ state=op(state,'completeOnboarding',{draftId,publish:false});assert.equal(state.models.find(m=>m.id===id).listingStatus,'已下架');assert.equal(state.modelSupplies.find(s=>s.id===supply.id).salesEnabled,true);assert.equal(state.modelSupplies.find(s=>s.id==='unused-backup').salesEnabled,false);assert.deepEqual(activeSupplySalePrice(state,id,supply.id).items.map(item=>item.amount),[3000000,3000000]);assert.equal(state.modelOnboardings.find(item=>item.id===draftId).status,'已完成');assert.ok(publicationChecks(state,state.models.find(m=>m.id===id)).some(check=>check.tab==='serviceMode' && !check.passed));
 });
 test('uncertain identity requires explicit confirmation; missing connection retains saved progress',()=>{
  let {state,id}=connected();state=op(state,'providerRegistration',{provider:{...newProvider,name:'第二家',code:'second-provider'},connections:[connection]});const provider=state.providers.find(p=>p.code==='second-provider'),ep=state.endpoints.find(e=>e.providerId===provider.id);state=op(state,'saveOnboarding',{providerId:provider.id,catalogueModelId:'upstream-v1',endpointId:ep.id,targetModelId:id,targetRevision:state.models.find(m=>m.id===id).updatedAt});let draftId=state.audits[0].objectId;assert.throws(()=>op(state,'onboardModel',{draftId,model:state.models.find(m=>m.id===id)}),/身份和版本/);state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),confirmedIdentity:true});state=op(state,'onboardModel',{draftId,model:state.models.find(m=>m.id===id)});assert.equal(modelSupplies(state,id).length,2);assert.equal(state.models.filter(m=>m.id===id).length,1);
@@ -207,13 +211,13 @@ test('markup preserves precision, zero and missing cost; change percentage handl
  const {markedUpItems,saleChange,billingItemKey}=await import('../src/admin-v2/provider-catalogue-pricing.js');const cost=[{name:'夜间输入',condition:'32K–128K',unit:'百万 Token',currency:'CNY',amount:1},{name:'缓存读取',unit:'百万 Token',currency:'USD',amount:0}];const draft=markedUpItems(cost,'50');assert.equal(draft[0].amount,'0.000002');assert.equal(draft[1].amount,'0');assert.equal(billingItemKey(draft[0]),billingItemKey(cost[0]));assert.throws(()=>markedUpItems([{...cost[0],amount:null}],'20'),/不能按零成本/);assert.throws(()=>markedUpItems(cost,''),/加价比例/);assert.throws(()=>markedUpItems(cost,'10001'),/范围/);assert.equal(saleChange(0,'1'),'免费 → 收费');assert.equal(saleChange(0,'0'),'0.00%');assert.equal(saleChange(null,'0'),'—');
 });
 
-test('supplier model sale, unlisting and service stop have separate effects',()=>{
+test('new supplier publication requires a service mode while existing listed supply retains unlist and stop behavior',()=>{
  let {state,id,supply}=connected();
  state=op(state,'reprice',priced(state,id,supply),id);
  const prices=structuredClone(state.modelSalePrices),endpoints=structuredClone(state.endpoints);
- state=op(state,'publishSupply',{id:supply.id},id);
- assert.equal(state.modelSupplies.find(s=>s.id===supply.id).salesEnabled,true);
- assert.equal(state.models.find(m=>m.id===id).listingStatus,'已上架');
+ const before=structuredClone(state);assert.throws(()=>op(state,'publishSupply',{id:supply.id},id),/服务模式/);assert.deepEqual(state,before);
+ Object.assign(state.models.find(item=>item.id===id),{listingStatus:'已上架',visibility:'公开',callsEnabled:true,status:'运行中'});
+ state.modelSupplies.find(item=>item.id===supply.id).salesEnabled=true;
  state=op(state,'unlistSupply',{id:supply.id},id);
  assert.equal(state.modelSupplies.find(s=>s.id===supply.id).salesEnabled,false);
  assert.equal(availableSupplies(state,id).length,1);
@@ -223,8 +227,9 @@ test('supplier model sale, unlisting and service stop have separate effects',()=
  assert.equal(availableSupplies(state,id).length,0);
  assert.equal(state.models.find(m=>m.id===id).callsEnabled,false);
  assert.equal(state.modelSupplies.find(s=>s.id===supply.id).status,'已停用');
- state=op(state,'publishSupply',{id:supply.id},id);
+ state=op(state,'startSupply',{id:supply.id},id);
  assert.equal(state.models.find(m=>m.id===id).callsEnabled,true);
+ assert.equal(state.models.find(m=>m.id===id).listingStatus,'已下架');assert.equal(state.modelSupplies.find(item=>item.id===supply.id).salesEnabled,false);
  assert.deepEqual(state.modelSalePrices,prices);
  assert.deepEqual(state.endpoints,endpoints);
 });
@@ -267,7 +272,8 @@ test('supplier connectivity preview never enables a stopped service or changes s
 
 test('existing subscriber calls survive unlisting and fail after the final supply stops',async()=>{
  const {simulateRequest}=await import('../src/admin-v2/domain.js');
- let {state,id,supply}=connected();state=op(state,'reprice',priced(state,id,supply),id);state=op(state,'publishSupply',{id:supply.id},id);
+ let {state,id,supply}=connected();state=op(state,'reprice',priced(state,id,supply),id);
+ Object.assign(state.models.find(item=>item.id===id),{listingStatus:'已上架',visibility:'公开',callsEnabled:true,status:'运行中'});state.modelSupplies.find(item=>item.id===supply.id).salesEnabled=true;
  const key=state.apiKeys.find(k=>k.status==='有效'&&state.grants.some(g=>g.subjectId===k.id));key.modelIds.push(id);state.limits=state.limits.filter(l=>l.scopeId!==key.id);
  const call=()=>simulateRequest(state,{requestId:crypto.randomUUID(),keyId:key.id,modelId:id}).request;
  assert.equal(call().httpStatus,200);

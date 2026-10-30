@@ -16,9 +16,9 @@ echarts.use([LineChart, BarChart, PieChart, GridComponent, TooltipComponent, Leg
 const grid = '#e4eaf3';
 const safe = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 
-function ChartData({ label, headings, rows }) {
+function ChartData({ label, headings, rows, compact = false }) {
   const [open, setOpen] = useState(false);
-  return <details className="admin-chart-data" onToggle={event => setOpen(event.currentTarget.open)}><summary>查看{label}数据</summary>{open && <div className="chart-data-scroll" tabIndex={0} aria-label={`${label}数据区域`}><table><caption className="sr-only">{label}</caption><thead><tr>{headings.map((name, index) => <th key={index} scope="col">{name}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((value, column) => <td key={column}>{value}</td>)}</tr>)}</tbody></table>{!rows.length && <p>当前范围暂无数据。</p>}</div>}</details>;
+  return <details className="admin-chart-data" onToggle={event => setOpen(event.currentTarget.open)}><summary aria-label={`查看${label}数据`}>{compact ? '查看数据' : `查看${label}数据`}</summary>{open && <div className="chart-data-scroll" tabIndex={0} aria-label={`${label}数据区域`}><table><caption className="sr-only">{label}</caption><thead><tr>{headings.map((name, index) => <th key={index} scope="col">{name}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((value, column) => <td key={column}>{value}</td>)}</tr>)}</tbody></table>{!rows.length && <p>当前范围暂无数据。</p>}</div>}</details>;
 }
 
 function Chart({ option, height, label, onClick, onLegend }) {
@@ -41,39 +41,48 @@ function Chart({ option, height, label, onClick, onLegend }) {
   return <div className="ua-echart unified-chart-canvas" ref={element} style={{ height }} role="img" aria-label={label} />;
 }
 
-export function TimeSeriesChart({ labels, series, unit = '', label, axisUnit, tickScale, height = 250, valueFormatter, type = 'line', stacked = false, domain, tickFormatter, overview = false, className = '' }) {
+export function TimeSeriesChart({ labels, series, unit = '', label, axisUnit, tickScale, height = 250, valueFormatter, type = 'line', stacked = false, domain, tickFormatter, overview = false, className = '', showData = true, compact = false, selectedNames, onSelectNames }) {
   const admin = useContext(AdminUIContext);
   const muted = admin ? '#5d6b82' : '#64748b';
   const [choice, setChoice] = useState(null), [query, setQuery] = useState('');
   const signature = series.map(item => item.label).join('\u0000');
-  const selected = choice?.signature === signature ? choice.names : defaultChartSeries(series);
-  const legendNames = choice?.signature === signature ? choice.legendNames : selected;
-  const choose = (names, legendNames = names) => setChoice({ signature, names, legendNames });
-  const seriesColor = item => admin && (series.length === 1 || chartColor(item) === chartPalette[0]) ? '#315fe8' : chartColor(item);
+  const selected = selectedNames ?? (choice?.signature === signature ? choice.names : defaultChartSeries(series));
+  const legendNames = selectedNames ?? (choice?.signature === signature ? choice.legendNames : selected);
+  const choose = (names, legendNames = names) => onSelectNames ? onSelectNames(names) : setChoice({ signature, names, legendNames });
+  const seriesColor = item => admin && (!compact && series.length === 1 || chartColor(item) === chartPalette[0]) ? '#315fe8' : chartColor(item);
   const visible = series.filter(item => selected.includes(item.label));
   const axis = chartAxis(visible, unit, axisUnit, tickScale);
   const formatter = valueFormatter || chartNumber;
   const matches = series.filter(item => item.label.toLowerCase().includes(query.trim().toLowerCase()));
   const temporal = type !== 'bar' || labels.some(time => /^\d{2}-\d{2}|^\d{2}:\d{2}/.test(time));
   const singleDay = labels.length > 0 && labels.every(time => /^\d{2}-\d{2} \d{2}:\d{2}$/.test(time) && time.slice(0, 5) === labels[0].slice(0, 5));
+  const tooltip = items => {
+    const time = items[0]?.axisValueLabel || '';
+    const interval = compact && /^\d{2}:00$/.test(time) ? `${time}–${String((Number(time.slice(0, 2)) + 1) % 24).padStart(2, '0')}:00` : time;
+    const ordered = compact ? type === 'bar' ? items : items.filter(item => item.value !== 0) : [...items].sort((a,b) => (Number.isFinite(b.value) ? b.value : -Infinity) - (Number.isFinite(a.value) ? a.value : -Infinity));
+    const scale = compact ? axis.scale : 1;
+    const suffix = scale === 1e8 ? ' 亿' : scale === 1e4 ? ' 万' : '';
+    const zeros = compact && type !== 'bar' ? items.filter(item => item.value === 0).length : 0;
+    return `<div>${safe(interval)}${temporal ? ' · 北京时间' : ''}</div>${ordered.map(item => `<div>${item.marker} ${safe(item.seriesName)}：<b>${safe(formatter(Number.isFinite(item.value) ? item.value / scale : item.value))}${Number.isFinite(item.value) ? `${suffix} ${safe(unit)}` : ''}</b></div>`).join('')}${zeros ? `<div>${zeros === items.length ? '当前' : '另 '}${zeros} 项本时段无用量</div>` : ''}`;
+  };
   const option = {
     animation: false,
     color: series.map(seriesColor),
-    grid: { top: 66, left: 8, right: 16, bottom: 12, containLabel: true },
-    legend: { type: 'scroll', data: legendNames, top: 0, right: 8, left: 8, selected: Object.fromEntries(series.map(item => [item.label, selected.includes(item.label)])), icon: 'rect', itemWidth: 18, itemHeight: 3, inactiveColor: '#a1aab8', pageTextStyle: { color: muted }, textStyle: { color: muted, fontSize: 12 } },
-    tooltip: { trigger: 'axis', confine: true, axisPointer: { type: type === 'bar' ? 'shadow' : 'line', lineStyle: { color: '#b8c7e8', type: 'dashed' } }, backgroundColor: '#fff', borderColor: grid, extraCssText: `max-height:60vh;overflow-y:auto;border-radius:6px;box-shadow:${admin ? '0 4px 12px rgba(38,50,71,.12)' : '0 4px 16px #17243b12'}`, textStyle: { color: '#263247', fontSize: 12 }, formatter: items => `<div>${safe(items[0]?.axisValueLabel)}${temporal ? ' · 北京时间' : ''}</div>${[...items].sort((a,b) => (Number.isFinite(b.value) ? b.value : -Infinity) - (Number.isFinite(a.value) ? a.value : -Infinity)).map(item => `<div>${item.marker} ${safe(item.seriesName)}：<b>${safe(formatter(item.value))}${Number.isFinite(item.value) ? ` ${safe(unit)}` : ''}</b></div>`).join('')}` },
-    xAxis: { type: 'category', data: labels, boundaryGap: type === 'bar', axisTick: { show: false }, axisLine: { lineStyle: { color: '#dce4ee' } }, axisLabel: { color: muted, fontSize: 12, hideOverlap: true, formatter: value => singleDay ? value.slice(6) : overview && /^\d{2}-\d{2}$/.test(value) ? value.replace('-', '/') : value, interval: labels.length > 16 ? Math.ceil(labels.length / 6) - 1 : 'auto' } },
-    yAxis: { type: 'value', min: domain?.[0] ?? 0, max: domain?.[1], minInterval: ['次','人','个','张'].includes(unit) ? 1 : undefined, splitNumber: 4, name: axis.name, nameTextStyle: { color: muted, fontSize: 12, align: 'left' }, axisLabel: { color: muted, fontSize: 12, formatter: tickFormatter || (value => formatter(value / axis.scale)) }, splitLine: { lineStyle: { color: grid, type: 'dashed' } } },
-    series: series.map((item, index) => ({ name: item.label, type: type === 'bar' ? 'bar' : 'line', data: item.values, smooth: .2, connectNulls: false, showSymbol: false, stack: stacked && type !== 'line' ? 'total' : undefined, areaStyle: type === 'area' ? { opacity: .12 } : undefined, barMaxWidth: 24, lineStyle: { width: item.total || /^(总|累计)/.test(item.label) ? 2.5 : 2, type: item.dashed ? 'dashed' : admin ? ['solid', 'dashed', 'dotted'][index % 3] : 'solid' }, emphasis: { focus: 'series' } })),
+    grid: { top: compact ? 34 : 66, left: 8, right: 16, bottom: compact ? 42 : 12, containLabel: true },
+    legend: { show: !compact || type !== 'bar' || series.length > 1, type: 'scroll', data: legendNames, top: compact ? undefined : 0, bottom: compact ? 0 : undefined, right: 8, left: 8, selected: Object.fromEntries(series.map(item => [item.label, selected.includes(item.label)])), icon: 'rect', itemWidth: 18, itemHeight: 3, inactiveColor: '#a1aab8', pageTextStyle: { color: muted }, tooltip: { show: compact }, textStyle: { color: muted, fontSize: 12, ...(compact ? { width: 160, overflow: 'truncate' } : {}) } },
+    tooltip: { trigger: 'axis', confine: true, axisPointer: { type: type === 'bar' ? 'shadow' : 'line', lineStyle: { color: '#b8c7e8', type: 'dashed' } }, backgroundColor: '#fff', borderColor: grid, extraCssText: `max-height:60vh;overflow-y:auto;border-radius:6px;box-shadow:${admin ? '0 4px 12px rgba(38,50,71,.12)' : '0 4px 16px #17243b12'}`, textStyle: { color: '#263247', fontSize: 12 }, formatter: tooltip },
+    xAxis: { type: 'category', data: labels, boundaryGap: type === 'bar', axisTick: { show: false }, axisLine: { lineStyle: { color: '#dce4ee' } }, axisLabel: { color: muted, fontSize: 12, hideOverlap: !(compact && type === 'bar'), formatter: value => singleDay ? value.slice(6) : overview && /^\d{2}-\d{2}$/.test(value) ? value.replace('-', '/') : value, interval: compact && type === 'bar' ? 0 : labels.length > 16 ? Math.ceil(labels.length / 6) - 1 : 'auto' } },
+    yAxis: { type: 'value', min: domain?.[0] ?? 0, max: domain?.[1], minInterval: ['次','人','个','张','个客户'].includes(unit) ? 1 : undefined, splitNumber: 4, name: axis.name, nameTextStyle: { color: muted, fontSize: 12, align: 'left' }, axisLabel: { color: muted, fontSize: 12, formatter: tickFormatter || (value => formatter(value / axis.scale)) }, splitLine: { lineStyle: { color: grid, type: 'dashed' } } },
+    series: series.map((item, index) => ({ name: item.label, type: type === 'bar' ? 'bar' : 'line', data: item.values, label: type === 'bar' && item.showValues ? { show: true, position: 'top', color: muted, fontSize: 12 } : undefined, smooth: .2, connectNulls: false, showSymbol: compact && labels.length === 1, symbolSize: compact ? 6 : undefined, stack: stacked && type !== 'line' ? 'total' : undefined, areaStyle: type === 'area' ? { opacity: .12 } : undefined, barMaxWidth: 24, lineStyle: { width: item.total || /^(总|累计)/.test(item.label) ? 2.5 : 2, type: item.dashed ? 'dashed' : admin ? ['solid', 'dashed', 'dotted'][index % 3] : 'solid' }, emphasis: { focus: 'series' } })),
   };
   return <div className={`unified-chart ${className}`} role="group" aria-label={`${label}（${{ line: '折线图', bar: '柱状图', area: '面积图' }[type]}）`}>
-    {series.length > 1 && <div className="unified-chart-tools"><span>已展示 {visible.length} / {series.length} 条{choice?.signature !== signature && series.length > 8 ? ' · 默认按用量排序' : ''}</span><Popover><PopoverTrigger asChild><Button variant="outline" size="icon" aria-label={`${label}图表设置`} title="图表设置" onClick={() => setQuery('')}><SlidersHorizontal size={15}/></Button></PopoverTrigger><PopoverContent align="end" className="unified-chart-picker"><strong>显示指标／模型</strong><Input aria-label={`${label}搜索曲线`} placeholder="搜索指标或模型名称" value={query} onChange={event => setQuery(event.target.value)}/><div className="unified-chart-picker-actions"><Button variant="ghost" size="sm" onClick={() => choose(series.map(item => item.label))}>显示全部</Button><Button variant="ghost" size="sm" onClick={() => setChoice(null)}>恢复默认</Button></div><div className="unified-chart-options">{matches.map(item => <label key={item.label}><Checkbox aria-label={`显示${item.label}`} checked={selected.includes(item.label)} disabled={visible.length === 1 && selected.includes(item.label)} onCheckedChange={checked => choose(checked ? [...selected, item.label] : selected.filter(name => name !== item.label))}/><i style={{ background: seriesColor(item) }}/><span>{item.label}</span></label>)}{!matches.length && <p>无匹配曲线</p>}</div><small>仅改变图表显示，不影响统计、筛选和导出。</small></PopoverContent></Popover></div>}
+    {!compact && series.length > 1 && <div className="unified-chart-tools"><span>已展示 {visible.length} / {series.length} 条{choice?.signature !== signature && series.length > 8 ? ' · 默认按用量排序' : ''}</span><Popover><PopoverTrigger asChild><Button variant="outline" size="icon" aria-label={`${label}图表设置`} title="图表设置" onClick={() => setQuery('')}><SlidersHorizontal size={15}/></Button></PopoverTrigger><PopoverContent align="end" className="unified-chart-picker"><strong>显示指标／模型</strong><Input aria-label={`${label}搜索曲线`} placeholder="搜索指标或模型名称" value={query} onChange={event => setQuery(event.target.value)}/><div className="unified-chart-picker-actions"><Button variant="ghost" size="sm" onClick={() => choose(series.map(item => item.label))}>显示全部</Button><Button variant="ghost" size="sm" onClick={() => setChoice(null)}>恢复默认</Button></div><div className="unified-chart-options">{matches.map(item => <label key={item.label}><Checkbox aria-label={`显示${item.label}`} checked={selected.includes(item.label)} disabled={visible.length === 1 && selected.includes(item.label)} onCheckedChange={checked => choose(checked ? [...selected, item.label] : selected.filter(name => name !== item.label))}/><i style={{ background: seriesColor(item) }}/><span>{item.label}</span></label>)}{!matches.length && <p>无匹配曲线</p>}</div><small>仅改变图表显示，不影响统计、筛选和导出。</small></PopoverContent></Popover></div>}
     <Chart option={option} height={height} label={`${label}图表`} onLegend={event => choose(Object.keys(event.selected).filter(name => event.selected[name]), legendNames)}/>
-    {admin && <ChartData label={label} headings={['时间 / 分类', ...visible.map(item => `${item.label}${unit ? `（${unit}）` : ''}`)]} rows={labels.map((time, index) => [time, ...visible.map(item => Number.isFinite(item.values[index]) ? formatter(item.values[index]) : '—')])}/>}
+    {admin && showData && <ChartData compact={compact} label={label} headings={['时间 / 分类', ...visible.map(item => `${item.label}${unit ? `（${unit}）` : ''}`)]} rows={labels.map((time, index) => [time, ...visible.map(item => Number.isFinite(item.values[index]) ? formatter(item.values[index]) : '—')])}/>}
   </div>;
 }
 
-export function RankingChart({ rows, metric, unit, collection, scale, onChoose }) {
+export function RankingChart({ rows, metric, unit, collection, scale, onChoose, showData = true }) {
   const admin = useContext(AdminUIContext);
   const muted = admin ? '#5d6b82' : '#64748b';
   const names = rows.map((row, index) => `${index + 1}  ${collection.find(item => item.id === row.id)?.name || row.id}`);
@@ -85,10 +94,10 @@ export function RankingChart({ rows, metric, unit, collection, scale, onChoose }
     yAxis: { type: 'category', data: names, inverse: true, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: muted, fontSize: 12, width: 116, overflow: 'truncate', margin: 10 } },
     series: [{ type: 'bar', data: rows.map(row => scale === 'log' ? Math.log10(row[metric] + 1) : row[metric]), barWidth: 10, showBackground: true, backgroundStyle: { color: '#edf1f8', borderRadius: 2 }, itemStyle: { color: admin ? '#315fe8' : chartPalette[0], borderRadius: 2 }, label: { show: true, position: 'right', distance: 8, color: '#34425b', fontSize: 12, formatter: ({ dataIndex }) => { const value = rows[dataIndex][metric]; return value >= 1e8 ? `${chartNumber(value / 1e8)}亿` : value >= 1e4 ? `${chartNumber(value / 1e4)}万` : chartNumber(value); } } }],
   };
-  return <><Chart option={option} height={Math.max(140, rows.length * 28 + 20)} label={`用量排行，显示 ${rows.length} 个对象，点击条形查看明细`} onClick={event => { if (rows[event.dataIndex]) onChoose(rows[event.dataIndex].id); }} />{admin && <ChartData label="用量排行" headings={['对象', `${metric === 'calls' ? '调用次数' : '用量'}（${unit || '次'}）`]} rows={rows.map(row => [<Button variant="link" onClick={() => onChoose(row.id)}>{collection.find(item => item.id === row.id)?.name || row.id}</Button>, chartNumber(row[metric])])}/>}</>;
+  return <><Chart option={option} height={Math.max(140, rows.length * 28 + 20)} label={`用量排行，显示 ${rows.length} 个对象，点击条形查看明细`} onClick={event => { if (rows[event.dataIndex]) onChoose(rows[event.dataIndex].id); }} />{admin && showData && <ChartData label="用量排行" headings={['对象', `${metric === 'calls' ? '调用次数' : '用量'}（${unit || '次'}）`]} rows={rows.map(row => [<Button variant="link" onClick={() => onChoose(row.id)}>{collection.find(item => item.id === row.id)?.name || row.id}</Button>, chartNumber(row[metric])])}/>}</>;
 }
 
-export function DonutChart({ rows, unit = '', label, height = 200, centerValue, centerLabel }) {
+export function DonutChart({ rows, unit = '', label, height = 200, centerValue, centerLabel, showData = true }) {
   const admin = useContext(AdminUIContext);
   const muted = admin ? '#5d6b82' : '#64748b';
   const total = rows.reduce((sum, row) => sum + row.value, 0);
@@ -103,5 +112,5 @@ export function DonutChart({ rows, unit = '', label, height = 200, centerValue, 
   return <><div className="unified-donut" style={{ position: 'relative' }}>
     <Chart option={option} height={height} label={`${label}：${rows.map(row => `${row.label} ${chartNumber(row.value)} ${unit}，占比 ${total ? (row.value / total * 100).toFixed(1) + '%' : '—'}`).join('；')}`}/>
     <div className="unified-donut-center" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', gap: 4 }}><strong style={{ fontSize: admin ? 28 : 20, fontWeight: admin ? 600 : 650, color: admin ? '#263247' : '#202b3e' }}>{centerValue}</strong><span style={{ fontSize: 12, color: muted }}>{centerLabel}</span></div>
-  </div>{admin && <ChartData label={label} headings={['分类', `用量${unit ? `（${unit}）` : ''}`, '占比']} rows={rows.map(row => [row.label, chartNumber(row.value), total ? `${(row.value / total * 100).toFixed(1)}%` : '—'])}/>}</>;
+  </div>{admin && showData && <ChartData label={label} headings={['分类', `用量${unit ? `（${unit}）` : ''}`, '占比']} rows={rows.map(row => [row.label, chartNumber(row.value), total ? `${(row.value / total * 100).toFixed(1)}%` : '—'])}/>}</>;
 }

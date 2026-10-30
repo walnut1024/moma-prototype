@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { createAdminSeed, commitAdminState, persistModelAction, parseAdminState } from '../src/admin-v2/store.js';
 import { catalogueConnections } from '../src/admin-v2/provider-model-connections.js';
 import { providerCataloguePrice } from '../src/admin-v2/moma-catalogue-prices.js';
-const providerId = 'provider-moma', modelId = 'Access/New-Model';
-const draft = { modelId, modelType: 'text', endpoint: '/v1/chat/completions', protocol: 'OpenAI', baseUrl: 'https://model.example.invalid/v1', discountFactor: '1', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] };
+const providerId = 'provider-moma', modelId = 'Access-New-Model';
+const draft = { modelId, modelType: 'text', channelName: '国内渠道', modelName: '模型显示名称', protocol: 'OpenAI', apiUrl: 'https://model.example.invalid/v1/chat/completions', discountFactor: '1', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] };
 const action = (values = draft, operation = 'catalogueAdd') => ({ type: 'modelOperations', operation: 'provider', data: { operation, objectId: providerId, values } });
 const owner = state => state.providers.find(item => item.id === providerId);
 
@@ -13,7 +13,7 @@ test('adding a model atomically saves its protocol, access address and quote wit
   const next = persistModelAction(seed, action(), { getItem: () => saved, setItem: (_, value) => { saved = value; } });
   const state = parseAdminState(saved), connections = catalogueConnections(state, owner(state), modelId);
   assert.equal(connections.length, 1); assert.equal(connections[0].protocol, 'OpenAI');
-  assert.equal(connections[0].baseUrl, draft.baseUrl); assert.equal(connections[0].status, '草稿');
+  assert.equal(connections[0].baseUrl, draft.apiUrl); assert.equal(connections[0].status, '草稿');
   assert.deepEqual(connections[0].apiKeys, []); assert.equal(connections[0].credentialRef, '');
   assert.equal(providerCataloguePrice(owner(state), modelId).scenarios[0].listPrice, 0);
   for (const endpoint of seed.endpoints) assert.deepEqual(state.endpoints.find(item => item.id === endpoint.id), endpoint);
@@ -34,7 +34,7 @@ test('the saved model address can be edited without changing the model ID, quote
 
 test('missing/invalid access fields, duplicate model, permission, conflict and storage errors never leave partial records', () => {
   const state = createAdminSeed(), before = JSON.stringify(state);
-  for (const patch of [{ protocol: '' }, { protocol: 'unknown' }, { baseUrl: '' }, { baseUrl: undefined }, { baseUrl: 'http://third.example.invalid' }, { baseUrl: 'https://user:pass@example.invalid/v1' }, { baseUrl: 'https://example.invalid/v1?key=secret' }]) {
+  for (const patch of [{ protocol: '' }, { protocol: 'unknown' }, { apiUrl: '' }, { apiUrl: undefined }, { apiUrl: 'http://third.example.invalid/v1/chat/completions' }, { apiUrl: 'https://user:pass@example.invalid/v1/chat/completions' }, { apiUrl: 'https://example.invalid/v1/chat/completions?key=secret' }]) {
     assert.throws(() => commitAdminState(state, action({ ...draft, ...patch })));
     assert.equal(JSON.stringify(state), before);
   }
