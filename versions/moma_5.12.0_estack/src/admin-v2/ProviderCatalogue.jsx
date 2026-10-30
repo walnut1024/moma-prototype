@@ -1,7 +1,7 @@
 import SupplyModelPicker from './SupplyModelPicker';
 import { supplyModelRecord } from './supply-models';
 import { Fragment, useRef, useState } from 'react';
-import { PlugZap, BadgeDollarSign, Link, KeyRound, Pencil, Trash2, PackageMinus } from 'lucide-react';
+import { PlugZap, BadgeDollarSign, Link, KeyRound, Pencil, Trash2, PackageMinus, Plus } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Button } from '../components/ui/button';
 import { Table, TableHeader, TableBody, TableHead } from '../components/ui/table';
@@ -12,9 +12,10 @@ import { catalogueMoneyDisplay } from './provider-catalogue-pricing';
 import { supplierChannelResources, supplierChannelCode, supplierChannelName, supplierCredentialIssues } from './supplier-resources';
 import { SupplierAssociationDialog, SupplierChannelDialog } from './SupplierResourceDialogs';
 import SupplierChannelTest from './SupplierChannelTest';
+import SupplierChannelConfiguration from './SupplierChannelConfiguration';
 
 const pending = <span className="supplier-key-pending">待配置</span>;
-const channelActions = [['test', '测试连接', PlugZap], ['price', '渠道售价', BadgeDollarSign], ['address', 'API 地址', Link], ['credentials', 'API 密钥', KeyRound], ['info', '渠道信息', Pencil], ['unlink', '删除', Trash2]];
+const channelActions = [['test', '测试连接', PlugZap], ['price', '采购价', BadgeDollarSign], ['models', '添加关联模型', Plus], ['address', 'API 地址', Link], ['credentials', 'API 密钥', KeyRound], ['info', '渠道信息', Pencil], ['unlink', '删除', Trash2]];
 function ChannelAddress({ value }) {
   const clipped = value.length > 42, origin = value.match(/^https?:\/\/[^/]+/)?.[0];
   return <div className="supplier-channel-address supplier-address-text" title={value}><span className="supplier-url-head">{clipped ? origin || value.slice(0, 20) : value}</span>{clipped && <span className="supplier-url-tail">…{value.slice(value.lastIndexOf('/', value.lastIndexOf('/') - 1))}</span>}</div>;
@@ -33,7 +34,7 @@ export default function ProviderCatalogue({ state, provider, ops, entries }) {
     {!entries && <div className="supplier-toolbar supplier-resource-toolbar"><SearchBox value={query} placeholder="搜索模型名称 / Model ID" onChange={setQuery}/></div>}
     {!entries && !resources.length && <div className="supplier-resource-notice"><Notice>当前供应商尚未配置供应渠道。创建渠道并关联模型后，才能进行连接测试及对外服务关联。</Notice></div>}
     {credentialIssues.map(({channel, modelIds}) => <div key={channel.id} className="supplier-resource-notice"><Notice error>已关联渠道「{supplierChannelCode(channel)} · {supplierChannelName(provider, channel)}」缺少可用 API 凭证，影响 {modelIds.length} 个模型。配置凭证后，请先测试并启用渠道，再检测和启用模型关联。<Button variant="link" onClick={() => ops.go({ tab: 'api-keys', credentialChannel: channel.id })}>前往配置密钥</Button></Notice></div>)}
-    <div className="mo-table-scroll"><Table className="supplier-model-resource-table"><colgroup>{Array.from({ length: 8 }, (_, index) => <col key={index}/>)}</colgroup><TableHeader><Row>{[entries ? '供应商' : '模型名称', '渠道名称/ID', 'API 地址', '上游模型 ID', '计费项', '渠道售价', '计价单位', '操作'].map(label => <TableHead key={label} scope="col">{label}</TableHead>)}</Row></TableHeader><TableBody>
+    <div className="mo-table-scroll"><Table className="supplier-model-resource-table"><colgroup>{Array.from({ length: 8 }, (_, index) => <col key={index}/>)}</colgroup><TableHeader><Row>{[entries ? '供应商' : '模型名称', '渠道名称/ID', 'API 地址', '上游模型 ID', '计费项', '采购价', '计价单位', '操作'].map(label => <TableHead key={label} scope="col">{label}</TableHead>)}</Row></TableHeader><TableBody>
       {visible.map(({ provider, modelId: id }) => {
         const model = supplyModelRecord(state, provider, id) || providerCatalogueModel(provider, id), channels = catalogueChannels(state, provider, id).filter(row => row.endpointId);
         const rows = channels.length ? channels : [null], modelSpan = rows.reduce((sum, row) => sum + Math.max(1, row?.pricing.scenarios.length || 0), 0);
@@ -51,6 +52,7 @@ export default function ProviderCatalogue({ state, provider, ops, entries }) {
     {editing?.kind === 'linkModel' && <Modal title="关联模型资料" description={editingProvider.name + ' · ' + editing.modelId} onClose={() => ops.proceed(close)}><SupplyModelPicker ops={ops} state={state} value={libraryId} disabled={!ops.can} onChange={id => { setLibraryId(id); ops.dirty(true); ops.setError(''); }}/><p>当前供应模型的全部渠道将归入所选模型。渠道配置、价格及已上线服务保持不变。</p>{ops.error && <Notice error>{ops.error}</Notice>}<div className="supplier-key-actions"><Button variant="outline" onClick={() => ops.proceed(close)}>取消</Button><Button disabled={!ops.can || !libraryId} onClick={() => { if (ops.run('provider', { operation: 'supplierModelLink', objectId: editingProvider.id, values: { modelId: editing.modelId, libraryId, confirmed: true } })) close(); }}>确认关联</Button></div></Modal>}
     {editing?.kind === 'price' && <SupplierAssociationDialog key={editing.modelId + editing.associationId} state={state} provider={editingProvider} modelId={editing.modelId} association={edited} ops={ops} close={close}/>}
     {['address', 'credentials', 'info'].includes(editing?.kind) && edited && <SupplierChannelDialog key={editing.kind + edited.endpointId} state={state} provider={editingProvider} endpoint={edited.endpoint} mode={editing.kind} ops={ops} close={close}/>}
+    {editing?.kind === 'models' && edited && <SupplierChannelConfiguration state={state} provider={editingProvider} endpoint={edited.endpoint} ops={ops} close={close}/>}
     {editing?.kind === 'test' && edited && <SupplierChannelTest state={state} provider={editingProvider} association={edited} ops={ops} close={close}/>}
     {['unlink', 'deleteModel'].includes(editing?.kind) && <Modal title={editing.kind === 'unlink' ? '删除模型渠道' : '移除供应模型'} description={editing.kind === 'unlink' && edited ? `${editing.modelId} · ${supplierChannelName(editingProvider, edited.endpoint)}` : editing.modelId} onClose={close}><p>{editing.kind === 'unlink' ? '删除当前模型与此渠道的关联，渠道资源及其他模型的关联保留。' : '仅移除当前供应商的模型供应关系；模型资料、其他供应商的关系及价格历史保留。'}如仍被服务或路由引用，请先解除服务映射。</p>{editing.kind === 'unlink' && !edited && <Notice error>当前模型渠道已变化，请关闭后重新选择。</Notice>}{ops.error && <Notice error>{ops.error}</Notice>}<div className="supplier-key-actions"><Button variant="outline" onClick={close}>取消</Button><Button variant="destructive" disabled={!ops.can || editing.kind === 'unlink' && !edited} onClick={() => { if (ops.run('provider', { operation: editing.kind === 'unlink' ? 'supplierAssociationRemove' : 'catalogueRemove', objectId: editingProvider.id, values: { modelId: editing.modelId, endpointId: edited?.endpointId, associationId: edited?.id, confirmed: true } })) close(); }}>确认{editing.kind === 'unlink' ? '删除' : '移除供应模型'}</Button></div></Modal>}
   </TooltipProvider>;

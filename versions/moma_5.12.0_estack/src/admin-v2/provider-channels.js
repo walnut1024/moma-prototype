@@ -4,8 +4,14 @@ import { providerCataloguePrice } from './moma-catalogue-prices.js';
 import { cataloguePriceDraft, billingItemKey } from './provider-catalogue-pricing.js';
 import { connectionFingerprint, connectionTestPassed, connectionCredentialsReady } from './connection-state.js';
 import { supplyModelUrl } from './model-management.js';
+import { modelTaskUrl } from './channel-interface.js';
 
 export const CHANNEL_ORIGINS = { undisclosed: '未披露', direct: '自营', resale: '转售' };
+export function channelModelUrl(endpoint, type) {
+  if (!endpoint.interfaceType) return endpoint.baseUrl;
+  try { return modelTaskUrl(endpoint, type); }
+  catch { return ''; }
+}
 export const channelIdentity = (providerId, modelId, endpointId) => JSON.stringify([providerId, modelId, endpointId]);
 export function catalogueChannels(state, provider, modelId) {
   const saved = (provider.catalogConnections || []).filter(item => item.modelId === modelId && !item.deletedAt);
@@ -15,7 +21,7 @@ export function catalogueChannels(state, provider, modelId) {
     return (entries.length ? entries : [{ modelId, endpointId: endpoint.id }]).map(item => ({
       ...item, id: item.id || channelIdentity(provider.id, modelId, endpoint.id),
       name: endpoint.supplierChannel ? endpoint.name : item.name || (endpoints.length > 1 ? `默认渠道 ${index + 1}` : '默认渠道'), origin: item.origin || 'undisclosed', upstreamProvider: item.upstreamProvider || '',
-      ...(endpoint.supplierChannel ? { apiAddresses: [{ protocol: endpoint.protocol, baseUrl: endpoint.baseUrl }] } : {}),
+      ...(endpoint.supplierChannel ? { apiAddresses: [{ protocol: endpoint.protocol, baseUrl: channelModelUrl(endpoint, provider.catalogModels?.find(row => row.modelId === modelId)?.type) }] } : {}),
       upstreamModelId: item.upstreamModelId || state.modelSupplies.find(supply => supply.endpointId === endpoint.id && (supply.catalogueModelId || supply.upstreamModelId) === modelId)?.upstreamModelId || modelId, endpoint,
       managed: Object.hasOwn(item, 'enabled'),
       enabled: item.enabled ?? ['运行中', '需关注'].includes(endpoint.status),
@@ -25,7 +31,7 @@ export function catalogueChannels(state, provider, modelId) {
   return [...rows, ...saved.filter(item => !item.endpointId).map(item => ({ ...item, managed: true, endpoint: { id: null, protocol: 'OpenAI', baseUrl: '', apiKeys: [] }, enabled: false, pricing: item.pricing || providerCataloguePrice(provider, modelId) }))];
 }
 export function channelUrl(provider, channel) {
-  if (channel.managed) return channel.endpoint.baseUrl;
+  if (channel.managed) return channelModelUrl(channel.endpoint, provider.catalogModels?.find(row => row.modelId === channel.modelId)?.type);
   return supplyModelUrl({ provider, endpoint: channel.endpoint, catalogueModelId: channel.modelId }, provider.catalogModels?.find(item => item.modelId === channel.modelId)) || channel.endpoint.baseUrl;
 }
 export const channelAddresses = (provider, channel) => channel.apiAddresses?.length ? channel.apiAddresses : channel.endpoint.baseUrl ? [{ protocol: channel.endpoint.protocol, baseUrl: channelUrl(provider, channel) }] : [];
@@ -39,6 +45,10 @@ export function modelApiIssue(type, baseUrl) {
 export function channelInterfaceIssue(provider, channel) {
   const type = provider.catalogModels?.find(row => row.modelId === channel.modelId)?.type;
   if (!channel.endpoint?.supplierChannel) return '';
+  if (channel.endpoint.interfaceType) {
+    try { return modelApiIssue(type, modelTaskUrl(channel.endpoint, type)); }
+    catch (error) { return error.message; }
+  }
   return channelAddresses(provider, channel).map(address => modelApiIssue(type, address.baseUrl)).find(Boolean) || '';
 }
 export function channelLinkedModels(state, provider, channel) {
@@ -83,7 +93,7 @@ function channelCosts(provider, modelId, scenarios, normalize, draft = false) {
   if (!Array.isArray(scenarios)) throw new Error('请填写渠道价格');
   // Channel cost is the entered amount; old model-level discount and manual overrides remain separate.
   const quote = normalize(provider, { modelId, discountFactor: '1', scenarios: scenarios.map(row => ({ ...row, purchasePrice: undefined })) });
-  if (!quote.scenarios.length || !draft && quote.scenarios.some(row => row.listPrice == null)) throw new Error('请填写完整的渠道价格，免费请填 0');
+  if (!draft && quote.scenarios.some(row => row.listPrice == null)) throw new Error('请填写完整的采购价，免费请填 0');
   return quote;
 }
 
@@ -166,7 +176,7 @@ export function providerChannelTransaction(state, { operation, objectId, data = 
     } else if (operation === 'channelEnable') {
       if (channelInterfaceIssue(provider, current)) throw new Error(channelInterfaceIssue(provider, current));
       if (current.endpoint.supplierChannel && (!connectionTestPassed(current.endpoint) || !['运行中', '需关注'].includes(current.endpoint.status))) throw new Error('请先完成渠道连接测试并启用渠道');
-      if (provider.status !== '已启用' || !connectionCredentialsReady(current.endpoint, provider) || !channelCheckCurrent(current) || current.managed && current.health.result !== '通过' || !current.pricing.scenarios.length || current.pricing.scenarios.some(row => row.listPrice == null)) throw new Error('当前渠道须先完成有效的健康检测并补齐渠道售价');
+      if (provider.status !== '已启用' || !connectionCredentialsReady(current.endpoint, provider) || !channelCheckCurrent(current) || current.managed && current.health.result !== '通过') throw new Error('当前渠道须先完成有效的健康检测');
       next.enabled = true; label = '启用供应渠道';
     } else if (operation === 'channelDisable') {
       if (!data.confirmed) throw new Error('请确认全局停用渠道及服务影响');

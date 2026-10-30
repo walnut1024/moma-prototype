@@ -11,7 +11,7 @@ const owner = state => state.providers.find(row => row.id === providerId);
 const endpoint = (state, code = 'CH-001') => state.endpoints.find(row => row.channelCode === code);
 const action = (operation, values) => ({ type: 'modelOperations', operation: 'provider', data: { operation, objectId: providerId, values } });
 const run = (state, operation, values) => commitAdminState(state, action(operation, values));
-const createValues = { libraryId: 'model-2', modelId: 'GLM-5.2', name: '验收专用渠道', upstreamModelId: 'GLM-5.2', protocol: 'OpenAI', baseUrl: 'https://qa.example.invalid/v1/chat/completions', keyGroupId: 'default', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }, { name: '输出 Token', listPrice: '8.5', unit: '百万 Token', currency: 'CNY' }] };
+const createValues = { name: '验收专用渠道', protocol: 'OpenAI', baseUrl: 'https://qa.example.invalid/v1/chat/completions', keyGroupId: 'default', models: [{ libraryId: 'model-2', upstreamModelId: 'GLM-5.2', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }, { name: '输出 Token', listPrice: '8.5', unit: '百万 Token', currency: 'CNY' }] }] };
 
 test('group read views preserve old credentials and expose unassigned keys in the default group', () => {
   const state = parseAdminState(null), provider = owner(state), before = structuredClone(state);
@@ -40,18 +40,18 @@ test('group creation, rename and group-scoped key addition preserve identities a
   assert.throws(() => run(next, 'addApiKeys', { ...draft, groupId: 'foreign-group' }), /密钥组不存在/);
 });
 
-test('channel creation atomically creates a fresh endpoint and its model quote using the actual UI payload', () => {
+test('channel creation atomically saves model quotes and rejects invalid nonempty prices using the UI payload', () => {
   const state = parseAdminState(null), before = structuredClone(state);
   const next = run(state, 'supplierChannelCreate', createValues), created = next.endpoints.find(row => !state.endpoints.some(old => old.id === row.id));
   assert.equal(next.endpoints.length, state.endpoints.length + 1);assert.ok(created.channelCode);
   assert.equal(created.authMode, 'group');assert.equal(created.keyGroupId, 'default');assert.equal(created.status, '草稿');
   assert.equal(connectionKeys(created, owner(next))[0].id, owner(state).defaultApiKeyId);
-  const association = catalogueChannels(next, owner(next), createValues.modelId).find(row => row.endpointId === created.id);
-  assert.equal(association.upstreamModelId, createValues.upstreamModelId);
+  const association = catalogueChannels(next, owner(next), 'GLM-5.2').find(row => row.endpointId === created.id);
+  assert.equal(association.upstreamModelId, createValues.models[0].upstreamModelId);
   assert.deepEqual(association.pricing.scenarios.map(row => row.listPrice), [0, 8500000]);assert.equal(association.enabled, false);
   for (const field of ['modelSupplies', 'models', 'serviceRoutes', 'supplyPrices', 'modelSalePrices']) assert.deepEqual(next[field], state[field]);
   assert.deepEqual(state, before);
-  for (const patch of [{ endpointId: endpoint(state).id }, { channelId: 'existing-channel' }, { libraryId: 'missing-model' }, { keyGroupId: 'missing-group' }, { baseUrl: 'https://qa.example.invalid/v1' }, { scenarios: [] }, { scenarios: [{ ...createValues.scenarios[0], listPrice: '' }] }]) {
+  for (const patch of [{ endpointId: endpoint(state).id }, { channelId: 'existing-channel' }, { models: [{ ...createValues.models[0], libraryId: 'missing-model' }] }, { keyGroupId: 'missing-group' }, { baseUrl: 'https://qa.example.invalid/v1' }, { models: [{ ...createValues.models[0], scenarios: [{ ...createValues.models[0].scenarios[0], listPrice: '' }] }] }]) {
     assert.throws(() => run(state, 'supplierChannelCreate', { ...createValues, ...patch }));assert.deepEqual(state, before);
   }
   assert.throws(() => run(next, 'supplierChannelCreate', createValues), /名称不可重复/);
@@ -121,7 +121,7 @@ test('group operations retain role, conflict and storage-failure boundaries', ()
 test('model connection previews use only the current group major and cannot bypass a disabled major', () => {
   const state = run(parseAdminState(null), 'supplierChannelCreate', createValues), provider = owner(state);
   const channel = state.endpoints.find(row => row.name === createValues.name);
-  const values = { providerId, endpointId: channel.id, modelId: createValues.modelId, upstreamId: createValues.upstreamModelId, prompt: '连接检查', scenario: 'success' };
+  const values = { providerId, endpointId: channel.id, modelId: 'GLM-5.2', upstreamId: createValues.models[0].upstreamModelId, prompt: '连接检查', scenario: 'success' };
   assert.equal(providerModelConnectivityTest(state, values).keyId, provider.defaultApiKeyId);
   assert.throws(() => providerModelConnectivityTest(state, { ...values, keyId: 'KEY-002' }), /主要密钥/);
   const key = provider.apiKeys.find(row => row.id === provider.defaultApiKeyId);

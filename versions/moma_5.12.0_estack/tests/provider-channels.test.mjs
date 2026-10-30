@@ -179,7 +179,7 @@ test('cost updates are channel-specific, retain health and expose exact ranges o
 
 test('invalid channel edits reject atomically, including foreign keys, URL secrets and malformed cost precision', async () => {
   const { state, value } = await prepared(), before = structuredClone(state);
-  for (const patch of [{ name: '' }, { origin: 'fake' }, { upstreamModelId: 'bad model' }, { baseUrl: 'http://public.example.invalid' }, { baseUrl: 'https://u:pass@example.invalid' }, { baseUrl: 'https://example.invalid/?key=secret' }, { protocol: 'invalid' }, { scenarios: [] }, { scenarios: [{ ...price[0], listPrice: '1.0000001' }] }]) assert.throws(() => add(state, { ...value, ...patch }));
+  for (const patch of [{ name: '' }, { origin: 'fake' }, { upstreamModelId: 'bad model' }, { baseUrl: 'http://public.example.invalid' }, { baseUrl: 'https://u:pass@example.invalid' }, { baseUrl: 'https://example.invalid/?key=secret' }, { protocol: 'invalid' }, { scenarios: null }, { scenarios: [{ ...price[0], listPrice: '1.0000001' }] }]) assert.throws(() => add(state, { ...value, ...patch }));
   assert.throws(() => add(state, { ...value, modelId: 'unknown-model' }), /不存在/);
   assert.deepEqual(state, before);
 });

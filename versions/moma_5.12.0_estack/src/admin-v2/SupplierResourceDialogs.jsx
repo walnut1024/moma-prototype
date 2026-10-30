@@ -10,6 +10,7 @@ import { supplierChannelAssociations, supplierChannelCode, supplierChannelName }
 import { connectionCredentialsReady, connectionTestPassed } from './connection-state';
 import { cataloguePriceDraft } from './provider-catalogue-pricing';
 import { PROTOCOLS } from './provider-management';
+import { CHANNEL_INTERFACES, prepareChannelInterface } from './channel-interface';
 import { modelApiExample } from './provider-channels';
 import SupplierPriceFields from './SupplierPriceFields';
 import { SupplierKeyGroupField } from './SupplierKeyGroupField';
@@ -27,20 +28,21 @@ export function SupplierModelEditor({ state, provider, ops, close, onBatch }) {
 
 export function SupplierChannelDialog({ state, provider, endpoint, ops, close, done = close, mode = 'all' }) {
   const all = mode === 'all', info = all || mode === 'info', address = all || mode === 'address', credentials = all || mode === 'credentials';
-  const [value, setValue] = useState(() => ({ name: endpoint ? supplierChannelName(provider, endpoint) : '', protocol: endpoint?.protocol || 'OpenAI', baseUrl: endpoint?.baseUrl || '', authMode: endpoint?.authMode || (endpoint?.apiKeys?.length ? 'specific' : 'inherit'), apiKeyId: endpoint?.apiKeyId || endpoint?.apiKeys?.[0]?.id || '', keyGroupId: endpoint?.keyGroupId || 'default' }));
+  const [value, setValue] = useState(() => ({ name: endpoint ? supplierChannelName(provider, endpoint) : '', interfaceType: endpoint?.interfaceType, addressMode: endpoint?.addressMode, taskUrls: endpoint?.taskUrls, protocol: endpoint?.protocol || 'OpenAI', baseUrl: endpoint?.baseUrl || '', authMode: endpoint?.authMode || (endpoint?.apiKeys?.length ? 'specific' : 'inherit'), apiKeyId: endpoint?.apiKeyId || endpoint?.apiKeys?.[0]?.id || '', keyGroupId: endpoint?.keyGroupId || 'default' }));
   const [confirming, setConfirming] = useState(false), [deleting, setDeleting] = useState(false);
   const refs = endpoint ? supplierChannelAssociations(state, provider, endpoint.id) : [];
   const set = patch => { setValue({ ...value, ...patch }); ops.dirty(true); ops.setError(''); };
   const changed = endpoint && (address && (endpoint.baseUrl !== value.baseUrl.trim() || endpoint.protocol !== value.protocol) || credentials && (endpoint.authMode !== value.authMode || (endpoint.apiKeyId || '') !== (value.authMode === 'specific' ? value.apiKeyId : '') || credentials && endpoint.keyGroupId !== (value.authMode === 'group' ? value.keyGroupId : endpoint.keyGroupId)));
-  const save = confirmed => { const next = ops.run('provider', { operation: 'supplierChannelSave', objectId: provider.id, values: { ...value, mode, endpointId: endpoint?.id, confirmed } }); if (next) { const saved = endpoint ? next.endpoints.find(row => row.id === endpoint.id) : next.endpoints.find(row => row.providerId === provider.id && row.name === value.name.trim() && row.supplierChannel); done(saved); } else if (confirmed) setConfirming(false); };
+  const save = confirmed => { let normalized = {}; try { if (address && value.interfaceType) normalized = prepareChannelInterface({ ...value, allowHttp: provider.sourceType === 'selfHosted' }); } catch (error) { ops.setError(error.message); return; } const next = ops.run('provider', { operation: 'supplierChannelSave', objectId: provider.id, values: { ...value, ...normalized, mode, endpointId: endpoint?.id, confirmed } }); if (next) { const saved = endpoint ? next.endpoints.find(row => row.id === endpoint.id) : next.endpoints.find(row => row.providerId === provider.id && row.name === value.name.trim() && row.supplierChannel); done(saved); } else if (confirmed) setConfirming(false); };
   const title = all ? endpoint ? `编辑渠道 · ${supplierChannelCode(endpoint)}` : '添加渠道' : { info: '渠道信息', address: 'API 地址', credentials: 'API 密钥' }[mode];
   return <><Modal drawer={mode !== 'info'} wide={mode !== 'info'} title={title} description={`${provider.name}${endpoint ? ` · ${supplierChannelCode(endpoint)}` : ''}`} onClose={() => ops.proceed(close)}><form className="supplier-resource-form" noValidate onSubmit={event => { event.preventDefault(); event.stopPropagation(); if (changed && refs.length) setConfirming(true); else save(false); }}>
     {mode === 'info' && <Field label="渠道 ID"><Input aria-label="渠道 ID" value={supplierChannelCode(endpoint)} readOnly/></Field>}
     {(info || address) && <div className={all ? 'supplier-channel-fields' : undefined}>
       {info && <Field label="渠道名称 *"><Input aria-label="渠道名称" value={value.name} maxLength={60} disabled={!ops.can} onChange={event => set({ name: event.target.value })}/></Field>}
-      {address && <Field label="协议 *"><Choice label="渠道协议" value={value.protocol} options={PROTOCOLS.map(id => [id, id === 'OpenAI' ? 'OpenAI 兼容接口' : id])} disabled={!ops.can} onChange={protocol => set({ protocol })}/></Field>}
+      {address && value.interfaceType && <Field label="接口类型 *"><Choice label="接口类型" value={value.interfaceType} options={CHANNEL_INTERFACES.map(item => [item.id, item.label])} disabled={!ops.can} onChange={interfaceType => set({ interfaceType, protocol: CHANNEL_INTERFACES.find(item => item.id === interfaceType).protocol, addressMode: interfaceType === 'custom' ? 'task' : 'base', taskUrls: {} })}/></Field>}
+      {address && !value.interfaceType && <Field label="协议 *"><Choice label="渠道协议" value={value.protocol} options={PROTOCOLS.map(id => [id, id === 'OpenAI' ? 'OpenAI 兼容接口' : id])} disabled={!ops.can} onChange={protocol => set({ protocol })}/></Field>}
     </div>}
-    {address && <Field label="API 地址 *" hint="填写完整调用地址。"><Input aria-label="渠道 API 地址" value={value.baseUrl} maxLength={2048} placeholder={modelApiExample(provider.catalogModels?.find(row => row.modelId === refs[0]?.modelId)?.type)} disabled={!ops.can} onChange={event => set({ baseUrl: event.target.value })}/></Field>}
+    {address && <Field label={value.addressMode === 'base' ? '服务根地址 *' : 'API 地址 *'} hint={value.addressMode === 'base' ? undefined : '填写完整调用地址。'}><Input aria-label="渠道 API 地址" value={value.baseUrl} maxLength={2048} placeholder={modelApiExample(provider.catalogModels?.find(row => row.modelId === refs[0]?.modelId)?.type)} disabled={!ops.can} onChange={event => set({ baseUrl: event.target.value })}/></Field>}
     {credentials && <SupplierKeyGroupField ops={ops} state={state} provider={provider} value={value.authMode === 'group' ? value.keyGroupId : 'current'} current={value.authMode !== 'group' ? { name: value.authMode === 'none' ? '无需认证' : value.authMode === 'inherit' ? '当前供应商默认密钥' : '当前指定密钥 · ' + (value.apiKeyId || '凭证引用'), ready: connectionCredentialsReady(endpoint, provider) } : null} disabled={!ops.can} onChange={keyGroupId => set({ authMode: 'group', keyGroupId })}/>} 
     {all && <section><h3>引用此渠道的供应模型（{refs.length}）</h3>{refs.length ? <ul className="supplier-reference-list">{refs.map(row => <li key={row.id}><strong>{row.modelId}</strong><span>上游 ID：{row.upstreamModelId}</span></li>)}</ul> : <p className="supplier-price-hint">暂未关联模型。渠道保存后，可在模型及渠道中建立关联。</p>}<p className="supplier-price-hint">上游 Model ID 和供应商售价在模型与渠道的关联中维护。</p></section>}
     {changed && <Notice>当前渠道配置尚未保存，请保存后再测试连接。</Notice>}
@@ -55,10 +57,10 @@ export function SupplierChannelDialog({ state, provider, endpoint, ops, close, d
 
 export function SupplierAssociationDialog({ state, provider, modelId, association, ops, close }) {
   const [scenarios, setScenarios] = useState(() => cataloguePriceDraft(association.pricing).scenarios);
-  return <Modal drawer wide title="渠道售价" description={provider.name + ' · ' + modelId + ' · ' + supplierChannelName(provider, association.endpoint)} onClose={() => ops.proceed(close)}><form className="supplier-resource-form" noValidate onSubmit={event => { event.preventDefault(); if (ops.run('provider', { operation: 'supplierAssociationSave', objectId: provider.id, values: { modelId, endpointId: association.endpointId, associationId: association.id, upstreamModelId: association.upstreamModelId, scenarios } })) close(); }}>
+  return <Modal drawer wide title="采购价" description={provider.name + ' · ' + modelId + ' · ' + supplierChannelName(provider, association.endpoint)} onClose={() => ops.proceed(close)}><form className="supplier-resource-form" noValidate onSubmit={event => { event.preventDefault(); if (ops.run('provider', { operation: 'supplierAssociationSave', objectId: provider.id, values: { modelId, endpointId: association.endpointId, associationId: association.id, upstreamModelId: association.upstreamModelId, scenarios } })) close(); }}>
     <SupplierPriceFields ops={ops} state={state} scenarios={scenarios} disabled={!ops.can} onChange={next => { setScenarios(next); ops.dirty(true); ops.setError(''); }}/>
     {ops.error && <Notice error>{ops.error}</Notice>}
-    <footer className="supplier-channel-footer"><Button type="button" variant="outline" onClick={() => ops.proceed(close)}>取消</Button><Button type="submit" disabled={!ops.can}>保存渠道售价</Button></footer>
+    <footer className="supplier-channel-footer"><Button type="button" variant="outline" onClick={() => ops.proceed(close)}>取消</Button><Button type="submit" disabled={!ops.can}>保存采购价</Button></footer>
   </form></Modal>;
 }
 

@@ -95,7 +95,7 @@ test('missing Kimi credentials guide configuration, and the first added key is i
 
 test('create resource separately, then associate a Zhipu model without duplicating the endpoint',()=>{
  const s=parseAdminState(null),id='provider-zhipu-direct';
- const created=run(s,'supplierChannelSave',{name:'新增渠道',protocol:'OpenAI',baseUrl:'https://zhipu.example.invalid/v1/chat/completions',authMode:'none'},id);
+ const created=run(s,'supplierChannelSave',{name:'新增渠道',protocol:'OpenAI',baseUrl:'https://zhipu.example.invalid/v1/chat/completions',authMode:'inherit'},id);
  const ep=supplierChannelResources(created,owner(created,id))[0];
  assert.equal(supplierChannelAssociations(created,owner(created,id)).length,0);
  const linked=run(created,'supplierAssociationSave',{modelId:'glm-4-7',endpointId:ep.id,upstreamModelId:'glm-4.7',scenarios:price(0)},id);
@@ -217,7 +217,7 @@ test('cross-supplier keys and resources, incomplete URLs and invalid association
  assert.throws(()=>run(s,'supplierChannelSave',{name:'错误',protocol:'OpenAI',baseUrl:'https://x.example.invalid/v1/chat/completions',authMode:'specific',apiKeyId:'KEY-201'}),/当前供应商/);
  assert.throws(()=>run(s,'supplierChannelSave',{name:'错误',protocol:'OpenAI',baseUrl:'https://x.example.invalid/v1',authMode:'inherit'}),/完整接口/);
  assert.throws(()=>run(s,'supplierAssociationSave',{modelId:'DeepSeek-V4-Flash-0731',endpointId:endpoint(s,'CH-101').id,upstreamModelId:'deepseek-flash',scenarios:price(1)}),/当前供应商/);
- assert.throws(()=>run(s,'supplierAssociationSave',{modelId:'Kimi/miKimi-K3',endpointId:ep.id,upstreamModelId:'bad id',scenarios:price(1)}),/空格/);
+ assert.throws(()=>run(s,'supplierAssociationSave',{modelId:'Kimi/miKimi-K3',endpointId:ep.id,upstreamModelId:'bad id',scenarios:price(1)}),/空白/);
  assert.throws(()=>run(s,'supplierAssociationSave',{modelId:'Kimi/miKimi-K3',endpointId:ep.id,upstreamModelId:'ok',scenarios:[{...price(1)[0],listPrice:''}]}),/完整供应商售价/);
  assert.deepEqual(s,before);
 });

@@ -12,18 +12,18 @@ export default function GettingStarted() {
     </div>
     <div className="gs-workflows">
       <section className="gs-panel" aria-labelledby="gs-connect"><header><h2 id="gs-connect">1. 接入模型</h2><Button asChild variant="outline" size="sm"><a href="#/admin-2/providers">去供应管理<ArrowRight aria-hidden="true"/></a></Button></header>
-        <p className="gs-preparation">准备好供应商名称、API 地址、上游模型 ID、API 密钥及渠道报价。</p>
+        <p className="gs-preparation">准备供应商、接口类型、API 地址、上游模型 ID 和 API 密钥；采购价可以后补。</p>
         <ol>
           <li><h3>找到模型资料与供应商</h3><p>先检查是否已存在，避免重复创建。缺少模型资料可到资料管理新增，也可在添加渠道时就地新增；缺少供应商则点击“添加供应商”。</p></li>
-          <li><h3>添加渠道并填写接入配置</h3><p>点击“添加渠道”，选择模型和供应商，填写渠道名称、上游模型 ID、API 地址和计费项。渠道 ID 自动生成。</p></li>
+          <li><h3>添加渠道并填写接入配置</h3><p>点击“添加渠道”，选择供应商与接口类型，填写渠道名称和服务根地址。再选择一个或多个模型，分别填写上游模型 ID；渠道 ID 自动生成。</p></li>
           <li><h3>选择 API 密钥组</h3><p>使用供应商默认组或独立密钥组；没有可用密钥时先添加。组内第一位是主要密钥，可在供应商的“API 密钥”页维护。</p></li>
-          <li><h3>保存、测试并启用渠道</h3><p>保存后进入连接测试，按提示处理缺失配置或连接问题，测试通过后单独启用。临时切换测试密钥组不会修改渠道的正式配置。</p></li>
+          <li><h3>保存、测试并启用渠道</h3><p>保存后逐个测试模型；通过后选择要启用的模型并确认。未配置采购价的模型可以测试和技术启用，但补齐采购价后才能用于正式服务。临时切换测试密钥组不修改正式配置。</p></li>
         </ol>
         <p className="gs-result"><strong>完成后：</strong>在“模型”目录可查看同一模型的全部供应商与渠道，再进入服务管理上架。接入成功不会自动对外开放。</p>
         <p className="gs-tip">仅登记供应商的模型清单时使用“添加模型”，可稍后再配置渠道。</p>
       </section>
       <section className="gs-panel" aria-labelledby="gs-publish"><header><h2 id="gs-publish">2. 上架模型</h2><Button asChild variant="outline" size="sm"><a href="#/admin-2/listing">去服务管理<ArrowRight aria-hidden="true"/></a></Button></header>
-        <p className="gs-preparation">先完成渠道接入；渠道的供应报价和面向用户的平台售价分别维护。</p>
+        <p className="gs-preparation">先完成渠道接入并补齐采购价；采购价与面向用户的平台售价分别维护。</p>
         <ol>
           <li><h3>选择或新增模型服务</h3><p>先在平台模型目录查找。没有对应服务时点击“新增模型服务”，可从资料管理引入资料，补全必填信息后保存草稿。</p></li>
           <li><h3>选择服务模式并配置售价</h3><p>“统一服务”使用统一调用 ID 和售价；“分供应商”为各供应商配置独立调用 ID 和售价。在“服务内容”中选择模式、配置计费项与平台售价并关联渠道。</p></li>
@@ -48,7 +48,7 @@ export default function GettingStarted() {
     </section>
     <section className="gs-panel gs-questions" aria-labelledby="gs-questions"><header><h2 id="gs-questions">遇到问题时</h2></header>
       <details><summary>资料已经创建，为什么还没有可用服务？</summary><p>资料管理只保存模型资料。还需在供应管理接入并启用渠道，再到服务管理配置售价、路由并上架。</p></details>
-      <details><summary>连接测试失败，先检查哪里？</summary><p>检查 API 地址是否与模型类型匹配、上游模型 ID 是否正确、所选密钥组是否有可用密钥，再按测试结果修正。本原型的连接测试为本地模拟，不验证真实上游。</p></details>
+      <details><summary>连接测试失败，先检查哪里？</summary><p>检查 API 地址是否与模型类型匹配、上游模型 ID 是否正确、所选密钥组是否有可用密钥，再按测试结果修正。</p></details>
       <details><summary>上架按钮不可用，或切换服务模式后需要重配？</summary><p>按“校验并上架”的未通过项逐一处理。切换服务模式会触发下架并清除原路由映射，关联渠道、Provider 与售价需重新配置；操作前先确认影响。</p></details>
     </section>
   </div>;

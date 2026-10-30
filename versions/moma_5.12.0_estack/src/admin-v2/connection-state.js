@@ -1,7 +1,7 @@
 import { providerKeyGroupKeys } from './provider-key-groups.js';
 
 // Shared gate for supplier configuration, model verification and routing candidates.
-export const connectionFingerprint = endpoint => JSON.stringify([endpoint.baseUrl, endpoint.protocol, endpoint.credentialRef, endpoint.capacity, endpoint.timeoutSeconds, ...(endpoint.apiKeys?.length ? [endpoint.apiKeys.map(key => key.fingerprint)] : []), ...(endpoint.authMode ? [endpoint.authMode, endpoint.apiKeyId, endpoint.credentialVersion] : []), ...(endpoint.authMode === 'group' ? [endpoint.keyGroupId] : [])]);
+export const connectionFingerprint = endpoint => JSON.stringify([endpoint.baseUrl, endpoint.protocol, endpoint.credentialRef, endpoint.capacity, endpoint.timeoutSeconds, ...(endpoint.apiKeys?.length ? [endpoint.apiKeys.map(key => key.fingerprint)] : []), ...(endpoint.authMode ? [endpoint.authMode, endpoint.apiKeyId, endpoint.credentialVersion] : []), ...(endpoint.authMode === 'group' ? [endpoint.keyGroupId] : []), ...(['interfaceType', 'addressMode', 'taskUrls'].some(key => Object.hasOwn(endpoint, key)) ? [endpoint.interfaceType, endpoint.addressMode, Object.entries(endpoint.taskUrls || {}).sort(([left], [right]) => left.localeCompare(right))] : [])]);
 export function connectionKeys(endpoint, provider, includeDisabled = false) {
   if (!endpoint) return [];
   if (endpoint.authMode === 'group') {

@@ -56,7 +56,13 @@ export function serviceSupplyRows(state, model) {
 }
 export function availableServiceChannels(state, provider, catalogueModelId) {
   if (!provider || !providerCatalogueIds(provider).includes(catalogueModelId)) return [];
-  return catalogueChannels(state, provider, catalogueModelId).map(channel => ({ ...channel, reason: channelBlockReason(provider, channel) }));
+  return catalogueChannels(state, provider, catalogueModelId).map(channel => {
+    const existingCosts = !channel.managed && state.modelSupplies.filter(row => row.status !== '已移除' && row.endpointId === channel.endpointId && row.upstreamModelId === channel.upstreamModelId && (row.catalogueModelId || row.upstreamModelId) === catalogueModelId)
+      .map(row => priceItems(activeSupplyPrice(state, row.id), state.models.find(model => model.id === row.modelId)))
+      .find(items => items.length && items.every(item => item.amount != null));
+    const costs = existingCosts || serviceChannelCosts(channel);
+    return { ...channel, reason: channelBlockReason(provider, channel) || (!costs.length || costs.some(item => item.amount == null) ? '采购价待配置' : '') };
+  });
 }
 export function serviceAssociationChannels(state) {
   return supplierDirectory(state).flatMap(provider => displayedCatalogueIds(provider,state).flatMap(catalogueModelId =>

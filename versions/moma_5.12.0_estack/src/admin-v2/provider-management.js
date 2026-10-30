@@ -5,10 +5,11 @@ import { providerCatalogueIds } from './moma-provider.js';
 import { availableSupplies, modelTransaction } from './model-management.js';
 import { connectionFingerprint, connectionTestCurrent, connectionTestPassed, connectionCredentialsReady, connectionKeys } from './connection-state.js';
 import { supplierResourceTransaction, invalidateSupplierChannels } from './supplier-resources.js';
+import { prepareChannelInterface } from './channel-interface.js';
 import { catalogueConnections, connectionCatalogueIds } from './provider-model-connections.js';
 import { isMomaCataloguePrice, providerCataloguePrice } from './moma-catalogue-prices.js';
 import { normalizeCataloguePrice, normalizeCatalogueDiscount, cataloguePriceDraft, billingItemKey } from './provider-catalogue-pricing.js';
-import { providerChannelTransaction, channelIdentity, catalogueChannels, channelInterfaceIssue } from './provider-channels.js';
+import { providerChannelTransaction, channelIdentity, catalogueChannels, channelInterfaceIssue, channelModelUrl } from './provider-channels.js';
 import { officialCatalogueTransaction } from './official-supply-catalogue.js';
 import { providerKeyGroups } from './provider-key-groups.js';
 export { connectionFingerprint, connectionTestCurrent } from './connection-state.js';
@@ -94,7 +95,8 @@ export function providerModelConnectivityTest(state, { providerId, keyId, endpoi
   if (!callId || callId.length > 200 || /\s/.test(callId)) throw new Error('调用 Model ID 须为 1–200 位字符，不含空格或换行');
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 2000) throw new Error('请填写测试内容，最多 2000 字');
   if (!Object.hasOwn(MODEL_CONNECTIVITY_SCENARIOS, scenario)) throw new Error('请选择有效的结果预览状态');
-  return modelConnectivityPreview({ modelId, upstreamId: callId, keyId: groupKey?.id || keyId, endpointId, baseUrl: endpoint.baseUrl, protocol: endpoint.protocol }, scenario);
+  const type = provider.catalogModels?.find(row => row.modelId === modelId)?.type;
+  return modelConnectivityPreview({ modelId, upstreamId: callId, keyId: groupKey?.id || keyId, endpointId, baseUrl: channelModelUrl(endpoint, type), protocol: endpoint.protocol }, scenario);
 }
 export function modelConnectivityPreview(context, scenario) {
   if (!Object.hasOwn(MODEL_CONNECTIVITY_SCENARIOS, scenario)) throw new Error('请选择有效的结果预览状态');
@@ -160,7 +162,7 @@ export function providerImpact(state, providerId, endpointId) {
 export function providerTransaction(state, action) {
   const { operation, objectId, data = {} } = action;
   if (operation === 'officialCatalogue') return officialCatalogueTransaction(state);
-  if (['supplierModelLink', 'supplierModelAdd', 'supplierChannelCreate', 'supplierChannelSave', 'supplierChannelDelete', 'supplierChannelTest', 'supplierChannelEnable', 'supplierModelTest', 'supplierModelEnable', 'supplierAssociationSave', 'supplierAssociationRemove', 'defaultApiKey', 'toggleApiKey', 'keyGroupSave', 'keyGroupDelete', 'keyGroupPrimary'].includes(operation)) return supplierResourceTransaction(state, action, providerTransaction, normalizeProviderPrice);
+  if (['supplierModelLink', 'supplierModelAdd', 'supplierChannelCreate', 'supplierModelsAdd', 'supplierModelsTest', 'supplierModelsEnable', 'supplierChannelSave', 'supplierChannelDelete', 'supplierChannelTest', 'supplierChannelEnable', 'supplierModelTest', 'supplierModelEnable', 'supplierAssociationSave', 'supplierAssociationRemove', 'defaultApiKey', 'toggleApiKey', 'keyGroupSave', 'keyGroupDelete', 'keyGroupPrimary'].includes(operation)) return supplierResourceTransaction(state, action, providerTransaction, normalizeProviderPrice);
   if (['channelSave', 'channelPrice', 'channelTest', 'channelEnable', 'channelDisable', 'channelDelete', 'catalogueRemove'].includes(operation)) return providerChannelTransaction(state, action, providerTransaction, normalizeProviderPrice, modelConnectivityPreview);
   const changes = [];
   const provider = state.providers.find(item => item.id === (data.providerId || objectId));
@@ -351,7 +353,8 @@ export function providerTransaction(state, action) {
       if (credentialRef && !/^(env:[A-Z_][A-Z0-9_]*|secret:[a-zA-Z0-9_./-]+)$/.test(credentialRef) && endpoint?.credentialRef !== credentialRef) throw new Error('凭证引用无效');
       const capacity = data.capacity == null || String(data.capacity).trim() === '' ? null : Number(data.capacity), timeoutSeconds = Number(data.timeoutSeconds);
       if ((capacity != null && (!Number.isSafeInteger(capacity) || capacity < 1)) || !Number.isSafeInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 600) throw new Error('RPM 如填写必须为正整数；超时须为 1–600 秒');
-      const fields = { name: data.name.trim(), providerId: provider.id, protocol: data.protocol, baseUrl: url.toString().replace(/\/$/, ''), credentialRef, apiKeys, capacity, timeoutSeconds };
+      const interfaceFields = data.interfaceType ? { ...prepareChannelInterface({ ...data, allowHttp: provider.sourceType === 'selfHosted' }), allowHttp: provider.sourceType === 'selfHosted' } : {};
+      const fields = { name: data.name.trim(), providerId: provider.id, protocol: data.protocol, baseUrl: url.toString().replace(/\/$/, ''), credentialRef, apiKeys, capacity, timeoutSeconds, ...interfaceFields };
       const changed = !endpoint || connectionFingerprint(endpoint) !== connectionFingerprint(fields);
       if (!endpoint) {
         const id = uid('endpoint');

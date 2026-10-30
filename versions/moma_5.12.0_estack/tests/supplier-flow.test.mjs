@@ -31,7 +31,7 @@ test('invalid addresses cannot be newly saved for a model or shared with incompa
  const s=parseAdminState(null), c=channel(s);
  assert.throws(()=>run(s,'supplierChannelSave',{endpointId:c.endpointId,mode:'address',protocol:'OpenAI',baseUrl:'https://changed.example.invalid/v1/embeddings',confirmed:true}),/Embeddings/);
  const master=s.models.find(row=>row.type==='embedding');
- assert.throws(()=>run(s,'supplierChannelCreate',{libraryId:master.id,name:'invalid vector',upstreamModelId:'vec',baseUrl:'https://v.example.invalid/v1/chat/completions',keyGroupId:'default',scenarios:[]}),/Chat Completions/);
+ assert.throws(()=>run(s,'supplierChannelCreate',{name:'invalid vector',baseUrl:'https://v.example.invalid/v1/chat/completions',keyGroupId:'default',models:[{libraryId:master.id,upstreamModelId:'vec',scenarios:[]}]}),/Chat Completions/);
 });
 
 test('temporary group preview does not mutate saved keys, health, activation or routes',async()=>{
