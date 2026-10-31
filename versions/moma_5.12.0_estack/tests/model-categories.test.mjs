@@ -5,6 +5,8 @@ import { MODEL_IMPORT_HEADERS, MODEL_IMPORT_TEMPLATE, modelRowsFromCells, valida
 
 test('import distinguishes visual understanding from image and video generation without changing stored data', () => {
   const state = createAdminSeed(), before = JSON.stringify(state);
+  assert.deepEqual(MODEL_IMPORT_HEADERS.slice(0, 2), ['模型编码', '模型名称']);
+  assert.throws(() => modelRowsFromCells([['模型ID', ...MODEL_IMPORT_HEADERS.slice(1)], MODEL_IMPORT_TEMPLATE[1]]), /表头不匹配/);
   const understanding = ['catalog/vision-001', '视觉分析', '视觉理解', '图像理解', '文本、图片', '文本', '', '32768', '8192', '分析图片并回答问题。'];
   const rows = validateModelRows(state, modelRowsFromCells([MODEL_IMPORT_HEADERS, ...MODEL_IMPORT_TEMPLATE.slice(1), understanding]));
   assert.deepEqual(rows.map(row => row.status), ['ready', 'ready', 'ready', 'ready']);

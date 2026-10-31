@@ -251,15 +251,15 @@ export function providerTransaction(state, action) {
     let entry;
     if (operation === 'catalogueDiscount') entry = { ...current, discountFactor: normalizeCatalogueDiscount(data.discountFactor) };
     else if (operation === 'catalogueCost') {
-      if (!current.scenarios.length) throw new Error('请先维护供应商目录价和计费项');
-      if (!Array.isArray(data.scenarios) || data.scenarios.length !== current.scenarios.length || data.scenarios.some(item => !item)) throw new Error('计费项已变化，请重新载入后修改平台成本');
+      if (!current.scenarios.length) throw new Error('请先维护采购参考价和计费项');
+      if (!Array.isArray(data.scenarios) || data.scenarios.length !== current.scenarios.length || data.scenarios.some(item => !item)) throw new Error('计费项已变化，请重新载入后修改采购价');
       const costs = new Map(data.scenarios.map(item => [billingItemKey(item), item.purchasePrice]));
-      if (costs.size !== current.scenarios.length || current.scenarios.some(item => !costs.has(billingItemKey(item)))) throw new Error('计费项已变化，请重新载入后修改平台成本');
+      if (costs.size !== current.scenarios.length || current.scenarios.some(item => !costs.has(billingItemKey(item)))) throw new Error('计费项已变化，请重新载入后修改采购价');
       const draft = cataloguePriceDraft(current);
       entry = normalizeProviderPrice(provider, { ...draft, modelId: data.modelId, scenarios: draft.scenarios.map(item => ({ ...item, purchasePrice: costs.get(billingItemKey(item)) })) });
     } else entry = { ...normalizeProviderPrice(provider, { ...data, discountFactor: '' }), discountFactor: current.discountFactor ?? 1000000 };
     const catalogPricing = [...(provider.catalogPricing || []).filter(item => item.modelId !== entry.modelId), entry];
-    return { type: 'batch', label: operation === 'catalogueDiscount' ? '修改采购折扣系数' : operation === 'catalogueCost' ? '修改平台成本' : '保存供应商售价', objectId: provider.id, changes: [update('providers', provider.id, { catalogPricing })] };
+    return { type: 'batch', label: operation === 'catalogueDiscount' ? '修改采购折扣系数' : operation === 'catalogueCost' ? '修改采购价' : '保存采购参考价', objectId: provider.id, changes: [update('providers', provider.id, { catalogPricing })] };
   }
   if (operation === 'addApiKeys') {
     if (!provider || provider.id !== objectId) throw new Error('供应商不存在');

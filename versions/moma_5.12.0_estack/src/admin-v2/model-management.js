@@ -218,10 +218,10 @@ export function modelTransaction(state, action) {
     if(operation==='serviceBasics' && data.expectedUpdatedAt!==model.updatedAt) throw new Error('模型资料已有并发修订，请重新打开核对');
     if(compact) data={...normalizeServiceModel(state,data,model),serviceMode:data.serviceMode};
     const modelId = creating ? data.modelId?.trim() : model.modelId;
-    if (!modelId || !compact && !/^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('Model ID 需使用小写字母、数字或 . _ : / -，最多 80 字符');
+    if (!modelId || !compact && !/^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('模型编码需使用小写字母、数字或 . _ : / -，最多 80 字符');
     if (!data.name?.trim() || !data.description?.trim()) throw new Error('模型展示名称和介绍必填');
     if (typeof data.type!=='string' || !Object.hasOwn(MODEL_TYPES,data.type)) throw new Error('请选择有效的模型类型');
-    if (state.models.some(item => item.id !== model?.id && item.modelId.toLowerCase() === modelId.toLowerCase())) throw new Error('Model ID 已存在');
+    if (state.models.some(item => item.id !== model?.id && item.modelId.toLowerCase() === modelId.toLowerCase())) throw new Error('模型编码已存在');
     const declaredCapabilities = capabilities(data.capabilities, data.type, true);
     const profile = normalizeModelProfile(data.profile ?? model?.profile, data.type, data.usageUnit);
     if (operation === 'create') requireModelBasics(profile);
@@ -268,7 +268,7 @@ export function modelTransaction(state, action) {
     } else changes.push(update('modelSupplies', supply.id, { status: { enableSupply: '已启用', disableSupply: '已停用', removeSupply: '已移除' }[operation] }));
   } else if (['priceDraft', 'pricePublish'].includes(operation)) {
     if (model.serviceMode === 'standard') throw new Error('统一服务模式只能配置统一售价');
-    if (model.serviceMode === 'provider') throw new Error('分供应商模式请在 Provider 配置维护售价');
+    if (model.serviceMode === 'provider') throw new Error('分供应商模式请在供应商服务配置维护平台售价');
     if (!Array.isArray(data.items)) throw new Error('请按完整计费项设置售价');
     const supply = modelSupplies(state, model.id).find(item => item.id === data.supplyId);
     if (!supply) throw new Error('供应服务不存在');

@@ -50,7 +50,7 @@ export function supplierListingRows(state, provider) {
     };
     const costs = priceItems(cost, master), sale = matched.supply && matched.model && activeSupplySalePrice(state, matched.model.id, matched.supply.id);
     const draft = state.modelOnboardings.find(item => item.providerId === provider.id && item.catalogueModelId === catalogueModelId && item.status !== '已完成');
-    if (!issue) issue = !master ? '待关联模型资料' : !endpoint ? '待配置接入地址' : connectionBlockReason(endpoint, provider) || (!costs.length || costs.some(item => item.amount == null) ? '待补齐供应商价格' : !matched.supply ? '待接入服务管理' : matched.supply.validationStatus !== '通过' ? '待检查模型' : !supplyPriceReady(state, matched.model, matched.supply.id) ? '待配置平台目录价' : '');
+    if (!issue) issue = !master ? '待关联模型资料' : !endpoint ? '待配置接入地址' : connectionBlockReason(endpoint, provider) || (!costs.length || costs.some(item => item.amount == null) ? '待补齐采购价' : !matched.supply ? '待接入服务管理' : matched.supply.validationStatus !== '通过' ? '待检查模型' : !supplyPriceReady(state, matched.model, matched.supply.id) ? '待配置平台售价' : '');
     const selling = matched.supply?.salesEnabled && matched.supply.status === '已启用';
     return { catalogueModelId, master, model: matched.model, supply: matched.supply, endpoint, cost, costs, sale, draft, issue,
       type: master?.type || providerCatalogueModel(provider, catalogueModelId)?.type || '',

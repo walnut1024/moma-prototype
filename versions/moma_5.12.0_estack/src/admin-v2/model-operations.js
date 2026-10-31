@@ -345,7 +345,7 @@ export function operationsTransaction(state, action) {
         if (!/^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/.test(callId)) throw new Error('对外调用 ID 必填，最多200字，仅支持英文、数字及 . _ / -');
         if (working.models.some(item=>item.id===callId || modelCode(item)===callId || providerServices(item).some(service=>!(item.id===modelId && service.providerId===provider.id) && service.callId===callId))) throw new Error('对外调用 ID 已存在');
         if (listed(model) && current.callId && current.callId!==callId) throw new Error('请先下架模型再修改对外调用 ID');
-        if (data.expectedSaleVersion!==providerPriceRevision(working,modelId,provider.id)) throw new Error('Provider 售价已有并发修订，请重新核对');
+        if (data.expectedSaleVersion!==providerPriceRevision(working,modelId,provider.id)) throw new Error('供应商平台售价已有并发修订，请重新核对');
         const items=retailItems(data.items), version=Math.max(0,...working.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && price.providerId===provider.id).map(price=>price.version))+1;
         add('modelSalePrices',{id:`provider-sale-${crypto.randomUUID()}`,modelId,providerId:provider.id,serviceId,scope:'provider',serviceModeRevision:model.serviceModeRevision || 0,items,version,effectiveAt:new Date().toISOString(),status:'已发布'});
         entry={...current,callId};label='配置 Provider 对外服务';
@@ -414,7 +414,7 @@ export function operationsTransaction(state, action) {
     if (data.selected || data.openScope || data.publish || data.salesEnabled != null) throw new Error('调价只允许修改售价');
     if (!Array.isArray(data.items)) throw new Error('请按完整计费项设置售价');
     modelOp('pricePublish', modelId, data);
-    label = '修改平台目录价';
+    label = '修改平台售价';
   } else if (operation === 'completeOnboarding') {
     const draft = working.modelOnboardings.find(item => item.id === data.draftId && item.status !== '已完成');
     if (!draft) throw new Error('配置进度不存在或已完成');

@@ -67,7 +67,7 @@ function CatalogueImport({ state, provider, libraryId, ops, mode, setMode }) {
       if (ops.run('provider', { operation: 'catalogueImport', objectId: batchProvider.id, values: { mode, text } })) close();
     }}>
       <Field label="模型资料 ID / 编码（每行一个）*" hint="从模型资料库登记供应关系；最多 2000 个，空行与重复项自动忽略。"><Textarea {...inputProps} rows={8} placeholder={'glm-5.2\nbge-m3'}/></Field>
-      <p className="supplier-price-hint">添加后通过渠道配置创建渠道，维护上游模型 ID 和渠道售价。</p>
+      <p className="supplier-price-hint">登记后可添加渠道，维护上游模型 ID 和采购价。</p>
       {ops.error && <p role="alert" id="catalogue-import-error" className="supplier-key-error">{ops.error}</p>}
       <div className="supplier-key-actions"><Button type="button" variant="outline" onClick={cancel}>取消</Button><Button type="submit" disabled={!ops.can}>批量添加</Button></div>
     </form></Modal>}
@@ -98,7 +98,7 @@ export default function ProviderManagement(props) {
         {provider.status === '已启用' ? <SupplierMore label="供应商更多操作" disabled={!ops.can} onStop={() => modal('provider', provider)}/> : <Button variant="outline" size="sm" disabled={!ops.can} onClick={() => ops.run('provider', { operation: 'enableProvider', objectId: provider.id, values: {} })}><Power data-icon="inline-start"/>启用供应商</Button>}
       </SupplierHeading></div>
 
-          <CardHeader><CardTitle><TabsList variant="line" aria-label="供应商详情"><span className="supplier-catalogue-tab"><TabsTrigger value="catalogue">模型及渠道</TabsTrigger><TooltipProvider><Tooltip><TooltipTrigger asChild><Button type="button" variant="ghost" size="icon-sm" aria-label="渠道说明"><Info aria-hidden="true"/></Button></TooltipTrigger><TooltipContent>渠道是供应商提供模型调用的一条独立接入配置，包含 API 地址、上游模型 ID、API 密钥组和渠道售价。同一模型可配置多个渠道。</TooltipContent></Tooltip></TooltipProvider></span><TabsTrigger value="api-keys">API 密钥</TabsTrigger><TabsTrigger value="basic">基本信息</TabsTrigger></TabsList></CardTitle>{tab === 'basic' && <CardDescription>{descriptions[tab]}</CardDescription>}<CardAction>
+          <CardHeader><CardTitle><TabsList variant="line" aria-label="供应商详情"><span className="supplier-catalogue-tab"><TabsTrigger value="catalogue">模型及渠道</TabsTrigger><TooltipProvider><Tooltip><TooltipTrigger asChild><Button type="button" variant="ghost" size="icon-sm" aria-label="渠道说明"><Info aria-hidden="true"/></Button></TooltipTrigger><TooltipContent>渠道是访问供应商服务的一组接入配置，包含接口类型、API 地址和认证方式。一个渠道可关联多个模型，各自维护上游模型 ID 和采购价。</TooltipContent></Tooltip></TooltipProvider></span><TabsTrigger value="api-keys">API 密钥</TabsTrigger><TabsTrigger value="basic">基本信息</TabsTrigger></TabsList></CardTitle>{tab === 'basic' && <CardDescription>{descriptions[tab]}</CardDescription>}<CardAction>
             {tab === 'basic' ? <Button variant="outline" size="sm" disabled={!ops.can} onClick={() => go({ view: 'profile', tab: 'basic' })}><Pencil data-icon="inline-start"/>编辑资料</Button> : null}
           </CardAction></CardHeader>
           <CardContent><TabsContent value={tab}>

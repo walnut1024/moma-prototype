@@ -20,7 +20,7 @@ test('platform cost maintenance changes only cost overrides and retains supplier
   assert.equal(quote(next).discountFactor, current.discountFactor);
   assert.deepEqual(quote(next).scenarios.map(({ purchasePrice, ...item }) => item), current.scenarios.map(({ purchasePrice, ...item }) => item));
   assert.deepEqual(effective(quote(next)), [1234567, 1234567, 1234567]);
-  assert.equal(next.audits[0].action, '修改平台成本');
+  assert.equal(next.audits[0].action, '修改采购价');
   for (const key of ['models', 'modelSupplies', 'supplyPrices', 'modelSalePrices', 'endpoints', 'routes', 'serviceRoutes']) assert.deepEqual(next[key], state[key]);
   assert.deepEqual(state, before);
 });

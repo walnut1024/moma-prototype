@@ -286,7 +286,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
   if (existing?.upstreamModelId === upstreamModelId) return { ...connect(state, { operation: 'channelPrice', objectId, data: { modelId, channelId: existing.id, scenarios: data.scenarios } }), label: '保存模型渠道关联' };
   if (!Array.isArray(data.scenarios)) throw new Error('请填写有效的采购计费项');
   const pricing = normalizePrice(provider, { modelId, discountFactor: '1', scenarios: data.scenarios.map(row => ({ ...row, purchasePrice: undefined })) });
-  if (pricing.scenarios.some(row => row.listPrice == null)) throw new Error('请填写完整供应商售价，免费请填 0');
+  if (pricing.scenarios.some(row => row.listPrice == null)) throw new Error('请填写完整采购价，免费请填 0');
   const record = { ...(existing ? provider.catalogConnections?.find(row => row.modelId === modelId && row.endpointId === endpoint.id) : { onboardingCreated: true }), id: existing?.id || `association-${crypto.randomUUID()}`, modelId, endpointId: endpoint.id, name: supplierChannelName(provider, endpoint), origin: existing?.origin || 'undisclosed', upstreamModelId, pricing, updatedAt: new Date().toISOString() };
   if (!existing || existing.upstreamModelId !== upstreamModelId) { record.enabled = false; record.health = null; record.protocolTests = {}; }
   return finish('保存模型渠道关联', [update('providers', objectId, { catalogConnections: [...(provider.catalogConnections || []).filter(row => row.id !== record.id), record] })]);

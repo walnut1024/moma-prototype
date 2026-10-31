@@ -43,7 +43,7 @@ export default function SupplierChannelDetails({ state, provider, association, o
           <div><dt>上游模型 ID</dt><dd><code>{association.upstreamModelId}</code></dd></div>
           <div><dt>接入状态</dt><dd>{channelStatus(provider, association)}</dd></div>
           <div><dt>配置版本</dt><dd>{endpoint.configurationRevision || 0}</dd></div>
-          <div><dt>接口地址</dt><dd>{addresses.map((address, index) => <div key={index}><span>{address.protocol}</span><code>{String(redactDiagnostic(address.baseUrl))}</code></div>)}</dd></div>
+          <div><dt>请求地址</dt><dd>{addresses.map((address, index) => <div key={index}><span>{address.protocol}</span><code>{String(redactDiagnostic(address.baseUrl))}</code></div>)}</dd></div>
           <div><dt>凭证</dt><dd>{endpoint.authMode === 'none' ? '无需认证' : endpoint.authMode === 'group' ? `密钥组 ${endpoint.keyGroupId}` : '渠道当前凭证'}</dd></div>
           <div><dt>最近检查</dt><dd>{time(association.health?.testedAt || endpoint.connectionTest?.testedAt)}</dd></div>
           <div><dt>采购价</dt><dd>{association.pricing?.scenarios?.length ? `${association.pricing.scenarios.length} 个计费项` : '待配置'}</dd></div>

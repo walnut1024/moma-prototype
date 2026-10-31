@@ -67,7 +67,7 @@ export default function SupplierModelBatch({ state, ops, home, viewSwitch }) {
       <div className="mo-batch-tools"><Field label="加价比例（%）"><Input aria-label="批量加价比例" inputMode="decimal" value={markup} disabled={!ops.can} onChange={event => setMarkup(event.target.value)}/></Field><Button variant="outline" disabled={!ops.can} onClick={() => {
         try { const next = entries.map(entry => { const row = catalogue.find(row => row.catalogueModelId === entry.catalogueModelId); return { ...entry, prices: markedUpItems(row.costs, markup) }; }); setEntries(next); ops.dirty(true); ops.setError(''); }
         catch (error) { ops.setError(error.message); }
-      }}>按供应商价格批量填入</Button><p>逐计费项计算平台目录价，保留币种、单位和适用条件；可展开模型单独调整。</p></div>
+      }}>按采购价批量填入</Button><p>逐计费项计算平台售价，保留币种、单位和适用条件；可展开模型单独调整。</p></div>
       <div className="mo-batch-scope"><label className="mo-check"><Checkbox checked={applyScope} disabled={!ops.can} onCheckedChange={checked => { setApplyScope(checked === true); if (checked !== true) setEntries(current => current.map(entry => ({ ...entry, listingScope: null }))); ops.dirty(true); }}/>统一设置所选模型的订购范围</label>{applyScope ? <ScopeFields state={state} {...scope} disabled={!ops.can} onChange={(openScope, tenantIds) => { setScope({ openScope, tenantIds }); ops.dirty(true); }}/> : <p>沿用各项已保存的范围；未设置时保留已有模型范围，新模型默认为全部租户。确认页将逐项展示。</p>}</div>
       <div className="mo-batch-models">{entries.map((entry, index) => {
         const row = catalogue.find(row => row.catalogueModelId === entry.catalogueModelId), master = libraryRecord(state, entry.libraryId);
@@ -82,9 +82,9 @@ export default function SupplierModelBatch({ state, ops, home, viewSwitch }) {
       })}</div>
       <div className="mo-footer"><span>保存进度不会上架模型。</span><Button variant="outline" disabled={!ops.can} onClick={saveProgress}>保存进度</Button><Button disabled={!ops.can} onClick={inspect}>保存并检查配置</Button></div>
     </section> : <section className="mo-surface mo-pad mo-supplier-batch">
-      {stage === 'done' ? <Notice>已上架 {done} 个模型，另有 {check.blocked.length} 个待处理。未通过检查的项目保留在原配置进度中。</Notice> : <><h2>{stage === 'review' ? '确认上架销售' : '配置检查结果'}</h2><p>本次可继续 {check.ready.length} 个，待处理 {check.blocked.length} 个。{stage === 'review' ? '确认后将发布平台目录价并开放订购；其他供应商保持原配置。' : '保存合格项的关联、价格草稿及检查结果，销售和服务状态保持到最终确认。'}</p></>}
+      {stage === 'done' ? <Notice>已上架 {done} 个模型，另有 {check.blocked.length} 个待处理。未通过检查的项目保留在原配置进度中。</Notice> : <><h2>{stage === 'review' ? '确认上架销售' : '配置检查结果'}</h2><p>本次可继续 {check.ready.length} 个，待处理 {check.blocked.length} 个。{stage === 'review' ? '确认后将发布平台售价并开放订购；其他供应商保持原配置。' : '保存合格项的关联、价格草稿及检查结果，销售和服务状态保持到最终确认。'}</p></>}
       {stale && stage !== 'done' && <Notice error>数据已有修订，请返回配置重新核对；当前输入保留。</Notice>}
-      <GridTable headings={['目录模型', '关联平台模型', '平台目录价', '订购范围', '检查结果']} empty={false}>{entries.map(entry => {
+      <GridTable headings={['目录模型', '关联平台模型', '平台售价', '订购范围', '检查结果']} empty={false}>{entries.map(entry => {
         const blocked = check.blocked.find(item => item.catalogueModelId === entry.catalogueModelId), row = catalogue.find(row => row.catalogueModelId === entry.catalogueModelId), master = libraryRecord(state, entry.libraryId), listingScope = applyScope ? scope : row?.draft?.listingScope || master;
         return <Row key={entry.catalogueModelId}><Cell><code>{entry.catalogueModelId}</code></Cell><Cell>{master?.name || '未关联'}</Cell><Cell>{blocked ? '待核对' : <Price model={master} price={{ items: entry.prices.map(item => ({ ...item, amount: parseSaleAmount(item.amount, false) })) }}/>}</Cell><Cell>{listingScope?.openScope === 'selected' ? `${listingScope.tenantIds.length} 个指定租户` : '全部租户'}</Cell><Cell>{blocked ? <span className="mo-pending">{blocked.reason}</span> : stage === 'done' ? '已上架销售' : stage === 'review' ? '检查通过，待确认上架' : '配置检查通过'}</Cell></Row>;
       })}</GridTable>

@@ -3,7 +3,7 @@ import { MODEL_CATEGORIES, modelTransaction } from './model-management.js';
 import { INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, TASK_OPTIONS } from './model-profile.js';
 
 export const MODEL_IMPORT_LIMIT = 500;
-export const MODEL_IMPORT_HEADERS = ['模型ID', '模型展示名称', '模型类型', '支持任务', '输入模态', '输出模态', '结果类型', '上下文大小（Token）', '最大输出（Token）', '简短介绍'];
+export const MODEL_IMPORT_HEADERS = ['模型编码', '模型名称', '模型类型', '支持任务', '输入模态', '输出模态', '结果类型', '上下文大小（Token）', '最大输出（Token）', '简短介绍'];
 export const MODEL_IMPORT_TEMPLATE = [MODEL_IMPORT_HEADERS,
   ['catalog/chat-001', '智能对话', '语言模型', '对话', '文本', '文本', '', '32768', '8192', '面向知识问答和文本生成。'],
   ['catalog/image-001', '图像创作', MODEL_CATEGORIES.visual, '文生图', '文本、图片', '图片', '', '', '', '根据文本和参考图生成图像。'],
@@ -38,7 +38,7 @@ export function validateModelRows(state, rows) {
         data.profile[key] = values;
       }
       modelTransaction(state, { operation: 'create', data });
-      if (seen.has(modelId.toLowerCase())) throw new Error('批次内 Model ID 重复');
+      if (seen.has(modelId.toLowerCase())) throw new Error('批次内模型编码重复');
       seen.add(modelId.toLowerCase());
       return { ...row, data, status: 'ready', message: '可导入' };
     } catch (error) { return { ...row, data, status: 'error', message: error.message }; }

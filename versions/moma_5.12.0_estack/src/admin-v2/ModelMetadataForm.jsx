@@ -106,6 +106,6 @@ export default function ModelMetadataForm({ model, initial, can = true, run, dir
       <Field label="参数范围与组合限制">{editing ? <Textarea aria-label="参数范围与组合限制" rows={2} disabled={!editable} value={form.profile.parameterRules || ''} onChange={event => profileChange('parameterRules', event.target.value)}/> : fact(form.profile.parameterRules)}</Field>
     </details>
     {error && <p className="mm-warning-text" role="alert">{error}</p>}
-    {editing && <footer className="mm-form-footer"><span>模型编码创建后固定；供应商 Model ID 从供应商目录引用。</span><div>{(model || onCancel) && <Button type="button" variant="outline" onClick={onCancel || cancel}>取消</Button>}{onSaveProgress && <Button type="button" variant="outline" disabled={!editable || uploading} onClick={onSaveProgress}>保存进度</Button>}<Button type="submit" className="mm-primary" disabled={!editable || uploading}>{submitLabel || (model ? '保存模型资料' : '下一步：接入供应商')}</Button></div></footer>}
+    {editing && <footer className="mm-form-footer"><span>模型编码创建后固定；上游模型 ID 在渠道接入中配置。</span><div>{(model || onCancel) && <Button type="button" variant="outline" onClick={onCancel || cancel}>取消</Button>}{onSaveProgress && <Button type="button" variant="outline" disabled={!editable || uploading} onClick={onSaveProgress}>保存进度</Button>}<Button type="submit" className="mm-primary" disabled={!editable || uploading}>{submitLabel || (model ? '保存模型资料' : '下一步：接入供应商')}</Button></div></footer>}
   </form>;
 }

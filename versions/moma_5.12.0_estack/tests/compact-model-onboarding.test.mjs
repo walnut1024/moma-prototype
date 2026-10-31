@@ -25,7 +25,7 @@ test('all eight required metadata values reject blanks and forged single or mult
 });
 test('new IDs use English letters, numbers and single internal hyphens, and duplicate IDs reject',()=>{
  const state=createAdminSeed(), value=input(state);
- for(const modelId of ['中文','a.b','a_b','a/b','a b','a--b','-model','model-','123'])assert.throws(()=>run(state,'createServiceModel',{...value,modelId}),/模型 ID/);
+ for(const modelId of ['中文','a.b','a_b','a/b','a b','a--b','-model','model-','123'])assert.throws(()=>run(state,'createServiceModel',{...value,modelId}),/模型编码/);
  const next=run(state,'createServiceModel',{...value,modelId:'Custom-Model-3'});
  assert.throws(()=>run(next,'createServiceModel',{...value,modelId:'custom-model-3'}),/已存在/);
 });

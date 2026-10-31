@@ -30,6 +30,7 @@
 .admin-v2 .gs-questions details+details{border-top:1px solid #e8edf5}
 .admin-v2 .gs-questions summary{cursor:pointer;padding:12px 0;min-height:32px}
 .admin-v2 .gs-questions details p{padding:0 0 12px;color:#586982}
+.admin-v2 .gs-concepts>p{margin-bottom:12px}.admin-v2 .gs-concepts details+details{border-top:1px solid #e8edf5}.admin-v2 .gs-concepts summary{cursor:pointer;padding:12px 0;min-height:32px;font-weight:500}.admin-v2 .gs-concepts .gs-term-table th[scope=row]{width:24%}.admin-v2 .gs-concepts .gs-term-table td{width:auto}
 .admin-v2 .getting-started a:hover{text-decoration:underline}
 .admin-v2 .getting-started :is(a,summary):focus-visible{outline:2px solid #315fe8;outline-offset:2px}
 @media(max-width:1100px){.admin-v2 .gs-workflows{grid-template-columns:minmax(0,1fr)}}

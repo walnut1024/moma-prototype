@@ -218,7 +218,7 @@ test('cross-supplier keys and resources, incomplete URLs and invalid association
  assert.throws(()=>run(s,'supplierChannelSave',{name:'错误',protocol:'OpenAI',baseUrl:'https://x.example.invalid/v1',authMode:'inherit'}),/完整接口/);
  assert.throws(()=>run(s,'supplierAssociationSave',{modelId:'DeepSeek-V4-Flash-0731',endpointId:endpoint(s,'CH-101').id,upstreamModelId:'deepseek-flash',scenarios:price(1)}),/当前供应商/);
  assert.throws(()=>run(s,'supplierAssociationSave',{modelId:'Kimi/miKimi-K3',endpointId:ep.id,upstreamModelId:'bad id',scenarios:price(1)}),/空白/);
- assert.throws(()=>run(s,'supplierAssociationSave',{modelId:'Kimi/miKimi-K3',endpointId:ep.id,upstreamModelId:'ok',scenarios:[{...price(1)[0],listPrice:''}]}),/完整供应商售价/);
+ assert.throws(()=>run(s,'supplierAssociationSave',{modelId:'Kimi/miKimi-K3',endpointId:ep.id,upstreamModelId:'ok',scenarios:[{...price(1)[0],listPrice:''}]}),/完整采购价/);
  assert.deepEqual(s,before);
 });
 

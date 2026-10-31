@@ -24,7 +24,7 @@ import { channelSelectionGroups, channelSelectionServiceImpact } from './channel
 import { catalogueMappingRows, channelRowsPage, channelSelectionId, channelStatus, filterChannelRows, selectChannelRows } from './channel-selection';
 
 const pending = <span className="supplier-key-pending">待配置</span>;
-const channelActions = [['price', '配置采购价', BadgeDollarSign], ['models', '添加关联模型', Plus], ['discover', '检查模型变更', FileText], ['address', 'API 地址', Link], ['credentials', 'API 密钥', KeyRound], ['info', '渠道信息', Pencil], ['copyModel', '复制上游模型 ID', Copy], ['copyAddress', '复制 API 地址', Copy], ['linkModel', '关联模型资料', Link], ['unlink', '删除模型关联', Trash2]];
+const channelActions = [['price', '配置采购价', BadgeDollarSign], ['models', '添加关联模型', Plus], ['discover', '检查模型变更', FileText], ['address', 'API 地址', Link], ['credentials', 'API 密钥', KeyRound], ['info', '渠道信息', Pencil], ['copyModel', '复制上游模型 ID', Copy], ['copyAddress', '复制请求地址', Copy], ['linkModel', '关联模型资料', Link], ['unlink', '删除模型关联', Trash2]];
 const actionLabels = { test: '测试', enable: '启用', disable: '停用' };
 function ChannelAddress({ value }) {
   const clipped = value.length > 42, origin = value.match(/^https?:\/\/[^/]+/)?.[0];
@@ -57,7 +57,7 @@ export default function ProviderCatalogue({ state, provider, ops, entries }) {
   const copy = async (value, label) => { try { await navigator.clipboard.writeText(value); toast.success(`${label}已复制`); } catch { ops.setError('复制失败，请查看完整内容后重试'); } };
   const act = (row, kind, target) => {
     if (kind === 'copyModel') return copy(row.association.upstreamModelId, '上游模型 ID');
-    if (kind === 'copyAddress') return copy(channelAddresses(row.provider, row.association).map(item => item.baseUrl).join('\n'), 'API 地址');
+    if (kind === 'copyAddress') return copy(channelAddresses(row.provider, row.association).map(item => item.baseUrl).join('\n'), '请求地址');
     open(target, kind, row.modelId, row.association?.id, row.provider);
   };
   const beginBatch = action => { setAllowHighCost(false); setTestGroupIndex(0); ops.setError(''); setBatch({ action, selections: structuredClone(selection) }); };
@@ -76,7 +76,7 @@ export default function ProviderCatalogue({ state, provider, ops, entries }) {
     {credentialIssues.map(({channel, modelIds}) => <div key={channel.id} className="supplier-resource-notice"><Notice error>已关联渠道「{supplierChannelCode(channel)} · {supplierChannelName(provider, channel)}」缺少可用 API 凭证，影响 {modelIds.length} 个模型。<Button variant="link" onClick={() => ops.go({ tab: 'api-keys', credentialChannel: channel.id })}>前往配置密钥</Button></Notice></div>)}
     {selection.length > 0 && <div className="supplier-selection-toolbar" role="group" aria-label="批量渠道操作"><span>已选 {selection.length} 项</span><Button variant="outline" size="sm" disabled={!ops.can} onClick={() => beginBatch('test')}>测试所选</Button><Button variant="outline" size="sm" disabled={!ops.can} onClick={() => beginBatch('enable')}>启用所选</Button><Button variant="outline" size="sm" disabled={!ops.can} onClick={() => beginBatch('disable')}>停用所选</Button>{filteredRows.length > pageRows.length && <Button variant="link" size="sm" disabled={!ops.can} onClick={() => setSelection(selectChannelRows(selection, filteredRows, true))}>选择全部筛选结果（{filteredRows.length}）</Button>}<Button variant="link" size="sm" onClick={() => setSelection([])}>清空选择</Button></div>}
     {!batch && ops.error && <Notice error>{ops.error}</Notice>}
-    <div className="mo-table-scroll"><Table className="supplier-model-resource-table supplier-selectable-table" style={{ minWidth: 1250 }}><colgroup>{[40, 120, 115, 175, 125, 110, 100, 90, 100, 132].map((width, index) => <col key={index} style={{ width }}/>)}</colgroup><TableHeader><Row><TableHead scope="col"><Checkbox className="supplier-selection-checkbox" aria-label="选择当前页" checked={pageChecked} disabled={!ops.can || !pageRows.length} onCheckedChange={checked => setSelection(selectChannelRows(selection, pageRows, checked === true))}/></TableHead>{[entries ? '供应商' : '模型名称', '渠道名称/ID', 'API 地址', '上游模型 ID', '接入状态', '计费项', '采购价', '计价单位', '操作'].map(label => <TableHead key={label} scope="col">{label}</TableHead>)}</Row></TableHeader><TableBody>
+    <div className="mo-table-scroll"><Table className="supplier-model-resource-table supplier-selectable-table" style={{ minWidth: 1250 }}><colgroup>{[40, 120, 115, 175, 125, 110, 100, 90, 100, 132].map((width, index) => <col key={index} style={{ width }}/>)}</colgroup><TableHeader><Row><TableHead scope="col"><Checkbox className="supplier-selection-checkbox" aria-label="选择当前页" checked={pageChecked} disabled={!ops.can || !pageRows.length} onCheckedChange={checked => setSelection(selectChannelRows(selection, pageRows, checked === true))}/></TableHead>{[entries ? '供应商' : '模型名称', '渠道名称/ID', '请求地址', '上游模型 ID', '接入状态', '计费项', '采购价', '计价单位', '操作'].map(label => <TableHead key={label} scope="col">{label}</TableHead>)}</Row></TableHeader><TableBody>
       {current.rows.map(row => {
         const { provider: owner, modelId, model, association } = row, endpoint = association?.endpoint;
         const prices = association?.pricing.scenarios.length ? association.pricing.scenarios : [null];
