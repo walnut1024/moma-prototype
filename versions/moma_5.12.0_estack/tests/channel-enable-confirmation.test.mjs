@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAdminState, commitAdminState } from '../src/admin-v2/store.js';
 import { supplierChannelAssociations } from '../src/admin-v2/supplier-resources.js';
-import { channelEnableConfirmationIssue, channelFirstEnableIssue, prepareChannelEnableConfirmation, prepareChannelFirstEnableConfirmation } from '../src/admin-v2/channel-enable-confirmation.js';
+import { channelEnableConfirmationIssue, channelDirectEnableIssue, prepareChannelEnableConfirmation, prepareChannelDirectEnableConfirmation } from '../src/admin-v2/channel-enable-confirmation.js';
 
 function fixture(count=2) {
   const providerId = 'provider-moma', name = '启用确认测试';
@@ -18,33 +18,50 @@ function fixture(count=2) {
 test('one newly created model can explicitly enable after testing without a selection step and testing itself never activates it',()=>{
  const env=fixture(1),before=structuredClone(env.state),args=[env.providerId,env.endpointId,env.ids];
  assert.equal(env.state.endpoints.find(row=>row.id===env.endpointId).onboardingCreated,true);
- assert.equal(channelFirstEnableIssue(env.state,...args),'');
- assert.throws(()=>prepareChannelFirstEnableConfirmation(env.untested,...args),/尚未全部通过/);
+ assert.equal(channelDirectEnableIssue(env.state,...args),'');
+ assert.throws(()=>prepareChannelDirectEnableConfirmation(env.untested,...args),/尚未全部通过/);
  assert.ok(env.rows(env.state).every(row=>row.enabled===false));
- const confirmation=prepareChannelFirstEnableConfirmation(env.state,...args);
- assert.equal(confirmation.firstActivation,true);assert.deepEqual(confirmation.selections.map(row=>row.associationId),env.ids);
+ const confirmation=prepareChannelDirectEnableConfirmation(env.state,...args);
+ assert.equal(confirmation.directActivation,true);assert.deepEqual(confirmation.selections.map(row=>row.associationId),env.ids);
  const enabled=env.enable(env.state,confirmation);
  assert.equal(env.rows(enabled)[0].enabled,true);assert.ok(env.rows(enabled)[0].activationChangedAt);assert.ok(enabled.endpoints.find(row=>row.id===env.endpointId).activationChangedAt);
- assert.ok(channelFirstEnableIssue(enabled,...args));assert.deepEqual(env.state,before);
+ assert.ok(channelDirectEnableIssue(enabled,...args));assert.deepEqual(env.state,before);
+});
+
+test('one newly appended model can explicitly enable on a running channel without changing its existing mappings',()=>{
+ const env=fixture(1),running=env.enable(env.state,env.prepare()),old=structuredClone(env.provider(running).catalogConnections.find(row=>row.id===env.ids[0]));
+ const added=env.run(running,'supplierModelsAdd',{endpointId:env.endpointId,models:[{libraryId:'model-6',upstreamModelId:'vendor/new-embed',scenarios:[]}]});
+ const id=env.rows(added).find(row=>row.id!==env.ids[0]).id,args=[env.providerId,env.endpointId,[id]];
+ assert.equal(env.rows(added).find(row=>row.id===id).onboardingCreated,true);
+ assert.equal(channelDirectEnableIssue(added,...args),'');
+ assert.throws(()=>prepareChannelDirectEnableConfirmation(added,...args),/尚未全部通过/);
+ const checked=env.run(added,'supplierModelsTest',{endpointId:env.endpointId,associationIds:[id]});
+ assert.equal(env.rows(checked).find(row=>row.id===id).enabled,false);
+ const snapshot=prepareChannelDirectEnableConfirmation(checked,...args),enabled=env.enable(checked,snapshot);
+ assert.equal(env.rows(enabled).find(row=>row.id===id).enabled,true);
+ assert.deepEqual(env.provider(enabled).catalogConnections.find(row=>row.id===old.id),old);
+ for(const change of [s=>{delete env.provider(s).catalogConnections.find(row=>row.id===id).onboardingCreated;},s=>{env.provider(s).catalogConnections.find(row=>row.id===id).activationChangedAt='2026-10-31';}]){
+  const historical=structuredClone(checked);change(historical);assert.ok(channelDirectEnableIssue(historical,...args));assert.throws(()=>prepareChannelDirectEnableConfirmation(historical,...args));
+ }
 });
 
 test('history, an old origin and a shared channel retain the full selection and impact confirmation path',()=>{
  const env=fixture(1),args=[env.providerId,env.endpointId,env.ids];
  for(const mutate of [s=>{delete s.endpoints.find(row=>row.id===env.endpointId).onboardingCreated;},s=>{s.endpoints.find(row=>row.id===env.endpointId).activationChangedAt='2026-10-31';},s=>{env.provider(s).catalogConnections.find(row=>row.id===env.ids[0]).activationChangedAt='2026-10-31';},s=>{s.endpoints.find(row=>row.id===env.endpointId).status='停用';}]){
-  const state=structuredClone(env.state);mutate(state);assert.ok(channelFirstEnableIssue(state,...args));assert.throws(()=>prepareChannelFirstEnableConfirmation(state,...args));assert.doesNotThrow(()=>env.prepare(state));
+  const state=structuredClone(env.state);mutate(state);assert.ok(channelDirectEnableIssue(state,...args));assert.throws(()=>prepareChannelDirectEnableConfirmation(state,...args));assert.doesNotThrow(()=>env.prepare(state));
  }
- const shared=fixture();assert.ok(channelFirstEnableIssue(shared.state,shared.providerId,shared.endpointId,[shared.ids[0]]));
+ const shared=fixture();assert.ok(channelDirectEnableIssue(shared.state,shared.providerId,shared.endpointId,[shared.ids[0]]));
  const enabled=env.enable(env.state,env.prepare()),stopped=commitAdminState(enabled,{type:'modelOperations',operation:'supplierSelection',data:{action:'disable',confirmed:true,selections:env.prepare(enabled).selections}});
- assert.ok(env.rows(stopped)[0].activationChangedAt);assert.ok(channelFirstEnableIssue(stopped,...args));assert.doesNotThrow(()=>env.prepare(stopped));
+ assert.ok(env.rows(stopped)[0].activationChangedAt);assert.ok(channelDirectEnableIssue(stopped,...args));assert.doesNotThrow(()=>env.prepare(stopped));
 });
 
 test('a newly published service reference after the first-enable snapshot requires a fresh impact confirmation',()=>{
- const env=fixture(1),confirmation=prepareChannelFirstEnableConfirmation(env.state,env.providerId,env.endpointId,env.ids),changed=structuredClone(env.state),association=env.rows(changed)[0];
+ const env=fixture(1),confirmation=prepareChannelDirectEnableConfirmation(env.state,env.providerId,env.endpointId,env.ids),changed=structuredClone(env.state),association=env.rows(changed)[0];
  changed.models.find(row=>row.id==='model-2').serviceMode='standard';
  changed.modelSupplies.push({id:'new-live-supply',modelId:'model-2',endpointId:env.endpointId,catalogueModelId:association.modelId,upstreamModelId:association.upstreamModelId,status:'已启用',validationStatus:'通过',capabilities:{}});
  changed.serviceRoutes.push({serviceId:'standard:model-2',activeVersion:1,versions:[{version:1,config:{strategy:'fixed',channels:[{supplyId:'new-live-supply',enabled:true}]}}]});
- assert.match(channelEnableConfirmationIssue(changed,confirmation),/服务引用/);assert.throws(()=>prepareChannelFirstEnableConfirmation(changed,env.providerId,env.endpointId,env.ids),/服务引用/);
- const reviewed=env.prepare(changed);assert.equal(reviewed.serviceImpact.length,1);assert.equal(reviewed.firstActivation,undefined);
+ assert.match(channelEnableConfirmationIssue(changed,confirmation),/服务引用/);assert.throws(()=>prepareChannelDirectEnableConfirmation(changed,env.providerId,env.endpointId,env.ids),/服务引用/);
+ const reviewed=env.prepare(changed);assert.equal(reviewed.serviceImpact.length,1);assert.equal(reviewed.directActivation,undefined);
 });
 
 test('confirmation freezes the complete selected ID order and fingerprints for the existing atomic transaction', () => {

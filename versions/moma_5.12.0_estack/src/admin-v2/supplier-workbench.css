@@ -406,3 +406,4 @@
 @media(max-width:700px){.admin-ui-portal .supplier-reference-options{grid-template-columns:1fr}.admin-ui-portal .supplier-configuration-body details>.supplier-channel-fields,.admin-ui-portal .supplier-resource-form>.supplier-channel-fields{grid-template-columns:1fr}}
 
 .admin-ui-portal .supplier-onboarding-single th:first-child,.admin-ui-portal .supplier-onboarding-single td:first-child{display:none}.admin-ui-portal .supplier-inline-key{display:grid;gap:12px}.admin-ui-portal .supplier-inline-key .supplier-price-hint{margin:4px 0 0}
+.admin-ui-portal .supplier-configuration-body>.mo-table-scroll:has(.supplier-onboarding-models){flex-shrink:0}

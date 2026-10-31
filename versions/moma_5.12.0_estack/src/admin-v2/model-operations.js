@@ -101,11 +101,15 @@ export function operationsTransaction(state, action) {
     assertOnboardingMetadata(data);
     const input = data.values;
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('请填写渠道连接及模型映射');
+    const endpoint = input.endpointId && working.endpoints.find(row => row.id === input.endpointId && row.providerId === data.providerId && !row.deletedAt);
+    if (input.endpointId && !endpoint) throw new Error('追加模型的渠道已变化或不属于当前供应商');
+    if (endpoint && (data.newProvider || data.providerPresetId || data.newApiKey || Object.keys(input).some(key => !['endpointId', 'models'].includes(key)))) throw new Error('追加模型只能引用已有渠道，不能同时修改连接或密钥');
     const draft = data.draftId && working.modelOnboardings.find(row => row.id === data.draftId && row.kind === 'supplier-channel');
-    if (data.draftId && (!draft || draft.status !== '配置中' || draft.draftRevision !== data.expectedDraftRevision || draft.endpointId)) throw new Error('接入草稿已变化或不属于新渠道，请重新载入');
+    if (data.draftId && (!draft || draft.status !== '配置中' || draft.draftRevision !== data.expectedDraftRevision || (draft.endpointId || '') !== (endpoint?.id || ''))) throw new Error('接入草稿已变化或渠道不匹配，请重新载入');
     let provider = resolveOnboardingProvider(working, data);
     if (provider.isDraft) {
-      const created = providerOp('create', undefined, { name: provider.name, code: provider.code, sourceType: provider.sourceType, catalogModelIds: [] });
+      const code = data.newProvider ? 'custom-' + crypto.randomUUID().replaceAll('-', '').slice(0, 24) : provider.code;
+      const created = providerOp('create', undefined, { name: provider.name, code, sourceType: provider.sourceType, catalogModelIds: [] });
       provider = working.providers.find(row => row.id === created.objectId);
     }
     if (data.providerPresetId && provider.onboardingPresetId !== data.providerPresetId) update('providers', provider.id, { onboardingPresetId: data.providerPresetId });
@@ -124,15 +128,15 @@ export function operationsTransaction(state, action) {
       let record = resolved.record;
       if (resolved.isDraft) {
         const { id: presetId, ...metadata } = record;
-        record = { ...metadata, id: 'template-onboarding-' + crypto.randomUUID(), onboardingPresetId: presetId, revision: 1, updatedAt: new Date().toISOString() };
+        record = { ...metadata, id: 'template-onboarding-' + crypto.randomUUID(), ...(row.modelPresetId ? { onboardingPresetId: presetId } : {}), revision: 1, updatedAt: new Date().toISOString() };
         add('modelTemplates', record);
       }
-      return { libraryId: record.id, upstreamModelId: row.upstreamModelId, scenarios: row.scenarios || [] };
+      return { libraryId: record.id, upstreamModelId: row.upstreamModelId ?? (row.newModel ? record.modelId : ''), scenarios: row.scenarios || [] };
     });
-    const created = providerOp('supplierChannelCreate', provider.id, values), endpoint = created.changes.find(change => change.type === 'add' && change.collection === 'endpoints')?.record;
-    if (!endpoint) throw new Error('渠道创建结果缺失');
-    objectId = endpoint.id; label = '保存快捷模型接入';
-    if (draft) update('modelOnboardings', draft.id, { status: '已完成', draftRevision: draft.draftRevision + 1, createdEndpointId: endpoint.id });
+    const created = providerOp(endpoint ? 'supplierModelsAdd' : 'supplierChannelCreate', provider.id, values), channel = endpoint || created.changes.find(change => change.type === 'add' && change.collection === 'endpoints')?.record;
+    if (!channel) throw new Error('渠道创建结果缺失');
+    objectId = channel.id; label = endpoint ? '追加模型接入' : '保存快捷模型接入';
+    if (draft) update('modelOnboardings', draft.id, { status: '已完成', draftRevision: draft.draftRevision + 1, createdEndpointId: channel.id });
   } else if (operation==='prepareServiceReviewCases') {
     if (data.confirmed!==true) throw new Error('请确认配置这五个评审场景');
     const prepared=prepareServiceReviewCases(working);

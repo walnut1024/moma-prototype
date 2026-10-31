@@ -2,6 +2,7 @@ import { REAL_PROVIDERS, BAICHUAN_PROVIDER } from './real-provider-catalogue.js'
 import { REAL_MODELS } from './real-model-catalogue.js';
 import { MOMA_PROVIDER } from './moma-provider.js';
 import { libraryRecord, modelLibrary } from './model-library.js';
+import { MODEL_TYPES } from './model-management.js';
 
 // Presets are reference metadata, never registered supply, account entitlements or validation.
 export const ONBOARDING_PROVIDER_PRESETS = [MOMA_PROVIDER, ...REAL_PROVIDERS, BAICHUAN_PROVIDER].map(row => Object.freeze({ id: row.code, code: row.code, name: row.name, sourceType: row.sourceType, interfaceType: 'openai', defaultBaseUrl: row.baseUrl, catalogModelIds: Object.freeze([...(row.catalogModelIds || [])]), catalogueSource: row.catalogueSource || '', catalogueCheckedAt: row.catalogueCheckedAt || null }));
@@ -10,8 +11,21 @@ export function onboardingProviderPreset(id) {
   if (!preset) throw new Error('供应商预设不存在，请重新选择');
   return { ...preset };
 }
-export function resolveOnboardingProvider(state, { providerId, providerPresetId } = {}) {
-  if (Boolean(providerId) === Boolean(providerPresetId)) throw new Error('请选择已有供应商或供应商预设，不能同时选择');
+const newFields = (value, fields, label) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !fields.includes(key))) throw new Error(`${label}包含不支持的字段`);
+};
+const identityText = (value, label, max) => {
+  if (typeof value !== 'string' || !value.trim() || value.trim().length > max || /\p{Cc}/u.test(value)) throw new Error(`请填写有效的${label}，最多${max}字`);
+  return value.trim();
+};
+export function resolveOnboardingProvider(state, { providerId, providerPresetId, newProvider } = {}) {
+  if ([providerId, providerPresetId, newProvider].filter(Boolean).length !== 1) throw new Error('请选择已有供应商、供应商预设或新供应商，不能同时选择');
+  if (newProvider) {
+    newFields(newProvider, ['name'], '新供应商');
+    const name = identityText(newProvider.name, '供应商名称', 100);
+    if (state.providers.some(row => !row.deletedAt && row.name?.trim().toLowerCase() === name.toLowerCase())) throw new Error('供应商名称已存在，请明确选择已有供应商');
+    return { id: 'new-provider', isDraft: true, name, sourceType: 'thirdParty', status: '未登记', apiKeys: [] };
+  }
   if (providerId) { const provider = state.providers.find(row => row.id === providerId && !row.deletedAt); if (!provider) throw new Error('供应商已不存在，请重新选择'); return structuredClone(provider); }
   const preset = onboardingProviderPreset(providerPresetId);
   const matches = state.providers.filter(row => !row.deletedAt && (row.onboardingPresetId === preset.id || row.code?.toLowerCase() === preset.code));
@@ -25,8 +39,16 @@ export function onboardingModelPreset(id) {
   const { modelId, name, maker, type, description, usageUnit, profile, capabilities } = model;
   return structuredClone({ id, modelId, name, maker, type, description, ...(usageUnit ? { usageUnit } : {}), profile, capabilities, sourceCheckedAt: model.sourceCheckedAt || profile?.sourceUpdated || null });
 }
-export function resolveOnboardingModel(state, { libraryId, modelPresetId } = {}) {
-  if (Boolean(libraryId) === Boolean(modelPresetId)) throw new Error('请选择模型资料或模型参考预设，不能同时选择');
+export function resolveOnboardingModel(state, { libraryId, modelPresetId, newModel } = {}) {
+  if ([libraryId, modelPresetId, newModel].filter(Boolean).length !== 1) throw new Error('请选择模型资料、模型参考预设或新模型，不能同时选择');
+  if (newModel) {
+    newFields(newModel, ['modelId', 'name', 'type'], '新模型');
+    const modelId = identityText(newModel.modelId, '模型编码', 80), name = identityText(newModel.name || modelId, '模型名称', 100);
+    if (!/^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('模型编码须由小写字母、数字及 . _ : / - 组成，最多80字');
+    if (!Object.hasOwn(MODEL_TYPES, newModel.type)) throw new Error('请选择模型类型');
+    if (modelLibrary(state).some(row => row.modelId?.toLowerCase() === modelId.toLowerCase())) throw new Error('相同模型编码的资料已存在，请明确选择已有资料');
+    return { isDraft: true, record: { id: 'new-model:' + modelId, modelId, name, type: newModel.type, maker: '', description: '', metadataStatus: '待完善', profile: { tasks: [], inputModalities: [], outputModalities: [], resultTypes: [] }, capabilities: { context: null, output: null, streaming: null, tools: null } } };
+  }
   if (libraryId) { const record = libraryRecord(state, libraryId); if (!record) throw new Error('模型资料已不存在，请重新选择'); return { record: structuredClone(record), isDraft: false }; }
   const preset = onboardingModelPreset(modelPresetId), matches = modelLibrary(state).filter(row => row.onboardingPresetId === modelPresetId || row.modelId?.toLowerCase() === preset.modelId.toLowerCase());
   if (matches.length > 1) throw new Error('模型预设对应多个同编码资料，请明确选择已有主档');

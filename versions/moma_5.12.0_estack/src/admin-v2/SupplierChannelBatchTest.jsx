@@ -1,6 +1,6 @@
 import { resolveChannelAssociationModel } from './channel-association-model';
 import { channelServiceParameters } from './channel-service-context';
-import { channelEnableConfirmationIssue, channelFirstEnableIssue, prepareChannelEnableConfirmation, prepareChannelFirstEnableConfirmation } from './channel-enable-confirmation';
+import { channelEnableConfirmationIssue, channelDirectEnableIssue, prepareChannelEnableConfirmation, prepareChannelDirectEnableConfirmation } from './channel-enable-confirmation';
 import { basicChannelUsageButton, channelTestUsageAuthorized } from './channel-test-authorization';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../components/ui/button';
@@ -37,7 +37,7 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
   let plannedModels = [], planError = '';
   try { plannedModels = channelTestModels(records, { check, expensiveIds, audioProbes, plannedIds }); } catch (issue) { planError = issue.message; }
   const basicUsageButton=basicChannelUsageButton(plannedModels,check),mediaRecords=records.filter(row=>['image','video','audio'].includes(row.type));
-  const firstEnable=!channelFirstEnableIssue(state,provider.id,endpointId,associationIds),singleEnabled=rows.length===1 && rows[0].enabled && ['运行中','需关注'].includes(endpoint?.status),showSelection=!firstEnable && !singleEnabled;
+  const firstEnable=!channelDirectEnableIssue(state,provider.id,endpointId,associationIds),singleEnabled=rows.length===1 && rows[0].enabled && ['运行中','需关注'].includes(endpoint?.status),showSelection=!firstEnable && !singleEnabled;
   const current=useRef(null);current.current={state,provider,endpoint,signature,plan:JSON.stringify([check,plannedModels]),can:ops.can};
   const recordJob = record => opsRef.current.run('channelTestEvidenceJob', { providerId: provider.id, endpointId, ...record });
   const receive = (result, trackedJob) => {
@@ -116,7 +116,7 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
     setError('');
     if(!ops.can || busy || running || unresolved || singleEnabled)return;
     if(firstEnable){
-      try{const snapshot=prepareChannelFirstEnableConfirmation(current.current.state,provider.id,endpointId,associationIds),issue=channelEnableConfirmationIssue(current.current.state,snapshot);if(issue)throw new Error(issue);opsRef.current.run('supplierSelection',{action:'enable',selections:snapshot.selections,confirmed:true});}
+      try{const snapshot=prepareChannelDirectEnableConfirmation(current.current.state,provider.id,endpointId,associationIds),issue=channelEnableConfirmationIssue(current.current.state,snapshot);if(issue)throw new Error(issue);opsRef.current.run('supplierSelection',{action:'enable',selections:snapshot.selections,confirmed:true});}
       catch(issue){setError(issue.message);}return;
     }
     if (!confirmation) {

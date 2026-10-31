@@ -1,3 +1,4 @@
+import { credentialRotationChannels } from './credential-rotation-scope.js';
 import { modelLibrary } from './model-library.js';
 import { supplierModelFields } from './supply-models.js';
 import { canonicalMomaScenarios } from './moma-billing-items.js';
@@ -294,7 +295,8 @@ export function providerTransaction(state, action) {
     if (!row || !data.expectedFingerprint || row.apiKey.fingerprint !== data.expectedFingerprint) throw new Error('API 密钥已变化或不存在，请重新打开后操作');
     const replacement = operation === 'editApiKey' ? checkedConnectionKeys([data.apiKey])[0] : null;
     const changed = !replacement || replacement.fingerprint !== row.apiKey.fingerprint;
-    if ((operation === 'deleteApiKey' || changed && row.endpoints.length) && data.confirmed !== true) throw new Error('请确认密钥变更及关联模型需要重新验证');
+    const affectedEndpoints = replacement ? credentialRotationChannels(state, provider, row.apiKey.id) : row.endpoints;
+    if ((operation === 'deleteApiKey' || changed && affectedEndpoints.length) && data.confirmed !== true) throw new Error('请确认密钥变更及关联模型需要重新验证');
     if (replacement && providerApiKeyRows(state, provider).some(item => item.apiKey.fingerprint !== row.apiKey.fingerprint && item.apiKey.fingerprint === replacement.fingerprint)) throw new Error('此供应商已配置相同的 API 密钥');
     const replace = keys => (keys || []).filter(key => replacement || key.fingerprint !== row.apiKey.fingerprint).map(key => key.fingerprint === row.apiKey.fingerprint ? { ...key, name: providerApiKeyName(row.apiKey), maskedKey: replacement.maskedKey, fingerprint: replacement.fingerprint } : key);
     if (provider.apiKeys?.some(key => key.fingerprint === row.apiKey.fingerprint)) changes.push(update('providers', provider.id, { apiKeys: replace(provider.apiKeys) }));
@@ -306,11 +308,11 @@ export function providerTransaction(state, action) {
       const remaining = replace(provider.apiKeys);
       changes.push(update('providers', provider.id, { apiKeyGroups, ...(removedIds.has(provider.defaultApiKeyId) ? { defaultApiKeyId, ...(fallback && !remaining.some(key => key.id === fallback.id) ? { apiKeys: [...remaining, fallback] } : {}) } : {}) }));
     }
-    for (const endpoint of row.endpoints) {
+    for (const endpoint of affectedEndpoints) {
       const transaction = providerTransaction(state, { operation: 'connectionKeys', objectId: provider.id, data: { endpointId: endpoint.id, apiKeys: replace(endpoint.apiKeys), confirmed: true } });
       changes.push(...transaction.changes);
     }
-    if (changed) changes.push(...invalidateSupplierChannels(state, provider, row.endpoints.filter(endpoint => endpoint.authMode).map(endpoint => endpoint.id)));
+    if (changed) changes.push(...invalidateSupplierChannels(state, provider, affectedEndpoints.filter(endpoint => endpoint.authMode).map(endpoint => endpoint.id)));
     return { type: 'batch', label: operation === 'editApiKey' ? '编辑 API 密钥' : '删除 API 密钥', objectId: row.apiKey.id, changes };
   }
   if (['supply', 'verify', 'enableSupply', 'disableSupply'].includes(operation)) {

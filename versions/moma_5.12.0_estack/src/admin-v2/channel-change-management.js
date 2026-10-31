@@ -4,6 +4,7 @@ import { connectionFingerprint, connectionKeys, connectionCredentialsReady } fro
 import { channelFingerprint, channelInterfaceIssue, channelModelUrl } from './provider-channels.js';
 import { supplierChannelAssociations, supplierKeyChannels, invalidateSupplierChannels } from './supplier-resources.js';
 import { providerKeyGroups } from './provider-key-groups.js';
+import { credentialRotationChannels } from './credential-rotation-scope.js';
 import { providerTransaction, modelConnectivityPreview, normalizeProviderPrice } from './provider-management.js';
 import { channelTestDiagnostics } from './channel-test-diagnostics.js';
 
@@ -85,7 +86,7 @@ export function assertDirectChannelMutation(state, operation, providerId, data =
     if (changed) endpoints = [endpoint];
   } else if (['keyGroupPrimary', 'defaultApiKey', 'editApiKey'].includes(operation)) {
     if (operation === 'keyGroupPrimary' && providerKeyGroups(provider).find(group => group.id === data.groupId)?.keyIds[0] === data.keyId || operation === 'defaultApiKey' && provider.defaultApiKeyId === data.keyId) return;
-    endpoints = operation === 'editApiKey' ? supplierKeyChannels(state, provider, data.keyId) : state.endpoints.filter(row => row.providerId === provider.id && (row.authMode === 'group' && row.keyGroupId === (data.groupId || 'default') || row.authMode === 'inherit' && (!data.groupId || data.groupId === 'default')));
+    endpoints = operation === 'editApiKey' ? credentialRotationChannels(state, provider, data.keyId) : state.endpoints.filter(row => row.providerId === provider.id && (row.authMode === 'group' && row.keyGroupId === (data.groupId || 'default') || row.authMode === 'inherit' && (!data.groupId || data.groupId === 'default')));
   }
   if (endpoints.some(endpoint => channelChangeImpact(state, provider.id, endpoint.id).activeAssociationIds.length)) throw new Error('在线渠道须先创建候选配置并完成测试后应用');
 }
@@ -131,7 +132,12 @@ export function channelCandidateStatus(state, providerId, endpointId, options) {
   return candidateChecks(state, provider, endpoint, candidate, { ...options, requireReal: options?.requireReal || candidate.requireReal === true });
 }
 
+function assertCandidateImpact(state, provider, endpoint, impactRevision) {
+  if (impactRevision !== channelChangeImpact(state, provider.id, endpoint.id).revision) throw new Error('关联模型或服务引用已变化，请重新保存候选配置后测试');
+}
+
 function testedCandidate(state, provider, endpoint, candidate, data) {
+  assertCandidateImpact(state, provider, endpoint, candidate.impactRevision);
   const mappings = supplierChannelAssociations(state, provider, endpoint.id), ids = data.associationIds || mappings.map(row => row.id);
   if (!Array.isArray(ids) || !ids.length || ids.length > 50 || new Set(ids).size !== ids.length) throw new Error('请选择 1–50 个不重复的候选模型');
   const selected = ids.map(id => {
@@ -230,11 +236,12 @@ export function candidateTestPlan(state, data) {
   let current, projectedState = state, provider;
   if (data.groupId) {
     current = keyGroupContext(state, data);
+    for (const endpoint of current.endpoints) assertCandidateImpact(state, current.provider, endpoint, current.candidate.impactRevisions[endpoint.id]);
     if (!current.endpoints.some(row => row.id === data.endpointId)) throw new Error('渠道不属于当前密钥组候选');
     const projected = projectedKeyGroup(state, current.provider, current.candidate);
     projectedState = projected.state; provider = projected.provider;
     current.endpoint = current.endpoints.find(row => row.id === data.endpointId);
-  } else { current = candidateContext(state, data); provider = current.provider; }
+  } else { current = candidateContext(state, data); provider = current.provider; assertCandidateImpact(state, provider, current.endpoint, current.candidate.impactRevision); }
   const { candidate, endpoint } = current;
   const projectedEndpoint = { ...endpoint, ...(data.groupId ? candidate.configs[endpoint.id] : candidate.config) };
   assertCredentials(projectedEndpoint, provider);
@@ -333,12 +340,13 @@ function keyGroupTransaction(state, operation, data) {
   if (operation === 'keyGroupCandidateDiscard') return { type: 'batch', objectId: group.id, label: '放弃密钥组候选配置', changes: [update('providers', provider.id, { keyGroupCandidates: provider.keyGroupCandidates.filter(row => row.groupId !== group.id) })] };
   const projected = projectedKeyGroup(state, provider, candidate);
   if (operation === 'keyGroupCandidateTest') {
+    for (const endpoint of endpoints) assertCandidateImpact(state, provider, endpoint, candidate.impactRevisions[endpoint.id]);
     const ids = data.endpointIds || endpoints.map(row => row.id);
     if (!Array.isArray(ids) || !ids.length || ids.length > 50 || new Set(ids).size !== ids.length || ids.some(id => !endpoints.some(row => row.id === id))) throw new Error('请选择 1–50 个当前密钥组引用渠道');
     const records = ids.flatMap(id => {
       const endpoint = endpoints.find(row => row.id === id);
       if (!supplierChannelAssociations(state, provider, id).length) return [];
-      const tested = testedCandidate(projected.state, projected.provider, endpoint, { ...candidate, config: candidate.configs[id], tests: [] }, { scenarios: data.scenarios });
+      const tested = testedCandidate(projected.state, projected.provider, endpoint, { ...candidate, config: candidate.configs[id], impactRevision: candidate.impactRevisions[id], tests: [] }, { scenarios: data.scenarios });
       return tested.tests;
     });
     const next = { ...candidate, tests: [...candidate.tests, ...records] };
@@ -397,7 +405,58 @@ function procurementTransaction(state, operation, data) {
   return { type: 'batch', objectId: association.id, label: operation === 'channelProcurementDraft' ? '保存采购价版本' : '发布采购价版本', changes: [update('providers', provider.id, { catalogConnections })] };
 }
 
+function stageCredentialChanges(state, changes) {
+  let next = structuredClone(state);
+  for (const change of changes) {
+    if (change.type !== 'update') throw new Error('密钥候选只能更新现有供应商和渠道');
+    next[change.collection] = next[change.collection].map(row => row.id === change.id ? { ...row, ...structuredClone(change.changes) } : row);
+  }
+  return next;
+}
+function checkedNewCredential(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['maskedKey', 'fingerprint', 'accountRpm'].includes(key))) throw new Error('新密钥只能提交掩码、指纹和账号上限');
+  return value;
+}
+export function keyGroupRotationSignature(state, providerId, groupId) {
+  const provider = state.providers.find(row => row.id === providerId);
+  const current = keyGroupContext(state, { providerId, groupId, expectedGroupVersion: provider?.keyGroupRevisions?.[groupId] || 0 }, false);
+  return JSON.stringify([current.signature, current.endpoints.map(endpoint => [endpoint.id, channelChangeImpact(state, providerId, endpoint.id).revision])]);
+}
+function prepareCredentialCandidate(state, operation, data) {
+  const provider = state.providers.find(row => row.id === data.providerId);
+  if (!provider || provider.deletedAt) throw new Error('供应商已不存在');
+  checkedNewCredential(data.newApiKey);
+  let groupId = data.groupId, endpoint, working = state;
+  const changes = [];
+  if (operation === 'channelCandidateCredentialPrepare') {
+    endpoint = context(state, provider.id, data.endpointId).endpoint;
+    expectedRevision(endpoint, data.expectedRevision);
+    if (data.expectedImpactRevision !== channelChangeImpact(state, provider.id, endpoint.id).revision) throw new Error('渠道模型或服务引用已变化，请重新核对替换范围');
+    const key = connectionKeys(endpoint, provider, true)[0];
+    if ((data.expectedKeyId || '') !== (key?.id || '') || (data.expectedFingerprint || '') !== (key?.fingerprint || '')) throw new Error('渠道当前密钥或绑定范围已变化，请重新打开');
+    groupId = key && providerKeyGroups(provider).find(group => group.keyIds.includes(key.id))?.id;
+    if (!groupId) {
+      const names = new Set(providerKeyGroups(provider).map(group => group.name));
+      let name = '渠道专属密钥 ' + endpoint.id.slice(-8), suffix = 2;
+      while (names.has(name)) name = '渠道专属密钥 ' + endpoint.id.slice(-8) + ' ' + suffix++;
+      const created = providerTransaction(state, { operation: 'keyGroupSave', objectId: provider.id, data: { name } });
+      changes.push(...created.changes); working = stageCredentialChanges(state, changes);
+      groupId = working.providers.find(row => row.id === provider.id).apiKeyGroups.find(group => group.name === name).id;
+    }
+  } else {
+    keyGroupContext(state, data, false);
+    if (data.expectedScope !== keyGroupRotationSignature(state, provider.id, groupId)) throw new Error('密钥组引用范围或凭证已变化，请重新打开');
+  }
+  const added = providerTransaction(working, { operation: 'addApiKeys', objectId: provider.id, data: { groupId, apiKeys: [data.newApiKey] } });
+  const next = stageCredentialChanges(working, added.changes), owner = next.providers.find(row => row.id === provider.id), key = owner.apiKeys.find(row => row.fingerprint === data.newApiKey.fingerprint);
+  const prepared = operation === 'channelCandidateCredentialPrepare'
+    ? channelChangeTransaction(next, { operation: 'channelCandidateSave', data: { providerId: provider.id, endpointId: endpoint.id, expectedRevision: data.expectedRevision, config: { authMode: 'specific', apiKeyId: key.id } } })
+    : keyGroupTransaction(next, 'keyGroupCandidateSave', { ...data, keyId: key.id });
+  return { type: 'batch', objectId: prepared.objectId, label: '准备新密钥候选', changes: [...changes, ...added.changes, ...prepared.changes] };
+}
+
 export function channelChangeTransaction(state, { operation, data = {} }) {
+  if (['channelCandidateCredentialPrepare', 'keyGroupCandidatePrepare'].includes(operation)) return prepareCredentialCandidate(state, operation, data);
   if (/^(channel|keyGroup)CandidateTest(Job|Receipt)$/.test(operation)) return candidateReceiptTransaction(state, operation, data);
   if (operation.startsWith('keyGroupCandidate')) return keyGroupTransaction(state, operation, data);
   if (operation.startsWith('channelProcurement')) return procurementTransaction(state, operation, data);
