@@ -186,8 +186,8 @@ test('uncertain identity requires explicit confirmation; missing connection reta
  let {state,id}=connected();state=op(state,'providerRegistration',{provider:{...newProvider,name:'第二家',code:'second-provider'},connections:[connection]});const provider=state.providers.find(p=>p.code==='second-provider'),ep=state.endpoints.find(e=>e.providerId===provider.id);state=op(state,'saveOnboarding',{providerId:provider.id,catalogueModelId:'upstream-v1',endpointId:ep.id,targetModelId:id,targetRevision:state.models.find(m=>m.id===id).updatedAt});let draftId=state.audits[0].objectId;assert.throws(()=>op(state,'onboardModel',{draftId,model:state.models.find(m=>m.id===id)}),/身份和版本/);state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),confirmedIdentity:true});state=op(state,'onboardModel',{draftId,model:state.models.find(m=>m.id===id)});assert.equal(modelSupplies(state,id).length,2);assert.equal(state.models.filter(m=>m.id===id).length,1);
  const draft={providerId:provider.id,catalogueModelId:'upstream-v1',endpointId:''};state=op(state,'saveOnboarding',draft);draftId=state.audits[0].objectId;assert.throws(()=>op(state,'onboardModel',{draftId,model:modelInput}),/连接/);assert.ok(state.modelOnboardings.some(d=>d.id===draftId));
 });
-test('failed verification and stale metadata never partially change models or prices',()=>{
- let {state,id,supply,draftId}=connected();state=op(state,'verifySupply',{id:supply.id,scenario:'鉴权失败'},id);assert.equal(availableSupplies(state,id).length,0);const data=priced(state,id,supply);state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),prices:data.items,sourceVersion:data.sourceVersion});const before=JSON.stringify(state);assert.throws(()=>op(state,'completeOnboarding',{draftId,publish:true}),/验证/);assert.equal(JSON.stringify(state),before);state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),targetRevision:'outdated'});assert.throws(()=>op(state,'onboardModel',{draftId,model:state.models.find(m=>m.id===id)}),/资料已有并发修订/);
+test('diagnostic failure retains online qualification but blocks new onboarding; stale metadata never partially changes models or prices',()=>{
+ let {state,id,supply,draftId}=connected();state=op(state,'verifySupply',{id:supply.id,scenario:'鉴权失败'},id);assert.equal(availableSupplies(state,id).length,1);assert.equal(state.endpoints.find(row=>row.id===supply.endpointId).connectionTest.result,'失败');const data=priced(state,id,supply);state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),prices:data.items,sourceVersion:data.sourceVersion});const before=JSON.stringify(state);assert.throws(()=>op(state,'completeOnboarding',{draftId,publish:true}),/验证/);assert.equal(JSON.stringify(state),before);state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),targetRevision:'outdated'});assert.throws(()=>op(state,'onboardModel',{draftId,model:state.models.find(m=>m.id===id)}),/资料已有并发修订/);
 });
 
 test('same platform model keeps each supplier sale independent',()=>{
@@ -322,11 +322,11 @@ test('library capability changes require confirmation, while supplier and price 
 
 test('a library record remains one editable authority after supplier onboarding',async()=>{
  const {libraryRecord,modelLibrary}=await import('../src/admin-v2/model-operations.js');let {state,id}=connected();const model=state.models.find(m=>m.id===id),libraryId=model.templateId;
- assert.ok(libraryId);assert.equal(libraryRecord(state,libraryId).id,id);assert.equal(modelLibrary(state).filter(m=>m.modelId===model.modelId).length,1);
+ assert.ok(libraryId);assert.equal(libraryRecord(state,libraryId).id,libraryId);assert.equal(libraryRecord(state,id).id,libraryId);assert.equal(modelLibrary(state).filter(m=>m.modelId===model.modelId).length,1);
  state=op(state,'templateSave',{...model,id:libraryId,description:'统一维护后的模型介绍'});
  assert.equal(state.models.find(m=>m.id===id).description,'统一维护后的模型介绍');
  assert.equal(libraryRecord(state,libraryId).description,'统一维护后的模型介绍');
- assert.equal(state.modelTemplates.find(m=>m.id===libraryId).description,modelInput.description);
+ assert.equal(state.modelTemplates.find(m=>m.id===libraryId).description,'统一维护后的模型介绍');
  const draft=state.modelOnboardings.find(d=>d.modelId===id);state=op(state,'saveOnboarding',{...draft,libraryId:id,step:'price'});
  assert.equal(state.modelOnboardings.find(d=>d.id===draft.id).supplyId,draft.supplyId);
  assert.equal(state.modelOnboardings.find(d=>d.id===draft.id).modelId,id);
@@ -343,6 +343,6 @@ test('onboarding cannot bypass the library with a standalone editable metadata p
 test('saving a master from onboarding atomically retains its reference and draft progress',()=>{
  let {state,id,draftId}=connected();const model=state.models.find(m=>m.id===id),draft=state.modelOnboardings.find(d=>d.id===draftId);
  state=op(state,'templateSave',{...model,id,description:'上架期间更新资料',onboardingId:draftId});
- const saved=state.modelOnboardings.find(d=>d.id===draftId);assert.equal(saved.libraryId,id);assert.equal(saved.modelId,id);assert.equal(saved.supplyId,draft.supplyId);
+ const saved=state.modelOnboardings.find(d=>d.id===draftId);assert.equal(saved.libraryId,model.templateId);assert.equal(saved.modelId,id);assert.equal(saved.supplyId,draft.supplyId);
  const before=structuredClone(state);assert.throws(()=>op(state,'templateSave',{...modelInput,modelId:'another-master',onboardingId:'missing'}),/上架进度/);assert.deepEqual(state,before);
 });

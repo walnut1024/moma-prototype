@@ -17,6 +17,8 @@ import { operationsTransaction, templateSeed } from './model-operations.js';
 import { catalogueModelSeed } from './real-model-catalogue.js';
 import { prepareServiceReviewCases, completeServiceProviderExample } from './service-review-cases.js';
 import { prepareSupplierReviewCases } from './supplier-review-cases.js';
+import { prepareMockOnboardingSync, commitMockOnboardingSync } from './mock-onboarding-sync.js';
+import { assertNewMockPublications } from './mock-publication-gate.js';
 
 export const STORAGE_KEY = "moma.adminV2.5120.v1";
 const now = "2026-09-15T10:30:00+08:00";
@@ -193,6 +195,7 @@ export function persistAdminAction(state, action, storage) {
   const raw = storage.getItem(STORAGE_KEY);
   if (raw && JSON.parse(raw).revision !== state.revision) throw new Error('数据已变化，请载入新版本后重试');
   const next = commitAdminState(state, action);
+  assertNewMockPublications(state,next,action);
   storage.setItem(STORAGE_KEY, serializeAdminState(next));
   return next;
 }
@@ -203,7 +206,16 @@ export function persistModelAction(state, action, storage) {
   const raw = storage.getItem(STORAGE_KEY);
   if (raw && JSON.parse(raw).revision !== state.revision) throw new Error('数据已变化，请载入新版本后重试；当前输入保留');
   const next = commitAdminState(state, action);
-  storage.setItem(STORAGE_KEY, serializeAdminState(next));
+  assertNewMockPublications(state,next,action);
+  const prepared = prepareMockOnboardingSync(state, next), serialized = serializeAdminState(next);
+  storage.setItem(STORAGE_KEY, serialized);
+  try { commitMockOnboardingSync(prepared, next); }
+  catch (error) {
+    if (storage.getItem(STORAGE_KEY) !== serialized) throw new Error('保存期间数据已变化，请重新载入核对，未覆盖其他修改');
+    try { if (raw === null) storage.removeItem(STORAGE_KEY); else storage.setItem(STORAGE_KEY, raw); }
+    catch { throw new Error('接入状态同步失败且本地恢复未完成，请重新载入核对'); }
+    throw error;
+  }
   return next;
 }
 
@@ -213,7 +225,16 @@ export function persistProviderAction(state, action, storage, expectedRevision =
   const raw = storage.getItem(STORAGE_KEY);
   if (state.revision !== expectedRevision || (raw && JSON.parse(raw).revision !== expectedRevision)) throw new Error('数据已变化，请载入新版本后重试；当前输入保留');
   const next = commitAdminState(state, action);
-  storage.setItem(STORAGE_KEY, serializeAdminState(next));
+  assertNewMockPublications(state,next,action);
+  const prepared = prepareMockOnboardingSync(state, next), serialized = serializeAdminState(next);
+  storage.setItem(STORAGE_KEY, serialized);
+  try { commitMockOnboardingSync(prepared, next); }
+  catch (error) {
+    if (storage.getItem(STORAGE_KEY) !== serialized) throw new Error('保存期间数据已变化，请重新载入核对，未覆盖其他修改');
+    try { if (raw === null) storage.removeItem(STORAGE_KEY); else storage.setItem(STORAGE_KEY, raw); }
+    catch { throw new Error('接入状态同步失败且本地恢复未完成，请重新载入核对'); }
+    throw error;
+  }
   return next;
 }
 

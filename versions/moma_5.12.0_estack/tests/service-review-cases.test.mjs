@@ -13,7 +13,11 @@ test('five explicit cases have distinct modes, lifecycle states, metadata and ex
   const state=prepared(),models=state.models.filter(model=>model.serviceReviewVersion===SERVICE_REVIEW_VERSION);
   assert.equal(models.length,5);assert.equal(new Set(models.map(model=>model.type)).size,5);
   assert.deepEqual(models.map(model=>model.serviceReviewCase),SERVICE_REVIEW_CASES.map(item=>item.key));
-  for (const key of ['deepseek','qwen','video']) assert.ok(publicationChecks(state,byCase(state,key)).every(check=>check.passed),key);
+  for (const key of ['deepseek','qwen','video']) {
+    const checks=publicationChecks(state,byCase(state,key));
+    assert.ok(checks.filter(check=>check.tab!=='platform').every(check=>check.passed),key);
+    assert.equal(checks.find(check=>check.tab==='platform').passed,false);
+  }
   const deepseek=byCase(state,'deepseek'),qwen=byCase(state,'qwen'),video=byCase(state,'video'),image=byCase(state,'image'),audio=byCase(state,'audio');
   assert.equal(deepseek.listingStatus,'已下架');assert.ok(deepseek.firstPublishedAt);
   assert.equal(qwen.listingStatus,'已上架');assert.equal(video.listingStatus,'已上架');
@@ -21,7 +25,7 @@ test('five explicit cases have distinct modes, lifecycle states, metadata and ex
   assert.equal(modelSupplies(state,image.id).length,0);assert.equal(routingServices(state).filter(service=>service.modelId===image.id).length,0);assert.equal(activeModelSalePrice(state,image.id),undefined);
   assert.equal(audio.listingStatus,'已下架');assert.equal(audio.firstPublishedAt,undefined);
   const gaps=publicationChecks(state,audio).filter(check=>!check.passed);
-  assert.equal(gaps.length,2);assert.ok(gaps.some(check=>check.label.includes('阿里云百炼') && check.tab==='pricing'));assert.ok(gaps.some(check=>check.label.includes('讯飞星火') && check.tab==='routing'));
+  assert.equal(gaps.length,3);assert.ok(gaps.some(check=>check.label.includes('阿里云百炼') && check.tab==='pricing'));assert.ok(gaps.some(check=>check.label.includes('讯飞星火') && check.tab==='routing'));assert.ok(gaps.some(check=>check.tab==='platform'));
 });
 
 test('configured fixtures have complete valid routes, independent Provider IDs and prices, and dynamic billing units',()=>{
@@ -70,5 +74,5 @@ test('a named user-created DeepSeek preserves its identity and manual metadata w
   source.models.push({...structuredClone(legacy),id:'model-user-deepseek',modelId:'deepseek-v4-pro222',name:'DeepSeek V4 Pro',description:'用户手工填写的模型简介',profile:{author:'自定义作者',releaseDate:'2026-10-01',inputModalities:['文本'],outputModalities:['文本'],family:'手工资料'},serviceModeRevision:4});
   const state=prepareServiceReviewCases(source),current=byCase(state,'deepseek');
   assert.equal(current.id,'model-user-deepseek');assert.equal(current.modelId,'deepseek-v4-pro222');assert.equal(current.description,'用户手工填写的模型简介');assert.equal(current.profile.family,'手工资料');assert.equal(current.profile.author,'自定义作者');assert.equal(current.serviceModeRevision,5);
-  assert.equal(activeModelSalePrice(state,current.id).serviceModeRevision,5);assert.ok(publicationChecks(state,current).every(check=>check.passed));assert.deepEqual(state.models.find(model=>model.id==='model-1'),legacy);
+  assert.equal(activeModelSalePrice(state,current.id).serviceModeRevision,5);assert.ok(publicationChecks(state,current).filter(check=>check.tab!=='platform').every(check=>check.passed));assert.equal(publicationChecks(state,current).find(check=>check.tab==='platform').passed,false);assert.deepEqual(state.models.find(model=>model.id==='model-1'),legacy);
 });

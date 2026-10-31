@@ -6,6 +6,9 @@ import { catalogueMetadata } from './real-model-catalogue.js';
 import { connectionFingerprint, connectionTestPassed, connectionBlockReason } from './connection-state.js';
 import { providerCataloguePrice } from './moma-catalogue-prices.js';
 import { cataloguePurchasePrice, billingItemKey, parseSaleAmount } from './provider-catalogue-pricing.js';
+import { activeChannelProcurement } from './channel-change-management.js';
+import { libraryRecord } from './model-library.js';
+import { platformPublicationCheck, platformPublicationFingerprint } from './platform-publication-state.js';
 
 export const MODEL_TYPES = { text: '语言模型', multimodal: '视觉理解', image: '图像生成', video: '视频生成', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
 export const MODEL_CATEGORIES = { text: '语言模型', multimodal: '视觉理解', visual: '视觉生成', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
@@ -67,14 +70,18 @@ export function activeSupplySalePrice(state, modelId, supplyId, at = Date.now())
 }
 export function activeSupplyPrice(state, supplyId, at = Date.now()) {
   const supply = state.modelSupplies.find(item => item.id === supplyId);
+  if (!supply) return undefined;
   const endpoint = state.endpoints.find(item => item.id === supply?.endpointId);
   const provider = state.providers.find(item => item.id === endpoint?.providerId);
-  const channelQuote = provider?.catalogConnections?.find(item => item.modelId === (supply.catalogueModelId || supply.upstreamModelId) && item.endpointId === supply.endpointId)?.pricing;
+  const association = provider?.catalogConnections?.find(item => !item.deletedAt && item.modelId === (supply.catalogueModelId || supply.upstreamModelId) && item.endpointId === supply.endpointId);
+  const version = activeChannelProcurement(association, at);
+  if (version === null) return null;
+  const channelQuote = version?.pricing || association?.pricing;
   if (supply?.catalogueModelId || channelQuote) {
     const catalogueModelId = supply.catalogueModelId || supply.upstreamModelId;
     const quote = channelQuote || provider && providerCataloguePrice(provider, catalogueModelId);
     const items = (quote?.scenarios || []).map(({ listPrice, purchasePrice, ...item }) => ({ ...item, amount: cataloguePurchasePrice(listPrice, quote.discountFactor, purchasePrice) }));
-    return { items, sourceVersion: JSON.stringify(quote ? { modelId: catalogueModelId, discountFactor: quote.discountFactor, scenarios: quote.scenarios } : null), sourceLabel: `${provider?.name || '供应商已失效'} / ${catalogueModelId}`, catalogueModelId };
+    return { items, sourceVersion: version?.id || JSON.stringify(quote ? { modelId: catalogueModelId, discountFactor: quote.discountFactor, scenarios: quote.scenarios } : null), ...(version ? { id: version.id, version: version.version, effectiveAt: version.effectiveAt, expiresAt: version.expiresAt } : {}), sourceLabel: `${provider?.name || '供应商已失效'} / ${catalogueModelId}`, catalogueModelId };
   }
   return state.supplyPrices.filter(price => price.supplyId === supplyId && price.status === '生效中' && Date.parse(price.effectiveAt) <= at).sort((a, b) => Date.parse(b.effectiveAt) - Date.parse(a.effectiveAt))[0];
 }
@@ -117,6 +124,7 @@ export function publicationChecks(state, model) {
           {label:`${provider?.name || '供应商'}：${routeReady?'已发布可用渠道路由':channels.length?'路由尚未发布':'未关联可用渠道'}`,passed:routeReady,tab:'routing',providerId:entry.providerId,mapping:!channels.length}];
       }),
       {label:'开放范围明确',passed:model.openScope==='all' || model.openScope==='selected' && model.tenantIds?.length>0 && model.tenantIds.every(id=>state.tenants.some(item=>item.id===id)),tab:'publication'},
+      platformPublicationCheck(state,model),
     ];
   }
   if (model.serviceMode === 'standard') {
@@ -128,6 +136,7 @@ export function publicationChecks(state, model) {
       {label:routeReady?'已发布有效的供应商与渠道路由映射':channels.length?'渠道路由待配置或发布':'尚未关联供应渠道',passed:routeReady,tab:'routing',mapping:!channels.length},
       {label:priceReady?'统一售价与计量规则完整':'统一售价待配置',passed:priceReady,tab:'pricing'},
       {label:'开放范围明确',passed:model.openScope==='all' || model.openScope==='selected' && model.tenantIds?.length>0 && model.tenantIds.every(id=>state.tenants.some(item=>item.id===id)),tab:'publication'},
+      platformPublicationCheck(state,model),
     ];
   }
 }
@@ -199,6 +208,11 @@ export function modelTransaction(state, action) {
   if (!creating && !model) throw new Error('模型不存在');
   let objectId = model?.id;
   if (creating || operation === 'basic' || operation === 'serviceBasics') {
+    const libraryId = operation === 'createServiceModel' ? data.libraryId : model?.templateId;
+    const source = libraryId ? libraryRecord(state, libraryId) : null;
+    if (libraryId && !source) throw new Error('来源模型资料已变化，请重新选择');
+    if (operation === 'createServiceModel' && source && state.models.some(row => row.id === source.id || row.templateId === source.id)) throw new Error('该模型资料已有模型服务，请进入现有服务配置');
+    if (source && data.type !== source.type) throw new Error('服务模型类型须与引用的模型资料一致');
     const compact = operation === 'createServiceModel' || operation === 'serviceBasics';
     if(operation==='createServiceModel' && data.serviceMode!=null && data.serviceMode!=='' && !['standard','provider'].includes(data.serviceMode)) throw new Error('请选择一种服务方式');
     if(operation==='serviceBasics' && data.expectedUpdatedAt!==model.updatedAt) throw new Error('模型资料已有并发修订，请重新打开核对');
@@ -212,7 +226,7 @@ export function modelTransaction(state, action) {
     const profile = normalizeModelProfile(data.profile ?? model?.profile, data.type, data.usageUnit);
     if (operation === 'create') requireModelBasics(profile);
     if (profile.maxInput && declaredCapabilities.context && profile.maxInput > declaredCapabilities.context) throw new Error('最大输入不能超过上下文上限');
-    const fields = { modelId, name: data.name.trim(), maker: profile.author || data.maker || model?.maker || '', description: data.description.trim(), type: data.type, usageUnit: data.usageUnit, profile, capabilities: declaredCapabilities, ...(operation==='createServiceModel'?{serviceManaged:true,...(data.serviceMode?{serviceMode:data.serviceMode}:{})}:{}) };
+    const fields = { modelId, name: data.name.trim(), maker: profile.author || data.maker || model?.maker || '', description: data.description.trim(), type: data.type, usageUnit: data.usageUnit, profile, capabilities: declaredCapabilities, ...(operation==='createServiceModel'?{serviceManaged:true,...(source?{templateId:source.id}:{}),...(data.serviceMode?{serviceMode:data.serviceMode}:{})}:{}) };
     if (model) {
       changes.push(update('models', model.id, fields));
       const previousProfile = normalizeModelProfile(model.profile, model.type, model.usageUnit);
@@ -227,6 +241,11 @@ export function modelTransaction(state, action) {
       const versionId = uid('version');
       changes.push(add('models', { id: objectId, ...fields, listingStatus: '已下架', status: operation==='createServiceModel'?'草稿':'停用', callsEnabled: false, visibility: '内部', openScope: 'all', tenantIds: [], defaultVersionId: versionId }), add('modelVersions', { id: versionId, modelId: objectId, version: 'v1.0', capabilities: fields.capabilities, validationStatus: '未验证', isDefault: true, status: '草稿' }));
     }
+  } else if (operation === 'recordPlatformPublication') {
+    const fingerprint = platformPublicationFingerprint(state,model,data.serviceId);
+    if (!fingerprint || fingerprint !== data.expectedFingerprint || !data.mockServiceId || !Number.isInteger(data.publishedVersion)) throw new Error('平台验证记录与当前服务配置不一致，请重新核对');
+    const record = { serviceId:data.serviceId,mockServiceId:data.mockServiceId,publishedVersion:data.publishedVersion,fingerprint,source:'mock',recordedAt:at };
+    changes.push(update('models',model.id,{platformPublications:[...(model.platformPublications || []).filter(row=>row.serviceId!==data.serviceId),record]}));
   } else if (operation === 'supply') {
     const endpoint = state.endpoints.find(item => item.id === data.endpointId), supply = data.id && state.modelSupplies.find(item => item.id === data.id && item.modelId === model.id);
     if (data.id && !supply) throw new Error('供应服务不存在');
@@ -271,12 +290,13 @@ export function modelTransaction(state, action) {
     changes.push(update('models', model.id, { openScope: data.openScope, tenantIds: data.openScope === 'selected' ? [...new Set(data.tenantIds)] : [] }));
   } else if (['publish', 'unlist'].includes(operation)) {
     if (operation === 'publish') {
-      const failed = publicationChecks(state, model).filter(check => !check.passed);
+      // Persistence verifies mock evidence outside the editable main store.
+      const failed = publicationChecks(state, model).filter(check => check.tab !== 'platform' && !check.passed);
       if (failed.length) throw new Error(failed.map(check => check.label).join('；'));
     }
     const fields = { publish: { listingStatus: '已上架', visibility: '公开', callsEnabled: true, status: '运行中', firstPublishedAt:model.firstPublishedAt || at }, unlist: { listingStatus: '已下架', visibility: '内部', callsEnabled: false, status: '停用' } }[operation];
     changes.push(update('models', model.id, fields));
   } else throw new Error('未知模型操作');
-  const labels = { createServiceModel:'添加模型', serviceBasics:'修改模型资料', create: '创建模型', basic: '编辑模型', supply: '保存供应服务', verify: '验证供应服务', enableSupply: '启用供应服务', disableSupply: '停用供应服务', removeSupply: '移除供应服务', priceDraft: '保存价格草稿', pricePublish: '发布销售价格', scope: '设置开放范围', publish: '模型上架', unlist: '模型下架' };
+  const labels = { recordPlatformPublication:'记录平台发布验证', createServiceModel:'添加模型', serviceBasics:'修改模型资料', create: '创建模型', basic: '编辑模型', supply: '保存供应服务', verify: '验证供应服务', enableSupply: '启用供应服务', disableSupply: '停用供应服务', removeSupply: '移除供应服务', priceDraft: '保存价格草稿', pricePublish: '发布销售价格', scope: '设置开放范围', publish: '模型上架', unlist: '模型下架' };
   return { type: 'batch', label: labels[operation], objectId, changes };
 }

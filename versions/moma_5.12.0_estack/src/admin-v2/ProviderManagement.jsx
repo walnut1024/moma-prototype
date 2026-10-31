@@ -1,6 +1,7 @@
+import SupplierChannelBatchTest from './SupplierChannelBatchTest';
 import DevelopmentNotes from './DevelopmentNotes';
 import SupplyModelView, { SupplyModelSidebar } from './SupplyModelView';
-import SupplierCreationDialog from './SupplierCreationDialog';
+import ProviderEditor from './SupplierProfileDialog';
 import { supplyModelDirectory } from './supply-models';
 import { useRef, useState } from 'react';
 import { Plus, CloudCog, Pencil, MoreHorizontal, Power, PowerOff, Info } from 'lucide-react';
@@ -15,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Field } from './ModelMetadataForm';
 import { providerImpact, PROVIDER_TYPES } from './provider-management';
 import { providerCode } from './model-operations';
-import { Status, Notice, SearchBox, Modal, useOperations, ProviderFields, emptyProvider } from './ModelOperationsUI';
+import { Status, Notice, SearchBox, Modal, useOperations } from './ModelOperationsUI';
 import ProviderCatalogue from './ProviderCatalogue';
 import ProviderApiKeys from './ProviderApiKeys';
 import SupplierChannelConfiguration from './SupplierChannelConfiguration';
@@ -73,22 +74,11 @@ function CatalogueImport({ state, provider, libraryId, ops, mode, setMode }) {
   </>;
 }
 
-function ProviderEditor({ provider, ops, done, cancel }) {
-  const [value, setValue] = useState(() => provider ? { ...emptyProvider(), ...provider, code: providerCode(provider) } : emptyProvider());
-  return <SupplierCreationDialog title={provider ? '编辑供应商' : '添加供应商'} description="登记供应商主体资料，渠道接入与密钥在添加后配置。" cancel={cancel} disabled={!ops.can} action="保存供应商" submit={() => {
-    const next = ops.run('provider', { operation: provider ? 'profile' : 'create', objectId: provider?.id, values: value });
-    if (next) done(next, provider?.id || next.audits[0].objectId);
-  }}>
-    <ProviderFields value={value} editing={Boolean(provider)} disabled={!ops.can} onChange={next => { setValue(next); ops.setError(''); ops.dirty(true); }}/>
-    {ops.error && <Notice error>{ops.error}</Notice>}
-  </SupplierCreationDialog>;
-}
-
 export default function ProviderManagement(props) {
   const { state } = props, ops = useOperations(props, 'providers'), { params, go } = ops;
   const [dialog, setDialog] = useState(null), [creating, setCreating] = useState(null);
   const supplierTrigger = useRef(null);
-  const providers = supplierDirectory(state).filter(row => !row.id.startsWith('service-review-provider-')), defaultProvider = providers.find(item => item.id === 'provider-moma') || providers[0];
+  const providers = supplierDirectory(state).filter(row => !row.id.startsWith('service-review-provider-') || row.id === params.get('provider')), defaultProvider = providers.find(item => item.id === 'provider-moma') || providers[0];
   const provider = providers.find(item => item.id === (params.get('provider') || defaultProvider?.id)), view = params.get('view'), tab = ['catalogue', 'api-keys', 'basic'].includes(params.get('tab')) ? params.get('tab') : 'catalogue';
   const detail = (id, nextTab = tab, saved = false) => go({ provider: id, view: null, perspective: 'suppliers', tab: nextTab, endpoint: null, model: null, supply: null, q: null, page: null, status: null, connection: null, resource: null, credentialChannel: null, listQ: null, listPage: null }, { saved });
   const perspective = params.get('perspective') || (params.has('provider') || params.has('tab') || view ? 'suppliers' : 'models');
@@ -121,8 +111,11 @@ export default function ProviderManagement(props) {
     content = <Notice error>{providers.length ? '该供应商不存在，请切换其他供应商。' : '尚未创建供应商，请先添加供应商。'}</Notice>;
   }
   const viewSwitch = <Tabs className="supplier-perspective" value={perspective} onValueChange={perspective => go({ perspective, resource: null })}><TabsList aria-label="供应管理视图"><TabsTrigger value="models">模型</TabsTrigger><TabsTrigger value="suppliers">供应商</TabsTrigger></TabsList></Tabs>;
+  const returnEndpoint = state.endpoints.find(row => row.id === params.get('returnTestEndpoint') && row.providerId === provider?.id && !row.deletedAt);
+  let returnIds = []; try { const parsed = JSON.parse(params.get('returnTestAssociations') || '[]'); if (Array.isArray(parsed) && parsed.length <= 50 && parsed.every(id => typeof id === 'string')) returnIds = parsed; } catch { /* Invalid return context does not open an operation. */ }
   const impact = dialog && providerImpact(state, dialog.kind === 'provider' ? dialog.item.id : dialog.item.providerId, dialog.kind === 'connection' ? dialog.item.id : null);
-  return <div className="mo-workbench supplier-workbench">{params.get('onboarding') && <Notice>上架进度已保留。<Button variant="link" onClick={() => ops.go({ view: 'add', draft: params.get('onboarding'), onboarding: null, provider: null, tab: null, step: state.modelOnboardings.find(item => item.id === params.get('onboarding'))?.step || 'select' }, { base: 'listing' })}>返回上架流程</Button></Notice>}<SupplierHeading title={<><CloudCog/>供应管理<DevelopmentNotes area="供应管理"/></>} description="统一管理模型的供应来源：同一模型可由多家供应商、多个渠道提供，集中维护接入、密钥与价格。"><Button ref={supplierTrigger} variant="outline" size="sm" disabled={!ops.can} onClick={() => startCreation('provider')}><Plus/>添加供应商</Button><CatalogueImport key={perspective + (provider?.id || '')} state={state} provider={perspective === 'suppliers' ? provider : undefined} libraryId={perspective === 'models' ? selectedModel?.master?.id : undefined} ops={ops} mode={creating} setMode={setCreating}/></SupplierHeading><div className="supplier-layout"><aside className="supplier-sidebar" aria-label={perspective === 'models' ? '供应模型列表' : '供应商列表'}>{viewSwitch}{perspective === 'models' ? <SupplyModelSidebar models={models} selected={selectedModel} ops={ops}/> : <SupplierSidebar state={state} providers={providers} selected={provider?.id} onSelect={id => detail(id)}/>}</aside>{perspective === 'models' ? <SupplyModelView state={state} selected={selectedModel} ops={ops}/> : <div className="supplier-body">{content}</div>}</div>
+  return <div className="mo-workbench supplier-workbench">{params.get('origin')?.startsWith('#/admin-2/listing') && <Notice><Button variant="link" onClick={() => ops.proceed(() => { location.hash = params.get('origin'); })}>返回服务配置</Button></Notice>}{params.get('onboarding') && <Notice>上架进度已保留。<Button variant="link" onClick={() => ops.go({ view: 'add', draft: params.get('onboarding'), onboarding: null, provider: null, tab: null, step: state.modelOnboardings.find(item => item.id === params.get('onboarding'))?.step || 'select' }, { base: 'listing' })}>返回上架流程</Button></Notice>}<SupplierHeading title={<><CloudCog/>供应管理<DevelopmentNotes area="供应管理"/></>} description="统一管理模型的供应来源：同一模型可由多家供应商、多个渠道提供，集中维护接入、密钥与价格。"><Button ref={supplierTrigger} variant="outline" size="sm" disabled={!ops.can} onClick={() => startCreation('provider')}><Plus/>添加供应商</Button><CatalogueImport key={perspective + (provider?.id || '')} state={state} provider={perspective === 'suppliers' ? provider : undefined} libraryId={perspective === 'models' ? selectedModel?.master?.id : undefined} ops={ops} mode={creating} setMode={setCreating}/></SupplierHeading><div className="supplier-layout"><aside className="supplier-sidebar" aria-label={perspective === 'models' ? '供应模型列表' : '供应商列表'}>{viewSwitch}{perspective === 'models' ? <SupplyModelSidebar models={models} selected={selectedModel} ops={ops}/> : <SupplierSidebar state={state} providers={providers} selected={provider?.id} onSelect={id => detail(id)}/>}</aside>{perspective === 'models' ? <SupplyModelView state={state} selected={selectedModel} ops={ops}/> : <div className="supplier-body">{content}</div>}</div>
     {(creating === 'provider' || view === 'new' || view === 'profile' && provider) && <ProviderEditor key={view === 'profile' ? provider.id : 'new'} provider={view === 'profile' ? provider : undefined} ops={ops} cancel={() => ops.proceed(() => { closeCreation(); if (view) go({ view: null }, { saved: true }); })} done={(next, id) => { closeCreation(); detail(id, view === 'profile' ? 'basic' : 'catalogue', true); }}/>}
+    {returnEndpoint && returnIds.length > 0 && <SupplierChannelBatchTest state={state} provider={provider} endpointId={returnEndpoint.id} associationIds={returnIds} ops={ops} close={() => ops.go({ returnTestEndpoint: null, returnTestAssociations: null })}/>}
     {ops.error && <Notice error>{ops.error}</Notice>}{ops.leaveDialog}{provider && params.get('resource') && (() => { const endpoint = supplierChannelResources(state, provider).find(row => row.id === params.get('resource')); return endpoint ? <SupplierChannelDialog key={endpoint.id} state={state} provider={provider} endpoint={endpoint} ops={ops} close={closeResource}/> : <Modal title="渠道不存在" onClose={closeResource}><Notice error>渠道已变化，请重新选择。</Notice></Modal>; })()}{dialog && <Modal title={`停用${dialog.kind === 'provider' ? '供应商' : '接入'}：${dialog.item.name}`} description="停用会影响实际调用，其他供应商不会自动替换。" onClose={() => setDialog(null)}><Notice error>影响 {impact.supplies.length} 条模型供给，其中 {impact.exposed.length} 个已上架模型将失去可用供给。</Notice><ul>{[...new Set(impact.supplies.map(item => item.modelId))].map(id => <li key={id}>{state.models.find(item => item.id === id)?.name}</li>)}</ul><p className="mo-muted">已有订购影响人数：待接入订购关联数据。</p><div className="mo-footer"><Button variant="outline" onClick={() => setDialog(null)}>取消</Button><Button disabled={!ops.can} onClick={() => { if (ops.run('provider', { operation: dialog.kind === 'provider' ? 'disableProvider' : 'disableConnection', objectId: dialog.item.id, values: { confirmed: true } })) setDialog(null); }}>确认停用</Button></div>{ops.error && <Notice error>{ops.error}</Notice>}</Modal>}</div>;
 }

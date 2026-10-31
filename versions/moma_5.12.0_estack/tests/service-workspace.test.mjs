@@ -66,6 +66,9 @@ test('a unified model cannot edit or publish a channel retail offer',()=>{
 });
 test('unified billing always snapshots the model price, independent of the chosen supplier price',()=>{
  let {state,model}=setup();state=transact(state,'unifiedPrice',model.id,pricing(state,model));
+ const service=routingServices(state).find(item=>item.modelId===model.id), channel=routingChannels(state,service).find(item=>item.available);
+ assert.ok(channel);
+ state=transact(state,'serviceRoutePublish',null,{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'weighted',autoFailover:true,channels:[{supplyId:channel.id,enabled:true,weight:100}]}});
  const key=state.apiKeys.find(item=>item.status==='有效'&&state.grants.some(grant=>grant.subjectId===item.id));key.modelIds=[...new Set([...key.modelIds,model.id])];state.limits=state.limits.filter(item=>item.scopeId!==key.id);
  const result=simulateRequest(state,{requestId:crypto.randomUUID(),keyId:key.id,modelId:model.id}).request;
  assert.equal(result.httpStatus,200);assert.equal(result.priceVersionId,activeModelSalePrice(state,model.id).id);assert.equal(result.priceSnapshot.scope,'model');
@@ -76,7 +79,9 @@ test('unified model publication requires both unified price and a valid publishe
  const service=routingServices(state).find(item=>item.modelId===model.id), channels=routingChannels(state,service).filter(item=>item.available);
  assert.ok(channels.length);
  state=transact(state,'serviceRoutePublish',null,{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'weighted',autoFailover:true,channels:[{supplyId:channels[0].id,enabled:true,weight:100}]}});
- assert.ok(publicationChecks(state,state.models.find(item=>item.id===model.id)).every(item=>item.passed));
+ const checks=publicationChecks(state,state.models.find(item=>item.id===model.id));
+ assert.ok(checks.filter(item=>item.tab!=='platform').every(item=>item.passed));
+ assert.equal(checks.find(item=>item.tab==='platform').passed,false);
 });
 function association(){
  const state=createAdminSeed(), model=state.models.find(item=>item.id==='catalog-demo-kimi-code');

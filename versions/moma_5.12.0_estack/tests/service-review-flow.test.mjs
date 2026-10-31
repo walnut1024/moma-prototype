@@ -52,7 +52,7 @@ test('type-aware guide uses the selected public Provider ID and does not use tex
     for(const language of ['cURL','Python','Java','Go']) {const code=serviceGuideCode(request,language);assert.ok(code.includes(path));assert.ok(code.includes('selected-provider-id'));assert.ok(code.includes('MOMA_API_KEY'));}
   }
 });
-test('image first configuration reaches publication through metadata, unified price, an existing channel and an explicit route',()=>{
+test('image first configuration completes metadata, price and routing while persisted listing still requires platform validation',()=>{
   let state=parseAdminState(null);const id=state.models.find(model=>model.serviceReviewCase==='image').id;
   const model=()=>state.models.find(item=>item.id===id),run=(operation,data)=>{state=commitAdminState(state,{type:'modelOperations',operation,modelId:id,data});};
   run('serviceMode',{serviceMode:'standard',expectedUpdatedAt:model().updatedAt});
@@ -63,8 +63,10 @@ test('image first configuration reaches publication through metadata, unified pr
   const service=routingServices(state).find(item=>item.modelId===id),mapped=routingChannels(state,service);
   run('serviceRoutePublish',{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'fixed',autoFailover:true,channels:[{supplyId:mapped[0].id,enabled:true,priority:1}]}});
   assert.equal(serviceConfiguration(state,model()).label,'已配置');
-  state=commitAdminState(state,{type:'modelOperation',operation:'publish',modelId:id,data:{}});
-  assert.equal(serviceLifecycle(model()),'已上架');assert.ok(model().firstPublishedAt);
+  assert.equal(publicationChecks(state,model()).find(check=>check.tab==='platform').passed,false);
+  const before=structuredClone(state);
+  assert.throws(()=>persistModelAction(state,{type:'modelOperation',operation:'publish',modelId:id,data:{}},{getItem:()=>JSON.stringify(state),setItem:()=>assert.fail('A missing platform proof cannot write the store')}),/平台试调用/);
+  assert.equal(model().listingStatus,'已下架');assert.equal(model().firstPublishedAt,undefined);assert.deepEqual(state,before);
 });
 test('video sixth-channel association leaves published routing unchanged until a revised route is explicitly published',()=>{
   let state=parseAdminState(null);const model=state.models.find(item=>item.serviceReviewCase==='video'),service=routingServices(state).find(item=>item.modelId===model.id),before=structuredClone(activeRouteVersion(serviceRoute(state,service.id)));

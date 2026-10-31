@@ -1,8 +1,8 @@
 import { supplierModelFields } from './supply-models.js';
 import { libraryRecord } from './model-library.js';
 import { providerCatalogueIds } from './moma-provider.js';
-import { catalogueChannels, channelInterfaceIssue, channelFingerprint } from './provider-channels.js';
-import { connectionKeys, connectionTestPassed, connectionCredentialsReady } from './connection-state.js';
+import { catalogueChannels, channelInterfaceIssue, channelFingerprint, channelQualification } from './provider-channels.js';
+import { connectionKeys, connectionTestPassed, connectionTestPending, connectionCredentialsReady } from './connection-state.js';
 import { providerKeyGroups } from './provider-key-groups.js';
 
 const update = (collection, id, changes) => ({ type: 'update', collection, id, changes });
@@ -147,7 +147,8 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
         if (operation === 'supplierModelsEnable') throw error;
         const owner = working.providers.find(item => item.id === objectId), current = catalogueChannels(working, owner, association.modelId).find(item => item.id === association.id);
         const health = { result: '失败', message: error.message, simulated: true, testedAt: new Date().toISOString(), fingerprint: channelFingerprint(current) };
-        const record = { ...current, health }; delete record.endpoint; delete record.managed;
+        const qualification = channelQualification(current);
+        const record = { ...current, ...(qualification ? { qualification: structuredClone(qualification) } : {}), health }; delete record.endpoint; delete record.managed;
         transaction = { changes: [update('providers', objectId, { catalogConnections: [...(owner.catalogConnections || []).filter(item => item.id !== association.id && !(item.modelId === association.modelId && item.endpointId === endpoint.id)), record] })] };
       }
       working = stageResourceChanges(working, transaction.changes); changes.push(...transaction.changes);
@@ -266,8 +267,9 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
   }
   if (operation === 'supplierChannelEnable') {
     if (provider.status !== '已启用') throw new Error('请先启用供应商');
+    if (connectionTestPending(endpoint)) throw new Error('当前渠道测试尚未完成，不能使用先前证据启用');
     if (!connectionCredentialsReady(endpoint, provider) || !connectionTestPassed(endpoint)) throw new Error('请先配置凭证并通过渠道测试');
-    return finish('启用供应渠道', [update('endpoints', endpoint.id, { status: '运行中' })]);
+    return finish('启用供应渠道', [update('endpoints', endpoint.id, { status: '运行中', connectionQualification: structuredClone(endpoint.connectionTest) })]);
   }
   if (operation !== 'supplierAssociationSave') throw new Error('未知供应资源操作');
   const modelId = required(data.modelId, '模型 ID');

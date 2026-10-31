@@ -3,15 +3,16 @@ import { supplierModelFields } from './supply-models.js';
 import { canonicalMomaScenarios } from './moma-billing-items.js';
 import { providerCatalogueIds } from './moma-provider.js';
 import { availableSupplies, modelTransaction } from './model-management.js';
-import { connectionFingerprint, connectionTestCurrent, connectionTestPassed, connectionCredentialsReady, connectionKeys } from './connection-state.js';
+import { connectionFingerprint, connectionTestCurrent, connectionTestPassed, connectionCredentialsReady, connectionKeys, connectionQualification, connectionTestPending } from './connection-state.js';
 import { supplierResourceTransaction, invalidateSupplierChannels } from './supplier-resources.js';
-import { prepareChannelInterface } from './channel-interface.js';
+import { prepareChannelInterface, prepareChannelAdapterOptions } from './channel-interface.js';
 import { catalogueConnections, connectionCatalogueIds } from './provider-model-connections.js';
 import { isMomaCataloguePrice, providerCataloguePrice } from './moma-catalogue-prices.js';
 import { normalizeCataloguePrice, normalizeCatalogueDiscount, cataloguePriceDraft, billingItemKey } from './provider-catalogue-pricing.js';
 import { providerChannelTransaction, channelIdentity, catalogueChannels, channelInterfaceIssue, channelModelUrl } from './provider-channels.js';
 import { officialCatalogueTransaction } from './official-supply-catalogue.js';
 import { providerKeyGroups } from './provider-key-groups.js';
+import { assertDirectChannelMutation } from './channel-change-management.js';
 export { connectionFingerprint, connectionTestCurrent } from './connection-state.js';
 
 export const providerCode = provider => provider.code || ({ mobile: 'cmcc', unicom: 'cucc', telecom: 'ctcc', alibaba: 'bailian' }[provider.id.replace(/^(catalog-provider-|provider-)/, '')] || provider.id.replace(/^(catalog-provider-|provider-)/, ''));
@@ -31,7 +32,7 @@ export function appendProviderCatalogue(current, text) {
   if (result.length === current.length) throw new Error('输入的 Model ID 均已存在。');
   return result;
 }
-function normalizeProviderPrice(provider, draft) {
+export function normalizeProviderPrice(provider, draft) {
   const entry = normalizeCataloguePrice(draft);
   if (provider.id === 'provider-moma') {
     if (entry.scenarios.some(row => !isMomaCataloguePrice(row))) throw new Error('移动云 MoMA 模型目录仅支持按量计费；请移除省市节点、资源包、抵扣或 TPM 预留报价');
@@ -161,11 +162,13 @@ export function providerImpact(state, providerId, endpointId) {
 
 export function providerTransaction(state, action) {
   const { operation, objectId, data = {} } = action;
+  assertDirectChannelMutation(state, operation, objectId, data);
   if (operation === 'officialCatalogue') return officialCatalogueTransaction(state);
   if (['supplierModelLink', 'supplierModelAdd', 'supplierChannelCreate', 'supplierModelsAdd', 'supplierModelsTest', 'supplierModelsEnable', 'supplierChannelSave', 'supplierChannelDelete', 'supplierChannelTest', 'supplierChannelEnable', 'supplierModelTest', 'supplierModelEnable', 'supplierAssociationSave', 'supplierAssociationRemove', 'defaultApiKey', 'toggleApiKey', 'keyGroupSave', 'keyGroupDelete', 'keyGroupPrimary'].includes(operation)) return supplierResourceTransaction(state, action, providerTransaction, normalizeProviderPrice);
   if (['channelSave', 'channelPrice', 'channelTest', 'channelEnable', 'channelDisable', 'channelDelete', 'catalogueRemove'].includes(operation)) return providerChannelTransaction(state, action, providerTransaction, normalizeProviderPrice, modelConnectivityPreview);
   const changes = [];
   const provider = state.providers.find(item => item.id === (data.providerId || objectId));
+
   if (operation === 'catalogueConnection' || operation === 'connectionKeys') {
     if (!provider || provider.id !== objectId) throw new Error('供应商不存在');
     const endpoint = state.endpoints.find(item => item.id === data.endpointId && item.providerId === provider.id);
@@ -278,7 +281,8 @@ export function providerTransaction(state, action) {
       let id;
       do { id = crypto.randomUUID().slice(0, 8); } while (ids.has(id));
       ids.add(id);
-      return { id, name, maskedKey: item.maskedKey, fingerprint: item.fingerprint, createdAt };
+      if (item.accountRpm != null && (!Number.isSafeInteger(item.accountRpm) || item.accountRpm < 1)) throw new Error('账号 RPM 必须为正整数');
+      return { id, name, maskedKey: item.maskedKey, fingerprint: item.fingerprint, ...(item.accountRpm != null ? { accountRpm: item.accountRpm } : {}), createdAt };
     });
     changes.push(update('providers', provider.id, { apiKeys: [...keys, ...added], ...(data.groupId || provider.apiKeyGroups ? { apiKeyGroups: groups.map(row => row.id === groupId ? { ...row, keyIds: [...row.keyIds, ...added.map(key => key.id)] } : row) } : {}), ...(groupId === 'default' && !group.keyIds.length && !provider.defaultApiKeyId ? { defaultApiKeyId: added[0].id } : {}) }));
     if (!group.keyIds.length) changes.push(...invalidateSupplierChannels(state, provider, state.endpoints.filter(row => !row.deletedAt && row.providerId === provider.id && (row.authMode === 'group' && row.keyGroupId === groupId || groupId === 'default' && row.authMode === 'inherit')).map(row => row.id)));
@@ -353,7 +357,7 @@ export function providerTransaction(state, action) {
       if (credentialRef && !/^(env:[A-Z_][A-Z0-9_]*|secret:[a-zA-Z0-9_./-]+)$/.test(credentialRef) && endpoint?.credentialRef !== credentialRef) throw new Error('凭证引用无效');
       const capacity = data.capacity == null || String(data.capacity).trim() === '' ? null : Number(data.capacity), timeoutSeconds = Number(data.timeoutSeconds);
       if ((capacity != null && (!Number.isSafeInteger(capacity) || capacity < 1)) || !Number.isSafeInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 600) throw new Error('RPM 如填写必须为正整数；超时须为 1–600 秒');
-      const interfaceFields = data.interfaceType ? { ...prepareChannelInterface({ ...data, allowHttp: provider.sourceType === 'selfHosted' }), allowHttp: provider.sourceType === 'selfHosted' } : {};
+      const interfaceFields = data.interfaceType ? { ...prepareChannelInterface({ ...data, allowHttp: provider.sourceType === 'selfHosted' }), adapterOptions: prepareChannelAdapterOptions(data.adapterOptions), allowHttp: provider.sourceType === 'selfHosted' } : {};
       const fields = { name: data.name.trim(), providerId: provider.id, protocol: data.protocol, baseUrl: url.toString().replace(/\/$/, ''), credentialRef, apiKeys, capacity, timeoutSeconds, ...interfaceFields };
       const changed = !endpoint || connectionFingerprint(endpoint) !== connectionFingerprint(fields);
       if (!endpoint) {
@@ -371,12 +375,14 @@ export function providerTransaction(state, action) {
         const scenarios = { 成功: ['通过', '服务地址、凭证和协议检查通过'], 超时: ['失败', '上游连接超时，请检查服务地址与网络'], 鉴权失败: ['失败', '鉴权失败，请检查凭证引用与权限'], 协议错误: ['失败', '协议不兼容，请核对接入协议'] };
         const result = scenarios[data.scenario];
         if (!result) throw new Error('请选择测试场景');
-        changes.push(update('endpoints', endpoint.id, { connectionTest: { result: result[0], message: result[1], simulated: true, testedAt: new Date().toISOString(), fingerprint: connectionFingerprint(endpoint) }, ...(result[0] !== '通过' && ['运行中', '需关注'].includes(endpoint.status) ? { status: '需关注' } : {}) }));
+        const qualification = connectionQualification(endpoint);
+        changes.push(update('endpoints', endpoint.id, { ...(qualification ? { connectionQualification: structuredClone(qualification) } : {}), connectionTest: { result: result[0], message: result[1], simulated: true, testedAt: new Date().toISOString(), fingerprint: connectionFingerprint(endpoint) }, ...(result[0] !== '通过' && ['运行中', '需关注'].includes(endpoint.status) ? { status: '需关注' } : {}) }));
       } else if (operation === 'enableConnection') {
+        if (connectionTestPending(endpoint)) throw new Error('当前配置的测试尚未完成，请等待结果');
         if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在 API 密钥页签配置此接入地址的凭证');
         if (owner?.status !== '已启用') throw new Error('请先启用供应商');
         if (!connectionTestPassed(endpoint)) throw new Error('当前接入配置须先通过连接测试');
-        changes.push(update('endpoints', endpoint.id, { status: '运行中' }));
+        changes.push(update('endpoints', endpoint.id, { status: '运行中', connectionQualification: structuredClone(endpoint.connectionTest) }));
       } else if (operation === 'disableConnection') {
         if (!data.confirmed) throw new Error('请先确认停用影响');
         changes.push(update('endpoints', endpoint.id, { status: '停用' }));

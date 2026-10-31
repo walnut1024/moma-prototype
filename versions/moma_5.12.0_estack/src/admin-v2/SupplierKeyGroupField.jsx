@@ -17,7 +17,6 @@ export function SupplierKeyGroupField({ state, provider, value, disabled, onChan
   const close = () => { setEditing(false); ops.dirty(parentDirty.current); ops.setError(''); requestAnimationFrame(() => trigger.current?.focus()); };
   const keyOps = { ...ops,
     dirty: dirty => { keyDirty.current = dirty; ops.dirty(parentDirty.current || dirty); },
-    proceed: callback => keyDirty.current ? ops.proceed(() => { ops.dirty(parentDirty.current); callback(); }) : callback(),
     run: (...args) => { const result = ops.run(...args); ops.dirty(parentDirty.current || !result && keyDirty.current); return result; },
   };
   return <div className="supplier-key-group-field">

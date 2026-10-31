@@ -44,7 +44,7 @@ test('single-element models use the atomic batch path and old top-level model in
 
 test('invalid later rows, duplicate identities and unsupported tasks reject the entire batch without writes', () => {
   const state = parseAdminState(null), before = structuredClone(state);
-  const invalid = [[], null, Array(51).fill(models[0]), [models[0], { ...models[1], libraryId: 'missing' }], [models[0], models[0]], [models[0], { ...models[1], upstreamModelId: models[0].upstreamModelId }], [models[0], { ...models[1], upstreamModelId: 'bad\u0000model' }], [models[0], { ...models[1], scenarios: [{ name: '输入 Token', listPrice: '-1', unit: '百万 Token', currency: 'CNY' }] }], [models[0], { ...models[1], libraryId: 'model-5' }]];
+  const invalid = [[], null, Array(51).fill(models[0]), [models[0], { ...models[1], libraryId: 'missing' }], [models[0], models[0]], [models[0], { ...models[1], upstreamModelId: models[0].upstreamModelId }], [models[0], { ...models[1], upstreamModelId: 'bad\u0000model' }], [models[0], { ...models[1], scenarios: [{ name: '输入 Token', listPrice: '-1', unit: '百万 Token', currency: 'CNY' }] }], [models[0], { ...models[1], libraryId: 'model-15' }]];
   for (const entries of invalid) {
     assert.throws(() => run(state, 'supplierChannelCreate', { ...draft, models: entries }));
     assert.deepEqual(state, before);

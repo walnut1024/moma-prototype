@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CHANNEL_INTERFACES, prepareChannelInterface, suggestChannelRoot, modelTaskUrl } from '../src/admin-v2/channel-interface.js';
+import { CHANNEL_INTERFACES, prepareChannelInterface, suggestChannelRoot, modelTaskUrl, prepareChannelAdapterOptions } from '../src/admin-v2/channel-interface.js';
 
 const openai = { interfaceType: 'openai', baseUrl: 'https://api.example.com/v1' };
 
@@ -13,7 +13,10 @@ test('presets keep explicitly supplied roots and append only the selected task',
   assert.equal(modelTaskUrl({ ...openai, baseUrl: 'https://api.example.com/gateway' }, 'text'), 'https://api.example.com/gateway/chat/completions');
   assert.equal(modelTaskUrl({ interfaceType: 'anthropic', baseUrl: 'https://api.example.com/v1/' }, 'text'), 'https://api.example.com/v1/messages');
   assert.throws(() => modelTaskUrl(openai, 'rerank'), /尚不支持/);
-  assert.throws(() => modelTaskUrl(openai, 'image'), /尚不支持/);
+  assert.equal(modelTaskUrl(openai, 'image'), 'https://api.example.com/v1/images/generations');
+  assert.throws(() => modelTaskUrl(openai, 'audio'), /尚不支持/);
+  assert.equal(modelTaskUrl(openai, 'audio', { probe: 'speech' }), 'https://api.example.com/v1/audio/speech');
+  assert.equal(modelTaskUrl(openai, 'audio', { probe: 'transcription' }), 'https://api.example.com/v1/audio/transcriptions');
   assert.throws(() => modelTaskUrl({ interfaceType: 'anthropic', baseUrl: openai.baseUrl }, 'embedding'), /尚不支持/);
 });
 
@@ -58,4 +61,17 @@ test('validation signatures cover interface semantics without invalidating untou
   const tasks = { text: 'https://api.example.com/a', embedding: 'https://api.example.com/b' };
   assert.equal(connectionFingerprint({ ...current, taskUrls: tasks }), connectionFingerprint({ ...current, taskUrls: { embedding: tasks.embedding, text: tasks.text } }));
   assert.equal(connectionTestCurrent({ ...current, name: '显示名称变更' }), true);
+});
+
+
+test('explicit adapter options validate and participate in configuration evidence', async () => {
+  const { connectionFingerprint } = await import('../src/admin-v2/connection-state.js');
+  const options = { apiVersion: '2026-10-21', workspaceId: 'workspace_1', tokenLimitField: 'max_tokens', imageSize: '1024x1024', voice: 'alloy', statusPath: '/tasks/{id}' };
+  assert.deepEqual(prepareChannelAdapterOptions(options), options);
+  assert.deepEqual(prepareChannelAdapterOptions({ voice: '' }), {});
+  for (const input of [{ secret: 'no' }, { apiVersion: 'yesterday' }, { workspaceId: 'a b' }, { tokenLimitField: 'limit' }, { statusPath: '//other.example/tasks/{id}' }]) assert.throws(() => prepareChannelAdapterOptions(input));
+  const before = connectionFingerprint(openai);
+  assert.equal(connectionFingerprint({ ...openai, adapterOptions: {} }), before);
+  assert.notEqual(connectionFingerprint({ ...openai, adapterOptions: options }), before);
+  assert.equal(connectionFingerprint({ ...openai, adapterOptions: options }), connectionFingerprint({ ...openai, adapterOptions: Object.fromEntries(Object.entries(options).reverse()) }));
 });

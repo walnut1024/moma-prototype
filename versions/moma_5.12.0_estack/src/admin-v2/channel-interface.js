@@ -22,6 +22,26 @@ function checkedUrl(value, allowHttp) {
 
 const urlText = url => url.toString().replace(/\/+$/, '');
 
+export function prepareChannelAdapterOptions(input = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('接口选项格式无效');
+  const options = {};
+  const rules = {
+    apiVersion: value => /^\d{4}-\d{2}-\d{2}$/.test(value),
+    workspaceId: value => /^[A-Za-z0-9_-]{1,128}$/.test(value),
+    tokenLimitField: value => ['max_completion_tokens', 'max_tokens'].includes(value),
+    imageSize: value => ['auto', '256x256', '512x512', '1024x1024', '1536x1024', '1024x1536'].includes(value),
+    voice: value => /^[A-Za-z0-9_-]{1,60}$/.test(value),
+    statusPath: value => value.startsWith('/') && !value.startsWith('//') && value.includes('{id}') && !/[?#\r\n]/.test(value),
+  };
+  for (const [key, value] of Object.entries(input)) {
+    if (!Object.hasOwn(rules, key)) throw new Error('存在未支持的接口选项');
+    if (value == null || value === '') continue;
+    if (typeof value !== 'string' || value.length > 2048 || !rules[key](value)) throw new Error(`接口选项 ${key} 格式无效`);
+    options[key] = value;
+  }
+  return options;
+}
+
 export function suggestChannelRoot({ interfaceType, baseUrl, allowHttp = false }) {
   const url = checkedUrl(baseUrl, allowHttp);
   const pathname = url.pathname.replace(/\/+$/, '');
@@ -59,13 +79,13 @@ export function prepareChannelInterface({ interfaceType, baseUrl, taskUrls = {},
   return { interfaceType, protocol: preset.protocol, addressMode: 'task', baseUrl: urlText(url), taskUrls: preparedTasks };
 }
 
-export function modelTaskUrl(endpoint, modelType) {
+export function modelTaskUrl(endpoint, modelType, { probe } = {}) {
   if (!endpoint || !modelTypes.includes(modelType)) throw new Error('请选择已支持的模型任务');
   const { interfaceType, baseUrl, taskUrls } = prepareChannelInterface({ ...endpoint, allowHttp: endpoint.allowHttp === true });
   if (interfaceType === 'custom') return taskUrls[modelType] || baseUrl;
   const task = interfaceType === 'anthropic'
     ? ['text', 'multimodal'].includes(modelType) ? 'messages' : null
-    : ({ text: 'chat/completions', multimodal: 'chat/completions', embedding: 'embeddings' })[modelType];
+    : ({ text: 'chat/completions', multimodal: 'chat/completions', embedding: 'embeddings', image: 'images/generations', audio: probe === 'speech' ? 'audio/speech' : probe === 'transcription' ? 'audio/transcriptions' : null })[modelType];
   if (!task) throw new Error('当前接口预设尚不支持此模型任务，请使用已支持的自定义任务端点');
   return `${baseUrl}/${task}`;
 }

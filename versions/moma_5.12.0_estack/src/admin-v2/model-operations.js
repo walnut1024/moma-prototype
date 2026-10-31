@@ -7,8 +7,10 @@ import { billingItemKey, parseSaleAmount } from './provider-catalogue-pricing.js
 import { modelTransaction, modelCode, modelSupplies, availableSupplies, supplyPriceReady, supplyModelUrl, latestSaleRevision } from './model-management.js';
 import { modelProfileDraft } from './model-profile.js';
 import { tariffDictionaryTransaction } from './tariff-dictionary.js';
+import { channelChangeTransaction } from './channel-change-management.js';
+import { channelOnboardingTransaction } from './channel-onboarding.js';
 import { providerTransaction, providerCode, modelConnectivityPreview, PROTOCOLS } from './provider-management.js';
-import { connectionTestPassed, connectionCredentialsReady } from './connection-state.js';
+import { connectionTestPassed, connectionTestPending, connectionCredentialsReady } from './connection-state.js';
 import { providerCatalogueIds } from './moma-provider.js';
 import { catalogueMetadata, REAL_MODELS, RECENT_TEMPLATE_CODES } from './real-model-catalogue.js';
 
@@ -75,6 +77,8 @@ function retailItems(rows) {
 }
 // Compose existing domain operations against one working copy; persistence stays atomic.
 export function operationsTransaction(state, action) {
+  if (/^channel(Draft|Discovery|Metadata|TestEvidence|TemporaryTest)/.test(action.operation) || action.operation === 'supplierSelection') return channelOnboardingTransaction(state, action);
+  if (/^channel(Candidate|Procurement)/.test(action.operation) || action.operation.startsWith('keyGroupCandidate') || action.operation === 'credentialEmergencyRevoke') return channelChangeTransaction(state, action);
   if (['serviceRouteDraft', 'serviceRoutePublish', 'serviceRouteRollback','serviceRouteStop'].includes(action.operation)) return routingTransaction(state, action);
   const working = structuredClone(state), changes = [];
   const apply = transaction => {
@@ -119,9 +123,10 @@ export function operationsTransaction(state, action) {
       }
       const master = libraryRecord(working, entry.libraryId);
       if (operation === 'prepareSupplierBatch' && (!master || master.updatedAt !== entry.libraryRevision)) throw new Error('模型资料未选择或已有修订，请重新核对主档');
+      const target=master && working.models.find(item=>item.id===master.id || item.templateId===master.id);
       const saved = apply(operationsTransaction(working, { operation: 'saveOnboarding', data: {
         ...entry, id: draft?.id, providerId: provider.id,
-        targetModelId: working.models.some(item => item.id === master?.id) ? master.id : '', targetRevision: master?.updatedAt || '',
+        libraryId:master?.id || entry.libraryId,targetModelId:target?.id || '',targetRevision:target?.updatedAt || '',
       } }));
       if (operation === 'saveSupplierBatch') continue;
       const onboarded = apply(operationsTransaction(working, { operation: 'onboardModel', data: { draftId: saved.objectId } }));
@@ -159,6 +164,12 @@ export function operationsTransaction(state, action) {
       const fields = { ...metadata(validated), revision: (current?.revision || 0) + 1, updatedAt: new Date().toISOString() };
       objectId = current?.id || `template-${crypto.randomUUID()}`;
       if (current) update('modelTemplates', current.id, fields); else add('modelTemplates', { id: objectId, ...fields });
+      if(current){
+        const transactions=working.models.filter(row=>row.templateId===current.id).map(row=>modelTransaction(working,{operation:'basic',modelId:row.id,data:{...fields,profile:{...row.profile,...fields.profile}}}));
+        const affected=transactions.flatMap(transaction=>transaction.changes).filter(change=>change.collection==='modelSupplies');
+        if(affected.length && !data.confirmCapabilities)throw new Error(`请确认能力变更：${affected.length} 条供应商供给将暂停服务并重新验证；价格与订购范围保留。`);
+        for(const transaction of transactions)apply(transaction);
+      }
     }
     if (onboarding) {
       const unchanged = libraryRecord(working, onboarding.libraryId)?.id === objectId;
@@ -173,7 +184,7 @@ export function operationsTransaction(state, action) {
     if (data.libraryId && !libraryRecord(working, data.libraryId)) throw new Error('模型资料不存在，请重新选择资料库记录');
     if (data.endpointId && !working.endpoints.some(item => item.id === data.endpointId && item.providerId === provider.id)) throw new Error('连接不属于当前供应商');
     const fields = { providerId: provider.id, catalogueModelId: data.catalogueModelId, endpointId: data.endpointId || '', targetModelId: data.targetModelId || '', targetRevision: data.targetRevision || '', expectedSaleVersion: data.expectedSaleVersion || '', confirmedIdentity: data.confirmedIdentity === true, model: data.model || null, prices: data.prices || [], sourceVersion: data.sourceVersion || '', ...(Array.isArray(data.selected) ? { selected: [...new Set(data.selected)] } : {}), step: ['select', 'metadata', 'price', 'review'].includes(data.step) ? data.step : 'select', status: '配置中' };
-    fields.libraryId = data.libraryId || '';
+    fields.libraryId = libraryRecord(working,data.libraryId)?.id || '';
     fields.libraryRevision = data.libraryRevision ?? current?.libraryRevision ?? '';
     fields.listingScope = data.listingScope === undefined ? current?.listingScope ?? null : data.listingScope;
     if (current && (current.providerId !== fields.providerId || current.catalogueModelId !== fields.catalogueModelId || current.targetModelId !== fields.targetModelId || libraryRecord(working, current.libraryId)?.id !== libraryRecord(working, fields.libraryId)?.id)) Object.assign(fields, { modelId: null, supplyId: null, prices: [], sourceVersion: '', expectedSaleVersion: '' });
@@ -192,9 +203,9 @@ export function operationsTransaction(state, action) {
     if (!endpoint?.baseUrl || !connectionCredentialsReady(endpoint, provider)) throw new Error('连接或 API 密钥配置缺失，请补齐供应商连接设置；当前进度已保存');
     const matched = catalogueModelMatch(working, provider.id, draft.catalogueModelId);
     const master = libraryRecord(working, draft.libraryId) || matched.model || matched.template;
-    const target = (draft.targetModelId && working.models.find(item => item.id === draft.targetModelId)) || (master && working.models.find(item => item.id === master.id));
+    const target = (draft.targetModelId && working.models.find(item => item.id === draft.targetModelId)) || (master && working.models.find(item => item.id === master.id || item.templateId === master.id));
     if (draft.targetModelId && !working.models.some(item => item.id === draft.targetModelId)) throw new Error('所选平台模型已不存在');
-    if (master && target && master.id !== target.id) throw new Error('模型资料与所选平台模型不一致，请重新核对');
+    if (master && target && master.id !== libraryRecord(working,target.id)?.id) throw new Error('模型资料与所选平台模型不一致，请重新核对');
     if (matched.model && target && matched.model.id !== target.id) throw new Error('此目录模型已有明确对应关系，请进入已有模型');
     if (target && !matched.model && !draft.confirmedIdentity) throw new Error('请确认模型身份和版本一致，不能仅凭名称相似合并');
     if (master && !matched.model && modelCode(master) !== draft.catalogueModelId && !draft.confirmedIdentity) throw new Error('请确认模型身份和版本一致，不能仅凭名称相似合并');
@@ -368,7 +379,8 @@ export function operationsTransaction(state, action) {
     if (!draft) throw new Error('配置进度不存在或已完成');
     const supply = working.modelSupplies.find(item => item.id === draft.supplyId && item.modelId === draft.modelId && item.status !== '已移除');
     if (!supply) throw new Error('供给已变化，请返回供应商选择步骤');
-    if (!availableSupplies(working, draft.modelId, working.models.find(item => item.id === draft.modelId).capabilities).some(item => item.id === supply.id)) throw new Error('当前销售供给尚未通过验证，请检查连接与模型');
+    const endpoint = working.endpoints.find(item => item.id === supply.endpointId);
+    if (connectionTestPending(endpoint) || !connectionTestPassed(endpoint) || !availableSupplies(working, draft.modelId, working.models.find(item => item.id === draft.modelId).capabilities).some(item => item.id === supply.id)) throw new Error('当前销售供给尚未通过验证，请检查连接与模型');
     modelOp('pricePublish', draft.modelId, { supplyId: supply.id, items: draft.prices, sourceVersion: draft.sourceVersion, expectedSaleVersion: draft.expectedSaleVersion });
     if (draft.salesVersion !== salesSelectionVersion(working, draft.modelId)) throw new Error('销售供给已有并发修订，请重新核对本次选择');
     const supplies = modelSupplies(working, draft.modelId), selected = draft.selected || [...supplies.filter(item => item.salesEnabled).map(item => item.id), supply.id];

@@ -40,7 +40,7 @@ export function supplierListingRows(state, provider) {
   return providerCatalogueIds(provider).map(catalogueModelId => {
     let matched = {}, issue = '';
     try { matched = catalogueModelMatch(state, provider.id, catalogueModelId); } catch (error) { issue = error.message; }
-    const master = matched.model || libraryRecord(state, matched.template?.id) || library.find(item => item.modelId.toLowerCase() === catalogueModelId.toLowerCase());
+    const master = libraryRecord(state, matched.model?.id || matched.template?.id) || library.find(item => item.modelId.toLowerCase() === catalogueModelId.toLowerCase());
     const endpoints = catalogueConnections(state, provider, catalogueModelId);
     const endpoint = endpoints.find(item => item.id === matched.supply?.endpointId) || (endpoints.length === 1 ? endpoints[0] : null);
     const quote = providerCataloguePrice(provider, catalogueModelId);

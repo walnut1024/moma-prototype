@@ -2,14 +2,16 @@ import { catalogueConnections } from './provider-model-connections.js';
 import { providerCatalogueIds } from './moma-provider.js';
 import { providerCataloguePrice } from './moma-catalogue-prices.js';
 import { cataloguePriceDraft, billingItemKey } from './provider-catalogue-pricing.js';
-import { connectionFingerprint, connectionTestPassed, connectionCredentialsReady } from './connection-state.js';
+import { connectionFingerprint, connectionTestPassed, connectionCredentialsReady, connectionKeys, connectionQualified } from './connection-state.js';
 import { supplyModelUrl } from './model-management.js';
 import { modelTaskUrl } from './channel-interface.js';
+import { activeChannelProcurement } from './channel-change-management.js';
 
 export const CHANNEL_ORIGINS = { undisclosed: '未披露', direct: '自营', resale: '转售' };
-export function channelModelUrl(endpoint, type) {
+const channelProbe = channel => [channel.task, channel.health?.task, channel.qualification?.task].find(task => ['speech', 'transcription'].includes(task));
+export function channelModelUrl(endpoint, type, options = {}) {
   if (!endpoint.interfaceType) return endpoint.baseUrl;
-  try { return modelTaskUrl(endpoint, type); }
+  try { return modelTaskUrl(endpoint, type, options); }
   catch { return ''; }
 }
 export const channelIdentity = (providerId, modelId, endpointId) => JSON.stringify([providerId, modelId, endpointId]);
@@ -18,35 +20,39 @@ export function catalogueChannels(state, provider, modelId) {
   const endpoints = catalogueConnections(state, provider, modelId);
   const rows = endpoints.flatMap((endpoint, index) => {
     const entries = saved.filter(item => item.endpointId === endpoint.id);
-    return (entries.length ? entries : [{ modelId, endpointId: endpoint.id }]).map(item => ({
+    return (entries.length ? entries : [{ modelId, endpointId: endpoint.id }]).map(item => {
+      const version = activeChannelProcurement(item);
+      return {
       ...item, id: item.id || channelIdentity(provider.id, modelId, endpoint.id),
       name: endpoint.supplierChannel ? endpoint.name : item.name || (endpoints.length > 1 ? `默认渠道 ${index + 1}` : '默认渠道'), origin: item.origin || 'undisclosed', upstreamProvider: item.upstreamProvider || '',
-      ...(endpoint.supplierChannel ? { apiAddresses: [{ protocol: endpoint.protocol, baseUrl: channelModelUrl(endpoint, provider.catalogModels?.find(row => row.modelId === modelId)?.type) }] } : {}),
+      ...(endpoint.supplierChannel ? { apiAddresses: [{ protocol: endpoint.protocol, baseUrl: channelModelUrl(endpoint, item.type || provider.catalogModels?.find(row => row.modelId === modelId)?.type, { probe: channelProbe(item) }) }] } : {}),
       upstreamModelId: item.upstreamModelId || state.modelSupplies.find(supply => supply.endpointId === endpoint.id && (supply.catalogueModelId || supply.upstreamModelId) === modelId)?.upstreamModelId || modelId, endpoint,
       managed: Object.hasOwn(item, 'enabled'),
       enabled: item.enabled ?? ['运行中', '需关注'].includes(endpoint.status),
-      pricing: item.pricing || providerCataloguePrice(provider, modelId),
-    }));
+      pricing: version === undefined ? item.pricing || providerCataloguePrice(provider, modelId) : version?.pricing || { modelId, discountFactor: 1000000, scenarios: [] },
+    }; });
   });
   return [...rows, ...saved.filter(item => !item.endpointId).map(item => ({ ...item, managed: true, endpoint: { id: null, protocol: 'OpenAI', baseUrl: '', apiKeys: [] }, enabled: false, pricing: item.pricing || providerCataloguePrice(provider, modelId) }))];
 }
 export function channelUrl(provider, channel) {
-  if (channel.managed) return channelModelUrl(channel.endpoint, provider.catalogModels?.find(row => row.modelId === channel.modelId)?.type);
+  if (channel.managed) return channelModelUrl(channel.endpoint, channel.type || provider.catalogModels?.find(row => row.modelId === channel.modelId)?.type, { probe: channelProbe(channel) });
   return supplyModelUrl({ provider, endpoint: channel.endpoint, catalogueModelId: channel.modelId }, provider.catalogModels?.find(item => item.modelId === channel.modelId)) || channel.endpoint.baseUrl;
 }
 export const channelAddresses = (provider, channel) => channel.apiAddresses?.length ? channel.apiAddresses : channel.endpoint.baseUrl ? [{ protocol: channel.endpoint.protocol, baseUrl: channelUrl(provider, channel) }] : [];
 export const modelApiExample = type => `https://api.example.com${({ text: '/v1/chat/completions', multimodal: '/v1/chat/completions', embedding: '/v1/embeddings', rerank: '/v1/rerank' })[type] || '/完整接口路径'}`;
 export function modelApiIssue(type, baseUrl) {
   if (!type) return '';
-  const known = [['/chat/completions', ['text', 'multimodal'], 'Chat Completions'], ['/embeddings', ['embedding'], 'Embeddings'], ['/rerank', ['rerank'], 'Rerank']];
+  const known = [['/chat/completions', ['text', 'multimodal'], 'Chat Completions'], ['/embeddings', ['embedding'], 'Embeddings'], ['/rerank', ['rerank'], 'Rerank'], ['/images/generations', ['image'], 'Images'], ['/audio/speech', ['audio'], 'Speech'], ['/audio/transcriptions', ['audio'], 'Transcriptions']];
   const match = known.find(([suffix]) => baseUrl?.replace(/\/$/, '').endsWith(suffix));
   return match && !match[1].includes(type) ? `当前模型类型不适用 ${match[2]} 接口，请修改 API 地址。` : '';
 }
 export function channelInterfaceIssue(provider, channel) {
-  const type = provider.catalogModels?.find(row => row.modelId === channel.modelId)?.type;
+  const type = channel.type || provider.catalogModels?.find(row => row.modelId === channel.modelId)?.type;
   if (!channel.endpoint?.supplierChannel) return '';
   if (channel.endpoint.interfaceType) {
-    try { return modelApiIssue(type, modelTaskUrl(channel.endpoint, type)); }
+    const probe = channel.probe || channelProbe(channel);
+    if (channel.endpoint.interfaceType === 'openai' && type === 'audio' && !probe) return '';
+    try { return modelApiIssue(type, modelTaskUrl(channel.endpoint, type, { probe })); }
     catch (error) { return error.message; }
   }
   return channelAddresses(provider, channel).map(address => modelApiIssue(type, address.baseUrl)).find(Boolean) || '';
@@ -57,16 +63,23 @@ export function channelLinkedModels(state, provider, channel) {
   return state.models.filter(item => ids.has(item.id));
 }
 export const channelFingerprint = channel => JSON.stringify([channel.modelId, channel.upstreamModelId, connectionFingerprint(channel.endpoint), ...(channel.apiAddresses?.length > 1 ? [channel.apiAddresses] : [])]);
-export const channelCheckCurrent = channel => channel.managed ? channel.health?.fingerprint === channelFingerprint(channel) : connectionTestPassed(channel.endpoint);
-export function channelBlockReason(provider, channel) {
+export const channelCheckCurrent = channel => channel.health ? channel.health.fingerprint === channelFingerprint(channel) : !channel.managed && connectionTestPassed(channel.endpoint);
+export const channelTestPending = channel => channel.endpoint.serverTestJobs?.some(job => !job.receivedAt && job.signature === connectionFingerprint(channel.endpoint) && job.associationIds?.includes(channel.id));
+export function channelQualification(channel) {
+  if (channel.qualification?.result === '通过' && channel.qualification.fingerprint === channelFingerprint(channel)) return channel.qualification;
+  return channel.enabled && channel.health?.result === '通过' && channel.health.fingerprint === channelFingerprint(channel) ? channel.health : null;
+}
+export function channelBlockReason(provider, channel, { runtime = false } = {}) {
   if (provider.status !== '已启用') return '供应商已停用';
   if (channelInterfaceIssue(provider, channel)) return channelInterfaceIssue(provider, channel);
   if (!channel.enabled) return '渠道已停用';
   if (!connectionCredentialsReady(channel.endpoint, provider)) return 'API 凭证待配置';
-  if (channel.endpoint.supplierChannel && !connectionTestPassed(channel.endpoint)) return '渠道连接测试待通过';
+  if (!runtime && channelTestPending(channel)) return '当前模型测试尚未完成';
+  if (channel.endpoint.supplierChannel && !(runtime ? connectionQualified(channel.endpoint) : connectionTestPassed(channel.endpoint))) return '渠道连接测试待通过';
   if (channel.endpoint.supplierChannel && !['运行中', '需关注'].includes(channel.endpoint.status)) return '渠道待启用';
-  if (!channelCheckCurrent(channel)) return '渠道配置已变化，需检测';
-  if (channel.managed && channel.health.result !== '通过') return channel.health.message || '健康检测未通过';
+  const evidence = runtime ? channelQualification(channel) : channel.health;
+  if (!(runtime ? channel.managed ? evidence : connectionQualified(channel.endpoint) : channelCheckCurrent(channel))) return '渠道配置已变化，需检测';
+  if (evidence && evidence.result !== '通过') return evidence.message || '健康检测未通过';
   return '';
 }
 export function channelRouteRefs(state, provider, channel) {
@@ -169,15 +182,19 @@ export function providerChannelTransaction(state, { operation, objectId, data = 
       const addressIndex = data.addressIndex ?? 0, address = channelAddresses(provider, current)[addressIndex];
       if (!Number.isInteger(addressIndex) || !address) throw new Error('请选择当前渠道的协议地址');
       const result = preview({ modelId: data.modelId, upstreamId: current.upstreamModelId, endpointId: current.endpointId, ...address }, data.scenario);
-      const health = { ...result, fingerprint: channelFingerprint(current), testedAt: new Date().toISOString() };
+      const qualification = channelQualification(current);
+      if (qualification) next.qualification = structuredClone(qualification);
+      const health = { ...result, id: `test-${crypto.randomUUID()}`, source: 'local-preview', task: provider.catalogModels?.find(row => row.modelId === data.modelId)?.type || '基础调用', operator: state.currentRole, credentialIds: connectionKeys(current.endpoint, provider).map(key => key.id), configurationRevision: current.endpoint.configurationRevision || 0, fingerprint: channelFingerprint(current), testedAt: new Date().toISOString() };
+      next.testHistory = [...(current.testHistory || []), structuredClone(health)];
       next.protocolTests = { ...current.protocolTests, [address.protocol]: health };
       if (addressIndex === 0) next.health = health;
       label = '检测供应渠道';
     } else if (operation === 'channelEnable') {
+      if (channelTestPending(current)) throw new Error('当前模型测试尚未完成，不能使用先前证据启用');
       if (channelInterfaceIssue(provider, current)) throw new Error(channelInterfaceIssue(provider, current));
       if (current.endpoint.supplierChannel && (!connectionTestPassed(current.endpoint) || !['运行中', '需关注'].includes(current.endpoint.status))) throw new Error('请先完成渠道连接测试并启用渠道');
-      if (provider.status !== '已启用' || !connectionCredentialsReady(current.endpoint, provider) || !channelCheckCurrent(current) || current.managed && current.health.result !== '通过') throw new Error('当前渠道须先完成有效的健康检测');
-      next.enabled = true; label = '启用供应渠道';
+      if (provider.status !== '已启用' || !connectionCredentialsReady(current.endpoint, provider) || !channelCheckCurrent(current) || !current.health || current.health.result !== '通过' || current.health.fingerprint !== channelFingerprint(current)) throw new Error('当前渠道须先完成有效的健康检测');
+      next.enabled = true; next.qualification = structuredClone(current.health); label = '启用供应渠道';
     } else if (operation === 'channelDisable') {
       if (!data.confirmed) throw new Error('请确认全局停用渠道及服务影响');
       next.enabled = false; label = '停用供应渠道';

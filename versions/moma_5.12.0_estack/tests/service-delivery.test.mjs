@@ -50,7 +50,9 @@ test('new provider example has independent public IDs, prices and valid supplier
   assert.ok(providers.length >= 2);
   assert.equal(new Set(providers.map(row => row.callId)).size, providers.length);
   assert.ok(providers.every(row => row.callId && activeProviderPrice(state, model.id, row.providerId)?.items.length));
-  assert.ok(publicationChecks(state, model).every(check => check.passed));
+  const checks=publicationChecks(state,model);
+  assert.ok(checks.filter(check=>check.tab!=='platform').every(check=>check.passed));
+  assert.equal(checks.find(check=>check.tab==='platform').passed,false);
   const services = routingServices(state).filter(service => service.modelId === model.id);
   assert.equal(services.length, providers.length);
   for (const service of services) {
@@ -64,7 +66,7 @@ test('new provider example has independent public IDs, prices and valid supplier
 
 test('an already configured visible provider service only gets the one-time marker', () => {
   const source = parseAdminState(null), before = structuredClone(source);
-  assert.ok(serviceDirectoryModels(source).some(model => model.serviceMode === 'provider' && publicationChecks(source, model).every(check => check.passed)));
+  assert.ok(serviceDirectoryModels(source).some(model => model.serviceMode === 'provider' && publicationChecks(source, model).filter(check=>check.tab!=='platform').every(check => check.passed)));
   const state = completeServiceProviderExample(source);
   preserveRecords(before, state);
   for (const [collection, records] of Object.entries(before)) if (Array.isArray(records)) assert.equal(state[collection].length, records.length, collection);

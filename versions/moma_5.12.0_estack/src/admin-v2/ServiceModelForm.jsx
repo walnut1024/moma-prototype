@@ -9,19 +9,21 @@ import { Notice } from './ModelOperationsUI';
 import { MODEL_TYPES } from './model-management';
 import { modelLibrary } from './model-operations';
 import { modelAuthors, serviceModelDraft, INPUT_MODALITY_OPTIONS, SERVICE_OUTPUT_MODALITIES } from './model-profile';
+import { libraryRecord } from './model-library';
 
 export default function ServiceModelForm({state,ops,model,close,saved}) {
-  const [form,setForm]=useState(()=>serviceModelDraft(model));
-  const [source,setSource]=useState(''), [query,setQuery]=useState(''), [sourceOpen,setSourceOpen]=useState(false), [replacement,setReplacement]=useState(null);
+  const initialSource=!model && ops.params.get('sourceLibrary') ? libraryRecord(state,ops.params.get('sourceLibrary')) : null;
+  const [form,setForm]=useState(()=>serviceModelDraft(model || initialSource));
+  const [source,setSource]=useState(initialSource?.id || ''), [query,setQuery]=useState(''), [sourceOpen,setSourceOpen]=useState(false), [replacement,setReplacement]=useState(null);
   const [revision]=useState(model?.updatedAt);
   const library=modelLibrary(state), matches=library.filter(item=>[item.name,item.modelId].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
   const change=patch=>{setForm(current=>({...current,...patch}));ops.dirty(true);ops.setError('');};
   const importRecord=record=>{setForm(serviceModelDraft(record));setSource(record.id);setSourceOpen(false);setReplacement(null);ops.dirty(true);ops.setError('');};
   const select=record=>{if(Object.values(form).some(value=>Array.isArray(value)?value.length:value && value!=='K'))setReplacement(record);else importRecord(record);};
-  return <form className="sm-model-form" noValidate aria-label={model?'编辑模型资料':'新增模型服务'} onSubmit={event=>{event.preventDefault();const next=ops.run(model?'serviceBasics':'createServiceModel',{...form,expectedUpdatedAt:revision},model?.id);if(next)saved(next,model?.id || next.audits[0].objectId);}}>
+  return <form className="sm-model-form" noValidate aria-label={model?'编辑模型资料':'新增模型服务'} onSubmit={event=>{event.preventDefault();const next=ops.run(model?'serviceBasics':'createServiceModel',{...form,...(!model && source?{libraryId:source}:{}),expectedUpdatedAt:revision},model?.id);if(next)saved(next,model?.id || next.audits[0].objectId);}}>
     <h2>{model?'编辑模型资料':'新增模型服务'}</h2>
     {model?.listingStatus==='已上架' && <p className="mo-muted">修改模型类型或输入、输出能力后，模型将自动下架，关联渠道需重新验证。</p>}
-    {!model && <Field label="从资料管理引入（选填）" hint="引入后可修改，不影响原资料。"><Popover open={sourceOpen} onOpenChange={setSourceOpen}><PopoverTrigger asChild><Button type="button" variant="outline" className="sm-source-trigger" aria-label="从资料管理引入"><span>{library.find(item=>item.id===source)?.name || '搜索并选择模型资料'}</span><ChevronDown/></Button></PopoverTrigger><PopoverContent className="sm-source-picker" align="start"><Input aria-label="查询模型资料" placeholder="模型名称 / 模型 ID" value={query} onChange={event=>setQuery(event.target.value)}/><div>{matches.map(item=><Button key={item.id} type="button" variant="ghost" onClick={()=>select(item)}><strong>{item.name}</strong><small>{item.modelId}</small></Button>)}{!matches.length && <p>没有匹配的模型资料。</p>}</div></PopoverContent></Popover></Field>}
+    {!model && <Field label="引用模型资料（选填）" hint="服务保留原资料引用；可完善对外展示内容。"><Popover open={sourceOpen} onOpenChange={setSourceOpen}><PopoverTrigger asChild><Button type="button" variant="outline" className="sm-source-trigger" aria-label="从资料管理引入"><span>{library.find(item=>item.id===source)?.name || '搜索并选择模型资料'}</span><ChevronDown/></Button></PopoverTrigger><PopoverContent className="sm-source-picker" align="start"><Input aria-label="查询模型资料" placeholder="模型名称 / 模型 ID" value={query} onChange={event=>setQuery(event.target.value)}/><div>{matches.map(item=><Button key={item.id} type="button" variant="ghost" disabled={state.models.some(row=>row.id===item.id || row.templateId===item.id)} onClick={()=>select(item)}><strong>{item.name}</strong><small>{item.modelId}{state.models.some(row=>row.id===item.id || row.templateId===item.id)?' · 已有服务':''}</small></Button>)}{!matches.length && <p>没有匹配的模型资料。</p>}</div></PopoverContent></Popover></Field>}
     {replacement && <div className="sm-import-confirm" role="alert"><p>引入“{replacement.name}”将替换当前已填写的模型资料。</p><Button type="button" variant="outline" onClick={()=>setReplacement(null)}>保留当前内容</Button><Button type="button" onClick={()=>importRecord(replacement)}>确认引入</Button></div>}
     <div className="sm-metadata-grid">
       <Field label="模型名称 *"><Input aria-label="模型名称" required maxLength={100} disabled={!ops.can} value={form.name} onChange={event=>change({name:event.target.value})}/></Field>

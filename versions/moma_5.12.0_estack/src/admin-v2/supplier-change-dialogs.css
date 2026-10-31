@@ -1,0 +1,26 @@
+.admin-ui-portal .supplier-change-dialog{display:flex;flex-direction:column;gap:16px;font-size:12px;min-width:0}
+.admin-ui-portal .supplier-change-dialog h3{font-size:14px;font-weight:600;line-height:1.5;margin:0}
+.admin-ui-portal .supplier-change-dialog p{margin:0;line-height:1.6}
+.admin-ui-portal .supplier-change-dialog small{display:block;color:var(--muted-foreground);font-size:11px;line-height:1.5;margin-top:4px}
+.admin-ui-portal .supplier-change-dialog code{overflow-wrap:anywhere;white-space:normal}
+.admin-ui-portal .supplier-change-fields{display:flex;align-items:flex-end;gap:12px;min-width:0}
+.admin-ui-portal .supplier-change-fields>.mm-field{flex:1;min-width:0;margin:0}
+.admin-ui-portal .supplier-change-fields [data-slot=select-trigger]{width:100%}
+.admin-ui-portal .supplier-change-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+.admin-ui-portal .supplier-change-section{display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--border);padding-top:16px}
+.admin-ui-portal .supplier-change-section details summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
+.admin-ui-portal .supplier-change-section ul{margin:0;padding-left:20px;line-height:1.6}
+.admin-ui-portal .supplier-change-check{display:flex;align-items:center;gap:8px;min-height:32px}
+.admin-ui-portal .supplier-change-form{display:flex;flex-direction:column;gap:16px;border-top:1px solid var(--border);padding-top:16px}
+.admin-ui-portal .supplier-change-time-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.admin-ui-portal .supplier-change-time-fields>.mm-field{margin:0}
+.admin-ui-portal .supplier-change-confirmation{display:flex;flex-direction:column;gap:12px}
+.admin-ui-portal .supplier-change-footer{display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border);padding-top:16px}
+@media(max-width:700px){.admin-ui-portal .supplier-change-time-fields{grid-template-columns:minmax(0,1fr)}.admin-ui-portal .supplier-change-fields{align-items:stretch;flex-direction:column}}
+
+.admin-ui-portal.mo-dialog .mo-dialog-footer{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:none;padding:16px 20px;border-top:1px solid var(--border);background:var(--background)}
+.admin-ui-portal.mo-dialog:has(>.mo-dialog-footer) .mo-dialog-body{min-height:0;flex:1;overflow:auto}
+
+.admin-ui-portal .supplier-trial-tenant-scroll{max-height:210px;overflow:auto;min-width:0}
+.admin-ui-portal .supplier-trial-tenant-scroll .mo-table-scroll{overflow:visible}
+.admin-ui-portal .supplier-trial-tenant-scroll th{position:sticky;top:0;z-index:1}

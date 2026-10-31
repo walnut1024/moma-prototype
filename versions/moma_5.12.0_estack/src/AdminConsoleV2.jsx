@@ -1,3 +1,4 @@
+import { setMockRuntimeState } from './admin-v2/mock-onboarding-service';
 import GettingStarted from './admin-v2/GettingStarted';
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
@@ -39,6 +40,7 @@ import { AdminUIContext } from "./components/admin-ui-context";
 
 export default function AdminConsoleV2({ bannerTarget }) {
   const { state, dispatch, transact, transactModel, transactIndividual, transactAdminAccount, reload, conflict } = useAdminStore();
+  useEffect(() => { setMockRuntimeState(state); }, [state]);
   const initialPage = pageFromHash(location.hash, state.currentRole);
   const [navOpen, setNavOpen] = useState(false);
   const navTrigger = useRef(null);
