@@ -1,3 +1,4 @@
+import { resolveOnboardingProvider, resolveOnboardingModel, assertOnboardingMetadata } from './onboarding-presets.js';
 import { libraryRecord, modelLibrary, libraryRemovalIssue } from './model-library.js';
 export { libraryRecord, modelLibrary } from './model-library.js';
 import { routingTransaction } from './service-routing.js';
@@ -96,7 +97,43 @@ export function operationsTransaction(state, action) {
   const providerOp = (operation, objectId, data) => apply(providerTransaction(working, { operation, objectId, data }));
   const { operation, data = {}, modelId } = action;
   let objectId = modelId, label;
-  if (operation==='prepareServiceReviewCases') {
+  if (operation === 'channelQuickCreate') {
+    assertOnboardingMetadata(data);
+    const input = data.values;
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('请填写渠道连接及模型映射');
+    const draft = data.draftId && working.modelOnboardings.find(row => row.id === data.draftId && row.kind === 'supplier-channel');
+    if (data.draftId && (!draft || draft.status !== '配置中' || draft.draftRevision !== data.expectedDraftRevision || draft.endpointId)) throw new Error('接入草稿已变化或不属于新渠道，请重新载入');
+    let provider = resolveOnboardingProvider(working, data);
+    if (provider.isDraft) {
+      const created = providerOp('create', undefined, { name: provider.name, code: provider.code, sourceType: provider.sourceType, catalogModelIds: [] });
+      provider = working.providers.find(row => row.id === created.objectId);
+    }
+    if (data.providerPresetId && provider.onboardingPresetId !== data.providerPresetId) update('providers', provider.id, { onboardingPresetId: data.providerPresetId });
+    const values = { ...input };
+    if (data.newApiKey) {
+      if (input.authMode === 'none') throw new Error('无需认证的渠道不能同时新增密钥');
+      if (Object.keys(data.newApiKey).some(key => !['maskedKey', 'fingerprint', 'accountRpm'].includes(key))) throw new Error('新增密钥只接受掩码、指纹和账号上限');
+      providerOp('addApiKeys', provider.id, { apiKeys: [data.newApiKey], groupId: input.keyGroupId || 'default' });
+      const added = working.providers.find(row => row.id === provider.id).apiKeys.find(row => row.fingerprint === data.newApiKey.fingerprint);
+      values.authMode = 'specific'; values.apiKeyId = added.id;
+    }
+    if (!Array.isArray(input.models) || !input.models.length || input.models.length > 50) throw new Error('每批请选择 1–50 个模型');
+    values.models = input.models.map(row => {
+      if (!row || typeof row !== 'object') throw new Error('请选择有效的模型资料');
+      const resolved = resolveOnboardingModel(working, row);
+      let record = resolved.record;
+      if (resolved.isDraft) {
+        const { id: presetId, ...metadata } = record;
+        record = { ...metadata, id: 'template-onboarding-' + crypto.randomUUID(), onboardingPresetId: presetId, revision: 1, updatedAt: new Date().toISOString() };
+        add('modelTemplates', record);
+      }
+      return { libraryId: record.id, upstreamModelId: row.upstreamModelId, scenarios: row.scenarios || [] };
+    });
+    const created = providerOp('supplierChannelCreate', provider.id, values), endpoint = created.changes.find(change => change.type === 'add' && change.collection === 'endpoints')?.record;
+    if (!endpoint) throw new Error('渠道创建结果缺失');
+    objectId = endpoint.id; label = '保存快捷模型接入';
+    if (draft) update('modelOnboardings', draft.id, { status: '已完成', draftRevision: draft.draftRevision + 1, createdEndpointId: endpoint.id });
+  } else if (operation==='prepareServiceReviewCases') {
     if (data.confirmed!==true) throw new Error('请确认配置这五个评审场景');
     const prepared=prepareServiceReviewCases(working);
     for (const collection of ['models','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','serviceRoutes','modelVersions']) for (const record of prepared[collection]) {

@@ -12,15 +12,15 @@ export default function GettingStarted() {
     </div>
     <div className="gs-workflows">
       <section className="gs-panel" aria-labelledby="gs-connect"><header><h2 id="gs-connect">1. 接入模型</h2><Button asChild variant="outline" size="sm"><a href="#/admin-2/providers">去供应管理<ArrowRight aria-hidden="true"/></a></Button></header>
-        <p className="gs-preparation">准备供应商、接口类型、API 地址、上游模型 ID 和 API 密钥；采购价可以后补。</p>
+        <p className="gs-preparation">准备账号密钥或可复用的密钥组；常用供应商和模型可从参考目录选择，保存前核对地址与上游模型 ID。采购价可以后补。</p>
         <ol>
-          <li><h3>找到模型资料与供应商</h3><p>先检查是否已存在，避免重复创建。缺少模型资料可到资料管理新增，也可在添加渠道时就地新增；缺少供应商则点击“添加供应商”。</p></li>
-          <li><h3>添加渠道并填写接入配置</h3><p>点击“添加渠道”，选择供应商与接口类型，填写渠道名称和服务根地址。再选择一个或多个模型，分别填写上游模型 ID；渠道 ID 自动生成。</p></li>
-          <li><h3>选择 API 密钥组</h3><p>使用供应商默认组或独立密钥组；没有可用密钥时先添加。组内第一位是主要密钥，可在供应商的“API 密钥”页维护。</p></li>
-          <li><h3>保存、测试并启用渠道</h3><p>保存后确认本次模型范围与测试任务，再批量测试；通过后选择要启用的模型并确认。未配置采购价的模型可以测试和技术启用，但补齐采购价后才能用于正式服务。临时切换测试密钥组不修改正式配置。</p></li>
+          <li><h3>打开添加渠道并选择供应商和模型</h3><p>在同一表单选择已有记录或常用参考项，再核对渠道名称、接口地址和上游模型 ID。缺少的供应关系在保存时补齐；目录外项目可手动新增。</p></li>
+          <li><h3>复用密钥组或直接输入新 Key</h3><p>已有可用密钥组时可以直接复用；没有可用密钥时，在当前表单输入新 Key，随接入一起保存。参考目录不代表当前账号已开通模型，也不代表采购价格。</p></li>
+          <li><h3>保存接入，再明确发起测试</h3><p>点击“保存接入”后，核对模型范围并点击标明产生用量的基础测试按钮。图片、语音、视频及专项测试按页面选择任务并确认；测试通过不会自动启用。</p></li>
+          <li><h3>启用模型，再配置对外服务</h3><p>单模型首次接入通过检查后，可直接点击启用。多模型和停用恢复需选择范围并确认影响；共享配置变更仍先检查和测试。采购价未配置的模型可技术启用，补齐采购价后才能用于正式服务。</p></li>
         </ol>
         <p className="gs-result"><strong>完成后：</strong>在“模型”目录可查看同一模型的全部供应商与渠道，再进入服务管理上架。接入成功不会自动对外开放。</p>
-        <p className="gs-tip">仅登记供应商的模型清单时使用“添加模型”，可稍后再配置渠道。</p>
+        <p className="gs-tip">仅登记主体时使用“添加供应商”；仅登记供应关系时使用“添加模型”。参考目录以外的资料可手动维护。</p>
       </section>
       <section className="gs-panel" aria-labelledby="gs-publish"><header><h2 id="gs-publish">2. 上架模型</h2><Button asChild variant="outline" size="sm"><a href="#/admin-2/listing">去服务管理<ArrowRight aria-hidden="true"/></a></Button></header>
         <p className="gs-preparation">先完成渠道接入并补齐采购价；采购价与面向用户的平台售价分别维护。</p>

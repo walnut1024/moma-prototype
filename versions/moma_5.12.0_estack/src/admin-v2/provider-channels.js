@@ -194,10 +194,10 @@ export function providerChannelTransaction(state, { operation, objectId, data = 
       if (channelInterfaceIssue(provider, current)) throw new Error(channelInterfaceIssue(provider, current));
       if (current.endpoint.supplierChannel && (!connectionTestPassed(current.endpoint) || !['运行中', '需关注'].includes(current.endpoint.status))) throw new Error('请先完成渠道连接测试并启用渠道');
       if (provider.status !== '已启用' || !connectionCredentialsReady(current.endpoint, provider) || !channelCheckCurrent(current) || !current.health || current.health.result !== '通过' || current.health.fingerprint !== channelFingerprint(current)) throw new Error('当前渠道须先完成有效的健康检测');
-      next.enabled = true; next.qualification = structuredClone(current.health); label = '启用供应渠道';
+      next.enabled = true; next.activationChangedAt = new Date().toISOString(); next.qualification = structuredClone(current.health); label = '启用供应渠道';
     } else if (operation === 'channelDisable') {
       if (!data.confirmed) throw new Error('请确认全局停用渠道及服务影响');
-      next.enabled = false; label = '停用供应渠道';
+      next.enabled = false; next.activationChangedAt = new Date().toISOString(); label = '停用供应渠道';
     } else throw new Error('未知渠道操作');
     next.updatedAt = new Date().toISOString();
   }

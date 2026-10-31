@@ -35,7 +35,7 @@ export const displayedCatalogueIds = (provider, state) => {
 };
 export const providerCatalogueModel = (provider, modelId) => provider?.catalogModels?.find(item => item.modelId === modelId);
 export const supplierDirectory = state => {
-  const providers = state.providers.filter(provider => !hiddenFixtureIds.has(provider.id) && !(provider.id === 'provider-deepseek-direct' && state.providers.some(item => item.id === 'provider-deepseek-official') && !provider.catalogConnections?.length && !provider.apiKeys?.length && !state.endpoints.some(item => item.providerId === provider.id && (item.credentialRef || item.apiKeys?.length || item.modelIds?.length)))).map(provider => provider.id === MOMA_PROVIDER.id ? { ...provider, catalogModelIds: providerCatalogueIds(provider) } : provider);
+  const providers = state.providers.filter(provider => (!hiddenFixtureIds.has(provider.id) || Boolean(provider.onboardingPresetId)) && !(provider.id === 'provider-deepseek-direct' && state.providers.some(item => item.id === 'provider-deepseek-official') && !provider.catalogConnections?.length && !provider.apiKeys?.length && !state.endpoints.some(item => item.providerId === provider.id && (item.credentialRef || item.apiKeys?.length || item.modelIds?.length)))).map(provider => provider.id === MOMA_PROVIDER.id ? { ...provider, catalogModelIds: providerCatalogueIds(provider) } : provider);
   const order = [...OFFICIAL_SUPPLY_CATALOGUE.map(provider => provider.id), ...defaultSupplierIds];
   return [...order.map(id => providers.find(provider => provider.id === id)).filter(Boolean), ...providers.filter(provider => !order.includes(provider.id))].map(provider => provider.id === MOMA_PROVIDER.id ? { ...provider, catalogModelIds: displayedCatalogueIds(provider, state) } : provider);
 };

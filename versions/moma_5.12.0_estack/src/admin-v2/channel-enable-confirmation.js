@@ -5,9 +5,26 @@ import { supplierChannelAssociations } from './supplier-resources.js';
 
 const serviceScope = impact => JSON.stringify(impact.map(row => [row.id, row.routeVersion, [...row.affectedSupplyIds].sort()]).sort(([left], [right]) => left.localeCompare(right)));
 
+export function channelFirstEnableIssue(state, providerId, endpointId, associationIds) {
+  if(!Array.isArray(associationIds) || associationIds.length!==1)return '多模型启用须选择并确认完整范围。';
+  const provider=state.providers.find(row=>row.id===providerId),endpoint=state.endpoints.find(row=>row.id===endpointId && row.providerId===providerId && !row.deletedAt);
+  if(!provider || endpoint?.onboardingCreated!==true || endpoint.status!=='草稿' || endpoint.activationChangedAt)return '已有渠道或历史停用恢复须确认影响。';
+  const rows=supplierChannelAssociations(state,provider,endpointId),row=rows[0];
+  if(rows.length!==1 || row.id!==associationIds[0] || row.enabled!==false || row.activationChangedAt)return '当前渠道不是单模型首次启用，请选择并确认范围。';
+  const selection=channelSelectionSnapshot({provider,modelId:row.modelId,association:row});
+  if(channelSelectionServiceImpact(state,[selection]).length)return '所选模型已有已发布服务引用，请核对启用影响。';
+  return '';
+}
+
+export function prepareChannelFirstEnableConfirmation(state,providerId,endpointId,associationIds) {
+  const issue=channelFirstEnableIssue(state,providerId,endpointId,associationIds);if(issue)throw new Error(issue);
+  return {...prepareChannelEnableConfirmation(state,providerId,endpointId,associationIds),firstActivation:true};
+}
+
 export function channelEnableConfirmationIssue(state, confirmation) {
   const selections = confirmation?.selections;
   if (!selections?.length || new Set(selections.map(row => row.associationId)).size !== selections.length) return '请选择有效且不重复的模型关联。';
+  if(confirmation.firstActivation){const first=selections[0],issue=channelFirstEnableIssue(state,first.providerId,first.endpointId,selections.map(row=>row.associationId));if(issue)return issue;}
   for (const selected of selections) {
     const provider = state.providers.find(row => row.id === selected.providerId), association = provider && catalogueChannels(state, provider, selected.modelId).find(row => row.id === selected.associationId && row.endpointId === selected.endpointId);
     if (!association || channelFingerprint(association) !== selected.expectedFingerprint || association.endpoint.status !== confirmation.endpointStatus) return '所选模型渠道已变化，本次不能启用。请重新选择。';

@@ -1,3 +1,4 @@
+import { resolveOnboardingProvider, onboardingModelPreset } from './onboarding-presets.js';
 import { libraryRecord, modelLibrary } from './model-library.js';
 import { MODEL_TYPES } from './model-management.js';
 import { TASK_OPTIONS, INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, modelProfileDraft } from './model-profile.js';
@@ -27,9 +28,10 @@ function assertNoSecrets(value) {
 export const channelDrafts = state => state.modelOnboardings.filter(row => row.kind === 'supplier-channel' && row.status === '配置中');
 export const channelDraftReferences = draft => draft.kind === 'supplier-channel' && draft.status === '配置中' ? draft.rows.map(row => row.libraryId).filter(Boolean) : [];
 export function channelDraftIssue(state, draft) {
-  const provider = state.providers.find(row => row.id === draft.value.providerId);
-  if (!provider) return '供应商已不存在，请重新选择';
-  if (provider.status !== '已启用') return '供应商已停用，可继续编辑，启用前需恢复供应商';
+  let provider;
+  try { provider = resolveOnboardingProvider(state, draft.value); } catch (error) { return error.message; }
+  if (!provider.isDraft && provider.status !== '已启用') return '供应商已停用，可继续编辑，启用前需恢复供应商';
+  try { for (const row of draft.rows) if (row.modelPresetId) onboardingModelPreset(row.modelPresetId); } catch (error) { return error.message; }
   if (draft.endpointId && !state.endpoints.some(row => row.id === draft.endpointId && row.providerId === provider.id && !row.deletedAt)) return '原渠道已不存在或归属已变化';
   if (draft.rows.some(row => row.libraryId && !libraryRecord(state, row.libraryId))) return '部分模型资料已不存在，请重新匹配';
   return '';
@@ -37,9 +39,8 @@ export function channelDraftIssue(state, draft) {
 function draftFields(state, data) {
   assertNoSecrets(data);
   const input = data.value || {};
-  const provider = state.providers.find(row => row.id === input.providerId);
-  if (!provider) throw new Error('请选择有效的供应商');
-  const value = { providerId: provider.id, name: text(input.name, '渠道名称', 60), interfaceType: input.interfaceType || 'unselected', baseUrl: text(input.baseUrl || '', 'API 地址', 2048, false), keyGroupId: text(input.keyGroupId || 'default', '密钥组', 100), authMode: input.authMode === 'none' ? 'none' : 'group', capacity: text(String(input.capacity ?? ''), '账号请求上限', 20, false), timeoutSeconds: text(String(input.timeoutSeconds ?? 60), '请求超时', 20, false) };
+  const provider = resolveOnboardingProvider(state, input);
+  const value = { ...(input.providerPresetId ? { providerId: '', providerPresetId: input.providerPresetId } : { providerId: provider.id }), name: text(input.name, '渠道名称', 60), interfaceType: input.interfaceType || 'unselected', baseUrl: text(input.baseUrl || '', 'API 地址', 2048, false), keyGroupId: text(input.keyGroupId || 'default', '密钥组', 100), authMode: input.authMode === 'none' ? 'none' : 'group', capacity: text(String(input.capacity ?? ''), '账号请求上限', 20, false), timeoutSeconds: text(String(input.timeoutSeconds ?? 60), '请求超时', 20, false) };
   // Drafts retain unfinished text; request validation runs when the connection is committed.
   const draftUrl = input => {
     const raw = text(input || '', 'API 地址', 2048, false);
@@ -57,8 +58,9 @@ function draftFields(state, data) {
   if (!Array.isArray(data.rows) || !data.rows.length || data.rows.length > 50) throw new Error('每个接入草稿包含 1–50 个模型行');
   const rows = data.rows.map((row, index) => {
     if (!Array.isArray(row.scenarios || [])) throw new Error('采购价格式无效');
+    if (row.libraryId && row.modelPresetId) throw new Error('草稿模型资料与参考预设只能选择一项');
     const scenarios = (row.scenarios || []).map(item => ({ name: text(item.name || '', '计费项', 100, false), listPrice: String(item.listPrice ?? ''), unit: text(item.unit || '', '计价单位', 100, false), currency: text(item.currency || 'CNY', '币种', 10), condition: text(item.condition || '', '条件', 160, false) }));
-    return { id: text(row.id || `row-${index + 1}`, '模型行标识', 100), libraryId: row.libraryId || '', upstreamModelId: text(row.upstreamModelId || '', '上游模型 ID', 200, false), selected: row.selected !== false, confirmed: row.confirmed === true, source: ['upstream', 'reference', 'manual'].includes(row.source) ? row.source : 'manual', scenarios };
+    return { id: text(row.id || `row-${index + 1}`, '模型行标识', 100), libraryId: row.libraryId || '', ...(row.modelPresetId ? { modelPresetId: text(row.modelPresetId, '模型参考预设', 100) } : {}), upstreamModelId: text(row.upstreamModelId || '', '上游模型 ID', 200, false), selected: row.selected !== false, confirmed: row.confirmed === true, source: ['upstream', 'reference', 'manual'].includes(row.source) ? row.source : 'manual', scenarios };
   });
   const endpoint = data.endpointId && state.endpoints.find(row => row.id === data.endpointId && row.providerId === provider.id && !row.deletedAt);
   if (data.endpointId && !endpoint) throw new Error('草稿渠道不属于当前供应商');

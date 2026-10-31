@@ -382,10 +382,10 @@ export function providerTransaction(state, action) {
         if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在 API 密钥页签配置此接入地址的凭证');
         if (owner?.status !== '已启用') throw new Error('请先启用供应商');
         if (!connectionTestPassed(endpoint)) throw new Error('当前接入配置须先通过连接测试');
-        changes.push(update('endpoints', endpoint.id, { status: '运行中', connectionQualification: structuredClone(endpoint.connectionTest) }));
+        changes.push(update('endpoints', endpoint.id, { status: '运行中', activationChangedAt: new Date().toISOString(), connectionQualification: structuredClone(endpoint.connectionTest) }));
       } else if (operation === 'disableConnection') {
         if (!data.confirmed) throw new Error('请先确认停用影响');
-        changes.push(update('endpoints', endpoint.id, { status: '停用' }));
+        changes.push(update('endpoints', endpoint.id, { status: '停用', activationChangedAt: new Date().toISOString() }));
       } else throw new Error('未知供应商操作');
     }
   }

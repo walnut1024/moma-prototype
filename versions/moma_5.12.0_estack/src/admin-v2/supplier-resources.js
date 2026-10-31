@@ -110,6 +110,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     const models = modelBatch(state, data.models);
     const created = supplierResourceTransaction(state, { operation: 'supplierChannelSave', objectId, data: { ...data, mode: 'all', protocol: data.protocol || 'OpenAI', authMode: data.authMode || 'group' } }, connect, normalizePrice);
     const record = created.changes.find(row => row.type === 'add' && row.collection === 'endpoints')?.record;
+    record.onboardingCreated = true;
     const associated = supplierResourceTransaction(stageResourceChanges(state, created.changes), { operation: 'supplierModelsAdd', objectId, data: { endpointId: record.id, models } }, connect, normalizePrice);
     return finish('创建模型渠道', [...created.changes, ...associated.changes]);
   }
@@ -155,7 +156,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     }
     if (operation === 'supplierModelsEnable' && !['运行中', '需关注'].includes(endpoint.status)) {
       const owner = working.providers.find(item => item.id === objectId), selectedIds = new Set(data.associationIds);
-      changes.push(update('providers', objectId, { catalogConnections: owner.catalogConnections.map(row => row.endpointId === endpoint.id && !selectedIds.has(row.id) ? { ...row, enabled: false } : row) }));
+      changes.push(update('providers', objectId, { catalogConnections: owner.catalogConnections.map(row => row.endpointId === endpoint.id && !selectedIds.has(row.id) ? { ...row, enabled: false, ...(row.enabled ? { activationChangedAt: new Date().toISOString() } : {}) } : row) }));
     }
     return finish(operation === 'supplierModelsTest' ? '批量测试模型渠道' : '批量启用模型渠道', changes);
   }
@@ -219,7 +220,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
       if (changed && supplierChannelAssociations(state, provider, endpoint.id).length && !data.confirmed) throw new Error('请确认共享渠道变更影响的所有模型');
       return finish('保存渠道 API 密钥', [update('endpoints', endpoint.id, { authMode: data.authMode, apiKeyId, ...(data.authMode === 'group' ? { keyGroupId: data.keyGroupId } : endpoint.authMode === 'group' ? { keyGroupId: '' } : {}), apiKeys: [], credentialRef: '' }), ...groupChanges, ...(selectedKey && !provider.apiKeys?.some(key => key.id === selectedKey.id) ? [update('providers', objectId, { apiKeys: [...(provider.apiKeys || []), selectedKey] })] : []), ...(changed ? invalidateSupplierChannels(state, provider, [endpoint.id]) : [])]);
     }
-    const transaction = connect(state, { operation: 'connection', objectId: endpoint?.id, data: { ...endpoint, ...data, providerId: objectId, name, protocol: data.protocol, baseUrl: data.baseUrl, timeoutSeconds: endpoint?.timeoutSeconds || 60, apiKeys: [], credentialRef: '' } });
+    const transaction = connect(state, { operation: 'connection', objectId: endpoint?.id, data: { ...endpoint, ...data, providerId: objectId, name, protocol: data.protocol, baseUrl: data.baseUrl, timeoutSeconds: data.timeoutSeconds ?? endpoint?.timeoutSeconds ?? 60, apiKeys: [], credentialRef: '' } });
     const change = transaction.changes.find(row => row.collection === 'endpoints');
     const normalized = change.type === 'add' ? change.record : { ...endpoint, ...change.changes };
     const url = new URL(normalized.baseUrl);
@@ -269,7 +270,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     if (provider.status !== '已启用') throw new Error('请先启用供应商');
     if (connectionTestPending(endpoint)) throw new Error('当前渠道测试尚未完成，不能使用先前证据启用');
     if (!connectionCredentialsReady(endpoint, provider) || !connectionTestPassed(endpoint)) throw new Error('请先配置凭证并通过渠道测试');
-    return finish('启用供应渠道', [update('endpoints', endpoint.id, { status: '运行中', connectionQualification: structuredClone(endpoint.connectionTest) })]);
+    return finish('启用供应渠道', [update('endpoints', endpoint.id, { status: '运行中', activationChangedAt: new Date().toISOString(), connectionQualification: structuredClone(endpoint.connectionTest) })]);
   }
   if (operation !== 'supplierAssociationSave') throw new Error('未知供应资源操作');
   const modelId = required(data.modelId, '模型 ID');
