@@ -1,7 +1,18 @@
-.development-notes-trigger { color: #8a5d18; vertical-align: middle; margin-left: 4px; }
 .development-notes { font-size: 13px; line-height: 1.65; }
 .development-notes h3 { font-size: 14px; font-weight: 600; margin: 16px 0 4px; }
 .development-notes p { margin: 0; }
 .development-notes ul { list-style: disc; padding-left: 20px; margin: 4px 0; }
 .development-notes li + li { margin-top: 4px; }
 .development-notes .development-notes-label { color: #8a5d18; background: #fff8e8; padding: 8px 12px; border-radius: 6px; }
+
+.development-notes .development-notes-tabs { margin-top: 12px; }
+.mo-dialog.wide:has(.development-notes) { display: flex; flex-direction: column; max-height: calc(100dvh - 40px); padding: 0; gap: 0; overflow: hidden; }
+.mo-dialog:has(.development-notes) > .mo-dialog-header { display: flex; flex: none; align-items: start; justify-content: space-between; gap: 12px; padding: 20px; border-bottom: 1px solid #e8edf5; }
+.mo-dialog:has(.development-notes) > .mo-dialog-body { min-height: 0; overflow: auto; padding: 20px; }
+.mo-dialog:has(.development-notes) > .mo-dialog-footer { display: flex; flex: none; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid #e8edf5; }
+.app-shell > header .banner-version-tools { display: flex; align-items: center; gap: 10px; }
+.app-shell > header .banner-version-tools > .development-notes-trigger { margin: 0; height: 32px; padding: 0 10px; border-color: transparent; background: transparent; color: #e8edf6; font-size: 12px; }
+.app-shell > header .banner-version-tools > .development-notes-trigger:hover { background: #ffffff14; color: #fff; }
+.app-shell > header .banner-version-tools > .development-notes-trigger:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+.development-model-scope{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:12px 0}

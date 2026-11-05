@@ -1,0 +1,3965 @@
+{
+  "id": "initial-workspace",
+  "version": 1,
+  "flags": {
+    "supplierReviewVersion": 1
+  },
+  "collections": {
+    "models": [
+      {
+        "id": "model-1",
+        "modelId": "deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro",
+        "maker": "DeepSeek",
+        "type": "text",
+        "description": "面向代码、推理与长文本任务的语言模型。",
+        "capabilities": {
+          "context": 1048576,
+          "output": 393216,
+          "streaming": true,
+          "tools": true
+        },
+        "profile": {
+          "author": "DeepSeek",
+          "releaseDate": "2026-04-24",
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ],
+          "resultTypes": [],
+          "tasks": [
+            "对话",
+            "文本生成",
+            "代码生成"
+          ],
+          "documentation": "https://api-docs.deepseek.com/quick_start/pricing/",
+          "sourceUpdated": "2026-10-11",
+          "family": "DeepSeek",
+          "version": "V4-Pro-0813",
+          "reasoning": "supported",
+          "structured": "supported"
+        },
+        "createdAt": "2026-09-15T10:30:00+08:00",
+        "updatedAt": "@initializedAt",
+        "status": "停用",
+        "visibility": "公开",
+        "defaultVersionId": "version-1",
+        "listingStatus": "已下架",
+        "callsEnabled": false,
+        "openScope": "all",
+        "tenantIds": [],
+        "serviceReviewCase": "deepseek",
+        "serviceReviewVersion": 1,
+        "serviceModeRevision": 1,
+        "serviceMode": "standard",
+        "firstPublishedAt": "@initializedAt",
+        "serviceProviders": []
+      },
+      {
+        "id": "catalog-demo-qwen",
+        "modelId": "qwen3.8-max",
+        "name": "Qwen3.8 Max",
+        "maker": "阿里巴巴",
+        "type": "multimodal",
+        "description": "支持文本、图像与视频理解，适用于复杂内容分析和通用任务。",
+        "capabilities": {
+          "context": 1048576,
+          "output": null,
+          "streaming": true,
+          "tools": true
+        },
+        "profile": {
+          "author": "阿里巴巴",
+          "releaseDate": "2026-08-02",
+          "inputModalities": [
+            "文本",
+            "图片",
+            "视频"
+          ],
+          "outputModalities": [
+            "文本"
+          ],
+          "resultTypes": [],
+          "tasks": [
+            "对话",
+            "图像理解",
+            "视频理解",
+            "代码生成"
+          ],
+          "documentation": "https://help.aliyun.com/zh/model-studio/vision-model",
+          "sourceUpdated": "2026-10-11",
+          "reasoning": "supported",
+          "structured": "supported",
+          "videoDuration": 7200,
+          "imageLimit": 2048
+        },
+        "listingStatus": "已上架",
+        "visibility": "公开",
+        "status": "运行中",
+        "callsEnabled": true,
+        "openScope": "all",
+        "tenantIds": [],
+        "defaultVersionId": "version-catalog-demo-qwen",
+        "createdAt": "2026-11-02T06:39:55.510Z",
+        "updatedAt": "@initializedAt",
+        "serviceReviewCase": "qwen",
+        "serviceReviewVersion": 1,
+        "serviceModeRevision": 1,
+        "serviceMode": "provider",
+        "firstPublishedAt": "@initializedAt",
+        "serviceProviders": [
+          {
+            "providerId": "service-review-provider-aliyun",
+            "code": "aliyun",
+            "callId": "qwen3.8-max-aliyun",
+            "status": "已关联",
+            "updatedAt": "@initializedAt"
+          },
+          {
+            "providerId": "service-review-provider-siliconflow",
+            "code": "siliconflow",
+            "callId": "qwen3.8-max-siliconflow",
+            "status": "已关联",
+            "updatedAt": "@initializedAt"
+          },
+          {
+            "providerId": "service-review-provider-aggregate",
+            "code": "aggregate",
+            "callId": "qwen3.8-max-aggregate",
+            "status": "已关联",
+            "updatedAt": "@initializedAt"
+          }
+        ]
+      },
+      {
+        "id": "catalog-demo-image",
+        "modelId": "qwen-image-3.0-pro",
+        "name": "Qwen Image 3.0 Pro",
+        "maker": "阿里巴巴",
+        "type": "image",
+        "description": "",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "profile": {
+          "author": "阿里巴巴",
+          "inputModalities": [
+            "文本",
+            "图片"
+          ],
+          "outputModalities": [
+            "图片"
+          ],
+          "tasks": [
+            "文生图",
+            "图像编辑"
+          ]
+        },
+        "listingStatus": "已下架",
+        "visibility": "内部",
+        "status": "草稿",
+        "callsEnabled": false,
+        "openScope": "all",
+        "tenantIds": [],
+        "defaultVersionId": "version-catalog-demo-image",
+        "createdAt": "2026-11-02T06:39:55.509Z",
+        "updatedAt": "@initializedAt",
+        "serviceReviewCase": "image",
+        "serviceReviewVersion": 1,
+        "serviceModeRevision": 1,
+        "serviceMode": null,
+        "serviceProviders": []
+      },
+      {
+        "id": "catalog-demo-video",
+        "modelId": "wan3.0-video",
+        "name": "Wan3.0 Video",
+        "maker": "阿里巴巴",
+        "type": "video",
+        "description": "支持文本、图像、视频及音频参考，统一生成视频。",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "profile": {
+          "author": "阿里巴巴",
+          "releaseDate": "2026-08-06",
+          "inputModalities": [
+            "文本",
+            "图片",
+            "视频",
+            "音频"
+          ],
+          "outputModalities": [
+            "视频"
+          ],
+          "tasks": [
+            "文生视频",
+            "图生视频",
+            "参考生视频"
+          ],
+          "maxDuration": 30,
+          "resolutions": "480P、720P、1080P",
+          "resultTypes": [],
+          "documentation": "https://help.aliyun.com/zh/model-studio/wan3-0-video",
+          "sourceUpdated": "2026-10-11",
+          "minDuration": 2
+        },
+        "listingStatus": "已上架",
+        "visibility": "公开",
+        "status": "运行中",
+        "callsEnabled": true,
+        "openScope": "all",
+        "tenantIds": [],
+        "defaultVersionId": "version-catalog-demo-video",
+        "createdAt": "2026-11-02T06:39:55.508Z",
+        "updatedAt": "@initializedAt",
+        "serviceReviewCase": "video",
+        "serviceReviewVersion": 1,
+        "serviceModeRevision": 1,
+        "serviceMode": "standard",
+        "firstPublishedAt": "@initializedAt",
+        "serviceProviders": []
+      },
+      {
+        "id": "catalog-demo-tts",
+        "modelId": "qwen-audio-3.0-tts-flash",
+        "name": "Qwen Audio 3.0 TTS Flash",
+        "maker": "阿里巴巴",
+        "type": "audio",
+        "description": "支持文本语音合成、声音复刻和声音设计。",
+        "usageUnit": "字符",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "profile": {
+          "author": "阿里巴巴",
+          "releaseDate": "2026-07-14",
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "音频"
+          ],
+          "tasks": [
+            "语音合成"
+          ],
+          "outputFormats": "mp3、wav",
+          "voices": "标准音色",
+          "speedControl": "supported",
+          "resultTypes": [],
+          "documentation": "https://help.aliyun.com/zh/model-studio/tts-model",
+          "sourceUpdated": "2026-10-11"
+        },
+        "listingStatus": "已下架",
+        "visibility": "公开",
+        "status": "停用",
+        "callsEnabled": false,
+        "openScope": "all",
+        "tenantIds": [],
+        "defaultVersionId": "version-catalog-demo-tts",
+        "createdAt": "2026-11-02T06:39:55.507Z",
+        "updatedAt": "@initializedAt",
+        "serviceReviewCase": "audio",
+        "serviceReviewVersion": 1,
+        "serviceModeRevision": 1,
+        "serviceMode": "provider",
+        "serviceProviders": [
+          {
+            "providerId": "service-review-provider-aliyun",
+            "code": "aliyun",
+            "callId": "qwen-audio-3.0-tts-flash-aliyun",
+            "status": "已关联",
+            "updatedAt": "@initializedAt"
+          },
+          {
+            "providerId": "service-review-provider-iflytek",
+            "code": "iflytek",
+            "callId": "qwen-audio-3.0-tts-flash-iflytek",
+            "status": "已关联",
+            "updatedAt": "@initializedAt"
+          }
+        ]
+      }
+    ],
+    "modelTemplates": [
+      {
+        "id": "supplier-template-AICC-Doubao-Seedance-2.0",
+        "modelId": "aicc-doubao-seedance-2.0",
+        "name": "Seedance-2.0",
+        "type": "video",
+        "maker": "",
+        "description": "Seedance-2.0 的模型资料演示记录，具体能力规格待核对。",
+        "usageUnit": "秒",
+        "capabilities": {},
+        "profile": {
+          "tasks": [
+            "文生视频"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "视频"
+          ]
+        },
+        "revision": 1,
+        "updatedAt": "@initializedAt"
+      },
+      {
+        "id": "supplier-template-DeepSeek-V4-Flash-0731",
+        "modelId": "deepseek-v4-flash-0731",
+        "name": "DeepSeek-V4-Flash-0731",
+        "type": "text",
+        "maker": "",
+        "description": "DeepSeek-V4-Flash-0731 的模型资料演示记录，具体能力规格待核对。",
+        "usageUnit": "百万 Token",
+        "capabilities": {},
+        "profile": {
+          "tasks": [
+            "对话"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ]
+        },
+        "revision": 1,
+        "updatedAt": "@initializedAt"
+      },
+      {
+        "id": "supplier-template-Kimi/miKimi-K3",
+        "modelId": "kimi/mikimi-k3",
+        "name": "Kimi/miKimi-K3",
+        "type": "multimodal",
+        "maker": "",
+        "description": "Kimi/miKimi-K3 的模型资料演示记录，具体能力规格待核对。",
+        "usageUnit": "百万 Token",
+        "capabilities": {},
+        "profile": {
+          "tasks": [
+            "对话"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ]
+        },
+        "revision": 1,
+        "updatedAt": "@initializedAt"
+      },
+      {
+        "id": "supplier-template-deepseek-reasoner",
+        "modelId": "deepseek-reasoner",
+        "name": "DeepSeek-R1",
+        "type": "text",
+        "maker": "",
+        "description": "DeepSeek-R1 的模型资料演示记录，具体能力规格待核对。",
+        "usageUnit": "百万 Token",
+        "capabilities": {},
+        "profile": {
+          "tasks": [
+            "对话"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ]
+        },
+        "revision": 1,
+        "updatedAt": "@initializedAt"
+      },
+      {
+        "id": "supplier-template-doubao-pro",
+        "modelId": "doubao-pro",
+        "name": "Doubao-Pro",
+        "type": "text",
+        "maker": "",
+        "description": "Doubao-Pro 的模型资料演示记录，具体能力规格待核对。",
+        "usageUnit": "百万 Token",
+        "capabilities": {},
+        "profile": {
+          "tasks": [
+            "对话"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ]
+        },
+        "revision": 1,
+        "updatedAt": "@initializedAt"
+      },
+      {
+        "id": "supplier-template-doubao-seed",
+        "modelId": "doubao-seed",
+        "name": "Doubao-Seed",
+        "type": "text",
+        "maker": "",
+        "description": "Doubao-Seed 的模型资料演示记录，具体能力规格待核对。",
+        "usageUnit": "百万 Token",
+        "capabilities": {},
+        "profile": {
+          "tasks": [
+            "对话"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ]
+        },
+        "revision": 1,
+        "updatedAt": "@initializedAt"
+      },
+      {
+        "id": "supplier-template-kimi-k2",
+        "modelId": "kimi-k2",
+        "name": "Kimi-K2",
+        "type": "multimodal",
+        "maker": "",
+        "description": "Kimi-K2 的模型资料演示记录，具体能力规格待核对。",
+        "usageUnit": "百万 Token",
+        "capabilities": {},
+        "profile": {
+          "tasks": [
+            "对话"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ]
+        },
+        "revision": 1,
+        "updatedAt": "@initializedAt"
+      },
+      {
+        "id": "supplier-template-glm-4-7",
+        "modelId": "glm-4-7",
+        "name": "GLM-4.7",
+        "type": "text",
+        "maker": "",
+        "description": "GLM-4.7 的模型资料演示记录，具体能力规格待核对。",
+        "usageUnit": "百万 Token",
+        "capabilities": {},
+        "profile": {
+          "tasks": [
+            "对话"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ]
+        },
+        "revision": 1,
+        "updatedAt": "@initializedAt"
+      }
+    ],
+    "providers": [
+      {
+        "id": "provider-moma",
+        "createdAt": "2026-09-15T10:30:00+08:00",
+        "updatedAt": "2026-09-15T10:30:00+08:00",
+        "name": "中国移动 MoMA",
+        "code": "moma",
+        "baseUrl": "https://moma.cmecloud.cn/v1",
+        "sourceType": "thirdParty",
+        "integrationType": "云厂商模型服务",
+        "catalogueSource": "公有云MoMA_按Token用量计费_资源规格清单_v5-20260920.xlsx",
+        "catalogueCheckedAt": "2026-10-21",
+        "catalogModelIds": [
+          "GLM-5.2",
+          "BGE-M3",
+          "AICC-Doubao-Seedance-2.0",
+          "DeepSeek-V4-Flash-0731",
+          "Kimi/miKimi-K3"
+        ],
+        "description": "中国移动移动云模型服务平台 MoMA，提供模型 API 调用服务。",
+        "catalogueNote": "资源规格清单内模型按清单报价，未列入清单的主站、合作及机密模型保留原报价；不合并省市节点同名模型。价格规格名称不等同于已经验证的调用 ID，实际调用以供应商 API 资料与账号权益为准。",
+        "contact": "",
+        "contractEnd": null,
+        "status": "已启用",
+        "catalogModels": [
+          {
+            "modelId": "GLM-5.2",
+            "name": "GLM-5.2",
+            "type": "text",
+            "libraryId": "model-2"
+          },
+          {
+            "modelId": "BGE-M3",
+            "name": "BGE-M3",
+            "type": "embedding",
+            "libraryId": "catalog-demo-embedding"
+          },
+          {
+            "modelId": "AICC-Doubao-Seedance-2.0",
+            "name": "Seedance-2.0",
+            "type": "video",
+            "libraryId": "supplier-template-AICC-Doubao-Seedance-2.0"
+          },
+          {
+            "modelId": "DeepSeek-V4-Flash-0731",
+            "name": "DeepSeek-V4-Flash-0731",
+            "type": "text",
+            "libraryId": "supplier-template-DeepSeek-V4-Flash-0731"
+          },
+          {
+            "modelId": "Kimi/miKimi-K3",
+            "name": "Kimi/miKimi-K3",
+            "type": "multimodal",
+            "libraryId": "supplier-template-Kimi/miKimi-K3"
+          }
+        ],
+        "catalogConnections": [],
+        "catalogPricing": [],
+        "apiKeys": [
+          {
+            "id": "KEY-001",
+            "name": "生产凭证",
+            "maskedKey": "test••••••••0001",
+            "fingerprint": "00000000000000000000000000000000000000000000000000000000000003e9",
+            "status": "enabled",
+            "createdAt": "@initializedAt"
+          },
+          {
+            "id": "KEY-002",
+            "name": "备用凭证",
+            "maskedKey": "test••••••••0002",
+            "fingerprint": "00000000000000000000000000000000000000000000000000000000000003ea",
+            "status": "enabled",
+            "createdAt": "@initializedAt"
+          },
+          {
+            "id": "KEY-003",
+            "name": "专用凭证",
+            "maskedKey": "test••••••••0003",
+            "fingerprint": "00000000000000000000000000000000000000000000000000000000000003eb",
+            "status": "enabled",
+            "createdAt": "@initializedAt"
+          }
+        ],
+        "defaultApiKeyId": "KEY-001",
+        "removedCatalogModelIds": [],
+        "catalogueScope": "managed",
+        "supplierReviewModelIds": [
+          "GLM-5.2",
+          "BGE-M3",
+          "AICC-Doubao-Seedance-2.0",
+          "DeepSeek-V4-Flash-0731",
+          "Kimi/miKimi-K3"
+        ]
+      },
+      {
+        "id": "provider-zhipu-direct",
+        "createdAt": "2026-09-15T10:30:00+08:00",
+        "updatedAt": "2026-09-15T10:30:00+08:00",
+        "name": "智谱",
+        "code": "zhipu-direct",
+        "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+        "catalogueSource": "https://docs.bigmodel.cn/cn/guide/develop/openai/introduction",
+        "catalogModelIds": [
+          "glm-4-7",
+          "glm-5.2"
+        ],
+        "catalogueCheckedAt": "2026-10-11",
+        "sourceType": "thirdParty",
+        "integrationType": "模型厂商直连",
+        "contact": "",
+        "contractEnd": null,
+        "status": "已启用",
+        "catalogModels": [
+          {
+            "modelId": "glm-4-7",
+            "name": "GLM-4.7",
+            "type": "text",
+            "libraryId": "supplier-template-glm-4-7"
+          },
+          {
+            "modelId": "glm-5.2",
+            "name": "GLM-5.2",
+            "type": "text",
+            "libraryId": "model-2"
+          }
+        ],
+        "catalogConnections": [],
+        "catalogPricing": [],
+        "apiKeys": [],
+        "defaultApiKeyId": "",
+        "removedCatalogModelIds": [],
+        "catalogueScope": "managed",
+        "supplierReviewModelIds": [
+          "glm-4-7",
+          "glm-5.2"
+        ]
+      },
+      {
+        "id": "provider-kimi-official",
+        "createdAt": "2026-09-15T10:30:00+08:00",
+        "updatedAt": "2026-09-15T10:30:00+08:00",
+        "name": "月之暗面 Kimi",
+        "code": "kimi-official",
+        "sourceType": "thirdParty",
+        "status": "已启用",
+        "contact": "",
+        "contactInfo": "",
+        "description": "",
+        "catalogModelIds": [
+          "kimi-k2"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "kimi-k2",
+            "name": "Kimi-K2",
+            "type": "multimodal",
+            "libraryId": "supplier-template-kimi-k2"
+          }
+        ],
+        "catalogPricing": [],
+        "catalogConnections": [
+          {
+            "id": "supplier-review-link-kimi-official-0-0",
+            "modelId": "kimi-k2",
+            "endpointId": "supplier-review-CH-301",
+            "upstreamModelId": "kimi-k2",
+            "name": "默认渠道",
+            "origin": "undisclosed",
+            "pricing": {
+              "modelId": "kimi-k2",
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入 Token",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 2000000
+                },
+                {
+                  "name": "输出 Token",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 8000000
+                }
+              ]
+            },
+            "enabled": false,
+            "health": null,
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt"
+          }
+        ],
+        "apiKeys": [],
+        "defaultApiKeyId": "",
+        "removedCatalogModelIds": [],
+        "catalogueScope": "managed",
+        "supplierReviewModelIds": [
+          "kimi-k2"
+        ]
+      },
+      {
+        "id": "provider-deepseek-official",
+        "createdAt": "2026-09-15T10:30:00+08:00",
+        "updatedAt": "2026-09-15T10:30:00+08:00",
+        "name": "DeepSeek 官方",
+        "code": "deepseek-official",
+        "sourceType": "thirdParty",
+        "status": "已启用",
+        "contact": "",
+        "contactInfo": "",
+        "description": "",
+        "catalogModelIds": [
+          "deepseek-reasoner"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "deepseek-reasoner",
+            "name": "DeepSeek-R1",
+            "type": "text",
+            "libraryId": "supplier-template-deepseek-reasoner"
+          }
+        ],
+        "catalogPricing": [],
+        "catalogConnections": [
+          {
+            "id": "supplier-review-link-deepseek-official-0-0",
+            "modelId": "deepseek-reasoner",
+            "endpointId": "supplier-review-CH-101",
+            "upstreamModelId": "deepseek-reasoner",
+            "name": "官方渠道",
+            "origin": "undisclosed",
+            "pricing": {
+              "modelId": "deepseek-reasoner",
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入 Token",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 4000000
+                },
+                {
+                  "name": "输出 Token",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 16000000
+                }
+              ]
+            },
+            "enabled": true,
+            "health": {
+              "result": "通过",
+              "testedAt": "@initializedAt",
+              "fingerprint": "[\"deepseek-reasoner\",\"deepseek-reasoner\",\"[\\\"https://api.deepseek.com/chat/completions\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"inherit\\\",\\\"\\\",\\\"supplier-review-1\\\"]\"]"
+            },
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt"
+          }
+        ],
+        "apiKeys": [
+          {
+            "id": "KEY-101",
+            "name": "生产凭证",
+            "maskedKey": "test••••••••0101",
+            "fingerprint": "000000000000000000000000000000000000000000000000000000000000044d",
+            "status": "enabled",
+            "createdAt": "@initializedAt"
+          }
+        ],
+        "defaultApiKeyId": "KEY-101",
+        "removedCatalogModelIds": [],
+        "catalogueScope": "managed",
+        "supplierReviewModelIds": [
+          "deepseek-reasoner"
+        ]
+      },
+      {
+        "id": "provider-ark-official",
+        "createdAt": "2026-09-15T10:30:00+08:00",
+        "updatedAt": "2026-09-15T10:30:00+08:00",
+        "name": "火山方舟",
+        "code": "ark-official",
+        "sourceType": "thirdParty",
+        "status": "已启用",
+        "contact": "",
+        "contactInfo": "",
+        "description": "",
+        "catalogModelIds": [
+          "doubao-pro",
+          "doubao-seed"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "doubao-pro",
+            "name": "Doubao-Pro",
+            "type": "text",
+            "libraryId": "supplier-template-doubao-pro"
+          },
+          {
+            "modelId": "doubao-seed",
+            "name": "Doubao-Seed",
+            "type": "text",
+            "libraryId": "supplier-template-doubao-seed"
+          }
+        ],
+        "catalogPricing": [],
+        "catalogConnections": [
+          {
+            "id": "supplier-review-link-ark-official-0-0",
+            "modelId": "doubao-pro",
+            "endpointId": "supplier-review-CH-201",
+            "upstreamModelId": "doubao-pro",
+            "name": "北京渠道",
+            "origin": "undisclosed",
+            "pricing": {
+              "modelId": "doubao-pro",
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入 Token",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 2000000
+                },
+                {
+                  "name": "输出 Token",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 8000000
+                }
+              ]
+            },
+            "enabled": true,
+            "health": {
+              "result": "通过",
+              "testedAt": "@initializedAt",
+              "fingerprint": "[\"doubao-pro\",\"doubao-pro\",\"[\\\"https://beijing.ark.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"inherit\\\",\\\"\\\",\\\"supplier-review-1\\\"]\"]"
+            },
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt"
+          },
+          {
+            "id": "supplier-review-link-ark-official-0-1",
+            "modelId": "doubao-pro",
+            "endpointId": "supplier-review-CH-202",
+            "upstreamModelId": "doubao-pro",
+            "name": "上海渠道",
+            "origin": "undisclosed",
+            "pricing": {
+              "modelId": "doubao-pro",
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入 Token",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 2100000
+                },
+                {
+                  "name": "输出 Token",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 8500000
+                }
+              ]
+            },
+            "enabled": true,
+            "health": {
+              "result": "通过",
+              "testedAt": "@initializedAt",
+              "fingerprint": "[\"doubao-pro\",\"doubao-pro\",\"[\\\"https://shanghai.ark.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"specific\\\",\\\"KEY-202\\\",\\\"supplier-review-1\\\"]\"]"
+            },
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt"
+          },
+          {
+            "id": "supplier-review-link-ark-official-0-2",
+            "modelId": "doubao-pro",
+            "endpointId": "supplier-review-CH-203",
+            "upstreamModelId": "doubao-pro",
+            "name": "海外渠道",
+            "origin": "undisclosed",
+            "pricing": {
+              "modelId": "doubao-pro",
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入 Token",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 2300000
+                },
+                {
+                  "name": "输出 Token",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 9000000
+                }
+              ]
+            },
+            "enabled": true,
+            "health": {
+              "result": "通过",
+              "testedAt": "@initializedAt",
+              "fingerprint": "[\"doubao-pro\",\"doubao-pro\",\"[\\\"https://overseas.ark.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"specific\\\",\\\"KEY-203\\\",\\\"supplier-review-1\\\"]\"]"
+            },
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt"
+          },
+          {
+            "id": "supplier-review-link-ark-official-1-0",
+            "modelId": "doubao-seed",
+            "endpointId": "supplier-review-CH-201",
+            "upstreamModelId": "doubao-seed",
+            "name": "北京渠道",
+            "origin": "undisclosed",
+            "pricing": {
+              "modelId": "doubao-seed",
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入 Token",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 800000
+                },
+                {
+                  "name": "输出 Token",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 2000000
+                }
+              ]
+            },
+            "enabled": true,
+            "health": {
+              "result": "通过",
+              "testedAt": "@initializedAt",
+              "fingerprint": "[\"doubao-seed\",\"doubao-seed\",\"[\\\"https://beijing.ark.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"inherit\\\",\\\"\\\",\\\"supplier-review-1\\\"]\"]"
+            },
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt"
+          }
+        ],
+        "apiKeys": [
+          {
+            "id": "KEY-201",
+            "name": "生产账号",
+            "maskedKey": "test••••••••0201",
+            "fingerprint": "00000000000000000000000000000000000000000000000000000000000004b1",
+            "status": "enabled",
+            "createdAt": "@initializedAt"
+          },
+          {
+            "id": "KEY-202",
+            "name": "专用账号",
+            "maskedKey": "test••••••••0202",
+            "fingerprint": "00000000000000000000000000000000000000000000000000000000000004b2",
+            "status": "enabled",
+            "createdAt": "@initializedAt"
+          },
+          {
+            "id": "KEY-203",
+            "name": "海外账号",
+            "maskedKey": "test••••••••0203",
+            "fingerprint": "00000000000000000000000000000000000000000000000000000000000004b3",
+            "status": "enabled",
+            "createdAt": "@initializedAt"
+          }
+        ],
+        "defaultApiKeyId": "KEY-201",
+        "removedCatalogModelIds": [],
+        "catalogueScope": "managed",
+        "supplierReviewModelIds": [
+          "doubao-pro",
+          "doubao-seed"
+        ]
+      },
+      {
+        "id": "service-review-provider-deepseek",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "name": "DeepSeek 官方",
+        "code": "review-deepseek",
+        "sourceType": "thirdParty",
+        "integrationType": "云厂商模型服务",
+        "baseUrl": "https://deepseek.service-review.example.invalid",
+        "status": "已启用",
+        "catalogModelIds": [
+          "deepseek-v4-pro"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "deepseek-v4-pro",
+            "name": "DeepSeek V4 Pro",
+            "type": "text"
+          }
+        ],
+        "catalogConnections": [
+          {
+            "id": "service-review-channel-deepseek-deepseek-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "deepseek-v4-pro",
+            "endpointId": "service-review-endpoint-deepseek-deepseek-1",
+            "name": "DeepSeek 官方主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "deepseek-v4-pro",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 1600000
+                },
+                {
+                  "name": "输出",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 6400000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"deepseek-v4-pro\",\"deepseek-v4-pro\",\"[\\\"https://deepseek-deepseek-1.service-review.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          }
+        ],
+        "contact": "",
+        "contractEnd": null
+      },
+      {
+        "id": "service-review-provider-siliconflow",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "name": "硅基流动",
+        "code": "review-siliconflow",
+        "sourceType": "thirdParty",
+        "integrationType": "云厂商模型服务",
+        "baseUrl": "https://siliconflow.service-review.example.invalid",
+        "status": "已启用",
+        "catalogModelIds": [
+          "deepseek-v4-pro",
+          "qwen3.8-max",
+          "qwen-image-3.0-pro"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "deepseek-v4-pro",
+            "name": "DeepSeek V4 Pro",
+            "type": "text"
+          },
+          {
+            "modelId": "qwen3.8-max",
+            "name": "Qwen3.8 Max",
+            "type": "multimodal"
+          },
+          {
+            "modelId": "qwen-image-3.0-pro",
+            "name": "Qwen Image 3.0 Pro",
+            "type": "image"
+          }
+        ],
+        "catalogConnections": [
+          {
+            "id": "service-review-channel-deepseek-siliconflow-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "deepseek-v4-pro",
+            "endpointId": "service-review-endpoint-deepseek-siliconflow-1",
+            "name": "硅基流动主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "deepseek-v4-pro",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 1500000
+                },
+                {
+                  "name": "输出",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 6000000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"deepseek-v4-pro\",\"deepseek-v4-pro\",\"[\\\"https://siliconflow-deepseek-1.service-review.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          },
+          {
+            "id": "service-review-channel-qwen-siliconflow-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "qwen3.8-max",
+            "endpointId": "service-review-endpoint-qwen-siliconflow-1",
+            "name": "硅基流动主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "qwen3.8-max",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 1250000
+                },
+                {
+                  "name": "输出",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 4900000
+                },
+                {
+                  "name": "缓存读取",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 200000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"qwen3.8-max\",\"qwen3.8-max\",\"[\\\"https://siliconflow-qwen-1.service-review.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          },
+          {
+            "id": "service-review-channel-qwen-siliconflow-2",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "qwen3.8-max",
+            "endpointId": "service-review-endpoint-qwen-siliconflow-2",
+            "name": "硅基流动备用渠道 2",
+            "origin": "resale",
+            "upstreamProvider": "硅基流动",
+            "upstreamModelId": "qwen3.8-max",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 1300000
+                },
+                {
+                  "name": "输出",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 5000000
+                },
+                {
+                  "name": "缓存读取",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 200000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"qwen3.8-max\",\"qwen3.8-max\",\"[\\\"https://siliconflow-qwen-2.service-review.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          },
+          {
+            "id": "service-review-channel-qwen-siliconflow-3",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "qwen3.8-max",
+            "endpointId": "service-review-endpoint-qwen-siliconflow-3",
+            "name": "硅基流动备用渠道 3",
+            "origin": "resale",
+            "upstreamProvider": "硅基流动",
+            "upstreamModelId": "qwen3.8-max",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 1350000
+                },
+                {
+                  "name": "输出",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 5100000
+                },
+                {
+                  "name": "缓存读取",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 200000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"qwen3.8-max\",\"qwen3.8-max\",\"[\\\"https://siliconflow-qwen-3.service-review.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          },
+          {
+            "id": "service-review-channel-image-siliconflow-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "qwen-image-3.0-pro",
+            "endpointId": "service-review-endpoint-image-siliconflow-1",
+            "name": "硅基流动主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "qwen-image-3.0-pro",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "生成图像",
+                  "unit": "元/张",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 140000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"qwen-image-3.0-pro\",\"qwen-image-3.0-pro\",\"[\\\"https://siliconflow-image-1.service-review.example.invalid/v1/images/generations\\\",\\\"其他\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          }
+        ],
+        "contact": "",
+        "contractEnd": null
+      },
+      {
+        "id": "service-review-provider-aggregate",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "name": "云端聚合",
+        "code": "review-aggregate",
+        "sourceType": "thirdParty",
+        "integrationType": "云厂商模型服务",
+        "baseUrl": "https://aggregate.service-review.example.invalid",
+        "status": "已启用",
+        "catalogModelIds": [
+          "deepseek-v4-pro",
+          "qwen3.8-max"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "deepseek-v4-pro",
+            "name": "DeepSeek V4 Pro",
+            "type": "text"
+          },
+          {
+            "modelId": "qwen3.8-max",
+            "name": "Qwen3.8 Max",
+            "type": "multimodal"
+          }
+        ],
+        "catalogConnections": [
+          {
+            "id": "service-review-channel-deepseek-aggregate-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "deepseek-v4-pro",
+            "endpointId": "service-review-endpoint-deepseek-aggregate-1",
+            "name": "云端聚合主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "deepseek-v4-pro",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 1800000
+                },
+                {
+                  "name": "输出",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 7000000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"deepseek-v4-pro\",\"deepseek-v4-pro\",\"[\\\"https://aggregate-deepseek-1.service-review.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          },
+          {
+            "id": "service-review-channel-qwen-aggregate-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "qwen3.8-max",
+            "endpointId": "service-review-endpoint-qwen-aggregate-1",
+            "name": "云端聚合主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "qwen3.8-max",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 1400000
+                },
+                {
+                  "name": "输出",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 5800000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"qwen3.8-max\",\"qwen3.8-max\",\"[\\\"https://aggregate-qwen-1.service-review.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          }
+        ],
+        "contact": "",
+        "contractEnd": null
+      },
+      {
+        "id": "service-review-provider-aliyun",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "name": "阿里云百炼",
+        "code": "review-aliyun",
+        "sourceType": "thirdParty",
+        "integrationType": "云厂商模型服务",
+        "baseUrl": "https://aliyun.service-review.example.invalid",
+        "status": "已启用",
+        "catalogModelIds": [
+          "qwen3.8-max",
+          "qwen-image-3.0-pro",
+          "wan3.0-video",
+          "qwen-audio-3.0-tts-flash"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "qwen3.8-max",
+            "name": "Qwen3.8 Max",
+            "type": "multimodal"
+          },
+          {
+            "modelId": "qwen-image-3.0-pro",
+            "name": "Qwen Image 3.0 Pro",
+            "type": "image"
+          },
+          {
+            "modelId": "wan3.0-video",
+            "name": "Wan3.0 Video",
+            "type": "video"
+          },
+          {
+            "modelId": "qwen-audio-3.0-tts-flash",
+            "name": "Qwen Audio 3.0 TTS Flash",
+            "type": "audio"
+          }
+        ],
+        "catalogConnections": [
+          {
+            "id": "service-review-channel-qwen-aliyun-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "qwen3.8-max",
+            "endpointId": "service-review-endpoint-qwen-aliyun-1",
+            "name": "阿里云百炼主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "qwen3.8-max",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 1600000
+                },
+                {
+                  "name": "输出",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 6400000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"qwen3.8-max\",\"qwen3.8-max\",\"[\\\"https://aliyun-qwen-1.service-review.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          },
+          {
+            "id": "service-review-channel-qwen-aliyun-2",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "qwen3.8-max",
+            "endpointId": "service-review-endpoint-qwen-aliyun-2",
+            "name": "阿里云百炼备用渠道 2",
+            "origin": "resale",
+            "upstreamProvider": "阿里云百炼",
+            "upstreamModelId": "qwen3.8-max",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 1500000
+                },
+                {
+                  "name": "输出",
+                  "unit": "元/百万 Token",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 6000000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"qwen3.8-max\",\"qwen3.8-max\",\"[\\\"https://aliyun-qwen-2.service-review.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          },
+          {
+            "id": "service-review-channel-image-aliyun-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "qwen-image-3.0-pro",
+            "endpointId": "service-review-endpoint-image-aliyun-1",
+            "name": "阿里云百炼主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "qwen-image-3.0-pro",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "生成图像",
+                  "unit": "元/张",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 160000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"qwen-image-3.0-pro\",\"qwen-image-3.0-pro\",\"[\\\"https://aliyun-image-1.service-review.example.invalid/v1/images/generations\\\",\\\"其他\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          },
+          {
+            "id": "service-review-channel-video-aliyun-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "wan3.0-video",
+            "endpointId": "service-review-endpoint-video-aliyun-1",
+            "name": "阿里云百炼主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "wan3.0-video",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "视频生成",
+                  "unit": "元/秒",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 480000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"wan3.0-video\",\"wan3.0-video\",\"[\\\"https://aliyun-video-1.service-review.example.invalid/v1/videos/generations\\\",\\\"其他\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          },
+          {
+            "id": "service-review-channel-video-aliyun-2",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "wan3.0-video",
+            "endpointId": "service-review-endpoint-video-aliyun-2",
+            "name": "阿里云百炼备用渠道 2",
+            "origin": "resale",
+            "upstreamProvider": "阿里云百炼",
+            "upstreamModelId": "wan3.0-video",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "视频生成",
+                  "unit": "元/秒",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 420000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"wan3.0-video\",\"wan3.0-video\",\"[\\\"https://aliyun-video-2.service-review.example.invalid/v1/videos/generations\\\",\\\"其他\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          },
+          {
+            "id": "service-review-channel-audio-aliyun-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "qwen-audio-3.0-tts-flash",
+            "endpointId": "service-review-endpoint-audio-aliyun-1",
+            "name": "阿里云百炼主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "qwen-audio-3.0-tts-flash",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "语音合成",
+                  "unit": "元/万字符",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 1200000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"qwen-audio-3.0-tts-flash\",\"qwen-audio-3.0-tts-flash\",\"[\\\"https://aliyun-audio-1.service-review.example.invalid/v1/audio/speech\\\",\\\"其他\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          }
+        ],
+        "contact": "",
+        "contractEnd": null
+      },
+      {
+        "id": "service-review-provider-baidu",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "name": "百度智能云千帆",
+        "code": "review-baidu",
+        "sourceType": "thirdParty",
+        "integrationType": "云厂商模型服务",
+        "baseUrl": "https://baidu.service-review.example.invalid",
+        "status": "已启用",
+        "catalogModelIds": [
+          "wan3.0-video"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "wan3.0-video",
+            "name": "Wan3.0 Video",
+            "type": "video"
+          }
+        ],
+        "catalogConnections": [
+          {
+            "id": "service-review-channel-video-baidu-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "wan3.0-video",
+            "endpointId": "service-review-endpoint-video-baidu-1",
+            "name": "百度智能云千帆主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "wan3.0-video",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "视频生成",
+                  "unit": "元/秒",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 450000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"wan3.0-video\",\"wan3.0-video\",\"[\\\"https://baidu-video-1.service-review.example.invalid/v1/videos/generations\\\",\\\"其他\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          }
+        ],
+        "contact": "",
+        "contractEnd": null
+      },
+      {
+        "id": "service-review-provider-stepfun",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "name": "阶跃星辰",
+        "code": "review-stepfun",
+        "sourceType": "thirdParty",
+        "integrationType": "云厂商模型服务",
+        "baseUrl": "https://stepfun.service-review.example.invalid",
+        "status": "已启用",
+        "catalogModelIds": [
+          "wan3.0-video"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "wan3.0-video",
+            "name": "Wan3.0 Video",
+            "type": "video"
+          }
+        ],
+        "catalogConnections": [
+          {
+            "id": "service-review-channel-video-stepfun-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "wan3.0-video",
+            "endpointId": "service-review-endpoint-video-stepfun-1",
+            "name": "阶跃星辰主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "wan3.0-video",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "视频生成",
+                  "unit": "元/次",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 2400000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"wan3.0-video\",\"wan3.0-video\",\"[\\\"https://stepfun-video-1.service-review.example.invalid/v1/videos/generations\\\",\\\"其他\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          }
+        ],
+        "contact": "",
+        "contractEnd": null
+      },
+      {
+        "id": "service-review-provider-tencent",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "name": "腾讯云",
+        "code": "review-tencent",
+        "sourceType": "thirdParty",
+        "integrationType": "云厂商模型服务",
+        "baseUrl": "https://tencent.service-review.example.invalid",
+        "status": "已启用",
+        "catalogModelIds": [
+          "wan3.0-video"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "wan3.0-video",
+            "name": "Wan3.0 Video",
+            "type": "video"
+          }
+        ],
+        "catalogConnections": [
+          {
+            "id": "service-review-channel-video-tencent-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "wan3.0-video",
+            "endpointId": "service-review-endpoint-video-tencent-1",
+            "name": "腾讯云主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "wan3.0-video",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "视频生成",
+                  "unit": "元/秒",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 600000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"wan3.0-video\",\"wan3.0-video\",\"[\\\"https://tencent-video-1.service-review.example.invalid/v1/videos/generations\\\",\\\"其他\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          }
+        ],
+        "contact": "",
+        "contractEnd": null
+      },
+      {
+        "id": "service-review-provider-iflytek",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "name": "讯飞星火",
+        "code": "review-iflytek",
+        "sourceType": "thirdParty",
+        "integrationType": "云厂商模型服务",
+        "baseUrl": "https://iflytek.service-review.example.invalid",
+        "status": "已启用",
+        "catalogModelIds": [
+          "wan3.0-video",
+          "qwen-audio-3.0-tts-flash"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "wan3.0-video",
+            "name": "Wan3.0 Video",
+            "type": "video"
+          },
+          {
+            "modelId": "qwen-audio-3.0-tts-flash",
+            "name": "Qwen Audio 3.0 TTS Flash",
+            "type": "audio"
+          }
+        ],
+        "catalogConnections": [
+          {
+            "id": "service-review-channel-video-iflytek-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "wan3.0-video",
+            "endpointId": "service-review-endpoint-video-iflytek-1",
+            "name": "讯飞星火主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "wan3.0-video",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "视频生成",
+                  "unit": "元/秒",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 500000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"wan3.0-video\",\"wan3.0-video\",\"[\\\"https://iflytek-video-1.service-review.example.invalid/v1/videos/generations\\\",\\\"其他\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          },
+          {
+            "id": "service-review-channel-audio-iflytek-1",
+            "createdAt": "@initializedAt",
+            "updatedAt": "@initializedAt",
+            "modelId": "qwen-audio-3.0-tts-flash",
+            "endpointId": "service-review-endpoint-audio-iflytek-1",
+            "name": "讯飞星火主渠道",
+            "origin": "direct",
+            "upstreamProvider": "",
+            "upstreamModelId": "qwen-audio-3.0-tts-flash",
+            "enabled": true,
+            "pricing": {
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "语音合成",
+                  "unit": "元/万字符",
+                  "currency": "CNY",
+                  "condition": "",
+                  "listPrice": 1100000
+                }
+              ]
+            },
+            "health": {
+              "fingerprint": "[\"qwen-audio-3.0-tts-flash\",\"qwen-audio-3.0-tts-flash\",\"[\\\"https://iflytek-audio-1.service-review.example.invalid/v1/audio/speech\\\",\\\"其他\\\",\\\"local-service-review-placeholder\\\",10000,60]\"]",
+              "result": "通过",
+              "message": "当前配置检查通过",
+              "testedAt": "@initializedAt"
+            }
+          }
+        ],
+        "contact": "",
+        "contractEnd": null
+      }
+    ],
+    "endpoints": [
+      {
+        "id": "service-review-endpoint-deepseek-deepseek-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-deepseek-deepseek-1",
+        "name": "DeepSeek 官方主渠道",
+        "providerId": "service-review-provider-deepseek",
+        "protocol": "OpenAI",
+        "baseUrl": "https://deepseek-deepseek-1.service-review.example.invalid/v1/chat/completions",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "model-1"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://deepseek-deepseek-1.service-review.example.invalid/v1/chat/completions\",\"OpenAI\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-deepseek-siliconflow-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-deepseek-siliconflow-1",
+        "name": "硅基流动主渠道",
+        "providerId": "service-review-provider-siliconflow",
+        "protocol": "OpenAI",
+        "baseUrl": "https://siliconflow-deepseek-1.service-review.example.invalid/v1/chat/completions",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "model-1"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://siliconflow-deepseek-1.service-review.example.invalid/v1/chat/completions\",\"OpenAI\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-deepseek-aggregate-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-deepseek-aggregate-1",
+        "name": "云端聚合主渠道",
+        "providerId": "service-review-provider-aggregate",
+        "protocol": "OpenAI",
+        "baseUrl": "https://aggregate-deepseek-1.service-review.example.invalid/v1/chat/completions",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "model-1"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://aggregate-deepseek-1.service-review.example.invalid/v1/chat/completions\",\"OpenAI\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-qwen-aliyun-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-qwen-aliyun-1",
+        "name": "阿里云百炼主渠道",
+        "providerId": "service-review-provider-aliyun",
+        "protocol": "OpenAI",
+        "baseUrl": "https://aliyun-qwen-1.service-review.example.invalid/v1/chat/completions",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "catalog-demo-qwen"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://aliyun-qwen-1.service-review.example.invalid/v1/chat/completions\",\"OpenAI\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-qwen-aliyun-2",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-qwen-aliyun-2",
+        "name": "阿里云百炼备用渠道 2",
+        "providerId": "service-review-provider-aliyun",
+        "protocol": "OpenAI",
+        "baseUrl": "https://aliyun-qwen-2.service-review.example.invalid/v1/chat/completions",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "catalog-demo-qwen"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://aliyun-qwen-2.service-review.example.invalid/v1/chat/completions\",\"OpenAI\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-qwen-siliconflow-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-qwen-siliconflow-1",
+        "name": "硅基流动主渠道",
+        "providerId": "service-review-provider-siliconflow",
+        "protocol": "OpenAI",
+        "baseUrl": "https://siliconflow-qwen-1.service-review.example.invalid/v1/chat/completions",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "catalog-demo-qwen"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://siliconflow-qwen-1.service-review.example.invalid/v1/chat/completions\",\"OpenAI\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-qwen-siliconflow-2",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-qwen-siliconflow-2",
+        "name": "硅基流动备用渠道 2",
+        "providerId": "service-review-provider-siliconflow",
+        "protocol": "OpenAI",
+        "baseUrl": "https://siliconflow-qwen-2.service-review.example.invalid/v1/chat/completions",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "catalog-demo-qwen"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://siliconflow-qwen-2.service-review.example.invalid/v1/chat/completions\",\"OpenAI\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-qwen-siliconflow-3",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-qwen-siliconflow-3",
+        "name": "硅基流动备用渠道 3",
+        "providerId": "service-review-provider-siliconflow",
+        "protocol": "OpenAI",
+        "baseUrl": "https://siliconflow-qwen-3.service-review.example.invalid/v1/chat/completions",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "catalog-demo-qwen"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://siliconflow-qwen-3.service-review.example.invalid/v1/chat/completions\",\"OpenAI\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-qwen-aggregate-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-qwen-aggregate-1",
+        "name": "云端聚合主渠道",
+        "providerId": "service-review-provider-aggregate",
+        "protocol": "OpenAI",
+        "baseUrl": "https://aggregate-qwen-1.service-review.example.invalid/v1/chat/completions",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "catalog-demo-qwen"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://aggregate-qwen-1.service-review.example.invalid/v1/chat/completions\",\"OpenAI\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-image-aliyun-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-image-aliyun-1",
+        "name": "阿里云百炼主渠道",
+        "providerId": "service-review-provider-aliyun",
+        "protocol": "其他",
+        "baseUrl": "https://aliyun-image-1.service-review.example.invalid/v1/images/generations",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://aliyun-image-1.service-review.example.invalid/v1/images/generations\",\"其他\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-image-siliconflow-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-image-siliconflow-1",
+        "name": "硅基流动主渠道",
+        "providerId": "service-review-provider-siliconflow",
+        "protocol": "其他",
+        "baseUrl": "https://siliconflow-image-1.service-review.example.invalid/v1/images/generations",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://siliconflow-image-1.service-review.example.invalid/v1/images/generations\",\"其他\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-video-aliyun-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-video-aliyun-1",
+        "name": "阿里云百炼主渠道",
+        "providerId": "service-review-provider-aliyun",
+        "protocol": "其他",
+        "baseUrl": "https://aliyun-video-1.service-review.example.invalid/v1/videos/generations",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "catalog-demo-video"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://aliyun-video-1.service-review.example.invalid/v1/videos/generations\",\"其他\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-video-baidu-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-video-baidu-1",
+        "name": "百度智能云千帆主渠道",
+        "providerId": "service-review-provider-baidu",
+        "protocol": "其他",
+        "baseUrl": "https://baidu-video-1.service-review.example.invalid/v1/videos/generations",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "catalog-demo-video"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://baidu-video-1.service-review.example.invalid/v1/videos/generations\",\"其他\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-video-stepfun-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-video-stepfun-1",
+        "name": "阶跃星辰主渠道",
+        "providerId": "service-review-provider-stepfun",
+        "protocol": "其他",
+        "baseUrl": "https://stepfun-video-1.service-review.example.invalid/v1/videos/generations",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "catalog-demo-video"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://stepfun-video-1.service-review.example.invalid/v1/videos/generations\",\"其他\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-video-tencent-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-video-tencent-1",
+        "name": "腾讯云主渠道",
+        "providerId": "service-review-provider-tencent",
+        "protocol": "其他",
+        "baseUrl": "https://tencent-video-1.service-review.example.invalid/v1/videos/generations",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "catalog-demo-video"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://tencent-video-1.service-review.example.invalid/v1/videos/generations\",\"其他\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-video-iflytek-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-video-iflytek-1",
+        "name": "讯飞星火主渠道",
+        "providerId": "service-review-provider-iflytek",
+        "protocol": "其他",
+        "baseUrl": "https://iflytek-video-1.service-review.example.invalid/v1/videos/generations",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "catalog-demo-video"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://iflytek-video-1.service-review.example.invalid/v1/videos/generations\",\"其他\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-video-aliyun-2",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-video-aliyun-2",
+        "name": "阿里云百炼备用渠道 2",
+        "providerId": "service-review-provider-aliyun",
+        "protocol": "其他",
+        "baseUrl": "https://aliyun-video-2.service-review.example.invalid/v1/videos/generations",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://aliyun-video-2.service-review.example.invalid/v1/videos/generations\",\"其他\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-audio-aliyun-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-audio-aliyun-1",
+        "name": "阿里云百炼主渠道",
+        "providerId": "service-review-provider-aliyun",
+        "protocol": "其他",
+        "baseUrl": "https://aliyun-audio-1.service-review.example.invalid/v1/audio/speech",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [
+          "catalog-demo-tts"
+        ],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://aliyun-audio-1.service-review.example.invalid/v1/audio/speech\",\"其他\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "service-review-endpoint-audio-iflytek-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "endpointId": "service-review-endpoint-audio-iflytek-1",
+        "name": "讯飞星火主渠道",
+        "providerId": "service-review-provider-iflytek",
+        "protocol": "其他",
+        "baseUrl": "https://iflytek-audio-1.service-review.example.invalid/v1/audio/speech",
+        "credentialRef": "local-service-review-placeholder",
+        "modelIds": [],
+        "capacity": 10000,
+        "timeoutSeconds": 60,
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://iflytek-audio-1.service-review.example.invalid/v1/audio/speech\",\"其他\",\"local-service-review-placeholder\",10000,60]",
+          "result": "通过",
+          "message": "连接配置检查通过",
+          "testedAt": "@initializedAt",
+          "simulated": true
+        }
+      },
+      {
+        "id": "supplier-review-CH-101",
+        "endpointId": "supplier-review-CH-101",
+        "providerId": "provider-deepseek-official",
+        "channelCode": "CH-101",
+        "supplierChannel": true,
+        "name": "官方渠道",
+        "protocol": "OpenAI",
+        "baseUrl": "https://api.deepseek.com/chat/completions",
+        "authMode": "inherit",
+        "apiKeyId": "",
+        "credentialVersion": "supplier-review-1",
+        "apiKeys": [],
+        "credentialRef": "",
+        "timeoutSeconds": 60,
+        "capacity": null,
+        "modelIds": [],
+        "status": "运行中",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "connectionTest": {
+          "result": "通过",
+          "testedAt": "@initializedAt",
+          "fingerprint": "[\"https://api.deepseek.com/chat/completions\",\"OpenAI\",\"\",null,60,\"inherit\",\"\",\"supplier-review-1\"]"
+        }
+      },
+      {
+        "id": "supplier-review-CH-201",
+        "endpointId": "supplier-review-CH-201",
+        "providerId": "provider-ark-official",
+        "channelCode": "CH-201",
+        "supplierChannel": true,
+        "name": "北京渠道",
+        "protocol": "OpenAI",
+        "baseUrl": "https://beijing.ark.example.invalid/v1/chat/completions",
+        "authMode": "inherit",
+        "apiKeyId": "",
+        "credentialVersion": "supplier-review-1",
+        "apiKeys": [],
+        "credentialRef": "",
+        "timeoutSeconds": 60,
+        "capacity": null,
+        "modelIds": [],
+        "status": "运行中",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "connectionTest": {
+          "result": "通过",
+          "testedAt": "@initializedAt",
+          "fingerprint": "[\"https://beijing.ark.example.invalid/v1/chat/completions\",\"OpenAI\",\"\",null,60,\"inherit\",\"\",\"supplier-review-1\"]"
+        }
+      },
+      {
+        "id": "supplier-review-CH-202",
+        "endpointId": "supplier-review-CH-202",
+        "providerId": "provider-ark-official",
+        "channelCode": "CH-202",
+        "supplierChannel": true,
+        "name": "上海渠道",
+        "protocol": "OpenAI",
+        "baseUrl": "https://shanghai.ark.example.invalid/v1/chat/completions",
+        "authMode": "specific",
+        "apiKeyId": "KEY-202",
+        "credentialVersion": "supplier-review-1",
+        "apiKeys": [],
+        "credentialRef": "",
+        "timeoutSeconds": 60,
+        "capacity": null,
+        "modelIds": [],
+        "status": "运行中",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "connectionTest": {
+          "result": "通过",
+          "testedAt": "@initializedAt",
+          "fingerprint": "[\"https://shanghai.ark.example.invalid/v1/chat/completions\",\"OpenAI\",\"\",null,60,\"specific\",\"KEY-202\",\"supplier-review-1\"]"
+        }
+      },
+      {
+        "id": "supplier-review-CH-203",
+        "endpointId": "supplier-review-CH-203",
+        "providerId": "provider-ark-official",
+        "channelCode": "CH-203",
+        "supplierChannel": true,
+        "name": "海外渠道",
+        "protocol": "OpenAI",
+        "baseUrl": "https://overseas.ark.example.invalid/v1/chat/completions",
+        "authMode": "specific",
+        "apiKeyId": "KEY-203",
+        "credentialVersion": "supplier-review-1",
+        "apiKeys": [],
+        "credentialRef": "",
+        "timeoutSeconds": 60,
+        "capacity": null,
+        "modelIds": [],
+        "status": "运行中",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "connectionTest": {
+          "result": "通过",
+          "testedAt": "@initializedAt",
+          "fingerprint": "[\"https://overseas.ark.example.invalid/v1/chat/completions\",\"OpenAI\",\"\",null,60,\"specific\",\"KEY-203\",\"supplier-review-1\"]"
+        }
+      },
+      {
+        "id": "supplier-review-CH-301",
+        "endpointId": "supplier-review-CH-301",
+        "providerId": "provider-kimi-official",
+        "channelCode": "CH-301",
+        "supplierChannel": true,
+        "name": "默认渠道",
+        "protocol": "OpenAI",
+        "baseUrl": "https://api.moonshot.cn/v1/chat/completions",
+        "authMode": "inherit",
+        "apiKeyId": "",
+        "credentialVersion": "supplier-review-1",
+        "apiKeys": [],
+        "credentialRef": "",
+        "timeoutSeconds": 60,
+        "capacity": null,
+        "modelIds": [],
+        "status": "草稿",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt"
+      }
+    ],
+    "modelVersions": [],
+    "validations": [],
+    "modelSupplies": [
+      {
+        "id": "supply-endpoint-ds-model-1",
+        "modelId": "model-1",
+        "endpointId": "endpoint-ds",
+        "upstreamModelId": "deepseek-v4-pro",
+        "capabilities": {
+          "context": 1048576,
+          "output": 393216,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "协议兼容",
+            "passed": true
+          },
+          {
+            "name": "基础推理",
+            "passed": true
+          },
+          {
+            "name": "流式响应",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "deepseek/deepseek-v4-pro",
+        "salesEnabled": false
+      },
+      {
+        "id": "supply-endpoint-glm-model-1",
+        "modelId": "model-1",
+        "endpointId": "endpoint-glm",
+        "upstreamModelId": "deepseek-v4-pro",
+        "capabilities": {
+          "context": 1048576,
+          "output": 393216,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "协议兼容",
+            "passed": true
+          },
+          {
+            "name": "基础推理",
+            "passed": true
+          },
+          {
+            "name": "流式响应",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "zhipu/deepseek-v4-pro",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-qwen-alibaba",
+        "modelId": "catalog-demo-qwen",
+        "endpointId": "catalog-endpoint-qwen-alibaba",
+        "upstreamModelId": "qwen3.8-max",
+        "capabilities": {
+          "context": 1048576,
+          "output": null,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "bailian/qwen3.8-max",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-qwen-openrouter",
+        "modelId": "catalog-demo-qwen",
+        "endpointId": "catalog-endpoint-qwen-openrouter",
+        "upstreamModelId": "qwen3.8-max",
+        "capabilities": {
+          "context": 1048576,
+          "output": null,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "volcengine/qwen3.8-max",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-qwen-unicom",
+        "modelId": "catalog-demo-qwen",
+        "endpointId": "catalog-endpoint-qwen-unicom",
+        "upstreamModelId": "qwen3.8-max",
+        "capabilities": {
+          "context": 1048576,
+          "output": null,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "stepfun/qwen3.8-max",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-qwen-telecom",
+        "modelId": "catalog-demo-qwen",
+        "endpointId": "catalog-endpoint-qwen-telecom",
+        "upstreamModelId": "qwen3.8-max",
+        "capabilities": {
+          "context": 1048576,
+          "output": null,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "spark/qwen3.8-max",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-qwen-mobile",
+        "modelId": "catalog-demo-qwen",
+        "endpointId": "catalog-endpoint-qwen-mobile",
+        "upstreamModelId": "qwen3.8-max",
+        "capabilities": {
+          "context": 1048576,
+          "output": null,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "qianfan/qwen3.8-max",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-image-alibaba",
+        "modelId": "catalog-demo-image",
+        "endpointId": "catalog-endpoint-image-alibaba",
+        "upstreamModelId": "qwen-image-3.0-pro",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "bailian/qwen-image-3.0-pro",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-image-tencent",
+        "modelId": "catalog-demo-image",
+        "endpointId": "catalog-endpoint-image-tencent",
+        "upstreamModelId": "qwen-image-3.0-pro",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "hunyuan/qwen-image-3.0-pro",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-image-telecom",
+        "modelId": "catalog-demo-image",
+        "endpointId": "catalog-endpoint-image-telecom",
+        "upstreamModelId": "qwen-image-3.0-pro",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "spark/qwen-image-3.0-pro",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-image-mobile",
+        "modelId": "catalog-demo-image",
+        "endpointId": "catalog-endpoint-image-mobile",
+        "upstreamModelId": "qwen-image-3.0-pro",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "qianfan/qwen-image-3.0-pro",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-image-unicom",
+        "modelId": "catalog-demo-image",
+        "endpointId": "catalog-endpoint-image-unicom",
+        "upstreamModelId": "qwen-image-3.0-pro",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "stepfun/qwen-image-3.0-pro",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-video-alibaba",
+        "modelId": "catalog-demo-video",
+        "endpointId": "catalog-endpoint-video-alibaba",
+        "upstreamModelId": "wan3.0-video",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "bailian/wan3.0-video",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-video-tencent",
+        "modelId": "catalog-demo-video",
+        "endpointId": "catalog-endpoint-video-tencent",
+        "upstreamModelId": "wan3.0-video",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "hunyuan/wan3.0-video",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-video-mobile",
+        "modelId": "catalog-demo-video",
+        "endpointId": "catalog-endpoint-video-mobile",
+        "upstreamModelId": "wan3.0-video",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "qianfan/wan3.0-video",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-video-unicom",
+        "modelId": "catalog-demo-video",
+        "endpointId": "catalog-endpoint-video-unicom",
+        "upstreamModelId": "wan3.0-video",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "stepfun/wan3.0-video",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-video-telecom",
+        "modelId": "catalog-demo-video",
+        "endpointId": "catalog-endpoint-video-telecom",
+        "upstreamModelId": "wan3.0-video",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "spark/wan3.0-video",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-tts-alibaba",
+        "modelId": "catalog-demo-tts",
+        "endpointId": "catalog-endpoint-tts-alibaba",
+        "upstreamModelId": "qwen-audio-3.0-tts-flash",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "bailian/qwen-audio-3.0-tts-flash",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-tts-huawei",
+        "modelId": "catalog-demo-tts",
+        "endpointId": "catalog-endpoint-tts-huawei",
+        "upstreamModelId": "qwen-audio-3.0-tts-flash",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "moonshot/qwen-audio-3.0-tts-flash",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-tts-unicom",
+        "modelId": "catalog-demo-tts",
+        "endpointId": "catalog-endpoint-tts-unicom",
+        "upstreamModelId": "qwen-audio-3.0-tts-flash",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "stepfun/qwen-audio-3.0-tts-flash",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-tts-telecom",
+        "modelId": "catalog-demo-tts",
+        "endpointId": "catalog-endpoint-tts-telecom",
+        "upstreamModelId": "qwen-audio-3.0-tts-flash",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "spark/qwen-audio-3.0-tts-flash",
+        "salesEnabled": false
+      },
+      {
+        "id": "catalog-supply-tts-mobile",
+        "modelId": "catalog-demo-tts",
+        "endpointId": "catalog-endpoint-tts-mobile",
+        "upstreamModelId": "qwen-audio-3.0-tts-flash",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已移除",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "接入验证",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "2026-11-02T06:39:55.503Z",
+        "createdAt": "2026-11-02T06:39:55.503Z",
+        "updatedAt": "2026-11-02T06:39:55.503Z",
+        "callId": "qianfan/qwen-audio-3.0-tts-flash",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-deepseek-deepseek-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "model-1",
+        "endpointId": "service-review-endpoint-deepseek-deepseek-1",
+        "providerId": "service-review-provider-deepseek",
+        "catalogueModelId": "deepseek-v4-pro",
+        "channelId": "service-review-channel-deepseek-deepseek-1",
+        "upstreamModelId": "deepseek-v4-pro",
+        "capabilities": {
+          "context": 1048576,
+          "output": 393216,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-deepseek-siliconflow-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "model-1",
+        "endpointId": "service-review-endpoint-deepseek-siliconflow-1",
+        "providerId": "service-review-provider-siliconflow",
+        "catalogueModelId": "deepseek-v4-pro",
+        "channelId": "service-review-channel-deepseek-siliconflow-1",
+        "upstreamModelId": "deepseek-v4-pro",
+        "capabilities": {
+          "context": 1048576,
+          "output": 393216,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-deepseek-aggregate-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "model-1",
+        "endpointId": "service-review-endpoint-deepseek-aggregate-1",
+        "providerId": "service-review-provider-aggregate",
+        "catalogueModelId": "deepseek-v4-pro",
+        "channelId": "service-review-channel-deepseek-aggregate-1",
+        "upstreamModelId": "deepseek-v4-pro",
+        "capabilities": {
+          "context": 1048576,
+          "output": 393216,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-qwen-aliyun-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-qwen",
+        "endpointId": "service-review-endpoint-qwen-aliyun-1",
+        "providerId": "service-review-provider-aliyun",
+        "catalogueModelId": "qwen3.8-max",
+        "channelId": "service-review-channel-qwen-aliyun-1",
+        "upstreamModelId": "qwen3.8-max",
+        "capabilities": {
+          "context": 1048576,
+          "output": null,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-qwen-aliyun-2",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-qwen",
+        "endpointId": "service-review-endpoint-qwen-aliyun-2",
+        "providerId": "service-review-provider-aliyun",
+        "catalogueModelId": "qwen3.8-max",
+        "channelId": "service-review-channel-qwen-aliyun-2",
+        "upstreamModelId": "qwen3.8-max",
+        "capabilities": {
+          "context": 1048576,
+          "output": null,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-qwen-siliconflow-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-qwen",
+        "endpointId": "service-review-endpoint-qwen-siliconflow-1",
+        "providerId": "service-review-provider-siliconflow",
+        "catalogueModelId": "qwen3.8-max",
+        "channelId": "service-review-channel-qwen-siliconflow-1",
+        "upstreamModelId": "qwen3.8-max",
+        "capabilities": {
+          "context": 1048576,
+          "output": null,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-qwen-siliconflow-2",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-qwen",
+        "endpointId": "service-review-endpoint-qwen-siliconflow-2",
+        "providerId": "service-review-provider-siliconflow",
+        "catalogueModelId": "qwen3.8-max",
+        "channelId": "service-review-channel-qwen-siliconflow-2",
+        "upstreamModelId": "qwen3.8-max",
+        "capabilities": {
+          "context": 1048576,
+          "output": null,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-qwen-siliconflow-3",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-qwen",
+        "endpointId": "service-review-endpoint-qwen-siliconflow-3",
+        "providerId": "service-review-provider-siliconflow",
+        "catalogueModelId": "qwen3.8-max",
+        "channelId": "service-review-channel-qwen-siliconflow-3",
+        "upstreamModelId": "qwen3.8-max",
+        "capabilities": {
+          "context": 1048576,
+          "output": null,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-qwen-aggregate-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-qwen",
+        "endpointId": "service-review-endpoint-qwen-aggregate-1",
+        "providerId": "service-review-provider-aggregate",
+        "catalogueModelId": "qwen3.8-max",
+        "channelId": "service-review-channel-qwen-aggregate-1",
+        "upstreamModelId": "qwen3.8-max",
+        "capabilities": {
+          "context": 1048576,
+          "output": null,
+          "streaming": true,
+          "tools": true
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-video-aliyun-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-video",
+        "endpointId": "service-review-endpoint-video-aliyun-1",
+        "providerId": "service-review-provider-aliyun",
+        "catalogueModelId": "wan3.0-video",
+        "channelId": "service-review-channel-video-aliyun-1",
+        "upstreamModelId": "wan3.0-video",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-video-baidu-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-video",
+        "endpointId": "service-review-endpoint-video-baidu-1",
+        "providerId": "service-review-provider-baidu",
+        "catalogueModelId": "wan3.0-video",
+        "channelId": "service-review-channel-video-baidu-1",
+        "upstreamModelId": "wan3.0-video",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-video-stepfun-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-video",
+        "endpointId": "service-review-endpoint-video-stepfun-1",
+        "providerId": "service-review-provider-stepfun",
+        "catalogueModelId": "wan3.0-video",
+        "channelId": "service-review-channel-video-stepfun-1",
+        "upstreamModelId": "wan3.0-video",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-video-tencent-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-video",
+        "endpointId": "service-review-endpoint-video-tencent-1",
+        "providerId": "service-review-provider-tencent",
+        "catalogueModelId": "wan3.0-video",
+        "channelId": "service-review-channel-video-tencent-1",
+        "upstreamModelId": "wan3.0-video",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-video-iflytek-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-video",
+        "endpointId": "service-review-endpoint-video-iflytek-1",
+        "providerId": "service-review-provider-iflytek",
+        "catalogueModelId": "wan3.0-video",
+        "channelId": "service-review-channel-video-iflytek-1",
+        "upstreamModelId": "wan3.0-video",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      },
+      {
+        "id": "service-review-supply-audio-aliyun-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-tts",
+        "endpointId": "service-review-endpoint-audio-aliyun-1",
+        "providerId": "service-review-provider-aliyun",
+        "catalogueModelId": "qwen-audio-3.0-tts-flash",
+        "channelId": "service-review-channel-audio-aliyun-1",
+        "upstreamModelId": "qwen-audio-3.0-tts-flash",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "validationCases": [
+          {
+            "name": "模型身份及能力",
+            "passed": true
+          }
+        ],
+        "verifiedAt": "@initializedAt",
+        "salesEnabled": false
+      }
+    ],
+    "modelSalePrices": [
+      {
+        "id": "service-review-price-model-1-unified-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "model-1",
+        "scope": "model",
+        "items": [
+          {
+            "name": "输入",
+            "unit": "元/百万 Token",
+            "currency": "CNY",
+            "amount": 2500000
+          },
+          {
+            "name": "输出",
+            "unit": "元/百万 Token",
+            "currency": "CNY",
+            "amount": 9000000
+          }
+        ],
+        "version": 1,
+        "serviceModeRevision": 1,
+        "effectiveAt": "@initializedAt",
+        "status": "已发布"
+      },
+      {
+        "id": "service-review-price-catalog-demo-qwen-review-aliyun-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-qwen",
+        "scope": "provider",
+        "providerId": "service-review-provider-aliyun",
+        "serviceId": "provider:catalog-demo-qwen:service-review-provider-aliyun",
+        "items": [
+          {
+            "name": "输入",
+            "unit": "元/百万 Token",
+            "currency": "CNY",
+            "amount": 2000000
+          },
+          {
+            "name": "输出",
+            "unit": "元/百万 Token",
+            "currency": "CNY",
+            "amount": 8000000
+          }
+        ],
+        "version": 1,
+        "serviceModeRevision": 1,
+        "effectiveAt": "@initializedAt",
+        "status": "已发布"
+      },
+      {
+        "id": "service-review-price-catalog-demo-qwen-review-siliconflow-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-qwen",
+        "scope": "provider",
+        "providerId": "service-review-provider-siliconflow",
+        "serviceId": "provider:catalog-demo-qwen:service-review-provider-siliconflow",
+        "items": [
+          {
+            "name": "输入",
+            "unit": "元/百万 Token",
+            "currency": "CNY",
+            "amount": 1500000
+          },
+          {
+            "name": "输出",
+            "unit": "元/百万 Token",
+            "currency": "CNY",
+            "amount": 6000000
+          },
+          {
+            "name": "缓存读取",
+            "unit": "元/百万 Token",
+            "currency": "CNY",
+            "amount": 300000
+          }
+        ],
+        "version": 1,
+        "serviceModeRevision": 1,
+        "effectiveAt": "@initializedAt",
+        "status": "已发布"
+      },
+      {
+        "id": "service-review-price-catalog-demo-qwen-review-aggregate-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-qwen",
+        "scope": "provider",
+        "providerId": "service-review-provider-aggregate",
+        "serviceId": "provider:catalog-demo-qwen:service-review-provider-aggregate",
+        "items": [
+          {
+            "name": "输入",
+            "unit": "元/百万 Token",
+            "currency": "CNY",
+            "amount": 1800000
+          },
+          {
+            "name": "输出",
+            "unit": "元/百万 Token",
+            "currency": "CNY",
+            "amount": 7000000
+          }
+        ],
+        "version": 1,
+        "serviceModeRevision": 1,
+        "effectiveAt": "@initializedAt",
+        "status": "已发布"
+      },
+      {
+        "id": "service-review-price-catalog-demo-video-unified-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-video",
+        "scope": "model",
+        "items": [
+          {
+            "name": "视频生成",
+            "unit": "元/秒",
+            "currency": "CNY",
+            "amount": 800000
+          }
+        ],
+        "version": 1,
+        "serviceModeRevision": 1,
+        "effectiveAt": "@initializedAt",
+        "status": "已发布"
+      },
+      {
+        "id": "service-review-price-catalog-demo-tts-review-iflytek-1",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "modelId": "catalog-demo-tts",
+        "scope": "provider",
+        "providerId": "service-review-provider-iflytek",
+        "serviceId": "provider:catalog-demo-tts:service-review-provider-iflytek",
+        "items": [
+          {
+            "name": "语音合成",
+            "unit": "元/万字符",
+            "currency": "CNY",
+            "amount": 1600000
+          }
+        ],
+        "version": 1,
+        "serviceModeRevision": 1,
+        "effectiveAt": "@initializedAt",
+        "status": "已发布"
+      }
+    ],
+    "supplyPrices": [],
+    "serviceRoutes": [
+      {
+        "id": "service-review-route-deepseek-unified",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "serviceId": "standard:model-1",
+        "activeVersion": 1,
+        "versions": [
+          {
+            "id": "service-review-route-deepseek-unified-v1",
+            "version": 1,
+            "config": {
+              "strategy": "weighted",
+              "groups": [
+                {
+                  "id": "P1",
+                  "name": "主用组",
+                  "strategy": "weighted"
+                }
+              ],
+              "channels": [
+                {
+                  "supplyId": "service-review-supply-deepseek-deepseek-1",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 50,
+                  "priority": 1
+                },
+                {
+                  "supplyId": "service-review-supply-deepseek-siliconflow-1",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 30,
+                  "priority": 2
+                },
+                {
+                  "supplyId": "service-review-supply-deepseek-aggregate-1",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 20,
+                  "priority": 3
+                }
+              ],
+              "autoFailover": true,
+              "excludeAbnormal": true,
+              "autoRecover": true,
+              "advanced": {
+                "timeoutSeconds": 60,
+                "maxRetries": 0,
+                "failureThreshold": 3,
+                "recoverySeconds": 30,
+                "latencyWindowSeconds": 60,
+                "costBasis": "input"
+              }
+            },
+            "publishedAt": "@initializedAt",
+            "actor": "平台管理员",
+            "rollbackFrom": null,
+            "costVersions": {
+              "service-review-supply-deepseek-deepseek-1": "dbc3265b7e0e2853",
+              "service-review-supply-deepseek-siliconflow-1": "9b6b4843e89f63f9",
+              "service-review-supply-deepseek-aggregate-1": "b6185996ce6c4461"
+            }
+          }
+        ],
+        "draft": null,
+        "draftUpdatedAt": null
+      },
+      {
+        "id": "service-review-route-qwen-review-aliyun",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "serviceId": "provider:catalog-demo-qwen:service-review-provider-aliyun",
+        "activeVersion": 1,
+        "versions": [
+          {
+            "id": "service-review-route-qwen-review-aliyun-v1",
+            "version": 1,
+            "config": {
+              "strategy": "weighted",
+              "groups": [
+                {
+                  "id": "P1",
+                  "name": "主用组",
+                  "strategy": "weighted"
+                }
+              ],
+              "channels": [
+                {
+                  "supplyId": "service-review-supply-qwen-aliyun-1",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 70,
+                  "priority": 1
+                },
+                {
+                  "supplyId": "service-review-supply-qwen-aliyun-2",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 30,
+                  "priority": 2
+                }
+              ],
+              "autoFailover": true,
+              "excludeAbnormal": true,
+              "autoRecover": true,
+              "advanced": {
+                "timeoutSeconds": 60,
+                "maxRetries": 0,
+                "failureThreshold": 3,
+                "recoverySeconds": 30,
+                "latencyWindowSeconds": 60,
+                "costBasis": "input"
+              }
+            },
+            "publishedAt": "@initializedAt",
+            "actor": "平台管理员",
+            "rollbackFrom": null,
+            "costVersions": {
+              "service-review-supply-qwen-aliyun-1": "b8096122d3ebcb8e",
+              "service-review-supply-qwen-aliyun-2": "ead863db92963f81"
+            }
+          }
+        ],
+        "draft": null,
+        "draftUpdatedAt": null
+      },
+      {
+        "id": "service-review-route-qwen-review-siliconflow",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "serviceId": "provider:catalog-demo-qwen:service-review-provider-siliconflow",
+        "activeVersion": 1,
+        "versions": [
+          {
+            "id": "service-review-route-qwen-review-siliconflow-v1",
+            "version": 1,
+            "config": {
+              "strategy": "weighted",
+              "groups": [
+                {
+                  "id": "P1",
+                  "name": "主用组",
+                  "strategy": "weighted"
+                }
+              ],
+              "channels": [
+                {
+                  "supplyId": "service-review-supply-qwen-siliconflow-1",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 50,
+                  "priority": 1
+                },
+                {
+                  "supplyId": "service-review-supply-qwen-siliconflow-2",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 30,
+                  "priority": 2
+                },
+                {
+                  "supplyId": "service-review-supply-qwen-siliconflow-3",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 20,
+                  "priority": 3
+                }
+              ],
+              "autoFailover": true,
+              "excludeAbnormal": true,
+              "autoRecover": true,
+              "advanced": {
+                "timeoutSeconds": 60,
+                "maxRetries": 0,
+                "failureThreshold": 3,
+                "recoverySeconds": 30,
+                "latencyWindowSeconds": 60,
+                "costBasis": "input"
+              }
+            },
+            "publishedAt": "@initializedAt",
+            "actor": "平台管理员",
+            "rollbackFrom": null,
+            "costVersions": {
+              "service-review-supply-qwen-siliconflow-1": "53157728ff3d297",
+              "service-review-supply-qwen-siliconflow-2": "13fdf0d6006d1d1f",
+              "service-review-supply-qwen-siliconflow-3": "ac7e232fc71ea98f"
+            }
+          }
+        ],
+        "draft": null,
+        "draftUpdatedAt": null
+      },
+      {
+        "id": "service-review-route-qwen-review-aggregate",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "serviceId": "provider:catalog-demo-qwen:service-review-provider-aggregate",
+        "activeVersion": 1,
+        "versions": [
+          {
+            "id": "service-review-route-qwen-review-aggregate-v1",
+            "version": 1,
+            "config": {
+              "strategy": "fixed",
+              "groups": [
+                {
+                  "id": "P1",
+                  "name": "主用组",
+                  "strategy": "fixed"
+                }
+              ],
+              "channels": [
+                {
+                  "supplyId": "service-review-supply-qwen-aggregate-1",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 100,
+                  "priority": 1
+                }
+              ],
+              "autoFailover": true,
+              "excludeAbnormal": true,
+              "autoRecover": true,
+              "advanced": {
+                "timeoutSeconds": 60,
+                "maxRetries": 0,
+                "failureThreshold": 3,
+                "recoverySeconds": 30,
+                "latencyWindowSeconds": 60,
+                "costBasis": "input"
+              }
+            },
+            "publishedAt": "@initializedAt",
+            "actor": "平台管理员",
+            "rollbackFrom": null,
+            "costVersions": {
+              "service-review-supply-qwen-aggregate-1": "43f555ea00d85093"
+            }
+          }
+        ],
+        "draft": null,
+        "draftUpdatedAt": null
+      },
+      {
+        "id": "service-review-route-video-unified",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "serviceId": "standard:catalog-demo-video",
+        "activeVersion": 1,
+        "versions": [
+          {
+            "id": "service-review-route-video-unified-v1",
+            "version": 1,
+            "config": {
+              "strategy": "weighted",
+              "groups": [
+                {
+                  "id": "P1",
+                  "name": "主用组",
+                  "strategy": "weighted"
+                }
+              ],
+              "channels": [
+                {
+                  "supplyId": "service-review-supply-video-aliyun-1",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 30,
+                  "priority": 1
+                },
+                {
+                  "supplyId": "service-review-supply-video-baidu-1",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 25,
+                  "priority": 2
+                },
+                {
+                  "supplyId": "service-review-supply-video-stepfun-1",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 20,
+                  "priority": 3
+                },
+                {
+                  "supplyId": "service-review-supply-video-tencent-1",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 15,
+                  "priority": 4
+                },
+                {
+                  "supplyId": "service-review-supply-video-iflytek-1",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 10,
+                  "priority": 5
+                }
+              ],
+              "autoFailover": true,
+              "excludeAbnormal": true,
+              "autoRecover": true,
+              "advanced": {
+                "timeoutSeconds": 60,
+                "maxRetries": 0,
+                "failureThreshold": 3,
+                "recoverySeconds": 30,
+                "latencyWindowSeconds": 60,
+                "costBasis": "input"
+              }
+            },
+            "publishedAt": "@initializedAt",
+            "actor": "平台管理员",
+            "rollbackFrom": null,
+            "costVersions": {
+              "service-review-supply-video-aliyun-1": "ea2d7f44c45abdd",
+              "service-review-supply-video-baidu-1": "51425ab17bafffd3",
+              "service-review-supply-video-stepfun-1": "73643be03dd05b36",
+              "service-review-supply-video-tencent-1": "727d8384d7532b1",
+              "service-review-supply-video-iflytek-1": "79ef72adad16e087"
+            }
+          }
+        ],
+        "draft": null,
+        "draftUpdatedAt": null
+      },
+      {
+        "id": "service-review-route-audio-review-aliyun",
+        "createdAt": "@initializedAt",
+        "updatedAt": "@initializedAt",
+        "serviceId": "provider:catalog-demo-tts:service-review-provider-aliyun",
+        "activeVersion": 1,
+        "versions": [
+          {
+            "id": "service-review-route-audio-review-aliyun-v1",
+            "version": 1,
+            "config": {
+              "strategy": "fixed",
+              "groups": [
+                {
+                  "id": "P1",
+                  "name": "主用组",
+                  "strategy": "fixed"
+                }
+              ],
+              "channels": [
+                {
+                  "supplyId": "service-review-supply-audio-aliyun-1",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 100,
+                  "priority": 1
+                }
+              ],
+              "autoFailover": true,
+              "excludeAbnormal": true,
+              "autoRecover": true,
+              "advanced": {
+                "timeoutSeconds": 60,
+                "maxRetries": 0,
+                "failureThreshold": 3,
+                "recoverySeconds": 30,
+                "latencyWindowSeconds": 60,
+                "costBasis": "input"
+              }
+            },
+            "publishedAt": "@initializedAt",
+            "actor": "平台管理员",
+            "rollbackFrom": null,
+            "costVersions": {
+              "service-review-supply-audio-aliyun-1": "835cdccb68903ccc"
+            }
+          }
+        ],
+        "draft": null,
+        "draftUpdatedAt": null
+      }
+    ],
+    "modelOnboardings": []
+  },
+  "excludeIds": {
+    "models": [],
+    "modelTemplates": [],
+    "providers": [],
+    "endpoints": [
+      "endpoint-moma",
+      "endpoint-zhipu-direct",
+      "endpoint-official-kimi-official-kimi-k3-cn",
+      "endpoint-official-kimi-official-kimi-k3-global",
+      "endpoint-official-deepseek-official-deepseek-v4-pro-official",
+      "endpoint-official-ark-official-doubao-seedance-2-0-260128-official",
+      "endpoint-official-ark-official-doubao-seedream-5-0-flash-260915-official"
+    ],
+    "modelVersions": [],
+    "validations": [],
+    "modelSupplies": [],
+    "modelSalePrices": [],
+    "supplyPrices": [],
+    "serviceRoutes": [],
+    "modelOnboardings": []
+  }
+}

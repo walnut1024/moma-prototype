@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="220" viewBox="0 0 1120 220" role="img" aria-labelledby="title desc">
+  <title id="title">客户模型与上游模型的映射</title>
+  <desc id="desc">客户请求对外调用标识 glm-5.5，平台路由选择移动云生产渠道，再按映射请求上游模型 glm-5.5-release。示例标识不代表实际接入参数。</desc>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#2563eb" stroke-width="1.5"/></marker></defs>
+  <rect width="1120" height="220" rx="12" fill="#f8fafc"/>
+  <rect x="16" y="22" width="320" height="146" rx="10" fill="#eff6ff" stroke="#93c5fd"/>
+  <rect x="400" y="22" width="320" height="146" rx="10" fill="#fff" stroke="#cbd5e1"/>
+  <rect x="784" y="22" width="320" height="146" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <g fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"><path d="M348 95 H382"/><path d="M732 95 H766"/></g>
+  <g font-family="PingFang SC, Microsoft YaHei, sans-serif" text-anchor="middle">
+    <g font-size="21" fill="#0f172a" font-weight="600"><text x="176" y="60">客户请求</text><text x="560" y="60">平台路由选中</text><text x="944" y="60">供应商收到</text></g>
+    <text x="176" y="104" font-family="Menlo, Consolas, monospace" font-size="23" fill="#1d4ed8">model: glm-5.5</text>
+    <text x="560" y="103" font-size="22" fill="#334155">移动云 · 生产渠道</text>
+    <text x="944" y="104" font-family="Menlo, Consolas, monospace" font-size="19" fill="#0f766e">model: glm-5.5-release</text>
+    <g font-size="16" fill="#475569"><text x="176" y="140">对外调用标识</text><text x="560" y="140">按模型映射转发</text><text x="944" y="140">上游模型标识</text></g>
+    <text x="560" y="199" font-size="16" fill="#475569">示例标识，实际以上游接口资料为准。</text>
+  </g>
+</svg>

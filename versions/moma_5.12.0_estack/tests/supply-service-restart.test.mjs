@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAdminSeed, commitAdminState, persistModelAction } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction } from '../src/admin-v2/store.js';
 import { modelSupplies, availableSupplies } from '../src/admin-v2/model-management.js';
 import { simulateRequest } from '../src/admin-v2/domain.js';
 
@@ -12,7 +13,7 @@ function stopped() {
   return { state, modelId, supplyId };
 }
 
-test('starting the last stopped supply restores existing calls without resuming sales', () => {
+test('starting a supply never restores customer calls while its model remains unlisted', () => {
   let { state, modelId, supplyId } = stopped();
   assert.equal(availableSupplies(state, modelId).length, 0);
   assert.equal(state.models.find(item => item.id === modelId).callsEnabled, false);
@@ -26,13 +27,13 @@ test('starting the last stopped supply restores existing calls without resuming 
   assert.equal(state.models.find(item => item.id === modelId).callsEnabled, true);
   assert.equal(state.models.find(item => item.id === modelId).listingStatus, '已下架');
   assert.equal(state.modelSupplies.find(item => item.id === supplyId).salesEnabled, false);
-  assert.equal(call().httpStatus, 200);
+  assert.equal(call().httpStatus, 403);
 });
 
 test('starting only changes the target service and preserves prices, shared connections and sale state', () => {
   const { state, modelId, supplyId } = stopped(), before = structuredClone(state);
   const next = op(state, 'startSupply', modelId, supplyId), model = state.models.find(item => item.id === modelId), saved = next.models.find(item => item.id === modelId);
-  assert.deepEqual(saved, { ...model, callsEnabled: true, status: '运行中', updatedAt: saved.updatedAt });
+  assert.deepEqual(saved, { ...model, accessGeneration: (model.accessGeneration || 0) + 1, requestGeneration: (model.requestGeneration || 0) + 1, callsEnabled: true, status: '运行中', updatedAt: saved.updatedAt });
   assert.deepEqual(next.modelSupplies.filter(item => item.id !== supplyId), state.modelSupplies.filter(item => item.id !== supplyId));
   for (const key of ['endpoints', 'providers', 'supplyPrices', 'modelSalePrices', 'serviceRoutes']) assert.deepEqual(next[key], state[key]);
   assert.deepEqual(state, before);
@@ -59,3 +60,5 @@ test('starting retains permissions and failed-persistence protection', () => {
   assert.throws(() => persistModelAction(state, action, { getItem: () => JSON.stringify(state), setItem: () => { throw Error('storage failed'); } }), /storage failed/);
   assert.deepEqual(state, before);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }

@@ -1,7 +1,8 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import { MOMA_BILLING_ITEMS } from '../src/admin-v2/moma-billing-items.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAdminSeed, commitAdminState, parseAdminState, persistModelAction } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, parseAdminState as baseParseAdminState, persistModelAction } from '../src/admin-v2/store.js';
 import { tariffDictionarySeed, tariffDictionaryEntries, tariffDictionaryId, tariffOptions, normalizeTariffName, normalizeCurrency, tariffScenarioUnit, tariffDictionaryTransaction } from '../src/admin-v2/tariff-dictionary.js';
 import { normalizeCataloguePrice } from '../src/admin-v2/provider-catalogue-pricing.js';
 
@@ -61,7 +62,7 @@ test('shared choices restore without resetting custom edits, disabled items or e
   assert.ok(tariffOptions(state, 'scenario').includes('输入 Token'));
   const existing = structuredClone(state); delete existing.tariffDictionary;
   const restored = parseAdminState(JSON.stringify(existing));
-  assert.deepEqual(restored.tariffDictionary, state.tariffDictionary);
+  assert.deepEqual(restored.tariffDictionary, []);
   assert.deepEqual(restored.providers, existing.providers);
   let edited = save(state, { kind: 'unit', name: '小时' });
   const id = find(edited, '小时').id;
@@ -233,3 +234,6 @@ test('custom deletion retains role, revision and storage failure protections', (
   assert.throws(() => persistModelAction(state, input, { getItem: () => before, setItem: () => { throw new Error('quota'); } }), /quota/);
   assert.equal(JSON.stringify(state), before);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

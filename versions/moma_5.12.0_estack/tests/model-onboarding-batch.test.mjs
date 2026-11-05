@@ -1,6 +1,8 @@
+import { legacySupplierState } from './legacy-supplier-fixture.mjs';
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAdminState, createAdminSeed, commitAdminState, persistModelAction } from '../src/admin-v2/store.js';
+import { parseAdminState as baseParseAdminState, createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction } from '../src/admin-v2/store.js';
 import { supplierChannelAssociations } from '../src/admin-v2/supplier-resources.js';
 import { channelBlockReason, channelUrl, channelInterfaceIssue } from '../src/admin-v2/provider-channels.js';
 import { connectionTestPassed } from '../src/admin-v2/connection-state.js';
@@ -20,7 +22,7 @@ const selection = state => ({ endpointId: endpoint(state).id, associationIds: ma
 const unchangedServices = (before, after) => { for (const field of ['models', 'modelSupplies', 'serviceRoutes', 'modelSalePrices', 'supplyPrices']) assert.deepEqual(after[field], before[field], field); };
 
 test('one connection atomically creates multiple canonical mappings with unknown prices and task-specific URLs', () => {
-  const state = parseAdminState(null), before = structuredClone(state);
+  const state = legacySupplierState(), before = structuredClone(state);
   const next = run(state, 'supplierChannelCreate', draft), ep = endpoint(next), rows = mappings(next);
   assert.equal(next.endpoints.length, state.endpoints.length + 1);
   assert.equal(ep.addressMode, 'base'); assert.equal(ep.status, '草稿');
@@ -34,7 +36,7 @@ test('one connection atomically creates multiple canonical mappings with unknown
 });
 
 test('single-element models use the atomic batch path and old top-level model inputs are rejected', () => {
-  const state = parseAdminState(null);
+  const state = legacySupplierState();
   const connection = { name: draft.name, protocol: 'OpenAI', baseUrl: 'https://single.example.invalid/v1/chat/completions', keyGroupId: 'default' };
   const next = run(state, 'supplierChannelCreate', { ...connection, models: [models[0]] });
   assert.equal(mappings(next).length, 1);
@@ -43,7 +45,7 @@ test('single-element models use the atomic batch path and old top-level model in
 });
 
 test('invalid later rows, duplicate identities and unsupported tasks reject the entire batch without writes', () => {
-  const state = parseAdminState(null), before = structuredClone(state);
+  const state = legacySupplierState(), before = structuredClone(state);
   const invalid = [[], null, Array(51).fill(models[0]), [models[0], { ...models[1], libraryId: 'missing' }], [models[0], models[0]], [models[0], { ...models[1], upstreamModelId: models[0].upstreamModelId }], [models[0], { ...models[1], upstreamModelId: 'bad\u0000model' }], [models[0], { ...models[1], scenarios: [{ name: '输入 Token', listPrice: '-1', unit: '百万 Token', currency: 'CNY' }] }], [models[0], { ...models[1], libraryId: 'model-15' }]];
   for (const entries of invalid) {
     assert.throws(() => run(state, 'supplierChannelCreate', { ...draft, models: entries }));
@@ -52,13 +54,13 @@ test('invalid later rows, duplicate identities and unsupported tasks reject the 
 });
 
 test('new channel creation rejects existing resource IDs and foreign credential groups', () => {
-  const state = parseAdminState(null);
+  const state = legacySupplierState();
   for (const patch of [{ endpointId: state.endpoints[0].id }, { associationId: 'existing' }, { keyGroupId: 'foreign-group' }]) assert.throws(() => run(state, 'supplierChannelCreate', { ...draft, ...patch }));
   assert.throws(() => run(state, 'supplierChannelCreate', { ...draft, interfaceType: undefined, addressMode: 'base' }), /完整接口路径/);
 });
 
 test('unknown prices stay unknown through technical test and enable and cannot fall back to catalogue offers', () => {
-  const initial = parseAdminState(null), created = run(initial, 'supplierChannelCreate', draft);
+  const initial = legacySupplierState(), created = run(initial, 'supplierChannelCreate', draft);
   const tested = run(created, 'supplierModelsTest', selection(created));
   assert.ok(mappings(tested).every(row => row.health.result === '通过' && row.health.simulated));
   assert.equal(endpoint(tested).status, '草稿'); assert.ok(mappings(tested).every(row => !row.enabled));
@@ -86,7 +88,7 @@ test('legacy supply-scoped procurement remains a valid source for existing impli
 });
 
 test('explicit free procurement is a complete price and is distinguished from missing procurement', () => {
-  let state = run(parseAdminState(null), 'supplierChannelCreate', { ...draft, models: [{ ...models[0], scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] }] });
+  let state = run(legacySupplierState(), 'supplierChannelCreate', { ...draft, models: [{ ...models[0], scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] }] });
   state = run(state, 'supplierModelsTest', selection(state)); state = run(state, 'supplierModelsEnable', selection(state));
   const row = mappings(state)[0];
   assert.equal(row.pricing.scenarios[0].listPrice, 0);
@@ -94,7 +96,7 @@ test('explicit free procurement is a complete price and is distinguished from mi
 });
 
 test('partial batch test failures are stored individually and block atomic batch enable', () => {
-  const created = run(parseAdminState(null), 'supplierChannelCreate', draft), ids = selection(created);
+  const created = run(legacySupplierState(), 'supplierChannelCreate', draft), ids = selection(created);
   const tested = run(created, 'supplierModelsTest', { ...ids, scenarios: { [ids.associationIds[1]]: 'unauthorized' } });
   assert.equal(mappings(tested).find(row => row.id === ids.associationIds[0]).health.result, '通过');
   assert.equal(mappings(tested).find(row => row.id === ids.associationIds[1]).health.status, 401);
@@ -107,7 +109,7 @@ test('partial batch test failures are stored individually and block atomic batch
 });
 
 test('missing credentials produce per-model failure results without enabling or deleting saved configuration', () => {
-  const created = run(parseAdminState(null), 'supplierChannelCreate', draft);
+  const created = run(legacySupplierState(), 'supplierChannelCreate', draft);
   owner(created).apiKeys.forEach(key => { key.status = 'disabled'; });
   const tested = run(created, 'supplierModelsTest', selection(created));
   assert.equal(mappings(tested).length, 2);
@@ -116,7 +118,7 @@ test('missing credentials produce per-model failure results without enabling or 
 });
 
 test('retesting a model failure prevents an earlier success from qualifying for enable', () => {
-  let state = run(parseAdminState(null), 'supplierChannelCreate', draft);
+  let state = run(legacySupplierState(), 'supplierChannelCreate', draft);
   state = run(state, 'supplierModelsTest', selection(state));
   const ids = selection(state), fail = ids.associationIds[0];
   state = run(state, 'supplierModelsTest', { endpointId: ids.endpointId, associationIds: [fail], scenarios: { [fail]: 'unavailable' } });
@@ -124,7 +126,7 @@ test('retesting a model failure prevents an earlier success from qualifying for 
 });
 
 test('batch actions reject duplicate IDs, foreign endpoints, foreign associations and empty selections', () => {
-  const state = run(parseAdminState(null), 'supplierChannelCreate', draft), ids = selection(state);
+  const state = run(legacySupplierState(), 'supplierChannelCreate', draft), ids = selection(state);
   const other = supplierChannelAssociations(state, owner(state)).find(row => row.endpointId !== ids.endpointId);
   for (const operation of ['supplierModelsTest', 'supplierModelsEnable']) {
     for (const associationIds of [[], null, [ids.associationIds[0], ids.associationIds[0]], [other.id], Array(51).fill('x')]) assert.throws(() => run(state, operation, { ...ids, associationIds }));
@@ -133,7 +135,7 @@ test('batch actions reject duplicate IDs, foreign endpoints, foreign association
 });
 
 test('adding models to an existing channel preserves existing checks, prices, activation and services', () => {
-  let state = run(parseAdminState(null), 'supplierChannelCreate', { ...draft, models: [models[0]] });
+  let state = run(legacySupplierState(), 'supplierChannelCreate', { ...draft, models: [models[0]] });
   state = run(state, 'supplierModelsTest', selection(state)); state = run(state, 'supplierModelsEnable', selection(state));
   const previous = structuredClone(mappings(state)[0]), originalEndpoint = structuredClone(endpoint(state));
   const next = run(state, 'supplierModelsAdd', { endpointId: endpoint(state).id, models: [models[1]] });
@@ -146,7 +148,7 @@ test('adding models to an existing channel preserves existing checks, prices, ac
 });
 
 test('restoring a stopped channel enables only selected mappings rather than reviving all siblings', () => {
-  let state = run(parseAdminState(null), 'supplierChannelCreate', draft);
+  let state = run(legacySupplierState(), 'supplierChannelCreate', draft);
   state = run(state, 'supplierModelsTest', selection(state)); state = run(state, 'supplierModelsEnable', selection(state));
   endpoint(state).status = '停用';
   const ids = selection(state), next = run(state, 'supplierModelsEnable', { ...ids, associationIds: [ids.associationIds[0]] });
@@ -156,7 +158,7 @@ test('restoring a stopped channel enables only selected mappings rather than rev
 });
 
 test('editing explicit base-address channels retains interface fields and invalidates only affected evidence', () => {
-  let state = run(parseAdminState(null), 'supplierChannelCreate', draft);
+  let state = run(legacySupplierState(), 'supplierChannelCreate', draft);
   state = run(state, 'supplierModelsTest', selection(state));
   const next = run(state, 'supplierChannelSave', { endpointId: endpoint(state).id, mode: 'address', protocol: 'OpenAI', baseUrl: 'https://edited.example.invalid/api/v1', confirmed: true });
   assert.equal(endpoint(next).interfaceType, 'openai'); assert.equal(endpoint(next).addressMode, 'base');
@@ -165,7 +167,7 @@ test('editing explicit base-address channels retains interface fields and invali
 });
 
 test('batch creation and enable preserve role, revision and storage failure boundaries', () => {
-  const state = parseAdminState(null), before = structuredClone(state);
+  const state = legacySupplierState(), before = structuredClone(state);
   assert.throws(() => run({ ...state, currentRole: '运维人员' }, 'supplierChannelCreate', draft), /无权/);
   assert.throws(() => persistModelAction(state, action('supplierChannelCreate', draft), { getItem: () => JSON.stringify({ ...state, revision: state.revision + 1 }), setItem: () => assert.fail() }), /数据已变化/);
   assert.throws(() => persistModelAction(state, action('supplierChannelCreate', draft), { getItem: () => JSON.stringify(state), setItem: () => { throw Error('disk full'); } }), /disk full/);
@@ -173,7 +175,7 @@ test('batch creation and enable preserve role, revision and storage failure boun
 });
 
 test('only self-hosted suppliers can create channels without authentication', () => {
-  const initial = parseAdminState(null);
+  const initial = legacySupplierState();
   assert.throws(() => run(initial, 'supplierChannelCreate', { ...draft, authMode: 'none' }), /自有推理/);
   const created = run(initial, 'create', { name: '本地供给', code: 'batch-self-hosted', sourceType: 'selfHosted', description: '' }, null), id = created.audits[0].objectId;
   const state = run(created, 'supplierChannelCreate', { ...draft, authMode: 'none', baseUrl: 'http://inference.example.invalid/v1', models: [models[0]] }, id);
@@ -182,7 +184,7 @@ test('only self-hosted suppliers can create channels without authentication', ()
 });
 
 test('an incompatible later metadata change remains readable and blocks the mapping instead of crashing the catalogue', () => {
-  const state = run(parseAdminState(null), 'supplierChannelCreate', { ...draft, models: [models[0]] });
+  const state = run(legacySupplierState(), 'supplierChannelCreate', { ...draft, models: [models[0]] });
   const entry = owner(state).catalogModels.find(row => row.libraryId === models[0].libraryId);
   entry.type = 'rerank';
   const row = mappings(state)[0];
@@ -190,3 +192,6 @@ test('an incompatible later metadata change remains readable and blocks the mapp
   assert.match(channelInterfaceIssue(owner(state), row), /不支持/);
   assert.match(channelBlockReason(owner(state), row), /不支持/);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

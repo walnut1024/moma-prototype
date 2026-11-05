@@ -1,8 +1,8 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import { AdminUIContext } from './admin-ui-context';
 import * as echarts from 'echarts/core';
-import { LineChart, BarChart, PieChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
+import { LineChart, BarChart, PieChart, HeatmapChart } from 'echarts/charts';
+import { GridComponent, TooltipComponent, LegendComponent, VisualMapComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 import { SlidersHorizontal } from 'lucide-react';
 import { Button } from './ui/button';
@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { chartPalette, chartColor, chartAxis, chartNumber, defaultChartSeries } from './chart-style.mjs';
 import './analytics-charts.css';
 
-echarts.use([LineChart, BarChart, PieChart, GridComponent, TooltipComponent, LegendComponent, SVGRenderer]);
+echarts.use([LineChart, BarChart, PieChart, HeatmapChart, GridComponent, TooltipComponent, LegendComponent, VisualMapComponent, SVGRenderer]);
 const grid = '#e4eaf3';
 const safe = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 
@@ -73,13 +73,25 @@ export function TimeSeriesChart({ labels, series, unit = '', label, axisUnit, ti
     tooltip: { trigger: 'axis', confine: true, axisPointer: { type: type === 'bar' ? 'shadow' : 'line', lineStyle: { color: '#b8c7e8', type: 'dashed' } }, backgroundColor: '#fff', borderColor: grid, extraCssText: `max-height:60vh;overflow-y:auto;border-radius:6px;box-shadow:${admin ? '0 4px 12px rgba(38,50,71,.12)' : '0 4px 16px #17243b12'}`, textStyle: { color: '#263247', fontSize: 12 }, formatter: tooltip },
     xAxis: { type: 'category', data: labels, boundaryGap: type === 'bar', axisTick: { show: false }, axisLine: { lineStyle: { color: '#dce4ee' } }, axisLabel: { color: muted, fontSize: 12, hideOverlap: !(compact && type === 'bar'), formatter: value => singleDay ? value.slice(6) : overview && /^\d{2}-\d{2}$/.test(value) ? value.replace('-', '/') : value, interval: compact && type === 'bar' ? 0 : labels.length > 16 ? Math.ceil(labels.length / 6) - 1 : 'auto' } },
     yAxis: { type: 'value', min: domain?.[0] ?? 0, max: domain?.[1], minInterval: ['次','人','个','张','个客户'].includes(unit) ? 1 : undefined, splitNumber: 4, name: axis.name, nameTextStyle: { color: muted, fontSize: 12, align: 'left' }, axisLabel: { color: muted, fontSize: 12, formatter: tickFormatter || (value => formatter(value / axis.scale)) }, splitLine: { lineStyle: { color: grid, type: 'dashed' } } },
-    series: series.map((item, index) => ({ name: item.label, type: type === 'bar' ? 'bar' : 'line', data: item.values, label: type === 'bar' && item.showValues ? { show: true, position: 'top', color: muted, fontSize: 12 } : undefined, smooth: .2, connectNulls: false, showSymbol: compact && labels.length === 1, symbolSize: compact ? 6 : undefined, stack: stacked && type !== 'line' ? 'total' : undefined, areaStyle: type === 'area' ? { opacity: .12 } : undefined, barMaxWidth: 24, lineStyle: { width: item.total || /^(总|累计)/.test(item.label) ? 2.5 : 2, type: item.dashed ? 'dashed' : admin ? ['solid', 'dashed', 'dotted'][index % 3] : 'solid' }, emphasis: { focus: 'series' } })),
+    series: series.map((item, index) => ({ name: item.label, type: type === 'bar' ? 'bar' : 'line', data: item.values, label: type === 'bar' && item.showValues ? { show: true, position: 'top', color: muted, fontSize: 12 } : undefined, smooth: .2, connectNulls: false, showSymbol: compact && (labels.length === 1 || item.showPoints === true), symbolSize: compact ? 6 : undefined, stack: stacked && type !== 'line' ? 'total' : undefined, areaStyle: type === 'area' ? { opacity: .12 } : undefined, barMaxWidth: 24, lineStyle: { width: item.total || /^(总|累计)/.test(item.label) ? 2.5 : 2, type: item.dashed ? 'dashed' : admin ? ['solid', 'dashed', 'dotted'][index % 3] : 'solid' }, emphasis: { focus: 'series' } })),
   };
   return <div className={`unified-chart ${className}`} role="group" aria-label={`${label}（${{ line: '折线图', bar: '柱状图', area: '面积图' }[type]}）`}>
     {!compact && series.length > 1 && <div className="unified-chart-tools"><span>已展示 {visible.length} / {series.length} 条{choice?.signature !== signature && series.length > 8 ? ' · 默认按用量排序' : ''}</span><Popover><PopoverTrigger asChild><Button variant="outline" size="icon" aria-label={`${label}图表设置`} title="图表设置" onClick={() => setQuery('')}><SlidersHorizontal size={15}/></Button></PopoverTrigger><PopoverContent align="end" className="unified-chart-picker"><strong>显示指标／模型</strong><Input aria-label={`${label}搜索曲线`} placeholder="搜索指标或模型名称" value={query} onChange={event => setQuery(event.target.value)}/><div className="unified-chart-picker-actions"><Button variant="ghost" size="sm" onClick={() => choose(series.map(item => item.label))}>显示全部</Button><Button variant="ghost" size="sm" onClick={() => setChoice(null)}>恢复默认</Button></div><div className="unified-chart-options">{matches.map(item => <label key={item.label}><Checkbox aria-label={`显示${item.label}`} checked={selected.includes(item.label)} disabled={visible.length === 1 && selected.includes(item.label)} onCheckedChange={checked => choose(checked ? [...selected, item.label] : selected.filter(name => name !== item.label))}/><i style={{ background: seriesColor(item) }}/><span>{item.label}</span></label>)}{!matches.length && <p>无匹配曲线</p>}</div><small>仅改变图表显示，不影响统计、筛选和导出。</small></PopoverContent></Popover></div>}
     <Chart option={option} height={height} label={`${label}图表`} onLegend={event => choose(Object.keys(event.selected).filter(name => event.selected[name]), legendNames)}/>
     {admin && showData && <ChartData compact={compact} label={label} headings={['时间 / 分类', ...visible.map(item => `${item.label}${unit ? `（${unit}）` : ''}`)]} rows={labels.map((time, index) => [time, ...visible.map(item => Number.isFinite(item.values[index]) ? formatter(item.values[index]) : '—')])}/>}
   </div>;
+}
+
+export function HorizontalBarChart({ rows, unit = '', label, height, onChoose }) {
+  const option = {
+    animation: false,
+    grid: { top: 12, left: 8, right: 88, bottom: 28, containLabel: true },
+    tooltip: { trigger: 'axis', confine: true, backgroundColor: '#fff', borderColor: grid, textStyle: { color: '#263247', fontSize: 12 }, axisPointer: { type: 'shadow' }, formatter: items => `${safe(rows[items[0]?.dataIndex]?.name)}<br/>${safe(label)}：<b>${chartNumber(rows[items[0]?.dataIndex]?.value)} ${safe(unit)}</b>` },
+    xAxis: { type: 'value', min: unit === '%' ? 0 : undefined, max: unit === '%' ? 100 : undefined, name: unit, nameTextStyle: { color: '#5d6b82', fontSize: 12 }, axisLabel: { color: '#5d6b82', fontSize: 12, formatter: chartNumber }, splitLine: { lineStyle: { color: grid, type: 'dashed' } } },
+    yAxis: { type: 'category', inverse: true, data: rows.map(row=>row.name), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#5d6b82', fontSize: 12, width: 150, overflow: 'truncate' } },
+    series: [{ type: 'bar', barMaxWidth: 18, data: rows.map(row=>({ value: row.value, itemStyle: { color: row.value < 0 ? '#c43228' : '#315fe8' }, label: { position: row.value < 0 ? 'left' : 'right' } })), label: { show: true, distance: 6, color: '#263247', fontSize: 12, formatter: item=>unit === '%' ? Number(item.value).toFixed(2)+'%' : chartNumber(item.value) } }],
+  };
+  return <Chart option={option} height={height || Math.max(220,rows.length*32+60)} label={`${label}（横向条形图）：${rows.map(row=>`${row.name} ${chartNumber(row.value)} ${unit}`).join('；')}`} onClick={event=>{if(rows[event.dataIndex])onChoose?.(rows[event.dataIndex].id);}}/>;
 }
 
 export function RankingChart({ rows, metric, unit, collection, scale, onChoose, showData = true }) {
@@ -97,7 +109,7 @@ export function RankingChart({ rows, metric, unit, collection, scale, onChoose, 
   return <><Chart option={option} height={Math.max(140, rows.length * 28 + 20)} label={`用量排行，显示 ${rows.length} 个对象，点击条形查看明细`} onClick={event => { if (rows[event.dataIndex]) onChoose(rows[event.dataIndex].id); }} />{admin && showData && <ChartData label="用量排行" headings={['对象', `${metric === 'calls' ? '调用次数' : '用量'}（${unit || '次'}）`]} rows={rows.map(row => [<Button variant="link" onClick={() => onChoose(row.id)}>{collection.find(item => item.id === row.id)?.name || row.id}</Button>, chartNumber(row[metric])])}/>}</>;
 }
 
-export function DonutChart({ rows, unit = '', label, height = 200, centerValue, centerLabel, showData = true }) {
+export function DonutChart({ rows, unit = '', label, height = 200, centerValue, centerLabel, showData = true, onChoose }) {
   const admin = useContext(AdminUIContext);
   const muted = admin ? '#5d6b82' : '#64748b';
   const total = rows.reduce((sum, row) => sum + row.value, 0);
@@ -110,7 +122,36 @@ export function DonutChart({ rows, unit = '', label, height = 200, centerValue, 
       data: rows.map((row, index) => ({ name: row.label, value: row.value, itemStyle: { color: admin && (row.color === chartPalette[0] || !row.color && index === 0) ? '#315fe8' : row.color || chartPalette[index % chartPalette.length] } })) }],
   };
   return <><div className="unified-donut" style={{ position: 'relative' }}>
-    <Chart option={option} height={height} label={`${label}：${rows.map(row => `${row.label} ${chartNumber(row.value)} ${unit}，占比 ${total ? (row.value / total * 100).toFixed(1) + '%' : '—'}`).join('；')}`}/>
+    <Chart option={option} height={height} label={`${label}：${rows.map(row => `${row.label} ${chartNumber(row.value)} ${unit}，占比 ${total ? (row.value / total * 100).toFixed(1) + '%' : '—'}`).join('；')}`} onClick={onChoose ? event=>{if(rows[event.dataIndex])onChoose(rows[event.dataIndex].id);} : undefined}/>
     <div className="unified-donut-center" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', gap: 4 }}><strong style={{ fontSize: admin ? 28 : 20, fontWeight: admin ? 600 : 650, color: admin ? '#263247' : '#202b3e' }}>{centerValue}</strong><span style={{ fontSize: 12, color: muted }}>{centerLabel}</span></div>
   </div>{admin && showData && <ChartData label={label} headings={['分类', `用量${unit ? `（${unit}）` : ''}`, '占比']} rows={rows.map(row => [row.label, chartNumber(row.value), total ? `${(row.value / total * 100).toFixed(1)}%` : '—'])}/>}</>;
+}
+
+export function CoverageHeatmap({ labels, rows, label, onChoose }) {
+  const max=Math.max(1,...rows.flatMap(row=>row.values.filter(Number.isFinite)));
+  const data=rows.flatMap((row,y)=>row.values.map((value,x)=>({value:[x,y,value ?? -1],label:{color:value>max*.94?'#fff':'#000'},...(value==null?{itemStyle:{color:'#e4eaf3'}}:{})})));
+  const option={
+    animation:false,
+    grid:{top:12,left:8,right:16,bottom:64,containLabel:true},
+    xAxis:{type:'category',data:labels,splitArea:{show:false},axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#5d6b82',fontSize:12,interval:'auto'}},
+    yAxis:{type:'category',inverse:true,data:rows.map(row=>row.name),axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#5d6b82',fontSize:12,width:150,overflow:'truncate'}},
+    visualMap:{type:'continuous',min:0,max,dimension:2,orient:'horizontal',left:'center',bottom:0,itemWidth:10,itemHeight:120,text:[`${chartNumber(max)} 个客户`,'0'],textStyle:{color:'#5d6b82',fontSize:12},inRange:{color:['#f3f5f8','#c6d7ff','#315fe8']},outOfRange:{color:'#e4eaf3'}},
+    tooltip:{trigger:'item',confine:true,backgroundColor:'#fff',borderColor:grid,textStyle:{color:'#263247',fontSize:12},formatter:item=>{const [x,y,value]=item.value;return `${safe(rows[y].name)} · ${safe(labels[x])} · 北京时间<br/>去重客户：<b>${value<0?'待确认':chartNumber(value)+' 个'}</b>`;}},
+    series:[{type:'heatmap',data,itemStyle:{borderWidth:2,borderColor:'#fff'},label:{show:labels.length<=10,color:'#263247',fontSize:12,formatter:item=>item.value[2]<0?'—':chartNumber(item.value[2])},emphasis:{itemStyle:{borderColor:'#263247',borderWidth:2}}}],
+  };
+  return <Chart option={option} height={Math.max(220,rows.length*36+100)} label={`${label}（热力图）：${rows.map(row=>`${row.name}：${labels.map((day,index)=>`${day} ${row.values[index]==null?'待确认':row.values[index]+' 个客户'}`).join('，')}`).join('；')}`} onClick={event=>{const [x,y]=event.value || [];if(rows[y])onChoose?.(rows[y].id,x);}}/>;
+}
+
+export function MarginWaterfall({ data, label }) {
+  const {steps,currency}=data;
+  const amount=value=>Number(value).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:6});
+  const option={
+    animation:false,
+    grid:{top:42,left:8,right:30,bottom:12,containLabel:true},
+    xAxis:{type:'category',data:steps.map(row=>row.name),axisLine:{lineStyle:{color:grid}},axisTick:{show:false},axisLabel:{color:'#5d6b82',fontSize:12}},
+    yAxis:{type:'value',boundaryGap:['20%','20%'],name:currency,nameTextStyle:{color:'#5d6b82',fontSize:12},axisLabel:{color:'#5d6b82',fontSize:12,formatter:chartNumber},splitLine:{lineStyle:{color:grid,type:'dashed'}}},
+    tooltip:{trigger:'axis',confine:true,backgroundColor:'#fff',borderColor:grid,textStyle:{color:'#263247',fontSize:12},formatter:items=>{const row=steps[items[0]?.dataIndex];return row?`${safe(row.name)}：<b>${amount(row.amount)} ${safe(currency)}</b>`:'';}},
+    series:[{type:'bar',stack:'margin',stackStrategy:'all',silent:true,itemStyle:{color:'transparent'},emphasis:{itemStyle:{color:'transparent'}},data:steps.map(row=>row.base)},{type:'bar',stack:'margin',stackStrategy:'all',barMaxWidth:88,markLine:{silent:true,symbol:'none',label:{show:false},lineStyle:{color:'#8a97ac',type:'dashed'},data:[[{coord:[0,steps[0].amount]},{coord:[1,steps[0].amount]}],[{coord:[1,steps[2].amount]},{coord:[2,steps[2].amount]}]]},data:steps.map((row,index)=>({value:row.value,itemStyle:{color:index===1 || row.amount<0?'#c43228':index===0?'#315fe8':'#198754'},label:{position:row.amount<0&&index!==1?'bottom':'top'}})),label:{show:true,color:'#263247',fontSize:12,formatter:item=>amount(steps[item.dataIndex].amount)}}],
+  };
+  return <Chart option={option} height={320} label={`${label}（瀑布图）：${steps.map(row=>`${row.name} ${amount(row.amount)} ${currency}`).join('；')}`}/>;
 }

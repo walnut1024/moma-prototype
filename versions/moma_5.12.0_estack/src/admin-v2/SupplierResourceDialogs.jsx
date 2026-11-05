@@ -1,33 +1,63 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import SupplierCreationDialog from './SupplierCreationDialog';
-import { supplierDirectory } from './moma-provider';
-import SupplyModelPicker from './SupplyModelPicker';
-import { Choice, Field } from './ModelMetadataForm';
 import { Modal, Notice } from './ModelOperationsUI';
-import { supplierChannelCode } from './supplier-resources';
+import { supplierChannelName } from './supplier-resources';
 import ChannelCandidateEditor from './ChannelCandidateEditor';
 import ProcurementVersionEditor from './ProcurementVersionEditor';
-
-export function SupplierModelEditor({ state, provider, ops, close, onBatch }) {
-  const [libraryId, setLibraryId] = useState(''), [providerId, setProviderId] = useState(provider?.id || 'unselected');
-  const providers = supplierDirectory(state).filter(row => !row.id.startsWith('service-review-provider-'));
-  const change = setter => value => { setter(value); ops.dirty(true); ops.setError(''); };
-  return <SupplierCreationDialog title="添加模型" description="从统一模型资料库选择模型，并关联供应商。" cancel={() => ops.proceed(close)} disabled={!ops.can || !libraryId || !providers.some(row => row.id === providerId)} action="登记模型" submit={() => { if (ops.run('provider', { operation: 'supplierModelAdd', objectId: providerId, values: { libraryId } })) close(libraryId); }}>
-    <div className="supplier-channel-fields"><Field label="模型 *"><SupplyModelPicker ops={ops} state={state} value={libraryId} disabled={!ops.can} onChange={change(setLibraryId)}/></Field><Field label="供应商 *"><Choice label="供应商" value={providerId} options={[[ 'unselected', '请选择供应商' ], ...providers.map(row => [row.id, row.name])]} disabled={!ops.can} onChange={change(setProviderId)}/></Field></div>
-    <p className="supplier-price-hint">登记该供应商提供的模型，可稍后添加渠道。接入调用可直接使用「添加渠道」。{onBatch && <Button type="button" variant="link" disabled={!ops.can || !providers.some(row => row.id === providerId)} onClick={() => ops.proceed(() => onBatch(providerId))}>批量添加模型</Button>}</p>
-    {ops.error && <Notice error>{ops.error}</Notice>}
-  </SupplierCreationDialog>;
-}
-
+import SupplierChannelFields from './SupplierChannelFields';
+import SupplierCreationDialog from './SupplierCreationDialog';
+import { supplierModelChannelGroups } from './supplier-model-channel-table';
+import { providerApiKeysDraft } from './provider-management';
+import { cataloguePriceDraft, cataloguePurchasePrice } from './provider-catalogue-pricing';
+import { suggestChannelRoot } from './channel-interface';
+import { connectionKeys, connectionCredentialsReady } from './connection-state';
+import { providerKeyGroups } from './provider-key-groups';
 
 export function SupplierChannelDialog(props) {
   if (!props.endpoint) return <Modal title="渠道不存在" onClose={props.close}><Notice error>渠道已变化，请重新选择。</Notice></Modal>;
   return props.mode === 'info' ? <SupplierChannelInfo {...props}/> : <ChannelCandidateEditor {...props}/>;
 }
-function SupplierChannelInfo({ provider, endpoint, ops, close }) {
-  const [name, setName] = useState(endpoint.name);
-  return <Modal title="渠道信息" description={provider.name} onClose={() => ops.proceed(close)}><form className="supplier-resource-form" onSubmit={event => { event.preventDefault(); event.stopPropagation(); if (ops.run('provider', { operation: 'supplierChannelSave', objectId: provider.id, values: { mode: 'info', endpointId: endpoint.id, name } })) close(); }}><Field label="渠道 ID"><Input aria-label="渠道 ID" value={supplierChannelCode(endpoint)} readOnly/></Field><Field label="渠道名称 *"><Input aria-label="渠道名称" maxLength={60} value={name} disabled={!ops.can} onChange={event => { setName(event.target.value); ops.dirty(true); ops.setError(''); }}/></Field>{ops.error && <Notice error>{ops.error}</Notice>}<div className="supplier-key-actions"><Button variant="outline" type="button" onClick={() => ops.proceed(close)}>取消</Button><Button type="submit" disabled={!ops.can}>保存渠道信息</Button></div></form></Modal>;
+function SupplierChannelInfo(props) {
+  const { state, provider, endpoint, association, ops, close } = props;
+  const independent = endpoint.authMode === 'specific' || !endpoint.authMode && Boolean(connectionKeys(endpoint, provider, true).length || endpoint.credentialRef);
+  const preserveCurrent = !independent && endpoint.authMode !== 'group';
+  const [value, setValue] = useState(() => ({ name: supplierChannelName(provider, endpoint), modelId: association?.modelId || '', upstreamModelId: association?.upstreamModelId || '', baseUrl: endpoint.baseUrl, independent, keyGroupId: endpoint.authMode === 'group' ? endpoint.keyGroupId : preserveCurrent ? 'current' : providerKeyGroups(provider)[0]?.id || '', scenarios: cataloguePriceDraft({ scenarios: (association?.pricing?.scenarios || []).map(item => ({ ...item, listPrice: cataloguePurchasePrice(item.listPrice, association.pricing.discountFactor, item.purchasePrice), purchasePrice: undefined })) }).scenarios }));
+  const [rawKey, setRawKey] = useState(''), [saving, setSaving] = useState(false), [connection, setConnection] = useState(false), [costChanged, setCostChanged] = useState(false);
+  const [base, setBase] = useState({ expectedUpdatedAt: endpoint.updatedAt, expectedProviderUpdatedAt: provider.updatedAt });
+  const [priceRevision] = useState(association?.procurementRevision || 0);
+  const disabled = !ops.can || saving || Boolean(ops.conflict), addressChanged = value.baseUrl.trim() !== endpoint.baseUrl;
+  const keyGroupChanged = !value.independent && value.keyGroupId !== 'current' && (endpoint.authMode !== 'group' || endpoint.keyGroupId !== value.keyGroupId);
+  const connectionChanged = addressChanged || keyGroupChanged || Boolean(rawKey.trim());
+  const currentKey = independent && (connectionKeys(endpoint, provider, true).length || endpoint.credentialRef) ? '已配置' : '';
+  const models = supplierModelChannelGroups(state, provider).filter(row => row.modelId);
+  useEffect(() => { if (!ops.can) setRawKey(''); }, [ops.can]);
+  const set = patch => { setValue(current => ({ ...current, ...patch })); if (patch.scenarios) setCostChanged(true); ops.dirty(true); ops.setError(''); };
+  const cancel = () => { if (!saving) ops.proceed(() => { setRawKey(''); close(); }); };
+  let suggestedRoot = '';
+  try { if (endpoint.interfaceType && endpoint.interfaceType !== 'custom') suggestedRoot = suggestChannelRoot({ interfaceType: endpoint.interfaceType, baseUrl: value.baseUrl, allowHttp: provider.sourceType === 'selfHosted' }); } catch { /* Validate incomplete input on save. */ }
+  const submit = async () => {
+    if (disabled) return;
+    setSaving(true);
+    try {
+      if (value.independent && !rawKey.trim() && !currentKey) throw Error('请输入独立API密钥');
+      const newApiKey = value.independent && rawKey.trim() ? (await providerApiKeysDraft([rawKey])).apiKeys[0] : undefined;
+      if (!ops.isCurrent()) throw Error('权限或数据已有变化，请重新核对');
+      if (await ops.run('supplierChannelEdit', { ...base, providerId: provider.id, endpointId: endpoint.id, name: value.name, baseUrl: value.baseUrl, ...(keyGroupChanged ? { keyGroupId: value.keyGroupId } : {}), ...(newApiKey ? { newApiKey } : {}), ...(association ? { associationId: association.id, modelId: association.modelId, upstreamModelId: value.upstreamModelId } : {}), ...(costChanged ? { scenarios: value.scenarios, expectedPriceRevision: priceRevision } : {}) })) {
+        setRawKey(''); ops.dirty(false);
+        if (connectionChanged) setConnection(true); else close();
+      }
+    } catch (error) { ops.setError(error.message); }
+    finally { setSaving(false); }
+  };
+  if (connection) return <ChannelCandidateEditor {...props} mode="all"/>;
+  return <SupplierCreationDialog className="supplier-add-dialog mo-drawer mo-drawer-left supplier-channel-edit-drawer" title="编辑渠道" description={provider.name} cancel={cancel} submit={submit} disabled={disabled} action={saving ? '保存中…' : '保存'}>
+    <SupplierChannelFields state={state} provider={provider} models={models} value={value} rawKey={rawKey} disabled={disabled} editing currentKey={currentKey} ops={ops} current={preserveCurrent ? { name: '保留当前密钥配置', ready: connectionCredentialsReady(endpoint, provider) } : null} onSharedKeySaved={next => setBase({ expectedUpdatedAt: next.endpoints.find(row => row.id === endpoint.id).updatedAt, expectedProviderUpdatedAt: next.providers.find(row => row.id === provider.id).updatedAt })} onChange={set} onKeyChange={key => { setRawKey(key); ops.dirty(true); ops.setError(''); }}>
+      {connectionChanged && suggestedRoot && <Notice>识别到完整任务地址。<Button type="button" variant="link" disabled={disabled} onClick={() => set({ baseUrl: suggestedRoot })}>使用根地址 {suggestedRoot}</Button></Notice>}
+    </SupplierChannelFields>
+    {connectionChanged && <Notice>地址或密钥变更须测试后应用，验证前继续使用当前配置。</Notice>}
+    {endpoint.candidateConfiguration && <Button type="button" variant="outline" disabled={disabled} onClick={() => ops.proceed(() => { setRawKey(''); setConnection(true); })}>继续验证连接配置</Button>}
+    {costChanged && <Notice>采购配置保存为立即生效的新版本，历史配置和客户售价保留。</Notice>}
+    {ops.error && <Notice error>{ops.error}</Notice>}
+  </SupplierCreationDialog>;
 }
 export function SupplierAssociationDialog(props) { return <ProcurementVersionEditor {...props}/>; }

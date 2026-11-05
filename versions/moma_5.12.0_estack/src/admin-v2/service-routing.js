@@ -5,7 +5,7 @@ import { providerServices, providerServiceId, serviceChannelId, serviceChannelCo
 import { billingItemKey } from './provider-catalogue-pricing.js';
 import { routeMappingStatus } from './service-route-mapping.js';
 
-export const ROUTING_STRATEGIES = { fixed:'固定渠道', random:'随机分流', weighted:'加权分流', priority_weighted:'优先级 + 加权分流', latency:'最低延迟', load:'最少负载', cost:'最低成本', priority:'主备优先' };
+export const ROUTING_STRATEGIES = { fixed:'固定', random:'随机分流', weighted:'加权分流', priority_weighted:'优先级 + 加权分流', latency:'最低延迟', load:'最少负载', cost:'最低成本', priority:'主备优先' };
 const GROUP_STRATEGIES=['fixed','random','weighted','latency','load','cost'];
 export const ROUTE_ADVANCED_DEFAULTS={timeoutSeconds:60,maxRetries:0,failureThreshold:3,recoverySeconds:30,latencyWindowSeconds:60,costBasis:'input'};
 // shortcut: these service-level prototype versions do not execute gateway traffic; production needs a server-side publisher.
@@ -107,7 +107,7 @@ function validateSelectionStrategy(strategy,rows,candidates,config) {
   if (strategy==='weighted' && (rows.some(row=>row.weight<=0) || rows.reduce((sum,row)=>sum+Math.round(row.weight*100),0)!==10000)) throw new Error('参与分流的渠道权重须大于 0，且合计必须等于 100%');
   const channels=rows.map(row=>candidates.find(item=>item.id===row.supplyId));
   if (strategy==='fixed') {
-    if (!config.autoFailover && rows.length!==1) throw new Error('关闭故障切换时，固定渠道只能启用一个渠道');
+    if (rows.length!==1) throw new Error('固定策略只能选择一个供应渠道');
   }
   if (strategy==='latency' && channels.some(channel=>channel.p95LatencyMs==null)) throw new Error('最低延迟策略需要每个渠道的实际 P95 延迟数据');
   if (strategy==='load' && channels.some(channel=>channel.activeRequests==null)) throw new Error('最低负载策略需要每个渠道的实际并发请求数据');
@@ -136,8 +136,8 @@ export function validateRouteConfig(state, service, input, requireHealthy = true
 
 export function routingStatus(state, service) {
   const route = serviceRoute(state, service.id), version = activeRouteVersion(route);
-  if (!version) return { label: '待配置', good: false, reason: route?.draft ? '已有草稿，尚未发布' : '尚未发布路由配置' };
-  try { validateRouteConfig(state, service, version.config); return { label: '已配置', good: true, reason: route.draft ? '有未发布草稿' : '' }; }
+  if (!version) return { label: '待配置', good: false, reason: '尚未发布路由配置' };
+  try { validateRouteConfig(state, service, version.config); return { label: '已配置', good: true, reason: '' }; }
   catch (error) { return { label: '需调整', good: false, reason: error.message }; }
 }
 

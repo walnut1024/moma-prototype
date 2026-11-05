@@ -59,3 +59,17 @@ test('derived history is stable within an hour and never expands persisted busin
   assert.ok(raw.length < 1_000_000);
   assert.ok(parseAdminState(raw).requests.length > 3000);
 });
+
+test('user keys and edits never acquire or reassign initial synthetic request history',t=>{
+ const state=fixture(t),before=state.requests;
+ const template=state.apiKeys.find(row=>row.status==='有效');
+ state.apiKeys.unshift({...template,id:'user-key',keyId:'user-key'});
+ state.apiKeys.find(row=>row.id===template.id).status='停用';
+ const loaded=parseAdminState(serializeAdminState(state));
+ assert.deepEqual(loaded.requests,before);
+ assert.equal(loaded.requests.some(row=>row.keyId==='user-key'),false);
+ loaded.apiKeys=loaded.apiKeys.filter(row=>row.id!==template.id);
+ const removed=parseAdminState(serializeAdminState(loaded));
+ assert.equal(removed.requests.some(row=>row.keyId===template.id),false);
+ assert.equal(removed.requests.some(row=>row.keyId==='user-key'),false);
+});

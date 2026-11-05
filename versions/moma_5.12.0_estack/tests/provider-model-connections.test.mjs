@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createAdminSeed, commitAdminState, parseAdminState, persistModelAction } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, parseAdminState as baseParseAdminState, persistModelAction } from '../src/admin-v2/store.js';
 import { catalogueConnections, connectionCatalogueIds } from '../src/admin-v2/provider-model-connections.js';
 import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
 import { connectionTestPassed } from '../src/admin-v2/connection-state.js';
@@ -15,7 +16,7 @@ test('catalogue address is explicit, model-scoped, persisted and leaves prices, 
   const saved = configure(seed), restored = parseAdminState(JSON.stringify(saved)), next = restored.providers.find(p => p.id === providerId);
   const endpoints = catalogueConnections(restored, next, modelId);
   assert.equal(endpoints.length, 1); assert.equal(endpoints[0].baseUrl, 'https://new.example.invalid/v1');
-  assert.equal(endpoints[0].protocol, 'OpenAI'); assert.equal(endpoints[0].status, '草稿');
+  assert.equal(endpoints[0].protocol, 'OpenAI'); assert.equal(endpoints[0].status, '停用');
   assert.deepEqual(endpoints[0].apiKeys, []);
   assert.deepEqual(connectionCatalogueIds(restored, next, endpoints[0].id), [modelId]);
   assert.equal(catalogueConnections(restored, next, 'DeepSeek-V3').length, 0);
@@ -26,7 +27,7 @@ test('catalogue address is explicit, model-scoped, persisted and leaves prices, 
   const reused = configure(seed, { endpointId: existing.id, baseUrl: existing.baseUrl + '/' });
   assert.deepEqual(reused.endpoints, seed.endpoints);
   assert.equal(catalogueConnections(reused, reused.providers.find(p => p.id === providerId), modelId)[0].id, existing.id);
-  assert.throws(() => run(saved, 'checkConnection', { endpointId: endpoints[0].id }), /API 密钥/);
+  assert.throws(() => run(saved, 'checkConnection', { endpointId: endpoints[0].id }), /供应商密钥/);
 });
 
 test('keys can be maintained separately; shared address edits require confirmation and invalidate checks', async () => {
@@ -47,7 +48,7 @@ test('keys can be maintained separately; shared address edits require confirmati
   assert.equal(changed.apiKeys.length, 1);
   assert.equal(catalogueConnections(state, owner(), 'DeepSeek-V3')[0].baseUrl, changed.baseUrl);
   state = commitAdminState(state, action('connectionKeys', { apiKeys: [], credentialRef: '', endpointId: ep.id, confirmed: true }));
-  assert.throws(() => run(state, 'checkConnection', { endpointId: ep.id }), /API 密钥/);
+  assert.throws(() => run(state, 'checkConnection', { endpointId: ep.id }), /供应商密钥/);
   assert.ok(!JSON.stringify(state).includes('sk-local-only-model-key-0001'));
 });
 
@@ -74,3 +75,6 @@ test('invalid URL, cross-supplier reference, unknown model, permission, revision
   assert.throws(() => persistModelAction(state, request, { getItem: () => before, setItem: () => { throw new Error('quota'); } }), /quota/);
   assert.equal(JSON.stringify(state), before);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

@@ -1,4 +1,5 @@
 import { credentialRotationChannels } from './credential-rotation-scope.js';
+import { supplierModelMaintenance } from './supplier-model-maintenance.js';
 import { modelLibrary } from './model-library.js';
 import { supplierModelFields } from './supply-models.js';
 import { canonicalMomaScenarios } from './moma-billing-items.js';
@@ -52,6 +53,7 @@ export const providerApiKeyId = key => key.id.match(/^(?:provider-key-)?([a-f0-9
 export function providerApiKeyRows(state, provider) {
   const rows = new Map();
   const addKey = (apiKey, endpoint) => {
+    if (apiKey.scope === 'channel') return;
     if (!rows.has(apiKey.fingerprint)) rows.set(apiKey.fingerprint, { apiKey, endpoints: [] });
     const row = rows.get(apiKey.fingerprint);
     if (endpoint && !row.endpoints.some(item => item.id === endpoint.id)) row.endpoints.push(endpoint);
@@ -85,7 +87,8 @@ export function providerModelConnectivityTest(state, { providerId, keyId, endpoi
   if (endpoint.authMode === 'group' && (!groupKey || keyId && keyId !== groupKey.id)) throw new Error('请使用当前渠道 API 密钥组中可用的主要密钥');
   const key = groupKey || [...(provider.apiKeys || []), ...(endpoint.apiKeys || [])].find(item => item.id === keyId);
   if (keyId && !key || !key && !connectionCredentialsReady({ ...endpoint, apiKeys: [] }, provider)) throw new Error('API 密钥不存在或不适用于当前接入地址');
-  if (key) checkedConnectionKeys([key]);
+  // A saved key's display mask is not its credential identity.
+  if (key && (!/^[a-f0-9]{64}$/.test(key.fingerprint || '') || key.status === 'disabled' || key.revokedAt)) throw new Error('API 密钥不可用，请重新核对');
   if (!PROTOCOLS.includes(endpoint.protocol)) throw new Error('接入协议无效，请在模型目录中修改');
   let url;
   try { url = new URL(endpoint.baseUrl); } catch { throw new Error('接入地址无效，请在模型目录中修改'); }
@@ -111,7 +114,7 @@ export function modelConnectivityPreview(context, scenario) {
   };
   return { ...responses[scenario], ...context, simulated: true };
 }
-function checkedConnectionKeys(keys) {
+export function checkedConnectionKeys(keys) {
   if (!Array.isArray(keys) || keys.length > PROVIDER_API_KEY_LIMIT || keys.some(item => !item || !/^[\x21-\x7e]{4}•{8}[\x21-\x7e]{4}$/.test(item.maskedKey || '') || !/^[a-f0-9]{64}$/.test(item.fingerprint || ''))) throw new Error('连接 API 密钥配置无效，请重新输入');
   if (new Set(keys.map(item => item.fingerprint)).size !== keys.length) throw new Error('同一连接不能配置相同的 API 密钥');
   return keys.map(item => ({ id: item.id || uid('connection-key'), maskedKey: item.maskedKey, fingerprint: item.fingerprint, ...(item.name ? { name: item.name } : {}), ...(item.createdAt ? { createdAt: item.createdAt } : {}) }));
@@ -163,9 +166,10 @@ export function providerImpact(state, providerId, endpointId) {
 
 export function providerTransaction(state, action) {
   const { operation, objectId, data = {} } = action;
+  if (['supplierModelProfile', 'supplierModelCopy', 'supplierListPriceDraft', 'supplierListPricePublish', 'supplierChannelListPricePublish'].includes(operation)) return supplierModelMaintenance(state, action);
   assertDirectChannelMutation(state, operation, objectId, data);
   if (operation === 'officialCatalogue') return officialCatalogueTransaction(state);
-  if (['supplierModelLink', 'supplierModelAdd', 'supplierChannelCreate', 'supplierModelsAdd', 'supplierModelsTest', 'supplierModelsEnable', 'supplierChannelSave', 'supplierChannelDelete', 'supplierChannelTest', 'supplierChannelEnable', 'supplierModelTest', 'supplierModelEnable', 'supplierAssociationSave', 'supplierAssociationRemove', 'defaultApiKey', 'toggleApiKey', 'keyGroupSave', 'keyGroupDelete', 'keyGroupPrimary'].includes(operation)) return supplierResourceTransaction(state, action, providerTransaction, normalizeProviderPrice);
+  if (['supplierModelLink', 'supplierModelAdd', 'supplierChannelCreate', 'supplierModelsAdd', 'supplierModelsTest', 'supplierModelsEnable', 'supplierChannelSave', 'supplierChannelDelete', 'supplierCatalogueChannelDelete', 'supplierChannelFreeze', 'supplierChannelTest', 'supplierChannelEnable', 'supplierModelTest', 'supplierModelEnable', 'supplierAssociationSave', 'supplierAssociationRemove', 'defaultApiKey', 'toggleApiKey', 'keyGroupSave', 'keyGroupDelete', 'keyGroupPrimary'].includes(operation)) return supplierResourceTransaction(state, action, providerTransaction, normalizeProviderPrice);
   if (['channelSave', 'channelPrice', 'channelTest', 'channelEnable', 'channelDisable', 'channelDelete', 'catalogueRemove'].includes(operation)) return providerChannelTransaction(state, action, providerTransaction, normalizeProviderPrice, modelConnectivityPreview);
   const changes = [];
   const provider = state.providers.find(item => item.id === (data.providerId || objectId));
@@ -364,7 +368,7 @@ export function providerTransaction(state, action) {
       const changed = !endpoint || connectionFingerprint(endpoint) !== connectionFingerprint(fields);
       if (!endpoint) {
         const id = uid('endpoint');
-        changes.push(add('endpoints', { id, endpointId: id, ...fields, modelIds: [], status: '草稿', health: null, connectionTest: null }));
+        changes.push(add('endpoints', { id, endpointId: id, ...fields, modelIds: [], status: '停用', health: null, connectionTest: null }));
       } else {
         changes.push(update('endpoints', endpoint.id, { ...fields, ...(changed ? { status: '停用', connectionTest: null } : {}) }));
         if (changed) state.modelSupplies.filter(supply => supply.endpointId === endpoint.id && supply.status !== '已移除').forEach(supply => changes.push(update('modelSupplies', supply.id, { status: '已停用', validationStatus: '待验证', verifiedAt: null, validationCases: [] })));
@@ -373,7 +377,7 @@ export function providerTransaction(state, action) {
       if (!endpoint) throw new Error('接入配置不存在');
       const owner = state.providers.find(item => item.id === endpoint.providerId);
       if (operation === 'testConnection') {
-        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在 API 密钥页签配置此接入地址的凭证');
+        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在供应商密钥页签配置此接入地址的凭证');
         const scenarios = { 成功: ['通过', '服务地址、凭证和协议检查通过'], 超时: ['失败', '上游连接超时，请检查服务地址与网络'], 鉴权失败: ['失败', '鉴权失败，请检查凭证引用与权限'], 协议错误: ['失败', '协议不兼容，请核对接入协议'] };
         const result = scenarios[data.scenario];
         if (!result) throw new Error('请选择测试场景');
@@ -381,7 +385,7 @@ export function providerTransaction(state, action) {
         changes.push(update('endpoints', endpoint.id, { ...(qualification ? { connectionQualification: structuredClone(qualification) } : {}), connectionTest: { result: result[0], message: result[1], simulated: true, testedAt: new Date().toISOString(), fingerprint: connectionFingerprint(endpoint) }, ...(result[0] !== '通过' && ['运行中', '需关注'].includes(endpoint.status) ? { status: '需关注' } : {}) }));
       } else if (operation === 'enableConnection') {
         if (connectionTestPending(endpoint)) throw new Error('当前配置的测试尚未完成，请等待结果');
-        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在 API 密钥页签配置此接入地址的凭证');
+        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在供应商密钥页签配置此接入地址的凭证');
         if (owner?.status !== '已启用') throw new Error('请先启用供应商');
         if (!connectionTestPassed(endpoint)) throw new Error('当前接入配置须先通过连接测试');
         changes.push(update('endpoints', endpoint.id, { status: '运行中', activationChangedAt: new Date().toISOString(), connectionQualification: structuredClone(endpoint.connectionTest) }));

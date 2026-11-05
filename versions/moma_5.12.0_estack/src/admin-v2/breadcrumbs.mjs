@@ -16,20 +16,23 @@ export function adminBreadcrumbs(active, params, names = {}) {
   const add = (label, target) => crumbs.push({ label, ...(target ? { href: target } : {}) });
   const view = params.get('view');
   if (active === 'providers') {
-    const workspace = href(active, { view: null, tab: view === 'profile' ? 'basic' : params.get('tab'), endpoint: null, q: null, page: null, listQ: null, listPage: null });
-    add('供应管理', view ? workspace : null);
+    const workspace = href(active, { view: null, tab: params.get('tab') === 'api-keys' ? 'api-keys' : 'catalogue', endpoint: null, q: null, page: null, listQ: null, listPage: null });
+    add('模型接入', view ? workspace : null);
     if (view === 'new') add('添加供应商');
     else if (view === 'profile') add('编辑供应商资料');
+  } else if (active === 'listing' && view === 'onboarding') {
+    add(names.onboardingIntent==='reserve'?'准备备用供应':names.onboardingIntent==='activate'?'投入当前服务':'接入并上架模型');
   } else if (['listing', 'model-templates'].includes(active)) {
-    if (active === 'model-templates') add('资料管理', '#/admin-2/model-templates');
-    add(active === 'listing' ? '服务管理' : '模型资料库', view && view !== 'templates' ? listHref : null);
+    if (active === 'model-templates') add('模型资料', '#/admin-2/model-templates');
+    add(active === 'listing' ? '模型服务' : '模型', view && view !== 'templates' ? listHref : null);
     if (view === 'template') add(params.has('template') ? names.model || '模型资料不存在' : '新建模型资料');
     else if (['import', 'templateImport'].includes(view)) add(view === 'import' ? '批量导入模型' : '批量导入模型资料');
     else if (view === 'add') add('添加模型');
+    else if (view === 'onboarding') add('接入模型');
     else if (view === 'supplier-batch') add('批量配置与上架');
   } else if (active === 'tariff-dictionary') {
     const tab = params.get('tab');
-    add('资料管理', '#/admin-2/model-templates');
+    add('模型资料', '#/admin-2/model-templates');
     add(TARIFF_KINDS[Object.hasOwn(TARIFF_KINDS, tab) ? tab : 'scenario']);
   } else if (active === 'deployments') {
     add('模型部署', params.has('deployment') || view === 'create' ? href(active, {}, ['deployment', 'view', 'tab']) : null);

@@ -1,3 +1,4 @@
+import { legacySupplierState } from './legacy-supplier-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAdminState, commitAdminState, serializeAdminState } from '../src/admin-v2/store.js';
@@ -8,7 +9,7 @@ import { channelEvidenceSignature, candidateTestPlan } from '../src/admin-v2/cha
 import { catalogueChannels, channelBlockReason } from '../src/admin-v2/provider-channels.js';
 import { connectionFingerprint } from '../src/admin-v2/connection-state.js';
 import { activeSupplyPrice, priceItems } from '../src/admin-v2/model-management.js';
-const state = () => parseAdminState(null);
+const state = () => legacySupplierState();
 const value = { providerId: 'provider-moma', name: '持久草稿', interfaceType: 'openai', baseUrl: 'https://example.com/v1', keyGroupId: 'default' };
 const rows = [{ id: 'r1', libraryId: 'model-2', upstreamModelId: 'vendor/model-1', scenarios: [] }];
 const run = (s, operation, data) => commitAdminState(s, { type: 'modelOperations', operation, data });

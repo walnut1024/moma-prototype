@@ -1,4 +1,4 @@
-import { libraryRecord, modelLibrary } from './model-library.js';
+import { libraryRecord, modelLibrary, modelCatalogue } from './model-library.js';
 import { displayedCatalogueIds, providerCatalogueModel, supplierDirectory, providerCatalogueIds } from './moma-provider.js';
 
 export function supplyModelRecord(state, provider, modelId) {
@@ -8,15 +8,21 @@ export function supplyModelRecord(state, provider, modelId) {
   const matches = modelLibrary(state).filter(model => model.modelId?.toLowerCase() === modelId.toLowerCase() && (!entry?.type || entry.type === model.type));
   return matches.length === 1 ? matches[0] : undefined;
 }
+export function supplierModelIds(state, provider, modelId) {
+  const master = supplyModelRecord(state, provider, modelId);
+  return master ? providerCatalogueIds(provider).filter(id => supplyModelRecord(state, provider, id)?.id === master.id) : [modelId];
+}
 export function supplyModelDirectory(state, providers = supplierDirectory(state).filter(row => !row.id.startsWith('service-review-provider-'))) {
-  const groups = new Map();
+  const groups = new Map(modelCatalogue(state).map(master => [master.id, { id: master.id, master, name: master.name, code: master.modelId, entries: [] }]));
   for (const provider of providers) for (const modelId of displayedCatalogueIds(provider, state)) {
     const master = supplyModelRecord(state, provider, modelId), entry = providerCatalogueModel(provider, modelId);
+    if (state.modelData?.archivedCatalogueIds && (!master || !groups.has(master.id))) continue;
     const id = master?.id || JSON.stringify([provider.id, modelId]);
     if (!groups.has(id)) groups.set(id, { id, master, name: master?.name || entry?.name || modelId, code: master?.modelId || modelId, entries: [] });
     groups.get(id).entries.push({ provider, modelId });
   }
-  return [...groups.values()].sort((a,b) => a.name.localeCompare(b.name, 'zh-CN'));
+  const registered = [...groups.values()].filter(row => row.entries.length > 0);
+  return state.modelData?.archivedCatalogueIds ? registered : registered.sort((a,b) => a.name.localeCompare(b.name, 'zh-CN'));
 }
 export function supplierModelFields(state, provider, libraryId) {
   const master = libraryRecord(state, libraryId);
@@ -33,3 +39,5 @@ export function supplierModelFields(state, provider, libraryId) {
     catalogModels: [...(provider.catalogModels || []).filter(row => row.modelId !== modelId), { ...current, modelId, name: current?.name || master.name, type: current?.type || master.type, libraryId: master.id }],
   } };
 }
+
+export const serviceModelSources = state => supplyModelDirectory(state).flatMap(group=>group.master?[group.master]:[]);

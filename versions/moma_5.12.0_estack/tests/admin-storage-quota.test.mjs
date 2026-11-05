@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAdminSeed, loadAdminState, parseAdminState, persistAdminAction, serializeAdminState, STORAGE_KEY } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, loadAdminState, parseAdminState as baseParseAdminState, persistAdminAction, serializeAdminState, STORAGE_KEY } from '../src/admin-v2/store.js';
 
 const clock = Date.parse('2026-10-28T08:00:00+08:00');
 const quota = 1_000_000;
@@ -145,3 +146,6 @@ test('prepared records retain the parser fallback for non-array or missing reque
     assert.equal(storage.getItem('other-version-data'), '保留其他版本的原始数据');
   }
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

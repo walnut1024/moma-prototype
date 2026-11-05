@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createAdminSeed,commitAdminState,parseAdminState,persistModelAction} from '../src/admin-v2/store.js';
+import {createAdminSeed as baseCreateAdminSeed,commitAdminState,parseAdminState as baseParseAdminState,persistModelAction} from '../src/admin-v2/store.js';
 import {providerApiKeysDraft} from '../src/admin-v2/provider-management.js';
 import {serviceAssociationChannels,serviceSupplyRows} from '../src/admin-v2/service-workspace.js';
 
@@ -50,3 +51,6 @@ test('batch preserves role, service mode and storage concurrency protections',()
   assert.throws(()=>persistModelAction(prepared,action,{getItem:()=>JSON.stringify({...prepared,revision:prepared.revision+1}),setItem:()=>assert.fail()}),/数据已变化/);
   assert.throws(()=>persistModelAction(prepared,action,{getItem:()=>JSON.stringify(prepared),setItem:()=>{throw Error('quota');}}),/quota/);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

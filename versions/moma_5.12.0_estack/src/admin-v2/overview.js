@@ -1,3 +1,5 @@
+import {userBusinessData} from '../business-facts.mjs';
+import mockConfig from '../mock/catalogues.json' with { type: 'json' };
 import { dayOf } from './analytics.js';
 import { userDemo } from './user-analysis.js';
 const DAY = 86400000, HOUR = 3600000, OFFSET = 8 * HOUR;
@@ -28,7 +30,7 @@ export function overviewPeriod(now, id, range) {
     range: `${range.start} — ${range.end}`, comparison: partial ? '对比上一等长周期同时段' : '对比上一等长周期' };
 }
 const noise = seed => { const n = Math.sin(seed * 12.9898) * 43758.5453; return n - Math.floor(n); };
-const models = ['DeepSeek-V4-Pro', 'Qwen3.8-Max', 'GLM-5.2', 'Kimi-K3', 'DeepSeek-V4-Flash', 'Qwen3.5-Plus', 'GLM-5.3', 'MiniMax-H3', 'BGE-M3', 'Qwen3.5-VL', 'Qwen3-Embedding', 'GLM-4.6V'];
+const models = mockConfig["admin-v2/overview.js"]["models"];
 const customers = Array.from({ length: 32 }, (_, i) => ({ id: `tenant-demo-${1001 + i}`, name: `客户 ${String.fromCharCode(65 + Math.floor(i / 10))}-${1001 + i}` }));
 const empty = () => ({ total: 0, calls: 0, successfulCalls: 0, self: 0, partner: 0 });
 const add = (target, row) => { for (const key of ['total', 'calls', 'successfulCalls', 'self', 'partner']) target[key] += row[key]; };
@@ -113,4 +115,27 @@ export function overviewDemo(now = Date.now(), periodId = 'day', range) {
   const identities = userDemo(now);
   return { ...current, rates:overviewRates(current.total,period.start,period.end), registrations: overviewRegistrations(identities.users, period.end), monthlyActive: overviewMonthlyActive(identities, Date.parse(`${dayOf(now)}T00:00:00+08:00`)), period,
     previous: { ...previous, rates:overviewRates(previous.total,period.previousStart,period.previousEnd), registrations: overviewRegistrations(identities.users, period.previousEnd) } };
+}
+
+export function overviewBusiness(state, now=Date.now(), periodId='day',range) {
+  const period=overviewPeriod(now,periodId,range);
+  if(!period)throw new RangeError('无效统计时间范围');
+  const aggregateFacts=(start,end)=>{
+    const summary=empty(),tenants=new Map(),modelMap=new Map(),pairs=new Map(),buckets=new Map(),hours=new Map(),seen=new Set();
+    const step=period.hourly?HOUR:DAY;
+    for(let at=start;at<end;at+=step)buckets.set(at,{at,label:period.hourly?new Date(at+OFFSET).toISOString().slice(11,16):dayOf(at).slice(5),...empty()});
+    for(const request of state.requests){const id=request.requestId||request.id,time=Date.parse(request.createdAt);if(seen.has(id)||time<start||time>=end||!Number.isFinite(time))continue;seen.add(id);
+      const model=state.models.find(row=>row.id===request.modelId),tenant=state.tenants.find(row=>row.id===request.tenantId),usage=request.usage||{},token=['text','multimodal','embedding','rerank'].includes(model?.type)&&Number.isFinite(usage.input)&&Number.isFinite(usage.output)?usage.input+usage.output:0;
+      const row={total:token,calls:1,successfulCalls:request.httpStatus>=200&&request.httpStatus<300?1:0,self:0,partner:0};
+      const endpoint=state.endpoints.find(row=>row.id===request.endpointId),provider=state.providers.find(row=>row.id===endpoint?.providerId);
+      if(provider?.sourceType==='selfHosted')row.self=token;else if(provider)row.partner=token;
+      const cid=tenant?.id||request.tenantId||'__unknown__',mid=model?.id||request.modelId||'__unknown__',key=cid+'/'+mid;
+      if(!tenants.has(cid))tenants.set(cid,{id:cid,name:tenant?.name||cid,...empty(),modelIds:new Set()});if(!modelMap.has(mid))modelMap.set(mid,{id:mid,name:model?.name||mid,...empty(),customerIds:new Set()});if(!pairs.has(key))pairs.set(key,{customerId:cid,customerName:tenant?.name||cid,modelId:mid,modelName:model?.name||mid,...empty()});
+      for(const target of [summary,tenants.get(cid),modelMap.get(mid),pairs.get(key),buckets.get(start+Math.floor((time-start)/step)*step)])add(target,row);
+      tenants.get(cid).modelIds.add(mid);modelMap.get(mid).customerIds.add(cid);const hour=Math.floor(time/HOUR);hours.set(hour,(hours.get(hour)||0)+token);
+    }
+    return {...summary,peakHourlyTokens:Math.max(0,...hours.values()),activeCustomers:tenants.size,success:summary.calls?summary.successfulCalls/summary.calls*100:null,customers:sort([...tenants.values()].map(({modelIds,...row})=>({...row,modelCount:modelIds.size}))),models:sort([...modelMap.values()].map(({customerIds,...row})=>({...row,customerCount:customerIds.size}))),pairs:[...pairs.values()],trend:[...buckets.values()]};
+  };
+  const current=aggregateFacts(period.start,period.end),previous=aggregateFacts(period.previousStart,period.previousEnd),identities=userBusinessData(state);
+  return {...current,period,rates:overviewRates(current.total,period.start,period.end),registrations:overviewRegistrations(identities.users,period.end),monthlyActive:overviewMonthlyActive(identities,now),previous:{...previous,rates:overviewRates(previous.total,period.previousStart,period.previousEnd),registrations:overviewRegistrations(identities.users,period.previousEnd)}};
 }

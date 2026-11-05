@@ -19,10 +19,27 @@ artifacts/
 
 # Internal planning and review material
 AGENTS.md
+!/AGENTS.md
+!/versions/moma_5.12.0_estack/AGENTS.md
 CONTEXT.md
 design-qa.md
 usage-statistics-*-audit.md
 docs/
+
+# Current instructions and their required references
+!/docs/
+/docs/*
+!/docs/PAGE-SPEC.md
+!/docs/auth-prototype.md
+!/docs/organization-member-batch.md
+!/docs/tenant-usage-5110.md
+!/docs/usage-billing-items.md
+!/docs/admin-v2/
+/docs/admin-v2/*
+!/docs/admin-v2/README.md
+!/docs/admin-v2/CALCLOUD-INTEGRATION.md
+!/docs/admin-v2/ENTERPRISE-ONBOARDING.md
+!/docs/admin-v2/MODEL-DEPLOYMENT-DESIGN-5120.md
 
 # Local release snapshots and review evidence
 outputs/

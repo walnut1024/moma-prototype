@@ -1,14 +1,11 @@
+import mockConfig from '../mock/catalogues.json' with {type:'json'};
 import { parseDelimitedCells } from '../tabular-import.mjs';
 import { MODEL_CATEGORIES, modelTransaction } from './model-management.js';
 import { INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, TASK_OPTIONS } from './model-profile.js';
 
 export const MODEL_IMPORT_LIMIT = 500;
 export const MODEL_IMPORT_HEADERS = ['模型编码', '模型名称', '模型类型', '支持任务', '输入模态', '输出模态', '结果类型', '上下文大小（Token）', '最大输出（Token）', '简短介绍'];
-export const MODEL_IMPORT_TEMPLATE = [MODEL_IMPORT_HEADERS,
-  ['catalog/chat-001', '智能对话', '语言模型', '对话', '文本', '文本', '', '32768', '8192', '面向知识问答和文本生成。'],
-  ['catalog/image-001', '图像创作', MODEL_CATEGORIES.visual, '文生图', '文本、图片', '图片', '', '', '', '根据文本和参考图生成图像。'],
-  ['catalog/video-001', '视频创作', MODEL_CATEGORIES.visual, '文生视频', '文本、图片', '视频', '', '', '', '根据文本和参考图生成视频。'],
-];
+export const MODEL_IMPORT_TEMPLATE = mockConfig['admin-v2/model-import.js'].MODEL_IMPORT_TEMPLATE;
 export function modelRowsFromCells(cells) {
   const rows = cells.map(row => row.map(cell => String(cell ?? '').trim())).filter(row => row.some(Boolean));
   if (!rows.length || MODEL_IMPORT_HEADERS.some((header, index) => rows[0][index] !== header) || rows[0].length !== MODEL_IMPORT_HEADERS.length) throw new Error('表头不匹配，请下载最新模板，保留十列表头和顺序');

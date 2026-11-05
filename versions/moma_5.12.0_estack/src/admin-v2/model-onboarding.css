@@ -1,0 +1,97 @@
+.admin-v2 .model-onboarding{--onboarding-line:#e4eaf3;width:100%;max-width:1180px;margin:0 auto;color:#263247;font-size:12px}
+.admin-v2 .mo-workbench .model-onboarding .mo-heading{padding:0 0 16px;background:transparent;border:0}
+.admin-v2 .model-onboarding h2{font-size:14px;font-weight:600;line-height:1.5;margin:0}
+.admin-v2 .model-onboarding h2[tabindex="-1"]{outline:none}
+.admin-v2 .model-onboarding [data-slot=button]{font-size:12px;min-height:32px}
+.admin-v2 .model-onboarding code{font-family:var(--font-mono,monospace);font-size:12px;overflow-wrap:anywhere}
+.admin-v2 .onboarding-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:0 0 20px;padding:16px 0;list-style:none;border-top:1px solid var(--onboarding-line);border-bottom:1px solid var(--onboarding-line)}
+.admin-v2 .onboarding-steps li{min-width:0;position:relative}
+.admin-v2 .onboarding-steps li:not(:last-child):after{content:"";position:absolute;right:12px;top:50%;width:20px;border-top:1px solid #cbd5e1}
+.admin-v2 .mo-workbench .onboarding-steps [data-slot=button]{height:auto;padding:4px 8px;gap:10px;justify-content:flex-start;white-space:normal;text-align:left;border:0;background:transparent;box-shadow:none}
+.admin-v2 .onboarding-step-number{display:flex;align-items:center;justify-content:center;flex:none;width:26px;height:26px;border:1px solid #cbd5e1;border-radius:50%;font-variant-numeric:tabular-nums}
+.admin-v2 .onboarding-step-number svg{width:15px;height:15px}
+.admin-v2 .onboarding-steps [aria-current=step]{color:#315fe8}
+.admin-v2 .onboarding-steps [aria-current=step] .onboarding-step-number{background:#315fe8;color:white;border-color:#315fe8}
+.admin-v2 .onboarding-context{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;min-width:0}
+.admin-v2 .onboarding-context>div{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px 16px;min-width:0}
+.admin-v2 .onboarding-context strong{font-size:14px}
+.admin-v2 .onboarding-context span:not(.mo-status),.admin-v2 .onboarding-context code{color:#586982}
+.admin-v2 .onboarding-content{background:white;border:1px solid var(--onboarding-line);border-radius:6px;min-width:0}
+.admin-v2 .mo-workbench .onboarding-content-heading{display:block;height:auto;max-height:none;padding:18px 20px;border-bottom:1px solid var(--onboarding-line)}
+.admin-v2 .onboarding-content-heading p,.admin-v2 .onboarding-caption{margin:6px 0 0;color:#586982;font-size:12px;line-height:1.6}
+.admin-v2 .onboarding-embedded .supplier-configuration-form{display:flex;flex-direction:column;min-width:0}
+.admin-v2 .onboarding-embedded .supplier-configuration-body{display:flex;flex-direction:column;gap:20px;padding:20px;min-width:0}
+.admin-v2 .onboarding-embedded .supplier-configuration-body>.mm-field,.admin-v2 .onboarding-source-model{max-width:720px;width:100%}
+.admin-v2 .onboarding-embedded .supplier-configuration-body:has(.onboarding-source-model)>.supplier-channel-fields{grid-template-columns:minmax(0,1fr);max-width:720px}
+.admin-v2 .model-onboarding .supplier-channel-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px;min-width:0}
+.admin-v2 .model-onboarding .mm-field{margin:0;min-width:0;display:flex;flex-direction:column;gap:6px}
+.admin-v2 .model-onboarding .mm-field>input,.admin-v2 .model-onboarding .mm-field>[data-slot=select-trigger]{width:100%;min-width:0}
+.admin-v2 .model-onboarding .supplier-configuration-model{width:100%;justify-content:space-between;text-align:left}
+.admin-v2 .model-onboarding .mm-field small{color:#586982;font-size:12px;line-height:1.5}
+.admin-v2 .onboarding-source-model{display:grid;gap:20px}
+.admin-v2 .onboarding-reference{margin:0;color:#586982}
+.admin-v2 .onboarding-test-repair{display:block;color:#b42318;line-height:1.6;margin-top:4px;white-space:normal}
+.admin-v2 .model-onboarding .supplier-inline-model,.admin-v2 .model-onboarding .supplier-row-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.admin-v2 .model-onboarding .supplier-inline-key{max-width:720px}
+.admin-v2 .model-onboarding .supplier-onboarding-context{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.admin-v2 .model-onboarding .supplier-price-tools,.admin-v2 .model-onboarding .supplier-channel-toolbar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0}
+.admin-v2 .model-onboarding .supplier-price-input{display:flex;gap:8px;align-items:center}
+.admin-v2 .model-onboarding .supplier-price-input input{min-width:100px}
+.admin-v2 .model-onboarding .supplier-price-input [data-slot=select-trigger]{width:84px}
+.admin-v2 .model-onboarding .supplier-channel-costs>h3{display:none}
+.admin-v2 .model-onboarding .supplier-key-error{color:#b42318}
+.admin-v2 .onboarding-footer,.admin-v2 .onboarding-embedded .supplier-configuration-footer{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding:16px 20px;border-top:1px solid var(--onboarding-line);background:white;border-radius:0 0 6px 6px}
+.admin-v2 .onboarding-footer>[data-slot=button]:first-child,.admin-v2 .onboarding-embedded .supplier-configuration-footer>[data-slot=button]:first-child{margin-right:auto}
+.admin-v2 .onboarding-sections{display:flex;gap:16px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--onboarding-line)}
+.admin-v2 .onboarding-sections [data-slot=button]{color:#586982;gap:6px;padding:0 4px;border-radius:0}
+.admin-v2 .onboarding-sections [aria-current=step]{color:#315fe8;box-shadow:0 2px #315fe8}
+.admin-v2 .onboarding-sections svg{width:14px;height:14px}
+.admin-v2 .model-onboarding .sm-model-form{padding:20px}
+.admin-v2 .model-onboarding .sm-model-form>h2{margin-bottom:20px}
+.admin-v2 .model-onboarding .sm-model-form .sm-form-footer{margin:20px -20px -20px;padding:16px 20px;flex-wrap:wrap}
+.admin-v2 .onboarding-form-section{padding:20px;border-bottom:1px solid var(--onboarding-line);min-width:0}
+.admin-v2 .onboarding-form-section>h2{margin-bottom:16px}
+.admin-v2 .onboarding-section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.admin-v2 .onboarding-section-title>span{color:#586982}
+.admin-v2 .onboarding-review{padding:20px}
+.admin-v2 .onboarding-review label,.admin-v2 .onboarding-confirm{display:flex;align-items:center;gap:8px;line-height:1.6}
+.admin-v2 .onboarding-review p{margin:6px 0 0 24px;color:#586982;line-height:1.6}
+.admin-v2 .onboarding-route>h2,.admin-v2 .onboarding-route>.onboarding-caption,.admin-v2 .onboarding-route>.onboarding-confirm{margin:20px}
+.admin-v2 .onboarding-route-path{display:flex;align-items:center;gap:24px;margin:20px;padding:16px 0;border-top:1px solid var(--onboarding-line);border-bottom:1px solid var(--onboarding-line);flex-wrap:wrap}
+.admin-v2 .onboarding-route-path>div{display:flex;flex-direction:column;gap:6px;min-width:0}
+.admin-v2 .onboarding-route-path span{color:#586982}
+.admin-v2 .onboarding-route-path>svg{width:18px;height:18px;color:#586982}
+.admin-v2 .onboarding-route-path>strong{margin-left:auto;color:#315fe8}
+.admin-v2 .onboarding-route .sr-workbench{margin:20px;min-width:0}
+.admin-v2 .onboarding-checks{list-style:none;margin:0;padding:12px 20px;border-bottom:1px solid var(--onboarding-line)}
+.admin-v2 .onboarding-checks li{display:flex;align-items:center;gap:8px;min-height:34px}
+.admin-v2 .onboarding-checks svg{width:16px;height:16px;color:#315fe8;flex:none}
+.admin-v2 .onboarding-checks li>[data-slot=button]{margin-left:auto}
+.admin-v2 .onboarding-checks li:has([data-slot=button])>svg{color:#b54708}
+.admin-v2 .onboarding-platform>.supplier-change-dialog{padding:20px}
+.admin-v2 .onboarding-trial-scope{display:grid;gap:16px;grid-template-columns:minmax(180px,1fr) minmax(0,2fr)}
+.admin-v2 .onboarding-trial-scope .mo-table{min-width:0}
+.admin-v2 .onboarding-verified{padding:20px}
+.admin-v2 .onboarding-listing-footer{position:sticky;bottom:0;z-index:2}
+.admin-v2 .onboarding-resume{margin-bottom:20px;border-bottom:1px solid var(--onboarding-line);padding:0 0 16px}
+.admin-v2 .onboarding-resume summary{cursor:pointer;color:#315fe8;line-height:32px}
+.admin-v2 .onboarding-resume>div{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0}
+.admin-v2 .onboarding-resume>div>div{display:flex;gap:16px;flex-wrap:wrap}
+.admin-v2 .onboarding-resume span{color:#586982}
+.admin-v2 .onboarding-complete{background:white;border:1px solid var(--onboarding-line);border-radius:6px;padding:40px 24px;text-align:center}
+.admin-v2 .onboarding-complete>svg{width:36px;height:36px;color:#16804a;margin:0 auto 16px}
+.admin-v2 .onboarding-complete>p{margin:12px 0;color:#586982;line-height:1.6}
+.admin-v2 .onboarding-complete-ids{display:flex;flex-direction:column;gap:12px;margin:24px 0}
+.admin-v2 .onboarding-complete-ids>div{display:flex;justify-content:center;gap:16px;flex-wrap:wrap}
+.admin-v2 .onboarding-complete-ids span{color:#586982}
+.admin-v2 .onboarding-complete-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+.admin-v2 .onboarding-summary{padding:16px 20px;border-bottom:1px solid var(--onboarding-line);text-align:left;min-width:0}
+.admin-v2 .onboarding-summary dl{display:flex;flex-wrap:wrap;gap:12px 32px;margin:0 0 12px}
+.admin-v2 .onboarding-summary dl>div{display:flex;gap:12px}
+.admin-v2 .onboarding-summary dt,.admin-v2 .onboarding-summary small{color:#586982}
+.admin-v2 .onboarding-summary dd{margin:0}
+.admin-v2 .onboarding-summary-service{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 24px;padding:12px 0;border-top:1px solid var(--onboarding-line)}
+.admin-v2 .onboarding-summary-service>.sm-billing-items,.admin-v2 .onboarding-summary-service>small{grid-column:1/-1}
+.admin-v2 .onboarding-complete .onboarding-summary{margin:20px auto;max-width:720px}
+@media(max-width:900px){.admin-v2 .onboarding-steps{gap:12px 8px}.admin-v2 .onboarding-steps li:not(:last-child):after{display:none}.admin-v2 .onboarding-steps [data-slot=button]{gap:6px;padding:4px}.admin-v2 .onboarding-step-number{width:22px;height:22px}.admin-v2 .model-onboarding .supplier-channel-fields,.admin-v2 .onboarding-trial-scope{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:650px){.admin-v2 .onboarding-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-v2 .onboarding-content-heading,.admin-v2 .onboarding-form-section,.admin-v2 .onboarding-embedded .supplier-configuration-body{padding:16px}.admin-v2 .onboarding-context{align-items:flex-start}.admin-v2 .onboarding-sections{gap:12px;padding:12px 16px}.admin-v2 .onboarding-footer,.admin-v2 .onboarding-embedded .supplier-configuration-footer{padding:12px 16px}}

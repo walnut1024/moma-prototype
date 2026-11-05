@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { withAdminSession } from './admin-session-fixture.mjs';
 import assert from 'node:assert/strict';
 import { createAdminSeed, parseAdminState, serializeAdminState, loadAdminState, STORAGE_KEY } from '../src/admin-v2/store.js';
 import { completeServiceProviderExample } from '../src/admin-v2/service-review-cases.js';
@@ -7,7 +8,7 @@ import { publicationChecks } from '../src/admin-v2/model-management.js';
 import { activeProviderPrice, providerServices, serviceDirectoryModels } from '../src/admin-v2/service-workspace.js';
 import { routingServices, routingChannels, serviceRoute, activeRouteVersion, validateRouteConfig } from '../src/admin-v2/service-routing.js';
 
-const legacy = () => prepareSupplierReviewCases(createAdminSeed());
+const legacy = () => withAdminSession(prepareSupplierReviewCases(createAdminSeed()));
 const addedModel = (before, after) => after.models.find(model => !before.models.some(row => row.id === model.id));
 const preserveRecords = (before, after) => {
   for (const [collection, records] of Object.entries(before)) {
@@ -51,7 +52,8 @@ test('new provider example has independent public IDs, prices and valid supplier
   assert.equal(new Set(providers.map(row => row.callId)).size, providers.length);
   assert.ok(providers.every(row => row.callId && activeProviderPrice(state, model.id, row.providerId)?.items.length));
   const checks=publicationChecks(state,model);
-  assert.ok(checks.filter(check=>check.tab!=='platform').every(check=>check.passed));
+  assert.ok(checks.filter(check=>!['basic','platform'].includes(check.tab)).every(check=>check.passed));
+  assert.equal(checks.find(check=>check.tab==='basic').passed,false,'unknown tasks remain incomplete instead of being invented');
   assert.equal(checks.find(check=>check.tab==='platform').passed,false);
   const services = routingServices(state).filter(service => service.modelId === model.id);
   assert.equal(services.length, providers.length);
@@ -89,17 +91,14 @@ test('occupied delivery IDs and public call IDs are preserved while the example 
   }
 });
 
-test('existing storage persists completion and revision once, with identical second-load records', () => {
+test('existing storage no longer auto-inserts superseded provider examples', () => {
   const source = legacy(), storage = memoryStorage(source);
   const first = loadAdminState(storage);
   assert.equal(first.storageError, undefined);
-  assert.equal(first.revision, source.revision + 1);
-  assert.equal(storage.writes, 1);
-  assert.equal(JSON.parse(storage.raw).serviceProviderExampleVersion, 1);
-  const saved = storage.raw, second = loadAdminState(storage);
-  assert.deepEqual(second, first);
-  assert.equal(storage.raw, saved);
-  assert.equal(storage.writes, 1);
+  assert.equal(first.revision, source.revision);
+  assert.equal(storage.writes, 0);
+  assert.equal(first.serviceProviderExampleVersion, undefined);
+  assert.deepEqual(loadAdminState(storage), first);
 });
 
 test('deleting the independently added model after completion never recreates it', () => {
@@ -129,7 +128,7 @@ test('later manual mode, provider, price and route edits are not repaired on rel
 });
 
 test('storage failure returns original parsed records with an error and no partial completion', () => {
-  const source = legacy(), raw = JSON.stringify(source), original = parseAdminState(raw);
+  const source = legacy(); delete source.adminSession; const raw = JSON.stringify(source), original = parseAdminState(raw);
   let writes = 0;
   const storage = {
     getItem: () => raw,
@@ -144,7 +143,7 @@ test('storage failure returns original parsed records with an error and no parti
 });
 
 test('concurrent raw revision change aborts completion without overwriting the other tab', () => {
-  const source = legacy(), raw = JSON.stringify(source), incoming = JSON.stringify({ ...source, revision: source.revision + 1 });
+  const source = legacy(); delete source.adminSession; const raw = JSON.stringify(source), incoming = JSON.stringify({ ...source, revision: source.revision + 1 });
   let reads = 0, writes = 0;
   const storage = { getItem: () => ++reads === 1 ? raw : incoming, setItem: () => { writes++; } };
   const state = loadAdminState(storage), original = parseAdminState(raw);

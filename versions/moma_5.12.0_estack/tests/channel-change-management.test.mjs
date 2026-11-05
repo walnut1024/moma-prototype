@@ -1,6 +1,7 @@
+import { legacySupplierState } from './legacy-supplier-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAdminState, commitAdminState, persistModelAction } from '../src/admin-v2/store.js';
+import { commitAdminState, persistModelAction } from '../src/admin-v2/store.js';
 import { supplierChannelAssociations } from '../src/admin-v2/supplier-resources.js';
 import { channelBlockReason } from '../src/admin-v2/provider-channels.js';
 import { connectionFingerprint } from '../src/admin-v2/connection-state.js';
@@ -17,7 +18,7 @@ const args = state => ({ providerId, endpointId: endpoint(state).id, expectedRev
 const price = amount => [{ name: '输入 Token', unit: '百万 Token', currency: 'CNY', listPrice: String(amount) }];
 
 function fixture() {
-  let state = parseAdminState(null);
+  let state = legacySupplierState();
   const provider = (operation, values) => { state = commitAdminState(state, { type: 'modelOperations', operation: 'provider', data: { operation, objectId: providerId, values } }); };
   provider('supplierChannelCreate', { name: '候选配置测试', interfaceType: 'openai', protocol: 'OpenAI', baseUrl: 'https://active.example.invalid/v1', authMode: 'group', keyGroupId: 'default', models: [{ libraryId: 'model-2', upstreamModelId: 'vendor/chat', scenarios: price(1) }, { libraryId: 'model-6', upstreamModelId: 'vendor/embedding', scenarios: price(1) }] });
   provider('supplierModelsTest', { endpointId: endpoint(state).id, associationIds: mappings(state).map(row => row.id) });
@@ -151,12 +152,11 @@ test('candidate writes respect supplier ownership, revision, roles and failed pe
 });
 
 const quoteArgs = state => ({ ...args(state), associationId: mappings(state)[0].id, expectedPriceRevision: mappings(state)[0].procurementRevision || 0 });
-test('procurement drafts do not change active cost; publish respects effective and expiry times with no older-price fallback', () => {
+test('scheduled procurement does not change active cost before its effective time; publish respects effective and expiry times with no older-price fallback', () => {
   const initial = fixture(), starts = Date.now() + 5000, ends = starts + 5000;
-  const draft = run(initial, 'channelProcurementDraft', { ...quoteArgs(initial), scenarios: price(2), effectiveAt: new Date(starts).toISOString(), expiresAt: new Date(ends).toISOString() });
-  const version = mappings(draft)[0].procurementVersions.at(-1);
+  const draft = run(initial, 'channelProcurementPublish', { confirmed: true, ...quoteArgs(initial), scenarios: price(2), effectiveAt: new Date(starts).toISOString(), expiresAt: new Date(ends).toISOString() });
   assert.equal(mappings(draft)[0].pricing.scenarios[0].listPrice, 1000000);
-  const published = run(draft, 'channelProcurementPublish', { ...quoteArgs(draft), versionId: version.id, confirmed: true });
+  const published = draft;
   assert.equal(activeChannelProcurement(mappings(published)[0], Date.now()).version, 0);
   assert.equal(activeChannelProcurement(mappings(published)[0], starts + 1).pricing.scenarios[0].listPrice, 2000000);
   assert.equal(activeChannelProcurement(mappings(published)[0], ends), null);
@@ -165,8 +165,8 @@ test('procurement drafts do not change active cost; publish respects effective a
 
 test('request procurement snapshots retain the selected version and amount across later price changes', () => {
   const initial = fixture(), selected = channelProcurementSnapshot(mappings(initial)[0]);
-  const draft = run(initial, 'channelProcurementDraft', { ...quoteArgs(initial), scenarios: price(3) }), version = mappings(draft)[0].procurementVersions.at(-1);
-  const published = run(draft, 'channelProcurementPublish', { ...quoteArgs(draft), versionId: version.id, confirmed: true });
+  const draft = run(initial, 'channelProcurementPublish', { confirmed: true, ...quoteArgs(initial), scenarios: price(3) }), version = mappings(draft)[0].procurementVersions.at(-1);
+  const published = draft;
   const next = channelProcurementSnapshot(mappings(published)[0]);
   assert.equal(selected.pricing.scenarios[0].listPrice, 1000000); assert.equal(next.pricing.scenarios[0].listPrice, 3000000);
   assert.equal(next.versionId, version.id);
@@ -176,12 +176,11 @@ test('request procurement snapshots retain the selected version and amount acros
 
 test('procurement publishing rejects incomplete amounts, invalid periods, foreign associations and stale revisions', () => {
   const state = fixture();
-  assert.throws(() => run(state, 'channelProcurementDraft', { ...quoteArgs(state), scenarios: price(-1) }), /非负数/);
-  assert.throws(() => run(state, 'channelProcurementDraft', { ...quoteArgs(state), scenarios: price(2), effectiveAt: 'bad' }), /时间/);
-  assert.throws(() => run(state, 'channelProcurementDraft', { ...quoteArgs(state), associationId: 'foreign', scenarios: price(2) }), /不属于/);
-  const draft = run(state, 'channelProcurementDraft', { ...quoteArgs(state), scenarios: [{ ...price(1)[0], listPrice: '' }] }), version = mappings(draft)[0].procurementVersions.at(-1);
-  assert.throws(() => run(draft, 'channelProcurementPublish', { ...quoteArgs(draft), versionId: version.id, confirmed: true }), /补齐/);
-  assert.throws(() => run(draft, 'channelProcurementPublish', { ...quoteArgs(state), versionId: version.id, confirmed: true }), /修订/);
+  assert.throws(() => run(state, 'channelProcurementPublish', { confirmed: true, ...quoteArgs(state), scenarios: price(-1) }), /非负数/);
+  assert.throws(() => run(state, 'channelProcurementPublish', { confirmed: true, ...quoteArgs(state), scenarios: price(2), effectiveAt: 'bad' }), /时间/);
+  assert.throws(() => run(state, 'channelProcurementPublish', { confirmed: true, ...quoteArgs(state), associationId: 'foreign', scenarios: price(2) }), /不属于/);
+  assert.throws(() => run(state, 'channelProcurementPublish', { ...quoteArgs(state), scenarios: [{ ...price(1)[0], listPrice: '' }], confirmed: true }), /补齐/);
+  assert.throws(() => run(state, 'channelProcurementPublish', { ...quoteArgs(state), expectedPriceRevision: 99, scenarios: price(1), confirmed: true }), /修订/);
 });
 
 const groupArgs = state => ({ providerId, groupId: 'default', expectedGroupVersion: owner(state).keyGroupRevisions?.default || 0, candidateId: owner(state).keyGroupCandidates?.find(row => row.groupId === 'default')?.id });

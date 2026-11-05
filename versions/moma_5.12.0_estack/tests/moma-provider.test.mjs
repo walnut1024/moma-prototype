@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createAdminSeed, parseAdminState } from '../src/admin-v2/store.js';
 import { MOMA_PROVIDER, DEFAULT_SUPPLIERS, supplierDirectory } from '../src/admin-v2/moma-provider.js';
-const directoryNames = ['月之暗面 Kimi', 'DeepSeek 官方', '火山方舟', '中国移动 MoMA', '智谱'];
+const directoryNames = ['中国移动 MoMA', '月之暗面 Kimi', 'DeepSeek 官方', '火山方舟', '智谱'];
 
 test('supplier directory includes MoMA, Zhipu and DeepSeek with their registered catalogues', () => {
   const state = createAdminSeed();
@@ -38,7 +38,7 @@ test('supplier directory includes MoMA, Zhipu and DeepSeek with their registered
   assert.ok(!state.supplyPrices.some(item => item.providerId === provider.id));
 });
 
-test('saved data gains independent default suppliers without replacing renamed historical records', () => {
+test('saved data preserves renamed records and does not resurrect removed default suppliers', () => {
   const saved = createAdminSeed();
   const ids = new Set(DEFAULT_SUPPLIERS.map(item => item.id));
   saved.providers = saved.providers.filter(item => !ids.has(item.id));
@@ -46,7 +46,7 @@ test('saved data gains independent default suppliers without replacing renamed h
   saved.providers[0].name = '已编辑的原供应商';
   const raw = JSON.stringify(saved);
   const restored = parseAdminState(raw);
-  assert.deepEqual(supplierDirectory(restored).map(item => item.name), directoryNames);
+  assert.deepEqual(supplierDirectory(restored).map(item => item.name), supplierDirectory(saved).map(item => item.name));
   for (const key of ['providers', 'endpoints']) {
     for (const item of saved[key]) assert.deepEqual(restored[key].find(record => record.id === item.id), item);
   }

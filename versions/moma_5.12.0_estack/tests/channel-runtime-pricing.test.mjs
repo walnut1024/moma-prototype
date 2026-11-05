@@ -45,9 +45,7 @@ function fixture(count = 2) {
 }
 function publishPrice(state, endpointId, amount, expiresAt = null, effectiveAt) {
   const row = mapping(state, endpointId), data = { providerId, endpointId, associationId: row.id, expectedPriceRevision: row.procurementRevision || 0, scenarios: price(amount), effectiveAt, expiresAt };
-  state = transact(state, 'channelProcurementDraft', data);
-  const updated = mapping(state, endpointId), version = updated.procurementVersions.at(-1);
-  return transact(state, 'channelProcurementPublish', { ...data, expectedPriceRevision: updated.procurementRevision, versionId: version.id, confirmed: true });
+  return transact(state, 'channelProcurementPublish', { ...data, confirmed: true });
 }
 const call = (fixture, state = fixture.state, patch = {}) => simulateRequest(state, { requestId: crypto.randomUUID(), keyId: fixture.keyId, modelId: fixture.modelId, ...patch });
 
@@ -160,13 +158,12 @@ test('explicitly managing a legacy implicit quote preserves its stable identity 
   const originalMapping = supplierChannelAssociations(initial, source.provider, source.endpointId).find(row => row.upstreamModelId === source.upstreamModelId);
   assert.ok(originalCost.length); assert.ok(!source.provider.catalogConnections?.some(row => row.id === originalMapping.id));
   const data = { providerId: source.provider.id, endpointId: source.endpointId, associationId: originalMapping.id, expectedPriceRevision: 0, scenarios: price(9), effectiveAt: new Date(base + 1000).toISOString(), expiresAt: new Date(base + 2000).toISOString() };
-  const draft = transact(initial, 'channelProcurementDraft', data);
+  const draft = transact(initial, 'channelProcurementPublish', { ...data, confirmed: true });
   const stored = draft.providers.find(row => row.id === source.provider.id).catalogConnections.find(row => row.id === originalMapping.id);
   assert.equal(stored.endpointId, source.endpointId); assert.equal(stored.upstreamModelId, source.upstreamModelId);
   assert.deepEqual(priceItems(activeSupplyPrice(draft, source.id), model), originalCost);
   for (const field of ['modelSupplies', 'endpoints', 'models', 'modelSalePrices', 'supplyPrices', 'serviceRoutes']) assert.deepEqual(draft[field], initial[field], field);
-  const version = stored.procurementVersions.at(-1);
-  const published = transact(draft, 'channelProcurementPublish', { ...data, expectedPriceRevision: stored.procurementRevision, versionId: version.id, confirmed: true });
+  const published = draft;
   assert.deepEqual(priceItems(activeSupplyPrice(published, source.id), model), originalCost);
   t.mock.timers.tick(1000);
   assert.equal(priceItems(activeSupplyPrice(published, source.id), model)[0].amount, 9000000);
@@ -218,4 +215,38 @@ test('a pending test blocks new enable and route publication while existing qual
   assert.equal(call(f).request.httpStatus, 200);
   ep.serverTestJobs[0].receivedAt = new Date().toISOString();
   assert.equal(routingChannels(f.state, service)[0].available, true);
+});
+
+// These scenarios exercise the platform call path, not independent chart fixtures.
+import { businessFacts, businessSummary, businessGroups, supplyGroups, operationFacts, analysisFilters } from '../src/admin-v2/operations-analysis.js';
+import { usagePreset } from '../src/admin-v2/usage-analysis.js';
+const measured = (state, request) => businessFacts(state, operationFacts({...state,requests:[request]},usagePreset('today'),analysisFilters()))[0];
+
+test('operational revenue follows the unified service while procurement follows the selected channel', t => {
+ const base=Date.now();t.mock.timers.enable({apis:['Date'],now:base});const f=fixture(2);
+ const s=publishPrice(f.state,f.supplies[0].endpointId,3,new Date(base+1000).toISOString());
+ const first=call(f,s,{usage:{input:1000000,output:0,cached:0}});t.mock.timers.tick(1000);
+ const second=call(f,first.state,{usage:{input:1000000,output:0,cached:0}});t.mock.timers.tick(1);
+ const facts=[measured(second.state,first.request),measured(second.state,second.request)];
+ assert.deepEqual(facts.map(r=>r.sale?.amount),[8,8]);assert.deepEqual(facts.map(r=>r.cost?.amount),[3,2]);
+ assert.equal(businessGroups(second.state,facts).length,1);assert.equal(businessSummary(facts,'CNY').profit,11);
+ assert.equal(first.request.serviceId,second.request.serviceId);assert.notEqual(first.request.endpointId,second.request.endpointId);
+});
+test('a failover keeps known service revenue but leaves total procurement and profit pending if the failed attempt lacks usage', t => {
+ const base=Date.now();t.mock.timers.enable({apis:['Date'],now:base});const f=fixture(2),result=call(f,f.state,{forceTimeout:true,usage:{input:1000000,output:0,cached:0}});t.mock.timers.tick(1);
+ const fact=measured(result.state,result.request);assert.equal(fact.sale.amount,8);assert.equal(fact.cost,null);assert.equal(fact.profit,null);assert.equal(fact.purchases.length,2);assert.equal(fact.purchases[0].cost,null);assert.equal(fact.purchases[1].cost.amount,2);
+ const summary=businessSummary([fact],'CNY');assert.equal(summary.income,8);assert.equal(summary.cost,2);assert.equal(summary.profit,null);assert.equal(summary.costPending,1);
+ const channels=supplyGroups(result.state,operationFacts({...result.state,requests:[result.request]},usagePreset('today'),analysisFilters()),true);assert.equal(channels.reduce((n,r)=>n+r.failedAttempts,0),1);assert.equal(channels.reduce((n,r)=>n+r.calls,0),1);
+});
+test('operating history uses recorded sales and procurement snapshots after both prices change', t => {
+ const base=Date.now();t.mock.timers.enable({apis:['Date'],now:base});const f=fixture(1),s=publishPrice(f.state,f.supplies[0].endpointId,3);
+ const first=call(f,s,{usage:{input:1000000,output:0,cached:0}});t.mock.timers.tick(1000);
+ const next=publishPrice(first.state,f.supplies[0].endpointId,7);next.modelSalePrices.push({...next.modelSalePrices.find(p=>p.id==='runtime-sale'),id:'runtime-sale-v2',version:2,effectiveAt:new Date(Date.now()).toISOString(),items:[{name:'输入',unit:'百万 Token',currency:'CNY',amount:12000000},{name:'输出',unit:'百万 Token',currency:'CNY',amount:16000000}]});
+ const second=call(f,next,{usage:{input:1000000,output:0,cached:0}});t.mock.timers.tick(1);
+ for(const price of second.state.modelSalePrices)price.items?.forEach(item=>{item.amount=99000000;});
+ const facts=[measured(second.state,first.request),measured(second.state,second.request)];assert.deepEqual(facts.map(r=>r.sale?.amount),[8,12]);assert.deepEqual(facts.map(r=>r.cost?.amount),[3,7]);assert.equal(businessSummary(facts,'CNY').profit,10);
+});
+test('gateway checks are operational tests and cannot inflate accrued customer revenue', t => {
+ const base=Date.now();t.mock.timers.enable({apis:['Date'],now:base});const f=fixture(1),result=call(f,f.state,{purpose:'gateway-test'});t.mock.timers.tick(1);
+ assert.equal(businessFacts(result.state,operationFacts({...result.state,requests:[result.request]},usagePreset('today'),analysisFilters())).length,0);
 });

@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAdminSeed, commitAdminState, persistModelAction, parseAdminState } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction, parseAdminState as baseParseAdminState } from '../src/admin-v2/store.js';
 import { catalogueConnections } from '../src/admin-v2/provider-model-connections.js';
 import { providerCataloguePrice } from '../src/admin-v2/moma-catalogue-prices.js';
 const providerId = 'provider-moma', modelId = 'Access-New-Model';
@@ -13,7 +14,7 @@ test('adding a model atomically saves its protocol, access address and quote wit
   const next = persistModelAction(seed, action(), { getItem: () => saved, setItem: (_, value) => { saved = value; } });
   const state = parseAdminState(saved), connections = catalogueConnections(state, owner(state), modelId);
   assert.equal(connections.length, 1); assert.equal(connections[0].protocol, 'OpenAI');
-  assert.equal(connections[0].baseUrl, draft.apiUrl); assert.equal(connections[0].status, '草稿');
+  assert.equal(connections[0].baseUrl, draft.apiUrl); assert.equal(connections[0].status, '停用');
   assert.deepEqual(connections[0].apiKeys, []); assert.equal(connections[0].credentialRef, '');
   assert.equal(providerCataloguePrice(owner(state), modelId).scenarios[0].listPrice, 0);
   for (const endpoint of seed.endpoints) assert.deepEqual(state.endpoints.find(item => item.id === endpoint.id), endpoint);
@@ -45,3 +46,6 @@ test('missing/invalid access fields, duplicate model, permission, conflict and s
   assert.throws(() => persistModelAction(state, action(), { getItem: () => before, setItem: () => { throw Error('quota'); } }), /quota/);
   assert.equal(JSON.stringify(state), before);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

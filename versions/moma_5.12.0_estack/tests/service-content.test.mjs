@@ -1,10 +1,12 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createAdminSeed,commitAdminState,parseAdminState,persistModelAction} from '../src/admin-v2/store.js';
+import {createAdminSeed as baseCreateAdminSeed,commitAdminState,parseAdminState as baseParseAdminState,persistModelAction} from '../src/admin-v2/store.js';
 import {providerServices,providerServiceId,activeProviderPrice,providerPriceRevision,unifiedBillingDraft,serviceSupplyRows} from '../src/admin-v2/service-workspace.js';
 import {routingServices,routingChannels,routeSourceVersion,serviceRoute,activeRouteVersion,validateRouteConfig} from '../src/admin-v2/service-routing.js';
 import {modelSupplies,publicationChecks} from '../src/admin-v2/model-management.js';
 import {connectionFingerprint} from '../src/admin-v2/connection-state.js';
+import {lifecycleAccess,serviceReferences} from '../src/service-access.mjs';
 import {simulateRequest} from '../src/admin-v2/domain.js';
 const run=(state,operation,modelId,data)=>commitAdminState(state,{type:'modelOperations',operation,modelId,data});
 const items=[{name:'输入',condition:'',unit:'百万 Token',currency:'CNY',amount:'2'},{name:'输出',condition:'',unit:'百万 Token',currency:'CNY',amount:'8'}];
@@ -59,17 +61,24 @@ test('Provider route candidates stay within associated channels of that Provider
  const removed=channels[0];f.state.modelSupplies.find(item=>item.id===removed.id).status='已移除';
  assert.ok(!routingChannels(f.state,service).some(item=>item.id===removed.id));
 });
-test('removing a binding retains supply resources and prices, but published and draft route references block removal',()=>{
- const f=configured(), service=routingServices(f.state).find(item=>item.providerId===f.provider.id), channel=routingChannels(f.state,service).find(item=>item.available);
+test('channel removal checks route references; supplier unbinding requires downlisting and atomically stops its route',()=>{
+ const f=configured();
+ assert.throws(()=>run(f.state,'removeServiceProvider',f.model.id,{providerId:f.provider.id,expectedUpdatedAt:f.model.updatedAt}),/先下架当前供应商/);
+ f.state=run(f.state,'serviceProviderListing',f.model.id,{providerId:f.provider.id,enabled:false,expectedUpdatedAt:f.model.updatedAt}); f.model=f.state.models.find(row=>row.id===f.model.id);
+ const service=routingServices(f.state).find(item=>item.providerId===f.provider.id), channel=routingChannels(f.state,service).find(item=>item.available);
  assert.ok(channel);const data={supplyId:channel.id,expectedUpdatedAt:f.model.updatedAt};
  const detached=run(f.state,'removeServiceChannel',f.model.id,data);
  for(const key of ['providers','endpoints','modelSalePrices'])assert.deepEqual(detached[key],f.state[key]);
  assert.equal(detached.modelSupplies.find(item=>item.id===channel.id).status,'已移除');
  const draft=run(f.state,'serviceRouteDraft',null,{serviceId:service.id,expectedVersion:0,config:{strategy:'fixed',autoFailover:true,channels:[{supplyId:channel.id,enabled:true}]}});
- assert.throws(()=>run(draft,'removeServiceChannel',f.model.id,data),/草稿引用/);
- assert.throws(()=>run(draft,'removeServiceProvider',f.model.id,{providerId:f.provider.id,expectedUpdatedAt:f.model.updatedAt}),/路由或草稿引用/);
+ assert.doesNotThrow(()=>run(draft,'removeServiceChannel',f.model.id,data));
+ assert.doesNotThrow(()=>run(draft,'removeServiceProvider',f.model.id,{providerId:f.provider.id,expectedUpdatedAt:f.model.updatedAt}));
  const published=run(f.state,'serviceRoutePublish',null,{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(f.state,service),config:{strategy:'fixed',autoFailover:true,channels:[{supplyId:channel.id,enabled:true}]}});
  assert.throws(()=>run(published,'removeServiceChannel',f.model.id,data),/生效路由/);
+ const foreign=structuredClone(published);foreign.serviceRoutes.push({...structuredClone(serviceRoute(published,service.id)),id:'foreign-route',serviceId:`standard:${f.model.id}`});
+ assert.throws(()=>run(foreign,'removeServiceProvider',f.model.id,{providerId:f.provider.id,expectedUpdatedAt:f.model.updatedAt}),/其他服务路由引用/);
+ const removed=run(published,'removeServiceProvider',f.model.id,{providerId:f.provider.id,expectedUpdatedAt:f.model.updatedAt});
+ assert.equal(serviceRoute(removed,service.id).activeVersion,0);assert.deepEqual(serviceRoute(removed,service.id).versions,serviceRoute(published,service.id).versions);
  assert.throws(()=>run(published,'serviceRouteStop',null,{serviceId:service.id,expectedVersion:1}),/确认/);
  const stopped=run(published,'serviceRouteStop',null,{serviceId:service.id,expectedVersion:1,confirmed:true});
  assert.deepEqual(serviceRoute(stopped,service.id).versions,serviceRoute(published,service.id).versions);
@@ -82,6 +91,7 @@ test('a Provider call resolves to its model and snapshots its Provider price aft
  const f=configured(), service=routingServices(f.state).find(item=>item.providerId===f.provider.id), channel=routingChannels(f.state,service).find(item=>item.available);
  let state=run(f.state,'serviceRoutePublish',null,{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(f.state,service),config:{strategy:'fixed',autoFailover:true,channels:[{supplyId:channel.id,enabled:true}]}});
  const key=state.apiKeys.find(item=>item.status==='有效' && state.grants.some(grant=>grant.subjectId===item.id));key.modelIds=[...new Set([...key.modelIds,f.model.id])];state.limits=state.limits.filter(item=>item.scopeId!==key.id);
+ Object.assign(state.models.find(row=>row.id===f.model.id),{listingStatus:'已上架',visibility:'公开',callsEnabled:true,openScope:'all'});
  const result=simulateRequest(state,{requestId:crypto.randomUUID(),keyId:key.id,modelId:service.callId}).request;
  assert.equal(result.httpStatus,200);assert.equal(result.providerId,f.provider.id);assert.equal(result.modelId,f.model.id);assert.equal(result.priceSnapshot.scope,'provider');assert.equal(result.priceVersionId,activeProviderPrice(state,f.model.id,f.provider.id).id);
  assert.equal(simulateRequest(state,{requestId:crypto.randomUUID(),keyId:key.id,modelId:f.model.id}).request.attempts.at(-1).error,'provider_service_required');
@@ -108,4 +118,45 @@ test('permissions, generic-write guards, conflict and storage failures preserve 
  assert.throws(()=>commitAdminState(f.state,{type:'add',collection:'modelSalePrices',record:{id:'forged',scope:'provider'}}),/须通过服务管理/);
  assert.throws(()=>persistModelAction(f.state,action,{getItem:()=>JSON.stringify({...f.state,revision:f.state.revision+1}),setItem:()=>assert.fail()}),/数据已变化/);
  assert.throws(()=>persistModelAction(f.state,action,{getItem:()=>JSON.stringify(f.state),setItem:()=>{throw Error('disk full');}}),/disk full/);assert.deepEqual(f.state,before);
+});
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }
+
+test('supplier listing and serving are independent, persist, preserve resources and never change other suppliers or model generations',()=>{
+ let f=configured(), state=f.state;
+ const other=modelSupplies(state,f.model.id).find(row=>row.provider?.id!==f.provider.id).provider;
+ state=run(state,'associateServiceProvider',f.model.id,{providerId:other.id,expectedUpdatedAt:state.models.find(row=>row.id===f.model.id).updatedAt});
+ const get=()=>state.models.find(row=>row.id===f.model.id), act=(operation,enabled)=>{state=run(state,operation,f.model.id,{providerId:f.provider.id,enabled,expectedUpdatedAt:get().updatedAt});};
+ Object.assign(get(),{listingStatus:'已上架',visibility:'公开',callsEnabled:true,openScope:'all'});
+ const before=structuredClone(state), foreign=structuredClone(get().serviceProviders.find(row=>row.providerId===other.id));
+ const access=id=>lifecycleAccess(state,serviceReferences(state).find(row=>row.providerId===id && row.modelId===f.model.id),'tenant-gov');
+ assert.equal(access(f.provider.id).allowed,true);
+ act('serviceProviderListing',false);assert.equal(access(f.provider.id).allowed,true);
+ assert.equal(get().serviceProviders.find(row=>row.providerId===f.provider.id).marketVisible,false);
+ act('serviceProviderServing',false);assert.equal(access(f.provider.id).code,'provider_unavailable');assert.equal(access(other.id).allowed,true);
+ act('serviceProviderListing',true);assert.equal(access(f.provider.id).code,'provider_unavailable');
+ assert.deepEqual(get().serviceProviders.find(row=>row.providerId===other.id),foreign);
+ for(const field of ['listingStatus','callsEnabled','marketVisible','accessGeneration','requestGeneration'])assert.equal(get()[field],before.models.find(row=>row.id===f.model.id)[field]);
+ for(const collection of ['providers','endpoints','modelSupplies','modelSalePrices','orders','requests','serviceRoutes'])assert.deepEqual(state[collection],before[collection]);
+ assert.equal(providerServices(parseAdminState(JSON.stringify(state)).models.find(row=>row.id===f.model.id)).find(row=>row.providerId===f.provider.id).callsEnabled,false);
+ assert.throws(()=>run(state,'serviceProviderServing',f.model.id,{providerId:f.provider.id,enabled:true,expectedUpdatedAt:get().updatedAt}),/完善/);
+ const service=routingServices(state).find(row=>row.modelId===f.model.id && row.providerId===f.provider.id), channel=routingChannels(state,service).find(row=>row.available);
+ state=run(state,'serviceRoutePublish',null,{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'fixed',channels:[{supplyId:channel.id,enabled:true}]}});
+ act('serviceProviderServing',true);assert.equal(access(f.provider.id).allowed,true);
+ const key=state.apiKeys.find(row=>row.status==='有效' && state.grants.some(grant=>grant.subjectId===row.id));key.modelIds=[...new Set([...key.modelIds,f.model.id])];state.limits=state.limits.filter(row=>row.scopeId!==key.id);
+ act('serviceProviderServing',false);
+ assert.equal(simulateRequest(state,{requestId:crypto.randomUUID(),keyId:key.id,modelId:service.callId}).request.attempts.at(-1).error,'provider_unavailable');
+ act('serviceProviderServing',true);
+ assert.equal(simulateRequest(state,{requestId:crypto.randomUUID(),keyId:key.id,modelId:service.callId}).request.httpStatus,200);
+});
+
+test('supplier state writes validate role, revision, input and storage atomically',()=>{
+ const f=configured(),before=structuredClone(f.state),action={type:'modelOperations',operation:'serviceProviderListing',modelId:f.model.id,data:{providerId:f.provider.id,enabled:false,expectedUpdatedAt:f.model.updatedAt}};
+ for(const enabled of [undefined,'false',0])assert.throws(()=>commitAdminState(f.state,{...action,data:{...action.data,enabled}}),/有效/);
+ assert.throws(()=>commitAdminState(f.state,{...action,data:{...action.data,expectedUpdatedAt:'stale'}}),/并发/);
+ assert.throws(()=>commitAdminState(f.state,{...action,data:{...action.data,providerId:'missing'}}),/不存在/);
+ assert.throws(()=>commitAdminState({...f.state,currentRole:'运维人员'},action),/无权/);
+ assert.throws(()=>persistModelAction(f.state,action,{getItem:()=>JSON.stringify(f.state),setItem:()=>{throw Error('disk full');}}),/disk full/);
+ assert.deepEqual(f.state,before);
 });

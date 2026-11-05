@@ -7,44 +7,44 @@ const params = crumb => new URLSearchParams(crumb.href.split('?')[1]);
 
 test('supplier workspace has one level and editors return to the same supplier and tab', () => {
   const rows = build('providers', 'provider=provider-moma&tab=api-keys&view=profile&endpoint=ep&q=model-search&listQ=MoMA&listPage=2&status=已启用', { provider: '中国移动 MoMA' });
-  assert.deepEqual(labels(rows), ['模型运营', '供应管理', '编辑供应商资料']);
+  assert.deepEqual(labels(rows), ['模型运营', '模型接入', '编辑供应商资料']);
   assert.equal(params(rows[1]).get('provider'), 'provider-moma');
-  assert.equal(params(rows[1]).get('tab'), 'basic');
+  assert.equal(params(rows[1]).get('tab'), 'api-keys');
   for (const key of ['endpoint', 'view', 'q', 'page', 'listQ', 'listPage']) assert.equal(params(rows[1]).has(key), false);
   assert.equal(rows.at(-1).href, undefined);
-  assert.deepEqual(labels(build('providers', 'provider=provider-moma&tab=catalogue')), ['模型运营', '供应管理']);
-  assert.deepEqual(labels(build('providers', 'provider=provider-moma&tab=api-keys')), ['模型运营', '供应管理']);
-  assert.deepEqual(labels(build('providers', 'view=new&q=MoMA')), ['模型运营', '供应管理', '添加供应商']);
+  assert.deepEqual(labels(build('providers', 'provider=provider-moma&tab=catalogue')), ['模型运营', '模型接入']);
+  assert.deepEqual(labels(build('providers', 'provider=provider-moma&tab=api-keys')), ['模型运营', '模型接入']);
+  assert.deepEqual(labels(build('providers', 'view=new&q=MoMA')), ['模型运营', '模型接入', '添加供应商']);
 });
 
 test('supplier and history drawers stay on model management without a detail breadcrumb', () => {
   for (const tab of ['supplies', 'history', 'basic']) {
     const rows = build('listing', `model=abc&tab=${tab}&q=Qwen&type=text&page=3`, { model: 'Qwen' });
-    assert.deepEqual(labels(rows), ['模型运营', '服务管理']);
+    assert.deepEqual(labels(rows), ['模型运营', '模型服务']);
     assert.equal(rows[1].href, undefined);
   }
 });
 
 test('tariff categories are direct materials-management children in breadcrumbs', () => {
   for (const [tab, label] of [['scenario', '计费项'], ['unit', '计价单位'], ['currency', '货币']]) {
-    assert.deepEqual(build('tariff-dictionary', `tab=${tab}`), [{ label: '模型运营' }, { label: '资料管理', href: '#/admin-2/model-templates' }, { label }]);
+    assert.deepEqual(build('tariff-dictionary', `tab=${tab}`), [{ label: '模型运营' }, { label: '模型资料', href: '#/admin-2/model-templates' }, { label }]);
   }
-  for (const query of ['', 'tab=invalid', 'tab=constructor', 'tab=__proto__']) assert.deepEqual(labels(build('tariff-dictionary', query)), ['模型运营', '资料管理', '计费项']);
+  for (const query of ['', 'tab=invalid', 'tab=constructor', 'tab=__proto__']) assert.deepEqual(labels(build('tariff-dictionary', query)), ['模型运营', '模型资料', '计费项']);
 });
 
 test('model creation and metadata workflows retain the correct parent', () => {
-  assert.deepEqual(labels(build('listing', 'view=add&step=select')), ['模型运营', '服务管理', '添加模型']);
+  assert.deepEqual(labels(build('listing', 'view=add&step=select')), ['模型运营', '模型服务', '添加模型']);
   const rows = build('listing', 'view=add&draft=d1&step=metadata&provider=p1&catalogue=x&q=GLM&page=2');
-  assert.deepEqual(labels(rows), ['模型运营', '服务管理', '添加模型']);
+  assert.deepEqual(labels(rows), ['模型运营', '模型服务', '添加模型']);
   assert.equal(params(rows[1]).get('q'), 'GLM');
   for (const key of ['draft', 'step', 'provider', 'catalogue']) assert.equal(params(rows[1]).has(key), false);
-  assert.deepEqual(labels(build('model-templates', 'view=templateImport')), ['模型运营', '资料管理', '模型资料库', '批量导入模型资料']);
+  assert.deepEqual(labels(build('model-templates', 'view=templateImport')), ['模型运营', '模型资料', '模型', '批量导入模型资料']);
 });
 
 test('model library editor shows the current model name and keeps identity out of the list link', () => {
   const query = 'view=template&template=catalog-demo-kimi&returnModel=catalog-demo-kimi&q=Kimi&page=2';
   const rows = build('model-templates', query, { model: 'Kimi K3' });
-  assert.deepEqual(labels(rows), ['模型运营', '资料管理', '模型资料库', 'Kimi K3']);
+  assert.deepEqual(labels(rows), ['模型运营', '模型资料', '模型', 'Kimi K3']);
   assert.equal(rows.at(-1).href, undefined);
   assert.equal(params(rows[2]).get('q'), 'Kimi');
   assert.equal(params(rows[2]).get('page'), '2');
@@ -79,7 +79,7 @@ test('user and analytics detail breadcrumbs preserve their original list scope',
 
 test('top-level pages do not invent a back destination; gateway parents remain navigable', () => {
   assert.deepEqual(build('dashboard'), [{ label: '概览' }]);
-  assert.deepEqual(labels(build('providers')), ['模型运营', '供应管理']);
+  assert.deepEqual(labels(build('providers')), ['模型运营', '模型接入']);
   const gateway = build('alerts');
   assert.equal(gateway[1].href, '#/admin-2/routes');
   assert.equal(gateway.at(-1).href, undefined);
@@ -91,6 +91,12 @@ test('supplier batches return to the same supplier perspective and page while dr
   const rows = build('listing', 'view=supplier-batch&provider=p1&listingReturn=' + encodeURIComponent(target));
   assert.equal(rows[1].href, target);
   assert.equal(rows.at(-1).label, '批量配置与上架');
-  assert.deepEqual(labels(build('listing', 'model=abc&tab=supplies&listingReturn=' + encodeURIComponent(target), { model: 'GLM' })), ['模型运营', '服务管理']);
+  assert.deepEqual(labels(build('listing', 'model=abc&tab=supplies&listingReturn=' + encodeURIComponent(target), { model: 'GLM' })), ['模型运营', '模型服务']);
   assert.ok(build('listing', 'view=supplier-batch&listingReturn=https%3A%2F%2Fexternal.invalid')[1].href.startsWith('#/admin-2/listing'));
+});
+
+test('onboarding belongs directly to model operations and names the selected task goal',()=>{
+  assert.deepEqual(labels(build('listing','view=onboarding')),['模型运营','接入并上架模型']);
+  assert.deepEqual(labels(build('listing','view=onboarding',{onboardingIntent:'reserve'})),['模型运营','准备备用供应']);
+  assert.deepEqual(labels(build('listing','view=onboarding',{onboardingIntent:'activate'})),['模型运营','投入当前服务']);
 });

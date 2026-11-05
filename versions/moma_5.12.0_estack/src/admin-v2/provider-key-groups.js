@@ -1,4 +1,5 @@
 export function providerKeyGroups(provider, keys = provider.apiKeys || []) {
+  keys = keys.filter(key => key.scope !== 'channel');
   const known = new Set(keys.map(key => key.id));
   const assigned = new Set();
   const groups = (provider.apiKeyGroups || []).filter(group => group.id !== 'default').map(group => ({ ...group, keyIds: (group.keyIds || []).filter(id => {

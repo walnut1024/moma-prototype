@@ -1,19 +1,20 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createAdminSeed,commitAdminState,parseAdminState,persistModelAction} from '../src/admin-v2/store.js';
+import {createAdminSeed as baseCreateAdminSeed,commitAdminState,parseAdminState as baseParseAdminState,persistModelAction} from '../src/admin-v2/store.js';
 import {serviceDirectoryModels,serviceConfiguration,serviceLifecycle,serviceIndexModels,serviceConfigurationTarget,serviceAssociationChannels,modelSaleRevision} from '../src/admin-v2/service-workspace.js';
 import {serviceModelDraft} from '../src/admin-v2/model-profile.js';
 import {publicationChecks} from '../src/admin-v2/model-management.js';
 import {serviceGuideRequest,serviceGuideCode} from '../src/admin-v2/service-guide.js';
 import {routingServices,routingChannels,routeSourceVersion,serviceRoute,activeRouteVersion} from '../src/admin-v2/service-routing.js';
 
-test('fresh review directory contains five distinct progress and lifecycle scenarios with Wan available as default',()=>{
-  const state=parseAdminState(null),models=serviceDirectoryModels(state);
+test('configured historical review scenarios retain distinct progress and lifecycle states',()=>{
+  const state=parseAdminState(null),models=serviceDirectoryModels(state).filter(model=>model.serviceReviewCase);
   assert.deepEqual(models.map(model=>model.serviceReviewCase),['deepseek','qwen','image','video','audio']);
-  assert.deepEqual(models.map(model=>serviceLifecycle(model)),['已下架','已上架','草稿','已上架','未上架']);
+  assert.deepEqual(models.map(model=>serviceLifecycle(model)),['已下架','已上架','未上架','已上架','未上架']);
   assert.deepEqual(models.map(model=>serviceConfiguration(state,model).label),['已配置','已配置','未配置','已配置','待完善']);
-  for(const status of ['listed','unlisted','draft','unpublished'])assert.ok(serviceIndexModels(state,new URLSearchParams({status})).every(model=>serviceLifecycle(model)==={listed:'已上架',unlisted:'已下架',draft:'草稿',unpublished:'未上架'}[status]));
-  assert.equal(serviceIndexModels(state,new URLSearchParams({mode:'provider'})).length,2);
+  for(const status of ['listed','unlisted','unpublished'])assert.ok(serviceIndexModels(state,new URLSearchParams({status})).every(model=>serviceLifecycle(model)==={listed:'已上架',unlisted:'已下架',draft:'草稿',unpublished:'未上架'}[status]));
+  assert.equal(serviceIndexModels(state,new URLSearchParams({mode:'provider'})).filter(model=>model.serviceReviewCase).length,2);
 });
 test('audio missing price and missing mapping link directly to the correct Provider and panel',()=>{
   const state=parseAdminState(null),audio=state.models.find(model=>model.serviceReviewCase==='audio'),issues=serviceConfiguration(state,audio).issues;
@@ -21,16 +22,16 @@ test('audio missing price and missing mapping link directly to the correct Provi
   const price=issues.find(issue=>issue.tab==='pricing'),mapping=issues.find(issue=>issue.tab==='routing');
   assert.equal(serviceConfigurationTarget(audio,price).providerEdit,price.providerId);
   const target=serviceConfigurationTarget(audio,mapping);
-  assert.equal(target.panel,null);assert.equal(target.providerChannels,mapping.providerId);assert.equal(target.providerAssociate,'1');
+  assert.equal(target.panel,'routing');assert.equal(target.providerChannels,mapping.providerId);assert.equal(target.providerAssociate,'1');
 });
 test('new service creates a genuine mode-less draft and cannot publish before configuration',()=>{
-  const state=parseAdminState(null),source=state.models.find(model=>model.serviceReviewCase==='deepseek'),data={...serviceModelDraft(source),name:'新增服务',modelId:'new-review-service'};
+  const state=parseAdminState(null),source=structuredClone(state.models.find(model=>model.serviceReviewCase==='deepseek'));source.id='template-new-review-service';source.modelId='new-review-source';delete source.templateId;state.modelTemplates.push(source);const provider=state.providers.find(row=>row.id==='provider-moma');provider.catalogModelIds.push(source.modelId);provider.catalogModels.push({modelId:source.modelId,libraryId:source.id,type:source.type,name:source.name});const data={...serviceModelDraft(source),libraryId:source.id,name:'新增服务',modelId:'new-review-service'};
   const saved=commitAdminState(state,{type:'modelOperations',operation:'createServiceModel',data}),model=saved.models.find(item=>item.modelId===data.modelId);
-  assert.equal(model.serviceMode,undefined);assert.equal(serviceLifecycle(model),'草稿');
+  assert.equal(model.serviceMode,undefined);assert.equal(serviceLifecycle(model),'未上架');
   assert.equal(saved.modelSupplies.some(item=>item.modelId===model.id),false);
   assert.equal(publicationChecks(saved,model).some(check=>check.tab==='serviceMode' && !check.passed),true);
   assert.throws(()=>commitAdminState(saved,{type:'modelOperation',operation:'publish',modelId:model.id,data:{}}),/服务模式/);
-  assert.equal(serviceDirectoryModels(saved).length,6);
+  assert.equal(serviceDirectoryModels(saved).length,state.models.length+1);
 });
 test('scenario preparation is explicit, atomic, permission checked and saved edits survive later parsing',()=>{
   const state=createAdminSeed(),action={type:'modelOperations',operation:'prepareServiceReviewCases',data:{confirmed:true}};
@@ -77,3 +78,6 @@ test('video sixth-channel association leaves published routing unchanged until a
   state=commitAdminState(state,{type:'modelOperations',operation:'serviceRoutePublish',data:{serviceId:service.id,expectedVersion:before.version,sourceVersion:routeSourceVersion(state,current),config}});
   assert.equal(activeRouteVersion(serviceRoute(state,service.id)).config.channels.length,6);assert.equal(state.models.find(item=>item.id===model.id).listingStatus,'已上架');
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

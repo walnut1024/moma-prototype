@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAdminState, commitAdminState, persistModelAction, serializeAdminState } from '../src/admin-v2/store.js';
+import { parseAdminState as baseParseAdminState, commitAdminState, persistModelAction, serializeAdminState } from '../src/admin-v2/store.js';
 import { ONBOARDING_PROVIDER_PRESETS, onboardingProviderPreset, resolveOnboardingProvider, onboardingModelOptions, onboardingModelPreset } from '../src/admin-v2/onboarding-presets.js';
 import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
 import { providerKeyGroups } from '../src/admin-v2/provider-key-groups.js';
@@ -130,3 +131,5 @@ test('a pending preset draft reuses supplier and material registered by another 
   assert.deepEqual(supplierChannelAssociations(next, supplier, secondEndpoint.id).map(row => row.upstreamModelId), [originalAlias]); assert.deepEqual(next.endpoints.find(row => row.id === firstEndpoint.id), firstEndpoint);
   const completed = next.modelOnboardings.find(row => row.id === draft.id); assert.equal(completed.status, '已完成'); assert.equal(completed.draftRevision, draft.draftRevision + 1); assert.equal(completed.createdEndpointId, secondEndpoint.id); assert.equal(currentDraft.status, '配置中');
 });
+
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

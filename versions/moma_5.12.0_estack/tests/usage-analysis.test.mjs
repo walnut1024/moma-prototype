@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tokenModelTypes, usagePreset, usagePresets, operationsPresets, operationsPeriod, usageWindow, usageValue, usageFacts, usageTotals, usageGroups, usageBuckets, usageCallBuckets, usageRates, usageFilterOptions } from '../src/admin-v2/usage-analysis.js';
+import { tokenModelTypes, usagePreset, usagePresets, operationsPeriod, usageWindow, usageValue, usageFacts, usageTotals, usageGroups, usageBuckets, usageCallBuckets, usageRates, usageFilterOptions } from '../src/admin-v2/usage-analysis.js';
+
+import { userMetrics } from '../src/admin-v2/user-analysis.js';
 
 const now = Date.parse('2026-09-24T12:30:00+08:00');
 const state = {
@@ -57,24 +59,20 @@ test('usage periods use Beijing natural days and like-for-like elapsed compariso
   assert.equal(usageBuckets([], [], window).at(-1).partial, true);
 });
 
-test('usage page opts into today while completed-period callers keep their existing bounds', () => {
+test('all operations periods allow today and custom through today while rolling periods keep complete days', () => {
   assert.deepEqual(usagePresets.map(([id]) => id), ['today', 'yesterday', '7d', '30d']);
-  assert.deepEqual(operationsPresets.map(([id]) => id), ['yesterday', '7d', '30d']);
-  assert.deepEqual(operationsPeriod('today', null, now), { period: 'yesterday', range: usagePreset('yesterday', now) });
-  assert.deepEqual(operationsPeriod('today', null, now, true), { period: 'today', range: usagePreset('today', now) });
+  for (const period of ['today', 'yesterday', '7d', '30d']) assert.deepEqual(operationsPeriod(period, null, now), { period, range: usagePreset(period, now) });
   const custom = { start: '2026-09-22', end: '2026-09-25' };
-  assert.deepEqual(operationsPeriod('custom', custom, now), { period: 'custom', range: { start: custom.start, end: '2026-09-23' } });
-  assert.deepEqual(operationsPeriod('custom', custom, now, true), { period: 'custom', range: { start: custom.start, end: '2026-09-24' } });
-  assert.deepEqual(operationsPeriod('custom', usagePreset('today', now), now, true), { period: 'custom', range: usagePreset('today', now) });
-  assert.deepEqual(operationsPeriod('custom', { start: '2026-09-25', end: '2026-09-26' }, now, true), { period: 'yesterday', range: usagePreset('yesterday', now) });
-  for (const period of ['yesterday', '7d', '30d']) assert.deepEqual(operationsPeriod(period, null, now, true), { period, range: usagePreset(period, now) });
+  assert.deepEqual(operationsPeriod('custom', custom, now), { period: 'custom', range: { start: custom.start, end: '2026-09-24' } });
+  assert.deepEqual(operationsPeriod('custom', usagePreset('today', now), now), { period: 'custom', range: usagePreset('today', now) });
+  assert.deepEqual(operationsPeriod('custom', { start: '2026-09-25', end: '2026-09-26' }, now), { period: 'yesterday', range: usagePreset('yesterday', now) });
 });
 
 test('saved today recalculates in Beijing time and excludes future requests and unstarted buckets', () => {
   const saved = JSON.parse(JSON.stringify({ period: 'today', range: { start: '2026-09-23', end: '2026-09-23' } }));
-  const restored = operationsPeriod(saved.period, saved.range, now, true);
+  const restored = operationsPeriod(saved.period, saved.range, now);
   assert.deepEqual(restored, { period: 'today', range: { start: '2026-09-24', end: '2026-09-24' } });
-  assert.deepEqual(operationsPeriod(saved.period, saved.range, Date.parse('2026-09-24T00:30:00+08:00'), true), restored);
+  assert.deepEqual(operationsPeriod(saved.period, saved.range, Date.parse('2026-09-24T00:30:00+08:00')), restored);
   const facts = usageFacts({ ...state, requests: [
     request('before-now', '2026-09-24T12:29:00+08:00', 'one', { input: 10, output: 1 }),
     request('future', '2026-09-24T12:31:00+08:00', 'one', { input: 20, output: 2 }),
@@ -98,7 +96,7 @@ test('today at Beijing midnight is a valid empty window while future and invalid
   assert.equal(window.end, midnight);
   assert.equal(window.days, 1);
   assert.deepEqual(usageBuckets([], [], window), []);
-  assert.deepEqual(operationsPeriod('custom', selected, midnight, true), { period: 'custom', range: selected });
+  assert.deepEqual(operationsPeriod('custom', selected, midnight), { period: 'custom', range: selected });
   const facts = usageFacts({ ...state, requests: [request('not-elapsed', '2026-09-24T00:00:00+08:00', 'one', { input: 1, output: 1 })] }, selected, filters, midnight);
   assert.deepEqual(facts.current, []);
   assert.deepEqual(facts.prior, []);
@@ -215,4 +213,22 @@ test('channel filtering uses final request state after failover, not an older ma
   ] };
   assert.equal(usageFacts(fixture, usagePreset('today', now), { ...filters, channels: ['e'] }, now).current.length, 0);
   assert.equal(usageFacts(fixture, usagePreset('today', now), { ...filters, channels: ['e2'] }, now).current.length, 1);
+});
+
+test('today user identity metrics exclude future events and compare yesterday at the same cutoff',()=>{
+ const at=value=>Date.parse(value),data={users:[{id:'u',type:'企业',at:at('2026-09-20T10:00:00+08:00')},{id:'later',type:'个人',at:at('2026-09-24T15:00:00+08:00')}],logins:[{userId:'u',at:at('2026-09-24T10:00:00+08:00')},{userId:'later',at:at('2026-09-24T16:00:00+08:00')},{userId:'u',at:at('2026-09-23T10:00:00+08:00')}],calls:[],keys:[]};
+ const selected=operationsPeriod('today',null,now),metrics=userMetrics(data,selected.range,now);
+ assert.equal(metrics.current.registered,1);assert.equal(metrics.current.login,1);assert.equal(metrics.previous.login,1);assert.equal(metrics.dau.at(-1),1);assert.equal(metrics.mau.at(-1),1);
+ assert.deepEqual(userMetrics(data,operationsPeriod('custom',selected.range,now).range,now),metrics);
+});
+
+test('customer drill-down inherits URL dates, restores presets and bounds invalid ranges without changing the customer', async () => {
+  const { operationsPeriodFromQuery } = await import('../src/admin-v2/usage-analysis.js');
+  const params = new URLSearchParams('customer=tenant-gov&start=2026-09-01&end=2026-09-18'), before = params.toString();
+  assert.deepEqual(operationsPeriodFromQuery(params,now),{period:'custom',range:{start:'2026-09-01',end:'2026-09-18'}});
+  assert.equal(params.toString(),before);
+  assert.deepEqual(operationsPeriodFromQuery(new URLSearchParams('customer=tenant-gov&period=7d&start=old&end=old'),now),operationsPeriod('7d',null,now));
+  assert.deepEqual(operationsPeriodFromQuery(new URLSearchParams('customer=tenant-gov'),now),operationsPeriod('yesterday',null,now));
+  assert.deepEqual(operationsPeriodFromQuery(new URLSearchParams('start=2026-09-23&end=2099-01-01'),now).range,{start:'2026-09-23',end:'2026-09-24'});
+  for(const query of ['start=bad&end=bad','start=2020-01-01&end=2026-09-01','start=2026-09-20&end=2026-09-01'])assert.deepEqual(operationsPeriodFromQuery(new URLSearchParams(query),now),operationsPeriod('yesterday',null,now));
 });

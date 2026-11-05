@@ -1,17 +1,12 @@
+import mockConfig from '../mock/catalogues.json' with { type: 'json' };
 import { connectionFingerprint } from './connection-state.js';
 import { channelFingerprint } from './provider-channels.js';
 import { routingServices, routingChannels, validateRouteConfig } from './service-routing.js';
 import { serviceDirectoryModels, serviceConfiguration } from './service-workspace.js';
 
 export const SERVICE_REVIEW_VERSION = 1;
-export const SERVICE_REVIEW_CASES = [
-  {key:'deepseek',id:'model-1',name:'DeepSeek V4 Pro',modelId:'deepseek-v4-pro',type:'text',mode:'standard',listed:false},
-  {key:'qwen',id:'catalog-demo-qwen',name:'Qwen3.8 Max',modelId:'qwen3.8-max',type:'multimodal',mode:'provider',listed:true},
-  {key:'image',id:'catalog-demo-image',name:'Qwen Image 3.0 Pro',modelId:'qwen-image-3.0-pro',type:'image',mode:null,listed:false},
-  {key:'video',id:'catalog-demo-video',name:'Wan3.0 Video',modelId:'wan3.0-video',type:'video',mode:'standard',listed:true},
-  {key:'audio',id:'catalog-demo-tts',name:'Qwen Audio 3.0 TTS Flash',modelId:'qwen-audio-3.0-tts-flash',type:'audio',mode:'provider',listed:false},
-];
-const supplierNames={deepseek:'DeepSeek 官方',aliyun:'阿里云百炼',siliconflow:'硅基流动',aggregate:'云端聚合',baidu:'百度智能云千帆',stepfun:'阶跃星辰',tencent:'腾讯云',iflytek:'讯飞星火'};
+export const SERVICE_REVIEW_CASES = mockConfig["admin-v2/service-review-cases.js"]["SERVICE_REVIEW_CASES"];
+const supplierNames=mockConfig["admin-v2/service-review-cases.js"]["supplierNames"];
 const tokens=(input,output,cached)=>[{name:'输入',unit:'元/百万 Token',currency:'CNY',amount:Math.round(input*1000000)},{name:'输出',unit:'元/百万 Token',currency:'CNY',amount:Math.round(output*1000000)},...(cached==null?[]:[{name:'缓存读取',unit:'元/百万 Token',currency:'CNY',amount:Math.round(cached*1000000)}])];
 const unitPrice=(name,unit,amount)=>[{name,unit,currency:'CNY',amount:Math.round(amount*1000000)}];
 

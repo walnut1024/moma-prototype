@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createAdminSeed, commitAdminState, persistModelAction, parseAdminState } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction, parseAdminState as baseParseAdminState } from '../src/admin-v2/store.js';
 import { providerApiKeysDraft, providerApiKeyId, PROVIDER_API_KEY_LIMIT, maskProviderApiKey, providerModelConnectivityTest, MODEL_CONNECTIVITY_SCENARIOS } from '../src/admin-v2/provider-management.js';
 
 const first = 'sk-test-only-provider-key-0001', second = 'sk-test-only-provider-key-0002', third = 'sk-test-only-provider-key-0003';
@@ -157,3 +158,6 @@ test('short generated IDs avoid collisions with the visible prefix of existing U
   assert.match(keys[1].id, /^[a-f0-9]{8}$/);
   assert.deepEqual(keys[0], provider.apiKeys[0]);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

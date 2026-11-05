@@ -27,7 +27,7 @@ export function validateMemberRows(state, rows, mode, defaultDepartment) {
     const issues = [];
     const phoneIssue = memberPhoneError(phone);
     if (phoneIssue) issues.push(phoneIssue);
-    const identity = mode === "existing" ? platformAccounts.find(a => account ? a.account.toLowerCase() === account : phone && normalizeMemberPhone(a.phone) === phone) : null;
+    const identity = mode === "existing" ? (state.platformAccounts || platformAccounts).find(a => account ? a.account.toLowerCase() === account : phone && normalizeMemberPhone(a.phone) === phone) : null;
     if (mode === "existing" && !identity) issues.push("未找到平台账号，请核对账号或切换邀请新成员");
     if (identity?.phone && phone && normalizeMemberPhone(identity.phone) !== phone) issues.push("手机号与平台账号登记号码不一致");
     const name = identity?.name || row.name.trim();

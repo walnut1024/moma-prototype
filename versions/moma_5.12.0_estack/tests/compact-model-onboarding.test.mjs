@@ -1,13 +1,15 @@
+import {serviceModelSources} from '../src/admin-v2/supply-models.js';
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createAdminSeed,commitAdminState,parseAdminState,persistModelAction} from '../src/admin-v2/store.js';
+import {createAdminSeed as baseCreateAdminSeed,commitAdminState,parseAdminState as baseParseAdminState,persistModelAction} from '../src/admin-v2/store.js';
 import {modelAuthors,serviceModelDraft} from '../src/admin-v2/model-profile.js';
 import {modelSupplies} from '../src/admin-v2/model-management.js';
 import {availableServiceChannels} from '../src/admin-v2/service-workspace.js';
 import {catalogueChannels} from '../src/admin-v2/provider-channels.js';
 import {providerApiKeysDraft} from '../src/admin-v2/provider-management.js';
 const run=(state,operation,data,modelId)=>commitAdminState(state,{type:'modelOperations',operation,modelId,data});
-const input=state=>({name:'独立模型',modelId:'custom-model-3',type:'text',author:modelAuthors(state)[0],releaseDate:'2026-10-25',inputModalities:['文本','图片'],outputModalities:['文本'],description:'独立创建模型资料，随后配置供给。',context:'1.5',contextUnit:'M',serviceMode:'provider'});
+const input=state=>({libraryId:'template-compact-source',name:'独立模型',modelId:'custom-model-3',type:'text',author:modelAuthors(state)[0],releaseDate:'2026-10-25',inputModalities:['文本','图片'],outputModalities:['文本'],description:'独立创建模型资料，随后配置供给。',context:'1.5',contextUnit:'M',serviceMode:'provider'});
 const create=state=>run(state,'createServiceModel',input(state));
 
 test('metadata alone creates a delisted empty model, with exact context and no supplier or price effects',()=>{
@@ -23,11 +25,12 @@ test('all eight required metadata values reject blanks and forged single or mult
  for(const patch of [{name:''},{modelId:''},{author:''},{releaseDate:''},{description:''},{type:''},{type:['text']},{type:'constructor'},{author:'未知作者'}, {releaseDate:'2026-02-30'}, {inputModalities:[]},{inputModalities:'文本'},{inputModalities:['文本','伪造']},{outputModalities:[]},{outputModalities:['伪造']},{serviceMode:['provider']}])assert.throws(()=>run(state,'createServiceModel',{...value,...patch}),JSON.stringify(patch));
  assert.deepEqual(state,before);
 });
-test('new IDs use English letters, numbers and single internal hyphens, and duplicate IDs reject',()=>{
+test('call identifiers accept catalogue punctuation and retain case-insensitive uniqueness',()=>{
  const state=createAdminSeed(), value=input(state);
- for(const modelId of ['中文','a.b','a_b','a/b','a b','a--b','-model','model-','123'])assert.throws(()=>run(state,'createServiceModel',{...value,modelId}),/模型编码/);
+ for(const modelId of ['中文','a b','a?b','a#b','a'.repeat(81)])assert.throws(()=>run(state,'createServiceModel',{...value,modelId}),/调用标识/);
+ for(const modelId of ['author/model-3.1','a_b:free','123'])assert(run(state,'createServiceModel',{...value,modelId}));
  const next=run(state,'createServiceModel',{...value,modelId:'Custom-Model-3'});
- assert.throws(()=>run(next,'createServiceModel',{...value,modelId:'custom-model-3'}),/已存在/);
+ assert.throws(()=>run(next,'createServiceModel',{...value,libraryId:'template-compact-source-alt',modelId:'custom-model-3'}),/已存在/);
 });
 test('context is optional and K/M conversions are exact while invalid values never commit',()=>{
  const state=createAdminSeed(), value=input(state);
@@ -37,10 +40,10 @@ test('context is optional and K/M conversions are exact while invalid values nev
  for(const patch of [{context:'0'},{context:'-1'},{context:'Infinity'},{context:'0.1',contextUnit:'K'},{context:'9007199254740991'},{contextUnit:'G'}])assert.throws(()=>run(state,'createServiceModel',{...value,...patch}),/上下文/);
 });
 test('imported visible metadata can be changed independently of source material, including vector output',()=>{
- const state=createAdminSeed(), source=state.models.find(item=>item.modelId==='kimi-k3'), old=structuredClone(source);
- const next=run(state,'createServiceModel',{...serviceModelDraft(source),modelId:'new-kimi-3',name:'独立修改名称',releaseDate:'2026-10-25',serviceMode:'standard'});
- assert.deepEqual(next.models.find(item=>item.id===source.id),old);
- const vector=run(state,'createServiceModel',{...input(state),type:'embedding',modelId:'new-vector-3',outputModalities:['向量']});
+ const state=createAdminSeed(), source=state.modelTemplates.find(item=>item.id==='template-compact-source'), old=structuredClone(source);
+ const next=run(state,'createServiceModel',{...serviceModelDraft(source),libraryId:source.id,modelId:'new-kimi-3',name:'独立修改名称',releaseDate:'2026-10-25',serviceMode:'standard'});
+ assert.deepEqual(next.modelTemplates.find(item=>item.id===source.id),old);
+ const vector=run(state,'createServiceModel',{...input(state),libraryId:'template-compact-vector',type:'embedding',modelId:'new-vector-3',outputModalities:['向量']});
  assert.deepEqual(vector.models.find(item=>item.id===vector.audits[0].objectId).profile.resultTypes,['向量']);
 });
 test('editing service metadata preserves ID, hidden user data and prices, and rejects stale changes',()=>{
@@ -64,7 +67,7 @@ test('editing a listed model capability delists it and invalidates affected supp
  for(const key of ['providers','endpoints','modelSalePrices','supplyPrices','serviceRoutes'])assert.deepEqual(next[key],state[key],key);
  assert.deepEqual(state,before);
 });
-const providerId='provider-cmss',catalogueModelId='deepseek-v4-pro';
+const providerId='provider-cmss',catalogueModelId='compact-source';
 const providerRun=(state,operation,values)=>run(state,'provider',{operation,objectId:providerId,values:{modelId:catalogueModelId,...values}});
 async function supplyFixture(){
  let state=createAdminSeed();const keys=await providerApiKeysDraft(['sk-compact-local-only-00000001']);state=providerRun(state,'addApiKeys',keys);
@@ -101,4 +104,24 @@ test('new creation and channel association retain permission, stale storage and 
   assert.throws(()=>persistModelAction(current,action,{getItem:()=>JSON.stringify({...current,revision:current.revision+1}),setItem:()=>assert.fail()}),/数据已变化/);
   assert.throws(()=>persistModelAction(current,action,{getItem:()=>JSON.stringify(current),setItem:()=>{throw Error('quota');}}),/quota/);assert.deepEqual(current,before);
  }
+});
+
+function createAdminSeed(...args) {
+ const state=withAdminSession(baseCreateAdminSeed(...args)),author=modelAuthors(state)[0];
+ for(const [id,code,type]of [['template-compact-source','compact-source','text'],['template-compact-source-alt','compact-source-alt','text'],['template-compact-vector','compact-vector','embedding']]){
+  state.modelTemplates.push({id,modelId:code,name:'已接入测试模型 '+code,type,maker:author,description:'资料主档',profile:{author,tasks:[type==='embedding'?'文本向量化':'对话'],inputModalities:['文本'],outputModalities:['文本']},capabilities:{context:131072}});
+  for(const provider of state.providers.filter(p=>['provider-moma','provider-cmss'].includes(p.id))){provider.catalogModelIds=[...(provider.catalogModelIds || []),code];provider.catalogModels=[...(provider.catalogModels || []),{modelId:code,libraryId:id,type,name:code}];}
+ }
+ return state;
+}
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }
+
+test('service sources share the access model directory and reject missing or removed registrations atomically',()=>{
+ const state=createAdminSeed(),before=structuredClone(state),source=state.modelTemplates.find(row=>row.id==='template-compact-source');
+ state.modelTemplates.push({...structuredClone(source),id:'template-material-only',modelId:'material-only'});
+ const sources=serviceModelSources(state);assert.equal(sources.filter(row=>row.id===source.id).length,1);assert(!sources.some(row=>row.id==='template-material-only'));
+ for(const libraryId of ['',undefined,'missing','template-material-only'])assert.throws(()=>run(state,'createServiceModel',{...input(state),libraryId}),/已登记/);
+ const detached=structuredClone(before);for(const provider of detached.providers){provider.catalogModelIds=(provider.catalogModelIds || []).filter(id=>id!=='compact-source');provider.catalogModels=(provider.catalogModels || []).filter(row=>row.libraryId!==source.id);}
+ const detachedBefore=structuredClone(detached);assert.throws(()=>create(detached),/供应关系/);assert.deepEqual(detached,detachedBefore);
+ const created=create(before);assert.equal(created.models.find(row=>row.id===created.audits[0].objectId).templateId,source.id);
 });

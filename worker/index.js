@@ -1,5 +1,9 @@
+import { handleModelOperations } from '../versions/moma_5.12.0_estack/server/api.js';
+
 export default {
   async fetch(request, env) {
+    const pathname = new URL(request.url).pathname;
+    if (pathname === '/api/5120' || pathname.startsWith('/api/5120/')) return handleModelOperations(request, env);
     const response = await env.ASSETS.fetch(request);
     const acceptsHtml = request.headers.get("accept")?.includes("text/html");
 

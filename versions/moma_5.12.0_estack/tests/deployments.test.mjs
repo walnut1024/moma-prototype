@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAdminSeed, commitAdminState, persistAdminAction, STORAGE_KEY } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistAdminAction, STORAGE_KEY } from '../src/admin-v2/store.js';
 import { deploymentPreflight, deploymentGpu, deploymentUsesArtifact } from '../src/admin-v2/deployments.js';
 const values = { name:'知识问答服务', deploymentId:'qwen-test-prod', modelId:'model-1', runtimeId:'artifact-vllm', weightId:'', weightPath:'/models/deepseek', clusterId:'cluster-nj-a', namespace:'inference', replicas:2, gpuPerReplica:2, tensorParallel:2, pipelineParallel:1, maxModelLen:'', gpuMemoryUtilization:0.9, startupTimeout:600 };
 const act = (state, operation, data={}, deploymentId) => commitAdminState(state,{type:'deploymentOperation',operation,data,deploymentId});
@@ -58,3 +59,5 @@ test('failed and stopped deployments can repair configuration and reserve only t
  for(const status of ['失败','停止']) {let {state,id}=running();state=act(state,'stop',{},id);state.deployments[0].status=status;state=act(state,'update',{maxModelLen:4096},id);assert.equal(state.deployments[0].status,'更新中');assert.equal(clusterGpu(state),40);state=act(state,'check',{},id);assert.equal(state.deployments[0].status,'运行中');assert.equal(state.deployments[0].readyReplicas,2);}
  const seed=createAdminSeed();let state=act(seed,'check',{},'deployment-bge');state=act(state,'update',{...values,modelId:seed.deployments.find(item=>item.id==='deployment-bge').modelId},'deployment-bge');assert.equal(state.deployments.find(item=>item.id==='deployment-bge').status,'更新中');assert.equal(clusterGpu(state),36);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }

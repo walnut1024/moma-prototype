@@ -31,6 +31,7 @@ export function channelDraftIssue(state, draft) {
   let provider;
   try {
     const newProvider = draft.value.newProvider;
+    if (draft.guided && !draft.value.providerId && !draft.value.providerPresetId && !newProvider) return draft.rows.some(row=>row.libraryId && !libraryRecord(state,row.libraryId)) ? '模型资料已不存在，请重新选择' : '';
     provider = newProvider && !newProvider.name?.trim() && !draft.value.providerId && !draft.value.providerPresetId ? { id: 'new-provider', isDraft: true } : resolveOnboardingProvider(state, draft.value);
   } catch (error) { return error.message; }
   if (!provider.isDraft && provider.status !== '已启用') return '供应商已停用，可继续编辑，启用前需恢复供应商';
@@ -45,11 +46,12 @@ export function channelDraftIssue(state, draft) {
 }
 function draftFields(state, data) {
   assertNoSecrets(data);
-  const input = data.value || {};
-  if ([input.providerId, input.providerPresetId, input.newProvider].filter(Boolean).length !== 1) throw new Error('草稿供应商引用与新供应商只能选择一项');
+  const input = { ...data.value, ...(data.guided && data.value?.providerId === 'unselected' ? {providerId:''} : {}) };
+  const modelOnly = data.guided && !input.providerId && !input.providerPresetId && !input.newProvider;
+  if (!modelOnly && [input.providerId, input.providerPresetId, input.newProvider].filter(Boolean).length !== 1) throw new Error('草稿供应商引用与新供应商只能选择一项');
   if (input.newProvider && (typeof input.newProvider !== 'object' || Array.isArray(input.newProvider) || Object.keys(input.newProvider).some(key => key !== 'name'))) throw new Error('新供应商草稿包含不支持的字段');
-  const provider = input.newProvider ? { id: 'new-provider', isDraft: true } : resolveOnboardingProvider(state, input);
-  const value = { ...(input.newProvider ? { providerId: '', newProvider: { name: text(input.newProvider.name || '', '供应商名称', 100, false) } } : input.providerPresetId ? { providerId: '', providerPresetId: input.providerPresetId } : { providerId: provider.id }), name: text(input.name, '渠道名称', 60), interfaceType: input.interfaceType || 'unselected', baseUrl: text(input.baseUrl || '', 'API 地址', 2048, false), keyGroupId: text(input.keyGroupId || 'default', '密钥组', 100), authMode: input.authMode === 'none' ? 'none' : 'group', capacity: text(String(input.capacity ?? ''), '账号请求上限', 20, false), timeoutSeconds: text(String(input.timeoutSeconds ?? 60), '请求超时', 20, false) };
+  const provider = modelOnly ? { id: '', isDraft: true } : input.newProvider ? { id: 'new-provider', isDraft: true } : resolveOnboardingProvider(state, input);
+  const value = { ...(input.newProvider ? { providerId: '', newProvider: { name: text(input.newProvider.name || '', '供应商名称', 100, false) } } : input.providerPresetId ? { providerId: '', providerPresetId: input.providerPresetId } : { providerId: provider.id }), name: text(input.name || '', '渠道名称', 60, !data.guided), interfaceType: input.interfaceType || 'unselected', baseUrl: text(input.baseUrl || '', 'API 地址', 2048, false), keyGroupId: text(input.keyGroupId || 'default', '密钥组', 100), authMode: input.authMode === 'none' ? 'none' : 'group', capacity: text(String(input.capacity ?? ''), '账号请求上限', 20, false), timeoutSeconds: text(String(input.timeoutSeconds ?? 60), '请求超时', 20, false) };
   // Drafts retain unfinished text; request validation runs when the connection is committed.
   const draftUrl = input => {
     const raw = text(input || '', 'API 地址', 2048, false);
@@ -75,7 +77,8 @@ function draftFields(state, data) {
   });
   const endpoint = data.endpointId && state.endpoints.find(row => row.id === data.endpointId && row.providerId === provider.id && !row.deletedAt);
   if (data.endpointId && !endpoint) throw new Error('草稿渠道不属于当前供应商');
-  return { kind: 'supplier-channel', value, rows, endpointId: endpoint?.id || '', endpointFingerprint: endpoint ? connectionFingerprint(endpoint) : '', step: data.step === 1 ? 1 : 0, status: '配置中' };
+  if (data.guided && rows.length !== 1) throw new Error('接入模型流程每次仅配置一个模型');
+  return { kind: 'supplier-channel', guided: data.guided === true, intent: ['onboard','reserve','activate'].includes(data.intent) ? data.intent : 'onboard', value, rows, endpointId: endpoint?.id || '', endpointFingerprint: endpoint ? connectionFingerprint(endpoint) : '', step: data.step === 1 ? 1 : 0, status: '配置中' };
 }
 export function previewChannelModels(state, providerId, models, { source = 'upstream', complete = true, endpointId = '' } = {}) {
   const provider = state.providers.find(row => row.id === providerId);
@@ -152,7 +155,7 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
       return finish('保存草稿并创建接入', current.id, [...transaction.changes, update('modelOnboardings', current.id, { status: '已完成', draftRevision: current.draftRevision + 1 })]);
     }
     if (operation === 'channelDraftSave') {
-      const fields = draftFields(state, data), id = current?.id || `channel-draft-${crypto.randomUUID()}`;
+      const fields = draftFields(state, { ...data, intent: data.intent || current?.intent, guided: current?.guided || data.guided }), id = current?.id || `channel-draft-${crypto.randomUUID()}`;
       const record = { ...fields, draftRevision: (current?.draftRevision || 0) + 1, updatedAt: now, createdBy: current?.createdBy || state.currentRole };
       return finish('保存接入草稿', id, [current ? update('modelOnboardings', id, record) : add('modelOnboardings', { id, ...record })]);
     }

@@ -15,7 +15,7 @@ test('one canonical model collects independent suppliers and preserves service p
  const added=owner(next,'provider-zhipu-direct');
  assert.equal(added.catalogModels.find(row=>row.modelId==='glm-5.2').libraryId,'model-2');
  const channels=group.entries.flatMap(row=>catalogueChannels(next,row.provider,row.modelId));
- assert.equal(channels.length,3);assert.equal(channels.filter(row=>row.upstreamModelId==='vendor/glm-52').length,1);
+ assert.equal(channels.length,1);assert.equal(channels.filter(row=>row.upstreamModelId==='vendor/glm-52').length,1);
  assert.equal(channels.find(row=>row.upstreamModelId==='vendor/glm-52').pricing.scenarios[0].listPrice,0);
  for(const field of ['models','modelSupplies','serviceRoutes','modelSalePrices','supplyPrices']) assert.deepEqual(next[field],state[field]);
  assert.deepEqual(state,before);

@@ -1,0 +1,5 @@
+[
+  {"providerId":"provider-54f803f2-f344-4ef7-a9bc-f7c08e4dd8a1","name":"D1完整验收供应商-1103-UI","modelId":"model-bbe365a9-f950-4f42-8965-b768c594b45b","modelName":"D1完整验收-统一服务-1103","libraryId":"template-onboarding-b4708084-8239-43ef-81d2-dbaf188bfa73","endpointId":"endpoint-ee6f14c3-5ec3-4bd1-a37c-564c9d8d8ef4","supplyId":"supply-b4906a84-061e-4902-91c1-4fe67d030ffe"},
+  {"providerId":"provider-ebb6ad10-6b65-4f5e-a6da-7f604715e5db","name":"D1完整验收-standard-86025供应商","modelId":"model-85827eaa-836b-4fa4-8df0-4ae20f6071e5","modelName":"D1完整验收-standard-86025","libraryId":"template-onboarding-9326ce76-dcda-43df-be5b-9696f19bae93","endpointId":"endpoint-a04cc3d8-5caf-4ae5-80cb-73489bb8f5dd","supplyId":"supply-ad06ecfd-901a-4acf-962d-3330e4170c17"},
+  {"providerId":"provider-f85914cf-4bff-40db-b29b-88826c870929","name":"D1完整验收-provider-87390供应商","modelId":"model-20f4d58d-b1d2-4746-844e-4607f8b812e8","modelName":"D1完整验收-provider-87390","libraryId":"template-onboarding-74932712-846f-413b-a4c9-3f6265c482de","endpointId":"endpoint-38fef80f-5f43-4993-9bb0-b28bf47d47fd","supplyId":"supply-722f3173-1606-4121-9c91-8b89a9090427"}
+]

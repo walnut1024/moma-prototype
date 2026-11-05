@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAdminSeed as baseSeed, commitAdminState, parseAdminState, persistModelAction } from '../src/admin-v2/store.js';
+import { createAdminSeed as rawBaseSeed, commitAdminState, parseAdminState as baseParseAdminState, persistModelAction } from '../src/admin-v2/store.js';
 import { catalogueChannels, channelBlockReason, channelPriceRows, channelRouteRefs, channelPriceDraft, channelLinkedModels } from '../src/admin-v2/provider-channels.js';
 import { catalogueConnections } from '../src/admin-v2/provider-model-connections.js';
 import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
@@ -246,3 +247,18 @@ test('channel maintenance respects role, stale revisions and failed storage with
 });
 
 function createAdminSeed() { const state = baseSeed(); state.modelTemplates.push(...["batch-one","batch-two"].map(code => ({ id: "test-library-" + code, modelId: code, name: code, type: "text", capabilities: {}, profile: {} }))); return state; }
+
+function baseSeed(...args) { return withAdminSession(rawBaseSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }
+
+test('editing channel connection keeps its independent list-price versions', async () => {
+  const { state: initial, value } = await prepared();
+  let state = add(initial, value);
+  const channel = channels(state).find(row => row.name === value.name);
+  state = commitAdminState(state, operation('supplierChannelListPricePublish', { associationId: channel.id, endpointId: channel.endpointId, expectedRevision: 0, confirmed: true, source: '渠道报价', effectiveAt: '2020-01-01', scenarios: price }));
+  const before = channels(state).find(row => row.id === channel.id);
+  state = add(state, { ...value, name: '新渠道名称', channelId: channel.id });
+  const after = channels(state).find(row => row.id === channel.id);
+  assert.equal(after.listPriceRevision, before.listPriceRevision);
+  assert.deepEqual(after.listPriceVersions, before.listPriceVersions);
+});

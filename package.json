@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev:5120": "vite --config versions/moma_5.12.0_estack/vite.config.mjs",
+    "dev:backend:5120": "node versions/moma_5.12.0_estack/database/dev.js",
+    "test:backend:5120": "node --test versions/moma_5.12.0_estack/tests/d1-*.test.mjs",
     "dev": "vite",
     "build": "npm run build:5.12.0 && vite build && node scripts/prepare-sites-build.mjs",
     "build:5.12.0": "vite build --config versions/moma_5.12.0_estack/vite.config.mjs",
@@ -41,6 +44,7 @@
   },
   "devDependencies": {
     "@shadcn/lint": "^0.1.1",
+    "miniflare": "4.20260730.0",
     "oxlint": "^1.83.0"
   }
 }

@@ -1,7 +1,8 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAdminSeed, commitAdminState, parseAdminState, persistModelAction } from '../src/admin-v2/store.js';
-import { serviceDirectoryModels, serviceIndexModels, selectServiceModel, serviceSupplyRows, activeModelSalePrice, modelSaleRevision, availableServiceChannels } from '../src/admin-v2/service-workspace.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, parseAdminState as baseParseAdminState, persistModelAction } from '../src/admin-v2/store.js';
+import { commercialTaskBase, serviceDirectoryModels, serviceIndexModels, selectServiceModel, serviceSupplyRows, activeModelSalePrice, modelSaleRevision, availableServiceChannels } from '../src/admin-v2/service-workspace.js';
 import { modelSupplies, publicationChecks } from '../src/admin-v2/model-management.js';
 import { routingServices, routingChannels, routeSourceVersion } from '../src/admin-v2/service-routing.js';
 import { providerCatalogueIds } from '../src/admin-v2/moma-provider.js';
@@ -14,8 +15,8 @@ const pricing=(state,model,items=[{name:'输入',unit:'百万 Token',currency:'C
 test('model index search and filters compose without changing total records or data',()=>{
  const state=createAdminSeed(), before=structuredClone(state), kimi=state.models.find(item=>item.id==='catalog-demo-kimi');kimi.serviceMode='provider';
  const total=state.models.length;
- assert.equal(serviceIndexModels(state,new URLSearchParams()).length,5);
- assert.equal(new Set(serviceDirectoryModels(state).map(model=>model.type)).size,5);
+ assert.equal(serviceIndexModels(state,new URLSearchParams()).length,total);
+ assert.equal(new Set(serviceDirectoryModels(state).map(model=>model.type)).size,new Set(state.models.map(model=>model.type)).size);
  assert.ok(serviceIndexModels(state,new URLSearchParams({q:'KIMI'})).every(item=>[item.name,item.modelId].join(' ').toLowerCase().includes('kimi')));
  assert.deepEqual(serviceIndexModels(state,new URLSearchParams({q:'kimi-k3',type:'text',mode:'provider',status:'listed'})).map(item=>item.id),[kimi.id]);
  assert.equal(serviceIndexModels(state,new URLSearchParams({q:'no-such-model'})).length,0);
@@ -26,12 +27,12 @@ test('model directory keeps custom records and existing examples visible without
  const custom={...state.models[0],id:'model-user-created',name:'My model',createdAt:'2026-10-25'};
  state.models.push(custom);
  const before=structuredClone(state), directory=serviceDirectoryModels(state);
- assert.equal(directory.length,6);assert.equal(new Set(directory.map(model=>model.type)).size,5);
+ assert.equal(directory.length,state.models.length);assert.equal(new Set(directory.map(model=>model.type)).size,new Set(state.models.map(model=>model.type)).size);
  assert.ok(directory.includes(custom));assert.ok(directory.some(model=>model.id==='catalog-demo-kimi'));
  assert.deepEqual(serviceIndexModels(state,new URLSearchParams({q:'My model'})),[custom]);
  assert.equal(serviceIndexModels(state,new URLSearchParams({q:'kimi-k3'})).length,1);
  state.models.push(...Array.from({length:5},(_,index)=>({...custom,id:'custom-'+index})));
- assert.equal(serviceDirectoryModels(state).length,11);
+ assert.equal(serviceDirectoryModels(state).length,before.models.length+5);
  state.models.splice(-5);assert.deepEqual(state,before);
 });
 test('an explicit old model URL remains visible and never silently selects a different model',()=>{
@@ -105,7 +106,7 @@ test('channel association rejects stale models, foreign channels and missing ide
  assert.deepEqual(state,before);model.serviceMode='';assert.throws(()=>transact(state,'associateServiceChannels',model.id,data),/配置服务模式/);
 });
 test('new price and association operations preserve permissions, revision and storage errors',()=>{
- for(const fixture of [(()=>{const {state,model}=setup();return {state,model,operation:'unifiedPrice',data:pricing(state,model)};})(),{...association(),operation:'associateServiceChannels'}]){
+ for(const fixture of [(()=>{const {state,model}=setup();model.listingStatus='已下架';return {state,model,operation:'commercialPublish',data:{confirmed:true,kind:'price',value:{callId:model.modelId,items:pricing(state,model).items},expectedBase:commercialTaskBase(state,model,'price')}};})(),{...association(),operation:'associateServiceChannels'}]){
   const {state,model,operation,data}=fixture, before=structuredClone(state), action={type:'modelOperations',operation,modelId:model.id,data};
   assert.throws(()=>commitAdminState({...state,currentRole:'运维人员'},action),/无权/);
   assert.throws(()=>persistModelAction(state,action,{getItem:()=>JSON.stringify({...state,revision:state.revision+1}),setItem:()=>assert.fail()}),/数据已变化/);
@@ -121,3 +122,6 @@ test('a unified model with no supplies explicitly maps an existing channel from 
  assert.equal(routingChannels(next,service).length,1);assert.equal(serviceSupplyRows(next,model)[0].salesEnabled,false);
  assert.deepEqual(next.modelSalePrices,before);assert.equal(next.serviceRoutes.length,state.serviceRoutes.length);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAdminSeed, commitAdminState, parseAdminState, persistModelAction } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, parseAdminState as baseParseAdminState, persistModelAction } from '../src/admin-v2/store.js';
 import { activeModelSalePrice, activeProviderPrice, modelSaleRevision, providerPriceRevision, providerServices } from '../src/admin-v2/service-workspace.js';
 import { modelSupplies, publicationChecks } from '../src/admin-v2/model-management.js';
 
@@ -22,8 +23,9 @@ test('initial service mode selection preserves all existing business fields', ()
     const {state,model}=setup();
     const before = structuredClone(state), next = commitAdminState(state, action(model, serviceMode));
     const saved = next.models.find(item => item.id === model.id);
-    assert.deepEqual(saved, { ...model, serviceMode, updatedAt: saved.updatedAt });
-    for (const key of Object.keys(state).filter(key => !['models', 'audits', 'revision', 'updatedAt'].includes(key))) assert.deepEqual(next[key], state[key]);
+    assert.deepEqual(saved, { ...model, serviceMode, accessGeneration: (model.accessGeneration || 0) + 1, requestGeneration: (model.requestGeneration || 0) + 1, updatedAt: saved.updatedAt });
+    for (const key of Object.keys(state).filter(key => !['models', 'modelData', 'initialData', 'audits', 'revision', 'updatedAt'].includes(key))) assert.deepEqual(next[key], state[key]);
+    assert.ok(next.modelData.userIds.models.includes(model.id));
     assert.deepEqual(state, before);
     assert.equal(parseAdminState(JSON.stringify(next)).models.find(item => item.id === model.id).serviceMode, serviceMode);
   }
@@ -126,3 +128,6 @@ test('service mode retains permission, concurrent-write and storage-error protec
   assert.throws(() => persistModelAction(state, pending, { getItem: () => JSON.stringify(state), setItem: () => { throw Error('storage failed'); } }), /storage failed/);
   assert.deepEqual(state, before);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

@@ -1,46 +1,12 @@
+import { initialOrganizationData } from './mock/application-data.js';
+import mockConfig from './mock/catalogues.json' with { type: 'json' };
 export const ORGANIZATION_STORAGE_KEY = "moma-organization:moma_5.12.0_estack";
 export const roles = ["企业管理员", "部门管理员", "普通成员", "财务审计"];
 export const statuses = ["已加入", "待加入", "已停用"];
-export const platformAccounts = [
-  { name: "林雨", account: "linyu@example.com", phone: "13800000101" },
-  { name: "周然", account: "zhouran@example.com", phone: "13800000102" },
-  { name: "何川", account: "hechuan@example.com" },
-];
+export const platformAccounts = mockConfig["organization-data.mjs"]["platformAccounts"];
 
 export function createOrganization() {
-  const departments = [
-    { id: "root", name: "云启科技有限公司", parentId: null, ownerId: "m1", description: "企业组织" },
-    { id: "research", name: "研发中心", parentId: "root", ownerId: "m2", description: "负责模型应用研发与技术平台建设" },
-    { id: "algorithm", name: "算法部", parentId: "research", ownerId: "m3", description: "负责算法研究与模型评测" },
-    { id: "application", name: "应用开发部", parentId: "research", ownerId: "m6", description: "负责业务应用开发" },
-    { id: "product", name: "产品中心", parentId: "root", ownerId: "m10", description: "负责产品规划与设计" },
-    { id: "operations", name: "运营部", parentId: "root", ownerId: "m13", description: "负责客户与业务运营" },
-    { id: "finance", name: "财务部", parentId: "root", ownerId: "m15", description: "负责费用核对与审计" },
-  ];
-  const rows = [
-    ["企业管理员", "estack-yy", "root", "企业管理员"],
-    ["陈明", "chenming@example.com", "research", "部门管理员"],
-    ["李晓", "lixiao@example.com", "algorithm", "部门管理员"],
-    ["王宁", "wangning@example.com", "algorithm"],
-    ["赵晨", "zhaochen@example.com", "algorithm"],
-    ["刘洋", "liuyang@example.com", "application", "部门管理员"],
-    ["孙悦", "sunyue@example.com", "application"],
-    ["郑浩", "zhenghao@example.com", "application", "普通成员", "待加入"],
-    ["吴昊", "wuhao@example.com", "application", "普通成员", "已停用"],
-    ["周敏", "zhoumin@example.com", "product", "部门管理员"],
-    ["徐佳", "xujia@example.com", "product"],
-    ["胡卓", "huzhuo@example.com", "product", "普通成员", "待加入"],
-    ["许安", "xuan@example.com", "operations", "部门管理员"],
-    ["马琳", "malin@example.com", "operations"],
-    ["林静", "linjing@example.com", "finance", "财务审计"],
-    ["高远", "gaoyuan@example.com", "unassigned"],
-    ["梁禾", "lianghe@example.com", "research"],
-  ];
-  return { departments, members: rows.map(([name, account, departmentId, role = "普通成员", status = "已加入"], i) => ({
-    id: `m${i + 1}`, name, account, phone: String(13900000101 + i), departmentId, role, status,
-    scopeId: role === "部门管理员" ? departmentId : null, includeChildren: role === "部门管理员",
-    source: "平台账号", joinedAt: status === "待加入" ? null : "2026-10-01 09:00", invitedAt: "2026-10-01 09:00",
-  })), audit: [] };
+  return initialOrganizationData();
 }
 
 export function descendantIds(departments, id) {
@@ -88,6 +54,7 @@ export function displayMemberAccount(value) {
 
 // Pure local-demo mutations. These do not provision accounts or enforce gateway permissions.
 export function changeOrganization(state, action, stamp = new Date().toLocaleString("sv-SE", { timeZone: "Asia/Shanghai", hour12: false })) {
+  const accounts=state.platformAccounts || platformAccounts;
   let departments = state.departments.map(d => ({ ...d }));
   let members = state.members.map(m => ({ ...m }));
   let description = "";
@@ -119,10 +86,10 @@ export function changeOrganization(state, action, stamp = new Date().toLocaleStr
     const existing = members.find(m => m.id === draft.id);
     const phoneError = memberPhoneError(draft.phone);
     if (phoneError) fail(phoneError);
-    const identity = !existing && draft.source === "平台账号" ? platformAccounts.find(a => a.account === draft.account) : null;
+    const identity = !existing && draft.source === "平台账号" ? accounts.find(a => a.account === draft.account) : null;
     if (identity?.phone && normalizeMemberPhone(identity.phone) !== draft.phone) fail("手机号与平台账号登记号码不一致");
     if (!draft.name || draft.name.length > 30 || !draft.account) fail("请填写成员姓名及登录账号");
-    if (!existing && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.account) && draft.account !== draft.phone && !platformAccounts.some(a => a.account === draft.account)) fail("请输入有效的邮箱账号");
+    if (!existing && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.account) && draft.account !== draft.phone && !accounts.some(a => a.account === draft.account)) fail("请输入有效的邮箱账号");
     if (members.some(m => m.id !== draft.id && normalizeMemberPhone(m.phone) === draft.phone)) fail("该手机号已在企业中，请直接调整现有成员");
     if (members.some(m => m.id !== draft.id && m.account.toLowerCase() === draft.account)) fail("该账号已在企业中，请直接调整现有成员");
     requireDepartment(draft.departmentId);
@@ -159,5 +126,5 @@ export function changeOrganization(state, action, stamp = new Date().toLocaleStr
   }
   if (!members.some(m => m.role === "企业管理员" && m.status === "已加入")) fail("企业至少保留一位已加入的企业管理员");
   if (departments.some(d => d.ownerId && !members.some(m => m.id === d.ownerId && m.status === "已加入"))) fail("该成员是部门负责人，请先交接负责人");
-  return { departments, members, audit: [{ id: action.logId, time: stamp, actor: "estack-yy", description }, ...state.audit].slice(0, 200) };
+  return { ...(state.platformAccounts?{platformAccounts:state.platformAccounts}:{}),departments, members, audit: [{ id: action.logId, time: stamp, actor: "estack-yy", description }, ...state.audit].slice(0, 200) };
 }

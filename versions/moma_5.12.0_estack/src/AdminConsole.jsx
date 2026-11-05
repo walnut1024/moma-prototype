@@ -1,17 +1,10 @@
-import { maskApiKey } from "./api-key-utils.mjs";
+import mockConfig from './mock/catalogues.json' with { type: 'json' };
 import { useMemo, useState } from "react";
 import { TimeSeriesChart as SharedMetricChart } from "./components/AnalyticsCharts";
 import { ChevronDown, ChevronRight, Plus, RefreshCw, Search, X } from "lucide-react";
 import "./admin.css";
 
-const modelRows = [
-  ["Qwen3.8-Max", "CMSS", "参数量 2.4T · 文本生成", "文本模型 / 文本对话 / Qwen", "2026-09-12 10:30:00"],
-  ["Text-Embedding-V4", "TokenHub", "参数量 4B · 向量", "向量模型 / Embedding", "2026-09-11 17:20:00"],
-  ["DeepSeek-V4-Pro", "江苏移动", "参数量 1.6T · 文本生成", "文本模型 / 深度推理", "2026-09-11 09:45:00"],
-  ["GLM-5.2", "江苏联通", "参数量 744B · 文本生成", "文本模型 / 文本对话 / GLM", "2026-09-10 14:10:00"],
-  ["Kimi-K3", "江苏移动", "参数量 2.8T · 多模态", "多模态模型 / Kimi", "2026-09-09 18:00:00"],
-  ["MiniMax-H3", "TokenHub", "参数量 456B · 音视频", "多模态模型 / MiniMax", "2026-09-09 15:10:00"],
-];
+const modelRows = mockConfig["AdminConsole.jsx"]["modelRows"];
 
 const menu = [
   ["model", "模型管理"], ["image", "镜像管理"], ["calls", "调用统计"],
@@ -50,15 +43,7 @@ function ModelPage({ open }) {
   return <PageShell title="模型管理"><div className="adm-tabs"><button className="active">基础模型</button></div><Filters onSearch={setQuery} /><div className="adm-toolbar"><button className="primary" onClick={() => open("新建基础模型")}><Plus size={14} />新建</button></div><GridTable columns={["模型名称", "服务商名称", "模型属性", "状态", "是否现网可见", "更新时间", "操作"]} rows={rows} renderCell={(cell, c, row) => c === 3 || c === 4 ? <span className="adm-status">{cell}</span> : c === 6 ? <span className="adm-actions"><button>上下架</button><button onClick={() => open(`编辑 ${row[0]}`)}>编辑</button><button disabled>删除</button></span> : cell} /></PageShell>;
 }
 
-const simpleTables = {
-  image: { title: "镜像管理", tabs: ["镜像实例", "基础镜像", "官方镜像"], columns: ["镜像实例 ID", "镜像名称", "镜像类型", "资源池", "状态", "现网是否可见", "更新时间", "操作"], rows: [["img-2041", "moma-text-runtime:v5", "部署基础镜像", "南京一池", "已启用", "可见", "2026-09-12 11:20:08", "详情"], ["img-1938", "vllm-cu128:latest", "微调基础镜像", "苏州智算池", "已启用", "不可见", "2026-09-10 08:14:52", "详情"]] },
-  rate: { title: "流量管理", columns: ["用户名称", "项目", "API 密钥名称", "API 密钥", "流量限制", "操作"], rows: [["江苏政务云", "moma-prod", "api-key-prod", maskApiKey("sk-***8L2"), "100,000 tokens/分钟 · 1,000 次/分钟", "编辑　删除"], ["研发测试组", "moma-test", "api-key-test", maskApiKey("sk-***A71"), "10,000 tokens/天", "编辑　删除"]] },
-  cluster: { title: "集群管理", columns: ["IP", "节点名称", "主机类型", "规格类型", "GPU 类型", "所属分组", "是否占有", "操作"], rows: [["10.25.18.12", "gpu-node-01", "物理机", "8卡", "H20", "推理生产组", "是", "编辑　删除"], ["10.25.18.18", "gpu-node-07", "云主机", "4卡", "L20", "弹性资源组", "否", "编辑　删除"]] },
-  group: { title: "节点分组", columns: ["分组名称", "标签", "主 GPU 型号", "成员数", "可用", "状态", "操作"], rows: [["推理生产组", "生产", "H20", "32", "28", "启用", "成员　编辑"], ["弹性资源组", "弹性", "L20", "16", "11", "启用", "成员　编辑"]] },
-  provider: { title: "模型服务商管理", columns: ["服务商归属", "服务商英文名称", "服务商中文名称", "服务地址", "是否外部供应商", "操作"], rows: [["OpenAI 兼容服务", "cmss", "中国移动", "https://moma.cmecloud.cn/v1", "否", "编辑　删除"], ["OpenAI 兼容服务", "tokenhub", "TokenHub", "https://api.tokenhub.cn/v1", "是", "编辑　删除"], ["OpenAI 兼容服务", "jslt", "江苏联通", "https://llm.jslt.cn/v1", "是", "编辑　删除"]] },
-  route: { title: "模型路由管理", columns: ["名称", "路径匹配规则", "模型匹配规则", "服务提供商", "请求授权", "操作"], rows: [["deepseek-prod", "前缀匹配 | /v1/chat", "精确匹配 | DeepSeek-V4-Pro", "中国移动: 70% · TokenHub: 30%", "已开启", "编辑　删除"], ["embedding-route", "前缀匹配 | /v1/embeddings", "前缀匹配 | Text-Embedding", "TokenHub", "未开启", "编辑　删除"]] },
-  safety: { title: "模型安全", columns: ["策略名称", "检测范围", "处置动作", "状态", "更新时间", "操作"], rows: [["政务敏感信息防护", "输入与输出", "拦截", "已启用", "2026-09-12 14:22:10", "编辑"], ["提示词攻击检测", "输入", "告警", "已启用", "2026-09-11 09:18:02", "编辑"]] },
-};
+const simpleTables = mockConfig["AdminConsole.jsx"]["simpleTables"];
 
 function SimpleTablePage({ page, open }) {
   const data = simpleTables[page];

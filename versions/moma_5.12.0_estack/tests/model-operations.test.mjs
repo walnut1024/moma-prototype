@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createAdminSeed,commitAdminState,persistModelAction,STORAGE_KEY,parseAdminState} from '../src/admin-v2/store.js';
+import {createAdminSeed as baseCreateAdminSeed,commitAdminState,persistModelAction,STORAGE_KEY,parseAdminState as baseParseAdminState} from '../src/admin-v2/store.js';
 import {modelSupplies,activeSupplyPrice,activeSupplySalePrice,availableSupplies,priceItems,procurementVersion,latestSaleRevision,publicationChecks} from '../src/admin-v2/model-management.js';
 import {salesSelectionVersion} from '../src/admin-v2/model-operations.js';
 import {normalizeModelProfile,requireModelBasics} from '../src/admin-v2/model-profile.js';
@@ -27,12 +28,12 @@ test('model library edits the same operating record without a template copy or m
 test('supplier code collision is rejected across existing seeded providers',()=>{assert.throws(()=>op(createAdminSeed(),'providerRegistration',{provider:{...newProvider,code:'bailian'}}),/不可重复/);});
 test('editing shared endpoint invalidates all model validations and keeps costs',()=>{let {state,id,supply}=connected();const ep=state.endpoints.find(ep=>ep.id===supply.endpointId),cost=structuredClone(state.supplyPrices);state=op(state,'provider',{operation:'connection',objectId:ep.id,values:{...ep,baseUrl:'https://changed.example.invalid/v1'}});assert.equal(state.modelSupplies.find(s=>s.id===supply.id).validationStatus,'待验证');assert.equal(availableSupplies(state,id).length,0);assert.deepEqual(state.supplyPrices,cost);});
 test('permission, stale revision and storage errors prevent commits without resetting data',()=>{const s=createAdminSeed();assert.throws(()=>commitAdminState({...s,currentRole:'运维人员'},{type:'modelOperations',operation:'templateSave',data:modelInput}),/无权/);const storage={getItem:()=>JSON.stringify({...s,revision:s.revision+1}),setItem:()=>assert.fail('must not write')};assert.throws(()=>persistModelAction(s,{type:'modelOperations',operation:'templateSave',data:modelInput},storage),/数据已变化/);const broken={getItem:()=>JSON.stringify(s),setItem:()=>{throw new Error('quota');}};assert.throws(()=>persistModelAction(s,{type:'modelOperations',operation:'templateSave',data:modelInput},broken),/quota/);assert.ok(!s.modelTemplates.some(t=>t.modelId===modelInput.modelId));});
-test('old saved data keeps IDs, pricing and user edits; new template collection is separate',()=>{const s=createAdminSeed();delete s.modelTemplates;s.models[0].name='用户自定义名称';const restored=parseAdminState(JSON.stringify(s));assert.equal(restored.models[0].name,'用户自定义名称');assert.deepEqual(restored.modelSalePrices,s.modelSalePrices);assert.equal(restored.modelTemplates.length,createAdminSeed().modelTemplates.length);assert.match(STORAGE_KEY,/5120/);});
+test('old saved data keeps IDs, pricing and user edits without inventing absent template records',()=>{const s=createAdminSeed();delete s.modelTemplates;s.models[0].name='用户自定义名称';const restored=parseAdminState(JSON.stringify(s));assert.equal(restored.models[0].name,'用户自定义名称');assert.deepEqual(restored.modelSalePrices,s.modelSalePrices);assert.equal(restored.modelTemplates.length,0);assert.match(STORAGE_KEY,/5120/);});
 
 test('metadata modality change invalidates existing verification without altering prices',()=>{let {state,id,supply}=connected();const model=state.models.find(item=>item.id===id),before=structuredClone(state.supplyPrices);state=legacy(state,'basic',{...model,profile:{...model.profile,inputModalities:['文本','图片']}},id);assert.equal(state.modelSupplies.find(item=>item.id===supply.id).validationStatus,'待验证');assert.deepEqual(state.supplyPrices,before);});
 test('saving a missing library record gives a recoverable domain error',()=>assert.throws(()=>op(createAdminSeed(),'templateSave',{...modelInput,id:'missing'}),/模型资料不存在/));
 
-test('model templates are a dedicated operations page with matching role boundaries', async()=>{const {sections,canAccessPage,pageFromHash}=await import('../src/admin-v2/navigation.mjs');const group=sections.find(item=>item.id==='models');assert.deepEqual(group.items.map(item=>item.label),['供应管理','服务管理','资料管理']);assert.equal(pageFromHash('#/admin-2/model-templates?view=template','运营人员'),'model-templates');assert.equal(canAccessPage('运营人员','model-templates'),true);assert.equal(canAccessPage('运维人员','model-templates'),false);});
+test('model templates are a dedicated operations page with matching role boundaries', async()=>{const {sections,canAccessPage,pageFromHash}=await import('../src/admin-v2/navigation.mjs');const group=sections.find(item=>item.id==='models');assert.deepEqual(group.items.map(item=>item.label),['模型接入','模型服务','模型资料']);assert.equal(pageFromHash('#/admin-2/model-templates?view=template','运营人员'),'model-templates');assert.equal(canAccessPage('运营人员','model-templates'),true);assert.equal(canAccessPage('运维人员','model-templates'),false);});
 
 test('real model catalogue has unique codes and editable sourced metadata without invented shared limits',()=>{
   const state=createAdminSeed();
@@ -216,7 +217,7 @@ test('new supplier publication requires a service mode while existing listed sup
  state=op(state,'reprice',priced(state,id,supply),id);
  const prices=structuredClone(state.modelSalePrices),endpoints=structuredClone(state.endpoints);
  const before=structuredClone(state);assert.throws(()=>op(state,'publishSupply',{id:supply.id},id),/服务模式/);assert.deepEqual(state,before);
- Object.assign(state.models.find(item=>item.id===id),{listingStatus:'已上架',visibility:'公开',callsEnabled:true,status:'运行中'});
+ Object.assign(state.models.find(item=>item.id===id),{listingStatus:'已上架',visibility:'公开',callsEnabled:true,status:'运行中',openScope:'all'});
  state.modelSupplies.find(item=>item.id===supply.id).salesEnabled=true;
  state=op(state,'unlistSupply',{id:supply.id},id);
  assert.equal(state.modelSupplies.find(s=>s.id===supply.id).salesEnabled,false);
@@ -270,14 +271,14 @@ test('supplier connectivity preview never enables a stopped service or changes s
  assert.equal(supplySalesStatus({status:'已启用',salesEnabled:false}),'下架停售');
 });
 
-test('existing subscriber calls survive unlisting and fail after the final supply stops',async()=>{
+test('unlisting the final sale service blocks existing subscriber calls',async()=>{
  const {simulateRequest}=await import('../src/admin-v2/domain.js');
  let {state,id,supply}=connected();state=op(state,'reprice',priced(state,id,supply),id);
- Object.assign(state.models.find(item=>item.id===id),{listingStatus:'已上架',visibility:'公开',callsEnabled:true,status:'运行中'});state.modelSupplies.find(item=>item.id===supply.id).salesEnabled=true;
+ Object.assign(state.models.find(item=>item.id===id),{listingStatus:'已上架',visibility:'公开',callsEnabled:true,status:'运行中',openScope:'all'});state.modelSupplies.find(item=>item.id===supply.id).salesEnabled=true;
  const key=state.apiKeys.find(k=>k.status==='有效'&&state.grants.some(g=>g.subjectId===k.id));key.modelIds.push(id);state.limits=state.limits.filter(l=>l.scopeId!==key.id);
  const call=()=>simulateRequest(state,{requestId:crypto.randomUUID(),keyId:key.id,modelId:id}).request;
  assert.equal(call().httpStatus,200);
- state=op(state,'unlistSupply',{id:supply.id},id);assert.equal(call().httpStatus,200);
+ state=op(state,'unlistSupply',{id:supply.id},id);assert.equal(call().httpStatus,403);
  state=op(state,'stopSupply',{id:supply.id},id);assert.notEqual(call().httpStatus,200);
 });
 
@@ -346,3 +347,6 @@ test('saving a master from onboarding atomically retains its reference and draft
  const saved=state.modelOnboardings.find(d=>d.id===draftId);assert.equal(saved.libraryId,model.templateId);assert.equal(saved.modelId,id);assert.equal(saved.supplyId,draft.supplyId);
  const before=structuredClone(state);assert.throws(()=>op(state,'templateSave',{...modelInput,modelId:'another-master',onboardingId:'missing'}),/上架进度/);assert.deepEqual(state,before);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAdminState, commitAdminState, persistModelAction, serializeAdminState } from '../src/admin-v2/store.js';
+import { parseAdminState as baseParseAdminState, commitAdminState, persistModelAction, serializeAdminState } from '../src/admin-v2/store.js';
 import { resolveOnboardingProvider, resolveOnboardingModel } from '../src/admin-v2/onboarding-presets.js';
 import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
 import { channelDrafts, channelDraftIssue } from '../src/admin-v2/channel-onboarding.js';
@@ -119,3 +120,5 @@ test('appending a custom model atomically materializes only its metadata and map
   assert.throws(() => run(first, 'channelQuickCreate', { ...data, values: { ...data.values, models: [data.values.models[0], { newModel: { modelId: 'bad-second', type: 'video' } }] } })); assert.deepEqual(first, before);
   assert.throws(() => run(draftState, 'channelQuickCreate', { ...payload({ newProvider: undefined, providerId }), draftId: draft.id, expectedDraftRevision: draft.draftRevision }), /草稿已变化/);
 });
+
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

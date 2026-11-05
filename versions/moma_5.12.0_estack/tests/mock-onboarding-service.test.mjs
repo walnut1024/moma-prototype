@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mockOnboardingApi as api, getMockScenario, setMockScenario, SCENARIOS, setMockRuntimeState, prepareMockConfiguration, commitMockConfiguration, getMockServiceSnapshots, inspectMockPublication } from '../src/admin-v2/mock-onboarding-service.js';
+import { mockOnboardingApi as api, getMockScenario, setMockScenario, SCENARIOS, setMockRuntimeState as rawSetMockRuntimeState, prepareMockConfiguration, commitMockConfiguration, getMockServiceSnapshots, inspectMockPublication } from '../src/admin-v2/mock-onboarding-service.js';
 
 function fixture(t) {
   setMockRuntimeState(null);
@@ -11,13 +11,29 @@ function fixture(t) {
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: key => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, value), removeItem: key => stored.delete(key) } });
   t.after(() => previous ? Object.defineProperty(globalThis, 'localStorage', previous) : delete globalThis.localStorage);
   const op = () => `operation-${++sequence}`, post = (route, body) => api(route, { method: 'POST', body: { operationId: op(), ...body } });
-  const channel = (name, credentialId = 'opaque-key', extra = {}) => post('/channels', { providerId: 'supplier', name, baseUrl: 'https://gateway.mock.invalid/v1', interfaceType: 'openai', authMode: 'key', credentialId, ...extra });
+  const channel = (name, credentialId = 'opaque-key', extra = {}) => post('/channels', { providerId: 'supplier', clientChannelId: name, name, baseUrl: 'https://gateway.mock.invalid/v1', interfaceType: 'openai', authMode: 'key', credentialId, ...extra });
   const model = { id: 'model-main', associationId: 'association', upstreamModelId: 'vendor/chat', type: 'text' };
   const prove = async (ch, options = {}) => { const batch = await post('/tests', { channelId: ch.id, models: [{ ...model, ...options }] }); clock += 1000; return api(`/tests/${batch.id}`); };
   const price = (id, extra = {}) => ({ id, amount: 1000000, unit: 'request', currency: 'CNY', effectiveAt: new Date(clock - 60000).toISOString(), ...extra });
   const service = (ch, extra = {}) => post('/services', { publicModelId: `moma/mock-${sequence}`, mode: 'standard', tenantIds: ['tenant-a'], bindings: [{ id: 'binding', channelId: ch.id, model, procurementPrices: [price('cost')] }], salePrices: [price('sale')], route: { version: 1, strategy: 'fixed', channels: [{ bindingId: 'binding', priority: 1, weight: 1 }] }, ...extra });
   const trial = async current => { const identity = await post(`/services/${current.id}/test-identities`, { expectedRevision: current.revision }); return post(`/services/${current.id}/trial`, { trialToken: identity.token }); };
-  const publish = async current => { await trial(current); return post(`/services/${current.id}/publish`, { expectedRevision: current.revision }); };
+  const publish = async current => {
+    await trial(current); const published = await post(`/services/${current.id}/publish`, { expectedRevision: current.revision });
+    const local = JSON.parse(stored.get('moma.adminV2.5120.v1') || '{"models":[],"tenants":[],"providers":[],"endpoints":[]}');
+    const config = published.published.config;
+    const record = { id: current.id, modelId: config.publicModelId, serviceMode: 'standard', listingStatus: '已上架', visibility: '公开', callsEnabled: true, openScope: 'all', platformPublications: [{ serviceId: `standard:${current.id}`, mockServiceId: current.id, source: 'mock' }] };
+    local.models = [...local.models.filter(row => row.id !== record.id), record];
+    for (const id of [...config.tenantIds, 'tenant-a', 'tenant-b']) if (!local.tenants.some(row => row.id === id)) local.tenants.push({ id, status: '正常' });
+    const mock = JSON.parse(stored.get('moma-5120-model-onboarding-mock-v1'));
+    for (const channel of mock.channels) {
+      if (!local.providers.some(row => row.id === channel.providerId)) local.providers.push({ id: channel.providerId, status: '已启用', catalogModels: [{ modelId: 'mapped-model', libraryId: model.id }], catalogConnections: [] });
+      if (!local.endpoints.some(row => row.id === channel.clientChannelId)) {
+        local.endpoints.push({ id: channel.clientChannelId, providerId: channel.providerId, status: '运行中' });
+        local.providers.find(row => row.id === channel.providerId).catalogConnections.push({ id: model.associationId, modelId: 'mapped-model', endpointId: channel.clientChannelId, upstreamModelId: model.upstreamModelId, enabled: true });
+      }
+    }
+    stored.set('moma.adminV2.5120.v1', JSON.stringify(local)); return published;
+  };
   return { op, post, channel, model, prove, price, service, trial, publish, stored, advance: ms => { clock += ms; }, clock: () => clock, fetchCalls: () => fetchCalls };
 }
 
@@ -131,7 +147,7 @@ test('custom task endpoints reject generic discovery while manual task testing r
 
 test('browser delay is visible and aborts before dispatch without any network request', async t => {
   const env = fixture(t), previous = Object.getOwnPropertyDescriptor(globalThis, 'window'), timers = [];
-  Object.defineProperty(globalThis, 'window', { configurable: true, value: {} });
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { dispatchEvent() {} } });
   t.after(() => previous ? Object.defineProperty(globalThis, 'window', previous) : delete globalThis.window);
   t.mock.method(globalThis, 'setTimeout', (callback, ms) => { timers.push({ callback, ms }); return timers.length; }); t.mock.method(globalThis, 'clearTimeout', () => {});
   const controller = new AbortController(), pending = env.post('/channels', { providerId: 'supplier', name: 'must-not-be-created', interfaceType: 'openai', baseUrl: 'https://mock.invalid/v1', credentialId: 'key' });
@@ -217,4 +233,55 @@ test('publication inspection rejects nonmock proof provenance, uncommitted candi
   }
   env.stored.set(storageKey, original); const published = getMockServiceSnapshots()[0]; await api('/services/' + current.id, { method: 'PATCH', body: { operationId: env.op(), expectedRevision: published.revision, tenantIds: ['tenant-a'] } }); assert.match(inspectMockPublication(current.id).reason, /候选已变化/);
   env.stored.set(storageKey, original); env.advance(25 * 3600000); assert.equal(inspectMockPublication(current.id).ready, false);
+});
+
+function setMockRuntimeState(local) {
+  rawSetMockRuntimeState(local);
+  if (local && globalThis.localStorage) {
+    const current = JSON.parse(localStorage.getItem('moma.adminV2.5120.v1') || '{"models":[],"tenants":[]}');
+    localStorage.setItem('moma.adminV2.5120.v1', JSON.stringify({ ...current, ...local }));
+  }
+}
+
+test('unlisting one model stops both provider services and old keys while another published model remains callable', async t => {
+  const env=fixture(t), a=await env.channel('provider-a','opaque-a',{providerId:'supplier-a'}), b=await env.channel('provider-b','opaque-b',{providerId:'supplier-b'});
+  await env.prove(a);await env.prove(b);
+  const first=await env.service(a,{mode:'provider'}), second=await env.service(b,{mode:'provider'}), other=await env.service(a);
+  for(const item of [first,second,other]) await env.publish(item);
+  const key=await env.post('/client-keys',{tenantId:'tenant-a',serviceIds:[first.id,second.id,other.id]});
+  const mainKey='moma.adminV2.5120.v1', local=JSON.parse(env.stored.get(mainKey));
+  const common={...local.models.find(row=>row.id===first.id),id:'multi',modelId:'multi',serviceMode:'provider',serviceProviders:[{providerId:'supplier-a',callId:first.candidate.publicModelId},{providerId:'supplier-b',callId:second.candidate.publicModelId}],platformPublications:[{source:'mock',serviceId:'provider:multi:supplier-a',mockServiceId:first.id},{source:'mock',serviceId:'provider:multi:supplier-b',mockServiceId:second.id}]};
+  local.models=[common,local.models.find(row=>row.id===other.id)];env.stored.set(mainKey,JSON.stringify(local));
+  const bodies=[first,second,other].map(item=>({operationId:env.op(),model:item.candidate.publicModelId,messages:[{role:'user',content:'scope'}]}));
+  const call=body=>api('/client/completions',{method:'POST',token:key.clientKey,body});
+  for(const body of bodies) assert.equal((await call(body)).source,'mock');
+  common.listingStatus='已下架';env.stored.set(mainKey,JSON.stringify(local));
+  for(const body of bodies.slice(0,2)) {
+    await assert.rejects(call(body),error=>error.code==='model_unavailable');
+    await assert.rejects(call({...body,operationId:env.op(),identityType:'platform',trial:true}),error=>error.code==='model_unavailable');
+  }
+  assert.equal((await call({...bodies[2],operationId:env.op()})).source,'mock');
+});
+
+import { getMockOperationalRequests } from '../src/admin-v2/mock-onboarding-service.js';
+import { operationFacts, businessFacts, businessSummary, analysisFilters } from '../src/admin-v2/operations-analysis.js';
+import { usagePreset } from '../src/admin-v2/usage-analysis.js';
+test('customer service calls produce immutable operational receipts while platform trials stay outside revenue',async t=>{
+ const env=fixture(t),ch=await env.channel('operational-receipt');await env.prove(ch);const current=await env.service(ch);await env.publish(current);
+ assert.equal(getMockOperationalRequests().length,0);
+ const key=await env.post('/client-keys',{tenantId:'tenant-a',serviceIds:[current.id]});await api('/client/completions',{method:'POST',token:key.clientKey,body:{operationId:env.op(),model:current.candidate.publicModelId,messages:[{role:'user',content:'usage event'}]}});
+ const requests=getMockOperationalRequests();assert.equal(requests.length,1);assert.equal(requests[0].tenantId,'tenant-a');assert.equal(requests[0].serviceId,'standard:'+current.id);assert.equal(requests[0].attempts[0].procurementSnapshot.items.length,1);
+ const state={models:[{id:current.id,type:'text',name:'模型服务'}],providers:[{id:'supplier',name:'供应商'}],endpoints:[{id:requests[0].endpointId,providerId:'supplier',name:'渠道'}],tenants:[{id:'tenant-a',name:'客户'}],requests};
+ const facts=businessFacts(state,operationFacts(state,usagePreset('today'),analysisFilters(),Date.now()+1));assert.equal(facts[0].complete,true);assert.ok(facts[0].sale.amount>0);assert.equal(businessSummary(facts,'CNY').pending,0);
+ const before=JSON.stringify(requests);await env.post('/scenario',{value:'auth'}).catch(()=>{});assert.equal(JSON.stringify(getMockOperationalRequests()),before);
+});
+test('a final upstream client failure is retained once without creating customer income or a fake zero cost',async t=>{
+ const env=fixture(t),ch=await env.channel('failed-operational');await env.prove(ch);const current=await env.service(ch);await env.publish(current);const key=await env.post('/client-keys',{tenantId:'tenant-a',serviceIds:[current.id]});
+ setMockScenario('auth');const body={operationId:env.op(),model:current.candidate.publicModelId,messages:[{role:'user',content:'failure'}]};
+ const publicFailure=error=>{assert.equal(error.code,'upstream_unauthorized');assert.equal(error.attempts?.length || 0,0);assert.equal(error.cost,undefined);assert.ok(!JSON.stringify(error).includes('procurementSnapshot'));return true;};
+ await assert.rejects(api('/client/completions',{method:'POST',token:key.clientKey,body}),publicFailure);await assert.rejects(api('/client/completions',{method:'POST',token:key.clientKey,body}),publicFailure);
+ const requests=getMockOperationalRequests();assert.equal(requests.length,1);assert.equal(requests[0].billingStatus,'not_billable');assert.equal(requests[0].attempts[0].error,'upstream_unauthorized');
+ assert.equal(requests[0].attempts[0].procurementSnapshot.items.length,1);
+ const state={models:[{id:current.id,type:'text'}],providers:[{id:'supplier'}],endpoints:[{id:requests[0].endpointId,providerId:'supplier'}],requests};
+ const facts=businessFacts(state,operationFacts(state,usagePreset('today'),analysisFilters(),Date.now()+1));assert.equal(facts[0].sale.amount,0);assert.equal(facts[0].cost,null);assert.equal(facts[0].profit,null);
 });

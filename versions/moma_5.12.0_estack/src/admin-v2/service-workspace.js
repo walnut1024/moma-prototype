@@ -1,29 +1,21 @@
+import { modelOperationsView } from '../mock/model-data.js';
 import { modelCategory, modelCode, modelSupplies, activeSupplyPrice, activeSupplySalePrice, priceItems, supplyModelUrl, publicationChecks } from './model-management.js';
 import { catalogueChannels, channelUrl, channelBlockReason, channelFingerprint } from './provider-channels.js';
-import { providerCatalogueIds, supplierDirectory, displayedCatalogueIds } from './moma-provider.js';
+import { MOMA_PROVIDER, providerCatalogueIds, supplierDirectory, displayedCatalogueIds } from './moma-provider.js';
 import { cataloguePurchasePrice } from './provider-catalogue-pricing.js';
-import { REAL_MODELS } from './real-model-catalogue.js';
 import { activeChannelProcurement } from './channel-change-management.js';
 
-const seededModelIds = new Set(REAL_MODELS.map(model => model.id));
-export function serviceDirectoryModels(state, linkedId) {
-  const cases=['deepseek','qwen','image','video','audio'], review=cases.map(key=>state.models.find(model=>model.serviceReviewCase===key)).filter(Boolean);
-  if (review.length) return [...state.models.filter(model=>!model.serviceReviewCase && (model.id === linkedId || model.serviceManaged || !seededModelIds.has(model.id) && !model.id.startsWith('catalog-demo-'))),...review];
-  const models = state.models.filter(model => !seededModelIds.has(model.id));
-  for (const id of ['catalog-demo-kimi', 'catalog-demo-qwen', 'catalog-demo-image', 'catalog-demo-video', 'catalog-demo-tts']) {
-    const example = state.models.find(model => model.id === id);
-    if (example && !models.some(model => model.id === example.id)) models.push(example);
-  }
-  return models;
+export function serviceDirectoryModels(state, linkedId, catalogue) {
+  return modelOperationsView(state,catalogue,linkedId).models;
 }
 
 export function serviceIndexModels(state, params) {
   const query = (params.get('q') || '').trim().toLowerCase(), type = params.get('type'), mode = params.get('mode'), status = params.get('status');
-  return serviceDirectoryModels(state, params.get('model')).filter(model =>
+  return serviceDirectoryModels(state, params.get('model'), params.get('catalogue')).filter(model =>
     (!query || [model.name, modelCode(model)].join(' ').toLowerCase().includes(query)) &&
     (!type || type === 'all' || modelCategory(model.type) === type) &&
     (!mode || mode === 'all' || (mode === 'unset' ? !model.serviceMode : model.serviceMode === mode)) &&
-    (!status || status === 'all' || serviceLifecycle(model)==={listed:'已上架',unlisted:'已下架',draft:'草稿',unpublished:'未上架'}[status]));
+    (!status || status === 'all' || serviceLifecycle(model)==={listed:'已上架',unlisted:'已下架',unpublished:'未上架'}[status]));
 }
 
 export function selectServiceModel(rows, requestedId) {
@@ -31,7 +23,6 @@ export function selectServiceModel(rows, requestedId) {
 }
 export function serviceLifecycle(model) {
   if (model.listingStatus==='已上架') return '已上架';
-  if (!model.serviceMode && model.status==='草稿') return '草稿';
   return (model.serviceManaged || model.serviceReviewCase) && !model.firstPublishedAt?'未上架':'已下架';
 }
 export function serviceConfiguration(state,model) {
@@ -40,12 +31,15 @@ export function serviceConfiguration(state,model) {
   return {label:issues.length?'待完善':'已配置',issues};
 }
 export function serviceConfigurationTarget(model,check) {
-  const base={panel:null,providerEdit:null,providerAdd:null,providerChannels:null,providerAssociate:null,routeProvider:null,service:null,mapping:null};
+  const base={panel:'pricing',providerEdit:null,providerAdd:null,providerChannels:null,providerAssociate:null,routeProvider:null,service:null,mapping:null};
+  if (check.tab==='serviceMode') return {...base,panel:'routing'};
+  if (check.tab==='publication') return {...base,panel:'scope'};
+  if (check.tab==='pricing' && model.serviceMode==='provider' && !providerServices(model).find(row=>row.providerId===check.providerId)?.callId) return {...base,panel:'routing',identityProvider:check.providerId};
   if (check.tab==='platform') return {...base,panel:'guide',routeProvider:check.providerId || null};
-  if (check.tab==='supplies' && model.serviceMode==='provider') return {...base,providerAdd:'1'};
+  if (check.tab==='supplies' && model.serviceMode==='provider') return {...base,panel:'routing',providerAdd:'1'};
   if (check.tab==='basic') return {...base,panel:'editMetadata'};
   if (check.tab==='routing' && check.mapping && model.serviceMode==='standard') return {...base,panel:'associate'};
-  if (check.tab==='routing' && check.mapping && model.serviceMode==='provider') return {...base,providerChannels:check.providerId,providerAssociate:'1'};
+  if (check.tab==='routing' && check.mapping && model.serviceMode==='provider') return {...base,panel:'routing',providerChannels:check.providerId,providerAssociate:'1'};
   if (check.tab==='routing') return {...base,panel:'routing',routeProvider:check.providerId || null,...(check.mapping?{mapping:providerServiceId(model.id,check.providerId)}:{service:check.providerId?providerServiceId(model.id,check.providerId):'standard:'+model.id})};
   return {...base,providerEdit:check.providerId || null};
 }
@@ -94,6 +88,16 @@ export function serviceBindingInUse(state, modelId, supplies, serviceId) {
     const current=route.versions.find(version=>version.version===route.activeVersion);
     const relevant=serviceId ? route.serviceId===serviceId : route.serviceId===`standard:${modelId}` || route.serviceId.startsWith(`provider:${modelId}:`);
     const refers=row=>serviceId || ids.has(row.supplyId);
-    return relevant && (current?.config.channels.some(row=>row.enabled!==false && refers(row)) || route.draft?.channels.some(refers));
+    return relevant && (current?.config.channels.some(row=>row.enabled!==false && refers(row)));
   });
+}
+
+export const commercialTaskKey = (kind, providerId = '') => kind === 'scope' ? 'scope' : `price:${providerId || 'standard'}`;
+export function commercialTaskBase(state, model, kind, providerId = '') {
+  return JSON.stringify([model.serviceMode, model.serviceModeRevision || 0, model.modelId, kind === 'scope' ? [model.openScope, [...(model.tenantIds || [])].sort()] : [providerId, providerId ? providerServices(model).find(row => row.providerId === providerId)?.callId : '', providerId ? providerPriceRevision(state, model.id, providerId) : modelSaleRevision(state, model.id)]]);
+}
+
+export function servicePriceIdentity(state, model, providerId = '') {
+  const provider = state.providers.find(row => row.id === (providerId || MOMA_PROVIDER.id));
+  return { supplierName: provider?.name || '供应商已不存在', callId: providerId ? providerServices(model).find(row => row.providerId === providerId)?.callId || '' : model.modelId || '' };
 }

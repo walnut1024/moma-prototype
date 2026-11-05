@@ -1,10 +1,15 @@
+import {APPLICATION_CONFIG} from './mock/application-data.js';
+import mockConfig from './mock/catalogues.json' with {type:'json'};
+import {authBusinessSnapshot} from './auth-link-sync.mjs';
+import {ADMIN_DATA_KEY} from './service-access.mjs';
+import { notifyLinkedState } from './service-access.mjs';
 import { memberPhoneError, normalizeMemberPhone } from './organization-data.mjs';
 import { normalizeAdminLogin } from './admin-v2/admin-accounts.js';
 
 // Browser-local interaction state; never authorizes backend or gateway access.
 export const AUTH_STORAGE_KEY = 'moma-auth-prototype-5120-v1';
-export const AUTH_INVITE = Object.freeze({ id: 'invite-jiangsu', phone: '13800138000', enterpriseId: 'auth-jiangsu', enterprise: '江苏政务云', inviter: '张明', department: '研发中心', role: '普通成员', expiresAt: '2026-12-31T23:59:59+08:00' });
-export const emptyAuthState = () => ({ accounts: [], memberships: [], applications: [], currentUserId: null, activeSpace: 'personal' });
+export const AUTH_INVITE = mockConfig["auth-state.mjs"]["AUTH_INVITE"];
+export const emptyAuthState = () => structuredClone(APPLICATION_CONFIG.auth);
 export const authRoute = hash => /^#\/auth\/(login|register|account|enterprise|invite|application|activate|password)(?:\?|$)/.exec(hash)?.[1] || null;
 export const currentAuthUser = state => state.accounts.find(account => account.id === state.currentUserId) || null;
 export const authPhone = value => {
@@ -58,7 +63,7 @@ export function loginAuthAccount(state, identifier, userType, policy = AUTH_ENTE
   const next = { ...state, currentUserId: account.id };
   const spaces = availableAuthSpaces(next);
   if (userType === 'personal') {
-    if (!spaces.some(space => space.id === 'personal')) throw new Error('个人空间已停用，请联系平台管理员或选择企业用户登录');
+    if (!spaces.some(space => space.id === 'personal')) throw new Error('个人账号已停用，请联系平台管理员或选择企业用户登录');
     return { ...next, activeSpace: 'personal' };
   }
   const enterprises = spaces.filter(space => space.id !== 'personal');
@@ -69,7 +74,7 @@ export function loginAuthAccount(state, identifier, userType, policy = AUTH_ENTE
 export function availableAuthSpaces(state) {
   const user = currentAuthUser(state);
   if (!user || user.status !== '正常' || user.activation) return [];
-  return [...(user.phone && !user.personalFrozen ? [{ id: 'personal', name: '个人空间', role: '个人用户' }] : []), ...state.memberships.filter(member => member.userId === user.id && member.status === '已加入' && !member.enterpriseFrozen).map(member => ({ id: member.enterpriseId, name: member.enterprise, role: member.role }))];
+  return [...(user.phone && user.userType !== 'enterprise' && !user.personalFrozen ? [{ id: 'personal', name: '个人用户', role: '个人用户' }] : []), ...state.memberships.filter(member => member.userId === user.id && member.status === '已加入' && !member.enterpriseFrozen).map(member => ({ id: member.enterpriseId, name: member.enterprise, role: member.role }))];
 }
 
 export function acceptAuthInvite(state, token, now = Date.now()) {
@@ -201,4 +206,15 @@ export async function matchesAuthPassword(password, credential) {
   if (!credential || !password) return false;
   try { return (await encodeAuthPassword(password, credential.salt)).digest === credential.digest; }
   catch { return false; }
+}
+
+export function persistAuthState(state, next, storage = globalThis.localStorage) {
+  const current = JSON.parse(storage.getItem(AUTH_STORAGE_KEY) || 'null') || emptyAuthState();
+  if (JSON.stringify(current) !== JSON.stringify(state)) throw new Error('登录状态已变化，请重试');
+  const saved = { ...next, revision: (state.revision || 0) + 1, sessionGeneration: (state.sessionGeneration || 0) + (next.currentUserId !== state.currentUserId || next.activeSpace !== state.activeSpace ? 1 : 0) };
+  const business=authBusinessSnapshot(state,saved,storage);
+  if(business){if(storage.getItem(ADMIN_DATA_KEY)!==business.raw)throw Error('用户数据已变化，请重试');storage.setItem(ADMIN_DATA_KEY,business.encoded);}
+  try{storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(saved));}
+  catch(error){if(business&&storage.getItem(ADMIN_DATA_KEY)===business.encoded)storage.setItem(ADMIN_DATA_KEY,business.raw);throw error;}
+  notifyLinkedState(); return saved;
 }

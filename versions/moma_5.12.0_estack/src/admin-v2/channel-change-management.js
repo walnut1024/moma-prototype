@@ -1,6 +1,6 @@
 import { prepareChannelInterface, prepareChannelAdapterOptions } from './channel-interface.js';
 import { resolveChannelAssociationModel, channelAssociationPricing, materializeChannelAssociation } from './channel-association-model.js';
-import { connectionFingerprint, connectionKeys, connectionCredentialsReady } from './connection-state.js';
+import { connectionFingerprint, connectionKeys, connectionCredentialsReady, normalizeChannelKeyPool } from './connection-state.js';
 import { channelFingerprint, channelInterfaceIssue, channelModelUrl } from './provider-channels.js';
 import { supplierChannelAssociations, supplierKeyChannels, invalidateSupplierChannels } from './supplier-resources.js';
 import { providerKeyGroups } from './provider-key-groups.js';
@@ -9,13 +9,13 @@ import { providerTransaction, modelConnectivityPreview, normalizeProviderPrice }
 import { channelTestDiagnostics } from './channel-test-diagnostics.js';
 
 export const CHANNEL_EVIDENCE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const connectionFields = ['protocol', 'baseUrl', 'interfaceType', 'addressMode', 'taskUrls', 'adapterOptions', 'allowHttp', 'authMode', 'apiKeyId', 'keyGroupId', 'credentialRef', 'apiKeys', 'capacity', 'timeoutSeconds', 'credentialVersion', 'adapterVersion'];
-const editableFields = ['protocol', 'baseUrl', 'interfaceType', 'taskUrls', 'adapterOptions', 'authMode', 'apiKeyId', 'keyGroupId', 'capacity', 'timeoutSeconds', 'adapterVersion'];
+const connectionFields = ['protocol', 'baseUrl', 'interfaceType', 'addressMode', 'taskUrls', 'adapterOptions', 'allowHttp', 'authMode', 'apiKeyId', 'keyGroupId', 'keyPool', 'credentialRef', 'apiKeys', 'capacity', 'timeoutSeconds', 'credentialVersion', 'adapterVersion'];
+const editableFields = ['protocol', 'baseUrl', 'interfaceType', 'taskUrls', 'adapterOptions', 'authMode', 'apiKeyId', 'keyGroupId', 'keyPool', 'capacity', 'timeoutSeconds', 'adapterVersion'];
 const update = (collection, id, changes) => ({ type: 'update', collection, id, changes });
 const uid = prefix => `${prefix}-${crypto.randomUUID()}`;
 const snapshot = endpoint => structuredClone(Object.fromEntries(connectionFields.filter(key => Object.hasOwn(endpoint, key)).map(key => [key, endpoint[key]])));
 const requestSignature = request => JSON.stringify([request?.operationId, request?.channelId, request?.confirmExpensive === true, request?.models?.map(model => Object.entries(model).sort(([left], [right]) => left.localeCompare(right)))]);
-const latestCandidateEvidence = (candidate, associationId, signature) => candidate.tests.filter(test => test.associationId === associationId && test.signature === signature && !test.check).reverse().sort((left, right) => Date.parse(right.testedAt) - Date.parse(left.testedAt))[0];
+const latestCandidateEvidence = (candidate, associationId, signature, keyId) => candidate.tests.filter(test => test.associationId === associationId && test.signature === signature && !test.check && (!keyId || test.credentialIds?.includes(keyId))).reverse().sort((left, right) => Date.parse(right.testedAt) - Date.parse(left.testedAt))[0];
 
 function context(state, providerId, endpointId) {
   const provider = state.providers.find(row => row.id === providerId);
@@ -33,6 +33,7 @@ function configSignature(endpoint, provider) {
   return JSON.stringify([snapshot(endpoint), liveKeys(endpoint, provider)]);
 }
 function assertCredentials(endpoint, provider) {
+  if (endpoint.authMode === 'pool') normalizeChannelKeyPool(endpoint.keyPool, provider);
   if (!connectionCredentialsReady(endpoint, provider) || liveKeys(endpoint, provider).some(key => key.revokedAt)) throw new Error('候选配置缺少可用凭证，或凭证已经撤销');
 }
 function configuredEndpoint(state, provider, endpoint, input) {
@@ -41,18 +42,21 @@ function configuredEndpoint(state, provider, endpoint, input) {
   value.adapterOptions = prepareChannelAdapterOptions(value.adapterOptions || {});
   if (value.interfaceType) value = { ...value, ...prepareChannelInterface({ ...value, allowHttp: provider.sourceType === 'selfHosted' }), allowHttp: provider.sourceType === 'selfHosted' };
   const retainedReference = !Object.hasOwn(input, 'authMode') && !endpoint.authMode && (endpoint.credentialRef || endpoint.apiKeys?.length);
-  if (!retainedReference && !['group', 'specific', 'inherit', 'none'].includes(value.authMode)) throw new Error('请选择候选配置的凭证方式');
+  if (!retainedReference && !['group', 'specific', 'inherit', 'none', 'pool'].includes(value.authMode)) throw new Error('请选择候选配置的凭证方式');
+  if (value.authMode === 'pool') value.keyPool = normalizeChannelKeyPool(value.keyPool, provider);
   if (value.authMode === 'none' && provider.sourceType !== 'selfHosted') throw new Error('仅自有推理服务可无需认证');
   if (value.authMode === 'group' && !providerKeyGroups(provider).some(group => group.id === value.keyGroupId)) throw new Error('密钥组不属于当前供应商');
-  if (value.authMode === 'specific' && !provider.apiKeys?.some(key => key.id === value.apiKeyId)) throw new Error('指定密钥不属于当前供应商');
+  if (value.authMode === 'specific' && !provider.apiKeys?.some(key => key.id === value.apiKeyId) && !endpoint.apiKeys?.some(key => key.scope === 'channel' && key.id === value.apiKeyId)) throw new Error('指定密钥不属于当前供应商或渠道');
   if (Object.hasOwn(input, 'authMode') || Object.hasOwn(input, 'keyGroupId') || Object.hasOwn(input, 'apiKeyId')) {
     value.apiKeys = []; value.credentialRef = '';
     if (value.authMode !== 'specific') value.apiKeyId = '';
     if (value.authMode !== 'group') value.keyGroupId = '';
+    if (value.authMode !== 'pool') value.keyPool = [];
   }
   const transaction = providerTransaction(state, { operation: 'connection', objectId: endpoint.id, data: { ...endpoint, ...value, name: endpoint.name, providerId: provider.id, timeoutSeconds: value.timeoutSeconds || 60 } });
   const normalized = transaction.changes.find(change => change.collection === 'endpoints' && change.id === endpoint.id).changes;
   value = { ...value, ...snapshot(normalized) };
+  if (value.apiKeys) value.apiKeys = value.apiKeys.map(key => endpoint.apiKeys?.some(saved => saved.scope === 'channel' && saved.id === key.id && saved.fingerprint === key.fingerprint) ? { ...key, scope: 'channel' } : key);
   const prepared = { ...endpoint, ...value };
   for (const mapping of supplierChannelAssociations(state, provider, endpoint.id)) {
     const master = resolveChannelAssociationModel(state, provider, mapping);
@@ -112,14 +116,17 @@ function candidateChecks(state, provider, endpoint, candidate, { at = Date.now()
   const enabledIds = impact.mappings.filter(row => row.enabled).map(row => row.id);
   const requiredIds = impact.activeAssociationIds.length ? impact.activeAssociationIds : enabledIds.length ? enabledIds : impact.mappings.map(row => row.id);
   const projected = { ...endpoint, ...candidate.config };
+  const keyIds = projected.authMode === 'pool' ? connectionKeys(projected, provider).map(key => key.id) : [null];
   const checks = requiredIds.map(id => {
     const mapping = impact.mappings.find(row => row.id === id), signature = channelEvidenceSignature(state, provider.id, mapping, projected);
-    const evidence = latestCandidateEvidence(candidate, id, signature);
+    const evidenceByKey = keyIds.map(keyId => latestCandidateEvidence(candidate, id, signature, keyId));
+    const evidence = evidenceByKey.find(row => !row || row.result !== '通过') || evidenceByKey.slice().sort((left, right) => Date.parse(left?.testedAt) - Date.parse(right?.testedAt))[0];
     const pending = candidate.pendingTests?.some(job => job.endpointId === endpoint.id && job.associationIds.includes(id));
-    const age = evidence ? at - Date.parse(evidence.testedAt) : Infinity;
-    const real = evidence?.source === 'server-receipt' && evidence.simulated === false && evidence.serverBatchId && evidence.serverSignature;
-    const passed = !impactChanged && !pending && evidence?.result === '通过' && age >= 0 && age <= CHANNEL_EVIDENCE_MAX_AGE_MS && (!requireReal || real);
-    return { associationId: id, modelId: mapping.modelId, passed, evidence, reason: impactChanged ? '关联模型或服务引用已变化，请重新保存候选配置' : pending ? '候选测试尚未完成' : !evidence ? '候选配置尚未测试' : evidence.result !== '通过' ? evidence.message || '最近一次测试未通过' : age < 0 || age > CHANNEL_EVIDENCE_MAX_AGE_MS ? '测试证据已过期，请重新测试' : requireReal && !real ? '正式接入需要真实上游测试证据' : '' };
+    const covered = keyIds.length > 0 && evidenceByKey.every(Boolean);
+    const real = evidenceByKey.every(row => row?.source === 'server-receipt' && row.simulated === false && row.serverBatchId && row.serverSignature);
+    const fresh = evidenceByKey.every(row => row && at - Date.parse(row.testedAt) >= 0 && at - Date.parse(row.testedAt) <= CHANNEL_EVIDENCE_MAX_AGE_MS);
+    const passed = !impactChanged && !pending && covered && fresh && evidence?.result === '通过' && (!requireReal || real);
+    return { associationId: id, modelId: mapping.modelId, passed, evidence, evidenceByKey, reason: impactChanged ? '关联模型或服务引用已变化，请重新保存候选配置' : pending ? '候选测试尚未完成' : !covered ? projected.authMode === 'pool' ? '候选配置尚未完成全部启用密钥的测试' : '候选配置尚未测试' : evidence.result !== '通过' ? evidence.message || '最近一次测试未通过' : !fresh ? '测试证据已过期，请重新测试' : requireReal && !real ? '正式接入需要真实上游测试证据' : '' };
   });
   let credentialError = '';
   try { assertCredentials(projected, provider); } catch (error) { credentialError = error.message; }
@@ -146,6 +153,7 @@ function testedCandidate(state, provider, endpoint, candidate, data) {
     return mapping;
   });
   const projected = { ...endpoint, ...candidate.config };
+  if (projected.authMode === 'pool' && !connectionKeys(projected, provider).some(key => key.id === data.keyId)) throw new Error('请选择一条可用的候选密钥进行测试');
   const tests = selected.map(mapping => {
     let result;
     try {
@@ -154,7 +162,7 @@ function testedCandidate(state, provider, endpoint, candidate, data) {
       if (issue) throw new Error(issue);
       result = modelConnectivityPreview({ upstreamId: mapping.upstreamModelId }, data.scenarios?.[mapping.id] || 'success');
     } catch (error) { result = { result: '失败', message: error.message }; }
-    return { ...result, id: uid('candidate-test'), candidateId: candidate.id, endpointId: endpoint.id, associationId: mapping.id, signature: channelEvidenceSignature(state, provider.id, mapping, projected), testedAt: new Date().toISOString(), source: 'prototype', simulated: true, credentialIds: liveKeys(projected, provider).map(key => key.id) };
+    return { ...result, id: uid('candidate-test'), candidateId: candidate.id, endpointId: endpoint.id, associationId: mapping.id, signature: channelEvidenceSignature(state, provider.id, mapping, projected), testedAt: new Date().toISOString(), source: 'prototype', simulated: true, credentialIds: projected.authMode === 'pool' ? [data.keyId] : liveKeys(projected, provider).map(key => key.id) };
   });
   return { ...candidate, tests: [...candidate.tests, ...tests] };
 }
@@ -173,7 +181,8 @@ function appliedCandidate(state, provider, endpoint, candidate, data) {
   const tested = new Map();
   for (const mapping of mappings) {
     const signature = channelEvidenceSignature(state, provider.id, mapping, next);
-    const evidence = latestCandidateEvidence(candidate, mapping.id, signature);
+    const check = status.checks.find(row => row.associationId === mapping.id);
+    const evidence = next.authMode === 'pool' ? check?.passed ? { ...check.evidence, source: check.evidenceByKey.every(row => row.source === 'server-receipt' && row.simulated === false) ? 'server-receipt' : check.evidenceByKey.every(row => row.source === 'mock') ? 'mock' : 'prototype', simulated: check.evidenceByKey.some(row => row.simulated !== false), credentialIds: connectionKeys(next, provider).map(key => key.id), evidenceIds: check.evidenceByKey.map(row => row.id) } : null : latestCandidateEvidence(candidate, mapping.id, signature);
     const age = evidence ? Date.now() - Date.parse(evidence.testedAt) : Infinity;
     if (evidence?.result === '通过' && age >= 0 && age <= CHANNEL_EVIDENCE_MAX_AGE_MS && (!requireReal || evidence.source === 'server-receipt' && evidence.simulated === false)) tested.set(mapping.id, evidence);
   }
@@ -245,11 +254,12 @@ export function candidateTestPlan(state, data) {
   const { candidate, endpoint } = current;
   const projectedEndpoint = { ...endpoint, ...(data.groupId ? candidate.configs[endpoint.id] : candidate.config) };
   assertCredentials(projectedEndpoint, provider);
+  if (projectedEndpoint.authMode === 'pool' && !connectionKeys(projectedEndpoint, provider).some(key => key.id === data.keyId)) throw new Error('请选择一条可用的候选密钥进行测试');
   const records = supplierChannelAssociations(projectedState, provider, endpoint.id).map(mapping => {
     const master = resolveChannelAssociationModel(state, provider, mapping);
     return { associationId: mapping.id, modelId: master.id, upstreamModelId: mapping.upstreamModelId, type: master.type, signature: channelEvidenceSignature(projectedState, provider.id, mapping, projectedEndpoint) };
   });
-  return { candidateId: candidate.id, provider, endpoint: projectedEndpoint, records, signature: configSignature(projectedEndpoint, provider), ...(data.groupId ? { groupId: data.groupId } : {}) };
+  return { candidateId: candidate.id, provider, endpoint: projectedEndpoint, records, signature: configSignature(projectedEndpoint, provider) + (projectedEndpoint.authMode === 'pool' ? JSON.stringify(data.keyId) : ''), ...(data.groupId ? { groupId: data.groupId } : {}) };
 }
 
 function candidateReceiptTransaction(state, operation, data) {
@@ -261,10 +271,11 @@ function candidateReceiptTransaction(state, operation, data) {
     const existing = jobs.find(row => row.operationId === data.operationId);
     if (existing) {
       const batchId = data.batchId || existing.batchId || '';
-      if (existing.endpointId !== endpoint.id || existing.groupId !== data.groupId || existing.candidateId !== data.candidateId || existing.signature !== data.signature || existing.serverSignature !== data.serverSignature || existing.serverChannelId !== data.serverChannelId || requestSignature(existing.request) !== requestSignature(data.request) || existing.batchId && existing.batchId !== batchId || typeof batchId !== 'string' || batchId.length > 120) throw new Error('同一操作 ID 不能替换候选、配置、请求或测试任务');
+      if (existing.endpointId !== endpoint.id || existing.keyId !== data.keyId || existing.serverCredentialId !== data.serverCredentialId || existing.groupId !== data.groupId || existing.candidateId !== data.candidateId || existing.signature !== data.signature || existing.serverSignature !== data.serverSignature || existing.serverChannelId !== data.serverChannelId || requestSignature(existing.request) !== requestSignature(data.request) || existing.batchId && existing.batchId !== batchId || typeof batchId !== 'string' || batchId.length > 120) throw new Error('同一操作 ID 不能替换候选、配置、请求或测试任务');
       return finish('恢复候选测试任务', [update(group ? 'providers' : 'endpoints', group ? provider.id : endpoint.id, { [field]: jobs.map(row => row === existing ? { ...row, batchId } : row) })]);
     }
     const plan = candidateTestPlan(state, data), request = data.request;
+    if (plan.endpoint.authMode === 'pool' && (typeof data.serverCredentialId !== 'string' || !data.serverCredentialId || data.serverCredentialId.length > 160)) throw new Error('候选测试缺少密钥引用');
     if (data.signature !== plan.signature || typeof data.serverSignature !== 'string' || !data.serverSignature || typeof data.serverChannelId !== 'string' || !data.serverChannelId || !request || request.channelId !== data.serverChannelId || request.operationId !== data.operationId || typeof data.operationId !== 'string' || !data.operationId || data.operationId.length > 120) throw new Error('候选任务与当前配置或原始请求不匹配');
     if (!Array.isArray(request.models) || !request.models.length || request.models.length > 50 || new Set(request.models.map(row => row.associationId)).size !== request.models.length) throw new Error('请选择 1–50 个不重复的候选模型');
     const models = request.models.map(model => {
@@ -276,7 +287,7 @@ function candidateReceiptTransaction(state, operation, data) {
     });
     const previous = jobs.find(row => row.operationId === data.operationId), batchId = data.batchId || previous?.batchId || '';
     if (typeof batchId !== 'string' || batchId.length > 120) throw new Error('测试任务 ID 无效');
-    const record = { candidateId: plan.candidateId, providerId: provider.id, endpointId: endpoint.id, ...(group ? { groupId: data.groupId } : {}), operationId: data.operationId, batchId, signature: plan.signature, serverChannelId: data.serverChannelId, serverSignature: data.serverSignature, request: { operationId: data.operationId, channelId: data.serverChannelId, confirmExpensive: request.confirmExpensive === true, models }, associationSignatures: Object.fromEntries(models.map(model => [model.associationId, plan.records.find(row => row.associationId === model.associationId).signature])), createdAt: previous?.createdAt || new Date().toISOString(), operator: state.currentRole, configurationRevision: endpoint.configurationRevision || 0 };
+    const record = { ...(plan.endpoint.authMode === 'pool' ? { keyId: data.keyId, serverCredentialId: data.serverCredentialId } : {}), candidateId: plan.candidateId, providerId: provider.id, endpointId: endpoint.id, ...(group ? { groupId: data.groupId } : {}), operationId: data.operationId, batchId, signature: plan.signature, serverChannelId: data.serverChannelId, serverSignature: data.serverSignature, request: { operationId: data.operationId, channelId: data.serverChannelId, confirmExpensive: request.confirmExpensive === true, models }, associationSignatures: Object.fromEntries(models.map(model => [model.associationId, plan.records.find(row => row.associationId === model.associationId).signature])), createdAt: previous?.createdAt || new Date().toISOString(), operator: state.currentRole, configurationRevision: endpoint.configurationRevision || 0 };
     if (previous && (previous.candidateId !== record.candidateId || previous.signature !== record.signature || previous.serverSignature !== record.serverSignature || previous.serverChannelId !== record.serverChannelId || JSON.stringify(previous.request) !== JSON.stringify(record.request) || previous.batchId && previous.batchId !== batchId)) throw new Error('同一操作 ID 不能替换候选、配置、请求或测试任务');
     const next = { ...record, ...(previous?.receivedAt ? { receivedAt: previous.receivedAt, status: previous.status } : {}) }, updated = [...jobs.filter(row => row.operationId !== next.operationId), next];
     const pending = candidate => ({ ...candidate, pendingTests: [...(candidate.pendingTests || []).filter(row => row.operationId !== next.operationId), ...(previous?.receivedAt ? [] : [{ operationId: next.operationId, endpointId: endpoint.id, associationIds: models.map(model => model.associationId) }])] });
@@ -285,11 +296,12 @@ function candidateReceiptTransaction(state, operation, data) {
   }
   const batch = data.batch, job = jobs.find(row => row.operationId === data.operationId && row.candidateId === data.candidateId && row.endpointId === endpoint.id);
   if (!job || !job.batchId || batch?.id !== job.batchId || batch.channelId !== job.serverChannelId || batch.signature !== job.serverSignature || batch.providerId !== provider.id || !['completed', 'cancelled', 'interrupted'].includes(batch.status) || !Array.isArray(batch.items)) throw new Error('候选回执不属于已知的已完成任务');
+  if (job.keyId && batch.credentialId !== job.serverCredentialId) throw new Error('回执密钥与原提交不一致');
   if (job.receivedAt) return finish('候选测试结果已记录', []);
   const expected = job.request.models;
   if (batch.items.length !== expected.length || new Set(batch.items.map(item => item.model?.associationId)).size !== expected.length) throw new Error('候选回执的模型集合与提交不一致');
   let plan;
-  try { plan = candidateTestPlan(state, { ...data, expectedRevision: endpoint.configurationRevision || 0, expectedGroupVersion: provider.keyGroupRevisions?.[job.groupId] || 0 }); } catch { /* An old job remains history and cannot qualify a changed candidate. */ }
+  try { plan = candidateTestPlan(state, { ...data, keyId: job.keyId, expectedRevision: endpoint.configurationRevision || 0, expectedGroupVersion: provider.keyGroupRevisions?.[job.groupId] || 0 }); } catch { /* An old job remains history and cannot qualify a changed candidate. */ }
   const at = new Date().toISOString();
   const records = batch.items.map(item => {
     const submitted = expected.find(model => model.associationId === item.model?.associationId);
@@ -299,7 +311,7 @@ function candidateReceiptTransaction(state, operation, data) {
     const result = ({ passed: '通过', failed: '失败', cancelled: '已取消', unknown: '结果未知' })[item.status] || '结果未知';
     const mock = batch.source === 'mock';
     if (result === '通过' && (item.evidenceSource !== (mock ? 'mock' : 'real') || !Number.isFinite(Date.parse(item.endedAt)))) throw new Error('候选通过证据必须来自已完成的对应测试任务');
-    return { id: item.id, candidateId: job.candidateId, signature: job.associationSignatures[submitted.associationId], current, source: mock ? 'mock' : 'server-receipt', simulated: mock, ...channelTestDiagnostics({ providerId: provider.id, endpointId: endpoint.id, associationId: submitted.associationId, operator: job.operator, configurationRevision: job.configurationRevision, serverChannelId: job.serverChannelId }, batch, item) };
+    return { id: item.id, candidateId: job.candidateId, signature: job.associationSignatures[submitted.associationId], current, source: mock ? 'mock' : 'server-receipt', simulated: mock, ...channelTestDiagnostics({ providerId: provider.id, endpointId: endpoint.id, associationId: submitted.associationId, operator: job.operator, configurationRevision: job.configurationRevision, serverChannelId: job.serverChannelId }, batch, item), ...(job.keyId ? { credentialId: job.keyId, credentialIds: [job.keyId], serverCredentialId: job.serverCredentialId } : {}) };
   });
   const received = jobs.map(row => row.operationId === job.operationId ? { ...row, receivedAt: at, status: batch.status } : row), usable = records.filter(row => row.current);
   const completed = candidate => ({ ...candidate, tests: [...candidate.tests, ...usable], pendingTests: (candidate.pendingTests || []).filter(row => row.operationId !== job.operationId) });
@@ -373,7 +385,7 @@ function keyGroupTransaction(state, operation, data) {
 }
 
 function procurementTransaction(state, operation, data) {
-  if (!['channelProcurementDraft', 'channelProcurementPublish'].includes(operation)) throw new Error('未知采购价版本操作');
+  if (operation !== 'channelProcurementPublish') throw new Error('未知采购价版本操作');
   const { provider, endpoint } = context(state, data.providerId, data.endpointId);
   const projected = supplierChannelAssociations(state, provider, endpoint.id).find(row => row.id === data.associationId);
   if (!projected) throw new Error('采购报价不属于当前模型渠道');
@@ -386,23 +398,18 @@ function procurementTransaction(state, operation, data) {
   if (data.expectedPriceRevision !== (association.procurementRevision || 0)) throw new Error('采购报价已有修订，请重新载入');
   const at = new Date().toISOString();
   let versions = structuredClone(association.procurementVersions || [{ id: `baseline-${association.id}`, version: 0, pricing: structuredClone(association.pricing), status: '已发布', effectiveAt: association.updatedAt || endpoint.createdAt || new Date(0).toISOString(), publishedAt: association.updatedAt || endpoint.createdAt || new Date(0).toISOString(), expiresAt: null }]);
-  if (operation === 'channelProcurementDraft') {
-    const pricing = normalizeProviderPrice(provider, { modelId: association.modelId, discountFactor: '1', scenarios: data.scenarios });
-    const effectiveAt = data.effectiveAt || at, expiresAt = data.expiresAt || null;
-    if (!Number.isFinite(Date.parse(effectiveAt)) || expiresAt && (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.parse(effectiveAt))) throw new Error('请填写有效的采购价生效和到期时间');
-    versions.push({ id: uid('procurement'), version: Math.max(...versions.map(row => row.version)) + 1, pricing, effectiveAt, expiresAt, status: '草稿', createdAt: at });
-  } else {
-    const version = versions.find(row => row.id === data.versionId && row.status === '草稿');
-    if (!version || data.confirmed !== true) throw new Error('请确认发布当前采购价草稿');
-    if (!version.pricing.scenarios.length || version.pricing.scenarios.some(row => row.listPrice == null)) throw new Error('请补齐采购计费项，免费请明确填写 0');
-    if (version.expiresAt && Date.parse(version.expiresAt) <= Date.parse(at)) throw new Error('采购价已经到期，不能发布');
-    version.status = '已发布'; version.publishedAt = at;
-  }
+  if (data.confirmed !== true) throw new Error('请确认发布采购价');
+  const pricing = normalizeProviderPrice(provider, { modelId: association.modelId, discountFactor: '1', scenarios: data.scenarios });
+  const effectiveAt = data.effectiveAt || at, expiresAt = data.expiresAt || null;
+  if (!Number.isFinite(Date.parse(effectiveAt)) || expiresAt && (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.parse(effectiveAt))) throw new Error('请填写有效的采购价生效和到期时间');
+  if (!pricing.scenarios.length || pricing.scenarios.some(row => row.listPrice == null)) throw new Error('请补齐采购计费项，免费请明确填写 0');
+  if (expiresAt && Date.parse(expiresAt) <= Date.parse(at)) throw new Error('采购价已经到期，不能发布');
+  versions.push({ id: uid('procurement'), version: Math.max(...versions.map(row => row.version)) + 1, pricing, effectiveAt, expiresAt, status: '已发布', createdAt: at, publishedAt: at });
   const next = { ...association, procurementVersions: versions, procurementRevision: (association.procurementRevision || 0) + 1 };
   const active = activeChannelProcurement(next);
   if (active) next.pricing = structuredClone(active.pricing);
   const catalogConnections = saved ? entries.map(row => row === saved ? next : row) : [...entries, next];
-  return { type: 'batch', objectId: association.id, label: operation === 'channelProcurementDraft' ? '保存采购价版本' : '发布采购价版本', changes: [update('providers', provider.id, { catalogConnections })] };
+  return { type: 'batch', objectId: association.id, label: '发布采购价版本', changes: [update('providers', provider.id, { catalogConnections })] };
 }
 
 function stageCredentialChanges(state, changes) {
@@ -450,7 +457,7 @@ function prepareCredentialCandidate(state, operation, data) {
   const added = providerTransaction(working, { operation: 'addApiKeys', objectId: provider.id, data: { groupId, apiKeys: [data.newApiKey] } });
   const next = stageCredentialChanges(working, added.changes), owner = next.providers.find(row => row.id === provider.id), key = owner.apiKeys.find(row => row.fingerprint === data.newApiKey.fingerprint);
   const prepared = operation === 'channelCandidateCredentialPrepare'
-    ? channelChangeTransaction(next, { operation: 'channelCandidateSave', data: { providerId: provider.id, endpointId: endpoint.id, expectedRevision: data.expectedRevision, config: { authMode: 'specific', apiKeyId: key.id } } })
+    ? channelChangeTransaction(next, { operation: 'channelCandidateSave', data: { providerId: provider.id, endpointId: endpoint.id, expectedRevision: data.expectedRevision, config: { ...data.config, authMode: 'specific', apiKeyId: key.id } } })
     : keyGroupTransaction(next, 'keyGroupCandidateSave', { ...data, keyId: key.id });
   return { type: 'batch', objectId: prepared.objectId, label: '准备新密钥候选', changes: [...changes, ...added.changes, ...prepared.changes] };
 }

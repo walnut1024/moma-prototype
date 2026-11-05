@@ -1,9 +1,13 @@
+import mockConfig from '../mock/catalogues.json' with { type: 'json' };
+import {initialApplicationData} from '../mock/application-data.js';
+import {systemModelData} from '../mock/model-data.js';
 import { usageMeter } from './usage-analysis.js';
 
+const initialResources={...initialApplicationData(0),...systemModelData()};
 const DAY = 86400000;
-const hourlyTraffic = [3, 2, 2, 1, 2, 4, 6, 11, 20, 32, 39, 35, 24, 34, 42, 46, 39, 31, 25, 18, 13, 9, 6, 4];
-const customerWeights = { 'tenant-gov': 28, 'tenant-nanjing': 12, 'tenant-demo': 1, 'tenant-usage-1': 25, 'tenant-usage-2': 12, 'tenant-usage-3': 8, 'tenant-usage-4': 4, 'tenant-usage-5': 3, 'tenant-usage-6': 2, 'tenant-usage-7': 0.8, 'tenant-usage-8': 0.7, 'tenant-usage-9': 0.5 };
-const typeWeights = { text: 58, multimodal: 12, embedding: 18, rerank: 7, image: 5, audio: 6, video: 2 };
+const hourlyTraffic = mockConfig["admin-v2/usage-demo.js"]["hourlyTraffic"];
+const customerWeights = mockConfig["admin-v2/usage-demo.js"]["customerWeights"];
+const typeWeights = mockConfig["admin-v2/usage-demo.js"]["typeWeights"];
 const hash = text => [...text].reduce((value, char) => Math.imul(value ^ char.charCodeAt(0), 16777619), 2166136261) >>> 0;
 const randomFor = key => {
   let value = hash(key);
@@ -14,10 +18,14 @@ const choose = (items, weight, random) => {
   return items.find((item, index) => (remaining -= weight(item, index)) < 0) || items.at(-1);
 };
 
-export function usageDemoRequests({ models, tenants, projects, apiKeys, endpoints, memberships }, now) {
+export function usageDemoRequests(state, now) {
+  if(!state.initialData)return [];
+  const {models,tenants,projects,apiKeys,endpoints,memberships}=initialResources;
+  const ids=Object.fromEntries(['models','tenants','projects','apiKeys','endpoints','users'].map(collection=>[collection,new Set(state[collection].map(row=>row.id))]));
   const candidates = models.map(model => ({ model, channels: endpoints.filter(endpoint => endpoint.modelIds?.includes(model.id) && endpoint.status !== '草稿') })).filter(item => item.channels.length && typeWeights[item.model.type]);
   const types = Object.keys(typeWeights).filter(type => candidates.some(item => item.model.type === type));
-  const customers = tenants.filter(tenant => customerWeights[tenant.id]).map(tenant => ({ tenant, projects: projects.filter(project => project.tenantId === tenant.id && apiKeys.some(key => key.projectId === project.id && key.status === '有效' && key.modelIds.length === models.length)) })).filter(item => item.projects.length);
+  const customers = tenants.filter(tenant => customerWeights[tenant.id]).map(tenant => ({ tenant, projects: projects.filter(project => project.tenantId === tenant.id && apiKeys.some(key => key.projectId === project.id && key.status === '有效' && key.modelIds?.length)) })).filter(item => item.projects.length);
+  if(!candidates.length || !customers.length)return [];
   const today = Math.floor((now + 8 * 3600000) / DAY) * DAY - 8 * 3600000;
   const requests = [];
   for (let day = 0; day < 36; day++) {
@@ -33,8 +41,10 @@ export function usageDemoRequests({ models, tenants, projects, apiKeys, endpoint
         const at = start + Math.floor(random() * 3600000);
         const customer = choose(customers, item => customerWeights[item.tenant.id] * (item.tenant.id === 'tenant-usage-1' ? office ? 1 : 1.7 : office ? 1.15 : 0.35), random);
         const project = choose(customer.projects, item => item.name.includes('生产') ? 9 : 1, random);
-        const type = choose(types, item => typeWeights[item] * (office || ['embedding', 'rerank'].includes(item) ? 1 : 0.7), random);
-        const { model, channels } = choose(candidates.filter(item => item.model.type === type), (_, rank) => 1 / (rank + 1) ** 1.5, random);
+        const eligible=candidates.filter(item=>apiKeys.some(key=>key.projectId===project.id&&key.status==='有效'&&key.modelIds?.includes(item.model.id)));
+        if(!eligible.length)continue;
+        const type = choose(types.filter(type=>eligible.some(item=>item.model.type===type)), item => typeWeights[item] * (office || ['embedding', 'rerank'].includes(item) ? 1 : 0.7), random);
+        const { model, channels } = choose(eligible.filter(item => item.model.type === type), (_, rank) => 1 / (rank + 1) ** 1.5, random);
         const endpoint = choose(channels, (_, rank) => rank === 0 ? 3 : 1, random);
         const key = apiKeys.find(item => item.projectId === project.id && item.status === '有效' && item.modelIds.includes(model.id));
         const actors = memberships.filter(member => member.tenantId === customer.tenant.id && member.projectIds?.includes(project.id));
@@ -52,7 +62,12 @@ export function usageDemoRequests({ models, tenants, projects, apiKeys, endpoint
         const createdAt = new Date(at).toISOString(), id = `${stamp.replaceAll('-', '')}-${String(hour).padStart(2, '0')}-${String(index).padStart(3, '0')}`;
         const row = { id: `usage-demo-${id}`, requestId: `req_${id}`, tenantId: customer.tenant.id, projectId: project.id, keyId: key.id, userId: anonymous ? undefined : actor?.userId, modelId: model.id, versionId: model.defaultVersionId, endpointId: endpoint.id, releaseId: 'release-2', source: random() < 0.92 ? 'API 调用' : '网页端调用', attempts: [{ endpointId: endpoint.id, durationMs, error: failed ? 'upstream_timeout' : null }], usage, usageUnit: unit, usageConfirmed: true, httpStatus: failed ? 504 : 200, ttftMs, durationMs, createdAt, updatedAt: createdAt };
         // Generate the whole hour before clipping, so reloads keep earlier requests stable.
-        if (at < now) requests.push(row);
+        if (at < now && ids.models.has(row.modelId) && ids.tenants.has(row.tenantId) && ids.projects.has(row.projectId) && ids.apiKeys.has(row.keyId) && ids.endpoints.has(row.endpointId)) {
+          const currentKey=state.apiKeys.find(item=>item.id===row.keyId);
+          if(currentKey.tenantId!==row.tenantId || currentKey.projectId!==row.projectId)continue;
+          if(row.userId&&!ids.users.has(row.userId))row.userId=undefined;
+          requests.push(row);
+        }
       }
     }
   }

@@ -15,7 +15,7 @@ test('multiple connections and their keys persist atomically without plaintext o
   assert.equal(endpoints.length, 2);
   assert.deepEqual(endpoints.map(item => item.apiKeys.length), [1, 2]);
   assert.equal(endpoints[1].protocol, '其他');
-  assert.ok(endpoints.every(item => item.status === '草稿' && !connectionTestPassed(item) && connectionCredentialsReady(item, saved)));
+  assert.ok(endpoints.every(item => item.status === '停用' && !connectionTestPassed(item) && connectionCredentialsReady(item, saved)));
   assert.equal(saved.contactInfo, 'contact@example.invalid');
   assert.deepEqual(saved.catalogModelIds, []);
   assert.deepEqual(state.models, seed.models);

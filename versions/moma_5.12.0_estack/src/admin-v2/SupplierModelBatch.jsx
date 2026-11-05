@@ -9,7 +9,7 @@ import { CompletePriceTable } from './SupplyPriceEditor';
 import { modelLibrary, libraryRecord } from './model-operations';
 import { priceItems } from './model-management';
 import { markedUpItems, parseSaleAmount } from './provider-catalogue-pricing';
-import { supplierListingRows, supplierBatchEntry, supplierPublishEntry, previewSupplierBatch, listingPreferences, rememberCatalogueSelection, selectedCatalogueIds } from './supplier-listing';
+import { supplierListingRows, supplierBatchEntry, previewSupplierBatch, listingPreferences, rememberCatalogueSelection, selectedCatalogueIds } from './supplier-listing';
 
 export default function SupplierModelBatch({ state, ops, home, viewSwitch }) {
   const provider = state.providers.find(item => item.id === ops.params.get('provider'));
@@ -17,47 +17,24 @@ export default function SupplierModelBatch({ state, ops, home, viewSwitch }) {
   const batch = listingPreferences(localStorage).batch;
   const selectedRows = batch?.providerId === provider?.id && Array.isArray(batch.ids) ? catalogue.filter(row => batch.ids.includes(row.catalogueModelId)) : [];
   const [entries, setEntries] = useState(() => {
-    return selectedRows.filter(row => !row.selling || row.draft).map(row => supplierBatchEntry(state, row));
+    return selectedRows.filter(row => !row.selling).map(row => supplierBatchEntry(state, row));
   });
   const [stage, setStage] = useState(ops.params.get('batchMode') === 'review' ? 'check' : 'configure');
-  const [check, setCheck] = useState(() => ops.params.get('batchMode') === 'review' && provider && entries.length ? previewSupplierBatch(state, 'prepareSupplierBatch', provider.id, entries) : null), [markup, setMarkup] = useState('20');
+  const [check, setCheck] = useState(() => ops.params.get('batchMode') === 'review' && provider && entries.length ? previewSupplierBatch(state, 'submitSupplierBatch', provider.id, entries) : null), [markup, setMarkup] = useState('20');
   const [applyScope, setApplyScope] = useState(false), [scope, setScope] = useState({ openScope: 'all', tenantIds: [] }), [done, setDone] = useState(0);
   const library = modelLibrary(state);
   const setEntry = (id, patch) => { setEntries(current => current.map(entry => entry.catalogueModelId === id ? { ...entry, ...patch } : entry)); ops.dirty(true); ops.setError(''); };
   const payload = () => entries.map(entry => ({ ...entry, ...(applyScope ? { listingScope: scope } : {}) }));
-  const inspect = () => {
-    const next = ops.run('saveSupplierBatch', { providerId: provider.id, items: payload() });
-    if (!next) return;
-    const fresh = savedEntries(next); setEntries(fresh);
-    setCheck({ ...previewSupplierBatch(next, 'prepareSupplierBatch', provider.id, fresh), persisted: true }); setStage('check');
-  };
-  const savedEntries = next => {
-    const rows = supplierListingRows(next, provider);
-    return entries.map(entry => { const row = rows.find(row => row.catalogueModelId === entry.catalogueModelId); return row ? { ...entry, draftId: row.draft?.id || entry.draftId } : entry; });
-  };
-  const saveProgress = () => {
-    const next = ops.run('saveSupplierBatch', { providerId: provider.id, items: payload() });
-    if (next) setEntries(savedEntries(next));
-    return next;
-  };
-  const prepare = () => {
+  const inspect = () => { setCheck(previewSupplierBatch(state, 'submitSupplierBatch', provider.id, payload())); setStage('review'); };
+  const publish = async () => {
     if (!check?.ready.length || check.revision !== state.revision) return;
-    const next = ops.run('prepareSupplierBatch', { providerId: provider.id, items: check.ready });
-    if (!next) return;
-    setEntries(supplierListingRows(next, provider).filter(row => entries.some(entry => entry.catalogueModelId === row.catalogueModelId)).map(row => supplierBatchEntry(next, row)));
-    const rows = supplierListingRows(next, provider);
-    const publish = previewSupplierBatch(next, 'publishSupplierBatch', provider.id, check.ready.map(entry => supplierPublishEntry(rows.find(row => row.catalogueModelId === entry.catalogueModelId))));
-    setCheck({ ...publish, blocked: [...check.blocked, ...publish.blocked] }); setStage('review');
-  };
-  const publish = () => {
-    if (!check?.ready.length || check.revision !== state.revision) return;
-    const next = ops.run('publishSupplierBatch', { providerId: provider.id, items: check.ready });
+    const next = await ops.run('submitSupplierBatch', { providerId: provider.id, items: check.ready });
     if (!next) return;
     setDone(check.ready.length); setStage('done');
     const completed = new Set(check.ready.map(item => item.catalogueModelId));
     rememberCatalogueSelection(localStorage, provider, selectedCatalogueIds(localStorage, provider).filter(id => !completed.has(id)));
   };
-  const maintainMaster = entry => { if (saveProgress()) ops.go({ view: 'template', template: entry.libraryId || null, code: entry.catalogueModelId, returnListing: location.hash }, { base: 'model-templates', saved: true }); };
+  const maintainMaster = entry => ops.go({ view: 'template', template: entry.libraryId || null, code: entry.catalogueModelId, returnListing: location.hash }, { base: 'model-templates' });
   if (!provider || !entries.length) return <><Heading title="批量配置与上架"/><Notice error={!provider || !selectedRows.length}>{provider && selectedRows.length ? '本批次模型已上架，可返回列表继续管理。' : '供应商或所选目录模型已变化，请返回列表重新选择。'}<Button variant="link" onClick={home}>返回供应商视角</Button></Notice></>;
   const stale = check && check.revision !== state.revision;
   return <>
@@ -80,15 +57,15 @@ export default function SupplierModelBatch({ state, ops, home, viewSwitch }) {
           <CompletePriceTable cost={row.costs} sale={priceItems(row.sale, master || { type: 'text' })} rows={entry.prices} disabled={!ops.can} setRows={prices => setEntry(entry.catalogueModelId, { prices })}/>
         </div></details>;
       })}</div>
-      <div className="mo-footer"><span>保存进度不会上架模型。</span><Button variant="outline" disabled={!ops.can} onClick={saveProgress}>保存进度</Button><Button disabled={!ops.can} onClick={inspect}>保存并检查配置</Button></div>
+      <div className="mo-footer"><Button disabled={!ops.can} onClick={inspect}>预览并检查配置</Button></div>
     </section> : <section className="mo-surface mo-pad mo-supplier-batch">
-      {stage === 'done' ? <Notice>已上架 {done} 个模型，另有 {check.blocked.length} 个待处理。未通过检查的项目保留在原配置进度中。</Notice> : <><h2>{stage === 'review' ? '确认上架销售' : '配置检查结果'}</h2><p>本次可继续 {check.ready.length} 个，待处理 {check.blocked.length} 个。{stage === 'review' ? '确认后将发布平台售价并开放订购；其他供应商保持原配置。' : '保存合格项的关联、价格草稿及检查结果，销售和服务状态保持到最终确认。'}</p></>}
+      {stage === 'done' ? <Notice>已上架 {done} 个模型，另有 {check.blocked.length} 个待处理。未通过检查的项目未提交。</Notice> : <><h2>{stage === 'review' ? '确认上架销售' : '配置检查结果'}</h2><p>本次可继续 {check.ready.length} 个，待处理 {check.blocked.length} 个。{stage === 'review' ? '确认后将发布平台售价并开放订购；其他供应商保持原配置。' : '保存合格项的关联、未上架售价及检查结果，销售和服务状态保持到最终确认。'}</p></>}
       {stale && stage !== 'done' && <Notice error>数据已有修订，请返回配置重新核对；当前输入保留。</Notice>}
       <GridTable headings={['目录模型', '关联平台模型', '平台售价', '订购范围', '检查结果']} empty={false}>{entries.map(entry => {
-        const blocked = check.blocked.find(item => item.catalogueModelId === entry.catalogueModelId), row = catalogue.find(row => row.catalogueModelId === entry.catalogueModelId), master = libraryRecord(state, entry.libraryId), listingScope = applyScope ? scope : row?.draft?.listingScope || master;
+        const blocked = check.blocked.find(item => item.catalogueModelId === entry.catalogueModelId), master = libraryRecord(state, entry.libraryId), listingScope = applyScope ? scope : entry.listingScope || master;
         return <Row key={entry.catalogueModelId}><Cell><code>{entry.catalogueModelId}</code></Cell><Cell>{master?.name || '未关联'}</Cell><Cell>{blocked ? '待核对' : <Price model={master} price={{ items: entry.prices.map(item => ({ ...item, amount: parseSaleAmount(item.amount, false) })) }}/>}</Cell><Cell>{listingScope?.openScope === 'selected' ? `${listingScope.tenantIds.length} 个指定租户` : '全部租户'}</Cell><Cell>{blocked ? <span className="mo-pending">{blocked.reason}</span> : stage === 'done' ? '已上架销售' : stage === 'review' ? '检查通过，待确认上架' : '配置检查通过'}</Cell></Row>;
       })}</GridTable>
-      <div className="mo-footer">{stage === 'done' ? <Button onClick={home}>返回供应商视角</Button> : <><Button variant="outline" onClick={() => { setStage('configure'); setCheck(null); }}>返回配置</Button><Button disabled={!ops.can || stale || (stage === 'review' || check.persisted) && !check.ready.length} onClick={stage === 'review' ? publish : check.persisted ? prepare : inspect}>{stage === 'review' ? `确认上架 ${check.ready.length} 个模型` : check.persisted ? `保存合格的 ${check.ready.length} 项并继续` : '保存进度并检查'}</Button></>}</div>
+      <div className="mo-footer">{stage === 'done' ? <Button onClick={home}>返回供应商视角</Button> : <><Button variant="outline" onClick={() => { setStage('configure'); setCheck(null); }}>返回配置</Button><Button disabled={!ops.can || stale || !check.ready.length} onClick={publish}>{`确认上架 ${check.ready.length} 个模型`}</Button></>}</div>
     </section>}
   </>;
 }

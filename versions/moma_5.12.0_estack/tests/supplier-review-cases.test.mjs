@@ -1,3 +1,4 @@
+import { legacySupplierState } from './legacy-supplier-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createAdminSeed,parseAdminState} from '../src/admin-v2/store.js';
@@ -9,8 +10,8 @@ import {routeMappingStatus} from '../src/admin-v2/service-route-mapping.js';
 import {displayedCatalogueIds} from '../src/admin-v2/moma-provider.js';
 
 const moma=state=>state.providers.find(provider=>provider.id==='provider-moma');
-test('MoMA keeps five catalogue models, two shared chat channels and four compatible associations',()=>{
-  const state=parseAdminState(null),provider=moma(state),channels=supplierChannelResources(state,provider),links=supplierChannelAssociations(state,provider);
+test('explicit historical fixture keeps five models and four mappings across its two legacy channels',()=>{
+  const state=legacySupplierState(),provider=moma(state),channels=supplierChannelResources(state,provider),links=supplierChannelAssociations(state,provider);
   assert.equal(displayedCatalogueIds(provider,state).length,5);assert.equal(channels.length,2);assert.equal(links.length,4);assert.equal(provider.apiKeys.length,3);
   const identities=links.map(link=>[link.modelId,state.endpoints.find(endpoint=>endpoint.id===link.endpointId).channelCode]);
   assert.deepEqual(identities.sort(),[['GLM-5.2','CH-001'],['GLM-5.2','CH-002'],['DeepSeek-V4-Flash-0731','CH-001'],['Kimi/miKimi-K3','CH-002']].sort());
@@ -25,7 +26,7 @@ test('MoMA keeps five catalogue models, two shared chat channels and four compat
   for (const id of ['BGE-M3','AICC-Doubao-Seedance-2.0']) assert.equal(catalogueChannels(state,provider,id).length,0,id+' must start unassociated');
 });
 test('shared resource credential references and reference counts resolve to the intended key',()=>{
-  const state=parseAdminState(null),provider=moma(state),channels=supplierChannelResources(state,provider);
+  const state=legacySupplierState(),provider=moma(state),channels=supplierChannelResources(state,provider);
   assert.equal(provider.defaultApiKeyId,'KEY-001');
   for (const [code,keyId] of [['CH-001','KEY-001'],['CH-002','KEY-003']]) {
     const channel=channels.find(item=>item.channelCode===code);
@@ -51,7 +52,7 @@ test('fusion adds corrected missing cases without overwriting custom resources, 
   for (const key of ['models','modelSupplies','modelSalePrices','serviceRoutes','supplyPrices']) assert.deepEqual(prepared[key],state[key]);
 });
 test('version-one initialization is idempotent and never restores removed or edited review records',()=>{
-  const state=parseAdminState(null),provider=moma(state);
+  const state=legacySupplierState(),provider=moma(state);
   provider.catalogConnections.find(item=>item.modelId==='DeepSeek-V4-Flash-0731').deletedAt='2026-10-26';
   state.endpoints.find(item=>item.channelCode==='CH-002').name='维护后的专用渠道';
   provider.apiKeys.find(key=>key.id==='KEY-003').status='disabled';

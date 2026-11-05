@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createAdminSeed, commitAdminState, persistModelAction, parseAdminState } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction, parseAdminState as baseParseAdminState } from '../src/admin-v2/store.js';
 import { providerCatalogueIds, providerCatalogueModel } from '../src/admin-v2/moma-provider.js';
 import { catalogueChannels } from '../src/admin-v2/provider-channels.js';
 import { SUPPLIER_MODEL_TYPES } from '../src/admin-v2/provider-management.js';
@@ -121,3 +122,6 @@ test('deleted model identities cannot silently create an invisible duplicate or 
   assert.throws(() => commitAdminState(removed, action()), /历史记录/);
   assert.deepEqual(removed, before);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

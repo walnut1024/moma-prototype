@@ -1,3 +1,8 @@
+import {recordTenantExperience} from './tenant-data.mjs';
+import mockConfig from './mock/catalogues.json' with { type: 'json' };
+import { useServiceDirectory } from './useServiceDirectory';
+import { beginExperience, validateExperience } from './service-directory.mjs';
+import { readExperienceDraft, saveExperienceDraft } from './experience-drafts.mjs';
 import FrontPageHeader from "./components/FrontPageHeader";
 import { Languages } from "lucide-react";
 import { displayBusinessCopy } from './display-copy.mjs';
@@ -28,104 +33,31 @@ import "./experience.css";
 import "./experience-refinements.css";
 
 const STORAGE_KEY = "moma-text-conversations-5120-v1";
-const models = [
-  {
-    name: "DeepSeek/DeepSeek-V4-Pro",
-    icon: 1,
-    type: "text",
-    subscribed: true,
-    billing: "Token Plan",
-    desc: "擅长复杂推理、代码与长文本分析。",
-  },
-  {
-    name: "ZHIPU/GLM-5.2",
-    icon: 3,
-    type: "text",
-    subscribed: true,
-    billing: "按量计费",
-    desc: "兼顾推理质量与工具调用。",
-  },
-  {
-    name: "Qwen/Qwen3.7-Max",
-    icon: 4,
-    type: "text",
-    subscribed: false,
-    billing: "按量计费",
-    desc: "覆盖办公、编程与智能体任务。",
-  },
-  {
-    name: "Moonshot/Kimi-K3",
-    inputModalities: ["text", "image"],
-    icon: 2,
-    type: "text",
-    subscribed: true,
-    billing: "Token Plan",
-    desc: "适合长文本阅读与知识问答。",
-  },
-  {
-    name: "Qwen/Qwen3.5-VL",
-    inputModalities: ["text", "image"],
-    icon: 4,
-    type: "multimodal",
-    subscribed: true,
-    billing: "按量计费",
-    desc: "支持理解文字、图片和视频。",
-  },
-  {
-    name: "ZHIPU/GLM-4.6V",
-    inputModalities: ["text", "image"],
-    icon: 3,
-    type: "multimodal",
-    subscribed: false,
-    billing: "按量计费",
-    desc: "支持图文理解与视觉问答。",
-  },
-];
+const recommendations = mockConfig["TextExperience.jsx"]["recommendations"];
 
-const recommendations = [
-  [
-    "十年后的信",
-    "请以第一人称写一封给十年后自己的信。语气温柔、克制而真诚，回顾此刻正在坚持的事情、害怕失去的东西和仍未说出口的愿望；加入两个具体生活细节，让情绪有落点；结尾不要给出确定答案，而是留下一个开放式悬念。全文约 900 字，避免空泛鸡汤。",
-  ],
-  [
-    "雨夜故事",
-    "请写一则发生在雨夜便利店的短篇故事。设计清晰的开场钩子、人物冲突和一次合理但意外的反转；主要人物不超过三人，用动作和对话推进情节，减少旁白解释；结尾留有余味但不故弄玄虚。全文约 1200 字，现实主义风格。",
-  ],
-  [
-    "开业推文",
-    "请为一家新开的社区手作面包店写开业推文。突出当天现烤、邻里感、可见的手作过程和限时优惠，开头 20 字内抓住注意力；正文包含店铺亮点、三款主推产品、开业活动、地址与营业时间；语气亲切自然，避免夸张营销，给出一个主标题和三个备选标题。",
-  ],
-  [
-    "咖啡烘焙",
-    "请用适合咖啡入门者的方式解释浅烘和深烘咖啡豆的区别。按烘焙程度、酸度、苦味、香气、醇厚度、咖啡因误区和适合冲煮方式逐项对比；用一张简洁表格总结，并分别推荐适合喜欢果香与喜欢浓郁口感的人如何选择。",
-  ],
-  [
-    "产品翻译",
-    "请将下面的中文产品发布邮件翻译成自然、专业的英文。保留原有段落和项目符号，产品名与技术术语不翻译；语气正式但不生硬，适合发送给海外企业客户。翻译后另附一份术语对照表，并标出原文中可能存在歧义、需要确认的表达。\n\n邮件主题：MoMA 智能路由 2.0 正式发布\n\n尊敬的客户：\n\n您好！我们很高兴地宣布，MoMA 智能路由 2.0 将于 2026 年 10 月 8 日正式上线。本次升级进一步优化了多模型调度能力，帮助企业在保障生成质量的同时降低模型调用成本。\n\n本次更新包括：\n- 新增效果优先、成本优先和平衡模式三种路由策略；\n- 支持按请求内容、响应时延和模型可用性自动选择模型；\n- 新增调用链路追踪与成本分析面板；\n- 支持通过现有 API Key 直接调用，无需修改鉴权方式。\n\n现有客户可在 MoMA 控制台免费体验 30 天。若您希望获取产品咨询、迁移建议或专属报价，请回复本邮件联系我们的客户成功团队。\n\n感谢您一直以来对 MoMA 的支持！\n\nMoMA 产品团队",
-  ],
-];
-
-const loadHistory = () => {
+const loadHistory = (owner) => {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]").slice(0, 20);
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]").filter(row => owner && row.owner === owner);
   } catch {
     return [];
   }
 };
 
-function ModelPicker({ value, onChange }) {
+function ModelPicker({ value, onChange, models, disabled }) {
   const [open, setOpen] = useState(false);
+  const selected = models.find(item => item.id === value);
   return (
     <div className="pg-model-picker">
       <button
         className="pg-model"
         type="button"
+        disabled={disabled}
         aria-label="选择模型"
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
       >
-        <span>{value}</span>
+        <span>{selected ? `${selected.name} · ${selected.provider}` : "请选择模型"}</span>
         <ChevronDown size={15} />
       </button>
       <ModelSelectDialog
@@ -133,7 +65,7 @@ function ModelPicker({ value, onChange }) {
         models={models}
         value={value}
         onApply={(next) => {
-          if (onChange(next) === false) return;
+          if (onChange(next) === false) return false;
           setOpen(false);
         }}
         onClose={() => setOpen(false)}
@@ -142,25 +74,28 @@ function ModelPicker({ value, onChange }) {
   );
 }
 
-export default function TextExperience({ onCompare, title = "文本生成", imageUploadEnabled = false }) {
-  const [model, setModel] = useState(models[0].name);
-  const [images, setImages] = useState([]);
+export default function TextExperience({ onCompare, title = "文本生成", imageUploadEnabled = false, initialServiceId = "", owner = "" }) {
+  const directory = useServiceDirectory('text'), models = directory.models;
+  const [draft] = useState(() => { try { return readExperienceDraft(owner, 'text'); } catch { return { storageError: '草稿读取失败，请核对本地存储' }; } });
+  const ticket = useRef(null);
+  const [model, setModel] = useState(initialServiceId || draft.model || models.find(item => item.callable)?.id || '');
+  const [images, setImages] = useState(draft.images || []);
   const [readingImages, setReadingImages] = useState(false);
   const imageInput = useRef();
   const imageUrls = useRef(new Set());
   const imageReadVersion = useRef(0);
   const currentModel = useRef(model);
-  const [text, setText] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [conversations, setConversations] = useState(loadHistory);
-  const [conversationId, setConversationId] = useState("");
-  const [home, setHome] = useState(true);
+  const [text, setText] = useState(draft.text || "");
+  const [messages, setMessages] = useState(draft.messages || []);
+  const [conversations, setConversations] = useState(() => loadHistory(owner));
+  const [conversationId, setConversationId] = useState(draft.conversationId || "");
+  const [home, setHome] = useState(!draft.conversationId);
   const [busy, setBusy] = useState(false);
   const [deepThinking, setDeepThinking] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [temperature, setTemperature] = useState("0.7");
-  const [topP, setTopP] = useState("0.8");
-  const [systemPrompt, setSystemPrompt] = useState("");
+  const [temperature, setTemperature] = useState(draft.temperature || "0.7");
+  const [topP, setTopP] = useState(draft.topP || "0.8");
+  const [systemPrompt, setSystemPrompt] = useState(draft.systemPrompt || "");
   const [ratings, setRatings] = useState({});
   const [expanded, setExpanded] = useState({});
   const [notice, setNotice] = useState("");
@@ -170,11 +105,11 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
   const textarea = useRef();
 
   currentModel.current = model;
-  const selectedModel = models.find(item => item.name === model);
+  const selectedModel = models.find(item => item.id === model);
   const canUploadImages = imageUploadEnabled && supportsImageInput(selectedModel);
   useEffect(() => () => {
     imageReadVersion.current++;
-    imageUrls.current.forEach(url => URL.revokeObjectURL(url));
+
   }, []);
   const removeImage = (image) => {
     URL.revokeObjectURL(image.url);
@@ -182,7 +117,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     setImages(current => current.filter(item => item.url !== image.url));
   };
   const changeModel = (next) => {
-    if ((images.length || readingImages) && !supportsImageInput(models.find(item => item.name === next))) {
+    if ((images.length || readingImages) && !supportsImageInput(models.find(item => item.id === next))) {
       setNotice("请先移除已添加的图片，再切换到不支持图片输入的模型。");
       return false;
     }
@@ -222,11 +157,24 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
 
   useEffect(() => () => clearTimeout(timer.current), []);
   useEffect(() => {
-    try { localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(conversations.slice(0, 20), (key, value) => key === "images" ? value.map(image => ({ name: image.name })) : value),
-    ); } catch { setNotice("对话记录无法保存，请检查浏览器存储空间。"); }
-  }, [conversations]);
+    if (!owner) return;
+    try {
+      const others = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]').filter(row => row.owner !== owner);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...others, ...conversations], (key, value) => key === 'images' ? value.map(image => ({ name: image.name })) : value));
+    } catch { setNotice('对话记录无法保存，原记录未替换。'); }
+  }, [conversations, owner]);
+  useEffect(() => {
+    if (draft.storageError) { setNotice(draft.storageError); return; }
+    try { saveExperienceDraft(owner, 'text', { model, text, images, messages: messages.map(row => row.status === 'loading' ? { ...row, status: 'stopped', answer: '任务已停止，请重新发送。' } : row), conversationId, temperature, topP, systemPrompt }); }
+    catch { setNotice('草稿无法保存，请检查浏览器存储。'); }
+  }, [owner, model, text, images, messages, conversationId, temperature, topP, systemPrompt]);
+  useEffect(() => {
+    if (!busy || !ticket.current) return;
+    try { validateExperience(ticket.current); } catch (error) {
+      clearTimeout(timer.current); setBusy(false); setNotice(error.message);
+      const stopped = messages.map(item => item.status === 'loading' ? { ...item, status: 'stopped', answer: error.message } : item); setMessages(stopped); persist(conversationId, stopped);
+    }
+  }, [directory]);
   useEffect(() => {
     if (conversationActive) end.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, conversationActive]);
@@ -242,6 +190,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     const previous = conversations.find((item) => item.id === id);
     const record = {
       id,
+      owner, serviceId: model, modelName: selectedModel?.name || model,
       title:
         previous?.title || nextMessages[0]?.question.slice(0, 22) || "新对话",
       updatedAt: Date.now(),
@@ -256,19 +205,23 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     };
     setConversations((current) =>
       [record, ...current.filter((item) => item.id !== id)]
-        .sort((a, b) => b.updatedAt - a.updatedAt)
-        .slice(0, 20),
+        .sort((a, b) => b.updatedAt - a.updatedAt),
     );
   };
 
   const finish = (id, pendingId, question, shouldFail, pendingMessages) => {
+    try { validateExperience(ticket.current); } catch (error) {
+      const stopped = pendingMessages.map(item => item.id === pendingId ? { ...item, status: 'stopped', answer: error.message } : item);
+      setMessages(stopped); persist(id, stopped); setNotice(error.message); setBusy(false); return;
+    }
+    try{recordTenantExperience(ticket.current,shouldFail?403:200);}catch(error){setNotice(error.message);setBusy(false);return;}
     const result = shouldFail
       ? {
           id: pendingId,
           question,
           status: "error",
           code: "10042000",
-          requestId: `a${Date.now().toString(16)}-218b-4c24-8cfd-eccd7e92201e`,
+          requestId: ticket.current.requestId,
           error: "Model.AccessDenied",
           message:
             "当前账号暂无该模型的调用权限，请订购模型或切换其他可用模型。",
@@ -278,18 +231,15 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
           id: pendingId,
           question,
           status: "success",
-          answer: `关于“${question.slice(0, 32)}${question.length > 32 ? "…" : ""}”，可以按以下思路组织内容：`,
-          points: [
-            "先明确目标、对象与使用场景，避免回答停留在泛泛描述。",
-            "按关键信息、判断依据与可执行建议组织内容，便于快速阅读。",
-            "对不确定的信息明确标注，并给出下一步核验方式。",
-          ],
+          answer: mockConfig['TextExperience.jsx'].response.answer.replace('{question}',question.slice(0,32)+(question.length>32?'…':'')),
+          points: mockConfig['TextExperience.jsx'].response.points,
         };
     const next = pendingMessages.map((item) =>
       item.id === pendingId ? { ...item, ...result } : item,
     );
     setMessages(next);
     persist(id, next);
+    if (!shouldFail) { setText(""); setImages([]); }
     setBusy(false);
   };
 
@@ -297,15 +247,14 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     const question = prompt.trim();
     if ((!question && !images.length) || busy || readingImages) return;
     if (images.length && !canUploadImages) { setNotice("当前模型不支持图片输入。"); return; }
+    try { ticket.current = beginExperience(model, 'text', { images: images.length > 0 }); } catch (error) { setNotice(error.message); return; }
     const id = conversationId || crypto.randomUUID();
     const pendingId = crypto.randomUUID();
-    const pending = { id: pendingId, question, images, status: "loading" };
+    const pending = { id: pendingId, question, images, modelName: ticket.current.modelName, provider: selectedModel.provider, callId: selectedModel.callId, status: "loading" };
     const next = [...(conversationId ? messages : []), pending];
     setConversationId(id);
     setHome(false);
     setMessages(next);
-    setText("");
-    setImages([]);
     setNotice("");
     setBusy(true);
     persist(id, next, {
@@ -340,8 +289,9 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
   const regenerate = (index) => {
     if (busy) return;
     const original = messages[index];
+    try { ticket.current = beginExperience(model, 'text', { images: Boolean(original.images?.length) }); } catch (error) { setNotice(error.message); return; }
     const next = messages.map((item, i) =>
-      i === index ? { ...item, status: "loading" } : item,
+      i === index ? { ...item, modelName: ticket.current.modelName, provider: selectedModel.provider, callId: selectedModel.callId, status: "loading" } : item,
     );
     setMessages(next);
     setBusy(true);
@@ -392,6 +342,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     <section
       className={`playground tx-page ${conversationActive ? "has-messages tx-conversation" : ""}`}
     >
+      {(directory.error || directory.identityError || !selectedModel?.callable) && <p role="status">{directory.error || directory.identityError || selectedModel?.reason || "请选择可体验的模型"}</p>}
       {conversationActive ? (
         <div className="tx-topbar">
           <button onClick={blank}>
@@ -402,7 +353,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
           <button onClick={requestBlank}>新建对话</button>
         </div>
       ) : (
-        <FrontPageHeader className="pg-heading" title={title} icon={Languages} description={imageUploadEnabled ? "文本生成用于问答、创作和翻译；支持图片输入的模型还可进行图文理解。" : "文本生成模型用于理解和生成文字；多模态模型还可以理解图片、视频等内容。"} actions={<div className="pg-heading-actions">{onCompare && <button className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button onClick={requestBlank}>新建对话</button></div>} />
+        <FrontPageHeader className="pg-heading" title={title} icon={Languages} description={imageUploadEnabled ? "文本生成用于问答、创作和翻译；支持图片输入的模型还可进行图文理解。" : "文本生成模型用于理解和生成文字；多模态模型还可以理解图片、视频等内容。"} actions={<div className="pg-heading-actions"><select aria-label="恢复历史对话" value="" onChange={event => { const row = conversations.find(item => item.id === event.target.value); if (!row || busy) return; setConversationId(row.id); setMessages(row.messages); setModel(row.serviceId || ''); setHome(false); setNotice(row.serviceId ? '' : '旧会话为只读记录，请重新选择模型后发送。'); }}><option value="">历史对话</option>{conversations.map(row => <option key={row.id} value={row.id}>{row.title}</option>)}</select>{onCompare && <button className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button onClick={requestBlank}>新建对话</button></div>} />
       )}
       <div className="pg-workspace">
         {conversationActive ? (
@@ -412,7 +363,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
                 <div className="pg-question">{item.images?.length > 0 && <div className="tx-image-list">{item.images.map((image, i) => <span key={i}>{image.url ? <img src={image.url} alt={image.name} /> : <><ImageIcon size={18} /><small>{image.name}</small></>}</span>)}</div>}{item.question}</div>
                 <div className="pg-answer">
                   <div className="pg-answer-meta">
-                    <strong>{model}</strong>
+                    <strong>{item.modelName || activeConversation?.modelName || selectedModel?.name || "模型不可用"}{item.provider && ` · ${item.provider}`}</strong>
                     {item.status !== "loading" && (
                       <small>
                         {item.status === "error" ? "调用失败" : "刚刚"}
@@ -543,11 +494,12 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
           <textarea
             ref={textarea}
             aria-label="输入消息"
+            disabled={busy}
             value={text}
             onChange={(event) => setText(event.target.value)}
             placeholder={imageUploadEnabled ? (canUploadImages ? "输入问题，或上传图片进行分析" : "输入问题") : "输入问题，或添加图片、视频进行分析"}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                 event.preventDefault();
                 send();
               }
@@ -586,7 +538,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
             </div>
             <div className="pg-primary-actions">
               <span className="pg-count">{text.length}/6000</span>
-              <ModelPicker value={model} onChange={changeModel} />
+              <ModelPicker disabled={busy} models={models} value={model} onChange={changeModel} />
               {busy ? (
                 <button
                   className="pg-send"
@@ -601,7 +553,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
                   className="pg-send"
                   type="submit"
                   aria-label="发送"
-                  disabled={(!text.trim() && !images.length) || readingImages}
+                  disabled={!selectedModel?.callable || (!text.trim() && !images.length) || readingImages}
                 >
                   <ArrowUp size={18} />
                 </button>

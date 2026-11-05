@@ -3382,3 +3382,7 @@ body:has(.app-shell:not(.version-5102) > .front-main) :is(.model-select-dialog, 
 
 body:has(.catalogue-tools){min-width:0}
 .content:has(.catalogue-tools){min-width:0}
+
+.model-card h4>.model-card-logo{width:24px;height:24px;object-fit:contain;flex:none}
+.market-guide-toolbar{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:12px 0}
+.market-guide-code{white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f7fb;border:1px solid #e8edf5;border-radius:8px;padding:16px;font-size:12px;max-height:300px;overflow:auto}

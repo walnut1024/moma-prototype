@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createAdminSeed as baseSeed, commitAdminState, persistModelAction, parseAdminState } from '../src/admin-v2/store.js';
+import { createAdminSeed as rawBaseSeed, commitAdminState, persistModelAction, parseAdminState as baseParseAdminState } from '../src/admin-v2/store.js';
 import { providerCatalogueIds } from '../src/admin-v2/moma-provider.js';
 
 const action = (text, mode = 'batch', objectId = 'provider-moma') => ({ type: 'modelOperations', operation: 'provider', data: { operation: 'catalogueImport', objectId, values: { text, mode } } });
@@ -53,3 +54,6 @@ test('imports retain role, revision and storage-failure protections without chan
 });
 
 function createAdminSeed() { const state = baseSeed(); state.modelTemplates.push(...["Model/Alpha","Model/Beta","Keep/Model","Test/Model"].map(code => ({ id: "test-library-" + code, modelId: code, name: code, type: "text", capabilities: {}, profile: {} }))); return state; }
+
+function baseSeed(...args) { return withAdminSession(rawBaseSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

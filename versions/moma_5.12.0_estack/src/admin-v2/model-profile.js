@@ -16,12 +16,12 @@ export const TASK_OPTIONS = {
   embedding: ['文本向量化', '图像向量化', '多模态向量化'],
   rerank: ['文档重排', '多模态重排'],
 };
-export const IDENTITY_FIELDS = [field('family', '模型系列'), field('version', '模型版本'), field('releaseDate', '发布日期', 'date'), field('lifecycle', '版本状态', 'lifecycle'), field('retirementDate', '退役日期', 'date'), field('replacement', '替代模型ID')];
-export const TECHNICAL_FIELDS = [field('license', '许可协议', 'license'), field('architecture', '模型架构', 'architecture'), { ...field('parameters', '总参数', 'decimal'), unit: 'B' }, { ...field('activeParameters', '激活参数', 'decimal'), unit: 'B' }, field('openWeights', '开放权重', 'support'), field('baseModel', '基础模型'), field('precision', '量化精度'), field('knowledgeCutoff', '知识截止日期', 'date')];
+export const IDENTITY_FIELDS = [field('family', '模型系列'), field('version', '模型版本'), field('releaseDate', '原厂发布日期', 'date'), field('lifecycle', '版本状态', 'lifecycle'), field('retirementDate', '退役日期', 'date'), field('replacement', '替代模型规范标识')];
+export const TECHNICAL_FIELDS = [field('license', '许可协议', 'license'), field('architecture', '模型架构', 'architecture'), { ...field('parameters', '总参数', 'decimal'), unit: 'B' }, { ...field('activeParameters', '激活参数', 'decimal'), unit: 'B' }, field('openWeights', '开放权重', 'support'), field('baseModel', '基础模型'), field('precision', '量化精度'), field('knowledgeCutoff', '知识截止日期', 'date'), field('huggingFaceId', 'Hugging Face 模型标识'), field('instructType', '指令格式')];
 export const PRESENTATION_FIELDS = [field('author', '模型作者'), field('logo', '模型 Logo', 'image'), field('scenarios', '适用场景', 'scenarios'), field('languages', '支持语言', 'languages')];
 export const COMMON_FIELDS = [field('tasks', '支持任务', 'tasks'), field('inputModalities', '输入模态', 'modalities'), field('outputModalities', '输出模态', 'modalities'), field('resultTypes', '结果类型', 'results')];
-export const INTERFACE_FIELDS = [field('inputFormats', '输入文件格式', 'text', '例如 PDF、PNG、WAV'), field('inputMethods', '输入方式', 'methods'), field('supportedParameters', '支持参数', 'parameters'), field('parameterRules', '参数范围与组合限制', 'text', '例如 1080P 仅支持 5 秒和 10 秒')];
-export const RECORD_FIELDS = [field('documentation', '资料链接', 'url', 'https://'), field('sourceUpdated', '资料核对日期', 'date'), field('sourceStatus', '资料确认状态', 'confirmation'), field('benchmark', '评测任务与指标'), field('benchmarkResult', '评测结果'), field('benchmarkDataset', '数据集与版本'), field('benchmarkConditions', '测试条件'), field('benchmarkDate', '测试日期', 'date')];
+export const INTERFACE_FIELDS = [field('inputFormats', '输入文件格式', 'text', '例如 PDF、PNG、WAV'), field('inputMethods', '输入方式', 'methods'), field('supportedParameters', '支持参数', 'parameters'), field('defaultParameters', '默认参数', 'json'), field('parameterRules', '参数范围与组合限制', 'text', '例如 1080P 仅支持 5 秒和 10 秒')];
+export const RECORD_FIELDS = [field('documentation', '资料链接', 'url', 'https://'), field('sourceUpdated', '最近核对日期', 'date'), field('sourceStatus', '资料状态', 'confirmation'), field('benchmark', '评测任务与指标'), field('benchmarkResult', '评测结果'), field('benchmarkDataset', '数据集与版本'), field('benchmarkConditions', '测试条件'), field('benchmarkDate', '测试日期', 'date')];
 export const FEATURE_FIELDS = [field('reasoning', '深度思考', 'support'), field('structured', '结构化输出', 'support'), field('cache', '提示词缓存', 'support'), field('batch', '批量调用', 'support')];
 export function normalizeModelLogo(value) {
   if (!value.startsWith('data:')) {
@@ -67,6 +67,7 @@ export function normalizeModelProfile(value = {}, type, usageUnit) {
       if (selected.length) result[descriptor.key] = selected;
       continue;
     }
+    if(descriptor.kind==='json'){let object;try{object=typeof raw==='string'?JSON.parse(raw):raw;}catch{throw Error('默认参数须为有效的 JSON 对象');}if(!object || Array.isArray(object) || typeof object!=='object' || JSON.stringify(object).length>5000)throw Error('默认参数须为不超过 5000 字符的 JSON 对象');if(Object.keys(object).some(key=>!value.supportedParameters?.includes(key)))throw Error('默认参数只能包含已声明支持的参数');result[descriptor.key]=object;continue;}
     const clean = String(raw).trim();
     if (!clean) continue;
     if (descriptor.kind === 'image') { result[descriptor.key] = normalizeModelLogo(clean); continue; }
@@ -81,7 +82,7 @@ export function normalizeModelProfile(value = {}, type, usageUnit) {
       if (descriptor.kind === 'support' && !['supported', 'unsupported'].includes(clean)) throw new Error(`${descriptor.label}状态无效`);
       if (descriptor.kind === 'lifecycle' && !['stable', 'preview', 'deprecated'].includes(clean)) throw new Error('版本状态无效');
       if (descriptor.kind === 'confirmation' && !['pending', 'confirmed'].includes(clean)) throw new Error('资料确认状态无效');
-      if (descriptor.kind === 'date' && (!/^\d{4}-\d{2}-\d{2}$/.test(clean) || Number.isNaN(Date.parse(clean)) || new Date(clean).toISOString().slice(0, 10) !== clean)) throw new Error(`${descriptor.label}日期无效`);
+      if (descriptor.kind === 'date' && !(['releaseDate','knowledgeCutoff'].includes(descriptor.key) && /^\d{4}-(0[1-9]|1[0-2])$/.test(clean)) && (!/^\d{4}-\d{2}-\d{2}$/.test(clean) || Number.isNaN(Date.parse(clean)) || new Date(clean).toISOString().slice(0, 10) !== clean)) throw new Error(`${descriptor.label}日期无效`);
       if (descriptor.kind === 'url') { let url; try { url = new URL(clean); } catch { throw new Error(`${descriptor.label}需填写完整的 http 或 https 地址`); } if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error(`${descriptor.label}需填写无凭据的 http 或 https 地址`); }
       if (descriptor.kind === 'dimensions' && !clean.split(/[,，、\s]+/).every(item => /^\d+$/.test(item) && Number.isSafeInteger(Number(item)) && Number(item) > 0)) throw new Error('向量维度需填写正整数，多个维度用逗号分隔');
       result[descriptor.key] = clean;
@@ -96,6 +97,7 @@ export function normalizeModelProfile(value = {}, type, usageUnit) {
 }
 export function modelProfileDraft(model) {
   const draft = { ...model?.profile };
+  if(!draft.author && model?.maker)draft.author=model.maker;
   // Canonicalize existing local values for the new controls without discarding edits.
   if (typeof draft.parameters === 'string') {
     const matched = draft.parameters.trim().match(/^(\d+(?:\.\d+)?)\s*(?:B(?:[（(]总参数[）)])?)?$/i);
@@ -125,27 +127,36 @@ export function modelAuthors(state) {
 export function serviceModelDraft(model) {
   const profile = modelProfileDraft(model), context = model?.capabilities?.context;
   const contextUnit = context && context % 1048576 === 0 ? 'M' : 'K';
-  return { name:model?.name || '', modelId:model?.modelId || '', type:model?.type || '', author:profile.author || model?.maker || '', releaseDate:profile.releaseDate || '', inputModalities:profile.inputModalities || [], outputModalities:[...new Set([...(profile.outputModalities || []), ...(profile.resultTypes || []).filter(value=>SERVICE_OUTPUT_MODALITIES.includes(value))])], context:context ? String(context / (contextUnit==='M'?1048576:1024)) : '', contextUnit, description:model?.description || '' };
+  return { name:model?.name || '', modelId:model?.modelId || '', type:model?.type || '', author:profile.author || model?.maker || '', releaseDate:profile.releaseDate || '', tasks:profile.tasks || [], inputModalities:profile.inputModalities || [], outputModalities:[...new Set([...(profile.outputModalities || []), ...(profile.resultTypes || []).filter(value=>SERVICE_OUTPUT_MODALITIES.includes(value))])], context:context ? String(context / (contextUnit==='M'?1048576:1024)) : '', contextUnit, description:model?.description || '' };
+}
+export function serviceModelSourceDraft(state, model) {
+  const draft=serviceModelDraft(model), used=new Set(state.models.filter(row=>row.id!==model.id).map(row=>row.modelId.toLowerCase()));
+  if(used.has(draft.modelId.toLowerCase())){
+    const base=draft.modelId.slice(0,60);let code=base+'-service',suffix=2;
+    while(used.has(code.toLowerCase()))code=base+'-service-'+suffix++;
+    draft.modelId=code;
+  }
+  return draft;
 }
 export function serviceMetadataReady(model) {
   const data=serviceModelDraft(model);
-  return Boolean(data.name.trim() && data.modelId.trim() && data.type && data.author.trim() && /^\d{4}-\d{2}-\d{2}$/.test(data.releaseDate) && data.inputModalities.length && data.outputModalities.length && data.description.trim());
+  return Boolean(data.name.trim() && data.modelId.trim() && data.type && data.author.trim() && /^\d{4}-\d{2}(-\d{2})?$/.test(data.releaseDate) && data.tasks.length && data.inputModalities.length && data.outputModalities.length && data.description.trim());
 }
 export function normalizeServiceModel(state, data, existing) {
   const text = (value,label,max) => { if(typeof value!=='string' || !value.trim() || value.length>max) throw new Error(`${label}必填，最多 ${max} 字符`); return value.trim(); };
-  const name=text(data.name,'模型名称',100), modelId=existing?.modelId || text(data.modelId,'模型编码',80);
-  if(!existing && !/^[a-zA-Z][a-zA-Z0-9]*(?:-[a-zA-Z0-9]+)*$/.test(modelId)) throw new Error('模型编码仅支持英文字母、数字和中划线，须以字母开头，中划线不能连续或结尾');
+  const name=text(data.name,'模型名称',100), modelId=existing?.modelId || text(data.modelId,'对外调用标识',80);
+  if(!existing && !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('对外调用标识须为英文字母、数字或 . _ : / -，最多 80 字符');
   const author=text(data.author,'模型作者',100);
   if(!modelAuthors(state).includes(author)) throw new Error('请选择已有模型作者');
   const releaseDate=text(data.releaseDate,'发布时间',10);
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(releaseDate) || Number.isNaN(Date.parse(releaseDate)) || new Date(releaseDate).toISOString().slice(0,10)!==releaseDate) throw new Error('请选择有效的发布时间');
+  if(!/^\d{4}-(0[1-9]|1[0-2])(-\d{2})?$/.test(releaseDate) || Number.isNaN(Date.parse(releaseDate)) || new Date(releaseDate).toISOString().slice(0,releaseDate.length)!==releaseDate) throw new Error('请选择有效的发布时间');
   const selected=(value,options,label)=>{if(!Array.isArray(value) || !value.length || value.some(item=>!options.includes(item))) throw new Error(`请选择有效的${label}`); return [...new Set(value)];};
   const inputModalities=selected(data.inputModalities,INPUT_MODALITY_OPTIONS,'输入模态'), outputs=selected(data.outputModalities,SERVICE_OUTPUT_MODALITIES,'输出模态 / 结果类型');
   if(!['K','M'].includes(data.contextUnit)) throw new Error('上下文单位请选择 K 或 M');
   const amount=String(data.context ?? '').trim();
   const context=amount ? Number(amount) * (data.contextUnit==='M'?1048576:1024) : null;
   if(amount && (!/^\d+(?:\.\d+)?$/.test(amount) || !Number.isSafeInteger(context) || context<=0)) throw new Error('上下文须为正数，换算后的 Token 数必须为有效整数');
-  return {name,modelId,type:data.type,maker:author,description:text(data.description,'模型简介',1000),usageUnit:existing?.usageUnit,profile:{...existing?.profile,author,releaseDate,inputModalities,outputModalities:outputs.filter(value=>INPUT_MODALITY_OPTIONS.includes(value)),resultTypes:outputs.filter(value=>!INPUT_MODALITY_OPTIONS.includes(value))},capabilities:{...existing?.capabilities,context}};
+  return {name,modelId,type:data.type,maker:author,description:text(data.description,'模型简介',1000),usageUnit:existing?.usageUnit,profile:{...existing?.profile,...(data.tasks?{tasks: [...new Set(data.tasks)]}:{}),author,releaseDate,inputModalities,outputModalities:outputs.filter(value=>INPUT_MODALITY_OPTIONS.includes(value)),resultTypes:outputs.filter(value=>!INPUT_MODALITY_OPTIONS.includes(value))},capabilities:{...existing?.capabilities,context}};
 }
 
 export function modelKeySpecs(model) {

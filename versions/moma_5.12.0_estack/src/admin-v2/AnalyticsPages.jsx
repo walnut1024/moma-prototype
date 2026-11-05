@@ -1,5 +1,6 @@
 import { toast } from 'sonner';
 import UserAnalysisPage from './UserAnalysisPage';
+import OperationsDataPage from './OperationsDataPage';
 import UsageAnalysisPage from './UsageAnalysisPage';
 import { useState } from 'react';
 import { CalendarDays, Info, ArrowRight } from 'lucide-react';
@@ -24,7 +25,7 @@ function Help({label,children}) {return <Tooltip><TooltipTrigger asChild><Button
 function Summary({title,items,action}) {return <Card className="ua-panel ca-summary"><CardHeader><CardTitle>{title}</CardTitle>{action}</CardHeader><CardContent className="ca-metrics">{items.map(([name,value,note])=><div key={name}><span>{name}{note&&<Help label={`${name}说明`}>{note}</Help>}</span><strong>{typeof value==='number'?fmt(value):value}</strong></div>)}</CardContent></Card>}
 function Plot({title,labels,series,unit=''}) {return <Card className="ua-panel ca-plot"><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><TimeSeriesChart compact labels={labels} series={series} unit={unit} valueFormatter={unit==='次/分钟' ? value=>Number(value.toFixed(4)) : undefined} label={title} height={260}/></CardContent></Card>}
 export default function AnalyticsPages({pageId,state}) {
-  return pageId === 'usage-analysis' ? <UsageAnalysisPage state={state}/> : pageId === 'user-analysis' ? <UserAnalysisPage state={state}/> : <OtherAnalyticsPages pageId={pageId} state={state}/>;
+  return pageId === 'supply-analysis' ? <OperationsDataPage key={pageId} state={state}/> : pageId === 'business-analysis' ? <OperationsDataPage key={pageId} state={state} business/> : pageId === 'usage-analysis' ? <UsageAnalysisPage state={state}/> : pageId === 'user-analysis' ? <UserAnalysisPage state={state}/> : <OtherAnalyticsPages pageId={pageId} state={state}/>;
 }
 function OtherAnalyticsPages({pageId,state}) {
   const latest=dayOf(state.requests.length?Math.max(...state.requests.map(r=>Date.parse(r.createdAt))):Date.now());

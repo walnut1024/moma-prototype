@@ -6,9 +6,9 @@ export async function prepareCandidateTest(state, context, options = {}) {
   const plan = candidateTestPlan(state, context);
   const models = channelTestModels(plan.records, options);
   if (!models.length) throw new Error('请选择可测试的候选模型；高成本任务需要明确选择');
-  const serverChannel = await prepareServerChannel(plan.provider, plan.endpoint);
+  const serverChannel = await prepareServerChannel(plan.provider, plan.endpoint, context.keyId);
   const request = channelTestRequest(serverChannel.id, models, options);
-  return { operation: context.groupId ? 'keyGroupCandidateTestJob' : 'channelCandidateTestJob', data: { ...context, candidateId: plan.candidateId, signature: plan.signature, serverChannelId: serverChannel.id, serverSignature: serverChannel.signature, operationId: request.operationId, batchId: '', request } };
+  return { operation: context.groupId ? 'keyGroupCandidateTestJob' : 'channelCandidateTestJob', data: { ...context, candidateId: plan.candidateId, signature: plan.signature, serverChannelId: serverChannel.id, ...(context.keyId ? { serverCredentialId: serverChannel.credentialId } : {}), serverSignature: serverChannel.signature, operationId: request.operationId, batchId: '', request } };
 }
 
 // Persist the prepared job before calling submit; lost responses are recovered by operationId.

@@ -1,125 +1,53 @@
 import { BookOpen, ArrowRight } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import source from '../../MODEL_OPERATIONS_GUIDE.md?raw';
+import workflow from '../../guide-assets/workflow.svg';
+import mapping from '../../guide-assets/mapping.svg';
+import { parseOperationsGuide } from './model-operations-guide.mjs';
 import './getting-started.css';
 
-const conceptGroups = [
-  ['模型标识', [
-    ['模型名称', '模型的展示名称，用于目录展示和检索。'],
-    ['资料 ID', '系统自动生成的模型资料唯一标识，用于关联模型资料、供应模型和模型服务。'],
-    ['模型编码', '模型资料或模型服务的业务编码。创建后不可修改，填写要求见对应表单。'],
-    ['上游模型 ID', '调用供应商接口时使用的模型标识，在渠道中配置。不同渠道可使用不同的上游模型 ID。'],
-    ['对外调用 ID', '客户调用平台 API 时，在 model 参数中填写的服务标识。具体取值见服务的“调用指南”。'],
-  ]],
-  ['模型属性', [
-    ['模型类型', '模型的用途分类，例如语言模型、视觉理解模型、语音模型。'],
-    ['任务类型', '模型执行的具体任务，例如文本生成、图像理解、语音识别。'],
-    ['输入模态 / 输出模态', '模型接收或生成的内容形式，例如文本、图片、音频。'],
-    ['结果类型', '模型返回的数据形式，例如向量、相关性分数、排序结果。'],
-    ['上下文', '单次请求可处理的 Token 范围。服务表单支持 K、M 单位，1 K = 1,024 Token，1 M = 1,048,576 Token。'],
-    ['专项能力', '流式响应、工具调用、结构化输出等功能。使用前需分别完成对应能力验证。'],
-  ]],
-  ['供应与接入', [
-    ['模型作者', '模型的研发团队或发布者。'],
-    ['供应商 / 供应商编码', '供应商是向平台提供上游模型服务的一方；供应商编码用于识别该主体。'],
-    ['供应模型', '供应商与模型资料的对应关系，表示该供应商提供哪些模型。'],
-    ['渠道', '一组上游接入配置，包括接口类型、地址和认证信息。同一渠道可接入多个模型。'],
-    ['渠道模型映射', '平台模型与渠道中上游模型 ID 的对应关系。'],
-    ['服务根地址 / 请求地址', '服务根地址是标准接口的基础地址；请求地址是包含任务路径的完整调用地址。自定义任务使用完整请求地址。'],
-    ['API 密钥 / 密钥组', '供应商 API 密钥用于上游接口认证。渠道可绑定专属密钥，也可使用密钥组的当前主要密钥。'],
-  ]],
-  ['计费与服务', [
-    ['采购参考价 / 折扣系数', '采购参考价是计算采购价的基准。应用折扣系数后得到采购价，也可手工指定采购价。'],
-    ['采购价 / Token 成本', '采购价是平台采购上游服务的单价；Token 成本是按实际用量和适用采购价计算的费用。'],
-    ['平台售价', '平台向客户销售模型服务的单价，与采购价分别维护。'],
-    ['计费项 / 计价单位 / 币种', '计费项表示收费对象，例如输入 Token、输出 Token；计价单位表示单价对应的数量；币种表示金额所使用的货币。'],
-    ['统一服务', '模型服务使用一套对外调用 ID 和平台售价，通过路由选择供应渠道。'],
-    ['分供应商', '按供应商分别配置对外调用 ID 和平台售价。同一供应商的多个渠道共用该售价。'],
-    ['关联渠道 / 渠道路由', '关联渠道用于指定服务可使用的供给；渠道路由用于配置请求的选择、分配和回退规则。'],
-  ]],
-  ['操作与状态', [
-    ['测试通过', '所选模型和任务的本次验证成功。其他任务或专项能力需单独验证。'],
-    ['启用模型', '允许服务管理使用已验证的渠道模型作为供给来源。'],
-    ['应用配置', '将测试通过的新地址或新密钥切换为当前渠道配置。'],
-    ['发布配置', '将验证后的服务配置发布为生效版本。渠道路由通过“校验并保存”单独保存生效。'],
-    ['上架服务', '完成上架检查并开放模型服务订购。上架范围由服务的开放范围配置决定。'],
-  ]],
-];
+const sections = parseOperationsGuide(source);
+const pictures = { 'guide-assets/workflow.svg': workflow, 'guide-assets/mapping.svg': mapping };
+
+function jump(event, id) {
+  event.preventDefault();
+  const target = document.getElementById(id);
+  if (!target) return;
+  const details = target.closest('details');
+  if (details) details.open = true;
+  target.scrollIntoView({ block: 'start' });
+  (details?.querySelector('summary') || target).focus({ preventScroll: true });
+}
+
+function inline(text) {
+  return text.split(/(`[^`]+`|\[[^\]]+\]\(#[^)]+\))/g).filter(Boolean).map((part, i) => {
+    if (part.startsWith('`')) return <code key={i}>{part.slice(1, -1)}</code>;
+    const link = part.match(/^\[([^\]]+)\]\(#([^)]+)\)$/);
+    return link ? <a key={i} href={`#${link[2]}`} onClick={event => jump(event, link[2])}>{link[1]}</a> : part;
+  });
+}
+
+function Blocks({ blocks }) {
+  return blocks.map((block, index) => {
+    if (block.type === 'anchor') return <span key={index} id={block.id} className="gs-anchor" tabIndex={-1}/>;
+    if (block.type === 'image') return <figure key={index}><img src={pictures[block.source]} alt={block.alt}/></figure>;
+    if (block.type === 'table') return <div key={index} className="gs-table-scroll"><table><thead><tr>{block.headings.map((cell, i) => <th key={i} scope="col">{inline(cell)}</th>)}</tr></thead><tbody>{block.rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{inline(cell)}</td>)}</tr>)}</tbody></table></div>;
+    if (block.type === 'list') {
+      const Tag = block.ordered ? 'ol' : 'ul';
+      return <Tag key={index} start={block.ordered ? block.start : undefined}>{block.items.map((item, i) => <li key={i}>{inline(item)}</li>)}</Tag>;
+    }
+    return <p key={index}>{inline(block.text)}</p>;
+  });
+}
 
 export default function GettingStarted() {
-  return <div className="getting-started">
-    <header className="gs-heading"><h1><BookOpen aria-hidden="true"/>运营入门</h1><p>介绍模型接入、服务上架和日常维护的操作方法。</p></header>
-    <div className="gs-overview" aria-label="模型运营功能入口">
-      <a href="#/admin-2/providers"><strong>供应管理</strong><span>配置供应商、渠道和模型接入</span></a><ArrowRight aria-hidden="true"/>
-      <a href="#/admin-2/model-templates"><strong>资料管理</strong><span>维护模型资料和基础计费信息</span></a><ArrowRight aria-hidden="true"/>
-      <a href="#/admin-2/listing"><strong>服务管理</strong><span>配置售价、路由并上架服务</span></a>
-    </div>
-    <section className="gs-panel gs-concepts" aria-labelledby="gs-concepts"><header><h2 id="gs-concepts">功能概述与术语</h2></header>
-      <p>模型运营包括资料管理、供应管理和服务管理。各模块的职责如下。</p>
-      <div className="gs-table-scroll"><table><thead><tr><th>功能模块</th><th>管理对象</th><th>主要用途</th></tr></thead><tbody>
-        <tr><th scope="row">资料管理</th><td>模型资料、计费项、计价单位、币种。</td><td>维护模型身份、任务类型和能力规格，为接入和服务配置提供资料。</td></tr>
-        <tr><th scope="row">供应管理</th><td>供应商、供应模型、渠道、API 密钥、采购报价。</td><td>配置上游连接，验证模型调用，并启用可用的渠道模型。</td></tr>
-        <tr><th scope="row">服务管理</th><td>模型服务、平台售价、关联渠道、路由、开放范围。</td><td>配置对外调用方式和销售规则，验证并上架模型服务。</td></tr>
-      </tbody></table></div>
-      <p className="gs-tip">同一款模型可由多家供应商提供，每家供应商可配置多个渠道。客户使用对外调用 ID 请求模型服务，平台按生效路由选择渠道，再使用上游模型 ID 调用供应商接口。客户费用按平台售价计算，采购成本按实际供给的采购价计算。</p>
-      {conceptGroups.map(([title, terms]) => <details key={title}><summary>{title}</summary><div className="gs-table-scroll"><table className="gs-term-table"><thead><tr><th>术语</th><th>说明</th></tr></thead><tbody>{terms.map(([term, meaning]) => <tr key={term}><th scope="row">{term}</th><td>{meaning}</td></tr>)}</tbody></table></div></details>)}
-    </section>
-    <div className="gs-workflows">
-      <section className="gs-panel" aria-labelledby="gs-connect"><header><h2 id="gs-connect">1. 模型接入</h2><Button asChild variant="outline" size="sm"><a href="#/admin-2/providers">打开供应管理<ArrowRight aria-hidden="true"/></a></Button></header>
-        <p className="gs-preparation"><strong>操作准备：</strong>准备接口类型、API 地址和上游模型 ID。需要密钥认证时，还应准备可用的 API 密钥。使用供应商账号接入时，确认该账号已开通目标模型。</p>
-        <ol>
-          <li><h3>新建渠道</h3><p>在“供应管理”中，单击“添加渠道”。</p></li>
-          <li><h3>选择供应商</h3><p>选择已有供应商或内置供应商。需要接入新的供应商时，选择“新供应商”并填写名称。</p></li>
-          <li><h3>配置渠道连接</h3><p>填写渠道名称，选择接口类型并填写 API 地址。标准接口使用服务根地址，自定义任务使用完整请求地址。需要密钥认证时，选择可用密钥组或输入新的 API 密钥。</p></li>
-          <li><h3>添加模型</h3><p>选择需要接入的模型，并核对上游模型 ID。目录中没有对应模型时，在模型选择框中单击“输入新模型 ID”，填写 ID 并选择模型类型；已显示新模型输入行时，直接填写。</p></li>
-          <li><h3>保存接入配置</h3><p>单击“保存接入”。系统保存渠道配置，并打开“测试与启用”页面。</p></li>
-          <li><h3>测试模型调用</h3><p>核对测试范围，单击“测试连接（产生用量）”。图像生成、语音、视频及专项测试需按页面要求选择任务并确认用量。</p></li>
-          <li><h3>启用渠道模型</h3><p>测试通过后，选择需要启用的模型并按页面提示确认。首次接入单个模型时，可直接单击“启用模型”；批量启用或恢复已停用渠道时，先核对所选模型及服务影响。</p></li>
-        </ol>
-        <p className="gs-result"><strong>操作结果：</strong>所选渠道模型已启用。补齐模型资料和采购价后，可在服务管理中关联渠道并上架服务。</p>
-        <p className="gs-tip"><strong>说明：</strong>采购价可在接入后补充，服务上架前应配置有效采购价。仅需登记供应商或供应关系时，分别使用“添加供应商”或“添加模型”。</p>
-        <p className="gs-tip"><strong>草稿保存：</strong>单击“保存草稿”保留未完成的配置。再次打开“添加渠道”后，依次单击“继续草稿”和“继续编辑”恢复配置。直接输入的 API 密钥不随草稿保存，恢复后需重新输入；使用密钥组时，核对恢复后的密钥组选择。</p>
-      </section>
-      <section className="gs-panel" aria-labelledby="gs-publish"><header><h2 id="gs-publish">2. 服务上架</h2><Button asChild variant="outline" size="sm"><a href="#/admin-2/listing">打开服务管理<ArrowRight aria-hidden="true"/></a></Button></header>
-        <p className="gs-preparation"><strong>操作条件：</strong>已完成模型接入并启用渠道模型。模型资料应完整，服务上架前应配置有效采购价。</p>
-        <ol>
-          <li><h3>选择模型服务</h3><p>在平台模型目录中选择已有服务。需要新建服务时，单击“新增模型服务”，引入已有资料或填写模型信息，然后单击“完成添加”。</p></li>
-          <li><h3>选择服务模式</h3><p>在“服务内容”中单击“选择服务模式”，选择“统一服务”或“分供应商”，然后确认。已有服务模式的模型可跳过此步骤。</p></li>
-          <li><h3>配置平台售价</h3><p>统一服务：单击“编辑售价”，配置计费项、计价单位、币种和单价后保存。分供应商：先单击“关联供应商”，确认关联后，在“供应商服务配置”中填写对外调用 ID 和平台售价并保存。</p></li>
-          <li><h3>关联供应渠道</h3><p>统一服务：单击“关联渠道”，选择供给后保存关联。分供应商：在对应供应商行单击渠道数量后的“管理”，再单击“关联渠道”并确认选择。</p></li>
-          <li><h3>配置生效路由</h3><p>进入“渠道与路由”，设置参与调度的渠道及路由规则。单击“校验并保存”，核对检查结果后单击“确认保存生效”。</p></li>
-          <li><h3>执行平台试调用</h3><p>单击“平台试调用”，选择调用服务、客户范围和允许供给。完成所需能力检查并确认测试用量后，单击“同步候选并试调用”。检查调用结果及采购成本、销售费用试算。</p></li>
-          <li><h3>发布服务配置</h3><p>试调用及配置检查通过后，单击“发布验证后的配置”，核对发布内容并单击“确认发布”。</p></li>
-          <li><h3>确认上架</h3><p>单击页面显示的“上架”“校验并上架”或“重新上架”。按检查结果补齐未通过项后，单击“确认上架”。</p></li>
-        </ol>
-        <p className="gs-result"><strong>操作结果：</strong>服务状态变为“已上架”，开放范围内的用户可订购。客户调用时使用的 API 地址和对外调用 ID 可在“调用指南”中查看。</p>
-        <p className="gs-tip"><strong>说明：</strong>渠道测试、模型启用、配置发布和服务上架是独立操作。发布服务配置后，仍需完成上架确认。</p>
-      </section>
-    </div>
-    <section className="gs-panel" aria-labelledby="gs-maintain"><header><h2 id="gs-maintain">3. 日常维护</h2></header>
-      <div className="gs-table-scroll"><table><thead><tr><th>维护任务</th><th>操作路径</th><th>操作说明</th></tr></thead><tbody>
-        {[
-          ['维护模型资料', '资料管理 → 模型资料库 → 编辑', '修改资料并保存。涉及模型类型或能力规格变更时，核对影响范围并按提示确认。', 'model-templates'],
-          ['修改服务展示信息', '服务管理 → 选择模型 → 模型信息 → 编辑资料', '修改模型名称、介绍等展示信息并保存。修改模型类型或输入、输出能力会使已上架服务下架，完成修改后需重新验证并上架。', 'listing'],
-          ['追加渠道模型', '供应管理 → 渠道行更多操作 → 添加关联模型', '选择模型或输入新模型 ID，单击“保存接入”。测试通过后，启用本次新增的模型。', 'providers'],
-          ['修改渠道地址', '供应管理 → 渠道行更多操作 → API 地址', '填写新地址并核对影响范围。单击“测试新配置（产生用量）”，测试通过后单击“应用配置”。', 'providers'],
-          ['更换渠道专属密钥', '供应管理 → 渠道行更多操作 → API 密钥', '核对目标渠道并输入新密钥。单击“测试新密钥（产生用量）”，测试通过后单击“应用新密钥”。本次更换仅更新目标渠道。', 'providers'],
-          ['轮换密钥组主要密钥', '供应管理 → 选择供应商 → API 密钥 → 主要密钥的替换', '核对全部引用渠道并输入新密钥。单击“测试新密钥（产生用量）”，全部通过后单击“应用新密钥”。正常轮换保留旧密钥，专属绑定保持不变。', 'providers'],
-          ['调整采购价', '供应管理 → 渠道行更多操作 → 配置采购价', '核对计费项、计价单位、币种和生效时间，发布采购报价。采购价与平台售价分别维护。', 'providers'],
-          ['调整平台售价或供给范围', '服务管理 → 选择模型 → 服务内容 / 渠道与路由', '修改平台售价或关联渠道。供给范围变化后，重新配置并保存生效路由，再完成平台试调用及配置发布。', 'listing'],
-          ['下架或重新上架服务', '服务管理 → 选择模型 → 下架 / 重新上架', '下架将停止新增订购并保留历史资料。重新上架前，按页面检查结果补齐配置并确认上架。', 'listing'],
-          ['移除渠道或供应关系', '供应管理 → 渠道删除 / 移除供应模型', '先解除服务和路由引用，再移除渠道。移除供应模型前，先移除其渠道关联；模型资料及其他供应商的关系保留。', 'providers'],
-        ].map(([task, location, check, page]) => <tr key={task}><th scope="row">{task}</th><td><a href={`#/admin-2/${page}`}>{location}<ArrowRight aria-hidden="true"/></a></td><td>{check}</td></tr>)}
-      </tbody></table></div>
-    </section>
-    <section className="gs-panel gs-questions" aria-labelledby="gs-questions"><header><h2 id="gs-questions">4. 常见问题</h2></header>
-      <details><summary>未找到供应商或模型</summary><p>在“添加渠道”中选择“新供应商”并填写名称。模型目录中没有对应记录时，单击“输入新模型 ID”并填写模型信息。单击“保存接入”后完成登记。</p></details>
-      <details><summary>模型资料显示“待完善”</summary><p>可先完成渠道连接测试和模型启用。服务上架前，在资料管理或服务的“模型信息”中补齐所需资料，并完成对应能力验证。</p></details>
-      <details><summary>模型调用测试失败</summary><p>根据测试详情检查接口类型、API 地址、上游模型 ID 和密钥状态。修正配置后，重新发起测试。</p></details>
-      <details><summary>测试通过后仍无法对外调用</summary><p>新接入模型需完成启用；修改地址或密钥后需应用新配置。随后核对服务是否已上架，以及客户是否位于开放范围内。</p></details>
-      <details><summary>地址或密钥变更测试失败</summary><p>当前地址和密钥保持不变。修正新配置并重新测试，测试通过后再执行应用操作。</p></details>
-      <details><summary>同一密钥同时用于专属渠道和共享组</summary><p>从供应商的“API 密钥”页发起替换时，先选择“替换指定渠道专属密钥”或“轮换共享组主要密钥”，再核对目标渠道并继续操作。</p></details>
-      <details><summary>服务未通过上架检查</summary><p>在上架检查窗口查看未通过项，单击“前往配置”补齐资料、价格、渠道或开放范围。配置变更后，重新完成所需验证和发布，再执行上架。</p></details>
-      <details><summary>需要切换服务模式</summary><p>在“服务内容”中单击“解锁并切换服务模式”，阅读影响提示后确认。切换会使服务下架并清除路由映射。重新配置供应商关联、渠道和平台售价后，完成验证、发布及上架。</p></details>
-    </section>
-  </div>;
+  return <article className="getting-started">
+    <div className="gs-heading"><div><h1><BookOpen aria-hidden="true"/>模型运营</h1><p>首次上架按步骤操作，已有模型直接查找维护任务。</p><p>模型映射、开放范围及部分维护操作将陆续开放。</p></div><Button asChild variant="outline"><a href="#/admin-2/listing?perspective=models">打开模型服务<ArrowRight aria-hidden="true"/></a></Button></div>
+    <nav className="gs-section-nav" aria-label="指南章节">{sections.map(section => <a key={section.id} href={`#${section.id}`} onClick={event => jump(event, section.id)}>{section.title}</a>)}</nav>
+    {sections.map(section => <section key={section.id} className="gs-panel" aria-labelledby={section.id}>
+      <h2 id={section.id} tabIndex={-1}>{section.title}</h2>
+      <div className="gs-copy"><Blocks blocks={section.blocks}/></div>
+      {section.tasks.length > 0 && <div className="gs-tasks">{section.tasks.map(task => <details key={task.id} id={task.id}><summary><h3>{task.title}</h3></summary><div className="gs-copy"><Blocks blocks={task.blocks}/></div></details>)}</div>}
+    </section>)}
+  </article>;
 }

@@ -1,16 +1,11 @@
+import mockConfig from '../mock/catalogues.json' with { type: 'json' };
 import { normalizeCataloguePrice } from './provider-catalogue-pricing.js';
 import { connectionFingerprint, connectionCredentialsReady } from './connection-state.js';
 import { channelFingerprint } from './provider-channels.js';
 import { modelLibrary } from './model-library.js';
 
-const tokens = (input, output) => [{ name: '输入 Token', listPrice: String(input), unit: '百万 Token', currency: 'CNY' }, ...(output == null ? [] : [{ name: '输出 Token', listPrice: String(output), unit: '百万 Token', currency: 'CNY' }])];
-export const SUPPLIER_REVIEW_CASES = [
-  { id: 'provider-moma', code: 'moma', name: '中国移动 MoMA', models: [['GLM-5.2', 'GLM-5.2', 'text'], ['BGE-M3', 'BGE-M3', 'embedding'], ['AICC-Doubao-Seedance-2.0', 'Seedance-2.0', 'visual'], ['DeepSeek-V4-Flash-0731', 'DeepSeek-V4-Flash-0731', 'text'], ['Kimi/miKimi-K3', 'Kimi/miKimi-K3', 'multimodal']], keys: [['KEY-001', '生产凭证'], ['KEY-002', '备用凭证'], ['KEY-003', '专用凭证']], channels: [['CH-001', '生产渠道', 'https://moma.example.invalid/v1/chat/completions', 'inherit'], ['CH-002', '专用渠道', 'https://vip.moma.example.invalid/v1/chat/completions', 'specific', 'KEY-003']], links: [[0, 0, 'GLM-5.2', tokens(8, 28)], [0, 1, 'glm-5.2', tokens(7, 25)], [3, 0, 'DeepSeek-V4-Flash-0731', tokens(1.5, 6)], [4, 1, 'Kimi/miKimi-K3', tokens(2, 8)]] },
-  { id: 'provider-deepseek-official', code: 'deepseek-official', name: 'DeepSeek 官方', models: [['deepseek-reasoner', 'DeepSeek-R1', 'text']], keys: [['KEY-101', '生产凭证']], channels: [['CH-101', '官方渠道', 'https://api.deepseek.com/chat/completions', 'inherit']], links: [[0, 0, 'deepseek-reasoner', tokens(4, 16)]] },
-  { id: 'provider-ark-official', code: 'ark-official', name: '火山方舟', models: [['doubao-pro', 'Doubao-Pro', 'text'], ['doubao-seed', 'Doubao-Seed', 'text']], keys: [['KEY-201', '生产账号'], ['KEY-202', '专用账号'], ['KEY-203', '海外账号']], channels: [['CH-201', '北京渠道', 'https://beijing.ark.example.invalid/v1/chat/completions', 'inherit'], ['CH-202', '上海渠道', 'https://shanghai.ark.example.invalid/v1/chat/completions', 'specific', 'KEY-202'], ['CH-203', '海外渠道', 'https://overseas.ark.example.invalid/v1/chat/completions', 'specific', 'KEY-203']], links: [[0, 0, 'doubao-pro', tokens(2, 8)], [0, 1, 'doubao-pro', tokens(2.1, 8.5)], [0, 2, 'doubao-pro', tokens(2.3, 9)], [1, 0, 'doubao-seed', tokens(.8, 2)]] },
-  { id: 'provider-kimi-official', code: 'kimi-official', name: '月之暗面 Kimi', models: [['kimi-k2', 'Kimi-K2', 'multimodal']], keys: [], channels: [['CH-301', '默认渠道', 'https://api.moonshot.cn/v1/chat/completions', 'inherit']], links: [[0, 0, 'kimi-k2', tokens(2, 8)]] },
-  { id: 'provider-zhipu-direct', code: 'zhipu-direct', name: '智谱', models: [['glm-4-7', 'GLM-4.7', 'text'], ['glm-5.2', 'GLM-5.2', 'text']], keys: [], channels: [], links: [] },
-];
+
+export const SUPPLIER_REVIEW_CASES = mockConfig["admin-v2/supplier-review-cases.js"]["SUPPLIER_REVIEW_CASES"];
 
 // Merge only missing fixtures; saved edits, deletions and service data are never reset.
 export function prepareSupplierReviewCases(source, merge = true) {

@@ -1,4 +1,4 @@
-import { MOMA_BILLING_ITEMS } from './moma-billing-items.js';
+import { initialTariffDictionary } from '../mock/application-data.js';
 
 export const TARIFF_KINDS = { scenario: '计费项', unit: '计价单位', currency: '货币' };
 export async function tariffDictionaryId(id) {
@@ -14,36 +14,7 @@ export async function tariffDictionaryId(id) {
 }
 const removedScenarioNames = new Set(['长视频生成', '输入', '输出', '缓存读取', '缓存写入', '图像生成', '视频生成', '语音识别', '语音合成', '向量生成', '重排']);
 export function tariffDictionarySeed() {
-  const scenario = [
-    [1, '输入 Token', 'Input tokens', 1, '普通输入部分；缓存读取、写入按供应商规则分别配置。'],
-    [2, '输出 Token', 'Output tokens', 1, '按模型生成的输出 Token 数量计费。'],
-    [3, '缓存读取 Token', 'Cache read tokens', 1, '命中提示词缓存、从缓存读取的输入 Token。'],
-    [4, '缓存写入 Token', 'Cache write tokens', 1, '写入提示词缓存的输入 Token；供应商单独收费时配置。'],
-    [11, '缓存写入 Token（5 分钟）', 'Cache write tokens (5m)', 1, '缓存有效期为 5 分钟的写入 Token；有效期不是计量单位。'],
-    [12, '缓存写入 Token（1 小时）', 'Cache write tokens (1h)', 1, '缓存有效期为 1 小时的写入 Token；有效期不是计量单位。'],
-    [13, '图像输入 Token', 'Image input tokens', 1, '输入图片经模型分词后的 Token，适用于按 Token 计费的图像模型。'],
-    [14, '图像输出 Token', 'Image output tokens', 1, '生成图片对应的输出 Token；与按张计费项按实际口径选择。'],
-    [15, '音频输入 Token', 'Audio input tokens', 1, '输入音频对应的 Token，适用于实时语音等按 Token 计费的接口。'],
-    [16, '音频输出 Token', 'Audio output tokens', 1, '模型生成音频对应的输出 Token。'],
-    [9, '向量输入 Token', 'Embedding input tokens', 1, '按向量化请求的输入 Token 计费。'],
-    [17, '重排输入 Token', 'Rerank input tokens', 1, '适用于按 Token 计费的重排接口，与按请求计费项按实际口径选择。'],
-    [10, '重排请求数', 'Rerank requests', 6, '适用于按请求次数计费的重排服务，单次计量范围以供应商规则为准。'],
-    [5, '图像输出（按张）', 'Image output (per image)', 2, '按生成或编辑后的图片数量计费；分辨率等规格可另建计费项。'],
-    [6, '视频输出时长', 'Video output duration', 3, '按生成视频的时长计费；分辨率、是否含音频等规格可另建计费项。'],
-    [18, '图像输入（按张）', 'Image input (per image)', 2, '按输入图片数量计费；免费张数、分辨率等条件以供应商报价为准。'],
-    [19, '视频输入时长', 'Video input duration', 3, '按输入视频时长计费，适用的输出分辨率等条件以供应商报价为准。'],
-    [20, '视频输入 Token', 'Video input tokens', 1, '按输入视频转换后的 Token 计费，与按时长计费区分。'],
-    [21, 'Token 用量', 'Token usage', 1, '供应商未区分输入输出的 Token 单价，按报价条件使用。'],
-    [22, '输入 TPM 预留', 'Reserved input TPM', 7, '按预留输入吞吐规格和月份计费，不是按量 Token 单价。'],
-    [23, '输出 TPM 预留', 'Reserved output TPM', 7, '按预留输出吞吐规格和月份计费，不是按量 Token 单价。'],
-    [24, '资源包', 'Resource package', 8, '按完整资源包计费，规格和有效期见适用条件。'],
-    [25, '图像及视频输入 Token', 'Image and video input tokens', 1, '适用于供应商将图片和视频输入合并报价的 Token 计费项。'],
-    [7, '音频输入时长', 'Audio input duration', 4, '适用于按音频时长收费的语音识别等接口。'],
-    [8, '语音合成字符数', 'Speech synthesis characters', 5, '按待合成语音的文本字符数量计费。'],
-  ];
-  const unit = [[1, '百万 Token', 'Million tokens'], [2, '张', 'Image'], [3, '秒', 'Second'], [4, '分钟', 'Minute'], [5, '万字符', '10,000 characters'], [6, '千次', '1,000 requests'], [7, '千 TPM·月', '1,000 TPM-month'], [8, '包', 'Package']];
-  const currency = [[1, '人民币', 'Chinese yuan', 'CNY'], [2, '美元', 'US dollar', 'USD']];
-  return [...Object.entries({ scenario, unit, currency }).flatMap(([kind, entries]) => entries.map(([key, name, englishName, reference, description]) => ({ id: `tariff-${kind}-${key}`, kind, name, englishName, ...(kind === 'currency' ? { code: reference } : kind === 'scenario' ? { unitId: `tariff-unit-${reference}`, description } : {}), status: '已启用', builtin: true }))), ...MOMA_BILLING_ITEMS.map(item => ({ ...item }))];
+  return initialTariffDictionary();
 }
 
 export function tariffDictionaryEntries(state) {

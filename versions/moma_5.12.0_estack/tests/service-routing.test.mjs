@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAdminSeed, commitAdminState, persistModelAction, parseAdminState } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction, parseAdminState as baseParseAdminState } from '../src/admin-v2/store.js';
 import { routingServices, routingChannels, serviceRoute, activeRouteVersion, routeSourceVersion, normalizeRouteConfig, validateRouteConfig, routingStatus, routePreview, routeGroups, comparableRouteCosts } from '../src/admin-v2/service-routing.js';
 import { activeSupplyPrice } from '../src/admin-v2/model-management.js';
 import { connectionFingerprint } from '../src/admin-v2/connection-state.js';
@@ -65,7 +66,7 @@ test('only explicit model service modes and Provider associations expose routing
  assert.equal(routingServices(state).length,0);
 });
 
-test('fixed unified routing keeps distinct same-provider channels and allows cross-provider backups', () => {
+test('fixed routing rejects multiple selected channels regardless of provider or failover', () => {
   const { state, service, config, channels } = baseline();
   const copy = { ...structuredClone(state.modelSupplies.find(item => item.id === channels[0].id)), id: 'same-provider-backup' };
   const endpoint = structuredClone(state.endpoints.find(item => item.id === copy.endpointId));
@@ -74,9 +75,10 @@ test('fixed unified routing keeps distinct same-provider channels and allows cro
   state.modelSupplies.push(copy);
   state.supplyPrices.push({...structuredClone(activeSupplyPrice(state,channels[0].id)),id:'backup-cost',supplyId:copy.id});
   const next = { strategy: 'fixed', autoFailover: true, channels: [config.channels[0], { supplyId: copy.id, enabled: true, weight: 0 }] };
-  assert.equal(validateRouteConfig(state, service, next).channels.length, 2);
-  assert.throws(() => validateRouteConfig(state, service, { ...next, autoFailover: false }), /只能启用一个/);
-  assert.equal(validateRouteConfig(state,service,{...next,channels:config.channels}).channels.length,2);
+  assert.throws(() => validateRouteConfig(state, service, next), /只能选择一个/);
+  assert.throws(() => validateRouteConfig(state, service, { ...next, autoFailover: false }), /只能选择一个/);
+  assert.throws(() => validateRouteConfig(state,service,{...next,channels:config.channels}), /只能选择一个/);
+  assert.equal(validateRouteConfig(state,service,{...next,channels:[config.channels[0]]}).channels.length,1);
 });
 
 test('flow preview keeps normal weighted selection separate from failover and reports unavailable traffic', () => {
@@ -115,7 +117,8 @@ test('publish produces an immutable version and preserves all models, supply, pr
   const version = activeRouteVersion(serviceRoute(next, service.id));
   assert.equal(version.version, 1);
   assert.equal(routingStatus(next, service).label, '已配置');
-  for (const key of Object.keys(state).filter(key => !['serviceRoutes', 'revision', 'updatedAt', 'audits'].includes(key))) assert.deepEqual(next[key], state[key], key);
+  for (const key of Object.keys(state).filter(key => !['serviceRoutes', 'modelData', 'initialData', 'revision', 'updatedAt', 'audits'].includes(key))) assert.deepEqual(next[key], state[key], key);
+  assert.ok(next.modelData.userIds.serviceRoutes.includes(next.serviceRoutes.at(-1).id));
   assert.deepEqual(state, before);
   assert.doesNotMatch(JSON.stringify(next.serviceRoutes), /must-not-persist|credentialRef|listPrice|purchasePrice/);
 });
@@ -246,3 +249,6 @@ test('mapping incompatibility blocks publication and all advanced limits are val
   endpoint.protocol=before.endpoints.find(item=>item.id===endpoint.id).protocol;endpoint.connectionTest=before.endpoints.find(item=>item.id===endpoint.id).connectionTest;
   assert.deepEqual(state,before);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

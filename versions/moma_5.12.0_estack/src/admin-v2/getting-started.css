@@ -1,37 +1,36 @@
-.admin-v2 .getting-started{display:grid;gap:8px;min-width:0;color:#263247;font-size:12px;line-height:1.5}
-.admin-v2 .getting-started :is(h1,h2,h3,p){margin:0}
-.admin-v2 .gs-heading,.admin-v2 .gs-panel,.admin-v2 .gs-overview{background:#fff;border:1px solid #e4eaf3;border-radius:6px;padding:16px}
-.admin-v2 .gs-heading h1{display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600}
-.admin-v2 .gs-heading h1 svg,.admin-v2 .getting-started a svg{width:16px;height:16px;flex:none}
+.admin-v2 .getting-started{display:grid;gap:12px;max-width:1280px;min-width:0;margin:0 auto;color:#263247;font-size:14px;line-height:1.75}
+.admin-v2 .getting-started :is(h1,h2,h3,p,figure){margin:0}
+.admin-v2 .gs-heading,.admin-v2 .gs-panel{background:#fff;border:1px solid #e4eaf3;border-radius:6px;padding:20px 24px;min-width:0}
+.admin-v2 .gs-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.admin-v2 .gs-heading h1{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:600}
+.admin-v2 .gs-heading h1 svg{width:19px;height:19px;flex:none}
 .admin-v2 .gs-heading p{margin-top:4px;color:#586982}
-.admin-v2 .gs-overview{display:flex;align-items:center;gap:16px;padding:12px 16px}
-.admin-v2 .gs-overview>a{display:flex;flex:1;flex-direction:column;gap:4px;color:#315fe8;text-decoration:none}
-.admin-v2 .gs-overview>a span{color:#586982}
-.admin-v2 .gs-overview>svg{width:16px;height:16px;color:#586982;flex:none}
-.admin-v2 .gs-workflows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.admin-v2 .gs-panel{min-width:0}
-.admin-v2 .gs-panel>header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
-.admin-v2 .gs-panel h2{font-size:14px;font-weight:600}
-.admin-v2 .gs-panel h3{font-size:12px;font-weight:600;margin-bottom:4px}
-.admin-v2 .gs-panel .gs-preparation{color:#586982;margin-bottom:16px}
-.admin-v2 .gs-panel ol{list-style:decimal;margin:0;padding-left:24px;display:grid;gap:16px}
-.admin-v2 .gs-panel li{padding-left:4px}
-.admin-v2 .gs-panel li::marker{color:#315fe8;font-weight:600}
-.admin-v2 .gs-panel .gs-result{border-top:1px solid #e8edf5;padding-top:12px;margin-top:16px}
-.admin-v2 .gs-panel .gs-tip{margin-top:8px;color:#586982}
-.admin-v2 .gs-table-scroll{overflow:auto}
-.admin-v2 .gs-panel table{border-collapse:collapse;width:100%;min-width:640px;text-align:left}
-.admin-v2 .gs-panel :is(th,td){padding:12px;vertical-align:top;border-bottom:1px solid #e8edf5}
-.admin-v2 .gs-panel thead th{background:#f8faff;color:#586982;font-weight:500}
-.admin-v2 .gs-panel th[scope=row]{width:20%;font-weight:500}
-.admin-v2 .gs-panel td:nth-child(2){width:32%}
-.admin-v2 .gs-panel td a{display:inline-flex;align-items:center;gap:4px;color:#315fe8}
-.admin-v2 .gs-panel tbody tr:last-child>*{border-bottom:0}
-.admin-v2 .gs-questions details+details{border-top:1px solid #e8edf5}
-.admin-v2 .gs-questions summary{cursor:pointer;padding:12px 0;min-height:32px}
-.admin-v2 .gs-questions details p{padding:0 0 12px;color:#586982}
-.admin-v2 .gs-concepts>p{margin-bottom:12px}.admin-v2 .gs-concepts details+details{border-top:1px solid #e8edf5}.admin-v2 .gs-concepts summary{cursor:pointer;padding:12px 0;min-height:32px;font-weight:500}.admin-v2 .gs-concepts .gs-term-table th[scope=row]{width:24%}.admin-v2 .gs-concepts .gs-term-table td{width:auto}
+.admin-v2 .gs-heading a svg{width:16px;height:16px}
+.admin-v2 .gs-section-nav{display:flex;gap:8px 24px;flex-wrap:wrap;padding:4px 8px}
+.admin-v2 .getting-started a{color:#315fe8;text-underline-offset:3px}
 .admin-v2 .getting-started a:hover{text-decoration:underline}
-.admin-v2 .getting-started :is(a,summary):focus-visible{outline:2px solid #315fe8;outline-offset:2px}
-@media(max-width:1100px){.admin-v2 .gs-workflows{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:650px){.admin-v2 .gs-overview{flex-direction:column;align-items:flex-start}.admin-v2 .gs-overview>svg{transform:rotate(90deg)}}
+.admin-v2 .gs-panel h2{font-size:16px;font-weight:600;margin-bottom:16px}
+.admin-v2 .gs-copy{display:grid;gap:12px;min-width:0;overflow-wrap:anywhere}
+.admin-v2 .gs-copy:empty{display:none}
+.admin-v2 .gs-copy ol,.admin-v2 .gs-copy ul{margin:0;padding-left:25px;display:grid;gap:8px;list-style:decimal}
+.admin-v2 .gs-copy ul{list-style:disc}
+.admin-v2 .gs-copy li{padding-left:4px}
+.admin-v2 .gs-copy li::marker{color:#315fe8;font-weight:600}
+.admin-v2 .gs-copy p{max-width:90ch}
+.admin-v2 .gs-copy code{font-size:.95em;background:#f4f6fa;border-radius:3px;padding:1px 4px}
+.admin-v2 .gs-copy figure img{display:block;width:100%;height:auto;max-width:1120px}
+.admin-v2 .gs-table-scroll{overflow:auto;min-width:0}
+.admin-v2 .gs-panel table{border-collapse:collapse;width:100%;text-align:left}
+.admin-v2 .gs-panel :is(th,td){padding:9px 12px;vertical-align:top;border-bottom:1px solid #e8edf5}
+.admin-v2 .gs-panel th{background:#f8faff;color:#586982;font-weight:500}
+.admin-v2 .gs-panel td:first-child{width:30%}
+.admin-v2 .gs-panel tbody tr:last-child td{border-bottom:0}
+.admin-v2 .gs-tasks{margin-top:8px}
+.admin-v2 .gs-tasks details+details{border-top:1px solid #e8edf5}
+.admin-v2 .gs-tasks summary{cursor:pointer;padding:14px 0;font-weight:600}
+.admin-v2 .gs-tasks h3{display:inline;font-size:14px;font-weight:600}
+.admin-v2 .gs-tasks details>.gs-copy{padding:0 0 20px 18px}
+.admin-v2 .getting-started :is(h2,details,.gs-anchor){scroll-margin-top:80px}
+.admin-v2 .gs-anchor{height:0}
+.admin-v2 .getting-started :is(a,summary,h2):focus-visible{outline:2px solid #315fe8;outline-offset:3px}
+@media(max-width:900px){.admin-v2 .gs-heading,.admin-v2 .gs-panel{padding:16px}.admin-v2 .gs-panel :is(th,td){padding:8px}.admin-v2 .gs-section-nav{gap:8px 16px}}

@@ -18,6 +18,16 @@ test("serves existing static assets without a fallback", async () => {
   assert.deepEqual(calls, ["/assets/app.js"]);
 });
 
+test('routes only the 5.12.0 API to the version handler and never serves its failures as HTML', async () => {
+  const env = { ASSETS: { fetch: () => { throw Error('API must not read assets'); } } };
+  const missingBinding = await worker.fetch(new Request('https://example.test/api/5120/services'), env);
+  assert.equal(missingBinding.status, 503);
+  assert.equal((await missingBinding.json()).error.code, 'DATABASE_UNAVAILABLE');
+  const unknown = await worker.fetch(new Request('https://example.test/api/5120/unknown', { headers: { accept: 'text/html' } }), env);
+  assert.equal(unknown.status, 404);
+  assert.equal((await unknown.json()).error.code, 'NOT_FOUND');
+});
+
 test("falls back to index.html for an unknown app route", async () => {
   const calls = [];
   const response = await worker.fetch(

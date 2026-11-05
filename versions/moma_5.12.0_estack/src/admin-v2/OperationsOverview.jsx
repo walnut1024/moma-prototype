@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
-import { overviewDemo, overviewPeriod, overviewPresets, overviewDateTime, overviewChange, compactCount } from './overview';
+import { overviewBusiness, overviewPeriod, overviewPresets, overviewDateTime, overviewChange, compactCount } from './overview';
 import { DateRange } from './AnalyticsFilters';
 import { dayOf } from './analytics';
 import './analytics.css';
@@ -38,11 +38,11 @@ function CallRankPanel({ title, rows, total, limits, onChoose }) {
   const choose = id => { setOpen(false); onChoose(id); };
   return <><Card className="ov-call-rank"><CardHeader><div><CardTitle>{title}</CardTitle><small>Top 10 占比 {percent(top.reduce((sum, row) => sum + row[metric], 0), total)}</small></div><div className="ov-rank-scale">{scaleControl}<Help label="排行刻度">指数模式使用 log10(数值＋1) 压缩条长；排序、标签和悬浮数值保持原始值。</Help><Button variant="outline" size="icon" className="ov-rank-expand" aria-label={`放大${title}排行榜`} title="放大排行榜" onClick={() => setOpen(true)}><Maximize2 size={15}/></Button></div></CardHeader><CardContent>{top.length ? <RankingChart showData={false} rows={top} metric={metric} unit={unit} collection={collection} scale={scale} onChoose={choose}/> : <p className="ov-empty">所选范围暂无排行数据</p>}</CardContent></Card><Dialog open={open} onOpenChange={setOpen}><DialogContent className="ov-ranking-dialog"><DialogHeader><DialogTitle>{title.replace('Top 10', `Top ${limit}`)}</DialogTitle><DialogDescription>共 {ranked.length} 个有用量的对象，当前展示 {expanded.length} 个 · 单位：{unit} · 点击条形查看明细</DialogDescription></DialogHeader><div className="ov-expanded-controls"><RankingSegments label="排行数量" value={limit} onChange={setLimit} items={limits.map(value => [value, `Top ${value}`])}/>{scaleControl}</div><div className="ov-expanded-scroll">{expanded.length ? <RankingChart showData={false} rows={expanded} metric={metric} unit={unit} collection={collection} scale={scale} onChoose={choose}/> : <p className="ov-empty">所选范围暂无排行数据</p>}</div></DialogContent></Dialog></>;
 }
-export default function OperationsOverview() {
+export default function OperationsOverview({state}) {
   const [now, setNow] = useState(() => Date.now()), [periodId, setPeriodId] = useState('day');
   const [customRange, setCustomRange] = useState(null);
   const [detail, setDetail] = useState(null);
-  const data = useMemo(() => overviewDemo(now, periodId, customRange), [now, periodId, customRange]);
+  const data = useMemo(() => overviewBusiness(state, now, periodId, customRange), [state, now, periodId, customRange]);
   const { period, previous } = data;
   const choosePeriod = (id, range = null) => { const current = Date.now(); if (!overviewPeriod(current, id, range)) { toast.error('请选择不晚于今天且不超过 365 天的日期范围'); return; } setPeriodId(id); setCustomRange(range); setNow(current); setDetail(null); };
   const tokenChange = overviewChange(data.total, previous.total), monthlyActive = data.monthlyActive;

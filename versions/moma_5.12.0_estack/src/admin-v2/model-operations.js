@@ -1,33 +1,46 @@
+import { channelHealthTransaction } from './channel-health.js';
 import { resolveOnboardingProvider, resolveOnboardingModel, assertOnboardingMetadata } from './onboarding-presets.js';
 import { libraryRecord, modelLibrary, libraryRemovalIssue } from './model-library.js';
 export { libraryRecord, modelLibrary } from './model-library.js';
-import { routingTransaction } from './service-routing.js';
+import { routingTransaction, routingServices, routingStatus } from './service-routing.js';
+import { prepareServiceShowcase, SERVICE_SHOWCASE_ID } from './service-showcase.js';
 import { prepareServiceReviewCases } from './service-review-cases.js';
-import { modelSaleRevision, availableServiceChannels, providerServices, providerServiceId, providerPriceRevision, serviceBindingInUse } from './service-workspace.js';
+import { commercialTaskKey, commercialTaskBase, modelSaleRevision, availableServiceChannels, providerServices, providerServiceId, providerPriceRevision, serviceBindingInUse, activeModelSalePrice, activeProviderPrice } from './service-workspace.js';
 import { billingItemKey, parseSaleAmount } from './provider-catalogue-pricing.js';
-import { modelTransaction, modelCode, modelSupplies, availableSupplies, supplyPriceReady, supplyModelUrl, latestSaleRevision } from './model-management.js';
-import { modelProfileDraft } from './model-profile.js';
+import { modelTransaction, modelCode, modelSupplies, availableSupplies, supplyPriceReady, supplyModelUrl, latestSaleRevision, activeSupplyPrice } from './model-management.js';
+import { modelProfileDraft, requireModelBasics } from './model-profile.js';
+import { MODEL_OPERATION_NAMES } from './model-operation-history.js';
 import { tariffDictionaryTransaction } from './tariff-dictionary.js';
-import { channelChangeTransaction } from './channel-change-management.js';
+import { channelChangeTransaction, channelChangeImpact } from './channel-change-management.js';
 import { channelOnboardingTransaction } from './channel-onboarding.js';
-import { providerTransaction, providerCode, modelConnectivityPreview, PROTOCOLS } from './provider-management.js';
-import { connectionTestPassed, connectionTestPending, connectionCredentialsReady } from './connection-state.js';
+import { providerTransaction, providerCode, modelConnectivityPreview, PROTOCOLS, checkedConnectionKeys } from './provider-management.js';
+import { builtinModelCatalogueChanges, cleanModelCatalogueTransaction } from '../mock/builtin-model-catalogue.js';
+import { archiveAcceptanceFixture } from './acceptance-cleanup.js';
+import { supplierModelRegistration } from './supplier-model-registration.js';
+import { supplyModelRecord } from './supply-models.js';
+import { providerKeyGroupKeys } from './provider-key-groups.js';
+import { connectionTestPassed, connectionTestPending, connectionCredentialsReady, connectionKeys } from './connection-state.js';
 import { providerCatalogueIds } from './moma-provider.js';
 import { catalogueMetadata, REAL_MODELS, RECENT_TEMPLATE_CODES } from './real-model-catalogue.js';
+import { guidedOnboarding } from './guided-onboarding.js';
+import { channelFingerprint, channelInterfaceIssue } from './provider-channels.js';
+import { supplierChannelAssociations } from './supplier-resources.js';
+import { platformPriceVersions } from './platform-service-client.js';
+import { modelOperationsExamplesTransaction } from './model-operations-examples.js';
 
 export { providerCode } from './provider-management.js';
 export const callModelId = (provider, model) => `${providerCode(provider)}/${modelCode(model)}`;
 export const listed = model => model.listingStatus === '已上架';
 export const SERVICE_MODES = {
-  standard: { label: '统一服务', description: '对外使用统一的模型 ID 和售价，用户无需关心后端由哪家供应商、哪个渠道提供服务。' },
-  provider: { label: '分供应商', description: '同一模型按供应商分别提供服务，每家供应商有独立的调用 ID 和售价，用户可按需选择。' },
+  standard: { label: '统一服务', description: '用户只选模型，用统一 ID 和价格调用；平台负责在不同供应商的渠道间调度。' },
+  provider: { label: '分供应商', description: '用户先选供应商，按该供应商的 ID 和价格调用；平台仅在该供应商的渠道内调度。' },
 };
 export const supplySalesStatus = supply => supply.status !== '已启用' ? '停止服务' : supply.salesEnabled ? '上架售卖' : '下架停售';
 export function supplyConnectivityTest(state, { modelId, supplyId, prompt, scenario }) {
   const supply = modelSupplies(state, modelId).find(item => item.id === supplyId);
   if (!supply?.endpoint || !supply.provider) throw new Error('供应商模型或接入地址不存在');
   const { endpoint, provider } = supply;
-  if (!connectionCredentialsReady(endpoint, provider)) throw new Error('请先在供应商 API 密钥页签配置凭证');
+  if (!connectionCredentialsReady(endpoint, provider)) throw new Error('请先在供应商密钥页签配置凭证');
   let url;
   try { url = new URL(endpoint.baseUrl); } catch { throw new Error('供应商模型 URL 无效'); }
   if (!PROTOCOLS.includes(endpoint.protocol) || (url.protocol !== 'https:' && !(provider.sourceType === 'selfHosted' && url.protocol === 'http:')) || url.username || url.password || url.search || url.hash) throw new Error('供应商模型 URL 或协议无效');
@@ -38,6 +51,19 @@ export function supplyConnectivityTest(state, { modelId, supplyId, prompt, scena
   return modelConnectivityPreview({ modelId, upstreamId: supply.upstreamModelId, endpointId: endpoint.id, baseUrl: requestUrl, protocol: endpoint.protocol }, scenario);
 }
 export const metadata = model => ({ modelId: modelCode(model), name: model.name, maker: model.maker || '', type: model.type, description: model.description, usageUnit: model.usageUnit, profile: { ...modelProfileDraft(model), author: model.profile?.author || model.maker || '' }, capabilities: { ...model.capabilities } });
+export const materialBase = (state, record) => JSON.stringify([metadata(record), state.models.filter(row => libraryRecord(state, row.id)?.id === record.id).map(row => [row.id, row.listingStatus, row.serviceModeRevision || 0]).sort(([a],[b])=>a.localeCompare(b))]);
+function validatedMaterial(state, record, value) {
+  if (!record) return modelTransaction({ ...state, models: [] }, { operation: 'create', data: value, catalogue:true }).changes[0].record;
+  // Editing an existing card must not require filling hidden technical fields.
+  const fields = modelTransaction({ ...state, models: [{ ...record, templateId: undefined }], modelSupplies: [] }, { operation: 'basic', modelId: record.id, data: value, catalogue:true }).changes.find(row => row.collection === 'models').changes;
+  return { ...record, ...fields };
+}
+export function materialImpact(state, record, value) {
+  const normalized = validatedMaterial(state, record, { ...value, modelId: record.modelId });
+  const before = metadata(validatedMaterial(state,record,metadata(record))), after = metadata(normalized);
+  const changed = before.type !== after.type || ['streaming', 'tools', 'context', 'output'].some(key => before.capabilities[key] !== after.capabilities[key]) || ['version', 'tasks', 'inputModalities', 'outputModalities', 'resultTypes', 'reasoning', 'structured', 'supportedParameters', 'parameterRules', 'maxInput'].some(key => JSON.stringify(before.profile[key] || []) !== JSON.stringify(after.profile[key] || []));
+  return { changed, services: state.models.filter(row => libraryRecord(state, row.id)?.id === record.id) };
+}
 export function templateSeed(models) {
   const samples = models.filter(model => model.id.startsWith('catalog-demo-'));
   const templates = samples.map(model => ({ id: `template-${modelCode(model)}`, ...metadata(model), revision: 1, updatedAt: model.updatedAt }));
@@ -78,10 +104,15 @@ function retailItems(rows) {
 }
 // Compose existing domain operations against one working copy; persistence stays atomic.
 export function operationsTransaction(state, action) {
+  if (action.operation === 'archiveAcceptanceFixture') return archiveAcceptanceFixture(state, action.data);
+  if (action.operation === 'cleanModelCatalogue') return cleanModelCatalogueTransaction(state);
+  if (action.operation === 'installModelCatalogue') return builtinModelCatalogueChanges(state, action.data?.catalogueIds);
+  if (action.operation === 'channelHealthTest') return channelHealthTransaction(state, action);
   if (/^channel(Draft|Discovery|Metadata|TestEvidence|TemporaryTest)/.test(action.operation) || action.operation === 'supplierSelection') return channelOnboardingTransaction(state, action);
   if (/^channel(Candidate|Procurement)/.test(action.operation) || action.operation.startsWith('keyGroupCandidate') || action.operation === 'credentialEmergencyRevoke') return channelChangeTransaction(state, action);
   if (['serviceRouteDraft', 'serviceRoutePublish', 'serviceRouteRollback','serviceRouteStop'].includes(action.operation)) return routingTransaction(state, action);
-  const working = structuredClone(state), changes = [];
+  // Cloud commands keep simulation history and reference data read-only.
+  const working = state.cloudOperations ? {...state,...Object.fromEntries(['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','modelVersions','validations','modelOnboardings','serviceRoutes','tariffDictionary','modelData'].map(key=>[key,structuredClone(state[key])]))} : structuredClone(state), changes = [];
   const apply = transaction => {
     for (const change of transaction.changes) {
       if (change.type === 'add') working[change.collection].unshift(change.record);
@@ -96,8 +127,100 @@ export function operationsTransaction(state, action) {
   const modelOp = (operation, modelId, data) => apply(modelTransaction(working, { operation, modelId, data }));
   const providerOp = (operation, objectId, data) => apply(providerTransaction(working, { operation, objectId, data }));
   const { operation, data = {}, modelId } = action;
+  if (operation.startsWith('guided')) assertOnboardingMetadata(data);
   let objectId = modelId, label;
-  if (operation === 'channelQuickCreate') {
+  if (operation === 'recordFailedOperation') {
+    const target = working.models.find(row => row.id === modelId) || working.modelTemplates.find(row => row.id === modelId);
+    if (!target || typeof data.reason !== 'string' || !data.reason.trim() || data.reason.length > 500) throw new Error('操作失败记录无效');
+    return { type: 'batch', label: Object.hasOwn(MODEL_OPERATION_NAMES, data.operation) ? MODEL_OPERATION_NAMES[data.operation] : '模型配置操作', objectId: modelId, auditFailure: data.reason.trim(), changes: [] };
+  } else if (operation === 'prepareModelOperationsExamples') {
+    if (data.confirmed !== true) throw new Error('请确认准备模型运营 Mock 数据');
+    return modelOperationsExamplesTransaction(working);
+  } else if (operation === 'guidePublish') {
+    const model=working.models.find(row=>row.id===modelId), providerId=data.providerId || '';
+    if(!model || !['standard','provider'].includes(model.serviceMode) || (model.serviceMode==='provider'?!providerServices(model).some(row=>row.providerId===providerId):Boolean(providerId)))throw Error('服务身份已变化');
+    if(data.expectedBase!==JSON.stringify([model.updatedAt,model.apiGuides || {}]))throw Error('配置已变化，请重新打开核对');
+    if(!data.codes || !['cURL','Python','Java','Go'].every(key=>typeof data.codes[key]==='string' && data.codes[key].length<=50000) || !Object.values(data.codes).some(code=>code.trim()))throw Error('请填写示例代码，每种语言最多 50000 字');
+    update('models',modelId,{apiGuides:{...model.apiGuides,[providerId || 'standard']:{codes:Object.fromEntries(['cURL','Python','Java','Go'].map(key=>[key,data.codes[key]]))}},updatedAt:new Date().toISOString()});
+    label='发布 API 调用指南';
+  } else if (operation === 'commercialPublish') {
+    const model = working.models.find(row => row.id === modelId);
+    if (!model || !['standard', 'provider'].includes(model.serviceMode) || !['price', 'scope'].includes(data.kind)) throw new Error('请选择有效模型和维护任务');
+    const providerId = data.kind === 'price' ? data.providerId || '' : '';
+    if (data.kind === 'price' && (model.serviceMode === 'provider' ? !providerServices(model).some(row => row.providerId === providerId) : providerId)) throw new Error('供应商服务已变化，请重新核对');
+    if (data.confirmed !== true || data.expectedBase !== commercialTaskBase(working, model, data.kind, providerId)) throw new Error('配置已有修订，请重新核对后提交');
+    const key = commercialTaskKey(data.kind, providerId), value = data.value;
+    if (!value || typeof value !== 'object') throw new Error('请填写配置');
+    if (data.kind === 'scope') modelOp('scope', modelId, value);
+    else {
+      retailItems(value.items);
+      if (providerId && value.callId !== providerServices(model).find(row => row.providerId === providerId)?.callId) throw new Error('对外调用 ID 已变化，请重新核对');
+      apply(operationsTransaction(working, { operation: providerId ? 'configureServiceProvider' : 'unifiedPrice', modelId, data: { ...value, providerId, expectedUpdatedAt: model.updatedAt, expectedSaleVersion: providerId ? providerPriceRevision(working, modelId, providerId) : modelSaleRevision(working, modelId) } }));
+      platformPriceVersions(providerId ? activeProviderPrice(working, modelId, providerId) : activeModelSalePrice(working, modelId), model);
+    }
+    const current = working.models.find(row => row.id === modelId);
+    update('models', modelId, { commercialPublications: { ...current.commercialPublications, [key]: { kind: data.kind, providerId, version: (model.commercialPublications?.[key]?.version || 0) + 1, publishedAt: new Date().toISOString() } } });
+    label = '发布' + (data.kind === 'price' ? '售价' : '客户范围');
+  } else if (operation === 'supplierModelsRegister') {
+    const provider = working.providers.find(row => row.id === data.providerId);
+    if (!provider) throw new Error('请选择当前供应商');
+    const rows = supplierModelRegistration(working, provider, data.libraryIds);
+    for (const row of rows) providerOp('supplierModelAdd', provider.id, { libraryId: row.id });
+    objectId = provider.id; label = '添加供应模型';
+  } else if (operation === 'supplierChannelEdit') {
+    const provider = working.providers.find(row => row.id === data.providerId);
+    const endpoint = working.endpoints.find(row => row.id === data.endpointId && row.providerId === provider?.id && !row.deletedAt);
+    if (!provider || !endpoint) throw new Error('请选择当前供应商的渠道');
+    const association = data.associationId && supplierChannelAssociations(working, provider, endpoint.id).find(row => row.id === data.associationId && row.modelId === data.modelId);
+    if (data.associationId && !association || !association && data.scenarios !== undefined) throw new Error('模型与渠道的关联已变化');
+    if (typeof data.baseUrl !== 'string' || !data.baseUrl.trim()) throw new Error('请填写 API 地址');
+    const addressChanged = data.baseUrl.trim() !== endpoint.baseUrl;
+    if (data.keyGroupId !== undefined && (typeof data.keyGroupId !== 'string' || !data.keyGroupId)) throw new Error('请选择有效的共享API密钥组');
+    const keyGroupChanged = data.keyGroupId !== undefined && (endpoint.authMode !== 'group' || endpoint.keyGroupId !== data.keyGroupId), connectionChanged = addressChanged || keyGroupChanged || data.newApiKey !== undefined;
+    if (data.newApiKey !== undefined && data.keyGroupId !== undefined) throw new Error('请选择一种 API 密钥方式');
+    if (keyGroupChanged) {
+      const primary = providerKeyGroupKeys(provider, data.keyGroupId, true)[0];
+      if (!primary || primary.status === 'disabled' || primary.revokedAt) throw new Error('请选择主要密钥可用的共享API密钥组');
+    }
+    if (connectionChanged && endpoint.candidateConfiguration) throw new Error('渠道已有待验证配置，请先完成或放弃现有配置');
+    providerOp('supplierChannelSave', provider.id, { mode: 'info', endpointId: endpoint.id, name: data.name, expectedUpdatedAt: data.expectedUpdatedAt, expectedProviderUpdatedAt: data.expectedProviderUpdatedAt, ...(association ? { associationId: association.id, modelId: association.modelId, upstreamModelId: data.upstreamModelId } : {}) });
+    if (connectionChanged && data.newApiKey === undefined) apply(channelChangeTransaction(working, { operation: 'channelCandidateSave', data: { providerId: provider.id, endpointId: endpoint.id, expectedRevision: endpoint.configurationRevision || 0, config: { baseUrl: data.baseUrl.trim(), ...(keyGroupChanged ? { authMode: 'group', keyGroupId: data.keyGroupId } : {}) } } }));
+    if (data.newApiKey !== undefined) {
+      const key = connectionKeys(endpoint, provider, true)[0];
+      apply(channelChangeTransaction(working, { operation: 'channelCandidateCredentialPrepare', data: { providerId: provider.id, endpointId: endpoint.id, expectedRevision: endpoint.configurationRevision || 0, expectedImpactRevision: channelChangeImpact(working, provider.id, endpoint.id).revision, expectedKeyId: key?.id || '', expectedFingerprint: key?.fingerprint || '', newApiKey: data.newApiKey, config: { baseUrl: data.baseUrl.trim() } } }));
+    }
+    if (data.scenarios !== undefined) apply(channelChangeTransaction(working, { operation: 'channelProcurementPublish', data: { providerId: provider.id, endpointId: endpoint.id, associationId: association.id, expectedPriceRevision: data.expectedPriceRevision, scenarios: data.scenarios, confirmed: true } }));
+    objectId = endpoint.id; label = connectionChanged ? '保存渠道信息及待验证配置' : '保存渠道信息';
+  } else if (operation === 'supplierChannelRegister') {
+    const provider = working.providers.find(row => row.id === data.providerId);
+    if (!provider || !providerCatalogueIds(provider).includes(data.modelId)) throw new Error('请选择当前供应商已登记的模型');
+    const master = supplyModelRecord(working, provider, data.modelId);
+    if (!master) throw new Error('当前供应模型尚未关联基础资料，请先维护模型资料');
+    if (!Array.isArray(data.scenarios) || !data.scenarios.length) throw new Error('请至少添加一项采购成本，并填写计费项、采购价和单位');
+    if (!['group', 'independent'].includes(data.authMode)) throw new Error('请选择 API 密钥方式');
+    let privateKey;
+    if (data.authMode === 'independent') {
+      if (!data.apiKey || Object.keys(data.apiKey).some(key => !['maskedKey', 'fingerprint'].includes(key))) throw new Error('独立密钥只接受脱敏元数据');
+      privateKey = { ...checkedConnectionKeys([data.apiKey])[0], scope: 'channel' };
+    } else if (data.apiKey || !providerKeyGroupKeys(provider, data.keyGroupId).some(key => !key.revokedAt)) throw new Error('请选择包含可用密钥的共享API密钥组');
+    const created = providerOp('supplierChannelSave', provider.id, {
+      name: data.name, baseUrl: data.baseUrl, protocol: provider.defaultProtocol?.includes('Anthropic') ? 'Anthropic' : 'OpenAI',
+      authMode: 'group', keyGroupId: privateKey ? 'default' : data.keyGroupId,
+    });
+    const endpoint = created.changes.find(row => row.type === 'add' && row.collection === 'endpoints').record;
+    update('endpoints', endpoint.id, { onboardingCreated: true, ...(privateKey ? { authMode: 'specific', keyGroupId: '', apiKeyId: privateKey.id, apiKeys: [privateKey] } : {}) });
+    const issue = channelInterfaceIssue(provider, { modelId: data.modelId, endpoint });
+    if (issue) throw new Error(issue);
+    providerOp('supplierAssociationSave', provider.id, { endpointId: endpoint.id, modelId: data.modelId, upstreamModelId: data.upstreamModelId, scenarios: data.scenarios });
+    objectId = endpoint.id; label = '添加模型渠道';
+  } else if (operation === 'guidedChannelCreate') {
+    if (!data.task) throw new Error('请完整配置模型与渠道');
+    const task = apply(channelOnboardingTransaction(working, { operation: 'channelDraftSave', data: { ...data.task, guided: true, step: 1 } }));
+    const saved = working.modelOnboardings.find(row => row.id === task.objectId);
+    const { task: _ignored, ...input } = data;
+    const created = apply(operationsTransaction(working, { operation: 'channelQuickCreate', data: { ...input, draftId: saved.id, expectedDraftRevision: saved.draftRevision } }));
+    objectId = created.objectId; label = '保存模型渠道接入';
+  } else if (operation === 'channelQuickCreate') {
     assertOnboardingMetadata(data);
     const input = data.values;
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('请填写渠道连接及模型映射');
@@ -105,7 +228,7 @@ export function operationsTransaction(state, action) {
     if (input.endpointId && !endpoint) throw new Error('追加模型的渠道已变化或不属于当前供应商');
     if (endpoint && (data.newProvider || data.providerPresetId || data.newApiKey || Object.keys(input).some(key => !['endpointId', 'models'].includes(key)))) throw new Error('追加模型只能引用已有渠道，不能同时修改连接或密钥');
     const draft = data.draftId && working.modelOnboardings.find(row => row.id === data.draftId && row.kind === 'supplier-channel');
-    if (data.draftId && (!draft || draft.status !== '配置中' || draft.draftRevision !== data.expectedDraftRevision || (draft.endpointId || '') !== (endpoint?.id || ''))) throw new Error('接入草稿已变化或渠道不匹配，请重新载入');
+    if (data.draftId && (!draft || draft.status !== '配置中' || draft.draftRevision !== data.expectedDraftRevision || !draft.guided && (draft.endpointId || '') !== (input.endpointId || ''))) throw new Error('接入草稿已变化或渠道不匹配，请重新载入');
     let provider = resolveOnboardingProvider(working, data);
     if (provider.isDraft) {
       const code = data.newProvider ? 'custom-' + crypto.randomUUID().replaceAll('-', '').slice(0, 24) : provider.code;
@@ -133,10 +256,103 @@ export function operationsTransaction(state, action) {
       }
       return { libraryId: record.id, upstreamModelId: row.upstreamModelId ?? (row.newModel ? record.modelId : ''), scenarios: row.scenarios || [] };
     });
-    const created = providerOp(endpoint ? 'supplierModelsAdd' : 'supplierChannelCreate', provider.id, values), channel = endpoint || created.changes.find(change => change.type === 'add' && change.collection === 'endpoints')?.record;
+    const reuse = draft?.guided && endpoint && values.models.length===1 && provider.catalogConnections?.find(row=>row.endpointId===endpoint.id && !row.deletedAt && row.upstreamModelId===values.models[0].upstreamModelId && provider.catalogModels.some(master=>master.modelId===row.modelId && libraryRecord(working,master.libraryId)?.id===values.models[0].libraryId));
+    const created = reuse ? null : providerOp(endpoint ? 'supplierModelsAdd' : 'supplierChannelCreate', provider.id, values), channel = endpoint || created?.changes.find(change => change.type === 'add' && change.collection === 'endpoints')?.record;
     if (!channel) throw new Error('渠道创建结果缺失');
     objectId = channel.id; label = endpoint ? '追加模型接入' : '保存快捷模型接入';
-    if (draft) update('modelOnboardings', draft.id, { status: '已完成', draftRevision: draft.draftRevision + 1, createdEndpointId: channel.id });
+    if (draft) {
+      const owner = working.providers.find(row => row.id === provider.id);
+      const createdAssociationIds = owner.catalogConnections.filter(row => row.endpointId === channel.id && !row.deletedAt && values.models.some(model => model.upstreamModelId.trim() === row.upstreamModelId && owner.catalogModels.some(item => item.modelId === row.modelId && item.libraryId === model.libraryId))).map(row => row.id);
+      if (draft.guided && createdAssociationIds.length !== 1) throw new Error('接入模型结果不唯一，请重新核对');
+      update('modelOnboardings', draft.id, { status: '已完成', draftRevision: draft.draftRevision + 1, createdEndpointId: channel.id, createdAssociationIds, ...(draft.guided?{rows:values.models.map((row,index)=>({id:draft.rows[index].id,libraryId:row.libraryId,upstreamModelId:row.upstreamModelId,scenarios:row.scenarios,selected:true,confirmed:true,source:'reference'}))}:{}) });
+    }
+  } else if (operation === 'guidedUpstreamSave') {
+    const context = guidedOnboarding(working, data.draftId);
+    if (!context?.channel || context.draft.draftRevision !== data.expectedDraftRevision || channelFingerprint(context.channel) !== data.expectedFingerprint) throw new Error('接入模型已变化，请重新打开核对');
+    if (working.modelSupplies.some(row => row.status !== '已移除' && (row.channelId === context.association.id || row.endpointId === context.endpoint.id && row.upstreamModelId === context.association.upstreamModelId))) throw new Error('该渠道模型已关联服务，请在供应管理中维护');
+    if (context.endpoint.serverTestJobs?.some(row => !row.receivedAt && row.associationIds?.includes(context.association.id))) throw new Error('测试尚未完成，请先查询原任务结果');
+    const upstreamModelId = typeof data.upstreamModelId === 'string' ? data.upstreamModelId.trim() : '';
+    if (!upstreamModelId || upstreamModelId.length > 200 || /\s/u.test(upstreamModelId)) throw new Error('上游模型 ID 必填，最多 200 字符，不能包含空白');
+    if (data.confirmed !== true) throw new Error('请确认修改后重新测试并启用');
+    if (context.provider.catalogConnections.some(row => row.id !== context.association.id && !row.deletedAt && row.endpointId === context.endpoint.id && row.upstreamModelId === upstreamModelId)) throw new Error('此渠道已有相同上游模型 ID');
+    update('providers', context.provider.id, { catalogConnections: context.provider.catalogConnections.map(row => row.id === context.association.id ? { ...row, upstreamModelId, enabled: false, health: null, qualification: null, capabilityTests: [] } : row) });
+    update('modelOnboardings', context.draft.id, { rows: context.draft.rows.map(row => ({ ...row, upstreamModelId })), draftRevision: context.draft.draftRevision + 1, updatedAt: new Date().toISOString() });
+    objectId = context.association.id; label = '修正接入模型 ID';
+  } else if (operation === 'guidedRouteSave') {
+    const context=guidedOnboarding(working,data.draftId);
+    if(!context?.model || !context.supply || !context.supplyReady || context.draft.draftRevision!==data.expectedDraftRevision || data.serviceId!==context.service?.id)throw new Error('本次服务、供应或任务已变化，请重新核对');
+    apply(routingTransaction(working,{operation:'serviceRoutePublish',data}));
+    update('modelOnboardings',context.draft.id,{routeCandidate:null,draftRevision:context.draft.draftRevision+1});
+    objectId=context.model.id;label='发布本次接入路由';
+  } else if (operation === 'guidedReserveComplete') {
+    const context=guidedOnboarding(working,data.draftId);
+    if(!context || context.draft.intent!=='reserve' || !context.supplyReady || context.draft.draftRevision!==data.expectedDraftRevision)throw new Error('备用供应的采购条件或检查尚未完成');
+    update('modelOnboardings',context.draft.id,{completion:{outcome:'reserve',completedAt:new Date().toISOString()},draftRevision:context.draft.draftRevision+1});
+    objectId=context.master.id;label='完成备用供应准备';
+  } else if (operation === 'guidedPublish') {
+    const context=guidedOnboarding(working,data.draftId), model=context?.model;
+    if(!model || model.id!==modelId || !data.operationId || data.confirmed!==true)throw new Error('请选择有效的接入任务并确认发布上架');
+    if(context.draft.completion?.operationId===data.operationId)return {type:'batch',changes:[],objectId:modelId,label:'核对发布上架结果'};
+    if(context.draft.draftRevision!==data.expectedDraftRevision || !context.serviceReady || !context.routed)throw new Error('本次供应、采购条件、路由或接入任务已变化，请重新核对');
+    if(context.routeTransaction)apply(context.routeTransaction);
+    modelOp('recordPlatformPublication',modelId,{serviceId:data.serviceId,mockServiceId:data.mockServiceId,publishedVersion:data.publishedVersion,expectedFingerprint:data.expectedFingerprint});
+    modelOp('publish',modelId,{});
+    update('modelOnboardings',context.draft.id,{completion:{operationId:data.operationId,outcome:'listed',publishedAt:new Date().toISOString()},draftRevision:context.draft.draftRevision+1});
+    objectId=modelId;label='发布验证后的配置并上架模型';
+  } else if (operation === 'guidedSupplyAttach') {
+    const context=guidedOnboarding(working,data.draftId), model=context?.model;
+    if(!model || context.draft.intent!=='activate' || !context.supplyReady || context.draft.draftRevision!==data.expectedDraftRevision)throw new Error('请先确认投入目标、采购条件和供应检查');
+    if(model.serviceMode==='provider' && !providerServices(model).some(row=>row.providerId===context.provider.id))throw new Error('请先在对外服务中配置新增供应商的独立售价与调用 ID');
+    if(!context.supply)apply(operationsTransaction(working,{operation:'associateServiceChannels',modelId:model.id,data:{providerId:context.provider.id,catalogueModelId:context.association.modelId,channelIds:[context.association.id],confirmedIdentity:true,expectedUpdatedAt:model.updatedAt}}));
+    objectId=model.id;label='关联新增供应，不改变售价和客户范围';
+  } else if (operation === 'guidedProfileSave') {
+    const context = guidedOnboarding(working, data.draftId);
+    if (!context?.master || context.connectionIssue || context.draft.draftRevision !== data.expectedDraftRevision || context.model?.listingStatus === '已上架' || (context.model?.id || null) !== (modelId || null)) throw new Error('接入模型、服务或进度已变化，请重新核对');
+    if (data.values?.type !== context.master.type) throw new Error('模型类型须与本次接入的模型一致');
+    const args={...data.values,...(!context.model?{libraryId:context.master.id}:{})};
+    const preview=modelTransaction(working,{operation:context.model?'serviceBasics':'createServiceModel',modelId,data:args}).changes.find(row=>row.collection==='models');
+    const values={...context.model,...(preview.record || preview.changes)};
+    requireModelBasics(values.profile);
+    apply(operationsTransaction(working,{operation:'templateSave',data:{...metadata(values),id:context.master.id,modelId:context.master.modelId,confirmCapabilities:true}}));
+    const saved = modelOp(context.model ? 'serviceBasics' : 'createServiceModel', modelId, args);
+    update('modelOnboardings', context.draft.id, { profile: null, draftRevision: context.draft.draftRevision + 1, updatedAt: new Date().toISOString() });
+    objectId = saved.objectId; label = '保存接入模型对外资料';
+  } else if (operation === 'guidedServiceConfigure') {
+    const context = guidedOnboarding(working, data.draftId), model = context?.model;
+    if (!model || model.id !== modelId || !context.channel || context.connectionIssue) throw new Error(context?.connectionIssue || '接入模型与当前服务不匹配');
+    if (model.listingStatus === '已上架') throw new Error('已上架服务请在服务管理中维护');
+    if (context.draft.draftRevision !== data.expectedDraftRevision || model.updatedAt !== data.expectedUpdatedAt || (context.association.procurementRevision || 0) !== data.expectedPriceRevision || modelSaleRevision(working, modelId) !== data.expectedSaleVersion || providerPriceRevision(working, modelId, context.provider.id) !== data.expectedProviderSaleVersion) throw new Error('模型、采购价或平台售价已有修订，请重新核对');
+    if (data.confirmed !== true) throw new Error('请确认采购价、平台售价及开放范围');
+    if (model.serviceMode && model.serviceMode !== data.serviceMode) throw new Error('已有服务模式不能在接入流程中重置，请在服务管理中维护');
+    if (!context.supplyReady) throw new Error('请先在接通供应阶段确认有效采购条件');
+    if (!model.serviceMode) apply(operationsTransaction(working, { operation: 'serviceMode', modelId, data: { serviceMode: data.serviceMode, expectedUpdatedAt: model.updatedAt } }));
+    if (data.serviceMode === 'standard') apply(operationsTransaction(working, { operation: 'unifiedPrice', modelId, data: { items: data.prices, expectedUpdatedAt: model.updatedAt, expectedSaleVersion: data.expectedSaleVersion } }));
+    else {
+      if (!providerServices(model).some(row => row.providerId === context.provider.id)) apply(operationsTransaction(working, { operation: 'associateServiceProvider', modelId, data: { providerId: context.provider.id, expectedUpdatedAt: model.updatedAt } }));
+      apply(operationsTransaction(working, { operation: 'configureServiceProvider', modelId, data: { providerId: context.provider.id, callId: data.callId, items: data.prices, expectedUpdatedAt: model.updatedAt, expectedSaleVersion: data.expectedProviderSaleVersion } }));
+    }
+    modelOp('scope', modelId, { openScope: data.openScope, tenantIds: data.tenantIds });
+    if (!context.supply) apply(operationsTransaction(working, { operation: 'associateServiceChannels', modelId, data: { providerId: context.provider.id, catalogueModelId: context.association.modelId, channelIds: [context.association.id], confirmedIdentity: true, expectedUpdatedAt: model.updatedAt } }));
+    else if (context.supply.validationStatus !== '通过' || context.supply.status !== '已启用') {
+      modelOp('supply', modelId, { id: context.supply.id, endpointId: context.endpoint.id, upstreamModelId: context.association.upstreamModelId, capabilities: model.capabilities });
+      apply(operationsTransaction(working, { operation: 'verifySupply', modelId, data: { id: context.supply.id } }));
+    }
+    const configured = guidedOnboarding(working, data.draftId);
+    const procurement = platformPriceVersions(activeSupplyPrice(working, configured.supply.id), model, '采购价');
+    const sale = platformPriceVersions(data.serviceMode === 'provider' ? activeProviderPrice(working, modelId, context.provider.id) : activeModelSalePrice(working, modelId), model, '平台售价');
+    const measures = items => items.map(item => `${item.unit}:${item.currency}`).sort().join('|');
+    if (measures(procurement) !== measures(sale)) throw new Error('采购价与平台售价须使用相同的计量方式和币种');
+    update('modelOnboardings', context.draft.id, { sales: null, draftRevision: context.draft.draftRevision + 1, updatedAt: new Date().toISOString() });
+    objectId = modelId; label = '保存模型对外服务配置';
+   } else if (operation === 'prepareServiceShowcase') {
+    if (data.confirmed !== true) throw new Error('请确认准备两个模型服务案例');
+    const prepared = prepareServiceShowcase(working);
+    for (const collection of ['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','serviceRoutes','modelVersions']) for (const record of prepared[collection]) {
+      const current = working[collection].find(item => item.id === record.id);
+      if (!current) add(collection, record);
+      else if (JSON.stringify(current) !== JSON.stringify(record)) update(collection, record.id, record);
+    }
+    objectId = SERVICE_SHOWCASE_ID; label = '准备两个模型服务案例';
   } else if (operation==='prepareServiceReviewCases') {
     if (data.confirmed!==true) throw new Error('请确认配置这五个评审场景');
     const prepared=prepareServiceReviewCases(working);
@@ -146,6 +362,14 @@ export function operationsTransaction(state, action) {
       else if (JSON.stringify(current)!==JSON.stringify(record)) update(collection,record.id,record);
     }
     objectId='service-review-cases';label='配置服务管理评审场景';
+  } else if (operation === 'submitSupplierBatch') {
+    apply(operationsTransaction(working, { operation: 'prepareSupplierBatch', data }));
+    const items = data.items.map(entry => {
+      const task = working.modelOnboardings.find(row => row.providerId === data.providerId && row.catalogueModelId === entry.catalogueModelId && row.status !== '已完成');
+      return { catalogueModelId: entry.catalogueModelId, draftId: task.id, draftRevision: task.updatedAt };
+    });
+    apply(operationsTransaction(working, { operation: 'publishSupplierBatch', data: { providerId: data.providerId, items } }));
+    objectId = data.providerId; label = `批量上架 ${items.length} 个模型`;
   } else if (['saveSupplierBatch', 'prepareSupplierBatch', 'publishSupplierBatch'].includes(operation)) {
     const provider = working.providers.find(item => item.id === data.providerId);
     if (!provider) throw new Error('供应商不存在');
@@ -180,6 +404,19 @@ export function operationsTransaction(state, action) {
     }
     objectId = provider.id;
     label = `${{ saveSupplierBatch: '保存批量配置进度', prepareSupplierBatch: '保存配置并检查', publishSupplierBatch: '批量上架供应商模型' }[operation]} ${data.items.length} 个`;
+  } else if (operation === 'templatePublish') {
+    const record = libraryRecord(working, data.id);
+    if (!record) throw new Error('模型资料不存在');
+    if (data.confirmed !== true || data.expectedBase !== materialBase(working, record)) throw new Error('请重新核对资料版本和共享影响后发布');
+    const collection = working.models.some(row => row.id === record.id) ? 'models' : 'modelTemplates';
+    objectId = record.id;
+    const impact = materialImpact(working, record, data.value);
+    const online = impact.changed ? impact.services.filter(listed) : [];
+    if (online.length && data.confirmDownlist !== true) throw new Error('能力变更需先修复相关服务，或明确下架受影响服务后发布');
+    apply(operationsTransaction(working, { operation: 'templateSave', data: { ...data.value, id: record.id, confirmCapabilities: true } }));
+    for (const service of online) update('models', service.id, { listingStatus: '已下架', visibility: '内部', callsEnabled: false, status: '停用', lifecycleStopReason: 'capability' });
+    update(collection, record.id, { materialPublication: { publishedAt: new Date().toISOString(), revision: (record.materialPublication?.revision || 0) + 1 } });
+    label = '发布共享模型资料';
   } else if (operation === 'templateDelete') {
     const issue = libraryRemovalIssue(working, data.id);
     if (issue) throw new Error(issue);
@@ -201,7 +438,7 @@ export function operationsTransaction(state, action) {
         if (affected.length && !data.confirmCapabilities) throw new Error(`请确认能力变更：${affected.length} 条供应商供给将暂停服务并重新验证；价格与订购范围保留。`);
         apply(transaction); objectId = current.id; continue;
       }
-      const validated = modelTransaction({ ...working, models: [] }, { operation: 'create', data: { ...entry, modelId: current?.modelId || entry.modelId } }).changes[0].record;
+      const validated = validatedMaterial(working, current, { ...entry, modelId: current?.modelId || entry.modelId });
       const fields = { ...metadata(validated), revision: (current?.revision || 0) + 1, updatedAt: new Date().toISOString() };
       objectId = current?.id || `template-${crypto.randomUUID()}`;
       if (current) update('modelTemplates', current.id, fields); else add('modelTemplates', { id: objectId, ...fields });
@@ -320,7 +557,20 @@ export function operationsTransaction(state, action) {
     const version = Math.max(0,...working.modelSalePrices.filter(price => price.modelId === modelId && price.scope === 'model').map(price => price.version)) + 1;
     add('modelSalePrices', { id:`model-sale-${crypto.randomUUID()}`, modelId, scope:'model', serviceModeRevision:model.serviceModeRevision || 0, items, version, effectiveAt:new Date().toISOString(), status:'已发布' });
     objectId=modelId; label='配置统一售价';
-  } else if (['associateServiceProvider','configureServiceProvider','removeServiceProvider'].includes(operation)) {
+  } else if (['serviceProviderListing','serviceProviderServing'].includes(operation)) {
+    const model=working.models.find(item=>item.id===modelId), provider=working.providers.find(item=>item.id===data.providerId);
+    const entry=model?.serviceProviders?.find(item=>item.providerId===data.providerId && item.status!=='已移除');
+    if (!model || model.serviceMode!=='provider' || !entry || !provider) throw new Error('供应商服务不存在');
+    if (data.expectedUpdatedAt!==model.updatedAt) throw new Error('模型服务已有并发修订，请重新打开配置');
+    if (typeof data.enabled!=='boolean') throw new Error('请选择有效的供应商服务状态');
+    if (operation==='serviceProviderServing' && data.enabled) {
+      const price=activeProviderPrice(working,modelId,provider.id), service=routingServices(working).find(item=>item.id===providerServiceId(modelId,provider.id));
+      if (provider.status!=='已启用' || !entry.callId || !price?.items.length || price.items.some(item=>item.amount==null) || !routingStatus(working,service).good) throw new Error('请先完善供应商调用 ID、售价及可用路由，再恢复服务');
+    }
+    const field=operation==='serviceProviderListing'?'marketVisible':'callsEnabled';
+    update('models',modelId,{serviceProviders:model.serviceProviders.map(item=>item===entry?{...item,[field]:data.enabled}:item)});
+    label=operation==='serviceProviderListing'?(data.enabled?'上架供应商':'下架供应商'):(data.enabled?'恢复供应商服务':'停服供应商');objectId=modelId;
+  } else if (['associateServiceProvider','configureServiceProvider','configureServiceIdentity','removeServiceProvider'].includes(operation)) {
     const model=working.models.find(item=>item.id===modelId), provider=working.providers.find(item=>item.id===data.providerId);
     if (!model || model.serviceMode!=='provider' || !provider) throw new Error('请在分供应商模式选择已有供应商');
     if (data.expectedUpdatedAt!==model.updatedAt) throw new Error('模型服务已有并发修订，请重新打开配置');
@@ -329,26 +579,29 @@ export function operationsTransaction(state, action) {
     if (operation==='associateServiceProvider') {
       if (provider.status!=='已启用') throw new Error('供应商已停用');
       if (current && current.status!=='已移除') throw new Error('供应商已关联');
-      entry={providerId:provider.id,code:providerCode(provider),callId:'',status:'已关联'};
+      entry={providerId:provider.id,code:providerCode(provider),callId:'',status:'已关联',...(listed(model)?{pendingPublication:true}:{})};
       label='关联已有供应商';
     } else {
       if (!current || current.status==='已移除') throw new Error('供应商关联不存在');
       if (operation==='removeServiceProvider') {
-        if (listed(model)) throw new Error('请先下架模型再移除 Provider');
+        if (current.marketVisible!==false) throw new Error('请先下架当前供应商，再解绑');
         const supplies=modelSupplies(working,modelId).filter(item=>item.provider?.id===provider.id);
-        if (serviceBindingInUse(working,modelId,supplies,serviceId)) throw new Error('Provider 被生效路由或草稿引用，请先在渠道与路由移除引用');
+        if (serviceBindingInUse({...working,serviceRoutes:working.serviceRoutes.filter(route=>route.serviceId!==serviceId)},modelId,supplies)) throw new Error('供应商渠道仍被其他服务路由引用，请先解除引用');
+        for (const route of working.serviceRoutes.filter(item=>item.serviceId===serviceId)) update('serviceRoutes',route.id,{activeVersion:0,draft:null,draftUpdatedAt:null});
         for (const supply of supplies) update('modelSupplies',supply.id,{status:'已移除',salesEnabled:false});
-        entry={...current,status:'已移除'};label='解除供应商关联';
+        entry={...current,status:'已移除',callsEnabled:false};label='解绑供应商';
       } else {
         if (provider.status!=='已启用') throw new Error('供应商已停用');
         const callId=typeof data.callId==='string'?data.callId.trim():'';
         if (!/^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/.test(callId)) throw new Error('对外调用 ID 必填，最多200字，仅支持英文、数字及 . _ / -');
         if (working.models.some(item=>item.id===callId || modelCode(item)===callId || providerServices(item).some(service=>!(item.id===modelId && service.providerId===provider.id) && service.callId===callId))) throw new Error('对外调用 ID 已存在');
         if (listed(model) && current.callId && current.callId!==callId) throw new Error('请先下架模型再修改对外调用 ID');
-        if (data.expectedSaleVersion!==providerPriceRevision(working,modelId,provider.id)) throw new Error('供应商平台售价已有并发修订，请重新核对');
-        const items=retailItems(data.items), version=Math.max(0,...working.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && price.providerId===provider.id).map(price=>price.version))+1;
-        add('modelSalePrices',{id:`provider-sale-${crypto.randomUUID()}`,modelId,providerId:provider.id,serviceId,scope:'provider',serviceModeRevision:model.serviceModeRevision || 0,items,version,effectiveAt:new Date().toISOString(),status:'已发布'});
-        entry={...current,callId};label='配置 Provider 对外服务';
+        if (operation !== 'configureServiceIdentity') {
+          if (data.expectedSaleVersion!==providerPriceRevision(working,modelId,provider.id)) throw new Error('供应商平台售价已有并发修订，请重新核对');
+          const items=retailItems(data.items), version=Math.max(0,...working.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && price.providerId===provider.id).map(price=>price.version))+1;
+          add('modelSalePrices',{id:`provider-sale-${crypto.randomUUID()}`,modelId,providerId:provider.id,serviceId,scope:'provider',serviceModeRevision:model.serviceModeRevision || 0,items,version,effectiveAt:new Date().toISOString(),status:'已发布'});
+        }
+        entry={...current,callId};label=operation === 'configureServiceIdentity' ? '保存对外调用 ID' : '配置 Provider 对外服务';
       }
     }
     update('models',modelId,{serviceProviders:[...entries.filter(item=>item.providerId!==provider.id),{...entry,updatedAt:new Date().toISOString()}]});
@@ -401,6 +654,13 @@ export function operationsTransaction(state, action) {
     }
     update('models', modelId, { serviceMode: data.serviceMode, ...(reset?{serviceModeRevision:(model.serviceModeRevision || 0)+1,serviceProviders:(model.serviceProviders || []).map(entry=>({...entry,status:'已移除'}))}:{}) });
     objectId = modelId; label = '修改模型服务模式';
+  } else if (operation === 'marketVisibility') {
+    const model = working.models.find(item => item.id === modelId);
+    if (!model) throw new Error('模型不存在');
+    if (typeof data.visible !== 'boolean') throw new Error('请选择有效的模型广场可见性');
+    if (data.expectedUpdatedAt !== model.updatedAt) throw new Error('模型已有并发修订，请载入最新数据后重试');
+    update('models', modelId, { marketVisible: data.visible });
+    objectId = modelId; label = data.visible ? '设为用户可见' : '设为用户不可见';
   } else if (operation === 'display') {
     const model = working.models.find(item => item.id === modelId);
     if (!model) throw new Error('模型不存在');

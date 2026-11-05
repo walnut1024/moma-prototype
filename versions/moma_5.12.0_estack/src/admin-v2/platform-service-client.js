@@ -5,6 +5,7 @@ import { resolveChannelAssociationModel } from './channel-association-model.js';
 import { catalogueChannels } from './provider-channels.js';
 import { connectionFingerprint, connectionKeys } from './connection-state.js';
 import { onboardingApi, prepareServerChannel } from './onboarding-client.js';
+import { getMockChannelSnapshots, getMockServiceSnapshots, inspectMockCandidate } from './mock-onboarding-service.js';
 import { platformPublicationFingerprint } from './platform-publication-state.js';
 
 const issue = (path, message) => { const error = new Error(`${path}：${message}`); error.path = path; throw error; };
@@ -146,3 +147,15 @@ export async function runPlatformTrial(plan, { confirmExpensive = false, isCurre
 }
 
 export const publishPlatformCandidate = (service, api = onboardingApi) => api(`/services/${service.id}/publish`, { method: 'POST', body: { operationId: crypto.randomUUID(), expectedRevision: service.revision } });
+
+export function recoverPlatformTrial(plan) {
+  const service=getMockServiceSnapshots().find(row=>row.candidate.publicModelId===plan.candidate.publicModelId);
+  if(!service)return null;
+  const channels=getMockChannelSnapshots();
+  const candidate={...plan.candidate,bindings:plan.candidate.bindings.map(({localEndpointId,...binding})=>{
+    const row=plan.rows.find(row=>row.id===binding.id),matches=channels.filter(channel=>channel.clientChannelId===localEndpointId && channel.providerId===row.supply.provider.id && channel.clientSignature===connectionFingerprint(row.supply.endpoint) && !channel.supersededBy);
+    return {...binding,channelId:matches.length===1?matches[0].id:''};
+  })};
+  const recovered=inspectMockCandidate(service.id,candidate);
+  return recovered.ready?{service:recovered.service,result:recovered.result,fingerprint:plan.fingerprint,publicationFingerprint:plan.publicationFingerprint,serviceId:plan.service.id}:null;
+}

@@ -341,3 +341,15 @@
 
 .mm-model-code,.mm-linked-supplier .mm-model-id,.mm-id-table code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:#52617a;overflow-wrap:anywhere}
 .mm-list .mm-linked-suppliers{gap:8px}.mm-provider-heading{display:flex;align-items:baseline;gap:4px;flex-wrap:wrap;line-height:18px}.mm-provider-heading>span{color:#52617a;font-size:10px;overflow-wrap:anywhere}.mm-linked-supplier .mm-model-id{margin:0;line-height:18px;min-height:20px}.mm-linked-supplier .mm-model-id>span{flex:0 1 auto;min-width:0}.mm-list .mm-linked-suppliers .mm-provider-more{justify-self:start;font-size:11px;gap:4px;min-height:20px}
+
+.admin-v2 .mm-presentation-form .mm-metadata-section{min-width:0;margin-bottom:16px}
+.admin-v2 .mm-presentation-form .mm-basic-section-heading{align-items:center;flex-wrap:wrap;gap:4px 12px;margin:0 0 12px;padding-top:16px}
+.admin-v2 .mm-presentation-form .mm-metadata-section:first-of-type .mm-basic-section-heading{border-top:0;padding-top:0}
+.admin-v2 .mm-presentation-form .mm-basic-section-heading h3{font-size:14px;color:#263247}
+.admin-v2 .mm-presentation-form .mm-basic-section-heading>span,.admin-v2 .mm-presentation-form .mm-field>span{font-size:12px}
+.admin-v2 .mm-presentation-form .mm-basic-grid>.mm-capability-fields{display:contents}
+.admin-v2 .mm-presentation-form .mm-field{margin-bottom:12px}
+.admin-v2 .mm-presentation-form .mm-form-footer{position:sticky;bottom:0;z-index:1;background:#fff;flex-wrap:wrap;border-top:1px solid #e8edf5;padding:12px 0}
+.admin-v2 .mm-presentation-form .mm-form-footer>div{display:flex;flex-wrap:wrap;gap:8px}
+.admin-v2 .mm-presentation-form .mm-form-footer>span{font-size:12px}
+.admin-v2 .mm-presentation-form .mo-metadata-extra>summary{min-height:32px;color:#315fe8}

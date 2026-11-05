@@ -52,17 +52,21 @@ export function usagePreset(preset, now = Date.now()) {
   return { start: addDays(today, -days), end: addDays(today, -1) };
 }
 
-export const operationsPresets = [['yesterday', '昨日'], ['7d', '近 7 天'], ['30d', '近 30 天']];
-export const usagePresets = [['today', '今日'], ...operationsPresets];
+export const usagePresets = [['today', '今日'], ['yesterday', '昨日'], ['7d', '近 7 天'], ['30d', '近 30 天']];
 
-export function operationsPeriod(period, range, now = Date.now(), allowToday = false) {
-  const latest = usagePreset(allowToday ? 'today' : 'yesterday', now);
+export function operationsPeriod(period, range, now = Date.now()) {
+  const latest = usagePreset('today', now);
   if (period === 'custom' && range?.start && range?.end) {
     const bounded = { start: range.start, end: range.end > latest.end ? latest.end : range.end };
     if (usageWindow(bounded, now)) return { period: 'custom', range: bounded };
   }
-  const preset = (allowToday ? usagePresets : operationsPresets).some(([id]) => id === period) ? period : 'yesterday';
+  const preset = usagePresets.some(([id]) => id === period) ? period : 'yesterday';
   return { period: preset, range: usagePreset(preset, now) };
+}
+
+export function operationsPeriodFromQuery(params, now = Date.now()) {
+  const range = { start: params.get('start'), end: params.get('end') };
+  return operationsPeriod(params.get('period') || (range.start && range.end ? 'custom' : 'yesterday'), range, now);
 }
 
 export function usageWindow(range, now = Date.now()) {

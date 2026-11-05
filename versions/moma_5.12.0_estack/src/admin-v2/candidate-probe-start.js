@@ -5,7 +5,7 @@ import { prepareCandidateTest } from './candidate-tests.js';
 
 const requestIdentity = request => JSON.stringify([request?.operationId, request?.channelId, request?.confirmExpensive === true, request?.models?.map(model => Object.entries(model).sort(([left], [right]) => left.localeCompare(right)))]);
 
-export const candidateProbeResultCurrent = (context, job, pendingEdits = false) => Boolean(!pendingEdits && context.candidateId && job?.candidateId === context.candidateId && job.providerId === context.providerId && job.endpointId === context.endpointId);
+export const candidateProbeResultCurrent = (context, job, pendingEdits = false) => Boolean(!pendingEdits && context.candidateId && job?.candidateId === context.candidateId && job.providerId === context.providerId && job.endpointId === context.endpointId && job.keyId === context.keyId);
 
 export async function prepareAuthorizedCandidateProbe(state, context, options, { records, beforeTest, consent, explicitBasicClick } = {}) {
   const models = channelTestModels(records || candidateTestPlan(state, context).records, options);

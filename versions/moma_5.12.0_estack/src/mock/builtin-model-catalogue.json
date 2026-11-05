@@ -1,0 +1,549 @@
+{
+  "id": "domestic-model-catalogue-20261104",
+  "version": 1,
+  "models": [
+    {
+      "id": "builtin-pp-ocrv6",
+      "modelId": "pp-ocrv6",
+      "name": "PP-OCRv6",
+      "type": "image",
+      "releaseDate": "2026-06-11"
+    },
+    {
+      "id": "builtin-glm-5.2",
+      "modelId": "glm-5.2",
+      "name": "GLM-5.2",
+      "type": "text",
+      "releaseDate": "2026-06-13",
+      "existingId": "model-2",
+      "initialRecord": {
+        "id": "model-2",
+        "modelId": "glm-5.2",
+        "name": "GLM-5.2",
+        "maker": "智谱 AI",
+        "type": "text",
+        "description": "面向项目级开发与长程智能体任务的语言模型。",
+        "capabilities": {
+          "context": 1048576,
+          "output": 131072,
+          "streaming": true,
+          "tools": true
+        },
+        "profile": {
+          "author": "智谱 AI",
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ],
+          "resultTypes": [],
+          "tasks": [
+            "对话",
+            "文本生成",
+            "代码生成"
+          ],
+          "documentation": "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.2",
+          "sourceUpdated": "2026-10-11",
+          "family": "GLM",
+          "version": "5.2",
+          "reasoning": "supported",
+          "structured": "supported"
+        },
+        "status": "运行中",
+        "visibility": "公开",
+        "defaultVersionId": "version-2",
+        "listingStatus": "已上架",
+        "callsEnabled": true,
+        "openScope": "all",
+        "tenantIds": []
+      }
+    },
+    {
+      "id": "builtin-happyhorse-1.1-i2v",
+      "modelId": "happyhorse-1.1-i2v",
+      "name": "HappyHorse-1.1-I2V",
+      "type": "video",
+      "releaseDate": "2026-06-22",
+      "existingId": "model-14",
+      "initialRecord": {
+        "id": "model-14",
+        "modelId": "happyhorse-1.1-i2v",
+        "name": "HappyHorse 1.1 I2V",
+        "maker": "阿里巴巴",
+        "type": "video",
+        "description": "根据输入图片生成视频。",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "profile": {
+          "author": "阿里巴巴",
+          "inputModalities": [
+            "文本",
+            "图片"
+          ],
+          "outputModalities": [
+            "视频"
+          ],
+          "resultTypes": [],
+          "tasks": [
+            "图生视频"
+          ],
+          "documentation": "https://help.aliyun.com/zh/model-studio/video-generate-edit-model",
+          "sourceUpdated": "2026-10-11",
+          "resolutions": "1080P",
+          "minDuration": 3,
+          "maxDuration": 15
+        },
+        "status": "运行中",
+        "visibility": "公开",
+        "defaultVersionId": "version-14",
+        "listingStatus": "已下架",
+        "callsEnabled": true,
+        "openScope": "all",
+        "tenantIds": []
+      }
+    },
+    {
+      "id": "builtin-happyhorse-1.1-r2v",
+      "modelId": "happyhorse-1.1-r2v",
+      "name": "HappyHorse-1.1-R2V",
+      "type": "video",
+      "releaseDate": "2026-06-22",
+      "existingId": "model-21",
+      "initialRecord": {
+        "id": "model-21",
+        "modelId": "happyhorse-1.1-r2v",
+        "name": "HappyHorse 1.1 R2V",
+        "maker": "阿里巴巴",
+        "type": "video",
+        "description": "根据参考素材生成视频。",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "profile": {
+          "author": "阿里巴巴",
+          "inputModalities": [
+            "文本",
+            "图片"
+          ],
+          "outputModalities": [
+            "视频"
+          ],
+          "resultTypes": [],
+          "tasks": [
+            "参考生视频"
+          ],
+          "documentation": "https://help.aliyun.com/zh/model-studio/video-generate-edit-model",
+          "sourceUpdated": "2026-10-11"
+        },
+        "status": "运行中",
+        "visibility": "公开",
+        "defaultVersionId": "version-21",
+        "listingStatus": "已下架",
+        "callsEnabled": true,
+        "openScope": "all",
+        "tenantIds": []
+      }
+    },
+    {
+      "id": "builtin-happyhorse-1.1-t2v",
+      "modelId": "happyhorse-1.1-t2v",
+      "name": "HappyHorse-1.1-T2V",
+      "type": "video",
+      "releaseDate": "2026-06-22",
+      "existingId": "model-13",
+      "initialRecord": {
+        "id": "model-13",
+        "modelId": "happyhorse-1.1-t2v",
+        "name": "HappyHorse 1.1 T2V",
+        "maker": "阿里巴巴",
+        "type": "video",
+        "description": "根据文本描述生成有声视频。",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "profile": {
+          "author": "阿里巴巴",
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "视频"
+          ],
+          "resultTypes": [],
+          "tasks": [
+            "文生视频"
+          ],
+          "documentation": "https://help.aliyun.com/zh/model-studio/video-generate-edit-model",
+          "sourceUpdated": "2026-10-11",
+          "resolutions": "1080P",
+          "maxDuration": 15
+        },
+        "status": "运行中",
+        "visibility": "公开",
+        "defaultVersionId": "version-13",
+        "listingStatus": "已下架",
+        "callsEnabled": true,
+        "openScope": "all",
+        "tenantIds": []
+      }
+    },
+    {
+      "id": "builtin-qwen-audio-3.0-asr-flash",
+      "modelId": "qwen-audio-3.0-asr-flash",
+      "name": "qwen-audio-3.0-asr-flash",
+      "type": "audio",
+      "releaseDate": "2026-07-15"
+    },
+    {
+      "id": "builtin-qwen-audio-3.0-asr-flash-streaming",
+      "modelId": "qwen-audio-3.0-asr-flash-streaming",
+      "name": "qwen-audio-3.0-asr-flash-streaming",
+      "type": "audio",
+      "releaseDate": "2026-07-15"
+    },
+    {
+      "id": "builtin-qwen-audio-3.0-tts-flash",
+      "modelId": "qwen-audio-3.0-tts-flash",
+      "name": "qwen-audio-3.0-tts-flash",
+      "type": "audio",
+      "releaseDate": "2026-07-15",
+      "existingId": "catalog-demo-tts",
+      "initialRecord": {
+        "id": "catalog-demo-tts",
+        "modelId": "qwen-audio-3.0-tts-flash",
+        "name": "Qwen Audio 3.0 TTS Flash",
+        "maker": "阿里巴巴",
+        "type": "audio",
+        "description": "支持文本语音合成、声音复刻和声音设计。",
+        "usageUnit": "字符",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "profile": {
+          "author": "阿里巴巴",
+          "releaseDate": "2026-07-14",
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "音频"
+          ],
+          "tasks": [
+            "语音合成"
+          ],
+          "outputFormats": "mp3、wav",
+          "voices": "标准音色",
+          "speedControl": "supported",
+          "resultTypes": [],
+          "documentation": "https://help.aliyun.com/zh/model-studio/tts-model",
+          "sourceUpdated": "2026-10-11"
+        },
+        "listingStatus": "已下架",
+        "visibility": "公开",
+        "status": "停用",
+        "callsEnabled": false,
+        "openScope": "all",
+        "tenantIds": [],
+        "defaultVersionId": "version-catalog-demo-tts",
+        "serviceReviewCase": "audio",
+        "serviceReviewVersion": 1,
+        "serviceModeRevision": 1,
+        "serviceMode": "provider",
+        "serviceProviders": [
+          {
+            "providerId": "service-review-provider-aliyun",
+            "code": "aliyun",
+            "callId": "qwen-audio-3.0-tts-flash-aliyun",
+            "status": "已关联"
+          },
+          {
+            "providerId": "service-review-provider-iflytek",
+            "code": "iflytek",
+            "callId": "qwen-audio-3.0-tts-flash-iflytek",
+            "status": "已关联"
+          }
+        ]
+      }
+    },
+    {
+      "id": "builtin-kimi-k3",
+      "modelId": "kimi-k3",
+      "name": "Kimi K3",
+      "type": "multimodal",
+      "releaseDate": "2026-07-17",
+      "existingId": "catalog-demo-kimi",
+      "initialRecord": {
+        "id": "catalog-demo-kimi",
+        "modelId": "kimi-k3",
+        "name": "Kimi K3",
+        "maker": "月之暗面",
+        "type": "text",
+        "description": "支持原生视觉理解与长上下文，适用于编程、知识工作和推理。",
+        "capabilities": {
+          "context": 1048576,
+          "output": null,
+          "streaming": true,
+          "tools": true
+        },
+        "profile": {
+          "author": "月之暗面",
+          "inputModalities": [
+            "文本",
+            "图片",
+            "视频"
+          ],
+          "outputModalities": [
+            "文本"
+          ],
+          "resultTypes": [],
+          "tasks": [
+            "对话",
+            "图像理解",
+            "视频理解",
+            "代码生成"
+          ],
+          "documentation": "https://platform.kimi.ai/docs/guide/kimi-k3-quickstart",
+          "sourceUpdated": "2026-10-11",
+          "releaseDate": "2026-07-16",
+          "family": "Kimi",
+          "version": "K3",
+          "parameters": 2800,
+          "architecture": "MoE",
+          "reasoning": "supported"
+        },
+        "listingStatus": "已上架",
+        "visibility": "公开",
+        "status": "运行中",
+        "callsEnabled": true,
+        "openScope": "all",
+        "tenantIds": [],
+        "defaultVersionId": "version-catalog-demo-kimi"
+      }
+    },
+    {
+      "id": "builtin-qwen-image-3.0",
+      "modelId": "qwen-image-3.0",
+      "name": "Qwen-Image-3.0",
+      "type": "image",
+      "releaseDate": "2026-07-21"
+    },
+    {
+      "id": "builtin-qwen-image-3.0-pro",
+      "modelId": "qwen-image-3.0-pro",
+      "name": "Qwen-Image-3.0-Pro",
+      "type": "image",
+      "releaseDate": "2026-07-21",
+      "existingId": "catalog-demo-image",
+      "initialRecord": {
+        "id": "catalog-demo-image",
+        "modelId": "qwen-image-3.0-pro",
+        "name": "Qwen Image 3.0 Pro",
+        "maker": "阿里巴巴",
+        "type": "image",
+        "description": "",
+        "capabilities": {
+          "context": null,
+          "output": null,
+          "streaming": null,
+          "tools": null
+        },
+        "profile": {
+          "author": "阿里巴巴",
+          "inputModalities": [
+            "文本",
+            "图片"
+          ],
+          "outputModalities": [
+            "图片"
+          ],
+          "tasks": [
+            "文生图",
+            "图像编辑"
+          ]
+        },
+        "listingStatus": "已下架",
+        "visibility": "内部",
+        "status": "草稿",
+        "callsEnabled": false,
+        "openScope": "all",
+        "tenantIds": [],
+        "defaultVersionId": "version-catalog-demo-image",
+        "serviceReviewCase": "image",
+        "serviceReviewVersion": 1,
+        "serviceModeRevision": 1,
+        "serviceMode": null,
+        "serviceProviders": []
+      }
+    },
+    {
+      "id": "builtin-deepseek-v4-flash-0731",
+      "modelId": "deepseek-v4-flash-0731",
+      "name": "DeepSeek-V4-Flash-0731",
+      "type": "text",
+      "releaseDate": "2026-07-31",
+      "existingId": "supplier-template-DeepSeek-V4-Flash-0731",
+      "initialRecord": {
+        "id": "supplier-template-DeepSeek-V4-Flash-0731",
+        "modelId": "deepseek-v4-flash-0731",
+        "name": "DeepSeek-V4-Flash-0731",
+        "maker": "DeepSeek",
+        "type": "text",
+        "description": "DeepSeek-V4-Flash-0731 提供文本对话、内容生成与知识问答能力。",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "profile": {
+          "author": "DeepSeek",
+          "releaseDate": "2026-07-31",
+          "tasks": [
+            "对话"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ],
+          "languages": [
+            "中文",
+            "英文"
+          ],
+          "detailDescription": "DeepSeek-V4-Flash-0731 的文本对话服务，支持多轮问答与内容生成。",
+          "sourceStatus": "pending"
+        },
+        "revision": 1
+      }
+    },
+    {
+      "id": "builtin-glm-5.3",
+      "modelId": "glm-5.3",
+      "name": "GLM-5.3",
+      "type": "text",
+      "releaseDate": "2026-08-14",
+      "existingId": "template-glm-5.3",
+      "initialRecord": {
+        "id": "template-glm-5.3",
+        "modelId": "glm-5.3",
+        "name": "GLM-5.3",
+        "maker": "智谱",
+        "type": "text",
+        "description": "GLM-5.3 提供文本对话、内容生成与知识问答能力。",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "profile": {
+          "author": "智谱",
+          "releaseDate": "2026-08-14",
+          "tasks": [
+            "对话"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ],
+          "languages": [
+            "中文",
+            "英文"
+          ],
+          "detailDescription": "GLM-5.3 的文本对话服务，支持多轮问答与内容生成。",
+          "sourceStatus": "pending"
+        },
+        "revision": 1
+      }
+    },
+    {
+      "id": "builtin-glm-5.3-flash",
+      "modelId": "glm-5.3-flash",
+      "name": "GLM-5.3-Flash",
+      "type": "multimodal",
+      "releaseDate": "2026-08-14"
+    },
+    {
+      "id": "builtin-deepseek-flash",
+      "modelId": "deepseek-flash",
+      "name": "DeepSeek-V4.1-Flash",
+      "type": "multimodal",
+      "releaseDate": "2026-09-10",
+      "existingId": "model-9",
+      "initialRecord": {
+        "id": "model-9",
+        "modelId": "deepseek-flash",
+        "name": "DeepSeek V4.1 Flash",
+        "maker": "DeepSeek",
+        "type": "multimodal",
+        "description": "支持思考模式与视觉输入的快速模型。",
+        "capabilities": {
+          "context": 1048576,
+          "output": 393216,
+          "streaming": true,
+          "tools": true
+        },
+        "profile": {
+          "author": "DeepSeek",
+          "inputModalities": [
+            "文本",
+            "图片"
+          ],
+          "outputModalities": [
+            "文本"
+          ],
+          "resultTypes": [],
+          "tasks": [
+            "对话",
+            "图像理解",
+            "代码生成"
+          ],
+          "documentation": "https://api-docs.deepseek.com/quick_start/pricing/",
+          "sourceUpdated": "2026-10-11",
+          "releaseDate": "2026-09-10",
+          "version": "V4.1-Flash",
+          "reasoning": "supported",
+          "structured": "supported"
+        },
+        "status": "运行中",
+        "visibility": "公开",
+        "defaultVersionId": "version-9",
+        "listingStatus": "已下架",
+        "callsEnabled": true,
+        "openScope": "all",
+        "tenantIds": []
+      }
+    },
+    {
+      "id": "builtin-deepseek-v4.1-flash-1017",
+      "modelId": "deepseek-v4.1-flash-1017",
+      "name": "DeepSeek-V4.1-Flash-1017",
+      "type": "multimodal",
+      "releaseDate": "2026-10-17"
+    },
+    {
+      "id": "builtin-kimi-k3.1-pro",
+      "modelId": "kimi-k3.1-pro",
+      "name": "Kimi K3.1 Pro",
+      "type": "multimodal",
+      "releaseDate": "2026-10"
+    }
+  ]
+}

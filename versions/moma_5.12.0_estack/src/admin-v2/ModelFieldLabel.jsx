@@ -1,0 +1,17 @@
+import {CircleHelp} from 'lucide-react';
+import {Tooltip,TooltipContent,TooltipProvider,TooltipTrigger} from '../components/ui/tooltip';
+
+const explanations={
+  '模型名称':'用于页面展示，修改名称不影响模型调用。',
+  '规范模型标识':'模型的稳定身份，用于跨供应商关联同一款模型，不作为调用参数。',
+  '上游模型标识':'平台调用该渠道对应模型时，向供应商提交的 model 参数。',
+  '对外调用标识':'用户调用平台 API 时填写的 model 参数。',
+  '上下文窗口':'模型声明的上下文容量；文本生成的输入与输出共同占用，渠道实际限制可能更低。',
+  '最大输出':'单次请求的输出 Token 上限，同时受上下文剩余容量限制。',
+  '原厂发布日期':'模型研发方公布的发布日期，与平台目录收录时间不同。',
+  '支持参数':'模型声明支持的调用参数，具体可用范围以渠道配置与验证结果为准。',
+  '默认参数':'原厂提供的默认参数资料，保存资料不会改变现有服务的调用配置。',
+};
+export default function ModelFieldLabel({name,required=false}) {
+  return <span className="mm-field-title">{name}{required?' *':''}{explanations[name] && <TooltipProvider><Tooltip><TooltipTrigger asChild><button className="mm-field-help" type="button" aria-label={`${name}说明`}><CircleHelp size={13}/></button></TooltipTrigger><TooltipContent>{explanations[name]}</TooltipContent></Tooltip></TooltipProvider>}</span>;
+}

@@ -1,7 +1,7 @@
 import { REAL_PROVIDERS, BAICHUAN_PROVIDER } from './real-provider-catalogue.js';
 import { REAL_MODELS } from './real-model-catalogue.js';
 import { MOMA_PROVIDER } from './moma-provider.js';
-import { libraryRecord, modelLibrary } from './model-library.js';
+import { libraryRecord, modelLibrary, modelCatalogue } from './model-library.js';
 import { MODEL_TYPES } from './model-management.js';
 
 // Presets are reference metadata, never registered supply, account entitlements or validation.
@@ -56,13 +56,19 @@ export function resolveOnboardingModel(state, { libraryId, modelPresetId, newMod
   return { record: preset, isDraft: true };
 }
 export function onboardingModelOptions(state) {
-  const records = modelLibrary(state), known = new Set(records.map(row => row.modelId?.toLowerCase()));
+  const records = modelCatalogue(state), known = new Set(records.map(row => row.modelId?.toLowerCase()));
   return [
     ...records.map(record => ({ ...structuredClone(record), libraryId: record.id, modelPresetId: '', source: 'library', sourceCheckedAt: record.sourceCheckedAt || record.profile?.sourceUpdated || null })),
-    ...REAL_MODELS.filter(row => !known.has(row.modelId.toLowerCase())).map(row => ({ ...onboardingModelPreset(row.id), id: 'preset:' + row.id, libraryId: '', modelPresetId: row.id, source: 'reference' })),
+    ...(state.modelData?.archivedCatalogueIds ? [] : REAL_MODELS).filter(row => !known.has(row.modelId.toLowerCase())).map(row => ({ ...onboardingModelPreset(row.id), id: 'preset:' + row.id, libraryId: '', modelPresetId: row.id, source: 'reference' })),
   ];
 }
 export function assertOnboardingMetadata(value) {
   if (!value || typeof value !== 'object') return;
   for (const [key, item] of Object.entries(value)) { if (/^(secret|apiKey|apiKeys|password|token|accessToken|authorization|credentialRef|newKey|keyInput|keyInputs)$/i.test(key)) throw new Error('快捷接入只接受密钥掩码和指纹，不能保存明文或认证内容'); assertOnboardingMetadata(item); }
+}
+
+export function similarOnboardingProviders(state, name) {
+  const normalize=value=>String(value || '').toLowerCase().replace(/官方|开放平台|引擎|[\s·（）()]/gu,'');
+  const target=normalize(name);
+  return target.length<2?[]:state.providers.filter(row=>!row.deletedAt && [normalize(row.name),normalize(row.code)].some(value=>value.length>=2 && (target.includes(value) || value.includes(target))));
 }

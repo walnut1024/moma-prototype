@@ -1,18 +1,27 @@
+import { useEffect, useState } from 'react';
+import { DateRange } from './AnalyticsFilters';
+import { FilterPresets, FilterReset, FilterToolbar } from '../components/FilterControls';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Button } from '../components/ui/button';
 import { customerModelDetails, filterAnalytics } from './analytics';
-import { formatUsageNumber, usageMeter, operationsPeriod, usageValue } from './usage-analysis';
+import { formatUsageNumber, usageMeter, operationsPeriod, operationsPeriodFromQuery, usagePresets, usageValue } from './usage-analysis';
 import './usage-analysis.css';
 import './user-analysis.css';
 
 const amount = value => value == null ? '—' : formatUsageNumber(value);
 
 export default function CustomerUsageDetail({ state }) {
+  const [clock, setClock] = useState(Date.now);
+  useEffect(() => { const sync = () => setClock(Date.now()); addEventListener('hashchange', sync); return () => removeEventListener('hashchange', sync); }, []);
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
   const tenant = state.tenants.find(item => item.id === params.get('customer'));
-  const requested = { start: params.get('start'), end: params.get('end') };
-  const { range: { start, end } } = operationsPeriod('custom', requested);
+  const { period, range: { start, end } } = operationsPeriodFromQuery(params, clock);
+  const selectPeriod = (value, range) => {
+    const now = Date.now(), selected = operationsPeriod(value, range, now), next = new URLSearchParams(params);
+    next.set('period', selected.period); next.set('start', selected.range.start); next.set('end', selected.range.end);
+    setClock(now); location.hash = '#/admin-2/customer-usage-detail?' + next;
+  };
   const rows = tenant ? filterAnalytics(state, { start, end, tenant: [tenant.id] }) : [];
   const models = customerModelDetails(state, rows, start, end);
   const tokenModels = models.filter(model => model.unit === 'Token' && model.total != null);
@@ -26,6 +35,11 @@ export default function CustomerUsageDetail({ state }) {
   if (!tenant) return <section className="ent-panel admin-page-error"><h1>客户不存在</h1><p>该客户记录不可用，请返回用户数据重新选择。</p><Button asChild><a href="#/admin-2/user-analysis">返回用户数据</a></Button></section>;
   return <div className="ua-page us-detail-page">
     {tenant && <>
+      <Card className="ua-filters"><CardContent><div className="ua-filter-scroll"><FilterToolbar className="ua-filter-controls">
+        <FilterPresets className="ua-segments" label="时间筛选" value={period} onChange={value => selectPeriod(value)} items={usagePresets}/>
+        <DateRange presets={usagePresets} label="自定义" start={start} end={end} allowLongRange rangeHint="最多 365 天" onChange={range => selectPeriod('custom', range)}/>
+        <FilterReset onClick={() => selectPeriod('yesterday')}/>
+      </FilterToolbar></div></CardContent></Card>
       <Card className="ua-kpis"><CardContent><div className="ua-kpi-grid us-detail-kpis">
         <div className="ua-kpi"><div className="ua-kpi-label">Token 调用量</div><strong>{amount(tokenTotal)}</strong></div>
         <div className="ua-kpi"><div className="ua-kpi-label">模型调用次数</div><strong>{amount(rows.length)}</strong></div>

@@ -1,5 +1,8 @@
+import { platformCandidatePlan } from './platform-service-client.js';
+import { platformPublicationServices } from './platform-publication-state.js';
+import { assertMockModelPublication } from './mock-publication-gate.js';
 import { connectionFingerprint } from './connection-state.js';
-import { commitMockConfiguration, getMockChannelSnapshots, prepareMockConfiguration, setMockRuntimeState } from './mock-onboarding-service.js';
+import { commitMockConfiguration, mockContext, setMockRuntimeState } from './mock-onboarding-service.js';
 
 const changedEndpoints = (previous, next) => (previous.endpoints || []).flatMap(before => {
   const after = next.endpoints?.find(row => row.id === before.id && row.providerId === before.providerId && !row.deletedAt);
@@ -40,11 +43,29 @@ export function planMockOnboardingSync(previous, next, snapshots) {
   return { scope: transitions.some(row => row.scope === 'group') ? 'group' : 'channels', replacements, unverifiedChannelIds, transitions: transitions.map(({ endpointId, candidateId, target }) => ({ endpointId, candidateId, candidateChannelId: target?.id || null })) };
 }
 
-export function prepareMockOnboardingSync(previous, next) {
-  if (!changedEndpoints(previous, next).length) return null;
+export function prepareMockOnboardingSync(previous, next, action) {
+  const {getMockChannelSnapshots,getMockServiceSnapshots,prepareMockConfiguration}=mockContext(previous);
+  const commercialUpdates = [], publications = action?.operation==='guidedPublish' ? [{serviceId:action.data.mockServiceId,expectedRevision:action.data.expectedMockRevision,operationId:action.data.operationId}] : [];
+  const snapshots = getMockServiceSnapshots();
+  for (const model of next.models) {
+    const before = previous.models.find(row => row.id === model.id);
+    if (!before) continue;
+    for (const [key, receipt] of Object.entries(model.commercialPublications || {})) {
+      if (before.commercialPublications?.[key]?.version === receipt.version) continue;
+      for (const service of platformPublicationServices(before).filter(row => receipt.kind === 'scope' || (row.providerId || '') === receipt.providerId)) {
+        const snapshot = snapshots.find(row => row.published?.config.publicModelId === service.callId);
+        if (!snapshot) { if(service.providerId && before.serviceProviders?.find(row=>row.providerId===service.providerId)?.pendingPublication)continue; if (before.listingStatus === '已上架') throw new Error('当前服务缺少有效发布配置，请先完成平台验证'); continue; }
+        assertMockModelPublication(previous, before, service.id, true);
+        const tenantIds = model.openScope === 'all' ? next.tenants.filter(row => ['正常', '需关注'].includes(row.status)).map(row => row.id) : model.tenantIds;
+        const plan = platformCandidatePlan(next, model, { serviceId: service.id, tenantIds: receipt.kind === 'scope' ? tenantIds : snapshot.published.config.tenantIds, supplyIds: snapshot.published.config.bindings.map(row => row.id), audioProbe: snapshot.published.config.bindings.find(row => row.model.type === 'audio')?.model.probe || '' });
+        commercialUpdates.push({ serviceId: snapshot.id, ...(receipt.kind === 'scope' ? { tenantIds: plan.candidate.tenantIds } : { salePrices: plan.candidate.salePrices }) });
+      }
+    }
+  }
+  if (!changedEndpoints(previous, next).length && !commercialUpdates.length && !publications.length) return null;
   const plan = planMockOnboardingSync(previous, next, getMockChannelSnapshots());
-  if (!plan.replacements.length && !plan.unverifiedChannelIds.length) return null;
-  return prepareMockConfiguration({ operationId: `local-sync-${next.audits?.[0]?.id || crypto.randomUUID()}`, scope: plan.scope, replacements: plan.replacements, unverifiedChannelIds: plan.unverifiedChannelIds });
+  if (!plan.replacements.length && !plan.unverifiedChannelIds.length && !commercialUpdates.length && !publications.length) return null;
+  return prepareMockConfiguration({ operationId: `local-sync-${next.audits?.[0]?.id || crypto.randomUUID()}`, scope: plan.scope, commercialUpdates, publications, replacements: plan.replacements, unverifiedChannelIds: plan.unverifiedChannelIds }, previous.cloudOperations === true);
 }
 
 export function commitMockOnboardingSync(prepared, next) {

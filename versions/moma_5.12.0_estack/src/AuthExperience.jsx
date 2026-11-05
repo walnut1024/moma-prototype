@@ -1,3 +1,6 @@
+import {authDisplayUser} from './auth-link-sync.mjs';
+import { LINK_EVENT } from './service-access.mjs';
+import { LINKED_USERS, switchLinkedUser } from './linked-accounts.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Building2, Check, ChevronDown, Clock3, Eye, EyeOff, KeyRound, LogOut, ShieldCheck, UserRound, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -12,12 +15,12 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectI
 import { Toaster } from './components/ui/sonner';
 import { chinaRegions, industries } from './admin-v2/enterprise-options';
 import { maskMemberPhone } from './organization-data.mjs';
-import { AUTH_STORAGE_KEY, AUTH_INVITE, AUTH_ENTERPRISE_LOGIN, normalizeAuthLogin, emptyAuthState, authRoute, authPhone, currentAuthUser, availableAuthSpaces, registerAuthAccount, loginAuthAccount, verifyAuthCode, submitEnterpriseCertification, applicationErrors, queryAuthApplication, activationAccount, activateAuthAccount, acceptAuthInvite, encodeAuthPassword, matchesAuthPassword } from './auth-state.mjs';
+import { persistAuthState, AUTH_STORAGE_KEY, AUTH_INVITE, AUTH_ENTERPRISE_LOGIN, normalizeAuthLogin, emptyAuthState, authRoute, authPhone, currentAuthUser, availableAuthSpaces, registerAuthAccount, loginAuthAccount, verifyAuthCode, submitEnterpriseCertification, applicationErrors, queryAuthApplication, activationAccount, activateAuthAccount, acceptAuthInvite, encodeAuthPassword, matchesAuthPassword } from './auth-state.mjs';
 import AccountCenter from './AccountCenter';
 import './auth.css';
 
 export function usePrototypeAuth() {
-  const [loaded] = useState(() => {
+  const [loaded, setLoaded] = useState(() => {
     try {
       const raw = localStorage.getItem(AUTH_STORAGE_KEY);
       if (!raw) return { state: emptyAuthState(), error: '' };
@@ -27,6 +30,17 @@ export function usePrototypeAuth() {
     } catch { return { state: emptyAuthState(), error: '账号资料读取失败，请检查浏览器存储后重试。' }; }
   });
   const [state, setState] = useState(loaded.state), [hash, setHash] = useState(() => location.hash), [draftPhone, setDraftPhone] = useState('');
+  useEffect(() => {
+    const sync = () => {
+      try { const fresh = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || 'null') || emptyAuthState();
+        if (!['accounts','memberships','applications'].every(key => Array.isArray(fresh[key]))) throw new Error();
+        setState(fresh); setLoaded({ state: fresh, error: '' });
+      } catch { setLoaded(previous => ({ ...previous, error: '账号资料读取失败，请重新载入' })); setState(emptyAuthState()); }
+    };
+    for (const event of [LINK_EVENT, 'storage', 'focus']) addEventListener(event, sync);
+    document.addEventListener('visibilitychange', sync);
+    return () => { for (const event of [LINK_EVENT, 'storage', 'focus']) removeEventListener(event, sync); document.removeEventListener('visibilitychange', sync); };
+  }, []);
   const route = authRoute(hash);
   const returnTo = useRef(authRoute(location.hash) ? '' : location.hash);
   useEffect(() => {
@@ -41,16 +55,15 @@ export function usePrototypeAuth() {
   const close = () => { location.hash = returnTo.current; };
   const commit = next => {
     if (loaded.error) throw new Error(loaded.error);
-    try { localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next)); }
-    catch { throw new Error('账号资料未能保存，请检查浏览器存储并重试'); }
+    next = persistAuthState(state, next);
     setState(next);
     return next;
   };
-  return { state, route, params: new URLSearchParams(hash.split('?')[1] || ''), draftPhone, setDraftPhone, navigate, close, commit, storageError: loaded.error, user: currentAuthUser(state), spaces: availableAuthSpaces(state) };
+  return { state, route, params: new URLSearchParams(hash.split('?')[1] || ''), draftPhone, setDraftPhone, navigate, close, commit, storageError: loaded.error, user: authDisplayUser(state,currentAuthUser(state)), spaces: availableAuthSpaces(state) };
 }
 
 export function AuthBanner({ auth, showToast }) {
-  const [open, setOpen] = useState(false), [spacesOpen, setSpacesOpen] = useState(false);
+  const [open, setOpen] = useState(false), [spacesOpen, setSpacesOpen] = useState(false), [mockOpen, setMockOpen] = useState(false);
   const currentSpace = auth.spaces.find(space => space.id === auth.state.activeSpace);
   const navigate = route => { setOpen(false); auth.navigate(route); };
   const switchSpace = space => {
@@ -59,7 +72,8 @@ export function AuthBanner({ auth, showToast }) {
   };
   return <div className="auth-banner-actions">
     {showToast && <Toaster position="top-right" offset={64} mobileOffset={64} />}
-    {auth.user && <Popover open={spacesOpen} onOpenChange={setSpacesOpen}><PopoverTrigger asChild><Button variant="ghost" className="auth-banner-space" aria-label="切换使用空间">{currentSpace?.name || '选择使用空间'}<ChevronDown data-icon="inline-end" /></Button></PopoverTrigger><PopoverContent className="auth-space-menu" align="end"><p>切换使用空间</p>{auth.spaces.map(space => <Button variant="ghost" key={space.id} onClick={() => switchSpace(space)}><span>{space.id === 'personal' ? <UserRound /> : <Building2 />}<span>{space.name}<small>{space.role}</small></span></span>{space.id === auth.state.activeSpace && <Check data-icon="inline-end" />}</Button>)}{!auth.spaces.length && <p>暂无可访问的空间，请联系管理员。</p>}<Button variant="ghost" onClick={() => { setSpacesOpen(false); auth.navigate('account'); }}><ShieldCheck data-icon="inline-start" />身份认证</Button></PopoverContent></Popover>}
+    <Popover open={mockOpen} onOpenChange={setMockOpen}><PopoverTrigger asChild><Button variant="ghost" className="auth-banner-space" aria-label="切换 Mock 账号">Mock 账号<ChevronDown data-icon="inline-end" /></Button></PopoverTrigger><PopoverContent className="auth-space-menu" align="end"><p>原型账号切换</p>{LINKED_USERS.map(row => <Button variant="ghost" key={row.id} aria-label={`切换至${row.name}`} onClick={() => { try { switchLinkedUser(row.id); setMockOpen(false); setOpen(false); setSpacesOpen(false); if (auth.route) auth.close(); toast.success(`已切换至${row.name}`); } catch (error) { toast.error(error.message); } }}><span>{row.userType === 'personal' ? <UserRound/> : <Building2/>}<span>{row.name}<small>{row.phone}</small></span></span>{auth.user?.id === row.id && <Check data-icon="inline-end"/>}</Button>)}</PopoverContent></Popover>
+    {auth.user && auth.spaces.length > 1 && <Popover open={spacesOpen} onOpenChange={setSpacesOpen}><PopoverTrigger asChild><Button variant="ghost" className="auth-banner-space" aria-label="切换使用空间">{currentSpace?.name || '选择使用空间'}<ChevronDown data-icon="inline-end" /></Button></PopoverTrigger><PopoverContent className="auth-space-menu" align="end"><p>切换使用空间</p>{auth.spaces.map(space => <Button variant="ghost" key={space.id} onClick={() => switchSpace(space)}><span>{space.id === 'personal' ? <UserRound /> : <Building2 />}<span>{space.name}<small>{space.role}</small></span></span>{space.id === auth.state.activeSpace && <Check data-icon="inline-end" />}</Button>)}{!auth.spaces.length && <p>暂无可访问的空间，请联系管理员。</p>}<Button variant="ghost" onClick={() => { setSpacesOpen(false); auth.navigate('account'); }}><ShieldCheck data-icon="inline-start" />身份认证</Button></PopoverContent></Popover>}
     {!auth.user && <><Button variant="ghost" className="auth-banner-login" onClick={() => auth.navigate('login')}>登录</Button><Button variant="outline" className="auth-banner-register" onClick={() => auth.navigate('register')}>注册</Button></>}
     <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button variant="ghost" className="auth-banner-user" aria-label={auth.user ? '账号菜单' : '账号服务'}>{auth.user ? <><UserRound data-icon="inline-start" />{auth.user.name}</> : '账号服务'}<ChevronDown data-icon="inline-end" /></Button></PopoverTrigger><PopoverContent className="auth-account-menu" align="end">
       {auth.user && <div className="auth-menu-profile"><b>{auth.user.name}</b><span>{auth.user.phone ? maskMemberPhone(auth.user.phone) : auth.user.email}</span></div>}
@@ -181,7 +195,7 @@ function IdentityExperience({ auth }) {
   const acceptInvite = () => run(() => { auth.commit(acceptAuthInvite(auth.state, token)); setCompleted('invite'); });
   const invitePage = route === 'invite';
   const titles = { login: choosingEnterprise ? '选择企业' : '登录', register: '注册', invite: completed ? '已加入企业' : '邀请你加入企业', password: completed ? '密码已设置' : auth.user ? '设置登录密码' : '找回密码' };
-  const descriptions = { login: choosingEnterprise ? '请选择本次要进入的企业空间' : userType === 'enterprise' ? '使用企业管理员或成员账号，进入已加入的企业' : '使用个人手机号，进入个人空间', register: '使用手机号创建账号', invite: '核对邀请信息，加入企业协作', password: completed ? '密码已更新。请妥善保管登录信息。' : '验证手机号后，设置新的登录密码' };
+  const descriptions = { login: choosingEnterprise ? '请选择本次要进入的企业空间' : userType === 'enterprise' ? '使用企业管理员或成员账号，进入已加入的企业' : '使用个人手机号登录', register: '使用手机号创建账号', invite: '核对邀请信息，加入企业协作', password: completed ? '密码已更新。请妥善保管登录信息。' : '验证手机号后，设置新的登录密码' };
   const identityForm = !completed && !choosingEnterprise && !(invitePage && (inviteError || inviteVerified));
   const errorMessage = auth.storageError || errors.submit;
   const agreement = <div className="auth-agreement"><div><Checkbox id="auth-agreement" checked={agreed} onCheckedChange={value => { setAgreed(value === true); setErrors({}); }} aria-invalid={Boolean(errors.agreement)} aria-describedby={errors.agreement ? 'auth-agreement-error' : undefined} /><label htmlFor="auth-agreement">{auth.preview ? '已核对填写信息' : '已阅读并同意'}</label><Button variant="link" type="button" onClick={() => setDocument('用户协议')}>用户协议</Button><span>和</span><Button variant="link" type="button" onClick={() => setDocument('隐私政策')}>隐私政策</Button></div>{errors.agreement && <p id="auth-agreement-error" className="auth-field-error" role="alert">{errors.agreement}</p>}</div>;
@@ -208,7 +222,7 @@ function IdentityExperience({ auth }) {
           {invitePage && <p className="auth-form-note">请使用已注册的受邀手机号登录，再确认加入企业。</p>}
           {route !== 'password' && agreement}
           {errorMessage && <p className="auth-field-error" role="alert">{errorMessage}</p>}
-          <Button className="auth-submit" type="submit" disabled={busy || Boolean(auth.storageError)}>{busy ? '正在处理…' : route === 'login' ? userType === 'enterprise' ? '登录政企空间' : '登录个人空间' : route === 'register' ? '立即注册' : route === 'password' ? '确认设置密码' : '登录并继续'}{!busy && <ArrowRight data-icon="inline-end" />}</Button>
+          <Button className="auth-submit" type="submit" disabled={busy || Boolean(auth.storageError)}>{busy ? '正在处理…' : route === 'login' ? userType === 'enterprise' ? '登录政企空间' : '登录个人账号' : route === 'register' ? '立即注册' : route === 'password' ? '确认设置密码' : '登录并继续'}{!busy && <ArrowRight data-icon="inline-end" />}</Button>
           <div className="auth-form-footer">{route === 'password' ? <Button variant="link" type="button" onClick={() => auth.user ? auth.close() : navigate('login')}>{auth.user ? '暂不设置，返回空间' : '返回登录'}</Button> : route === 'login' ? <span>{userType === 'enterprise' ? <>需要企业认证？<Button variant="link" type="button" onClick={() => navigate('account')}>前往账号中心</Button></> : <>没有账号？<Button variant="link" type="button" onClick={() => navigate('register')}>立即注册</Button></>}</span> : <span>已有账号？<Button variant="link" type="button" onClick={() => navigate('login')}>立即登录</Button></span>}</div>
           {enterpriseLogin && <p className="auth-form-note">{emailLogin ? '邮箱账号由企业管理员登记，使用密码登录；' : '请使用已加入企业的手机号；'}尚未加入请联系企业管理员。</p>}
         </form>}

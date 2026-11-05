@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createAdminSeed, commitAdminState, persistModelAction, parseAdminState } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction, parseAdminState as baseParseAdminState } from '../src/admin-v2/store.js';
 import { cataloguePriceDraft, cataloguePurchasePrice, cataloguePurchasePriceInput, normalizeCataloguePrice, markedUpItems } from '../src/admin-v2/provider-catalogue-pricing.js';
 import { providerCataloguePrice } from '../src/admin-v2/moma-catalogue-prices.js';
 import { canonicalMomaScenarios } from '../src/admin-v2/moma-billing-items.js';
@@ -135,3 +136,6 @@ test('canonical billing labels preserve conflicting manual prices and distinguis
   const conditions = [{ ...base, name: '输入 Token', condition: '自营按量·移动云；输入tokens', purchasePrice: 1 }, { ...base, name: '输入 Token', condition: '合作按量；输入', purchasePrice: 2 }];
   assert.deepEqual(canonicalMomaScenarios(conditions), conditions);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

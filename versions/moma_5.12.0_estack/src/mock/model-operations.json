@@ -1,0 +1,1278 @@
+{
+  "id": "model-operations",
+  "version": 1,
+  "platformProviderId": "provider-moma",
+  "scenarioId": "daily-operations",
+  "modelIds": [
+    "model-glm53",
+    "mock-service-deepseek-v4-flash-0731"
+  ],
+  "collections": {
+    "models": [
+      {
+        "id": "model-glm53",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "modelId": "glm-5.3",
+        "name": "GLM-5.3",
+        "maker": "智谱",
+        "type": "text",
+        "description": "GLM-5.3 提供文本对话、内容生成与知识问答能力。",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "profile": {
+          "author": "智谱",
+          "releaseDate": "2026-08-14",
+          "tasks": [
+            "对话"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ],
+          "languages": [
+            "中文",
+            "英文"
+          ],
+          "detailDescription": "GLM-5.3 的文本对话服务，支持多轮问答与内容生成。",
+          "sourceStatus": "pending"
+        },
+        "serviceShowcase": "service-showcase-20261102",
+        "serviceShowcaseRank": 0,
+        "serviceManaged": true,
+        "serviceMode": "provider",
+        "serviceModeRevision": 1,
+        "serviceProviders": [
+          {
+            "providerId": "provider-moma",
+            "code": "moma",
+            "callId": "glm-5.3-moma",
+            "status": "已关联",
+            "updatedAt": "2026-11-02T00:00:00.000Z"
+          },
+          {
+            "providerId": "provider-zhipu-direct",
+            "code": "zhipu",
+            "callId": "glm-5.3-zhipu",
+            "status": "已关联",
+            "updatedAt": "2026-11-02T00:00:00.000Z"
+          }
+        ],
+        "listingStatus": "已下架",
+        "callsEnabled": false,
+        "status": "停用",
+        "visibility": "公开",
+        "openScope": "all",
+        "tenantIds": [],
+        "defaultVersionId": "showcase-version-glm-5.3",
+        "templateId": "template-glm-5.3"
+      },
+      {
+        "id": "mock-service-deepseek-v4-flash-0731",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "modelId": "deepseek-v4-flash-0731",
+        "name": "DeepSeek-V4-Flash-0731",
+        "maker": "DeepSeek",
+        "type": "text",
+        "description": "DeepSeek-V4-Flash-0731 提供文本对话、内容生成与知识问答能力。",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "profile": {
+          "author": "DeepSeek",
+          "releaseDate": "2026-07-31",
+          "tasks": [
+            "对话"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ],
+          "languages": [
+            "中文",
+            "英文"
+          ],
+          "detailDescription": "DeepSeek-V4-Flash-0731 的文本对话服务，支持多轮问答与内容生成。",
+          "sourceStatus": "pending"
+        },
+        "serviceShowcase": "service-showcase-20261102",
+        "serviceShowcaseRank": 1,
+        "serviceManaged": true,
+        "serviceMode": "standard",
+        "serviceModeRevision": 1,
+        "serviceProviders": [],
+        "listingStatus": "已下架",
+        "callsEnabled": false,
+        "status": "停用",
+        "visibility": "公开",
+        "openScope": "all",
+        "tenantIds": [],
+        "defaultVersionId": "showcase-version-deepseek-v4-flash-0731",
+        "templateId": "supplier-template-DeepSeek-V4-Flash-0731"
+      }
+    ],
+    "modelTemplates": [
+      {
+        "id": "template-glm-5.3",
+        "modelId": "glm-5.3",
+        "name": "GLM-5.3",
+        "maker": "智谱",
+        "type": "text",
+        "description": "GLM-5.3 提供文本对话、内容生成与知识问答能力。",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "profile": {
+          "author": "智谱",
+          "releaseDate": "2026-08-14",
+          "tasks": [
+            "对话"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ],
+          "languages": [
+            "中文",
+            "英文"
+          ],
+          "detailDescription": "GLM-5.3 的文本对话服务，支持多轮问答与内容生成。",
+          "sourceStatus": "pending"
+        },
+        "revision": 1,
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z"
+      },
+      {
+        "id": "supplier-template-DeepSeek-V4-Flash-0731",
+        "modelId": "deepseek-v4-flash-0731",
+        "name": "DeepSeek-V4-Flash-0731",
+        "maker": "DeepSeek",
+        "type": "text",
+        "description": "DeepSeek-V4-Flash-0731 提供文本对话、内容生成与知识问答能力。",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "profile": {
+          "author": "DeepSeek",
+          "releaseDate": "2026-07-31",
+          "tasks": [
+            "对话"
+          ],
+          "inputModalities": [
+            "文本"
+          ],
+          "outputModalities": [
+            "文本"
+          ],
+          "languages": [
+            "中文",
+            "英文"
+          ],
+          "detailDescription": "DeepSeek-V4-Flash-0731 的文本对话服务，支持多轮问答与内容生成。",
+          "sourceStatus": "pending"
+        },
+        "revision": 1,
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z"
+      }
+    ],
+    "providers": [
+      {
+        "id": "provider-moma",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "code": "moma",
+        "name": "移动云 MoMA",
+        "status": "已启用",
+        "sourceType": "thirdParty",
+        "catalogModelIds": [
+          "glm-5.3",
+          "deepseek-v4-flash-0731"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "glm-5.3",
+            "libraryId": "template-glm-5.3",
+            "name": "GLM-5.3",
+            "type": "text"
+          },
+          {
+            "modelId": "deepseek-v4-flash-0731",
+            "libraryId": "supplier-template-DeepSeek-V4-Flash-0731",
+            "name": "DeepSeek-V4-Flash-0731",
+            "type": "text"
+          }
+        ],
+        "catalogConnections": [
+          {
+            "id": "showcase-association-moma-self-glm-5.3",
+            "createdAt": "2026-11-02T00:00:00.000Z",
+            "updatedAt": "2026-11-02T00:00:00.000Z",
+            "modelId": "glm-5.3",
+            "endpointId": "showcase-channel-moma-self",
+            "upstreamModelId": "glm-5.3",
+            "name": "自营渠道",
+            "origin": "direct",
+            "enabled": true,
+            "pricing": {
+              "modelId": "glm-5.3",
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入 Token",
+                  "condition": "",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 1000000
+                },
+                {
+                  "name": "输出 Token",
+                  "condition": "",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 4000000
+                }
+              ]
+            },
+            "procurementVersions": [
+              {
+                "id": "showcase-procurement-showcase-association-moma-self-glm-5.3",
+                "version": 1,
+                "pricing": {
+                  "modelId": "glm-5.3",
+                  "discountFactor": 1000000,
+                  "scenarios": [
+                    {
+                      "name": "输入 Token",
+                      "condition": "",
+                      "unit": "百万 Token",
+                      "currency": "CNY",
+                      "listPrice": 1000000
+                    },
+                    {
+                      "name": "输出 Token",
+                      "condition": "",
+                      "unit": "百万 Token",
+                      "currency": "CNY",
+                      "listPrice": 4000000
+                    }
+                  ]
+                },
+                "status": "已发布",
+                "effectiveAt": "2026-11-02T00:00:00.000Z",
+                "publishedAt": "2026-11-02T00:00:00.000Z",
+                "expiresAt": null
+              }
+            ],
+            "procurementRevision": 1,
+            "health": {
+              "fingerprint": "[\"glm-5.3\",\"glm-5.3\",\"[\\\"https://moma-self.example.invalid/v1\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"specific\\\",\\\"showcase-key-moma-self\\\",null,\\\"openai\\\",null,[]]\"]",
+              "result": "通过",
+              "testedAt": "2026-11-02T00:00:00.000Z",
+              "source": "mock",
+              "simulated": true
+            }
+          },
+          {
+            "id": "showcase-association-moma-resale-glm-5.3",
+            "createdAt": "2026-11-02T00:00:00.000Z",
+            "updatedAt": "2026-11-02T00:00:00.000Z",
+            "modelId": "glm-5.3",
+            "endpointId": "showcase-channel-moma-resale",
+            "upstreamModelId": "glm-5.3",
+            "name": "转售渠道",
+            "origin": "resale",
+            "enabled": true,
+            "pricing": {
+              "modelId": "glm-5.3",
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入 Token",
+                  "condition": "",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 2000000
+                },
+                {
+                  "name": "输出 Token",
+                  "condition": "",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 6000000
+                }
+              ]
+            },
+            "procurementVersions": [
+              {
+                "id": "showcase-procurement-showcase-association-moma-resale-glm-5.3",
+                "version": 1,
+                "pricing": {
+                  "modelId": "glm-5.3",
+                  "discountFactor": 1000000,
+                  "scenarios": [
+                    {
+                      "name": "输入 Token",
+                      "condition": "",
+                      "unit": "百万 Token",
+                      "currency": "CNY",
+                      "listPrice": 2000000
+                    },
+                    {
+                      "name": "输出 Token",
+                      "condition": "",
+                      "unit": "百万 Token",
+                      "currency": "CNY",
+                      "listPrice": 6000000
+                    }
+                  ]
+                },
+                "status": "已发布",
+                "effectiveAt": "2026-11-02T00:00:00.000Z",
+                "publishedAt": "2026-11-02T00:00:00.000Z",
+                "expiresAt": null
+              }
+            ],
+            "procurementRevision": 1,
+            "health": {
+              "fingerprint": "[\"glm-5.3\",\"glm-5.3\",\"[\\\"https://moma-resale.example.invalid/v1\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"specific\\\",\\\"showcase-key-moma-resale\\\",null,\\\"openai\\\",null,[]]\"]",
+              "result": "通过",
+              "testedAt": "2026-11-02T00:00:00.000Z",
+              "source": "mock",
+              "simulated": true
+            }
+          },
+          {
+            "id": "showcase-association-moma-self-deepseek-v4-flash-0731",
+            "createdAt": "2026-11-02T00:00:00.000Z",
+            "updatedAt": "2026-11-02T00:00:00.000Z",
+            "modelId": "deepseek-v4-flash-0731",
+            "endpointId": "showcase-channel-moma-self",
+            "upstreamModelId": "deepseek-v4-flash-0731",
+            "name": "自营渠道",
+            "origin": "direct",
+            "enabled": true,
+            "pricing": {
+              "modelId": "deepseek-v4-flash-0731",
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入 Token",
+                  "condition": "",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 1000000
+                },
+                {
+                  "name": "输出 Token",
+                  "condition": "",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 4000000
+                }
+              ]
+            },
+            "procurementVersions": [
+              {
+                "id": "showcase-procurement-showcase-association-moma-self-deepseek-v4-flash-0731",
+                "version": 1,
+                "pricing": {
+                  "modelId": "deepseek-v4-flash-0731",
+                  "discountFactor": 1000000,
+                  "scenarios": [
+                    {
+                      "name": "输入 Token",
+                      "condition": "",
+                      "unit": "百万 Token",
+                      "currency": "CNY",
+                      "listPrice": 1000000
+                    },
+                    {
+                      "name": "输出 Token",
+                      "condition": "",
+                      "unit": "百万 Token",
+                      "currency": "CNY",
+                      "listPrice": 4000000
+                    }
+                  ]
+                },
+                "status": "已发布",
+                "effectiveAt": "2026-11-02T00:00:00.000Z",
+                "publishedAt": "2026-11-02T00:00:00.000Z",
+                "expiresAt": null
+              }
+            ],
+            "procurementRevision": 1,
+            "health": {
+              "fingerprint": "[\"deepseek-v4-flash-0731\",\"deepseek-v4-flash-0731\",\"[\\\"https://moma-self.example.invalid/v1\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"specific\\\",\\\"showcase-key-moma-self\\\",null,\\\"openai\\\",null,[]]\"]",
+              "result": "通过",
+              "testedAt": "2026-11-02T00:00:00.000Z",
+              "source": "mock",
+              "simulated": true
+            }
+          },
+          {
+            "id": "showcase-association-moma-resale-deepseek-v4-flash-0731",
+            "createdAt": "2026-11-02T00:00:00.000Z",
+            "updatedAt": "2026-11-02T00:00:00.000Z",
+            "modelId": "deepseek-v4-flash-0731",
+            "endpointId": "showcase-channel-moma-resale",
+            "upstreamModelId": "deepseek-v4-flash-0731",
+            "name": "转售渠道",
+            "origin": "resale",
+            "enabled": true,
+            "pricing": {
+              "modelId": "deepseek-v4-flash-0731",
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入 Token",
+                  "condition": "",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 2000000
+                },
+                {
+                  "name": "输出 Token",
+                  "condition": "",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 6000000
+                }
+              ]
+            },
+            "procurementVersions": [
+              {
+                "id": "showcase-procurement-showcase-association-moma-resale-deepseek-v4-flash-0731",
+                "version": 1,
+                "pricing": {
+                  "modelId": "deepseek-v4-flash-0731",
+                  "discountFactor": 1000000,
+                  "scenarios": [
+                    {
+                      "name": "输入 Token",
+                      "condition": "",
+                      "unit": "百万 Token",
+                      "currency": "CNY",
+                      "listPrice": 2000000
+                    },
+                    {
+                      "name": "输出 Token",
+                      "condition": "",
+                      "unit": "百万 Token",
+                      "currency": "CNY",
+                      "listPrice": 6000000
+                    }
+                  ]
+                },
+                "status": "已发布",
+                "effectiveAt": "2026-11-02T00:00:00.000Z",
+                "publishedAt": "2026-11-02T00:00:00.000Z",
+                "expiresAt": null
+              }
+            ],
+            "procurementRevision": 1,
+            "health": {
+              "fingerprint": "[\"deepseek-v4-flash-0731\",\"deepseek-v4-flash-0731\",\"[\\\"https://moma-resale.example.invalid/v1\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"specific\\\",\\\"showcase-key-moma-resale\\\",null,\\\"openai\\\",null,[]]\"]",
+              "result": "通过",
+              "testedAt": "2026-11-02T00:00:00.000Z",
+              "source": "mock",
+              "simulated": true
+            }
+          }
+        ],
+        "apiKeys": [
+          {
+            "id": "showcase-key-moma-self",
+            "name": "演示凭证",
+            "maskedKey": "mock••••2026",
+            "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "status": "enabled",
+            "createdAt": "2026-11-02T00:00:00.000Z"
+          },
+          {
+            "id": "showcase-key-moma-resale",
+            "name": "演示凭证",
+            "maskedKey": "mock••••2026",
+            "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "status": "enabled",
+            "createdAt": "2026-11-02T00:00:00.000Z"
+          }
+        ]
+      },
+      {
+        "id": "provider-zhipu-direct",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "code": "zhipu-direct",
+        "name": "智谱",
+        "status": "已启用",
+        "sourceType": "thirdParty",
+        "catalogModelIds": [
+          "glm-5.3"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "glm-5.3",
+            "libraryId": "template-glm-5.3",
+            "name": "GLM-5.3",
+            "type": "text"
+          }
+        ],
+        "catalogConnections": [
+          {
+            "id": "showcase-association-zhipu-official-glm-5.3",
+            "createdAt": "2026-11-02T00:00:00.000Z",
+            "updatedAt": "2026-11-02T00:00:00.000Z",
+            "modelId": "glm-5.3",
+            "endpointId": "showcase-channel-zhipu-official",
+            "upstreamModelId": "glm-5.3",
+            "name": "原厂渠道",
+            "origin": "direct",
+            "enabled": true,
+            "pricing": {
+              "modelId": "glm-5.3",
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入 Token",
+                  "condition": "",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 1000000
+                },
+                {
+                  "name": "输出 Token",
+                  "condition": "",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 4000000
+                }
+              ]
+            },
+            "procurementVersions": [
+              {
+                "id": "showcase-procurement-showcase-association-zhipu-official-glm-5.3",
+                "version": 1,
+                "pricing": {
+                  "modelId": "glm-5.3",
+                  "discountFactor": 1000000,
+                  "scenarios": [
+                    {
+                      "name": "输入 Token",
+                      "condition": "",
+                      "unit": "百万 Token",
+                      "currency": "CNY",
+                      "listPrice": 1000000
+                    },
+                    {
+                      "name": "输出 Token",
+                      "condition": "",
+                      "unit": "百万 Token",
+                      "currency": "CNY",
+                      "listPrice": 4000000
+                    }
+                  ]
+                },
+                "status": "已发布",
+                "effectiveAt": "2026-11-02T00:00:00.000Z",
+                "publishedAt": "2026-11-02T00:00:00.000Z",
+                "expiresAt": null
+              }
+            ],
+            "procurementRevision": 1,
+            "health": {
+              "fingerprint": "[\"glm-5.3\",\"glm-5.3\",\"[\\\"https://zhipu-official.example.invalid/v1\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"specific\\\",\\\"showcase-key-zhipu-official\\\",null,\\\"openai\\\",null,[]]\"]",
+              "result": "通过",
+              "testedAt": "2026-11-02T00:00:00.000Z",
+              "source": "mock",
+              "simulated": true
+            }
+          }
+        ],
+        "apiKeys": [
+          {
+            "id": "showcase-key-zhipu-official",
+            "name": "演示凭证",
+            "maskedKey": "mock••••2026",
+            "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "status": "enabled",
+            "createdAt": "2026-11-02T00:00:00.000Z"
+          }
+        ]
+      },
+      {
+        "id": "provider-deepseek-official",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "code": "deepseek-official",
+        "name": "DeepSeek",
+        "status": "已启用",
+        "sourceType": "thirdParty",
+        "catalogModelIds": [
+          "deepseek-v4-flash-0731"
+        ],
+        "catalogModels": [
+          {
+            "modelId": "deepseek-v4-flash-0731",
+            "libraryId": "supplier-template-DeepSeek-V4-Flash-0731",
+            "name": "DeepSeek-V4-Flash-0731",
+            "type": "text"
+          }
+        ],
+        "catalogConnections": [
+          {
+            "id": "showcase-association-deepseek-official-deepseek-v4-flash-0731",
+            "createdAt": "2026-11-02T00:00:00.000Z",
+            "updatedAt": "2026-11-02T00:00:00.000Z",
+            "modelId": "deepseek-v4-flash-0731",
+            "endpointId": "showcase-channel-deepseek-official",
+            "upstreamModelId": "deepseek-v4-flash-0731",
+            "name": "原厂渠道",
+            "origin": "direct",
+            "enabled": true,
+            "pricing": {
+              "modelId": "deepseek-v4-flash-0731",
+              "discountFactor": 1000000,
+              "scenarios": [
+                {
+                  "name": "输入 Token",
+                  "condition": "",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 1000000
+                },
+                {
+                  "name": "输出 Token",
+                  "condition": "",
+                  "unit": "百万 Token",
+                  "currency": "CNY",
+                  "listPrice": 4000000
+                }
+              ]
+            },
+            "procurementVersions": [
+              {
+                "id": "showcase-procurement-showcase-association-deepseek-official-deepseek-v4-flash-0731",
+                "version": 1,
+                "pricing": {
+                  "modelId": "deepseek-v4-flash-0731",
+                  "discountFactor": 1000000,
+                  "scenarios": [
+                    {
+                      "name": "输入 Token",
+                      "condition": "",
+                      "unit": "百万 Token",
+                      "currency": "CNY",
+                      "listPrice": 1000000
+                    },
+                    {
+                      "name": "输出 Token",
+                      "condition": "",
+                      "unit": "百万 Token",
+                      "currency": "CNY",
+                      "listPrice": 4000000
+                    }
+                  ]
+                },
+                "status": "已发布",
+                "effectiveAt": "2026-11-02T00:00:00.000Z",
+                "publishedAt": "2026-11-02T00:00:00.000Z",
+                "expiresAt": null
+              }
+            ],
+            "procurementRevision": 1,
+            "health": {
+              "fingerprint": "[\"deepseek-v4-flash-0731\",\"deepseek-v4-flash-0731\",\"[\\\"https://deepseek-official.example.invalid/v1\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"specific\\\",\\\"showcase-key-deepseek-official\\\",null,\\\"openai\\\",null,[]]\"]",
+              "result": "通过",
+              "testedAt": "2026-11-02T00:00:00.000Z",
+              "source": "mock",
+              "simulated": true
+            }
+          }
+        ],
+        "apiKeys": [
+          {
+            "id": "showcase-key-deepseek-official",
+            "name": "演示凭证",
+            "maskedKey": "mock••••2026",
+            "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "status": "enabled",
+            "createdAt": "2026-11-02T00:00:00.000Z"
+          }
+        ]
+      }
+    ],
+    "endpoints": [
+      {
+        "id": "showcase-channel-moma-self",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "endpointId": "showcase-channel-moma-self",
+        "providerId": "provider-moma",
+        "supplierChannel": true,
+        "channelCode": "showcase-moma-self",
+        "name": "自营渠道",
+        "protocol": "OpenAI",
+        "interfaceType": "openai",
+        "baseUrl": "https://moma-self.example.invalid/v1",
+        "authMode": "specific",
+        "apiKeyId": "showcase-key-moma-self",
+        "apiKeys": [],
+        "credentialRef": "",
+        "timeoutSeconds": 60,
+        "modelIds": [
+          "model-glm53",
+          "mock-service-deepseek-v4-flash-0731"
+        ],
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://moma-self.example.invalid/v1\",\"OpenAI\",\"\",null,60,\"specific\",\"showcase-key-moma-self\",null,\"openai\",null,[]]",
+          "result": "通过",
+          "testedAt": "2026-11-02T00:00:00.000Z",
+          "source": "mock",
+          "simulated": true
+        }
+      },
+      {
+        "id": "showcase-channel-moma-resale",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "endpointId": "showcase-channel-moma-resale",
+        "providerId": "provider-moma",
+        "supplierChannel": true,
+        "channelCode": "showcase-moma-resale",
+        "name": "转售渠道",
+        "protocol": "OpenAI",
+        "interfaceType": "openai",
+        "baseUrl": "https://moma-resale.example.invalid/v1",
+        "authMode": "specific",
+        "apiKeyId": "showcase-key-moma-resale",
+        "apiKeys": [],
+        "credentialRef": "",
+        "timeoutSeconds": 60,
+        "modelIds": [
+          "model-glm53",
+          "mock-service-deepseek-v4-flash-0731"
+        ],
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://moma-resale.example.invalid/v1\",\"OpenAI\",\"\",null,60,\"specific\",\"showcase-key-moma-resale\",null,\"openai\",null,[]]",
+          "result": "通过",
+          "testedAt": "2026-11-02T00:00:00.000Z",
+          "source": "mock",
+          "simulated": true
+        }
+      },
+      {
+        "id": "showcase-channel-zhipu-official",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "endpointId": "showcase-channel-zhipu-official",
+        "providerId": "provider-zhipu-direct",
+        "supplierChannel": true,
+        "channelCode": "showcase-zhipu-official",
+        "name": "原厂渠道",
+        "protocol": "OpenAI",
+        "interfaceType": "openai",
+        "baseUrl": "https://zhipu-official.example.invalid/v1",
+        "authMode": "specific",
+        "apiKeyId": "showcase-key-zhipu-official",
+        "apiKeys": [],
+        "credentialRef": "",
+        "timeoutSeconds": 60,
+        "modelIds": [
+          "model-glm53"
+        ],
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://zhipu-official.example.invalid/v1\",\"OpenAI\",\"\",null,60,\"specific\",\"showcase-key-zhipu-official\",null,\"openai\",null,[]]",
+          "result": "通过",
+          "testedAt": "2026-11-02T00:00:00.000Z",
+          "source": "mock",
+          "simulated": true
+        }
+      },
+      {
+        "id": "showcase-channel-deepseek-official",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "endpointId": "showcase-channel-deepseek-official",
+        "providerId": "provider-deepseek-official",
+        "supplierChannel": true,
+        "channelCode": "showcase-deepseek-official",
+        "name": "原厂渠道",
+        "protocol": "OpenAI",
+        "interfaceType": "openai",
+        "baseUrl": "https://deepseek-official.example.invalid/v1",
+        "authMode": "specific",
+        "apiKeyId": "showcase-key-deepseek-official",
+        "apiKeys": [],
+        "credentialRef": "",
+        "timeoutSeconds": 60,
+        "modelIds": [
+          "mock-service-deepseek-v4-flash-0731"
+        ],
+        "status": "运行中",
+        "connectionTest": {
+          "fingerprint": "[\"https://deepseek-official.example.invalid/v1\",\"OpenAI\",\"\",null,60,\"specific\",\"showcase-key-deepseek-official\",null,\"openai\",null,[]]",
+          "result": "通过",
+          "testedAt": "2026-11-02T00:00:00.000Z",
+          "source": "mock",
+          "simulated": true
+        }
+      }
+    ],
+    "modelVersions": [
+      {
+        "id": "showcase-version-glm-5.3",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "modelId": "model-glm53",
+        "version": "v1.0",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "status": "已发布",
+        "validationStatus": "通过",
+        "isDefault": true
+      },
+      {
+        "id": "showcase-version-deepseek-v4-flash-0731",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "modelId": "mock-service-deepseek-v4-flash-0731",
+        "version": "v1.0",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "status": "已发布",
+        "validationStatus": "通过",
+        "isDefault": true
+      }
+    ],
+    "validations": [],
+    "modelSupplies": [
+      {
+        "id": "showcase-supply-moma-self-glm-5.3",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "modelId": "model-glm53",
+        "providerId": "provider-moma",
+        "endpointId": "showcase-channel-moma-self",
+        "channelId": "showcase-association-moma-self-glm-5.3",
+        "catalogueModelId": "glm-5.3",
+        "upstreamModelId": "glm-5.3",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "verifiedAt": "2026-11-02T00:00:00.000Z",
+        "salesEnabled": false
+      },
+      {
+        "id": "showcase-supply-moma-resale-glm-5.3",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "modelId": "model-glm53",
+        "providerId": "provider-moma",
+        "endpointId": "showcase-channel-moma-resale",
+        "channelId": "showcase-association-moma-resale-glm-5.3",
+        "catalogueModelId": "glm-5.3",
+        "upstreamModelId": "glm-5.3",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "verifiedAt": "2026-11-02T00:00:00.000Z",
+        "salesEnabled": false
+      },
+      {
+        "id": "showcase-supply-zhipu-official-glm-5.3",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "modelId": "model-glm53",
+        "providerId": "provider-zhipu-direct",
+        "endpointId": "showcase-channel-zhipu-official",
+        "channelId": "showcase-association-zhipu-official-glm-5.3",
+        "catalogueModelId": "glm-5.3",
+        "upstreamModelId": "glm-5.3",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "verifiedAt": "2026-11-02T00:00:00.000Z",
+        "salesEnabled": false
+      },
+      {
+        "id": "showcase-supply-moma-self-deepseek-v4-flash-0731",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "modelId": "mock-service-deepseek-v4-flash-0731",
+        "providerId": "provider-moma",
+        "endpointId": "showcase-channel-moma-self",
+        "channelId": "showcase-association-moma-self-deepseek-v4-flash-0731",
+        "catalogueModelId": "deepseek-v4-flash-0731",
+        "upstreamModelId": "deepseek-v4-flash-0731",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "verifiedAt": "2026-11-02T00:00:00.000Z",
+        "salesEnabled": false
+      },
+      {
+        "id": "showcase-supply-moma-resale-deepseek-v4-flash-0731",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "modelId": "mock-service-deepseek-v4-flash-0731",
+        "providerId": "provider-moma",
+        "endpointId": "showcase-channel-moma-resale",
+        "channelId": "showcase-association-moma-resale-deepseek-v4-flash-0731",
+        "catalogueModelId": "deepseek-v4-flash-0731",
+        "upstreamModelId": "deepseek-v4-flash-0731",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "verifiedAt": "2026-11-02T00:00:00.000Z",
+        "salesEnabled": false
+      },
+      {
+        "id": "showcase-supply-deepseek-official-deepseek-v4-flash-0731",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "modelId": "mock-service-deepseek-v4-flash-0731",
+        "providerId": "provider-deepseek-official",
+        "endpointId": "showcase-channel-deepseek-official",
+        "channelId": "showcase-association-deepseek-official-deepseek-v4-flash-0731",
+        "catalogueModelId": "deepseek-v4-flash-0731",
+        "upstreamModelId": "deepseek-v4-flash-0731",
+        "capabilities": {
+          "context": 131072,
+          "output": 8192,
+          "streaming": true,
+          "tools": false
+        },
+        "status": "已启用",
+        "validationStatus": "通过",
+        "verifiedAt": "2026-11-02T00:00:00.000Z",
+        "salesEnabled": false
+      }
+    ],
+    "modelSalePrices": [
+      {
+        "id": "showcase-price-glm-5.3-provider-moma",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "modelId": "model-glm53",
+        "scope": "provider",
+        "providerId": "provider-moma",
+        "serviceId": "provider:model-glm53:provider-moma",
+        "serviceModeRevision": 1,
+        "items": [
+          {
+            "name": "输入 Token",
+            "condition": "",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "amount": 3000000
+          },
+          {
+            "name": "输出 Token",
+            "condition": "",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "amount": 9000000
+          }
+        ],
+        "version": 1,
+        "status": "已发布",
+        "effectiveAt": "2026-11-02T00:00:00.000Z"
+      },
+      {
+        "id": "showcase-price-glm-5.3-provider-zhipu-direct",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "modelId": "model-glm53",
+        "scope": "provider",
+        "providerId": "provider-zhipu-direct",
+        "serviceId": "provider:model-glm53:provider-zhipu-direct",
+        "serviceModeRevision": 1,
+        "items": [
+          {
+            "name": "输入 Token",
+            "condition": "",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "amount": 2000000
+          },
+          {
+            "name": "输出 Token",
+            "condition": "",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "amount": 8000000
+          }
+        ],
+        "version": 1,
+        "status": "已发布",
+        "effectiveAt": "2026-11-02T00:00:00.000Z"
+      },
+      {
+        "id": "showcase-price-deepseek-v4-flash-0731-standard",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "modelId": "mock-service-deepseek-v4-flash-0731",
+        "scope": "model",
+        "providerId": null,
+        "serviceId": "standard:mock-service-deepseek-v4-flash-0731",
+        "serviceModeRevision": 1,
+        "items": [
+          {
+            "name": "输入 Token",
+            "condition": "",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "amount": 2000000
+          },
+          {
+            "name": "输出 Token",
+            "condition": "",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "amount": 8000000
+          }
+        ],
+        "version": 1,
+        "status": "已发布",
+        "effectiveAt": "2026-11-02T00:00:00.000Z"
+      }
+    ],
+    "supplyPrices": [],
+    "serviceRoutes": [
+      {
+        "id": "showcase-route-glm-5.3-provider-moma",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "serviceId": "provider:model-glm53:provider-moma",
+        "versions": [
+          {
+            "id": "showcase-route-glm-5.3-provider-moma-v1",
+            "version": 1,
+            "config": {
+              "strategy": "weighted",
+              "groups": [
+                {
+                  "id": "P1",
+                  "name": "主用组",
+                  "strategy": "weighted"
+                }
+              ],
+              "channels": [
+                {
+                  "supplyId": "showcase-supply-moma-self-glm-5.3",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 70,
+                  "priority": 1
+                },
+                {
+                  "supplyId": "showcase-supply-moma-resale-glm-5.3",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 30,
+                  "priority": 2
+                }
+              ],
+              "autoFailover": false,
+              "excludeAbnormal": true,
+              "autoRecover": false,
+              "advanced": {
+                "timeoutSeconds": 60,
+                "maxRetries": 0,
+                "failureThreshold": 3,
+                "recoverySeconds": 30,
+                "latencyWindowSeconds": 60,
+                "costBasis": "input"
+              }
+            },
+            "publishedAt": "2026-11-02T00:00:00.000Z",
+            "actor": "平台管理员",
+            "costVersions": {
+              "showcase-supply-moma-self-glm-5.3": "6e6e12a7eda176f",
+              "showcase-supply-moma-resale-glm-5.3": "efac74bbdba3c715"
+            }
+          }
+        ],
+        "activeVersion": 1,
+        "draft": null,
+        "draftUpdatedAt": null
+      },
+      {
+        "id": "showcase-route-glm-5.3-provider-zhipu-direct",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "serviceId": "provider:model-glm53:provider-zhipu-direct",
+        "versions": [
+          {
+            "id": "showcase-route-glm-5.3-provider-zhipu-direct-v1",
+            "version": 1,
+            "config": {
+              "strategy": "fixed",
+              "groups": [
+                {
+                  "id": "P1",
+                  "name": "主用组",
+                  "strategy": "fixed"
+                }
+              ],
+              "channels": [
+                {
+                  "supplyId": "showcase-supply-zhipu-official-glm-5.3",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 100,
+                  "priority": 1
+                }
+              ],
+              "autoFailover": false,
+              "excludeAbnormal": true,
+              "autoRecover": false,
+              "advanced": {
+                "timeoutSeconds": 60,
+                "maxRetries": 0,
+                "failureThreshold": 3,
+                "recoverySeconds": 30,
+                "latencyWindowSeconds": 60,
+                "costBasis": "input"
+              }
+            },
+            "publishedAt": "2026-11-02T00:00:00.000Z",
+            "actor": "平台管理员",
+            "costVersions": {
+              "showcase-supply-zhipu-official-glm-5.3": "dd357fe28a53b250"
+            }
+          }
+        ],
+        "activeVersion": 1,
+        "draft": null,
+        "draftUpdatedAt": null
+      },
+      {
+        "id": "showcase-route-deepseek-v4-flash-0731-standard",
+        "createdAt": "2026-11-02T00:00:00.000Z",
+        "updatedAt": "2026-11-02T00:00:00.000Z",
+        "serviceId": "standard:mock-service-deepseek-v4-flash-0731",
+        "versions": [
+          {
+            "id": "showcase-route-deepseek-v4-flash-0731-standard-v1",
+            "version": 1,
+            "config": {
+              "strategy": "weighted",
+              "groups": [
+                {
+                  "id": "P1",
+                  "name": "主用组",
+                  "strategy": "weighted"
+                }
+              ],
+              "channels": [
+                {
+                  "supplyId": "showcase-supply-moma-self-deepseek-v4-flash-0731",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 50,
+                  "priority": 1
+                },
+                {
+                  "supplyId": "showcase-supply-moma-resale-deepseek-v4-flash-0731",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 30,
+                  "priority": 2
+                },
+                {
+                  "supplyId": "showcase-supply-deepseek-official-deepseek-v4-flash-0731",
+                  "enabled": true,
+                  "groupId": "P1",
+                  "weight": 20,
+                  "priority": 3
+                }
+              ],
+              "autoFailover": false,
+              "excludeAbnormal": true,
+              "autoRecover": false,
+              "advanced": {
+                "timeoutSeconds": 60,
+                "maxRetries": 0,
+                "failureThreshold": 3,
+                "recoverySeconds": 30,
+                "latencyWindowSeconds": 60,
+                "costBasis": "input"
+              }
+            },
+            "publishedAt": "2026-11-02T00:00:00.000Z",
+            "actor": "平台管理员",
+            "costVersions": {
+              "showcase-supply-moma-self-deepseek-v4-flash-0731": "2304f325171d4464",
+              "showcase-supply-moma-resale-deepseek-v4-flash-0731": "38a990f5dd8ce146",
+              "showcase-supply-deepseek-official-deepseek-v4-flash-0731": "152ccdb934e49566"
+            }
+          }
+        ],
+        "activeVersion": 1,
+        "draft": null,
+        "draftUpdatedAt": null
+      }
+    ],
+    "modelOnboardings": []
+  }
+}

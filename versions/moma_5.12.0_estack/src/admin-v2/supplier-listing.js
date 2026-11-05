@@ -5,7 +5,7 @@ import { catalogueConnections } from './provider-model-connections.js';
 import { activeSupplySalePrice, priceItems, procurementVersion, latestSaleRevision, supplyPriceReady, availableSupplies } from './model-management.js';
 import { cataloguePurchasePrice, saleItemsDraft } from './provider-catalogue-pricing.js';
 import { connectionBlockReason } from './connection-state.js';
-import { commitAdminState } from './store.js';
+import { commitAdminState } from './state-transaction.js';
 
 export const LISTING_PREFERENCES_KEY = 'moma:5120:model-management:views';
 export const LISTING_FILTER_KEYS = ['q', 'type', 'mode', 'model', 'status', 'attention', 'provider', 'page', 'size', 'supplier', 'supplierQ', 'catalogueQ', 'catalogueType', 'catalogueStatus', 'cataloguePage', 'catalogueSize'];
@@ -60,14 +60,13 @@ export function supplierListingRows(state, provider) {
   });
 }
 export function supplierBatchEntry(state, row) {
-  const draft = row.draft;
-  return { catalogueModelId: row.catalogueModelId, draftId: draft?.id || '',
-    libraryId: draft?.libraryId || row.master?.id || '', libraryRevision: draft?.libraryRevision || row.master?.updatedAt || '',
-    endpointId: draft?.endpointId || row.endpoint?.id || '', confirmedIdentity: draft?.confirmedIdentity || false,
-    prices: draft?.prices?.length ? draft.prices : saleItemsDraft(row.costs, priceItems(row.sale, row.master)),
-    sourceVersion: draft?.sourceVersion || procurementVersion(row.cost),
-    expectedSaleVersion: draft?.sourceVersion ? draft.expectedSaleVersion : row.supply ? latestSaleRevision(state, row.supply.id) : '',
-    listingScope: draft?.listingScope || null,
+  return { catalogueModelId: row.catalogueModelId, draftId: row.draft?.id || '',
+    libraryId: row.master?.id || '', libraryRevision: row.master?.updatedAt || '',
+    endpointId: row.endpoint?.id || '', confirmedIdentity: false,
+    prices: saleItemsDraft(row.costs, priceItems(row.sale, row.master)),
+    sourceVersion: procurementVersion(row.cost),
+    expectedSaleVersion: row.supply ? latestSaleRevision(state, row.supply.id) : '',
+    listingScope: null,
   };
 }
 export function supplierPublishEntry(row) {

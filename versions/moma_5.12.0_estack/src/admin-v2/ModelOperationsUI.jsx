@@ -1,3 +1,5 @@
+import { activeAdmin } from '../linked-accounts.mjs';
+import { readLinkedState } from '../service-access.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Search, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Copy, X, Plus, Trash2 } from 'lucide-react';
@@ -11,6 +13,7 @@ import { priceItems, moneyDisplay } from './model-management';
 import { PROVIDER_TYPES, PROTOCOLS } from './provider-management';
 import { connectionTestPassed } from './connection-state';
 import { canMutate } from './store';
+import { modelOperationTarget } from './model-operation-history';
 import './model-management.css';
 import './model-operations.css';
 
@@ -18,15 +21,16 @@ export function Heading({ title, description, children }) { return <div classNam
 export function Status({ children, good = false }) { return <span className={`mo-status ${good ? 'good' : ''}`}>{children}</span>; }
 export function Notice({ children, error = false }) { return <div className={`mo-notice ${error ? 'error' : ''}`} role={error ? 'alert' : 'status'}>{error ? <AlertCircle/> : <CheckCircle2/>}<div>{children}</div></div>; }
 export function SearchBox({ value, onChange, placeholder = '搜索模型名称 / 编码 / 作者' }) { return <div className="mo-search"><Search/><Input aria-label={placeholder} placeholder={placeholder} value={value} onChange={event => onChange(event.target.value)}/></div>; }
-export function GridTable({ headings, children, empty, emptyMessage = '没有符合条件的记录', className = '' }) { return <div className="mo-table-scroll"><Table className={`mo-table ${className}`}><TableHeader><TableRow>{headings.map(label => <TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{children}</TableBody></Table>{empty && <div className="mo-empty" role="status">{emptyMessage}</div>}</div>; }
+export function GridTable({ headings, children, empty, emptyMessage = '没有符合条件的记录', className = '' }) { return <div className="mo-table-scroll"><Table className={`mo-table ${className}`}><TableHeader><TableRow>{headings.map((label,index) => <TableHead key={index}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{children}</TableBody></Table>{empty && <div className="mo-empty" role="status">{emptyMessage}</div>}</div>; }
 export { TableRow as Row, TableCell as Cell };
 export function Pagination({ count, page, setPage, size = 10 }) { const pages = Math.max(1, Math.ceil(count / size)); return <div className="mo-pagination"><span>共 {count} 条</span><span>{size} 条/页</span><Button type="button" size="icon" variant="outline" aria-label="上一页" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft/></Button><span>{page} / {pages}</span><Button type="button" size="icon" variant="outline" aria-label="下一页" disabled={page >= pages} onClick={() => setPage(page + 1)}><ChevronRight/></Button></div>; }
 export function CopyId({ value, label = '调用 Model ID' }) { return <div className="mo-copy"><code>{value}</code><Button type="button" size="icon" variant="ghost" aria-label={`复制 ${value}`} onClick={async () => { try { await navigator.clipboard.writeText(value); toast.success(`${label} 已复制`); } catch { toast.error('复制失败，请选择文本复制'); } }}><Copy/></Button></div>; }
 export function Price({ model, price }) { const items = priceItems(price, model); return items.length ? <details className="mo-price"><summary>{items.length} 个计费项</summary>{items.map((item, index) => <small key={index}>{item.name}{item.condition ? '（' + item.condition + '）' : ''}：{item.currency || 'CNY'} {moneyDisplay(item.amount)} / {item.unit}</small>)}</details> : <span className="mo-muted">未配置</span>; }
-export function Modal({ title, description, children, onClose, wide, drawer = false, footer }) { return <Dialog open onOpenChange={open => { if (!open) onClose(); }}><DialogContent className={`mo-dialog ${wide ? 'wide' : ''} ${drawer ? 'mo-drawer' : ''}`} showCloseButton={false}><div className="mo-dialog-header"><div><DialogTitle>{title}</DialogTitle><DialogDescription>{description || '请核对当前配置后继续。'}</DialogDescription></div><Button variant="ghost" size="icon" aria-label="关闭" onClick={onClose}><X/></Button></div><div className="mo-dialog-body">{children}</div>{footer && <div className="mo-dialog-footer">{footer}</div>}</DialogContent></Dialog>; }
+export function Modal({ title, description, children, onClose, wide, drawer = false, drawerSide = 'right', footer, className = '', headerActions }) { return <Dialog open onOpenChange={open => { if (!open) onClose(); }}><DialogContent className={`mo-dialog ${className} ${wide ? 'wide' : ''} ${drawer ? `mo-drawer${drawerSide==='left'?' mo-drawer-left':''}` : ''}`} showCloseButton={false}><div className="mo-dialog-header"><div><DialogTitle>{title}</DialogTitle><DialogDescription>{description || '请核对当前配置后继续。'}</DialogDescription></div>{headerActions}<Button variant="ghost" size="icon" aria-label="关闭" onClick={onClose}><X/></Button></div><div className="mo-dialog-body">{children}</div>{footer && <div className="mo-dialog-footer">{footer}</div>}</DialogContent></Dialog>; }
 export function useOperations({ state, transact, conflict, reload }, base) {
   const [params, setParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
   const [dirty, setDirty] = useState(false), [leave, setLeave] = useState(null), [error, setError] = useState('');
+  const running = useRef(false);
   const accepted = useRef(location.hash), bypass = useRef(false), dirtyRef = useRef(dirty); dirtyRef.current = dirty;
   const proceed = callback => { if (dirtyRef.current) setLeave(() => callback); else callback(); };
   useEffect(() => {
@@ -40,10 +44,20 @@ export function useOperations({ state, transact, conflict, reload }, base) {
     const navigate = () => { const next = new URLSearchParams(params); Object.entries(patch).forEach(([key, value]) => value == null ? next.delete(key) : next.set(key, value)); const hash = `#/admin-2/${options.base || base}${next.size ? '?' + next : ''}`; accepted.current = hash; setError(''); setDirty(false); dirtyRef.current = false; if (options.replace) history.replaceState(null, '', hash); else { location.hash = hash; if (!options.preserveScroll) window.scrollTo(0, 0); } setParams(next); };
     if (options.saved) navigate(); else proceed(navigate);
   };
-  const can = !conflict && !state.storageError && canMutate(state.currentRole, { type: 'modelOperations' });
-  const run = (operation, data = {}, modelId, legacy = false) => { try { if (!can) throw new Error(conflict ? '请先载入最新数据，再保存配置；当前输入保留' : '当前无法保存，请检查角色权限和数据状态'); const next = transact({ type: legacy ? 'modelOperation' : 'modelOperations', operation, modelId, data }); setError(''); setDirty(false); dirtyRef.current = false; toast.success(next.audits[0].action + '成功'); return next; } catch (issue) { setError(issue.message); return null; } };
-  const leaveDialog = leave && <Modal title="有未保存的配置" description="放弃修改后继续离开，已保存的数据保留。" onClose={() => setLeave(null)}><div className="mo-footer"><Button variant="outline" onClick={() => setLeave(null)}>继续编辑</Button><Button onClick={() => { const next = leave; setLeave(null); setDirty(false); dirtyRef.current = false; next(); }}>放弃修改</Button></div></Modal>;
-  return { params, go, proceed, dirty: setDirty, hasUnsaved: () => dirtyRef.current, can, run, error, setError, leaveDialog, conflict, reload };
+  const isCurrent = () => { if(state.cloudOperations)return !conflict && canMutate(state.currentRole,{type:'modelOperations'}); try { const fresh = readLinkedState(); const account = activeAdmin(fresh); return fresh.revision === state.revision && account.id === state.adminSession?.accountId && canMutate(account.role, { type: 'modelOperations' }); } catch { return false; } };
+  const can = !conflict && !state.storageError && isCurrent();
+  const run = async (operation, data = {}, modelId, legacy = false) => { if(running.current)return null;running.current=true;try { if (!can) throw new Error(conflict ? '请先载入最新数据，再保存配置；当前输入保留' : '当前无法保存，请检查角色权限和数据状态'); const next = await transact({ type: legacy ? 'modelOperation' : 'modelOperations', operation, modelId, data }); setError(''); setDirty(false); dirtyRef.current = false; toast.success(next.audits[0].action + '成功'); return next; } catch (issue) {
+    let message = issue instanceof Error ? issue.message : String(issue);
+    const target = modelOperationTarget(state, modelId, data);
+    if (can && isCurrent() && target && operation !== 'recordFailedOperation') {
+      try { await transact({ type: 'modelOperations', operation: 'recordFailedOperation', modelId: target, data: { operation, reason: message.slice(0, 500) } }); }
+      catch { message += '；失败记录未能保存，当前输入保留。'; }
+    }
+    setError(message); return null;
+  } finally { running.current=false; } };
+  const leaveDialog = leave && <Modal title="有未保存的配置" description="放弃修改后继续离开，当前生效配置保留。" onClose={() => setLeave(null)}><div className="mo-footer"><Button variant="outline" onClick={() => setLeave(null)}>继续编辑</Button><Button variant="outline" onClick={() => { const next = leave; setLeave(null); setDirty(false); dirtyRef.current = false; next(); }}>放弃本次修改</Button></div></Modal>;
+
+  return { params, go, proceed, dirty: setDirty, hasUnsaved: () => dirtyRef.current, can, isCurrent, run, error, setError, leaveDialog, conflict, reload };
 }
 export const emptyProvider = () => ({ name: '', code: '', sourceType: 'thirdParty', contact: '', contactInfo: '', description: '' });
 export function ProviderFields({ value, onChange, disabled, editing = false, children }) {
@@ -79,5 +93,5 @@ export function ConnectionApiKeys({ value, onChange, disabled, optionalKey = fal
       <p className="supplier-key-hint">{optionalKey ? '自有推理服务可不配置 API 密钥。' : '第三方推理服务至少配置一个 API 密钥。'}每个连接最多 20 个，保存后仅展示脱敏值。</p>
     </fieldset>;
 }
-export function ScopeFields({ state, openScope, tenantIds, onChange, disabled }) { return <div className="mo-form-grid"><Field label="允许订购的租户"><Choice label="订购范围" value={openScope} disabled={disabled} options={[[ 'all', '全部租户'], ['selected', '指定租户']]} onChange={value => onChange(value, tenantIds)}/></Field>{openScope === 'selected' && <Field label="选择租户"><MultiChoice label="选择租户" choices={state.tenants.map(tenant => tenant.name)} value={state.tenants.filter(tenant => tenantIds.includes(tenant.id)).map(tenant => tenant.name)} disabled={disabled} onChange={names => onChange('selected', state.tenants.filter(tenant => names.includes(tenant.name)).map(tenant => tenant.id))}/></Field>}</div>; }
+export function ScopeFields({ state, openScope, tenantIds, onChange, disabled }) { const tenantLabel = tenant => `${tenant.name} · ${tenant.id}`; return <div className="mo-form-grid"><Field label="客户开放范围"><Choice label="客户范围" value={openScope} disabled={disabled} options={[[ 'all', '全部客户'], ['selected', '指定客户']]} onChange={value => onChange(value, tenantIds)}/></Field>{openScope === 'selected' && <Field label="选择客户"><MultiChoice label="客户" choices={state.tenants.map(tenantLabel)} value={state.tenants.filter(tenant => tenantIds.includes(tenant.id)).map(tenantLabel)} disabled={disabled} onChange={names => onChange('selected', state.tenants.filter(tenant => names.includes(tenantLabel(tenant))).map(tenant => tenant.id))}/></Field>}</div>; }
 export function ValidationNote({ endpoint, supply }) { return <div className="mo-stack"><Status good={connectionTestPassed(endpoint) && supply?.validationStatus === '通过'}>{!connectionTestPassed(endpoint) ? '连接待验证' : supply?.validationStatus === '通过' ? '已通过' : supply?.validationStatus || '待验证'}</Status><small>{supply?.verifiedAt ? new Date(supply.verifiedAt).toLocaleString('zh-CN') : '尚无验证记录'}</small></div>; }

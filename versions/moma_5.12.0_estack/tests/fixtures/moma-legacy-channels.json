@@ -1,0 +1,194 @@
+{
+  "endpoints": [
+    {
+      "id": "supplier-review-CH-001",
+      "endpointId": "supplier-review-CH-001",
+      "providerId": "provider-moma",
+      "channelCode": "CH-001",
+      "supplierChannel": true,
+      "name": "生产渠道",
+      "protocol": "OpenAI",
+      "baseUrl": "https://moma.example.invalid/v1/chat/completions",
+      "authMode": "inherit",
+      "apiKeyId": "",
+      "credentialVersion": "supplier-review-1",
+      "apiKeys": [],
+      "credentialRef": "",
+      "timeoutSeconds": 60,
+      "capacity": null,
+      "modelIds": [],
+      "status": "运行中",
+      "createdAt": "@initializedAt",
+      "updatedAt": "@initializedAt",
+      "connectionTest": {
+        "result": "通过",
+        "testedAt": "@initializedAt",
+        "fingerprint": "[\"https://moma.example.invalid/v1/chat/completions\",\"OpenAI\",\"\",null,60,\"inherit\",\"\",\"supplier-review-1\"]"
+      }
+    },
+    {
+      "id": "supplier-review-CH-002",
+      "endpointId": "supplier-review-CH-002",
+      "providerId": "provider-moma",
+      "channelCode": "CH-002",
+      "supplierChannel": true,
+      "name": "专用渠道",
+      "protocol": "OpenAI",
+      "baseUrl": "https://vip.moma.example.invalid/v1/chat/completions",
+      "authMode": "specific",
+      "apiKeyId": "KEY-003",
+      "credentialVersion": "supplier-review-1",
+      "apiKeys": [],
+      "credentialRef": "",
+      "timeoutSeconds": 60,
+      "capacity": null,
+      "modelIds": [],
+      "status": "运行中",
+      "createdAt": "@initializedAt",
+      "updatedAt": "@initializedAt",
+      "connectionTest": {
+        "result": "通过",
+        "testedAt": "@initializedAt",
+        "fingerprint": "[\"https://vip.moma.example.invalid/v1/chat/completions\",\"OpenAI\",\"\",null,60,\"specific\",\"KEY-003\",\"supplier-review-1\"]"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "supplier-review-link-moma-0-0",
+      "modelId": "GLM-5.2",
+      "endpointId": "supplier-review-CH-001",
+      "upstreamModelId": "GLM-5.2",
+      "name": "生产渠道",
+      "origin": "undisclosed",
+      "pricing": {
+        "modelId": "GLM-5.2",
+        "discountFactor": 1000000,
+        "scenarios": [
+          {
+            "name": "输入 Token",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "listPrice": 8000000
+          },
+          {
+            "name": "输出 Token",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "listPrice": 28000000
+          }
+        ]
+      },
+      "enabled": true,
+      "health": {
+        "result": "通过",
+        "testedAt": "@initializedAt",
+        "fingerprint": "[\"GLM-5.2\",\"GLM-5.2\",\"[\\\"https://moma.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"inherit\\\",\\\"\\\",\\\"supplier-review-1\\\"]\"]"
+      },
+      "createdAt": "@initializedAt",
+      "updatedAt": "@initializedAt"
+    },
+    {
+      "id": "supplier-review-link-moma-0-1",
+      "modelId": "GLM-5.2",
+      "endpointId": "supplier-review-CH-002",
+      "upstreamModelId": "glm-5.2",
+      "name": "专用渠道",
+      "origin": "undisclosed",
+      "pricing": {
+        "modelId": "GLM-5.2",
+        "discountFactor": 1000000,
+        "scenarios": [
+          {
+            "name": "输入 Token",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "listPrice": 7000000
+          },
+          {
+            "name": "输出 Token",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "listPrice": 25000000
+          }
+        ]
+      },
+      "enabled": true,
+      "health": {
+        "result": "通过",
+        "testedAt": "@initializedAt",
+        "fingerprint": "[\"GLM-5.2\",\"glm-5.2\",\"[\\\"https://vip.moma.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"specific\\\",\\\"KEY-003\\\",\\\"supplier-review-1\\\"]\"]"
+      },
+      "createdAt": "@initializedAt",
+      "updatedAt": "@initializedAt"
+    },
+    {
+      "id": "supplier-review-link-moma-3-0",
+      "modelId": "DeepSeek-V4-Flash-0731",
+      "endpointId": "supplier-review-CH-001",
+      "upstreamModelId": "DeepSeek-V4-Flash-0731",
+      "name": "生产渠道",
+      "origin": "undisclosed",
+      "pricing": {
+        "modelId": "DeepSeek-V4-Flash-0731",
+        "discountFactor": 1000000,
+        "scenarios": [
+          {
+            "name": "输入 Token",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "listPrice": 1500000
+          },
+          {
+            "name": "输出 Token",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "listPrice": 6000000
+          }
+        ]
+      },
+      "enabled": true,
+      "health": {
+        "result": "通过",
+        "testedAt": "@initializedAt",
+        "fingerprint": "[\"DeepSeek-V4-Flash-0731\",\"DeepSeek-V4-Flash-0731\",\"[\\\"https://moma.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"inherit\\\",\\\"\\\",\\\"supplier-review-1\\\"]\"]"
+      },
+      "createdAt": "@initializedAt",
+      "updatedAt": "@initializedAt"
+    },
+    {
+      "id": "supplier-review-link-moma-4-1",
+      "modelId": "Kimi/miKimi-K3",
+      "endpointId": "supplier-review-CH-002",
+      "upstreamModelId": "Kimi/miKimi-K3",
+      "name": "专用渠道",
+      "origin": "undisclosed",
+      "pricing": {
+        "modelId": "Kimi/miKimi-K3",
+        "discountFactor": 1000000,
+        "scenarios": [
+          {
+            "name": "输入 Token",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "listPrice": 2000000
+          },
+          {
+            "name": "输出 Token",
+            "unit": "百万 Token",
+            "currency": "CNY",
+            "listPrice": 8000000
+          }
+        ]
+      },
+      "enabled": true,
+      "health": {
+        "result": "通过",
+        "testedAt": "@initializedAt",
+        "fingerprint": "[\"Kimi/miKimi-K3\",\"Kimi/miKimi-K3\",\"[\\\"https://vip.moma.example.invalid/v1/chat/completions\\\",\\\"OpenAI\\\",\\\"\\\",null,60,\\\"specific\\\",\\\"KEY-003\\\",\\\"supplier-review-1\\\"]\"]"
+      },
+      "createdAt": "@initializedAt",
+      "updatedAt": "@initializedAt"
+    }
+  ]
+}

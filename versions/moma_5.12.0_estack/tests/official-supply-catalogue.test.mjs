@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAdminSeed, commitAdminState, parseAdminState, persistModelAction } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, parseAdminState as baseParseAdminState, persistModelAction } from '../src/admin-v2/store.js';
 import { officialSupplyRecords } from '../src/admin-v2/official-supply-catalogue.js';
 import { catalogueChannels, channelAddresses, channelPriceDraft } from '../src/admin-v2/provider-channels.js';
 import { displayedCatalogueIds, providerCatalogueIds } from '../src/admin-v2/moma-provider.js';
@@ -89,9 +90,9 @@ test('channel and model removal require confirmation, retain history and never r
   assert.deepEqual(removed.modelSalePrices, seed.modelSalePrices);
   assert.deepEqual(removed.endpoints, seed.endpoints);
   const linked = { ...seed, modelSupplies: [...seed.modelSupplies, { id: 'guarded-supply', modelId: seed.models[0].id, catalogueModelId: item.modelId, upstreamModelId: item.upstreamModelId, endpointId: item.endpointId, status: '已停用' }] };
-  assert.throws(() => commitAdminState(linked, act('channelDelete', owner.id, { modelId: 'kimi-k3', channelId: item.id, confirmed: true })), /关联服务/);
-  const draft = { ...seed, modelSupplies: [...seed.modelSupplies, { id: 'old-supply-reference', modelId: seed.models[0].id, catalogueModelId: item.modelId, upstreamModelId: item.upstreamModelId, endpointId: item.endpointId, status: '已移除' }], serviceRoutes: [{ id: 'draft-route', versions: [], draft: { config: { channels: [{ supplyId: 'old-supply-reference', enabled: false }] } } }] };
-  assert.throws(() => commitAdminState(draft, act('channelDelete', owner.id, { modelId: 'kimi-k3', channelId: item.id, confirmed: true })), /关联服务或路由/);
+  assert.throws(() => commitAdminState(linked, act('channelDelete', owner.id, { modelId: 'kimi-k3', channelId: item.id, confirmed: true })), /模型服务/);
+  const draft = { ...seed, modelSupplies: [...seed.modelSupplies, { id: 'old-supply-reference', modelId: seed.models[0].id, catalogueModelId: item.modelId, upstreamModelId: item.upstreamModelId, endpointId: item.endpointId, status: '已移除' }], serviceRoutes: [{ id: 'draft-route', versions: [], draft: { channels: [{ supplyId: 'old-supply-reference', enabled: false }] } }] };
+  assert.throws(() => commitAdminState(draft, act('channelDelete', owner.id, { modelId: 'kimi-k3', channelId: item.id, confirmed: true })), /路由引用/);
 });
 
 test('official loading and deletion keep role, stale revision and failed-storage protections', () => {
@@ -100,3 +101,6 @@ test('official loading and deletion keep role, stale revision and failed-storage
   assert.throws(() => persistModelAction(seed, action, { getItem: () => JSON.stringify({ ...seed, revision: seed.revision + 1 }), setItem: () => assert.fail() }), /数据已变化/);
   assert.throws(() => persistModelAction(seed, action, { getItem: () => JSON.stringify(seed), setItem: () => { throw new Error('quota'); } }), /quota/);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

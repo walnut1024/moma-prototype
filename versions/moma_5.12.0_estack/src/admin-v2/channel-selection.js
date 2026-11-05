@@ -15,13 +15,21 @@ export function channelSelectionSnapshot(row) {
 
 export function catalogueMappingRows(state, provider, entries) {
   const models = entries || (provider ? displayedCatalogueIds(provider, state).map(modelId => ({ provider, modelId })) : []);
-  return models.flatMap(({ provider: owner, modelId }) => {
+  const rows = models.flatMap(({ provider: owner, modelId }) => {
     const model = supplyModelRecord(state, owner, modelId) || providerCatalogueModel(owner, modelId);
     const mappings = catalogueChannels(state, owner, modelId).filter(row => row.endpointId);
     return (mappings.length ? mappings : [null]).map(association => {
       const row = { provider: owner, model, modelId, association };
       return { ...row, selectionId: association ? channelSelectionId(row) : JSON.stringify([owner.id, modelId, 'unconfigured']) };
     });
+  });
+  if (!entries) return rows;
+  const configured = new Set(rows.filter(row => row.association).map(row => row.provider.id)), seen = new Set();
+  return rows.filter(row => {
+    if (!row.association && configured.has(row.provider.id)) return false;
+    const key = row.association ? row.selectionId : row.provider.id;
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
   });
 }
 
@@ -45,6 +53,8 @@ export function selectChannelRows(selection, rows, checked) {
 export function channelStatus(provider, association) {
   if (!association) return '未配置渠道';
   if (provider.status !== '已启用') return '供应商已停用';
+  if (association.endpoint?.frozen) return '已冻结';
+  if (association.unlinked) return '未关联模型';
   if (!connectionCredentialsReady(association.endpoint, provider)) return '凭证待配置';
   if (channelInterfaceIssue(provider, association)) return '接口不匹配';
   if (connectionTestCurrent(association.endpoint) && association.endpoint.connectionTest.result !== '通过') return '测试失败';

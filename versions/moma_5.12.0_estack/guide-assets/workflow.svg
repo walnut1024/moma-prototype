@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="210" viewBox="0 0 1120 210" role="img" aria-labelledby="title desc">
+  <title id="title">从接入到日常维护</title>
+  <desc id="desc">先准备模型资料和供应，再配置模型服务、映射、路由、售价及开放范围，完成验证上架与客户调用，最后进入日常维护。已有服务直接进入对应维护任务。</desc>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#64748b" stroke-width="1.5"/></marker></defs>
+  <rect width="1120" height="210" rx="12" fill="#f8fafc"/>
+  <g fill="#fff" stroke="#cbd5e1">
+    <rect x="16" y="24" width="238" height="130" rx="10"/>
+    <rect x="298" y="24" width="238" height="130" rx="10"/>
+    <rect x="580" y="24" width="238" height="130" rx="10"/>
+    <rect x="862" y="24" width="242" height="130" rx="10"/>
+  </g>
+  <g fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)">
+    <path d="M264 89 H284"/><path d="M546 89 H566"/><path d="M828 89 H848"/>
+  </g>
+  <g font-family="PingFang SC, Microsoft YaHei, sans-serif" text-anchor="middle">
+    <g fill="#1e40af" font-size="23" font-weight="600">
+      <text x="135" y="66">准备模型</text><text x="417" y="66">配置服务</text><text x="699" y="66">上架和使用</text><text x="983" y="66">日常维护</text>
+    </g>
+    <g fill="#475569" font-size="17">
+      <text x="135" y="105">创建资料 → 接入供应</text>
+      <text x="417" y="100">服务 · 映射 · 路由</text><text x="417" y="128">售价 · 开放范围</text>
+      <text x="699" y="100">验证 → 上架</text><text x="699" y="128">客户订购和调用</text>
+      <text x="983" y="105">改配置 · 停服 · 退出</text>
+    </g>
+    <text x="560" y="188" font-size="16" fill="#475569">已有服务：直接找到维护任务，无需从头再做。</text>
+  </g>
+</svg>

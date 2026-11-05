@@ -1,3 +1,14 @@
+import {loadAdminState} from './admin-v2/store.js';
+import {useTenantData} from './useTenantData';
+import {saveTenantKeys,orderTenantServices,saveTenantRoutes} from './tenant-data.mjs';
+import {toast} from 'sonner';
+import mockConfig from './mock/catalogues.json' with { type: 'json' };
+import { readExperienceDraft } from './experience-drafts.mjs';
+import { useServiceDirectory } from './useServiceDirectory';
+import { beginExperience, marketModels, customerPriceRows } from './service-directory.mjs';
+import MarketModelDetail from './MarketModelDetail';
+import { readModelDetail, modelDetailLocation } from './model-detail-route.mjs';
+import DevelopmentNotes from './admin-v2/DevelopmentNotes';
 import { AdminUIContext } from './components/admin-ui-context';
 import FrontPageHeader from "./components/FrontPageHeader";
 import AuthExperience, { AuthBanner, usePrototypeAuth } from "./AuthExperience";
@@ -5,7 +16,7 @@ import OperationRecords from "./OperationRecords";
 import { displaySmartRouteName } from './display-copy.mjs';
 import { MODEL_ORDER_BILLING_TYPES, MODEL_ORDER_COLUMNS } from './model-order-display.mjs';
 import { DEFAULT_PAGE_SIZE, FilterPagination } from "./components/FilterControls";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import UsageStatistics from "./components/UsageStatistics";
 import OrganizationMembers from "./OrganizationMembers";
 import "./styles.css";
@@ -18,13 +29,11 @@ import ModelExperience from "./ModelExperience";
 import CallLogs from "./CallLogs";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import TextExperience from "./TextExperience";
-import { toast } from "sonner";
-import { TENANT_USER_TYPE_KEY, tenantUserAccess } from "./tenant-user-type.mjs";
+import { tenantUserAccess } from "./tenant-user-type.mjs";
 import ModelComparison from "./ModelComparison";
 import AdminConsole from "./AdminConsole";
 import AdminConsoleV2 from "./AdminConsoleV2";
 import { shanghaiDate } from "./call-log-data.mjs";
-import { orderedRouteModels } from "./route-models.mjs";
 import { Popover as PopoverPrimitive } from "radix-ui";
 import {
   Select,
@@ -68,217 +77,12 @@ import {
 
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./components/ui/dialog";
 import { Button } from "./components/ui/button";
-import { apiKeyOptions } from "./api-key-data.mjs";
-import { tokenPlanSubscriptions } from "./token-plan-data.mjs";
 import { Input } from "./components/ui/input";
 import { maskApiKey, parseIpAllowlist } from "./api-key-utils.mjs";
 import "./frontend-pages.css";
 
 const A = "/moma_5.12.0_estack/assets/";
-const models = [
-  {
-    name: "DeepSeek-V4-Pro",
-    series: "DeepSeek",
-    desc: "旗舰级 MoE 大模型，总参1.6T、激活 49B，原生支持百万级超长上下文。依托海量高质量训练数据，具备顶尖数学逻辑、复杂推理、专业代码与长文本深度解析能力。",
-    context: "1024K",
-    date: "2026-08-16 17:03:37",
-    icon: 1,
-    hot: true,
-  },
-  {
-    name: "Kimi-K3",
-    series: "Kimi",
-    desc: "Kimi K3 是 Kimi 迄今能力最强的旗舰模型，拥有 2.8 万亿参数，基于 KDA 混合线性注意力机制和注意力残差技术构建。",
-    context: "1024K",
-    date: "2026-08-16 17:03:40",
-    icon: 2,
-    hot: true,
-  },
-  {
-    name: "GLM-5.2",
-    series: "GLM",
-    desc: "智谱新一代旗舰模型，专为长程任务能力而生，支持 1M 无损上下文，一次任务即可完成“从需求到多端可部署产物”的完整开发链路。",
-    context: "1024K",
-    date: "2026-08-16 17:03:36",
-    icon: 3,
-    hot: true,
-  },
-  {
-    name: "Qwen3.7-Max",
-    series: "Qwen",
-    desc: "qwen3.7 系列中规模最大、综合能力最强的 Max 模型，面向智能体时代，在编程、办公与生产力方面表现出色。",
-    context: "1024K",
-    date: "2026-08-16 17:03:21",
-    icon: 4,
-    hot: true,
-  },
-  {
-    name: "MiniMax-M3",
-    series: "MiniMax",
-    desc: "MiniMax 最新旗舰模型，同时具备前沿 Coding 能力、超长上下文、原生多模态三大核心能力。",
-    context: "512K",
-    date: "2026-08-16 17:03:39",
-    icon: 5,
-    score: 176,
-  },
-  {
-    name: "GLM-5",
-    series: "GLM",
-    desc: "智谱 AI 开源的旗舰大模型，约 744B 参数 MoE 架构，支持百万级上下文，在推理、编程与 Agent 任务上位居开源前列。",
-    context: "200K",
-    date: "2026-08-16 17:03:43",
-    icon: 6,
-    score: 165,
-  },
-  {
-    name: "Qwen3.5-397B-A17B",
-    series: "Qwen",
-    desc: "阿里通义千问开源的多模态 MoE 大模型，原生多模态，面向多语言多模态智能体与科研场景。",
-    context: "256K",
-    date: "2026-08-16 17:03:43",
-    icon: 4,
-    score: 147,
-  },
-  {
-    name: "DeepSeek-V4-Flash",
-    series: "DeepSeek",
-    desc: "DeepSeek 最新一代 MoE 架构大语言模型的轻量版本，标配百万 token 超长上下文，兼顾高性能与低成本。",
-    context: "1024K",
-    date: "2026-08-16 17:03:39",
-    icon: 1,
-    score: 119,
-  },
-  {
-    name: "Qwen3.5-4B",
-    series: "Qwen",
-    desc: "Qwen3.5 融合多模态学习、架构效率、强化学习规模等方面的突破，带来能力与效率的全面提升。",
-    context: "128K",
-    date: "2026-08-16 17:03:27",
-    icon: 4,
-    score: 108,
-  },
-  {
-    name: "Qwen3.8-Max",
-    series: "Qwen",
-    desc: "新一代多模态旗舰模型，支持文本、图像与长视频理解，适合复杂办公与智能体任务。",
-    context: "1024K",
-    date: "2026-09-10 09:20:00",
-    icon: 4,
-    input: ["文本", "图像", "视频"],
-    output: ["文本"],
-    task: ["多模态", "文本与代码"],
-  },
-  {
-    name: "Qwen-Image-3.0-Pro",
-    series: "Qwen",
-    desc: "高品质图像生成与编辑模型，擅长中英文排版、商业海报与多图参考创作。",
-    context: "32K",
-    date: "2026-09-09 15:10:00",
-    icon: 4,
-    input: ["文本", "图像"],
-    output: ["图像"],
-    task: ["图像", "多模态"],
-  },
-  {
-    name: "Wan3.0-Video",
-    series: "Qwen",
-    desc: "视频生成旗舰模型，支持文生视频和图生视频，兼顾镜头运动与主体一致性。",
-    context: "16K",
-    date: "2026-09-08 11:30:00",
-    icon: 4,
-    input: ["文本", "图像"],
-    output: ["视频"],
-    task: ["视频", "多模态"],
-  },
-  {
-    name: "Qwen-Audio-TTS",
-    series: "Qwen",
-    desc: "多语言语音合成模型，支持自然音色、语速调节和情感表达，适合客服与内容播报。",
-    context: "8K",
-    date: "2026-09-07 16:40:00",
-    icon: 4,
-    input: ["文本"],
-    output: ["音频"],
-    task: ["音频"],
-  },
-  {
-    name: "Qwen-Audio-ASR-Flash",
-    series: "Qwen",
-    desc: "低延迟语音识别模型，适用于会议转录、实时字幕与多语种音频内容理解。",
-    context: "8K",
-    date: "2026-09-07 10:12:00",
-    icon: 4,
-    input: ["音频"],
-    output: ["文本"],
-    task: ["音频", "多模态"],
-  },
-  {
-    name: "BGE-M3",
-    series: "Bge",
-    desc: "通用文本向量模型，支持多语言语义检索、知识库召回与长文档表示。",
-    context: "32K",
-    date: "2026-09-06 13:26:00",
-    icon: 6,
-    input: ["文本"],
-    output: ["向量"],
-    task: ["向量"],
-  },
-  {
-    name: "GLM-5.3-Flash",
-    series: "GLM",
-    desc: "原生多模态模型，支持图像、视频与文本理解，以较低成本提供快速推理。",
-    context: "1024K",
-    date: "2026-09-12 10:30:00",
-    icon: 3,
-    input: ["图像", "视频", "文本"],
-    output: ["文本"],
-    task: ["多模态", "文本与代码"],
-  },
-  {
-    name: "Kimi-K2.6",
-    series: "Kimi",
-    desc: "面向智能体任务的多模态模型，支持文本、图片和视频输入，兼顾复杂推理与代码能力。",
-    context: "256K",
-    date: "2026-09-11 17:20:00",
-    icon: 2,
-    input: ["文本", "图像", "视频"],
-    output: ["文本"],
-    task: ["多模态", "文本与代码"],
-  },
-  {
-    name: "MiniMax-H3",
-    series: "MiniMax",
-    desc: "原生音视频生成模型，支持文本、图片与音频参考，适用于广告、数字人与影视分镜。",
-    context: "32K",
-    date: "2026-09-11 09:45:00",
-    icon: 5,
-    input: ["文本", "图像", "音频"],
-    output: ["视频"],
-    task: ["视频", "多模态"],
-  },
-  {
-    name: "Wan3.0-I2V-Plus",
-    series: "Qwen",
-    desc: "专业图生视频模型，可根据参考图生成稳定连贯的镜头运动并保持主体一致性。",
-    context: "16K",
-    date: "2026-09-10 14:10:00",
-    icon: 4,
-    input: ["图像", "文本"],
-    output: ["视频"],
-    task: ["视频", "多模态"],
-  },
-  {
-    name: "Seedance-2.0",
-    series: "Doubao",
-    desc: "多模态视频创作模型，支持图片、视频、音频等参考输入，并提供视频生成与延长能力。",
-    context: "32K",
-    date: "2026-09-09 18:00:00",
-    icon: 5,
-    input: ["文本", "图像", "视频", "音频"],
-    output: ["视频"],
-    task: ["视频", "多模态"],
-  },
-];
+
 const nav = [
   ["模型市场", "模型广场"],
   ["", "智能路由"],
@@ -329,10 +133,13 @@ const prototypeVersions = [
   },
 ];
 
-const routeApiUrl = "https://zhenze-huhehaote.cmecloud.cn/v1/chat/completions";
+const routeApiUrl = "$MOMA_BASE_URL/chat/completions";
 
 function SmartRoute({ versionId, onNavigate }) {
-  const storageKey = `moma-smart-routes:${versionId}`;
+  const tenant=useTenantData();
+  const routes=tenant.routes;
+  const setRoutes=rows=>{try{saveTenantRoutes(rows,draftRevision ?? tenant.revision);return true;}catch(error){toast.error(error.message);return false;}};
+  const [draftRevision,setDraftRevision]=useState(null);
   const [creating, setCreating] = useState(false),
     [editingId, setEditingId] = useState(null),
     [apiRoute, setApiRoute] = useState(null),
@@ -343,24 +150,14 @@ function SmartRoute({ versionId, onNavigate }) {
     [name, setName] = useState(""),
     [strategy, setStrategy] = useState("效果优先"),
     [models, setModels] = useState([]),
-    [agreed, setAgreed] = useState(false),
-    [routes, setRoutes] = useState(() => {
-      try {
-        const stored = localStorage.getItem(storageKey);
-        if (stored !== null) {
-          const saved = JSON.parse(stored);
-          if (Array.isArray(saved)) return saved;
-        }
-      } catch { /* Keep the prototype usable if browser storage is unavailable. */ }
-      return versionId === "moma_5.12.0_estack" ? [{ id: "route-demo-001", name: "primary-route", strategy: "效果优先", models: ["Kimi-K3", "DeepSeek-V4-Pro"], status: "正常", creator: "estack-yy", time: new Date().toLocaleString("sv-SE", { timeZone: "Asia/Shanghai", hour12: false }) }] : [];
-    });
-  useEffect(() => { try { localStorage.setItem(storageKey, JSON.stringify(routes)); } catch { /* Preview remains usable without persistence. */ } }, [routes, storageKey]);
-  const candidates = orderedRouteModels(strategy);
+    [agreed, setAgreed] = useState(false);
+  const candidates=tenant.services.filter(row=>row.callable).map(row=>({name:row.callId,size:row.parameters ?? null,price:row.salePrices.reduce((sum,item)=>sum+item.amount/1000000,0),type:row.type}));
   const filteredRoutes=routes.filter(route=>displaySmartRouteName(route).toLowerCase().includes(query.trim().toLowerCase()));
   const current=Math.min(page,Math.max(1,Math.ceil(filteredRoutes.length/size)));
   const visibleRoutes=filteredRoutes.slice((current-1)*size,current*size);
   const duplicateName = routes.some(route => displaySmartRouteName(route) === name && route.id !== editingId);
   const openForm = route => {
+    setDraftRevision(tenant.revision);
     setEditingId(route?.id ?? null);
     setName(displaySmartRouteName(route));
     setStrategy(route?.strategy ?? "效果优先");
@@ -368,11 +165,13 @@ function SmartRoute({ versionId, onNavigate }) {
     setAgreed(!!route);
     setCreating(true);
   };
-  const closeForm = () => { setCreating(false); setEditingId(null); };
+  const closeForm = () => { setCreating(false); setEditingId(null); setDraftRevision(null); };
   const submit = () => {
     if (name.length < 2 || name.length > 50 || duplicateName || !models.length || !editingId && !agreed) return;
-    if (editingId) setRoutes(routes.map(route => route.id === editingId ? { ...route, name, strategy, models } : route));
-    else setRoutes([{ id: `route-${crypto.randomUUID()}`, name, strategy, models, status: "正常", creator: "estack-yy", time: new Date().toLocaleString("sv-SE", { timeZone: "Asia/Shanghai", hour12: false }) }, ...routes]);
+    let saved;
+    if (editingId) saved=setRoutes(routes.map(route => route.id === editingId ? { ...route, name, strategy, models } : route));
+    else saved=setRoutes([{ id: `route-${crypto.randomUUID()}`, name, strategy, models, status: "正常", creator: tenant.identity?.name || "", time: new Date().toLocaleString("sv-SE", { timeZone: "Asia/Shanghai", hour12: false }) }, ...routes]);
+    if(!saved)return;
     closeForm();
     setName("");
     setModels([]);
@@ -536,7 +335,7 @@ function SmartRoute({ versionId, onNavigate }) {
                   />
                   <span>
                     <b>{index + 1}. {model.name}</b>
-                    <small>总参数 {model.size >= 1000 ? `${model.size / 1000}T` : `${model.size}B`}</small>
+                    <small>{model.size==null?"参数规模未填写":`总参数 ${model.size >= 1000 ? `${model.size / 1000}T` : `${model.size}B`}`}</small>
                   </span>
                 </label>
               ))}
@@ -573,7 +372,7 @@ function SmartRoute({ versionId, onNavigate }) {
         </DialogContent>
       </Dialog>
       <Dialog open={!!deleting} onOpenChange={open => { if (!open) setDeleting(null); }}>
-        <DialogContent className="route-delete-dialog sm:max-w-md"><DialogHeader><DialogTitle>确认删除该智能路由吗？</DialogTitle><DialogDescription>“{displaySmartRouteName(deleting)}”删除后不可恢复，请谨慎操作。</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleting(null)}>取消</Button><Button onClick={() => { setRoutes(routes.filter(route => route.id !== deleting?.id)); setDeleting(null); }}>删除</Button></DialogFooter></DialogContent>
+        <DialogContent className="route-delete-dialog sm:max-w-md"><DialogHeader><DialogTitle>确认删除该智能路由吗？</DialogTitle><DialogDescription>“{displaySmartRouteName(deleting)}”删除后不可恢复，请谨慎操作。</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleting(null)}>取消</Button><Button onClick={() => { if(setRoutes(routes.filter(route => route.id !== deleting?.id)))setDeleting(null); }}>删除</Button></DialogFooter></DialogContent>
       </Dialog>
     </div>
   );
@@ -592,9 +391,12 @@ function UnifiedApiKeys() {
 }
 
 function TokenPlanApiKeys() {
+  const tenant=useTenantData();
+  const tokenPlanSubscriptions=tenant.plans.map(row=>({id:row.id,name:row.product.name,startAt:row.createdAt?.slice(0,10) || '',endAt:row.expiresAt || '长期有效'}));
   const [planId, setPlanId] = useState(tokenPlanSubscriptions[0]?.id || "");
   const [planQuery, setPlanQuery] = useState("");
-  const selectedPlan = tokenPlanSubscriptions.find(plan => plan.id === planId);
+  const selectedPlan = tokenPlanSubscriptions.find(plan => plan.id === planId) || tokenPlanSubscriptions[0];
+  const effectivePlanId=selectedPlan?.id;
   const visiblePlans = tokenPlanSubscriptions.filter(plan => `${plan.name} ${plan.id}`.toLowerCase().includes(planQuery.trim().toLowerCase()));
   if (!selectedPlan) return <div className="v2-empty">暂无 Token Plan 订阅，<a href="?page=model-order">前往模型订购</a></div>;
   return <div className="token-plan-workspace">
@@ -602,40 +404,26 @@ function TokenPlanApiKeys() {
       <h2>已购套餐</h2>
       <div className="token-plan-search"><Search size={16} aria-hidden="true" /><Input aria-label="搜索套餐名称或订阅编号" placeholder="搜索套餐名称或编号" value={planQuery} onChange={e => setPlanQuery(e.target.value)} /></div>
       <div className="token-plan-list">
-        {visiblePlans.map(plan => <Button key={plan.id} variant="ghost" className="token-plan-item" aria-label={`选择套餐：${plan.name} ${plan.id}`} aria-pressed={plan.id === planId} onClick={() => setPlanId(plan.id)}>
+        {visiblePlans.map(plan => <Button key={plan.id} variant="ghost" className="token-plan-item" aria-label={`选择套餐：${plan.name} ${plan.id}`} aria-pressed={plan.id === effectivePlanId} onClick={() => setPlanId(plan.id)}>
           <strong>{plan.name}</strong><span>{plan.id}</span><small>{plan.startAt} 至 {plan.endAt}</small>
         </Button>)}
         {!visiblePlans.length && <p className="token-plan-empty" role="status">没有匹配的套餐</p>}
       </div>
     </nav>
     <div className="token-plan-detail">
-      {tokenPlanSubscriptions.map(plan => <div key={plan.id} hidden={plan.id !== planId}><ApiKeys billing="Token Plan" subscription={plan} hideHeading /></div>)}
+      {tokenPlanSubscriptions.map(plan => <div key={plan.id} hidden={plan.id !== effectivePlanId}><ApiKeys billing="Token Plan" subscription={plan} hideHeading /></div>)}
     </div>
   </div>;
 }
 
 function ApiKeys({ billing, subscription, hideHeading = false }) {
-  const keyScope = subscription?.id ?? billingTypes.indexOf(billing);
-  const editModels = [
-    ["AITC-MiniMax-M2.5", "文本模型"],
-    ["Kimi/Kimi-K3", "多模态模型"],
-    ["YKD/minimax-m2.5", "文本模型"],
-    ["YKD/deepseek-v3.2", "文本模型"],
-    ["ZHIPU/GLM-5.3-Flash", "多模态模型"],
-    ["ZHIPU/GLM-5.3", "文本模型"],
-    ["MiniMax/MiniMax-M3", "多模态模型"],
-    ["Qwen/Qwen3.7-Plus", "多模态模型"],
-    ["ZHIPU/GLM-5.2", "文本模型"],
-    ["ZHIPU/GLM-5.1", "文本模型"],
-    ["DeepSeek/DeepSeek-V4-Pro", "文本模型"],
-    ["DeepSeek/DeepSeek-V4-Flash", "文本模型"],
-    ["Qwen/Qwen3.8-Max", "多模态模型"],
-    ["Qwen/Qwen3.5-397B", "多模态模型"],
-    ["Kimi/Kimi-K2.6", "多模态模型"],
-    ["BGE/BGE-M3", "向量模型"],
-  ];
-  const [keys, setKeys] = useState(() => apiKeyOptions(billing, subscription).map(key => ({ ...key, models: key.scope === "无限制" ? null : editModels.slice(0, parseInt(key.scope)).map(([model]) => model), ips: key.ip === "办公网段" ? ["192.168.1.0/24"] : key.ip.includes("个 IP") ? Array.from({length: parseInt(key.ip)}, (_, i) => `10.0.1.${100 + i}`) : [] }))),
-    [query, setQuery] = useState(""),
+  const tenant=useTenantData();
+  const keyScope=subscription?.id || billing;
+  const [revealedKeys,setRevealedKeys]=useState({});
+  const editModels = [...new Map(tenant.services.filter(row=>row.callable).map(row=>[row.modelId,[row.modelId,row.typeLabel || row.type]])).values()];
+  const keys=tenant.keys.filter(row=>(row.billingType || '按量付费')===billing && (row.subscriptionId || '')===(subscription?.id || '')).map(row=>({...row,key:revealedKeys[row.id] || row.secretPreview || '****',desc:row.description,created:row.createdAt,enabled:row.status==='有效',models:row.modelIds?.map(id=>tenant.models.find(model=>model.id===id)?.modelId || id) || [],ips:row.ipAllowlist || []}));
+  const setKeys=rows=>{try {saveTenantKeys(rows,{billing,subscriptionId:subscription?.id,expectedRevision:panel?.revision ?? action?.revision ?? tenant.revision});setRevealedKeys(current=>({...current,...Object.fromEntries(rows.filter(row=>row.key && !row.key.includes('*')).map(row=>[row.id,row.key]))}));return true;}catch(error){setFormError(error.message);toast.error(error.message);return false;}};
+  const     [query, setQuery] = useState(""),
     [selectedSearchId, setSelectedSearchId] = useState(null),
     [page, setPage] = useState(1), [size, setSize] = useState(DEFAULT_PAGE_SIZE),
     [searchOpen, setSearchOpen] = useState(false),
@@ -647,28 +435,35 @@ function ApiKeys({ billing, subscription, hideHeading = false }) {
     [quotaEnabled, setQuotaEnabled] = useState(true),
     [quotaType, setQuotaType] = useState("日"),
     [quota, setQuota] = useState("10000"),
-    [tpmEnabled, setTpmEnabled] = useState(true),
-    [qpmEnabled, setQpmEnabled] = useState(true),
+    [tpmEnabled, setTpmEnabled] = useState(false),
+    [qpmEnabled, setQpmEnabled] = useState(false),
+    [tpmLimit,setTpmLimit]=useState("100000"),
+    [qpmLimit,setQpmLimit]=useState("1000"),
     [modelScope, setModelScope] = useState("限定范围"),
     [selectedModels, setSelectedModels] = useState([]),
     [copied, setCopied] = useState(""),
     [copiedValue, setCopiedValue] = useState(""),
-    [action, setAction] = useState(null),
+    [action, setActionState] = useState(null),
     [formError, setFormError] = useState(""),
     [scopeQuery, setScopeQuery] = useState("");
+  const setAction=value=>setActionState(value?{...value,revision:tenant.revision}:null);
   useEffect(() => {
     if (!copied && !copiedValue) return;
     const timer = setTimeout(() => { setCopied(""); setCopiedValue(""); }, 2000);
     return () => clearTimeout(timer);
   }, [copied, copiedValue]);
   const openPanel = (kind, key) => {
-    setPanel({ kind, key });
+    setPanel({ kind, key, revision:tenant.revision });
     setName(key?.name || "");
     setDesc(key?.desc || "");
     setIpList((key?.ips || []).join("\n"));
+    setTpmEnabled(key?.tpmLimit!=null);setQpmEnabled(key?.qpmLimit!=null);
+    setTpmLimit(String(key?.tpmLimit ?? 100000));setQpmLimit(String(key?.qpmLimit ?? 1000));
     setFormError("");
     setSelectedModels(key?.models || []);
-    setQuotaType(kind === "edit" ? "不限额度" : "日");
+    setQuotaEnabled(kind==='create' || key?.quotaLimit!=null);
+    setQuotaType(key?.quotaType || (kind==='edit'?'不限额度':'日'));
+    setQuota(key?.quotaLimit==null?(kind==='edit'?'':'10000'):String(key.quotaLimit));
     setModelScope(key?.models ? "限定范围" : "全选");
   };
   const save = () => {
@@ -676,12 +471,13 @@ function ApiKeys({ billing, subscription, hideHeading = false }) {
     let ips;
     try { ips = parseIpAllowlist(ipList); } catch (error) { setFormError(error.message); return; }
     if (modelScope === "限定范围" && !selectedModels.length) { setFormError("请至少选择一个模型"); return; }
-    const access = { ips, models: modelScope === "全选" ? null : selectedModels };
+    const access = { ips,tpmLimit:tpmEnabled?Number(tpmLimit):null,qpmLimit:qpmEnabled?Number(qpmLimit):null,quotaType,quotaEnabled:quotaEnabled && quotaType!=='不限额度',quotaLimit:!quotaEnabled || quotaType==='不限额度'?null:Number(quota), models: modelScope === "全选" ? null : selectedModels };
+    let saved;
     if (panel.kind === "create")
-      setKeys([
+      saved=setKeys([
         {
           name: name.trim(),
-          id: `ak-${Date.now()}`,
+          id: `key-${crypto.randomUUID()}`,
           key: `sk-${crypto.randomUUID().replaceAll("-", "")}`,
           ...(subscription ? { subscriptionId: subscription.id } : {}),
           ...access,
@@ -692,16 +488,17 @@ function ApiKeys({ billing, subscription, hideHeading = false }) {
         ...keys,
       ]);
     else
-      setKeys(
+      saved=setKeys(
         keys.map((k) =>
-          k === panel.key ? { ...k, name: name.trim(), desc, ...access } : k,
+          k.id === panel.key.id ? { ...k, name: name.trim(), desc, ...access } : k,
         ),
       );
+    if(!saved)return;
     setPanel(null);
     setCopied(panel.kind === "create" ? "API Key 已创建" : "API Key 已保存");
   };
   const toggle = (key) =>
-    setKeys(keys.map((k) => (k === key ? { ...k, enabled: !k.enabled } : k)));
+    setKeys(keys.map((k) => (k.id === key.id ? { ...k, enabled: !k.enabled } : k)));
   const copyText = (value, label) =>
     navigator.clipboard
       .writeText(value)
@@ -722,6 +519,7 @@ function ApiKeys({ billing, subscription, hideHeading = false }) {
   };
   return (
     <div className="api-key-page">
+      {tenant.error && <p role="alert">{tenant.error}</p>}
       {!hideHeading && <div className="api-key-heading">
         <h1>API Key 管理</h1>
         <span>{billing}</span>
@@ -763,7 +561,7 @@ function ApiKeys({ billing, subscription, hideHeading = false }) {
               {!suggestions.length && <p>没有匹配的 Key</p>}
             </div>}
           </div>
-          <button aria-label="刷新">
+          <button aria-label="刷新" onClick={tenant.reload}>
             <RefreshCw size={17} />
           </button>
           <button aria-label="设置">
@@ -806,7 +604,8 @@ function ApiKeys({ billing, subscription, hideHeading = false }) {
                 <button
                   className="inline-action"
                   aria-label={copiedValue === k.key ? "API Key 已复制到剪贴板" : "复制 API Key"}
-                  title={copiedValue === k.key ? "已复制到剪贴板" : "复制 API Key"}
+                  disabled={!revealedKeys[k.id]}
+                  title={!revealedKeys[k.id] ? "密钥仅在本次创建或重置后可复制" : copiedValue === k.key ? "已复制到剪贴板" : "复制 API Key"}
                   onClick={() => copyText(k.key, "API Key")}
                 >
                   {copiedValue === k.key ? <Check size={14} className="copy-success" /> : <Copy size={14} />}
@@ -826,7 +625,7 @@ function ApiKeys({ billing, subscription, hideHeading = false }) {
                 {subscription && <small><button className="key-ip-link" onClick={() => { setAction({ kind: "ip", key: k }); setIpList(k.ips.join("\n")); setFormError(""); }}>IP 白名单：{k.ips.length ? `${k.ips.length} 项` : "不限制"}</button>{k.desc ? ` · ${k.desc}` : ""}</small>}
               </span>
               {!subscription && <span className="api-key-security">
-                <b>每日 {k.quota || "0 / 10 K"} tokens</b>
+                <b>{k.quota || "未配置额度"} tokens</b>
                 <i className="quota-bar">
                   <i style={{ width: `${k.progress || 0}%` }} />
                 </i>
@@ -855,13 +654,13 @@ function ApiKeys({ billing, subscription, hideHeading = false }) {
             <DialogTitle>{action?.kind === "models" ? "可访问模型" : action?.kind === "ip" ? "IP 白名单" : action?.kind === "reset" ? "重置 API Key" : "删除 API Key"}</DialogTitle>
             <DialogDescription>{action?.key.name} · {action?.kind === "models" ? "查看此 Key 允许访问的模型" : action?.kind === "ip" ? "仅允许白名单来源调用；留空表示不限制。" : action?.kind === "reset" ? "重置后旧密钥立即失效，请及时替换业务系统中的密钥。Key ID、额度和访问权限保持不变。" : "删除后该 Key 将无法继续调用，且不可恢复。"}</DialogDescription>
           </DialogHeader>
-          {action?.kind === "models" && <><input aria-label="搜索可访问模型" className="key-dialog-input" placeholder="搜索模型名称" value={scopeQuery} onChange={e => setScopeQuery(e.target.value)} /><div className="key-model-list">{(action.key.models === null ? editModels.map(([model]) => model) : action.key.models).filter(model => model.toLowerCase().includes(scopeQuery.toLowerCase())).map(model => <div key={model}>{model}</div>)}{!(action.key.models === null ? editModels.map(([model]) => model) : action.key.models).some(model => model.toLowerCase().includes(scopeQuery.toLowerCase())) && <div>没有匹配的模型</div>}</div><small>{action.key.models === null ? "可访问全部模型，包含后续新增模型。" : `共 ${action.key.models.length} 个模型`}</small></>}
+          {action?.kind === "models" && <><input aria-label="搜索可访问模型" className="key-dialog-input" placeholder="搜索模型名称" value={scopeQuery} onChange={e => setScopeQuery(e.target.value)} /><div className="key-model-list">{(action.key.models === null ? editModels.map(([model]) => model) : action.key.models).filter(model => model.toLowerCase().includes(scopeQuery.toLowerCase())).map(model => <div key={model}>{model}</div>)}{!(action.key.models === null ? editModels.map(([model]) => model) : action.key.models).some(model => model.toLowerCase().includes(scopeQuery.toLowerCase())) && <div>没有匹配的模型</div>}</div><small>{action.key.models === null ? "可访问当前已授权的全部模型。" : `共 ${action.key.models.length} 个模型`}</small></>}
           {action?.kind === "ip" && <label className="key-ip-field">IPv4 地址 / CIDR 网段<textarea aria-label="IP 白名单" rows={5} value={ipList} onChange={e => { setIpList(e.target.value); setFormError(""); }} placeholder={"例如：10.0.1.100\n192.168.1.0/24"}/><small>多个地址用逗号或换行分隔，重复项自动合并。</small>{formError && <span role="alert" className="key-error">{formError}</span>}</label>}
           <DialogFooter><Button variant="outline" onClick={() => setAction(null)}>{action?.kind === "models" ? "关闭" : "取消"}</Button>{action?.kind !== "models" && <Button variant={action?.kind === "delete" ? "destructive" : "default"} onClick={() => {
             const target = action.key.id;
-            if (action.kind === "ip") { let ips; try { ips = parseIpAllowlist(ipList); } catch (error) { setFormError(error.message); return; } setKeys(keys.map(key => key.id === target ? { ...key, ips } : key)); setCopied("IP 白名单已保存"); }
-            else if (action.kind === "reset") { setKeys(keys.map(key => key.id === target ? { ...key, key: 'sk-' + crypto.randomUUID().replaceAll('-', '') } : key)); setCopied("API Key 已重置，请复制新密钥并更新调用配置"); }
-            else { setKeys(keys.filter(key => key.id !== target)); setCopied("API Key 已删除"); }
+            if (action.kind === "ip") { let ips; try { ips = parseIpAllowlist(ipList); } catch (error) { setFormError(error.message); return; } if(!setKeys(keys.map(key => key.id === target ? { ...key, ips } : key)))return; setCopied("IP 白名单已保存"); }
+            else if (action.kind === "reset") { if(!setKeys(keys.map(key => key.id === target ? { ...key, key: 'sk-' + crypto.randomUUID().replaceAll('-', ''),credentialVersion:(key.credentialVersion || 1)+1 } : key)))return; setCopied("API Key 已重置，请复制新密钥并更新调用配置"); }
+            else { if(!setKeys(keys.filter(key => key.id !== target)))return; setCopied("API Key 已删除"); }
             setAction(null);
           }}>{action?.kind === "ip" ? "保存" : action?.kind === "reset" ? "确认重置" : "确认删除"}</Button>}</DialogFooter>
         </DialogContent>
@@ -1014,7 +813,7 @@ function ApiKeys({ billing, subscription, hideHeading = false }) {
                             </small>
                             <input
                               disabled={!tpmEnabled}
-                              defaultValue="100000"
+                              aria-label="TPM 上限" value={tpmLimit} onChange={e=>setTpmLimit(e.target.value)}
                             />
                           </div>
                         </label>
@@ -1030,7 +829,7 @@ function ApiKeys({ billing, subscription, hideHeading = false }) {
                             <small>
                               当实时QPM达到设定阈值时，将触发限流策略
                             </small>
-                            <input disabled={!qpmEnabled} defaultValue="1000" />
+                            <input aria-label="QPM 上限" disabled={!qpmEnabled} value={qpmLimit} onChange={e=>setQpmLimit(e.target.value)} />
                           </div>
                         </label>
                       </>
@@ -1102,8 +901,7 @@ function ApiKeys({ billing, subscription, hideHeading = false }) {
                               </span>
                               <span>{model}</span>
                               <span>
-                                <em>未开通</em>
-                                <button>去开通 →</button>
+                                {tenant.orders.some(order=>['生效中','已开通'].includes(order.status)&&tenant.services.some(service=>service.id===order.serviceId&&service.modelId===model)) ? <em>已订购</em> : <><em>未订购</em><button onClick={()=>window.open(`/${'moma_5.12.0_estack'}/?page=model-order`,'_blank','noopener')}>去订购 →</button></>}
                               </span>
                               <span>{type}</span>
                             </div>
@@ -1232,26 +1030,8 @@ function ApiKeys({ billing, subscription, hideHeading = false }) {
   );
 }
 
-const rankingModels = [
-  "DeepSeek-V4-Flash",
-  "Qwen3.7-Max",
-  "Qwen3.8-Max",
-  "GLM-5.2",
-  "Kimi-K3",
-  "MiniMax-M3",
-  "Qwen3.5-4B",
-  "GLM-5.2",
-  "Qwen3-32B",
-  "DeepSeek-V4-Pro",
-];
-const rankingSeries = [
-  { name: "DeepSeek-V4-Flash", color: "#f45bad", share: 44 },
-  { name: "Qwen3.7-Max", color: "#0f8be8", share: 15 },
-  { name: "Qwen3.8-Max", color: "#15bfa8", share: 13 },
-  { name: "GLM-5.2", color: "#91cd2b", share: 11 },
-  { name: "Kimi-K3", color: "#ffb829", share: 9 },
-  { name: "MiniMax-M3", color: "#a256ca", share: 8 },
-];
+const rankingModels = mockConfig["App.jsx"]["rankingModels"];
+const rankingSeries = mockConfig["App.jsx"]["rankingSeries"];
 function ModelRanking() {
   const [metric, setMetric] = useState("模型调用量"),
     [scale, setScale] = useState("log"),
@@ -1472,166 +1252,11 @@ function ModelOrderList({
     [confirming, setConfirming] = useState(false),
     [ordered, setOrdered] = useState(false),
     [detail, setDetail] = useState(null), [page, setPage] = useState(1), [size, setSize] = useState(DEFAULT_PAGE_SIZE);
-  const allRows = [
-    [
-      "AICC-doubao-seedance-2.0",
-      "合营",
-      "视觉模型",
-      "火山引擎",
-      "共 4 个资费场景",
-      "56 ~ 102 元/百万tokens",
-      "未订购",
-      "—",
-      "—",
-    ],
-    [
-      "AITC-DeepSeek-V4-flash",
-      "自营",
-      "文本模型",
-      "移动云",
-      "AITC-DeepSeek-V4-flash-输入\nAITC-DeepSeek-V4-flash-输出",
-      "2 元/百万tokens\n4 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:42",
-      "362天后到期\n2027-09-14 21:21:42",
-    ],
-    [
-      "CosyVoice",
-      "自营",
-      "语音模型",
-      "移动云",
-      "处理字符数资费",
-      "2 元/万字符",
-      "使用中",
-      "2026-09-14 21:21:47",
-      "362天后到期\n2027-09-14 21:21:47",
-    ],
-    [
-      "DeepSeek-R1,DeepSeek-R1-0528",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入tokens\n输出tokens",
-      "4 元/百万tokens\n16 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:36",
-      "362天后到期\n2027-09-14 21:21:36",
-    ],
-    [
-      "DeepSeek-R1-Distill-Llama-70B",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入/输出tokens",
-      "4.13 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:39",
-      "362天后到期\n2027-09-14 21:21:39",
-    ],
-    [
-      "DeepSeek-R1-Distill-Llama-8B",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入/输出tokens",
-      "0.42 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:31",
-      "362天后到期\n2027-09-14 21:21:31",
-    ],
-    [
-      "DeepSeek-R1-Distill-Qwen-14B",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入/输出tokens",
-      "0.7 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:35",
-      "362天后到期\n2027-09-14 21:21:35",
-    ],
-    [
-      "DeepSeek-R1-Distill-Qwen-32B",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入/输出tokens",
-      "1.26 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:34",
-      "362天后到期\n2027-09-14 21:21:34",
-    ],
-    [
-      "DeepSeek-V2-Lite-Chat",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入/输出tokens",
-      "1.33 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:35",
-      "362天后到期\n2027-09-14 21:21:35",
-    ],
-    [
-      "DeepSeek-V3.2,DeepSeek-V3,DeepSeek-V3.1",
-      "自营",
-      "文本模型",
-      "移动云",
-      "输入tokens\n输出tokens",
-      "2 元/百万tokens\n8 元/百万tokens",
-      "使用中",
-      "2026-09-14 21:21:33",
-      "362天后到期\n2027-09-14 21:21:33",
-    ],
-    [
-      "deepseek-v3.2",
-      "合营",
-      "文本模型",
-      "优刻得科技股份有限公司",
-      "DeepSeek-V3.2-输入\nDeepSeek-V3.2-输出\nDeepSeek-V3.2-缓存",
-      "2 元/百万tokens\n3 元/百万tokens\n0.4 元/百万tokens",
-      "未订购",
-      "—",
-      "—",
-    ],
-    [
-      "GLM-5.1",
-      "合营",
-      "文本模型",
-      "智谱 AI",
-      "共 6 个资费场景",
-      "1.3 ~ 28 元/百万tokens",
-      "未订购",
-      "—",
-      "—",
-    ],
-    [
-      "GLM-5.3-Flash",
-      "合营",
-      "多模态模型",
-      "智谱 AI",
-      "共 3 个资费场景",
-      "0.23 ~ 2.8 元/百万tokens",
-      "未订购",
-      "—",
-      "—",
-    ],
-    [
-      "Kimi-K2.6",
-      "合营",
-      "多模态模型",
-      "月之暗面",
-      "共 3 个资费场景",
-      "1.1 ~ 27 元/百万tokens",
-      "未订购",
-      "—",
-      "—",
-    ],
-  ];
-  const subscriptions = {
-    "Token Plan订阅": [["办公团队套餐", "自营", "Token Plan", "移动云", "月度额度", "¥99 / 月", "已订购", "2026-09-15", "2026-10-15"], ["研发团队套餐", "自营", "Token Plan", "移动云", "月度额度", "¥199 / 月", "已订购", "2026-09-20", "2026-10-20"]],
-    "Coding Plan订阅": [["研发助手 Coding Plan", "自营", "Coding Plan", "移动云", "月度编程套餐", "¥199 / 月", "已订购", "2026-09-15", "2026-10-15"]],
-  };
+  const tenant=useTenantData();
+  const orderOwner=useRef(tenant.identity?.key);
+  useEffect(()=>{if(orderOwner.current!==tenant.identity?.key){orderOwner.current=tenant.identity?.key;setSelectedOrders([]);setAgreed(false);setConfirming(false);setOrdered(false);}},[tenant.identity?.key]);
+  const allRows = tenant.services.map(service=>{const order=tenant.orders.find(row=>row.serviceId===service.id && ['已开通','生效中'].includes(row.status));return [service.callId,service.mode==='standard'?'统一服务':'分供应商',service.typeLabel,service.provider,customerPriceRows(service.salePrices).map(row=>row.name).join(' / '),customerPriceRows(service.salePrices).map(row=>row.currency+' '+row.amount+' / '+row.unit).join('\n'),order?'使用中':'未订购',order?.createdAt || '—',order?.expiresAt || '长期有效'];});
+  const subscriptions = {'Token Plan订阅':tenant.plans.filter(row=>!row.product.name.includes('Coding')).map(row=>[row.product.name,'平台','Token Plan','平台','套餐权益',String(row.amount),'已订购',row.createdAt || '—',row.expiresAt || '长期有效']),'Coding Plan订阅':tenant.plans.filter(row=>row.product.name.includes('Coding')).map(row=>[row.product.name,'平台','Coding Plan','平台','套餐权益',String(row.amount),'已订购',row.createdAt || '—',row.expiresAt || '长期有效'])};
   const rows = (historical || tab === "按Token用量计费" ? allRows : subscriptions[tab] || []).filter(row => row[0].toLowerCase().includes(query.trim().toLowerCase()));
   const current = Math.min(page, Math.max(1, Math.ceil(rows.length / size)));
   const visibleRows = rows.slice((current - 1) * size, current * size);
@@ -1650,7 +1275,7 @@ function ModelOrderList({
         : [...current, name],
     );
   if (ordering) {
-    const orderRows = allRows.filter(
+    const orderRows = (tab === '按Token用量计费' ? allRows : []).filter(
       (row) =>
         (!hideOrdered || row[6] === "未订购") &&
         row[0].toLowerCase().includes(query.toLowerCase()) &&
@@ -1726,21 +1351,14 @@ function ModelOrderList({
               onChange={(e) => setModelType(e.target.value)}
             >
               <option>全部模型类别</option>
-              <option>文本模型</option>
-              <option>多模态模型</option>
-              <option>视觉模型</option>
-              <option>语音模型</option>
+              {[...new Set(allRows.map(row=>row[2]))].map(name=><option key={name}>{name}</option>)}
             </select>
             <select
               value={provider}
               onChange={(e) => setProvider(e.target.value)}
             >
               <option>全部模型服务商</option>
-              <option>移动云</option>
-              <option>火山引擎</option>
-              <option>智谱 AI</option>
-              <option>月之暗面</option>
-              <option>优刻得科技股份有限公司</option>
+              {[...new Set(allRows.map(row=>row[3]))].map(name=><option key={name}>{name}</option>)}
             </select>
             <label>
               <input
@@ -1759,6 +1377,7 @@ function ModelOrderList({
               隐藏已订购规格
             </label>
           </div>
+          {tab !== '按Token用量计费' && <p role="status">本轮暂不提供新套餐订购；已有订阅读取后台订单，可在订购管理中查看。</p>}
           <div className="service-order-table">
             <div className="service-order-row head">
               {[
@@ -1854,11 +1473,7 @@ function ModelOrderList({
         </section>
         <section className="order-meta">
           <strong>预计到期时间</strong>
-          <span>2027-09-17 23:59:59</span>
-          <p>
-            <Info size={14} /> 默认 1
-            年后到期自动退订，订购成功后可在控制台按需延长到期时间
-          </p>
+          <span>长期有效</span>
           <strong>
             <i>*</i> 服务协议
           </strong>
@@ -1932,8 +1547,8 @@ function ModelOrderList({
               {ordered ? (
                 <div className="order-success">
                   <Check size={32} />
-                  <h2>订购申请已提交</h2>
-                  <p>所选模型规格将进入开通流程。</p>
+                  <h2>模型服务已开通</h2>
+                  <p>订购记录已保存，可返回订购管理查看。</p>
                   <button
                     onClick={() => {
                       setConfirming(false);
@@ -1959,7 +1574,7 @@ function ModelOrderList({
                     <button onClick={() => setConfirming(false)}>取消</button>
                     <button
                       className="primary"
-                      onClick={() => setOrdered(true)}
+                      onClick={() => {try{if(tab!=='按Token用量计费')throw Error('暂无可订购套餐');orderTenantServices(selectedOrders.map(callId=>tenant.services.find(row=>row.callId===callId)?.id),tenant.revision);setOrdered(true);}catch(error){toast.error(error.message);}}}
                     >
                       确认订购
                     </button>
@@ -2046,7 +1661,7 @@ function ModelOrderList({
             />
             <Search size={15} />
           </label>
-          <button aria-label="刷新">
+          <button aria-label="刷新" onClick={tenant.reload}>
             <RefreshCw size={15} />
           </button>
         </div>
@@ -2618,6 +2233,7 @@ function VersionIndex() {
 }
 
 function PrototypeApp({ version }) {
+  useState(()=>{try{loadAdminState(localStorage);}catch{/* Existing storage errors are surfaced by the affected workspace. */}return null;});
   const is5102 = version.id === "moma_5.10.2_estack";
   const versionAdmin = is5102 ? "legacy" : "v2";
   const modeFromHash = () =>
@@ -2638,17 +2254,60 @@ function PrototypeApp({ version }) {
         (is5102 || !["按量付费", "Token Plan"].includes(item)) &&
         (!is5102 || !["模型排行", "语音模型"].includes(item)),
     );
+  const directory = useServiceDirectory();
+  const [catalogueScope, setCatalogueScope] = useState('showcase');
+  const models = useMemo(() => marketModels(directory.models, catalogueScope), [directory.models, catalogueScope]);
+  const owner = directory.identity?.key || '';
+  const [entryService, setEntryService] = useState(() => new URLSearchParams(location.search).get('service') || '');
+  const [entryError, setEntryError] = useState('');
+  const [entryConfirm, setEntryConfirm] = useState('');
+  useEffect(() => { setEntryError(''); setEntryConfirm(''); }, [owner]);
   const [activePage, setActivePage] = useState(() => {
     const requestedPage = new URLSearchParams(location.search).get("page");
-    return requestedPage === "model-order" ? "模型订购" : !is5102 ? ({ "organization-members": "组织及成员", "operation-records": "操作记录", "api-keys": "API Key 管理", "account-certification": "账号认证", "call-logs": "调用日志", "usage-statistics": "用量统计" }[requestedPage] || "模型广场") : "模型广场";
+    return requestedPage === 'model-detail' ? '模型详情' : requestedPage === 'experience' ? ({text:'文本生成', image:'图片生成', video:'视频生成', voice:'语音识别'}[new URLSearchParams(location.search).get('task')] || '模型广场') : requestedPage === "model-order" ? "模型订购" : !is5102 ? ({ "organization-members": "组织及成员", "operation-records": "操作记录", "api-keys": "API Key 管理", "account-certification": "账号认证", "call-logs": "调用日志", "usage-statistics": "用量统计" }[requestedPage] || "模型广场") : "模型广场";
   }),
     [admin, setAdmin] = useState(modeFromHash),
     [adminBannerTarget, setAdminBannerTarget] = useState(null),
     [textCompare, setTextCompare] = useState(false),
     [query, setQuery] = useState(""),
     [filters, setFilters] = useState({}),
-    [selected, setSelected] = useState(null),
+    [selected, setSelected] = useState(() => readModelDetail(location.search)),
     [sortMode, setSortMode] = useState("latest");
+  const selectedCard = useRef('');
+  useEffect(() => {
+    const syncDetail = () => {
+      const detail = readModelDetail(location.search);
+      setSelected(detail); setEntryError(''); setEntryConfirm('');
+      const page = new URLSearchParams(location.search).get('page');
+      const query = new URLSearchParams(location.search);
+      setEntryService(query.get('service') || '');
+      setActivePage(detail ? '模型详情' : page === 'api-keys' ? 'API Key 管理' : page === 'experience' ? ({text:'文本生成',image:'图片生成',video:'视频生成',voice:'语音识别'}[query.get('task')] || '模型广场') : '模型广场');
+    };
+    window.addEventListener('popstate', syncDetail);
+    return () => window.removeEventListener('popstate', syncDetail);
+  }, []);
+  useEffect(() => {
+    if (activePage !== '模型详情' && readModelDetail(location.search)) history.replaceState(null, '', modelDetailLocation(location.href));
+    if (activePage === '模型广场' && selectedCard.current) document.querySelector('[data-model-key="' + CSS.escape(selectedCard.current) + '"]')?.focus();
+    if (activePage === '模型详情') { window.scrollTo(0, 0); document.querySelector('.market-detail-title h1')?.focus({ preventScroll: true }); }
+  }, [activePage]);
+  const selectDetailService = service => {
+    setSelected({ modelKey: service.modelKey, id: service.id });
+    setEntryError(''); setEntryConfirm('');
+    history.replaceState(history.state, '', modelDetailLocation(location.href, service));
+  };
+  const openModelDetails = (_event, model) => {
+    const service = model.services.find(row => row.provider === filters.provider) || model.services.find(row => row.callable) || model.services[0];
+    selectedCard.current = model.modelKey;
+    history.replaceState(null, '', modelDetailLocation(location.href));
+    history.pushState({ marketFromList: true }, '', modelDetailLocation(location.href, service));
+    setSelected({ modelKey: service.modelKey, id: service.id }); setEntryError(''); setEntryConfirm(''); setActivePage('模型详情');
+  };
+  const returnToMarket = () => {
+    if (history.state?.marketFromList) { history.back(); return; }
+    history.replaceState(null, '', modelDetailLocation(location.href));
+    setSelected(null); setEntryError(''); setEntryConfirm(''); setActivePage('模型广场');
+  };
   const [compactFilters, setCompactFilters] = useState(() => window.matchMedia('(max-width: 900px)').matches);
   const [filtersExpanded, setFiltersExpanded] = useState(() => !window.matchMedia('(max-width: 900px)').matches);
   useEffect(() => {
@@ -2658,28 +2317,8 @@ function PrototypeApp({ version }) {
     return () => media.removeEventListener('change', change);
   }, []);
   const auth = usePrototypeAuth();
-  const [previewUserType, setPreviewUserType] = useState(() => {
-    try { return localStorage.getItem(TENANT_USER_TYPE_KEY) === 'personal' ? 'personal' : 'enterprise'; }
-    catch { return 'enterprise'; }
-  });
-  const tenantAccess = tenantUserAccess(auth.state, previewUserType);
+  const tenantAccess = tenantUserAccess(auth.state, 'personal');
   const enterprisePagesAllowed = !auth.storageError && tenantAccess.canViewOrganization;
-  const changeUserType = value => {
-    if (!['personal', 'enterprise'].includes(value)) return;
-    try {
-      if (auth.user) {
-        const target = value === 'personal'
-          ? auth.spaces.find(space => space.id === 'personal')
-          : auth.spaces.find(space => space.id === auth.state.activeSpace && space.id !== 'personal') || auth.spaces.find(space => space.id !== 'personal');
-        if (!target) return;
-        auth.commit({ ...auth.state, activeSpace: target.id });
-      } else {
-        localStorage.setItem(TENANT_USER_TYPE_KEY, value);
-        setPreviewUserType(value);
-      }
-      toast.success(value === 'personal' ? '已切换为个人用户' : '已切换为政企用户');
-    } catch (error) { toast.error(auth.user && error.message ? error.message : '用户类型未能保存，请检查浏览器存储后重试。'); }
-  };
   useEffect(() => {
     if (!enterprisePagesAllowed && ['组织及成员', '操作记录', '调用日志'].includes(activePage)) {
       setActivePage('模型广场');
@@ -2721,29 +2360,17 @@ function PrototypeApp({ version }) {
       ...current,
       [group]: current[group] === value ? "" : value,
     }));
-  const meta = (m) => {
-    const multimodal =
-      m.series === "Kimi" || m.series === "MiniMax" || m.name.includes("397B");
-    return {
-      task: m.task || (multimodal ? ["多模态", "文本与代码"] : ["文本与代码"]),
-      input: m.input || (multimodal ? ["文本", "图像", "视频"] : ["文本"]),
-      output: m.output || ["文本"],
-      author: {
-        DeepSeek: "深度求索",
-        Kimi: "月之暗面",
-        GLM: "智谱 AI",
-        Qwen: "阿里巴巴",
-        MiniMax: "稀宇科技",
-        Bge: "北京智源",
-        Doubao: "字节跳动",
-      }[m.series],
-      provider:
-        m.series === "GLM"
-          ? "联通"
-          : m.series === "DeepSeek"
-            ? "电信"
-            : "移动云",
-    };
+  const meta = m => ({ task: ({ text: ['文本与代码'], multimodal: ['多模态', '文本与代码'], image: ['图像'], video: ['视频'], voice: ['音频'], embedding: ['向量'], rerank: ['重排'] })[m.type] || [], input: m.input, output: m.outputModalities, author: m.maker, provider: m.providers });
+  const enterExperience = selected => {
+    try {
+      const task = selected.tasks[0];
+      beginExperience(selected.id, task);
+      const draft = readExperienceDraft(owner, task);
+      if (draft.model && draft.model !== selected.id && (draft.text || draft.file || draft.images?.length) && entryConfirm !== selected.id) { setEntryConfirm(selected.id); setEntryError('当前体验有未发送内容。切换模型将保留草稿，请确认后继续。'); return; }
+      if (readModelDetail(location.search)) { const url = new URL(location.href); url.searchParams.set('page', 'experience'); url.searchParams.set('task', task); url.searchParams.set('service', selected.id); url.searchParams.delete('model'); history.pushState(null, '', url.pathname + url.search); }
+      setEntryService(selected.id); setTextCompare(false); setSelected(null); setEntryError('');
+      setActivePage({ text: '文本生成', image: '图片生成', video: '视频生成', voice: '语音识别' }[task]);
+    } catch (error) { setEntryError(error.message); }
   };
   const visible = useMemo(
     () =>
@@ -2756,7 +2383,7 @@ function PrototypeApp({ version }) {
               ([group, value]) =>
                 !value ||
                 (group === "context"
-                  ? parseFloat(m.context) <= Number(value)
+                  ? m.contextTokens != null && m.contextTokens / 1024 <= Number(value)
                   : group === "series"
                   ? m.series === value
                   : Array.isArray(data[group])
@@ -2767,11 +2394,11 @@ function PrototypeApp({ version }) {
         })
         .sort((a, b) =>
           sortMode === "latest"
-            ? b.date.localeCompare(a.date)
+            ? (b.releaseDate || b.date).localeCompare(a.releaseDate || a.date)
             : Number(Boolean(b.hot)) - Number(Boolean(a.hot)) ||
               models.indexOf(a) - models.indexOf(b),
         ),
-    [query, filters, sortMode],
+    [query, filters, sortMode, models],
   );
   const option = (group, value) => (
     <button
@@ -2833,19 +2460,13 @@ function PrototypeApp({ version }) {
                   />
                 </FilterSection>
                 <FilterSection title="模型作者" count={filters.author ? 1 : 0}>
-                  {[
-                    "阿里巴巴",
-                    "深度求索",
-                    "月之暗面",
-                    "智谱 AI",
-                    "稀宇科技",
-                  ].map((x) => option("author", x))}
+                  {[...new Set(models.map(model => model.maker))].map((x) => option("author", x))}
                 </FilterSection>
                 <FilterSection
                   title="推理服务商"
                   count={filters.provider ? 1 : 0}
                 >
-                  {["移动云", "联通", "电信"].map((x) => option("provider", x))}
+                  {[...new Set(models.flatMap(model => model.providers))].map((x) => option("provider", x))}
                 </FilterSection>
               </div>);
   const filterLabels = {task:'任务分类', input:'输入', output:'输出', context:'上下文上限', author:'模型作者', provider:'推理服务商', series:'模型系列'};
@@ -2857,7 +2478,7 @@ function PrototypeApp({ version }) {
       {compactFilters ? <Dialog open={filtersExpanded} onOpenChange={setFiltersExpanded}><DialogTrigger asChild>{filterToggle}</DialogTrigger><DialogContent className="catalogue-filter-drawer"><DialogHeader><DialogTitle>模型筛选</DialogTitle><DialogDescription className="sr-only">选择筛选条件查找模型</DialogDescription></DialogHeader>{catalogueFilters}</DialogContent></Dialog> : filterToggle}
       <div className="catalogue-search"><Search aria-hidden="true"/><Input aria-label="搜索模型" value={query} placeholder="搜索模型名称或模型 ID" onChange={event => { setQuery(event.target.value); }}/>{query && <Button variant="ghost" size="icon" aria-label="清除搜索" onClick={() => setQuery('')}><X/></Button>}</div>
       <span className="catalogue-count" role="status">{query.trim() || activeFilters.length ? '找到 ' : '模型 '}{visible.length} 个</span>
-      <Select value={sortMode} onValueChange={setSortMode}><SelectTrigger aria-label="模型排序"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="latest">最新</SelectItem><SelectItem value="recommended">推荐</SelectItem></SelectContent></Select>
+      <Select value={catalogueScope} onValueChange={setCatalogueScope}><SelectTrigger aria-label="模型目录范围"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="showcase">演示模型</SelectItem><SelectItem value="all">全部模型</SelectItem></SelectContent></Select><Select value={sortMode} onValueChange={setSortMode}><SelectTrigger aria-label="模型排序"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="latest">最新</SelectItem><SelectItem value="recommended">推荐</SelectItem></SelectContent></Select>
     </div>
     {(query.trim() || activeFilters.length > 0) && <div className="catalogue-conditions" aria-label="已选条件"><span>已选条件</span>{query.trim() && <Button variant="outline" size="sm" aria-label="移除搜索条件" onClick={() => setQuery('')}>搜索：{query.trim()}<X/></Button>}{activeFilters.map(([group,value]) => <Button key={group} variant="outline" size="sm" aria-label={'移除' + (filterLabels[group] || group) + '条件'} onClick={() => removeFilter(group)}>{filterLabels[group] || group}：{value}{group === 'context' ? 'K' : ''}<X/></Button>)}<Button variant="ghost" size="sm" onClick={resetFilters}>清空</Button></div>}
   </section>;
@@ -2882,7 +2503,9 @@ function PrototypeApp({ version }) {
               <div data-admin-role />
             </div>
           )}
-          <div className="version-switch">
+          <div className="banner-version-tools">
+            <DevelopmentNotes/>
+            <div className="version-switch">
             <Select
               value={version.id}
               onValueChange={(value) => location.assign(`/${value}/`)}
@@ -2901,6 +2524,7 @@ function PrototypeApp({ version }) {
               </SelectContent>
             </Select>
           </div>
+          </div>
           {admin === "front" ? (
             <button onClick={() => navigateAdmin(versionAdmin)}>
               后台
@@ -2910,16 +2534,8 @@ function PrototypeApp({ version }) {
               返回前台
             </button>
           )}
-          {admin === 'front' && !auth.route && <div className="version-switch user-type-switch">
-            <Select value={tenantAccess.userType} onValueChange={changeUserType} disabled={Boolean(auth.storageError) || Boolean(auth.user && !auth.spaces.length)}>
-              <SelectTrigger size="sm" aria-label="切换用户类型"><SelectValue /></SelectTrigger>
-              <SelectContent position="popper" align="end"><SelectGroup>
-                <SelectItem value="enterprise" disabled={Boolean(auth.user && !auth.spaces.some(space => space.id !== 'personal'))}>政企用户</SelectItem>
-                <SelectItem value="personal" disabled={Boolean(auth.user && !auth.spaces.some(space => space.id === 'personal'))}>个人用户</SelectItem>
-              </SelectGroup></SelectContent>
-            </Select>
-          </div>}
-          {is5102 ? <div className="user">estack-yy</div> : <AuthBanner auth={auth} showToast={admin === "front"} />}
+          {admin === 'front' && auth.user && <span>{auth.state.activeSpace === 'personal' ? '个人用户' : '政企用户'}</span>}
+          {is5102 ? <div className="user">estack-yy</div> : admin === "front" ? <AuthBanner auth={auth} showToast /> : null}
         </div>
       </header>
       {admin === "front" && !auth.route && (
@@ -2930,9 +2546,9 @@ function PrototypeApp({ version }) {
               <div key={item}>
                 {group && i > 0 && <small>{group}</small>}
                 <button
-                  className={activePage === item ? "active" : ""}
+                  className={activePage === item || item === "模型广场" && activePage === "模型详情" ? "active" : ""}
                   onClick={() => {
-                    setActivePage(item);
+                    setEntryService(''); setActivePage(item);
                     if (item === "文本生成")
                       setTextCompare(false);
                   }}
@@ -2987,24 +2603,26 @@ function PrototypeApp({ version }) {
           )}
         </aside>
       )}
-      <main className={admin !== "front" ? "admin-main" : is5102 ? "" : "front-main"}>
+      <main key={admin === "front" ? owner || "anonymous" : "admin"} className={admin !== "front" ? "admin-main" : is5102 ? "" : "front-main"}>
         {auth.route ? (
           <AuthExperience key={auth.route} auth={auth} />
         ) : admin === "legacy" ? (
           <AdminConsole />
         ) : admin === "v2" ? (
           <AdminConsoleV2 bannerTarget={adminBannerTarget} />
+        ) : activePage === "模型详情" ? (
+          <MarketModelDetail services={directory.models} selected={selected} onSelect={selectDetailService} onBack={returnToMarket} onExperience={enterExperience} error={entryError} confirm={entryConfirm} onManageKeys={() => { const url = new URL(location.href); url.searchParams.set('page', 'api-keys'); url.searchParams.delete('model'); url.searchParams.delete('service'); history.pushState(null, '', url.pathname + url.search); setActivePage('API Key 管理'); }}/>
         ) : activePage === "智能路由" ? (
-          <SmartRoute key={is5102 ? "moma_5.10.2_estack" : "moma_5.12.0_estack"} versionId={is5102 ? "moma_5.10.2_estack" : "moma_5.12.0_estack"} onNavigate={setActivePage} />
+          <SmartRoute key={`${version.id}:${owner}`} versionId={is5102 ? "moma_5.10.2_estack" : "moma_5.12.0_estack"} onNavigate={setActivePage} />
         ) : activePage === "模型排行" ? (
           <ModelRanking />
         ) : activePage === "文本生成" ? (
           textCompare ? (
-            <ModelComparison
+            <ModelComparison key={owner || "anonymous"} owner={owner}
               onBack={() => setTextCompare(false)}
             />
           ) : (
-            <TextExperience
+            <TextExperience key={`${owner}:text:${entryService}`} owner={owner} initialServiceId={entryService}
               imageUploadEnabled
               title="文本生成"
               onCompare={is5102 ? undefined : () => setTextCompare(true)}
@@ -3012,13 +2630,13 @@ function PrototypeApp({ version }) {
           )
         ) : activePage === "图片生成" || activePage === "视频生成" ? (
           <ModelExperience
-            key={activePage}
+            key={`${owner}:${activePage}:${entryService}`} owner={owner} initialServiceId={entryService}
             kind={activePage === "图片生成" ? "image" : "video"}
             groupLabel={activePage}
           />
         ) : activePage === "语音识别" ? (
           <ModelExperience
-            key="voice"
+            key={`${owner}:voice:${entryService}`} owner={owner} initialServiceId={entryService}
             kind="voice"
             groupLabel="语音识别"
           />
@@ -3029,7 +2647,7 @@ function PrototypeApp({ version }) {
         ) : activePage === "账号认证" && !is5102 ? (
           <AuthExperience auth={{ ...auth, route: "account", close: () => setActivePage("模型广场") }} accountTitle="账号认证" />
         ) : activePage === "API Key 管理" ? (
-          <UnifiedApiKeys />
+          <UnifiedApiKeys key={owner || "anonymous"} />
         ) : activePage === "操作记录" && !is5102 && enterprisePagesAllowed ? (
           <OperationRecords />
         ) : activePage === "组织及成员" && !is5102 && enterprisePagesAllowed ? (
@@ -3044,6 +2662,8 @@ function PrototypeApp({ version }) {
           <UsageStatistics5102 />
         ) : (
           <div className="content">
+
+            {(directory.error || directory.identityError) && <p role="status">{directory.error || directory.identityError}</p>}
             {!is5102 && catalogueToolbar}
             <section className={is5102 ? "catalog" : `catalog catalogue-layout ${compactFilters || !filtersExpanded ? 'catalogue-collapsed' : ''}`}>
               {is5102 ? catalogueFilters : !compactFilters && <div hidden={!filtersExpanded}>{catalogueFilters}</div>}
@@ -3084,22 +2704,24 @@ function PrototypeApp({ version }) {
                         视频: Video,
                         音频: AudioLines,
                       },
-                      OutputIcon = icons[data.output[0]] || FileText;
+                      outputs = data.output;
                     return (
                       <article
                         className="model-card"
-                        key={m.name}
-                        onClick={() => setSelected(m)}
+                        data-model-key={m.modelKey}
+                        key={m.id}
+                        tabIndex={0} role="button" onKeyDown={event => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); openModelDetails(event, m); } }}
+                        onClick={event => openModelDetails(event, m)}
                       >
                         {m.hot && (
                           <img className="hot" src={`${A}hot-7601e629.svg`} />
                         )}{" "}
                         {m.score && <span className="score">{m.score}</span>}
                         <h4>
-                          <img src={`${A}model-${m.icon}.jpg`} />
+                          {m.logo ? <img className="model-card-logo" src={m.logo} alt="" onError={event => { event.currentTarget.hidden = true; }}/> : <FileText aria-hidden="true" />}
                           {m.name}
                         </h4>
-                        <p>{m.desc}</p>
+                        <small>{[m.typeLabel, m.provider].filter(Boolean).join(' · ')}</small><p>{m.desc}</p>
                         <div
                           className="modalities"
                           aria-label={`${data.input.join("+")} 转 ${data.output.join("+")}`}
@@ -3114,10 +2736,10 @@ function PrototypeApp({ version }) {
                             className="arrow"
                             src={`${A}modelArrow-ae18ab15.svg`}
                           />
-                          <OutputIcon />
+                          <span>{outputs.map(type => { const OutputIcon = icons[type] || FileText; return <OutputIcon key={type} aria-label={type}/>; })}</span>
                         </div>
                         <div className="context">上下文窗口：{m.context}</div>
-                        <footer>更新于&nbsp; {m.date}</footer>
+                        <footer>{m.callable ? "可体验" : m.reason}{m.date && ` · 更新于 ${m.date}`}</footer>
                       </article>
                     );
                   })}
@@ -3128,25 +2750,8 @@ function PrototypeApp({ version }) {
           </div>
         )}
       </main>
-      {selected && (
-        <div className="modal" onClick={() => setSelected(null)}>
-          <div onClick={(e) => e.stopPropagation()}>
-            <button className="close" onClick={() => setSelected(null)}>
-              ×
-            </button>
-            <img src={`${A}model-${selected.icon}.jpg`} />
-            <h2>{selected.name}</h2>
-            <p>{selected.desc}</p>
-            <dl>
-              <dt>上下文窗口</dt>
-              <dd>{selected.context}</dd>
-              <dt>功能</dt>
-              <dd>在线体验、API调用</dd>
-            </dl>
-            <button className="primary">查看详情</button>
-          </div>
-        </div>
-      )}
+
+
     </div></AdminUIContext.Provider>
   );
 }

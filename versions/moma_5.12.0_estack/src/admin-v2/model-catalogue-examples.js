@@ -1,19 +1,11 @@
+import mockConfig from '../mock/catalogues.json' with {type:'json'};
 // Verified model identities; suppliers, mapping availability and prices remain local fixtures.
 import { catalogueMetadata } from './real-model-catalogue.js';
 import { realProvider } from './real-provider-catalogue.js';
 export function addCatalogueExamples({ models, providers, endpoints, modelSupplies, modelSalePrices, at }) {
-  const vendors = ['alibaba', 'huawei', 'tencent', 'openrouter', 'mobile', 'unicom', 'telecom'];
+  const vendors = mockConfig["admin-v2/model-catalogue-examples.js"]["vendors"];
   vendors.forEach(key => providers.push({ ...realProvider(`catalog-provider-${key}`), status: '已启用', contact: '', createdAt: at, updatedAt: at }));
-  const examples = [
-    { key: 'kimi', vendors: ['openrouter', 'huawei'], unit: '元/百万 Token', input: 2, output: 8, cached: 0.5, cacheWrite: 2.5 },
-    { key: 'qwen', vendors: ['alibaba', 'openrouter'], unit: '元/百万 Token', input: 2.4, output: 12, cached: 0.6 },
-    { key: 'image', vendors: ['alibaba', 'tencent'], unit: '元/张', input: 0.2 },
-    { key: 'video', vendors: ['alibaba', 'tencent'], unit: '元/秒', input: 0.6 },
-    { key: 'tts', vendors: ['alibaba', 'huawei'], unit: '元/万字符', input: 1.2 },
-    { key: 'asr', vendors: ['alibaba', 'huawei'], unit: '元/分钟', input: 0.04 },
-    { key: 'embedding', vendors: ['huawei', 'openrouter'], unit: '元/百万 Token', input: 0.3 },
-    { key: 'rerank', vendors: ['huawei', 'tencent'], unit: '元/千次', input: 0.8 },
-  ];
+  const examples = mockConfig["admin-v2/model-catalogue-examples.js"]["examples"];
   examples.forEach((sample, index) => {
     const id = `catalog-demo-${sample.key}`, details = catalogueMetadata(id), capabilities = details.capabilities;
     const createdAt = new Date(Date.parse(at) + examples.length - index).toISOString();

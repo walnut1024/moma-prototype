@@ -1,3 +1,5 @@
+import {useTenantData} from './useTenantData';
+import {tenantLogRecords} from './call-log-data.mjs';
 import FrontPageHeader from "./components/FrontPageHeader";
 import { FileText } from "lucide-react";
 import { DateRange } from "./admin-v2/AnalyticsFilters";
@@ -8,7 +10,7 @@ import { Tabs } from 'radix-ui';
 import { ChevronLeft, ChevronRight, Copy, Download, Eye, FileSearch, Maximize2, Minimize2, RotateCcw, Search, WrapText, X } from 'lucide-react';
 import { Button } from './components/ui/button';
 import SavedFilterViews from './components/SavedFilterViews';
-import { createLogRecords, defaultLogFilters, restoreLogFilters, logPeriod, filterLogRecords, logJSON, logStatuses, logsCSV, shanghaiDate } from './call-log-data.mjs';
+import { defaultLogFilters, restoreLogFilters, logPeriod, filterLogRecords, logJSON, logStatuses, logsCSV, shanghaiDate } from './call-log-data.mjs';
 import { maskApiKey } from './api-key-utils.mjs';
 
 function IconAction({ label, icon: Icon, ...props }) {
@@ -44,7 +46,7 @@ function LogDetail({ log, onClose }) {
     try { await navigator.clipboard.writeText(text); setNotice('已复制'); }
     catch { setNotice('复制失败，请选中文本后手动复制'); }
   }
-  const [status, error, suggestion] = logStatuses[log.status];
+  const [status, error, suggestion] = logStatuses[log.status] || ['失败','','请联系管理员核对请求。'];
   const json = logJSON(log);
   return <dialog ref={dialog} className={`cl-drawer ${expanded ? 'cl-expanded' : ''}`} aria-labelledby="cl-detail-title" onCancel={onClose} onClick={event => { if (event.target === event.currentTarget && event.clientX < event.currentTarget.getBoundingClientRect().left) onClose(); }}>
     <div className="cl-drawer-head"><div><h2 id="cl-detail-title">请求详情</h2><p>{log.billing} · {log.source}</p></div><div className="cl-actions"><IconAction label={expanded ? '收起详情' : '展开详情'} icon={expanded ? Minimize2 : Maximize2} onClick={() => setExpanded(!expanded)} /><IconAction label="关闭详情" icon={X} onClick={onClose} /></div></div>
@@ -67,7 +69,8 @@ function LogDetail({ log, onClose }) {
 
 export default function CallLogs({ billing = '全部' }) {
   const [today] = useState(shanghaiDate);
-  const [records] = useState(() => createLogRecords(today));
+  const tenant=useTenantData();
+  const records=tenantLogRecords(tenant);
   const defaults = billing === '全部' ? { ...defaultLogFilters, range:'1' } : defaultLogFilters;
   const [draft, setDraft] = useState(defaults);
   const [filters, setFilters] = useState(defaults);
@@ -112,7 +115,7 @@ export default function CallLogs({ billing = '全部' }) {
         {!unified && draft.range === 'custom' && <div className="cl-date-range"><label>开始日期<input type="date" max={draft.end || today} value={draft.start} onInput={e => update('start', e.currentTarget.value)} required /></label><span>—</span><label>结束日期<input type="date" min={draft.start} max={today} value={draft.end} onInput={e => update('end', e.currentTarget.value)} required /></label><small>北京时间 UTC+8</small></div>}
         {dateError && <p role="alert" className="cl-date-error">{dateError}</p>}
       </form>
-      {unified && <div className="cl-view-row"><SavedFilterViews scope="tenant-call-logs" saveDescription="保存当前已应用的时间、计费方式、模型、套餐、API Key、请求来源、状态和 Request ID 条件；查询草稿不包含在视图中。保存后可快速应用已保存的筛选条件。" value={filters} onApply={value => { if (!value || !['1','yesterday','7','30','custom'].includes(value.range) || value.range === 'custom' && !validAnalyticsRange(value.start,value.end,'day',Date.now(),31)) return; const next = restoreLogFilters(value, defaults, records); setFilters(next); setDraft(next); setPage(1); setDateError(''); }} summary={viewConditions.join(' · ')} preview={viewPreview} conditions={viewConditions}/></div>}
+      {unified && <div className="cl-view-row"><SavedFilterViews scope={`${tenant.identity?.key || 'anonymous'}:tenant-call-logs`} saveDescription="保存当前已应用的时间、计费方式、模型、套餐、API Key、请求来源、状态和 Request ID 条件；查询草稿不包含在视图中。保存后可快速应用已保存的筛选条件。" value={filters} onApply={value => { if (!value || !['1','yesterday','7','30','custom'].includes(value.range) || value.range === 'custom' && !validAnalyticsRange(value.start,value.end,'day',Date.now(),31)) return; const next = restoreLogFilters(value, defaults, records); setFilters(next); setDraft(next); setPage(1); setDateError(''); }} summary={viewConditions.join(' · ')} preview={viewPreview} conditions={viewConditions}/></div>}
       <div className="cl-table-tools"><span>请求记录 <b>{filtered.length}</b></span><span className="cl-feedback" role="status">{notice}</span><IconAction label="导出筛选结果" icon={Download} disabled={!filtered.length} onClick={() => { saveFile(logsCSV(filtered), `${unified ? '' : `${billing}-`}调用日志.csv`, 'text/csv;charset=utf-8'); setNotice(`已导出 ${filtered.length} 条记录`); }} /></div>
       <div className="cl-table-note">单位：Tokens / ms；缓存命中包含在输入中，缺失字段显示 —。</div>
       <div className="cl-table-scroll" tabIndex={0} aria-label="调用日志表格，可横向滚动"><table className="cl-table cl-audit-table"><thead><tr>{['请求时间', 'Request ID', '模型 ID', '服务 / 套餐', 'API Key', '状态码', '输入 Tokens', '输出 Tokens', '缓存命中 Tokens', '首 Token 时延', '总时延', '操作'].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>
@@ -122,7 +125,7 @@ export default function CallLogs({ billing = '全部' }) {
           <td>{log.model}</td>
           <td>{log.resource || log.endpointName || '—'}<small>{log.billing}{(log.resourceId || log.endpointId) && ` · ${log.resourceId || log.endpointId}`}</small></td>
           <td><code>{maskApiKey(log.apiKey)}</code></td>
-          <td><span className={`cl-status ${log.status === 200 ? 'cl-success' : 'cl-failed'}`} title={logStatuses[log.status][0]}>{log.status}</span></td>
+          <td><span className={`cl-status ${log.status === 200 ? 'cl-success' : 'cl-failed'}`} title={logStatuses[log.status]?.[0] || '未定义状态'}>{log.status ?? '—'}</span></td>
           {[log.input, log.output, log.cache].map((value, index) => <td className="cl-numeric" key={index} title={value == null ? '本次请求未返回此用量字段' : undefined}>{number(value)}</td>)}
           <td className="cl-numeric" title="首 Token 时延，单位 ms">{number(log.first)}</td><td className="cl-numeric" title="请求端到端时延，单位 ms">{number(log.duration)}</td>
           <td><IconAction label={`查看请求详情 ${log.id}`} icon={Eye} onClick={() => setSelected(log)} /></td>

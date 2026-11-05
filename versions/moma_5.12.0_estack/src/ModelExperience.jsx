@@ -1,3 +1,8 @@
+import {recordTenantExperience} from './tenant-data.mjs';
+import mockConfig from './mock/catalogues.json' with { type: 'json' };
+import { useServiceDirectory } from './useServiceDirectory';
+import { beginExperience, validateExperience } from './service-directory.mjs';
+import { readExperienceDraft, saveExperienceDraft } from './experience-drafts.mjs';
 import FrontPageHeader from "./components/FrontPageHeader";
 import { displayBusinessCopy } from './display-copy.mjs';
 import { useEffect, useRef, useState } from "react";
@@ -24,250 +29,22 @@ import SpeechRecorder from "./SpeechRecorder";
 import "./experience.css";
 import "./experience-refinements.css";
 
-const modelCatalog = {
-  text: [
-    {
-      name: "DeepSeek/DeepSeek-V4-Pro",
-      icon: 1,
-      type: "text",
-      subscribed: true,
-      billing: "Token Plan",
-      desc: "擅长复杂推理、代码与长文本分析。",
-    },
-    {
-      name: "ZHIPU/GLM-5.2",
-      icon: 3,
-      type: "text",
-      subscribed: true,
-      billing: "按量计费",
-      desc: "兼顾推理质量与工具调用。",
-    },
-    {
-      name: "Qwen/Qwen3.7-Max",
-      icon: 4,
-      type: "text",
-      subscribed: false,
-      billing: "按量计费",
-      desc: "覆盖办公、编程与智能体任务。",
-    },
-    {
-      name: "Moonshot/Kimi-K3",
-      icon: 2,
-      type: "text",
-      subscribed: true,
-      billing: "Token Plan",
-      desc: "适合长文本阅读与知识问答。",
-    },
-    {
-      name: "Qwen/Qwen3.5-VL",
-      icon: 4,
-      type: "multimodal",
-      subscribed: true,
-      billing: "按量计费",
-      desc: "支持理解文字、图片和视频。",
-    },
-    {
-      name: "ZHIPU/GLM-4.6V",
-      icon: 3,
-      type: "multimodal",
-      subscribed: false,
-      billing: "按量计费",
-      desc: "支持图文理解与视觉问答。",
-    },
-  ],
-  image: [
-    {
-      name: "Qwen/Qwen-Image-3.0-Pro",
-      icon: 4,
-      type: "image",
-      subscribed: true,
-      billing: "Token Plan",
-    },
-    {
-      name: "ByteDance/Seedream-5.0",
-      icon: 5,
-      type: "image",
-      subscribed: true,
-      billing: "按量计费",
-    },
-    {
-      name: "Wan/Wan2.6-Image",
-      icon: 2,
-      type: "image",
-      subscribed: false,
-      billing: "按量计费",
-    },
-  ],
-  video: [
-    {
-      name: "Qwen/Wan2.7-R2V",
-      icon: 4,
-      type: "video",
-      subscribed: true,
-      billing: "Token Plan",
-      desc: "最多 5 个图片或视频参考，支持音色参考与多主体一致性。",
-    },
-    {
-      name: "Qwen/Wan3.0-Video-Prime",
-      icon: 4,
-      type: "video",
-      subscribed: true,
-      billing: "按量计费",
-      desc: "支持文生、首尾帧及全能参考，兼顾速度与画面表现。",
-    },
-    {
-      name: "MiniMax/MiniMax-Hailuo-2.3",
-      icon: 5,
-      type: "video",
-      subscribed: false,
-      billing: "按量计费",
-      desc: "支持文生视频、首帧图生视频和首尾帧控制。",
-    },
-  ],
-  asr: [
-    {
-      name: "Alibaba/SenseVoice",
-      icon: 6,
-      type: "voice",
-      subscribed: true,
-      billing: "按量计费",
-    },
-  ],
-  tts: [
-    {
-      name: "Alibaba/CosyVoice",
-      icon: 6,
-      type: "voice",
-      subscribed: true,
-      billing: "Token Plan",
-    },
-  ],
-};
+const voiceCatalog = mockConfig["ModelExperience.jsx"]["voiceCatalog"];
 
-const voiceCatalog = [
-  { id: "longxiaochun_v2", name: "龙小淳", desc: "温柔知性女声", icon: 1 },
-  { id: "longcheng_v2", name: "龙橙", desc: "沉稳磁性男声", icon: 2 },
-  { id: "longhua_v2", name: "龙华", desc: "新闻主播音色", icon: 3 },
-  { id: "longshu_v2", name: "龙书", desc: "自然叙事男声", icon: 4 },
-  { id: "longxiaobai_v2", name: "龙小白", desc: "活泼元气女声", icon: 5 },
-  { id: "longan_v2", name: "龙安", desc: "专业客服女声", icon: 6 },
-  { id: "longyue_v2", name: "龙悦", desc: "清新甜美女声", icon: 1 },
-  { id: "longlao_v2", name: "龙老", desc: "浑厚评书男声", icon: 2 },
-];
+// Local presentation presets; these do not grant a model any capability.
+const videoProfile = mockConfig["ModelExperience.jsx"]["videoProfile"];
+const promptCatalog = mockConfig["ModelExperience.jsx"]["promptCatalog"];
 
-const videoProfiles = {
-  "Qwen/Wan2.7-R2V": {
-    modes: ["参考生视频"],
-    resolutions: ["1080P", "720P"],
-    aspects: ["16:9", "9:16", "1:1", "4:3", "3:4"],
-    durations: ["5秒", "10秒"],
-    accept: "image/*,video/*,audio/*",
-    add: "添加图片、视频或音频参考",
-    sound: true,
-  },
-  "Qwen/Wan3.0-Video-Prime": {
-    modes: ["全能参考", "文生视频", "首尾帧"],
-    resolutions: ["1080P", "720P", "480P"],
-    aspects: ["智能比例", "16:9", "9:16", "1:1"],
-    durations: ["5秒", "10秒", "15秒", "30秒"],
-    accept: "image/*,video/*,audio/*",
-    add: "添加参考素材",
-    sound: true,
-  },
-  "MiniMax/MiniMax-Hailuo-2.3": {
-    modes: ["文生视频", "首帧图生视频", "首尾帧生视频"],
-    resolutions: ["1080P", "768P"],
-    aspects: ["16:9", "9:16"],
-    durations: ["6秒", "10秒"],
-    accept: "image/*",
-    add: "添加首帧或尾帧图片",
-    sound: false,
-  },
-};
-
-const promptCatalog = {
-  text: [
-    {
-      label: "项目总结报告",
-      prompt:
-        "请帮我撰写一份专业的项目总结报告。报告需包含项目背景与目标、实施范围、关键里程碑、主要成果与量化数据、团队协作情况、遇到的问题及解决方案、经验复盘和下一阶段计划；语言正式、逻辑清晰，使用分级标题和要点列表，适合向管理层汇报。",
-    },
-    {
-      label: "分析图片信息",
-      prompt:
-        "请全面分析我上传的图片：先概括画面主题与主要内容，再识别人物、物体、场景、文字、数据和关键细节，说明各元素之间的关系；如包含图表，请提取核心指标、趋势与异常；最后给出基于画面证据的结论，并明确标注无法确认的信息。",
-    },
-    {
-      label: "总结视频内容",
-      prompt:
-        "请总结我上传的视频内容：按时间顺序梳理主要情节或观点，提取关键人物、事件、数据和结论，标注重要时间点；区分事实、观点和推测，并用一段摘要加分点列表呈现，最后给出适合快速阅读的三条核心要点。",
-    },
-  ],
-  image: [
-    {
-      label: "未来都市",
-      prompt:
-        "生成一张未来城市夜景海报：雨后的高空视角，玻璃摩天楼与空中轨道层层延伸，霓虹蓝紫灯光倒映在湿润街道，远处有飞行器穿过薄雾，电影级广角构图，体积光，自然景深，画面层次丰富，细节清晰，8K 商业海报质感。",
-    },
-    {
-      label: "科技主视觉",
-      prompt:
-        "设计一张极简科技产品主视觉：银白色智能终端悬浮在纯净渐变空间中，柔和侧光勾勒金属边缘，少量蓝色光带表现数据流动，大面积留白，居中构图，高端发布会视觉风格，真实材质、精细阴影和清晰产品轮廓。",
-    },
-    {
-      label: "水墨山水",
-      prompt:
-        "绘制一幅水墨风格山水插画：层叠远山隐入晨雾，一叶木舟划过平静江面，岸边松树与古亭若隐若现，传统宣纸肌理，浓淡墨色自然晕染，局部淡青设色，构图疏密有致，留白克制，呈现宋代山水画的宁静意境。",
-    },
-    {
-      label: "美食广告",
-      prompt:
-        "创作一张高端中式餐饮广告：深色石材桌面上摆放一碗热气升腾的牛肉面，汤汁油亮，牛肉纹理和香菜细节清晰，暖金色侧逆光穿过蒸汽，背景虚化并保留标题留白，近景商业摄影，真实食物质感，诱人但不过度饱和。",
-    },
-    {
-      label: "角色设定",
-      prompt:
-        "绘制一张东方幻想角色设定图：年轻女性游侠身穿深青与银灰相间的轻甲，腰间佩剑，衣料、金属和皮革材质清晰；画面同时展示正面全身、侧面轮廓和面部特写，浅灰纯色背景，专业游戏概念设计稿，比例准确，细节统一。",
-    },
-  ],
-  video: [
-    {
-      label: "云海日出",
-      prompt:
-        "清晨云海之上，镜头从贴近云层的低空缓慢抬升，金色日光穿透薄雾照亮连绵山峰，云层随风流动，远处飞鸟掠过画面，电影级航拍，体积光，自然景深，色彩由冷蓝渐变为暖金，镜头运动平稳连贯。",
-    },
-    {
-      label: "产品环绕",
-      prompt:
-        "极简黑色智能终端置于深色展台中央，镜头沿顺时针方向缓慢环绕一周，冷白轮廓光扫过金属边缘，屏幕逐渐点亮并出现蓝色数据流，背景保持干净，商业广告质感，材质真实，动作稳定，产品始终位于画面视觉中心。",
-    },
-    {
-      label: "城市延时",
-      prompt:
-        "雨后城市夜景延时摄影，高楼灯光依次亮起，车流在湿润街道形成红蓝光轨，云层快速掠过天空，镜头固定在高处广角机位，画面从蓝调时刻自然过渡到深夜，曝光平滑，建筑结构稳定，呈现真实电影摄影质感。",
-    },
-    {
-      label: "人物漫步",
-      prompt:
-        "一名穿米色风衣的年轻人沿秋日林荫道向镜头缓慢走来，微风吹动衣摆与落叶，镜头以中景稳定后退跟拍，午后柔光从树隙洒下，肤色自然，背景有浅景深和轻微散景，动作连贯真实，电影叙事感。",
-    },
-    {
-      label: "微距花开",
-      prompt:
-        "一朵白色百合从花苞缓慢绽放的微距延时镜头，露珠沿花瓣滑落，清晨阳光从侧后方逐渐增强，背景为柔和绿色散景，镜头固定且焦点稳定，花瓣运动自然连续，细节锐利，真实生态纪录片质感。",
-    },
-  ],
-};
-
-function ModelPicker({ model, options, onChange, speech = false }) {
+function ModelPicker({ model, options, onChange, speech = false, task, disabled }) {
   const [open, setOpen] = useState(false);
   const selected =
-    options.find((option) => option.name === model) || options[0];
+    options.find((option) => option.id === model) || { name: '请选择模型' };
   return (
     <div className="pg-model-picker">
       <button
         className="pg-model"
         type="button"
+        disabled={disabled}
         aria-label="选择模型"
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -279,6 +56,7 @@ function ModelPicker({ model, options, onChange, speech = false }) {
       </button>
       <ModelSelectDialog
         open={open}
+        task={task}
         models={options}
         value={model}
         onApply={onChange}
@@ -292,30 +70,26 @@ export default function ModelExperience({
   kind = "text",
   groupLabel,
   onKindChange,
-  onCompare,
+  onCompare, initialServiceId = "", owner = "",
 }) {
   const [mode, setMode] = useState("语音识别");
-  const [model, setModel] = useState(
-    kind === "text"
-      ? "DeepSeek/DeepSeek-V4-Pro"
-      : kind === "image"
-        ? "Qwen/Qwen-Image-3.0-Pro"
-        : kind === "video"
-          ? "Qwen/Wan2.7-R2V"
-          : "Alibaba/SenseVoice",
-  );
-  const [text, setText] = useState("");
-  const [file, setFile] = useState(null);
+  const directory = useServiceDirectory(kind), models = directory.models;
+  const [draft] = useState(() => { try { return readExperienceDraft(owner, kind); } catch { return { storageError: '草稿读取失败，请核对本地存储' }; } });
+  const ticket = useRef(null);
+  const [model, setModel] = useState(initialServiceId || draft.model || models.find(item => item.callable)?.id || '');
+  const selectedModel = models.find(item => item.id === model);
+  const [text, setText] = useState(draft.text || '');
+  const [file, setFile] = useState(draft.file || null);
   const [url, setUrl] = useState("");
   const [recording, setRecording] = useState(false);
   const [requestingMic, setRequestingMic] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(draft.messages || []);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [temperature, setTemperature] = useState("0.7");
+  const [temperature, setTemperature] = useState(draft.temperature || "0.7");
   const [topP, setTopP] = useState(kind === "text" ? "0.8" : "0.9");
-  const [systemPrompt, setSystemPrompt] = useState("");
+  const [systemPrompt, setSystemPrompt] = useState(draft.systemPrompt || "");
   const [stop, setStop] = useState("");
   const [thinkingBudget, setThinkingBudget] = useState("4000");
   const [deepThinking, setDeepThinking] = useState(false);
@@ -333,14 +107,14 @@ export default function ModelExperience({
   const [volume, setVolume] = useState("50");
   const [voice, setVoice] = useState("longxiaochun_v2");
   const [format, setFormat] = useState("mp3");
-  const [language, setLanguage] = useState("auto");
+  const [language, setLanguage] = useState(draft.language || "auto");
   const [removeFillers, setRemoveFillers] = useState(false);
-  const [imageSize, setImageSize] = useState("1024 × 1024");
-  const [imageCount, setImageCount] = useState("1");
-  const [videoMode, setVideoMode] = useState("全能模式");
-  const [resolution, setResolution] = useState("1080P");
-  const [aspect, setAspect] = useState("16:9");
-  const [duration, setDuration] = useState("5秒");
+  const [imageSize, setImageSize] = useState(draft.imageSize || "1024 × 1024");
+  const [imageCount, setImageCount] = useState(draft.imageCount || "1");
+  const [videoMode, setVideoMode] = useState(draft.videoMode || "全能模式");
+  const [resolution, setResolution] = useState(draft.resolution || "1080P");
+  const [aspect, setAspect] = useState(draft.aspect || "16:9");
+  const [duration, setDuration] = useState(draft.duration || "5秒");
   const [sound, setSound] = useState(true);
   const [previewing, setPreviewing] = useState(-1);
   const [newDialog, setNewDialog] = useState(false);
@@ -370,8 +144,16 @@ export default function ModelExperience({
         : kind === "video"
           ? "视频生成"
           : "语音生成");
-  const models = modelCatalog[kind === "voice" ? (asr ? "asr" : "tts") : kind];
-  const videoProfile = videoProfiles[model];
+
+  useEffect(() => {
+    if (draft.storageError) { setError(draft.storageError); return; }
+    try { saveExperienceDraft(owner, kind, { model, text, file, messages, temperature, topP, systemPrompt, imageSize, imageCount, videoMode, resolution, aspect, duration, sound, language, removeFillers }); }
+    catch { setError('草稿无法保存，请检查浏览器存储。'); }
+  }, [owner, kind, model, text, file, messages, temperature, topP, systemPrompt, imageSize, imageCount, videoMode, resolution, aspect, duration, sound, language, removeFillers]);
+  useEffect(() => {
+    if (!busy || !ticket.current) return;
+    try { validateExperience(ticket.current); } catch (error) { clearTimeout(timer.current); setBusy(false); setError(error.message); }
+  }, [directory]);
   const prompts = promptCatalog[kind] || [];
   useEffect(() => {
     if (!file) {
@@ -459,7 +241,7 @@ export default function ModelExperience({
   function changeModel(value) {
     setModel(value);
     if (kind === "video") {
-      const profile = videoProfiles[value];
+      const profile = videoProfile;
       setVideoMode(profile.modes[0]);
       setResolution(profile.resolutions[0]);
       setAspect(profile.aspects[0]);
@@ -471,7 +253,7 @@ export default function ModelExperience({
     setTemperature(defaults.temperature);
     setTopP(defaults.topP);
     setThinkingBudget(defaults.thinkingBudget);
-    setNotice(`已切换至 ${value}，并应用推荐参数`);
+    setNotice(`已切换至 ${models.find(item => item.id === value)?.name || '所选模型'}`);
   }
   function openModelSettings() {
     setSettingsDraft({
@@ -586,13 +368,14 @@ export default function ModelExperience({
     event?.preventDefault();
     if (busy || !model || (asr && !file) || (!asr && !text.trim() && !file))
       return;
-    setError("");
-    setNotice("");
+    try { ticket.current = beginExperience(model, kind); if (file && kind !== 'voice' && !selectedModel?.inputModalities.includes('image')) throw new Error('所选模型不支持参考图片'); } catch (error) { setError(error.message); return; }
+    setError('');
+    setNotice('');
     setBusy(true);
     const message = {
       text: text.trim() || (kind === "text" && file ? "请分析这个文件" : ""),
       file: file?.name,
-      model,
+      model: selectedModel?.name, serviceId: model, owner,
       mode,
       temperature,
       topP,
@@ -617,6 +400,8 @@ export default function ModelExperience({
     };
     // ponytail: local mock response only; replace with model API when integration is requested.
     timer.current = setTimeout(() => {
+      try { validateExperience(ticket.current); } catch (error) { setError(error.message); setBusy(false); return; }
+      try{recordTenantExperience(ticket.current,200);}catch(error){setError(error.message);setBusy(false);return;}
       setMessages((items) => [
         ...items,
         {
@@ -624,27 +409,14 @@ export default function ModelExperience({
           answer: visualGeneration
             ? ""
             : asr
-              ? "大家好，今天我们讨论项目进度。请各位先介绍当前任务的完成情况，再确认下一阶段的工作安排。"
+              ? mockConfig['ModelExperience.jsx'].response.asr
               : tts
                 ? message.text
-                : "可以从以下几个方面梳理任务，帮助你获得更清晰、可直接使用的结果。",
+                : mockConfig['ModelExperience.jsx'].response.answer,
           points:
             visualGeneration || asr || tts
               ? null
-              : [
-                  {
-                    title: "明确任务目标",
-                    body: "说明希望解决的问题、使用场景，以及最终要获得的结果。",
-                  },
-                  {
-                    title: "补充必要背景",
-                    body: "提供相关上下文、已有材料和限制条件，回答会更贴合实际需求。",
-                  },
-                  {
-                    title: "约定输出格式",
-                    body: "注明篇幅、语气或结构要求，可以减少后续修改成本。",
-                  },
-                ],
+              : mockConfig['ModelExperience.jsx'].response.points,
         },
       ]);
       setBusy(false);
@@ -743,6 +515,7 @@ export default function ModelExperience({
       className={`playground pg-${kind}-experience ${asr ? "pg-asr-experience" : ""} ${messages.length ? "has-messages" : ""}`}
     >
       <FrontPageHeader className="pg-heading" title={label} description={headingCopy} icon={kind === "voice" ? Mic : Image} actions={<div className="pg-heading-actions">{kind === "text" && <button type="button" className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button type="button" onClick={createConversation}>新建对话</button></div>} />
+      {(directory.error || directory.identityError || !selectedModel?.callable) && <p role="status">{directory.error || directory.identityError || selectedModel?.reason || "请选择可体验的模型"}</p>}
       {onKindChange && (
         <div className="pg-tabs" aria-label="视觉体验模式">
           {[
@@ -767,7 +540,7 @@ export default function ModelExperience({
       )}
       {kind === "voice" && (
         <div className="pg-tabs" aria-label="语音体验模式">
-          {["语音识别", "语音合成"].map((value) => (
+          {["语音识别"].map((value) => (
             <button
               type="button"
               aria-pressed={mode === value}
@@ -775,11 +548,7 @@ export default function ModelExperience({
               onClick={() => {
                 reset();
                 setMode(value);
-                setModel(
-                  value === "语音识别"
-                    ? "Alibaba/SenseVoice"
-                    : "Alibaba/CosyVoice",
-                );
+                setModel('');
               }}
             >
               {value === "语音识别" ? (
@@ -1053,6 +822,7 @@ export default function ModelExperience({
           {!asr && (
             <textarea
               aria-label="体验输入"
+              disabled={busy}
               maxLength={6000}
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -1477,6 +1247,8 @@ export default function ModelExperience({
               </span>
               <ModelPicker
                 model={model}
+                task={kind}
+                disabled={busy}
                 speech={asr}
                 options={models}
                 onChange={changeModel}
@@ -1497,7 +1269,7 @@ export default function ModelExperience({
                 }
                 title={asr ? "开始识别" : undefined}
                 disabled={
-                  busy || (asr && !file) || (!asr && !text.trim() && !file)
+                  busy || !selectedModel?.callable || (asr && !file) || (!asr && !text.trim() && !file)
                 }
               >
                 {busy ? (

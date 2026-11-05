@@ -30,10 +30,10 @@ export default function ModelBatchImport({ state, can, run, close, dirty, mode =
     } catch (e) { if (current === request.current) { const message = e.message.includes('请') || e.message.includes('模型') ? e.message : '读取失败，请检查文件是否损坏并使用最新模板'; setError(message); toast.error(message); } }
     finally { toast.dismiss(progress); if (current === request.current) setBusy(false); }
   };
-  const submit = () => {
+  const submit = async () => {
     if (busy || !can || !valid.length || invalid && !skip) return;
     setBusy(true);
-    const next = run('import', { models: valid.map(row => row.data) });
+    const next = await run('import', { models: valid.map(row => row.data) });
     if (next) { setOutcome({ imported: valid.length, skipped: invalid }); setStep('result'); dirty(false); }
     setBusy(false);
   };

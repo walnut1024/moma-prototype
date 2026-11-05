@@ -1,8 +1,9 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { connectionFingerprint } from '../src/admin-v2/connection-state.js';
 import { planMockOnboardingSync } from '../src/admin-v2/mock-onboarding-sync.js';
-import { commitAdminState, parseAdminState, persistModelAction, serializeAdminState, STORAGE_KEY } from '../src/admin-v2/store.js';
+import { commitAdminState, parseAdminState as baseParseAdminState, persistModelAction, serializeAdminState, STORAGE_KEY } from '../src/admin-v2/store.js';
 import { prepareServerChannel, onboardingApi as api } from '../src/admin-v2/onboarding-client.js';
 import { prepareCandidateTest, submitCandidateTest, candidateTestReceipt } from '../src/admin-v2/candidate-tests.js';
 import { setMockRuntimeState } from '../src/admin-v2/mock-onboarding-service.js';
@@ -102,6 +103,9 @@ test('an online candidate with a missing immutable target cannot commit only the
 
 test('mapping disable updates the runtime gate in the same persisted action and stops old published calls', async t => {
   const env = await fixture(t), provider = env.state.providers.find(row => row.id === env.action.data.providerId), mapping = provider.catalogConnections.find(row => row.endpointId === env.action.data.endpointId);
+  env.state.tenants.push({ id: 'tenant-sync', status: '正常' });
+  env.state.models.push({ id: 'sync-runtime', modelId: 'moma/sync-chat', serviceMode: 'standard', listingStatus: '已上架', visibility: '公开', callsEnabled: true, openScope: 'all', platformPublications: [{ serviceId: 'standard:sync-runtime', mockServiceId: env.published.id, source: 'mock' }] });
+  env.storage.setItem(STORAGE_KEY, JSON.stringify(env.state));
   const key = await api('/client-keys', { method: 'POST', body: { operationId: crypto.randomUUID(), tenantId: 'tenant-sync', serviceIds: [env.published.id] } });
   const request = () => api('/client/completions', { method: 'POST', token: key.clientKey, body: { operationId: crypto.randomUUID(), model: 'moma/sync-chat', messages: [{ role: 'user', content: 'check' }] } });
   assert.equal((await request()).source, 'mock');
@@ -121,3 +125,5 @@ test('rollback refuses to overwrite a concurrent main-store change', async t => 
   assert.throws(() => persistModelAction(env.state, env.action, env.storage), /未覆盖其他修改/);
   assert.equal(env.records.get(STORAGE_KEY), concurrent);
 });
+
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

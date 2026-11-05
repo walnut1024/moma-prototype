@@ -1,41 +1,13 @@
+import mockConfig from './mock/catalogues.json' with { type: 'json' };
 import { apiKeyOptions } from './api-key-data.mjs';
 import { shanghaiDate } from './call-log-data.mjs';
 
-export const usageModels = {
-  文本模型: ['DeepSeek-V4-Pro', 'DeepSeek-V4-Flash', 'DeepSeek-V4-Flash-0731', 'Qwen3.7-Max', 'Qwen3-32B', 'Qwen3.5-27B', 'Qwen3.5-9B', 'Qwen3.5-35B-A3B', 'Qwen3.5-397B-A17B', 'GLM-5.1', 'GLM-5.2', 'Kimi-K2.6', 'Kimi-K2.7-Code', 'Kimi-K3', 'MiniMax-M3', 'qwen3-max', 'qwen3.5-flash', 'qwen3.5-plus', 'qwen3.6-flash', 'qwen3.6-plus', 'qwen3.7-plus'],
-  视觉理解: ['Qwen-VL', 'GLM-VL'],
-  多模态模型: ['Qwen-Omni', 'GLM-Omni'],
-  图片生成: ['Qwen-Image', 'Seedream', 'HY-Image'],
-  视频生成: ['MiniMax-H3', 'Wan3.0-Video', 'Seedance-2.0'],
-  语音合成: ['Qwen-Audio-TTS'],
-  语音识别: ['Qwen-Audio-ASR-Flash'],
-  向量模型: ['BGE-M3'],
-  重排模型: ['BGE-Reranker-V2-M3'],
-};
-const tier32 = ['0＜输入长度≤32K', '32K＜输入长度≤128K', '128K＜输入长度≤252K'];
-const tier128 = ['0＜输入长度≤128K', '128K＜输入长度≤256K'];
-const tier256 = ['0＜输入长度≤256K', '256K＜输入长度≤1M'];
-const tier1M = ['0＜输入长度≤128K', '128K＜输入长度≤256K', '256K＜输入长度≤1M'];
-export const languageMetering = {
-  'DeepSeek-V4-Pro': { cache: true },
-  'DeepSeek-V4-Flash-0731': { cache: true },
-  'Qwen3.7-Max': { cache: true, explicit: true },
-  'Qwen3-32B': { modes: true },
-  'Qwen3.5-35B-A3B': { tiers: tier128, modes: true },
-  'Qwen3.5-397B-A17B': { tiers: tier128 },
-  'GLM-5.1': { tiers: ['0＜输入长度≤32K', '32K＜输入长度≤200K'], cache: true },
-  'GLM-5.2': { cache: true },
-  'Kimi-K2.6': { cache: true, cachedInput: true },
-  'Kimi-K2.7-Code': { cache: true, cachedInput: true },
-  'Kimi-K3': { cache: true, cachedInput: true },
-  'MiniMax-M3': { tiers: ['0＜输入长度≤512K', '512K＜输入长度≤1M'], cache: true },
-  'qwen3-max': { tiers: tier32, cache: true, explicit: true, cachedInput: true },
-  'qwen3.5-flash': { tiers: tier1M, explicit: true },
-  'qwen3.5-plus': { tiers: tier1M, explicit: true },
-  'qwen3.6-flash': { tiers: tier256, explicit: true },
-  'qwen3.6-plus': { tiers: tier256, explicit: true },
-  'qwen3.7-plus': { tiers: tier256, cache: true, explicit: true, cachedInput: true },
-};
+export const usageModels = mockConfig["usage-data.mjs"]["usageModels"];
+
+
+
+
+export const languageMetering = mockConfig["usage-data.mjs"]["languageMetering"];
 export const usageModelGroups = [
   { id: '语言模型', name: '语言模型', types: ['文本模型'] },
   { id: '多模态理解', name: '多模态理解', types: ['多模态模型'] },
@@ -488,4 +460,30 @@ export function meteringView(type) {
   }
   const excluded = new Set(['响应时延','吞吐趋势','调用状态分布','首 Token 时延','输出吞吐']);
   return {summary:view.summary.filter(key => key !== 'latency'),charts:view.charts.filter(([title]) => !excluded.has(title)).map(([title,keys,options]) => title === '调用次数趋势' ? ['模型请求次数趋势',['requests']] : [title,keys,options])};
+}
+
+// Tenant charts aggregate the same scoped request facts as the backend and call logs.
+export function tenantUsageTypes(category, task) {
+  if(category==='视觉模型'&&task)return {'视觉理解':['multimodal'],'图片生成':['image'],'视频生成':['video']}[task] || [];
+  return {'语言模型':['text'],'文本模型':['text'],'多模态理解':['multimodal'],'多模态模型':['multimodal'],'视觉模型':['image','video'],'语音模型':['audio'],'音频模型':['audio'],'向量模型':['embedding'],'排序模型':['rerank'],'重排模型':['rerank']}[category] || [];
+}
+export function tenantUsageData({records=[],models=[],start,end,minutes=60,now=new Date(),billing='全部',modelIds=null,apiKeyIds=null,apiKeyId=null,types=null}) {
+  const begin=Date.parse(`${start}T00:00:00+08:00`),finish=Math.min(Date.parse(`${end}T00:00:00+08:00`)+86400000,now.getTime());
+  if(!Number.isFinite(begin)||!Number.isFinite(finish)||finish<=begin||finish-begin>31*86400000)return {summary:derived(empty()),buckets:[]};
+  const summary=empty(),buckets=new Map(),minuteTokens=new Map();
+  for(let time=begin;time<finish;time+=minutes*60000){const bucket=empty();bucket.observedMinutes=(Math.min(time+minutes*60000,finish)-time)/60000;buckets.set(time,bucket);}
+  summary.observedMinutes=(finish-begin)/60000;
+  const seen=new Set();
+  for(const row of records){const identity=row.requestId||row.id;if(seen.has(identity))continue;seen.add(identity);
+    const time=Date.parse(row.createdAt),model=models.find(item=>item.id===row.modelId),code=row.publicModelId || model?.modelId || row.modelId;
+    if(time<begin||time>=finish||!Number.isFinite(time)||billing!=='全部'&&(row.billingType||'按量付费')!==billing||modelIds!==null&&!modelIds.includes(code)&&!modelIds.includes(row.modelId)&&!modelIds.includes(model?.modelId)||apiKeyIds!==null&&!apiKeyIds.includes(row.keyId)||apiKeyId!==null&&apiKeyId!==row.keyId||types&&!types.includes(model?.type))continue;
+    const ok=row.httpStatus>=200&&row.httpStatus<300,usage=row.usage||{},duration=Number.isFinite(row.durationMs)?row.durationMs/1000:null;
+    const sample={pendingMetering:!Number.isFinite(usage.input)&&!Number.isFinite(usage.images)&&!Number.isFinite(usage.seconds)&&!Number.isFinite(usage.characters)?1:0,durationSamples:ok&&duration!==null?1:0,requests:1,success:ok?1:0,failure:ok?0:1,status2:ok?1:0,status4:row.httpStatus>=400&&row.httpStatus<500?1:0,status5:row.httpStatus>=500?1:0,statusOther:row.httpStatus<200||row.httpStatus>=300&&row.httpStatus<400?1:0,modelNames:new Set([code]),modelRequests:{[code]:1}};
+    if(ok&&duration!==null)Object.assign(sample,{duration,latencyMin:duration,latencyMax:duration,latencySamples:[[duration,1]]});
+    for(const [from,to] of [['input','input'],['output','output'],['cached','cache'],['cacheWrite','cacheCreate'],['characters','characters'],['images','images'],['seconds',model?.type==='audio'?'audio':'videoSeconds']])if(Number.isFinite(usage[from]))sample[to]=usage[from];
+    if(Number.isFinite(sample.input)&&Number.isFinite(sample.output)){sample.total=sample.input+sample.output;const minute=Math.floor(time/60000);minuteTokens.set(minute,(minuteTokens.get(minute)||0)+sample.total);}
+    if(Number.isFinite(row.ttftMs))sample.ttftDuration=row.ttftMs/1000;
+    add(summary,sample);add(buckets.get(begin+Math.floor((time-begin)/(minutes*60000))*minutes*60000),sample);
+  }
+  const result=derived(summary);result.latency=summary.durationSamples?summary.duration/summary.durationSamples:null;if(result.pendingMetering)result.average=null;result.peakTpm=Math.max(0,...minuteTokens.values());return {summary:result,buckets:[...buckets].map(([time,row])=>({time,...derived(row)})),minuteTokens,availableUntil:finish};
 }

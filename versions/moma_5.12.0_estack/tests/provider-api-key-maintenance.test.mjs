@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAdminSeed, commitAdminState, persistModelAction, parseAdminState } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction, parseAdminState as baseParseAdminState } from '../src/admin-v2/store.js';
 import { providerApiKeysDraft, providerApiKeyRows, providerApiKeyName, connectionFingerprint } from '../src/admin-v2/provider-management.js';
 
 const secrets = ['local-prototype-key-alpha-0001', 'local-prototype-key-beta-0002', 'local-prototype-key-rotated-0003'];
@@ -110,3 +111,6 @@ test('key maintenance keeps role, revision, storage-failure and masked persisten
   assert.deepEqual(parseAdminState(saved).providers, next.providers);
   assert.equal(JSON.stringify(state), before);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

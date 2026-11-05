@@ -9,11 +9,11 @@ const provider = (s, id) => s.providers.find(row=>row.id===id);
 const supplyOp = (s, id, operation, values) => op(s,'provider',{operation,objectId:id,values});
 const create = s => op(s,'templateSave',{...s.models.find(row=>row.id==='model-2'),id:undefined,modelId:'contract-new-model',name:'仅资料模型'});
 
-test('fresh mocks have canonical identities, pending suppliers and multiple channels without populating the full library',()=>{
+test('fresh mocks have canonical identities, pending suppliers and multiple channels only for registered models',()=>{
  const s=parseAdminState(null), groups=supplyModelDirectory(s);
  assert.ok(groups.every(row=>row.master));assert.ok(modelLibrary(s).length>groups.length);
  const glm=groups.find(row=>row.id==='model-2');assert.equal(glm.entries.length,2);
- assert.equal(catalogueChannels(s,provider(s,'provider-moma'),'GLM-5.2').length,2);
+ assert.equal(catalogueChannels(s,provider(s,'provider-moma'),'GLM-5.2').length,0);
  assert.equal(catalogueChannels(s,provider(s,'provider-zhipu-direct'),'glm-5.2').length,0);
  for(const group of groups)for(const entry of group.entries)assert.equal(entry.provider.catalogModels.find(row=>row.modelId===entry.modelId).libraryId,group.master.id);
 });

@@ -1,6 +1,8 @@
+import { legacySupplierState } from './legacy-supplier-fixture.mjs';
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAdminState, createAdminSeed, commitAdminState, persistModelAction } from '../src/admin-v2/store.js';
+import { parseAdminState as baseParseAdminState, createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction } from '../src/admin-v2/store.js';
 import { displayedCatalogueIds } from '../src/admin-v2/moma-provider.js';
 import { supplierChannelResources, supplierChannelAssociations, supplierKeyChannels } from '../src/admin-v2/supplier-resources.js';
 import { connectionKeys, connectionCredentialsReady, connectionTestPassed } from '../src/admin-v2/connection-state.js';
@@ -15,7 +17,7 @@ const price = n => [{name:'输入 Token',listPrice:String(n),unit:'百万 Token'
 const unchangedServices=(a,b)=>{for(const k of ['models','modelSupplies','modelSalePrices','supplyPrices','serviceRoutes'])assert.deepEqual(b[k],a[k],k);};
 
 test('five cases express shared channels and missing credentials without adding extra supplier resources',()=>{
- const s=parseAdminState(null);
+ const s=legacySupplierState();
  for(const [id,models,channels,links,keys]of [['provider-moma',5,2,4,3],['provider-deepseek-official',1,1,1,1],['provider-ark-official',2,3,4,3],['provider-kimi-official',1,1,1,0],['provider-zhipu-direct',2,0,0,0]]){
   const p=owner(s,id);assert.equal(displayedCatalogueIds(p,s).length,models);assert.equal(supplierChannelResources(s,p).length,channels);assert.equal(supplierChannelAssociations(s,p).length,links);assert.equal(p.apiKeys.length,keys);
  }
@@ -28,7 +30,7 @@ test('five cases express shared channels and missing credentials without adding 
 });
 
 test('one endpoint can serve several models while each model-channel association has its own quote',()=>{
- const s=parseAdminState(null),ep=endpoint(s,'CH-001'),p=owner(s),before=structuredClone(s);
+ const s=legacySupplierState(),ep=endpoint(s,'CH-001'),p=owner(s),before=structuredClone(s);
  const next=run(s,'supplierAssociationSave',{modelId:'Kimi/miKimi-K3',endpointId:ep.id,upstreamModelId:'kimi-k3',scenarios:price(2)});
  assert.equal(supplierChannelResources(next,owner(next)).length,2);assert.equal(supplierChannelAssociations(next,owner(next)).length,5);
  assert.equal(catalogueChannels(next,owner(next),'DeepSeek-V4-Flash-0731')[0].pricing.scenarios[0].listPrice,1500000);
@@ -39,18 +41,18 @@ test('one endpoint can serve several models while each model-channel association
 });
 
 test('unlinking a model retains the reusable channel and sibling associations; referenced services block unlink',()=>{
- const s=parseAdminState(null),p=owner(s),ep=endpoint(s,'CH-001'),link=catalogueChannels(s,p,'GLM-5.2').find(row=>row.endpointId===ep.id);
+ const s=legacySupplierState(),p=owner(s),ep=endpoint(s,'CH-001'),link=catalogueChannels(s,p,'GLM-5.2').find(row=>row.endpointId===ep.id);
  const values={modelId:link.modelId,endpointId:ep.id,associationId:link.id,confirmed:true};
  const next=run(s,'supplierAssociationRemove',values);
  assert.equal(supplierChannelResources(next,owner(next)).length,2);assert.equal(catalogueChannels(next,owner(next),'DeepSeek-V4-Flash-0731').length,1);assert.equal(catalogueChannels(next,owner(next),'GLM-5.2').length,1);
  assert.throws(()=>run(next,'supplierChannelDelete',{endpointId:ep.id,confirmed:true}),/引用/);
  const blocked=structuredClone(s);blocked.modelSupplies.push({id:'protected',endpointId:ep.id,providerId:p.id,modelId:s.models[0].id,catalogueModelId:link.modelId,upstreamModelId:link.upstreamModelId,status:'已启用'});
- assert.throws(()=>run(blocked,'supplierAssociationRemove',values),/关联服务或路由/);
+ assert.throws(()=>run(blocked,'supplierAssociationRemove',values),/模型服务/);
  assert.throws(()=>run(s,'supplierAssociationRemove',{...values,endpointId:endpoint(s,'CH-002').id}),/不匹配/);
 });
 
 test('default key rotation invalidates only inherited channels and all of their model associations',()=>{
- const s=parseAdminState(null),p=owner(s),ep=endpoint(s,'CH-001'),other=endpoint(s,'CH-002'),key=p.apiKeys.find(row=>row.id==='KEY-002');
+ const s=legacySupplierState(),p=owner(s),ep=endpoint(s,'CH-001'),other=endpoint(s,'CH-002'),key=p.apiKeys.find(row=>row.id==='KEY-002');
  const v={keyId:key.id,expectedFingerprint:key.fingerprint};
  assert.throws(()=>run(s,'defaultApiKey',v),/确认/);
  const next=run(s,'defaultApiKey',{...v,confirmed:true});
@@ -63,7 +65,7 @@ test('default key rotation invalidates only inherited channels and all of their 
 });
 
 test('key replacement and disable invalidate resolved references while preserving masked storage and prices',async()=>{
- const s=parseAdminState(null),p=owner(s),key=p.apiKeys[0],draft=await providerApiKeysDraft(['test-supplier-rotation-local-only-1234']);
+ const s=legacySupplierState(),p=owner(s),key=p.apiKeys[0],draft=await providerApiKeysDraft(['test-supplier-rotation-local-only-1234']);
  const replaced=run(s,'editApiKey',{keyId:key.id,expectedFingerprint:key.fingerprint,apiKey:draft.apiKeys[0],confirmed:true});
  assert.equal(owner(replaced).apiKeys[0].id,key.id);assert.notEqual(owner(replaced).apiKeys[0].fingerprint,key.fingerprint);
  assert.ok(supplierChannelAssociations(replaced,owner(replaced),endpoint(s,'CH-001').id).every(row=>!row.health));
@@ -75,7 +77,7 @@ test('key replacement and disable invalidate resolved references while preservin
 });
 
 test('missing Kimi credentials guide configuration, and the first added key is inherited by the channel',async()=>{
- const s=parseAdminState(null),id='provider-kimi-official',ep=endpoint(s,'CH-301');
+ const s=legacySupplierState(),id='provider-kimi-official',ep=endpoint(s,'CH-301');
  assert.equal(connectionCredentialsReady(ep,owner(s,id)),false);
  assert.throws(()=>run(s,'supplierChannelTest',{endpointId:ep.id},id),/凭证/);
  const keys=await providerApiKeysDraft(['test-kimi-local-only-987654']);
@@ -94,7 +96,7 @@ test('missing Kimi credentials guide configuration, and the first added key is i
 });
 
 test('create resource separately, then associate a Zhipu model without duplicating the endpoint',()=>{
- const s=parseAdminState(null),id='provider-zhipu-direct';
+ const s=legacySupplierState(),id='provider-zhipu-direct';
  const created=run(s,'supplierChannelSave',{name:'新增渠道',protocol:'OpenAI',baseUrl:'https://zhipu.example.invalid/v1/chat/completions',authMode:'inherit'},id);
  const ep=supplierChannelResources(created,owner(created,id))[0];
  assert.equal(supplierChannelAssociations(created,owner(created,id)).length,0);
@@ -105,14 +107,14 @@ test('create resource separately, then associate a Zhipu model without duplicati
 });
 
 test('supplier registration places its first key in the central library and makes the initial channel inherit it',async()=>{
- const s=parseAdminState(null),keys=await providerApiKeysDraft(['test-registration-local-only-443322']);
+ const s=legacySupplierState(),keys=await providerApiKeysDraft(['test-registration-local-only-443322']);
  const next=commitAdminState(s,{type:'modelOperations',operation:'providerRegistration',data:{provider:{name:'新增供应商',code:'supplier-new-review',sourceType:'thirdParty',description:''},connections:[{name:'初始渠道',protocol:'OpenAI',baseUrl:'https://new.example.invalid/v1/chat/completions',apiKeys:keys.apiKeys,timeoutSeconds:60}]}});
  const p=next.providers.find(row=>row.code==='supplier-new-review'),ep=supplierChannelResources(next,p)[0];
  assert.equal(p.defaultApiKeyId,p.apiKeys[0].id);assert.equal(p.apiKeys[0].fingerprint,keys.apiKeys[0].fingerprint);assert.equal(ep.authMode,'inherit');assert.equal(connectionKeys(ep,p)[0].id,p.defaultApiKeyId);assert.equal(supplierKeyChannels(next,p,p.defaultApiKeyId).length,1);
 });
 
 test('editing a shared channel affects all mappings after confirmation and name-only changes preserve validation',()=>{
- const s=parseAdminState(null),ep=endpoint(s,'CH-001'),v={endpointId:ep.id,name:ep.name,protocol:ep.protocol,baseUrl:'https://new.example.invalid/v1/chat/completions',authMode:'inherit'};
+ const s=legacySupplierState(),ep=endpoint(s,'CH-001'),v={endpointId:ep.id,name:ep.name,protocol:ep.protocol,baseUrl:'https://new.example.invalid/v1/chat/completions',authMode:'inherit'};
  assert.throws(()=>run(s,'supplierChannelSave',v),/确认共享/);
  const next=run(s,'supplierChannelSave',{...v,confirmed:true});
  assert.equal(supplierChannelAssociations(next,owner(next),ep.id).length,2);assert.ok(supplierChannelAssociations(next,owner(next),ep.id).every(row=>!row.health&&!row.enabled));
@@ -130,7 +132,7 @@ test('editing a shared channel affects all mappings after confirmation and name-
 });
 
 test('editing one model-channel tariff, unit and free price preserves sibling models and other channels',()=>{
- const s=parseAdminState(null),id='provider-ark-official',p=owner(s,id),ep=endpoint(s,'CH-201');
+ const s=legacySupplierState(),id='provider-ark-official',p=owner(s,id),ep=endpoint(s,'CH-201');
  const target=catalogueChannels(s,p,'doubao-pro').find(row=>row.endpointId===ep.id),before=structuredClone(s);
  const scenarios=[{name:'缓存读取',condition:'命中缓存',listPrice:'0',unit:'千 Token',currency:'CNY'}];
  const next=run(s,'channelPrice',{modelId:target.modelId,channelId:target.id,scenarios},id);
@@ -146,7 +148,7 @@ test('editing one model-channel tariff, unit and free price preserves sibling mo
 
 test('focused channel information edits preserve legacy credential references and key pools exactly',()=>{
  for(const keyPool of [false,true]){
-  const s=parseAdminState(null),id='provider-ark-official',p=owner(s,id),ep=endpoint(s,'CH-201');
+  const s=legacySupplierState(),id='provider-ark-official',p=owner(s,id),ep=endpoint(s,'CH-201');
   delete ep.authMode;delete ep.apiKeyId;delete ep.supplierChannel;
   ep.credentialRef=keyPool?'':'env:LEGACY_CHANNEL_KEY';ep.apiKeys=keyPool?structuredClone(p.apiKeys.slice(0,2)):[];
   const before=structuredClone(s),name='只修改渠道名称';
@@ -160,7 +162,7 @@ test('focused channel information edits preserve legacy credential references an
 
 test('focused address edits retain legacy authentication and secondary addresses while invalidating shared checks',()=>{
  for(const keyPool of [false,true]){
-  const s=parseAdminState(null),id='provider-ark-official',p=owner(s,id),ep=endpoint(s,'CH-201');
+  const s=legacySupplierState(),id='provider-ark-official',p=owner(s,id),ep=endpoint(s,'CH-201');
   delete ep.authMode;delete ep.apiKeyId;delete ep.supplierChannel;
   ep.credentialRef=keyPool?'':'env:LEGACY_CHANNEL_KEY';ep.apiKeys=keyPool?structuredClone(p.apiKeys.slice(0,2)):[];
   const secondary={protocol:'Anthropic',baseUrl:'https://legacy.example.invalid/v1/messages'};
@@ -184,7 +186,7 @@ test('focused address edits retain legacy authentication and secondary addresses
 });
 
 test('saving an unchanged focused address preserves modern channel authentication and validation',()=>{
- const s=parseAdminState(null),ep=endpoint(s,'CH-201'),id='provider-ark-official';
+ const s=legacySupplierState(),ep=endpoint(s,'CH-201'),id='provider-ark-official';
  const next=run(s,'supplierChannelSave',{mode:'address',endpointId:ep.id,protocol:ep.protocol,baseUrl:ep.baseUrl},id);
  assert.deepEqual(next.endpoints,s.endpoints.map(row=>row.id===ep.id?{...row,updatedAt:endpoint(next,'CH-201').updatedAt}:row));
  assert.deepEqual(owner(next,id),owner(s,id));unchangedServices(s,next);
@@ -192,7 +194,7 @@ test('saving an unchanged focused address preserves modern channel authenticatio
 
 test('focused key changes preserve legacy channel identity, hidden fields and secondary protocols',()=>{
  for(const authMode of ['inherit','specific']){
-  const s=parseAdminState(null),id='provider-ark-official',p=owner(s,id),ep=endpoint(s,'CH-201');
+  const s=legacySupplierState(),id='provider-ark-official',p=owner(s,id),ep=endpoint(s,'CH-201');
   delete ep.authMode;delete ep.apiKeyId;delete ep.supplierChannel;
   ep.credentialRef='env:LEGACY_CHANNEL_KEY';ep.apiKeys=structuredClone(p.apiKeys.slice(0,2));
   const secondary={protocol:'Anthropic',baseUrl:'https://legacy.example.invalid/v1/messages'};
@@ -213,7 +215,7 @@ test('focused key changes preserve legacy channel identity, hidden fields and se
 });
 
 test('cross-supplier keys and resources, incomplete URLs and invalid association prices cannot be persisted',()=>{
- const s=parseAdminState(null),ep=endpoint(s,'CH-001'),before=structuredClone(s);
+ const s=legacySupplierState(),ep=endpoint(s,'CH-001'),before=structuredClone(s);
  assert.throws(()=>run(s,'supplierChannelSave',{name:'错误',protocol:'OpenAI',baseUrl:'https://x.example.invalid/v1/chat/completions',authMode:'specific',apiKeyId:'KEY-201'}),/当前供应商/);
  assert.throws(()=>run(s,'supplierChannelSave',{name:'错误',protocol:'OpenAI',baseUrl:'https://x.example.invalid/v1',authMode:'inherit'}),/完整接口/);
  assert.throws(()=>run(s,'supplierAssociationSave',{modelId:'DeepSeek-V4-Flash-0731',endpointId:endpoint(s,'CH-101').id,upstreamModelId:'deepseek-flash',scenarios:price(1)}),/当前供应商/);
@@ -223,7 +225,7 @@ test('cross-supplier keys and resources, incomplete URLs and invalid association
 });
 
 test('existing endpoint-only credentials can be selected into the supplier library without losing their identity',async()=>{
- const s=parseAdminState(null),p=owner(s),keys=await providerApiKeysDraft(['test-legacy-local-only-556677']);
+ const s=legacySupplierState(),p=owner(s),keys=await providerApiKeysDraft(['test-legacy-local-only-556677']);
  keys.apiKeys[0].id='legacy-key-local';
  const legacy={id:'legacy-endpoint',providerId:p.id,name:'旧渠道',protocol:'OpenAI',baseUrl:'https://old.example.invalid/v1/chat/completions',apiKeys:keys.apiKeys,status:'停用'};
  s.endpoints.push(legacy);p.catalogConnections.push({id:'legacy-link',modelId:'Kimi/miKimi-K3',endpointId:legacy.id,upstreamModelId:'kimi-old'});
@@ -233,7 +235,7 @@ test('existing endpoint-only credentials can be selected into the supplier libra
 });
 
 test('live service mappings protect upstream identity while pricing remains editable; supplier status gates channel enable',()=>{
- const s=parseAdminState(null),p=owner(s),ep=endpoint(s,'CH-001'),link=catalogueChannels(s,p,'DeepSeek-V4-Flash-0731')[0];
+ const s=legacySupplierState(),p=owner(s),ep=endpoint(s,'CH-001'),link=catalogueChannels(s,p,'DeepSeek-V4-Flash-0731')[0];
  s.modelSupplies.push({id:'live-map',providerId:p.id,endpointId:ep.id,catalogueModelId:link.modelId,upstreamModelId:link.upstreamModelId,status:'已启用'});
  const values={associationId:link.id,endpointId:ep.id,modelId:link.modelId,upstreamModelId:'different-upstream',scenarios:price(1)};
  assert.throws(()=>run(s,'supplierAssociationSave',values),/先解除服务映射/);
@@ -244,7 +246,7 @@ test('live service mappings protect upstream identity while pricing remains edit
 });
 
 test('an existing service-derived model association remains editable without changing its resource or service history',()=>{
- const s=parseAdminState(null),p=owner(s),ep=endpoint(s,'CH-001');
+ const s=legacySupplierState(),p=owner(s),ep=endpoint(s,'CH-001');
  p.catalogConnections=p.catalogConnections.filter(row=>row.modelId!=='DeepSeek-V4-Flash-0731');
  s.modelSupplies.push({id:'saved-service-map',providerId:p.id,modelId:s.models[0].id,endpointId:ep.id,catalogueModelId:'DeepSeek-V4-Flash-0731',upstreamModelId:'deepseek-flash-existing',status:'已启用'});
  const link=catalogueChannels(s,p,'DeepSeek-V4-Flash-0731')[0];
@@ -254,6 +256,7 @@ test('an existing service-derived model association remains editable without cha
 
 test('fusion preserves saved resources, exact models, existing default keys, prices and service histories and never re-adds removed fixtures',()=>{
  const s=createAdminSeed(),p=owner(s);p.apiKeys=[{id:'manual-key',name:'我的凭证',fingerprint:'f'.repeat(64),maskedKey:'test••••••••2222'}];p.defaultApiKeyId='manual-key';p.catalogModels=[{modelId:'GLM-5.2',name:'我的模型名称',type:'text'}];
+ const legacy=legacySupplierState();s.endpoints.push(...legacy.endpoints.filter(row=>['supplier-review-CH-001','supplier-review-CH-002'].includes(row.id)));p.catalogConnections=owner(legacy).catalogConnections;
  const before=structuredClone(s),next=prepareSupplierReviewCases(s);
  assert.equal(owner(next).defaultApiKeyId,'manual-key');assert.deepEqual(owner(next).apiKeys[0],p.apiKeys[0]);assert.deepEqual(owner(next).catalogModels[0],p.catalogModels[0]);
  for(const e of s.endpoints)assert.deepEqual(next.endpoints.find(row=>row.id===e.id),e);
@@ -264,7 +267,7 @@ test('fusion preserves saved resources, exact models, existing default keys, pri
 });
 
 test('supplier resource writes retain role, conflict and storage failure guards',()=>{
- const s=parseAdminState(null),a=action('supplierChannelSave',{name:'新增',protocol:'OpenAI',baseUrl:'https://x.example.invalid/v1/chat/completions',authMode:'inherit'}),before=JSON.stringify(s);
+ const s=legacySupplierState(),a=action('supplierChannelSave',{name:'新增',protocol:'OpenAI',baseUrl:'https://x.example.invalid/v1/chat/completions',authMode:'inherit'}),before=JSON.stringify(s);
  assert.throws(()=>commitAdminState({...s,currentRole:'运维人员'},a),/无权/);
  assert.throws(()=>persistModelAction(s,a,{getItem:()=>JSON.stringify({...s,revision:s.revision+1}),setItem:()=>assert.fail()}),/数据已变化/);
  assert.throws(()=>persistModelAction(s,a,{getItem:()=>before,setItem:()=>{throw Error('quota');}}),/quota/);
@@ -273,7 +276,7 @@ test('supplier resource writes retain role, conflict and storage failure guards'
 
 
 test('model removal requires all channels to be unlinked, including disabled channels',()=>{
- const s=parseAdminState(null),before=structuredClone(s),modelId='GLM-5.2';
+ const s=legacySupplierState(),before=structuredClone(s),modelId='GLM-5.2';
  assert.equal(catalogueChannels(s,owner(s),modelId).length,2);
  assert.throws(()=>run(s,'catalogueRemove',{modelId,confirmed:true}),/请先删除.*全部渠道/);
  assert.deepEqual(s,before);
@@ -294,4 +297,38 @@ test('model removal requires all channels to be unlinked, including disabled cha
  assert.equal(catalogueChannels(removed,owner(removed),'DeepSeek-V4-Flash-0731').length,1);
  unchangedServices(s,removed);
  assert.deepEqual(s,before);
+});
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
+function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }
+
+test('channel editor saves shared name and the selected upstream identity atomically without changing cost, history or other mappings',()=>{
+ const state=legacySupplierState(),p=owner(state),ep=endpoint(state,'CH-001'),mapping=supplierChannelAssociations(state,p,ep.id)[0];
+ state.modelSupplies=[];state.serviceRoutes=[];
+ const before=structuredClone(state),values={mode:'info',endpointId:ep.id,name:'渠道编辑核验',associationId:mapping.id,modelId:mapping.modelId,upstreamModelId:'renamed/upstream-v2',expectedUpdatedAt:ep.updatedAt,expectedProviderUpdatedAt:p.updatedAt};
+ const next=run(state,'supplierChannelSave',values),saved=owner(next).catalogConnections.find(row=>row.id===mapping.id),old=p.catalogConnections.find(row=>row.id===mapping.id);
+ assert.equal(next.endpoints.find(row=>row.id===ep.id).name,values.name);assert.equal(saved.upstreamModelId,values.upstreamModelId);assert.equal(saved.enabled,false);assert.equal(saved.health,null);
+ for(const key of ['pricing','procurementVersions','procurementRevision','listPriceVersions','listPriceRevision','qualification'])assert.deepEqual(saved[key],old[key]);
+ assert.deepEqual(owner(next).catalogModels,p.catalogModels);
+ for(const row of p.catalogConnections.filter(row=>row.id!==mapping.id)){
+  const after=owner(next).catalogConnections.find(item=>item.id===row.id);
+  assert.deepEqual(after,row.endpointId===ep.id&&!row.deletedAt?{...row,name:values.name}:row);
+ }
+ assert.deepEqual(next.endpoints.find(row=>row.id===ep.id).connectionTest,ep.connectionTest);
+ unchangedServices(state,next);assert.deepEqual(state,before);
+ const restored=parseAdminState(JSON.stringify(next));assert.equal(owner(restored).catalogConnections.find(row=>row.id===mapping.id).upstreamModelId,values.upstreamModelId);
+ const another=supplierChannelAssociations(state,p,ep.id).find(row=>row.id!==mapping.id);
+ for(const patch of [{upstreamModelId:'bad id'},{upstreamModelId:''},{associationId:'missing'},{modelId:'wrong'},{upstreamModelId:another.upstreamModelId},{expectedUpdatedAt:'stale'},{expectedProviderUpdatedAt:'stale'}])assert.throws(()=>run(state,'supplierChannelSave',{...values,...patch}));
+ assert.throws(()=>run(withAdminSession({...state,currentRole:'运维人员'}),'supplierChannelSave',values),/无权/);
+ assert.deepEqual(state,before);
+});
+
+test('channel identity edits reject service references and active routes before changing either the name or the model identifier',()=>{
+ const state=legacySupplierState(),p=owner(state),ep=endpoint(state,'CH-001'),mapping=supplierChannelAssociations(state,p,ep.id)[0];
+ const values={mode:'info',endpointId:ep.id,name:'不得部分保存',associationId:mapping.id,modelId:mapping.modelId,upstreamModelId:'blocked/upstream'};
+ state.modelSupplies=[{id:'identity-reference',modelId:state.models[0].id,endpointId:ep.id,catalogueModelId:mapping.modelId,status:'已停用'}];state.serviceRoutes=[];
+ assert.throws(()=>run(state,'supplierChannelSave',values),/服务引用/);
+ state.modelSupplies=[];state.serviceRoutes=[{id:'identity-route',activeVersion:1,versions:[{version:1,config:{channels:[{supplyId:mapping.id,enabled:true}]}}]}];
+ const before=structuredClone(state);assert.throws(()=>run(state,'supplierChannelSave',values),/服务引用/);assert.deepEqual(state,before);
+ assert.doesNotThrow(()=>run(state,'supplierChannelSave',{...values,upstreamModelId:mapping.upstreamModelId}));
 });

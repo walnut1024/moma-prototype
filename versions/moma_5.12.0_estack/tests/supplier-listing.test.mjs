@@ -4,7 +4,6 @@ import { createAdminSeed, commitAdminState, parseAdminState } from '../src/admin
 import { supplierListingRows, supplierBatchEntry, supplierPublishEntry, previewSupplierBatch, listingPreferences, rememberListing, selectedCatalogueIds, rememberCatalogueSelection, listingAddress, validListingReturn, LISTING_PREFERENCES_KEY } from '../src/admin-v2/supplier-listing.js';
 import { markedUpItems } from '../src/admin-v2/provider-catalogue-pricing.js';
 import { activeSupplyPrice, procurementVersion } from '../src/admin-v2/model-management.js';
-import { libraryRecord } from '../src/admin-v2/model-library.js';
 const op = (state, operation, data) => commitAdminState(state, { type: 'modelOperations', operation, data });
 function fixture() {
   let state = op(createAdminSeed(), 'providerRegistration', { provider: { name: '批量供应商', code: 'batch-supplier', sourceType: 'thirdParty', catalogModelIds: ['batch-model-a', 'batch-model-b'] }, connections: [{ name: '批量接入', protocol: 'OpenAI', baseUrl: 'https://batch.example.invalid/v1', credentialRef: 'env:BATCH_TEST_KEY', timeoutSeconds: 60 }] });
@@ -72,17 +71,15 @@ test('final batch confirmation without service modes rejects all publication eff
   }
 });
 
-test('a prepared batch can return to configuration and recheck without losing new-model prices', () => {
-  const { state, providerId } = prepared();
-  for(const draft of state.modelOnboardings.filter(row=>row.providerId===providerId))state.models.find(row=>row.id===draft.modelId).updatedAt='2026-10-31T03:21:00.000Z';
+test('historical unsubmitted prices are not restored and direct batch failure is atomic', () => {
+  const { state, providerId } = prepared(), before = structuredClone(state);
   const entries = supplierListingRows(state, state.providers.find(item => item.id === providerId)).map(row => supplierBatchEntry(state, row));
-  for(const entry of entries){const master=libraryRecord(state,entry.libraryId);assert.equal(entry.libraryId,master.id);assert.equal(entry.libraryRevision,master.updatedAt);assert.ok(state.modelTemplates.some(row=>row.id===entry.libraryId));}
-  const checked = op(state, 'prepareSupplierBatch', { providerId, items: entries });
-  const before=structuredClone(checked);
-  assert.throws(()=>op(checked, 'publishSupplierBatch', { providerId, items: publication(checked, providerId) }),/服务模式/);
-  assert.deepEqual(checked,before);assert.equal(checked.models.length, state.models.length);
-  assert.ok(checked.modelOnboardings.filter(item => item.providerId === providerId).every(item => item.status !== '已完成' && item.prices.length === 2));
-  assert.deepEqual(checked.modelOnboardings.filter(item=>item.providerId===providerId).map(item=>item.prices),state.modelOnboardings.filter(item=>item.providerId===providerId).map(item=>item.prices));
+  assert.ok(entries.every(entry => entry.prices.every(item => item.amount === '')));
+  assert.throws(() => op(state, 'submitSupplierBatch', { providerId, items: entries }), /售价必填/);
+  assert.deepEqual(state, before);
+  const ready = fixture(), snapshot = structuredClone(ready.state);
+  assert.throws(() => op(ready.state, 'submitSupplierBatch', { providerId: ready.providerId, items: ready.entries }), /服务模式/);
+  assert.deepEqual(ready.state, snapshot);
 });
 
 test('failed final confirmation leaves proposed scopes in drafts without changing any existing model', () => {

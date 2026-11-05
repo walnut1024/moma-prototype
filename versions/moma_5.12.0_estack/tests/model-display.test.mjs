@@ -1,6 +1,7 @@
+import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAdminSeed, commitAdminState, persistModelAction } from '../src/admin-v2/store.js';
+import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction } from '../src/admin-v2/store.js';
 import { libraryRecord } from '../src/admin-v2/model-operations.js';
 
 function action(model, values = {}) {
@@ -38,3 +39,5 @@ test('display retains role, revision and failed-persistence protection', () => {
   assert.throws(() => persistModelAction(state, action(model), { getItem: () => JSON.stringify(state), setItem: () => { throw Error('storage full'); } }), /storage full/);
   assert.deepEqual(state, before);
 });
+
+function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }

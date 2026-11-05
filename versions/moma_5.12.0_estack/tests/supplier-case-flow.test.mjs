@@ -1,6 +1,7 @@
+import { legacySupplierState } from './legacy-supplier-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createAdminSeed,parseAdminState,commitAdminState} from '../src/admin-v2/store.js';
+import {createAdminSeed,commitAdminState} from '../src/admin-v2/store.js';
 import {prepareSupplierReviewCases} from '../src/admin-v2/supplier-review-cases.js';
 import {supplierChannelResources,supplierChannelAssociations,supplierCredentialIssues,supplierChannelReadiness} from '../src/admin-v2/supplier-resources.js';
 import {displayedCatalogueIds} from '../src/admin-v2/moma-provider.js';
@@ -31,7 +32,7 @@ test('a legacy inherited-credential choice takes effect only after the channel c
 });
 
 test('the credential warning is scoped to the actual affected models and Kimi recovery cannot skip stages',async()=>{
- let s=parseAdminState(null);const id='provider-kimi-official';let p=owner(s,id),ep=supplierChannelResources(s,p)[0];
+ let s=legacySupplierState();const id='provider-kimi-official';let p=owner(s,id),ep=supplierChannelResources(s,p)[0];
  assert.deepEqual(supplierCredentialIssues(s,p).map(issue=>issue.modelIds),[['kimi-k2']]);
  assert.deepEqual(supplierCredentialIssues(s,p,[]),[]);
  const before=JSON.stringify(s);let link=catalogueChannels(s,p,'kimi-k2')[0];
@@ -52,7 +53,7 @@ test('the credential warning is scoped to the actual affected models and Kimi re
 });
 
 test('a saved native model linked to a chat-only channel cannot be reported or retested as usable',()=>{
- const s=parseAdminState(null),p=owner(s),ep=s.endpoints.find(row=>row.channelCode==='CH-001');
+ const s=legacySupplierState(),p=owner(s),ep=s.endpoints.find(row=>row.channelCode==='CH-001');
  p.catalogConnections.push({...p.catalogConnections.find(row=>row.endpointId===ep.id),id:'old-vector-link',modelId:'BGE-M3',upstreamModelId:'BGE-M3'});
  const link=catalogueChannels(s,p,'BGE-M3')[0];
  assert.match(channelInterfaceIssue(p,link),/不适用 Chat Completions/);
@@ -61,7 +62,7 @@ test('a saved native model linked to a chat-only channel cannot be reported or r
 });
 
 test('failed or inactive shared resources block service selection even when a model association was previously enabled',()=>{
- const s=parseAdminState(null),p=owner(s),ep=s.endpoints.find(row=>row.channelCode==='CH-001');
+ const s=legacySupplierState(),p=owner(s),ep=s.endpoints.find(row=>row.channelCode==='CH-001');
  const link=catalogueChannels(s,p,'GLM-5.2').find(row=>row.endpointId===ep.id);
  assert.equal(channelBlockReason(p,link),'');
  const failed=run(s,p.id,'supplierChannelTest',{endpointId:ep.id,scenario:'超时'}),failedProvider=owner(failed);

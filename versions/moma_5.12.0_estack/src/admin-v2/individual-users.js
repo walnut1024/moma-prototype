@@ -1,3 +1,4 @@
+import { initialPersonalData } from '../mock/application-data.js';
 import { enterpriseDisplayValue, validateDemoAdminCode } from './enterprise.js';
 import { MODEL_ORDER_BILLING_TYPES } from '../model-order-display.mjs';
 
@@ -16,49 +17,7 @@ export function filterIndividualAccounts(state, { q = '', status = '' } = {}) {
 
 // Explicit browser-local phone-registration fixtures; these are not real identities.
 export function individualSeed() {
-  const users = [], tenants = [], projects = [], apiKeys = [], grants = [];
-  const names = ['林间风', '云边客', '星河', '码上见', '小满', '远山', '南风', '清禾', '蓝鲸', '拾光', '听雨', '向晚'];
-  names.forEach((nickname, index) => {
-    const number = String(index + 1).padStart(3, '0');
-    const userId = `user-personal-demo-${number}`, tenantId = `personal-demo-${number}`;
-    const phone = `13800001${number}`, registeredAt = `2026-09-${String(30 - index).padStart(2, '0')}T${index % 2 ? '15:30' : '09:20'}:00+08:00`;
-    const frozen = [3, 8].includes(index), hasProject = index < 7;
-    const common = { createdAt: registeredAt, updatedAt: registeredAt, demo: true };
-    users.push({ ...common, id: userId, name: nickname, nickname, phone, login: phone, email: index % 3 === 0 ? `personal${number}@example.com` : '', status: '正常', initialized: true, registeredAt, phoneVerifiedAt: registeredAt, lastLoginAt: index % 4 === 0 ? null : `2026-10-0${index % 3 + 1}T10:12:00+08:00` });
-    tenants.push({ ...common, id: tenantId, name: nickname, type: '个人', ownerId: userId, status: frozen ? '停用' : '正常', notes: '', source: '手机号注册', freezeReason: frozen ? '账号异常，暂停个人空间访问' : '' });
-    if (hasProject) {
-      const projectId = `personal-project-demo-${number}`, keyId = `personal-key-demo-${number}`;
-      projects.push({ ...common, id: projectId, tenantId, name: '默认项目', ownerId: userId, status: '正常', budget: 0 });
-      apiKeys.push({ ...common, id: keyId, keyId: `ak-personal-demo-${number}`, name: '开发测试', tenantId, projectId, modelIds: ['model-1', 'model-2'], secretPreview: `sk-demo*****${number}0`, status: index === 4 ? '停用' : '有效', lastUsedAt: null });
-      grants.push({ ...common, id: `personal-grant-demo-${number}`, subjectType: 'key', subjectId: keyId, modelIds: ['model-1', 'model-2'], period: 'month', limit: 1000000, used: 0, expiresAt: '2026-12-31', status: '生效中' });
-    }
-  });
-  const products = [
-    { id: 'personal-product-demo-ds', name: 'DeepSeek 按量服务', billingType: 'payg', modelIds: ['model-1'], tariffScenario: '输入 Token\n输出 Token', catalogPrice: '2 元/百万 Token\n4 元/百万 Token' },
-    { id: 'personal-product-demo-glm', name: 'GLM 按量服务', billingType: 'payg', modelIds: ['model-2'], tariffScenario: '输入 Token\n输出 Token', catalogPrice: '3 元/百万 Token\n6 元/百万 Token' },
-    { id: 'personal-product-demo-token-basic', name: 'Token Plan · 标准版', billingType: 'plan', modelIds: ['model-1', 'model-2'], tariffScenario: '月度 Token 额度', catalogPrice: '699 元/月', entitlement: 100000000, quotaUnit: 'Token' },
-    { id: 'personal-product-demo-token-pro', name: 'Token Plan · 专业版', billingType: 'plan', modelIds: ['model-1', 'model-2', 'model-7'], tariffScenario: '月度 Token 额度', catalogPrice: '1699 元/月', entitlement: 300000000, quotaUnit: 'Token' },
-    { id: 'personal-product-demo-coding-lite', name: 'Coding Plan · Lite', billingType: 'coding', modelIds: ['model-1', 'model-2'], tariffScenario: '月度编程请求额度', catalogPrice: '99 元/月', entitlement: 600, quotaUnit: '次' },
-    { id: 'personal-product-demo-coding-pro', name: 'Coding Plan · Pro', billingType: 'coding', modelIds: ['model-1', 'model-2', 'model-7'], tariffScenario: '月度编程请求额度', catalogPrice: '199 元/月', entitlement: 1200, quotaUnit: '次' },
-  ].map(product => ({ ...product, providerName: '移动云', demo: true, status: '已上架' }));
-  const orders = [];
-  const addOrder = (tenantId, product, sequence, period, status, used) => {
-    const month = period === 'current' ? '10' : period === 'future' ? '11' : '10';
-    const createdAt = `2026-10-${period === 'future' ? '03' : '01'}T09:00:00+08:00`;
-    orders.push({ id: `personal-order-demo-${tenantId.slice(-3)}-${String(sequence).padStart(2, '0')}`, orderNo: `ORD-P-${tenantId.slice(-3)}-2026${month}-${String(sequence).padStart(2, '0')}`, tenantId, productId: product.id, billingType: product.billingType, providerName: product.providerName, catalogPrice: product.catalogPrice, tariffScenario: product.tariffScenario, modelIds: product.modelIds, entitlement: product.entitlement, quotaUnit: product.quotaUnit, used, status, createdAt, updatedAt: createdAt, startAt: `2026-${period === 'future' ? '11' : '10'}-01T10:00:00+08:00`, endAt: period === 'past' ? '2026-10-03T23:59:59+08:00' : `2026-${month}-${month === '11' ? '30' : '31'}T23:59:59+08:00`, demo: true });
-  };
-  // Supported billing types share the first page; history exercises pagination.
-  const firstPage = [0, 2, 4, 5, 1, 3, 2, 4];
-  firstPage.forEach((index, sequence) => addOrder('personal-demo-001', products[index], sequence + 1, 'current', '已开通', products[index].entitlement == null ? undefined : Math.round(products[index].entitlement * [0.25, 0.48, 0, 0.72][sequence % 4])));
-  for (let index = 0; index < 16; index++) {
-    const product = products[index % products.length], future = index < 4, cancelled = index >= 12;
-    addOrder('personal-demo-001', product, index + 9, future ? 'future' : 'past', future ? '待生效' : cancelled ? '已取消' : '已到期', product.entitlement == null ? undefined : future || cancelled ? 0 : product.entitlement);
-  }
-  addOrder('personal-demo-002', products[4], 1, 'current', '已开通', 126);
-  addOrder('personal-demo-002', products[5], 2, 'past', '已到期', 1200);
-  addOrder('personal-demo-003', products[2], 1, 'current', '已开通', 2800000);
-  addOrder('personal-demo-003', products[3], 2, 'future', '待生效', 0);
-  return { users, tenants, projects, apiKeys, grants, products, orders };
+  return initialPersonalData();
 }
 
 export function individualTransaction(state, command, actor = state.currentRole) {
