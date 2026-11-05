@@ -44,14 +44,16 @@ export function routingChannels(state, service, at = Date.now(), { runtime = fal
 
 export const serviceRoute = (state, serviceId) => (state.serviceRoutes || []).find(item => item.serviceId === serviceId);
 export const activeRouteVersion = route => route?.versions.find(item => item.version === route.activeVersion);
-export const emptyRouteConfig = service => ({ strategy: service.mode === 'provider' ? 'fixed' : 'weighted', groups:[{id:'P1',name:'主用组',strategy:'weighted'}], channels: [], autoFailover: true, excludeAbnormal:true, autoRecover:true, advanced:{...ROUTE_ADVANCED_DEFAULTS} });
+export const lastRouteVersion = route => route?.versions.reduce((last,item)=>!last || item.version>last.version?item:last,null);
+export const routeStopReason = service => service.model.listingStatus==='已上架' && service.model.callsEnabled!==false && (!service.providerId || providerServices(service.model).find(row=>row.providerId===service.providerId)?.callsEnabled!==false) ? (service.providerId?'请先停服当前供应商，再停用路由。其他供应商不受影响。':'请先在模型页头下架并停用服务，再停用路由。隐藏模型不能代替停服。') : '';
+export const emptyRouteConfig = () => ({ strategy:'fixed', groups:[{id:'P1',name:'默认组',strategy:'fixed'}], channels: [], autoFailover:false, excludeAbnormal:true, autoRecover:false, advanced:{...ROUTE_ADVANCED_DEFAULTS} });
 
 export function routeGroups(config) {
   return config?.groups || [{id:'P1',name:'主用组',strategy:GROUP_STRATEGIES.includes(config?.strategy)?config.strategy:'weighted'}];
 }
 
 export function routeSourceVersion(state, service) {
-  return JSON.stringify([service.id, service.model.updatedAt, service.model.capabilities, routingChannels(state, service).map(item => [item.id, item.channelId, item.channelUpdatedAt, item.channelHealth, item.reason, item.mapping, item.p95LatencyMs, item.activeRequests, item.provider?.id, item.endpointId, item.upstreamModelId, item.status, item.validationStatus, item.capabilities, item.updatedAt, item.endpoint?.updatedAt, item.endpoint && connectionFingerprint(item.endpoint), item.endpoint?.connectionTest, item.provider?.status, item.costVersion])]);
+  return JSON.stringify([service.id, service.model.updatedAt, service.model.capabilities, routingChannels(state, service).sort((a,b)=>a.id.localeCompare(b.id)).map(item => [item.id, item.channelId, item.channelUpdatedAt, item.channelHealth, item.reason, item.mapping, item.p95LatencyMs, item.activeRequests, item.provider?.id, item.endpointId, item.upstreamModelId, item.status, item.validationStatus, item.capabilities, item.updatedAt, item.endpoint?.updatedAt, item.endpoint && connectionFingerprint(item.endpoint), item.endpoint?.connectionTest, item.provider?.status, item.costVersion])]);
 }
 
 export function normalizeRouteConfig(input) {
@@ -138,7 +140,7 @@ export function validateRouteConfig(state, service, input, requireHealthy = true
 
 export function routingStatus(state, service) {
   const route = serviceRoute(state, service.id), version = activeRouteVersion(route);
-  if (!version) return { label: '待配置', good: false, reason: '尚未发布路由配置' };
+  if (!version) return lastRouteVersion(route)?{label:'已停用',good:false,reason:'路由已停用，请恢复或重新配置。'}:{ label: '待配置', good: false, reason: '尚未发布路由配置' };
   try { validateRouteConfig(state, service, version.config); return { label: '已配置', good: true, reason: '' }; }
   catch (error) { return { label: '需调整', good: false, reason: error.message }; }
 }
@@ -178,8 +180,8 @@ export function routingTransaction(state, { operation, data = {} }) {
   let changes, label;
   if (operation==='serviceRouteStop') {
     if (!route || !route.activeVersion && !route.draft) throw new Error('当前没有可停用的路由或草稿');
-    if (service.model.listingStatus==='已上架') throw new Error('请先下架模型再停用路由');
-    if (!data.confirmed) throw new Error('请确认停用路由并清空未发布草稿');
+    const reason=routeStopReason(service);if(reason)throw new Error(reason);
+    if (data.confirmed!==true) throw new Error('请确认停用路由并清空未发布草稿');
     changes={activeVersion:0,draft:null,draftUpdatedAt:null};label='停用服务路由并清空草稿';
   } else if (operation === 'serviceRouteDraft') {
     const draft = normalizeRouteConfig(data.config);
@@ -187,16 +189,19 @@ export function routingTransaction(state, { operation, data = {} }) {
     if (draft.channels.some(item=>!candidates.has(item.supplyId))) throw new Error('所选渠道不属于当前模型或供应商');
     changes = { draft, draftUpdatedAt: new Date().toISOString() };
     label = '保存路由草稿';
-  } else if (operation === 'serviceRoutePublish' || operation === 'serviceRouteRollback') {
+  } else if (['serviceRoutePublish','serviceRouteRollback','serviceRouteRestore'].includes(operation)) {
     if (!service.callId) throw new Error('请先在服务内容配置对外调用 ID');
     if (data.sourceVersion !== routeSourceVersion(state, service)) throw new Error('供应渠道、模型或成本已变化，请重新校验并确认');
-    const previous = operation === 'serviceRouteRollback' && route?.versions.find(item => item.version === data.version);
+    const restoring=operation==='serviceRouteRestore';
+    if(restoring && (current || !lastRouteVersion(route)))throw new Error('当前路由未停用或没有可恢复的配置');
+    if(restoring && (data.confirmed!==true || route.draft))throw new Error('请先确认恢复；存在路由草稿时，请先明确配置并发布，避免覆盖草稿');
+    const previous = restoring ? lastRouteVersion(route) : operation === 'serviceRouteRollback' && route?.versions.find(item => item.version === data.version);
     if (operation === 'serviceRouteRollback' && (!previous || previous.version === current)) throw new Error('请选择一个可回滚的历史版本');
     const config = validateRouteConfig(state, service, previous ? previous.config : data.config);
     const version = Math.max(0, ...(route?.versions || []).map(item => item.version)) + 1;
-    const snapshot = { id: crypto.randomUUID(), version, config, publishedAt: new Date().toISOString(), actor: state.currentRole, rollbackFrom: previous?.version || null, costVersions: Object.fromEntries(routingChannels(state, service).filter(item => config.channels.some(row => row.supplyId === item.id)).map(item => [item.id, item.costVersion])) };
+    const snapshot = { id: crypto.randomUUID(), version, config, publishedAt: new Date().toISOString(), actor: state.currentRole, rollbackFrom: !restoring && previous?.version || null, ...(restoring?{restoredFrom:previous.version}:{}), costVersions: Object.fromEntries(routingChannels(state, service).filter(item => config.channels.some(row => row.supplyId === item.id)).map(item => [item.id, item.costVersion])) };
     changes = { draft: null, draftUpdatedAt: null, activeVersion: version, versions: [...(route?.versions || []), snapshot] };
-    label = previous ? `回滚路由至 v${previous.version}，生成 v${version}` : `发布路由 v${version}`;
+    label = restoring?'恢复服务路由':previous ? `回滚路由至 v${previous.version}，生成 v${version}` : `发布路由 v${version}`;
   } else throw new Error('未知路由操作');
   return { type: 'batch', objectId: id, label, changes: [{ type: route ? 'update' : 'add', collection: 'serviceRoutes', id, ...(route ? { changes } : { record: { id, serviceId: service.id, activeVersion: 0, versions: [], ...changes } }) }] };
 }

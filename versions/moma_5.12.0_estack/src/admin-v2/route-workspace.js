@@ -1,11 +1,11 @@
-import { activeRouteVersion, emptyRouteConfig, normalizeRouteConfig, routeGroups, ROUTE_ADVANCED_DEFAULTS, ROUTING_STRATEGIES } from './service-routing.js';
+import { activeRouteVersion, lastRouteVersion, emptyRouteConfig, normalizeRouteConfig, routeGroups, ROUTE_ADVANCED_DEFAULTS, ROUTING_STRATEGIES } from './service-routing.js';
 
 export const routeStrategyChoices = () => ['fixed', 'weighted', 'latency'];
 
-export function routeEditConfig(service, route, channels = []) {
-  const saved = activeRouteVersion(route)?.config;
+export function routeEditConfig(service, route) {
+  const saved = (activeRouteVersion(route) || lastRouteVersion(route))?.config;
   // Existing runtime settings survive this UI change; new routes do not enable deferred failover.
-  const config = structuredClone(saved || {...emptyRouteConfig(service), strategy: service.mode !== 'standard' && channels.length === 1 ? 'fixed' : 'weighted', autoFailover: false, autoRecover: false});
+  const config = structuredClone(saved || emptyRouteConfig(service));
   return {...config, groups: routeGroups(config), channels: config.channels.map(row => ({...row, groupId: row.groupId || 'P1'})), advanced: {...ROUTE_ADVANCED_DEFAULTS, ...config.advanced}};
 }
 

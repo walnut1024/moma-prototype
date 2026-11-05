@@ -27,7 +27,7 @@ test('guide keeps task links, diagrams and continued field-table steps from the 
   const blocks = sections.flatMap(section => [...section.blocks, ...section.tasks.flatMap(task => task.blocks)]);
   const ids = new Set([...sections.map(section => section.id), ...tasks.map(task => task.id), ...blocks.filter(block => block.type === 'anchor').map(block => block.id)]);
   for (const link of source.matchAll(/\]\(#([^)]+)\)/g)) assert.equal(ids.has(link[1]), true, link[1]);
-  assert.equal(tasks.length, 27);
+  assert.equal(tasks.length, 28);
   assert.equal(blocks.filter(block => block.type === 'image').length, 2);
   const channel = tasks.find(task => task.id === 'channel-add');
   assert.deepEqual(channel.blocks.filter(block => block.type === 'list').map(block => block.start), [1, 3]);

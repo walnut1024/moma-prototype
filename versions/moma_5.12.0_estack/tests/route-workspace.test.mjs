@@ -16,9 +16,9 @@ test('unified choices are restricted without rewriting existing route history or
   assert.deepEqual(route,before);
 });
 
-test('new unified routes use weighted strategy even for a single channel without enabling failover',()=>{
+test('new routes default to fixed with explicit empty selection and no failover',()=>{
   const single=routeEditConfig(service,null,[channels[0]]), multiple=routeEditConfig(service,null,channels);
-  assert.equal(single.strategy,'weighted');assert.equal(multiple.strategy,'weighted');
+  assert.equal(single.strategy,'fixed');assert.equal(multiple.strategy,'fixed');
   assert.equal(single.autoFailover,false);assert.equal(single.autoRecover,false);assert.deepEqual(single.channels,[]);
 });
 test('opening an existing route preserves runtime settings and never mutates its history',()=>{

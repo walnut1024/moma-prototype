@@ -113,7 +113,7 @@ export function operationsTransaction(state, action) {
   if (/^channel(Draft|Discovery|Metadata|TestEvidence|TemporaryTest)/.test(action.operation) || action.operation === 'supplierSelection') return channelOnboardingTransaction(state, action);
   if (/^channel(Candidate|Procurement)/.test(action.operation) || action.operation.startsWith('keyGroupCandidate') || action.operation === 'credentialEmergencyRevoke') return channelChangeTransaction(state, action);
   if (action.operation.startsWith('serviceMapping')) return serviceMappingTransaction(state,action);
-  if (['serviceRouteDraft', 'serviceRoutePublish', 'serviceRouteRollback','serviceRouteStop'].includes(action.operation)) return routingTransaction(state, action);
+  if (['serviceRouteDraft', 'serviceRoutePublish', 'serviceRouteRollback','serviceRouteStop','serviceRouteRestore'].includes(action.operation)) return routingTransaction(state, action);
   // Cloud commands keep simulation history and reference data read-only.
   const working = state.cloudOperations ? {...state,...Object.fromEntries(['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','modelVersions','validations','modelOnboardings','serviceRoutes','tariffDictionary','modelData'].map(key=>[key,structuredClone(state[key])]))} : structuredClone(state), changes = [];
   const apply = transaction => {

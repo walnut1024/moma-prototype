@@ -73,3 +73,8 @@
 .admin-ui-portal .service-mapping-preview dd,.admin-ui-portal .service-mapping-fields dd{margin:4px 0 0;overflow-wrap:anywhere}
 .admin-ui-portal .service-mapping-preview code,.admin-ui-portal .service-mapping-fields code{white-space:normal;overflow-wrap:anywhere}
 @media(max-width:700px){.admin-ui-portal .service-mapping-preview,.admin-ui-portal .service-mapping-fields{grid-template-columns:1fr}}
+
+.admin-v2 .sr-route-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px;background:#f8faff;border-block:1px solid #e8edf5}
+.admin-v2 .sr-route-heading h3,.admin-v2 .sr-route-heading>div{display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap;font-size:14px}
+.admin-v2 .sr-fixed-picker{padding:12px;border-bottom:1px solid #e8edf5}.admin-v2 .sr-fixed-picker .mm-field{display:grid;gap:8px;margin:0}.admin-v2 .sr-fixed-picker [data-slot=select-trigger]{width:100%;min-width:0;height:auto;min-height:36px;white-space:normal}
+.admin-v2 .sr-fixed-picker [data-slot=select-trigger]>span{white-space:normal;text-align:left;overflow-wrap:anywhere}
