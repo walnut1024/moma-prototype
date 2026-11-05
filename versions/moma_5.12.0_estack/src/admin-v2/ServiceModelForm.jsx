@@ -4,11 +4,12 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import ModelMetadataForm from './ModelMetadataForm';
 import { Choice, Field, MultiChoice } from './ModelMetadataForm';
 import { Notice } from './ModelOperationsUI';
 import { MODEL_TYPES } from './model-management';
 import {serviceModelSources} from './supply-models';
-import { modelAuthors, serviceModelDraft, serviceModelSourceDraft, INPUT_MODALITY_OPTIONS, SERVICE_OUTPUT_MODALITIES, TASK_OPTIONS } from './model-profile';
+import { modelAuthors, serviceMetadataReady, serviceModelDraft, serviceModelSourceDraft, INPUT_MODALITY_OPTIONS, SERVICE_OUTPUT_MODALITIES, TASK_OPTIONS } from './model-profile';
 
 
 export default function ServiceModelForm({state,sourceState=state,ops,model,close,saved,sourceLibraryId,guided=false,draftValues}) {
@@ -27,17 +28,23 @@ export default function ServiceModelForm({state,sourceState=state,ops,model,clos
     return values;
   });
   const [source,setSource]=useState(initialSource?.id || ''), [query,setQuery]=useState(''), [sourceOpen,setSourceOpen]=useState(false), [replacement,setReplacement]=useState(null);
-  const [revision]=useState(model?.updatedAt);
+  const [revision]=useState(model?.updatedAt), [serviceMode,setServiceMode]=useState('');
+  const standalone=!model && !guided, selectedSource=library.find(row=>row.id===source);
+  const maintainSource=()=>{const back=new URLSearchParams(ops.params);back.set('view','add');back.set('sourceLibrary',source);ops.go({view:'template',template:source,materialMode:'edit',returnListing:'#/admin-2/listing?'+back},{base:'model-templates'});};
   const matches=library.filter(item=>[item.name,item.modelId].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
   const change=patch=>{setForm(current=>({...current,...patch}));ops.dirty(true);ops.setError('');};
   const importRecord=record=>{setForm(serviceModelSourceDraft(sourceState,record));setSource(record.id);setSourceOpen(false);setReplacement(null);ops.dirty(true);ops.setError('');};
   const select=record=>{setSourceOpen(false);if(Object.values(form).some(value=>Array.isArray(value)?value.length:value && value!=='K'))setReplacement(record);else importRecord(record);};
-  return <form className="sm-model-form" noValidate aria-label={model?'编辑模型资料':'新增模型服务'} onSubmit={async event=>{event.preventDefault();if(!model && !source){ops.setError('请先选择已接入模型');return;}const next=await ops.run(model?'serviceBasics':'createServiceModel',{...form,...(!model && source?{libraryId:source}:{}),expectedUpdatedAt:revision},model?.id);if(next)saved(next,model?.id || next.audits[0].objectId);}}>
+  return <form className="sm-model-form" noValidate aria-label={model?'编辑模型资料':'新增模型服务'} onSubmit={async event=>{event.preventDefault();if(!model && !source){ops.setError('请先选择已接入模型');return;}if(standalone && !serviceMode){ops.setError('请选择服务模式');return;}const next=await ops.run(model?'serviceBasics':'createServiceModel',{...form,...(!model && source?{libraryId:source}:{}),...(standalone?{serviceMode}:{}),expectedUpdatedAt:revision},model?.id);if(next)saved(next,model?.id || next.audits[0].objectId);}}>
     <h2>{guided?'补全对外资料':model?'编辑模型资料':'新增模型服务'}</h2>
     {model?.listingStatus==='已上架' && <p className="mo-muted">修改模型类型或输入、输出能力后，模型将自动下架，关联渠道需重新验证。</p>}
     {!model && !sourceLibraryId && <div className="mm-field sm-source-field"><div className="sm-source-heading"><span>已接入模型 *</span><Button type="button" variant="link" onClick={()=>ops.go({view:null,template:null,model:null,sourceLibrary:null,listingReturn:null,panel:null,perspective:'models'},{base:'providers'})}>前往模型接入</Button></div><Popover open={sourceOpen} onOpenChange={setSourceOpen}><PopoverTrigger asChild><Button type="button" variant="outline" className="sm-source-trigger" aria-label="选择已接入模型"><span>{library.find(item=>item.id===source)?.name || '从模型接入中搜索并选择模型'}</span><ChevronDown/></Button></PopoverTrigger><PopoverContent className="sm-source-picker" align="start"><Input aria-label="查询已接入模型" placeholder="模型名称 / 规范模型标识" value={query} onChange={event=>setQuery(event.target.value)}/><div>{matches.map(item=><Button key={item.id} type="button" variant="ghost" disabled={state.models.some(row=>row.id===item.id || row.templateId===item.id)} onClick={()=>select(item)}><strong>{item.name}</strong><small>{item.modelId}{state.models.some(row=>row.id===item.id || row.templateId===item.id)?' · 已有服务':''}</small></Button>)}{!matches.length && <p>暂无可选的已接入模型，请先在模型接入中添加模型。</p>}</div></PopoverContent></Popover><small>来源：模型接入 → 模型。保留同一模型资料引用，服务售价与路由另行配置。</small></div>}
     {replacement && <div className="sm-import-confirm" role="alert"><p>引入“{replacement.name}”将替换当前已填写的模型资料。</p><Button type="button" variant="outline" onClick={()=>setReplacement(null)}>保留当前内容</Button><Button type="button" onClick={()=>importRecord(replacement)}>确认引入</Button></div>}
-    <div className="sm-metadata-grid">
+    {standalone ? <>
+      {selectedSource && <section aria-label="引用的模型资料"><div className="sm-section-bar"><h3>模型资料</h3><Button type="button" variant="link" onClick={maintainSource}>维护模型资料</Button></div><ModelMetadataForm model={selectedSource} readOnly cardOnly title=""/>{!serviceMetadataReady(selectedSource) && <Notice error>模型资料尚未完善，请先维护作者、发布时间、支持任务、模态及简介。</Notice>}</section>}
+      <div className="sm-metadata-grid"><Field label="服务模式 *"><Choice label="服务模式" value={serviceMode || 'none'} options={[[ 'none','请选择服务模式' ],['standard','统一服务'],['provider','分供应商']]} disabled={!ops.can} onChange={mode=>{setServiceMode(mode==='none'?'':mode);ops.dirty(true);}}/></Field><Field label="对外调用标识 *" hint="客户请求平台时填写的 model 参数；分供应商模式还需配置各供应商的调用标识。"><Input aria-label="对外调用标识" value={form.modelId} maxLength={80} disabled={!ops.can} onChange={event=>change({modelId:event.target.value})}/></Field></div>
+      {serviceMode && <p>{serviceMode==='standard'?'客户使用一个调用标识和统一售价，平台选择供应渠道。':'客户选择供应商，使用各供应商的调用标识和售价。'}</p>}
+    </> : <div className="sm-metadata-grid">
       <Field label="模型名称 *"><Input aria-label="模型名称" required maxLength={100} disabled={!ops.can} value={form.name} onChange={event=>change({name:event.target.value})}/></Field>
       <Field label="对外调用标识 *" hint={model?'创建后不可修改；对外调用标识 在服务内容中配置。':'用户调用平台 API 时填写的 model 参数；最多 80 字符。'}><Input aria-label="对外调用标识" required readOnly={Boolean(model)} maxLength={80} autoCapitalize="none" spellCheck={false} disabled={!ops.can} value={form.modelId} onChange={event=>change({modelId:event.target.value})}/></Field>
       <Field label="模型类型 *"><Choice label="模型类型" value={form.type || 'none'} disabled={!ops.can || guided || !model && Boolean(source)} options={[[ 'none','请选择模型类型'],...Object.entries(MODEL_TYPES)]} onChange={type=>change({type:type==='none'?'':type})}/></Field>
@@ -48,8 +55,8 @@ export default function ServiceModelForm({state,sourceState=state,ops,model,clos
       <Field label="输入模态 *"><MultiChoice label="输入模态" choices={INPUT_MODALITY_OPTIONS} value={form.inputModalities} disabled={!ops.can} onChange={inputModalities=>change({inputModalities})}/></Field>
       <Field label="输出模态 / 结果类型 *"><MultiChoice label="输出模态 / 结果类型" choices={SERVICE_OUTPUT_MODALITIES} value={form.outputModalities} disabled={!ops.can} onChange={outputModalities=>change({outputModalities})}/></Field>
       <div className="sm-form-span"><Field label="模型简介 *"><Textarea aria-label="模型简介" required maxLength={1000} rows={3} disabled={!ops.can} value={form.description} onChange={event=>change({description:event.target.value})}/></Field></div>
-    </div>
+    </div>}
     {ops.error && <Notice error>{ops.error}</Notice>}
-    <div className="sm-form-footer"><span>{!model && !guided && '添加后配置服务模式、售价和渠道，确认后上架。'}</span><Button type="button" variant="outline" onClick={close}>{guided?'返回连接检查':'取消'}</Button><Button type="submit" disabled={!ops.can || !model && !source}>{guided?'保存资料并继续':model?'保存模型资料':'完成添加'}</Button></div>
+    <div className="sm-form-footer"><span>{!model && !guided && '添加后继续配置模型映射、路由、售价和开放范围。'}</span><Button type="button" variant="outline" onClick={close}>{guided?'返回连接检查':'取消'}</Button><Button type="submit" disabled={!ops.can || !model && !source || standalone && (!serviceMode || !serviceMetadataReady(selectedSource))}>{guided?'保存资料并继续':model?'保存模型资料':'完成添加'}</Button></div>
   </form>;
 }

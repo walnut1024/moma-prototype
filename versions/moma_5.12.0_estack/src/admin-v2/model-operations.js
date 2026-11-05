@@ -27,6 +27,7 @@ import { channelFingerprint, channelInterfaceIssue } from './provider-channels.j
 import { supplierChannelAssociations } from './supplier-resources.js';
 import { platformPriceVersions } from './platform-service-client.js';
 import { modelOperationsExamplesTransaction } from './model-operations-examples.js';
+import { CHANNEL_INTERFACES } from './channel-interface.js';
 
 export { providerCode } from './provider-management.js';
 export const callModelId = (provider, model) => `${providerCode(provider)}/${modelCode(model)}`;
@@ -174,9 +175,13 @@ export function operationsTransaction(state, action) {
     const association = data.associationId && supplierChannelAssociations(working, provider, endpoint.id).find(row => row.id === data.associationId && row.modelId === data.modelId);
     if (data.associationId && !association || !association && data.scenarios !== undefined) throw new Error('模型与渠道的关联已变化');
     if (typeof data.baseUrl !== 'string' || !data.baseUrl.trim()) throw new Error('请填写 API 地址');
+    if(data.protocol!==undefined && !['OpenAI','Anthropic','其他'].includes(data.protocol)) throw Error('请选择已支持的上游协议');
+    const interfaceType=CHANNEL_INTERFACES.find(row=>row.protocol===data.protocol)?.id;
+    const protocolChanged=data.protocol!==undefined && (data.protocol!==endpoint.protocol || interfaceType!==endpoint.interfaceType);
+    const protocolConfig=protocolChanged ? {protocol:data.protocol,interfaceType,taskUrls:{},adapterOptions:{}} : {};
     const addressChanged = data.baseUrl.trim() !== endpoint.baseUrl;
     if (data.keyGroupId !== undefined && (typeof data.keyGroupId !== 'string' || !data.keyGroupId)) throw new Error('请选择有效的共享API密钥组');
-    const keyGroupChanged = data.keyGroupId !== undefined && (endpoint.authMode !== 'group' || endpoint.keyGroupId !== data.keyGroupId), connectionChanged = addressChanged || keyGroupChanged || data.newApiKey !== undefined;
+    const keyGroupChanged = data.keyGroupId !== undefined && (endpoint.authMode !== 'group' || endpoint.keyGroupId !== data.keyGroupId), connectionChanged = protocolChanged || addressChanged || keyGroupChanged || data.newApiKey !== undefined;
     if (data.newApiKey !== undefined && data.keyGroupId !== undefined) throw new Error('请选择一种 API 密钥方式');
     if (keyGroupChanged) {
       const primary = providerKeyGroupKeys(provider, data.keyGroupId, true)[0];
@@ -184,10 +189,10 @@ export function operationsTransaction(state, action) {
     }
     if (connectionChanged && endpoint.candidateConfiguration) throw new Error('渠道已有待验证配置，请先完成或放弃现有配置');
     providerOp('supplierChannelSave', provider.id, { mode: 'info', endpointId: endpoint.id, name: data.name, expectedUpdatedAt: data.expectedUpdatedAt, expectedProviderUpdatedAt: data.expectedProviderUpdatedAt, ...(association ? { associationId: association.id, modelId: association.modelId, upstreamModelId: data.upstreamModelId } : {}) });
-    if (connectionChanged && data.newApiKey === undefined) apply(channelChangeTransaction(working, { operation: 'channelCandidateSave', data: { providerId: provider.id, endpointId: endpoint.id, expectedRevision: endpoint.configurationRevision || 0, config: { baseUrl: data.baseUrl.trim(), ...(keyGroupChanged ? { authMode: 'group', keyGroupId: data.keyGroupId } : {}) } } }));
+    if (connectionChanged && data.newApiKey === undefined) apply(channelChangeTransaction(working, { operation: 'channelCandidateSave', data: { providerId: provider.id, endpointId: endpoint.id, expectedRevision: endpoint.configurationRevision || 0, config: { ...protocolConfig, baseUrl: data.baseUrl.trim(), ...(keyGroupChanged ? { authMode: 'group', keyGroupId: data.keyGroupId } : {}) } } }));
     if (data.newApiKey !== undefined) {
       const key = connectionKeys(endpoint, provider, true)[0];
-      apply(channelChangeTransaction(working, { operation: 'channelCandidateCredentialPrepare', data: { providerId: provider.id, endpointId: endpoint.id, expectedRevision: endpoint.configurationRevision || 0, expectedImpactRevision: channelChangeImpact(working, provider.id, endpoint.id).revision, expectedKeyId: key?.id || '', expectedFingerprint: key?.fingerprint || '', newApiKey: data.newApiKey, config: { baseUrl: data.baseUrl.trim() } } }));
+      apply(channelChangeTransaction(working, { operation: 'channelCandidateCredentialPrepare', data: { providerId: provider.id, endpointId: endpoint.id, expectedRevision: endpoint.configurationRevision || 0, expectedImpactRevision: channelChangeImpact(working, provider.id, endpoint.id).revision, expectedKeyId: key?.id || '', expectedFingerprint: key?.fingerprint || '', newApiKey: data.newApiKey, config: { ...protocolConfig, baseUrl: data.baseUrl.trim() } } }));
     }
     if (data.scenarios !== undefined) apply(channelChangeTransaction(working, { operation: 'channelProcurementPublish', data: { providerId: provider.id, endpointId: endpoint.id, associationId: association.id, expectedPriceRevision: data.expectedPriceRevision, scenarios: data.scenarios, confirmed: true } }));
     objectId = endpoint.id; label = connectionChanged ? '保存渠道信息及待验证配置' : '保存渠道信息';
@@ -197,6 +202,7 @@ export function operationsTransaction(state, action) {
     const master = supplyModelRecord(working, provider, data.modelId);
     if (!master) throw new Error('当前供应模型尚未关联基础资料，请先维护模型资料');
     if (!Array.isArray(data.scenarios) || !data.scenarios.length) throw new Error('请至少添加一项采购成本，并填写计费项、采购价和单位');
+    if(data.protocol!==undefined && !['OpenAI','Anthropic','其他'].includes(data.protocol)) throw Error('请选择已支持的上游协议');
     if (!['group', 'independent'].includes(data.authMode)) throw new Error('请选择 API 密钥方式');
     let privateKey;
     if (data.authMode === 'independent') {
@@ -204,7 +210,8 @@ export function operationsTransaction(state, action) {
       privateKey = { ...checkedConnectionKeys([data.apiKey])[0], scope: 'channel' };
     } else if (data.apiKey || !providerKeyGroupKeys(provider, data.keyGroupId).some(key => !key.revokedAt)) throw new Error('请选择包含可用密钥的共享API密钥组');
     const created = providerOp('supplierChannelSave', provider.id, {
-      name: data.name, baseUrl: data.baseUrl, protocol: provider.defaultProtocol?.includes('Anthropic') ? 'Anthropic' : 'OpenAI',
+      name: data.name, baseUrl: data.baseUrl, protocol: data.protocol || (provider.defaultProtocol?.includes('Anthropic') ? 'Anthropic' : 'OpenAI'),
+      ...(data.protocol?{interfaceType:CHANNEL_INTERFACES.find(row=>row.protocol===data.protocol).id}:{}),
       authMode: 'group', keyGroupId: privateKey ? 'default' : data.keyGroupId,
     });
     const endpoint = created.changes.find(row => row.type === 'add' && row.collection === 'endpoints').record;

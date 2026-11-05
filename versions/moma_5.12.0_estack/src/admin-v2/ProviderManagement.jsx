@@ -39,13 +39,13 @@ function SupplierSidebar({ state, providers, selected, onSelect }) {
 
 export default function ProviderManagement(props) {
   const { state } = props, ops = useOperations(props, 'providers'), { params, go } = ops;
-  const [creating, setCreating] = useState(null), [creationLibraryId,setCreationLibraryId]=useState('');
+  const [creating, setCreating] = useState(() => params.get('addingModel')==='1' ? 'model' : null), [creationLibraryId,setCreationLibraryId]=useState('');
   const supplierTrigger = useRef(null), creationTrigger = useRef(null);
   const providers = supplierDirectory(state).filter(row => !row.id.startsWith('service-review-provider-') || row.id === params.get('provider')), defaultProvider = providers.find(item => item.id === 'provider-moma') || providers[0];
   const provider = providers.find(item => item.id === (params.get('provider') || defaultProvider?.id)), view = params.get('view'), tab = ['catalogue', 'api-keys'].includes(params.get('tab')) ? params.get('tab') : 'catalogue';
   const detail = (id, nextTab = tab, saved = false) => go({ provider: id, view: null, perspective: 'suppliers', tab: nextTab, endpoint: null, model: null, supply: null, q: null, page: null, status: null, connection: null, resource: null, credentialChannel: null, listQ: null, listPage: null }, { saved });
   const perspective = params.get('perspective') || 'suppliers';
-  const closeCreation = () => { setCreating(null); ops.setError(''); requestAnimationFrame(() => (creationTrigger.current || supplierTrigger.current)?.focus()); };
+  const closeCreation = () => { setCreating(null); if(params.has('addingModel')) go({addingModel:null,selectedModels:null},{saved:true}); ops.setError(''); requestAnimationFrame(() => (creationTrigger.current || supplierTrigger.current)?.focus()); };
   const models = supplyModelDirectory(state, providers), selectedModel = models.find(row => row.id === params.get('supplyModel')) || (!params.has('supplyModel') ? models.find(row => row.code.toLowerCase() === 'glm-5.2') || models[0] : null);
   const startCreation = (mode, event, libraryId='') => { setCreationLibraryId(libraryId); creationTrigger.current = event?.currentTarget; ops.setError(''); setCreating(mode); };
   const closeResource = () => { go({ resource: null }); requestAnimationFrame(() => document.querySelector('.supplier-detail-tabs [role=tab][data-state=active]')?.focus()); };

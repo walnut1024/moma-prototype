@@ -115,8 +115,9 @@ export default function ModelMetadataForm({ model, initial, can = true, run, dir
     </>}
     {error && <p className="mm-warning-text" role="alert">{error}</p>}
   </>;
-  return <form className={`mm-form mm-basic-form mm-presentation-form${editing ? '' : ' mm-basic-view'}${scrollable ? ' mm-scroll-form' : ''}`} onSubmit={submit}>{scrollable?<div className="mm-form-scroll" tabIndex={-1}>{body}</div>:body}
+  const Container=readOnly?'div':'form';
+  return <Container className={`mm-form mm-basic-form mm-presentation-form${editing ? '' : ' mm-basic-view'}${scrollable ? ' mm-scroll-form' : ''}`} onSubmit={readOnly?undefined:submit}>{scrollable?<div className="mm-form-scroll" tabIndex={-1}>{body}</div>:body}
     {!editing && scrollable && <footer className="mm-form-footer"><Button type="button" variant="outline" onClick={onCancel}>关闭</Button></footer>}
     {editing && <footer className="mm-form-footer">{!cardOnly && <span>规范模型标识创建后固定；上游模型标识在渠道接入中维护。</span>}<div className={cardOnly ? 'ml-auto' : undefined}>{(model || onCancel) && <Button type="button" variant="outline" onClick={onCancel || cancel}>取消</Button>}<Button type="submit" className="mm-primary" disabled={!editable || uploading}>{submitLabel || (model ? '保存模型资料' : '下一步：接入供应商')}</Button></div></footer>}
-  </form>;
+  </Container>;
 }
