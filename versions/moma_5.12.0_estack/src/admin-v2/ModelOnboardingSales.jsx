@@ -39,7 +39,7 @@ export default function ModelOnboardingSales({ state, context, ops, onSaved, bac
       <Field label="对外调用 ID"><Input aria-label="对外调用 ID" maxLength={200} readOnly={form.serviceMode === 'standard'} disabled={!ops.can} value={form.serviceMode === 'standard' ? model.modelId : form.callId} onChange={event => change({ callId: event.target.value })}/></Field>
     </div></section>
 
-    <section className="onboarding-form-section"><div className="onboarding-section-title"><h2>平台售价</h2><span>向客户销售的价格</span></div><RetailPriceFields rows={form.prices} setRows={prices => change({ prices })} ops={ops} prefix="接入售价"/></section>
+    <section className="onboarding-form-section"><div className="onboarding-section-title"><h2>平台售价</h2><span>向客户销售的价格</span></div><RetailPriceFields state={state} rows={form.prices} setRows={prices => change({ prices })} ops={ops} prefix="接入售价"/></section>
     <section className="onboarding-form-section"><h2>向哪些客户开放</h2><ScopeFields state={state} openScope={form.openScope} tenantIds={form.tenantIds} disabled={!ops.can} onChange={(openScope, tenantIds) => change({ openScope, tenantIds })}/></section>
     <div className="onboarding-review"><label><Checkbox checked={confirmed} disabled={!ops.can || !current} onCheckedChange={value => setConfirmed(value === true)}/>已核对平台售价和客户范围；上架前不对客户开放</label><p>保存后关联本次接入的渠道，下一项确认流量路由。完成验证并上架后，客户才能使用。</p></div>
     {!current && <Notice error>模型或价格已被修改，当前输入保留。<Button type="button" variant="link" onClick={() => ops.proceed(() => ops.go({ section: 'sales', refresh: String(Date.now()) }, { saved: true }))}>载入最新配置</Button></Notice>}

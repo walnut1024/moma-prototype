@@ -11,6 +11,10 @@ export function modelLibrary(state) {
   return [...state.models.filter(item => !item.templateId || item.templateId === item.id && !state.modelTemplates.some(row=>row.id===item.id)), ...state.modelTemplates.filter(item => libraryRecord(state, item.id)?.id === item.id)];
 }
 
+export function modelReleaseOrder(a,b) {
+  const date=row=>/^\d{4}-\d{2}(?:-\d{2})?$/.test(row.profile?.releaseDate || '')?row.profile.releaseDate:'';
+  return date(b).localeCompare(date(a));
+}
 export function modelCatalogue(state) {
   const archived = new Set(state.modelData?.archivedCatalogueIds || []);
   const records = modelLibrary(state).filter(row => !archived.has(row.id));

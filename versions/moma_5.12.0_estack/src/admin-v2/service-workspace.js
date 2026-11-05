@@ -33,14 +33,15 @@ export function serviceConfiguration(state,model) {
 export function serviceConfigurationTarget(model,check) {
   const base={panel:'pricing',providerEdit:null,providerAdd:null,providerChannels:null,providerAssociate:null,routeProvider:null,service:null,mapping:null};
   if (check.tab==='serviceMode') return {...base,panel:'routing'};
-  if (check.tab==='publication') return {...base,panel:'scope'};
+  if (check.tab==='publication') return {...base,panel:'pricing',scopeEdit:'1'};
   if (check.tab==='pricing' && model.serviceMode==='provider' && !providerServices(model).find(row=>row.providerId===check.providerId)?.callId) return {...base,panel:'routing',identityProvider:check.providerId};
   if (check.tab==='platform') return {...base,panel:'guide',routeProvider:check.providerId || null};
   if (check.tab==='supplies' && model.serviceMode==='provider') return {...base,panel:'routing',providerAdd:'1'};
   if (check.tab==='basic') return {...base,panel:'editMetadata'};
-  if (check.tab==='routing' && check.mapping && model.serviceMode==='standard') return {...base,panel:'associate'};
-  if (check.tab==='routing' && check.mapping && model.serviceMode==='provider') return {...base,panel:'routing',providerChannels:check.providerId,providerAssociate:'1'};
-  if (check.tab==='routing') return {...base,panel:'routing',routeProvider:check.providerId || null,...(check.mapping?{mapping:providerServiceId(model.id,check.providerId)}:{service:check.providerId?providerServiceId(model.id,check.providerId):'standard:'+model.id})};
+  if (check.tab==='routing') {
+    const id=check.providerId?providerServiceId(model.id,check.providerId):'standard:'+model.id;
+    return {...base,panel:'routing',routeProvider:check.providerId || null,[check.mapping?'mapping':'service']:id};
+  }
   return {...base,providerEdit:check.providerId || null};
 }
 export function serviceSupplyRows(state, model) {

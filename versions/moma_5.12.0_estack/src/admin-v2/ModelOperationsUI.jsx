@@ -1,3 +1,4 @@
+import { scopeTenants } from './service-commercial';
 import { activeAdmin } from '../linked-accounts.mjs';
 import { readLinkedState } from '../service-access.mjs';
 import { useEffect, useRef, useState } from 'react';
@@ -93,5 +94,9 @@ export function ConnectionApiKeys({ value, onChange, disabled, optionalKey = fal
       <p className="supplier-key-hint">{optionalKey ? '自有推理服务可不配置 API 密钥。' : '第三方推理服务至少配置一个 API 密钥。'}每个连接最多 20 个，保存后仅展示脱敏值。</p>
     </fieldset>;
 }
-export function ScopeFields({ state, openScope, tenantIds, onChange, disabled }) { const tenantLabel = tenant => `${tenant.name} · ${tenant.id}`; return <div className="mo-form-grid"><Field label="客户开放范围"><Choice label="客户范围" value={openScope} disabled={disabled} options={[[ 'all', '全部客户'], ['selected', '指定客户']]} onChange={value => onChange(value, tenantIds)}/></Field>{openScope === 'selected' && <Field label="选择客户"><MultiChoice label="客户" choices={state.tenants.map(tenantLabel)} value={state.tenants.filter(tenant => tenantIds.includes(tenant.id)).map(tenantLabel)} disabled={disabled} onChange={names => onChange('selected', state.tenants.filter(tenant => names.includes(tenantLabel(tenant))).map(tenant => tenant.id))}/></Field>}</div>; }
+export function ScopeFields({ state, openScope, tenantIds = [], onChange, disabled }) {
+  const tenants=scopeTenants(state), tenantLabel=tenant=>tenant.name+' · '+tenant.id;
+  const unavailable=tenantIds.filter(id=>!tenants.some(row=>row.id===id));
+  return <div className="mo-form-grid"><Field label="客户开放范围 *"><Choice label="客户范围" value={openScope || 'unselected'} disabled={disabled} options={[[ 'unselected','请选择开放范围'],['all','全部有效客户'],['selected','指定客户']]} onChange={value=>onChange(value,tenantIds)}/></Field>{openScope==='selected' && <Field label="选择客户 *"><MultiChoice label="客户" choices={tenants.map(tenantLabel)} value={tenants.filter(tenant=>tenantIds.includes(tenant.id)).map(tenantLabel)} disabled={disabled} onChange={names=>onChange('selected',tenants.filter(tenant=>names.includes(tenantLabel(tenant))).map(tenant=>tenant.id))}/>{unavailable.length>0 && <Notice error>有 {unavailable.length} 个客户已停用或删除，请重新选择有效客户。<Button type="button" variant="link" disabled={disabled} onClick={()=>onChange('selected',tenantIds.filter(id=>!unavailable.includes(id)))}>移除无效客户</Button></Notice>}</Field>}</div>;
+}
 export function ValidationNote({ endpoint, supply }) { return <div className="mo-stack"><Status good={connectionTestPassed(endpoint) && supply?.validationStatus === '通过'}>{!connectionTestPassed(endpoint) ? '连接待验证' : supply?.validationStatus === '通过' ? '已通过' : supply?.validationStatus || '待验证'}</Status><small>{supply?.verifiedAt ? new Date(supply.verifiedAt).toLocaleString('zh-CN') : '尚无验证记录'}</small></div>; }

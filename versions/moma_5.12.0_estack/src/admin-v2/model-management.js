@@ -1,3 +1,4 @@
+import { serviceScope } from './service-commercial.js';
 import {serviceModelSources} from './supply-models.js';
 import { normalizeModelProfile, requireModelBasics, normalizeServiceModel, serviceMetadataReady } from './model-profile.js';
 import { activeModelSalePrice, activeProviderPrice, providerServices, providerServiceId, serviceDirectoryModels } from './service-workspace.js';
@@ -109,6 +110,7 @@ export function modelSupplies(state, modelId) {
 export function availableSupplies(state, modelId, requirements = {}) {
   return modelSupplies(state, modelId).filter(supply => supply.status === '已启用' && supply.validationStatus === '通过' && !connectionBlockReason(supply.endpoint, supply.provider) && ['streaming', 'tools'].every(key => !requirements[key] || supply.capabilities[key]) && (!requirements.context || supply.capabilities.context >= requirements.context) && (!requirements.output || supply.capabilities.output >= requirements.output));
 }
+function scopeReady(state, model) { try { serviceScope(state,{openScope:model.openScope,tenantIds:model.tenantIds || []}); return true; } catch { return false; } }
 export function publicationChecks(state, model) {
   const metadataReady=model.serviceManaged || model.serviceReviewCase ? serviceMetadataReady(model) : Boolean(model.name?.trim() && model.description?.trim());
   if (!['standard','provider'].includes(model.serviceMode)) return [{label:metadataReady?'模型资料完整':'模型资料待完善',passed:metadataReady,tab:'basic'},{label:model.serviceMode?'服务模式无效，请重新选择':'尚未选择服务模式',passed:false,tab:'serviceMode'}];
@@ -124,7 +126,7 @@ export function publicationChecks(state, model) {
         return [{label:`${provider?.name || '供应商'}：${priceReady?'调用 ID 和售价已配置':!entry.callId?'对外调用 ID 待配置':'缺少对外售价'}`,passed:priceReady,tab:'pricing',providerId:entry.providerId},
           {label:`${provider?.name || '供应商'}：${routeReady?'已发布可用渠道路由':channels.length?'路由尚未发布':'未关联可用渠道'}`,passed:routeReady,tab:'routing',providerId:entry.providerId,mapping:!channels.length}];
       }),
-      {label:'开放范围明确',passed:model.openScope==='all' || model.openScope==='selected' && model.tenantIds?.length>0 && model.tenantIds.every(id=>state.tenants.some(item=>item.id===id)),tab:'publication'},
+      {label:'开放范围明确',passed:scopeReady(state,model),tab:'publication'},
       platformPublicationCheck(state,model),
     ];
   }
@@ -136,7 +138,7 @@ export function publicationChecks(state, model) {
       {label:metadataReady?'模型资料完整':'模型资料待完善',passed:metadataReady,tab:'basic'},
       {label:routeReady?'已发布有效的供应商与渠道路由映射':channels.length?'渠道路由待配置或发布':'尚未关联供应渠道',passed:routeReady,tab:'routing',mapping:!channels.length},
       {label:priceReady?'统一售价与计量规则完整':'统一售价待配置',passed:priceReady,tab:'pricing'},
-      {label:'开放范围明确',passed:model.openScope==='all' || model.openScope==='selected' && model.tenantIds?.length>0 && model.tenantIds.every(id=>state.tenants.some(item=>item.id===id)),tab:'publication'},
+      {label:'开放范围明确',passed:scopeReady(state,model),tab:'publication'},
       platformPublicationCheck(state,model),
     ];
   }
@@ -294,8 +296,7 @@ export function modelTransaction(state, action) {
     const floorDiscountBps = data.floorDiscountPercent === undefined ? activeSupplySalePrice(state, model.id, supply.id)?.floorDiscountBps : parseFloorDiscount(data.floorDiscountPercent);
     changes.push(add('modelSalePrices', { id: uid('sale'), modelId: model.id, supplyId: supply.id, items, ...(floorDiscountBps == null ? {} : { floorDiscountBps }), version, sourceVersion: procurementVersion(cost), sourceLabel: procurementLabel(cost), effectiveAt, status: operation === 'priceDraft' ? '草稿' : '已发布' }));
   } else if (operation === 'scope') {
-    if (!['all', 'selected'].includes(data.openScope) || (data.openScope === 'selected' && (!data.tenantIds?.length || data.tenantIds.some(id => !state.tenants.some(tenant => tenant.id === id))))) throw new Error('请选择有效的开放客户');
-    changes.push(update('models', model.id, { openScope: data.openScope, tenantIds: data.openScope === 'selected' ? [...new Set(data.tenantIds)] : [] }));
+    changes.push(update('models', model.id, serviceScope(state,data)));
   } else if (['publish', 'unlist'].includes(operation)) {
     if (operation === 'publish') {
       // Persistence verifies mock evidence outside the editable main store.

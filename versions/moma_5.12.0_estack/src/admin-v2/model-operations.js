@@ -1,3 +1,4 @@
+import { retailItems } from './service-commercial.js';
 import { channelHealthTransaction } from './channel-health.js';
 import { resolveOnboardingProvider, resolveOnboardingModel, assertOnboardingMetadata } from './onboarding-presets.js';
 import { libraryRecord, modelLibrary, libraryRemovalIssue } from './model-library.js';
@@ -6,7 +7,6 @@ import { routingTransaction, routingServices, routingStatus } from './service-ro
 import { prepareServiceShowcase, SERVICE_SHOWCASE_ID } from './service-showcase.js';
 import { prepareServiceReviewCases } from './service-review-cases.js';
 import { commercialTaskKey, commercialTaskBase, modelSaleRevision, availableServiceChannels, providerServices, providerServiceId, providerPriceRevision, serviceBindingInUse, activeModelSalePrice, activeProviderPrice } from './service-workspace.js';
-import { billingItemKey, parseSaleAmount } from './provider-catalogue-pricing.js';
 import { modelTransaction, modelCode, modelSupplies, availableSupplies, supplyPriceReady, supplyModelUrl, latestSaleRevision, activeSupplyPrice } from './model-management.js';
 import { modelProfileDraft, requireModelBasics } from './model-profile.js';
 import { MODEL_OPERATION_NAMES } from './model-operation-history.js';
@@ -93,17 +93,6 @@ export function catalogueModelMatch(state, providerId, catalogueModelId) {
   return { model, supply, template };
 }
 export const salesSelectionVersion = (state, modelId) => JSON.stringify(modelSupplies(state, modelId).map(item => [item.id, Boolean(item.salesEnabled)]).sort(([a], [b]) => a.localeCompare(b)));
-function retailItems(rows) {
-  if (!Array.isArray(rows) || !rows.length || rows.length > 100) throw new Error('请配置 1–100 个计费项');
-  const items=rows.map(item=>{
-    if (!item || typeof item!=='object' || Array.isArray(item)) throw new Error('请填写有效的计费项');
-    if (typeof item.name!=='string' || !item.name.trim() || item.name.length>100 || typeof item.unit!=='string' || !item.unit.trim() || item.unit.length>100 || !['CNY','USD'].includes(item.currency)) throw new Error('请填写有效的计费项、计价单位和货币');
-    if (typeof item.condition!=='string' || item.condition.length>200) throw new Error('计费条件最多 200 字');
-    return {name:item.name.trim(),unit:item.unit.trim(),condition:item.condition.trim(),currency:item.currency,amount:parseSaleAmount(item.amount,true)};
-  });
-  if (new Set(items.map(billingItemKey)).size!==items.length) throw new Error('计费项、条件与单位不能重复');
-  return items;
-}
 // Compose existing domain operations against one working copy; persistence stays atomic.
 export function operationsTransaction(state, action) {
   if (action.operation === 'archiveAcceptanceFixture') return archiveAcceptanceFixture(state, action.data);
@@ -156,7 +145,7 @@ export function operationsTransaction(state, action) {
     if (!value || typeof value !== 'object') throw new Error('请填写配置');
     if (data.kind === 'scope') modelOp('scope', modelId, value);
     else {
-      retailItems(value.items);
+      retailItems(working,value.items,(providerId?activeProviderPrice(working,modelId,providerId):activeModelSalePrice(working,modelId))?.items);
       if (providerId && value.callId !== providerServices(model).find(row => row.providerId === providerId)?.callId) throw new Error('对外调用 ID 已变化，请重新核对');
       apply(operationsTransaction(working, { operation: providerId ? 'configureServiceProvider' : 'unifiedPrice', modelId, data: { ...value, providerId, expectedUpdatedAt: model.updatedAt, expectedSaleVersion: providerId ? providerPriceRevision(working, modelId, providerId) : modelSaleRevision(working, modelId) } }));
       platformPriceVersions(providerId ? activeProviderPrice(working, modelId, providerId) : activeModelSalePrice(working, modelId), model);
@@ -562,7 +551,7 @@ export function operationsTransaction(state, action) {
     const model = working.models.find(item => item.id === modelId);
     if (!model || model.serviceMode !== 'standard') throw new Error('仅统一服务模式可配置统一售价');
     if (data.expectedUpdatedAt !== model.updatedAt || data.expectedSaleVersion !== modelSaleRevision(working, modelId)) throw new Error('模型或统一售价已有并发修订，请重新打开配置');
-    const items = retailItems(data.items);
+    const items = retailItems(working,data.items,activeModelSalePrice(working,modelId)?.items);
     const version = Math.max(0,...working.modelSalePrices.filter(price => price.modelId === modelId && price.scope === 'model').map(price => price.version)) + 1;
     add('modelSalePrices', { id:`model-sale-${crypto.randomUUID()}`, modelId, scope:'model', serviceModeRevision:model.serviceModeRevision || 0, items, version, effectiveAt:new Date().toISOString(), status:'已发布' });
     objectId=modelId; label='配置统一售价';
@@ -607,7 +596,7 @@ export function operationsTransaction(state, action) {
         if (listed(model) && current.callId && current.callId!==callId) throw new Error('请先下架模型再修改对外调用 ID');
         if (operation !== 'configureServiceIdentity') {
           if (data.expectedSaleVersion!==providerPriceRevision(working,modelId,provider.id)) throw new Error('供应商平台售价已有并发修订，请重新核对');
-          const items=retailItems(data.items), version=Math.max(0,...working.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && price.providerId===provider.id).map(price=>price.version))+1;
+          const items=retailItems(working,data.items,activeProviderPrice(working,modelId,provider.id)?.items), version=Math.max(0,...working.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && price.providerId===provider.id).map(price=>price.version))+1;
           add('modelSalePrices',{id:`provider-sale-${crypto.randomUUID()}`,modelId,providerId:provider.id,serviceId,scope:'provider',serviceModeRevision:model.serviceModeRevision || 0,items,version,effectiveAt:new Date().toISOString(),status:'已发布'});
         }
         entry={...current,callId};label=operation === 'configureServiceIdentity' ? '保存对外调用 ID' : '配置 Provider 对外服务';

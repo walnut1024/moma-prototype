@@ -85,21 +85,21 @@ test('custom additions persist and share choices without rewriting business data
   assert.equal(JSON.stringify(initial), before);
 });
 
-test('custom renames and disabling preserve quote snapshots and allow saved quotes to be saved again', () => {
+test('referenced dictionary names cannot change; disabling preserves snapshots and saved quote editing', () => {
   let state = save(createAdminSeed(), { kind: 'unit', name: '千 Token' });
   const unitId = find(state, '千 Token').id;
   state = save(state, { kind: 'scenario', name: '定制输入 Token', unitId });
   const id = find(state, '定制输入 Token').id, price = quoteAction('定制输入 Token', '千 Token');
   state = commitAdminState(state, price);
   const providers = structuredClone(state.providers);
-  state = save(state, { id, name: '定制标准输入', unitId });
-  state = save(state, { id: unitId, name: '千个 Token' });
+  assert.throws(()=>save(state,{id,name:'定制标准输入',unitId}),/价格或草稿引用/);
+  assert.throws(()=>save(state,{id:unitId,name:'千个 Token'}),/价格或草稿引用/);
   state = status(status(state, id, '已停用'), unitId, '已停用');
-  assert.ok(!tariffOptions(state, 'scenario').includes('定制标准输入'));
+  assert.ok(!tariffOptions(state, 'scenario').includes('定制输入 Token'));
   assert.deepEqual(state.providers, providers);
   assert.deepEqual(commitAdminState(state, price).providers.find(item => item.id === 'provider-moma').catalogPricing, providers.find(item => item.id === 'provider-moma').catalogPricing);
   state = status(state, unitId, '已启用');
-  assert.ok(tariffOptions(state, 'unit').includes('千个 Token'));
+  assert.ok(tariffOptions(state, 'unit').includes('千 Token'));
   assert.equal(normalizeCataloguePrice({ modelId: 'm', discountFactor: '', scenarios: [{ name: '定制规格', unit: '小时', currency: 'CNY', listPrice: '2' }] }).scenarios[0].unit, '小时');
 });
 
@@ -218,13 +218,16 @@ test('custom deletions persist, block referenced units including disabled items 
   assert.throws(() => remove(state, unit), /被计费项引用/);
   let saved = JSON.stringify(state);
   const storage = { getItem: () => saved, setItem: (_, next) => { saved = next; } };
-  for (const id of [scene, unit, currency]) state = persistModelAction(state, action({ operation: 'delete', id }), storage);
+  for(const id of [scene,currency])assert.throws(()=>remove(state,id),/仍被.*引用/);
+  state=save(state,{kind:'unit',name:'无引用单位'});const unused=find(state,'无引用单位').id;saved=JSON.stringify(state);
+  state=persistModelAction(state,action({operation:'delete',id:unused}),storage);
   state = parseAdminState(saved);
-  assert.ok(!state.tariffDictionary.some(item => [scene, unit, currency].includes(item.id)));
+  assert.ok([scene,unit,currency].every(id=>state.tariffDictionary.some(item=>item.id===id)));
+  assert.equal(state.tariffDictionary.some(item=>item.id===unused),false);
   assert.deepEqual(state.tariffDictionary.filter(item => item.builtin), builtins);
   assert.deepEqual(state.providers, providers);
   assert.ok(state.audits[0].action.startsWith('删除自定义'));
-  assert.throws(() => remove(state, scene), /不存在/);
+  assert.throws(() => remove(state, unused), /不存在/);
 });
 
 test('custom deletion retains role, revision and storage failure protections', () => {

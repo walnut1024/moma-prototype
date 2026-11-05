@@ -22,7 +22,7 @@ test('audio missing price and missing mapping link directly to the correct Provi
   const price=issues.find(issue=>issue.tab==='pricing'),mapping=issues.find(issue=>issue.tab==='routing');
   assert.equal(serviceConfigurationTarget(audio,price).providerEdit,price.providerId);
   const target=serviceConfigurationTarget(audio,mapping);
-  assert.equal(target.panel,'routing');assert.equal(target.providerChannels,mapping.providerId);assert.equal(target.providerAssociate,'1');
+  assert.equal(target.panel,'routing');assert.equal(target.mapping,`provider:${audio.id}:${mapping.providerId}`);assert.equal(target.providerAssociate,null);
 });
 test('new service creates a genuine mode-less draft and cannot publish before configuration',()=>{
   const state=parseAdminState(null),source=structuredClone(state.models.find(model=>model.serviceReviewCase==='deepseek'));source.id='template-new-review-service';source.modelId='new-review-source';delete source.templateId;state.modelTemplates.push(source);const provider=state.providers.find(row=>row.id==='provider-moma');provider.catalogModelIds.push(source.modelId);provider.catalogModels.push({modelId:source.modelId,libraryId:source.id,type:source.type,name:source.name});const data={...serviceModelDraft(source),libraryId:source.id,name:'新增服务',modelId:'new-review-service'};
@@ -58,7 +58,7 @@ test('image first configuration completes metadata, price and routing while pers
   const model=()=>state.models.find(item=>item.id===id),run=(operation,data)=>{state=commitAdminState(state,{type:'modelOperations',operation,modelId:id,data});};
   run('serviceMode',{serviceMode:'standard',expectedUpdatedAt:model().updatedAt});
   run('serviceBasics',{...serviceModelDraft(model()),releaseDate:'2026-10-01',description:'根据文本和参考图片生成图像。',expectedUpdatedAt:model().updatedAt});
-  run('unifiedPrice',{items:[{name:'生成图像',unit:'元/张',condition:'',currency:'CNY',amount:'0.2'}],expectedUpdatedAt:model().updatedAt,expectedSaleVersion:modelSaleRevision(state,id)});
+  run('unifiedPrice',{items:[{name:'图像输出（按张）',unit:'张',condition:'',currency:'CNY',amount:'0.2'}],expectedUpdatedAt:model().updatedAt,expectedSaleVersion:modelSaleRevision(state,id)});
   const channel=serviceAssociationChannels(state).find(item=>item.catalogueModelId===model().modelId && !item.reason);
   run('associateServiceChannelsBatch',{groups:[{providerId:channel.provider.id,catalogueModelId:channel.catalogueModelId,channelIds:[channel.id]}],confirmedIdentity:true,expectedUpdatedAt:model().updatedAt});
   const service=routingServices(state).find(item=>item.modelId===id),mapped=routingChannels(state,service);

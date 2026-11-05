@@ -8,7 +8,7 @@ const at = Date.parse('2026-10-31T04:00:00Z'), effectiveAt = '2026-10-30T00:00:0
 const tokenItems = (input = 1000000, output = 0) => [{ name: '输入 Token', unit: '百万 Token', currency: 'CNY', amount: input }, { name: '输出 Token', unit: '百万 Token', currency: 'CNY', amount: output }];
 const price = (items = tokenItems(), extra = {}) => ({ id: 'sale-v1', effectiveAt, items, ...extra });
 function fixture() {
-  const model = { id: 'canonical-chat', name: 'Chat', modelId: 'moma/chat', type: 'text', serviceMode: 'standard', capabilities: { streaming: false, tools: false } };
+  const model = { id: 'canonical-chat', name: 'Chat', modelId: 'moma/chat', type: 'text', serviceMode: 'standard', openScope:'all',tenantIds:[], capabilities: { streaming: false, tools: false } };
   const endpoint = { id: 'endpoint-1', name: 'Primary', providerId: 'provider-1', baseUrl: 'https://example.test/v1', interfaceType: 'openai', authMode: 'none', status: '运行中' };
   const association = { id: 'association-1', modelId: 'supplier-catalogue-id', endpointId: endpoint.id, upstreamModelId: 'vendor/raw-chat', enabled: true, procurementVersions: [{ id: 'cost-v1', version: 1, status: '已发布', effectiveAt, publishedAt: effectiveAt, expiresAt: null, pricing: { discountFactor: 1000000, scenarios: tokenItems(500000, 0).map(({ amount, ...item }) => ({ ...item, listPrice: amount })) } }] };
   const provider = { id: endpoint.providerId, name: 'Supplier', status: '已启用', catalogModels: [{ modelId: association.modelId, libraryId: model.id }], catalogConnections: [association] };

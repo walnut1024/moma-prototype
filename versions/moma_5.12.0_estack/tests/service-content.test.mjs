@@ -9,7 +9,7 @@ import {connectionFingerprint} from '../src/admin-v2/connection-state.js';
 import {lifecycleAccess,serviceReferences} from '../src/service-access.mjs';
 import {simulateRequest} from '../src/admin-v2/domain.js';
 const run=(state,operation,modelId,data)=>commitAdminState(state,{type:'modelOperations',operation,modelId,data});
-const items=[{name:'输入',condition:'',unit:'百万 Token',currency:'CNY',amount:'2'},{name:'输出',condition:'',unit:'百万 Token',currency:'CNY',amount:'8'}];
+const items=[{name:'输入 Token',condition:'',unit:'百万 Token',currency:'CNY',amount:'2'},{name:'输出 Token',condition:'',unit:'百万 Token',currency:'CNY',amount:'8'}];
 function fixture(){
  let state=createAdminSeed();const model=state.models[0];model.serviceMode='provider';model.listingStatus='已下架';for(const endpoint of state.endpoints.filter(item=>state.modelSupplies.some(supply=>supply.modelId===model.id && supply.endpointId===item.id))){if(!endpoint.baseUrl.endsWith('/chat/completions'))endpoint.baseUrl=endpoint.baseUrl.replace(/\/$/,'')+'/chat/completions';endpoint.connectionTest={fingerprint:connectionFingerprint(endpoint),result:'通过',testedAt:'2026-01-01'};}
  const provider=modelSupplies(state,model.id).find(supply=>supply.provider?.status==='已启用').provider;
@@ -31,7 +31,7 @@ test('associating an existing Provider creates no resources, channel price or au
 test('Provider price and call ID are scoped to the Provider, versioned and survive refresh without rewriting channel prices',()=>{
  let f=configured(), first=activeProviderPrice(f.state,f.model.id,f.provider.id);
  assert.equal(first.scope,'provider');assert.equal(first.items[0].amount,2000000);assert.equal(first.serviceId,providerServiceId(f.model.id,f.provider.id));
- const before=structuredClone(f.state), next=run(f.state,'configureServiceProvider',f.model.id,configuration(f,{items:[{...items[0],name:'请求',unit:'千次',amount:'0.000001'}]}));
+ const before=structuredClone(f.state), next=run(f.state,'configureServiceProvider',f.model.id,configuration(f,{items:[{...items[0],name:'重排请求数',unit:'千次',amount:'0.000001'}]}));
  assert.equal(activeProviderPrice(next,f.model.id,f.provider.id).version,2);assert.equal(activeProviderPrice(next,f.model.id,f.provider.id).items[0].amount,1);
  assert.deepEqual(next.modelSalePrices.find(price=>price.id===first.id),first);
  for(const key of ['providers','endpoints','modelSupplies','serviceRoutes'])assert.deepEqual(next[key],before[key]);

@@ -105,3 +105,5 @@
 .admin-v2 .sm-guide-preview{min-width:0}.admin-v2 .sm-guide-editor-grid h4{margin:0 0 8px;font-size:12px;font-weight:600;color:#263247}
 
 .admin-v2 .sm-source-field{margin-bottom:12px;display:grid;gap:6px}.admin-v2 .sm-source-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:500}.admin-v2 .sm-source-heading button{font-size:12px;padding:0;height:28px}.admin-v2 .sm-source-field>small{color:#586982;font-size:11px}
+
+.admin-v2 .sm-scope-summary .sm-section-bar{margin:0 0 12px}.admin-v2 .sm-scope-summary p{margin:8px 0}.admin-ui-portal.mo-dialog.mo-drawer.sm-scope-drawer{width:min(1000px,calc(100vw - 32px))}.admin-v2 .sm-guide-commercial{padding:16px 0;border-bottom:1px solid #e1e7f0}.admin-v2 .sm-guide-commercial ul{padding-left:20px}.admin-v2 .sm-price-form td{min-width:120px}.admin-v2 .sm-price-form td:last-child{min-width:64px}.admin-v2 .sm-price-form td input+input,.admin-v2 .sm-price-form td button+input{margin-top:6px}

@@ -31,7 +31,7 @@ test('initial service mode selection preserves all existing business fields', ()
   }
 });
 
-const priceItems=[{name:'输入',condition:'',unit:'百万 Token',currency:'CNY',amount:2000000}];
+const priceItems=[{name:'输入 Token',condition:'',unit:'百万 Token',currency:'CNY',amount:2000000}];
 function configured() {
   const state=createAdminSeed(),supply=state.modelSupplies.find(item=>item.status!=='已移除'),model=state.models.find(item=>item.id===supply.modelId),provider=state.providers.find(item=>item.id===state.endpoints.find(item=>item.id===supply.endpointId).providerId);
   model.serviceMode='standard';model.listingStatus='已下架';

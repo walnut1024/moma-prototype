@@ -84,6 +84,7 @@ export function platformCandidatePlan(state, model, { serviceId, tenantIds = [],
   if (!service) issue('服务模式', '请选择当前模型的统一服务或供应商服务');
   if (!service.callId || /\s/.test(service.callId)) issue('服务调用 ID', '请先完善当前服务的对外调用 ID');
   if (!tenantIds.length || new Set(tenantIds).size !== tenantIds.length || tenantIds.some(id => !state.tenants?.some(tenant => tenant.id === id && !['已删除', '已停用', '停用'].includes(tenant.status)))) issue('客户范围', '请明确选择有效租户');
+  if (model.openScope !== 'all' && (model.openScope !== 'selected' || tenantIds.some(id=>!model.tenantIds?.includes(id)))) issue('客户范围','验证客户须在已发布的开放范围内');
   const version = activeRouteVersion(serviceRoute(state, service.id));
   if (!version) issue('路由配置', '请先发布当前服务的路由');
   const allowed = platformAllowedChannels(state, service);

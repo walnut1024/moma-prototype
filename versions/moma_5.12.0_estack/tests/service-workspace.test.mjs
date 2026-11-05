@@ -10,7 +10,7 @@ import {connectionFingerprint} from '../src/admin-v2/connection-state.js';
 import { simulateRequest } from '../src/admin-v2/domain.js';
 const transact=(state,operation,modelId,data)=>commitAdminState(state,{type:'modelOperations',operation,modelId,data});
 const setup=()=>{const state=createAdminSeed(), model=state.models.find(item=>item.id==='catalog-demo-kimi');model.serviceMode='standard';for(const endpoint of state.endpoints.filter(item=>state.modelSupplies.some(supply=>supply.modelId===model.id && supply.endpointId===item.id))){if(!endpoint.baseUrl.endsWith('/chat/completions'))endpoint.baseUrl=endpoint.baseUrl.replace(/\/$/,'')+'/chat/completions';endpoint.connectionTest={fingerprint:connectionFingerprint(endpoint),result:'通过',testedAt:'2026-01-01'};}return {state,model};};
-const pricing=(state,model,items=[{name:'输入',unit:'百万 Token',currency:'CNY',condition:'',amount:'0.000001'},{name:'输出',unit:'百万 Token',currency:'CNY',condition:'',amount:'0'}])=>({items,expectedUpdatedAt:model.updatedAt,expectedSaleVersion:modelSaleRevision(state,model.id)});
+const pricing=(state,model,items=[{name:'输入 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'0.000001'},{name:'输出 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'0'}])=>({items,expectedUpdatedAt:model.updatedAt,expectedSaleVersion:modelSaleRevision(state,model.id)});
 
 test('model index search and filters compose without changing total records or data',()=>{
  const state=createAdminSeed(), before=structuredClone(state), kimi=state.models.find(item=>item.id==='catalog-demo-kimi');kimi.serviceMode='provider';
@@ -48,7 +48,7 @@ test('unified pricing is model-scoped, exact to six decimals, versioned and inde
  let {state,model}=setup();const channels=structuredClone(state.modelSupplies), prices=structuredClone(state.modelSalePrices), oldModel=structuredClone(model);
  state=transact(state,'unifiedPrice',model.id,pricing(state,model));const first=activeModelSalePrice(state,model.id);
  assert.equal(first.items[0].amount,1);assert.equal(first.items[1].amount,0);assert.equal(first.version,1);
- state=transact(state,'unifiedPrice',model.id,pricing(state,model,[{name:'输入',unit:'百万 Token',currency:'CNY',condition:'',amount:'2'}]));
+ state=transact(state,'unifiedPrice',model.id,pricing(state,model,[{name:'输入 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'2'}]));
  assert.equal(activeModelSalePrice(state,model.id).version,2);assert.deepEqual(state.modelSalePrices.find(item=>item.id===first.id),first);
  assert.deepEqual(state.modelSalePrices.filter(item=>item.scope!=='model'),prices);assert.deepEqual(state.modelSupplies,channels);assert.deepEqual(state.models.find(item=>item.id===model.id),oldModel);
  assert.equal(activeModelSalePrice(parseAdminState(JSON.stringify(state)),model.id).items[0].amount,2000000);

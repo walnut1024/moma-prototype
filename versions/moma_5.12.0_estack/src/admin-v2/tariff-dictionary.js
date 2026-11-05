@@ -54,6 +54,16 @@ export function appendCommonTariffScenarios(rows, selected, state, currency) {
   return [...retained, ...additions.map(name => ({ name, unit: tariffScenarioUnit(state, name), currency, listPrice: '' }))];
 }
 
+export function tariffPriceReferences(state, entry) {
+  const field = {scenario:'name',unit:'unit',currency:'currency'}[entry.kind];
+  const matches = value => {
+    if (!value || typeof value !== 'object') return false;
+    if (!Array.isArray(value) && typeof value.name === 'string' && typeof value.unit === 'string' && value[field] === (entry.kind === 'currency' ? entry.code : entry.name)) return true;
+    return Object.values(value).some(matches);
+  };
+  return [['modelSalePrices','平台售价及历史'],['supplyPrices','采购价格及历史'],['providers','供应商价格或草稿'],['endpoints','渠道配置或草稿'],['modelOnboardings','接入草稿']].filter(([key]) => matches(state[key])).map(([,label]) => label);
+}
+
 export function tariffDictionaryTransaction(state, data) {
   const current = tariffDictionaryEntries(state).find(item => item.id === data.id);
   if (current?.builtin) throw new Error('内置字典项只读，不可编辑、停用或删除');
@@ -65,6 +75,7 @@ export function tariffDictionaryTransaction(state, data) {
     const englishName = typeof data.englishName === 'string' ? data.englishName.trim().replace(/[\t ]+/g, ' ') : '';
     if (!/^[\x20-\x7e]{1,80}$/.test(englishName) || !/[a-z]/i.test(englishName)) throw new Error('英文名称须为 1–80 个英文字符，至少包含一个字母，不能换行');
     const fields = { name, englishName, ...(kind === 'currency' ? { code: normalizeCurrency(data.code) } : {}) };
+    if (current && (kind === 'currency' ? fields.code !== current.code : name !== current.name) && tariffPriceReferences(state,current).length) throw new Error('该字典项已被价格或草稿引用，不能修改名称或货币代码；请新增字典项，原配置及历史保留');
     if (tariffDictionaryEntries(state).some(item => item.id !== current?.id && item.kind === kind && (item.name.toLowerCase() === name.toLowerCase() || kind === 'currency' && item.code === fields.code))) throw new Error('同类字典名称或货币代码已存在，请编辑或启用已有条目');
     if (kind === 'scenario') {
       const description = data.description == null ? '' : data.description;
@@ -84,6 +95,8 @@ export function tariffDictionaryTransaction(state, data) {
   } else if (data.operation === 'delete') {
     if (!current) throw new Error('字典条目不存在，请重新载入');
     if (current.kind === 'unit' && tariffDictionaryEntries(state).some(item => item.kind === 'scenario' && item.unitId === current.id)) throw new Error('该计价单位仍被计费项引用，请先更换关联单位');
+    const references = tariffPriceReferences(state,current);
+    if (references.length) throw new Error(`该字典项仍被${references.join('、')}引用，不能删除；可停用以停止新增选用，已有配置和历史保留`);
     change = { type: 'remove', collection: 'tariffDictionary', id: current.id };
     label = `删除自定义${TARIFF_KINDS[current.kind]}`;
   } else throw new Error('未知资费字典操作');

@@ -42,7 +42,7 @@ function Blocks({ blocks }) {
 
 export default function GettingStarted() {
   return <article className="getting-started">
-    <div className="gs-heading"><div><h1><BookOpen aria-hidden="true"/>模型运营</h1><p>首次上架按步骤操作，已有模型直接查找维护任务。</p><p>开放范围及部分维护操作将陆续开放。</p></div><Button asChild variant="outline"><a href="#/admin-2/listing?perspective=models">打开模型服务<ArrowRight aria-hidden="true"/></a></Button></div>
+    <div className="gs-heading"><div><h1><BookOpen aria-hidden="true"/>模型运营</h1><p>首次上架按步骤操作，已有模型直接查找维护任务。</p><p>部分日常维护和退出操作将陆续完善。</p></div><Button asChild variant="outline"><a href="#/admin-2/listing?perspective=models">打开模型服务<ArrowRight aria-hidden="true"/></a></Button></div>
     <nav className="gs-section-nav" aria-label="指南章节">{sections.map(section => <a key={section.id} href={`#${section.id}`} onClick={event => jump(event, section.id)}>{section.title}</a>)}</nav>
     {sections.map(section => <section key={section.id} className="gs-panel" aria-labelledby={section.id}>
       <h2 id={section.id} tabIndex={-1}>{section.title}</h2>
