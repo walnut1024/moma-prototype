@@ -8,7 +8,7 @@ import { SERVICE_MODES } from './model-operations';
 import { providerServices } from './service-workspace';
 import { supplierDirectory } from './moma-provider';
 import { itemMoney } from './SupplyPriceEditor';
-import { CommercialDialog, AssociateChannelsDialog, AssociateUnifiedChannelsDialog, ServiceIdentityDialog } from './ServiceWorkspaceDialogs';
+import { CommercialDialog, ServiceIdentityDialog } from './ServiceWorkspaceDialogs';
 import { RouteWorkbench } from './ServiceRouting';
 
 export function BillingItems({items,commonUnit}) {
@@ -25,7 +25,7 @@ function ProviderContent({state,model,ops}) {
   const close=()=>ops.proceed(()=>{setAdding(false);setEditing(null);setRemoving(null);setChanging(null);setProviderId('');ops.dirty(false);ops.setError('');if(ops.params.has('providerEdit') || ops.params.has('providerAdd') || ops.params.has('identityProvider'))ops.go({providerEdit:null,providerAdd:null,identityProvider:null},{saved:true,preserveScroll:true});requestAnimationFrame(()=>{if(trigger.current?.isConnected)trigger.current.focus();else associateTrigger.current?.focus();});});
   const editProviderId=editing || ops.params.get('identityProvider');
   return <>
-    <RouteWorkbench state={state} model={model} ops={ops} onAddProvider={()=>ops.go({providerAdd:'1'},{preserveScroll:true})} onIdentity={id=>ops.go({identityProvider:id,routeProvider:id},{preserveScroll:true})} onAssociate={id=>ops.go({providerAssociate:'1',providerChannels:id,routeProvider:id},{preserveScroll:true})} onProviderState={(id,operation,enabled)=>ops.proceed(()=>setChanging({providerId:id,operation,enabled,expectedUpdatedAt:model.updatedAt}))} onRemoveProvider={id=>ops.proceed(()=>setRemoving(rows.find(row=>row.providerId===id)))}/>
+    <RouteWorkbench state={state} model={model} ops={ops} onAddProvider={()=>ops.go({providerAdd:'1'},{preserveScroll:true})} onIdentity={id=>ops.go({identityProvider:id,routeProvider:id},{preserveScroll:true})} onProviderState={(id,operation,enabled)=>ops.proceed(()=>setChanging({providerId:id,operation,enabled,expectedUpdatedAt:model.updatedAt}))} onRemoveProvider={id=>ops.proceed(()=>setRemoving(rows.find(row=>row.providerId===id)))}/>
 
     {(adding || ops.params.has('providerAdd')) && <Modal title="关联供应商" description="选择供应管理中已有的供应商，不会创建供应商。" onClose={close}><form noValidate onSubmit={async event=>{event.preventDefault();const next=await ops.run('associateServiceProvider',{providerId,expectedUpdatedAt:model.updatedAt},model.id);if(next){setAdding(false);setEditing(providerId);if(ops.params.has('providerAdd'))ops.go({providerAdd:null},{saved:true,preserveScroll:true});}}}><Field label="供应商 *"><Choice label="关联已有供应商" value={providerId || 'none'} disabled={!ops.can} options={[[ 'none','请选择供应商'],...suppliers.filter(item=>!entries.some(entry=>entry.providerId===item.id)).map(item=>[item.id,item.name])]} onChange={id=>{setProviderId(id==='none'?'':id);ops.dirty(true);ops.setError('');}}/></Field>{ops.error && <Notice error>{ops.error}</Notice>}<div className="mo-footer"><Button type="button" variant="outline" onClick={close}>取消</Button><Button type="submit" disabled={!ops.can || !providerId}>确认关联</Button></div></form></Modal>}
     {editProviderId && <ServiceIdentityDialog key={editProviderId} model={model} providerId={editProviderId} ops={ops} close={close}/>}
@@ -34,11 +34,7 @@ function ProviderContent({state,model,ops}) {
   </>;
 }
 export function ServiceMappingsContent({state,model,ops,act}) {
-  const entries=providerServices(model), providerId=ops.params.get('providerChannels') || ops.params.get('routeProvider') || entries[0]?.providerId;
-  return <><ServiceModeBar model={model} ops={ops} act={act}/>{model.serviceMode==='provider'?<ProviderContent key={model.id} state={state} model={model} ops={ops}/>:<RouteWorkbench state={state} model={model} ops={ops} onAssociate={()=>ops.go({panel:'associate'},{preserveScroll:true})}/>}
-    {model.serviceMode==='standard' && ops.params.get('panel')==='associate' && <AssociateUnifiedChannelsDialog state={state} model={model} ops={ops} close={()=>ops.go({panel:'routing'},{preserveScroll:true})}/>}
-    {model.serviceMode==='provider' && ops.params.has('providerAssociate') && <AssociateChannelsDialog state={state} model={model} ops={ops} providerId={providerId} context="service" close={()=>ops.go({providerAssociate:null},{preserveScroll:true})}/>}
-  </>;
+  return <><ServiceModeBar model={model} ops={ops} act={act}/>{model.serviceMode==='provider'?<ProviderContent key={model.id} state={state} model={model} ops={ops}/>:<RouteWorkbench state={state} model={model} ops={ops}/>}</>;
 }
 export function ServicePricingContent({state,model,ops}) {
   const [editing,setEditing]=useState(null);

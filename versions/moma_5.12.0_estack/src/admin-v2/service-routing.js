@@ -4,6 +4,7 @@ import { catalogueChannels, channelBlockReason, channelUrl } from './provider-ch
 import { providerServices, providerServiceId, serviceChannelId, serviceChannelCosts } from './service-workspace.js';
 import { billingItemKey } from './provider-catalogue-pricing.js';
 import { routeMappingStatus } from './service-route-mapping.js';
+import { mappingReadiness } from './service-model-mappings.js';
 
 export const ROUTING_STRATEGIES = { fixed:'固定', random:'随机分流', weighted:'加权分流', priority_weighted:'优先级 + 加权分流', latency:'最低延迟', load:'最少负载', cost:'最低成本', priority:'主备优先' };
 const GROUP_STRATEGIES=['fixed','random','weighted','latency','load','cost'];
@@ -36,6 +37,7 @@ export function routingChannels(state, service, at = Date.now(), { runtime = fal
     const row={...supply,channelId:channel ? serviceChannelId(channel) : supply.channelId || supply.endpointId,channelUpdatedAt:channel?.updatedAt,channelHealth:channel?.health,channelName:channel?.name || supply.endpoint?.name,verifiedAt:channel?.health?.testedAt || supply.verifiedAt,url,costItems:costs,costVersion:costRevision([channel?.pricing,activeSupplyPrice(state,supply.id,at)]),p95LatencyMs:metric([channel?.p95LatencyMs,channel?.metrics?.p95LatencyMs,supply.endpoint?.p95LatencyMs,supply.endpoint?.metrics?.p95LatencyMs]),activeRequests:metric([channel?.activeRequests,channel?.metrics?.activeRequests,supply.endpoint?.activeRequests,supply.endpoint?.metrics?.activeRequests],true)};
     const mapping=routeMappingStatus(state,{...service,callId},row);
     if (!reason && !mapping.valid) reason=mapping.reason;
+    if (!reason) reason=mappingReadiness(state,service,row,{runtime});
     return {...row,mapping,reason,available:!reason};
   });
 }

@@ -103,6 +103,8 @@ export function supplierDeletionBlock(state, provider, modelId, channel) {
   supplies.forEach(row => ids.add(row.id));
   const related = state.models.filter(model => master && libraryRecord(state, model.id)?.id === master.id || supplies.some(row => row.modelId === model.id));
   const services = related.filter(model => model.serviceProviders?.some(row => row.providerId === provider.id && row.status !== '已移除'));
+  const pendingMappings=state.modelSupplies.filter(row=>row.status!=='已移除' && row.serviceMapping?.pending?.config.providerId===provider.id && (channel ? row.serviceMapping.pending.config.endpointId===channel.endpointId : modelIds.includes(row.serviceMapping.pending.config.catalogueModelId)));
+  if(pendingMappings.length)return {message:'该渠道仍被模型服务的待验证映射引用，请先应用或放弃映射变更。',models:state.models.filter(model=>pendingMappings.some(row=>row.modelId===model.id))};
   const linked = supplies.filter(row => row.status !== '已移除');
   const serviceIds = new Set(related.flatMap(model => ['standard:' + model.id, `provider:${model.id}:${provider.id}`]));
   const references = (route, rows) => rows?.some(row => ids.has(row.supplyId) || (wholeEndpoint || serviceIds.has(route.serviceId)) && endpoints.has(row.supplyId));

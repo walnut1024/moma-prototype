@@ -50,3 +50,26 @@
 /* Radix submits through a hidden form proxy; only the visible button paints a checkbox. */
 .admin-v2 .sr-workbench input[type=checkbox][aria-hidden=true]{opacity:0!important;pointer-events:none}
 .admin-v2 .sr-channel-sub>span:not(.sr-planned){font-size:11px;color:#586982}
+.admin-v2 .service-mappings{border-bottom:1px solid var(--border)}
+.admin-v2 .service-mappings-table{min-width:1050px;font-size:12px}
+.admin-v2 .service-mappings-table td{white-space:normal;overflow-wrap:anywhere;vertical-align:top}
+.admin-v2 .service-mappings-table small{display:block;max-width:190px;margin-top:4px;color:var(--muted-foreground)}
+.admin-v2 .service-mappings-table .mo-copy{align-items:flex-start;max-width:170px}
+.admin-v2 .service-mappings-table code{white-space:normal;overflow-wrap:anywhere}
+.admin-v2 .service-mapping-actions{display:flex;flex-wrap:wrap;gap:4px 10px;min-width:170px}
+.admin-v2 .service-mapping-actions button{padding:0;height:28px;font-size:12px}
+.admin-v2 .service-mapping-note{padding:8px 12px;margin:0;font-size:12px;color:var(--muted-foreground)}
+.admin-ui-portal.mo-dialog.mo-drawer.wide.service-mapping-editor{width:min(1200px,96vw);max-width:none;max-height:none}
+.admin-ui-portal .service-mapping-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.admin-ui-portal .service-mapping-fields>.mm-field:first-child,.admin-ui-portal .service-mapping-fields>dl,.admin-ui-portal .service-mapping-fields>p,.admin-ui-portal .service-mapping-fields>button{grid-column:1/-1}
+.admin-ui-portal .service-mapping-fields>dl{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;margin:0}
+.admin-ui-portal .service-mapping-fields>dl :is(dt,dd){margin:0}
+.admin-ui-portal .service-mapping-fields .mm-field{margin:0;display:grid;gap:8px}
+.admin-ui-portal .service-mapping-fields [data-slot=select-trigger]{width:100%}
+.admin-ui-portal .service-mapping-preview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.admin-ui-portal .service-mapping-preview section{border:1px solid var(--border);padding:16px;border-radius:6px}
+.admin-ui-portal .service-mapping-preview h3{margin:0 0 16px;font-size:14px}
+.admin-ui-portal .service-mapping-preview dt,.admin-ui-portal .service-mapping-fields dt{margin-top:12px;color:var(--muted-foreground);font-size:12px}
+.admin-ui-portal .service-mapping-preview dd,.admin-ui-portal .service-mapping-fields dd{margin:4px 0 0;overflow-wrap:anywhere}
+.admin-ui-portal .service-mapping-preview code,.admin-ui-portal .service-mapping-fields code{white-space:normal;overflow-wrap:anywhere}
+@media(max-width:700px){.admin-ui-portal .service-mapping-preview,.admin-ui-portal .service-mapping-fields{grid-template-columns:1fr}}
