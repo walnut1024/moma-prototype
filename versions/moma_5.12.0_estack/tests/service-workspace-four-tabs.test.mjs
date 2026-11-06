@@ -16,7 +16,7 @@ function providerFixture() {
 }
 
 test('five workspace tabs resolve metadata, mapping, pricing and contextual task links', () => {
-  assert.deepEqual(SERVICE_WORKSPACE_TABS.map(row => row[1]), ['模型卡片', '路由及映射', '售价管理', 'API 调用指南', '操作记录']);
+  assert.deepEqual(SERVICE_WORKSPACE_TABS.map(row => row[1]), ['模型卡片', '路由及映射', '售价与开放范围', 'API 调用指南', '操作记录']);
   for (const [params, expected] of [[{}, 'materials'], [{panel:'editMetadata'}, 'materials'], [{panel:'routing'}, 'routing'], [{panel:'associate'}, 'routing'], [{panel:'guide'}, 'guide'], [{panel:'guide',providerChannels:'p',routeProvider:'p'}, 'guide'], [{providerAdd:'1'}, 'routing'], [{identityProvider:'p'}, 'routing'], [{providerAssociate:'1'}, 'routing'], [{panel:'pricing'}, 'pricing'], [{providerEdit:'p'}, 'pricing'], [{panel:'history'}, 'history']]) assert.equal(serviceWorkspaceTab(new URLSearchParams(params)), expected);
 });
 

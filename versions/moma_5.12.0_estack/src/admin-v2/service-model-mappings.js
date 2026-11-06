@@ -51,7 +51,7 @@ export function mappingReadiness(state,service,supply,{runtime=false}={}) {
 export function mappingReferences(state,supply) {
   return (state.serviceRoutes || []).flatMap(route=>{
     const active=route.versions.find(row=>row.version===route.activeVersion);
-    return [[active?.config,'生效路由'],[route.draft,'路由草稿']].filter(([config])=>config?.channels.some(row=>row.supplyId===supply.id)).map(([,kind])=>({serviceId:route.serviceId,kind}));
+    return [[active?.config,'生效路由'],[route.draft,'路由草稿']].filter(([config])=>config?.channels.some(row=>row.supplyId===supply.id)).map(([config,kind])=>({serviceId:route.serviceId,kind:kind==='生效路由'?(config.channels.some(row=>row.supplyId===supply.id && row.enabled)?'当前使用':'配置保留引用'):kind}));
   });
 }
 export function mappingPendingTasks(state,supply) {

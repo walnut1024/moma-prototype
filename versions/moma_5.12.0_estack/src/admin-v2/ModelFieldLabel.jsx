@@ -12,6 +12,6 @@ const explanations={
   '支持参数':'模型声明支持的调用参数，具体可用范围以渠道配置与验证结果为准。',
   '默认参数':'原厂提供的默认参数资料，保存资料不会改变现有服务的调用配置。',
 };
-export default function ModelFieldLabel({name,required=false}) {
-  return <span className="mm-field-title">{name}{required?' *':''}{explanations[name] && <TooltipProvider><Tooltip><TooltipTrigger asChild><button className="mm-field-help" type="button" aria-label={`${name}说明`}><CircleHelp size={13}/></button></TooltipTrigger><TooltipContent>{explanations[name]}</TooltipContent></Tooltip></TooltipProvider>}</span>;
+export default function ModelFieldLabel({name,required=false,description=explanations[name],tooltipClassName}) {
+  return <span className="mm-field-title">{name}{required?' *':''}{description && <TooltipProvider><Tooltip><TooltipTrigger asChild><button className="mm-field-help" type="button" aria-label={`${name}说明`}><CircleHelp size={13}/></button></TooltipTrigger><TooltipContent className={tooltipClassName}>{description}</TooltipContent></Tooltip></TooltipProvider>}</span>;
 }

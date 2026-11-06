@@ -19,6 +19,7 @@ export default function ModelLibraryEditor({ state, record, initial, onboardingI
   const inspect = value => { try { setDownlist(false); setPreview({ value, impact: materialImpact(state, record, value) }); } catch (error) { ops.setError(error.message); } };
   const online = preview?.impact.changed ? preview.impact.services.filter(listed) : [];
   return <>
+    {cardOnly && <Notice>修改共享模型资料，关联的 {state.models.filter(model=>model.id===record?.id || model.templateId===record?.id).length} 个模型服务同步更新。能力变更需重新验证。</Notice>}
     <ModelMetadataForm sourceLabel={record ? Object.values(state.modelData?.userIds || {}).some(ids=>ids.includes(record.id))?'用户配置':Object.values(state.modelData?.builtinIds || {}).some(ids=>ids.includes(record.id))?'内置资料':'已有资料' : '用户配置'} key={record?.id || 'new'} model={record} initial={initial} readOnly={readOnly} scrollable={scrollable} startEditing={!readOnly} can={ops.can} dirty={ops.dirty} cardOnly={cardOnly} title="" submitLabel={scrollable?'保存':record ? cardOnly?'保存卡片':'预览资料变更' : '保存模型资料'} onCancel={onCancel} onSubmit={record ? inspect : save}/>
     {ops.error && <Notice error>{ops.error}</Notice>}
     {preview && <Modal title={cardOnly?'核对卡片修改':scrollable?'确认资料变更':'发布共享模型资料'} description={record.name} onClose={() => setPreview(null)}>

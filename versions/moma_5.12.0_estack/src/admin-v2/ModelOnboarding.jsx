@@ -54,7 +54,7 @@ function OnboardingRoute({ state, context, ops, next, back, exit }) {
   const [version] = useState(route?.activeVersion || 0), [sourceVersion] = useState(() => service && routeSourceVersion(state, service));
   const [confirmed, setConfirmed] = useState(false);
   const existing = Boolean(active);
-  const routeOps={...ops,run:async (operation,data)=>await ops.run(operation==='serviceRoutePublish'?'guidedRouteSave':operation,{...data,draftId:context.draft.id,expectedDraftRevision:context.draft.draftRevision})};
+  const routeOps={...ops,run:async (operation,data)=>await ops.run(operation==='serviceRoutePublish'?'guidedRouteSave':operation==='serviceRouteConfigure'?'guidedRouteConfigure':operation,{...data,draftId:context.draft.id,expectedDraftRevision:context.draft.draftRevision})};
   return <section className="onboarding-route" aria-label="确认流量路由"><h2>确认流量路由</h2>{existing ? <>
     <p className="onboarding-caption">确认发布路由后生效，服务仍需完成验证和上架。</p><RouteWorkbench state={state} model={model} ops={routeOps} draftOnly serviceId={service?.id}/>
   </> : <>

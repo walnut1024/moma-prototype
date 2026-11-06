@@ -6,7 +6,9 @@
 .admin-v2 .gs-heading h1 svg{width:19px;height:19px;flex:none}
 .admin-v2 .gs-heading p{margin-top:4px;color:#586982}
 .admin-v2 .gs-heading a svg{width:16px;height:16px}
-.admin-v2 .gs-section-nav{display:flex;gap:8px 24px;flex-wrap:wrap;padding:4px 8px}
+.admin-v2 .gs-section-nav{display:flex;gap:4px 24px;flex-wrap:wrap;padding:0 8px;border-bottom:1px solid #e4eaf3}
+.admin-v2 .gs-section-nav a{display:inline-flex;align-items:center;min-height:44px;padding:8px 0;border-bottom:2px solid transparent;color:#586982}
+.admin-v2 .gs-section-nav a[aria-current="page"]{border-bottom-color:#315fe8;color:#315fe8;font-weight:600}
 .admin-v2 .getting-started a{color:#315fe8;text-underline-offset:3px}
 .admin-v2 .getting-started a:hover{text-decoration:underline}
 .admin-v2 .gs-panel h2{font-size:16px;font-weight:600;margin-bottom:16px}
@@ -16,7 +18,7 @@
 .admin-v2 .gs-copy ul{list-style:disc}
 .admin-v2 .gs-copy li{padding-left:4px}
 .admin-v2 .gs-copy li::marker{color:#315fe8;font-weight:600}
-.admin-v2 .gs-copy p{max-width:90ch}
+.admin-v2 .gs-copy p{max-width:75ch}
 .admin-v2 .gs-copy code{font-size:.95em;background:#f4f6fa;border-radius:3px;padding:1px 4px}
 .admin-v2 .gs-copy figure img{display:block;width:100%;height:auto;max-width:1120px}
 .admin-v2 .gs-table-scroll{overflow:auto;min-width:0}
@@ -30,7 +32,7 @@
 .admin-v2 .gs-tasks summary{cursor:pointer;padding:14px 0;font-weight:600}
 .admin-v2 .gs-tasks h3{display:inline;font-size:14px;font-weight:600}
 .admin-v2 .gs-tasks details>.gs-copy{padding:0 0 20px 18px}
-.admin-v2 .getting-started :is(h2,details,.gs-anchor){scroll-margin-top:80px}
+.admin-v2 .getting-started,.admin-v2 .getting-started :is(h2,details,.gs-anchor){scroll-margin-top:100px}
 .admin-v2 .gs-anchor{height:0}
 .admin-v2 .getting-started :is(a,summary,h2):focus-visible{outline:2px solid #315fe8;outline-offset:3px}
 @media(max-width:900px){.admin-v2 .gs-heading,.admin-v2 .gs-panel{padding:16px}.admin-v2 .gs-panel :is(th,td){padding:8px}.admin-v2 .gs-section-nav{gap:8px 16px}}

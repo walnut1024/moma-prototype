@@ -1,4 +1,8 @@
 // The guide uses this small, local Markdown subset; no HTML is executed.
+export function findOperationsGuide(sections, target) {
+  return sections.find(section => section.id === target || section.tasks.some(task => task.id === target)) || sections[0];
+}
+
 export function parseOperationsGuide(source) {
   const lines = source.split(/\r?\n/), blocks = [];
   const anchor = line => line.match(/^<a id="([a-z0-9-]+)"><\/a>$/);

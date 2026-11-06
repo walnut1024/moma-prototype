@@ -2,7 +2,7 @@ import {trackUserConfiguration} from "../mock/application-data.js";
 import {applyModelDataset,trackModelUserChanges} from "../mock/model-data.js";
 import { MOMA_PROVIDER } from './moma-provider.js';
 import { platformPublicationFingerprint } from './platform-publication-state.js';
-import { modelAuditContext } from './model-operation-history.js';
+import { modelAuditContext, modelAuditChanges } from './model-operation-history.js';
 
 
 import { enterpriseTransaction } from "./enterprise.js";
@@ -53,7 +53,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   const supplierLifecycle = action.type === 'modelOperations' && ['serviceProviderListing','serviceProviderServing','removeServiceProvider'].includes(action.operation);
   const deletingLibrary = action.type === 'modelOperations' && action.operation === 'templateDelete';
   const directChanges=action.type==='batch'?action.changes:[action];
-  if (action.type!=='modelOperations' && directChanges?.some(change=>change.collection==='models' && ['marketVisible','openScope','tenantIds','commercialDrafts','commercialPublications','materialDraft','materialPublication','lifecycleStopReason','requestGeneration','serviceProviders','serviceMode','serviceModeRevision'].some(key=>Object.hasOwn(change.changes || change.record || {},key)) || change.collection==='modelSalePrices' && ['model','provider'].includes((change.record || change.changes)?.scope || state.modelSalePrices.find(price=>price.id===change.id)?.scope))) throw new Error('模型服务关联及售价须通过服务管理操作');
+  if (action.type!=='modelOperations' && directChanges?.some(change=>change.collection==='models' && ['archivedAt','marketVisible','openScope','tenantIds','commercialDrafts','commercialPublications','materialDraft','materialPublication','lifecycleStopReason','requestGeneration','serviceProviders','serviceMode','serviceModeRevision'].some(key=>Object.hasOwn(change.changes || change.record || {},key)) || change.collection==='modelSalePrices' && ['model','provider'].includes((change.record || change.changes)?.scope || state.modelSalePrices.find(price=>price.id===change.id)?.scope))) throw new Error('模型服务关联及售价须通过服务管理操作');
   if (action.type !== 'modelOperations' && directChanges?.some(change => change.collection === 'modelTemplates' && ['materialDraft', 'materialPublication'].some(key => Object.hasOwn(change.changes || change.record || {}, key)))) throw new Error('模型资料须通过模型资料维护操作');
   if (action.type!=='modelOperations' && directChanges?.some(change=>change.collection==='endpoints' && Object.hasOwn(change.changes || change.record || {},'frozen'))) throw new Error('渠道冻结状态须通过供应管理操作');
   const isEnterprise = ['enterprise', 'individual', 'adminAccount'].includes(action.type);
@@ -113,7 +113,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   if (currentAdmin) next.currentRole = currentAdmin.role;
   next.revision += 1; next.updatedAt = timestamp;
   const auditBefore = modelAuditContext(state, action), auditAfter = modelAuditContext(next, action);
-  if (action.type !== "setRole") next.audits.unshift(record(`audit-${next.revision}`, { createdAt: timestamp, updatedAt: timestamp, actor, action: action.label || action.type, objectId: action.record?.id || action.id || action.objectId || "batch", objectLabel: auditAfter.objectLabel, relatedModelIds: [...new Set([...auditBefore.relatedModelIds, ...auditAfter.relatedModelIds])], result: action.auditFailure ? '失败' : '成功', ...(action.auditFailure ? { reason: action.auditFailure } : {}), before: isEnterprise ? action.changes.filter(change => change.type === 'update').map(change => ({ collection: change.collection, id: change.id, values: Object.fromEntries(Object.keys(change.changes).map(key => [key, state[change.collection].find(item => item.id === change.id)?.[key]])) })) : null, after: action.record || action.changes }));
+  if (action.type !== "setRole") next.audits.unshift(record(`audit-${next.revision}`, { createdAt: timestamp, updatedAt: timestamp, actor, action: action.label || action.type, objectId: action.record?.id || action.id || action.objectId || "batch", objectLabel: auditAfter.objectLabel, relatedModelIds: [...new Set([...auditBefore.relatedModelIds, ...auditAfter.relatedModelIds])], result: action.auditFailure ? '失败' : '成功', changes: modelAuditChanges(state,action), ...(action.auditFailure ? { reason: action.auditFailure } : {}), before: isEnterprise ? action.changes.filter(change => change.type === 'update').map(change => ({ collection: change.collection, id: change.id, values: Object.fromEntries(Object.keys(change.changes).map(key => [key, state[change.collection].find(item => item.id === change.id)?.[key]])) })) : null, after: action.record || action.changes }));
   if (preparingDataset) next.modelData = applyModelDataset(state).modelData;
   else if (installingCatalogue) {
     const added = next.modelTemplates.filter(row => !state.modelTemplates.some(before => before.id === row.id)).map(row => row.id);

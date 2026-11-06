@@ -102,3 +102,9 @@ export function tariffDictionaryTransaction(state, data) {
   } else throw new Error('未知资费字典操作');
   return { type: 'batch', objectId: current?.id || change.record.id, label, changes: [change] };
 }
+
+export function commonTariffNames(names,modelType) {
+  const common=/^(输入 Token|输出 Token|缓存读取 Token|缓存写入 Token)$/;
+  const related={text:common,multimodal:/^(输入 Token|输出 Token|缓存读取 Token|缓存写入 Token|图像输入 Token|音频输入 Token|音频输出 Token)$/,audio:/音频|语音|字符|分钟/,image:/图片|图像|张/,video:/视频|秒/,embedding:/输入 Token|向量/,rerank:/重排|次|输入 Token/}[modelType];
+  return related?names.filter(name=>related.test(name)):names;
+}

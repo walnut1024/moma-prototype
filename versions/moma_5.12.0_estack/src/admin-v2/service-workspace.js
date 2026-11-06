@@ -12,24 +12,26 @@ export function serviceDirectoryModels(state, linkedId, catalogue) {
 export function serviceIndexModels(state, params) {
   const query = (params.get('q') || '').trim().toLowerCase(), type = params.get('type'), mode = params.get('mode'), status = params.get('status');
   return serviceDirectoryModels(state, params.get('model'), params.get('catalogue')).filter(model =>
+    (status==='archived'?Boolean(model.archivedAt):!model.archivedAt) &&
     (!query || [model.name, modelCode(model)].join(' ').toLowerCase().includes(query)) &&
     (!type || type === 'all' || modelCategory(model.type) === type) &&
     (!mode || mode === 'all' || (mode === 'unset' ? !model.serviceMode : model.serviceMode === mode)) &&
-    (!status || status === 'all' || serviceLifecycle(model)==={listed:'已上架',unlisted:'已下架',unpublished:'未上架'}[status]));
+    (!status || status === 'all' || serviceLifecycle(model)==={listed:'已上架',unlisted:'已下架',unpublished:'未上架',archived:'已归档'}[status]));
 }
 
 export function selectServiceModel(rows, requestedId) {
   return requestedId !== null ? rows.find(model => model.id === requestedId) : rows.find(model => model.serviceReviewCase === 'video') || rows[0];
 }
 export function serviceLifecycle(model) {
+  if(model.archivedAt)return '已归档';
   if (model.listingStatus==='已上架') return '已上架';
   return (model.serviceManaged || model.serviceReviewCase) && !model.firstPublishedAt?'未上架':'已下架';
 }
 export function serviceConfiguration(state,model) {
-  if (!model.serviceMode) return {label:'未配置',issues:publicationChecks(state,model).filter(check=>!check.passed)};
-  const issues=publicationChecks(state,model).filter(check=>check.tab!=='platform' && !check.passed);
-  return {label:issues.length?'待完善':'已配置',issues};
+  const issues=publicationChecks(state,model).filter(check=>!check.passed),setupIssues=issues.filter(check=>check.tab!=='platform');
+  return {label:!model.serviceMode?'未配置':setupIssues.length?'待配置':issues.length?'待验证':model.listingStatus==='已上架'?'已就绪':'可上架',issues,setupIssues};
 }
+
 export function serviceConfigurationTarget(model,check) {
   const base={panel:'pricing',providerEdit:null,providerAdd:null,providerChannels:null,providerAssociate:null,routeProvider:null,service:null,mapping:null};
   if (check.tab==='serviceMode') return {...base,panel:'routing'};
@@ -101,4 +103,11 @@ export function commercialTaskBase(state, model, kind, providerId = '') {
 export function servicePriceIdentity(state, model, providerId = '') {
   const provider = state.providers.find(row => row.id === (providerId || MOMA_PROVIDER.id));
   return { supplierName: provider?.name || '供应商已不存在', callId: providerId ? providerServices(model).find(row => row.providerId === providerId)?.callId || '' : model.modelId || '' };
+}
+
+export function currentServiceCosts(state,model,providerId='') {
+  const route=state.serviceRoutes.find(row=>row.serviceId===(providerId?providerServiceId(model.id,providerId):`standard:${model.id}`));
+  const config=route?.versions.find(row=>row.version===route.activeVersion)?.config;
+  const selected=new Set((config?.channels || []).filter(row=>row.enabled).map(row=>row.supplyId));
+  return serviceSupplyRows(state,model).filter(row=>selected.has(row.id)).map(row=>({name:row.channelName,items:row.cost?.items || []}));
 }

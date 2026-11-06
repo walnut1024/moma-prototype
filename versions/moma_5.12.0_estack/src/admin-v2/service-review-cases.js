@@ -117,7 +117,7 @@ export function completeServiceProviderExample(source) {
   if (source.serviceProviderExampleVersion === 1) return source;
   const state = structuredClone(source);
   state.serviceProviderExampleVersion = 1;
-  const ready = serviceDirectoryModels(source).some(model => model.serviceMode === 'provider' && !serviceConfiguration(source, model).issues.length);
+  const ready = serviceDirectoryModels(source).some(model => model.serviceMode === 'provider' && !serviceConfiguration(source, model).setupIssues.length);
   if (ready) return state;
   const collections = ['models', 'modelVersions', 'providers', 'endpoints', 'modelSupplies', 'modelSalePrices', 'serviceRoutes'];
   let prefix = 'service-delivery', serial = 1;

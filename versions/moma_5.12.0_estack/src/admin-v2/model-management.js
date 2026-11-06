@@ -209,6 +209,7 @@ export function modelTransaction(state, action) {
   const creating = operation === 'create' || operation === 'createServiceModel';
   let model = creating ? null : state.models.find(item => item.id === action.modelId);
   if (!creating && !model) throw new Error('模型不存在');
+  if(model?.archivedAt && !action.catalogue)throw Error('服务已归档，请先恢复服务');
   let objectId = model?.id;
   if (creating || operation === 'basic' || operation === 'serviceBasics') {
     const libraryId = operation === 'createServiceModel' ? data.libraryId : model?.templateId;
@@ -226,7 +227,7 @@ export function modelTransaction(state, action) {
     const compact = operation === 'createServiceModel' || operation === 'serviceBasics';
     if(operation==='createServiceModel' && data.serviceMode!=null && data.serviceMode!=='' && !['standard','provider'].includes(data.serviceMode)) throw new Error('请选择一种服务方式');
     if(operation==='serviceBasics' && data.expectedUpdatedAt!==model.updatedAt) throw new Error('模型资料已有并发修订，请重新打开核对');
-    if(compact) data={...normalizeServiceModel(state,data,model),serviceMode:data.serviceMode};
+    if(compact) data={...normalizeServiceModel(state,data,operation==='createServiceModel' && model?{...model,modelId:data.modelId}:model),serviceMode:data.serviceMode};
     const modelId = creating ? data.modelId?.trim() : model.modelId;
     if (!modelId || !compact && !/^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('模型编码需使用小写字母、数字或 . _ : / -，最多 80 字符');
     if (!data.name?.trim() || !action.catalogue && !data.description?.trim()) throw new Error('模型展示名称和介绍必填');

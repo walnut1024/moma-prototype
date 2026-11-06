@@ -12,13 +12,13 @@ test('configured historical review scenarios retain distinct progress and lifecy
   const state=parseAdminState(null),models=serviceDirectoryModels(state).filter(model=>model.serviceReviewCase);
   assert.deepEqual(models.map(model=>model.serviceReviewCase),['deepseek','qwen','image','video','audio']);
   assert.deepEqual(models.map(model=>serviceLifecycle(model)),['已下架','已上架','未上架','已上架','未上架']);
-  assert.deepEqual(models.map(model=>serviceConfiguration(state,model).label),['已配置','已配置','未配置','已配置','待完善']);
+  assert.deepEqual(models.map(model=>serviceConfiguration(state,model).label),['待验证','待验证','未配置','待验证','待配置']);
   for(const status of ['listed','unlisted','unpublished'])assert.ok(serviceIndexModels(state,new URLSearchParams({status})).every(model=>serviceLifecycle(model)==={listed:'已上架',unlisted:'已下架',draft:'草稿',unpublished:'未上架'}[status]));
   assert.equal(serviceIndexModels(state,new URLSearchParams({mode:'provider'})).filter(model=>model.serviceReviewCase).length,2);
 });
 test('audio missing price and missing mapping link directly to the correct Provider and panel',()=>{
   const state=parseAdminState(null),audio=state.models.find(model=>model.serviceReviewCase==='audio'),issues=serviceConfiguration(state,audio).issues;
-  assert.equal(issues.length,2);
+  assert.equal(issues.filter(issue=>issue.tab!=='platform').length,2);assert.ok(issues.some(issue=>issue.tab==='platform'));
   const price=issues.find(issue=>issue.tab==='pricing'),mapping=issues.find(issue=>issue.tab==='routing');
   assert.equal(serviceConfigurationTarget(audio,price).providerEdit,price.providerId);
   const target=serviceConfigurationTarget(audio,mapping);
@@ -63,7 +63,7 @@ test('image first configuration completes metadata, price and routing while pers
   run('associateServiceChannelsBatch',{groups:[{providerId:channel.provider.id,catalogueModelId:channel.catalogueModelId,channelIds:[channel.id]}],confirmedIdentity:true,expectedUpdatedAt:model().updatedAt});
   const service=routingServices(state).find(item=>item.modelId===id),mapped=routingChannels(state,service);
   run('serviceRoutePublish',{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'fixed',autoFailover:true,channels:[{supplyId:mapped[0].id,enabled:true,priority:1}]}});
-  assert.equal(serviceConfiguration(state,model()).label,'已配置');
+  assert.equal(serviceConfiguration(state,model()).label,'待验证');
   assert.equal(publicationChecks(state,model()).find(check=>check.tab==='platform').passed,false);
   const before=structuredClone(state);
   assert.throws(()=>persistModelAction(state,{type:'modelOperation',operation:'publish',modelId:id,data:{}},{getItem:()=>JSON.stringify(state),setItem:()=>assert.fail('A missing platform proof cannot write the store')}),/平台试调用/);

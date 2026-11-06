@@ -19,7 +19,7 @@ test('two newest requested examples have complete, identity-consistent prices an
   const state = prepareServiceShowcase(createAdminSeed()), models = serviceDirectoryModels(state);
   assert.deepEqual(models.map(row => row.modelId), SERVICE_SHOWCASE_MODELS.map(row => row.code));
   for (const model of models) {
-    assert.deepEqual(serviceConfiguration(state, model).issues, []);
+    assert.deepEqual(serviceConfiguration(state, model).issues.filter(check=>check.tab!=='platform'), []);
     assert.equal(model.listingStatus, '已下架', 'fixture preparation cannot claim platform publication');
     assert.equal(libraryRecord(state, model.id).name, model.name);
     const services = routingServices(state).filter(row => row.modelId === model.id);

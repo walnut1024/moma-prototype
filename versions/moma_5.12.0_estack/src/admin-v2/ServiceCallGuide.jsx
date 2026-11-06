@@ -18,9 +18,9 @@ export default function ServiceCallGuide({state,model,ops}) {
   const [editing,setEditing]=useState(null),[codes,setCodes]=useState({}),[base,setBase]=useState('');
   const editor=useRef(null);
   const service=services.find(item=>item.id===providerId) || services[0], configuration=serviceConfiguration(state,model);
-  if (!model.serviceMode || !service?.callId || configuration.issues.length) return <div className="sm-empty sm-first-config"><h2>{!model.serviceMode?'调用指南尚未生成':'调用指南待完善'}</h2><p>完成服务模式、售价、渠道和路由配置后，生成对应模型服务的调用示例。</p><ServicePlatformTrial state={state} model={model} ops={ops} providerId={service?.providerId}/><Button variant="outline" onClick={()=>ops.go(serviceConfigurationTarget(model,configuration.issues[0] || {tab:'serviceMode'}))}>前往完善配置</Button></div>;
+  if (!model.serviceMode || !service?.callId || configuration.setupIssues.length) return <div className="sm-empty sm-first-config"><h2>{!model.serviceMode?'调用指南尚未生成':'调用指南待完善'}</h2><p>完成服务模式、售价、渠道和路由配置后，生成对应模型服务的调用示例。</p><ServicePlatformTrial state={state} model={model} ops={ops} providerId={service?.providerId}/><Button variant="outline" onClick={()=>ops.go(serviceConfigurationTarget(model,configuration.setupIssues[0] || {tab:'serviceMode'}))}>前往完善配置</Button></div>;
   const request=serviceGuideRequest(editing?{...model,apiGuides:{...model.apiGuides,[service.providerId || 'standard']:{codes}}}:model,service.callId,service.providerId);
-  return <div className="sm-model-form sm-guide">
+  return <div className="sm-model-form sm-guide"><div className="sm-section-bar"><ServicePlatformTrial state={state} model={model} ops={ops} providerId={service.providerId}/></div>
     {model.serviceMode==='provider' && <div className="sm-section-bar"> <Field label="供应商"><Choice label="调用指南供应商" value={service.id} options={services.map(item=>[item.id,item.name])} disabled={Boolean(editing)} onChange={id=>{setProviderId(id);ops.go({panel:'guide',routeProvider:services.find(item=>item.id===id)?.providerId || null},{preserveScroll:true});}}/></Field></div>}
     {model.listingStatus!=='已上架' && <Notice>当前服务{serviceLifecycle(model)}，完成平台验证并上架后可调用。</Notice>}
     {ops.error && <Notice error>{ops.error}</Notice>}

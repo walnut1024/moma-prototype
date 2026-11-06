@@ -1,43 +1,77 @@
 import mockConfig from '../mock/catalogues.json' with {type:'json'};
 import { parseDelimitedCells } from '../tabular-import.mjs';
-import { MODEL_CATEGORIES, modelTransaction } from './model-management.js';
-import { INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, TASK_OPTIONS } from './model-profile.js';
+import { modelTransaction } from './model-management.js';
+import { MODEL_CATALOGUE_TYPES, modelLibrary } from './model-library.js';
+import { IDENTITY_FIELDS, TECHNICAL_FIELDS, PRESENTATION_FIELDS, COMMON_FIELDS, INTERFACE_FIELDS, RECORD_FIELDS, FEATURE_FIELDS, ARCHITECTURE_OPTIONS, LICENSE_OPTIONS, TASK_OPTIONS, specificationFields } from './model-profile.js';
 
 export const MODEL_IMPORT_LIMIT = 500;
-export const MODEL_IMPORT_HEADERS = ['模型编码', '模型名称', '模型类型', '支持任务', '输入模态', '输出模态', '结果类型', '上下文大小（Token）', '最大输出（Token）', '简短介绍'];
-export const MODEL_IMPORT_TEMPLATE = mockConfig['admin-v2/model-import.js'].MODEL_IMPORT_TEMPLATE;
+const column = (key, label, target = 'profile', kind = 'text') => ({ key, label, target, kind });
+const header = field => field.label + (field.unit ? `（${field.unit}）` : '');
+const profileFields = [...IDENTITY_FIELDS, ...TECHNICAL_FIELDS, ...PRESENTATION_FIELDS, ...COMMON_FIELDS, ...INTERFACE_FIELDS, ...FEATURE_FIELDS, ...Object.keys(TASK_OPTIONS).flatMap(type => specificationFields(type, '', { tasks: TASK_OPTIONS[type] })), ...RECORD_FIELDS, column('detailDescription', '详细介绍')];
+const basicProfileFields = [...PRESENTATION_FIELDS, ...COMMON_FIELDS, ...IDENTITY_FIELDS.filter(field => ['family', 'version', 'releaseDate'].includes(field.key))];
+export const MODEL_IMPORT_FIELDS = [
+  column('modelId', '规范模型标识', 'model'), column('name', '模型名称', 'model'), column('type', '模型类型', 'model'), column('visualType', '视觉任务类型', 'model'),
+  ...PRESENTATION_FIELDS.filter(field => ['author', 'logo'].includes(field.key)),
+  ...IDENTITY_FIELDS.filter(field => ['family', 'version', 'releaseDate'].includes(field.key)), column('description', '简短介绍', 'model'),
+  ...COMMON_FIELDS, ...PRESENTATION_FIELDS.filter(field => ['languages', 'scenarios'].includes(field.key)),
+  column('context', '上下文窗口（Token）', 'capabilities', 'number'), column('output', '最大输出（Token）', 'capabilities', 'number'),
+  column('streaming', '流式响应', 'capabilities', 'support'), column('tools', '工具调用', 'capabilities', 'support'),
+  ...profileFields.filter((field, index, all) => !basicProfileFields.some(item => item.key === field.key) && all.findIndex(item => header(item) === header(field)) === index),
+].map(field => ({ target: 'profile', ...field, header: header(field) }));
+export const MODEL_IMPORT_HEADERS = MODEL_IMPORT_FIELDS.map(field => field.header);
+export const MODEL_IMPORT_REQUIRED_HEADERS = ['规范模型标识', '模型名称', '模型类型'];
+export const MODEL_IMPORT_TEMPLATE_HEADERS = MODEL_IMPORT_HEADERS.map(label => MODEL_IMPORT_REQUIRED_HEADERS.includes(label) ? `${label}（必填）` : label === '视觉任务类型' ? `${label}（视觉模型必填）` : label);
+export const MODEL_IMPORT_TEMPLATE = [MODEL_IMPORT_HEADERS, ...mockConfig['admin-v2/model-import.js'].MODEL_IMPORT_EXAMPLES.map(example => MODEL_IMPORT_HEADERS.map(label => example[label] ?? ''))];
+
 export function modelRowsFromCells(cells) {
-  const rows = cells.map(row => row.map(cell => String(cell ?? '').trim())).filter(row => row.some(Boolean));
-  if (!rows.length || MODEL_IMPORT_HEADERS.some((header, index) => rows[0][index] !== header) || rows[0].length !== MODEL_IMPORT_HEADERS.length) throw new Error('表头不匹配，请下载最新模板，保留十列表头和顺序');
-  rows.shift();
+  const clean = cells.map(row => row.map(cell => cell instanceof Date ? cell.toISOString().slice(0, 10) : String(cell ?? '').trim()));
+  const labels = (clean[0] || []).map(label => MODEL_IMPORT_HEADERS[MODEL_IMPORT_TEMPLATE_HEADERS.indexOf(label)] || label);
+  if (MODEL_IMPORT_REQUIRED_HEADERS.some(label => !labels.includes(label))) throw new Error('表头不匹配，请下载最新模板，保留规范模型标识、模型名称和模型类型');
+  if (new Set(labels).size !== labels.length || labels.some(label => !MODEL_IMPORT_HEADERS.includes(label))) throw new Error('表头含重复或未知字段，请使用最新模板，可删除不需要的可选列');
+  const rows = clean.slice(1).map((row, index) => ({ rowNumber: index + 2, cells: row })).filter(row => row.cells.some(Boolean));
   if (!rows.length) throw new Error('没有可导入的模型，请填写至少一条记录');
   if (rows.length > MODEL_IMPORT_LIMIT) throw new Error(`每批最多 ${MODEL_IMPORT_LIMIT} 条，请拆分后导入`);
-  if (rows.some(row => row.length > MODEL_IMPORT_HEADERS.length)) throw new Error('列数超过模板范围，请按十列填写');
-  return rows.map((cells, index) => ({ rowNumber: index + 2, cells }));
+  if (rows.some(row => row.cells.slice(labels.length).some(Boolean))) throw new Error('数据列超过表头范围，请检查表格');
+  return rows.map(row => ({ ...row, cells: MODEL_IMPORT_HEADERS.map(label => row.cells[labels.indexOf(label)] || '') }));
 }
 export const parseModelText = text => modelRowsFromCells(parseDelimitedCells(text));
-export function validateModelRows(state, rows) {
+const split = raw => [...new Set(raw.split(/[,，、;；]/).map(value => value.trim()).filter(Boolean))];
+const choices = {
+  support: [['supported', '支持'], ['unsupported', '不支持']], lifecycle: [['stable', '稳定版'], ['preview', '预览版'], ['deprecated', '已退役']],
+  confirmation: [['pending', '待核对'], ['confirmed', '已核对']], architecture: ARCHITECTURE_OPTIONS, license: LICENSE_OPTIONS,
+};
+export function validateModelRows(state, rows, { catalogue = true } = {}) {
   const seen = new Set();
   return rows.map(row => {
-    const [modelId = '', name = '', category = '', task = '', input = '', output = '', result = '', context = '', maxOutput = '', description = ''] = row.cells;
-    const split = raw => [...new Set(raw.split(/[,，、;；]/).map(value => value.trim()).filter(Boolean))];
-    const tasks = split(task);
-    const data = { modelId, name, description, type: Object.keys(MODEL_CATEGORIES).find(key => MODEL_CATEGORIES[key] === category), usageUnit: tasks.includes('语音合成') ? '字符' : '秒', profile: { tasks }, capabilities: { streaming: null, tools: null, context, output: maxOutput } };
+    const values = Object.fromEntries(MODEL_IMPORT_HEADERS.map((label, index) => [label, row.cells[index] || '']));
+    const tasks = split(values['支持任务']);
+    const data = { modelId: values['规范模型标识'], name: values['模型名称'], description: values['简短介绍'], type: Object.keys(MODEL_CATALOGUE_TYPES).find(key => MODEL_CATALOGUE_TYPES[key] === values['模型类型']), profile: {}, capabilities: { streaming: null, tools: null, context: null, output: null } };
     try {
       if (data.type === 'visual') {
-        data.type = ['image', 'video'].find(key => tasks.length && tasks.every(value => TASK_OPTIONS[key].includes(value)));
-        if (!data.type) throw new Error('视觉生成的支持任务需属于图像生成或视频生成中的一类');
+        data.type = { '图像': 'image', '视频': 'video' }[values['视觉任务类型']];
+        if (!data.type) throw new Error('视觉模型的视觉任务类型必填，请选择图像或视频');
+      } else if (values['视觉任务类型']) throw new Error('仅视觉模型填写视觉任务类型');
+      const applicable = [...IDENTITY_FIELDS, ...TECHNICAL_FIELDS, ...PRESENTATION_FIELDS, ...COMMON_FIELDS, ...INTERFACE_FIELDS, ...RECORD_FIELDS, ...FEATURE_FIELDS.filter(field => ['text', 'multimodal'].includes(data.type) || field.key === 'batch'), ...specificationFields(data.type, '', { tasks }), column('detailDescription', '详细介绍')];
+      for (const field of MODEL_IMPORT_FIELDS) {
+        const raw = values[field.header];
+        if (!raw || field.target === 'model') continue;
+        if (field.target === 'profile' && !applicable.some(item => header(item) === field.header) || field.target === 'capabilities' && !({ context: ['text', 'multimodal', 'embedding', 'rerank'], output: ['text', 'multimodal'], streaming: ['text', 'multimodal', 'audio'], tools: ['text', 'multimodal'] }[field.key].includes(data.type))) throw new Error(`${field.header}不适用于当前模型类型或支持任务，请留空`);
+        let value = raw;
+        if (['languages', 'modalities', 'tasks', 'results', 'scenarios', 'methods', 'parameters'].includes(field.kind)) value = split(raw);
+        if (choices[field.kind]) {
+          if (['未填写', '待确认'].includes(raw)) continue;
+          value = choices[field.kind].find(([id, label]) => id === raw || label === raw)?.[0];
+          if (!value) throw new Error(`${field.header}包含无效选项，请按填写提示填写`);
+          if (field.target === 'capabilities') value = value === 'supported';
+        }
+        if (field.target === 'capabilities' && field.kind === 'number' && (!Number.isSafeInteger(Number(raw)) || Number(raw) < 1)) throw new Error(`${field.header}需为正整数`);
+        data[field.target][field.key] = value;
       }
-      for (const value of [context, maxOutput]) if (value && (!Number.isSafeInteger(Number(value)) || Number(value) < 1)) throw new Error('Token 大小需为正整数');
-      for (const [key, raw, choices, label] of [['inputModalities', input, INPUT_MODALITY_OPTIONS, '输入模态'], ['outputModalities', output, OUTPUT_MODALITY_OPTIONS, '输出模态'], ['resultTypes', result, RESULT_TYPE_OPTIONS, '结果类型']]) {
-        const values = split(raw);
-        if (values.some(value => !choices.includes(value))) throw new Error(label + '包含无效选项，请按模板说明填写');
-        data.profile[key] = values;
-      }
-      modelTransaction(state, { operation: 'create', data });
-      if (seen.has(modelId.toLowerCase())) throw new Error('批次内模型编码重复');
-      seen.add(modelId.toLowerCase());
-      return { ...row, data, status: 'ready', message: '可导入' };
+      if (catalogue && modelLibrary(state).some(model => model.modelId.toLowerCase() === data.modelId.toLowerCase())) throw new Error('规范模型标识已存在，请维护已有模型资料');
+      const record = modelTransaction(state, { operation: 'create', data, catalogue }).changes[0].record;
+      if (seen.has(data.modelId.toLowerCase())) throw new Error('批次内规范模型标识重复');
+      seen.add(data.modelId.toLowerCase());
+      return { ...row, data: { ...data, profile: record.profile, capabilities: record.capabilities, maker: record.maker }, status: 'ready', message: '可导入' };
     } catch (error) { return { ...row, data, status: 'error', message: error.message }; }
   });
 }
