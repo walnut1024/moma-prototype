@@ -60,9 +60,10 @@ test('versioned procurement drives every commercial gate and expiry cannot resto
   t.mock.timers.tick(2000); row = mapping(state, ep);
   assert.deepEqual(row.pricing.scenarios, []); assert.deepEqual(serviceChannelCosts(row), []);
   assert.equal(activeSupplyPrice(state, f.supplies[0].id), null);
-  assert.equal(availableServiceChannels(state, owner(state), row.modelId).find(item => item.id === row.id).reason, '采购价待配置');
+  assert.equal(availableServiceChannels(state, owner(state), row.modelId).find(item => item.id === row.id).reason, '');
   const service = routingServices(state).find(item => item.modelId === f.modelId);
-  assert.equal(routingChannels(state, service)[0].available, false);
+  assert.equal(routingChannels(state, service)[0].available, true);
+  assert.equal(routingChannels(state, service, Date.now(), {runtime:true})[0].available, false);
   assert.equal(call(f, state).request.httpStatus, 503);
 });
 
@@ -171,7 +172,7 @@ test('explicitly managing a legacy implicit quote preserves its stable identity 
   assert.equal(activeSupplyPrice(published, source.id), null);
   const provider = published.providers.find(row => row.id === source.provider.id);
   const channel = availableServiceChannels(published, provider, originalMapping.modelId).find(row => row.id === originalMapping.id);
-  assert.equal(channel.reason, '采购价待配置');
+  assert.equal(channel.reason, '');
   assert.ok(published.supplyPrices.some(row => row.supplyId === source.id));
 });
 

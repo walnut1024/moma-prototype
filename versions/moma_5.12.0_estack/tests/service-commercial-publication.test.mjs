@@ -188,3 +188,15 @@ test('freezing a supplier channel rejects its published Mock API and thawing res
  assert.deepEqual(env.model().platformPublications,publication);
  for(const collection of ['providers','models','modelSalePrices','supplyPrices','serviceRoutes','orders'])assert.deepEqual(env.state[collection],before[collection]);
 });
+
+test('technical stop, sales stop and purpose changes remain independent and reject stale edits',async t=>{
+  const env=await fixture(t),history=structuredClone(env.state.modelSalePrices),scope={openScope:env.model().openScope,tenantIds:env.model().tenantIds};
+  env.save('stopSales',{expectedUpdatedAt:env.model().updatedAt});
+  assert.equal(env.model().listingStatus,'已下架');assert.equal(env.model().callsEnabled,true);
+  env.save('disableService',{expectedUpdatedAt:env.model().updatedAt});assert.equal(env.model().callsEnabled,false);
+  env.save('servicePurpose',{purpose:'internal',confirmed:true,expectedUpdatedAt:env.model().updatedAt});
+  assert.equal(env.model().purpose,'internal');assert.deepEqual(env.state.modelSalePrices,history);assert.deepEqual({openScope:env.model().openScope,tenantIds:env.model().tenantIds},scope);
+  assert.throws(()=>env.save('servicePurpose',{purpose:'commercial',confirmed:true,expectedUpdatedAt:'stale'}),/核对/);
+  env.save('enableService',{expectedUpdatedAt:env.model().updatedAt});assert.equal(env.model().callsEnabled,true);assert.equal(env.model().listingStatus,'已下架');
+  assert.throws(()=>env.save('servicePurpose',{purpose:'commercial',confirmed:true,expectedUpdatedAt:env.model().updatedAt}),/停用/);
+});

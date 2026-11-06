@@ -44,6 +44,7 @@ test('mock credentials and normal requests never fetch or persist raw secrets', 
   const ch = await env.channel('channel', key.id); await env.prove(ch); const current = await env.service(ch); await env.publish(current);
   const client = await env.post('/client-keys', { tenantId: 'tenant-a', serviceIds: [current.id] });
   const response = await api('/client/completions', { method: 'POST', token: client.clientKey, body: { operationId: env.op(), model: current.candidate.publicModelId, messages: [{ role: 'user', content: 'customer text remains visible' }] } });
+  assert.equal(JSON.parse(env.stored.get('moma-5120-model-onboarding-mock-v1')).usage.find(row=>row.identityType==='client').billingStatus,'billable');
   assert.match(response.choices[0].message.content, /customer text remains visible/); assert.equal(response.source, 'mock'); assert.equal('cost' in response, false); assert.equal('actualSupply' in response, false); assert.equal(env.fetchCalls(), 0); assert.equal([...env.stored.values()].join('').includes(client.clientKey), false);
 });
 
@@ -284,4 +285,30 @@ test('a final upstream client failure is retained once without creating customer
  assert.equal(requests[0].attempts[0].procurementSnapshot.items.length,1);
  const state={models:[{id:current.id,type:'text'}],providers:[{id:'supplier'}],endpoints:[{id:requests[0].endpointId,providerId:'supplier'}],requests};
  const facts=businessFacts(state,operationFacts(state,usagePreset('today'),analysisFilters(),Date.now()+1));assert.equal(facts[0].sale.amount,0);assert.equal(facts[0].cost,null);assert.equal(facts[0].profit,null);
+});
+
+test('technical trials publish without sale or procurement prices and replay without duplicate usage', async t => {
+  const env=fixture(t),ch=await env.channel('technical');await env.prove(ch);
+  const current=await env.service(ch,{technical:true,purpose:'internal',salePrices:[],bindings:[{id:'binding',channelId:ch.id,model:env.model,procurementPrices:[]}]});
+  const identity=await env.post(`/services/${current.id}/test-identities`,{expectedRevision:current.revision});
+  const body={operationId:env.op(),trialToken:identity.token};
+  const first=await api(`/services/${current.id}/trial`,{method:'POST',body});
+  assert.equal(first.technicalReady,true);assert.equal(first.billingReady,false);assert.equal(first.cost,null);assert.equal(first.saleTrial,null);assert.equal(first.customerDebited,false);
+  assert.deepEqual(await api(`/services/${current.id}/trial`,{method:'POST',body}),first);
+  const stored=JSON.parse(env.stored.get('moma-5120-model-onboarding-mock-v1'));
+  assert.equal(stored.usage.length,1);assert.equal(stored.usage[0].billingStatus,'not_applicable');assert.equal(stored.usage[0].costStatus,'pending');assert.equal(stored.usage[0].priceSnapshot,null);assert.equal(stored.usage[0].attempts[0].procurementSnapshot,null);
+  const published=await env.post(`/services/${current.id}/publish`,{expectedRevision:current.revision});
+  assert.equal(published.published.config.technical,true);assert.equal(inspectMockPublication(current.id).ready,true);
+});
+
+test('technical trial costs freeze their own price version and later costs never rewrite earlier records',async t=>{
+  const env=fixture(t),ch=await env.channel('technical-cost');await env.prove(ch);
+  const current=await env.service(ch,{technical:true,purpose:'internal',salePrices:[]});
+  const first=await env.trial(current);assert.equal(first.cost.amount,1000000);assert.equal(first.saleTrial,null);
+  const changed=await api(`/services/${current.id}`,{method:'PATCH',body:{operationId:env.op(),expectedRevision:current.revision,bindings:[{id:'binding',channelId:ch.id,model:env.model,procurementPrices:[env.price('cost-v2',{amount:2000000})]}]}});
+  const second=await env.trial(changed);assert.equal(second.cost.amount,2000000);
+  const records=JSON.parse(env.stored.get('moma-5120-model-onboarding-mock-v1')).usage;
+  assert.equal(records.find(row=>row.id===first.id).cost.amount,1000000);
+  assert.equal(records.find(row=>row.id===first.id).attempts[0].procurementSnapshot.id,'cost');
+  assert.equal(records.find(row=>row.id===second.id).attempts[0].procurementSnapshot.id,'cost-v2');
 });

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { platformAllowedChannels, platformCandidatePlan, platformFeeDisplay, platformPriceVersions, platformServices, publishPlatformCandidate, runPlatformTrial } from '../src/admin-v2/platform-service-client.js';
 import { onboardingApi, prepareServerChannel } from '../src/admin-v2/onboarding-client.js';
+import { platformPublicationFingerprint } from '../src/admin-v2/platform-publication-state.js';
 import { setMockScenario } from '../src/admin-v2/mock-onboarding-service.js';
 
 const at = Date.parse('2026-10-31T04:00:00Z'), effectiveAt = '2026-10-30T00:00:00Z';
@@ -163,4 +164,20 @@ test('standard services retain their existing public model ID without adding a p
   candidate.bindings[0].channelId = channel.id;
   const saved = await onboardingApi('/services', { method: 'POST', body: { ...candidate, operationId: crypto.randomUUID() } });
   assert.equal(saved.candidate.publicModelId, env.model.modelId);
+});
+
+
+test('technical candidates preserve missing costs and omit sales without weakening configuration checks', () => {
+  const env=fixture();env.model.purpose='internal';env.state.modelSalePrices=[];env.association.procurementVersions=[];delete env.association.pricing;
+  const plan=platformCandidatePlan(env.state,env.model,{...env.selection,technical:true});
+  assert.equal(plan.candidate.technical,true);assert.equal(plan.candidate.purpose,'internal');
+  assert.deepEqual(plan.candidate.salePrices,[]);assert.deepEqual(plan.candidate.bindings[0].procurementPrices,[]);
+  assert.throws(env.plan,/价格/);
+  env.endpoint.status='停用';assert.throws(()=>platformCandidatePlan(env.state,env.model,{...env.selection,technical:true}),/未启用/);
+});
+
+test('cost and sale changes preserve technical evidence while connections and routing still invalidate it',()=>{
+  const env=fixture(),signature=()=>platformPublicationFingerprint(env.state,env.model,env.selection.serviceId);
+  const before=signature();env.state.modelSalePrices[0].items[0].amount++;env.association.procurementVersions[0].pricing.scenarios[0].listPrice++;
+  assert.equal(signature(),before);env.endpoint.baseUrl+='/changed';assert.notEqual(signature(),before);
 });

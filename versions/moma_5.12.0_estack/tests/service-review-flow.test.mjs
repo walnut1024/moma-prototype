@@ -16,18 +16,19 @@ test('configured historical review scenarios retain distinct progress and lifecy
   for(const status of ['listed','unlisted','unpublished'])assert.ok(serviceIndexModels(state,new URLSearchParams({status})).every(model=>serviceLifecycle(model)==={listed:'已上架',unlisted:'已下架',draft:'草稿',unpublished:'未上架'}[status]));
   assert.equal(serviceIndexModels(state,new URLSearchParams({mode:'provider'})).filter(model=>model.serviceReviewCase).length,2);
 });
-test('audio missing price and missing mapping link directly to the correct Provider and panel',()=>{
+test('audio technical readiness excludes price while sales keeps its own configuration target',()=>{
   const state=parseAdminState(null),audio=state.models.find(model=>model.serviceReviewCase==='audio'),issues=serviceConfiguration(state,audio).issues;
-  assert.equal(issues.filter(issue=>issue.tab!=='platform').length,2);assert.ok(issues.some(issue=>issue.tab==='platform'));
-  const price=issues.find(issue=>issue.tab==='pricing'),mapping=issues.find(issue=>issue.tab==='routing');
+  assert.equal(issues.filter(issue=>issue.tab!=='platform').length,1);assert.ok(issues.some(issue=>issue.tab==='platform'));
+  assert.equal(issues.some(issue=>issue.tab==='pricing'),false);
+  const price=publicationChecks(state,audio).find(issue=>issue.tab==='pricing'),mapping=issues.find(issue=>issue.tab==='routing');
   assert.equal(serviceConfigurationTarget(audio,price).providerEdit,price.providerId);
   const target=serviceConfigurationTarget(audio,mapping);
   assert.equal(target.panel,'routing');assert.equal(target.mapping,`provider:${audio.id}:${mapping.providerId}`);assert.equal(target.providerAssociate,null);
 });
 test('new service creates a genuine mode-less draft and cannot publish before configuration',()=>{
-  const state=parseAdminState(null),source=structuredClone(state.models.find(model=>model.serviceReviewCase==='deepseek'));source.id='template-new-review-service';source.modelId='new-review-source';delete source.templateId;state.modelTemplates.push(source);const provider=state.providers.find(row=>row.id==='provider-moma');provider.catalogModelIds.push(source.modelId);provider.catalogModels.push({modelId:source.modelId,libraryId:source.id,type:source.type,name:source.name});const data={...serviceModelDraft(source),libraryId:source.id,name:'新增服务',modelId:'new-review-service'};
+  const state=parseAdminState(null),source=structuredClone(state.models.find(model=>model.serviceReviewCase==='deepseek'));source.id='template-new-review-service';source.modelId='new-review-source';delete source.templateId;state.modelTemplates.push(source);const provider=state.providers.find(row=>row.id==='provider-moma');provider.catalogModelIds.push(source.modelId);provider.catalogModels.push({modelId:source.modelId,libraryId:source.id,type:source.type,name:source.name});const data={...serviceModelDraft(source),libraryId:source.id,name:'新增服务',modelId:'new-review-service',purpose:'internal'};
   const saved=commitAdminState(state,{type:'modelOperations',operation:'createServiceModel',data}),model=saved.models.find(item=>item.modelId===data.modelId);
-  assert.equal(model.serviceMode,undefined);assert.equal(serviceLifecycle(model),'未上架');
+  assert.equal(model.purpose,'internal');assert.equal(model.serviceMode,undefined);assert.equal(serviceLifecycle(model),'未上架');
   assert.equal(saved.modelSupplies.some(item=>item.modelId===model.id),false);
   assert.equal(publicationChecks(saved,model).some(check=>check.tab==='serviceMode' && !check.passed),true);
   assert.throws(()=>commitAdminState(saved,{type:'modelOperation',operation:'publish',modelId:model.id,data:{}}),/服务模式/);

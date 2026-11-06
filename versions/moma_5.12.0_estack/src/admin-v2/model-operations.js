@@ -1,3 +1,4 @@
+import { SERVICE_PURPOSES, servicePurpose } from './service-purpose.js';
 import { serviceArchiveIssues, checkedServiceCallId } from './service-maintenance.js';
 import { retailItems } from './service-commercial.js';
 import { channelHealthTransaction } from './channel-health.js';
@@ -124,7 +125,18 @@ export function operationsTransaction(state, action) {
   const { operation, data = {}, modelId } = action;
   if (operation.startsWith('guided')) assertOnboardingMetadata(data);
   let objectId = modelId, label;
-  if (operation === 'recordFailedOperation') {
+  if (['enableService','disableService','stopSales'].includes(operation)) {
+    modelOp(operation,modelId,data);label={enableService:'启用技术服务',disableService:'停用技术服务',stopSales:'停止销售'}[operation];
+  } else if (operation === 'servicePurpose') {
+    const model=working.models.find(row=>row.id===modelId);
+    if (!model || data.expectedUpdatedAt!==model.updatedAt || !Object.hasOwn(SERVICE_PURPOSES,data.purpose) || data.confirmed!==true) throw Error('请核对当前服务用途并明确确认');
+    if (model.callsEnabled || model.listingStatus==='已上架') throw Error('请先停用服务并停止销售，再修改用途');
+    const entry=data.providerId?model.serviceProviders?.find(row=>row.providerId===data.providerId && row.status!=='已移除'):null;
+    if (model.serviceMode==='provider' && !entry || model.serviceMode==='standard' && data.providerId) throw Error('请选择当前服务');
+    if (servicePurpose(model,data.providerId)!==data.purpose && (working.orders || []).some(order=>!['已取消','已关闭','已过期'].includes(order.status) && (order.serviceId===(entry?'provider:'+model.id+':'+entry.providerId:'standard:'+model.id) || working.products?.find(row=>row.id===order.productId)?.modelIds?.includes(model.id)))) throw Error('服务仍有商业依赖，不能变更用途');
+    if (data.purpose==='internal' && servicePurpose(model,data.providerId)!=='internal' && working.cloudOperations && (model.firstPublishedAt || !model.purpose && !entry?.purpose)) throw Error('已经营服务的客户权益尚无法完整核对，暂不能转为内部服务');
+    update('models',modelId,entry?{serviceProviders:model.serviceProviders.map(row=>row===entry?{...row,purpose:data.purpose}:row)}:{purpose:data.purpose});label='变更服务用途';
+  } else if (operation === 'recordFailedOperation') {
     const target = working.models.find(row => row.id === modelId) || working.modelTemplates.find(row => row.id === modelId);
     if (!target || typeof data.reason !== 'string' || !data.reason.trim() || data.reason.length > 500) throw new Error('操作失败记录无效');
     return { type: 'batch', label: Object.hasOwn(MODEL_OPERATION_NAMES, data.operation) ? MODEL_OPERATION_NAMES[data.operation] : '模型配置操作', objectId: modelId, auditFailure: data.reason.trim(), changes: [] };

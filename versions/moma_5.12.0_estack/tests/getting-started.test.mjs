@@ -44,7 +44,7 @@ test('guide separates internal use from sales and explains current entry points'
   const source = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE.md', import.meta.url), 'utf8');
   const guides = parseOperationsGuide(source);
   assert.match(JSON.stringify(guides.find(guide => guide.id === 'overview')), /内部使用不需要用零元售价/);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'services')), /内部免售价开放尚待完善/);
+  assert.match(JSON.stringify(guides.find(guide => guide.id === 'services')), /技术验证及启用，不要求售价或销售上架/);
   assert.match(JSON.stringify(guides.find(guide => guide.id === 'sales')), /纯内部使用可以跳过/);
   assert.match(JSON.stringify(guides.find(guide => guide.id === 'costs')), /尚无独立的模型成本页面/);
   const imported = guides.flatMap(guide => guide.tasks).find(task => task.id === 'materials-import');

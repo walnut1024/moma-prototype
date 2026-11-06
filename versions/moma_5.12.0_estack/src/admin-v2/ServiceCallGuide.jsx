@@ -10,7 +10,7 @@ import {Button} from '../components/ui/button';
 import {Choice,Field} from './ModelMetadataForm';
 import {CopyId,Notice} from './ModelOperationsUI';
 import {routingServices} from './service-routing';
-import {serviceConfiguration,serviceConfigurationTarget,serviceLifecycle} from './service-workspace';
+import {serviceConfiguration,serviceConfigurationTarget} from './service-workspace';
 import {serviceGuideRequest,serviceGuideCode} from './service-guide';
 
 export default function ServiceCallGuide({state,model,ops}) {
@@ -18,11 +18,11 @@ export default function ServiceCallGuide({state,model,ops}) {
   const [editing,setEditing]=useState(null),[codes,setCodes]=useState({}),[base,setBase]=useState('');
   const editor=useRef(null);
   const service=services.find(item=>item.id===providerId) || services[0], configuration=serviceConfiguration(state,model);
-  if (!model.serviceMode || !service?.callId || configuration.setupIssues.length) return <div className="sm-empty sm-first-config"><h2>{!model.serviceMode?'调用指南尚未生成':'调用指南待完善'}</h2><p>完成服务模式、售价、渠道和路由配置后，生成对应模型服务的调用示例。</p><ServicePlatformTrial state={state} model={model} ops={ops} providerId={service?.providerId}/><Button variant="outline" onClick={()=>ops.go(serviceConfigurationTarget(model,configuration.setupIssues[0] || {tab:'serviceMode'}))}>前往完善配置</Button></div>;
+  if (!model.serviceMode || !service?.callId || configuration.setupIssues.length) return <div className="sm-empty sm-first-config"><h2>{!model.serviceMode?'调用指南尚未生成':'调用指南待完善'}</h2><p>完成服务模式、渠道、路由和开放范围配置后，生成对应模型服务的调用示例。</p><ServicePlatformTrial state={state} model={model} ops={ops} providerId={service?.providerId}/><Button variant="outline" onClick={()=>ops.go(serviceConfigurationTarget(model,configuration.setupIssues[0] || {tab:'serviceMode'}))}>前往完善配置</Button></div>;
   const request=serviceGuideRequest(editing?{...model,apiGuides:{...model.apiGuides,[service.providerId || 'standard']:{codes}}}:model,service.callId,service.providerId);
   return <div className="sm-model-form sm-guide"><div className="sm-section-bar"><ServicePlatformTrial state={state} model={model} ops={ops} providerId={service.providerId}/></div>
     {model.serviceMode==='provider' && <div className="sm-section-bar"> <Field label="供应商"><Choice label="调用指南供应商" value={service.id} options={services.map(item=>[item.id,item.name])} disabled={Boolean(editing)} onChange={id=>{setProviderId(id);ops.go({panel:'guide',routeProvider:services.find(item=>item.id===id)?.providerId || null},{preserveScroll:true});}}/></Field></div>}
-    {model.listingStatus!=='已上架' && <Notice>当前服务{serviceLifecycle(model)}，完成平台验证并上架后可调用。</Notice>}
+    {!model.callsEnabled && <Notice>当前技术服务未启用，完成管理端验证后可启用。</Notice>}
     {ops.error && <Notice error>{ops.error}</Notice>}
     <dl className="sm-guide-info"><div><dt><ModelFieldLabel name="对外调用标识"/></dt><dd><CopyId value={service.callId} label="对外调用标识"/></dd></div><div><dt>接口路径</dt><dd><code>POST /v1{request.path}</code></dd></div><div><dt>鉴权</dt><dd>Bearer Token · 使用已授权当前模型的 API 密钥</dd></div></dl>
     <section className="sm-guide-commercial"><h3>生效售价</h3><ul>{priceItems(service.providerId?activeProviderPrice(state,model.id,service.providerId):activeModelSalePrice(state,model.id),model).map((row,i)=><li key={i}>{row.name}{row.condition?'（'+row.condition+'）':''}：{itemMoney(row)} / {row.unit}</li>)}</ul><p>开放范围：{model.openScope==='all'?'全部有效客户':state.tenants.filter(row=>model.tenantIds?.includes(row.id)).map(row=>row.name).join('、') || '尚未配置'}</p></section>

@@ -105,7 +105,7 @@ function normalizeCandidate(state, body, previous = {}) {
   const bindings = (input.bindings || []).map(binding => { channelById(state, binding.channelId); return { id: text(binding.id || `${binding.channelId}:${binding.model?.id}`, '供给 ID'), channelId: binding.channelId, model: copy(binding.model), procurementPrices: prices(binding.procurementPrices || []) }; });
   const route = input.route || { version: 1, strategy: 'priority', channels: [] };
   if (!['fixed', 'priority', 'weighted', 'priority_weighted'].includes(route.strategy || 'priority') || !Number.isInteger(route.version) || route.channels.some(row => !bindings.some(binding => binding.id === row.bindingId))) fail('invalid_route', '路由须引用明确关联的供给');
-  return { name: input.name || publicModelId, publicModelId, mode: input.mode, tenantIds: [...new Set(input.tenantIds || [])], capabilities: [...new Set(input.capabilities || [])], bindings, salePrices: prices(input.salePrices || []), route: { ...copy(route), strategy: route.strategy || 'priority', channels: route.channels.map((row, index) => ({ bindingId: row.bindingId, priority: row.priority ?? index + 1, weight: row.weight ?? 1, ...(row.enabled === false ? { enabled: false } : {}) })), autoFailover: route.autoFailover === true } };
+  return { ...(input.technical === true ? { technical: true, purpose: input.purpose === 'internal' ? 'internal' : 'commercial' } : {}), name: input.name || publicModelId, publicModelId, mode: input.mode, tenantIds: [...new Set(input.tenantIds || [])], capabilities: [...new Set(input.capabilities || [])], bindings, salePrices: prices(input.salePrices || []), route: { ...copy(route), strategy: route.strategy || 'priority', channels: route.channels.map((row, index) => ({ bindingId: row.bindingId, priority: row.priority ?? index + 1, weight: row.weight ?? 1, ...(row.enabled === false ? { enabled: false } : {}) })), autoFailover: route.autoFailover === true } };
 }
 function assertAvailable(state, channel, { live = false, model } = {}) {
   if (runtime) {
@@ -133,8 +133,8 @@ function evidence(state, binding, capabilities = []) {
 const activeRouteChannels = config => config.route.channels.filter(row => row.enabled !== false && (!['weighted', 'priority_weighted'].includes(config.route.strategy) || row.weight > 0));
 function qualify(state, service) {
   const config = service.candidate;
-  if (!config.tenantIds.length || !activeRouteChannels(config).length || !activePrices(config.salePrices, Date.now())) fail('service_incomplete', '客户范围、有效售价和路由尚未完整');
-  return activeRouteChannels(config).map(row => { const binding = config.bindings.find(item => item.id === row.bindingId); if (!activePrices(binding.procurementPrices, Date.now())) fail('procurement_price_required', '采购价缺失或已过期'); return evidence(state, binding, config.capabilities); });
+  if (!config.tenantIds.length || !activeRouteChannels(config).length || !config.technical && !activePrices(config.salePrices, Date.now())) fail('service_incomplete', '客户范围、有效售价和路由尚未完整');
+  return activeRouteChannels(config).map(row => { const binding = config.bindings.find(item => item.id === row.bindingId); if (!config.technical && !activePrices(binding.procurementPrices, Date.now())) fail('procurement_price_required', '采购价缺失或已过期'); return evidence(state, binding, config.capabilities); });
 }
 function routeOrder(config) {
   const weighted = rows => { const pool = [...rows], result = []; while (pool.length) { let target = Math.random() * pool.reduce((sum, row) => sum + row.weight, 0), index = 0; while (index < pool.length - 1 && (target -= pool[index].weight) >= 0) index++; result.push(...pool.splice(index, 1)); } return result; };
@@ -154,8 +154,8 @@ function operationalPrice(selected, context, at) {
   return {id:selected.map(row=>row.id).join(' / '),modelId:context?.modelId,serviceId:context?.serviceId,effectiveAt:selected.map(row=>row.effectiveAt).sort((a,b)=>Date.parse(b)-Date.parse(a))[0],expiresAt:selected.map(row=>row.expiresAt).filter(Boolean).sort((a,b)=>Date.parse(a)-Date.parse(b))[0] || null,selectedAt:new Date(at).toISOString(),items:selected.map(row=>({name:meters[row.unit]?.[0] || row.unit,unit:meters[row.unit]?.[1] || row.unit,currency:row.currency,amount:row.amount}))};
 }
 function pipeline(state, service, config, proofs, { identityType, identityId, messages }) {
-  const started = Date.now(), sale = activePrices(config.salePrices, started);
-  if (!sale) fail('sale_price_expired', '当前销售价格已过期');
+  const started = Date.now(), technical = config.technical === true && identityType === 'trial', sale = technical ? null : activePrices(config.salePrices, started);
+  if (!technical && !sale) fail('sale_price_expired', '当前销售价格已过期');
   let lastIssue, attempt = 0; const attempts = [];
   for (const route of routeOrder(config)) {
     const binding = config.bindings.find(item => item.id === route.bindingId), channel = channelById(state, binding.channelId);
@@ -163,15 +163,15 @@ function pipeline(state, service, config, proofs, { identityType, identityId, me
     try {
       assertAvailable(state, channel, { live: identityType === 'client', model: binding.model });
       if (proofs.find(item => item.bindingId === binding.id)?.signature !== channelSignature(state, channel)) fail('supply_changed', '供给配置已变化，请重新检查发布');
-      const procurement = activePrices(binding.procurementPrices, started); if (!procurement) fail('procurement_price_expired', '采购价已到期');
+      const procurement = activePrices(binding.procurementPrices, started); if (!technical && !procurement) fail('procurement_price_expired', '采购价已到期');
       dispatched=true;
       const result = resultFor(state.scenario, binding.model, state.scenario === 'partial' ? attempt++ === 0 ? 1 : 0 : 0);
       if (result.status !== 'passed') fail(result.code, result.message);
       const context=operationalContext(service,binding,channel);
-      attempts.push({ dispatched:true, bindingId: binding.id, channelId: channel.id, endpointId:channel.clientChannelId || null, status: 'passed', usage:result.usage || null, procurementSnapshot:{...operationalPrice(procurement,context,started),providerId:channel.providerId,endpointId:channel.clientChannelId || null,supplyId:binding.id} });
-      const usage = result.usage || null, record = { id: uid(), source: 'mock', evidenceSource: 'mock', serviceId: service.id, publicModelId: config.publicModelId, serviceVersion: identityType === 'trial' ? service.candidateVersion : service.published.version, routeVersion: config.route.version, identityType, identityId, operational:context, priceSnapshot:operationalPrice(sale,context,started), tenantId:identityType === 'client' ? state.clientKeys.find(row=>row.id===identityId)?.tenantId || null : null, attempts: copy(attempts), startedAt: new Date(started).toISOString(), endedAt: now(), providerId: channel.providerId, channelId: channel.id, upstreamModelId: binding.model.upstreamModelId, usage, cost: result.meteringUnknown ? null : totalPrice(procurement, usage), saleTrial: result.meteringUnknown ? null : totalPrice(sale, usage), customerDebited: false, traceId: uid() };
+      attempts.push({ dispatched:true, bindingId: binding.id, channelId: channel.id, endpointId:channel.clientChannelId || null, status: 'passed', usage:result.usage || null, procurementSnapshot:procurement?{...operationalPrice(procurement,context,started),providerId:channel.providerId,endpointId:channel.clientChannelId || null,supplyId:binding.id}:null });
+      const usage = result.usage || null, cost = result.meteringUnknown ? null : totalPrice(procurement,usage), record = { id: uid(), source: 'mock', evidenceSource: 'mock', serviceId: service.id, publicModelId: config.publicModelId, serviceVersion: identityType === 'trial' ? service.candidateVersion : service.published.version, routeVersion: config.route.version, identityType, identityId, operational:context, priceSnapshot:sale?operationalPrice(sale,context,started):null,billingStatus:technical?'not_applicable':identityType==='client'?'billable':'trial',costStatus:cost?'confirmed':'pending', tenantId:identityType === 'client' ? state.clientKeys.find(row=>row.id===identityId)?.tenantId || null : null, attempts: copy(attempts), startedAt: new Date(started).toISOString(), endedAt: now(), providerId: channel.providerId, channelId: channel.id, upstreamModelId: binding.model.upstreamModelId, usage, cost, saleTrial: result.meteringUnknown ? null : totalPrice(sale, usage), customerDebited: false, traceId: uid() };
       state.usage.push(record);
-      return { id: record.id, model: config.publicModelId, choices: [{ message: { role: 'assistant', content: `已处理：${messages?.at(-1)?.content || '连接检查'}` } }], usage, traceId: record.traceId, source: 'mock', attempts: copy(attempts), actualSupply: { providerId: channel.providerId, channelId: channel.id, upstreamModelId: binding.model.upstreamModelId }, routeVersion: config.route.version, cost: record.cost, saleTrial: record.saleTrial, billingReady: Boolean(record.cost && record.saleTrial), customerDebited: false };
+      return { id: record.id, model: config.publicModelId, choices: [{ message: { role: 'assistant', content: `已处理：${messages?.at(-1)?.content || '连接检查'}` } }], usage, traceId: record.traceId, source: 'mock', attempts: copy(attempts), actualSupply: { providerId: channel.providerId, channelId: channel.id, upstreamModelId: binding.model.upstreamModelId }, routeVersion: config.route.version, cost: record.cost, saleTrial: record.saleTrial, technicalReady: true, billingReady: Boolean(record.cost && record.saleTrial), customerDebited: false };
     } catch (error) { const selected=activePrices(binding.procurementPrices,started),context=operationalContext(service,binding,channel); attempts.push({ dispatched, bindingId: binding.id, channelId: channel.id, endpointId:channel.clientChannelId || null, status: 'failed', code: error.code || 'request_failed', usage:null, procurementSnapshot:selected?{...operationalPrice(selected,context,started),providerId:channel.providerId,endpointId:channel.clientChannelId || null}:null }); error.attempts = copy(attempts); lastIssue = error; if (!config.route.autoFailover || error.code === 'request_timeout') throw error; }
   }
   throw lastIssue || new Error('没有符合当前允许范围的可用供给');
@@ -250,7 +250,7 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
         try {
           entry.proofs = qualify(state, service);
           const result = pipeline(state, service, service.candidate, entry.proofs, { identityType: 'trial', identityId: identity.id });
-          Object.assign(entry, { result: copy({...result,candidateVersion:service.candidateVersion}), requestId: result.id, status: result.billingReady ? 'passed' : 'metering_unknown', traceId: result.traceId, endedAt: now(), at: now() });
+          Object.assign(entry, { result: copy({...result,candidateVersion:service.candidateVersion}), requestId: result.id, status: result.technicalReady && service.candidate.technical || result.billingReady ? 'passed' : 'metering_unknown', traceId: result.traceId, endedAt: now(), at: now() });
           return { ...result, candidateVersion: service.candidateVersion };
         } catch (error) {
           Object.assign(entry, { status: error.code === 'request_timeout' ? 'unknown' : 'failed', code: error.code || 'request_failed', message: error.message, traceId: error.traceId || uid(), attempts: copy(error.attempts || []), usage: null, cost: null, saleTrial: null, endedAt: now(), at: now() });

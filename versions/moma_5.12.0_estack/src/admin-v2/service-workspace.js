@@ -28,8 +28,8 @@ export function serviceLifecycle(model) {
   return (model.serviceManaged || model.serviceReviewCase) && !model.firstPublishedAt?'未上架':'已下架';
 }
 export function serviceConfiguration(state,model) {
-  const issues=publicationChecks(state,model).filter(check=>!check.passed),setupIssues=issues.filter(check=>check.tab!=='platform');
-  return {label:!model.serviceMode?'未配置':setupIssues.length?'待配置':issues.length?'待验证':model.listingStatus==='已上架'?'已就绪':'可上架',issues,setupIssues};
+  const issues=publicationChecks(state,model,{technical:true}).filter(check=>!check.passed),setupIssues=issues.filter(check=>check.tab!=='platform');
+  return {label:!model.serviceMode?'未配置':setupIssues.length?'待配置':issues.length?'待验证':model.callsEnabled?'已启用':'可启用',issues,setupIssues};
 }
 
 export function serviceConfigurationTarget(model,check) {
@@ -55,13 +55,7 @@ export function serviceSupplyRows(state, model) {
 }
 export function availableServiceChannels(state, provider, catalogueModelId) {
   if (!provider || !providerCatalogueIds(provider).includes(catalogueModelId)) return [];
-  return catalogueChannels(state, provider, catalogueModelId).map(channel => {
-    const existingCosts = !channel.managed && state.modelSupplies.filter(row => row.status !== '已移除' && row.endpointId === channel.endpointId && row.upstreamModelId === channel.upstreamModelId && (row.catalogueModelId || row.upstreamModelId) === catalogueModelId)
-      .map(row => priceItems(activeSupplyPrice(state, row.id), state.models.find(model => model.id === row.modelId)))
-      .find(items => items.length && items.every(item => item.amount != null));
-    const costs = existingCosts || serviceChannelCosts(channel);
-    return { ...channel, reason: channelBlockReason(provider, channel) || (!costs.length || costs.some(item => item.amount == null) ? '采购价待配置' : '') };
-  });
+  return catalogueChannels(state, provider, catalogueModelId).map(channel => ({ ...channel, reason: channelBlockReason(provider, channel) }));
 }
 export function serviceAssociationChannels(state) {
   return supplierDirectory(state).flatMap(provider => displayedCatalogueIds(provider,state).flatMap(catalogueModelId =>

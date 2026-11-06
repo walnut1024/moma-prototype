@@ -52,7 +52,14 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     assert((await local.db.prepare('SELECT count(*) AS n FROM publications').first()).n>=3);
     assert((await local.db.prepare('SELECT count(*) AS n FROM simulation_records').first()).n>10);
     const model=current.find(m=>m.serviceMode==='provider'),prices=structuredClone(fresh.modelSalePrices);
-    state=await save(fresh,{type:'modelOperation',operation:'unlist',modelId:model.id,data:{}});
+    state=await save(fresh,{type:'modelOperations',operation:'stopSales',modelId:model.id,data:{expectedUpdatedAt:model.updatedAt}});
+    assert.equal(state.models.find(m=>m.id===model.id).callsEnabled,true);
+    const stopped=state.models.find(m=>m.id===model.id);
+    const priorRevision=state.revision;
+    await assert.rejects(save(state,{type:'modelOperations',operation:'disableService',modelId:model.id,data:{expectedUpdatedAt:'stale'}}),/并发修订/);
+    assert.equal(state.revision,priorRevision);
+    state=await save(state,{type:'modelOperations',operation:'disableService',modelId:model.id,data:{expectedUpdatedAt:stopped.updatedAt}});
+    assert.equal(state.models.find(m=>m.id===model.id).callsEnabled,false);
     assert.equal(state.models.find(m=>m.id===model.id).listingStatus,'已下架');
     assert.deepEqual(state.modelSalePrices,prices);
     const provider=(operation,values)=>save(state,{type:'modelOperations',operation:'provider',data:{operation,objectId:'provider-moma',values}});

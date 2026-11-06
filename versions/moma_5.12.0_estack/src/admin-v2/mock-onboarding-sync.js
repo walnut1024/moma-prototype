@@ -57,7 +57,7 @@ export function prepareMockOnboardingSync(previous, next, action) {
         if (!snapshot) { if(service.providerId && before.serviceProviders?.find(row=>row.providerId===service.providerId)?.pendingPublication)continue; if (before.listingStatus === '已上架') throw new Error('当前服务缺少有效发布配置，请先完成平台验证'); continue; }
         assertMockModelPublication(previous, before, service.id, true);
         const tenantIds = model.openScope === 'all' ? next.tenants.filter(row => ['正常', '需关注'].includes(row.status)).map(row => row.id) : model.tenantIds;
-        const plan = platformCandidatePlan(next, model, { serviceId: service.id, tenantIds: receipt.kind === 'scope' ? tenantIds : snapshot.published.config.tenantIds, supplyIds: snapshot.published.config.bindings.map(row => row.id), audioProbe: snapshot.published.config.bindings.find(row => row.model.type === 'audio')?.model.probe || '' });
+        const plan = platformCandidatePlan(next, model, { serviceId: service.id, tenantIds: receipt.kind === 'scope' ? tenantIds : snapshot.published.config.tenantIds, supplyIds: snapshot.published.config.bindings.map(row => row.id), technical:snapshot.published.config.technical===true,audioProbe: snapshot.published.config.bindings.find(row => row.model.type === 'audio')?.model.probe || '' });
         commercialUpdates.push({ serviceId: snapshot.id, ...(receipt.kind === 'scope' ? { tenantIds: plan.candidate.tenantIds } : { salePrices: plan.candidate.salePrices }) });
       }
     }

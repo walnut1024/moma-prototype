@@ -5,11 +5,7 @@ export function platformPublicationServices(model) {
   if (model.serviceMode === 'provider') return (model.serviceProviders || []).filter(row => row.status !== '已移除').map(row => ({ id: `provider:${model.id}:${row.providerId}`, providerId: row.providerId, callId: row.callId }));
   return [];
 }
-const currentPrice = (versions, at) => {
-  const latest = (versions || []).filter(row => row.status === '已发布' && Date.parse(row.effectiveAt) <= at && (!row.publishedAt || Date.parse(row.publishedAt) <= at)).sort((a,b) => Date.parse(b.effectiveAt)-Date.parse(a.effectiveAt) || (b.version || 0)-(a.version || 0))[0];
-  return latest && (!latest.expiresAt || Date.parse(latest.expiresAt) > at) ? latest : null;
-};
-export function platformPublicationFingerprint(state, model, serviceId, at = Date.now()) {
+export function platformPublicationFingerprint(state, model, serviceId) {
   const service = platformPublicationServices(model).find(row => row.id === serviceId);
   if (!service) return '';
   const route = (state.serviceRoutes || []).find(row => row.serviceId === serviceId), version = route?.versions.find(row => row.version === route.activeVersion);
@@ -18,10 +14,9 @@ export function platformPublicationFingerprint(state, model, serviceId, at = Dat
   const connections = supplies.map(supply => {
     const endpoint = state.endpoints.find(row => row.id === supply.endpointId), provider = state.providers.find(row => row.id === endpoint?.providerId);
     const association = provider?.catalogConnections?.find(row => !row.deletedAt && row.endpointId === supply.endpointId && row.modelId === (supply.catalogueModelId || supply.upstreamModelId) && row.upstreamModelId === supply.upstreamModelId);
-    return [supply.id, supply.status, supply.validationStatus, supply.upstreamModelId, supply.capabilities, provider?.id, provider?.status, endpoint && connectionFingerprint(endpoint), endpoint?.status, connectionKeys(endpoint, provider).map(key=>[key.id,key.version,key.fingerprint,key.status,key.revokedAt]), association && [association.id,association.enabled,association.upstreamModelId,association.capabilities,association.task,association.qualification || association.health,association.capabilityTests,Array.isArray(association.procurementVersions)?currentPrice(association.procurementVersions,at):association.pricing], (state.supplyPrices || []).filter(row=>row.supplyId===supply.id && row.status==='生效中')];
+    return [supply.id, supply.status, supply.validationStatus, supply.upstreamModelId, supply.capabilities, provider?.id, provider?.status, endpoint && connectionFingerprint(endpoint), endpoint?.status, connectionKeys(endpoint, provider).map(key=>[key.id,key.version,key.fingerprint,key.status,key.revokedAt]), association && [association.id,association.enabled,association.upstreamModelId,association.capabilities,association.task,association.qualification || association.health,association.capabilityTests]];
   });
-  const sale = currentPrice((state.modelSalePrices || []).filter(row => row.modelId === model.id && (row.serviceModeRevision || 0) === (model.serviceModeRevision || 0) && (service.providerId ? row.scope === 'provider' && row.providerId === service.providerId : row.scope === 'model')), at);
-  return JSON.stringify([service, model.templateId, model.type, model.serviceModeRevision || 0, model.capabilities, model.profile?.tasks, model.profile?.structured, model.openScope, model.tenantIds, version?.version || 0, version?.config || null, sale, connections]);
+  return JSON.stringify([service, model.templateId, model.type, model.serviceModeRevision || 0, model.capabilities, model.profile?.tasks, model.profile?.structured, model.openScope, model.tenantIds, version?.version || 0, version?.config || null, connections]);
 }
 export function platformPublicationCheck(state, model, at = Date.now()) {
   const services = platformPublicationServices(model);

@@ -181,3 +181,15 @@
 @container(max-width:1000px){.admin-v2 .sm-service-detail .sm-card-content .mm-basic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @container(max-width:760px){.admin-v2 .sm-service-heading .sm-header-model h1{font-size:20px!important}}
 @container(max-width:520px){.admin-v2 .sm-service-detail .sm-card-content .mm-basic-grid{grid-template-columns:minmax(0,1fr)}.admin-v2 .sm-service-heading .sm-service-tab-list{gap:12px}.admin-v2 .sm-service-heading .sm-service-tab-list>[data-slot=tabs-trigger]{font-size:17px!important}}
+
+/* Service overview follows the selected routing table. */
+.admin-v2 .sm-overview-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin:0 0 28px}
+.admin-v2 .sm-overview-facts>div{display:flex;align-items:center;gap:18px;min-width:0}
+.admin-v2 .sm-overview-facts dt{color:#65718a;flex:none;font-size:16px}
+.admin-v2 .sm-overview-facts dd{margin:0;color:#202b40;overflow-wrap:anywhere}
+.admin-v2 .mo-table.sm-overview-services{border:1px solid #dce2ed;border-radius:6px;overflow:hidden}
+.admin-v2 .sm-overview-services th{background:#eef1f7;color:#34415a}
+.admin-v2 .sm-overview-services th,.admin-v2 .sm-overview-services td{padding:16px 20px!important;border-right:1px solid #dce2ed;font-size:18px!important}
+@media(max-width:760px){.admin-v2 .sm-overview-facts{grid-template-columns:1fr}}
+
+.admin-v2 .sm-overview-services button,.admin-v2 .sm-overview-services code{font-size:18px!important}

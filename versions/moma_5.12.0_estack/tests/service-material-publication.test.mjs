@@ -134,7 +134,7 @@ test('minimal material → channel → mock B → referenced service → mock C 
   state=persistModelAction(state,{type:'modelOperation',operation:'unlist',modelId,data:{}},storage);
   state=run(state,'unifiedPrice',{expectedUpdatedAt:model().updatedAt,expectedSaleVersion:modelSaleRevision(state,modelId),items:[{name:'输入 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'3'},{name:'输出 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'4'}]},modelId);
   storage.setItem(STORAGE_KEY,JSON.stringify(state));
-  assert.equal(publicationChecks(state,model()).find(row=>row.tab==='platform').passed,false);
+  assert.equal(publicationChecks(state,model()).find(row=>row.tab==='platform').passed,true,'price edits preserve technical evidence');
   assert.throws(()=>persistModelAction(state,listing,storage),/不一致/);
   assert.equal(state.models.find(row=>row.id===online.id).listingStatus,'已上架');
   assert.deepEqual(state.modelTemplates.find(row=>row.id===material.id),material);

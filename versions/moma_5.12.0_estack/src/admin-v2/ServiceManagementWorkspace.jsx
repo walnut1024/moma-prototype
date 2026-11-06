@@ -1,7 +1,7 @@
 import {MODEL_CATALOGUE_TYPES} from './model-library';
 import { pendingGuidedOnboardings } from './guided-onboarding';
 import ChannelServiceContext from './ChannelServiceContext';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Search, SlidersHorizontal, Plus, Waypoints } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Toggle } from '../components/ui/toggle';
@@ -9,13 +9,15 @@ import { Input } from '../components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { TooltipProvider } from '../components/ui/tooltip';
-import ModelMetadataForm, { Choice, Field } from './ModelMetadataForm';
+import { Choice, Field } from './ModelMetadataForm';
 import { GridTable, Row, Cell, Status, Notice, Pagination, Modal, MoreActions } from './ModelOperationsUI';
 import { modelCode, displayTime } from './model-management';
 import { SERVICE_MODES, listed } from './model-operations';
 import { serviceDirectoryModels, serviceIndexModels, selectServiceModel, serviceLifecycle, serviceConfiguration } from './service-workspace';
 import ServiceModelForm from './ServiceModelForm';
 import ModelLibraryEditor from './ModelLibraryEditor';
+import ServiceOverview from './ServiceOverview';
+import ServicePlatformTrial from './ServicePlatformTrial';
 import { libraryRecord } from './model-library';
 import { ServiceMappingsContent, ServicePricingContent, ServiceCallGuide } from './ServiceContent';
 import { SERVICE_WORKSPACE_TABS, serviceWorkspaceTab } from './service-workspace-panels';
@@ -23,12 +25,6 @@ import { modelOperationHistory } from './model-operation-history';
 import { serviceArchiveIssues } from './service-maintenance';
 import './service-workspace.css';
 
-function ModelDetails({state,model,ops}) {
-  const master=libraryRecord(state,model.id);
-  const trigger=useRef(null);
-  useEffect(()=>{if(ops.params.get('returnFocus')==='metadata'){ops.go({returnFocus:null},{saved:true,replace:true,preserveScroll:true});const frame=requestAnimationFrame(()=>trigger.current?.focus());return()=>cancelAnimationFrame(frame);}},[]);
-  return <div className="sm-model-form sm-card-content"><div className="sm-section-bar"><Button ref={trigger} className="sm-push" variant="outline" disabled={!ops.can} onClick={()=>ops.go({panel:'editMetadata'})}>编辑卡片</Button></div><ModelMetadataForm key={`${master?.id || model.id}:${master?.updatedAt || model.updatedAt}`} model={master || model} readOnly cardOnly title=""/></div>;
-}
 function ModelStatusSummary({state,model,ops}) {
   const task=pendingGuidedOnboardings(state).find(row=>row.model?.id===model.id);
   return task ? <div className="sm-status-summary"><Notice>本模型有接入任务待完成。<Button variant="link" onClick={()=>ops.go({view:'onboarding',draft:task.draft.id,step:String(task.step),model:null,panel:null})}>继续接入</Button></Notice></div> : null;
@@ -48,7 +44,7 @@ export default function ServiceManagementWorkspace({state,sourceState,ops,act,ad
   const change=patch=>go({...patch,view:null,panel:null,model:null,page:null,listingReturn:null,tab:null,service:null,mapping:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:null},{replace:true,preserveScroll:true});
   const tasks=pendingGuidedOnboardings(state);
   const tabList=<TabsList variant="line" className="sm-service-tab-list" aria-label="模型工作区">{SERVICE_WORKSPACE_TABS.map(([value,label])=><TabsTrigger key={value} value={value}>{label}</TabsTrigger>)}</TabsList>;
-  const serviceActions=selected && <><Button variant="outline" disabled={!ops.can || Boolean(ops.conflict) || Boolean(selected.archivedAt)} onClick={()=>act(selected,listed(selected)?'unlist':'publish')}>{listed(selected)?'下架并停用':'上架'}</Button><Toggle variant="outline" aria-label="模型广场可见性" title="仅控制模型广场展示，不影响已有订购和 API 调用；未就绪的服务仍需完成配置发布。" pressed={selected.marketVisible!==false} disabled={!ops.can || Boolean(selected.archivedAt)} onPressedChange={visible=>ops.proceed(async ()=>await ops.run('marketVisibility',{visible,expectedUpdatedAt:selected.updatedAt},selected.id))}>{selected.marketVisible!==false?'用户可见':'用户不可见'}</Toggle><MoreActions label="服务维护" disabled={!ops.can}><Button variant="ghost" onClick={()=>ops.proceed(()=>setMaintenance(selected.archivedAt?'serviceRestore':'serviceArchive'))}>{selected.archivedAt?'恢复已归档服务':'归档服务'}</Button></MoreActions></>;
+  const serviceActions=selected && <><ServicePlatformTrial state={state} model={selected} ops={ops}/><Button variant="outline" disabled={!ops.can || Boolean(selected.archivedAt)} onClick={()=>act(selected,selected.callsEnabled?'disableService':'enableService')}>{selected.callsEnabled?'停用技术服务':'启用技术服务'}</Button><Button variant="outline" disabled={!ops.can || Boolean(ops.conflict) || Boolean(selected.archivedAt)} onClick={()=>act(selected,listed(selected)?'stopSales':'publish')}>{listed(selected)?'停止销售':'上架销售'}</Button><Toggle variant="outline" aria-label="模型广场可见性" title="仅控制模型广场展示，不影响已有订购和 API 调用；未就绪的服务仍需完成配置发布。" pressed={selected.marketVisible!==false} disabled={!ops.can || Boolean(selected.archivedAt)} onPressedChange={visible=>ops.proceed(async ()=>await ops.run('marketVisibility',{visible,expectedUpdatedAt:selected.updatedAt},selected.id))}>{selected.marketVisible!==false?'用户可见':'用户不可见'}</Toggle><MoreActions label="服务维护" disabled={!ops.can}><Button variant="ghost" onClick={()=>ops.proceed(()=>setMaintenance(selected.archivedAt?'serviceRestore':'serviceArchive'))}>{selected.archivedAt?'恢复已归档服务':'归档服务'}</Button></MoreActions></>;
   const header=selected && <div className="sm-service-heading"><div className="sm-service-title"><div className="sm-model-symbol">{selected.profile?.logo?<img src={selected.profile.logo} alt=""/>:<Waypoints aria-hidden="true"/>}</div><div className="sm-header-model"><h1>{selected.name}</h1></div></div>{tabList}<div className="sm-service-header-actions"><Popover><PopoverTrigger asChild><Button variant="ghost" aria-label="服务操作">服务操作</Button></PopoverTrigger><PopoverContent className="sm-service-actions-menu" align="end">{serviceActions}</PopoverContent></Popover></div></div>;
   return <TooltipProvider delayDuration={200}><div className="sm-workspace">
     <aside className="sm-index" aria-label="平台模型目录">
@@ -63,7 +59,7 @@ export default function ServiceManagementWorkspace({state,sourceState,ops,act,ad
       <ModelStatusSummary state={state} model={selected} ops={ops}/>
       <Tabs className="sm-service-tabs" value={activeTab} onValueChange={value=>{go({panel:value==='materials'?null:value,service:null,mapping:null,tab:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:null},{preserveScroll:true});}}>
         {header}
-        <TabsContent value="materials">{panel==='editMetadata'?<div className="sm-model-form sm-card-content"><ModelLibraryEditor cardOnly key={selected.id} state={state} record={libraryRecord(state,selected.id)} ops={ops} onCancel={()=>go({panel:null,returnFocus:'metadata'})} onSaved={()=>go({panel:null,returnFocus:'metadata'},{saved:true})}/></div>:<ModelDetails state={state} model={selected} ops={ops}/>}</TabsContent>
+        <TabsContent value="materials">{panel==='editMetadata'?<div className="sm-model-form sm-card-content"><ModelLibraryEditor cardOnly key={selected.id} state={state} record={libraryRecord(state,selected.id)} ops={ops} onCancel={()=>go({panel:null,returnFocus:'metadata'})} onSaved={()=>go({panel:null,returnFocus:'metadata'},{saved:true})}/></div>:<ServiceOverview state={state} model={selected} ops={ops}/>}</TabsContent>
         <TabsContent value="routing"><ServiceMappingsContent key={selected.id} state={state} model={selected} ops={{...ops,can:ops.can && !selected.archivedAt}} act={act}/></TabsContent>
         <TabsContent value="guide"><ServiceCallGuide key={selected.id+'guide'+params.get('routeProvider')} state={state} model={selected} ops={{...ops,can:ops.can && !selected.archivedAt}}/></TabsContent>
         <TabsContent value="pricing"><ServicePricingContent key={selected.id} state={state} model={selected} ops={ops}/></TabsContent>

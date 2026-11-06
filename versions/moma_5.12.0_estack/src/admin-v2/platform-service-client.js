@@ -1,3 +1,4 @@
+import { servicePurpose } from './service-purpose.js';
 import { activeSupplyPrice, modelSupplies, moneyDisplay } from './model-management.js';
 import { activeModelSalePrice, activeProviderPrice } from './service-workspace.js';
 import { activeRouteVersion, routingServices, serviceRoute } from './service-routing.js';
@@ -79,7 +80,7 @@ function platformRoute(version, rows) {
   }) };
 }
 
-export function platformCandidatePlan(state, model, { serviceId, tenantIds = [], supplyIds = [], audioProbe = '', at = Date.now() }) {
+export function platformCandidatePlan(state, model, { serviceId, tenantIds = [], supplyIds = [], audioProbe = '', technical = false, at = Date.now() }) {
   const service = platformServices(state, model).find(row => row.id === serviceId);
   if (!service) issue('服务模式', '请选择当前模型的统一服务或供应商服务');
   if (!service.callId || /\s/.test(service.callId)) issue('服务调用 ID', '请先完善当前服务的对外调用 ID');
@@ -91,7 +92,10 @@ export function platformCandidatePlan(state, model, { serviceId, tenantIds = [],
   if (!supplyIds.length || supplyIds.length > 20 || new Set(supplyIds).size !== supplyIds.length) issue('允许供给', '请选择 1–20 条已发布路由中的渠道');
   const rows = supplyIds.map(id => allowed.find(row => row.id === id) || issue('允许供给', '选择含未发布或已移除的渠道，请重新选择'));
   const sale = service.providerId ? activeProviderPrice(state, model.id, service.providerId, at) : activeModelSalePrice(state, model.id, at);
-  const salePrices = platformPriceVersions(sale, model, '销售价格', at);
+  let salePrices = [];
+  if (technical) {
+    if (servicePurpose(model,service.providerId)!=='internal') { try { salePrices=platformPriceVersions(sale,model,'销售价格',at); } catch { /* Missing sale prices do not block technical verification. */ } }
+  } else salePrices=platformPriceVersions(sale,model,'销售价格',at);
   const bindings = rows.map(row => {
     const { supply, association } = row, path = `供应渠道 ${supply?.provider?.name || row.id}`;
     if (!supply?.provider || !supply.endpoint || supply.provider.status !== '已启用' || supply.status !== '已启用' || !['运行中', '需关注'].includes(supply.endpoint.status)) issue(path, '供应商、渠道或模型关联未启用');
@@ -105,9 +109,12 @@ export function platformCandidatePlan(state, model, { serviceId, tenantIds = [],
     if (!association.upstreamModelId || /\s/.test(association.upstreamModelId)) issue(path, '上游模型 ID 未配置');
     if (!supply.endpoint.interfaceType) issue(path, '接口类型未配置');
     if (supply.endpoint.authMode !== 'none' && !connectionKeys(supply.endpoint, supply.provider)[0] && !(!supply.endpoint.authMode && supply.endpoint.credentialRef)) issue(path, '缺少可用且未撤销的主要密钥');
-    const procurementPrices = platformPriceVersions(activeSupplyPrice(state, supply.id, at), model, `${path} / 采购价格`, at);
+    let procurementPrices = [];
+    if (technical) {
+      try { procurementPrices = platformPriceVersions(activeSupplyPrice(state, supply.id, at), model, `${path} / 采购价格`, at); } catch { /* Unsupported cost remains unknown during technical verification. */ }
+    } else procurementPrices = platformPriceVersions(activeSupplyPrice(state, supply.id, at), model, `${path} / 采购价格`, at);
     const measures = prices => prices.map(item => `${item.unit}:${item.currency}`).sort().join('|');
-    if (measures(procurementPrices) !== measures(salePrices)) issue(`${path} / 价格`, '采购与销售的计量字段或币种不可比，请调整价格配置');
+    if (!technical && measures(procurementPrices) !== measures(salePrices)) issue(`${path} / 价格`, '采购与销售的计量字段或币种不可比，请调整价格配置');
     let probe;
     if (model.type === 'audio') {
       if (!['speech', 'transcription'].includes(audioProbe)) issue('语音测试任务', '请明确选择语音合成或语音识别');
@@ -117,7 +124,7 @@ export function platformCandidatePlan(state, model, { serviceId, tenantIds = [],
     }
     return { id: supply.id, localEndpointId: supply.endpoint.id, model: { id: master.id, upstreamModelId: association.upstreamModelId, type: master.type, ...(probe ? { probe } : {}) }, procurementPrices };
   });
-  const candidate = { name: `${model.name} · ${service.name}`, publicModelId: service.callId, mode: service.mode, tenantIds: [...tenantIds].sort(), bindings, salePrices, capabilities: ['streaming', 'tools', 'structured'].filter(key => model.capabilities?.[key] === true || key === 'structured' && model.profile?.structured === true), route: platformRoute(version, rows) };
+  const candidate = { ...(technical ? { technical: true, purpose: servicePurpose(model,service.providerId) } : {}), name: `${model.name} · ${service.name}`, publicModelId: service.callId, mode: service.mode, tenantIds: [...tenantIds].sort(), bindings, salePrices, capabilities: ['streaming', 'tools', 'structured'].filter(key => model.capabilities?.[key] === true || key === 'structured' && model.profile?.structured === true), route: platformRoute(version, rows) };
   const fingerprint = JSON.stringify([candidate, rows.map(({ supply, association }) => [connectionFingerprint(supply.endpoint), supply.endpoint.adapterOptions, connectionKeys(supply.endpoint, supply.provider).map(key => [key.id, key.version, key.serverCredentialId]), association.id, association.enabled, association.health, association.capabilityTests, supply.status, supply.provider.status])]);
   return { candidate, fingerprint, publicationFingerprint:platformPublicationFingerprint(state,model,service.id), service, rows, expensive: bindings.some(row => ['image', 'video', 'audio'].includes(row.model.type)) };
 }

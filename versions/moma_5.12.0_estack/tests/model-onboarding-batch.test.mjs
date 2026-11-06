@@ -69,7 +69,7 @@ test('unknown prices stay unknown through technical test and enable and cannot f
   for (const row of mappings(enabled)) {
     assert.equal(row.enabled, true); assert.equal(channelBlockReason(owner(enabled), row), '');
     assert.equal(row.pricing.scenarios.length, 0);
-    assert.equal(availableServiceChannels(enabled, owner(enabled), row.modelId).find(item => item.id === row.id).reason, '采购价待配置');
+    assert.equal(availableServiceChannels(enabled, owner(enabled), row.modelId).find(item => item.id === row.id).reason, '');
   }
   unchangedServices(initial, enabled);
 });
