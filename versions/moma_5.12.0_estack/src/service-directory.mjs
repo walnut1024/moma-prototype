@@ -59,7 +59,7 @@ export function directorySnapshot(storage = globalThis.localStorage) {
     if (model.listingStatus !== '已上架' || model.visibility !== '公开' || model.callsEnabled !== true) return [];
     const proofs = (model.platformPublications || []).filter(row => row.serviceId === service.id && row.source === 'mock');
     const live = proofs.length === 1 && published.find(row => row.id === proofs[0].mockServiceId);
-    if (!identity && (auth?.currentUserId || model.openScope !== 'all')) return [];
+    if (!identity && (auth?.currentUserId || model.openScope !== 'all' || model.releaseStage==='gray')) return [];
     let access = identity ? serviceAccess(state, service, identity.tenantId, live) : { allowed: false, reason: identityError };
     if (access.code === 'model_forbidden' || access.code === 'customer_unavailable') return [];
     if (access.allowed) access = mockServiceReadiness(state, live);

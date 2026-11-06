@@ -57,7 +57,7 @@ export function modelOperationHistory(state, model) {
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 }
 
-const auditFields={name:'名称',modelId:'模型标识',callId:'调用标识',upstreamModelId:'上游模型标识',status:'状态',listingStatus:'上架状态',callsEnabled:'调用开关',marketVisible:'广场可见',salesScope:'销售对象范围',purpose:'服务用途',archivedAt:'归档时间',baseUrl:'API 地址',protocol:'协议',openScope:'开放范围',tenantIds:'客户范围',enabled:'启用状态',amount:'价格',currency:'货币',unit:'单位',condition:'条件',listPrice:'采购价',purchasePrice:'采购价',strategy:'策略',supplyId:'映射',activeVersion:'生效路由',salesEnabled:'销售开关'};
+const auditFields={name:'名称',modelId:'模型标识',callId:'调用标识',upstreamModelId:'上游模型标识',status:'状态',listingStatus:'上架状态',releaseStage:'上架阶段',releaseTenantIds:'灰度客户范围',callsEnabled:'调用开关',marketVisible:'广场可见',salesScope:'销售对象范围',purpose:'服务用途',archivedAt:'归档时间',baseUrl:'API 地址',protocol:'协议',openScope:'开放范围',tenantIds:'客户范围',enabled:'启用状态',amount:'价格',currency:'货币',unit:'单位',condition:'条件',listPrice:'采购价',purchasePrice:'采购价',strategy:'策略',supplyId:'映射',activeVersion:'生效路由',salesEnabled:'销售开关'};
 function auditValue(value,key,state) {
   if(key==='tenantIds' && Array.isArray(value))return value.map(id=>{const tenant=state.tenants?.find(row=>row.id===id);return tenant?tenant.name+' · '+id:id;});
   if(key==='openScope')return {all:'全部有效客户',selected:'指定客户'}[value] || value;

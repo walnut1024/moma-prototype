@@ -16,7 +16,7 @@ export function serviceIndexModels(state, params) {
     (!query || [model.name, modelCode(model)].join(' ').toLowerCase().includes(query)) &&
     (!type || type === 'all' || modelCategory(model.type) === type) &&
     (!mode || mode === 'all' || (mode === 'unset' ? !model.serviceMode : model.serviceMode === mode)) &&
-    (!status || status === 'all' || serviceLifecycle(model)==={listed:'已上架',unlisted:'已下架',unpublished:'未上架',archived:'已归档'}[status]));
+    (!status || status === 'all' || (status==='listed' && model.listingStatus==='已上架' || serviceLifecycle(model)==={listed:'已上架',unlisted:'已下架',unpublished:'未上架',archived:'已归档'}[status])));
 }
 
 export function selectServiceModel(rows, requestedId) {
@@ -24,7 +24,7 @@ export function selectServiceModel(rows, requestedId) {
 }
 export function serviceLifecycle(model) {
   if(model.archivedAt)return '已归档';
-  if (model.listingStatus==='已上架') return '已上架';
+  if (model.listingStatus==='已上架') return model.releaseStage==='gray'?'灰度上架':'已上架';
   return (model.serviceManaged || model.serviceReviewCase) && !model.firstPublishedAt?'未上架':'已下架';
 }
 export function serviceConfiguration(state,model) {
@@ -34,6 +34,8 @@ export function serviceConfiguration(state,model) {
 
 export function serviceConfigurationTarget(model,check) {
   const base={page:'listing',model:model.id,panel:'routing',providerEdit:null,providerAdd:null,providerChannels:null,providerAssociate:null,routeProvider:null,service:null,mapping:null};
+  if (check.tab==='technical' || check.tab==='purpose') return {...base,panel:'materials'};
+  if (check.tab==='scope') return {page:'model-prices',service:model.serviceMode==='provider'?providerServiceId(model.id,providerServices(model)[0]?.providerId):'standard:'+model.id,tab:'sales'};
   if (check.tab==='serviceMode') return {...base,panel:'routing'};
   if (check.tab==='publication') return {...base,panel:'access',scopeEdit:'1'};
   if (check.tab==='pricing' && model.serviceMode==='provider' && !providerServices(model).find(row=>row.providerId===check.providerId)?.callId) return {...base,panel:'routing',identityProvider:check.providerId};

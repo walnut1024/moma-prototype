@@ -5,7 +5,7 @@ import { channelFingerprint, channelInterfaceIssue, channelModelUrl } from './pr
 import { supplierChannelAssociations, supplierKeyChannels, invalidateSupplierChannels } from './supplier-resources.js';
 import { providerKeyGroups } from './provider-key-groups.js';
 import { credentialRotationChannels } from './credential-rotation-scope.js';
-import { providerTransaction, modelConnectivityPreview, normalizeProviderPrice } from './provider-management.js';
+import { providerTransaction, providerApiKeyRows, modelConnectivityPreview, normalizeProviderPrice } from './provider-management.js';
 import { channelTestDiagnostics } from './channel-test-diagnostics.js';
 
 export const CHANNEL_EVIDENCE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -334,19 +334,46 @@ export function keyGroupCandidateStatus(state, providerId, groupId, options) {
   return { ready: checks.every(row => row.ready), checks };
 }
 function keyGroupTransaction(state, operation, data) {
-  const saving = operation === 'keyGroupCandidateSave' || operation === 'keyGroupCandidateRollback';
+  if(operation==='keyGroupPriority') {
+    const owner=state.providers.find(row=>row.id===data.providerId);
+    const inherited=owner && providerApiKeyRows(state,owner).map(row=>row.apiKey).filter(key=>!owner.apiKeys?.some(row=>row.id===key.id));
+    if(inherited?.length) {
+      const apiKeys=[...(owner.apiKeys || []),...inherited],provider={...owner,apiKeys};
+      const transaction=keyGroupTransaction({...state,providers:state.providers.map(row=>row.id===owner.id?provider:row)},operation,data);
+      return {...transaction,changes:[update('providers',owner.id,{apiKeys}),...transaction.changes]};
+    }
+  }
+  const saving = ['keyGroupPriority','keyGroupCandidateSave','keyGroupCandidateRollback'].includes(operation);
   const { provider, group, endpoints, revision, signature, candidate } = keyGroupContext(state, data, !saving);
+  if (operation === 'keyGroupPriority') {
+    if (candidate) throw new Error('此密钥组有待处理的候选配置，请先应用或放弃');
+    if (JSON.stringify(data.expectedKeyIds) !== JSON.stringify(group.keyIds)) throw new Error('密钥顺序已变化，请重新载入');
+    const index = group.keyIds.indexOf(data.keyId), target = index + (data.direction === 'up' ? -1 : 1);
+    if (!['up','down'].includes(data.direction) || index < 0 || target < 0 || target >= group.keyIds.length) throw new Error('请选择可上移或下移的组内密钥');
+    const keyIds = [...group.keyIds];[keyIds[index],keyIds[target]] = [keyIds[target],keyIds[index]];
+    if (keyIds[0] !== group.keyIds[0]) {
+      const first = provider.apiKeys?.find(row=>row.id===keyIds[0]);
+      if (!first || first.status === 'disabled' || first.revokedAt) throw new Error('优先级 1 须为可用且未撤销的密钥');
+      if (endpoints.length) return keyGroupTransaction(state,'keyGroupCandidateSave',{...data,keyIds,priorityChange:true});
+    }
+    const at = new Date().toISOString(), versions = [...(provider.keyGroupVersions || [])];
+    if (!versions.some(row=>row.groupId===group.id)) versions.push({groupId:group.id,version:revision,keyIds:[...group.keyIds],appliedAt:provider.updatedAt || at});
+    versions.push({groupId:group.id,version:revision+1,keyIds,appliedAt:at,evidenceIds:[]});
+    return {type:'batch',objectId:group.id,label:'调整 API 密钥优先级',changes:[update('providers',provider.id,{apiKeyGroups:providerKeyGroups(provider).map(row=>row.id===group.id?{...row,keyIds}:row),...(group.id==='default' && keyIds[0]!==group.keyIds[0]?{defaultApiKeyId:keyIds[0]}:{}),keyGroupRevisions:{...provider.keyGroupRevisions,[group.id]:revision+1},keyGroupVersions:versions})]};
+  }
   if (saving) {
-    let keyId = data.keyId;
+    let keyId = data.keyId, keyIds = data.keyIds;
     if (operation === 'keyGroupCandidateRollback') {
       const version = provider.keyGroupVersions?.find(row => row.groupId === group.id && row.version === data.targetVersion);
       if (!version || data.targetVersion === revision) throw new Error('请选择其他密钥组历史版本');
-      keyId = version.keyIds[0];
+      keyIds = [...version.keyIds, ...group.keyIds.filter(id => !version.keyIds.includes(id))];
     }
+    if (keyIds !== undefined && (!Array.isArray(keyIds) || keyIds.length !== group.keyIds.length || new Set(keyIds).size !== keyIds.length || keyIds.some(id=>!group.keyIds.includes(id)))) throw new Error('密钥优先级必须完整保留当前组内密钥，不能重复或跨组');
+    keyId = keyIds?.[0] || keyId;
     const key = provider.apiKeys?.find(row => row.id === keyId && group.keyIds.includes(row.id));
     if (!key || key.status === 'disabled' || key.revokedAt) throw new Error('请选择组内可用且未撤销的主要密钥');
     const configs = Object.fromEntries(endpoints.map(endpoint => [endpoint.id, { ...snapshot(endpoint), credentialVersion: uid('credential-version') }]));
-    const next = { id: uid('key-group-candidate'), groupId: group.id, keyIds: [key.id, ...group.keyIds.filter(id => id !== key.id)], baseSignature: signature, baseRevision: revision, configs, impactRevisions: Object.fromEntries(endpoints.map(endpoint => [endpoint.id, channelChangeImpact(state, provider.id, endpoint.id).revision])), tests: [], createdAt: new Date().toISOString(), ...(operation === 'keyGroupCandidateRollback' ? { rollbackOf: data.targetVersion } : {}) };
+    const next = { id: uid('key-group-candidate'), groupId: group.id, keyIds: keyIds || [key.id, ...group.keyIds.filter(id => id !== key.id)], ...(data.priorityChange?{priorityChange:true}:{}), baseSignature: signature, baseRevision: revision, configs, impactRevisions: Object.fromEntries(endpoints.map(endpoint => [endpoint.id, channelChangeImpact(state, provider.id, endpoint.id).revision])), tests: [], createdAt: new Date().toISOString(), ...(operation === 'keyGroupCandidateRollback' ? { rollbackOf: data.targetVersion } : {}) };
     return { type: 'batch', objectId: group.id, label: '保存密钥组候选配置', changes: [update('providers', provider.id, { keyGroupCandidates: [...(provider.keyGroupCandidates || []).filter(row => row.groupId !== group.id), next] })] };
   }
   if (operation === 'keyGroupCandidateDiscard') return { type: 'batch', objectId: group.id, label: '放弃密钥组候选配置', changes: [update('providers', provider.id, { keyGroupCandidates: provider.keyGroupCandidates.filter(row => row.groupId !== group.id) })] };
@@ -465,7 +492,7 @@ function prepareCredentialCandidate(state, operation, data) {
 export function channelChangeTransaction(state, { operation, data = {} }) {
   if (['channelCandidateCredentialPrepare', 'keyGroupCandidatePrepare'].includes(operation)) return prepareCredentialCandidate(state, operation, data);
   if (/^(channel|keyGroup)CandidateTest(Job|Receipt)$/.test(operation)) return candidateReceiptTransaction(state, operation, data);
-  if (operation.startsWith('keyGroupCandidate')) return keyGroupTransaction(state, operation, data);
+  if (operation.startsWith('keyGroupCandidate') || operation === 'keyGroupPriority') return keyGroupTransaction(state, operation, data);
   if (operation.startsWith('channelProcurement')) return procurementTransaction(state, operation, data);
   if (operation === 'credentialEmergencyRevoke') {
     const provider = state.providers.find(row => row.id === data.providerId);

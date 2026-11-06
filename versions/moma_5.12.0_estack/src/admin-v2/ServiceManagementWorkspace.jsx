@@ -10,13 +10,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { TooltipProvider } from '../components/ui/tooltip';
 import { Choice, Field } from './ModelMetadataForm';
-import { GridTable, Row, Cell, Status, Notice, Pagination, Modal, MoreActions } from './ModelOperationsUI';
+import { GridTable, Row, Cell, Status, Notice, Pagination, Modal } from './ModelOperationsUI';
 import { modelCode, displayTime } from './model-management';
 import { SERVICE_MODES, listed } from './model-operations';
 import { serviceDirectoryModels, serviceIndexModels, selectServiceModel, serviceLifecycle, serviceConfiguration } from './service-workspace';
 import ServiceModelForm from './ServiceModelForm';
 import ServiceOverview from './ServiceOverview';
-import ServicePlatformTrial from './ServicePlatformTrial';
+import ServiceListingDialog from './ServiceListingDialog';
 import { ServiceMappingsContent, ServiceAccessContent, ServiceCallGuide } from './ServiceContent';
 import { SERVICE_WORKSPACE_TABS, serviceWorkspaceTab } from './service-workspace-panels';
 import { modelOperationHistory } from './model-operation-history';
@@ -35,14 +35,15 @@ export function ModelOperationRecords({state,model}) {
 }
 
 export default function ServiceManagementWorkspace({state,sourceState,ops,act,add,creating=false,cancelCreate,finishCreate}) {
-  const {params,go}=ops, rows=serviceIndexModels(state,params), [filtersOpen,setFiltersOpen]=useState(false),[maintenance,setMaintenance]=useState(null);
+  const {params,go}=ops, rows=serviceIndexModels(state,params), [filtersOpen,setFiltersOpen]=useState(false),[maintenance,setMaintenance]=useState(null),[listing,setListing]=useState(null),[visible,setVisible]=useState(true),[visibilityRevision,setVisibilityRevision]=useState(null);
   const selected=selectServiceModel(rows,params.get('model'));
   const activeTab=serviceWorkspaceTab(params);
   const filterCount=['type','mode','status'].filter(key=>params.get(key) && params.get(key)!=='all').length;
   const change=patch=>go({...patch,view:null,panel:null,model:null,page:null,listingReturn:null,tab:null,service:null,mapping:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:null},{replace:true,preserveScroll:true});
   const tasks=pendingGuidedOnboardings(state);
   const tabList=<TabsList variant="line" className="sm-service-tab-list" aria-label="模型工作区">{SERVICE_WORKSPACE_TABS.map(([value,label])=><TabsTrigger key={value} value={value}>{label}</TabsTrigger>)}</TabsList>;
-  const serviceActions=selected && <><ServicePlatformTrial state={state} model={selected} ops={ops}/><Button variant="outline" disabled={!ops.can || Boolean(selected.archivedAt)} onClick={()=>act(selected,selected.callsEnabled?'disableService':'enableService')}>{selected.callsEnabled?'停用技术服务':'启用技术服务'}</Button><Button variant="outline" onClick={()=>go({service:(selected.serviceMode==='provider'?'provider:'+selected.id+':'+selected.serviceProviders?.find(row=>row.status!=='已移除')?.providerId:'standard:'+selected.id),returnTo:location.hash},{base:'model-prices',reset:true})}>维护售价与销售</Button><MoreActions label="服务维护" disabled={!ops.can}><Button variant="ghost" onClick={()=>ops.proceed(()=>setMaintenance(selected.archivedAt?'serviceRestore':'serviceArchive'))}>{selected.archivedAt?'恢复已归档服务':'归档服务'}</Button></MoreActions></>;
+  const closeListing=()=>ops.proceed(()=>{setListing(null);ops.dirty(false);ops.setError('');});
+  const serviceActions=selected && <><Button variant="outline" disabled={!ops.can || Boolean(selected.archivedAt)} onClick={()=>ops.proceed(()=>setListing('gray'))}>灰度上架</Button><Button variant="outline" disabled={!ops.can || Boolean(selected.archivedAt)} onClick={()=>ops.proceed(()=>setListing('formal'))}>正式上架</Button><Button variant="outline" disabled={!ops.can || selected.listingStatus!=='已上架'} onClick={()=>act(selected,'stopSales')}>下架</Button><Button variant="outline" disabled={!ops.can} onClick={()=>ops.proceed(()=>{setVisible(selected.marketVisible!==false);setVisibilityRevision(selected.updatedAt);setListing('visibility');})}>可见性配置</Button></>;
   const header=selected && <div className="sm-service-heading"><div className="sm-service-title"><div className="sm-model-symbol">{selected.profile?.logo?<img src={selected.profile.logo} alt=""/>:<Waypoints aria-hidden="true"/>}</div><div className="sm-header-model"><h1>{selected.name}</h1></div></div>{tabList}<div className="sm-service-header-actions">{operationsReturn(params.get('returnTo')) && <Button variant="outline" onClick={()=>ops.proceed(()=>{location.hash=params.get('returnTo');})}>返回来源页面</Button>}<Popover><PopoverTrigger asChild><Button variant="ghost" aria-label="服务操作">服务操作</Button></PopoverTrigger><PopoverContent className="sm-service-actions-menu" align="end">{serviceActions}</PopoverContent></Popover></div></div>;
   return <TooltipProvider delayDuration={200}><div className="sm-workspace">
     <aside className="sm-index" aria-label="平台模型目录">
@@ -54,10 +55,12 @@ export default function ServiceManagementWorkspace({state,sourceState,ops,act,ad
     <section className={`sm-detail${!creating && selected?' sm-service-detail':''}`} aria-label="模型服务工作台"><ChannelServiceContext state={state} ops={ops}/>{params.has('returnOnboarding') && <Notice><Button variant="link" onClick={()=>go({view:'onboarding',draft:params.get('returnOnboarding'),step:'2',panel:null,model:null,returnOnboarding:null,providerAdd:null,providerEdit:null})}>返回接入任务</Button></Notice>}{creating?<ServiceModelForm key="create" state={state} sourceState={sourceState} ops={ops} close={cancelCreate} saved={finishCreate}/>:selected?<>
       {params.get('publicationReturn')===selected.id && <div className="sm-section-bar"><Button variant="outline" onClick={()=>{go({publicationReturn:null},{saved:true,preserveScroll:true});act(selected,'publish');}}>返回上架检查</Button></div>}
       {maintenance && <Modal title={maintenance==='serviceArchive'?'归档服务':'恢复已归档服务'} description={selected.name} onClose={()=>setMaintenance(null)}><p>{maintenance==='serviceArchive'?'归档后移入已归档列表，保留资料、ID、配置、价格及调用历史。':'恢复后保持下架和停服，请核对配置后重新上架。'}</p>{maintenance==='serviceArchive' && serviceArchiveIssues(state,selected).map(issue=><p key={issue}>{issue}</p>)}{maintenance==='serviceArchive' && serviceArchiveIssues(state,selected).length>0 && <Button variant="link" onClick={()=>{setMaintenance(null);go({panel:'routing'});}}>前往渠道与路由处理引用</Button>}<div className="mo-footer"><Button variant="outline" onClick={()=>setMaintenance(null)}>取消</Button><Button disabled={!ops.can || maintenance==='serviceArchive' && serviceArchiveIssues(state,selected).length>0} onClick={async()=>{if(await ops.run(maintenance,{confirmed:true,expectedUpdatedAt:selected.updatedAt},selected.id)){setMaintenance(null);go({status:maintenance==='serviceArchive'?'archived':null},{saved:true});}}}>确认{maintenance==='serviceArchive'?'归档':'恢复'}</Button></div>{ops.error && <Notice error>{ops.error}</Notice>}</Modal>}
+      {['gray','formal'].includes(listing) && <ServiceListingDialog key={selected.id+listing} state={state} model={selected} ops={ops} stage={listing} close={closeListing}/>}
+      {listing==='visibility' && <Modal title="可见性配置" description={selected.name} onClose={closeListing}><Field label="用户可见性"><Choice label="用户可见性" value={visible?'visible':'hidden'} options={[[ 'visible','用户可见'],['hidden','用户不可见']]} disabled={!ops.can} onChange={value=>{setVisible(value==='visible');ops.dirty(true);}}/></Field><p>控制模型广场展示，调用授权与上架状态保持不变。</p>{ops.error && <Notice error>{ops.error}</Notice>}<div className="mo-footer"><Button variant="outline" onClick={closeListing}>取消</Button><Button disabled={!ops.can || Boolean(ops.conflict)} onClick={async()=>{if(await ops.run('marketVisibility',{visible,expectedUpdatedAt:visibilityRevision},selected.id))closeListing();}}>保存可见性</Button></div></Modal>}
       <ModelStatusSummary state={state} model={selected} ops={ops}/>
       <Tabs className="sm-service-tabs" value={activeTab} onValueChange={value=>{go({panel:value==='materials'?null:value,service:null,mapping:null,tab:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:null},{preserveScroll:true});}}>
         {header}
-        <TabsContent value="materials"><ServiceOverview state={state} model={selected} ops={ops}/></TabsContent>
+        <TabsContent value="materials"><ServiceOverview state={state} model={selected} ops={ops} act={act} onMaintenance={()=>ops.proceed(()=>setMaintenance(selected.archivedAt?'serviceRestore':'serviceArchive'))}/></TabsContent>
         <TabsContent value="routing"><ServiceMappingsContent key={selected.id} state={state} model={selected} ops={{...ops,can:ops.can && !selected.archivedAt}} act={act}/></TabsContent>
         <TabsContent value="guide"><ServiceCallGuide key={selected.id+'guide'+params.get('routeProvider')} state={state} model={selected} ops={{...ops,can:ops.can && !selected.archivedAt}}/></TabsContent>
         <TabsContent value="access"><ServiceAccessContent key={selected.id} state={state} model={selected} ops={ops}/></TabsContent>

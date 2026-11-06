@@ -8,15 +8,16 @@ import { modelSupplies } from './model-management';
 import { routingServices } from './service-routing';
 import { SERVICE_PURPOSES, servicePurpose } from './service-purpose';
 
-export default function ServiceOverview({ state, model, ops }) {
+export default function ServiceOverview({ state, model, ops, act, onMaintenance }) {
   const master = libraryRecord(state, model.id);
   const services = routingServices(state).filter(row => row.modelId === model.id);
   const [editing, setEditing] = useState(null), [purpose, setPurpose] = useState('');
   const close = () => ops.proceed(() => { setEditing(null); ops.dirty(false); ops.setError(''); });
   return <div className="sm-model-form sm-overview">
+    <div className="sm-section-bar"><Button variant="outline" disabled={!ops.can || Boolean(model.archivedAt)} onClick={()=>act(model,model.callsEnabled?'disableService':'enableService')}>{model.callsEnabled?'停用技术服务':'启用技术服务'}</Button><Button variant="outline" disabled={!ops.can} onClick={onMaintenance}>{model.archivedAt?'恢复已归档服务':'归档服务'}</Button></div>
     <dl className="sm-overview-facts">
       <div><dt>技术状态</dt><dd><Status good={model.callsEnabled === true}>{model.callsEnabled ? '已启用' : '已停用'}</Status></dd></div>
-      <div><dt>销售状态</dt><dd>{model.listingStatus === '已上架' ? '已上架' : '未销售'}</dd></div>
+      <div><dt>销售状态</dt><dd>{model.listingStatus === '已上架' ? model.releaseStage==='gray'?'灰度上架':'正式上架' : '未销售'}</dd></div>
       <div><dt>模型资料</dt><dd><Button variant="link" onClick={() => ops.go({ view:'template', template:master?.id || model.id, materialMode:'view', returnTo:location.hash, returnModel:model.id }, { base:'model-templates' })}>{master?.name || model.name}</Button></dd></div>
       <div><dt>开放范围</dt><dd>{model.openScope === 'all' ? '全部有效客户' : (model.tenantIds || []).map(id => state.tenants.find(row => row.id === id)?.name || id).join('、') || '待配置'}</dd></div>
     </dl>

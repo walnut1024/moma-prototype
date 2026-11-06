@@ -47,7 +47,7 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
       state=next;useCloudMockSnapshot(next,next.cloudMockState);return next;
     };
     state=await completeServiceShowcase(state,save,{onProgress:message=>console.log('D1:',message)});
-    const fresh=(await api('/model-operations')).data;
+    let fresh=(await api('/model-operations')).data;
     const baseline=initialModelWorkspace();
     for(const key of ['models','modelTemplates','providers','endpoints','modelSupplies'])assert.deepEqual(new Set(fresh[key].map(r=>r.id)),new Set(baseline[key].map(r=>r.id)),key);
     const current=fresh.models.filter(m=>m.serviceShowcase);
@@ -55,7 +55,12 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     assert.deepEqual(current.map(m=>m.serviceMode).sort(),['provider','standard']);
     assert((await local.db.prepare('SELECT count(*) AS n FROM publications').first()).n>=3);
     assert((await local.db.prepare('SELECT count(*) AS n FROM simulation_records').first()).n>10);
-    const model=current.find(m=>m.serviceMode==='provider'),prices=structuredClone(fresh.modelSalePrices);
+    const releaseModel=current.find(m=>m.serviceMode==='standard'),releaseScope=structuredClone({openScope:releaseModel.openScope,tenantIds:releaseModel.tenantIds});
+    state=await save(fresh,{type:'modelOperations',operation:'startSales',modelId:releaseModel.id,data:{releaseStage:'gray',releaseTenantIds:['tenant-gov'],confirmed:true,expectedUpdatedAt:releaseModel.updatedAt}});
+    fresh=(await api('/model-operations')).data;const gray=fresh.models.find(m=>m.id===releaseModel.id);assert.equal(gray.releaseStage,'gray');assert.deepEqual(gray.releaseTenantIds,['tenant-gov']);assert.deepEqual({openScope:gray.openScope,tenantIds:gray.tenantIds},releaseScope);
+    state=await save(fresh,{type:'modelOperations',operation:'startSales',modelId:gray.id,data:{releaseStage:'formal',confirmed:true,expectedUpdatedAt:gray.updatedAt}});
+    fresh=(await api('/model-operations')).data;assert.equal(fresh.models.find(m=>m.id===gray.id).releaseStage,'formal');assert.deepEqual(fresh.models.find(m=>m.id===gray.id).releaseTenantIds,[]);
+    const model=fresh.models.find(m=>m.serviceMode==='provider'),prices=structuredClone(fresh.modelSalePrices);
     state=await save(fresh,{type:'modelOperations',operation:'stopSales',modelId:model.id,data:{expectedUpdatedAt:model.updatedAt}});
     assert.equal(state.models.find(m=>m.id===model.id).callsEnabled,true);
     const stopped=state.models.find(m=>m.id===model.id);

@@ -60,7 +60,7 @@ export default function ProviderManagement(props) {
         {provider.status !== '已启用' && <Button variant="outline" size="sm" disabled={!ops.can} onClick={async () => await ops.run('provider', { operation: 'enableProvider', objectId: provider.id, values: {} })}><Power data-icon="inline-start"/>启用供应商</Button>}
       </SupplierHeading></div>
 
-          <CardHeader><CardTitle><TabsList variant="line" aria-label="供应商详情"><TabsTrigger value="catalogue">模型渠道</TabsTrigger><TabsTrigger value="api-keys">共享API密钥</TabsTrigger></TabsList></CardTitle></CardHeader>
+          <CardHeader><CardTitle><TabsList variant="line" aria-label="供应商详情"><TabsTrigger value="catalogue">模型渠道</TabsTrigger><TabsTrigger value="api-keys">API 密钥池</TabsTrigger></TabsList></CardTitle></CardHeader>
           <CardContent><TabsContent value={tab}>
             {tab === 'catalogue' ? <SupplierModelCatalogue key={provider.id} state={state} provider={provider} ops={ops} onAddModel={event => startCreation('model',event)} onAddChannel={(event,libraryId) => startCreation('channel',event,libraryId)}/> : <ProviderApiKeys key={provider.id} state={state} provider={provider} ops={ops}/>}
           </TabsContent></CardContent>

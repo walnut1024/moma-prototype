@@ -1,3 +1,4 @@
+import {serviceReleaseScope} from './service-release.mjs';
 export const ADMIN_DATA_KEY = 'moma.adminV2.5120.v1';
 export const AUTH_DATA_KEY = 'moma-auth-prototype-5120-v1';
 export const LINK_EVENT = 'moma-5120-state-change';
@@ -14,7 +15,7 @@ export function readLinkedState(storage = globalThis.localStorage) {
 export const accessError = (code, message) => Object.assign(new Error(message), { code });
 const reject = (code, reason) => ({ allowed: false, code, reason });
 export const activeCustomer = tenant => tenant && ['正常', '需关注'].includes(tenant.status);
-export const lifecycleSignature = model => JSON.stringify([model.listingStatus, model.visibility, model.callsEnabled, model.openScope, [...(model.tenantIds || [])].sort(), model.serviceMode, model.serviceModeRevision, model.serviceProviders, model.platformPublications, model.profile?.tasks, model.profile?.inputModalities, model.profile?.outputModalities]);
+export const lifecycleSignature = model => JSON.stringify([model.listingStatus, model.visibility, model.callsEnabled, model.releaseStage, [...(model.releaseTenantIds || [])].sort(), model.openScope, [...(model.tenantIds || [])].sort(), model.serviceMode, model.serviceModeRevision, model.serviceProviders, model.platformPublications, model.profile?.tasks, model.profile?.inputModalities, model.profile?.outputModalities]);
 
 export function serviceReferences(state) {
   return (state.models || []).flatMap(model => model.serviceMode === 'standard'
@@ -32,7 +33,8 @@ export function lifecycleAccess(state, service, tenantId) {
   }
   if (!activeCustomer(state.tenants?.find(row => row.id === tenantId))) return reject('customer_unavailable', '当前用户或组织不可用');
   if (!['all', 'selected'].includes(model.openScope)) return reject('model_forbidden', '模型开放范围尚未配置');
-  if (model.openScope === 'selected' && !model.tenantIds?.includes(tenantId)) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');
+  const releaseScope=serviceReleaseScope(model);
+  if (releaseScope.openScope === 'selected' && !releaseScope.tenantIds.includes(tenantId)) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');
   const grant = state.grants?.find(row => row.subjectType === 'tenant' && row.subjectId === tenantId);
   if (grant && (grant.status !== '生效中' || !grant.modelIds?.includes(model.id))) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');
   return { allowed: true, reason: '' };

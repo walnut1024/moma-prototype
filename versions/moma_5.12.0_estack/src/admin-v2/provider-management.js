@@ -48,14 +48,22 @@ const update = (collection, id, changes) => ({ type: 'update', collection, id, c
 
 export const maskProviderApiKey = value => typeof value === 'string' && value.length > 8 ? `${value.slice(0, 4)}••••••••${value.slice(-4)}` : '••••••••';
 export const providerApiKeyName = key => typeof key.name === 'string' && key.name.trim() ? key.name : `API 密钥 ${(key.id || key.fingerprint).slice(-6)}`;
-export const providerApiKeyId = key => key.id.match(/^(?:provider-key-)?([a-f0-9]{8})(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i)?.[1] || key.id;
+export function providerApiKeyId(key) {
+  const uuid = key.id.match(/^(?:provider-key-)?([a-f0-9]{8})(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i)?.[1];
+  if (uuid || key.id.length <= 12) return uuid || key.id;
+  let hash = 2166136261;
+  for (const char of key.id) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  return `KEY-${(hash >>> 0).toString(16).padStart(8, '0')}`;
+}
 
 export function providerApiKeyRows(state, provider) {
   const rows = new Map();
   const addKey = (apiKey, endpoint) => {
     if (apiKey.scope === 'channel') return;
-    if (!rows.has(apiKey.fingerprint)) rows.set(apiKey.fingerprint, { apiKey, endpoints: [] });
-    const row = rows.get(apiKey.fingerprint);
+    // Endpoint aliases share a credential; supplier-owned records retain their stable IDs.
+    const id=endpoint && !rows.has(apiKey.id)?[...rows.values()].find(row=>row.apiKey.fingerprint===apiKey.fingerprint)?.apiKey.id || apiKey.id:apiKey.id;
+    if (!rows.has(id)) rows.set(id, { apiKey, endpoints: [] });
+    const row = rows.get(id);
     if (endpoint && !row.endpoints.some(item => item.id === endpoint.id)) row.endpoints.push(endpoint);
   };
   (provider.apiKeys || []).forEach(key => addKey(key));
@@ -273,7 +281,7 @@ export function providerTransaction(state, action) {
     const group = groups.find(row => row.id === groupId);
     if (!group) throw new Error('API 密钥组不存在，请重新选择');
     if (keys.length + data.apiKeys.length > PROVIDER_API_KEY_LIMIT) throw new Error('每个供应商最多配置 20 个 API 密钥');
-    const existing = providerApiKeyRows(state, provider).map(row => row.apiKey.fingerprint);
+    const existing = [...new Set(providerApiKeyRows(state, provider).map(row => row.apiKey.fingerprint))];
     const fingerprints = new Set([...existing, ...data.apiKeys.map(item => item.fingerprint)]);
     if (fingerprints.size !== existing.length + data.apiKeys.length) throw new Error('此供应商已配置相同的 API 密钥，或本次输入有重复项。');
     const createdAt = new Date().toISOString();

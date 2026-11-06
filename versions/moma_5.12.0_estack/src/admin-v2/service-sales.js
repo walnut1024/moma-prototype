@@ -27,5 +27,5 @@ export function salesStatus(state, model, providerId) {
   if (servicePurpose(model,providerId) === 'internal') return '不销售';
   if (model.listingStatus !== '已上架') return model.firstPublishedAt ? '已停售' : '未上架';
   if (!model.callsEnabled) return '服务不可用';
-  return salesChecks(state,model).every(row => row.passed) ? '在售' : '不可销售';
+  return salesChecks(state,model).every(row => row.passed) ? model.releaseStage==='gray'?'灰度在售':'在售' : '不可销售';
 }

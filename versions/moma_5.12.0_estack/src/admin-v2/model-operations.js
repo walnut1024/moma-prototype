@@ -107,7 +107,7 @@ export function operationsTransaction(state, action) {
   if (action.operation === 'installModelCatalogue') return builtinModelCatalogueChanges(state, action.data?.catalogueIds);
   if (action.operation === 'channelHealthTest') return channelHealthTransaction(state, action);
   if (/^channel(Draft|Discovery|Metadata|TestEvidence|TemporaryTest)/.test(action.operation) || action.operation === 'supplierSelection') return channelOnboardingTransaction(state, action);
-  if (/^channel(Candidate|Procurement)/.test(action.operation) || action.operation.startsWith('keyGroupCandidate') || action.operation === 'credentialEmergencyRevoke') return channelChangeTransaction(state, action);
+  if (/^channel(Candidate|Procurement)/.test(action.operation) || action.operation.startsWith('keyGroupCandidate') || action.operation === 'keyGroupPriority' || action.operation === 'credentialEmergencyRevoke') return channelChangeTransaction(state, action);
   if (action.operation.startsWith('serviceMapping')) return serviceMappingTransaction(state,action);
   if (['serviceRouteDraft', 'serviceRoutePublish', 'serviceRouteRollback','serviceRouteStop','serviceRouteRestore'].includes(action.operation)) return routingTransaction(state, action);
   // Cloud commands keep simulation history and reference data read-only.
@@ -137,7 +137,11 @@ export function operationsTransaction(state, action) {
     } else {
       const failed=salesChecks(working,model).filter(row=>!row.passed);
       if(failed.length)throw Error(failed.map(row=>row.label).join('；'));
-      update('models',modelId,{listingStatus:'已上架',visibility:'公开',firstPublishedAt:model.firstPublishedAt || new Date().toISOString()});label='上架销售';
+      const releaseStage=data.releaseStage || 'formal';
+      if(!['gray','formal'].includes(releaseStage))throw Error('请选择灰度上架或正式上架');
+      const releaseTenantIds=releaseStage==='gray'?serviceScope(working,{openScope:'selected',tenantIds:data.releaseTenantIds}).tenantIds:[];
+      if(releaseTenantIds.some(id=>model.openScope!=='all' && !model.tenantIds?.includes(id)))throw Error('灰度客户须在当前调用授权范围内');
+      update('models',modelId,{listingStatus:'已上架',visibility:'公开',releaseStage,releaseTenantIds,firstPublishedAt:model.firstPublishedAt || new Date().toISOString()});label=releaseStage==='gray'?'灰度上架':'正式上架';
     }
   } else if (['enableService','disableService','stopSales'].includes(operation)) {
     modelOp(operation,modelId,data);label={enableService:'启用技术服务',disableService:'停用技术服务',stopSales:'停止销售'}[operation];

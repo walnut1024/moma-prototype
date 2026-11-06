@@ -14,6 +14,8 @@ import { onboardingApi, prepareServerChannel } from '../src/admin-v2/onboarding-
 import { setMockScenario, getMockServiceSnapshots, inspectMockPublication, getMockOperationalRequests } from '../src/admin-v2/mock-onboarding-service.js';
 import { platformPublicationFingerprint } from '../src/admin-v2/platform-publication-state.js';
 import { directorySnapshot } from '../src/service-directory.mjs';
+import { lifecycleAccess } from '../src/service-access.mjs';
+import { serviceReleaseScope } from '../src/service-release.mjs';
 import { simulateRequest } from '../src/admin-v2/domain.js';
 const parseAdminState=(...args)=>withAdminSession(baseParseAdminState(...args));
 const run=(state,operation,data,modelId)=>commitAdminState(state,{type:'modelOperations',operation,data,modelId});
@@ -214,4 +216,25 @@ test('management sales settings do not expand call access and selling cannot ena
   assert.equal(env.model().callsEnabled,false);assert.equal(env.model().listingStatus,'已下架');
   env.save('enableService',{expectedUpdatedAt:env.model().updatedAt});env.save('startSales',{confirmed:true,expectedUpdatedAt:env.model().updatedAt});
   assert.equal(env.model().callsEnabled,true);assert.equal(env.model().listingStatus,'已上架');assert.deepEqual(env.state.modelSalePrices,storedPrices);
+});
+
+for(const mode of ['standard','provider'])test(mode+' gray listing intersects customer authorization; formal listing removes only the gray restriction',async t=>{
+  const env=await fixture(t,mode),before=structuredClone(env.model()),prices=structuredClone(env.state.modelSalePrices),publications=structuredClone(env.model().platformPublications);
+  const list=(releaseStage,releaseTenantIds)=>env.save('startSales',{releaseStage,releaseTenantIds,confirmed:true,expectedUpdatedAt:env.model().updatedAt});
+  list('gray',['tenant-gov']);assert.equal(env.model().releaseStage,'gray');await env.call();
+  assert.deepEqual(serviceReleaseScope(env.model()),{openScope:'selected',tenantIds:['tenant-gov']});
+  assert.equal(lifecycleAccess(env.state,{...env.service,model:env.model()},'tenant-nanjing').allowed,false);
+  list('gray',['tenant-nanjing']);await assert.rejects(env.call(),error=>error.code==='model_forbidden');
+  list('formal',[]);await env.call();assert.equal(env.model().releaseStage,'formal');assert.deepEqual(env.model().releaseTenantIds,[]);
+  assert.deepEqual({openScope:env.model().openScope,tenantIds:env.model().tenantIds},{openScope:before.openScope,tenantIds:before.tenantIds});assert.deepEqual(env.model().platformPublications,publications);assert.deepEqual(env.state.modelSalePrices,prices);
+  const stable=structuredClone(env.state);for(const ids of [[],['missing'],['tenant-gov','missing']])assert.throws(()=>list('gray',ids));
+  assert.throws(()=>list('percent',[]),/灰度|正式/);assert.deepEqual(env.state,stable);
+  const action={type:'modelOperations',operation:'startSales',modelId:env.modelId,data:{releaseStage:'gray',releaseTenantIds:['tenant-gov'],confirmed:true,expectedUpdatedAt:env.model().updatedAt}};
+  assert.throws(()=>commitAdminState(env.state,action,'运维人员'),/无权/);
+  assert.throws(()=>env.save('startSales',{...action.data,expectedUpdatedAt:'stale'}),/已变化/);
+  assert.throws(()=>persistModelAction(env.state,action,{getItem:key=>env.storage.getItem(key),setItem:()=>{throw Error('quota');}}),/quota/);
+  env.save('commercialPublish',{kind:'scope',expectedBase:commercialTaskBase(env.state,env.model(),'scope'),value:{openScope:'selected',tenantIds:['tenant-gov']},confirmed:true});
+  assert.throws(()=>list('gray',['tenant-nanjing']),/授权范围/);list('gray',['tenant-gov']);
+  const narrowed={...env.model(),openScope:'selected',tenantIds:['tenant-nanjing']};assert.deepEqual(serviceReleaseScope(narrowed).tenantIds,[]);assert.equal(lifecycleAccess(env.state,{...env.service,model:narrowed},'tenant-gov').allowed,false);
+  env.save('stopSales',{expectedUpdatedAt:env.model().updatedAt});assert.equal(env.model().callsEnabled,true);await assert.rejects(env.call(),error=>error.code==='model_unavailable');
 });

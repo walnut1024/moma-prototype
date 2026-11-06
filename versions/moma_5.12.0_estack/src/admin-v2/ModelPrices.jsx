@@ -1,3 +1,4 @@
+import ServiceListingDialog from './ServiceListingDialog';
 import { useState } from 'react';
 import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
@@ -6,7 +7,7 @@ import { GridTable, Row, Cell, Notice, Modal, SearchBox, Pagination, ScopeFields
 import { CommercialDialog } from './ServiceWorkspaceDialogs';
 import { ModelOperationRecords } from './ServiceManagementWorkspace';
 import { priceRecords, operationsReturn } from './model-pricing-workspace';
-import { salesScope, salesChecks, salesStatus } from './service-sales';
+import { salesScope, salesStatus } from './service-sales';
 import { servicePurpose } from './service-purpose';
 import { displayTime, moneyDisplay, priceItems } from './model-management';
 import './model-pricing-workspace.css';
@@ -32,7 +33,7 @@ export default function ModelPrices(props) {
   const tab=['pricing','sales','history'].includes(params.get('tab'))?params.get('tab'):'pricing';
   const back=operationsReturn(params.get('returnTo'));
   const close=()=>ops.proceed(()=>{setDialog(null);ops.dirty(false);ops.setError('');});
-  const model=service?.model,checks=model?salesChecks(state,model):[];
+  const model=service?.model;
   const providerEntry=model?.serviceProviders?.find(row=>row.providerId===service?.providerId);
   const versions=service?state.modelSalePrices.filter(row=>row.modelId===model.id && (service.providerId?row.scope==='provider' && row.providerId===service.providerId:row.scope==='model')).slice().sort((a,b)=>b.version-a.version):[];
   return <div className="mo-workbench mp-workspace">
@@ -55,11 +56,8 @@ export default function ModelPrices(props) {
       </Tabs>
       {dialog==='settings' && <SalesSettings state={state} service={service} ops={ops} close={close}/>}
       {['showProvider','hideProvider'].includes(dialog) && <Modal title={dialog==='showProvider'?'展示此供应商':'隐藏此供应商'} description={service.name} onClose={close}><p>仅修改当前供应商的销售展示，技术状态、调用授权、价格与历史保留。</p>{ops.error && <Notice error>{ops.error}</Notice>}<div className="mo-footer"><Button variant="outline" onClick={close}>取消</Button><Button disabled={!ops.can || Boolean(ops.conflict)} onClick={async()=>{if(await ops.run('serviceProviderListing',{providerId:service.providerId,enabled:dialog==='showProvider',expectedUpdatedAt:model.updatedAt},model.id))close();}}>确认</Button></div></Modal>}
-      {['start','stop'].includes(dialog) && <Modal wide title={dialog==='start'?'上架销售':'停止销售'} description={model.name} onClose={close}>
-        {dialog==='start'?<ul className="mo-checks">{checks.map((check,index)=><li key={index}>{check.passed?'✓':'待完成'} {check.label}</li>)}</ul>:<p>停止新增销售并保留售价、技术启用状态及全部历史。</p>}
-        {ops.error && <Notice error>{ops.error}</Notice>}
-        <div className="mo-footer"><Button variant="outline" onClick={close}>取消</Button><Button disabled={!ops.can || Boolean(ops.conflict) || dialog==='start' && checks.some(row=>!row.passed)} onClick={async()=>{if(await ops.run(dialog==='start'?'startSales':'stopSales',{expectedUpdatedAt:model.updatedAt,confirmed:true},model.id))close();}}>确认{dialog==='start'?'上架':'停售'}</Button></div>
-      </Modal>}
+      {dialog==='start' && <ServiceListingDialog state={state} model={model} ops={ops} stage="formal" close={close}/>}
+      {dialog==='stop' && <Modal title="下架" description={model.name} onClose={close}><p>停止新增销售，保留技术启用状态、价格及历史。</p>{ops.error && <Notice error>{ops.error}</Notice>}<div className="mo-footer"><Button variant="outline" onClick={close}>取消</Button><Button disabled={!ops.can || Boolean(ops.conflict)} onClick={async()=>{if(await ops.run('stopSales',{expectedUpdatedAt:model.updatedAt,confirmed:true},model.id))close();}}>确认下架</Button></div></Modal>}
     </> : <Notice error>指定服务不存在或已归档，请返回售价列表。</Notice> : <>
       <SearchBox value={params.get('q') || ''} placeholder="搜索模型 / 服务提供方 / 调用标识" onChange={q=>go({q:q || null,page:null},{replace:true,preserveScroll:true})}/>
       <GridTable headings={['模型','服务提供方','对外调用标识','售价版本','销售状态','操作']} empty={!rows.length}>{rows.slice((page-1)*20,page*20).map(row=><Row key={row.id}><Cell>{row.model.name}</Cell><Cell>{row.name}</Cell><Cell>{row.callId || '待配置'}</Cell><Cell>{row.price?`v${row.price.version}`:'待配置'}</Cell><Cell>{salesStatus(state,row.model,row.providerId)}</Cell><Cell><Button variant="link" onClick={()=>go({service:row.id,tab:'pricing',edit:null},{preserveScroll:true})}>{row.price?'维护售价':'配置售价'}</Button></Cell></Row>)}</GridTable>

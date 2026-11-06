@@ -14,12 +14,14 @@ import {routeEditorChannels, routeEditorPayload} from './service-route-editor';
 import {operationsTransaction} from './model-operations';
 import {mappingSourceVersion} from './service-model-mappings';
 import ServiceModelMappings from './ServiceModelMappings';
+import ServiceChannelSetup from './ServiceChannelSetup';
 import './service-routing.css';
 
 const strategyName = id => id === 'fixed' ? '固定渠道' : ROUTING_STRATEGIES[id];
 const enabledRows = config => config?.channels.filter(row => row.enabled) || [];
 
 export function RouteWorkbench({state, model, ops, draftOnly = false, serviceId, onAddProvider, onRemoveProvider, onProviderState, onIdentity}) {
+  const [channelSetup,setChannelSetup]=useState(null);
   const services = routingServices(state).filter(service => service.modelId === model.id && (!serviceId || service.id === serviceId));
   const [editor, setEditor] = useState(null), [maintenance, setMaintenance] = useState(null), [servicePicker, setServicePicker] = useState(false), trigger = useRef(null), routeTrigger = useRef(null);
   const blocked = !ops.can || Boolean(ops.conflict);
@@ -54,12 +56,13 @@ export function RouteWorkbench({state, model, ops, draftOnly = false, serviceId,
         });
       })}
     </GridTable>
-    {editor && <RouteEditor key={editor.service.id} state={state} service={editor.service} ops={ops} side={editor.side} focusChannel={editor.channelId} close={close} draftOnly={draftOnly} onIdentity={onIdentity} onRemoveProvider={onRemoveProvider} onProviderState={onProviderState} onMaintenance={() => ops.proceed(() => {close(true);setMaintenance(editor.service);})}/>}
+    {editor && <RouteEditor key={editor.service.id} state={state} service={editor.service} ops={ops} side={editor.side} focusChannel={editor.channelId} close={close} draftOnly={draftOnly} onIdentity={onIdentity} onRemoveProvider={onRemoveProvider} onProviderState={onProviderState} onAddChannel={()=>ops.proceed(()=>{setChannelSetup(editor.service);close(true);})} onMaintenance={() => ops.proceed(() => {close(true);setMaintenance(editor.service);})}/>}
+    {channelSetup && <ServiceChannelSetup state={state} service={channelSetup} ops={ops} close={()=>{setChannelSetup(null);requestAnimationFrame(()=>trigger.current?.isConnected && trigger.current.focus());}} onRoute={()=>{const service=services.find(row=>row.id===channelSetup.id);setChannelSetup(null);if(service)setEditor({service,side:'left'});}}/>}
     {maintenance && <Modal drawer wide drawerSide="left" title="备用映射维护" description={`${model.name} · ${maintenance.name}`} onClose={() => ops.proceed(() => setMaintenance(null))}><ServiceModelMappings state={state} service={maintenance} ops={ops} onRoute={() => ops.proceed(() => setMaintenance(null))}/></Modal>}
   </div>;
 }
 
-function RouteEditor({state, service, ops, side, focusChannel, close, draftOnly, onIdentity, onRemoveProvider, onProviderState, onMaintenance}) {
+function RouteEditor({state, service, ops, side, focusChannel, close, draftOnly, onIdentity, onRemoveProvider, onProviderState, onMaintenance, onAddChannel}) {
   const route = serviceRoute(state, service.id), current = activeRouteVersion(route), last = lastRouteVersion(route);
   const [config, setConfig] = useState(() => routeEditConfig(service, route));
   const [baseline] = useState(() => routeEditConfig(service, route));
@@ -113,7 +116,7 @@ function RouteEditor({state, service, ops, side, focusChannel, close, draftOnly,
     <section className="sr-editor-identity"><div><small>对外调用标识</small><CopyId value={service.callId || '待配置'} label="对外调用标识"/></div><ArrowRight aria-hidden="true"/><div><small>转发到上游</small><strong>{selected.length} 条渠道</strong></div></section>
     {review ? <section className="sr-review"><h3>变更核对</h3><GridTable className="sr-diff-table" headings={['配置项', '当前生效', '保存后']} empty={false}>{routeChangeRows(current?.config, config, channels).map((row, index) => <Row key={index}><Cell>{row.label}</Cell><Cell>{row.before}</Cell><Cell>{row.after}</Cell></Row>)}{removeIds.map(id => <Row key={id}><Cell>解除备用映射</Cell><Cell>{channels.find(row => row.id === id)?.channelName}</Cell><Cell>解除关联，保留供应配置和历史</Cell></Row>)}</GridTable><h3>调用关系</h3><GridTable headings={['对外调用标识', '供应商 / 渠道', '上游模型标识']} empty={false}>{selected.map(row => {const channel = channels.find(item => item.id === row.supplyId); return <Row key={row.supplyId}><Cell>{service.callId}</Cell><Cell>{channel?.provider?.name} / {channel?.channelName}</Cell><Cell>{channel?.upstreamModelId}</Cell></Row>;})}</GridTable><p>保存后新请求使用本次路由。仅检查已有供给检测结果，不发送测试请求。{route?.draft ? '本次保存将替换已保存的路由草稿。' : ''}</p></section> : <>
       <div className="sr-editor-strategy"><Field label="路由策略"><Choice label="路由策略" value={config.strategy} options={[...routeStrategyChoices(service).map(id => [id, strategyName(id)]), ...(!routeStrategyChoices(service).includes(config.strategy) ? [[config.strategy, `${strategyName(config.strategy)}（已有配置）`]] : [])]} disabled={blocked} onChange={strategy => set(changeRouteStrategy(config, strategy))}/></Field>{config.strategy === 'weighted' && <p className={Math.round(selected.reduce((sum, row) => sum + Number(row.weight || 0), 0) * 100) === 10000 ? '' : 'sr-error-text'}>权重合计 {selected.reduce((sum, row) => sum + Number(row.weight || 0), 0)}%，必须为 100%</p>}{config.strategy === 'fixed' && <p>选择一条渠道承接调用。</p>}{config.strategy === 'latency' && <Field label="延迟统计窗口（秒）"><Input aria-label="延迟统计窗口（秒）" value={config.advanced.latencyWindowSeconds} disabled={blocked} onChange={event => set({...config, advanced: {...config.advanced, latencyWindowSeconds: event.target.value}})}/></Field>}</div>
-      <div className="sr-editor-channel-heading"><h3>选择上游渠道</h3>{channels.length > 4 && <Input aria-label="搜索路由渠道" placeholder="搜索供应商 / 渠道 / 上游模型标识" value={query} onChange={event => setQuery(event.target.value)}/>}</div>
+      <div className="sr-editor-channel-heading"><h3>选择上游渠道</h3>{channels.length > 4 && <Input aria-label="搜索路由渠道" placeholder="搜索供应商 / 渠道 / 上游模型标识" value={query} onChange={event => setQuery(event.target.value)}/>}<Button variant="outline" disabled={blocked} onClick={onAddChannel}><Plus/>接入新渠道</Button></div>
       <GridTable className="sr-editor-table" headings={['选择', '供应商 / 渠道', '上游模型标识', config.strategy === 'weighted' ? '权重' : '状态', '操作']} empty={!visible.length} emptyMessage="没有可选渠道，请先在渠道接入中接入、检测并启用同一模型的渠道。">
         {visible.map(channel => {
           const row = config.channels.find(item => item.supplyId === channel.id), enabled = Boolean(row?.enabled);
