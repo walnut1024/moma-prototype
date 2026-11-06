@@ -3,7 +3,6 @@ import {ArrowRight, Plus} from 'lucide-react';
 import {Button} from '../components/ui/button';
 import {Input} from '../components/ui/input';
 import {Checkbox} from '../components/ui/checkbox';
-import {Popover, PopoverContent, PopoverTrigger} from '../components/ui/popover';
 import {Choice, Field} from './ModelMetadataForm';
 import ModelFieldLabel from './ModelFieldLabel';
 import {GridTable, Row, Cell, Status, CopyId, Notice, Modal, MoreActions} from './ModelOperationsUI';
@@ -23,20 +22,23 @@ const enabledRows = config => config?.channels.filter(row => row.enabled) || [];
 export function RouteWorkbench({state, model, ops, draftOnly = false, serviceId, onAddProvider, onRemoveProvider, onProviderState, onIdentity}) {
   const [channelSetup,setChannelSetup]=useState(null);
   const services = routingServices(state).filter(service => service.modelId === model.id && (!serviceId || service.id === serviceId));
-  const [editor, setEditor] = useState(null), [maintenance, setMaintenance] = useState(null), [servicePicker, setServicePicker] = useState(false), trigger = useRef(null), routeTrigger = useRef(null);
+  const [editor, setEditor] = useState(null), [maintenance, setMaintenance] = useState(null), trigger = useRef(null);
   const blocked = !ops.can || Boolean(ops.conflict);
-  const open = (event, service, channelId, returnTrigger) => ops.proceed(() => {
-    trigger.current = returnTrigger || event.currentTarget;
-    const box = trigger.current.getBoundingClientRect();
-    setEditor({service, channelId, side: box.left + box.width / 2 < window.innerWidth / 2 ? 'right' : 'left'});
-    ops.setError('');
-  });
+  const open = (event, service, channelId) => {
+    const returnTrigger = event.currentTarget;
+    ops.proceed(() => {
+      trigger.current = returnTrigger;
+      const box = trigger.current.getBoundingClientRect();
+      setEditor({service, channelId, side: box.left + box.width / 2 < window.innerWidth / 2 ? 'right' : 'left'});
+      ops.setError('');
+    });
+  };
   const close = saved => {
     const finish = () => { setEditor(null); ops.dirty(false); ops.setError(''); requestAnimationFrame(() => trigger.current?.isConnected && trigger.current.focus()); };
     if (saved) finish(); else ops.proceed(finish);
   };
   return <div className="sr-workbench">
-    <div className="sr-table-toolbar">{model.serviceMode === 'provider' && !draftOnly && <Button variant="outline" disabled={blocked} onClick={onAddProvider}><Plus/>关联供应商</Button>}{services.length===1?<Button className="sr-edit-route" variant="outline" disabled={blocked} onClick={event=>open(event,services[0])}>编辑路由</Button>:services.length>1 && <Popover open={servicePicker} onOpenChange={setServicePicker}><PopoverTrigger asChild><Button ref={routeTrigger} className="sr-edit-route" variant="outline" disabled={blocked}>编辑路由</Button></PopoverTrigger><PopoverContent className="sr-service-picker" align="end"><p>选择服务提供方</p>{services.map(service=><Button key={service.id} variant="ghost" onClick={event=>{setServicePicker(false);open(event,service,undefined,routeTrigger.current);}}>{service.name}</Button>)}</PopoverContent></Popover>}</div>
+    {model.serviceMode === 'provider' && !draftOnly && <div className="sr-table-toolbar"><Button variant="outline" disabled={blocked} onClick={onAddProvider}><Plus/>关联供应商</Button></div>}
     <GridTable className={`sr-mapping-table sr-${model.serviceMode}-table`} headings={['服务提供方', <ModelFieldLabel key="call" tooltipClassName="sr-route-tooltip" name="对外调用标识" description="用户调用左侧的模型。平台将请求转发给右侧的上游模型。"/>, '路由策略', '上游渠道', <ModelFieldLabel key="upstream" tooltipClassName="sr-route-tooltip" name="上游模型标识"/>, '操作']} empty={!services.length} emptyMessage="先关联供应商，再配置模型映射与路由。">
       {services.flatMap(service => {
         const route = serviceRoute(state, service.id), current = activeRouteVersion(route), last = lastRouteVersion(route), config = (current || last)?.config, channels = routingChannels(state, service), status = routingStatus(state, service);
@@ -48,7 +50,7 @@ export function RouteWorkbench({state, model, ops, draftOnly = false, serviceId,
           return <Row key={`${service.id}:${row?.supplyId || 'empty'}`} className={index === 0 ? 'sr-group-start' : ''}>
             {index === 0 && <><Cell rowSpan={displayed.length}><div className="sr-provider-name"><strong>{providerName}</strong>{!service.providerId && <small>平台统一服务</small>}{provider?.marketVisible === false && <Status>已下架</Status>}{provider?.callsEnabled === false && <Status>已停服</Status>}</div></Cell>
               <Cell rowSpan={displayed.length}>{service.callId ? <CopyId value={service.callId} label="对外调用标识"/> : <Button variant="link" disabled={blocked} onClick={() => onIdentity?.(service.providerId)}>配置对外调用标识</Button>}</Cell>
-              <Cell rowSpan={displayed.length}><div className="sr-table-strategy"><div><strong>{config ? strategyName(config.strategy) : '尚未配置'}</strong>{config?.strategy === 'weighted' && <small>合计 {rows.reduce((sum, item) => sum + Number(item.weight), 0)}%</small>}{!current && last && <small>已停用</small>}{current && !status.good && <small className="sr-error-text">需调整</small>}</div><ArrowRight aria-hidden="true"/></div></Cell></>}
+              <Cell rowSpan={displayed.length}><Button variant="ghost" className="sr-table-strategy" disabled={blocked} aria-label={`${service.name}：${config ? strategyName(config.strategy) : '尚未配置'}，编辑路由`} onClick={event=>open(event,service)}><span><strong>{config ? strategyName(config.strategy) : '尚未配置'}</strong>{config?.strategy === 'weighted' && <small>合计 {rows.reduce((sum, item) => sum + Number(item.weight), 0)}%</small>}{!current && last && <small>已停用</small>}{current && !status.good && <small className="sr-error-text">需调整</small>}</span><ArrowRight aria-hidden="true"/></Button></Cell></>}
             <Cell>{row ? <div className="sr-table-channel"><div>{service.mode === 'standard' && <strong>{channel?.provider?.name || '供应商缺失'}</strong>}<span>{channel?.channelName || '映射已失效'}</span>{channel && !channel.available && <small className="sr-error-text">{channel.reason}</small>}</div>{config.strategy === 'weighted' && <span className="sr-weight-badge">{row.weight}%</span>}</div> : <span className="sr-muted">待选择渠道</span>}</Cell>
             <Cell>{channel?.upstreamModelId ? <CopyId value={channel.upstreamModelId} label="上游模型标识"/> : <span className="sr-muted">—</span>}</Cell>
             <Cell><Button variant="link" disabled={blocked} aria-label={`编辑${service.name}${channel ? ' · ' + channel.channelName : ''}渠道与路由`} onClick={event => open(event, service, channel?.id)}>编辑</Button></Cell>

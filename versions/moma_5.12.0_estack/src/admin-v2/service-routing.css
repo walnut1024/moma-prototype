@@ -42,7 +42,7 @@
 .admin-v2 .sr-provider-name{display:flex;align-items:flex-start;flex-direction:column;gap:6px}
 .admin-v2 .sr-provider-name strong,.admin-v2 .sr-table-strategy strong{font-size:16px;font-weight:600}
 .admin-v2 .sr-provider-name small,.admin-v2 .sr-table-strategy small,.admin-v2 .sr-table-channel small{display:block;color:#67748b;margin-top:4px;font-size:12px}
-.admin-v2 .sr-table-strategy{display:flex;align-items:center;justify-content:space-between;gap:8px}.admin-v2 .sr-table-strategy svg{width:18px;height:18px;color:#3568f9;flex-shrink:0}
+.admin-v2 .sr-table-strategy{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;height:auto;padding:4px 0;text-align:left;white-space:normal;color:inherit}.admin-v2 .sr-table-strategy svg{width:18px;height:18px;color:#3568f9;flex-shrink:0}
 .admin-v2 .sr-table-channel{display:flex;align-items:center;justify-content:space-between;gap:12px}.admin-v2 .sr-table-channel strong{display:block;font-weight:600;margin-bottom:4px}.admin-v2 .sr-table-channel span{font-size:14px}
 .admin-v2 .sr-weight-badge{color:#315fe8;background:#edf2ff;white-space:nowrap;padding:3px 6px;border-radius:4px;font-variant-numeric:tabular-nums}
 .admin-v2 .sr-muted{color:#67748b}.admin-v2 .sr-error-text,.admin-ui-portal.sr-editor .sr-error-text{color:#bd352f!important}
@@ -91,7 +91,6 @@
 .admin-v2 .sm-service-detail .sr-workbench{display:contents}
 .admin-v2 .sm-service-detail .sr-table-toolbar{grid-column:2;grid-row:1;margin:0 4px 0 0;justify-content:flex-end;gap:12px}
 .admin-v2 .sm-service-detail .sr-table-toolbar>button{height:42px!important;min-height:42px!important;font-size:16px!important;border-radius:10px;padding:0 20px}
-.admin-v2 .sm-service-detail .sr-table-toolbar .sr-edit-route{border-color:#1554f7!important;color:#1554f7!important;font-size:18px!important;background:#fff}
 .admin-v2 .sm-service-detail .sr-workbench>.mo-table-scroll{grid-column:1/-1;grid-row:2;border:0;max-height:none;overflow:auto}
 .admin-v2 .sm-service-detail .mo-table.sr-mapping-table{min-width:1080px;border-color:#dce2ed;border-radius:8px;font-size:19px}
 .admin-v2 .sm-service-detail .mo-table.sr-mapping-table :is(td,th){padding:8px 22px;border-color:#dce2ed;line-height:1.35;font-size:20px;color:#202b40;vertical-align:middle}
@@ -124,9 +123,6 @@
 .admin-v2 .sm-service-detail>.sm-service-tabs>[data-slot=tabs-content]{margin:0}
 .admin-ui-portal.sm-service-actions-menu{display:flex;flex-direction:column;align-items:stretch;gap:8px;width:200px}
 .admin-ui-portal.sm-service-actions-menu>button{justify-content:flex-start}
-.admin-ui-portal.sr-service-picker{width:240px;padding:8px}
-.admin-ui-portal.sr-service-picker p{margin:8px;color:#65718a;font-size:12px}
-.admin-ui-portal.sr-service-picker>button{display:flex;width:100%;justify-content:flex-start}
 @container(max-width:760px){
  .admin-v2 .sm-service-detail .sm-mode-bar{gap:12px;padding:12px 0;min-height:64px}
  .admin-v2 .sm-service-detail .sm-mode-bar h2{font-size:17px!important}
