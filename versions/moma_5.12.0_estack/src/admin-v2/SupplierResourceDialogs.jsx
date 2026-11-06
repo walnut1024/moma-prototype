@@ -3,7 +3,6 @@ import { Button } from '../components/ui/button';
 import { Modal, Notice } from './ModelOperationsUI';
 import { supplierChannelName } from './supplier-resources';
 import ChannelCandidateEditor from './ChannelCandidateEditor';
-import ProcurementVersionEditor from './ProcurementVersionEditor';
 import SupplierChannelFields from './SupplierChannelFields';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import { supplierModelChannelGroups } from './supplier-model-channel-table';
@@ -21,9 +20,8 @@ function SupplierChannelInfo(props) {
   const independent = endpoint.authMode === 'specific' || !endpoint.authMode && Boolean(connectionKeys(endpoint, provider, true).length || endpoint.credentialRef);
   const preserveCurrent = !independent && endpoint.authMode !== 'group';
   const [value, setValue] = useState(() => ({ name: supplierChannelName(provider, endpoint), modelId: association?.modelId || '', upstreamModelId: association?.upstreamModelId || '', baseUrl: endpoint.baseUrl, protocol:endpoint.protocol, independent, keyGroupId: endpoint.authMode === 'group' ? endpoint.keyGroupId : preserveCurrent ? 'current' : providerKeyGroups(provider)[0]?.id || '', scenarios: cataloguePriceDraft({ scenarios: (association?.pricing?.scenarios || []).map(item => ({ ...item, listPrice: cataloguePurchasePrice(item.listPrice, association.pricing.discountFactor, item.purchasePrice), purchasePrice: undefined })) }).scenarios }));
-  const [rawKey, setRawKey] = useState(''), [saving, setSaving] = useState(false), [connection, setConnection] = useState(false), [costChanged, setCostChanged] = useState(false);
+  const [rawKey, setRawKey] = useState(''), [saving, setSaving] = useState(false), [connection, setConnection] = useState(false);
   const [base, setBase] = useState({ expectedUpdatedAt: endpoint.updatedAt, expectedProviderUpdatedAt: provider.updatedAt });
-  const [priceRevision] = useState(association?.procurementRevision || 0);
   const disabled = !ops.can || saving || Boolean(ops.conflict), addressChanged = value.baseUrl.trim() !== endpoint.baseUrl;
   const keyGroupChanged = !value.independent && value.keyGroupId !== 'current' && (endpoint.authMode !== 'group' || endpoint.keyGroupId !== value.keyGroupId);
   const protocolChanged=value.protocol!==endpoint.protocol || !endpoint.interfaceType;
@@ -31,7 +29,7 @@ function SupplierChannelInfo(props) {
   const currentKey = independent && (connectionKeys(endpoint, provider, true).length || endpoint.credentialRef) ? '已配置' : '';
   const models = supplierModelChannelGroups(state, provider).filter(row => row.modelId);
   useEffect(() => { if (!ops.can) setRawKey(''); }, [ops.can]);
-  const set = patch => { setValue(current => ({ ...current, ...patch })); if (patch.scenarios) setCostChanged(true); ops.dirty(true); ops.setError(''); };
+  const set = patch => { setValue(current => ({ ...current, ...patch })); ops.dirty(true); ops.setError(''); };
   const cancel = () => { if (!saving) ops.proceed(() => { setRawKey(''); close(); }); };
   const submit = async () => {
     if (disabled) return;
@@ -40,7 +38,7 @@ function SupplierChannelInfo(props) {
       if (value.independent && !rawKey.trim() && !currentKey) throw Error('请输入独立API密钥');
       const newApiKey = value.independent && rawKey.trim() ? (await providerApiKeysDraft([rawKey])).apiKeys[0] : undefined;
       if (!ops.isCurrent()) throw Error('权限或数据已有变化，请重新核对');
-      if (await ops.run('supplierChannelEdit', { ...base, providerId: provider.id, endpointId: endpoint.id, name: value.name, baseUrl: value.baseUrl, protocol:value.protocol, ...(keyGroupChanged ? { keyGroupId: value.keyGroupId } : {}), ...(newApiKey ? { newApiKey } : {}), ...(association ? { associationId: association.id, modelId: association.modelId, upstreamModelId: value.upstreamModelId } : {}), ...(costChanged ? { scenarios: value.scenarios, expectedPriceRevision: priceRevision } : {}) })) {
+      if (await ops.run('supplierChannelEdit', { ...base, providerId: provider.id, endpointId: endpoint.id, name: value.name, baseUrl: value.baseUrl, protocol:value.protocol, ...(keyGroupChanged ? { keyGroupId: value.keyGroupId } : {}), ...(newApiKey ? { newApiKey } : {}), ...(association ? { associationId: association.id, modelId: association.modelId, upstreamModelId: value.upstreamModelId } : {}) })) {
         setRawKey(''); ops.dirty(false);
         if (connectionChanged) setConnection(true); else close();
       }
@@ -49,14 +47,12 @@ function SupplierChannelInfo(props) {
   };
   if (connection) return <ChannelCandidateEditor {...props} mode="all"/>;
   return <SupplierCreationDialog className="supplier-add-dialog mo-drawer mo-drawer-left supplier-channel-edit-drawer" title="编辑渠道" description={provider.name} cancel={cancel} submit={submit} disabled={disabled} action={saving ? '保存中…' : '保存'}>
-    <Notice>连接、协议及密钥由此渠道关联的 {provider.catalogConnections?.filter(row=>row.endpointId===endpoint.id).length || 1} 个模型共用；上游模型标识和采购成本仅修改当前模型。</Notice>
+    <Notice>连接、协议及密钥由此渠道关联的 {provider.catalogConnections?.filter(row=>row.endpointId===endpoint.id).length || 1} 个模型共用；上游模型标识仅修改当前模型，采购成本在模型成本中维护。</Notice>
     <SupplierChannelFields state={state} provider={provider} models={models} value={value} rawKey={rawKey} disabled={disabled} editing currentKey={currentKey} ops={ops} current={preserveCurrent ? { name: '保留当前密钥配置', ready: connectionCredentialsReady(endpoint, provider) } : null} onSharedKeySaved={next => setBase({ expectedUpdatedAt: next.endpoints.find(row => row.id === endpoint.id).updatedAt, expectedProviderUpdatedAt: next.providers.find(row => row.id === provider.id).updatedAt })} onChange={set} onKeyChange={key => { setRawKey(key); ops.dirty(true); ops.setError(''); }}>
       {!endpoint.interfaceType && <Notice>请确认上游协议和 API 地址，保存后测试连接配置。</Notice>}
     </SupplierChannelFields>
     {connectionChanged && <Notice>协议、地址或密钥变更须测试后应用，验证前继续使用当前配置。</Notice>}
     {endpoint.candidateConfiguration && <Button type="button" variant="outline" disabled={disabled} onClick={() => ops.proceed(() => { setRawKey(''); setConnection(true); })}>继续验证连接配置</Button>}
-    {costChanged && <Notice>采购配置保存为立即生效的新版本，历史配置和客户售价保留。</Notice>}
     {ops.error && <Notice error>{ops.error}</Notice>}
   </SupplierCreationDialog>;
 }
-export function SupplierAssociationDialog(props) { return <ProcurementVersionEditor {...props}/>; }

@@ -34,7 +34,7 @@ export default function ProcurementVersionEditor({ state, provider, association,
   return <Modal drawer wide title="采购价版本" description={`${provider.name} · ${supplierChannelName(provider, association.endpoint)} · ${association.upstreamModelId}`} onClose={cancel} footer={<Button variant="outline" onClick={cancel}>关闭</Button>}>
     <div className="supplier-change-dialog">
       <dl className="supplier-test-facts"><div><dt>报价修订</dt><dd>{revision}</dd></div><div><dt>当前采购价</dt><dd>{quote?.scenarios?.length ? `${quote.scenarios.length} 个计费项${active ? ` · 版本 ${active.version}` : ''}` : '待配置'}</dd></div></dl>
-      {active === null && <Notice error>当前没有有效采购价。到期或缺价的映射不能承接新的正式流量，已发起请求保留原采购版本。</Notice>}
+      {active === null && <Notice error>当前没有有效采购价，成本保持待核算；经营上架须补齐成本。技术验证与内部启用可继续，已发起请求保留原采购版本。</Notice>}
       <form className="supplier-change-form" noValidate onSubmit={save}>
         <h3>新建采购价</h3>
         <div className="supplier-change-time-fields"><Field label="生效时间 *"><Input type="datetime-local" step="0.001" aria-label="采购价生效时间" value={effectiveAt} disabled={!ops.can} onChange={event => changed(setEffectiveAt)(event.target.value)}/></Field><Field label="到期时间（选填）"><Input type="datetime-local" step="0.001" aria-label="采购价到期时间" value={expiresAt} disabled={!ops.can} onChange={event => changed(setExpiresAt)(event.target.value)}/></Field></div>

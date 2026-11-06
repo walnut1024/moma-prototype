@@ -17,7 +17,7 @@ export function adminBreadcrumbs(active, params, names = {}) {
   const view = params.get('view');
   if (active === 'providers') {
     const workspace = href(active, { view: null, tab: params.get('tab') === 'api-keys' ? 'api-keys' : 'catalogue', endpoint: null, q: null, page: null, listQ: null, listPage: null });
-    add('模型接入', view ? workspace : null);
+    add('渠道接入', view ? workspace : null);
     if (view === 'new') add('添加供应商');
     else if (view === 'profile') add('编辑供应商资料');
   } else if (active === 'listing' && view === 'onboarding') {
@@ -30,9 +30,13 @@ export function adminBreadcrumbs(active, params, names = {}) {
     else if (view === 'add') add('添加模型');
     else if (view === 'onboarding') add('接入模型');
     else if (view === 'supplier-batch') add('批量配置与上架');
+  } else if (['model-costs','model-prices'].includes(active)) {
+    const detail=params.has('association') || params.has('service');
+    add(page.label,detail?href(active,{},['association','provider','service','edit','tab']):null);
+    if(detail)add(active==='model-costs'?'成本详情':'服务售价详情');
   } else if (active === 'tariff-dictionary') {
     const tab = params.get('tab');
-    add('模型资料', '#/admin-2/model-templates');
+    add('模型成本', '#/admin-2/model-costs');
     add(TARIFF_KINDS[Object.hasOwn(TARIFF_KINDS, tab) ? tab : 'scenario']);
   } else if (active === 'deployments') {
     add('模型部署', params.has('deployment') || view === 'create' ? href(active, {}, ['deployment', 'view', 'tab']) : null);

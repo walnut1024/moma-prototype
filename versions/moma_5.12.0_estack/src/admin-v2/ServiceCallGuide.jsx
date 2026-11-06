@@ -1,6 +1,3 @@
-import { activeModelSalePrice, activeProviderPrice } from './service-workspace';
-import { priceItems } from './model-management';
-import { itemMoney } from './SupplyPriceEditor';
 import ModelFieldLabel from './ModelFieldLabel';
 import ServicePlatformTrial from './ServicePlatformTrial';
 import {useRef,useState} from 'react';
@@ -18,14 +15,14 @@ export default function ServiceCallGuide({state,model,ops}) {
   const [editing,setEditing]=useState(null),[codes,setCodes]=useState({}),[base,setBase]=useState('');
   const editor=useRef(null);
   const service=services.find(item=>item.id===providerId) || services[0], configuration=serviceConfiguration(state,model);
-  if (!model.serviceMode || !service?.callId || configuration.setupIssues.length) return <div className="sm-empty sm-first-config"><h2>{!model.serviceMode?'调用指南尚未生成':'调用指南待完善'}</h2><p>完成服务模式、渠道、路由和开放范围配置后，生成对应模型服务的调用示例。</p><ServicePlatformTrial state={state} model={model} ops={ops} providerId={service?.providerId}/><Button variant="outline" onClick={()=>ops.go(serviceConfigurationTarget(model,configuration.setupIssues[0] || {tab:'serviceMode'}))}>前往完善配置</Button></div>;
+  if (!model.serviceMode || !service?.callId || configuration.setupIssues.length) return <div className="sm-empty sm-first-config"><h2>{!model.serviceMode?'调用指南尚未生成':'调用指南待完善'}</h2><p>完成服务模式、渠道、路由和开放范围配置后，生成对应模型服务的调用示例。</p><ServicePlatformTrial state={state} model={model} ops={ops} providerId={service?.providerId}/><Button variant="outline" onClick={()=>(()=>{const {page,...target}=serviceConfigurationTarget(model,configuration.setupIssues[0] || {tab:'serviceMode'});ops.go({...target,returnTo:location.hash},{base:page,reset:true});})()}>前往完善配置</Button></div>;
   const request=serviceGuideRequest(editing?{...model,apiGuides:{...model.apiGuides,[service.providerId || 'standard']:{codes}}}:model,service.callId,service.providerId);
   return <div className="sm-model-form sm-guide"><div className="sm-section-bar"><ServicePlatformTrial state={state} model={model} ops={ops} providerId={service.providerId}/></div>
     {model.serviceMode==='provider' && <div className="sm-section-bar"> <Field label="供应商"><Choice label="调用指南供应商" value={service.id} options={services.map(item=>[item.id,item.name])} disabled={Boolean(editing)} onChange={id=>{setProviderId(id);ops.go({panel:'guide',routeProvider:services.find(item=>item.id===id)?.providerId || null},{preserveScroll:true});}}/></Field></div>}
     {!model.callsEnabled && <Notice>当前技术服务未启用，完成管理端验证后可启用。</Notice>}
     {ops.error && <Notice error>{ops.error}</Notice>}
     <dl className="sm-guide-info"><div><dt><ModelFieldLabel name="对外调用标识"/></dt><dd><CopyId value={service.callId} label="对外调用标识"/></dd></div><div><dt>接口路径</dt><dd><code>POST /v1{request.path}</code></dd></div><div><dt>鉴权</dt><dd>Bearer Token · 使用已授权当前模型的 API 密钥</dd></div></dl>
-    <section className="sm-guide-commercial"><h3>生效售价</h3><ul>{priceItems(service.providerId?activeProviderPrice(state,model.id,service.providerId):activeModelSalePrice(state,model.id),model).map((row,i)=><li key={i}>{row.name}{row.condition?'（'+row.condition+'）':''}：{itemMoney(row)} / {row.unit}</li>)}</ul><p>开放范围：{model.openScope==='all'?'全部有效客户':state.tenants.filter(row=>model.tenantIds?.includes(row.id)).map(row=>row.name).join('、') || '尚未配置'}</p></section>
+    <section className="sm-guide-commercial"><p>开放范围：{model.openScope==='all'?'全部有效客户':state.tenants.filter(row=>model.tenantIds?.includes(row.id)).map(row=>row.name).join('、') || '尚未配置'}</p><Button variant="link" onClick={()=>ops.go({service:service.id,returnTo:location.hash},{base:'model-prices',reset:true})}>查看服务售价</Button></section>
     <p className="mo-muted">将 MOMA_BASE_URL 替换为平台提供的 API 地址（包含 /v1），MOMA_API_KEY 替换为已授权密钥。</p>
     {['cURL','Python','Java','Go'].map(language=>{const code=serviceGuideCode(request,language);return <section className="sm-guide-language" key={language} aria-label={`${language} 调用示例`}>
     <div className="sm-guide-toolbar"><h3>{language}</h3><div className="sm-guide-actions">{editing!==language && <Button disabled={!ops.can || Boolean(editing)} onClick={()=>{setCodes(Object.fromEntries(['cURL','Python','Java','Go'].map(lang=>[lang,serviceGuideCode(request,lang)])));setBase(JSON.stringify([model.updatedAt,model.apiGuides || {}]));setEditing(language);ops.setError('');}}>编辑 {language}</Button>}<Button variant="outline" onClick={async()=>{try{await navigator.clipboard.writeText(code);toast.success('调用示例已复制');}catch{toast.error('复制失败，请选择代码复制');}}}><Copy/>复制代码</Button></div></div>

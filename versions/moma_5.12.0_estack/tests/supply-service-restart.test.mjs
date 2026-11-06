@@ -53,11 +53,13 @@ test('starting rechecks verification, current connection and supplier ownership 
   assert.throws(() => op(original.state, 'startSupply', 'model-1', original.supplyId), /不存在/);
 });
 
-test('starting retains permissions and failed-persistence protection', () => {
+test('starting retains permissions and requires current platform evidence before persistence', () => {
   const { state, modelId, supplyId } = stopped(), before = structuredClone(state);
   const action = { type: 'modelOperations', operation: 'startSupply', modelId, data: { id: supplyId } };
   assert.throws(() => commitAdminState({ ...state, currentRole: '运维人员' }, action), /无权/);
-  assert.throws(() => persistModelAction(state, action, { getItem: () => JSON.stringify(state), setItem: () => { throw Error('storage failed'); } }), /storage failed/);
+  assert.throws(() => persistModelAction(state, action, { getItem: () => JSON.stringify(state), setItem: () => { throw Error('unexpected write'); } }), /平台试调用|服务模式|路由/);
+  const stop={type:'modelOperations',operation:'disableService',modelId,data:{expectedUpdatedAt:state.models.find(row=>row.id===modelId).updatedAt}};
+  assert.throws(() => persistModelAction(state, stop, { getItem: () => JSON.stringify(state), setItem: () => { throw Error('storage failed'); } }), /storage failed/);
   assert.deepEqual(state, before);
 });
 

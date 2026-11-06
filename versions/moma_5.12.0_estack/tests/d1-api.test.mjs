@@ -251,8 +251,8 @@ test('split supplier registration commits batch models and channel-owned keys th
   const provider = fresh.providers.find(row => row.id === providerId), model = provider.catalogModels.find(row => row.libraryId === master.id);
   assert.deepEqual(fresh.endpoints, state.endpoints); assert.deepEqual(fresh.models, state.models); assert.deepEqual(fresh.modelTemplates, state.modelTemplates);
   const secret = 'contract-private-key-' + randomBytes(12).toString('hex'), apiKey = (await providerApiKeysDraft([secret])).apiKeys[0];
-  const values = { providerId, modelId: model.modelId, name: 'HTTP独立渠道', upstreamModelId: 'vendor/image', baseUrl: 'https://contract.example.invalid/v1/images/generations', authMode: 'independent', apiKey, scenarios: [{ name: '图像生成', listPrice: '0', unit: '张', currency: 'CNY' }] };
-  for (const scenarios of [undefined, [], [{ name: '图像生成', listPrice: '', unit: '张', currency: 'CNY' }], [{ name: '图像生成', listPrice: '1', unit: '', currency: 'CNY' }]]) {
+  const values = { providerId, modelId: model.modelId, name: 'HTTP独立渠道', upstreamModelId: 'vendor/image', baseUrl: 'https://contract.example.invalid/v1/images/generations', authMode: 'independent', apiKey, scenarios: [] };
+  for (const scenarios of [null, {}, [{ name: '图像生成', listPrice: '', unit: '张', currency: 'CNY' }], [{ name: '图像生成', listPrice: '1', unit: '', currency: 'CNY' }]]) {
     const rejected = await command(fresh, 'supplierChannelRegister', { ...values, scenarios });
     assert.equal(rejected.status, 422, JSON.stringify(rejected.data));
   }
@@ -264,6 +264,7 @@ test('split supplier registration commits batch models and channel-owned keys th
   state = (await request('/model-operations')).data;
   const endpoint = state.endpoints.find(row => !fresh.endpoints.some(old => old.id === row.id)), current = state.providers.find(row => row.id === providerId);
   assert.equal(connectionKeys(endpoint, current)[0].fingerprint, apiKey.fingerprint); assert.equal(endpoint.apiKeys[0].scope, 'channel');
+  assert.deepEqual(current.catalogConnections.find(row=>row.endpointId===endpoint.id).pricing.scenarios,[]);
   assert.deepEqual(current.apiKeys, provider.apiKeys); assert.ok(providerKeyGroups(current).every(group => !group.keyIds.includes(endpoint.apiKeyId)));
   assert.ok(!JSON.stringify(state).includes(secret)); assert.deepEqual(state.modelSalePrices, fresh.modelSalePrices);
   assert.equal((await command(fresh, 'supplierChannelRegister', values)).status, 409);

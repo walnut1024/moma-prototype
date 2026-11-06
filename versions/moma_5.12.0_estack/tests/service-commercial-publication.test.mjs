@@ -69,7 +69,7 @@ async function fixture(t,mode='standard') {
   storage.setItem(STORAGE_KEY,JSON.stringify(state));
   assert.equal(publicationChecks(state,model()).find(row=>row.tab==='platform').passed,true);
   assert.throws(()=>persistModelAction(state,listing,storage),/平台试调用/);
-  assert.throws(()=>persistAdminAction(state,{type:'update',collection:'models',id:modelId,changes:{listingStatus:'已上架'}},storage),/平台试调用/);
+  assert.throws(()=>persistAdminAction(state,{type:'update',collection:'models',id:modelId,changes:{listingStatus:'已上架'}},storage),/服务管理操作/);
   state=commitAdminState(state,{type:'modelOperation',operation:'scope',modelId,data:{openScope:'all',tenantIds:[]}});storage.setItem(STORAGE_KEY,JSON.stringify(state));
   const plan=platformCandidatePlan(state,model(),{serviceId:service.id,tenantIds:['tenant-gov'],supplyIds:[supply.id]});
   assert.equal(plan.candidate.bindings[0].model.id,material.id);assert.equal(plan.candidate.bindings[0].model.upstreamModelId,'vendor/unmodified-upstream');
@@ -199,4 +199,19 @@ test('technical stop, sales stop and purpose changes remain independent and reje
   assert.throws(()=>env.save('servicePurpose',{purpose:'commercial',confirmed:true,expectedUpdatedAt:'stale'}),/核对/);
   env.save('enableService',{expectedUpdatedAt:env.model().updatedAt});assert.equal(env.model().callsEnabled,true);assert.equal(env.model().listingStatus,'已下架');
   assert.throws(()=>env.save('servicePurpose',{purpose:'commercial',confirmed:true,expectedUpdatedAt:env.model().updatedAt}),/停用/);
+});
+
+test('management sales settings do not expand call access and selling cannot enable a stopped service',async t=>{
+  const env=await fixture(t),scope=structuredClone({openScope:env.model().openScope,tenantIds:env.model().tenantIds});
+  const proof=structuredClone(env.model().platformPublications);
+  env.save('commercialPublish',{kind:'price',expectedBase:commercialTaskBase(env.state,env.model(),'price'),value:prices('3.25'),confirmed:true});
+  const storedPrices=structuredClone(env.state.modelSalePrices);
+  assert.deepEqual(env.model().platformPublications,proof);
+  env.save('salesSettings',{scope:{openScope:'selected',tenantIds:['tenant-gov']},visible:false,confirmed:true,expectedUpdatedAt:env.model().updatedAt});
+  assert.deepEqual(env.model().salesScope,{openScope:'selected',tenantIds:['tenant-gov']});assert.deepEqual({openScope:env.model().openScope,tenantIds:env.model().tenantIds},scope);
+  env.save('stopSales',{expectedUpdatedAt:env.model().updatedAt});env.save('disableService',{expectedUpdatedAt:env.model().updatedAt});
+  assert.throws(()=>env.save('startSales',{confirmed:true,expectedUpdatedAt:env.model().updatedAt}),/技术服务已启用/);
+  assert.equal(env.model().callsEnabled,false);assert.equal(env.model().listingStatus,'已下架');
+  env.save('enableService',{expectedUpdatedAt:env.model().updatedAt});env.save('startSales',{confirmed:true,expectedUpdatedAt:env.model().updatedAt});
+  assert.equal(env.model().callsEnabled,true);assert.equal(env.model().listingStatus,'已上架');assert.deepEqual(env.state.modelSalePrices,storedPrices);
 });

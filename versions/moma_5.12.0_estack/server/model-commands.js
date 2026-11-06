@@ -3,6 +3,7 @@ import { createMockEngine } from '../src/admin-v2/mock-onboarding-core.js';
 import { prepareMockOnboardingSync } from '../src/admin-v2/mock-onboarding-sync.js';
 import { assertNewMockPublications } from '../src/admin-v2/mock-publication-gate.js';
 import { modelWorkspacePayload, loadModelWorkspace, loadSimulationWorkspace, modelChanges, simulatorChanges } from './model-repository.js';
+import { storedModel, domainModel } from '../src/mock/model-fields.js';
 
 const collections=['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','modelVersions','validations','modelOnboardings','serviceRoutes','tariffDictionary','audits'];
 const canonical=value=>value && typeof value==='object'?Array.isArray(value)?value.map(canonical):Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])])):value;
@@ -14,7 +15,9 @@ const validId=value=>typeof value==='string' && /^[A-Za-z0-9:_.-]{1,200}$/.test(
 function patches(before,after){
   return Object.fromEntries(collections.flatMap(key=>{
     const a=new Map((before[key] || []).map(r=>[r.id,JSON.stringify(r)])),rows=after[key] || [],ids=new Set(rows.map(r=>r.id));
-    const upsert=rows.filter(r=>a.get(r.id)!==JSON.stringify(r)),remove=[...a.keys()].filter(id=>!ids.has(id));
+    const changed=rows.filter(r=>a.get(r.id)!==JSON.stringify(r)),remove=[...a.keys()].filter(id=>!ids.has(id));
+    // Revision signatures must see the same field order in command patches and D1 reads.
+    const upsert=['models','modelTemplates'].includes(key)?changed.map(row=>domainModel(storedModel(row,key==='models'),key==='models')):changed;
     return upsert.length || remove.length?[[key,{upsert:key==='audits'?upsert.map(row=>Object.fromEntries(Object.entries(row).filter(([field])=>!['before','after'].includes(field)))):upsert,remove}]]:[];
   }));
 }

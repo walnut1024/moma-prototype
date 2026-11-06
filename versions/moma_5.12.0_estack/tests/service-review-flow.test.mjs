@@ -21,7 +21,7 @@ test('audio technical readiness excludes price while sales keeps its own configu
   assert.equal(issues.filter(issue=>issue.tab!=='platform').length,1);assert.ok(issues.some(issue=>issue.tab==='platform'));
   assert.equal(issues.some(issue=>issue.tab==='pricing'),false);
   const price=publicationChecks(state,audio).find(issue=>issue.tab==='pricing'),mapping=issues.find(issue=>issue.tab==='routing');
-  assert.equal(serviceConfigurationTarget(audio,price).providerEdit,price.providerId);
+  assert.equal(serviceConfigurationTarget(audio,price).service,`provider:${audio.id}:${price.providerId}`);assert.equal(serviceConfigurationTarget(audio,price).page,'model-prices');
   const target=serviceConfigurationTarget(audio,mapping);
   assert.equal(target.panel,'routing');assert.equal(target.mapping,`provider:${audio.id}:${mapping.providerId}`);assert.equal(target.providerAssociate,null);
 });

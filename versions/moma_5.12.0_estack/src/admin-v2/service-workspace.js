@@ -33,18 +33,18 @@ export function serviceConfiguration(state,model) {
 }
 
 export function serviceConfigurationTarget(model,check) {
-  const base={panel:'pricing',providerEdit:null,providerAdd:null,providerChannels:null,providerAssociate:null,routeProvider:null,service:null,mapping:null};
+  const base={page:'listing',model:model.id,panel:'routing',providerEdit:null,providerAdd:null,providerChannels:null,providerAssociate:null,routeProvider:null,service:null,mapping:null};
   if (check.tab==='serviceMode') return {...base,panel:'routing'};
-  if (check.tab==='publication') return {...base,panel:'pricing',scopeEdit:'1'};
+  if (check.tab==='publication') return {...base,panel:'access',scopeEdit:'1'};
   if (check.tab==='pricing' && model.serviceMode==='provider' && !providerServices(model).find(row=>row.providerId===check.providerId)?.callId) return {...base,panel:'routing',identityProvider:check.providerId};
   if (check.tab==='platform') return {...base,panel:'guide',routeProvider:check.providerId || null};
   if (check.tab==='supplies' && model.serviceMode==='provider') return {...base,panel:'routing',providerAdd:'1'};
-  if (check.tab==='basic') return {...base,panel:'editMetadata'};
+  if (check.tab==='basic') return {page:'model-templates',view:'template',template:model.templateId || model.id,materialMode:'edit',returnModel:model.id};
   if (check.tab==='routing') {
     const id=check.providerId?providerServiceId(model.id,check.providerId):'standard:'+model.id;
     return {...base,panel:'routing',routeProvider:check.providerId || null,[check.mapping?'mapping':'service']:id};
   }
-  return {...base,providerEdit:check.providerId || null};
+  return {page:'model-prices',service:model.serviceMode==='provider'?providerServiceId(model.id,check.providerId):'standard:'+model.id,tab:'pricing'};
 }
 export function serviceSupplyRows(state, model) {
   if (!['standard','provider'].includes(model.serviceMode)) return [];
@@ -67,7 +67,8 @@ export function serviceChannelCosts(channel, at = Date.now()) {
   const version = activeChannelProcurement(channel, at), pricing = version === undefined ? channel.pricing : version?.pricing;
   return (pricing?.scenarios || []).map(({ listPrice, purchasePrice, ...item }) => ({ ...item, amount: cataloguePurchasePrice(listPrice, pricing.discountFactor, purchasePrice) }));
 }
-export const activeModelSalePrice = (state, modelId, at = Date.now()) => state.modelSalePrices.filter(price => price.modelId === modelId && price.scope === 'model' && price.status === '已发布' && (price.serviceModeRevision || 0)===(state.models.find(model=>model.id===modelId)?.serviceModeRevision || 0) && Date.parse(price.effectiveAt) <= at).sort((a,b) => Date.parse(b.effectiveAt)-Date.parse(a.effectiveAt) || b.version-a.version)[0];
+const currentSale = (rows,at) => { const price=rows[0];return price && (!price.expiresAt || Date.parse(price.expiresAt)>at) ? price : undefined; };
+export const activeModelSalePrice = (state, modelId, at = Date.now()) => currentSale( state.modelSalePrices.filter(price => price.modelId === modelId && price.scope === 'model' && price.status === '已发布' && (price.serviceModeRevision || 0)===(state.models.find(model=>model.id===modelId)?.serviceModeRevision || 0) && Date.parse(price.effectiveAt) <= at).sort((a,b) => Date.parse(b.effectiveAt)-Date.parse(a.effectiveAt) || b.version-a.version),at);
 export const modelSaleRevision = (state, modelId) => state.modelSalePrices.filter(price => price.modelId === modelId && price.scope === 'model').sort((a,b) => b.version-a.version)[0]?.id || '';
 export function unifiedBillingDraft(state, model) {
   const sale = activeModelSalePrice(state, model.id);
@@ -77,7 +78,7 @@ export function unifiedBillingDraft(state, model) {
 
 export const providerServices = model => (model.serviceProviders || []).filter(item=>item.status !== '已移除');
 export const providerServiceId = (modelId, providerId) => `provider:${modelId}:${providerId}`;
-export const activeProviderPrice = (state, modelId, providerId, at = Date.now()) => state.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && price.providerId===providerId && price.status==='已发布' && (price.serviceModeRevision || 0)===(state.models.find(model=>model.id===modelId)?.serviceModeRevision || 0) && Date.parse(price.effectiveAt)<=at).sort((a,b)=>b.version-a.version)[0];
+export const activeProviderPrice = (state, modelId, providerId, at = Date.now()) => currentSale( state.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && price.providerId===providerId && price.status==='已发布' && (price.serviceModeRevision || 0)===(state.models.find(model=>model.id===modelId)?.serviceModeRevision || 0) && Date.parse(price.effectiveAt)<=at).sort((a,b)=>Date.parse(b.effectiveAt)-Date.parse(a.effectiveAt) || b.version-a.version),at);
 export const providerPriceRevision = (state, modelId, providerId) => state.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && price.providerId===providerId).sort((a,b)=>b.version-a.version)[0]?.id || '';
 export function serviceBindingInUse(state, modelId, supplies, serviceId) {
   const ids=new Set(supplies.flatMap(item=>[item.id,item.channelId].filter(Boolean)));

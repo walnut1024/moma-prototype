@@ -34,10 +34,9 @@ export default function SupplierAddDialog({ state, provider: fixedProvider, mode
         supplierModelRegistration(state, provider, libraryIds);
         operation = 'supplierModelsRegister'; data = { providerId, libraryIds };
       } else {
-        if (!value.scenarios.length) throw Error('请至少添加一项采购成本，并填写计费项、采购价和单位');
         operation = 'supplierChannelRegister';
-        data = { providerId, modelId: selected, name: value.name, upstreamModelId: value.upstreamModelId, baseUrl: value.baseUrl, protocol: value.protocol, scenarios: value.scenarios, authMode: value.independent ? 'independent' : 'group', keyGroupId: value.keyGroupId };
-        if(reused)data={providerId,modelId:selected,upstreamModelId:value.upstreamModelId,scenarios:value.scenarios,endpointId:reused.id,expectedEndpointUpdatedAt:reused.updatedAt};
+        data = { providerId, modelId: selected, name: value.name, upstreamModelId: value.upstreamModelId, baseUrl: value.baseUrl, protocol: value.protocol, scenarios: [], authMode: value.independent ? 'independent' : 'group', keyGroupId: value.keyGroupId };
+        if(reused)data={providerId,modelId:selected,upstreamModelId:value.upstreamModelId,scenarios:[],endpointId:reused.id,expectedEndpointUpdatedAt:reused.updatedAt};
         else if (value.independent) data.apiKey = (await providerApiKeysDraft([rawKey])).apiKeys[0];
       }
       if (!ops.isCurrent()) throw Error('权限或数据已有变化，请重新核对');

@@ -43,20 +43,8 @@ function ProviderContent({state,model,ops}) {
 export function ServiceMappingsContent({state,model,ops,act}) {
   return <div className="sm-routing-content"><ServiceModeBar model={model} ops={ops} act={act}/>{model.serviceMode==='provider'?<ProviderContent key={model.id} state={state} model={model} ops={ops}/>:<StandardContent state={state} model={model} ops={ops}/>}</div>;
 }
-export function ServicePricingContent({state,model,ops}) {
-  const [editing,setEditing]=useState(null),[scopeSide,setScopeSide]=useState('left'),scopeTrigger=useRef(null);
-  const selected=editing || ops.params.get('providerEdit');
-  const close=()=>ops.proceed(()=>{setEditing(null);ops.dirty(false);ops.setError('');if(ops.params.has('providerEdit'))ops.go({providerEdit:null},{saved:true,preserveScroll:true});});
-  if(!model.serviceMode)return <div className="sm-empty"><p>先选择服务模式，再配置平台售价。</p><Button variant="outline" onClick={()=>ops.go({panel:'routing'})}>前往路由及映射</Button></div>;
-  const services=model.serviceMode==='standard'?[{providerId:'',callId:model.modelId}]:providerServices(model);
-  const scopeOpen=ops.params.has('scopeEdit');
-  const closeScope=()=>ops.proceed(()=>{ops.go({scopeEdit:null},{saved:true,preserveScroll:true});requestAnimationFrame(()=>scopeTrigger.current?.focus());});
-  return <>{services.length?services.map(service=>{
-    const id=service.providerId || 'standard', active=selected===id;
-    return <CommercialDialog key={`${id}:${active}`} state={state} model={model} providerId={service.providerId} ops={ops} readOnly={!active} onEdit={()=>ops.proceed(()=>{if(!service.callId){ops.go({panel:'routing',identityProvider:service.providerId || null,providerEdit:null});return;}setEditing(id);if(ops.params.has('providerEdit'))ops.go({providerEdit:null},{saved:true,preserveScroll:true});})} close={close}/>;
-   } ):<div className="sm-empty">尚未关联供应商，请到路由及映射关联。</div>}
-    <section className="sm-inline-price sm-scope-summary" aria-label="开放范围"><div className="sm-section-bar"><h3>开放范围</h3><Button ref={scopeTrigger} className="sm-push" variant="outline" disabled={!ops.can} onClick={event=>ops.proceed(()=>{setScopeSide(materialDrawerSide(event.currentTarget.getBoundingClientRect(),window.innerWidth));ops.go({scopeEdit:'1'},{preserveScroll:true});})}>编辑开放范围</Button></div><p>{model.openScope==='all'?'全部有效客户':model.openScope==='selected'?(model.tenantIds || []).map(id=>state.tenants.find(row=>row.id===id)?.name || id).join('、') || '尚未选择客户':'尚未配置'}</p><p className="mo-muted">客户需另行订购并授权 API 密钥；移出范围后不能发起新调用。</p>{model.openScope==='selected' && model.tenantIds?.some(id=>!scopeTenants(state).some(row=>row.id===id)) && <Notice error>范围内有已停用或删除的客户，请编辑后重新发布。</Notice>}</section>
-    {scopeOpen && <CommercialDialog state={state} model={model} ops={ops} kind="scope" drawerSide={scopeSide} close={closeScope}/>}
-  </>;
+export function ServiceAccessContent({state,model,ops}) {
+  const [side,setSide]=useState('left'),trigger=useRef(null);
+  return <div className="sm-model-form"><section className="sm-inline-price sm-scope-summary" aria-label="调用授权"><div className="sm-section-bar"><h3>客户开放范围</h3><Button ref={trigger} className="sm-push" variant="outline" disabled={!ops.can} onClick={event=>ops.proceed(()=>{setSide(materialDrawerSide(event.currentTarget.getBoundingClientRect(),window.innerWidth));ops.go({scopeEdit:'1'},{preserveScroll:true});})}>编辑开放范围</Button></div><p>{model.openScope==='all'?'全部有效客户':(model.tenantIds || []).map(id=>state.tenants.find(row=>row.id===id)?.name || id).join('、') || '尚未配置'}</p><p className="mo-muted">当前模型的统一服务或全部供应商服务共用此客户范围。</p>{model.openScope==='selected' && model.tenantIds?.some(id=>!scopeTenants(state).some(row=>row.id===id)) && <Notice error>范围内有已停用或删除的客户，请重新核对。</Notice>}</section>{ops.params.has('scopeEdit') && <CommercialDialog state={state} model={model} ops={ops} kind="scope" drawerSide={side} close={()=>ops.proceed(()=>{ops.go({scopeEdit:null},{saved:true,preserveScroll:true});requestAnimationFrame(()=>trigger.current?.focus());})}/>}</div>;
 }
 export { default as ServiceCallGuide } from './ServiceCallGuide';

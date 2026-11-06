@@ -43,7 +43,13 @@ test('same-name distinct canonical identities are not conflated by supplier regi
 });
 test('channel registration requires an existing supplier model, explicit identifier, address and usable shared credential', () => {
   const state = initial(), before = structuredClone(state);
-  for (const scenarios of [undefined, null, [], {}]) assert.throws(() => run(state, 'supplierChannelRegister', channel(state, { scenarios })), /至少添加一项采购成本/);
+  for (const scenarios of [null, {}]) assert.throws(() => run(state, 'supplierChannelRegister', channel(state, { scenarios })), /采购成本须为计费项列表/);
+  for (const scenarios of [undefined, []]) {
+    const next=run(state,'supplierChannelRegister',channel(state,{scenarios}));
+    const endpoint=next.endpoints.find(row=>!state.endpoints.some(old=>old.id===row.id));
+    assert.deepEqual(owner(next).catalogConnections.find(row=>row.endpointId===endpoint.id).pricing.scenarios,[]);
+    assert.equal(endpoint.status,'草稿');assert.deepEqual(next.modelSalePrices,state.modelSalePrices);
+  }
   for (const scenarios of [[{ name: '', listPrice: '1', unit: '百万 Token', currency: 'CNY' }], [{ name: '输入 Token', listPrice: '1', unit: '', currency: 'CNY' }], [{ name: '输入 Token', listPrice: '-1', unit: '百万 Token', currency: 'CNY' }]]) assert.throws(() => run(state, 'supplierChannelRegister', channel(state, { scenarios })));
   for (const patch of [{ modelId: 'foreign' }, { upstreamModelId: '' }, { upstreamModelId: 'white space' }, { name: '' }, { baseUrl: '' }, { baseUrl: 'https://bad.invalid/v1' }, { keyGroupId: 'foreign' }, { scenarios: [{ name: '输入 Token', listPrice: '', unit: '百万 Token', currency: 'CNY' }] }]) assert.throws(() => run(state, 'supplierChannelRegister', channel(state, patch)));
   const noKeys = structuredClone(state); owner(noKeys).apiKeys = [];

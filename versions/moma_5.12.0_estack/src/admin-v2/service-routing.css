@@ -143,3 +143,4 @@
 .admin-v2 .sm-service-detail .sr-workbench>.mo-table-scroll>[data-slot=table-container]{overflow:visible}
 .admin-ui-portal.sr-route-tooltip[data-slot=tooltip-content]{max-width:340px;padding:12px 16px!important;border:1px solid #c9d2e2;border-radius:8px;background:#fff!important;color:#202b40!important;font-size:18px!important;line-height:1.45;box-shadow:0 4px 12px #24324a26}
 .admin-ui-portal.sr-route-tooltip>svg{background:#fff;fill:#fff}
+.admin-v2 .sm-service-detail :is(.sr-provider-name,.sr-table-strategy) strong{white-space:nowrap}

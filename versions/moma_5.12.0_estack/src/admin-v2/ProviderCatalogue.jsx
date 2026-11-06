@@ -16,7 +16,7 @@ import { displayedCatalogueIds } from './moma-provider';
 import { catalogueChannels, channelAddresses, channelFingerprint, channelLinkedModels } from './provider-channels';
 import { catalogueMoneyDisplay, cataloguePurchasePrice } from './provider-catalogue-pricing';
 import { supplierChannelResources, supplierChannelCode, supplierChannelName, supplierCredentialIssues } from './supplier-resources';
-import { SupplierAssociationDialog, SupplierChannelDialog } from './SupplierResourceDialogs';
+import { SupplierChannelDialog } from './SupplierResourceDialogs';
 import SupplierChannelTest from './SupplierChannelTest';
 import SupplierChannelConfiguration from './SupplierChannelConfiguration';
 import SupplierChannelDetails from './SupplierChannelDetails';
@@ -26,7 +26,7 @@ import { channelSelectionGroups, channelSelectionServiceImpact } from './channel
 import { catalogueMappingRows, channelRowsPage, channelSelectionId, channelStatus, filterChannelRows, selectChannelRows } from './channel-selection';
 
 const pending = <span className="supplier-key-pending">待配置</span>;
-const channelActions = [['price', '配置采购价', BadgeDollarSign], ['models', '添加关联模型', Plus], ['discover', '检查模型变更', FileText], ['address', 'API 地址', Link], ['credentials', 'API 密钥', KeyRound], ['info', '渠道信息', Pencil], ['copyModel', '复制上游模型 ID', Copy], ['copyAddress', '复制请求地址', Copy], ['linkModel', '关联模型资料', Link], ['unlink', '删除模型关联', Trash2]];
+const channelActions = [['price', '维护模型成本', BadgeDollarSign], ['models', '添加关联模型', Plus], ['discover', '检查模型变更', FileText], ['address', 'API 地址', Link], ['credentials', 'API 密钥', KeyRound], ['info', '渠道信息', Pencil], ['copyModel', '复制上游模型 ID', Copy], ['copyAddress', '复制请求地址', Copy], ['linkModel', '关联模型资料', Link], ['unlink', '删除模型关联', Trash2]];
 const actionLabels = { test: '测试', enable: '启用', disable: '停用' };
 function ChannelAddress({ value }) {
   const clipped = value.length > 42, origin = value.match(/^https?:\/\/[^/]+/)?.[0];
@@ -42,8 +42,8 @@ function ChannelActions({ disabled, id, endpointId, onAction }) {
 }
 
 export default function ProviderCatalogue({ state, provider, ops, entries, modelIds, endpointId, associationId }) {
-  const [query, setQuery] = useState(''), [editing, setEditing] = useState(null), [libraryId, setLibraryId] = useState('');
-  const [page, setPage] = useState(1), [size, setSize] = useState(DEFAULT_PAGE_SIZE), [selection, setSelection] = useState([]), [batch, setBatch] = useState(null), [allowHighCost, setAllowHighCost] = useState(false);
+  const [query, setQuery] = useState(ops.params.get('channelQ') || ''), [editing, setEditing] = useState(()=>{const owner=state.providers.find(row=>row.id===ops.params.get('channelProvider')),association=owner?.catalogConnections?.find(row=>row.id===ops.params.get('channelDetails'));return association?{kind:'details',modelId:association.modelId,associationId:association.id,providerId:owner.id}:null;}), [libraryId, setLibraryId] = useState('');
+  const [page, setPage] = useState(Number(ops.params.get('channelPage')) || 1), [size, setSize] = useState(Number(ops.params.get('channelSize')) || DEFAULT_PAGE_SIZE), [selection, setSelection] = useState([]), [batch, setBatch] = useState(null), [allowHighCost, setAllowHighCost] = useState(false);
   const [testGroupIndex, setTestGroupIndex] = useState(0);
   const trigger = useRef(null), ids = provider ? displayedCatalogueIds(provider, state) : [], resources = provider ? supplierChannelResources(state, provider) : [];
   const allRows = catalogueMappingRows(state, provider, entries).filter(row => (!modelIds || modelIds.includes(row.modelId)) && (!endpointId || row.association?.endpoint?.id === endpointId) && (!associationId || row.association?.id === associationId)), filtered = filterChannelRows(allRows, query), current = channelRowsPage(filtered, page, size);
@@ -52,12 +52,18 @@ export default function ProviderCatalogue({ state, provider, ops, entries, model
   const pageChecked = pageRows.length > 0 && selectedPageCount === pageRows.length ? true : selectedPageCount ? 'indeterminate' : false;
   const credentialIssues = provider ? supplierCredentialIssues(state, provider, ids) : [];
   const open = (target, kind, modelId, associationId, owner) => ops.proceed(() => { trigger.current = target; ops.setError(''); setLibraryId(supplyModelRecord(state, owner, modelId)?.id || ''); setEditing({ kind, modelId, associationId, providerId: owner.id }); });
-  const close = () => { setEditing(null); ops.setError(''); requestAnimationFrame(() => trigger.current?.isConnected && trigger.current.focus()); };
+  const close = () => { ops.go({channelDetails:null,channelProvider:null},{saved:true,preserveScroll:true}); setEditing(null); ops.setError(''); requestAnimationFrame(() => trigger.current?.isConnected && trigger.current.focus()); };
   const closeEditor = () => editing?.returnToDetails ? setEditing({ ...editing, kind: 'details', returnToDetails: false }) : close();
+  const cost=(owner,association,details=false)=>{
+    const back=new URLSearchParams(location.hash.split('?')[1]);back.set('channelQ',query);back.set('channelPage',String(current.page));back.set('channelSize',String(size));back.set('channelProvider',owner.id);
+    if(details)back.set('channelDetails',association.id);else back.delete('channelDetails');
+    ops.go({provider:owner.id,association:association.id,returnTo:'#/admin-2/providers?'+back},{base:'model-costs',reset:true});
+  };
   const editingProvider = editing && state.providers.find(row => row.id === editing.providerId);
   const edited = editingProvider && catalogueChannels(state, editingProvider, editing.modelId).find(row => row.id === editing.associationId);
   const copy = async (value, label) => { try { await navigator.clipboard.writeText(value); toast.success(`${label}已复制`); } catch { ops.setError('复制失败，请查看完整内容后重试'); } };
   const act = (row, kind, target) => {
+    if(kind==='price')return cost(row.provider,row.association);
     if (kind === 'copyModel') return copy(row.association.upstreamModelId, '上游模型 ID');
     if (kind === 'copyAddress') return copy(channelAddresses(row.provider, row.association).map(item => item.baseUrl).join('\n'), '请求地址');
     open(target, kind, row.modelId, row.association?.id, row.provider);
@@ -91,9 +97,8 @@ export default function ProviderCatalogue({ state, provider, ops, entries, model
     </TableBody></Table>{!filtered.length && <div className="mo-empty" role="status">{allRows.length ? '没有匹配的模型，请调整搜索条件。' : '尚未添加供应模型。'}</div>}</div>
     <FilterPagination total={filtered.length} page={current.page} size={size} onPageChange={setPage} onSizeChange={value => { setSize(value); setPage(1); }}/>
     {editing?.kind === 'health' && edited && <ChannelHealthDialog state={state} provider={editingProvider} endpoint={edited.endpoint} associationId={edited.id} ops={ops} close={closeEditor}/>}
-    {editing?.kind === 'details' && edited && <SupplierChannelDetails state={state} provider={editingProvider} association={edited} ops={ops} close={close} onEdit={(kind, target) => { trigger.current = target; setEditing({ ...editing, kind, returnToDetails: true }); }}/>}
+    {editing?.kind === 'details' && edited && <SupplierChannelDetails state={state} provider={editingProvider} association={edited} ops={ops} close={close} onEdit={(kind, target) => { if(kind==='price'){cost(editingProvider,edited,true);return;} trigger.current = target; setEditing({ ...editing, kind, returnToDetails: true }); }}/>}
     {editing?.kind === 'linkModel' && <Modal title="关联模型资料" description={editingProvider.name + ' · ' + editing.modelId} onClose={() => ops.proceed(close)}><SupplyModelPicker ops={ops} state={state} value={libraryId} disabled={!ops.can} onChange={id => { setLibraryId(id); ops.dirty(true); ops.setError(''); }}/><p>当前供应模型的全部渠道将归入所选模型。渠道配置、价格及已上线服务保持不变。</p>{ops.error && <Notice error>{ops.error}</Notice>}<div className="supplier-key-actions"><Button variant="outline" onClick={() => ops.proceed(close)}>取消</Button><Button disabled={!ops.can || !libraryId} onClick={async () => { if (await ops.run('provider', { operation: 'supplierModelLink', objectId: editingProvider.id, values: { modelId: editing.modelId, libraryId, confirmed: true } })) close(); }}>确认关联</Button></div></Modal>}
-    {editing?.kind === 'price' && <SupplierAssociationDialog key={editing.modelId + editing.associationId} state={state} provider={editingProvider} modelId={editing.modelId} association={edited} ops={ops} close={closeEditor}/>}
     {['address', 'credentials', 'info'].includes(editing?.kind) && edited && <SupplierChannelDialog key={editing.kind + edited.endpointId} state={state} provider={editingProvider} endpoint={edited.endpoint} mode={editing.kind} ops={ops} close={closeEditor}/>}
     {editing?.kind === 'discover' && edited && <Modal wide title="检查模型变更" description={`${editingProvider.name} · ${supplierChannelName(editingProvider, edited.endpoint)}`} onClose={closeEditor}><ChannelDiscovery mode="changes" state={state} provider={editingProvider} configuration={edited.endpoint} ops={ops} onAppend={rows => { setEditing({ ...editing, kind: 'models', initialRows: rows }); ops.dirty(true); }}/><div className="supplier-key-actions"><Button type="button" variant="outline" onClick={closeEditor}>关闭</Button></div></Modal>}
     {editing?.kind === 'models' && edited && <SupplierChannelConfiguration key={edited.endpointId} initialRows={editing.initialRows} state={state} provider={editingProvider} endpoint={edited.endpoint} ops={ops} close={closeEditor}/>}

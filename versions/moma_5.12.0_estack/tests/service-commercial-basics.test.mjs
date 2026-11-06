@@ -30,7 +30,7 @@ test('listing repairs target the current standard or provider mapping and the vi
   assert.equal(serviceConfigurationTarget(model,{tab:'routing',mapping:true}).mapping,'standard:canonical');
   assert.equal(serviceConfigurationTarget(model,{tab:'routing',providerId:'p',mapping:true}).mapping,'provider:canonical:p');
   assert.equal(serviceConfigurationTarget(model,{tab:'publication'}).scopeEdit,'1');
-  assert.equal(serviceConfigurationTarget(model,{tab:'publication'}).panel,'pricing');
+  assert.equal(serviceConfigurationTarget(model,{tab:'publication'}).panel,'access');
 });
 test('material release sorting is newest first, stable for ties and missing last without fabricating month precision',()=>{
   const rows=[['missing',''],['june','2026-06-11'],['month','2026-10'],['october','2026-10-17'],['tie','2026-10-17']].map(([id,releaseDate])=>({id,profile:{releaseDate}}));

@@ -10,12 +10,13 @@ import { Field } from './ModelMetadataForm';
 import { GridTable, Row, Cell, Modal, Status, Notice, useOperations } from './ModelOperationsUI';
 import { TARIFF_KINDS, tariffDictionaryEntries, tariffDictionaryId } from './tariff-dictionary';
 import './supplier-workbench.css';
-import MaterialsHeader from './MaterialsHeader';
+import { operationsReturn } from './model-pricing-workspace';
+import { Tabs,TabsList,TabsTrigger } from '../components/ui/tabs';
 
 export function TariffDictionaryPage(props) {
   const ops = useOperations(props, 'tariff-dictionary');
   const tab = ops.params.get('tab'), kind = Object.hasOwn(TARIFF_KINDS, tab) ? tab : 'scenario';
-  return <div className="mo-workbench supplier-workbench"><MaterialsHeader active={kind} ops={ops}/><TariffDictionary key={kind} kind={kind} state={props.state} ops={ops}/>{ops.error && <Notice error>{ops.error}</Notice>}{ops.leaveDialog}</div>;
+  return <div className="mo-workbench supplier-workbench"><div className="mp-heading"><h1>计量配置</h1><Button variant="outline" onClick={()=>ops.proceed(()=>{location.hash=operationsReturn(ops.params.get('returnTo')) || '#/admin-2/model-costs';})}>返回</Button></div><Tabs value={kind} onValueChange={tab=>ops.go({tab})}><TabsList variant="line" aria-label="计量配置">{Object.entries(TARIFF_KINDS).map(([id,label])=><TabsTrigger key={id} value={id}>{label}</TabsTrigger>)}</TabsList></Tabs><TariffDictionary key={kind} kind={kind} state={props.state} ops={ops}/>{ops.error && <Notice error>{ops.error}</Notice>}{ops.leaveDialog}</div>;
 }
 
 export function TariffChoice({ label, kind, value, options, entries = [], disabled, onChange }) {

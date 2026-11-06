@@ -7,14 +7,14 @@ const params = crumb => new URLSearchParams(crumb.href.split('?')[1]);
 
 test('supplier workspace has one level and editors return to the same supplier and tab', () => {
   const rows = build('providers', 'provider=provider-moma&tab=api-keys&view=profile&endpoint=ep&q=model-search&listQ=MoMA&listPage=2&status=已启用', { provider: '中国移动 MoMA' });
-  assert.deepEqual(labels(rows), ['模型运营', '模型接入', '编辑供应商资料']);
+  assert.deepEqual(labels(rows), ['模型运营', '渠道接入', '编辑供应商资料']);
   assert.equal(params(rows[1]).get('provider'), 'provider-moma');
   assert.equal(params(rows[1]).get('tab'), 'api-keys');
   for (const key of ['endpoint', 'view', 'q', 'page', 'listQ', 'listPage']) assert.equal(params(rows[1]).has(key), false);
   assert.equal(rows.at(-1).href, undefined);
-  assert.deepEqual(labels(build('providers', 'provider=provider-moma&tab=catalogue')), ['模型运营', '模型接入']);
-  assert.deepEqual(labels(build('providers', 'provider=provider-moma&tab=api-keys')), ['模型运营', '模型接入']);
-  assert.deepEqual(labels(build('providers', 'view=new&q=MoMA')), ['模型运营', '模型接入', '添加供应商']);
+  assert.deepEqual(labels(build('providers', 'provider=provider-moma&tab=catalogue')), ['模型运营', '渠道接入']);
+  assert.deepEqual(labels(build('providers', 'provider=provider-moma&tab=api-keys')), ['模型运营', '渠道接入']);
+  assert.deepEqual(labels(build('providers', 'view=new&q=MoMA')), ['模型运营', '渠道接入', '添加供应商']);
 });
 
 test('supplier and history drawers stay on model management without a detail breadcrumb', () => {
@@ -27,9 +27,9 @@ test('supplier and history drawers stay on model management without a detail bre
 
 test('tariff categories are direct materials-management children in breadcrumbs', () => {
   for (const [tab, label] of [['scenario', '计费项'], ['unit', '计价单位'], ['currency', '货币']]) {
-    assert.deepEqual(build('tariff-dictionary', `tab=${tab}`), [{ label: '模型运营' }, { label: '模型资料', href: '#/admin-2/model-templates' }, { label }]);
+    assert.deepEqual(build('tariff-dictionary', `tab=${tab}`), [{ label: '模型运营' }, { label: '模型成本', href: '#/admin-2/model-costs' }, { label }]);
   }
-  for (const query of ['', 'tab=invalid', 'tab=constructor', 'tab=__proto__']) assert.deepEqual(labels(build('tariff-dictionary', query)), ['模型运营', '模型资料', '计费项']);
+  for (const query of ['', 'tab=invalid', 'tab=constructor', 'tab=__proto__']) assert.deepEqual(labels(build('tariff-dictionary', query)), ['模型运营', '模型成本', '计费项']);
 });
 
 test('model creation and metadata workflows retain the correct parent', () => {
@@ -79,7 +79,7 @@ test('user and analytics detail breadcrumbs preserve their original list scope',
 
 test('top-level pages do not invent a back destination; gateway parents remain navigable', () => {
   assert.deepEqual(build('dashboard'), [{ label: '概览' }]);
-  assert.deepEqual(labels(build('providers')), ['模型运营', '模型接入']);
+  assert.deepEqual(labels(build('providers')), ['模型运营', '渠道接入']);
   const gateway = build('alerts');
   assert.equal(gateway[1].href, '#/admin-2/routes');
   assert.equal(gateway.at(-1).href, undefined);

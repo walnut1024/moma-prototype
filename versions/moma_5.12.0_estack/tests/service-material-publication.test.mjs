@@ -71,7 +71,7 @@ test('minimal material → channel → mock B → referenced service → mock C 
   storage.setItem(STORAGE_KEY,JSON.stringify(state));
   assert.equal(publicationChecks(state,model()).find(row=>row.tab==='platform').passed,true);
   assert.throws(()=>persistModelAction(state,listing,storage),/平台试调用/);
-  assert.throws(()=>persistAdminAction(state,{type:'update',collection:'models',id:modelId,changes:{listingStatus:'已上架'}},storage),/平台试调用/);
+  assert.throws(()=>persistAdminAction(state,{type:'update',collection:'models',id:modelId,changes:{listingStatus:'已上架'}},storage),/服务管理操作/);
   const plan=platformCandidatePlan(state,model(),{serviceId:service.id,tenantIds:['tenant-gov'],supplyIds:[supply.id]});
   assert.equal(plan.candidate.bindings[0].model.id,material.id);assert.equal(plan.candidate.bindings[0].model.upstreamModelId,'vendor/unmodified-upstream');
   const trial=await runPlatformTrial(plan);assert.equal(trial.result.billingReady,true);assert.equal(model().listingStatus,'已下架');
@@ -135,7 +135,8 @@ test('minimal material → channel → mock B → referenced service → mock C 
   state=run(state,'unifiedPrice',{expectedUpdatedAt:model().updatedAt,expectedSaleVersion:modelSaleRevision(state,modelId),items:[{name:'输入 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'3'},{name:'输出 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'4'}]},modelId);
   storage.setItem(STORAGE_KEY,JSON.stringify(state));
   assert.equal(publicationChecks(state,model()).find(row=>row.tab==='platform').passed,true,'price edits preserve technical evidence');
-  assert.throws(()=>persistModelAction(state,listing,storage),/不一致/);
+  state=persistModelAction(state,listing,storage);
+  assert.equal(state.models.find(row=>row.id===modelId).listingStatus,'已上架','price changes do not require another technical trial');
   assert.equal(state.models.find(row=>row.id===online.id).listingStatus,'已上架');
   assert.deepEqual(state.modelTemplates.find(row=>row.id===material.id),material);
 });

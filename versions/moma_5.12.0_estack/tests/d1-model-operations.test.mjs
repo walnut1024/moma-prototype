@@ -8,9 +8,13 @@ import {configureOnboardingTransport} from '../src/admin-v2/onboarding-client.js
 import {useCloudMockSnapshot} from '../src/admin-v2/mock-onboarding-service.js';
 import {initialModelWorkspace} from '../server/model-repository.js';
 import {serviceModelSources} from '../src/admin-v2/supply-models.js';
-import {serviceModelSourceDraft} from '../src/admin-v2/model-profile.js';
+import {serviceModelSourceDraft,serviceModelDraft,modelAuthors} from '../src/admin-v2/model-profile.js';
+import {prepareServerChannel,onboardingApi} from '../src/admin-v2/onboarding-client.js';
+import {connectionFingerprint} from '../src/admin-v2/connection-state.js';
+import {routingServices,routeSourceVersion} from '../src/admin-v2/service-routing.js';
+import {platformCandidatePlan,runPlatformTrial,publishPlatformCandidate} from '../src/admin-v2/platform-service-client.js';
 import {providerApiKeysDraft} from '../src/admin-v2/provider-management.js';
-import {operationsTransaction} from '../src/admin-v2/model-operations.js';
+import {operationsTransaction,materialBase} from '../src/admin-v2/model-operations.js';
 
 test('cloud service configuration leaves the original workspace and simulation history unchanged',()=>{
   const state=initialModelWorkspace(),before=structuredClone(state),model=state.models.find(m=>m.id==='model-glm53');
@@ -60,6 +64,13 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     assert.equal(state.revision,priorRevision);
     state=await save(state,{type:'modelOperations',operation:'disableService',modelId:model.id,data:{expectedUpdatedAt:stopped.updatedAt}});
     assert.equal(state.models.find(m=>m.id===model.id).callsEnabled,false);
+    const stoppedModel=state.models.find(m=>m.id===model.id),callScope={openScope:stoppedModel.openScope,tenantIds:stoppedModel.tenantIds};
+    state=await save(state,{type:'modelOperations',operation:'salesSettings',modelId:model.id,data:{scope:{openScope:'selected',tenantIds:['tenant-gov']},visible:false,confirmed:true,expectedUpdatedAt:stoppedModel.updatedAt}});
+    const afterSettings=(await api('/model-operations')).data.models.find(m=>m.id===model.id);
+    assert.deepEqual(afterSettings.salesScope,{openScope:'selected',tenantIds:['tenant-gov']});
+    assert.deepEqual({openScope:afterSettings.openScope,tenantIds:afterSettings.tenantIds},callScope);
+    await assert.rejects(save(state,{type:'modelOperations',operation:'startSales',modelId:model.id,data:{confirmed:true,expectedUpdatedAt:afterSettings.updatedAt}}),/技术服务已启用/);
+    assert.equal((await api('/model-operations')).data.models.find(m=>m.id===model.id).callsEnabled,false);
     assert.equal(state.models.find(m=>m.id===model.id).listingStatus,'已下架');
     assert.deepEqual(state.modelSalePrices,prices);
     const provider=(operation,values)=>save(state,{type:'modelOperations',operation:'provider',data:{operation,objectId:'provider-moma',values}});
@@ -112,6 +123,42 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     const sorted=rows=>[...rows].sort((a,b)=>a.id.localeCompare(b.id));
     for(const key of ['providers','endpoints','modelSupplies','modelSalePrices','serviceRoutes'])assert.deepEqual(sorted(reloaded[key]),sorted(beforeCreate[key]),key);
     await assert.rejects(save(state,{type:'modelOperations',operation:'createServiceModel',data:{...serviceModelSourceDraft(state,source),libraryId:source.id}}),/已有模型服务/);
+    {
+    const commit=(operation,data,modelId)=>save(state,{type:['recordPlatformPublication','enableService'].includes(operation)?'modelOperation':'modelOperations',operation,data,modelId});
+    state=await commit('channelMetadataCreate',{name:'D1内部无价格',modelId:'d1-internal-no-price',type:'text',profile:{tasks:['对话'],inputModalities:['文本'],outputModalities:['文本']}});
+    const material=state.modelTemplates.find(row=>row.modelId==='d1-internal-no-price');
+    state=await commit('templatePublish',{id:material.id,confirmed:true,expectedBase:materialBase(state,material),value:{...material,description:'内部技术服务',profile:{...material.profile,tasks:['对话'],inputModalities:['文本'],outputModalities:['文本']}}});
+    state=await commit('provider',{operation:'supplierChannelCreate',objectId:'provider-moma',values:{name:'D1无价格渠道',protocol:'OpenAI',interfaceType:'openai',baseUrl:'https://internal.example.invalid/v1',authMode:'group',keyGroupId:group.id,models:[{libraryId:material.id,upstreamModelId:'vendor/internal',scenarios:[]}]}});
+    const ep=state.endpoints.find(row=>row.name==='D1无价格渠道'),owner=()=>state.providers.find(row=>row.id==='provider-moma');
+    const association=owner().catalogConnections.find(row=>row.endpointId===ep.id);
+    const channel=await prepareServerChannel(owner(),ep),request={operationId:crypto.randomUUID(),channelId:channel.id,models:[{id:material.id,associationId:association.id,upstreamModelId:association.upstreamModelId,type:'text'}]};
+    const job={providerId:owner().id,endpointId:ep.id,operationId:request.operationId,serverChannelId:channel.id,signature:connectionFingerprint(ep),associationIds:[association.id],request};
+    state=await commit('channelTestEvidenceJob',job);
+    let batch=await onboardingApi('/tests',{method:'POST',body:request});
+    state=await commit('channelTestEvidenceJob',{...job,batchId:batch.id});
+    for(let attempt=0;batch.items.some(row=>!['passed','failed','cancelled'].includes(row.status)) && attempt<40;attempt++){
+      await new Promise(resolve=>setTimeout(resolve,200));batch=await onboardingApi('/tests/'+batch.id);
+    }
+    assert(batch.items.every(row=>row.status==='passed'));
+    state=await commit('channelTestEvidenceReceipt',{providerId:owner().id,endpointId:ep.id,batch});
+    state=await commit('provider',{operation:'supplierModelsEnable',objectId:owner().id,values:{endpointId:ep.id,associationIds:[association.id]}});
+    state=await commit('createServiceModel',{...serviceModelDraft(material),libraryId:material.id,author:modelAuthors(state)[0],releaseDate:'2026-11-06',description:'内部技术服务',serviceMode:'standard',purpose:'internal'});
+    const internalId=state.audits[0].objectId,internal=()=>state.models.find(row=>row.id===internalId);
+    state=await commit('associateServiceChannels',{providerId:owner().id,catalogueModelId:association.modelId,channelIds:[association.id],confirmedIdentity:true,expectedUpdatedAt:internal().updatedAt},internalId);
+    const service=routingServices(state).find(row=>row.modelId===internalId),supply=state.modelSupplies.find(row=>row.modelId===internalId);
+    state=await commit('serviceRoutePublish',{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'fixed',autoFailover:false,channels:[{supplyId:supply.id,enabled:true,priority:1,weight:0}]}},internalId);
+    state=await commit('commercialPublish',{kind:'scope',expectedBase:(await import('../src/admin-v2/service-workspace.js')).commercialTaskBase(state,internal(),'scope'),value:{openScope:'all',tenantIds:[]},confirmed:true},internalId);
+    const trial=await runPlatformTrial(platformCandidatePlan(state,internal(),{serviceId:service.id,tenantIds:['tenant-gov'],supplyIds:[supply.id],technical:true}));
+    assert.equal(trial.result.technicalReady,true);assert.equal(trial.result.cost,null);assert.equal(trial.result.saleTrial,null);assert.equal(trial.result.customerDebited,false);
+    const publication=await publishPlatformCandidate(trial.service);
+    state=await commit('recordPlatformPublication',{serviceId:service.id,mockServiceId:publication.id,publishedVersion:publication.published.version,expectedFingerprint:trial.publicationFingerprint},internalId);
+    state=await commit('enableService',{expectedUpdatedAt:internal().updatedAt},internalId);
+    const readback=(await api('/model-operations')).data;
+    assert.equal(readback.models.find(row=>row.id===internalId).callsEnabled,true);assert.equal(readback.models.find(row=>row.id===internalId).listingStatus,'已下架');
+    assert.equal(readback.modelSalePrices.some(row=>row.modelId===internalId),false);
+    const usage=readback.cloudMockState.usage.find(row=>row.id===trial.result.id);
+    assert.equal(usage.billingStatus,'not_applicable');assert.equal(usage.costStatus,'pending');assert.equal(usage.priceSnapshot,null);
+    }
     assert.equal((await local.db.prepare('PRAGMA foreign_key_check').all()).results.length,0);
   }finally{configureOnboardingTransport(null);await local.runtime.dispose();}
 });

@@ -7,8 +7,8 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Choice, Field } from './ModelMetadataForm';
 import { Modal, Notice, GridTable, Row, Cell, ScopeFields } from './ModelOperationsUI';
-import { currentServiceCosts, servicePriceIdentity, commercialTaskKey, commercialTaskBase, activeModelSalePrice, unifiedBillingDraft, providerServices, activeProviderPrice } from './service-workspace';
-import { priceItems, displayTime } from './model-management';
+import { currentServiceCosts, servicePriceIdentity, commercialTaskBase, activeModelSalePrice, unifiedBillingDraft, providerServices, activeProviderPrice } from './service-workspace';
+import { priceItems } from './model-management';
 import { itemMoney } from './SupplyPriceEditor';
 
 
@@ -32,7 +32,6 @@ export function RetailPriceFields({state,rows,setRows,ops,prefix,readOnly=false,
   </>;
 }
 export function CommercialDialog({state,model,ops,close,kind='price',providerId='',readOnly=false,onEdit,drawerSide='left'}) {
-  const key= commercialTaskKey(kind,providerId);
   const initial=()=>kind==='scope'?{openScope:model.openScope,tenantIds:model.tenantIds || []}:{callId:providerId?providerServices(model).find(row=>row.providerId===providerId)?.callId || '':model.modelId,items:providerId?priceItems(activeProviderPrice(state,model.id,providerId),model).map(item=>({...item,condition:item.condition || '',amount:item.amount==null?'':String(item.amount/1000000)})):unifiedBillingDraft(state,model)};
   const [value,setValue]=useState(()=>structuredClone(kind==='price'?{...(initial()),callId:initial().callId}:initial()));
   const [base,setBase]=useState(()=>commercialTaskBase(state,model,kind,providerId));
@@ -45,7 +44,6 @@ export function CommercialDialog({state,model,ops,close,kind='price',providerId=
     if(next){setPreview(false);ops.dirty(false);close();}
     }finally{setPublishing(false);}
   };
-  const receipt=model.commercialPublications?.[key];
   const names=ids=>state.tenants.filter(row=>ids.includes(row.id)).map(row=>row.name).join('、') || '未选择客户';
   const scopeText=v=>v.openScope==='all'?'全部客户':names(v.tenantIds || []);
   const selected=v=>v.openScope==='all'?scopeTenants(state).map(row=>row.id):v.tenantIds || [];
@@ -54,7 +52,6 @@ export function CommercialDialog({state,model,ops,close,kind='price',providerId=
   const content=<form noValidate onSubmit={event=>{event.preventDefault();try{if(kind==='scope')serviceScope(state,value);else retailItems(state,value.items,current?.items);ops.setError('');setPreview(true);}catch(issue){setPreview(false);ops.setError(issue.message);}}}>
     <ConflictNotice ops={ops}/>
     {(base!==commercialTaskBase(state,model,kind,providerId)) && <Notice error>配置已变化，当前输入保留。<Button type="button" variant="link" disabled={!ops.can} onClick={()=>{setBase(commercialTaskBase(state,model,kind,providerId));setPreview(false);ops.dirty(true);}}>按当前配置重新核对</Button></Notice>}
-    {receipt && <Notice>{title}已生效 · {displayTime(receipt.publishedAt)}{providerId && model.serviceProviders?.find(row=>row.providerId===providerId)?.pendingPublication?'；本供应商服务尚待平台验证':model.listingStatus!=='已上架'?'；服务尚未上架':''}</Notice>}
     {kind==='scope'?<ScopeFields state={state} {...value} disabled={!ops.can || publishing} onChange={(openScope,tenantIds)=>change({openScope,tenantIds})}/>:<>
       <RetailPriceFields state={state} purchaseCosts={currentServiceCosts(state,model,providerId)} identity={servicePriceIdentity(state,model,providerId)} readOnly={readOnly} onEdit={onEdit} rows={readOnly?initial().items:value.items} setRows={items=>change({items})} ops={{...ops,can:ops.can && !publishing}} prefix="平台售价"/>
     </>}
@@ -64,7 +61,6 @@ export function CommercialDialog({state,model,ops,close,kind='price',providerId=
   </form>;
   return kind==='price'?<section className="sm-inline-price" aria-label={title}><h3>{providerId?state.providers.find(row=>row.id===providerId)?.name+" · ":""}{title}</h3>{content}</section>:<Modal wide drawer drawerSide={drawerSide} className="sm-scope-drawer" title={title} description={model.name} onClose={()=>{if(!publishing)close();}}>{content}</Modal>;
 }
-export function UnifiedPriceDialog(props) { return <CommercialDialog {...props}/>; }
 export function ServiceIdentityDialog({model, providerId, ops, close}) {
   const entry = providerServices(model).find(row => row.providerId === providerId), original=providerId?entry?.callId || '':model.modelId;
   const [callId, setCallId] = useState(original), [revision] = useState(model.updatedAt),[confirm,setConfirm]=useState(false);
