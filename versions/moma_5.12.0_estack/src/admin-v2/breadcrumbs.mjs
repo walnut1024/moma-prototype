@@ -36,7 +36,7 @@ export function adminBreadcrumbs(active, params, names = {}) {
     if(detail)add(active==='model-costs'?'成本详情':'服务售价详情');
   } else if (active === 'tariff-dictionary') {
     const tab = params.get('tab');
-    add('模型成本', '#/admin-2/model-costs');
+    add('模型资料', '#/admin-2/model-templates');
     add(TARIFF_KINDS[Object.hasOwn(TARIFF_KINDS, tab) ? tab : 'scenario']);
   } else if (active === 'deployments') {
     add('模型部署', params.has('deployment') || view === 'create' ? href(active, {}, ['deployment', 'view', 'tab']) : null);
