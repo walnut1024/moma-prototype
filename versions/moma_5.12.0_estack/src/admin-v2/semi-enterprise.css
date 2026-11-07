@@ -1,0 +1,18 @@
+.admin-enterprise-dialog, .admin-enterprise-page .semi-descriptions-item-td { overflow-wrap: anywhere; }
+.admin-enterprise-page .admin-analytics-fields, .admin-enterprise-dialog.admin-analytics-fields,
+.admin-enterprise-dialog .admin-analytics-fields { grid-template-columns: minmax(0, 1fr); }
+.admin-enterprise-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--admin-control-gap, 12px); }
+.admin-enterprise-fields > * { min-width: 0; }
+.admin-enterprise-wide { grid-column: 1 / -1; }
+.admin-enterprise-form .semi-form-slot { padding-block: 0; }
+.admin-enterprise-form .semi-select { width: 100%; }
+.admin-enterprise-form-section { display: grid; min-width: 0; gap: 12px; }
+.admin-enterprise-accounts { max-height: 240px; overflow: auto; }
+.admin-enterprise-members { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(0, 3fr); gap: var(--admin-section-gap); align-items: start; }
+.admin-enterprise-members > * { min-width: 0; }
+.admin-enterprise-tree { max-height: 520px; overflow: auto; }
+.admin-enterprise-tree-label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.admin-enterprise-member-scope { display: grid; gap: 4px; }
+.admin-enterprise-member-scope .semi-button-content { width: 100%; }
+@media (max-width: 760px) { .admin-enterprise-members { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .admin-enterprise-fields { grid-template-columns: minmax(0, 1fr); } .admin-enterprise-tree { max-height: 280px; } }
