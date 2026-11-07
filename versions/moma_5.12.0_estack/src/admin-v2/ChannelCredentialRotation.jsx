@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Input } from '@douyinfe/semi-ui';
 import { Choice, Field } from './ModelMetadataForm';
-import { Modal, Notice, GridTable, Row, Cell } from './ModelOperationsUI';
+import { Disclosure, Modal, Notice, GridTable, Row, Cell } from './ModelOperationsUI';
 import CandidateProbePanel from './CandidateProbePanel';
 import { channelCandidateStatus, channelChangeImpact } from './channel-change-management';
 import { connectionKeys } from './connection-state';
@@ -50,7 +50,7 @@ function EndpointCredentialRotation({ state, provider, endpoint, ops, close }) {
       <Field label="新 API 密钥"><Input mode="password" autoComplete="new-password" aria-label="替换渠道 API 密钥" placeholder={candidate ? '已保存候选；重新输入可替换候选' : '请输入新的 API 密钥'} maxLength={512} value={rawKey} disabled={!ops.can || testing || preparing} onChange={value => { setRawKey(value); setApplied(null); setEdited(true); ops.dirty(true); ops.setError(''); }}/></Field>
       <CandidateProbePanel state={state} context={context} ops={ops} beforeTest={beforeTest} initialRecords={records} onBusyChange={setTesting} pendingEdits={edited} testLabel="测试新密钥（产生用量）"/>
       {candidate && <><GridTable headings={['模型', '候选检查']} empty={!status.checks.length}>{status.checks.map(check => <Row key={check.associationId}><Cell>{check.modelId}</Cell><Cell>{check.passed ? '通过' : check.reason || status.credentialError || '待测试'}</Cell></Row>)}</GridTable>{status.credentialError && <Notice error>{status.credentialError}</Notice>}<Button type="tertiary" theme="borderless" disabled={!ops.can || testing || preparing} onClick={async () => { if (await ops.run('channelCandidateDiscard', context)) { setRawKey(''); setEdited(false); } }}>放弃候选密钥</Button></>}
-      {endpoint.configurationVersions?.length > 0 && <details><summary>历史配置与回退</summary><Choice label="回退密钥版本" value={rollback} options={[[ 'unselected', '请选择历史版本' ], ...endpoint.configurationVersions.map(row => [String(row.version), `版本 ${row.version} · ${row.appliedAt}`])]} disabled={!ops.can || testing || preparing} onChange={setRollback}/><Button theme="light" disabled={!ops.can || rollback === 'unselected' || testing || preparing} onClick={async () => { if (await ops.run('channelCandidateRollback', { ...context, targetVersion: Number(rollback) })) { setRawKey(''); setApplied(null); setEdited(false); } }}>准备回退并重新测试</Button></details>}
+      {endpoint.configurationVersions?.length > 0 && <Disclosure title="历史配置与回退"><Choice label="回退密钥版本" value={rollback} options={[[ 'unselected', '请选择历史版本' ], ...endpoint.configurationVersions.map(row => [String(row.version), `版本 ${row.version} · ${row.appliedAt}`])]} disabled={!ops.can || testing || preparing} onChange={setRollback}/><Button theme="light" disabled={!ops.can || rollback === 'unselected' || testing || preparing} onClick={async () => { if (await ops.run('channelCandidateRollback', { ...context, targetVersion: Number(rollback) })) { setRawKey(''); setApplied(null); setEdited(false); } }}>准备回退并重新测试</Button></Disclosure>}
       {ops.error && <Notice error>{ops.error}</Notice>}
     </div>
   </Modal>;

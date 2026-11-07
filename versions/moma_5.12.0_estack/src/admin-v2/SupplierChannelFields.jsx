@@ -1,6 +1,6 @@
 import ModelFieldLabel from './ModelFieldLabel';
 import { useId } from 'react';
-import { Button, Input, Typography } from '@douyinfe/semi-ui';
+import { Button, Input, Radio, RadioGroup, Typography } from '@douyinfe/semi-ui';
 import { Field, Choice } from './ModelMetadataForm';
 import { SupplierKeyGroupField } from './SupplierKeyGroupField';
 import { Notice } from './ModelOperationsUI';
@@ -18,6 +18,10 @@ export default function SupplierChannelFields({ state, provider, models, value, 
     <Field label="上游 API 地址 *"><Input aria-label="上游 API 地址" maxLength={2048} value={value.baseUrl} disabled={disabled || connectionReadOnly} placeholder={interfaceType==='custom'?'https://api.example.com/完整任务路径':'https://api.example.com/v1'} onChange={value => onChange({ baseUrl: value })}/></Field>
     {!connectionReadOnly && suggestedRoot && <Notice>识别到完整任务地址。<Button type="tertiary" theme="borderless" disabled={disabled} onClick={()=>onChange({baseUrl:suggestedRoot})}>使用根地址 {suggestedRoot}</Button></Notice>}
     {children}
-    {!connectionReadOnly && <section className="supplier-add-credentials"><Typography.Title heading={5} component="h3">API密钥 *</Typography.Title><div className="mm-checkbox-row" role="radiogroup" aria-label="API密钥方式">{[[false, '共享API密钥'], [true, '独立API密钥']].map(([independent, label]) => <label key={label}><input type="radio" name={keyModeId} checked={value.independent === independent} disabled={disabled} onChange={() => { onChange({ independent }); onKeyChange(''); }}/>{label}</label>)}</div>{value.independent ? <Field label="API Key" hint={editing && currentKey ? '已配置；留空保留，输入新密钥替换' : undefined}><Input mode="password" aria-label="独立API密钥" autoComplete="new-password" maxLength={512} value={rawKey} placeholder="请输入 API Key" disabled={disabled} onChange={value => onKeyChange(value)}/></Field> : provider && <SupplierKeyGroupField state={state} provider={provider} value={value.keyGroupId} disabled={disabled} current={current} ops={ops} label="共享API密钥组" actionLabel="添加共享 API 密钥" onSaved={onSharedKeySaved} onChange={keyGroupId => onChange({ keyGroupId })}/>}</section>}
+    {!connectionReadOnly && <section className="supplier-add-credentials"><Typography.Title heading={5} component="h3">API密钥 *</Typography.Title><div role="radiogroup" aria-label="API密钥方式"><RadioGroup name={keyModeId} value={value.independent} disabled={disabled} direction="horizontal"
+      onChange={event => { onChange({ independent: event.target.value }); onKeyChange(''); }}>
+      <Radio value={false}>共享API密钥</Radio>
+      <Radio value={true}>独立API密钥</Radio>
+    </RadioGroup></div>{value.independent ? <Field label="API Key" hint={editing && currentKey ? '已配置；留空保留，输入新密钥替换' : undefined}><Input mode="password" aria-label="独立API密钥" autoComplete="new-password" maxLength={512} value={rawKey} placeholder="请输入 API Key" disabled={disabled} onChange={value => onKeyChange(value)}/></Field> : provider && <SupplierKeyGroupField state={state} provider={provider} value={value.keyGroupId} disabled={disabled} current={current} ops={ops} label="共享API密钥组" actionLabel="添加共享 API 密钥" onSaved={onSharedKeySaved} onChange={keyGroupId => onChange({ keyGroupId })}/>}</section>}
   </>;
 }

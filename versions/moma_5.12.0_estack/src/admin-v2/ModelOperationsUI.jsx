@@ -1,8 +1,9 @@
+import AdminCollapsePanel from './AdminCollapsePanel';
 import { scopeTenants } from './service-commercial';
 import { activeAdmin } from '../linked-accounts.mjs';
 import { readLinkedState } from '../service-access.mjs';
 import { Children, Fragment, isValidElement, useEffect, useRef, useState } from 'react';
-import { Button, Input, Pagination as SemiPagination, Popover, Table, TextArea, Toast } from '@douyinfe/semi-ui';
+import { Button, Collapse, Input, Pagination as SemiPagination, Popover, Table, TextArea, Toast } from '@douyinfe/semi-ui';
 import { IconDelete, IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import AdminPageHeading from './AdminPageHeading';
 import { CopyId, Modal as ServiceModal, Notice, Status, serviceOperationsUi } from './ServiceUI';
@@ -66,7 +67,17 @@ export function GridTable({ headings, children, empty, emptyMessage = '没有符
 export function Row({ children }) { return <>{children}</>; }
 export function Cell({ children }) { return <>{children}</>; }
 export function Pagination({ count, page, setPage, size = 10 }) { return <SemiPagination className="mo-pagination" total={count} pageSize={size} currentPage={page} onPageChange={setPage} showTotal size="small"/>; }
-export function Price({ model, price }) { const items = priceItems(price, model); return items.length ? <details className="mo-price"><summary>{items.length} 个计费项</summary>{items.map((item, index) => <small key={index}>{item.name}{item.condition ? '（' + item.condition + '）' : ''}：{item.currency || 'CNY'} {moneyDisplay(item.amount)} / {item.unit}</small>)}</details> : <span className="mo-muted">未配置</span>; }
+export function Disclosure({ title, children, defaultOpen = false, className }) {
+  return <Collapse className={className} defaultActiveKey={defaultOpen ? ['content'] : []} keepDOM>
+    <AdminCollapsePanel itemKey="content" header={title}>{children}</AdminCollapsePanel>
+  </Collapse>;
+}
+export function Price({ model, price }) {
+  const items = priceItems(price, model);
+  return items.length ? <Disclosure className="mo-price" title={`${items.length} 个计费项`}>
+    {items.map((item, index) => <small key={index}>{item.name}{item.condition ? '（' + item.condition + '）' : ''}：{item.currency || 'CNY'} {moneyDisplay(item.amount)} / {item.unit}</small>)}
+  </Disclosure> : <span className="mo-muted">未配置</span>;
+}
 export function Modal({ title, description, children, onClose, wide, drawer = false, drawerSide = 'right', footer, className = '' }) { return <ServiceModal title={title} description={description ?? '请核对当前配置后继续。'} onClose={onClose} wide={wide} drawer={drawer} drawerSide={drawerSide} footer={footer} className={className}>{children}</ServiceModal>; }
 export function useOperations({ state, transact, conflict, reload, notify = message => Toast.success(message), renderLeaveDialog = serviceOperationsUi.renderLeaveDialog }, base) {
   const [params, setParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));

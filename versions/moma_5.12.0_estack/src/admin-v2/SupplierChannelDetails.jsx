@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Descriptions, Tabs, Typography } from '@douyinfe/semi-ui';
-import { GridTable, Row, Cell, Modal } from './ModelOperationsUI';
+import { Disclosure, GridTable, Row, Cell, Modal } from './ModelOperationsUI';
 import { channelAddresses, channelFingerprint, channelLinkedModels, channelRouteRefs } from './provider-channels';
 import { supplierChannelCode, supplierChannelName } from './supplier-resources';
 import { channelStatus, redactDiagnostic } from './channel-selection';
@@ -67,7 +67,7 @@ export default function SupplierChannelDetails({ state, provider, association, o
         {record && <section className="supplier-test-record" aria-label="测试诊断">
           <Typography.Title heading={5} component="h3">测试诊断</Typography.Title>
           <dl className="supplier-test-facts supplier-test-conclusion"><div><dt>结论</dt><dd>{safe(record.result || record.status)}<small>{safe(record.message || record.error?.message)}</small></dd></div><div><dt>请求阶段</dt><dd>{stages[record.phase || record.stage] || safe(record.phase || record.stage)}{(record.statusCode ?? (typeof record.status === 'number' ? record.status : null)) != null && <small>状态码 {record.statusCode ?? record.status}</small>}</dd></div><div><dt>建议</dt><dd>{safe(record.suggestion || record.hint || suggestions[record.code] || (record.result === '通过' ? '无需处理。' : '核对本次任务和配置后，明确重新测试。'))}{record.retryAfter != null && <small>建议等待 {record.retryAfter} 秒</small>}</dd></div><div><dt>用量 / 费用</dt><dd>{record.usage ? '已记录用量' : '用量未知'} / {record.cost == null ? '费用未知' : '已记录费用'}</dd></div></dl>
-          <details><summary>技术详情</summary><dl className="supplier-test-facts supplier-test-technical">
+          <Disclosure title="技术详情"><dl className="supplier-test-facts supplier-test-technical">
             <div><dt>测试 ID</dt><dd><code>{safe(record.id)}</code></dd></div><div><dt>追踪 ID</dt><dd><code>{safe(record.traceId || record.requestId)}</code></dd></div>
             <div><dt>上游请求 ID</dt><dd><code>{safe(record.upstreamRequestId)}</code></dd></div><div><dt>上游任务 ID</dt><dd><code>{safe(record.taskId)}</code></dd></div>
             <div><dt>凭证 ID</dt><dd><code>{safe(record.credentialId || record.credentialIds?.join('、'))}</code></dd></div><div><dt>凭证版本</dt><dd>{safe(record.credentialVersion)}</dd></div>
@@ -75,7 +75,7 @@ export default function SupplierChannelDetails({ state, provider, association, o
             <div><dt>操作者</dt><dd>{safe(record.operator)}</dd></div><div><dt>任务 / 专项</dt><dd>{safe(record.task)}{record.check && <small>{safe(record.check)}</small>}</dd></div>
             <div><dt>开始时间</dt><dd>{time(record.startedAt)}</dd></div><div><dt>结束时间</dt><dd>{time(record.endedAt || record.testedAt)}</dd></div>
             <div><dt>服务商 / 渠道 / 映射</dt><dd><code>{safe(record.providerId)}</code><code>{safe(record.endpointId)}</code><code>{safe(record.associationId)}</code></dd></div><div><dt>来源 / 错误码</dt><dd>{source(record)}<small>{safe(record.code)}</small></dd></div>
-          </dl><pre aria-label="用量与费用摘要">{JSON.stringify(redactDiagnostic({ source: record.source || null, simulated: record.simulated ?? null, usage: record.usage ?? null, cost: record.cost ?? null }), null, 2)}</pre></details>
+          </dl><pre aria-label="用量与费用摘要">{JSON.stringify(redactDiagnostic({ source: record.source || null, simulated: record.simulated ?? null, usage: record.usage ?? null, cost: record.cost ?? null }), null, 2)}</pre></Disclosure>
         </section>}
       </Tabs.TabPane>
       <Tabs.TabPane tab="关联服务" itemKey="services">

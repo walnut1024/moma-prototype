@@ -1,3 +1,4 @@
+import AdminCollapsePanel from './AdminCollapsePanel';
 import { useState } from 'react';
 import { Button, Card, Checkbox, Collapse, Input, Steps, Typography } from '@douyinfe/semi-ui';
 import { Choice, Field } from './ModelMetadataForm';
@@ -57,7 +58,7 @@ export default function SupplierModelBatch({ state, ops, home, viewSwitch }) {
         const row = catalogue.find(row => row.catalogueModelId === entry.catalogueModelId), master = libraryRecord(state, entry.libraryId);
         if (!row) return <Notice error key={entry.catalogueModelId}>目录模型 {entry.catalogueModelId} 已移除，请返回列表重新选择。</Notice>;
         const needsIdentity = master && !row.model && master.modelId !== row.catalogueModelId;
-        return <Collapse.Panel key={entry.catalogueModelId} itemKey={entry.catalogueModelId} header={
+        return <AdminCollapsePanel key={entry.catalogueModelId} itemKey={entry.catalogueModelId} header={
           <div className="supplier-batch-model-heading">
             <Typography.Text strong>{entry.catalogueModelId}</Typography.Text>
             <Typography.Text type="secondary">{master?.name || '待关联模型资料'}</Typography.Text>
@@ -68,7 +69,7 @@ export default function SupplierModelBatch({ state, ops, home, viewSwitch }) {
           <div className="mo-row-actions"><Button theme="borderless" type="tertiary" disabled={!ops.can} onClick={() => maintainMaster(entry)}>{master ? '维护模型资料' : '登记模型资料'}</Button><Button theme="borderless" type="tertiary" onClick={() => ops.proceed(() => { location.hash = '#/admin-2/providers?provider=' + encodeURIComponent(provider.id) + '&tab=catalogue'; })}>维护服务商目录与接入</Button><Button theme="borderless" type="tertiary" disabled={!ops.can} onClick={() => ops.proceed(() => { setEntries(current => current.map(value => value.catalogueModelId === entry.catalogueModelId ? { ...supplierBatchEntry(state, { ...row, draft: null }), draftId: row.draft?.id || "" } : value)); ops.dirty(true); ops.setError(''); })}>重新载入本项配置</Button></div>
           {needsIdentity && <Checkbox checked={entry.confirmedIdentity} disabled={!ops.can} onChange={event => setEntry(entry.catalogueModelId, { confirmedIdentity: event.target.checked })}>已核对目录模型与所选平台模型的身份和版本一致</Checkbox>}
           <CompletePriceTable cost={row.costs} sale={priceItems(row.sale, master || { type: 'text' })} rows={entry.prices} disabled={!ops.can} setRows={prices => setEntry(entry.catalogueModelId, { prices })}/>
-        </div></Collapse.Panel>;
+        </div></AdminCollapsePanel>;
       })}</Collapse>
       <div className="admin-form-actions"><Button theme="solid" disabled={!ops.can} onClick={inspect}>预览并检查配置</Button></div>
     </div></Card> : <Card><div className="ss-body mo-supplier-batch">

@@ -1,3 +1,4 @@
+import AdminCollapsePanel from './AdminCollapsePanel';
 import { cloneElement, useEffect, useRef, useState } from 'react';
 import { Banner, Button, Collapse, Form, Input, InputNumber, Select, Space, TextArea, Tooltip, Typography, Upload } from '@douyinfe/semi-ui';
 import { IconHelpCircle, IconUpload } from '@douyinfe/semi-icons';
@@ -75,10 +76,10 @@ export default function MaterialMetadataForm({model,initial,readOnly,can,dirty,o
       {slot('简短介绍',readOnly?<Typography.Text>{display(form.description)}</Typography.Text>:<TextArea aria-label="简短介绍" rows={3} value={form.description} disabled={!editable} onChange={value=>change('description',value)}/>,'description',true)}
     </div>
     <Collapse keepDOM>
-      <Collapse.Panel header="模态与任务" itemKey="modalities"><div className="materials-field-grid">{fields([...COMMON_FIELDS,...PRESENTATION_FIELDS.filter(item=>['languages','scenarios'].includes(item.key))])}</div></Collapse.Panel>
-      <Collapse.Panel header="调用能力" itemKey="capabilities"><div className="materials-field-grid">{capabilities}{fields(FEATURE_FIELDS.filter(item=>['text','multimodal'].includes(form.type) || item.key==='batch'))}{fields(specificationFields(form.type,form.usageUnit,form.profile))}</div></Collapse.Panel>
-      <Collapse.Panel header="支持参数" itemKey="parameters"><div className="materials-field-grid">{fields(INTERFACE_FIELDS)}</div></Collapse.Panel>
-      <Collapse.Panel header="技术与来源" itemKey="source"><div className="materials-field-grid">{slot('资料来源',<Typography.Text>{sourceLabel}</Typography.Text>)}{fields(TECHNICAL_FIELDS)}{fields(IDENTITY_FIELDS.filter(item=>['lifecycle','retirementDate','replacement'].includes(item.key)))}{fields(RECORD_FIELDS)}{slot('详细介绍',readOnly?<Typography.Text>{display(form.profile.detailDescription)}</Typography.Text>:<TextArea aria-label="详细介绍" rows={4} value={form.profile.detailDescription || ''} disabled={!editable} onChange={value=>profileChange('detailDescription',value)}/>,'detailDescription',true)}</div></Collapse.Panel>
+      <AdminCollapsePanel header="模态与任务" itemKey="modalities"><div className="materials-field-grid">{fields([...COMMON_FIELDS,...PRESENTATION_FIELDS.filter(item=>['languages','scenarios'].includes(item.key))])}</div></AdminCollapsePanel>
+      <AdminCollapsePanel header="调用能力" itemKey="capabilities"><div className="materials-field-grid">{capabilities}{fields(FEATURE_FIELDS.filter(item=>['text','multimodal'].includes(form.type) || item.key==='batch'))}{fields(specificationFields(form.type,form.usageUnit,form.profile))}</div></AdminCollapsePanel>
+      <AdminCollapsePanel header="支持参数" itemKey="parameters"><div className="materials-field-grid">{fields(INTERFACE_FIELDS)}</div></AdminCollapsePanel>
+      <AdminCollapsePanel header="技术与来源" itemKey="source"><div className="materials-field-grid">{slot('资料来源',<Typography.Text>{sourceLabel}</Typography.Text>)}{fields(TECHNICAL_FIELDS)}{fields(IDENTITY_FIELDS.filter(item=>['lifecycle','retirementDate','replacement'].includes(item.key)))}{fields(RECORD_FIELDS)}{slot('详细介绍',readOnly?<Typography.Text>{display(form.profile.detailDescription)}</Typography.Text>:<TextArea aria-label="详细介绍" rows={4} value={form.profile.detailDescription || ''} disabled={!editable} onChange={value=>profileChange('detailDescription',value)}/>,'detailDescription',true)}</div></AdminCollapsePanel>
     </Collapse>
     {error && <Banner type="danger" description={error}/>}
     <div className="materials-form-footer"><Button onClick={onCancel}>{readOnly?'关闭':'取消'}</Button>{!readOnly && <Button htmlType="submit" theme="solid" loading={saving} disabled={!editable || uploading}>保存</Button>}</div>

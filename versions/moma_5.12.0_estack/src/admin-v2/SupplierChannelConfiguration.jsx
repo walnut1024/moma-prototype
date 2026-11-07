@@ -6,7 +6,7 @@ import { IconDelete, IconPlus } from '@douyinfe/semi-icons';
 import { Button, Checkbox, Input, Select, Steps, Table, Typography } from '@douyinfe/semi-ui';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import { Choice, Field } from './ModelMetadataForm';
-import { Notice, Pagination } from './ModelOperationsUI';
+import { Disclosure, Notice, Pagination } from './ModelOperationsUI';
 import { supplierDirectory } from './moma-provider';
 import { libraryRecord } from './model-library';
 import { MODEL_TYPES } from './model-management';
@@ -175,7 +175,7 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
       </div>)}
       {guidedStep===0 && rows.some(row=>{const master=masterFor(row);return master && state.models.some(model=>model.id===master.id || model.templateId===master.id);}) && <Field label="本次目标 *"><Choice label="新增供应目标" value={intent} options={[[ 'onboard','请选择本次目标' ],['reserve','准备备用供应'],['activate','投入当前服务']]} onChange={value=>{setIntent(value);dirty();}}/></Field>}
       {guidedStep===1 && rows.map(row=>{const existing=endpoint && provider?.catalogConnections?.find(item=>item.endpointId===endpoint.id && !item.deletedAt && item.upstreamModelId===row.upstreamModelId && provider.catalogModels.some(record=>record.modelId===item.modelId && libraryRecord(state,record.libraryId)?.id===masterFor(row)?.id));return <section key={row.id} className="onboarding-form-section"><Field label="上游模型标识 *"><Input aria-label="上游模型标识" value={row.upstreamModelId} maxLength={200} onChange={value=>setRow(row.id,{upstreamModelId:value})}/></Field><Typography.Title heading={5} component="h3">采购条件</Typography.Title>{existing?<p>复用已有模型关联，原采购报价保持不变。保存后核对当前采购条件。</p>:<SupplierPriceFields state={state} ops={ops} scenarios={row.scenarios} disabled={!ops.can} onChange={scenarios=>setRow(row.id,{scenarios})}/>}</section>;})}
-    {!guided && <details className="supplier-model-discovery"><summary>自动发现模型</summary><ChannelDiscovery state={discoveryState} provider={previewProvider} configuration={discoveryConfiguration} ops={{ ...ops, can: ops.can && (!useNewKey || Boolean(keyMetadata)) }} onAppend={discovered => { changeRows([...rows.filter(row => row.libraryId || row.modelPresetId || row.newModel || row.upstreamModelId), ...discovered]); }}/></details>}
+    {!guided && <Disclosure title="自动发现模型"><ChannelDiscovery state={discoveryState} provider={previewProvider} configuration={discoveryConfiguration} ops={{ ...ops, can: ops.can && (!useNewKey || Boolean(keyMetadata)) }} onAppend={discovered => { changeRows([...rows.filter(row => row.libraryId || row.modelPresetId || row.newModel || row.upstreamModelId), ...discovered]); }}/></Disclosure>}
     {errors.filter(error => guided || !error.rowId).map(error => <Notice error key={error.rowId + ':' + error.field}>{error.message}</Notice>)}{ops.error && !nameError && <Notice error>{ops.error}</Notice>}
   </SupplierCreationDialog></>;
 }

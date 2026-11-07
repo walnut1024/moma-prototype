@@ -135,7 +135,6 @@
 .supplier-import-form .supplier-price-hint{margin:0}
 .supplier-workbench ::selection{background:color-mix(in srgb,var(--primary) 18%,transparent)}
 .supplier-workbench input,.supplier-workbench textarea{caret-color:var(--primary)}
-.supplier-workbench summary:focus-visible{outline:2px solid var(--ring);outline-offset:4px;border-radius:3px}
 @media(max-width:1100px){.supplier-workbench .supplier-heading{align-items:flex-start}.supplier-actions{flex-wrap:wrap;justify-content:flex-end}.supplier-workbench .supplier-card>[data-slot=card-header]{padding-left:16px;padding-right:16px}.supplier-workbench .supplier-detail-card [data-slot=tabs-list]{gap:14px}.supplier-workbench .supplier-url{max-width:260px}}
 @media(max-width:760px){.supplier-workbench .supplier-heading{flex-direction:column;gap:12px}.supplier-actions{justify-content:flex-start;flex-wrap:wrap}.supplier-workbench .supplier-detail-card [data-slot=card-header]{grid-template-columns:1fr}.supplier-workbench .supplier-detail-card [data-slot=card-action]{grid-column:1;grid-row:auto!important;justify-self:start;margin-top:8px}.supplier-workbench .mo-form-grid{grid-template-columns:1fr}.supplier-workbench [data-slot=card-footer]{flex-wrap:wrap}.supplier-workbench [data-slot=card-footer]>span:first-child{width:100%}.supplier-workbench .mo-search{min-width:0;width:100%}.supplier-workbench .supplier-toolbar{padding:12px 16px}.supplier-workbench .mo-table-scroll{max-height:60dvh}}
 
@@ -211,7 +210,6 @@
 .mo-dialog .supplier-test-response dl{margin:16px 0}.mo-dialog .supplier-test-response dl>div{display:grid;grid-template-columns:70px minmax(0,1fr);gap:12px;margin:10px 0}.mo-dialog .supplier-test-response dt{color:var(--muted-foreground)}.mo-dialog .supplier-test-response dd{margin:0;overflow-wrap:anywhere}
 .mo-dialog .supplier-test-response-body{border-top:1px solid var(--border);padding-top:16px}.mo-dialog .supplier-test-response-body h4{margin:0 0 12px;font-weight:500}.mo-dialog .supplier-test-response-body p{color:var(--muted-foreground)}
 .mo-dialog .supplier-test-response-body .supplier-test-output{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--foreground)}
-.mo-dialog .supplier-test-response-body summary{cursor:pointer;color:var(--muted-foreground);font-size:11px}
 .mo-dialog .supplier-test-response-body pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:180px;overflow:auto;background:var(--background);padding:12px;border-radius:6px}
 .mo-dialog .supplier-test-footer{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1px solid var(--border);padding-top:16px}
 @media(max-width:760px){.mo-dialog .supplier-model-test{display:flex;flex-direction:column;overflow:auto}.mo-dialog .supplier-test-config,.mo-dialog .supplier-test-result{overflow:visible;flex:none}.mo-dialog .supplier-test-result{min-height:220px}.mo-dialog .supplier-test-footer{align-items:flex-start;flex-direction:column;position:sticky;bottom:0;background:var(--background)}.mo-dialog .supplier-test-footer>.supplier-key-actions{align-self:flex-end}}

@@ -2,7 +2,7 @@ import TemporaryChannelProbe from './TemporaryChannelProbe';
 import SupplierChannelBatchTest from './SupplierChannelBatchTest';
 import { useState } from 'react';
 import { Button } from '@douyinfe/semi-ui';
-import { Modal, Notice } from './ModelOperationsUI';
+import { Disclosure, Modal, Notice } from './ModelOperationsUI';
 import { supplierChannelName, supplierChannelReadiness } from './supplier-resources';
 import { connectionKeys, connectionCredentialsReady, connectionTestCurrent, connectionTestPassed } from './connection-state';
 import { channelCheckCurrent, channelInterfaceIssue, channelFingerprint } from './provider-channels';
@@ -36,7 +36,7 @@ export default function SupplierChannelTest({ state, provider, association, ops,
     <SupplierKeyGroupField state={state} provider={provider} ops={ops} value={groupId} disabled={!ops.can} current={endpoint.authMode !== 'group' || groupId === 'current' ? { name: endpoint.authMode === 'none' ? '无需认证' : '渠道当前密钥配置', ready: connectionCredentialsReady(endpoint, owner) } : null} onChange={id => { setGroupId(id); setPreview(null); ops.setError(''); }}/>
     {temporary && <p className="supplier-price-hint">切换密钥组仅用于本次测试。<Button type="tertiary" theme="borderless" disabled={!ops.can} onClick={() => setEditing('credentials')}>修改渠道密钥配置</Button></p>}
     <Notice error={Boolean(issue || !credentialsReady || result?.result === '失败' || ops.error)}>{ops.error || message}</Notice>
-    {result && !issue && credentialsReady && <details className="supplier-test-details"><summary>检查详情</summary><dl><dt>密钥 ID</dt><dd>{keys.map(providerApiKeyId).join('、') || '无需认证'}</dd><dt>检查时间</dt><dd>{result.testedAt ? new Date(result.testedAt).toLocaleString('zh-CN') : '本次检查'}</dd></dl></details>}
+    {result && !issue && credentialsReady && <Disclosure title="检查详情"><dl><dt>密钥 ID</dt><dd>{keys.map(providerApiKeyId).join('、') || '无需认证'}</dd><dt>检查时间</dt><dd>{result.testedAt ? new Date(result.testedAt).toLocaleString('zh-CN') : '本次检查'}</dd></dl></Disclosure>}
     {temporary && temporaryOpen && <TemporaryChannelProbe key={fingerprint} state={state} provider={owner} association={association} selectedEndpoint={selectedEndpoint} fingerprint={fingerprint} ops={ops}/>}
     {passed && !temporary && provider.status !== '已启用' && <p className="supplier-price-hint">服务商已停用，需先启用服务商。</p>}
     <div className="supplier-key-actions"><Button theme="light" onClick={close}>关闭</Button><Button theme={passed && !temporary && !ready ? 'light' : 'solid'} disabled={!ops.can || !credentialsReady || Boolean(issue)} onClick={test}>{result ? '重新测试' : '开始测试'}</Button>{passed && !temporary && !ready && <Button disabled={!ops.can || provider.status !== '已启用'} onClick={() => setBatchOpen(true)}>核对并启用</Button>}</div>

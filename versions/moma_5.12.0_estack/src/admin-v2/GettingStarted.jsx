@@ -1,3 +1,4 @@
+import AdminCollapsePanel from './AdminCollapsePanel';
 import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useState } from 'react';
 import { Card, Collapse, Space, Table, Typography } from '@douyinfe/semi-ui';
@@ -44,15 +45,9 @@ function GuideTasks({ tasks, guideId }) {
     if (linkedTask) setOpenTasks(current => current.includes(linkedTask.id) ? current : [...current, linkedTask.id]);
   }, [linkedTask]);
   return <Collapse activeKey={openTasks} onChange={setOpenTasks} className="gs-tasks">
-    {tasks.map(task => <Collapse.Panel key={task.id} itemKey={task.id}
-      onKeyDown={event => {
-        if (['Enter', ' '].includes(event.key) && event.target.getAttribute('role') === 'button') {
-          event.preventDefault();
-          event.target.click();
-        }
-      }} header={<Typography.Text id={task.id} strong>{task.title}</Typography.Text>}>
+    {tasks.map(task => <AdminCollapsePanel key={task.id} itemKey={task.id} header={<Typography.Text id={task.id} strong>{task.title}</Typography.Text>}>
       <div className="gs-copy"><Blocks blocks={task.blocks}/></div>
-    </Collapse.Panel>)}
+    </AdminCollapsePanel>)}
   </Collapse>;
 }
 

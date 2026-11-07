@@ -8,7 +8,7 @@ const cell = (row, label) => row.cells[MODEL_IMPORT_HEADERS.indexOf(label)] || '
 const typeTasks = [['文本', 'text'], ['多模态', 'multimodal'], ['视觉 · 图像', 'image'], ['视觉 · 视频', 'video'], ['语音', 'audio'], ['向量', 'embedding'], ['重排', 'rerank']];
 function ImportHelp() {
   return <section className="materials-import-help" aria-labelledby="model-import-help-title">
-    <h3 id="model-import-help-title">填写提示</h3>
+    <Typography.Title heading={5} component="h3" id="model-import-help-title">填写提示</Typography.Title>
     <dl className="materials-import-rules">
       <div><dt>必填信息</dt><dd>规范模型标识、模型展示名、模型类型。视觉模型还需填写视觉任务类型：图像或视频。其他字段未知时留空，不用填写 0 或“不支持”。</dd></div>
       <div><dt>规范模型标识</dt><dd>以小写字母或数字开头，可使用 . _ : / -，最多 80 字符。已有标识不覆盖，同一批次不能重复。</dd></div>
@@ -17,7 +17,7 @@ function ImportHelp() {
       <div><dt>日期与数值</dt><dd>日期用 YYYY-MM-DD；原厂发布日期、知识截止日期也可用 YYYY-MM。上下文窗口和最大输出使用 Token 正整数，参数规模使用 B；其他规格按表头单位填写，只填写适用于当前类型与任务的字段。</dd></div>
       <div><dt>参数与来源</dt><dd>支持参数填写参数名，如 temperature、max_tokens；默认参数为 JSON 对象，例如 {'{"temperature":0.7}'}，其中的参数名须已声明支持。版本状态：稳定版、预览版、已退役；资料状态：待核对、已核对。许可协议与架构使用资料表单中的选项名称或标识。模型 Logo、资料链接填写无凭据的 http / https 地址；批量导入不上传 Logo 图片。</dd></div>
     </dl>
-    <div className="materials-import-tasks"><h4>模型类型与支持任务</h4><dl>{typeTasks.map(([label, type]) => <div key={type}><dt>{label}</dt><dd>{TASK_OPTIONS[type].join('、')}</dd></div>)}</dl></div>
+    <div className="materials-import-tasks"><Typography.Title heading={6} component="h4">模型类型与支持任务</Typography.Title><dl>{typeTasks.map(([label, type]) => <div key={type}><dt>{label}</dt><dd>{TASK_OPTIONS[type].join('、')}</dd></div>)}</dl></div>
   </section>;
 }
 

@@ -1,3 +1,4 @@
+import AdminCollapsePanel from './AdminCollapsePanel';
 import { useEffect, useRef, useState } from 'react';
 import { Banner, Button, Card, Collapse, Descriptions, Form, Input, Modal, Space, Steps, Table, Tabs, Tag, Timeline, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
@@ -161,13 +162,13 @@ function DeploymentEditor({ state, existing, can, run, go, dirty }) {
             </div>
             <Paragraph type="secondary">总 GPU = 副本数 × 每副本 GPU。TP × PP 须等于每副本 GPU，跨节点拓扑及通信以集群调度检查为准。</Paragraph>
             <Collapse>
-              <Collapse.Panel itemKey="advanced" header="高级运行参数">
+              <AdminCollapsePanel itemKey="advanced" header="高级运行参数">
                 <div className="admin-deployment-fields">
                   {numberField('maxModelLen', '上下文上限（Token）', { placeholder: '沿用模型配置' })}
                   {numberField('gpuMemoryUtilization', '显存利用比例', { min: .01, max: 1, step: .01 })}
                   {numberField('startupTimeout', '启动超时（秒）', { min: 1, max: 7200 })}
                 </div>
-              </Collapse.Panel>
+              </AdminCollapsePanel>
             </Collapse>
             <Title heading={5} component="h2">服务访问</Title>
             <Text>OpenAI 兼容协议 · 平台内部端点</Text>
