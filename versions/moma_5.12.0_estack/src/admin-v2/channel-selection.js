@@ -52,7 +52,7 @@ export function selectChannelRows(selection, rows, checked) {
 
 export function channelStatus(provider, association) {
   if (!association) return '未配置渠道';
-  if (provider.status !== '已启用') return '供应商已停用';
+  if (provider.status !== '已启用') return '服务商已停用';
   if (association.endpoint?.frozen) return '已冻结';
   if (association.unlinked) return '未关联模型';
   if (!connectionCredentialsReady(association.endpoint, provider)) return '凭证待配置';

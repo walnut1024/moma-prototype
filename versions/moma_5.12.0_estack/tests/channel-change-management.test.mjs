@@ -114,7 +114,7 @@ test('rollback creates a new candidate, requires fresh tests, and appends a vers
 
 test('credential group candidates refer only to the same supplier and temporary results cannot forge real evidence', () => {
   const initial = fixture();
-  assert.throws(() => createCandidate(initial, { keyGroupId: 'foreign-group' }), /当前供应商/);
+  assert.throws(() => createCandidate(initial, { keyGroupId: 'foreign-group' }), /当前服务商/);
   assert.throws(() => createCandidate(initial, { apiKey: 'secret' }), /敏感字段/);
   let state = createCandidate(initial, { authMode: 'specific', apiKeyId: owner(initial).apiKeys.find(row => row.id !== owner(initial).defaultApiKeyId).id });
   state = testCandidate(state, { source: 'upstream', simulated: false });

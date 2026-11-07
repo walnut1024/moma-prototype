@@ -79,7 +79,7 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     assert.equal(state.models.find(m=>m.id===model.id).listingStatus,'已下架');
     assert.deepEqual(state.modelSalePrices,prices);
     const provider=(operation,values)=>save(state,{type:'modelOperations',operation:'provider',data:{operation,objectId:'provider-moma',values}});
-    state=await provider('create',{name:'D1验收供应商',code:'d1-qa-provider',sourceType:'thirdParty'});
+    state=await provider('create',{name:'D1验收服务商',code:'d1-qa-provider',sourceType:'thirdParty'});
     assert(state.providers.some(p=>p.code==='d1-qa-provider'));
     state=await provider('keyGroupSave',{name:'D1验收密钥组'});
     const group=state.providers.find(p=>p.id==='provider-moma').apiKeyGroups.find(g=>g.name==='D1验收密钥组');
@@ -107,6 +107,17 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     assert.equal((await local.db.prepare('SELECT active_purchase_price_id FROM channel_models WHERE id=?').bind(mapping).first()).active_purchase_price_id,association().procurementVersions[2].id);
     state=await save(state,{type:'modelOperations',operation:'tariffDictionary',data:{operation:'save',kind:'unit',name:'D1验收单位',englishName:'D1 QA unit'}});
     assert(state.tariffDictionary.some(r=>r.name==='D1验收单位'));
+    const dictionaryBefore=(await api('/model-operations')).data;
+    const dictionaryAction=name=>({type:'modelOperations',operation:'tariffDictionary',data:{operation:'save',kind:'scenario',name}});
+    await assert.rejects(save(state,dictionaryAction('')),/计费项/);
+    assert.deepEqual((await api('/model-operations')).data,dictionaryBefore);
+    state=await save(state,dictionaryAction('D1计费项'));
+    const entry=(await api('/model-operations')).data.tariffDictionary.find(row=>row.name==='D1计费项');
+    assert.equal(entry.status,undefined);assert.equal(entry.unitId,undefined);assert.equal(entry.englishName,undefined);
+    const afterEntry=(await api('/model-operations')).data;
+    await assert.rejects(save(dictionaryBefore,dictionaryAction('冲突计费项')),/修订|变化/);
+    await assert.rejects(save(state,{type:'modelOperations',operation:'tariffDictionary',data:{operation:'status',id:entry.id,status:'已停用'}}),/计费项不设/);
+    assert.deepEqual((await api('/model-operations')).data,afterEntry);
     for(const mode of ['standard','provider']){
       const current=state.models.find(m=>m.id===model.id);
       state=await save(state,{type:'modelOperations',operation:'serviceMode',modelId:model.id,data:{serviceMode:mode,expectedUpdatedAt:current.updatedAt,confirmedReset:true}});

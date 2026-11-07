@@ -46,11 +46,11 @@ export function modelSupplierRows(model, supplies) {
     if (groups.has(key)) continue;
     const keyCode = provider?.id.replace(/^(catalog-provider-|provider-)/, '');
     const code = provider?.code || keyCode;
-    groups.set(key, { key, name: provider?.name || '供应商不可用', code, callId: code ? `${code}/${modelCode(model)}` : null });
+    groups.set(key, { key, name: provider?.name || '服务商不可用', code, callId: code ? `${code}/${modelCode(model)}` : null });
   }
   return [...groups.values()];
 }
-export const MODEL_TABS = { basic: '基本信息', supplies: '供应商', pricing: '价格配置', publication: '上架配置', history: '变更记录' };
+export const MODEL_TABS = { basic: '基本信息', supplies: '服务商', pricing: '价格配置', publication: '上架配置', history: '变更记录' };
 const uid = prefix => `${prefix}-${crypto.randomUUID()}`;
 const add = (collection, record) => ({ type: 'add', collection, record });
 const update = (collection, id, changes) => ({ type: 'update', collection, id, changes });
@@ -84,7 +84,7 @@ export function activeSupplyPrice(state, supplyId, at = Date.now()) {
     const catalogueModelId = supply.catalogueModelId || supply.upstreamModelId;
     const quote = channelQuote || provider && providerCataloguePrice(provider, catalogueModelId);
     const items = (quote?.scenarios || []).map(({ listPrice, purchasePrice, ...item }) => ({ ...item, amount: cataloguePurchasePrice(listPrice, quote.discountFactor, purchasePrice) }));
-    return { items, sourceVersion: version?.id || JSON.stringify(quote ? { modelId: catalogueModelId, discountFactor: quote.discountFactor, scenarios: quote.scenarios } : null), ...(version ? { id: version.id, version: version.version, effectiveAt: version.effectiveAt, expiresAt: version.expiresAt } : {}), sourceLabel: `${provider?.name || '供应商已失效'} / ${catalogueModelId}`, catalogueModelId };
+    return { items, sourceVersion: version?.id || JSON.stringify(quote ? { modelId: catalogueModelId, discountFactor: quote.discountFactor, scenarios: quote.scenarios } : null), ...(version ? { id: version.id, version: version.version, effectiveAt: version.effectiveAt, expiresAt: version.expiresAt } : {}), sourceLabel: `${provider?.name || '服务商已失效'} / ${catalogueModelId}`, catalogueModelId };
   }
   return state.supplyPrices.filter(price => price.supplyId === supplyId && price.status === '生效中' && Date.parse(price.effectiveAt) <= at).sort((a, b) => Date.parse(b.effectiveAt) - Date.parse(a.effectiveAt))[0];
 }
@@ -119,13 +119,13 @@ export function publicationChecks(state, model, { technical = false } = {}) {
     const providers=providerServices(model);
     return [
       {label:metadataReady?'模型资料完整':'模型资料待完善',passed:metadataReady,tab:'basic'},
-      {label:providers.length?'已关联供应商':'尚未关联供应商',passed:providers.length>0,tab:'supplies'},
+      {label:providers.length?'已关联服务商':'尚未关联服务商',passed:providers.length>0,tab:'supplies'},
       ...providers.flatMap(entry=>{
         const provider=state.providers.find(item=>item.id===entry.providerId), price=activeProviderPrice(state,model.id,entry.providerId), service={id:providerServiceId(model.id,entry.providerId),modelId:model.id,model,providerId:entry.providerId,mode:'provider',callId:entry.callId};
         const channels=routingChannels(state,service);
         const priceReady=provider?.status==='已启用' && Boolean(entry.callId) && (technical || servicePurpose(model,entry.providerId)!=='internal' && Boolean(price?.items.length) && price.items.every(item=>item.amount!=null)), routeReady=routingStatus(state,service).good;
-        return [{label:`${provider?.name || '供应商'}：${technical?(entry.callId?'对外调用 ID 已配置':'对外调用 ID 待配置'):priceReady?'调用 ID 和售价已配置':!entry.callId?'对外调用 ID 待配置':'缺少对外售价'}`,passed:priceReady,tab:'pricing',providerId:entry.providerId},
-          {label:`${provider?.name || '供应商'}：${routeReady?'已发布可用渠道路由':channels.length?'路由尚未发布':'未关联可用渠道'}`,passed:routeReady,tab:'routing',providerId:entry.providerId,mapping:!channels.length}];
+        return [{label:`${provider?.name || '服务商'}：${technical?(entry.callId?'对外调用 ID 已配置':'对外调用 ID 待配置'):priceReady?'调用 ID 和售价已配置':!entry.callId?'对外调用 ID 待配置':'缺少对外售价'}`,passed:priceReady,tab:'pricing',providerId:entry.providerId},
+          {label:`${provider?.name || '服务商'}：${routeReady?'已发布可用渠道路由':channels.length?'路由尚未发布':'未关联可用渠道'}`,passed:routeReady,tab:'routing',providerId:entry.providerId,mapping:!channels.length}];
       }),
       {label:'开放范围明确',passed:scopeReady(state,model),tab:'publication'},
       platformPublicationCheck(state,model),
@@ -137,7 +137,7 @@ export function publicationChecks(state, model, { technical = false } = {}) {
     const routeReady=routingStatus(state,service).good, priceReady=prices.length>0 && prices.every(item=>item.amount!=null);
     return [
       {label:metadataReady?'模型资料完整':'模型资料待完善',passed:metadataReady,tab:'basic'},
-      {label:routeReady?'已发布有效的供应商与渠道路由映射':channels.length?'渠道路由待配置或发布':'尚未关联供应渠道',passed:routeReady,tab:'routing',mapping:!channels.length},
+      {label:routeReady?'已发布有效的服务商与渠道路由映射':channels.length?'渠道路由待配置或发布':'尚未关联供应渠道',passed:routeReady,tab:'routing',mapping:!channels.length},
       ...(!technical?[{label:servicePurpose(model)==='internal'?'内部服务无需销售上架':priceReady?'统一售价与计量规则完整':'统一售价待配置',passed:servicePurpose(model)!=='internal' && priceReady,tab:'pricing'}]:[]),
       {label:'开放范围明确',passed:scopeReady(state,model),tab:'publication'},
       platformPublicationCheck(state,model),
@@ -272,7 +272,7 @@ export function modelTransaction(state, action) {
     const supply = state.modelSupplies.find(item => item.id === data.id && item.modelId === model.id && item.status !== '已移除');
     if (!supply) throw new Error('供应服务不存在');
     const endpoint = state.endpoints.find(item => item.id === supply.endpointId), provider = state.providers.find(item => item.id === endpoint?.providerId);
-    if (operation === 'enableSupply' && (supply.validationStatus !== '通过' || connectionBlockReason(endpoint, provider))) throw new Error('供应服务需验证通过，且当前接入配置测试通过并启用、供应商已启用，才能启用');
+    if (operation === 'enableSupply' && (supply.validationStatus !== '通过' || connectionBlockReason(endpoint, provider))) throw new Error('供应服务需验证通过，且当前接入配置测试通过并启用、服务商已启用，才能启用');
     if (operation === 'verify') {
       const reason = connectionBlockReason(endpoint, provider);
       if (reason) throw new Error(reason);
@@ -281,14 +281,14 @@ export function modelTransaction(state, action) {
     } else changes.push(update('modelSupplies', supply.id, { status: { enableSupply: '已启用', disableSupply: '已停用', removeSupply: '已移除' }[operation] }));
   } else if (['priceDraft', 'pricePublish'].includes(operation)) {
     if (model.serviceMode === 'standard') throw new Error('统一服务模式只能配置统一售价');
-    if (model.serviceMode === 'provider') throw new Error('分供应商模式请在供应商服务配置维护平台售价');
+    if (model.serviceMode === 'provider') throw new Error('分服务商模式请在服务商服务配置维护平台售价');
     if (!Array.isArray(data.items)) throw new Error('请按完整计费项设置售价');
     const supply = modelSupplies(state, model.id).find(item => item.id === data.supplyId);
     if (!supply) throw new Error('供应服务不存在');
     const cost = activeSupplyPrice(state, supply.id), required = priceItems(cost, model);
     if (data.expectedSaleVersion !== latestSaleRevision(state, supply.id)) throw new Error('售价已有并发修订，请载入最新售价并核对草稿');
-    if (!required.length || required.some(item => item.amount == null)) throw new Error('采购价缺失，请补齐供应商目录报价');
-    if (data.sourceVersion !== procurementVersion(cost)) throw new Error('供应商报价已变化，请核对完整计费项与售价后重试');
+    if (!required.length || required.some(item => item.amount == null)) throw new Error('采购价缺失，请补齐服务商目录报价');
+    if (data.sourceVersion !== procurementVersion(cost)) throw new Error('服务商报价已变化，请核对完整计费项与售价后重试');
     if (data.items.length !== required.length || new Set(data.items.map(billingItemKey)).size !== required.length || required.some(item => !data.items.some(row => billingItemKey(row) === billingItemKey(item)))) throw new Error('售价须包含与采购价一致的完整计费项、单位和适用条件');
     const items = required.map(item => ({ name: item.name, condition: item.condition || '', unit: item.unit, currency: item.currency || 'CNY', amount: parseSaleAmount(data.items.find(row => billingItemKey(row) === billingItemKey(item)).amount, operation !== 'priceDraft') }));
     const effectiveAt = data.effectiveAt ? new Date(data.effectiveAt).toISOString() : at;

@@ -3,7 +3,7 @@ import { activeSupplyPrice, priceItems } from './model-management.js';
 
 export function resolveChannelAssociationModel(state, provider, association) {
   const endpoint = state.endpoints.find(row => row.id === association.endpointId && row.providerId === provider.id && !row.deletedAt);
-  if (!endpoint) throw new Error('模型渠道不属于当前供应商');
+  if (!endpoint) throw new Error('模型渠道不属于当前服务商');
   const entry = provider.catalogModels?.find(row => row.modelId === association.modelId);
   if (entry?.libraryId) {
     const master = libraryRecord(state, entry.libraryId);

@@ -43,7 +43,7 @@ test('saved data preserves renamed records and does not resurrect removed defaul
   const ids = new Set(DEFAULT_SUPPLIERS.map(item => item.id));
   saved.providers = saved.providers.filter(item => !ids.has(item.id));
   saved.endpoints = saved.endpoints.filter(item => !ids.has(item.providerId));
-  saved.providers[0].name = '已编辑的原供应商';
+  saved.providers[0].name = '已编辑的原服务商';
   const raw = JSON.stringify(saved);
   const restored = parseAdminState(raw);
   assert.deepEqual(supplierDirectory(restored).map(item => item.name), supplierDirectory(saved).map(item => item.name));
@@ -63,10 +63,10 @@ test('supplier edits and newly registered suppliers survive reload without dupli
   zhipu.contact = '智谱客户经理';
   zhipu.status = '已停用';
   zhipu.catalogModelIds.push('custom-glm');
-  saved.providers.push({ id: 'provider-custom', name: '新增供应商', code: 'custom' });
+  saved.providers.push({ id: 'provider-custom', name: '新增服务商', code: 'custom' });
   const restored = parseAdminState(JSON.stringify(saved));
   for (const id of DEFAULT_SUPPLIERS.map(item => item.id)) assert.equal(restored.providers.filter(item => item.id === id).length, 1);
   assert.deepEqual(restored.providers.find(item => item.id === MOMA_PROVIDER.id), provider);
   assert.deepEqual(supplierDirectory(restored).find(item => item.id === zhipu.id), zhipu);
-  assert.deepEqual(supplierDirectory(restored).map(item => item.name), [...directoryNames, '新增供应商']);
+  assert.deepEqual(supplierDirectory(restored).map(item => item.name), [...directoryNames, '新增服务商']);
 });

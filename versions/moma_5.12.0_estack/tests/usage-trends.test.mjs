@@ -92,7 +92,7 @@ test('supplier selection keeps whole groups dynamic and partial selections expli
   assert.equal(draft.channels.length, 3);
   draft = toggleSupplyGroup(draft, 'p1', channels, false);
   assert.deepEqual(draft, { providers: [], channels: ['e3'] });
-  assert.equal(supplySummary({ providers: ['p1'], channels: [] }, usageFilterOptions(state)), '供应商：1个');
+  assert.equal(supplySummary({ providers: ['p1'], channels: [] }, usageFilterOptions(state)), '服务商：1个');
 });
 
 test('saved view round trip preserves filters and modes and rejects malformed state', () => {

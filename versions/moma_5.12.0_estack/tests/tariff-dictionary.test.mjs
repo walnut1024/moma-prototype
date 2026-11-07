@@ -40,7 +40,7 @@ test('automatically generated custom IDs survive editing, status changes and rel
   state = parseAdminState(JSON.stringify(state));
   assert.equal(await tariffDictionaryId(find(state, '计费小时').id), compactId);
   assert.equal(await tariffDictionaryId(find(state, '定制输入时长').id), sceneId);
-  assert.equal(find(state, '定制输入时长').unitId, id);
+  assert.equal(find(state, '定制输入时长').unitId, undefined);
 });
 
 test('removed generic scenarios stay absent after restoring old records without changing saved prices', () => {
@@ -58,7 +58,7 @@ test('removed generic scenarios stay absent after restoring old records without 
 
 test('shared choices restore without resetting custom edits, disabled items or empty dictionaries', () => {
   const state = createAdminSeed();
-  assert.deepEqual(state.tariffDictionary, tariffDictionarySeed());
+  assert.deepEqual(tariffDictionaryEntries(state), tariffDictionarySeed());
   assert.ok(tariffOptions(state, 'scenario').includes('输入 Token'));
   const existing = structuredClone(state); delete existing.tariffDictionary;
   const restored = parseAdminState(JSON.stringify(existing));
@@ -94,8 +94,9 @@ test('referenced dictionary names cannot change; disabling preserves snapshots a
   const providers = structuredClone(state.providers);
   assert.throws(()=>save(state,{id,name:'定制标准输入',unitId}),/价格或草稿引用/);
   assert.throws(()=>save(state,{id:unitId,name:'千个 Token'}),/价格或草稿引用/);
-  state = status(status(state, id, '已停用'), unitId, '已停用');
-  assert.ok(!tariffOptions(state, 'scenario').includes('定制输入 Token'));
+  assert.throws(()=>status(state, id, '已停用'),/计费项不设/);
+  state = status(state, unitId, '已停用');
+  assert.ok(tariffOptions(state, 'scenario').includes('定制输入 Token'));
   assert.deepEqual(state.providers, providers);
   assert.deepEqual(commitAdminState(state, price).providers.find(item => item.id === 'provider-moma').catalogPricing, providers.find(item => item.id === 'provider-moma').catalogPricing);
   state = status(state, unitId, '已启用');
@@ -106,7 +107,6 @@ test('referenced dictionary names cannot change; disabling preserves snapshots a
 test('invalid custom edits and duplicates reject atomically including disabled names and invalid kinds', () => {
   let state = save(createAdminSeed(), { kind: 'scenario', name: '自定义输入' });
   const id = find(state, '自定义输入').id;
-  state = status(state, id, '已停用');
   const before = JSON.stringify(state);
   for (const kind of ['wrong', 'constructor', '__proto__']) assert.throws(() => save(state, { kind, name: 'bad' }), /计费项、计价单位或货币/);
   for (const name of ['', 'x'.repeat(81), '输入\n输出']) assert.throws(() => save(state, { kind: 'scenario', name }), /计费项/);
@@ -115,7 +115,7 @@ test('invalid custom edits and duplicates reject atomically including disabled n
   assert.throws(() => save(state, { kind: 'unit', name: '百万 TOKEN' }), /已存在/);
   assert.throws(() => save(state, { id: 'missing', kind: 'scenario', name: '场景' }), /不存在/);
   assert.throws(() => status(state, 'missing', '已启用'), /无效/);
-  assert.throws(() => status(state, id, '已删除'), /无效/);
+  assert.throws(() => status(state, id, '已删除'), /计费项不设/);
   assert.equal(JSON.stringify(state), before);
   assert.equal(normalizeTariffName('unit', ' 百万  Token '), '百万 Token');
   const full = { ...state, tariffDictionary: [...state.tariffDictionary.filter(item => item.kind !== 'scenario'), ...Array.from({ length: 200 }, (_, i) => ({ id: `limit-${i}`, kind: 'scenario', name: `场景${i}`, status: '已启用' }))] };
@@ -140,7 +140,7 @@ test('English names and ISO currencies validate while old records remain unchang
   state = status(state, eur.id, '已停用');
   assert.ok(!tariffOptions(state, 'currency').includes('EUR'));
   assert.throws(() => save(state, { kind: 'currency', name: '重复欧元', code: 'EUR' }), /已存在/);
-  for (const englishName of ['', '中文', '123', 'Input\nOutput', 'x'.repeat(81)]) assert.throws(() => save(seed, { kind: 'scenario', name: '测试', englishName }), /英文名称/);
+  for (const englishName of ['', '中文', '123', 'Input\nOutput', 'x'.repeat(81)]) assert.throws(() => save(seed, { kind: 'unit', name: '测试', englishName }), /英文名称/);
   for (const code of ['', 'usd', 'ZZZ', 'US', '__proto__']) assert.throws(() => normalizeCurrency(code), /货币代码/);
   const old = structuredClone(seed); old.tariffDictionary = [{ id: 'saved', kind: 'unit', name: '元/小时', status: '已停用', builtin: false }];
   old.providers.find(item => item.id === 'provider-moma').catalogPricing = [{ modelId: 'ZHIPU/GLM-5.1', discountFactor: 0, scenarios: [{ name: '旧输入', unit: '元/小时', listPrice: 0 }] }];
@@ -150,25 +150,21 @@ test('English names and ISO currencies validate while old records remain unchang
   assert.equal(JSON.stringify(seed), before);
 });
 
-test('custom unit links follow renames, preserve quotes and reject missing or newly disabled references', () => {
-  let state = save(createAdminSeed(), { kind: 'unit', name: '像素' });
-  const first = find(state, '像素').id;
-  state = save(state, { kind: 'scenario', name: '定制图像输出', unitId: first });
-  const id = find(state, '定制图像输出').id;
-  state = commitAdminState(state, quoteAction('定制图像输出', '像素', 'USD'));
-  const providers = structuredClone(state.providers);
-  state = save(state, { kind: 'unit', name: '帧' });
-  const unitId = find(state, '帧').id;
-  state = save(state, { id, name: '定制图像输出', unitId });
-  state = save(state, { id: unitId, name: '图像帧' });
-  assert.equal(tariffScenarioUnit(parseAdminState(JSON.stringify(state)), '定制图像输出'), '图像帧');
-  assert.deepEqual(state.providers, providers);
-  state = status(state, unitId, '已停用');
-  assert.equal(tariffScenarioUnit(state, '定制图像输出'), '');
-  assert.doesNotThrow(() => save(state, { id, name: '定制图像输出', unitId }));
-  const before = JSON.stringify(state);
-  for (const invalid of [undefined, '', 'missing', 'tariff-currency-1', id, unitId]) assert.throws(() => save(state, { kind: 'scenario', name: '无效关联', unitId: invalid }), /计价单位/);
-  assert.equal(JSON.stringify(state), before);
+test('billing items require a name without English, unit or status fields and preserve existing records', () => {
+  let state=createAdminSeed();
+  const snapshot=JSON.stringify(state);
+  assert.ok(tariffDictionaryEntries(state).filter(item=>item.kind==='scenario').every(item=>!Object.hasOwn(item,'status')));
+  assert.equal(JSON.stringify(state),snapshot);
+  state=commitAdminState(state,{type:'modelOperations',operation:'tariffDictionary',data:{operation:'save',kind:'scenario',name:'定制视频'}});
+  const item=find(state,'定制视频');
+  assert.equal(item.unitId,undefined);assert.equal(item.status,undefined);assert.equal(item.englishName,undefined);
+  state=save(state,{id:item.id,name:'定制视频时长'});
+  assert.equal(find(parseAdminState(JSON.stringify(state)),'定制视频时长').id,item.id);
+  assert.throws(()=>status(state,item.id,'已停用'),/计费项不设/);
+  const old={...state,tariffDictionary:[...state.tariffDictionary,{id:'old-custom',kind:'scenario',name:'旧自定义',englishName:'Old item',status:'已停用',unitId:'tariff-unit-1'}]};
+  assert.ok(tariffOptions(old,'scenario').includes('旧自定义'));
+  assert.equal(tariffScenarioUnit(old,'旧自定义'),'百万 Token');
+  assert.equal(old.tariffDictionary.at(-1).status,'已停用');
 });
 
 test('built-in billing quantities have stable IDs, descriptions and valid unit links', () => {
@@ -189,8 +185,8 @@ test('built-in billing quantities have stable IDs, descriptions and valid unit l
 test('custom billing descriptions persist and invalid text never commits partially', () => {
   const state = save(createAdminSeed(), { kind: 'scenario', name: '定制输入 Token' }), id = find(state, '定制输入 Token').id, before = JSON.stringify(state);
   for (const description of ['x'.repeat(161), '输入\n输出', 123, {}]) assert.throws(() => save(state, { id, name: '定制输入 Token', description }), /计费说明/);
-  const changed = save(state, { id, name: '定制输入 Token', description: '  供应商输入计费口径  ' });
-  assert.equal(find(parseAdminState(JSON.stringify(changed)), '定制输入 Token').description, '供应商输入计费口径');
+  const changed = save(state, { id, name: '定制输入 Token', description: '  服务商输入计费口径  ' });
+  assert.equal(find(parseAdminState(JSON.stringify(changed)), '定制输入 Token').description, '服务商输入计费口径');
   assert.deepEqual(changed.providers, state.providers);
   assert.equal(JSON.stringify(state), before);
 });
@@ -212,10 +208,10 @@ test('custom deletions persist, block referenced units including disabled items 
   const currency = find(state, '欧元').id;
   state = commitAdminState(state, quoteAction('定制时长', '小时', 'EUR'));
   const providers = structuredClone(state.providers), builtins = state.tariffDictionary.filter(item => item.builtin), before = JSON.stringify(state);
-  assert.throws(() => remove(state, unit), /被计费项引用/);
+  assert.throws(() => remove(state, unit), /仍被.*引用/);
   assert.equal(JSON.stringify(state), before);
-  state = status(state, scene, '已停用');
-  assert.throws(() => remove(state, unit), /被计费项引用/);
+  assert.throws(()=>status(state,scene,'已停用'),/计费项不设/);
+  assert.throws(() => remove(state, unit), /仍被.*引用/);
   let saved = JSON.stringify(state);
   const storage = { getItem: () => saved, setItem: (_, next) => { saved = next; } };
   for(const id of [scene,currency])assert.throws(()=>remove(state,id),/仍被.*引用/);

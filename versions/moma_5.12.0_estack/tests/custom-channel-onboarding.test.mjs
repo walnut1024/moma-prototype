@@ -10,7 +10,7 @@ import { serviceMetadataReady, serviceModelDraft } from '../src/admin-v2/model-p
 
 const run = (state, operation, data) => commitAdminState(state, { type: 'modelOperations', operation, data });
 const clean = () => { const state = parseAdminState(null); for (const key of ['providers', 'endpoints', 'models', 'modelTemplates', 'modelSupplies', 'supplyPrices', 'modelSalePrices', 'serviceRoutes', 'modelOnboardings']) state[key] = []; return state; };
-const payload = extra => ({ newProvider: { name: '目录外独立供应商' }, values: { name: '独立接入', interfaceType: 'openai', baseUrl: 'https://custom.example.invalid/v1', keyGroupId: 'default', authMode: 'group', models: [{ newModel: { modelId: 'custom-model-v1', type: 'text' } }] }, ...extra });
+const payload = extra => ({ newProvider: { name: '目录外独立服务商' }, values: { name: '独立接入', interfaceType: 'openai', baseUrl: 'https://custom.example.invalid/v1', keyGroupId: 'default', authMode: 'group', models: [{ newModel: { modelId: 'custom-model-v1', type: 'text' } }] }, ...extra });
 
 test('custom identity previews stay read-only and never fabricate model capabilities or service metadata', () => {
   const state = clean(), before = structuredClone(state), data = payload();
@@ -57,7 +57,7 @@ test('custom forms survive unfinished draft round trips without materializing su
 });
 
 test('restoring incomplete identity text stays neutral while valid duplicate identities and broken references still report conflicts', () => {
-  const state = clean(), value = { newProvider: { name: '未完成资料供应商' }, name: '未完成身份草稿', interfaceType: 'openai', baseUrl: 'https://unfinished.' };
+  const state = clean(), value = { newProvider: { name: '未完成资料服务商' }, name: '未完成身份草稿', interfaceType: 'openai', baseUrl: 'https://unfinished.' };
   for (const modelId of ['', 'Upper Part', 'draft model ']) {
     const saved = run(state, 'channelDraftSave', { value, rows: [{ id: 'unfinished-model', newModel: { modelId, type: 'embedding' }, upstreamModelId: '', scenarios: [] }] }), draft = channelDrafts(saved)[0];
     assert.equal(channelDraftIssue(saved, draft), '');
@@ -65,10 +65,10 @@ test('restoring incomplete identity text stays neutral while valid duplicate ide
   }
   const registered = run(state, 'channelQuickCreate', payload()), provider = registered.providers[0], master = registered.modelTemplates[0];
   const duplicateProvider = { value: { ...value, newProvider: { name: provider.name } }, rows: [{ id: 'one', newModel: { modelId: '', type: 'text' } }] };
-  assert.match(channelDraftIssue(registered, duplicateProvider), /供应商名称已存在/);
+  assert.match(channelDraftIssue(registered, duplicateProvider), /服务商名称已存在/);
   const duplicateModel = { value: { providerId: provider.id }, rows: [{ id: 'one', newModel: { modelId: master.modelId, type: master.type } }] };
   assert.match(channelDraftIssue(registered, duplicateModel), /模型编码.*已存在/);
-  assert.match(channelDraftIssue(registered, { value: { providerId: 'missing' }, rows: [] }), /供应商已不存在/);
+  assert.match(channelDraftIssue(registered, { value: { providerId: 'missing' }, rows: [] }), /服务商已不存在/);
   assert.match(channelDraftIssue(registered, { value: { providerId: provider.id }, rows: [{ libraryId: 'missing' }] }), /模型资料已不存在/);
 });
 
@@ -87,7 +87,7 @@ test('custom identities reject conflicts, unsupported fields, malformed IDs and 
   ];
   for (const data of variants) { assert.throws(() => run(state, 'channelQuickCreate', data)); assert.deepEqual(state, before); }
   const registered = run(state, 'channelQuickCreate', base), existing = registered.providers[0], master = registered.modelTemplates[0];
-  assert.throws(() => run(registered, 'channelQuickCreate', base), /供应商名称已存在/);
+  assert.throws(() => run(registered, 'channelQuickCreate', base), /服务商名称已存在/);
   assert.throws(() => run(registered, 'channelQuickCreate', { providerId: existing.id, values: base.values }), /模型编码.*已存在/);
   const reused = run(registered, 'channelQuickCreate', { providerId: existing.id, values: { ...base.values, name: '明确引用已有资料', models: [{ libraryId: master.id, upstreamModelId: 'actual/second' }] } });
   assert.equal(reused.modelTemplates.length, 1); assert.equal(reused.providers.length, 1);

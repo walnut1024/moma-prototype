@@ -27,6 +27,12 @@ export function serviceLifecycle(model) {
   if (model.listingStatus==='已上架') return model.releaseStage==='gray'?'灰度上架':'已上架';
   return (model.serviceManaged || model.serviceReviewCase) && !model.firstPublishedAt?'未上架':'已下架';
 }
+export function serviceHeaderStatus(model) {
+  return {
+    service: model.listingStatus === '已上架' ? model.releaseStage === 'gray' ? '灰度上架' : '正式上架' : '已下架',
+    visibility: model.marketVisible === false ? '用户不可见' : model.releaseStage === 'gray' ? '灰度用户可见' : '用户可见',
+  };
+}
 export function serviceConfiguration(state,model) {
   const issues=publicationChecks(state,model,{technical:true}).filter(check=>!check.passed),setupIssues=issues.filter(check=>check.tab!=='platform');
   return {label:!model.serviceMode?'未配置':setupIssues.length?'待配置':issues.length?'待验证':model.callsEnabled?'已启用':'可启用',issues,setupIssues};
@@ -99,7 +105,7 @@ export function commercialTaskBase(state, model, kind, providerId = '') {
 
 export function servicePriceIdentity(state, model, providerId = '') {
   const provider = state.providers.find(row => row.id === (providerId || MOMA_PROVIDER.id));
-  return { supplierName: provider?.name || '供应商已不存在', callId: providerId ? providerServices(model).find(row => row.providerId === providerId)?.callId || '' : model.modelId || '' };
+  return { supplierName: provider?.name || '服务商已不存在', callId: providerId ? providerServices(model).find(row => row.providerId === providerId)?.callId || '' : model.modelId || '' };
 }
 
 export function currentServiceCosts(state,model,providerId='') {

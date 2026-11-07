@@ -44,28 +44,28 @@
 .admin-v2 .v2-sidebar nav section > div > button { color: #586982; }
 .admin-v2 .v2-sidebar nav section > div > button.active { color: var(--primary); background: var(--accent); }
 
-:is(.admin-v2, .admin-ui-portal) [data-slot="button"] {
+:is(.admin-v2, .admin-ui-portal) [data-slot="button"]:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) {
   font-size: 12px;
   border-radius: 10px;
 }
-:is(.admin-v2, .admin-ui-portal) .v2-primary { border-radius: 10px !important; }
+:is(.admin-v2, .admin-ui-portal) .v2-primary:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { border-radius: 10px !important; }
 .admin-ui-portal [data-slot="button"]:is([data-variant="outline"], [data-variant="ghost"], [data-variant="secondary"]) { color: var(--foreground); }
 .admin-ui-portal [data-slot="button"][data-variant="link"] { color: var(--primary); }
 .admin-ui-portal [data-slot="button"]:is([data-variant="destructive"], .text-destructive) { color: var(--destructive); }
 .admin-ui-portal [data-slot="button"]:is([data-selected-single="true"], [data-range-start="true"], [data-range-end="true"]) { background: var(--primary); color: var(--primary-foreground); }
-:is(.admin-v2, .admin-ui-portal) :is([data-slot="input"], [data-slot="select-trigger"], [data-slot="textarea"]) {
+:is(.admin-v2, .admin-ui-portal) :is([data-slot="input"], [data-slot="select-trigger"], [data-slot="textarea"]):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) {
   font-size: 12px;
   border-color: var(--input);
   border-radius: 8px;
 }
-:is(.admin-v2, .admin-ui-portal) :is([data-slot="input"], [data-slot="select-trigger"]) { min-height: 32px; }
-:is(.admin-v2, .admin-ui-portal) :is(input, textarea)::placeholder { color: #5d6b82; opacity: 1; }
-:is(.admin-v2, .admin-ui-portal) [aria-invalid="true"] { border-color: var(--destructive); }
-:is(.admin-v2, .admin-ui-portal) :focus-visible {
+:is(.admin-v2, .admin-ui-portal) :is([data-slot="input"], [data-slot="select-trigger"]):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { min-height: 32px; }
+:is(.admin-v2, .admin-ui-portal) :is(input, textarea):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *))::placeholder { color: #5d6b82; opacity: 1; }
+:is(.admin-v2, .admin-ui-portal) [aria-invalid="true"]:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { border-color: var(--destructive); }
+:is(.admin-v2, .admin-ui-portal) :focus-visible:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
-:is(.admin-v2, .admin-ui-portal) ::selection { background: #d8e6ff; color: #263247; }
+:is(.admin-v2, .admin-ui-portal) :where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *))::selection { background: #d8e6ff; color: #263247; }
 .admin-ui-portal[data-slot="select-content"] { border-color: var(--border); border-radius: 8px; }
 .admin-ui-portal[data-slot="select-content"] [data-slot="select-item"] { min-height: 32px; font-size: 12px; }
 .admin-ui-portal :is([data-slot="command-input"], [data-slot="command-item"]) { font-size: 12px; }
@@ -103,8 +103,8 @@
 .admin-ui-portal[data-slot="dialog-content"]:not(:is(.mo-dialog, .mm-dialog, .enterprise-dialog, .aa-dialog, .dp-dialog, .tp-dialog, .ov-detail, .operation-input-dialog, .entity-drawer)):has(table) { width: min(960px, calc(100vw - 40px)); }
 
 /* Native controls in retained gateway and settlement pages use the same scale. */
-:is(.admin-v2, .admin-ui-portal) select,
-:is(.admin-v2 .entity-drawer, .admin-ui-portal.entity-drawer) :is(input, textarea) {
+:is(.admin-v2, .admin-ui-portal) select:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)),
+:is(.admin-v2 .entity-drawer, .admin-ui-portal.entity-drawer) :is(input, textarea):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) {
   min-height: 32px;
   max-width: 100%;
   padding: 6px 10px;
@@ -114,7 +114,7 @@
   color: var(--foreground);
   font: inherit;
 }
-:is(.admin-v2, .admin-ui-portal) select:disabled { background: #f3f5f8; color: #5d6b82; cursor: not-allowed; }
+:is(.admin-v2, .admin-ui-portal) select:disabled:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { background: #f3f5f8; color: #5d6b82; cursor: not-allowed; }
 .admin-v2 .v2-toolbar { height: auto; min-height: 54px; padding-block: 10px; flex-wrap: wrap; }
 .admin-v2 .v2-toolbar label:has(input) { min-width: 0; border-color: var(--input); border-radius: 8px; }
 .admin-v2 .v2-toolbar label > svg { flex: none; width: 14px; height: 14px; color: #5d6b82; }
@@ -144,14 +144,14 @@
 .admin-v2 .incident-grid dl > span { display: grid; gap: 4px; }
 .admin-v2 .incident-grid ol { margin: 16px 0; padding-left: 20px; line-height: 1.8; }
 
-:is(.admin-v2, .admin-ui-portal) table th {
+:is(.admin-v2, .admin-ui-portal) table th:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) {
   background: #f8faff;
   color: #586982;
   border-color: #e4eaf3;
   font-size: 12px;
   font-weight: 500;
 }
-:is(.admin-v2, .admin-ui-portal) table { font-size: 12px; }
+:is(.admin-v2, .admin-ui-portal) table:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { font-size: 12px; }
 .admin-v2 :is(.v2-table, .mo-table, .ent-table, .aa-table) [data-slot="button"] { font-size: 12px; }
 .admin-v2 .ua-panel:has(.ua-echart) [data-slot="card-title"],
 .admin-v2 .ops-monitor > article > header b { font-size: 16px; font-weight: 600; }
@@ -166,7 +166,7 @@
 .admin-v2 [data-admin-page="bills"] table :is(th, td):nth-child(n+4):nth-child(-n+6),
 .admin-v2 [data-admin-page="settlement"] table :is(th, td):nth-child(n+4):nth-child(-n+6),
 .admin-v2 [data-admin-page="adjustments"] table :is(th, td):nth-child(3) { text-align: right; font-variant-numeric: tabular-nums; }
-:is(.admin-v2, .admin-ui-portal) table td { color: #263247; border-color: #e8edf5; }
+:is(.admin-v2, .admin-ui-portal) table td:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { color: #263247; border-color: #e8edf5; }
 .admin-v2 :is(.mo-table, .ent-table, .aa-table, .v2-table table) tbody tr:hover { background: #f8faff; }
 .admin-v2 .supplier-workbench .mo-table th:last-child { background: #f8faff; }
 .admin-v2 :is(.mo-empty, .ent-empty, .aa-empty, .v2-empty) { color: #5d6b82; padding: 40px 16px; line-height: 1.7; }
@@ -196,8 +196,8 @@
 .admin-v2 .mo-onboarding .mo-form-grid { margin-top: 0; gap: 16px 24px; }
 .admin-v2 .supplier-workbench [data-slot="card-action"] [data-slot="button"] { height: 32px; }
 .admin-v2 .supplier-workbench .supplier-toolbar [data-slot="input"] { height: 32px; }
-:is(.admin-v2, .admin-ui-portal) .mo-billing-table :is(th, td):nth-child(n+3) { text-align: right; }
-:is(.admin-v2, .admin-ui-portal) .mo-billing-table input { text-align: right; }
+:is(.admin-v2, .admin-ui-portal) .mo-billing-table :is(th, td):nth-child(n+3):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { text-align: right; }
+:is(.admin-v2, .admin-ui-portal) .mo-billing-table input:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { text-align: right; }
 .mo-dialog .supplier-price-input-table input[inputmode="decimal"] { text-align: right; }
 .admin-ui-portal[data-slot="dialog-content"] {
   border-color: var(--border);
@@ -217,17 +217,17 @@
 }
 
 /* Canonical roles override the inherited page-specific scales, only in Admin. */
-:is(.admin-v2, .admin-ui-portal) :is(.mo-workbench, .supplier-workbench, .individual-page, .enterprise-page, .iu-dialog, .mm-form, [aria-label="面包屑"]) {
+:is(.admin-v2, .admin-ui-portal) :is(.mo-workbench, .supplier-workbench, .individual-page, .enterprise-page, .iu-dialog, .mm-form, [aria-label="面包屑"]):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) {
   --primary: #315fe8; --ring: #315fe8; --muted-foreground: #5d6b82;
   --mo-blue: #315fe8; --mo-muted: #5d6b82; --pm-blue: #315fe8; --input: #586982;
 }
 .admin-ui-portal { --primary: #315fe8; --ring: #315fe8; --muted-foreground: #5d6b82; --mo-blue: #315fe8; --mo-muted: #5d6b82; }
-:is(.admin-v2, .admin-ui-portal) :is(h1, h2, h3, [data-slot="dialog-title"], [data-slot="card-title"]) { font-size: 14px !important; font-weight: 600 !important; line-height: 1.5 !important; color: #263247 !important; }
+:is(.admin-v2, .admin-ui-portal) :is(h1, h2, h3, [data-slot="dialog-title"], [data-slot="card-title"]):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { font-size: 14px !important; font-weight: 600 !important; line-height: 1.5 !important; color: #263247 !important; }
 .admin-v2 :is(.ua-panel:has(.ua-echart), .ov-trend, .ov-ranking, .ov-supply, .ov-users) [data-slot="card-title"],
 .admin-v2 .ops-monitor > article > header b { font-size: 16px !important; font-weight: 600 !important; color: #263247 !important; }
 .admin-v2 :is(.ua-kpis, .ca-summary) [data-slot="card-title"] { font-size: 14px !important; font-weight: 600 !important; }
-:is(.admin-v2, .admin-ui-portal) :is(small, code, dt, .mo-muted, .mo-helper, .mo-copy, .an-note, .sfv-label, .sfv-dialog-group strong, .ent-hint, .dp-list-note, .unified-chart-tools > span) { color: #5d6b82 !important; }
-:is(.admin-v2, .admin-ui-portal) code { font: 400 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+:is(.admin-v2, .admin-ui-portal) :is(small, code, dt, .mo-muted, .mo-helper, .mo-copy, .an-note, .sfv-label, .sfv-dialog-group strong, .ent-hint, .dp-list-note, .unified-chart-tools > span):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { color: #5d6b82 !important; }
+:is(.admin-v2, .admin-ui-portal) code:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { font: 400 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .admin-v2 :is(.mo-heading, .supplier-heading, .ent-page-head) p,
 .admin-ui-portal :is([data-slot="dialog-description"], .ent-section-head p, .supplier-price-hint) { color: #5d6b82 !important; }
 .admin-v2 :is(.ent-section-head > span, .v2-list > footer, .ops-ranking small, .ops-ranking i, .dp-steps li > span),
@@ -242,41 +242,41 @@
 .admin-v2 :is(.ov-value strong, .ua-kpi strong, .an-metrics strong, .an-conversion strong, .ca-metrics strong, .v2-summary b, .tp-kpis strong, .ops-monitor > article > strong) { font-size: 28px !important; font-weight: 600 !important; line-height: 1.25 !important; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .admin-v2 :is(.ov-metric-value, .ua-metric-value, .ca-metrics) { align-items: baseline; }
 
-:is(.admin-v2, .admin-ui-portal) :is(button, input, select, textarea) { font-family: inherit; }
-:is(.admin-v2, .admin-ui-portal) :where(button:not([role="checkbox"]):not([role="radio"])) { min-height: 32px !important; font-size: 12px !important; line-height: 1.5; transition: color 120ms ease-out, background-color 120ms ease-out, border-color 120ms ease-out; }
-:is(.admin-v2, .admin-ui-portal) [data-slot="button"] { height: auto !important; min-height: 32px; padding: 6px 12px; gap: 4px; border-radius: 10px; box-shadow: none; }
-:is(.admin-v2, .admin-ui-portal) :is([data-size^="icon"], .ov-help, .mo-copy > button) { flex: none; min-width: 32px !important; width: 32px !important; height: 32px !important; padding: 7px !important; }
-:is(.admin-v2, .admin-ui-portal) .lucide { flex: none; width: 16px !important; height: 16px !important; stroke-width: 2px; }
-:is(.admin-v2, .admin-ui-portal) :is([data-variant="outline"], [data-variant="secondary"]),
-:is(.admin-v2 .entity-drawer, .admin-ui-portal.entity-drawer) form footer [data-variant="ghost"] { color: #263247 !important; background: #fff !important; border: 1px solid #586982 !important; }
-:is(.admin-v2, .admin-ui-portal) :is([data-variant="outline"], [data-variant="secondary"]):hover:not(:disabled) { background: #f8faff !important; }
-:is(.admin-v2, .admin-ui-portal) :is([data-slot="button"][data-variant="default"], .v2-primary) { background: #315fe8 !important; border-color: #315fe8 !important; color: #fff !important; }
-:is(.admin-v2, .admin-ui-portal) :is([data-slot="button"][data-variant="default"], .v2-primary):is(:hover, :active):not(:disabled) { background: #2854d6 !important; border-color: #2854d6 !important; }
-:is(.admin-v2, .admin-ui-portal) :is([data-variant="link"], .ent-link, .ov-name, .supplier-price-actions button, .v2-table td button) { color: #315fe8 !important; background: transparent; font-size: 12px !important; text-decoration: none; text-underline-offset: 3px; }
-:is(.admin-v2, .admin-ui-portal) :is([data-variant="link"], .ent-link, .ov-name, .v2-table td button):is(:hover, :focus-visible) { color: #2854d6 !important; text-decoration: underline; }
-:is(.admin-v2, .admin-ui-portal) [data-variant="ghost"] { color: #263247; }
-:is(.admin-v2, .admin-ui-portal) button:active { translate: none; }
-:is(.admin-v2, .admin-ui-portal) :is(button, input, select, textarea):disabled,
-:is(.admin-v2, .admin-ui-portal) [aria-disabled="true"] { opacity: 1 !important; background: #f3f5f8 !important; color: #5d6b82 !important; border-color: #586982 !important; cursor: not-allowed; }
-:is(.admin-v2, .admin-ui-portal) :is([data-slot="input"], [data-slot="select-trigger"], .mm-multi-trigger, [data-slot="textarea"], select, input:not([type="checkbox"]):not([type="radio"]):not([type="file"])) { height: auto !important; min-height: 32px; border: 1px solid #586982 !important; border-radius: 8px !important; background: #fff; color: #263247; font-size: 12px !important; line-height: 1.5; padding: 6px 10px; box-shadow: none !important; }
-:is(.admin-v2, .admin-ui-portal) :is(textarea, [data-slot="textarea"]) { min-height: 80px !important; resize: vertical; }
-:is(.admin-v2, .admin-ui-portal) :is(.mo-search, .mm-search, .ent-search, .pm-search, .aa-search, .org-search) input { padding-left: 32px !important; }
+:is(.admin-v2, .admin-ui-portal) :is(button, input, select, textarea):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { font-family: inherit; }
+:is(.admin-v2, .admin-ui-portal) :where(button:not([role="checkbox"]):not([role="radio"])):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { min-height: 32px !important; font-size: 12px !important; line-height: 1.5; transition: color 120ms ease-out, background-color 120ms ease-out, border-color 120ms ease-out; }
+:is(.admin-v2, .admin-ui-portal) [data-slot="button"]:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { height: auto !important; min-height: 32px; padding: 6px 12px; gap: 4px; border-radius: 10px; box-shadow: none; }
+:is(.admin-v2, .admin-ui-portal) :is([data-size^="icon"], .ov-help, .mo-copy > button):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { flex: none; min-width: 32px !important; width: 32px !important; height: 32px !important; padding: 7px !important; }
+:is(.admin-v2, .admin-ui-portal) .lucide:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { flex: none; width: 16px !important; height: 16px !important; stroke-width: 2px; }
+:is(.admin-v2, .admin-ui-portal) :is([data-variant="outline"], [data-variant="secondary"]):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)),
+:is(.admin-v2 .entity-drawer, .admin-ui-portal.entity-drawer) form footer [data-variant="ghost"]:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { color: #263247 !important; background: #fff !important; border: 1px solid #586982 !important; }
+:is(.admin-v2, .admin-ui-portal) :is([data-variant="outline"], [data-variant="secondary"]):hover:not(:disabled):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { background: #f8faff !important; }
+:is(.admin-v2, .admin-ui-portal) :is([data-slot="button"][data-variant="default"], .v2-primary):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { background: #315fe8 !important; border-color: #315fe8 !important; color: #fff !important; }
+:is(.admin-v2, .admin-ui-portal) :is([data-slot="button"][data-variant="default"], .v2-primary):is(:hover, :active):not(:disabled):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { background: #2854d6 !important; border-color: #2854d6 !important; }
+:is(.admin-v2, .admin-ui-portal) :is([data-variant="link"], .ent-link, .ov-name, .supplier-price-actions button, .v2-table td button):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { color: #315fe8 !important; background: transparent; font-size: 12px !important; text-decoration: none; text-underline-offset: 3px; }
+:is(.admin-v2, .admin-ui-portal) :is([data-variant="link"], .ent-link, .ov-name, .v2-table td button):is(:hover, :focus-visible):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { color: #2854d6 !important; text-decoration: underline; }
+:is(.admin-v2, .admin-ui-portal) [data-variant="ghost"]:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { color: #263247; }
+:is(.admin-v2, .admin-ui-portal) button:active:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { translate: none; }
+:is(.admin-v2, .admin-ui-portal) :is(button, input, select, textarea):disabled:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)),
+:is(.admin-v2, .admin-ui-portal) [aria-disabled="true"]:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { opacity: 1 !important; background: #f3f5f8 !important; color: #5d6b82 !important; border-color: #586982 !important; cursor: not-allowed; }
+:is(.admin-v2, .admin-ui-portal) :is([data-slot="input"], [data-slot="select-trigger"], .mm-multi-trigger, [data-slot="textarea"], select, input:not([type="checkbox"]):not([type="radio"]):not([type="file"])):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { height: auto !important; min-height: 32px; border: 1px solid #586982 !important; border-radius: 8px !important; background: #fff; color: #263247; font-size: 12px !important; line-height: 1.5; padding: 6px 10px; box-shadow: none !important; }
+:is(.admin-v2, .admin-ui-portal) :is(textarea, [data-slot="textarea"]):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { min-height: 80px !important; resize: vertical; }
+:is(.admin-v2, .admin-ui-portal) :is(.mo-search, .mm-search, .ent-search, .pm-search, .aa-search, .org-search) input:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { padding-left: 32px !important; }
 .admin-v2 .v2-toolbar label:has(input) { border: 0; padding: 0; height: auto; }
 .admin-v2 .v2-toolbar label > svg { display: none; }
-:is(.admin-v2, .admin-ui-portal) :is(.mo-field, .mm-field, .ent-field, .aa-field, .dp-field) { gap: 4px !important; font-size: 12px; }
-:is(.admin-v2, .admin-ui-portal) :is(.mo-form-grid, .mm-form-grid, .ent-form-grid, .iu-editor-grid) { gap: 16px; align-items: start; }
-:is(.admin-v2, .admin-ui-portal) :is([aria-invalid="true"], .is-invalid) { border-color: #c43228 !important; }
-:is(.admin-v2, .admin-ui-portal) :is(input[type="checkbox"], input[type="radio"], [role="checkbox"], [role="radio"]) { width: 16px; height: 16px; min-height: 16px; accent-color: #315fe8; border-color: #586982; }
-:is(.admin-v2, .admin-ui-portal) :is(.mo-check, label:has(input[type="checkbox"]), label:has(input[type="radio"]), .unified-chart-options label) { min-height: 32px; align-items: center; gap: 4px; }
-:is(.admin-v2, .admin-ui-portal) :is(input, textarea)::placeholder { color: #5d6b82; opacity: 1; }
-:is(.admin-v2, .admin-ui-portal) :focus-visible { outline: 2px solid #315fe8 !important; outline-offset: 2px !important; box-shadow: none !important; }
+:is(.admin-v2, .admin-ui-portal) :is(.mo-field, .mm-field, .ent-field, .aa-field, .dp-field):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { gap: 4px !important; font-size: 12px; }
+:is(.admin-v2, .admin-ui-portal) :is(.mo-form-grid, .mm-form-grid, .ent-form-grid, .iu-editor-grid):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { gap: 16px; align-items: start; }
+:is(.admin-v2, .admin-ui-portal) :is([aria-invalid="true"], .is-invalid):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { border-color: #c43228 !important; }
+:is(.admin-v2, .admin-ui-portal) :is(input[type="checkbox"], input[type="radio"], [role="checkbox"], [role="radio"]):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { width: 16px; height: 16px; min-height: 16px; accent-color: #315fe8; border-color: #586982; }
+:is(.admin-v2, .admin-ui-portal) :is(.mo-check, label:has(input[type="checkbox"]), label:has(input[type="radio"]), .unified-chart-options label):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { min-height: 32px; align-items: center; gap: 4px; }
+:is(.admin-v2, .admin-ui-portal) :is(input, textarea):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *))::placeholder { color: #5d6b82; opacity: 1; }
+:is(.admin-v2, .admin-ui-portal) :focus-visible:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { outline: 2px solid #315fe8 !important; outline-offset: 2px !important; box-shadow: none !important; }
 
-:is(.admin-v2, .admin-ui-portal) table { font-size: 12px; }
-:is(.admin-v2, .admin-ui-portal) table th { height: 38px; padding: 8px 12px !important; font-size: 12px !important; line-height: 1.5; font-weight: 500; background: #f8faff !important; color: #586982 !important; }
-:is(.admin-v2, .admin-ui-portal) table td { height: 40px; padding: 4px 12px; font-size: 12px; line-height: 1.5; }
-:is(.admin-v2, .admin-ui-portal) table tr:has(td small) { height: 60px; }
-:is(.admin-v2, .admin-ui-portal) tbody tr:hover > td { background-color: #f8faff; }
-:is(.admin-v2, .admin-ui-portal) .supplier-price-number { text-align: right; font-variant-numeric: tabular-nums; }
+:is(.admin-v2, .admin-ui-portal) table:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { font-size: 12px; }
+:is(.admin-v2, .admin-ui-portal) table th:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { height: 38px; padding: 8px 12px !important; font-size: 12px !important; line-height: 1.5; font-weight: 500; background: #f8faff !important; color: #586982 !important; }
+:is(.admin-v2, .admin-ui-portal) table td:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { height: 40px; padding: 4px 12px; font-size: 12px; line-height: 1.5; }
+:is(.admin-v2, .admin-ui-portal) table tr:has(td small):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { height: 60px; }
+:is(.admin-v2, .admin-ui-portal) tbody tr:hover > td:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { background-color: #f8faff; }
+:is(.admin-v2, .admin-ui-portal) .supplier-price-number:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { text-align: right; font-variant-numeric: tabular-nums; }
 .admin-v2 :is(.mo-status, .v2-status, .ent-status, .supplier-status, .aa-status) { color: #5d6b82 !important; background: #f3f5f8; font-size: 12px; }
 .admin-v2 :is(.mo-status.good, .ent-status.good, .supplier-status.is-active, .aa-status.is-active), .admin-v2 .v2-status:not(.warn) { color: #198754 !important; background: #fff; }
 .admin-v2 :is(.v2-status.warn, .ent-status.warn) { color: #8a5d18 !important; background: #fff8e8; }
@@ -296,11 +296,11 @@
 .admin-v2 .ops-monitor :is(span, i), .admin-v2 .incident-grid span,
 :is(.admin-v2, .admin-ui-portal) .ent-section-head p,
 .admin-ui-portal .ent-role-note p { color: #5d6b82 !important; }
-:is(.admin-v2, .admin-ui-portal) summary { color: #315fe8 !important; min-height: 32px; }
+:is(.admin-v2, .admin-ui-portal) summary:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { color: #315fe8 !important; min-height: 32px; }
 .admin-v2 :is(.org-avatar, .org-directory-view.is-selected, .org-directory-view.is-selected > span) { color: #315fe8 !important; }
 .admin-v2 .dp-steps li[aria-current="step"] > span { background: #315fe8; color: #fff !important; }
-:is(.admin-v2, .admin-ui-portal) :is(button, input, select, textarea) { box-sizing: border-box; }
-:is(.admin-v2, .admin-ui-portal) :is([data-slot="input"], [data-slot="select-trigger"], .mm-multi-trigger, select, input:not([type="checkbox"]):not([type="radio"]):not([type="file"])) { height: calc(1lh + 14px) !important; }
+:is(.admin-v2, .admin-ui-portal) :is(button, input, select, textarea):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { box-sizing: border-box; }
+:is(.admin-v2, .admin-ui-portal) :is([data-slot="input"], [data-slot="select-trigger"], .mm-multi-trigger, select, input:not([type="checkbox"]):not([type="radio"]):not([type="file"])):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *)) { height: calc(1lh + 14px) !important; }
 .admin-v2 .v2-module-tabs button.active { color: #315fe8; border-color: #315fe8; }
 
 .admin-ui-portal[data-slot="dialog-content"] { box-shadow: 0 12px 32px rgba(38,50,71,.18) !important; font-size: 12px; animation-duration: 160ms; animation-timing-function: ease-out; }

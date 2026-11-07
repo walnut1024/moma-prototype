@@ -81,10 +81,10 @@ export function projectModelState(state){
     for(const o of tables.offers?.values() || [])if(o.service_id===m.id && (!o.supplier_id || o.supplier_id===row.supplier_id) && s.status!=='已移除')add('offer_channels',{offer_id:o.record_id,channel_model_id:technical,material_id:row.material_id,supplier_id:row.supplier_id,created_at:at(s.createdAt),removed_at:null});
   }
   for(const d of state.tariffDictionary){
-    const row={id:d.id,name:d.name,name_en:d.englishName || '',builtin:Number(d.builtin===true),enabled:Number(d.status==='已启用'),revision:d.revision || 1,deleted_at:null,record_json:j(d)};
+    const row={id:d.id,name:d.name,name_en:d.englishName || '',builtin:Number(d.builtin===true),enabled:Number(d.kind==='scenario' || d.status==='已启用'),revision:d.revision || 1,deleted_at:null,record_json:j(d)};
     if(d.kind==='unit')add('billing_units',{...row,dimension:d.name});
     if(d.kind==='currency')add('currencies',{...row,code:d.code});
-    if(d.kind==='scenario')add('billing_items',{...row,unit_id:d.unitId,description:d.description || ''});
+    if(d.kind==='scenario')add('billing_items',{...row,description:d.description || ''});
   }
   for(const collection of ['modelSalePrices','supplyPrices'])for(const v of state[collection])add('model_price_records',{id:v.id,record_collection:collection,record_json:j(v)});
   const actor='admin-001';

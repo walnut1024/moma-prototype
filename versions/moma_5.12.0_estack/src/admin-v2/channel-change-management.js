@@ -20,7 +20,7 @@ const latestCandidateEvidence = (candidate, associationId, signature, keyId) => 
 function context(state, providerId, endpointId) {
   const provider = state.providers.find(row => row.id === providerId);
   const endpoint = state.endpoints.find(row => row.id === endpointId && row.providerId === providerId && !row.deletedAt);
-  if (!provider || !endpoint) throw new Error('渠道不属于当前供应商或已删除');
+  if (!provider || !endpoint) throw new Error('渠道不属于当前服务商或已删除');
   return { provider, endpoint };
 }
 function expectedRevision(endpoint, value) {
@@ -45,8 +45,8 @@ function configuredEndpoint(state, provider, endpoint, input) {
   if (!retainedReference && !['group', 'specific', 'inherit', 'none', 'pool'].includes(value.authMode)) throw new Error('请选择候选配置的凭证方式');
   if (value.authMode === 'pool') value.keyPool = normalizeChannelKeyPool(value.keyPool, provider);
   if (value.authMode === 'none' && provider.sourceType !== 'selfHosted') throw new Error('仅自有推理服务可无需认证');
-  if (value.authMode === 'group' && !providerKeyGroups(provider).some(group => group.id === value.keyGroupId)) throw new Error('密钥组不属于当前供应商');
-  if (value.authMode === 'specific' && !provider.apiKeys?.some(key => key.id === value.apiKeyId) && !endpoint.apiKeys?.some(key => key.scope === 'channel' && key.id === value.apiKeyId)) throw new Error('指定密钥不属于当前供应商或渠道');
+  if (value.authMode === 'group' && !providerKeyGroups(provider).some(group => group.id === value.keyGroupId)) throw new Error('密钥组不属于当前服务商');
+  if (value.authMode === 'specific' && !provider.apiKeys?.some(key => key.id === value.apiKeyId) && !endpoint.apiKeys?.some(key => key.scope === 'channel' && key.id === value.apiKeyId)) throw new Error('指定密钥不属于当前服务商或渠道');
   if (Object.hasOwn(input, 'authMode') || Object.hasOwn(input, 'keyGroupId') || Object.hasOwn(input, 'apiKeyId')) {
     value.apiKeys = []; value.credentialRef = '';
     if (value.authMode !== 'specific') value.apiKeyId = '';
@@ -169,7 +169,7 @@ function testedCandidate(state, provider, endpoint, candidate, data) {
 
 function appliedCandidate(state, provider, endpoint, candidate, data) {
   if (data.confirmed !== true) throw new Error('请确认应用候选配置及其服务影响');
-  if (provider.status !== '已启用') throw new Error('供应商已停用，不能应用候选配置');
+  if (provider.status !== '已启用') throw new Error('服务商已停用，不能应用候选配置');
   const requireReal = data.requireReal === true || candidate.requireReal === true;
   const status = candidateChecks(state, provider, endpoint, candidate, { requireReal });
   if (status.impact.revision !== candidate.impactRevision) throw new Error('关联模型或服务引用已变化，请重新检查影响并创建候选配置');
@@ -225,7 +225,7 @@ export function channelProcurementSnapshot(association, at = Date.now()) {
 function keyGroupContext(state, data, withCandidate = true) {
   const provider = state.providers.find(row => row.id === data.providerId);
   const group = provider && providerKeyGroups(provider).find(row => row.id === data.groupId);
-  if (!provider || !group) throw new Error('密钥组不属于当前供应商');
+  if (!provider || !group) throw new Error('密钥组不属于当前服务商');
   const revision = provider.keyGroupRevisions?.[group.id] || 0;
   if (data.expectedGroupVersion !== revision) throw new Error('密钥组已有修订，请重新载入');
   const endpoints = state.endpoints.filter(row => row.providerId === provider.id && !row.deletedAt && (row.authMode === 'group' && row.keyGroupId === group.id || group.id === 'default' && row.authMode === 'inherit'));
@@ -442,7 +442,7 @@ function procurementTransaction(state, operation, data) {
 function stageCredentialChanges(state, changes) {
   let next = structuredClone(state);
   for (const change of changes) {
-    if (change.type !== 'update') throw new Error('密钥候选只能更新现有供应商和渠道');
+    if (change.type !== 'update') throw new Error('密钥候选只能更新现有服务商和渠道');
     next[change.collection] = next[change.collection].map(row => row.id === change.id ? { ...row, ...structuredClone(change.changes) } : row);
   }
   return next;
@@ -458,7 +458,7 @@ export function keyGroupRotationSignature(state, providerId, groupId) {
 }
 function prepareCredentialCandidate(state, operation, data) {
   const provider = state.providers.find(row => row.id === data.providerId);
-  if (!provider || provider.deletedAt) throw new Error('供应商已不存在');
+  if (!provider || provider.deletedAt) throw new Error('服务商已不存在');
   checkedNewCredential(data.newApiKey);
   let groupId = data.groupId, endpoint, working = state;
   const changes = [];
@@ -497,7 +497,7 @@ export function channelChangeTransaction(state, { operation, data = {} }) {
   if (operation === 'credentialEmergencyRevoke') {
     const provider = state.providers.find(row => row.id === data.providerId);
     const key = provider?.apiKeys?.find(row => row.id === data.keyId);
-    if (!key || key.fingerprint !== data.expectedFingerprint) throw new Error('密钥已变化或不属于当前供应商');
+    if (!key || key.fingerprint !== data.expectedFingerprint) throw new Error('密钥已变化或不属于当前服务商');
     if (data.confirmed !== true) throw new Error('请确认紧急撤销密钥及其全部调用影响');
     const affected = supplierKeyChannels(state, provider, key.id).map(row => row.id), at = new Date().toISOString();
     return { type: 'batch', objectId: key.id, label: '紧急撤销供应凭证', changes: [update('providers', provider.id, { apiKeys: provider.apiKeys.map(row => row.id === key.id ? { ...row, status: 'disabled', revokedAt: at } : row) }), ...invalidateSupplierChannels(state, provider, affected)] };

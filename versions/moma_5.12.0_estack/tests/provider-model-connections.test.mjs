@@ -27,7 +27,7 @@ test('catalogue address is explicit, model-scoped, persisted and leaves prices, 
   const reused = configure(seed, { endpointId: existing.id, baseUrl: existing.baseUrl + '/' });
   assert.deepEqual(reused.endpoints, seed.endpoints);
   assert.equal(catalogueConnections(reused, reused.providers.find(p => p.id === providerId), modelId)[0].id, existing.id);
-  assert.throws(() => run(saved, 'checkConnection', { endpointId: endpoints[0].id }), /供应商密钥/);
+  assert.throws(() => run(saved, 'checkConnection', { endpointId: endpoints[0].id }), /服务商密钥/);
 });
 
 test('keys can be maintained separately; shared address edits require confirmation and invalidate checks', async () => {
@@ -48,7 +48,7 @@ test('keys can be maintained separately; shared address edits require confirmati
   assert.equal(changed.apiKeys.length, 1);
   assert.equal(catalogueConnections(state, owner(), 'DeepSeek-V3')[0].baseUrl, changed.baseUrl);
   state = commitAdminState(state, action('connectionKeys', { apiKeys: [], credentialRef: '', endpointId: ep.id, confirmed: true }));
-  assert.throws(() => run(state, 'checkConnection', { endpointId: ep.id }), /供应商密钥/);
+  assert.throws(() => run(state, 'checkConnection', { endpointId: ep.id }), /服务商密钥/);
   assert.ok(!JSON.stringify(state).includes('sk-local-only-model-key-0001'));
 });
 
@@ -68,7 +68,7 @@ test('invalid URL, cross-supplier reference, unknown model, permission, revision
   const state = createAdminSeed(), before = JSON.stringify(state);
   for (const baseUrl of ['', 'http://third-party.example.invalid', 'https://user:pass@example.invalid', 'javascript:alert(1)', 'https://example.invalid?secret=x']) assert.throws(() => configure(state, { baseUrl }));
   assert.throws(() => configure(state, { endpointId: state.endpoints.find(e => e.providerId !== providerId).id }), /不属于/);
-  assert.throws(() => configure(state, { modelId: 'not-in-catalogue' }), /不在供应商目录/);
+  assert.throws(() => configure(state, { modelId: 'not-in-catalogue' }), /不在服务商目录/);
   assert.throws(() => configure({ ...state, currentRole: '运维人员' }), /无权/);
   const request = action('catalogueConnection', { modelId, protocol: 'OpenAI', baseUrl: 'https://valid.example.invalid/v1' });
   assert.throws(() => persistModelAction(state, request, { getItem: () => JSON.stringify({ ...state, revision: state.revision + 1 }), setItem: () => assert.fail() }), /数据已变化/);

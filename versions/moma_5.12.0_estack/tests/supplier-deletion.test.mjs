@@ -8,7 +8,7 @@ const action = (providerId, operation, values) => ({ type: 'modelOperations', op
 const run = (state, providerId, operation, values) => commitAdminState(state, action(providerId, operation, values));
 function fixture() {
   let state = withAdminSession(parseAdminState(null));
-  state = run(state, null, 'create', { name: '删除校验供应商', code: 'delete-contract', sourceType: 'thirdParty', description: '', catalogModelIds: [] });
+  state = run(state, null, 'create', { name: '删除校验服务商', code: 'delete-contract', sourceType: 'thirdParty', description: '', catalogModelIds: [] });
   const providerId = state.providers.find(row => row.code === 'delete-contract').id;
   state = run(state, providerId, 'supplierChannelCreate', { name: '删除校验渠道', protocol: 'OpenAI', baseUrl: 'https://delete.example.invalid/v1/chat/completions', authMode: 'inherit', models: [{ libraryId: 'model-2', upstreamModelId: 'vendor/delete', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] }] });
   const provider = state.providers.find(row => row.id === providerId), channel = catalogueChannels(state, provider, provider.catalogModelIds[0])[0];

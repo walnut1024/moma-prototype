@@ -57,20 +57,20 @@ export function supplierListPriceDraft(data, modelId) {
 }
 export function supplierModelMaintenance(state, { operation, objectId, data = {} }) {
   const provider = state.providers.find(row => row.id === objectId);
-  if (!provider || !providerCatalogueIds(provider).includes(data.modelId)) throw new Error('供应商模型不存在，请重新选择');
+  if (!provider || !providerCatalogueIds(provider).includes(data.modelId)) throw new Error('服务商模型不存在，请重新选择');
   const current = provider.catalogModels?.find(row => row.modelId === data.modelId) || { modelId: data.modelId };
   const update = (owner, fields, label) => ({ type: 'batch', objectId: owner.id, label, changes: [{ type: 'update', collection: 'providers', id: owner.id, changes: fields }] });
   const save = (record, label) => update(provider, { catalogModels: [...(provider.catalogModels || []).filter(row => row.modelId !== data.modelId), record] }, label);
   if (operation === 'supplierModelProfile') {
     if (data.expectedRevision !== (current.supplyProfileRevision || 0)) throw new Error('供应能力已变化，请重新载入');
     const supplyProfile = normalizeSupplyProfile(data.profile);
-    return save({ ...current, supplyProfile, supplyProfileRevision: (current.supplyProfileRevision || 0) + 1, supplyProfileUpdatedAt: new Date().toISOString() }, '保存供应商模型参数与能力');
+    return save({ ...current, supplyProfile, supplyProfileRevision: (current.supplyProfileRevision || 0) + 1, supplyProfileUpdatedAt: new Date().toISOString() }, '保存服务商模型参数与能力');
   }
   if (operation === 'supplierModelCopy') {
     const target = state.providers.find(row => row.id === data.targetProviderId);
-    if (!target) throw new Error('请选择目标供应商');
+    if (!target) throw new Error('请选择目标服务商');
     const { modelId, fields } = supplierModelFields(state, target, data.libraryId);
-    if (providerCatalogueIds(target).includes(modelId)) throw new Error('目标供应商已登记该模型，请直接配置，不能重复创建');
+    if (providerCatalogueIds(target).includes(modelId)) throw new Error('目标服务商已登记该模型，请直接配置，不能重复创建');
     const profile = normalizeSupplyProfile(current.supplyProfile);
     let copiedPrice;
     if (data.copyListPrice) {
@@ -102,7 +102,7 @@ export function supplierModelMaintenance(state, { operation, objectId, data = {}
     const price = supplierListPriceDraft(data, data.modelId);
     if (price.expiresAt && Date.parse(price.expiresAt) <= Date.now()) throw new Error('刊例价已经到期，不能发布');
     const next = { ...price, id: crypto.randomUUID(), version: revision, status: '已发布', publishedAt: new Date().toISOString(), createdAt: new Date().toISOString(), operator: state.currentRole };
-    return save({ ...current, listPriceRevision: revision, listPriceVersions: [...versions, next] }, '发布供应商刊例价');
+    return save({ ...current, listPriceRevision: revision, listPriceVersions: [...versions, next] }, '发布服务商刊例价');
   }
-  throw new Error('未知供应商模型维护操作');
+  throw new Error('未知服务商模型维护操作');
 }

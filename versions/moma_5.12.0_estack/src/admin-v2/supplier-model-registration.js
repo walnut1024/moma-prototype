@@ -24,7 +24,7 @@ export function supplierModelRegistration(state, provider, libraryIds) {
   return libraryIds.map(id => {
     const model = library.find(row => row.id === id);
     if (!model) throw Error('模型资料已有变化，请重新选择');
-    if (existing.includes(id)) throw Error(`当前供应商已登记模型：${model.name}`);
+    if (existing.includes(id)) throw Error(`当前服务商已登记模型：${model.name}`);
     return model;
   });
 }

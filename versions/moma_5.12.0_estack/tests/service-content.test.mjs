@@ -26,7 +26,7 @@ test('associating an existing Provider creates no resources, channel price or au
  for(const key of ['providers','endpoints','modelSupplies','modelSalePrices','serviceRoutes'])assert.deepEqual(f.state[key],seed[key]);
  assert.equal(publicationChecks(f.state,f.model).some(item=>!item.passed),true);
  assert.throws(()=>run(f.state,'associateServiceProvider',f.model.id,{providerId:f.provider.id,expectedUpdatedAt:f.model.updatedAt}),/已关联/);
- assert.throws(()=>run(f.state,'associateServiceProvider',f.model.id,{providerId:'missing',expectedUpdatedAt:f.model.updatedAt}),/已有供应商/);
+ assert.throws(()=>run(f.state,'associateServiceProvider',f.model.id,{providerId:'missing',expectedUpdatedAt:f.model.updatedAt}),/已有服务商/);
 });
 test('Provider price and call ID are scoped to the Provider, versioned and survive refresh without rewriting channel prices',()=>{
  let f=configured(), first=activeProviderPrice(f.state,f.model.id,f.provider.id);
@@ -63,7 +63,7 @@ test('Provider route candidates stay within associated channels of that Provider
 });
 test('channel removal checks route references; supplier unbinding requires downlisting and atomically stops its route',()=>{
  const f=configured();
- assert.throws(()=>run(f.state,'removeServiceProvider',f.model.id,{providerId:f.provider.id,expectedUpdatedAt:f.model.updatedAt}),/先下架当前供应商/);
+ assert.throws(()=>run(f.state,'removeServiceProvider',f.model.id,{providerId:f.provider.id,expectedUpdatedAt:f.model.updatedAt}),/先下架当前服务商/);
  f.state=run(f.state,'serviceProviderListing',f.model.id,{providerId:f.provider.id,enabled:false,expectedUpdatedAt:f.model.updatedAt}); f.model=f.state.models.find(row=>row.id===f.model.id);
  const service=routingServices(f.state).find(item=>item.providerId===f.provider.id), channel=routingChannels(f.state,service).find(item=>item.available);
  assert.ok(channel);const data={supplyId:channel.id,expectedUpdatedAt:f.model.updatedAt};

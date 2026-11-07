@@ -20,8 +20,8 @@ export function supplyPickerGroups(options, query) {
 }
 
 export function supplyPickerSelectionSummary(draft, channels, all) {
-  if (all) return '全部供应商';
+  if (all) return '全部服务商';
   const providers = new Set(draft.providers);
   const count = [...new Set(draft.channels)].filter(id => !providers.has(channels.find(channel => channel.id === id)?.groupId)).length;
-  return providers.size || count ? `已选 ${providers.size} 家全部渠道＋${count} 条渠道` : '未选择供应商或渠道';
+  return providers.size || count ? `已选 ${providers.size} 家全部渠道＋${count} 条渠道` : '未选择服务商或渠道';
 }

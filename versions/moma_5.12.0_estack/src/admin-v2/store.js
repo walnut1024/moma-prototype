@@ -88,7 +88,7 @@ export function persistModelAction(state, action, storage) {
 }
 
 export function persistProviderAction(state, action, storage, expectedRevision = state.revision) {
-  if (action.type !== 'providerOperation') throw new Error('此入口仅支持供应商操作');
+  if (action.type !== 'providerOperation') throw new Error('此入口仅支持服务商操作');
   if (state.storageError) throw new Error('本地数据尚未就绪，请先重新加载');
   const raw = storage.getItem(STORAGE_KEY);
   if (state.revision !== expectedRevision || (raw && JSON.parse(raw).revision !== expectedRevision)) throw new Error('数据已变化，请载入新版本后重试；当前输入保留');

@@ -40,7 +40,7 @@ export default function SupplierChannelDetails({ state, provider, association, o
       <TabsContent value="configuration">
         <dl className="supplier-test-facts">
           <div><dt>渠道</dt><dd>{supplierChannelName(provider, endpoint)}<small>{supplierChannelCode(endpoint)}</small></dd></div>
-          <div><dt>上游模型 ID</dt><dd><code>{association.upstreamModelId}</code></dd></div>
+          <div><dt>上游模型标识</dt><dd><code>{association.upstreamModelId}</code></dd></div>
           <div><dt>接入状态</dt><dd>{channelStatus(provider, association)}</dd></div>
           <div><dt>配置版本</dt><dd>{endpoint.configurationRevision || 0}</dd></div>
           <div><dt>请求地址</dt><dd>{addresses.map((address, index) => <div key={index}><span>{address.protocol}</span><code>{String(redactDiagnostic(address.baseUrl))}</code></div>)}</dd></div>
@@ -66,13 +66,13 @@ export default function SupplierChannelDetails({ state, provider, association, o
             <div><dt>渠道配置版本</dt><dd>{safe(record.configurationRevision)}{record.configVersion != null && <small>接入配置 v{safe(record.configVersion)}</small>}</dd></div><div><dt>测试模板版本</dt><dd>{safe(record.templateVersion)}</dd></div>
             <div><dt>操作者</dt><dd>{safe(record.operator)}</dd></div><div><dt>任务 / 专项</dt><dd>{safe(record.task)}{record.check && <small>{safe(record.check)}</small>}</dd></div>
             <div><dt>开始时间</dt><dd>{time(record.startedAt)}</dd></div><div><dt>结束时间</dt><dd>{time(record.endedAt || record.testedAt)}</dd></div>
-            <div><dt>供应商 / 渠道 / 映射</dt><dd><code>{safe(record.providerId)}</code><code>{safe(record.endpointId)}</code><code>{safe(record.associationId)}</code></dd></div><div><dt>来源 / 错误码</dt><dd>{source(record)}<small>{safe(record.code)}</small></dd></div>
+            <div><dt>服务商 / 渠道 / 映射</dt><dd><code>{safe(record.providerId)}</code><code>{safe(record.endpointId)}</code><code>{safe(record.associationId)}</code></dd></div><div><dt>来源 / 错误码</dt><dd>{source(record)}<small>{safe(record.code)}</small></dd></div>
           </dl><pre aria-label="用量与费用摘要">{JSON.stringify(redactDiagnostic({ source: record.source || null, simulated: record.simulated ?? null, usage: record.usage ?? null, cost: record.cost ?? null }), null, 2)}</pre></details>
         </section>}
       </TabsContent>
       <TabsContent value="services">
         <GridTable headings={['模型服务', '服务模式', '状态', '操作']} empty={!services.length} emptyMessage="尚未关联模型服务。">
-          {services.map(model => <Row key={model.id}><Cell>{model.name}<small>{model.modelId}</small></Cell><Cell>{model.serviceMode === 'standard' ? '统一服务' : model.serviceMode === 'provider' ? '分供应商' : '待配置'}</Cell><Cell>{model.listingStatus || model.status || '—'}</Cell><Cell><Button variant="link" onClick={() => { close(); ops.go({ model: model.id, panel: null }, { base: 'listing' }); }}>前往服务管理</Button></Cell></Row>)}
+          {services.map(model => <Row key={model.id}><Cell>{model.name}<small>{model.modelId}</small></Cell><Cell>{model.serviceMode === 'standard' ? '统一服务' : model.serviceMode === 'provider' ? '分服务商' : '待配置'}</Cell><Cell>{model.listingStatus || model.status || '—'}</Cell><Cell><Button variant="link" onClick={() => { close(); ops.go({ model: model.id, panel: null }, { base: 'listing' }); }}>前往服务管理</Button></Cell></Row>)}
         </GridTable>
         {routes.length > 0 && <p className="supplier-price-hint">被 {routes.length} 项生效路由引用。</p>}
       </TabsContent>

@@ -172,5 +172,5 @@ test('channel status reports frozen, missing association and supplier-disabled f
  assert.equal(channelStatus(provider,null),'未配置渠道');
  assert.equal(channelStatus(provider,{endpoint:{frozen:true}}),'已冻结');
  assert.equal(channelStatus(provider,{unlinked:true,endpoint:{}}),'未关联模型');
- assert.equal(channelStatus({status:'已停用'},{unlinked:true,endpoint:{frozen:true}}),'供应商已停用');
+ assert.equal(channelStatus({status:'已停用'},{unlinked:true,endpoint:{frozen:true}}),'服务商已停用');
 });

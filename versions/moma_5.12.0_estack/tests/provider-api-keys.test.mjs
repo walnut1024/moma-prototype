@@ -44,7 +44,7 @@ test('duplicates within the batch or supplier reject the entire save; other supp
   const state = commitAdminState(createAdminSeed(), action(draft)), before = JSON.stringify(state);
   assert.throws(() => commitAdminState(state, action(draft)), /相同的 API 密钥/);
   assert.throws(() => commitAdminState(state, action({ apiKeys: [...draft.apiKeys, ...draft.apiKeys] })), /相同的 API 密钥/);
-  assert.throws(() => commitAdminState(state, action(draft, 'missing')), /供应商不存在/);
+  assert.throws(() => commitAdminState(state, action(draft, 'missing')), /服务商不存在/);
   const other = state.providers.find(p => p.id !== 'provider-moma');
   const next = commitAdminState(state, action(draft, other.id));
   assert.equal(next.providers.find(p => p.id === other.id).apiKeys.length, 1);
@@ -103,7 +103,7 @@ test('model previews reject invalid identities, model-address links and request 
   const provider = state.providers.find(item => item.id === 'provider-moma'), endpoint = state.endpoints.find(item => item.providerId === provider.id), key = provider.apiKeys[0];
   const request = { providerId: provider.id, keyId: key.id, endpointId: endpoint.id, modelId: 'DeepSeek-R1', upstreamId: 'DeepSeek-R1', prompt: '请回复 OK', scenario: 'success' };
   assert.throws(() => providerModelConnectivityTest(state, { ...request, keyId: 'missing' }), /API 密钥不存在/);
-  assert.throws(() => providerModelConnectivityTest(state, { ...request, endpointId: state.endpoints.find(item => item.providerId !== provider.id).id }), /当前供应商/);
+  assert.throws(() => providerModelConnectivityTest(state, { ...request, endpointId: state.endpoints.find(item => item.providerId !== provider.id).id }), /当前服务商/);
   for (const patch of [{ baseUrl: 'bad' }, { baseUrl: 'http://example.com/v1' }, { baseUrl: 'https://user:pass@example.com' }, { baseUrl: 'https://example.com?key=secret' }, { protocol: 'invalid' }]) {
     const invalid = { ...state, endpoints: state.endpoints.map(item => item.id === endpoint.id ? { ...item, ...patch } : item) };
     assert.throws(() => providerModelConnectivityTest(invalid, request), /地址无效|协议无效/);

@@ -38,7 +38,7 @@ export function routeMappingStatus(state,service,channel) {
   if (contract.reason) return reject(contract.unsupported?'待适配':'待配置',contract.reason);
   if (!result.platformModelId) return reject('待配置','请先配置当前服务的对外调用 ID。');
   if (!result.upstreamModelId || /\s/.test(result.upstreamModelId)) return reject('待配置','请先在供应管理配置有效的上游模型 ID。');
-  if (!endpoint || !provider || (channel.modelId && channel.modelId!==model.id) || (service.providerId && service.providerId!==provider.id)) return reject('待配置','渠道与当前模型服务或供应商的关联不完整。');
+  if (!endpoint || !provider || (channel.modelId && channel.modelId!==model.id) || (service.providerId && service.providerId!==provider.id)) return reject('待配置','渠道与当前模型服务或服务商的关联不完整。');
   if (!upstreamProtocol) return reject('待配置','请先在供应管理明确渠道协议。');
   if (!url) return reject('待配置','请先在供应管理配置完整的请求地址。');
   if (!['http:','https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname==='/' || /^\/v\d+\/?$/.test(url.pathname)) return reject('待配置','请求地址 需为无嵌入凭据的完整接口地址。');

@@ -33,7 +33,7 @@ export function usageFilterOptions(state) {
   }
   const providers = new Map(state.providers.map(item => [item.id, { id: item.id, name: item.name || item.id, code: item.code || item.providerCode || item.id }]));
   for (const channel of channels.values()) {
-    if (!providers.has(channel.groupId)) providers.set(channel.groupId, { id: channel.groupId, name: channel.groupId === '__unknown__' ? '未归属供应商' : channel.groupId });
+    if (!providers.has(channel.groupId)) providers.set(channel.groupId, { id: channel.groupId, name: channel.groupId === '__unknown__' ? '未归属服务商' : channel.groupId });
   }
   return { models, channels: [...channels.values()], providers: [...providers.values()], users: [...users.values()] };
 }

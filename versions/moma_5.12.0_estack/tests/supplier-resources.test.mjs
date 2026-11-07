@@ -108,7 +108,7 @@ test('create resource separately, then associate a Zhipu model without duplicati
 
 test('supplier registration places its first key in the central library and makes the initial channel inherit it',async()=>{
  const s=legacySupplierState(),keys=await providerApiKeysDraft(['test-registration-local-only-443322']);
- const next=commitAdminState(s,{type:'modelOperations',operation:'providerRegistration',data:{provider:{name:'新增供应商',code:'supplier-new-review',sourceType:'thirdParty',description:''},connections:[{name:'初始渠道',protocol:'OpenAI',baseUrl:'https://new.example.invalid/v1/chat/completions',apiKeys:keys.apiKeys,timeoutSeconds:60}]}});
+ const next=commitAdminState(s,{type:'modelOperations',operation:'providerRegistration',data:{provider:{name:'新增服务商',code:'supplier-new-review',sourceType:'thirdParty',description:''},connections:[{name:'初始渠道',protocol:'OpenAI',baseUrl:'https://new.example.invalid/v1/chat/completions',apiKeys:keys.apiKeys,timeoutSeconds:60}]}});
  const p=next.providers.find(row=>row.code==='supplier-new-review'),ep=supplierChannelResources(next,p)[0];
  assert.equal(p.defaultApiKeyId,p.apiKeys[0].id);assert.equal(p.apiKeys[0].fingerprint,keys.apiKeys[0].fingerprint);assert.equal(ep.authMode,'inherit');assert.equal(connectionKeys(ep,p)[0].id,p.defaultApiKeyId);assert.equal(supplierKeyChannels(next,p,p.defaultApiKeyId).length,1);
 });
@@ -216,9 +216,9 @@ test('focused key changes preserve legacy channel identity, hidden fields and se
 
 test('cross-supplier keys and resources, incomplete URLs and invalid association prices cannot be persisted',()=>{
  const s=legacySupplierState(),ep=endpoint(s,'CH-001'),before=structuredClone(s);
- assert.throws(()=>run(s,'supplierChannelSave',{name:'错误',protocol:'OpenAI',baseUrl:'https://x.example.invalid/v1/chat/completions',authMode:'specific',apiKeyId:'KEY-201'}),/当前供应商/);
+ assert.throws(()=>run(s,'supplierChannelSave',{name:'错误',protocol:'OpenAI',baseUrl:'https://x.example.invalid/v1/chat/completions',authMode:'specific',apiKeyId:'KEY-201'}),/当前服务商/);
  assert.throws(()=>run(s,'supplierChannelSave',{name:'错误',protocol:'OpenAI',baseUrl:'https://x.example.invalid/v1',authMode:'inherit'}),/完整接口/);
- assert.throws(()=>run(s,'supplierAssociationSave',{modelId:'DeepSeek-V4-Flash-0731',endpointId:endpoint(s,'CH-101').id,upstreamModelId:'deepseek-flash',scenarios:price(1)}),/当前供应商/);
+ assert.throws(()=>run(s,'supplierAssociationSave',{modelId:'DeepSeek-V4-Flash-0731',endpointId:endpoint(s,'CH-101').id,upstreamModelId:'deepseek-flash',scenarios:price(1)}),/当前服务商/);
  assert.throws(()=>run(s,'supplierAssociationSave',{modelId:'Kimi/miKimi-K3',endpointId:ep.id,upstreamModelId:'bad id',scenarios:price(1)}),/空白/);
  assert.throws(()=>run(s,'supplierAssociationSave',{modelId:'Kimi/miKimi-K3',endpointId:ep.id,upstreamModelId:'ok',scenarios:[{...price(1)[0],listPrice:''}]}),/完整采购价/);
  assert.deepEqual(s,before);
@@ -242,7 +242,7 @@ test('live service mappings protect upstream identity while pricing remains edit
  const next=run(s,'supplierAssociationSave',{...values,upstreamModelId:link.upstreamModelId});
  assert.deepEqual(next.modelSupplies,s.modelSupplies);
  assert.throws(()=>run(s,'supplierModelAdd',{libraryId:'missing'}),/模型资料不存在/);
- p.status='已停用';assert.throws(()=>run(s,'supplierChannelEnable',{endpointId:ep.id}),/启用供应商/);
+ p.status='已停用';assert.throws(()=>run(s,'supplierChannelEnable',{endpointId:ep.id}),/启用服务商/);
 });
 
 test('an existing service-derived model association remains editable without changing its resource or service history',()=>{

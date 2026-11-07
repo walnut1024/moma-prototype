@@ -16,7 +16,7 @@ const entry = state => owner(state).catalogModels.find(row => row.modelId === 'G
 const action = (operation, values, providerId = 'provider-moma') => ({ type: 'modelOperations', operation: 'provider', data: { operation, objectId: providerId, values: { modelId: 'GLM-5.2', ...values } } });
 const run = (state, operation, values) => commitAdminState(state, action(operation, values));
 const initial = () => withAdminSession(parseAdminState(null));
-const profile = { capabilities: { tools: false, context: '128000', output: '4000' }, parameters: [{ name: 'temperature', defaultValue: '0.5', range: '0–1', required: false }], constraints: 'temperature 与 top_p 不能同时设置', source: '供应商规格' };
+const profile = { capabilities: { tools: false, context: '128000', output: '4000' }, parameters: [{ name: 'temperature', defaultValue: '0.5', range: '0–1', required: false }], constraints: 'temperature 与 top_p 不能同时设置', source: '服务商规格' };
 const price = { expectedRevision: 0, confirmed: true, source: '报价单', effectiveAt: '2026-01-01T00:00:00Z', scenarios: [{ name: '输入 Token', unit: '百万 Token', currency: 'CNY', listPrice: '0', condition: '上下文 ≤32K' }] };
 
 test('supplier declarations and independent price versions persist without changing identity, keys, procurement or sales', () => {

@@ -48,3 +48,15 @@ test('fixed strategy selects only one channel while weighted and latency retain 
  for(const strategy of ['weighted','latency'])assert.equal(changeRouteStrategy(config,strategy).channels.filter(row=>row.enabled).length,2);
  assert.deepEqual(config,before);
 });
+
+test('service table preserves merged groups, unavailable channel references and an empty service row',async()=>{
+  const {legacySupplierState}=await import('./legacy-supplier-fixture.mjs');
+  const {routingServices}=await import('../src/admin-v2/service-routing.js');
+  const {routeTableRows}=await import('../src/admin-v2/route-workspace.js');
+  const state=legacySupplierState(),model=state.models.find(row=>row.serviceMode==='standard'),service=routingServices(state).find(row=>row.modelId===model.id),before=structuredClone(state);
+  state.serviceRoutes=state.serviceRoutes.filter(row=>row.serviceId!==service.id);
+  const empty=routeTableRows(state,model,service.id);assert.equal(empty.length,1);assert.equal(empty[0].span,1);assert.equal(empty[0].row,null);
+  state.serviceRoutes.push({id:'table-test',serviceId:service.id,activeVersion:1,versions:[{version:1,config:{...config,channels:[{supplyId:'missing-a',enabled:true,weight:60},{supplyId:'disabled',enabled:false,weight:1},{supplyId:'missing-b',enabled:true,weight:40}]}}]});
+  const snapshot=structuredClone(state),rows=routeTableRows(state,model,service.id);
+  assert.equal(rows.length,2);assert.deepEqual(rows.map(row=>row.span),[2,0]);assert.equal(new Set(rows.map(row=>row.id)).size,2);assert.equal(rows[0].channel,undefined);assert.equal(rows[0].row.supplyId,'missing-a');assert.deepEqual(state,snapshot);assert.deepEqual(state.models,before.models);
+});

@@ -157,7 +157,7 @@ test('monetary daily trends distinguish missing historical facts from a genuinel
  assert.deepEqual(daily.map(row=>row.income),[0,null,4]);assert.deepEqual(daily.map(row=>row.cost),[0,null,2]);assert.ok(businessBuckets([],[],period,now,'CNY').every(row=>row.income===null&&row.cost===null));
 });
 test('supplier donut preserves the full same-unit denominator when grouping the tail',()=>{
- const groups=Array.from({length:7},(_,i)=>({id:String(i),name:'供应商'+i,total:(i+1)*100,units:{'张':i+1}}));
+ const groups=Array.from({length:7},(_,i)=>({id:String(i),name:'服务商'+i,total:(i+1)*100,units:{'张':i+1}}));
  for(const unit of ['Token','张']){
   const slices=supplyShareSlices(groups,unit),total=unit==='Token'?2800:28;
   assert.equal(slices.length,6);assert.equal(slices.at(-1).id,null);assert.equal(slices.at(-1).name,'其他');

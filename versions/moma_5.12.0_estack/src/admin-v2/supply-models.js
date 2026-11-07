@@ -30,7 +30,7 @@ export function supplierModelFields(state, provider, libraryId) {
   const ids = providerCatalogueIds(provider), existing = [...ids, ...(provider.removedCatalogModelIds || [])].find(id => supplyModelRecord(state, provider, id)?.id === master.id);
   const modelId = existing || master.modelId;
   if (!modelId) throw new Error('请先完善模型资料的模型 ID');
-  if (!existing && (ids.includes(modelId) || provider.catalogModels?.some(row => row.modelId === modelId) || provider.removedCatalogModelIds?.includes(modelId))) throw new Error('供应商中已有该模型 ID，请先核对并关联模型资料');
+  if (!existing && (ids.includes(modelId) || provider.catalogModels?.some(row => row.modelId === modelId) || provider.removedCatalogModelIds?.includes(modelId))) throw new Error('服务商中已有该模型 ID，请先核对并关联模型资料');
   if (!ids.includes(modelId) && ids.length >= 2000) throw new Error('模型目录最多 2000 个模型');
   const current = providerCatalogueModel(provider, modelId);
   return { modelId, fields: {

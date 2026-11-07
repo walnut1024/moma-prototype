@@ -8,7 +8,7 @@ import { MODEL_TYPES } from './model-management.js';
 export const ONBOARDING_PROVIDER_PRESETS = [MOMA_PROVIDER, ...REAL_PROVIDERS, BAICHUAN_PROVIDER].map(row => Object.freeze({ id: row.code, code: row.code, name: row.name, sourceType: row.sourceType, interfaceType: 'openai', defaultBaseUrl: row.baseUrl, catalogModelIds: Object.freeze([...(row.catalogModelIds || [])]), catalogueSource: row.catalogueSource || '', catalogueCheckedAt: row.catalogueCheckedAt || null }));
 export function onboardingProviderPreset(id) {
   const preset = ONBOARDING_PROVIDER_PRESETS.find(row => row.id === id);
-  if (!preset) throw new Error('供应商预设不存在，请重新选择');
+  if (!preset) throw new Error('服务商预设不存在，请重新选择');
   return { ...preset };
 }
 const newFields = (value, fields, label) => {
@@ -19,18 +19,18 @@ const identityText = (value, label, max) => {
   return value.trim();
 };
 export function resolveOnboardingProvider(state, { providerId, providerPresetId, newProvider } = {}) {
-  if ([providerId, providerPresetId, newProvider].filter(Boolean).length !== 1) throw new Error('请选择已有供应商、供应商预设或新供应商，不能同时选择');
+  if ([providerId, providerPresetId, newProvider].filter(Boolean).length !== 1) throw new Error('请选择已有服务商、服务商预设或新服务商，不能同时选择');
   if (newProvider) {
-    newFields(newProvider, ['name'], '新供应商');
-    const name = identityText(newProvider.name, '供应商名称', 100);
-    if (state.providers.some(row => !row.deletedAt && row.name?.trim().toLowerCase() === name.toLowerCase())) throw new Error('供应商名称已存在，请明确选择已有供应商');
+    newFields(newProvider, ['name'], '新服务商');
+    const name = identityText(newProvider.name, '服务商名称', 100);
+    if (state.providers.some(row => !row.deletedAt && row.name?.trim().toLowerCase() === name.toLowerCase())) throw new Error('服务商名称已存在，请明确选择已有服务商');
     return { id: 'new-provider', isDraft: true, name, sourceType: 'thirdParty', status: '未登记', apiKeys: [] };
   }
-  if (providerId) { const provider = state.providers.find(row => row.id === providerId && !row.deletedAt); if (!provider) throw new Error('供应商已不存在，请重新选择'); return structuredClone(provider); }
+  if (providerId) { const provider = state.providers.find(row => row.id === providerId && !row.deletedAt); if (!provider) throw new Error('服务商已不存在，请重新选择'); return structuredClone(provider); }
   const preset = onboardingProviderPreset(providerPresetId);
   const matches = state.providers.filter(row => !row.deletedAt && (row.onboardingPresetId === preset.id || row.code?.toLowerCase() === preset.code));
-  if (matches.length > 1) throw new Error('供应商预设对应多个同编码实体，请明确选择已有供应商');
-  if (matches[0]) { if (matches[0].sourceType !== preset.sourceType) throw new Error('供应商编码与预设的供给类型冲突，请明确选择已有供应商'); return structuredClone(matches[0]); }
+  if (matches.length > 1) throw new Error('服务商预设对应多个同编码实体，请明确选择已有服务商');
+  if (matches[0]) { if (matches[0].sourceType !== preset.sourceType) throw new Error('服务商编码与预设的供给类型冲突，请明确选择已有服务商'); return structuredClone(matches[0]); }
   return { ...preset, id: 'preset:' + preset.id, providerPresetId: preset.id, isDraft: true, status: '未登记', apiKeys: [] };
 }
 export function onboardingModelPreset(id) {

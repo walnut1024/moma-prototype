@@ -29,7 +29,7 @@ test('invalid, duplicate-only and oversized imports fail atomically', () => {
   for (const text of ['', ' \n ', existing, 'valid\ninvalid model', 'x'.repeat(201)]) assert.throws(() => commitAdminState(seed, action(text)), /请输入|均已存在|有效 Model ID/);
   assert.throws(() => commitAdminState(seed, action('One\nTwo', 'single')), /请选择/);
   assert.throws(() => commitAdminState(seed, action('One', 'unknown')), /请选择/);
-  assert.throws(() => commitAdminState(seed, action('One', 'batch', 'missing')), /供应商不存在/);
+  assert.throws(() => commitAdminState(seed, action('One', 'batch', 'missing')), /服务商不存在/);
   assert.throws(() => commitAdminState(seed, action(Array.from({ length: 2001 }, (_, index) => `Extra/${index}`).join('\n'))), /最多 2000/);
   assert.equal(JSON.stringify(seed), before);
 });

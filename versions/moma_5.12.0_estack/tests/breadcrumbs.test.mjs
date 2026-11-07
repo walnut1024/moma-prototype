@@ -7,14 +7,14 @@ const params = crumb => new URLSearchParams(crumb.href.split('?')[1]);
 
 test('supplier workspace has one level and editors return to the same supplier and tab', () => {
   const rows = build('providers', 'provider=provider-moma&tab=api-keys&view=profile&endpoint=ep&q=model-search&listQ=MoMA&listPage=2&status=已启用', { provider: '中国移动 MoMA' });
-  assert.deepEqual(labels(rows), ['模型运营', '渠道接入', '编辑供应商资料']);
+  assert.deepEqual(labels(rows), ['模型运营', '渠道接入', '编辑服务商资料']);
   assert.equal(params(rows[1]).get('provider'), 'provider-moma');
   assert.equal(params(rows[1]).get('tab'), 'api-keys');
   for (const key of ['endpoint', 'view', 'q', 'page', 'listQ', 'listPage']) assert.equal(params(rows[1]).has(key), false);
   assert.equal(rows.at(-1).href, undefined);
   assert.deepEqual(labels(build('providers', 'provider=provider-moma&tab=catalogue')), ['模型运营', '渠道接入']);
   assert.deepEqual(labels(build('providers', 'provider=provider-moma&tab=api-keys')), ['模型运营', '渠道接入']);
-  assert.deepEqual(labels(build('providers', 'view=new&q=MoMA')), ['模型运营', '渠道接入', '添加供应商']);
+  assert.deepEqual(labels(build('providers', 'view=new&q=MoMA')), ['模型运营', '渠道接入', '添加服务商']);
 });
 
 test('supplier and history drawers stay on model management without a detail breadcrumb', () => {
@@ -99,4 +99,14 @@ test('onboarding belongs directly to model operations and names the selected tas
   assert.deepEqual(labels(build('listing','view=onboarding')),['模型运营','接入并上架模型']);
   assert.deepEqual(labels(build('listing','view=onboarding',{onboardingIntent:'reserve'})),['模型运营','准备备用供应']);
   assert.deepEqual(labels(build('listing','view=onboarding',{onboardingIntent:'activate'})),['模型运营','投入当前服务']);
+});
+
+test('pricing detail breadcrumbs retain search, combination filters, context and list page',()=>{
+  for(const page of ['model-costs','model-prices']){
+    const params=new URLSearchParams({q:'GLM',filterModel:'master-1',filterSupplier:'provider-1',filterStatus:'已配置',page:'2',model:'service-context',provider:'detail-provider',association:'detail-association',service:'detail-service',edit:'1',tab:'sales'});
+    const link=adminBreadcrumbs(page,params).find(row=>row.href?.startsWith('#/admin-2/'+page));
+    assert.ok(link);const back=new URLSearchParams(link.href.split('?')[1]);
+    for(const key of ['q','filterModel','filterSupplier','filterStatus','page','model'])assert.equal(back.get(key),params.get(key));
+    for(const key of ['association','provider','service','edit','tab'])assert.equal(back.has(key),false);
+  }
 });

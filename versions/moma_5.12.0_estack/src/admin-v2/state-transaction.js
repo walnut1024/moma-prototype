@@ -69,7 +69,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   if (action.type === 'adminAccount') action = adminAccountTransaction(state, action);
   if (action.type === 'deploymentOperation') action = deploymentTransaction(state, action);
   if (action.type === 'update' && action.collection === 'artifacts' && action.changes.status === '已删除' && state.deployments.some(item => deploymentUsesArtifact(item, action.id))) throw new Error('该制品被部署或回滚配置引用，不能删除');
-  if ((action.type === 'batch' ? action.changes : [action]).some(change => change.type === 'remove' && change.collection === 'providers' && change.id === MOMA_PROVIDER.id)) throw new Error('内置平台供应商不可删除');
+  if ((action.type === 'batch' ? action.changes : [action]).some(change => change.type === 'remove' && change.collection === 'providers' && change.id === MOMA_PROVIDER.id)) throw new Error('内置平台服务商不可删除');
   const next = state.cloudOperations ? {...state,...Object.fromEntries(['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','modelVersions','validations','modelOnboardings','serviceRoutes','tariffDictionary','modelData'].map(key=>[key,structuredClone(state[key])])),audits:[...state.audits]} : structuredClone(state), timestamp = new Date().toISOString();
   if (action.type === "setRole") next.currentRole = action.role;
   else if (action.type === "setSettings") next.settings = { ...next.settings, ...action.changes };

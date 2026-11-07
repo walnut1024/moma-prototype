@@ -26,14 +26,14 @@ export function MoreActions({children,label='更多操作',disabled=false}) {
 }
 export function Status({ children, good = false }) { return <span className={`mo-status ${good ? 'good' : ''}`}>{children}</span>; }
 export function Notice({ children, error = false }) { return <div className={`mo-notice ${error ? 'error' : ''}`} role={error ? 'alert' : 'status'}>{error ? <AlertCircle/> : <CheckCircle2/>}<div>{children}</div></div>; }
-export function SearchBox({ value, onChange, placeholder = '搜索模型名称 / 编码 / 作者' }) { return <div className="mo-search"><Search/><Input aria-label={placeholder} placeholder={placeholder} value={value} onChange={event => onChange(event.target.value)}/></div>; }
+export function SearchBox({ value, onChange, placeholder = '搜索模型展示名 / 编码 / 作者' }) { return <div className="mo-search"><Search/><Input aria-label={placeholder} placeholder={placeholder} value={value} onChange={event => onChange(event.target.value)}/></div>; }
 export function GridTable({ headings, children, empty, emptyMessage = '没有符合条件的记录', className = '' }) { return <div className="mo-table-scroll"><Table className={`mo-table ${className}`}><TableHeader><TableRow>{headings.map((label,index) => <TableHead key={index}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{children}</TableBody></Table>{empty && <div className="mo-empty" role="status">{emptyMessage}</div>}</div>; }
 export { TableRow as Row, TableCell as Cell };
 export function Pagination({ count, page, setPage, size = 10 }) { const pages = Math.max(1, Math.ceil(count / size)); return <div className="mo-pagination"><span>共 {count} 条</span><span>{size} 条/页</span><Button type="button" size="icon" variant="outline" aria-label="上一页" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft/></Button><span>{page} / {pages}</span><Button type="button" size="icon" variant="outline" aria-label="下一页" disabled={page >= pages} onClick={() => setPage(page + 1)}><ChevronRight/></Button></div>; }
-export function CopyId({ value, label = '调用 Model ID' }) { return <div className="mo-copy"><code>{value}</code><Button type="button" size="icon" variant="ghost" aria-label={`复制 ${value}`} onClick={async () => { try { await navigator.clipboard.writeText(value); toast.success(`${label} 已复制`); } catch { toast.error('复制失败，请选择文本复制'); } }}><Copy/></Button></div>; }
+export function CopyId({ value, label = '对外调用标识' }) { return <div className="mo-copy"><code>{value}</code><Button type="button" size="icon" variant="ghost" aria-label={`复制 ${value}`} onClick={async () => { try { await navigator.clipboard.writeText(value); toast.success(`${label} 已复制`); } catch { toast.error('复制失败，请选择文本复制'); } }}><Copy/></Button></div>; }
 export function Price({ model, price }) { const items = priceItems(price, model); return items.length ? <details className="mo-price"><summary>{items.length} 个计费项</summary>{items.map((item, index) => <small key={index}>{item.name}{item.condition ? '（' + item.condition + '）' : ''}：{item.currency || 'CNY'} {moneyDisplay(item.amount)} / {item.unit}</small>)}</details> : <span className="mo-muted">未配置</span>; }
 export function Modal({ title, description, children, onClose, wide, drawer = false, drawerSide = 'right', footer, className = '', headerActions }) { return <Dialog open onOpenChange={open => { if (!open) onClose(); }}><DialogContent className={`mo-dialog ${className} ${wide ? 'wide' : ''} ${drawer ? `mo-drawer${drawerSide==='left'?' mo-drawer-left':''}` : ''}`} showCloseButton={false}><div className="mo-dialog-header"><div><DialogTitle>{title}</DialogTitle><DialogDescription>{description || '请核对当前配置后继续。'}</DialogDescription></div>{headerActions}<Button variant="ghost" size="icon" aria-label="关闭" onClick={onClose}><X/></Button></div><div className="mo-dialog-body">{children}</div>{footer && <div className="mo-dialog-footer">{footer}</div>}</DialogContent></Dialog>; }
-export function useOperations({ state, transact, conflict, reload }, base) {
+export function useOperations({ state, transact, conflict, reload, notify = toast.success, renderLeaveDialog }, base) {
   const [params, setParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
   const [dirty, setDirty] = useState(false), [leave, setLeave] = useState(null), [error, setError] = useState('');
   const running = useRef(false);
@@ -52,7 +52,7 @@ export function useOperations({ state, transact, conflict, reload }, base) {
   };
   const isCurrent = () => { if(state.cloudOperations)return !conflict && canMutate(state.currentRole,{type:'modelOperations'}); try { const fresh = readLinkedState(); const account = activeAdmin(fresh); return fresh.revision === state.revision && account.id === state.adminSession?.accountId && canMutate(account.role, { type: 'modelOperations' }); } catch { return false; } };
   const can = !conflict && !state.storageError && isCurrent();
-  const run = async (operation, data = {}, modelId, legacy = false) => { if(running.current)return null;running.current=true;try { if (!can) throw new Error(conflict ? '请先载入最新数据，再保存配置；当前输入保留' : '当前无法保存，请检查角色权限和数据状态'); const next = await transact({ type: legacy ? 'modelOperation' : 'modelOperations', operation, modelId, data }); setError(''); setDirty(false); dirtyRef.current = false; toast.success(next.audits[0].action + '成功'); return next; } catch (issue) {
+  const run = async (operation, data = {}, modelId, legacy = false) => { if(running.current)return null;running.current=true;try { if (!can) throw new Error(conflict ? '请先载入最新数据，再保存配置；当前输入保留' : '当前无法保存，请检查角色权限和数据状态'); const next = await transact({ type: legacy ? 'modelOperation' : 'modelOperations', operation, modelId, data }); setError(''); setDirty(false); dirtyRef.current = false; notify(next.audits[0].action + '成功'); return next; } catch (issue) {
     let message = issue instanceof Error ? issue.message : String(issue);
     const target = modelOperationTarget(state, modelId, data);
     if (can && isCurrent() && target && operation !== 'recordFailedOperation') {
@@ -61,7 +61,9 @@ export function useOperations({ state, transact, conflict, reload }, base) {
     }
     setError(message); return null;
   } finally { running.current=false; } };
-  const leaveDialog = leave && <Modal title="有未保存的配置" description="放弃修改后继续离开，当前生效配置保留。" onClose={() => setLeave(null)}><div className="mo-footer"><Button variant="outline" onClick={() => setLeave(null)}>继续编辑</Button><Button variant="outline" onClick={() => { const next = leave; setLeave(null); setDirty(false); dirtyRef.current = false; next(); }}>放弃本次修改</Button></div></Modal>;
+  const cancelLeave = () => setLeave(null);
+  const discardLeave = () => { const next = leave; setLeave(null); setDirty(false); dirtyRef.current = false; next(); };
+  const leaveDialog = leave && (renderLeaveDialog ? renderLeaveDialog({ cancel: cancelLeave, discard: discardLeave }) : <Modal title="有未保存的配置" description="放弃修改后继续离开，当前生效配置保留。" onClose={cancelLeave}><div className="mo-footer"><Button variant="outline" onClick={cancelLeave}>继续编辑</Button><Button variant="outline" onClick={discardLeave}>放弃本次修改</Button></div></Modal>);
 
   return { params, go, proceed, dirty: setDirty, hasUnsaved: () => dirtyRef.current, can, isCurrent, run, error, setError, leaveDialog, conflict, reload };
 }
@@ -70,7 +72,7 @@ export function ProviderFields({ value, onChange, disabled, editing = false, chi
   const set = (key, input) => onChange({ ...value, [key]: input });
   const descriptionLength = [...value.description.trim()].length;
   return <div className="mo-form-grid supplier-profile-fields">
-    <Field label="供应商名称 *"><Input required aria-label="供应商名称" value={value.name} disabled={disabled} onChange={e => set('name', e.target.value)}/></Field>
+    <Field label="服务商名称 *"><Input required aria-label="服务商名称" value={value.name} disabled={disabled} onChange={e => set('name', e.target.value)}/></Field>
     <Field label="英文编码 *" hint="2–32 位小写字母、数字或连字符，字母开头；创建后固定。"><Input required aria-label="英文编码" placeholder="例如 cmcc" pattern="[a-z][a-z0-9-]{1,31}" autoCapitalize="none" autoComplete="off" spellCheck={false} value={value.code} disabled={disabled} readOnly={editing} onChange={e => set('code', e.target.value.toLowerCase())}/></Field>
     <Field label="供给类型 *"><Choice label="供给类型" value={value.sourceType} options={Object.entries(PROVIDER_TYPES)} disabled={disabled || editing} onChange={value => set('sourceType', value)}/></Field><div/>
     {children}

@@ -46,7 +46,7 @@ test('guide separates internal use from sales and explains current entry points'
   assert.match(JSON.stringify(guides.find(guide => guide.id === 'overview')), /内部使用不需要用零元售价/);
   assert.match(JSON.stringify(guides.find(guide => guide.id === 'services')), /技术验证及启用，不要求售价或销售上架/);
   assert.match(JSON.stringify(guides.find(guide => guide.id === 'sales')), /纯内部使用可以跳过/);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'costs')), /模型成本 → 对应供应商、渠道及模型 → 查看成本/);
+  assert.match(JSON.stringify(guides.find(guide => guide.id === 'costs')), /模型成本 → 对应服务商、渠道及模型 → 查看成本/);
   assert.match(JSON.stringify(guides.find(guide => guide.id === 'sales')), /销售设置/);
   const imported = guides.flatMap(guide => guide.tasks).find(task => task.id === 'materials-import');
   assert.match(JSON.stringify(imported), /XLSX 或 UTF-8 CSV/);

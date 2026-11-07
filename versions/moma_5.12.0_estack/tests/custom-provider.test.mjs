@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createAdminSeed, commitAdminState, parseAdminState } from '../src/admin-v2/store.js';
 import { appendProviderCatalogue } from '../src/admin-v2/provider-management.js';
 const register = (state, provider, providerId) => commitAdminState(state, { type: 'modelOperations', operation: 'providerRegistration', data: { provider, providerId, connections: [{ protocol: 'OpenAI', baseUrl: 'https://custom.example.invalid/v1', credentialRef: 'env:CUSTOM_KEY', timeoutSeconds: 60 }] } });
-const input = { name: '自定义供应商测试', code: '  MY-Service  ', sourceType: 'thirdParty', integrationType: '其他兼容服务', catalogModelIds: [] };
+const input = { name: '自定义服务商测试', code: '  MY-Service  ', sourceType: 'thirdParty', integrationType: '其他兼容服务', catalogModelIds: [] };
 
 test('custom supplier creation lowercases unique codes, preserves existing identities and persists catalogue drafts', () => {
   const seed = createAdminSeed(), original = JSON.stringify(seed);

@@ -4,7 +4,7 @@ import fixtures from '../mock/acceptance-cleanup.json' with { type: 'json' };
 export function archiveAcceptanceFixture(state, data) {
   if (state.currentRole !== '平台管理员') throw Error('仅平台管理员可归档验收数据');
   const spec = fixtures.find(row => row.providerId === data?.providerId);
-  if (!spec || data.confirmed !== true) throw Error('请确认指定的验收供应商');
+  if (!spec || data.confirmed !== true) throw Error('请确认指定的验收服务商');
   const provider = state.providers.find(row => row.id === spec.providerId), model = state.models.find(row => row.id === spec.modelId);
   const endpoint = state.endpoints.find(row => row.id === spec.endpointId), supply = state.modelSupplies.find(row => row.id === spec.supplyId);
   if (!provider || !model || !endpoint || !supply) throw Error('验收数据已变化或已归档，请重新核对');
@@ -32,5 +32,5 @@ export function archiveAcceptanceFixture(state, data) {
     ...state.validations.filter(row => row.modelId === model.id).map(row => ['validations', row]),
     ...routes.map(row => ['serviceRoutes', row]),
   ].map(([collection, row]) => ({ type: 'remove', collection, id: row.id }));
-  return { type: 'batch', changes, objectId: provider.id, label: '归档指定验收供应商及模型服务', archivedCatalogueIds: [...new Set([...(state.modelData?.archivedCatalogueIds || []), spec.libraryId])] };
+  return { type: 'batch', changes, objectId: provider.id, label: '归档指定验收服务商及模型服务', archivedCatalogueIds: [...new Set([...(state.modelData?.archivedCatalogueIds || []), spec.libraryId])] };
 }

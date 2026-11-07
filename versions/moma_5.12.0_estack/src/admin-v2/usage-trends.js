@@ -1,18 +1,18 @@
 import { usageBuckets, usageFilterOptions, usageModelTypes, usageMeter } from './usage-analysis.js';
 import { usageTokenValue } from './usage-distributions.js';
 
-export const usageDimensions = [['category', '按模型类型'], ['providerId', '按供应商'], ['modelId', '按模型'], ['tenantId', '按客户']];
+export const usageDimensions = [['category', '按模型类型'], ['providerId', '按服务商'], ['modelId', '按模型'], ['tenantId', '按客户']];
 export const trendDimensions = [['total', '合计'], ...usageDimensions];
 export const tokenMetrics = [['total', '总Token'], ['input', '输入Token'], ['output', '输出Token']];
 export const defaultTrend = () => ({ dimension: 'total', metric: 'total', showTotal: false, curves: null });
 
 export function supplySummary(filters, options, full = false) {
   const providers = filters.providers || [];
-  if (filters.channels === null && !providers.length) return '供应商：全部';
+  if (filters.channels === null && !providers.length) return '服务商：全部';
   if (full) return [...providers.map(id => `${options.providers.find(item => item.id === id)?.name || id}：全部渠道`), ...(filters.channels || []).map(id => options.channels.find(item => item.id === id)?.name || id)].join('、') || '未选择供给';
   const partial = new Set((filters.channels || []).map(id => options.channels.find(item => item.id === id)?.groupId || '__unknown__'));
   const count = new Set([...providers, ...partial]).size;
-  return partial.size ? `供应商：${count}家／部分渠道` : `供应商：${count}个`;
+  return partial.size ? `服务商：${count}家／部分渠道` : `服务商：${count}个`;
 }
 
 // Whole suppliers remain identities; individual channels never promote themselves to a supplier scope.
@@ -35,7 +35,7 @@ export function trendSeries(state, facts, filters, settings, calls = false) {
   const candidates = new Map();
   const add = id => {
     const item = collections[dimension]?.find(item => item.id === id);
-    const name = item?.name || (id === '__unknown__' ? `未归属${dimension === 'tenantId' ? '客户' : dimension === 'providerId' ? '供应商' : '模型'}` : id);
+    const name = item?.name || (id === '__unknown__' ? `未归属${dimension === 'tenantId' ? '客户' : dimension === 'providerId' ? '服务商' : '模型'}` : id);
     const label = collections[dimension]?.filter(candidate => candidate.name === name).length > 1 ? `${name}（${item.code || id}）` : name;
     if (!candidates.has(id)) candidates.set(id, { id, label, code: item?.code || id, color: dimension === 'category' ? item?.color : undefined, values: buckets.map(() => 0), sum: 0 });
   };

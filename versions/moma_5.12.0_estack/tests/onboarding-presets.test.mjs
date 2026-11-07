@@ -51,7 +51,7 @@ test('an inline new key binds the new channel while preserving the old group pri
 });
 
 test('legacy raw IDs and similar names never override explicit supplier identity and duplicate codes refuse guessing', () => {
-  const state = clean(); state.providers = [{ id: 'provider-cmss', name: '江苏移动旧供应商', code: 'js-old', sourceType: 'thirdParty', catalogModelIds: [], apiKeys: [] }];
+  const state = clean(); state.providers = [{ id: 'provider-cmss', name: '江苏移动旧服务商', code: 'js-old', sourceType: 'thirdParty', catalogModelIds: [], apiKeys: [] }];
   const old = structuredClone(state.providers[0]), next = run(state, 'channelQuickCreate', { providerPresetId: 'deepseek', values: values() }), endpoint = created(next);
   assert.notEqual(endpoint.providerId, old.id); assert.deepEqual(next.providers.find(row => row.id === old.id), old);
   const ambiguous = clean(); ambiguous.providers = [{ ...old, id: 'one', code: 'deepseek' }, { ...old, id: 'two', code: 'DEEPSEEK' }];

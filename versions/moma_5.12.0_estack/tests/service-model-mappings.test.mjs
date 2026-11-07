@@ -30,7 +30,7 @@ test('only exact same-master supply and provider scope are accepted; readonly an
  assert.throws(()=>command(f,'serviceMappingSave',{id:s.id,name:'x',config:config(f.candidates[0],f.service),expectedRevision:99}),/修订/);
  assert.throws(()=>command(f,'serviceMappingValidate',{id:s.id,expectedSource:'stale'}),/已变化/);
  assert.throws(()=>command(f,'serviceMappingEnable',{id:s.id},'运维人员'),/无权/);assert.deepEqual(f.state,before);
- const providerService={...f.service,providerId:f.candidates[1].provider.id};assert.throws(()=>mappingPreview(f.state,providerService,config(f.candidates[0],f.service)),/供应商/);
+ const providerService={...f.service,providerId:f.candidates[1].provider.id};assert.throws(()=>mappingPreview(f.state,providerService,config(f.candidates[0],f.service)),/服务商/);
 });
 test('pending edits preserve the effective mapping and validation until explicitly checked and applied; discard keeps it intact',()=>{
  const f=fixture(),s=create(f);f.state=command(f,'serviceMappingValidate',{id:s.id});f.state=command(f,'serviceMappingEnable',{id:s.id});const old=structuredClone(f.state.modelSupplies.find(row=>row.id===s.id));

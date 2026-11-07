@@ -125,3 +125,16 @@ test('a unified model with no supplies explicitly maps an existing channel from 
 
 function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
 function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }
+
+test('service header separates release badges from market visibility without changing saved state',async()=>{
+  const {serviceHeaderStatus}=await import('../src/admin-v2/service-workspace.js');
+  const model={listingStatus:'已上架',releaseStage:'formal',marketVisible:true,callsEnabled:false};
+  const before=structuredClone(model);
+  assert.deepEqual(serviceHeaderStatus(model),{service:'正式上架',visibility:'用户可见'});
+  assert.deepEqual(serviceHeaderStatus({...model,releaseStage:'gray'}),{service:'灰度上架',visibility:'灰度用户可见'});
+  assert.deepEqual(serviceHeaderStatus({...model,releaseStage:'gray',marketVisible:false}),{service:'灰度上架',visibility:'用户不可见'});
+  assert.deepEqual(serviceHeaderStatus({...model,listingStatus:'已下架'}),{service:'已下架',visibility:'用户可见'});
+  assert.equal(serviceHeaderStatus({...model,listingStatus:'已下架',releaseStage:'gray'}).visibility,'灰度用户可见');
+  assert.deepEqual(serviceHeaderStatus({}),{service:'已下架',visibility:'用户可见'});
+  assert.deepEqual(model,before);
+});

@@ -6,7 +6,7 @@ import { markedUpItems } from '../src/admin-v2/provider-catalogue-pricing.js';
 import { activeSupplyPrice, procurementVersion } from '../src/admin-v2/model-management.js';
 const op = (state, operation, data) => commitAdminState(state, { type: 'modelOperations', operation, data });
 function fixture() {
-  let state = op(createAdminSeed(), 'providerRegistration', { provider: { name: '批量供应商', code: 'batch-supplier', sourceType: 'thirdParty', catalogModelIds: ['batch-model-a', 'batch-model-b'] }, connections: [{ name: '批量接入', protocol: 'OpenAI', baseUrl: 'https://batch.example.invalid/v1', credentialRef: 'env:BATCH_TEST_KEY', timeoutSeconds: 60 }] });
+  let state = op(createAdminSeed(), 'providerRegistration', { provider: { name: '批量服务商', code: 'batch-supplier', sourceType: 'thirdParty', catalogModelIds: ['batch-model-a', 'batch-model-b'] }, connections: [{ name: '批量接入', protocol: 'OpenAI', baseUrl: 'https://batch.example.invalid/v1', credentialRef: 'env:BATCH_TEST_KEY', timeoutSeconds: 60 }] });
   const provider = state.providers.find(item => item.code === 'batch-supplier'), endpoint = state.endpoints.find(item => item.providerId === provider.id);
   state = op(state, 'checkConnection', { endpointId: endpoint.id });
   for (const code of ['batch-model-a', 'batch-model-b']) {

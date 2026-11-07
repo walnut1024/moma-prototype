@@ -6,7 +6,7 @@ export function normalizeChannelKeyPool(input, provider) {
   const rows = input.map(row => {
     if (!row || typeof row !== 'object' || Object.keys(row).some(key => !['keyId', 'priority', 'enabled'].includes(key))) throw new Error('密钥池包含无效字段');
     const key = provider.apiKeys?.find(key => key.id === row.keyId);
-    if (!key || key.revokedAt || ids.has(row.keyId)) throw new Error('密钥须属于当前供应商、未撤销且不重复');
+    if (!key || key.revokedAt || ids.has(row.keyId)) throw new Error('密钥须属于当前服务商、未撤销且不重复');
     if (!Number.isSafeInteger(row.priority) || row.priority < 1 || row.priority > 100 || typeof row.enabled !== 'boolean') throw new Error('优先级须为 1–100 的整数，并明确启用状态');
     if (row.enabled && key.status === 'disabled') throw new Error('请先启用所选 API 密钥');
     ids.add(row.keyId);
@@ -44,7 +44,7 @@ export function connectionQualification(endpoint) {
 }
 export const connectionQualified = endpoint => Boolean(connectionQualification(endpoint));
 export function connectionBlockReason(endpoint, provider) {
-  if (provider?.status !== '已启用') return '先启用供应商';
+  if (provider?.status !== '已启用') return '先启用服务商';
   if (endpoint?.frozen) return '渠道已冻结';
   if (!connectionCredentialsReady(endpoint, provider)) return 'API 凭证待配置或已撤销';
   if (!connectionQualified(endpoint)) return '先通过当前配置的连接测试';

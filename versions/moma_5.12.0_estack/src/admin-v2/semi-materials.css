@@ -1,0 +1,27 @@
+.semi-materials { color: var(--semi-color-text-0); font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 14px; min-width: 0; }
+.semi-materials.materials-page { padding: 24px; background: var(--semi-color-bg-1); border-radius: var(--semi-border-radius-medium); }
+.materials-heading, .materials-toolbar, .materials-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.materials-heading { margin-bottom: 20px; }
+.materials-toolbar { margin: 20px 0; }
+.materials-filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.materials-filters > .semi-input-wrapper { width: 320px; max-width: 100%; }
+.materials-filters > .semi-select { min-width: 160px; }
+.materials-code { overflow-wrap: anywhere; }
+.materials-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
+.materials-field-grid > * { min-width: 0; }
+.materials-field-grid .semi-select, .materials-field-grid .semi-input-number { width: 100%; }
+.materials-wide-field { grid-column: 1 / -1; }
+.materials-form-footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 24px; }
+.materials-description { margin: 16px 0; }
+.materials-import { display: flex; flex-direction: column; gap: 24px; }
+.materials-import-help { display: grid; gap: 12px; padding: 20px; background: var(--semi-color-fill-0); border-radius: var(--semi-border-radius-medium); }
+.materials-import-help p { margin: 0; line-height: 1.7; }
+.materials-logo { width: 32px; height: 32px; object-fit: contain; }
+.materials-logo-preview { width: 64px; height: 64px; object-fit: contain; }
+@media (max-width: 760px) { .semi-materials.materials-page { padding: 16px; } .materials-field-grid { grid-template-columns: minmax(0, 1fr); } .materials-filters > .semi-input-wrapper { width: 100%; } }
+.materials-editor-body { height: 100%; overflow: auto; padding-right: 8px; }
+@media (max-width: 760px) {
+  .semi-materials .semi-table-pagination-outer { flex-wrap: wrap; gap: 12px; }
+  .semi-materials .semi-table-pagination-info { flex: 0 0 100%; }
+  .semi-materials .semi-table-pagination-wrapper { width: 100%; }
+}

@@ -121,6 +121,9 @@
   .cl-filters select { flex: 1 1 135px; }
 }
 
+/* Keep the application font independent of lazy-loaded component library body styles. */
+#root { font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+
 :root {
   font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
   color: #20232a;

@@ -12,8 +12,8 @@ export async function migrateEmptyDatabase(db) {
   const current = await db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='db_state'").first();
   if (current) {
     const state = await db.prepare('SELECT schema_version FROM db_state WHERE id=1').first();
-    if(![1,2,3,4].includes(state?.schema_version))throw Error('数据库结构版本不匹配');
-    for(const [version,file]of [[2,'0002_domain_records.sql'],[3,'0003_full_model_scope.sql'],[4,'0004_model_metadata.sql']])if(state.schema_version<version){const sql=await readFile(new URL('./migrations/'+file,import.meta.url),'utf8');await db.batch(sql.trim().split('\n').filter(Boolean).map(line=>db.prepare(line)));}
+    if(![1,2,3,4,5].includes(state?.schema_version))throw Error('数据库结构版本不匹配');
+    for(const [version,file]of [[2,'0002_domain_records.sql'],[3,'0003_full_model_scope.sql'],[4,'0004_model_metadata.sql'],[5,'0005_billing_item_units.sql']])if(state.schema_version<version){const sql=await readFile(new URL('./migrations/'+file,import.meta.url),'utf8');await db.batch(sql.trim().split('\n').filter(Boolean).map(line=>db.prepare(line)));}
     return;
   }
   const existing = await db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'").all();
@@ -24,8 +24,9 @@ export async function migrateEmptyDatabase(db) {
     sqlite.exec(await readFile(new URL('./migrations/0002_domain_records.sql', import.meta.url), 'utf8'));
     sqlite.exec(await readFile(new URL('./migrations/0003_full_model_scope.sql',import.meta.url),'utf8'));
     sqlite.exec(await readFile(new URL('./migrations/0004_model_metadata.sql',import.meta.url),'utf8'));
+    sqlite.exec(await readFile(new URL('./migrations/0005_billing_item_units.sql',import.meta.url),'utf8'));
     const schema = sqlite.prepare('SELECT sql FROM sqlite_schema WHERE sql IS NOT NULL ORDER BY rowid').all();
-    await db.batch([...schema.map(row => db.prepare(row.sql)), db.prepare('INSERT INTO db_state(id,schema_version,commit_seq) VALUES(1,4,0)')]);
+    await db.batch([...schema.map(row => db.prepare(row.sql)), db.prepare('INSERT INTO db_state(id,schema_version,commit_seq) VALUES(1,5,0)')]);
   } finally { sqlite.close(); }
 }
 

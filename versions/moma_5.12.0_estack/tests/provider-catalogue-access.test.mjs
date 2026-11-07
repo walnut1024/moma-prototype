@@ -40,7 +40,7 @@ test('missing/invalid access fields, duplicate model, permission, conflict and s
     assert.equal(JSON.stringify(state), before);
   }
   const next = commitAdminState(state, action());
-  assert.throws(() => commitAdminState(next, action()), /已在供应商目录/);
+  assert.throws(() => commitAdminState(next, action()), /已在服务商目录/);
   assert.throws(() => commitAdminState({ ...state, currentRole: '运维人员' }, action()), /无权/);
   assert.throws(() => persistModelAction(state, action(), { getItem: () => JSON.stringify({ ...state, revision: state.revision + 1 }), setItem: () => assert.fail('must not write') }), /数据已变化/);
   assert.throws(() => persistModelAction(state, action(), { getItem: () => before, setItem: () => { throw Error('quota'); } }), /quota/);

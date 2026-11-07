@@ -49,7 +49,7 @@ function OtherAnalyticsPages({pageId,state}) {
     {label:'租户',items:filters.tenant?.map(id=>name('tenants',id))??null},
     {label:'模型类型',text:types.find(([id])=>id===filters.type)?.[1]||'全部'},
     {label:'模型 ID',items:filters.model?.map(id=>name('models',id))??null,all:'全部模型'},
-    {label:'供应商',items:filters.provider?.map(id=>name('providers',id))??null},
+    {label:'服务商',items:filters.provider?.map(id=>name('providers',id))??null},
   ];
   const lengths=inputLengthDistribution(rows);
   return <TooltipProvider><div className="ua-page ca-page">
@@ -64,7 +64,7 @@ function OtherAnalyticsPages({pageId,state}) {
     <MultiPick compact label="租户" value={filters.tenant} onChange={v=>set('tenant',v)} items={state.tenants}/>
     <Pick label="模型类型" value={filters.type} onChange={v=>set('type',v)} items={types.filter(([id])=>id).map(([id,name])=>({id,name}))}/>
     <MultiPick compact label="模型 ID" value={filters.model} onChange={v=>set('model',v)} items={state.models.filter(m=>!filters.type||m.type===filters.type)}/>
-    <MultiPick compact label="供应商" value={filters.provider} onChange={v=>set('provider',v)} items={state.providers}/>
+    <MultiPick compact label="服务商" value={filters.provider} onChange={v=>set('provider',v)} items={state.providers}/>
   </CardContent></Card>
   {!invalid&&!rows.length&&<p className="ca-data-note" role="status">所选时段暂无调用记录。</p>}
   {invalid?<p className="ca-range-error" role="alert">{granularity==='week'?'周粒度最多 365 天':'日粒度最多 30 天'}，结束日期不能晚于今天，请调整日期范围。</p>:<>

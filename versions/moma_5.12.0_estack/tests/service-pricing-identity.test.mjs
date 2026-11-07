@@ -14,7 +14,7 @@ test('prices use current supplier names and customer-facing IDs for both modes',
   assert.equal(servicePriceIdentity(state,model).supplierName,'平台更名');
   assert.equal(servicePriceIdentity(state,model,'missing').callId,'');
   state.providers=[];
-  assert.equal(servicePriceIdentity(state,model).supplierName,'供应商已不存在');
+  assert.equal(servicePriceIdentity(state,model).supplierName,'服务商已不存在');
 });
 
 test('platform supplier is pinned once regardless of stored order', () => {
@@ -28,6 +28,6 @@ test('platform supplier is pinned once regardless of stored order', () => {
 test('built-in platform supplier cannot be removed in a batch', () => {
   const state=withAdminSession(createAdminSeed());
   const before=structuredClone(state);
-  assert.throws(()=>commitAdminState(state,{type:'batch',changes:[{type:'remove',collection:'providers',id:MOMA_PROVIDER.id}]}),/内置平台供应商不可删除/);
+  assert.throws(()=>commitAdminState(state,{type:'batch',changes:[{type:'remove',collection:'providers',id:MOMA_PROVIDER.id}]}),/内置平台服务商不可删除/);
   assert.deepEqual(state,before);
 });

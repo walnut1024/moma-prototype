@@ -1,58 +1,23 @@
-import { operationsReturn } from './model-pricing-workspace';
+import ServiceModeDialog from './ServiceModeDialog';
 import ServicePublicationDialog from './ServicePublicationDialog';
-import ModelMaterialDrawer from './ModelMaterialDrawer';
-import {materialDrawerSide} from './model-material-drawer';
-import { libraryRemovalIssue, modelCatalogue, modelReleaseOrder, MODEL_CATALOGUE_TYPES } from './model-library';
 import { useEffect, useRef, useState } from 'react';
-import { Plus, ArrowRight, FileText, Image, Video, AudioLines, Braces, Gauge, ListOrdered, File, Boxes, Building2 } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { FilterPagination, FilterReset, DEFAULT_PAGE_SIZE } from '../components/FilterControls';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
-import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group';
-import { Choice, Field } from './ModelMetadataForm';
-import ModelBatchImport from './ModelBatchImport';
-import { modelCategory, modelCode } from './model-management';
-import { modelProfileDraft } from './model-profile';
-import { modelLibrary, libraryRecord, SERVICE_MODES } from './model-operations';
-import { Heading, Notice, SearchBox, GridTable, Row, Cell, Modal, useOperations } from './ModelOperationsUI';
+import { Plus, Boxes } from 'lucide-react';
+import {Button, RadioGroup} from '@douyinfe/semi-ui';
+import {Notice, Modal, serviceOperationsUi} from './ServiceUI';
+import { Heading, useOperations } from './ModelOperationsUI';
 
-import MaterialsHeader from './MaterialsHeader';
 import SupplyActionDialog from './SupplyActionDialog';
 import ServiceManagementWorkspace from './ServiceManagementWorkspace';
 import ModelOnboarding from './ModelOnboarding';
 import SupplierModelListing from './SupplierModelListing';
 import SupplierModelBatch from './SupplierModelBatch';
-import { supplierMaterialReturn } from './supplier-model-registration';
 import { LISTING_FILTER_KEYS, listingAddress, validListingReturn, listingPreferences, rememberListing } from './supplier-listing';
 
-const modalityIcons = { 文本: FileText, 图片: Image, 视频: Video, 音频: AudioLines, 向量: Braces, 相关性分数: Gauge, 排序结果: ListOrdered };
-function TemplateModalities({ profile }) {
-  const inputs = profile.inputModalities || [], outputs = profile.outputModalities?.length ? profile.outputModalities : profile.resultTypes || [];
-  const label = `输入：${inputs.join('、') || '未填写'}；输出：${outputs.join('、') || '未填写'}`;
-  const icons = values => values.length ? values.map(value => { const Icon = modalityIcons[value] || File; return <span key={value} title={value}><Icon aria-hidden="true"/></span>; }) : <span>—</span>;
-  return <Tooltip><TooltipTrigger asChild><span className="mo-template-modalities" tabIndex={0} role="img" aria-label={label}><span>{icons(inputs)}</span><ArrowRight aria-hidden="true"/><span>{icons(outputs)}</span></span></TooltipTrigger><TooltipContent>{label}</TooltipContent></Tooltip>;
-}
-function TemplateLogo({ src, name }) {
-  const [failed, setFailed] = useState(false);
-  return src && !failed ? <img className="mo-template-logo" src={src} alt={name + '的模型展示 Logo'} width={28} height={28} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)}/> : <span>—</span>;
-}
-function TemplateList({ state, ops }) {
-  const openMaterial=(event,id,mode)=>ops.go({view:'template',template:id,materialMode:mode,drawerSide:materialDrawerSide(event.currentTarget.getBoundingClientRect(),window.innerWidth)},{preserveScroll:true});
-  const [query, setQuery] = useState(''), [type, setType] = useState('all'), [page, setPage] = useState(1), [size, setSize] = useState(DEFAULT_PAGE_SIZE);
-  const [removing, setRemoving] = useState(null);
-  const records = modelCatalogue(state);
-  const rows = records.filter(template => (!query || [template.name, template.modelId, template.profile?.author].join(' ').toLowerCase().includes(query.toLowerCase())) && (type === 'all' || modelCategory(template.type) === type)).sort(modelReleaseOrder);
-  const current = Math.min(page, Math.ceil(rows.length / size) || 1);
-  return <TooltipProvider delayDuration={200}><section className="mo-surface"><div className="mo-toolbar" role="group" aria-label="筛选条件"><SearchBox value={query} onChange={value => { setQuery(value); setPage(1); }} placeholder="搜索模型展示名 / 作者 / 规范标识"/><span className="mo-filter-label">模型类型</span><Choice label="模型类型" value={type} options={[[ 'all', '全部类型'], ...Object.entries(MODEL_CATALOGUE_TYPES)]} onChange={value => { setType(value); setPage(1); }}/><FilterReset onClick={() => { setQuery(''); setType('all'); setPage(1); }}/></div><GridTable className="mo-template-table" headings={['模型展示名', '规范模型标识', '作者', '原厂发布日期', '模型类型', '模型展示 Logo', '输入 / 输出', '上下文窗口', '操作']} empty={!rows.length}>{rows.slice((current - 1) * size, current * size).map(template => {
-    const profile = modelProfileDraft(template);
-    return <Row key={template.id}><Cell><Button variant="link" className="mo-template-name" title={template.name} onClick={event=>openMaterial(event,template.id,'view')}>{template.name}</Button></Cell><Cell><code title={template.modelId}>{template.modelId || '—'}</code></Cell><Cell>{profile.author || template.maker || '—'}</Cell><Cell>{profile.releaseDate || '—'}</Cell><Cell>{MODEL_CATALOGUE_TYPES[modelCategory(template.type)]}</Cell><Cell><TemplateLogo key={profile.logo || ''} src={profile.logo} name={template.name}/></Cell><Cell><TemplateModalities profile={profile}/></Cell><Cell>{template.capabilities.context ? template.capabilities.context / 1024 + 'K Token' : '—'}</Cell><Cell><div className="mo-template-actions"><Button variant="link" onClick={event=>openMaterial(event,template.id,'edit')}>编辑</Button><Tooltip><TooltipTrigger asChild><span tabIndex={0}><Button variant="link" disabled={!ops.can || Boolean(libraryRemovalIssue(state, template.id))} aria-label={'删除模型资料：' + template.name} onClick={() => { ops.setError(''); setRemoving(template); }}>删除</Button></span></TooltipTrigger><TooltipContent>{libraryRemovalIssue(state, template.id) || '删除未被引用的模型资料'}</TooltipContent></Tooltip></div></Cell></Row>;
-  })}</GridTable><FilterPagination total={rows.length} page={current} size={size} onPageChange={setPage} onSizeChange={value => { setSize(value); setPage(1); }}/></section>{removing && <Modal title="删除模型资料" description={removing.name} onClose={() => { setRemoving(null); ops.setError(''); }}><p>仅可删除未被引用的模型资料。删除后将无法在添加供应模型时选择。</p>{ops.error && <Notice error>{ops.error}</Notice>}<div className="mo-footer"><Button variant="outline" onClick={() => setRemoving(null)}>取消</Button><Button variant="destructive" disabled={!ops.can || Boolean(libraryRemovalIssue(state, removing.id))} onClick={async () => { if (await ops.run('templateDelete', { id: removing.id, confirmed: true })) setRemoving(null); }}>确认删除资料</Button></div></Modal>}</TooltipProvider>;
-}
 export default function ModelManagement(props) {
-  const { state } = props, baseOps = useOperations(props, props.templatePage ? 'model-templates' : 'listing'), { params } = baseOps;
+  const { state } = props, baseOps = useOperations({...props,...serviceOperationsUi}, 'listing'), { params } = baseOps;
   const rememberedView = listingPreferences(localStorage).perspective;
   const perspective = params.get('perspective') === 'suppliers' || !params.has('perspective') && rememberedView === 'suppliers' ? 'suppliers' : 'models';
-  const isList = !props.templatePage && !params.get('view');
+  const isList = !params.get('view');
   const restoreList = useRef(true);
   const rememberCurrentList = () => rememberListing(localStorage, { perspective, [perspective]: { address: listingAddress(params, perspective), scrollY: window.scrollY } });
   useEffect(() => {
@@ -71,15 +36,13 @@ export default function ModelManagement(props) {
     if (isList && ['add', 'supplier-batch', 'onboarding'].includes(patch.view)) {
       rememberCurrentList(); patch = { ...patch, listingReturn: listingAddress(params, perspective) };
     }
-    const nextView = Object.hasOwn(patch, 'view') ? patch.view : params.get('view') || (props.templatePage ? 'templates' : null);
+    const nextView = Object.hasOwn(patch, 'view') ? patch.view : params.get('view');
     baseOps.go(patch, { ...options, base: options.base || (['templates', 'template', 'templateImport'].includes(nextView) ? 'model-templates' : 'listing') });
   };
   const ops = { ...baseOps, go }, drawerTrigger = useRef(null);
   const onboard = () => go({ view: 'onboarding', draft: null, step: '0', section: null, model: null, provider: null, panel: null, sourceLibrary: null, refresh: null });
   const [dialog, setDialog] = useState(null);
-  const model = state.models.find(item => item.id === params.get('model')), view = params.get('view') || (props.templatePage ? 'templates' : null);
-  const template = libraryRecord(state, params.get('template'));
-  const returnFromLibrary = (id, saved = false) => operationsReturn(params.get('returnTo')) ? ops.proceed(()=>{location.hash=params.get('returnTo');}) : supplierMaterialReturn(params.get('returnProvider'),saved?id:null) ? ops.proceed(() => { location.hash=supplierMaterialReturn(params.get('returnProvider'),saved?id:null); }) : validListingReturn(params.get('returnListing')) ? ops.proceed(() => { location.hash = params.get('returnListing'); }) : params.get('returnModel') ? go({ view: null, template: null, returnModel: null, model: params.get('returnModel'), tab: null }, { base: 'listing', saved }) : params.get('returnDraft') ? go({ view: 'add', template: null, returnDraft: null, draft: params.get('returnDraft'), library: id || params.get('library'), step: 'metadata' }, { base: 'listing', saved }) : go({ view: 'templates', template: null,materialMode:null,drawerSide:null }, { saved,preserveScroll:true });
+  const model = state.models.find(item => item.id === params.get('model')), view = params.get('view');
   const home = () => validListingReturn(params.get('listingReturn')) ? ops.proceed(() => { location.hash = params.get('listingReturn'); }) : params.get('origin')?.startsWith('#/admin-2/providers') ? ops.proceed(() => { location.hash = params.get('origin'); }) : go({ view: null, model: null, sourceLibrary: null, step: null, tab: null, template: null, return: null, supply: null, chosen: null, draft: null, provider: null, catalogue: null, section: null, refresh: null });
   const switchPerspective = next => {
     if (!next || next === perspective) return;
@@ -103,27 +66,13 @@ export default function ModelManagement(props) {
     go({ perspective: 'models', model: model.id, view: null, tab: null, step: null }, { preserveScroll: true });
   };
   const act = (model, kind, item) => ops.proceed(() => { if(['price','reprice','unifiedPrice','publish','display'].includes(kind)){go({model:model.id,tab:kind==='publish' || kind==='display'?'sales':'pricing',returnTo:location.hash},{base:'model-prices',reset:true});return;}if(kind==='scope'){go({model:model.id,panel:'access',scopeEdit:'1'},{base:'listing',reset:true});return;} drawerTrigger.current = document.activeElement; setDialog({modelId:model.id,kind,item}); });
-  const viewSwitch = <TooltipProvider delayDuration={200}><ToggleGroup type="single" value={perspective} onValueChange={switchPerspective} spacing={0} aria-label="管理视角" className="mo-perspective-switch">{[['models', '模型视角', Boxes], ['suppliers', '供应商视角', Building2]].map(([value, label, Icon]) => <Tooltip key={value}><TooltipTrigger asChild><ToggleGroupItem value={value} aria-label={label}><Icon/></ToggleGroupItem></TooltipTrigger><TooltipContent side="bottom">{label}</TooltipContent></Tooltip>)}</ToggleGroup></TooltipProvider>;
+  const viewSwitch = <RadioGroup type="button" aria-label="管理视角" value={perspective} onChange={event=>switchPerspective(event.target.value)} options={[{label:'模型视角',value:'models'},{label:'服务商视角',value:'suppliers'}]}/>;
   let content;
-  if (['templates','template'].includes(view)) content = <><MaterialsHeader active="model-templates" ops={ops}>{supplierMaterialReturn(params.get('returnProvider')) && <Button variant="outline" onClick={()=>returnFromLibrary()}>返回供应商接入</Button>}<Button variant="outline" disabled={!ops.can} onClick={() => go({ view: 'templateImport' })}>批量导入模型资料</Button><Button disabled={!ops.can} onClick={event=>go({view:'template',template:null,materialMode:'edit',drawerSide:materialDrawerSide(event.currentTarget.getBoundingClientRect(),window.innerWidth)},{preserveScroll:true})}><Plus/>新建资料</Button></MaterialsHeader><TemplateList state={state} ops={ops}/>{view==='template' && (params.get('template') && !template?<Modal title="模型资料不存在" onClose={()=>returnFromLibrary()}><Notice error>该模型资料可能已移除。</Notice></Modal>:<ModelMaterialDrawer state={state} record={template} ops={ops} initial={state.modelOnboardings.find(item=>item.id===params.get('returnDraft'))?.model || {modelId:params.get('code') || '',name:params.get('code') || ''}} onClose={()=>returnFromLibrary(template?.id)} onSaved={(next,id)=>params.get('returnTo') || params.get('returnProvider') || params.get('returnListing') || params.get('returnModel') || params.get('returnDraft')?returnFromLibrary(id,true):go({template:id,materialMode:'view'},{saved:true,replace:true,preserveScroll:true})}/>)}</>;
-  else if (view === 'templateImport') content = <><Heading title="批量导入模型资料" description="先校验，再确认导入；相同规范模型标识不会覆盖。"/><section className="mo-surface mo-pad"><ModelBatchImport key={view} mode="template" state={{...state,models:modelLibrary(state)}} can={ops.can} dirty={ops.dirty} run={async (_operation,data)=>await ops.run('templateImport',data)} close={saved=>go({view:'templates'},{saved:saved===true})}/></section></>;
-  else if (view === 'supplier-batch') content = <SupplierModelBatch key={params.get('provider') + ':' + params.get('batchMode')} state={state} ops={ops} home={home} viewSwitch={viewSwitch}/>;
+  if (view === 'supplier-batch') content = <SupplierModelBatch key={params.get('provider') + ':' + params.get('batchMode')} state={state} ops={ops} home={home} viewSwitch={viewSwitch}/>;
   else if (view === 'onboarding') content = <ModelOnboarding state={state} ops={ops} home={home}/>;
   else if (view === 'add') content = <ServiceManagementWorkspace sourceState={props.sourceState} state={state} ops={ops} act={act} creating cancelCreate={home} finishCreate={(next,id)=>go({view:null,model:id,sourceLibrary:null,panel:null,perspective:'models',q:null,type:null,mode:null,status:null,step:null,draft:null,provider:null,catalogue:null,listingReturn:null},{saved:true})} add={()=>{}}/>;
-  else content = perspective === 'suppliers' ? <><Heading title={<><Boxes/>模型服务</>} description="按供应商目录批量配置供给。">{viewSwitch}<Button onClick={onboard}><Plus/>接入模型</Button><Button variant="outline" onClick={()=>go({view:"add",sourceLibrary:null,step:null,panel:null,draft:null,model:null,provider:null})}>新增模型服务</Button></Heading><SupplierModelListing key={params.get('supplier') || 'default'} state={state} ops={ops} open={open} batch={batch}/></> : <ServiceManagementWorkspace state={state} ops={ops} act={act} add={()=>go({view:"add",sourceLibrary:null,step:null,panel:null,draft:null,model:null,provider:null})}/>;
+  else content = perspective === 'suppliers' ? <><Heading title={<><Boxes/>模型服务</>} description="按服务商目录批量配置供给。">{viewSwitch}<Button onClick={onboard}><Plus/>接入模型</Button><Button theme="light" onClick={()=>go({view:"add",sourceLibrary:null,step:null,panel:null,draft:null,model:null,provider:null})}>新增模型服务</Button></Heading><SupplierModelListing key={params.get('supplier') || 'default'} state={state} ops={ops} open={open} batch={batch}/></> : <ServiceManagementWorkspace state={state} ops={ops} act={act} add={()=>go({view:"add",sourceLibrary:null,step:null,panel:null,draft:null,model:null,provider:null})}/>;
   const dialogModel = dialog && state.models.find(item => item.id === dialog.modelId);
   const close = () => ops.proceed(() => { setDialog(null); ops.dirty(false); requestAnimationFrame(() => drawerTrigger.current?.isConnected && drawerTrigger.current.focus()); });
-  return <div className={`mo-workbench${['templates','template'].includes(view) ? ' mo-catalog-workbench mo-template-workbench' : !view ? ' mo-catalog-workbench mo-model-list-workbench' : ''}`}>{content}{ops.error && !dialog && !(model && !view) && <Notice error>{ops.error}</Notice>}{ops.leaveDialog}{dialogModel && (['testSupply', 'publishSupply', 'unlistSupply', 'stopSupply', 'startSupply'].includes(dialog.kind) ? <SupplyActionDialog key={dialog.kind + dialog.item.id} state={state} model={dialogModel} supplyId={dialog.item.id} kind={dialog.kind} ops={ops} close={close}/> : dialog.kind === 'serviceMode' ? <ServiceModeDialog key={dialogModel.id} state={state} model={dialogModel} ops={ops} close={close}/> : dialog.kind==='enableService' ? <ServicePublicationDialog state={state} model={dialogModel} ops={ops} close={close} chooseMode={()=>setDialog({modelId:dialogModel.id,kind:'serviceMode'})}/> : ['disableService','stopSales'].includes(dialog.kind) ? <Modal title={dialog.kind==='disableService'?'停用技术服务':'下架'} description={dialogModel.name} onClose={close}><p>{dialog.kind==='disableService'?'停止技术服务，保留销售配置、价格与历史。':'停止销售，保留技术启用状态、价格与历史。'}</p>{ops.error && <Notice error>{ops.error}</Notice>}<div className="mo-footer"><Button variant="outline" onClick={close}>取消</Button><Button disabled={!ops.can || Boolean(ops.conflict)} onClick={async()=>{if(await ops.run(dialog.kind,{expectedUpdatedAt:dialogModel.updatedAt},dialogModel.id,true))close();}}>确认</Button></div></Modal> : <Modal title={`下架并停用 ${dialogModel.name}`} description="下架后停止新的订购与调用，资料、价格和历史记录保留。" onClose={close}><p className="mo-muted">已有订购和已有 Key 不再允许发起新请求；已经开始的请求按原配置完成。</p><div className="mo-footer"><Button variant="outline" onClick={close}>取消</Button><Button disabled={!ops.can} onClick={async()=>{if(await ops.run('unlist',{},dialogModel.id,true))setDialog(null);}}>确认下架并停用</Button></div>{ops.error && <Notice error>{ops.error}</Notice>}</Modal>)}</div>;
-}
-function ServiceModeDialog({ model, ops, close }) {
-  const [value, setValue] = useState(() => ({ serviceMode: '', expectedUpdatedAt: model.updatedAt }));
-  const resetRequired=Boolean(model.serviceMode), delisting=resetRequired || model.listingStatus==='已上架';
-  const mode = SERVICE_MODES[value.serviceMode];
-  return <Modal title={resetRequired ? '切换服务模式' : '选择服务模式'} description={model.name + ' · ' + modelCode(model)} onClose={close}>
-    {resetRequired?<><Notice error>切换服务模式会触发模型下架，并清除路由映射配置。请务必谨慎操作，是否确定切换？</Notice><p className="mo-muted">当前关联渠道、供应商和平台售价需重新配置。模型资料、供应管理资源及历史版本保留。</p></>:<p className="mo-muted">服务模式为必选项，选择后才能关联渠道和配置售价。{delisting?'保存时模型将自动下架，完成配置后需重新上架。':''}</p>}
-    <div className="flex flex-col gap-3">{Object.values(SERVICE_MODES).map(item => <p key={item.label}><strong>{item.label}：</strong>{item.description}</p>)}</div>
-    <div className="mo-form-grid"><Field label={resetRequired?'新服务模式 *':'服务模式 *'}><Choice label="服务模式" value={value.serviceMode || 'none'} options={[[ 'none','请选择服务模式'],...Object.entries(SERVICE_MODES).filter(([id])=>id!==model.serviceMode).map(([id, item]) => [id, item.label])]} disabled={!ops.can} onChange={serviceMode => { setValue(current => ({ ...current, serviceMode:serviceMode==='none'?'':serviceMode })); ops.dirty(true); ops.setError(''); }}/></Field></div>
-    {ops.error && <Notice error>{ops.error}</Notice>}
-    <div className="mo-footer"><Button variant="outline" onClick={close}>取消</Button><Button disabled={!ops.can || !mode} onClick={async () => { if (await ops.run('serviceMode', {...value,confirmedReset:delisting}, model.id)) close(); }}>{resetRequired?'确定切换服务模式':'确认选择服务模式'}</Button></div>
-  </Modal>;
+  return <div className={view==='onboarding' || view==='supplier-batch' || perspective==='suppliers' ? 'mo-workbench' : 'semi-services'}>{content}{ops.error && !dialog && (view==='onboarding' || view==='supplier-batch' || perspective==='suppliers') && !(model && !view) && <Notice error>{ops.error}</Notice>}{ops.leaveDialog}{dialogModel && (['testSupply', 'publishSupply', 'unlistSupply', 'stopSupply', 'startSupply'].includes(dialog.kind) ? <SupplyActionDialog key={dialog.kind + dialog.item.id} state={state} model={dialogModel} supplyId={dialog.item.id} kind={dialog.kind} ops={ops} close={close}/> : dialog.kind === 'serviceMode' ? <ServiceModeDialog key={dialogModel.id} state={state} model={dialogModel} ops={ops} close={close}/> : dialog.kind==='enableService' ? <ServicePublicationDialog state={state} model={dialogModel} ops={ops} close={close} chooseMode={()=>setDialog({modelId:dialogModel.id,kind:'serviceMode'})}/> : ['disableService','stopSales'].includes(dialog.kind) ? <Modal title={dialog.kind==='disableService'?'停用技术服务':'下架'} description={dialogModel.name} onClose={close}><p>{dialog.kind==='disableService'?'停止技术服务，保留销售配置、价格与历史。':'停止销售，保留技术启用状态、价格与历史。'}</p>{ops.error && <Notice error>{ops.error}</Notice>}<div className="ss-footer"><Button theme="light" onClick={close}>取消</Button><Button disabled={!ops.can || Boolean(ops.conflict)} onClick={async()=>{if(await ops.run(dialog.kind,{expectedUpdatedAt:dialogModel.updatedAt},dialogModel.id,true))close();}}>确认</Button></div></Modal> : <Modal title={`下架并停用 ${dialogModel.name}`} description="下架后停止新的订购与调用，资料、价格和历史记录保留。" onClose={close}><p className="mo-muted">已有订购和已有 Key 不再允许发起新请求；已经开始的请求按原配置完成。</p><div className="ss-footer"><Button theme="light" onClick={close}>取消</Button><Button disabled={!ops.can} onClick={async()=>{if(await ops.run('unlist',{},dialogModel.id,true))setDialog(null);}}>确认下架并停用</Button></div>{ops.error && <Notice error>{ops.error}</Notice>}</Modal>)}</div>;
 }

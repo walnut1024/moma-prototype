@@ -7,7 +7,7 @@ export function channelServiceContext(state, params) {
   if (!Array.isArray(ids) || !ids.length || ids.length > 50 || ids.some(id => typeof id !== 'string') || new Set(ids).size !== ids.length) return { error: '接入选择范围无效' };
   const provider = state.providers.find(row => row.id === params.get('supplyProvider'));
   const endpoint = state.endpoints.find(row => row.id === params.get('supplyEndpoint') && row.providerId === provider?.id && !row.deletedAt);
-  if (!provider || !endpoint) return { error: '原供应商或渠道已变化，请重新选择' };
+  if (!provider || !endpoint) return { error: '原服务商或渠道已变化，请重新选择' };
   const mappings=supplierChannelAssociations(state,provider,endpoint.id);
   const rows = ids.map(id => {
     const association = mappings.find(row=>row.id===id);

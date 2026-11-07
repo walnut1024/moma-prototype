@@ -33,7 +33,7 @@ export function normalizeCataloguePrice(draft) {
     if (seen.has(key)) throw new Error('同一计费项、计价单位、货币和适用条件不可重复');
     seen.add(key);
     const purchasePrice = decimal(item.purchasePrice, '平台成本');
-    return { name, unit, currency, ...(condition.trim() ? { condition: condition.trim() } : {}), listPrice: decimal(item.listPrice, '供应商目录价'), ...(purchasePrice == null ? {} : { purchasePrice }) };
+    return { name, unit, currency, ...(condition.trim() ? { condition: condition.trim() } : {}), listPrice: decimal(item.listPrice, '服务商目录价'), ...(purchasePrice == null ? {} : { purchasePrice }) };
   });
   return { modelId: draft.modelId, discountFactor, scenarios };
 }
@@ -55,7 +55,7 @@ export function cataloguePurchasePrice(listPrice, discountFactor, purchasePrice)
 }
 
 export function cataloguePurchasePriceInput(item, discountFactor) {
-  return item.purchasePrice ?? catalogueAmountInput(cataloguePurchasePrice(decimal(item.listPrice, '供应商目录价'), normalizeCatalogueDiscount(discountFactor)));
+  return item.purchasePrice ?? catalogueAmountInput(cataloguePurchasePrice(decimal(item.listPrice, '服务商目录价'), normalizeCatalogueDiscount(discountFactor)));
 }
 
 export const billingItemKey = item => JSON.stringify([item.name, item.condition || "", item.unit, item.currency || "CNY"]);

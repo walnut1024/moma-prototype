@@ -25,7 +25,7 @@ test('one canonical model collects independent suppliers and preserves service p
 
 test('explicit alias linking unifies every existing channel without rewriting upstream data or prices', () => {
  const state=parseAdminState(null), p=owner(state,'provider-zhipu-direct');
- p.catalogModelIds.push('vendor-glm');p.catalogModels.push({modelId:'vendor-glm',name:'供应商定制名称',type:'text'});
+ p.catalogModelIds.push('vendor-glm');p.catalogModels.push({modelId:'vendor-glm',name:'服务商定制名称',type:'text'});
  p.catalogConnections=[...(p.catalogConnections||[]),{id:'alias-quote',modelId:'vendor-glm',endpointId:null,upstreamModelId:'vendor-call-id',pricing:{scenarios:[]}}];
  const old=structuredClone(p);
  const next=run(state,p.id,'supplierModelLink',{modelId:'vendor-glm',libraryId:'model-2',confirmed:true});
@@ -75,5 +75,5 @@ test('independent supplier, model and channel creation share one canonical assoc
  assert.ok(supplyModelDirectory(state).find(row=>row.id==='model-2').entries.some(row=>row.provider.id===providerId));
  for(const field of ['models','modelSupplies','serviceRoutes','modelSalePrices']) assert.deepEqual(state[field],original[field]);
  assert.throws(()=>run(state,providerId,'supplierModelAdd',{libraryId:'model-2'}),/已/);
- assert.throws(()=>run(state,null,'create',{name:'重复供应商',code:'new-supply-org',sourceType:'thirdParty'}),/不可重复/);
+ assert.throws(()=>run(state,null,'create',{name:'重复服务商',code:'new-supply-org',sourceType:'thirdParty'}),/不可重复/);
 });

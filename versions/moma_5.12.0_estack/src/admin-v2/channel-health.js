@@ -10,7 +10,7 @@ export function keyHealth(provider, association, key, now = Date.now()) {
   const records = (endpoint.keyConnectivityTests || []).filter(row => row.associationId === association.id && row.keyId === (key?.id || ''));
   const record = records.slice().reverse().sort((a,b) => Date.parse(b.testedAt)-Date.parse(a.testedAt))[0];
   let label;
-  if (provider.status !== '已启用') label = '供应商已停用';
+  if (provider.status !== '已启用') label = '服务商已停用';
   else if (key?.revokedAt) label = '密钥已撤销';
   else if (key?.status === 'disabled') label = '密钥已停用';
   else if (channelInterfaceIssue(provider, association)) label = '接口不匹配';
@@ -33,7 +33,7 @@ export function channelHealthTransaction(state, { data }) {
   const { providerId, endpointId, associationId, keyId = '', expectedFingerprint, confirmed, scenario = 'success' } = data;
   const provider = state.providers.find(row => row.id === providerId);
   const endpoint = state.endpoints.find(row => row.id === endpointId && row.providerId === providerId && !row.deletedAt);
-  if (!provider || !endpoint || provider.status !== '已启用') throw new Error('供应商或渠道不可用，请重新核对');
+  if (!provider || !endpoint || provider.status !== '已启用') throw new Error('服务商或渠道不可用，请重新核对');
   const association = supplierChannelAssociations(state, provider, endpointId).find(row => row.id === associationId);
   if (!association) throw new Error('渠道模型关联已变化');
   const key = connectionKeys(endpoint, provider, true).find(row => row.id === keyId);

@@ -47,8 +47,8 @@ test('empty-channel suppliers remain selectable and unfiltered groups retain the
 });
 
 test('selection summary distinguishes whole suppliers and individual channels, deduplicating overlaps', () => {
-  assert.equal(supplyPickerSelectionSummary({ providers: [], channels: [] }, options.channels, true), '全部供应商');
-  assert.equal(supplyPickerSelectionSummary({ providers: [], channels: [] }, options.channels, false), '未选择供应商或渠道');
+  assert.equal(supplyPickerSelectionSummary({ providers: [], channels: [] }, options.channels, true), '全部服务商');
+  assert.equal(supplyPickerSelectionSummary({ providers: [], channels: [] }, options.channels, false), '未选择服务商或渠道');
   assert.equal(supplyPickerSelectionSummary({ providers: ['p-ds', 'p-ds'], channels: ['east-id', 'sf-id', 'sf-id'] }, options.channels, false), '已选 1 家全部渠道＋1 条渠道');
   assert.equal(supplyPickerSelectionSummary({ providers: [], channels: ['east-id', 'north-id'] }, options.channels, false), '已选 0 家全部渠道＋2 条渠道');
   assert.equal(supplyPickerSelectionSummary({ providers: ['p-empty'], channels: ['historical-id'] }, options.channels, false), '已选 1 家全部渠道＋1 条渠道');

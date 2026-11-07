@@ -45,7 +45,7 @@ test('blank/duplicate identities, incomplete or duplicate billing rows, invalid 
     { ...draft, discountFactor: '1.01' }, { ...draft, discountFactor: '-0.1' }, { ...draft, scenarios: [{ name: '资源包', unit: '包', currency: 'CNY', listPrice: '1' }] }
   ];
   for (const value of cases) { assert.throws(() => commitAdminState(seed, action(value)));assert.equal(JSON.stringify(seed), before); }
-  assert.throws(() => commitAdminState(seed, action(draft, 'missing')), /供应商不存在/);
+  assert.throws(() => commitAdminState(seed, action(draft, 'missing')), /服务商不存在/);
 });
 
 test('empty discount is one, explicit zero remains zero and catalogue IDs remain case-sensitive', () => {

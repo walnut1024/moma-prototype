@@ -272,7 +272,7 @@ test('customer service calls produce immutable operational receipts while platfo
  assert.equal(getMockOperationalRequests().length,0);
  const key=await env.post('/client-keys',{tenantId:'tenant-a',serviceIds:[current.id]});await api('/client/completions',{method:'POST',token:key.clientKey,body:{operationId:env.op(),model:current.candidate.publicModelId,messages:[{role:'user',content:'usage event'}]}});
  const requests=getMockOperationalRequests();assert.equal(requests.length,1);assert.equal(requests[0].tenantId,'tenant-a');assert.equal(requests[0].serviceId,'standard:'+current.id);assert.equal(requests[0].attempts[0].procurementSnapshot.items.length,1);
- const state={models:[{id:current.id,type:'text',name:'模型服务'}],providers:[{id:'supplier',name:'供应商'}],endpoints:[{id:requests[0].endpointId,providerId:'supplier',name:'渠道'}],tenants:[{id:'tenant-a',name:'客户'}],requests};
+ const state={models:[{id:current.id,type:'text',name:'模型服务'}],providers:[{id:'supplier',name:'服务商'}],endpoints:[{id:requests[0].endpointId,providerId:'supplier',name:'渠道'}],tenants:[{id:'tenant-a',name:'客户'}],requests};
  const facts=businessFacts(state,operationFacts(state,usagePreset('today'),analysisFilters(),Date.now()+1));assert.equal(facts[0].complete,true);assert.ok(facts[0].sale.amount>0);assert.equal(businessSummary(facts,'CNY').pending,0);
  const before=JSON.stringify(requests);await env.post('/scenario',{value:'auth'}).catch(()=>{});assert.equal(JSON.stringify(getMockOperationalRequests()),before);
 });

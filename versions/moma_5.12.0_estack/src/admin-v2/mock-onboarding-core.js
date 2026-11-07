@@ -113,7 +113,7 @@ function assertAvailable(state, channel, { live = false, model } = {}) {
     if (key?.localKeyId && (!localKey || localKey.revokedAt || localKey.status === 'disabled')) fail('credential_unavailable', '当前密钥已移除、停用或撤销');
     if (live) {
       const endpoint = runtime.endpoints.find(row => row.id === channel.clientChannelId);
-      if (!provider || provider.status !== '已启用' || !endpoint || endpoint.deletedAt || endpoint.frozen || !['运行中', '需关注'].includes(endpoint.status)) fail('supply_unavailable', '当前供应商或渠道已停用');
+      if (!provider || provider.status !== '已启用' || !endpoint || endpoint.deletedAt || endpoint.frozen || !['运行中', '需关注'].includes(endpoint.status)) fail('supply_unavailable', '当前服务商或渠道已停用');
       const association = runtime.associations.find(row => row.providerId === channel.providerId && row.endpointId === endpoint.id && (model?.associationId ? row.id === model.associationId : row.masterId === model?.id && row.upstreamModelId === model?.upstreamModelId));
       if (!association || association.deletedAt || association.enabled === false) fail('supply_unavailable', '当前模型关联已移除或停用');
     }
@@ -180,7 +180,7 @@ function changeSnapshot(state, input) {
   if (!['channels', 'group'].includes(input.scope || 'channels')) fail('invalid_scope', '请选择渠道或共享组切换范围');
   if (!Array.isArray(input.replacements) || !input.replacements.length) fail('invalid_replacement', '请选择明确替换集合');
   const sources = new Set(), targets = new Set();
-  const replacements = input.replacements.map(row => { const source = channelById(state, row.channelId), candidate = channelById(state, row.candidateChannelId); if (source.providerId !== candidate.providerId || source.id === candidate.id || sources.has(source.id) || targets.has(candidate.id) || source.supersededBy || candidate.supersededBy) fail('invalid_replacement', '替换须为同供应商下独立的候选配置'); sources.add(source.id); targets.add(candidate.id); return { channelId: source.id, candidateChannelId: candidate.id }; }).sort((a, b) => a.channelId.localeCompare(b.channelId));
+  const replacements = input.replacements.map(row => { const source = channelById(state, row.channelId), candidate = channelById(state, row.candidateChannelId); if (source.providerId !== candidate.providerId || source.id === candidate.id || sources.has(source.id) || targets.has(candidate.id) || source.supersededBy || candidate.supersededBy) fail('invalid_replacement', '替换须为同服务商下独立的候选配置'); sources.add(source.id); targets.add(candidate.id); return { channelId: source.id, candidateChannelId: candidate.id }; }).sort((a, b) => a.channelId.localeCompare(b.channelId));
   if ([...targets].some(id => sources.has(id))) fail('replacement_cycle', '替换不能含循环或链式映射');
   if (input.scope === 'group') {
     const oldCredentials = new Set([...sources].map(id => channelById(state, id).credentialId));
@@ -196,7 +196,7 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
   const url = new URL(path, 'http://mock.invalid'), route = url.pathname, scenario = state.scenario;
   if (method === 'GET' && route === '/health') return { status: 'healthy', source: 'mock' };
   if (method === 'GET' && route === '/credentials') return { credentials: state.credentials };
-  if (method === 'POST' && route === '/credentials') return once(state, 'createCredential', body, () => { const secret = body.secret || '', row = { id: uid(), providerId: text(body.providerId, '供应商'), name: text(body.name, '密钥名称'), maskedKey: secret.length > 12 ? `${secret.slice(0, 8)}*****${secret.slice(-4)}` : '*****', version: 1, status: 'active', source: 'mock', accountRpm: body.accountRpm || null }; state.credentials.push(row); return row; });
+  if (method === 'POST' && route === '/credentials') return once(state, 'createCredential', body, () => { const secret = body.secret || '', row = { id: uid(), providerId: text(body.providerId, '服务商'), name: text(body.name, '密钥名称'), maskedKey: secret.length > 12 ? `${secret.slice(0, 8)}*****${secret.slice(-4)}` : '*****', version: 1, status: 'active', source: 'mock', accountRpm: body.accountRpm || null }; state.credentials.push(row); return row; });
   const credentialAction = route.match(/^\/credentials\/([^/]+)\/(revoke|disable|enable)$/);
   if (method === 'POST' && credentialAction) return once(state, credentialAction[2] + 'Credential', body, () => { const row = state.credentials.find(item => item.id === credentialAction[1]); if (!row) fail('credential_not_found', '凭证引用不存在'); if (row.version !== body.expectedRevision) fail('revision_conflict', '凭证版本已变化'); if (row.status === 'revoked' && credentialAction[2] !== 'revoke') fail('credential_revoked', '已撤销凭证不能恢复'); const status = ({ revoke: 'revoked', disable: 'disabled', enable: 'active' })[credentialAction[2]]; if (row.status !== status) { row.status = status; row.version++; } return row; });
   if (method === 'GET' && route === '/channels') return { channels: state.channels.map(channel => ({ ...channel, signature: channelSignature(state, channel) })) };
@@ -204,13 +204,13 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
   if (method === 'POST' && route === '/channels' || method === 'PATCH' && channelPath) return once(state, channelPath ? 'updateChannel' : 'createChannel', body, () => {
     const current = channelPath ? channelById(state, channelPath[1]) : null;
     if (current && current.revision !== body.expectedRevision) fail('revision_conflict', '渠道版本已变化');
-    const input = { ...current, ...body }, providerId = text(input.providerId, '供应商'), name = text(input.name, '渠道名称', 60);
-    if (current && current.providerId !== providerId) fail('provider_immutable', '渠道不能变更供应商');
+    const input = { ...current, ...body }, providerId = text(input.providerId, '服务商'), name = text(input.name, '渠道名称', 60);
+    if (current && current.providerId !== providerId) fail('provider_immutable', '渠道不能变更服务商');
     if (state.channels.some(row => row.id !== current?.id && row.providerId === providerId && row.name === name)) fail('duplicate_name', '渠道名称重复');
     if (!['openai', 'anthropic', 'custom'].includes(input.interfaceType)) fail('invalid_interface', '请选择明确接口类型');
     const localKeyId = input.credential?.id || null, externalVersion = input.credential?.version || 'initial', credentialId = input.authMode === 'none' ? null : localKeyId ? `${localKeyId}@${hash(externalVersion)}` : input.credentialId;
     if (input.authMode !== 'none' && !state.credentials.some(row => row.id === credentialId)) { const revoked = localKeyId && state.credentials.some(row => row.localKeyId === localKeyId && row.status === 'revoked'); state.credentials.push({ id: text(credentialId, '密钥引用'), localKeyId, externalVersion, providerId, name: '渠道密钥引用', maskedKey: '*****', status: revoked ? 'revoked' : input.credential?.status || 'active', version: 1, accountRpm: input.credential?.accountRpm || null, source: 'mock' }); }
-    const key = state.credentials.find(row => row.id === credentialId); if (key && key.providerId !== providerId) fail('credential_scope', '密钥不属于此供应商');
+    const key = state.credentials.find(row => row.id === credentialId); if (key && key.providerId !== providerId) fail('credential_scope', '密钥不属于此服务商');
     const channel = { id: current?.id || uid(), providerId, name, displayName: input.displayName || name, interfaceType: input.interfaceType, baseUrl: text(input.baseUrl, '接口地址', 2048), taskUrls: copy(input.taskUrls || {}), authMode: input.authMode || 'key', credentialId, clientChannelId: input.clientChannelId || null, clientSignature: input.clientSignature || null, mockModels: copy(input.mockModels || current?.mockModels || []), apiVersion: input.apiVersion || input.adapterOptions?.apiVersion || null, workspaceId: input.workspaceId || input.adapterOptions?.workspaceId || null, tokenLimitField: input.tokenLimitField || input.adapterOptions?.tokenLimitField || null, imageSize: input.imageSize || input.adapterOptions?.imageSize || null, voice: input.voice || input.adapterOptions?.voice || null, statusPath: input.statusPath || input.adapterOptions?.statusPath || null, revision: (current?.revision || 0) + 1, configVersion: (current?.configVersion || 0) + 1, source: 'mock' };
     if (current && hash(requestConfiguration(current)) === hash(requestConfiguration(channel))) channel.configVersion = current.configVersion;
     if (current) state.channels[state.channels.indexOf(current)] = channel; else state.channels.push(channel);

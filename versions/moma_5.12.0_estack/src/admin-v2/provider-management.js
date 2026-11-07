@@ -75,13 +75,13 @@ export const PROVIDER_API_KEY_LIMIT = 20;
 export const MODEL_CONNECTIVITY_SCENARIOS = { success: '测试成功', unauthorized: '鉴权失败', unavailable: '模型不可用', timeout: '请求超时' };
 export function supplierModelTestPreview(state, providerId, associationId, modelId, keyGroupId) {
   const provider = state.providers.find(row => row.id === providerId);
-  if (!provider) throw new Error('供应商不存在');
+  if (!provider) throw new Error('服务商不存在');
   const association = catalogueChannels(state, provider, modelId).find(row => row.id === associationId);
   if (!association?.endpointId) throw new Error('模型与渠道关联已变化');
   const issue = channelInterfaceIssue(provider, association);
   if (issue) throw new Error(issue);
   const owner = { ...provider, apiKeys: providerApiKeyRows(state, provider).map(row => row.apiKey) };
-  if (!providerKeyGroups(owner).some(row => row.id === keyGroupId)) throw new Error('请选择当前供应商的 API 密钥组');
+  if (!providerKeyGroups(owner).some(row => row.id === keyGroupId)) throw new Error('请选择当前服务商的 API 密钥组');
   const endpoint = { ...association.endpoint, authMode: 'group', keyGroupId, apiKeyId: '', apiKeys: [], credentialRef: '' };
   const working = { ...state, providers: state.providers.map(row => row.id === providerId ? owner : row), endpoints: state.endpoints.map(row => row.id === endpoint.id ? endpoint : row) };
   return providerModelConnectivityTest(working, { providerId, endpointId: endpoint.id, modelId, upstreamId: association.upstreamModelId, prompt: '连接检查', scenario: 'success' });
@@ -90,7 +90,7 @@ export function supplierModelTestPreview(state, providerId, associationId, model
 export function providerModelConnectivityTest(state, { providerId, keyId, endpointId, modelId, upstreamId, prompt, scenario }) {
   const provider = state.providers.find(item => item.id === providerId);
   const endpoint = state.endpoints.find(item => item.id === endpointId && item.providerId === providerId);
-  if (!provider || !endpoint) throw new Error('请选择当前供应商的接入地址');
+  if (!provider || !endpoint) throw new Error('请选择当前服务商的接入地址');
   const groupKey = endpoint.authMode === 'group' ? connectionKeys(endpoint, provider)[0] : null;
   if (endpoint.authMode === 'group' && (!groupKey || keyId && keyId !== groupKey.id)) throw new Error('请使用当前渠道 API 密钥组中可用的主要密钥');
   const key = groupKey || [...(provider.apiKeys || []), ...(endpoint.apiKeys || [])].find(item => item.id === keyId);
@@ -101,7 +101,7 @@ export function providerModelConnectivityTest(state, { providerId, keyId, endpoi
   let url;
   try { url = new URL(endpoint.baseUrl); } catch { throw new Error('接入地址无效，请在模型目录中修改'); }
   if ((url.protocol !== 'https:' && !(provider.sourceType === 'selfHosted' && url.protocol === 'http:')) || url.username || url.password || url.search || url.hash) throw new Error('接入地址无效，请在模型目录中修改');
-  if (!providerCatalogueIds(provider).includes(modelId)) throw new Error('请选择当前供应商的目录模型');
+  if (!providerCatalogueIds(provider).includes(modelId)) throw new Error('请选择当前服务商的目录模型');
   const configured = catalogueConnections(state, provider, modelId);
   if (configured.length && !configured.some(item => item.id === endpointId)) throw new Error('接入地址与所选目录模型不匹配');
   const callId = typeof upstreamId === 'string' ? upstreamId.trim() : '';
@@ -116,8 +116,8 @@ export function modelConnectivityPreview(context, scenario) {
   const callId = context.upstreamId;
   const responses = {
     success: { result: '通过', title: '测试成功', status: 200, durationMs: 486, message: '模型已返回测试响应。', response: { model: callId, choices: [{ message: { role: 'assistant', content: 'OK' } }] } },
-    unauthorized: { result: '失败', title: '鉴权失败', status: 401, durationMs: 128, message: 'API 密钥无效或没有访问该模型的权限。', hint: '请核对 API 密钥的有效期、供应商账号权限与模型授权。', response: { error: { code: 'invalid_api_key', message: 'Authentication failed' } } },
-    unavailable: { result: '失败', title: '模型不可用', status: 404, durationMs: 156, message: '当前地址下未找到该模型，或模型尚未开放。', hint: '请核对调用 Model ID 的大小写、接入地址与供应商模型目录。', response: { error: { code: 'model_not_found', message: 'Model is unavailable' } } },
+    unauthorized: { result: '失败', title: '鉴权失败', status: 401, durationMs: 128, message: 'API 密钥无效或没有访问该模型的权限。', hint: '请核对 API 密钥的有效期、服务商账号权限与模型授权。', response: { error: { code: 'invalid_api_key', message: 'Authentication failed' } } },
+    unavailable: { result: '失败', title: '模型不可用', status: 404, durationMs: 156, message: '当前地址下未找到该模型，或模型尚未开放。', hint: '请核对调用 Model ID 的大小写、接入地址与服务商模型目录。', response: { error: { code: 'model_not_found', message: 'Model is unavailable' } } },
     timeout: { result: '失败', title: '请求超时', status: null, durationMs: 10000, message: '等待模型响应超过 10 秒。', hint: '请检查服务状态与网络连接，稍后重新测试。', response: { error: { code: 'request_timeout', message: 'No response received within 10 seconds' } } },
   };
   return { ...responses[scenario], ...context, simulated: true };
@@ -134,7 +134,7 @@ export async function providerConnectionDraft(value) {
 }
 // shortcut: Store ordered masked metadata only; real invocation and failover require a server-side credential store.
 export async function providerApiKeysDraft(inputs) {
-  if (!Array.isArray(inputs) || inputs.length > PROVIDER_API_KEY_LIMIT) throw new Error('每个供应商最多配置 20 个 API 密钥');
+  if (!Array.isArray(inputs) || inputs.length > PROVIDER_API_KEY_LIMIT) throw new Error('每个服务商最多配置 20 个 API 密钥');
   const values = inputs.map((input, index) => {
     const value = typeof input === 'string' ? input.trim() : '';
     if (value && !/^[\x21-\x7e]{12,512}$/.test(value)) throw new Error(`第 ${index + 1} 条 API 密钥请输入 12–512 位字符，不要包含空格或换行`);
@@ -183,11 +183,11 @@ export function providerTransaction(state, action) {
   const provider = state.providers.find(item => item.id === (data.providerId || objectId));
 
   if (operation === 'catalogueConnection' || operation === 'connectionKeys') {
-    if (!provider || provider.id !== objectId) throw new Error('供应商不存在');
+    if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
     const endpoint = state.endpoints.find(item => item.id === data.endpointId && item.providerId === provider.id);
-    if (data.endpointId && !endpoint) throw new Error('接入地址不存在或不属于此供应商');
+    if (data.endpointId && !endpoint) throw new Error('接入地址不存在或不属于此服务商');
     if (operation === 'connectionKeys' && !endpoint) throw new Error('请选择要配置 API 密钥的接入地址');
-    if (operation === 'catalogueConnection' && !providerCatalogueIds(provider).includes(data.modelId)) throw new Error('该模型不在供应商目录中');
+    if (operation === 'catalogueConnection' && !providerCatalogueIds(provider).includes(data.modelId)) throw new Error('该模型不在服务商目录中');
     const fields = { ...endpoint, ...(operation === 'connectionKeys' ? { apiKeys: checkedConnectionKeys(data.apiKeys), credentialRef: data.credentialRef ?? endpoint.credentialRef } : { protocol: data.protocol, baseUrl: typeof data.baseUrl === 'string' ? data.baseUrl.trim().replace(/\/$/, '') : data.baseUrl }), providerId: provider.id, name: endpoint?.name || data.modelId + ' 接入' };
     const changed = endpoint && connectionFingerprint(endpoint) !== connectionFingerprint(fields);
     const previous = operation === 'catalogueConnection' ? catalogueConnections(state, provider, data.modelId) : [];
@@ -215,7 +215,7 @@ export function providerTransaction(state, action) {
     return { type: 'batch', label: operation === 'catalogueConnection' ? '保存模型接入地址' : '保存接入 API 密钥', objectId: provider.id, changes };
   }
   if (operation === 'catalogueAdd') {
-    if (!provider || provider.id !== objectId) throw new Error('供应商不存在');
+    if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
     if (typeof data.modelId !== 'string' || !data.modelId.trim()) throw new Error('请填写模型ID');
     if (!Object.hasOwn(SUPPLIER_MODEL_TYPES, data.modelType)) throw new Error('请选择有效的模型类型');
     const [modelId] = normalizeProviderCatalogue([data.modelId]);
@@ -231,7 +231,7 @@ export function providerTransaction(state, action) {
     const protocol = data.modelType === 'text' ? data.protocol ?? 'OpenAI' : '其他';
     if (data.modelType === 'text' && protocol !== 'OpenAI') throw new Error('语言模型目前仅支持 OpenAI 协议');
     const currentIds = providerCatalogueIds(provider);
-    if (currentIds.includes(modelId) || provider.catalogModelIds?.includes(modelId) || provider.catalogModels?.some(item => item.modelId === modelId)) throw new Error('该 Model ID 已在供应商目录或历史记录中，请使用其他 ID');
+    if (currentIds.includes(modelId) || provider.catalogModelIds?.includes(modelId) || provider.catalogModels?.some(item => item.modelId === modelId)) throw new Error('该 Model ID 已在服务商目录或历史记录中，请使用其他 ID');
     const catalogModelIds = normalizeProviderCatalogue([...currentIds, modelId]);
     const entry = normalizeProviderPrice(provider, { ...data, modelId });
     if (!entry.scenarios.length || entry.scenarios.some(row => row.listPrice == null)) throw new Error('请至少填写一条完整计费项、目录价和计价单位；免费请填 0');
@@ -241,10 +241,10 @@ export function providerTransaction(state, action) {
     const endpointId = connection.changes.find(item => item.collection === 'endpoints').record.id;
     const catalogConnections = [...(provider.catalogConnections || []), { id: channelIdentity(provider.id, modelId, endpointId), modelId, endpointId, name: channelName, origin: 'undisclosed', upstreamModelId: modelId, enabled: false, health: null }];
     const fields = { catalogModelIds, catalogPricing, catalogModels, catalogConnections };
-    return { type: 'batch', label: '添加供应商目录模型', objectId: provider.id, changes: [update('providers', provider.id, fields), ...connection.changes] };
+    return { type: 'batch', label: '添加服务商目录模型', objectId: provider.id, changes: [update('providers', provider.id, fields), ...connection.changes] };
   }
   if (operation === 'catalogueImport') {
-    if (!provider || provider.id !== objectId) throw new Error('供应商不存在');
+    if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
     if (data.mode !== 'batch') throw new Error('请选择批量添加；单个模型请填写添加模型表单');
     const catalogModelIds = appendProviderCatalogue(providerCatalogueIds(provider), data.text);
     const added = catalogModelIds.filter(id => !providerCatalogueIds(provider).includes(id));
@@ -257,8 +257,8 @@ export function providerTransaction(state, action) {
     return { type: 'batch', label: '登记供应模型', objectId: provider.id, changes: [update('providers', provider.id, { catalogModelIds: current.catalogModelIds, catalogModels: current.catalogModels, removedCatalogModelIds: current.removedCatalogModelIds })] };
   }
   if (['cataloguePrice', 'catalogueDiscount', 'catalogueCost'].includes(operation)) {
-    if (!provider || provider.id !== objectId) throw new Error('供应商不存在');
-    if (!providerCatalogueIds(provider).includes(data.modelId)) throw new Error('该 Model ID 不在供应商目录中，请重新载入目录');
+    if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
+    if (!providerCatalogueIds(provider).includes(data.modelId)) throw new Error('该 Model ID 不在服务商目录中，请重新载入目录');
     const current = provider.catalogPricing?.find(item => item.modelId === data.modelId) || providerCataloguePrice(provider, data.modelId);
     let entry;
     if (operation === 'catalogueDiscount') entry = { ...current, discountFactor: normalizeCatalogueDiscount(data.discountFactor) };
@@ -274,16 +274,16 @@ export function providerTransaction(state, action) {
     return { type: 'batch', label: operation === 'catalogueDiscount' ? '修改采购折扣系数' : operation === 'catalogueCost' ? '修改采购价' : '保存采购参考价', objectId: provider.id, changes: [update('providers', provider.id, { catalogPricing })] };
   }
   if (operation === 'addApiKeys') {
-    if (!provider || provider.id !== objectId) throw new Error('供应商不存在');
+    if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
     if (!Array.isArray(data.apiKeys) || !data.apiKeys.length || data.apiKeys.length > PROVIDER_API_KEY_LIMIT || data.apiKeys.some(item => !item || !/^[\x21-\x7e]{4}•{8}[\x21-\x7e]{4}$/.test(item.maskedKey || '') || !/^[a-f0-9]{64}$/.test(item.fingerprint || ''))) throw new Error('API 密钥配置无效，请重新输入。');
     const keys = provider.apiKeys || [];
     const groupId = data.groupId || 'default', groups = providerKeyGroups(provider, providerApiKeyRows(state, provider).map(row => row.apiKey));
     const group = groups.find(row => row.id === groupId);
     if (!group) throw new Error('API 密钥组不存在，请重新选择');
-    if (keys.length + data.apiKeys.length > PROVIDER_API_KEY_LIMIT) throw new Error('每个供应商最多配置 20 个 API 密钥');
+    if (keys.length + data.apiKeys.length > PROVIDER_API_KEY_LIMIT) throw new Error('每个服务商最多配置 20 个 API 密钥');
     const existing = [...new Set(providerApiKeyRows(state, provider).map(row => row.apiKey.fingerprint))];
     const fingerprints = new Set([...existing, ...data.apiKeys.map(item => item.fingerprint)]);
-    if (fingerprints.size !== existing.length + data.apiKeys.length) throw new Error('此供应商已配置相同的 API 密钥，或本次输入有重复项。');
+    if (fingerprints.size !== existing.length + data.apiKeys.length) throw new Error('此服务商已配置相同的 API 密钥，或本次输入有重复项。');
     const createdAt = new Date().toISOString();
     const names = new Set(providerApiKeyRows(state, provider).map(row => providerApiKeyName(row.apiKey)));
     const ids = new Set(providerApiKeyRows(state, provider).map(row => providerApiKeyId(row.apiKey)));
@@ -302,14 +302,14 @@ export function providerTransaction(state, action) {
     return { type: 'batch', label: '添加 API 密钥', objectId: provider.id, changes };
   }
   if (operation === 'editApiKey' || operation === 'deleteApiKey') {
-    if (!provider || provider.id !== objectId) throw new Error('供应商不存在');
+    if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
     const row = providerApiKeyRows(state, provider).find(item => item.apiKey.id === data.keyId);
     if (!row || !data.expectedFingerprint || row.apiKey.fingerprint !== data.expectedFingerprint) throw new Error('API 密钥已变化或不存在，请重新打开后操作');
     const replacement = operation === 'editApiKey' ? checkedConnectionKeys([data.apiKey])[0] : null;
     const changed = !replacement || replacement.fingerprint !== row.apiKey.fingerprint;
     const affectedEndpoints = replacement ? credentialRotationChannels(state, provider, row.apiKey.id) : row.endpoints;
     if ((operation === 'deleteApiKey' || changed && affectedEndpoints.length) && data.confirmed !== true) throw new Error('请确认密钥变更及关联模型需要重新验证');
-    if (replacement && providerApiKeyRows(state, provider).some(item => item.apiKey.fingerprint !== row.apiKey.fingerprint && item.apiKey.fingerprint === replacement.fingerprint)) throw new Error('此供应商已配置相同的 API 密钥');
+    if (replacement && providerApiKeyRows(state, provider).some(item => item.apiKey.fingerprint !== row.apiKey.fingerprint && item.apiKey.fingerprint === replacement.fingerprint)) throw new Error('此服务商已配置相同的 API 密钥');
     const replace = keys => (keys || []).filter(key => replacement || key.fingerprint !== row.apiKey.fingerprint).map(key => key.fingerprint === row.apiKey.fingerprint ? { ...key, name: providerApiKeyName(row.apiKey), maskedKey: replacement.maskedKey, fingerprint: replacement.fingerprint } : key);
     if (provider.apiKeys?.some(key => key.fingerprint === row.apiKey.fingerprint)) changes.push(update('providers', provider.id, { apiKeys: replace(provider.apiKeys) }));
     if (!replacement) {
@@ -330,19 +330,19 @@ export function providerTransaction(state, action) {
   if (['supply', 'verify', 'enableSupply', 'disableSupply'].includes(operation)) {
     const supply = state.modelSupplies.find(item => item.id === data.id);
     const endpoint = state.endpoints.find(item => item.id === (operation === 'supply' ? data.endpointId : supply?.endpointId));
-    if (!provider || endpoint?.providerId !== provider.id) throw new Error('模型映射不属于该供应商');
+    if (!provider || endpoint?.providerId !== provider.id) throw new Error('模型映射不属于该服务商');
     if (operation === 'supply' && data.id && supply?.endpointId !== endpoint.id) throw new Error('现有模型映射不能更换接入，请在目标接入新增映射');
     const transaction = modelTransaction(state, { type: 'modelOperation', operation, modelId: operation === 'supply' ? data.modelId : supply.modelId, data });
     return { ...transaction, objectId: provider.id };
   }
   if (['create', 'profile'].includes(operation)) {
-    if (operation === 'profile' && !provider) throw new Error('供应商不存在');
+    if (operation === 'profile' && !provider) throw new Error('服务商不存在');
     const name = data.name?.trim();
-    if (!name) throw new Error('请填写供应商名称');
-    if (state.providers.some(item => item.id !== provider?.id && item.name.trim().toLowerCase() === name.toLowerCase())) throw new Error('供应商名称已存在');
+    if (!name) throw new Error('请填写服务商名称');
+    if (state.providers.some(item => item.id !== provider?.id && item.name.trim().toLowerCase() === name.toLowerCase())) throw new Error('服务商名称已存在');
     if (!PROVIDER_TYPES[data.sourceType]) throw new Error('请选择有效的供给类型');
     const code = operation === 'create' ? data.code?.trim().toLowerCase() : providerCode(provider);
-    if (operation === 'create' && (!/^[a-z][a-z0-9-]{1,31}$/.test(code || '') || state.providers.some(item => providerCode(item).toLowerCase() === code))) throw new Error('供应商英文编码需为 2–32 位小写字母、数字或连字符，且不可重复');
+    if (operation === 'create' && (!/^[a-z][a-z0-9-]{1,31}$/.test(code || '') || state.providers.some(item => providerCode(item).toLowerCase() === code))) throw new Error('服务商英文编码需为 2–32 位小写字母、数字或连字符，且不可重复');
     const description = data.description?.trim() || '';
     if ([...description].length > 2000 && description !== provider?.description?.trim()) throw new Error('备注最多 2000 字');
     const fields = { code, name, sourceType: data.sourceType, contact: data.contact?.trim() || '', contactInfo: data.contactInfo?.trim() || '', description, ...(operation === 'create' ? { catalogModelIds: normalizeProviderCatalogue(data.catalogModelIds ?? []) } : {}) };
@@ -352,14 +352,14 @@ export function providerTransaction(state, action) {
       changes.push(update('providers', provider.id, fields));
     }
   } else if (['enableProvider', 'disableProvider'].includes(operation)) {
-    if (!provider) throw new Error('供应商不存在');
+    if (!provider) throw new Error('服务商不存在');
     if (operation === 'disableProvider' && !data.confirmed) throw new Error('请先确认停用影响');
     changes.push(update('providers', provider.id, { status: operation === 'enableProvider' ? '已启用' : '停用' }));
   } else {
     const endpoint = state.endpoints.find(item => item.id === objectId);
     if (operation === 'connection') {
-      if (!provider) throw new Error('供应商不存在');
-      if (objectId && (!endpoint || endpoint.providerId !== provider.id)) throw new Error('接入配置不存在或不属于该供应商');
+      if (!provider) throw new Error('服务商不存在');
+      if (objectId && (!endpoint || endpoint.providerId !== provider.id)) throw new Error('接入配置不存在或不属于该服务商');
       if (!data.name?.trim()) throw new Error('请填写接入名称');
       if (!PROTOCOLS.includes(data.protocol)) throw new Error('请选择有效的接入协议');
       let url;
@@ -385,7 +385,7 @@ export function providerTransaction(state, action) {
       if (!endpoint) throw new Error('接入配置不存在');
       const owner = state.providers.find(item => item.id === endpoint.providerId);
       if (operation === 'testConnection') {
-        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在供应商密钥页签配置此接入地址的凭证');
+        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在服务商密钥页签配置此接入地址的凭证');
         const scenarios = { 成功: ['通过', '服务地址、凭证和协议检查通过'], 超时: ['失败', '上游连接超时，请检查服务地址与网络'], 鉴权失败: ['失败', '鉴权失败，请检查凭证引用与权限'], 协议错误: ['失败', '协议不兼容，请核对接入协议'] };
         const result = scenarios[data.scenario];
         if (!result) throw new Error('请选择测试场景');
@@ -393,15 +393,15 @@ export function providerTransaction(state, action) {
         changes.push(update('endpoints', endpoint.id, { ...(qualification ? { connectionQualification: structuredClone(qualification) } : {}), connectionTest: { result: result[0], message: result[1], simulated: true, testedAt: new Date().toISOString(), fingerprint: connectionFingerprint(endpoint) }, ...(result[0] !== '通过' && ['运行中', '需关注'].includes(endpoint.status) ? { status: '需关注' } : {}) }));
       } else if (operation === 'enableConnection') {
         if (connectionTestPending(endpoint)) throw new Error('当前配置的测试尚未完成，请等待结果');
-        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在供应商密钥页签配置此接入地址的凭证');
-        if (owner?.status !== '已启用') throw new Error('请先启用供应商');
+        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在服务商密钥页签配置此接入地址的凭证');
+        if (owner?.status !== '已启用') throw new Error('请先启用服务商');
         if (!connectionTestPassed(endpoint)) throw new Error('当前接入配置须先通过连接测试');
         changes.push(update('endpoints', endpoint.id, { status: '运行中', activationChangedAt: new Date().toISOString(), connectionQualification: structuredClone(endpoint.connectionTest) }));
       } else if (operation === 'disableConnection') {
         if (!data.confirmed) throw new Error('请先确认停用影响');
         changes.push(update('endpoints', endpoint.id, { status: '停用', activationChangedAt: new Date().toISOString() }));
-      } else throw new Error('未知供应商操作');
+      } else throw new Error('未知服务商操作');
     }
   }
-  return { type: 'batch', label: ({ create: '新增模型供应商', profile: '更新供应商资料', connection: '保存供应商接入配置', testConnection: '连接测试', enableProvider: '启用供应商', disableProvider: '停用供应商', enableConnection: '启用接入', disableConnection: '停用接入' })[operation], objectId: objectId || changes[0]?.record?.id, changes };
+  return { type: 'batch', label: ({ create: '新增模型服务商', profile: '更新服务商资料', connection: '保存服务商接入配置', testConnection: '连接测试', enableProvider: '启用服务商', disableProvider: '停用服务商', enableConnection: '启用接入', disableConnection: '停用接入' })[operation], objectId: objectId || changes[0]?.record?.id, changes };
 }

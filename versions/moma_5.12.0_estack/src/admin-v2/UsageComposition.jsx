@@ -15,7 +15,7 @@ import { usageShare, usageDistributions } from './usage-distributions';
 
 const percent = (value, total) => total > 0 ? `${(value / total * 100).toFixed(2)}%` : '—';
 const amount = value => formatUsageNumber(value).replace('w', '万');
-const subjects = { category: '模型类型', providerId: '供应商', modelId: '模型', tenantId: '客户' };
+const subjects = { category: '模型类型', providerId: '服务商', modelId: '模型', tenantId: '客户' };
 
 export function UsageShare({ state, range, clock, filters, onChange, volume = false, settings, onSettings }) {
   const [showAll, setShowAll] = useState(false);

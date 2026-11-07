@@ -28,7 +28,7 @@ function environment(t) {
 }
 async function connected(t, {supplyOnly=false,intent='onboard',baseState,providerId,libraryId}={}) {
   let state = baseState || withAdminSession(parseAdminState(null));
-  const value = { newProvider: { name: '接入流程验证供应商' }, name: '新手渠道', interfaceType: 'openai', baseUrl: 'https://novice.example.invalid/v1', authMode: 'group', keyGroupId: 'default', taskUrls: {}, adapterOptions: {} };
+  const value = { newProvider: { name: '接入流程验证服务商' }, name: '新手渠道', interfaceType: 'openai', baseUrl: 'https://novice.example.invalid/v1', authMode: 'group', keyGroupId: 'default', taskUrls: {}, adapterOptions: {} };
   if(providerId){delete value.newProvider;value.providerId=providerId;value.name='新增供应'+crypto.randomUUID().slice(0,8);}
   const rows = [{ id: 'one-model', newModel: { modelId: 'guided-chat-v1', name: '接入流程验证模型', type: 'text' }, upstreamModelId: 'vendor/actual-chat', selected: true, confirmed: true, scenarios: costs }];
   if(libraryId){delete rows[0].newModel;rows[0].libraryId=libraryId;rows[0].upstreamModelId='vendor/backup-chat';}

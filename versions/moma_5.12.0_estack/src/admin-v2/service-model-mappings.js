@@ -21,7 +21,7 @@ export function mappingCandidates(state,service) {
 function relation(state,service,config) {
   const provider=state.providers.find(row=>row.id===config.providerId);
   const channel=provider && catalogueChannels(state,provider,config.catalogueModelId).find(row=>row.id===config.associationId && row.endpointId===config.endpointId && row.upstreamModelId===config.upstreamModelId);
-  if(!channel || service.providerId && service.providerId!==provider.id)throw Error('供应商或渠道模型关联已变化，请重新选择');
+  if(!channel || service.providerId && service.providerId!==provider.id)throw Error('服务商或渠道模型关联已变化，请重新选择');
   const source=resolveChannelAssociationModel(state,provider,channel),master=libraryRecord(state,service.modelId);
   if(!master || source.id!==master.id)throw Error('只能选择当前模型资料对应的供给，不能按名称关联其他模型');
   return {...channel,provider,catalogueModelId:config.catalogueModelId};

@@ -82,7 +82,7 @@ function platformRoute(version, rows) {
 
 export function platformCandidatePlan(state, model, { serviceId, tenantIds = [], supplyIds = [], audioProbe = '', technical = false, at = Date.now() }) {
   const service = platformServices(state, model).find(row => row.id === serviceId);
-  if (!service) issue('服务模式', '请选择当前模型的统一服务或供应商服务');
+  if (!service) issue('服务模式', '请选择当前模型的统一服务或服务商服务');
   if (!service.callId || /\s/.test(service.callId)) issue('服务调用 ID', '请先完善当前服务的对外调用 ID');
   if (!tenantIds.length || new Set(tenantIds).size !== tenantIds.length || tenantIds.some(id => !state.tenants?.some(tenant => tenant.id === id && !['已删除', '已停用', '停用'].includes(tenant.status)))) issue('客户范围', '请明确选择有效租户');
   if (model.openScope !== 'all' && (model.openScope !== 'selected' || tenantIds.some(id=>!model.tenantIds?.includes(id)))) issue('客户范围','验证客户须在已发布的开放范围内');
@@ -98,8 +98,8 @@ export function platformCandidatePlan(state, model, { serviceId, tenantIds = [],
   } else salePrices=platformPriceVersions(sale,model,'销售价格',at);
   const bindings = rows.map(row => {
     const { supply, association } = row, path = `供应渠道 ${supply?.provider?.name || row.id}`;
-    if (!supply?.provider || !supply.endpoint || supply.provider.status !== '已启用' || supply.status !== '已启用' || !['运行中', '需关注'].includes(supply.endpoint.status)) issue(path, '供应商、渠道或模型关联未启用');
-    if (service.providerId && supply.provider.id !== service.providerId) issue(path, '渠道不属于当前供应商服务');
+    if (!supply?.provider || !supply.endpoint || supply.provider.status !== '已启用' || supply.status !== '已启用' || !['运行中', '需关注'].includes(supply.endpoint.status)) issue(path, '服务商、渠道或模型关联未启用');
+    if (service.providerId && supply.provider.id !== service.providerId) issue(path, '渠道不属于当前服务商服务');
     if (!association || association.enabled === false) issue(path, '请在模型供应中建立并启用明确的模型映射');
     let master;
     try { master = resolveChannelAssociationModel(state, supply.provider, association); }

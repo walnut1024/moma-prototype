@@ -33,7 +33,7 @@ export async function createSeed(dataset = MODEL_DATASET) {
     id: item.id, code: item.code, name: item.name, name_en: item.englishName || '', builtin: Number(item.builtin), enabled: Number(item.status === '已启用'),
   });
   for (const item of dict.filter(row => row.kind === 'scenario')) add('billing_items', {
-    id: item.id, unit_id: item.unitId, name: item.name, name_en: item.englishName || '', description: item.description || '', builtin: Number(item.builtin), enabled: Number(item.status === '已启用'),
+    id: item.id, record_json: json(item), name: item.name, name_en: item.englishName || '', description: item.description || '', builtin: Number(item.builtin), enabled: Number(item.status === '已启用'),
   });
   for (const p of c.providers) {
     add('suppliers', { id: p.id, code: p.code, name: p.name, builtin: Number(p.id === dataset.platformProviderId), enabled: Number(p.status === '已启用'), origin: 'seed',

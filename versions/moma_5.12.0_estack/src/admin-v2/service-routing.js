@@ -20,7 +20,7 @@ const metric=(values,integer=false)=>values.find(value=>typeof value==='number' 
 
 // Existing public model IDs and supplier call IDs are read-only service references.
 export function routingServices(state) {
-  return state.models.flatMap(model=>model.serviceMode==='standard' ? [{id:'standard:'+model.id,modelId:model.id,name:'统一服务',mode:'standard',callId:model.modelId,model,providerId:null}] : model.serviceMode==='provider' ? providerServices(model).map(entry=>({id:providerServiceId(model.id,entry.providerId),modelId:model.id,name:state.providers.find(provider=>provider.id===entry.providerId)?.name || '供应商已不存在',mode:'provider',callId:entry.callId,model,providerId:entry.providerId})) : []);
+  return state.models.flatMap(model=>model.serviceMode==='standard' ? [{id:'standard:'+model.id,modelId:model.id,name:'统一服务',mode:'standard',callId:model.modelId,model,providerId:null}] : model.serviceMode==='provider' ? providerServices(model).map(entry=>({id:providerServiceId(model.id,entry.providerId),modelId:model.id,name:state.providers.find(provider=>provider.id===entry.providerId)?.name || '服务商已不存在',mode:'provider',callId:entry.callId,model,providerId:entry.providerId})) : []);
 }
 
 export function routingChannels(state, service, at = Date.now(), { runtime = false } = {}) {
@@ -30,7 +30,7 @@ export function routingChannels(state, service, at = Date.now(), { runtime = fal
     const channel=supply.provider && catalogueChannels(state,supply.provider,supply.catalogueModelId || supply.upstreamModelId).find(item=>item.endpointId===supply.endpointId && item.upstreamModelId===supply.upstreamModelId);
     const url=channel ? channelUrl(supply.provider,channel) : supplyModelUrl(supply,service.model);
     const costs=channel?.managed ? serviceChannelCosts(channel, at) : priceItems(activeSupplyPrice(state,supply.id,at),service.model);
-    let reason=!supply.provider || !supply.endpoint ? '供应商或接入已不存在' : supply.status!=='已启用' ? '供应渠道已停用' : channel ? channelBlockReason(supply.provider,channel,{runtime}) : connectionBlockReason(supply.endpoint,supply.provider);
+    let reason=!supply.provider || !supply.endpoint ? '服务商或接入已不存在' : supply.status!=='已启用' ? '供应渠道已停用' : channel ? channelBlockReason(supply.provider,channel,{runtime}) : connectionBlockReason(supply.endpoint,supply.provider);
     if (!reason && !ready.has(supply.id)) reason='平台模型映射或能力需验证';
     if (!reason && !url) reason='请求地址待完善';
     if (!reason && runtime && (!costs.length || costs.some(item=>item.amount==null))) reason='渠道供应成本待配置';
@@ -45,7 +45,7 @@ export function routingChannels(state, service, at = Date.now(), { runtime = fal
 export const serviceRoute = (state, serviceId) => (state.serviceRoutes || []).find(item => item.serviceId === serviceId);
 export const activeRouteVersion = route => route?.versions.find(item => item.version === route.activeVersion);
 export const lastRouteVersion = route => route?.versions.reduce((last,item)=>!last || item.version>last.version?item:last,null);
-export const routeStopReason = service => service.model.listingStatus==='已上架' && service.model.callsEnabled!==false && (!service.providerId || providerServices(service.model).find(row=>row.providerId===service.providerId)?.callsEnabled!==false) ? (service.providerId?'请先停服当前供应商，再停用路由。其他供应商不受影响。':'请先在模型页头下架并停用服务，再停用路由。隐藏模型不能代替停服。') : '';
+export const routeStopReason = service => service.model.listingStatus==='已上架' && service.model.callsEnabled!==false && (!service.providerId || providerServices(service.model).find(row=>row.providerId===service.providerId)?.callsEnabled!==false) ? (service.providerId?'请先停服当前服务商，再停用路由。其他服务商不受影响。':'请先在模型页头下架并停用服务，再停用路由。隐藏模型不能代替停服。') : '';
 export const emptyRouteConfig = () => ({ strategy:'fixed', groups:[{id:'P1',name:'默认组',strategy:'fixed'}], channels: [], autoFailover:false, excludeAbnormal:true, autoRecover:false, advanced:{...ROUTE_ADVANCED_DEFAULTS} });
 
 export function routeGroups(config) {
@@ -96,7 +96,7 @@ export function comparableRouteCosts(channels,basis) {
   let reference='';
   return channels.map(channel=>{
     const items=(channel.costItems || []).filter(item=>basis==='total' || (basis==='input'?/输入|input/i:/输出|output/i).test(item.name));
-    if (!items.length || items.some(item=>!Number.isSafeInteger(item.amount) || item.amount<0 || typeof item.unit!=='string' || !item.unit.trim())) throw new Error('所选成本口径缺少完整供应商报价');
+    if (!items.length || items.some(item=>!Number.isSafeInteger(item.amount) || item.amount<0 || typeof item.unit!=='string' || !item.unit.trim())) throw new Error('所选成本口径缺少完整服务商报价');
     if (new Set(items.map(item=>item.unit)).size!==1 || new Set(items.map(item=>item.currency || 'CNY')).size!==1) throw new Error('成本计费项单位或币种不同，不能比较');
     const identity=JSON.stringify(items.map(billingItemKey).sort());
     if (reference && identity!==reference) throw new Error('渠道计费项、适用条件、单位或币种不一致，不能比较成本');
@@ -125,10 +125,10 @@ export function validateRouteConfig(state, service, input, requireHealthy = true
   const candidates = routingChannels(state, service);
   for (const row of selected) {
     const channel = candidates.find(item => item.id === row.supplyId);
-    if (!channel) throw new Error('所选渠道不属于当前模型或指定供应商，请重新选择');
+    if (!channel) throw new Error('所选渠道不属于当前模型或指定服务商，请重新选择');
     if (requireHealthy && !channel.available) throw new Error(`${channel.provider?.name || row.supplyId}：${channel.reason}`);
   }
-  if (config.channels.some(row=>!candidates.some(channel=>channel.id===row.supplyId))) throw new Error('所选渠道不属于当前模型或指定供应商，请重新选择');
+  if (config.channels.some(row=>!candidates.some(channel=>channel.id===row.supplyId))) throw new Error('所选渠道不属于当前模型或指定服务商，请重新选择');
   if (config.strategy==='priority_weighted') for (const group of config.groups) {
     const rows=selected.filter(row=>row.groupId===group.id);
     if (!rows.length) throw new Error(`${group.name}至少需要一个参与调度的渠道`);
@@ -186,7 +186,7 @@ export function routingTransaction(state, { operation, data = {} }) {
   } else if (operation === 'serviceRouteDraft') {
     const draft = normalizeRouteConfig(data.config);
     const candidates=new Set(routingChannels(state,service).map(item=>item.id));
-    if (draft.channels.some(item=>!candidates.has(item.supplyId))) throw new Error('所选渠道不属于当前模型或供应商');
+    if (draft.channels.some(item=>!candidates.has(item.supplyId))) throw new Error('所选渠道不属于当前模型或服务商');
     changes = { draft, draftUpdatedAt: new Date().toISOString() };
     label = '保存路由草稿';
   } else if (['serviceRoutePublish','serviceRouteRollback','serviceRouteRestore'].includes(operation)) {

@@ -74,14 +74,14 @@ test('explicit preparation persists once and never recreates removed fixture res
   const storage = storageFor(seed());
   assert.equal(prepareModelOperationsExamples(storage), true); assert.equal(storage.writes, 1);
   let current = JSON.parse(storage.getItem(STORAGE_KEY));
-  current.providers.find(row => row.id === 'provider-moma').name = '自己维护的供应商名称';
+  current.providers.find(row => row.id === 'provider-moma').name = '自己维护的服务商名称';
   const removed = current.endpoints.find(row => row.id.startsWith('mock-channel-minimax'));
   current.endpoints = current.endpoints.filter(row => row.id !== removed.id);
   current.providers.find(row => row.id === removed.providerId).catalogConnections = [];
   storage.setItem(STORAGE_KEY, serializeAdminState(current)); const writes = storage.writes;
   assert.equal(prepareModelOperationsExamples(storage), false); assert.equal(storage.writes, writes);
   const restored = parseAdminState(storage.getItem(STORAGE_KEY));
-  assert.equal(restored.providers.find(row => row.id === 'provider-moma').name, '自己维护的供应商名称');
+  assert.equal(restored.providers.find(row => row.id === 'provider-moma').name, '自己维护的服务商名称');
   assert.equal(restored.endpoints.some(row => row.id === removed.id), false);
   const replay = commitAdminState(restored, action);
   assert.deepEqual(replay.models, restored.models); assert.deepEqual(replay.providers, restored.providers); assert.deepEqual(replay.endpoints, restored.endpoints);
@@ -91,7 +91,7 @@ test('explicit preparation persists once and never recreates removed fixture res
 test('identity conflicts and unfinished material drafts reject the entire mock batch without partial changes', () => {
   const cases = [
     state => state.endpoints.push({ id: 'mock-channel-moma-resale', providerId: 'foreign' }),
-    state => state.providers.push({ id: 'provider-minimax-direct', code: 'foreign', name: '已有供应商' }),
+    state => state.providers.push({ id: 'provider-minimax-direct', code: 'foreign', name: '已有服务商' }),
     state => { state.models.find(row => row.modelId === 'glm-5.2').materialDraft = { id: 'keep-draft' }; },
     state => state.modelTemplates.push({ ...structuredClone(state.models.find(row => row.modelId === 'glm-5.2')), id: 'different-master', modelId: 'GLM-5.2' }),
   ];

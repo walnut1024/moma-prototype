@@ -43,7 +43,7 @@ test('temporary group preview does not mutate saved keys, health, activation or 
  const result=supplierModelTestPreview(s,owner(s).id,c.id,c.modelId,group.id);
  assert.equal(result.result,'通过');assert.deepEqual(s,before);
  assert.throws(()=>run(s,'supplierModelTest',{...args(c),keyGroupId:group.id}),/临时密钥组/);
- assert.throws(()=>supplierModelTestPreview(s,owner(s).id,c.id,c.modelId,'foreign-group'),/当前供应商/);
+ assert.throws(()=>supplierModelTestPreview(s,owner(s).id,c.id,c.modelId,'foreign-group'),/当前服务商/);
 });
 
 test('empty and disabled primary groups cannot be used for temporary tests',()=>{
@@ -60,11 +60,11 @@ test('stale health and disabled supplier cannot be used to enable a channel',()=
  assert.throws(()=>run(s,'supplierModelEnable',args(channel(s))),/测试/);
  s=run(s,'supplierModelTest',args(channel(s)));
  s={...s,providers:s.providers.map(p=>p.id===owner(s).id?{...p,status:'已停用'}:p)};
- assert.throws(()=>run(s,'supplierModelEnable',args(channel(s))),/启用供应商/);
+ assert.throws(()=>run(s,'supplierModelEnable',args(channel(s))),/启用服务商/);
 });
 
 test('supplier remarks allow concise notes but reject over-limit input',()=>{
- const s=legacySupplierState();const values={name:'简短备注供应商',code:'short-note',sourceType:'thirdParty',description:'仅用于内部接入'};
+ const s=legacySupplierState();const values={name:'简短备注服务商',code:'short-note',sourceType:'thirdParty',description:'仅用于内部接入'};
  const added=run(s,'create',values);assert.ok(added.providers.some(p=>p.code==='short-note'&&p.description===values.description));
  assert.throws(()=>run(s,'create',{...values,description:'字'.repeat(2001)}),/2000/);
 });

@@ -72,7 +72,7 @@ export function channelQualification(channel) {
   return channel.enabled && channel.health?.result === '通过' && channel.health.fingerprint === channelFingerprint(channel) ? channel.health : null;
 }
 export function channelBlockReason(provider, channel, { runtime = false } = {}) {
-  if (provider.status !== '已启用') return '供应商已停用';
+  if (provider.status !== '已启用') return '服务商已停用';
   if (channel.endpoint?.frozen) return '渠道已冻结';
   if (channelInterfaceIssue(provider, channel)) return channelInterfaceIssue(provider, channel);
   if (!channel.enabled) return '渠道已停用';
@@ -110,7 +110,7 @@ export function supplierDeletionBlock(state, provider, modelId, channel) {
   const references = (route, rows) => rows?.some(row => ids.has(row.supplyId) || (wholeEndpoint || serviceIds.has(route.serviceId)) && endpoints.has(row.supplyId));
   const routes = (state.serviceRoutes || []).filter(route => references(route, route.versions?.find(row => row.version === route.activeVersion)?.config?.channels) || references(route, route.draft?.channels));
   if (services.length || linked.length || routes.length) {
-    return { message: '该供应商或渠道已在“模型服务”中关联，无法删除。下架或停服不会解除关联，请先移除对应的供应商、渠道映射及路由引用。', models: related.filter(model => services.includes(model) || linked.some(row => row.modelId === model.id) || routes.some(route => ['standard:' + model.id, `provider:${model.id}:${provider.id}`].includes(route.serviceId))) };
+    return { message: '该服务商或渠道已在“模型服务”中关联，无法删除。下架或停服不会解除关联，请先移除对应的服务商、渠道映射及路由引用。', models: related.filter(model => services.includes(model) || linked.some(row => row.modelId === model.id) || routes.some(route => ['standard:' + model.id, `provider:${model.id}:${provider.id}`].includes(route.serviceId))) };
   }
   const pending = state.modelOnboardings.some(row => {
     if (row.status === '已放弃' || (row.guided ? row.completion : row.status === '已完成') || (row.providerId || row.value?.providerId) !== provider.id) return false;
@@ -142,7 +142,7 @@ function channelCosts(provider, modelId, scenarios, normalize, draft = false) {
 
 export function providerChannelTransaction(state, { operation, objectId, data = {} }, connect, normalizePrice, preview) {
   const provider = state.providers.find(item => item.id === objectId);
-  if (!provider || !providerCatalogueIds(provider).includes(data.modelId)) throw new Error('供应商或目录模型不存在');
+  if (!provider || !providerCatalogueIds(provider).includes(data.modelId)) throw new Error('服务商或目录模型不存在');
   const channels = catalogueChannels(state, provider, data.modelId);
   const current = channels.find(item => item.id === data.channelId);
   if (data.channelId && !current) throw new Error('渠道已不存在，请重新载入');

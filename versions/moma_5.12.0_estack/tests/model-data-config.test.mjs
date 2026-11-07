@@ -74,6 +74,6 @@ test('editing an initial provider records a user override without exposing archi
  assert.equal(view.modelTemplates.length,2);
 });
 test('frontend default catalogue includes user services and keeps historical builtins in all mode',()=>{
- const rows=[{id:'one',modelKey:'one',defaultCatalogue:true,provider:'平台',callable:true},{id:'user',modelKey:'user',defaultCatalogue:true,provider:'用户供应商',callable:true},{id:'old',modelKey:'old',defaultCatalogue:false,provider:'旧内置',callable:true}];
+ const rows=[{id:'one',modelKey:'one',defaultCatalogue:true,provider:'平台',callable:true},{id:'user',modelKey:'user',defaultCatalogue:true,provider:'用户服务商',callable:true},{id:'old',modelKey:'old',defaultCatalogue:false,provider:'旧内置',callable:true}];
  assert.deepEqual(marketModels(rows).map(row=>row.modelKey),['one','user']);assert.equal(marketModels(rows,'all').length,3);
 });

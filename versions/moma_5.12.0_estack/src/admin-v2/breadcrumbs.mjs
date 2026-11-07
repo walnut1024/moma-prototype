@@ -18,8 +18,8 @@ export function adminBreadcrumbs(active, params, names = {}) {
   if (active === 'providers') {
     const workspace = href(active, { view: null, tab: params.get('tab') === 'api-keys' ? 'api-keys' : 'catalogue', endpoint: null, q: null, page: null, listQ: null, listPage: null });
     add('渠道接入', view ? workspace : null);
-    if (view === 'new') add('添加供应商');
-    else if (view === 'profile') add('编辑供应商资料');
+    if (view === 'new') add('添加服务商');
+    else if (view === 'profile') add('编辑服务商资料');
   } else if (active === 'listing' && view === 'onboarding') {
     add(names.onboardingIntent==='reserve'?'准备备用供应':names.onboardingIntent==='activate'?'投入当前服务':'接入并上架模型');
   } else if (['listing', 'model-templates'].includes(active)) {

@@ -29,7 +29,7 @@ export function supplierCredentialIssues(state, provider, modelIds = providerCat
   });
 }
 export function supplierChannelReadiness(endpoint, provider) {
-  if (provider.status !== '已启用') return {ready: false, label: '供应商已停用'};
+  if (provider.status !== '已启用') return {ready: false, label: '服务商已停用'};
   if (!connectionCredentialsReady(endpoint, provider)) return {ready: false, label: '凭证待配置'};
   if (!connectionTestPassed(endpoint)) return {ready: false, label: '待连接测试'};
   if (!['运行中', '需关注'].includes(endpoint.status)) return {ready: false, label: '待启用渠道'};
@@ -68,7 +68,7 @@ export function invalidateSupplierChannels(state, provider, ids) {
 
 export function supplierResourceTransaction(state, { operation, objectId, data = {} }, connect, normalizePrice) {
   const provider = state.providers.find(row => row.id === objectId);
-  if (!provider) throw new Error('供应商不存在');
+  if (!provider) throw new Error('服务商不存在');
   const resources = supplierChannelResources(state, provider), endpoint = resources.find(row => row.id === data.endpointId);
   const finish = (label, changes) => ({ type: 'batch', label, objectId, changes });
   if (['keyGroupSave', 'keyGroupDelete', 'keyGroupPrimary'].includes(operation)) {
@@ -116,7 +116,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     return finish('创建模型渠道', [...created.changes, ...associated.changes]);
   }
   if (operation === 'supplierModelsAdd') {
-    if (!endpoint) throw new Error('渠道不属于当前供应商或已删除');
+    if (!endpoint) throw new Error('渠道不属于当前服务商或已删除');
     const models = modelBatch(state, data.models), changes = [];
     let working = state;
     for (const row of models) {
@@ -131,7 +131,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     return finish('添加渠道关联模型', changes);
   }
   if (operation === 'supplierModelsTest' || operation === 'supplierModelsEnable') {
-    if (!endpoint) throw new Error('渠道不属于当前供应商或已删除');
+    if (!endpoint) throw new Error('渠道不属于当前服务商或已删除');
     if (!Array.isArray(data.associationIds) || !data.associationIds.length || data.associationIds.length > SUPPLIER_MODEL_BATCH_LIMIT || new Set(data.associationIds).size !== data.associationIds.length) throw new Error(`请选择 1–${SUPPLIER_MODEL_BATCH_LIMIT} 条不重复的模型关联`);
     const associations = supplierChannelAssociations(state, provider, endpoint.id);
     const selected = data.associationIds.map(id => {
@@ -163,7 +163,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
   }
   if (operation === 'supplierModelAdd') {
     const linked = supplierModelFields(state, provider, data.libraryId);
-    if (displayedCatalogueIds(provider, state).includes(linked.modelId)) throw new Error('当前供应商已添加该模型');
+    if (displayedCatalogueIds(provider, state).includes(linked.modelId)) throw new Error('当前服务商已添加该模型');
     return finish('登记供应模型', [update('providers', objectId, linked.fields)]);
   }
   if (['defaultApiKey', 'toggleApiKey'].includes(operation)) {
@@ -176,10 +176,10 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     return finish(operation === 'defaultApiKey' ? '设置默认 API 密钥' : '变更 API 密钥状态', [update('providers', objectId, operation === 'defaultApiKey' ? { apiKeys: keys, defaultApiKeyId: key.id, ...(provider.apiKeyGroups ? { apiKeyGroups: providerKeyGroups(provider, keys).map(row => row.id === 'default' ? { ...row, keyIds: [key.id, ...row.keyIds.filter(id => id !== key.id)] } : { ...row, keyIds: row.keyIds.filter(id => id !== key.id) }) } : {}) } : { apiKeys: keys.map(row => row.id === key.id ? { ...row, status: data.enabled ? 'enabled' : 'disabled' } : row) }), ...invalidateSupplierChannels(state, provider, ids)]);
   }
   if (operation === 'supplierChannelSave') {
-    if (data.endpointId && !endpoint) throw new Error('渠道不属于当前供应商或已删除');
+    if (data.endpointId && !endpoint) throw new Error('渠道不属于当前服务商或已删除');
     const mode = data.mode || 'all';
     if (!['all', 'info', 'address', 'credentials'].includes(mode)) throw new Error('请选择有效的渠道配置项');
-    if (mode !== 'all' && !endpoint) throw new Error('请选择当前供应商的渠道');
+    if (mode !== 'all' && !endpoint) throw new Error('请选择当前服务商的渠道');
     if (mode === 'address') {
       const transaction = connect(state, { operation: 'connection', objectId: endpoint.id, data: { ...endpoint, ...data, providerId: objectId, timeoutSeconds: endpoint.timeoutSeconds || 60 } });
       const fields = transaction.changes.find(row => row.collection === 'endpoints').changes;
@@ -204,7 +204,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
       return finish('保存渠道 API 地址', changes);
     }
     const name = mode === 'credentials' ? endpoint.name : required(data.name, '渠道名称', 60);
-    if (mode !== 'credentials' && resources.some(row => row.id !== endpoint?.id && supplierChannelName(provider, row) === name)) throw new Error('供应商的渠道名称不可重复');
+    if (mode !== 'credentials' && resources.some(row => row.id !== endpoint?.id && supplierChannelName(provider, row) === name)) throw new Error('服务商的渠道名称不可重复');
     if (mode === 'info') {
       if (data.expectedUpdatedAt !== undefined && data.expectedUpdatedAt !== endpoint.updatedAt || data.expectedProviderUpdatedAt !== undefined && data.expectedProviderUpdatedAt !== provider.updatedAt) throw new Error('渠道或模型标识已变化，请重新载入后编辑');
       let catalogConnections = (provider.catalogConnections || []).map(row => row.endpointId === endpoint.id && !row.deletedAt ? { ...row, name } : row);
@@ -228,10 +228,10 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     const knownKeys = knownSupplierKeys(provider, resources);
     const groups = data.authMode === 'group' ? providerKeyGroups(provider, knownKeys) : null;
     const selectedGroup = groups?.find(row => row.id === data.keyGroupId);
-    if (data.authMode === 'group' && !selectedGroup) throw new Error('请选择当前供应商的 API 密钥组');
+    if (data.authMode === 'group' && !selectedGroup) throw new Error('请选择当前服务商的 API 密钥组');
     const groupChanges = selectedGroup ? [update('providers', objectId, { apiKeyGroups: groups, apiKeys: [...(provider.apiKeys || []), ...knownKeys.filter(key => selectedGroup.keyIds.includes(key.id) && !provider.apiKeys?.some(row => row.id === key.id))] })] : [];
     const selectedKey = data.authMode === 'specific' ? [...(provider.apiKeys || []), ...state.endpoints.filter(row => row.providerId === objectId && !row.deletedAt).flatMap(row => row.apiKeys || [])].find(key => key.id === data.apiKeyId && key.scope !== 'channel') : null;
-    if (data.authMode === 'specific' && (!selectedKey || selectedKey.status === 'disabled')) throw new Error('请选择当前供应商的可用密钥');
+    if (data.authMode === 'specific' && (!selectedKey || selectedKey.status === 'disabled')) throw new Error('请选择当前服务商的可用密钥');
     if (mode === 'credentials') {
       const apiKeyId = data.authMode === 'specific' ? data.apiKeyId : '';
       const changed = endpoint.authMode !== data.authMode || (endpoint.apiKeyId || '') !== apiKeyId || data.authMode === 'group' && endpoint.keyGroupId !== data.keyGroupId || Boolean(endpoint.apiKeys?.length || endpoint.credentialRef);
@@ -253,7 +253,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     const ids = endpoint && changed ? [endpoint.id] : [];
     return finish(endpoint ? '保存供应渠道' : '创建供应渠道', [...transaction.changes.filter(row => changed || row.collection === 'endpoints'), ...groupChanges, ...(selectedKey && !provider.apiKeys?.some(key => key.id === selectedKey.id) ? [update('providers', objectId, { apiKeys: [...(provider.apiKeys || []), selectedKey] })] : []), ...(ids.length ? invalidateSupplierChannels(state, provider, ids) : [])]);
   }
-  if (!endpoint) throw new Error('请选择当前供应商的渠道');
+  if (!endpoint) throw new Error('请选择当前服务商的渠道');
   if (operation === 'supplierCatalogueChannelDelete') {
     const association = supplierChannelAssociations(state, provider, endpoint.id).find(row => row.id === data.associationId && row.modelId === data.modelId);
     if (!association) throw new Error('模型与渠道关联已变化，请重新选择');
@@ -301,14 +301,14 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     return connect(state, { operation: 'testConnection', objectId: endpoint.id, data: { scenario: data.scenario || '成功' } });
   }
   if (operation === 'supplierChannelEnable') {
-    if (provider.status !== '已启用') throw new Error('请先启用供应商');
+    if (provider.status !== '已启用') throw new Error('请先启用服务商');
     if (connectionTestPending(endpoint)) throw new Error('当前渠道测试尚未完成，不能使用先前证据启用');
     if (!connectionCredentialsReady(endpoint, provider) || !connectionTestPassed(endpoint)) throw new Error('请先配置凭证并通过渠道测试');
     return finish('启用供应渠道', [update('endpoints', endpoint.id, { status: '运行中', activationChangedAt: new Date().toISOString(), connectionQualification: structuredClone(endpoint.connectionTest) })]);
   }
   if (operation !== 'supplierAssociationSave') throw new Error('未知供应资源操作');
   const modelId = required(data.modelId, '模型 ID');
-  if (!providerCatalogueIds(provider).includes(modelId)) throw new Error('模型不属于当前供应商');
+  if (!providerCatalogueIds(provider).includes(modelId)) throw new Error('模型不属于当前服务商');
   const existing = data.associationId && catalogueChannels(state, provider, modelId).find(row => row.id === data.associationId && row.endpointId === endpoint.id);
   if (data.associationId && !existing) throw new Error('模型与渠道的关联已变化');
   if (!existing && catalogueChannels(state, provider, modelId).some(row => row.endpointId === endpoint.id)) throw new Error('此模型已关联该渠道');

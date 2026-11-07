@@ -42,7 +42,7 @@ export function modelOperationsExamplesTransaction(source) {
   }
   for (const spec of MODEL_OPERATIONS_SUPPLIERS) {
     let provider = state.providers.find(row => row.id === spec.id);
-    if (provider && provider.code !== spec.code) throw new Error(`${spec.name} 的供应商 ID 已被其他编码占用`);
+    if (provider && provider.code !== spec.code) throw new Error(`${spec.name} 的服务商 ID 已被其他编码占用`);
     if (!provider) {
       if (state.providers.some(row => row.code === spec.code || row.name === spec.name)) throw new Error(`${spec.name} 已存在其他身份，请先核对，不能按名称合并`);
       provider = add('providers', record(spec.id, { name: spec.name, code: spec.code, sourceType: 'thirdParty', integrationType: '云厂商模型服务', status: '已启用', catalogModelIds: [], catalogModels: [], catalogConnections: [], apiKeys: [], catalogueScope: 'managed' }));

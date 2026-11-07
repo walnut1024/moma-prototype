@@ -80,12 +80,12 @@ test('aliases of the same master share one supplier group while keeping custom n
   const state=initialModelWorkspace(),provider=state.providers.find(row=>row.id==='provider-moma');
   const master=supplyModelDirectory(state).find(row=>row.code==='deepseek-v4-flash-0731').master;
   provider.catalogModelIds.push('manual-alias');
-  provider.catalogModels.push({modelId:'manual-alias',libraryId:master.id,displayName:'保留的供应商名称'});
+  provider.catalogModels.push({modelId:'manual-alias',libraryId:master.id,displayName:'保留的服务商名称'});
   const existing=provider.catalogConnections.find(row=>row.modelId==='deepseek-v4-flash-0731');
   provider.catalogConnections.push({...structuredClone(existing),id:'manual-channel-alias',modelId:'manual-alias',upstreamModelId:'manual/upstream-id'});
   const before=structuredClone(state),groups=supplierModelChannelGroups(state,provider).filter(row=>row.master?.id===master.id);
   assert.equal(groups.length,1);
-  assert.equal(groups[0].name,'保留的供应商名称');
+  assert.equal(groups[0].name,'保留的服务商名称');
   assert.ok(groups[0].channels.some(row=>row.id==='manual-channel-alias'&&row.modelId==='manual-alias'&&row.upstreamModelId==='manual/upstream-id'));
   assert.equal(new Set(groups[0].channels.map(row=>row.id)).size,3);
   assert.deepEqual(state,before);
