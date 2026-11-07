@@ -1,21 +1,28 @@
-import { X } from 'lucide-react';
 import { useState } from 'react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Textarea } from './ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { Banner, Button, Form, Modal, Typography } from '@douyinfe/semi-ui';
 
 export default function OperationInputDialog({ title, description, label, initialValue = '', numeric = false, onSubmit, onClose }) {
-  const [value, setValue] = useState(String(initialValue)), [error, setError] = useState('');
-  const [trigger] = useState(() => document.activeElement);
-  const submit = event => {
-    event.preventDefault();
+  const [error, setError] = useState('');
+  const save = ({ value }) => {
     try {
-      if (!value.trim()) throw new Error(`请填写${label}`);
-      if (onSubmit(value.trim())) onClose();
+      const trimmed = value?.trim();
+      if (!trimmed) throw new Error(`请填写${label}`);
+      if (onSubmit(trimmed)) onClose();
       else setError('保存未完成，请检查操作反馈后重试');
-    } catch (cause) { setError(cause.message); }
+    } catch (cause) {
+      setError(cause.message);
+    }
   };
-  const Field = numeric ? Input : Textarea;
-  return <Dialog open onOpenChange={open => !open && onClose()}><DialogContent className="operation-input-dialog" showCloseButton={false} onCloseAutoFocus={event => { event.preventDefault(); trigger?.focus(); }}><DialogHeader><DialogTitle>{title}</DialogTitle><Button className="operation-dialog-close" type="button" variant="ghost" size="icon" aria-label="关闭" onClick={onClose}><X/></Button><DialogDescription>{description}</DialogDescription></DialogHeader><form onSubmit={submit} noValidate><label htmlFor="operation-value">{label}</label><Field id="operation-value" type={numeric ? 'number' : undefined} min={numeric ? 1 : undefined} step={numeric ? 1 : undefined} value={value} onChange={event => { setValue(event.target.value); setError(''); }} aria-invalid={Boolean(error)} aria-describedby={error ? 'operation-error' : undefined}/>{error && <p id="operation-error" role="alert" className="form-error">{error}</p>}<footer><Button type="button" variant="outline" onClick={onClose}>取消</Button><Button type="submit">确认保存</Button></footer></form></DialogContent></Dialog>;
+  return <Modal visible title={title} width="min(480px, calc(100vw - 32px))" closeOnEsc maskClosable={false} footer={null} onCancel={onClose}>
+    <Typography.Paragraph type="secondary">{description}</Typography.Paragraph>
+    <Form initValues={{ value: String(initialValue) }} onSubmit={save} onValueChange={() => setError('')}>
+      {numeric ? <Form.Input field="value" label={label} type="number" min={1} step={1} autoFocus/>
+        : <Form.TextArea field="value" label={label} autosize={{ minRows: 4, maxRows: 9 }} autoFocus/>}
+      {error && <Banner type="danger" closeIcon={null} description={error}/>}
+      <div className="admin-form-actions">
+        <Button onClick={onClose}>取消</Button>
+        <Button htmlType="submit" theme="solid">确认保存</Button>
+      </div>
+    </Form>
+  </Modal>;
 }

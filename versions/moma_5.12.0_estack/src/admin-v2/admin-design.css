@@ -86,12 +86,12 @@
 }
 .admin-ui-portal[data-slot="dialog-content"] [data-slot="button"] { border-radius: 10px; font-size: 12px; }
 .admin-ui-portal[data-slot="dialog-content"] :is([data-slot="input"], [data-slot="select-trigger"], select) { border-radius: 8px; font-size: 12px; }
-.admin-ui-portal[data-slot="dialog-content"]:not(:is(.mo-dialog, .mm-dialog, .enterprise-dialog, .dp-dialog, .tp-dialog, .operation-input-dialog, .entity-drawer)) {
+.admin-ui-portal[data-slot="dialog-content"]:not(:is(.mo-dialog, .mm-dialog, .enterprise-dialog, .dp-dialog, .tp-dialog, .entity-drawer)) {
   width: min(520px, calc(100vw - 40px));
   max-width: none;
   padding: 20px;
 }
-.admin-ui-portal[data-slot="dialog-content"]:not(:is(.mo-dialog, .mm-dialog, .enterprise-dialog, .dp-dialog, .tp-dialog, .operation-input-dialog, .entity-drawer)):has(table) { width: min(960px, calc(100vw - 40px)); }
+.admin-ui-portal[data-slot="dialog-content"]:not(:is(.mo-dialog, .mm-dialog, .enterprise-dialog, .dp-dialog, .tp-dialog, .entity-drawer)):has(table) { width: min(960px, calc(100vw - 40px)); }
 
 /* Native controls in retained gateway and settlement pages use the same scale. */
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) select:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)),
@@ -114,7 +114,7 @@
 .admin-v2 :where(.admin-legacy) .request-simulator select { height: 32px; }
 .admin-v2 :where(.admin-legacy) .request-simulator > div { min-width: 0; flex-basis: 260px; }
 .admin-v2 :where(.admin-legacy) .request-simulator b, .admin-v2 :where(.admin-legacy) .release-actions b { font-weight: 600; }
-.admin-v2 :where(.admin-legacy) :is(.ops-filters, .ent-toolbar, .request-simulator) select { font-size: 12px; }
+.admin-v2 :where(.admin-legacy) :is(.ent-toolbar, .request-simulator) select { font-size: 12px; }
 
 :is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) { display: flex; flex-direction: column; min-width: 0; color: var(--foreground); }
 :is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) > header { position: sticky; top: 0; z-index: 2; flex: none; height: 58px; padding: 16px 20px; background: #fff; }
@@ -124,16 +124,9 @@
 :is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) form :is(input, select) { height: 32px; }
 :is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) form footer { position: sticky; bottom: -20px; z-index: 1; gap: 8px; padding: 16px 0 0; background: #fff; }
 :is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) form footer [data-slot="button"] { min-width: auto; height: 32px; padding: 0 12px; }
-:is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) .ops-detail-body { min-width: 0; padding: 20px; }
 :is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) pre { max-width: 100%; overflow: auto; font-size: 11px; line-height: 1.6; }
 .admin-v2 :where(.admin-legacy) .v2-summary article { border-color: var(--border); }
 .admin-v2 :where(.admin-legacy) .v2-summary :is(span, small) { color: #5d6b82; }
-.admin-v2 :where(.admin-legacy) .incident-grid article { padding: 20px; }
-.admin-v2 :where(.admin-legacy) .incident-grid header b { font-size: 14px; font-weight: 600; }
-.admin-v2 :where(.admin-legacy) .incident-grid :is(small, dt) { color: #5d6b82; }
-.admin-v2 :where(.admin-legacy) .incident-grid dl { display: flex; gap: 24px; margin-block: 16px; }
-.admin-v2 :where(.admin-legacy) .incident-grid dl > span { display: grid; gap: 4px; }
-.admin-v2 :where(.admin-legacy) .incident-grid ol { margin: 16px 0; padding-left: 20px; line-height: 1.8; }
 
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) table th:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) {
   background: #f8faff;
@@ -144,8 +137,7 @@
 }
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) table:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { font-size: 12px; }
 .admin-v2 :where(.admin-legacy) :is(.v2-table, .mo-table, .ent-table) [data-slot="button"] { font-size: 12px; }
-.admin-v2 :where(.admin-legacy) .ua-panel:has(.ua-echart) [data-slot="card-title"],
-.admin-v2 :where(.admin-legacy) .ops-monitor > article > header b { font-size: 16px; font-weight: 600; }
+.admin-v2 :where(.admin-legacy) .ua-panel:has(.ua-echart) [data-slot="card-title"] { font-size: 16px; font-weight: 600; }
 .admin-v2 :where(.admin-legacy) :where(.admin-legacy)[data-admin-page="goods"] table :is(th, td):nth-child(4),
 .admin-v2 :where(.admin-legacy) :where(.admin-legacy)[data-admin-page="orders"] table :is(th, td):nth-child(4),
 .admin-v2 :where(.admin-legacy) :where(.admin-legacy)[data-admin-page="metering"] table :is(th, td):is(:nth-child(5), :nth-child(7)),
@@ -210,8 +202,7 @@
 }
 .admin-ui-portal { --primary: #315fe8; --ring: #315fe8; --muted-foreground: #5d6b82; --mo-blue: #315fe8; --mo-muted: #5d6b82; }
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) :is(h1, h2, h3, [data-slot="dialog-title"], [data-slot="card-title"]):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { font-size: 14px !important; font-weight: 600 !important; line-height: 1.5 !important; color: #263247 !important; }
-.admin-v2 :where(.admin-legacy) :is(.ua-panel:has(.ua-echart)) [data-slot="card-title"],
-.admin-v2 :where(.admin-legacy) .ops-monitor > article > header b { font-size: 16px !important; font-weight: 600 !important; color: #263247 !important; }
+.admin-v2 :where(.admin-legacy) :is(.ua-panel:has(.ua-echart)) [data-slot="card-title"] { font-size: 16px !important; font-weight: 600 !important; color: #263247 !important; }
 .admin-v2 :where(.admin-legacy) .ua-kpis [data-slot="card-title"] { font-size: 14px !important; font-weight: 600 !important; }
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) :is(small, code, dt, .mo-muted, .mo-helper, .mo-copy, .an-note, .sfv-label, .sfv-dialog-group strong, .ent-hint, .dp-list-note, .unified-chart-tools > span):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { color: #5d6b82 !important; }
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) code:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { font: 400 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
@@ -226,7 +217,7 @@
 .admin-v2 :where(.admin-legacy) .ua-filters { box-shadow: none !important; }
 .admin-v2 :where(.admin-legacy) :is(.supplier-card, .supplier-editor) > [data-slot="card-header"] { padding: 12px; }
 .admin-v2 :where(.admin-legacy) .ua-panel > [data-slot="card-header"] { padding: 16px; }
-.admin-v2 :where(.admin-legacy) :is(.ua-kpi strong, .an-metrics strong, .an-conversion strong, .v2-summary b, .tp-kpis strong, .ops-monitor > article > strong) { font-size: 28px !important; font-weight: 600 !important; line-height: 1.25 !important; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.admin-v2 :where(.admin-legacy) :is(.ua-kpi strong, .an-metrics strong, .an-conversion strong, .v2-summary b, .tp-kpis strong) { font-size: 28px !important; font-weight: 600 !important; line-height: 1.25 !important; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .admin-v2 :where(.admin-legacy) .ua-metric-value { align-items: baseline; }
 
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) :is(button, input, select, textarea):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { font-family: inherit; }
@@ -274,7 +265,6 @@
 .admin-v2 :where(.admin-legacy) .ent-members-workspace .org-expand { right: 32px; }
 .admin-v2 :where(.admin-legacy) .ent-members-workspace .org-tree-select { padding-right: 68px; }
 .admin-v2 :where(.admin-legacy) .filter-reset { color: #5d6b82 !important; }
-.admin-v2 :where(.admin-legacy) .ops-monitor :is(span, i), .admin-v2 :where(.admin-legacy) .incident-grid span,
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) .ent-section-head p,
 .admin-ui-portal .ent-role-note p { color: #5d6b82 !important; }
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) summary:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { color: #315fe8 !important; min-height: 32px; }
@@ -309,7 +299,7 @@
 .admin-ui-toast[data-type="warning"] [data-icon] { color: #8a5d18; }
 
 @media (max-width: 900px) {
-  .admin-v2 :where(.admin-legacy) :is(.an-grid, .ua-chart-grid, .incident-grid, .dp-grid, .mo-form-grid, .ent-form-grid, .iu-editor-grid, .pm-form-grid) { grid-template-columns: minmax(0,1fr); }
+  .admin-v2 :where(.admin-legacy) :is(.an-grid, .ua-chart-grid, .dp-grid, .mo-form-grid, .ent-form-grid, .iu-editor-grid, .pm-form-grid) { grid-template-columns: minmax(0,1fr); }
   .admin-v2 :where(.admin-legacy) :is(.mo-heading, .supplier-heading, .ent-page-head) { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) {

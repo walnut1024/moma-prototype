@@ -234,9 +234,10 @@ export default function UsageAnalysisPage({ state }) {
                 <Input className="admin-list-search" prefix={<IconSearch aria-hidden="true"/>} showClear aria-label="搜索明细"
                   placeholder="搜索名称" value={query} onChange={value => { setQuery(value); setPage(0); }}/>
               </div>
-              <Table rowKey="id" size="small" dataSource={detailRows} columns={columns} empty="所选范围暂无明细记录"
+              <Table rowKey="id" size="small" dataSource={detailRows.slice(detailPage * size, (detailPage + 1) * size)}
+                columns={columns} empty="所选范围暂无明细记录"
                 scroll={{ x: 'max(100%, 860px)' }}
-                pagination={{ currentPage: detailPage + 1, pageSize: size, showTotal: true, showSizeChanger: true, pageSizeOpts: PAGE_SIZES,
+                pagination={{ currentPage: detailPage + 1, total: detailRows.length, pageSize: size, showTotal: true, showSizeChanger: true, pageSizeOpts: PAGE_SIZES,
                   onPageChange: value => setPage(value - 1), onPageSizeChange: value => { setSize(value); setPage(0); } }}/>
             </Card>
           </section>

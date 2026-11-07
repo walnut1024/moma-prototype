@@ -40,6 +40,7 @@ import ModelManagement from "./admin-v2/ModelManagement";
 import { privateEnterprise } from "./admin-v2/enterprise";
 import GatewayPage, { gatewaySettingsPages } from "./admin-v2/GatewayPages";
 import ObservabilityPage from "./admin-v2/ObservabilityPages";
+import ArtifactManagement from './admin-v2/ArtifactManagement';
 import BusinessOperationsPage from "./admin-v2/BusinessOperationsPages";
 import AdminPageBoundary from "./admin-v2/AdminPageBoundary";
 import "./admin-v2/gateway.css";
@@ -155,9 +156,8 @@ function AdminConsoleV2View({bannerTarget,store}) {
   const showPage = hasAccount && canVisit;
   const gatewaySettings = gatewaySettingsPages.includes(active);
   const legacyPage = page.groupId === 'customers'
-    || (page.groupId === 'production' && !['clusters', 'model-observability'].includes(active))
+    || (page.groupId === 'production' && !['clusters', 'artifacts', 'model-observability'].includes(active))
     || (page.groupId === 'analytics' && !['usage-analysis', 'user-analysis', 'customer-usage-detail'].includes(active))
-    || (page.groupId === 'gateway' && !gatewaySettings)
     || ['goods', 'orders', 'announcements', 'metering', 'ledger', 'bills', 'settlement', 'adjustments'].includes(active);
   const menu = <nav aria-label="后台导航">{sections.filter(group => group.workspace === currentWorkspace || (group.id === 'platform' && state.currentRole === '平台管理员')).map(group => (
       <section key={group.id} aria-label={group.title}>
@@ -224,6 +224,7 @@ function AdminConsoleV2View({bannerTarget,store}) {
             : ["monitoring", "logs", "alerts", "incidents", "sla"].includes(active) ? <ObservabilityPage pageId={active} state={factState} dispatch={dispatch} navigate={navigate}/>
             : active === "clusters" ? <ClusterManagement state={state} dispatch={dispatch}/>
             : active === "deployments" ? <ModelDeployments state={state} dispatch={dispatch} conflict={conflict}/>
+            : active === "artifacts" ? <ArtifactManagement state={state} dispatch={dispatch}/>
             : active === "model-observability" ? <ModelObservability state={state}/> : <BusinessOperationsPage key={active} pageId={active} state={state} dispatch={dispatch}/>}
           </>}
         </AdminPageBoundary>

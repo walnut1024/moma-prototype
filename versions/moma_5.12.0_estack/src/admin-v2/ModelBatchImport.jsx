@@ -59,6 +59,9 @@ export default function ModelBatchImport({ state, can, run, close, dirty, mode =
     } catch (e) { setError(e.message); Toast.error(e.message); }
     finally { setBusy(false); }
   };
+  const visibleRows = onlyProblems ? preview.filter(row => row.status === 'error') : preview;
+  const { pageSize } = pagination;
+  const currentPage = Math.min(pagination.currentPage, Math.ceil(visibleRows.length / pageSize) || 1);
   const previewColumns = [
     {title:'文件行',dataIndex:'rowNumber',width:85},
     {title:'模型展示名 / 规范模型标识',width:260,render:(_,row)=><Space vertical align="start"><Typography.Text strong>{cell(row,'模型展示名') || '未填写'}</Typography.Text><Typography.Text type="tertiary">{cell(row,'规范模型标识') || '—'}</Typography.Text><Button theme="borderless" onClick={()=>setExpandedRow(expandedRow===row.rowNumber?null:row.rowNumber)}>查看第 {row.rowNumber} 行资料</Button></Space>},
@@ -77,7 +80,9 @@ export default function ModelBatchImport({ state, can, run, close, dirty, mode =
       <Typography.Title heading={6}><span ref={previewTitle} tabIndex={-1}>{fileName}</span></Typography.Title>
       <Banner type={invalid?'warning':'success'} description={'共 '+preview.length+' 条，可导入 '+valid.length+' 条，问题 '+invalid+' 条'}/>
       <div className="materials-actions"><Checkbox checked={onlyProblems} onChange={event=>{setOnlyProblems(event.target.checked);setExpandedRow(null);}}>只看问题记录</Checkbox><Button icon={<IconDownload aria-hidden/>} onClick={()=>download('模型资料导入校验清单.csv',[[...MODEL_IMPORT_HEADERS,'校验结果'],...preview.map(row=>[...row.cells,row.message])])}>下载校验清单</Button></div>
-      <Table rowKey="rowNumber" columns={previewColumns} dataSource={preview.filter(row=>!onlyProblems || row.status==='error')} scroll={{x:1120}} pagination={{...pagination,total:preview.filter(row=>!onlyProblems || row.status==='error').length,currentPage:Math.min(pagination.currentPage,Math.ceil((preview.filter(row=>!onlyProblems || row.status==='error').length)/pagination.pageSize) || 1),showSizeChanger:true,pageSizeOpts:[20,50,100],showTotal:true}} onChange={({pagination})=>setPagination({currentPage:pagination.currentPage,pageSize:pagination.pageSize})}/>
+      <Table rowKey="rowNumber" columns={previewColumns} dataSource={visibleRows.slice((currentPage - 1) * pageSize, currentPage * pageSize)}
+        scroll={{ x: 1120 }} pagination={{ pageSize, currentPage, total: visibleRows.length, showSizeChanger: true, pageSizeOpts: [20, 50, 100], showTotal: true }}
+        onChange={({ pagination }) => setPagination({ currentPage: pagination.currentPage, pageSize: pagination.pageSize })}/>
       {selected && <><div className="materials-actions"><Typography.Title heading={6}>第 {selected.rowNumber} 行 · {cell(selected,'模型展示名') || '未填写名称'}</Typography.Title><Button onClick={()=>setExpandedRow(null)}>收起资料</Button></div><Descriptions align="left" data={MODEL_IMPORT_FIELDS.filter(field=>cell(selected,field.header)).map(field=>({key:field.header,value:cell(selected,field.header)}))}/></>}
       {invalid>0 && valid.length>0 && <Checkbox checked={skip} onChange={event=>setSkip(event.target.checked)}>跳过 {invalid} 条问题记录，仅导入 {valid.length} 条有效记录</Checkbox>}
     </>:<Banner type="success" title="导入完成" description={'已新增 '+outcome.imported+' 个模型资料'+(outcome.skipped?'，跳过 '+outcome.skipped+' 条问题记录':'')+'。可在模型资料中查看和维护。'}/>}

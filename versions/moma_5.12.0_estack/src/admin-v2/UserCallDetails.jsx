@@ -97,9 +97,10 @@ export default function UserCallDetails({ state, rows, start, end, draft, onDraf
       </form>
       {conditionGroups && <SelectedConditions groups={conditionGroups} label="已选条件（仅调用明细）"/>}
       <Typography.Paragraph type="tertiary">计量用量仅汇总已确认请求，并按模型单位分别统计；TPM 仅适用于 Token 模型。区间平均 TPM／RPM 包含无调用分钟。</Typography.Paragraph>
-      <Table rowKey="id" size="small" scroll={{ x: 'max(100%, 1120px)' }} dataSource={data} hideExpandedColumn expandIcon={false}
+      <Table rowKey="id" size="small" scroll={{ x: 'max(100%, 1120px)' }} dataSource={data.slice(current * size, (current + 1) * size)}
+        hideExpandedColumn expandIcon={false}
         expandedRowKeys={expanded ? [expanded] : []} expandedRowRender={detail}
-        pagination={{ currentPage: current + 1, pageSize: size, pageSizeOpts: PAGE_SIZES, showTotal: true, showSizeChanger: true,
+        pagination={{ currentPage: current + 1, total: data.length, pageSize: size, pageSizeOpts: PAGE_SIZES, showTotal: true, showSizeChanger: true,
           onPageChange: page => setPage(page - 1), onPageSizeChange: value => { setSize(value); setPage(0); } }}
         empty="暂无匹配记录，请调整模型、客户或上方日期筛选。" columns={[
           ...tableColumns,

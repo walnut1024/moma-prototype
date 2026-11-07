@@ -213,8 +213,9 @@ export default function AdminAccounts({ state, transact, conflict }) {
           </Space>
           <Button theme="borderless" type="tertiary" onClick={reset}>重置筛选</Button>
         </div>
-        <Table size="small" rowKey="id" dataSource={rows} columns={columns} scroll={{ x: 'max(100%, 880px)' }}
-          pagination={{ currentPage, pageSize: size, pageSizeOpts: PAGE_SIZES, showSizeChanger: true, showTotal: true, onPageChange: setPage,
+        <Table size="small" rowKey="id" dataSource={rows.slice((currentPage - 1) * size, currentPage * size)}
+          columns={columns} scroll={{ x: 'max(100%, 880px)' }}
+          pagination={{ currentPage, total: rows.length, pageSize: size, pageSizeOpts: PAGE_SIZES, showSizeChanger: true, showTotal: true, onPageChange: setPage,
             onPageSizeChange: value => { setSize(value); setPage(1); } }}
           empty={state.admins.length ? '没有符合条件的后台账号，请调整或重置筛选。' : '暂无后台账号。'}/>
       </Card>
