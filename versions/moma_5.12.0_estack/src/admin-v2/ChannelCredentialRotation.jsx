@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Input } from '@douyinfe/semi-ui';
-import { Choice, Field } from './ModelMetadataForm';
+import { Choice, Field } from './ServiceUI';
 import { Disclosure, Modal, Notice, GridTable, Row, Cell } from './ModelOperationsUI';
 import CandidateProbePanel from './CandidateProbePanel';
 import { channelCandidateStatus, channelChangeImpact } from './channel-change-management';

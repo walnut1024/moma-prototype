@@ -1,5 +1,5 @@
 import { PROVIDER_TYPES } from './provider-management';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Button, Input, TextArea, Typography } from '@douyinfe/semi-ui';
 import { Choice, Field, FieldLabel, Modal, Notice } from './ServiceUI';
 import { serviceScope, scopeTenants } from './service-commercial';
@@ -26,15 +26,40 @@ export function ServiceScopeEditor({state,model,ops,close}) {
     <div className="ss-footer"><Button disabled={publishing} onClick={close}>取消</Button><Button disabled={!ops.can || publishing} onClick={() => {try{serviceScope(state,value);ops.setError('');setPreview(true);}catch(issue){setPreview(false);ops.setError(issue.message);}}}>预览变更</Button></div>
   </div>;
 }
-export function ServiceIdentityDialog({model,providerId,ops,close,onSaved=close}) {
-  const entry=providerServices(model).find(row => row.providerId === providerId),original=providerId ? entry?.callId || '' : model.modelId;
-  const [callId,setCallId]=useState(original),[revision]=useState(model.updatedAt),[confirm,setConfirm]=useState(false);
-  const changing=Boolean(original && original!==callId.trim()),blocked=Boolean(original) && (model.listingStatus==='已上架' || (providerId ? entry?.callsEnabled!==false : model.callsEnabled===true));
-  return <Modal title="编辑调用标识" description={model.name} onClose={close}><form onSubmit={async event=>{event.preventDefault();if(changing && !confirm){setConfirm(true);return;}if(await ops.run(providerId?'configureServiceIdentity':'configureServiceModelIdentity',{providerId,callId,expectedUpdatedAt:revision,confirmed:true},model.id))onSaved();}}>
-    <Field label={<FieldLabel name="对外调用标识" required/>}><Input aria-label="对外调用标识" autoFocus value={callId} required maxLength={200} disabled={!ops.can || blocked} onChange={text=>{setCallId(text);setConfirm(false);ops.dirty(true);ops.setError('');}}/></Field>
-    {blocked && <Notice>先下架并停用当前服务，再修改对外调用标识。</Notice>}{changing && <Notice>原标识：{original}。保存后，客户需将调用参数改为新标识；原标识不再接受新请求。订购、配置和历史记录保留。</Notice>}{confirm && <p>请确认客户已完成调用标识迁移，再保存为 <code>{callId}</code>。</p>}{ops.error && <Notice error>{ops.error}</Notice>}
-    <div className="ss-footer"><Button htmlType="button" onClick={close}>取消</Button><Button htmlType="submit" disabled={!ops.can || !callId.trim() || callId.trim()===original || blocked}>{confirm?'确认修改调用标识':changing?'核对变更':'保存调用标识'}</Button></div>
-  </form></Modal>;
+export function ServiceIdentityDialog({ model, providerId, ops, close, onSaved = close }) {
+  const entry = providerServices(model).find(row => row.providerId === providerId);
+  const original = providerId ? entry?.callId || '' : model.modelId;
+  const formId = useId();
+  const [callId, setCallId] = useState(original), [revision] = useState(model.updatedAt), [confirm, setConfirm] = useState(false);
+  const changing = Boolean(original && original !== callId.trim());
+  const blocked = Boolean(original) && (model.listingStatus === '已上架' || (providerId ? entry?.callsEnabled !== false : model.callsEnabled === true));
+  const submit = async event => {
+    event.preventDefault();
+    if (changing && !confirm) {
+      setConfirm(true);
+      return;
+    }
+    if (await ops.run(providerId ? 'configureServiceIdentity' : 'configureServiceModelIdentity',
+      { providerId, callId, expectedUpdatedAt: revision, confirmed: true }, model.id)) onSaved();
+  };
+
+  return <Modal title="编辑调用标识" description={model.name} onClose={close} footer={<>
+    <Button theme="light" onClick={close}>取消</Button>
+    <Button theme="solid" form={formId} htmlType="submit" disabled={!ops.can || !callId.trim() || callId.trim() === original || blocked}>
+      {confirm ? '确认修改调用标识' : changing ? '核对变更' : '保存调用标识'}
+    </Button>
+  </>}>
+    <form id={formId} onSubmit={submit}>
+      <Field required label={<FieldLabel name="对外调用标识"/>}>
+        <Input aria-label="对外调用标识" autoFocus value={callId} required maxLength={200} disabled={!ops.can || blocked}
+          onChange={text => { setCallId(text); setConfirm(false); ops.dirty(true); ops.setError(''); }}/>
+      </Field>
+      {blocked && <Notice>先下架并停用当前服务，再修改对外调用标识。</Notice>}
+      {changing && <Notice>原标识：{original}。保存后，客户需将调用参数改为新标识；原标识不再接受新请求。订购、配置和历史记录保留。</Notice>}
+      {confirm && <p>请确认客户已完成调用标识迁移，再保存为 <code>{callId}</code>。</p>}
+      {ops.error && <Notice error>{ops.error}</Notice>}
+    </form>
+  </Modal>;
 }
 
 export function ServiceSupplierDialog({ops,done,cancel}) {

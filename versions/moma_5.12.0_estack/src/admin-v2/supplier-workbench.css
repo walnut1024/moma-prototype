@@ -13,7 +13,7 @@
 .supplier-workbench .mo-table small{color:var(--semi-color-text-2);line-height:1.5;margin-top:5px}
 .supplier-workbench .mo-table code{font-size:12px;color:var(--semi-color-text-2)}
 .supplier-key-row{display:flex;align-items:flex-end;gap:8px}
-.supplier-key-row .mm-field{flex:1;min-width:0;margin:0}
+.supplier-key-row .admin-form-field{flex:1;min-width:0;margin:0}
 .supplier-key-pending{color:var(--semi-color-text-2)}
 .supplier-key-form{display:flex;flex-direction:column;gap:16px}
 .supplier-key-actions{display:flex;justify-content:flex-end;gap:8px}
@@ -45,7 +45,7 @@
 .admin-v2 .supplier-connection-key-group{border:0;margin:0;padding:0;min-width:0}
 .admin-v2 .supplier-connection-key-group legend{padding:0;margin-bottom:8px;font-weight:500}
 .admin-v2 .supplier-connection-key-group .supplier-key-row{display:flex;align-items:flex-end;gap:8px;margin-bottom:8px}
-.admin-v2 .supplier-connection-key-group .supplier-key-row>.mm-field{flex:1;min-width:0;margin:0}
+.admin-v2 .supplier-connection-key-group .supplier-key-row>.admin-form-field{flex:1;min-width:0;margin:0}
 .admin-v2 .supplier-connection-key-group .supplier-key-row>span{flex:1;align-self:center}
 .admin-v2 .supplier-key-hint{color:var(--semi-color-text-2);font-size:11px;margin:4px 0 0}
 .admin-v2 .supplier-description>small{display:block;text-align:right;margin-top:4px;color:var(--semi-color-text-2);font-size:11px}

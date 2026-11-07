@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Typography } from '@douyinfe/semi-ui';
-import { Choice, Field } from './ModelMetadataForm';
+import { Choice, Field } from './ServiceUI';
 import { GridTable, Row, Cell, Notice } from './ModelOperationsUI';
 import { candidateTestPlan } from './channel-change-management';
 import { submitCandidateTest, recoverCandidateTest, cancelCandidateTest, candidateTestReceipt } from './candidate-tests';

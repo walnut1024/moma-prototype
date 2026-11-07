@@ -1,7 +1,7 @@
 import CandidateProbePanel from './CandidateProbePanel';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Input } from '@douyinfe/semi-ui';
-import { Choice, Field } from './ModelMetadataForm';
+import { Choice, Field } from './ServiceUI';
 import { Disclosure, GridTable, Row, Cell, Modal, Notice } from './ModelOperationsUI';
 import { providerApiKeysDraft, providerApiKeyId, providerApiKeyName } from './provider-management';
 import { providerKeyGroups } from './provider-key-groups';

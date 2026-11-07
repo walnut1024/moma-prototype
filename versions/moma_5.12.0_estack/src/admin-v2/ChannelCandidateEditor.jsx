@@ -4,7 +4,7 @@ import ChannelCredentialRotation from './ChannelCredentialRotation';
 import ChannelAdvancedFields from './ChannelAdvancedFields';
 import { useState } from 'react';
 import { Button, Input, Typography } from '@douyinfe/semi-ui';
-import { Choice, Field } from './ModelMetadataForm';
+import { Choice, Field } from './ServiceUI';
 import { Disclosure, Modal, Notice, GridTable, Row, Cell } from './ModelOperationsUI';
 import { SupplierKeyGroupField } from './SupplierKeyGroupField';
 import { CHANNEL_INTERFACES, suggestChannelRoot } from './channel-interface';

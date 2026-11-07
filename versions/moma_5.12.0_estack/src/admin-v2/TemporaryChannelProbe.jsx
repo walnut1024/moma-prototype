@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Typography } from '@douyinfe/semi-ui';
-import { Choice, Field } from './ModelMetadataForm';
+import { Choice, Field } from './ServiceUI';
 import { Notice } from './ModelOperationsUI';
 import { onboardingApi, prepareServerChannel } from './onboarding-client';
 import { resolveChannelAssociationModel } from './channel-association-model';

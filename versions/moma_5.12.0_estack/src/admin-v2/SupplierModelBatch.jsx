@@ -1,7 +1,7 @@
 import AdminCollapsePanel from './AdminCollapsePanel';
 import { useState } from 'react';
 import { Button, Card, Checkbox, Collapse, Input, Steps, Typography } from '@douyinfe/semi-ui';
-import { Choice, Field } from './ModelMetadataForm';
+import { Choice, Field } from './ServiceUI';
 import { Heading, Notice, GridTable, Row, Cell, ScopeFields, Price } from './ModelOperationsUI';
 import { CompletePriceTable } from './SupplyPriceEditor';
 import { modelLibrary, libraryRecord } from './model-operations';

@@ -5,7 +5,7 @@ import { basicChannelUsageButton, channelTestUsageAuthorized } from './channel-t
 import { useEffect, useRef, useState } from 'react';
 import { Button, Checkbox } from '@douyinfe/semi-ui';
 import SupplierCreationDialog from './SupplierCreationDialog';
-import { Choice, Field } from './ModelMetadataForm';
+import { Choice, Field } from './ServiceUI';
 import { Disclosure, GridTable, Row, Cell, Modal, Notice } from './ModelOperationsUI';
 import { supplierChannelAssociations } from './supplier-resources';
 import { channelCheckCurrent, channelInterfaceIssue } from './provider-channels';

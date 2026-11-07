@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@douyinfe/semi-ui';
 import SupplierModelMultiSelect from './SupplierModelMultiSelect';
-import { Field, Choice } from './ModelMetadataForm';
+import { Field, Choice } from './ServiceUI';
 import { Notice } from './ModelOperationsUI';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import { supplierModelRegistration, registeredSupplierModelIds, supplierModelSelection } from './supplier-model-registration';

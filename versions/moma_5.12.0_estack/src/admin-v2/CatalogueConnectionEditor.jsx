@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Checkbox, Input } from '@douyinfe/semi-ui';
-import { Choice, Field } from './ModelMetadataForm';
+import { Choice, Field } from './ServiceUI';
 import { Modal, Notice } from './ModelOperationsUI';
 import { catalogueConnections, connectionCatalogueIds } from './provider-model-connections';
 import { PROTOCOLS } from './provider-management';

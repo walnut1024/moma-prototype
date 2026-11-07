@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { IconDelete, IconPlus } from '@douyinfe/semi-icons';
 import { Button, Checkbox, Input, Select, Steps, Table, Typography } from '@douyinfe/semi-ui';
 import SupplierCreationDialog from './SupplierCreationDialog';
-import { Choice, Field } from './ModelMetadataForm';
+import { Choice, Field } from './ServiceUI';
 import { Disclosure, Notice, Pagination } from './ModelOperationsUI';
 import { supplierDirectory } from './moma-provider';
 import { libraryRecord } from './model-library';
@@ -154,9 +154,9 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
     {!guided && !initialEndpoint && provider && !provider.isDraft && <Field label="接入渠道"><Choice label="接入渠道" value={endpointId || 'new'} options={[[ 'new', '新建渠道' ], ...supplierChannelResources(state, provider).map(row=>[row.id,supplierChannelName(provider,row)])]} disabled={saving || !ops.can} onChange={chooseChannel}/></Field>}
     {!guided && endpoint && <div className="supplier-onboarding-context">{initialEndpoint && <strong>{supplierChannelName(provider,endpoint)}</strong>}<span>{endpoint.protocol}</span><code>{endpoint.baseUrl}</code></div>}
     {(!endpoint || guidedStep === 0) && <>
-      {guidedStep !== 0 && <div className="supplier-channel-fields">{guided && supplierField}{!guided && <Field label="渠道名称 *"><Input ref={nameInput} aria-label="渠道名称" aria-invalid={Boolean(nameError)} aria-describedby={nameError ? 'supplier-channel-name-error' : undefined} value={value.name} maxLength={60} disabled={saving || !ops.can} onChange={value => set({ name: value })}/>{nameError && <small id="supplier-channel-name-error" role="alert" className="supplier-key-error">{nameError}</small>}</Field>}</div>}
+      {guidedStep !== 0 && <div className="supplier-channel-fields">{guided && supplierField}{!guided && <Field label="渠道名称 *" error={nameError}><Input ref={nameInput} aria-label="渠道名称" value={value.name} maxLength={60} disabled={saving || !ops.can} onChange={value => set({ name: value })}/></Field>}</div>}
       {guidedStep !== 0 && !endpoint && <>
-      {guided && <Field label="渠道名称 *"><Input ref={nameInput} aria-label="渠道名称" value={value.name} maxLength={60} disabled={saving || !ops.can} onChange={value => set({ name: value })}/>{nameError && <small role="alert" className="supplier-key-error">{nameError}</small>}</Field>}
+      {guided && <Field label="渠道名称 *" error={nameError}><Input ref={nameInput} aria-label="渠道名称" value={value.name} maxLength={60} disabled={saving || !ops.can} onChange={value => set({ name: value })}/></Field>}
       <div className="supplier-channel-fields"><Field label="接口类型 *"><Choice label="接口类型" value={value.interfaceType} options={[[ 'unselected', '请选择接口类型' ], ...CHANNEL_INTERFACES.map(item => [item.id, item.label])]} disabled={saving || !ops.can} onChange={interfaceType => value.baseUrl ? ops.proceed(() => set({ interfaceType, baseUrl: '', taskUrls: {}, adapterOptions: {} })) : set({ interfaceType, baseUrl: '', taskUrls: {}, adapterOptions: {} })}/></Field><Field label={value.interfaceType === 'custom' ? '完整任务地址 *' : '服务根地址 *'}><Input aria-label="渠道 API 地址" maxLength={2048} placeholder={value.interfaceType === 'custom' ? 'https://gateway.example.com/完整接口路径' : 'https://gateway.example.com/v1'} value={value.baseUrl} disabled={saving || !ops.can} onChange={value => set({ baseUrl: value })}/></Field></div>
       {suggestedRoot && <Notice>识别到完整任务地址。<Button type="tertiary" theme="borderless" onClick={() => set({ baseUrl: suggestedRoot })}>使用根地址 {suggestedRoot}</Button></Notice>}
       {provider?.sourceType === 'selfHosted' && <Field label="认证方式"><Choice label="认证方式" value={value.authMode} options={[[ 'group', 'API 密钥组' ], [ 'none', '无需认证' ]]} disabled={saving || !ops.can} onChange={authMode => { setRawKey(''); set({ authMode }); }}/></Field>}

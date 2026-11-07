@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Info } from 'lucide-react';
 import { Button, Tooltip } from '@douyinfe/semi-ui';
-import { Choice } from './ModelMetadataForm';
+import { Choice } from './ServiceUI';
 import { providerApiKeyRows } from './provider-management';
 import { providerKeyGroups, providerKeyGroupKeys } from './provider-key-groups';
 import { KeyEditor } from './ProviderApiKeys';

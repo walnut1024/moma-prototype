@@ -1,3 +1,8 @@
+.admin-form-field { min-width: 0; }
+.admin-form-field > .semi-form-slot-main > :is(.semi-input-wrapper, .semi-input-number, .semi-textarea-wrapper, .semi-select) {
+  width: 100%;
+  min-width: 0;
+}
 .semi-services { color: var(--semi-color-text-0); font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 14px; min-width: 0; }
 .ss-workspace { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
 .ss-index, .ss-detail { min-width: 0; background: var(--semi-color-bg-1); border-radius: var(--semi-border-radius-medium); padding: 20px; }

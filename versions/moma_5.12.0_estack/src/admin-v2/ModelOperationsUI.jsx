@@ -6,14 +6,12 @@ import { Children, Fragment, isValidElement, useEffect, useRef, useState } from 
 import { Button, Collapse, Input, Pagination as SemiPagination, Table, TextArea, Toast } from '@douyinfe/semi-ui';
 import { IconDelete, IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import AdminPageHeading from './AdminPageHeading';
-import { CopyId, Modal as ServiceModal, Notice, Status, serviceOperationsUi } from './ServiceUI';
-import { Choice, Field, MultiChoice } from './ModelMetadataForm';
+import { CopyId, Modal as ServiceModal, Notice, Status, serviceOperationsUi, Choice, Field, MultiChoice } from './ServiceUI';
 import { priceItems, moneyDisplay } from './model-management';
 import { PROVIDER_TYPES, PROTOCOLS } from './provider-management';
 import { connectionTestPassed } from './connection-state';
 import { canMutate } from './store';
 import { modelOperationTarget } from './model-operation-history';
-import './model-management.css';
 import './model-operations.css';
 import './semi-onboarding.css';
 
@@ -78,7 +76,7 @@ export function useOperations({ state, transact, conflict, reload, notify = mess
   useEffect(() => {
     const sync = () => { const next = location.hash; if (dirtyRef.current && !bypass.current) { history.replaceState(null, '', accepted.current); setLeave(() => () => { accepted.current = next; location.hash = next; setParams(new URLSearchParams(next.split('?')[1] || '')); }); } else { accepted.current = next; setParams(new URLSearchParams(next.split('?')[1] || '')); } };
     const guard = event => { if (dirtyRef.current) { event.preventDefault(); event.returnValue = ''; } };
-    const click = event => { const target = event.target.closest('.v2-sidebar button, .v2-sidebar [role="tab"], .v2-sidebar a, [data-model-list-breadcrumb], .mm-breadcrumb-link'); if (dirtyRef.current && target && !bypass.current) { event.preventDefault(); event.stopPropagation(); setLeave(() => () => { bypass.current = true; target.click(); bypass.current = false; }); } };
+    const click = event => { const target = event.target.closest('.v2-sidebar button, .v2-sidebar [role="tab"], .v2-sidebar a, [data-model-list-breadcrumb]'); if (dirtyRef.current && target && !bypass.current) { event.preventDefault(); event.stopPropagation(); setLeave(() => () => { bypass.current = true; target.click(); bypass.current = false; }); } };
     addEventListener('hashchange', sync); addEventListener('beforeunload', guard); document.addEventListener('click', click, true);
     return () => { removeEventListener('hashchange', sync); removeEventListener('beforeunload', guard); document.removeEventListener('click', click, true); };
   }, []);

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@douyinfe/semi-ui';
-import { Field, Choice } from './ModelMetadataForm';
+import { Field, Choice } from './ServiceUI';
 import { Disclosure, Modal, Notice, GridTable, Row, Cell, Status } from './ModelOperationsUI';
 import { connectionKeys } from './connection-state';
 import { supplierChannelResources, supplierChannelAssociations } from './supplier-resources';

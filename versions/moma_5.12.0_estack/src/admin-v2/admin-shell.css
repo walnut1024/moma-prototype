@@ -37,6 +37,8 @@
 .admin-breadcrumb { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; overflow-x: auto; }
 .admin-breadcrumb .semi-breadcrumb { flex-wrap: nowrap; }
 .admin-breadcrumb a { color: var(--semi-color-link); }
+.admin-breadcrumb a:hover { text-decoration: underline; }
+.admin-breadcrumb a:focus-visible { outline: 2px solid var(--semi-color-primary); outline-offset: -1px; }
 .admin-breadcrumb .us-breadcrumb-meta { flex: none; }
 .v2-module-tabs { margin-inline: var(--v2-layout-gap); }
 .v2-content .admin-nav-toggle { display: none; }

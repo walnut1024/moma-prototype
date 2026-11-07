@@ -188,7 +188,7 @@ function AdminConsoleV2View({bannerTarget,store}) {
         <Button className="admin-nav-toggle" type="tertiary" theme="borderless" icon={<Menu size={18}/>} aria-label="展开后台导航" aria-haspopup="dialog" aria-expanded={navOpen} onClick={() => setNavOpen(true)}/>
         <div className="admin-breadcrumb">
           <Breadcrumb aria-label="面包屑">{breadcrumbs.map(({ label, href }, index) => (
-            <Breadcrumb.Item key={index} noLink>{href ? <a className="mm-breadcrumb-link" data-model-list-breadcrumb data-admin-breadcrumb href={href}>{label}</a> : <span title={label} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{label}</span>}</Breadcrumb.Item>
+            <Breadcrumb.Item key={index} noLink>{href ? <a data-model-list-breadcrumb data-admin-breadcrumb href={href}>{label}</a> : <span title={label} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{label}</span>}</Breadcrumb.Item>
           ))}</Breadcrumb>
           {detailTenant && <Typography.Text type="tertiary" size="small" className="us-breadcrumb-meta">{detailTenant.id} · {detailTenant.type} · {detailTenant.status}</Typography.Text>}
         </div>

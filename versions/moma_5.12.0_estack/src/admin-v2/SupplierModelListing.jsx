@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button, Card, Checkbox, Typography } from '@douyinfe/semi-ui';
 import { FilterPagination, FilterReset, normalizePageSize } from '../components/FilterControls';
-import { Choice } from './ModelMetadataForm';
+import { Choice } from './ServiceUI';
 import { SearchBox, GridTable, Row, Cell, Status, Price } from './ModelOperationsUI';
 import { MODEL_CATEGORIES, modelCategory } from './model-management';
 import { supplierDirectory, supplierListingRows, selectedCatalogueIds, rememberCatalogueSelection } from './supplier-listing';

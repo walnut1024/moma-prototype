@@ -1,6 +1,6 @@
 import {onboardingApi} from './onboarding-client';
 import { useState } from 'react';
-import { Choice, Field } from './ModelMetadataForm';
+import { Choice, Field } from './ServiceUI';
 import {getMockScenario,SCENARIOS} from "./mock-onboarding-service";
 
 export default function OnboardingScenarioControl({ onConnected, disabled = false }) {

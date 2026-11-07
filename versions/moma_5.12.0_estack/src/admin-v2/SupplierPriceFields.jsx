@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { Button, Checkbox, Input, Select, Typography } from '@douyinfe/semi-ui';
 import { IconDelete, IconPlus } from '@douyinfe/semi-icons';
-import { Choice } from './ModelMetadataForm';
+import { Choice } from './ServiceUI';
 import { GridTable, Row, Cell, Modal, Notice } from './ModelOperationsUI';
 import { tariffOptions, tariffScenarioUnit, tariffDictionaryEntries, appendCommonTariffScenarios, commonTariffNames } from './tariff-dictionary';
 

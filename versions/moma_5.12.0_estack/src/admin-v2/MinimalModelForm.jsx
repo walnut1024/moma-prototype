@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Input } from '@douyinfe/semi-ui';
-import { Choice, Field, MultiChoice } from './ModelMetadataForm';
+import { Choice, Field, MultiChoice } from './ServiceUI';
 import { MODEL_TYPES } from './model-management';
 import { TASK_OPTIONS, INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS } from './model-profile';
 import { Notice } from './ModelOperationsUI';

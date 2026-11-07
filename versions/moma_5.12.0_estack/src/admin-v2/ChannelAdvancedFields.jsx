@@ -1,6 +1,6 @@
 import { Input } from '@douyinfe/semi-ui';
 import { Disclosure } from './ModelOperationsUI';
-import { Choice, Field } from './ModelMetadataForm';
+import { Choice, Field } from './ServiceUI';
 import { MODEL_TYPES } from './model-management';
 
 export default function ChannelAdvancedFields({ value, onChange, disabled = false }) {

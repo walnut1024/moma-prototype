@@ -10,7 +10,7 @@ import { IconPlus } from '@douyinfe/semi-icons';
 import { Button, Input, Select, TextArea, Typography } from '@douyinfe/semi-ui';
 import { Disclosure, GridTable, Row, Cell, Modal, Notice, Status } from './ModelOperationsUI';
 import { supplierChannelResources, supplierChannelAssociations, supplierChannelCode, supplierChannelName, supplierKeyChannels } from './supplier-resources';
-import { Choice, Field } from './ModelMetadataForm';
+import { Choice, Field } from './ServiceUI';
 import { providerApiKeysDraft, providerApiKeyRows, providerApiKeyName, providerApiKeyId, maskProviderApiKey, providerModelConnectivityTest, MODEL_CONNECTIVITY_SCENARIOS } from './provider-management';
 import { catalogueConnections } from './provider-model-connections';
 import { providerCatalogueIds } from './moma-provider';
@@ -32,7 +32,9 @@ export function KeyEditor(props) {
 function CredentialEditor({ provider, group, record, ops, close }) {
   const [value, setValue] = useState(''), [saving, setSaving] = useState(false), [pending, setPending] = useState(null), [accountRpm, setAccountRpm] = useState(record?.apiKey.accountRpm || '');
   const [edited, setEdited] = useState(false), [discarding, setDiscarding] = useState(false);
-  const active = useRef(true), input = useRef(null);
+  const [invalidRpm, setInvalidRpm] = useState(false);
+  const formId = useId();
+  const active = useRef(true), input = useRef(null), rpmInput = useRef(null);
   useEffect(() => { active.current = true; const frame = requestAnimationFrame(() => input.current?.focus()); return () => { active.current = false; cancelAnimationFrame(frame); }; }, []);
   const resume = () => { setDiscarding(false); setPending(null); requestAnimationFrame(() => input.current?.focus()); };
   const cancel = () => { if (saving) return; if (discarding) resume(); else if (edited) setDiscarding(true); else close(); };
@@ -40,27 +42,45 @@ function CredentialEditor({ provider, group, record, ops, close }) {
     const values = record ? { keyId: record.apiKey.id, expectedFingerprint: record.apiKey.fingerprint, apiKey, confirmed } : { apiKeys: [apiKey], groupId: group.id };
     if (await ops.run('provider', { operation: record ? 'editApiKey' : 'addApiKeys', objectId: provider.id, values })) close();
   };
-  return <Modal title={record ? '替换 API 密钥' : '添加 API 密钥'} description={record ? providerApiKeyId(record.apiKey) : `${provider.name} · ${group.name}`} onClose={cancel}>
-      <form hidden={discarding || Boolean(pending)} style={discarding || pending ? { display: 'none' } : undefined} className="supplier-key-form supplier-single-key-form" noValidate onSubmit={async event => {
+  const footer = discarding ? <>
+    <Button theme="light" autoFocus onClick={resume}>继续编辑</Button>
+    <Button type="danger" onClick={() => { setValue(''); setPending(null); ops.dirty(false); close(); }}>放弃本次修改</Button>
+  </> : pending ? <>
+    <Button theme="light" onClick={resume}>返回替换</Button>
+    <Button theme="solid" disabled={!ops.can} onClick={async () => await save(pending, true)}>确认替换</Button>
+  </> : <>
+    <Button theme="light" disabled={saving} onClick={cancel}>取消</Button>
+    <Button theme="solid" form={formId} htmlType="submit" disabled={!ops.can || saving}>
+      {saving ? '保存中…' : record ? '替换' : '保存'}
+    </Button>
+  </>;
+  return <Modal title={record ? '替换 API 密钥' : '添加 API 密钥'} description={record ? providerApiKeyId(record.apiKey) : `${provider.name} · ${group.name}`} onClose={cancel} footer={footer}>
+      <form id={formId} hidden={discarding || Boolean(pending)} style={discarding || pending ? { display: 'none' } : undefined} className="supplier-key-form supplier-single-key-form" noValidate onSubmit={async event => {
         event.preventDefault(); event.stopPropagation(); if (saving || !ops.can) return;
-        setSaving(true); ops.setError('');
+        setSaving(true); ops.setError(''); setInvalidRpm(false);
         try {
           const draft = await providerApiKeysDraft([value]);
           if (!active.current) return;
           const apiKey = draft.apiKeys[0];
-          if (accountRpm !== '' && (!Number.isSafeInteger(Number(accountRpm)) || Number(accountRpm) < 1)) throw new Error('账号 RPM 如填写必须为正整数');
+          if (accountRpm !== '' && (!Number.isSafeInteger(Number(accountRpm)) || Number(accountRpm) < 1)) {
+            setInvalidRpm(true);
+            requestAnimationFrame(() => rpmInput.current?.focus());
+            return;
+          }
           apiKey.accountRpm = accountRpm === '' ? null : Number(accountRpm);
           if (record?.endpoints.length && apiKey.fingerprint !== record.apiKey.fingerprint) setPending(apiKey);
           else await save(apiKey);
         } catch (error) { if (active.current) ops.setError(error.message); }
         finally { if (active.current) setSaving(false); }
       }}>
-        <Field label="API 密钥" hint={record ? '输入新的密钥后替换当前密钥，原值不回显。' : '保存后自动生成 ID，仅展示脱敏值。'}><Input ref={input} aria-label="API 密钥" mode="password" autoComplete="new-password" maxLength={512} placeholder={record ? '请输入新的 API 密钥' : '请输入 API 密钥'} value={value} disabled={!ops.can || saving} onChange={value => { setValue(value); setEdited(true); ops.dirty(true); ops.setError(''); }}/></Field>
-        <Field label="账号请求上限（RPM）"><Input aria-label="密钥账号请求上限" type="number" min={1} value={accountRpm} disabled={!ops.can || saving} placeholder="未配置" onChange={value => { setAccountRpm(value); setEdited(true); ops.dirty(true); }}/></Field>
-        {ops.error && <p role="alert" className="supplier-key-error">{ops.error}</p>}
-        <div className="supplier-key-actions"><Button theme="light" disabled={saving} onClick={cancel}>取消</Button><Button htmlType="submit" disabled={!ops.can || saving}>{saving ? '保存中…' : record ? '替换' : '保存'}</Button></div>
+        <Field label="API 密钥 *" hint={record ? '输入新的密钥后替换当前密钥，原值不回显。' : '保存后自动生成 ID，仅展示脱敏值。'}><Input ref={input} aria-label="API 密钥" mode="password" autoComplete="new-password" maxLength={512} placeholder={record ? '请输入新的 API 密钥' : '请输入 API 密钥'} value={value} disabled={!ops.can || saving} onChange={value => { setValue(value); setEdited(true); ops.dirty(true); ops.setError(''); }}/></Field>
+        <Field label="账号请求上限（RPM）" error={invalidRpm ? '账号 RPM 如填写必须为正整数' : undefined}><Input ref={rpmInput} aria-label="密钥账号请求上限" type="number" min={1} value={accountRpm} disabled={!ops.can || saving} placeholder="未配置" onChange={value => { setAccountRpm(value); setInvalidRpm(false); setEdited(true); ops.dirty(true); }}/></Field>
+        {ops.error && <Notice error>{ops.error}</Notice>}
       </form>
-      {discarding ? <div><Notice>放弃未保存的密钥输入？已保存的密钥保留。</Notice><div className="supplier-key-actions"><Button theme="light" autoFocus onClick={resume}>继续编辑</Button><Button onClick={() => { setValue(''); setPending(null); ops.dirty(false); close(); }}>放弃修改</Button></div></div> : pending && <div><p>此密钥已关联 {record.endpoints.length} 个接入地址。替换后关联模型需要重新验证，请确认后继续。</p>{ops.error && <Notice error>{ops.error}</Notice>}<div className="supplier-key-actions"><Button theme="light" onClick={() => { setPending(null); requestAnimationFrame(() => input.current?.focus()); }}>返回替换</Button><Button disabled={!ops.can} onClick={async () => await save(pending, true)}>确认替换</Button></div></div>}
+      {discarding ? <Notice>放弃未保存的密钥输入？已保存的密钥保留。</Notice> : pending && <>
+        <Typography.Paragraph>此密钥已关联 {record.endpoints.length} 个接入地址。替换后关联模型需要重新验证，请确认后继续。</Typography.Paragraph>
+        {ops.error && <Notice error>{ops.error}</Notice>}
+      </>}
     </Modal>;
 }
 
