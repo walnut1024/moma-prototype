@@ -11,8 +11,6 @@ import {sharedRequests} from './business-facts.mjs';
 import { modelOperationsView } from './mock/model-data.js';
 import { setMockRuntimeState } from './admin-v2/mock-onboarding-service';
 import GettingStarted from './admin-v2/GettingStarted';
-import { toast } from "sonner";
-import { Toaster } from "./components/ui/sonner";
 import { createPortal } from "react-dom";
 import { Badge, Banner, Breadcrumb, Button, ConfigProvider, Select, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './admin-v2/AdminOverlay';
@@ -45,7 +43,6 @@ import BusinessOperationsPage from "./admin-v2/BusinessOperationsPages";
 import AdminPageBoundary from "./admin-v2/AdminPageBoundary";
 import AdminAccounts from "./admin-v2/AdminAccounts";
 import { ADMIN_ROLE_LABELS } from "./admin-v2/admin-accounts";
-import "./admin-v2/admin-design.css";
 import { AdminUIContext } from "./components/admin-ui-context";
 import { serviceOperationsUi } from "./admin-v2/ServiceUI";
 
@@ -134,7 +131,6 @@ function AdminConsoleV2View({bannerTarget,store}) {
     sync(); window.addEventListener('hashchange', handleHashChange);
     return () => { clearTimeout(pendingHash); window.removeEventListener('hashchange', handleHashChange); };
   }, [state.currentRole]);
-  useEffect(() => () => toast.dismiss(), []);
   const switchWorkspace = nextWorkspace => {
     if (!allowedWorkspaces.includes(nextWorkspace) || nextWorkspace === currentWorkspace) return;
     if (canVisit && pageWorkspace(active)) lastVisits.current[currentWorkspace] = location.hash;
@@ -162,7 +158,6 @@ function AdminConsoleV2View({bannerTarget,store}) {
   const hasAccount = state.admins.some(account => account.id === state.adminSession?.accountId && account.status === '已启用');
   const showPage = hasAccount && canVisit;
   const gatewaySettings = gatewaySettingsPages.includes(active);
-  const legacyPage = page.groupId === 'analytics' && !['usage-analysis', 'user-analysis', 'customer-usage-detail'].includes(active);
   const menu = <nav aria-label="后台导航">{sections.filter(group => group.workspace === currentWorkspace || (group.id === 'platform' && state.currentRole === '平台管理员')).map(group => (
       <section key={group.id} aria-label={group.title}>
         {!group.direct && <Typography.Text type="tertiary" size="small">{group.title}</Typography.Text>}
@@ -179,7 +174,6 @@ function AdminConsoleV2View({bannerTarget,store}) {
   useEffect(() => { const media = matchMedia('(min-width: 901px)'); const close = () => { if (media.matches) setNavOpen(false); }; media.addEventListener('change', close); return () => media.removeEventListener('change', close); }, []);
   const alertCount = state.alerts.filter(item => !["已恢复", "已转事件"].includes(item.status)).length;
   return <AdminUIContext.Provider value={true}><div className="admin-v2">
-    {createPortal(<Toaster position="top-right" offset={{ top: 64, right: 20 }} duration={3000} richColors closeButton containerAriaLabel="操作反馈" toastOptions={{ closeButtonAriaLabel: "关闭提示", classNames: { toast: "cn-toast admin-ui-toast" } }}/>, document.body)}
     {roleTarget && createPortal(<div className="admin-banner-field">
       <Typography.Text id="admin-account-picker-label" type="secondary" size="small">后台账号</Typography.Text>
       <Select aria-labelledby="admin-account-picker-label" size="small" position="bottomRight" value={state.adminSession?.accountId || ''} placeholder="选择 mock 账号" onSelect={enterAdmin}
@@ -204,12 +198,11 @@ function AdminConsoleV2View({bannerTarget,store}) {
           {activeModule.children.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={label}/>)}
         </Tabs>
       )}
-      <main data-admin-page={active} className={showPage && legacyPage ? 'admin-legacy' : undefined}>
+      <main data-admin-page={active}>
         <AdminPageBoundary key={active}>
           {!hasAccount ? <Banner title="选择后台账号" description="请在顶部选择后台 mock 账号进入。用户面登录独立保留。" closeIcon={null}/> : !canVisit ? (
             <Banner type="warning" title="无访问权限" description={<Button onClick={() => navigate(WORKSPACE_HOME[allowedWorkspaces[0]] || 'dashboard')}>返回首页</Button>} closeIcon={null}/>
           ) : <>
-            {['supply-analysis', 'business-analysis'].includes(active) && <h1 className="sr-only">{page.label}</h1>}
             {active === "getting-started" ? <GettingStarted guideId={detailParams.get('guide')}/>
             : active === "dashboard" ? <OperationsOverview state={factState}/>
             : ["usage-analysis", "user-analysis", "supply-analysis", "business-analysis", "call-analysis"].includes(active) ? <AnalyticsPages pageId={active} state={factState}/>

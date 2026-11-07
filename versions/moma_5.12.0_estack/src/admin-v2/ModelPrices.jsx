@@ -1,3 +1,4 @@
+import AdminPageHeading from './AdminPageHeading';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useState } from 'react';
@@ -37,7 +38,7 @@ export default function ModelPrices(props) {
   const versions=service?state.modelSalePrices.filter(row=>row.modelId===model.id && (service.providerId?row.scope==='provider' && row.providerId===service.providerId:row.scope==='model')).slice().sort((a,b)=>b.version-a.version):[];
   const merged=render=>(_,row)=>({children:render(row),props:{rowSpan:row.serviceSpan}});
   return <div className="semi-services sp-workspace">
-    <div className="ss-heading"><Typography.Title heading={4}>{service?`${model.name} · ${service.supplierName} · 售价`:'模型售价'}</Typography.Title><div className="sp-actions">{back && <Button onClick={()=>ops.proceed(()=>{location.hash=back;})}>返回来源页面</Button>}<Button onClick={()=>go({returnTo:location.hash,tab:'scenario'},{base:'tariff-dictionary',reset:true})}>计量配置</Button></div></div>
+    <AdminPageHeading className="ss-heading" title={service?`${model.name} · ${service.supplierName} · 售价`:'模型售价'}><div className="sp-actions">{back && <Button onClick={()=>ops.proceed(()=>{location.hash=back;})}>返回来源页面</Button>}<Button onClick={()=>go({returnTo:location.hash,tab:'scenario'},{base:'tariff-dictionary',reset:true})}>计量配置</Button></div></AdminPageHeading>
     {params.has('service') ? service ? <>
       <Descriptions data={[{key:'对外调用标识',value:service.callId || '待配置'},{key:'技术状态',value:<AdminStatus value={model.callsEnabled?'已启用':'已停用'}/>},{key:'销售状态',value:<AdminStatus value={salesStatus(state,model,service.providerId)}/>},{key:'售价版本',value:service.price?`v${service.price.version}`:'待配置'}]}/>
       {servicePurpose(model,service.providerId)==='internal' && <Notice>此服务用于内部使用，无售价记录是合法状态。服务用途在新建模型服务时确定。</Notice>}

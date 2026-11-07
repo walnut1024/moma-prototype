@@ -1,4 +1,5 @@
-import { Button, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
+import AdminPageHeading from './AdminPageHeading';
+import { Button, Space, Tabs, Toast } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { TARIFF_KINDS } from './tariff-dictionary';
 import './semi-materials.css';
@@ -11,7 +12,7 @@ export const materialOperationsUi = {
 
 export default function MaterialsHeader({ active, ops, children }) {
   return <>
-    <div className="materials-heading"><Typography.Title heading={4}>模型资料</Typography.Title><Space wrap>{children}</Space></div>
+    <AdminPageHeading className="materials-heading" title="模型资料"><Space wrap>{children}</Space></AdminPageHeading>
     <Tabs type="line" activeKey={active} onChange={id => ops.go(id === 'model-templates' ? {} : { tab: id }, { base: id === 'model-templates' ? id : 'tariff-dictionary', reset: id === 'model-templates' || active === 'model-templates' })} aria-label="资料分类">
       {materialPages.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={label}/>)}
     </Tabs>

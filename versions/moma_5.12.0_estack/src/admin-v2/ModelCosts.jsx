@@ -1,3 +1,4 @@
+import AdminPageHeading from './AdminPageHeading';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { Button, Descriptions, Typography } from '@douyinfe/semi-ui';
@@ -18,7 +19,7 @@ export default function ModelCosts(props) {
   const rows=filterPricingRecords(records,params).filter(row=>(!params.has('model') || state.modelSupplies.some(supply=>supply.modelId===params.get('model') && supply.endpointId===row.association.endpointId && (supply.catalogueModelId || supply.upstreamModelId)===row.association.modelId)) && [row.modelName,row.association.modelId,row.provider.name,row.association.upstreamModelId,supplierChannelName(row.provider,row.association.endpoint)].join(' ').toLowerCase().includes(query));
   const back=operationsReturn(params.get('returnTo'));
   return <div className="semi-services sp-workspace">
-    <div className="ss-heading"><Typography.Title heading={4}>{selected?`${selected.modelName} · 模型成本`:'模型成本'}</Typography.Title><div className="sp-actions">{back && <Button onClick={()=>ops.proceed(()=>{location.hash=back;})}>返回来源页面</Button>}<Button onClick={()=>go({returnTo:location.hash,tab:'scenario'},{base:'tariff-dictionary',reset:true})}>计量配置</Button></div></div>
+    <AdminPageHeading className="ss-heading" title={selected?`${selected.modelName} · 模型成本`:'模型成本'}><div className="sp-actions">{back && <Button onClick={()=>ops.proceed(()=>{location.hash=back;})}>返回来源页面</Button>}<Button onClick={()=>go({returnTo:location.hash,tab:'scenario'},{base:'tariff-dictionary',reset:true})}>计量配置</Button></div></AdminPageHeading>
     {params.has('association') ? selected ? <>
       <Descriptions data={[{key:'服务商',value:selected.provider.name},{key:'渠道',value:supplierChannelName(selected.provider,selected.association.endpoint)},{key:'上游模型标识',value:selected.association.upstreamModelId || '—'},{key:'成本状态',value:selected.status}]}/>
       <div className="ss-section-bar"><Typography.Title heading={5}>当前成本</Typography.Title><Button disabled={!ops.can} onClick={()=>go({edit:'1'},{preserveScroll:true})}>编辑成本</Button></div>

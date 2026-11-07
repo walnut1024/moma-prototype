@@ -4,7 +4,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { AdminUIContext } from './admin-ui-context';
 import * as echarts from 'echarts/core';
 import { LineChart, BarChart, PieChart, HeatmapChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, LegendComponent, VisualMapComponent } from 'echarts/components';
+import { GridComponent, TooltipComponent, LegendComponent, VisualMapComponent, MarkLineComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 import { SlidersHorizontal } from 'lucide-react';
 import { Button } from './ui/button';
@@ -14,12 +14,12 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { adminChartColor, chartPalette, chartColor, chartAxis, chartNumber, defaultChartSeries } from './chart-style.mjs';
 import './analytics-charts.css';
 
-echarts.use([LineChart, BarChart, PieChart, HeatmapChart, GridComponent, TooltipComponent, LegendComponent, VisualMapComponent, SVGRenderer]);
+echarts.use([LineChart, BarChart, PieChart, HeatmapChart, GridComponent, TooltipComponent, LegendComponent, VisualMapComponent, MarkLineComponent, SVGRenderer]);
 const grid = '#e4eaf3';
 
 function chartTheme(admin) {
   if (!admin) return { muted: '#64748b', primary: chartPalette[0], border: grid, text: '#263247',
-    surface: '#fff', inactive: '#a1aab8', axis: '#dce4ee', fill: '#edf1f8', barText: '#34425b' };
+    surface: '#fff', inactive: '#a1aab8', axis: '#dce4ee', fill: '#edf1f8', barText: '#34425b', danger: '#c43228', success: '#198754', tint: '#c6d7ff' };
 
   const style = getComputedStyle(document.body);
   const token = name => style.getPropertyValue(`--semi-color-${name}`).trim();
@@ -27,6 +27,7 @@ function chartTheme(admin) {
     fontFamily: style.fontFamily, muted: token('text-2'), primary: token('primary'),
     border: token('border'), text: token('text-0'), surface: token('bg-0'),
     inactive: token('text-3'), axis: token('border'), fill: token('fill-0'), barText: token('text-1'),
+    danger: token('danger'), success: token('success'), tint: token('primary-light-active'),
   };
 }
 const safe = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
@@ -134,13 +135,15 @@ export function TimeSeriesChart({ labels, series, unit = '', label, axisUnit, ti
 }
 
 export function HorizontalBarChart({ rows, unit = '', label, height, onChoose }) {
+  const theme = chartTheme(useContext(AdminUIContext));
   const option = {
+    textStyle: { fontFamily: theme.fontFamily },
     animation: false,
     grid: { top: 12, left: 8, right: 88, bottom: 28, containLabel: true },
-    tooltip: { trigger: 'axis', confine: true, backgroundColor: '#fff', borderColor: grid, textStyle: { color: '#263247', fontSize: 12 }, axisPointer: { type: 'shadow' }, formatter: items => `${safe(rows[items[0]?.dataIndex]?.name)}<br/>${safe(label)}：<b>${chartNumber(rows[items[0]?.dataIndex]?.value)} ${safe(unit)}</b>` },
-    xAxis: { type: 'value', min: unit === '%' ? 0 : undefined, max: unit === '%' ? 100 : undefined, name: unit, nameTextStyle: { color: '#5d6b82', fontSize: 12 }, axisLabel: { color: '#5d6b82', fontSize: 12, formatter: chartNumber }, splitLine: { lineStyle: { color: grid, type: 'dashed' } } },
-    yAxis: { type: 'category', inverse: true, data: rows.map(row=>row.name), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#5d6b82', fontSize: 12, width: 150, overflow: 'truncate' } },
-    series: [{ type: 'bar', barMaxWidth: 18, data: rows.map(row=>({ value: row.value, itemStyle: { color: row.value < 0 ? '#c43228' : '#315fe8' }, label: { position: row.value < 0 ? 'left' : 'right' } })), label: { show: true, distance: 6, color: '#263247', fontSize: 12, formatter: item=>unit === '%' ? Number(item.value).toFixed(2)+'%' : chartNumber(item.value) } }],
+    tooltip: { trigger: 'axis', confine: true, backgroundColor: theme.surface, borderColor: theme.border, textStyle: { color: theme.text, fontSize: 12 }, axisPointer: { type: 'shadow' }, formatter: items => `${safe(rows[items[0]?.dataIndex]?.name)}<br/>${safe(label)}：<b>${chartNumber(rows[items[0]?.dataIndex]?.value)} ${safe(unit)}</b>` },
+    xAxis: { type: 'value', min: unit === '%' ? 0 : undefined, max: unit === '%' ? 100 : undefined, name: unit, nameTextStyle: { color: theme.muted, fontSize: 12 }, axisLabel: { color: theme.muted, fontSize: 12, formatter: chartNumber }, splitLine: { lineStyle: { color: theme.border, type: 'dashed' } } },
+    yAxis: { type: 'category', inverse: true, data: rows.map(row=>row.name), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: theme.muted, fontSize: 12, width: 150, overflow: 'truncate' } },
+    series: [{ type: 'bar', barMaxWidth: 18, data: rows.map(row=>({ value: row.value, itemStyle: { color: row.value < 0 ? theme.danger : theme.primary }, label: { position: row.value < 0 ? 'left' : 'right' } })), label: { show: true, distance: 6, color: theme.text, fontSize: 12, formatter: item=>unit === '%' ? Number(item.value).toFixed(2)+'%' : chartNumber(item.value) } }],
   };
   return <Chart option={option} height={height || Math.max(220,rows.length*32+60)} label={`${label}（横向条形图）：${rows.map(row=>`${row.name} ${chartNumber(row.value)} ${unit}`).join('；')}`} onClick={event=>{if(rows[event.dataIndex])onChoose?.(rows[event.dataIndex].id);}}/>;
 }
@@ -201,30 +204,34 @@ export function DonutChart({ rows, unit = '', label, height = 200, centerValue, 
 }
 
 export function CoverageHeatmap({ labels, rows, label, onChoose }) {
+  const theme = chartTheme(useContext(AdminUIContext));
   const max=Math.max(1,...rows.flatMap(row=>row.values.filter(Number.isFinite)));
-  const data=rows.flatMap((row,y)=>row.values.map((value,x)=>({value:[x,y,value ?? -1],label:{color:value>max*.94?'#fff':'#000'},...(value==null?{itemStyle:{color:'#e4eaf3'}}:{})})));
+  const data=rows.flatMap((row,y)=>row.values.map((value,x)=>({value:[x,y,value ?? -1],label:{color:value>max*.94?'#fff':theme.text},...(value==null?{itemStyle:{color:theme.border}}:{})})));
   const option={
+    textStyle: { fontFamily: theme.fontFamily },
     animation:false,
     grid:{top:12,left:8,right:16,bottom:64,containLabel:true},
-    xAxis:{type:'category',data:labels,splitArea:{show:false},axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#5d6b82',fontSize:12,interval:'auto'}},
-    yAxis:{type:'category',inverse:true,data:rows.map(row=>row.name),axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#5d6b82',fontSize:12,width:150,overflow:'truncate'}},
-    visualMap:{type:'continuous',min:0,max,dimension:2,orient:'horizontal',left:'center',bottom:0,itemWidth:10,itemHeight:120,text:[`${chartNumber(max)} 个客户`,'0'],textStyle:{color:'#5d6b82',fontSize:12},inRange:{color:['#f3f5f8','#c6d7ff','#315fe8']},outOfRange:{color:'#e4eaf3'}},
-    tooltip:{trigger:'item',confine:true,backgroundColor:'#fff',borderColor:grid,textStyle:{color:'#263247',fontSize:12},formatter:item=>{const [x,y,value]=item.value;return `${safe(rows[y].name)} · ${safe(labels[x])} · 北京时间<br/>去重客户：<b>${value<0?'待确认':chartNumber(value)+' 个'}</b>`;}},
-    series:[{type:'heatmap',data,itemStyle:{borderWidth:2,borderColor:'#fff'},label:{show:labels.length<=10,color:'#263247',fontSize:12,formatter:item=>item.value[2]<0?'—':chartNumber(item.value[2])},emphasis:{itemStyle:{borderColor:'#263247',borderWidth:2}}}],
+    xAxis:{type:'category',data:labels,splitArea:{show:false},axisLine:{show:false},axisTick:{show:false},axisLabel:{color:theme.muted,fontSize:12,interval:'auto'}},
+    yAxis:{type:'category',inverse:true,data:rows.map(row=>row.name),axisLine:{show:false},axisTick:{show:false},axisLabel:{color:theme.muted,fontSize:12,width:150,overflow:'truncate'}},
+    visualMap:{type:'continuous',min:0,max,dimension:2,orient:'horizontal',left:'center',bottom:0,itemWidth:10,itemHeight:120,text:[`${chartNumber(max)} 个客户`,'0'],textStyle:{color:theme.muted,fontSize:12},inRange:{color:[theme.fill,theme.tint,theme.primary]},outOfRange:{color:theme.border}},
+    tooltip:{trigger:'item',confine:true,backgroundColor:theme.surface,borderColor:theme.border,textStyle:{color:theme.text,fontSize:12},formatter:item=>{const [x,y,value]=item.value;return `${safe(rows[y].name)} · ${safe(labels[x])} · 北京时间<br/>去重客户：<b>${value<0?'待确认':chartNumber(value)+' 个'}</b>`;}},
+    series:[{type:'heatmap',data,itemStyle:{borderWidth:2,borderColor:theme.surface},label:{show:labels.length<=10,color:theme.text,fontSize:12,formatter:item=>item.value[2]<0?'—':chartNumber(item.value[2])},emphasis:{itemStyle:{borderColor:theme.text,borderWidth:2}}}],
   };
   return <Chart option={option} height={Math.max(220,rows.length*36+100)} label={`${label}（热力图）：${rows.map(row=>`${row.name}：${labels.map((day,index)=>`${day} ${row.values[index]==null?'待确认':row.values[index]+' 个客户'}`).join('，')}`).join('；')}`} onClick={event=>{const [x,y]=event.value || [];if(rows[y])onChoose?.(rows[y].id,x);}}/>;
 }
 
 export function MarginWaterfall({ data, label }) {
+  const theme = chartTheme(useContext(AdminUIContext));
   const {steps,currency}=data;
   const amount=value=>Number(value).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:6});
   const option={
+    textStyle: { fontFamily: theme.fontFamily },
     animation:false,
     grid:{top:42,left:8,right:30,bottom:12,containLabel:true},
-    xAxis:{type:'category',data:steps.map(row=>row.name),axisLine:{lineStyle:{color:grid}},axisTick:{show:false},axisLabel:{color:'#5d6b82',fontSize:12}},
-    yAxis:{type:'value',boundaryGap:['20%','20%'],name:currency,nameTextStyle:{color:'#5d6b82',fontSize:12},axisLabel:{color:'#5d6b82',fontSize:12,formatter:chartNumber},splitLine:{lineStyle:{color:grid,type:'dashed'}}},
-    tooltip:{trigger:'axis',confine:true,backgroundColor:'#fff',borderColor:grid,textStyle:{color:'#263247',fontSize:12},formatter:items=>{const row=steps[items[0]?.dataIndex];return row?`${safe(row.name)}：<b>${amount(row.amount)} ${safe(currency)}</b>`:'';}},
-    series:[{type:'bar',stack:'margin',stackStrategy:'all',silent:true,itemStyle:{color:'transparent'},emphasis:{itemStyle:{color:'transparent'}},data:steps.map(row=>row.base)},{type:'bar',stack:'margin',stackStrategy:'all',barMaxWidth:88,markLine:{silent:true,symbol:'none',label:{show:false},lineStyle:{color:'#8a97ac',type:'dashed'},data:[[{coord:[0,steps[0].amount]},{coord:[1,steps[0].amount]}],[{coord:[1,steps[2].amount]},{coord:[2,steps[2].amount]}]]},data:steps.map((row,index)=>({value:row.value,itemStyle:{color:index===1 || row.amount<0?'#c43228':index===0?'#315fe8':'#198754'},label:{position:row.amount<0&&index!==1?'bottom':'top'}})),label:{show:true,color:'#263247',fontSize:12,formatter:item=>amount(steps[item.dataIndex].amount)}}],
+    xAxis:{type:'category',data:steps.map(row=>row.name),axisLine:{lineStyle:{color:theme.border}},axisTick:{show:false},axisLabel:{color:theme.muted,fontSize:12}},
+    yAxis:{type:'value',boundaryGap:['20%','20%'],name:currency,nameTextStyle:{color:theme.muted,fontSize:12},axisLabel:{color:theme.muted,fontSize:12,formatter:chartNumber},splitLine:{lineStyle:{color:theme.border,type:'dashed'}}},
+    tooltip:{trigger:'axis',confine:true,backgroundColor:theme.surface,borderColor:theme.border,textStyle:{color:theme.text,fontSize:12},formatter:items=>{const row=steps[items[0]?.dataIndex];return row?`${safe(row.name)}：<b>${amount(row.amount)} ${safe(currency)}</b>`:'';}},
+    series:[{type:'bar',stack:'margin',stackStrategy:'all',silent:true,itemStyle:{color:'transparent'},emphasis:{itemStyle:{color:'transparent'}},data:steps.map(row=>row.base)},{type:'bar',stack:'margin',stackStrategy:'all',barMaxWidth:88,markLine:{silent:true,symbol:'none',label:{show:false},lineStyle:{color:theme.muted,type:'dashed'},data:[[{coord:[0,steps[0].amount]},{coord:[1,steps[0].amount]}],[{coord:[1,steps[2].amount]},{coord:[2,steps[2].amount]}]]},data:steps.map((row,index)=>({value:row.value,itemStyle:{color:index===1 || row.amount<0?theme.danger:index===0?theme.primary:theme.success},label:{position:row.amount<0&&index!==1?'bottom':'top'}})),label:{show:true,color:theme.text,fontSize:12,formatter:item=>amount(steps[item.dataIndex].amount)}}],
   };
   return <Chart option={option} height={320} label={`${label}（瀑布图）：${steps.map(row=>`${row.name} ${amount(row.amount)} ${currency}`).join('；')}`}/>;
 }

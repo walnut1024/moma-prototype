@@ -1,27 +1,24 @@
-import { useMemo, useState } from 'react';
-import { ArrowLeft, ArrowUpDown, Download, Expand, Info, Search } from 'lucide-react';
-import { toast } from 'sonner';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem } from '../components/ui/select';
-import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '../components/ui/table';
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../components/ui/tooltip';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Banner, Button, Card, Empty, Input, RadioGroup, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import { IconArrowLeft, IconDownload, IconMaximize, IconSearch, IconChevronDown, IconChevronUp, IconChevronUpDown } from '@douyinfe/semi-icons';
+import AdminPageHeading from './AdminPageHeading';
+import { AdminModal, AdminSideSheet } from './AdminOverlay';
+import Table from './AdminTable';
+import { AnalysisHelp } from './AnalysisMetric';
+import { Choice } from './ServiceUI';
 import { TimeSeriesChart, HorizontalBarChart, DonutChart, CoverageHeatmap, MarginWaterfall } from '../components/AnalyticsCharts';
-import { chartPalette } from '../components/chart-style.mjs';
+import { adminChartColor, chartPalette } from '../components/chart-style.mjs';
 import { FilterPresets, FilterReset, FilterToolbar, PAGE_SIZES } from '../components/FilterControls';
 import SavedFilterViews from '../components/SavedFilterViews';
-import { DateRange } from './AnalyticsFilters';
+import { SemiDateRange as DateRange } from './SemiAnalyticsFilters';
 import UsageSupplyPicker from './UsageSupplyPicker';
 import { usageFilterOptions, usagePreset, usagePresets, operationsPeriod } from './usage-analysis';
 import { analysisFilters, operationFacts, operationBuckets, supplyGroups, supplyChannelGroups, supplyShareSlices, supplyCoverageRows, callMarginWaterfall, businessFacts, businessBuckets, businessGroups, businessCurrencyRows, procurementGroups, procurementFacts, unresolvedSupply, unlinkedUsage, analysisCsv } from './operations-analysis';
 import { getMockOperationalRequests } from './mock-onboarding-service';
 import { routingServices } from './service-routing';
-import './usage-analysis.css';
 import './operations-data.css';
 
+const { Title, Text, Paragraph } = Typography;
 const number = value => value == null ? '—' : Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
 const money = value => value == null ? '—' : Number(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
 const percent = value => value == null ? '—' : `${number(value)}%`;
@@ -33,38 +30,139 @@ const filter = (key,label,labelKey) => ({key,label,labelKey});
 const countColumn = (key,label) => ({key,label,numeric:true});
 const amountColumn = (key,label) => ({key,label,numeric:true,render:row=>money(row[key])});
 function Pick({ label, value, items, onChange, all = true }) {
-  return <Select value={value || '__all__'} onValueChange={value => onChange(value === '__all__' ? '' : value)}><SelectTrigger aria-label={label}><SelectValue placeholder={label}/></SelectTrigger><SelectContent><SelectGroup>{all && <SelectItem value="__all__">全部{label}</SelectItem>}{items.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectGroup></SelectContent></Select>;
+  const options = [...(all ? [['__all__', '全部' + label]] : []), ...items.map(item => [item.id, item.name])];
+  return <Choice label={label} value={value || '__all__'} options={options}
+    onSelect={value => onChange(value === '__all__' ? '' : value)}/>;
 }
-function Help({ title, children }) {
-  return <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" aria-label={`${title}统计说明`}><Info size={14}/></Button></TooltipTrigger><TooltipContent>{children}</TooltipContent></Tooltip>;
-}
+
 function Plot({ title, labels = [], series = [], bars, slices, matrix, unit = '', note, onDetails, onChoose, controls }) {
-  const [expanded,setExpanded]=useState(false),[choice,setChoice]=useState(null);
-  const signature=series.map(item=>item.label).join('\0');
-  const names=choice?.signature===signature?choice.names:series.slice(0,5).map(item=>item.label);
-  const choose=names=>setChoice({signature,names});
-  const draw=large=>{
-    if(slices){
-      const total=slices.reduce((sum,row)=>sum+row.value,0);
-      return total>0?<div className="od-share"><DonutChart rows={slices.map((row,index)=>({...row,label:row.name,color:row.id===null?'#8a97ac':chartPalette[index]}))} unit={unit} label={title} height={280} centerValue={number(total>=1e8?total/1e8:total>=1e4?total/1e4:total)} centerLabel={`已确认${total>=1e8?'亿 ':total>=1e4?'万 ':''}${unit}`} showData={false} onChoose={id=>{setExpanded(false);onChoose(id);}}/><ul className="od-share-key">{slices.map((row,index)=><li key={row.id ?? '__other__'}><button type="button" onClick={()=>{setExpanded(false);onChoose(row.id);}}><span className="od-swatch" style={{background:row.id===null?'#8a97ac':chartPalette[index]}}/><span className="od-share-name">{row.name}</span><strong>{percent(row.share)}</strong><span>{number(row.value)} {unit}</span></button></li>)}</ul></div>:<p className="od-empty" role="status">所选条件下暂无已确认的{unit}用量</p>;
+  const [expanded, setExpanded] = useState(false);
+  const [choice, setChoice] = useState(null);
+  const signature = series.map(item => item.label).join('\0');
+  const first = series.slice(0, 5).map(item => item.label);
+  const names = choice?.signature === signature ? choice.names : first;
+  const choose = names => setChoice({ signature, names });
+  const drill = (...args) => { setExpanded(false); onChoose?.(...args); };
+  const draw = large => {
+    if (slices) {
+      const total = slices.reduce((sum, row) => sum + row.value, 0);
+      if (!total) return <Empty className="od-empty" description={`所选条件下暂无已确认的${unit}用量`}/>;
+      const rows = slices.map((row, index) => ({ ...row, label: row.name, color: row.id === null ? '#8a97ac' : chartPalette[index] }));
+      return <div className="od-share">
+        <DonutChart rows={rows} unit={unit} label={title} height={280}
+          centerValue={number(total >= 1e8 ? total / 1e8 : total >= 1e4 ? total / 1e4 : total)}
+          centerLabel={`已确认${total >= 1e8 ? '亿 ' : total >= 1e4 ? '万 ' : ''}${unit}`} showData={false} onChoose={drill}/>
+        <Table pagination={false} rowKey={row => row.id ?? '__other__'} dataSource={rows} scroll={{ x: 'max(100%, 360px)' }}
+          columns={[
+            { title: '服务商', dataIndex: 'name', render: (name, row) => <Space>
+              <span className="od-swatch" style={{ background: adminChartColor(row.color) }} aria-hidden="true"/>
+              <Button size="small" theme="borderless" onClick={() => drill(row.id)}>{name}</Button>
+            </Space> },
+            { title: '占比', dataIndex: 'share', align: 'right', render: percent },
+            { title: '已确认用量', dataIndex: 'value', align: 'right', render: value => `${number(value)} ${unit}` },
+          ]}/>
+      </div>;
     }
-    if(matrix)return matrix.length?<CoverageHeatmap labels={labels} rows={large?matrix:matrix.slice(0,10)} label={title} onChoose={(id,index)=>{setExpanded(false);onChoose(id,index);}}/>:<p className="od-empty" role="status">所选条件下暂无客户覆盖数据</p>;
-    if(bars)return bars.length?<HorizontalBarChart rows={large?bars:bars.slice(0,10)} unit={unit} label={title} height={Math.max(230,Math.min(large?bars.length:10,bars.length)*32+60)} onChoose={id=>{setExpanded(false);onChoose?.(id);}}/>:<p className="od-empty" role="status">所选条件下暂无可核对数据</p>;
-    return labels.length&&series.some(item=>item.values.some(Number.isFinite))?<TimeSeriesChart compact labels={labels} series={series.map(item=>({...item,showPoints:true}))} selectedNames={names} onSelectNames={choose} domain={[0,undefined]} unit={unit} label={title} height={large?440:280} showData={false}/>:<p className="od-empty" role="status">所选条件下暂无可核对数据</p>;
+    if (matrix) return matrix.length
+      ? <CoverageHeatmap labels={labels} rows={large ? matrix : matrix.slice(0, 10)} label={title} onChoose={drill}/>
+      : <Empty className="od-empty" description="所选条件下暂无客户覆盖数据"/>;
+    if (bars) return bars.length
+      ? <HorizontalBarChart rows={large ? bars : bars.slice(0, 10)} unit={unit} label={title}
+          height={Math.max(230, Math.min(large ? bars.length : 10, bars.length) * 32 + 60)} onChoose={drill}/>
+      : <Empty className="od-empty" description="所选条件下暂无可核对数据"/>;
+    return labels.length && series.some(item => item.values.some(Number.isFinite))
+      ? <TimeSeriesChart compact labels={labels} series={series.map(item => ({ ...item, showPoints: true }))}
+          selectedNames={names} onSelectNames={choose} domain={[0, undefined]} unit={unit} label={title}
+          height={large ? 440 : 280} showData={false}/>
+      : <Empty className="od-empty" description="所选条件下暂无可核对数据"/>;
   };
-  const ranked=bars || matrix;
-  return <><Card className="ua-panel od-plot"><CardHeader><div className="od-title"><CardTitle>{title}</CardTitle>{note&&<Help title={title}>{note}</Help>}</div><div className="od-chart-actions">{ranked?.length>10&&<span className="od-range">前10 / 共{ranked.length}</span>}{series.length>5&&<Button variant="ghost" onClick={()=>choose(names.length===series.length?series.slice(0,5).map(item=>item.label):series.map(item=>item.label))}>{names.length===series.length?'显示前五':'显示全部曲线'}</Button>}<Button variant="link" aria-label={`查看${title}明细`} onClick={onDetails}>查看明细</Button><Button variant="ghost" size="icon" aria-label={`放大${title}`} onClick={()=>setExpanded(true)}><Expand size={15}/></Button></div></CardHeader><CardContent>{controls&&<div className="od-plot-controls">{controls}</div>}{draw(false)}</CardContent></Card><Dialog open={expanded} onOpenChange={setExpanded}><DialogContent className="od-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{note || '当前时间与筛选范围'}</DialogDescription></DialogHeader>{draw(true)}</DialogContent></Dialog></>;
+  const ranked = bars || matrix;
+  return <>
+    <Card title={<Space>
+      <Title heading={5} component="h2">{title}</Title>
+      {note && <AnalysisHelp label={title + '统计'}>{note}</AnalysisHelp>}
+    </Space>} headerExtraContent={<Space wrap>
+      {ranked?.length > 10 && <Text size="small" type="tertiary">前 10 / 共 {ranked.length}</Text>}
+      {series.length > 5 && <Button size="small" theme="borderless" onClick={() => choose(
+        names.length === series.length ? first : series.map(item => item.label)
+      )}>{names.length === series.length ? '显示前五' : '显示全部曲线'}</Button>}
+      <Button size="small" theme="borderless" aria-label={`查看${title}明细`} onClick={onDetails}>查看明细</Button>
+      <Button size="small" theme="borderless" type="tertiary" aria-label={`放大${title}`}
+        icon={<IconMaximize aria-hidden="true"/>} onClick={() => setExpanded(true)}/>
+    </Space>}>
+      {controls && <div className="od-plot-controls">{controls}</div>}
+      {draw(false)}
+    </Card>
+    {expanded && <AdminModal visible title={title} width="min(1040px, calc(100vw - 32px))"
+      onCancel={() => setExpanded(false)} footer={<Button onClick={() => setExpanded(false)}>关闭</Button>}>
+      <Paragraph type="secondary">{note || '当前时间与筛选范围'}</Paragraph>
+      {draw(true)}
+    </AdminModal>}
+  </>;
 }
+
 function DataGrid({ title, columns, rows, actions = [], filters = [] }) {
-  const [search,setSearch]=useState(''),[page,setPage]=useState(0),[size,setSize]=useState(20),[sort,setSort]=useState({key:'',direction:-1}),[criteria,setCriteria]=useState({});
-  const filtered=rows.filter(row=>filters.every(item=>!criteria[item.key] || String(row[item.key] ?? '')===criteria[item.key])&&columns.some(column=>String(column.export?column.export(row):row[column.key] ?? '').toLowerCase().includes(search.trim().toLowerCase())));
-  if(sort.key)filtered.sort((a,b)=>a[sort.key]==null?b[sort.key]==null?0:1:b[sort.key]==null?-1:sort.direction*(typeof a[sort.key]==='number'?a[sort.key]-b[sort.key]:String(a[sort.key]).localeCompare(String(b[sort.key]),'zh-CN')));
-  const pages=Math.max(1,Math.ceil(filtered.length/size)),current=Math.min(page,pages-1);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [size, setSize] = useState(20);
+  const [sort, setSort] = useState({ key: '', direction: -1 });
+  const [criteria, setCriteria] = useState({});
+  const query = search.trim().toLowerCase();
+  const filtered = rows.filter(row => filters.every(item => !criteria[item.key] || String(row[item.key] ?? '') === criteria[item.key])
+    && columns.some(column => String(column.export ? column.export(row) : row[column.key] ?? '').toLowerCase().includes(query)));
+  if (sort.key) filtered.sort((first, second) => {
+    const a = first[sort.key], b = second[sort.key];
+    if (a == null) return b == null ? 0 : 1;
+    if (b == null) return -1;
+    return sort.direction * (typeof a === 'number' ? a - b : String(a).localeCompare(String(b), 'zh-CN'));
+  });
+  const current = Math.min(page, Math.max(1, Math.ceil(filtered.length / size)));
+  const tableColumns = columns.map(column => ({
+    key: column.key,
+    align: column.numeric ? 'right' : 'left',
+    onHeaderCell: () => ({ 'aria-sort': sort.key !== column.key ? 'none' : sort.direction === 1 ? 'ascending' : 'descending' }),
+    title: <Button size="small" theme="borderless" type="tertiary" icon={sort.key !== column.key ? <IconChevronUpDown aria-hidden="true"/> : sort.direction === 1 ? <IconChevronUp aria-hidden="true"/> : <IconChevronDown aria-hidden="true"/>} iconPosition="right"
+      onClick={() => { setSort({ key: column.key, direction: sort.key === column.key ? -sort.direction : -1 }); setPage(1); }}>
+      {column.label}
+    </Button>,
+    render: (_, row) => column.render ? column.render(row) : typeof row[column.key] === 'number' ? number(row[column.key]) : row[column.key] ?? '—',
+  }));
+  if (actions.length) tableColumns.push({
+    key: 'actions', title: '操作',
+    render: (_, row) => <Space wrap>{actions.map(action =>
+      <Button key={action.label} size="small" theme="borderless" onClick={() => action.run(row)}>{action.label}</Button>
+    )}</Space>,
+  });
   function download() {
-    try {const csv=analysisCsv(columns.map(item=>item.label),filtered.map(row=>columns.map(item=>item.export?item.export(row):row[item.key]))),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),link=document.createElement('a');link.href=url;link.download=title+'.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast.success('已开始下载');}catch{toast.error('导出失败，请重试');}
+    try {
+      const csv = analysisCsv(columns.map(item => item.label), filtered.map(row => columns.map(item => item.export ? item.export(row) : row[item.key])));
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = title + '.csv';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      Toast.success('已开始下载');
+    } catch { Toast.error('导出失败，请重试'); }
   }
-  return <Card className="ua-panel ua-detail"><CardHeader><CardTitle className="sr-only">{title}</CardTitle><div className="od-table-actions"><label className="od-search"><Search size={14}/><Input aria-label={`搜索${title}`} placeholder="搜索名称或 ID" value={search} onChange={event=>{setSearch(event.target.value);setPage(0);}}/></label><Button variant="outline" disabled={!filtered.length} onClick={download}><Download size={14}/>导出</Button></div></CardHeader><CardContent>{filters.length>0&&<div className="od-table-filters">{filters.map(item=><Pick key={item.key} label={item.label} value={criteria[item.key]} items={[...new Map(rows.filter(row=>row[item.key]!=null&&row[item.key]!=='').map(row=>[String(row[item.key]),{id:String(row[item.key]),name:String(row[item.labelKey || item.key])}])).values()]} onChange={value=>{setCriteria({...criteria,[item.key]:value});setPage(0);}}/>)}</div>}<div className="ua-table-scroll"><Table><TableHeader><TableRow>{columns.map(column=><TableHead key={column.key} className={column.numeric?'od-number':undefined} aria-sort={sort.key===column.key?sort.direction===1?'ascending':'descending':'none'}><button type="button" onClick={()=>{setSort({key:column.key,direction:sort.key===column.key?-sort.direction:-1});setPage(0);}}>{column.label}<ArrowUpDown size={12}/></button></TableHead>)}{actions.length>0&&<TableHead>操作</TableHead>}</TableRow></TableHeader><TableBody>{filtered.slice(current*size,(current+1)*size).map(row=><TableRow key={row.id}>{columns.map(column=><TableCell key={column.key} className={column.numeric?'od-number':undefined}>{column.render?column.render(row):typeof row[column.key]==='number'?number(row[column.key]):row[column.key] ?? '—'}</TableCell>)}{actions.length>0&&<TableCell><div className="od-row-actions">{actions.map(action=><Button key={action.label} variant="link" onClick={async ()=>await action.run(row)}>{action.label}</Button>)}</div></TableCell>}</TableRow>)}{!filtered.length&&<TableRow><TableCell colSpan={columns.length+(actions.length?1:0)} className="od-empty">暂无匹配记录，请调整筛选</TableCell></TableRow>}</TableBody></Table></div><div className="ua-pagination"><span>共 {filtered.length} 条</span><Pick label={`${title}每页条数`} value={String(size)} all={false} items={PAGE_SIZES.map(value=>({id:String(value),name:`${value} 条 / 页`}))} onChange={value=>{setSize(Number(value));setPage(0);}}/><Button variant="outline" disabled={!current} onClick={()=>setPage(current-1)}>上一页</Button><span>{current+1} / {pages}</span><Button variant="outline" disabled={current+1>=pages} onClick={()=>setPage(current+1)}>下一页</Button></div></CardContent></Card>;
+  return <section aria-label={title}>
+    <div className="admin-list-toolbar">
+      <Input className="admin-list-search" showClear prefix={<IconSearch aria-hidden="true"/>}
+        aria-label={`搜索${title}`} placeholder="搜索名称或 ID" value={search}
+        onChange={value => { setSearch(value); setPage(1); }}/>
+      {filters.map(item => <Pick key={item.key} label={item.label} value={criteria[item.key]}
+        items={[...new Map(rows.filter(row => row[item.key] != null && row[item.key] !== '').map(row => [
+          String(row[item.key]), { id: String(row[item.key]), name: String(row[item.labelKey || item.key]) },
+        ])).values()]} onChange={value => { setCriteria({ ...criteria, [item.key]: value }); setPage(1); }}/>)}
+      <Button icon={<IconDownload aria-hidden="true"/>} disabled={!filtered.length} onClick={download}>导出</Button>
+    </div>
+    <Table rowKey="id" columns={tableColumns} dataSource={filtered.slice((current - 1) * size, current * size)}
+      scroll={{ x: `max(100%, ${tableColumns.length * 144}px)` }} empty="暂无匹配记录，请调整筛选"
+      pagination={{ total: filtered.length, currentPage: current, pageSize: size, pageSizeOpts: PAGE_SIZES,
+        showSizeChanger: true, onChange: (next, pageSize) => { setPage(next); setSize(pageSize); } }}/>
+  </section>;
 }
+
 const qualityColumns=[countColumn('calls','承接请求'),countColumn('customers','承接客户'),countColumn('models','供给模型'),countColumn('total','Token 用量'),{key:'units',label:'其他用量',render:unitsText,export:unitsText},countColumn('attemptsCount','上游尝试'),countColumn('failedAttempts','上游失败'),{key:'successRate',label:'上游成功率',numeric:true,render:row=>percent(row.successRate),export:row=>percent(row.successRate)},countColumn('unknownAttempts','结果待确认'),countColumn('pending','待确认计量')];
 const latencyColumns=[countColumn('p95Ms','P95 耗时 (ms)'),countColumn('avgMs','平均耗时 (ms)'),countColumn('latencySamples','有效耗时样本')];
 const requestColumns=[{key:'requestId',label:'Request ID'},{key:'createdAt',label:'调用时间',render:row=>time(row.createdAt)},{key:'customer',label:'客户'},{key:'serviceName',label:'对外调用标识'},{key:'usage',label:'分项用量',render:usageText,export:usageText},amountColumn('saleAmount','应计收入'),{key:'saleCurrency',label:'销售币种'},amountColumn('costAmount','采购总成本'),{key:'costCurrency',label:'采购币种'},amountColumn('profit','调用毛利'),{key:'reason',label:'核对状态',render:row=>row.reason || '可核对',export:row=>row.reason || '可核对'}];
@@ -108,14 +206,49 @@ export default function OperationsDataPage({state,business=false}) {
   const openGaps=()=>business?openRequests(reviewRows):push('供给关联缺口',reviewRows,[{key:'requestId',label:'Request ID'},{key:'modelId',label:'模型 ID'},{key:'endpointId',label:'记录的渠道 ID'},{key:'reason',label:'核对状态'}]);
   const choosePeriod=value=>{const now=Date.now(),next=operationsPeriod(value,null,now);setClock(now);setPeriod(next.period);setRange(next.range);setTrail([]);};
   const reset=()=>{choosePeriod('yesterday');setFilters(analysisFilters());setModel('');setService('');setMode('provider');setCurrency('CNY');setMeasureUnit('Token');};
-  const applyView=view=>{if(!view?.range || !view.filters || !Array.isArray(view.filters.providers) || !['types','tenant','model','channels','user'].every(key=>view.filters[key]===null || Array.isArray(view.filters[key]))){toast.error('视图配置无效，请重新保存');return false;}const now=Date.now(),next=operationsPeriod(view.period,view.range,now);setClock(now);setPeriod(next.period);setRange(next.range);setFilters(business?analysisFilters():view.filters);setMode(view.mode==='model'?'model':'provider');setModel(view.model || '');setService(view.service || '');setCurrency(view.currency || 'CNY');setMeasureUnit(['Token','张','秒','字符'].includes(view.measureUnit)?view.measureUnit:'Token');setTrail([]);};
+  const applyView=view=>{if(!view?.range || !view.filters || !Array.isArray(view.filters.providers) || !['types','tenant','model','channels','user'].every(key=>view.filters[key]===null || Array.isArray(view.filters[key]))){Toast.error('视图配置无效，请重新保存');return false;}const now=Date.now(),next=operationsPeriod(view.period,view.range,now);setClock(now);setPeriod(next.period);setRange(next.range);setFilters(business?analysisFilters():view.filters);setMode(view.mode==='model'?'model':'provider');setModel(view.model || '');setService(view.service || '');setCurrency(view.currency || 'CNY');setMeasureUnit(['Token','张','秒','字符'].includes(view.measureUnit)?view.measureUnit:'Token');setTrail([]);};
   const viewGroups=[{label:'时间',text:range.start+' — '+range.end},{label:business?'销售服务':'模型',text:business?serviceOptions.find(row=>row.id===service)?.name || '全部销售服务':state.models.find(row=>row.id===selectedModel)?.name || '全部模型'}];
   viewGroups.push(...(business?[{label:'模型',text:state.models.find(row=>row.id===model)?.name || '全部模型'},{label:'币种',text:currency}]:[{label:'分析方式',text:mode==='model'?'同模型供给对比':'按服务商分析'},{label:'服务商与渠道',text:[filters.providers.map(id=>state.providers.find(row=>row.id===id)?.name || id).join('、'),(filters.channels || []).map(id=>state.endpoints.find(row=>row.id===id)?.name || id).join('、')].filter(Boolean).join('；') || (filters.channels===null?'全部':'未选择')},{label:'计量单位',text:measureUnit}]));
   const current=trail.at(-1),allPurchases=costs.flatMap(group=>group.rows),waterfall=current?.margin?callMarginWaterfall(current.margin):null;
-  return <TooltipProvider><div className="ua-page ua-usage-analysis od-page">
-    <Card className="ua-filters"><CardContent><FilterToolbar className="ua-filter-controls"><FilterPresets className="ua-segments" value={period} items={usagePresets} onChange={choosePeriod}/><DateRange start={range.start} end={range.end} presets={usagePresets} allowLongRange rangeHint="按北京时间自然日统计" onChange={value=>{const now=Date.now(),next=operationsPeriod('custom',value,now);setClock(now);setPeriod(next.period);setRange(next.range);setTrail([]);}}/><span className="ua-time-scope">北京时间</span><FilterReset onClick={reset}/></FilterToolbar></CardContent><CardContent className="ua-view-row"><SavedFilterViews notify={toast} scope={business?'admin-business-data':'admin-supply-data'} showCurrent={false} value={{period,range,filters,mode,model,service,currency,measureUnit}} groups={viewGroups} onApply={applyView}/></CardContent></Card>
-    <Card className="od-objects"><CardContent><div className="od-object-controls">{!business&&<ToggleGroup className="ua-segments" type="single" value={mode} aria-label="供给分析方式" onValueChange={value=>{if(value){setMode(value);setModel('');setTrail([]);}}}><ToggleGroupItem value="provider">按服务商分析</ToggleGroupItem><ToggleGroupItem value="model">同模型供给对比</ToggleGroupItem></ToggleGroup>}<Pick label="模型" value={selectedModel} items={state.models} all={business || mode!=='model'} onChange={value=>{setModel(value);setService('');setTrail([]);}}/>{business?<><Pick label="销售服务" value={service} items={serviceOptions.filter(row=>!model || row.id===`standard:${model}` || row.id.startsWith(`provider:${model}:`))} onChange={value=>{setService(value);setTrail([]);}}/><Pick label="币种" value={currency} all={false} items={currencies.map(id=>({id,name:id}))} onChange={value=>{setCurrency(value);setTrail([]);}}/></>:<UsageSupplyPicker filters={filters} options={usageFilterOptions(state)} onChange={value=>{setFilters(value);setTrail([]);}}/>}<div className="od-main-actions"><Button variant="outline" onClick={business?openSales:openSuppliers}>{business?'经营明细':'供给明细'}</Button>{reviewRows.length>0&&<Button variant="link" onClick={openGaps}>核对缺口（{number(reviewRows.length)}）</Button>}</div></div></CardContent></Card>
-    {business&&knownServices.length===0&&<div className="od-data-gap"><strong>{reviewRows.length?'现有调用缺少销售服务或历史价格信息':'本周期暂无客户经营调用'}</strong><span>{reviewRows.length?'可通过核对缺口查看原始记录。':'请调整时间或销售服务筛选。'}</span><Button variant="outline" asChild><a href="#/admin-2/listing">查看服务管理</a></Button></div>}
+  const detailHeading = useRef(null);
+  useLayoutEffect(() => { detailHeading.current?.focus({ preventScroll: true }); }, [current]);
+  const closeDetails = () => setTrail([]);
+  return <div className="admin-page-stack od-page">
+    <AdminPageHeading title={business ? '经营数据' : '供给数据'}/>
+    <Card>
+      <FilterToolbar>
+        <FilterPresets value={period} items={usagePresets} onChange={choosePeriod}/>
+        <DateRange start={range.start} end={range.end} presets={usagePresets} allowLongRange rangeHint="按北京时间自然日统计"
+          onChange={value => { const now = Date.now(), next = operationsPeriod('custom', value, now); setClock(now); setPeriod(next.period); setRange(next.range); setTrail([]); }}/>
+        <Text type="secondary">北京时间</Text>
+        <FilterReset onClick={reset}/>
+      </FilterToolbar>
+      <SavedFilterViews notify={Toast} scope={business ? 'admin-business-data' : 'admin-supply-data'} showCurrent={false}
+        value={{ period, range, filters, mode, model, service, currency, measureUnit }} groups={viewGroups} onApply={applyView}/>
+    </Card>
+    <Card>
+      <Space wrap>
+        {!business && <RadioGroup type="button" aria-label="供给分析方式" value={mode}
+          options={[{ label: '按服务商分析', value: 'provider' }, { label: '同模型供给对比', value: 'model' }]}
+          onChange={event => { setMode(event.target.value); setModel(''); setTrail([]); }}/>}
+        <Pick label="模型" value={selectedModel} items={state.models} all={business || mode !== 'model'}
+          onChange={value => { setModel(value); setService(''); setTrail([]); }}/>
+        {business ? <>
+          <Pick label="销售服务" value={service}
+            items={serviceOptions.filter(row => !model || row.id === `standard:${model}` || row.id.startsWith(`provider:${model}:`))}
+            onChange={value => { setService(value); setTrail([]); }}/>
+          <Pick label="币种" value={currency} all={false} items={currencies.map(id => ({ id, name: id }))}
+            onChange={value => { setCurrency(value); setTrail([]); }}/>
+        </> : <UsageSupplyPicker filters={filters} options={usageFilterOptions(state)}
+          onChange={value => { setFilters(value); setTrail([]); }}/>}
+        <Button onClick={business ? openSales : openSuppliers}>{business ? '经营明细' : '供给明细'}</Button>
+        {reviewRows.length > 0 && <Button theme="borderless" onClick={openGaps}>核对缺口（{number(reviewRows.length)}）</Button>}
+      </Space>
+    </Card>
+    {business && knownServices.length === 0 && <Banner closeIcon={null}
+      title={reviewRows.length ? '现有调用缺少销售服务或历史价格信息' : '本周期暂无客户经营调用'}
+      description={<Space wrap><Text>{reviewRows.length ? '可通过核对缺口查看原始记录。' : '请调整时间或销售服务筛选。'}</Text>
+        <Typography.Text link={{ href: '#/admin-2/listing' }}>查看服务管理</Typography.Text></Space>}/>}
     <div className="od-charts">{business?<>
       <Plot title="收入与采购成本趋势" labels={buckets.map(row=>row.label)} series={['income','cost'].map((key,index)=>({label:['已确认应计收入','已确认采购成本'][index],color:chartPalette[index],values:buckets.map(bucket=>bucket[key])}))} unit={currency} onDetails={openSales} note="收入按调用时售价核算；采购成本逐次累加已确认部分。缺失信息在明细中待核算，不代表零成本。"/>
       <Plot title="销售服务毛利排行" bars={bars(knownServices.filter(row=>row.pending===0),'profit')} unit={currency} onDetails={openSales} onChoose={id=>openRequests(knownServices.find(row=>row.id===id).rows)} note="调用毛利＝应计收入－采购成本。核算不完整的服务不进入排行，亏损保留负值。"/>
@@ -128,6 +261,31 @@ export default function OperationsDataPage({state,business=false}) {
       <Plot title="同模型服务商成功率对比" bars={bars(groups,'successRate')} unit="%" onDetails={openSuppliers} onChoose={id=>openChannels(groups.find(row=>row.id===id))} note="仅比较选定模型。成功率＝成功上游尝试／已确认结果的尝试，平台前置拒绝不计入，未知结果另列。"/>
       <Plot title="同模型服务商响应耗时对比" bars={bars(groups,'p95Ms')} unit="ms" onDetails={openSuppliers} onChoose={id=>openChannels(groups.find(row=>row.id===id))} note="仅展示实际尝试的P95耗时；平均值和有效样本数在明细中查看，不使用整段客户回退耗时。"/>
     </>}</div>
-    <Dialog open={!!current} onOpenChange={open=>{if(!open)setTrail([]);}}><DialogContent className="od-dialog od-detail-dialog"><DialogHeader><DialogTitle>{current?.title}</DialogTitle><DialogDescription>{current?.context || `${range.start} — ${range.end} · ${business?currency:state.models.find(row=>row.id===selectedModel)?.name || '当前供给范围'}`}</DialogDescription></DialogHeader><div className="od-drill-nav"><Button variant="outline" disabled={trail.length<2} onClick={()=>setTrail(previous=>previous.slice(0,-1))}><ArrowLeft size={14}/>返回上一级</Button><span>{trail.map(item=>item.title).join(' / ')}</span></div>{current?.margin?<section className="od-margin"><p className="od-margin-context">{current.margin.serviceName} · {current.margin.requestId}</p>{waterfall?<MarginWaterfall data={waterfall} label="调用毛利拆解"/>:<p className="od-empty" role="status">待核算：{current.margin.reason || '收入与采购成本尚未完整确认'}</p>}<p className="od-margin-note">应计收入 − 各次实际采购成本 ＝ 调用毛利；不含税费、退款及其他费用。</p><div className="od-row-actions"><Button variant="outline" onClick={()=>openPurchases(current.margin.purchases)}>采购核对</Button><Button variant="outline" onClick={()=>openPrices([...priceLines(current.margin.requestId,'销售',current.margin.sale),...current.margin.purchases.flatMap(item=>priceLines(current.margin.requestId,'采购',item.cost,item.provider,item.channel,item.id))])}>价格核对</Button></div></section>:current&&<DataGrid key={trail.length+current.title} {...current}/>}</DialogContent></Dialog>
-  </div></TooltipProvider>;
+    {current && <AdminSideSheet visible title={current.title} className="od-details" width="min(1120px, 100vw)" closeOnEsc
+      onCancel={closeDetails} footer={<>
+        <Button icon={<IconArrowLeft aria-hidden="true"/>} disabled={trail.length < 2}
+          onClick={() => setTrail(previous => previous.slice(0, -1))}>返回上一级</Button>
+        <Button onClick={closeDetails}>关闭</Button>
+      </>}>
+      <div className="admin-page-stack">
+        <div tabIndex={-1} ref={detailHeading}>
+          <Paragraph type="secondary">{current.context || `${range.start} — ${range.end} · ${business ? currency : state.models.find(row => row.id === selectedModel)?.name || '当前供给范围'}`}</Paragraph>
+          <Text type="tertiary">{trail.map(item => item.title).join(' / ')}</Text>
+        </div>
+        {current.margin ? <section className="admin-analytics-fields">
+          <Text>{current.margin.serviceName} · {current.margin.requestId}</Text>
+          {waterfall ? <MarginWaterfall data={waterfall} label="调用毛利拆解"/>
+            : <Empty description={`待核算：${current.margin.reason || '收入与采购成本尚未完整确认'}`}/>}
+          <Paragraph type="secondary">应计收入 − 各次实际采购成本 ＝ 调用毛利；不含税费、退款及其他费用。</Paragraph>
+          <Space wrap>
+            <Button onClick={() => openPurchases(current.margin.purchases)}>采购核对</Button>
+            <Button onClick={() => openPrices([...priceLines(current.margin.requestId, '销售', current.margin.sale),
+              ...current.margin.purchases.flatMap(item => priceLines(current.margin.requestId, '采购', item.cost, item.provider, item.channel, item.id))])}>
+              价格核对
+            </Button>
+          </Space>
+        </section> : <DataGrid key={trail.length + current.title} {...current}/>}
+      </div>
+    </AdminSideSheet>}
+  </div>;
 }
