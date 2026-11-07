@@ -1,3 +1,4 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { ROUTING_POLICIES } from './routing-policy';
 import {useRef, useState} from 'react';
@@ -5,7 +6,7 @@ import {ArrowRight, Plus} from 'lucide-react';
 import { Button, Input, Checkbox, Radio, Space, Typography } from '@douyinfe/semi-ui';
 import {Choice, Field} from './ServiceUI';
 import { FieldLabel as ModelFieldLabel } from './ServiceUI';
-import {Status, CopyId, Notice, Modal} from './ServiceUI';
+import { CopyId, Notice, Modal } from './ServiceUI';
 import {ROUTING_STRATEGIES, serviceRoute, activeRouteVersion, lastRouteVersion, routingServices, routeStopReason, routeSourceVersion, validateRouteConfig} from './service-routing';
 import {routeTableRows, changeRouteStrategy, routeStrategyChoices, routeEditConfig, sameRouteConfig, routeChangeRows} from './route-workspace';
 import {routeEditorChannels, routeEditorPayload} from './service-route-editor';
@@ -45,10 +46,10 @@ export function RouteWorkbench({state, model, ops, draftOnly = false, serviceId,
   return <div className="ss-route-workbench">
     {model.serviceMode === 'provider' && !draftOnly && <div className="ss-route-table-toolbar"><Button theme="light" disabled={blocked} onClick={onAddProvider}><Plus/>关联服务商及渠道</Button></div>}
     <Table rowKey="id" pagination={false} scroll={{x:explicit ? 1020 : 1180}} empty="先关联服务商，再配置模型映射与路由。" dataSource={routeTableRows(state,model,serviceId)} columns={[
-      {title:'服务商',width:150,render:(_,data)=>({children:<div className="ss-channel-name"><Typography.Text strong>{data.providerName}</Typography.Text>{!data.service.providerId && <Typography.Text type="tertiary">平台统一模型服务模式</Typography.Text>}{data.provider?.marketVisible===false && <Status>已下架</Status>}{data.provider?.callsEnabled===false && <Status>已停服</Status>}</div>,props:{rowSpan:data.span}})},
+      {title:'服务商',width:150,render:(_,data)=>({children:<div className="ss-channel-name"><Typography.Text strong>{data.providerName}</Typography.Text>{!data.service.providerId && <Typography.Text type="tertiary">平台统一模型服务模式</Typography.Text>}{data.provider?.marketVisible===false && <AdminStatus value="已下架"/>}{data.provider?.callsEnabled===false && <AdminStatus value="已停服"/>}</div>,props:{rowSpan:data.span}})},
       {title:<ModelFieldLabel name="对外调用标识" description="用户调用左侧的模型。平台将请求转发给右侧的上游模型。"/>,width:180,render:(_,data)=>({children:data.service.callId ? <CopyId value={data.service.callId} label="对外调用标识"/> : <Button theme="borderless" disabled={blocked} onClick={()=>onIdentity?.(data.service.providerId)}>配置对外调用标识</Button>,props:{rowSpan:data.span}})},
       ...(explicit ? [] : [{title:'路由策略',width:160,render:(_,data)=>({children:<Button theme="borderless" disabled={blocked} aria-label={`${data.service.name}：${data.config ? strategyName(data.config.strategy) : '尚未配置'}，编辑路由`} onClick={event=>open(event,data.service)}><span className="ss-field-stack"><strong>{data.config ? strategyName(data.config.strategy) : '尚未配置'}</strong>{data.config?.strategy==='weighted' && <Typography.Text type="tertiary">合计 {data.rows.reduce((sum,item)=>sum+Number(item.weight),0)}%</Typography.Text>}{!data.current && data.last && <Typography.Text type="tertiary">已停用</Typography.Text>}{data.current && !data.status.good && <Typography.Text type="danger">需调整</Typography.Text>}</span><ArrowRight aria-hidden="true"/></Button>,props:{rowSpan:data.span}})}]),
-      {title:explicit ? '主渠道' : '上游渠道',width:160,render:(_,data)=>data.row ? <div className="ss-channel-name">{data.service.mode==='standard' && <Typography.Text strong>{data.channel?.provider?.name || '服务商缺失'}</Typography.Text>}<Typography.Text>{data.channel?.channelName || '映射已失效'}</Typography.Text>{data.channel && !data.channel.available && <Typography.Text type="danger">{data.channel.reason}</Typography.Text>}{explicit && !data.current && data.last && <Status>已停用</Status>}{explicit && data.current && !data.status.good && <Status>需调整</Status>}{!explicit && data.config.strategy==='weighted' && <Status>{data.row.weight}%</Status>}</div> : <Typography.Text type="tertiary">待选择渠道</Typography.Text>},
+      {title:explicit ? '主渠道' : '上游渠道',width:160,render:(_,data)=>data.row ? <div className="ss-channel-name">{data.service.mode==='standard' && <Typography.Text strong>{data.channel?.provider?.name || '服务商缺失'}</Typography.Text>}<Typography.Text>{data.channel?.channelName || '映射已失效'}</Typography.Text>{data.channel && !data.channel.available && <Typography.Text type="danger">{data.channel.reason}</Typography.Text>}{explicit && !data.current && data.last && <AdminStatus value="已停用"/>}{explicit && data.current && !data.status.good && <AdminStatus value="需调整"/>}{!explicit && data.config.strategy==='weighted' && <Typography.Text type="tertiary">{data.row.weight}%</Typography.Text>}</div> : <Typography.Text type="tertiary">待选择渠道</Typography.Text>},
       {title:<ModelFieldLabel name="上游模型标识"/>,width:160,render:(_,data)=>data.channel?.upstreamModelId ? <CopyId value={data.channel.upstreamModelId} label="上游模型标识"/> : '—'},
       {title:'操作',width:270,fixed:'right',render:(_,data)=>({props:{rowSpan:data.span},children:<Space wrap>
         <Button theme="borderless" disabled={blocked} onClick={event=>open(event,data.service)}>{explicit ? '选择主渠道' : '编辑路由'}</Button>

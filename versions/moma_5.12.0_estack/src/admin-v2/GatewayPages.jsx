@@ -1,7 +1,8 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Banner, Button, Card, Checkbox, Form, Modal, Space, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Checkbox, Form, Modal, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconPlus } from '@douyinfe/semi-icons';
 import { simulateRequest } from './domain';
 import { Choice, serviceOperationsUi } from './ServiceUI';
@@ -21,11 +22,6 @@ const limitScopes = [
 ];
 const cacheScopes = ['tenant+model', 'project+model', 'key+model'].map(value => ({ value, label: value }));
 const uid = prefix => `${prefix}-${Date.now()}`;
-
-function Status({ value }) {
-  const tone = ['通过', '已启用', '当前生效'].includes(value) ? 'green' : 'grey';
-  return <Tag color={tone}>{value === '草稿' ? '未发布' : value}</Tag>;
-}
 
 function Editor({ pageId, state, dispatch, close }) {
   const [error, setError] = useState('');
@@ -161,8 +157,8 @@ function Releases({ state, dispatch }) {
     { title: '版本', dataIndex: 'version' },
     { title: '配置快照', dataIndex: 'configSnapshot' },
     { title: '差异', dataIndex: 'diff' },
-    { title: '校验', dataIndex: 'validation', render: value => <Status value={value}/> },
-    { title: '状态', dataIndex: 'status', render: value => <Status value={value}/> },
+    { title: '校验', dataIndex: 'validation', render: value => <AdminStatus value={value === '草稿' ? '未发布' : value}/> },
+    { title: '状态', dataIndex: 'status', render: value => <AdminStatus value={value === '草稿' ? '未发布' : value}/> },
     { title: '发布时间', dataIndex: 'publishedAt', render: value => value?.slice(0, 16).replace('T', ' ') || '—' },
     { title: '操作', render: (_, item) => item.status !== '当前生效' &&
       <Button size="small" theme="borderless" onClick={() => save(item, `回滚至 ${item.version}`)}>回滚到此版本</Button> },
@@ -237,7 +233,7 @@ export default function GatewayPage({ pageId, state, dispatch }) {
         {['routes', 'fallback', 'cache'].includes(pageId) && <Simulator state={state} dispatch={dispatch}/>}
         <Card><Table size="small" rowKey="id" dataSource={rows} pagination={false} scroll={{ x: 'max(100%, 760px)' }} columns={[
           ...columns,
-          { title: '状态', dataIndex: 'status', render: value => <Status value={value}/> },
+          { title: '状态', dataIndex: 'status', render: value => <AdminStatus value={value === '草稿' ? '未发布' : value}/> },
           { title: '操作', key: 'actions', render: (_, item) => {
             const stopped = item.status.includes('停用');
             return <Space spacing={4}>

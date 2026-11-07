@@ -1,6 +1,7 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useEffect, useState } from 'react';
-import { Avatar, Banner, Button, Card, Checkbox, Descriptions, Form, Input, Modal, Progress, Space, Tabs, Tag, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
+import { Avatar, Banner, Button, Card, Checkbox, Descriptions, Form, Input, Modal, Progress, Space, Tabs, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconSearch } from '@douyinfe/semi-icons';
 import { MODEL_ORDER_COLUMNS } from '../model-order-display.mjs';
 import { maskApiKey } from '../api-key-utils.mjs';
@@ -24,7 +25,7 @@ const quantity = (value, unit) => value == null || String(value).trim() === '' |
 const restoreBulkFocus = () => requestAnimationFrame(() => document.getElementById('iu-bulk-action')?.focus());
 
 function AccountStatus({ tenant }) {
-  return <Tag color={tenant.status === '正常' ? 'green' : 'grey'}>{individualStatus(tenant)}</Tag>;
+  return <AdminStatus value={individualStatus(tenant)}/>;
 }
 
 function Facts({ rows }) {
@@ -212,7 +213,7 @@ function SubscriptionDetails({ state, tenantId }) {
         const { order, display } = entry;
         return [
           order.id, display.name, individualBillingTypes[entry.billingType] || '未记录', display.type, display.provider, display.tariff,
-          display.catalogPrice, <Tag color={display.status === '已开通' ? 'green' : 'grey'}>{display.status}</Tag>,
+          display.catalogPrice, <AdminStatus value={display.status}/>,
           time(display.orderedAt), time(display.expiresAt),
           <Button size="small" theme="borderless" aria-label={`查看 ${display.name} 订购详情`} onClick={() => setInspect(entry)}>详情</Button>,
         ];

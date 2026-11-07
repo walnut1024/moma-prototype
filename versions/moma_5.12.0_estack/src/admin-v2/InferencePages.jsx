@@ -1,5 +1,6 @@
+import AdminStatus from './AdminStatus';
 import { useMemo, useState } from 'react';
-import { Banner, Button, Card, Form, Input, Modal, Progress, Space, Tag, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Form, Input, Modal, Progress, Space, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import { FilterToolbar, FilterReset } from '../components/FilterControls';
@@ -63,7 +64,7 @@ export function ClusterManagement({ state, dispatch }) {
           const maintenance = item.status === '维护中';
           const facts = [['可用区', item.zone], ['GPU 型号', item.gpuType], ['节点', item.nodes], ['GPU 容量', `${item.allocatedGpu} / ${item.totalGpu}`]];
           return <Card key={item.id} title={<div><Title heading={5} component="h2">{item.name}</Title><Text size="small" type="tertiary">{item.clusterId}</Text></div>}
-            headerExtraContent={<Tag color={item.status === '运行中' ? 'green' : 'grey'}>{item.status}</Tag>}>
+            headerExtraContent={<AdminStatus value={item.status}/>}>
             <div className="admin-analytics-fields">
               <dl className="admin-analysis-detail-fields">{facts.map(([label, value]) => <div key={label}>
                 <dt><Text type="tertiary">{label}</Text></dt><dd><Text>{value ?? '—'}</Text></dd>

@@ -1,11 +1,11 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
-import { Descriptions, Modal, Tag, Typography } from '@douyinfe/semi-ui';
+import { Descriptions, Modal, Typography } from '@douyinfe/semi-ui';
 import './semi-enterprise.css';
 
 export function EnterpriseStatus({ value, enterprise = false }) {
   const label = value === '正常' ? '已启用' : value === '停用' ? enterprise ? '已冻结' : '已停用' : value;
-  const color = ['正常', '有效'].includes(value) ? 'green' : value === '需关注' ? 'orange' : 'grey';
-  return <Tag color={color}>{label}</Tag>;
+  return <AdminStatus value={label}/>;
 }
 
 export function EnterpriseFacts({ rows }) {

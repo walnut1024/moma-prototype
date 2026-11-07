@@ -1,3 +1,4 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useState } from 'react';
 import { Button, Checkbox, Descriptions, Tabs, Typography } from '@douyinfe/semi-ui';
@@ -39,7 +40,7 @@ export default function ModelPrices(props) {
   return <div className="semi-services sp-workspace">
     <div className="ss-heading"><Typography.Title heading={4}>{service?`${model.name} · ${service.supplierName} · 售价`:'模型售价'}</Typography.Title><div className="sp-actions">{back && <Button onClick={()=>ops.proceed(()=>{location.hash=back;})}>返回来源页面</Button>}<Button onClick={()=>go({returnTo:location.hash,tab:'scenario'},{base:'tariff-dictionary',reset:true})}>计量配置</Button></div></div>
     {params.has('service') ? service ? <>
-      <Descriptions data={[{key:'对外调用标识',value:service.callId || '待配置'},{key:'技术状态',value:model.callsEnabled?'已启用':'已停用'},{key:'销售状态',value:salesStatus(state,model,service.providerId)},{key:'售价版本',value:service.price?`v${service.price.version}`:'待配置'}]}/>
+      <Descriptions data={[{key:'对外调用标识',value:service.callId || '待配置'},{key:'技术状态',value:<AdminStatus value={model.callsEnabled?'已启用':'已停用'}/>},{key:'销售状态',value:<AdminStatus value={salesStatus(state,model,service.providerId)}/>},{key:'售价版本',value:service.price?`v${service.price.version}`:'待配置'}]}/>
       {servicePurpose(model,service.providerId)==='internal' && <Notice>此服务用于内部使用，无售价记录是合法状态。服务用途在新建模型服务时确定。</Notice>}
       <Tabs activeKey={tab} keepDOM={false} onChange={tab=>go({tab,edit:null},{preserveScroll:true})}>
         <Tabs.TabPane itemKey="pricing" tab="售价配置"><div className="ss-tab-content ss-body"><CommercialDialog key={service.id+params.get('edit')} state={state} model={model} providerId={service.providerId || ''} ops={ops} readOnly={params.get('edit')!=='1'} onEdit={()=>go({edit:'1'},{preserveScroll:true})} close={()=>ops.proceed(()=>go({edit:null},{saved:true,preserveScroll:true}))}/><div className="ss-section-bar"><Button theme="borderless" onClick={()=>go({model:model.id,returnTo:location.hash},{base:'model-costs',reset:true})}>查看关联成本</Button><Button theme="borderless" onClick={()=>go({model:model.id,panel:'routing',returnTo:location.hash},{base:'listing',reset:true})}>查看服务与路由</Button></div></div></Tabs.TabPane>
@@ -61,7 +62,7 @@ export default function ModelPrices(props) {
         {title:'计价单位',width:140,render:(_,row)=>row.item?.unit || '—'},
         {title:'货币',width:90,render:(_,row)=>row.item?.currency || '—'},
         {title:'售价版本',width:100,render:merged(row=>row.price?`v${row.price.version}`:'待配置')},
-        {title:'销售状态',width:120,render:merged(row=>row.status)},
+        {title:'销售状态',width:120,render:merged(row=><AdminStatus value={row.status}/>)},
         {title:'操作',width:130,fixed:'right',render:merged(row=><Button theme="borderless" onClick={()=>go({service:row.id,tab:'pricing',edit:null},{preserveScroll:true})}>{row.price?'维护售价':'配置售价'}</Button>)},
       ]}/><Typography.Text type="tertiary">共 {rows.length} 项服务</Typography.Text>
     </>}{ops.error && !dialog && <Notice error>{ops.error}</Notice>}{ops.leaveDialog}

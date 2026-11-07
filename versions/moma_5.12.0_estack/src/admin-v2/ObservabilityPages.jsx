@@ -1,6 +1,7 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useEffect, useState } from 'react';
-import { Button, Card, Descriptions, Input, Modal, Space, Tag, Timeline, Toast, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Descriptions, Input, Modal, Space, Timeline, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconDownload, IconSearch } from '@douyinfe/semi-icons';
 import { observedUsageTotal } from '../business-facts.mjs';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
@@ -32,8 +33,10 @@ const metricsFor = types => ['请求数',
   ...(types.includes('video') || types.includes('audio') ? ['生成秒数'] : []),
   ...(types.includes('embedding') ? ['向量数'] : []), 'P95 延迟', '失败率'];
 
-function Status({ value }) {
-  return <Tag color={['待确认', '处理中', '高', '未达标'].includes(value) || Number(value) >= 400 ? 'orange' : 'grey'}>{value}</Tag>;
+
+function HttpStatus({ code }) {
+  const color = code >= 400 ? 'red' : code >= 200 && code < 300 ? 'green' : 'grey';
+  return <AdminStatus value={code} color={color}/>;
 }
 
 function MetricChart({ state, requests, buckets, groupBy, selected, metric }) {
@@ -115,7 +118,7 @@ function Detail({ request, state, close }) {
       <Text code>{request.requestId}</Text>
       <Descriptions data={[
         { key: '创建时间', value: stamp(request.createdAt) },
-        { key: 'HTTP 状态', value: <Status value={String(request.httpStatus)}/> },
+        { key: 'HTTP 状态', value: <HttpStatus code={request.httpStatus}/> },
         { key: 'Model ID', value: request.publicModelId || labelOf(state, 'modelId', request.modelId) },
         { key: 'API 密钥 ID', value: key?.keyId },
       ]}/>
@@ -228,7 +231,7 @@ export function Logs({ state }) {
           { title: '用量', width: 70, align: 'right', render: (_, row) => observedUsageTotal(row.usage)?.toLocaleString() ?? '—' },
           { title: '首包延迟', dataIndex: 'ttftMs', width: 86, align: 'right', render: value => value ? `${value} ms` : '—' },
           { title: '延迟', dataIndex: 'durationMs', width: 74, align: 'right', render: value => `${value} ms` },
-          { title: '状态', dataIndex: 'httpStatus', width: 60, render: value => <Status value={String(value)}/> },
+          { title: '状态', dataIndex: 'httpStatus', width: 60, render: value => <HttpStatus code={value}/> },
           { title: '操作', width: 64, render: (_, row) => <Button size="small" theme="borderless" onClick={() => setDetail(row)}>详情</Button> },
         ]}/>
     </Card>
@@ -261,13 +264,13 @@ export function Alerts({ state, dispatch, navigate }) {
     <Card>
       <Table size="small" rowKey="id" pagination={false} dataSource={state.alerts} scroll={{ x: 'max(100%, 880px)' }} columns={[
         { title: '告警', dataIndex: 'title' },
-        { title: '级别', dataIndex: 'severity', render: value => <Status value={value}/> },
+        { title: '级别', dataIndex: 'severity', render: value => <AdminStatus value={value}/> },
         { title: '对象', dataIndex: 'objectId' },
         { title: '负责人', dataIndex: 'assignee', render: (value, row) =>
           <Choice size="small" label={`告警 ${row.id} 的处理人`} value={value}
             options={['运维人员', '平台管理员', '安全管理员'].map(name => [name, name])}
             onChange={assignee => dispatch({ type: 'update', collection: 'alerts', id: row.id, changes: { assignee } })}/> },
-        { title: '状态', dataIndex: 'status', render: value => <Status value={value}/> },
+        { title: '状态', dataIndex: 'status', render: value => <AdminStatus value={value}/> },
         { title: '触发时间', dataIndex: 'startedAt', render: stamp },
         { title: '操作', render: (_, row) => <Space spacing={4}>
           {row.status === '待确认' && <Button theme="borderless" size="small" onClick={() => update(row, '处理中')}>确认</Button>}
@@ -292,7 +295,7 @@ export function Incidents({ state, dispatch }) {
     <AdminPageHeading title="事件处理" description="协同处理服务故障；恢复服务与复盘关闭是两个独立阶段。"/>
     <div className="admin-analysis-plot-grid">
       {state.incidents.map(row => <Card key={row.id} title={<Title heading={5} component="h2">{row.title}</Title>}
-        headerExtraContent={<Status value={row.status}/>}>
+        headerExtraContent={<AdminStatus value={row.status}/>}>
         <div className="admin-analytics-fields">
           <Text code>{row.incidentId}</Text>
           <Descriptions data={[
@@ -336,7 +339,7 @@ export function Sla({ state }) {
         { title: 'P95 延迟', dataIndex: 'p95', align: 'right', render: value => `${value} ms` },
         { title: '故障事件', dataIndex: 'incidents', align: 'right' },
         { title: 'SLA 目标', align: 'right', render: () => '≥ 99.00%' },
-        { title: '结果', render: (_, row) => <Status value={row.available >= 99 ? '达标' : '未达标'}/> },
+        { title: '结果', render: (_, row) => <AdminStatus value={row.available >= 99 ? '达标' : '未达标'}/> },
       ]}/>
     </Card>
   </div>;

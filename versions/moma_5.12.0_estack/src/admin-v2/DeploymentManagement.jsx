@@ -1,7 +1,8 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import { useEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, Collapse, Descriptions, Form, Input, Modal, Space, Steps, Tabs, Tag, Timeline, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Collapse, Descriptions, Form, Input, Modal, Space, Steps, Tabs, Timeline, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { FilterToolbar, FilterReset, PAGE_SIZES, normalizePageSize } from '../components/FilterControls';
 import AdminPageHeading from './AdminPageHeading';
@@ -28,11 +29,6 @@ const confirmDetails = {
   rollback: '恢复上一版配置并重建服务，当前端点会暂时不可用。',
 };
 const primaryOperation = item => item.status === '运行中' ? 'scale' : inProgress(item) ? 'check' : 'start';
-
-function Status({ value }) {
-  const color = { 运行中: 'green', 失败: 'red', 停止: 'grey' }[value] || 'orange';
-  return <Tag color={color}>{value}</Tag>;
-}
 
 function Facts({ values }) {
   return <Descriptions align="left" data={values.map(([key, value]) => ({ key, value: value ?? '—' }))}/>;
@@ -242,7 +238,7 @@ function DeploymentDetail({ item, state, can, go, ask, tab }) {
     </AdminPageHeading>
     <Card>
       <Space wrap>
-        <Status value={item.status}/>
+        <AdminStatus value={item.status}/>
         <Text type="secondary">集群：{cluster?.name || '—'}</Text>
         <Text type="secondary">配置版本：{item.configRevision ? `v${item.configRevision}` : '未登记'}</Text>
         <Text type="secondary">更新：{time(item.updatedAt)}</Text>
@@ -355,7 +351,7 @@ function DeploymentList({ state, params, can, go, ask }) {
       <Text type="secondary" size="small">{item.replicas} 副本 × {item.gpuPerReplica} 张</Text>
     </div> },
     { title: '就绪状态', width: 135, render: (_, item) => <div className="admin-table-record">
-      <Status value={item.status}/>
+      <AdminStatus value={item.status}/>
       <Text type="secondary" size="small">{item.readyReplicas == null ? '就绪副本未接入' : `${item.readyReplicas} / ${item.replicas} 副本就绪`}</Text>
     </div> },
     { title: '服务端点', width: 150, render: (_, item) => {

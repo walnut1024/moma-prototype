@@ -1,6 +1,7 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import {useEffect, useRef, useState} from 'react';
-import { Banner, Button, Form, Input, Modal, Space, Tag, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Form, Input, Modal, Space, Typography } from '@douyinfe/semi-ui';
 import {IconPlus, IconSearch} from '@douyinfe/semi-icons';
 import {TARIFF_KINDS, tariffDictionaryEntries, tariffDictionaryId} from './tariff-dictionary';
 
@@ -33,7 +34,7 @@ export default function MaterialDictionary({state,ops,kind}) {
     ...(kind==='scenario'?[]:[{title:label+' ID',width:230,render:(_,row)=><Typography.Text className="materials-code" copyable={Boolean(ids[row.id])}>{ids[row.id] || '—'}</Typography.Text>}]),
     ...(kind==='currency'?[{title:'货币代码',dataIndex:'code',width:120}]:[]),
     {title:'来源',width:100,render:(_,row)=>row.builtin?'内置':'自定义'},
-    ...(kind==='scenario'?[]:[{title:'状态',width:110,render:(_,row)=><Tag color={row.status==='已启用'?'green':'grey'}>{row.status}</Tag>}]),
+    ...(kind==='scenario'?[]:[{title:'状态',width:110,render:(_,row)=><AdminStatus value={row.status}/>}]),
     {title:'操作',width:220,fixed:'right',render:(_,row)=>row.builtin?<Typography.Text type="tertiary">内置只读</Typography.Text>:<Space><Button theme="borderless" disabled={!ops.can} aria-label={'编辑 '+row.name} onClick={event=>{trigger.current=event.currentTarget;ops.setError('');setEditing({entry:row,kind});}}>编辑</Button>{kind!=='scenario' && <Button theme="borderless" disabled={!ops.can || busy} aria-label={(row.status==='已启用'?'停用 ':'启用 ')+row.name} onClick={async()=>{setBusy(true);try{await ops.run('tariffDictionary',{operation:'status',id:row.id,status:row.status==='已启用'?'已停用':'已启用'});}finally{setBusy(false);}}}>{row.status==='已启用'?'停用':'启用'}</Button>}<Button type="danger" theme="borderless" disabled={!ops.can} aria-label={'删除 '+row.name} onClick={event=>{trigger.current=event.currentTarget;ops.setError('');setRemoving(row);}}>删除</Button></Space>},
   ];
   return <>

@@ -1,3 +1,4 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminActionMenu from './AdminActionMenu';
 import { operationsReturn } from './model-pricing-workspace';
@@ -5,11 +6,11 @@ import { MODEL_CATALOGUE_TYPES } from './model-library';
 import { pendingGuidedOnboardings } from './guided-onboarding';
 import ChannelServiceContext from './ChannelServiceContext';
 import { useState } from 'react';
-import { Badge, Button, Descriptions, Empty, Input, Nav, Popover, Space, Tabs, Typography } from '@douyinfe/semi-ui';
+import { Button, Descriptions, Empty, Input, Nav, Popover, Space, Tabs, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch, IconFilter } from '@douyinfe/semi-icons';
-import { Choice, Field, Status, Notice, Modal } from './ServiceUI';
+import { Choice, Field, Notice, Modal } from './ServiceUI';
 import { modelCode, displayTime } from './model-management';
-import { SERVICE_MODES, listed } from './model-operations';
+import { SERVICE_MODES } from './model-operations';
 import { serviceDirectoryModels, serviceIndexModels, selectServiceModel, serviceLifecycle, serviceHeaderStatus, serviceConfiguration } from './service-workspace';
 import ServiceModelForm from './ServiceModelForm';
 import ServiceOverview from './ServiceOverview';
@@ -34,7 +35,7 @@ export function ModelOperationRecords({ state, model }) {
     { title:'操作', dataIndex:'action', width:180 },
     { title:'操作对象', width:200, render:(_, row) => row.objectLabel || row.objectId },
     { title:'操作人', width:140, render:(_, row) => row.actorName || row.actor },
-    { title:'结果', width:100, render:(_, row) => <Status good={row.result === '成功'}>{row.result}</Status> },
+    { title:'结果', width:100, render:(_, row) => <AdminStatus value={row.result}/> },
     { title:'详情', width:110, fixed:'right', render:(_, row) => <Button theme="borderless" onClick={() => setDetail(row)}>查看详情</Button> },
   ];
   return <div className="ss-body"><div className="ss-history-filters"><Input prefix={<IconSearch aria-hidden="true"/>} aria-label="搜索操作记录" placeholder="搜索动作 / 对象 / 操作人" value={query} onChange={text => { setQuery(text); }}/><Choice label="操作类型" value={operation} options={[[ 'all','全部操作' ], ...[...new Set(all.map(row => row.action))].map(name => [name,name])]} onChange={name => { setOperation(name); }}/></div>
@@ -65,14 +66,14 @@ export default function ServiceManagementWorkspace({state,sourceState,ops,act,ad
       <Input prefix={<IconSearch aria-hidden="true"/>} showClear aria-label="搜索模型展示名或调用标识" placeholder="名称 / 调用标识" value={params.get('q') || ''} onChange={text => change({q:text || null})}/>
       <Popover trigger="custom" visible={filtersOpen} onClickOutSide={() => setFiltersOpen(false)} position="bottomLeft" content={<div className="semi-services ss-filter-fields"><Field label="模型分类"><Choice label="筛选模型类型" value={params.get('type') || 'all'} options={[[ 'all','全部分类' ],...Object.entries(MODEL_CATALOGUE_TYPES)]} onChange={type => change({type:type === 'all' ? null : type})}/></Field><Field label="服务模式"><Choice label="筛选服务模式" value={params.get('mode') || 'all'} options={[[ 'all','全部模式' ],...Object.entries(SERVICE_MODES).map(([key,item]) => [key,item.label]),['unset','待配置']]} onChange={mode => change({mode:mode === 'all' ? null : mode})}/></Field><Field label="上架状态"><Choice label="筛选上架状态" value={params.get('status') || 'all'} options={[[ 'all','全部状态' ],['listed','已上架'],['unlisted','已下架'],['unpublished','未上架'],['archived','已归档']]} onChange={status => change({status:status === 'all' ? null : status})}/></Field><div className="ss-footer"><Button theme="borderless" onClick={() => change({type:null,mode:null,status:null})}>重置筛选</Button><Button onClick={() => setFiltersOpen(false)}>完成</Button></div></div>}><Button icon={<IconFilter aria-hidden="true"/>} onClick={() => setFiltersOpen(!filtersOpen)} aria-label={`筛选模型${filterCount ? `，已选 ${filterCount} 项` : ''}`}>筛选{filterCount ? ` ${filterCount}` : ''}</Button></Popover>
       <Nav selectedKeys={!creating && selected ? [selected.id] : []} aria-label="模型列表" onSelect={({itemKey}) => go({view:null,panel:null,model:itemKey,listingReturn:null,scopeEdit:null,tab:null,service:null,mapping:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:null},{replace:true,preserveScroll:true})}>
-        {rows.map(model => <Nav.Item style={{height:"auto"}} key={model.id} itemKey={model.id} text={<div className="ss-model-item"><div className="ss-model-title"><Typography.Text strong>{model.name}</Typography.Text><Status good={listed(model)}>{serviceLifecycle(model)}</Status></div><Typography.Text type="tertiary" size="small">{SERVICE_MODES[model.serviceMode]?.label || '未选择模式'} · {serviceConfiguration(state,model).label}</Typography.Text><Typography.Text type="tertiary" size="small">{modelCode(model)}</Typography.Text></div>}/>) }
+        {rows.map(model => <Nav.Item style={{height:"auto"}} key={model.id} itemKey={model.id} text={<div className="ss-model-item"><div className="ss-model-title"><Typography.Text strong>{model.name}</Typography.Text><AdminStatus value={serviceLifecycle(model)}/></div><Typography.Text type="tertiary" size="small">{SERVICE_MODES[model.serviceMode]?.label || '未选择模式'} · {serviceConfiguration(state,model).label}</Typography.Text><Typography.Text type="tertiary" size="small">{modelCode(model)}</Typography.Text></div>}/>) }
       </Nav>
       {!rows.length && <Empty description={<><p>没有匹配的模型。</p><Button theme="borderless" onClick={() => change({q:null,type:null,mode:null,status:null})}>清空查询和筛选</Button></>}/>}
       {tasks.length > 0 && <><Typography.Text type="tertiary">未建服务的接入任务</Typography.Text>{tasks.map(task => <Button key={task.draft.id} theme="borderless" onClick={() => go({view:'onboarding',draft:task.draft.id,step:String(task.step),model:null,panel:null})}>{task.master?.name || task.draft.rows[0]?.newModel?.name || '待选择模型'} · 继续任务</Button>)}</>}
     </aside>
     <section className="ss-detail" aria-label="模型服务工作台"><ChannelServiceContext state={state} ops={ops}/>{params.has('returnOnboarding') && <Notice><Button theme="borderless" onClick={() => go({view:'onboarding',draft:params.get('returnOnboarding'),step:'2',panel:null,model:null,returnOnboarding:null,providerAdd:null,providerEdit:null})}>返回接入任务</Button></Notice>}
       {creating ? <ServiceModelForm key="create" state={state} sourceState={sourceState} ops={ops} close={cancelCreate} saved={finishCreate}/> : selected ? <>
-        <div className="ss-heading"><div className="ss-model-heading"><Typography.Title heading={4}>{selected.name}</Typography.Title><Space wrap><Badge theme="light" type={headerStatus.service === '正式上架' ? 'success' : headerStatus.service === '灰度上架' ? 'warning' : 'tertiary'} count={`服务状态：${headerStatus.service}`}/><Badge theme="light" type={headerStatus.visibility === '用户不可见' ? 'tertiary' : headerStatus.visibility === '灰度用户可见' ? 'warning' : 'primary'} count={`可见性：${headerStatus.visibility}`}/></Space></div><Space wrap>{operationsReturn(params.get('returnTo')) && <Button onClick={() => ops.proceed(() => {location.hash=params.get('returnTo');})}>返回来源页面</Button>}<AdminActionMenu label="服务操作" items={actions}>服务操作</AdminActionMenu></Space></div>
+        <div className="ss-heading"><div className="ss-model-heading"><Typography.Title heading={4}>{selected.name}</Typography.Title><Space wrap><AdminStatus prefix="服务状态" value={headerStatus.service}/><AdminStatus prefix="可见性" value={headerStatus.visibility}/></Space></div><Space wrap>{operationsReturn(params.get('returnTo')) && <Button onClick={() => ops.proceed(() => {location.hash=params.get('returnTo');})}>返回来源页面</Button>}<AdminActionMenu label="服务操作" items={actions}>服务操作</AdminActionMenu></Space></div>
         {params.get('publicationReturn') === selected.id && <Button onClick={() => {go({publicationReturn:null},{saved:true,preserveScroll:true});act(selected,'publish');}}>返回上架检查</Button>}
         <ModelStatusSummary state={state} model={selected} ops={ops}/>
         <Tabs activeKey={activeTab} keepDOM={false} collapsible onChange={value => go({panel:value === 'materials' ? null : value,service:null,mapping:null,scopeEdit:null,tab:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:['trial','guide','failover'].includes(value) ? params.get('routeProvider') : null},{preserveScroll:true})}>

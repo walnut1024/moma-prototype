@@ -1,7 +1,8 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useState } from 'react';
-import { Banner, Button, Card, Form, Input, Modal, Radio, RadioGroup, Select, Space, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Form, Input, Modal, Radio, RadioGroup, Select, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconCopy, IconEyeClosed, IconEyeOpened, IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '../components/FilterControls';
 import { ADMIN_ROLES, ADMIN_ROLE_LABELS, ROLE_DESCRIPTIONS, generateAdminPassword, lastEnabledAdmin, normalizeAdminLogin } from './admin-accounts';
@@ -176,7 +177,7 @@ export default function AdminAccounts({ state, transact, conflict }) {
     { title: '姓名', dataIndex: 'name' },
     { title: '手机号码', dataIndex: 'phone', render: value => value ? maskMemberPhone(value) : '—' },
     { title: '角色', dataIndex: 'role', render: value => ADMIN_ROLE_LABELS[value] || '未配置角色' },
-    { title: '账号状态', dataIndex: 'status', render: value => <Tag color={value === '已启用' ? 'green' : 'grey'}>{value === '已启用' ? '已启用' : '已停用'}</Tag> },
+    { title: '账号状态', dataIndex: 'status', render: value => <AdminStatus value={value === '已启用' ? '已启用' : '已停用'}/> },
     { title: '创建时间', dataIndex: 'createdAt', render: value => value && Number.isFinite(Date.parse(value)) ? dateFormat.format(new Date(value)) : '—' },
     { title: '操作', key: 'actions', render: (_, account) => {
       const protectedAdmin = lastEnabledAdmin(state, account.id);

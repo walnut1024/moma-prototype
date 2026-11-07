@@ -1,10 +1,11 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminActionMenu from './AdminActionMenu';
 import {useRef,useState} from 'react';
 import { IconPlus } from '@douyinfe/semi-icons';
 import { Button, Input, Typography, Descriptions } from '@douyinfe/semi-ui';
 import {Choice, Field} from './ServiceUI';
-import {Status,Modal,Notice,CopyId} from './ServiceUI';
+import { Modal, Notice, CopyId } from './ServiceUI';
 import {modelSupplies,displayTime} from './model-management';
 import {SERVICE_MODES} from './model-operations';
 import {mappingCandidates,mappingConfig,mappingInterfaces,mappingPreview,mappingSourceVersion,mappingState} from './service-model-mappings';
@@ -45,7 +46,7 @@ export default function ServiceModelMappings({state,service,ops,onRoute}) {
     {!service.callId && <Notice>请先配置当前服务商服务的对外调用标识。</Notice>}
     {!interfaces.length && <Notice>当前模型任务尚无可用的平台接口，请先完善模型资料或使用支持的接口。</Notice>}
     {ops.error && !editor && !confirm && <Notice error>{ops.error}</Notice>}
-    <Table pagination={false} rowKey="id" scroll={{x:750}} empty="暂无映射。选择已验证的模型渠道建立映射，再配置路由。" columns={['映射 / 渠道','上游模型标识','接口映射','状态 / 引用','操作'].map((title,index)=>({title,render:(_,row)=>row['c'+index]}))} dataSource={rows.map(supply=>{const status=mappingState(state,service,supply),pending=supply.serviceMapping?.pending,used=status.references.length>0;return ({id:supply.id,c0: <><strong>{supply.mappingName || supply.endpoint?.name || '待补齐映射'}</strong>{!service.providerId && <small>{supply.provider?.name}</small>}{pending && <small>{pending.validation?'变更已验证，待应用':'有待验证变更'}</small>}</>,c1: <>{supply.upstreamModelId?<CopyId value={supply.upstreamModelId} label="上游模型标识"/>:'待配置'}</>,c2: <>{interfaces.find(([id])=>id===(supply.serviceMapping?.platformInterface || interfaces[0]?.[0]))?.[1] || '待配置'} → {supply.endpoint?.protocol || '待配置'}</>,c3: <><Status good={!status.issue && supply.status==='已启用'}>{status.label}</Status><small>{status.references.length?status.references.map(row=>row.kind).join('、'):'备用 · 未参与'}</small>{status.issue && <small>{status.issue}</small>}{used && <Button theme="borderless" onClick={onRoute}>处理路由引用</Button>}</>,c4: <><div className="ss-mapping-actions"><Button theme="borderless" disabled={blocked || ops.hasUnsaved?.()} onClick={event=>open(event,supply)}>编辑</Button>
+    <Table pagination={false} rowKey="id" scroll={{x:750}} empty="暂无映射。选择已验证的模型渠道建立映射，再配置路由。" columns={['映射 / 渠道','上游模型标识','接口映射','状态 / 引用','操作'].map((title,index)=>({title,render:(_,row)=>row['c'+index]}))} dataSource={rows.map(supply=>{const status=mappingState(state,service,supply),pending=supply.serviceMapping?.pending,used=status.references.length>0;return ({id:supply.id,c0: <><strong>{supply.mappingName || supply.endpoint?.name || '待补齐映射'}</strong>{!service.providerId && <small>{supply.provider?.name}</small>}{pending && <small>{pending.validation?'变更已验证，待应用':'有待验证变更'}</small>}</>,c1: <>{supply.upstreamModelId?<CopyId value={supply.upstreamModelId} label="上游模型标识"/>:'待配置'}</>,c2: <>{interfaces.find(([id])=>id===(supply.serviceMapping?.platformInterface || interfaces[0]?.[0]))?.[1] || '待配置'} → {supply.endpoint?.protocol || '待配置'}</>,c3: <><AdminStatus value={status.label}/><small>{status.references.length?status.references.map(row=>row.kind).join('、'):'备用 · 未参与'}</small>{status.issue && <small>{status.issue}</small>}{used && <Button theme="borderless" onClick={onRoute}>处理路由引用</Button>}</>,c4: <><div className="ss-mapping-actions"><Button theme="borderless" disabled={blocked || ops.hasUnsaved?.()} onClick={event=>open(event,supply)}>编辑</Button>
           {!used && !pending && (status.issue || supply.status!=='已启用') && <Button theme="borderless" disabled={blocked} onClick={()=>command(status.issue?'serviceMappingValidate':supply.status==='已启用'?'serviceMappingValidate':'serviceMappingEnable',payload(supply))}>{status.issue?'验证映射':supply.status==='已启用'?'重新验证':'启用映射'}</Button>}
           <AdminActionMenu label={'更多映射操作 '+(supply.mappingName || supply.endpoint?.name)} items={[
  {node:'item',name:'预览映射',onClick:button=>read(button,supply)},

@@ -19,7 +19,6 @@
 .admin-v2 .supplier-group-key-table th:nth-child(5){width:12%}
 .admin-v2 .supplier-group-key-table th:nth-child(6){width:26%}
 .admin-v2 .supplier-workbench .supplier-group-key-table td:first-child{width:auto;max-width:none;min-width:0;font-variant-numeric:tabular-nums}
-.admin-v2 .supplier-group-key-table td:first-child .mo-status{display:block;width:fit-content;margin-top:4px}
 .admin-v2 .supplier-group-key-table td:nth-child(2) code{white-space:nowrap}
 .admin-v2 .supplier-group-key-table td:first-child [data-slot=button]{display:block;height:24px;padding:0;font-size:11px}
 .admin-v2 .supplier-group-key-table .supplier-row-actions{flex-wrap:wrap;gap:4px 8px}

@@ -1,3 +1,4 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import { scopeTenants } from './service-commercial';
@@ -7,7 +8,7 @@ import { Children, Fragment, isValidElement, useEffect, useRef, useState } from 
 import { Button, Collapse, Input, TextArea, Toast } from '@douyinfe/semi-ui';
 import { IconDelete, IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import AdminPageHeading from './AdminPageHeading';
-import { CopyId, Modal as ServiceModal, Notice, Status, serviceOperationsUi, Choice, Field, MultiChoice } from './ServiceUI';
+import { CopyId, Modal as ServiceModal, Notice, serviceOperationsUi, Choice, Field, MultiChoice } from './ServiceUI';
 import { priceItems, moneyDisplay } from './model-management';
 import { PROVIDER_TYPES, PROTOCOLS } from './provider-management';
 import { connectionTestPassed } from './connection-state';
@@ -16,7 +17,7 @@ import { modelOperationTarget } from './model-operation-history';
 import './model-operations.css';
 import './semi-onboarding.css';
 
-export { Notice, Status, CopyId };
+export { Notice, CopyId };
 export function Heading({ title, description, children }) {
   return <AdminPageHeading title={title} description={description}>
     {children && <div className="mo-actions">{children}</div>}
@@ -140,4 +141,4 @@ export function ScopeFields({ state, openScope, tenantIds = [], onChange, disabl
   const unavailable=tenantIds.filter(id=>!tenants.some(row=>row.id===id));
   return <div className="mo-form-grid"><Field label="客户开放范围 *"><Choice label="客户范围" value={openScope || 'unselected'} disabled={disabled} options={[[ 'unselected','请选择开放范围'],['all','全部有效客户'],['selected','指定客户']]} onChange={value=>onChange(value,tenantIds)}/></Field>{openScope==='selected' && <Field label="选择客户 *"><MultiChoice label="客户" groups={[[ '政企客户',tenants.filter(row=>row.type!=='个人').map(tenantLabel) ],[ '个人客户',tenants.filter(row=>row.type==='个人').map(tenantLabel) ]]} choices={tenants.map(tenantLabel)} value={tenants.filter(tenant=>tenantIds.includes(tenant.id)).map(tenantLabel)} disabled={disabled} onChange={names=>onChange('selected',tenants.filter(tenant=>names.includes(tenantLabel(tenant))).map(tenant=>tenant.id))}/>{unavailable.length>0 && <Notice error>有 {unavailable.length} 个客户已停用或删除，请重新选择有效客户。<Button type="tertiary" theme="borderless" disabled={disabled} onClick={()=>onChange('selected',tenantIds.filter(id=>!unavailable.includes(id)))}>移除无效客户</Button></Notice>}</Field>}</div>;
 }
-export function ValidationNote({ endpoint, supply }) { return <div className="mo-stack"><Status good={connectionTestPassed(endpoint) && supply?.validationStatus === '通过'}>{!connectionTestPassed(endpoint) ? '连接待验证' : supply?.validationStatus === '通过' ? '已通过' : supply?.validationStatus || '待验证'}</Status><small>{supply?.verifiedAt ? new Date(supply.verifiedAt).toLocaleString('zh-CN') : '尚无验证记录'}</small></div>; }
+export function ValidationNote({ endpoint, supply }) { return <div className="mo-stack"><AdminStatus value={!connectionTestPassed(endpoint) ? '连接待验证' : supply?.validationStatus === '通过' ? '已通过' : supply?.validationStatus || '待验证'}/><small>{supply?.verifiedAt ? new Date(supply.verifiedAt).toLocaleString('zh-CN') : '尚无验证记录'}</small></div>; }

@@ -1,3 +1,4 @@
+import AdminStatus from './AdminStatus';
 import SupplierChannelBatchTest from './SupplierChannelBatchTest';
 import SupplyModelView, { SupplyModelSidebar } from './SupplyModelView';
 import ProviderEditor from './SupplierProfileDialog';
@@ -9,7 +10,7 @@ import { Button, Space, Tabs, Typography, Card } from '@douyinfe/semi-ui';
 import { MOMA_PROVIDER, supplierDirectory } from './moma-provider.js';
 import { supplierChannelResources } from './supplier-resources';
 import { providerCode } from './model-operations';
-import { Status, Notice, SearchBox, Modal, useOperations } from './ModelOperationsUI';
+import { Notice, SearchBox, Modal, useOperations } from './ModelOperationsUI';
 import SupplierModelCatalogue from './SupplierModelCatalogue';
 import { supplierModelChannelGroups } from './supplier-model-channel-table';
 import ProviderApiKeys from './ProviderApiKeys';
@@ -26,7 +27,7 @@ function SupplierSidebar({ state, providers, selected, onSelect }) {
     <nav className="supplier-sidebar-options" aria-label="服务商目录">
       {matches.map(item => {
         const groups = supplierModelChannelGroups(state, item), modelCount = groups.filter(row => row.modelId).length, channelCount = new Set(groups.flatMap(row => row.channels.map(channel => channel.endpointId)).filter(Boolean)).size;
-        return <Button key={item.id} type={item.id === selected ? 'primary' : 'tertiary'} theme={item.id === selected ? 'light' : 'borderless'} aria-pressed={item.id === selected} title={providerCode(item)} onClick={() => onSelect(item.id)}><span>{item.name}{item.id===MOMA_PROVIDER.id && <Status>内置</Status>}</span><small>{modelCount} 款模型，{channelCount} 个渠道</small></Button>;
+        return <Button key={item.id} type={item.id === selected ? 'primary' : 'tertiary'} theme={item.id === selected ? 'light' : 'borderless'} aria-pressed={item.id === selected} title={providerCode(item)} onClick={() => onSelect(item.id)}><span>{item.name}{item.id===MOMA_PROVIDER.id && <AdminStatus value="内置"/>}</span><small>{modelCount} 款模型，{channelCount} 个渠道</small></Button>;
       })}
       {!matches.length && <p role="status">没有匹配的服务商</p>}
     </nav>
@@ -53,7 +54,7 @@ export default function ProviderManagement(props) {
         <div>
           <Space wrap>
             <Typography.Title heading={4} component="h2">{provider.name}</Typography.Title>
-            <Status good={provider.status === '已启用'}>{provider.status}</Status>
+            <AdminStatus value={provider.status}/>
           </Space>
           <Typography.Paragraph type="tertiary" size="small">服务商 ID <code title={provider.id}>{provider.id}</code></Typography.Paragraph>
         </div>

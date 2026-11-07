@@ -1,3 +1,4 @@
+import AdminStatus from './AdminStatus';
 import { useState } from 'react';
 import { Button, Descriptions, Tabs, Typography } from '@douyinfe/semi-ui';
 import { Disclosure, GridTable, Row, Cell, Modal } from './ModelOperationsUI';
@@ -40,7 +41,7 @@ export default function SupplierChannelDetails({ state, provider, association, o
           { key: '渠道', value: <div className="admin-table-record">{supplierChannelName(provider, endpoint)}
             <Typography.Text type="tertiary" size="small">{supplierChannelCode(endpoint)}</Typography.Text></div> },
           { key: '上游模型标识', value: <code>{association.upstreamModelId}</code> },
-          { key: '接入状态', value: channelStatus(provider, association) },
+          { key: '接入状态', value: <AdminStatus value={channelStatus(provider, association)}/> },
           { key: '配置版本', value: endpoint.configurationRevision || 0 },
           { key: '请求地址', value: addresses.map((address, index) => <div className="admin-table-record" key={index}>
             <Typography.Text type="tertiary">{address.protocol}</Typography.Text><code>{String(redactDiagnostic(address.baseUrl))}</code>
@@ -62,7 +63,7 @@ export default function SupplierChannelDetails({ state, provider, association, o
       <Tabs.TabPane tab="操作记录" itemKey="operations"><GridTable headings={['时间','操作','结果','操作人']} empty={!(state.audits || []).some(row=>[endpoint.id,association.id].includes(row.objectId) || row.endpointId===endpoint.id || row.relatedEndpointIds?.includes(endpoint.id))} emptyMessage="暂无明确归属当前渠道的操作记录。">{(state.audits || []).filter(row=>[endpoint.id,association.id].includes(row.objectId) || row.endpointId===endpoint.id || row.relatedEndpointIds?.includes(endpoint.id)).map(row=><Row key={row.id}><Cell>{time(row.createdAt)}</Cell><Cell>{row.action}</Cell><Cell>{row.result}</Cell><Cell>{row.actorName || row.actor}</Cell></Row>)}</GridTable></Tabs.TabPane>
       <Tabs.TabPane tab="测试记录" itemKey="tests">
         <GridTable headings={['时间 / 任务', '来源', '结果', '耗时', '操作']} empty={!history.length} emptyMessage="尚无测试记录。">
-          {history.map((test, index) => <Row key={test.id || index}><Cell>{time(test.startedAt || test.testedAt || test.createdAt)}<small>{test.task || test.templateId || '基础调用'}</small></Cell><Cell>{source(test)}</Cell><Cell>{test.result || test.status || '未记录'}{(test.current === false || test.fingerprint && test.fingerprint !== channelFingerprint(association)) && <small>旧配置记录</small>}</Cell><Cell>{test.durationMs == null ? '—' : `${test.durationMs} ms`}</Cell><Cell><Button type="tertiary" theme="borderless" onClick={() => setSelectedTest(test.id || test.testedAt)}>详情</Button></Cell></Row>)}
+          {history.map((test, index) => <Row key={test.id || index}><Cell>{time(test.startedAt || test.testedAt || test.createdAt)}<small>{test.task || test.templateId || '基础调用'}</small></Cell><Cell>{source(test)}</Cell><Cell><AdminStatus value={test.result || test.status || '未记录'}/>{(test.current === false || test.fingerprint && test.fingerprint !== channelFingerprint(association)) && <small>旧配置记录</small>}</Cell><Cell>{test.durationMs == null ? '—' : `${test.durationMs} ms`}</Cell><Cell><Button type="tertiary" theme="borderless" onClick={() => setSelectedTest(test.id || test.testedAt)}>详情</Button></Cell></Row>)}
         </GridTable>
         {record && <section className="supplier-test-record" aria-label="测试诊断">
           <Typography.Title heading={5} component="h3">测试诊断</Typography.Title>
@@ -80,7 +81,7 @@ export default function SupplierChannelDetails({ state, provider, association, o
       </Tabs.TabPane>
       <Tabs.TabPane tab="关联服务" itemKey="services">
         <GridTable headings={['模型服务', '服务模式', '状态', '操作']} empty={!services.length} emptyMessage="尚未关联模型服务。">
-          {services.map(model => <Row key={model.id}><Cell>{model.name}<small>{model.modelId}</small></Cell><Cell>{model.serviceMode === 'standard' ? '统一模型服务模式' : model.serviceMode === 'provider' ? '渠道直选模式' : '待配置'}</Cell><Cell>{model.listingStatus || model.status || '—'}</Cell><Cell><Button type="tertiary" theme="borderless" onClick={() => { close(); ops.go({ model: model.id, panel: null }, { base: 'listing' }); }}>前往服务管理</Button></Cell></Row>)}
+          {services.map(model => <Row key={model.id}><Cell>{model.name}<small>{model.modelId}</small></Cell><Cell>{model.serviceMode === 'standard' ? '统一模型服务模式' : model.serviceMode === 'provider' ? '渠道直选模式' : '待配置'}</Cell><Cell><AdminStatus value={model.listingStatus || model.status || '—'}/></Cell><Cell><Button type="tertiary" theme="borderless" onClick={() => { close(); ops.go({ model: model.id, panel: null }, { base: 'listing' }); }}>前往服务管理</Button></Cell></Row>)}
         </GridTable>
         {routes.length > 0 && <p className="supplier-price-hint">被 {routes.length} 项生效路由引用。</p>}
       </Tabs.TabPane>

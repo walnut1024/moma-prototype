@@ -1,6 +1,7 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useState } from 'react';
-import { Banner, Button, Card, Form, Input, Modal, Space, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Form, Input, Modal, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch, IconUpload } from '@douyinfe/semi-icons';
 import { DEFAULT_PAGE_SIZE, FilterReset, FilterToolbar, PAGE_SIZES } from '../components/FilterControls';
 import OperationInputDialog from '../components/OperationInputDialog';
@@ -13,11 +14,6 @@ import { canMutate } from './store';
 
 const uid = prefix => `${prefix}-${crypto.randomUUID()}`;
 const { Text, Title } = Typography;
-const statuses = {
-  green: ['已启用', '已上架', '生效中', '已开通', '已完成', '已出账', '已确认', '已执行', '已计量'],
-  orange: ['待开通', '待出账', '待审批', '待确认', '待结算', '有差异'],
-  red: ['已拒绝', '失败'],
-};
 const titles = { goods: '商品与套餐', orders: '订单与订阅', announcements: '公告与服务通知', metering: '计量明细',
   ledger: '账户与额度流水', bills: '客户账单', settlement: '服务商对账与结算', adjustments: '退款与调账' };
 const configs = {
@@ -29,14 +25,9 @@ const configs = {
   ] },
 };
 const editable = (state, collection) => !state.storageError && canMutate(state.currentRole, { type: 'update', collection });
-const statusColumn = { title: '状态', dataIndex: 'status', width: 100, render: value => <Status value={value}/> };
+const statusColumn = { title: '状态', dataIndex: 'status', width: 100, render: value => <AdminStatus value={value === '草稿' ? '未发布' : value}/> };
 const money = amount => amount == null ? '—' : `¥${amount}`;
 const actionColumn = render => ({ title: '操作', key: 'actions', width: 155, render: (_, row) => render(row) });
-
-function Status({ value }) {
-  const color = Object.keys(statuses).find(color => statuses[color].includes(value)) || 'grey';
-  return <Tag color={color}>{value === '草稿' ? '未发布' : value}</Tag>;
-}
 
 function BusinessTable({ rows, columns, minWidth = 850, children, empty = '暂无记录', tableKey }) {
   const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
@@ -186,7 +177,7 @@ function Metering({ state, dispatch }) {
       { title: '数量', dataIndex: 'usage', align: 'right', render: usage => usageTotal(usage).toLocaleString() },
       { title: '价格快照', render: () => '2026-09 生效价' },
       { title: '金额', align: 'right', render: (_, row) => money(row.httpStatus === 200 ? (usageTotal(row.usage) / 1e6 * 1.8).toFixed(4) : '0.0000') },
-      { ...statusColumn, dataIndex: 'httpStatus', render: value => <Status value={value === 200 ? '已计量' : '不计费'}/> },
+      { ...statusColumn, dataIndex: 'httpStatus', render: value => <AdminStatus value={value === 200 ? '已计量' : '不计费'}/> },
     ]}/>
   </>;
 }

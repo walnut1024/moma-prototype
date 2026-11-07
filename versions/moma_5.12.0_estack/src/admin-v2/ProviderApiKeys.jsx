@@ -1,3 +1,4 @@
+import AdminStatus from './AdminStatus';
 import AdminActionMenu from './AdminActionMenu';
 import ChannelHealthDialog from './ChannelHealthDialog';
 import { credentialRotationOpening, credentialRotationChannels } from './credential-rotation-scope';
@@ -8,7 +9,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { LoaderCircle, Radio } from 'lucide-react';
 import { IconPlus } from '@douyinfe/semi-icons';
 import { Button, Input, Select, TextArea, Typography } from '@douyinfe/semi-ui';
-import { Disclosure, GridTable, Row, Cell, Modal, Notice, Status } from './ModelOperationsUI';
+import { Disclosure, GridTable, Row, Cell, Modal, Notice } from './ModelOperationsUI';
 import { supplierChannelResources, supplierChannelAssociations, supplierChannelCode, supplierChannelName, supplierKeyChannels } from './supplier-resources';
 import { Choice, Field } from './ServiceUI';
 import { providerApiKeysDraft, providerApiKeyRows, providerApiKeyName, providerApiKeyId, maskProviderApiKey, providerModelConnectivityTest, MODEL_CONNECTIVITY_SCENARIOS } from './provider-management';
@@ -190,7 +191,7 @@ export default function ProviderApiKeys({ state, provider, ops }) {
               items={channels.length ? channels.map(channel => ({
                 node: 'item', name: supplierChannelCode(channel) + ' · ' + supplierChannelName(provider, channel),
                 onClick: () => ops.go({ tab: 'catalogue', resource: channel.id }),
-              })) : [{ node: 'title', name: '暂无渠道绑定' }]}>{channels.length} 个</AdminActionMenu></Cell><Cell><Status good={row.apiKey.status !== 'disabled' && !row.apiKey.revokedAt}>{row.apiKey.revokedAt ? '已撤销' : row.apiKey.status === 'disabled' ? '已停用' : '已配置'}</Status></Cell><Cell><div className="supplier-row-actions"><Button theme="borderless" type="tertiary" aria-label={`检测密钥 ${row.apiKey.id}`} disabled={!ops.can || Boolean(row.apiKey.revokedAt) || row.apiKey.status === 'disabled'} onClick={event => open(event.currentTarget, () => setKeyAction({ kind: 'test', row }))}>检测</Button>
+              })) : [{ node: 'title', name: '暂无渠道绑定' }]}>{channels.length} 个</AdminActionMenu></Cell><Cell><AdminStatus value={row.apiKey.revokedAt ? '已撤销' : row.apiKey.status === 'disabled' ? '已停用' : '已配置'}/></Cell><Cell><div className="supplier-row-actions"><Button theme="borderless" type="tertiary" aria-label={`检测密钥 ${row.apiKey.id}`} disabled={!ops.can || Boolean(row.apiKey.revokedAt) || row.apiKey.status === 'disabled'} onClick={event => open(event.currentTarget, () => setKeyAction({ kind: 'test', row }))}>检测</Button>
 
             <Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} aria-label={(channels.some(channel => channel.authMode === 'pool') ? '管理密钥池：' : '替换：') + providerApiKeyId(row.apiKey)} onClick={event => open(event.currentTarget, () => channels.some(channel => channel.authMode === 'pool') ? setKeyAction({ kind: 'pool', row, group }) : setEditing({ record: keyRecord(row), group }))}>{channels.some(channel => channel.authMode === 'pool') ? '管理密钥池' : '替换'}</Button>
             <Button theme="borderless" type="tertiary" size="small" aria-label={'上移 '+providerApiKeyName(row.apiKey)} disabled={!ops.can || reordering || Boolean(ops.conflict) || Boolean(candidate) || index===0} onClick={event=>move(event,row,'up')}>上移</Button><Button theme="borderless" type="tertiary" size="small" aria-label={'下移 '+providerApiKeyName(row.apiKey)} disabled={!ops.can || reordering || Boolean(ops.conflict) || Boolean(candidate) || index===rows.length-1} onClick={event=>move(event,row,'down')}>下移</Button>

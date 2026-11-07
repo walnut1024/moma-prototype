@@ -1,14 +1,11 @@
 import { Children, cloneElement, isValidElement, useCallback, useId } from 'react';
-import { Banner, Button, Form, Input, InputNumber, Modal as SemiModal, Select, TextArea, SideSheet, Space, Tag, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Form, Input, InputNumber, Modal as SemiModal, Select, TextArea, SideSheet, Space, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { IconHelpCircle } from '@douyinfe/semi-icons';
 import { modelFieldDescriptions } from './model-field-descriptions';
 import './semi-services.css';
 
 export function Notice({ children, error = false }) {
   return <Banner type={error ? 'danger' : 'info'} description={children}/>;
-}
-export function Status({ children, good = false }) {
-  return <Tag color={good ? 'green' : 'grey'}>{children}</Tag>;
 }
 const textControls = new Set([Input, InputNumber, TextArea]);
 const fieldControls = new Set([...textControls, Select, Choice, MultiChoice]);

@@ -1,6 +1,7 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useId, useState } from 'react';
-import { Button, Input, Descriptions, Tag, Typography } from '@douyinfe/semi-ui';
+import { Button, Input, Descriptions, Typography } from '@douyinfe/semi-ui';
 import { Field, Modal, Notice } from './ServiceUI';
 import ProcurementPriceFields from './ProcurementPriceFields';
 import { cataloguePriceDraft, cataloguePurchasePrice, catalogueMoneyDisplay } from './provider-catalogue-pricing';
@@ -87,7 +88,7 @@ export default function ProcurementVersionEditor({ state, provider, association,
             </Typography.Paragraph>) : '待配置' },
           { title: '状态', width: 100, render: (_, version) => {
             const label = status(version);
-            return <Tag color={label === '生效中' ? 'green' : 'grey'}>{label}</Tag>;
+            return <AdminStatus value={label}/>;
           } },
           { title: '操作', width: 130, render: (_, version) => <Button theme="borderless" size="small" disabled={!ops.can || busy}
             onClick={() => changed(setScenarios)(cataloguePriceDraft(version.pricing).scenarios)}>沿用报价</Button> },

@@ -1,3 +1,4 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { Button, Descriptions, Typography } from '@douyinfe/semi-ui';
 import PricingFilters from './PricingFilters';

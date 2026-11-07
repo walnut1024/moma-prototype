@@ -1,6 +1,7 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useState } from 'react';
-import { Button, Card, Space, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconPlus } from '@douyinfe/semi-icons';
 import AdminPageHeading from './AdminPageHeading';
 import { deploymentUsesArtifact } from './deployments';
@@ -40,8 +41,8 @@ export default function ArtifactManagement({ state, dispatch }) {
           { title: '摘要', dataIndex: 'digest', render: value => <Typography.Text code>{value}</Typography.Text> },
           { title: '大小', dataIndex: 'size', align: 'right' },
           { title: '引用部署', dataIndex: 'refs', align: 'right' },
-          { title: '验证', dataIndex: 'validation', render: value => <Tag color={value === '通过' ? 'green' : 'orange'}>{value}</Tag> },
-          { title: '状态', dataIndex: 'status', render: value => <Tag color={value === '可运行' ? 'green' : 'grey'}>{value}</Tag> },
+          { title: '验证', dataIndex: 'validation', render: value => <AdminStatus value={value}/> },
+          { title: '状态', dataIndex: 'status', render: value => <AdminStatus value={value}/> },
           { title: '操作', render: (_, row) => <Space spacing={4}>
             {row.validation !== '通过' && <Button size="small" theme="borderless"
               onClick={() => update(row, { validation: '通过', status: '可运行' })}>校验</Button>}

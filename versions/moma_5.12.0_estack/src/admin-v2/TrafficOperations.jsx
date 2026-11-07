@@ -1,7 +1,8 @@
+import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, ConfigProvider, Input, InputNumber, Modal, Space, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, ConfigProvider, Input, InputNumber, Modal, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import { Choice } from './ServiceUI.jsx';
 import { accountTraffic, effectiveTraffic, trafficAccounts, trafficModels, trafficSettings } from './traffic-limits.js';
@@ -179,7 +180,7 @@ export default function TrafficOperations({ state, transact, conflict, dirtyRef 
     { title: '模型名称', dataIndex: 'name' }, { title: '模型标识', dataIndex: 'modelId' },
     ...rateColumns(row => editing('model', row.id) ? draft.data : row.limit, (row, metric) => editing('model', row.id)
       ? value => update(data => ({ ...data, [metric]: value })) : null),
-    { title: '配置状态', render: (_, row) => <Tag color={row.limit ? 'green' : 'grey'}>{row.limit ? '已配置' : '未配置'}</Tag> },
+    { title: '配置状态', render: (_, row) => <AdminStatus value={row.limit ? '已配置' : '未配置'}/> },
     { title: '操作', render: (_, row) => editing('model', row.id) ? <>{editorActions}{rowError}</>
       : editButton('编辑', event => begin(event, 'model', row.id, row.limit || blank), `编辑 ${row.name}`) },
   ];
