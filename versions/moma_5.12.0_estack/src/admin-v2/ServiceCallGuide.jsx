@@ -3,7 +3,6 @@ import 'prismjs/components/prism-java';
 import 'prismjs/components/prism-go';
 import 'prismjs/components/prism-bash';
 import { FieldLabel as ModelFieldLabel } from './ServiceUI';
-import ServicePlatformTrial from './ServicePlatformTrial';
 import {useRef,useState} from 'react';
 import {Copy} from 'lucide-react';
 import { CodeHighlight, Button, Toast, TextArea, Typography, Descriptions } from '@douyinfe/semi-ui';
@@ -18,9 +17,9 @@ export default function ServiceCallGuide({state,model,ops}) {
   const [editing,setEditing]=useState(null),[codes,setCodes]=useState({}),[base,setBase]=useState('');
   const editor=useRef(null);
   const service=services.find(item=>item.id===providerId) || services[0], configuration=serviceConfiguration(state,model);
-  if (!model.serviceMode || !service?.callId || configuration.setupIssues.length) return <div className="ss-empty ss-first-config"><Typography.Title heading={5}>{!model.serviceMode?'调用指南尚未生成':'调用指南待完善'}</Typography.Title><Typography.Paragraph>完成服务模式、渠道、路由和开放范围配置后，生成对应模型服务的调用示例。</Typography.Paragraph><ServicePlatformTrial state={state} model={model} ops={ops} providerId={service?.providerId}/><Button theme="light" onClick={()=>(()=>{const {page,...target}=serviceConfigurationTarget(model,configuration.setupIssues[0] || {tab:'serviceMode'});ops.go({...target,returnTo:location.hash},{base:page,reset:true});})()}>前往完善配置</Button></div>;
+  if (!model.serviceMode || !service?.callId || configuration.setupIssues.length) return <div className="ss-empty ss-first-config"><Typography.Title heading={5}>{!model.serviceMode?'调用指南尚未生成':'调用指南待完善'}</Typography.Title><Typography.Paragraph>完成服务模式、渠道、路由和开放范围配置后，生成对应模型服务的调用示例。</Typography.Paragraph><Button theme="light" onClick={()=>(()=>{const {page,...target}=serviceConfigurationTarget(model,configuration.setupIssues[0] || {tab:'serviceMode'});ops.go({...target,returnTo:location.hash},{base:page,reset:true});})()}>前往完善配置</Button></div>;
   const request=serviceGuideRequest(editing?{...model,apiGuides:{...model.apiGuides,[service.providerId || 'standard']:{codes}}}:model,service.callId,service.providerId);
-  return <div className="ss-model-form ss-guide"><div className="ss-section-bar"><ServicePlatformTrial state={state} model={model} ops={ops} providerId={service.providerId}/></div>
+  return <div className="ss-model-form ss-guide">
     {model.serviceMode==='provider' && <div className="ss-section-bar"> <Field label="服务商"><Choice label="调用指南服务商" value={service.id} options={services.map(item=>[item.id,item.name])} disabled={Boolean(editing)} onChange={id=>{setProviderId(id);ops.go({panel:'guide',routeProvider:services.find(item=>item.id===id)?.providerId || null},{preserveScroll:true});}}/></Field></div>}
     {!model.callsEnabled && <Notice>当前技术服务未启用，完成管理端验证后可启用。</Notice>}
     {ops.error && <Notice error>{ops.error}</Notice>}

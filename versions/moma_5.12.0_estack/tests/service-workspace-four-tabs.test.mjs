@@ -15,9 +15,9 @@ function providerFixture() {
   return { state, modelId: model.id, providerId: provider.id };
 }
 
-test('five workspace tabs resolve metadata, mapping, pricing and contextual task links', () => {
-  assert.deepEqual(SERVICE_WORKSPACE_TABS.map(row => row[1]), ['服务概览', '渠道与路由', '调用授权', '验证与调用', '操作记录']);
-  for (const [params, expected] of [[{}, 'materials'], [{panel:'editMetadata'}, 'materials'], [{panel:'routing'}, 'routing'], [{panel:'associate'}, 'routing'], [{panel:'guide'}, 'guide'], [{panel:'guide',providerChannels:'p',routeProvider:'p'}, 'guide'], [{providerAdd:'1'}, 'routing'], [{identityProvider:'p'}, 'routing'], [{providerAssociate:'1'}, 'routing'], [{panel:'access'}, 'access'], [{scopeEdit:'1'}, 'access'], [{panel:'history'}, 'history']]) assert.equal(serviceWorkspaceTab(new URLSearchParams(params)), expected);
+test('seven workspace tabs resolve metadata, mapping, pricing and contextual task links', () => {
+  assert.deepEqual(SERVICE_WORKSPACE_TABS.map(row => row[1]), ['服务概览', '渠道与路由', '故障转移', '调用授权', '调用指南', '平台试调用', '操作记录']);
+  for (const [params, expected] of [[{}, 'materials'], [{panel:'editMetadata'}, 'materials'], [{panel:'routing'}, 'routing'], [{panel:'associate'}, 'routing'], [{panel:'guide'}, 'guide'], [{panel:'guide',providerChannels:'p',routeProvider:'p'}, 'guide'], [{providerAdd:'1'}, 'routing'], [{identityProvider:'p'}, 'routing'], [{providerAssociate:'1'}, 'routing'], [{panel:'access'}, 'access'], [{scopeEdit:'1'}, 'access'], [{panel:'failover'}, 'failover'], [{panel:'trial',routeProvider:'p'}, 'trial'], [{panel:'history'}, 'history']]) assert.equal(serviceWorkspaceTab(new URLSearchParams(params)), expected);
 });
 
 test('provider call-ID mapping is independent of prices, routes, resources and customer scope', () => {

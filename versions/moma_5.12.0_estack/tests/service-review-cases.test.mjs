@@ -39,7 +39,8 @@ test('configured fixtures have complete valid routes, independent Provider IDs a
     const current=activeRouteVersion(serviceRoute(state,service.id));
     assert.ok(current);assert.ok(routingChannels(state,service).every(channel=>channel.available));
     assert.doesNotThrow(()=>validateRouteConfig(state,service,current.config));
-    assert.equal(current.config.autoFailover,true);
+    assert.equal(current.config.autoFailover,current.config.channels.length>1);
+    if (service.providerId) assert.equal(current.config.channels.filter(row=>row.enabled && !row.backup).length,1);
     if (service.providerId) assert.ok(routingChannels(state,service).every(channel=>channel.provider.id===service.providerId));
   }
 });

@@ -71,14 +71,14 @@ function platformRoute(state, service, version, rows) {
   const config = version.config;
   validateRouteConfig(state,service,config,false);
   if (!['fixed', 'weighted', 'priority', 'priority_weighted', 'load', 'tpm', 'latency', 'cost'].includes(config.strategy)) issue('路由配置', '当前路由策略不能用于平台试调用');
-  if (config.strategy === 'fixed' && !config.autoFailover && rows.length !== 1) issue('路由配置', '关闭故障切换时，固定渠道须明确选择一条供给');
+  if (service.mode === 'provider' && rows.length !== config.channels.filter(row => row.enabled).length) issue('供给范围', '请选择主渠道及已配置的备用渠道');
   if (config.strategy === 'priority_weighted' && (!config.groups?.length || config.groups.some(group => group.strategy !== 'weighted'))) issue('路由配置', '优先级组内仅支持权重分流，请调整组内策略');
   return { version: version.version, strategy: config.strategy, strategyCode:ROUTING_POLICIES[config.strategy]?.code || config.strategy, costBasis:config.advanced?.costBasis || 'input', autoFailover: config.autoFailover === true, channels: rows.map(row => {
     const group = config.groups?.findIndex(group => group.id === row.route.groupId);
     const priority = config.strategy === 'priority_weighted' ? group : row.route.priority;
     const weighted = ['weighted', 'priority_weighted'].includes(config.strategy);
     if (!Number.isInteger(priority) || priority < 0 || weighted && (!Number.isFinite(row.route.weight) || row.route.weight <= 0)) issue('路由配置', '渠道的优先级、分组或权重无效');
-    return { bindingId: row.id, priority, ...(weighted ? { weight: row.route.weight } : {}) };
+    return { bindingId: row.id, priority, ...(row.route.backup ? { backup:true } : {}), ...(weighted ? { weight: row.route.weight } : {}) };
   }) };
 }
 

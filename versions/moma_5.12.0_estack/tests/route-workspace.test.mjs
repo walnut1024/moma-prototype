@@ -6,9 +6,9 @@ const service={mode:'standard'};
 const config=normalizeRouteConfig({strategy:'weighted',autoFailover:true,autoRecover:true,channels:[{supplyId:'a',weight:60,enabled:true},{supplyId:'b',weight:40,enabled:true}]});
 const channels=[{id:'a',channelName:'自营',provider:{name:'MoMA'}},{id:'b',channelName:'转售',provider:{name:'MoMA'}}];
 
-test('unified choices are restricted without rewriting existing route history or provider choices',()=>{
+test('unified choices are restricted without rewriting existing route history',()=>{
   assert.deepEqual(routeStrategyChoices(service),['weighted','load','tpm','latency','cost']);
-  assert.deepEqual(routeStrategyChoices({mode:'provider'}),['fixed','weighted','load','tpm','latency','cost']);
+  assert.deepEqual(routeStrategyChoices({mode:'provider'}),['fixed']);
   assert.equal(routeEditConfig({mode:'provider'},null,[channels[0]]).strategy,'fixed');
   const saved={...structuredClone(config),strategy:'random'};
   const route={activeVersion:1,versions:[{version:1,config:saved}]},before=structuredClone(route);
@@ -35,11 +35,11 @@ test('publish review lists weight edits, removed and newly participating channel
   assert.equal(rows[1].after,'未加入');assert.equal(sameRouteConfig(config,next),false);
   const first=routeChangeRows(null,config,channels);assert.equal(first.length,3);
 });
-test('publish review detects parameter-only and preserved runtime changes without treating typed numeric weights as changes',()=>{
+test('publish review detects route parameters without treating typed numeric weights as changes',()=>{
   const typed=structuredClone(config);typed.channels[0].weight='60';
   assert.ok(sameRouteConfig(config,typed));assert.deepEqual(routeChangeRows(config,typed,channels),[]);
   const changed=structuredClone(config);changed.advanced.costBasis='output';changed.autoFailover=false;
-  const rows=routeChangeRows(config,changed,channels);assert.deepEqual(rows.map(row=>row.label),['故障转移','成本口径']);
+  const rows=routeChangeRows(config,changed,channels);assert.deepEqual(rows.map(row=>row.label),['成本口径']);
 });
 
 test('fixed strategy selects only one channel while weighted and latency retain multiple selections',()=>{

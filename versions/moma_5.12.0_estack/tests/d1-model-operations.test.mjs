@@ -100,6 +100,42 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     assert.equal((await api('/model-operations')).data.models.find(m=>m.id===model.id).callsEnabled,false);
     assert.equal(state.models.find(m=>m.id===model.id).listingStatus,'已下架');
     assert.deepEqual(state.modelSalePrices,prices);
+    const explicit = routingServices(state).find(row=>row.modelId===model.id && row.providerId==='provider-moma');
+    const primaryVersion = activeRouteVersion(serviceRoute(state,explicit.id));
+    const [primary] = primaryVersion.config.channels;
+    const backup = routingChannels(state,explicit).find(row=>row.available && row.id!==primary.supplyId);
+    assert.ok(backup);
+    const saveFailover = (enabled, backupSupplyId, overrides={}) => save(state,{type:'modelOperations',operation:'serviceFailoverConfigure',modelId:model.id,data:{serviceId:explicit.id,expectedVersion:serviceRoute(state,explicit.id).activeVersion,sourceVersion:routeSourceVersion(state,explicit),confirmed:true,enabled,backupSupplyId,...overrides}});
+    const beforeFailover = (await api('/model-operations')).data;
+    await assert.rejects(saveFailover(true,primary.supplyId),/不同的备用渠道/);
+    const foreign = routingServices(state).find(row=>row.modelId===model.id && row.providerId==='provider-zhipu-direct');
+    await assert.rejects(saveFailover(true,routingChannels(state,foreign)[0].id),/指定服务商/);
+    assert.deepEqual((await api('/model-operations')).data,beforeFailover);
+    await saveFailover(true,backup.id);
+    const withBackup = (await api('/model-operations')).data;
+    const configured = activeRouteVersion(serviceRoute(withBackup,explicit.id));
+    assert.deepEqual(configured.config.channels.find(row=>!row.backup),primary);
+    assert.equal(configured.config.channels.find(row=>row.backup).supplyId,backup.id);
+    assert.deepEqual(routePreview(withBackup,explicit,configured.config).map(row=>row.share),[100,0]);
+    assert.deepEqual(routePreview(withBackup,explicit,configured.config,primary.supplyId).map(row=>row.share),[0,100]);
+    assert.deepEqual(withBackup.models,beforeFailover.models);
+    assert.deepEqual(withBackup.modelSalePrices,beforeFailover.modelSalePrices);
+    const plan = platformCandidatePlan(state,state.models.find(row=>row.id===model.id),{serviceId:explicit.id,tenantIds:['tenant-gov'],supplyIds:[primary.supplyId,backup.id],technical:true});
+    const healthy = await runPlatformTrial(plan);
+    assert.deepEqual(healthy.result.attempts.map(row=>row.bindingId),[primary.supplyId]);
+    await onboardingApi('/scenario',{method:'POST',body:{operationId:crypto.randomUUID(),scenario:'partial'}});
+    try {
+      const failedOver = await runPlatformTrial(plan);
+      assert.deepEqual(failedOver.result.attempts.map(row=>[row.bindingId,row.status]),[[primary.supplyId,'failed'],[backup.id,'passed']]);
+    } finally {
+      await onboardingApi('/scenario',{method:'POST',body:{operationId:crypto.randomUUID(),scenario:'success'}});
+    }
+    await assert.rejects(saveFailover(false,null,{expectedVersion:primaryVersion.version}),/生效路由已变化/);
+    await saveFailover(false,null);
+    const restoredRoute = serviceRoute(state,explicit.id);
+    assert.deepEqual(activeRouteVersion(restoredRoute).config,{...primaryVersion.config,channels:[primary]});
+    assert.deepEqual(restoredRoute.versions.find(row=>row.version===primaryVersion.version),primaryVersion);
+
     const provider=(operation,values)=>save(state,{type:'modelOperations',operation:'provider',data:{operation,objectId:'provider-moma',values}});
     state=await provider('create',{name:'D1验收服务商',code:'d1-qa-provider',sourceType:'thirdParty'});
     assert(state.providers.some(p=>p.code==='d1-qa-provider'));

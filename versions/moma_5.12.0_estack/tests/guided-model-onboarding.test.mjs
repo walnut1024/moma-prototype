@@ -113,7 +113,7 @@ for (const mode of ['standard', 'provider']) test(`${mode}: one exact model comp
   let active=guidedOnboarding(state,activeId);assert.equal(active.completed,false,'old listed service is not the completion of this supply task');
   state=run(state,'guidedSupplyAttach',{draftId:activeId,expectedDraftRevision:active.draft.draftRevision});active=guidedOnboarding(state,activeId);
   const targetService=active.service,route=state.serviceRoutes.find(row=>row.serviceId===targetService.id),existing=route.versions.find(row=>row.version===route.activeVersion).config;
-  state=run(state,'guidedRouteSave',{draftId:activeId,expectedDraftRevision:active.draft.draftRevision,serviceId:targetService.id,expectedVersion:route.activeVersion,sourceVersion:routeSourceVersion(state,targetService),config:{...existing,strategy:'weighted',autoFailover:true,channels:[{supplyId:active.supply.id,enabled:true,groupId:'P1',priority:1,weight:100}]}});
+  state=run(state,'guidedRouteSave',{draftId:activeId,expectedDraftRevision:active.draft.draftRevision,serviceId:targetService.id,expectedVersion:route.activeVersion,sourceVersion:routeSourceVersion(state,targetService),config:{...existing,strategy:mode==='provider'?'fixed':'weighted',autoFailover:false,channels:[{supplyId:active.supply.id,enabled:true,groupId:'P1',priority:1,weight:100}]}});
   assert.equal(state.serviceRoutes.find(row=>row.serviceId===targetService.id).versions.length,route.versions.length+1);
   active=guidedOnboarding(state,activeId);assert.equal(active.completed,false);assert.equal(active.serviceReady,true,JSON.stringify({issue:active.candidateIssue,checks:active.checks.filter(row=>!row.passed)}));
   assert.equal(active.step,3);

@@ -14,6 +14,8 @@ import ServiceOverview from './ServiceOverview';
 import ServiceListingDialog from './ServiceListingDialog';
 import { ServiceMappingsContent, ServiceAccessContent, ServiceCallGuide } from './ServiceContent';
 import { SERVICE_WORKSPACE_TABS, serviceWorkspaceTab } from './service-workspace-panels';
+import { PlatformTrialDialog } from './ServicePlatformTrial';
+import ServiceFailover from './ServiceFailover';
 import { modelOperationHistory } from './model-operation-history';
 
 function ModelStatusSummary({ state, model, ops }) {
@@ -45,7 +47,7 @@ export default function ServiceManagementWorkspace({state,sourceState,ops,act,ad
   const selected = selectServiceModel(rows,params.get('model')), activeTab = serviceWorkspaceTab(params);
   const headerStatus = selected && serviceHeaderStatus(selected);
   const filterCount = ['type','mode','status'].filter(key => params.get(key) && params.get(key) !== 'all').length;
-  const change = patch => go({...patch,view:null,panel:null,model:null,page:null,listingReturn:null,tab:null,service:null,mapping:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:null},{replace:true,preserveScroll:true});
+  const change = patch => go({...patch,view:null,panel:null,model:null,page:null,listingReturn:null,scopeEdit:null,tab:null,service:null,mapping:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:null},{replace:true,preserveScroll:true});
   const tasks = pendingGuidedOnboardings(state).filter(task => !task.model);
   const closeListing = () => ops.proceed(() => {setListing(null);ops.dirty(false);ops.setError('');});
   const actions = selected ? [
@@ -60,7 +62,7 @@ export default function ServiceManagementWorkspace({state,sourceState,ops,act,ad
       <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can || creating} onClick={add}>新增模型服务</Button>
       <Input prefix={<IconSearch aria-hidden="true"/>} showClear aria-label="搜索模型展示名或调用标识" placeholder="名称 / 调用标识" value={params.get('q') || ''} onChange={text => change({q:text || null})}/>
       <Popover trigger="custom" visible={filtersOpen} onClickOutSide={() => setFiltersOpen(false)} position="bottomLeft" content={<div className="semi-services ss-filter-fields"><Field label="模型分类"><Choice label="筛选模型类型" value={params.get('type') || 'all'} options={[[ 'all','全部分类' ],...Object.entries(MODEL_CATALOGUE_TYPES)]} onChange={type => change({type:type === 'all' ? null : type})}/></Field><Field label="服务模式"><Choice label="筛选服务模式" value={params.get('mode') || 'all'} options={[[ 'all','全部模式' ],...Object.entries(SERVICE_MODES).map(([key,item]) => [key,item.label]),['unset','待配置']]} onChange={mode => change({mode:mode === 'all' ? null : mode})}/></Field><Field label="上架状态"><Choice label="筛选上架状态" value={params.get('status') || 'all'} options={[[ 'all','全部状态' ],['listed','已上架'],['unlisted','已下架'],['unpublished','未上架'],['archived','已归档']]} onChange={status => change({status:status === 'all' ? null : status})}/></Field><div className="ss-footer"><Button theme="borderless" onClick={() => change({type:null,mode:null,status:null})}>重置筛选</Button><Button onClick={() => setFiltersOpen(false)}>完成</Button></div></div>}><Button icon={<IconFilter aria-hidden="true"/>} onClick={() => setFiltersOpen(!filtersOpen)} aria-label={`筛选模型${filterCount ? `，已选 ${filterCount} 项` : ''}`}>筛选{filterCount ? ` ${filterCount}` : ''}</Button></Popover>
-      <Nav selectedKeys={!creating && selected ? [selected.id] : []} aria-label="模型列表" onSelect={({itemKey}) => go({view:null,panel:null,model:itemKey,listingReturn:null,tab:null,service:null,mapping:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:null},{replace:true,preserveScroll:true})}>
+      <Nav selectedKeys={!creating && selected ? [selected.id] : []} aria-label="模型列表" onSelect={({itemKey}) => go({view:null,panel:null,model:itemKey,listingReturn:null,scopeEdit:null,tab:null,service:null,mapping:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:null},{replace:true,preserveScroll:true})}>
         {rows.map(model => <Nav.Item style={{height:"auto"}} key={model.id} itemKey={model.id} text={<div className="ss-model-item"><div className="ss-model-title"><Typography.Text strong>{model.name}</Typography.Text><Status good={listed(model)}>{serviceLifecycle(model)}</Status></div><Typography.Text type="tertiary" size="small">{SERVICE_MODES[model.serviceMode]?.label || '未选择模式'} · {serviceConfiguration(state,model).label}</Typography.Text><Typography.Text type="tertiary" size="small">{modelCode(model)}</Typography.Text></div>}/>) }
       </Nav>
       {!rows.length && <Empty description={<><p>没有匹配的模型。</p><Button theme="borderless" onClick={() => change({q:null,type:null,mode:null,status:null})}>清空查询和筛选</Button></>}/>}
@@ -71,12 +73,14 @@ export default function ServiceManagementWorkspace({state,sourceState,ops,act,ad
         <div className="ss-heading"><div className="ss-model-heading"><Typography.Title heading={4}>{selected.name}</Typography.Title><Space wrap><Badge theme="light" type={headerStatus.service === '正式上架' ? 'success' : headerStatus.service === '灰度上架' ? 'warning' : 'tertiary'} count={`服务状态：${headerStatus.service}`}/><Badge theme="light" type={headerStatus.visibility === '用户不可见' ? 'tertiary' : headerStatus.visibility === '灰度用户可见' ? 'warning' : 'primary'} count={`可见性：${headerStatus.visibility}`}/></Space></div><Space wrap>{operationsReturn(params.get('returnTo')) && <Button onClick={() => ops.proceed(() => {location.hash=params.get('returnTo');})}>返回来源页面</Button>}<Dropdown clickToHide trigger="click" position="bottomRight" className="semi-services" menu={actions}><Button icon={<IconMore aria-hidden="true"/>}>服务操作</Button></Dropdown></Space></div>
         {params.get('publicationReturn') === selected.id && <Button onClick={() => {go({publicationReturn:null},{saved:true,preserveScroll:true});act(selected,'publish');}}>返回上架检查</Button>}
         <ModelStatusSummary state={state} model={selected} ops={ops}/>
-        <Tabs activeKey={activeTab} keepDOM={false} collapsible onChange={value => go({panel:value === 'materials' ? null : value,service:null,mapping:null,tab:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:null},{preserveScroll:true})}>
+        <Tabs activeKey={activeTab} keepDOM={false} collapsible onChange={value => go({panel:value === 'materials' ? null : value,service:null,mapping:null,scopeEdit:null,tab:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:['trial','guide','failover'].includes(value) ? params.get('routeProvider') : null},{preserveScroll:true})}>
           {SERVICE_WORKSPACE_TABS.map(([value,label]) => <Tabs.TabPane key={value} itemKey={value} tab={label}><div className="ss-tab-content">
             {value === 'materials' && <ServiceOverview state={state} model={selected} ops={ops}/>}
             {value === 'routing' && <ServiceMappingsContent key={selected.id} state={state} model={selected} ops={{...ops,can:ops.can && !selected.archivedAt}} act={act}/>}
             {value === 'access' && <ServiceAccessContent key={selected.id} state={state} model={selected} ops={ops}/>}
             {value === 'guide' && <ServiceCallGuide key={selected.id+'guide'+params.get('routeProvider')} state={state} model={selected} ops={{...ops,can:ops.can && !selected.archivedAt}}/>}
+            {value === 'failover' && <ServiceFailover key={selected.id} state={state} model={selected} ops={{...ops,can:ops.can && !selected.archivedAt}}/>}
+            {value === 'trial' && <PlatformTrialDialog key={selected.id+':'+params.get('routeProvider')} inline state={state} model={selected} providerId={params.get('routeProvider')} ops={{...ops,can:ops.can && !selected.archivedAt}}/>}
             {value === 'history' && <ModelOperationRecords key={selected.id} state={state} model={selected}/>}
           </div></Tabs.TabPane>)}
         </Tabs>

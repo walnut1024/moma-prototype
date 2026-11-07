@@ -52,7 +52,7 @@ export function simulateRequest(state, { requestId, keyId, modelId: requestedMod
     return { state, request: authorized ? previous : { ...previous, httpStatus: 403, error: access.code || 'auth_rejected' }, duplicate: true };
   }
   const routeConfig = service && activeRouteVersion(serviceRoute(state,service.id))?.config;
-  const mapped = routeConfig?.channels.filter(item => item.enabled).map(item => item.supplyId);
+  const mapped = routeConfig?.channels.filter(item => item.enabled && (!item.backup || routeConfig.autoFailover)).sort((a,b)=>Number(Boolean(a.backup))-Number(Boolean(b.backup))).map(item => item.supplyId);
   const serviceCandidates = service && new Set(routingChannels(state, service, startedAt, { runtime: true }).filter(item => item.available).map(item => item.id));
   let candidates = availableSupplies(state, modelId, requirements).filter(supply => !service || mapped?.includes(supply.id) && serviceCandidates.has(supply.id) && (service.mode !== 'provider' || supply.provider?.id === service.providerId)).filter(supply => {
     const items = priceItems(activeSupplyPrice(state, supply.id, startedAt), model);

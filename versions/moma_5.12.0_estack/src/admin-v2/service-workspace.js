@@ -45,7 +45,7 @@ export function serviceConfigurationTarget(model,check) {
   if (check.tab==='serviceMode') return {...base,panel:'routing'};
   if (check.tab==='publication') return {...base,panel:'access',scopeEdit:'1'};
   if (check.tab==='pricing' && model.serviceMode==='provider' && !providerServices(model).find(row=>row.providerId===check.providerId)?.callId) return {...base,panel:'routing',identityProvider:check.providerId};
-  if (check.tab==='platform') return {...base,panel:'guide',routeProvider:check.providerId || null};
+  if (check.tab==='platform') return {...base,panel:'trial',routeProvider:check.providerId || null};
   if (check.tab==='supplies' && model.serviceMode==='provider') return {...base,panel:'routing',providerAdd:'1'};
   if (check.tab==='basic') return {page:'model-templates',view:'template',template:model.templateId || model.id,materialMode:'edit',returnModel:model.id};
   if (check.tab==='routing') {

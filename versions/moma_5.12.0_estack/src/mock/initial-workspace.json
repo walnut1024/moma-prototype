@@ -3638,12 +3638,12 @@
             "id": "service-review-route-qwen-review-aliyun-v1",
             "version": 1,
             "config": {
-              "strategy": "weighted",
+              "strategy": "fixed",
               "groups": [
                 {
                   "id": "P1",
                   "name": "主用组",
-                  "strategy": "weighted"
+                  "strategy": "fixed"
                 }
               ],
               "channels": [
@@ -3651,15 +3651,16 @@
                   "supplyId": "service-review-supply-qwen-aliyun-1",
                   "enabled": true,
                   "groupId": "P1",
-                  "weight": 70,
+                  "weight": 0,
                   "priority": 1
                 },
                 {
                   "supplyId": "service-review-supply-qwen-aliyun-2",
                   "enabled": true,
                   "groupId": "P1",
-                  "weight": 30,
-                  "priority": 2
+                  "weight": 0,
+                  "priority": 2,
+                  "backup": true
                 }
               ],
               "autoFailover": true,
@@ -3697,12 +3698,12 @@
             "id": "service-review-route-qwen-review-siliconflow-v1",
             "version": 1,
             "config": {
-              "strategy": "weighted",
+              "strategy": "fixed",
               "groups": [
                 {
                   "id": "P1",
                   "name": "主用组",
-                  "strategy": "weighted"
+                  "strategy": "fixed"
                 }
               ],
               "channels": [
@@ -3710,22 +3711,16 @@
                   "supplyId": "service-review-supply-qwen-siliconflow-1",
                   "enabled": true,
                   "groupId": "P1",
-                  "weight": 50,
+                  "weight": 0,
                   "priority": 1
                 },
                 {
                   "supplyId": "service-review-supply-qwen-siliconflow-2",
                   "enabled": true,
                   "groupId": "P1",
-                  "weight": 30,
-                  "priority": 2
-                },
-                {
-                  "supplyId": "service-review-supply-qwen-siliconflow-3",
-                  "enabled": true,
-                  "groupId": "P1",
-                  "weight": 20,
-                  "priority": 3
+                  "weight": 0,
+                  "priority": 2,
+                  "backup": true
                 }
               ],
               "autoFailover": true,
@@ -3777,11 +3772,11 @@
                   "supplyId": "service-review-supply-qwen-aggregate-1",
                   "enabled": true,
                   "groupId": "P1",
-                  "weight": 100,
+                  "weight": 0,
                   "priority": 1
                 }
               ],
-              "autoFailover": true,
+              "autoFailover": false,
               "excludeAbnormal": true,
               "autoRecover": true,
               "advanced": {
@@ -3911,11 +3906,11 @@
                   "supplyId": "service-review-supply-audio-aliyun-1",
                   "enabled": true,
                   "groupId": "P1",
-                  "weight": 100,
+                  "weight": 0,
                   "priority": 1
                 }
               ],
-              "autoFailover": true,
+              "autoFailover": false,
               "excludeAbnormal": true,
               "autoRecover": true,
               "advanced": {

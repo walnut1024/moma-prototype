@@ -62,7 +62,7 @@ async function fixture(t,mode='standard') {
   state=run(state,'channelProcurementPublish',{confirmed:true,providerId:owner(state).id,endpointId,associationId:mapping.id,expectedPriceRevision:0,scenarios:quote,effectiveAt:new Date().toISOString()});
   state=run(state,mode==='provider'?'configureServiceProvider':'unifiedPrice',{...(mode==='provider'?{providerId:owner(state).id,callId:'provider/material-e2e'}:{}),expectedUpdatedAt:model().updatedAt,expectedSaleVersion:mode==='provider'?providerPriceRevision(state,modelId,owner(state).id):modelSaleRevision(state,modelId),items:[{name:'输入 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'2'},{name:'输出 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'4'}]},modelId);
   const service=routingServices(state).find(row=>row.modelId===modelId);
-  state=run(state,'serviceRoutePublish',{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'weighted',autoFailover:false,channels:[{supplyId:supply.id,enabled:true,priority:1,weight:100}]}});
+  state=run(state,'serviceRoutePublish',{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:mode==='provider'?'fixed':'weighted',autoFailover:false,channels:[{supplyId:supply.id,enabled:true,priority:1,weight:100}]}});
   assert.ok(publicationChecks(state,model()).filter(row=>row.tab!=='platform').every(row=>row.passed));
   const listing={type:'modelOperation',operation:'publish',modelId,data:{}};
   storage.setItem(STORAGE_KEY,JSON.stringify(state));const raw=storage.getItem(STORAGE_KEY);

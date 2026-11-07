@@ -125,9 +125,11 @@ test('local emergency revoke and provider/channel/model stops gate the same mock
   local.endpoints[0].status = '运行中'; local.providers[0].catalogConnections[0].enabled = false; setMockRuntimeState(local); await assert.rejects(request(), issue => issue.code === 'supply_unavailable');
 });
 
-test('partial scene demonstrates explicit failover only inside the allowed set', async t => {
+test('provider primary takes healthy traffic and only fails over to the configured backup', async t => {
   const env = fixture(t), a = await env.channel('primary'), b = await env.channel('backup'); await env.prove(a); await env.prove(b);
-  const current = await env.service(a, { bindings: [{ id: 'primary', channelId: a.id, model: env.model, procurementPrices: [env.price('a')] }, { id: 'backup', channelId: b.id, model: env.model, procurementPrices: [env.price('b')] }], route: { version: 1, strategy: 'priority', channels: [{ bindingId: 'primary', priority: 1, weight: 1 }, { bindingId: 'backup', priority: 2, weight: 1 }], autoFailover: true } });
+  const current = await env.service(a, { mode:'provider', bindings: [{ id: 'primary', channelId: a.id, model: env.model, procurementPrices: [env.price('a')] }, { id: 'backup', channelId: b.id, model: env.model, procurementPrices: [env.price('b')] }], route: { version: 1, strategy: 'fixed', channels: [{ bindingId: 'backup', priority: 1, backup:true }, { bindingId: 'primary', priority: 2 }], autoFailover: true } });
+  const healthy = await env.trial(current);
+  assert.deepEqual(healthy.attempts.map(row=>row.bindingId), ['primary']);
   setMockScenario('partial'); const result = await env.trial(current); assert.equal(result.actualSupply.channelId, b.id); assert.deepEqual(result.attempts.map(row => row.status), ['failed', 'passed']);
 });
 
