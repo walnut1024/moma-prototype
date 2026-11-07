@@ -21,7 +21,6 @@ import {
   UsersRound,
 } from "lucide-react";
 import "./admin-v2.css";
-import "./admin-v2-fix.css";
 import "./admin-navigation.css";
 import "./admin-v2/admin-shell.css";
 import { useAdminStore } from "./admin-v2/store";
@@ -43,7 +42,6 @@ import ObservabilityPage from "./admin-v2/ObservabilityPages";
 import ArtifactManagement from './admin-v2/ArtifactManagement';
 import BusinessOperationsPage from "./admin-v2/BusinessOperationsPages";
 import AdminPageBoundary from "./admin-v2/AdminPageBoundary";
-import "./admin-v2/gateway.css";
 import AdminAccounts from "./admin-v2/AdminAccounts";
 import { ADMIN_ROLE_LABELS } from "./admin-v2/admin-accounts";
 import "./admin-v2/admin-design.css";
