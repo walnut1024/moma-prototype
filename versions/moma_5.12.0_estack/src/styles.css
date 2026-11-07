@@ -608,12 +608,12 @@ main {
   align-items: center;
   gap: 42px;
 }
-h1 {
+:where(.front-main, .auth-shell, .version-main, .admin-legacy) h1 {
   margin: 0;
   font-size: 34px;
   letter-spacing: -1px;
 }
-h1 em {
+:where(.front-main, .auth-shell, .version-main, .admin-legacy) h1 em {
   font-style: normal;
   color: #3f28ff;
 }
