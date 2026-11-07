@@ -508,22 +508,6 @@ header {
   color: #2878ee;
   font-weight: 600;
 }
-.version-5102 aside button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.version-5102 aside button > svg {
-  width: 16px;
-  height: 16px;
-  flex: none;
-  color: #6b7280;
-  stroke-width: 1.7;
-}
-.version-5102 aside button:hover > svg,
-.version-5102 aside button.active > svg {
-  color: #2878ee;
-}
 .observe-nav {
   margin-top: 2px;
 }
@@ -586,10 +570,10 @@ header {
 .billing-nav > div > button.active > svg {
   color: #2878ee;
 }
-.app-shell:not(.version-5102) aside > div > small {
+.app-shell aside > div > small {
   margin: 12px 6px 4px;
 }
-.app-shell:not(.version-5102) aside > div > button {
+.app-shell aside > div > button {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -597,15 +581,15 @@ header {
   padding: 7px 12px;
   font-size: 13px;
 }
-.app-shell:not(.version-5102) aside > div > button > svg {
+.app-shell aside > div > button > svg {
   width: 15px;
   height: 15px;
   flex: none;
   color: #778295;
   stroke-width: 1.7;
 }
-.app-shell:not(.version-5102) aside > div > button:hover > svg,
-.app-shell:not(.version-5102) aside > div > button.active > svg {
+.app-shell aside > div > button:hover > svg,
+.app-shell aside > div > button.active > svg {
   color: #2878ee;
 }
 main {
@@ -3279,10 +3263,10 @@ h1 em {
 }
 
 /* Current tenant surface follows the compact management spacing. */
-.app-shell:not(.version-5102) > aside { width: 184px; padding: 12px 8px; }
-.app-shell:not(.version-5102) > aside h3 { margin: 0 8px 10px; font-size: 16px; }
-.app-shell:not(.version-5102) > aside > div > small { margin: 9px 8px 3px; }
-.app-shell:not(.version-5102) > aside > div > button { min-height: 32px; padding: 6px 10px; }
+.app-shell > aside { width: 184px; padding: 12px 8px; }
+.app-shell > aside h3 { margin: 0 8px 10px; font-size: 16px; }
+.app-shell > aside > div > small { margin: 9px 8px 3px; }
+.app-shell > aside > div > button { min-height: 32px; padding: 6px 10px; }
 .app-shell > main.front-main { padding-left: 184px; }
 .front-main > .content { min-width: 0; padding: 16px 14px 36px; }
 .front-main > .route-page { padding: 8px; }
@@ -3355,13 +3339,13 @@ h1 em {
 }
 
 /* Current tenant actions share the existing business blue; historical UI stays independent. */
-.app-shell:not(.version-5102):not(.auth-shell) .front-main { --primary: #3568f9; --ring: #3568f9; }
-.app-shell:not(.version-5102):has(> .front-main) :is(.primary, .pg-send) { background: #3568f9; border-color: #3568f9; }
-.app-shell:not(.version-5102):has(> .front-main) :is(.primary, .pg-send):hover:not(:disabled) { background: #2858d9; border-color: #2858d9; }
+.app-shell:not(.auth-shell) .front-main { --primary: #3568f9; --ring: #3568f9; }
+.app-shell:has(> .front-main) :is(.primary, .pg-send) { background: #3568f9; border-color: #3568f9; }
+.app-shell:has(> .front-main) :is(.primary, .pg-send):hover:not(:disabled) { background: #2858d9; border-color: #2858d9; }
 
-.app-shell:not(.version-5102) .front-main .playground { --experience-accent: #3568f9; }
+.app-shell .front-main .playground { --experience-accent: #3568f9; }
 
-body:has(.app-shell:not(.version-5102) > .front-main) :is(.model-select-dialog, .key-action-dialog) { --experience-accent: #3568f9; --primary: #3568f9; --ring: #3568f9; }
+body:has(.app-shell > .front-main) :is(.model-select-dialog, .key-action-dialog) { --experience-accent: #3568f9; --primary: #3568f9; --ring: #3568f9; }
 
 .user-type-switch [data-slot="select-trigger"] { min-width: 112px; }
 

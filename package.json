@@ -7,15 +7,11 @@
     "dev:5120": "vite --config versions/moma_5.12.0_estack/vite.config.mjs",
     "dev:backend:5120": "node versions/moma_5.12.0_estack/database/dev.js",
     "test:backend:5120": "node --test versions/moma_5.12.0_estack/tests/d1-*.test.mjs",
-    "dev": "vite",
-    "build": "npm run build:5.12.0 && vite build && node scripts/prepare-sites-build.mjs",
+    "build": "npm run build:5.12.0 && node scripts/prepare-sites-build.mjs",
     "build:5.12.0": "vite build --config versions/moma_5.12.0_estack/vite.config.mjs",
-    "lint": "oxlint src worker scripts vite.config.mjs tests/*.test.mjs",
-    "preview": "vite preview",
-    "test": "npm run test:admin && npm run test:usage && npm run test:sites && node --test tests/route-models.test.mjs tests/model-selection.test.mjs tests/chart-style.test.mjs tests/version-copy.test.mjs tests/version-retirement.test.mjs",
-    "test:admin": "node --test tests/admin-v2-*.test.mjs",
-    "test:sites": "node --test tests/sites-worker.test.mjs",
-    "test:usage": "node --test tests/usage-statistics.test.mjs tests/billing-usage.test.mjs"
+    "lint": "oxlint worker scripts tests/*.test.mjs",
+    "test": "npm run test:sites && node --test tests/tenant-user-type-5120.test.mjs tests/version-copy.test.mjs tests/version-retirement.test.mjs",
+    "test:sites": "node --test tests/sites-worker.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -37,7 +33,6 @@
     "react-day-picker": "^10.0.1",
     "react-dom": "19.2.0",
     "read-excel-file": "9.3.10",
-    "recharts": "^3.8.0",
     "shadcn": "^4.21.0",
     "sonner": "^2.0.8",
     "tailwindcss": "^4.3.3",

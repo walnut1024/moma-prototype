@@ -1,3 +1,132 @@
+.legacy-page {
+  min-width: 1100px;
+  min-height: calc(100vh - 48px);
+  padding: 18px;
+  background: #f5f7fb;
+  color: #303642;
+  font-size: 12px;
+}
+.legacy-panel {
+  padding: 14px 18px 18px;
+  border-radius: 12px;
+  background: #fff;
+}
+.legacy-order-tools {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.legacy-order-tools > span {
+  display: flex;
+  gap: 10px;
+}
+.legacy-order-tools button {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid #dce2ea;
+  border-radius: 3px;
+  background: #fff;
+  color: #586170;
+}
+.legacy-order-tools button:disabled {
+  background: #f5f6f8;
+  color: #b8bec8;
+}
+.legacy-order-tools .legacy-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-color: #3779ed;
+  background: #3779ed;
+  color: #fff;
+}
+.legacy-order-tools label {
+  display: flex;
+  align-items: center;
+  width: 260px;
+  height: 32px;
+  margin-left: auto;
+  border: 1px solid #dce2ea;
+  border-radius: 3px;
+  color: #8992a0;
+}
+.legacy-order-tools label input {
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  outline: 0;
+}
+.legacy-order-tools > button {
+  margin-left: 8px;
+  padding: 0 9px;
+  border: 0;
+}
+.legacy-order-table {
+  overflow: auto;
+  border-top: 1px solid #e9edf2;
+}
+.legacy-order-row {
+  display: grid;
+  grid-template-columns:
+    38px minmax(170px, 1.35fr) 92px 105px minmax(145px, 1.15fr)
+    minmax(130px, 1fr) 90px 145px 145px 95px;
+  min-width: 1180px;
+  min-height: 56px;
+  align-items: center;
+  border-bottom: 1px solid #edf0f4;
+}
+.legacy-order-row.head {
+  min-height: 42px;
+  background: #f2f4f8;
+  color: #4b5462;
+  font-weight: 600;
+}
+.legacy-order-row > span {
+  min-width: 0;
+  padding: 7px 10px;
+  white-space: pre-line;
+}
+.legacy-order-row > span b {
+  display: block;
+  overflow: hidden;
+  color: #3e75d8;
+  font-weight: 400;
+  text-overflow: ellipsis;
+}
+.legacy-order-row > span em {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: #eef2ff;
+  color: #3568db;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 600;
+}
+.legacy-order-row span small {
+  display: block;
+  line-height: 18px;
+}
+.legacy-order-row .price {
+  color: #ef645c;
+}
+.legacy-order-row .state small {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: #eaf8ec;
+  color: #45a461;
+}
+.legacy-order-row button {
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: #3c78e8;
+  font-size: 12px;
+}
 .legacy-service-order {
   min-width: 1120px;
   min-height: 100vh;
@@ -395,7 +524,6 @@
 .orders-current .legacy-order-tools label { width: 280px; }
 .orders-current .legacy-order-table { border-top: 0; }
 .orders-current .legacy-order-row.head { background: #f7f8fc; }
-.orders-current .legacy-pager { min-height: 58px; height: auto; gap: 12px; flex-wrap: wrap; }
 @media (max-width: 760px) {
   .orders-current > .legacy-panel { margin: 16px; padding: 14px 14px 0; }
   .orders-current .legacy-order-tools label { margin-left: 0; }

@@ -32,17 +32,25 @@ test('5.12.0 has its own source, styles, public assets and storage keys', () => 
     ['organization-data.mjs', 'moma-organization:moma_5.12.0_estack'],
   ]) {
     assert.ok(fs.readFileSync(path.join(version, 'src', file), 'utf8').includes(key));
-    assert.ok(!fs.readFileSync(path.join(root, 'src', file), 'utf8').includes(key));
   }
 });
 
 test('the built 5.12.0 entry loads only its own JS and CSS', () => {
   const html = fs.readFileSync(path.join(root, 'dist/client/moma_5.12.0_estack/index.html'), 'utf8');
   assert.equal(fs.readFileSync(path.join(root, 'dist/client/moma_5.12.0_estack/order/serviceOrder/index.html'), 'utf8'), html);
-  const assets = [...html.matchAll(/(?:src|href)="([^\"]+\.(?:js|css))"/g)].map(match => match[1]);
+  const assets = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)].map(match => match[1]);
   assert.equal(assets.length, 2);
   for (const asset of assets) {
     assert.ok(asset.startsWith('/moma_5.12.0_estack/assets/'), asset);
     assert.ok(fs.existsSync(path.join(root, 'dist/client', asset)));
+  }
+});
+
+test('the built 5.12.0 keeps order table, checkout and confirmation layout', () => {
+  const html = fs.readFileSync(path.join(root, 'dist/client/moma_5.12.0_estack/index.html'), 'utf8');
+  const cssPath = [...html.matchAll(/href="([^"]+\.css)"/g)][0][1];
+  const css = fs.readFileSync(path.join(root, 'dist/client', cssPath), 'utf8');
+  for (const selector of ['.legacy-order-row', '.service-order-row', '.service-order-footer', '.order-confirm-backdrop']) {
+    assert.ok(css.includes(selector + '{'), 'Missing order layout: ' + selector);
   }
 });

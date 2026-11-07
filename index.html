@@ -3,11 +3,87 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="/assets/jiangSuZhengWu.png" />
-    <title>模型市场</title>
+    <title>模型服务平台 MoMA 政企版 · 平台版本</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; }
+      body { font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif; }
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+      .version-index { min-height: 100vh; background: #f4f6f9; color: #182238; }
+      .version-header { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 36px; background: #20242b; }
+      .brand-mark { display: flex; align-items: center; gap: 12px; color: #fff; font-size: 15px; font-weight: 600; letter-spacing: .02em; }
+      .brand-mark img { width: 34px; height: 34px; }
+      .version-header > span { color: #aeb8c8; font-size: 13px; letter-spacing: .08em; }
+      .version-main { min-height: calc(100vh - 64px); padding: 70px max(48px, 7vw) 90px; background: linear-gradient(90deg, #e9edf3 1px, transparent 1px), linear-gradient(#e9edf3 1px, transparent 1px); background-size: 32px 32px; }
+      .version-intro { max-width: 720px; }
+      .version-intro small { color: #2463ff; font-size: 11px; font-weight: 700; letter-spacing: .16em; }
+      .version-intro h1 { margin: 14px 0 12px; font-size: 42px; letter-spacing: -1.5px; }
+      .version-intro p { color: #687387; font-size: 15px; line-height: 1.8; }
+      .version-table-wrap { max-width: 1260px; margin-top: 42px; overflow: hidden; border: 1px solid #d9dfe8; border-radius: 14px; background: #fff; box-shadow: 0 14px 40px #26354d0d; }
+      .version-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      .version-table th { padding: 14px 20px; border-bottom: 1px solid #d9dfe8; background: #f7f8fa; color: #687386; font-size: 12px; font-weight: 600; text-align: left; }
+      .version-table th:nth-child(1) { width: 22%; }
+      .version-table th:nth-child(2) { width: 14%; }
+      .version-table th:nth-child(3) { width: 40%; }
+      .version-table th:nth-child(4) { width: 12%; }
+      .version-table th:nth-child(5) { width: 12%; }
+      .version-table td { padding: 22px 20px; border-bottom: 1px solid #e7eaf0; vertical-align: middle; }
+      .version-table tr:last-child td { border-bottom: 0; }
+      .version-table tbody tr { transition: background .18s ease; }
+      .version-table tbody tr:hover { background: #f8faff; }
+      .version-table td > strong { font-size: 16px; font-weight: 650; letter-spacing: -.2px; }
+      .version-table time { color: #687386; font-size: 13px; }
+      .version-table p { color: #596579; font-size: 13px; line-height: 1.7; }
+      .version-state { display: inline-flex; padding: 5px 10px; border-radius: 999px; background: #eaf7ef; color: #257c48; font-size: 12px; font-weight: 600; white-space: nowrap; }
+      .version-entry { display: inline-flex; align-items: center; gap: 7px; color: #2463ff; font-size: 13px; font-weight: 650; text-decoration: none; white-space: nowrap; }
+      .version-entry svg { width: 16px; height: 16px; transition: transform .18s ease; }
+      .version-entry:hover svg { transform: translateX(3px); }
+      @media (max-width: 900px) { .version-table-wrap { overflow-x: auto; } .version-table { min-width: 860px; } }
+      @media (max-width: 700px) { .version-main { padding: 48px 20px; } .version-header { padding: 0 20px; } .version-intro h1 { font-size: 34px; } .brand-mark span { display: none; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <div class="version-index">
+      <header class="version-header">
+        <div class="brand-mark">
+          <img src="/moma_5.12.0_estack/assets/jiangSuZhengWu.png" alt="" />
+          <span>模型服务平台 MoMA 政企版</span>
+        </div>
+        <span>平台版本</span>
+      </header>
+      <main class="version-main">
+        <div class="version-intro">
+          <small>PROTOTYPE ARCHIVE</small>
+          <h1>平台版本</h1>
+          <p>选择平台版本，查看对应的功能与服务。</p>
+        </div>
+        <section class="version-table-wrap" aria-label="版本列表">
+          <table class="version-table">
+            <thead>
+              <tr>
+                <th>版本号</th>
+                <th>发布时间</th>
+                <th>迭代内容</th>
+                <th>状态</th>
+                <th><span class="sr-only">操作</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>moma_5.12.0_estack</strong></td>
+                <td><time>10月8日</time></td>
+                <td><p>基于 5.11.0 复制，独立迭代。</p></td>
+                <td><span class="version-state">当前版本</span></td>
+                <td>
+                  <a class="version-entry" href="/moma_5.12.0_estack/">
+                    进入平台
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      </main>
+    </div>
   </body>
 </html>

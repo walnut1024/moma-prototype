@@ -121,7 +121,7 @@
 .us-chart-nav.is-collapsed .us-chart-nav-head{justify-content:center;padding:4px;border-bottom:0}
 @media(max-width:1000px){.us-chart-layout .us-charts{grid-template-columns:1fr}.front-main .us-overview-groups{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 0}.front-main .us-overview-group:nth-child(odd){border-left:0}}
 @media(max-width:900px){.us-chart-layout,.us-chart-layout:has(.us-chart-nav.is-collapsed){grid-template-columns:minmax(0,1fr)}.us-chart-nav{display:none}}
-@media(max-width:1180px){body:has(.app-shell:not(.version-5102) .us-page){min-width:0}}
+@media(max-width:1180px){body:has(.app-shell .us-page){min-width:0}}
 .us-key-picker { width: 340px; padding: 10px; }
 .us-key-picker [role=listbox] { max-height: 300px; overflow: auto; margin-top: 8px; }
 .us-key-picker [role=option] { display: block; width: 100%; padding: 9px 10px; border: 0; border-radius: 4px; background: transparent; text-align: left; font-size: 13px; }

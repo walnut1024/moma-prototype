@@ -22,8 +22,7 @@ import OrganizationMembers from "./OrganizationMembers";
 import "./styles.css";
 import "./token-plan-keys.css";
 import "./version-index.css";
-import "./legacy-5102.css";
-import "./order-5102.css";
+import "./model-order.css";
 import "./ranking.css";
 import ModelExperience from "./ModelExperience";
 import CallLogs from "./CallLogs";
@@ -34,7 +33,6 @@ import ModelComparison from "./ModelComparison";
 import AdminConsole from "./AdminConsole";
 import AdminConsoleV2 from "./AdminConsoleV2";
 import { shanghaiDate } from "./call-log-data.mjs";
-import { Popover as PopoverPrimitive } from "radix-ui";
 import {
   Select,
   SelectContent,
@@ -47,11 +45,9 @@ import {
   Activity,
   ArrowRight,
   AudioLines,
-  CalendarDays,
   Calculator,
   ChartNoAxesCombined,
   Check,
-  ChevronDown,
   Copy,
   ExternalLink,
   FileText,
@@ -61,7 +57,6 @@ import {
   KeyRound,
   History,
   Languages,
-  ReceiptText,
   RefreshCw,
   Route,
   Search,
@@ -95,7 +90,7 @@ const nav = [
   ["", "Token Plan"],
 ];
 const billingTypes = ["按量付费", "Token Plan"];
-const navIcons5102 = {
+const navIcons = {
   模型广场: Store,
   智能路由: Route,
   模型排行: Activity,
@@ -107,29 +102,12 @@ const navIcons5102 = {
   按量付费: KeyRound,
   "Token Plan": Calculator,
 };
-const usageIcons5102 = {
-  按量付费: ChartNoAxesCombined,
-  "Token Plan": ReceiptText,
-};
 const prototypeVersions = [
   {
     id: "moma_5.12.0_estack",
     state: "当前版本",
     releaseDate: "10月8日",
     changes: "基于 5.11.0 复制，独立迭代。",
-  },
-  {
-    id: "moma_5.11.0_estack",
-    state: "历史版本",
-    releaseDate: "待定",
-    changes: "新增模型排行、语音模型与 Coding Plan；完善模型体验、订单管理、API Key、用量统计和调用日志。",
-  },
-  {
-    id: "moma_5.10.2_estack",
-    state: "历史版本",
-    releaseDate: "9月30日",
-    changes:
-      "保留模型市场、智能路由、语言与视觉模型体验，以及按量付费、Token Plan、API Key 和历史用量统计。",
   },
 ];
 
@@ -1232,8 +1210,8 @@ function ModelRanking() {
 
 function ModelOrderList({
   standalone = false,
-  versionId = "moma_5.10.2_estack",
-  historical = true,
+  versionId = "moma_5.12.0_estack",
+  historical = false,
 }) {
   const initialModel = standalone
     ? new URLSearchParams(location.search).get("model")
@@ -1711,458 +1689,6 @@ function ModelOrderList({
   );
 }
 
-function UsageStatistics5102() {
-  const [type, setType] = useState("语言模型");
-  const [subtype, setSubtype] = useState("时长产出型");
-  const [multiFilters, setMultiFilters] = useState({
-    providers: [],
-    models: [],
-    apiKeys: [],
-    tenants: [],
-  });
-  const [dateRange, setDateRange] = useState([
-    "2026-09-16T00:00",
-    "2026-09-16T23:59",
-  ]);
-  const callMetrics = [
-    ["调用模型数", "0 个"],
-    ["调用成功次数", "0 次"],
-    ["调用失败次数", "0 次"],
-  ];
-  const tokenMetrics = [
-    ["Token 总量", "—"],
-    ["输入总 Token 数", "—"],
-    ["输出总 Token 数", "—"],
-    ["平均单次请求 Token", "—"],
-  ];
-  const tokenColumns = [
-    "模型名称",
-    "模型类型",
-    "模型服务商",
-    "调用总量",
-    "调用成功量",
-    "调用失败量",
-    "失败率",
-    "调用Tokens数",
-    "输入Tokens数",
-    "输出Tokens数",
-    "隐式缓存命中Tokens数",
-    "显式缓存创建Tokens数",
-    "显式缓存命中Tokens数",
-    "隐式缓存命中率",
-    "显式缓存命中率",
-    "平均RPM",
-    "平均TPM",
-    "TTFT/首Token时延",
-    "平均Token时延",
-    "操作",
-  ];
-  const visualColumns =
-    subtype === "时长产出型"
-      ? [
-          "模型名称",
-          "类别",
-          "模型服务商",
-          "调用总量",
-          "调用成功量",
-          "调用失败量",
-          "失败率",
-          "视频分辨率",
-          "视频总时长(输入+输出)",
-          "操作",
-        ]
-      : subtype === "图片产出型"
-        ? [
-            "模型名称",
-            "类别",
-            "模型服务商",
-            "调用总量",
-            "调用成功量",
-            "调用失败量",
-            "失败率",
-            "图片生成数量",
-            "操作",
-          ]
-        : tokenColumns;
-  const voiceColumns = [
-    "模型名称",
-    "调用总量",
-    "调用成功量",
-    "调用失败量",
-    "失败率",
-    subtype === "语音识别" ? "处理语音时长" : "处理字符数",
-    "操作",
-  ];
-  const columns =
-    type === "视觉模型"
-      ? visualColumns
-      : type === "语音模型"
-        ? voiceColumns
-        : tokenColumns;
-  const modelOptions = {
-    语言模型: [
-      "DeepSeek/DeepSeek-V4-Pro",
-      "DeepSeek/DeepSeek-V4-Flash",
-      "ZHIPU/GLM-5.2",
-      "Moonshot/Kimi-K3",
-      "Qwen/Qwen3.7-Max",
-    ],
-    视觉模型: [
-      "AICC-doubao-seedance-2.0",
-      "Qwen/Qwen-Image-3.0-Pro",
-      "Wan3.0-I2V-Plus",
-      "Wan3.0-Video",
-    ],
-    多模态模型: ["Qwen/Qwen3.8-Max", "Qwen/Qwen3.5-397B-A17B", "Kimi/Kimi-K3"],
-    语音模型: ["Qwen-Audio-ASR-Flash", "Qwen-Audio-TTS", "CosyVoice"],
-  }[type];
-  const selectType = (nextType) => {
-    setType(nextType);
-    setSubtype(nextType === "语音模型" ? "语音识别" : "时长产出型");
-    setMultiFilters((current) => ({ ...current, models: [] }));
-  };
-  const setMultiFilter = (name, value) =>
-    setMultiFilters((current) => ({ ...current, [name]: value }));
-  return (
-    <div className="legacy-page legacy-usage">
-      <section className="legacy-hero">
-        <span>
-          <Activity />
-        </span>
-        <div>
-          <h1>
-            用量统计{" "}
-            <a>
-              帮助中心 <ExternalLink size={13} />
-            </a>
-          </h1>
-          <p>观测模型的使用情况以及性能指标。</p>
-        </div>
-      </section>
-      <nav className="legacy-tabs model-tabs">
-        {["语言模型", "视觉模型", "多模态模型", "语音模型"].map((x) => (
-          <button
-            className={type === x ? "active" : ""}
-            onClick={() => selectType(x)}
-            key={x}
-          >
-            {x}
-          </button>
-        ))}
-      </nav>
-      <section className="legacy-panel">
-        {type === "语音模型" && (
-          <div className="legacy-balance-tip">
-            剩余语音识别时长：72000秒，剩余语音合成字符数：19996字符，到期时间：2027.02.02。
-          </div>
-        )}
-        <div className="legacy-notice">
-          <Info size={15} />
-          <div>
-            <strong>注意：</strong>
-            <p>
-              1、页面数据更新会有约10-15分钟的延迟，机密模型数据更新会有约2-3小时的延迟，最新调用可能尚未显示，请稍后刷新查看。
-            </p>
-            <p>
-              2、7月与8月的数据请分别按单月查询；其他月份跨月查询最长支持31天。
-            </p>
-            <p>3、Token Plan、Coding Plan 用量请前往对应页面查看。</p>
-          </div>
-        </div>
-        <div className="legacy-filter-grid">
-          <UsageMultiSelect
-            label="模型服务商"
-            placeholder="请选择模型服务商"
-            options={["移动云", "火山引擎", "阿里云", "智谱 AI"]}
-            value={multiFilters.providers}
-            onChange={(value) => setMultiFilter("providers", value)}
-          />
-          <UsageMultiSelect
-            label="模型名称"
-            placeholder="请选择模型名称"
-            options={modelOptions}
-            value={multiFilters.models}
-            onChange={(value) => setMultiFilter("models", value)}
-          />
-          <UsageFilterSelect
-            label="调用类型"
-            defaultValue="全部"
-            options={["全部", "成功", "失败"]}
-          />
-          <UsageMultiSelect
-            label="API Key"
-            placeholder="请选择API Key"
-            options={["test", "生产环境", "测试环境"]}
-            value={multiFilters.apiKeys}
-            onChange={(value) => setMultiFilter("apiKeys", value)}
-          />
-          <UsageMultiSelect
-            label="租户"
-            placeholder="请选择租户"
-            options={["当前租户", "默认租户"]}
-            value={multiFilters.tenants}
-            onChange={(value) => setMultiFilter("tenants", value)}
-          />
-          <UsageFilterSelect
-            label="时间精度"
-            defaultValue="按日"
-            options={["按日", "按小时"]}
-          />
-          <UsageDateRange value={dateRange} onChange={setDateRange} />
-          <button type="button" className="legacy-refresh">
-            <RefreshCw size={15} />
-            刷新
-          </button>
-        </div>
-        {type === "视觉模型" && (
-          <nav className="legacy-subtabs">
-            {["时长产出型", "图片产出型", "Token消耗型"].map((item) => (
-              <button
-                className={subtype === item ? "active" : ""}
-                key={item}
-                onClick={() => setSubtype(item)}
-              >
-                {item}
-              </button>
-            ))}
-          </nav>
-        )}
-        {type === "语音模型" && (
-          <nav className="legacy-subtabs">
-            {["语音识别", "语音合成"].map((item) => (
-              <button
-                className={subtype === item ? "active" : ""}
-                key={item}
-                onClick={() => setSubtype(item)}
-              >
-                {item}
-              </button>
-            ))}
-          </nav>
-        )}
-        <LegacyMetricSection title="调用指标" items={callMetrics} />
-        {type === "视觉模型" && subtype !== "Token消耗型" ? (
-          <LegacyMetricSection
-            title={subtype === "时长产出型" ? "视频生成指标" : "图片生成指标"}
-            items={[
-              [
-                subtype === "时长产出型" ? "视频总时长" : "图片生成总数",
-                subtype === "时长产出型" ? "0 秒" : "0 张",
-              ],
-            ]}
-          />
-        ) : type === "语音模型" ? (
-          <LegacyMetricSection
-            title="语音处理指标"
-            items={[
-              [
-                subtype === "语音识别" ? "处理语音时长" : "处理字符数",
-                subtype === "语音识别" ? "0 秒" : "0 字符",
-              ],
-            ]}
-          />
-        ) : (
-          <LegacyMetricSection title="Token指标" items={tokenMetrics} />
-        )}
-        <h3 className="legacy-list-title">模型列表</h3>
-        <div className="legacy-usage-table">
-          <div
-            style={{
-              gridTemplateColumns: `repeat(${columns.length}, minmax(110px, 1fr))`,
-            }}
-          >
-            {columns.map((x) => (
-              <span key={x}>{x}</span>
-            ))}
-          </div>
-          <p>暂无数据</p>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function UsageFilterSelect({ label, placeholder, defaultValue, options }) {
-  return (
-    <label>
-      <span>{label}</span>
-      <Select defaultValue={defaultValue}>
-        <SelectTrigger className="legacy-filter-select" aria-label={label}>
-          <SelectValue placeholder={placeholder} />
-        </SelectTrigger>
-        <SelectContent align="start">
-          <SelectGroup>
-            {options.map((option) => (
-              <SelectItem value={option} key={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    </label>
-  );
-}
-
-function UsageMultiSelect({ label, placeholder, options, value, onChange }) {
-  const [search, setSearch] = useState("");
-  const filteredOptions = options.filter((option) =>
-    option.toLowerCase().includes(search.trim().toLowerCase()),
-  );
-  const toggle = (option) =>
-    onChange(
-      value.includes(option)
-        ? value.filter((item) => item !== option)
-        : [...value, option],
-    );
-
-  return (
-    <label>
-      <span>{label}</span>
-      <PopoverPrimitive.Root
-        onOpenChange={(open) => {
-          if (!open) setSearch("");
-        }}
-      >
-        <PopoverPrimitive.Trigger asChild>
-          <button
-            type="button"
-            className="legacy-filter-select legacy-multi-trigger"
-            aria-label={label}
-          >
-            <span>{value.length ? value.join("、") : placeholder}</span>
-            <ChevronDown />
-          </button>
-        </PopoverPrimitive.Trigger>
-        <PopoverPrimitive.Portal>
-          <PopoverPrimitive.Content
-            className="legacy-multi-options"
-            align="start"
-            sideOffset={4}
-          >
-            <div className="legacy-multi-search">
-              <Search />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={`搜索${label}`}
-                aria-label={`搜索${label}`}
-                autoFocus
-              />
-            </div>
-            {filteredOptions.map((option) => {
-              const selected = value.includes(option);
-              return (
-                <button
-                  type="button"
-                  key={option}
-                  data-selected={selected}
-                  onClick={() => toggle(option)}
-                >
-                  <span>{option}</span>
-                  {selected && <Check />}
-                </button>
-              );
-            })}
-            {!filteredOptions.length && (
-              <p className="legacy-multi-empty">无匹配数据</p>
-            )}
-          </PopoverPrimitive.Content>
-        </PopoverPrimitive.Portal>
-      </PopoverPrimitive.Root>
-    </label>
-  );
-}
-
-function UsageDateRange({ value, onChange }) {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const valid = draft[0] && draft[1] && draft[0] <= draft[1];
-  const display = value.every(Boolean)
-    ? value.map((item) => item.replace("T", " ") + ":00").join(" - ")
-    : "请选择时间范围";
-
-  return (
-    <label className="legacy-date">
-      <span>时间范围</span>
-      <PopoverPrimitive.Root
-        open={open}
-        onOpenChange={(nextOpen) => {
-          setOpen(nextOpen);
-          if (nextOpen) setDraft(value);
-        }}
-      >
-        <PopoverPrimitive.Trigger asChild>
-          <button
-            type="button"
-            className="legacy-filter-select legacy-date-trigger"
-            aria-label="时间范围"
-          >
-            <span>{display}</span>
-            <CalendarDays />
-          </button>
-        </PopoverPrimitive.Trigger>
-        <PopoverPrimitive.Portal>
-          <PopoverPrimitive.Content
-            className="legacy-date-options"
-            align="start"
-            sideOffset={4}
-          >
-            <label>
-              <span>开始时间</span>
-              <input
-                type="datetime-local"
-                value={draft[0]}
-                onChange={(event) => setDraft([event.target.value, draft[1]])}
-              />
-            </label>
-            <label>
-              <span>结束时间</span>
-              <input
-                type="datetime-local"
-                value={draft[1]}
-                onChange={(event) => setDraft([draft[0], event.target.value])}
-              />
-            </label>
-            <div>
-              <button type="button" onClick={() => setDraft(["", ""])}>
-                清空
-              </button>
-              <button
-                type="button"
-                className="primary"
-                disabled={!valid}
-                onClick={() => {
-                  onChange(draft);
-                  setOpen(false);
-                }}
-              >
-                确定
-              </button>
-            </div>
-          </PopoverPrimitive.Content>
-        </PopoverPrimitive.Portal>
-      </PopoverPrimitive.Root>
-    </label>
-  );
-}
-
-function LegacyMetricSection({ title, items }) {
-  return (
-    <section className="legacy-metrics">
-      <h3>{title}</h3>
-      <div>
-        {items.map(([label, value]) => (
-          <article key={label}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function FilterSection({ title, count = 0, children }) {
   const [open, setOpen] = useState(true);
   return (
@@ -2234,13 +1760,12 @@ function VersionIndex() {
 
 function PrototypeApp({ version }) {
   useState(()=>{try{loadAdminState(localStorage);}catch{/* Existing storage errors are surfaced by the affected workspace. */}return null;});
-  const is5102 = version.id === "moma_5.10.2_estack";
-  const versionAdmin = is5102 ? "legacy" : "v2";
+  const versionAdmin = "v2";
   const modeFromHash = () =>
     location.hash.startsWith("#/admin") ? versionAdmin : "front";
   if (location.pathname.includes("/order/serviceOrder"))
     return (
-      <ModelOrderList standalone versionId={version.id} historical={is5102} />
+      <ModelOrderList standalone versionId={version.id} />
     );
   const versionNav = nav
     .map(([group, item]) => [
@@ -2251,8 +1776,7 @@ function PrototypeApp({ version }) {
     ])
     .filter(
       ([, item]) =>
-        (is5102 || !["按量付费", "Token Plan"].includes(item)) &&
-        (!is5102 || !["模型排行", "语音模型"].includes(item)),
+        !["按量付费", "Token Plan"].includes(item),
     );
   const directory = useServiceDirectory();
   const [catalogueScope, setCatalogueScope] = useState('showcase');
@@ -2264,7 +1788,7 @@ function PrototypeApp({ version }) {
   useEffect(() => { setEntryError(''); setEntryConfirm(''); }, [owner]);
   const [activePage, setActivePage] = useState(() => {
     const requestedPage = new URLSearchParams(location.search).get("page");
-    return requestedPage === 'model-detail' ? '模型详情' : requestedPage === 'experience' ? ({text:'文本生成', image:'图片生成', video:'视频生成', voice:'语音识别'}[new URLSearchParams(location.search).get('task')] || '模型广场') : requestedPage === "model-order" ? "模型订购" : !is5102 ? ({ "organization-members": "组织及成员", "operation-records": "操作记录", "api-keys": "API Key 管理", "account-certification": "账号认证", "call-logs": "调用日志", "usage-statistics": "用量统计" }[requestedPage] || "模型广场") : "模型广场";
+    return requestedPage === 'model-detail' ? '模型详情' : requestedPage === 'experience' ? ({text:'文本生成', image:'图片生成', video:'视频生成', voice:'语音识别'}[new URLSearchParams(location.search).get('task')] || '模型广场') : requestedPage === "model-order" ? "模型订购" : ({ "organization-members": "组织及成员", "operation-records": "操作记录", "api-keys": "API Key 管理", "account-certification": "账号认证", "call-logs": "调用日志", "usage-statistics": "用量统计" }[requestedPage] || "模型广场");
   }),
     [admin, setAdmin] = useState(modeFromHash),
     [adminBannerTarget, setAdminBannerTarget] = useState(null),
@@ -2330,15 +1854,8 @@ function PrototypeApp({ version }) {
     }
   }, [enterprisePagesAllowed, activePage]);
   useEffect(() => {
-    if (is5102 && activePage === "模型排行") setActivePage("模型广场");
-  }, [is5102, activePage]);
-  useEffect(() => {
     const sync = () => {
-      if (is5102 && location.hash.startsWith("#/admin-2")) {
-        location.hash = "/admin";
-        return;
-      }
-      if (!is5102 && location.hash.startsWith("#/admin") && !location.hash.startsWith("#/admin-2")) {
+      if (location.hash.startsWith("#/admin") && !location.hash.startsWith("#/admin-2")) {
         location.hash = "/admin-2/dashboard";
         return;
       }
@@ -2347,7 +1864,7 @@ function PrototypeApp({ version }) {
     sync();
     window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
-  }, [is5102, versionAdmin]);
+  }, [versionAdmin]);
   const navigateAdmin = (mode) => {
     const nextMode = mode === "front" ? "front" : versionAdmin;
     setAdmin(nextMode);
@@ -2484,7 +2001,7 @@ function PrototypeApp({ version }) {
   </section>;
 
   return (
-    <AdminUIContext.Provider value={admin === "v2"}><div className={`app-shell ${is5102 ? "version-5102" : ""} ${auth.route ? "auth-shell" : ""} ${auth.route ? "auth-enterprise-shell" : ""}`}>
+    <AdminUIContext.Provider value={admin === "v2"}><div className={`app-shell ${auth.route ? "auth-shell" : ""} ${auth.route ? "auth-enterprise-shell" : ""}`}>
       <header className={admin === "v2" ? "admin-banner" : undefined}>
         <div className="brand-mark">
           <img src={`${A}jiangSuZhengWu.png`} />
@@ -2535,13 +2052,13 @@ function PrototypeApp({ version }) {
             </button>
           )}
           {admin === 'front' && auth.user && <span>{auth.state.activeSpace === 'personal' ? '个人用户' : '政企用户'}</span>}
-          {is5102 ? <div className="user">estack-yy</div> : admin === "front" ? <AuthBanner auth={auth} showToast /> : null}
+          {admin === "front" ? <AuthBanner auth={auth} showToast /> : null}
         </div>
       </header>
       {admin === "front" && !auth.route && (
         <aside>
           {versionNav.map(([group, item], i) => {
-            const NavIcon = navIcons5102[item];
+            const NavIcon = navIcons[item];
             return (
               <div key={item}>
                 {group && i > 0 && <small>{group}</small>}
@@ -2559,51 +2076,28 @@ function PrototypeApp({ version }) {
               </div>
             );
           })}
-          {is5102 ? (
-            <div>
-              <small>用量统计</small>
-              {billingTypes
-                .map((billing) => {
-                  const page = `用量统计·${billing}`;
-                  const NavIcon = usageIcons5102[billing];
-                  return (
-                    <button
-                      key={billing}
-                      className={activePage === page ? "active" : ""}
-                      onClick={() => setActivePage(page)}
-                    >
-                      <NavIcon aria-hidden="true" />
-                      {billing}
-                    </button>
-                  );
-                })}
-            </div>
-          ) : (
-            <>
-              <div>
-                <small>模型观测</small>
-                <button
-                  className={activePage === "用量统计" ? "active" : ""}
-                  onClick={() => setActivePage("用量统计")}
-                >
-                  <ChartNoAxesCombined aria-hidden="true" />
-                  用量统计
-                </button>
-                <button className={activePage === "调用观测" ? "active" : ""} onClick={() => setActivePage("调用观测")}><Activity aria-hidden="true" />调用观测</button>
-                {enterprisePagesAllowed && <button className={activePage === "调用日志" ? "active" : ""} onClick={() => setActivePage("调用日志")}><FileText aria-hidden="true" />调用日志</button>}
-              </div>
-              <div>
-                <small>账号管理</small>
-                <button className={activePage === "API Key 管理" ? "active" : ""} onClick={() => setActivePage("API Key 管理")}><KeyRound aria-hidden="true" />API Key</button>
-                {enterprisePagesAllowed && <button className={activePage === "组织及成员" ? "active" : ""} onClick={() => setActivePage("组织及成员")}><Users aria-hidden="true" />组织及成员</button>}
-                {enterprisePagesAllowed && <button className={activePage === "操作记录" ? "active" : ""} onClick={() => setActivePage("操作记录")}><History aria-hidden="true" />操作记录</button>}
-                <button className={activePage === "账号认证" ? "active" : ""} onClick={() => setActivePage("账号认证")}><ShieldCheck aria-hidden="true" />账号认证</button>
-              </div>
-            </>
-          )}
+          <div>
+            <small>模型观测</small>
+            <button
+              className={activePage === "用量统计" ? "active" : ""}
+              onClick={() => setActivePage("用量统计")}
+            >
+              <ChartNoAxesCombined aria-hidden="true" />
+              用量统计
+            </button>
+            <button className={activePage === "调用观测" ? "active" : ""} onClick={() => setActivePage("调用观测")}><Activity aria-hidden="true" />调用观测</button>
+            {enterprisePagesAllowed && <button className={activePage === "调用日志" ? "active" : ""} onClick={() => setActivePage("调用日志")}><FileText aria-hidden="true" />调用日志</button>}
+          </div>
+          <div>
+            <small>账号管理</small>
+            <button className={activePage === "API Key 管理" ? "active" : ""} onClick={() => setActivePage("API Key 管理")}><KeyRound aria-hidden="true" />API Key</button>
+            {enterprisePagesAllowed && <button className={activePage === "组织及成员" ? "active" : ""} onClick={() => setActivePage("组织及成员")}><Users aria-hidden="true" />组织及成员</button>}
+            {enterprisePagesAllowed && <button className={activePage === "操作记录" ? "active" : ""} onClick={() => setActivePage("操作记录")}><History aria-hidden="true" />操作记录</button>}
+            <button className={activePage === "账号认证" ? "active" : ""} onClick={() => setActivePage("账号认证")}><ShieldCheck aria-hidden="true" />账号认证</button>
+          </div>
         </aside>
       )}
-      <main key={admin === "front" ? owner || "anonymous" : "admin"} className={admin !== "front" ? "admin-main" : is5102 ? "" : "front-main"}>
+      <main key={admin === "front" ? owner || "anonymous" : "admin"} className={admin !== "front" ? "admin-main" : "front-main"}>
         {auth.route ? (
           <AuthExperience key={auth.route} auth={auth} />
         ) : admin === "legacy" ? (
@@ -2613,7 +2107,7 @@ function PrototypeApp({ version }) {
         ) : activePage === "模型详情" ? (
           <MarketModelDetail services={directory.models} selected={selected} onSelect={selectDetailService} onBack={returnToMarket} onExperience={enterExperience} error={entryError} confirm={entryConfirm} onManageKeys={() => { const url = new URL(location.href); url.searchParams.set('page', 'api-keys'); url.searchParams.delete('model'); url.searchParams.delete('service'); history.pushState(null, '', url.pathname + url.search); setActivePage('API Key 管理'); }}/>
         ) : activePage === "智能路由" ? (
-          <SmartRoute key={`${version.id}:${owner}`} versionId={is5102 ? "moma_5.10.2_estack" : "moma_5.12.0_estack"} onNavigate={setActivePage} />
+          <SmartRoute key={`${version.id}:${owner}`} versionId="moma_5.12.0_estack" onNavigate={setActivePage} />
         ) : activePage === "模型排行" ? (
           <ModelRanking />
         ) : activePage === "文本生成" ? (
@@ -2625,7 +2119,7 @@ function PrototypeApp({ version }) {
             <TextExperience key={`${owner}:text:${entryService}`} owner={owner} initialServiceId={entryService}
               imageUploadEnabled
               title="文本生成"
-              onCompare={is5102 ? undefined : () => setTextCompare(true)}
+              onCompare={() => setTextCompare(true)}
             />
           )
         ) : activePage === "图片生成" || activePage === "视频生成" ? (
@@ -2641,16 +2135,14 @@ function PrototypeApp({ version }) {
             groupLabel="语音识别"
           />
         ) : activePage === "模型订购" ? (
-          <ModelOrderList versionId={version.id} historical={is5102} />
-        ) : is5102 && (activePage === "按量付费" || activePage === "Token Plan") ? (
-          <ApiKeys key={activePage} billing={activePage} />
-        ) : activePage === "账号认证" && !is5102 ? (
+          <ModelOrderList versionId={version.id} />
+        ) : activePage === "账号认证" ? (
           <AuthExperience auth={{ ...auth, route: "account", close: () => setActivePage("模型广场") }} accountTitle="账号认证" />
         ) : activePage === "API Key 管理" ? (
           <UnifiedApiKeys key={owner || "anonymous"} />
-        ) : activePage === "操作记录" && !is5102 && enterprisePagesAllowed ? (
+        ) : activePage === "操作记录" && enterprisePagesAllowed ? (
           <OperationRecords />
-        ) : activePage === "组织及成员" && !is5102 && enterprisePagesAllowed ? (
+        ) : activePage === "组织及成员" && enterprisePagesAllowed ? (
           <OrganizationMembers />
         ) : activePage === "调用观测" ? (
           <UsageStatistics key="observation" observation />
@@ -2658,43 +2150,14 @@ function PrototypeApp({ version }) {
           <UsageStatistics />
         ) : activePage === "调用日志" && enterprisePagesAllowed ? (
           <CallLogs />
-        ) : is5102 && activePage.startsWith("用量统计·") ? (
-          <UsageStatistics5102 />
         ) : (
           <div className="content">
 
             {(directory.error || directory.identityError) && <p role="status">{directory.error || directory.identityError}</p>}
-            {!is5102 && catalogueToolbar}
-            <section className={is5102 ? "catalog" : `catalog catalogue-layout ${compactFilters || !filtersExpanded ? 'catalogue-collapsed' : ''}`}>
-              {is5102 ? catalogueFilters : !compactFilters && <div hidden={!filtersExpanded}>{catalogueFilters}</div>}
+            {catalogueToolbar}
+            <section className={`catalog catalogue-layout ${compactFilters || !filtersExpanded ? 'catalogue-collapsed' : ''}`}>
+              {!compactFilters && <div hidden={!filtersExpanded}>{catalogueFilters}</div>}
               <div className="results">
-                {is5102 && (
-                <div className="toolbar">
-                  <h3>
-                    模型{" "}
-                    {visible.length}
-                    个 <img src={`${A}refresh-3e0d92ae.svg`} />
-                  </h3>
-                  <div>
-                    <select
-                      className="sort"
-                      aria-label="模型排序"
-                      value={sortMode}
-                      onChange={(e) => setSortMode(e.target.value)}
-                    >
-                      <option value="latest">最新</option>
-                      <option value="recommended">推荐</option>
-                    </select>
-                    <label>
-                      <input
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        aria-label="搜索模型名称" placeholder="请输入模型名称"
-                      />
-                    </label>
-                  </div>
-                </div>
-                )}
                 <div className="cards">
                   {visible.map((m) => {
                     const data = meta(m),
@@ -2744,7 +2207,7 @@ function PrototypeApp({ version }) {
                     );
                   })}
                 </div>
-                {!visible.length && <div className="empty">未找到符合条件的模型{!is5102 && <Button variant="link" onClick={resetFilters}>清空条件</Button>}</div>}
+                {!visible.length && <div className="empty">未找到符合条件的模型<Button variant="link" onClick={resetFilters}>清空条件</Button></div>}
               </div>
             </section>
           </div>
