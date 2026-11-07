@@ -6,18 +6,12 @@ import ChannelKeyPoolEditor from './ChannelKeyPoolEditor';
 import ChannelCredentialRotation from './ChannelCredentialRotation';
 import KeyGroupCandidateDialog from './KeyGroupCandidateDialog';
 import { useEffect, useId, useRef, useState } from 'react';
-import { LoaderCircle, Radio } from 'lucide-react';
 import { IconPlus } from '@douyinfe/semi-icons';
-import { Button, Input, Select, TextArea, Typography } from '@douyinfe/semi-ui';
-import { Disclosure, GridTable, Row, Cell, Modal, Notice } from './ModelOperationsUI';
+import { Button, Input, Typography } from '@douyinfe/semi-ui';
+import { GridTable, Row, Cell, Modal, Notice } from './ModelOperationsUI';
 import { supplierChannelResources, supplierChannelAssociations, supplierChannelCode, supplierChannelName, supplierKeyChannels } from './supplier-resources';
-import { Choice, Field } from './ServiceUI';
-import { providerApiKeysDraft, providerApiKeyRows, providerApiKeyName, providerApiKeyId, maskProviderApiKey, providerModelConnectivityTest, MODEL_CONNECTIVITY_SCENARIOS } from './provider-management';
-import { catalogueConnections } from './provider-model-connections';
-import { providerCatalogueIds } from './moma-provider';
-import { supplyConnectivityTest } from './model-operations';
-import { connectionCredentialsReady } from './connection-state';
-import { supplyModelUrl } from './model-management';
+import { Field } from './ServiceUI';
+import { providerApiKeysDraft, providerApiKeyRows, providerApiKeyName, providerApiKeyId, maskProviderApiKey } from './provider-management';
 import { providerKeyGroups } from './provider-key-groups';
 import './supplier-key-groups.css';
 
@@ -83,60 +77,6 @@ function CredentialEditor({ provider, group, record, ops, close }) {
         {ops.error && <Notice error>{ops.error}</Notice>}
       </>}
     </Modal>;
-}
-
-export function ModelConnectivityTest({ state, provider, apiKey, endpoint: initialEndpoint, supply, catalogueModelId, ops, close }) {
-  const modelEndpoints = catalogueModelId ? catalogueConnections(state, provider, catalogueModelId) : null;
-  const endpoints = state.endpoints.filter(item => (!modelEndpoints || modelEndpoints.some(endpoint => endpoint.id === item.id)) && item.providerId === provider.id && (!apiKey || provider.apiKeys?.some(key => key.fingerprint === apiKey.fingerprint) || item.apiKeys?.some(key => key.fingerprint === apiKey.fingerprint)));
-  const models = catalogueModelId ? providerCatalogueIds(provider).filter(id => id === catalogueModelId) : supply ? [supply.upstreamModelId] : providerCatalogueIds(provider).filter(id => !catalogueConnections(state, provider, id).length || catalogueConnections(state, provider, id).some(item => endpoints.some(endpoint => endpoint.id === item.id) && (!initialEndpoint || item.id === initialEndpoint.id)));
-  const [modelId, setModelId] = useState(catalogueModelId || supply?.upstreamModelId || ''), [upstreamId, setUpstreamId] = useState(catalogueModelId || supply?.upstreamModelId || '');
-  const [prompt, setPrompt] = useState('请只回复 OK。');
-  const [scenario, setScenario] = useState('success');
-  const mapped = catalogueConnections(state, provider, modelId).filter(item => endpoints.some(endpoint => endpoint.id === item.id));
-  const candidates = initialEndpoint ? [initialEndpoint] : mapped.length ? mapped : endpoints;
-  const [endpointId, setEndpointId] = useState(initialEndpoint?.id || (endpoints.length === 1 ? endpoints[0].id : ''));
-  const endpoint = candidates.find(item => item.id === endpointId);
-  const [selectedKeyId, setSelectedKeyId] = useState('');
-  const keys = endpoint?.apiKeys || [];
-  const testKeyId = keys.some(key => key.id === selectedKeyId) ? selectedKeyId : keys.length === 1 ? keys[0].id : '';
-  const credentialsReady = apiKey || supply || (testKeyId || connectionCredentialsReady(endpoint, provider) && !keys.length);
-  const requestUrl = supply && supplyModelUrl(supply, state.models.find(item => item.id === supply.modelId));
-  const [testing, setTesting] = useState(false), [result, setResult] = useState(null);
-  const timer = useRef(null);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  const chooseModel = id => {
-    setModelId(id); setUpstreamId(id); setResult(null);
-    const configured = catalogueConnections(state, provider, id).filter(item => endpoints.some(endpoint => endpoint.id === item.id));
-    const choices = initialEndpoint ? [initialEndpoint] : configured.length ? configured : endpoints;
-    setEndpointId(choices.length === 1 ? choices[0].id : '');
-  };
-  const start = () => {
-    if (!ops.can || testing || !endpoint || !modelId || !upstreamId.trim() || !prompt.trim() || !credentialsReady) return;
-    setTesting(true); setResult(null);
-    timer.current = setTimeout(() => {
-      try { const key = apiKey && [...(provider.apiKeys || []), ...(endpoint.apiKeys || [])].find(item => item.fingerprint === apiKey.fingerprint); setResult(supply ? supplyConnectivityTest(state, { modelId: supply.modelId, supplyId: supply.id, prompt, scenario }) : providerModelConnectivityTest(state, { providerId: provider.id, keyId: key?.id || testKeyId, endpointId, modelId, upstreamId, prompt, scenario })); }
-      catch (error) { setResult({ result: '失败', title: '无法开始测试', message: error.message, upstreamId }); }
-      setTesting(false);
-    }, 800);
-  };
-  const cancel = () => { clearTimeout(timer.current); setTesting(false); setResult({ result: '已取消', title: '测试已取消', message: '本次测试已取消，可以调整配置后重新测试。', upstreamId }); };
-  return <Modal wide title="模型连通性测试" description={provider.name + (apiKey ? ' · API 密钥 ' + maskProviderApiKey(apiKey.maskedKey) : ' · 使用已配置凭证')} onClose={close}><div className="supplier-model-test">
-    <section className="supplier-test-config" aria-label="测试配置"><Typography.Title heading={5} component="h3">测试配置</Typography.Title>
-      <Field label="测试模型 *"><Select className="supplier-test-model-trigger" filter aria-label="选择测试模型" placeholder="搜索并选择服务商模型" value={modelId || undefined} disabled={Boolean(supply || catalogueModelId) || testing || !ops.can || !models.length} optionList={models.map(id => ({ value: id, label: id }))} emptyContent="没有匹配的模型" onChange={id => chooseModel(id)}/></Field>
-      {!models.length && <Notice error>服务商目录暂无模型，请先添加模型。</Notice>}
-      <Field label="对外调用标识 *" hint="用于本次请求，不修改目录资料。"><Input aria-label="测试对外调用标识" value={upstreamId} maxLength={200} disabled={Boolean(supply) || testing || !modelId || !ops.can} onChange={value => { setUpstreamId(value); setResult(null); }}/></Field>
-      {candidates.length ? <Field label="接入地址 *"><Choice label="测试接入地址" value={endpointId} options={candidates.map(item => [item.id, requestUrl || item.baseUrl])} disabled={Boolean(initialEndpoint) || testing || !ops.can} onChange={id => { setEndpointId(id); setSelectedKeyId(''); setResult(null); }}/></Field> : <Notice error>请先在模型目录配置接入地址。</Notice>}
-      {!supply && !catalogueModelId && modelId && !mapped.length && candidates.length > 0 && <small className="supplier-test-hint">该模型尚未关联地址，选择的地址仅用于本次测试。</small>}
-      {!apiKey && !supply && endpoint && (keys.length ? <Field label="API 密钥 *"><Choice label="测试 API 密钥" value={testKeyId || 'choose'} options={[['choose', '请选择 API 密钥'], ...keys.map(key => [key.id, providerApiKeyName(key)])]} disabled={testing || !ops.can} onChange={id => { setSelectedKeyId(id); setResult(null); }}/></Field> : <Notice error={!credentialsReady}>{credentialsReady ? provider.sourceType === 'selfHosted' ? '此服务无需 API 密钥。' : '使用已配置的凭证引用。' : '当前 API 地址尚未关联凭证，请先通过 API 密钥操作完成配置。'}</Notice>)}
-      <Field label="测试内容 *"><TextArea aria-label="模型测试内容" value={prompt} maxLength={2000} disabled={testing || !ops.can} onChange={value => { setPrompt(value); setResult(null); }}/></Field>
-      <div className="supplier-test-protocol"><span>协议</span><b>{endpoint?.protocol || '—'}</b><span>最大输出</span><b>32 Tokens</b></div>
-      {new URLSearchParams(location.hash.split('?')[1] || '').get('devtools') === '1' && <Field label="结果预览"><Choice label="模型测试结果预览" value={scenario} options={Object.entries(MODEL_CONNECTIVITY_SCENARIOS)} disabled={testing || !ops.can} onChange={value => { setScenario(value); setResult(null); }}/></Field>}
-    </section>
-    <section className="supplier-test-result" aria-label="测试结果" aria-live="polite"><Typography.Title heading={5} component="h3">测试结果</Typography.Title>
-      {testing ? <div className="supplier-test-empty" role="status"><LoaderCircle className="animate-spin"/><strong>正在测试</strong><p>目标模型：{upstreamId}</p></div> : result ? <div className="supplier-test-response"><Notice error={result.result === '失败'}><strong>{result.title}</strong><p>{result.message}</p>{result.hint && <p>{result.hint}</p>}</Notice><dl><div><dt>模型</dt><dd>{result.upstreamId || upstreamId}</dd></div><div><dt>HTTP 状态</dt><dd>{result.status ?? (result.response ? '未收到响应' : '—')}</dd></div><div><dt>响应耗时</dt><dd>{result.durationMs == null ? '—' : result.durationMs.toLocaleString('zh-CN') + ' ms'}</dd></div><div><dt>接入地址</dt><dd>{result.baseUrl || requestUrl || endpoint?.baseUrl || '—'}</dd></div></dl><div className="supplier-test-response-body"><Typography.Title heading={6} component="h4">{result.result === '失败' ? '错误详情' : '模型响应'}</Typography.Title>{result.response ? <><p className="supplier-test-output">{result.response.choices?.[0]?.message.content || result.response.error?.message}</p><Disclosure title="响应详情"><pre>{JSON.stringify(result.response, null, 2)}</pre></Disclosure></> : <p>本次测试未产生响应。</p>}</div></div> : <div className="supplier-test-empty"><Radio/><strong>等待测试</strong><p>选择模型并填写测试内容，结果将在此显示。</p></div>}
-    </section>
-    <footer className="supplier-test-footer"><span>结果为交互预览，不发送真实模型请求或改变启用状态。</span><div className="supplier-key-actions"><Button theme="light" onClick={close}>关闭</Button>{!models.length || !endpoints.length ? <Button disabled={!ops.can} onClick={() => { close(); ops.go({ tab: 'catalogue' }); }}>前往模型渠道</Button> : testing ? <Button theme="light" onClick={cancel}>取消测试</Button> : <Button disabled={!ops.can || !endpoint || !modelId || !upstreamId.trim() || !prompt.trim() || !credentialsReady} onClick={start}>{result ? '重新测试' : '开始测试'}</Button>}</div></footer>
-  </div></Modal>;
 }
 
 function KeyGroupEditor({ provider, group, ops, close, saved }) {

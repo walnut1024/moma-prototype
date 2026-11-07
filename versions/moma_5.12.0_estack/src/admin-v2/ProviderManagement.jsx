@@ -6,7 +6,7 @@ import { supplyModelDirectory } from './supply-models';
 import { useRef, useState } from 'react';
 import { Power } from 'lucide-react';
 import { IconEdit, IconPlus } from '@douyinfe/semi-icons';
-import { Button, Space, Tabs, Typography, Card } from '@douyinfe/semi-ui';
+import { Button, Card, Empty, Space, Tabs, Typography } from '@douyinfe/semi-ui';
 import { MOMA_PROVIDER, supplierDirectory } from './moma-provider.js';
 import { supplierChannelResources } from './supplier-resources';
 import { providerCode } from './model-operations';
@@ -29,7 +29,7 @@ function SupplierSidebar({ state, providers, selected, onSelect }) {
         const groups = supplierModelChannelGroups(state, item), modelCount = groups.filter(row => row.modelId).length, channelCount = new Set(groups.flatMap(row => row.channels.map(channel => channel.endpointId)).filter(Boolean)).size;
         return <Button key={item.id} type={item.id === selected ? 'primary' : 'tertiary'} theme={item.id === selected ? 'light' : 'borderless'} aria-pressed={item.id === selected} title={providerCode(item)} onClick={() => onSelect(item.id)}><span>{item.name}{item.id===MOMA_PROVIDER.id && <AdminStatus value="内置"/>}</span><small>{modelCount} 款模型，{channelCount} 个渠道</small></Button>;
       })}
-      {!matches.length && <p role="status">没有匹配的服务商</p>}
+      {!matches.length && <Empty description={<span role="status">没有匹配的服务商</span>}/>}
     </nav>
   </>;
 }
@@ -70,7 +70,7 @@ export default function ProviderManagement(props) {
       </Tabs>
     </Card>;
   } else {
-    content = <Notice error>{providers.length ? '该服务商不存在，请切换其他服务商。' : '尚未创建服务商，请先添加服务商。'}</Notice>;
+    content = <Empty description={providers.length ? '该服务商不存在，请切换其他服务商。' : '尚未创建服务商，请先添加服务商。'}/>;
   }
   const viewSwitch = <Tabs className="supplier-perspective" type="button" activeKey={perspective} onChange={perspective => go({ perspective, resource: null })} aria-label="渠道接入视图"><Tabs.TabPane tab="服务商" itemKey="suppliers"/><Tabs.TabPane tab="模型" itemKey="models"/></Tabs>;
   const returnEndpoint = state.endpoints.find(row => row.id === params.get('returnTestEndpoint') && row.providerId === provider?.id && !row.deletedAt);

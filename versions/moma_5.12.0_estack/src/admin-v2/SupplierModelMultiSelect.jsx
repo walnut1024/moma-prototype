@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Checkbox, Input } from '@douyinfe/semi-ui';
+import { Checkbox, Empty, Input, Typography } from '@douyinfe/semi-ui';
 import { modelReleaseOrder, modelCatalogue } from './model-library';
 import { SUPPLIER_REGISTRATION_LIMIT } from './supplier-model-registration';
 
@@ -10,5 +10,5 @@ export default function SupplierModelMultiSelect({ state, registered, value, dis
   return <div className="supplier-model-multiselect supplier-model-multiselect-inline"><Input autoFocus aria-label="搜索模型目录" placeholder="搜索模型展示名 / 规范标识 / 类型" value={query} onChange={value => setQuery(value)}/><div className="supplier-model-select-options" role="group" aria-label="统一模型目录">{options.map(model => {
     const exists = registered.includes(model.id), checked = value.includes(model.id);
     return <Checkbox key={model.id} className="supplier-model-option" checked={checked || exists} disabled={disabled || exists || !checked && value.length >= SUPPLIER_REGISTRATION_LIMIT} onChange={() => onChange(checked ? value.filter(id => id !== model.id) : [...value, model.id])}><span>{model.name}<small>{catalogueType(model.type)}{model.profile?.releaseDate ? ` · ${model.profile.releaseDate}` : ''}{exists ? ' · 已添加' : ''}</small></span></Checkbox>;
-  })}{!options.length && <p role="status">没有匹配的模型</p>}</div><p className="mo-muted">已选 {value.length} / {SUPPLIER_REGISTRATION_LIMIT}</p></div>;
+  })}{!options.length && <Empty description={<span role="status">没有匹配的模型</span>}/>}</div><Typography.Text type="secondary">已选 {value.length} / {SUPPLIER_REGISTRATION_LIMIT}</Typography.Text></div>;
 }
