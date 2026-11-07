@@ -16,7 +16,6 @@
 .supplier-key-row .admin-form-field{flex:1;min-width:0;margin:0}
 .supplier-key-pending{color:var(--semi-color-text-2)}
 .supplier-key-form{display:flex;flex-direction:column;gap:16px}
-.supplier-key-actions{display:flex;justify-content:flex-end;gap:8px}
 .supplier-key-error{color:var(--semi-color-danger);font-size:12px}
 .supplier-price-number{text-align:right!important;font-variant-numeric:tabular-nums;white-space:nowrap}
 .supplier-workbench .supplier-catalogue-actions{display:flex;flex-direction:column;align-items:flex-start;gap:2px}

@@ -19,9 +19,9 @@ export function EnterpriseTable({ columns, rows, empty, pagination = false, minW
     dataSource={rows} scroll={{ x: `max(100%, ${minWidth}px)` }} pagination={pagination} empty={empty}/>;
 }
 
-export function EnterpriseDialog({ title, description, close, children, wide = false, closeOnEsc = true }) {
+export function EnterpriseDialog({ title, description, close, children, wide = false, closeOnEsc = true, footer = null }) {
   return <Modal visible title={title} width={`min(${wide ? 840 : 620}px, calc(100vw - 32px))`}
-    onCancel={close} maskClosable={false} footer={null} closeOnEsc={closeOnEsc}>
+    onCancel={close} maskClosable={false} footer={footer} closeOnEsc={closeOnEsc}>
     <div className="admin-analytics-fields admin-enterprise-dialog">
       {description && <Typography.Paragraph type="secondary">{description}</Typography.Paragraph>}
       {children}

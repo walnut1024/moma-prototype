@@ -140,14 +140,13 @@ export default function EnterpriseMembers({ state, tenant, projects, canWrite, s
         </div>
       </Card>
     </section>
-    {inspect && <EnterpriseDialog title="成员详情" description={`${tenant.name} · ${inspectUser?.name || inspect.name}`} close={() => setInspectId(null)}>
+    {inspect && <EnterpriseDialog title="成员详情" description={`${tenant.name} · ${inspectUser?.name || inspect.name}`} close={() => setInspectId(null)} footer={<><Button onClick={() => setInspectId(null)}>关闭</Button></>}>
       <EnterpriseFacts rows={[
         ['成员 ID', inspect.id], ['登录身份 ID', inspect.userId], ['登录账号', inspectUser?.login || inspect.userId],
         ['手机号码', inspectUser?.phone || '未填写'], ['主部门', pathFor(inspect)], ['企业角色', inspect.role],
         ['项目范围', projectScope(inspect)], ['登录身份状态', inspectUser ? <EnterpriseStatus value={inspectUser.status}/> : '身份不存在'],
         ['账号初始化', inspectUser?.initialized ? '已完成' : '待初始化'], ['本企业成员状态', <EnterpriseStatus value={inspect.status}/>],
       ]}/>
-      <div className="admin-form-actions"><Button onClick={() => setInspectId(null)}>关闭</Button></div>
     </EnterpriseDialog>}
   </div>;
 }

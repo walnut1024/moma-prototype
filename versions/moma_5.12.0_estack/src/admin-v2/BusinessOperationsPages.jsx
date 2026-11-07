@@ -1,6 +1,6 @@
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Banner, Button, Card, Form, Input, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus, IconSearch, IconUpload } from '@douyinfe/semi-icons';
@@ -40,6 +40,7 @@ function BusinessTable({ rows, columns, minWidth = 850, children, empty = '暂�
 }
 
 function Managed({ pageId, state, dispatch }) {
+  const formId = useId();
   const { collection, fields } = configs[pageId];
   const title = titles[pageId];
   const [query, setQuery] = useState('');
@@ -84,16 +85,15 @@ function Managed({ pageId, state, dispatch }) {
       </FilterToolbar>
     </BusinessTable>
     {editing && <Modal visible title={`新建${title}`} width="min(520px, calc(100vw - 32px))"
-      maskClosable={false} closeOnEsc footer={null} onCancel={close}>
-      <Form onSubmit={save} onValueChange={() => setError('')}>
+      maskClosable={false} closeOnEsc footer={<>
+        <Button onClick={close}>取消</Button>
+        <Button form={formId} htmlType="submit" theme="solid" disabled={!canWrite}>保存</Button>
+      </>} onCancel={close}>
+      <Form id={formId} onSubmit={save} onValueChange={() => setError('')}>
         {fields.map(([field, label, type]) => type === 'date'
           ? <Form.DatePicker key={field} field={field} label={label} type="date" format="yyyy-MM-dd" onChangeWithDateFirst={false} zIndex={1200}/>
           : <Form.Input key={field} field={field} label={label} type={type || 'text'}/>)}
         {error && <Banner type="danger" closeIcon={null} description={error}/>}
-        <div className="admin-form-actions">
-          <Button onClick={close}>取消</Button>
-          <Button htmlType="submit" theme="solid" disabled={!canWrite}>保存</Button>
-        </div>
       </Form>
     </Modal>}
   </>;

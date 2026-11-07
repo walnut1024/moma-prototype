@@ -1,7 +1,7 @@
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Banner, Button, Card, Form, Input, Radio, RadioGroup, Select, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconCopy, IconEyeClosed, IconEyeOpened, IconPlus, IconSearch } from '@douyinfe/semi-icons';
@@ -22,6 +22,7 @@ const dateFormat = new Intl.DateTimeFormat('zh-CN', {
 const modalWidth = 'min(480px, calc(100vw - 32px))';
 
 function AccountEditor({ account, revision, canWrite, transact, close, complete }) {
+  const formId = useId();
   const [draft, setDraft] = useState(() => ({ account: '', accountType: 'phone', name: '', phone: '', email: '', role: '运营人员', ...account }));
   const [error, setError] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -60,9 +61,12 @@ function AccountEditor({ account, revision, canWrite, transact, close, complete 
     }
   };
   return (
-    <Modal visible width={modalWidth} title={account ? '编辑后台账号' : '新建后台账号'} footer={null} closeOnEsc maskClosable={false} onCancel={close}>
+    <Modal visible width={modalWidth} title={account ? '编辑后台账号' : '新建后台账号'} footer={<>
+        <Button onClick={close}>取消</Button>
+        <Button theme="solid" form={formId} htmlType="submit" disabled={!canWrite}>{account ? '保存账号' : '新建账号'}</Button>
+      </>} closeOnEsc maskClosable={false} onCancel={close}>
       <Typography.Paragraph type="secondary">{account ? '维护后台人员姓名、角色及联系资料。' : '使用手机号码或邮箱登录，创建成功后自动生成初始密码。'}</Typography.Paragraph>
-      <form noValidate onSubmit={submit}>
+      <form id={formId} noValidate onSubmit={submit}>
         <Form.Slot label={{ text: '登录账号', name: 'aa-account', required: true }}>
           {!account && <RadioGroup className="aa-login-type" type="button" aria-label="登录账号类型" value={draft.accountType}
             onChange={event => set('accountType', event.target.value)}>
@@ -91,10 +95,6 @@ function AccountEditor({ account, revision, canWrite, transact, close, complete 
           <Typography.Paragraph size="small" type="tertiary">{ROLE_DESCRIPTIONS[draft.role]}</Typography.Paragraph>
         </Form.Slot>
         {error && <Banner type="danger" closeIcon={null} description={error}/>}
-        <div className="admin-form-actions">
-          <Button onClick={close}>取消</Button>
-          <Button theme="solid" htmlType="submit" disabled={!canWrite}>{account ? '保存账号' : '新建账号'}</Button>
-        </div>
       </form>
     </Modal>
   );

@@ -1,5 +1,5 @@
 import AdminStatus from './AdminStatus';
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Banner, Button, Card, Form, Input, Progress, Space, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
@@ -21,6 +21,7 @@ const monitorMetrics = [
 ];
 
 export function ClusterManagement({ state, dispatch }) {
+  const formId = useId();
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
@@ -87,8 +88,11 @@ export function ClusterManagement({ state, dispatch }) {
       {!rows.length && <Paragraph type="secondary">{query ? '没有符合筛选条件的集群' : '暂无纳管集群'}</Paragraph>}
     </Card>
     {creating && <Modal visible title="纳管推理集群" width="min(480px, calc(100vw - 32px))" closeOnEsc maskClosable={false}
-      footer={null} onCancel={() => setCreating(false)}>
-      <Form initValues={{ zone: '南京', gpuType: 'H20', totalGpu: 8, nodes: 1 }} onSubmit={save} onValueChange={() => setError('')}>
+      footer={<>
+        <Button onClick={() => setCreating(false)}>取消</Button>
+        <Button form={formId} htmlType="submit" theme="solid">确认纳管</Button>
+      </>} onCancel={() => setCreating(false)}>
+      <Form id={formId} initValues={{ zone: '南京', gpuType: 'H20', totalGpu: 8, nodes: 1 }} onSubmit={save} onValueChange={() => setError('')}>
         <Form.Input field="clusterId" label="Cluster ID" placeholder="例如 inference-nj-b"/>
         <Form.Input field="name" label="集群名称" placeholder="请输入集群名称"/>
         <Form.Input field="zone" label="可用区"/>
@@ -96,10 +100,6 @@ export function ClusterManagement({ state, dispatch }) {
         <Form.InputNumber field="totalGpu" label="GPU 总量"/>
         <Form.InputNumber field="nodes" label="节点数量"/>
         {error && <Banner type="danger" closeIcon={null} description={error}/>}
-        <div className="admin-form-actions">
-          <Button onClick={() => setCreating(false)}>取消</Button>
-          <Button htmlType="submit" theme="solid">确认纳管</Button>
-        </div>
       </Form>
     </Modal>}
   </div>;

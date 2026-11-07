@@ -13,7 +13,7 @@ export function AdminModal({
     const labelHeaderChild = child => {
       if (!isValidElement(child)) return child;
       if (child.props.id === modal.props['aria-labelledby']) return cloneElement(child, { id: titleId });
-      if (child.props['aria-label'] === 'close') return cloneElement(child, { 'aria-label': '关闭' });
+      if (child.props['aria-label'] === 'close') return cloneElement(child, { 'aria-label': '关闭弹窗' });
       return child;
     };
     const labeledHeader = isValidElement(header)
@@ -32,7 +32,7 @@ export function AdminModal({
     cancelText={cancelText} cancelButtonProps={{ 'aria-label': typeof cancelText === 'string' ? cancelText : undefined, ...cancelButtonProps }}/>;
 }
 
-export function AdminSideSheet({ title, label, maskClosable = false, ...props }) {
+export function AdminSideSheet({ title, label, footer, maskClosable = false, ...props }) {
   const titleId = useId();
   const opener = useRef(null);
   const labelSheet = useCallback(node => {
@@ -40,7 +40,7 @@ export function AdminSideSheet({ title, label, maskClosable = false, ...props })
     if (!dialog) return;
     if (label) dialog.setAttribute('aria-label', label);
     else dialog.setAttribute('aria-labelledby', titleId);
-    dialog.querySelector('.semi-sidesheet-close')?.setAttribute('aria-label', '关闭');
+    dialog.querySelector('.semi-sidesheet-close')?.setAttribute('aria-label', '关闭抽屉');
     if (!dialog.contains(document.activeElement)) {
       opener.current ??= document.activeElement;
       dialog.focus({ preventScroll: true });
@@ -55,5 +55,6 @@ export function AdminSideSheet({ title, label, maskClosable = false, ...props })
   }, []);
 
   return <SideSheet {...props} maskClosable={maskClosable}
+    footer={footer ? <div className="admin-sheet-actions">{footer}</div> : null}
     title={title == null ? title : <div id={titleId} ref={labelSheet}>{title}</div>}/>;
 }

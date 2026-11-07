@@ -1,6 +1,6 @@
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
-import { useEffect, useState } from 'react';
+import { useId, useEffect, useState } from 'react';
 import { Avatar, Banner, Button, Card, Checkbox, Descriptions, Form, Input, Progress, Space, Tabs, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconSearch } from '@douyinfe/semi-icons';
@@ -50,6 +50,7 @@ function DetailsModal({ title, description, children, close }) {
 }
 
 function UserEditor({ account, transact, canWrite, close, complete }) {
+  const formId = useId();
   const [form, setForm] = useState({ nickname: account.user.nickname || '', email: account.user.email || '', notes: account.tenant.notes || '' });
   const [dirty, setDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
@@ -72,8 +73,11 @@ function UserEditor({ account, transact, canWrite, close, complete }) {
   };
   return <>
     <Modal visible title="编辑个人用户资料" width="min(560px, calc(100vw - 32px))" closeOnEsc={!discard}
-      maskClosable={false} onCancel={requestClose} footer={null}>
-      <form className="admin-individual-dialog" onSubmit={submit}>
+      maskClosable={false} onCancel={requestClose} footer={<>
+        <Button onClick={requestClose} disabled={busy}>取消</Button>
+        <Button form={formId} htmlType="submit" theme="solid" loading={busy} disabled={!canWrite || !dirty}>保存</Button>
+      </>}>
+      <form id={formId} className="admin-individual-dialog" onSubmit={submit}>
         <Paragraph type="secondary">用户 ID：{account.user.id}</Paragraph>
         <Form.Slot label={{ text: '注册手机号', name: 'iu-phone' }}>
           <Input id="iu-phone" readOnly value={maskIndividualValue('phone', account.user.phone)}/>
@@ -89,10 +93,6 @@ function UserEditor({ account, transact, canWrite, close, complete }) {
         </Form.Slot>
         <Paragraph type="secondary">换绑手机号需由用户完成身份验证，用户 ID 保持不变。</Paragraph>
         {error && <Banner type="danger" closeIcon={null} description={error}/>}
-        <div className="admin-form-actions">
-          <Button onClick={requestClose} disabled={busy}>取消</Button>
-          <Button htmlType="submit" theme="solid" loading={busy} disabled={!canWrite || !dirty}>保存</Button>
-        </div>
       </form>
     </Modal>
     {discard && serviceOperationsUi.renderLeaveDialog({ cancel: () => setDiscard(false), discard: close })}
@@ -100,6 +100,7 @@ function UserEditor({ account, transact, canWrite, close, complete }) {
 }
 
 function StatusDialog({ account, accounts, role, transact, canWrite, close, complete }) {
+  const formId = useId();
   const bulk = Boolean(accounts);
   const targets = accounts || [account];
   const [status] = useState(bulk || account.tenant.status !== '停用' ? '停用' : '正常');
@@ -144,8 +145,11 @@ function StatusDialog({ account, accounts, role, transact, canWrite, close, comp
     }
   };
   return <Modal visible title={bulk ? `批量冻结个人账号（${targets.length} 个）` : `${action}个人账号`}
-    width="min(620px, calc(100vw - 32px))" closeOnEsc maskClosable={false} onCancel={close} footer={null}>
-    <form className="admin-analytics-fields admin-individual-dialog" onSubmit={submit}>
+    width="min(620px, calc(100vw - 32px))" closeOnEsc maskClosable={false} onCancel={close} footer={<>
+      <Button disabled={busy} onClick={close}>取消</Button>
+      <Button form={formId} htmlType="submit" theme="solid" type={freezing ? 'danger' : 'primary'} disabled={disabled} loading={busy}>确认{action}</Button>
+    </>}>
+    <form id={formId} className="admin-analytics-fields admin-individual-dialog" onSubmit={submit}>
       {bulk ? <RecordTable columns={['用户 / User ID', '手机号码']}
         rows={targets.map(item => [item.tenant.id, <div className="admin-table-record">
           <Text>{individualName(item)}</Text><Text type="secondary" size="small">{item.tenant.ownerId}</Text>
@@ -173,10 +177,6 @@ function StatusDialog({ account, accounts, role, transact, canWrite, close, comp
         </Paragraph>}
       </>}
       {error && <Banner type="danger" closeIcon={null} description={error}/>}
-      <div className="admin-form-actions">
-        <Button disabled={busy} onClick={close}>取消</Button>
-        <Button htmlType="submit" theme="solid" type={freezing ? 'danger' : 'primary'} disabled={disabled} loading={busy}>确认{action}</Button>
-      </div>
     </form>
   </Modal>;
 }

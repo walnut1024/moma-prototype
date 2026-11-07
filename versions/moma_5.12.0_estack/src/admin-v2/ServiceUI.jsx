@@ -66,12 +66,11 @@ export function Modal({ title, description, children, onClose, wide, drawer = fa
   const content = <div className="ss-dialog-content">
     {description && <Typography.Paragraph type="tertiary">{description}</Typography.Paragraph>}{children}
   </div>;
-  const actions = footer ? <div className="ss-footer">{footer}</div> : null;
   return drawer
     ? <AdminSideSheet visible className={`semi-services ${className}`} title={title} placement={drawerSide}
-        width={`min(${wide ? 1000 : 720}px, 100vw)`} onCancel={onClose} closeOnEsc maskClosable={maskClosable} footer={actions}>{content}</AdminSideSheet>
+        width={`min(${wide ? 1000 : 720}px, 100vw)`} onCancel={onClose} closeOnEsc maskClosable={maskClosable} footer={footer}>{content}</AdminSideSheet>
     : <AdminModal visible className={`semi-services ${className}`} title={title}
-        width={`min(${wide ? 960 : 448}px, calc(100vw - 32px))`} onCancel={onClose} maskClosable={maskClosable} footer={actions}>{content}</AdminModal>;
+        width={`min(${wide ? 960 : 448}px, calc(100vw - 32px))`} onCancel={onClose} maskClosable={maskClosable} footer={footer ?? null}>{content}</AdminModal>;
 }
 export const serviceOperationsUi = {
   notify: message => Toast.success(message),

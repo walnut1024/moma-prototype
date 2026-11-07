@@ -1,25 +1,25 @@
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
-import {useEffect, useRef, useState} from 'react';
+import {useId, useEffect, useRef, useState} from 'react';
 import { Banner, Button, Form, Input, Space, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import {IconPlus, IconSearch} from '@douyinfe/semi-icons';
 import {TARIFF_KINDS, tariffDictionaryEntries, tariffDictionaryId} from './tariff-dictionary';
 
 function DictionaryEditor({entry,kind,ops,close}) {
+  const formId = useId();
   const [value,setValue]=useState({name:entry?.name || '',englishName:entry?.englishName || '',code:entry?.code || '',description:entry?.description || ''});
   const [saving,setSaving]=useState(false);
   const change=(key,input)=>{setValue(current=>({...current,[key]:input}));ops.dirty(true);ops.setError('');};
   const cancel=()=>ops.proceed(close);
-  return <Modal visible className="semi-materials" title={entry?'编辑'+TARIFF_KINDS[kind]:kind==='unit'?'新增单位':'新增'+TARIFF_KINDS[kind]} onCancel={cancel} footer={null}>
+  return <Modal visible className="semi-materials" title={entry?'编辑'+TARIFF_KINDS[kind]:kind==='unit'?'新增单位':'新增'+TARIFF_KINDS[kind]} onCancel={cancel} footer={<><Button onClick={cancel}>取消</Button><Button form={formId} htmlType="submit" theme="solid" loading={saving} disabled={!ops.can}>保存字典项</Button></>}>
     <Typography.Paragraph type="secondary">{kind==='scenario'?'成本与售价共用此计费项。已被引用的名称不能更改。':'用于采购与平台售价。已被引用的名称、单位及货币代码不能更改；停用后已有配置和历史保留。'}</Typography.Paragraph>
-    <Form onSubmit={async()=>{if(saving || !ops.can)return;setSaving(true);try{if(await ops.run('tariffDictionary',{operation:'save',id:entry?.id,kind,...value}))close();}finally{setSaving(false);}}}>
+    <Form id={formId} onSubmit={async()=>{if(saving || !ops.can)return;setSaving(true);try{if(await ops.run('tariffDictionary',{operation:'save',id:entry?.id,kind,...value}))close();}finally{setSaving(false);}}}>
       <Form.Slot label={kind==='scenario'?'计费项名称':'中文名称'}><Input aria-label={kind==='scenario'?'计费项名称':'中文名称'} maxLength={kind==='unit'?40:80} value={value.name} disabled={!ops.can} onChange={input=>change('name',input)}/></Form.Slot>
       {kind!=='scenario' && <Form.Slot label="英文名称"><Input aria-label="英文名称" maxLength={80} value={value.englishName} disabled={!ops.can} onChange={input=>change('englishName',input)}/></Form.Slot>}
       {kind==='scenario' && <><Form.Slot label="计费说明"><Input aria-label="计费说明" maxLength={160} value={value.description} disabled={!ops.can} onChange={input=>change('description',input)}/></Form.Slot></>}
       {kind==='currency' && <Form.Slot label="货币代码"><Input aria-label="货币代码" maxLength={3} placeholder="ISO 4217 代码，如 CNY、USD" value={value.code} disabled={!ops.can} onChange={input=>change('code',input.toUpperCase())}/></Form.Slot>}
       {ops.error && <Banner type="danger" description={ops.error}/>}
-      <div className="materials-form-footer"><Button onClick={cancel}>取消</Button><Button htmlType="submit" theme="solid" loading={saving} disabled={!ops.can}>保存字典项</Button></div>
     </Form>
   </Modal>;
 }

@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { useEffect, useRef, useState } from 'react';
+import { useId, useEffect, useRef, useState } from 'react';
 import { Avatar, Banner, Button, Card, Form, Input, Radio, RadioGroup, Select, Space, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { PAGE_SIZES, normalizePageSize, FilterReset, FilterToolbar } from '../components/FilterControls';
@@ -88,18 +88,19 @@ function EnterpriseEditor({ state, tenant, kind, mode, apply, close, complete, i
   const notes = <Form.Slot label={{ text: '备注', name: 'ent-notes' }}>
     <TextArea id="ent-notes" value={form.notes} maxLength={500} disabled={!canWrite} onChange={value => update('notes', value)}/>
   </Form.Slot>;
-  const buttons = <div className="admin-form-actions">
+  const formId = useId();
+  const buttons = <>
     <Button disabled={busy} onClick={requestClose}>取消</Button>
-    <Button htmlType="submit" theme="solid" disabled={!canWrite} loading={busy}>
+    <Button form={formId} htmlType="submit" theme="solid" disabled={!canWrite} loading={busy}>
       {edit ? '保存修改' : addAdmin ? '添加管理员' : '创建并开通'}
     </Button>
-  </div>;
+  </>;
   const content = <>
-    <form className="admin-analytics-fields admin-enterprise-form" onSubmit={submit}
+    <form id={formId} className="admin-analytics-fields admin-enterprise-form" onSubmit={submit}
       aria-label={edit ? '编辑政企用户信息' : addAdmin ? '添加企业管理员' : '新用户'}>
       {inline && <div className="admin-page-heading">
         <div><Title heading={5} component="h2">编辑信息</Title><Text type="secondary">User ID：{tenant.id}</Text></div>
-        {buttons}
+        <div className="admin-form-actions">{buttons}</div>
       </div>}
       {edit && <>
         <section className="admin-enterprise-form-section">
@@ -208,11 +209,10 @@ function EnterpriseEditor({ state, tenant, kind, mode, apply, close, complete, i
         </section>
       </>}
       {error && <Banner type="danger" closeIcon={null} description={error}/>}
-      {!inline && buttons}
     </form>
     {discard && serviceOperationsUi.renderLeaveDialog({ cancel: () => { pendingLeave.current = null; setDiscard(false); }, discard: abandon })}
   </>;
-  return inline ? content : <EnterpriseDialog wide title={addAdmin ? '添加企业管理员' : '新用户'} close={requestClose} closeOnEsc={!discard}
+  return inline ? content : <EnterpriseDialog wide title={addAdmin ? '添加企业管理员' : '新用户'} close={requestClose} closeOnEsc={!discard} footer={buttons}
     description={addAdmin ? `所属企业：${tenant.name}` : '建立政企主体，并开通首位企业管理员。'}>{content}</EnterpriseDialog>;
 }
 
@@ -340,17 +340,16 @@ export default function EnterprisePage({ state, transact, deploymentTarget }) {
       kind={editor.kind} mode={mode} apply={apply} canWrite={canWrite} close={() => setEditor(null)}
       complete={value => { setEditor(null); setResult(value); }}/>}
     {result && <EnterpriseDialog title={result.handover ? '账号交接信息' : result.added ? '企业管理员已添加' : '企业账号已开通'}
-      description="请核对企业与管理员信息，妥善保管账号交接资料。" close={() => setResult(null)}>
+      description="请核对企业与管理员信息，妥善保管账号交接资料。" close={() => setResult(null)} footer={<>
+      <Button onClick={copy}>复制交接信息</Button>
+      <Button theme="solid" onClick={() => { open(result.tenant, 'members'); setResult(null); }}>查看企业</Button>
+    </>}>
       <EnterpriseFacts rows={[
         ['用户名称', result.tenant.name], ['user_id', result.tenant.id], ['管理员', result.user.name],
         ['登录账号', result.user.login], ['手机号码', result.user.phone || '未填写'],
         ['账号初始化', result.user.initialized ? '已完成，沿用现有登录方式' : '待设置密码'],
       ]}/>
       <Form.Slot label={{ text: '账号交接信息', name: 'ent-handover' }}><TextArea id="ent-handover" readOnly value={handover}/></Form.Slot>
-      <div className="admin-form-actions">
-        <Button onClick={copy}>复制交接信息</Button>
-        <Button theme="solid" onClick={() => { open(result.tenant, 'members'); setResult(null); }}>查看企业</Button>
-      </div>
     </EnterpriseDialog>}
     {confirmation && <EnterpriseStatusDialog key={(confirmation.key || confirmation.member || confirmation.tenant).id} state={state}
       confirmation={confirmation} apply={apply} canWrite={canWrite} close={() => setConfirmation(null)}

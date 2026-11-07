@@ -1,5 +1,6 @@
 import AdminCollapsePanel from './AdminCollapsePanel';
-import { cloneElement, useEffect, useRef, useState } from 'react';
+import { cloneElement, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Banner, Button, Collapse, Form, Input, InputNumber, Select, Space, TextArea, Tooltip, Typography, Upload } from '@douyinfe/semi-ui';
 import { IconHelpCircle, IconUpload } from '@douyinfe/semi-icons';
 import {modelFieldDescriptions} from './model-field-descriptions';
@@ -12,10 +13,11 @@ const supports = [['unknown','未填写'],['supported','支持'],['unsupported',
 const optionList = entries => entries.map(([value,label])=>({value,label}));
 const display = value => value == null || value === '' ? '—' : Array.isArray(value) ? value.join('、') || '—' : typeof value === 'object' ? JSON.stringify(value) : String(value);
 
-export default function MaterialMetadataForm({model,initial,readOnly,can,dirty,onCancel,onSubmit,sourceLabel}) {
+export default function MaterialMetadataForm({model,initial,readOnly,can,dirty,onCancel,onSubmit,sourceLabel,footerTarget}) {
   const [form,setForm] = useState(()=>blankModel(model || initial)), [error,setError] = useState(''), [uploading,setUploading] = useState(false), [saving,setSaving] = useState(false);
   const [contextUnit,setContextUnit] = useState(form.capabilities.context > 0 && form.capabilities.context % 1024 === 0 ? 'K' : 'Token');
   const version = useRef(0);
+  const formId = useId();
   useEffect(()=>()=>{version.current++;},[]);
   const editable = !readOnly && can;
   const change = (key,value) => {
@@ -60,7 +62,11 @@ export default function MaterialMetadataForm({model,initial,readOnly,can,dirty,o
     {['text','multimodal'].includes(form.type) && slot('最大输出',readOnly?<Typography.Text>{form.capabilities.output?form.capabilities.output.toLocaleString()+' Token':'—'}</Typography.Text>:<InputNumber aria-label="最大输出" value={form.capabilities.output ?? ''} min={1} suffix="Token" disabled={!editable} onChange={value=>capabilityChange('output',value)}/>)}
     {['text','multimodal','audio'].includes(form.type) && ['streaming',...(['text','multimodal'].includes(form.type)?['tools']:[])].map(key=>slot(key==='streaming'?'流式响应':'工具调用',readOnly?<Typography.Text>{form.capabilities[key]==null?'未填写':form.capabilities[key]?'支持':'不支持'}</Typography.Text>:<Select aria-label={key==='streaming'?'流式响应':'工具调用'} value={form.capabilities[key]==null?'unknown':form.capabilities[key]?'supported':'unsupported'} optionList={optionList(supports)} disabled={!editable} onChange={value=>capabilityChange(key,value==='unknown'?null:value==='supported')}/>))}
   </>;
-  return <Form onSubmit={async()=>{
+  const footer = <>
+    <Button onClick={onCancel}>{readOnly ? '关闭' : '取消'}</Button>
+    {!readOnly && <Button form={formId} htmlType="submit" theme="solid" loading={saving} disabled={!editable || uploading}>保存</Button>}
+  </>;
+  return <Form id={formId} onSubmit={async()=>{
     if(!editable || saving || uploading)return;
     if(!form.name.trim() || !form.modelId.trim()){setError('请填写模型展示名和规范模型标识');return;}
     setSaving(true);try{await onSubmit({...form,capabilities:['text','multimodal','embedding','rerank'].includes(form.type)?form.capabilities:{streaming:form.type==='audio'?form.capabilities.streaming:null,tools:null,context:null,output:null}});}finally{setSaving(false);}
@@ -82,6 +88,6 @@ export default function MaterialMetadataForm({model,initial,readOnly,can,dirty,o
       <AdminCollapsePanel header="技术与来源" itemKey="source"><div className="materials-field-grid">{slot('资料来源',<Typography.Text>{sourceLabel}</Typography.Text>)}{fields(TECHNICAL_FIELDS)}{fields(IDENTITY_FIELDS.filter(item=>['lifecycle','retirementDate','replacement'].includes(item.key)))}{fields(RECORD_FIELDS)}{slot('详细介绍',readOnly?<Typography.Text>{display(form.profile.detailDescription)}</Typography.Text>:<TextArea aria-label="详细介绍" rows={4} value={form.profile.detailDescription || ''} disabled={!editable} onChange={value=>profileChange('detailDescription',value)}/>,'detailDescription',true)}</div></AdminCollapsePanel>
     </Collapse>
     {error && <Banner type="danger" description={error}/>}
-    <div className="materials-form-footer"><Button onClick={onCancel}>{readOnly?'关闭':'取消'}</Button>{!readOnly && <Button htmlType="submit" theme="solid" loading={saving} disabled={!editable || uploading}>保存</Button>}</div>
+    {footerTarget && createPortal(footer, footerTarget)}
   </Form>;
 }

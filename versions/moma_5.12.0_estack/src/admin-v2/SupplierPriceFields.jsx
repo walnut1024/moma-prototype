@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Checkbox, Input, Select, Typography } from '@douyinfe/semi-ui';
+import { Button, Checkbox, Empty, Input, RadioGroup, Select, Space, Typography } from '@douyinfe/semi-ui';
 import { IconDelete, IconPlus, IconExternalOpenStroked } from '@douyinfe/semi-icons';
 import { Choice } from './ServiceUI';
 import { GridTable, Row, Cell, Modal, Notice } from './ModelOperationsUI';
@@ -27,9 +27,51 @@ export default function ChannelPrices({ state, scenarios, disabled, onChange, op
 }
 
 export function CommonTariffBatchButton({ state, scenarios, disabled, onChange, label = '批量添加计费项', modelType }) {
-  const [batch, setBatch] = useState(false), [selected, setSelected] = useState([]), [query, setQuery] = useState(''), [error, setError] = useState(''),[all,setAll]=useState(false);
-  const entries = tariffDictionaryEntries(state), available = tariffOptions(state, 'scenario');
-  return <><Button size="small" theme="light" disabled={disabled || scenarios.length >= 100} onClick={() => { setSelected([]); setQuery(''); setError(''); setBatch(true); }}>{label}</Button>
-    {batch && <Modal title={label} onClose={() => setBatch(false)}><div className="supplier-common-items"><Input aria-label="搜索常用计费项" placeholder="搜索中文 / 英文名称" value={query} onChange={value => setQuery(value)}/><div className="supplier-common-toolbar"><Button theme={all ? 'light' : undefined} onClick={()=>setAll(false)}>常用计费项</Button><Button theme={all ? undefined : 'light'} onClick={()=>setAll(true)}>全部计费项（{available.length}）</Button><span>已选 {selected.length} 项</span></div><div className="supplier-common-item-options">{(all || query.trim()?available:commonTariffNames(available,modelType)).filter(name => { const entry = entries.find(item => item.kind === 'scenario' && item.name === name); return `${name} ${entry?.englishName || ''}`.toLowerCase().includes(query.trim().toLowerCase()); }).map(name => { const added = scenarios.some(row => row.name.trim().toLowerCase() === name.toLowerCase()); return <Checkbox key={name} checked={added || selected.includes(name)} disabled={disabled || added} onChange={event => setSelected(event.target.checked ? [...selected, name] : selected.filter(item => item !== name))}>{name}<small>{added ? '已添加' : tariffScenarioUnit(state, name)}</small></Checkbox>; })}</div>{error && <Notice error>{error}</Notice>}<div className="supplier-key-actions"><Button theme="light" onClick={() => setBatch(false)}>取消</Button><Button disabled={disabled || !selected.length} onClick={() => { try { onChange(appendCommonTariffScenarios(scenarios, selected, state, 'CNY')); setBatch(false); } catch (issue) { setError(issue.message); } }}>添加所选项</Button></div></div></Modal>}
+  const [batch, setBatch] = useState(false);
+  const [selected, setSelected] = useState([]);
+  const [query, setQuery] = useState('');
+  const [error, setError] = useState('');
+  const [all, setAll] = useState(false);
+  const entries = tariffDictionaryEntries(state);
+  const available = tariffOptions(state, 'scenario');
+  const text = query.trim().toLowerCase();
+  const options = (all || text ? available : commonTariffNames(available, modelType)).filter(name => {
+    const entry = entries.find(item => item.kind === 'scenario' && item.name === name);
+    return [name, entry?.englishName].join(' ').toLowerCase().includes(text);
+  });
+  const close = () => setBatch(false);
+  const add = () => {
+    try {
+      onChange(appendCommonTariffScenarios(scenarios, selected, state, 'CNY'));
+      close();
+    } catch (issue) {
+      setError(issue.message);
+    }
+  };
+  return <>
+    <Button size="small" theme="light" disabled={disabled || scenarios.length >= 100} onClick={() => {
+      setSelected([]); setQuery(''); setError(''); setBatch(true);
+    }}>{label}</Button>
+    {batch && <Modal title={label} description={null} onClose={close} footer={<>
+      <Button theme="light" onClick={close}>取消</Button>
+      <Button theme="solid" disabled={disabled || !selected.length} onClick={add}>添加所选项</Button>
+    </>}>
+      <Input autoFocus aria-label="搜索常用计费项" placeholder="搜索中文 / 英文名称" value={query} onChange={setQuery}/>
+      <Space wrap>
+        <RadioGroup type="button" aria-label="计费项范围" value={all ? 'all' : 'common'} onChange={event => setAll(event.target.value === 'all')}
+          options={[{ label: '常用计费项', value: 'common' }, { label: `全部计费项（${available.length}）`, value: 'all' }]}/>
+        <Typography.Text type="secondary" aria-live="polite">已选 {selected.length} 项</Typography.Text>
+      </Space>
+      {options.length ? <Space className="supplier-common-item-options" vertical align="start">
+        {options.map(name => {
+          const added = scenarios.some(row => row.name.trim().toLowerCase() === name.toLowerCase());
+          return <Checkbox key={name} checked={added || selected.includes(name)} disabled={disabled || added}
+            onChange={event => setSelected(event.target.checked ? [...selected, name] : selected.filter(item => item !== name))}>
+            {name} · {added ? '已添加' : tariffScenarioUnit(state, name)}
+          </Checkbox>;
+        })}
+      </Space> : <Empty description="没有匹配的计费项"/>}
+      {error && <Notice error>{error}</Notice>}
+    </Modal>}
   </>;
 }

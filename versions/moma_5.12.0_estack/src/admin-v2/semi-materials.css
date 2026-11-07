@@ -11,7 +11,6 @@
 .materials-field-grid > * { min-width: 0; }
 .materials-field-grid .semi-select, .materials-field-grid .semi-input-number { width: 100%; }
 .materials-wide-field { grid-column: 1 / -1; }
-.materials-form-footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 24px; }
 .materials-description { margin: 16px 0; }
 .materials-import { display: flex; flex-direction: column; gap: 24px; }
 .materials-import-help { display: grid; gap: 12px; padding: 20px; background: var(--semi-color-fill-0); border-radius: var(--semi-border-radius-medium); }

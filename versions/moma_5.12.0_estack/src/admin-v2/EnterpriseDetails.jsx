@@ -61,7 +61,7 @@ function ScopeList({ state, tenant, projects, keys, params, navigate, askKey, ca
         ] }))}
         pagination={{ currentPage: current, pageSize: size, total: rows.length, pageSizeOpts: PAGE_SIZES, showTotal: true, showSizeChanger: true,
           onPageChange: setPage, onPageSizeChange: value => { setSize(value); setPage(1); } }}/>}
-    {inspect && <EnterpriseDialog title="API 密钥详情" description={`${tenant.name} · ${inspect.name}`} close={() => setInspect(null)}>
+    {inspect && <EnterpriseDialog title="API 密钥详情" description={`${tenant.name} · ${inspect.name}`} close={() => setInspect(null)} footer={<><Button onClick={() => setInspect(null)}>关闭</Button></>}>
       <EnterpriseFacts rows={[
         ['API 密钥 ID', inspect.keyId], ['所属项目', projectName(inspect)], ['API 密钥状态', inspect.status],
         ['调用条件', tenant.status === '停用' ? '企业账号已冻结，调用被拒绝'
@@ -70,7 +70,6 @@ function ScopeList({ state, tenant, projects, keys, params, navigate, askKey, ca
         ['最近调用', time(inspect.lastUsedAt)], ['有效模型范围', effectiveModels(inspect).map(model => model.name).join('、') || '无'],
       ]}/>
       <Paragraph type="secondary">有效模型范围是企业授权与 API 密钥授权的交集，模型开放规则仍参与调用校验。</Paragraph>
-      <div className="admin-form-actions"><Button onClick={() => setInspect(null)}>关闭</Button></div>
     </EnterpriseDialog>}
   </>;
 }

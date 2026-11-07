@@ -65,6 +65,7 @@
 .admin-table-record { display: grid; justify-items: start; min-width: 0; gap: 2px; overflow-wrap: anywhere; }
 .admin-table-record .semi-button { max-width: 100%; height: auto; min-height: 24px; }
 .admin-table-record .semi-button-content { white-space: normal; text-align: start; overflow-wrap: anywhere; }
+.admin-sheet-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
 .admin-form-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
 @media (max-width: 900px) {
