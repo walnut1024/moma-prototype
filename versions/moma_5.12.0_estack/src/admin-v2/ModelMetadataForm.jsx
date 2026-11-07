@@ -1,36 +1,34 @@
-import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { useId, useState } from 'react';
+import { Checkbox, InputNumber, Select } from '@douyinfe/semi-ui';
 import { modelCategory } from './model-management';
 import {MODEL_CATALOGUE_TYPES} from './model-library';
 import ModelFieldLabel from './ModelFieldLabel';
 import { modelMetadataDraft as blankModel } from './model-metadata-draft';
 
 export function Choice({ label, value, options, onChange, disabled }) {
-  return <Select value={value} onValueChange={onChange} disabled={disabled}><SelectTrigger aria-label={label}><SelectValue/></SelectTrigger><SelectContent>{options.map(([id, name]) => <SelectItem value={String(id)} key={id}>{name}</SelectItem>)}</SelectContent></Select>;
+  const id = useId();
+  return <><span id={id} className="sr-only">{label}</span><Select aria-labelledby={id} value={value === undefined || value === null ? '' : String(value)} disabled={disabled} onChange={value => onChange(value)} optionList={options.map(([id, name]) => ({ value: String(id), label: name }))}/></>;
 }
 export function MultiChoice({ label, choices, value = [], onChange, disabled, groups = [] }) {
-  const [query,setQuery]=useState(''),[group,setGroup]=useState('all');
-  const options = [...new Set([...choices, ...value])].filter(option=>option.toLowerCase().includes(query.trim().toLowerCase()) && (group==='all' || group==='selected' && value.includes(option) || groups.find(row=>row[0]===group)?.[1].includes(option)));
-  return <Popover><PopoverTrigger asChild><Button type="button" variant="outline" className="mm-multi-trigger" aria-label={label} disabled={disabled} title={value.join('、')}><span>{value.length ? value.slice(0, 2).join('、') + (value.length > 2 ? ' 等' + value.length + '项' : '') : '请选择' + label}</span><ChevronDown/></Button></PopoverTrigger><PopoverContent align="start" className="mm-multi-options"><div><b>{label}</b><Button type="button" variant="link" disabled={disabled || !value.length} onClick={() => onChange([])}>清空</Button></div><Input aria-label={`搜索${label}`} placeholder="搜索名称 / 标识" value={query} onChange={event=>setQuery(event.target.value)}/>{groups.length>0 && <Choice label={`${label}类型`} value={group} options={[['all','全部类型'],['selected','已选客户'],...groups.map(([name])=>[name,name])]} onChange={setGroup}/>}<small>已选 {value.length} 项</small><div className="mm-multi-grid">{options.map(option => <label key={option}><input type="checkbox" disabled={disabled} checked={value.includes(option)} onChange={event => onChange(event.target.checked ? [...value, option] : value.filter(item => item !== option))}/>{option}</label>)}{!options.length && <p role="status">没有匹配项</p>}</div></PopoverContent></Popover>;
+  const id = useId();
+  const grouped = groups.filter(([, rows]) => rows.length > 0);
+  const extra = [...new Set([...choices, ...value])].filter(option => !grouped.some(([, rows]) => rows.includes(option)));
+  return <><span id={id} className="sr-only">{label}</span><Select aria-labelledby={id} multiple filter maxTagCount={2} showRestTagsPopover disabled={disabled} value={value} placeholder={'请选择' + label} onChange={value => onChange(value)} emptyContent={<span role="status">没有匹配项</span>}>{grouped.map(([name, rows]) => <Select.OptGroup key={name} label={name}>{rows.map(option => <Select.Option key={option} value={option}>{option}</Select.Option>)}</Select.OptGroup>)}{extra.map(option => <Select.Option key={option} value={option}>{option}</Select.Option>)}</Select></>;
 }
 function UnitInput({ unit, ...props }) {
-  return <div className="mm-unit-input"><Input {...props}/><span>{unit}</span></div>;
+  return <div className="mm-unit-input"><InputNumber {...props}/><span>{unit}</span></div>;
 }
 function ContextInput({value,onChange,disabled}) {
   const [unit,setUnit]=useState(value>0 && value%1024===0?'K':'Token');
-  return <div className="mm-context-input"><Input aria-label="上下文窗口" type="number" min="1" step="1" value={value==null || value===''?'':Number(value)/(unit==='K'?1024:1)} disabled={disabled} onChange={event=>onChange(event.target.value===''?'':String(Number(event.target.value)*(unit==='K'?1024:1)))}/><Choice label="上下文窗口单位" value={unit} options={[[ 'K','K Token' ],['Token','Token']]} disabled={disabled} onChange={setUnit}/></div>;
+  return <div className="mm-context-input"><InputNumber aria-label="上下文窗口" min={1} step={1} value={value==null || value===''?'':Number(value)/(unit==='K'?1024:1)} disabled={disabled} onChange={input=>onChange(input===''||input==null?'':String(Number(input)*(unit==='K'?1024:1)))}/><Choice label="上下文窗口单位" value={unit} options={[['K','K Token'],['Token','Token']]} disabled={disabled} onChange={setUnit}/></div>;
 }
 export function Field({ label, children, hint, className = '' }) { return <label className={`mm-field ${className}`}><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>; }
 export function CapabilityFields({ value, type, onChange, disabled, catalogue = false, fields = ['context', 'output', 'streaming', 'tools'] }) {
   const set = (key, input) => onChange({ ...value, [key]: input });
   return <div className="mm-capability-fields">
     {fields.includes('context') && ['text', 'multimodal', 'embedding', 'rerank'].includes(type) && <Field label={<ModelFieldLabel name="上下文窗口"/>}><ContextInput value={value.context} disabled={disabled} onChange={value=>set('context',value)}/></Field>}
-    {fields.includes('output') && ['text', 'multimodal'].includes(type) && <Field label={<ModelFieldLabel name="最大输出"/>}><UnitInput unit="Token" aria-label="最大输出" required={!catalogue} min="1" step="1" type="number" placeholder="待确认" value={value.output ?? ''} disabled={disabled} onChange={event => set('output', event.target.value)}/></Field>}
-    {['text', 'multimodal', 'audio'].includes(type) && (catalogue ? ['streaming', ...(['text', 'multimodal'].includes(type) ? ['tools'] : [])].filter(key => fields.includes(key)).map(key => <Field key={key} label={key === 'streaming' ? '流式响应' : '工具调用'}><Choice label={key === 'streaming' ? '流式响应' : '工具调用'} disabled={disabled} value={value[key] == null ? 'unknown' : value[key] ? 'supported' : 'unsupported'} options={[['unknown', '未填写'], ['supported', '支持'], ['unsupported', '不支持']]} onChange={input => set(key, input === 'unknown' ? null : input === 'supported')}/></Field>) : <div className="mm-checkbox-row"><label><input type="checkbox" checked={Boolean(value.streaming)} disabled={disabled} onChange={event => set('streaming', event.target.checked)}/>支持流式响应</label>{['text', 'multimodal'].includes(type) && <label><input type="checkbox" checked={Boolean(value.tools)} disabled={disabled} onChange={event => set('tools', event.target.checked)}/>支持工具调用</label>}</div>)}
+    {fields.includes('output') && ['text', 'multimodal'].includes(type) && <Field label={<ModelFieldLabel name="最大输出"/>}><UnitInput unit="Token" aria-label="最大输出" required={!catalogue} min={1} step={1} placeholder="待确认" value={value.output == null || value.output === '' ? '' : Number(value.output)} disabled={disabled} onChange={input => set('output', input == null || input === '' ? '' : String(input))}/></Field>}
+    {['text', 'multimodal', 'audio'].includes(type) && (catalogue ? ['streaming', ...(['text', 'multimodal'].includes(type) ? ['tools'] : [])].filter(key => fields.includes(key)).map(key => <Field key={key} label={key === 'streaming' ? '流式响应' : '工具调用'}><Choice label={key === 'streaming' ? '流式响应' : '工具调用'} disabled={disabled} value={value[key] == null ? 'unknown' : value[key] ? 'supported' : 'unsupported'} options={[['unknown', '未填写'], ['supported', '支持'], ['unsupported', '不支持']]} onChange={input => set(key, input === 'unknown' ? null : input === 'supported')}/></Field>) : <div className="mm-checkbox-row"><Checkbox aria-label="支持流式响应" checked={Boolean(value.streaming)} disabled={disabled} onChange={event => set('streaming', event.target.checked)}>支持流式响应</Checkbox>{['text', 'multimodal'].includes(type) && <Checkbox aria-label="支持工具调用" checked={Boolean(value.tools)} disabled={disabled} onChange={event => set('tools', event.target.checked)}>支持工具调用</Checkbox>}</div>)}
   </div>;
 }
 const contextLabel = value => value % 1024 === 0 ? `${value / 1024}K` : value.toLocaleString('zh-CN');

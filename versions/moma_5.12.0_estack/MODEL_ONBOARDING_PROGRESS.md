@@ -1,5 +1,13 @@
 # 模型接入优化实施台账
 
+## 渠道接入模块 Semi Design 统一（2026-11-07）
+
+将渠道接入整棵子树从 shadcn/ui + mo-\* 手写套件迁移到 Semi Design，消除模型运营五模块中最后一处双组件库混排（模型服务/成本/售价/资料此前已是 Semi）。范围：providers 宿主页与全部子组件、接入向导管线（含 cmdk 模型选择器、多选目录、渠道表单）、接入记录续配、Listing 服务商目录配置，共 42 个组件文件 + 旧 TariffDictionary 退役；共享基座 `ModelOperationsUI`/`ModelMetadataForm`/`ModelFieldLabel` 内部换芯、导出签名不变，39+23 个引用方自动跟随；新增 `semi-onboarding.css` 适配层（旧 mo/mm/supplier CSS 保留，绑定 shadcn DOM 的规则自然失效，容器前缀覆盖仍在命中的规则）。`useOperations` 纯 hook 与 ops 事务契约未动。
+
+实现要点：`GridTable` 改为 Semi Table 兼容层——按 HTML 表格列游标算法解析 children（含 Fragment 展开、rowSpan/colSpan 占位），colSpan/rowSpan 经 render 返回 `{children, props}` 传递（Semi 仅从该路径读取合并语义，onCell 返回只落 DOM 属性）；ProviderCatalogue 原表头跨 3 列的「采购条件」合并为单列等价呈现；ProviderChoice 三分组下拉换 Semi Select.OptGroup；向导两步条换 Semi Steps；`useOperations` 默认通知与离开守卫对齐 `serviceOperationsUi`（Semi Toast/Modal）。
+
+验证：独立版本构建通过；全量 952/952 通过（纯逻辑测试，UI 迁移不触及）；src oxlint 0 警告（tests 4 个既有参数警告；SupplyModelPicker 的 minified 报错为工具误判，esbuild 通过）。本地 5173 + D1 后端实测：渠道接入页双视图、模型渠道表合并单元格（模型列跨行、渠道组/操作列跨计费项，DOM 逐格核对）、API 密钥池、接入新模型多选（修复原生 label 包裹 Semi Checkbox 导致的双次 toggle 抵消）、接入新渠道表单、接入记录空态、未保存离开守卫（拦截导航 + 放弃放行）、模型视角侧栏；截图见 ../../output/playwright/semi-\*.png。分支 feat/providers-semi-migration，未提交无关遗留改动（database/server/PAGE-SPEC 演示包导入主题保持工作树原状）。未推送、未部署、未执行真实上游调用。
+
 ## 移除路由编辑器内接入入口（2026-11-06）
 
 按用户批注移除“选择上游渠道”旁的“接入新渠道”，并删除只由该入口调用的内联接入组件、状态及专用表单参数。路由编辑仅选择已有渠道，供应模型登记、渠道创建、检测与明确启用继续在渠道接入模块完成；原渠道与模型记录、路由配置、密钥及历史保留。同步页面规格、指导、研发说明与验收口径，原全链路 HTTP/D1 合同继续保留。

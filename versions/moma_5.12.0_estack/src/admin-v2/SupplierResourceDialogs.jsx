@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button } from '../components/ui/button';
+import { Button } from '@douyinfe/semi-ui';
 import { Modal, Notice } from './ModelOperationsUI';
 import { supplierChannelName } from './supplier-resources';
 import ChannelCandidateEditor from './ChannelCandidateEditor';
@@ -46,13 +46,13 @@ function SupplierChannelInfo(props) {
     finally { setSaving(false); }
   };
   if (connection) return <ChannelCandidateEditor {...props} mode="all"/>;
-  return <SupplierCreationDialog className="supplier-add-dialog mo-drawer mo-drawer-left supplier-channel-edit-drawer" title="编辑渠道" description={provider.name} cancel={cancel} submit={submit} disabled={disabled} action={saving ? '保存中…' : '保存'}>
+  return <SupplierCreationDialog className="supplier-add-dialog supplier-channel-edit-drawer" drawer drawerSide="left" title="编辑渠道" description={provider.name} cancel={cancel} submit={submit} disabled={disabled} action={saving ? '保存中…' : '保存'}>
     <Notice>连接、协议及密钥由此渠道关联的 {provider.catalogConnections?.filter(row=>row.endpointId===endpoint.id).length || 1} 个模型共用；上游模型标识仅修改当前模型，采购成本在模型成本中维护。</Notice>
     <SupplierChannelFields state={state} provider={provider} models={models} value={value} rawKey={rawKey} disabled={disabled} editing currentKey={currentKey} ops={ops} current={preserveCurrent ? { name: '保留当前密钥配置', ready: connectionCredentialsReady(endpoint, provider) } : null} onSharedKeySaved={next => setBase({ expectedUpdatedAt: next.endpoints.find(row => row.id === endpoint.id).updatedAt, expectedProviderUpdatedAt: next.providers.find(row => row.id === provider.id).updatedAt })} onChange={set} onKeyChange={key => { setRawKey(key); ops.dirty(true); ops.setError(''); }}>
       {!endpoint.interfaceType && <Notice>请确认上游协议和 API 地址，保存后测试连接配置。</Notice>}
     </SupplierChannelFields>
     {connectionChanged && <Notice>协议、地址或密钥变更须测试后应用，验证前继续使用当前配置。</Notice>}
-    {endpoint.candidateConfiguration && <Button type="button" variant="outline" disabled={disabled} onClick={() => ops.proceed(() => { setRawKey(''); setConnection(true); })}>继续验证连接配置</Button>}
+    {endpoint.candidateConfiguration && <Button theme="light" disabled={disabled} onClick={() => ops.proceed(() => { setRawKey(''); setConnection(true); })}>继续验证连接配置</Button>}
     {ops.error && <Notice error>{ops.error}</Notice>}
   </SupplierCreationDialog>;
 }

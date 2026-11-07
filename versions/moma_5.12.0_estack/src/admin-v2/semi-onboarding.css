@@ -1,0 +1,90 @@
+/* Semi 适配层：渠道接入/接入向导从 shadcn+mo-* 迁移到 Semi Design 后的布局、密度与视觉对齐。
+   旧 model-operations.css/model-management.css/supplier-workbench.css 中绑定 shadcn DOM 的规则已失效，保留不删；本文件用容器前缀提高 specificity 覆盖仍在命中的规则。 */
+
+/* 基础排版对齐 Semi token（与 semi-services 页面一致） */
+.mo-workbench{font-size:14px;color:var(--semi-color-text-0)}
+.mo-workbench h1,.mo-workbench h2,.mo-workbench h3{color:var(--semi-color-text-0)}
+.mo-workbench .mo-heading p,.mo-workbench .mo-muted,.mo-workbench .mo-pagination,.mo-workbench .mo-stack small,.mo-workbench .mo-table small{color:var(--semi-color-text-2)}
+.mo-workbench code{color:var(--semi-color-text-1)}
+
+/* 按钮：中和旧全局 button 规则对 Semi Button 的覆盖 */
+.mo-workbench .semi-button{font-size:14px}
+.mo-workbench .semi-button-small{font-size:12px}
+.mo-workbench .semi-button svg{width:16px;height:16px}
+.mo-workbench .semi-button-small svg{width:14px;height:14px}
+.mo-workbench .mo-row-actions .semi-button{padding-inline:8px;height:28px}
+.mo-workbench .mo-row-actions .semi-button-small{height:24px}
+.mo-workbench .semi-button.semi-button-with-icon-only{padding-inline:6px}
+
+/* 表单字段：Semi 控件占满 mm-field/mo-form-grid 单元 */
+.mo-workbench .mm-field .semi-input-wrapper,.mo-workbench .mm-field .semi-select,.mo-workbench .mm-field .semi-input-number,.mo-workbench .mm-field .semi-textarea-wrapper,.mo-workbench .mm-field .semi-checkbox{max-width:100%}
+.mo-workbench .mm-field .semi-input-wrapper,.mo-workbench .mm-field .semi-select,.mo-workbench .mm-field .semi-input-number,.mo-workbench .mm-form-grid .semi-input-wrapper,.mo-workbench .mo-form-grid .semi-select,.mo-workbench .mo-form-grid .semi-input-number,.mo-workbench .mo-form-grid .semi-textarea-wrapper{width:100%;min-width:0}
+.mo-workbench .mm-field .semi-input-wrapper textarea{min-height:68px}
+.mm-unit-input{display:flex;align-items:center;gap:8px}
+.mm-unit-input .semi-input-number{flex:1;min-width:0}
+.mm-unit-input>span{color:var(--semi-color-text-2);font-size:12px;flex:none}
+.mm-context-input{display:flex;gap:8px;min-width:0}
+.mm-context-input .semi-input-number{flex:1;min-width:0}
+.mm-context-input .semi-select{width:110px;flex:none}
+.mm-field-title{display:inline-flex;align-items:center;gap:4px;min-width:0}
+.mo-workbench .mm-field .semi-select-selection{min-height:32px}
+.mo-workbench .mo-form-grid .semi-select,.mo-workbench .mo-form-grid .semi-input-wrapper,.mo-workbench .mo-form-grid .semi-input-number{min-height:32px}
+
+/* 表格：mo-table 现在是 Semi Table wrapper，密度与表头对齐 Semi 视觉 */
+.mo-workbench .mo-table.semi-table-wrapper,.mo-table.semi-table-wrapper{font-size:13px}
+.mo-table.semi-table-wrapper .semi-table-row-head{background:var(--semi-color-fill-0);color:var(--semi-color-text-1);font-size:12px;font-weight:500;white-space:nowrap;padding:10px 16px}
+.mo-table.semi-table-wrapper .semi-table-row-cell{padding:12px 16px;line-height:1.55;vertical-align:middle}
+.mo-table.semi-table-wrapper .semi-table-tbody>.semi-table-row:hover .semi-table-row-cell{background:var(--semi-color-fill-0)}
+.mo-table.semi-table-wrapper .semi-table{width:100%}
+/* 固定列宽表格（模型渠道表等）：table-layout 需落在真 table 上，旧规则挂在 wrapper 上已失效 */
+.mo-table.semi-table-wrapper.supplier-model-channel-table .semi-table{table-layout:fixed}
+.mo-table-scroll .semi-table-wrapper{min-width:0}
+
+/* 空态与分页 */
+.mo-workbench .mo-table.semi-table-wrapper .semi-table-placeholder svg{color:var(--semi-color-text-2)}
+.mo-pagination{display:flex;justify-content:flex-end;align-items:center;padding-top:12px}
+.mo-pagination.semi-pagination{color:var(--semi-color-text-2);font-size:12px}
+
+/* 弹窗：Semi Modal/SideSheet 结构 */
+.semi-modal .mo-footer,.semi-sidesheet .mo-footer{border-top:1px solid var(--semi-color-border);padding-top:14px;margin-top:14px}
+.semi-modal .supplier-key-actions,.semi-sidesheet .supplier-key-actions{margin-top:16px}
+.semi-modal-content .ss-dialog-content,.semi-sidesheet-content .ss-dialog-content{gap:16px}
+.mo-more-actions{display:flex;flex-direction:column;align-items:stretch;width:240px;padding:8px;gap:4px}
+.mo-more-actions .semi-button{justify-content:flex-start;height:auto;min-height:32px;white-space:normal;text-align:left;padding-inline:12px}
+
+/* 密钥组：Semi 图标按钮行对齐 */
+.supplier-key-row{display:flex;align-items:flex-start;gap:8px}
+.supplier-key-row>.mm-field{flex:1;min-width:0}
+.supplier-key-row .semi-button.semi-button-with-icon-only{flex:none;margin-top:26px}
+.supplier-connection-key-group legend{font-size:12px;color:var(--semi-color-text-1);padding:8px 0 6px}
+.supplier-key-hint,.supplier-price-hint,.supplier-key-error{font-size:12px;color:var(--semi-color-text-2)}
+.supplier-key-error{color:var(--semi-color-danger)}
+
+/* 步骤条：Semi Steps 替代原 ol.supplier-onboarding-steps */
+.supplier-onboarding-steps.semi-steps{flex:1;min-width:0;padding:4px 0}
+.supplier-onboarding-steps.semi-steps .semi-steps-item-title{font-size:13px}
+
+/* Tabs：supplier-detail-tabs / supplier-perspective 现在是 Semi Tabs */
+.supplier-detail-tabs.semi-tabs{padding-block:4px}
+.supplier-detail-tabs.semi-tabs .semi-tabs-bar{padding-inline:20px}
+.supplier-detail-tabs.semi-tabs .semi-tabs-content{padding:16px 20px 20px}
+.supplier-perspective.semi-tabs .semi-tabs-bar{margin-bottom:8px}
+
+/* 统一模型目录多选：Semi Checkbox 承载原 label 布局 */
+.supplier-model-select-options .semi-checkbox-wrapper.supplier-model-option{display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 8px;border-bottom:1px solid var(--semi-color-border);cursor:pointer;width:100%}
+.supplier-model-select-options .supplier-model-option:hover{background:var(--semi-color-fill-0)}
+.supplier-model-select-options .supplier-model-option .semi-checkbox-label{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.supplier-model-select-options .supplier-model-option small{font-size:11px;color:var(--semi-color-text-2);font-weight:400}
+.supplier-model-select-options .supplier-model-option.semi-checkbox-wrapper-disabled{color:var(--semi-color-text-2);cursor:default}
+
+/* 服务商侧栏按钮 */
+.supplier-sidebar-options .semi-button{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-height:56px;height:auto;width:100%;padding:8px 12px;white-space:normal;text-align:left}
+.supplier-sidebar-options .semi-button small{font-size:11px;color:var(--semi-color-text-2);white-space:nowrap}
+
+/* 搜索框 */
+.mo-search.semi-input-wrapper{width:340px;max-width:100%;min-width:220px}
+
+@media(max-width:640px){
+  .mo-search.semi-input-wrapper{width:100%}
+  .mo-workbench .mo-form-grid .semi-select,.mo-workbench .mo-form-grid .semi-input-wrapper{min-height:32px}
+}

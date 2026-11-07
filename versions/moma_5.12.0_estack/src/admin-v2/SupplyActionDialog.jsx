@@ -1,4 +1,4 @@
-import { Button } from '../components/ui/button';
+import { Button } from '@douyinfe/semi-ui';
 import { modelSupplies, supplyModelUrl } from './model-management';
 import { Modal, Notice } from './ModelOperationsUI';
 import { ModelConnectivityTest } from './ProviderApiKeys';
@@ -19,6 +19,6 @@ export default function SupplyActionDialog({ state, model, supplyId, kind, ops, 
     <dl className="mo-facts mo-supply-confirm"><div><dt>模型</dt><dd>{model.name}</dd></div><div><dt>服务商</dt><dd>{supply.provider.name}</dd></div><div><dt>服务商模型 URL</dt><dd><code>{supplyModelUrl(supply, model) || 'URL 待配置'}</code></dd></div></dl>
     {kind !== 'publishSupply' && <p className="mo-muted">本次操作仅影响当前渠道。{kind === 'startSupply' ? '恢复服务不自动上架售卖，如需开放新增订购，请另行上架销售。' : kind === 'unlistSupply' ? '已有订购仍可调用。' : '该供给不再承接调用。'}</p>}
     {ops.error && <Notice error>{ops.error}</Notice>}
-    <div className="mo-footer"><Button variant="outline" onClick={close}>取消</Button><Button disabled={!ops.can} onClick={async () => { if (await ops.run(kind, { id: supply.id }, model.id)) close(); }}>确认{action.title}</Button></div>
+    <div className="mo-footer"><Button theme="light" onClick={close}>取消</Button><Button disabled={!ops.can} onClick={async () => { if (await ops.run(kind, { id: supply.id }, model.id)) close(); }}>确认{action.title}</Button></div>
   </Modal>;
 }
