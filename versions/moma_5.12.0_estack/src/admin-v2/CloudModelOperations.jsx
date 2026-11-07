@@ -1,9 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
-import {Button} from '../components/ui/button';
-import {Input} from '../components/ui/input';
+import {Banner, Button, Card, Form, Input, Spin, Typography} from '@douyinfe/semi-ui';
 import {configureOnboardingTransport} from './onboarding-client.js';
 import {useCloudMockSnapshot,clearCloudMockSnapshot} from './mock-onboarding-service.js';
-import {AdminUIContext} from '../components/admin-ui-context';
 import {completeServiceShowcase} from './service-showcase-client.js';
 import './cloud-model-login.css';
 import {domainModelWorkspace} from '../mock/model-fields.js';
@@ -63,21 +61,24 @@ export default function CloudModelOperations({children}){
     const result=queue.current.then(execute);queue.current=result.catch(()=>{});return result;
   };
   const dispatch=action=>{if(action.type==='enterAdmin'){setCode('');setError('');setLogin({accountId:action.accountId});return;}throw Error('此操作不属于模型运营');};
-  const submit=async event=>{event.preventDefault();setBusy(true);setError('');try{await api('/auth/login',{method:'POST',body:{accountId:login.accountId,accessCode:code}});setCode('');await load();}catch(issue){setError(issue.message);}finally{setBusy(false);}};
-  const form=<AdminUIContext.Provider value={true}>
-    <div className="mo-cloud-login">
-      <section className="mo-cloud-login-card" aria-labelledby="mo-cloud-login-title">
-        <h1 id="mo-cloud-login-title">模型运营登录</h1>
-        <form onSubmit={submit}>
-          <label>后台账号<Input aria-label="后台账号" autoComplete="username" value={login?.accountId || 'admin-001'} onChange={e=>setLogin({accountId:e.target.value})}/></label>
-          <label>后台密码<Input aria-label="后台密码" type="password" autoComplete="current-password" value={code} onChange={e=>setCode(e.target.value)}/></label>
-          <Button disabled={busy || !code} type="submit">{busy?'正在登录…':'登录'}</Button>
-        </form>
-        {error && <p role="alert">{error}</p>}
-      </section>
-    </div>
-  </AdminUIContext.Provider>;
-  if(login)return form;
-  if(!state)return <AdminUIContext.Provider value={true}><div className="admin-v2"><section className="mo-workbench"><p role={error?'alert':'status'}>{error || '正在加载模型运营…'}</p>{error && <Button onClick={()=>void load()}>重新加载</Button>}</section></div></AdminUIContext.Provider>;
+  const submit=async event=>{event.preventDefault();if(busy || !login?.accountId || !code)return;setBusy(true);setError('');try{await api('/auth/login',{method:'POST',body:{accountId:login.accountId,accessCode:code}});setCode('');await load();}catch(issue){setError(issue.message);}finally{setBusy(false);}};
+  if(login)return <div className="mo-cloud-login">
+    <Card className="mo-cloud-login-card">
+      <Typography.Title heading={3} id="mo-cloud-login-title">模型运营登录</Typography.Title>
+      <form onSubmit={submit} aria-labelledby="mo-cloud-login-title">
+        <Form.Slot label={{ text: '后台账号', name: 'mo-cloud-account' }}>
+          <Input id="mo-cloud-account" autoComplete="username" value={login.accountId} onChange={accountId=>setLogin({accountId})}/>
+        </Form.Slot>
+        <Form.Slot label={{ text: '后台密码', name: 'mo-cloud-password' }}>
+          <Input id="mo-cloud-password" mode="password" autoComplete="current-password" value={code} onChange={setCode}/>
+        </Form.Slot>
+        <Button block theme="solid" htmlType="submit" loading={busy} disabled={!login.accountId || !code}>登录</Button>
+      </form>
+      {error && <Banner type="danger" closeIcon={null} description={error}/>}
+    </Card>
+  </div>;
+  if(!state)return <div className="mo-cloud-login">{error
+    ? <Banner type="danger" closeIcon={null} description={<>{error} <Button onClick={()=>void load()}>重新加载</Button></>}/>
+    : <Spin tip="正在加载模型运营…"><div role="status" aria-label="正在加载模型运营"/></Spin>}</div>;
   return children({state,transactModel:transact,transact,dispatch,transactIndividual:()=>{throw Error('此入口不处理客户数据');},transactAdminAccount:()=>{throw Error('此入口不处理后台账号配置');},reload:load,conflict});
 }

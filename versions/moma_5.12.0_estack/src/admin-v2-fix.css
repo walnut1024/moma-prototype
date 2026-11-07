@@ -1,5 +1,4 @@
-.admin-v2 header { position: static !important; inset: auto !important; z-index: auto !important; background: #fff; color: #202733; }
-.admin-v2 .v2-sidebar { position: sticky; inset: auto; top: 0; z-index: auto; width: auto; padding: 0; }
+.admin-v2 :where(.admin-legacy) header { position: static !important; inset: auto !important; z-index: auto !important; background: #fff; color: #202733; }
 .admin-v2 .v2-drawer { position: absolute; inset: 0 0 auto auto; width: 520px; padding: 0; }
 
 .admin-v2 .v2-environment { color: #667085; font-size: 12px; }
@@ -200,24 +199,3 @@
 .release-actions div { display: flex; flex-direction: column; gap: 4px; }
 .release-actions span { color: #667085; font-size: 12px; }
 .v2-flat-analysis>button{width:100%}
-.v2-module-tabs{display:flex;gap:4px;overflow-x:auto;margin-bottom:var(--v2-layout-gap);padding:0 8px;border:1px solid #dce4f2;border-radius:4px;background:#fff;white-space:nowrap}
-.v2-module-tabs button{flex:none;font-size:12px;height:38px;padding:8px 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:#495365;cursor:pointer}
-.v2-module-tabs button:hover{color:#185bd3}
-.v2-module-tabs button.active{border-bottom-color:#3568f9;color:#185bd3;font-weight:600}
-
-/* Admin navigation follows the operator's functional modules. */
-.admin-v2{--v2-navigation-header-height:42px}
-.admin-v2 .v2-content>header{height:var(--v2-navigation-header-height)}
-.admin-v2 .v2-sidebar button:focus-visible{outline:2px solid #2468e8;outline-offset:-2px}
-.admin-v2 .v2-sidebar nav{padding:8px 8px 16px}
-.admin-v2 .v2-sidebar nav section>small{margin:9px 10px 3px;line-height:18px}
-.admin-v2 .v2-sidebar nav section>div>button{height:32px;padding:6px 10px;font-size:13px;line-height:20px}
-.admin-v2 .v2-sidebar{top:48px;height:calc(100vh - 48px)}
-
-/* Workspace tabs use the approved grey track and white selected segment. */
-.admin-v2 .v2-workspace-tabs{gap:0;min-height:100%}
-.admin-v2 .v2-workspace-tab-list{position:sticky;top:8px;z-index:1;width:calc(100% - 16px);height:32px;margin:8px 8px 0;padding:2px;border-radius:8px;background:#ececee}
-.admin-v2 .v2-workspace-tab-list [role="tab"]{height:28px;border:0;border-radius:6px;background:transparent;color:#909399;font-size:13px;font-weight:500;cursor:pointer}
-.admin-v2 .v2-workspace-tab-list [role="tab"]::after{display:none}
-.admin-v2 .v2-workspace-tab-list [role="tab"][data-state="active"]{background:#fff;color:#1f2329;box-shadow:0 1px 3px #00000014}
-.admin-v2 .v2-workspace-navigation{margin:0}

@@ -430,7 +430,7 @@ header {
   align-items: center;
   gap: 28px;
 }
-.top-actions > button {
+header:not(.admin-banner) .top-actions > button {
   height: 48px;
   padding: 0 12px;
   border: 0;
@@ -438,8 +438,8 @@ header {
   background: none;
   color: #fff;
 }
-.top-actions > button:hover,
-.top-actions > button.active {
+header:not(.admin-banner) .top-actions > button:hover,
+header:not(.admin-banner) .top-actions > button.active {
   border-color: #4a8cff;
   color: #72a5ff;
 }
@@ -466,7 +466,7 @@ header {
   .top-actions .user {
     display: none;
   }
-  .top-actions > button {
+  header:not(.admin-banner) .top-actions > button {
     white-space: nowrap;
   }
 }
@@ -3318,22 +3318,16 @@ h1 em {
 .api-key-search-menu p { padding: 8px 10px; color: #71809b; font-size: 12px; }
 .cl-view-row{display:flex;justify-content:flex-end;padding:8px 0;border-bottom:1px solid #edf0f5}
 
-/* Admin context controls share the platform's fixed banner. */
-.app-shell > .admin-banner { gap: 16px; padding-right: 16px; }
-.app-shell > .admin-banner .brand-mark { min-width: 0; flex: 1; }
+/* Layout for the Semi controls in the fixed admin banner. */
+.app-shell > .admin-banner { gap: 12px; padding-inline: 12px; background: var(--semi-color-bg-0); color: var(--semi-color-text-0); border-bottom: 1px solid var(--semi-color-border); }
+.app-shell > .admin-banner .brand-mark { min-width: 32px; flex: 1; }
 .app-shell > .admin-banner .brand-mark img { flex: none; }
 .app-shell > .admin-banner .brand-mark span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.app-shell > .admin-banner .top-actions { gap: 10px; min-width: 0; max-width: calc(100% - 48px); overflow-x: auto; scrollbar-width: thin; scrollbar-color: #66748b #252525; }
-.app-shell > .admin-banner .top-actions > * { flex-shrink: 0; }
-.app-shell > .admin-banner .top-actions > button { white-space: nowrap; padding-inline: 8px; }
-.admin-banner-controls { display: flex; align-items: center; gap: 10px; }
+.app-shell > .admin-banner .top-actions { gap: 8px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.app-shell > .admin-banner :is(.top-actions > *, .admin-banner-return) { flex-shrink: 0; }
+.admin-banner-controls, .admin-banner-field { display: flex; align-items: center; gap: 8px; }
 .admin-banner-controls > div:empty { display: none; }
-.admin-banner-field { display: flex; align-items: center; gap: 8px; color: #cbd3df; font-size: 12px; white-space: nowrap; }
-.admin-banner-field [data-slot="select-trigger"] { height: 30px; min-width: 90px; border-color: #ffffff26; background: #252525; color: #cbd3df; font-size: 12px; box-shadow: none; }
-.admin-banner-role [data-slot="select-trigger"] { min-width: 132px; }
-.admin-banner-field [data-slot="select-trigger"]:hover,
-.admin-banner-field [data-slot="select-trigger"][data-state="open"] { border-color: #72a5ff; color: #fff; }
-.admin-banner-field [data-slot="select-trigger"] svg { color: #8f9aab; }
+.admin-banner-field { white-space: nowrap; }
 @media (max-width: 1280px) {
   .admin-banner-field > span { display: none; }
 }

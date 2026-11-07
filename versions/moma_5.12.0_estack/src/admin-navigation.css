@@ -1,12 +1,3 @@
-.admin-v2 [aria-label="面包屑"]{display:flex;align-items:center;gap:12px;flex:1;min-width:0;--primary:#3563ff;--ring:#3563ff}
-.admin-v2 [aria-label="面包屑"] ol{display:flex;align-items:center;gap:6px;list-style:none;margin:0;padding:3px 0;min-width:0;overflow-x:auto;scrollbar-width:thin}
-.admin-v2 [aria-label="面包屑"] li{display:flex;align-items:center;gap:6px;white-space:nowrap;min-width:0;flex-shrink:0}
-.admin-v2 [aria-label="面包屑"] li:last-child{flex-shrink:1}
-.admin-v2 [aria-label="面包屑"] li>svg{flex:none;width:13px;height:13px;color:var(--muted-foreground)}
-.admin-v2 [aria-label="面包屑"] [aria-current="page"]{overflow:hidden;text-overflow:ellipsis;color:var(--foreground)}
-.admin-v2 [aria-label="面包屑"] a{color:var(--primary);text-decoration:none;text-underline-offset:4px}
-.admin-v2 [aria-label="面包屑"] a:hover{text-decoration:underline}
-.admin-v2 [aria-label="面包屑"] a:focus-visible{outline:2px solid var(--ring);outline-offset:2px;border-radius:2px}
 .admin-v2:has(.mo-workbench){min-width:0}
 .admin-v2 .mo-workbench .mo-heading{flex-wrap:wrap}
 .admin-v2 .mo-workbench .mo-type-tabs{min-width:0;overflow-x:auto}

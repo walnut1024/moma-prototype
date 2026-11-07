@@ -72,7 +72,7 @@ export function useOperations({ state, transact, conflict, reload, notify = mess
   useEffect(() => {
     const sync = () => { const next = location.hash; if (dirtyRef.current && !bypass.current) { history.replaceState(null, '', accepted.current); setLeave(() => () => { accepted.current = next; location.hash = next; setParams(new URLSearchParams(next.split('?')[1] || '')); }); } else { accepted.current = next; setParams(new URLSearchParams(next.split('?')[1] || '')); } };
     const guard = event => { if (dirtyRef.current) { event.preventDefault(); event.returnValue = ''; } };
-    const click = event => { const target = event.target.closest('.v2-sidebar button, .v2-sidebar a, [data-model-list-breadcrumb], .mm-breadcrumb-link'); if (dirtyRef.current && target && !bypass.current) { event.preventDefault(); event.stopPropagation(); setLeave(() => () => { bypass.current = true; target.click(); bypass.current = false; }); } };
+    const click = event => { const target = event.target.closest('.v2-sidebar button, .v2-sidebar [role="tab"], .v2-sidebar a, [data-model-list-breadcrumb], .mm-breadcrumb-link'); if (dirtyRef.current && target && !bypass.current) { event.preventDefault(); event.stopPropagation(); setLeave(() => () => { bypass.current = true; target.click(); bypass.current = false; }); } };
     addEventListener('hashchange', sync); addEventListener('beforeunload', guard); document.addEventListener('click', click, true);
     return () => { removeEventListener('hashchange', sync); removeEventListener('beforeunload', guard); document.removeEventListener('click', click, true); };
   }, []);

@@ -180,7 +180,7 @@ export default function TrafficOperations({ state, transact, conflict, dirtyRef 
   ];
   const pagination = { pageSize: 10, hideOnSinglePage: true, showTotal: true, disabled: Boolean(draft) };
 
-  return <ConfigProvider locale={zhCN}><section ref={root} className="semi-native traffic-page">
+  return <ConfigProvider locale={zhCN}><section ref={root} className="traffic-page">
     <Title heading={3}>限流配置</Title>
     {conflict && <Banner type="warning" description="数据已变化。请载入新版本后重新开始编辑。"/>}
     <Tabs type="line" activeKey={tab} onChange={value => {

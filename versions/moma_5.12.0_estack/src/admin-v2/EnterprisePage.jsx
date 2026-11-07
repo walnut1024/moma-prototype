@@ -5,6 +5,7 @@ import { Building2, CheckCircle2, Copy, Plus, Search, ShieldCheck, X } from 'luc
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { Select as SemiSelect, Typography } from '@douyinfe/semi-ui';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog';
@@ -38,7 +39,7 @@ function EnterpriseEditor({ state, tenant, kind, mode, apply, close, complete, i
     const savedHash = location.hash;
     const guardUnload = event => { event.preventDefault(); event.returnValue = ''; };
     const guardNavigation = event => {
-      const target = event.target.closest?.('.v2-sidebar button, .v2-module-tabs button, a[href^="#/"]');
+      const target = event.target.closest?.('.v2-sidebar button, .v2-sidebar [role="tab"], .v2-module-tabs [role="tab"], a[href^="#/"]');
       if (!target || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); event.stopPropagation();
       pendingLeave.current = () => target.click(); setDiscard(true);
@@ -142,7 +143,12 @@ export default function EnterprisePage({ state, transact, deploymentTarget }) {
   const copy = async text => { try { await navigator.clipboard.writeText(text); toast.success('已复制账号交接信息'); } catch { toast.error('复制失败，请选择下方文本手动复制'); } };
   const handover = result ? `【企业账号交接信息】\n企业：${result.tenant.name}\nuser_id：${result.tenant.id}\n管理员：${result.user.name}\n登录账号：${result.user.login}\n手机号码：${result.user.phone || '未填写'}\n账号初始化：${result.user.initialized ? '已完成，沿用现有登录方式' : '待设置密码'}` : '';
   return <div className={`v2-page enterprise-page ${detailId ? 'ent-detail-page' : ''}`}>
-    {deploymentTarget && createPortal(<div className="admin-banner-field admin-banner-deployment"><span>部署方式</span><Select value={mode} onValueChange={value => navigate({ scenario: value === 'private' ? 'private' : '', enterprise: '', tab: '', page: '', q: '', status: '' })}><SelectTrigger size="sm" aria-label="部署方式" disabled={editor?.kind === 'edit'}><SelectValue/></SelectTrigger><SelectContent align="end"><SelectGroup><SelectItem value="cloud">私有云</SelectItem><SelectItem value="private">私有化</SelectItem></SelectGroup></SelectContent></Select></div>, deploymentTarget)}
+    {deploymentTarget && createPortal(<div className="admin-banner-field">
+      <Typography.Text id="admin-deployment-picker-label" type="secondary" size="small">部署方式</Typography.Text>
+      <SemiSelect aria-labelledby="admin-deployment-picker-label" size="small" position="bottomRight" value={mode} disabled={editor?.kind === 'edit'}
+        onSelect={value => { if (value !== mode) navigate({ scenario: value === 'private' ? 'private' : '', enterprise: '', tab: '', page: '', q: '', status: '' }); }}
+        optionList={[{ value: 'cloud', label: '私有云' }, { value: 'private', label: '私有化' }]}/>
+    </div>, deploymentTarget)}
     <div className="ent-page-head"><div><div className="ent-title-line"><h1 tabIndex={-1}><Building2 size={16}/>{detailId ? tenant?.name || '政企详情' : '政企用户'}</h1>{tenant && <Status value={tenant.status} enterprise/>}</div><p>{detailId ? '管理企业管理员、查看组织成员、项目空间及 API 密钥。' : '以政府机构或企业为主体开通，由管理员统一管理组织成员及模型服务资源的用户。'}</p></div><div className="ent-head-actions">{tenant && <Button variant="outline" disabled={!canWrite || editor?.kind === 'edit'} onClick={() => askToggle(tenant)}>{tenant.status === '停用' ? '账号解冻' : '账号冻结'}</Button>}{!detailId && <Button disabled={!canWrite || !hasCapacity} title={!hasCapacity ? '单企业容量已用完，请进入企业详情管理账号' : !canWrite ? '当前角色仅可查看' : undefined} onClick={() => setEditor({ kind: 'create' })}><Plus size={14}/>新用户</Button>}</div></div>
     {mode === 'private' && <div className="ent-banner">默认企业：{defaultTenant?.name || '尚未开户'}<span>当前部署仅管理默认企业。</span></div>}
     {!canWrite && <div className="ent-banner">当前角色仅可查看企业信息。平台管理员和运营人员可执行开户及账号管理。</div>}

@@ -2,13 +2,21 @@ import { prepareLinkedAccounts, LINKED_USERS, LINKED_ADMINS } from '../linked-ac
 import { directorySnapshot } from '../service-directory.mjs';
 import { loadAdminState, prepareModelServiceShowcase, completeModelServiceShowcase } from './CloudModelOperations';
 import { useRef, useState } from 'react';
-import { Button } from '../components/ui/button';
+import { Button as LegacyButton } from '../components/ui/button';
+import { Button as SemiButton, Tabs as SemiTabs } from '@douyinfe/semi-ui';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { isServiceShowcase } from './service-showcase';
 import { Modal } from './ModelOperationsUI';
 import './development-notes.css';
 
-export default function DevelopmentNotes() {
+function AdminNotesButton({ variant, ...props }) {
+  return <SemiButton theme={variant === 'outline' ? 'outline' : 'light'} {...props}/>;
+}
+
+const noteAreas = ['前台与服务', '渠道接入', '模型资料'];
+
+export default function DevelopmentNotes({ admin = false }) {
+  const Button = admin ? AdminNotesButton : LegacyButton;
   const [open, setOpen] = useState(false), trigger = useRef(null);
   const [area, setArea] = useState('前台与服务');
   const [notice, setNotice] = useState(''), [mockNotice, setMockNotice] = useState('');
@@ -30,15 +38,7 @@ export default function DevelopmentNotes() {
     setOpen(false);
     location.hash=`#/admin-2/listing?${params}`;
   };
-  return <><Button ref={trigger} type="button" variant="outline" size="sm" className="development-notes-trigger" aria-label="研发人员注意：功能说明（非产品功能）" title="研发说明 · 非产品功能" onClick={() => setOpen(true)}>研发人员注意</Button>
-    {open && <Modal wide title="研发人员注意" description="研发专用 · 非产品功能" onClose={close} footer={<Button variant="outline" onClick={close}>关闭说明</Button>}><div className="development-notes">
-      <p className="development-notes-label">此入口仅用于原型评审与研发对齐，不纳入正式产品功能。</p>
-      <Tabs value={area} onValueChange={setArea}>
-        <TabsList variant="line" className="development-notes-tabs" aria-label="研发说明分类">
-          {['前台与服务', '渠道接入', '模型资料'].map(label => <TabsTrigger key={label} value={label}>{label}</TabsTrigger>)}
-        </TabsList>
-        <TabsContent value={area}>
-      {service ? <>
+  const content = open && (service ? <>
       <h3>模型服务案例</h3><div className="development-model-scope"><span>目录演示范围</span><Button variant="outline" onClick={()=>showModels('showcase')}>演示模型</Button><Button variant="outline" onClick={()=>showModels('all')}>全部模型</Button></div><p>目录主入口为新增模型服务，接入与资料批量导入分别在所属模块；演示范围仅在本说明切换，模型资料展示有效统一主档；渠道接入的模型视图只汇总已有服务商登记，点击模型展示服务商和渠道列表；服务商通过搜索多选登记引用，模型服务演示范围独立，新增服务选择器读取同一批主档，用户新增和修改的资源仍可见。默认展示两个模型：DeepSeek-V4-Flash-0731 为统一模型服务模式，GLM-5.3 为渠道直选模式，通过 glm-5.3-moma 指定 MoMA 自营渠道，通过 glm-5.3-zhipu 指定智谱原厂渠道。MoMA 提供自营和转售。历史内置案例保留在全部模型中；未标记来源的旧存档按用户数据保留，不自动清理。能力、采购价、售价及凭证为演示值，不代表真实规格或报价。配置补齐后保持下架，平台试调用并发布后再明确上架。</p><Button disabled={mockBusy} onClick={async () => { try { setMockNotice(await prepareModelServiceShowcase() ? '两个案例已准备，请刷新页面查看。原有记录和历史保留。' : '案例已存在，保留后续编辑。'); } catch (error) { setMockNotice(error.message); } }}>准备两个模型服务案例</Button><Button disabled={mockBusy} variant="outline" onClick={async()=>{setMockBusy(true);try {await completeModelServiceShowcase(setMockNotice);}catch(error){setMockNotice(error.message);}finally{setMockBusy(false);}}}>验证并上架两个案例</Button><p role="status">{mockNotice}</p>
       <h3>五模块管理流程</h3><p>渠道接入维护协议、地址、上游标识及凭证；模型服务依次为服务概览、渠道与路由、故障转移、调用授权、调用指南、平台试调用、操作记录。模型资料是唯一主档，概览只读引用。模型成本按服务商、渠道与模型关联维护采购版本；模型售价按稳定统一／服务商服务维护售价、销售设置与变更记录。内部服务可无价格完成后台技术验证和启用，缺成本保持待核算，销售费用不适用；经营服务另检查成本、售价及销售对象后上架。调用范围仍为模型级有效客户集合，销售范围独立保存。价格变更不清技术证据，不追改历史；连接、路由或能力变化要求重验。跨页保留来源对象与筛选，旧接入记录只定位现有资源，不再编辑第二套资料或价格。服务操作仅提供灰度上架、正式上架、下架及可见性配置；服务状态和可见性在模型名下展示，试调用在验证与调用。灰度指定客户独立保存，与调用授权取交集，正式上架结束灰度限制。关联服务商可原地新建，点击对应服务的路由策略单元格打开路由编辑，包含尚未配置状态；主表操作列直接提供编辑路由、编辑调用标识、模型映射及停用/恢复路由；路由抽屉仅维护路由配置。路由编辑只选择已有合格渠道，不提供接入新渠道；模型登记、渠道配置、检测与明确启用统一在渠道接入模块完成后，再返回配置映射。服务商页签为 API 密钥池，名称在前、短 ID 在后，按组上移或下移；改变引用中的首位密钥先完整检测再明确应用，备用排序不触碰当前配置。此轮不新增租户身份、用户 Key、多层授权或用户端 D1 接口。</p>
       <h3>两面身份与样例</h3><p>后台账号代表平台管理人员；前台政企用户与个人用户代表服务使用者。两面的登录状态独立。用户通过稳定 ID 关联后台用户、组织或个人客户及成员记录，不按名称、手机号或页面自报的客户 ID 猜测授权。</p>
@@ -62,9 +62,27 @@ export default function DevelopmentNotes() {
       {supply && <><h3>模型渠道</h3><p>表格按模型合并名称，按渠道和计费项分行，采购价来自当前采购配置及折扣，与刊例价、客户售价分开。编辑按渠道维护名称和当前模型标识；被服务引用的标识须先解除映射，检测不自动启用或上架。共享API密钥仍按原服务商、密钥组及渠道引用管理。</p><h3>最低身份与参考目录</h3><p>目录外模型的任务、输入／输出模态、上下文和工具能力不按类型补造，资料标为待完善；技术测试和明确启用允许最低身份资料，正式服务仍校验资料、能力、采购计量与发布证据。参考目录只辅助填写，不代表账号已授权、真实调用成功或采购报价。</p><h3>密钥与轮换范围</h3><p>可复用服务商可用密钥组，或内联输入新 Key 随接入保存。明文只留在当前输入会话；事务仅接收掩码、指纹及受控元数据，输入恢复需重新输入。渠道专属 Key 按目标渠道轮换，组主要 Key 按全部组引用验证；混合引用先明确范围，不遗漏专属绑定，也不误改共享主要 Key。列表按真实绑定显示当前绑定渠道；未使用的备用 Key 替换不触碰在线渠道，删除和撤销仍检查完整引用。正常轮换不自动撤销旧 Key，应用后保留成功结果与版本。</p><h3>测试与明确应用</h3><p>保存接入不自动测试或启用。普通基础测试点击标明产生用量的按钮即授权本次操作；图片、语音、视频及专项检查继续明确任务和用量。地址或 Key 的“测试新配置／密钥”合并保存候选与测试，失败不改当前值；通过后再一次明确点击应用。影响范围前置展示，测试派发与应用前都核对冻结的候选、模型与服务引用、凭证、配置版本和权限；范围变化先拒绝派发，不自动应用或重试。</p><h3>新增映射与历史恢复</h3><p>新渠道单模型或向已有渠道新追加的一条映射，在从未启停、没有服务影响且当前验证有效时，可直接明确点击启用。历史恢复、多项选择或存在服务影响时，列表和测试入口共用固定选择与完整预检，不保留旧结果直达启用的旁路；其他映射保持当前状态。</p><h3>简化验收口径</h3><p>目录内首次接入上一轮实测为新 Key 6 项、已有 Key 5 项；本轮 mock 浏览器实测目录外新服务商＋新模型＋新 Key 9 项，已有渠道追加单模型 6 项，修改地址、正常专属 Key 或组主要 Key 轮换各 5 项。共享轮换实测 2 条引用一次启动全部测试；混合引用需另计范围选择。起点为已打开的添加表单或目标可见列表，终点为技术启用或明确应用。字段填写、独立选择和必要提交分别计数，不能把多个字段合为一步，也不把业务动作称为鼠标点击数。正式服务上架另计。</p></>}
       <h3>与服务管理的边界</h3><p>采购价为空仍可后台技术验证和内部启用，缺成本待核算。模型服务维护身份、供给、路由、调用范围及技术启停；模型售价独立负责售价、销售对象、展示与上架；接入成功不自动对外开放。接入动作数只计算到技术启用，不表示客户服务已完成上架。</p>
       <h3>Mock 验收</h3><p>新建演示数据包含仅有资料、待配置渠道、同模型多服务商、同服务商多渠道等状态；两种供应视图读取相同关系。已有浏览器数据保留，不自动重置或补造渠道。内置 mock API 覆盖模型发现、异步任务、候选切换、平台试调用与费用试算；模型运营通过 Workers 与 D1 保存配置及模拟任务，图表样例保留静态 JSON；检测与试调用不访问真实模型上游，不构成生产接入证明。</p>
-      </>}
-        </TabsContent>
-      </Tabs>
-    </div></Modal>}
+      </>);
+  return <>
+    <Button {...(admin ? { size: 'small', variant: 'outline' } : { size: 'sm', variant: 'outline', className: 'development-notes-trigger' })}
+      aria-label="研发人员注意：功能说明（非产品功能）" title="研发说明 · 非产品功能"
+      onClick={event => { trigger.current = event.currentTarget; setOpen(true); }}>研发人员注意</Button>
+    {open && <Modal wide title="研发人员注意" description="研发专用 · 非产品功能" onClose={close} footer={<Button variant="outline" onClick={close}>关闭说明</Button>}>
+      <div className="development-notes">
+        <p className="development-notes-label">此入口仅用于原型评审与研发对齐，不纳入正式产品功能。</p>
+        {admin ? (
+          <SemiTabs activeKey={area} onChange={setArea} className="development-notes-tabs" aria-label="研发说明分类">
+            {noteAreas.map(label => <SemiTabs.TabPane key={label} itemKey={label} tab={label}>{label === area && content}</SemiTabs.TabPane>)}
+          </SemiTabs>
+        ) : (
+          <Tabs value={area} onValueChange={setArea}>
+            <TabsList variant="line" className="development-notes-tabs" aria-label="研发说明分类">
+              {noteAreas.map(label => <TabsTrigger key={label} value={label}>{label}</TabsTrigger>)}
+            </TabsList>
+            <TabsContent value={area}>{content}</TabsContent>
+          </Tabs>
+        )}
+      </div>
+    </Modal>}
   </>;
 }

@@ -8,6 +8,7 @@ import { useServiceDirectory } from './useServiceDirectory';
 import { beginExperience, marketModels, customerPriceRows } from './service-directory.mjs';
 import MarketModelDetail from './MarketModelDetail';
 import { readModelDetail, modelDetailLocation } from './model-detail-route.mjs';
+import { Button as SemiButton, Select as SemiSelect } from '@douyinfe/semi-ui';
 import DevelopmentNotes from './admin-v2/DevelopmentNotes';
 import { AdminUIContext } from './components/admin-ui-context';
 import FrontPageHeader from "./components/FrontPageHeader";
@@ -2021,39 +2022,38 @@ function PrototypeApp({ version }) {
             </div>
           )}
           <div className="banner-version-tools">
-            <DevelopmentNotes/>
+            <DevelopmentNotes admin={admin === "v2"}/>
             <div className="version-switch">
-            <Select
-              value={version.id}
-              onValueChange={(value) => location.assign(`/${value}/`)}
-            >
-              <SelectTrigger size="sm" aria-label="切换版本">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent position="popper" align="end">
-                <SelectGroup>
-                  {prototypeVersions.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.id}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
+              {admin === "v2" ? (
+                <>
+                  <span id="admin-version-picker-label" className="sr-only">切换版本</span>
+                  <SemiSelect aria-labelledby="admin-version-picker-label" size="small" position="bottomRight" value={version.id}
+                    onSelect={value => { if (value !== version.id) location.assign(`/${value}/`); }}
+                    optionList={prototypeVersions.map(item => ({ value: item.id, label: item.id }))}/>
+                </>
+              ) : (
+                <Select value={version.id} onValueChange={value => location.assign(`/${value}/`)}>
+                  <SelectTrigger size="sm" aria-label="切换版本"><SelectValue /></SelectTrigger>
+                  <SelectContent position="popper" align="end">
+                    <SelectGroup>
+                      {prototypeVersions.map(item => <SelectItem key={item.id} value={item.id}>{item.id}</SelectItem>)}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
           {admin === "front" ? (
-            <button onClick={() => navigateAdmin(versionAdmin)}>
-              后台
-            </button>
-          ) : (
-            <button className="active" onClick={() => navigateAdmin("front")}>
-              返回前台
-            </button>
+            <button onClick={() => navigateAdmin(versionAdmin)}>后台</button>
+          ) : admin === "legacy" && (
+            <button className="active" onClick={() => navigateAdmin("front")}>返回前台</button>
           )}
           {admin === 'front' && auth.user && <span>{auth.state.activeSpace === 'personal' ? '个人用户' : '政企用户'}</span>}
           {admin === "front" ? <AuthBanner auth={auth} showToast /> : null}
         </div>
+        {admin === "v2" && (
+          <SemiButton className="admin-banner-return" type="tertiary" theme="borderless" size="small" onClick={() => navigateAdmin("front")}>返回前台</SemiButton>
+        )}
       </header>
       {admin === "front" && !auth.route && (
         <aside>

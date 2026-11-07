@@ -63,7 +63,7 @@ export default function ModelDeployments({ state, dispatch, conflict }) {
   useEffect(() => {
     const sync = () => { if (dirty.current && location.hash !== accepted.current && !window.confirm('当前配置未保存，是否放弃修改并离开？')) { history.replaceState(null, '', accepted.current); return; } accepted.current = location.hash; dirty.current = false; setParams(new URLSearchParams(location.hash.split('?')[1] || '')); setError(''); };
     const unload = event => { if (dirty.current) { event.preventDefault(); event.returnValue = ''; } };
-    const click = event => { if (dirty.current && event.target.closest('.v2-sidebar button, .v2-sidebar a, .v2-content>header a')) { if (window.confirm('当前配置未保存，是否放弃修改并离开？')) dirty.current = false; else { event.preventDefault(); event.stopPropagation(); } } };
+    const click = event => { if (dirty.current && event.target.closest('.v2-sidebar button, .v2-sidebar [role="tab"], .v2-sidebar a, .v2-content>header a')) { if (window.confirm('当前配置未保存，是否放弃修改并离开？')) dirty.current = false; else { event.preventDefault(); event.stopPropagation(); } } };
     addEventListener('hashchange', sync); addEventListener('beforeunload', unload); document.addEventListener('click', click, true);
     return () => { removeEventListener('hashchange', sync); removeEventListener('beforeunload', unload); document.removeEventListener('click', click, true); };
   }, []);
