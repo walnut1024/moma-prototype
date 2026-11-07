@@ -73,7 +73,11 @@ export default function ModelBatchImport({ state, can, run, close, dirty, mode =
   return <div className="materials-import" aria-busy={busy}>
     <Steps type="basic" current={['input','preview','result'].indexOf(step)}><Steps.Step title="上传表格"/><Steps.Step title="校验预览"/><Steps.Step title="导入结果"/></Steps>
     {step==='input'?<>
-      <div className="materials-actions"><Typography.Text type="secondary">每批最多 {MODEL_IMPORT_LIMIT} 条，仅新增模型资料；相同规范模型标识不覆盖。</Typography.Text><Button tag="a" href={import.meta.env.BASE_URL+'templates/model-material-import.xlsx'} download="模型资料导入模板.xlsx" icon={<IconDownload aria-hidden/>}>下载模板</Button></div>
+      <div className="materials-actions">
+        <Typography.Text type="secondary">每批最多 {MODEL_IMPORT_LIMIT} 条，仅新增模型资料；相同规范模型标识不覆盖。</Typography.Text>
+        <Typography.Text link={{ href: import.meta.env.BASE_URL + 'templates/model-material-import.xlsx', download: '模型资料导入模板.xlsx' }}
+          icon={<IconDownload aria-hidden="true"/>}>下载模板</Typography.Text>
+      </div>
       <Upload accept=".xlsx,.csv" uploadTrigger="custom" fileList={[]} showUploadList={false} draggable dragIcon={<IconUpload aria-hidden/>} dragMainText="点击上传模型资料表格或拖拽文件到这里" dragSubText="支持 XLSX、UTF-8 CSV，单个文件不超过 10 MB" disabled={busy || !can} onFileChange={files=>readFile(files[0])}/>
       <ImportHelp/>
     </>:step==='preview'?<>

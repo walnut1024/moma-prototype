@@ -19,3 +19,12 @@
 .filter-pagination,.filter-pagination>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .filter-pagination{justify-content:space-between;padding:12px 0;font-size:12px;color:#54647c}
 .filter-pagination select{height:30px;border:1px solid #dce2ec;border-radius:5px;background:white;padding:0 8px}
+
+.admin-filter-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding-top: 12px;
+}

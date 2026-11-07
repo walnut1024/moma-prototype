@@ -1,8 +1,3 @@
-.mo-workbench{font-size:14px;color:var(--semi-color-text-0)}
-.mo-workbench :is(h1,h2,h3):where(:not(.semi-typography)){color:var(--semi-color-text-0)}
-.mo-workbench .mo-heading p,.mo-workbench .mo-muted,.mo-workbench .mo-pagination,.mo-workbench .mo-stack small,.mo-workbench .mo-table small{color:var(--semi-color-text-2)}
-.mo-workbench code{color:var(--semi-color-text-1)}
-
 /* 表单字段：Semi 控件占满 mm-field/mo-form-grid 单元 */
 .mo-workbench .mm-field .semi-input-wrapper,.mo-workbench .mm-field .semi-select,.mo-workbench .mm-field .semi-input-number,.mo-workbench .mm-field .semi-textarea-wrapper,.mo-workbench .mm-field .semi-checkbox{max-width:100%}
 .mo-workbench .mm-field .semi-input-wrapper,.mo-workbench .mm-field .semi-select,.mo-workbench .mm-field .semi-input-number,.mo-workbench .mm-form-grid .semi-input-wrapper,.mo-workbench .mo-form-grid .semi-select,.mo-workbench .mo-form-grid .semi-input-number,.mo-workbench .mo-form-grid .semi-textarea-wrapper{width:100%;min-width:0}
@@ -54,9 +49,26 @@
 .supplier-model-select-options .supplier-model-option small{font-size:11px;color:var(--semi-color-text-2);font-weight:400}
 .supplier-model-select-options .supplier-model-option.semi-checkbox-wrapper-disabled{color:var(--semi-color-text-2);cursor:default}
 
-/* 侧栏选项允许名称和数量换行 */
-.supplier-sidebar-options .semi-button{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-height:56px;height:auto;width:100%;padding:8px 12px;white-space:normal;text-align:left}
-.supplier-sidebar-options .semi-button small{font-size:11px;color:var(--semi-color-text-2);white-space:nowrap}
+/* 渠道接入和模型服务共用两行服务商选项。 */
+:is(.supplier-sidebar-options, .mo-supplier-navigation nav) .semi-button {
+  justify-content: flex-start;
+  min-height: 56px;
+  height: auto;
+  width: 100%;
+  padding: 8px 12px;
+  white-space: normal;
+  text-align: left;
+}
+:is(.supplier-sidebar-options, .mo-supplier-navigation nav) .semi-button-content {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+:is(.supplier-sidebar-options, .mo-supplier-navigation nav) .semi-button small {
+  font-size: 11px;
+  color: var(--semi-color-text-2);
+}
 
 /* 搜索框 */
 .mo-search.semi-input-wrapper{width:340px;max-width:100%;min-width:220px}

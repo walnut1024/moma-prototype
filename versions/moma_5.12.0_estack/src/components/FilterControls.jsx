@@ -1,5 +1,6 @@
-import { useContext } from 'react';
-import { Button as SemiButton } from '@douyinfe/semi-ui';
+import { useContext, useId } from 'react';
+import { Button as SemiButton, Select as SemiSelect, Space, Typography } from '@douyinfe/semi-ui';
+import { IconChevronLeft, IconChevronRight } from '@douyinfe/semi-icons';
 import { AdminUIContext } from './admin-ui-context';
 import { Button } from './ui/button';
 import './filter-controls.css';
@@ -41,6 +42,21 @@ export function FilterViewRow({ children, className = '' }) {
 export function FilterPagination({ total, page, size, onPageChange, onSizeChange }) {
   const pages = Math.max(1, Math.ceil(total / size));
   const current = Math.min(page, pages);
+  const admin = useContext(AdminUIContext);
+  const pageSizeLabel = useId();
+  if (admin) return <div className="admin-filter-pagination" role="group" aria-label="分页">
+    <Typography.Text type="tertiary">共 {total} 条</Typography.Text>
+    <Space wrap>
+      <SemiButton theme="borderless" type="tertiary" size="small" aria-label="上一页"
+        icon={<IconChevronLeft aria-hidden="true"/>} disabled={current === 1} onClick={() => onPageChange(current - 1)}/>
+      <Typography.Text aria-live="polite">{current} / {pages}</Typography.Text>
+      <SemiButton theme="borderless" type="tertiary" size="small" aria-label="下一页"
+        icon={<IconChevronRight aria-hidden="true"/>} disabled={current === pages} onClick={() => onPageChange(current + 1)}/>
+      <span id={pageSizeLabel} className="sr-only">每页条数</span>
+      <SemiSelect aria-labelledby={pageSizeLabel} size="small" value={size} onChange={onSizeChange}
+        optionList={PAGE_SIZES.map(value => ({ value, label: `${value} 条 / 页` }))}/>
+    </Space>
+  </div>;
   return <div className="filter-pagination"><span>共 {total} 条</span><div>
     <select aria-label="每页条数" value={size} onChange={event => onSizeChange(Number(event.target.value))}>
       {PAGE_SIZES.map(value => <option key={value} value={value}>{value} 条 / 页</option>)}
