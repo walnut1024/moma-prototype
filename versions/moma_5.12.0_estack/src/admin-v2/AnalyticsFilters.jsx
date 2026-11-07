@@ -1,5 +1,7 @@
+import { AdminUIContext } from '../components/admin-ui-context';
+import { SemiDateRange, SemiMultiPick } from './SemiAnalyticsFilters';
 import { dayOf, validAnalyticsRange } from './analytics';
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { CalendarDays, ChevronDown, Check } from 'lucide-react';
 import { zhCN } from 'react-day-picker/locale';
 import { Calendar } from '../components/ui/calendar';
@@ -11,14 +13,14 @@ import { TIME_PRESETS } from '../components/FilterControls';
 import { usagePreset } from './usage-analysis';
 const date = s => new Date(`${s}T12:00:00`);
 const stamp = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-export function DateRange({start,end,onChange,granularity='day',allowLongRange=false,label='自定义',trigger,latest,rangeHint,presets=TIME_PRESETS,maxDays=allowLongRange||granularity==='week'?365:30}) {
+function FrontDateRange({start,end,onChange,granularity='day',allowLongRange=false,label='自定义',trigger,latest,rangeHint,presets=TIME_PRESETS,maxDays=allowLongRange||granularity==='week'?365:30}) {
   const [open,setOpen]=useState(false),[range,setRange]=useState();
   const today=dayOf(Date.now());
   const valid=range?.from&&range?.to&&stamp(range.to)<=today&&validAnalyticsRange(stamp(range.from),stamp(range.to),granularity,Date.now(),maxDays);
   const choose=id=>{const next=usagePreset(id);setRange({from:date(next.start),to:date(next.end)})};
   return <Popover open={open} onOpenChange={v=>{setOpen(v);if(v)setRange({from:date(start),to:date(end)})}}><PopoverTrigger asChild>{trigger || <Button variant="outline" className="filter-date-trigger" aria-label="日期范围"><CalendarDays/>{label && `${label} · `}{start} — {end}</Button>}</PopoverTrigger><PopoverContent className="filter-date-popover w-auto max-w-[95vw]" align="start"><div className="flex gap-2">{presets.map(([id,name])=><Button key={id} variant="outline" size="sm" onClick={()=>choose(id)}>{name}</Button>)}</div><Calendar mode="range" min={0} disabled={{after:date(today)}} locale={zhCN} numberOfMonths={2} defaultMonth={date(start)} selected={range} onSelect={setRange}/><p className="text-sm text-muted-foreground">北京时间 · {rangeHint || (allowLongRange?'单日按小时，2–30 天按日，31–365 天按周':granularity==='week'?'周粒度最多 1 年（365 天）':`单次最多 ${maxDays} 天`)} · 当日从 00:00 至当前时刻</p>{latest&&<p className="text-xs text-muted-foreground">记录截至 {latest}，之后的范围可能暂无数据。</p>}{range?.from&&range?.to&&!valid&&<p role="alert">请选择不晚于今天且不超过 {maxDays} 天的日期范围。</p>}<div className="flex justify-end gap-2 mt-3"><Button variant="outline" onClick={()=>setOpen(false)}>取消</Button><Button disabled={!valid} onClick={()=>{onChange({start:stamp(range.from),end:stamp(range.to)});setOpen(false)}}>应用日期</Button></div></PopoverContent></Popover>;
 }
-export function MultiPick({label,value,onChange,items,searchPlaceholder,compact=false,hint}) {
+function FrontMultiPick({label,value,onChange,items,searchPlaceholder,compact=false,hint}) {
   const [open,setOpen]=useState(false),[query,setQuery]=useState(''),[onlySelected,setOnlySelected]=useState(false),[draft,setDraft]=useState(value);
   const selected=new Set(draft===null?items.map(i=>i.id):draft);
   const matches=items.filter(i=>`${i.name} ${i.id} ${i.searchText || ''}`.toLowerCase().includes(query.trim().toLowerCase()));
@@ -43,4 +45,13 @@ export function MultiPick({label,value,onChange,items,searchPlaceholder,compact=
       <footer className="mp-footer"><span>共 {onlySelected?visible.length:matches.length} 项{onlySelected?'（已选）':query?'（搜索结果）':''}</span>{compact && <><Button variant="ghost" size="sm" aria-pressed={onlySelected} onClick={()=>setOnlySelected(!onlySelected)}>仅看已选</Button><Button variant="ghost" size="sm" onClick={()=>setDraft([])} disabled={!selectedCount}>清空</Button></>}<div><Button variant="outline" size="sm" onClick={()=>setOpen(false)}>取消</Button><Button size="sm" onClick={()=>{onChange(selectedCount===items.length?null:items.filter(i=>selected.has(i.id)).map(i=>i.id));setOpen(false)}}>确定（{selectedCount}）</Button></div></footer>
     </PopoverContent>
   </Popover>;
+}
+
+export function DateRange(props) {
+  const admin = useContext(AdminUIContext);
+  return admin ? <SemiDateRange {...props}/> : <FrontDateRange {...props}/>;
+}
+export function MultiPick(props) {
+  const admin = useContext(AdminUIContext);
+  return admin ? <SemiMultiPick {...props}/> : <FrontMultiPick {...props}/>;
 }

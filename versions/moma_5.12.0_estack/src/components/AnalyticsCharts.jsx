@@ -1,3 +1,5 @@
+import { Button as SemiButton, Checkbox as SemiCheckbox, Input as SemiInput, Popover as SemiPopover, Space, Table, Typography } from '@douyinfe/semi-ui';
+import { IconChevronDown, IconSetting } from '@douyinfe/semi-icons';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { AdminUIContext } from './admin-ui-context';
 import * as echarts from 'echarts/core';
@@ -18,7 +20,17 @@ const safe = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&
 
 function ChartData({ label, headings, rows, compact = false }) {
   const [open, setOpen] = useState(false);
-  return <details className="admin-chart-data" onToggle={event => setOpen(event.currentTarget.open)}><summary aria-label={`查看${label}数据`}>{compact ? '查看数据' : `查看${label}数据`}</summary>{open && <div className="chart-data-scroll" tabIndex={0} aria-label={`${label}数据区域`}><table><caption className="sr-only">{label}</caption><thead><tr>{headings.map((name, index) => <th key={index} scope="col">{name}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((value, column) => <td key={column}>{value}</td>)}</tr>)}</tbody></table>{!rows.length && <p>当前范围暂无数据。</p>}</div>}</details>;
+  return <div className="admin-chart-data-section">
+    <SemiButton size="small" theme="borderless" type="tertiary" icon={<IconChevronDown aria-hidden="true"/>}
+      aria-label={`查看${label}数据`} aria-expanded={open} onClick={() => setOpen(!open)}>
+      {compact ? '查看数据' : `查看${label}数据`}
+    </SemiButton>
+    {open && <section aria-label={`${label}数据区域`}>
+      <Table size="small" pagination={false} rowKey="id" scroll={{ x: 'max(100%, 400px)', y: 320 }}
+        columns={headings.map((title, index) => ({ title, key: index, render: (_, row) => row.values[index] }))}
+        dataSource={rows.map((values, id) => ({ id, values }))}/>
+    </section>}
+  </div>;
 }
 
 function Chart({ option, height, label, onClick, onLegend }) {
@@ -76,7 +88,26 @@ export function TimeSeriesChart({ labels, series, unit = '', label, axisUnit, ti
     series: series.map((item, index) => ({ name: item.label, type: type === 'bar' ? 'bar' : 'line', data: item.values, label: type === 'bar' && item.showValues ? { show: true, position: 'top', color: muted, fontSize: 12 } : undefined, smooth: .2, connectNulls: false, showSymbol: compact && (labels.length === 1 || item.showPoints === true), symbolSize: compact ? 6 : undefined, stack: stacked && type !== 'line' ? 'total' : undefined, areaStyle: type === 'area' ? { opacity: .12 } : undefined, barMaxWidth: 24, lineStyle: { width: item.total || /^(总|累计)/.test(item.label) ? 2.5 : 2, type: item.dashed ? 'dashed' : admin ? ['solid', 'dashed', 'dotted'][index % 3] : 'solid' }, emphasis: { focus: 'series' } })),
   };
   return <div className={`unified-chart ${className}`} role="group" aria-label={`${label}（${{ line: '折线图', bar: '柱状图', area: '面积图' }[type]}）`}>
-    {!compact && series.length > 1 && <div className="unified-chart-tools"><span>已展示 {visible.length} / {series.length} 条{choice?.signature !== signature && series.length > 8 ? ' · 默认按用量排序' : ''}</span><Popover><PopoverTrigger asChild><Button variant="outline" size="icon" aria-label={`${label}图表设置`} title="图表设置" onClick={() => setQuery('')}><SlidersHorizontal size={15}/></Button></PopoverTrigger><PopoverContent align="end" className="unified-chart-picker"><strong>显示指标／模型</strong><Input aria-label={`${label}搜索曲线`} placeholder="搜索指标或模型名称" value={query} onChange={event => setQuery(event.target.value)}/><div className="unified-chart-picker-actions"><Button variant="ghost" size="sm" onClick={() => choose(series.map(item => item.label))}>显示全部</Button><Button variant="ghost" size="sm" onClick={() => setChoice(null)}>恢复默认</Button></div><div className="unified-chart-options">{matches.map(item => <label key={item.label}><Checkbox aria-label={`显示${item.label}`} checked={selected.includes(item.label)} disabled={visible.length === 1 && selected.includes(item.label)} onCheckedChange={checked => choose(checked ? [...selected, item.label] : selected.filter(name => name !== item.label))}/><i style={{ background: seriesColor(item) }}/><span>{item.label}</span></label>)}{!matches.length && <p>无匹配曲线</p>}</div><small>仅改变图表显示，不影响统计、筛选和导出。</small></PopoverContent></Popover></div>}
+    {!compact && series.length > 1 && <div className="unified-chart-tools"><span>已展示 {visible.length} / {series.length} 条{choice?.signature !== signature && series.length > 8 ? ' · 默认按用量排序' : ''}</span>{admin ? <SemiPopover trigger="click" position="bottomRight" onVisibleChange={open => { if (open) setQuery(''); }} content={({ initialFocusRef }) =>
+      <div ref={initialFocusRef} tabIndex={-1} className="admin-analytics-picker admin-analytics-fields">
+        <Typography.Text strong>显示指标／模型</Typography.Text>
+        <SemiInput aria-label={`${label}搜索曲线`} placeholder="搜索指标或模型名称" value={query} onChange={setQuery}/>
+        <Space>
+          <SemiButton size="small" theme="borderless" onClick={() => choose(series.map(item => item.label))}>显示全部</SemiButton>
+          <SemiButton size="small" theme="borderless" onClick={() => setChoice(null)}>恢复默认</SemiButton>
+        </Space>
+        <div className="admin-analytics-options">
+          {matches.map(item => <SemiCheckbox key={item.label} aria-label={`显示${item.label}`} checked={selected.includes(item.label)}
+            disabled={visible.length === 1 && selected.includes(item.label)}
+            onChange={event => choose(event.target.checked ? [...selected, item.label] : selected.filter(name => name !== item.label))}>
+            {item.label}
+          </SemiCheckbox>)}
+          {!matches.length && <Typography.Text type="secondary">无匹配曲线</Typography.Text>}
+        </div>
+        <Typography.Text size="small" type="tertiary">仅改变图表显示，不影响统计、筛选和导出。</Typography.Text>
+      </div>}>
+      <SemiButton size="small" theme="borderless" type="tertiary" icon={<IconSetting aria-hidden="true"/>} aria-label={`${label}图表设置`}/>
+    </SemiPopover> : <Popover><PopoverTrigger asChild><Button variant="outline" size="icon" aria-label={`${label}图表设置`} title="图表设置" onClick={() => setQuery('')}><SlidersHorizontal size={15}/></Button></PopoverTrigger><PopoverContent align="end" className="unified-chart-picker"><strong>显示指标／模型</strong><Input aria-label={`${label}搜索曲线`} placeholder="搜索指标或模型名称" value={query} onChange={event => setQuery(event.target.value)}/><div className="unified-chart-picker-actions"><Button variant="ghost" size="sm" onClick={() => choose(series.map(item => item.label))}>显示全部</Button><Button variant="ghost" size="sm" onClick={() => setChoice(null)}>恢复默认</Button></div><div className="unified-chart-options">{matches.map(item => <label key={item.label}><Checkbox aria-label={`显示${item.label}`} checked={selected.includes(item.label)} disabled={visible.length === 1 && selected.includes(item.label)} onCheckedChange={checked => choose(checked ? [...selected, item.label] : selected.filter(name => name !== item.label))}/><i style={{ background: seriesColor(item) }}/><span>{item.label}</span></label>)}{!matches.length && <p>无匹配曲线</p>}</div><small>仅改变图表显示，不影响统计、筛选和导出。</small></PopoverContent></Popover>}</div>}
     <Chart option={option} height={height} label={`${label}图表`} onLegend={event => choose(Object.keys(event.selected).filter(name => event.selected[name]), legendNames)}/>
     {admin && showData && <ChartData compact={compact} label={label} headings={['时间 / 分类', ...visible.map(item => `${item.label}${unit ? `（${unit}）` : ''}`)]} rows={labels.map((time, index) => [time, ...visible.map(item => Number.isFinite(item.values[index]) ? formatter(item.values[index]) : '—')])}/>}
   </div>;

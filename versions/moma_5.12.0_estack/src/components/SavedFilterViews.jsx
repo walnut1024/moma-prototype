@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react';
+import { Button as SemiButton, Form, Input as SemiInput, Modal, Popover as SemiPopover, Space, Tag, Typography } from '@douyinfe/semi-ui';
+import { IconBookmark, IconChevronDown, IconDelete } from '@douyinfe/semi-icons';
+import { AdminUIContext } from './admin-ui-context';
+import { useContext, useEffect, useState } from 'react';
 import { Bookmark, ChevronDown, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -30,11 +33,35 @@ function ConditionChip({ group }) {
   return <Popover onOpenChange={open => { if (open) setQuery(''); }}><PopoverTrigger asChild><button type="button" className="sfv-chip sfv-chip-expand" aria-label={`${group.label}已选 ${group.items.length} 个，查看完整清单`} title={label}><span>{label}</span><ChevronDown size={13} aria-hidden="true"/></button></PopoverTrigger><PopoverContent align="start" className="sfv-detail"><strong>已选{group.label}（{group.items.length}）</strong>{group.items.length > 5 && <Input aria-label={`搜索已选${group.label}`} placeholder={`搜索已选${group.label}`} value={query} onChange={event => setQuery(event.target.value)}/>}<ul>{visible.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>{!visible.length && <p>没有匹配项</p>}<small>如需调整，请使用上方筛选框</small></PopoverContent></Popover>;
 }
 
+function SemiCondition({ group }) {
+  const [query, setQuery] = useState('');
+  const label = groupText(group);
+  if (!Array.isArray(group.items) || group.items.length < 2) return <Tag title={label}>{label}</Tag>;
+  const visible = group.items.filter(item => item.toLowerCase().includes(query.trim().toLowerCase()));
+  return <SemiPopover trigger="click" position="bottomLeft" onVisibleChange={open => { if (open) setQuery(''); }}
+    content={<div className="admin-analytics-picker admin-analytics-fields">
+      <Typography.Text strong>已选{group.label}（{group.items.length}）</Typography.Text>
+      {group.items.length > 5 && <SemiInput aria-label={`搜索已选${group.label}`} value={query} onChange={setQuery}/>}
+      <div className="admin-analytics-options">
+        {visible.map((item, index) => <Typography.Text key={`${item}-${index}`}>{item}</Typography.Text>)}
+        {!visible.length && <Typography.Text type="secondary">没有匹配项</Typography.Text>}
+      </div>
+    </div>}>
+    <SemiButton size="small" type="tertiary" icon={<IconChevronDown aria-hidden="true"/>} iconPosition="right"
+      aria-label={`${group.label}已选 ${group.items.length} 个，查看完整清单`} title={label}>{label}</SemiButton>
+  </SemiPopover>;
+}
+
 export function SelectedConditions({ groups, label = '已选条件' }) {
+  if (useContext(AdminUIContext)) return <Space wrap>
+    <Typography.Text type="secondary">{label}</Typography.Text>
+    {groups.map(group => <SemiCondition key={`${group.label}-${group.text}`} group={group}/>)}
+  </Space>;
   return <div className="sfv-current"><span className="sfv-label">{label}</span>{groups.map(group => <ConditionChip key={`${group.label}-${group.text}`} group={group}/>)}</div>;
 }
 
 export default function SavedFilterViews({ scope, value, onApply, summary = '', conditions, groups, currentGroups = groups, saveDescription = '核对当前筛选条件并命名，保存后可快速应用。', showCurrent = true, disabled = false, legacyKey, notify }) {
+  const admin = useContext(AdminUIContext);
   const key = `moma-5120-filter-views:${scope}`;
   const [views, setViews] = useState(() => {
     try {
@@ -52,7 +79,7 @@ export default function SavedFilterViews({ scope, value, onApply, summary = '', 
   }, [pending, value]);
   const persist = next => {
     try { localStorage.setItem(key, JSON.stringify(next)); setViews(next); setError(''); return true; }
-    catch { if (notify) notify.error('视图保存失败，请稍后重试'); else setError('视图保存失败，请稍后重试'); return false; }
+    catch { if (notify) notify.error('视图保存失败，请稍后重试'); if (admin || !notify) setError('视图保存失败，请稍后重试'); return false; }
   };
   const save = () => {
     const label = name.trim();
@@ -64,6 +91,52 @@ export default function SavedFilterViews({ scope, value, onApply, summary = '', 
   const currentConditions = (conditions ?? summary.split(' · ')).filter(Boolean);
   const activeGroups = currentGroups || currentConditions.map(text => ({ text }));
   const viewLabel = applied ? `${applied.name}${signature(value) === applied.signature ? '' : ' · 已修改'}` : '当前筛选';
+  if (admin) return <div className="admin-saved-views">
+    {showCurrent && <SelectedConditions groups={activeGroups}/>}
+    <Space wrap>
+      <SemiPopover trigger="click" position="bottomRight" visible={open} onVisibleChange={setOpen} content={({ initialFocusRef }) =>
+        <div ref={initialFocusRef} tabIndex={-1} className="admin-analytics-picker admin-analytics-fields">
+          <div className="admin-analytics-options">
+            {views.map(view => <div className="admin-analytics-picker-footer" key={view.id}>
+              <SemiButton theme="borderless" onClick={() => {
+                if (onApply(view.value) === false) return;
+                setOpen(false);
+                setPending({ id: view.id, name: view.name });
+                notify?.success(`已应用视图：${view.name}`);
+              }}>{view.name}</SemiButton>
+              <SemiButton theme="borderless" type="tertiary" icon={<IconDelete aria-hidden="true"/>} aria-label={`删除视图 ${view.name}`}
+                onClick={() => {
+                  if (!persist(views.filter(item => item.id !== view.id))) return;
+                  if (applied?.id === view.id) setApplied(null);
+                  notify?.success('筛选视图已删除');
+                }}/>
+            </div>)}
+            {!views.length && <Typography.Text type="secondary">暂无视图，请先设置筛选条件。</Typography.Text>}
+          </div>
+          {error && <Typography.Text type="danger" role="alert">{error}</Typography.Text>}
+        </div>
+      }>
+        <SemiButton icon={<IconChevronDown aria-hidden="true"/>} iconPosition="right" aria-expanded={open}>视图：{viewLabel}</SemiButton>
+      </SemiPopover>
+      <SemiButton icon={<IconBookmark aria-hidden="true"/>} disabled={disabled} onClick={() => { setError(''); setCreating(true); }}>保存为视图</SemiButton>
+    </Space>
+    {creating && <Modal visible title="保存为视图" width="min(480px, calc(100vw - 32px))" closeOnEsc maskClosable={false}
+      okText="保存视图" onOk={save} onCancel={() => setCreating(false)}
+      okButtonProps={{ disabled: !name.trim() || disabled, 'aria-label': '保存视图' }} cancelButtonProps={{ 'aria-label': '取消' }}>
+      <Typography.Paragraph type="secondary">{saveDescription}</Typography.Paragraph>
+      <dl className="admin-saved-summary">{groups ? groups.map(group => <div key={group.label}>
+        <dt><Typography.Text strong>{group.label}</Typography.Text></dt>
+        {group.scope && <dd><Typography.Text size="small" type="tertiary">{group.scope}</Typography.Text></dd>}
+        <dd>{Array.isArray(group.items) && group.items.length ? <Space wrap>{group.items.map((item, index) => <Tag key={index}>{item}</Tag>)}</Space>
+          : 'items' in group ? group.items === null ? group.all || '全部' : '未选择' : group.text}</dd>
+      </div>) : <dd>{currentConditions.join('；')}</dd>}</dl>
+      <Form.Slot label={{ text: '视图名称', name: `saved-view-${scope}` }}>
+        <SemiInput id={`saved-view-${scope}`} maxLength={40} placeholder="输入视图名称" value={name} onChange={setName}
+          onEnterPress={() => { if (!disabled) save(); }}/>
+      </Form.Slot>
+      {error && <Typography.Text type="danger" role="alert">{error}</Typography.Text>}
+    </Modal>}
+  </div>;
   return <div className={`sfv-actions${showCurrent ? ' sfv-with-current' : ''}`}>
     {showCurrent && <SelectedConditions groups={activeGroups}/>}
     <div className="sfv-controls"><Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button type="button" variant="outline" className="sfv-view-trigger" aria-label={`视图：${viewLabel}`}><span>视图：{viewLabel}</span><ChevronDown size={15}/></Button></PopoverTrigger><PopoverContent align="end" className="w-80"><div className="flex flex-col gap-2">{views.map(view => <div key={view.id} className="flex items-center gap-2"><Button type="button" className="flex-1 justify-start truncate" variant="ghost" onClick={() => { if (onApply(view.value) === false) return; setOpen(false); setPending({ id: view.id, name: view.name }); notify?.success(`已应用视图：${view.name}`); }}>{view.name}</Button><Button type="button" variant="ghost" size="icon" aria-label={`删除视图 ${view.name}`} onClick={() => { if (persist(views.filter(item => item.id !== view.id))) { if (applied?.id === view.id) setApplied(null); notify?.success("筛选视图已删除"); } }}><Trash2 size={15}/></Button></div>)}{!views.length && <p className="text-sm text-muted-foreground">暂无视图，请先设置筛选条件。</p>}{error && <p role="alert">{error}</p>}</div></PopoverContent></Popover>
