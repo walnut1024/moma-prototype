@@ -58,7 +58,10 @@ export function mappingPendingTasks(state,supply) {
   return (state.modelOnboardings || []).some(task=>!['已放弃','已完成'].includes(task.status) && !task.completion && (task.supplyId===supply.id || task.selectedSupplyId===supply.id)) || (state.cloudMockState?.usage || []).some(row=>!row.endedAt && row.attempts?.some(attempt=>attempt.bindingId===supply.id));
 }
 export function mappingSourceVersion(state,service) {
-  return JSON.stringify([service.id,service.callId,service.model.updatedAt,mappingCandidates(state,service).map(row=>[row.selectionId,row.reason,channelFingerprint(row)])]);
+  const candidates=mappingCandidates(state,service)
+    .sort((left,right)=>left.selectionId.localeCompare(right.selectionId))
+    .map(row=>[row.selectionId,row.reason,channelFingerprint(row)]);
+  return JSON.stringify([service.id,service.callId,service.model.updatedAt,candidates]);
 }
 export function mappingState(state,service,supply) {
   let issue=mappingReadiness(state,service,supply);

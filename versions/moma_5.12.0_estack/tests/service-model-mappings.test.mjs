@@ -15,6 +15,18 @@ const config=(row)=>({providerId:row.provider.id,endpointId:row.endpointId,assoc
 function command(f,operation,data={},role='平台管理员'){const supply=data.id && f.state.modelSupplies.find(row=>row.id===data.id);return commitAdminState(f.state,{type:'modelOperations',operation,modelId:f.service.modelId,data:{serviceId:f.service.id,expectedSource:mappingSourceVersion(f.state,f.service),expectedRevision:supply?.mappingRevision || 0,...data}},role);}
 function create(f){f.state=command(f,'serviceMappingCreate',{name:'移动云映射',config:config(f.candidates[0],f.service)});return f.state.modelSupplies.find(row=>row.modelId===f.service.modelId);}
 
+test('mapping validation accepts reordered command patches but rejects actual supply changes',()=>{
+ const f=fixture(),s=create(f),snapshot=structuredClone(f.state);
+ const expectedSource=mappingSourceVersion(snapshot,f.service);
+ f.state.endpoints.reverse();
+ f.state.providers.reverse();
+ assert.notDeepEqual(mappingCandidates(f.state,f.service).map(row=>row.selectionId),mappingCandidates(snapshot,f.service).map(row=>row.selectionId));
+ const validated=command(f,'serviceMappingValidate',{id:s.id,expectedSource});
+ assert.equal(validated.modelSupplies.find(row=>row.id===s.id).validationStatus,'通过');
+ f.state.endpoints.find(row=>row.id===s.endpointId).baseUrl='https://changed.example.invalid/v1/chat/completions';
+ assert.throws(()=>command(f,'serviceMappingValidate',{id:s.id,expectedSource}),/已变化/);
+});
+
 test('preview is read only; create → validate → enable is explicit and does not publish routes, prices or services',()=>{
  const f=fixture(),before=structuredClone(f.state),draft=config(f.candidates[0],f.service);
  const preview=mappingPreview(f.state,f.service,draft);assert.equal(preview.request.platform.model,f.service.callId);assert.equal(preview.request.upstream.model,f.candidates[0].upstreamModelId);assert.deepEqual(f.state,before);
