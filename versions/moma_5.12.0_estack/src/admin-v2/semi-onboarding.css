@@ -74,3 +74,6 @@
 }
 
 .supplier-reference-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 8px; }
+
+.supplier-batch-model-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.supplier-batch-steps .semi-steps-basic { flex-wrap: wrap; gap: 8px 12px; }

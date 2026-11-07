@@ -69,18 +69,15 @@ body:has(.mo-workbench){min-width:0}
 .admin-v2 .mo-perspective-switch [role="radio"]:focus-visible{outline:2px solid #315fe8;outline-offset:2px;z-index:1}
 .admin-v2 .mo-perspective-label{font-weight:600;color:#263247}
 .admin-v2 .mo-supplier-listing{display:grid;grid-template-columns:200px minmax(0,1fr);gap:8px;align-items:start;min-width:0}
-.admin-v2 .mo-supplier-navigation{min-width:0;background:#fff;border:1px solid #e4eaf3;border-radius:6px;padding:12px}
+.admin-v2 .mo-supplier-navigation{min-width:0}
 .admin-v2 .mo-supplier-nav-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.admin-v2 .mo-supplier-nav-heading span,.admin-v2 .mo-supplier-catalogue-heading span{font-size:11px;color:#586982}
 .admin-v2 .mo-supplier-navigation .mo-search{min-width:0;width:100%;margin-bottom:8px}
 .admin-v2 .mo-supplier-navigation nav{display:flex;flex-direction:column;gap:4px;max-height:calc(100dvh - 280px);overflow:auto}
 .admin-v2 .mo-supplier-navigation nav button{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;min-height:58px;height:auto;padding:10px 8px;white-space:normal;text-align:left}
-.admin-v2 .mo-supplier-navigation nav button[aria-current="true"]{background:#edf3ff;color:#315fe8}
 .admin-v2 .mo-supplier-navigation nav small{font-size:11px;color:#586982}
 .admin-v2 .mo-supplier-catalogue{min-width:0}
-.admin-v2 .mo-supplier-catalogue-heading{display:flex;gap:8px;align-items:center;padding:12px;border-bottom:1px solid #e8edf5;flex-wrap:wrap}
+.admin-v2 .mo-supplier-catalogue-heading{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
 .admin-v2 .mo-supplier-catalogue-heading>div{margin-right:auto}
-.admin-v2 .mo-supplier-catalogue-heading h2{font-size:14px}
 .admin-v2 .mo-supplier-catalogue .mo-toolbar{padding:12px;gap:8px}
 .admin-v2 .mo-supplier-catalogue .mo-toolbar .mo-search{min-width:220px;flex:1;width:auto}
 .admin-v2 .mo-supplier-selection{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 12px;background:#edf3ff;font-size:12px;color:#263247}
@@ -100,13 +97,6 @@ body:has(.mo-workbench){min-width:0}
 .admin-v2 .mo-batch-tools p{flex:1 1 320px;color:#586982;font-size:12px}
 .admin-v2 .mo-batch-scope{padding:16px 0;border-bottom:1px solid #e8edf5;margin-bottom:8px}
 .admin-v2 .mo-batch-scope p{font-size:12px;color:#586982}
-.admin-v2 .mo-batch-models{max-height:calc(100dvh - 420px);min-height:220px;overflow:auto;padding-right:8px}
-.admin-v2 .mo-batch-models>details{border-bottom:1px solid #e8edf5;padding:12px 0}
-.admin-v2 .mo-batch-models>details>summary{display:flex;align-items:center;gap:16px;cursor:pointer;flex-wrap:wrap;color:#263247}
-.admin-v2 .mo-batch-models>details>summary>svg{width:16px;height:16px;flex:none;color:#315fe8;transition:transform 120ms ease-out}
-.admin-v2 .mo-batch-models>details[open]>summary>svg{transform:rotate(180deg)}
-.admin-v2 .mo-batch-models>details>summary strong{min-width:160px;max-width:320px;overflow-wrap:anywhere}
-.admin-v2 .mo-batch-models>details>summary span{font-size:11px;color:#586982}
 .admin-v2 .mo-batch-model-body{padding:0 0 12px 16px}
 .admin-v2 .mo-batch-model-body .mo-row-actions{margin:12px 0}
 .admin-v2 .mo-batch-model-body .mo-billing-table{min-width:740px}

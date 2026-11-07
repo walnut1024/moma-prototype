@@ -30,7 +30,7 @@ export function Modal({ title, description, children, onClose, wide, drawer = fa
     if (!dialog) return;
     // The installed Semi SideSheet does not forward aria-label to its dialog.
     if (typeof title === 'string') dialog.setAttribute('aria-label', title);
-    dialog.focus({ preventScroll: true });
+    if (!dialog.contains(document.activeElement)) dialog.focus({ preventScroll: true });
   }, [title]);
   const content = <div className="ss-dialog-content" ref={drawer ? focusSheet : undefined}>
     {description && <Typography.Paragraph type="tertiary">{description}</Typography.Paragraph>}{children}
