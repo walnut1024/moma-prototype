@@ -65,7 +65,7 @@ export default function ModelManagement(props) {
     if (target === 'supply') { go({view:null,model:model.id,perspective:'models',panel:model.serviceMode==='provider'?null:'associate',draft:null,step:null,provider:null,catalogue:null}); return; }
     go({ perspective: 'models', model: model.id, view: null, tab: null, step: null }, { preserveScroll: true });
   };
-  const act = (model, kind, item) => ops.proceed(() => { if(['price','reprice','unifiedPrice','publish','display'].includes(kind)){go({model:model.id,tab:kind==='publish' || kind==='display'?'sales':'pricing',returnTo:location.hash},{base:'model-prices',reset:true});return;}if(kind==='scope'){go({model:model.id,panel:'access',scopeEdit:'1'},{base:'listing',reset:true});return;} drawerTrigger.current = document.activeElement; setDialog({modelId:model.id,kind,item}); });
+  const act = (model, kind, item, button = document.activeElement) => ops.proceed(() => { if(['price','reprice','unifiedPrice','publish','display'].includes(kind)){go({model:model.id,tab:kind==='publish' || kind==='display'?'sales':'pricing',returnTo:location.hash},{base:'model-prices',reset:true});return;}if(kind==='scope'){go({model:model.id,panel:'access',scopeEdit:'1'},{base:'listing',reset:true});return;} drawerTrigger.current = document.activeElement; setDialog({modelId:model.id,kind,item}); });
   const viewSwitch = <RadioGroup type="button" aria-label="管理视角" value={perspective} onChange={event=>switchPerspective(event.target.value)} options={[{label:'模型视角',value:'models'},{label:'服务商视角',value:'suppliers'}]}/>;
   let content;
   if (view === 'supplier-batch') content = <SupplierModelBatch key={params.get('provider') + ':' + params.get('batchMode')} state={state} ops={ops} home={home} viewSwitch={viewSwitch}/>;

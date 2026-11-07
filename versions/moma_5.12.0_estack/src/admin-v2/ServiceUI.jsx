@@ -25,21 +25,23 @@ export function FieldLabel({ name, description, required }) {
   return <Space spacing={4}>{name}{required && ' *'}{help && <Tooltip content={help}><Button theme="borderless" type="tertiary" icon={<IconHelpCircle aria-hidden="true"/>} aria-label={`${name}说明`}/></Tooltip>}</Space>;
 }
 export function Modal({ title, description, children, onClose, wide, drawer = false, drawerSide = 'right', footer, className = '' }) {
-  const focusSheet = useCallback(node => {
+  const titleId = useId();
+  const labelDialog = useCallback(node => {
     const dialog = node?.closest('[role="dialog"]');
     if (!dialog) return;
-    // The installed Semi SideSheet does not forward aria-label to its dialog.
-    if (typeof title === 'string') dialog.setAttribute('aria-label', title);
-    if (!dialog.contains(document.activeElement)) dialog.focus({ preventScroll: true });
-  }, [title]);
-  const content = <div className="ss-dialog-content" ref={drawer ? focusSheet : undefined}>
+    // Semi Modal reuses its title ID across portals and SideSheet does not label the dialog.
+    if (title != null) dialog.setAttribute('aria-labelledby', titleId);
+    if (drawer && !dialog.contains(document.activeElement)) dialog.focus({ preventScroll: true });
+  }, [drawer, title, titleId]);
+  const heading = title == null ? title : <span id={titleId}>{title}</span>;
+  const content = <div className="ss-dialog-content" ref={labelDialog}>
     {description && <Typography.Paragraph type="tertiary">{description}</Typography.Paragraph>}{children}
   </div>;
   const actions = footer ? <div className="ss-footer">{footer}</div> : null;
   return drawer
-    ? <SideSheet visible className={`semi-services ${className}`} title={title} placement={drawerSide}
+    ? <SideSheet visible className={`semi-services ${className}`} title={heading} placement={drawerSide}
         width={`min(${wide ? 1000 : 720}px, 100vw)`} onCancel={onClose} closeOnEsc footer={actions}>{content}</SideSheet>
-    : <SemiModal visible className={`semi-services ${className}`} title={title}
+    : <SemiModal visible className={`semi-services ${className}`} title={heading}
         width={`min(${wide ? 960 : 448}px, calc(100vw - 32px))`} onCancel={onClose} footer={actions}>{content}</SemiModal>;
 }
 export const serviceOperationsUi = {

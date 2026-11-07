@@ -1,10 +1,11 @@
+import AdminActionMenu from './AdminActionMenu';
 import { operationsReturn } from './model-pricing-workspace';
 import { MODEL_CATALOGUE_TYPES } from './model-library';
 import { pendingGuidedOnboardings } from './guided-onboarding';
 import ChannelServiceContext from './ChannelServiceContext';
 import { useState } from 'react';
-import { Badge, Button, Descriptions, Dropdown, Empty, Input, Nav, Popover, Space, Table, Tabs, Typography } from '@douyinfe/semi-ui';
-import { IconPlus, IconSearch, IconFilter, IconMore } from '@douyinfe/semi-icons';
+import { Badge, Button, Descriptions, Empty, Input, Nav, Popover, Space, Table, Tabs, Typography } from '@douyinfe/semi-ui';
+import { IconPlus, IconSearch, IconFilter } from '@douyinfe/semi-icons';
 import { Choice, Field, Status, Notice, Modal } from './ServiceUI';
 import { modelCode, displayTime } from './model-management';
 import { SERVICE_MODES, listed } from './model-operations';
@@ -70,7 +71,7 @@ export default function ServiceManagementWorkspace({state,sourceState,ops,act,ad
     </aside>
     <section className="ss-detail" aria-label="模型服务工作台"><ChannelServiceContext state={state} ops={ops}/>{params.has('returnOnboarding') && <Notice><Button theme="borderless" onClick={() => go({view:'onboarding',draft:params.get('returnOnboarding'),step:'2',panel:null,model:null,returnOnboarding:null,providerAdd:null,providerEdit:null})}>返回接入任务</Button></Notice>}
       {creating ? <ServiceModelForm key="create" state={state} sourceState={sourceState} ops={ops} close={cancelCreate} saved={finishCreate}/> : selected ? <>
-        <div className="ss-heading"><div className="ss-model-heading"><Typography.Title heading={4}>{selected.name}</Typography.Title><Space wrap><Badge theme="light" type={headerStatus.service === '正式上架' ? 'success' : headerStatus.service === '灰度上架' ? 'warning' : 'tertiary'} count={`服务状态：${headerStatus.service}`}/><Badge theme="light" type={headerStatus.visibility === '用户不可见' ? 'tertiary' : headerStatus.visibility === '灰度用户可见' ? 'warning' : 'primary'} count={`可见性：${headerStatus.visibility}`}/></Space></div><Space wrap>{operationsReturn(params.get('returnTo')) && <Button onClick={() => ops.proceed(() => {location.hash=params.get('returnTo');})}>返回来源页面</Button>}<Dropdown clickToHide trigger="click" position="bottomRight" className="semi-services" menu={actions}><Button icon={<IconMore aria-hidden="true"/>}>服务操作</Button></Dropdown></Space></div>
+        <div className="ss-heading"><div className="ss-model-heading"><Typography.Title heading={4}>{selected.name}</Typography.Title><Space wrap><Badge theme="light" type={headerStatus.service === '正式上架' ? 'success' : headerStatus.service === '灰度上架' ? 'warning' : 'tertiary'} count={`服务状态：${headerStatus.service}`}/><Badge theme="light" type={headerStatus.visibility === '用户不可见' ? 'tertiary' : headerStatus.visibility === '灰度用户可见' ? 'warning' : 'primary'} count={`可见性：${headerStatus.visibility}`}/></Space></div><Space wrap>{operationsReturn(params.get('returnTo')) && <Button onClick={() => ops.proceed(() => {location.hash=params.get('returnTo');})}>返回来源页面</Button>}<AdminActionMenu label="服务操作" items={actions}>服务操作</AdminActionMenu></Space></div>
         {params.get('publicationReturn') === selected.id && <Button onClick={() => {go({publicationReturn:null},{saved:true,preserveScroll:true});act(selected,'publish');}}>返回上架检查</Button>}
         <ModelStatusSummary state={state} model={selected} ops={ops}/>
         <Tabs activeKey={activeTab} keepDOM={false} collapsible onChange={value => go({panel:value === 'materials' ? null : value,service:null,mapping:null,scopeEdit:null,tab:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:['trial','guide','failover'].includes(value) ? params.get('routeProvider') : null},{preserveScroll:true})}>

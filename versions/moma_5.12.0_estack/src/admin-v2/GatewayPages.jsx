@@ -1,9 +1,9 @@
 import AdminPageHeading from './AdminPageHeading';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Banner, Button, Card, Checkbox, Form, Modal, Space, Table, Tag, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconPlus } from '@douyinfe/semi-icons';
 import { simulateRequest } from './domain';
-import { Choice } from './ServiceUI';
+import { Choice, serviceOperationsUi } from './ServiceUI';
 import './gateway-settings.css';
 
 const collection = { routes: 'routes', limits: 'limits', fallback: 'fallbacks', cache: 'caches', releases: 'releases' };
@@ -28,6 +28,10 @@ function Status({ value }) {
 
 function Editor({ pageId, state, dispatch, close }) {
   const [error, setError] = useState('');
+  const [dirty, setDirty] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const formId = useId();
+  const dismiss = () => dirty ? setDiscarding(true) : close();
   const formBody = useRef(null);
   useEffect(() => {
     const frame = requestAnimationFrame(() => formBody.current?.querySelector('input')?.focus({ preventScroll: true }));
@@ -78,11 +82,20 @@ function Editor({ pageId, state, dispatch, close }) {
     }
     if (dispatch({ type: 'add', collection: collection[pageId], record })) close();
   };
-  return (
-    <Modal visible width="min(560px, calc(100vw - 32px))" title={`新建${meta[pageId][0]}`} footer={null}
-      closeOnEsc maskClosable={false} onCancel={close}>
+  const initial = initialValues[pageId];
+  return <>
+    <Modal visible width="min(560px, calc(100vw - 32px))" title={`新建${meta[pageId][0]}`}
+      closeOnEsc={!discarding} maskClosable={false} onCancel={dismiss}
+      footer={<div className="gateway-editor-actions">
+        <Button theme="light" onClick={dismiss}>取消</Button>
+        <Button theme="solid" htmlType="submit" form={formId}>保存并生效</Button>
+      </div>}>
       <div ref={formBody}>
-        <Form initValues={initialValues[pageId]} onSubmit={save} onValueChange={() => setError('')}>
+        <Form id={formId} initValues={initial} onSubmit={save} onValueChange={values => {
+          setError('');
+          const fields = new Set([...Object.keys(initial), ...Object.keys(values)]);
+          setDirty([...fields].some(field => (values[field] ?? '') !== (initial[field] ?? '')));
+        }}>
           {pageId === 'routes' && <>
             <Form.Input field="routeId" label="Route ID"/>
             <Form.Input field="name" label="名称"/>
@@ -115,14 +128,14 @@ function Editor({ pageId, state, dispatch, close }) {
             <Form.Input field="exclusions" label="排除规则" placeholder="例如敏感策略命中"/>
           </>}
           {error && <Banner type="danger" closeIcon={null} description={error}/>}
-          <div className="admin-form-actions">
-            <Button onClick={close}>取消</Button>
-            <Button theme="solid" htmlType="submit">保存并生效</Button>
-          </div>
         </Form>
       </div>
     </Modal>
-  );
+    {discarding && serviceOperationsUi.renderLeaveDialog({
+      cancel: () => setDiscarding(false),
+      discard: close,
+    })}
+  </>;
 }
 
 function Releases({ state, dispatch }) {

@@ -1,1 +1,2 @@
 .gateway-settings-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.gateway-editor-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }

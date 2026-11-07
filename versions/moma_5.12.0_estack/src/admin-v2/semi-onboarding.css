@@ -22,8 +22,6 @@
 .semi-modal .mo-footer,.semi-sidesheet .mo-footer{border-top:1px solid var(--semi-color-border);padding-top:14px;margin-top:14px}
 .semi-modal .supplier-key-actions,.semi-sidesheet .supplier-key-actions{margin-top:16px}
 .semi-modal-content .ss-dialog-content,.semi-sidesheet-content .ss-dialog-content{gap:16px}
-.mo-more-actions{display:flex;flex-direction:column;align-items:stretch;width:240px;padding:8px;gap:4px}
-.mo-more-actions .semi-button{justify-content:flex-start;height:auto;min-height:32px;white-space:normal;text-align:left;padding-inline:12px}
 
 /* 密钥组：Semi 图标按钮行对齐 */
 .supplier-key-row{display:flex;align-items:flex-start;gap:8px}

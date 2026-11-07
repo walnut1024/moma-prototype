@@ -3,7 +3,7 @@ import { scopeTenants } from './service-commercial';
 import { activeAdmin } from '../linked-accounts.mjs';
 import { readLinkedState } from '../service-access.mjs';
 import { Children, Fragment, isValidElement, useEffect, useRef, useState } from 'react';
-import { Button, Collapse, Input, Pagination as SemiPagination, Popover, Table, TextArea, Toast } from '@douyinfe/semi-ui';
+import { Button, Collapse, Input, Pagination as SemiPagination, Table, TextArea, Toast } from '@douyinfe/semi-ui';
 import { IconDelete, IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import AdminPageHeading from './AdminPageHeading';
 import { CopyId, Modal as ServiceModal, Notice, Status, serviceOperationsUi } from './ServiceUI';
@@ -22,16 +22,6 @@ export function Heading({ title, description, children }) {
   return <AdminPageHeading title={title} description={description}>
     {children && <div className="mo-actions">{children}</div>}
   </AdminPageHeading>;
-}
-export function MoreActions({children,label='更多操作',disabled=false}) {
-  const [open,setOpen]=useState(false);
-  useEffect(() => {
-    if (!open) return;
-    const close = event => { if (!event.target.closest('.mo-more-actions, .semi-popover-wrapper, .mo-more-trigger')) setOpen(false); };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [open]);
-  return <Popover trigger="custom" visible={open} position="bottomRight" content={<div className="mo-more-actions" onClick={event=>{if(event.target.closest('button:not(:disabled)'))setOpen(false);}}>{children}</div>}><Button className="mo-more-trigger" theme="light" disabled={disabled} aria-label={label} onClick={()=>setOpen(!open)}>更多</Button></Popover>;
 }
 export function SearchBox({ value, onChange, placeholder = '搜索模型展示名 / 编码 / 作者' }) { return <Input className="mo-search" prefix={<IconSearch aria-hidden="true"/>} aria-label={placeholder} placeholder={placeholder} value={value} onChange={onChange}/>; }
 export function GridTable({ headings, children, empty, emptyMessage = '没有符合条件的记录', className = '' }) {

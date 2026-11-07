@@ -1,3 +1,4 @@
+import AdminActionMenu from './AdminActionMenu';
 import ChannelHealthDialog from './ChannelHealthDialog';
 import { credentialRotationOpening, credentialRotationChannels } from './credential-rotation-scope';
 import ChannelKeyPoolEditor from './ChannelKeyPoolEditor';
@@ -6,8 +7,8 @@ import KeyGroupCandidateDialog from './KeyGroupCandidateDialog';
 import { useEffect, useId, useRef, useState } from 'react';
 import { LoaderCircle, Radio } from 'lucide-react';
 import { IconPlus } from '@douyinfe/semi-icons';
-import { Button, Input, Popover, Select, TextArea, Typography } from '@douyinfe/semi-ui';
-import { Disclosure, GridTable, Row, Cell, MoreActions, Modal, Notice, Status } from './ModelOperationsUI';
+import { Button, Input, Select, TextArea, Typography } from '@douyinfe/semi-ui';
+import { Disclosure, GridTable, Row, Cell, Modal, Notice, Status } from './ModelOperationsUI';
 import { supplierChannelResources, supplierChannelAssociations, supplierChannelCode, supplierChannelName, supplierKeyChannels } from './supplier-resources';
 import { Choice, Field } from './ModelMetadataForm';
 import { providerApiKeysDraft, providerApiKeyRows, providerApiKeyName, providerApiKeyId, maskProviderApiKey, providerModelConnectivityTest, MODEL_CONNECTIVITY_SCENARIOS } from './provider-management';
@@ -145,7 +146,7 @@ export default function ProviderApiKeys({ state, provider, ops }) {
   const candidate = provider.keyGroupCandidates?.find(row=>row.groupId===group.id);
   const affected = keyAction?.row ? supplierKeyChannels(state, provider, keyAction.row.apiKey.id) : [];
   const deleteGroupChannels = groupDeleting ? groupChannels(groupDeleting.id) : [];
-  const open = (event, callback) => { trigger.current = event.currentTarget; ops.setError(''); callback(); };
+  const open = (target, callback) => { trigger.current = target; ops.setError(''); callback(); };
   const close = () => { setEditing(null); setDeleting(null); setKeyAction(null); setGroupEditing(null); setGroupDeleting(null); ops.setError(''); requestAnimationFrame(() => (trigger.current?.isConnected ? trigger.current : document.getElementById(addTriggerId))?.focus()); };
   const keyRecord = row => ({ ...row, endpoints: supplierKeyChannels(state, provider, row.apiKey.id) });
   const move = async (event,row,direction) => {
@@ -158,18 +159,30 @@ export default function ProviderApiKeys({ state, provider, ops }) {
     {returning && <div className="supplier-resource-notice"><Notice>为渠道 {supplierChannelCode(returning)} · {supplierChannelName(provider, returning)} 配置密钥组。<Button theme="borderless" type="tertiary" onClick={() => ops.go({ tab: 'catalogue', resource: returning.id, credentialChannel: null })}>返回渠道配置</Button></Notice></div>}
     <div className="supplier-key-groups">
       <aside className="supplier-key-group-sidebar" aria-label="API 密钥组">
-        <div className="supplier-key-group-heading"><Typography.Title heading={5} component="h3">密钥组</Typography.Title><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={event => open(event, () => setGroupEditing({ group: null }))}>新建组</Button></div>
+        <div className="supplier-key-group-heading"><Typography.Title heading={5} component="h3">密钥组</Typography.Title><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={event => open(event.currentTarget, () => setGroupEditing({ group: null }))}>新建组</Button></div>
         <nav className="supplier-key-group-options" aria-label="选择密钥组">{groups.map(item => <Button key={item.id} type={item.id === group.id ? 'primary' : 'tertiary'} theme={item.id === group.id ? 'light' : 'borderless'} aria-pressed={item.id === group.id} title={item.name} onClick={() => ops.proceed(() => { setSelectedGroupId(item.id); ops.setError(''); })}><span>{item.name}</span><small>{item.keyIds.length}</small></Button>)}</nav>
       </aside>
       <section className="supplier-key-group-content" aria-label={group.name}>
-        <div className="supplier-key-group-toolbar"><Typography.Title heading={5} component="h3">{group.name}</Typography.Title><div className="supplier-row-actions">{group.id !== 'default' && <><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} onClick={event => open(event, () => setGroupEditing({ group }))}>重命名</Button><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} onClick={event => open(event, () => setGroupDeleting(group))}>删除组</Button></>}<Button id={addTriggerId} size="small" disabled={!ops.can} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={event => open(event, () => setEditing({ record: null, group }))}>添加 API 密钥</Button></div></div>
-        {candidate && <Notice>此组有待处理的密钥{candidate.priorityChange?'优先级调整':'轮换'}。<Button theme="borderless" type="tertiary" disabled={!ops.can} onClick={event=>open(event,()=>setKeyAction({kind:'priority',group}))}>继续处理</Button></Notice>}
+        <div className="supplier-key-group-toolbar"><Typography.Title heading={5} component="h3">{group.name}</Typography.Title><div className="supplier-row-actions">{group.id !== 'default' && <><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} onClick={event => open(event.currentTarget, () => setGroupEditing({ group }))}>重命名</Button><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} onClick={event => open(event.currentTarget, () => setGroupDeleting(group))}>删除组</Button></>}<Button id={addTriggerId} size="small" disabled={!ops.can} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={event => open(event.currentTarget, () => setEditing({ record: null, group }))}>添加 API 密钥</Button></div></div>
+        {candidate && <Notice>此组有待处理的密钥{candidate.priorityChange?'优先级调整':'轮换'}。<Button theme="borderless" type="tertiary" disabled={!ops.can} onClick={event=>open(event.currentTarget,()=>setKeyAction({kind:'priority',group}))}>继续处理</Button></Notice>}
         <GridTable className="supplier-key-table supplier-group-key-table" headings={['优先级', '密钥名称 / ID', 'API 密钥', '当前绑定渠道', '状态', '操作']} empty={!rows.length} emptyMessage="当前密钥组暂无密钥，请点击添加 API 密钥。">
-          {rows.map((row, index) => { const channels = credentialRotationChannels(state, provider, row.apiKey.id); return <Row key={row.apiKey.id}><Cell><span>{index + 1}</span></Cell><Cell><span>{providerApiKeyName(row.apiKey)}</span><small><code>{providerApiKeyId(row.apiKey)}</code></small></Cell><Cell><code>{maskProviderApiKey(row.apiKey.maskedKey)}</code></Cell><Cell><Popover position="bottomLeft" content={<div className="supplier-key-reference-popover"><strong>当前绑定渠道（{channels.length}）</strong>{channels.map(channel => <Button theme="borderless" type="tertiary" key={channel.id} onClick={() => ops.go({ tab: 'catalogue', resource: channel.id })}>{supplierChannelCode(channel)} · {supplierChannelName(provider, channel)}</Button>)}{!channels.length && <p>暂无渠道绑定</p>}</div>}><Button theme="borderless" type="tertiary" size="small" aria-label={'查看密钥 ' + providerApiKeyId(row.apiKey) + ' 当前绑定渠道'}>{channels.length} 个</Button></Popover></Cell><Cell><Status good={row.apiKey.status !== 'disabled' && !row.apiKey.revokedAt}>{row.apiKey.revokedAt ? '已撤销' : row.apiKey.status === 'disabled' ? '已停用' : '已配置'}</Status></Cell><Cell><div className="supplier-row-actions"><Button theme="borderless" type="tertiary" aria-label={`检测密钥 ${row.apiKey.id}`} disabled={!ops.can || Boolean(row.apiKey.revokedAt) || row.apiKey.status === 'disabled'} onClick={event => open(event, () => setKeyAction({ kind: 'test', row }))}>检测</Button>
+          {rows.map((row, index) => { const channels = credentialRotationChannels(state, provider, row.apiKey.id); return <Row key={row.apiKey.id}><Cell><span>{index + 1}</span></Cell><Cell><span>{providerApiKeyName(row.apiKey)}</span><small><code>{providerApiKeyId(row.apiKey)}</code></small></Cell><Cell><code>{maskProviderApiKey(row.apiKey.maskedKey)}</code></Cell><Cell><AdminActionMenu label={'查看密钥 ' + providerApiKeyId(row.apiKey) + ' 当前绑定渠道'}
+              items={channels.length ? channels.map(channel => ({
+                node: 'item', name: supplierChannelCode(channel) + ' · ' + supplierChannelName(provider, channel),
+                onClick: () => ops.go({ tab: 'catalogue', resource: channel.id }),
+              })) : [{ node: 'title', name: '暂无渠道绑定' }]}>{channels.length} 个</AdminActionMenu></Cell><Cell><Status good={row.apiKey.status !== 'disabled' && !row.apiKey.revokedAt}>{row.apiKey.revokedAt ? '已撤销' : row.apiKey.status === 'disabled' ? '已停用' : '已配置'}</Status></Cell><Cell><div className="supplier-row-actions"><Button theme="borderless" type="tertiary" aria-label={`检测密钥 ${row.apiKey.id}`} disabled={!ops.can || Boolean(row.apiKey.revokedAt) || row.apiKey.status === 'disabled'} onClick={event => open(event.currentTarget, () => setKeyAction({ kind: 'test', row }))}>检测</Button>
 
-            <Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} aria-label={(channels.some(channel => channel.authMode === 'pool') ? '管理密钥池：' : '替换：') + providerApiKeyId(row.apiKey)} onClick={event => open(event, () => channels.some(channel => channel.authMode === 'pool') ? setKeyAction({ kind: 'pool', row, group }) : setEditing({ record: keyRecord(row), group }))}>{channels.some(channel => channel.authMode === 'pool') ? '管理密钥池' : '替换'}</Button>
+            <Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} aria-label={(channels.some(channel => channel.authMode === 'pool') ? '管理密钥池：' : '替换：') + providerApiKeyId(row.apiKey)} onClick={event => open(event.currentTarget, () => channels.some(channel => channel.authMode === 'pool') ? setKeyAction({ kind: 'pool', row, group }) : setEditing({ record: keyRecord(row), group }))}>{channels.some(channel => channel.authMode === 'pool') ? '管理密钥池' : '替换'}</Button>
             <Button theme="borderless" type="tertiary" size="small" aria-label={'上移 '+providerApiKeyName(row.apiKey)} disabled={!ops.can || reordering || Boolean(ops.conflict) || Boolean(candidate) || index===0} onClick={event=>move(event,row,'up')}>上移</Button><Button theme="borderless" type="tertiary" size="small" aria-label={'下移 '+providerApiKeyName(row.apiKey)} disabled={!ops.can || reordering || Boolean(ops.conflict) || Boolean(candidate) || index===rows.length-1} onClick={event=>move(event,row,'down')}>下移</Button>
-            <MoreActions label="密钥更多操作" disabled={!ops.can}><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can || Boolean(row.apiKey.revokedAt) || !provider.apiKeys?.some(key => key.id === row.apiKey.id)} aria-label={(row.apiKey.status === 'disabled' ? '启用：' : '停用：') + providerApiKeyId(row.apiKey)} onClick={event => open(event, () => setKeyAction({ kind: 'toggle', row, group }))}>{row.apiKey.status === 'disabled' ? '启用' : '停用'}</Button><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} aria-label={'移除：' + providerApiKeyId(row.apiKey)} onClick={event => open(event, () => setDeleting({ ...keyRecord(row), group, nextKey: index === 0 ? rows[1]?.apiKey : null }))}>移除</Button><Button theme="borderless" type="danger" size="small" disabled={!ops.can || Boolean(row.apiKey.revokedAt)} onClick={event => open(event, () => setKeyAction({ kind: 'revoke', row, group }))}>紧急撤销</Button></MoreActions>
+            <AdminActionMenu label={'密钥更多操作 ' + providerApiKeyId(row.apiKey)} disabled={!ops.can} items={[
+              { node: 'item', name: row.apiKey.status === 'disabled' ? '启用' : '停用',
+                disabled: Boolean(row.apiKey.revokedAt) || !provider.apiKeys?.some(key => key.id === row.apiKey.id),
+                onClick: button => open(button, () => setKeyAction({ kind: 'toggle', row, group })) },
+              { node: 'item', name: '移除',
+                onClick: button => open(button, () => setDeleting({ ...keyRecord(row), group, nextKey: index === 0 ? rows[1]?.apiKey : null })) },
+              { node: 'item', name: '紧急撤销', type: 'danger', disabled: Boolean(row.apiKey.revokedAt),
+                onClick: button => open(button, () => setKeyAction({ kind: 'revoke', row, group })) },
+            ]}/>
           </div></Cell></Row>; })}
         </GridTable>
       </section>
