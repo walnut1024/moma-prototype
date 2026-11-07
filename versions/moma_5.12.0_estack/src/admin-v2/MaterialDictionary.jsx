@@ -1,7 +1,8 @@
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import {useEffect, useRef, useState} from 'react';
-import { Banner, Button, Form, Input, Modal, Space, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Form, Input, Space, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from './AdminOverlay';
 import {IconPlus, IconSearch} from '@douyinfe/semi-icons';
 import {TARIFF_KINDS, tariffDictionaryEntries, tariffDictionaryId} from './tariff-dictionary';
 

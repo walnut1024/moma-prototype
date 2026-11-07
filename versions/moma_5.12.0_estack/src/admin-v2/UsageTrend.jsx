@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Button, Card, Checkbox, Input, Modal, Popover, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Checkbox, Input, Popover, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from './AdminOverlay';
 import { IconMaximize, IconMore } from '@douyinfe/semi-icons';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import { chartColor } from '../components/chart-style.mjs';

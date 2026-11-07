@@ -1,6 +1,7 @@
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
-import { Descriptions, Modal, Typography } from '@douyinfe/semi-ui';
+import { Descriptions, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from './AdminOverlay';
 import './semi-enterprise.css';
 
 export function EnterpriseStatus({ value, enterprise = false }) {

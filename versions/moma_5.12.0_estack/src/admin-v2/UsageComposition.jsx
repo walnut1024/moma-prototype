@@ -1,6 +1,7 @@
 import Table from './AdminTable';
 import { useState } from 'react';
-import { Button, Card, Modal, Space, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Space, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from './AdminOverlay';
 import { DonutChart, TimeSeriesChart } from '../components/AnalyticsCharts';
 import { chartColor } from '../components/chart-style.mjs';
 import { AnalysisHelp } from './AnalysisMetric';

@@ -1,7 +1,8 @@
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useEffect, useState } from 'react';
-import { Button, Card, Descriptions, Input, Modal, Space, Timeline, Toast, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Descriptions, Input, Space, Timeline, Toast, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from './AdminOverlay';
 import { IconDownload, IconSearch } from '@douyinfe/semi-icons';
 import { observedUsageTotal } from '../business-facts.mjs';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';

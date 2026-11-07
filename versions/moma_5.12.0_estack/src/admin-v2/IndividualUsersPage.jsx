@@ -1,7 +1,8 @@
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useEffect, useState } from 'react';
-import { Avatar, Banner, Button, Card, Checkbox, Descriptions, Form, Input, Modal, Progress, Space, Tabs, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
+import { Avatar, Banner, Button, Card, Checkbox, Descriptions, Form, Input, Progress, Space, Tabs, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from './AdminOverlay';
 import { IconSearch } from '@douyinfe/semi-icons';
 import { MODEL_ORDER_COLUMNS } from '../model-order-display.mjs';
 import { maskApiKey } from '../api-key-utils.mjs';

@@ -1,6 +1,7 @@
-import { Children, cloneElement, isValidElement, useCallback, useId } from 'react';
-import { Banner, Button, Form, Input, InputNumber, Modal as SemiModal, Select, TextArea, SideSheet, Space, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { Children, cloneElement, isValidElement, useId } from 'react';
+import { Banner, Button, Form, Input, InputNumber, Select, TextArea, Space, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { IconHelpCircle } from '@douyinfe/semi-icons';
+import { AdminModal, AdminSideSheet } from './AdminOverlay';
 import { modelFieldDescriptions } from './model-field-descriptions';
 import './semi-services.css';
 
@@ -61,25 +62,16 @@ export function FieldLabel({ name, description }) {
   const help = description || modelFieldDescriptions[name];
   return <Space spacing={4}>{name}{help && <Tooltip content={help}><Button theme="borderless" type="tertiary" icon={<IconHelpCircle aria-hidden="true"/>} aria-label={`${name}说明`}/></Tooltip>}</Space>;
 }
-export function Modal({ title, description, children, onClose, wide, drawer = false, drawerSide = 'right', footer, className = '' }) {
-  const titleId = useId();
-  const labelDialog = useCallback(node => {
-    const dialog = node?.closest('[role="dialog"]');
-    if (!dialog) return;
-    // Semi Modal reuses its title ID across portals and SideSheet does not label the dialog.
-    if (title != null) dialog.setAttribute('aria-labelledby', titleId);
-    if (drawer && !dialog.contains(document.activeElement)) dialog.focus({ preventScroll: true });
-  }, [drawer, title, titleId]);
-  const heading = title == null ? title : <span id={titleId}>{title}</span>;
-  const content = <div className="ss-dialog-content" ref={labelDialog}>
+export function Modal({ title, description, children, onClose, wide, drawer = false, drawerSide = 'right', footer, className = '', maskClosable }) {
+  const content = <div className="ss-dialog-content">
     {description && <Typography.Paragraph type="tertiary">{description}</Typography.Paragraph>}{children}
   </div>;
   const actions = footer ? <div className="ss-footer">{footer}</div> : null;
   return drawer
-    ? <SideSheet visible className={`semi-services ${className}`} title={heading} placement={drawerSide}
-        width={`min(${wide ? 1000 : 720}px, 100vw)`} onCancel={onClose} closeOnEsc footer={actions}>{content}</SideSheet>
-    : <SemiModal visible className={`semi-services ${className}`} title={heading}
-        width={`min(${wide ? 960 : 448}px, calc(100vw - 32px))`} onCancel={onClose} footer={actions}>{content}</SemiModal>;
+    ? <AdminSideSheet visible className={`semi-services ${className}`} title={title} placement={drawerSide}
+        width={`min(${wide ? 1000 : 720}px, 100vw)`} onCancel={onClose} closeOnEsc maskClosable={maskClosable} footer={actions}>{content}</AdminSideSheet>
+    : <AdminModal visible className={`semi-services ${className}`} title={title}
+        width={`min(${wide ? 960 : 448}px, calc(100vw - 32px))`} onCancel={onClose} maskClosable={maskClosable} footer={actions}>{content}</AdminModal>;
 }
 export const serviceOperationsUi = {
   notify: message => Toast.success(message),

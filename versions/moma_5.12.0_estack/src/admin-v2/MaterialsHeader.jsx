@@ -1,4 +1,5 @@
-import { Button, Modal, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
+import { Button, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from './AdminOverlay';
 import { TARIFF_KINDS } from './tariff-dictionary';
 import './semi-materials.css';
 

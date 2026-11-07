@@ -2,7 +2,8 @@ import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, ConfigProvider, Input, InputNumber, Modal, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, ConfigProvider, Input, InputNumber, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from './AdminOverlay';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import { Choice } from './ServiceUI.jsx';
 import { accountTraffic, effectiveTraffic, trafficAccounts, trafficModels, trafficSettings } from './traffic-limits.js';
@@ -45,6 +46,7 @@ export default function TrafficOperations({ state, transact, conflict, dirtyRef 
   const [type, setType] = useState('all');
   const [selectedIds, setSelectedIds] = useState([]);
   const [draft, setDraft] = useState(null);
+  const [confirmation, setConfirmation] = useState(null);
   const [error, setError] = useState('');
   const root = useRef(null);
   const opener = useRef(null);
@@ -90,8 +92,8 @@ export default function TrafficOperations({ state, transact, conflict, dirtyRef 
 
   function discard(run = finish) {
     if (!isDirty) { run(); return; }
-    Modal.confirm({ title: '放弃未保存的修改？', okText: '放弃修改', cancelText: '继续编辑',
-      okButtonProps: { 'aria-label': '放弃修改' }, cancelButtonProps: { 'aria-label': '继续编辑' }, onOk: run });
+    setConfirmation({ title: '放弃未保存的修改？', okText: '放弃修改', cancelText: '继续编辑',
+      okButtonProps: { type: 'danger' }, onOk: run });
   }
 
   function persist(operation, id, data, expectedRevision, after) {
@@ -168,8 +170,7 @@ export default function TrafficOperations({ state, transact, conflict, dirtyRef 
     const content = settings.global
       ? `所选 ${selectedIds.length} 个账号将使用全局默认值（${number(settings.global.rpm)} RPM / ${number(settings.global.tpm)} TPM）。`
       : `全局默认值尚未配置。恢复后，所选 ${selectedIds.length} 个账号的通用额度将显示为未配置。`;
-    Modal.confirm({ title: '恢复默认额度？', content, okText: '恢复默认',
-      okButtonProps: { 'aria-label': '恢复默认' },
+    setConfirmation({ title: '恢复默认额度？', content, okText: '恢复默认',
       onOk: () => persist('batchAccounts', '', { accountIds: selectedIds, limit: null }, revision, clearSelection) });
   }
 
@@ -188,6 +189,14 @@ export default function TrafficOperations({ state, transact, conflict, dirtyRef 
 
   return <ConfigProvider locale={zhCN}><section ref={root} className="traffic-page admin-page-stack">
     <AdminPageHeading title="限流配置"/>
+    {confirmation && <Modal visible title={confirmation.title} okText={confirmation.okText}
+      cancelText={confirmation.cancelText} okButtonProps={confirmation.okButtonProps}
+      onCancel={() => setConfirmation(null)} onOk={() => {
+        setConfirmation(null);
+        confirmation.onOk();
+      }}>
+      {confirmation.content}
+    </Modal>}
     {conflict && <Banner type="warning" description="数据已变化。请载入新版本后重新开始编辑。"/>}
     <Tabs type="line" activeKey={tab} onChange={value => {
       if (value !== tab) discard(() => { finish(false); clearSelection(); setTab(value); });

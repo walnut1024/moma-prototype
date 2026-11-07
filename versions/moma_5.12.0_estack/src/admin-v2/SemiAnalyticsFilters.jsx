@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react';
-import { Banner, Button, Checkbox, DatePicker, Input, Modal, Popover, Space, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Checkbox, DatePicker, Input, Popover, Space, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from './AdminOverlay';
 import { IconCalendar, IconChevronDown } from '@douyinfe/semi-icons';
 import { TIME_PRESETS } from '../components/FilterControls';
 import { dayOf, validAnalyticsRange } from './analytics';

@@ -1,6 +1,7 @@
 import Table from './AdminTable';
 import { useRef, useState } from 'react';
-import { Banner, Button, Input, Modal, Select, Space, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Input, Select, Space, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { libraryRemovalIssue, modelCatalogue, modelReleaseOrder, MODEL_CATALOGUE_TYPES } from './model-library';
 import { modelCategory } from './model-management';

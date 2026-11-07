@@ -1,7 +1,8 @@
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useState } from 'react';
-import { Banner, Button, Card, Form, Input, Modal, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Form, Input, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus, IconSearch, IconUpload } from '@douyinfe/semi-icons';
 import { DEFAULT_PAGE_SIZE, FilterReset, FilterToolbar, PAGE_SIZES } from '../components/FilterControls';
 import OperationInputDialog from '../components/OperationInputDialog';

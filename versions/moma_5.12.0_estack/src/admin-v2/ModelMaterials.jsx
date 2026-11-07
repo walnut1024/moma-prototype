@@ -1,4 +1,5 @@
-import {Banner, Button, Modal, Typography} from '@douyinfe/semi-ui';
+import {Banner, Button, Typography} from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from './AdminOverlay';
 import MaterialsHeader, {materialOperationsUi} from './MaterialsHeader';
 import MaterialCatalogue, {NewMaterialButton} from './MaterialCatalogue';
 import ModelMaterialDrawer from './ModelMaterialDrawer';

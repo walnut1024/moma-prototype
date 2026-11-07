@@ -1,4 +1,5 @@
-import { Button as SemiButton, Form, Input as SemiInput, Modal, Popover as SemiPopover, Space, Tag, Typography } from '@douyinfe/semi-ui';
+import { Button as SemiButton, Form, Input as SemiInput, Popover as SemiPopover, Space, Tag, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from '../admin-v2/AdminOverlay';
 import { IconBookmark, IconChevronDown, IconDelete } from '@douyinfe/semi-icons';
 import { AdminUIContext } from './admin-ui-context';
 import { useContext, useEffect, useState } from 'react';

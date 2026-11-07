@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import { Banner, Button, Form, Modal, Typography } from '@douyinfe/semi-ui';
+import { useId, useState } from 'react';
+import { Banner, Button, Form, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from '../admin-v2/AdminOverlay';
 
 export default function OperationInputDialog({ title, description, label, initialValue = '', numeric = false, onSubmit, onClose }) {
+  const formId = useId();
   const [error, setError] = useState('');
   const save = ({ value }) => {
     try {
@@ -13,16 +15,16 @@ export default function OperationInputDialog({ title, description, label, initia
       setError(cause.message);
     }
   };
-  return <Modal visible title={title} width="min(480px, calc(100vw - 32px))" closeOnEsc maskClosable={false} footer={null} onCancel={onClose}>
+  return <Modal visible title={title} width="min(480px, calc(100vw - 32px))" closeOnEsc onCancel={onClose}
+    footer={<>
+      <Button onClick={onClose}>取消</Button>
+      <Button form={formId} htmlType="submit" theme="solid">确认保存</Button>
+    </>}>
     <Typography.Paragraph type="secondary">{description}</Typography.Paragraph>
-    <Form initValues={{ value: String(initialValue) }} onSubmit={save} onValueChange={() => setError('')}>
+    <Form id={formId} initValues={{ value: String(initialValue) }} onSubmit={save} onValueChange={() => setError('')}>
       {numeric ? <Form.Input field="value" label={label} type="number" min={1} step={1} autoFocus/>
         : <Form.TextArea field="value" label={label} autosize={{ minRows: 4, maxRows: 9 }} autoFocus/>}
       {error && <Banner type="danger" closeIcon={null} description={error}/>}
-      <div className="admin-form-actions">
-        <Button onClick={onClose}>取消</Button>
-        <Button htmlType="submit" theme="solid">确认保存</Button>
-      </div>
     </Form>
   </Modal>;
 }

@@ -1,6 +1,7 @@
 import AdminStatus from './AdminStatus';
 import { useMemo, useState } from 'react';
-import { Banner, Button, Card, Form, Input, Modal, Progress, Space, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Form, Input, Progress, Space, Typography } from '@douyinfe/semi-ui';
+import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import { FilterToolbar, FilterReset } from '../components/FilterControls';

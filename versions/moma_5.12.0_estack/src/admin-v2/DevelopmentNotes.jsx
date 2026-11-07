@@ -6,7 +6,7 @@ import { Button as LegacyButton } from '../components/ui/button';
 import { Banner, Button as SemiButton, Tabs as SemiTabs, Typography } from '@douyinfe/semi-ui';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { isServiceShowcase } from './service-showcase';
-import { Modal } from './ModelOperationsUI';
+import { Modal } from './ServiceUI';
 import './development-notes.css';
 
 function AdminNotesButton({ variant, ...props }) {
@@ -73,7 +73,7 @@ export default function DevelopmentNotes({ admin = false }) {
     <Button {...(admin ? { size: 'small', variant: 'outline' } : { size: 'sm', variant: 'outline', className: 'development-notes-trigger' })}
       aria-label="研发人员注意：功能说明（非产品功能）" title="研发说明 · 非产品功能"
       onClick={event => { trigger.current = event.currentTarget; setOpen(true); }}>研发人员注意</Button>
-    {open && <Modal wide title="研发人员注意" description="研发专用 · 非产品功能" onClose={close} footer={<Button variant="outline" onClick={close}>关闭说明</Button>}>
+    {open && <Modal wide maskClosable={!admin} title="研发人员注意" description="研发专用 · 非产品功能" onClose={close} footer={<Button variant="outline" onClick={close}>关闭说明</Button>}>
       <div className={admin ? 'development-notes-semi' : 'development-notes'}>
         {admin ? <Banner type="warning" closeIcon={null} description="此入口仅用于原型评审与研发对齐，不纳入正式产品功能。"/>
           : <p className="development-notes-label">此入口仅用于原型评审与研发对齐，不纳入正式产品功能。</p>}
