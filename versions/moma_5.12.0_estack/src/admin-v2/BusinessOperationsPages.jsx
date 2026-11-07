@@ -1,57 +1,317 @@
-import { toast } from 'sonner';
-import { displayBusinessCopy } from '../display-copy.mjs';
-import { useState } from "react";
-import { Download, Plus, Search, X } from "lucide-react";
-import { usageTotal } from "./observability";
-import { simulateRequest, orderActivationCommand } from "./domain";
-
-import { Button } from '../components/ui/button';
-import { Dialog, DialogContent, DialogTitle } from '../components/ui/dialog';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/table';
+import { useState } from 'react';
+import { Banner, Button, Card, Form, Input, Modal, Space, Table, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { IconPlus, IconSearch, IconUpload } from '@douyinfe/semi-icons';
+import { DEFAULT_PAGE_SIZE, FilterReset, FilterToolbar, PAGE_SIZES } from '../components/FilterControls';
 import OperationInputDialog from '../components/OperationInputDialog';
-import './enterprise.css';
+import { displayBusinessCopy } from '../display-copy.mjs';
+import AdminPageHeading from './AdminPageHeading';
+import { Choice } from './ServiceUI';
+import { simulateRequest, orderActivationCommand } from './domain';
+import { usageTotal } from './observability';
+import { canMutate } from './store';
 
-const uid = prefix => `${prefix}-${Date.now()}`;
-const title = { goods:"商品与套餐",orders:"订单与订阅",announcements:"公告与服务通知",metering:"计量明细",ledger:"账户与额度流水",bills:"客户账单",settlement:"服务商对账与结算",adjustments:"退款与调账" };
-const configs = {
-  goods:{collection:"products",cols:[["code","商品编码"],["name","商品名称"],["billingMode","计费方式"],["price","基础价格"],["status","状态"]],fields:[["code","商品编码"],["name","商品名称"],["billingMode","计费方式"],["price","基础价格","number"]]},
-  announcements:{collection:"announcements",cols:[["title","标题"],["audience","受众"],["channel","渠道"],["effectiveAt","生效时间"],["status","状态"]],fields:[["title","标题"],["audience","受众"],["channel","渠道"],["effectiveAt","生效时间","date"]]},
+const uid = prefix => `${prefix}-${crypto.randomUUID()}`;
+const { Text, Title } = Typography;
+const statuses = {
+  green: ['已启用', '已上架', '生效中', '已开通', '已完成', '已出账', '已确认', '已执行', '已计量'],
+  orange: ['待开通', '待出账', '待审批', '待确认', '待结算', '有差异'],
+  red: ['已拒绝', '失败'],
 };
-function Head({pageId,action}) { return <div className="ent-page-head"><div><h1>{title[pageId]}</h1></div>{action}</div>; }
-function Badge({children}) { return <em className={`v2-status ${String(children).match(/待|停|失败|未/) ? "warn":""}`}>{children === "草稿" ? "未发布" : children}</em>; }
-function Managed({pageId,state,dispatch}) {
-  const cfg=configs[pageId],[query,setQuery]=useState(""),[editing,setEditing]=useState(false),[trigger,setTrigger]=useState(null),[error,setError]=useState("");
-  const rows=state[cfg.collection].filter(x=>x.billingType !== 'package' && Object.values(x).join(" ").toLowerCase().includes(query.trim().toLowerCase()));
-  const save=e=>{e.preventDefault();const values=Object.fromEntries(new FormData(e.currentTarget));for(const f of cfg.fields.filter(x=>x[2]==="number")){values[f[0]]=Number(values[f[0]]);if(values[f[0]]<0)return setError(`${f[1]}不能为负数`);}if(cfg.fields.some(f=>!values[f[0]]))return setError("请填写全部必填项");if (dispatch({type:"add",collection:cfg.collection,record:{id:uid(cfg.collection),...values,status:"已启用"}}))setEditing(false)};
-  const toggle=row=>dispatch({type:"update",collection:cfg.collection,id:row.id,changes:{status:["已启用","已上架","生效中"].includes(row.status)?"停用":"已启用"}});
-  return <div className="enterprise-page gw-page"><Head pageId={pageId} action={cfg.fields&&<Button className="v2-primary" onClick={event=>{setTrigger(event.currentTarget);setEditing(true)}}><Plus/> 新建</Button>}/><section className="v2-list"><div className="v2-toolbar"><label><Search/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={`搜索${title[pageId]}`}/></label></div><div className="v2-table"><Table><TableHeader><TableRow>{cfg.cols.map(c=><TableHead key={c[0]}>{c[1]}</TableHead>)}<TableHead>操作</TableHead></TableRow></TableHeader><TableBody>{rows.map(row=><TableRow key={row.id}>{cfg.cols.map(c=><TableCell key={c[0]}>{c[0]==="status"?<Badge>{row[c[0]]}</Badge>:Array.isArray(row[c[0]])?row[c[0]].length:displayBusinessCopy(row[c[0]])}</TableCell>)}<TableCell><Button variant="ghost" onClick={()=>toggle(row)}>{row.status==="停用"?"启用":"变更状态"}</Button></TableCell></TableRow>)}</TableBody></Table></div><footer>共 {rows.length} 条</footer></section>{editing&&<Dialog open onOpenChange={open=>{if(!open)setEditing(false)}}><DialogContent className="entity-drawer" showCloseButton={false} aria-describedby={undefined} onCloseAutoFocus={event=>{event.preventDefault();trigger?.focus()}}><header><DialogTitle>新建{title[pageId]}</DialogTitle><Button type="button" variant="ghost" size="icon" aria-label="关闭" onClick={()=>setEditing(false)}><X/></Button></header><form onSubmit={save}>{cfg.fields.map(f=><label key={f[0]}>{f[1]}<input name={f[0]} type={f[2]||"text"}/></label>)}{error&&<p className="form-error" role="alert">{error}</p>}<footer><Button variant="ghost" type="button" onClick={()=>setEditing(false)}>取消</Button><Button className="v2-primary">保存</Button></footer></form></DialogContent></Dialog>}</div>;
-}
-function Orders({state,dispatch}) {
-  const create = () => {
-    const product = state.products.find(item => item.code === 'TOKEN-100M' && item.status === '已上架'), tenant = state.tenants[0], stamp = Date.now();
-    if (!product || !tenant) return toast.error('缺少可订购商品或客户');
-    dispatch({type:'add',collection:'orders',record:{id:`order-${stamp}`,orderNo:`ORD-${stamp}`,tenantId:tenant.id,productId:product.id,amount:product.price,entitlement:100000000,quotaUnit:'Token',status:'待开通',timeline:['订单创建']}});
-  };
-  const activate = order => { try { const command = orderActivationCommand(state,order.id); if (command) dispatch(command); } catch (error) { toast.error(error.message); } };
-  const cancel = order => dispatch({type:'update',collection:'orders',id:order.id,changes:{status:'已退订',timeline:[...(order.timeline ?? []),'用户退订']}});
-  return <div className="enterprise-page gw-page"><Head pageId="orders" action={<Button className="v2-primary" onClick={create}><Plus/>创建订单</Button>}/><section className="v2-list"><div className="v2-table"><Table><TableHeader><TableRow>{['订单号','租户','商品','金额','权益','状态','时间线','操作'].map(label=><TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{state.orders.filter(order=>{const billing=order.billingType||state.products.find(product=>product.id===order.productId)?.billingType;return billing !== 'package'}).map(order=>{
-    const product=state.products.find(item=>item.id===order.productId),payg=(order.billingType||product?.billingType)==='payg'||product?.billingMode==='按量付费';
-    return <TableRow key={order.id}><TableCell>{order.orderNo || '—'}</TableCell><TableCell>{state.tenants.find(item=>item.id===order.tenantId)?.name || '未记录'}</TableCell><TableCell>{product?.name || '未记录'}</TableCell><TableCell>{Number.isFinite(order.amount)?'¥'+order.amount.toLocaleString('zh-CN'):'未记录'}</TableCell><TableCell>{payg?'不适用':Number.isFinite(order.entitlement)?order.entitlement.toLocaleString('zh-CN')+' '+(order.quotaUnit||product?.quotaUnit||(product?.code?.startsWith('TOKEN-')?'Token':'（单位未记录）')):'未记录'}</TableCell><TableCell><Badge>{order.status}</Badge></TableCell><TableCell>{order.timeline?.length?order.timeline.join(' → '):'未记录'}</TableCell><TableCell>{order.status==='待开通'&&<Button variant="ghost" onClick={()=>activate(order)}>开通</Button>}{['已开通','生效中'].includes(order.status)&&<Button variant="ghost" onClick={()=>cancel(order)}>退订</Button>}</TableCell></TableRow>;
-  })}</TableBody></Table></div></section></div>;
-}
-function Metering({state,dispatch}) { const [keyId,setKeyId]=useState(state.apiKeys.find(x=>x.status==="有效")?.id||""),[modelId,setModelId]=useState(state.models[0]?.id||""),[result,setResult]=useState(""); const run=()=>{const requestId=`req_demo_${Date.now()}`,planned=simulateRequest(state,{requestId,keyId,modelId,purpose:"metering-test"});if (!dispatch({type:"batch",objectId:requestId,changes:planned.changes,feedback:false})) return; toast[planned.request.httpStatus >= 400 ? "error" : "success"](`调用测试：HTTP ${planned.request.httpStatus}`); setResult(`${planned.request.httpStatus} · ${planned.request.requestId} · ${planned.request.attempts.at(-1).error||"已计量扣减"}`)}; return <div className="enterprise-page gw-page"><Head pageId="metering"/><section className="request-simulator"><div><b>调用测试</b><span>{result||"选择 API 密钥 ID 与 Model ID，验证鉴权、额度、限流、路由和计量"}</span></div><select aria-label="调用测试 API 密钥" value={keyId} onChange={e=>setKeyId(e.target.value)}>{state.apiKeys.map(x=><option value={x.id} key={x.id}>{x.keyId}</option>)}</select><select aria-label="调用测试模型" value={modelId} onChange={e=>setModelId(e.target.value)}>{state.models.map(x=><option value={x.id} key={x.id}>{x.modelId}</option>)}</select><Button className="v2-primary" onClick={run}>发送请求</Button></section><section className="v2-list"><div className="v2-table"><Table><TableHeader><TableRow><TableHead>Request ID</TableHead><TableHead>客户</TableHead><TableHead>Model ID</TableHead><TableHead>计量项</TableHead><TableHead>数量</TableHead><TableHead>价格快照</TableHead><TableHead>金额</TableHead><TableHead>状态</TableHead></TableRow></TableHeader><TableBody>{state.requests.slice(0,40).map(x=>{const qty=usageTotal(x.usage);return <TableRow key={x.id}><TableCell>{x.requestId}</TableCell><TableCell>{state.tenants.find(t=>t.id===x.tenantId)?.name}</TableCell><TableCell>{state.models.find(m=>m.id===x.modelId)?.modelId}</TableCell><TableCell>{Object.keys(x.usage).join(" / ")}</TableCell><TableCell>{qty.toLocaleString()}</TableCell><TableCell>2026-09 生效价</TableCell><TableCell>¥{x.httpStatus===200?(qty/1e6*1.8).toFixed(4):"0.0000"}</TableCell><TableCell><Badge>{x.httpStatus===200?"已计量":"不计费"}</Badge></TableCell></TableRow>})}</TableBody></Table></div></section></div> }
-function Ledger({state}) { return <div className="enterprise-page gw-page"><Head pageId="ledger"/><section className="v2-list"><div className="v2-table"><Table><TableHeader><TableRow><TableHead>流水 ID</TableHead><TableHead>账户</TableHead><TableHead>来源</TableHead><TableHead>类型</TableHead><TableHead>变动</TableHead><TableHead>余额</TableHead><TableHead>原因</TableHead><TableHead>状态</TableHead></TableRow></TableHeader><TableBody>{state.ledger.map(x=><TableRow key={x.id}><TableCell>{x.id}</TableCell><TableCell>{x.accountId}</TableCell><TableCell>{x.sourceId}</TableCell><TableCell>{x.type}</TableCell><TableCell>{x.delta.toLocaleString()} {x.unit}</TableCell><TableCell>{x.balance.toLocaleString()} {x.unit}</TableCell><TableCell>{x.reason}</TableCell><TableCell><Badge>{x.status}</Badge></TableCell></TableRow>)}</TableBody></Table></div></section></div> }
-function Bills({state,dispatch}) { const generate=()=>{const period="2026-09",existing=new Set(state.bills.map(x=>`${x.tenantId}:${x.period}`)),changes=state.tenants.filter(t=>!existing.has(`${t.id}:${period}`)).map(t=>{const amount=state.requests.filter(r=>r.tenantId===t.id&&r.httpStatus===200).reduce((sum,r)=>sum+usageTotal(r.usage)/1e6*1.8,0);return {type:"add",collection:"bills",record:{id:uid("bill"),billNo:`BILL-${period.replace("-","")}-${t.id}`,tenantId:t.id,period,amount:Number(amount.toFixed(2)),discount:0,paid:0,status:"待出账"}}});if(changes.length)dispatch({type:"batch",objectId:`bills:${period}`,changes})};return <div className="enterprise-page gw-page"><Head pageId="bills" action={<Button className="v2-primary" onClick={generate}>生成 2026-09 账单</Button>}/><section className="v2-list"><div className="v2-table"><Table><TableHeader><TableRow><TableHead>账单号</TableHead><TableHead>租户</TableHead><TableHead>账期</TableHead><TableHead>应收</TableHead><TableHead>优惠</TableHead><TableHead>实收</TableHead><TableHead>状态</TableHead><TableHead>操作</TableHead></TableRow></TableHeader><TableBody>{state.bills.map(x=><TableRow key={x.id}><TableCell>{x.billNo}</TableCell><TableCell>{state.tenants.find(t=>t.id===x.tenantId)?.name}</TableCell><TableCell>{x.period}</TableCell><TableCell>¥{x.amount}</TableCell><TableCell>¥{x.discount}</TableCell><TableCell>¥{x.paid}</TableCell><TableCell><Badge>{x.status}</Badge></TableCell><TableCell>{x.status==="待出账"&&<Button variant="ghost" onClick={()=>dispatch({type:"update",collection:"bills",id:x.id,changes:{status:"已出账"}})}>确认出账</Button>}</TableCell></TableRow>)}</TableBody></Table></div></section></div>}
-function Settlements({state,dispatch}) { const [previewed,setPreviewed]=useState(false); const preview=()=>{setPreviewed(true);toast.info("导入预览：12 行匹配，1 行金额差异 ¥2.50，0 行格式错误")};return <div className="enterprise-page gw-page"><Head pageId="settlement" action={<Button variant="ghost" onClick={preview}><Download/> 导入对账预览</Button>}/><section className="v2-list"><div className="v2-table"><Table><TableHeader><TableRow><TableHead>结算单</TableHead><TableHead>服务商</TableHead><TableHead>账期</TableHead><TableHead>平台金额</TableHead><TableHead>服务商金额</TableHead><TableHead>差异</TableHead><TableHead>状态</TableHead><TableHead>操作</TableHead></TableRow></TableHeader><TableBody>{state.settlements.map(x=><TableRow key={x.id}><TableCell>{x.settlementNo}</TableCell><TableCell>{state.providers.find(p=>p.id===x.providerId)?.name}</TableCell><TableCell>{x.period}</TableCell><TableCell>¥{x.platformAmount}</TableCell><TableCell>¥{x.providerAmount}</TableCell><TableCell>¥{x.difference}</TableCell><TableCell><Badge>{x.status}</Badge></TableCell><TableCell><Button variant="ghost" disabled={!previewed||x.difference!==0} onClick={()=>dispatch({type:"update",collection:"settlements",id:x.id,changes:{status:"已确认"}})}>确认结算</Button>{x.difference!==0&&<Button variant="ghost" onClick={()=>dispatch({type:"update",collection:"settlements",id:x.id,changes:{difference:0,status:"差异已处理"}})}>处理差异</Button>}</TableCell></TableRow>)}</TableBody></Table></div></section></div>}
-function Adjustments({state,dispatch}) { const [review,setReview]=useState(null); const decide=reason=>{const x=state.adjustments.find(item=>item.id===review.order.id),approved=review.approved; if(!x||x.status!=="待审批") throw new Error("申请状态已变化，请重新打开操作"); const bill=state.bills.find(b=>b.id===x.billId); if(!bill) throw new Error("关联账单不存在");if(approved&&Math.abs(x.amount)>bill.amount)throw new Error("调账金额不能超过账单应收");const changes=[{type:"update",collection:"adjustments",id:x.id,changes:{status:approved?"已执行":"已拒绝",approvalReason:reason}}];if(approved&&!state.ledger.some(l=>l.sourceId===`adjustment:${x.id}`))changes.push({type:"add",collection:"ledger",record:{id:uid("ledger"),accountId:bill.tenantId,sourceId:`adjustment:${x.id}`,type:"账单冲正",delta:-x.amount,balance:0,reason,status:"已完成"}});return dispatch({type:"batch",objectId:x.adjustmentNo,changes})};return <div className="enterprise-page gw-page"><Head pageId="adjustments"/><section className="v2-list"><div className="v2-table"><Table><TableHeader><TableRow><TableHead>申请号</TableHead><TableHead>账单</TableHead><TableHead>金额</TableHead><TableHead>原因</TableHead><TableHead>审批意见</TableHead><TableHead>状态</TableHead><TableHead>操作</TableHead></TableRow></TableHeader><TableBody>{state.adjustments.map(x=><TableRow key={x.id}><TableCell>{x.adjustmentNo}</TableCell><TableCell>{state.bills.find(b=>b.id===x.billId)?.billNo}</TableCell><TableCell>¥{x.amount}</TableCell><TableCell>{x.reason}</TableCell><TableCell>{x.approvalReason||"—"}</TableCell><TableCell><Badge>{x.status}</Badge></TableCell><TableCell>{x.status==="待审批"&&<><Button variant="ghost" onClick={()=>setReview({order:x,approved:true})}>通过并执行</Button><Button variant="ghost" onClick={()=>setReview({order:x,approved:false})}>驳回</Button></>}</TableCell></TableRow>)}</TableBody></Table></div></section>{review&&<OperationInputDialog title={review.approved?"通过调账":"驳回调账"} description={review.order.adjustmentNo} label="审批意见" onSubmit={decide} onClose={()=>setReview(null)}/>}</div>}
+const titles = { goods: '商品与套餐', orders: '订单与订阅', announcements: '公告与服务通知', metering: '计量明细',
+  ledger: '账户与额度流水', bills: '客户账单', settlement: '服务商对账与结算', adjustments: '退款与调账' };
+const configs = {
+  goods: { collection: 'products', fields: [
+    ['code', '商品编码'], ['name', '商品名称'], ['billingMode', '计费方式'], ['price', '基础价格', 'number'],
+  ] },
+  announcements: { collection: 'announcements', fields: [
+    ['title', '标题'], ['audience', '受众'], ['channel', '渠道'], ['effectiveAt', '生效时间', 'date'],
+  ] },
+};
+const editable = (state, collection) => !state.storageError && canMutate(state.currentRole, { type: 'update', collection });
+const statusColumn = { title: '状态', dataIndex: 'status', width: 100, render: value => <Status value={value}/> };
+const money = amount => amount == null ? '—' : `¥${amount}`;
+const actionColumn = render => ({ title: '操作', key: 'actions', width: 155, render: (_, row) => render(row) });
 
-export default function BusinessOperationsPage({pageId,state,dispatch}) {
-  if(configs[pageId]) return <Managed pageId={pageId} state={state} dispatch={dispatch}/>;
-  if(pageId==="orders") return <Orders state={state} dispatch={dispatch}/>;
-  if(pageId==="metering") return <Metering state={state} dispatch={dispatch}/>;
-  if(pageId==="ledger") return <Ledger state={state}/>;
-  if(pageId==="bills") return <Bills state={state} dispatch={dispatch}/>;
-  if(pageId==="settlement") return <Settlements state={state} dispatch={dispatch}/>;
-  if(pageId==="adjustments") return <Adjustments state={state} dispatch={dispatch}/>;
-  return null;
+function Status({ value }) {
+  const color = Object.keys(statuses).find(color => statuses[color].includes(value)) || 'grey';
+  return <Tag color={color}>{value === '草稿' ? '未发布' : value}</Tag>;
+}
+
+function BusinessTable({ rows, columns, minWidth = 850, children, empty = '暂无记录', tableKey }) {
+  const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
+  return <Card>
+    {children}
+    <Table key={tableKey} size="small" rowKey="id" dataSource={rows} columns={columns} scroll={{ x: `max(100%, ${minWidth}px)` }}
+      empty={empty} pagination={{ pageSize: size, pageSizeOpts: PAGE_SIZES, showSizeChanger: true, showTotal: true, onPageSizeChange: setSize }}/>
+  </Card>;
+}
+
+function Managed({ pageId, state, dispatch }) {
+  const { collection, fields } = configs[pageId];
+  const title = titles[pageId];
+  const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState('');
+  const canWrite = editable(state, collection);
+  const rows = state[collection].filter(row => row.billingType !== 'package'
+    && Object.values(row).join(' ').toLowerCase().includes(query.trim().toLowerCase()));
+  const toggle = row => dispatch({ type: 'update', collection, id: row.id,
+    changes: { status: ['已启用', '已上架', '生效中'].includes(row.status) ? '停用' : '已启用' } });
+  const columns = [
+    ...fields.map(([dataIndex, title, type]) => ({
+      title, dataIndex, align: type === 'number' ? 'right' : 'left',
+      render: value => Array.isArray(value) ? value.length : displayBusinessCopy(value),
+    })),
+    statusColumn,
+    actionColumn(row => <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => toggle(row)}>
+      {row.status === '停用' ? '启用' : '变更状态'}
+    </Button>),
+  ];
+  const close = () => { setEditing(false); setError(''); };
+  const save = values => {
+    const record = { ...values };
+    for (const [field, label, type] of fields) {
+      if (type === 'number') {
+        record[field] = Number(values[field]);
+        if (record[field] < 0) return setError(`${label}不能为负数`);
+      }
+      if (!record[field]) return setError('请填写全部必填项');
+    }
+    if (dispatch({ type: 'add', collection, record: { id: uid(collection), ...record, status: '已启用' } })) close();
+  };
+  return <>
+    <AdminPageHeading title={title}>
+      <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite} onClick={() => setEditing(true)}>新建</Button>
+    </AdminPageHeading>
+    <BusinessTable tableKey={query} rows={rows} columns={columns} minWidth={760} empty={query ? '没有符合条件的记录' : '暂无记录'}>
+      <FilterToolbar className="admin-list-toolbar">
+        <Input className="admin-list-search" showClear prefix={<IconSearch aria-hidden="true"/>} aria-label={`搜索${title}`}
+          placeholder={`搜索${title}`} value={query} onChange={setQuery}/>
+        <FilterReset onClick={() => setQuery('')}/>
+      </FilterToolbar>
+    </BusinessTable>
+    {editing && <Modal visible title={`新建${title}`} width="min(520px, calc(100vw - 32px))"
+      maskClosable={false} closeOnEsc footer={null} onCancel={close}>
+      <Form onSubmit={save} onValueChange={() => setError('')}>
+        {fields.map(([field, label, type]) => type === 'date'
+          ? <Form.DatePicker key={field} field={field} label={label} type="date" format="yyyy-MM-dd" onChangeWithDateFirst={false} zIndex={1200}/>
+          : <Form.Input key={field} field={field} label={label} type={type || 'text'}/>)}
+        {error && <Banner type="danger" closeIcon={null} description={error}/>}
+        <div className="admin-form-actions">
+          <Button onClick={close}>取消</Button>
+          <Button htmlType="submit" theme="solid" disabled={!canWrite}>保存</Button>
+        </div>
+      </Form>
+    </Modal>}
+  </>;
+}
+
+function Orders({ state, dispatch }) {
+  const canWrite = editable(state, 'orders');
+  const productFor = order => state.products.find(item => item.id === order.productId);
+  const rows = state.orders.filter(order => (order.billingType || productFor(order)?.billingType) !== 'package');
+  const create = () => {
+    const product = state.products.find(item => item.code === 'TOKEN-100M' && item.status === '已上架');
+    const tenant = state.tenants[0];
+    if (!product || !tenant) return Toast.error('缺少可订购商品或客户');
+    dispatch({ type: 'add', collection: 'orders', record: {
+      id: uid('order'), orderNo: `ORD-${Date.now()}`, tenantId: tenant.id, productId: product.id, amount: product.price,
+      entitlement: 100000000, quotaUnit: 'Token', status: '待开通', timeline: ['订单创建'],
+    } });
+  };
+  const activate = order => {
+    try {
+      const command = orderActivationCommand(state, order.id);
+      if (command) dispatch(command);
+    } catch (error) { Toast.error(error.message); }
+  };
+  const cancel = order => dispatch({ type: 'update', collection: 'orders', id: order.id,
+    changes: { status: '已退订', timeline: [...(order.timeline ?? []), '用户退订'] } });
+  return <>
+    <AdminPageHeading title={titles.orders}>
+      <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite} onClick={create}>创建订单</Button>
+    </AdminPageHeading>
+    <BusinessTable rows={rows} minWidth={1100} columns={[
+      { title: '订单号', dataIndex: 'orderNo', render: value => value || '—' },
+      { title: '租户', render: (_, order) => state.tenants.find(item => item.id === order.tenantId)?.name || '未记录' },
+      { title: '商品', render: (_, order) => productFor(order)?.name || '未记录' },
+      { title: '金额', dataIndex: 'amount', align: 'right', render: amount =>
+        Number.isFinite(amount) ? money(amount.toLocaleString('zh-CN')) : '未记录' },
+      { title: '权益', render: (_, order) => {
+        const product = productFor(order);
+        if ((order.billingType || product?.billingType) === 'payg' || product?.billingMode === '按量付费') return '不适用';
+        const unit = order.quotaUnit || product?.quotaUnit || (product?.code?.startsWith('TOKEN-') ? 'Token' : '（单位未记录）');
+        return Number.isFinite(order.entitlement) ? `${order.entitlement.toLocaleString('zh-CN')} ${unit}` : '未记录';
+      } },
+      statusColumn,
+      { title: '时间线', dataIndex: 'timeline', render: timeline => timeline?.length ? timeline.join(' → ') : '未记录' },
+      actionColumn(order => order.status === '待开通'
+        ? <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => activate(order)}>开通</Button>
+        : ['已开通', '生效中'].includes(order.status) && <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => cancel(order)}>退订</Button>),
+    ]}/>
+  </>;
+}
+
+function Metering({ state, dispatch }) {
+  const [keyId, setKeyId] = useState(state.apiKeys.find(row => row.status === '有效')?.id || '');
+  const [modelId, setModelId] = useState(state.models[0]?.id || '');
+  const [result, setResult] = useState(null);
+  const run = () => {
+    try {
+      const requestId = `req_demo_${Date.now()}`;
+      const planned = simulateRequest(state, { requestId, keyId, modelId, purpose: 'metering-test' });
+      if (!dispatch({ type: 'batch', objectId: requestId, changes: planned.changes, feedback: false })) return;
+      const { httpStatus, attempts } = planned.request;
+      setResult({ failed: httpStatus >= 400, message: `HTTP ${httpStatus} · ${requestId} · ${attempts?.at(-1)?.error || '已计量扣减'}` });
+    } catch (error) { setResult({ failed: true, message: error.message }); }
+  };
+  return <>
+    <AdminPageHeading title={titles.metering}/>
+    <Card title={<Title heading={5} component="h2">调用测试</Title>}>
+      <div className="admin-analytics-fields">
+        <FilterToolbar>
+          <Choice label="调用测试 API 密钥" value={keyId} options={state.apiKeys.map(row => [row.id, row.keyId])} onChange={setKeyId}/>
+          <Choice label="调用测试模型" value={modelId} options={state.models.map(row => [row.id, row.modelId])} onChange={setModelId}/>
+          <Button theme="solid" disabled={!keyId || !modelId || !editable(state, 'requests')} onClick={run}>发送请求</Button>
+        </FilterToolbar>
+        {result && <Banner type={result.failed ? 'danger' : 'success'} closeIcon={null} description={result.message}/>}
+      </div>
+    </Card>
+    <BusinessTable rows={state.requests.slice(0, 40)} minWidth={980} columns={[
+      { title: 'Request ID', dataIndex: 'requestId', render: value => <Text code>{value}</Text> },
+      { title: '客户', render: (_, row) => state.tenants.find(tenant => tenant.id === row.tenantId)?.name },
+      { title: 'Model ID', render: (_, row) => state.models.find(model => model.id === row.modelId)?.modelId },
+      { title: '计量项', key: 'usage-fields', dataIndex: 'usage', render: usage => Object.keys(usage || {}).join(' / ') || '—' },
+      { title: '数量', dataIndex: 'usage', align: 'right', render: usage => usageTotal(usage).toLocaleString() },
+      { title: '价格快照', render: () => '2026-09 生效价' },
+      { title: '金额', align: 'right', render: (_, row) => money(row.httpStatus === 200 ? (usageTotal(row.usage) / 1e6 * 1.8).toFixed(4) : '0.0000') },
+      { ...statusColumn, dataIndex: 'httpStatus', render: value => <Status value={value === 200 ? '已计量' : '不计费'}/> },
+    ]}/>
+  </>;
+}
+
+function Ledger({ state }) {
+  const count = (value, row) => [value?.toLocaleString(), row.unit].filter(Boolean).join(' ') || '—';
+  return <>
+    <AdminPageHeading title={titles.ledger}/>
+    <BusinessTable rows={state.ledger} minWidth={980} columns={[
+      { title: '流水 ID', dataIndex: 'id', render: value => <Text code>{value}</Text> },
+      { title: '账户', dataIndex: 'accountId' },
+      { title: '来源', dataIndex: 'sourceId' },
+      { title: '类型', dataIndex: 'type' },
+      { title: '变动', dataIndex: 'delta', align: 'right', render: count },
+      { title: '余额', dataIndex: 'balance', align: 'right', render: count },
+      { title: '原因', dataIndex: 'reason' },
+      statusColumn,
+    ]}/>
+  </>;
+}
+
+function Bills({ state, dispatch }) {
+  const canWrite = editable(state, 'bills');
+  const period = '2026-09';
+  const generate = () => {
+    const existing = new Set(state.bills.filter(row => row.period === period).map(row => row.tenantId));
+    const changes = state.tenants.filter(tenant => !existing.has(tenant.id)).map(tenant => {
+      const amount = state.requests.filter(row => row.tenantId === tenant.id && row.httpStatus === 200)
+        .reduce((sum, row) => sum + usageTotal(row.usage) / 1e6 * 1.8, 0);
+      return { type: 'add', collection: 'bills', record: {
+        id: uid('bill'), billNo: `BILL-${period.replace('-', '')}-${tenant.id}`, tenantId: tenant.id, period,
+        amount: Number(amount.toFixed(2)), discount: 0, paid: 0, status: '待出账',
+      } };
+    });
+    if (changes.length) dispatch({ type: 'batch', objectId: `bills:${period}`, changes });
+  };
+  return <>
+    <AdminPageHeading title={titles.bills}>
+      <Button theme="solid" disabled={!canWrite} onClick={generate}>生成 {period} 账单</Button>
+    </AdminPageHeading>
+    <BusinessTable rows={state.bills} minWidth={940} columns={[
+      { title: '账单号', dataIndex: 'billNo', width: 240 },
+      { title: '租户', render: (_, row) => state.tenants.find(tenant => tenant.id === row.tenantId)?.name },
+      { title: '账期', dataIndex: 'period' },
+      { title: '应收', dataIndex: 'amount', align: 'right', render: money },
+      { title: '优惠', dataIndex: 'discount', align: 'right', render: money },
+      { title: '实收', dataIndex: 'paid', align: 'right', render: money },
+      statusColumn,
+      actionColumn(row => row.status === '待出账' && <Button size="small" theme="borderless" disabled={!canWrite}
+        onClick={() => dispatch({ type: 'update', collection: 'bills', id: row.id, changes: { status: '已出账' } })}>确认出账</Button>),
+    ]}/>
+  </>;
+}
+
+function Settlements({ state, dispatch }) {
+  const [previewed, setPreviewed] = useState(false);
+  const canWrite = editable(state, 'settlements');
+  const update = (row, changes) => dispatch({ type: 'update', collection: 'settlements', id: row.id, changes });
+  return <>
+    <AdminPageHeading title={titles.settlement}>
+      <Button theme="solid" icon={<IconUpload aria-hidden="true"/>} onClick={() => setPreviewed(true)}>导入对账预览</Button>
+    </AdminPageHeading>
+    {previewed && <Banner type="info" closeIcon={null} description="导入预览：12 行匹配，1 行金额差异 ¥2.50，0 行格式错误"/>}
+    <BusinessTable rows={state.settlements} minWidth={1000} columns={[
+      { title: '结算单', dataIndex: 'settlementNo' },
+      { title: '服务商', render: (_, row) => state.providers.find(provider => provider.id === row.providerId)?.name },
+      { title: '账期', dataIndex: 'period' },
+      { title: '平台金额', dataIndex: 'platformAmount', align: 'right', render: money },
+      { title: '服务商金额', dataIndex: 'providerAmount', align: 'right', render: money },
+      { title: '差异', dataIndex: 'difference', align: 'right', render: money },
+      statusColumn,
+      actionColumn(row => <Space wrap spacing={4}>
+        <Button size="small" theme="borderless" disabled={!canWrite || !previewed || row.difference !== 0}
+          onClick={() => update(row, { status: '已确认' })}>确认结算</Button>
+        {row.difference !== 0 && <Button size="small" theme="borderless" disabled={!canWrite}
+          onClick={() => update(row, { difference: 0, status: '差异已处理' })}>处理差异</Button>}
+      </Space>),
+    ]}/>
+  </>;
+}
+
+function Adjustments({ state, dispatch }) {
+  const [review, setReview] = useState(null);
+  const canWrite = editable(state, 'adjustments');
+  const billFor = id => state.bills.find(bill => bill.id === id);
+  const decide = reason => {
+    const item = state.adjustments.find(row => row.id === review.id);
+    if (!item || item.status !== '待审批') throw new Error('申请状态已变化，请重新打开操作');
+    const bill = billFor(item.billId);
+    if (!bill) throw new Error('关联账单不存在');
+    if (review.approved && Math.abs(item.amount) > bill.amount) throw new Error('调账金额不能超过账单应收');
+    const changes = [{ type: 'update', collection: 'adjustments', id: item.id,
+      changes: { status: review.approved ? '已执行' : '已拒绝', approvalReason: reason } }];
+    const sourceId = `adjustment:${item.id}`;
+    if (review.approved && !state.ledger.some(row => row.sourceId === sourceId)) {
+      changes.push({ type: 'add', collection: 'ledger', record: {
+        id: uid('ledger'), accountId: bill.tenantId, sourceId, type: '账单冲正', delta: -item.amount, balance: 0, reason, status: '已完成',
+      } });
+    }
+    return dispatch({ type: 'batch', objectId: item.adjustmentNo, changes });
+  };
+  return <>
+    <AdminPageHeading title={titles.adjustments}/>
+    <BusinessTable rows={state.adjustments} minWidth={940} columns={[
+      { title: '申请号', dataIndex: 'adjustmentNo' },
+      { title: '账单', render: (_, row) => billFor(row.billId)?.billNo },
+      { title: '金额', dataIndex: 'amount', align: 'right', render: money },
+      { title: '原因', dataIndex: 'reason' },
+      { title: '审批意见', dataIndex: 'approvalReason', render: value => value || '—' },
+      statusColumn,
+      actionColumn(row => row.status === '待审批' && <Space spacing={4}>
+        <Button size="small" theme="borderless" disabled={!canWrite}
+          onClick={() => setReview({ id: row.id, number: row.adjustmentNo, approved: true })}>通过并执行</Button>
+        <Button size="small" theme="borderless" disabled={!canWrite}
+          onClick={() => setReview({ id: row.id, number: row.adjustmentNo, approved: false })}>驳回</Button>
+      </Space>),
+    ]}/>
+    {review && <OperationInputDialog title={review.approved ? '通过调账' : '驳回调账'} description={review.number}
+      label="审批意见" onSubmit={decide} onClose={() => setReview(null)}/>}
+  </>;
+}
+
+const pages = { goods: Managed, announcements: Managed, orders: Orders, metering: Metering, ledger: Ledger,
+  bills: Bills, settlement: Settlements, adjustments: Adjustments };
+
+export default function BusinessOperationsPage({ pageId, state, dispatch }) {
+  const Page = pages[pageId];
+  return Page ? <div className="admin-page-stack"><Page pageId={pageId} state={state} dispatch={dispatch}/></div> : null;
 }

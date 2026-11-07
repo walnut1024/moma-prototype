@@ -155,8 +155,7 @@ function AdminConsoleV2View({bannerTarget,store}) {
   const hasAccount = state.admins.some(account => account.id === state.adminSession?.accountId && account.status === '已启用');
   const showPage = hasAccount && canVisit;
   const gatewaySettings = gatewaySettingsPages.includes(active);
-  const legacyPage = (page.groupId === 'analytics' && !['usage-analysis', 'user-analysis', 'customer-usage-detail'].includes(active))
-    || ['goods', 'orders', 'announcements', 'metering', 'ledger', 'bills', 'settlement', 'adjustments'].includes(active);
+  const legacyPage = page.groupId === 'analytics' && !['usage-analysis', 'user-analysis', 'customer-usage-detail'].includes(active);
   const menu = <nav aria-label="后台导航">{sections.filter(group => group.workspace === currentWorkspace || (group.id === 'platform' && state.currentRole === '平台管理员')).map(group => (
       <section key={group.id} aria-label={group.title}>
         {!group.direct && <Typography.Text type="tertiary" size="small">{group.title}</Typography.Text>}

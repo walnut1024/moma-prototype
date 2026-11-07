@@ -1,22 +1,3 @@
-/* Gateway and retained business pages share the accepted enterprise density. */
-.gw-page{--primary:#3568f9;--ring:#3568f9;--border:#e4eaf3;min-width:0}
-.gw-page .ent-page-head h1 svg{width:16px;height:16px}
-.gw-page .v2-list{border-color:#e4eaf3;border-radius:6px;overflow:hidden;min-width:0}
-.gw-page .v2-table table{font-size:12px}
-.gw-page .v2-table th{height:38px;padding:8px 12px;background:#f8faff;color:#586982;font-size:11px;border-bottom:1px solid #e4eaf3}
-.gw-page .v2-table td{height:48px;padding:8px 12px;color:#263247;border-color:#e8edf5}
-.gw-page .v2-table td:last-child{display:table-cell}
-.gw-page .v2-table td button{height:26px;padding:0;margin-right:14px;font-size:11px;color:#3568f9}
-.gw-page .v2-table tbody tr:last-child td{border-bottom:0}
-.gw-page .v2-status{display:inline-flex;align-items:center;gap:5px;padding:0;background:none;font-size:11px}
-.gw-page .v2-status::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
-.gw-page .v2-status.warn{background:none;color:#9b6b20}
-.gw-page .v2-summary{gap:0;margin:0;border:1px solid #e4eaf3;border-radius:6px;background:#fff;overflow:hidden}
-.gw-page .v2-summary article{min-height:82px;border:0;background:none}
-.gw-page .v2-summary article+article{border-left:1px solid #e8edf5}
-.gw-page .v2-summary b{font-size:21px;font-weight:650;color:#263247}
-.gw-page .request-simulator,.gw-page .release-actions{margin:0;border-color:#e4eaf3;border-radius:6px;flex-wrap:wrap;gap:12px;font-size:12px}
 .admin-page-error{padding:24px;color:#263247;font-size:12px}
 .admin-page-error h1{font-size:14px;font-weight:650}
 .admin-page-error p{margin:10px 0 18px;color:#586982}
-@media(max-width:1000px){.gw-page .v2-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}

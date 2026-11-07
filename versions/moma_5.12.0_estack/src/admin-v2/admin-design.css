@@ -70,32 +70,17 @@
 .admin-ui-portal.enterprise-dialog:not(.ent-drawer) [data-slot="button"][data-variant="destructive"] { background: var(--destructive); color: #fff; }
 .admin-ui-portal.enterprise-dialog:not(.ent-drawer) [data-slot="button"][data-variant="destructive"]:hover { background: #9e2921; }
 .admin-ui-portal[data-slot="dialog-content"]:is(.mo-drawer, .ent-drawer) { border-radius: 0; }
-.admin-ui-portal.entity-drawer[data-slot="dialog-content"] {
-  position: fixed;
-  inset: 48px 0 0 auto;
-  width: min(720px, calc(100vw - 32px));
-  max-width: none;
-  height: calc(100dvh - 48px);
-  max-height: none;
-  margin: 0;
-  padding: 0;
-  gap: 0;
-  transform: none;
-  translate: none;
-  border-radius: 0;
-}
 .admin-ui-portal[data-slot="dialog-content"] [data-slot="button"] { border-radius: 10px; font-size: 12px; }
 .admin-ui-portal[data-slot="dialog-content"] :is([data-slot="input"], [data-slot="select-trigger"], select) { border-radius: 8px; font-size: 12px; }
-.admin-ui-portal[data-slot="dialog-content"]:not(:is(.mo-dialog, .mm-dialog, .enterprise-dialog, .tp-dialog, .entity-drawer)) {
+.admin-ui-portal[data-slot="dialog-content"]:not(:is(.mo-dialog, .mm-dialog, .enterprise-dialog, .tp-dialog)) {
   width: min(520px, calc(100vw - 40px));
   max-width: none;
   padding: 20px;
 }
-.admin-ui-portal[data-slot="dialog-content"]:not(:is(.mo-dialog, .mm-dialog, .enterprise-dialog, .tp-dialog, .entity-drawer)):has(table) { width: min(960px, calc(100vw - 40px)); }
+.admin-ui-portal[data-slot="dialog-content"]:not(:is(.mo-dialog, .mm-dialog, .enterprise-dialog, .tp-dialog)):has(table) { width: min(960px, calc(100vw - 40px)); }
 
 /* Native controls in retained gateway and settlement pages use the same scale. */
-:is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) select:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)),
-:is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) :is(input, textarea):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) {
+:is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) select:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) {
   min-height: 32px;
   max-width: 100%;
   padding: 6px 10px;
@@ -110,21 +95,7 @@
 .admin-v2 :where(.admin-legacy) .v2-toolbar label:has(input) { min-width: 0; border-color: var(--input); border-radius: 8px; }
 .admin-v2 :where(.admin-legacy) .v2-toolbar label > svg { flex: none; width: 14px; height: 14px; color: #5d6b82; }
 .admin-v2 :where(.admin-legacy) .v2-toolbar label > input { font-size: 12px; color: var(--foreground); }
-.admin-v2 :where(.admin-legacy) .request-simulator, .admin-v2 :where(.admin-legacy) .release-actions { background: #fff; border-color: var(--border); }
-.admin-v2 :where(.admin-legacy) .request-simulator select { height: 32px; }
-.admin-v2 :where(.admin-legacy) .request-simulator > div { min-width: 0; flex-basis: 260px; }
-.admin-v2 :where(.admin-legacy) .request-simulator b, .admin-v2 :where(.admin-legacy) .release-actions b { font-weight: 600; }
-.admin-v2 :where(.admin-legacy) :is(.ent-toolbar, .request-simulator) select { font-size: 12px; }
-
-:is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) { display: flex; flex-direction: column; min-width: 0; color: var(--foreground); }
-:is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) > header { position: sticky; top: 0; z-index: 2; flex: none; height: 58px; padding: 16px 20px; background: #fff; }
-:is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) > header h2 { margin: 0; font-size: 16px; font-weight: 600; }
-:is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) form { min-height: 0; align-content: start; gap: 16px; padding: 20px; }
-:is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) form label { min-width: 0; color: #586982; }
-:is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) form :is(input, select) { height: 32px; }
-:is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) form footer { position: sticky; bottom: -20px; z-index: 1; gap: 8px; padding: 16px 0 0; background: #fff; }
-:is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) form footer [data-slot="button"] { min-width: auto; height: 32px; padding: 0 12px; }
-:is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) pre { max-width: 100%; overflow: auto; font-size: 11px; line-height: 1.6; }
+.admin-v2 :where(.admin-legacy) .ent-toolbar select { font-size: 12px; }
 .admin-v2 :where(.admin-legacy) .v2-summary article { border-color: var(--border); }
 .admin-v2 :where(.admin-legacy) .v2-summary :is(span, small) { color: #5d6b82; }
 
@@ -138,13 +109,6 @@
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) table:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { font-size: 12px; }
 .admin-v2 :where(.admin-legacy) :is(.v2-table, .mo-table, .ent-table) [data-slot="button"] { font-size: 12px; }
 .admin-v2 :where(.admin-legacy) .ua-panel:has(.ua-echart) [data-slot="card-title"] { font-size: 16px; font-weight: 600; }
-.admin-v2 :where(.admin-legacy) :where(.admin-legacy)[data-admin-page="goods"] table :is(th, td):nth-child(4),
-.admin-v2 :where(.admin-legacy) :where(.admin-legacy)[data-admin-page="orders"] table :is(th, td):nth-child(4),
-.admin-v2 :where(.admin-legacy) :where(.admin-legacy)[data-admin-page="metering"] table :is(th, td):is(:nth-child(5), :nth-child(7)),
-.admin-v2 :where(.admin-legacy) :where(.admin-legacy)[data-admin-page="ledger"] table :is(th, td):is(:nth-child(5), :nth-child(6)),
-.admin-v2 :where(.admin-legacy) :where(.admin-legacy)[data-admin-page="bills"] table :is(th, td):nth-child(n+4):nth-child(-n+6),
-.admin-v2 :where(.admin-legacy) :where(.admin-legacy)[data-admin-page="settlement"] table :is(th, td):nth-child(n+4):nth-child(-n+6),
-.admin-v2 :where(.admin-legacy) :where(.admin-legacy)[data-admin-page="adjustments"] table :is(th, td):nth-child(3) { text-align: right; font-variant-numeric: tabular-nums; }
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) table td:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { color: #263247; border-color: #e8edf5; }
 .admin-v2 :where(.admin-legacy) :is(.mo-table, .ent-table, .v2-table table) tbody tr:hover { background: #f8faff; }
 .admin-v2 :where(.admin-legacy) .supplier-workbench .mo-table th:last-child { background: #f8faff; }
@@ -189,10 +153,6 @@
   .admin-v2 :where(.admin-legacy) .mo-workbench .mo-heading { flex-wrap: wrap; }
   .admin-v2 :where(.admin-legacy) .mo-onboarding .mo-steps { gap: 8px; padding-inline: 8px; }
 }
-@media (max-width: 1100px) {
-  :is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) form { grid-template-columns: 1fr; }
-  .admin-v2 :where(.admin-legacy) .request-simulator > div { flex-basis: 100%; }
-}
 
 /* Canonical roles override the inherited page-specific scales, only in Admin. */
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) :is(.mo-workbench, .supplier-workbench, .enterprise-page, .mm-form, [aria-label="面包屑"]):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) {
@@ -224,8 +184,7 @@
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) [data-slot="button"]:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { height: auto !important; min-height: 32px; padding: 6px 12px; gap: 4px; border-radius: 10px; box-shadow: none; }
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) :is([data-size^="icon"], .mo-copy > button):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { flex: none; min-width: 32px !important; width: 32px !important; height: 32px !important; padding: 7px !important; }
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) .lucide:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { flex: none; width: 16px !important; height: 16px !important; stroke-width: 2px; }
-:is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) :is([data-variant="outline"], [data-variant="secondary"]):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)),
-:is(.admin-v2 :where(.admin-legacy) .entity-drawer, .admin-ui-portal.entity-drawer) form footer [data-variant="ghost"]:where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { color: #263247 !important; background: #fff !important; border: 1px solid #586982 !important; }
+:is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) :is([data-variant="outline"], [data-variant="secondary"]):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { color: #263247 !important; background: #fff !important; border: 1px solid #586982 !important; }
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) :is([data-variant="outline"], [data-variant="secondary"]):hover:not(:disabled):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { background: #f8faff !important; }
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) :is([data-slot="button"][data-variant="default"], .v2-primary):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { background: #315fe8 !important; border-color: #315fe8 !important; color: #fff !important; }
 :is(.admin-v2 :where(.admin-legacy), .admin-ui-portal) :is([data-slot="button"][data-variant="default"], .v2-primary):is(:hover, :active):not(:disabled):where(:not(.semi-materials, .semi-materials *, .semi-services, .semi-services *, .semi-native, .semi-native *)) { background: #2854d6 !important; border-color: #2854d6 !important; }
