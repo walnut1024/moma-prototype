@@ -1,3 +1,10 @@
+import {
+  IconActivity, IconApartment, IconAppCenter, IconBarChartVStroked, IconBellStroked,
+  IconBookOpenStroked, IconBookStroked, IconBox, IconChainStroked, IconChecklistStroked,
+  IconCoinMoneyStroked, IconComponentStroked, IconFlowChartStroked, IconGridStroked, IconLayers,
+  IconMenu, IconMonitorStroked, IconPlayCircle, IconPriceTag, IconPulse, IconServerStroked,
+  IconTaskMoneyStroked, IconUserGroup, IconUserSetting, IconUserStroked,
+} from '@douyinfe/semi-icons';
 import CloudModelOperations from './admin-v2/CloudModelOperations';
 import {sharedRequests} from './business-facts.mjs';
 import { modelOperationsView } from './mock/model-data.js';
@@ -14,12 +21,6 @@ import { libraryRecord } from './admin-v2/model-operations';
 import OperationsOverview from './admin-v2/OperationsOverview';
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import AnalyticsPages from "./admin-v2/AnalyticsPages";
-import {
-  Activity, Bell, BookOpen, Building2, Cable, Calculator, ChartColumn,
-  Container, Layers, LayoutDashboard, LibraryBig,
-  Menu, Radar, Rocket, Route, Server, Tag, UserCog, UserRound,
-  UsersRound,
-} from "lucide-react";
 import "./admin-v2/admin-shell.css";
 import { useAdminStore } from "./admin-v2/store";
 import { ClusterManagement, ModelDeployments, ModelObservability } from "./admin-v2/InferencePages";
@@ -47,27 +48,27 @@ import { AdminUIContext } from "./components/admin-ui-context";
 import { serviceOperationsUi } from "./admin-v2/ServiceUI";
 
 const NAVIGATION_ICONS = {
-  overview: LayoutDashboard,
-  usage: ChartColumn,
-  'users-analysis': UsersRound,
-  'supply-analysis': Layers,
-  'business-analysis': ChartColumn,
-  channels: Cable,
-  warehouse: Layers,
-  costs: Calculator,
-  prices: Tag,
-  materials: LibraryBig,
-  'traffic-limits': Activity,
-  enterprise: Building2,
-  individual: UserRound,
-  calls: Activity,
-  gateway: Route,
-  clusters: Server,
-  deployments: Rocket,
-  artifacts: Container,
-  'production-observation': Radar,
-  accounts: UserCog,
-  'getting-started': BookOpen,
+  overview: IconGridStroked,
+  usage: IconBarChartVStroked,
+  'users-analysis': IconUserGroup,
+  'supply-analysis': IconLayers,
+  'business-analysis': IconBarChartVStroked,
+  channels: IconChainStroked,
+  warehouse: IconLayers,
+  costs: IconCoinMoneyStroked,
+  prices: IconPriceTag,
+  materials: IconBookStroked,
+  'traffic-limits': IconActivity,
+  enterprise: IconApartment,
+  individual: IconUserStroked,
+  calls: IconPulse,
+  gateway: IconFlowChartStroked,
+  clusters: IconServerStroked,
+  deployments: IconPlayCircle,
+  artifacts: IconComponentStroked,
+  'production-observation': IconMonitorStroked,
+  accounts: IconUserSetting,
+  'getting-started': IconBookOpenStroked,
 };
 
 export default function AdminConsoleV2(props) {
@@ -166,7 +167,7 @@ function AdminConsoleV2View({bannerTarget,store}) {
         {group.items.map(item => {
           const Icon = NAVIGATION_ICONS[item.id];
           const selected = page.area === item.id;
-          return <Button key={item.id} block icon={<Icon size={16} aria-hidden="true"/>} type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'} aria-current={selected ? 'page' : undefined} onClick={() => navigate(item.children[0][0])}>{item.label}</Button>;
+          return <Button key={item.id} block icon={<Icon aria-hidden="true"/>} type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'} aria-current={selected ? 'page' : undefined} onClick={() => navigate(item.children[0][0])}>{item.label}</Button>;
         })}
       </section>
     ))}</nav>;
@@ -185,14 +186,14 @@ function AdminConsoleV2View({bannerTarget,store}) {
     {!navOpen && <aside className="v2-sidebar v2-sidebar-desktop">{navigation}</aside>}
     <div className="v2-content">
       <header className="admin-context-bar">
-        <Button className="admin-nav-toggle" type="tertiary" theme="borderless" icon={<Menu size={18}/>} aria-label="展开后台导航" aria-haspopup="dialog" aria-expanded={navOpen} onClick={() => setNavOpen(true)}/>
+        <Button className="admin-nav-toggle" type="tertiary" theme="borderless" icon={<IconMenu aria-hidden="true"/>} aria-label="展开后台导航" aria-haspopup="dialog" aria-expanded={navOpen} onClick={() => setNavOpen(true)}/>
         <div className="admin-breadcrumb">
           <Breadcrumb aria-label="面包屑">{breadcrumbs.map(({ label, href }, index) => (
             <Breadcrumb.Item key={index} noLink>{href ? <a data-model-list-breadcrumb data-admin-breadcrumb href={href}>{label}</a> : <span title={label} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{label}</span>}</Breadcrumb.Item>
           ))}</Breadcrumb>
           {detailTenant && <Typography.Text type="tertiary" size="small" className="us-breadcrumb-meta">{detailTenant.id} · {detailTenant.type} · {detailTenant.status}</Typography.Text>}
         </div>
-        <Badge count={alertCount} aria-label={`${alertCount} 条待处理告警`}><Bell size={16} aria-hidden="true"/></Badge>
+        <Badge count={alertCount} aria-label={`${alertCount} 条待处理告警`}><IconBellStroked aria-hidden="true"/></Badge>
       </header>
       {state.storageError && <Banner type="danger" closeIcon={null} description={<>本地数据异常：{state.storageError.toLowerCase().includes('quota') ? '浏览器本地存储空间不足，原数据未更改。' : state.storageError} <Button onClick={reload}>重新加载</Button></>}/>}
       {conflict && <Banner type="warning" closeIcon={null} description={<>检测到其他页面的新版本数据。 <Button onClick={reload}>载入新版本</Button></>}/>}

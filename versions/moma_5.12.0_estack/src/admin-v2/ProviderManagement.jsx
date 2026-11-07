@@ -4,8 +4,7 @@ import SupplyModelView, { SupplyModelSidebar } from './SupplyModelView';
 import ProviderEditor from './SupplierProfileDialog';
 import { supplyModelDirectory } from './supply-models';
 import { useRef, useState } from 'react';
-import { Power } from 'lucide-react';
-import { IconEdit, IconPlus } from '@douyinfe/semi-icons';
+import { IconEdit, IconPlay, IconPlus } from '@douyinfe/semi-icons';
 import { Button, Card, Empty, Space, Tabs, Typography } from '@douyinfe/semi-ui';
 import { MOMA_PROVIDER, supplierDirectory } from './moma-provider.js';
 import { supplierChannelResources } from './supplier-resources';
@@ -60,7 +59,7 @@ export default function ProviderManagement(props) {
         </div>
         <Space wrap>
         <Button icon={<IconEdit aria-hidden="true"/>} theme="borderless" aria-label="编辑服务商资料" title="编辑服务商资料" disabled={!ops.can} onClick={() => go({ view: 'profile', tab })}/>
-        {provider.status !== '已启用' && <Button theme="light" size="small" disabled={!ops.can} icon={<Power aria-hidden="true"/>} onClick={async () => await ops.run('provider', { operation: 'enableProvider', objectId: provider.id, values: {} })}>启用服务商</Button>}
+        {provider.status !== '已启用' && <Button theme="light" size="small" disabled={!ops.can} icon={<IconPlay aria-hidden="true"/>} onClick={async () => await ops.run('provider', { operation: 'enableProvider', objectId: provider.id, values: {} })}>启用服务商</Button>}
         </Space>
       </div></div>
 

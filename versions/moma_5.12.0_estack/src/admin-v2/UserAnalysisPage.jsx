@@ -3,7 +3,7 @@ import {userBusinessData} from '../business-facts.mjs';
 import { Card, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import AnalysisMetric from './AnalysisMetric';
 import { useMemo, useState } from 'react';
-import { DateRange } from './AnalyticsFilters';
+import { SemiDateRange as DateRange } from './SemiAnalyticsFilters';
 import { formatUsageNumber, usagePreset, usagePresets, operationsPeriod, operationsPeriodFromQuery } from './usage-analysis';
 import { filterAnalytics } from './analytics';
 import { userMetrics } from './user-analysis';

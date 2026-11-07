@@ -96,32 +96,7 @@
 
 .admin-v2 .supplier-resource-toolbar{gap:12px}
 .admin-v2 .supplier-resource-notice{padding:0 16px 12px}
-.admin-v2 .supplier-model-resource-table{min-width:990px;table-layout:fixed}
-.admin-v2 .supplier-model-resource-table col:nth-child(1){width:110px}
-.admin-v2 .supplier-model-resource-table col:nth-child(2){width:115px}
-.admin-v2 .supplier-model-resource-table col:nth-child(3){width:175px}
-.admin-v2 .supplier-model-resource-table col:nth-child(4){width:110px}
-.admin-v2 .supplier-model-resource-table col:nth-child(5){width:100px}
-.admin-v2 .supplier-model-resource-table col:nth-child(6){width:90px}
-.admin-v2 .supplier-model-resource-table col:nth-child(7){width:100px}
-.admin-v2 .supplier-model-resource-table col:last-child{width:132px}
-.admin-v2 .supplier-model-resource-table th:nth-child(6){text-align:right}
-.admin-v2 .supplier-model-resource-table td{white-space:normal;overflow-wrap:anywhere}
-.admin-v2 .supplier-model-resource-table th:last-child,.admin-v2 .supplier-model-resource-table .supplier-catalogue-operation-cell {
-  position: sticky;
-  right: 0;
-  z-index: 1;
-  background: var(--semi-color-bg-0);
-  border-left: 1px solid var(--semi-color-border);
-}
-.admin-v2 .supplier-model-resource-table th:last-child{background:var(--semi-color-fill-0);z-index:2}
-.admin-v2 .supplier-model-resource-table code{display:block;white-space:normal;overflow-wrap:anywhere}
-.admin-v2 .supplier-model-resource-table .supplier-resource-name>code{font-size:11px}
-.admin-v2 .supplier-model-resource-table .supplier-resource-name>strong{display:block}
 .admin-v2 .supplier-resource-name small{line-height:1.5}
-.admin-v2 .supplier-model-resource-table .supplier-address-text{min-width:0;width:100%;height:32px;gap:0;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px}
-.admin-v2 .supplier-model-resource-table .supplier-catalogue-actions{display:grid;grid-template-columns:repeat(3,32px);gap:4px}
-.admin-v2 .supplier-model-resource-table .supplier-catalogue-model-actions{margin-top:8px}
 
 /* Model and supplier perspectives share the same channel records and actions. */
 .admin-v2 .supplier-perspective{margin:0 0 8px}
@@ -131,8 +106,6 @@
 .admin-v2 .supplier-model-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;border-bottom:1px solid var(--semi-color-border)}
 .admin-v2 .supplier-model-heading>div{display:flex;align-items:center;gap:16px;min-width:0;flex-wrap:wrap}
 .admin-v2 .supplier-model-heading h2{overflow-wrap:anywhere}
-.admin-v2 .supplier-model-panel .supplier-model-resource-table td[rowspan]{vertical-align:middle}
-.admin-v2 .supplier-model-panel .supplier-model-resource-table th:first-child{width:120px}
 .admin-v2 .supplier-model-panel .supplier-protocol-address>small{display:none}
 @media(max-width:700px) {
   .admin-v2 .supplier-model-heading{padding:12px;flex-wrap:wrap}
@@ -143,14 +116,7 @@
 }
 .admin-v2 .supplier-owner-link{white-space:normal;height:auto;padding:0;font-weight:600;text-align:left;justify-content:flex-start}
 
-.admin-v2 .supplier-channel-directory{min-width:760px;table-layout:fixed}
-.admin-v2 .supplier-channel-directory th:nth-child(2){width:27%}
-.admin-v2 .supplier-channel-directory th:last-child{width:170px}
-.admin-v2 .supplier-channel-directory small, .admin-v2 .supplier-channel-directory code{display:block;color:var(--semi-color-text-2);font-size:12px;margin-top:4px;overflow-wrap:anywhere}
-.admin-v2 .supplier-channel-directory small[title]{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.admin-v2 .supplier-channel-directory td:first-child{white-space:normal;overflow-wrap:anywhere}
 
-.admin-v2 .supplier-channel-directory .supplier-row-actions{flex-wrap:wrap;gap:4px 8px}
 
 .admin-v2 .supplier-model-channel-table{min-width:1280px;table-layout:fixed}
 .admin-v2 .supplier-model-channel-table th:first-child{width:170px}

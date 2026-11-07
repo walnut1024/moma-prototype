@@ -1,5 +1,5 @@
+import { IconHelpCircle } from '@douyinfe/semi-icons';
 import { useRef, useState } from 'react';
-import { Info } from 'lucide-react';
 import { Button, Tooltip } from '@douyinfe/semi-ui';
 import { Choice } from './ServiceUI';
 import { providerApiKeyRows } from './provider-management';
@@ -19,7 +19,7 @@ export function SupplierKeyGroupField({ state, provider, value, disabled, onChan
     run: async (...args) => { const result = await ops.run(...args); ops.dirty(parentDirty.current || !result && keyDirty.current); if (result) onSaved?.(result); return result; },
   };
   return <div className="supplier-key-group-field">
-    <div className="supplier-key-group-label">{label}<Tooltip content="渠道使用所选组的主要密钥。组内第一位为主要密钥，可在服务商的「API 密钥」中管理分组。"><Button theme="borderless" aria-label="API 密钥组说明" icon={<Info aria-hidden="true"/>}/></Tooltip></div>
+    <div className="supplier-key-group-label">{label}<Tooltip content="渠道使用所选组的主要密钥。组内第一位为主要密钥，可在服务商的「API 密钥」中管理分组。"><Button size="small" type="tertiary" theme="borderless" aria-label="API 密钥组说明" icon={<IconHelpCircle aria-hidden="true"/>}/></Tooltip></div>
     <div className="supplier-key-group-control"><Choice label={label} value={value} options={[...(current ? [['current', current.name]] : []), ...groups.map(item => [item.id, item.name])]} disabled={disabled || fixed} onChange={onChange}/>{group && <Button type="tertiary" theme="borderless" disabled={disabled} onClick={event => { trigger.current = event.currentTarget; parentDirty.current = ops.hasUnsaved(); keyDirty.current = false; ops.setError(''); setEditing(true); }}>{actionLabel}</Button>}</div>
     {!ready && <small className="supplier-key-pending">{selected.length ? '主要密钥已停用，请在服务商的 API 密钥中启用或更换主要密钥。' : '该组暂无 API 密钥，可先添加密钥或保存渠道后补充。'}</small>}
     {editing && group && <KeyEditor provider={provider} group={group} ops={keyOps} close={close}/>}

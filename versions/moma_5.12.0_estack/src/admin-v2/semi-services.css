@@ -26,7 +26,7 @@
 .ss-channel-name { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .ss-checks { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
 .ss-checks li { display: flex; align-items: center; gap: 12px; }
-.ss-checks li > span { flex: 1; }
+.ss-checks li > span:not(.semi-icon) { flex: 1; }
 .ss-guide-code, .ss-request-json { max-width: 100%; overflow: auto; max-height: 440px; white-space: pre; }
 .ss-guide-editor-grid, .ss-request-preview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .ss-guide-input .semi-input-textarea-wrapper { margin-block: 8px; }

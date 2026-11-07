@@ -9,8 +9,6 @@
 
 .admin-v2 .supplier-selectable-table th:nth-child(8){text-align:right}
 
-.supplier-channel-action-menu { display: grid; gap: 4px; padding: 8px; }
-.supplier-channel-action-menu .semi-button { justify-content: flex-start; }
 .supplier-channel-details .semi-tabs-content { padding-block-start: 16px; min-width: 0; }
 .supplier-channel-details :is(code, dd, pre) { overflow-wrap: anywhere; white-space: pre-wrap; }
 .supplier-channel-details pre { max-height: 280px; overflow: auto; }

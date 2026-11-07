@@ -8,7 +8,7 @@ import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalList
 import { CSS } from '@dnd-kit/utilities';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES, FilterPresets, FilterReset, FilterToolbar } from '../components/FilterControls';
 import SavedFilterViews from '../components/SavedFilterViews';
-import { DateRange } from './AnalyticsFilters';
+import { SemiDateRange as DateRange } from './SemiAnalyticsFilters';
 import { Choice } from './ServiceUI';
 import UsageTrend from './UsageTrend';
 import { UsageShare, UsageDistribution } from './UsageComposition';

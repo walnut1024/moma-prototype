@@ -7,7 +7,7 @@ import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import { FilterPresets, FilterReset, FilterToolbar, TIME_PRESETS } from '../components/FilterControls';
 import SavedFilterViews from '../components/SavedFilterViews';
 import { AnalysisHelp } from './AnalysisMetric';
-import { DateRange, MultiPick } from './AnalyticsFilters';
+import { SemiDateRange as DateRange, SemiMultiPick as MultiPick } from './SemiAnalyticsFilters';
 import { Choice } from './ServiceUI';
 import { usagePreset } from './usage-analysis';
 import { dayOf, filterAnalytics, summarize, timeBuckets, inputLengthDistribution, weeklyBuckets, validAnalyticsRange } from './analytics';

@@ -10,7 +10,7 @@ import OperationInputDialog from '../components/OperationInputDialog';
 import { SelectedConditions } from '../components/SavedFilterViews';
 import AdminPageHeading from './AdminPageHeading';
 import AnalysisMetric from './AnalysisMetric';
-import { DateRange, MultiPick } from './AnalyticsFilters';
+import { SemiDateRange as DateRange, SemiMultiPick as MultiPick } from './SemiAnalyticsFilters';
 import { Choice } from './ServiceUI';
 import { filterAnalytics, matchesSelection, tokens } from './analytics';
 import { groupRequests, percentile, beijingTime, monitoringWindow } from './observability';

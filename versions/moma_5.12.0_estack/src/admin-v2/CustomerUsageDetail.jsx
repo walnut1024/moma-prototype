@@ -3,7 +3,7 @@ import AdminPageHeading from './AdminPageHeading';
 import { Banner, Card, Typography } from '@douyinfe/semi-ui';
 import AnalysisMetric from './AnalysisMetric';
 import { useEffect, useState } from 'react';
-import { DateRange } from './AnalyticsFilters';
+import { SemiDateRange as DateRange } from './SemiAnalyticsFilters';
 import { FilterPresets, FilterReset, FilterToolbar } from '../components/FilterControls';
 import { customerModelDetails, filterAnalytics } from './analytics';
 import { formatUsageNumber, usageMeter, operationsPeriod, operationsPeriodFromQuery, usagePresets, usageValue } from './usage-analysis';

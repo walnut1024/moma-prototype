@@ -6,7 +6,7 @@ import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import { FilterToolbar, FilterReset } from '../components/FilterControls';
 import AdminPageHeading from './AdminPageHeading';
 import AnalysisMetric from './AnalysisMetric';
-import { MultiPick } from './AnalyticsFilters';
+import { SemiMultiPick as MultiPick } from './SemiAnalyticsFilters';
 import { Choice } from './ServiceUI';
 import { deploymentSeries, deploymentSummary } from './observability';
 import './semi-inference.css';

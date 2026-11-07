@@ -7,7 +7,7 @@ import { TimeSeriesChart, DonutChart, RankingChart } from '../components/Analyti
 import SavedFilterViews from '../components/SavedFilterViews';
 import { FilterToolbar, FilterPresets, FilterReset } from '../components/FilterControls';
 import { overviewBusiness, overviewPeriod, overviewPresets, overviewDateTime, overviewChange, compactCount } from './overview';
-import { DateRange } from './AnalyticsFilters';
+import { SemiDateRange as DateRange } from './SemiAnalyticsFilters';
 import { dayOf } from './analytics';
 import AnalysisMetric, { AnalysisHelp as Help } from './AnalysisMetric';
 import './overview.css';

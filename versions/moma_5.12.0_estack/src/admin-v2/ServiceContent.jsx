@@ -1,6 +1,6 @@
+import { IconLockStroked } from '@douyinfe/semi-icons';
 import { scopeTenants } from './service-commercial';
 import { useRef, useState } from 'react';
-import { LockKeyhole } from 'lucide-react';
 import { Button, Radio, Space, Typography, Tooltip } from '@douyinfe/semi-ui';
 import {Choice, Field} from './ServiceUI';
 import { Notice, Modal } from './ServiceUI';
@@ -12,7 +12,7 @@ import { RouteWorkbench } from './ServiceRouting';
 import { ServiceSupplierDialog } from './ServiceConfigurationDialogs';
 
 export function ServiceModeBar({model,ops,act}) {
-  return <div className="ss-section-bar"><Space wrap><Typography.Text strong>服务模式</Typography.Text>{Object.entries(SERVICE_MODES).map(([value,item])=><Tooltip key={value} content={item.englishName+' · '+item.description}><Radio checked={model.serviceMode===value} disabled>{item.label}</Radio></Tooltip>)}</Space>{model.serviceMode?<Button theme="borderless" disabled={!ops.can} onClick={()=>act(model,'serviceMode')} icon={<LockKeyhole aria-hidden="true"/>}>解锁并切换服务模式</Button>:<Button disabled={!ops.can} onClick={()=>act(model,'serviceMode')}>选择服务模式</Button>}</div>;
+  return <div className="ss-section-bar"><Space wrap><Typography.Text strong>服务模式</Typography.Text>{Object.entries(SERVICE_MODES).map(([value,item])=><Tooltip key={value} content={item.englishName+' · '+item.description}><Radio checked={model.serviceMode===value} disabled>{item.label}</Radio></Tooltip>)}</Space>{model.serviceMode?<Button theme="borderless" disabled={!ops.can} onClick={()=>act(model,'serviceMode')} icon={<IconLockStroked aria-hidden="true"/>}>解锁并切换服务模式</Button>:<Button disabled={!ops.can} onClick={()=>act(model,'serviceMode')}>选择服务模式</Button>}</div>;
 }
 function StandardContent({state,model,ops}) {
   const [identity,setIdentity]=useState(false);

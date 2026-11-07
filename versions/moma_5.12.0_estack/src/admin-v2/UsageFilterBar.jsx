@@ -1,5 +1,5 @@
 import { Button } from '@douyinfe/semi-ui';
-import { MultiPick } from './AnalyticsFilters';
+import { SemiMultiPick as MultiPick } from './SemiAnalyticsFilters';
 import UsageCascade from './UsageCascade';
 import UsageSupplyPicker from './UsageSupplyPicker';
 import { usageFilterOptions, usageModelTypes } from './usage-analysis';
