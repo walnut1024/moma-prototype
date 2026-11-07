@@ -1,6 +1,6 @@
 import Table from './AdminTable';
 import { useId, useState } from 'react';
-import { Button, Card, Select, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Descriptions, Popover, Progress, Select, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconChevronDown, IconChevronRight, IconDownload, IconSort } from '@douyinfe/semi-icons';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES, FilterToolbar, FilterReset } from '../components/FilterControls';
 import { SelectedConditions } from '../components/SavedFilterViews';
@@ -12,22 +12,24 @@ const detailColumns = [['dailyUsage','日均用量'],['endUsage','结束日用�
 const display = value => value == null ? '—' : typeof value === 'number' ? value > 0 && value < 0.01 ? '<0.01' : formatUsageNumber(value) : value;
 const statusLabels = ['成功','400','5xx','0','其他'];
 
-function StatusBar({ row }) {
-  const label = row.statuses.map((count, index) => `${statusLabels[index]}：${count} 次`).join('，') + `，请求记录数 ${row.calls}`;
+function SuccessRate({ row }) {
+  const titleId = useId();
+  const rate = row.success.toFixed(2) + '%';
   return <div className="admin-analysis-status">
-    <Tooltip trigger="hover" content={<div className="admin-analysis-status-key">
-      {row.statuses.map((count, index) => <div key={statusLabels[index]}>
-        <span><i className={`an-status-${index}`}/>{statusLabels[index]}</span><b>{display(count)}</b><span>{(count / row.calls * 100).toFixed(1)}%</span>
-      </div>)}
-      <Typography.Text strong>请求记录数 {display(row.calls)}</Typography.Text>
-    </div>}>
-      <Button theme="borderless" type="tertiary" size="small" aria-label={label}>
-        <span className="admin-analysis-status-bar" aria-hidden="true">
-          {row.statuses.map((count, index) => <span key={statusLabels[index]} className={`an-status-${index}`} style={{ width: count / row.calls * 100 + '%' }}/>)}
-        </span>
-      </Button>
-    </Tooltip>
-    <Typography.Text>{row.success.toFixed(2)}%</Typography.Text>
+    <div aria-hidden="true"><Progress percent={row.success} size="small" stroke="var(--semi-color-success)"/></div>
+    <Popover trigger="click" position="bottomRight" motion={false}
+      content={({ initialFocusRef }) => <section className="admin-analytics-fields" ref={initialFocusRef} tabIndex={-1} aria-labelledby={titleId}>
+        <Typography.Title heading={6} component="h3" id={titleId}>HTTP 状态分布</Typography.Title>
+        <Descriptions align="left" data={statusLabels.map((key, index) => {
+          const count = row.statuses[index];
+          return { key, value: `${display(count)} 次（${(count / row.calls * 100).toFixed(1)}%）` };
+        })}/>
+        <Typography.Text strong>请求记录数 {display(row.calls)}</Typography.Text>
+      </section>}>
+      <Button theme="borderless" type="tertiary" size="small"
+        icon={<IconChevronDown aria-hidden="true"/>} iconPosition="right"
+        aria-label={`${row.customer} ${row.model} HTTP 状态分布，成功率 ${rate}`}>{rate}</Button>
+    </Popover>
   </div>;
 }
 
@@ -68,7 +70,7 @@ export default function UserCallDetails({ state, rows, start, end, draft, onDraf
       </div>)}
   </dl>;
   const renderValue = (key, row) => {
-    if (key === 'success') return row.success == null || !row.calls ? '—' : <StatusBar row={row}/>;
+    if (key === 'success') return row.success == null || !row.calls ? '—' : <SuccessRate row={row}/>;
     if (key === 'customer') return <Typography.Text link={{ href: `#/admin-2/customer-usage-detail?customer=${encodeURIComponent(row.customerId)}&start=${start}&end=${end}`,
       onClick: () => window.scrollTo(0, 0) }}>{row.customer}</Typography.Text>;
     if (key === 'total') return <>

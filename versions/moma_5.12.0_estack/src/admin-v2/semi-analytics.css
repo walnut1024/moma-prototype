@@ -17,16 +17,8 @@
 .admin-analysis-view-row { margin-top: var(--admin-section-gap); }
 .admin-analysis-detail-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 12px; }
 .admin-analysis-detail-fields dd { margin-inline-start: 0; }
-.admin-analysis-status { display: flex; align-items: center; gap: 8px; }
-.admin-analysis-status .admin-analysis-status-bar { display: flex; width: 80px; min-width: 80px; height: 8px; overflow: hidden; border-radius: var(--semi-border-radius-full); }
-.admin-analysis-status-bar .an-status-0, .admin-analysis-status-key .an-status-0 { background: var(--semi-color-success); }
-.admin-analysis-status-bar .an-status-1, .admin-analysis-status-key .an-status-1 { background: var(--semi-color-warning); }
-.admin-analysis-status-bar .an-status-2, .admin-analysis-status-key .an-status-2 { background: var(--semi-color-danger); }
-.admin-analysis-status-bar .an-status-3, .admin-analysis-status-key .an-status-3 { background: var(--semi-color-tertiary); }
-.admin-analysis-status-bar .an-status-4, .admin-analysis-status-key .an-status-4 { background: var(--semi-color-info); }
-.admin-analysis-status-key { display: grid; gap: 4px; }
-.admin-analysis-status-key > div { display: grid; align-items: center; grid-template-columns: 1fr auto 5ch; gap: 12px; }
-.admin-analysis-status-key i { display: inline-block; width: 8px; height: 8px; margin-inline-end: 6px; }
+.admin-analysis-status { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.admin-analysis-status > div { flex: 0 0 72px; }
 .admin-analysis-details > .semi-table-wrapper { margin-top: 12px; }
 @media (max-width: 1400px) { .admin-analysis-metrics:not(.admin-analysis-metrics-four) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .admin-analysis-metrics, .admin-analysis-metrics:not(.admin-analysis-metrics-four) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

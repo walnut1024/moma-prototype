@@ -1,5 +1,6 @@
+import AdminPageLoading from './AdminPageLoading';
 import {useEffect,useRef,useState} from 'react';
-import {Banner, Button, Card, Form, Input, Spin, Typography} from '@douyinfe/semi-ui';
+import {Banner, Button, Card, Form, Input, Typography} from '@douyinfe/semi-ui';
 import {configureOnboardingTransport} from './onboarding-client.js';
 import {useCloudMockSnapshot,clearCloudMockSnapshot} from './mock-onboarding-service.js';
 import {completeServiceShowcase} from './service-showcase-client.js';
@@ -79,6 +80,6 @@ export default function CloudModelOperations({children}){
   </div>;
   if(!state)return <div className="mo-cloud-login">{error
     ? <Banner type="danger" closeIcon={null} description={<>{error} <Button onClick={()=>void load()}>重新加载</Button></>}/>
-    : <Spin tip="正在加载模型运营…"><div role="status" aria-label="正在加载模型运营"/></Spin>}</div>;
+    : <AdminPageLoading label="模型运营"/>}</div>;
   return children({state,transactModel:transact,transact,dispatch,transactIndividual:()=>{throw Error('此入口不处理客户数据');},transactAdminAccount:()=>{throw Error('此入口不处理后台账号配置');},reload:load,conflict});
 }

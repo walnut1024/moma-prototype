@@ -1,3 +1,4 @@
+import AdminPageLoading from './admin-v2/AdminPageLoading';
 import {
   IconActivity, IconApartment, IconAppCenter, IconBarChartVStroked, IconBellStroked,
   IconBookOpenStroked, IconBookStroked, IconBox, IconChainStroked, IconChecklistStroked,
@@ -215,11 +216,11 @@ function AdminConsoleV2View({bannerTarget,store}) {
             : active === "admins" ? <AdminAccounts state={state} transact={transactAdminAccount} conflict={conflict}/>
             : active === "model-costs" ? <ModelCosts state={state} transact={transactModel} conflict={conflict} reload={reload}/>
             : active === "model-prices" ? <ModelPrices state={state} transact={transactModel} conflict={conflict} reload={reload}/>
-            : active === "tariff-dictionary" ? <Suspense fallback={<p role="status">正在加载模型资料…</p>}><MaterialDictionaryPage state={state} transact={transactModel} conflict={conflict}/></Suspense>
+            : active === "tariff-dictionary" ? <Suspense fallback={<AdminPageLoading label="模型资料"/>}><MaterialDictionaryPage state={state} transact={transactModel} conflict={conflict}/></Suspense>
             : active === "providers" ? <ProviderManagement state={state} transact={transactModel} conflict={conflict} reload={reload}/>
-            : active === 'model-templates' ? <Suspense fallback={<p role="status">正在加载模型资料…</p>}><ModelMaterials state={modelOperationsView(state,'all')} transact={transactModel} conflict={conflict} reload={reload}/></Suspense>
+            : active === 'model-templates' ? <Suspense fallback={<AdminPageLoading label="模型资料"/>}><ModelMaterials state={modelOperationsView(state,'all')} transact={transactModel} conflict={conflict} reload={reload}/></Suspense>
             : active === 'listing' ? <ModelManagement sourceState={state} state={modelOperationsView(state,new URLSearchParams(location.hash.split('?')[1]).get('catalogue'),new URLSearchParams(location.hash.split('?')[1]).get('model'))} transact={transactModel} conflict={conflict} reload={reload}/>
-            : active === 'traffic-limits' ? <Suspense fallback={<p role="status">正在加载流量运营…</p>}><TrafficOperations key={state.adminSession.accountId} state={state} transact={transactTraffic} conflict={conflict} dirtyRef={draftDirty}/></Suspense>
+            : active === 'traffic-limits' ? <Suspense fallback={<AdminPageLoading label="限流配置"/>}><TrafficOperations key={state.adminSession.accountId} state={state} transact={transactTraffic} conflict={conflict} dirtyRef={draftDirty}/></Suspense>
             : active === "individual-users" ? <IndividualUsersPage state={state} transact={transactIndividual} conflict={conflict}/>
             : active === "tenants" ? <CustomerPage state={state} transact={transact} deploymentTarget={deploymentTarget}/>
             : gatewaySettings ? <GatewayPage key={active} pageId={active} state={state} dispatch={dispatch}/>
