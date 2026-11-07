@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Button, Card, Space, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { DonutChart, TimeSeriesChart } from '../components/AnalyticsCharts';
-import { chartColor } from '../components/chart-style.mjs';
+import { adminChartColor, chartColor, chartPalette } from '../components/chart-style.mjs';
 import { AnalysisHelp } from './AnalysisMetric';
 import { Choice } from './ServiceUI';
 import UsageFilterBar from './UsageFilterBar';
@@ -27,15 +27,29 @@ export function UsageShare({ state, range, clock, filters, onChange, volume = fa
   const collection = { category: usageModelTypes, providerId: options.providers, modelId: options.models, tenantId: state.tenants }[settings.dimension];
   const name = id => id === '__other__' ? `其他${subject}` : id === '__unknown__' ? `未归属${subject}` : collection.find(item => item.id === id)?.name || id;
   const code = id => id.startsWith('__') || settings.dimension === 'category' ? '' : collection.find(item => item.id === id)?.code || (settings.dimension === 'modelId' ? state.models.find(item => item.id === id)?.modelId : id) || id;
-  const slices = (settings.dimension === 'category' ? share.ranked.filter(row => row.value > 0) : share.slices).map(row => ({ ...row, label: name(row.id), color: row.id === '__unknown__' ? '#8a97ac' : row.id === '__other__' ? '#b8c3d5' : chartColor({ label: row.id, color: settings.dimension === 'category' ? collection.find(item => item.id === row.id)?.color : undefined }) }));
+  const uncategorizedColor = '#64748b';
+  const otherColor = '#b8c3d5';
+  const usedColors = new Set([uncategorizedColor, otherColor]);
+  const colorOf = id => {
+    if (id === '__unknown__') return uncategorizedColor;
+    if (id === '__other__') return otherColor;
+    const preferred = chartColor({ label: id, color: settings.dimension === 'category' ? collection.find(item => item.id === id)?.color : undefined });
+    const color = usedColors.has(preferred) ? chartPalette.find(candidate => !usedColors.has(candidate)) : preferred;
+    usedColors.add(color);
+    return color;
+  };
+  const slices = (settings.dimension === 'category' ? share.ranked.filter(row => row.value > 0) : share.slices)
+    .map(row => ({ ...row, label: name(row.id), color: colorOf(row.id) }));
+  const sliceColors = new Map(slices.map(row => [row.id, row.color]));
   const metricLabel = volume ? tokenMetrics.find(([id]) => id === settings.metric)[1] : '调用次数';
   const valueText = value => volume ? `${amount(value)} Token` : `${amount(value)} 次`;
   const usageNote = volume ? `${metricLabel}占比，仅统计 Token 计量请求；张、秒、字符等不计入。${share.pendingCalls > 0 ? ` ${amount(share.pendingCalls)} 次请求的计量待确认，未计入占比。` : ''}` : '调用次数占比以当前筛选范围内的请求数为分母，同一请求仅计一次。';
   const columns = showCode => [
-    { title: subject, dataIndex: 'id', render: (id, row) => {
+    { title: subject, dataIndex: 'id', render: id => {
       const identifier = code(id);
+      const color = sliceColors.get(id);
       return <div className="ua-native-share-name" title={identifier ? `${name(id)} / ${identifier}` : name(id)}>
-        {row.color && <span className="ua-native-swatch" style={{ background: row.color }} aria-hidden="true"/>}
+        {color && <span className="ua-native-swatch" style={{ background: adminChartColor(color) }} aria-hidden="true"/>}
         <Text>{name(id)}</Text>
         {showCode && identifier && <Text type="tertiary" size="small">{identifier}</Text>}
       </div>;

@@ -1,4 +1,5 @@
 .unified-chart{min-width:0;color:#263247;font-variant-numeric:tabular-nums}
+.admin-v2 .unified-chart{color:var(--semi-color-text-0)}
 .unified-chart-canvas{min-width:0;width:100%}
 .unified-chart-tools{display:flex;justify-content:flex-end;align-items:center;gap:8px;min-height:32px;margin-bottom:6px;color:#64748b;font-size:12px}
 .unified-chart-tools [data-slot=button]{width:30px;height:30px;border-radius:6px;box-shadow:none}

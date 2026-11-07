@@ -1,4 +1,6 @@
 export const chartPalette = ['#3568f9', '#18a69a', '#f09b38', '#865bd6', '#7199ca', '#dd659d', '#8a97ac', '#946d42', '#3d8a66', '#b46b85', '#547dc0', '#a68a35'];
+export const adminChartColor = (color, primary = 'var(--semi-color-primary)') => color === chartPalette[0] ? primary : color;
+
 const semantic = { '语言模型': 1, '多模态理解': 2, '视觉模型': 3, '语音模型': 5, '向量模型': 4, '排序模型': 6 };
 export function chartColor(item) {
   if (item.color) return item.color;

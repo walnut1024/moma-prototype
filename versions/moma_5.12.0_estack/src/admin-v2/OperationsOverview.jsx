@@ -5,6 +5,7 @@ import { Button, Card, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconArrowLeft, IconArrowRight, IconMaximize, IconRefresh } from '@douyinfe/semi-icons';
 import { TimeSeriesChart, DonutChart, RankingChart } from '../components/AnalyticsCharts';
+import { adminChartColor, chartPalette } from '../components/chart-style.mjs';
 import SavedFilterViews from '../components/SavedFilterViews';
 import { FilterToolbar, FilterPresets, FilterReset } from '../components/FilterControls';
 import { overviewBusiness, overviewPeriod, overviewPresets, overviewDateTime, overviewChange, compactCount } from './overview';
@@ -87,7 +88,7 @@ export default function OperationsOverview({state}) {
       ].map(chart => <Card key={chart.key} title={<ChartTitle>{chart.title}</ChartTitle>}>
         <Paragraph type="secondary">{period.label} · {period.hourly ? '按小时汇总' : '按天汇总'}</Paragraph>
         {data.trend.length ? <TimeSeriesChart showData={false} labels={data.trend.map(row => row.label)}
-          series={[{ label: chart.label, values: data.trend.map(row => row[chart.key]), color: '#3568f9' }]} unit={chart.unit} label={chart.title} height={225}/>
+          series={[{ label: chart.label, values: data.trend.map(row => row[chart.key]) }]} unit={chart.unit} label={chart.title} height={225}/>
           : <Paragraph type="secondary" className="ov-empty">本期暂无调用记录</Paragraph>}
         <Space wrap>
           <Text size="small" type="tertiary">{period.comparison}</Text><Change value={chart.change}/>
@@ -108,11 +109,11 @@ export default function OperationsOverview({state}) {
       ))}
       <Composition title="供给构成" caption="Token 用量占比" empty="本期暂无 Token 用量" total={data.total} unit="Token"
         centerLabel="Token 总量" centerValue={compactCount(data.total)} rows={[
-          { label: '自产', value: data.self, color: '#3568f9' }, { label: '引入', value: data.partner, color: '#13aaa7' },
+          { label: '自产', value: data.self, color: chartPalette[0] }, { label: '引入', value: data.partner, color: '#13aaa7' },
         ]} help="按承接客户调用的实际供给来源汇总 Token 用量。自产指自有推理服务，引入指外部服务；占比以本期平台 Token 总量为分母。"/>
       <Composition title="用户构成" caption="累计注册用户" empty="暂无注册用户" total={data.registrations.total} unit="人"
         centerLabel="注册用户总数" centerValue={number(data.registrations.total)} rows={[
-          { label: '政企', value: data.registrations.enterprise, color: '#3568f9' }, { label: '个人', value: data.registrations.personal, color: '#8b5cf6' },
+          { label: '政企', value: data.registrations.enterprise, color: chartPalette[0] }, { label: '个人', value: data.registrations.personal, color: '#8b5cf6' },
         ]} help="截至统计结束时的注册用户构成，政企与个人数量之和等于注册用户总数。按用户 ID 去重，分类沿用用户分析的身份记录。"/>
       {[['customer', '客户', data.customers], ['model', '模型', data.models]].map(([kind, label, rows]) =>
         <CallRankPanel key={kind} title={`模型调用次数 Top 10 ${label}`} rows={rows} total={data.calls}
@@ -177,7 +178,7 @@ function Composition({ title, caption, empty, total, unit, centerLabel, centerVa
       centerValue={centerValue} centerLabel={centerLabel}/> : <Paragraph className="ov-empty" type="secondary">{empty}</Paragraph>}
     <div className="ov-composition-values">
       {rows.map(row => <div key={row.label}>
-        <Space><span className="ov-dot" style={{ background: row.color }}/><Text>{row.label}</Text><Text type="secondary">{percent(row.value, total)}</Text></Space>
+        <Space><span className="ov-dot" style={{ background: adminChartColor(row.color) }} aria-hidden="true"/><Text>{row.label}</Text><Text type="secondary">{percent(row.value, total)}</Text></Space>
         <Text strong title={`${number(row.value)} ${unit}`}>{unit === 'Token' ? compactCount(row.value) : number(row.value)} {unit}</Text>
       </div>)}
     </div>
@@ -198,9 +199,9 @@ function CallRankPanel({ title, rows, total, limits, onChoose }) {
   const ranked = rows.filter(row => row.id !== '__unknown__' && row.calls > 0).sort((a, b) => b.calls - a.calls || a.id.localeCompare(b.id));
   const top = ranked.slice(0, 10), expanded = ranked.slice(0, limit);
   const scaleControl = <RankingSegments label={`${title}刻度`} items={[[ 'linear', '线性' ], [ 'log', '指数' ]]} value={scale} onChange={setScale}/>;
-  const choose = id => { setOpen(false); onChoose(id); };
-  const chart = values => values.length
-    ? <RankingChart showData={false} rows={values} metric="calls" unit="次" collection={rows} scale={scale} onChoose={choose}/>
+  const expandedTitle = title.replace('Top 10', `Top ${limit}`);
+  const chart = (values, label) => values.length
+    ? <RankingChart label={label} rows={values} metric="calls" unit="次" collection={rows} scale={scale} onChoose={onChoose}/>
     : <Paragraph type="secondary" className="ov-empty">所选范围暂无排行数据</Paragraph>;
   return <>
     <Card title={<ChartTitle>{title}</ChartTitle>} headerExtraContent={
@@ -210,9 +211,9 @@ function CallRankPanel({ title, rows, total, limits, onChoose }) {
         <Text size="small" type="secondary">Top 10 占比 {percent(top.reduce((sum, row) => sum + row.calls, 0), total)}</Text>
         <Space wrap>{scaleControl}<Help label="排行刻度">指数模式使用 log10(数值＋1) 压缩条长；排序、标签和悬浮数值保持原始值。</Help></Space>
       </div>
-      {chart(top)}
+      {chart(top, title)}
     </Card>
-    {open && <Modal visible title={title.replace('Top 10', `Top ${limit}`)} closeOnEsc footer={null}
+    {open && <Modal visible title={expandedTitle} closeOnEsc footer={null}
       width="min(1100px, calc(100vw - 32px))" onCancel={() => setOpen(false)}>
       <div className="admin-analytics-fields">
         <Paragraph type="secondary">共 {ranked.length} 个有调用的对象，当前展示 {expanded.length} 个 · 单位：次 · 点击条形查看明细</Paragraph>
@@ -220,7 +221,7 @@ function CallRankPanel({ title, rows, total, limits, onChoose }) {
           <RankingSegments label="排行数量" value={limit} onChange={setLimit} items={limits.map(value => [value, `Top ${value}`])}/>
           {scaleControl}
         </div>
-        <div className="ov-expanded-scroll">{chart(expanded)}</div>
+        <div className="ov-expanded-scroll">{chart(expanded, expandedTitle)}</div>
       </div>
     </Modal>}
   </>;
