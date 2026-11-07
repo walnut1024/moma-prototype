@@ -20,8 +20,6 @@ import {
   Menu, Radar, Rocket, Route, Server, Tag, UserCog, UserRound,
   UsersRound,
 } from "lucide-react";
-import "./admin-v2.css";
-import "./admin-navigation.css";
 import "./admin-v2/admin-shell.css";
 import { useAdminStore } from "./admin-v2/store";
 import { ClusterManagement, ModelDeployments, ModelObservability } from "./admin-v2/InferencePages";
@@ -46,6 +44,7 @@ import AdminAccounts from "./admin-v2/AdminAccounts";
 import { ADMIN_ROLE_LABELS } from "./admin-v2/admin-accounts";
 import "./admin-v2/admin-design.css";
 import { AdminUIContext } from "./components/admin-ui-context";
+import { serviceOperationsUi } from "./admin-v2/ServiceUI";
 
 const NAVIGATION_ICONS = {
   overview: LayoutDashboard,
@@ -84,16 +83,23 @@ function AdminConsoleV2View({bannerTarget,store}) {
   const factState={...state,requests:sharedRequests(state)};
   const initialPage = pageFromHash(location.hash, state.currentRole);
   const [navOpen, setNavOpen] = useState(false);
+  const [leave, setLeave] = useState(null);
   const draftDirty = useRef(false);
   useEffect(() => {
     let accepted = location.hash;
     const sync = () => {
-      if (draftDirty.current && location.hash !== accepted && !window.confirm('配置尚未保存，是否放弃修改？')) {
+      const next = location.hash;
+      if (next === accepted) return;
+      if (draftDirty.current) {
         history.replaceState(null, '', accepted);
-        return;
+        setNavOpen(false);
+        setLeave(() => () => {
+          accepted = next;
+          location.hash = next;
+        });
+      } else {
+        accepted = next;
       }
-      accepted = location.hash;
-      draftDirty.current = false;
     };
     const unload = event => { if (draftDirty.current) { event.preventDefault(); event.returnValue = ''; } };
     addEventListener('hashchange', sync, true);
@@ -144,9 +150,9 @@ function AdminConsoleV2View({bannerTarget,store}) {
   const breadcrumbs = !canVisit ? [{ label: '无访问权限' }] : adminBreadcrumbs(active, detailParams, { onboardingIntent: state.modelOnboardings.find(row=>row.id===detailParams.get('draft'))?.intent, provider: detailProvider?.name, model: detailModel?.name, deployment: state.deployments.find(item => item.id === detailParams.get('deployment'))?.name, enterprise: detailEnterprise?.name, user: detailIndividual && individualName(detailIndividual), customer: detailTenant?.name });
   const enterAdmin = accountId => {
     if (accountId === state.adminSession?.accountId) return;
-    if (draftDirty.current && !window.confirm('配置尚未保存，是否放弃修改？')) return;
-    dispatch({ type: 'enterAdmin', accountId });
-    draftDirty.current = false;
+    const selectAccount = () => dispatch({ type: 'enterAdmin', accountId });
+    if (draftDirty.current) setLeave(() => selectAccount);
+    else selectAccount();
   };
   const roleTarget = bannerTarget?.querySelector("[data-admin-role]");
   const deploymentTarget = bannerTarget?.querySelector("[data-admin-deployment]");
@@ -200,7 +206,7 @@ function AdminConsoleV2View({bannerTarget,store}) {
           {!hasAccount ? <Banner title="选择后台账号" description="请在顶部选择后台 mock 账号进入。用户面登录独立保留。" closeIcon={null}/> : !canVisit ? (
             <Banner type="warning" title="无访问权限" description={<Button onClick={() => navigate(WORKSPACE_HOME[allowedWorkspaces[0]] || 'dashboard')}>返回首页</Button>} closeIcon={null}/>
           ) : <>
-            {['dashboard', 'usage-analysis', 'user-analysis', 'supply-analysis', 'business-analysis'].includes(active) && <h1 className="sr-only">{page.label}</h1>}
+            {['supply-analysis', 'business-analysis'].includes(active) && <h1 className="sr-only">{page.label}</h1>}
             {active === "getting-started" ? <GettingStarted guideId={detailParams.get('guide')}/>
             : active === "dashboard" ? <OperationsOverview state={factState}/>
             : ["usage-analysis", "user-analysis", "supply-analysis", "business-analysis", "call-analysis"].includes(active) ? <AnalyticsPages pageId={active} state={factState}/>
@@ -225,6 +231,11 @@ function AdminConsoleV2View({bannerTarget,store}) {
         </AdminPageBoundary>
       </main>
     </div>
+    {leave && serviceOperationsUi.renderLeaveDialog({ cancel: () => setLeave(null), discard: () => {
+      draftDirty.current = false;
+      setLeave(null);
+      leave();
+    } })}
     <Modal title="后台导航" visible={navOpen} footer={null} width="min(320px, calc(100vw - 32px))" closeOnEsc onCancel={() => setNavOpen(false)} bodyStyle={{ maxHeight: '65dvh', overflow: 'auto' }}>
       {navOpen && <div className="v2-sidebar">{navigation}</div>}
     </Modal>

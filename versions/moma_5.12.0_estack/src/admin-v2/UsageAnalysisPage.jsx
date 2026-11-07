@@ -1,3 +1,4 @@
+import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useRef, useState } from 'react';
 import { Banner, Button, Card, Input, Space, Table, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconArrowUp, IconCalendar, IconChevronLeft, IconChevronRight, IconDownload, IconHandle, IconRefresh, IconSave, IconSearch } from '@douyinfe/semi-icons';
@@ -166,6 +167,7 @@ export default function UsageAnalysisPage({ state }) {
       }}/>;
   };
   return <div className="admin-page-stack ua-native-usage">
+    <AdminPageHeading title="用量数据"/>
     <Card className="ua-native-time">
       <div className="admin-analysis-filter-row">
         <FilterToolbar>

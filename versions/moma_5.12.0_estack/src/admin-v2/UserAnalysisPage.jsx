@@ -1,3 +1,4 @@
+import AdminPageHeading from './AdminPageHeading';
 import {userBusinessData} from '../business-facts.mjs';
 import { Card, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import AnalysisMetric from './AnalysisMetric';
@@ -50,6 +51,7 @@ export default function UserAnalysisPage({ state }) {
     setDetailDraft(detail);
   };
   return <div className="admin-page-stack">
+    <AdminPageHeading title="用户数据"/>
     <Card>
       <FilterToolbar>
         <FilterPresets label="时间筛选" value={period} onChange={selectPeriod} items={presets}/>

@@ -1,5 +1,5 @@
 import AdminPageHeading from './AdminPageHeading';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Banner, Button, Card, ConfigProvider, Input, InputNumber, Modal, Space, Table, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import { Choice } from './ServiceUI.jsx';
@@ -47,7 +47,10 @@ export default function TrafficOperations({ state, transact, conflict, dirtyRef 
   const root = useRef(null);
   const opener = useRef(null);
   const isDirty = Boolean(draft && JSON.stringify(draft.data) !== draft.initial);
-  dirtyRef.current = isDirty;
+  useLayoutEffect(() => {
+    dirtyRef.current = isDirty;
+    return () => { dirtyRef.current = false; };
+  }, [dirtyRef, isDirty]);
 
   useEffect(() => {
     if (!draft) return;
@@ -214,7 +217,7 @@ export default function TrafficOperations({ state, transact, conflict, dirtyRef 
             <Input className="admin-list-search" showClear value={modelQuery} aria-label="搜索模型" placeholder="搜索模型名称或标识" onChange={setModelQuery} disabled={Boolean(draft)}/>
           </div>
           <Table key={modelQuery} rowKey="id" size="small" scroll={{ x: 'max(100%, 720px)' }} empty="暂无模型" dataSource={modelRows} columns={modelColumns} pagination={pagination}
-            rowClassName={row => editing('model', row.id) ? 'traffic-editing' : ''}/>
+            onRow={row => editing('model', row.id) ? { className: 'traffic-editing' } : {}}/>
         </Card></div>}
       </Tabs.TabPane>
     </Tabs>

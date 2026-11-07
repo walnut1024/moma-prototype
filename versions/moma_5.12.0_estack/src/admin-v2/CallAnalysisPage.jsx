@@ -1,3 +1,4 @@
+import AdminPageHeading from './AdminPageHeading';
 import { useState } from 'react';
 import { Banner, Button, Card, Space, Table, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconArrowRight, IconCalendar } from '@douyinfe/semi-icons';
@@ -85,7 +86,7 @@ export default function CallAnalysisPage({ state }) {
       .map(([title, dataIndex]) => ({ title, dataIndex, align: 'right', render: fmt })),
   ];
   return <div className="admin-page-stack">
-    <h1 className="sr-only">调用数据</h1>
+    <AdminPageHeading title="调用数据"/>
     <Card>
       <div className="admin-analytics-fields">
         <FilterToolbar>

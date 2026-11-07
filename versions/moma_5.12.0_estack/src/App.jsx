@@ -8,7 +8,7 @@ import { useServiceDirectory } from './useServiceDirectory';
 import { beginExperience, marketModels, customerPriceRows } from './service-directory.mjs';
 import MarketModelDetail from './MarketModelDetail';
 import { readModelDetail, modelDetailLocation } from './model-detail-route.mjs';
-import { Button as SemiButton, Select as SemiSelect } from '@douyinfe/semi-ui';
+import { Button as SemiButton, Select as SemiSelect, Typography as SemiTypography } from '@douyinfe/semi-ui';
 import DevelopmentNotes from './admin-v2/DevelopmentNotes';
 import { AdminUIContext } from './components/admin-ui-context';
 import FrontPageHeader from "./components/FrontPageHeader";
@@ -31,7 +31,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import TextExperience from "./TextExperience";
 import { tenantUserAccess } from "./tenant-user-type.mjs";
 import ModelComparison from "./ModelComparison";
-import AdminConsole from "./AdminConsole";
 import AdminConsoleV2 from "./AdminConsoleV2";
 import { shanghaiDate } from "./call-log-data.mjs";
 import {
@@ -1761,9 +1760,8 @@ function VersionIndex() {
 
 function PrototypeApp({ version }) {
   useState(()=>{try{loadAdminState(localStorage);}catch{/* Existing storage errors are surfaced by the affected workspace. */}return null;});
-  const versionAdmin = "v2";
   const modeFromHash = () =>
-    location.hash.startsWith("#/admin") ? versionAdmin : "front";
+    location.hash.startsWith("#/admin") ? "v2" : "front";
   if (location.pathname.includes("/order/serviceOrder"))
     return (
       <ModelOrderList standalone versionId={version.id} />
@@ -1865,13 +1863,12 @@ function PrototypeApp({ version }) {
     sync();
     window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
-  }, [versionAdmin]);
+  }, []);
   const navigateAdmin = (mode) => {
-    const nextMode = mode === "front" ? "front" : versionAdmin;
-    setAdmin(nextMode);
+    setAdmin(mode);
     if (mode === "front")
       history.replaceState(null, "", location.pathname + location.search);
-    else location.hash = versionAdmin === "legacy" ? "/admin" : "/admin-2/dashboard";
+    else location.hash = "/admin-2/dashboard";
   };
   const toggleFilter = (group, value) =>
     setFilters((current) => ({
@@ -2006,13 +2003,9 @@ function PrototypeApp({ version }) {
       <header className={admin === "v2" ? "admin-banner" : undefined}>
         <div className="brand-mark">
           <img src={`${A}jiangSuZhengWu.png`} />
-          <span>
-            {admin === "front"
-              ? "模型服务平台 MoMA 政企版"
-              : admin === "legacy"
-                ? "大模型服务平台后台运营系统"
-                : "大模型服务平台运营运维中心"}
-          </span>
+          {admin === "v2"
+            ? <SemiTypography.Text strong>大模型服务平台运营运维中心</SemiTypography.Text>
+            : <span>模型服务平台 MoMA 政企版</span>}
         </div>
         <div className="top-actions">
           {admin === "v2" && (
@@ -2044,10 +2037,8 @@ function PrototypeApp({ version }) {
             </div>
           </div>
           {admin === "front" ? (
-            <button onClick={() => navigateAdmin(versionAdmin)}>后台</button>
-          ) : admin === "legacy" && (
-            <button className="active" onClick={() => navigateAdmin("front")}>返回前台</button>
-          )}
+            <button onClick={() => navigateAdmin("v2")}>后台</button>
+          ) : null}
           {admin === 'front' && auth.user && <span>{auth.state.activeSpace === 'personal' ? '个人用户' : '政企用户'}</span>}
           {admin === "front" ? <AuthBanner auth={auth} showToast /> : null}
         </div>
@@ -2100,8 +2091,6 @@ function PrototypeApp({ version }) {
       <main key={admin === "front" ? owner || "anonymous" : "admin"} className={admin !== "front" ? "admin-main" : "front-main"}>
         {auth.route ? (
           <AuthExperience key={auth.route} auth={auth} />
-        ) : admin === "legacy" ? (
-          <AdminConsole />
         ) : admin === "v2" ? (
           <AdminConsoleV2 bannerTarget={adminBannerTarget} />
         ) : activePage === "模型详情" ? (

@@ -7,7 +7,8 @@
   background: var(--semi-color-bg-0);
   color: var(--semi-color-text-0);
 }
-.admin-v2 .v2-content > main { min-width: 0; }
+.admin-v2 .v2-content { min-width: 0; }
+.admin-v2 .v2-content > main { min-width: 0; padding: var(--v2-layout-gap); }
 .v2-sidebar { min-width: 0; }
 .v2-sidebar-desktop {
   position: sticky;
@@ -23,10 +24,9 @@
 .v2-sidebar nav section > span { margin: 0 8px 2px; }
 .v2-sidebar .semi-button { justify-content: flex-start; }
 .v2-content > .admin-context-bar {
-  position: static;
-  inset: auto;
-  z-index: auto;
-  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   min-height: 44px;
   gap: 12px;
   padding: 4px 16px;
@@ -42,7 +42,9 @@
 .v2-content .admin-nav-toggle { display: none; }
 
 @media (max-width: 900px) {
+  body:has(.app-shell > .admin-main) { min-width: 0; }
   .admin-v2 { grid-template-columns: minmax(0, 1fr); }
+  .admin-v2 .v2-content > main { padding: 14px; }
   .v2-sidebar-desktop { display: none; }
   .v2-content .admin-nav-toggle { display: inline-flex; }
 }
@@ -53,7 +55,7 @@
   --admin-control-gap: 12px;
 }
 .admin-v2 .v2-content > main:has(> .admin-page-stack) { padding: var(--admin-section-gap); }
-.admin-page-stack { display: grid; gap: var(--admin-section-gap); min-width: 0; }
+.admin-page-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--admin-section-gap); min-width: 0; }
 .admin-page-heading, .admin-list-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--admin-control-gap); }
 .admin-page-heading { justify-content: space-between; }
 .admin-page-heading > div { min-width: 0; overflow-wrap: anywhere; }
@@ -66,4 +68,50 @@
 
 @media (max-width: 900px) {
   .admin-v2 .v2-content > main:has(> .admin-page-stack) { padding: 12px; }
+}
+
+/* Layout for the Semi controls in the fixed admin banner. */
+.app-shell > .admin-banner {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  gap: 12px;
+  padding-inline: 12px;
+  background: var(--semi-color-bg-0);
+  color: var(--semi-color-text-0);
+  border-bottom: 1px solid var(--semi-color-border);
+}
+.app-shell > .admin-banner .brand-mark { min-width: 32px; flex: 1; }
+.app-shell > .admin-banner .brand-mark img { flex: none; }
+.app-shell > .admin-banner .brand-mark span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell > .admin-banner .top-actions { gap: 8px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.app-shell > .admin-banner :is(.top-actions > *, .admin-banner-return) { flex-shrink: 0; }
+.admin-banner-controls, .admin-banner-field { display: flex; align-items: center; gap: 8px; }
+.admin-banner-controls > div:empty { display: none; }
+.admin-banner-field { white-space: nowrap; }
+@media (max-width: 1280px) {
+  .admin-banner-field > span { display: none; }
+}
+@media (max-width: 900px) {
+  .app-shell > .admin-banner {
+    position: sticky;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    height: auto;
+    gap: 8px;
+    padding-block: 8px;
+  }
+  .app-shell > .admin-banner .brand-mark span { display: block; }
+  .app-shell > .admin-banner .top-actions { grid-row: 2; grid-column: 1 / -1; flex-wrap: wrap; overflow: visible; }
+  .app-shell > .admin-banner .admin-banner-return { grid-row: 1; grid-column: 2; }
+  .app-shell > .admin-banner :is(.admin-banner-controls, .banner-version-tools) { flex-wrap: wrap; max-width: 100%; }
+  .app-shell > .admin-banner + .admin-main { padding-top: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-v2 * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }

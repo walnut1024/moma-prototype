@@ -4,6 +4,7 @@ import { readLinkedState } from '../service-access.mjs';
 import { Children, Fragment, isValidElement, useEffect, useRef, useState } from 'react';
 import { Button, Input, Pagination as SemiPagination, Popover, Table, TextArea, Toast } from '@douyinfe/semi-ui';
 import { IconDelete, IconPlus, IconSearch } from '@douyinfe/semi-icons';
+import AdminPageHeading from './AdminPageHeading';
 import { CopyId, Modal as ServiceModal, Notice, Status, serviceOperationsUi } from './ServiceUI';
 import { Choice, Field, MultiChoice } from './ModelMetadataForm';
 import { priceItems, moneyDisplay } from './model-management';
@@ -16,7 +17,11 @@ import './model-operations.css';
 import './semi-onboarding.css';
 
 export { Notice, Status, CopyId };
-export function Heading({ title, description, children }) { return <div className="mo-heading"><div><h1>{title}</h1>{description && <p>{description}</p>}</div><div className="mo-actions">{children}</div></div>; }
+export function Heading({ title, description, children }) {
+  return <AdminPageHeading title={title} description={description}>
+    {children && <div className="mo-actions">{children}</div>}
+  </AdminPageHeading>;
+}
 export function MoreActions({children,label='更多操作',disabled=false}) {
   const [open,setOpen]=useState(false);
   useEffect(() => {

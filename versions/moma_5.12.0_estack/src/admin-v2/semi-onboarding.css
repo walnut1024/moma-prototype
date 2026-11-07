@@ -3,7 +3,7 @@
 
 /* 基础排版对齐 Semi token（与 semi-services 页面一致） */
 .mo-workbench{font-size:14px;color:var(--semi-color-text-0)}
-.mo-workbench h1,.mo-workbench h2,.mo-workbench h3{color:var(--semi-color-text-0)}
+.mo-workbench :is(h1,h2,h3):where(:not(.semi-typography)){color:var(--semi-color-text-0)}
 .mo-workbench .mo-heading p,.mo-workbench .mo-muted,.mo-workbench .mo-pagination,.mo-workbench .mo-stack small,.mo-workbench .mo-table small{color:var(--semi-color-text-2)}
 .mo-workbench code{color:var(--semi-color-text-1)}
 

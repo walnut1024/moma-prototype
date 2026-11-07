@@ -1,3 +1,4 @@
+import AdminPageHeading from './AdminPageHeading';
 import { useMemo, useState } from 'react';
 import { Button, Card, Modal, Space, Table, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconArrowLeft, IconArrowRight, IconMaximize, IconRefresh } from '@douyinfe/semi-icons';
@@ -42,6 +43,7 @@ export default function OperationsOverview({state}) {
     scope: '用量指标、趋势、供给和排行；月活固定按昨日所在自然月统计',
   };
   return <div className="admin-page-stack ov-page">
+    <AdminPageHeading title="概览"/>
     <Card>
       <FilterToolbar>
         <Text type="secondary">统计时间</Text>

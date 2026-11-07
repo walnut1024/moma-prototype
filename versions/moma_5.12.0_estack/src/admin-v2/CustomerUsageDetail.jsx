@@ -1,3 +1,4 @@
+import AdminPageHeading from './AdminPageHeading';
 import { Banner, Card, Table, Typography } from '@douyinfe/semi-ui';
 import AnalysisMetric from './AnalysisMetric';
 import { useEffect, useState } from 'react';
@@ -49,6 +50,7 @@ export default function CustomerUsageDetail({ state }) {
     { title: '状态码', dataIndex: 'httpStatus', align: 'right', render: value => value ?? '—' },
   ];
   return <div className="admin-page-stack">
+    <AdminPageHeading title="客户详情"/>
     <Card>
       <FilterToolbar>
         <FilterPresets label="时间筛选" value={period} onChange={value => selectPeriod(value)} items={usagePresets}/>

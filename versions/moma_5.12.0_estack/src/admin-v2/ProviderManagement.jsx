@@ -3,9 +3,9 @@ import SupplyModelView, { SupplyModelSidebar } from './SupplyModelView';
 import ProviderEditor from './SupplierProfileDialog';
 import { supplyModelDirectory } from './supply-models';
 import { useRef, useState } from 'react';
-import { CloudCog, Power } from 'lucide-react';
+import { Power } from 'lucide-react';
 import { IconEdit, IconPlus } from '@douyinfe/semi-icons';
-import { Button, Tabs } from '@douyinfe/semi-ui';
+import { Button, Space, Tabs, Typography } from '@douyinfe/semi-ui';
 import { MOMA_PROVIDER, supplierDirectory } from './moma-provider.js';
 import { supplierChannelResources } from './supplier-resources';
 import { providerCode } from './model-operations';
@@ -15,11 +15,8 @@ import { supplierModelChannelGroups } from './supplier-model-channel-table';
 import ProviderApiKeys from './ProviderApiKeys';
 import SupplierAddDialog from './SupplierAddDialog';
 import { SupplierChannelDialog } from './SupplierResourceDialogs';
+import AdminPageHeading from './AdminPageHeading';
 import './supplier-workbench.css';
-
-function SupplierHeading({ title, description, children }) {
-  return <div className="supplier-heading"><div><h1>{title}</h1>{description && <p>{description}</p>}</div><div className="supplier-actions">{children}</div></div>;
-}
 
 function SupplierSidebar({ state, providers, selected, onSelect }) {
   const [query, setQuery] = useState('');
@@ -52,10 +49,19 @@ export default function ProviderManagement(props) {
   if (provider) {
     content = <div className="supplier-card supplier-detail-card">
       <div className="supplier-context">
-      <SupplierHeading title={<>{provider.name}<Status good={provider.status === '已启用'}>{provider.status}</Status></>} description={<><span className="shrink-0">服务商 ID</span><code title={provider.id}>{provider.id}</code></>}>
+      <div className="supplier-heading">
+        <div>
+          <Space wrap>
+            <Typography.Title heading={4} component="h2">{provider.name}</Typography.Title>
+            <Status good={provider.status === '已启用'}>{provider.status}</Status>
+          </Space>
+          <Typography.Paragraph type="tertiary" size="small">服务商 ID <code title={provider.id}>{provider.id}</code></Typography.Paragraph>
+        </div>
+        <Space wrap>
         <Button icon={<IconEdit aria-hidden="true"/>} theme="borderless" aria-label="编辑服务商资料" title="编辑服务商资料" disabled={!ops.can} onClick={() => go({ view: 'profile', tab })}/>
         {provider.status !== '已启用' && <Button theme="light" size="small" disabled={!ops.can} icon={<Power aria-hidden="true"/>} onClick={async () => await ops.run('provider', { operation: 'enableProvider', objectId: provider.id, values: {} })}>启用服务商</Button>}
-      </SupplierHeading></div>
+        </Space>
+      </div></div>
 
       <Tabs className="supplier-detail-tabs" type="line" lazyRender activeKey={tab} onChange={tab => go({ tab, q: null, page: null })} aria-label="服务商详情">
         <Tabs.TabPane tab="模型渠道" itemKey="catalogue">{tab === 'catalogue' ? <SupplierModelCatalogue key={provider.id} state={state} provider={provider} ops={ops} onAddModel={event => startCreation('model',event)} onAddChannel={(event,libraryId) => startCreation('channel',event,libraryId)}/> : null}</Tabs.TabPane>
@@ -68,7 +74,7 @@ export default function ProviderManagement(props) {
   const viewSwitch = <Tabs className="supplier-perspective" type="button" activeKey={perspective} onChange={perspective => go({ perspective, resource: null })} aria-label="渠道接入视图"><Tabs.TabPane tab="服务商" itemKey="suppliers"/><Tabs.TabPane tab="模型" itemKey="models"/></Tabs>;
   const returnEndpoint = state.endpoints.find(row => row.id === params.get('returnTestEndpoint') && row.providerId === provider?.id && !row.deletedAt);
   let returnIds = []; try { const parsed = JSON.parse(params.get('returnTestAssociations') || '[]'); if (Array.isArray(parsed) && parsed.length <= 50 && parsed.every(id => typeof id === 'string')) returnIds = parsed; } catch { /* Invalid return context does not open an operation. */ }
-  return <div className="mo-workbench supplier-workbench">{params.get('origin')?.startsWith('#/admin-2/listing') && <Notice><Button type="tertiary" theme="borderless" onClick={() => ops.proceed(() => { location.hash = params.get('origin'); })}>返回服务配置</Button></Notice>}{params.get('onboarding') && <Notice>上架进度已保留。<Button type="tertiary" theme="borderless" onClick={() => ops.go({ view: 'add', draft: params.get('onboarding'), onboarding: null, provider: null, tab: null, step: state.modelOnboardings.find(item => item.id === params.get('onboarding'))?.step || 'select' }, { base: 'listing' })}>返回上架流程</Button></Notice>}<SupplierHeading title={<><CloudCog/>渠道接入</>} description="统一管理模型的供应来源：同一模型可由多家服务商、多个渠道提供，维护接入和上游密钥，成本在模型成本维护。">{perspective === 'suppliers' && <Button ref={supplierTrigger} theme="light" size="small" disabled={!ops.can} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={() => startCreation('provider')}>添加服务商</Button>}</SupplierHeading><div className="supplier-layout"><aside className="supplier-sidebar" aria-label={perspective === 'models' ? '已接入模型列表' : '服务商列表'}>{viewSwitch}{perspective === 'models' ? <SupplyModelSidebar models={models} selected={selectedModel} ops={ops}/> : <SupplierSidebar state={state} providers={providers} selected={provider?.id} onSelect={id => detail(id)}/>}</aside>{perspective === 'models' ? <SupplyModelView state={state} selected={selectedModel} ops={ops}/> : <div className="supplier-body">{content}</div>}</div>
+  return <div className="mo-workbench supplier-workbench">{params.get('origin')?.startsWith('#/admin-2/listing') && <Notice><Button type="tertiary" theme="borderless" onClick={() => ops.proceed(() => { location.hash = params.get('origin'); })}>返回服务配置</Button></Notice>}{params.get('onboarding') && <Notice>上架进度已保留。<Button type="tertiary" theme="borderless" onClick={() => ops.go({ view: 'add', draft: params.get('onboarding'), onboarding: null, provider: null, tab: null, step: state.modelOnboardings.find(item => item.id === params.get('onboarding'))?.step || 'select' }, { base: 'listing' })}>返回上架流程</Button></Notice>}<AdminPageHeading title="渠道接入" description="统一管理模型的供应来源：同一模型可由多家服务商、多个渠道提供，维护接入和上游密钥，成本在模型成本维护。">{perspective === 'suppliers' && <Button ref={supplierTrigger} theme="solid" disabled={!ops.can} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={() => startCreation('provider')}>添加服务商</Button>}</AdminPageHeading><div className="supplier-layout"><aside className="supplier-sidebar" aria-label={perspective === 'models' ? '已接入模型列表' : '服务商列表'}>{viewSwitch}{perspective === 'models' ? <SupplyModelSidebar models={models} selected={selectedModel} ops={ops}/> : <SupplierSidebar state={state} providers={providers} selected={provider?.id} onSelect={id => detail(id)}/>}</aside>{perspective === 'models' ? <SupplyModelView state={state} selected={selectedModel} ops={ops}/> : <div className="supplier-body">{content}</div>}</div>
     {['model','channel'].includes(creating) && <SupplierAddDialog state={state} provider={perspective==='suppliers'?provider:undefined} libraryId={creationLibraryId || (perspective==='models'?selectedModel?.master?.id:undefined)} mode={creating} ops={ops} close={closeCreation}/>}
     {(creating === 'provider' || view === 'new' || view === 'profile' && provider) && <ProviderEditor key={view === 'profile' ? provider.id : 'new'} provider={view === 'profile' ? provider : undefined} ops={ops} cancel={() => ops.proceed(() => { closeCreation(); if (view) go({ view: null }, { saved: true }); })} done={(next, id) => { closeCreation(); detail(id, view === 'profile' ? tab : 'catalogue', true); }}/>}
     {returnEndpoint && returnIds.length > 0 && <SupplierChannelBatchTest state={state} provider={provider} endpointId={returnEndpoint.id} associationIds={returnIds} ops={ops} close={() => ops.go({ returnTestEndpoint: null, returnTestAssociations: null })}/>}

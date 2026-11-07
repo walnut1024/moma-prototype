@@ -1,9 +1,7 @@
 .admin-v2:has(.supplier-workbench){min-width:0}
 .supplier-workbench.mo-workbench{padding:8px 8px 24px;gap:16px;color:var(--foreground);--mo-muted:var(--muted-foreground)}
 .supplier-workbench .supplier-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:4px 2px;min-height:64px}
-.supplier-workbench .supplier-heading h1{display:flex;align-items:center;gap:10px;font-size:18px;color:var(--foreground);line-height:1.5}
-.supplier-workbench .supplier-heading h1>svg{width:18px;height:18px;color:var(--muted-foreground)}
-.supplier-workbench .supplier-heading p{display:flex;align-items:center;gap:12px;margin:5px 0 0;font-size:12px;color:var(--muted-foreground)}
+.supplier-workbench .supplier-heading p{margin:4px 0 0;overflow-wrap:anywhere}
 .supplier-workbench .supplier-heading p code{font-size:12px}
 .supplier-actions,.supplier-row-actions{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
 .supplier-workbench [data-slot=button]{font-size:12px;box-shadow:none}
@@ -188,7 +186,6 @@
 .admin-v2 .supplier-sidebar-options>[aria-pressed=true] small{color:var(--primary)}
 .admin-v2 .supplier-sidebar-options>p{padding:16px 8px;color:var(--muted-foreground);font-size:12px}
 .admin-v2 .supplier-body{display:flex;flex-direction:column;gap:16px;min-width:0}
-.admin-v2 .supplier-workbench>.supplier-heading h1,.admin-v2 .supplier-body>.supplier-heading h1,.admin-v2 .supplier-context .supplier-heading h1{font-size:14px}
 .admin-v2 .supplier-context .supplier-heading{padding:12px 20px;min-height:0}
 .admin-v2 .supplier-context .supplier-heading p code{min-width:0;overflow-wrap:anywhere}
 .admin-v2 .supplier-context{border-bottom:1px solid var(--border)}
@@ -370,9 +367,6 @@
 
 .admin-v2 .supplier-perspective [role=tab][data-state=active]{background:white;color:var(--foreground)}
 
-.admin-v2 .supplier-workbench>.supplier-heading{align-items:flex-start;gap:16px}
-.admin-v2 .supplier-workbench>.supplier-heading>div:first-child{min-width:240px;flex:1}
-.admin-v2 .supplier-workbench>.supplier-heading p{line-height:1.5;max-width:720px}
 .admin-v2 .supplier-create-actions{display:flex;gap:8px}
 
 @media(max-width:1400px){.admin-v2 .supplier-workbench>.supplier-heading{flex-wrap:wrap}.admin-v2 .supplier-workbench>.supplier-heading>.supplier-actions{margin-left:auto}}
