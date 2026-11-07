@@ -13,9 +13,11 @@ import { adminAccountTransaction } from './admin-accounts.js';
 import { deploymentTransaction, deploymentUsesArtifact } from './deployments.js';
 import { operationsTransaction } from './model-operations.js';
 import { lifecycleSignature, assertOrderAccess } from '../service-access.mjs';
+import { trafficTransaction } from './traffic-limits.js';
 const now='2026-09-15T10:30:00+08:00';
 const record=(id,value)=>({id,createdAt:now,updatedAt:now,...value});
 export function canMutate(role, action) {
+  if (action.type === 'trafficOperation') return ['平台管理员', '运营人员'].includes(role);
   if (action.type === 'deploymentOperation') return ['平台管理员', '运维人员'].includes(role);
   if (action.type === 'modelOperations') return ['installModelCatalogue', 'cleanModelCatalogue'].includes(action.operation) ? role === '平台管理员' : ['平台管理员', '运营人员'].includes(role);
   if (action.type === 'adminAccount') return role === '平台管理员';
@@ -53,6 +55,8 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   const supplierLifecycle = action.type === 'modelOperations' && ['serviceProviderListing','serviceProviderServing','removeServiceProvider'].includes(action.operation);
   const deletingLibrary = action.type === 'modelOperations' && action.operation === 'templateDelete';
   const directChanges=action.type==='batch'?action.changes:[action];
+  if (directChanges?.some(change => change.type === 'setSettings' && Object.hasOwn(change.changes || {}, 'trafficLimits')
+    || change.collection === 'tenants' && Object.hasOwn(change.changes || change.record || {}, 'trafficPolicy'))) throw new Error('限流配置须通过流量运营维护');
   if (action.type!=='modelOperations' && directChanges?.some(change=>change.collection==='models' && ['callsEnabled','listingStatus','releaseStage','releaseTenantIds','salesScope','purpose','archivedAt','marketVisible','openScope','tenantIds','commercialDrafts','commercialPublications','materialDraft','materialPublication','lifecycleStopReason','requestGeneration','serviceProviders','serviceMode','serviceModeRevision'].some(key=>Object.hasOwn(change.changes || change.record || {},key)) || change.collection==='modelSalePrices' && ['model','provider'].includes((change.record || change.changes)?.scope || state.modelSalePrices.find(price=>price.id===change.id)?.scope))) throw new Error('模型服务关联及售价须通过服务管理操作');
   if (action.type !== 'modelOperations' && directChanges?.some(change => change.collection === 'modelTemplates' && ['materialDraft', 'materialPublication'].some(key => Object.hasOwn(change.changes || change.record || {}, key)))) throw new Error('模型资料须通过模型资料维护操作');
   if (action.type!=='modelOperations' && directChanges?.some(change=>change.collection==='endpoints' && Object.hasOwn(change.changes || change.record || {},'frozen'))) throw new Error('渠道冻结状态须通过供应管理操作');
@@ -61,6 +65,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   if (action.type !== 'modelOperations' && (action.collection === 'serviceRoutes' || Array.isArray(action.changes) && action.changes.some(change => change.collection === 'serviceRoutes'))) throw new Error('服务路由须通过路由管理操作');
   if (action.type !== 'modelOperations' && (action.collection === 'tariffDictionary' || Array.isArray(action.changes) && action.changes.some(change => change.collection === 'tariffDictionary'))) throw new Error('资费字典须通过字典维护操作');
   if (!canMutate(actor, action)) throw new Error(`${actor}无权执行此操作`);
+  if (action.type === 'trafficOperation') action = trafficTransaction(state, action);
   if (action.type === "enterprise") action = enterpriseTransaction(state, action);
   if (action.type === "individual") action = individualTransaction(state, action, actor);
   if (action.type === "modelOperations") action = operationsTransaction(state, action);

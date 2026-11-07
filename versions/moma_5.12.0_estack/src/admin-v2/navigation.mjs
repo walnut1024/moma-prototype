@@ -15,6 +15,9 @@ export const sections = [
     { id: "prices", label: "模型售价", children: [["model-prices", "模型售价"]] },
     { id: "materials", label: "模型资料", children: [["model-templates", "模型"], ["tariff-dictionary", "计费项"]] },
   ]},
+  { id: "traffic", workspace: "operations", title: "流量运营", items: [
+    { id: "traffic-limits", label: "限流配置", children: [["traffic-limits", "限流配置"]] },
+  ]},
   { id: "customers", workspace: "operations", title: "用户管理", items: [
     { id: "enterprise", label: "政企用户", children: [["tenants", "政企用户"]] },
     { id: "individual", label: "个人用户", children: [["individual-users", "个人用户"]] },

@@ -232,6 +232,13 @@ export function useAdminStore() {
     setState(next);
     return next;
   };
+  const transactTraffic = action => {
+    if (conflict) throw new Error('检测到数据冲突，请载入新版本后重试；当前输入保留');
+    const next = persistAdminAction(currentState.current, { ...action, type: 'trafficOperation' }, localStorage);
+    currentState.current = next;
+    setState(next);
+    return next;
+  };
   const reload = () => { try { const fresh = loadAdminState(localStorage); currentState.current = fresh; setState(fresh); setConflict(false); if (fresh.storageError) toast.error(fresh.storageError); else toast.success("已载入最新数据"); } catch (error) { toast.error(error.message); setState(current => ({ ...current, storageError: error.message })); } };
   const transactAdminAccount = (action, expectedRevision) => {
     if (conflict) throw new Error('检测到数据冲突，请载入新版本后重试；当前输入保留');
@@ -240,5 +247,5 @@ export function useAdminStore() {
     setState(next);
     return next;
   };
-  return { state, dispatch, transact, transactModel, transactIndividual, transactProvider, transactAdminAccount, reload, conflict };
+  return { state, dispatch, transact, transactModel, transactIndividual, transactProvider, transactAdminAccount, transactTraffic, reload, conflict };
 }
