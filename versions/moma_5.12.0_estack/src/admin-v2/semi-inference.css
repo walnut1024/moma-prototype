@@ -1,0 +1,7 @@
+.admin-analysis-metrics.admin-analysis-metrics-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-cluster-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--admin-section-gap); }
+.admin-cluster-grid .admin-analysis-detail-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.admin-inference-empty { display: grid; place-items: center; min-height: 180px; }
+@media (max-width: 600px) {
+  .admin-analysis-metrics.admin-analysis-metrics-three { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+}
