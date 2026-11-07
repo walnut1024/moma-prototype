@@ -32,7 +32,21 @@ export function AdminModal({
     cancelText={cancelText} cancelButtonProps={{ 'aria-label': typeof cancelText === 'string' ? cancelText : undefined, ...cancelButtonProps }}/>;
 }
 
-export function AdminSideSheet({ title, label, footer, maskClosable = false, ...props }) {
+function keepSheetTabInside(event) {
+  if (event.key !== 'Tab' || event.defaultPrevented) return;
+  const dialog = event.currentTarget;
+  const active = document.activeElement;
+  const controls = [...dialog.querySelectorAll('a[href], button, input, select, textarea, [tabindex], [contenteditable="true"]')]
+    .filter(element => element.tabIndex >= 0 && !element.matches(':disabled, [aria-disabled="true"]')
+      && !element.closest('[inert]') && element.getClientRects().length && getComputedStyle(element).visibility === 'visible');
+  const first = controls[0], last = controls.at(-1);
+  if (active === dialog || !first || active === (event.shiftKey ? first : last)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first)?.focus();
+  }
+}
+
+export function AdminSideSheet({ title, label, footer, mask = true, maskClosable = false, ...props }) {
   const titleId = useId();
   const opener = useRef(null);
   const labelSheet = useCallback(node => {
@@ -41,11 +55,19 @@ export function AdminSideSheet({ title, label, footer, maskClosable = false, ...
     if (label) dialog.setAttribute('aria-label', label);
     else dialog.setAttribute('aria-labelledby', titleId);
     dialog.querySelector('.semi-sidesheet-close')?.setAttribute('aria-label', '关闭抽屉');
+    if (mask) {
+      dialog.setAttribute('aria-modal', 'true');
+      dialog.addEventListener('keydown', keepSheetTabInside);
+    }
     if (!dialog.contains(document.activeElement)) {
       opener.current ??= document.activeElement;
       dialog.focus({ preventScroll: true });
     }
-  }, [label, titleId]);
+    return () => {
+      dialog.removeEventListener('keydown', keepSheetTabInside);
+      dialog.removeAttribute('aria-modal');
+    };
+  }, [label, mask, titleId]);
 
   useLayoutEffect(() => () => {
     const target = opener.current;
@@ -54,7 +76,7 @@ export function AdminSideSheet({ title, label, footer, maskClosable = false, ...
     });
   }, []);
 
-  return <SideSheet {...props} maskClosable={maskClosable}
+  return <SideSheet {...props} mask={mask} maskClosable={maskClosable}
     footer={footer ? <div className="admin-sheet-actions">{footer}</div> : null}
     title={title == null ? title : <div id={titleId} ref={labelSheet}>{title}</div>}/>;
 }
