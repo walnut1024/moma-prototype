@@ -44,7 +44,6 @@
 .v2-content .admin-nav-toggle { display: none; }
 
 @media (max-width: 900px) {
-  body:has(.app-shell > .admin-main) { min-width: 0; }
   .admin-v2 { grid-template-columns: minmax(0, 1fr); }
   .admin-v2 .v2-content > main { padding: 14px; }
   .v2-sidebar-desktop { display: none; }
@@ -71,6 +70,9 @@
 @media (max-width: 900px) {
   .admin-v2 .v2-content > main:has(> .admin-page-stack) { padding: 12px; }
 }
+
+/* Keep the fixed banner offset on the admin shell alone. */
+.app-shell > .admin-main { padding-top: 48px; min-height: 100vh; font-size: 14px; }
 
 /* Layout for the Semi controls in the fixed admin banner. */
 .app-shell > .admin-banner {

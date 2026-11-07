@@ -121,8 +121,8 @@
   .cl-filters select { flex: 1 1 135px; }
 }
 
-/* Keep the application font independent of lazy-loaded component library body styles. */
-#root { font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+/* Keep the front and version pages independent of the Semi body font. */
+#root:where(:not(:has(> .app-shell > .admin-banner))) { font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
 
 :root {
   font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -386,9 +386,11 @@
 }
 body {
   margin: 0;
-  min-width: 1180px;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+}
+body:where(:not(:has(> #root > .app-shell > .admin-banner))) {
+  min-width: 1180px;
 }
 button,
 input {
@@ -457,9 +459,6 @@ header:not(.admin-banner) .top-actions > button.active {
 }
 .version-switch [data-slot="select-trigger"] svg {
   color: #8f9aab;
-}
-.admin-main {
-  padding-left: 0;
 }
 .front-main .v2-empty { padding: 42px; text-align: center; color: #98a2b3; }
 @media (max-width: 760px) {
@@ -571,10 +570,10 @@ header:not(.admin-banner) .top-actions > button.active {
 .billing-nav > div > button.active > svg {
   color: #2878ee;
 }
-.app-shell aside > div > small {
+.app-shell:where(:not(:has(> .admin-banner))) aside > div > small {
   margin: 12px 6px 4px;
 }
-.app-shell aside > div > button {
+.app-shell:where(:not(:has(> .admin-banner))) aside > div > button {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -582,18 +581,18 @@ header:not(.admin-banner) .top-actions > button.active {
   padding: 7px 12px;
   font-size: 13px;
 }
-.app-shell aside > div > button > svg {
+.app-shell:where(:not(:has(> .admin-banner))) aside > div > button > svg {
   width: 15px;
   height: 15px;
   flex: none;
   color: #778295;
   stroke-width: 1.7;
 }
-.app-shell aside > div > button:hover > svg,
-.app-shell aside > div > button.active > svg {
+.app-shell:where(:not(:has(> .admin-banner))) aside > div > button:hover > svg,
+.app-shell:where(:not(:has(> .admin-banner))) aside > div > button.active > svg {
   color: #2878ee;
 }
-main {
+main:where(.front-main, .version-main) {
   padding: 48px 0 0 190px;
   min-height: 100vh;
 }
@@ -1350,7 +1349,7 @@ main {
   .app-shell > aside {
     display: none;
   }
-  main {
+  main:where(.front-main, .version-main) {
     padding-left: 0;
   }
   .content {
