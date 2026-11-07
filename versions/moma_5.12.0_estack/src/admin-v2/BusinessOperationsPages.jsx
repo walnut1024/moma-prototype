@@ -1,5 +1,6 @@
+import Table from './AdminTable';
 import { useState } from 'react';
-import { Banner, Button, Card, Form, Input, Modal, Space, Table, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Form, Input, Modal, Space, Tag, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch, IconUpload } from '@douyinfe/semi-icons';
 import { DEFAULT_PAGE_SIZE, FilterReset, FilterToolbar, PAGE_SIZES } from '../components/FilterControls';
 import OperationInputDialog from '../components/OperationInputDialog';

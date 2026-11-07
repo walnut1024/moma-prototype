@@ -1,5 +1,6 @@
+import Table from './AdminTable';
 import { useId, useState } from 'react';
-import { Button, Input, Table, Descriptions, Tag, Typography } from '@douyinfe/semi-ui';
+import { Button, Input, Descriptions, Tag, Typography } from '@douyinfe/semi-ui';
 import { Field, Modal, Notice } from './ServiceUI';
 import ProcurementPriceFields from './ProcurementPriceFields';
 import { cataloguePriceDraft, cataloguePurchasePrice, catalogueMoneyDisplay } from './provider-catalogue-pricing';

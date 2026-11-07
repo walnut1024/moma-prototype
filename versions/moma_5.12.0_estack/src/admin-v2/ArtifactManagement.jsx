@@ -1,5 +1,6 @@
+import Table from './AdminTable';
 import { useState } from 'react';
-import { Button, Card, Space, Table, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Space, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconPlus } from '@douyinfe/semi-icons';
 import AdminPageHeading from './AdminPageHeading';
 import { deploymentUsesArtifact } from './deployments';

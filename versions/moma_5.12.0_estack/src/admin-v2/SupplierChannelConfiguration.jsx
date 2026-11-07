@@ -1,12 +1,13 @@
+import Table, { AdminPagination } from './AdminTable';
 import { pendingGuidedOnboardings } from './guided-onboarding';
 import ChannelDiscovery from './ChannelDiscovery';
 import ChannelAdvancedFields from './ChannelAdvancedFields';
 import { useEffect, useRef, useState } from 'react';
 import { IconDelete, IconPlus } from '@douyinfe/semi-icons';
-import { Button, Checkbox, Input, Select, Steps, Table, Typography } from '@douyinfe/semi-ui';
+import { Button, Checkbox, Input, Select, Steps, Typography } from '@douyinfe/semi-ui';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import { Choice, Field } from './ServiceUI';
-import { Disclosure, Notice, Pagination } from './ModelOperationsUI';
+import { Disclosure, Notice } from './ModelOperationsUI';
 import { supplierDirectory } from './moma-provider';
 import { libraryRecord } from './model-library';
 import { MODEL_TYPES } from './model-management';
@@ -139,7 +140,7 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
   ];
   const modelFields = !guided && <section className="supplier-combined-models"><div className="supplier-model-entry-heading"><Typography.Title heading={5} component="h3">模型</Typography.Title><Button theme="light" disabled={saving || !ops.can || rows.length >= 50} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={() => { changeRows([...rows, modelRow(state)]); setPage(Math.ceil((rows.length + 1) / 10)); }}>添加模型</Button></div>
       {rows.length > 1 && <div className="supplier-row-actions"><Checkbox aria-label="选择全部模型行" disabled={saving || !ops.can} checked={rows.length > 0 && selected.length === rows.length} indeterminate={selected.length > 0 && selected.length < rows.length} onChange={event => changeRows(rows.map(row => ({ ...row, selected: event.target.checked })))}>全部 {rows.length} 项</Checkbox><span>已选 {selected.length}</span></div>}
-      <div className="mo-table-scroll"><Table size="small" className={`supplier-onboarding-models${rows.length === 1 && selected.length === 1 ? ' supplier-onboarding-single' : ''}`} rowKey="id" columns={modelColumns} dataSource={pageRows} pagination={false} onRow={row => ({ 'data-channel-row': row.id })}/></div>{rows.length > 10 && <Pagination count={rows.length} page={currentPage} setPage={setPage}/>}
+      <div className="mo-table-scroll"><Table size="small" className={`supplier-onboarding-models${rows.length === 1 && selected.length === 1 ? ' supplier-onboarding-single' : ''}`} rowKey="id" columns={modelColumns} dataSource={pageRows} pagination={false} onRow={row => ({ 'data-channel-row': row.id })}/></div>{rows.length > 10 && <AdminPagination total={rows.length} currentPage={currentPage} onPageChange={setPage}/>}
 
       {rows.filter(row => row.id === priceRow).map(row => <SupplierPriceFields key={row.id} ops={ops} state={state} scenarios={row.scenarios} disabled={saving || !ops.can} onChange={scenarios => setRow(row.id, { scenarios })}/>)}
     </section>;

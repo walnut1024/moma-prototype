@@ -1,7 +1,8 @@
+import Table from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import SupplierChannelBatchTest from './SupplierChannelBatchTest';
 import { useEffect, useRef, useState } from 'react';
-import { Button, Checkbox, Table, Typography, Descriptions, Collapse } from '@douyinfe/semi-ui';
+import { Button, Checkbox, Typography, Descriptions, Collapse } from '@douyinfe/semi-ui';
 import {Choice, Field} from './ServiceUI';
 import { Modal, Notice } from './ServiceUI';
 import { displayTime } from './model-management';

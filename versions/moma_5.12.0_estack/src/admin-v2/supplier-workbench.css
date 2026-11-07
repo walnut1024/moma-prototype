@@ -25,7 +25,6 @@
 .supplier-tariff-choice{width:100%;min-width:0;justify-content:space-between;gap:8px}
 .supplier-tariff-choice>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .supplier-workbench .supplier-row-actions{gap:6px}
-.supplier-workbench .mo-pagination{width:100%;border:0;padding:0;color:var(--semi-color-text-2);font-size:12px}
 .supplier-workbench .mo-empty{padding:48px 20px;color:var(--semi-color-text-2)}
 .supplier-workbench .mo-form-grid{gap:20px 28px;margin:0}
 .supplier-workbench .supplier-check{display:flex;align-items:center;gap:10px;font-size:12px;line-height:1.6}

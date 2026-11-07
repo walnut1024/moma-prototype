@@ -1,9 +1,10 @@
+import { AdminPagination } from './AdminTable';
 import SupplierChannelDetails from './SupplierChannelDetails';
 import { useRef, useState } from 'react';
 import { IconPlus } from '@douyinfe/semi-icons';
 import { Button } from '@douyinfe/semi-ui';
 import ModelFieldLabel from './ModelFieldLabel';
-import { GridTable, Row, Cell, Modal, Notice, SearchBox, Pagination, CopyId, Status } from './ModelOperationsUI';
+import { GridTable, Row, Cell, Modal, Notice, SearchBox, CopyId, Status } from './ModelOperationsUI';
 import { catalogueMoneyDisplay } from './provider-catalogue-pricing';
 import { modelSupplyGroups, supplierModelChannelGroups, supplierModelChannelRows, supplierChannelInterface } from './supplier-model-channel-table';
 import { channelStatus } from './channel-selection';
@@ -57,7 +58,7 @@ export default function SupplierModelCatalogue({ state, provider, ops, onAddMode
           {channelSpan > 0 && <Cell className="supplier-action-cell" rowSpan={channelSpan}><div className="supplier-row-actions">{channel?.endpointId ? <><Button type="tertiary" theme="borderless" size="small" onClick={event=>open(event,setResource,{providerId:groupOwner.id,endpointId:channel.endpointId,associationId:channel.unlinked?null:channel.id,kind:'details'})}>详情</Button>{!channel.unlinked && <Button type="tertiary" theme="borderless" size="small" onClick={()=>cost(groupOwner,channel)}>成本</Button>}<Button type="tertiary" theme="borderless" size="small" disabled={blocked} onClick={event => open(event,setResource,{providerId:groupOwner.id,endpointId:channel.endpointId,associationId:channel.unlinked?null:channel.id,kind:'edit'})}>编辑</Button><Button type="tertiary" theme="borderless" size="small" disabled={blocked || channel.unlinked} title={channel.unlinked?'请先关联模型后测试连接':undefined} onClick={event => open(event,setResource,{providerId:groupOwner.id,endpointId:channel.endpointId,associationId:channel.id,kind:'test'})}>测试连接</Button>{!channel.unlinked && <Button type="tertiary" theme="borderless" size="small" disabled={blocked} onClick={event=>open(event,setResource,{providerId:groupOwner.id,endpointId:channel.endpointId,associationId:channel.id,kind:enabled?'stop':'test'})}>{enabled?'停用供给':'启用供给'}</Button>}<Button type="tertiary" theme="borderless" size="small" disabled={blocked} onClick={event => open(event,setDeleting,{providerId:groupOwner.id,modelId:channel.modelId || group.modelId,channelId:channel.id,endpointId:channel.endpointId,name:supplierChannelName(groupOwner,channel.endpoint)})}>删除渠道</Button></> : <><Button type="tertiary" theme="borderless" size="small" disabled={blocked} onClick={event => modelEntries?ops.go({perspective:'suppliers',provider:groupOwner.id,tab:'catalogue'}):onAddChannel(event,group.master?.id)}>接入新渠道</Button><Button type="tertiary" theme="borderless" size="small" disabled={blocked} onClick={event => open(event,setDeleting,{providerId:groupOwner.id,modelId:group.modelId,name:group.name})}>删除模型</Button></>}</div></Cell>}
         </Row>;
       }))}
-    </GridTable><Pagination count={filtered.length} page={currentPage} setPage={setPage}/>
+    </GridTable><AdminPagination total={filtered.length} currentPage={currentPage} onPageChange={setPage}/>
     {endpoint && association && resource.kind==='details' && <SupplierChannelDetails state={state} provider={owner} association={association} ops={ops} close={close} onEdit={(kind)=>{if(kind==='price'){cost(owner,association,true);return;}setResource({...resource,kind:kind==='test'?'test':'edit'});}}/>}
     {endpoint && resource.kind === 'edit' && <SupplierChannelDialog key={endpoint.id+':'+(association?.id || '')} state={state} provider={owner} endpoint={endpoint} association={association || undefined} mode="info" ops={ops} close={close}/>}
     {endpoint && resource.kind === 'test' && (endpoint.interfaceType ? <SupplierChannelBatchTest state={state} provider={owner} endpointId={endpoint.id} associationIds={[association.id]} ops={ops} close={close}/> : <SupplierChannelDialog key={endpoint.id} state={state} provider={owner} endpoint={endpoint} association={association} mode="info" ops={ops} close={close}/>)}

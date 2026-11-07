@@ -1,7 +1,8 @@
+import Table from './AdminTable';
 import { ROUTING_POLICIES } from './routing-policy';
 import {useRef, useState} from 'react';
 import {ArrowRight, Plus} from 'lucide-react';
-import { Button, Input, Checkbox, Radio, Table, Space, Typography } from '@douyinfe/semi-ui';
+import { Button, Input, Checkbox, Radio, Space, Typography } from '@douyinfe/semi-ui';
 import {Choice, Field} from './ServiceUI';
 import { FieldLabel as ModelFieldLabel } from './ServiceUI';
 import {Status, CopyId, Notice, Modal} from './ServiceUI';

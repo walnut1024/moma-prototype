@@ -1,4 +1,5 @@
-import { Banner, Button, Checkbox, Descriptions, Space, Steps, Table, Toast, Typography, Upload } from '@douyinfe/semi-ui';
+import Table from './AdminTable';
+import { Banner, Button, Checkbox, Descriptions, Space, Steps, Toast, Typography, Upload } from '@douyinfe/semi-ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { IconDownload, IconUpload } from '@douyinfe/semi-icons';
 import { MODEL_IMPORT_FIELDS, MODEL_IMPORT_HEADERS, MODEL_IMPORT_LIMIT, downloadModelCsv, modelRowsFromCells, parseModelText, validateModelRows } from './model-import';
@@ -44,7 +45,8 @@ export default function ModelBatchImport({ state, can, run, close, dirty, mode =
       else if (/\.csv$/i.test(file.name)) parsed = parseModelText(await file.text());
       else throw new Error('请选择 .xlsx 或 UTF-8 .csv 文件，旧版 .xls 请另存为 .xlsx');
       if (current === request.current) {
-        setRows(parsed); setFileName(file.name); setStep('preview'); setError(''); setSkip(false); setOnlyProblems(false); setExpandedRow(null); dirty(true);
+        setRows(parsed); setFileName(file.name); setStep('preview'); setError(''); setSkip(false); setOnlyProblems(false); setExpandedRow(null);
+        setPagination(current => ({ ...current, currentPage: 1 })); dirty(true);
         Toast.success('文件已读取，请核对校验结果');
       }
     } catch (e) { if (current === request.current) { const message = e.message.includes('请') || e.message.includes('模型') ? e.message : '读取失败，请检查文件是否损坏并使用最新模板'; setError(message); Toast.error(message); } }
@@ -83,7 +85,7 @@ export default function ModelBatchImport({ state, can, run, close, dirty, mode =
     </>:step==='preview'?<>
       <Typography.Title heading={6}><span ref={previewTitle} tabIndex={-1}>{fileName}</span></Typography.Title>
       <Banner type={invalid?'warning':'success'} description={'共 '+preview.length+' 条，可导入 '+valid.length+' 条，问题 '+invalid+' 条'}/>
-      <div className="materials-actions"><Checkbox checked={onlyProblems} onChange={event=>{setOnlyProblems(event.target.checked);setExpandedRow(null);}}>只看问题记录</Checkbox><Button icon={<IconDownload aria-hidden/>} onClick={()=>download('模型资料导入校验清单.csv',[[...MODEL_IMPORT_HEADERS,'校验结果'],...preview.map(row=>[...row.cells,row.message])])}>下载校验清单</Button></div>
+      <div className="materials-actions"><Checkbox checked={onlyProblems} onChange={event=>{setOnlyProblems(event.target.checked);setExpandedRow(null);setPagination(current => ({ ...current, currentPage: 1 }));}}>只看问题记录</Checkbox><Button icon={<IconDownload aria-hidden/>} onClick={()=>download('模型资料导入校验清单.csv',[[...MODEL_IMPORT_HEADERS,'校验结果'],...preview.map(row=>[...row.cells,row.message])])}>下载校验清单</Button></div>
       <Table rowKey="rowNumber" columns={previewColumns} dataSource={visibleRows.slice((currentPage - 1) * pageSize, currentPage * pageSize)}
         scroll={{ x: 1120 }} pagination={{ pageSize, currentPage, total: visibleRows.length, showSizeChanger: true, pageSizeOpts: [20, 50, 100], showTotal: true }}
         onChange={({ pagination }) => setPagination({ currentPage: pagination.currentPage, pageSize: pagination.pageSize })}/>

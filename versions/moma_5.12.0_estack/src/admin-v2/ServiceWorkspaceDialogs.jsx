@@ -1,5 +1,6 @@
+import Table from './AdminTable';
 import { useState } from 'react';
-import { Button, Input, Table, Typography } from '@douyinfe/semi-ui';
+import { Button, Input, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconDelete } from '@douyinfe/semi-icons';
 import { Choice, Notice } from './ServiceUI';
 import { tariffOptions, tariffScenarioUnit } from './tariff-dictionary';

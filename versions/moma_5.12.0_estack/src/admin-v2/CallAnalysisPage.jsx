@@ -1,6 +1,7 @@
+import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useState } from 'react';
-import { Banner, Button, Card, Space, Table, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconArrowRight, IconCalendar } from '@douyinfe/semi-icons';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import { FilterPresets, FilterReset, FilterToolbar, TIME_PRESETS } from '../components/FilterControls';

@@ -1,5 +1,6 @@
+import Table from './AdminTable';
 import { useRef, useState } from 'react';
-import { Banner, Button, Checkbox, Modal, Table, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Checkbox, Modal, Typography } from '@douyinfe/semi-ui';
 import MaterialMetadataForm from './MaterialMetadataForm';
 
 import { materialBase, materialImpact, listed } from './model-operations';

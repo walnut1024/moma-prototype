@@ -1,3 +1,4 @@
+import Table, { AdminPagination } from './AdminTable';
 import ChannelHealthDialog from './ChannelHealthDialog';
 import { channelModelHealth } from './channel-health';
 import SupplyModelPicker from './SupplyModelPicker';
@@ -5,8 +6,8 @@ import { supplyModelRecord } from './supply-models';
 import { useEffect, useRef, useState } from 'react';
 import { PlugZap, BadgeDollarSign, Link, KeyRound, Pencil, PackageMinus, FileText } from 'lucide-react';
 import { IconCopy, IconDelete, IconMore, IconPlus } from '@douyinfe/semi-icons';
-import { Button, Checkbox, Popover, Table, Toast, Tooltip } from '@douyinfe/semi-ui';
-import { FilterPagination, DEFAULT_PAGE_SIZE } from '../components/FilterControls';
+import { Button, Checkbox, Popover, Toast, Tooltip } from '@douyinfe/semi-ui';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '../components/FilterControls';
 import { Modal, Notice, SearchBox } from './ModelOperationsUI';
 import { displayedCatalogueIds } from './moma-provider';
 import { catalogueChannels, channelAddresses, channelFingerprint, channelLinkedModels } from './provider-channels';
@@ -98,7 +99,7 @@ export default function ProviderCatalogue({ state, provider, ops, entries, model
     {selection.length > 0 && <div className="supplier-selection-toolbar" role="group" aria-label="批量渠道操作"><span>已选 {selection.length} 项</span><Button theme="light" size="small" disabled={!ops.can} onClick={() => beginBatch('test')}>测试所选</Button><Button theme="light" size="small" disabled={!ops.can} onClick={() => beginBatch('enable')}>启用所选</Button><Button theme="light" size="small" disabled={!ops.can} onClick={() => beginBatch('disable')}>停用所选</Button>{filteredRows.length > pageRows.length && <Button type="tertiary" theme="borderless" size="small" disabled={!ops.can} onClick={() => setSelection(selectChannelRows(selection, filteredRows, true))}>选择全部筛选结果（{filteredRows.length}）</Button>}<Button type="tertiary" theme="borderless" size="small" onClick={() => setSelection([])}>清空选择</Button></div>}
     {!batch && ops.error && <Notice error>{ops.error}</Notice>}
     <div className="mo-table-scroll"><Table size="small" className="supplier-model-resource-table supplier-selectable-table" scroll={{ x: 1250 }} rowKey="selectionId" onRow={row => ({ 'data-supplier-model': row.modelId, 'data-resource-id': row.association?.endpoint?.id, className: 'supplier-channel-start' })} columns={columns} dataSource={current.rows} pagination={false} empty={filtered.length ? ' ' : allRows.length ? '没有匹配的模型，请调整搜索条件。' : '尚未添加供应模型。'}/></div>
-    <FilterPagination total={filtered.length} page={current.page} size={size} onPageChange={setPage} onSizeChange={value => { setSize(value); setPage(1); }}/>
+    <AdminPagination total={filtered.length} currentPage={current.page} pageSize={size} onPageChange={setPage} pageSizeOpts={PAGE_SIZES} showSizeChanger onPageSizeChange={value => { setSize(value); setPage(1); }}/>
     {editing?.kind === 'health' && edited && <ChannelHealthDialog state={state} provider={editingProvider} endpoint={edited.endpoint} associationId={edited.id} ops={ops} close={closeEditor}/>}
     {editing?.kind === 'details' && edited && <SupplierChannelDetails state={state} provider={editingProvider} association={edited} ops={ops} close={close} onEdit={(kind, target) => { if(kind==='price'){cost(editingProvider,edited,true);return;} trigger.current = target; setEditing({ ...editing, kind, returnToDetails: true }); }}/>}
     {editing?.kind === 'linkModel' && <Modal title="关联模型资料" description={editingProvider.name + ' · ' + editing.modelId} onClose={() => ops.proceed(close)}><SupplyModelPicker ops={ops} state={state} value={libraryId} disabled={!ops.can} onChange={id => { setLibraryId(id); ops.dirty(true); ops.setError(''); }}/><p>当前供应模型的全部渠道将归入所选模型。渠道配置、价格及已上线服务保持不变。</p>{ops.error && <Notice error>{ops.error}</Notice>}<div className="supplier-key-actions"><Button theme="light" onClick={() => ops.proceed(close)}>取消</Button><Button disabled={!ops.can || !libraryId} onClick={async () => { if (await ops.run('provider', { operation: 'supplierModelLink', objectId: editingProvider.id, values: { modelId: editing.modelId, libraryId, confirmed: true } })) close(); }}>确认关联</Button></div></Modal>}

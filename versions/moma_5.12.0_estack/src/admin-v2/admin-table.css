@@ -1,0 +1,14 @@
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  width: 100%;
+  min-width: 0;
+  padding-block: 12px;
+}
+
+.admin-pagination .admin-page-number {
+  width: 64px;
+}

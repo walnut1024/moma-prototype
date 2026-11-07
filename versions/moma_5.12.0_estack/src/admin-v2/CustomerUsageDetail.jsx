@@ -1,5 +1,6 @@
+import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
-import { Banner, Card, Table, Typography } from '@douyinfe/semi-ui';
+import { Banner, Card, Typography } from '@douyinfe/semi-ui';
 import AnalysisMetric from './AnalysisMetric';
 import { useEffect, useState } from 'react';
 import { DateRange } from './AnalyticsFilters';

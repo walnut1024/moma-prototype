@@ -1,6 +1,7 @@
+import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useState } from 'react';
-import { Banner, Button, Card, Form, Input, Modal, Radio, RadioGroup, Select, Space, Table, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Form, Input, Modal, Radio, RadioGroup, Select, Space, Tag, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconCopy, IconEyeClosed, IconEyeOpened, IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '../components/FilterControls';
 import { ADMIN_ROLES, ADMIN_ROLE_LABELS, ROLE_DESCRIPTIONS, generateAdminPassword, lastEnabledAdmin, normalizeAdminLogin } from './admin-accounts';

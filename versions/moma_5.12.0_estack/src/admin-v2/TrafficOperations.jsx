@@ -1,6 +1,7 @@
+import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, ConfigProvider, Input, InputNumber, Modal, Space, Table, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, ConfigProvider, Input, InputNumber, Modal, Space, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import { Choice } from './ServiceUI.jsx';
 import { accountTraffic, effectiveTraffic, trafficAccounts, trafficModels, trafficSettings } from './traffic-limits.js';

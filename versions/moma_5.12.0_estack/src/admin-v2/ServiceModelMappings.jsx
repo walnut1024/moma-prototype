@@ -1,7 +1,8 @@
+import Table from './AdminTable';
 import AdminActionMenu from './AdminActionMenu';
 import {useRef,useState} from 'react';
 import { IconPlus } from '@douyinfe/semi-icons';
-import { Button, Input, Table, Typography, Descriptions } from '@douyinfe/semi-ui';
+import { Button, Input, Typography, Descriptions } from '@douyinfe/semi-ui';
 import {Choice, Field} from './ServiceUI';
 import {Status,Modal,Notice,CopyId} from './ServiceUI';
 import {modelSupplies,displayTime} from './model-management';

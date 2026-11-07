@@ -1,5 +1,6 @@
+import Table from './AdminTable';
 import { useId, useState } from 'react';
-import { Button, Card, Select, Table, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Select, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { IconChevronDown, IconChevronRight, IconDownload, IconSort } from '@douyinfe/semi-icons';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES, FilterToolbar, FilterReset } from '../components/FilterControls';
 import { SelectedConditions } from '../components/SavedFilterViews';

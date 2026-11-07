@@ -1,4 +1,5 @@
-import { Button, Descriptions, Table, Typography } from '@douyinfe/semi-ui';
+import Table from './AdminTable';
+import { Button, Descriptions, Typography } from '@douyinfe/semi-ui';
 import PricingFilters from './PricingFilters';
 import { Notice, serviceOperationsUi } from './ServiceUI';
 import { useOperations } from './ModelOperationsUI';

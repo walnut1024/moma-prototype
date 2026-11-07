@@ -1,5 +1,6 @@
+import Table from './AdminTable';
 import { useState } from 'react';
-import { Button, Checkbox, Descriptions, Table, Tabs, Typography } from '@douyinfe/semi-ui';
+import { Button, Checkbox, Descriptions, Tabs, Typography } from '@douyinfe/semi-ui';
 import { Choice, Field, Modal, Notice, serviceOperationsUi } from './ServiceUI';
 import { useOperations } from './ModelOperationsUI';
 import ServiceListingDialog from './ServiceListingDialog';

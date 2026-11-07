@@ -1,6 +1,7 @@
+import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useMemo, useState } from 'react';
-import { Button, Card, Modal, Space, Table, Toast, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Modal, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconArrowLeft, IconArrowRight, IconMaximize, IconRefresh } from '@douyinfe/semi-icons';
 import { TimeSeriesChart, DonutChart, RankingChart } from '../components/AnalyticsCharts';
 import SavedFilterViews from '../components/SavedFilterViews';

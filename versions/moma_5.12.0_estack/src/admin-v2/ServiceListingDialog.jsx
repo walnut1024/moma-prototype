@@ -1,5 +1,6 @@
+import Table from './AdminTable';
 import { useState } from 'react';
-import { Button, Checkbox, Table, Typography } from '@douyinfe/semi-ui';
+import { Button, Checkbox, Typography } from '@douyinfe/semi-ui';
 import { Modal, Notice } from './ServiceUI';
 import { salesChecks } from './service-sales';
 import { scopeTenants } from './service-commercial';

@@ -1,6 +1,7 @@
+import Table from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import { useEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, Collapse, Descriptions, Form, Input, Modal, Space, Steps, Table, Tabs, Tag, Timeline, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Collapse, Descriptions, Form, Input, Modal, Space, Steps, Tabs, Tag, Timeline, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { FilterToolbar, FilterReset, PAGE_SIZES, normalizePageSize } from '../components/FilterControls';
 import AdminPageHeading from './AdminPageHeading';

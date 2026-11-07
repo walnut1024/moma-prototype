@@ -1,4 +1,5 @@
-import { Button, Descriptions, Table, Typography } from '@douyinfe/semi-ui';
+import Table from './AdminTable';
+import { Button, Descriptions, Typography } from '@douyinfe/semi-ui';
 import { CopyId } from './ServiceUI';
 import { libraryRecord } from './model-library';
 import { activeModelSalePrice, activeProviderPrice } from './service-workspace';

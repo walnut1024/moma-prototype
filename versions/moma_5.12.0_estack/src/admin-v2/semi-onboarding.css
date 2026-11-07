@@ -7,7 +7,6 @@
 .mo-table-scroll .semi-table-wrapper{min-width:0}
 
 /* 分页布局 */
-.mo-pagination{display:flex;justify-content:flex-end;align-items:center;padding-top:12px}
 
 /* 弹窗：Semi Modal/SideSheet 结构 */
 .semi-modal .mo-footer,.semi-sidesheet .mo-footer{border-top:1px solid var(--semi-color-border);padding-top:14px;margin-top:14px}

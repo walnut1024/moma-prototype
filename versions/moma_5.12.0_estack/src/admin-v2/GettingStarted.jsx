@@ -1,7 +1,8 @@
+import Table from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useState } from 'react';
-import { Card, Collapse, Space, Table, Typography } from '@douyinfe/semi-ui';
+import { Card, Collapse, Space, Typography } from '@douyinfe/semi-ui';
 import { IconArrowRight } from '@douyinfe/semi-icons';
 import source from '../../MODEL_OPERATIONS_GUIDE.md?raw';
 import { findOperationsGuide, parseOperationsGuide } from './model-operations-guide.mjs';

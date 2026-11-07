@@ -1,6 +1,7 @@
+import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, Input, Space, Table, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Input, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconArrowUp, IconCalendar, IconChevronLeft, IconChevronRight, IconDownload, IconHandle, IconRefresh, IconSave, IconSearch } from '@douyinfe/semi-icons';
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';

@@ -1,6 +1,7 @@
+import { AdminPagination } from './AdminTable';
 import { useState } from 'react';
 import { Button, Card, Checkbox, Typography } from '@douyinfe/semi-ui';
-import { FilterPagination, FilterReset, normalizePageSize } from '../components/FilterControls';
+import { FilterReset, normalizePageSize, PAGE_SIZES } from '../components/FilterControls';
 import { Choice } from './ServiceUI';
 import { SearchBox, GridTable, Row, Cell, Status, Price } from './ModelOperationsUI';
 import { MODEL_CATEGORIES, modelCategory } from './model-management';
@@ -37,7 +38,7 @@ export default function SupplierModelListing({ state, ops, open, batch }) {
         {visible.length > 0 && <Row className="mo-supplier-select-all"><Cell><Checkbox aria-label="选择本页待上架模型" disabled={!ops.can || !selectable.length} checked={selectedOnPage > 0 && selectedOnPage === selectable.length} indeterminate={selectedOnPage > 0 && selectedOnPage < selectable.length} onChange={event => setSelected(event.target.checked ? [...selected, ...selectable] : selected.filter(id => !selectable.includes(id)))}/></Cell><Cell colSpan={7}>选择本页待上架模型；已上架项通过详情继续维护</Cell></Row>}
         {visible.map(row => <Row key={row.catalogueModelId}><Cell><Checkbox aria-label={`选择目录模型 ${row.catalogueModelId}`} disabled={!ops.can || row.selling || selected.length >= 100 && !selected.includes(row.catalogueModelId)} checked={selected.includes(row.catalogueModelId)} onChange={event => setSelected(event.target.checked ? [...selected, row.catalogueModelId] : selected.filter(id => id !== row.catalogueModelId))}/></Cell><Cell><code>{row.catalogueModelId}</code>{row.model ? <Button theme="borderless" type="tertiary" onClick={() => open(row.model)}>{row.model.name}</Button> : <small>{row.master?.name || '尚未关联平台模型'}</small>}</Cell><Cell>{MODEL_CATEGORIES[modelCategory(row.type)] || '待登记'}</Cell><Cell><Price model={row.master || { type: 'text' }} price={row.cost}/></Cell><Cell><Price model={row.master || { type: 'text' }} price={row.sale}/></Cell><Cell><span className={row.issue ? 'mo-pending' : ''}>{row.selling ? '—' : row.issue || '配置完整，可上架'}</span></Cell><Cell><Status good={row.selling}>{row.draft && !row.selling ? '配置中' : row.status}</Status></Cell><Cell><div className="mo-row-actions">{row.model && <Button theme="borderless" type="tertiary" onClick={() => open(row.model)}>详情</Button>}<Button theme="borderless" type="tertiary" disabled={!ops.can} onClick={() => row.selling && row.model ? open(row.model, 'price') : batch(provider, [row.catalogueModelId])}>{row.selling ? '修改平台售价' : row.draft ? '继续配置' : '配置'}</Button></div></Cell></Row>)}
       </GridTable>
-      <FilterPagination total={rows.length} page={page} size={size} onPageChange={cataloguePage => go({ cataloguePage }, { replace: true })} onSizeChange={catalogueSize => change({ catalogueSize })}/>
+      <AdminPagination total={rows.length} currentPage={page} pageSize={size} onPageChange={cataloguePage => go({ cataloguePage }, { replace: true })} pageSizeOpts={PAGE_SIZES} showSizeChanger onPageSizeChange={catalogueSize => change({ catalogueSize })}/>
     </Card>
   </div>;
 }

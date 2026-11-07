@@ -1,9 +1,10 @@
+import Table from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import { scopeTenants } from './service-commercial';
 import { activeAdmin } from '../linked-accounts.mjs';
 import { readLinkedState } from '../service-access.mjs';
 import { Children, Fragment, isValidElement, useEffect, useRef, useState } from 'react';
-import { Button, Collapse, Input, Pagination as SemiPagination, Table, TextArea, Toast } from '@douyinfe/semi-ui';
+import { Button, Collapse, Input, TextArea, Toast } from '@douyinfe/semi-ui';
 import { IconDelete, IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import AdminPageHeading from './AdminPageHeading';
 import { CopyId, Modal as ServiceModal, Notice, Status, serviceOperationsUi, Choice, Field, MultiChoice } from './ServiceUI';
@@ -54,7 +55,6 @@ export function GridTable({ headings, children, empty, emptyMessage = '没有符
 }
 export function Row({ children }) { return <>{children}</>; }
 export function Cell({ children }) { return <>{children}</>; }
-export function Pagination({ count, page, setPage, size = 10 }) { return <SemiPagination className="mo-pagination" total={count} pageSize={size} currentPage={page} onPageChange={setPage} showTotal size="small"/>; }
 export function Disclosure({ title, children, defaultOpen = false, className }) {
   return <Collapse className={className} defaultActiveKey={defaultOpen ? ['content'] : []} keepDOM>
     <AdminCollapsePanel itemKey="content" header={title}>{children}</AdminCollapsePanel>

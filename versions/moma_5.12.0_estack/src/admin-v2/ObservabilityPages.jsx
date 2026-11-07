@@ -1,5 +1,6 @@
+import Table from './AdminTable';
 import { useEffect, useState } from 'react';
-import { Button, Card, Descriptions, Input, Modal, Space, Table, Tag, Timeline, Toast, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Descriptions, Input, Modal, Space, Tag, Timeline, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconDownload, IconSearch } from '@douyinfe/semi-icons';
 import { observedUsageTotal } from '../business-facts.mjs';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';

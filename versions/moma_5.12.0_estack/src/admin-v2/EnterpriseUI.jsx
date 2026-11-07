@@ -1,4 +1,5 @@
-import { Descriptions, Modal, Table, Tag, Typography } from '@douyinfe/semi-ui';
+import Table from './AdminTable';
+import { Descriptions, Modal, Tag, Typography } from '@douyinfe/semi-ui';
 import './semi-enterprise.css';
 
 export function EnterpriseStatus({ value, enterprise = false }) {

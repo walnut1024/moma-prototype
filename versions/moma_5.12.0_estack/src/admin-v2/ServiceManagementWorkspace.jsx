@@ -1,10 +1,11 @@
+import Table from './AdminTable';
 import AdminActionMenu from './AdminActionMenu';
 import { operationsReturn } from './model-pricing-workspace';
 import { MODEL_CATALOGUE_TYPES } from './model-library';
 import { pendingGuidedOnboardings } from './guided-onboarding';
 import ChannelServiceContext from './ChannelServiceContext';
 import { useState } from 'react';
-import { Badge, Button, Descriptions, Empty, Input, Nav, Popover, Space, Table, Tabs, Typography } from '@douyinfe/semi-ui';
+import { Badge, Button, Descriptions, Empty, Input, Nav, Popover, Space, Tabs, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch, IconFilter } from '@douyinfe/semi-icons';
 import { Choice, Field, Status, Notice, Modal } from './ServiceUI';
 import { modelCode, displayTime } from './model-management';

@@ -1,6 +1,7 @@
+import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Banner, Button, Card, Checkbox, Form, Modal, Space, Table, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Checkbox, Form, Modal, Space, Tag, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconPlus } from '@douyinfe/semi-icons';
 import { simulateRequest } from './domain';
 import { Choice, serviceOperationsUi } from './ServiceUI';
