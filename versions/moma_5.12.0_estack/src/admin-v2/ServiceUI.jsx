@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useCallback, useId } from 'react';
 import { Banner, Button, Form, Modal as SemiModal, Select, SideSheet, Space, Tag, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { IconHelpCircle } from '@douyinfe/semi-icons';
 import { modelFieldDescriptions } from './model-field-descriptions';
@@ -25,9 +25,22 @@ export function FieldLabel({ name, description, required }) {
   return <Space spacing={4}>{name}{required && ' *'}{help && <Tooltip content={help}><Button theme="borderless" type="tertiary" icon={<IconHelpCircle aria-hidden="true"/>} aria-label={`${name}说明`}/></Tooltip>}</Space>;
 }
 export function Modal({ title, description, children, onClose, wide, drawer = false, drawerSide = 'right', footer, className = '' }) {
-  const content = <div className="ss-dialog-content">{description && <Typography.Paragraph type="tertiary">{description}</Typography.Paragraph>}{children}</div>;
+  const focusSheet = useCallback(node => {
+    const dialog = node?.closest('[role="dialog"]');
+    if (!dialog) return;
+    // The installed Semi SideSheet does not forward aria-label to its dialog.
+    if (typeof title === 'string') dialog.setAttribute('aria-label', title);
+    dialog.focus({ preventScroll: true });
+  }, [title]);
+  const content = <div className="ss-dialog-content" ref={drawer ? focusSheet : undefined}>
+    {description && <Typography.Paragraph type="tertiary">{description}</Typography.Paragraph>}{children}
+  </div>;
   const actions = footer ? <div className="ss-footer">{footer}</div> : null;
-  return drawer ? <SideSheet visible className={`semi-services ${className}`} title={title} placement={drawerSide} width={`min(${wide ? 1000 : 720}px, 100vw)`} onCancel={onClose} closeOnEsc footer={actions}>{content}</SideSheet> : <SemiModal visible className={`semi-services ${className}`} title={title} width={wide ? 'min(960px, calc(100vw - 32px))' : undefined} onCancel={onClose} footer={actions}>{content}</SemiModal>;
+  return drawer
+    ? <SideSheet visible className={`semi-services ${className}`} title={title} placement={drawerSide}
+        width={`min(${wide ? 1000 : 720}px, 100vw)`} onCancel={onClose} closeOnEsc footer={actions}>{content}</SideSheet>
+    : <SemiModal visible className={`semi-services ${className}`} title={title}
+        width={`min(${wide ? 960 : 448}px, calc(100vw - 32px))`} onCancel={onClose} footer={actions}>{content}</SemiModal>;
 }
 export const serviceOperationsUi = {
   notify: message => Toast.success(message),

@@ -3,10 +3,10 @@ import { credentialRotationOpening, credentialRotationChannels } from './credent
 import ChannelKeyPoolEditor from './ChannelKeyPoolEditor';
 import ChannelCredentialRotation from './ChannelCredentialRotation';
 import KeyGroupCandidateDialog from './KeyGroupCandidateDialog';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { LoaderCircle, Radio } from 'lucide-react';
 import { IconPlus } from '@douyinfe/semi-icons';
-import { Button, Input, Popover, Select, TextArea } from '@douyinfe/semi-ui';
+import { Button, Input, Popover, Select, TextArea, Typography } from '@douyinfe/semi-ui';
 import { GridTable, Row, Cell, MoreActions, Modal, Notice, Status } from './ModelOperationsUI';
 import { supplierChannelResources, supplierChannelAssociations, supplierChannelCode, supplierChannelName, supplierKeyChannels } from './supplier-resources';
 import { Choice, Field } from './ModelMetadataForm';
@@ -99,7 +99,7 @@ export function ModelConnectivityTest({ state, provider, apiKey, endpoint: initi
   };
   const cancel = () => { clearTimeout(timer.current); setTesting(false); setResult({ result: '已取消', title: '测试已取消', message: '本次测试已取消，可以调整配置后重新测试。', upstreamId }); };
   return <Modal wide title="模型连通性测试" description={provider.name + (apiKey ? ' · API 密钥 ' + maskProviderApiKey(apiKey.maskedKey) : ' · 使用已配置凭证')} onClose={close}><div className="supplier-model-test">
-    <section className="supplier-test-config" aria-label="测试配置"><h3>测试配置</h3>
+    <section className="supplier-test-config" aria-label="测试配置"><Typography.Title heading={5} component="h3">测试配置</Typography.Title>
       <Field label="测试模型 *"><Select className="supplier-test-model-trigger" filter aria-label="选择测试模型" placeholder="搜索并选择服务商模型" value={modelId || undefined} disabled={Boolean(supply || catalogueModelId) || testing || !ops.can || !models.length} optionList={models.map(id => ({ value: id, label: id }))} emptyContent="没有匹配的模型" onChange={id => chooseModel(id)}/></Field>
       {!models.length && <Notice error>服务商目录暂无模型，请先添加模型。</Notice>}
       <Field label="对外调用标识 *" hint="用于本次请求，不修改目录资料。"><Input aria-label="测试对外调用标识" value={upstreamId} maxLength={200} disabled={Boolean(supply) || testing || !modelId || !ops.can} onChange={value => { setUpstreamId(value); setResult(null); }}/></Field>
@@ -110,7 +110,7 @@ export function ModelConnectivityTest({ state, provider, apiKey, endpoint: initi
       <div className="supplier-test-protocol"><span>协议</span><b>{endpoint?.protocol || '—'}</b><span>最大输出</span><b>32 Tokens</b></div>
       {new URLSearchParams(location.hash.split('?')[1] || '').get('devtools') === '1' && <Field label="结果预览"><Choice label="模型测试结果预览" value={scenario} options={Object.entries(MODEL_CONNECTIVITY_SCENARIOS)} disabled={testing || !ops.can} onChange={value => { setScenario(value); setResult(null); }}/></Field>}
     </section>
-    <section className="supplier-test-result" aria-label="测试结果" aria-live="polite"><h3>测试结果</h3>
+    <section className="supplier-test-result" aria-label="测试结果" aria-live="polite"><Typography.Title heading={5} component="h3">测试结果</Typography.Title>
       {testing ? <div className="supplier-test-empty" role="status"><LoaderCircle className="animate-spin"/><strong>正在测试</strong><p>目标模型：{upstreamId}</p></div> : result ? <div className="supplier-test-response"><Notice error={result.result === '失败'}><strong>{result.title}</strong><p>{result.message}</p>{result.hint && <p>{result.hint}</p>}</Notice><dl><div><dt>模型</dt><dd>{result.upstreamId || upstreamId}</dd></div><div><dt>HTTP 状态</dt><dd>{result.status ?? (result.response ? '未收到响应' : '—')}</dd></div><div><dt>响应耗时</dt><dd>{result.durationMs == null ? '—' : result.durationMs.toLocaleString('zh-CN') + ' ms'}</dd></div><div><dt>接入地址</dt><dd>{result.baseUrl || requestUrl || endpoint?.baseUrl || '—'}</dd></div></dl><div className="supplier-test-response-body"><h4>{result.result === '失败' ? '错误详情' : '模型响应'}</h4>{result.response ? <><p className="supplier-test-output">{result.response.choices?.[0]?.message.content || result.response.error?.message}</p><details><summary>响应详情</summary><pre>{JSON.stringify(result.response, null, 2)}</pre></details></> : <p>本次测试未产生响应。</p>}</div></div> : <div className="supplier-test-empty"><Radio/><strong>等待测试</strong><p>选择模型并填写测试内容，结果将在此显示。</p></div>}
     </section>
     <footer className="supplier-test-footer"><span>结果为交互预览，不发送真实模型请求或改变启用状态。</span><div className="supplier-key-actions"><Button theme="light" onClick={close}>关闭</Button>{!models.length || !endpoints.length ? <Button disabled={!ops.can} onClick={() => { close(); ops.go({ tab: 'catalogue' }); }}>前往模型渠道</Button> : testing ? <Button theme="light" onClick={cancel}>取消测试</Button> : <Button disabled={!ops.can || !endpoint || !modelId || !upstreamId.trim() || !prompt.trim() || !credentialsReady} onClick={start}>{result ? '重新测试' : '开始测试'}</Button>}</div></footer>
@@ -135,7 +135,7 @@ export default function ProviderApiKeys({ state, provider, ops }) {
   const [editing, setEditing] = useState(null), [deleting, setDeleting] = useState(null), [keyAction, setKeyAction] = useState(null);
   const [groupEditing, setGroupEditing] = useState(null), [groupDeleting, setGroupDeleting] = useState(null);
   const [selectedGroupId, setSelectedGroupId] = useState('default');
-  const trigger = useRef(null), addTrigger = useRef(null);
+  const trigger = useRef(null), addTriggerId = useId();
   const allRows = providerApiKeyRows(state, provider), resources = supplierChannelResources(state, provider);
   const groups = providerKeyGroups(provider, allRows.map(row => row.apiKey));
   const group = groups.find(item => item.id === selectedGroupId) || groups[0];
@@ -146,7 +146,7 @@ export default function ProviderApiKeys({ state, provider, ops }) {
   const affected = keyAction?.row ? supplierKeyChannels(state, provider, keyAction.row.apiKey.id) : [];
   const deleteGroupChannels = groupDeleting ? groupChannels(groupDeleting.id) : [];
   const open = (event, callback) => { trigger.current = event.currentTarget; ops.setError(''); callback(); };
-  const close = () => { setEditing(null); setDeleting(null); setKeyAction(null); setGroupEditing(null); setGroupDeleting(null); ops.setError(''); requestAnimationFrame(() => (trigger.current?.isConnected ? trigger.current : addTrigger.current)?.focus()); };
+  const close = () => { setEditing(null); setDeleting(null); setKeyAction(null); setGroupEditing(null); setGroupDeleting(null); ops.setError(''); requestAnimationFrame(() => (trigger.current?.isConnected ? trigger.current : document.getElementById(addTriggerId))?.focus()); };
   const keyRecord = row => ({ ...row, endpoints: supplierKeyChannels(state, provider, row.apiKey.id) });
   const move = async (event,row,direction) => {
     if(reordering)return;
@@ -158,11 +158,11 @@ export default function ProviderApiKeys({ state, provider, ops }) {
     {returning && <div className="supplier-resource-notice"><Notice>为渠道 {supplierChannelCode(returning)} · {supplierChannelName(provider, returning)} 配置密钥组。<Button theme="borderless" type="tertiary" onClick={() => ops.go({ tab: 'catalogue', resource: returning.id, credentialChannel: null })}>返回渠道配置</Button></Notice></div>}
     <div className="supplier-key-groups">
       <aside className="supplier-key-group-sidebar" aria-label="API 密钥组">
-        <div className="supplier-key-group-heading"><h3>密钥组</h3><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={event => open(event, () => setGroupEditing({ group: null }))}>新建组</Button></div>
-        <nav className="supplier-key-group-options" aria-label="选择密钥组">{groups.map(item => <Button key={item.id} theme="borderless" aria-pressed={item.id === group.id} title={item.name} onClick={() => ops.proceed(() => { setSelectedGroupId(item.id); ops.setError(''); })}><span>{item.name}</span><small>{item.keyIds.length}</small></Button>)}</nav>
+        <div className="supplier-key-group-heading"><Typography.Title heading={5} component="h3">密钥组</Typography.Title><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={event => open(event, () => setGroupEditing({ group: null }))}>新建组</Button></div>
+        <nav className="supplier-key-group-options" aria-label="选择密钥组">{groups.map(item => <Button key={item.id} type={item.id === group.id ? 'primary' : 'tertiary'} theme={item.id === group.id ? 'light' : 'borderless'} aria-pressed={item.id === group.id} title={item.name} onClick={() => ops.proceed(() => { setSelectedGroupId(item.id); ops.setError(''); })}><span>{item.name}</span><small>{item.keyIds.length}</small></Button>)}</nav>
       </aside>
       <section className="supplier-key-group-content" aria-label={group.name}>
-        <div className="supplier-key-group-toolbar"><h3>{group.name}</h3><div className="supplier-row-actions">{group.id !== 'default' && <><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} onClick={event => open(event, () => setGroupEditing({ group }))}>重命名</Button><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} onClick={event => open(event, () => setGroupDeleting(group))}>删除组</Button></>}<Button ref={addTrigger} size="small" disabled={!ops.can} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={event => open(event, () => setEditing({ record: null, group }))}>添加 API 密钥</Button></div></div>
+        <div className="supplier-key-group-toolbar"><Typography.Title heading={5} component="h3">{group.name}</Typography.Title><div className="supplier-row-actions">{group.id !== 'default' && <><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} onClick={event => open(event, () => setGroupEditing({ group }))}>重命名</Button><Button theme="borderless" type="tertiary" size="small" disabled={!ops.can} onClick={event => open(event, () => setGroupDeleting(group))}>删除组</Button></>}<Button id={addTriggerId} size="small" disabled={!ops.can} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={event => open(event, () => setEditing({ record: null, group }))}>添加 API 密钥</Button></div></div>
         {candidate && <Notice>此组有待处理的密钥{candidate.priorityChange?'优先级调整':'轮换'}。<Button theme="borderless" type="tertiary" disabled={!ops.can} onClick={event=>open(event,()=>setKeyAction({kind:'priority',group}))}>继续处理</Button></Notice>}
         <GridTable className="supplier-key-table supplier-group-key-table" headings={['优先级', '密钥名称 / ID', 'API 密钥', '当前绑定渠道', '状态', '操作']} empty={!rows.length} emptyMessage="当前密钥组暂无密钥，请点击添加 API 密钥。">
           {rows.map((row, index) => { const channels = credentialRotationChannels(state, provider, row.apiKey.id); return <Row key={row.apiKey.id}><Cell><span>{index + 1}</span></Cell><Cell><span>{providerApiKeyName(row.apiKey)}</span><small><code>{providerApiKeyId(row.apiKey)}</code></small></Cell><Cell><code>{maskProviderApiKey(row.apiKey.maskedKey)}</code></Cell><Cell><Popover position="bottomLeft" content={<div className="supplier-key-reference-popover"><strong>当前绑定渠道（{channels.length}）</strong>{channels.map(channel => <Button theme="borderless" type="tertiary" key={channel.id} onClick={() => ops.go({ tab: 'catalogue', resource: channel.id })}>{supplierChannelCode(channel)} · {supplierChannelName(provider, channel)}</Button>)}{!channels.length && <p>暂无渠道绑定</p>}</div>}><Button theme="borderless" type="tertiary" size="small" aria-label={'查看密钥 ' + providerApiKeyId(row.apiKey) + ' 当前绑定渠道'}>{channels.length} 个</Button></Popover></Cell><Cell><Status good={row.apiKey.status !== 'disabled' && !row.apiKey.revokedAt}>{row.apiKey.revokedAt ? '已撤销' : row.apiKey.status === 'disabled' ? '已停用' : '已配置'}</Status></Cell><Cell><div className="supplier-row-actions"><Button theme="borderless" type="tertiary" aria-label={`检测密钥 ${row.apiKey.id}`} disabled={!ops.can || Boolean(row.apiKey.revokedAt) || row.apiKey.status === 'disabled'} onClick={event => open(event, () => setKeyAction({ kind: 'test', row }))}>检测</Button>

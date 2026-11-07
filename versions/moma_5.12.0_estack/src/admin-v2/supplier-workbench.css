@@ -27,15 +27,12 @@
 .supplier-workbench .mo-search>svg{top:9px;color:var(--muted-foreground)}
 .supplier-workbench .supplier-toolbar>[data-slot=select-trigger]{height:34px;min-width:130px;font-size:12px;border-color:var(--border);box-shadow:none}
 .supplier-workbench .mo-table-scroll{max-height:calc(100dvh - 350px);scrollbar-width:thin;scrollbar-color:var(--border) transparent}
-.supplier-workbench .mo-table{font-size:12px;min-width:780px}
-.supplier-workbench .mo-table th{height:40px;padding:10px 20px;background:var(--muted);color:var(--muted-foreground);font-size:11px;position:sticky;top:0;border-color:var(--border)}
-.supplier-workbench .mo-table td{padding:16px 20px;border-color:var(--border);color:var(--foreground);line-height:1.5}
+.supplier-workbench .mo-table{min-width:780px}
+.supplier-workbench .mo-table th{position:sticky;top:0}
 .supplier-workbench .mo-table td:first-child{min-width:150px}
 .supplier-workbench .mo-table td:last-child{min-width:80px}
 .supplier-workbench .mo-table small{color:var(--muted-foreground);line-height:1.5;margin-top:5px}
 .supplier-workbench .mo-table code{font-size:12px;color:var(--muted-foreground)}
-.supplier-workbench .mo-table strong{font-weight:550}
-.supplier-workbench .mo-table .mo-model-name{font-size:12px;font-weight:600;color:var(--foreground);height:auto;padding:0}
 .supplier-workbench .supplier-url{font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px;max-width:350px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .supplier-workbench .supplier-list-table .supplier-url{margin:0}
 .supplier-workbench .supplier-list-table{table-layout:fixed;min-width:1120px}
@@ -175,15 +172,12 @@
 
 /* Keep supplier switching visible beside the current workspace. */
 .admin-v2 .supplier-layout{display:grid;grid-template-columns:200px minmax(0,1fr);gap:8px;align-items:start;min-width:0}
-.admin-v2 .supplier-sidebar{min-width:0;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:6px}
+.admin-v2 .supplier-sidebar{min-width:0}
 .admin-v2 .supplier-sidebar .mo-search{width:100%;min-width:0;margin-bottom:8px}
 .admin-v2 .supplier-sidebar .mo-search input{height:32px;border-color:var(--input)}
 .admin-v2 .supplier-sidebar-options{display:flex;flex-direction:column;gap:4px;max-height:calc(100dvh - 300px);overflow:auto;scrollbar-width:thin}
 .admin-v2 .supplier-sidebar-options>[data-slot=button]{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;width:100%;height:auto;min-height:60px;padding:10px;text-align:left;white-space:normal}
 .admin-v2 .supplier-sidebar-options>[data-slot=button]>span{max-width:100%;overflow-wrap:anywhere}
-.admin-v2 .supplier-sidebar-options small{font-size:11px;font-weight:400;color:var(--muted-foreground)}
-.admin-v2 .supplier-sidebar-options>[aria-pressed=true]{background:var(--accent)!important;color:var(--primary)!important;font-weight:600}
-.admin-v2 .supplier-sidebar-options>[aria-pressed=true] small{color:var(--primary)}
 .admin-v2 .supplier-sidebar-options>p{padding:16px 8px;color:var(--muted-foreground);font-size:12px}
 .admin-v2 .supplier-body{display:flex;flex-direction:column;gap:16px;min-width:0}
 .admin-v2 .supplier-context .supplier-heading{padding:12px 20px;min-height:0}
@@ -200,7 +194,6 @@
 .admin-v2 .supplier-key-pool{border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
 .admin-v2 .supplier-key-pool legend{margin-bottom:8px;font-weight:500}
 .admin-v2 .supplier-key-toolbar{justify-content:flex-end;padding-block:12px}
-.admin-ui-portal.mo-dialog:has(.supplier-model-test) .mo-dialog-body{display:flex;flex:1;overflow:hidden}
 .mo-dialog .supplier-model-test{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:24px;flex:1;min-height:0;overflow:hidden}
 .mo-dialog .supplier-model-test h3{font-size:14px;font-weight:600;margin:0 0 4px}
 .mo-dialog .supplier-test-config{display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0;overflow:auto}
@@ -230,7 +223,6 @@
 .admin-v2 .supplier-catalogue-identity code,.admin-v2 .supplier-catalogue-credentials span,.admin-v2 .supplier-catalogue-connection .mo-copy code{white-space:normal;overflow-wrap:anywhere}
 .admin-v2 .supplier-catalogue-connection .mo-copy{align-items:flex-start;min-width:0}
 .admin-v2 .supplier-catalogue-connection .mo-copy button{flex-shrink:0}
-.admin-ui-portal .supplier-key-pool .supplier-check{display:flex;align-items:flex-start;gap:8px}
 
 .admin-v2 .supplier-catalogue-table .supplier-col-model{width:13%}
 .admin-v2 .supplier-catalogue-table .supplier-col-channel{width:13%}
@@ -256,44 +248,13 @@
 .admin-v2 .supplier-channel-address .supplier-url-head{flex:0 1 auto}
 .admin-v2 .supplier-channel-address .supplier-url-tail{flex:0 0 auto;max-width:none}
 .admin-v2 .supplier-channel-address>button:last-child{flex-shrink:0}
-.admin-ui-portal.supplier-channel-url-popover{width:min(560px,calc(100vw - 32px))}
-.admin-ui-portal.supplier-channel-url-popover .mo-copy code,.admin-ui-portal .supplier-credential-url{white-space:normal;overflow-wrap:anywhere;font-size:11px}
-.admin-ui-portal.supplier-channel-menu{display:flex;flex-direction:column;align-items:stretch;width:150px}
-.admin-ui-portal.mo-dialog.mo-drawer:has(.supplier-channel-drawer){width:min(1120px,calc(100vw - 48px))}
-.admin-ui-portal .supplier-channel-drawer,.admin-ui-portal .supplier-channel-form{display:flex;flex-direction:column;gap:20px;min-width:0;font-size:12px}
-.admin-ui-portal .supplier-channel-toolbar,.admin-ui-portal .supplier-channel-footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.admin-ui-portal .supplier-channel-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
-.admin-ui-portal .supplier-channel-fields input,.admin-ui-portal .supplier-channel-fields [data-slot=select-trigger]{width:100%;min-width:0}
-.admin-ui-portal .supplier-channel-table{min-width:880px;table-layout:fixed}
-.admin-ui-portal .supplier-channel-table th:nth-child(1){width:16%}.admin-ui-portal .supplier-channel-table th:nth-child(2){width:35%}.admin-ui-portal .supplier-channel-table th:nth-child(3){width:20%}.admin-ui-portal .supplier-channel-table th:nth-child(4){width:13%}.admin-ui-portal .supplier-channel-table th:nth-child(5){width:16%}
-.admin-ui-portal .supplier-channel-table td{vertical-align:top}.admin-ui-portal .supplier-channel-table small,.admin-ui-portal .supplier-channel-drawer .supplier-check small{display:block;white-space:normal;overflow-wrap:anywhere;margin-top:4px;color:var(--muted-foreground)}
-.admin-ui-portal .supplier-channel-table code{white-space:normal;overflow-wrap:anywhere}.admin-ui-portal .supplier-channel-table .mo-copy{align-items:flex-start;min-width:0}.admin-ui-portal .supplier-channel-table .mo-copy button{flex-shrink:0}
-.admin-ui-portal .supplier-channel-drawer .supplier-catalogue-actions{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
-.admin-ui-portal .supplier-channel-costs{display:flex;flex-direction:column;gap:12px}.admin-ui-portal .supplier-channel-costs table{min-width:680px}.admin-ui-portal .supplier-channel-costs input{width:140px;text-align:right;font-variant-numeric:tabular-nums}
-.admin-ui-portal .supplier-channel-test,.admin-ui-portal .supplier-channel-warning{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding-block:16px;border-top:1px solid var(--border)}
-.admin-ui-portal .supplier-channel-footer{padding-top:16px;border-top:1px solid var(--border);margin-top:auto}.admin-ui-portal .supplier-channel-form .supplier-channel-footer{justify-content:flex-end}
-.admin-ui-portal .supplier-channel-drawer .supplier-key-pool{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
-@media(max-width:760px){.admin-ui-portal .supplier-channel-fields{grid-template-columns:minmax(0,1fr)}}
-.admin-ui-portal .supplier-channel-drawer{min-height:100%;gap:16px}
-.admin-ui-portal .supplier-channel-drawer h3{border:0;padding:0;margin:0;font-size:14px}
-.admin-ui-portal .supplier-channel-fields .mm-field{margin:0}
-.admin-ui-portal .supplier-channel-form{gap:16px}
-.admin-ui-portal .supplier-channel-form .supplier-channel-footer{position:sticky;bottom:-20px;background:var(--card);z-index:1;padding-block:12px}
 .admin-v2 .supplier-protocol-address+.supplier-protocol-address{margin-top:12px}
-.admin-ui-portal .supplier-channel-addresses{display:flex;flex-direction:column;gap:12px}
-.admin-ui-portal .supplier-protocol-row{display:grid;grid-template-columns:140px minmax(0,1fr) 32px;gap:12px;align-items:end}
-.admin-ui-portal .supplier-channel-costs td>*+*{margin-top:8px}
-.admin-ui-portal .supplier-channel-costs td input{display:block;width:100%;min-width:0}
-.admin-ui-portal .supplier-channel-costs td:first-child input{text-align:left}
-@media(max-width:760px){.admin-ui-portal .supplier-protocol-row{grid-template-columns:minmax(0,1fr) 32px}.admin-ui-portal .supplier-protocol-row>.mm-field:nth-child(2){grid-column:1}.admin-ui-portal .supplier-protocol-row>button{grid-column:2;grid-row:1/3}}
 .admin-v2 .supplier-key-table td:first-child code{white-space:normal;overflow-wrap:anywhere}
 
 .admin-v2 .supplier-resource-toolbar{gap:12px}
 .admin-v2 .supplier-resource-notice{padding:0 16px 12px}.admin-v2 .supplier-resource-notice .mo-notice{margin:0}
 .admin-v2 .supplier-model-resource-table{min-width:990px;table-layout:fixed}
 .admin-v2 .supplier-model-resource-table col:nth-child(1){width:110px}.admin-v2 .supplier-model-resource-table col:nth-child(2){width:115px}.admin-v2 .supplier-model-resource-table col:nth-child(3){width:175px}.admin-v2 .supplier-model-resource-table col:nth-child(4){width:110px}.admin-v2 .supplier-model-resource-table col:nth-child(5){width:100px}.admin-v2 .supplier-model-resource-table col:nth-child(6){width:90px}.admin-v2 .supplier-model-resource-table col:nth-child(7){width:100px}.admin-v2 .supplier-model-resource-table col:last-child{width:132px}
-.admin-v2 .supplier-model-resource-table th,.admin-v2 .supplier-model-resource-table td{padding:12px;vertical-align:top}
-.admin-v2 .supplier-model-resource-table th{height:38px;padding-block:8px;background:var(--muted);vertical-align:middle}
 .admin-v2 .supplier-model-resource-table th:nth-child(6){text-align:right}
 .admin-v2 .supplier-model-resource-table td{white-space:normal;overflow-wrap:anywhere}
 .admin-v2 .supplier-model-resource-table th:last-child,.admin-v2 .supplier-model-resource-table .supplier-catalogue-operation-cell{position:sticky;right:0;z-index:1;background:var(--card);border-left:1px solid var(--border)}
@@ -301,101 +262,35 @@
 .admin-v2 .supplier-model-resource-table code{display:block;white-space:normal;overflow-wrap:anywhere}
 .admin-v2 .supplier-model-resource-table .supplier-resource-name>code{font-size:11px}.admin-v2 .supplier-model-resource-table .supplier-resource-name>strong{display:block}.admin-v2 .supplier-resource-name small{line-height:1.5}
 .admin-v2 .supplier-model-resource-table .supplier-address-text{min-width:0;width:100%;height:32px;gap:0;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px}
-.admin-ui-portal.mo-dialog.mo-drawer:has(.supplier-resource-form){width:min(980px,calc(100vw - 48px))}
-.admin-ui-portal .supplier-resource-form{display:flex;flex-direction:column;gap:20px;min-height:100%;font-size:12px}
-.admin-ui-portal .supplier-resource-form .mm-field{margin:0}.admin-ui-portal .supplier-resource-form [data-slot=select-trigger]{width:100%;min-width:0}
-.admin-ui-portal .supplier-resource-form h3{margin:0;padding:0;border:0;font-size:14px}.admin-ui-portal .supplier-resource-form .supplier-channel-footer{position:sticky;bottom:-20px;background:var(--card);padding-block:16px;justify-content:flex-end}.admin-ui-portal .supplier-resource-form .supplier-channel-footer>span{flex:1}
-.admin-ui-portal .supplier-reference-list{margin:12px 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px}.admin-ui-portal .supplier-reference-list li{display:flex;flex-direction:column;gap:4px;padding-bottom:12px;border-bottom:1px solid var(--border)}.admin-ui-portal .supplier-reference-list span{color:var(--muted-foreground);font-size:12px}
-.admin-ui-portal .supplier-resource-test{display:flex;align-items:center;gap:12px}.admin-ui-portal .supplier-association-reference{display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--muted);border-radius:6px}.admin-ui-portal .supplier-association-reference code{overflow-wrap:anywhere}
 .admin-v2 .supplier-resource-key-table{min-width:850px;table-layout:fixed}.admin-v2 .supplier-resource-key-table th:nth-child(1){width:22%}.admin-v2 .supplier-resource-key-table th:nth-child(2){width:26%}.admin-v2 .supplier-resource-key-table th:nth-child(3){width:10%}.admin-v2 .supplier-resource-key-table th:nth-child(4){width:14%}.admin-v2 .supplier-resource-key-table th:nth-child(5){width:12%}.admin-v2 .supplier-resource-key-table th:nth-child(6){width:16%}
-.admin-ui-portal.supplier-key-reference-popover{display:flex;flex-direction:column;align-items:stretch}.admin-ui-portal.supplier-key-actions-menu{display:flex;flex-direction:column;align-items:stretch;width:180px}
 .admin-v2 .supplier-model-resource-table .supplier-catalogue-actions{display:grid;grid-template-columns:repeat(3,32px);gap:4px}
 .admin-v2 .supplier-model-resource-table .supplier-catalogue-model-actions{margin-top:8px}
 .admin-v2 .supplier-model-resource-table [data-slot=button][data-variant=link]{height:24px;padding:0}
 .admin-v2 .supplier-resource-key-table td:first-child{width:auto;max-width:none}
 .admin-v2 .supplier-dictionary-toolbar{justify-content:space-between}
-
-.admin-ui-portal.supplier-configuration-dialog{width:min(900px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);padding:0;gap:0;overflow:hidden;display:flex;flex-direction:column}
-.admin-ui-portal.supplier-configuration-dialog>.mo-dialog-header{margin:0;padding:20px;flex:none;align-items:center}
-.admin-ui-portal .supplier-configuration-form{display:flex;flex-direction:column;min-height:0;font-size:12px}
-.admin-ui-portal .supplier-configuration-body{display:flex;flex-direction:column;gap:16px;overflow:auto;padding:20px;min-height:0}
-.admin-ui-portal .supplier-configuration-body .mm-field{margin:0;gap:4px}
-.admin-ui-portal .supplier-configuration-form input[readonly]{background:var(--muted);color:var(--muted-foreground)}
-.admin-ui-portal .supplier-configuration-form [data-slot=select-trigger],.admin-ui-portal .supplier-configuration-model{width:100%;min-width:0}
-.admin-ui-portal .supplier-configuration-model{justify-content:space-between}
-.admin-ui-portal .supplier-configuration-model>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.admin-ui-portal.supplier-configuration-model-options{width:min(600px,calc(100vw - 64px));padding:0}
-.admin-ui-portal.supplier-configuration-model-options small{display:block;color:var(--muted-foreground)}
-.admin-ui-portal .supplier-configuration-footer{display:flex;justify-content:flex-end;gap:8px;padding:16px 20px;border-top:1px solid var(--border);flex:none}
-.admin-ui-portal .supplier-key-group-field{display:flex;flex-direction:column;gap:4px}
-.admin-ui-portal .supplier-key-group-label{display:flex;align-items:center;gap:4px;font-weight:500}
-.admin-ui-portal .supplier-key-group-label button{height:24px;width:24px}
-.admin-ui-portal .supplier-configuration-costs table{min-width:600px;table-layout:fixed}
-.admin-ui-portal .supplier-configuration-costs th:nth-child(1){width:32%}.admin-ui-portal .supplier-configuration-costs th:nth-child(2){width:30%}.admin-ui-portal .supplier-configuration-costs th:nth-child(3){width:26%}.admin-ui-portal .supplier-configuration-costs th:nth-child(4){width:12%}
-.admin-ui-portal .supplier-price-tools{display:flex;gap:8px;flex-wrap:wrap}
-.admin-ui-portal .supplier-price-input{display:flex;gap:4px;align-items:center}
-.admin-ui-portal .supplier-price-input input{flex:1;width:0;min-width:0;text-align:right}
-.admin-ui-portal .supplier-price-input [data-slot=select-trigger]{width:76px;flex:none}
-.admin-ui-portal .supplier-common-items{display:flex;flex-direction:column;gap:16px}
-.admin-ui-portal .supplier-common-item-options{max-height:360px;overflow:auto;display:flex;flex-direction:column}
-.admin-ui-portal .supplier-common-item-options label{display:flex;align-items:center;gap:8px;min-height:36px;padding:4px}
-.admin-ui-portal .supplier-common-item-options input{width:16px;height:16px;flex:none;accent-color:var(--primary)}
-.admin-ui-portal .supplier-common-item-options small{margin-left:auto;color:var(--muted-foreground)}
-@media(max-width:700px){.admin-ui-portal .supplier-configuration-costs .supplier-channel-toolbar{align-items:flex-start;flex-direction:column}.admin-ui-portal .supplier-configuration-body{padding:16px}}
-
-.admin-v2 .supplier-model-resource-table .supplier-catalogue-actions button{color:var(--primary)}
 .admin-v2 .supplier-catalogue-tab{display:inline-flex;align-items:center;gap:2px}
 
 /* Model and supplier perspectives share the same channel records and actions. */
 .admin-v2 .supplier-perspective{margin:0 0 8px}
 .admin-v2 .supplier-perspective [role=tablist]{width:100%;min-width:0}
 .admin-v2 .supplier-perspective [role=tab]{flex:1;min-width:0}
-.admin-v2 .supplier-model-panel{background:var(--card);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.admin-v2 .supplier-model-panel{min-width:0;overflow:hidden}
 .admin-v2 .supplier-model-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;border-bottom:1px solid var(--border)}
 .admin-v2 .supplier-model-heading>div{display:flex;align-items:center;gap:16px;min-width:0;flex-wrap:wrap}
-.admin-v2 .supplier-model-heading h2{font-size:16px;font-weight:600;overflow-wrap:anywhere}
-.admin-v2 .supplier-model-heading span{font-size:12px;color:var(--muted-foreground)}
+.admin-v2 .supplier-model-heading h2{overflow-wrap:anywhere}
 .admin-v2 .supplier-model-options>[data-slot=button]{min-height:40px;padding:8px 10px}
 .admin-v2 .supplier-model-panel .supplier-model-resource-table td[rowspan]{vertical-align:middle}
 .admin-v2 .supplier-model-panel .supplier-model-resource-table th:first-child{width:120px}
 .admin-v2 .supplier-model-panel .supplier-protocol-address>small{display:none}
 .admin-v2 .supplier-catalogue-identity>[data-slot=button]{margin-top:4px;color:var(--primary)}
-.admin-ui-portal.supplier-configuration-dialog{width:min(1000px,calc(100vw - 32px))}
-.admin-ui-portal .supplier-configuration-body>.supplier-channel-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
-.admin-ui-portal .supplier-configuration-body>.supplier-channel-fields>*{min-width:0}
-@media(max-width:700px){.admin-ui-portal .supplier-configuration-body>.supplier-channel-fields{grid-template-columns:minmax(0,1fr);gap:16px}.admin-v2 .supplier-model-heading{padding:12px;flex-wrap:wrap}}
+@media(max-width:700px){.admin-v2 .supplier-model-heading{padding:12px;flex-wrap:wrap}}
 
 .admin-v2 .supplier-perspective [role=tab][data-state=active]{background:white;color:var(--foreground)}
 
 .admin-v2 .supplier-create-actions{display:flex;gap:8px}
 
 @media(max-width:1400px){.admin-v2 .supplier-workbench>.supplier-heading{flex-wrap:wrap}.admin-v2 .supplier-workbench>.supplier-heading>.supplier-actions{margin-left:auto}}
-
-.admin-ui-portal .supplier-key-group-control{display:flex;align-items:center;gap:8px}
-.admin-ui-portal .supplier-key-group-control>[role=combobox]{flex:1;min-width:0}
-.admin-ui-portal .supplier-key-group-control>button:last-child{flex-shrink:0}
-.admin-ui-portal .supplier-connection-check{display:grid;gap:12px}
-.admin-ui-portal .supplier-test-facts{display:grid;gap:8px;margin:0;font-size:12px}
-.admin-ui-portal .supplier-test-facts>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:12px;align-items:baseline}
-.admin-ui-portal .supplier-test-facts dt,.admin-ui-portal .supplier-test-details dt{color:var(--muted-foreground)}
-.admin-ui-portal .supplier-test-facts dd{margin:0;overflow-wrap:anywhere}
-.admin-ui-portal .supplier-test-details{font-size:12px}
-.admin-ui-portal .supplier-test-details summary{cursor:pointer;color:var(--primary);padding:4px 0}
-.admin-ui-portal .supplier-test-details dl{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px;margin:8px 0}
-.admin-ui-portal .supplier-test-details dd{margin:0;overflow-wrap:anywhere}
 .admin-v2 .supplier-owner-link{white-space:normal;height:auto;padding:0;font-weight:600;text-align:left;justify-content:flex-start}
-
-.admin-ui-portal .supplier-onboarding-steps{display:flex;gap:24px;list-style:none;padding:0;margin:0 0 8px;font-size:12px;color:var(--muted-foreground)}
-.admin-ui-portal .supplier-onboarding-steps li{display:flex;gap:8px;align-items:center}.admin-ui-portal .supplier-onboarding-steps li>span{display:grid;place-items:center;width:24px;height:24px;border:1px solid var(--border);border-radius:50%;flex:none}.admin-ui-portal .supplier-onboarding-steps [aria-current=step]{color:var(--primary);font-weight:600}.admin-ui-portal .supplier-onboarding-steps [aria-current=step]>span{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary)}
-.admin-ui-portal .supplier-onboarding-context{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px}.admin-ui-portal .supplier-onboarding-context code{overflow-wrap:anywhere;min-width:0}.admin-ui-portal .supplier-onboarding-models{min-width:760px;font-size:12px}.admin-ui-portal .supplier-onboarding-models th:first-child{width:32%}.admin-ui-portal .supplier-onboarding-models th:nth-child(2){width:30%}.admin-ui-portal .supplier-onboarding-models td:last-child{white-space:nowrap}.admin-ui-portal .supplier-onboarding-models td{vertical-align:middle}.admin-ui-portal .supplier-onboarding-models [data-slot=button]{font-size:12px}
-
-.admin-ui-portal .supplier-draft-list{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:6px}.admin-ui-portal .supplier-draft-list>div{display:flex;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border)}.admin-ui-portal .supplier-draft-list>div:last-child{border:0}.admin-ui-portal .supplier-draft-list>div>div{flex:1;min-width:0}.admin-ui-portal .supplier-draft-list small{display:block;color:var(--muted-foreground)}
-.admin-ui-portal .supplier-reference-body{padding:12px 0;display:flex;flex-direction:column;gap:8px}.admin-ui-portal .supplier-reference-options{display:grid;grid-template-columns:1fr 1fr;max-height:240px;overflow:auto;gap:4px}.admin-ui-portal .supplier-reference-options label{display:flex;align-items:center;gap:8px;min-height:36px;padding:4px 8px}.admin-ui-portal .supplier-reference-options small{display:block;color:var(--muted-foreground)}
-.admin-ui-portal .supplier-onboarding-models{min-width:880px;table-layout:fixed}.admin-ui-portal .supplier-onboarding-models th:first-child{width:44px}.admin-ui-portal .supplier-onboarding-models th:nth-child(2){width:29%}.admin-ui-portal .supplier-onboarding-models th:nth-child(3){width:34%}.admin-ui-portal .supplier-onboarding-models th:nth-child(4){width:80px}.admin-ui-portal .supplier-onboarding-models small{display:block;line-height:1.5;margin-top:4px}.admin-ui-portal .supplier-onboarding-models label{display:flex;align-items:center;gap:4px;line-height:1.5}.admin-ui-portal .supplier-request-preview{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted-foreground)}.admin-ui-portal .supplier-configuration-body details>.supplier-channel-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}.admin-ui-portal .supplier-resource-form>.supplier-channel-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media(max-width:700px){.admin-ui-portal .supplier-reference-options{grid-template-columns:1fr}.admin-ui-portal .supplier-configuration-body details>.supplier-channel-fields,.admin-ui-portal .supplier-resource-form>.supplier-channel-fields{grid-template-columns:1fr}}
-
-.admin-ui-portal .supplier-onboarding-single th:first-child,.admin-ui-portal .supplier-onboarding-single td:first-child{display:none}.admin-ui-portal .supplier-inline-key{display:grid;gap:12px}.admin-ui-portal .supplier-inline-key .supplier-price-hint{margin:4px 0 0}
-.admin-ui-portal .supplier-configuration-body>.mo-table-scroll:has(.supplier-onboarding-models){flex-shrink:0}
 
 .admin-v2 .supplier-directory-table,.admin-v2 .supplier-channel-directory{min-width:760px;table-layout:fixed}
 .admin-v2 .supplier-directory-table th:first-child{width:28%}
@@ -405,11 +300,6 @@
 .admin-v2 .supplier-directory-table small,.admin-v2 .supplier-channel-directory small,.admin-v2 .supplier-channel-directory code{display:block;color:var(--muted-foreground);font-size:12px;margin-top:4px;overflow-wrap:anywhere}
 .admin-v2 .supplier-channel-directory small[title]{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .admin-v2 .supplier-directory-table td:first-child,.admin-v2 .supplier-channel-directory td:first-child{white-space:normal;overflow-wrap:anywhere}
-.admin-ui-portal .supplier-model-detail-body{padding-top:16px}
-.admin-ui-portal .supplier-pool-table{min-width:600px;table-layout:fixed}
-.admin-ui-portal .supplier-pool-table th:first-child{width:55px}.admin-ui-portal .supplier-pool-table th:nth-child(2){width:36%}
-.admin-ui-portal .supplier-pool-table small,.admin-ui-portal .supplier-pool-table code{display:block;overflow-wrap:anywhere;color:var(--muted-foreground);font-size:12px}
-.admin-ui-portal .supplier-pool-table input[type=number]{max-width:90px}
 
 .admin-v2 .supplier-channel-directory .supplier-row-actions{flex-wrap:wrap;gap:4px 8px}
 .admin-v2 .supplier-channel-directory td:nth-child(4)>[data-slot=button]{padding:0;height:auto}
@@ -437,59 +327,9 @@
 .admin-v2 .supplier-model-channel-table .mo-copy code{min-width:0;white-space:normal;overflow-wrap:anywhere}
 .admin-v2 .supplier-model-channel-table .mo-copy>button{order:-1;flex-shrink:0}
 .admin-v2 .supplier-model-channel-table th:nth-child(7){text-align:right}
-.admin-ui-portal.mo-dialog.mo-drawer:has(.supplier-billing-editor){width:min(960px,calc(100vw - 16px))}
-.admin-ui-portal .supplier-billing-editor,.admin-ui-portal .supplier-billing-form{display:flex;flex-direction:column;gap:20px;min-width:0;font-size:12px}
-.admin-ui-portal .supplier-billing-editor h3{margin:0;padding:0;border:0;font-size:14px}
-.admin-ui-portal .supplier-billing-editor .supplier-price-hint{margin:0}
-.admin-ui-portal .supplier-billing-editor .supplier-channel-costs{display:flex;flex-direction:column;gap:12px;min-width:0}
-.admin-ui-portal .supplier-billing-editor .supplier-channel-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:0}
-.admin-ui-portal .supplier-billing-editor .mm-field{margin:0;min-width:0}
-.admin-ui-portal .supplier-billing-section{display:flex;flex-direction:column;gap:12px;min-width:0}
-.admin-ui-portal .supplier-billing-form>.supplier-billing-section{border-top:1px solid var(--border);padding-top:20px}
-.admin-ui-portal .supplier-billing-editor input,.admin-ui-portal .supplier-billing-editor [data-slot=select-trigger]{width:100%;min-width:0}
-.admin-ui-portal .supplier-billing-editor .supplier-separated-price-table{min-width:660px;table-layout:fixed}
-.admin-ui-portal .supplier-billing-editor .supplier-separated-price-table th:nth-child(1){width:30%}
-.admin-ui-portal .supplier-billing-editor .supplier-separated-price-table th:nth-child(2){width:20%}
-.admin-ui-portal .supplier-billing-editor .supplier-separated-price-table th:nth-child(3){width:14%}
-.admin-ui-portal .supplier-billing-editor .supplier-separated-price-table th:nth-child(4){width:26%}
-.admin-ui-portal .supplier-billing-editor .supplier-separated-price-table th:nth-child(5){width:10%}
-.admin-ui-portal .supplier-billing-editor .supplier-separated-price-table td{padding:10px 12px;vertical-align:top;min-width:0}
-.admin-ui-portal .supplier-billing-editor .supplier-separated-price-table td:first-child>.supplier-tariff-choice{margin-bottom:8px}
-.admin-ui-portal .supplier-billing-editor .supplier-separated-price-table .supplier-price-input input{width:100%}
-.admin-ui-portal .supplier-billing-history{border-top:1px solid var(--border);padding-top:16px;min-width:0}
-.admin-ui-portal .supplier-billing-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0}
-.admin-ui-portal .supplier-billing-facts dt{color:var(--muted-foreground)}
-.admin-ui-portal .supplier-billing-facts dd{margin:4px 0 0;overflow-wrap:anywhere}
-@media(max-width:700px){.admin-ui-portal .supplier-billing-editor .supplier-channel-fields,.admin-ui-portal .supplier-billing-facts{grid-template-columns:minmax(0,1fr)}}
 .admin-v2 .supplier-api-address{display:flex;align-items:center;gap:4px}
 .admin-v2 .supplier-api-address>span{min-width:0;overflow-wrap:anywhere}
 .admin-v2 .supplier-api-address>[data-slot=button]{flex-shrink:0}
-.admin-ui-portal .supplier-combined-models{display:flex;flex-direction:column;gap:12px;min-width:0;flex-shrink:0}
-.admin-ui-portal .supplier-model-entry-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.admin-ui-portal .supplier-model-entry-heading h3,.admin-ui-portal .supplier-configuration-body>h3{margin:0;font-size:14px}
-.admin-ui-portal .supplier-model-discovery summary{cursor:pointer;color:var(--muted-foreground)}
-.admin-ui-portal .supplier-combined-models .supplier-onboarding-models th:nth-child(4){width:120px}
-
-.admin-ui-portal.supplier-add-dialog{width:min(780px,calc(100vw - 32px))}
-.admin-ui-portal.supplier-add-model{width:min(600px,calc(100vw - 32px))}
-.admin-ui-portal .supplier-add-credentials,.admin-ui-portal .supplier-add-costs{display:flex;flex-direction:column;gap:8px}
-.admin-ui-portal .supplier-add-costs table{min-width:560px;table-layout:fixed}
-.admin-ui-portal .supplier-add-costs th:last-child{width:56px}
-.admin-ui-portal .supplier-add-costs input{width:100%;min-width:0}
-.admin-ui-portal.supplier-add-dialog h3{margin:0;padding:0;border:0;font-size:12px;line-height:18px}
-.admin-ui-portal.supplier-add-dialog .mm-checkbox-row{margin:0;min-height:32px}
-
-.admin-ui-portal.supplier-add-dialog .supplier-separated-price-table{min-width:660px;table-layout:fixed}
-.admin-ui-portal.supplier-add-dialog .supplier-separated-price-table th:nth-child(1){width:32%}
-.admin-ui-portal.supplier-add-dialog .supplier-separated-price-table th:nth-child(2){width:17%}
-.admin-ui-portal.supplier-add-dialog .supplier-separated-price-table th:nth-child(3){width:15%}
-.admin-ui-portal.supplier-add-dialog .supplier-separated-price-table th:nth-child(4){width:24%}
-.admin-ui-portal.supplier-add-dialog .supplier-separated-price-table th:nth-child(5){width:12%}
-.admin-ui-portal.supplier-add-dialog .supplier-separated-price-table th:last-child,.admin-ui-portal.supplier-add-dialog .supplier-separated-price-table td:last-child{position:sticky;right:0;z-index:1;background:var(--card);box-shadow:-1px 0 0 var(--border)}
-
-.admin-ui-portal.mo-dialog.mo-drawer.mo-drawer-left.supplier-channel-edit-drawer{width:min(1080px,calc(100vw - 16px));max-height:none;display:flex;flex-direction:column}
-.admin-ui-portal.supplier-channel-edit-drawer>.supplier-configuration-form,.admin-ui-portal.supplier-channel-edit-drawer .supplier-configuration-body{flex:1}
-.admin-ui-portal.supplier-model-multiselect{padding:8px;display:grid;gap:8px}
 .supplier-model-select-options{max-height:300px;overflow:auto}
 .supplier-model-select-options label{display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 8px;border-bottom:1px solid var(--border);cursor:pointer}
 .supplier-model-select-options label:has(input:disabled){color:var(--muted-foreground);cursor:default}
@@ -502,14 +342,10 @@
 .admin-v2 .supplier-model-channel-table th:first-child{width:140px}.admin-v2 .supplier-model-channel-table th:nth-child(5){width:210px}.admin-v2 .supplier-model-channel-table th:last-child{width:160px}
 .admin-v2 .supplier-model-channel-table .supplier-identity-cell,.admin-v2 .supplier-model-channel-table th:first-child{position:sticky;left:0;z-index:1;background:var(--card);box-shadow:1px 0 var(--border)}
 .admin-v2 .supplier-model-channel-table .supplier-action-cell,.admin-v2 .supplier-model-channel-table th:last-child{position:sticky;right:0;z-index:2;background:var(--card);box-shadow:-1px 0 var(--border)}
-.admin-v2 .supplier-model-channel-table :is(th:first-child,th:last-child){background:var(--muted)}
+.admin-v2 .supplier-model-channel-table :is(th:first-child,th:last-child){background:var(--semi-color-bg-1)}
 .admin-v2 .supplier-model-channel-table .mo-copy code{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.admin-ui-portal .supplier-model-multiselect-inline{width:100%;max-width:none;box-shadow:none;border:0;padding:0}
-.admin-ui-portal .supplier-model-multiselect-inline .supplier-model-select-options{max-height:380px;overflow:auto}
-.admin-ui-portal .supplier-common-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
 .admin-v2 .supplier-dictionary-reference{font-size:11px;color:var(--muted-foreground);margin-top:6px}.admin-v2 .supplier-dictionary-reference summary{cursor:pointer}
 @media(max-width:1400px){
-  .admin-v2 .supplier-model-channel-table{min-width:840px;font-size:12px}
+  .admin-v2 .supplier-model-channel-table{min-width:840px}
   .admin-v2 .supplier-model-channel-table th:first-child{width:95px}.admin-v2 .supplier-model-channel-table th:nth-child(2){width:75px}.admin-v2 .supplier-model-channel-table th:nth-child(3){width:60px}.admin-v2 .supplier-model-channel-table th:nth-child(4){width:105px}.admin-v2 .supplier-model-channel-table th:nth-child(5){width:115px}.admin-v2 .supplier-model-channel-table th:nth-child(6){width:80px}.admin-v2 .supplier-model-channel-table th:nth-child(7){width:95px}.admin-v2 .supplier-model-channel-table th:nth-child(8){width:75px}.admin-v2 .supplier-model-channel-table th:last-child{width:140px}
-  .admin-v2 .supplier-model-channel-table :is(td,th){padding:8px}
 }

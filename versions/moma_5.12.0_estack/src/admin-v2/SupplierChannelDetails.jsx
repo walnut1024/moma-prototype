@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Tabs } from '@douyinfe/semi-ui';
+import { Button, Descriptions, Tabs, Typography } from '@douyinfe/semi-ui';
 import { GridTable, Row, Cell, Modal } from './ModelOperationsUI';
 import { channelAddresses, channelFingerprint, channelLinkedModels, channelRouteRefs } from './provider-channels';
 import { supplierChannelCode, supplierChannelName } from './supplier-resources';
@@ -36,26 +36,36 @@ export default function SupplierChannelDetails({ state, provider, association, o
   return <Modal drawer wide title="模型渠道详情" description={`${provider.name} · ${supplierChannelName(provider, endpoint)}`} onClose={close}>
     <Tabs className="supplier-channel-details" type="line" defaultActiveKey="configuration" aria-label="模型渠道详情">
       <Tabs.TabPane tab="接入配置" itemKey="configuration">
-        <dl className="supplier-test-facts">
-          <div><dt>渠道</dt><dd>{supplierChannelName(provider, endpoint)}<small>{supplierChannelCode(endpoint)}</small></dd></div>
-          <div><dt>上游模型标识</dt><dd><code>{association.upstreamModelId}</code></dd></div>
-          <div><dt>接入状态</dt><dd>{channelStatus(provider, association)}</dd></div>
-          <div><dt>配置版本</dt><dd>{endpoint.configurationRevision || 0}</dd></div>
-          <div><dt>请求地址</dt><dd>{addresses.map((address, index) => <div key={index}><span>{address.protocol}</span><code>{String(redactDiagnostic(address.baseUrl))}</code></div>)}</dd></div>
-          <div><dt>凭证</dt><dd>{endpoint.authMode === 'none' ? '无需认证' : endpoint.authMode === 'group' ? `密钥组 ${endpoint.keyGroupId}` : '渠道当前凭证'}</dd></div>
-          <div><dt>最近检查</dt><dd>{time(association.health?.testedAt || endpoint.connectionTest?.testedAt)}</dd></div>
-          <div><dt>采购价</dt><dd>{association.pricing?.scenarios?.length ? `${association.pricing.scenarios.length} 个计费项` : '待配置'}</dd></div>
-        </dl>
+        <Descriptions data={[
+          { key: '渠道', value: <div className="admin-table-record">{supplierChannelName(provider, endpoint)}
+            <Typography.Text type="tertiary" size="small">{supplierChannelCode(endpoint)}</Typography.Text></div> },
+          { key: '上游模型标识', value: <code>{association.upstreamModelId}</code> },
+          { key: '接入状态', value: channelStatus(provider, association) },
+          { key: '配置版本', value: endpoint.configurationRevision || 0 },
+          { key: '请求地址', value: addresses.map((address, index) => <div className="admin-table-record" key={index}>
+            <Typography.Text type="tertiary">{address.protocol}</Typography.Text><code>{String(redactDiagnostic(address.baseUrl))}</code>
+          </div>) },
+          { key: '凭证', value: endpoint.authMode === 'none' ? '无需认证' : endpoint.authMode === 'group' ? `密钥组 ${endpoint.keyGroupId}` : '渠道当前凭证' },
+          { key: '最近检查', value: time(association.health?.testedAt || endpoint.connectionTest?.testedAt) },
+          { key: '采购价', value: association.pricing?.scenarios?.length ? `${association.pricing.scenarios.length} 个计费项` : '待配置' },
+        ]}/>
         <div className="supplier-channel-detail-actions"><Button theme="light" disabled={!ops.can} onClick={event => onEdit('address', event.currentTarget)}>修改地址</Button><Button theme="light" disabled={!ops.can} onClick={event => onEdit('credentials', event.currentTarget)}>修改密钥</Button><Button theme="light" disabled={!ops.can} onClick={event => onEdit('price', event.currentTarget)}>维护模型成本</Button><Button disabled={!ops.can} onClick={event => onEdit('test', event.currentTarget)}>测试连接</Button></div>
       </Tabs.TabPane>
-      <Tabs.TabPane tab="请求适配" itemKey="adapter"><dl className="supplier-test-facts"><div><dt>上游协议</dt><dd>{endpoint.interfaceType || endpoint.protocol || '待配置'}</dd></div><div><dt>参数与响应适配</dt><dd>{endpoint.adapterOptions && Object.keys(endpoint.adapterOptions).length?<pre>{JSON.stringify(redactDiagnostic(endpoint.adapterOptions),null,2)}</pre>:'使用当前协议默认适配'}</dd></div></dl><Button theme="light" disabled={!ops.can} onClick={event=>onEdit('address',event.currentTarget)}>维护接入与适配</Button></Tabs.TabPane>
+      <Tabs.TabPane tab="请求适配" itemKey="adapter">
+        <Descriptions data={[
+          { key: '上游协议', value: endpoint.interfaceType || endpoint.protocol || '待配置' },
+          { key: '参数与响应适配', value: endpoint.adapterOptions && Object.keys(endpoint.adapterOptions).length
+            ? <pre>{JSON.stringify(redactDiagnostic(endpoint.adapterOptions), null, 2)}</pre> : '使用当前协议默认适配' },
+        ]}/>
+        <div className="supplier-channel-detail-actions"><Button theme="light" disabled={!ops.can} onClick={event=>onEdit('address',event.currentTarget)}>维护接入与适配</Button></div>
+      </Tabs.TabPane>
       <Tabs.TabPane tab="操作记录" itemKey="operations"><GridTable headings={['时间','操作','结果','操作人']} empty={!(state.audits || []).some(row=>[endpoint.id,association.id].includes(row.objectId) || row.endpointId===endpoint.id || row.relatedEndpointIds?.includes(endpoint.id))} emptyMessage="暂无明确归属当前渠道的操作记录。">{(state.audits || []).filter(row=>[endpoint.id,association.id].includes(row.objectId) || row.endpointId===endpoint.id || row.relatedEndpointIds?.includes(endpoint.id)).map(row=><Row key={row.id}><Cell>{time(row.createdAt)}</Cell><Cell>{row.action}</Cell><Cell>{row.result}</Cell><Cell>{row.actorName || row.actor}</Cell></Row>)}</GridTable></Tabs.TabPane>
       <Tabs.TabPane tab="测试记录" itemKey="tests">
         <GridTable headings={['时间 / 任务', '来源', '结果', '耗时', '操作']} empty={!history.length} emptyMessage="尚无测试记录。">
           {history.map((test, index) => <Row key={test.id || index}><Cell>{time(test.startedAt || test.testedAt || test.createdAt)}<small>{test.task || test.templateId || '基础调用'}</small></Cell><Cell>{source(test)}</Cell><Cell>{test.result || test.status || '未记录'}{(test.current === false || test.fingerprint && test.fingerprint !== channelFingerprint(association)) && <small>旧配置记录</small>}</Cell><Cell>{test.durationMs == null ? '—' : `${test.durationMs} ms`}</Cell><Cell><Button type="tertiary" theme="borderless" onClick={() => setSelectedTest(test.id || test.testedAt)}>详情</Button></Cell></Row>)}
         </GridTable>
         {record && <section className="supplier-test-record" aria-label="测试诊断">
-          <h3>测试诊断</h3>
+          <Typography.Title heading={5} component="h3">测试诊断</Typography.Title>
           <dl className="supplier-test-facts supplier-test-conclusion"><div><dt>结论</dt><dd>{safe(record.result || record.status)}<small>{safe(record.message || record.error?.message)}</small></dd></div><div><dt>请求阶段</dt><dd>{stages[record.phase || record.stage] || safe(record.phase || record.stage)}{(record.statusCode ?? (typeof record.status === 'number' ? record.status : null)) != null && <small>状态码 {record.statusCode ?? record.status}</small>}</dd></div><div><dt>建议</dt><dd>{safe(record.suggestion || record.hint || suggestions[record.code] || (record.result === '通过' ? '无需处理。' : '核对本次任务和配置后，明确重新测试。'))}{record.retryAfter != null && <small>建议等待 {record.retryAfter} 秒</small>}</dd></div><div><dt>用量 / 费用</dt><dd>{record.usage ? '已记录用量' : '用量未知'} / {record.cost == null ? '费用未知' : '已记录费用'}</dd></div></dl>
           <details><summary>技术详情</summary><dl className="supplier-test-facts supplier-test-technical">
             <div><dt>测试 ID</dt><dd><code>{safe(record.id)}</code></dd></div><div><dt>追踪 ID</dt><dd><code>{safe(record.traceId || record.requestId)}</code></dd></div>

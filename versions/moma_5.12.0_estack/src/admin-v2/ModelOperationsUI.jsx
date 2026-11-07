@@ -61,7 +61,7 @@ export function GridTable({ headings, children, empty, emptyMessage = '没有符
     const props = { ...(cell.colSpan != null ? { colSpan: cell.colSpan } : {}), ...(cell.rowSpan != null ? { rowSpan: cell.rowSpan } : {}), ...(cell.className ? { className: cell.className } : {}) };
     return { children: cell.children, props };
   } }));
-  return <div className="mo-table-scroll"><Table className={`mo-table ${className}`} columns={columns} dataSource={dataSource} pagination={false} empty={empty ? emptyMessage : ' '}/></div>;
+  return <div className="mo-table-scroll"><Table size="small" className={`mo-table ${className}`} columns={columns} dataSource={dataSource} pagination={false} empty={empty ? emptyMessage : ' '}/></div>;
 }
 export function Row({ children }) { return <>{children}</>; }
 export function Cell({ children }) { return <>{children}</>; }

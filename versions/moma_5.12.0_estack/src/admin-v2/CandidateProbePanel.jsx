@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Checkbox } from '@douyinfe/semi-ui';
+import { Button, Checkbox, Typography } from '@douyinfe/semi-ui';
 import { Choice, Field } from './ModelMetadataForm';
 import { GridTable, Row, Cell, Notice } from './ModelOperationsUI';
 import { candidateTestPlan } from './channel-change-management';
@@ -63,7 +63,7 @@ export default function CandidateProbePanel({ state, context: inputContext, ops,
     catch (failure) { if (mounted.current) setError(failure.message); }
     finally { pending.current = false; if (mounted.current) setBusy(false); }
   };
-  return <section className="supplier-change-section"><h3>候选测试 · {endpoint?.name}</h3><OnboardingScenarioControl disabled={running}/>
+  return <section className="supplier-change-section"><Typography.Title heading={5} component="h3">候选测试 · {endpoint?.name}</Typography.Title><OnboardingScenarioControl disabled={running}/>
     {poolKeys.length > 0 && <Field label="测试密钥"><Choice label="候选测试密钥" value={keyId} options={poolKeys.map(key => [key.id, key.name || key.id])} disabled={running || unresolved} onChange={value => { setSelectedKeyId(value); setJob(null); setBatch(null); setConsent(false); }}/></Field>}
     {planError && <Notice error>{planError}</Notice>}
     <Field label="验证内容"><Choice label="候选验证内容" value={check || 'basic'} options={[[ 'basic', '基础调用' ], [ 'streaming', '流式响应' ], [ 'tools', '工具调用' ], [ 'structured', '结构化输出' ]]} disabled={running || unresolved || !ops.can} onChange={value => { setCheck(value === 'basic' ? '' : value); setConsent(false); }}/></Field>
