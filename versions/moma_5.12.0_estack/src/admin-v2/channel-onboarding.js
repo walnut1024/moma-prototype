@@ -73,7 +73,7 @@ function draftFields(state, data) {
     if (row.newModel && (typeof row.newModel !== 'object' || Array.isArray(row.newModel) || Object.keys(row.newModel).some(key => !['modelId', 'name', 'type'].includes(key)))) throw new Error('新模型草稿包含不支持的字段');
     const newModel = row.newModel && { modelId: text(row.newModel.modelId || '', '模型编码', 80, false), ...(row.newModel.name ? { name: text(row.newModel.name, '模型名称', 100, false) } : {}), type: text(row.newModel.type || '', '模型类型', 20, false) };
     const scenarios = (row.scenarios || []).map(item => ({ name: text(item.name || '', '计费项', 100, false), listPrice: String(item.listPrice ?? ''), unit: text(item.unit || '', '计价单位', 100, false), currency: text(item.currency || 'CNY', '币种', 10), condition: text(item.condition || '', '条件', 160, false) }));
-    return { id: text(row.id || `row-${index + 1}`, '模型行标识', 100), libraryId: row.libraryId || '', ...(row.modelPresetId ? { modelPresetId: text(row.modelPresetId, '模型参考预设', 100) } : {}), ...(newModel ? { newModel } : {}), upstreamModelId: text(row.upstreamModelId || '', '上游模型 ID', 200, false), selected: row.selected !== false, confirmed: row.confirmed === true, source: ['upstream', 'reference', 'manual'].includes(row.source) ? row.source : 'manual', scenarios };
+    return { id: text(row.id || `row-${index + 1}`, '模型行标识', 100), libraryId: row.libraryId || '', ...(row.modelPresetId ? { modelPresetId: text(row.modelPresetId, '模型参考预设', 100) } : {}), ...(newModel ? { newModel } : {}), upstreamModelId: text(row.upstreamModelId || '', '上游模型标识', 200, false), selected: row.selected !== false, confirmed: row.confirmed === true, source: ['upstream', 'reference', 'manual'].includes(row.source) ? row.source : 'manual', scenarios };
   });
   const endpoint = data.endpointId && state.endpoints.find(row => row.id === data.endpointId && row.providerId === provider.id && !row.deletedAt);
   if (data.endpointId && !endpoint) throw new Error('草稿渠道不属于当前服务商');
@@ -87,8 +87,8 @@ export function previewChannelModels(state, providerId, models, { source = 'upst
   const seen = new Set(), library = modelLibrary(state);
   const existing = endpointId ? (provider.catalogConnections || []).filter(row => row.endpointId === endpointId && !row.deletedAt) : [];
   return { source, complete, rows: models.flatMap(input => {
-    const id = text(typeof input === 'string' ? input : input.id, '上游模型 ID', 200);
-    if (/\s/u.test(id)) throw new Error('上游模型 ID 不能包含空白');
+    const id = text(typeof input === 'string' ? input : input.id, '上游模型标识', 200);
+    if (/\s/u.test(id)) throw new Error('上游模型标识 不能包含空白');
     if (seen.has(id)) return []; seen.add(id);
     const saved = existing.find(row => row.upstreamModelId === id);
     const candidates = library.filter(model => model.modelId === id || model.profile?.upstreamAliases?.[providerId]?.includes(id));
@@ -257,9 +257,9 @@ export function validateChannelRows(state, rows, endpoint) {
   for (const row of selected) {
     const master = libraryRecord(state, row.libraryId), id = row.upstreamModelId.trim();
     if (!master) errors.push({ rowId: row.id, field: 'libraryId', message: '请选择有效的模型资料' });
-    if (!id || /\s|\p{Cc}/u.test(id)) errors.push({ rowId: row.id, field: 'upstreamModelId', message: '填写有效的上游模型 ID，不能有空白或控制字符' });
+    if (!id || /\s|\p{Cc}/u.test(id)) errors.push({ rowId: row.id, field: 'upstreamModelId', message: '填写有效的上游模型标识，不能有空白或控制字符' });
     if (master && masters.has(master.id)) errors.push({ rowId: row.id, field: 'libraryId', message: '重复的模型资料' });
-    if (ids.has(id)) errors.push({ rowId: row.id, field: 'upstreamModelId', message: '重复的上游模型 ID' });
+    if (ids.has(id)) errors.push({ rowId: row.id, field: 'upstreamModelId', message: '重复的上游模型标识' });
     if (master) masters.add(master.id); ids.add(id);
     if (['upstream', 'reference'].includes(row.source) && !row.confirmed) errors.push({ rowId: row.id, field: 'confirmed', message: '请确认模型身份匹配' });
     if (row.scenarios.some(item => !item.name?.trim() || !item.unit?.trim() || String(item.listPrice).trim() === '' || !Number.isFinite(Number(item.listPrice)) || Number(item.listPrice) < 0)) errors.push({ rowId: row.id, field: 'scenarios', message: '补齐已填写的采购价，或清空后稍后配置' });

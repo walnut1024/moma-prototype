@@ -103,7 +103,7 @@ function prepareServiceCases(source, cases, prefix) {
   }
   for (const {model,provider,weights} of routes) {
     const service=routingServices(state).find(item=>item.modelId===model.id && item.providerId===(provider?.id || null)),channels=routingChannels(state,service);
-    const config=validateRouteConfig(state,service,{strategy:weights.length>1?'weighted':'fixed',channels:channels.map((item,index)=>({supplyId:item.id,enabled:true,weight:weights[index]})),autoFailover:true});
+    const config=validateRouteConfig(state,service,{strategy:service.mode==='standard' || weights.length>1?'weighted':'fixed',channels:channels.map((item,index)=>({supplyId:item.id,enabled:true,weight:weights[index]})),autoFailover:true});
     let route=state.serviceRoutes.find(item=>item.serviceId===service.id);
     if (!route) {route=record(`${prefix}-route-${model.serviceReviewCase}-${provider?.code || 'unified'}`,{serviceId:service.id,activeVersion:0,versions:[],draft:null});state.serviceRoutes.push(route);}
     const version=Math.max(0,...route.versions.map(item=>item.version))+1;

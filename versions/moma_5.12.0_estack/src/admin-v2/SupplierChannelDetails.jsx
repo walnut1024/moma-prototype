@@ -72,7 +72,7 @@ export default function SupplierChannelDetails({ state, provider, association, o
       </TabsContent>
       <TabsContent value="services">
         <GridTable headings={['模型服务', '服务模式', '状态', '操作']} empty={!services.length} emptyMessage="尚未关联模型服务。">
-          {services.map(model => <Row key={model.id}><Cell>{model.name}<small>{model.modelId}</small></Cell><Cell>{model.serviceMode === 'standard' ? '统一服务' : model.serviceMode === 'provider' ? '分服务商' : '待配置'}</Cell><Cell>{model.listingStatus || model.status || '—'}</Cell><Cell><Button variant="link" onClick={() => { close(); ops.go({ model: model.id, panel: null }, { base: 'listing' }); }}>前往服务管理</Button></Cell></Row>)}
+          {services.map(model => <Row key={model.id}><Cell>{model.name}<small>{model.modelId}</small></Cell><Cell>{model.serviceMode === 'standard' ? '统一模型服务模式' : model.serviceMode === 'provider' ? '渠道直选模式' : '待配置'}</Cell><Cell>{model.listingStatus || model.status || '—'}</Cell><Cell><Button variant="link" onClick={() => { close(); ops.go({ model: model.id, panel: null }, { base: 'listing' }); }}>前往服务管理</Button></Cell></Row>)}
         </GridTable>
         {routes.length > 0 && <p className="supplier-price-hint">被 {routes.length} 项生效路由引用。</p>}
       </TabsContent>

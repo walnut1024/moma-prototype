@@ -1,7 +1,8 @@
+import { ROUTING_POLICIES } from './routing-policy.js';
 import { servicePurpose } from './service-purpose.js';
 import { activeSupplyPrice, modelSupplies, moneyDisplay } from './model-management.js';
 import { activeModelSalePrice, activeProviderPrice } from './service-workspace.js';
-import { activeRouteVersion, routingServices, serviceRoute } from './service-routing.js';
+import { activeRouteVersion, routingServices, serviceRoute, validateRouteConfig } from './service-routing.js';
 import { resolveChannelAssociationModel } from './channel-association-model.js';
 import { catalogueChannels } from './provider-channels.js';
 import { connectionFingerprint, connectionKeys } from './connection-state.js';
@@ -66,12 +67,13 @@ export function platformPriceVersions(price, model, path = '价格配置', at = 
   return result;
 }
 
-function platformRoute(version, rows) {
+function platformRoute(state, service, version, rows) {
   const config = version.config;
-  if (!['fixed', 'weighted', 'priority', 'priority_weighted'].includes(config.strategy)) issue('路由配置', '当前调度策略尚未支持实际执行，请选择固定渠道、权重分流或优先级策略');
+  validateRouteConfig(state,service,config,false);
+  if (!['fixed', 'weighted', 'priority', 'priority_weighted', 'load', 'tpm', 'latency', 'cost'].includes(config.strategy)) issue('路由配置', '当前路由策略不能用于平台试调用');
   if (config.strategy === 'fixed' && !config.autoFailover && rows.length !== 1) issue('路由配置', '关闭故障切换时，固定渠道须明确选择一条供给');
   if (config.strategy === 'priority_weighted' && (!config.groups?.length || config.groups.some(group => group.strategy !== 'weighted'))) issue('路由配置', '优先级组内仅支持权重分流，请调整组内策略');
-  return { version: version.version, strategy: config.strategy, autoFailover: config.autoFailover === true, channels: rows.map(row => {
+  return { version: version.version, strategy: config.strategy, strategyCode:ROUTING_POLICIES[config.strategy]?.code || config.strategy, costBasis:config.advanced?.costBasis || 'input', autoFailover: config.autoFailover === true, channels: rows.map(row => {
     const group = config.groups?.findIndex(group => group.id === row.route.groupId);
     const priority = config.strategy === 'priority_weighted' ? group : row.route.priority;
     const weighted = ['weighted', 'priority_weighted'].includes(config.strategy);
@@ -82,8 +84,8 @@ function platformRoute(version, rows) {
 
 export function platformCandidatePlan(state, model, { serviceId, tenantIds = [], supplyIds = [], audioProbe = '', technical = false, at = Date.now() }) {
   const service = platformServices(state, model).find(row => row.id === serviceId);
-  if (!service) issue('服务模式', '请选择当前模型的统一服务或服务商服务');
-  if (!service.callId || /\s/.test(service.callId)) issue('服务调用 ID', '请先完善当前服务的对外调用 ID');
+  if (!service) issue('服务模式', '请选择当前模型的统一模型服务模式或服务商服务');
+  if (!service.callId || /\s/.test(service.callId)) issue('对外调用标识', '请先完善当前服务的对外调用标识');
   if (!tenantIds.length || new Set(tenantIds).size !== tenantIds.length || tenantIds.some(id => !state.tenants?.some(tenant => tenant.id === id && !['已删除', '已停用', '停用'].includes(tenant.status)))) issue('客户范围', '请明确选择有效租户');
   if (model.openScope !== 'all' && (model.openScope !== 'selected' || tenantIds.some(id=>!model.tenantIds?.includes(id)))) issue('客户范围','验证客户须在已发布的开放范围内');
   const version = activeRouteVersion(serviceRoute(state, service.id));
@@ -106,7 +108,7 @@ export function platformCandidatePlan(state, model, { serviceId, tenantIds = [],
     catch (error) { issue(path, `主档关联无效：${error.message}`); }
     const sameTemplate = model.templateId && (master.id === model.templateId || master.templateId === model.templateId);
     if (master.id !== model.id && !sameTemplate) issue(path, '主档关联与当前服务模型不一致，请重新关联模型资料');
-    if (!association.upstreamModelId || /\s/.test(association.upstreamModelId)) issue(path, '上游模型 ID 未配置');
+    if (!association.upstreamModelId || /\s/.test(association.upstreamModelId)) issue(path, '上游模型标识 未配置');
     if (!supply.endpoint.interfaceType) issue(path, '接口类型未配置');
     if (supply.endpoint.authMode !== 'none' && !connectionKeys(supply.endpoint, supply.provider)[0] && !(!supply.endpoint.authMode && supply.endpoint.credentialRef)) issue(path, '缺少可用且未撤销的主要密钥');
     let procurementPrices = [];
@@ -124,7 +126,7 @@ export function platformCandidatePlan(state, model, { serviceId, tenantIds = [],
     }
     return { id: supply.id, localEndpointId: supply.endpoint.id, model: { id: master.id, upstreamModelId: association.upstreamModelId, type: master.type, ...(probe ? { probe } : {}) }, procurementPrices };
   });
-  const candidate = { ...(technical ? { technical: true, purpose: servicePurpose(model,service.providerId) } : {}), name: `${model.name} · ${service.name}`, publicModelId: service.callId, mode: service.mode, tenantIds: [...tenantIds].sort(), bindings, salePrices, capabilities: ['streaming', 'tools', 'structured'].filter(key => model.capabilities?.[key] === true || key === 'structured' && model.profile?.structured === true), route: platformRoute(version, rows) };
+  const candidate = { ...(technical ? { technical: true, purpose: servicePurpose(model,service.providerId) } : {}), name: `${model.name} · ${service.name}`, publicModelId: service.callId, mode: service.mode, tenantIds: [...tenantIds].sort(), bindings, salePrices, capabilities: ['streaming', 'tools', 'structured'].filter(key => model.capabilities?.[key] === true || key === 'structured' && model.profile?.structured === true), route: platformRoute(state, service, version, rows) };
   const fingerprint = JSON.stringify([candidate, rows.map(({ supply, association }) => [connectionFingerprint(supply.endpoint), supply.endpoint.adapterOptions, connectionKeys(supply.endpoint, supply.provider).map(key => [key.id, key.version, key.serverCredentialId]), association.id, association.enabled, association.health, association.capabilityTests, supply.status, supply.provider.status])]);
   return { candidate, fingerprint, publicationFingerprint:platformPublicationFingerprint(state,model,service.id), service, rows, expensive: bindings.some(row => ['image', 'video', 'audio'].includes(row.model.type)) };
 }
@@ -143,7 +145,7 @@ export async function runPlatformTrial(plan, { confirmExpensive = false, isCurre
   current(); onProgress('保存服务候选');
   const existing = (await api('/services')).services.find(row => row.candidate.publicModelId === candidate.publicModelId || row.published?.config.publicModelId === candidate.publicModelId);
   const canonicalIds = new Set(candidate.bindings.map(row => row.model.id));
-  if (existing?.candidate.bindings.some(row => !canonicalIds.has(row.model.id))) issue('服务调用 ID', '该对外 ID 已被其他模型候选占用');
+  if (existing?.candidate.bindings.some(row => !canonicalIds.has(row.model.id))) issue('对外调用标识', '该对外调用标识 已被其他模型候选占用');
   current();
   const service = await api(existing ? `/services/${existing.id}` : '/services', { method: existing ? 'PATCH' : 'POST', body: { ...candidate, operationId: crypto.randomUUID(), ...(existing ? { expectedRevision: existing.revision } : {}) } });
   onCandidate(service); current(); onProgress('创建受限测试身份');

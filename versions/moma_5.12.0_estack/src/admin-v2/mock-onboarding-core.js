@@ -1,3 +1,5 @@
+import { withinRouteLimits } from './routing-policy.js';
+import { routingChannels, routingServices, comparableRouteCosts } from './service-routing.js';
 import mockConfig from '../mock/catalogues.json' with { type: 'json' };
 import { assertPublishedAccess, readLinkedState as browserReadLinkedState } from '../service-access.mjs';
 export const SCENARIOS = mockConfig["admin-v2/mock-onboarding-service.js"]["SCENARIOS"];
@@ -100,11 +102,11 @@ function totalPrice(selected, usage) {
   return { amount: items.reduce((sum, item) => sum + item.amount, 0), currency: items[0].currency, unit: 'micro', priceVersion: selected.map(item => item.id).join('+'), items };
 }
 function normalizeCandidate(state, body, previous = {}) {
-  const input = { ...previous, ...body }, publicModelId = text(input.publicModelId, '对外模型 ID');
-  if (/\s/.test(publicModelId) || !['standard', 'provider'].includes(input.mode)) fail('service_incomplete', '请配置对外模型 ID 和服务模式');
+  const input = { ...previous, ...body }, publicModelId = text(input.publicModelId, '对外调用标识');
+  if (/\s/.test(publicModelId) || !['standard', 'provider'].includes(input.mode)) fail('service_incomplete', '请配置对外调用标识 和服务模式');
   const bindings = (input.bindings || []).map(binding => { channelById(state, binding.channelId); return { id: text(binding.id || `${binding.channelId}:${binding.model?.id}`, '供给 ID'), channelId: binding.channelId, model: copy(binding.model), procurementPrices: prices(binding.procurementPrices || []) }; });
   const route = input.route || { version: 1, strategy: 'priority', channels: [] };
-  if (!['fixed', 'priority', 'weighted', 'priority_weighted'].includes(route.strategy || 'priority') || !Number.isInteger(route.version) || route.channels.some(row => !bindings.some(binding => binding.id === row.bindingId))) fail('invalid_route', '路由须引用明确关联的供给');
+  if (!['fixed', 'priority', 'weighted', 'priority_weighted', 'load', 'tpm', 'latency', 'cost'].includes(route.strategy || 'priority') || !Number.isInteger(route.version) || route.channels.some(row => !bindings.some(binding => binding.id === row.bindingId))) fail('invalid_route', '路由须引用明确关联的供给');
   return { ...(input.technical === true ? { technical: true, purpose: input.purpose === 'internal' ? 'internal' : 'commercial' } : {}), name: input.name || publicModelId, publicModelId, mode: input.mode, tenantIds: [...new Set(input.tenantIds || [])], capabilities: [...new Set(input.capabilities || [])], bindings, salePrices: prices(input.salePrices || []), route: { ...copy(route), strategy: route.strategy || 'priority', channels: route.channels.map((row, index) => ({ bindingId: row.bindingId, priority: row.priority ?? index + 1, weight: row.weight ?? 1, ...(row.enabled === false ? { enabled: false } : {}) })), autoFailover: route.autoFailover === true } };
 }
 function assertAvailable(state, channel, { live = false, model } = {}) {
@@ -138,7 +140,22 @@ function qualify(state, service) {
 }
 function routeOrder(config) {
   const weighted = rows => { const pool = [...rows], result = []; while (pool.length) { let target = Math.random() * pool.reduce((sum, row) => sum + row.weight, 0), index = 0; while (index < pool.length - 1 && (target -= pool[index].weight) >= 0) index++; result.push(...pool.splice(index, 1)); } return result; };
-  const allowed = activeRouteChannels(config).sort((a, b) => a.priority - b.priority);
+  let allowed = activeRouteChannels(config).sort((a, b) => a.priority - b.priority);
+  const local=runtime && readLinkedState(),needsMetrics=['load','tpm','latency','cost'].includes(config.route.strategy) || local?.endpoints?.some(row=>row.rpmLimit!=null || row.tpmLimit!=null || row.metrics?.rpmLimit!=null || row.metrics?.tpmLimit!=null),service=needsMetrics && local && routingServices(local).find(row=>row.callId===config.publicModelId);
+  const channels=service?routingChannels(local,service,Date.now(),{runtime:true}):[];
+  const byId=new Map(channels.map(row=>[row.id,row]));
+  if(service){
+    if(allowed.some(row=>!byId.has(row.bindingId)))fail('supply_changed','当前路由引用的渠道已变化');
+    allowed=allowed.filter(row=>withinRouteLimits(byId.get(row.bindingId)));
+  }
+  if(['load','tpm','latency','cost'].includes(config.route.strategy)){
+    if(!service || allowed.some(row=>!byId.has(row.bindingId)))fail('routing_metrics_required','缺少当前路由的实际渠道依据');
+    const costs=config.route.strategy==='cost'?new Map(comparableRouteCosts(allowed.map(row=>byId.get(row.bindingId)),config.route.costBasis || 'input').map(row=>[row.supplyId,row.amount])):null;
+    const metric=config.route.strategy==='load'?'activeRequests':config.route.strategy==='tpm'?'tokensPerMinute':'p95LatencyMs';
+    const value=row=>costs?costs.get(row.bindingId):byId.get(row.bindingId)[metric];
+    if(allowed.some(row=>value(row)==null))fail('routing_metrics_required','缺少路由所需的实际指标，不能推断为零');
+    return weighted(allowed.map(row=>({...row,weight:1}))).sort((a,b)=>value(a)-value(b));
+  }
   return config.route.strategy === 'weighted' ? weighted(allowed) : config.route.strategy === 'priority_weighted' ? [...new Set(allowed.map(row => row.priority))].flatMap(priority => weighted(allowed.filter(row => row.priority === priority))) : allowed;
 }
 function operationalContext(service, binding, channel) {
@@ -229,18 +246,18 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
     const channel = channelById(state, body.channelId); assertAvailable(state, channel);
     if (!Array.isArray(body.models) || !body.models.length || body.models.length > 50) fail('invalid_models', '请选择 1–50 个测试模型');
     if (body.models.some(model => ['image', 'video', 'audio'].includes(model.type)) && body.confirmExpensive !== true) fail('cost_confirmation_required', '请明确勾选高成本任务');
-    for (const model of body.models) { text(model.id, '模型资料 ID'); text(model.upstreamModelId, '上游模型 ID'); if (!['text', 'multimodal', 'embedding', 'rerank', 'image', 'audio', 'video'].includes(model.type) || model.check && !['streaming', 'tools', 'structured'].includes(model.check)) fail('invalid_task', '模型任务或验证内容无效'); }
+    for (const model of body.models) { text(model.id, '模型资料 ID'); text(model.upstreamModelId, '上游模型标识'); if (!['text', 'multimodal', 'embedding', 'rerank', 'image', 'audio', 'video'].includes(model.type) || model.check && !['streaming', 'tools', 'structured'].includes(model.check)) fail('invalid_task', '模型任务或验证内容无效'); }
     if (new Set(body.models.map(row => row.id)).size !== body.models.length || new Set(body.models.map(row => row.upstreamModelId)).size !== body.models.length) fail('duplicate_model', '测试模型不能重复');
     const batch = { id: uid(), channelId: channel.id, providerId: channel.providerId, signature: channelSignature(state, channel), configVersion: channel.configVersion, credentialId: channel.credentialId, credentialVersion: credential(state, channel)?.version || null, source: 'mock', scenario, status: 'queued', createdAt: now(), confirmExpensive: body.confirmExpensive === true, items: body.models.map(model => ({ id: uid(), model: { id: model.id, associationId: model.associationId, upstreamModelId: model.upstreamModelId, type: model.type, probe: model.probe || model.type, ...(model.check ? { check: model.check } : {}), ...(model.dimensions ? { dimensions: model.dimensions } : {}) }, status: 'queued', stage: 'queued', evidenceSource: 'mock', current: true, traceId: uid(), usage: null, cost: null, templateVersion: 1 })) }; state.batches.push(batch); return batch;
   });
   const batchPath = route.match(/^\/tests\/([^/]+)(\/cancel)?$/);
   if (batchPath) { const batch = state.batches.find(row => row.id === batchPath[1]); if (!batch) fail('batch_not_found', '测试任务不存在'); if (method === 'GET' && !batchPath[2]) return batch; if (method === 'POST' && batchPath[2]) return once(state, 'cancelTests', body, () => { batch.cancelRequested = true; advance(state); return batch; }); }
   if (method === 'GET' && route === '/services') return { services: state.services };
-  if (method === 'POST' && route === '/services') return once(state, 'createService', body, () => { const candidate = normalizeCandidate(state, body); if (state.services.some(service => service.candidate.publicModelId === candidate.publicModelId || service.published?.config.publicModelId === candidate.publicModelId)) fail('public_model_conflict', '对外模型 ID 已存在'); const service = { id: uid(), revision: 1, candidateVersion: 1, candidate, published: null, trials: [], source: 'mock' }; state.services.push(service); return service; });
+  if (method === 'POST' && route === '/services') return once(state, 'createService', body, () => { const candidate = normalizeCandidate(state, body); if (state.services.some(service => service.candidate.publicModelId === candidate.publicModelId || service.published?.config.publicModelId === candidate.publicModelId)) fail('public_model_conflict', '对外调用标识 已存在'); const service = { id: uid(), revision: 1, candidateVersion: 1, candidate, published: null, trials: [], source: 'mock' }; state.services.push(service); return service; });
   const servicePath = route.match(/^\/services\/([^/]+)(?:\/(test-identities|trial|publish|unpublish))?$/);
   if (servicePath) {
     const service = serviceById(state, servicePath[1]);
-    if (method === 'PATCH' && !servicePath[2]) return once(state, 'updateService', body, () => { if (service.revision !== body.expectedRevision) fail('revision_conflict', '服务修订已变化'); const candidate = normalizeCandidate(state, body, service.candidate); if (state.services.some(row => row.id !== service.id && (row.candidate.publicModelId === candidate.publicModelId || row.published?.config.publicModelId === candidate.publicModelId))) fail('public_model_conflict', '对外模型 ID 已存在'); service.candidate = candidate; service.revision++; service.candidateVersion++; return service; });
+    if (method === 'PATCH' && !servicePath[2]) return once(state, 'updateService', body, () => { if (service.revision !== body.expectedRevision) fail('revision_conflict', '服务修订已变化'); const candidate = normalizeCandidate(state, body, service.candidate); if (state.services.some(row => row.id !== service.id && (row.candidate.publicModelId === candidate.publicModelId || row.published?.config.publicModelId === candidate.publicModelId))) fail('public_model_conflict', '对外调用标识 已存在'); service.candidate = candidate; service.revision++; service.candidateVersion++; return service; });
     if (method === 'POST' && servicePath[2] === 'test-identities') return once(state, 'createTestIdentity', body, () => { if (service.revision !== body.expectedRevision) fail('revision_conflict', '服务修订已变化'); const token = `mock-trial-${uid()}`, identity = { id: uid(), tokenHash: hash(token), serviceId: service.id, candidateVersion: service.candidateVersion, fingerprint: hash(service.candidate), expiresAt: new Date(Date.now() + 600000).toISOString() }; state.identities.push(identity); return { id: identity.id, token, serviceId: service.id, candidateVersion: service.candidateVersion, expiresAt: identity.expiresAt, source: 'mock' }; }, true);
     if (method === 'POST' && servicePath[2] === 'trial') {
       const identity = state.identities.find(row => row.tokenHash === hash(body.trialToken || ''));

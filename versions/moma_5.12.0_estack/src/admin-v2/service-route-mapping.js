@@ -36,8 +36,8 @@ export function routeMappingStatus(state,service,channel) {
   try {url=new URL(upstreamUrl);result.upstreamPath=url.pathname;} catch { /* Missing or invalid addresses remain unconfigured. */ }
   const reject=(status,reason)=>({...result,status,reason});
   if (contract.reason) return reject(contract.unsupported?'待适配':'待配置',contract.reason);
-  if (!result.platformModelId) return reject('待配置','请先配置当前服务的对外调用 ID。');
-  if (!result.upstreamModelId || /\s/.test(result.upstreamModelId)) return reject('待配置','请先在供应管理配置有效的上游模型 ID。');
+  if (!result.platformModelId) return reject('待配置','请先配置当前服务的对外调用标识。');
+  if (!result.upstreamModelId || /\s/.test(result.upstreamModelId)) return reject('待配置','请先在供应管理配置有效的上游模型标识。');
   if (!endpoint || !provider || (channel.modelId && channel.modelId!==model.id) || (service.providerId && service.providerId!==provider.id)) return reject('待配置','渠道与当前模型服务或服务商的关联不完整。');
   if (!upstreamProtocol) return reject('待配置','请先在供应管理明确渠道协议。');
   if (!url) return reject('待配置','请先在供应管理配置完整的请求地址。');

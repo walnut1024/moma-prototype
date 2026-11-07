@@ -63,7 +63,7 @@ test('image first configuration completes metadata, price and routing while pers
   const channel=serviceAssociationChannels(state).find(item=>item.catalogueModelId===model().modelId && !item.reason);
   run('associateServiceChannelsBatch',{groups:[{providerId:channel.provider.id,catalogueModelId:channel.catalogueModelId,channelIds:[channel.id]}],confirmedIdentity:true,expectedUpdatedAt:model().updatedAt});
   const service=routingServices(state).find(item=>item.modelId===id),mapped=routingChannels(state,service);
-  run('serviceRoutePublish',{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'fixed',autoFailover:true,channels:[{supplyId:mapped[0].id,enabled:true,priority:1}]}});
+  run('serviceRoutePublish',{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'weighted',autoFailover:true,channels:[{supplyId:mapped[0].id,enabled:true,priority:1,weight:100}]}});
   assert.equal(serviceConfiguration(state,model()).label,'待验证');
   assert.equal(publicationChecks(state,model()).find(check=>check.tab==='platform').passed,false);
   const before=structuredClone(state);

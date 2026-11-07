@@ -205,7 +205,7 @@ async function route(request, env) {
         db.prepare('SELECT id,code,name,profile_json,builtin,enabled,revision FROM suppliers WHERE id=? AND deleted_at IS NULL').bind(id),
         db.prepare('SELECT * FROM supplier_models WHERE supplier_id=? AND removed_at IS NULL AND id>? ORDER BY id LIMIT ?').bind(id, p.after, p.limit + 1),
       ]);
-      if (!result[0].results.length) fail(404, 'NOT_FOUND', '供应商不存在');
+      if (!result[0].results.length) fail(404, 'NOT_FOUND', '服务商不存在');
       return json({ supplier: decode(result[0].results[0]), models: page(result[1].results, p.limit) });
     }
     if (kind === 'channels' && method === 'GET') {

@@ -1,3 +1,4 @@
+import { ROUTING_POLICIES, unifiedRouteStrategies, withinRouteLimits } from './routing-policy.js';
 import { modelSupplies, availableSupplies, activeSupplyPrice, supplyModelUrl, priceItems } from './model-management.js';
 import { connectionFingerprint, connectionBlockReason } from './connection-state.js';
 import { catalogueChannels, channelBlockReason, channelUrl } from './provider-channels.js';
@@ -6,8 +7,8 @@ import { billingItemKey } from './provider-catalogue-pricing.js';
 import { routeMappingStatus } from './service-route-mapping.js';
 import { mappingReadiness } from './service-model-mappings.js';
 
-export const ROUTING_STRATEGIES = { fixed:'固定', random:'随机分流', weighted:'加权分流', priority_weighted:'优先级 + 加权分流', latency:'最低延迟', load:'最少负载', cost:'最低成本', priority:'主备优先' };
-const GROUP_STRATEGIES=['fixed','random','weighted','latency','load','cost'];
+export const ROUTING_STRATEGIES = { fixed:'固定', random:'随机分流', weighted:'加权随机路由', priority_weighted:'优先级 + 加权分流', latency:'最低延迟路由', load:'最少并发路由', tpm:'最低 TPM 路由', cost:'最低成本路由', priority:'主备优先', ...Object.fromEntries(Object.entries(ROUTING_POLICIES).map(([id,item])=>[id,item.label])) };
+const GROUP_STRATEGIES=['fixed','random','weighted','latency','load','tpm','cost'];
 export const ROUTE_ADVANCED_DEFAULTS={timeoutSeconds:60,maxRetries:0,failureThreshold:3,recoverySeconds:30,latencyWindowSeconds:60,costBasis:'input'};
 // shortcut: these service-level prototype versions do not execute gateway traffic; production needs a server-side publisher.
 
@@ -20,7 +21,7 @@ const metric=(values,integer=false)=>values.find(value=>typeof value==='number' 
 
 // Existing public model IDs and supplier call IDs are read-only service references.
 export function routingServices(state) {
-  return state.models.flatMap(model=>model.serviceMode==='standard' ? [{id:'standard:'+model.id,modelId:model.id,name:'统一服务',mode:'standard',callId:model.modelId,model,providerId:null}] : model.serviceMode==='provider' ? providerServices(model).map(entry=>({id:providerServiceId(model.id,entry.providerId),modelId:model.id,name:state.providers.find(provider=>provider.id===entry.providerId)?.name || '服务商已不存在',mode:'provider',callId:entry.callId,model,providerId:entry.providerId})) : []);
+  return state.models.flatMap(model=>model.serviceMode==='standard' ? [{id:'standard:'+model.id,modelId:model.id,name:'统一模型服务模式',mode:'standard',callId:model.modelId,model,providerId:null}] : model.serviceMode==='provider' ? providerServices(model).map(entry=>({id:providerServiceId(model.id,entry.providerId),modelId:model.id,name:state.providers.find(provider=>provider.id===entry.providerId)?.name || '服务商已不存在',mode:'provider',callId:entry.callId,model,providerId:entry.providerId})) : []);
 }
 
 export function routingChannels(state, service, at = Date.now(), { runtime = false } = {}) {
@@ -35,6 +36,7 @@ export function routingChannels(state, service, at = Date.now(), { runtime = fal
     if (!reason && !url) reason='请求地址待完善';
     if (!reason && runtime && (!costs.length || costs.some(item=>item.amount==null))) reason='渠道供应成本待配置';
     const row={...supply,channelId:channel ? serviceChannelId(channel) : supply.channelId || supply.endpointId,channelUpdatedAt:channel?.updatedAt,channelHealth:channel?.health,channelName:channel?.name || supply.endpoint?.name,verifiedAt:channel?.health?.testedAt || supply.verifiedAt,url,costItems:costs,costVersion:costRevision([channel?.pricing,activeSupplyPrice(state,supply.id,at)]),p95LatencyMs:metric([channel?.p95LatencyMs,channel?.metrics?.p95LatencyMs,supply.endpoint?.p95LatencyMs,supply.endpoint?.metrics?.p95LatencyMs]),activeRequests:metric([channel?.activeRequests,channel?.metrics?.activeRequests,supply.endpoint?.activeRequests,supply.endpoint?.metrics?.activeRequests],true)};
+    for(const key of ['tokensPerMinute','requestsPerMinute','rpmLimit','tpmLimit'])row[key]=key.endsWith('Limit')?[channel?.[key],channel?.metrics?.[key],supply.endpoint?.[key],supply.endpoint?.metrics?.[key]].find(value=>value!=null) ?? null:metric([channel?.[key],channel?.metrics?.[key],supply.endpoint?.[key],supply.endpoint?.metrics?.[key]],true);
     const mapping=routeMappingStatus(state,{...service,callId},row);
     if (!reason && !mapping.valid) reason=mapping.reason;
     if (!reason) reason=mappingReadiness(state,service,row,{runtime});
@@ -46,14 +48,14 @@ export const serviceRoute = (state, serviceId) => (state.serviceRoutes || []).fi
 export const activeRouteVersion = route => route?.versions.find(item => item.version === route.activeVersion);
 export const lastRouteVersion = route => route?.versions.reduce((last,item)=>!last || item.version>last.version?item:last,null);
 export const routeStopReason = service => service.model.listingStatus==='已上架' && service.model.callsEnabled!==false && (!service.providerId || providerServices(service.model).find(row=>row.providerId===service.providerId)?.callsEnabled!==false) ? (service.providerId?'请先停服当前服务商，再停用路由。其他服务商不受影响。':'请先在模型页头下架并停用服务，再停用路由。隐藏模型不能代替停服。') : '';
-export const emptyRouteConfig = () => ({ strategy:'fixed', groups:[{id:'P1',name:'默认组',strategy:'fixed'}], channels: [], autoFailover:false, excludeAbnormal:true, autoRecover:false, advanced:{...ROUTE_ADVANCED_DEFAULTS} });
+export const emptyRouteConfig = service => ({ strategy:service?.mode==='standard'?'weighted':'fixed', groups:[{id:'P1',name:'默认组',strategy:service?.mode==='standard'?'weighted':'fixed'}], channels: [], autoFailover:false, excludeAbnormal:true, autoRecover:false, advanced:{...ROUTE_ADVANCED_DEFAULTS} });
 
 export function routeGroups(config) {
   return config?.groups || [{id:'P1',name:'主用组',strategy:GROUP_STRATEGIES.includes(config?.strategy)?config.strategy:'weighted'}];
 }
 
 export function routeSourceVersion(state, service) {
-  return JSON.stringify([service.id, service.model.updatedAt, service.model.capabilities, routingChannels(state, service).sort((a,b)=>a.id.localeCompare(b.id)).map(item => [item.id, item.channelId, item.channelUpdatedAt, item.channelHealth, item.reason, item.mapping, item.p95LatencyMs, item.activeRequests, item.provider?.id, item.endpointId, item.upstreamModelId, item.status, item.validationStatus, item.capabilities, item.updatedAt, item.endpoint?.updatedAt, item.endpoint && connectionFingerprint(item.endpoint), item.endpoint?.connectionTest, item.provider?.status, item.costVersion])]);
+  return JSON.stringify([service.id, service.model.updatedAt, service.model.capabilities, routingChannels(state, service).sort((a,b)=>a.id.localeCompare(b.id)).map(item => [item.id, item.channelId, item.channelUpdatedAt, item.channelHealth, item.reason, item.mapping, item.p95LatencyMs, item.activeRequests, item.tokensPerMinute, item.requestsPerMinute, item.rpmLimit, item.tpmLimit, item.provider?.id, item.endpointId, item.upstreamModelId, item.status, item.validationStatus, item.capabilities, item.updatedAt, item.endpoint?.updatedAt, item.endpoint && connectionFingerprint(item.endpoint), item.endpoint?.connectionTest, item.provider?.status, item.costVersion])]);
 }
 
 export function normalizeRouteConfig(input) {
@@ -114,12 +116,15 @@ function validateSelectionStrategy(strategy,rows,candidates,config) {
     if (rows.length!==1) throw new Error('固定策略只能选择一个供应渠道');
   }
   if (strategy==='latency' && channels.some(channel=>channel.p95LatencyMs==null)) throw new Error('最低延迟策略需要每个渠道的实际 P95 延迟数据');
-  if (strategy==='load' && channels.some(channel=>channel.activeRequests==null)) throw new Error('最低负载策略需要每个渠道的实际并发请求数据');
+  if (strategy==='load' && channels.some(channel=>channel.activeRequests==null)) throw new Error('最少并发路由需要每个渠道的实际并发请求数据');
+  if (strategy==='tpm' && channels.some(channel=>channel.tokensPerMinute==null)) throw new Error('最低 TPM 路由需要每个渠道的实际分钟 Token 用量');
+  for(const channel of channels)withinRouteLimits(channel);
   if (strategy==='cost') comparableRouteCosts(channels,config.advanced.costBasis);
 }
 
 export function validateRouteConfig(state, service, input, requireHealthy = true) {
   const config = normalizeRouteConfig(input);
+  if(service.mode==='standard' && !unifiedRouteStrategies.includes(config.strategy))throw Error('统一模型服务模式仅支持加权随机、最少并发、最低 TPM、最低延迟和最低成本五种路由策略');
   const selected = config.channels.filter(item => item.enabled);
   if (!selected.length) throw new Error('至少选择一个参与调度的供应渠道');
   const candidates = routingChannels(state, service);
@@ -151,13 +156,14 @@ export function routePreview(state, service, input, failedSupplyId = '') {
   const unavailable = new Set(channels.filter(channel => !channel.available).map(channel => channel.id));
   for (const id of Array.isArray(failedSupplyId)?failedSupplyId:failedSupplyId?[failedSupplyId]:[]) unavailable.add(id);
   const distribute=(strategy,rows)=>{
+    rows=rows.filter(row=>withinRouteLimits(channels.find(channel=>channel.id===row.supplyId)));
     if (!rows.length) return new Map();
     if (strategy==='weighted') {const total=rows.reduce((sum,row)=>sum+row.weight,0);return new Map(rows.map(row=>[row.supplyId,row.weight/total*100]));}
     if (strategy==='random') return new Map(rows.map(row=>[row.supplyId,100/rows.length]));
     let chosen=rows.slice().sort((a,b)=>a.priority-b.priority).slice(0,1);
-    if (['latency','load','cost'].includes(strategy)) {
+    if (['latency','load','tpm','cost'].includes(strategy)) {
       const costs=strategy==='cost'?new Map(comparableRouteCosts(rows.map(row=>channels.find(channel=>channel.id===row.supplyId)),config.advanced.costBasis).map(item=>[item.supplyId,item.amount])):null;
-      const value=row=>costs?costs.get(row.supplyId):channels.find(channel=>channel.id===row.supplyId)[strategy==='latency'?'p95LatencyMs':'activeRequests'];
+      const value=row=>costs?costs.get(row.supplyId):channels.find(channel=>channel.id===row.supplyId)[strategy==='latency'?'p95LatencyMs':strategy==='tpm'?'tokensPerMinute':'activeRequests'];
       const minimum=Math.min(...rows.map(value));chosen=rows.filter(row=>value(row)===minimum);
     }
     return new Map(chosen.map(row=>[row.supplyId,100/chosen.length]));
@@ -185,12 +191,13 @@ export function routingTransaction(state, { operation, data = {} }) {
     changes={activeVersion:0,draft:null,draftUpdatedAt:null};label='停用服务路由并清空草稿';
   } else if (operation === 'serviceRouteDraft') {
     const draft = normalizeRouteConfig(data.config);
+    if(service.mode==='standard' && !unifiedRouteStrategies.includes(draft.strategy))throw Error('统一模型服务模式不支持该路由策略');
     const candidates=new Set(routingChannels(state,service).map(item=>item.id));
     if (draft.channels.some(item=>!candidates.has(item.supplyId))) throw new Error('所选渠道不属于当前模型或服务商');
     changes = { draft, draftUpdatedAt: new Date().toISOString() };
     label = '保存路由草稿';
   } else if (['serviceRoutePublish','serviceRouteRollback','serviceRouteRestore'].includes(operation)) {
-    if (!service.callId) throw new Error('请先在服务内容配置对外调用 ID');
+    if (!service.callId) throw new Error('请先在服务内容配置对外调用标识');
     if (data.sourceVersion !== routeSourceVersion(state, service)) throw new Error('供应渠道、模型或成本已变化，请重新校验并确认');
     const restoring=operation==='serviceRouteRestore';
     if(restoring && (current || !lastRouteVersion(route)))throw new Error('当前路由未停用或没有可恢复的配置');

@@ -11,7 +11,7 @@ const storageFor = raw => { const data=new Map(raw?[[STORAGE_KEY,raw]]:[]); retu
 
 test('configuration has valid stable relationships and fails on broken fixtures before initialization',()=>{
  assert.doesNotThrow(()=>validateModelDataset()); assert.doesNotThrow(()=>validateSystemModelData());
- for(const damage of [c=>c.collections.providers.splice(0,1),c=>c.collections.models[0].templateId='missing',c=>c.collections.modelSupplies[0].upstreamModelId='wrong',c=>c.collections.modelSalePrices[0].items[0].amount=-1,c=>c.collections.serviceRoutes[0].versions[0].config.channels[0].weight=99]){
+ for(const damage of [c=>c.collections.providers.splice(0,1),c=>c.collections.models[0].templateId='missing',c=>c.collections.modelSupplies[0].upstreamModelId='wrong',c=>c.collections.modelSalePrices[0].items[0].amount=-1,c=>c.collections.serviceRoutes.find(row=>row.serviceId.startsWith('standard:')).versions[0].config.channels[0].weight=99]){
   const config=structuredClone(MODEL_DATASET);damage(config);assert.throws(()=>validateModelDataset(config),/配置无效/);
  }
 });

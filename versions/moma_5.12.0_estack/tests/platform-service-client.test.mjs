@@ -14,7 +14,7 @@ function fixture() {
   const association = { id: 'association-1', modelId: 'supplier-catalogue-id', endpointId: endpoint.id, upstreamModelId: 'vendor/raw-chat', enabled: true, procurementVersions: [{ id: 'cost-v1', version: 1, status: '已发布', effectiveAt, publishedAt: effectiveAt, expiresAt: null, pricing: { discountFactor: 1000000, scenarios: tokenItems(500000, 0).map(({ amount, ...item }) => ({ ...item, listPrice: amount })) } }] };
   const provider = { id: endpoint.providerId, name: 'Supplier', status: '已启用', catalogModels: [{ modelId: association.modelId, libraryId: model.id }], catalogConnections: [association] };
   const supply = { id: 'supply-1', modelId: model.id, endpointId: endpoint.id, catalogueModelId: association.modelId, upstreamModelId: association.upstreamModelId, status: '已启用' };
-  const config = { strategy: 'weighted', channels: [{ supplyId: supply.id, enabled: true, priority: 1, weight: 20, groupId: 'P1' }], groups: [{ id: 'P1', strategy: 'weighted' }], autoFailover: true };
+  const config = { strategy: 'weighted', channels: [{ supplyId: supply.id, enabled: true, priority: 1, weight: 100, groupId: 'P1' }], groups: [{ id: 'P1', name:'默认组', strategy: 'weighted' }], autoFailover: true };
   const state = { models: [model], modelTemplates: [], endpoints: [endpoint], providers: [provider], modelSupplies: [supply], supplyPrices: [], modelSalePrices: [price(tokenItems(), { modelId: model.id, scope: 'model', version: 1, status: '已发布' })], tenants: [{ id: 'tenant-explicit', name: 'Tenant', status: '正常' }], serviceRoutes: [{ serviceId: `standard:${model.id}`, activeVersion: 2, versions: [{ version: 2, config }] }] };
   const selection = { serviceId: `standard:${model.id}`, tenantIds: ['tenant-explicit'], supplyIds: [supply.id], at };
   return { state, model, endpoint, association, provider, supply, config, selection, plan: () => platformCandidatePlan(state, model, selection) };
@@ -49,7 +49,7 @@ test('candidate uses canonical and upstream IDs separately and only explicit pub
   assert.equal(plan.candidate.bindings[0].model.id, env.model.id);
   assert.equal(plan.candidate.bindings[0].model.upstreamModelId, env.association.upstreamModelId);
   assert.equal(plan.candidate.bindings[0].procurementPrices[0].id, 'cost-v1:million_input_tokens');
-  assert.deepEqual(plan.candidate.route.channels, [{ bindingId: env.supply.id, priority: 1, weight: 20 }]);
+  assert.deepEqual(plan.candidate.route.channels, [{ bindingId: env.supply.id, priority: 1, weight: 100 }]);
   assert.equal(plan.candidate.route.strategy, 'weighted'); assert.deepEqual(plan.candidate.tenantIds, ['tenant-explicit']);
   assert.deepEqual(env.state, before);
   env.config.channels.push({ supplyId: 'not-allowed', enabled: false, priority: 0, weight: 100 });
@@ -75,19 +75,9 @@ test('explicit supply references and shared template copies resolve the same can
   assert.throws(env.plan, /主档关联与当前服务模型不一致/);
 });
 
-test('priority groups preserve explicit group order while unsupported strategies are rejected', () => {
-  const env = fixture(); env.config.strategy = 'priority_weighted'; env.config.groups = [{ id: 'P2', strategy: 'weighted' }, { id: 'P1', strategy: 'weighted' }];
-  assert.equal(env.plan().candidate.route.channels[0].priority, 1);
-  env.config.groups[1].strategy = 'cost'; assert.throws(env.plan, /组内策略/);
-  env.config.strategy = 'random'; assert.throws(env.plan, /调度策略/);
-});
-
-test('fixed and priority preserve enabled membership even when the irrelevant local weight is zero', () => {
-  const env = fixture(); env.config.strategy = 'priority'; env.config.channels[0].weight = 0;
-  assert.equal(platformAllowedChannels(env.state, platformServices(env.state, env.model)[0]).length, 1);
-  assert.deepEqual(env.plan().candidate.route.channels, [{ bindingId: env.supply.id, priority: 1 }]);
-  env.config.strategy = 'fixed'; assert.equal(env.plan().candidate.route.strategy, 'fixed');
-  env.config.strategy = 'weighted'; assert.throws(env.plan, /权重无效/);
+test('unified candidates reject fixed and priority strategies before creating a platform candidate', () => {
+ for(const strategy of ['fixed','priority','priority_weighted']){const env=fixture(),before=structuredClone(env.state);env.config.strategy=strategy;assert.throws(()=>env.plan(),/统一模型服务模式/);env.config.strategy='weighted';assert.deepEqual(env.state,before);}
+ for(const strategy of ['load','tpm','latency']){const env=fixture();env.config.strategy=strategy;assert.throws(()=>env.plan(),/实际/);}
 });
 
 test('candidate fingerprint changes with price, credentials or allowed scope', () => {
@@ -180,4 +170,29 @@ test('cost and sale changes preserve technical evidence while connections and ro
   const env=fixture(),signature=()=>platformPublicationFingerprint(env.state,env.model,env.selection.serviceId);
   const before=signature();env.state.modelSalePrices[0].items[0].amount++;env.association.procurementVersions[0].pricing.scenarios[0].listPrice++;
   assert.equal(signature(),before);env.endpoint.baseUrl+='/changed';assert.notEqual(signature(),before);
+});
+
+test('all five unified policies emit their configuration identifiers and rank actual metrics without inventing missing data', async()=>{
+ const {ROUTING_POLICIES}=await import('../src/admin-v2/routing-policy.js');
+ const env=fixture(),second={...structuredClone(env.endpoint),id:'endpoint-2',name:'Second'};
+ env.state.endpoints.push(second);
+ const association={...structuredClone(env.association),id:'association-2',endpointId:second.id};
+ association.procurementVersions[0].pricing.scenarios[0].listPrice=250000;
+ env.provider.catalogConnections.push(association);
+ const supply={...env.supply,id:'supply-2',endpointId:second.id};env.state.modelSupplies.push(supply);env.selection.supplyIds.push(supply.id);
+ env.config.channels[0].weight=70;env.config.channels.push({...env.config.channels[0],supplyId:supply.id,weight:30,priority:2});
+ env.endpoint.metrics={activeRequests:5,tokensPerMinute:100,p95LatencyMs:10,requestsPerMinute:1,rpmLimit:100,tpmLimit:1000};
+ second.metrics={activeRequests:0,tokensPerMinute:200,p95LatencyMs:30,requestsPerMinute:2,rpmLimit:100,tpmLimit:1000};
+ for(const strategy of ['weighted','load','tpm','latency','cost']){
+  env.config.strategy=strategy;
+  assert.equal(env.plan().candidate.route.strategyCode,ROUTING_POLICIES[strategy].code);
+ }
+ env.config.strategy='tpm';second.metrics.tokensPerMinute=0;
+ second.metrics.requestsPerMinute=100;
+ delete second.metrics.requestsPerMinute;
+ assert.throws(()=>env.plan(),/实际分钟用量/);
+ second.metrics.requestsPerMinute=0;second.metrics.rpmLimit=-1;
+ assert.throws(()=>env.plan(),/限额配置无效/);
+ second.metrics.rpmLimit=100;delete second.metrics.tokensPerMinute;
+ assert.throws(()=>env.plan(),/实际分钟 Token/);
 });

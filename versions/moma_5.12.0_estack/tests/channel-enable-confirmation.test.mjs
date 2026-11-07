@@ -59,7 +59,7 @@ test('a newly published service reference after the first-enable snapshot requir
  const env=fixture(1),confirmation=prepareChannelDirectEnableConfirmation(env.state,env.providerId,env.endpointId,env.ids),changed=structuredClone(env.state),association=env.rows(changed)[0];
  changed.models.find(row=>row.id==='model-2').serviceMode='standard';
  changed.modelSupplies.push({id:'new-live-supply',modelId:'model-2',endpointId:env.endpointId,catalogueModelId:association.modelId,upstreamModelId:association.upstreamModelId,status:'已启用',validationStatus:'通过',capabilities:{}});
- changed.serviceRoutes.push({serviceId:'standard:model-2',activeVersion:1,versions:[{version:1,config:{strategy:'fixed',channels:[{supplyId:'new-live-supply',enabled:true}]}}]});
+ changed.serviceRoutes.push({serviceId:'standard:model-2',activeVersion:1,versions:[{version:1,config:{strategy:'weighted',channels:[{supplyId:'new-live-supply',enabled:true}]}}]});
  assert.match(channelEnableConfirmationIssue(changed,confirmation),/服务引用/);assert.throws(()=>prepareChannelDirectEnableConfirmation(changed,env.providerId,env.endpointId,env.ids),/服务引用/);
  const reviewed=env.prepare(changed);assert.equal(reviewed.serviceImpact.length,1);assert.equal(reviewed.directActivation,undefined);
 });
@@ -100,7 +100,7 @@ test('restoring a stopped channel shows only services of the frozen selected map
     state.models.find(row => row.id === libraryId).serviceMode = 'standard';
     const association = env.rows(state).find(row => row.id === env.ids[index]), supplyId = 'restore-supply-' + index;
     state.modelSupplies.push({ id: supplyId, providerId: env.providerId, modelId: libraryId, endpointId: env.endpointId, catalogueModelId: association.modelId, upstreamModelId: association.upstreamModelId, status: '已启用', validationStatus: '通过', capabilities: {} });
-    state.serviceRoutes.push({ serviceId: 'standard:' + libraryId, activeVersion: 3, versions: [{ version: 3, config: { strategy: 'fixed', autoFailover: false, channels: [{ supplyId, enabled: true, priority: 1, weight: 1 }] } }] });
+    state.serviceRoutes.push({ serviceId: 'standard:' + libraryId, activeVersion: 3, versions: [{ version: 3, config: { strategy:'weighted', autoFailover: false, channels: [{ supplyId, enabled: true, priority: 1, weight: 1 }] } }] });
   }
   const confirmation = env.prepare(state, [env.ids[0]]); assert.equal(confirmation.restoring, true); assert.equal(confirmation.serviceImpact.length, 1); assert.equal(confirmation.serviceImpact[0].id, 'standard:model-2'); assert.equal(confirmation.serviceImpact[0].routeVersion, 3);
   const next = env.enable(state, confirmation); assert.equal(env.rows(next).find(row => row.id === env.ids[0]).enabled, true); assert.equal(env.rows(next).find(row => row.id === env.ids[1]).enabled, false);

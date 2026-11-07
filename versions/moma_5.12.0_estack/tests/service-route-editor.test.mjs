@@ -12,7 +12,7 @@ import {startLocalBackend} from '../database/local-runtime.js';
 import {domainModelWorkspace} from '../src/mock/model-fields.js';
 
 function fixture(){const state=legacySupplierState(),service=routingServices(state).find(row=>row.id==='standard:model-1');for(const row of mappingCandidates(state,service)){row.provider.catalogModels.find(item=>item.modelId===row.catalogueModelId).libraryId=service.model.templateId || service.modelId;}state.modelSupplies=state.modelSupplies.filter(row=>row.modelId!==service.modelId);state.serviceRoutes=state.serviceRoutes.filter(row=>row.serviceId!==service.id);return {state,service};}
-function payload(state,service,targets,strategy='fixed'){const channels=routeEditorChannels(state,service),config={...routeEditConfig(service,serviceRoute(state,service.id)),strategy,groups:[{id:'P1',name:'默认组',strategy}],channels:targets.map((target,index)=>({supplyId:target.id,enabled:true,groupId:'P1',weight:targets.length===1?100:50,priority:index+1}))};return routeEditorPayload(state,service,config,channels);}
+function payload(state,service,targets,strategy='weighted'){const channels=routeEditorChannels(state,service),config={...routeEditConfig(service,serviceRoute(state,service.id)),strategy,groups:[{id:'P1',name:'默认组',strategy}],channels:targets.map((target,index)=>({supplyId:target.id,enabled:true,groupId:'P1',weight:targets.length===1?100:50,priority:index+1}))};return routeEditorPayload(state,service,config,channels);}
 function run(state,service,data,role='平台管理员'){return commitAdminState(state,{type:'modelOperations',operation:'serviceRouteConfigure',modelId:service.modelId,data},role);}
 
 test('one save creates, checks and enables mapping then publishes route atomically, preserving source records and prices',()=>{

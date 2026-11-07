@@ -81,8 +81,9 @@ export async function simulationRequest(db,actor,path,method,body,key){
   if(method!=='GET' && (!validId(key) || !validId(body?.operationId)))issue(400,'INVALID_INPUT','模拟操作须提供稳定操作标识');
   const hash=method==='GET'?null:await digest([path,method,body]),id=body?.operationId;
   if(method!=='GET'){const prior=await receipt(db,actor,key,hash,id);if(prior)return prior;}
-  const state=await loadSimulationWorkspace(db),engine=createMockEngine({initialState:state.cloudMockState,localState:state});engine.setMockRuntimeState(state);
-  if(body?.clientChannelId && !state.endpoints.some(e=>e.providerId===body.providerId && (e.id===body.clientChannelId || body.clientChannelId.startsWith(e.id+'-temporary-'))))issue(422,'BUSINESS_BLOCKED','模拟渠道必须关联当前供应商的实际渠道');
+  const dispatch=method==='POST' && (/^\/services\/[^/]+\/trial$/.test(path) || path==='/client/completions');
+  const state=dispatch?await loadModelWorkspace(db,actor):await loadSimulationWorkspace(db),engine=createMockEngine({initialState:state.cloudMockState,localState:state});engine.setMockRuntimeState(state);
+  if(body?.clientChannelId && !state.endpoints.some(e=>e.providerId===body.providerId && (e.id===body.clientChannelId || body.clientChannelId.startsWith(e.id+'-temporary-'))))issue(422,'BUSINESS_BLOCKED','模拟渠道必须关联当前服务商的实际渠道');
   if(method==='GET' && path.startsWith('/tests?operationId=')){const operationId=new URL('https://simulation.test'+path).searchParams.get('operationId'),prior=await db.prepare('SELECT response_json FROM operations WHERE actor_id=? AND id=?').bind(actor.id,operationId).first();if(!prior)issue(404,'submission_not_found','未找到此操作 ID 的测试提交');const batchId=JSON.parse(prior.response_json).result?.id;if(!batchId)issue(404,'submission_not_found','未找到此操作 ID 的测试提交');path='/tests/'+batchId;}
   let result;
   try{if(path==='/scenario'){engine.setMockScenario(body.scenario);result={scenario:body.scenario};}else result=engine.invoke(path,{method,body});}catch(error){

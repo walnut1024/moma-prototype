@@ -62,7 +62,7 @@ test('minimal material → channel → mock B → referenced service → mock C 
   state=run(state,'channelProcurementPublish',{confirmed:true,providerId:owner(state).id,endpointId,associationId:mapping.id,expectedPriceRevision:0,scenarios:quote,effectiveAt:new Date().toISOString()});
   state=run(state,'unifiedPrice',{expectedUpdatedAt:model().updatedAt,expectedSaleVersion:modelSaleRevision(state,modelId),items:[{name:'输入 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'2'},{name:'输出 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'4'}]},modelId);
   const service=routingServices(state).find(row=>row.modelId===modelId);
-  state=run(state,'serviceRoutePublish',{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'fixed',autoFailover:false,channels:[{supplyId:supply.id,enabled:true,priority:1,weight:0}]}});
+  state=run(state,'serviceRoutePublish',{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'weighted',autoFailover:false,channels:[{supplyId:supply.id,enabled:true,priority:1,weight:100}]}});
   assert.ok(publicationChecks(state,model()).filter(row=>row.tab!=='platform').every(row=>row.passed));
   const listing={type:'modelOperation',operation:'publish',modelId,data:{}};
   storage.setItem(STORAGE_KEY,JSON.stringify(state));const raw=storage.getItem(STORAGE_KEY);

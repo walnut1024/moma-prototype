@@ -40,7 +40,7 @@ test('publishing a price cannot carry a call-ID change into a different service'
   state=run(state,'configureServiceIdentity',modelId,{providerId,callId:'moma/identity-price',expectedUpdatedAt:model.updatedAt});
   model=state.models.find(row=>row.id===modelId);
   const before=structuredClone(state);
-  assert.throws(()=>run(state,'commercialPublish',modelId,{kind:'price',providerId,expectedBase:commercialTaskBase(state,model,'price',providerId),value:{callId:'sneaked/identity',items:[{name:'输入 Token',condition:'',unit:'百万 Token',currency:'CNY',amount:'2'}]},confirmed:true}),/调用 ID/);
+  assert.throws(()=>run(state,'commercialPublish',modelId,{kind:'price',providerId,expectedBase:commercialTaskBase(state,model,'price',providerId),value:{callId:'sneaked/identity',items:[{name:'输入 Token',condition:'',unit:'百万 Token',currency:'CNY',amount:'2'}]},confirmed:true}),/调用标识/);
   assert.deepEqual(state,before);
 });
 

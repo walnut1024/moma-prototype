@@ -124,7 +124,7 @@ export function publicationChecks(state, model, { technical = false } = {}) {
         const provider=state.providers.find(item=>item.id===entry.providerId), price=activeProviderPrice(state,model.id,entry.providerId), service={id:providerServiceId(model.id,entry.providerId),modelId:model.id,model,providerId:entry.providerId,mode:'provider',callId:entry.callId};
         const channels=routingChannels(state,service);
         const priceReady=provider?.status==='已启用' && Boolean(entry.callId) && (technical || servicePurpose(model,entry.providerId)!=='internal' && Boolean(price?.items.length) && price.items.every(item=>item.amount!=null)), routeReady=routingStatus(state,service).good;
-        return [{label:`${provider?.name || '服务商'}：${technical?(entry.callId?'对外调用 ID 已配置':'对外调用 ID 待配置'):priceReady?'调用 ID 和售价已配置':!entry.callId?'对外调用 ID 待配置':'缺少对外售价'}`,passed:priceReady,tab:'pricing',providerId:entry.providerId},
+        return [{label:`${provider?.name || '服务商'}：${technical?(entry.callId?'对外调用标识 已配置':'对外调用标识 待配置'):priceReady?'调用 ID 和售价已配置':!entry.callId?'对外调用标识 待配置':'缺少对外售价'}`,passed:priceReady,tab:'pricing',providerId:entry.providerId},
           {label:`${provider?.name || '服务商'}：${routeReady?'已发布可用渠道路由':channels.length?'路由尚未发布':'未关联可用渠道'}`,passed:routeReady,tab:'routing',providerId:entry.providerId,mapping:!channels.length}];
       }),
       {label:'开放范围明确',passed:scopeReady(state,model),tab:'publication'},
@@ -263,7 +263,7 @@ export function modelTransaction(state, action) {
     const endpoint = state.endpoints.find(item => item.id === data.endpointId), supply = data.id && state.modelSupplies.find(item => item.id === data.id && item.modelId === model.id);
     if (data.id && !supply) throw new Error('供应服务不存在');
     if (!endpoint) throw new Error('请选择有效接入渠道');
-    if (!data.upstreamModelId?.trim() || /\s/.test(data.upstreamModelId)) throw new Error('上游模型 ID 必填且不能包含空格');
+    if (!data.upstreamModelId?.trim() || /\s/.test(data.upstreamModelId)) throw new Error('上游模型标识 必填且不能包含空格');
     if (state.modelSupplies.some(item => item.id !== supply?.id && item.modelId === model.id && item.endpointId === endpoint.id && item.status !== '已移除')) throw new Error('该渠道已关联此模型');
     const fields = { modelId: model.id, endpointId: endpoint.id, upstreamModelId: data.upstreamModelId.trim(), capabilities: capabilities(data.capabilities, model.type, true), validationStatus: '待验证', verifiedAt: null, validationCases: [], status: '已停用' };
     changes.push(supply ? update('modelSupplies', supply.id, fields) : add('modelSupplies', { id: uid('supply'), ...fields }));
@@ -280,8 +280,8 @@ export function modelTransaction(state, action) {
       changes.push(update('modelSupplies', supply.id, { validationStatus: passed ? '通过' : '失败', verifiedAt: at, validationCases: ['协议兼容', '基础推理', ...(supply.capabilities.streaming ? ['流式响应'] : []), ...(supply.capabilities.tools ? ['工具调用'] : [])].map(name => ({ name, passed })), ...(passed ? {} : { status: '已停用' }) }));
     } else changes.push(update('modelSupplies', supply.id, { status: { enableSupply: '已启用', disableSupply: '已停用', removeSupply: '已移除' }[operation] }));
   } else if (['priceDraft', 'pricePublish'].includes(operation)) {
-    if (model.serviceMode === 'standard') throw new Error('统一服务模式只能配置统一售价');
-    if (model.serviceMode === 'provider') throw new Error('分服务商模式请在服务商服务配置维护平台售价');
+    if (model.serviceMode === 'standard') throw new Error('统一模型服务模式只能配置统一售价');
+    if (model.serviceMode === 'provider') throw new Error('渠道直选模式请在服务商服务配置维护平台售价');
     if (!Array.isArray(data.items)) throw new Error('请按完整计费项设置售价');
     const supply = modelSupplies(state, model.id).find(item => item.id === data.supplyId);
     if (!supply) throw new Error('供应服务不存在');

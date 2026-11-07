@@ -12,11 +12,11 @@ import {simulateRequest} from '../src/admin-v2/domain.js';
 
 function fixture(){const state=withAdminSession(parseAdminState(null)),service=routingServices(state).find(row=>row.id==='standard:model-1');assert.ok(service);service.model.listingStatus='已下架';service.model.callsEnabled=false;state.serviceRoutes=state.serviceRoutes.filter(row=>row.serviceId!==service.id);const channels=routingChannels(state,service).filter(row=>row.available);assert.ok(channels.length>=2);return {state,service,channels};}
 test('route review source is stable across client patch ordering without changing business arrays',()=>{const f=fixture(),source=routeSourceVersion(f.state,f.service);f.state.modelSupplies.reverse();assert.equal(routeSourceVersion(f.state,f.service),source);const order=f.state.modelSupplies.map(row=>row.id);routeSourceVersion(f.state,f.service);assert.deepEqual(f.state.modelSupplies.map(row=>row.id),order);});
-const fixed=id=>({...emptyRouteConfig(),channels:[{supplyId:id,enabled:true,priority:1,weight:0,groupId:'P1'}]});
+const fixed=id=>({...emptyRouteConfig({mode:'standard'}),channels:[{supplyId:id,enabled:true,priority:1,weight:100,groupId:'P1'}]});
 function run(f,operation,extra={},role='平台管理员'){const service=routingServices(f.state).find(row=>row.id===f.service.id);return commitAdminState(f.state,{type:'modelOperations',operation,data:{serviceId:service.id,expectedVersion:serviceRoute(f.state,service.id)?.activeVersion || 0,sourceVersion:routeSourceVersion(f.state,service),...extra}},role);}
 
-test('fixed route creation and replacement are atomic; stop releases references and restore preserves history without resuming service',()=>{
- const f=fixture(),before=structuredClone(f.state);assert.equal(routeEditConfig(f.service,null).strategy,'fixed');
+test('single-channel weighted route creation and replacement are atomic; stop releases references and restore preserves history without resuming service',()=>{
+ const f=fixture(),before=structuredClone(f.state);assert.equal(routeEditConfig(f.service,null).strategy,'weighted');
  f.state=run(f,'serviceRoutePublish',{config:fixed(f.channels[0].id)});const first=structuredClone(serviceRoute(f.state,f.service.id));
  assert.throws(()=>run(f,'serviceRoutePublish',{config:fixed(f.channels[1].id),sourceVersion:'stale'}),/已变化/);assert.deepEqual(serviceRoute(f.state,f.service.id),first);
  f.state=run(f,'serviceRoutePublish',{config:fixed(f.channels[1].id)});const replacement=structuredClone(serviceRoute(f.state,f.service.id));assert.equal(activeRouteVersion(replacement).config.channels[0].supplyId,f.channels[1].id);assert.deepEqual(replacement.versions[0],first.versions[0]);

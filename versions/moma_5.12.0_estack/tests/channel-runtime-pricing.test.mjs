@@ -35,7 +35,7 @@ function fixture(count = 2) {
   const sale = { id: 'runtime-sale', modelId: model.id, scope: 'model', serviceModeRevision: liveModel.serviceModeRevision || 0, status: '已发布', version: 1, effectiveAt: new Date(Date.now() - 10000).toISOString(), items: [{ name: '输入', unit: '百万 Token', currency: 'CNY', amount: 8000000 }, { name: '输出', unit: '百万 Token', currency: 'CNY', amount: 16000000 }] };
   state.modelSalePrices.push(sale);
   state.serviceRoutes = state.serviceRoutes.filter(row => row.serviceId !== 'standard:' + model.id);
-  state.serviceRoutes.push({ id: 'runtime-route', serviceId: 'standard:' + model.id, activeVersion: 1, versions: [{ version: 1, config: { strategy: 'fixed', autoFailover: true, channels: supplies.slice(0, 2).map(row => ({ supplyId: row.id, enabled: true })) } }] });
+  state.serviceRoutes.push({ id: 'runtime-route', serviceId: 'standard:' + model.id, activeVersion: 1, versions: [{ version: 1, config: { strategy:'weighted', autoFailover: true, channels: supplies.slice(0, 2).map(row => ({ supplyId: row.id, enabled: true })) } }] });
   const key = state.apiKeys.find(row => row.status === '有效' && state.grants.some(grant => grant.subjectId === row.id));
   key.modelIds = [...new Set([...key.modelIds, model.id])]; state.limits = state.limits.filter(row => row.scopeId !== key.id);
   const grant = state.grants.find(row => row.subjectId === key.id); grant.limit = 1000000000; grant.used = 0;
@@ -184,7 +184,7 @@ test('manual diagnostic failure blocks new activation and publication while froz
   assert.equal(routingChannels(failed, service)[0].available, false);
   assert.equal(routingChannels(failed, service, Date.now(), { runtime: true })[0].available, true);
   assert.throws(() => provider(failed, 'supplierModelsEnable', { endpointId: ep, associationIds: [original.id] }), /健康检测/);
-  assert.throws(() => validateRouteConfig(failed, service, { strategy: 'fixed', autoFailover: true, channels: [{ supplyId: f.supplies[0].id, enabled: true, weight: 100 }] }), /密钥|健康|检测|渠道/);
+  assert.throws(() => validateRouteConfig(failed, service, { strategy:'weighted', autoFailover: true, channels: [{ supplyId: f.supplies[0].id, enabled: true, weight: 100 }] }), /密钥|健康|检测|渠道/);
   assert.equal(call(f, failed).request.httpStatus, 200);
   const connectionFailed = provider(f.state, 'supplierModelTest', { endpointId: ep, associationId: original.id, modelId: original.modelId, scenario: '鉴权失败' });
   const currentEndpoint = connectionFailed.endpoints.find(row => row.id === ep);
@@ -212,7 +212,7 @@ test('a pending test blocks new enable and route publication while existing qual
   assert.equal(routingChannels(f.state, service)[0].reason, '当前模型测试尚未完成');
   assert.throws(() => provider(f.state, 'supplierModelsEnable', { endpointId: ep.id, associationIds: [row.id] }), /尚未完成/);
   assert.throws(() => provider(f.state, 'supplierChannelEnable', { endpointId: ep.id }), /尚未完成/);
-  assert.throws(() => validateRouteConfig(f.state, service, { strategy: 'fixed', autoFailover: true, channels: [{ supplyId: f.supplies[0].id, enabled: true, weight: 100 }] }), /测试尚未完成/);
+  assert.throws(() => validateRouteConfig(f.state, service, { strategy:'weighted', autoFailover: true, channels: [{ supplyId: f.supplies[0].id, enabled: true, weight: 100 }] }), /测试尚未完成/);
   assert.equal(call(f).request.httpStatus, 200);
   ep.serverTestJobs[0].receivedAt = new Date().toISOString();
   assert.equal(routingChannels(f.state, service)[0].available, true);

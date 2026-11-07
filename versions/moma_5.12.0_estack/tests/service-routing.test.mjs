@@ -66,19 +66,16 @@ test('only explicit model service modes and Provider associations expose routing
  assert.equal(routingServices(state).length,0);
 });
 
-test('fixed routing rejects multiple selected channels regardless of provider or failover', () => {
-  const { state, service, config, channels } = baseline();
-  const copy = { ...structuredClone(state.modelSupplies.find(item => item.id === channels[0].id)), id: 'same-provider-backup' };
-  const endpoint = structuredClone(state.endpoints.find(item => item.id === copy.endpointId));
-  endpoint.id = 'same-provider-second-endpoint'; copy.endpointId = endpoint.id;
-  state.endpoints.push(endpoint);
-  state.modelSupplies.push(copy);
-  state.supplyPrices.push({...structuredClone(activeSupplyPrice(state,channels[0].id)),id:'backup-cost',supplyId:copy.id});
-  const next = { strategy: 'fixed', autoFailover: true, channels: [config.channels[0], { supplyId: copy.id, enabled: true, weight: 0 }] };
-  assert.throws(() => validateRouteConfig(state, service, next), /只能选择一个/);
-  assert.throws(() => validateRouteConfig(state, service, { ...next, autoFailover: false }), /只能选择一个/);
-  assert.throws(() => validateRouteConfig(state,service,{...next,channels:config.channels}), /只能选择一个/);
-  assert.equal(validateRouteConfig(state,service,{...next,channels:[config.channels[0]]}).channels.length,1);
+test('unified mode rejects fixed routing even with a single healthy source, provider mode keeps explicit single-channel routing', () => {
+ const {state,service,config}=baseline(),before=structuredClone(state);
+ assert.throws(()=>validateRouteConfig(state,service,{...config,strategy:'fixed',channels:[config.channels[0]]}),/统一模型服务模式/);
+ assert.deepEqual(state,before);
+ service.model.serviceMode='provider';service.model.serviceProviders=[{providerId:routingChannels(state,service)[0].provider.id,callId:'explicit-provider',status:'已关联'}];
+ const explicit=routingServices(state).find(row=>row.modelId===service.modelId && row.mode==='provider'),sources=routingChannels(state,explicit);
+ assert.ok(explicit && sources.length);
+ const selected={strategy:'fixed',channels:[{supplyId:sources[0].id,enabled:true}]};
+ assert.equal(validateRouteConfig(state,explicit,selected,false).channels.length,1);
+ if(sources.length>1)assert.throws(()=>validateRouteConfig(state,explicit,{...selected,channels:sources.slice(0,2).map(row=>({supplyId:row.id,enabled:true}))},false),/只能选择一个/);
 });
 
 test('flow preview keeps normal weighted selection separate from failover and reports unavailable traffic', () => {
@@ -86,8 +83,7 @@ test('flow preview keeps normal weighted selection separate from failover and re
   assert.deepEqual(routePreview(state, service, config).map(item => item.share), [70, 30]);
   assert.deepEqual(routePreview(state, service, config, config.channels[0].supplyId).map(item => item.share), [0, 100]);
   assert.deepEqual(routePreview(state, service, { ...config, autoFailover: false }, config.channels[0].supplyId).map(item => item.share), [0, 30]);
-  assert.deepEqual(routePreview(state, service, { ...config, strategy: 'priority' }).map(item => item.share), [100, 0]);
-  assert.deepEqual(routePreview(state, service, { ...config, strategy: 'priority' }, config.channels[0].supplyId).map(item => item.share), [0, 100]);
+  assert.throws(()=>routePreview(state,service,{...config,strategy:'priority'}),/统一模型服务模式/);
   state.modelSupplies.find(item => item.id === config.channels[0].supplyId).status = '已停用';
   assert.deepEqual(routePreview(state, service, config).map(item => item.share), [0, 100]);
   state.modelSupplies.find(item => item.id === config.channels[1].supplyId).status = '已停用';
@@ -145,7 +141,7 @@ test('stale active version and invalid rollback never overwrite an active route'
 test('rollback revalidates live channels and creates a new version without deleting history', () => {
   const { state, service, config } = baseline();
   const first = commitAdminState(state, action(state, service, config));
-  const second = commitAdminState(first, action(first, service, { ...config, strategy: 'priority' }));
+  const second = commitAdminState(first, action(first, service, { ...config, channels:config.channels.map((row,index)=>({...row,weight:index?70:30})) }));
   const third = commitAdminState(second, action(second, service, null, 'serviceRouteRollback', { version: 1 }));
   const route = serviceRoute(third, service.id);
   assert.equal(route.activeVersion, 3);
@@ -190,7 +186,8 @@ function threeChannels() {
 }
 test('priority groups normalize and validate per-group weights, membership and nonempty enabled groups',()=>{
   const {state,service,config}=threeChannels();
-  assert.equal(validateRouteConfig(state,service,config).channels.length,3);
+  assert.equal(normalizeRouteConfig(config).channels.length,3);
+  assert.throws(()=>validateRouteConfig(state,service,config),/统一模型服务模式/);
   for (const change of [value=>{value.groups[1].id='P1';},value=>{value.groups[0].name='';},value=>{value.channels[0].groupId='P9';},value=>{value.channels[2].weight=99;},value=>{value.channels[2].enabled=false;},value=>{value.groups=Array.from({length:11},(_,index)=>({id:'G'+index,name:'组',strategy:'random'}));}]) {
     const value=structuredClone(config);change(value);assert.throws(()=>validateRouteConfig(state,service,value));
   }
@@ -199,19 +196,15 @@ test('priority groups normalize and validate per-group weights, membership and n
   assert.equal(normal.channels[0].weight,70);
   assert.deepEqual(routeGroups({strategy:'random'}),[{id:'P1',name:'主用组',strategy:'random'}]);
 });
-test('priority weighted preview only uses the first viable group and falls back after its last channel fails',()=>{
-  const {state,service,config}=threeChannels(),failed=config.channels.slice(0,2).map(row=>row.supplyId);
-  assert.deepEqual(routePreview(state,service,config).map(row=>row.share),[70,30,0]);
-  assert.deepEqual(routePreview(state,service,config,failed[0]).map(row=>row.share),[0,100,0]);
-  assert.deepEqual(routePreview(state,service,config,failed).map(row=>row.share),[0,0,100]);
-  assert.deepEqual(routePreview(state,service,{...config,autoFailover:false},failed).map(row=>row.share),[0,0,0]);
-  config.groups[0].strategy='random';
-  assert.deepEqual(routePreview(state,service,config).map(row=>row.share),[50,50,0]);
-  assert.deepEqual(routePreview(state,service,config,config.channels.map(row=>row.supplyId)).map(row=>row.share),[0,0,0]);
+test('obsolete unified priority policy cannot activate or overwrite its stored history',()=>{
+ const {state,service,config}=threeChannels(),before=structuredClone(state),source=structuredClone(config);
+ assert.throws(()=>routePreview(state,service,config),/统一模型服务模式/);
+ assert.throws(()=>commitAdminState(state,action(state,service,config)),/统一模型服务模式/);
+ assert.deepEqual(state,before);assert.deepEqual(config,source);
 });
 test('random and metric strategies use equal shares or measured minima, never fabricated statistics',()=>{
   const {state,service,config,channels}=baseline();
-  assert.deepEqual(routePreview(state,service,{...config,strategy:'random'}).map(row=>row.share),[50,50]);
+  assert.throws(()=>routePreview(state,service,{...config,strategy:'random'}),/统一模型服务模式/);
   for (const strategy of ['latency','load']) assert.throws(()=>validateRouteConfig(state,service,{...config,strategy}),/实际/);
   state.endpoints.find(item=>item.id===channels[0].endpointId).metrics={p95LatencyMs:80,activeRequests:4};
   state.endpoints.find(item=>item.id===channels[1].endpointId).metrics={p95LatencyMs:120,activeRequests:0};
@@ -252,3 +245,19 @@ test('mapping incompatibility blocks publication and all advanced limits are val
 
 function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
 function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }
+
+test('minimum TPM uses real zero and respects shared RPM/TPM limits; unknown counters never become zero',()=>{
+ const {state,service,config,channels}=baseline();
+ const a=state.endpoints.find(row=>row.id===channels[0].endpointId),b=state.endpoints.find(row=>row.id===channels[1].endpointId);
+ a.metrics={tokensPerMinute:100,requestsPerMinute:2,rpmLimit:10,tpmLimit:1000};b.metrics={tokensPerMinute:0,requestsPerMinute:1,rpmLimit:10,tpmLimit:1000};
+ assert.deepEqual(routePreview(state,service,{...config,strategy:'tpm'}).map(row=>row.share),[0,100]);
+ b.metrics.requestsPerMinute=10;
+ assert.deepEqual(routePreview(state,service,{...config,strategy:'tpm'}).map(row=>row.share),[100,0]);
+ assert.deepEqual(routePreview(state,service,config).map(row=>row.share),[100,0]);
+ a.metrics.tokensPerMinute=1000;
+ assert.deepEqual(routePreview(state,service,config).map(row=>row.share),[0,0]);
+ delete b.metrics.requestsPerMinute;
+ assert.throws(()=>validateRouteConfig(state,service,config),/实际分钟用量/);
+ b.metrics.requestsPerMinute=1;b.metrics.tpmLimit=-1;
+ assert.throws(()=>validateRouteConfig(state,service,config),/限额配置无效/);
+});

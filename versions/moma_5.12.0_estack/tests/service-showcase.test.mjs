@@ -35,7 +35,7 @@ test('two newest requested examples have complete, identity-consistent prices an
       const price = service.providerId ? activeProviderPrice(state, model.id, service.providerId) : activeModelSalePrice(state, model.id);
       assert.equal(price.items.length, 2);
       assert.equal(serviceGuideRequest(model, service.callId).body.model, service.callId);
-      assert.doesNotThrow(() => platformCandidatePlan(state, model, { serviceId: service.id, tenantIds: [state.tenants[0].id], supplyIds: channels.map(row => row.id) }));
+      assert.doesNotThrow(() => platformCandidatePlan(state, model, { serviceId: service.id, tenantIds: [state.tenants[0].id], supplyIds: version.config.channels.filter(row=>row.enabled).map(row => row.supplyId) }));
     }
   }
 });

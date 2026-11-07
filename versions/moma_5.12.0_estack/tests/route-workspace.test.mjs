@@ -7,8 +7,8 @@ const config=normalizeRouteConfig({strategy:'weighted',autoFailover:true,autoRec
 const channels=[{id:'a',channelName:'自营',provider:{name:'MoMA'}},{id:'b',channelName:'转售',provider:{name:'MoMA'}}];
 
 test('unified choices are restricted without rewriting existing route history or provider choices',()=>{
-  assert.deepEqual(routeStrategyChoices(service),['fixed','weighted','latency']);
-  assert.deepEqual(routeStrategyChoices({mode:'provider'}),['fixed','weighted','latency']);
+  assert.deepEqual(routeStrategyChoices(service),['weighted','load','tpm','latency','cost']);
+  assert.deepEqual(routeStrategyChoices({mode:'provider'}),['fixed','weighted','load','tpm','latency','cost']);
   assert.equal(routeEditConfig({mode:'provider'},null,[channels[0]]).strategy,'fixed');
   const saved={...structuredClone(config),strategy:'random'};
   const route={activeVersion:1,versions:[{version:1,config:saved}]},before=structuredClone(route);
@@ -16,9 +16,9 @@ test('unified choices are restricted without rewriting existing route history or
   assert.deepEqual(route,before);
 });
 
-test('new routes default to fixed with explicit empty selection and no failover',()=>{
+test('new unified routes default to weighted with explicit empty selection and no failover',()=>{
   const single=routeEditConfig(service,null,[channels[0]]), multiple=routeEditConfig(service,null,channels);
-  assert.equal(single.strategy,'fixed');assert.equal(multiple.strategy,'fixed');
+  assert.equal(single.strategy,'weighted');assert.equal(multiple.strategy,'weighted');
   assert.equal(single.autoFailover,false);assert.equal(single.autoRecover,false);assert.deepEqual(single.channels,[]);
 });
 test('opening an existing route preserves runtime settings and never mutates its history',()=>{

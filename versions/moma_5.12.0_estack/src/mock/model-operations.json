@@ -17,7 +17,7 @@
         "name": "GLM-5.3",
         "maker": "智谱",
         "type": "text",
-        "description": "GLM-5.3 提供文本对话、内容生成与知识问答能力。",
+        "description": "渠道直选模式演示：通过 glm-5.3-moma 指定移动云 MoMA 自营渠道，或通过 glm-5.3-zhipu 指定智谱原厂渠道。",
         "capabilities": {
           "context": 131072,
           "output": 8192,
@@ -1108,12 +1108,12 @@
             "id": "showcase-route-glm-5.3-provider-moma-v1",
             "version": 1,
             "config": {
-              "strategy": "weighted",
+              "strategy": "fixed",
               "groups": [
                 {
                   "id": "P1",
                   "name": "主用组",
-                  "strategy": "weighted"
+                  "strategy": "fixed"
                 }
               ],
               "channels": [
@@ -1121,14 +1121,14 @@
                   "supplyId": "showcase-supply-moma-self-glm-5.3",
                   "enabled": true,
                   "groupId": "P1",
-                  "weight": 70,
+                  "weight": 100,
                   "priority": 1
                 },
                 {
                   "supplyId": "showcase-supply-moma-resale-glm-5.3",
-                  "enabled": true,
+                  "enabled": false,
                   "groupId": "P1",
-                  "weight": 30,
+                  "weight": 0,
                   "priority": 2
                 }
               ],

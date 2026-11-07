@@ -102,7 +102,7 @@ test('default gallery limits existing marked examples to the two requested modes
   assert.deepEqual(marketModels(rows).map(row => row.modelId), ['deepseek-v4-flash-0731']);
   assert.equal(marketModels(rows, 'all').length, 2);
   assert.equal(rows[0].mode, 'standard');
-  assert.equal(rows[0].provider, '平台统一服务');
+  assert.equal(rows[0].provider, '平台统一模型服务模式');
 });
 
 test('hidden provider and unified models stay in the service directory but never appear in either gallery scope', t => {

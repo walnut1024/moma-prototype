@@ -1,7 +1,8 @@
+import { unifiedRouteStrategies } from './routing-policy.js';
 import { MOMA_PROVIDER } from './moma-provider.js';
 import { routingServices, routingChannels, serviceRoute, routingStatus, activeRouteVersion, lastRouteVersion, emptyRouteConfig, normalizeRouteConfig, routeGroups, ROUTE_ADVANCED_DEFAULTS, ROUTING_STRATEGIES } from './service-routing.js';
 
-export const routeStrategyChoices = () => ['fixed', 'weighted', 'latency'];
+export const routeStrategyChoices = service => service.mode==='standard' ? unifiedRouteStrategies : ['fixed', ...unifiedRouteStrategies];
 
 export function routeEditConfig(service, route) {
   const saved = (activeRouteVersion(route) || lastRouteVersion(route))?.config;
