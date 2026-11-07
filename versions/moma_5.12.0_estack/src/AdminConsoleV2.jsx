@@ -6,7 +6,7 @@ import GettingStarted from './admin-v2/GettingStarted';
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 import { createPortal } from "react-dom";
-import { Badge, Banner, Breadcrumb, Button, ConfigProvider, Modal, Select, Tabs, Typography } from '@douyinfe/semi-ui';
+import { Badge, Banner, Breadcrumb, Button, ConfigProvider, Modal, Select, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import { sections, pages, WORKSPACES, WORKSPACE_HOME, availableWorkspaces, pageWorkspace, canAccessPage, pageFromHash } from './admin-v2/navigation.mjs';
 import { adminBreadcrumbs } from './admin-v2/breadcrumbs.mjs';
@@ -38,7 +38,7 @@ import ModelCosts from './admin-v2/ModelCosts';
 import ModelPrices from './admin-v2/ModelPrices';
 import ModelManagement from "./admin-v2/ModelManagement";
 import { privateEnterprise } from "./admin-v2/enterprise";
-import GatewayPage from "./admin-v2/GatewayPages";
+import GatewayPage, { gatewaySettingsPages } from "./admin-v2/GatewayPages";
 import ObservabilityPage from "./admin-v2/ObservabilityPages";
 import BusinessOperationsPage from "./admin-v2/BusinessOperationsPages";
 import AdminPageBoundary from "./admin-v2/AdminPageBoundary";
@@ -78,7 +78,7 @@ export default function AdminConsoleV2(props) {
   const cloud=/^#\/admin-2\/(listing|providers|model-costs|model-prices|model-templates|tariff-dictionary)(?:[/?]|$)/.test(hash);
   return <ConfigProvider locale={zhCN}>{cloud?<CloudModelOperations>{store=><AdminConsoleV2View {...props} store={store}/>}</CloudModelOperations>:<LocalAdminConsole {...props}/>}</ConfigProvider>;
 }
-function LocalAdminConsole(props){const store=useAdminStore();return <AdminConsoleV2View {...props} store={store}/>;}
+function LocalAdminConsole(props){const store=useAdminStore(Toast);return <AdminConsoleV2View {...props} store={store}/>;}
 function AdminConsoleV2View({bannerTarget,store}) {
   const { state, dispatch, transact, transactModel, transactIndividual, transactAdminAccount, transactTraffic, reload, conflict } = store;
   useEffect(() => { if(!state.cloudOperations)setMockRuntimeState(state); }, [state]);
@@ -153,7 +153,9 @@ function AdminConsoleV2View({bannerTarget,store}) {
   const deploymentTarget = bannerTarget?.querySelector("[data-admin-deployment]");
   const hasAccount = state.admins.some(account => account.id === state.adminSession?.accountId && account.status === '已启用');
   const showPage = hasAccount && canVisit;
-  const legacyPage = ['overview', 'analytics', 'customers', 'runtime', 'gateway', 'production', 'platform', 'getting-started'].includes(page.groupId)
+  const gatewaySettings = gatewaySettingsPages.includes(active);
+  const legacyPage = ['overview', 'analytics', 'customers', 'runtime', 'production'].includes(page.groupId)
+    || (page.groupId === 'gateway' && !gatewaySettings)
     || ['goods', 'orders', 'announcements', 'metering', 'ledger', 'bills', 'settlement', 'adjustments'].includes(active);
   const menu = <nav aria-label="后台导航">{sections.filter(group => group.workspace === currentWorkspace || (group.id === 'platform' && state.currentRole === '平台管理员')).map(group => (
       <section key={group.id} aria-label={group.title}>
@@ -216,7 +218,7 @@ function AdminConsoleV2View({bannerTarget,store}) {
             : active === 'traffic-limits' ? <Suspense fallback={<p role="status">正在加载流量运营…</p>}><TrafficOperations key={state.adminSession.accountId} state={state} transact={transactTraffic} conflict={conflict} dirtyRef={draftDirty}/></Suspense>
             : active === "individual-users" ? <IndividualUsersPage state={state} transact={transactIndividual} conflict={conflict}/>
             : active === "tenants" ? <CustomerPage state={state} transact={transact} deploymentTarget={deploymentTarget}/>
-            : ["routes", "limits", "fallback", "cache", "releases"].includes(active) ? <GatewayPage pageId={active} state={state} dispatch={dispatch}/>
+            : gatewaySettings ? <GatewayPage key={active} pageId={active} state={state} dispatch={dispatch}/>
             : ["monitoring", "logs", "alerts", "incidents", "sla"].includes(active) ? <ObservabilityPage pageId={active} state={factState} dispatch={dispatch} navigate={navigate}/>
             : active === "clusters" ? <ClusterManagement state={state} dispatch={dispatch}/>
             : active === "deployments" ? <ModelDeployments state={state} dispatch={dispatch} conflict={conflict}/>

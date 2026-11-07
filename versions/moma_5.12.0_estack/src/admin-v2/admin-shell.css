@@ -46,3 +46,21 @@
   .v2-sidebar-desktop { display: none; }
   .v2-content .admin-nav-toggle { display: inline-flex; }
 }
+
+/* Shared page layout. Semi supplies the visual styles of the components. */
+.admin-v2 {
+  --admin-section-gap: 16px;
+  --admin-control-gap: 12px;
+}
+.admin-v2 .v2-content > main:has(> .admin-page-stack) { padding: var(--admin-section-gap); }
+.admin-page-stack { display: grid; gap: var(--admin-section-gap); min-width: 0; }
+.admin-page-heading, .admin-list-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--admin-control-gap); }
+.admin-page-heading { justify-content: space-between; }
+.admin-page-heading > div { min-width: 0; overflow-wrap: anywhere; }
+.admin-list-toolbar { margin-bottom: var(--admin-section-gap); }
+.admin-list-search { width: min(100%, 280px); }
+.admin-form-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+@media (max-width: 900px) {
+  .admin-v2 .v2-content > main:has(> .admin-page-stack) { padding: 12px; }
+}

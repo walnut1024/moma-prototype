@@ -1,3 +1,4 @@
+import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useRef, useState } from 'react';
 import { Banner, Button, Card, ConfigProvider, Input, InputNumber, Modal, Space, Table, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
@@ -5,7 +6,7 @@ import { Choice } from './ServiceUI.jsx';
 import { accountTraffic, effectiveTraffic, trafficAccounts, trafficModels, trafficSettings } from './traffic-limits.js';
 import './traffic-operations.css';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const blank = { rpm: '', tpm: '' };
 const format = new Intl.NumberFormat('zh-CN');
 const number = value => Number.isSafeInteger(value) ? format.format(value) : '—';
@@ -73,7 +74,7 @@ export default function TrafficOperations({ state, transact, conflict, dirtyRef 
       if (trigger?.isConnected) { trigger.focus(); return; }
       const replacement = Array.from(root.current?.querySelectorAll('button[aria-label]') || [])
         .find(button => button.getAttribute('aria-label') === trigger?.getAttribute('aria-label'));
-      (replacement || root.current?.querySelector('.traffic-filters input'))?.focus();
+      (replacement || root.current?.querySelector('.admin-list-search input'))?.focus();
     });
   }
 
@@ -121,7 +122,7 @@ export default function TrafficOperations({ state, transact, conflict, dirtyRef 
 
   const defaultsEditing = editing('defaults', '');
   const defaults = defaultsEditing ? draft.data.global : settings.global;
-  const defaultsPanel = <section className={`traffic-filters${defaultsEditing ? ' traffic-editing' : ''}`} aria-label="全局默认">
+  const defaultsPanel = <section className={`admin-list-toolbar${defaultsEditing ? ' traffic-editing' : ''}`} aria-label="全局默认">
     <Text strong>全局默认</Text>
     {['rpm', 'tpm'].map(metric => <Space key={metric} spacing={4}>
       <Text type="secondary">{metric.toUpperCase()}</Text>
@@ -180,8 +181,8 @@ export default function TrafficOperations({ state, transact, conflict, dirtyRef 
   ];
   const pagination = { pageSize: 10, hideOnSinglePage: true, showTotal: true, disabled: Boolean(draft) };
 
-  return <ConfigProvider locale={zhCN}><section ref={root} className="traffic-page">
-    <Title heading={3}>限流配置</Title>
+  return <ConfigProvider locale={zhCN}><section ref={root} className="traffic-page admin-page-stack">
+    <AdminPageHeading title="限流配置"/>
     {conflict && <Banner type="warning" description="数据已变化。请载入新版本后重新开始编辑。"/>}
     <Tabs type="line" activeKey={tab} onChange={value => {
       if (value !== tab) discard(() => { finish(false); clearSelection(); setTab(value); });
@@ -190,11 +191,11 @@ export default function TrafficOperations({ state, transact, conflict, dirtyRef 
         {tab === 'users' && <div className="traffic-tab">
           <Card className="traffic-list">
             {defaultsPanel}
-            <div className="traffic-filters">
-              <Input showClear value={accountQuery} aria-label="搜索账号" placeholder="搜索账号名称或 ID" onChange={value => { setAccountQuery(value); clearSelection(); }} disabled={Boolean(draft)}/>
+            <div className="admin-list-toolbar">
+              <Input className="admin-list-search" showClear value={accountQuery} aria-label="搜索账号" placeholder="搜索账号名称或 ID" onChange={value => { setAccountQuery(value); clearSelection(); }} disabled={Boolean(draft)}/>
               <TrafficSelect label="筛选账号类型" options={[[ 'all', '全部账号类型' ], ['个人', '个人'], ['政企', '政企']]} value={type} onChange={value => { setType(value); clearSelection(); }} disabled={Boolean(draft)}/>
             </div>
-            <div className="traffic-filters">
+            <div className="admin-list-toolbar">
               <Text aria-live="polite">已选 {selectedIds.length} 个账号</Text>
               <Space wrap>
                 <Button disabled={batchDisabled} onClick={event => begin(event, 'batchAccounts', '', { accountIds: selectedIds, limit: blank })}>批量修改额度</Button>
@@ -209,8 +210,8 @@ export default function TrafficOperations({ state, transact, conflict, dirtyRef 
       </Tabs.TabPane>
       <Tabs.TabPane tab="模型限流" itemKey="models">
         {tab === 'models' && <div className="traffic-tab"><Card className="traffic-list">
-          <div className="traffic-filters">
-            <Input showClear value={modelQuery} aria-label="搜索模型" placeholder="搜索模型名称或标识" onChange={setModelQuery} disabled={Boolean(draft)}/>
+          <div className="admin-list-toolbar">
+            <Input className="admin-list-search" showClear value={modelQuery} aria-label="搜索模型" placeholder="搜索模型名称或标识" onChange={setModelQuery} disabled={Boolean(draft)}/>
           </div>
           <Table key={modelQuery} rowKey="id" size="small" scroll={{ x: 'max(100%, 720px)' }} empty="暂无模型" dataSource={modelRows} columns={modelColumns} pagination={pagination}
             rowClassName={row => editing('model', row.id) ? 'traffic-editing' : ''}/>

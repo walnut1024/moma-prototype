@@ -1,21 +1,6 @@
-.traffic-page, .traffic-tab {
-  display: grid;
-  gap: 16px;
-  min-width: 0;
-}
-
-.traffic-tab { padding-top: 16px; }
-
-.traffic-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
+.traffic-tab { min-width: 0; padding-top: var(--admin-section-gap); }
 
 .traffic-list { min-width: 0; }
-.traffic-filters { margin-bottom: 16px; }
-.traffic-filters > .semi-input-wrapper { width: min(280px, 100%); }
 .traffic-page .traffic-rate-input { width: 100px; max-width: 100%; }
 .traffic-page .traffic-row-error {
   max-width: 220px;

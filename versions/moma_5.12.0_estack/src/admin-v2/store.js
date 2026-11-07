@@ -9,7 +9,6 @@ import { activeAdmin } from '../linked-accounts.mjs';
 import {readLinkedState,notifyLinkedState,LINK_EVENT} from "../service-access.mjs";
 import { MODEL_OPERATIONS_EXAMPLE_ID } from './model-operations-examples.js';
 import { usageDemoRequests } from './usage-demo.js';
-import { toast } from "sonner";
 import { useEffect, useRef, useState } from "react";
 
 
@@ -177,7 +176,7 @@ export function prepareModelOperationsExamples(storage = globalThis.localStorage
   return true;
 }
 
-export function useAdminStore() {
+export function useAdminStore(notify) {
   const [state, setState] = useState(() => { try { return loadAdminState(localStorage); } catch (error) { return { ...createAdminSeed(), storageError: error.message }; } });
   const [conflict, setConflict] = useState(false);
   const currentState = useRef(state);
@@ -199,10 +198,10 @@ export function useAdminStore() {
         const names = { clusters: '集群', deployments: '模型部署', artifacts: '制品', routes: '路由策略', limits: '限流规则', fallbacks: '回退策略', caches: '缓存策略', releases: '配置版本', alerts: '告警', incidents: '事件', products: '商品', orders: '订单', announcements: '公告', settlements: '结算单', adjustments: '调账', bills: '账单', prices: '价格' };
         const collection = action.collection || action.changes?.[0]?.collection;
         const status = action.changes?.status;
-        toast.success(action.feedback || `${names[collection] || '配置'}${status?.startsWith('已') ? status : action.type === 'add' ? '已新建' : '已更新'}`);
+        notify.success(action.feedback || `${names[collection] || '配置'}${status?.startsWith('已') ? status : action.type === 'add' ? '已新建' : '已更新'}`);
       }
       return next;
-    } catch (error) { toast.error(error.message); return null; }
+    } catch (error) { notify.error(error.message); return null; }
   };
   const transact = action => {
     if (conflict) throw new Error('检测到数据冲突，请载入新版本后重试；当前输入保留');
@@ -239,7 +238,7 @@ export function useAdminStore() {
     setState(next);
     return next;
   };
-  const reload = () => { try { const fresh = loadAdminState(localStorage); currentState.current = fresh; setState(fresh); setConflict(false); if (fresh.storageError) toast.error(fresh.storageError); else toast.success("已载入最新数据"); } catch (error) { toast.error(error.message); setState(current => ({ ...current, storageError: error.message })); } };
+  const reload = () => { try { const fresh = loadAdminState(localStorage); currentState.current = fresh; setState(fresh); setConflict(false); if (fresh.storageError) notify.error(fresh.storageError); else notify.success("已载入最新数据"); } catch (error) { notify.error(error.message); setState(current => ({ ...current, storageError: error.message })); } };
   const transactAdminAccount = (action, expectedRevision) => {
     if (conflict) throw new Error('检测到数据冲突，请载入新版本后重试；当前输入保留');
     const next = persistAdminAccountAction(currentState.current, action, localStorage, expectedRevision);

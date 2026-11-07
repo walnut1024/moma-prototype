@@ -1,38 +1,8 @@
-.admin-v2 .getting-started{display:grid;gap:12px;max-width:1280px;min-width:0;margin:0 auto;color:#263247;font-size:14px;line-height:1.75}
-.admin-v2 .getting-started :is(h1,h2,h3,p,figure){margin:0}
-.admin-v2 .gs-heading,.admin-v2 .gs-panel{background:#fff;border:1px solid #e4eaf3;border-radius:6px;padding:20px 24px;min-width:0}
-.admin-v2 .gs-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.admin-v2 .gs-heading h1{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:600}
-.admin-v2 .gs-heading h1 svg{width:19px;height:19px;flex:none}
-.admin-v2 .gs-heading p{margin-top:4px;color:#586982}
-.admin-v2 .gs-heading a svg{width:16px;height:16px}
-.admin-v2 .gs-section-nav{display:flex;gap:4px 24px;flex-wrap:wrap;padding:0 8px;border-bottom:1px solid #e4eaf3}
-.admin-v2 .gs-section-nav a{display:inline-flex;align-items:center;min-height:44px;padding:8px 0;border-bottom:2px solid transparent;color:#586982}
-.admin-v2 .gs-section-nav a[aria-current="page"]{border-bottom-color:#315fe8;color:#315fe8;font-weight:600}
-.admin-v2 .getting-started a{color:#315fe8;text-underline-offset:3px}
-.admin-v2 .getting-started a:hover{text-decoration:underline}
-.admin-v2 .gs-panel h2{font-size:16px;font-weight:600;margin-bottom:16px}
-.admin-v2 .gs-copy{display:grid;gap:12px;min-width:0;overflow-wrap:anywhere}
-.admin-v2 .gs-copy:empty{display:none}
-.admin-v2 .gs-copy ol,.admin-v2 .gs-copy ul{margin:0;padding-left:25px;display:grid;gap:8px;list-style:decimal}
-.admin-v2 .gs-copy ul{list-style:disc}
-.admin-v2 .gs-copy li{padding-left:4px}
-.admin-v2 .gs-copy li::marker{color:#315fe8;font-weight:600}
-.admin-v2 .gs-copy p{max-width:75ch}
-.admin-v2 .gs-copy code{font-size:.95em;background:#f4f6fa;border-radius:3px;padding:1px 4px}
-.admin-v2 .gs-copy figure img{display:block;width:100%;height:auto;max-width:1120px}
-.admin-v2 .gs-table-scroll{overflow:auto;min-width:0}
-.admin-v2 .gs-panel table{border-collapse:collapse;width:100%;text-align:left}
-.admin-v2 .gs-panel :is(th,td){padding:9px 12px;vertical-align:top;border-bottom:1px solid #e8edf5}
-.admin-v2 .gs-panel th{background:#f8faff;color:#586982;font-weight:500}
-.admin-v2 .gs-panel td:first-child{width:30%}
-.admin-v2 .gs-panel tbody tr:last-child td{border-bottom:0}
-.admin-v2 .gs-tasks{margin-top:8px}
-.admin-v2 .gs-tasks details+details{border-top:1px solid #e8edf5}
-.admin-v2 .gs-tasks summary{cursor:pointer;padding:14px 0;font-weight:600}
-.admin-v2 .gs-tasks h3{display:inline;font-size:14px;font-weight:600}
-.admin-v2 .gs-tasks details>.gs-copy{padding:0 0 20px 18px}
-.admin-v2 .getting-started,.admin-v2 .getting-started :is(h2,details,.gs-anchor){scroll-margin-top:100px}
-.admin-v2 .gs-anchor{height:0}
-.admin-v2 .getting-started :is(a,summary,h2):focus-visible{outline:2px solid #315fe8;outline-offset:3px}
-@media(max-width:900px){.admin-v2 .gs-heading,.admin-v2 .gs-panel{padding:16px}.admin-v2 .gs-panel :is(th,td){padding:8px}.admin-v2 .gs-section-nav{gap:8px 16px}}
+.getting-started { max-width: 1280px; min-width: 0; margin-inline: auto; }
+.gs-copy { display: grid; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
+.gs-copy:not(:empty), .gs-tasks { margin-top: 12px; }
+.gs-copy :is(ol, ul) { display: grid; gap: 8px; padding-inline-start: 24px; }
+.gs-copy ol { list-style: decimal; }
+.gs-copy ul { list-style: disc; }
+.getting-started :is([role="button"], h2, .gs-anchor) { scroll-margin-top: 72px; }
+.gs-anchor { height: 0; }
