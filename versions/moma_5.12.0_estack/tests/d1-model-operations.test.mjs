@@ -15,6 +15,7 @@ import {routingServices,routeSourceVersion,serviceRoute,activeRouteVersion,routi
 import {platformCandidatePlan,runPlatformTrial,publishPlatformCandidate} from '../src/admin-v2/platform-service-client.js';
 import {providerApiKeysDraft} from '../src/admin-v2/provider-management.js';
 import {operationsTransaction,materialBase} from '../src/admin-v2/model-operations.js';
+import {offerKey} from '../src/service-access.mjs';
 
 test('cloud service configuration leaves the original workspace and simulation history unchanged',()=>{
   const state=initialModelWorkspace(),before=structuredClone(state),model=state.models.find(m=>m.id==='model-glm53');
@@ -46,8 +47,23 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
       for(const [key,patch]of Object.entries(result.patches)){const remove=new Set([...patch.remove,...patch.upsert.map(r=>r.id)]);next[key]=[...patch.upsert,...previous[key].filter(r=>!remove.has(r.id))];}
       state=next;useCloudMockSnapshot(next,next.cloudMockState);return next;
     };
+    const configuredModel=state.models.find(model=>model.serviceShowcase && model.serviceMode==='provider');
+    const configuredScope={openScope:'selected',tenantIds:['tenant-gov']};
+    state=await save(state,{type:'modelOperations',operation:'salesSettings',modelId:configuredModel.id,data:{scope:configuredScope,expectedUpdatedAt:configuredModel.updatedAt,confirmed:true}});
     state=await completeServiceShowcase(state,save,{onProgress:message=>console.log('D1:',message)});
     let fresh=(await api('/model-operations')).data;
+    const showcaseModels=fresh.models.filter(model=>model.serviceShowcase);
+    assert.equal(showcaseModels.length,2);
+    for (const model of showcaseModels) {
+      assert.equal(model.salesScope?.openScope,'selected');
+      assert.deepEqual([...model.salesScope.tenantIds].sort(),model.id===configuredModel.id ? configuredScope.tenantIds : ['personal-demo-001','tenant-gov','tenant-nanjing']);
+      assert.equal(model.releaseStage,'formal');
+    }
+    const channelModel=showcaseModels.find(model=>model.serviceMode==='provider');
+    const channelOffers=routingServices(fresh).filter(service=>service.modelId===channelModel.id);
+    assert.equal(channelOffers.length,2);
+    const offerKeys=channelOffers.map(offerKey);
+    assert.ok(channelModel.serviceProviders.every(offer=>offer.listingStage==='formal'));
     const unifiedService=routingServices(state).find(row=>row.mode==='standard'),unifiedRoute=state.serviceRoutes.find(row=>row.serviceId===unifiedService.id),unifiedConfig=unifiedRoute.versions.find(row=>row.version===unifiedRoute.activeVersion).config;
     const beforeInvalidPolicy=(await api('/model-operations')).data;
     await assert.rejects(save(state,{type:'modelOperations',operation:'serviceRoutePublish',modelId:unifiedService.modelId,data:{serviceId:unifiedService.id,expectedVersion:unifiedRoute.activeVersion,sourceVersion:routeSourceVersion(state,unifiedService),config:{...unifiedConfig,strategy:'fixed'}}}),/统一模型服务模式/);
@@ -85,7 +101,7 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     state=await save(fresh,{type:'modelOperations',operation:'startSales',modelId:gray.id,data:{releaseStage:'formal',confirmed:true,expectedUpdatedAt:gray.updatedAt}});
     fresh=(await api('/model-operations')).data;assert.equal(fresh.models.find(m=>m.id===gray.id).releaseStage,'formal');assert.deepEqual(fresh.models.find(m=>m.id===gray.id).releaseTenantIds,[]);
     const model=fresh.models.find(m=>m.serviceMode==='provider'),prices=structuredClone(fresh.modelSalePrices);
-    state=await save(fresh,{type:'modelOperations',operation:'stopSales',modelId:model.id,data:{expectedUpdatedAt:model.updatedAt}});
+    state=await save(fresh,{type:'modelOperations',operation:'stopSales',modelId:model.id,data:{offerKeys,confirmed:true,expectedUpdatedAt:model.updatedAt}});
     assert.equal(state.models.find(m=>m.id===model.id).callsEnabled,true);
     const stopped=state.models.find(m=>m.id===model.id);
     const priorRevision=state.revision;
@@ -98,7 +114,7 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     const afterSettings=(await api('/model-operations')).data.models.find(m=>m.id===model.id);
     assert.deepEqual(afterSettings.salesScope,{openScope:'selected',tenantIds:['tenant-gov']});
     assert.deepEqual({openScope:afterSettings.openScope,tenantIds:afterSettings.tenantIds},callScope);
-    await assert.rejects(save(state,{type:'modelOperations',operation:'startSales',modelId:model.id,data:{confirmed:true,expectedUpdatedAt:afterSettings.updatedAt}}),/技术服务已启用/);
+    await assert.rejects(save(state,{type:'modelOperations',operation:'startSales',modelId:model.id,data:{offerKeys,releaseStage:'formal',confirmed:true,expectedUpdatedAt:afterSettings.updatedAt}}),/技术服务已启用/);
     assert.equal((await api('/model-operations')).data.models.find(m=>m.id===model.id).callsEnabled,false);
     assert.equal(state.models.find(m=>m.id===model.id).listingStatus,'已下架');
     assert.deepEqual(state.modelSalePrices,prices);

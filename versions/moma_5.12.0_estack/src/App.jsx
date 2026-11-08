@@ -1128,13 +1128,14 @@ function ModelOrderList({
   const current = Math.min(page, Math.max(1, Math.ceil(rows.length / size)));
   const visibleRows = rows.slice((current - 1) * size, current * size);
   const changeTab = value => { setTab(value); setQuery(""); setPage(1); };
+  const orderListUrl = `/${versionId}/?page=model-order`;
   const openOrder = (name) =>
     window.open(
       `/${versionId}/order/serviceOrder/?serviceType=presetModelService${name ? `&model=${encodeURIComponent(name)}` : ""}`,
       "_blank",
       "noopener",
     );
-  const closeOrder = () => (standalone ? window.close() : setOrdering(false));
+  const closeOrder = () => (standalone ? location.assign(orderListUrl) : setOrdering(false));
   const toggleOrder = (name) =>
     setSelectedOrders((current) =>
       current.includes(name)
@@ -1173,7 +1174,7 @@ function ModelOrderList({
     return (
       <div className="legacy-page legacy-service-order">
         <div className="service-order-title">
-          <nav aria-label="面包屑"><ol><li><a href={`/${versionId}/?page=model-order`} onClick={event => { if (!standalone) { event.preventDefault(); closeOrder(); } }}>模型订购</a></li><li><span aria-hidden="true">/</span><span aria-current="page">订购模型服务</span></li></ol></nav>
+          <nav aria-label="面包屑"><ol><li><a href={orderListUrl} onClick={event => { if (!standalone) { event.preventDefault(); closeOrder(); } }}>模型订购</a></li><li><span aria-hidden="true">/</span><span aria-current="page">订购模型服务</span></li></ol></nav>
           <h1>【订购】模型服务平台MoMA</h1>
           <span>产品介绍　|　帮助文档　|　产品控制台</span>
         </div>
@@ -1547,7 +1548,7 @@ function ModelOrderList({
             />
             <Search size={15} />
           </label>
-          <button aria-label="刷新" onClick={tenant.reload}>
+          <button aria-label="刷新" onClick={() => { market.refresh(); tenant.reload(); }}>
             <RefreshCw size={15} />
           </button>
         </div>
