@@ -4,13 +4,13 @@ import { Input } from './components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { cloudMarketPresentation } from './service-directory.mjs';
 
-const changed='moma5120-market-change';
+export const MARKET_EVENT='moma5120-market-change';
 
-async function marketRequest(path, body, signal) {
+export async function marketRequest(path, body, signal) {
   const response=await fetch('/api/5120/market/'+path,{credentials:'same-origin',signal,
     ...(body?{method:'POST',headers:{'Content-Type':'application/json','X-MoMA-Request':'1'},body:JSON.stringify(body)}:{})});
   const data=await response.json();
-  if (!response.ok) throw Error(data.error?.message || '模型广场暂不可用');
+  if (!response.ok) throw Object.assign(new Error(data.error?.message || '模型广场暂不可用'), { status: response.status, code: data.error?.code });
   return data;
 }
 
@@ -29,19 +29,23 @@ export function useCloudMarket(enabled=true) {
   },[enabled,revision]);
   useEffect(()=>{
     if (!enabled) return;
-    const refresh=()=>setRevision(current=>current+1);
-    window.addEventListener(changed,refresh);
+    const refresh=event=>{
+      if(event.detail==='login' || event.detail==='logout')setView({tenant:null,services:[],orders:[],loading:true,error:''});
+      setRevision(current=>current+1);
+    };
+    window.addEventListener(MARKET_EVENT,refresh);
     window.addEventListener('focus',refresh);
-    return ()=>{window.removeEventListener(changed,refresh);window.removeEventListener('focus',refresh);};
+    return ()=>{window.removeEventListener(MARKET_EVENT,refresh);window.removeEventListener('focus',refresh);};
   },[enabled]);
   const write=async(path,body)=>{
     const result=await marketRequest(path,body);
     if (path==='login' || path==='logout') setView({tenant:result.tenant || null,services:[],orders:[],loading:true,error:''});
-    window.dispatchEvent(new Event(changed));
+    window.dispatchEvent(new CustomEvent(MARKET_EVENT,{detail:path}));
     return result;
   };
   return {...view,refresh:()=>setRevision(current=>current+1),login:(tenantId,accessCode)=>write('login',{tenantId,accessCode}),
-    logout:()=>write('logout',{}),order:offerIds=>write('orders',{offerIds})};
+    logout:()=>write('logout',{}),order:offers=>write('orders',{tenantId:view.tenant?.id,offerIds:offers.map(row=>row.id),
+      salePriceIds:Object.fromEntries(offers.map(row=>[row.id,row.salePriceId]))})};
 }
 
 export function MarketSessionControl({ market }) {
@@ -85,11 +89,12 @@ export function MarketAction({ action, market, close }) {
     if (busy) return;
     setBusy(true);setError('');setResult(null);
     try {
-      if (ordering) {await market.order([service.id]);close();return;}
+      if (ordering) {await market.order([service]);close();return;}
       if (pending.current?.text!==message) pending.current={text:message,id:crypto.randomUUID()};
-      const reply=await marketRequest('completions',{requestId:pending.current.id,model:service.callId,messages:[{role:'user',content:message}]});
+      const reply=await marketRequest('completions',{requestId:pending.current.id,model:service.callId,tenantId:market.tenant?.id,messages:[{role:'user',content:message}]});
       pending.current=null;
       setResult(reply);
+      window.dispatchEvent(new Event(MARKET_EVENT));
     } catch (issue) {setError(issue.message);}
     finally {setBusy(false);}
   }

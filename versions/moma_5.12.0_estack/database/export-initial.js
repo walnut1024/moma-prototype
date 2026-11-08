@@ -2,7 +2,7 @@ import {writeFile} from 'node:fs/promises';
 import {startLocalBackend} from './local-runtime.js';
 
 // Offline release artifact only. This never reads a user's browser or QA database.
-const local=await startLocalBackend();
+const local=await startLocalBackend({ presets:true });
 try {
   const {results:schema}=await local.db.prepare("SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY rowid").all();
   const quote=value=>value===null?'NULL':typeof value==='number'?String(value):"'"+String(value).replaceAll("'","''")+"'";

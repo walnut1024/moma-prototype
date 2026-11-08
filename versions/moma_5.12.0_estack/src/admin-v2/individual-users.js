@@ -61,7 +61,7 @@ export const individualFreezeScope = ids => 'individual:batch-freeze:' + [...ids
 export const individualBillingTypes = MODEL_ORDER_BILLING_TYPES;
 export function individualOrders(state, tenantId) {
   return state.orders.filter(order => order.tenantId === tenantId).map(order => {
-    const product = state.products.find(item => item.id === order.productId);
+    const product = order.product || state.products.find(item => item.id === order.productId);
     const explicit = order.billingType || product?.billingType;
     if (explicit === 'package') return null;
     const billingType = explicit ? Object.hasOwn(individualBillingTypes, explicit) ? explicit : null : product?.billingMode === '按量付费' ? 'payg' : product?.code?.startsWith('TOKEN-') ? 'plan' : product?.code?.startsWith('CODING-') ? 'coding' : null;
@@ -87,6 +87,6 @@ export function individualOrderDisplay(state, { order, product, billingType }) {
     catalogPrice,
     status: order.status || '未记录',
     orderedAt: order.createdAt,
-    expiresAt: order.endAt,
+    expiresAt: order.expiresAt || order.endAt,
   };
 }

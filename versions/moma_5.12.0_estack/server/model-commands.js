@@ -24,14 +24,14 @@ function patches(before,after){
   }));
 }
 
-async function receipt(db,actor,key,hash,id){
+export async function receipt(db,actor,key,hash,id){
   const row=await db.prepare('SELECT id,request_hash,response_json FROM operations WHERE actor_id=? AND idempotency_key=?').bind(actor.id,key).first();
   if(!row)return null;
   if(row.request_hash!==hash || row.id!==id)issue(409,'IDEMPOTENCY_CONFLICT','同一操作标识不能提交不同内容');
   return JSON.parse(row.response_json);
 }
 
-async function save(db,actor,state,key,id,hash,command,response,statements,audit,entityType='model-operations'){
+export async function save(db,actor,state,key,id,hash,command,response,statements,audit,entityType='model-operations'){
   const time=Date.now();
   const operation=db.prepare('INSERT INTO operations(id,actor_id,session_id,idempotency_key,command,request_hash,expected_commit_seq,http_status,response_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(id,actor.id,actor.session_id,key,command,hash,state.commitSeq,200,JSON.stringify(response),time);
   const auditId=audit?.id || crypto.randomUUID(),event=audit || {id:auditId,action:command,objectId:id,result:'成功',createdAt:new Date(time).toISOString(),actor:actor.role,actorId:actor.id};
@@ -41,6 +41,8 @@ async function save(db,actor,state,key,id,hash,command,response,statements,audit
     const model=state.models.find(m=>m.id===modelId),materialId=model?.templateId || modelId;
     if(state.models.some(m=>m.id===modelId) || state.modelTemplates.some(m=>m.id===modelId))write.push(db.prepare('INSERT OR IGNORE INTO audit_models(audit_id,material_id,created_at) VALUES(?,?,?)').bind(auditId,materialId,time));
   }
+  if(write.length<26 && (state.commitSeq % 20)===0)write.push(db.prepare(`UPDATE operations SET response_json=json_remove(response_json,'$.mockState')
+    WHERE id IN (SELECT id FROM operations WHERE created_at<? AND json_type(response_json,'$.mockState')='object' ORDER BY created_at LIMIT 25)`).bind(time-7*86400000));
   if(write.length>26)issue(413,'SCOPE_TOO_LARGE','本次原子修改范围过大，请减少批量数量');
   try{await db.batch(write);}catch(error){
     if(String(error).includes('session_invalid'))issue(401,'SESSION_EXPIRED','会话已失效');
@@ -193,11 +195,13 @@ async function loadPackageWorkspace(db) {
 }
 
 export async function packageBootstrap(db, actor) {
-  const [{ commitSeq: _commitSeq, ...state }, accounts] = await Promise.all([
+  const [{ commitSeq: _commitSeq, ...state }, accounts, orders] = await Promise.all([
     loadPackageWorkspace(db),
     db.prepare("SELECT id, name, role, '已启用' AS status FROM admin_accounts WHERE enabled=1 ORDER BY id").all(),
+    db.prepare(`SELECT json_remove(value,'$.factorSnapshot','$.product') AS record FROM model_workspace w,json_each(w.reference_json,'$.orders')
+      WHERE w.id=1 AND json_extract(value,'$.packageId') IS NOT NULL ORDER BY json_extract(value,'$.createdAt') DESC`).all(),
   ]);
-  return { ...state, cloudOperations: true, currentRole: actor.role, adminSession: { accountId: actor.id }, admins: accounts.results,
+  return { ...state, packageOrders:orders.results.map(row=>JSON.parse(row.record)), cloudOperations:true, currentRole: actor.role, adminSession: { accountId: actor.id }, admins: accounts.results,
     alerts: [], requests: [], modelOnboardings: [], deployments: [] };
 }
 

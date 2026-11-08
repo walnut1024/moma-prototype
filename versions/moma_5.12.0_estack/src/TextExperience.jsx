@@ -1,7 +1,5 @@
-import {recordTenantExperience} from './tenant-data.mjs';
 import mockConfig from './mock/catalogues.json' with { type: 'json' };
-import { useServiceDirectory } from './useServiceDirectory';
-import { beginExperience, validateExperience } from './service-directory.mjs';
+import { useServiceDirectory, beginExperience, finishExperience } from './useServiceDirectory';
 import { readExperienceDraft, saveExperienceDraft } from './experience-drafts.mjs';
 import FrontPageHeader from "./components/FrontPageHeader";
 import { Languages } from "lucide-react";
@@ -155,7 +153,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
   );
   const conversationActive = !home && Boolean(conversationId);
 
-  useEffect(() => () => clearTimeout(timer.current), []);
+  useEffect(() => () => {clearTimeout(timer.current);ticket.current=null;}, []);
   useEffect(() => {
     if (!owner) return;
     try {
@@ -168,13 +166,6 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     try { saveExperienceDraft(owner, 'text', { model, text, images, messages: messages.map(row => row.status === 'loading' ? { ...row, status: 'stopped', answer: '任务已停止，请重新发送。' } : row), conversationId, temperature, topP, systemPrompt }); }
     catch { setNotice('草稿无法保存，请检查浏览器存储。'); }
   }, [owner, model, text, images, messages, conversationId, temperature, topP, systemPrompt]);
-  useEffect(() => {
-    if (!busy || !ticket.current) return;
-    try { validateExperience(ticket.current); } catch (error) {
-      clearTimeout(timer.current); setBusy(false); setNotice(error.message);
-      const stopped = messages.map(item => item.status === 'loading' ? { ...item, status: 'stopped', answer: error.message } : item); setMessages(stopped); persist(conversationId, stopped);
-    }
-  }, [directory]);
   useEffect(() => {
     if (conversationActive) end.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, conversationActive]);
@@ -209,12 +200,14 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     );
   };
 
-  const finish = (id, pendingId, question, shouldFail, pendingMessages) => {
-    try { validateExperience(ticket.current); } catch (error) {
+  const finish = async (id, pendingId, question, shouldFail, pendingMessages) => {
+    const current=ticket.current;
+    try { await finishExperience(current,shouldFail); } catch (error) {
+      if(ticket.current!==current)return;
       const stopped = pendingMessages.map(item => item.id === pendingId ? { ...item, status: 'stopped', answer: error.message } : item);
       setMessages(stopped); persist(id, stopped); setNotice(error.message); setBusy(false); return;
     }
-    try{recordTenantExperience(ticket.current,shouldFail?403:200);}catch(error){setNotice(error.message);setBusy(false);return;}
+    if(ticket.current!==current)return;
     const result = shouldFail
       ? {
           id: pendingId,
@@ -247,7 +240,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     const question = prompt.trim();
     if ((!question && !images.length) || busy || readingImages) return;
     if (images.length && !canUploadImages) { setNotice("当前模型不支持图片输入。"); return; }
-    try { ticket.current = beginExperience(model, 'text', { images: images.length > 0 }); } catch (error) { setNotice(error.message); return; }
+    try { ticket.current = beginExperience(directory, model, 'text', { images: images.length > 0 }); } catch (error) { setNotice(error.message); return; }
     const id = conversationId || crypto.randomUUID();
     const pendingId = crypto.randomUUID();
     const pending = { id: pendingId, question, images, modelName: ticket.current.modelName, provider: selectedModel.provider, callId: selectedModel.callId, status: "loading" };
@@ -275,6 +268,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
   };
 
   const stopGeneration = () => {
+    ticket.current=null;
     clearTimeout(timer.current);
     const next = messages.map((item) =>
       item.status === "loading"
@@ -289,7 +283,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
   const regenerate = (index) => {
     if (busy) return;
     const original = messages[index];
-    try { ticket.current = beginExperience(model, 'text', { images: Boolean(original.images?.length) }); } catch (error) { setNotice(error.message); return; }
+    try { ticket.current = beginExperience(directory, model, 'text', { images: Boolean(original.images?.length) }); } catch (error) { setNotice(error.message); return; }
     const next = messages.map((item, i) =>
       i === index ? { ...item, modelName: ticket.current.modelName, provider: selectedModel.provider, callId: selectedModel.callId, status: "loading" } : item,
     );

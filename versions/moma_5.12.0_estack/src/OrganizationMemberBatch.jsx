@@ -59,10 +59,10 @@ export default function OrganizationMemberBatch({ data, initialDepartment, onClo
       }
     } catch (e) { setError(e.message); }
   };
-  const submit = () => {
+  const submit = async () => {
     if (busy) return;
     setBusy(true);
-    try { const outcome = onApply(rows, mode, defaultDepartment); setResults(outcome); setStep("result"); setOnlyProblems(false); setError(""); }
+    try { const outcome = await onApply(rows, mode, defaultDepartment); setResults(outcome); setStep("result"); setOnlyProblems(false); setError(""); }
     catch (e) { setError(e.message); }
     finally { setBusy(false); }
   };

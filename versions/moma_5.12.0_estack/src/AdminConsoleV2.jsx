@@ -7,12 +7,10 @@ import {
   IconUserGroup, IconUserSetting, IconUserStroked,
 } from '@douyinfe/semi-icons';
 import CloudModelOperations from './admin-v2/CloudModelOperations';
-import {sharedRequests} from './business-facts.mjs';
 import { modelOperationsView } from './mock/model-data.js';
-import { setMockRuntimeState } from './admin-v2/mock-onboarding-service';
 import GettingStarted from './admin-v2/GettingStarted';
 import { createPortal } from "react-dom";
-import { Badge, Banner, Breadcrumb, Button, ConfigProvider, Select, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
+import { Badge, Banner, Breadcrumb, Button, ConfigProvider, Select, Tabs, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './admin-v2/AdminOverlay';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import { sections, pages, WORKSPACES, WORKSPACE_HOME, availableWorkspaces, pageWorkspace, canAccessPage, pageFromHash } from './admin-v2/navigation.mjs';
@@ -22,7 +20,6 @@ import OperationsOverview from './admin-v2/OperationsOverview';
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import AnalyticsPages from "./admin-v2/AnalyticsPages";
 import "./admin-v2/admin-shell.css";
-import { useAdminStore } from "./admin-v2/store";
 import { ClusterManagement, ModelDeployments, ModelObservability } from "./admin-v2/InferencePages";
 import ProviderManagement from "./admin-v2/ProviderManagement";
 const TrafficOperations = lazy(() => import('./admin-v2/TrafficOperations'));
@@ -82,13 +79,12 @@ export default function AdminConsoleV2(props) {
   useEffect(()=>{const sync=()=>setHash(location.hash);addEventListener('hashchange',sync);return()=>removeEventListener('hashchange',sync);},[]);
   const cloud=/^#\/admin-2\/(listing|providers|model-market|model-costs|model-prices|model-templates|provider-materials|tariff-dictionary)(?:[/?]|$)/.test(hash);
   const packageWorkspace=/^#\/admin-2\/(?:package-production|package-data)(?:[/?]|$)/.test(hash);
-  return <ConfigProvider locale={zhCN}>{cloud || packageWorkspace ? <CloudModelOperations key={packageWorkspace?'packages':'models'} packageWorkspace={packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store}/>}</CloudModelOperations>:<LocalAdminConsole {...props}/>}</ConfigProvider>;
+  const area = packageWorkspace ? 'packages' : cloud ? 'models' : 'application';
+  return <ConfigProvider locale={zhCN}><CloudModelOperations key={area} packageWorkspace={packageWorkspace} applicationWorkspace={!cloud && !packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store}/>}</CloudModelOperations></ConfigProvider>;
 }
-function LocalAdminConsole(props){const store=useAdminStore(Toast);return <AdminConsoleV2View {...props} store={store}/>;}
 function AdminConsoleV2View({bannerTarget,store}) {
   const { state, dispatch, transact, transactModel, transactIndividual, transactAdminAccount, reload, conflict } = store;
-  useEffect(() => { if(!state.cloudOperations)setMockRuntimeState(state); }, [state]);
-  const factState={...state,requests:sharedRequests(state)};
+  const factState=state;
   const initialPage = pageFromHash(location.hash, state.currentRole);
   const [navOpen, setNavOpen] = useState(false);
   const [leave, setLeave] = useState(null);

@@ -17,6 +17,7 @@ import { chinaRegions, industries } from './admin-v2/enterprise-options';
 import { maskMemberPhone } from './organization-data.mjs';
 import { persistAuthState, AUTH_STORAGE_KEY, AUTH_INVITE, AUTH_ENTERPRISE_LOGIN, normalizeAuthLogin, emptyAuthState, authRoute, authPhone, currentAuthUser, availableAuthSpaces, registerAuthAccount, loginAuthAccount, verifyAuthCode, submitEnterpriseCertification, applicationErrors, queryAuthApplication, activationAccount, activateAuthAccount, acceptAuthInvite, encodeAuthPassword, matchesAuthPassword } from './auth-state.mjs';
 import AccountCenter from './AccountCenter';
+import { useTenantData } from './useTenantData';
 import './auth.css';
 
 export function usePrototypeAuth() {
@@ -62,7 +63,7 @@ export function usePrototypeAuth() {
   return { state, route, params: new URLSearchParams(hash.split('?')[1] || ''), draftPhone, setDraftPhone, navigate, close, commit, storageError: loaded.error, user: authDisplayUser(state,currentAuthUser(state)), spaces: availableAuthSpaces(state) };
 }
 
-export function AuthBanner({ auth, showToast }) {
+export function AuthBanner({ auth, market, showToast }) {
   const [open, setOpen] = useState(false), [spacesOpen, setSpacesOpen] = useState(false), [mockOpen, setMockOpen] = useState(false);
   const currentSpace = auth.spaces.find(space => space.id === auth.state.activeSpace);
   const navigate = route => { setOpen(false); auth.navigate(route); };
@@ -70,6 +71,15 @@ export function AuthBanner({ auth, showToast }) {
     try { auth.commit({ ...auth.state, activeSpace: space.id }); setSpacesOpen(false); toast.success(`已切换至${space.name}`); }
     catch (error) { toast.error(error.message); }
   };
+  if(market?.tenant)return <div className="auth-banner-actions">
+    {showToast && <Toaster position="top-right" offset={64} mobileOffset={64}/>}
+    <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild>
+      <Button variant="ghost" className="auth-banner-user" aria-label="账号菜单"><UserRound data-icon="inline-start"/>{market.tenant.name}<ChevronDown data-icon="inline-end"/></Button>
+    </PopoverTrigger><PopoverContent className="auth-account-menu" align="end">
+      <Button variant="ghost" onClick={()=>navigate('account')}><UserRound data-icon="inline-start"/>账号中心</Button>
+      <Button variant="ghost" onClick={async()=>{try{await market.logout();setOpen(false);if(auth.route)auth.close();}catch(error){toast.error(error.message);}}}><LogOut data-icon="inline-start"/>退出登录</Button>
+    </PopoverContent></Popover>
+  </div>;
   return <div className="auth-banner-actions">
     {showToast && <Toaster position="top-right" offset={64} mobileOffset={64} />}
     <Popover open={mockOpen} onOpenChange={setMockOpen}><PopoverTrigger asChild><Button variant="ghost" className="auth-banner-space" aria-label="切换 Mock 账号">Mock 账号<ChevronDown data-icon="inline-end" /></Button></PopoverTrigger><PopoverContent className="auth-space-menu" align="end"><p>原型账号切换</p>{LINKED_USERS.map(row => <Button variant="ghost" key={row.id} aria-label={`切换至${row.name}`} onClick={() => { try { switchLinkedUser(row.id); setMockOpen(false); setOpen(false); setSpacesOpen(false); if (auth.route) auth.close(); toast.success(`已切换至${row.name}`); } catch (error) { toast.error(error.message); } }}><span>{row.userType === 'personal' ? <UserRound/> : <Building2/>}<span>{row.name}<small>{row.phone}</small></span></span>{auth.user?.id === row.id && <Check data-icon="inline-end"/>}</Button>)}</PopoverContent></Popover>
@@ -95,10 +105,52 @@ function FormSelect({ id, label, value, options, onChange, disabled, error }) {
   return <FormField id={id} label={label} error={error}><Select value={value} onValueChange={onChange} disabled={disabled}><SelectTrigger id={id} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined}><SelectValue placeholder="请选择" /></SelectTrigger><SelectContent><SelectGroup>{options.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectGroup></SelectContent></Select></FormField>;
 }
 
-export default function AuthExperience({ auth, accountTitle = '账号中心' }) {
+export default function AuthExperience({ auth, market, accountTitle = '账号中心' }) {
+  if(market && auth.route==='login' && auth.params.get('mode')!=='prototype')return <TenantLogin auth={auth} market={market}/>;
+  if(market?.tenant && auth.route==='account')return <TenantAccount auth={auth} title={accountTitle}/>;
   if (['account', 'enterprise'].includes(auth.route) && !auth.user) return <div className="auth-account-center"><h1>{accountTitle}</h1><p>请先注册或登录，再进行身份认证。</p><div className="auth-result-actions"><Button onClick={() => auth.navigate('login', '?next=account')}>登录</Button><Button variant="outline" onClick={() => auth.navigate('register', '?next=account')}>注册账号</Button></div></div>;
   if (auth.route === 'account') return <AccountCenter auth={auth} title={accountTitle} />;
   return ['enterprise', 'application', 'activate'].includes(auth.route) ? <EnterpriseApplication key={auth.params.toString()} auth={auth} /> : <IdentityExperience key={auth.params.toString()} auth={auth} />;
+}
+
+function TenantLogin({auth,market}) {
+  const [error,setError]=useState(''),[busy,setBusy]=useState(false);
+  async function login(event) {
+    event.preventDefault();
+    const values=new FormData(event.currentTarget);
+    setError('');setBusy(true);
+    try {
+      await market.login(values.get('account').trim(),values.get('password'));
+      if(auth.params.get('next')==='account')auth.navigate('account');
+      else auth.close();
+    } catch(issue) { setError(issue.message); }
+    finally { setBusy(false); }
+  }
+  return <section className="auth-account-center">
+    <h1>登录</h1>
+    <form className="auth-form" onSubmit={login}>
+      <FormField id="demo-account-id" label="演示账号" name="account" placeholder="zqzh 或 grzh" autoComplete="username" required maxLength={200}/>
+      <FormField id="demo-account-password" label="密码" name="password" type="password" autoComplete="current-password" required maxLength={128}/>
+      {error && <p role="alert">{error}</p>}
+      <div className="auth-result-actions"><Button disabled={busy}>{busy?'登录中…':'登录'}</Button><Button type="button" variant="outline" onClick={auth.close}>返回</Button></div>
+    </form>
+    <Button variant="link" onClick={()=>auth.navigate('login','?mode=prototype')}>查看原型注册与验证码流程</Button>
+  </section>;
+}
+
+function TenantAccount({auth,title}) {
+  const tenant=useTenantData();
+  return <section className="auth-account-center">
+    <h1>{title}</h1>
+    {tenant.error && <p role="alert">{tenant.error}</p>}
+    {tenant.profile && <dl className="auth-account-details">
+      <div><dt>登录账号</dt><dd>{tenant.profile.account}</dd></div>
+      <div><dt>账号名称</dt><dd>{tenant.profile.name}</dd></div>
+      <div><dt>客户空间</dt><dd>{tenant.profile.type==='个人'?'个人用户':'政企用户'}</dd></div>
+      <div><dt>状态</dt><dd>{tenant.profile.status}</dd></div>
+    </dl>}
+    <Button variant="outline" onClick={auth.close}>返回</Button>
+  </section>;
 }
 
 function AuthBrand({ title, description }) {

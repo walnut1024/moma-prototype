@@ -32,12 +32,16 @@ function save(state,next,identity,action,storage,raw) {
   storage.setItem(ADMIN_DATA_KEY,serializeAdminState(next));notifyLinkedState();return next;
 }
 export function saveTenantKeys(rows, { billing='按量付费', subscriptionId, expectedRevision }, storage=globalThis.localStorage) {
-  const {state,identity,link,canManage}=tenantContext(storage),raw=storage.getItem(ADMIN_DATA_KEY);
+  const context=tenantContext(storage), {state,identity}=context, raw=storage.getItem(ADMIN_DATA_KEY);
   if(state.revision!==expectedRevision)throw Error('数据已变化，请刷新后重试');
+  const services=directorySnapshot(storage).models;
+  return save(state,tenantKeyChanges(context,rows,{billing,subscriptionId},services),identity,'维护 API Key',storage,raw);
+}
+export function tenantKeyChanges({state,identity,link,canManage}, rows, {billing,subscriptionId}, services) {
   const scoped=state.apiKeys.filter(row=>row.tenantId===identity.tenantId && (canManage || row.ownerId===link.backendUserId) && (row.billingType || '按量付费')===billing && (row.subscriptionId || '')===(subscriptionId || ''));
   const ids=new Set(); const next=structuredClone(state);
-  if(subscriptionId&&!state.orders.some(row=>row.id===subscriptionId&&row.tenantId===identity.tenantId&&['已开通','生效中'].includes(row.status)))throw Error('套餐归属或状态无效');
-  const allowed=new Set(directorySnapshot(storage).models.filter(item=>item.callable).map(item=>item.modelKey));
+  if(subscriptionId&&!state.orders.some(row=>row.id===subscriptionId&&row.tenantId===identity.tenantId&&['已开通','生效中'].includes(row.status)&&(!row.expiresAt || Date.parse(row.expiresAt)>Date.now())))throw Error('套餐归属或状态无效');
+  const allowed=new Set(services.filter(item=>item.callable).map(item=>item.modelKey));
   const mapped=rows.map(row=>{
     if(!row.id || ids.has(row.id))throw Error('API Key ID 缺失或重复');ids.add(row.id);
     const existing=state.apiKeys.find(item=>item.id===row.id);
@@ -57,10 +61,10 @@ export function saveTenantKeys(rows, { billing='按量付费', subscriptionId, e
         else next.grants.push({id:grantId,subjectType:'key',subjectId:row.id,modelIds,period,limit:quotaLimit,used:0,status:'生效中'});
       }else for(const item of next.grants)if(item.subjectType==='key'&&item.subjectId===row.id)item.status='已停用';
     }
-    return {...existing,id:row.id,keyId:existing?.keyId || row.id,name,description:String(row.desc || ''),tenantId:identity.tenantId,projectId:existing?.projectId || project.id,ownerId:existing?.ownerId || link.backendUserId,modelIds,status:row.enabled?'有效':'停用',billingType:billing,quotaType:row.quotaType,quotaLimit,tpmLimit:row.tpmLimit ?? null,qpmLimit:row.qpmLimit ?? null,...(subscriptionId?{subscriptionId}:{}),ipAllowlist:parseIpAllowlist((row.ips || []).join('\n')),secretPreview:row.key?.startsWith('sk-')?row.key.slice(0,3)+'****'+row.key.slice(-4):existing?.secretPreview || '****',credentialVersion:row.credentialVersion || existing?.credentialVersion || 1,createdAt:existing?.createdAt || new Date().toISOString(),updatedAt:new Date().toISOString()};
+    return {...existing,id:row.id,keyId:existing?.keyId || row.id,name,description:String(row.desc || ''),tenantId:identity.tenantId,projectId:existing?.projectId || project.id,ownerId:existing?.ownerId || link.backendUserId,modelIds,status:row.enabled?'有效':'停用',billingType:billing,quotaType:row.quotaType,quotaLimit,tpmLimit:row.tpmLimit ?? null,qpmLimit:row.qpmLimit ?? null,...(subscriptionId?{subscriptionId}:{}),ipAllowlist:parseIpAllowlist((row.ips || []).join('\n')),secretPreview:row.secretPreview || (row.key?.startsWith('sk-')?row.key.slice(0,3)+'****'+row.key.slice(-4):existing?.secretPreview || '****'),credentialVersion:row.credentialVersion || existing?.credentialVersion || 1,createdAt:existing?.createdAt || new Date().toISOString(),updatedAt:new Date().toISOString()};
   });
   next.apiKeys=next.apiKeys.filter(row=>!scoped.some(item=>item.id===row.id)).concat(mapped);
-  return save(state,next,identity,'维护 API Key',storage,raw);
+  return next;
 }
 export function orderTenantServices(serviceIds,expectedRevision,storage=globalThis.localStorage) {
   const {state,identity}=tenantContext(storage),raw=storage.getItem(ADMIN_DATA_KEY);
@@ -81,9 +85,12 @@ export function organizationProjection(state,tenantId) {
   return {platformAccounts:state.users.filter(row=>row.invitable&&row.status==='正常').map(row=>({sourceUserId:row.id,name:row.name,account:row.login,phone:row.phone})),departments:state.organizations.filter(row=>row.tenantId===tenantId).map(row=>({...row,id:id(row.id),parentId:id(row.parentId),ownerId:state.memberships.find(member=>member.tenantId===tenantId&&member.userId===row.ownerId)?.id || null})),members:state.memberships.filter(row=>row.tenantId===tenantId).map(row=>{const user=state.users.find(item=>item.id===row.userId);return {...row,name:user?.name || row.name || '未填写',phone:user?.phone || '',account:user?.login || user?.email || user?.phone || row.userId,departmentId:id(row.organizationId || row.departmentId) || 'unassigned',role:row.role==='租户管理员'?'企业管理员':row.role,status:row.status==='正常'?'已加入':row.status==='停用'?'已停用':'待加入'};}),audit:state.audits.filter(row=>row.tenantId===tenantId).map(row=>({id:row.id,time:row.createdAt,actor:row.actor,description:row.action}))};
 }
 export function saveTenantOrganization(data,expectedRevision,storage=globalThis.localStorage) {
-  const {state,identity,link,canManage}=tenantContext(storage),raw=storage.getItem(ADMIN_DATA_KEY);
-  if(!canManage || identity.spaceId==='personal')throw Error('只有企业管理员可以维护组织成员');
+  const context=tenantContext(storage), {state,identity}=context, raw=storage.getItem(ADMIN_DATA_KEY);
   if(state.revision!==expectedRevision)throw Error('数据已变化，请刷新后重试');
+  return save(state,tenantOrganizationChanges(context,data),identity,data.audit[0]?.description || '维护组织成员',storage,raw);
+}
+export function tenantOrganizationChanges({state,identity,link,canManage}, data) {
+  if(!canManage || identity.spaceId==='personal')throw Error('只有企业管理员可以维护组织成员');
   const next=structuredClone(state),root=state.organizations.find(row=>row.tenantId===identity.tenantId&&!row.parentId);
   if(!root || !data.departments.some(row=>row.id==='root') || !data.members.some(row=>row.role==='企业管理员'&&row.status==='已加入'))throw Error('必须保留根部门和有效企业管理员');
 
@@ -101,7 +108,7 @@ export function saveTenantOrganization(data,expectedRevision,storage=globalThis.
   const members=data.members.map(row=>{const old=state.memberships.find(item=>item.id===row.id);if(old&&JSON.stringify(before.members.find(item=>item.id===row.id))===JSON.stringify(row))return structuredClone(old);const userId=old?.userId || before.platformAccounts?.find(account=>account.account===row.account)?.sourceUserId || 'user:'+row.id;const user=next.users.find(item=>item.id===userId);const profile={name:row.name,phone:row.phone,login:row.account};if(user){if(old)Object.assign(user,profile);}else next.users.push({id:userId,...profile,status:'正常'});return {...old,...row,userId,tenantId:identity.tenantId,organizationId:departmentId(row.departmentId),scopeId:departmentId(row.scopeId),role:row.role==='企业管理员'?'租户管理员':row.role,status:row.status==='已加入'?'正常':row.status==='已停用'?'停用':'待加入'};});
   next.organizations=next.organizations.map(row=>{if(row.tenantId!==identity.tenantId)return row;const source=data.departments.find(department=>departmentId(department.id)===row.id);return {...row,ownerId:members.find(member=>member.id===source.ownerId)?.userId || null};});
   next.memberships=next.memberships.filter(row=>row.tenantId!==identity.tenantId).concat(members);next.identityGeneration=(next.identityGeneration || 0)+1;
-  return save(state,next,identity,data.audit[0]?.description || '维护组织成员',storage,raw);
+  return next;
 }
 export function recordTenantExperience(ticket,httpStatus,storage=globalThis.localStorage) {
   const {state,identity,link}=tenantContext(storage),raw=storage.getItem(ADMIN_DATA_KEY);
@@ -113,11 +120,14 @@ export function recordTenantExperience(ticket,httpStatus,storage=globalThis.loca
   return save(state,next,identity,'模型在线体验',storage,raw);
 }
 export function saveTenantRoutes(rows,expectedRevision,storage=globalThis.localStorage) {
-  const {state,identity,link,canManage}=tenantContext(storage),raw=storage.getItem(ADMIN_DATA_KEY);
+  const context=tenantContext(storage), {state,identity}=context, raw=storage.getItem(ADMIN_DATA_KEY);
   if(state.revision!==expectedRevision)throw Error('数据已变化，请刷新后重试');
+  return save(state,tenantRouteChanges(context,rows,directorySnapshot(storage).models),identity,'维护智能路由',storage,raw);
+}
+export function tenantRouteChanges({state,identity,link,canManage}, rows, services) {
   const current=(state.tenantRoutes || []).filter(row=>row.tenantId===identity.tenantId&&(canManage||row.ownerId===link.backendUserId));
-  const available=new Set(directorySnapshot(storage).models.filter(row=>row.callable).map(row=>row.callId)),ids=new Set(),names=new Set();
+  const available=new Set(services.filter(row=>row.callable).map(row=>row.callId)),ids=new Set(),names=new Set();
   const normalized=rows.map(row=>{const previous=current.find(item=>item.id===row.id);if(!row.id||ids.has(row.id)||names.has(row.name)||String(row.name).length<2||String(row.name).length>50||!['效果优先','成本优先','平衡模式'].includes(row.strategy)||!row.models?.length||row.models.some(id=>!available.has(id)&&!previous?.models.includes(id)))throw Error('路由名称、策略或模型服务无效');ids.add(row.id);names.add(row.name);if((state.tenantRoutes || []).some(item=>item.id===row.id)&&!previous)throw Error('路由归属冲突');return {...row,tenantId:identity.tenantId,ownerId:previous?.ownerId || link.backendUserId};});
   const next=structuredClone(state);next.tenantRoutes=(next.tenantRoutes || []).filter(row=>!current.some(item=>item.id===row.id)).concat(normalized);
-  return save(state,next,identity,'维护智能路由',storage,raw);
+  return next;
 }

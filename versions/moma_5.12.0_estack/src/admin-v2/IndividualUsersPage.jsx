@@ -58,13 +58,13 @@ function UserEditor({ account, transact, canWrite, close, complete }) {
   const [busy, setBusy] = useState(false);
   const change = (field, value) => { setForm(current => ({ ...current, [field]: value })); setDirty(true); setError(''); };
   const requestClose = () => { if (!busy) { if (dirty) setDiscard(true); else close(); } };
-  const submit = event => {
+  const submit = async event => {
     event.preventDefault();
     if (busy || !canWrite || !dirty) return;
     setBusy(true);
     setError('');
     try {
-      transact({ type: 'individual', operation: 'edit', tenantId: account.tenant.id, data: form });
+      await transact({ type: 'individual', operation: 'edit', tenantId: account.tenant.id, data: form });
       complete('个人用户资料已保存');
     } catch (err) {
       setError(err.message);
@@ -129,13 +129,13 @@ function StatusDialog({ account, accounts, role, transact, canWrite, close, comp
     setError('');
   };
   const disabled = !canWrite || !reason.trim() || (freezing && (!challenge || code.length !== 6 || expired));
-  const submit = event => {
+  const submit = async event => {
     event.preventDefault();
     if (busy || disabled) return;
     setBusy(true);
     setError('');
     try {
-      transact(bulk
+      await transact(bulk
         ? { type: 'individual', operation: 'batch-freeze', tenantIds: targets.map(item => item.tenant.id), data: { reason, code, challenge } }
         : { type: 'individual', operation: 'set-status', tenantId: account.tenant.id, data: { status, reason, code, challenge } });
       complete(bulk ? `已冻结 ${targets.length} 个个人账号` : `个人账号已${action}`);

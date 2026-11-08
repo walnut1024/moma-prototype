@@ -1,4 +1,3 @@
-import { beginExperience } from './service-directory.mjs';
 import { Search, X } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { Button } from './components/ui/button';
@@ -10,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
 import { chooseModel, filterModels, modelCategory, modelSupplier } from './model-selection.mjs';
 import './model-select-dialog.css';
 
-export default function ModelSelectDialog({ open, models, value, multiple = false, min = 1, max = 1, onApply, onClose, task = 'text' }) {
+export default function ModelSelectDialog({ open, models, value, multiple = false, min = 1, max = 1, onApply, onClose }) {
   const selectionId = useId();
   const [error, setError] = useState('');
   const [selected, setSelected] = useState([]);
@@ -80,7 +79,7 @@ export default function ModelSelectDialog({ open, models, value, multiple = fals
           </div>
         </section>
       </div>
-      {error && <p role="alert">{error}</p>}<footer className="model-select-footer"><div className="model-select-current">{multiple ? <><span>已选 {selected.length} 个模型（{min}–{max} 个）</span>{selected.map(name => <Button type="button" variant="outline" size="xs" key={name} aria-label={`移除 ${name}`} onClick={() => setSelected(items => items.filter(item => item !== name))}>{models.find(model => model.id === name)?.name || '已不可用'}<X size={12}/></Button>)}</> : <><span>已选：</span><strong title={selected[0]}>{models.find(model => model.id === selected[0])?.name || '请选择模型'}</strong></>}</div><Button type="button" variant="outline" onClick={onClose}>取消</Button><Button type="button" className="model-select-apply" disabled={!validSelection} onClick={() => { try { selected.forEach(id => beginExperience(id, task)); if (onApply(multiple ? selected : selected[0]) !== false) onClose(); } catch (issue) { setError(issue.message); } }}>应用</Button></footer>
+      {error && <p role="alert">{error}</p>}<footer className="model-select-footer"><div className="model-select-current">{multiple ? <><span>已选 {selected.length} 个模型（{min}–{max} 个）</span>{selected.map(name => <Button type="button" variant="outline" size="xs" key={name} aria-label={`移除 ${name}`} onClick={() => setSelected(items => items.filter(item => item !== name))}>{models.find(model => model.id === name)?.name || '已不可用'}<X size={12}/></Button>)}</> : <><span>已选：</span><strong title={selected[0]}>{models.find(model => model.id === selected[0])?.name || '请选择模型'}</strong></>}</div><Button type="button" variant="outline" onClick={onClose}>取消</Button><Button type="button" className="model-select-apply" disabled={!validSelection} onClick={() => { try { if (onApply(multiple ? selected : selected[0]) !== false) onClose(); } catch (issue) { setError(issue.message); } }}>应用</Button></footer>
     </DialogContent>
   </Dialog>;
 }

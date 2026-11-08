@@ -9,7 +9,7 @@ import { FilterToolbar, FilterReset, PAGE_SIZES, normalizePageSize } from '../co
 import AdminPageHeading from './AdminPageHeading';
 import { Choice, CopyId, serviceOperationsUi } from './ServiceUI';
 import { canMutate } from './store';
-import { DEPLOYABLE_TYPES, runnableArtifact, deploymentGpu, deploymentConfig, deploymentPreflight, deploymentTransaction } from './deployments';
+import { deployableModels, runnableArtifact, deploymentGpu, deploymentConfig, deploymentPreflight, deploymentTransaction } from './deployments';
 import './deployment-management.css';
 
 const { Paragraph, Text, Title } = Typography;
@@ -63,7 +63,7 @@ function DeploymentEditor({ state, existing, can, run, go, dirty }) {
     setError('');
     dirty.current = true;
   };
-  const models = state.models.filter(item => DEPLOYABLE_TYPES.includes(item.type));
+  const models=deployableModels(state);
   const model = models.find(item => item.id === values.modelId);
   const cluster = state.clusters.find(item => item.id === values.clusterId);
   const runtimes = state.artifacts.filter(item => runnableArtifact(item, '运行时镜像'));
@@ -73,7 +73,7 @@ function DeploymentEditor({ state, existing, can, run, go, dirty }) {
   let preflightError;
   try { deploymentPreflight(state, values, existing); }
   catch (issue) { preflightError = issue.message; }
-  const submit = event => {
+  const submit = async event => {
     event.preventDefault();
     if (step === 0) {
       if (!values.name.trim() || !values.deploymentId.trim() || !values.modelId || !values.runtimeId || !(values.weightId || values.weightPath.trim())) {
@@ -89,7 +89,7 @@ function DeploymentEditor({ state, existing, can, run, go, dirty }) {
       setError('');
       return;
     }
-    const result = run(existing ? 'update' : 'create', values, existing?.id);
+    const result = await run(existing ? 'update' : 'create', values, existing?.id);
     if (result) go({ view: null, deployment: existing?.id || result.audits[0].objectId, tab: 'overview' }, true);
     else setError('提交未完成，请根据操作反馈处理。当前输入已保留。');
   };
@@ -216,7 +216,7 @@ function DeploymentEditor({ state, existing, can, run, go, dirty }) {
 const detailTabs = [['overview', '运行概览'], ['config', '部署配置'], ['events', '事件与日志']];
 
 function DeploymentDetail({ item, state, can, go, ask, tab }) {
-  const model = state.models.find(row => row.id === item.modelId);
+  const model = deployableModels(state).find(row=>row.id===item.modelId);
   const cluster = state.clusters.find(row => row.id === item.clusterId);
   const endpoint = state.endpoints.find(row => row.id === item.endpointId);
   const artifactName = id => state.artifacts.find(row => row.id === id)?.name;
@@ -323,7 +323,7 @@ function DeploymentList({ state, params, can, go, ask }) {
   const filter = params.get('status') || 'all';
   const cluster = params.get('cluster') || 'all';
   const size = normalizePageSize(params.get('size'));
-  const modelName = id => state.models.find(row => row.id === id)?.name;
+  const modelName = id => deployableModels(state).find(row=>row.id===id)?.name;
   const scope = state.deployments.filter(item =>
     `${item.name} ${item.deploymentId} ${modelName(item.modelId) || ''}`.toLowerCase().includes(query.toLowerCase())
     && (cluster === 'all' || item.clusterId === cluster));
@@ -452,12 +452,12 @@ export default function ModelDeployments({ state, dispatch, conflict }) {
   };
 
   const can = !conflict && !state.storageError && canMutate(state.currentRole, { type: 'deploymentOperation' });
-  const run = (operation, data = {}, deploymentId) => {
+  const run = async (operation, data = {}, deploymentId) => {
     try {
       if (!can) throw new Error('当前角色或数据状态不允许修改部署');
       const action = { type: 'deploymentOperation', operation, data, deploymentId };
       deploymentTransaction(state, action);
-      const next = dispatch({ ...action, feedback: '部署操作已保存' });
+      const next = await dispatch({ ...action, feedback: '部署操作已保存' });
       if (!next) throw new Error('操作未保存，请检查数据冲突或存储状态。当前输入已保留。');
       setError('');
       return next;
@@ -500,7 +500,7 @@ export default function ModelDeployments({ state, dispatch, conflict }) {
       closeOnEsc maskClosable={false} onCancel={closeConfirm} footer={<Space>
         <Button onClick={closeConfirm}>取消</Button>
         <Button theme="solid" type={confirm.operation === 'stop' ? 'danger' : 'primary'} disabled={!can || !current}
-          onClick={() => { if (run(confirm.operation, { replicas }, current?.id)) closeConfirm(); }}>
+          onClick={async () => { if (await run(confirm.operation, { replicas }, current?.id)) closeConfirm(); }}>
           确认{confirmActions[confirm.operation]}
         </Button>
       </Space>}>

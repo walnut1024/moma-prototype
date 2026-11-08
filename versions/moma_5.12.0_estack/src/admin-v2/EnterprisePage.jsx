@@ -70,11 +70,11 @@ function EnterpriseEditor({ state, tenant, kind, mode, apply, close, complete, i
   const candidates = state.users.filter(user => user.status === '正常' && `${user.name} ${user.login}`.toLowerCase().includes(query.toLowerCase()));
   const selected = state.users.find(user => user.id === form.userId);
   const sameName = !addAdmin && state.tenants.find(item => item.id !== tenant?.id && item.name.trim() === form.companyName.trim());
-  const submit = event => {
+  const submit = async event => {
     event.preventDefault(); if (busy || !canWrite) return; setBusy(true); setError('');
     try {
       const ids = newIds();
-      const next = apply({ type: 'enterprise', operation: kind, tenantId: tenant?.id, mode, ids, data: form });
+      const next = await apply({ type: 'enterprise', operation: kind, tenantId: tenant?.id, mode, ids, data: form });
       const company = next.tenants.find(item => item.id === (tenant?.id || ids.tenant));
       if (edit) complete({ edited: true, tenant: company });
       else complete({ tenant: company, user: next.users.find(user => user.id === (form.accountMode === 'existing' ? form.userId : ids.user)), added: addAdmin });

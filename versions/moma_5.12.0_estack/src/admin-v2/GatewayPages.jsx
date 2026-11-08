@@ -5,8 +5,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Banner, Button, Card, Checkbox, Form, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus } from '@douyinfe/semi-icons';
-import { simulateRequest } from './domain';
 import { Choice, serviceOperationsUi } from './ServiceUI';
+import { routingServices } from './service-routing.js';
 import './gateway-settings.css';
 
 const collection = { routes: 'routes', limits: 'limits', fallback: 'fallbacks', cache: 'caches', releases: 'releases' };
@@ -45,7 +45,7 @@ function Editor({ pageId, state, dispatch, close }) {
     fallback: { routeId: routeOptions[0]?.value, primary: endpointOptions[0]?.value, secondary: endpointOptions[0]?.value, timeoutMs: 3000, errorRate: 5 },
     cache: { scope: cacheScopes[0].value, ttl: 600 },
   };
-  const save = values => {
+  const save = async values => {
     const id = uid(pageId), name = values.name ?? '';
     let record;
     if (pageId === 'routes') {
@@ -78,7 +78,7 @@ function Editor({ pageId, state, dispatch, close }) {
       if (!Number.isInteger(ttl) || ttl < 1) return setError('TTL 必须为正整数');
       record = { id, name, scope: values.scope, ttl, exclusions: values.exclusions ?? '', hitRate: 0, savedTokens: 0, status: '已启用' };
     }
-    if (dispatch({ type: 'add', collection: collection[pageId], record })) close();
+    if (await dispatch({ type: 'add', collection: collection[pageId], record })) close();
   };
   const initial = initialValues[pageId];
   return <>
@@ -174,14 +174,16 @@ function Releases({ state, dispatch }) {
 }
 
 function Simulator({ state, dispatch }) {
-  const [keyId, setKeyId] = useState('key-002');
-  const [modelId, setModelId] = useState('model-1');
+  const services=routingServices(state).filter(row=>row.callId);
+  const [keyId,setKeyId]=useState(state.apiKeys.find(row=>row.status==='有效')?.id || '');
+  const [modelId,setModelId]=useState(services[0]?.callId || '');
   const [timeout, setTimeoutFlag] = useState(false);
   const [result, setResult] = useState('');
-  const run = () => {
-    const requestId = `req_gateway_${Date.now()}`;
-    const { request, changes } = simulateRequest(state, { requestId, keyId, modelId, forceTimeout: timeout, purpose: 'gateway-test' });
-    if (!dispatch({ type: 'batch', objectId: requestId, changes, feedback: false })) return;
+  const run = async () => {
+    const requestId = crypto.randomUUID();
+    const next = await dispatch({ type: 'simulateInvocation', data: { requestId, keyId, modelId, forceTimeout: timeout, purpose: 'gateway-test' }, feedback: false });
+    const request = next?.requests.find(row => row.requestId === requestId);
+    if (!request) return;
     Toast[request.httpStatus >= 400 ? 'error' : 'success'](`网关请求测试：HTTP ${request.httpStatus}`);
     const outcome = request.cacheHit ? '缓存命中' : request.attempts.length > 1 ? '回退成功' : request.attempts.at(-1)?.error || '路由成功';
     setResult(`${request.httpStatus} · ${outcome} · ${request.releaseId || '无发布版本'}`);
@@ -194,7 +196,7 @@ function Simulator({ state, dispatch }) {
       </div>
       <Space wrap>
         <Choice label="API 密钥 ID" value={keyId} options={state.apiKeys.map(item => [item.id, item.keyId])} onSelect={setKeyId}/>
-        <Choice label="Model ID" value={modelId} options={state.models.map(item => [item.id, item.modelId])} onSelect={setModelId}/>
+        <Choice label="Model ID" value={modelId} options={services.map(row=>[row.callId,row.callId])} onSelect={setModelId}/>
         <Checkbox checked={timeout} onChange={event => setTimeoutFlag(event.target.checked)}>主端点超时场景</Checkbox>
         <Button theme="solid" onClick={run}>发送请求</Button>
       </Space>

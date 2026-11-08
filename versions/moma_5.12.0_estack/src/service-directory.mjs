@@ -36,7 +36,8 @@ export function cloudMarketPresentation(offer) {
   const profile=offer.profile || {}, inputs=profile.inputModalities || [], outputs=profile.outputModalities || [];
   return {...presentation(offer),...offer,desc:offer.description,context:offer.capabilities?.context ? Math.round(offer.capabilities.context/1024)+'K' : '未填写',
     contextTokens:offer.capabilities?.context ?? null,series:profile.family || '',input:inputs,outputModalities:outputs,
-    businessTasks:profile.tasks || [],tasks:experienceTasks(offer),documentation:profile.documentation || '',
+    businessTasks:profile.tasks || [],tasks:experienceTasks(offer),inputModalities:inputs.map(item=>({文本:'text',图片:'image',音频:'audio',视频:'video'}[item] || item)),
+    output:offer.capabilities?.output ?? '未填写',icon:1,billing:'按量计费',reason:offer.callable ? '' : '请先订购此模型服务',documentation:profile.documentation || '',
     date:profile.releaseDate || '',guideRequest:serviceGuideRequest(offer,offer.callId)};
 }
 

@@ -42,8 +42,8 @@ const entitlementColumns = [
   { title: '套餐额度', width: 118, align: 'right', dataIndex: 'quota', render: value => number.format(value) },
   { title: '有效期至', width: 112, dataIndex: 'expires' },
   { title: '状态', width: 92, dataIndex: 'status', render: value => <AdminStatus value={value}/> },
-  { title: '已消耗 Tokens', width: 136, align: 'right', dataIndex: 'deducted', render: value => number.format(value) },
-  { title: '剩余额度（Tokens）', width: 166, align: 'right', dataIndex: 'remaining', render: value => number.format(value) },
+  { title: '已消耗 Tokens', width: 136, align: 'right', dataIndex:'deducted',render:value=>value==null?'—':number.format(value) },
+  { title: '剩余额度（Tokens）', width: 166, align: 'right', dataIndex:'remaining',render:value=>value==null?'—':number.format(value) },
   { title: '累计成本（元）', width: 132, align: 'right', dataIndex: 'cost',
     render: value => value === null ? '待核算' : currency.format(value / 100) },
 ];
@@ -60,11 +60,26 @@ export default function PackageData({ state, params }) {
   const kind = Object.hasOwn(PACKAGE_KINDS, params.get('kind')) ? params.get('kind') : 'all';
   const { period, range } = operationsPeriodFromQuery(params);
   const today = usagePreset('today').end;
-  const covered = demo && range.start >= sample.start && range.end <= sample.end;
-  const unavailable = demo ? '无演示数据' : '待接入';
+  const covered=!demo || range.start>=sample.start && range.end<=sample.end;
+  const unavailable='无演示数据';
+  const localDay=timestamp=>new Date(Date.parse(timestamp)+8*3600000).toISOString().slice(0,10);
+  const orderFacts=(state.packageOrders || []).map(row=>({...row,day:localDay(row.createdAt),expires:localDay(row.expiresAt)}));
+  const packageFacts=id=>orderFacts.filter(row=>row.packageId===id && row.day<=range.end);
+  const report=item=>{
+    if(demo)return covered?packageDemoSummary([filterPackageDemo(item,range)]):null;
+    const rows=packageFacts(item.id);
+    return {quantity:rows.filter(row=>row.day>=range.start).length,expiredThroughEnd:rows.filter(row=>row.expires<=range.end).length,
+      averageConsumptionRate:rows.length && range.end===today?rows.reduce((sum,row)=>sum+row.used/row.entitlement,0)/rows.length:null};
+  };
   const records = demo ? sample.records : state.tokenPackages;
   const selected = packageId ? records.find(item => item.id === packageId) : null;
-  const rights = selected && covered ? filterPackageDemo(selected, range).entitlements : null;
+  const rights=selected && covered ? demo?filterPackageDemo(selected,range).entitlements:
+    packageFacts(selected.id).filter(row=>row.expires>=range.start).map(row=>{
+      const deducted=range.end===today?row.used:null,expired=row.expires<=range.end;
+      return { id:row.id,orderedAt:row.day,packageId:row.packageId,userId:row.userId,accountName:row.accountName,
+        accountType:row.accountType,tier:PACKAGE_KINDS[selected.kind],quota:row.entitlement,expires:row.expires,
+        status:expired?'已到期':row.status,deducted,remaining:deducted==null?null:expired?0:row.entitlement-deducted,cost:null };
+    }) : null;
 
   useLayoutEffect(() => {
     if (packageId) {
@@ -96,7 +111,7 @@ export default function PackageData({ state, params }) {
 
   const rows = packageId ? [] : records
     .filter(item => kind === 'all' || item.kind === kind)
-    .map(item => ({ ...item, stats: covered ? packageDemoSummary([filterPackageDemo(item, range)]) : null }));
+    .map(item => ({ ...item, stats:report(item) }));
   const overviewColumns = [
     { title: '套餐名称', width: 240, render: (_, item) =>
       <Typography.Text link={{ href: pageHref(params, { package: item.id }), id: `package-data-link-${item.id}` }}>

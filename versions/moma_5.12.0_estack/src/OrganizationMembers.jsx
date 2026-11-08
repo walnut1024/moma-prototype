@@ -1,5 +1,4 @@
 import {useTenantData} from './useTenantData';
-import {saveTenantOrganization} from './tenant-data.mjs';
 import FrontPageHeader from "./components/FrontPageHeader";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from "./components/FilterControls";
 import { displayBusinessCopy } from './display-copy.mjs';
@@ -78,10 +77,10 @@ export default function OrganizationMembers() {
   const selectDepartment = id => { setSelectedDepartment(id); setSelectedMembers([]); setPage(1); };
   const open = (nextModal, nextForm = {}) => { if(nextModal.type!=='detail'&&!tenant.canManage){setError('只有企业管理员可以维护组织成员');return;} setDraftRevision(tenant.revision); setModal(nextModal); setForm(nextForm); setError(""); };
   const close = () => { setModal(null); setDraftRevision(null); setError(""); };
-  const commit = (action, success) => {
+  const commit = async (action, success) => {
     try {
       const next=changeOrganization(data,{...action,logId:crypto.randomUUID()});
-      saveTenantOrganization(next,draftRevision ?? tenant.revision);setData(next);
+      await tenant.command('organization', next, draftRevision ?? tenant.revision);setData(next);
       setSelectedMembers([]); setNotice(success); close(); return true;
     } catch (e) { setError(e.message); return false; }
   };
@@ -104,7 +103,8 @@ export default function OrganizationMembers() {
     } else if (modal.type === "move") commit({ type: "member.move", ids: modal.ids, departmentId: form.departmentId }, "成员主部门已更新，管理范围保持原设置");
   };
   const tree = (id, depth = 0) => {
-    const node = departments.find(d => d.id === id);
+    const node=departments.find(d=>d.id===id);
+    if(!node)return null;
     const children = departments.filter(d => d.parentId === id);
     const ids = descendantIds(departments, id);
     if (treeQuery && !departments.some(d => ids.has(d.id) && d.name.includes(treeQuery.trim()))) return null;
@@ -162,9 +162,9 @@ export default function OrganizationMembers() {
         <div className="org-pagination"><small>共 {filtered.length} 人 · 第 {currentPage} / {pageCount} 页</small><div><Choice label="每页人数" value={String(pageSize)} onChange={value => { setPageSize(Number(value)); setPage(1); setSelectedMembers([]); }} options={PAGE_SIZES.map(size => ({ value: String(size), label: `${size} 人 / 页` }))} /><Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>上一页</Button><Button variant="outline" size="sm" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>下一页</Button></div></div>
       </section>
     </div>
-    {batchOpen && <OrganizationMemberBatch data={data} initialDepartment={department?.id || "unassigned"} onClose={() => setBatchOpen(false)} onApply={(rows, mode, defaultDepartment) => {
+    {batchOpen && <OrganizationMemberBatch data={data} initialDepartment={department?.id || "unassigned"} onClose={() => setBatchOpen(false)} onApply={async (rows, mode, defaultDepartment) => {
       const outcome = applyMemberBatch(data, rows, mode, defaultDepartment, () => crypto.randomUUID());
-      try { saveTenantOrganization(outcome.state,draftRevision ?? tenant.revision); }
+      try { await tenant.command('organization',outcome.state,draftRevision ?? tenant.revision); }
       catch (error) { throw new Error(error.message); }
       setData(outcome.state); setSelectedMembers([]); setPage(1);
       return outcome.results;

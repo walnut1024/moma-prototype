@@ -20,7 +20,7 @@ export default defineConfig({
       const path = semiDate(source, importer); if (path) return { path };
     });
   } }] } },
-  server: { host: '127.0.0.1', proxy: { '/api/5120': { target: 'http://127.0.0.1:8787', changeOrigin: false } } },
+  server: { host: '127.0.0.1', proxy: { '/api/5120': { target:'http://127.0.0.1:'+Number(process.env.MOMA_5120_BACKEND_PORT || 8787), changeOrigin: false } } },
   build: {
     outDir,
     emptyOutDir: true,

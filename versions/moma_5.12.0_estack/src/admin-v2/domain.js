@@ -1,4 +1,4 @@
-import { lifecycleAccess, assertOrderAccess } from '../service-access.mjs';
+import { lifecycleAccess, assertOrderAccess, offerKey } from '../service-access.mjs';
 import { MODEL_ORDER_BILLING_TYPES } from '../model-order-display.mjs';
 import { commitAdminState } from "./state-transaction.js";
 import { usageTotal } from "./observability.js";
@@ -62,7 +62,7 @@ export function simulateRequest(state, { requestId, keyId, modelId: requestedMod
   const candidateIds = candidates.map(supply => supply.endpointId);
   const procurementSnapshots = new Map(candidates.map(supply => {
     const cost = activeSupplyPrice(state, supply.id, startedAt);
-    const association = supply.provider?.catalogConnections?.find(row => !row.deletedAt && row.endpointId === supply.endpointId && row.modelId === (supply.catalogueModelId || supply.upstreamModelId));
+    const association = supply.provider?.catalogConnections?.find(row => !row.deletedAt && (supply.channelId ? row.id===supply.channelId : row.endpointId===supply.endpointId && row.upstreamModelId===supply.upstreamModelId));
     const quote = association && channelProcurementSnapshot(association, startedAt);
     return [supply.id, { ...quote, versionId: quote?.versionId || procurementVersion(cost) || null, version: quote?.version ?? cost?.version ?? null, selectedAt: new Date(startedAt).toISOString(), items: structuredClone(priceItems(cost, model)), providerId: supply.provider.id, endpointId: supply.endpointId, supplyId: supply.id, configurationRevision: supply.endpoint.configurationRevision || 0 }];
   }));
@@ -76,9 +76,9 @@ export function simulateRequest(state, { requestId, keyId, modelId: requestedMod
   else if (tenantGrant && tenantGrant.limit - tenantGrant.used < tenantQuantity) [httpStatus, error] = [402, 'enterprise_quota_exhausted'];
   else if (!access.allowed) [httpStatus, error] = [403, access.code];
   else if (model.serviceMode==='provider' && !service) [httpStatus,error]=[403,'provider_service_required'];
-  else if (service?.mode === 'provider' && !activeProviderPrice(state,modelId,service.providerId,startedAt)) [httpStatus,error]=[503,'provider_price_unavailable'];
+  else if (service?.mode === 'provider' && !activeProviderPrice(state,modelId,offerKey(service),startedAt)) [httpStatus,error]=[503,'provider_price_unavailable'];
   else if (service?.mode === 'standard' && !activeModelSalePrice(state,modelId,startedAt)) [httpStatus,error]=[503,'model_price_unavailable'];
-  else if (!grant && key.quotaLimit !== null || grant && grant.limit - grant.used < quantity) [httpStatus, error] = [402, "quota_exhausted"];
+  else if (!grant && key.quotaLimit != null || grant && grant.limit - grant.used < quantity) [httpStatus, error] = [402, "quota_exhausted"];
   else if (keyRateExceeded || state.limits.some(item => item.scopeType === "key" && item.scopeId === key.id && item.status === "已启用")) [httpStatus, error] = [429, "rate_limit_exceeded"];
   else if (!endpointId) [httpStatus, error] = [503, "no_available_endpoint"];
   const attempts = [], cache = state.caches.find(item => item.status === "已启用"), cutoff = cache ? Date.now() - cache.ttl * 1000 : 0, cacheHit = Boolean(cache && state.requests.some(item => item.httpStatus === 200 && item.keyId === keyId && item.modelId === modelId && item.cacheKey === cacheKey && Date.parse(item.createdAt) >= Math.max(cutoff, Date.parse(cache.invalidatedAt || 0))));
@@ -93,9 +93,9 @@ export function simulateRequest(state, { requestId, keyId, modelId: requestedMod
   const fulfilledSupply = candidates.find(supply => supply.endpointId === endpointId);
   const procurementSnapshot = fulfilledSupply && structuredClone(procurementSnapshots.get(fulfilledSupply.id));
   attempts.push({ dispatched: !error, endpointId: endpointId || null, durationMs: error ? 0 : 680, error: error || null, ...(fulfilledSupply ? { supplyId: fulfilledSupply.id, procurementSnapshot: structuredClone(procurementSnapshot), configurationRevision: fulfilledSupply.endpoint.configurationRevision || 0 } : {}) });
-  const request = { id: id("request"), requestId, tenantId: key?.tenantId || null, projectId: key?.projectId || null, keyId: key?.id || keyId, modelId, versionId: model?.defaultVersionId || null, endpointId: endpointId || null, releaseId: state.releases.find(item => item.status === "当前生效")?.id || null, source: "API 调用", attempts, usage, cacheKey, cacheHit, httpStatus, ttftMs: httpStatus === 200 && model?.capabilities.streaming ? 220 : null, durationMs: httpStatus === 200 ? attempts.reduce((sum, item) => sum + item.durationMs, 0) : 0, createdAt: now(), updatedAt: now() };
+  const request = { id: id("request"), requestId, tenantId: key?.tenantId || null, projectId: key?.projectId || null, keyId: key?.id || keyId, modelId, versionId: model?.defaultVersionId || null, endpointId: endpointId || null, releaseId: state.releases.find(item => item.status === "当前生效")?.id || null, source: "API 调用", attempts, usage, cacheKey, cacheHit, httpStatus, ttftMs: httpStatus === 200 && model?.capabilities?.streaming ? 220 : null, durationMs: httpStatus === 200 ? attempts.reduce((sum, item) => sum + item.durationMs, 0) : 0, createdAt: now(), updatedAt: now() };
   const changes = [{ type: "add", collection: "requests", record: request }];
-  const price = fulfilledSupply && (model.serviceMode === 'standard' ? activeModelSalePrice(state,modelId,startedAt) : model.serviceMode==='provider' ? activeProviderPrice(state,modelId,service?.providerId,startedAt) : activeSupplySalePrice(state, modelId, fulfilledSupply.id,startedAt));
+  const price = fulfilledSupply && (model.serviceMode === 'standard' ? activeModelSalePrice(state,modelId,startedAt) : model.serviceMode==='provider' ? activeProviderPrice(state,modelId,offerKey(service),startedAt) : activeSupplySalePrice(state, modelId, fulfilledSupply.id,startedAt));
   request.modelType = model?.type || null;
   request.purpose = purpose;
   request.billingStatus = httpStatus === 200 ? "billable" : "not_billable";

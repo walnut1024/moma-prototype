@@ -1,5 +1,4 @@
 import {useTenantData} from './useTenantData';
-import {LINK_EVENT} from './service-access.mjs';
 import { useState } from 'react';
 import { Download, History, RefreshCw } from 'lucide-react';
 import FrontPageHeader from './components/FrontPageHeader';
@@ -33,7 +32,7 @@ export default function OperationRecords() {
         <Input className="operation-search" aria-label="搜索操作记录" placeholder="搜索操作人、操作内容" value={filters.query} onChange={event => update({ query: event.target.value })} />
         <div className="operation-dates"><span>操作日期</span><Input type="date" aria-label="操作开始日期" value={filters.start} max={filters.end || undefined} onChange={event => update({ start: event.target.value })} /><span>—</span><Input type="date" aria-label="操作结束日期" value={filters.end} min={filters.start || undefined} onChange={event => update({ end: event.target.value })} /></div>
         <FilterReset onClick={reset} />
-        <Button variant="outline" size="icon" aria-label="刷新操作记录" title="刷新操作记录" onClick={() => { window.dispatchEvent(new Event(LINK_EVENT)); setPage(1); }}><RefreshCw /></Button>
+        <Button variant="outline" size="icon" aria-label="刷新操作记录" title="刷新操作记录" onClick={() => { tenant.reload(); setPage(1); }}><RefreshCw /></Button>
         <Button variant="outline" size="icon" aria-label="导出操作记录" title="导出操作记录" disabled={!!data.error || !!invalidRange || !filtered.length} onClick={exportRecords}><Download /></Button>
       </div>
       {(data.error || invalidRange) && <p className="operation-error" role="alert">{data.error || '开始日期不能晚于结束日期，请调整日期范围。'}</p>}

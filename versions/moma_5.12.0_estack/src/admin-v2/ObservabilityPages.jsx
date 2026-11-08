@@ -18,7 +18,7 @@ const actionTime = () => new Date().toLocaleTimeString('zh-CN', { hour: '2-digit
 export function Alerts({ state, dispatch, navigate }) {
   const update = (item, status) => dispatch({ type: 'update', collection: 'alerts', id: item.id,
     changes: { status, timeline: [...item.timeline, `${actionTime()} ${status}`] } });
-  const incident = item => {
+  const incident = async item => {
     if (state.incidents.some(row => row.alertIds.includes(item.id))) return navigate('incidents');
     const now = Date.now();
     const changes = [
@@ -26,7 +26,7 @@ export function Alerts({ state, dispatch, navigate }) {
       { type: 'add', collection: 'incidents', record: { id: `incident-${now}`, incidentId: `INC-${now}`, title: item.title,
         alertIds: [item.id], impact: '待评估', assignee: item.assignee, resolution: '', status: '处理中', timeline: ['由告警转入事件'] } },
     ];
-    if (dispatch({ type: 'batch', objectId: item.id, changes })) navigate('incidents');
+    if (await dispatch({ type: 'batch', objectId: item.id, changes })) navigate('incidents');
   };
   return <div className="admin-page-stack">
     <AdminPageHeading title="告警管理" description="确认、指派、恢复告警，并把需要协同的问题转入事件处理。"/>

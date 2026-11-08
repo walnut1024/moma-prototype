@@ -1,0 +1,21 @@
+ALTER TABLE model_workspace ADD COLUMN application_revision INTEGER NOT NULL DEFAULT 0 CHECK(application_revision>=0);
+CREATE TABLE tenant_operations (id TEXT PRIMARY KEY NOT NULL, tenant_id TEXT NOT NULL, request_hash TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE INDEX tenant_operations_expiry ON tenant_operations(created_at);
+CREATE TABLE market_orders_next (id TEXT PRIMARY KEY NOT NULL, tenant_id TEXT NOT NULL, offer_id TEXT NOT NULL REFERENCES offers(record_id), sale_price_id TEXT NOT NULL REFERENCES price_versions(id), created_at INTEGER NOT NULL, cancelled_at INTEGER);
+INSERT INTO market_orders_next(id,tenant_id,offer_id,sale_price_id,created_at) SELECT id,tenant_id,offer_id,sale_price_id,created_at FROM market_orders;
+DROP TABLE market_orders;
+ALTER TABLE market_orders_next RENAME TO market_orders;
+CREATE UNIQUE INDEX market_orders_active ON market_orders(tenant_id,offer_id) WHERE cancelled_at IS NULL;
+CREATE INDEX market_orders_tenant_history ON market_orders(tenant_id,created_at DESC);
+CREATE INDEX market_sessions_expiry ON market_sessions(expires_at);
+CREATE INDEX admin_sessions_expiry ON admin_sessions(expires_at);
+ALTER TABLE admin_accounts ADD COLUMN login_name TEXT;
+ALTER TABLE admin_accounts ADD COLUMN access_hash TEXT CHECK(access_hash IS NULL OR length(access_hash)=64);
+CREATE UNIQUE INDEX admin_login_name ON admin_accounts(login_name) WHERE login_name IS NOT NULL;
+CREATE TABLE tenant_login_events (id TEXT PRIMARY KEY NOT NULL, user_id TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE INDEX tenant_login_expiry ON tenant_login_events(created_at);
+CREATE INDEX operations_activity_expiry ON operations(created_at);
+
+CREATE INDEX market_calls_expiry ON market_calls(created_at);
+INSERT OR IGNORE INTO admin_accounts(id,name,role,enabled) VALUES('yyg','系统管理员','平台管理员',1);
+UPDATE db_state SET schema_version=12 WHERE id=1;

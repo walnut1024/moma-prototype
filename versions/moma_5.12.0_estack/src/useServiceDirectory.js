@@ -1,14 +1,26 @@
-import { useEffect, useState } from 'react';
-import { LINK_EVENT } from './service-access.mjs';
-import { directorySnapshot } from './service-directory.mjs';
+import { MARKET_EVENT, marketRequest, useCloudMarket } from './CloudMarket';
+
 export function useServiceDirectory(task) {
-  const read = () => { try { return directorySnapshot(); } catch (error) { return { models: [], identity: null, identityError: '', error: error.message }; } };
-  const [snapshot, setSnapshot] = useState(read);
-  useEffect(() => {
-    const update = () => setSnapshot(read());
-    for (const event of [LINK_EVENT, 'storage', 'focus']) window.addEventListener(event, update);
-    document.addEventListener('visibilitychange', update);
-    return () => { for (const event of [LINK_EVENT, 'storage', 'focus']) window.removeEventListener(event, update); document.removeEventListener('visibilitychange', update); };
-  }, []);
-  return { ...snapshot, models: task ? snapshot.models.filter(model => model.tasks.includes(task)) : snapshot.models };
+  const market=useCloudMarket();
+  return {
+    models:market.services.filter(model=>!task || model.tasks.includes(task)),
+    tenantId:market.tenant?.id,
+    identityError:!market.loading && !market.tenant ? '请先登录客户账号' : '',
+    error:market.error,
+  };
+}
+
+export function beginExperience(directory, id, task, { images=false }={}) {
+  if (!directory.tenantId) throw Error('请先登录客户账号');
+  const model=directory.models.find(row=>row.id===id);
+  if (!model?.callable) throw Error(model?.reason || '请先订购此模型服务');
+  if (!model.tasks.includes(task) || (images && !model.inputModalities.includes('image'))) throw Error('所选模型不支持当前任务');
+  return { tenantId:directory.tenantId, serviceId:id, callId:model.callId, requestId:crypto.randomUUID(), modelName:model.name, task, images };
+}
+
+export async function finishExperience(ticket, simulateDenied=false) {
+  const result=await marketRequest('completions',{requestId:ticket.requestId,model:ticket.callId,tenantId:ticket.tenantId,
+    task:ticket.task,images:ticket.images,simulateDenied,messages:[{role:'user',content:'原型体验'}]});
+  window.dispatchEvent(new Event(MARKET_EVENT));
+  return result;
 }

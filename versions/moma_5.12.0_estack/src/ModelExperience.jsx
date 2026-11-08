@@ -1,7 +1,5 @@
-import {recordTenantExperience} from './tenant-data.mjs';
 import mockConfig from './mock/catalogues.json' with { type: 'json' };
-import { useServiceDirectory } from './useServiceDirectory';
-import { beginExperience, validateExperience } from './service-directory.mjs';
+import { useServiceDirectory, beginExperience, finishExperience } from './useServiceDirectory';
 import { readExperienceDraft, saveExperienceDraft } from './experience-drafts.mjs';
 import FrontPageHeader from "./components/FrontPageHeader";
 import { displayBusinessCopy } from './display-copy.mjs';
@@ -150,10 +148,6 @@ export default function ModelExperience({
     try { saveExperienceDraft(owner, kind, { model, text, file, messages, temperature, topP, systemPrompt, imageSize, imageCount, videoMode, resolution, aspect, duration, sound, language, removeFillers }); }
     catch { setError('草稿无法保存，请检查浏览器存储。'); }
   }, [owner, kind, model, text, file, messages, temperature, topP, systemPrompt, imageSize, imageCount, videoMode, resolution, aspect, duration, sound, language, removeFillers]);
-  useEffect(() => {
-    if (!busy || !ticket.current) return;
-    try { validateExperience(ticket.current); } catch (error) { clearTimeout(timer.current); setBusy(false); setError(error.message); }
-  }, [directory]);
   const prompts = promptCatalog[kind] || [];
   useEffect(() => {
     if (!file) {
@@ -166,7 +160,7 @@ export default function ModelExperience({
   }, [file]);
   useEffect(
     () => () => {
-      clearTimeout(timer.current);
+      clearTimeout(timer.current); ticket.current=null;
       recordSession.current += 1;
       clearInterval(recordTimer.current);
       clearTimeout(recordLimit.current);
@@ -191,7 +185,7 @@ export default function ModelExperience({
       settingsDialog.current.close();
   }, [settingsOpen]);
   function reset() {
-    clearTimeout(timer.current);
+    clearTimeout(timer.current); ticket.current=null;
     recordSession.current += 1;
     clearInterval(recordTimer.current);
     clearTimeout(recordLimit.current);
@@ -368,7 +362,7 @@ export default function ModelExperience({
     event?.preventDefault();
     if (busy || !model || (asr && !file) || (!asr && !text.trim() && !file))
       return;
-    try { ticket.current = beginExperience(model, kind); if (file && kind !== 'voice' && !selectedModel?.inputModalities.includes('image')) throw new Error('所选模型不支持参考图片'); } catch (error) { setError(error.message); return; }
+    try { ticket.current = beginExperience(directory, model, kind, {images:Boolean(file && kind!=='voice')}); } catch (error) { setError(error.message); return; }
     setError('');
     setNotice('');
     setBusy(true);
@@ -398,10 +392,13 @@ export default function ModelExperience({
       duration,
       sound,
     };
-    // ponytail: local mock response only; replace with model API when integration is requested.
-    timer.current = setTimeout(() => {
-      try { validateExperience(ticket.current); } catch (error) { setError(error.message); setBusy(false); return; }
-      try{recordTenantExperience(ticket.current,200);}catch(error){setError(error.message);setBusy(false);return;}
+    const current=ticket.current;
+    timer.current = setTimeout(async () => {
+      try { await finishExperience(current); } catch(error) {
+        if(ticket.current===current){setError(error.message);setBusy(false);}
+        return;
+      }
+      if(ticket.current!==current)return;
       setMessages((items) => [
         ...items,
         {

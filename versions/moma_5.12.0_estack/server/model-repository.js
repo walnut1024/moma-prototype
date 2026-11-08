@@ -218,7 +218,7 @@ export async function initializeModelWorkspace(db,{demo=false}={}){
 }
 
 const arraySql=(query)=>`json(COALESCE((SELECT json_group_array(json(record_json)) FROM (${query})), '[]'))`;
-async function workspacePayload(db,actor,command=false){
+async function workspacePayload(db,actor,command=false,simulation=true){
   const fields=[];
   for(const [collection,table]of Object.entries(entityTables)){
     const where=['services','suppliers','channels'].includes(table)?'deleted_at IS NULL':['model_template_records','service_supply_records','model_versions','model_validations','service_route_records'].includes(table)?'removed_at IS NULL':'1';
@@ -228,17 +228,22 @@ async function workspacePayload(db,actor,command=false){
   fields.push(`'tariffDictionary',${arraySql("SELECT record_json FROM billing_items WHERE deleted_at IS NULL UNION ALL SELECT record_json FROM billing_units WHERE deleted_at IS NULL UNION ALL SELECT record_json FROM currencies WHERE deleted_at IS NULL")}`);
   fields.push(`'audits',${arraySql(`SELECT json_remove(record_json,'$.before','$.after') AS record_json FROM audit_events WHERE record_json!='{}' ORDER BY created_at DESC LIMIT ${command?1:200}`)}`);
   fields.push(`'admins',${arraySql("SELECT json_object('id',id,'name',name,'role',role,'status',CASE WHEN enabled THEN '已启用' ELSE '已停用' END) AS record_json FROM admin_accounts")}`);
-  const snapshot=["'operations',json('{}')"];
-  for(const kind of ['credentials','channels','batches','services','identities','clientKeys','usage','changes','audits'])snapshot.push(`'${kind}',${arraySql(`SELECT payload_json AS record_json FROM simulation_records WHERE kind='${kind}'`)}`);
-  snapshot.push("'rateEvents',json(COALESCE((SELECT json_group_object(id,json(payload_json)) FROM simulation_records WHERE kind='rateEvents'),'{}'))");
-  fields.push(`'cloudMockState',json_patch(COALESCE((SELECT payload_json FROM simulation_records WHERE kind='meta' AND id='state'),'{}'),json_object(${snapshot.join(',')}))`);
+  if(simulation){
+    const snapshot=["'operations',json('{}')"];
+    for(const kind of ['credentials','channels','batches','services','identities','clientKeys','usage','changes','audits'])snapshot.push(`'${kind}',${arraySql(`SELECT payload_json AS record_json FROM simulation_records WHERE kind='${kind}'`)}`);
+    snapshot.push("'rateEvents',json(COALESCE((SELECT json_group_object(id,json(payload_json)) FROM simulation_records WHERE kind='rateEvents'),'{}'))");
+    fields.push(`'cloudMockState',json_patch(COALESCE((SELECT payload_json FROM simulation_records WHERE kind='meta' AND id='state'),'{}'),json_object(${snapshot.join(',')}))`);
+  }
   fields.push("'cloudOperations',json('true'),'revision',w.revision,'commitSeq',(SELECT commit_seq FROM db_state WHERE id=1),'adminSession',json_object('accountId',?),'currentRole',?");
-  const reference="json_set(w.reference_json,'$.apiKeys',json('[]'),'$.users',json('[]'),'$.memberships',json('[]'),'$.grants',json('[]'),'$.projects',json('[]'))";
+  const reference=`json_object('tenants',COALESCE(json_extract(w.reference_json,'$.tenants'),json('[]')),
+    'settings',json_extract(w.reference_json,'$.settings'),'orders',json('[]'),'products',json('[]'),'requests',json('[]'),
+    'alerts',json('[]'),'deployments',json('[]'),'apiKeys',json('[]'),'users',json('[]'),'memberships',json('[]'),'projects',json('[]'),
+    'grants',${command?"COALESCE(json_extract(w.reference_json,'$.grants'),json('[]'))":"json('[]')"})`;
   const payload=await db.prepare(`SELECT json_patch(json_patch(${reference},w.meta_json),json_object(${fields.join(',')})) AS payload FROM model_workspace w WHERE id=1`).bind(actor.id,actor.role).first('payload');
   if(!payload)throw Error('模型运营工作区尚未初始化');return payload;
 }
 export const modelWorkspacePayload=(db,actor)=>workspacePayload(db,actor);
-export async function loadModelWorkspace(db,actor,{command=false}={}){return domainModelWorkspace(JSON.parse(await workspacePayload(db,actor,command)));}
+export async function loadModelWorkspace(db,actor,{command=false,simulation=true}={}){return domainModelWorkspace(JSON.parse(await workspacePayload(db,actor,command,simulation)));}
 
 // Simulator calls need live resource availability, not the full model editing workspace.
 export async function loadSimulationWorkspace(db){

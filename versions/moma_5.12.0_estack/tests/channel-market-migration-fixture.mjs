@@ -1,5 +1,13 @@
 // Tests that start with the latest isolated database reconstruct earlier offer columns before migrating.
 export const resetMarketSchemaFixture = db => [
+  'ALTER TABLE model_workspace DROP COLUMN application_revision',
+  'DROP TABLE tenant_operations',
+  'DROP INDEX admin_sessions_expiry',
+  'DROP INDEX admin_login_name',
+  'ALTER TABLE admin_accounts DROP COLUMN access_hash',
+  'ALTER TABLE admin_accounts DROP COLUMN login_name',
+  'DROP TABLE tenant_login_events',
+  'DROP INDEX operations_activity_expiry',
   'DROP TABLE market_calls',
   'DROP TABLE market_orders',
   'DROP TABLE market_sessions',

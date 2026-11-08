@@ -5,11 +5,11 @@ import { AdminModal as Modal } from '../admin-v2/AdminOverlay';
 export default function OperationInputDialog({ title, description, label, initialValue = '', numeric = false, onSubmit, onClose }) {
   const formId = useId();
   const [error, setError] = useState('');
-  const save = ({ value }) => {
+  const save = async ({ value }) => {
     try {
       const trimmed = value?.trim();
       if (!trimmed) throw new Error(`请填写${label}`);
-      if (onSubmit(trimmed)) onClose();
+      if (await onSubmit(trimmed)) onClose();
       else setError('保存未完成，请检查操作反馈后重试');
     } catch (cause) {
       setError(cause.message);

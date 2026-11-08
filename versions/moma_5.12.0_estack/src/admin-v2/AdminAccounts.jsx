@@ -19,6 +19,7 @@ const statusOptions = [
 const dateFormat = new Intl.DateTimeFormat('zh-CN', {
   dateStyle: 'short', timeStyle: 'medium', timeZone: 'Asia/Shanghai', hour12: false,
 });
+const loginDigest=async password=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(password))),byte=>byte.toString(16).padStart(2,'0')).join('');
 const modalWidth = 'min(480px, calc(100vw - 32px))';
 
 function AccountEditor({ account, revision, canWrite, transact, close, complete }) {
@@ -43,17 +44,18 @@ function AccountEditor({ account, revision, canWrite, transact, close, complete 
       return false;
     }
   };
-  const submit = event => {
+  const submit = async event => {
     event.preventDefault();
     if (!canWrite || (!account && !validateLogin())) return;
     try {
       const login = account ? account.account : normalizeAdminLogin(draft[loginField], draft.accountType);
       const password = account ? null : generateAdminPassword();
-      transact({
+      await transact({
         type: 'adminAccount',
         operation: account ? 'edit' : 'create',
         id: account?.id || `admin-${crypto.randomUUID()}`,
         values: { ...draft, account: login },
+        ...(password?{loginDigest:await loginDigest(password)}:{}),
       }, revision);
       complete(account ? '后台账号已更新' : '后台账号已新建', password ? { account: login, password, label: '初始密码' } : null);
     } catch (issue) {
@@ -154,11 +156,11 @@ export default function AdminAccounts({ state, transact, conflict }) {
     setPasswordResult(result);
     if (!result) Toast.success(message);
   };
-  const confirm = () => {
+  const confirm = async () => {
     if (!canWrite) return;
     try {
       const password = confirmation.operation === 'resetPassword' ? generateAdminPassword() : null;
-      transact({ type: 'adminAccount', operation: confirmation.operation, id: confirmation.account.id }, confirmation.revision);
+      await transact({ type: 'adminAccount', operation: confirmation.operation, id:confirmation.account.id,...(password?{loginDigest:await loginDigest(password)}:{}) },confirmation.revision);
       complete(password ? '后台账号密码已重置' : `后台账号已${confirmation.account.status === '已启用' ? '停用' : '启用'}`,
         password ? { account: confirmation.account.account, password, label: '新密码' } : null);
     } catch (issue) {

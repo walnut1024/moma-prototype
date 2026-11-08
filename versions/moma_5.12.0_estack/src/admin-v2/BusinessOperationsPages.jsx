@@ -9,9 +9,10 @@ import OperationInputDialog from '../components/OperationInputDialog';
 import { displayBusinessCopy } from '../display-copy.mjs';
 import AdminPageHeading from './AdminPageHeading';
 import { Choice } from './ServiceUI';
-import { simulateRequest, orderActivationCommand } from './domain';
 import { usageTotal } from './observability';
 import { canMutate } from './store';
+import { routingServices } from './service-routing.js';
+import { mockCharge, billingPeriod } from './mock-billing.js';
 
 const uid = prefix => `${prefix}-${crypto.randomUUID()}`;
 const { Text, Title } = Typography;
@@ -62,7 +63,7 @@ function Managed({ pageId, state, dispatch }) {
     </Button>),
   ];
   const close = () => { setEditing(false); setError(''); };
-  const save = values => {
+  const save = async values => {
     const record = { ...values };
     for (const [field, label, type] of fields) {
       if (type === 'number') {
@@ -71,7 +72,7 @@ function Managed({ pageId, state, dispatch }) {
       }
       if (!record[field]) return setError('请填写全部必填项');
     }
-    if (dispatch({ type: 'add', collection, record: { id: uid(collection), ...record, status: '已启用' } })) close();
+    if (await dispatch({ type: 'add', collection, record: { id: uid(collection), ...record, status: '已启用' } })) close();
   };
   return <>
     <AdminPageHeading title={title}>
@@ -101,7 +102,7 @@ function Managed({ pageId, state, dispatch }) {
 
 function Orders({ state, dispatch }) {
   const canWrite = editable(state, 'orders');
-  const productFor = order => state.products.find(item => item.id === order.productId);
+  const productFor=order=>order.product || state.products.find(item=>item.id===order.productId);
   const rows = state.orders.filter(order => (order.billingType || productFor(order)?.billingType) !== 'package');
   const create = () => {
     const product = state.products.find(item => item.code === 'TOKEN-100M' && item.status === '已上架');
@@ -112,13 +113,8 @@ function Orders({ state, dispatch }) {
       entitlement: 100000000, quotaUnit: 'Token', status: '待开通', timeline: ['订单创建'],
     } });
   };
-  const activate = order => {
-    try {
-      const command = orderActivationCommand(state, order.id);
-      if (command) dispatch(command);
-    } catch (error) { Toast.error(error.message); }
-  };
-  const cancel = order => dispatch({ type: 'update', collection: 'orders', id: order.id,
+  const activate = order => dispatch({ type: 'activateOrder', id: order.id });
+  const cancel = order => order.marketOrder ? dispatch({type:'cancelMarketOrder',id:order.id}) : dispatch({ type: 'update', collection: 'orders', id: order.id,
     changes: { status: '已退订', timeline: [...(order.timeline ?? []), '用户退订'] } });
   return <>
     <AdminPageHeading title={titles.orders}>
@@ -127,7 +123,7 @@ function Orders({ state, dispatch }) {
     <BusinessTable rows={rows} minWidth={1100} columns={[
       { title: '订单号', dataIndex: 'orderNo', render: value => value || '—' },
       { title: '租户', render: (_, order) => state.tenants.find(item => item.id === order.tenantId)?.name || '未记录' },
-      { title: '商品', render: (_, order) => productFor(order)?.name || '未记录' },
+      { title: '商品', render: (_, order) => order.serviceName || productFor(order)?.name || '未记录' },
       { title: '金额', dataIndex: 'amount', align: 'right', render: amount =>
         Number.isFinite(amount) ? money(amount.toLocaleString('zh-CN')) : '未记录' },
       { title: '权益', render: (_, order) => {
@@ -147,14 +143,15 @@ function Orders({ state, dispatch }) {
 
 function Metering({ state, dispatch }) {
   const [keyId, setKeyId] = useState(state.apiKeys.find(row => row.status === '有效')?.id || '');
-  const [modelId, setModelId] = useState(state.models[0]?.id || '');
+  const [modelId,setModelId]=useState(routingServices(state).find(row=>row.callId)?.callId || '');
   const [result, setResult] = useState(null);
-  const run = () => {
+  const run = async () => {
     try {
-      const requestId = `req_demo_${Date.now()}`;
-      const planned = simulateRequest(state, { requestId, keyId, modelId, purpose: 'metering-test' });
-      if (!dispatch({ type: 'batch', objectId: requestId, changes: planned.changes, feedback: false })) return;
-      const { httpStatus, attempts } = planned.request;
+      const requestId = crypto.randomUUID();
+      const next = await dispatch({ type: 'simulateInvocation', data: { requestId, keyId, modelId, purpose: 'metering-test' }, feedback: false });
+      const request = next?.requests.find(row => row.requestId === requestId);
+      if (!request) return;
+      const { httpStatus, attempts } = request;
       setResult({ failed: httpStatus >= 400, message: `HTTP ${httpStatus} · ${requestId} · ${attempts?.at(-1)?.error || '已计量扣减'}` });
     } catch (error) { setResult({ failed: true, message: error.message }); }
   };
@@ -164,7 +161,7 @@ function Metering({ state, dispatch }) {
       <div className="admin-analytics-fields">
         <FilterToolbar>
           <Choice label="调用测试 API 密钥" value={keyId} options={state.apiKeys.map(row => [row.id, row.keyId])} onChange={setKeyId}/>
-          <Choice label="调用测试模型" value={modelId} options={state.models.map(row => [row.id, row.modelId])} onChange={setModelId}/>
+          <Choice label="调用测试模型" value={modelId} options={routingServices(state).filter(row=>row.callId).map(row=>[row.callId,row.callId])} onChange={setModelId}/>
           <Button theme="solid" disabled={!keyId || !modelId || !editable(state, 'requests')} onClick={run}>发送请求</Button>
         </FilterToolbar>
         {result && <Banner type={result.failed ? 'danger' : 'success'} closeIcon={null} description={result.message}/>}
@@ -176,8 +173,8 @@ function Metering({ state, dispatch }) {
       { title: 'Model ID', render: (_, row) => state.models.find(model => model.id === row.modelId)?.modelId },
       { title: '计量项', key: 'usage-fields', dataIndex: 'usage', render: usage => Object.keys(usage || {}).join(' / ') || '—' },
       { title: '数量', dataIndex: 'usage', align: 'right', render: usage => usageTotal(usage).toLocaleString() },
-      { title: '价格快照', render: () => '2026-09 生效价' },
-      { title: '金额', align: 'right', render: (_, row) => money(row.httpStatus === 200 ? (usageTotal(row.usage) / 1e6 * 1.8).toFixed(4) : '0.0000') },
+      { title: '价格快照', render: (_,row) => row.priceVersionId || '未记录' },
+      { title: '金额', align: 'right', render: (_,row) => { const charge=mockCharge(state,row);return charge?`${charge.currency} ${charge.amount}`:'—'; } },
       { ...statusColumn, dataIndex: 'httpStatus', render: value => <AdminStatus value={value === 200 ? '已计量' : '不计费'}/> },
     ]}/>
   </>;
@@ -202,22 +199,11 @@ function Ledger({ state }) {
 
 function Bills({ state, dispatch }) {
   const canWrite = editable(state, 'bills');
-  const period = '2026-09';
-  const generate = () => {
-    const existing = new Set(state.bills.filter(row => row.period === period).map(row => row.tenantId));
-    const changes = state.tenants.filter(tenant => !existing.has(tenant.id)).map(tenant => {
-      const amount = state.requests.filter(row => row.tenantId === tenant.id && row.httpStatus === 200)
-        .reduce((sum, row) => sum + usageTotal(row.usage) / 1e6 * 1.8, 0);
-      return { type: 'add', collection: 'bills', record: {
-        id: uid('bill'), billNo: `BILL-${period.replace('-', '')}-${tenant.id}`, tenantId: tenant.id, period,
-        amount: Number(amount.toFixed(2)), discount: 0, paid: 0, status: '待出账',
-      } };
-    });
-    if (changes.length) dispatch({ type: 'batch', objectId: `bills:${period}`, changes });
-  };
+  const period=billingPeriod();
+  const generate=()=>dispatch({type:'generateBills'});
   return <>
     <AdminPageHeading title={titles.bills}>
-      <Button theme="solid" disabled={!canWrite} onClick={generate}>生成 {period} 账单</Button>
+      <Button theme="solid" disabled={!canWrite} onClick={generate}>生成 {period} 模拟账单</Button>
     </AdminPageHeading>
     <BusinessTable rows={state.bills} minWidth={940} columns={[
       { title: '账单号', dataIndex: 'billNo', width: 240 },
@@ -270,15 +256,7 @@ function Adjustments({ state, dispatch }) {
     const bill = billFor(item.billId);
     if (!bill) throw new Error('关联账单不存在');
     if (review.approved && Math.abs(item.amount) > bill.amount) throw new Error('调账金额不能超过账单应收');
-    const changes = [{ type: 'update', collection: 'adjustments', id: item.id,
-      changes: { status: review.approved ? '已执行' : '已拒绝', approvalReason: reason } }];
-    const sourceId = `adjustment:${item.id}`;
-    if (review.approved && !state.ledger.some(row => row.sourceId === sourceId)) {
-      changes.push({ type: 'add', collection: 'ledger', record: {
-        id: uid('ledger'), accountId: bill.tenantId, sourceId, type: '账单冲正', delta: -item.amount, balance: 0, reason, status: '已完成',
-      } });
-    }
-    return dispatch({ type: 'batch', objectId: item.adjustmentNo, changes });
+    return dispatch({ type: 'adjustment', id: item.id, approved: review.approved, reason });
   };
   return <>
     <AdminPageHeading title={titles.adjustments}/>
