@@ -4,7 +4,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startLocalBackend } from '../database/local-runtime.js';
+import { migrateEmptyDatabase, startLocalBackend } from '../database/local-runtime.js';
+import { billingPeriod } from '../src/admin-v2/mock-billing.js';
 import { domainModelWorkspace } from '../src/mock/model-fields.js';
 import { offerKey } from '../src/service-access.mjs';
 import { materialBase } from '../src/admin-v2/model-operations.js';
@@ -28,11 +29,11 @@ import { platformAllowedChannels, platformCandidatePlan, publishPlatformCandidat
 test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are enforced end to end by D1',{timeout:90000},async()=>{
   const accessCode=randomBytes(18).toString('hex');
   const [a,b,c]=['zqzh','grzh','hospital-c'];
-  const loginHashes=Object.fromEntries(['yyg',a,b,c].map(id=>[id,createHash('sha256').update(accessCode).digest('hex')]));
+  const loginHashes=Object.fromEntries(['yyg','admin-002',a,b,c].map(id=>[id,createHash('sha256').update(accessCode).digest('hex')]));
   const persistPath=await mkdtemp(join(tmpdir(),'moma-glm-channel-market-'));
   let local,state,admin;
   async function request(path,{body,cookie,key}={}){
-    const response=await local.runtime.dispatchFetch('https://example.test/api/5120'+path,{method:body?'POST':'GET',
+    const response=await local.runtime.dispatchFetch('https://example.test/api/v1'+path,{method:body?'POST':'GET',
       headers:{...(cookie?{cookie}:{}),...(body?{origin:'https://example.test','x-moma-request':'1','content-type':'application/json'}:{}),...(key?{'idempotency-key':key}:{})},
       ...(body?{body:JSON.stringify(body)}:{})});
     return {status:response.status,data:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]};
@@ -73,9 +74,9 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     await command('templatePublish',{id:reference.id,confirmed:true,expectedBase:materialBase(state,reference),value:{...reference,...declared}});
     const material=state.modelTemplates.find(row=>row.id===reference.id);
     const sources=[
-      {vendor:'甲云',code:'qa-cloud-a',source:'自营',callId:'glm-5.3-a-self',upstream:'vendor/GLM-native',retail:[2,8]},
+      {vendor:'甲云',code:'qa-cloud-a',source:'自营',callId:'glm-5.3-a-self',upstream:'vendor/GLM-native',retail:[2000,8000]},
       {vendor:'甲云',code:'qa-cloud-a',source:'转售',callId:'glm-5.3-a-resale',upstream:'vendor/GLM-resale',retail:[3,10]},
-      {vendor:'乙云',code:'qa-cloud-b',source:'自营',callId:'glm-5.3-b-self',upstream:'vendor/GLM-native',retail:[2.5,9]},
+      {vendor:'乙云',code:'qa-cloud-b',source:'自营',callId:'glm-5.3-b-self',upstream:'vendor/GLM-native',retail:[2500,9000]},
     ];
     for (const source of sources) {
       const shared=sources.find(row=>row!==source && row.code===source.code && row.endpointId);
@@ -194,8 +195,35 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     const fact=beforeBills.requests.find(row=>row.requestId===successful[0].input.requestId);
     assert.equal(fact.userId,a);assert.equal(fact.priceVersionId,services.find(row=>row.callId===fact.publicModelId).salePriceId);
     assert.equal(fact.charge.currency,'CNY');
+    const restricted=await request('/application',{cookie:await login('/auth/login','admin-002')});
+    assert.equal(restricted.status,200,JSON.stringify(restricted.data.error));
+    const diagnostic=restricted.data.requests.find(row=>row.requestId===fact.requestId);
+    assert.equal(diagnostic.httpStatus,200);
+    assert.deepEqual(diagnostic.usage,fact.usage);
+    assert.equal(diagnostic.attempts[0].providerId,fact.attempts[0].procurementSnapshot.providerId);
+    for(const data of [diagnostic,...diagnostic.attempts]){
+      for(const field of ['charge','priceSnapshot','priceVersionId','procurementSnapshot'])assert(!Object.hasOwn(data,field),field);
+    }
+    const monthly=tenant=>local.db.prepare('SELECT amount_micros FROM market_monthly_charges WHERE period=? AND tenant_id=?')
+      .bind(billingPeriod(),tenant).first('amount_micros');
+    const initialMicros=beforeBills.requests.filter(row=>successful.some(item=>item.input.requestId===row.requestId))
+      .reduce((sum,row)=>sum+row.charge.amount,0);
+    assert(initialMicros>=10000);
+    assert.equal(await monthly(a),initialMicros,'replayed calls must not add charges');
+    await local.db.batch([
+      ...['market_charge_receipts','market_monthly_charges','retired_tenant_keys'].map(table=>local.db.prepare('DROP TABLE '+table)),
+      local.db.prepare('UPDATE db_state SET schema_version=12 WHERE id=1'),
+      local.db.prepare("UPDATE model_workspace SET reference_json=json_insert(reference_json,'$.grants[#]',json(?)) WHERE id=1")
+        .bind(JSON.stringify({id:'legacy-orphan',subjectType:'key',subjectId:'legacy-key',status:'生效中'})),
+    ]);
+    await migrateEmptyDatabase(local.db);
+    assert.equal(await monthly(a),initialMicros,'v12 upgrade backfills retained usage');
+    assert.equal(await local.db.prepare('SELECT count(*) AS n FROM market_charge_receipts').first('n'),2);
+    assert.equal(await local.db.prepare('SELECT id FROM retired_tenant_keys WHERE id=?').bind('legacy-key').first('id'),'legacy-key');
     assert.equal((await apply({type:'generateBills'})).status,200);
-    assert.ok((await application()).bills.some(row=>row.tenantId===a && row.status==='待出账'));
+    const draft=(await application()).bills.find(row=>row.tenantId===a && row.period===billingPeriod());
+    assert.equal(draft.status,'待出账');
+    assert.equal(draft.amount,Math.round(initialMicros/10000)/100);
 
     const packageState=async()=>(await request('/package-management',{cookie:admin})).data;
     const packageCommand=async (operation,values,record)=>{
@@ -252,7 +280,8 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
       assert.equal((await call(previous.input)).status,409);
     }
     assert.equal((await order(third.id)).status,200);
-    const after=await call(body(third.callId));assert.equal(after.status,200,JSON.stringify(after.data));
+    const afterInput=body(third.callId);
+    const after=await call(afterInput);assert.equal(after.status,200,JSON.stringify(after.data));
     successful.push({source:sources[2],id:after.data.id});
     for (const {source,id} of successful) {
       const row=await local.db.prepare("SELECT json_extract(r.payload_json,'$.upstreamModelId') AS upstream,call.offer_id,call.sale_price_id,call.route_version_id FROM market_calls call JOIN simulation_records r ON r.kind='usage' AND r.id=call.usage_id WHERE call.usage_id=?").bind(id).first();
@@ -273,14 +302,28 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal((await call(body(third.callId))).data.error.code,'ORDER_REQUIRED');
     const reordered=await order(third.id);
     assert.equal(reordered.status,200);assert.notEqual(reordered.data.orders[0].id,activeOrder.id);
-    const expiring=successful[0];
+    const expiring=successful.at(-1);
     await local.db.prepare('UPDATE market_calls SET created_at=? WHERE usage_id=?').bind(Date.now()-8*86400000,expiring.id).run();
-    assert.equal((await call(body(third.callId))).status,200);
+    const beforeExpiry=await monthly(a);
+    assert(beforeExpiry>initialMicros);
+    const denied=await call({...body(third.callId),simulateDenied:true});
+    assert.equal(denied.data.httpStatus,403);
     assert.equal(await local.db.prepare("SELECT id FROM simulation_records WHERE kind='usage' AND id=?").bind(expiring.id).first(),null);
+    assert.equal((await call(afterInput)).data.error.code,'CALL_RECEIPT_EXPIRED');
+    assert.equal(await monthly(a),beforeExpiry,'expired details and denied calls do not change the total');
+    assert.equal((await apply({type:'generateBills'})).status,200);
+    const updated=(await application()).bills.find(row=>row.id===draft.id);
+    assert.equal(updated.billNo,draft.billNo);
+    assert.equal(updated.amount,Math.round(beforeExpiry/10000)/100);
+    assert(updated.amount>draft.amount);
+    assert.equal((await apply({type:'update',collection:'bills',id:draft.id,changes:{status:'已出账'}})).status,200);
     await reload();
     await command('startSales',{...release([keys[2]],[]),releaseStage:'formal'},modelId);
     assert.deepEqual((await request('/market/ranking')).data.rows,[],'转为正式上架也不公开历史灰度用量');
     assert.equal((await call(body(third.callId))).status,200);
+    assert.equal((await apply({type:'generateBills'})).status,200);
+    const issued=(await application()).bills.filter(row=>row.tenantId===a && row.period===billingPeriod());
+    assert.deepEqual(issued.map(row=>[row.id,row.amount,row.status]),[[draft.id,updated.amount,'已出账']]);
     const ranking=await request('/market/ranking');
     assert.equal(ranking.status,200);
     assert.ok(ranking.data.rows.some(row=>row.id===material.id && row.tokens>=10));

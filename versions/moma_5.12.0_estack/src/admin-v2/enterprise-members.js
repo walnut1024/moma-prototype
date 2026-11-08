@@ -30,6 +30,6 @@ export function enterpriseMemberView(state, tenant, filters = {}) {
   const search = query.trim().toLowerCase();
   const filtered = scoped.filter(member => (role === 'all' || member.role === role) &&
     (status === 'all' || member.status === status) &&
-    `${userFor(member)?.name || member.name} ${userFor(member)?.login || ''} ${member.userId} ${member.role}`.toLowerCase().includes(search));
+    `${member.memberName ?? (userFor(member)?.name || member.name)} ${userFor(member)?.login || ''} ${member.userId} ${member.role}`.toLowerCase().includes(search));
   return { organizations, members, organization, scoped, filtered, organizationFor, userFor };
 }

@@ -1,3 +1,4 @@
+import { API_PREFIX } from '../api-path.js';
 import { useEffect, useState } from 'react';
 import { marketDemoModelIds } from './mock/model-data.js';
 
@@ -14,7 +15,7 @@ export function useMarketVisibility(enabled) {
       const controller = new AbortController();
       request = controller;
       try {
-        const response = await fetch('/api/5120/model-market/visibility', { signal: controller.signal, credentials: 'omit' });
+        const response = await fetch(API_PREFIX+'/model-market/visibility', { signal: controller.signal, credentials: 'omit' });
         if (!response.ok) throw Error('展示状态读取失败');
         const result = await response.json();
         if (!result.visibility || typeof result.visibility !== 'object' || Array.isArray(result.visibility) ||

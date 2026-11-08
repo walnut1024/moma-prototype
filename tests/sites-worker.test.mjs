@@ -18,12 +18,12 @@ test("serves existing static assets without a fallback", async () => {
   assert.deepEqual(calls, ["/assets/app.js"]);
 });
 
-test('routes only the 5.12.0 API to the version handler and never serves its failures as HTML', async () => {
+test('routes API v1 to the backend and never serves its failures as HTML', async () => {
   const env = { ASSETS: { fetch: () => { throw Error('API must not read assets'); } } };
-  const missingBinding = await worker.fetch(new Request('https://example.test/api/5120/services'), env);
+  const missingBinding = await worker.fetch(new Request('https://example.test/api/v1/services'), env);
   assert.equal(missingBinding.status, 503);
   assert.equal((await missingBinding.json()).error.code, 'DATABASE_UNAVAILABLE');
-  const unknown = await worker.fetch(new Request('https://example.test/api/5120/unknown', { headers: { accept: 'text/html' } }), env);
+  const unknown = await worker.fetch(new Request('https://example.test/api/v1/unknown', { headers: { accept: 'text/html' } }), env);
   assert.equal(unknown.status, 404);
   assert.equal((await unknown.json()).error.code, 'NOT_FOUND');
 });
@@ -53,7 +53,7 @@ test("falls back to index.html for an unknown app route", async () => {
 
 test("does not turn missing API or write requests into the app shell", async () => {
   for (const request of [
-    new Request("https://example.test/api/missing", { headers: { accept: "application/json" } }),
+    new Request("https://example.test/api/5120/health", { headers: { accept: "text/html" } }),
     new Request("https://example.test/flow", { method: "POST", headers: { accept: "text/html" } }),
   ]) {
     let calls = 0;

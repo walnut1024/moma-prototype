@@ -1,9 +1,10 @@
+import { API_PREFIX } from '../api-path.js';
 import assert from 'node:assert/strict';
 import{readFile,writeFile}from'node:fs/promises';
 import{completeServiceShowcase}from'../src/admin-v2/service-showcase-client.js';
 import{configureOnboardingTransport}from'../src/admin-v2/onboarding-client.js';
 import{useCloudMockSnapshot}from'../src/admin-v2/mock-onboarding-service.js';
-const base='https://5120-d1-preview.moma-prototype.pages.dev/api/5120';
+const base='https://5120-d1-preview.moma-prototype.pages.dev'+API_PREFIX;
 const codes=JSON.parse(await readFile(new URL('./.local/cloud-access.json',import.meta.url),'utf8'));
 let cookie,state;const timings=[];console.log('验收开始',new Date().toISOString());
 async function api(path,{method='GET',body,operationId}={}){

@@ -144,11 +144,11 @@ function AdminConsoleV2View({bannerTarget,store}) {
   const detailProvider = ['providers', 'provider-materials'].includes(active) ? state.providers.find(item => item.id === detailParams.get("provider")) : null;
   const activeModule = sections.flatMap(group => group.items).find(item => item.id === page.area);
   const detailTenant = active === 'customer-usage-detail' ? state.tenants.find(item => item.id === new URLSearchParams(location.hash.split('?')[1] || '').get('customer')) : null;
-  const detailModel = detailParams.get('view') === 'template' && ['listing', 'model-templates'].includes(active) ? libraryRecord(state, detailParams.get('template'))
+  const detailModel = !canVisit ? null : detailParams.get('view') === 'template' && ['listing', 'model-templates'].includes(active) ? libraryRecord(state, detailParams.get('template'))
             : active === 'listing' ? state.models.find(item => item.id === detailParams.get('model')) : null;
-  const enterpriseDetailId = active === 'tenants' ? detailParams.get('enterprise') : null;
+  const enterpriseDetailId = canVisit && active === 'tenants' ? detailParams.get('enterprise') : null;
   const detailEnterprise = enterpriseDetailId ? state.tenants.find(item => item.id === enterpriseDetailId && ['企业', '政府'].includes(item.type) && (detailParams.get('scenario') !== 'private' || privateEnterprise(state)?.id === item.id)) : null;
-  const individualDetailId = active === 'individual-users' ? detailParams.get('user') : null;
+  const individualDetailId = canVisit && active === 'individual-users' ? detailParams.get('user') : null;
   const detailIndividual = individualDetailId ? individualAccounts(state).find(account => account.tenant.ownerId === individualDetailId) : null;
   const breadcrumbs = !canVisit ? [{ label: '无访问权限' }] : adminBreadcrumbs(active, detailParams, { onboardingIntent: state.modelOnboardings.find(row=>row.id===detailParams.get('draft'))?.intent, provider: detailProvider?.name, model: detailModel?.name, deployment: state.deployments.find(item => item.id === detailParams.get('deployment'))?.name, enterprise: detailEnterprise?.name, user: detailIndividual && individualName(detailIndividual), customer: detailTenant?.name });
   const enterAdmin = accountId => {

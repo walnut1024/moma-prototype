@@ -13,7 +13,7 @@ const hash = createHash('sha256').update(code).digest('hex');
 let local, admin, operator, maintenance;
 
 async function request(path, { session = admin, body, sameOrigin = true } = {}) {
-  const response = await local.runtime.dispatchFetch('https://example.test/api/5120' + path, {
+  const response = await local.runtime.dispatchFetch('https://example.test/api/v1' + path, {
     method: body ? 'POST' : 'GET',
     headers: {
       ...(session ? { cookie: session } : {}),
@@ -77,7 +77,7 @@ test('D1 seeds both defaults and upgrades a v9 database without changing its sav
       .bind(time, JSON.stringify({ before: fresh.global, after: legacy })),
   ]);
   await migrateEmptyDatabase(local.db);
-  assert.equal((await request('/health')).data.schemaVersion, 12);
+  assert.equal((await request('/health')).data.schemaVersion, 13);
   const upgraded = (await request(path)).data;
   assert.deepEqual(upgraded.global, legacy);
   assert.deepEqual(upgraded.modelDefault, fresh.modelDefault);

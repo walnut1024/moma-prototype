@@ -120,8 +120,9 @@ function usageFields(row, model, usage = row.usage) {
 }
 
 export function callObservations(state) {
-  const [models, users, tenants, keys, providers, endpoints] = ['models', 'users', 'tenants', 'apiKeys', 'providers', 'endpoints']
-    .map(collection => new Map((state[collection] || []).map(row => [row.id, row])));
+  const [models, users, tenants, keys, providers, endpoints] =
+    [state.models, state.users, state.tenants, state.gatewayKeyOptions ?? state.apiKeys, state.providers, state.endpoints]
+      .map(collection => new Map((collection || []).map(row => [row.id, row])));
   const providerName = id => providers.get(id)?.name || id;
   const rows = [], attempts = [], seen = new Set();
   for (const record of state.requests) {

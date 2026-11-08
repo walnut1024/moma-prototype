@@ -40,7 +40,7 @@ test('material release sorting is newest first, stable for ties and missing last
 test('D1 commercial commands reject incomplete and stale writes, reject removed authorization and persist price and replay idempotently',{timeout:90000},async()=>{
   const accessCode=randomBytes(24).toString('hex'),local=await startLocalBackend({ demo: true, loginHashes:{'admin-001':createHash('sha256').update(accessCode).digest('hex')}});let cookie='',state;
   try{
-    const api=async(path,body,id)=>{const response=await local.runtime.dispatchFetch('https://example.test/api/5120'+path,{method:body?'POST':'GET',headers:{...(cookie?{cookie}:{}),...(body?{'content-type':'application/json',origin:'https://example.test','x-moma-request':'1'}:{}),...(id?{'idempotency-key':id}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:response.status,data:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]};};
+    const api=async(path,body,id)=>{const response=await local.runtime.dispatchFetch('https://example.test/api/v1'+path,{method:body?'POST':'GET',headers:{...(cookie?{cookie}:{}),...(body?{'content-type':'application/json',origin:'https://example.test','x-moma-request':'1'}:{}),...(id?{'idempotency-key':id}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:response.status,data:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]};};
     cookie=(await api('/auth/login',{accountId:'admin-001',accessCode})).cookie;
     const reload=async()=>{state=domainModelWorkspace((await api('/model-operations')).data);};await reload();
     const modelId='model-glm53',providerId='provider-moma',model=()=>state.models.find(row=>row.id===modelId),before=structuredClone(state);

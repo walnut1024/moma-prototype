@@ -53,7 +53,8 @@ export function tenantKeyChanges({state,identity,link,canManage}, rows, {billing
     if(quotaLimit!==null&&quotaLimit!==undefined&&(!Number.isSafeInteger(quotaLimit)||quotaLimit<0))throw Error('额度必须为非负整数');
     for(const field of ['tpmLimit','qpmLimit'])if(row[field]!=null&&(!Number.isSafeInteger(row[field])||row[field]<1))throw Error('TPM 和 QPM 上限必须为正整数');
     const project=state.projects.find(item=>item.tenantId===identity.tenantId && item.status==='正常');if(!project)throw Error('请先配置当前客户的项目空间');
-    const grantId='tenant-grant:'+row.id,grant=next.grants.find(item=>item.id===grantId)||next.grants.find(item=>item.subjectType==='key'&&item.subjectId===row.id&&item.status==='生效中');
+    const grantId='tenant-grant:'+row.id;
+    const grant=existing && next.grants.find(item=>item.subjectType==='key'&&item.subjectId===row.id&&(item.id===grantId||item.status==='生效中'));
     if(quotaLimit!==undefined){
       const period={'日':'day','周':'week','月':'month','总额度':'total','不限额度':'total'}[row.quotaType] || 'day';
       if(quotaLimit!==null){
@@ -63,6 +64,8 @@ export function tenantKeyChanges({state,identity,link,canManage}, rows, {billing
     }
     return {...existing,id:row.id,keyId:existing?.keyId || row.id,name,description:String(row.desc || ''),tenantId:identity.tenantId,projectId:existing?.projectId || project.id,ownerId:existing?.ownerId || link.backendUserId,modelIds,status:row.enabled?'有效':'停用',billingType:billing,quotaType:row.quotaType,quotaLimit,tpmLimit:row.tpmLimit ?? null,qpmLimit:row.qpmLimit ?? null,...(subscriptionId?{subscriptionId}:{}),ipAllowlist:parseIpAllowlist((row.ips || []).join('\n')),secretPreview:row.secretPreview || (row.key?.startsWith('sk-')?row.key.slice(0,3)+'****'+row.key.slice(-4):existing?.secretPreview || '****'),credentialVersion:row.credentialVersion || existing?.credentialVersion || 1,createdAt:existing?.createdAt || new Date().toISOString(),updatedAt:new Date().toISOString()};
   });
+  const removed=new Set(scoped.filter(row=>!ids.has(row.id)).map(row=>row.id));
+  for(const grant of next.grants)if(grant.subjectType==='key'&&removed.has(grant.subjectId))grant.status='已停用';
   next.apiKeys=next.apiKeys.filter(row=>!scoped.some(item=>item.id===row.id)).concat(mapped);
   return next;
 }
@@ -82,7 +85,7 @@ export function orderTenantServices(serviceIds,expectedRevision,storage=globalTh
 export function organizationProjection(state,tenantId) {
   const root=state.organizations.find(row=>row.tenantId===tenantId&&!row.parentId);
   const id=row=>row===root?.id?'root':row;
-  return {platformAccounts:state.users.filter(row=>row.invitable&&row.status==='正常').map(row=>({sourceUserId:row.id,name:row.name,account:row.login,phone:row.phone})),departments:state.organizations.filter(row=>row.tenantId===tenantId).map(row=>({...row,id:id(row.id),parentId:id(row.parentId),ownerId:state.memberships.find(member=>member.tenantId===tenantId&&member.userId===row.ownerId)?.id || null})),members:state.memberships.filter(row=>row.tenantId===tenantId).map(row=>{const user=state.users.find(item=>item.id===row.userId);return {...row,name:user?.name || row.name || '未填写',phone:user?.phone || '',account:user?.login || user?.email || user?.phone || row.userId,departmentId:id(row.organizationId || row.departmentId) || 'unassigned',role:row.role==='租户管理员'?'企业管理员':row.role,status:row.status==='正常'?'已加入':row.status==='停用'?'已停用':'待加入'};}),audit:state.audits.filter(row=>row.tenantId===tenantId).map(row=>({id:row.id,time:row.createdAt,actor:row.actor,description:row.action}))};
+  return {platformAccounts:state.users.filter(row=>row.invitable&&row.status==='正常').map(row=>({sourceUserId:row.id,name:row.name,account:row.login,phone:row.phone})),departments:state.organizations.filter(row=>row.tenantId===tenantId).map(row=>({...row,id:id(row.id),parentId:id(row.parentId),ownerId:state.memberships.find(member=>member.tenantId===tenantId&&member.userId===row.ownerId)?.id || null})),members:state.memberships.filter(row=>row.tenantId===tenantId).map(row=>{const user=state.users.find(item=>item.id===row.userId);return {...row,name:row.memberName ?? (user?.name || row.name || '未填写'),phone:row.memberPhone ?? (user?.phone || ''),account:user?.login || user?.email || user?.phone || row.userId,departmentId:id(row.organizationId || row.departmentId) || 'unassigned',role:row.role==='租户管理员'?'企业管理员':row.role,status:row.status==='正常'?'已加入':row.status==='停用'?'已停用':'待加入'};}),audit:state.audits.filter(row=>row.tenantId===tenantId).map(row=>({id:row.id,time:row.createdAt,actor:row.actor,description:row.action}))};
 }
 export function saveTenantOrganization(data,expectedRevision,storage=globalThis.localStorage) {
   const context=tenantContext(storage), {state,identity}=context, raw=storage.getItem(ADMIN_DATA_KEY);
@@ -105,7 +108,22 @@ export function tenantOrganizationChanges({state,identity,link,canManage}, data)
   for(const department of data.departments){if(state.organizations.some(row=>row.id===departmentId(department.id)&&row.tenantId!==identity.tenantId))throw Error('部门归属冲突');}
   for(const member of data.members){if(state.memberships.some(row=>row.id===member.id&&row.tenantId!==identity.tenantId))throw Error('成员归属冲突');}
   next.organizations=next.organizations.filter(row=>row.tenantId!==identity.tenantId).concat(data.departments.map(row=>({...row,id:departmentId(row.id),parentId:departmentId(row.parentId),tenantId:identity.tenantId,ownerId:data.members.find(member=>member.id===row.ownerId)?.userId || null,status:'正常'})));
-  const members=data.members.map(row=>{const old=state.memberships.find(item=>item.id===row.id);if(old&&JSON.stringify(before.members.find(item=>item.id===row.id))===JSON.stringify(row))return structuredClone(old);const userId=old?.userId || before.platformAccounts?.find(account=>account.account===row.account)?.sourceUserId || 'user:'+row.id;const user=next.users.find(item=>item.id===userId);const profile={name:row.name,phone:row.phone,login:row.account};if(user){if(old)Object.assign(user,profile);}else next.users.push({id:userId,...profile,status:'正常'});return {...old,...row,userId,tenantId:identity.tenantId,organizationId:departmentId(row.departmentId),scopeId:departmentId(row.scopeId),role:row.role==='企业管理员'?'租户管理员':row.role,status:row.status==='已加入'?'正常':row.status==='已停用'?'停用':'待加入'};});
+  const members=data.members.map(row=>{
+    const old=state.memberships.find(item=>item.id===row.id);
+    const previous=before.members.find(item=>item.id===row.id);
+    if(old&&JSON.stringify(previous)===JSON.stringify(row))return structuredClone(old);
+    let userId=old?.userId || before.platformAccounts.find(account=>account.account===row.account)?.sourceUserId;
+    if(!userId){
+      userId='user:'+crypto.randomUUID();
+      next.users.push({id:userId,name:row.name,phone:row.phone,login:row.account,status:'正常'});
+    }
+    return {...old,id:row.id,userId,tenantId:identity.tenantId,organizationId:departmentId(row.departmentId),
+      scopeId:departmentId(row.scopeId),role:row.role==='企业管理员'?'租户管理员':row.role,
+      status:row.status==='已加入'?'正常':row.status==='已停用'?'停用':'待加入',
+      includeChildren:row.includeChildren,source:old?.source || row.source,
+      memberName:row.name===previous?.name ? old?.memberName : row.name,
+      memberPhone:row.phone===previous?.phone ? old?.memberPhone : row.phone};
+  });
   next.organizations=next.organizations.map(row=>{if(row.tenantId!==identity.tenantId)return row;const source=data.departments.find(department=>departmentId(department.id)===row.id);return {...row,ownerId:members.find(member=>member.id===source.ownerId)?.userId || null};});
   next.memberships=next.memberships.filter(row=>row.tenantId!==identity.tenantId).concat(members);next.identityGeneration=(next.identityGeneration || 0)+1;
   return next;

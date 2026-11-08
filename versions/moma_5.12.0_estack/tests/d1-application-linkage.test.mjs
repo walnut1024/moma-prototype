@@ -10,7 +10,7 @@ import { startLocalBackend } from '../database/local-runtime.js';
 
 test('the preset administrator and customers share D1 while their workspaces stay isolated after a restart', { timeout:30_000 }, async () => {
   const persistPath=await mkdtemp(join(tmpdir(),'moma5120-linkage-'));
-  const passwords=Object.fromEntries(['yyg','zqzh','grzh'].map(id=>[id,randomUUID()]));
+  const passwords=Object.fromEntries(['yyg','zqzh','grzh','admin-002'].map(id=>[id,randomUUID()]));
   const loginHashes=Object.fromEntries(Object.entries(passwords).map(([id,password])=>[id,createHash('sha256').update(password).digest('hex')]));
   let local;
   try {
@@ -18,7 +18,7 @@ test('the preset administrator and customers share D1 while their workspaces sta
     const request=async (path,{ cookie, body }={})=>{
       const headers={ ...(cookie?{ Cookie:cookie }:{}), ...(body?{ 'X-MoMA-Request':'1', Origin:local.url.origin,'Content-Type':'application/json' }:{}) };
       if (path==='application/commands') headers['Idempotency-Key']=body.operationId;
-      const response=await fetch(new URL('api/5120/'+path,local.url),{ headers, ...(body?{method:'POST',body:JSON.stringify(body)}:{}) });
+      const response=await fetch(new URL('api/v1/'+path,local.url),{ headers, ...(body?{method:'POST',body:JSON.stringify(body)}:{}) });
       return { status:response.status, data:await response.json(), cookie:response.headers.get('set-cookie')?.split(';')[0] };
     };
     const login=(id,admin=false)=>request(admin?'auth/login':'market/login',{body:{[admin?'accountId':'tenantId']:id,accessCode:passwords[id]}});
@@ -51,6 +51,54 @@ test('the preset administrator and customers share D1 while their workspaces sta
     const app=(await request('application',{cookie:admin.cookie})).data;
     assert.equal(app.apiKeys.find(row=>row.id==='linkage-test-key').tenantId,'zqzh');
     assert.ok(!(await request('market/workspace',{cookie:personal.cookie})).data.keys.some(row=>row.id==='linkage-test-key'));
+
+    const maintenance=await login('admin-002',true);
+    assert.equal(maintenance.data.account.role,'运维人员');
+    const restricted=await request('application/open',{cookie:maintenance.cookie,body:{}});
+    assert.equal(restricted.status,200,JSON.stringify(restricted.data.error));
+    for(const field of ['users','memberships','projects','apiKeys','grants','orders','bills','ledger','identityEvents','modelSalePrices','supplyPrices']){
+      assert(!Object.hasOwn(restricted.data,field),field);
+    }
+    assert.deepEqual(restricted.data.gatewayKeyOptions.find(row=>row.id==='linkage-test-key'),
+      {id:'linkage-test-key',keyId:'linkage-test-key',status:'有效'});
+    assert(restricted.data.tenants.every(row=>!Object.hasOwn(row,'ownerId')));
+    assert.equal(restricted.data.clusters.length,app.clusters.length);
+
+    const tenantCommand=async (login,tenantId,action,data)=>{
+      const expectedRevision=(await request('market/workspace',{cookie:login.cookie})).data.revision;
+      return request('market/commands',{cookie:login.cookie,body:{operationId:randomUUID(),tenantId,expectedRevision,action,data}});
+    };
+    const [keep]=operation.data.rows;
+    const retired={...keep,id:'linkage-retired-key',quotaLimit:987654,quotaType:'日'};
+    const unlimited={...keep,id:'linkage-retired-unlimited-key'};
+    const writeKeys=(login,tenantId,rows)=>tenantCommand(login,tenantId,'keys',{billing:'按量付费',rows});
+    assert.equal((await writeKeys(business,'zqzh',[keep,retired,unlimited])).status,200);
+    assert.equal((await writeKeys(business,'zqzh',[keep])).status,200);
+    const afterDelete=(await request('application',{cookie:admin.cookie})).data;
+    assert.equal(afterDelete.grants.find(row=>row.subjectId===retired.id).status,'已停用');
+    assert.equal((await writeKeys(personal,'grzh',[retired])).status,422);
+    assert.equal((await writeKeys(personal,'grzh',[unlimited])).status,422);
+
+    const org=(await request('market/workspace',{cookie:business.cookie})).data.organization;
+    const account=org.platformAccounts.find(row=>!org.members.some(member=>member.account===row.account));
+    assert(account);
+    const invited={id:'linkage-member',name:account.name,phone:account.phone,account:account.account,
+      role:'普通成员',status:'待加入',departmentId:'root'};
+    const writeOrg=data=>tenantCommand(business,'zqzh','organization',data);
+    const invitation=await writeOrg({...org,members:[...org.members,invited]});
+    assert.equal(invitation.status,200,JSON.stringify(invitation.data.error));
+    const activeOrg=(await request('market/workspace',{cookie:business.cookie})).data.organization;
+    const renamed={...activeOrg.members.find(row=>row.id===invited.id),name:'企业内部显示名',phone:'13900009999'};
+    assert.equal(renamed.userId,account.sourceUserId);
+    const edit=await writeOrg({...activeOrg,members:activeOrg.members.map(row=>row.id===renamed.id?renamed:row)});
+    assert.equal(edit.status,200,JSON.stringify(edit.data.error));
+    const edited=(await request('market/workspace',{cookie:business.cookie})).data.organization;
+    assert.equal(edited.members.find(row=>row.id===renamed.id).name,renamed.name);
+    assert.equal(edited.members.find(row=>row.id===renamed.id).phone,renamed.phone);
+    assert.deepEqual(edited.platformAccounts.find(row=>row.sourceUserId===account.sourceUserId),account);
+    const globalUser=(await request('application',{cookie:admin.cookie})).data.users.find(row=>row.id===account.sourceUserId);
+    assert.equal(globalUser.name,account.name);
+    assert.equal(globalUser.phone,account.phone);
 
     const adminCommand=async action=>{
       const revision=(await request('application',{cookie:admin.cookie})).data.revision;
@@ -89,6 +137,8 @@ test('the preset administrator and customers share D1 while their workspaces sta
     local=await startLocalBackend({ persistPath, loginHashes, presets:true });
     const persisted=(await request('market/workspace',{cookie:business.cookie})).data;
     assert.equal(persisted.keys.find(row=>row.id==='linkage-test-key').secretPreview,'sk-demo*****abcd');
+    assert.equal(persisted.organization.members.find(row=>row.id===renamed.id).name,renamed.name);
+    assert.equal((await writeKeys(business,'zqzh',[keep,retired])).status,422);
     assert.equal((await request('application',{cookie:admin.cookie})).data.providers.length,4);
   } finally {
     await local?.runtime.dispose();

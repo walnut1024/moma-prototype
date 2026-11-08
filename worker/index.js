@@ -1,13 +1,14 @@
+import { isApiPath } from '../versions/moma_5.12.0_estack/api-path.js';
 import { handleModelOperations } from '../versions/moma_5.12.0_estack/server/api.js';
 
 export default {
   async fetch(request, env) {
     const pathname = new URL(request.url).pathname;
-    if (pathname === '/api/5120' || pathname.startsWith('/api/5120/')) return handleModelOperations(request, env);
+    if (isApiPath(pathname)) return handleModelOperations(request, env);
     const response = await env.ASSETS.fetch(request);
     const acceptsHtml = request.headers.get("accept")?.includes("text/html");
 
-    if (response.status !== 404 || !acceptsHtml || !["GET", "HEAD"].includes(request.method)) {
+    if (response.status !== 404 || pathname.startsWith('/api/') || !acceptsHtml || !["GET", "HEAD"].includes(request.method)) {
       return response;
     }
 

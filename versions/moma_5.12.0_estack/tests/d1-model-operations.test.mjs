@@ -32,7 +32,7 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
   const local=await startLocalBackend({ demo: true, loginHashes:{'admin-001':createHash('sha256').update(accessCode).digest('hex')}});
   let cookie,state;
   async function api(path,{method='GET',body,operationId}={}){
-    const r=await local.runtime.dispatchFetch('https://example.test/api/5120'+path,{method,headers:{...(cookie?{cookie}:{}),...(method==='GET'?{}:{origin:'https://example.test','x-moma-request':'1','content-type':'application/json'}),...(operationId?{'idempotency-key':operationId}:{})},...(body?{body:JSON.stringify(body)}:{})});
+    const r=await local.runtime.dispatchFetch('https://example.test/api/v1'+path,{method,headers:{...(cookie?{cookie}:{}),...(method==='GET'?{}:{origin:'https://example.test','x-moma-request':'1','content-type':'application/json'}),...(operationId?{'idempotency-key':operationId}:{})},...(body?{body:JSON.stringify(body)}:{})});
     const raw=await r.json(),data=path==='/model-operations' && r.ok?domainModelWorkspace(raw):raw;if(!r.ok)throw Object.assign(new Error(data.error?.message || JSON.stringify(data)),{status:r.status,code:data.error?.code});return {data,headers:r.headers};
   }
   try{

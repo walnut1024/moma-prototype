@@ -1,3 +1,4 @@
+import { API_PREFIX } from './api-path.js';
 import {validateApplicationConfig} from './src/mock/application-data.js';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -20,7 +21,7 @@ export default defineConfig({
       const path = semiDate(source, importer); if (path) return { path };
     });
   } }] } },
-  server: { host: '127.0.0.1', proxy: { '/api/5120': { target:'http://127.0.0.1:'+Number(process.env.MOMA_5120_BACKEND_PORT || 8787), changeOrigin: false } } },
+  server: { host: '127.0.0.1', proxy: { [API_PREFIX]: { target:'http://127.0.0.1:'+Number(process.env.MOMA_5120_BACKEND_PORT || 8787), changeOrigin: false } } },
   build: {
     outDir,
     emptyOutDir: true,

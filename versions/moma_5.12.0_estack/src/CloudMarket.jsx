@@ -1,3 +1,4 @@
+import { API_PREFIX } from '../api-path.js';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
@@ -7,7 +8,7 @@ import { cloudMarketPresentation } from './service-directory.mjs';
 export const MARKET_EVENT='moma5120-market-change';
 
 export async function marketRequest(path, body, signal) {
-  const response=await fetch('/api/5120/market/'+path,{credentials:'same-origin',signal,
+  const response=await fetch(API_PREFIX+'/market/'+path,{credentials:'same-origin',signal,
     ...(body?{method:'POST',headers:{'Content-Type':'application/json','X-MoMA-Request':'1'},body:JSON.stringify(body)}:{})});
   const data=await response.json();
   if (!response.ok) throw Object.assign(new Error(data.error?.message || '模型广场暂不可用'), { status: response.status, code: data.error?.code });

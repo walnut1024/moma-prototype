@@ -1,3 +1,4 @@
+import { API_PREFIX } from '../../api-path.js';
 import AdminPageLoading from './AdminPageLoading';
 import {useEffect,useRef,useState} from 'react';
 import {Banner, Button, Card, Form, Input, Toast, Typography} from '@douyinfe/semi-ui';
@@ -14,7 +15,7 @@ export async function prepareModelServiceShowcase(){if(!currentCloudState)throw 
 export async function completeModelServiceShowcase(onProgress){if(!currentCloudState)throw Error('请先进入模型运营并登录');return completeServiceShowcase(currentCloudState,saveCloudState,{onProgress});}
 
 async function api(path,{method='GET',body,operationId,signal}={}){
-  const response=await fetch('/api/5120'+path,{method,credentials:'same-origin',signal,headers:{...(method==='GET'?{}:{'content-type':'application/json','x-moma-request':'1'}),...(operationId?{'Idempotency-Key':operationId}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});
+  const response=await fetch(API_PREFIX+path,{method,credentials:'same-origin',signal,headers:{...(method==='GET'?{}:{'content-type':'application/json','x-moma-request':'1'}),...(operationId?{'Idempotency-Key':operationId}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});
   const data=await response.json();
   if(!response.ok || data.error)throw Object.assign(new Error(data.error?.message || '请求失败'),{code:data.error?.code,status:response.status});
   return path==='/model-operations'?domainModelWorkspace(data):data;

@@ -14,7 +14,7 @@ const hash = createHash('sha256').update(testCode).digest('hex');
 let local, admin, operator, maintenance;
 
 async function request(path, { session = admin, body, key } = {}) {
-  const response = await local.runtime.dispatchFetch('https://example.test/api/5120' + path, {
+  const response = await local.runtime.dispatchFetch('https://example.test/api/v1' + path, {
     method: body ? 'POST' : 'GET',
     headers: {
       ...(session ? { cookie: session } : {}),

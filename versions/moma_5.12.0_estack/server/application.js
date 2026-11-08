@@ -1,5 +1,5 @@
 import { initialApplicationData } from '../src/mock/application-data.js';
-import { mockCharge, billingPeriod } from '../src/admin-v2/mock-billing.js';
+import { billingPeriod } from '../src/admin-v2/mock-billing.js';
 import { canMutate, commitAdminState } from '../src/admin-v2/state-transaction.js';
 import { orderActivationCommand, simulateRequest, applyAdjustment } from '../src/admin-v2/domain.js';
 import { organizationProjection, tenantKeyChanges, tenantOrganizationChanges, tenantRouteChanges } from '../src/tenant-data.mjs';
@@ -8,6 +8,7 @@ import { marketCatalogue } from './market.js';
 import { addPackageOrders, deductMockPlan } from './market-packages.js';
 import { receipt, save } from './model-commands.js';
 import { addPrototypeAccounts } from './prototype-presets.js';
+import { routingServices } from '../src/admin-v2/service-routing.js';
 
 const collections = [
   'tenants', 'users', 'memberships', 'organizations', 'projects', 'apiKeys', 'grants',
@@ -64,21 +65,21 @@ async function applicationState(db, actor) {
   return { row, reference, state };
 }
 
-async function marketFacts(db, tenantId) {
+async function marketFacts(db, tenantId, { includeOrders = true } = {}) {
   const scope = tenantId ? ' WHERE t.tenant_id=?' : '';
   const query = (sql, tail) => {
     const statement = db.prepare(sql + scope + tail);
     return tenantId ? statement.bind(tenantId) : statement;
   };
-  const [orders, requests] = await db.batch([
-    query(`SELECT t.id,t.tenant_id,t.offer_id,t.created_at,t.cancelled_at,t.sale_price_id,o.service_id,o.id AS call_id,m.name,p.record_json AS price_json,s.name AS provider_name
-      FROM market_orders t JOIN offers o ON o.record_id=t.offer_id JOIN materials m ON m.id=o.material_id
-      LEFT JOIN suppliers s ON s.id=o.supplier_id LEFT JOIN price_versions p ON p.id=t.sale_price_id`, ' ORDER BY t.created_at DESC'),
+  const [requests, orders] = await db.batch([
     query(`SELECT t.tenant_id,t.request_id,t.created_at,t.offer_id,t.sale_price_id,o.id AS call_id,o.service_id,s.payload_json
       FROM market_calls t JOIN offers o ON o.record_id=t.offer_id JOIN simulation_records s ON s.kind='usage' AND s.id=t.usage_id`, ' ORDER BY t.created_at DESC LIMIT 400'),
+    ...(includeOrders ? [query(`SELECT t.id,t.tenant_id,t.offer_id,t.created_at,t.cancelled_at,t.sale_price_id,o.service_id,o.id AS call_id,m.name,p.record_json AS price_json,s.name AS provider_name
+      FROM market_orders t JOIN offers o ON o.record_id=t.offer_id JOIN materials m ON m.id=o.material_id
+      LEFT JOIN suppliers s ON s.id=o.supplier_id LEFT JOIN price_versions p ON p.id=t.sale_price_id`, ' ORDER BY t.created_at DESC')] : []),
   ]);
   return {
-    orders: orders.results.map(row => ({ id:row.id, orderNo:row.id, tenantId:row.tenant_id, serviceId:row.offer_id, marketOrder:true,
+    orders: (orders?.results || []).map(row => ({ id:row.id, orderNo:row.id, tenantId:row.tenant_id, serviceId:row.offer_id, marketOrder:true,
       billingType:'payg', status:row.cancelled_at?'已退订':'生效中', modelIds:[row.service_id], providerName:row.provider_name, serviceName:row.name,
       priceVersionId:row.sale_price_id, priceSnapshot:JSON.parse(row.price_json || 'null'), createdAt:new Date(row.created_at).toISOString(),
       timeline:['订单创建','服务开通',...(row.cancelled_at?['用户退订']:[])] })),
@@ -96,18 +97,55 @@ async function marketFacts(db, tenantId) {
   };
 }
 
+const pick = (row, fields) => Object.fromEntries(fields.filter(field=>Object.hasOwn(row,field)).map(field=>[field,row[field]]));
+const runtimeModel = ({id,name,modelId,type,usageUnit,capabilities,archivedAt,deletedAt}) =>
+  ({id,name,modelId,type,usageUnit,capabilities:{context:capabilities?.context},archivedAt,deletedAt});
+
+function maintenanceView(state, modelRevision, requests, audits) {
+  const { currentRole, adminSession, revision, routes, limits, fallbacks, releases, caches, alerts, incidents,
+    clusters, artifacts, deployments } = state;
+  const deploymentIds=new Set(deployments.flatMap(({id,deploymentId})=>[id,deploymentId]));
+  return { currentRole, adminSession, revision, modelRevision, routes, limits, fallbacks, releases, caches, alerts, incidents,
+    clusters, artifacts, deployments, modelOnboardings:[],
+    admins:state.admins.map(({id,name,role,status})=>({id,name,role,status})),
+    tenants:state.tenants.map(({id,name,type})=>({id,name,type})),
+    models:state.models.map(runtimeModel), modelTemplates:state.modelTemplates.map(runtimeModel),
+    providers:state.providers.map(({id,name})=>({id,name})),
+    endpoints:state.endpoints.map(({id,endpointId,name,providerId,modelIds,status})=>({id,endpointId,name,providerId,modelIds,status})),
+    gatewayKeyOptions:state.apiKeys.map(({id,keyId,status})=>({id,keyId,status})),
+    gatewayModelOptions:routingServices(state).map(({callId})=>callId).filter(Boolean),
+    audits:audits.filter(row=>deploymentIds.has(row.objectId)).map(({id,action,actor,objectId,createdAt,result})=>({id,action,actor,objectId,createdAt,result})),
+    requests:requests.map(row=>({
+      ...pick(row,['id','requestId','createdAt','startedAt','httpStatus','modelId','modelType','publicModelId','callId','tenantId','userId','keyId','source',
+        'providerId','channelId','endpointId','evidenceSource','status','finalStatus','requestStatus','isCanceled','isTimeout','streamInterrupted','finishReason',
+        'stream','errorCode','error','errorMessage','errorSource','cacheHit','durationMs','firstPacketMs','ttftMs','taskStatus','routeVersion','releaseId','usageUnit','usageConfirmed']),
+      providerId:row.providerId || row.procurementSnapshot?.providerId,
+      usage:row.usage && pick(row.usage,['input','output','cached','seconds','characters','images']),
+      attempts:(row.attempts || []).map(attempt=>({
+        ...pick(attempt,['dispatched','endpointId','channelId','status','httpStatus','statusCode','startedAt','createdAt','upstreamRequestId','upstreamModelId',
+          'durationMs','error','errorCode','code','errorMessage','message','errorSource','isTimeout','fallback','fallbackReason','usageConfirmed','usageUnit']),
+        providerId:attempt.providerId || attempt.procurementSnapshot?.providerId,
+        usage:attempt.usage && pick(attempt.usage,['input','output','cached','seconds','characters','images']),
+      })),
+    })),
+  };
+}
+
 export async function applicationBootstrap(db, actor) {
+  const maintenance=actor.role==='运维人员';
   const [{ state, row }, facts, audits, activity] = await Promise.all([
-    applicationState(db, actor), marketFacts(db),
+    applicationState(db, actor), marketFacts(db, null, {includeOrders:!maintenance}),
     db.prepare("SELECT record_json FROM audit_events WHERE entity_type='application' ORDER BY created_at DESC,rowid DESC LIMIT 200").all(),
-    db.prepare('SELECT id,user_id,created_at FROM tenant_login_events WHERE created_at>=? ORDER BY created_at DESC LIMIT 200').bind(Date.now()-week).all(),
+    maintenance ? null : db.prepare('SELECT id,user_id,created_at FROM tenant_login_events WHERE created_at>=? ORDER BY created_at DESC LIMIT 200').bind(Date.now()-week).all(),
   ]);
+  const events=[...audits.results.map(row=>JSON.parse(row.record_json)),...state.audits];
+  const requests=[...facts.requests,...state.requests];
+  if(maintenance)return maintenanceView(state,row.model_revision,requests,events);
   const { cloudMockState: _snapshot, ...view } = state;
   const logins=activity.results.map(({id,user_id,created_at})=>({id,userId:user_id,type:'login',at:new Date(created_at).toISOString()}));
   return { ...view,identityEvents:[...logins,...state.identityEvents],
     users:state.users.map(user=>({...user,lastLoginAt:logins.find(row=>row.userId===user.id)?.at || user.lastLoginAt})),
-    modelRevision:row.model_revision, audits: [...audits.results.map(row => JSON.parse(row.record_json)), ...state.audits],
-    orders: [...facts.orders, ...state.orders], requests: [...facts.requests, ...state.requests] };
+    modelRevision:row.model_revision, audits:events, orders:[...facts.orders,...state.orders], requests };
 }
 
 function referenceWrite(before, after, reference) {
@@ -163,16 +201,16 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins)
       if(cancellation.cancelled_at)return {operationId,revision:state.revision};
       next={...state,revision:state.revision+1,audits:[{action:'退订模型服务',objectId:action.id,result:'成功',createdAt:new Date().toISOString()},...state.audits]};
     } else if (action.type==='generateBills' && canMutate(actor.role,{type:'update',collection:'bills'})) {
-      const period=billingPeriod(), totals=new Map();
-      for(const request of (await marketFacts(db)).requests) {
-        if(billingPeriod(request.createdAt)!==period)continue;
-        const charge=mockCharge(state,request);
-        if(charge?.currency==='CNY') totals.set(request.tenantId,(totals.get(request.tenantId) || 0)+Math.round(charge.amount*1e6));
+      const period=billingPeriod();
+      const {results}=await db.prepare('SELECT tenant_id,amount_micros FROM market_monthly_charges WHERE period=?').bind(period).all();
+      const changes=[];
+      for(const {tenant_id:tenantId,amount_micros:micros} of results){
+        const bill=state.bills.find(row=>row.tenantId===tenantId && row.period===period);
+        const amount=Math.round(micros/10000)/100;
+        if(!bill)changes.push({type:'add',collection:'bills',record:{id:crypto.randomUUID(),billNo:'BILL-'+period.replace('-','')+'-'+tenantId,
+          tenantId,period,amount,discount:0,paid:0,status:'待出账'}});
+        else if(bill.status==='待出账' && bill.amount!==amount)changes.push({type:'update',collection:'bills',id:bill.id,changes:{amount}});
       }
-      const changes=[...totals].filter(([tenantId])=>!state.bills.some(row=>row.tenantId===tenantId && row.period===period)).map(([tenantId,micros])=>({
-        type:'add',collection:'bills',record:{id:crypto.randomUUID(),billNo:'BILL-'+period.replace('-','')+'-'+tenantId,
-          tenantId,period,amount:Math.round(micros/10000)/100,discount:0,paid:0,status:'待出账'},
-      }));
       next=changes.length?commitAdminState(state,{type:'batch',label:'生成模拟账单',changes},actor.role):state;
     } else if (action.type === 'adjustment' && actor.role === '平台管理员') {
       next = applyAdjustment(state, action.id, action.approved === true, action.reason);
@@ -279,7 +317,7 @@ export async function tenantCommand(db, session, body) {
   const context = tenantContext(state, tenant);
   if (!context.identity.userId) issue(403, 'FORBIDDEN', '该客户尚未关联可用的账号');
   const services=catalogue.services.map(service=>({...service,materialId:service.modelKey,modelKey:service.serviceModelId}));
-  let next;
+  let next, retiredIds=[];
   try {
     if(action==='subscribe') {
       if(!context.canManage)throw Error('仅可为当前客户办理订购');
@@ -290,10 +328,16 @@ export async function tenantCommand(db, session, body) {
     } else if (action === 'keys') {
       if (!Array.isArray(data?.rows) || data.rows.length > 100 || !['按量付费','Token Plan'].includes(data.billing) ||
           (data.billing === 'Token Plan') !== Boolean(data.subscriptionId) ||
-          data.rows.some(item => !validId(item.id) || item.secretPreview && !/^(?:[\w-]{0,8})\*{4,5}(?:[\w-]{0,4})$/.test(item.secretPreview))) throw Error('密钥配置无效');
+          data.rows.some(item => !validId(item?.id) || item.secretPreview && !/^(?:[\w-]{0,8})\*{4,5}(?:[\w-]{0,4})$/.test(item.secretPreview))) throw Error('密钥配置无效');
+      const existingIds=new Set(state.apiKeys.map(key=>key.id));
+      const newIds=data.rows.map(key=>key.id).filter(id=>!existingIds.has(id));
+      if(newIds.length && await db.prepare('SELECT 1 FROM retired_tenant_keys WHERE id IN (SELECT value FROM json_each(?)) LIMIT 1')
+        .bind(JSON.stringify(newIds)).first())throw Error('已删除的 API Key ID 不能再次使用');
       const plan=data.subscriptionId && state.orders.find(row=>row.id===data.subscriptionId && row.tenantId===tenant.id);
       const planServices=plan?.packageId ? services.map(row=>({...row,callable:row.canOrder && plan.product.modelIds.includes(row.materialId)})) : services;
       next=tenantKeyChanges(context,data.rows,data,planServices);
+      const remaining=new Set(next.apiKeys.map(key=>key.id));
+      retiredIds=[...existingIds].filter(id=>!remaining.has(id));
     } else if (action === 'organization') {
       if(!Array.isArray(data?.departments) || !Array.isArray(data?.members) || data.departments.length>100 || data.members.length>200 ||
          [...data.departments,...data.members].some(item=>!validId(item?.id)))throw Error('组织或成员配置无效');
@@ -313,6 +357,8 @@ export async function tenantCommand(db, session, body) {
       .bind(referenceWrite(state,next,reference),expectedRevision,row.commit_seq,session.hash,tenant.id,now),
     db.prepare('INSERT INTO tenant_operations(id,tenant_id,request_hash,created_at) SELECT ?,?,?,? WHERE changes()=1').bind(operationId,tenant.id,digest,now),
     db.prepare('UPDATE db_state SET commit_seq=commit_seq+1 WHERE id=1 AND changes()=1'),
+    ...(retiredIds.length ? [db.prepare('INSERT INTO retired_tenant_keys(id) SELECT value FROM json_each(?) WHERE changes()=1')
+      .bind(JSON.stringify(retiredIds))] : []),
     db.prepare('DELETE FROM tenant_operations WHERE id IN (SELECT id FROM tenant_operations WHERE created_at<? LIMIT 100)').bind(now-week),
   ]);
   if (!written.meta.changes) {

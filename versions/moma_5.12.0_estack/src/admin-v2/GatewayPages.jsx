@@ -174,9 +174,10 @@ function Releases({ state, dispatch }) {
 }
 
 function Simulator({ state, dispatch }) {
-  const services=routingServices(state).filter(row=>row.callId);
-  const [keyId,setKeyId]=useState(state.apiKeys.find(row=>row.status==='有效')?.id || '');
-  const [modelId,setModelId]=useState(services[0]?.callId || '');
+  const keys=state.gatewayKeyOptions ?? state.apiKeys;
+  const modelIds=state.gatewayModelOptions ?? routingServices(state).map(row=>row.callId).filter(Boolean);
+  const [keyId,setKeyId]=useState(keys.find(row=>row.status==='有效')?.id || '');
+  const [modelId,setModelId]=useState(modelIds[0] || '');
   const [timeout, setTimeoutFlag] = useState(false);
   const [result, setResult] = useState('');
   const run = async () => {
@@ -195,8 +196,8 @@ function Simulator({ state, dispatch }) {
         <Typography.Paragraph type="secondary" role="status">{result || '验证鉴权、限流、选路、回退、缓存与发布版本'}</Typography.Paragraph>
       </div>
       <Space wrap>
-        <Choice label="API 密钥 ID" value={keyId} options={state.apiKeys.map(item => [item.id, item.keyId])} onSelect={setKeyId}/>
-        <Choice label="Model ID" value={modelId} options={services.map(row=>[row.callId,row.callId])} onSelect={setModelId}/>
+        <Choice label="API 密钥 ID" value={keyId} options={keys.map(item => [item.id, item.keyId])} onSelect={setKeyId}/>
+        <Choice label="Model ID" value={modelId} options={modelIds.map(id=>[id,id])} onSelect={setModelId}/>
         <Checkbox checked={timeout} onChange={event => setTimeoutFlag(event.target.checked)}>主端点超时场景</Checkbox>
         <Button theme="solid" onClick={run}>发送请求</Button>
       </Space>

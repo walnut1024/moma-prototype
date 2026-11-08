@@ -109,7 +109,7 @@ export default function EnterpriseMembers({ state, tenant, projects, canWrite, s
             empty={members.length ? '当前范围内没有匹配成员' : '企业暂无成员'}
             rows={filtered.slice((current - 1) * size, current * size).map(member => {
               const user = userFor(member);
-              const name = user?.name || member.name;
+              const name = member.memberName ?? (user?.name || member.name || member.userId);
               const admin = isEnterpriseAdmin(member, tenant);
               return { id: member.id, cells: [
                 <Space>
@@ -120,7 +120,7 @@ export default function EnterpriseMembers({ state, tenant, projects, canWrite, s
                   </div>
                 </Space>,
                 ...(selection === 'admins' ? [
-                  user?.phone || '未填写', user ? <EnterpriseStatus value={user.status}/> : '身份不存在', user?.initialized ? '已完成' : '待初始化',
+                  (member.memberPhone ?? user?.phone) || '未填写', user ? <EnterpriseStatus value={user.status}/> : '身份不存在', user?.initialized ? '已完成' : '待初始化',
                 ] : [user?.login || member.userId, <Text title={pathFor(member)}>{organizationFor(member)?.name || '未分配部门'}</Text>, member.role]),
                 <EnterpriseStatus value={member.status}/>,
                 <Space spacing={4}>
@@ -140,10 +140,10 @@ export default function EnterpriseMembers({ state, tenant, projects, canWrite, s
         </div>
       </Card>
     </section>
-    {inspect && <EnterpriseDialog title="成员详情" description={`${tenant.name} · ${inspectUser?.name || inspect.name}`} close={() => setInspectId(null)} footer={<><Button onClick={() => setInspectId(null)}>关闭</Button></>}>
+    {inspect && <EnterpriseDialog title="成员详情" description={`${tenant.name} · ${inspect.memberName ?? (inspectUser?.name || inspect.name || inspect.userId)}`} close={() => setInspectId(null)} footer={<><Button onClick={() => setInspectId(null)}>关闭</Button></>}>
       <EnterpriseFacts rows={[
         ['成员 ID', inspect.id], ['登录身份 ID', inspect.userId], ['登录账号', inspectUser?.login || inspect.userId],
-        ['手机号码', inspectUser?.phone || '未填写'], ['主部门', pathFor(inspect)], ['企业角色', inspect.role],
+        ['手机号码', (inspect.memberPhone ?? inspectUser?.phone) || '未填写'], ['主部门', pathFor(inspect)], ['企业角色', inspect.role],
         ['项目范围', projectScope(inspect)], ['登录身份状态', inspectUser ? <EnterpriseStatus value={inspectUser.status}/> : '身份不存在'],
         ['账号初始化', inspectUser?.initialized ? '已完成' : '待初始化'], ['本企业成员状态', <EnterpriseStatus value={inspect.status}/>],
       ]}/>

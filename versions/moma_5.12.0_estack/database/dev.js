@@ -1,26 +1,21 @@
-import { createHash, randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { API_PREFIX } from '../api-path.js';
 import { fileURLToPath } from 'node:url';
 import { startLocalBackend } from './local-runtime.js';
 
-const persistPath=fileURLToPath(new URL('./.local/',import.meta.url));
-const loginFile=fileURLToPath(new URL('./.local/demo-logins.json',import.meta.url));
-let loginHashes;
-if (process.env.MODEL_OPS_LOGIN_HASHES) {
-  loginHashes=JSON.parse(process.env.MODEL_OPS_LOGIN_HASHES);
-  if (!Object.keys(loginHashes).length || Object.values(loginHashes).some(value=>!/^[a-f0-9]{64}$/.test(value))) {
-    throw Error('MODEL_OPS_LOGIN_HASHES 须为账号到 SHA-256 摘要的映射');
-  }
-} else {
-  await mkdir(persistPath,{recursive:true,mode:0o700});
-  try {
-    const accounts=Object.fromEntries(['yyg','zqzh','grzh'].map(id=>[id,randomBytes(16).toString('base64url')]));
-    await writeFile(loginFile,JSON.stringify(accounts,null,2)+'\n',{mode:0o600,flag:'wx'});
-  } catch (error) { if (error.code!=='EEXIST') throw error; }
-  const accounts=JSON.parse(await readFile(loginFile,'utf8'));
-  loginHashes=Object.fromEntries(Object.entries(accounts).map(([id,password])=>[id,createHash('sha256').update(password).digest('hex')]));
-  console.log('演示账号密码文件（仅限本机）：'+loginFile);
+const persistPath = fileURLToPath(new URL('./.local/', import.meta.url));
+const demoAccountIds = ['yyg', 'zqzh', 'grzh', 'admin-001', 'admin-002'];
+// The shared demo password is scoped to this local launcher.
+const demoPasswordHash = '1624061227710f3d1407747cafae82bb6e0c387614575e8ca017ebc1fe5c454b';
+const extraLoginHashes = JSON.parse(process.env.MODEL_OPS_LOGIN_HASHES || '{}');
+if (!extraLoginHashes || typeof extraLoginHashes !== 'object' || Array.isArray(extraLoginHashes)
+    || Object.values(extraLoginHashes).some(value => typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value))) {
+  throw new Error('MODEL_OPS_LOGIN_HASHES 须为账号到 SHA-256 摘要的映射');
 }
+const loginHashes = { ...extraLoginHashes, ...Object.fromEntries(demoAccountIds.map(id => [id, demoPasswordHash])) };
 const local=await startLocalBackend({persistPath,loginHashes,port:Number(process.env.MOMA_5120_BACKEND_PORT || 8787),presets:true});
-console.log(`5.12.0 原型 API: ${local.url}api/5120/health`);
+// A password reset during a demo applies until the next local startup.
+await local.db.prepare(
+  "UPDATE admin_accounts SET access_hash=NULL WHERE access_hash IS NOT NULL AND id IN (SELECT value FROM json_each(?))",
+).bind(JSON.stringify(demoAccountIds)).run();
+console.log(`5.12.0 原型 API: ${new URL(API_PREFIX + '/health', local.url)}`);
 for (const signal of ['SIGINT','SIGTERM']) process.once(signal,async()=>{await local.runtime.dispose();process.exit(0);});

@@ -35,13 +35,17 @@ test('registration creates one explicitly linked backend identity; failed auth p
  assert.throws(()=>persistAuthState(auth,another,{...storage,setItem(key,value){if(key===AUTH_DATA_KEY)throw Error('quota');storage.setItem(key,value);}}),/quota/);
  assert.equal(storage.getItem(STORAGE_KEY),raw);assert.equal(storage.getItem(AUTH_DATA_KEY),authRaw);
 });
-test('organization edits update the exact backend users and membership IDs and reject unauthorized or foreign scopes',t=>{
+test('organization edits update the tenant membership and reject unauthorized or foreign scopes',t=>{
  const storage=environment(t),fixture=linked(storage);fixture.state.memberships.find(row=>row.id==='member-link-enterprise-a').role='租户管理员';storage.setItem(STORAGE_KEY,serializeAdminState(fixture.state));
  const snapshot=tenantData(storage),member=snapshot.organization.members.find(row=>row.id==='member-link-enterprise-a');
  const next=changeOrganization(snapshot.organization,{type:'member.save',member:{...member,name:'修改后的同一用户'},logId:'qa-org'});
  saveTenantOrganization(next,snapshot.revision,storage);
- const backend=JSON.parse(storage.getItem(STORAGE_KEY));assert.equal(backend.users.find(row=>row.id==='user-link-enterprise-a').name,'修改后的同一用户');assert.ok(backend.memberships.some(row=>row.id===member.id));
- const latest=tenantData(storage),bad=structuredClone(latest.organization);bad.departments.push({id:backend.organizations.find(row=>row.tenantId==='tenant-nanjing').id,name:'foreign',parentId:'root'});
+ const backend=JSON.parse(storage.getItem(STORAGE_KEY));
+ assert.equal(backend.users.find(row=>row.id===member.userId).name,member.name);
+ assert.equal(backend.memberships.find(row=>row.id===member.id).memberName,'修改后的同一用户');
+ const latest=tenantData(storage),bad=structuredClone(latest.organization);
+ assert.equal(latest.organization.members.find(row=>row.id===member.id).name,'修改后的同一用户');
+ bad.departments.push({id:backend.organizations.find(row=>row.tenantId==='tenant-nanjing').id,name:'foreign',parentId:'root'});
  const raw=storage.getItem(STORAGE_KEY);assert.throws(()=>saveTenantOrganization(bad,latest.revision,storage),/归属冲突/);assert.equal(storage.getItem(STORAGE_KEY),raw);
  const removed=structuredClone(latest.organization);removed.members=removed.members.filter(row=>row.id!==member.id);assert.throws(()=>saveTenantOrganization(removed,latest.revision,storage),/当前登录成员/);
  backend.memberships.find(row=>row.id===member.id).role='普通成员';storage.setItem(STORAGE_KEY,serializeAdminState(backend));assert.throws(()=>saveTenantOrganization(next,backend.revision,storage),/只有企业管理员/);

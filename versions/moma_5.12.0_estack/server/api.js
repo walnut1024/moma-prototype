@@ -3,7 +3,7 @@ import { initializePrototypeCatalogue } from './prototype-presets.js';
 import { createMarketSession, marketCatalogue, marketRanking, marketCompletion, marketCookie, marketOrder, marketSession, marketTenant } from './market.js';
 import { applicationBootstrap, applicationCommand, initializeApplication, tenantCommand, tenantWorkspace } from './application.js';
 import { marketDemoModelIds } from '../src/mock/model-data.js';
-const PREFIX = '/api/5120';
+import { API_PREFIX, isApiPath } from '../api-path.js';
 const COOKIE = 'moma5120_session';
 const encoder = new TextEncoder();
 const MAX_BODY = 256 * 1024;
@@ -16,7 +16,7 @@ const fail = (status, code, message) => { throw new ApiError(status, code, messa
 const digest = async value => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(value))), b => b.toString(16).padStart(2, '0')).join('');
 const randomToken = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
 const json = (value, status = 200, headers = {}) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers } });
-const cookie = (token, age = 28800) => `${COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=${PREFIX}; Max-Age=${age}`;
+const cookie = (token, age = 28800) => `${COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=${API_PREFIX}; Max-Age=${age}`;
 const fields = (body, allowed) => {
   if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !allowed.includes(key))) fail(400, 'INVALID_INPUT', '请求字段无效');
 };
@@ -157,8 +157,9 @@ async function visibility(request, db, actor, id) {
 
 async function route(request, env) {
   const url = new URL(request.url), method = request.method;
+  if (!isApiPath(url.pathname)) fail(404, 'NOT_FOUND', 'API 不存在');
   let path;
-  try { path = decodeURIComponent(url.pathname.slice(PREFIX.length)); } catch { fail(400, 'INVALID_INPUT', '路径编码无效'); }
+  try { path = decodeURIComponent(url.pathname.slice(API_PREFIX.length)); } catch { fail(400, 'INVALID_INPUT', '路径编码无效'); }
   const resource = /^\/(materials|services|suppliers|channels|operations)\/([A-Za-z0-9:_.-]{1,200})(?:\/(workspace|visibility|history))?$/.exec(path);
   const dictionary = /^\/dictionary\/(items|units|currencies)$/.exec(path);
   const packagePath = ['/package-management', '/package-management/commands', '/package-management/factor-history'].includes(path);

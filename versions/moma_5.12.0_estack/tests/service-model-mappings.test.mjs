@@ -68,7 +68,7 @@ test('active routes and drafts block disable, target edits and removal; stopping
 });
 test('HTTP/D1 mapping commands retain stable references after reload and reject forged validation and revisions',{timeout:60000},async()=>{
  const accessCode=randomBytes(24).toString('hex'),local=await startLocalBackend({ demo: true, loginHashes:{'admin-001':createHash('sha256').update(accessCode).digest('hex')}});let cookie,state;
- async function api(path,body,key){const response=await local.runtime.dispatchFetch('https://example.test/api/5120'+path,{method:body?'POST':'GET',headers:{...(cookie?{cookie}:{}),...(body?{origin:'https://example.test','content-type':'application/json','x-moma-request':'1'}:{}),...(key?{'idempotency-key':key}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:response.status,data:await response.json(),headers:response.headers};}
+ async function api(path,body,key){const response=await local.runtime.dispatchFetch('https://example.test/api/v1'+path,{method:body?'POST':'GET',headers:{...(cookie?{cookie}:{}),...(body?{origin:'https://example.test','content-type':'application/json','x-moma-request':'1'}:{}),...(key?{'idempotency-key':key}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:response.status,data:await response.json(),headers:response.headers};}
  async function refresh(){state=domainModelWorkspace((await api('/model-operations')).data);}
  async function run(operation,modelId,data){const id=crypto.randomUUID();return api('/model-operations/commands',{operationId:id,expectedRevision:state.revision,action:{type:'modelOperations',operation,modelId,data}},id);}
  try{const login=await api('/auth/login',{accountId:'admin-001',accessCode});cookie=login.headers.get('set-cookie').split(';')[0];await refresh();

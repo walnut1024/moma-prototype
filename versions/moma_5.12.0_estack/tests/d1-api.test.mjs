@@ -10,7 +10,7 @@ const sha = value => createHash('sha256').update(value).digest('hex');
 let local, token, readonlyToken;
 const serviceId = 'model-glm53';
 async function request(path, { method = 'GET', body, session = token, key, headers = {} } = {}) {
-  const response = await local.runtime.dispatchFetch(`https://example.test/api/5120${path}`, { method,
+  const response = await local.runtime.dispatchFetch(`https://example.test/api/v1${path}`, { method,
     headers: { ...(session ? { cookie: session } : {}), ...(method === 'POST' ? { origin: 'https://example.test', 'x-moma-request': '1', 'content-type': 'application/json' } : {}),
       ...(key ? { 'idempotency-key': key } : {}), ...headers }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
   const raw = await response.json(),data=path==='/model-operations' && response.ok?domainModelWorkspace(raw):raw;
@@ -59,7 +59,8 @@ test('requires current server identity and follows existing navigation roles', a
 
 test('login uses a secure cookie and never returns an access code or token in JSON', async () => {
   const result = await request('/auth/login', { method: 'POST', session: null, body: { accountId: 'admin-001', accessCode: adminCode } });
-  assert.match(result.headers.get('set-cookie'), /HttpOnly; Secure; SameSite=Lax; Path=\/api\/5120/);
+  assert.match(result.headers.get('set-cookie'), /HttpOnly; Secure; SameSite=Lax; Path=\/api\/v1(?:;|$)/);
+  assert.equal((await local.runtime.dispatchFetch('https://example.test/api/5120/health')).status,404);
   assert(!JSON.stringify(result.data).includes(adminCode));
   assert.equal(result.data.token, undefined);
   assert.equal((await request('/auth/login', { method: 'POST', session: null, body: { accountId: 'admin-001', accessCode: '0'.repeat(64) } })).status, 401);

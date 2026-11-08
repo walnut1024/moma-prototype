@@ -7,6 +7,7 @@ import { activeSupplyPrice } from '../src/admin-v2/model-management.js';
 import { loadModelWorkspace } from './model-repository.js';
 import { listedPackages, packageOffer } from './market-packages.js';
 import { experienceTasks } from '../src/service-directory.mjs';
+import { billingPeriod } from '../src/admin-v2/mock-billing.js';
 
 const fail = (status, code, message) => { throw Object.assign(new Error(message), { status, code }); };
 const digest = async value => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -173,11 +174,24 @@ export async function marketCompletion(db, session, body) {
     fail(409,'CALL_UNAVAILABLE','当前渠道无法完成调用，请检查服务和价格状态');
   }
   const at=Date.now();
+  const period=billingPeriod(at), charge=usage.saleTrial;
+  const billable=usage.billingStatus==='billable' && charge?.currency==='CNY' && charge.unit==='micro' &&
+    Number.isSafeInteger(charge.amount) && charge.amount>=0;
+  const chargeWrites=billable ? [
+    db.prepare('INSERT INTO market_charge_receipts(tenant_id,request_id,period) SELECT ?,?,? WHERE changes()=1')
+      .bind(tenant.id,body.requestId,period),
+    db.prepare(`INSERT INTO market_monthly_charges(period,tenant_id,amount_micros) SELECT ?,?,? WHERE changes()=1
+      ON CONFLICT(period,tenant_id) DO UPDATE SET amount_micros=amount_micros+excluded.amount_micros`)
+      .bind(period,tenant.id,charge.amount),
+  ] : [];
   try {
     const [insert]=await db.batch([
       db.prepare(`INSERT INTO market_calls(tenant_id,request_id,request_hash,offer_id,sale_price_id,route_version_id,usage_id,response_json,created_at)
-        SELECT ?,?,?,?,?,?,?,?,? WHERE ${guard}`).bind(tenant.id,body.requestId,requestHash,row.record_id,row.sale_id,row.active_route_id,usage.id,JSON.stringify(response),at,row.commit_seq,hash,tenant.id,at),
+        SELECT ?,?,?,?,?,?,?,?,? WHERE ${guard}
+        AND NOT EXISTS(SELECT 1 FROM market_charge_receipts WHERE tenant_id=? AND request_id=?)`)
+        .bind(tenant.id,body.requestId,requestHash,row.record_id,row.sale_id,row.active_route_id,usage.id,JSON.stringify(response),at,row.commit_seq,hash,tenant.id,at,tenant.id,body.requestId),
       db.prepare("INSERT INTO simulation_records(kind,id,payload_json) SELECT 'usage',?,? WHERE EXISTS (SELECT 1 FROM market_calls WHERE usage_id=?)").bind(usage.id,JSON.stringify(usage),usage.id),
+      ...chargeWrites,
     ]);
     if (insert.meta.changes) { await trimMarketActivity(db,at); return response; }
   } catch (error) {
@@ -186,6 +200,9 @@ export async function marketCompletion(db, session, body) {
   await checkedOffer(db,session,'callId',body.model);
   const concurrent=await replay();
   if (concurrent) return concurrent;
+  if(await db.prepare('SELECT 1 FROM market_charge_receipts WHERE tenant_id=? AND request_id=?').bind(tenant.id,body.requestId).first()) {
+    fail(409,'CALL_RECEIPT_EXPIRED','此调用已计入月账单，明细已过期');
+  }
   fail(409,'REVISION_CONFLICT','服务配置已变化，请重新调用');
 }
 
@@ -196,6 +213,8 @@ async function trimMarketActivity(db, now) {
   await db.batch([
     db.prepare(`DELETE FROM simulation_records WHERE kind='usage' AND id IN (${expired})`).bind(cutoff),
     db.prepare(`DELETE FROM market_calls WHERE usage_id IN (${expired})`).bind(cutoff),
+    db.prepare('DELETE FROM market_charge_receipts WHERE rowid IN (SELECT rowid FROM market_charge_receipts WHERE period<? LIMIT 100)')
+      .bind(billingPeriod(now)),
   ]);
 }
 

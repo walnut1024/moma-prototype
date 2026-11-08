@@ -34,18 +34,18 @@ test('D1 state survives runtime restart and reinitialization never replaces an e
   let local;
   try {
     local = await startLocalBackend({ demo: true, persistPath: dir, loginHashes });
-    const login = await local.runtime.dispatchFetch('https://example.test/api/5120/auth/login', { method: 'POST', headers: { origin: 'https://example.test', 'x-moma-request': '1', 'content-type': 'application/json' }, body: JSON.stringify({ accountId: 'admin-001', accessCode }) });
+    const login = await local.runtime.dispatchFetch('https://example.test/api/v1/auth/login', { method: 'POST', headers: { origin: 'https://example.test', 'x-moma-request': '1', 'content-type': 'application/json' }, body: JSON.stringify({ accountId: 'admin-001', accessCode }) });
     assert.equal(login.status, 200); await login.json();
     const cookie = login.headers.get('set-cookie').split(';')[0];
-    const write = await local.runtime.dispatchFetch('https://example.test/api/5120/services/model-glm53/visibility', { method: 'POST', headers: { cookie, origin: 'https://example.test', 'x-moma-request': '1', 'content-type': 'application/json', 'idempotency-key': 'persist' }, body: JSON.stringify({ operationId: 'persist', expectedRevision: 1, visible: false }) });
+    const write = await local.runtime.dispatchFetch('https://example.test/api/v1/services/model-glm53/visibility', { method: 'POST', headers: { cookie, origin: 'https://example.test', 'x-moma-request': '1', 'content-type': 'application/json', 'idempotency-key': 'persist' }, body: JSON.stringify({ operationId: 'persist', expectedRevision: 1, visible: false }) });
     assert.equal(write.status, 200); const receipt = await write.json();
     await local.runtime.dispose(); local = undefined;
     local = await startLocalBackend({ persistPath: dir, loginHashes });
     assert.equal(local.initialization.initialized, false);
-    const response = await local.runtime.dispatchFetch('https://example.test/api/5120/services/model-glm53/workspace', { headers: { cookie } });
+    const response = await local.runtime.dispatchFetch('https://example.test/api/v1/services/model-glm53/workspace', { headers: { cookie } });
     const workspace = await response.json(); assert.equal(response.status, 200);
     assert.equal(workspace.service.revision, receipt.revision); assert.equal(workspace.service.marketVisible, false);
-    const replay = await local.runtime.dispatchFetch('https://example.test/api/5120/operations/persist', { headers: { cookie } });
+    const replay = await local.runtime.dispatchFetch('https://example.test/api/v1/operations/persist', { headers: { cookie } });
     assert.deepEqual(await replay.json(), receipt);
   } finally { await local?.runtime.dispose(); await rm(dir, { recursive: true, force: true }); }
 });
@@ -57,7 +57,7 @@ test('empty D1 starts with reference data and imports the two demos through the 
   const options = { persistPath: dir, loginHashes: { 'admin-001': hash, 'admin-002': hash } };
   let local, cookie;
   const headers = { origin: 'https://example.test', 'x-moma-request': '1', 'content-type': 'application/json' };
-  const request = (path, { body, key, session = cookie } = {}) => local.runtime.dispatchFetch('https://example.test/api/5120' + path, {
+  const request = (path, { body, key, session = cookie } = {}) => local.runtime.dispatchFetch('https://example.test/api/v1' + path, {
     method: body ? 'POST' : 'GET',
     headers: { ...headers, ...(session ? { cookie: session } : {}), ...(key ? { 'idempotency-key': key } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}),
