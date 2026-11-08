@@ -1,5 +1,6 @@
 import catalogues from './catalogues.json' with {type:'json'};
 import config from './application.json' with { type: 'json' };
+import tariffDictionary from '../data/tariff-dictionary.json' with { type: 'json' };
 export const APPLICATION_CONFIG = config;
 export function initialApplicationData(now = Date.now()) {
   const state = JSON.parse(JSON.stringify(config.initial), (_key, value) => typeof value === 'string' && /^@now:-?\d+$/.test(value) ? new Date(now + Number(value.slice(5))).toISOString() : value);
@@ -11,7 +12,7 @@ export function initialApplicationData(now = Date.now()) {
 }
 export const initialPersonalData = () => structuredClone(config.personal);
 export const initialEnterpriseOrganization = () => structuredClone(config.enterpriseOrganization);
-export const initialTariffDictionary = () => structuredClone(config.tariffDictionary);
+export const initialTariffDictionary = () => structuredClone(tariffDictionary);
 export const initialOrganizationData = () => structuredClone(config.organization);
 export function trackUserConfiguration(before, after) {
   if (!before.initialData) return;

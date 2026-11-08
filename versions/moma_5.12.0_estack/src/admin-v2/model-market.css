@@ -1,0 +1,85 @@
+.market-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr));
+  grid-auto-rows: 1fr;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.market-card-grid > li { min-width: 0; }
+.market-card-grid > [data-dragging] { position: relative; z-index: 1; }
+.market-card-grid > [data-dragging] .market-model-card { border-color: var(--semi-color-primary); }
+.market-card-order:not(:disabled) { touch-action: none; }
+.market-card-grid .market-model-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-wrap: anywhere;
+}
+.market-model-card .semi-card-body { flex: 1; min-width: 0; }
+.market-model-card .semi-card-footer { padding-top: 8px; }
+.market-card-heading { display: flex; align-items: flex-start; gap: 12px; }
+.market-card-identity { flex: 1; min-width: 0; }
+.market-card-identity h3 { min-block-size: 2lh; margin-block-end: 3px; }
+.market-card-identity .ss-code { display: block; block-size: 1.5em; color: var(--semi-color-text-2); font-size: 12px; line-height: 1.5; }
+.market-card-logo {
+  display: grid;
+  flex: 0 0 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid var(--semi-color-border);
+  border-radius: 9px;
+  color: var(--semi-color-text-2);
+  overflow: hidden;
+}
+.market-card-logo img { width: 30px; height: 30px; object-fit: contain; }
+.market-card-description { min-block-size: 2lh; margin-block-start: 14px; }
+.market-card-facts {
+  container-type: inline-size;
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--semi-color-fill-0);
+  font-size: 12px;
+}
+.market-card-facts dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(3, 2.7em);
+  gap: 4px 16px;
+  margin: 0;
+}
+.market-card-facts dl > div { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; line-height: 1.35; }
+.market-card-facts dt { flex: 0 0 auto; color: var(--semi-color-text-2); }
+.market-card-facts dd { min-width: 0; max-block-size: 2.7em; margin: 0; overflow: hidden; text-align: right; color: var(--semi-color-text-0); }
+.market-card-modalities { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0 8px; }
+.market-card-modalities > span { display: inline-flex; align-items: center; gap: 3px; }
+.market-card-supply { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--semi-color-border); }
+.market-card-supply-title { display: flex; justify-content: space-between; align-items: center; gap: 4px; margin-bottom: 5px; color: var(--semi-color-text-1); }
+.market-card-supply-title small { display: block; color: var(--semi-color-text-2); font-size: inherit; }
+.market-card-supply-preview { min-block-size: 92px; }
+.market-card-supply-preview .semi-button-content { width: 100%; min-width: 0; }
+.market-card-supply-preview .market-supply-row { width: 100%; align-items: center; text-align: left; }
+.market-card-supply-preview .market-supply-row > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.market-supply-detail { max-block-size: min(52vh, 440px); overflow: auto; padding: 2px; }
+.market-card-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+@container (max-width: 310px) {
+  .market-card-facts dl { grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(6, 2.7em); }
+}
+.market-card-pagination { align-self: flex-end; max-width: 100%; }
+.market-supplies { margin: 0; padding: 0; list-style: none; }
+.market-supplies > li + li { border-top: 1px solid var(--semi-color-border); }
+.market-supply-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 6px 10px;
+  overflow-wrap: anywhere;
+}
+.market-channel-count { display: flex; align-items: center; gap: 4px; color: var(--semi-color-text-2); font-size: 12px; font-weight: 400; white-space: nowrap; }
+.market-channel-names { margin: 0; padding-inline-start: 16px; list-style: disc; overflow-wrap: anywhere; }
+.market-channel-names > li + li { margin-top: 4px; }
+.market-order-handle:not(:disabled) { cursor: grab; }
+.market-order-handle:not(:disabled):active { cursor: grabbing; }
+.market-order-target > td { box-shadow: inset 0 -2px var(--semi-color-primary); }

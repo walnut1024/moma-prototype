@@ -1,6 +1,7 @@
 import { credentialRotationChannels } from './credential-rotation-scope.js';
 import { supplierModelMaintenance } from './supplier-model-maintenance.js';
 import { modelLibrary } from './model-library.js';
+import { normalizeModelLogo } from './model-profile.js';
 import { supplierModelFields } from './supply-models.js';
 import { canonicalMomaScenarios } from './moma-billing-items.js';
 import { providerCatalogueIds } from './moma-provider.js';
@@ -234,7 +235,7 @@ export function providerTransaction(state, action) {
     if (currentIds.includes(modelId) || provider.catalogModelIds?.includes(modelId) || provider.catalogModels?.some(item => item.modelId === modelId)) throw new Error('该 Model ID 已在服务商目录或历史记录中，请使用其他 ID');
     const catalogModelIds = normalizeProviderCatalogue([...currentIds, modelId]);
     const entry = normalizeProviderPrice(provider, { ...data, modelId });
-    if (!entry.scenarios.length || entry.scenarios.some(row => row.listPrice == null)) throw new Error('请至少填写一条完整计费项、目录价和计价单位；免费请填 0');
+    if (!entry.scenarios.length || entry.scenarios.some(row => row.listPrice == null)) throw new Error('请至少填写一条完整计费项、目录价和计费单位；免费请填 0');
     const catalogPricing = [...(provider.catalogPricing || []), entry];
     const catalogModels = [...(provider.catalogModels || []), { modelId, name: modelName || modelId, type: data.modelType }];
     const connection = providerTransaction(state, { operation: 'connection', data: { providerId: provider.id, name: channelName, protocol, baseUrl: apiUrl, timeoutSeconds: 60 } });
@@ -337,15 +338,32 @@ export function providerTransaction(state, action) {
   }
   if (['create', 'profile'].includes(operation)) {
     if (operation === 'profile' && !provider) throw new Error('服务商不存在');
+    if (operation === 'profile' && Object.hasOwn(data, 'expectedUpdatedAt') && data.expectedUpdatedAt !== (provider.updatedAt ?? null)) throw new Error('服务商资料已有修订，请重新打开核对');
     const name = data.name?.trim();
     if (!name) throw new Error('请填写服务商名称');
     if (state.providers.some(item => item.id !== provider?.id && item.name.trim().toLowerCase() === name.toLowerCase())) throw new Error('服务商名称已存在');
-    if (!PROVIDER_TYPES[data.sourceType]) throw new Error('请选择有效的供给类型');
-    const code = operation === 'create' ? data.code?.trim().toLowerCase() : providerCode(provider);
+    if (!Object.hasOwn(PROVIDER_TYPES, data.sourceType)) throw new Error('请选择有效的供给类型');
+    const code = operation === 'create' ? data.code?.trim().toLowerCase() : null;
     if (operation === 'create' && (!/^[a-z][a-z0-9-]{1,31}$/.test(code || '') || state.providers.some(item => providerCode(item).toLowerCase() === code))) throw new Error('服务商英文编码需为 2–32 位小写字母、数字或连字符，且不可重复');
     const description = data.description?.trim() || '';
     if ([...description].length > 2000 && description !== provider?.description?.trim()) throw new Error('备注最多 2000 字');
-    const fields = { code, name, sourceType: data.sourceType, contact: data.contact?.trim() || '', contactInfo: data.contactInfo?.trim() || '', description, ...(operation === 'create' ? { catalogModelIds: normalizeProviderCatalogue(data.catalogModelIds ?? []) } : {}) };
+    const fields = { name, sourceType: data.sourceType, contact: data.contact?.trim() || '', contactInfo: data.contactInfo?.trim() || '', description, ...(operation === 'create' ? { code, catalogModelIds: normalizeProviderCatalogue(data.catalogModelIds ?? []) } : {}) };
+    for (const [key, label] of [['introduction', '简介'], ['website', '官网'], ['documentation', '官方文档链接'], ['logo', '服务商 Logo']]) {
+      if (!Object.hasOwn(data, key)) continue;
+      if (typeof data[key] !== 'string') throw new Error(`${label}格式无效`);
+      const value = data[key].trim();
+      if (key === 'logo' && value) {
+        fields.logo = normalizeModelLogo(value, '服务商 Logo', 512 * 1024);
+        continue;
+      }
+      if (value.length > 1000) throw new Error(`${label}最多 1000 字符`);
+      if (value && key !== 'introduction') {
+        let url;
+        try { url = new URL(value); } catch { throw new Error(`${label}地址无效`); }
+        if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error(`${label}需填写无凭据的 HTTP 或 HTTPS 地址`);
+      }
+      fields[key] = value;
+    }
     if (operation === 'create') changes.push(add('providers', { id: data.id || uid('provider'), ...fields, status: '已启用', contractEnd: null }));
     else {
       if (provider.sourceType !== fields.sourceType && state.endpoints.some(endpoint => endpoint.providerId === provider.id)) throw new Error('已有接入配置，不能变更供给类型');

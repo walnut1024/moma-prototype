@@ -1,5 +1,5 @@
+import { offerKey } from '../service-access.mjs';
 import { servicePurpose } from './service-purpose.js';
-import { serviceScope } from './service-commercial.js';
 import {serviceModelSources} from './supply-models.js';
 import { normalizeModelProfile, requireModelBasics, normalizeServiceModel, serviceMetadataReady } from './model-profile.js';
 import { activeModelSalePrice, activeProviderPrice, providerServices, providerServiceId, serviceDirectoryModels } from './service-workspace.js';
@@ -76,7 +76,7 @@ export function activeSupplyPrice(state, supplyId, at = Date.now()) {
   if (!supply) return undefined;
   const endpoint = state.endpoints.find(item => item.id === supply?.endpointId);
   const provider = state.providers.find(item => item.id === endpoint?.providerId);
-  const association = provider?.catalogConnections?.find(item => !item.deletedAt && item.modelId === (supply.catalogueModelId || supply.upstreamModelId) && item.endpointId === supply.endpointId);
+  const association = provider?.catalogConnections?.find(item => !item.deletedAt && (supply.channelId ? item.id === supply.channelId : item.modelId === (supply.catalogueModelId || supply.upstreamModelId) && item.endpointId === supply.endpointId && (!item.upstreamModelId || item.upstreamModelId === supply.upstreamModelId)));
   const version = activeChannelProcurement(association, at);
   if (version === null) return null;
   const channelQuote = version?.pricing || association?.pricing;
@@ -111,24 +111,22 @@ export function modelSupplies(state, modelId) {
 export function availableSupplies(state, modelId, requirements = {}) {
   return modelSupplies(state, modelId).filter(supply => supply.status === '已启用' && supply.validationStatus === '通过' && !connectionBlockReason(supply.endpoint, supply.provider) && ['streaming', 'tools'].every(key => !requirements[key] || supply.capabilities[key]) && (!requirements.context || supply.capabilities.context >= requirements.context) && (!requirements.output || supply.capabilities.output >= requirements.output));
 }
-function scopeReady(state, model) { try { serviceScope(state,{openScope:model.openScope,tenantIds:model.tenantIds || []}); return true; } catch { return false; } }
-export function publicationChecks(state, model, { technical = false } = {}) {
+export function publicationChecks(state, model, { technical = false, serviceId } = {}) {
   const metadataReady=model.serviceManaged || model.serviceReviewCase ? serviceMetadataReady(model) : Boolean(model.name?.trim() && model.description?.trim());
   if (!['standard','provider'].includes(model.serviceMode)) return [{label:metadataReady?'模型资料完整':'模型资料待完善',passed:metadataReady,tab:'basic'},{label:model.serviceMode?'服务模式无效，请重新选择':'尚未选择服务模式',passed:false,tab:'serviceMode'}];
   if (model.serviceMode==='provider') {
-    const providers=providerServices(model);
+    const providers=providerServices(model).filter(entry=>!serviceId || providerServiceId(model.id,offerKey(entry))===serviceId);
     return [
       {label:metadataReady?'模型资料完整':'模型资料待完善',passed:metadataReady,tab:'basic'},
       {label:providers.length?'已关联服务商':'尚未关联服务商',passed:providers.length>0,tab:'supplies'},
       ...providers.flatMap(entry=>{
-        const provider=state.providers.find(item=>item.id===entry.providerId), price=activeProviderPrice(state,model.id,entry.providerId), service={id:providerServiceId(model.id,entry.providerId),modelId:model.id,model,providerId:entry.providerId,mode:'provider',callId:entry.callId};
+        const provider=state.providers.find(item=>item.id===entry.providerId), price=activeProviderPrice(state,model.id,offerKey(entry)), service={id:providerServiceId(model.id,offerKey(entry)),modelId:model.id,model,providerId:entry.providerId,channelId:entry.channelId,mode:'provider',callId:entry.callId};
         const channels=routingChannels(state,service);
-        const priceReady=provider?.status==='已启用' && Boolean(entry.callId) && (technical || servicePurpose(model,entry.providerId)!=='internal' && Boolean(price?.items.length) && price.items.every(item=>item.amount!=null)), routeReady=routingStatus(state,service).good;
-        return [{label:`${provider?.name || '服务商'}：${technical?(entry.callId?'对外调用标识 已配置':'对外调用标识 待配置'):priceReady?'调用 ID 和售价已配置':!entry.callId?'对外调用标识 待配置':'缺少对外售价'}`,passed:priceReady,tab:'pricing',providerId:entry.providerId},
-          {label:`${provider?.name || '服务商'}：${routeReady?'已发布可用渠道路由':channels.length?'路由尚未发布':'未关联可用渠道'}`,passed:routeReady,tab:'routing',providerId:entry.providerId,mapping:!channels.length}];
+        const priceReady=provider?.status==='已启用' && Boolean(entry.callId) && (technical || servicePurpose(model,offerKey(entry))!=='internal' && Boolean(price?.items.length) && price.items.every(item=>item.amount!=null)), routeReady=routingStatus(state,service).good;
+        return [{label:`${provider?.name || '服务商'}：${technical?(entry.callId?'对外调用标识 已配置':'对外调用标识 待配置'):priceReady?'调用 ID 和售价已配置':!entry.callId?'对外调用标识 待配置':'缺少对外售价'}`,passed:priceReady,tab:'pricing',providerId:offerKey(entry)},
+          {label:`${provider?.name || '服务商'}：${routeReady?'已发布可用渠道路由':channels.length?'路由尚未发布':'未关联可用渠道'}`,passed:routeReady,tab:'routing',providerId:offerKey(entry),mapping:!channels.length}];
       }),
-      {label:'开放范围明确',passed:scopeReady(state,model),tab:'publication'},
-      platformPublicationCheck(state,model),
+      platformPublicationCheck(state,model,Date.now(),serviceId),
     ];
   }
   if (model.serviceMode === 'standard') {
@@ -139,7 +137,6 @@ export function publicationChecks(state, model, { technical = false } = {}) {
       {label:metadataReady?'模型资料完整':'模型资料待完善',passed:metadataReady,tab:'basic'},
       {label:routeReady?'已发布有效的服务商与渠道路由映射':channels.length?'渠道路由待配置或发布':'尚未关联供应渠道',passed:routeReady,tab:'routing',mapping:!channels.length},
       ...(!technical?[{label:servicePurpose(model)==='internal'?'内部服务无需销售上架':priceReady?'统一售价与计量规则完整':'统一售价待配置',passed:servicePurpose(model)!=='internal' && priceReady,tab:'pricing'}]:[]),
-      {label:'开放范围明确',passed:scopeReady(state,model),tab:'publication'},
       platformPublicationCheck(state,model),
     ];
   }
@@ -152,7 +149,7 @@ export function supplyState(state, model) {
 
 export function modelManagementSeed(models, endpoints, supplyPrices, providers) {
   const at = timestamp();
-  const glm = { ...catalogueMetadata('model-glm53'), status: '运行中', visibility: '公开', listingStatus: '已上架', callsEnabled: true, openScope: 'all', tenantIds: [], defaultVersionId: 'version-glm53', createdAt: at, updatedAt: at };
+  const glm = { ...catalogueMetadata('model-glm53'), status: '运行中', visibility: '公开', listingStatus: '已上架', callsEnabled: true, defaultVersionId: 'version-glm53', createdAt: at, updatedAt: at };
   models.push(glm);
   const modelSupplies = endpoints.flatMap(endpoint => endpoint.modelIds.map(modelId => ({ id: `supply-${endpoint.id}-${modelId}`, modelId, endpointId: endpoint.id, upstreamModelId: models.find(model => model.id === modelId).modelId, capabilities: { ...models.find(model => model.id === modelId).capabilities }, status: endpoint.id === 'endpoint-kimi' ? '已停用' : '已启用', validationStatus: endpoint.id === 'endpoint-kimi' ? '待验证' : '通过', validationCases: ['协议兼容', '基础推理', '流式响应'].map(name => ({ name, passed: endpoint.id !== 'endpoint-kimi' })), verifiedAt: at, createdAt: at, updatedAt: at })));
   endpoints.forEach((endpoint, index) => {
@@ -252,13 +249,13 @@ export function modelTransaction(state, action) {
     else {
       objectId = action.recordId || uid('model');
       const versionId = uid('version');
-      changes.push(add('models', { id: objectId, ...fields, listingStatus: '已下架', status: '停用', callsEnabled: false, visibility: '内部', openScope: 'all', tenantIds: [], defaultVersionId: versionId }), add('modelVersions', { id: versionId, modelId: objectId, version: 'v1.0', capabilities: fields.capabilities, validationStatus: '未验证', isDefault: true, status: '草稿' }));
+      changes.push(add('models', { id: objectId, ...fields, listingStatus: '已下架', status: '停用', callsEnabled: false, visibility: '内部', defaultVersionId: versionId }), add('modelVersions', { id: versionId, modelId: objectId, version: 'v1.0', capabilities: fields.capabilities, validationStatus: '未验证', isDefault: true, status: '草稿' }));
     }
   } else if (operation === 'recordPlatformPublication') {
     const fingerprint = platformPublicationFingerprint(state,model,data.serviceId);
     if (!fingerprint || fingerprint !== data.expectedFingerprint || !data.mockServiceId || !Number.isInteger(data.publishedVersion)) throw new Error('平台验证记录与当前服务配置不一致，请重新核对');
     const record = { serviceId:data.serviceId,mockServiceId:data.mockServiceId,publishedVersion:data.publishedVersion,fingerprint,source:'mock',recordedAt:at };
-    changes.push(update('models',model.id,{platformPublications:[...(model.platformPublications || []).filter(row=>row.serviceId!==data.serviceId),record],...(model.serviceMode==='provider'?{serviceProviders:model.serviceProviders.map(row=>data.serviceId===`provider:${model.id}:${row.providerId}`?{...row,pendingPublication:false}:row)}:{})}));
+    changes.push(update('models',model.id,{platformPublications:[...(model.platformPublications || []).filter(row=>row.serviceId!==data.serviceId),record],...(model.serviceMode==='provider'?{serviceProviders:model.serviceProviders.map(row=>data.serviceId===providerServiceId(model.id,offerKey(row))?{...row,pendingPublication:false}:row)}:{})}));
   } else if (operation === 'supply') {
     const endpoint = state.endpoints.find(item => item.id === data.endpointId), supply = data.id && state.modelSupplies.find(item => item.id === data.id && item.modelId === model.id);
     if (data.id && !supply) throw new Error('供应服务不存在');
@@ -298,8 +295,6 @@ export function modelTransaction(state, action) {
     const version = Math.max(0, ...state.modelSalePrices.filter(price => price.modelId === model.id).map(price => price.version)) + 1;
     const floorDiscountBps = data.floorDiscountPercent === undefined ? activeSupplySalePrice(state, model.id, supply.id)?.floorDiscountBps : parseFloorDiscount(data.floorDiscountPercent);
     changes.push(add('modelSalePrices', { id: uid('sale'), modelId: model.id, supplyId: supply.id, items, ...(floorDiscountBps == null ? {} : { floorDiscountBps }), version, sourceVersion: procurementVersion(cost), sourceLabel: procurementLabel(cost), effectiveAt, status: operation === 'priceDraft' ? '草稿' : '已发布' }));
-  } else if (operation === 'scope') {
-    changes.push(update('models', model.id, serviceScope(state,data)));
   } else if (['enableService', 'disableService', 'stopSales'].includes(operation)) {
     if (data.expectedUpdatedAt !== model.updatedAt) throw new Error('服务已有并发修订，请重新核对');
     if (operation === 'enableService') {
@@ -316,6 +311,6 @@ export function modelTransaction(state, action) {
     const fields = { publish: { listingStatus: '已上架', visibility: '公开', callsEnabled: true, status: '运行中', firstPublishedAt:model.firstPublishedAt || at, lifecycleStopReason: null }, unlist: { listingStatus: '已下架', visibility: '内部', callsEnabled: false, status: '停用', lifecycleStopReason: 'operator' } }[operation];
     changes.push(update('models', model.id, fields));
   } else throw new Error('未知模型操作');
-  const labels = { enableService:'启用技术服务', disableService:'停用技术服务', stopSales:'停止销售', recordPlatformPublication:'记录平台发布验证', createServiceModel:'添加模型', serviceBasics:'修改模型资料', create: '创建模型', basic: '编辑模型', supply: '保存供应服务', verify: '验证供应服务', enableSupply: '启用供应服务', disableSupply: '停用供应服务', removeSupply: '移除供应服务', priceDraft: '保存价格草稿', pricePublish: '发布销售价格', scope: '设置开放范围', publish: '模型上架', unlist: '模型下架' };
+  const labels = { enableService:'启用技术服务', disableService:'停用技术服务', stopSales:'停止销售', recordPlatformPublication:'记录平台发布验证', createServiceModel:'添加模型', serviceBasics:'修改模型资料', create: '创建模型', basic: '编辑模型', supply: '保存供应服务', verify: '验证供应服务', enableSupply: '启用供应服务', disableSupply: '停用供应服务', removeSupply: '移除供应服务', priceDraft: '保存价格草稿', pricePublish: '发布销售价格', publish: '模型上架', unlist: '模型下架' };
   return { type: 'batch', label: labels[operation], objectId, changes };
 }

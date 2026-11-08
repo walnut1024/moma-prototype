@@ -13,14 +13,6 @@ export function groupRequests(requests, groupBy, selected = null) {
 
 export const beijingTime = value => new Date(Date.parse(value) + 8 * 3600000).toISOString().slice(0, 16).replace('T', ' ');
 
-export function monitoringWindow(requests, days, now = Date.now()) {
-  const start = now - days * 86400000;
-  return {
-    rows: requests.filter(row => Date.parse(row.createdAt) >= start && Date.parse(row.createdAt) < now),
-    buckets: Array.from({ length: days * 24 }, (_, index) => ({ start: start + index * 3600000, end: start + (index + 1) * 3600000 })),
-  };
-}
-
 // Local deployment demo samples; IDs keep each deployment stable when its peers are filtered.
 export function deploymentSeries(deployment, metric) {
   const phase = [...deployment.id].reduce((sum, character) => sum + character.charCodeAt(0), 0) % 5;

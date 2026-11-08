@@ -32,6 +32,14 @@ export function experienceTasks(model) {
     tasks.includes('语音识别') && 'voice',
   ].filter(Boolean);
 }
+export function cloudMarketPresentation(offer) {
+  const profile=offer.profile || {}, inputs=profile.inputModalities || [], outputs=profile.outputModalities || [];
+  return {...presentation(offer),...offer,desc:offer.description,context:offer.capabilities?.context ? Math.round(offer.capabilities.context/1024)+'K' : '未填写',
+    contextTokens:offer.capabilities?.context ?? null,series:profile.family || '',input:inputs,outputModalities:outputs,
+    businessTasks:profile.tasks || [],tasks:experienceTasks(offer),documentation:profile.documentation || '',
+    date:profile.releaseDate || '',guideRequest:serviceGuideRequest(offer,offer.callId)};
+}
+
 export function marketModels(services, scope = 'showcase') {
   const rows = services.filter(row => row.marketVisible !== false && (scope === 'all' || row.defaultCatalogue !== false));
   const groups = new Map();
@@ -59,7 +67,7 @@ export function directorySnapshot(storage = globalThis.localStorage) {
     if (model.listingStatus !== '已上架' || model.visibility !== '公开' || model.callsEnabled !== true) return [];
     const proofs = (model.platformPublications || []).filter(row => row.serviceId === service.id && row.source === 'mock');
     const live = proofs.length === 1 && published.find(row => row.id === proofs[0].mockServiceId);
-    if (!identity && (auth?.currentUserId || model.openScope !== 'all' || model.releaseStage==='gray')) return [];
+    if (!identity && (auth?.currentUserId || model.releaseStage==='gray')) return [];
     let access = identity ? serviceAccess(state, service, identity.tenantId, live) : { allowed: false, reason: identityError };
     if (access.code === 'model_forbidden' || access.code === 'customer_unavailable') return [];
     if (access.allowed) access = mockServiceReadiness(state, live);

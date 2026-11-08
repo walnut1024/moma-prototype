@@ -1,4 +1,4 @@
-import catalogue from '../mock/builtin-model-catalogue.json' with { type: 'json' };
+import catalogue from '../data/builtin-model-catalogue.json' with { type: 'json' };
 import { providerCatalogueIds } from './moma-provider.js';
 export const MODEL_CATALOGUE_TYPES = { text: '文本', visual: '视觉', multimodal: '多模态', audio: '语音', embedding: '向量', rerank: '重排' };
 export function libraryRecord(state, id) {

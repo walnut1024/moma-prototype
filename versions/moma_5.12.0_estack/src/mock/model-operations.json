@@ -7,6 +7,13 @@
     "model-glm53",
     "mock-service-deepseek-v4-flash-0731"
   ],
+  "demoTenant": {
+    "id": "tenant-model-operations-demo",
+    "name": "模型运营演示租户",
+    "type": "企业",
+    "status": "正常",
+    "source": "mock"
+  },
   "collections": {
     "models": [
       {

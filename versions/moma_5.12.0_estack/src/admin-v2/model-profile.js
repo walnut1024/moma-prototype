@@ -23,18 +23,19 @@ export const COMMON_FIELDS = [field('tasks', '支持任务', 'tasks'), field('in
 export const INTERFACE_FIELDS = [field('inputFormats', '输入文件格式', 'text', '例如 PDF、PNG、WAV'), field('inputMethods', '输入方式', 'methods'), field('supportedParameters', '支持参数', 'parameters'), field('defaultParameters', '默认参数', 'json'), field('parameterRules', '参数范围与组合限制', 'text', '例如 1080P 仅支持 5 秒和 10 秒')];
 export const RECORD_FIELDS = [field('documentation', '资料链接', 'url', 'https://'), field('sourceUpdated', '最近核对日期', 'date'), field('sourceStatus', '资料状态', 'confirmation'), field('benchmark', '评测任务与指标'), field('benchmarkResult', '评测结果'), field('benchmarkDataset', '数据集与版本'), field('benchmarkConditions', '测试条件'), field('benchmarkDate', '测试日期', 'date')];
 export const FEATURE_FIELDS = [field('reasoning', '深度思考', 'support'), field('structured', '结构化输出', 'support'), field('cache', '提示词缓存', 'support'), field('batch', '批量调用', 'support')];
-export function normalizeModelLogo(value) {
+export function normalizeModelLogo(value, label = '模型 Logo', maxBytes = 1048576) {
   if (!value.startsWith('data:')) {
-    if (value.length > 1000) throw new Error('模型 Logo 地址最多 1000 字符');
-    let url; try { url = new URL(value); } catch { throw new Error('模型 Logo 地址无效'); }
-    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('模型 Logo 需填写无凭据的 http 或 https 地址');
+    if (value.length > 1000) throw new Error(`${label}地址最多 1000 字符`);
+    let url; try { url = new URL(value); } catch { throw new Error(`${label}地址无效`); }
+    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error(`${label}需填写无凭据的 http 或 https 地址`);
     return value;
   }
   const match = value.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
-  if (!match || match[2].length > 1398104) throw new Error('Logo 仅支持 1 MB 以内的 PNG、JPEG 或 WebP 图片');
+  const limit = maxBytes === 1048576 ? '1 MB' : maxBytes / 1024 + ' KB';
+  if (!match || match[2].length > Math.ceil(maxBytes / 3) * 4) throw new Error(`Logo 仅支持 ${limit} 以内的 PNG、JPEG 或 WebP 图片`);
   let bytes; try { bytes = atob(match[2]); } catch { throw new Error('Logo 图片数据无效'); }
   const valid = match[1] === 'png' ? bytes.startsWith('\x89PNG\r\n\x1a\n') : match[1] === 'jpeg' ? bytes.startsWith('\xff\xd8\xff') : bytes.startsWith('RIFF') && bytes.slice(8, 12) === 'WEBP';
-  if (!valid || bytes.length > 1048576) throw new Error('Logo 图片格式或大小无效');
+  if (!valid || bytes.length > maxBytes) throw new Error('Logo 图片格式或大小无效');
   return value;
 }
 export function specificationFields(type, usageUnit, profile = {}) {

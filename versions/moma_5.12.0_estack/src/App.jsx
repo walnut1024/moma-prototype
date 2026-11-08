@@ -1,12 +1,12 @@
 import {loadAdminState} from './admin-v2/store.js';
 import {useTenantData} from './useTenantData';
-import {saveTenantKeys,orderTenantServices,saveTenantRoutes} from './tenant-data.mjs';
+import {saveTenantKeys,saveTenantRoutes} from './tenant-data.mjs';
 import {toast} from 'sonner';
 import mockConfig from './mock/catalogues.json' with { type: 'json' };
-import { readExperienceDraft } from './experience-drafts.mjs';
 import { useServiceDirectory } from './useServiceDirectory';
-import { beginExperience, marketModels, customerPriceRows } from './service-directory.mjs';
+import { marketModels, customerPriceRows } from './service-directory.mjs';
 import MarketModelDetail from './MarketModelDetail';
+import { MarketAction, MarketSessionControl, useCloudMarket } from './CloudMarket';
 import { readModelDetail, modelDetailLocation } from './model-detail-route.mjs';
 import { Button as SemiButton, Select as SemiSelect, Typography as SemiTypography } from '@douyinfe/semi-ui';
 import DevelopmentNotes from './admin-v2/DevelopmentNotes';
@@ -539,7 +539,7 @@ function ApiKeys({ billing, subscription, hideHeading = false }) {
               {!suggestions.length && <p>没有匹配的 Key</p>}
             </div>}
           </div>
-          <button aria-label="刷新" onClick={tenant.reload}>
+          <button aria-label="刷新" onClick={tab==='按Token用量计费'?market.refresh:tenant.reload}>
             <RefreshCw size={17} />
           </button>
           <button aria-label="设置">
@@ -1230,12 +1230,21 @@ function ModelOrderList({
     [confirming, setConfirming] = useState(false),
     [ordered, setOrdered] = useState(false),
     [detail, setDetail] = useState(null), [page, setPage] = useState(1), [size, setSize] = useState(DEFAULT_PAGE_SIZE);
-  const tenant=useTenantData();
-  const orderOwner=useRef(tenant.identity?.key);
-  useEffect(()=>{if(orderOwner.current!==tenant.identity?.key){orderOwner.current=tenant.identity?.key;setSelectedOrders([]);setAgreed(false);setConfirming(false);setOrdered(false);}},[tenant.identity?.key]);
-  const allRows = tenant.services.map(service=>{const order=tenant.orders.find(row=>row.serviceId===service.id && ['已开通','生效中'].includes(row.status));return [service.callId,service.mode==='standard'?'统一模型服务模式':'渠道直选模式',service.typeLabel,service.provider,customerPriceRows(service.salePrices).map(row=>row.name).join(' / '),customerPriceRows(service.salePrices).map(row=>row.currency+' '+row.amount+' / '+row.unit).join('\n'),order?'使用中':'未订购',order?.createdAt || '—',order?.expiresAt || '长期有效'];});
+  const tenant=useTenantData(), market=useCloudMarket();
+  const orderOwner=useRef(market.tenant?.id), [submitting,setSubmitting]=useState(false);
+  useEffect(()=>{
+    if(orderOwner.current!==market.tenant?.id){
+      orderOwner.current=market.tenant?.id;
+      setSelectedOrders(initialModel && market.tenant ? [initialModel] : []);setAgreed(false);setConfirming(false);setOrdered(false);
+    }
+  },[market.tenant?.id,initialModel]);
+  const allRows=market.services.filter(service=>service.canOrder || service.ordered).map(service=>{
+    const prices=customerPriceRows(service.salePrices);
+    return [service.callId,service.mode==='standard'?'统一模型服务模式':'渠道直选模式',service.typeLabel,service.provider,prices.map(row=>row.name).join(' / '),prices.map(row=>row.currency+' '+row.amount+' / '+row.unit).join('\n'),service.ordered?'使用中':'未订购',service.orderedAt ? shanghaiDate(new Date(service.orderedAt)) : '—','长期有效'];
+  });
+  const historicalRows=market.orders.filter(order=>!market.services.some(service=>service.id===order.offerId)).map(order=>[order.callId,'—','—','—','—','—',['gray','formal'].includes(order.stage)?'已订购':'已下架',shanghaiDate(new Date(order.createdAt)),'—']);
   const subscriptions = {'Token Plan订阅':tenant.plans.filter(row=>!row.product.name.includes('Coding')).map(row=>[row.product.name,'平台','Token Plan','平台','套餐权益',String(row.amount),'已订购',row.createdAt || '—',row.expiresAt || '长期有效']),'Coding Plan订阅':tenant.plans.filter(row=>row.product.name.includes('Coding')).map(row=>[row.product.name,'平台','Coding Plan','平台','套餐权益',String(row.amount),'已订购',row.createdAt || '—',row.expiresAt || '长期有效'])};
-  const rows = (historical || tab === "按Token用量计费" ? allRows : subscriptions[tab] || []).filter(row => row[0].toLowerCase().includes(query.trim().toLowerCase()));
+  const rows = (historical || tab === "按Token用量计费" ? [...allRows,...historicalRows] : subscriptions[tab] || []).filter(row => row[0].toLowerCase().includes(query.trim().toLowerCase()));
   const current = Math.min(page, Math.max(1, Math.ceil(rows.length / size)));
   const visibleRows = rows.slice((current - 1) * size, current * size);
   const changeTab = value => { setTab(value); setQuery(""); setPage(1); };
@@ -1285,6 +1294,7 @@ function ModelOrderList({
           <span>产品介绍　|　帮助文档　|　产品控制台</span>
         </div>
         <section className="service-order-panel">
+          <MarketSessionControl market={market}/>{market.error && <p role="alert">{market.error}</p>}
           <div className="billing-choice">
             <strong>
               计费方式<small>模型计费说明</small>
@@ -1507,7 +1517,7 @@ function ModelOrderList({
             </button>
           </div>
           <button
-            disabled={!selectedOrders.length || !agreed}
+            disabled={!market.tenant || !selectedOrders.length || !agreed}
             onClick={() => setConfirming(true)}
           >
             确认订单
@@ -1552,7 +1562,17 @@ function ModelOrderList({
                     <button onClick={() => setConfirming(false)}>取消</button>
                     <button
                       className="primary"
-                      onClick={() => {try{if(tab!=='按Token用量计费')throw Error('暂无可订购套餐');orderTenantServices(selectedOrders.map(callId=>tenant.services.find(row=>row.callId===callId)?.id),tenant.revision);setOrdered(true);}catch(error){toast.error(error.message);}}}
+                      disabled={submitting}
+                      onClick={async()=>{
+                        setSubmitting(true);
+                        try {
+                          if(tab!=='按Token用量计费')throw Error('暂无可订购套餐');
+                          const ids=selectedOrders.map(callId=>market.services.find(row=>row.callId===callId && row.canOrder)?.id);
+                          if(ids.some(id=>!id))throw Error('所选服务已有变化，请重新选择');
+                          await market.order(ids);setOrdered(true);
+                        }catch(error){toast.error(error.message);}
+                        finally{setSubmitting(false);}
+                      }}
                     >
                       确认订购
                     </button>
@@ -1623,6 +1643,7 @@ function ModelOrderList({
         ))}
       </nav>}
       <section className="legacy-panel">
+        <MarketSessionControl market={market}/>{market.error && <p role="alert">{market.error}</p>}
         <div className="legacy-order-tools">
           <span>
             <button className="legacy-primary" onClick={() => openOrder()}>
@@ -1779,12 +1800,9 @@ function PrototypeApp({ version }) {
     );
   const directory = useServiceDirectory();
   const [catalogueScope, setCatalogueScope] = useState('showcase');
-  const models = useMemo(() => marketModels(directory.models, catalogueScope), [directory.models, catalogueScope]);
   const owner = directory.identity?.key || '';
   const [entryService, setEntryService] = useState(() => new URLSearchParams(location.search).get('service') || '');
-  const [entryError, setEntryError] = useState('');
-  const [entryConfirm, setEntryConfirm] = useState('');
-  useEffect(() => { setEntryError(''); setEntryConfirm(''); }, [owner]);
+  const [marketAction,setMarketAction]=useState(null);
   const [activePage, setActivePage] = useState(() => {
     const requestedPage = new URLSearchParams(location.search).get("page");
     return requestedPage === 'model-detail' ? '模型详情' : requestedPage === 'experience' ? ({text:'文本生成', image:'图片生成', video:'视频生成', voice:'语音识别'}[new URLSearchParams(location.search).get('task')] || '模型广场') : requestedPage === "model-order" ? "模型订购" : ({ "organization-members": "组织及成员", "operation-records": "操作记录", "api-keys": "API Key 管理", "account-certification": "账号认证", "call-logs": "调用日志", "usage-statistics": "用量统计" }[requestedPage] || "模型广场");
@@ -1796,11 +1814,15 @@ function PrototypeApp({ version }) {
     [filters, setFilters] = useState({}),
     [selected, setSelected] = useState(() => readModelDetail(location.search)),
     [sortMode, setSortMode] = useState("latest");
+  const auth = usePrototypeAuth();
+  const market=useCloudMarket(admin==='front' && ['模型广场','模型详情'].includes(activePage) && !auth.route);
+  const marketServices=market.services;
+  const models = useMemo(() => marketModels(marketServices, catalogueScope), [marketServices, catalogueScope]);
   const selectedCard = useRef('');
   useEffect(() => {
     const syncDetail = () => {
       const detail = readModelDetail(location.search);
-      setSelected(detail); setEntryError(''); setEntryConfirm('');
+      setSelected(detail); setMarketAction(null);
       const page = new URLSearchParams(location.search).get('page');
       const query = new URLSearchParams(location.search);
       setEntryService(query.get('service') || '');
@@ -1816,7 +1838,6 @@ function PrototypeApp({ version }) {
   }, [activePage]);
   const selectDetailService = service => {
     setSelected({ modelKey: service.modelKey, id: service.id });
-    setEntryError(''); setEntryConfirm('');
     history.replaceState(history.state, '', modelDetailLocation(location.href, service));
   };
   const openModelDetails = (_event, model) => {
@@ -1824,7 +1845,7 @@ function PrototypeApp({ version }) {
     selectedCard.current = model.modelKey;
     history.replaceState(null, '', modelDetailLocation(location.href));
     history.pushState({ marketFromList: true }, '', modelDetailLocation(location.href, service));
-    setSelected({ modelKey: service.modelKey, id: service.id }); setEntryError(''); setEntryConfirm(''); setActivePage('模型详情');
+    setSelected({ modelKey: service.modelKey, id: service.id }); setActivePage('模型详情');
   };
   const returnToMarket = () => {
     if (history.state?.marketFromList) { history.back(); return; }
@@ -1839,7 +1860,6 @@ function PrototypeApp({ version }) {
     media.addEventListener('change', change);
     return () => media.removeEventListener('change', change);
   }, []);
-  const auth = usePrototypeAuth();
   const tenantAccess = tenantUserAccess(auth.state, 'personal');
   const enterprisePagesAllowed = !auth.storageError && tenantAccess.canViewOrganization;
   useEffect(() => {
@@ -1876,17 +1896,6 @@ function PrototypeApp({ version }) {
       [group]: current[group] === value ? "" : value,
     }));
   const meta = m => ({ task: ({ text: ['文本与代码'], multimodal: ['多模态', '文本与代码'], image: ['图像'], video: ['视频'], voice: ['音频'], embedding: ['向量'], rerank: ['重排'] })[m.type] || [], input: m.input, output: m.outputModalities, author: m.maker, provider: m.providers });
-  const enterExperience = selected => {
-    try {
-      const task = selected.tasks[0];
-      beginExperience(selected.id, task);
-      const draft = readExperienceDraft(owner, task);
-      if (draft.model && draft.model !== selected.id && (draft.text || draft.file || draft.images?.length) && entryConfirm !== selected.id) { setEntryConfirm(selected.id); setEntryError('当前体验有未发送内容。切换模型将保留草稿，请确认后继续。'); return; }
-      if (readModelDetail(location.search)) { const url = new URL(location.href); url.searchParams.set('page', 'experience'); url.searchParams.set('task', task); url.searchParams.set('service', selected.id); url.searchParams.delete('model'); history.pushState(null, '', url.pathname + url.search); }
-      setEntryService(selected.id); setTextCompare(false); setSelected(null); setEntryError('');
-      setActivePage({ text: '文本生成', image: '图片生成', video: '视频生成', voice: '语音识别' }[task]);
-    } catch (error) { setEntryError(error.message); }
-  };
   const visible = useMemo(
     () =>
       models
@@ -2094,7 +2103,8 @@ function PrototypeApp({ version }) {
         ) : admin === "v2" ? (
           <AdminConsoleV2 bannerTarget={adminBannerTarget} />
         ) : activePage === "模型详情" ? (
-          <MarketModelDetail services={directory.models} selected={selected} onSelect={selectDetailService} onBack={returnToMarket} onExperience={enterExperience} error={entryError} confirm={entryConfirm} onManageKeys={() => { const url = new URL(location.href); url.searchParams.set('page', 'api-keys'); url.searchParams.delete('model'); url.searchParams.delete('service'); history.pushState(null, '', url.pathname + url.search); setActivePage('API Key 管理'); }}/>
+          <><div className="market-detail-session"><MarketSessionControl market={market}/></div>{market.loading || market.error ? <p className="content" role="status">{market.error || '正在加载模型广场…'}</p> : <MarketModelDetail services={marketServices} selected={selected} onSelect={selectDetailService} onBack={returnToMarket} onExperience={service=>setMarketAction({kind:'call',service})} onOrder={service=>setMarketAction({kind:'order',service})}/>}
+          {marketAction && <MarketAction key={marketAction.kind+marketAction.service.id} action={marketAction} market={market} close={()=>setMarketAction(null)}/>}</>
         ) : activePage === "智能路由" ? (
           <SmartRoute key={`${version.id}:${owner}`} versionId="moma_5.12.0_estack" onNavigate={setActivePage} />
         ) : activePage === "模型排行" ? (
@@ -2142,7 +2152,8 @@ function PrototypeApp({ version }) {
         ) : (
           <div className="content">
 
-            {(directory.error || directory.identityError) && <p role="status">{directory.error || directory.identityError}</p>}
+            <MarketSessionControl market={market}/>
+            {(market.loading || market.error) && <p role="status">{market.error || '正在加载模型广场…'}</p>}
             {catalogueToolbar}
             <section className={`catalog catalogue-layout ${compactFilters || !filtersExpanded ? 'catalogue-collapsed' : ''}`}>
               {!compactFilters && <div hidden={!filtersExpanded}>{catalogueFilters}</div>}

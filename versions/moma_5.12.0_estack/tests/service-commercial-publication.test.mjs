@@ -6,7 +6,7 @@ import { modelAuthors, serviceModelDraft } from '../src/admin-v2/model-profile.j
 import { libraryRecord, modelLibrary } from '../src/admin-v2/model-library.js';
 import { catalogueChannels } from '../src/admin-v2/provider-channels.js';
 import { connectionFingerprint } from '../src/admin-v2/connection-state.js';
-import { commercialTaskKey, commercialTaskBase, modelSaleRevision, providerPriceRevision, activeProviderPrice } from '../src/admin-v2/service-workspace.js';
+import { commercialPriceKey, commercialPriceBase, modelSaleRevision, providerPriceRevision, activeProviderPrice } from '../src/admin-v2/service-workspace.js';
 import { routingServices, routeSourceVersion } from '../src/admin-v2/service-routing.js';
 import { publicationChecks } from '../src/admin-v2/model-management.js';
 import { platformCandidatePlan, runPlatformTrial, publishPlatformCandidate } from '../src/admin-v2/platform-service-client.js';
@@ -15,7 +15,6 @@ import { setMockScenario, getMockServiceSnapshots, inspectMockPublication, getMo
 import { platformPublicationFingerprint } from '../src/admin-v2/platform-publication-state.js';
 import { directorySnapshot } from '../src/service-directory.mjs';
 import { lifecycleAccess } from '../src/service-access.mjs';
-import { serviceReleaseScope } from '../src/service-release.mjs';
 import { simulateRequest } from '../src/admin-v2/domain.js';
 const parseAdminState=(...args)=>withAdminSession(baseParseAdminState(...args));
 const run=(state,operation,data,modelId)=>commitAdminState(state,{type:'modelOperations',operation,data,modelId});
@@ -72,7 +71,6 @@ async function fixture(t,mode='standard') {
   assert.equal(publicationChecks(state,model()).find(row=>row.tab==='platform').passed,true);
   assert.throws(()=>persistModelAction(state,listing,storage),/平台试调用/);
   assert.throws(()=>persistAdminAction(state,{type:'update',collection:'models',id:modelId,changes:{listingStatus:'已上架'}},storage),/服务管理操作/);
-  state=commitAdminState(state,{type:'modelOperation',operation:'scope',modelId,data:{openScope:'all',tenantIds:[]}});storage.setItem(STORAGE_KEY,JSON.stringify(state));
   const plan=platformCandidatePlan(state,model(),{serviceId:service.id,tenantIds:['tenant-gov'],supplyIds:[supply.id]});
   assert.equal(plan.candidate.bindings[0].model.id,material.id);assert.equal(plan.candidate.bindings[0].model.upstreamModelId,'vendor/unmodified-upstream');
   const trial=await runPlatformTrial(plan);assert.equal(trial.result.billingReady,true);assert.equal(model().listingStatus,'已下架');
@@ -84,8 +82,8 @@ async function fixture(t,mode='standard') {
   const client=await onboardingApi('/client-keys',{method:'POST',body:{operationId:crypto.randomUUID(),tenantId:'tenant-gov',serviceIds:[published.id]}});
   const save=(operation,data)=>{state=persistModelAction(state,{type:'modelOperations',operation,data,modelId},storage);return state;};
   const pending={};
-  const draft=(kind,value)=>{ const providerId=mode==='provider' && kind==='price'?'provider-moma':''; pending[commercialTaskKey(kind,providerId)]={id:crypto.randomUUID(),base:commercialTaskBase(state,model(),kind,providerId),values:structuredClone(value)}; };
-  const publish=kind=>{ const providerId=mode==='provider'&&kind==='price'?'provider-moma':'', input=pending[commercialTaskKey(kind,providerId)]; return save('commercialPublish',{kind,providerId,value:input.values,expectedBase:input.base,confirmed:true}); };
+  const draft=(kind,value)=>{ const providerId=mode==='provider' && kind==='price'?'provider-moma':''; pending[commercialPriceKey(providerId)]={id:crypto.randomUUID(),base:commercialPriceBase(state,model(),providerId),values:structuredClone(value)}; };
+  const publish=kind=>{ const providerId=mode==='provider'&&kind==='price'?'provider-moma':'', input=pending[commercialPriceKey(providerId)]; return save('commercialPublish',{kind,providerId,value:input.values,expectedBase:input.base,confirmed:true}); };
   const call=()=>onboardingApi('/client/completions',{method:'POST',token:client.clientKey,body:{operationId:crypto.randomUUID(),model:service.callId,messages:[{role:'user',content:'P1 price'}]}});
   return {get state(){return state;},model,modelId,storage,rows,pending,draft,publish,save,call,published,service};
 }
@@ -95,10 +93,9 @@ for(const mode of ['standard','provider']) test(mode+' price form edits do not a
  const before=getMockServiceSnapshots().find(row=>row.id===env.published.id).published.config;
  const route=env.state.serviceRoutes.find(row=>row.serviceId===env.service.id);route.draft={sentinel:'unpublished route'};
  env.storage.setItem(STORAGE_KEY,JSON.stringify(env.state));
- env.draft('scope',{openScope:'selected',tenantIds:['tenant-gov']});const scope=structuredClone(env.pending.scope);
  env.draft('price',prices());await env.call();assert.deepEqual(getMockServiceSnapshots().find(row=>row.id===env.published.id).published.config,before);
  const generation=env.model().accessGeneration;env.publish('price');assert.equal(env.model().accessGeneration,generation);const updated=getMockServiceSnapshots().find(row=>row.id===env.published.id).published.config;
- assert.equal(updated.salePrices[0].amount,3000000);assert.deepEqual(updated.route,before.route);assert.deepEqual(updated.tenantIds,before.tenantIds);assert.deepEqual(env.pending.scope,scope);assert.deepEqual(env.state.serviceRoutes.find(row=>row.serviceId===env.service.id).draft,{sentinel:'unpublished route'});
+ assert.equal(updated.salePrices[0].amount,3000000);assert.deepEqual(updated.route,before.route);assert.deepEqual(updated.tenantIds,before.tenantIds);assert.deepEqual(env.state.serviceRoutes.find(row=>row.serviceId===env.service.id).draft,{sentinel:'unpublished route'});
  await env.call();const latest=getMockOperationalRequests().find(row=>row.priceSnapshot?.items?.[0]?.amount===3000000);assert.ok(latest);assert.ok(history.every(row=>JSON.stringify(getMockOperationalRequests().find(item=>item.id===row.id))===JSON.stringify(row)));
  assert.equal(directorySnapshot(env.storage).models.find(row=>row.id===env.service.id).salePrices[0].amount,3000000);
  assert.equal(inspectMockPublication(env.published.id).ready,true,inspectMockPublication(env.published.id).reason);assert.equal(publicationChecks(env.state,env.model()).find(row=>row.tab==='platform').passed,true,JSON.stringify(env.model().platformPublications.map(row=>({record:JSON.parse(row.fingerprint).slice(7,12),expected:JSON.parse(platformPublicationFingerprint(env.state,env.model(),row.serviceId)).slice(7,12)}))));
@@ -106,11 +103,17 @@ for(const mode of ['standard','provider']) test(mode+' price form edits do not a
  const command=simulateRequest(env.state,{requestId:'p1-domain',keyId:key.id,modelId:env.service.callId});assert.equal(command.changes.find(row=>row.collection==='requests').record.priceSnapshot.items[0].amount,3000000);
  assert.equal(env.model().commercialDrafts,undefined); assert.throws(()=>env.save('commercialPublish',{kind:'price',providerId:mode==='provider'?'provider-moma':'',value:prices(),expectedBase:'stale',confirmed:true}),/修订/);
 });
-test('scope is a separate submission: publish adds authorized clients and removal blocks existing keys without publishing price',async t=>{
- const env=await fixture(t);env.draft('price',prices());const price=structuredClone(env.pending['price:standard']);
- env.draft('scope',{openScope:'selected',tenantIds:['tenant-nanjing']});await env.call();const generation=env.model().accessGeneration;env.publish('scope');assert.ok(env.model().accessGeneration>generation);
- assert.deepEqual(env.pending['price:standard'],price);assert.deepEqual(getMockServiceSnapshots().find(row=>row.id===env.published.id).published.config.tenantIds,['tenant-nanjing']);await assert.rejects(env.call,/未获授权/);
- const client=await onboardingApi('/client-keys',{method:'POST',body:{operationId:crypto.randomUUID(),tenantId:'tenant-nanjing',serviceIds:[env.published.id]}});await onboardingApi('/client/completions',{method:'POST',token:client.clientKey,body:{operationId:crypto.randomUUID(),model:env.service.callId,messages:[{role:'user',content:'new customer'}]}});
+test('published trial customers do not limit an eligible client, but client key and customer grants still apply',async t=>{
+ const env=await fixture(t);
+ const tenantId='tenant-nanjing';
+ const key=async serviceIds=>onboardingApi('/client-keys',{method:'POST',body:{operationId:crypto.randomUUID(),tenantId,serviceIds}});
+ const request=client=>onboardingApi('/client/completions',{method:'POST',token:client.clientKey,body:{operationId:crypto.randomUUID(),model:env.service.callId,messages:[{role:'user',content:'new customer'}]}});
+ assert.deepEqual(env.published.published.config.tenantIds,['tenant-gov']);
+ const client=await key([env.published.id]);await request(client);
+ const saved=JSON.parse(env.storage.getItem(STORAGE_KEY));
+ saved.grants.push({subjectType:'tenant',subjectId:tenantId,status:'生效中',modelIds:[]});
+ env.storage.setItem(STORAGE_KEY,JSON.stringify(saved));
+ await assert.rejects(request(client),error=>error.code==='model_forbidden');
 });
 test('failed main or mock writes preserve both stores, inputs and old clients, and allow retry',async t=>{
  const env=await fixture(t);env.draft('price',prices());const before=new Map(env.rows);const original=env.storage.setItem;let failKey=STORAGE_KEY;
@@ -130,7 +133,7 @@ test('unsaved inputs are not persisted; incomplete, stale and forged writes leav
 test('unmapped currency, stale publication base and direct online writes cannot partially change clients',async t=>{
  const env=await fixture(t);const values=prices();values.items.forEach(row=>{row.currency='USD';});env.draft('price',values);const before=new Map(env.rows);
  assert.throws(()=>env.publish('price'),/币种不可比/);assert.deepEqual(env.rows,before);await env.call();
- assert.throws(()=>persistModelAction(env.state,{type:'modelOperation',operation:'scope',modelId:env.modelId,data:{openScope:'selected',tenantIds:['tenant-gov']}},env.storage),/草稿/);
+ assert.throws(()=>persistModelAction(env.state,{type:'modelOperation',operation:'scope',modelId:env.modelId,data:{openScope:'selected',tenantIds:['tenant-gov']}},env.storage),/未知模型操作/);
  env.draft('price',prices());const draft=structuredClone(env.pending['price:standard']);
  const current=run(env.state,'unifiedPrice',{expectedUpdatedAt:env.model().updatedAt,expectedSaleVersion:modelSaleRevision(env.state,env.modelId),items:prices('4').items},env.modelId);
  assert.throws(()=>run(current,'commercialPublish',{kind:'price',value:draft.values,expectedBase:draft.base,confirmed:true},env.modelId),/修订/);
@@ -151,7 +154,7 @@ test('a new provider service can prepare its own initial price without publishin
   assert.equal(env.model().serviceProviders.find(row=>row.providerId===provider.id).pendingPublication,true);
   const input={...prices(),callId:'pending/new-provider-service'};
   env.save('configureServiceIdentity',{providerId:provider.id,callId:input.callId,expectedUpdatedAt:env.model().updatedAt});
-  env.save('commercialPublish',{kind:'price',providerId:provider.id,expectedBase:commercialTaskBase(env.state,env.model(),'price',provider.id),value:input,confirmed:true});
+  env.save('commercialPublish',{kind:'price',providerId:provider.id,expectedBase:commercialPriceBase(env.state,env.model(),provider.id),value:input,confirmed:true});
   assert.deepEqual(getMockServiceSnapshots(),before);
   assert.ok(activeProviderPrice(env.state,env.modelId,provider.id));
   assert.deepEqual(env.state.modelSalePrices.filter(row=>row.providerId!==provider.id),originalPrices);
@@ -206,10 +209,12 @@ test('technical stop, sales stop and purpose changes remain independent and reje
 test('management sales settings do not expand call access and selling cannot enable a stopped service',async t=>{
   const env=await fixture(t),scope=structuredClone({openScope:env.model().openScope,tenantIds:env.model().tenantIds});
   const proof=structuredClone(env.model().platformPublications);
-  env.save('commercialPublish',{kind:'price',expectedBase:commercialTaskBase(env.state,env.model(),'price'),value:prices('3.25'),confirmed:true});
+  env.save('commercialPublish',{kind:'price',expectedBase:commercialPriceBase(env.state,env.model()),value:prices('3.25'),confirmed:true});
   const storedPrices=structuredClone(env.state.modelSalePrices);
   assert.deepEqual(env.model().platformPublications,proof);
-  env.save('salesSettings',{scope:{openScope:'selected',tenantIds:['tenant-gov']},visible:false,confirmed:true,expectedUpdatedAt:env.model().updatedAt});
+  env.save('marketVisibility',{visible:false,expectedUpdatedAt:env.model().updatedAt});
+  env.save('salesSettings',{scope:{openScope:'selected',tenantIds:['tenant-gov']},confirmed:true,expectedUpdatedAt:env.model().updatedAt});
+  assert.equal(env.model().marketVisible,false);
   assert.deepEqual(env.model().salesScope,{openScope:'selected',tenantIds:['tenant-gov']});assert.deepEqual({openScope:env.model().openScope,tenantIds:env.model().tenantIds},scope);
   env.save('stopSales',{expectedUpdatedAt:env.model().updatedAt});env.save('disableService',{expectedUpdatedAt:env.model().updatedAt});
   assert.throws(()=>env.save('startSales',{confirmed:true,expectedUpdatedAt:env.model().updatedAt}),/技术服务已启用/);
@@ -218,11 +223,13 @@ test('management sales settings do not expand call access and selling cannot ena
   assert.equal(env.model().callsEnabled,true);assert.equal(env.model().listingStatus,'已上架');assert.deepEqual(env.state.modelSalePrices,storedPrices);
 });
 
-for(const mode of ['standard','provider'])test(mode+' gray listing intersects customer authorization; formal listing removes only the gray restriction',async t=>{
+for(const mode of ['standard','provider'])test(mode+' gray listing uses its own valid customers and formal listing removes the gray restriction',async t=>{
   const env=await fixture(t,mode),before=structuredClone(env.model()),prices=structuredClone(env.state.modelSalePrices),publications=structuredClone(env.model().platformPublications);
   const list=(releaseStage,releaseTenantIds)=>env.save('startSales',{releaseStage,releaseTenantIds,confirmed:true,expectedUpdatedAt:env.model().updatedAt});
+  assert.throws(()=>list('gray',['tenant-gov']),/销售对象有效/);
+  env.save('salesSettings',{scope:{openScope:'all',tenantIds:[]},confirmed:true,expectedUpdatedAt:env.model().updatedAt});
   list('gray',['tenant-gov']);assert.equal(env.model().releaseStage,'gray');await env.call();
-  assert.deepEqual(serviceReleaseScope(env.model()),{openScope:'selected',tenantIds:['tenant-gov']});
+  assert.deepEqual(env.model().releaseTenantIds,['tenant-gov']);
   assert.equal(lifecycleAccess(env.state,{...env.service,model:env.model()},'tenant-nanjing').allowed,false);
   list('gray',['tenant-nanjing']);await assert.rejects(env.call(),error=>error.code==='model_forbidden');
   list('formal',[]);await env.call();assert.equal(env.model().releaseStage,'formal');assert.deepEqual(env.model().releaseTenantIds,[]);
@@ -233,8 +240,8 @@ for(const mode of ['standard','provider'])test(mode+' gray listing intersects cu
   assert.throws(()=>commitAdminState(env.state,action,'运维人员'),/无权/);
   assert.throws(()=>env.save('startSales',{...action.data,expectedUpdatedAt:'stale'}),/已变化/);
   assert.throws(()=>persistModelAction(env.state,action,{getItem:key=>env.storage.getItem(key),setItem:()=>{throw Error('quota');}}),/quota/);
-  env.save('commercialPublish',{kind:'scope',expectedBase:commercialTaskBase(env.state,env.model(),'scope'),value:{openScope:'selected',tenantIds:['tenant-gov']},confirmed:true});
-  assert.throws(()=>list('gray',['tenant-nanjing']),/授权范围/);list('gray',['tenant-gov']);
-  const narrowed={...env.model(),openScope:'selected',tenantIds:['tenant-nanjing']};assert.deepEqual(serviceReleaseScope(narrowed).tenantIds,[]);assert.equal(lifecycleAccess(env.state,{...env.service,model:narrowed},'tenant-gov').allowed,false);
+  list('gray',['tenant-gov']);
+  const legacy={...env.model(),openScope:'selected',tenantIds:['tenant-nanjing']};
+  assert.equal(lifecycleAccess(env.state,{...env.service,model:legacy},'tenant-gov').allowed,true);
   env.save('stopSales',{expectedUpdatedAt:env.model().updatedAt});assert.equal(env.model().callsEnabled,true);await assert.rejects(env.call(),error=>error.code==='model_unavailable');
 });

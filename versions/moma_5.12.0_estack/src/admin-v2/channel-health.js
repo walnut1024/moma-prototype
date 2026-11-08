@@ -47,6 +47,6 @@ export function channelHealthTransaction(state, { data }) {
   if (key && endpoint.authMode === 'group') Object.assign(testingEndpoint, { authMode: 'specific', apiKeyId: key.id });
   // shortcut: Browser prototype uses simulated diagnostics; replace this call when a backend probe is available.
   const result = providerModelConnectivityTest(testingState, { providerId, endpointId, keyId, modelId: association.modelId, upstreamId: association.upstreamModelId, prompt: '请只回复 OK。', scenario });
-  const record = { id: crypto.randomUUID(), associationId, modelId: association.modelId, upstreamModelId: association.upstreamModelId, keyId, fingerprint: expectedFingerprint, connectionFingerprint: connectionFingerprint(endpoint), testedAt: new Date().toISOString(), result: result.result, status: result.status, durationMs: result.durationMs, message: result.message, hint: result.hint || '', simulated: true };
+  const record = { id: crypto.randomUUID(), associationId, modelId: association.modelId, upstreamModelId: association.upstreamModelId, keyId, fingerprint: expectedFingerprint, connectionFingerprint: connectionFingerprint(endpoint), testedAt: new Date().toISOString(), result: result.result, status: result.status, durationMs: result.durationMs, message: result.message, hint: result.hint || '', source: 'mock', simulated: true };
   return { type: 'batch', objectId: endpoint.id, label: '渠道密钥连通检测', changes: [{ type: 'update', collection: 'endpoints', id: endpoint.id, changes: { keyConnectivityTests: [...(endpoint.keyConnectivityTests || []), record] } }] };
 }

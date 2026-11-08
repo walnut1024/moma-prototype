@@ -2,7 +2,7 @@ import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAdminSeed as baseCreateAdminSeed, commitAdminState, parseAdminState as baseParseAdminState, persistModelAction } from '../src/admin-v2/store.js';
-import { commercialTaskBase, serviceDirectoryModels, serviceIndexModels, selectServiceModel, serviceSupplyRows, activeModelSalePrice, modelSaleRevision, availableServiceChannels } from '../src/admin-v2/service-workspace.js';
+import { commercialPriceBase, serviceDirectoryModels, serviceIndexModels, selectServiceModel, serviceSupplyRows, activeModelSalePrice, modelSaleRevision, availableServiceChannels } from '../src/admin-v2/service-workspace.js';
 import { modelSupplies, publicationChecks } from '../src/admin-v2/model-management.js';
 import { routingServices, routingChannels, routeSourceVersion } from '../src/admin-v2/service-routing.js';
 import { providerCatalogueIds } from '../src/admin-v2/moma-provider.js';
@@ -106,7 +106,7 @@ test('channel association rejects stale models, foreign channels and missing ide
  assert.deepEqual(state,before);model.serviceMode='';assert.throws(()=>transact(state,'associateServiceChannels',model.id,data),/配置服务模式/);
 });
 test('new price and association operations preserve permissions, revision and storage errors',()=>{
- for(const fixture of [(()=>{const {state,model}=setup();model.listingStatus='已下架';return {state,model,operation:'commercialPublish',data:{confirmed:true,kind:'price',value:{callId:model.modelId,items:pricing(state,model).items},expectedBase:commercialTaskBase(state,model,'price')}};})(),{...association(),operation:'associateServiceChannels'}]){
+ for(const fixture of [(()=>{const {state,model}=setup();model.listingStatus='已下架';return {state,model,operation:'commercialPublish',data:{confirmed:true,kind:'price',value:{callId:model.modelId,items:pricing(state,model).items},expectedBase:commercialPriceBase(state,model)}};})(),{...association(),operation:'associateServiceChannels'}]){
   const {state,model,operation,data}=fixture, before=structuredClone(state), action={type:'modelOperations',operation,modelId:model.id,data};
   assert.throws(()=>commitAdminState({...state,currentRole:'运维人员'},action),/无权/);
   assert.throws(()=>persistModelAction(state,action,{getItem:()=>JSON.stringify({...state,revision:state.revision+1}),setItem:()=>assert.fail()}),/数据已变化/);

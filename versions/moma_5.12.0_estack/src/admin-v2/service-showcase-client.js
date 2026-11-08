@@ -44,7 +44,7 @@ export async function completeServiceShowcase(initial, save, { onProgress = () =
       current(); const model = state.models.find(row => row.id === id);
       if (!libraryRecord(state, model.id)) throw new Error('模型资料已变化');
       onProgress(`${model.name} · ${service.name}：平台试调用`);
-      const plan = platformCandidatePlan(state, model, { serviceId: service.id, tenantIds: state.tenants.filter(row => !['已删除', '已停用', '停用'].includes(row.status) && (model.openScope === 'all' || model.tenantIds?.includes(row.id))).map(row => row.id), supplyIds: platformAllowedChannels(state, service).map(row => row.id) });
+      const plan = platformCandidatePlan(state, model, { serviceId: service.id, tenantIds: state.tenants.filter(row => !['已删除', '已停用', '停用'].includes(row.status)).map(row => row.id), supplyIds: platformAllowedChannels(state, service).map(row => row.id) });
       const trial = await runPlatformTrial(plan, { isCurrent: () => isCurrent(state) });
       if (!trial.result.billingReady) throw new Error('平台试调用费用未明确，不能发布');
       current(); const published = await publishPlatformCandidate(trial.service);

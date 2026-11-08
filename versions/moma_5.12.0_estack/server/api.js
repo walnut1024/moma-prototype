@@ -1,4 +1,6 @@
-import {modelBootstrap,modelCommand,simulationRequest} from './model-commands.js';
+import {modelBootstrap,modelCommand,packageBootstrap,packageCommand,packageFactorHistory,readTrafficLimits,simulationRequest,updateTrafficLimits} from './model-commands.js';
+import { createMarketSession, marketCatalogue, marketCompletion, marketCookie, marketOrder, marketSession, marketTenant } from './market.js';
+import { marketDemoModelIds } from '../src/mock/model-data.js';
 const PREFIX = '/api/5120';
 const COOKIE = 'moma5120_session';
 const encoder = new TextEncoder();
@@ -67,6 +69,23 @@ function pagination(url) {
   return { limit: Number(raw), after, q, pattern };
 }
 function page(rows, limit, map = decode) { return { items: rows.slice(0, limit).map(map), nextCursor: rows.length > limit ? rows[limit - 1].id : null }; }
+async function trafficHistory(db, actor, url) {
+  const { limit, after } = pagination(url);
+  const { results } = await db.prepare(`SELECT e.id,e.entity_id,e.action,e.record_json,e.created_at,o.actor_id,a.name AS actor_name
+    FROM audit_events e JOIN operations o ON o.id=e.operation_id LEFT JOIN admin_accounts a ON a.id=o.actor_id
+    WHERE e.entity_type='traffic-limits' AND COALESCE(json_array_length(e.record_json,'$.trafficChanges'),1)>0
+      AND (?='' OR (e.created_at,e.id) < (SELECT created_at,id FROM audit_events
+        WHERE id=? AND entity_type='traffic-limits'))
+    ORDER BY e.created_at DESC,e.id DESC LIMIT ?`).bind(after, after, limit + 1).all();
+  const history = page(results, limit, row => {
+    const { before, after, actorName, trafficChanges } = JSON.parse(row.record_json);
+    const changes = trafficChanges ?? [{ scope: 'user-default', objectId: row.entity_id, action: row.action, before, after }];
+    return changes.map((change, index) => ({ ...change, id: index ? row.id + ':' + index : row.id,
+      actorId: row.actor_id, actorName: actorName || row.actor_name, createdAt: new Date(row.created_at).toISOString() }));
+  });
+  return { accountId: actor.id, items: history.items.flat(), nextCursor: history.nextCursor };
+}
+
 async function list(db, url, kind) {
   const p = pagination(url);
   const queries = {
@@ -140,7 +159,11 @@ async function route(request, env) {
   try { path = decodeURIComponent(url.pathname.slice(PREFIX.length)); } catch { fail(400, 'INVALID_INPUT', '路径编码无效'); }
   const resource = /^\/(materials|services|suppliers|channels|operations)\/([A-Za-z0-9:_.-]{1,200})(?:\/(workspace|visibility|history))?$/.exec(path);
   const dictionary = /^\/dictionary\/(items|units|currencies)$/.exec(path);
-  const known = ['/auth/login','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-operations','/model-operations/commands'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
+  const packagePath = ['/package-management', '/package-management/commands', '/package-management/factor-history'].includes(path);
+  const trafficPath = path === '/traffic-limits';
+  const trafficHistoryPath = path === '/traffic-limits/history';
+  const marketPaths = ['/market/catalogue','/market/login','/market/logout','/market/orders','/market/completions'];
+  const known = marketPaths.includes(path) || trafficPath || trafficHistoryPath || packagePath || ['/auth/login','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-market/visibility','/model-operations','/model-operations/commands'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
   if (!known) fail(404, 'NOT_FOUND', 'API 不存在');
   if (!env.MODEL_OPS_DB) fail(503, 'DATABASE_UNAVAILABLE', '模型运营数据库尚未绑定');
   const db = env.MODEL_OPS_DB;
@@ -164,15 +187,71 @@ async function route(request, env) {
     const state = await db.prepare('SELECT schema_version FROM db_state WHERE id=1').first();
     return json({ status: 'ok', version: '5.12.0', schemaVersion: state.schema_version });
   }
+  if (path === '/model-market/visibility') {
+    if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '模型广场展示仅可读取');
+    // shortcut: expose display flags only for models already shipped in the browser demo until tenant catalogue data moves to D1.
+    const { results } = await db.prepare(`SELECT id, market_visible, deleted_at FROM services
+      WHERE id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(marketDemoModelIds())).all();
+    return json({ visibility: Object.fromEntries(results.map(row => [row.id, row.deleted_at == null && Boolean(row.market_visible)])) });
+  }
+  if (marketPaths.includes(path)) {
+    if (path === '/market/catalogue' && method === 'GET') return json(await marketCatalogue(db,await marketSession(db,request)));
+    if (method !== 'POST' || path === '/market/catalogue') fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
+    if (path === '/market/login') {
+      const body=await bodyJson(request,4096);
+      fields(body,['tenantId','accessCode']);
+      if (!identifier(body.tenantId) || typeof body.accessCode!=='string' || body.accessCode.length<8 || body.accessCode.length>128) fail(401,'INVALID_LOGIN','客户编号或密码无效');
+      let hashes;
+      try { hashes=JSON.parse(env.MODEL_OPS_LOGIN_HASHES || '{}'); } catch { fail(503,'LOGIN_UNAVAILABLE','客户登录尚未配置'); }
+      const expected=hashes[body.tenantId];
+      const valid=await secureEqual(await digest(body.accessCode),typeof expected==='string'?expected:'0'.repeat(64));
+      const tenant=valid && expected && await marketTenant(db,body.tenantId);
+      if (!tenant) fail(401,'INVALID_LOGIN','客户编号或密码无效');
+      const token=await createMarketSession(db,tenant);
+      return json({tenant},200,{'Set-Cookie':cookie(token).replace(COOKIE+'=',marketCookie+'=')});
+    }
+    const session=await marketSession(db,request);
+    if (path==='/market/logout') {
+      if (session) await db.prepare('DELETE FROM market_sessions WHERE token_hash=?').bind(session.hash).run();
+      return json({loggedOut:true},200,{'Set-Cookie':cookie('',0).replace(COOKIE+'=',marketCookie+'=')});
+    }
+    if (!session) fail(401,'TENANT_SESSION_REQUIRED','请先登录模型广场');
+    const body=await bodyJson(request,8192);
+    if (path==='/market/orders') {
+      fields(body,['offerIds']);
+      if (!Array.isArray(body.offerIds) || !body.offerIds.length || body.offerIds.length>20 || new Set(body.offerIds).size!==body.offerIds.length || body.offerIds.some(id=>typeof id!=='string' || !/^[A-Za-z0-9:_.-]{1,512}$/.test(id))) fail(400,'INVALID_INPUT','请选择 1–20 项不同的渠道服务');
+      return json(await marketOrder(db,session,body.offerIds));
+    }
+    fields(body,['requestId','model','messages']);
+    if (!identifier(body.requestId) || typeof body.model!=='string' || !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/.test(body.model) ||
+        !Array.isArray(body.messages) || body.messages.length!==1 || body.messages[0]?.role!=='user' ||
+        typeof body.messages[0].content!=='string' || !body.messages[0].content.trim() || body.messages[0].content.length>2000 ||
+        Object.keys(body.messages[0]).some(key=>!['role','content'].includes(key))) fail(400,'INVALID_INPUT','请填写当前调用标识和 1–2000 字的消息');
+    return json(await marketCompletion(db,session,body));
+  }
   const actor = await authenticate(request, db);
   if (path === '/auth/me' && method === 'GET') return json({ account: { id: actor.id, name: actor.name, role: actor.role } });
   if (path === '/auth/logout' && method === 'POST') {
     await db.prepare('UPDATE admin_sessions SET revoked_at=? WHERE id=?').bind(Date.now(), actor.session_id).run();
     return json({ loggedOut: true }, 200, { 'Set-Cookie': cookie('', 0) });
   }
-  const pageId = dictionary ? 'tariff-dictionary' : path.startsWith('/materials') ? 'model-templates'
+  const pageId = trafficPath || trafficHistoryPath ? 'traffic-limits' : packagePath ? 'package-production' : dictionary ? 'tariff-dictionary' : path.startsWith('/materials') ? 'model-templates'
     : path.startsWith('/suppliers') || path.startsWith('/channels') ? 'providers' : 'listing';
   if (!canAccessPage(actor.role, pageId)) fail(403, 'FORBIDDEN', '当前账号无此页面访问权限');
+  if (trafficHistoryPath) {
+    if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    return json(await trafficHistory(db, actor, url));
+  }
+  if (trafficPath) {
+    if (method === 'GET') return json(await readTrafficLimits(db, actor));
+    if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    const body = await bodyJson(request, 32 * 1024);
+    fields(body, ['operationId', 'expectedRevision', 'accountId', 'operation', 'id', 'data']);
+    return json(await updateTrafficLimits(db, actor, body, request.headers.get('idempotency-key')));
+  }
+  if (path === '/package-management' && method === 'GET') return json(await packageBootstrap(db, actor));
+  if (path === '/package-management/factor-history' && method === 'GET') return json(await packageFactorHistory(db, url.searchParams.get('model')));
+  if (path === '/package-management/commands' && method === 'POST') return json(await packageCommand(db, actor, await bodyJson(request, 16 * 1024), request.headers.get('idempotency-key')));
   if(path==='/model-operations' && method==='GET')return new Response(await modelBootstrap(db,actor),{headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
   if(path==='/model-operations/commands' && method==='POST')return json(await modelCommand(db,actor,await bodyJson(request,1024*1024),request.headers.get('idempotency-key')));
   if(path.startsWith('/simulation/')){const result=await simulationRequest(db,actor,path.slice('/simulation'.length)+url.search,method,method==='GET'?{}:await bodyJson(request),request.headers.get('idempotency-key'));return json(result,result.error?422:200);}

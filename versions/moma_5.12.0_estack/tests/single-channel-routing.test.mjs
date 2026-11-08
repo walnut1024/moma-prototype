@@ -44,7 +44,7 @@ test('new requests use the replacement channel; stopped route never falls back t
  f.state=run(f,'serviceRouteRestore',{confirmed:true});assert.equal(call().supplyId,f.channels[1].id);
 });
 test('HTTP/D1 create replace stop restore survive reload, preserve data and replay idempotently',{timeout:60000},async()=>{
- const accessCode=randomBytes(24).toString('hex'),local=await startLocalBackend({loginHashes:{'admin-001':createHash('sha256').update(accessCode).digest('hex')}});let cookie,state;
+ const accessCode=randomBytes(24).toString('hex'),local=await startLocalBackend({ demo: true, loginHashes:{'admin-001':createHash('sha256').update(accessCode).digest('hex')}});let cookie,state;
  async function api(path,body,key){const r=await local.runtime.dispatchFetch('https://example.test/api/5120'+path,{method:body?'POST':'GET',headers:{...(cookie?{cookie}:{}),...(body?{origin:'https://example.test','content-type':'application/json','x-moma-request':'1'}:{}),...(key?{'idempotency-key':key}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,data:await r.json(),headers:r.headers};}
  async function reload(){state=domainModelWorkspace((await api('/model-operations')).data);}
  try{cookie=(await api('/auth/login',{accountId:'admin-001',accessCode})).headers.get('set-cookie').split(';')[0];await reload();const service=routingServices(state).find(row=>row.mode==='standard' && row.callId==='deepseek-v4-flash-0731'),channels=routingChannels(state,service).filter(row=>row.available);assert.ok(channels.length>=2);const before=structuredClone(state);

@@ -4,7 +4,7 @@ import { SERVICE_WORKSPACE_TABS, serviceWorkspaceTab } from '../src/admin-v2/ser
 import { createAdminSeed, commitAdminState, persistModelAction, STORAGE_KEY } from '../src/admin-v2/store.js';
 import { withAdminSession } from './admin-session-fixture.mjs';
 import { modelOperationHistory, modelOperationTarget, MODEL_OPERATION_NAMES } from '../src/admin-v2/model-operation-history.js';
-import { commercialTaskBase } from '../src/admin-v2/service-workspace.js';
+import { commercialPriceBase } from '../src/admin-v2/service-workspace.js';
 
 const run = (state, operation, modelId, data = {}) => commitAdminState(state, { type: 'modelOperations', operation, modelId, data });
 function providerFixture() {
@@ -15,9 +15,9 @@ function providerFixture() {
   return { state, modelId: model.id, providerId: provider.id };
 }
 
-test('seven workspace tabs resolve metadata, mapping, pricing and contextual task links', () => {
-  assert.deepEqual(SERVICE_WORKSPACE_TABS.map(row => row[1]), ['服务概览', '渠道与路由', '故障转移', '调用授权', '调用指南', '平台试调用', '操作记录']);
-  for (const [params, expected] of [[{}, 'materials'], [{panel:'editMetadata'}, 'materials'], [{panel:'routing'}, 'routing'], [{panel:'associate'}, 'routing'], [{panel:'guide'}, 'guide'], [{panel:'guide',providerChannels:'p',routeProvider:'p'}, 'guide'], [{providerAdd:'1'}, 'routing'], [{identityProvider:'p'}, 'routing'], [{providerAssociate:'1'}, 'routing'], [{panel:'access'}, 'access'], [{scopeEdit:'1'}, 'access'], [{panel:'failover'}, 'failover'], [{panel:'trial',routeProvider:'p'}, 'trial'], [{panel:'history'}, 'history']]) assert.equal(serviceWorkspaceTab(new URLSearchParams(params)), expected);
+test('five workspace tabs resolve metadata, mapping, pricing and contextual task links', () => {
+  assert.deepEqual(SERVICE_WORKSPACE_TABS.map(row => row[1]), ['服务概览', '路由及映射', '故障转移', '调用指南', '操作记录']);
+  for (const [params, expected] of [[{}, 'materials'], [{panel:'editMetadata'}, 'materials'], [{panel:'routing'}, 'routing'], [{panel:'associate'}, 'routing'], [{panel:'guide'}, 'guide'], [{panel:'guide',providerChannels:'p',routeProvider:'p'}, 'guide'], [{providerAdd:'1'}, 'routing'], [{identityProvider:'p'}, 'routing'], [{providerAssociate:'1'}, 'routing'], [{panel:'access'}, 'materials'], [{panel:'materials',scopeEdit:'1'}, 'materials'], [{panel:'failover'}, 'failover'], [{panel:'trial',routeProvider:'p'}, 'materials'], [{panel:'history'}, 'history']]) assert.equal(serviceWorkspaceTab(new URLSearchParams(params)), expected);
 });
 
 test('provider call-ID mapping is independent of prices, routes, resources and customer scope', () => {
@@ -40,7 +40,7 @@ test('publishing a price cannot carry a call-ID change into a different service'
   state=run(state,'configureServiceIdentity',modelId,{providerId,callId:'moma/identity-price',expectedUpdatedAt:model.updatedAt});
   model=state.models.find(row=>row.id===modelId);
   const before=structuredClone(state);
-  assert.throws(()=>run(state,'commercialPublish',modelId,{kind:'price',providerId,expectedBase:commercialTaskBase(state,model,'price',providerId),value:{callId:'sneaked/identity',items:[{name:'输入 Token',condition:'',unit:'百万 Token',currency:'CNY',amount:'2'}]},confirmed:true}),/调用标识/);
+  assert.throws(()=>run(state,'commercialPublish',modelId,{kind:'price',providerId,expectedBase:commercialPriceBase(state,model,providerId),value:{callId:'sneaked/identity',items:[{name:'输入 Token',condition:'',unit:'百万 Token',currency:'CNY',amount:'2'}]},confirmed:true}),/调用标识/);
   assert.deepEqual(state,before);
 });
 

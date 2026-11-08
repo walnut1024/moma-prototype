@@ -1,4 +1,4 @@
-import catalogue from './builtin-model-catalogue.json' with { type: 'json' };
+import catalogue from '../data/builtin-model-catalogue.json' with { type: 'json' };
 import { modelLibrary } from '../admin-v2/model-library.js';
 
 export const BUILTIN_MODEL_CATALOGUE = catalogue;

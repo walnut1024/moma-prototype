@@ -176,7 +176,7 @@ function operationalPrice(selected, context, at) {
   const meters = {million_tokens:['总 Token','百万 Token'],million_input_tokens:['输入 Token','百万 Token'],million_output_tokens:['输出 Token','百万 Token'],request:['调用次数','次'],second:['时长','秒'],character:['语音合成字符数','字符']};
   return {id:selected.map(row=>row.id).join(' / '),modelId:context?.modelId,serviceId:context?.serviceId,effectiveAt:selected.map(row=>row.effectiveAt).sort((a,b)=>Date.parse(b)-Date.parse(a))[0],expiresAt:selected.map(row=>row.expiresAt).filter(Boolean).sort((a,b)=>Date.parse(a)-Date.parse(b))[0] || null,selectedAt:new Date(at).toISOString(),items:selected.map(row=>({name:meters[row.unit]?.[0] || row.unit,unit:meters[row.unit]?.[1] || row.unit,currency:row.currency,amount:row.amount}))};
 }
-function pipeline(state, service, config, proofs, { identityType, identityId, messages }) {
+function pipeline(state, service, config, proofs, { identityType, identityId, messages, tenantId }) {
   const started = Date.now(), technical = config.technical === true && identityType === 'trial', sale = technical ? null : activePrices(config.salePrices, started);
   if (!technical && !sale) fail('sale_price_expired', '当前销售价格已过期');
   let lastIssue, attempt = 0; const attempts = [];
@@ -192,7 +192,7 @@ function pipeline(state, service, config, proofs, { identityType, identityId, me
       if (result.status !== 'passed') fail(result.code, result.message);
       const context=operationalContext(service,binding,channel);
       attempts.push({ dispatched:true, bindingId: binding.id, channelId: channel.id, endpointId:channel.clientChannelId || null, status: 'passed', usage:result.usage || null, procurementSnapshot:procurement?{...operationalPrice(procurement,context,started),providerId:channel.providerId,endpointId:channel.clientChannelId || null,supplyId:binding.id}:null });
-      const usage = result.usage || null, cost = result.meteringUnknown ? null : totalPrice(procurement,usage), record = { id: uid(), source: 'mock', evidenceSource: 'mock', serviceId: service.id, publicModelId: config.publicModelId, serviceVersion: identityType === 'trial' ? service.candidateVersion : service.published.version, routeVersion: config.route.version, identityType, identityId, operational:context, priceSnapshot:sale?operationalPrice(sale,context,started):null,billingStatus:technical?'not_applicable':identityType==='client'?'billable':'trial',costStatus:cost?'confirmed':'pending', tenantId:identityType === 'client' ? state.clientKeys.find(row=>row.id===identityId)?.tenantId || null : null, attempts: copy(attempts), startedAt: new Date(started).toISOString(), endedAt: now(), providerId: channel.providerId, channelId: channel.id, upstreamModelId: binding.model.upstreamModelId, usage, cost, saleTrial: result.meteringUnknown ? null : totalPrice(sale, usage), customerDebited: false, traceId: uid() };
+      const usage = result.usage || null, cost = result.meteringUnknown ? null : totalPrice(procurement,usage), record = { id: uid(), source: 'mock', evidenceSource: 'mock', serviceId: service.id, publicModelId: config.publicModelId, serviceVersion: identityType === 'trial' ? service.candidateVersion : service.published.version, routeVersion: config.route.version, identityType, identityId, operational:context, priceSnapshot:sale?operationalPrice(sale,context,started):null,billingStatus:technical?'not_applicable':identityType==='client'?'billable':'trial',costStatus:cost?'confirmed':'pending', tenantId:identityType === 'client' ? tenantId || state.clientKeys.find(row=>row.id===identityId)?.tenantId || null : null, attempts: copy(attempts), startedAt: new Date(started).toISOString(), endedAt: now(), providerId: channel.providerId, channelId: channel.id, upstreamModelId: binding.model.upstreamModelId, usage, cost, saleTrial: result.meteringUnknown ? null : totalPrice(sale, usage), customerDebited: false, traceId: uid() };
       state.usage.push(record);
       return { id: record.id, model: config.publicModelId, choices: [{ message: { role: 'assistant', content: `已处理：${messages?.at(-1)?.content || '连接检查'}` } }], usage, traceId: record.traceId, source: 'mock', attempts: copy(attempts), actualSupply: { providerId: channel.providerId, channelId: channel.id, upstreamModelId: binding.model.upstreamModelId }, routeVersion: config.route.version, cost: record.cost, saleTrial: record.saleTrial, technicalReady: true, billingReady: Boolean(record.cost && record.saleTrial), customerDebited: false };
     } catch (error) { const selected=activePrices(binding.procurementPrices,started),context=operationalContext(service,binding,channel); attempts.push({ dispatched, bindingId: binding.id, channelId: channel.id, endpointId:channel.clientChannelId || null, status: 'failed', code: error.code || 'request_failed', usage:null, procurementSnapshot:selected?{...operationalPrice(selected,context,started),providerId:channel.providerId,endpointId:channel.clientChannelId || null}:null }); error.attempts = copy(attempts); lastIssue = error; if (!config.route.autoFailover || (error.code === 'request_timeout' && config.mode !== 'provider')) throw error; }
@@ -253,7 +253,7 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
     if (!Array.isArray(body.models) || !body.models.length || body.models.length > 50) fail('invalid_models', '请选择 1–50 个测试模型');
     if (body.models.some(model => ['image', 'video', 'audio'].includes(model.type)) && body.confirmExpensive !== true) fail('cost_confirmation_required', '请明确勾选高成本任务');
     for (const model of body.models) { text(model.id, '模型资料 ID'); text(model.upstreamModelId, '上游模型标识'); if (!['text', 'multimodal', 'embedding', 'rerank', 'image', 'audio', 'video'].includes(model.type) || model.check && !['streaming', 'tools', 'structured'].includes(model.check)) fail('invalid_task', '模型任务或验证内容无效'); }
-    if (new Set(body.models.map(row => row.id)).size !== body.models.length || new Set(body.models.map(row => row.upstreamModelId)).size !== body.models.length) fail('duplicate_model', '测试模型不能重复');
+    if (new Set(body.models.map(row => JSON.stringify([row.id,row.associationId]))).size !== body.models.length || new Set(body.models.map(row => row.upstreamModelId)).size !== body.models.length) fail('duplicate_model', '测试模型不能重复');
     const batch = { id: uid(), channelId: channel.id, providerId: channel.providerId, signature: channelSignature(state, channel), configVersion: channel.configVersion, credentialId: channel.credentialId, credentialVersion: credential(state, channel)?.version || null, source: 'mock', scenario, status: 'queued', createdAt: now(), confirmExpensive: body.confirmExpensive === true, items: body.models.map(model => ({ id: uid(), model: { id: model.id, associationId: model.associationId, upstreamModelId: model.upstreamModelId, type: model.type, probe: model.probe || model.type, ...(model.check ? { check: model.check } : {}), ...(model.dimensions ? { dimensions: model.dimensions } : {}) }, status: 'queued', stage: 'queued', evidenceSource: 'mock', current: true, traceId: uid(), usage: null, cost: null, templateVersion: 1 })) }; state.batches.push(batch); return batch;
   });
   const batchPath = route.match(/^\/tests\/([^/]+)(\/cancel)?$/);
@@ -298,7 +298,7 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
     setMockRuntimeState(local);
     const ready = mockServiceReadiness(local, service);
     if (!ready.allowed) fail(ready.code, ready.reason);
-    if (!key.serviceIds.includes(service.id) || !service.published.config.tenantIds.includes(key.tenantId)) fail('model_forbidden', '客户未获授权使用此模型');
+    if (!key.serviceIds.includes(service.id)) fail('model_forbidden', '客户未获授权使用此模型');
     return once(state, 'clientRequest', body, () => {
       const startedAt=now();
       try { const result = pipeline(state, service, service.published.config, service.published.proofs, { identityType: 'client', identityId: key.id, messages: body.messages }); return { id: result.id, model: result.model, choices: result.choices, usage: result.usage, traceId: result.traceId, source: 'mock' }; }
@@ -457,6 +457,16 @@ function getMockOperationalRequests() {
   return read().usage.filter(row=>row.identityType==='client' && row.operational?.modelId && row.operational?.serviceId).map(row=>({id:'mock-customer:'+row.id,requestId:row.traceId || row.id,modelId:row.operational.modelId,modelType:row.operational.modelType,serviceId:row.operational.serviceId,callId:row.publicModelId,tenantId:row.tenantId,endpointId:row.operational.endpointId,providerId:row.operational.providerId,supplyId:row.operational.supplyId,routeVersion:row.routeVersion,purpose:'customer',billingStatus:row.billingStatus || 'billable',usage:convert(row.usage),usageConfirmed:!!row.usage,httpStatus:row.status==='failed'?0:200,createdAt:row.startedAt,updatedAt:row.endedAt,priceSnapshot:copy(row.priceSnapshot),procurementSnapshot:copy(row.attempts.at(-1)?.procurementSnapshot || null),attempts:row.attempts.map(attempt=>({...copy(attempt),usage:convert(attempt.usage),error:attempt.status==='passed'?null:attempt.code || 'upstream_failed'}))}));
 }
 
+function callForOrder(service,config,{tenantId,orderId,messages}) {
+  const state=readForWrite();
+  const local=readLinkedState();
+  assertPublishedAccess(local,service,tenantId);
+  setMockRuntimeState(local);
+  const result=pipeline(state,service,config,service.published.proofs,{identityType:'client',identityId:orderId,tenantId,messages});
+  const {id,model,choices,usage,traceId,source}=result;
+  return {response:{id,model,choices,usage,traceId,source},usage:state.usage.at(-1)};
+}
+
 function invoke(path,options={}) { const state=readForWrite(); advance(state); try {const result=handle(state,path,options);save(state);return copy(result);}catch(error){if(error.persistMockState)save(state);throw error;} }
-return {getMockScenario,setMockScenario,mockOnboardingApi,setMockRuntimeState,getMockChannelSnapshots,prepareMockConfiguration,commitMockConfiguration,rollbackMockConfiguration,getMockServiceSnapshots,inspectMockPublication,inspectMockCandidate,mockServiceReadiness,getMockOperationalRequests,invoke,snapshot:()=>copy(read()),restore:value=>save(copy(value))};
+return {getMockScenario,setMockScenario,mockOnboardingApi,setMockRuntimeState,getMockChannelSnapshots,prepareMockConfiguration,commitMockConfiguration,rollbackMockConfiguration,getMockServiceSnapshots,inspectMockPublication,inspectMockCandidate,mockServiceReadiness,getMockOperationalRequests,callForOrder,invoke,snapshot:()=>copy(read()),restore:value=>save(copy(value))};
 }

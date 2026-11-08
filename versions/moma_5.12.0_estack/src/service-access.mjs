@@ -1,4 +1,3 @@
-import {serviceReleaseScope} from './service-release.mjs';
 export const ADMIN_DATA_KEY = 'moma.adminV2.5120.v1';
 export const AUTH_DATA_KEY = 'moma-auth-prototype-5120-v1';
 export const LINK_EVENT = 'moma-5120-state-change';
@@ -15,26 +14,31 @@ export function readLinkedState(storage = globalThis.localStorage) {
 export const accessError = (code, message) => Object.assign(new Error(message), { code });
 const reject = (code, reason) => ({ allowed: false, code, reason });
 export const activeCustomer = tenant => tenant && ['正常', '需关注'].includes(tenant.status);
-export const lifecycleSignature = model => JSON.stringify([model.listingStatus, model.visibility, model.callsEnabled, model.releaseStage, [...(model.releaseTenantIds || [])].sort(), model.openScope, [...(model.tenantIds || [])].sort(), model.serviceMode, model.serviceModeRevision, model.serviceProviders, model.platformPublications, model.profile?.tasks, model.profile?.inputModalities, model.profile?.outputModalities]);
+export const lifecycleSignature = model => JSON.stringify([model.listingStatus, model.visibility, model.callsEnabled, model.releaseStage, [...(model.releaseTenantIds || [])].sort(), model.serviceMode, model.serviceModeRevision, model.serviceProviders, model.platformPublications, model.profile?.tasks, model.profile?.inputModalities, model.profile?.outputModalities]);
+
+export const offerKey = entry => entry?.channelId || entry?.providerId || '';
+export const providerOffer = (model, key) => model.serviceProviders?.find(entry => entry.status !== '已移除' && offerKey(entry) === key);
+export const offerStage = (model, entry) => entry?.listingStage ?? (model.listingStatus === '已上架' ? model.releaseStage === 'gray' ? 'gray' : 'formal' : model.firstPublishedAt ? 'withdrawn' : 'unlisted');
+export const offerGrayTenants = (model, entry) => (entry?.listingStage ? entry.grayTenantIds : model.releaseTenantIds) || [];
+export const salesCustomer = (model, tenantId) => model.salesScope?.openScope === 'all' || model.salesScope?.openScope === 'selected' && model.salesScope.tenantIds?.includes(tenantId);
 
 export function serviceReferences(state) {
   return (state.models || []).flatMap(model => model.serviceMode === 'standard'
     ? [{ id: `standard:${model.id}`, modelId: model.id, callId: model.modelId, providerId: null, model }]
-    : model.serviceMode === 'provider' ? (model.serviceProviders || []).filter(row => row.status !== '已移除').map(row => ({ id: `provider:${model.id}:${row.providerId}`, modelId: model.id, callId: row.callId, providerId: row.providerId, model })) : []);
+    : model.serviceMode === 'provider' ? (model.serviceProviders || []).filter(row => row.status !== '已移除').map(row => ({ id: `provider:${model.id}:${offerKey(row)}`, modelId: model.id, callId: row.callId, providerId: row.providerId, ...(row.channelId ? { channelId: row.channelId } : {}), model })) : []);
 }
 
 export function lifecycleAccess(state, service, tenantId) {
   if (!service || !state) return reject('model_unavailable', '模型服务当前不可用');
   const { model } = service;
-  if (model.listingStatus !== '已上架' || model.visibility !== '公开' || model.callsEnabled !== true) return reject('model_unavailable', '模型服务已下架，请选择其他模型');
+  const entry = service.providerId ? providerOffer(model, offerKey(service)) : null;
+  const stage = offerStage(model, entry);
+  if (!['formal', 'gray'].includes(stage) || model.visibility !== '公开' || model.callsEnabled !== true || model.archivedAt) return reject('model_unavailable', '模型服务已下架，请选择其他模型');
   if (service.providerId) {
-    const entry=model.serviceProviders?.find(row=>row.providerId===service.providerId && row.status!=='已移除');
     if (!entry || entry.callsEnabled===false) return reject('provider_unavailable', '该供应商服务已停服，请选择其他供应商');
   }
   if (!activeCustomer(state.tenants?.find(row => row.id === tenantId))) return reject('customer_unavailable', '当前用户或组织不可用');
-  if (!['all', 'selected'].includes(model.openScope)) return reject('model_forbidden', '模型开放范围尚未配置');
-  const releaseScope=serviceReleaseScope(model);
-  if (releaseScope.openScope === 'selected' && !releaseScope.tenantIds.includes(tenantId)) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');
+  if (stage === 'gray' && !offerGrayTenants(model, entry).includes(tenantId)) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');
   const grant = state.grants?.find(row => row.subjectType === 'tenant' && row.subjectId === tenantId);
   if (grant && (grant.status !== '生效中' || !grant.modelIds?.includes(model.id))) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');
   return { allowed: true, reason: '' };
@@ -56,7 +60,6 @@ export function serviceAccess(state, service, tenantId, published) {
   const { model } = service;
   const proofs = (model.platformPublications || []).filter(row => row.serviceId === service.id && row.source === 'mock');
   if (proofs.length !== 1 || !published?.published || published.disabled || proofs[0].mockServiceId !== published.id || published.published.config.publicModelId !== service.callId) return reject('publication_required', '模型服务配置尚未就绪');
-  if (!published.published.config.tenantIds.includes(tenantId)) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');
   return { allowed: true, code: '', reason: '', generation: model.accessGeneration || 0 };
 }
 

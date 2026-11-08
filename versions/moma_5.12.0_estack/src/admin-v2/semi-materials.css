@@ -17,6 +17,7 @@
 .materials-import-help p { margin: 0; line-height: 1.7; }
 .materials-logo { width: 32px; height: 32px; object-fit: contain; }
 .materials-logo-preview { width: 64px; height: 64px; object-fit: contain; }
+.semi-materials .provider-material-profile { display: grid; gap: 16px; padding-block: 20px; }
 @media (max-width: 760px) { .semi-materials.materials-page { padding: 16px; } .materials-field-grid { grid-template-columns: minmax(0, 1fr); } .materials-filters > .semi-input-wrapper { width: 100%; } }
 .materials-editor-body { height: 100%; overflow: auto; padding-right: 8px; }
 @media (max-width: 760px) {

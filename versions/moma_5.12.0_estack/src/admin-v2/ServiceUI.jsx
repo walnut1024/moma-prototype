@@ -55,21 +55,21 @@ export function MultiChoice({ label, choices, value = [], onChange, disabled, gr
     </Select>
   </>;
 }
-export function CopyId({ value, label = '对外调用标识' }) {
-  return <Typography.Text className="ss-code" copyable={{ content: value, successTip: `${label} 已复制`, onError: () => Toast.error('复制失败，请选择文本复制') }}>{value}</Typography.Text>;
+export function CopyId({ value, label = '对外调用标识', ellipsis }) {
+  return <Typography.Text className="ss-code" ellipsis={ellipsis} copyable={{ content: value, successTip: `${label} 已复制`, onError: () => Toast.error('复制失败，请选择文本复制') }}>{value}</Typography.Text>;
 }
 export function FieldLabel({ name, description }) {
   const help = description || modelFieldDescriptions[name];
   return <Space spacing={4}>{name}{help && <Tooltip content={help}><Button theme="borderless" type="tertiary" icon={<IconHelpCircle aria-hidden="true"/>} aria-label={`${name}说明`}/></Tooltip>}</Space>;
 }
-export function Modal({ title, description, children, onClose, wide, drawer = false, drawerSide = 'right', footer, className = '', maskClosable }) {
+export function Modal({ title, description, children, onClose, wide, centered, drawer = false, drawerSide = 'right', footer, className = '', maskClosable }) {
   const content = <div className="ss-dialog-content">
     {description && <Typography.Paragraph type="tertiary">{description}</Typography.Paragraph>}{children}
   </div>;
   return drawer
     ? <AdminSideSheet visible className={`semi-services ${className}`} title={title} placement={drawerSide}
         width={`min(${wide ? 1000 : 720}px, 100vw)`} onCancel={onClose} closeOnEsc maskClosable={maskClosable} footer={footer}>{content}</AdminSideSheet>
-    : <AdminModal visible className={`semi-services ${className}`} title={title}
+    : <AdminModal visible centered={centered} className={`semi-services ${className}`} title={title}
         width={`min(${wide ? 960 : 448}px, calc(100vw - 32px))`} onCancel={onClose} maskClosable={maskClosable} footer={footer ?? null}>{content}</AdminModal>;
 }
 export const serviceOperationsUi = {

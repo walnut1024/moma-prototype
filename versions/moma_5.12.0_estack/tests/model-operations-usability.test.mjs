@@ -44,7 +44,7 @@ test('audit summaries expose business changes without credential material, and c
   const all=['输入 Token','输出 Token','缓存读取 Token','图像输出（按张）','音频分钟'];assert.deepEqual(commonTariffNames(all,'text'),all.slice(0,3));assert.deepEqual(commonTariffNames(all,'unknown'),all);
 });
 test('D1 maintenance and reused-connection commands preserve existing records and reject stale or cross-supplier attachment',{timeout:90000},async()=>{
-  const accessCode=randomBytes(24).toString('hex'),local=await startLocalBackend({loginHashes:{'admin-001':createHash('sha256').update(accessCode).digest('hex')}});let cookie='',s;
+  const accessCode=randomBytes(24).toString('hex'),local=await startLocalBackend({ demo: true, loginHashes:{'admin-001':createHash('sha256').update(accessCode).digest('hex')}});let cookie='',s;
   try{
     const api=async(path,body,id)=>{const r=await local.runtime.dispatchFetch('https://example.test/api/5120'+path,{method:body?'POST':'GET',headers:{...(cookie?{cookie}:{}),...(body?{'content-type':'application/json',origin:'https://example.test','x-moma-request':'1'}:{}),...(id?{'idempotency-key':id}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};};
     cookie=(await api('/auth/login',{accountId:'admin-001',accessCode})).cookie;

@@ -1,10 +1,6 @@
-.admin-observe-monitor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--admin-section-gap); }
-.admin-observe-monitor > * { min-width: 0; }
-.admin-observe-monitor td:first-child button { max-width: 100%; height: auto; min-height: 24px; text-align: start; }
-.admin-observe-monitor td:first-child button span { white-space: normal; overflow-wrap: anywhere; }
 .admin-observe-search { width: min(100%, 240px); }
+.admin-v2 .admin-log-request-id { max-width: 100%; }
+.admin-v2 .admin-log-request-id .semi-button-content { overflow: hidden; text-overflow: ellipsis; }
 .admin-observe-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--admin-section-gap); }
 .admin-observe-detail { overflow-wrap: anywhere; }
-.admin-observe-detail pre { margin: 0; padding: 12px; overflow: auto; background: var(--semi-color-fill-0); border-radius: var(--semi-border-radius-small); }
-@media (max-width: 1100px) { .admin-observe-monitor { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) { .admin-observe-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

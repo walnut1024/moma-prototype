@@ -1,6 +1,6 @@
 import { initialTariffDictionary } from '../mock/application-data.js';
 
-export const TARIFF_KINDS = { scenario: '计费项', unit: '计价单位', currency: '货币' };
+export const TARIFF_KINDS = { scenario: '计费项', unit: '计费单位', currency: '货币' };
 export async function tariffDictionaryId(id) {
   // Keep stored references intact; derive a stable UUIDv5 for the compact list identifier.
   const namespace = Uint8Array.from('6ba7b8119dad11d180b400c04fd430c8'.match(/../g), hex => parseInt(hex, 16));
@@ -33,7 +33,7 @@ export function tariffDictionaryEntries(state) {
 }
 
 export function normalizeTariffName(kind, input) {
-  if (!Object.hasOwn(TARIFF_KINDS, kind)) throw new Error('请选择计费项、计价单位或货币');
+  if (!Object.hasOwn(TARIFF_KINDS, kind)) throw new Error('请选择计费项、计费单位或货币');
   const name = typeof input === 'string' ? input.trim().replace(/[\t ]+/g, ' ') : '';
   if (!name || /[\r\n]/.test(name) || name.length > (kind === 'unit' ? 40 : 80)) throw new Error(`${TARIFF_KINDS[kind]}须为 1–${kind === 'unit' ? 40 : 80} 字，不能换行`);
   return name;
@@ -101,7 +101,7 @@ export function tariffDictionaryTransaction(state, data) {
     label = `${data.status === '已启用' ? '启用' : '停用'}${TARIFF_KINDS[current.kind]}`;
   } else if (data.operation === 'delete') {
     if (!current) throw new Error('字典条目不存在，请重新载入');
-    if (current.kind === 'unit' && tariffDictionaryEntries(state).some(item => item.kind === 'scenario' && item.unitId === current.id)) throw new Error('该计价单位仍被计费项引用，请先更换关联单位');
+    if (current.kind === 'unit' && tariffDictionaryEntries(state).some(item => item.kind === 'scenario' && item.unitId === current.id)) throw new Error('该计费单位仍被计费项引用，请先更换关联单位');
     const references = tariffPriceReferences(state,current);
     if (references.length) throw new Error(`该字典项仍被${references.join('、')}引用，不能删除；已有配置和历史保留${current.kind === 'scenario' ? '' : '，可停用以停止新增选用'}`);
     change = { type: 'remove', collection: 'tariffDictionary', id: current.id };

@@ -2,37 +2,15 @@ import { PROVIDER_TYPES } from './provider-management';
 import { useId, useState } from 'react';
 import { Button, Input, TextArea, Typography } from '@douyinfe/semi-ui';
 import { Choice, Field, FieldLabel, Modal, Notice } from './ServiceUI';
-import { serviceScope, scopeTenants } from './service-commercial';
-import { commercialTaskBase, providerServices } from './service-workspace';
+import { offerStage, providerOffer } from '../service-access.mjs';
 
-export function ServiceScopeEditor({state,model,ops,close}) {
-  const [value,setValue] = useState(() => ({openScope:model.openScope,tenantIds:model.tenantIds || []}));
-  const [base,setBase] = useState(() => commercialTaskBase(state,model,'scope',''));
-  const [preview,setPreview] = useState(false), [publishing,setPublishing] = useState(false);
-  const tenants = scopeTenants(state), unavailable = value.tenantIds.filter(id => !tenants.some(row => row.id === id));
-  const names = ids => state.tenants.filter(row => ids.includes(row.id)).map(row => row.name).join('、') || '未选择客户';
-  const scopeText = row => row.openScope === 'all' ? '全部客户' : names(row.tenantIds || []);
-  const selected = row => row.openScope === 'all' ? tenants.map(row => row.id) : row.tenantIds || [];
-  const added = selected(value).filter(id => !selected(model).includes(id)), removed = selected(model).filter(id => !selected(value).includes(id));
-  const change = patch => {if(publishing)return;setValue(row => ({...row,...patch}));setPreview(false);ops.dirty(true);ops.setError('');};
-  const publish = async () => {if(publishing)return;setPublishing(true);try {if(await ops.run('commercialPublish',{kind:'scope',providerId:'',value,expectedBase:base,confirmed:true},model.id)){setPreview(false);ops.dirty(false);close();}}finally{setPublishing(false);}};
-  return <div className="ss-model-form">
-    {ops.conflict && <Notice error>其他页面的数据已变化，当前输入保留。载入后请重新打开配置核对。<Button onClick={ops.reload}>载入最新数据</Button></Notice>}
-    {base !== commercialTaskBase(state,model,'scope','') && <Notice error>配置已变化，当前输入保留。<Button theme="borderless" disabled={!ops.can} onClick={() => {setBase(commercialTaskBase(state,model,'scope',''));setPreview(false);ops.dirty(true);}}>按当前配置重新核对</Button></Notice>}
-    <Field label="客户开放范围 *"><Choice label="客户范围" value={value.openScope || undefined} options={[[ 'all','全部有效客户' ],['selected','指定客户']]} placeholder="请选择开放范围" disabled={!ops.can || publishing} onChange={openScope => change({openScope})}/></Field>
-    {value.openScope === 'selected' && <Field label="选择客户 *"><Choice label="客户" multiple filter value={value.tenantIds} disabled={!ops.can || publishing} options={tenants.map(row => [row.id,(row.type === '个人' ? '个人客户' : '政企客户')+' · '+row.name+' · '+row.id])} onChange={tenantIds => change({tenantIds})}/>{unavailable.length > 0 && <Notice error>有 {unavailable.length} 个客户已停用或删除，请重新选择有效客户。<Button theme="borderless" disabled={!ops.can || publishing} onClick={() => change({tenantIds:value.tenantIds.filter(id => !unavailable.includes(id))})}>移除无效客户</Button></Notice>}</Field>}
-    {preview && <Notice><Typography.Title heading={5}>开放范围变更预览</Typography.Title><p>当前：{scopeText(model)}</p><p>发布后：{scopeText(value)}</p><p>新增：{added.length ? names(added) : '无'}；移除：{removed.length ? names(removed) : '无'}</p><p>移出的客户将不能继续发起新调用，已有订购不豁免。</p><p>仅发布本次开放范围，其他配置保持不变。</p><Button disabled={!ops.can || publishing} loading={publishing} onClick={publish}>确认发布开放范围</Button></Notice>}
-    {ops.error && <Notice error>{ops.error}</Notice>}
-    <div className="ss-footer"><Button disabled={publishing} onClick={close}>取消</Button><Button disabled={!ops.can || publishing} onClick={() => {try{serviceScope(state,value);ops.setError('');setPreview(true);}catch(issue){setPreview(false);ops.setError(issue.message);}}}>预览变更</Button></div>
-  </div>;
-}
 export function ServiceIdentityDialog({ model, providerId, ops, close, onSaved = close }) {
-  const entry = providerServices(model).find(row => row.providerId === providerId);
+  const entry = providerOffer(model,providerId);
   const original = providerId ? entry?.callId || '' : model.modelId;
   const formId = useId();
   const [callId, setCallId] = useState(original), [revision] = useState(model.updatedAt), [confirm, setConfirm] = useState(false);
   const changing = Boolean(original && original !== callId.trim());
-  const blocked = Boolean(original) && (model.listingStatus === '已上架' || (providerId ? entry?.callsEnabled !== false : model.callsEnabled === true));
+  const blocked = Boolean(original) && (['formal','gray'].includes(offerStage(model,entry)) || (providerId ? entry?.callsEnabled !== false : model.callsEnabled === true));
   const submit = async event => {
     event.preventDefault();
     if (changing && !confirm) {

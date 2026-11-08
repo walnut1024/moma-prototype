@@ -128,8 +128,8 @@ test('minimal material → channel → mock B → referenced service → mock C 
   state.providers=credentialsBefore;storage.setItem(STORAGE_KEY,JSON.stringify(state));assert.equal(validateExperience(ticket),true);
   const switched=loginAuthAccount(linked.auth,'13800002002','enterprise');
   storage.setItem(AUTH_DATA_KEY,JSON.stringify(switched));
-  assert.equal(directorySnapshot().models.some(row=>row.id===service.id),false);
-  assert.throws(()=>beginExperience(service.id,'text'));
+  assert.equal(directorySnapshot().models.some(row=>row.id===service.id),true);
+  assert.notEqual(beginExperience(service.id,'text').owner,ticket.owner);
   assert.throws(()=>validateExperience(ticket));
   state=persistModelAction(state,{type:'modelOperation',operation:'unlist',modelId,data:{}},storage);
   state=run(state,'unifiedPrice',{expectedUpdatedAt:model().updatedAt,expectedSaleVersion:modelSaleRevision(state,modelId),items:[{name:'输入 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'3'},{name:'输出 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'4'}]},modelId);

@@ -59,7 +59,7 @@ test('invalid amounts, discount bounds, duplicate scenarios and foreign catalogu
   const seed = createAdminSeed(), before = JSON.stringify(seed);
   for (const value of ['-1', '1e3', 'NaN', '0.0000001', '9007199254.740992']) assert.throws(() => commitAdminState(seed, action({ ...draft, scenarios: [{ ...draft.scenarios[0], listPrice: value }] })), /目录价/);
   for (const value of ['-0.1', '1.1', '0.1234567', 'abc']) assert.throws(() => commitAdminState(seed, discountAction(value)), /折扣系数/);
-  for (const scenarios of [[{ name: '', unit: '张', currency: 'CNY', listPrice: '1' }], [{ ...draft.scenarios[0], unit: '无效\n单位' }], [draft.scenarios[0], draft.scenarios[0]], Array(101).fill(draft.scenarios[0])]) assert.throws(() => commitAdminState(seed, action({ ...draft, scenarios })), /计费项|计价单位/);
+  for (const scenarios of [[{ name: '', unit: '张', currency: 'CNY', listPrice: '1' }], [{ ...draft.scenarios[0], unit: '无效\n单位' }], [draft.scenarios[0], draft.scenarios[0]], Array(101).fill(draft.scenarios[0])]) assert.throws(() => commitAdminState(seed, action({ ...draft, scenarios })), /计费项|计费单位/);
   assert.throws(() => commitAdminState(seed, action({ ...draft, modelId: 'missing' })), /目录/);
   assert.throws(() => commitAdminState(seed, action(draft, 'missing')), /不存在/);
   assert.equal(JSON.stringify(seed), before);

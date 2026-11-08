@@ -3,7 +3,6 @@ import AdminCollapsePanel from './AdminCollapsePanel';
 import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useState } from 'react';
 import { Card, Collapse, Space, Typography } from '@douyinfe/semi-ui';
-import { IconArrowRight } from '@douyinfe/semi-icons';
 import source from '../../MODEL_OPERATIONS_GUIDE.md?raw';
 import { findOperationsGuide, parseOperationsGuide } from './model-operations-guide.mjs';
 import './getting-started.css';
@@ -15,7 +14,9 @@ function inline(text) {
   return text.split(/(`[^`]+`|\[[^\]]+\]\(#[^)]+\))/g).filter(Boolean).map((part, index) => {
     if (part.startsWith('`')) return <Typography.Text key={index} code>{part.slice(1, -1)}</Typography.Text>;
     const link = part.match(/^\[([^\]]+)\]\(#([^)]+)\)$/);
-    return link ? <Typography.Text key={index} link={{ href: guideHref(link[2]) }}>{link[1]}</Typography.Text> : part;
+    if (!link) return part;
+    const href = link[2].startsWith('/admin-2/') ? `#${link[2]}` : guideHref(link[2]);
+    return <Typography.Text key={index} link={{ href }}>{link[1]}</Typography.Text>;
   });
 }
 
@@ -27,7 +28,7 @@ function Blocks({ blocks }) {
         key: column, title: inline(heading), render: (_, row) => inline(row.cells[column] ?? ''),
       }));
       const rows = block.rows.map((cells, id) => ({ id, cells }));
-      return <Table size="small" key={index} columns={columns} dataSource={rows} rowKey="id" pagination={false} scroll={{ x: 'max(100%, 420px)' }}/>;
+      return <Table size="small" key={index} columns={columns} dataSource={rows} rowKey="id" pagination={false}/>;
     }
     if (block.type === 'list') {
       const Tag = block.ordered ? 'ol' : 'ul';
@@ -63,11 +64,7 @@ export default function GettingStarted({ guideId }) {
   }, [guideId, section.id]);
   return (
     <article className="getting-started admin-page-stack">
-      <AdminPageHeading title="模型运营" description="按任务阅读：先接通模型，再开放使用；需要收费时再定价。">
-        <Typography.Text link={{ href: '#/admin-2/listing?perspective=models' }}>
-          <Space spacing={4}>打开模型服务<IconArrowRight aria-hidden="true"/></Space>
-        </Typography.Text>
-      </AdminPageHeading>
+      <AdminPageHeading title="模型运营"/>
       <nav aria-label="模型运营指导">
         <Space wrap spacing={16}>
           {sections.map(guide => <Typography.Text key={guide.id} strong={section.id === guide.id}

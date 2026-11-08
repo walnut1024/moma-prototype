@@ -1,10 +1,11 @@
-import { seedBuiltinModelCatalogue } from '../src/mock/builtin-model-catalogue.js';
+import { BUILTIN_MODEL_CATALOGUE, seedBuiltinModelCatalogue } from '../src/mock/builtin-model-catalogue.js';
 import {initialWorkspace,applyModelDataset,systemModelData,systemModelOrigin, MODEL_DATASET } from '../src/mock/model-data.js';
 import { initialApplicationData } from '../src/mock/application-data.js';
 import { libraryRecord, modelLibrary } from '../src/admin-v2/model-library.js';
 import {providerKeyGroups} from '../src/admin-v2/provider-key-groups.js';
 import { createMockEngine } from '../src/admin-v2/mock-onboarding-core.js';
 
+import { offerKey, offerStage, offerGrayTenants } from '../src/service-access.mjs';
 import {storedModel,domainModelWorkspace} from '../src/mock/model-fields.js';
 const j=JSON.stringify;
 const at=value=>Number.isFinite(Date.parse(value))?Date.parse(value):0;
@@ -26,17 +27,35 @@ export function initialModelWorkspace(){
     modelData:composed.modelData,cloudMockState:createMockEngine().snapshot()});
 }
 
+// Reference materials retain their established IDs so a demo can use the same master records.
+function initialReferenceWorkspace(){
+  const initial=initialApplicationData(0);
+  const reference=Object.fromEntries(Object.entries(initial).map(([key,value])=>[key,Array.isArray(value)?[]:value]));
+  delete reference.initialData;
+  const collections=Object.fromEntries(Object.keys(MODEL_DATASET.collections).map(key=>[key,[]]));
+  const state=seedBuiltinModelCatalogue({...reference,...collections,admins:initial.admins,
+    tariffDictionary:initial.tariffDictionary,revision:0,cloudOperations:true,
+    modelData:{sourceScope:'reference-only-v1',builtinIds:{},userIds:{}},cloudMockState:createMockEngine().snapshot()});
+  for(const template of state.modelTemplates){
+    const spec=BUILTIN_MODEL_CATALOGUE.models.find(row=>row.id===template.id);
+    template.id=spec.existingId || template.id;
+  }
+  state.modelData.builtinIds.modelTemplates=state.modelTemplates.map(row=>row.id);
+  return state;
+}
+
 // Typed relational columns enforce ownership; the JSON extension preserves the existing page contract.
 export function projectModelState(state){
   state.modelData ||= {};state.modelData.mappingIds ||= {};
   for(const p of state.providers)for(const a of p.catalogConnections || [])if(!state.modelData.mappingIds[a.id])state.modelData.mappingIds[a.id]=state.modelSupplies.find(s=>s.channelId===a.id && (s.providerId || state.endpoints.find(e=>e.id===s.endpointId)?.providerId)===p.id)?.id || a.id;
   const technicalId=s=>state.modelData.mappingIds[s.channelId] || s.id;
+  const offerServiceKeys=new Map();
   const tables={},add=(table,row)=>{(tables[table]||=new Map()).set((pk[table]||['id']).map(k=>row[k]).join('\0'),row);};
   const master=id=>{const row=libraryRecord(state,id);if(!row)throw Error('模型资料引用不存在');return row;};
   for(const m of modelLibrary(state))add('materials',{id:m.id,canonical_slug:m.modelId,name:m.name,model_type:m.type,maker:m.maker || '',description:m.description || '',usage_unit:m.usageUnit || null,metadata_json:j(storedModel({profile:m.profile || {},capabilities:m.capabilities || {}})),origin:'seed',revision:m.revision || 1,created_at:at(m.createdAt),updated_at:at(m.updatedAt),deleted_at:null,record_collection:state.modelTemplates.some(x=>x.id===m.id)?'modelTemplates':'models',record_json:j(storedModel(m))});
   for(const m of state.modelTemplates)add('model_template_records',{id:m.id,material_id:master(m.id).id,record_json:j(storedModel(m)),removed_at:null});
   for(const p of state.providers){
-    const profile={};for(const k of ['sourceType','integrationType','contact','contactInfo','description','contractEnd'])if(p[k]!==undefined)profile[k]=p[k];
+    const profile={};for(const k of ['sourceType','integrationType','contact','contactInfo','description','contractEnd','logo','introduction','website','documentation'])if(p[k]!==undefined)profile[k]=p[k];
     add('suppliers',{id:p.id,code:p.code || p.id,name:p.name,profile_json:j(profile),builtin:Number(p.id==='provider-moma'),enabled:bool(p.status),origin:'seed',revision:p.revision || 1,created_at:at(p.createdAt),updated_at:at(p.updatedAt),deleted_at:p.deletedAt?at(p.deletedAt):null,record_json:j(p)});
     for(const k of [...(p.apiKeys || []),...state.endpoints.filter(e=>e.providerId===p.id).flatMap(e=>e.apiKeys || [])]){
       if(!k.fingerprint || !/^[a-f0-9]{64}$/i.test(k.fingerprint))continue;
@@ -65,20 +84,24 @@ export function projectModelState(state){
     const material=master(m.id);
     add('services',{id:m.id,material_id:material.id,code:m.modelId,mode:['standard','provider'].includes(m.serviceMode)?m.serviceMode:null,mode_epoch:(m.serviceModeRevision || 1),listing_status:m.listingStatus==='已上架'?'listed':m.listingStatus==='已下架'?'withdrawn':'unlisted',calls_enabled:Number(m.listingStatus==='已上架' && m.callsEnabled===true),market_visible:Number(m.marketVisible!==false),stop_reason:m.lifecycleStopReason || null,scope_json:j({openScope:m.openScope,tenantIds:m.tenantIds || []}),revision:m.revision || 1,created_at:at(m.createdAt),updated_at:at(m.updatedAt),deleted_at:m.deletedAt?at(m.deletedAt):null,record_json:j(storedModel(m,true))});
     const offered=m.serviceMode==='standard'?[{providerId:null,callId:m.modelId}]:m.serviceMode==='provider'?(m.serviceProviders || []).filter(p=>p.status!=='已移除'):[];
-    for(const o of offered)add('offers',{record_id:offerId(m,o.providerId),service_id:m.id,material_id:material.id,mode_epoch:m.serviceModeRevision || 1,mode:m.serviceMode,supplier_id:o.providerId,id:o.callId,market_visible:Number(o.marketVisible!==false),calls_enabled:Number(o.callsEnabled!==false),revision:m.revision || 1,created_at:at(o.createdAt || m.createdAt),retired_at:null});
+    for(const o of offered) {
+      const key=offerKey(o),recordId=offerId(m,key);
+      offerServiceKeys.set(recordId,key?`provider:${m.id}:${key}`:`standard:${m.id}`);
+      add('offers',{record_id:recordId,service_id:m.id,material_id:material.id,mode_epoch:m.serviceModeRevision || 1,mode:m.serviceMode,supplier_id:o.providerId,id:o.callId,channel_model_id:o.channelId ? state.modelData.mappingIds[o.channelId] : null,listing_stage:offerStage(m,o),gray_tenants_json:j(offerGrayTenants(m,o)),market_visible:Number(o.marketVisible!==false),calls_enabled:Number(o.callsEnabled!==false),revision:m.revision || 1,created_at:at(o.createdAt || m.createdAt),retired_at:null});
+    }
   }
   for(const p of state.providers)for(const a of p.catalogConnections || []){
     const entry=p.catalogModels?.find(m=>m.modelId===a.modelId);if(!entry?.libraryId || !state.endpoints.some(e=>e.id===a.endpointId))continue;
     const material=master(entry.libraryId),rel=`supplier-model:${p.id}:${material.id}`;
     if(!tables.supplier_models?.has(rel))add('supplier_models',{id:rel,supplier_id:p.id,material_id:material.id,declaration_json:j(entry),revision:1,created_at:at(a.createdAt),updated_at:at(a.updatedAt),removed_at:null});
-    add('channel_models',{id:state.modelData.mappingIds[a.id],channel_id:a.endpointId,supplier_id:p.id,supplier_model_id:rel,material_id:material.id,upstream_model_id:a.upstreamModelId || '',mapping_json:j({sourceAssociationId:a.id,capabilities:a.capabilities || {}}),enabled:Number(a.enabled===true),config_epoch:(a.revision || 0)+1,revision:a.revision || 1,created_at:at(a.createdAt),updated_at:at(a.updatedAt),removed_at:a.deletedAt?at(a.deletedAt):null,record_json:'{}'});
+    add('channel_models',{id:state.modelData.mappingIds[a.id],channel_id:a.endpointId,supplier_id:p.id,supplier_model_id:rel,material_id:material.id,upstream_model_id:a.upstreamModelId || '',mapping_json:j({sourceAssociationId:a.id,sourceName:a.sourceName,capabilities:a.capabilities || {}}),enabled:Number(a.enabled===true),config_epoch:(a.revision || 0)+1,revision:a.revision || 1,created_at:at(a.createdAt),updated_at:at(a.updatedAt),removed_at:a.deletedAt?at(a.deletedAt):null,record_json:'{}'});
   }
   for(const s of state.modelSupplies){
     const m=state.models.find(m=>m.id===s.modelId),technical=technicalId(s);let row=tables.channel_models?.get(technical);
     if(!m)throw Error('供给的模型服务不存在');
     if(!row){const ep=state.endpoints.find(e=>e.id===s.endpointId),p=state.providers.find(p=>p.id===(s.providerId || ep?.providerId));if(!ep || !p)throw Error('历史供给的明确引用缺失');const material=master(m.id),rel=`supplier-model:${p.id}:${material.id}`;if(!tables.supplier_models?.has(rel))add('supplier_models',{id:rel,supplier_id:p.id,material_id:material.id,declaration_json:j({source:'historical-explicit-supply',supplyId:s.id}),revision:1,created_at:at(s.createdAt),updated_at:at(s.updatedAt),removed_at:null});row={id:technical,channel_id:ep.id,supplier_id:p.id,supplier_model_id:rel,material_id:material.id,upstream_model_id:s.upstreamModelId || '',mapping_json:j({source:'historical-explicit-supply',supplyId:s.id}),enabled:0,config_epoch:1,revision:1,created_at:at(s.createdAt),updated_at:at(s.updatedAt),removed_at:null,record_json:'{}'};add('channel_models',row);}
     add('service_supply_records',{id:s.id,channel_model_id:technical,service_id:m.id,record_json:j(s),removed_at:null});
-    for(const o of tables.offers?.values() || [])if(o.service_id===m.id && (!o.supplier_id || o.supplier_id===row.supplier_id) && s.status!=='已移除')add('offer_channels',{offer_id:o.record_id,channel_model_id:technical,material_id:row.material_id,supplier_id:row.supplier_id,created_at:at(s.createdAt),removed_at:null});
+    for(const o of tables.offers?.values() || [])if(o.service_id===m.id && (!o.supplier_id || o.supplier_id===row.supplier_id) && (!o.channel_model_id || o.channel_model_id===technical) && s.status!=='已移除')add('offer_channels',{offer_id:o.record_id,channel_model_id:technical,material_id:row.material_id,supplier_id:row.supplier_id,created_at:at(s.createdAt),removed_at:null});
   }
   for(const d of state.tariffDictionary){
     const row={id:d.id,name:d.name,name_en:d.englishName || '',builtin:Number(d.builtin===true),enabled:Number(d.kind==='scenario' || d.status==='已启用'),revision:d.revision || 1,deleted_at:null,record_json:j(d)};
@@ -105,11 +128,11 @@ export function projectModelState(state){
     const latest=versions.filter(v=>v.status==='已发布' && at(v.effectiveAt)<=Date.now()).sort((a,b)=>b.version-a.version)[0];
     tables.channel_models.get(id).active_purchase_price_id=latest && (!latest.expiresAt || at(latest.expiresAt)>Date.now())?latest.id:null;
   }
-  for(const v of state.modelSalePrices){if(!v.items?.length || v.supplyId)continue;const m=state.models.find(m=>m.id===v.modelId);if(!m)continue;const owner=offerId(m,v.providerId || null,v.serviceModeRevision || 1);if(!tables.offers?.has(owner)){const historical=owner;if(!tables.offers?.has(historical))add('offers',{record_id:historical,service_id:m.id,material_id:master(m.id).id,mode_epoch:v.serviceModeRevision || 1,mode:v.providerId?'provider':'standard',supplier_id:v.providerId || null,id:'',market_visible:0,calls_enabled:0,revision:1,created_at:at(v.createdAt),retired_at:1});price(v,'sale',historical,v.items || [],'modelSalePrices');}else price(v,'sale',owner,v.items || [],'modelSalePrices');}
+  for(const v of state.modelSalePrices){if(!v.items?.length || v.supplyId)continue;const m=state.models.find(m=>m.id===v.modelId);if(!m)continue;const owner=offerId(m,offerKey(v),v.serviceModeRevision || 1);if(!tables.offers?.has(owner)){const historical=owner;if(!tables.offers?.has(historical))add('offers',{record_id:historical,service_id:m.id,material_id:master(m.id).id,mode_epoch:v.serviceModeRevision || 1,mode:v.providerId?'provider':'standard',supplier_id:v.providerId || null,id:'',channel_model_id:null,listing_stage:'withdrawn',gray_tenants_json:'[]',market_visible:0,calls_enabled:0,revision:1,created_at:at(v.createdAt),retired_at:1});price(v,'sale',historical,v.items || [],'modelSalePrices');}else price(v,'sale',owner,v.items || [],'modelSalePrices');}
   for(const v of state.supplyPrices){if(!v.items?.length)continue;const supply=state.modelSupplies.find(s=>s.id===v.supplyId);if(supply)price(v,'purchase',technicalId(supply),v.items || [],'supplyPrices');}
   for(const o of tables.offers?.values() || []){const prices=[...(tables.price_versions?.values() || [])].filter(v=>v.offer_id===o.record_id).sort((a,b)=>b.version-a.version);o.active_sale_price_id=prices[0]?.id || null;o.active_route_id=null;o.active_publication_id=null;}
   for(const r of state.serviceRoutes){
-    const o=[...(tables.offers?.values() || [])].find(o=>!o.retired_at && (o.mode==='standard'?`standard:${o.service_id}`:`provider:${o.service_id}:${o.supplier_id}`)===r.serviceId);if(!o)continue;
+    const o=[...(tables.offers?.values() || [])].find(o=>!o.retired_at && offerServiceKeys.get(o.record_id)===r.serviceId);if(!o)continue;
     add('service_route_records',{id:r.id,offer_id:o.record_id,record_json:j(r),removed_at:null});
     const active=r.versions.find(v=>v.version===r.activeVersion);if(active)o.active_route_id=active.id || `${r.id}:v${active.version}`;
     for(const v of r.versions || []){
@@ -121,7 +144,7 @@ export function projectModelState(state){
   for(const v of state.validations)add('model_validations',{id:v.id,version_id:tables.model_versions?.has(v.modelVersionId)?v.modelVersionId:null,record_json:j(v),removed_at:null});
   for(const task of state.modelOnboardings)add('onboarding_tasks',{id:task.id,service_id:state.models.some(m=>m.id===task.modelId)?task.modelId:null,channel_model_id:null,goal:task.intent==='reserve'?'reserve':task.intent==='attach'?'attach':'first_publish',status:task.status==='已完成'?'completed':task.status==='已放弃'?'cancelled':'active',revision:task.draftRevision || 1,created_at:at(task.createdAt),updated_at:at(task.updatedAt),record_json:j(task)});
   for(const o of tables.offers?.values() || []){
-    const m=state.models.find(m=>m.id===o.service_id),receipt=m.platformPublications?.find(p=>p.serviceId===(o.mode==='standard'?`standard:${m.id}`:`provider:${m.id}:${o.supplier_id}`));
+    const m=state.models.find(m=>m.id===o.service_id),receipt=m.platformPublications?.find(p=>p.serviceId===offerServiceKeys.get(o.record_id));
     if(receipt && o.active_sale_price_id && o.active_route_id){
       const id=`publication:${o.record_id}:${receipt.publishedVersion}:${o.active_sale_price_id}:${o.active_route_id}:${m.materialPublication?.version || 0}:${m.commercialPublications?.scope?.version || 0}`;
       add('publications',{id,offer_id:o.record_id,mode_epoch:o.mode_epoch,sale_price_id:o.active_sale_price_id,route_version_id:o.active_route_id,material_revision:master(m.id).revision || 1,material_snapshot_json:j(master(m.id)),dependencies_json:j({receipt,scope:JSON.parse(tables.services.get(m.id).scope_json),id:o.id}),evidence_job_id:null,reason:'model-operations',created_at:at(receipt.publishedAt || m.updatedAt),actor_id:actor});o.active_publication_id=id;
@@ -130,19 +153,19 @@ export function projectModelState(state){
   return tables;
 }
 
-function upsert(db,table,rows){
+function upsert(db,table,rows,insertOnly=false){
   if(!rows.length)return null;
   const columns=[...new Set(rows.flatMap(Object.keys))],keys=pk[table] || ['id'];
   const update=columns.filter(c=>!keys.includes(c)).map(c=>`${c}=${table==='offers' && c!=='retired_at'?`CASE WHEN excluded.retired_at IS NOT NULL THEN offers.${c} ELSE excluded.${c} END`:`excluded.${c}`}`).join(',');
-  return db.prepare(`INSERT INTO ${table}(${columns.join(',')}) SELECT ${columns.map(c=>`json_extract(value,'$.${c}')`).join(',')} FROM json_each(?) WHERE true ON CONFLICT(${keys.join(',')}) DO UPDATE SET ${update}`).bind(j(rows));
+  return db.prepare(`INSERT INTO ${table}(${columns.join(',')}) SELECT ${columns.map(c=>`json_extract(value,'$.${c}')`).join(',')} FROM json_each(?) WHERE true${insertOnly?'':` ON CONFLICT(${keys.join(',')}) DO UPDATE SET ${update}`}`).bind(j(rows));
 }
 
-export function modelChanges(db,before,after){
+export function modelChanges(db,before,after,{insertOnly=false}={}){
   const a=before?projectModelState(before):{},b=projectModelState(after),statements=[];
   for(const table of ['offers'])for(const [key,row]of a[table] || [])if(!b[table]?.has(key))statements.push(db.prepare('UPDATE offers SET retired_at=? WHERE record_id=?').bind(at(after.updatedAt)||Date.now(),row.record_id));
   for(const [table,rows]of Object.entries(b)){
     const changed=[...rows].filter(([key,row])=>j(a[table]?.get(key))!==j(row)).map(([,row])=>row);
-    const statement=upsert(db,table,changed);if(statement)statements.push(statement);
+    const statement=upsert(db,table,changed,insertOnly);if(statement)statements.push(statement);
   }
   for(const [table,rows]of Object.entries(a))for(const [key,row]of rows)if(!b[table]?.has(key) && !['offers','price_versions','price_items','route_versions','route_members'].includes(table)){
     if(['materials','services','suppliers','channels'].includes(table))statements.push(db.prepare(`UPDATE ${table} SET deleted_at=? WHERE id=?`).bind(at(after.updatedAt)||Date.now(),row.id));
@@ -152,6 +175,12 @@ export function modelChanges(db,before,after){
     else if(pk[table])statements.push(db.prepare(`DELETE FROM ${table} WHERE ${pk[table].map(k=>k+'=?').join(' AND ')}`).bind(...pk[table].map(k=>row[k])));
   }
   const meta={modelData:after.modelData,initialData:after.initialData,updatedAt:after.updatedAt};
+  if(insertOnly && before){
+    const existingTenantIds=new Set(before.tenants.map(row=>row.id));
+    for(const tenant of after.tenants.filter(row=>!existingTenantIds.has(row.id))){
+      statements.push(db.prepare("UPDATE model_workspace SET reference_json=json_insert(reference_json,'$.tenants[#]',json(?)) WHERE id=1").bind(j(tenant)));
+    }
+  }
   statements.push(db.prepare('UPDATE model_workspace SET meta_json=?,revision=? WHERE id=1').bind(j(meta),after.revision || 0));
   return statements;
 }
@@ -170,24 +199,22 @@ export function simulatorChanges(db,before,after){
   return changed.length?[upsert(db,'simulation_records',changed)]:[];
 }
 
-export async function initializeModelWorkspace(db){
-  const stored=await db.prepare('SELECT id,meta_json FROM model_workspace WHERE id=1').first();
-  if(stored && JSON.parse(stored.meta_json).modelData?.sourceScope==='full-static-model-scope-v1')return;
-  let state=initialModelWorkspace();
-  if(stored){
-    await db.prepare("INSERT OR IGNORE INTO model_template_records(id,material_id,record_json) SELECT id,id,record_json FROM materials WHERE record_collection='modelTemplates' AND record_json!='{}'").run();
-    const saved=await loadModelWorkspace(db,{id:'admin-001',role:'平台管理员'});
-    for(const key of Object.keys(entityTables)){const ids=new Set(saved[key].map(r=>r.id)),known=new Set(saved.modelData?.builtinIds?.[key] || []);saved[key].push(...state[key].filter(r=>!ids.has(r.id) && !known.has(r.id)));}
-    for(const key of ['modelSalePrices','supplyPrices','tariffDictionary']){const ids=new Set(saved[key].map(r=>r.id));saved[key].push(...state[key].filter(r=>!ids.has(r.id)));}
-    saved.modelData={...state.modelData,...saved.modelData,sourceScope:state.modelData.sourceScope,importedPriceIds:state.modelData.importedPriceIds,builtinIds:state.modelData.builtinIds};
-    await db.batch([db.prepare('PRAGMA defer_foreign_keys=ON'),...modelChanges(db,null,saved)]);return;
-  }
-  const existing=await db.prepare('SELECT id,market_visible,revision,updated_at FROM services').all();
-  for(const row of existing.results){const m=state.models.find(m=>m.id===row.id);if(m){m.marketVisible=Boolean(row.market_visible);m.revision=row.revision;m.updatedAt=new Date(row.updated_at).toISOString();}}
-  const reference={...state};for(const key of [...Object.keys(entityTables),'modelSalePrices','supplyPrices','tariffDictionary','cloudMockState','modelData'])delete reference[key];
+export async function initializeModelWorkspace(db,{demo=false}={}){
+  if(await db.prepare('SELECT id FROM model_workspace WHERE id=1').first())return {initialized:false};
+  const state=demo?initialModelWorkspace():initialReferenceWorkspace();
+  const reference={...state};
+  for(const key of [...Object.keys(entityTables),'admins','modelSalePrices','supplyPrices','tariffDictionary','cloudMockState','modelData'])delete reference[key];
   const meta={modelData:state.modelData,initialData:state.initialData,updatedAt:state.updatedAt};
-  const statements=[db.prepare('PRAGMA defer_foreign_keys=ON'),db.prepare('INSERT INTO model_workspace(id,meta_json,reference_json) VALUES(1,?,?)').bind(j(meta),j(reference)),...modelChanges(db,null,state),...simulatorChanges(db,{version:1,scenario:'success',clock:0},state.cloudMockState)];
+  const statements=[db.prepare('PRAGMA defer_foreign_keys=ON'),
+    db.prepare('INSERT INTO model_workspace(id,meta_json,reference_json) VALUES(1,?,?)').bind(j(meta),j(reference))];
+  if(!demo){
+    const occupied=await db.prepare('SELECT EXISTS(SELECT 1 FROM seed_runs) OR EXISTS(SELECT 1 FROM operations) AS occupied').first('occupied');
+    if(occupied)throw Error('数据库已有模型运营记录，拒绝重新初始化');
+    for(const account of state.admins)statements.push(db.prepare('INSERT INTO admin_accounts(id,name,role,enabled,revision) VALUES(?,?,?,?,?)').bind(account.id,account.name,account.role,bool(account.status),1));
+  }
+  statements.push(...modelChanges(db,null,state,{insertOnly:!demo}),...simulatorChanges(db,{version:1,scenario:'success',clock:0},state.cloudMockState));
   await db.batch(statements);
+  return {initialized:true};
 }
 
 const arraySql=(query)=>`json(COALESCE((SELECT json_group_array(json(record_json)) FROM (${query})), '[]'))`;

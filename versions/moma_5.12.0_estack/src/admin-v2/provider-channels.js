@@ -26,7 +26,7 @@ export function catalogueChannels(state, provider, modelId) {
       const version = activeChannelProcurement(item);
       return {
       ...item, id: item.id || channelIdentity(provider.id, modelId, endpoint.id),
-      name: endpoint.supplierChannel ? endpoint.name : item.name || (endpoints.length > 1 ? `默认渠道 ${index + 1}` : '默认渠道'), origin: item.origin || 'undisclosed', upstreamProvider: item.upstreamProvider || '',
+      name: item.sourceName || (endpoint.supplierChannel ? endpoint.name : item.name || (endpoints.length > 1 ? `默认渠道 ${index + 1}` : '默认渠道')), origin: item.origin || 'undisclosed', upstreamProvider: item.upstreamProvider || '',
       ...(endpoint.supplierChannel ? { apiAddresses: [{ protocol: endpoint.protocol, baseUrl: channelModelUrl(endpoint, item.type || provider.catalogModels?.find(row => row.modelId === modelId)?.type, { probe: channelProbe(item) }) }] } : {}),
       upstreamModelId: item.upstreamModelId ?? state.modelSupplies.find(supply => supply.endpointId === endpoint.id && (supply.catalogueModelId || supply.upstreamModelId) === modelId)?.upstreamModelId ?? modelId, endpoint,
       managed: Object.hasOwn(item, 'enabled'),

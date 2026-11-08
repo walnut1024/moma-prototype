@@ -1,11 +1,12 @@
 import Table from './AdminTable';
 import { Banner, Button, Checkbox, Descriptions, Space, Steps, Toast, Typography, Upload } from '@douyinfe/semi-ui';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { IconDownload, IconUpload } from '@douyinfe/semi-icons';
-import { MODEL_IMPORT_FIELDS, MODEL_IMPORT_HEADERS, MODEL_IMPORT_LIMIT, downloadModelCsv, modelRowsFromCells, parseModelText, validateModelRows } from './model-import';
+import { IMPORT_REPORT_HEADERS, MODEL_IMPORT_LIMIT, downloadModelCsv } from './model-import';
+import { parseDelimitedCells } from '../tabular-import.mjs';
+import { materialImportHeaders, materialImportRows, previewMaterialRows, submitMaterialRows } from './material-batch-import';
 import { TASK_OPTIONS, INPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS } from './model-profile';
 
-const cell = (row, label) => row.cells[MODEL_IMPORT_HEADERS.indexOf(label)] || '';
 const typeTasks = [['文本', 'text'], ['多模态', 'multimodal'], ['视觉 · 图像', 'image'], ['视觉 · 视频', 'video'], ['语音', 'audio'], ['向量', 'embedding'], ['重排', 'rerank']];
 function ImportHelp() {
   return <section className="materials-import-help" aria-labelledby="model-import-help-title">
@@ -22,77 +23,161 @@ function ImportHelp() {
   </section>;
 }
 
-export default function ModelBatchImport({ state, can, run, close, dirty, mode = 'model' }) {
-  const [step, setStep] = useState('input'), [rows, setRows] = useState([]), [fileName, setFileName] = useState('');
-  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [skip, setSkip] = useState(false), [onlyProblems, setOnlyProblems] = useState(false);
-  const [outcome, setOutcome] = useState(null), [expandedRow, setExpandedRow] = useState(null);
-  const download = (name, values) => { try { downloadModelCsv(name, values); Toast.success('已开始下载' + name.replace('.csv', '')); } catch { Toast.error('下载失败，请重试'); } };
-  const request = useRef(0), previewTitle = useRef(null);
-  useEffect(() => () => { request.current++; }, []);
-  useEffect(() => { if (step === 'preview') previewTitle.current?.focus(); }, [step]);
-  const preview = useMemo(() => validateModelRows(state, rows, { catalogue: mode === 'template' }), [state, rows, mode]);
-  const valid = preview.filter(row => row.status === 'ready'), invalid = preview.length - valid.length;
-  const selected = preview.find(row => row.rowNumber === expandedRow);
-  const [pagination,setPagination]=useState({currentPage:1,pageSize:20});
-  const readFile = async file => {
-    if (!file || busy || !can) return;
-    const current = ++request.current; setBusy(true); setError('');
-    const progress = Toast.info({content:'正在读取模型文件…',duration:0});
-    try {
-      if (file.size > 10 * 1024 * 1024) throw new Error('文件超过 10 MB，请拆分后导入');
-      let parsed;
-      if (/\.xlsx$/i.test(file.name)) { const { readSheet } = await import('read-excel-file/browser'); parsed = modelRowsFromCells(await readSheet(file)); }
-      else if (/\.csv$/i.test(file.name)) parsed = parseModelText(await file.text());
-      else throw new Error('请选择 .xlsx 或 UTF-8 .csv 文件，旧版 .xls 请另存为 .xlsx');
-      if (current === request.current) {
-        setRows(parsed); setFileName(file.name); setStep('preview'); setError(''); setSkip(false); setOnlyProblems(false); setExpandedRow(null);
-        setPagination(current => ({ ...current, currentPage: 1 })); dirty(true);
-        Toast.success('文件已读取，请核对校验结果');
-      }
-    } catch (e) { if (current === request.current) { const message = e.message.includes('请') || e.message.includes('模型') ? e.message : '读取失败，请检查文件是否损坏并使用最新模板'; setError(message); Toast.error(message); } }
-    finally { Toast.close(progress); if (current === request.current) setBusy(false); }
-  };
-  const submit = async () => {
-    if (busy || !can || !valid.length || invalid && !skip) return;
-    setBusy(true); setError('');
-    try {
-      const next = await run('import', { models: valid.map(row => row.data) });
-      if (next) { setOutcome({ imported: valid.length, skipped: invalid }); setStep('result'); dirty(false); }
-    } catch (e) { setError(e.message); Toast.error(e.message); }
-    finally { setBusy(false); }
-  };
-  const visibleRows = onlyProblems ? preview.filter(row => row.status === 'error') : preview;
+const importNames = { model: '模型资料', provider: '服务商资料', relation: '供应关系' };
+const summaryHeaders = { model: ['模型名称', '规范模型标识', '模型类型'], provider: ['服务商名称', '服务商编码', '供给类型'], relation: materialImportHeaders.relation };
+const ready = row => row.status === 'ready';
+const issue = row => row.status === 'error' || row.status === 'failed';
+const count = (rows, status) => rows.filter(row => row.status === status).length;
+
+export default function ModelBatchImport({ state, ops, transact, close, kind, providerId }) {
+  const [step, setStep] = useState('input'), [preview, setPreview] = useState([]), [fileName, setFileName] = useState('');
+  const [results, setResults] = useState({}), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [skip, setSkip] = useState(false), [onlyProblems, setOnlyProblems] = useState(false), [expandedRow, setExpandedRow] = useState(null);
+  const [pagination, setPagination] = useState({ currentPage: 1, pageSize: 20 });
+  const mounted = useRef(false), previewTitle = useRef(null);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  useEffect(() => { if (step !== 'input') previewTitle.current?.focus(); }, [step]);
+
+  const label = importNames[kind], headers = materialImportHeaders[kind];
+  const provider = providerId && state.providers.find(row => row.id === providerId);
+  const display = preview.map(row => {
+    const outcome = results[row.rowNumber];
+    return outcome ? { ...row, ...outcome } : row;
+  });
+  const available = display.filter(ready), problems = display.filter(issue), failed = display.filter(row => row.status === 'failed');
+  const visible = onlyProblems ? problems : display;
+  const selected = display.find(row => row.rowNumber === expandedRow);
   const { pageSize } = pagination;
-  const currentPage = Math.min(pagination.currentPage, Math.ceil(visibleRows.length / pageSize) || 1);
-  const previewColumns = [
-    {title:'文件行',dataIndex:'rowNumber',width:85},
-    {title:'模型展示名 / 规范模型标识',width:260,render:(_,row)=><Space vertical align="start"><Typography.Text strong>{cell(row,'模型展示名') || '未填写'}</Typography.Text><Typography.Text type="tertiary">{cell(row,'规范模型标识') || '—'}</Typography.Text><Button theme="borderless" onClick={()=>setExpandedRow(expandedRow===row.rowNumber?null:row.rowNumber)}>查看第 {row.rowNumber} 行资料</Button></Space>},
-    {title:'模型类型 / 任务',width:180,render:(_,row)=><Space vertical align="start"><Typography.Text>{[cell(row,'模型类型'),cell(row,'视觉任务类型')].filter(Boolean).join(' · ') || '—'}</Typography.Text><Typography.Text type="tertiary">{cell(row,'支持任务') || '—'}</Typography.Text></Space>},
-    {title:'作者 / 原厂发布日期',width:160,render:(_,row)=><Space vertical align="start"><Typography.Text>{cell(row,'模型作者') || '—'}</Typography.Text><Typography.Text type="tertiary">{cell(row,'原厂发布日期') || '—'}</Typography.Text></Space>},
-    {title:'输入 → 输出 / 结果',width:180,render:(_,row)=>[cell(row,'输入模态') || '—','→',cell(row,'输出模态') || '—',cell(row,'结果类型')].filter(Boolean).join(' ')},
-    {title:'校验结果',width:260,render:(_,row)=><Typography.Text type={row.status==='error'?'danger':'success'}>{row.message}</Typography.Text>},
+  const currentPage = Math.min(pagination.currentPage, Math.ceil(visible.length / pageSize) || 1);
+  const download = (name, values) => {
+    try { downloadModelCsv(name, values); Toast.success('已开始下载' + name.replace('.csv', '')); }
+    catch { Toast.error('下载失败，请重试'); }
+  };
+  const reportRows = rows => [[...headers, ...IMPORT_REPORT_HEADERS], ...rows.map(row => [...row.cells, row.rowNumber, row.message])];
+  const readFile = async file => {
+    if (!file || busy || !ops.can) return;
+    setBusy(true);
+    setError('');
+    try {
+      if (file.size > 10 * 1024 * 1024) throw Error('文件超过 10 MB，请拆分后导入');
+      let cells;
+      if (/\.xlsx$/i.test(file.name)) {
+        const { readSheet } = await import('read-excel-file/browser');
+        cells = await readSheet(file);
+      } else if (/\.csv$/i.test(file.name)) cells = parseDelimitedCells(await file.text());
+      else throw Error('请选择 XLSX 或 UTF-8 CSV 文件');
+      const rows = previewMaterialRows(state, kind, materialImportRows(kind, cells), { providerId });
+      if (!mounted.current) return;
+      setPreview(rows);
+      setResults({});
+      setFileName(file.name);
+      setStep('preview');
+      setSkip(false);
+      setOnlyProblems(false);
+      setExpandedRow(null);
+      setPagination(value => ({ ...value, currentPage: 1 }));
+      ops.dirty(true);
+    } catch (issue) {
+      if (mounted.current) setError(issue.message);
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  };
+  const accept = rows => setResults(previous => {
+    const next = { ...previous };
+    for (const row of rows) next[row.rowNumber] = { ...row, masterCreated: row.masterCreated || previous[row.rowNumber]?.masterCreated };
+    return next;
+  });
+  const submit = async (selectedRows, retry = false) => {
+    if (busy || !ops.can || !selectedRows.length) return;
+    setBusy(true);
+    setError('');
+    try {
+      const checked = retry ? previewMaterialRows(state, kind, selectedRows, { providerId, retry: true }) : selectedRows;
+      const rows = checked.filter(ready);
+      const selectedNumbers = new Set(selectedRows.map(row => row.rowNumber));
+      let pending = checked.some(issue) || problems.some(row => !selectedNumbers.has(row.rowNumber));
+      accept(checked.filter(row => !ready(row)).map(({ rowNumber, status, message }) => ({ rowNumber, status, message })));
+      await submitMaterialRows({ state, kind, providerId, rows, transact, active: () => mounted.current, onResult: outcome => {
+        pending ||= outcome.some(issue);
+        accept(outcome);
+      } });
+      if (mounted.current) { setStep('result'); ops.dirty(pending); }
+    } catch (issue) {
+      if (mounted.current) setError(issue.message);
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  };
+  const columns = [
+    { title: '文件行', dataIndex: 'rowNumber', width: 85 },
+    ...summaryHeaders[kind].map(title => ({ title: title === '模型名称' ? '模型展示名' : title, width: 180, render: (_, row) => row.cells[headers.indexOf(title)] || '—' })),
+    { title: step === 'result' ? '处理结果' : '校验结果', width: 310, render: (_, row) => <Typography.Text type={issue(row) ? 'danger' : row.status === 'skip' ? 'tertiary' : 'success'}>
+      {row.masterCreated && providerId ? '主档已新增 · ' : row.modelId && providerId && row.status === 'done' ? '复用已有模型 · ' : ''}{row.message}
+    </Typography.Text> },
+    { title: '操作', width: 170, render: (_, row) => <Space>
+      <Button theme="borderless" aria-label={'查看第 ' + row.rowNumber + ' 行资料'} onClick={() => setExpandedRow(expandedRow === row.rowNumber ? null : row.rowNumber)}>查看</Button>
+      {row.status === 'failed' && <Button theme="borderless" aria-label={'重试第 ' + row.rowNumber + ' 行'} disabled={busy || !ops.can} onClick={() => submit([row], true)}>重试</Button>}
+    </Space> },
   ];
+  const startOver = () => { setStep('input'); setError(''); setPreview([]); setResults({}); ops.dirty(false); };
   return <div className="materials-import" aria-busy={busy}>
-    <Steps type="basic" current={['input','preview','result'].indexOf(step)}><Steps.Step title="上传表格"/><Steps.Step title="校验预览"/><Steps.Step title="导入结果"/></Steps>
-    {step==='input'?<>
+    <Steps type="basic" current={['input', 'preview', 'result'].indexOf(step)}><Steps.Step title="上传表格"/><Steps.Step title="校验预览"/><Steps.Step title="导入结果"/></Steps>
+    {provider && <Typography.Text strong>服务商 {provider.name}</Typography.Text>}
+    {(ops.conflict || failed.some(row => row.message.includes('提交结果待确认'))) && <Banner type="warning" description={
+      <>请核对最新数据后重试。<Button theme="borderless" disabled={busy} onClick={ops.reload}>载入最新数据</Button></>}/>}
+    {step === 'input' ? <>
       <div className="materials-actions">
-        <Typography.Text type="secondary">每批最多 {MODEL_IMPORT_LIMIT} 条，仅新增模型资料；相同规范模型标识不覆盖。</Typography.Text>
-        <Typography.Text link={{ href: import.meta.env.BASE_URL + 'templates/model-material-import.xlsx', download: '模型资料导入模板.xlsx' }}
-          icon={<IconDownload aria-hidden="true"/>}>下载模板</Typography.Text>
+        <Typography.Text type="secondary">每份最多 {MODEL_IMPORT_LIMIT} 条</Typography.Text>
+        {kind === 'model'
+          ? <Typography.Text link={{ href: import.meta.env.BASE_URL + 'templates/model-material-import.xlsx', download: '模型资料导入模板.xlsx' }}
+              icon={<IconDownload aria-hidden="true"/>}>下载模板</Typography.Text>
+          : <Button theme="borderless" icon={<IconDownload aria-hidden="true"/>} onClick={() => download(label + '导入模板.csv', [headers])}>下载模板</Button>}
       </div>
-      <Upload accept=".xlsx,.csv" uploadTrigger="custom" fileList={[]} showUploadList={false} draggable dragIcon={<IconUpload aria-hidden/>} dragMainText="点击上传模型资料表格或拖拽文件到这里" dragSubText="支持 XLSX、UTF-8 CSV，单个文件不超过 10 MB" disabled={busy || !can} onFileChange={files=>readFile(files[0])}/>
-      <ImportHelp/>
-    </>:step==='preview'?<>
+      <Upload accept=".xlsx,.csv" uploadTrigger="custom" fileList={[]} showUploadList={false} draggable dragIcon={<IconUpload aria-hidden="true"/>}
+        dragMainText={'点击上传' + label + '表格或拖拽文件到这里'} dragSubText="支持 XLSX、UTF-8 CSV，单个文件不超过 10 MB"
+        disabled={busy || !ops.can} onFileChange={files => readFile(files[0])}/>
+      {kind === 'model' ? <ImportHelp/> : <Typography.Paragraph>{kind === 'provider'
+        ? '填写服务商名称、服务商编码和供给类型。供给类型填写「自有推理服务」或「第三方推理服务」。其余字段选填。'
+        : '每行填写已有服务商编码和规范模型标识，确认后登记一条供给关系。'}</Typography.Paragraph>}
+    </> : <>
       <Typography.Title heading={6}><span ref={previewTitle} tabIndex={-1}>{fileName}</span></Typography.Title>
-      <Banner type={invalid?'warning':'success'} description={'共 '+preview.length+' 条，可导入 '+valid.length+' 条，问题 '+invalid+' 条'}/>
-      <div className="materials-actions"><Checkbox checked={onlyProblems} onChange={event=>{setOnlyProblems(event.target.checked);setExpandedRow(null);setPagination(current => ({ ...current, currentPage: 1 }));}}>只看问题记录</Checkbox><Button icon={<IconDownload aria-hidden/>} onClick={()=>download('模型资料导入校验清单.csv',[[...MODEL_IMPORT_HEADERS,'校验结果'],...preview.map(row=>[...row.cells,row.message])])}>下载校验清单</Button></div>
-      <Table rowKey="rowNumber" columns={previewColumns} dataSource={visibleRows.slice((currentPage - 1) * pageSize, currentPage * pageSize)}
-        scroll={{ x: 1120 }} pagination={{ pageSize, currentPage, total: visibleRows.length, showSizeChanger: true, pageSizeOpts: [20, 50, 100], showTotal: true }}
+      <Banner type={problems.length ? 'warning' : 'success'} description={step === 'preview'
+        ? `共 ${display.length} 条，可提交 ${available.length} 条，已存在或重复 ${count(display, 'skip')} 条，待修正 ${problems.length} 条`
+        : `${providerId || kind === 'relation' ? '新增关联' : '新增资料'} ${count(display, 'done')} 条，已存在或重复 ${count(display, 'skip')} 条，待修正 ${count(display, 'error')} 条，待重试 ${failed.length} 条`}/>
+      <div className="materials-actions">
+        <Checkbox checked={onlyProblems} onChange={event => {
+          setOnlyProblems(event.target.checked); setExpandedRow(null); setPagination(value => ({ ...value, currentPage: 1 }));
+        }}>只看问题记录</Checkbox>
+        <Space wrap>
+          <Button icon={<IconDownload aria-hidden="true"/>} onClick={() => download(label + '导入校验清单.csv', reportRows(display))}>下载校验清单</Button>
+          {problems.length > 0 && <Button icon={<IconDownload aria-hidden="true"/>} onClick={() => download(label + '问题行.csv', reportRows(problems))}>下载问题行</Button>}
+        </Space>
+      </div>
+      <Table rowKey="rowNumber" columns={columns} dataSource={visible.slice((currentPage - 1) * pageSize, currentPage * pageSize)}
+        scroll={{ x: kind === 'relation' ? 925 : 1105 }} empty="暂无问题记录"
+        pagination={{ pageSize, currentPage, total: visible.length, showSizeChanger: true, pageSizeOpts: [20, 50, 100], showTotal: true }}
         onChange={({ pagination }) => setPagination({ currentPage: pagination.currentPage, pageSize: pagination.pageSize })}/>
-      {selected && <><div className="materials-actions"><Typography.Title heading={6}>第 {selected.rowNumber} 行 · {cell(selected,'模型展示名') || '未填写名称'}</Typography.Title><Button onClick={()=>setExpandedRow(null)}>收起资料</Button></div><Descriptions align="left" data={MODEL_IMPORT_FIELDS.filter(field=>cell(selected,field.header)).map(field=>({key:field.header,value:cell(selected,field.header)}))}/></>}
-      {invalid>0 && valid.length>0 && <Checkbox checked={skip} onChange={event=>setSkip(event.target.checked)}>跳过 {invalid} 条问题记录，仅导入 {valid.length} 条有效记录</Checkbox>}
-    </>:<Banner type="success" title="导入完成" description={'已新增 '+outcome.imported+' 个模型资料'+(outcome.skipped?'，跳过 '+outcome.skipped+' 条问题记录':'')+'。可在模型资料中查看和维护。'}/>}
+      {selected && <>
+        <div className="materials-actions"><Typography.Title heading={6}>第 {selected.rowNumber} 行资料</Typography.Title>
+          <Button onClick={() => setExpandedRow(null)}>收起资料</Button></div>
+        <Descriptions align="left" data={headers.map((key, i) => ({ key, value: selected.cells[i] })).filter(field => field.value)}/>
+      </>}
+      {step === 'preview' && problems.length > 0 && available.length > 0 && <Checkbox disabled={busy} checked={skip}
+        onChange={event => setSkip(event.target.checked)}>跳过 {problems.length} 条问题记录，仅提交 {available.length} 条有效记录</Checkbox>}
+    </>}
     {error && <Banner type="danger" description={error}/>}
-    <div className="materials-actions"><Typography.Text type="tertiary">{mode==='template'?'仅创建模型资料，不添加供应关系或模型服务。':'导入后为已下架，配置完整后再上架。'}</Typography.Text><Space>{step==='result'?<Button theme="solid" onClick={()=>close(true)}>完成</Button>:<><Button disabled={busy} onClick={()=>step==='preview'?setStep('input'):close()}>{step==='preview'?'重新上传':'取消'}</Button>{step==='preview' && <Button theme="solid" loading={busy} disabled={!can || !valid.length || invalid>0 && !skip} onClick={submit}>确认导入 {valid.length} 条</Button>}</>}</Space></div>
+    <div className="materials-actions"><Space wrap>
+      {step === 'input' ? <Button disabled={busy} onClick={() => close(false)}>取消</Button> : <>
+        <Button disabled={busy} onClick={startOver}>重新上传</Button>
+        {step === 'result'
+          ? <><Button disabled={busy} onClick={() => close(true)}>完成</Button>{failed.length > 1 && <Button disabled={busy || !ops.can} onClick={() => submit(failed, true)}>重试失败行</Button>}</>
+          : <Button theme="solid" loading={busy} disabled={busy || !ops.can || !available.length || problems.length > 0 && !skip}
+              onClick={() => submit(available)}>确认导入 {available.length} 条</Button>}
+      </>}
+    </Space></div>
   </div>;
 }

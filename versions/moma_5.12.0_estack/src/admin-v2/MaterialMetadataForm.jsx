@@ -7,7 +7,8 @@ import {modelFieldDescriptions} from './model-field-descriptions';
 import { modelMetadataDraft as blankModel } from './model-metadata-draft';
 import { modelCategory } from './model-management';
 import { MODEL_CATALOGUE_TYPES } from './model-library';
-import { IDENTITY_FIELDS, TECHNICAL_FIELDS, PRESENTATION_FIELDS, COMMON_FIELDS, INTERFACE_FIELDS, RECORD_FIELDS, FEATURE_FIELDS, ARCHITECTURE_OPTIONS, LICENSE_OPTIONS, LANGUAGE_OPTIONS, INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, SCENARIO_OPTIONS, TASK_OPTIONS, specificationFields, normalizeModelLogo } from './model-profile';
+import { IDENTITY_FIELDS, TECHNICAL_FIELDS, PRESENTATION_FIELDS, COMMON_FIELDS, INTERFACE_FIELDS, RECORD_FIELDS, FEATURE_FIELDS, ARCHITECTURE_OPTIONS, LICENSE_OPTIONS, LANGUAGE_OPTIONS, INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, SCENARIO_OPTIONS, TASK_OPTIONS, specificationFields } from './model-profile';
+import { readMaterialLogo } from './MaterialLogo';
 
 const supports = [['unknown','未填写'],['supported','支持'],['unsupported','不支持']];
 const optionList = entries => entries.map(([value,label])=>({value,label}));
@@ -37,13 +38,11 @@ export default function MaterialMetadataForm({model,initial,readOnly,can,dirty,o
   const logoUpload = async files => {
     const file=files[0];if(!file)return;
     const current=++version.current;
-    if(!['image/png','image/jpeg','image/webp'].includes(file.type) || file.size>1048576){setError('Logo 仅支持 1 MB 以内的 PNG、JPEG 或 WebP 图片');return;}
     setUploading(true);setError('');
     try{
-      const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=()=>reject(Error('读取图片失败，请重新选择'));reader.onload=()=>resolve(String(reader.result));reader.readAsDataURL(file);});
-      const logo=normalizeModelLogo(data),image=document.createElement('img');image.src=logo;await image.decode();
+      const logo=await readMaterialLogo(file);
       if(version.current===current)profileChange('logo',logo);
-    }catch{if(version.current===current)setError('图片无法读取，请选择有效的 PNG、JPEG 或 WebP 图片');}
+    }catch(error){if(version.current===current)setError(error.message);}
     finally{if(version.current===current)setUploading(false);}
   };
   const slot = (label,children,key=label,wide=false) => <Form.Slot key={key} label={{text:<Space>{label}{modelFieldDescriptions[label.replace(' *','')] && <Tooltip content={modelFieldDescriptions[label.replace(' *','')]}><Button theme="borderless" type="tertiary" size="small" icon={<IconHelpCircle aria-hidden/>} aria-label={label.replace(' *','')+'说明'}/></Tooltip>}</Space>,id:'material-label-'+key}} className={wide?'materials-wide-field':undefined}>{children?.type===Select?cloneElement(children,{'aria-labelledby':'material-label-'+key}):children}</Form.Slot>;
@@ -77,7 +76,7 @@ export default function MaterialMetadataForm({model,initial,readOnly,can,dirty,o
       {slot('模型 Logo',<Space vertical align="start">{form.profile.logo?<img className="materials-logo-preview" src={form.profile.logo} alt="模型 Logo"/>:readOnly?<Typography.Text type="tertiary">未填写</Typography.Text>:null}{!readOnly && <Space><Upload accept="image/png,image/jpeg,image/webp" uploadTrigger="custom" fileList={[]} showUploadList={false} disabled={!editable || uploading} onFileChange={logoUpload}><Button icon={<IconUpload aria-hidden/>} loading={uploading} disabled={!editable}>{form.profile.logo?'更换图片':'上传图片'}</Button></Upload>{form.profile.logo && <Button type="danger" theme="borderless" disabled={!editable} onClick={()=>{version.current++;setUploading(false);profileChange('logo','');}}>移除图片</Button>}</Space>}{!readOnly && <Typography.Text type="tertiary" size="small">PNG、JPEG、WebP，最大 1 MB</Typography.Text>}</Space>)}
       {slot('模型类型',readOnly?<Typography.Text>{MODEL_CATALOGUE_TYPES[modelCategory(form.type)]}</Typography.Text>:<Select aria-label="模型类型" value={modelCategory(form.type)} optionList={optionList(Object.entries(MODEL_CATALOGUE_TYPES))} disabled={!editable} onChange={value=>change('type',value==='visual'?'image':value)}/>)}
       {modelCategory(form.type)==='visual' && slot('视觉任务类型',readOnly?<Typography.Text>{form.type==='video'?'视频':'图像'}</Typography.Text>:<Select aria-label="视觉任务类型" value={form.type} optionList={optionList([['image','图像'],['video','视频']])} disabled={!editable} onChange={value=>change('type',value)}/>)}
-      {field('规范模型标识'+(readOnly?'':' *'),form.modelId,value=>change('modelId',value),{readOnly:Boolean(model)})}
+      {field('规范模型标识'+(readOnly?'':' *'),form.modelId,value=>change('modelId',value),{readonly:Boolean(model)})}
       {fields([...PRESENTATION_FIELDS.filter(item=>item.key==='author'),...IDENTITY_FIELDS.filter(item=>['family','version','releaseDate'].includes(item.key))])}
       {slot('简短介绍',readOnly?<Typography.Text>{display(form.description)}</Typography.Text>:<TextArea aria-label="简短介绍" rows={3} value={form.description} disabled={!editable} onChange={value=>change('description',value)}/>,'description',true)}
     </div>

@@ -1,7 +1,0 @@
-.od-page .od-charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--admin-section-gap); }
-.od-plot-controls { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-.od-empty { padding-block: 24px; }
-.od-share { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 16px; }
-.od-swatch { width: 8px; height: 8px; flex: none; border-radius: 50%; }
-.od-details .admin-page-stack { gap: 16px; }
-@media (max-width: 760px) { .od-share { grid-template-columns: minmax(0, 1fr); } }

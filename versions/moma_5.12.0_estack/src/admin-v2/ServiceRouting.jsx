@@ -1,13 +1,14 @@
+import { offerKey, offerStage } from '../service-access.mjs';
 import { IconArrowRight, IconPlus } from '@douyinfe/semi-icons';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { ROUTING_POLICIES } from './routing-policy';
-import {useRef, useState} from 'react';
+import {useId, useRef, useState} from 'react';
 import { Button, Input, Checkbox, Radio, Space, Typography } from '@douyinfe/semi-ui';
 import {Choice, Field} from './ServiceUI';
 import { FieldLabel as ModelFieldLabel } from './ServiceUI';
 import { CopyId, Notice, Modal } from './ServiceUI';
-import {ROUTING_STRATEGIES, serviceRoute, activeRouteVersion, lastRouteVersion, routingServices, routeStopReason, routeSourceVersion, validateRouteConfig} from './service-routing';
+import {ROUTING_STRATEGIES, serviceRoute, activeRouteVersion, lastRouteVersion, routeStopReason, routeSourceVersion, validateRouteConfig} from './service-routing';
 import {routeTableRows, changeRouteStrategy, routeStrategyChoices, routeEditConfig, sameRouteConfig, routeChangeRows} from './route-workspace';
 import {routeEditorChannels, routeEditorPayload} from './service-route-editor';
 import {operationsTransaction} from './model-operations';
@@ -18,10 +19,20 @@ const strategyName = id => id === 'fixed' ? '固定渠道' : ROUTING_STRATEGIES[
 const enabledRows = config => config?.channels.filter(row => row.enabled && !row.backup) || [];
 
 export function RouteWorkbench({state, model, ops, draftOnly = false, serviceId, onAddProvider, onRemoveProvider, onProviderState, onIdentity}) {
-  const [manualEditor, setEditor] = useState(null), [maintenance, setMaintenance] = useState(null), [lifecycle,setLifecycle]=useState(null), [running,setRunning]=useState(false), trigger = useRef(null);
+  const [manualEditor, setEditor] = useState(null), [mappingServiceId, setMappingServiceId] = useState(null), [lifecycle,setLifecycle]=useState(null), [running,setRunning]=useState(false), trigger = useRef(null);
+  const mappingSection = useRef(null), routeActionPrefix = useId();
+  const routeRows = routeTableRows(state, model, serviceId);
+  const services = routeRows.filter(row => row.span > 0).map(row => row.service);
+  const mappingService = services.find(service => service.id === mappingServiceId) || services[0];
+  const routeActionId = id => routeActionPrefix + id;
+  const showMappings = id => ops.proceed(() => {
+    setMappingServiceId(id);
+    ops.setError('');
+    requestAnimationFrame(() => mappingSection.current?.focus());
+  });
   const explicit = model.serviceMode === 'provider';
   const associationProvider = explicit && ops.params.get('providerChannels');
-  const associatedService = associationProvider && routingServices(state).find(row=>row.modelId===model.id && row.providerId===associationProvider);
+  const associatedService = associationProvider && services.find(row=>offerKey(row)===associationProvider);
   const editor = manualEditor || (associatedService ? {service:associatedService,side:'left'} : null);
   const blocked = !ops.can || Boolean(ops.conflict);
   const open = (event, service, channelId) => {
@@ -45,27 +56,30 @@ export function RouteWorkbench({state, model, ops, draftOnly = false, serviceId,
   });
   return <div className="ss-route-workbench">
     {model.serviceMode === 'provider' && !draftOnly && <div className="ss-route-table-toolbar"><Button theme="light" disabled={blocked} icon={<IconPlus aria-hidden="true"/>} onClick={onAddProvider}>关联服务商及渠道</Button></div>}
-    <Table rowKey="id" pagination={false} scroll={{x:explicit ? 1020 : 1180}} empty="先关联服务商，再配置模型映射与路由。" dataSource={routeTableRows(state,model,serviceId)} columns={[
-      {title:'服务商',width:150,render:(_,data)=>({children:<div className="ss-channel-name"><Typography.Text strong>{data.providerName}</Typography.Text>{!data.service.providerId && <Typography.Text type="tertiary">平台统一模型服务模式</Typography.Text>}{data.provider?.marketVisible===false && <AdminStatus value="已下架"/>}{data.provider?.callsEnabled===false && <AdminStatus value="已停服"/>}</div>,props:{rowSpan:data.span}})},
-      {title:<ModelFieldLabel name="对外调用标识" description="用户调用左侧的模型。平台将请求转发给右侧的上游模型。"/>,width:180,render:(_,data)=>({children:data.service.callId ? <CopyId value={data.service.callId} label="对外调用标识"/> : <Button theme="borderless" disabled={blocked} onClick={()=>onIdentity?.(data.service.providerId)}>配置对外调用标识</Button>,props:{rowSpan:data.span}})},
+    <Table rowKey="id" pagination={false} scroll={{x:explicit ? 910 : 1070}} empty="先关联服务商，再配置模型映射与路由。" dataSource={routeRows} columns={[
+      {title:'服务商',width:150,render:(_,data)=>({children:<div className="ss-channel-name"><Typography.Text strong>{data.providerName}</Typography.Text>{!data.service.providerId && <Typography.Text type="tertiary">平台统一模型服务模式</Typography.Text>}{data.provider && offerStage(model,data.provider)==='withdrawn' && <AdminStatus value="已下架"/>}{data.provider?.callsEnabled===false && <AdminStatus value="已停服"/>}</div>,props:{rowSpan:data.span}})},
+      {title:<ModelFieldLabel name="对外调用标识" description="用户调用左侧的模型。平台将请求转发给右侧的上游模型。"/>,width:180,render:(_,data)=>({children:data.service.callId ? <CopyId value={data.service.callId} label="对外调用标识"/> : <Button theme="borderless" disabled={blocked} onClick={()=>onIdentity?.(offerKey(data.service))}>配置对外调用标识</Button>,props:{rowSpan:data.span}})},
       ...(explicit ? [] : [{title:'路由策略',width:160,render:(_,data)=>({children:<Button theme="borderless" disabled={blocked} aria-label={`${data.service.name}：${data.config ? strategyName(data.config.strategy) : '尚未配置'}，编辑路由`} onClick={event=>open(event,data.service)}><span className="ss-field-stack"><strong>{data.config ? strategyName(data.config.strategy) : '尚未配置'}</strong>{data.config?.strategy==='weighted' && <Typography.Text type="tertiary">合计 {data.rows.reduce((sum,item)=>sum+Number(item.weight),0)}%</Typography.Text>}{!data.current && data.last && <Typography.Text type="tertiary">已停用</Typography.Text>}{data.current && !data.status.good && <Typography.Text type="danger">需调整</Typography.Text>}</span><IconArrowRight aria-hidden="true"/></Button>,props:{rowSpan:data.span}})}]),
       {title:explicit ? '主渠道' : '上游渠道',width:160,render:(_,data)=>data.row ? <div className="ss-channel-name">{data.service.mode==='standard' && <Typography.Text strong>{data.channel?.provider?.name || '服务商缺失'}</Typography.Text>}<Typography.Text>{data.channel?.channelName || '映射已失效'}</Typography.Text>{data.channel && !data.channel.available && <Typography.Text type="danger">{data.channel.reason}</Typography.Text>}{explicit && !data.current && data.last && <AdminStatus value="已停用"/>}{explicit && data.current && !data.status.good && <AdminStatus value="需调整"/>}{!explicit && data.config.strategy==='weighted' && <Typography.Text type="tertiary">{data.row.weight}%</Typography.Text>}</div> : <Typography.Text type="tertiary">待选择渠道</Typography.Text>},
-      {title:<ModelFieldLabel name="上游模型标识"/>,width:160,render:(_,data)=>data.channel?.upstreamModelId ? <CopyId value={data.channel.upstreamModelId} label="上游模型标识"/> : '—'},
-      {title:'操作',width:270,fixed:'right',render:(_,data)=>({props:{rowSpan:data.span},children:<Space wrap>
-        <Button theme="borderless" disabled={blocked} onClick={event=>open(event,data.service)}>{explicit ? '选择主渠道' : '编辑路由'}</Button>
-        {onIdentity && <Button theme="borderless" disabled={blocked} onClick={()=>ops.proceed(()=>onIdentity(data.service.providerId))}>编辑调用标识</Button>}
-        <Button theme="borderless" disabled={blocked} onClick={()=>ops.proceed(()=>setMaintenance(data.service))}>模型映射</Button>
+      {title:<ModelFieldLabel name="上游模型标识"/>,render:(_,data)=>data.channel?.upstreamModelId ? <CopyId value={data.channel.upstreamModelId} label="上游模型标识"/> : '—'},
+      {title:'操作',width:160,fixed:'right',render:(_,data)=>({props:{rowSpan:data.span},children:<Space vertical align="start" spacing={4}>
+        <Button id={routeActionId(data.service.id)} theme="borderless" disabled={blocked} onClick={event=>open(event,data.service)}>{explicit ? '选择主渠道' : '编辑路由'}</Button>
+        {onIdentity && <Button theme="borderless" disabled={blocked} onClick={()=>ops.proceed(()=>onIdentity(offerKey(data.service)))}>编辑调用标识</Button>}
+        <Button theme="borderless" onClick={()=>showMappings(data.service.id)}>模型映射</Button>
         {!draftOnly && (data.current || serviceRoute(state,data.service.id)?.draft) && <Button theme="borderless" type="danger" disabled={blocked} onClick={()=>lifecycleOpen(data.service,'serviceRouteStop')}>停用路由</Button>}
         {!draftOnly && !data.current && data.last && <Button theme="borderless" disabled={blocked} onClick={()=>lifecycleOpen(data.service,'serviceRouteRestore')}>恢复路由</Button>}
-        {data.service.providerId && onProviderState && <Button theme="borderless" disabled={blocked} onClick={()=>onProviderState(data.service.providerId,'serviceProviderServing',data.provider?.callsEnabled===false)}>{data.provider?.callsEnabled===false?'恢复服务商服务':'停用服务商服务'}</Button>}
-        {data.service.providerId && data.provider?.marketVisible===false && onRemoveProvider && <Button theme="borderless" type="danger" disabled={blocked} onClick={()=>onRemoveProvider(data.service.providerId)}>解绑服务商</Button>}
+        {data.service.providerId && onProviderState && <Button theme="borderless" disabled={blocked} onClick={()=>onProviderState(offerKey(data.service),'serviceProviderServing',data.provider?.callsEnabled===false)}>{data.provider?.callsEnabled===false?'恢复服务':'停用服务'}</Button>}
+        {data.service.providerId && (data.service.channelId ? !['formal','gray'].includes(offerStage(model,data.provider)) : data.provider?.marketVisible===false) && onRemoveProvider && <Button theme="borderless" type="danger" disabled={blocked} onClick={()=>onRemoveProvider(offerKey(data.service))}>解绑</Button>}
       </Space>})},
     ]}/>
 
-    {ops.error && !editor && !maintenance && !lifecycle && <Notice error>{ops.error}</Notice>}
+    {ops.error && !editor && !mappingService && !lifecycle && <Notice error>{ops.error}</Notice>}
     {lifecycle && <Modal title={lifecycle.operation==='serviceRouteStop'?'停用路由':'恢复路由'} description={model.name+' · '+lifecycle.service.name} onClose={()=>!running && setLifecycle(null)} footer={<><Button disabled={running} onClick={()=>setLifecycle(null)}>取消</Button><Button theme="solid" loading={running} disabled={blocked || running} onClick={async()=>{setRunning(true);try{if(await ops.run(lifecycle.operation,{serviceId:lifecycle.service.id,expectedVersion:lifecycle.expectedVersion,sourceVersion:lifecycle.sourceVersion,confirmed:true},model.id))setLifecycle(null);}finally{setRunning(false);}}}>确认{lifecycle.operation==='serviceRouteStop'?'停用':'恢复'}</Button></>}><Typography.Paragraph>{lifecycle.operation==='serviceRouteStop'?'停止当前路由并清空未发布草稿，保留模型映射、接入资源和历史。':'恢复停用前的路由配置，重新检查渠道，不自动上架。'}</Typography.Paragraph>{ops.error && <Notice error>{ops.error}</Notice>}</Modal>}
     {editor && <RouteEditor key={editor.service.id} state={state} service={editor.service} ops={ops} side={editor.side} focusChannel={editor.channelId} close={close}/>}
-    {maintenance && <Modal drawer wide drawerSide="left" title="模型映射" description={`${model.name} · ${maintenance.name}`} onClose={() => ops.proceed(() => setMaintenance(null))}><ServiceModelMappings state={state} service={maintenance} ops={ops} onRoute={() => ops.proceed(() => setMaintenance(null))}/></Modal>}
+    {mappingService && <ServiceModelMappings key={mappingService.id} sectionRef={mappingSection} state={state} service={mappingService}
+      services={services} onServiceChange={showMappings}
+      ops={ops} showPageError={!editor && !lifecycle}
+      onRoute={() => document.getElementById(routeActionId(mappingService.id))?.focus()}/>}
   </div>;
 }
 

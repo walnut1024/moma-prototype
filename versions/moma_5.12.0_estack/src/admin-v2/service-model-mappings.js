@@ -14,14 +14,14 @@ export function mappingCandidates(state,service) {
   const master=libraryRecord(state,service.modelId);
   return supplierDirectory(state).filter(provider=>!service.providerId || provider.id===service.providerId).flatMap(provider=>displayedCatalogueIds(provider,state).flatMap(catalogueModelId=>catalogueChannels(state,provider,catalogueModelId).flatMap(channel=>{
     let source;try{source=resolveChannelAssociationModel(state,provider,channel);}catch{return [];}
-    if(!master || source.id!==master.id)return [];
+    if(!master || source.id!==master.id || service.channelId && channel.id!==service.channelId)return [];
     return [{...channel,provider,catalogueModelId,selectionId:JSON.stringify([provider.id,channel.id]),reason:channelBlockReason(provider,channel)}];
   })));
 }
 function relation(state,service,config) {
   const provider=state.providers.find(row=>row.id===config.providerId);
   const channel=provider && catalogueChannels(state,provider,config.catalogueModelId).find(row=>row.id===config.associationId && row.endpointId===config.endpointId && row.upstreamModelId===config.upstreamModelId);
-  if(!channel || service.providerId && service.providerId!==provider.id)throw Error('服务商或渠道模型关联已变化，请重新选择');
+  if(!channel || service.providerId && service.providerId!==provider.id || service.channelId && channel.id!==service.channelId)throw Error('服务商或渠道模型关联已变化，请重新选择');
   const source=resolveChannelAssociationModel(state,provider,channel),master=libraryRecord(state,service.modelId);
   if(!master || source.id!==master.id)throw Error('只能选择当前模型资料对应的供给，不能按名称关联其他模型');
   return {...channel,provider,catalogueModelId:config.catalogueModelId};
@@ -75,7 +75,7 @@ function checkedConfig(state,service,input,supply) {
   const channel=relation(state,service,config),reason=channelBlockReason(channel.provider,channel);
   if(reason)throw Error(reason);
   if(!mappingInterfaces(service.model).some(([id])=>id===config.platformInterface))throw Error('请选择当前模型支持的平台接口');
-  const duplicate=state.modelSupplies.some(row=>row.id!==supply?.id && row.modelId===service.modelId && row.status!=='已移除' && (row.endpointId===config.endpointId || row.serviceMapping?.pending?.config.endpointId===config.endpointId));
+  const duplicate=state.modelSupplies.some(row=>row.id!==supply?.id && row.modelId===service.modelId && row.status!=='已移除' && (row.channelId===config.associationId || !row.channelId && row.endpointId===config.endpointId && row.upstreamModelId===config.upstreamModelId || row.serviceMapping?.pending?.config.associationId===config.associationId));
   if(duplicate)throw Error('该渠道已建立模型映射，请维护原映射');
   return config;
 }
@@ -86,7 +86,7 @@ export function serviceMappingTransaction(state,{operation,modelId,data={}}) {
   if(operation==='serviceMappingCreate' && data.id)throw Error('新增映射不能提交已有映射标识');
   const supply=data.id && state.modelSupplies.find(row=>row.id===data.id && row.modelId===modelId && row.status!=='已移除');
   const providerId=supply && (supply.providerId || state.endpoints.find(row=>row.id===supply.endpointId)?.providerId);
-  if(data.id && (!supply || service.providerId && providerId!==service.providerId))throw Error('当前服务的模型映射已不存在');
+  if(data.id && (!supply || service.providerId && providerId!==service.providerId || service.channelId && supply.channelId!==service.channelId))throw Error('当前服务的模型映射已不存在');
   if(supply && data.expectedRevision!==(supply.mappingRevision || 0))throw Error('模型映射已有修订，请重新核对');
   const time=new Date().toISOString(),changes=[];
   const update=(id,patch)=>changes.push({type:'update',collection:'modelSupplies',id,changes:{...patch,mappingRevision:(supply?.mappingRevision || 0)+1,updatedAt:time}});

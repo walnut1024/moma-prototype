@@ -108,9 +108,9 @@ test('invalid custom edits and duplicates reject atomically including disabled n
   let state = save(createAdminSeed(), { kind: 'scenario', name: '自定义输入' });
   const id = find(state, '自定义输入').id;
   const before = JSON.stringify(state);
-  for (const kind of ['wrong', 'constructor', '__proto__']) assert.throws(() => save(state, { kind, name: 'bad' }), /计费项、计价单位或货币/);
+  for (const kind of ['wrong', 'constructor', '__proto__']) assert.throws(() => save(state, { kind, name: 'bad' }), /计费项、计费单位或货币/);
   for (const name of ['', 'x'.repeat(81), '输入\n输出']) assert.throws(() => save(state, { kind: 'scenario', name }), /计费项/);
-  for (const name of ['', '计量\n单位', 'x'.repeat(41)]) assert.throws(() => save(state, { kind: 'unit', name }), /计价单位/);
+  for (const name of ['', '计量\n单位', 'x'.repeat(41)]) assert.throws(() => save(state, { kind: 'unit', name }), /计费单位/);
   for (const name of [' 自定义输入 ', ' 输入 Token ']) assert.throws(() => save(state, { kind: 'scenario', name }), /已存在/);
   assert.throws(() => save(state, { kind: 'unit', name: '百万 TOKEN' }), /已存在/);
   assert.throws(() => save(state, { id: 'missing', kind: 'scenario', name: '场景' }), /不存在/);

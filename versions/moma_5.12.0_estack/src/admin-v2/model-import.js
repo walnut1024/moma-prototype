@@ -1,10 +1,11 @@
 import mockConfig from '../mock/catalogues.json' with {type:'json'};
 import { parseDelimitedCells } from '../tabular-import.mjs';
 import { modelTransaction } from './model-management.js';
-import { MODEL_CATALOGUE_TYPES, modelLibrary } from './model-library.js';
+import { MODEL_CATALOGUE_TYPES, modelCatalogue, modelLibrary } from './model-library.js';
 import { IDENTITY_FIELDS, TECHNICAL_FIELDS, PRESENTATION_FIELDS, COMMON_FIELDS, INTERFACE_FIELDS, RECORD_FIELDS, FEATURE_FIELDS, ARCHITECTURE_OPTIONS, LICENSE_OPTIONS, TASK_OPTIONS, specificationFields } from './model-profile.js';
 
 export const MODEL_IMPORT_LIMIT = 500;
+export const IMPORT_REPORT_HEADERS = ['原文件行', '处理结果'];
 const column = (key, label, target = 'profile', kind = 'text') => ({ key, label, target, kind });
 const header = field => field.label + (field.unit ? `（${field.unit}）` : '');
 const profileFields = [...IDENTITY_FIELDS, ...TECHNICAL_FIELDS, ...PRESENTATION_FIELDS, ...COMMON_FIELDS, ...INTERFACE_FIELDS, ...FEATURE_FIELDS, ...Object.keys(TASK_OPTIONS).flatMap(type => specificationFields(type, '', { tasks: TASK_OPTIONS[type] })), ...RECORD_FIELDS, column('detailDescription', '详细介绍')];
@@ -27,7 +28,7 @@ export function modelRowsFromCells(cells) {
   const clean = cells.map(row => row.map(cell => cell instanceof Date ? cell.toISOString().slice(0, 10) : String(cell ?? '').trim()));
   const labels = (clean[0] || []).map(label => MODEL_IMPORT_HEADERS[MODEL_IMPORT_TEMPLATE_HEADERS.indexOf(label)] || label);
   if (MODEL_IMPORT_REQUIRED_HEADERS.some(label => !labels.includes(label))) throw new Error('表头不匹配，请下载最新模板，保留规范模型标识、模型名称和模型类型');
-  if (new Set(labels).size !== labels.length || labels.some(label => !MODEL_IMPORT_HEADERS.includes(label))) throw new Error('表头含重复或未知字段，请使用最新模板，可删除不需要的可选列');
+  if (new Set(labels).size !== labels.length || labels.some(label => !MODEL_IMPORT_HEADERS.includes(label) && !IMPORT_REPORT_HEADERS.includes(label))) throw new Error('表头含重复或未知字段，请使用最新模板，可删除不需要的可选列');
   const rows = clean.slice(1).map((row, index) => ({ rowNumber: index + 2, cells: row })).filter(row => row.cells.some(Boolean));
   if (!rows.length) throw new Error('没有可导入的模型，请填写至少一条记录');
   if (rows.length > MODEL_IMPORT_LIMIT) throw new Error(`每批最多 ${MODEL_IMPORT_LIMIT} 条，请拆分后导入`);
@@ -40,8 +41,14 @@ const choices = {
   support: [['supported', '支持'], ['unsupported', '不支持']], lifecycle: [['stable', '稳定版'], ['preview', '预览版'], ['deprecated', '已退役']],
   confirmation: [['pending', '待核对'], ['confirmed', '已核对']], architecture: ARCHITECTURE_OPTIONS, license: LICENSE_OPTIONS,
 };
-export function validateModelRows(state, rows, { catalogue = true } = {}) {
+export function validateModelRows(state, rows, { catalogue = true, reuseExisting = false } = {}) {
   const seen = new Set();
+  const library = new Map();
+  for (const model of modelLibrary(state)) {
+    const code = model.modelId.toLowerCase();
+    library.set(code, library.has(code) ? null : model);
+  }
+  const active = reuseExisting ? new Set(modelCatalogue(state).map(model => model.id)) : null;
   return rows.map(row => {
     const values = Object.fromEntries(MODEL_IMPORT_HEADERS.map((label, index) => [label, row.cells[index] || '']));
     const tasks = split(values['支持任务']);
@@ -67,11 +74,27 @@ export function validateModelRows(state, rows, { catalogue = true } = {}) {
         if (field.target === 'capabilities' && field.kind === 'number' && (!Number.isSafeInteger(Number(raw)) || Number(raw) < 1)) throw new Error(`${field.header}需为正整数`);
         data[field.target][field.key] = value;
       }
-      if (catalogue && modelLibrary(state).some(model => model.modelId.toLowerCase() === data.modelId.toLowerCase())) throw new Error('规范模型标识已存在，请维护已有模型资料');
-      const record = modelTransaction(state, { operation: 'create', data, catalogue }).changes[0].record;
-      if (seen.has(data.modelId.toLowerCase())) throw new Error('批次内规范模型标识重复');
-      seen.add(data.modelId.toLowerCase());
-      return { ...row, data: { ...data, profile: record.profile, capabilities: record.capabilities, maker: record.maker }, status: 'ready', message: '可导入' };
+      const code = data.modelId.toLowerCase(), existing = catalogue ? library.get(code) : null;
+      if (catalogue && existing === null) throw new Error('规范模型标识匹配到多份资料，请先核对主档');
+      if (existing && !reuseExisting) throw new Error('规范模型标识已存在，请维护已有模型资料');
+      if (existing && !active.has(existing.id)) throw new Error('规范模型标识已被归档资料使用，请核对');
+      const validationState = existing ? { ...state, models: state.models.filter(model => model.modelId.toLowerCase() !== code) } : state;
+      const record = modelTransaction(validationState, { operation: 'create', data, catalogue }).changes[0].record;
+      if (seen.has(code)) throw new Error('批次内规范模型标识重复');
+      if (existing) {
+        const same = (left, right) => JSON.stringify(Array.isArray(left) ? [...left].sort() : left)
+          === JSON.stringify(Array.isArray(right) ? [...right].sort() : right);
+        const differences = MODEL_IMPORT_FIELDS.filter(({ target, key, header }) => {
+          if (!values[header] || ['modelId', 'visualType'].includes(key)) return false;
+          const before = (target === 'model' ? existing : existing[target])?.[key];
+          const after = (target === 'model' ? record : record[target])?.[key];
+          return before != null && before !== '' && after != null && !same(before, after);
+        });
+        if (differences.length) throw new Error('与已有模型资料不一致：' + differences.map(field => field.header).join('、'));
+      }
+      seen.add(code);
+      return { ...row, data: { ...data, profile: record.profile, capabilities: record.capabilities, maker: record.maker }, ...(existing ? { modelId: existing.id } : {}),
+        status: 'ready', message: existing ? '复用已有模型资料' : '可导入' };
     } catch (error) { return { ...row, data, status: 'error', message: error.message }; }
   });
 }

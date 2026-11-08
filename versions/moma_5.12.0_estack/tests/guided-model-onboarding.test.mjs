@@ -118,7 +118,7 @@ for (const mode of ['standard', 'provider']) test(`${mode}: one exact model comp
   active=guidedOnboarding(state,activeId);assert.equal(active.completed,false);assert.equal(active.serviceReady,true,JSON.stringify({issue:active.candidateIssue,checks:active.checks.filter(row=>!row.passed)}));
   assert.equal(active.step,3);
   storage.setItem(STORAGE_KEY,serializeAdminState(state));
-  const activePlan=platformCandidatePlan(active.candidateState,active.model,{serviceId:targetService.id,tenantIds:originalModel.tenantIds,supplyIds:active.candidateState.serviceRoutes.find(row=>row.serviceId===targetService.id).versions.at(-1).config.channels.map(row=>row.supplyId)});
+  const activePlan=platformCandidatePlan(active.candidateState,active.model,{serviceId:targetService.id,tenantIds:['tenant-gov'],supplyIds:active.candidateState.serviceRoutes.find(row=>row.serviceId===targetService.id).versions.at(-1).config.channels.map(row=>row.supplyId)});
   const activeTrial=await runPlatformTrial(activePlan),restored=recoverPlatformTrial(activePlan);assert.ok(restored);assert.equal(restored.result.traceId,activeTrial.result.traceId);
   const apply={type:'modelOperations',operation:'guidedPublish',modelId:active.model.id,data:{draftId:activeId,expectedDraftRevision:active.draft.draftRevision,serviceId:targetService.id,mockServiceId:activeTrial.service.id,expectedMockRevision:activeTrial.service.revision,publishedVersion:activeTrial.service.candidateVersion,expectedFingerprint:activeTrial.publicationFingerprint,operationId:crypto.randomUUID(),confirmed:true}};
   const mainBefore=storage.getItem(STORAGE_KEY),mockBefore=JSON.stringify(getMockServiceSnapshots());
@@ -132,7 +132,7 @@ for (const mode of ['standard', 'provider']) test(`${mode}: one exact model comp
 
 test('sales validation is atomic and rejects missing money, stale revisions, changed mode and mismatched task identity', async t => {
   environment(t); let { state, id } = await connected(t); const context = guidedOnboarding(state, id), before = structuredClone(state), valid = sales(state, id);
-  for (const patch of [{ prices: valid.prices.map(row => ({ ...row, amount: '' })) }, { prices: valid.prices.map(row => ({ ...row, currency: 'USD' })) }, { expectedPriceRevision: 100 }, { expectedUpdatedAt: 'stale' }, { confirmed: false }, { draftId: 'another-task' }, { openScope: 'selected', tenantIds: [] }]) {
+  for (const patch of [{ prices: valid.prices.map(row => ({ ...row, amount: '' })) }, { prices: valid.prices.map(row => ({ ...row, currency: 'USD' })) }, { expectedPriceRevision: 100 }, { expectedUpdatedAt: 'stale' }, { confirmed: false }, { draftId: 'another-task' }]) {
     assert.throws(() => run(state, 'guidedServiceConfigure', { ...valid, ...patch }, context.model.id)); assert.deepEqual(state, before);
   }
   assert.throws(() => run(state, 'guidedServiceConfigure', valid, 'another-model'), /不匹配/);

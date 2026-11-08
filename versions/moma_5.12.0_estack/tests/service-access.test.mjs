@@ -54,17 +54,17 @@ test('manager identity controls permission and audit regardless of a forged role
   next.admins.find(row=>row.id==='admin-link-system').status='已停用';assert.throws(()=>activeAdmin(next));
   assert.throws(()=>persistAdminAction(next,{type:'setRole',role:'平台管理员'},storage));
 });
-test('S1–S4 scope intersection applies to enterprise A, B and personal P, independently per provider service', () => {
+test('gray eligibility applies to enterprise A, B and personal P per provider and ignores retired model scope', () => {
   const tenants=['tenant-gov','tenant-nanjing','personal-demo-001'];
   const state={tenants:tenants.map(id=>({id,status:'正常'})),grants:[],models:[]};
   for (const [index,scope] of [[0,[tenants[0],tenants[2]]],[1,[tenants[1]]],[2,tenants],[3,[]]]) {
-    const model={id:`s${index}`,modelId:`call${index}`,serviceMode:'provider',serviceProviders:[{providerId:'p1',callId:`c${index}p1`},{providerId:'p2',callId:`c${index}p2`}],listingStatus:'已上架',visibility:'公开',callsEnabled:true,openScope:'selected',tenantIds:scope};
+    const model={id:`s${index}`,modelId:`call${index}`,serviceMode:'provider',serviceProviders:[{providerId:'p1',callId:`c${index}p1`},{providerId:'p2',callId:`c${index}p2`}],listingStatus:'已上架',visibility:'公开',callsEnabled:true,releaseStage:'gray',releaseTenantIds:scope,openScope:'selected',tenantIds:[]};
     state.models=[model]; model.platformPublications=['p1','p2'].map(p=>({serviceId:`provider:${model.id}:${p}`,mockServiceId:p,source:'mock'}));
     const refs=serviceReferences(state);
     for(const ref of refs) for(const tenantId of tenants) {
       const live={id:ref.providerId,published:{config:{publicModelId:ref.callId,tenantIds:tenants}}};
       assert.equal(serviceAccess(state,ref,tenantId,live).allowed,scope.includes(tenantId));
-      live.published.config.tenantIds=[];assert.equal(serviceAccess(state,ref,tenantId,live).allowed,false);
+      live.published.config.tenantIds=[];assert.equal(serviceAccess(state,ref,tenantId,live).allowed,scope.includes(tenantId));
     }
     model.listingStatus='已下架';assert.equal(serviceAccess(state,refs[0],tenants[0],{}).allowed,false);
   }

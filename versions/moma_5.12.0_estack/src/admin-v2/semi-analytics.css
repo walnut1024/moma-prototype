@@ -28,8 +28,16 @@
 .admin-analysis-plot-grid > * { min-width: 0; }
 @media (max-width: 760px) { .admin-analysis-plot-grid { grid-template-columns: minmax(0, 1fr); } }
 .admin-analysis-filter-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--admin-control-gap); }
+.admin-observation-supply.semi-cascader { width: min(100%, 272px); }
+.admin-observation-supply .semi-tagInput-wrapper { flex-wrap: nowrap; }
+.admin-observation-supply .semi-cascader-selection-tag { min-width: 0; }
+.admin-observation-supply .semi-tagInput-wrapper-n { flex: none; padding-inline: 4px; }
+.admin-observation-supply-menu .semi-cascader-option-lists:not(.semi-cascader-option-lists-empty) { height: min(264px, 40dvh); }
+.admin-observation-supply-menu .semi-cascader-option-list { min-width: min(152px, 40vw); max-width: min(232px, 43vw); }
+.admin-observation-supply-menu .semi-cascader-option-label { min-width: 0; white-space: normal; overflow-wrap: anywhere; word-break: normal; }
 .admin-analysis-metric-label { align-items: center; flex-wrap: nowrap; min-height: 32px; }
 .admin-analysis-metric-label > :first-child { min-width: 0; overflow-wrap: anywhere; }
+.admin-analysis-metrics.admin-call-metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 148px), 1fr)); }
 .admin-date-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .admin-date-pair > div { display: grid; gap: 4px; }
 .admin-date-pair .semi-datepicker { width: 100%; min-width: 0; }

@@ -21,3 +21,9 @@
 @media(max-width:1450px){.market-provider-offer>summary{gap:14px;padding:20px;grid-template-columns:minmax(150px,1.1fr) minmax(70px,.6fr) minmax(140px,1fr) auto auto}.market-provider-status{display:none}.market-detail-stats{gap:16px}}
 @media(max-width:1000px){.market-detail-sheet{margin:20px;padding:0 20px 28px}.market-detail-breadcrumb{padding:20px}.market-provider-offer>summary{grid-template-columns:1fr auto;gap:12px}.market-provider-meter{display:none}.market-provider-price{font-size:16px}.market-detail-stats>div{padding:14px}.market-detail-stats dd{font-size:16px}}
 @media(max-width:650px){.market-detail-title h1{font-size:23px}.market-detail-sheet{margin:12px;padding:0 16px 24px}.market-detail-stats,.market-detail-metadata dl{grid-template-columns:1fr}.market-detail-hero{padding:24px 0}.market-detail-breadcrumb{font-size:15px;padding:16px;gap:10px}.market-provider-offer>summary,.market-provider-content,.market-api-step-body{padding:16px}.market-provider-name{font-size:16px}.market-api-step>summary{padding:16px}.market-provider-actions>span{flex-basis:100%}}
+
+.market-session{display:flex;gap:12px;align-items:center;margin:0 0 12px}.market-detail-session{display:flex;justify-content:flex-end;padding:8px clamp(16px,3vw,32px);background:#fff}.market-detail-session .market-session{margin:0}
+.market-action-form{display:grid;gap:12px}
+.market-action-form label:not(.market-agreement){display:grid;gap:6px}
+.market-agreement{display:flex;gap:8px;align-items:center}
+.market-call-input{width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;resize:vertical}

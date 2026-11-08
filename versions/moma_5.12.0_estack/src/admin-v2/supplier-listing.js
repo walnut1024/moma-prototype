@@ -66,7 +66,6 @@ export function supplierBatchEntry(state, row) {
     prices: saleItemsDraft(row.costs, priceItems(row.sale, row.master)),
     sourceVersion: procurementVersion(row.cost),
     expectedSaleVersion: row.supply ? latestSaleRevision(state, row.supply.id) : '',
-    listingScope: null,
   };
 }
 export function supplierPublishEntry(row) {

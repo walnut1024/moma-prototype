@@ -1,3 +1,4 @@
+import { offerKey, providerOffer } from '../service-access.mjs';
 import { ROUTING_POLICIES, unifiedRouteStrategies, withinRouteLimits } from './routing-policy.js';
 import { modelSupplies, availableSupplies, activeSupplyPrice, supplyModelUrl, priceItems } from './model-management.js';
 import { connectionFingerprint, connectionBlockReason } from './connection-state.js';
@@ -21,13 +22,13 @@ const metric=(values,integer=false)=>values.find(value=>typeof value==='number' 
 
 // Existing public model IDs and supplier call IDs are read-only service references.
 export function routingServices(state) {
-  return state.models.flatMap(model=>model.serviceMode==='standard' ? [{id:'standard:'+model.id,modelId:model.id,name:'统一模型服务模式',mode:'standard',callId:model.modelId,model,providerId:null}] : model.serviceMode==='provider' ? providerServices(model).map(entry=>({id:providerServiceId(model.id,entry.providerId),modelId:model.id,name:state.providers.find(provider=>provider.id===entry.providerId)?.name || '服务商已不存在',mode:'provider',callId:entry.callId,model,providerId:entry.providerId})) : []);
+  return state.models.flatMap(model=>model.serviceMode==='standard' ? [{id:'standard:'+model.id,modelId:model.id,name:'统一模型服务模式',mode:'standard',callId:model.modelId,model,providerId:null}] : model.serviceMode==='provider' ? providerServices(model).map(entry=>({id:providerServiceId(model.id,offerKey(entry)),modelId:model.id,name:(state.providers.find(provider=>provider.id===entry.providerId)?.name || '服务商已不存在') + (entry.channelName ? `（${entry.channelName}）` : ''),mode:'provider',callId:entry.callId,model,providerId:entry.providerId,...(entry.channelId ? {channelId:entry.channelId} : {})})) : []);
 }
 
 export function routingChannels(state, service, at = Date.now(), { runtime = false } = {}) {
   const ready=new Set(availableSupplies(state,service.modelId,service.model.capabilities).map(item=>item.id));
-  const callId=service.providerId?providerServices(service.model).find(entry=>entry.providerId===service.providerId)?.callId:service.model.modelId;
-  return modelSupplies(state,service.modelId).filter(supply=>!service.providerId || supply.provider?.id===service.providerId).map(supply=>{
+  const callId=service.providerId?providerOffer(service.model,offerKey(service))?.callId:service.model.modelId;
+  return modelSupplies(state,service.modelId).filter(supply=>(!service.providerId || supply.provider?.id===service.providerId) && (!service.channelId || supply.channelId===service.channelId)).map(supply=>{
     const channel=supply.provider && catalogueChannels(state,supply.provider,supply.catalogueModelId || supply.upstreamModelId).find(item=>item.endpointId===supply.endpointId && item.upstreamModelId===supply.upstreamModelId);
     const url=channel ? channelUrl(supply.provider,channel) : supplyModelUrl(supply,service.model);
     const costs=channel?.managed ? serviceChannelCosts(channel, at) : priceItems(activeSupplyPrice(state,supply.id,at),service.model);
@@ -47,7 +48,7 @@ export function routingChannels(state, service, at = Date.now(), { runtime = fal
 export const serviceRoute = (state, serviceId) => (state.serviceRoutes || []).find(item => item.serviceId === serviceId);
 export const activeRouteVersion = route => route?.versions.find(item => item.version === route.activeVersion);
 export const lastRouteVersion = route => route?.versions.reduce((last,item)=>!last || item.version>last.version?item:last,null);
-export const routeStopReason = service => service.model.listingStatus==='已上架' && service.model.callsEnabled!==false && (!service.providerId || providerServices(service.model).find(row=>row.providerId===service.providerId)?.callsEnabled!==false) ? (service.providerId?'请先停服当前服务商，再停用路由。其他服务商不受影响。':'请先在模型页头下架并停用服务，再停用路由。隐藏模型不能代替停服。') : '';
+export const routeStopReason = service => service.model.listingStatus==='已上架' && service.model.callsEnabled!==false && (!service.providerId || providerOffer(service.model,offerKey(service))?.callsEnabled!==false) ? (service.providerId?'请先停服当前服务商，再停用路由。其他服务商不受影响。':'请先在模型页头下架并停用服务，再停用路由。隐藏模型不能代替停服。') : '';
 export const emptyRouteConfig = service => ({ strategy:service?.mode==='standard'?'weighted':'fixed', groups:[{id:'P1',name:'默认组',strategy:service?.mode==='standard'?'weighted':'fixed'}], channels: [], autoFailover:false, excludeAbnormal:true, autoRecover:false, advanced:{...ROUTE_ADVANCED_DEFAULTS} });
 
 export function routeGroups(config) {

@@ -26,8 +26,8 @@ test('short guides resolve every section and task link without leaving the guide
   const guides = parseOperationsGuide(source), tasks = guides.flatMap(guide => guide.tasks);
   const ids = [...guides.map(guide => guide.id), ...tasks.map(task => task.id)];
   assert.equal(new Set(ids).size, ids.length);
-  assert.deepEqual(guides.map(guide => guide.id), ['overview', 'channels', 'services', 'costs', 'sales', 'materials', 'maintenance']);
-  for (const link of source.matchAll(/\]\(#([^)]+)\)/g)) {
+  assert.deepEqual(guides.map(guide => guide.id), ['overview', 'channels', 'services', 'market', 'costs', 'sales', 'materials', 'maintenance']);
+  for (const link of source.matchAll(/\]\(#([a-z0-9-]+)\)/g)) {
     assert.ok(ids.includes(link[1]), link[1]);
     const guide = findOperationsGuide(guides, link[1]);
     assert.ok(guide.id === link[1] || guide.tasks.some(task => task.id === link[1]));
@@ -40,14 +40,30 @@ test('short guides resolve every section and task link without leaving the guide
   assert.equal(findOperationsGuide(guides, 'unknown-guide'), guides[0]);
 });
 
+test('overview links to the same six model operations pages as the sidebar', () => {
+  const source = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE.md', import.meta.url), 'utf8');
+  const [overview, ...guides] = parseOperationsGuide(source);
+  const menu = sections.find(group => group.id === 'models').items;
+  const links = overview.blocks.filter(block => block.type === 'table').flatMap(block => block.rows)
+    .flatMap(([cell]) => [...cell.matchAll(/^\[([^\]]+)\]\(#\/admin-2\/([^?)]+)(?:\?[^)]+)?\)$/g)]);
+  assert.deepEqual(links.map(([, label, page]) => [label, page]), menu.map(item => [item.label, item.children[0][0]]));
+  assert.deepEqual(guides.slice(0, -1).map(guide => guide.title), menu.map(item => item.label));
+});
+
 test('guide separates internal use from sales and explains current entry points', () => {
   const source = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE.md', import.meta.url), 'utf8');
   const guides = parseOperationsGuide(source);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'overview')), /内部使用不需要用零元售价/);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'services')), /技术验证及启用，不要求售价或销售上架/);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'sales')), /纯内部使用可以跳过/);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'costs')), /模型成本 → 对应服务商、渠道及模型 → 查看成本/);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'sales')), /销售设置/);
+  assert.match(JSON.stringify(guides.find(guide => guide.id === 'overview')), /内部使用无需配置售价/);
+  assert.match(JSON.stringify(guides.find(guide => guide.id === 'services')), /服务操作 → 启用/);
+  assert.match(JSON.stringify(guides.find(guide => guide.id === 'costs')), /表格中按计费项查看渠道采购价/);
+  const sales = JSON.stringify(guides.find(guide => guide.id === 'sales'));
+  assert.match(sales, /纯内部使用可以跳过/);
+  assert.match(sales, /编辑销售设置/);
+  assert.doesNotMatch(sales, /上架操作/);
+  const market = JSON.stringify(findOperationsGuide(guides, 'sales-release'));
+  for (const action of ['上架操作', '灰度上架', '正式上架', '下架', '允许展示', '隐藏模型']) {
+    assert.ok(market.includes(action), action);
+  }
   const imported = guides.flatMap(guide => guide.tasks).find(task => task.id === 'materials-import');
   assert.match(JSON.stringify(imported), /XLSX 或 UTF-8 CSV/);
   assert.match(JSON.stringify(imported), /已有规范标识不覆盖/);

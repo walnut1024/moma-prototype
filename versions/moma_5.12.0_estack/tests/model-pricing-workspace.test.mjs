@@ -2,12 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createAdminSeed} from '../src/admin-v2/store.js';
 import {costRecords,priceRecords,operationsReturn} from '../src/admin-v2/model-pricing-workspace.js';
+import {priceItems} from '../src/admin-v2/model-management.js';
 import {activeModelSalePrice,activeProviderPrice} from '../src/admin-v2/service-workspace.js';
 import {sections,canAccessPage} from '../src/admin-v2/navigation.mjs';
 
-test('five modules share operator permissions while measurement stays a page-level destination',()=>{
-  assert.deepEqual(sections.find(row=>row.id==='models').items.map(row=>row.label),['渠道接入','模型服务','模型成本','模型售价','模型资料']);
-  for(const page of ['model-costs','model-prices','tariff-dictionary']){
+test('model operations modules share operator permissions while measurement stays a page-level destination',()=>{
+  assert.deepEqual(sections.find(row=>row.id==='models').items.map(row=>row.label),['渠道接入','模型服务','模型广场','模型成本','模型售价','模型资料']);
+  for(const page of ['model-market','model-costs','model-prices','tariff-dictionary']){
     assert.equal(canAccessPage('运营人员',page),true);assert.equal(canAccessPage('运维人员',page),false);
   }
 });
@@ -29,7 +30,7 @@ test('expired latest sale never revives an older price for either service mode',
 });
 
 test('cross-page return accepts only supported local management destinations',()=>{
-  for(const path of ['#/admin-2/model-costs?provider=p&association=a','#/admin-2/model-prices?service=provider%3Am%3Ap','#/admin-2/listing?model=m&panel=access'])assert.equal(operationsReturn(path),path);
+  for(const path of ['#/admin-2/model-costs?provider=p&association=a','#/admin-2/model-prices?service=provider%3Am%3Ap','#/admin-2/listing?model=m&panel=access','#/admin-2/model-market?model=m&listing=gray'])assert.equal(operationsReturn(path),path);
   for(const path of ['https://example.com','#/admin-2/admins','#/admin-2/listing\nhttps://example.com',null])assert.equal(operationsReturn(path),null);
 });
 
@@ -67,13 +68,25 @@ test('scrolling price rows merge models across services while retaining each tar
     {id:'s1',modelKey:'a',modelName:'同名模型',model:{},price:{items:[{name:'输入',amount:0,unit:'百万 Token',currency:'CNY'},{name:'输出',amount:2500000,unit:'百万 Token',currency:'USD'}]}},
     {id:'s2',modelKey:'b',modelName:'同名模型',model:{},price:null},
     {id:'s3',modelKey:'a',modelName:'同名模型',model:{},price:{items:[{name:'调用',amount:null,unit:'次',currency:'CNY'}]}},
-  ],before=structuredClone(records),rows=pricingTableRows(records,true);
+  ],before=structuredClone(records),rows=pricingTableRows(records,row=>priceItems(row.price,row.model));
   assert.deepEqual(rows.map(row=>row.id),['s1','s1','s3','s2']);
   assert.deepEqual(rows.map(row=>row.modelSpan),[3,0,0,1]);
-  assert.deepEqual(rows.map(row=>row.serviceSpan),[2,0,1,1]);
+  assert.deepEqual(rows.map(row=>row.recordSpan),[2,0,1,1]);
   assert.equal(new Set(rows.map(row=>row.tableKey)).size,4);
   assert.equal(rows[0].item.amount,0);assert.equal(rows[1].item.currency,'USD');assert.equal(rows[2].item.amount,null);assert.equal(rows[3].item,null);
   assert.deepEqual(records,before);
-  const costs=pricingTableRows(records);assert.equal(costs.length,3);assert.deepEqual(costs.map(row=>row.modelSpan),[2,0,1]);
-  assert.deepEqual(pricingTableRows([]),[]);
+});
+
+test('cost table keeps each channel and tariff, including explicit zero and channels without a quote',async()=>{
+  const {pricingTableRows}=await import('../src/admin-v2/model-pricing-workspace.js');
+  const rows=pricingTableRows([
+    {key:'p:c1',modelKey:'m',items:[{name:'输入',condition:'≤ 32K',amount:0,unit:'百万 Token',currency:'CNY'},{name:'输出',amount:2500000,unit:'百万 Token',currency:'USD'}]},
+    {key:'p:c2',modelKey:'m',items:[]},
+  ],row=>row.items);
+  assert.deepEqual(rows.map(row=>[row.tableKey,row.modelSpan,row.recordSpan]),[['p:c1:0',3,2],['p:c1:1',0,0],['p:c2:0',0,1]]);
+  assert.deepEqual(rows.map(row=>row.item),[
+    {name:'输入',condition:'≤ 32K',amount:0,unit:'百万 Token',currency:'CNY'},
+    {name:'输出',amount:2500000,unit:'百万 Token',currency:'USD'},
+    null,
+  ]);
 });

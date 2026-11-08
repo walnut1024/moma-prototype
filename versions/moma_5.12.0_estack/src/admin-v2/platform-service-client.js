@@ -1,3 +1,4 @@
+import { offerKey } from '../service-access.mjs';
 import { ROUTING_POLICIES } from './routing-policy.js';
 import { servicePurpose } from './service-purpose.js';
 import { activeSupplyPrice, modelSupplies, moneyDisplay } from './model-management.js';
@@ -87,16 +88,15 @@ export function platformCandidatePlan(state, model, { serviceId, tenantIds = [],
   if (!service) issue('服务模式', '请选择当前模型的统一模型服务模式或服务商服务');
   if (!service.callId || /\s/.test(service.callId)) issue('对外调用标识', '请先完善当前服务的对外调用标识');
   if (!tenantIds.length || new Set(tenantIds).size !== tenantIds.length || tenantIds.some(id => !state.tenants?.some(tenant => tenant.id === id && !['已删除', '已停用', '停用'].includes(tenant.status)))) issue('客户范围', '请明确选择有效租户');
-  if (model.openScope !== 'all' && (model.openScope !== 'selected' || tenantIds.some(id=>!model.tenantIds?.includes(id)))) issue('客户范围','验证客户须在已发布的开放范围内');
   const version = activeRouteVersion(serviceRoute(state, service.id));
   if (!version) issue('路由配置', '请先发布当前服务的路由');
   const allowed = platformAllowedChannels(state, service);
   if (!supplyIds.length || supplyIds.length > 20 || new Set(supplyIds).size !== supplyIds.length) issue('允许供给', '请选择 1–20 条已发布路由中的渠道');
   const rows = supplyIds.map(id => allowed.find(row => row.id === id) || issue('允许供给', '选择含未发布或已移除的渠道，请重新选择'));
-  const sale = service.providerId ? activeProviderPrice(state, model.id, service.providerId, at) : activeModelSalePrice(state, model.id, at);
+  const sale = service.providerId ? activeProviderPrice(state, model.id, offerKey(service), at) : activeModelSalePrice(state, model.id, at);
   let salePrices = [];
   if (technical) {
-    if (servicePurpose(model,service.providerId)!=='internal') { try { salePrices=platformPriceVersions(sale,model,'销售价格',at); } catch { /* Missing sale prices do not block technical verification. */ } }
+    if (servicePurpose(model,offerKey(service))!=='internal') { try { salePrices=platformPriceVersions(sale,model,'销售价格',at); } catch { /* Missing sale prices do not block technical verification. */ } }
   } else salePrices=platformPriceVersions(sale,model,'销售价格',at);
   const bindings = rows.map(row => {
     const { supply, association } = row, path = `供应渠道 ${supply?.provider?.name || row.id}`;
@@ -126,7 +126,7 @@ export function platformCandidatePlan(state, model, { serviceId, tenantIds = [],
     }
     return { id: supply.id, localEndpointId: supply.endpoint.id, model: { id: master.id, upstreamModelId: association.upstreamModelId, type: master.type, ...(probe ? { probe } : {}) }, procurementPrices };
   });
-  const candidate = { ...(technical ? { technical: true, purpose: servicePurpose(model,service.providerId) } : {}), name: `${model.name} · ${service.name}`, publicModelId: service.callId, mode: service.mode, tenantIds: [...tenantIds].sort(), bindings, salePrices, capabilities: ['streaming', 'tools', 'structured'].filter(key => model.capabilities?.[key] === true || key === 'structured' && model.profile?.structured === true), route: platformRoute(state, service, version, rows) };
+  const candidate = { ...(technical ? { technical: true, purpose: servicePurpose(model,offerKey(service)) } : {}), name: `${model.name} · ${service.name}`, publicModelId: service.callId, mode: service.mode, tenantIds: [...tenantIds].sort(), bindings, salePrices, capabilities: ['streaming', 'tools', 'structured'].filter(key => model.capabilities?.[key] === true || key === 'structured' && model.profile?.structured === true), route: platformRoute(state, service, version, rows) };
   const fingerprint = JSON.stringify([candidate, rows.map(({ supply, association }) => [connectionFingerprint(supply.endpoint), supply.endpoint.adapterOptions, connectionKeys(supply.endpoint, supply.provider).map(key => [key.id, key.version, key.serverCredentialId]), association.id, association.enabled, association.health, association.capabilityTests, supply.status, supply.provider.status])]);
   return { candidate, fingerprint, publicationFingerprint:platformPublicationFingerprint(state,model,service.id), service, rows, expensive: bindings.some(row => ['image', 'video', 'audio'].includes(row.model.type)) };
 }

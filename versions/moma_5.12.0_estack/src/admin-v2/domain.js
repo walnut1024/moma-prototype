@@ -78,7 +78,6 @@ export function simulateRequest(state, { requestId, keyId, modelId: requestedMod
   else if (model.serviceMode==='provider' && !service) [httpStatus,error]=[403,'provider_service_required'];
   else if (service?.mode === 'provider' && !activeProviderPrice(state,modelId,service.providerId,startedAt)) [httpStatus,error]=[503,'provider_price_unavailable'];
   else if (service?.mode === 'standard' && !activeModelSalePrice(state,modelId,startedAt)) [httpStatus,error]=[503,'model_price_unavailable'];
-  else if (model.openScope === 'selected' && !model.tenantIds.includes(key.tenantId)) [httpStatus, error] = [403, "model_scope_rejected"];
   else if (!grant && key.quotaLimit !== null || grant && grant.limit - grant.used < quantity) [httpStatus, error] = [402, "quota_exhausted"];
   else if (keyRateExceeded || state.limits.some(item => item.scopeType === "key" && item.scopeId === key.id && item.status === "已启用")) [httpStatus, error] = [429, "rate_limit_exceeded"];
   else if (!endpointId) [httpStatus, error] = [503, "no_available_endpoint"];

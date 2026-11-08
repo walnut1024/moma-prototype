@@ -40,9 +40,7 @@ test('batch drafts persist without creating models, enabling services or publish
   const restored = parseAdminState(JSON.stringify(saved));
   assert.equal(restored.modelOnboardings.filter(item => item.providerId === providerId).length, 2);
   assert.equal(supplierBatchEntry(restored, supplierListingRows(restored, restored.providers.find(item => item.id === providerId))[0]).prices[0].amount, '');
-  const scoped = op(state, 'saveSupplierBatch', { providerId, items: entries.map(entry => ({ ...entry, listingScope: { openScope: 'selected', tenantIds: [state.tenants[0].id] } })) });
-  const cleared = op(scoped, 'saveSupplierBatch', { providerId, items: supplierListingRows(scoped, scoped.providers.find(item => item.id === providerId)).map(row => ({ ...supplierBatchEntry(scoped, row), listingScope: null })) });
-  assert.ok(cleared.modelOnboardings.filter(item => item.providerId === providerId).every(item => item.listingScope === null));
+
 });
 
 test('preparation checks all billing items while leaving sales, endpoint and service states unchanged', () => {
@@ -82,14 +80,13 @@ test('historical unsubmitted prices are not restored and direct batch failure is
   assert.deepEqual(ready.state, snapshot);
 });
 
-test('failed final confirmation leaves proposed scopes in drafts without changing any existing model', () => {
-  const { state, providerId, entries } = fixture(), tenantId = state.tenants[0].id;
-  const prepared = op(state, 'prepareSupplierBatch', { providerId, items: entries.map(entry => ({ ...entry, listingScope: { openScope: 'selected', tenantIds: [tenantId] } })) });
+test('failed final confirmation leaves drafts and existing models unchanged', () => {
+  const { state, providerId, entries } = fixture();
+  const prepared = op(state, 'prepareSupplierBatch', { providerId, items: entries });
   const drafts = prepared.modelOnboardings.filter(item => item.providerId === providerId);
-  assert.ok(drafts.every(draft => prepared.models.find(model => model.id === draft.modelId).openScope === 'all'));
   const before=structuredClone(prepared);
   assert.throws(()=>op(prepared, 'publishSupplierBatch', { providerId, items: publication(prepared, providerId) }),/服务模式/);
-  assert.deepEqual(prepared,before);assert.ok(drafts.every(draft=>draft.listingScope.openScope==='selected' && draft.listingScope.tenantIds[0]===tenantId));
+  assert.deepEqual(prepared,before);assert.ok(drafts.every(draft=>!Object.hasOwn(draft,'listingScope')));
   assert.deepEqual(prepared.models.filter(model => state.models.some(old => old.id === model.id)), state.models);
 });
 

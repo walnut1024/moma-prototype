@@ -1,3 +1,4 @@
+import { offerKey, providerOffer } from '../service-access.mjs';
 import { unifiedRouteStrategies } from './routing-policy.js';
 import { MOMA_PROVIDER } from './moma-provider.js';
 import { routingServices, routingChannels, serviceRoute, routingStatus, activeRouteVersion, lastRouteVersion, emptyRouteConfig, normalizeRouteConfig, routeGroups, ROUTE_ADVANCED_DEFAULTS, ROUTING_STRATEGIES } from './service-routing.js';
@@ -49,7 +50,7 @@ export function routeTableRows(state, model, serviceId) {
   return routingServices(state).filter(service => service.modelId === model.id && (!serviceId || service.id === serviceId)).flatMap(service => {
     const route=serviceRoute(state,service.id),current=activeRouteVersion(route),last=lastRouteVersion(route),config=(current || last)?.config,channels=routingChannels(state,service),status=routingStatus(state,service);
     const rows=config?.channels.filter(row=>row.enabled && !row.backup) || [],displayed=rows.length ? rows : [null];
-    const provider=service.providerId ? model.serviceProviders?.find(row=>row.providerId===service.providerId) : null;
+    const provider=service.providerId ? providerOffer(model,offerKey(service)) : null;
     const providerName=service.providerId ? service.name : state.providers.find(row=>row.id===MOMA_PROVIDER.id)?.name || MOMA_PROVIDER.name;
     return displayed.map((row,index)=>({id:service.id+':'+(row?.supplyId || 'empty'),service,config,current,last,status,provider,providerName,rows,row,channel:row && channels.find(item=>item.id===row.supplyId),span:index===0 ? displayed.length : 0}));
   });

@@ -1,8 +1,38 @@
 .traffic-tab { min-width: 0; padding-top: var(--admin-section-gap); }
 
 .traffic-list { min-width: 0; }
-.traffic-page .traffic-rate-input { width: 100px; max-width: 100%; }
-.traffic-page .traffic-row-error {
-  max-width: 220px;
-  white-space: normal;
+.traffic-list .semi-table-thead > .semi-table-row > .semi-table-row-head,
+.traffic-list .semi-table-tbody > .semi-table-row > .semi-table-row-cell { padding-inline: 12px; }
+.traffic-row-actions .semi-button { padding-inline: 8px; }
+.traffic-default-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-inline-start: auto;
+}
+.traffic-rate-pair { display: inline-flex; gap: 4px 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.traffic-rate-pair > span { white-space: nowrap; }
+.traffic-rate-pair small { color: var(--semi-color-text-2); font-size: 12px; }
+.traffic-rate-cell { display: grid; gap: 2px; justify-items: start; }
+.traffic-history-object { overflow-wrap: anywhere; }
+.traffic-resolution-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 185px), 1fr));
+  gap: 12px;
+  padding: 12px;
+  background: var(--semi-color-fill-0);
+  border-radius: var(--semi-border-radius-small);
+}
+.traffic-policy-drawer .semi-table-tbody .traffic-final-cell { background: var(--semi-color-primary-light-default); }
+.traffic-restore-rates { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-block: 8px; }
+.traffic-rate-dialog, .traffic-policy-drawer { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
+.traffic-rate-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr)); gap: 12px; }
+.traffic-rate-fields .semi-form-slot { margin: 0; }
+.traffic-policy-drawer .admin-list-toolbar { margin: 0; gap: 12px; }
+.traffic-policy-account { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; overflow-wrap: anywhere; }
+.traffic-policy-drawer .traffic-rate-input { width: 112px; max-width: 100%; text-align: right; }
+
+@media (max-width: 580px) {
+  .traffic-default-inline { margin-inline-start: 0; }
 }

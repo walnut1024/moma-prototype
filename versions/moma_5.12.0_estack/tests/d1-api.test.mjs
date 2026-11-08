@@ -22,7 +22,7 @@ async function login(id, code) {
   return result.headers.get('set-cookie').split(';')[0];
 }
 before(async () => {
-  local = await startLocalBackend({ loginHashes: { 'admin-001': sha(adminCode), 'admin-002': sha(opsCode) } });
+  local = await startLocalBackend({ demo: true, loginHashes: { 'admin-001': sha(adminCode), 'admin-002': sha(opsCode) } });
   token = await login('admin-001', adminCode); readonlyToken = await login('admin-002', opsCode);
 }, { timeout: 30000 });
 after(async () => { await local?.runtime.dispose(); });
@@ -195,6 +195,45 @@ test('card updates persist through HTTP without requiring hidden tasks or discar
  for(const key of ['license','architecture','supportedParameters'])assert.deepEqual(current.profile[key],before.profile[key]);
  assert.deepEqual(current.capabilities,before.capabilities);assert.deepEqual(next.providers,state.providers);
  assert.equal((await request('/model-operations/commands',{method:'POST',session:readonlyToken,key:crypto.randomUUID(),body:{...body,operationId:crypto.randomUUID(),expectedRevision:next.revision}})).status,403);
+});
+
+test('provider material commands preserve stable identities, validate display fields and register a model without a channel', async () => {
+  let state = (await request('/model-operations')).data;
+  const code = 'qa-material-' + randomBytes(4).toString('hex');
+  const values = { name: '服务商资料 ' + code, code, sourceType: 'thirdParty', introduction: '对外简介', website: 'https://example.test' };
+  const commit = async (operation, data) => {
+    const operationId = crypto.randomUUID();
+    return request('/model-operations/commands', {
+      method: 'POST', key: operationId, body: { operationId, expectedRevision: state.revision, action: { type: 'modelOperations', operation, data } },
+    });
+  };
+  const bad = await commit('supplierProfilesImport', { profiles: [values, { ...values, name: values.name + ' bad', code: code + '-bad', website: 'javascript:alert(1)' }] });
+  assert.equal(bad.status, 422);
+  assert.match(bad.data.error.message, /官网/);
+  assert.equal((await request('/model-operations')).data.providers.some(row => row.code === code), false);
+  assert.equal((await commit('supplierProfilesImport', { profiles: [values] })).status, 200);
+  state = (await request('/model-operations')).data;
+  const provider = state.providers.find(row => row.code === code);
+  assert.equal(provider.introduction, values.introduction);
+  assert.equal(provider.website, values.website);
+  const { modelCatalogue } = await import('../src/admin-v2/model-library.js');
+  const model = modelCatalogue(state).find(row => row.id === 'template-glm-5.3');
+  assert.ok(model);
+  const registered = await commit('supplierModelsRegister', { providerId: provider.id, libraryIds: [model.id] });
+  assert.equal(registered.status, 200, JSON.stringify(registered.data.error));
+  state = (await request('/model-operations')).data;
+  const current = state.providers.find(row => row.id === provider.id);
+  assert.equal((await commit('provider', { operation: 'profile', objectId: provider.id, values: {
+    ...values, code: 'replacement-code', documentation: 'https://example.test/docs', expectedUpdatedAt: current.updatedAt,
+  } })).status, 200);
+  state = (await request('/model-operations')).data;
+  const edited = state.providers.find(row => row.id === provider.id);
+  assert.equal(edited.code, code);
+  assert.equal(edited.documentation, 'https://example.test/docs');
+  assert.equal(edited.catalogModels[0].libraryId, model.id);
+  assert.equal(await local.db.prepare('SELECT COUNT(*) AS count FROM supplier_models WHERE supplier_id=? AND material_id=? AND removed_at IS NULL').bind(provider.id, model.id).first('count'), 1);
+  assert.equal(await local.db.prepare('SELECT COUNT(*) AS count FROM channel_models WHERE supplier_id=?').bind(provider.id).first('count'), 0);
+  assert.equal((await commit('provider', { operation: 'profile', objectId: provider.id, values: { ...values, expectedUpdatedAt: 'stale' } })).status, 422);
 });
 
 test('channel name and upstream identifier save together through HTTP and D1 without changing procurement history',async()=>{
@@ -480,4 +519,55 @@ test('acceptance cleanup is scoped, atomic, replayable and soft-archives only th
   for(const key of ['modelTemplates','modelSalePrices','supplyPrices','orders','requests','tariffDictionary'])assert.deepEqual(state[key],baseline[key]);
   for(const [key,field]of [['providers','providerId'],['endpoints','endpointId'],['models','modelId'],['modelSupplies','supplyId']])assert.deepEqual(state[key],baseline[key].filter(row=>!fixtures.some(spec=>spec[field]===row.id)));
   assert.equal(state.revision,baseline.revision+3);
+});
+
+test('the user-side market reads display flags saved through the admin command without an admin session', async () => {
+  const path = '/model-market/visibility';
+  const { marketDisplayServices } = await import('../src/useMarketVisibility.js');
+  const { marketDemoModelIds } = await import('../src/mock/model-data.js');
+  const card = { modelKey: serviceId, marketVisible: true };
+  for (const visible of [false, true]) {
+    const state = (await request('/model-operations')).data;
+    const model = state.models.find(row => row.id === serviceId);
+    const id = crypto.randomUUID();
+    const saved = await request('/model-operations/commands', { method: 'POST', key: id, body: {
+      operationId: id, expectedRevision: state.revision,
+      action: { type: 'modelOperations', operation: 'marketVisibility', modelId: serviceId, data: { visible, expectedUpdatedAt: model.updatedAt } },
+    } });
+    assert.equal(saved.status, 200, JSON.stringify(saved.data));
+    const result = await request(path, { session: null });
+    assert.equal(result.status, 200);
+    assert.deepEqual(Object.keys(result.data), ['visibility']);
+    const publicIds = new Set(marketDemoModelIds());
+    assert(Object.entries(result.data.visibility).every(([id, value]) => publicIds.has(id) && typeof value === 'boolean'));
+    assert.equal(result.data.visibility[serviceId], visible);
+    assert.deepEqual(marketDisplayServices([card], result.data.visibility), visible ? [card] : []);
+  }
+  assert.equal((await request(path, { method: 'POST', session: null, body: {} })).status, 405);
+});
+
+test('model market reordering persists across bootstrap without changing service records', async () => {
+  const { orderedMarketModels } = await import('../src/admin-v2/model-market-order.js');
+  const before = (await request('/model-operations')).data;
+  const initial = orderedMarketModels(before).map(row => row.id);
+  assert(initial.length > 1);
+  const modelId = initial.at(-1);
+  const submit = async (revision, data, session = token) => {
+    const id = crypto.randomUUID();
+    return request('/model-operations/commands', { method: 'POST', key: id, session, body: {
+      operationId: id, expectedRevision: revision,
+      action: { type: 'modelOperations', operation: 'marketReorder', modelId, data },
+    } });
+  };
+  const move = { position: 1, expectedRevision: before.revision };
+  assert.equal((await submit(before.revision, move, readonlyToken)).status, 403);
+  assert.equal((await submit(before.revision, { ...move, position: initial.length + 1 })).status, 422);
+  const saved = await submit(before.revision, move);
+  assert.equal(saved.status, 200, JSON.stringify(saved.data));
+  const after = (await request('/model-operations')).data;
+  assert.deepEqual(orderedMarketModels(after).map(row => row.id), [modelId, ...initial.slice(0, -1)]);
+  assert.deepEqual(after.models, before.models);
+  assert.deepEqual(after.audits[0].changes, [{ object: before.models.find(row => row.id === modelId).name, field: '序号', before: initial.length, after: 1 }]);
+  assert.equal((await submit(before.revision, move)).status, 409);
+  assert.equal((await submit(after.revision, move)).status, 422);
 });

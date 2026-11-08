@@ -1,16 +1,15 @@
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
-import { scopeTenants } from './service-commercial';
 import { activeAdmin } from '../linked-accounts.mjs';
 import { readLinkedState } from '../service-access.mjs';
 import { Children, Fragment, isValidElement, useEffect, useRef, useState } from 'react';
-import { Button, Collapse, Input, TextArea, Toast } from '@douyinfe/semi-ui';
+import { Button, Collapse, Input, Toast } from '@douyinfe/semi-ui';
 import { IconDelete, IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import AdminPageHeading from './AdminPageHeading';
-import { CopyId, Modal as ServiceModal, Notice, serviceOperationsUi, Choice, Field, MultiChoice } from './ServiceUI';
+import { CopyId, Modal as ServiceModal, Notice, serviceOperationsUi, Choice, Field } from './ServiceUI';
 import { priceItems, moneyDisplay } from './model-management';
-import { PROVIDER_TYPES, PROTOCOLS } from './provider-management';
+import { PROTOCOLS } from './provider-management';
 import { connectionTestPassed } from './connection-state';
 import { canMutate } from './store';
 import { modelOperationTarget } from './model-operation-history';
@@ -102,20 +101,6 @@ export function useOperations({ state, transact, conflict, reload, notify = mess
 
   return { params, go, proceed, dirty: setDirty, hasUnsaved: () => dirtyRef.current, can, isCurrent, run, error, setError, leaveDialog, conflict, reload };
 }
-export const emptyProvider = () => ({ name: '', code: '', sourceType: 'thirdParty', contact: '', contactInfo: '', description: '' });
-export function ProviderFields({ value, onChange, disabled, editing = false, children }) {
-  const set = (key, input) => onChange({ ...value, [key]: input });
-  const descriptionLength = [...value.description.trim()].length;
-  return <div className="mo-form-grid supplier-profile-fields">
-    <Field label="服务商名称 *"><Input required aria-label="服务商名称" value={value.name} disabled={disabled} onChange={value => set('name', value)}/></Field>
-    <Field label="英文编码 *" hint="2–32 位小写字母、数字或连字符，字母开头；创建后固定。"><Input required aria-label="英文编码" placeholder="例如 cmcc" pattern="[a-z][a-z0-9-]{1,31}" autoCapitalize="none" autoComplete="off" spellCheck={false} value={value.code} disabled={disabled} readOnly={editing} onChange={value => set('code', value.toLowerCase())}/></Field>
-    <Field label="供给类型 *"><Choice label="供给类型" value={value.sourceType} options={Object.entries(PROVIDER_TYPES)} disabled={disabled || editing} onChange={value => set('sourceType', value)}/></Field><div/>
-    {children}
-    <Field label="联系人（选填）"><Input aria-label="联系人" value={value.contact} disabled={disabled} onChange={value => set('contact', value)}/></Field>
-    <Field label="联系人号码/邮箱（选填）"><Input aria-label="联系人号码/邮箱" value={value.contactInfo || ''} disabled={disabled} onChange={value => set('contactInfo', value)}/></Field>
-    <div className="mo-span supplier-description"><Field label="备注（选填）" hint="最多 2000 字。"><TextArea aria-label="备注" aria-describedby="supplier-description-count" aria-invalid={descriptionLength > 2000} maxLength={2000} value={value.description} disabled={disabled} rows={4} onChange={value => set('description', value)}/></Field><small id="supplier-description-count">{descriptionLength} / 2000 字</small></div>
-  </div>;
-}
 export const emptyConnection = () => ({ name: '', protocol: 'OpenAI', baseUrl: '', credentialRef: '', capacity: '', timeoutSeconds: 60, apiKeys: [], keyInputs: [{ id: crypto.randomUUID(), value: '' }] });
 export function ConnectionFields({ value, onChange, disabled, optionalKey = false, prefix = '' }) {
   const set = (key, input) => onChange({ ...value, [key]: input });
@@ -135,10 +120,5 @@ export function ConnectionApiKeys({ value, onChange, disabled, optionalKey = fal
       <Button type="tertiary" theme="borderless" disabled={disabled || keys.length + inputs.length >= 20} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={() => set('keyInputs', [...inputs, { id: crypto.randomUUID(), value: '' }])}>添加 API 密钥</Button>
       <p className="supplier-key-hint">{optionalKey ? '自有推理服务可不配置 API 密钥。' : '第三方推理服务至少配置一个 API 密钥。'}每个连接最多 20 个，保存后仅展示脱敏值。</p>
     </fieldset>;
-}
-export function ScopeFields({ state, openScope, tenantIds = [], onChange, disabled }) {
-  const tenants=scopeTenants(state), tenantLabel=tenant=>tenant.name+' · '+tenant.id;
-  const unavailable=tenantIds.filter(id=>!tenants.some(row=>row.id===id));
-  return <div className="mo-form-grid"><Field label="客户开放范围 *"><Choice label="客户范围" value={openScope || 'unselected'} disabled={disabled} options={[[ 'unselected','请选择开放范围'],['all','全部有效客户'],['selected','指定客户']]} onChange={value=>onChange(value,tenantIds)}/></Field>{openScope==='selected' && <Field label="选择客户 *"><MultiChoice label="客户" groups={[[ '政企客户',tenants.filter(row=>row.type!=='个人').map(tenantLabel) ],[ '个人客户',tenants.filter(row=>row.type==='个人').map(tenantLabel) ]]} choices={tenants.map(tenantLabel)} value={tenants.filter(tenant=>tenantIds.includes(tenant.id)).map(tenantLabel)} disabled={disabled} onChange={names=>onChange('selected',tenants.filter(tenant=>names.includes(tenantLabel(tenant))).map(tenant=>tenant.id))}/>{unavailable.length>0 && <Notice error>有 {unavailable.length} 个客户已停用或删除，请重新选择有效客户。<Button type="tertiary" theme="borderless" disabled={disabled} onClick={()=>onChange('selected',tenantIds.filter(id=>!unavailable.includes(id)))}>移除无效客户</Button></Notice>}</Field>}</div>;
 }
 export function ValidationNote({ endpoint, supply }) { return <div className="mo-stack"><AdminStatus value={!connectionTestPassed(endpoint) ? '连接待验证' : supply?.validationStatus === '通过' ? '已通过' : supply?.validationStatus || '待验证'}/><small>{supply?.verifiedAt ? new Date(supply.verifiedAt).toLocaleString('zh-CN') : '尚无验证记录'}</small></div>; }

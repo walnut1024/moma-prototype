@@ -45,7 +45,7 @@ export default function ProcurementVersionEditor({ state, provider, association,
       setBusy(false);
     }
   };
-  return <Modal drawer wide title="采购价版本"
+  return <Modal drawer wide title="编辑渠道采购价"
     description={`${provider.name} · ${supplierChannelName(provider, association.endpoint)} · ${association.upstreamModelId}`}
     onClose={cancel} footer={publishing ? <>
       <Button type="tertiary" disabled={busy} onClick={() => setPublishing(null)}>取消发布</Button>
@@ -68,7 +68,7 @@ export default function ProcurementVersionEditor({ state, provider, association,
       <form id={formId} className="ss-change-form" noValidate onSubmit={save}>
         <Typography.Title heading={5} component="h3">新建采购价</Typography.Title>
         <div className="ss-change-time-fields">
-          <Field label="生效时间 *"><Input type="datetime-local" step="0.001" aria-label="采购价生效时间"
+          <Field label="生效时间 *"><Input autoFocus type="datetime-local" step="0.001" aria-label="采购价生效时间"
             value={effectiveAt} disabled={!ops.can || busy} onChange={(_value, event) => changed(setEffectiveAt)(event.target.value)}/></Field>
           <Field label="到期时间（选填）"><Input type="datetime-local" step="0.001" aria-label="采购价到期时间"
             value={expiresAt} disabled={!ops.can || busy} onChange={(_value, event) => changed(setExpiresAt)(event.target.value)}/></Field>

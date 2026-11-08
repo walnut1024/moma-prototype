@@ -1,3 +1,4 @@
+import { offerKey, providerOffer } from '../service-access.mjs';
 import { modelOperationsView } from '../mock/model-data.js';
 import { modelCategory, modelCode, modelSupplies, activeSupplyPrice, activeSupplySalePrice, priceItems, supplyModelUrl, publicationChecks } from './model-management.js';
 import { catalogueChannels, channelUrl, channelBlockReason, channelFingerprint } from './provider-channels.js';
@@ -29,7 +30,7 @@ export function serviceLifecycle(model) {
 }
 export function serviceHeaderStatus(model) {
   return {
-    service: model.listingStatus === '已上架' ? model.releaseStage === 'gray' ? '灰度上架' : '正式上架' : '已下架',
+    service: model.archivedAt ? '已归档' : model.listingStatus === '已上架' ? model.releaseStage === 'gray' ? '灰度上架' : '正式上架' : '已下架',
     visibility: model.marketVisible === false ? '用户不可见' : model.releaseStage === 'gray' ? '灰度用户可见' : '用户可见',
   };
 }
@@ -41,11 +42,9 @@ export function serviceConfiguration(state,model) {
 export function serviceConfigurationTarget(model,check) {
   const base={page:'listing',model:model.id,panel:'routing',providerEdit:null,providerAdd:null,providerChannels:null,providerAssociate:null,routeProvider:null,service:null,mapping:null};
   if (check.tab==='technical' || check.tab==='purpose') return {...base,panel:'materials'};
-  if (check.tab==='scope') return {page:'model-prices',service:model.serviceMode==='provider'?providerServiceId(model.id,providerServices(model)[0]?.providerId):'standard:'+model.id,tab:'sales'};
+  if (check.tab==='scope') return {page:'model-prices',service:model.serviceMode==='provider'?providerServiceId(model.id,offerKey(providerServices(model)[0])):'standard:'+model.id,tab:'sales'};
   if (check.tab==='serviceMode') return {...base,panel:'routing'};
-  if (check.tab==='publication') return {...base,panel:'access',scopeEdit:'1'};
-  if (check.tab==='pricing' && model.serviceMode==='provider' && !providerServices(model).find(row=>row.providerId===check.providerId)?.callId) return {...base,panel:'routing',identityProvider:check.providerId};
-  if (check.tab==='platform') return {...base,panel:'trial',routeProvider:check.providerId || null};
+  if (check.tab==='pricing' && model.serviceMode==='provider' && !providerOffer(model,check.providerId)?.callId) return {...base,panel:'routing',identityProvider:check.providerId};
   if (check.tab==='supplies' && model.serviceMode==='provider') return {...base,panel:'routing',providerAdd:'1'};
   if (check.tab==='basic') return {page:'model-templates',view:'template',template:model.templateId || model.id,materialMode:'edit',returnModel:model.id};
   if (check.tab==='routing') {
@@ -86,8 +85,8 @@ export function unifiedBillingDraft(state, model) {
 
 export const providerServices = model => (model.serviceProviders || []).filter(item=>item.status !== '已移除');
 export const providerServiceId = (modelId, providerId) => `provider:${modelId}:${providerId}`;
-export const activeProviderPrice = (state, modelId, providerId, at = Date.now()) => currentSale( state.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && price.providerId===providerId && price.status==='已发布' && (price.serviceModeRevision || 0)===(state.models.find(model=>model.id===modelId)?.serviceModeRevision || 0) && Date.parse(price.effectiveAt)<=at).sort((a,b)=>Date.parse(b.effectiveAt)-Date.parse(a.effectiveAt) || b.version-a.version),at);
-export const providerPriceRevision = (state, modelId, providerId) => state.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && price.providerId===providerId).sort((a,b)=>b.version-a.version)[0]?.id || '';
+export const activeProviderPrice = (state, modelId, providerId, at = Date.now()) => currentSale( state.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && (price.channelId || price.providerId)===providerId && price.status==='已发布' && (price.serviceModeRevision || 0)===(state.models.find(model=>model.id===modelId)?.serviceModeRevision || 0) && Date.parse(price.effectiveAt)<=at).sort((a,b)=>Date.parse(b.effectiveAt)-Date.parse(a.effectiveAt) || b.version-a.version),at);
+export const providerPriceRevision = (state, modelId, providerId) => state.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && offerKey(price)===providerId).sort((a,b)=>b.version-a.version)[0]?.id || '';
 export function serviceBindingInUse(state, modelId, supplies, serviceId) {
   const ids=new Set(supplies.flatMap(item=>[item.id,item.channelId].filter(Boolean)));
   return (state.serviceRoutes || []).some(route=>{
@@ -98,14 +97,15 @@ export function serviceBindingInUse(state, modelId, supplies, serviceId) {
   });
 }
 
-export const commercialTaskKey = (kind, providerId = '') => kind === 'scope' ? 'scope' : `price:${providerId || 'standard'}`;
-export function commercialTaskBase(state, model, kind, providerId = '') {
-  return JSON.stringify([model.serviceMode, model.serviceModeRevision || 0, model.modelId, kind === 'scope' ? [model.openScope, [...(model.tenantIds || [])].sort()] : [providerId, providerId ? providerServices(model).find(row => row.providerId === providerId)?.callId : '', providerId ? providerPriceRevision(state, model.id, providerId) : modelSaleRevision(state, model.id)]]);
+export const commercialPriceKey = (providerId = '') => `price:${providerId || 'standard'}`;
+export function commercialPriceBase(state, model, providerId = '') {
+  return JSON.stringify([model.serviceMode, model.serviceModeRevision || 0, model.modelId, [providerId, providerId ? providerOffer(model, providerId)?.callId : '', providerId ? providerPriceRevision(state, model.id, providerId) : modelSaleRevision(state, model.id)]]);
 }
 
 export function servicePriceIdentity(state, model, providerId = '') {
-  const provider = state.providers.find(row => row.id === (providerId || MOMA_PROVIDER.id));
-  return { supplierName: provider?.name || '服务商已不存在', callId: providerId ? providerServices(model).find(row => row.providerId === providerId)?.callId || '' : model.modelId || '' };
+  const entry = providerOffer(model, providerId);
+  const provider = state.providers.find(row => row.id === (entry?.providerId || MOMA_PROVIDER.id));
+  return { supplierName: entry?.channelName ? `${provider?.name || '服务商已不存在'}（${entry.channelName}）` : provider?.name || '服务商已不存在', callId: providerId ? entry?.callId || '' : model.modelId || '' };
 }
 
 export function currentServiceCosts(state,model,providerId='') {

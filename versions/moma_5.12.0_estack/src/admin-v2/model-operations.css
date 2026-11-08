@@ -54,8 +54,6 @@
 .admin-v2 .mo-supplier-batch .mo-batch-tools{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px}
 .admin-v2 .mo-batch-tools .admin-form-field{max-width:140px}
 .admin-v2 .mo-batch-tools p{flex:1 1 320px;color:var(--semi-color-text-2);font-size:12px}
-.admin-v2 .mo-batch-scope{padding:16px 0;border-bottom:1px solid #e8edf5;margin-bottom:8px}
-.admin-v2 .mo-batch-scope p{font-size:12px;color:var(--semi-color-text-2)}
 .admin-v2 .mo-batch-model-body{padding:0 0 12px 16px}
 .admin-v2 .mo-batch-model-body .mo-row-actions{margin:12px 0}
 .admin-v2 .mo-batch-model-body .mo-billing-table{min-width:740px}

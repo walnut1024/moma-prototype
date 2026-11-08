@@ -33,13 +33,12 @@
 .ss-empty { padding: 32px 0; }
 @media (max-width: 1100px) { .ss-workspace { grid-template-columns: 220px minmax(0, 1fr); } .ss-guide-editor-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 760px) { .ss-workspace, .ss-form-grid, .ss-request-preview { grid-template-columns: minmax(0, 1fr); } .ss-index, .ss-detail { padding: 16px; } .ss-index .semi-navigation-list { max-height: 220px; overflow: auto; } .semi-services .semi-table-pagination-outer { flex-wrap: wrap; gap: 12px; } .semi-services .semi-table-pagination-info { flex: 0 0 100%; } }
-.ss-guide, .ss-routing-content, .ss-change-dialog, .ss-change-section, .ss-mapping-fields { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.ss-guide, .ss-routing-content, .ss-route-workbench, .ss-mappings, .ss-change-dialog, .ss-change-section, .ss-mapping-fields { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .ss-route-editor-identity { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .ss-route-editor-identity > div { display: flex; flex-direction: column; gap: 8px; }
 .ss-route-editor-channel-heading, .ss-route-column-heading, .ss-guide-toolbar, .ss-guide-actions, .ss-change-actions, .ss-mapping-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .ss-route-weight-input { display: flex; align-items: center; gap: 8px; }
 .ss-route-weight-input .semi-input-wrapper { width: 90px; }
-.ss-trial-tenant-scroll { max-height: 320px; overflow: auto; }
 .ss-route-table-toolbar { margin-block: 16px; }
 .ss-route-lifecycle { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ss-focus-channel { outline: 1px solid var(--semi-color-primary); outline-offset: -1px; }

@@ -79,13 +79,13 @@ test('new failures and old evidence cannot be replaced by earlier success during
   setMockScenario('success'); await env.prove(ch); env.advance(25 * 3600000); await assert.rejects(env.trial(current), issue => issue.code === 'validation_required');
 });
 
-test('platform trial, published client scope and price versions keep their distinct state', async t => {
+test('trial customers and published price versions do not restrict otherwise eligible clients', async t => {
   const env = fixture(t), ch = await env.channel('channel'); await env.prove(ch); const current = await env.service(ch), key = await env.post('/client-keys', { tenantId: 'tenant-a', serviceIds: [current.id] });
   const request = () => api('/client/completions', { method: 'POST', token: key.clientKey, body: { operationId: env.op(), model: current.candidate.publicModelId, messages: [{ role: 'user', content: 'hello' }] } });
   await assert.rejects(request(), issue => issue.code === 'model_unavailable'); const published = await env.publish(current); const pending = request();
   const next = await api(`/services/${current.id}`, { method: 'PATCH', body: { operationId: env.op(), expectedRevision: published.revision, bindings: [{ ...published.candidate.bindings[0], procurementPrices: [env.price('new-cost', { amount: 3000000 })] }] } }); await env.publish(next);
   const priorResponse = await pending; const usage = await api('/usage'); assert.equal(usage.usage.find(row => row.id === priorResponse.id).cost.priceVersion, 'cost'); await request(); assert.equal((await api('/usage')).usage.at(-1).cost.priceVersion, 'new-cost'); assert.ok(usage.usage.every(row => row.customerDebited === false));
-  const forbidden = await env.post('/client-keys', { tenantId: 'tenant-b', serviceIds: [current.id] }); await assert.rejects(api('/client/completions', { method: 'POST', token: forbidden.clientKey, body: { operationId: env.op(), model: current.candidate.publicModelId, messages: [] } }), issue => issue.code === 'model_forbidden');
+  const other = await env.post('/client-keys', { tenantId: 'tenant-b', serviceIds: [current.id] }); await api('/client/completions', { method: 'POST', token: other.clientKey, body: { operationId: env.op(), model: current.candidate.publicModelId, messages: [] } });
 });
 
 test('latest expired quote cannot resurrect an old unlimited quote and future quote does not start early', async t => {
@@ -166,9 +166,10 @@ test('video task identifiers survive polling, cancellation and recovery unchange
 });
 
 
-test('client authentication and tenant scope precede idempotent responses, with caches isolated per customer key', async t => {
+test('client authentication and service key scope precede idempotent responses, with caches isolated per customer key', async t => {
   const env = fixture(t), ch = await env.channel('scope'); await env.prove(ch); const current = await env.service(ch); await env.publish(current);
-  const a = await env.post('/client-keys', { tenantId: 'tenant-a', serviceIds: [current.id] }), b = await env.post('/client-keys', { tenantId: 'tenant-a', serviceIds: [current.id] }), forbidden = await env.post('/client-keys', { tenantId: 'tenant-b', serviceIds: [current.id] });
+  const other = await env.service(ch);
+  const a = await env.post('/client-keys', { tenantId: 'tenant-a', serviceIds: [current.id] }), b = await env.post('/client-keys', { tenantId: 'tenant-a', serviceIds: [current.id] }), forbidden = await env.post('/client-keys', { tenantId: 'tenant-b', serviceIds: [other.id] });
   const body = { operationId: env.op(), model: current.candidate.publicModelId, messages: [{ role: 'user', content: 'scoped content' }] }, request = token => api('/client/completions', { method: 'POST', token, body });
   const first = await request(a.clientKey); assert.equal((await request(a.clientKey)).id, first.id);
   await assert.rejects(request('invalid'), issue => issue.code === 'client_unauthorized'); await assert.rejects(request(forbidden.clientKey), issue => issue.code === 'model_forbidden');

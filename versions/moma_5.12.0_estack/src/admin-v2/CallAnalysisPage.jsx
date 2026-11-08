@@ -1,171 +1,168 @@
+import { useMemo, useState } from 'react';
+import { Banner, Button, Card, Toast, Typography } from '@douyinfe/semi-ui';
+import { IconArrowRight } from '@douyinfe/semi-icons';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
-import { useState } from 'react';
-import { Banner, Button, Card, Space, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconArrowRight, IconCalendar } from '@douyinfe/semi-icons';
-import { TimeSeriesChart } from '../components/AnalyticsCharts';
-import { FilterPresets, FilterReset, FilterToolbar, TIME_PRESETS } from '../components/FilterControls';
-import SavedFilterViews from '../components/SavedFilterViews';
 import { AnalysisHelp } from './AnalysisMetric';
-import { SemiDateRange as DateRange, SemiMultiPick as MultiPick } from './SemiAnalyticsFilters';
 import { Choice } from './ServiceUI';
-import { usagePreset } from './usage-analysis';
-import { dayOf, filterAnalytics, summarize, timeBuckets, inputLengthDistribution, weeklyBuckets, validAnalyticsRange } from './analytics';
+import { FilterReset, FilterToolbar } from '../components/FilterControls';
+import SavedFilterViews from '../components/SavedFilterViews';
+import { HorizontalBarChart } from '../components/AnalyticsCharts';
+import { chartPalette } from '../components/chart-style.mjs';
+import { inputLengthDistribution } from './analytics';
+import { ObservationPick, ObservationPlot, ObservationSupplyPick, ObservationTimeRange, useObservationSupply } from './CallObservationControls';
+import {
+  callObservations, defaultObservationGrain, filterObservations, httpLabel, modelTypes, observationBuckets,
+  observationDrill, observationFilters, observationGrains, observationGroups, observationGroupScope, observationHash, observationNumber as fmt,
+  observationOptions, observationTime, observationViewFilters, observationWindow, summarizeObservations,
+} from './call-observations.mjs';
 
 const { Title, Text, Paragraph } = Typography;
-const types=[['','全部类型'],['text','语言模型'],['multimodal','多模态模型'],['image','图片生成'],['video','视频生成'],['audio','语音模型'],['embedding','向量模型'],['rerank','重排模型']];
-const fmt=v=>v==null?'—':Number(v).toLocaleString('zh-CN',{maximumFractionDigits:2});
-
-function Plot({ title, labels, series, unit = '' }) {
-  return <Card title={<Title heading={5} component="h2">{title}</Title>}>
-    <TimeSeriesChart compact labels={labels} series={series} unit={unit} valueFormatter={unit === '次/分钟' ? value => Number(value.toFixed(4)) : undefined}
-      label={title} height={260}/>
-  </Card>;
-}
+const grouping = [['callId', '对外调用标识'], ['tenant', '租户'], ['provider', '最终服务商'], ['channel', '最终渠道']];
+const labels = new Map(grouping);
+const selectors = [['tenant', '租户'], ['callId', '对外调用标识']];
+const latencyChoices = [['p95', 'P95 总耗时'], ['ttft', 'P95 首 Token 时延']];
+const countChoices = [['count', '请求数'], ['tokens', '输入 Token']];
+const requestStates = [['成功', 'success', chartPalette[0]], ['失败', 'failed', chartPalette[5]], ['其他状态', 'other', chartPalette[6]]];
+const outcomeForSeries = new Map(requestStates);
+const seriesOf = (summary, label, field) => ({ label, values: summary.map(bucket => bucket[field]) });
+const percent = value => value == null ? '—' : fmt(value) + '%';
+const millis = value => value == null ? '—' : fmt(value) + ' ms';
 
 export default function CallAnalysisPage({ state }) {
-  const latest=dayOf(state.requests.length?Math.max(...state.requests.map(r=>Date.parse(r.createdAt))):Date.now());
-  const routeFilters = new URLSearchParams(location.hash.split("?")[1]||"");
-  const initialStart = routeFilters.get("start") || usagePreset('today').start;
-  const initialEnd = routeFilters.get("end") || usagePreset('today').end;
-  const initialGranularity = (Date.parse(initialEnd)-Date.parse(initialStart))/86400000>=30?"week":"day";
-  const [filters,setFilters]=useState({start:initialStart,end:initialEnd,tenant:routeFilters.has('tenant')?[routeFilters.get('tenant')]:null,model:routeFilters.has('model')?[routeFilters.get('model')]:null,provider:null,type:'',key:'',source:''});
-  const [granularity,setGranularity]=useState(initialGranularity),[lengthMetric,setLengthMetric]=useState('calls');
-  const [period,setPeriod]=useState(routeFilters.has('start') || routeFilters.has('end') ? 'custom' : 'today');
-  const choosePeriod=value=>{setPeriod(value);setFilters(f=>({...f,...usagePreset(value)}));setGranularity('day')};
-  const set=(key,value)=>{setFilters(f=>({...f,[key]:['tenant','model','provider'].includes(key)&&typeof value==='string'?[value]:value,...(key==='type'?{model:null}:{})}))};
-  const invalid=!validAnalyticsRange(filters.start,filters.end,granularity);
-  const changeGranularity=v=>{if(!v)return;setGranularity(v)};
-  const rows=invalid?[]:filterAnalytics(state,{...filters,key:'',source:''}), summary=summarize(rows), buckets=invalid?[]:(granularity==='week'?weeklyBuckets(rows,filters.start,filters.end):timeBuckets(rows,filters.start,filters.end)),labels=buckets.map(b=>b.label);
-  const name=(collection,id)=>state[collection].find(x=>x.id===id)?.name||(id==='undefined'?'未识别':id)||'未识别';
-  const series=(label,key)=>({label,values:buckets.map(b=>b[key])});
-  const viewGroups=[
-    {label:'时间',text:`${TIME_PRESETS.find(([id])=>id===period)?.[1] || '自定义'}（${filters.start} — ${filters.end}）`},
-    {label:'统计粒度',text:granularity==='week'?'按周':'按天'},
-    {label:'租户',items:filters.tenant?.map(id=>name('tenants',id))??null},
-    {label:'模型类型',text:types.find(([id])=>id===filters.type)?.[1]||'全部'},
-    {label:'模型 ID',items:filters.model?.map(id=>name('models',id))??null,all:'全部模型'},
-    {label:'服务商',items:filters.provider?.map(id=>name('providers',id))??null},
-  ];
-  const lengths=inputLengthDistribution(rows);
-  const reset = () => {
-    setFilters({ ...usagePreset('today'), tenant: null, model: null, provider: null, key: '', source: '', type: '' });
-    setPeriod('today');
-    setGranularity('day');
+  const [initial] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
+  const [filters, setFilters] = useState(() => observationFilters(initial));
+  const [grain, setGrain] = useState(() => initial.get('grain'));
+  const [groupBy, setGroupBy] = useState(() => labels.has(initial.get('groupBy')) ? initial.get('groupBy') : 'callId');
+  const [latency, setLatency] = useState('p95');
+  const [lengthMetric, setLengthMetric] = useState('count');
+  const { requests } = useMemo(() => callObservations(state), [state]);
+  const supply = useObservationSupply(requests, filters.supply);
+  const window = observationWindow(filters);
+  const grains = observationGrains(window);
+  const granularity = grains.some(([id]) => id === grain) ? grain : defaultObservationGrain(filters, window);
+  const rows = filterObservations(requests, filters, window);
+  const summary = summarizeObservations(rows);
+  const buckets = observationBuckets(rows, window, granularity);
+  const trend = buckets.map(bucket => summarizeObservations(bucket.rows));
+  const timeLabels = buckets.map(bucket => bucket.label);
+  const modelRows = useMemo(() => filters.type ? requests.filter(row => row.modelType === filters.type) : requests, [requests, filters.type]);
+  const change = patch => {
+    setFilters(current => ({ ...current, ...patch }));
+    if (patch.period) setGrain(null);
   };
   const applyView = view => {
     if (!view?.filters) return false;
-    setPeriod(view.period || 'custom');
-    setFilters({ ...view.filters, ...(view.period && view.period !== 'custom' ? usagePreset(view.period) : {}) });
-    setGranularity(view.granularity === 'week' ? 'week' : 'day');
+    setFilters({ ...observationFilters(), ...observationViewFilters(view.filters), period: view.period || 'custom', key: null, source: null });
+    setGrain(view.granularity);
+    if (labels.has(view.groupBy)) setGroupBy(view.groupBy);
+    return true;
   };
-  const failedLogs = () => {
-    const selectedIds = values => values == null ? '' : values.join(',') || '__none__';
-    const params = new URLSearchParams({ failed: '1', model: selectedIds(filters.model), start: filters.start, end: filters.end,
-      provider: selectedIds(filters.provider), tenant: selectedIds(filters.tenant), type: filters.type });
-    location.hash = `/admin-2/logs?${params}`;
+  const reset = () => { setFilters(observationFilters()); setGrain(null); setGroupBy('callId'); };
+  const drill = (range, extra) => {
+    if (!range) return;
+    history.replaceState(history.state, '', observationHash('call-analysis', filters, { grain: granularity, groupBy }));
+    location.hash = observationDrill(filters, range, 'requests', extra);
   };
-  const summaryItems = [
-    ['总请求', fmt(summary.calls)],
-    ['成功 / 失败', `${summary.success} / ${summary.failed}`],
-    ['模型请求成功率 / 失败率', summary.rate == null ? '—' : `${fmt(summary.rate)}% / ${fmt(100 - summary.rate)}%`,
-      '按当前筛选范围内请求统计，HTTP 2xx 计为成功，其余计为失败；暂无请求时显示 —。'],
-    ['平均 / P95 时延', `${fmt(summary.avg)} / ${fmt(summary.p95)} ms`, '对当前筛选内请求样本计算'],
+
+  const viewGroups = [
+    { label: '时间', text: window ? observationTime(window.start) + ' — ' + observationTime(window.end) : '自定义' },
+    { label: '统计粒度', text: new Map(grains).get(granularity) },
+    { label: '分组', text: labels.get(groupBy) },
+    { label: '模型类型', text: new Map(modelTypes).get(filters.type) || '全部' },
+    ...selectors.map(([dimension, label]) => {
+      const names = new Map(observationOptions(requests, dimension).map(item => [item.id, item.name]));
+      return { label, items: filters[dimension]?.map(id => names.get(id) || id) ?? null };
+    }),
+    supply.group,
+    ...(filters.model == null ? [] : [{ label: '模型', items: filters.model.map(id => state.models.find(model => model.id === id)?.name || id) }]),
   ];
-  const byModel = [...new Set(rows.map(row => row.modelId))].map(id => {
-    const requests = rows.filter(row => row.modelId === id);
-    const values = summarize(requests);
-    return { id, ...values, name: name('models', id), tpm: requests.some(row => row.usage?.input != null)
-      ? values.total / (((Date.parse(filters.end) - Date.parse(filters.start)) / 86400000 + 1) * 1440) : null };
-  });
-  const detailColumns = [
-    { title: '模型', dataIndex: 'name' },
-    { title: '请求数', dataIndex: 'calls', align: 'right' },
-    { title: '成功率', dataIndex: 'rate', align: 'right', render: value => value == null ? '—' : `${fmt(value)}%` },
-    { title: '失败率', dataIndex: 'rate', key: 'failure', align: 'right', render: value => value == null ? '—' : `${fmt(100 - value)}%` },
-    ...[['平均时延 (ms)', 'avg'], ['P95 (ms)', 'p95'], ['TTFT (ms)', 'ttft'], ['TPM', 'tpm']]
-      .map(([title, dataIndex]) => ({ title, dataIndex, align: 'right', render: fmt })),
+  const grouped = observationGroups(rows, groupBy).map(group => ({ ...group, ...summarizeObservations(group.rows) }));
+  const failures = new Map();
+  for (const row of rows) {
+    if (row.outcome !== 'failed') continue;
+    const code = String(row.status ?? 'unreported');
+    failures.set(code, (failures.get(code) || 0) + 1);
+  }
+  const statusRows = [...failures].map(([id, value]) => ({ id, value, name: httpLabel(id === 'unreported' ? null : Number(id)) }))
+    .sort((a, b) => b.value - a.value || a.id.localeCompare(b.id));
+  const lengths = inputLengthDistribution(rows.map(row => ({ usage: { input: row.input } })));
+  const stats = [
+    ['请求数', fmt(summary.count)],
+    ['最终失败率', percent(summary.failureRate), fmt(summary.failed) + ' 次失败', '失败数除以成功与失败请求之和。取消、进行中和未采集单列。'],
+    ['P95 总耗时', millis(summary.p95)],
+    ['Token 用量', fmt(summary.total), '输入 ' + fmt(summary.input) + ' / 输出 ' + fmt(summary.output)],
+    ...(summary.ttftSamples ? [['P95 首 Token 时延', millis(summary.ttft), fmt(summary.ttftSamples) + ' 个有效样本']] : []),
+  ];
+  const columns = [
+    { title: labels.get(groupBy), render: (_, row) => <Button theme="borderless" size="small"
+      onClick={() => drill(window, observationGroupScope(groupBy, row))}>{row.name}</Button> },
+    { title: '请求数', dataIndex: 'count', align: 'right', sorter: (a, b) => a.count - b.count, render: fmt },
+    { title: '失败数', dataIndex: 'failed', align: 'right', sorter: (a, b) => a.failed - b.failed, render: fmt },
+    { title: '失败率', dataIndex: 'failureRate', align: 'right', render: percent },
+    ...[['P95 总耗时（ms）', 'p95'], ['输入 Token', 'input'], ['输出 Token', 'output']].map(([title, dataIndex]) =>
+      ({ title, dataIndex, align: 'right', render: fmt })),
   ];
   return <div className="admin-page-stack">
     <AdminPageHeading title="调用数据"/>
     <Card>
       <div className="admin-analytics-fields">
         <FilterToolbar>
-          <FilterPresets value={period} onChange={choosePeriod}/>
-          <DateRange granularity={granularity} start={filters.start} end={filters.end} latest={latest}
-            trigger={<Button icon={<IconCalendar aria-hidden="true"/>} aria-label="日期范围">
-              {filters.start === filters.end ? filters.start : `${filters.start} — ${filters.end}`}
-            </Button>}
-            onChange={range => { setPeriod('custom'); setFilters(current => ({ ...current, ...range })); }}/>
-          <Space>
-            <Text type="secondary">北京时间</Text>
-            <AnalysisHelp label="统计时间">记录截至 {latest}。{filters.end === dayOf(Date.now()) ? '当日截至当前时刻。' : ''}{granularity === 'week' ? '按周一至周日汇总，* 表示不足一周。' : ''}</AnalysisHelp>
-          </Space>
-          <Choice label="统计粒度" value={granularity} options={[[ 'day', '按天' ], [ 'week', '按周' ]]} onSelect={changeGranularity}/>
+          <ObservationTimeRange filters={filters} window={window} onChange={change}>
+            <Choice label="统计粒度" value={granularity} options={grains} onChange={setGrain}/>
+          </ObservationTimeRange>
           <FilterReset onClick={reset}/>
         </FilterToolbar>
         <div className="admin-analysis-filter-row">
-          <div className="admin-filter-toolbar" role="group" aria-label="调用数据对象筛选">
-            <MultiPick compact label="租户" value={filters.tenant} onChange={value => set('tenant', value)} items={state.tenants}/>
-            <Choice label="模型类型" value={filters.type || 'all'} options={types.map(([value, label]) => [value || 'all', label])}
-              onSelect={value => set('type', value === 'all' ? '' : value)}/>
-            <MultiPick compact label="模型 ID" value={filters.model} onChange={value => set('model', value)}
-              items={state.models.filter(model => !filters.type || model.type === filters.type)}/>
-            <MultiPick compact label="服务商" value={filters.provider} onChange={value => set('provider', value)} items={state.providers}/>
-          </div>
+          <FilterToolbar>
+            <Choice label="模型类型" value={filters.type || 'all'} options={modelTypes.map(([id, label]) => [id || 'all', label])}
+              onChange={value => change({ type: value === 'all' ? '' : value, callId: null, model: null })}/>
+            {selectors.map(([dimension, label]) => <ObservationPick key={dimension} dimension={dimension} label={label}
+              rows={dimension === 'callId' ? modelRows : requests} filters={filters} onChange={change}/>)}
+            <ObservationSupplyPick {...supply} onChange={change}/>
+            {filters.model != null && <ObservationPick dimension="model" label="模型" rows={requests} filters={filters} onChange={change}/>}
+          </FilterToolbar>
           <SavedFilterViews notify={Toast} scope="admin-call-analysis" legacyKey="moma-admin2-5120-analytics-views" showCurrent={false}
-            disabled={invalid} groups={viewGroups} value={{ period, filters, granularity }} onApply={applyView}/>
+            disabled={!window} groups={viewGroups} value={{ period: filters.period, filters, granularity, groupBy }} onApply={applyView}/>
         </div>
       </div>
     </Card>
-    {invalid ? <Banner type="danger" closeIcon={null} description={
-      `${granularity === 'week' ? '周粒度最多 365 天' : '日粒度最多 30 天'}，结束日期不能晚于今天，请调整日期范围。`
-    }/> : <>
+    {!window ? <Banner type="danger" closeIcon={null} description="请选择不超过 365 天的有效时间范围。"/> : <>
       {!rows.length && <Paragraph type="secondary" role="status">所选时段暂无调用记录。</Paragraph>}
       <Card title={<Title heading={5} component="h2">调用概览</Title>} headerExtraContent={
-        <Button icon={<IconArrowRight aria-hidden="true"/>} iconPosition="right" onClick={failedLogs}>查看失败日志</Button>
+        <Button icon={<IconArrowRight aria-hidden="true"/>} iconPosition="right" onClick={() => drill(window, { outcome: 'failed' })}>查看失败日志</Button>
       }>
-        <div className="admin-analysis-metrics admin-analysis-metrics-four">
-          {summaryItems.map(([title, value, help]) => <div key={title} className="admin-analysis-metric">
+        <div className="admin-analysis-metrics admin-call-metrics">
+          {stats.map(([title, value, detail, help]) => <div key={title} className="admin-analysis-metric">
             <div className="admin-analysis-metric-label"><Text type="secondary">{title}</Text>{help && <AnalysisHelp label={title}>{help}</AnalysisHelp>}</div>
             <Title heading={4} component="span">{value}</Title>
+            {detail && <Text type="tertiary" size="small">{detail}</Text>}
           </div>)}
         </div>
       </Card>
       <div className="admin-analysis-plot-grid">
-        <Plot title="请求量趋势" labels={labels} unit="次" series={[series('全部请求', 'calls'), series('失败请求', 'failed')]}/>
-        <Plot title="成功率趋势" labels={labels} unit="%" series={[series('成功率', 'rate')]}/>
-        <Plot title="响应时延趋势" labels={labels} unit="ms" series={[series('平均', 'avg'), series('P95', 'p95')]}/>
-        {(!filters.type || ['text', 'multimodal'].includes(filters.type)) &&
-          <Plot title="首 Token 时延（已上报样本）" labels={labels} unit="ms" series={[series('平均 TTFT', 'ttft')]}/>}
-        <Plot title="请求吞吐 RPM" labels={labels} unit="次/分钟" series={[{ label: '平均 RPM',
-          values: buckets.map(bucket => bucket.calls / (granularity === 'week' ? bucket.days * 1440 : 1440)) }]}/>
-        {!['audio', 'video', 'image'].includes(filters.type) &&
-          <Plot title="Token 吞吐 TPM" labels={labels} unit="Token/分钟" series={[{ label: '平均 TPM', values: buckets.map(bucket => bucket.total / 1440) }]}/>}
-        <Plot title="状态码分布趋势" labels={labels} unit="次" series={[2, 4, 5, '其他'].map(code => ({
-          label: code === '其他' ? code : `${code}xx`,
-          values: buckets.map(bucket => bucket.rows.filter(row => {
-            const category = Math.floor(row.httpStatus / 100);
-            return code === '其他' ? ![2, 4, 5].includes(category) : category === code;
-          }).length),
-        }))}/>
-        <Card title={<Space wrap><Title heading={5} component="h2">单次调用输入长度分布</Title>
-          <AnalysisHelp label="输入长度分布">按单次客户请求的输入 Token 分段；缺失字段不当作零。</AnalysisHelp>
-        </Space>} headerExtraContent={<Choice label="长度分布指标" value={lengthMetric}
-          options={[[ 'calls', '请求数' ], [ 'tokens', '输入 Token' ]]} onSelect={setLengthMetric}/>}>
-          {rows.some(row => Number.isFinite(row.usage?.input))
-            ? <TimeSeriesChart compact type="bar" labels={lengths.map(bucket => bucket.label)}
-                series={[{ label: lengthMetric === 'calls' ? '请求数' : '输入 Token', values: lengths.map(bucket => bucket[lengthMetric]) }]}
-                unit={lengthMetric === 'calls' ? '次' : 'Token'} label="单次调用输入长度分布" height={260}/>
-            : <Paragraph type="secondary">当前范围没有已上报输入 Token 的调用</Paragraph>}
+        <ObservationPlot title="请求量趋势" type="bar" stacked labels={timeLabels} unit="次"
+          series={requestStates.map(([label, field, color]) => ({ ...seriesOf(trend, label, field), color }))}
+          onChoose={(index, name) => drill(buckets[index], { outcome: outcomeForSeries.get(name) })}/>
+        <ObservationPlot title="耗时趋势" labels={timeLabels} unit="ms"
+          actions={<Choice label="耗时指标" value={latency} options={latencyChoices} onChange={setLatency}/>}
+          series={[seriesOf(trend, new Map(latencyChoices).get(latency), latency)]} onChoose={index => drill(buckets[index])}/>
+        <ObservationPlot title="Token 用量趋势" type="bar" stacked labels={timeLabels} unit="Token"
+          series={[seriesOf(trend, '输入 Token', 'input'), seriesOf(trend, '输出 Token', 'output')]} onChoose={index => drill(buckets[index])}/>
+        <Card title={<Title heading={5} component="h2">失败请求状态码分布</Title>}>
+          {statusRows.length ? <HorizontalBarChart rows={statusRows} label="失败请求状态码分布" unit="次" showData
+            onChoose={http => drill(window, { outcome: 'failed', http })}/> : <Paragraph type="secondary">所选范围暂无失败请求。</Paragraph>}
         </Card>
+        <ObservationPlot title="单次请求输入长度分布" type="bar" labels={lengths.map(bucket => bucket.label)}
+          unit={lengthMetric === 'count' ? '次' : 'Token'} actions={
+            <Choice label="长度分布指标" value={lengthMetric} options={countChoices} onChange={setLengthMetric}/>
+          } series={[{ label: new Map(countChoices).get(lengthMetric), values: lengths.map(bucket => summary.input == null
+            ? null : bucket[lengthMetric === 'count' ? 'calls' : 'tokens']) }]}/>
       </div>
-      {['image', 'video'].includes(filters.type) && <Paragraph type="tertiary">当前为请求接收统计；任务终态与完成时长未采集，不代表生成成功率。</Paragraph>}
-      <Card title={<Space><Title heading={5} component="h2">模型性能明细</Title>
-        <AnalysisHelp label="模型性能统计">TTFT 仅统计已上报样本；TPM 为所选完整时间区间平均值。</AnalysisHelp>
-      </Space>}>
-        <Table rowKey="id" size="small" dataSource={byModel} columns={detailColumns} pagination={false}
-          empty="所选范围暂无记录" scroll={{ x: 'max(100%, 880px)' }}/>
+      <Card title={<Title heading={5} component="h2">分组明细</Title>}
+        headerExtraContent={<Choice label="统计分组" value={groupBy} options={grouping} onChange={setGroupBy}/>}>
+        <Table rowKey="id" size="small" dataSource={grouped} columns={columns} pagination={false}
+          empty="所选范围暂无记录" scroll={{ x: 'max(100%, 840px)' }}/>
       </Card>
     </>}
   </div>;

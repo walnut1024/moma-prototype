@@ -4,7 +4,7 @@ import {
   IconBookOpenStroked, IconBookStroked, IconBox, IconChainStroked, IconChecklistStroked,
   IconCoinMoneyStroked, IconComponentStroked, IconFlowChartStroked, IconGridStroked, IconLayers,
   IconMenu, IconMonitorStroked, IconPlayCircle, IconPriceTag, IconPulse, IconServerStroked,
-  IconTaskMoneyStroked, IconUserGroup, IconUserSetting, IconUserStroked,
+  IconUserGroup, IconUserSetting, IconUserStroked,
 } from '@douyinfe/semi-icons';
 import CloudModelOperations from './admin-v2/CloudModelOperations';
 import {sharedRequests} from './business-facts.mjs';
@@ -27,6 +27,7 @@ import { ClusterManagement, ModelDeployments, ModelObservability } from "./admin
 import ProviderManagement from "./admin-v2/ProviderManagement";
 const TrafficOperations = lazy(() => import('./admin-v2/TrafficOperations'));
 const ModelMaterials = lazy(()=>import('./admin-v2/ModelMaterials'));
+const ProviderMaterials = lazy(()=>import('./admin-v2/ProviderMaterials'));
 const MaterialDictionaryPage = lazy(()=>import('./admin-v2/MaterialDictionaryPage'));
 import CustomerPage from "./admin-v2/CustomerPages";
 import IndividualUsersPage from "./admin-v2/IndividualUsersPage";
@@ -34,12 +35,15 @@ import { individualAccounts, individualName } from "./admin-v2/individual-users"
 import CustomerUsageDetail from "./admin-v2/CustomerUsageDetail";
 import ModelCosts from './admin-v2/ModelCosts';
 import ModelPrices from './admin-v2/ModelPrices';
+import ModelMarket from './admin-v2/ModelMarket';
 import ModelManagement from "./admin-v2/ModelManagement";
 import { privateEnterprise } from "./admin-v2/enterprise";
 import GatewayPage, { gatewaySettingsPages } from "./admin-v2/GatewayPages";
 import ObservabilityPage from "./admin-v2/ObservabilityPages";
 import ArtifactManagement from './admin-v2/ArtifactManagement';
 import BusinessOperationsPage from "./admin-v2/BusinessOperationsPages";
+import PackageProduction from "./admin-v2/PackageProduction";
+import PackageData from "./admin-v2/PackageData";
 import AdminPageBoundary from "./admin-v2/AdminPageBoundary";
 import AdminAccounts from "./admin-v2/AdminAccounts";
 import { ADMIN_ROLE_LABELS } from "./admin-v2/admin-accounts";
@@ -50,18 +54,21 @@ const NAVIGATION_ICONS = {
   overview: IconGridStroked,
   usage: IconBarChartVStroked,
   'users-analysis': IconUserGroup,
-  'supply-analysis': IconLayers,
-  'business-analysis': IconBarChartVStroked,
   channels: IconChainStroked,
   warehouse: IconLayers,
+  market: IconAppCenter,
   costs: IconCoinMoneyStroked,
   prices: IconPriceTag,
   materials: IconBookStroked,
+  'package-production': IconBox,
+  'package-data': IconChecklistStroked,
   'traffic-limits': IconActivity,
   enterprise: IconApartment,
   individual: IconUserStroked,
   calls: IconPulse,
   gateway: IconFlowChartStroked,
+  logs: IconChecklistStroked,
+  monitoring: IconMonitorStroked,
   clusters: IconServerStroked,
   deployments: IconPlayCircle,
   artifacts: IconComponentStroked,
@@ -73,12 +80,13 @@ const NAVIGATION_ICONS = {
 export default function AdminConsoleV2(props) {
   const [hash,setHash]=useState(location.hash);
   useEffect(()=>{const sync=()=>setHash(location.hash);addEventListener('hashchange',sync);return()=>removeEventListener('hashchange',sync);},[]);
-  const cloud=/^#\/admin-2\/(listing|providers|model-costs|model-prices|model-templates|tariff-dictionary)(?:[/?]|$)/.test(hash);
-  return <ConfigProvider locale={zhCN}>{cloud?<CloudModelOperations>{store=><AdminConsoleV2View {...props} store={store}/>}</CloudModelOperations>:<LocalAdminConsole {...props}/>}</ConfigProvider>;
+  const cloud=/^#\/admin-2\/(listing|providers|model-market|model-costs|model-prices|model-templates|provider-materials|tariff-dictionary)(?:[/?]|$)/.test(hash);
+  const packageWorkspace=/^#\/admin-2\/(?:package-production|package-data)(?:[/?]|$)/.test(hash);
+  return <ConfigProvider locale={zhCN}>{cloud || packageWorkspace ? <CloudModelOperations key={packageWorkspace?'packages':'models'} packageWorkspace={packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store}/>}</CloudModelOperations>:<LocalAdminConsole {...props}/>}</ConfigProvider>;
 }
 function LocalAdminConsole(props){const store=useAdminStore(Toast);return <AdminConsoleV2View {...props} store={store}/>;}
 function AdminConsoleV2View({bannerTarget,store}) {
-  const { state, dispatch, transact, transactModel, transactIndividual, transactAdminAccount, transactTraffic, reload, conflict } = store;
+  const { state, dispatch, transact, transactModel, transactIndividual, transactAdminAccount, reload, conflict } = store;
   useEffect(() => { if(!state.cloudOperations)setMockRuntimeState(state); }, [state]);
   const factState={...state,requests:sharedRequests(state)};
   const initialPage = pageFromHash(location.hash, state.currentRole);
@@ -137,7 +145,7 @@ function AdminConsoleV2View({bannerTarget,store}) {
     location.hash = lastVisits.current[nextWorkspace];
   };
   const page = pages[active];
-  const detailProvider = active === "providers" ? state.providers.find(item => item.id === detailParams.get("provider")) : null;
+  const detailProvider = ['providers', 'provider-materials'].includes(active) ? state.providers.find(item => item.id === detailParams.get("provider")) : null;
   const activeModule = sections.flatMap(group => group.items).find(item => item.id === page.area);
   const detailTenant = active === 'customer-usage-detail' ? state.tenants.find(item => item.id === new URLSearchParams(location.hash.split('?')[1] || '').get('customer')) : null;
   const detailModel = detailParams.get('view') === 'template' && ['listing', 'model-templates'].includes(active) ? libraryRecord(state, detailParams.get('template'))
@@ -205,20 +213,24 @@ function AdminConsoleV2View({bannerTarget,store}) {
           ) : <>
             {active === "getting-started" ? <GettingStarted guideId={detailParams.get('guide')}/>
             : active === "dashboard" ? <OperationsOverview state={factState}/>
-            : ["usage-analysis", "user-analysis", "supply-analysis", "business-analysis", "call-analysis"].includes(active) ? <AnalyticsPages pageId={active} state={factState}/>
+            : ["usage-analysis", "user-analysis", "call-analysis"].includes(active) ? <AnalyticsPages pageId={active} state={factState}/>
             : active === 'customer-usage-detail' ? <CustomerUsageDetail state={factState}/>
             : active === "admins" ? <AdminAccounts state={state} transact={transactAdminAccount} conflict={conflict}/>
             : active === "model-costs" ? <ModelCosts state={state} transact={transactModel} conflict={conflict} reload={reload}/>
+            : active === "model-market" ? <ModelMarket state={state} transact={transactModel} conflict={conflict}/>
             : active === "model-prices" ? <ModelPrices state={state} transact={transactModel} conflict={conflict} reload={reload}/>
             : active === "tariff-dictionary" ? <Suspense fallback={<AdminPageLoading label="模型资料"/>}><MaterialDictionaryPage state={state} transact={transactModel} conflict={conflict}/></Suspense>
             : active === "providers" ? <ProviderManagement state={state} transact={transactModel} conflict={conflict} reload={reload}/>
+            : active === 'provider-materials' ? <Suspense fallback={<AdminPageLoading label="服务商资料"/>}><ProviderMaterials state={state} transact={transactModel} conflict={conflict} reload={reload}/></Suspense>
             : active === 'model-templates' ? <Suspense fallback={<AdminPageLoading label="模型资料"/>}><ModelMaterials state={modelOperationsView(state,'all')} transact={transactModel} conflict={conflict} reload={reload}/></Suspense>
             : active === 'listing' ? <ModelManagement sourceState={state} state={modelOperationsView(state,new URLSearchParams(location.hash.split('?')[1]).get('catalogue'),new URLSearchParams(location.hash.split('?')[1]).get('model'))} transact={transactModel} conflict={conflict} reload={reload}/>
-            : active === 'traffic-limits' ? <Suspense fallback={<AdminPageLoading label="限流配置"/>}><TrafficOperations key={state.adminSession.accountId} state={state} transact={transactTraffic} conflict={conflict} dirtyRef={draftDirty}/></Suspense>
+            : active === "package-data" ? <PackageData state={state} params={detailParams}/>
+            : active === "package-production" ? <PackageProduction state={state} transact={transact} conflict={conflict} params={detailParams} dirty={draftDirty}/>
+            : active === 'traffic-limits' ? <Suspense fallback={<AdminPageLoading label="限流配置"/>}><TrafficOperations key={state.adminSession.accountId} state={state} dirtyRef={draftDirty}/></Suspense>
             : active === "individual-users" ? <IndividualUsersPage state={state} transact={transactIndividual} conflict={conflict}/>
             : active === "tenants" ? <CustomerPage state={state} transact={transact} deploymentTarget={deploymentTarget}/>
             : gatewaySettings ? <GatewayPage key={active} pageId={active} state={state} dispatch={dispatch}/>
-            : ["monitoring", "logs", "alerts", "incidents", "sla"].includes(active) ? <ObservabilityPage pageId={active} state={factState} dispatch={dispatch} navigate={navigate}/>
+            : ["monitoring", "logs", "alerts", "incidents", "sla"].includes(active) ? <ObservabilityPage pageId={active} params={detailParams} state={factState} dispatch={dispatch} navigate={navigate}/>
             : active === "clusters" ? <ClusterManagement state={state} dispatch={dispatch}/>
             : active === "deployments" ? <ModelDeployments state={state} dispatch={dispatch} conflict={conflict}/>
             : active === "artifacts" ? <ArtifactManagement state={state} dispatch={dispatch}/>

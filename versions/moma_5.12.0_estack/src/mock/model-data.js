@@ -4,6 +4,7 @@ import scenario from './model-operations.json' with { type: 'json' };
 
 export const MODEL_DATA_COLLECTIONS = Object.keys(scenario.collections);
 export const MODEL_DATASET = scenario;
+export const marketDemoModelIds = () => [...new Set([system, workspace, scenario].flatMap(data => data.collections.models.map(model => model.id)))];
 export const systemModelData = () => structuredClone(system.collections);
 const ids = collections => Object.fromEntries(MODEL_DATA_COLLECTIONS.map(key => [key, (collections[key] || []).map(row => row.id)]));
 function instantiateWorkspace(at) {

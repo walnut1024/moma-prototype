@@ -9,11 +9,18 @@ import { initializeModelWorkspace } from '../server/model-repository.js';
 
 // Tooling only: SQLite parses the original migration, D1 executes every resulting DDL statement.
 export async function migrateEmptyDatabase(db) {
+  const [trafficDefaults, trafficRules, channelMarket] = await Promise.all(['0009_user_traffic_defaults.sql', '0010_traffic_limits.sql','0011_channel_market.sql'].map(async file => {
+    const sql = await readFile(new URL('./migrations/' + file, import.meta.url), 'utf8');
+    return sql.trim().split('\n').map(line => db.prepare(line));
+  }));
   const current = await db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='db_state'").first();
   if (current) {
     const state = await db.prepare('SELECT schema_version FROM db_state WHERE id=1').first();
-    if(![1,2,3,4,5].includes(state?.schema_version))throw Error('数据库结构版本不匹配');
-    for(const [version,file]of [[2,'0002_domain_records.sql'],[3,'0003_full_model_scope.sql'],[4,'0004_model_metadata.sql'],[5,'0005_billing_item_units.sql']])if(state.schema_version<version){const sql=await readFile(new URL('./migrations/'+file,import.meta.url),'utf8');await db.batch(sql.trim().split('\n').filter(Boolean).map(line=>db.prepare(line)));}
+    if(![1,2,3,4,5,6,7,8,9,10,11].includes(state?.schema_version))throw Error('数据库结构版本不匹配');
+    for(const [version,file]of [[2,'0002_domain_records.sql'],[3,'0003_full_model_scope.sql'],[4,'0004_model_metadata.sql'],[5,'0005_billing_item_units.sql'],[6,'0006_token_packages.sql'],[7,'0007_package_model_factors.sql'],[8,'0008_package_factor_rules.sql']])if(state.schema_version<version){const sql=await readFile(new URL('./migrations/'+file,import.meta.url),'utf8');await db.batch(sql.trim().split('\n').filter(Boolean).map(line=>db.prepare(line)));}
+    if (state.schema_version < 9) await db.batch(trafficDefaults);
+    if (state.schema_version < 10) await db.batch(trafficRules);
+    if (state.schema_version < 11) await db.batch(channelMarket);
     return;
   }
   const existing = await db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'").all();
@@ -25,12 +32,16 @@ export async function migrateEmptyDatabase(db) {
     sqlite.exec(await readFile(new URL('./migrations/0003_full_model_scope.sql',import.meta.url),'utf8'));
     sqlite.exec(await readFile(new URL('./migrations/0004_model_metadata.sql',import.meta.url),'utf8'));
     sqlite.exec(await readFile(new URL('./migrations/0005_billing_item_units.sql',import.meta.url),'utf8'));
+    sqlite.exec(await readFile(new URL('./migrations/0006_token_packages.sql',import.meta.url),'utf8'));
+    sqlite.exec(await readFile(new URL('./migrations/0007_package_model_factors.sql',import.meta.url),'utf8'));
+    sqlite.exec(await readFile(new URL('./migrations/0008_package_factor_rules.sql',import.meta.url),'utf8'));
     const schema = sqlite.prepare('SELECT sql FROM sqlite_schema WHERE sql IS NOT NULL ORDER BY rowid').all();
-    await db.batch([...schema.map(row => db.prepare(row.sql)), db.prepare('INSERT INTO db_state(id,schema_version,commit_seq) VALUES(1,5,0)')]);
+    await db.batch([...schema.map(row => db.prepare(row.sql)), db.prepare('INSERT INTO db_state(id,schema_version,commit_seq) VALUES(1,8,0)'), ...trafficDefaults, ...trafficRules]);
+    await db.batch(channelMarket);
   } finally { sqlite.close(); }
 }
 
-export async function startLocalBackend({ persistPath, loginHashes, port = 0, log } = {}) {
+export async function startLocalBackend({ persistPath, loginHashes, port = 0, log, demo = false } = {}) {
   const source = fileURLToPath(new URL('../server/api.js', import.meta.url));
   const bundled = await build({ stdin: { contents: `import {handleModelOperations} from ${JSON.stringify(source)}; export default {fetch:handleModelOperations};`, resolveDir: process.cwd() },
     plugins:[modelWorkerDataPlugin], bundle: true, write: false, format: 'esm', platform: 'browser', target: 'es2022' });
@@ -41,9 +52,10 @@ export async function startLocalBackend({ persistPath, loginHashes, port = 0, lo
   try {
     const db = await runtime.getD1Database('MODEL_OPS_DB');
     await migrateEmptyDatabase(db);
-    const seed = await createSeed();
-    const initialization = await initializeDatabase(db, seed);
-    await initializeModelWorkspace(db);
-    return { runtime, db, seed, initialization, url: await runtime.ready };
+    if (demo && !await db.prepare('SELECT id FROM model_workspace WHERE id=1').first()) {
+      await initializeDatabase(db, await createSeed());
+    }
+    const initialization = await initializeModelWorkspace(db, { demo });
+    return { runtime, db, initialization, url: await runtime.ready };
   } catch (error) { await runtime.dispose(); throw error; }
 }

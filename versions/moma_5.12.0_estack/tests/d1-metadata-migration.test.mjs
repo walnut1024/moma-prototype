@@ -23,7 +23,7 @@ test('v3 to current schema migration preserves every business record and foreign
         if(['materials','model_template_records','services'].includes(table))row.record_json=JSON.stringify(domainModel(JSON.parse(row.record_json),table==='services'));
         if(table==='materials'){row.code=row.canonical_slug;delete row.canonical_slug;const metadata=domainModel(JSON.parse(row.metadata_json));row.profile_json=JSON.stringify(metadata.profile);row.capabilities_json=JSON.stringify(metadata.capabilities);delete row.metadata_json;}
         if(table==='billing_items')row.unit_id=JSON.parse(row.record_json).unitId;
-        if(table==='offers'){row.call_id=row.id;row.id=row.record_id;delete row.record_id;}
+        if(table==='offers'){row.call_id=row.id;row.id=row.record_id;delete row.record_id;delete row.channel_model_id;delete row.listing_stage;delete row.gray_tenants_json;}
         return row;
       });
       if(!records.length)continue;
@@ -34,7 +34,7 @@ test('v3 to current schema migration preserves every business record and foreign
     statements.push(db.prepare('INSERT INTO model_workspace VALUES(1,?,?,?)').bind(state.revision,JSON.stringify({modelData:state.modelData,updatedAt:state.updatedAt}),JSON.stringify(reference)));
     await db.batch(statements);
     await migrateEmptyDatabase(db);
-    assert.equal((await db.prepare('SELECT schema_version FROM db_state').first()).schema_version,5);
+    assert.equal((await db.prepare('SELECT schema_version FROM db_state').first()).schema_version,11);
     assert.equal((await db.prepare('PRAGMA foreign_key_check').all()).results.length,0);
     const restored=await loadModelWorkspace(db,{id:'admin-001',role:'平台管理员'});
     for(const key of ['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','serviceRoutes'])assert.deepEqual([...restored[key]].sort((a,b)=>a.id.localeCompare(b.id)),[...state[key]].sort((a,b)=>a.id.localeCompare(b.id)),key);

@@ -29,7 +29,7 @@ test('cloud service configuration leaves the original workspace and simulation h
 
 test('both 5.12.0 modes complete detection, trial, publication and unlisting through HTTP and D1', {timeout:120000}, async()=>{
   const accessCode=randomBytes(32).toString('hex');
-  const local=await startLocalBackend({loginHashes:{'admin-001':createHash('sha256').update(accessCode).digest('hex')}});
+  const local=await startLocalBackend({ demo: true, loginHashes:{'admin-001':createHash('sha256').update(accessCode).digest('hex')}});
   let cookie,state;
   async function api(path,{method='GET',body,operationId}={}){
     const r=await local.runtime.dispatchFetch('https://example.test/api/5120'+path,{method,headers:{...(cookie?{cookie}:{}),...(method==='GET'?{}:{origin:'https://example.test','x-moma-request':'1','content-type':'application/json'}),...(operationId?{'idempotency-key':operationId}:{})},...(body?{body:JSON.stringify(body)}:{})});
@@ -77,7 +77,9 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     assert.deepEqual(current.map(m=>m.serviceMode).sort(),['provider','standard']);
     assert((await local.db.prepare('SELECT count(*) AS n FROM publications').first()).n>=3);
     assert((await local.db.prepare('SELECT count(*) AS n FROM simulation_records').first()).n>10);
-    const releaseModel=current.find(m=>m.serviceMode==='standard'),releaseScope=structuredClone({openScope:releaseModel.openScope,tenantIds:releaseModel.tenantIds});
+    let releaseModel=current.find(m=>m.serviceMode==='standard'),releaseScope=structuredClone({openScope:releaseModel.openScope,tenantIds:releaseModel.tenantIds});
+    fresh=await save(fresh,{type:'modelOperations',operation:'salesSettings',modelId:releaseModel.id,data:{scope:{openScope:'all',tenantIds:[]},confirmed:true,expectedUpdatedAt:releaseModel.updatedAt}});
+    releaseModel=fresh.models.find(row=>row.id===releaseModel.id);
     state=await save(fresh,{type:'modelOperations',operation:'startSales',modelId:releaseModel.id,data:{releaseStage:'gray',releaseTenantIds:['tenant-gov'],confirmed:true,expectedUpdatedAt:releaseModel.updatedAt}});
     fresh=(await api('/model-operations')).data;const gray=fresh.models.find(m=>m.id===releaseModel.id);assert.equal(gray.releaseStage,'gray');assert.deepEqual(gray.releaseTenantIds,['tenant-gov']);assert.deepEqual({openScope:gray.openScope,tenantIds:gray.tenantIds},releaseScope);
     state=await save(fresh,{type:'modelOperations',operation:'startSales',modelId:gray.id,data:{releaseStage:'formal',confirmed:true,expectedUpdatedAt:gray.updatedAt}});
@@ -221,7 +223,6 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     state=await commit('associateServiceChannels',{providerId:owner().id,catalogueModelId:association.modelId,channelIds:[association.id],confirmedIdentity:true,expectedUpdatedAt:internal().updatedAt},internalId);
     const service=routingServices(state).find(row=>row.modelId===internalId),supply=state.modelSupplies.find(row=>row.modelId===internalId);
     state=await commit('serviceRoutePublish',{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'weighted',autoFailover:false,channels:[{supplyId:supply.id,enabled:true,priority:1,weight:100}]}},internalId);
-    state=await commit('commercialPublish',{kind:'scope',expectedBase:(await import('../src/admin-v2/service-workspace.js')).commercialTaskBase(state,internal(),'scope'),value:{openScope:'all',tenantIds:[]},confirmed:true},internalId);
     const trial=await runPlatformTrial(platformCandidatePlan(state,internal(),{serviceId:service.id,tenantIds:['tenant-gov'],supplyIds:[supply.id],technical:true}));
     assert.equal(trial.result.technicalReady,true);assert.equal(trial.result.cost,null);assert.equal(trial.result.saleTrial,null);assert.equal(trial.result.customerDebited,false);
     const publication=await publishPlatformCandidate(trial.service);

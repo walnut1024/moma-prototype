@@ -30,7 +30,7 @@ export function normalizeCataloguePrice(draft) {
     const condition = item.condition == null ? '' : item.condition;
     if (typeof condition !== 'string' || /[\r\n]/.test(condition) || condition.trim().length > 160) throw new Error('适用条件最多 160 字，不能换行');
     const key = JSON.stringify([name, unit, currency, condition.trim()]);
-    if (seen.has(key)) throw new Error('同一计费项、计价单位、货币和适用条件不可重复');
+    if (seen.has(key)) throw new Error('同一计费项、计费单位、货币和适用条件不可重复');
     seen.add(key);
     const purchasePrice = decimal(item.purchasePrice, '平台成本');
     return { name, unit, currency, ...(condition.trim() ? { condition: condition.trim() } : {}), listPrice: decimal(item.listPrice, '服务商目录价'), ...(purchasePrice == null ? {} : { purchasePrice }) };

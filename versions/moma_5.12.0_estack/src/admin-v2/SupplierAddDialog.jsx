@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@douyinfe/semi-ui';
+import { Button, Input } from '@douyinfe/semi-ui';
 import SupplierModelMultiSelect from './SupplierModelMultiSelect';
 import { Field, Choice } from './ServiceUI';
 import { Notice } from './ModelOperationsUI';
@@ -12,7 +12,7 @@ import SupplierChannelFields from './SupplierChannelFields';
 
 export default function SupplierAddDialog({ state, provider: fixedProvider, mode, libraryId, ops, close }) {
   const [providerId, setProviderId] = useState(fixedProvider?.id || ''), [libraryIds, setLibraryIds] = useState(() => supplierModelSelection(ops.params.get('selectedModels')).filter(id=>!fixedProvider || !registeredSupplierModelIds(state,fixedProvider).includes(id)).concat(libraryId ? [libraryId] : []).filter((id,index,ids)=>ids.indexOf(id)===index));
-  const [value, setValue] = useState({ modelId: '', name: '', upstreamModelId: '', baseUrl: '', protocol: 'OpenAI', keyGroupId: 'default', independent: false, scenarios: [] });
+  const [value, setValue] = useState({ modelId: '', name: '', sourceName: '', upstreamModelId: '', baseUrl: '', protocol: 'OpenAI', keyGroupId: 'default', independent: false, scenarios: [] });
   const [rawKey, setRawKey] = useState(''), [saving, setSaving] = useState(false),[stage,setStage]=useState(mode),[registered,setRegistered]=useState(null),[endpointId,setEndpointId]=useState('');
   const provider = state.providers.find(row => row.id === providerId);
   const models = provider ? supplierModelChannelGroups(state, provider).filter(row => row.modelId) : [];
@@ -34,9 +34,10 @@ export default function SupplierAddDialog({ state, provider: fixedProvider, mode
         supplierModelRegistration(state, provider, libraryIds);
         operation = 'supplierModelsRegister'; data = { providerId, libraryIds };
       } else {
+        if (!models.some(row=>row.modelId===selected)) throw Error('请选择当前服务商已登记的模型');
         operation = 'supplierChannelRegister';
         data = { providerId, modelId: selected, name: value.name, upstreamModelId: value.upstreamModelId, baseUrl: value.baseUrl, protocol: value.protocol, scenarios: [], authMode: value.independent ? 'independent' : 'group', keyGroupId: value.keyGroupId };
-        if(reused)data={providerId,modelId:selected,upstreamModelId:value.upstreamModelId,scenarios:[],endpointId:reused.id,expectedEndpointUpdatedAt:reused.updatedAt};
+        if(reused)data={providerId,modelId:selected,sourceName:value.sourceName.trim(),upstreamModelId:value.upstreamModelId,scenarios:[],endpointId:reused.id,expectedEndpointUpdatedAt:reused.updatedAt};
         else if (value.independent) data.apiKey = (await providerApiKeysDraft([rawKey])).apiKeys[0];
       }
       if (!ops.isCurrent()) throw Error('权限或数据已有变化，请重新核对');
@@ -51,8 +52,8 @@ export default function SupplierAddDialog({ state, provider: fixedProvider, mode
       <Field label="模型 *" hint="来自模型资料 → 模型，每次最多选择 5 个"><SupplierModelMultiSelect state={state} registered={provider ? registeredSupplierModelIds(state, provider) : []} value={libraryIds} disabled={disabled || !provider} onChange={ids => { setLibraryIds(ids); dirty(); }}/></Field>
       <Button theme="borderless" type="tertiary" onClick={() => { const back=new URLSearchParams({provider:providerId,perspective:'suppliers',tab:'catalogue',addingModel:'1',selectedModels:JSON.stringify(libraryIds)}); ops.go({view:'templates',template:null,returnProvider:'#/admin-2/providers?'+back},{base:'model-templates',saved:true}); }}>维护模型资料</Button>
     </> : <>
-      <Field label="连接方式"><Choice label="连接方式" value={endpointId || 'new'} options={[[ 'new','新建连接'],...connections.filter(row=>!models.find(item=>item.modelId===selected)?.channels.some(channel=>channel.endpointId===row.id)).map(row=>[row.id,'复用：'+row.name])]} disabled={disabled} onChange={id=>{setEndpointId(id==='new'?'':id);const endpoint=connections.find(row=>row.id===id);if(endpoint)set({name:endpoint.name,baseUrl:endpoint.baseUrl,protocol:endpoint.protocol});else dirty();setRawKey('');}}/></Field>
-      {reused && <Notice>复用当前服务商的连接和密钥，新增当前模型的上游标识。</Notice>}
+      <Field label="连接方式"><Choice label="连接方式" value={endpointId || 'new'} options={[[ 'new','新建连接'],...connections.map(row=>[row.id,'复用：'+row.name])]} disabled={disabled} onSelect={id=>{setEndpointId(id==='new'?'':id);const endpoint=connections.find(row=>row.id===id);if(endpoint)set({name:endpoint.name,baseUrl:endpoint.baseUrl,protocol:endpoint.protocol});else dirty();setRawKey('');}}/></Field>
+      {reused && <Field label="渠道来源名称 *"><Input aria-label="渠道来源名称" maxLength={60} value={value.sourceName} onChange={sourceName=>set({sourceName})} disabled={disabled}/></Field>}
       <SupplierChannelFields connectionReadOnly={Boolean(reused)} ops={ops} state={state} provider={provider} models={models} value={{ ...value, modelId: selected }} rawKey={rawKey} disabled={disabled} onChange={set} onKeyChange={key => { setRawKey(key); dirty(); }}/>
     </>}
     {ops.error && <Notice error>{ops.error}</Notice>}

@@ -8,17 +8,13 @@ import { modelCategory } from './model-management';
 import { modelProfileDraft } from './model-profile';
 import { materialModalitiesLabel } from './material-catalogue';
 import { materialDrawerSide } from './model-material-drawer';
-
-function MaterialLogo({src,name}) {
-  const [failed,setFailed]=useState(false);
-  return src && !failed ? <img className="materials-logo" src={src} alt={name+'的模型展示 Logo'} referrerPolicy="no-referrer" loading="lazy" onError={()=>setFailed(true)}/> : '—';
-}
+import MaterialLogo from './MaterialLogo';
 
 export default function MaterialCatalogue({ state, ops }) {
   const [query, setQuery] = useState(''), [type, setType] = useState('all'), [removing, setRemoving] = useState(null), [busy, setBusy] = useState(false);
   const trigger = useRef(null);
   const [pagination,setPagination]=useState({currentPage:1,pageSize:20});
-  const open = (event, record, mode) => { trigger.current = event.currentTarget; ops.go({ view: 'template', template: record.id, materialMode: mode, drawerSide: materialDrawerSide(event.currentTarget.getBoundingClientRect(), window.innerWidth) }, { preserveScroll: true }); };
+  const open = (event, record, mode) => { trigger.current = event.currentTarget; ops.go({ view: 'template', template: record.id, materialMode: mode, materialTab: null, drawerSide: materialDrawerSide(event.currentTarget.getBoundingClientRect(), window.innerWidth) }, { preserveScroll: true }); };
   const rows = modelCatalogue(state).filter(row => (!query || [row.name, row.modelId, row.profile?.author, row.maker].join(' ').toLowerCase().includes(query.trim().toLowerCase())) && (type === 'all' || modelCategory(row.type) === type)).sort(modelReleaseOrder);
   const { pageSize } = pagination;
   const currentPage = Math.min(pagination.currentPage, Math.ceil(rows.length / pageSize) || 1);
@@ -28,7 +24,7 @@ export default function MaterialCatalogue({ state, ops }) {
     { title: '作者', width: 140, render: (_, row) => modelProfileDraft(row).author || row.maker || '—' },
     { title: '原厂发布日期', width: 130, render: (_, row) => modelProfileDraft(row).releaseDate || '—' },
     { title: '模型类型', width: 100, render: (_, row) => MODEL_CATALOGUE_TYPES[modelCategory(row.type)] },
-    { title: '模型展示 Logo', width: 130, render: (_, row) => <MaterialLogo key={modelProfileDraft(row).logo || ''} src={modelProfileDraft(row).logo} name={row.name}/> },
+    { title: '模型展示 Logo', width: 130, render: (_, row) => <MaterialLogo key={modelProfileDraft(row).logo || ''} src={modelProfileDraft(row).logo} alt={row.name+'的模型展示 Logo'}/> },
     { title: '输入 / 输出', width: 200, render: (_, row) => { const profile = modelProfileDraft(row); return materialModalitiesLabel(profile); } },
     { title: '上下文窗口', width: 130, render: (_, row) => row.capabilities.context ? `${row.capabilities.context / 1024}K Token` : '—' },
     { title: '操作', width: 140, fixed: 'right', render: (_, row) => <Space><Button theme="borderless" disabled={!ops.can} onClick={event => open(event, row, 'edit')}>编辑</Button><Tooltip content={libraryRemovalIssue(state, row.id) || '删除未被引用的模型资料'}><span><Button theme="borderless" type="danger" disabled={!ops.can || Boolean(libraryRemovalIssue(state, row.id))} aria-label={'删除模型资料：' + row.name} onClick={event => { trigger.current = event.currentTarget; ops.setError(''); setRemoving(row); }}>删除</Button></span></Tooltip></Space> },

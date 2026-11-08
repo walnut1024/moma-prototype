@@ -1,3 +1,4 @@
+import { offerKey } from '../service-access.mjs';
 import { useState } from 'react';
 import { Button, Descriptions, RadioGroup, Radio, Typography } from '@douyinfe/semi-ui';
 import { Choice, CopyId, Field, Notice } from './ServiceUI';
@@ -6,7 +7,7 @@ import { activeRouteVersion, routeSourceVersion, routingChannels, serviceRoute }
 
 export default function ServiceFailover({state, model, ops}) {
   const services = platformServices(state, model);
-  const [serviceId, setServiceId] = useState(() => services.find(row=>row.providerId===ops.params.get('routeProvider'))?.id || services[0]?.id);
+  const [serviceId, setServiceId] = useState(() => services.find(row=>offerKey(row)===ops.params.get('routeProvider'))?.id || services[0]?.id);
   const service = services.find(row=>row.id===serviceId);
   return <section className="ss-model-form" aria-label="故障转移配置">
     {services.length > 1 && <Field label="服务商"><Choice label="故障转移服务商" value={serviceId} options={services.map(row=>[row.id,row.name])} onChange={id=>ops.proceed(()=>{
@@ -35,7 +36,7 @@ function FailoverSettings({state, service, ops}) {
   const unavailableBackup = channels.find(row=>row.id===backupSupplyId);
   const validBackup = !explicit || !enabled || backups.some(row=>row.id===backupSupplyId);
   const modified = enabled!==savedEnabled || explicit && enabled && backupSupplyId!==savedBackup;
-  if (!active || explicit && (selected.length!==1 || active.config.strategy!=='fixed')) return <Notice>请先在“渠道与路由”保存{explicit ? '一个主渠道' : '路由配置'}。</Notice>;
+  if (!active || explicit && (selected.length!==1 || active.config.strategy!=='fixed')) return <Notice>请先在“路由及映射”保存{explicit ? '一个主渠道' : '路由配置'}。</Notice>;
   const update = patch => {
     const next = {...(draft || {enabled:savedEnabled,backupSupplyId:savedBackup,expectedVersion:active.version,sourceVersion}),...patch};
     setDraft(next);
@@ -55,7 +56,7 @@ function FailoverSettings({state, service, ops}) {
     <Descriptions data={[{key:'对外调用标识',value:<CopyId value={service.callId} label="对外调用标识"/>},explicit ? {key:'主渠道',value:primary?.channelName || '渠道已失效'} : {key:'参与路由',value:selected.length+' 条渠道'}]}/>
     <Field label="故障转移"><RadioGroup aria-label="故障转移" value={enabled ? 'on' : 'off'} disabled={blocked} onChange={event=>update({enabled:event.target.value==='on'})}><Radio value="off">关闭</Radio><Radio value="on">开启</Radio></RadioGroup></Field>
     {explicit && enabled && <Field label="备用渠道"><Choice label="备用渠道" value={backupSupplyId || undefined} placeholder="请选择一个备用渠道" disabled={blocked} options={[...backups.map(row=>[row.id,`${row.channelName} · ${row.upstreamModelId}`]),...(backupSupplyId && !backups.some(row=>row.id===backupSupplyId) ? [[backupSupplyId,unavailableBackup ? unavailableBackup.channelName+'（不可用）' : '当前备用渠道不可用']] : [])]} onChange={id=>update({backupSupplyId:id})}/></Field>}
-    {explicit && enabled && !backups.length && <Notice>请先通过“渠道与路由”的“模型映射”启用同服务商的备用渠道。</Notice>}
+    {explicit && enabled && !backups.length && <Notice>请先通过“路由及映射”的“模型映射”启用同服务商的备用渠道。</Notice>}
     <Typography.Paragraph>{explicit ? '主渠道不可用或调用失败时，尝试备用渠道。' : '当前渠道调用失败时，按已配置的路由策略尝试其余可用渠道。'}</Typography.Paragraph>
     {route?.draft && <Notice>请先处理已有路由草稿。</Notice>}
     {changed && <Notice error>渠道配置已变化。请取消修改后重新核对。</Notice>}

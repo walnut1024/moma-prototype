@@ -26,17 +26,19 @@ export function assertNewMockPublications(previous, next, action, snapshot = nul
   if (['basic', 'serviceBasics'].includes(action?.operation) || action?.operation === 'templateSave' && action.data?.id) throw new Error('已有模型资料请核对共享影响后提交发布');
   const changes = action?.type === 'batch' ? action.changes : [action];
   if (!['modelOperation', 'modelOperations'].includes(action?.type) && changes?.some(row => ['models', 'modelTemplates'].includes(row?.collection) && ['name','modelId','templateId','type','maker','description','profile','capabilities','usageUnit'].some(key => Object.hasOwn(row.changes || row.record || {}, key)))) throw new Error('模型资料须通过资料预览与发布操作维护');
-  if (['unifiedPrice', 'configureServiceProvider', 'scope'].includes(action?.operation) && previous.models.find(row => row.id === action.modelId)?.listingStatus === '已上架') throw new Error('已上架服务请先保存售价或客户范围草稿，再明确发布');
+  if (['unifiedPrice', 'configureServiceProvider'].includes(action?.operation) && previous.models.find(row => row.id === action.modelId)?.listingStatus === '已上架') throw new Error('已上架服务请先保存售价或客户范围草稿，再明确发布');
   if (action?.operation === 'recordPlatformPublication') {
     const model = next.models.find(row=>row.id===action.modelId);
     if (!model) throw new Error('待记录平台验证的模型不存在');
     const [verified]=assertMockModelPublication(next,model,action.data.serviceId);
     if(verified.mockServiceId!==action.data.mockServiceId || verified.publishedVersion!==action.data.publishedVersion)throw new Error('平台发布验证引用不一致，请重新同步发布记录');
   }
-  if(['publish','guidedPublish','enableService','startSales'].includes(action?.operation))assertMockModelPublication(next,next.models.find(row=>row.id===action.modelId),undefined,false,snapshot);
+  const selected = action?.operation==='startSales' && action.data?.offerKeys;
+  if (selected) for (const key of selected) assertMockModelPublication(next,next.models.find(row=>row.id===action.modelId),`provider:${action.modelId}:${key}`,false,snapshot);
+  else if(['publish','guidedPublish','enableService','startSales'].includes(action?.operation))assertMockModelPublication(next,next.models.find(row=>row.id===action.modelId),undefined,false,snapshot);
   if(action?.operation==='serviceProviderServing' && action.data?.enabled)assertMockModelPublication(next,next.models.find(row=>row.id===action.modelId),`provider:${action.modelId}:${action.data.providerId}`,false,snapshot);
   for (const model of next.models.filter(row=>{
     const before=previous.models.find(old=>old.id===row.id);
-    return row.listingStatus==='已上架' && before?.listingStatus!=='已上架' || row.callsEnabled===true && before?.callsEnabled!==true;
+    return !selected && row.listingStatus==='已上架' && before?.listingStatus!=='已上架' || row.callsEnabled===true && before?.callsEnabled!==true;
   })) assertMockModelPublication(next,model,undefined,false,snapshot);
 }
