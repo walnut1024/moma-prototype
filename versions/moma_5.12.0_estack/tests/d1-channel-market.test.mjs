@@ -39,7 +39,8 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     return {status:response.status,data:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]};
   }
   const login=async(path,id)=>{
-    const result=await request(path,{body:{[path.includes('market')?'tenantId':'accountId']:id,accessCode}});
+    const result=await request(path,{body:path.includes('market')
+      ? {username:id,accountType:id===b?'personal':'enterprise',accessCode} : {accountId:id,accessCode}});
     assert.equal(result.status,200,JSON.stringify(result.data));
     return result.cookie;
   };
@@ -149,7 +150,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     const offers=await local.db.prepare("SELECT record_id,id,channel_model_id,listing_stage,active_sale_price_id,active_route_id,active_publication_id FROM offers WHERE service_id=? AND retired_at IS NULL ORDER BY id").bind(modelId).all();
     assert.equal(offers.results.length,3);
     assert(offers.results.every(row=>row.listing_stage==='gray' && row.active_sale_price_id && row.active_route_id && row.active_publication_id));
-    const customer=await login('/market/login',a), other=await login('/market/login',b);
+    let customer=await login('/market/login',a), other=await login('/market/login',b);
     const catalogue=async(cookie)=>{const result=await request('/market/catalogue',{cookie});assert.equal(result.status,200,JSON.stringify(result.data));return result.data.services;};
     const services=await catalogue(customer);
     assert.deepEqual(marketModels(services).map(row=>[row.name,row.services.length]),[['GLM-5.3',3]]);
@@ -173,6 +174,9 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
       const input={...body(offer.callId),tenantId:a,task:'text'}, invoked=await call(input);
       assert.equal(invoked.status,200,JSON.stringify(invoked.data));
       assert.equal(invoked.data.source,'mock');
+      assert.equal(invoked.data.experience.answer,invoked.data.choices[0].message.content);
+      assert.ok(invoked.data.experience.points.length);
+      assert.equal((await call({...input,imageCount:2})).status,400);
       assert(!JSON.stringify(invoked.data).includes('procurement'));
       assert.deepEqual((await call(input)).data,invoked.data);
       successful.push({source,input,id:invoked.data.id});
@@ -212,11 +216,16 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal(await monthly(a),initialMicros,'replayed calls must not add charges');
     await local.db.batch([
       ...['market_charge_receipts','market_monthly_charges','retired_tenant_keys'].map(table=>local.db.prepare('DROP TABLE '+table)),
+      local.db.prepare('ALTER TABLE market_sessions DROP COLUMN user_id'),
+      ...['customer_credentials','customer_signup_challenges'].map(table=>local.db.prepare('DROP TABLE '+table)),
       local.db.prepare('UPDATE db_state SET schema_version=12 WHERE id=1'),
       local.db.prepare("UPDATE model_workspace SET reference_json=json_insert(reference_json,'$.grants[#]',json(?)) WHERE id=1")
         .bind(JSON.stringify({id:'legacy-orphan',subjectType:'key',subjectId:'legacy-key',status:'生效中'})),
     ]);
     await migrateEmptyDatabase(local.db);
+    assert.equal((await request('/market/workspace',{cookie:customer})).status,401);
+    customer=await login('/market/login',a);
+    other=await login('/market/login',b);
     assert.equal(await monthly(a),initialMicros,'v12 upgrade backfills retained usage');
     assert.equal(await local.db.prepare('SELECT count(*) AS n FROM market_charge_receipts').first('n'),2);
     assert.equal(await local.db.prepare('SELECT id FROM retired_tenant_keys WHERE id=?').bind('legacy-key').first('id'),'legacy-key');
@@ -308,6 +317,8 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert(beforeExpiry>initialMicros);
     const denied=await call({...body(third.callId),simulateDenied:true});
     assert.equal(denied.data.httpStatus,403);
+    assert.equal(denied.data.invocationError.code,'Model.AccessDenied');
+    assert.equal(denied.data.experience,null);
     assert.equal(await local.db.prepare("SELECT id FROM simulation_records WHERE kind='usage' AND id=?").bind(expiring.id).first(),null);
     assert.equal((await call(afterInput)).data.error.code,'CALL_RECEIPT_EXPIRED');
     assert.equal(await monthly(a),beforeExpiry,'expired details and denied calls do not change the total');

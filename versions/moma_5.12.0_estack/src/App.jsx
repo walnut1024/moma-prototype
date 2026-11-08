@@ -1,4 +1,3 @@
-import {loadAdminState} from './admin-v2/store.js';
 import {useTenantData} from './useTenantData';
 import {toast} from 'sonner';
 import { marketModels, customerPriceRows } from './service-directory.mjs';
@@ -26,7 +25,6 @@ import ModelExperience from "./ModelExperience";
 import CallLogs from "./CallLogs";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 import TextExperience from "./TextExperience";
-import { tenantUserAccess } from "./tenant-user-type.mjs";
 import ModelComparison from "./ModelComparison";
 import AdminConsoleV2 from "./AdminConsoleV2";
 import { shanghaiDate } from "./call-log-data.mjs";
@@ -1676,7 +1674,6 @@ function frontPage(params) {
 }
 
 function PrototypeApp({ version }) {
-  useState(()=>{try{loadAdminState(localStorage);}catch{/* Existing storage errors are surfaced by the affected workspace. */}return null;});
   const modeFromHash = () =>
     location.hash.startsWith("#/admin") ? "v2" : "front";
   if (location.pathname.includes("/order/serviceOrder"))
@@ -1707,7 +1704,8 @@ function PrototypeApp({ version }) {
     [sortMode, setSortMode] = useState("latest");
   const auth = usePrototypeAuth();
   const market=useCloudMarket(admin==='front');
-  const owner=market.tenant?.id || '';
+  const owner=market.tenant && market.account
+    ? (market.tenant.id===market.account.id ? market.account.id : JSON.stringify([market.account.id,market.tenant.id])) : '';
   const marketServices=market.services;
   const models = useMemo(() => marketModels(marketServices, catalogueScope), [marketServices, catalogueScope]);
   const selectedCard = useRef('');
@@ -1752,8 +1750,7 @@ function PrototypeApp({ version }) {
     media.addEventListener('change', change);
     return () => media.removeEventListener('change', change);
   }, []);
-  const tenantAccess = tenantUserAccess(auth.state, 'personal');
-  const enterprisePagesAllowed = market.tenant ? market.tenant.type !== '个人' : !auth.storageError && tenantAccess.canViewOrganization;
+  const enterprisePagesAllowed = Boolean(market.tenant && market.tenant.type!=='个人');
   useEffect(() => {
     if (!market.loading && !enterprisePagesAllowed && ['组织及成员', '操作记录', '调用日志'].includes(activePage)) {
       setActivePage('模型广场');
@@ -1940,7 +1937,7 @@ function PrototypeApp({ version }) {
           {admin === "front" ? (
             <button onClick={() => navigateAdmin("v2")}>后台</button>
           ) : null}
-          {admin === 'front' && market.tenant && <span>{market.tenant.type === '个人' ? '个人用户' : '政企用户'}</span>}
+          {admin === 'front' && market.tenant && <span>{market.tenant.type==='个人'?'个人账号':'政企账号'}</span>}
           {admin === "front" ? <AuthBanner auth={auth} market={market} showToast /> : null}
         </div>
         {admin === "v2" && (

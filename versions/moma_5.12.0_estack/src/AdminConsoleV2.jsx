@@ -180,7 +180,7 @@ function AdminConsoleV2View({bannerTarget,store}) {
   return <AdminUIContext.Provider value={true}><div className="admin-v2">
     {roleTarget && createPortal(<div className="admin-banner-field">
       <Typography.Text id="admin-account-picker-label" type="secondary" size="small">后台账号</Typography.Text>
-      <Select aria-labelledby="admin-account-picker-label" size="small" position="bottomRight" value={state.adminSession?.accountId || ''} placeholder="选择 mock 账号" onSelect={enterAdmin}
+      <Select aria-labelledby="admin-account-picker-label" size="small" position="bottomRight" value={state.adminSession?.accountId || ''} placeholder="选择后台账号" onSelect={enterAdmin}
         optionList={state.admins.filter(account => account.status === '已启用').map(account => ({ value: account.id, label: `${account.name} · ${ADMIN_ROLE_LABELS[account.role]}` }))}/>
     </div>, roleTarget)}
     {!navOpen && <aside className="v2-sidebar v2-sidebar-desktop">{navigation}</aside>}
@@ -204,7 +204,7 @@ function AdminConsoleV2View({bannerTarget,store}) {
       )}
       <main data-admin-page={active}>
         <AdminPageBoundary key={active}>
-          {!hasAccount ? <Banner title="选择后台账号" description="请在顶部选择后台 mock 账号进入。用户面登录独立保留。" closeIcon={null}/> : !canVisit ? (
+          {!hasAccount ? <Banner title="选择后台账号" description="请在顶部选择后台账号并登录。" closeIcon={null}/> : !canVisit ? (
             <Banner type="warning" title="无访问权限" description={<Button onClick={() => navigate(WORKSPACE_HOME[allowedWorkspaces[0]] || 'dashboard')}>返回首页</Button>} closeIcon={null}/>
           ) : <>
             {active === "getting-started" ? <GettingStarted guideId={detailParams.get('guide')}/>

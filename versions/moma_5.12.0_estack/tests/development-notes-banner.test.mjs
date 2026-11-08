@@ -12,5 +12,5 @@ test('every development-notes entry comes from the shared banner immediately bef
   const headerStart = source.indexOf('<header className={admin === "v2"');
   assert(headerStart > 0);
   const header = source.slice(headerStart, source.indexOf('</header>', headerStart));
-  assert.match(header, /\)\}\s*<div className="banner-version-tools">\s*<DevelopmentNotes\/>\s*<div className="version-switch">/, 'Front and backend must share an unconditional entry at the same position');
+  assert.match(header, /\)\}\s*<div className="banner-version-tools">\s*<DevelopmentNotes admin=\{admin === "v2"\}\/>\s*<div className="version-switch">/, 'Front and backend must share an unconditional entry at the same position');
 });

@@ -18,9 +18,9 @@ export function beginExperience(directory, id, task, { images=false }={}) {
   return { tenantId:directory.tenantId, serviceId:id, callId:model.callId, requestId:crypto.randomUUID(), modelName:model.name, task, images };
 }
 
-export async function finishExperience(ticket, simulateDenied=false) {
+export async function finishExperience(ticket, options={}) {
   const result=await marketRequest('completions',{requestId:ticket.requestId,model:ticket.callId,tenantId:ticket.tenantId,
-    task:ticket.task,images:ticket.images,simulateDenied,messages:[{role:'user',content:'原型体验'}]});
+    task:ticket.task,images:ticket.images,...options,messages:[{role:'user',content:'原型体验'}]});
   window.dispatchEvent(new Event(MARKET_EVENT));
   return result;
 }

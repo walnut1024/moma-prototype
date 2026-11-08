@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table";
-import { departmentPath, platformAccounts } from "./organization-data.mjs";
+import { departmentPath } from "./organization-data.mjs";
 import { MEMBER_IMPORT_HEADERS, MEMBER_IMPORT_LIMIT, memberCsv, memberRowsFromCells, parseMemberText, validateMemberRows } from "./organization-import.mjs";
 
 const blankRow = () => ({ key: crypto.randomUUID(), name: "", phone: "", account: "", department: "" });
@@ -19,6 +19,7 @@ function download(name, rows) {
 }
 
 export default function OrganizationMemberBatch({ data, initialDepartment, onClose, onApply }) {
+  const platformAccounts=data.platformAccounts || [];
   const [mode, setMode] = useState("existing"), [entry, setEntry] = useState("manual"), [step, setStep] = useState("input");
   const [rows, setRows] = useState([blankRow()]), [paste, setPaste] = useState("");
   const [defaultDepartment, setDefaultDepartment] = useState(initialDepartment);
@@ -68,6 +69,7 @@ export default function OrganizationMemberBatch({ data, initialDepartment, onClo
   };
   const selectAccount = (key, account) => {
     const identity = platformAccounts.find(a => a.account === account);
+    if(!identity)return;
     setRows(rows.map(r => r.key === key ? { ...r, name: identity.name, account: identity.account, phone: identity.phone || "" } : r));
   };
   return <Dialog open onOpenChange={open => { if (!open) close(); }}><DialogContent className="org-dialog org-batch-dialog" onInteractOutside={event => event.preventDefault()}>

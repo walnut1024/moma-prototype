@@ -11,20 +11,21 @@ import { initializePrototypeCatalogue } from '../server/prototype-presets.js';
 
 // Tooling only: SQLite parses the original migration, D1 executes every resulting DDL statement.
 export async function migrateEmptyDatabase(db) {
-  const [trafficDefaults, trafficRules, channelMarket, application, integrity] = await Promise.all(['0009_user_traffic_defaults.sql', '0010_traffic_limits.sql','0011_channel_market.sql','0012_application_linkage.sql','0013_application_integrity.sql'].map(async file => {
+  const [trafficDefaults, trafficRules, channelMarket, application, integrity, identity] = await Promise.all(['0009_user_traffic_defaults.sql', '0010_traffic_limits.sql','0011_channel_market.sql','0012_application_linkage.sql','0013_application_integrity.sql','0014_customer_identity.sql'].map(async file => {
     const sql = await readFile(new URL('./migrations/' + file, import.meta.url), 'utf8');
     return sql.trim().split('\n').map(line => db.prepare(line));
   }));
   const current = await db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='db_state'").first();
   if (current) {
     const state = await db.prepare('SELECT schema_version FROM db_state WHERE id=1').first();
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13].includes(state?.schema_version))throw Error('数据库结构版本不匹配');
+    if(!Number.isInteger(state?.schema_version) || state.schema_version<1 || state.schema_version>14)throw Error('数据库结构版本不匹配');
     for(const [version,file]of [[2,'0002_domain_records.sql'],[3,'0003_full_model_scope.sql'],[4,'0004_model_metadata.sql'],[5,'0005_billing_item_units.sql'],[6,'0006_token_packages.sql'],[7,'0007_package_model_factors.sql'],[8,'0008_package_factor_rules.sql']])if(state.schema_version<version){const sql=await readFile(new URL('./migrations/'+file,import.meta.url),'utf8');await db.batch(sql.trim().split('\n').filter(Boolean).map(line=>db.prepare(line)));}
     if (state.schema_version < 9) await db.batch(trafficDefaults);
     if (state.schema_version < 10) await db.batch(trafficRules);
     if (state.schema_version < 11) await db.batch(channelMarket);
     if (state.schema_version < 12) await db.batch(application);
     if (state.schema_version < 13) await db.batch(integrity);
+    if (state.schema_version < 14) await db.batch(identity);
     return;
   }
   const existing = await db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'").all();
@@ -44,6 +45,7 @@ export async function migrateEmptyDatabase(db) {
     await db.batch(channelMarket);
     await db.batch(application);
     await db.batch(integrity);
+    await db.batch(identity);
   } finally { sqlite.close(); }
 }
 
@@ -54,7 +56,7 @@ export async function startLocalBackend({ persistPath, loginHashes, port = 0, lo
   const runtime = new Miniflare({ modules: true, script: bundled.outputFiles[0].text, host: '127.0.0.1', port,
     // The installed local engine supports this date; production compatibility is verified at deployment.
     compatibilityDate: '2026-07-30', d1Databases: ['MODEL_OPS_DB'], d1Persist: persistPath || false,
-    bindings: { MODEL_OPS_LOGIN_HASHES: JSON.stringify(loginHashes || {}) }, ...(log ? { log } : {}) });
+    bindings: { MODEL_OPS_LOGIN_HASHES: JSON.stringify(loginHashes || {}), MODEL_OPS_DEMO_OTP:'1' }, ...(log ? { log } : {}) });
   try {
     const db = await runtime.getD1Database('MODEL_OPS_DB');
     await migrateEmptyDatabase(db);

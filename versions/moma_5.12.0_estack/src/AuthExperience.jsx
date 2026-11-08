@@ -1,8 +1,7 @@
 import {authDisplayUser} from './auth-link-sync.mjs';
 import { LINK_EVENT } from './service-access.mjs';
-import { LINKED_USERS, switchLinkedUser } from './linked-accounts.mjs';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Building2, Check, ChevronDown, Clock3, Eye, EyeOff, KeyRound, LogOut, ShieldCheck, UserRound, Users } from 'lucide-react';
+import { ArrowRight, Building2, ChevronDown, Clock3, Eye, EyeOff, LogOut, ShieldCheck, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
@@ -18,6 +17,7 @@ import { maskMemberPhone } from './organization-data.mjs';
 import { persistAuthState, AUTH_STORAGE_KEY, AUTH_INVITE, AUTH_ENTERPRISE_LOGIN, normalizeAuthLogin, emptyAuthState, authRoute, authPhone, currentAuthUser, availableAuthSpaces, registerAuthAccount, loginAuthAccount, verifyAuthCode, submitEnterpriseCertification, applicationErrors, queryAuthApplication, activationAccount, activateAuthAccount, acceptAuthInvite, encodeAuthPassword, matchesAuthPassword } from './auth-state.mjs';
 import AccountCenter from './AccountCenter';
 import { useTenantData } from './useTenantData';
+import { marketRequest } from './CloudMarket';
 import './auth.css';
 
 export function usePrototypeAuth() {
@@ -64,33 +64,24 @@ export function usePrototypeAuth() {
 }
 
 export function AuthBanner({ auth, market, showToast }) {
-  const [open, setOpen] = useState(false), [spacesOpen, setSpacesOpen] = useState(false), [mockOpen, setMockOpen] = useState(false);
-  const currentSpace = auth.spaces.find(space => space.id === auth.state.activeSpace);
-  const navigate = route => { setOpen(false); auth.navigate(route); };
-  const switchSpace = space => {
-    try { auth.commit({ ...auth.state, activeSpace: space.id }); setSpacesOpen(false); toast.success(`已切换至${space.name}`); }
-    catch (error) { toast.error(error.message); }
-  };
+  const [open,setOpen]=useState(false);
+  const navigate=route=>{setOpen(false);auth.navigate(route);};
   if(market?.tenant)return <div className="auth-banner-actions">
     {showToast && <Toaster position="top-right" offset={64} mobileOffset={64}/>}
     <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild>
-      <Button variant="ghost" className="auth-banner-user" aria-label="账号菜单"><UserRound data-icon="inline-start"/>{market.tenant.name}<ChevronDown data-icon="inline-end"/></Button>
+      <Button variant="ghost" className="auth-banner-user" aria-label="账号菜单"><UserRound data-icon="inline-start"/>{market.account?.name || market.tenant.name}<ChevronDown data-icon="inline-end"/></Button>
     </PopoverTrigger><PopoverContent className="auth-account-menu" align="end">
       <Button variant="ghost" onClick={()=>navigate('account')}><UserRound data-icon="inline-start"/>账号中心</Button>
+      {market.spaces?.filter(space=>space.id!==market.tenant.id).map(space=><Button variant="ghost" key={space.id} onClick={async()=>{
+        try{await market.switchSpace(space.id);setOpen(false);}catch(error){toast.error(error.message);}
+      }}><Building2 data-icon="inline-start"/>{space.name}</Button>)}
       <Button variant="ghost" onClick={async()=>{try{await market.logout();setOpen(false);if(auth.route)auth.close();}catch(error){toast.error(error.message);}}}><LogOut data-icon="inline-start"/>退出登录</Button>
     </PopoverContent></Popover>
   </div>;
   return <div className="auth-banner-actions">
-    {showToast && <Toaster position="top-right" offset={64} mobileOffset={64} />}
-    <Popover open={mockOpen} onOpenChange={setMockOpen}><PopoverTrigger asChild><Button variant="ghost" className="auth-banner-space" aria-label="切换 Mock 账号">Mock 账号<ChevronDown data-icon="inline-end" /></Button></PopoverTrigger><PopoverContent className="auth-space-menu" align="end"><p>原型账号切换</p>{LINKED_USERS.map(row => <Button variant="ghost" key={row.id} aria-label={`切换至${row.name}`} onClick={() => { try { switchLinkedUser(row.id); setMockOpen(false); setOpen(false); setSpacesOpen(false); if (auth.route) auth.close(); toast.success(`已切换至${row.name}`); } catch (error) { toast.error(error.message); } }}><span>{row.userType === 'personal' ? <UserRound/> : <Building2/>}<span>{row.name}<small>{row.phone}</small></span></span>{auth.user?.id === row.id && <Check data-icon="inline-end"/>}</Button>)}</PopoverContent></Popover>
-    {auth.user && auth.spaces.length > 1 && <Popover open={spacesOpen} onOpenChange={setSpacesOpen}><PopoverTrigger asChild><Button variant="ghost" className="auth-banner-space" aria-label="切换使用空间">{currentSpace?.name || '选择使用空间'}<ChevronDown data-icon="inline-end" /></Button></PopoverTrigger><PopoverContent className="auth-space-menu" align="end"><p>切换使用空间</p>{auth.spaces.map(space => <Button variant="ghost" key={space.id} onClick={() => switchSpace(space)}><span>{space.id === 'personal' ? <UserRound /> : <Building2 />}<span>{space.name}<small>{space.role}</small></span></span>{space.id === auth.state.activeSpace && <Check data-icon="inline-end" />}</Button>)}{!auth.spaces.length && <p>暂无可访问的空间，请联系管理员。</p>}<Button variant="ghost" onClick={() => { setSpacesOpen(false); auth.navigate('account'); }}><ShieldCheck data-icon="inline-start" />身份认证</Button></PopoverContent></Popover>}
-    {!auth.user && <><Button variant="ghost" className="auth-banner-login" onClick={() => auth.navigate('login')}>登录</Button><Button variant="outline" className="auth-banner-register" onClick={() => auth.navigate('register')}>注册</Button></>}
-    <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button variant="ghost" className="auth-banner-user" aria-label={auth.user ? '账号菜单' : '账号服务'}>{auth.user ? <><UserRound data-icon="inline-start" />{auth.user.name}</> : '账号服务'}<ChevronDown data-icon="inline-end" /></Button></PopoverTrigger><PopoverContent className="auth-account-menu" align="end">
-      {auth.user && <div className="auth-menu-profile"><b>{auth.user.name}</b><span>{auth.user.phone ? maskMemberPhone(auth.user.phone) : auth.user.email}</span></div>}
-      <Button variant="ghost" onClick={() => navigate('account')}><UserRound data-icon="inline-start" />账号中心</Button>
-      <Button variant="ghost" onClick={() => { setOpen(false); auth.navigate('invite', `?token=${AUTH_INVITE.id}`); }}><Users data-icon="inline-start" />加入企业</Button>
-      {auth.user && <>{auth.user.phone ? <Button variant="ghost" onClick={() => navigate('password')}><KeyRound data-icon="inline-start" />设置登录密码</Button> : <p className="auth-form-note">密码重置请联系企业管理员</p>}<Button variant="ghost" onClick={() => { try { auth.commit({ ...auth.state, currentUserId: null }); setOpen(false); auth.navigate('login'); toast.success('已退出登录'); } catch (error) { toast.error(error.message); } }}><LogOut data-icon="inline-start" />退出登录</Button></>}
-    </PopoverContent></Popover>
+    {showToast && <Toaster position="top-right" offset={64} mobileOffset={64}/>}
+    <Button variant="ghost" className="auth-banner-login" onClick={()=>navigate('login')}>登录</Button>
+    <Button variant="outline" className="auth-banner-register" onClick={()=>navigate('register')}>注册</Button>
   </div>;
 }
 
@@ -106,8 +97,13 @@ function FormSelect({ id, label, value, options, onChange, disabled, error }) {
 }
 
 export default function AuthExperience({ auth, market, accountTitle = '账号中心' }) {
-  if(market && auth.route==='login' && auth.params.get('mode')!=='prototype')return <TenantLogin auth={auth} market={market}/>;
-  if(market?.tenant && auth.route==='account')return <TenantAccount auth={auth} title={accountTitle}/>;
+  if(market && auth.route==='login')return <TenantLogin auth={auth} market={market}/>;
+  if(market && auth.route==='register')return <TenantRegister auth={auth} market={market}/>;
+  if(market && ['account','enterprise'].includes(auth.route)){
+    if(market.loading)return <section className="auth-account-center"><h1>{accountTitle}</h1><p role="status">正在读取账号信息…</p></section>;
+    if(market.tenant)return <TenantAccount auth={auth} title={accountTitle}/>;
+    return <section className="auth-account-center"><h1>{accountTitle}</h1><Button onClick={()=>auth.navigate('login','?next=account')}>登录</Button></section>;
+  }
   if (['account', 'enterprise'].includes(auth.route) && !auth.user) return <div className="auth-account-center"><h1>{accountTitle}</h1><p>请先注册或登录，再进行身份认证。</p><div className="auth-result-actions"><Button onClick={() => auth.navigate('login', '?next=account')}>登录</Button><Button variant="outline" onClick={() => auth.navigate('register', '?next=account')}>注册账号</Button></div></div>;
   if (auth.route === 'account') return <AccountCenter auth={auth} title={accountTitle} />;
   return ['enterprise', 'application', 'activate'].includes(auth.route) ? <EnterpriseApplication key={auth.params.toString()} auth={auth} /> : <IdentityExperience key={auth.params.toString()} auth={auth} />;
@@ -115,12 +111,13 @@ export default function AuthExperience({ auth, market, accountTitle = '账号中
 
 function TenantLogin({auth,market}) {
   const [error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const [accountType,setAccountType]=useState(auth.params.get('type')==='personal'?'personal':'enterprise');
   async function login(event) {
     event.preventDefault();
     const values=new FormData(event.currentTarget);
     setError('');setBusy(true);
     try {
-      await market.login(values.get('account').trim(),values.get('password'));
+      await market.login(values.get('account').trim(),values.get('password'),accountType);
       if(auth.params.get('next')==='account')auth.navigate('account');
       else auth.close();
     } catch(issue) { setError(issue.message); }
@@ -129,28 +126,64 @@ function TenantLogin({auth,market}) {
   return <section className="auth-account-center">
     <h1>登录</h1>
     <form className="auth-form" onSubmit={login}>
-      <FormField id="demo-account-id" label="演示账号" name="account" placeholder="zqzh 或 grzh" autoComplete="username" required maxLength={200}/>
+      <FormSelect id="customer-account-type" label="账号类型" value={accountType} onChange={setAccountType} options={[[ 'enterprise','政企账号' ],[ 'personal','个人账号' ]]}/>
+      <FormField id="demo-account-id" label="用户名" name="account" placeholder={accountType==='enterprise'?'zqzh':'grzh'} autoComplete="username" required maxLength={254}/>
       <FormField id="demo-account-password" label="密码" name="password" type="password" autoComplete="current-password" required maxLength={128}/>
       {error && <p role="alert">{error}</p>}
       <div className="auth-result-actions"><Button disabled={busy}>{busy?'登录中…':'登录'}</Button><Button type="button" variant="outline" onClick={auth.close}>返回</Button></div>
     </form>
-    <Button variant="link" onClick={()=>auth.navigate('login','?mode=prototype')}>查看原型注册与验证码流程</Button>
+    <Button variant="link" onClick={()=>auth.navigate('register')}>注册个人账号</Button>
   </section>;
+}
+
+function TenantRegister({auth,market}) {
+  const [phone,setPhone]=useState(''),[challenge,setChallenge]=useState(null),[agreed,setAgreed]=useState(false);
+  const [busy,setBusy]=useState(false),[error,setError]=useState('');
+  async function run(operation){
+    setBusy(true);setError('');
+    try {await operation();}catch(issue){setError(issue.message);}
+    finally {setBusy(false);}
+  }
+  function submit(event){
+    event.preventDefault();
+    const fields=new FormData(event.currentTarget);
+    if(!challenge || !agreed){setError('请填写验证码并确认协议');return;}
+    void run(async()=>{
+      await market.signup({phone,challengeId:challenge.id,code:fields.get('code'),password:fields.get('password'),consent:agreed});
+      auth.navigate('account','?registered=1');
+    });
+  }
+  return <div className="auth-experience auth-identity-page auth-enterprise-shell"><div className="auth-layout">
+    <AuthBrand title="模型服务平台" description="注册后进入个人空间，可在账号中心发起企业认证。"/>
+    <section className="auth-form-panel" aria-label="注册个人账号">
+      <h1>注册个人账号</h1>
+      <form id="auth-identity-panel" data-registration="true" className="auth-form" onSubmit={submit}>
+        <FormField id="signup-phone" label="手机号" value={phone} onChange={event=>{setPhone(event.target.value);setChallenge(null);}} autoComplete="tel" maxLength={18} required/>
+        <FormField id="signup-code" label="验证码">
+          <InputGroup><InputGroupInput id="signup-code" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required/>
+            <InputGroupAddon align="inline-end"><InputGroupButton type="button" disabled={busy || !phone} onClick={()=>run(async()=>setChallenge(await marketRequest('signup-code',{phone})))}>获取验证码</InputGroupButton></InputGroupAddon>
+          </InputGroup>
+        </FormField>
+        {challenge && <p className="auth-form-note" role="status">演示验证码 {challenge.code}，5 分钟内有效。</p>}
+        <FormField id="signup-password" label="设置密码" type="password" name="password" autoComplete="new-password" minLength={8} maxLength={64} required/>
+        <div className="auth-agreement"><Checkbox id="signup-agreement" checked={agreed} onCheckedChange={value=>setAgreed(value===true)}/><label htmlFor="signup-agreement">同意用户协议和隐私政策</label></div>
+        {error && <p className="auth-field-error" role="alert">{error}</p>}
+        <Button disabled={busy}>{busy?'提交中…':'注册'}</Button>
+        <Button variant="link" type="button" onClick={()=>auth.navigate('login','?type=personal')}>返回登录</Button>
+      </form>
+    </section>
+  </div></div>;
 }
 
 function TenantAccount({auth,title}) {
   const tenant=useTenantData();
-  return <section className="auth-account-center">
-    <h1>{title}</h1>
-    {tenant.error && <p role="alert">{tenant.error}</p>}
-    {tenant.profile && <dl className="auth-account-details">
-      <div><dt>登录账号</dt><dd>{tenant.profile.account}</dd></div>
-      <div><dt>账号名称</dt><dd>{tenant.profile.name}</dd></div>
-      <div><dt>客户空间</dt><dd>{tenant.profile.type==='个人'?'个人用户':'政企用户'}</dd></div>
-      <div><dt>状态</dt><dd>{tenant.profile.status}</dd></div>
-    </dl>}
-    <Button variant="outline" onClick={auth.close}>返回</Button>
-  </section>;
+  if(!tenant.profile)return <section className="auth-account-center"><h1>{title}</h1>
+    {tenant.error ? <p role="alert">{tenant.error}</p> : <p role="status">正在读取账号信息…</p>}
+    <Button variant="outline" onClick={auth.close}>返回</Button></section>;
+  const customerAuth={...auth,user:tenant.profile,state:{applications:tenant.applications,accounts:[tenant.profile]},
+    storageError:tenant.error,certify:tenant.command};
+  return auth.route==='enterprise' ? <EnterpriseApplication key={auth.params.toString()} auth={customerAuth}/>
+    : <AccountCenter auth={customerAuth} title={title}/>;
 }
 
 function AuthBrand({ title, description }) {
@@ -361,12 +394,17 @@ function EnterpriseApplication({ auth }) {
   };
   const submit = event => {
     event.preventDefault();
-    run(() => {
+    run(async () => {
       if (!agreed) { setErrors({ agreement: auth.preview ? '请核对填写信息' : '请阅读并同意用户协议和隐私政策' }); return; }
-      const next = submitEnterpriseCertification(auth.state, data, editingId);
-      auth.commit(next);
-      const saved = editingId ? next.applications.find(item => item.id === editingId) : next.applications.at(-1);
-      setResultId(saved.id); setSubmitted(true); clearVerification();
+      if(auth.certify){
+        const result=await auth.certify('certifyEnterprise',{...data,applicationId:editingId});
+        setResultId(editingId || result.operationId);
+      }else{
+        const next=submitEnterpriseCertification(auth.state,data,editingId);
+        auth.commit(next);
+        setResultId(editingId || next.applications.at(-1).id);
+      }
+      setSubmitted(true); clearVerification();
     });
   };
   const query = event => {

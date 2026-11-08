@@ -31,7 +31,7 @@ export function useCloudMarket(enabled=true) {
   useEffect(()=>{
     if (!enabled) return;
     const refresh=event=>{
-      if(event.detail==='login' || event.detail==='logout')setView({tenant:null,services:[],orders:[],loading:true,error:''});
+      if(['login','logout','switch'].includes(event.detail))setView({tenant:null,services:[],orders:[],loading:true,error:''});
       setRevision(current=>current+1);
     };
     window.addEventListener(MARKET_EVENT,refresh);
@@ -40,11 +40,14 @@ export function useCloudMarket(enabled=true) {
   },[enabled]);
   const write=async(path,body)=>{
     const result=await marketRequest(path,body);
-    if (path==='login' || path==='logout') setView({tenant:result.tenant || null,services:[],orders:[],loading:true,error:''});
-    window.dispatchEvent(new CustomEvent(MARKET_EVENT,{detail:path}));
+    const event=path==='signup'?'login':path;
+    if (['login','logout','switch'].includes(event)) setView({tenant:result.tenant || null,services:[],orders:[],loading:true,error:''});
+    window.dispatchEvent(new CustomEvent(MARKET_EVENT,{detail:event}));
     return result;
   };
-  return {...view,refresh:()=>setRevision(current=>current+1),login:(tenantId,accessCode)=>write('login',{tenantId,accessCode}),
+  return {...view,refresh:()=>setRevision(current=>current+1),login:(username,accessCode,accountType)=>write('login',{username,accessCode,accountType}),
+    signup:data=>write('signup',data),
+    switchSpace:tenantId=>write('switch',{tenantId}),
     logout:()=>write('logout',{}),order:offers=>write('orders',{tenantId:view.tenant?.id,offerIds:offers.map(row=>row.id),
       salePriceIds:Object.fromEntries(offers.map(row=>[row.id,row.salePriceId]))})};
 }
@@ -55,7 +58,7 @@ export function MarketSessionControl({ market }) {
     event.preventDefault();
     const fields=new FormData(event.currentTarget);
     setBusy(true);setError('');
-    try {await market.login(fields.get('tenantId').trim(),fields.get('accessCode'));setOpen(false);}
+    try {await market.login(fields.get('username').trim(),fields.get('accessCode'),fields.get('accountType'));setOpen(false);}
     catch (issue) {setError(issue.message);}
     finally {setBusy(false);}
   }
@@ -68,9 +71,10 @@ export function MarketSessionControl({ market }) {
     </> : <Button variant="outline" onClick={()=>{setError('');setOpen(true);}}>登录模型广场</Button>}
     <Dialog open={open} onOpenChange={value=>{if(!busy)setOpen(value);}}>
       <DialogContent>
-        <DialogHeader><DialogTitle>登录模型广场</DialogTitle><DialogDescription>使用已开通的客户编号和密码。</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>登录模型广场</DialogTitle><DialogDescription>使用已开通的客户账号和密码。</DialogDescription></DialogHeader>
         <form onSubmit={login} className="market-action-form">
-          <label>客户编号<Input name="tenantId" autoComplete="username" required maxLength={200}/></label>
+          <label>账号类型<select name="accountType"><option value="enterprise">政企账号</option><option value="personal">个人账号</option></select></label>
+          <label>用户名<Input name="username" autoComplete="username" required maxLength={254}/></label>
           <label>密码<Input name="accessCode" type="password" autoComplete="current-password" required maxLength={128}/></label>
           {error && <p role="alert">{error}</p>}
           <DialogFooter><Button type="submit" disabled={busy}>{busy?'登录中…':'登录'}</Button></DialogFooter>

@@ -1,6 +1,7 @@
 import {modelBootstrap,modelCommand,packageBootstrap,packageCommand,packageFactorHistory,readTrafficLimits,simulationRequest,updateTrafficLimits} from './model-commands.js';
 import { initializePrototypeCatalogue } from './prototype-presets.js';
-import { createMarketSession, marketCatalogue, marketRanking, marketCompletion, marketCookie, marketOrder, marketSession, marketTenant } from './market.js';
+import { marketCatalogue, marketRanking, marketCompletion, marketOrder } from './market.js';
+import { createMarketSession, customerIdentity, customerPasswordMatches, issueSignupChallenge, marketCookie, marketSession, registerCustomer } from './customer-identity.js';
 import { applicationBootstrap, applicationCommand, initializeApplication, tenantCommand, tenantWorkspace } from './application.js';
 import { marketDemoModelIds } from '../src/mock/model-data.js';
 import { API_PREFIX, isApiPath } from '../api-path.js';
@@ -165,7 +166,7 @@ async function route(request, env) {
   const packagePath = ['/package-management', '/package-management/commands', '/package-management/factor-history'].includes(path);
   const trafficPath = path === '/traffic-limits';
   const trafficHistoryPath = path === '/traffic-limits/history';
-  const marketPaths = ['/market/catalogue','/market/ranking','/market/login','/market/logout','/market/orders','/market/completions','/market/workspace','/market/commands'];
+  const marketPaths = ['/market/catalogue','/market/ranking','/market/login','/market/signup-code','/market/signup','/market/logout','/market/switch','/market/orders','/market/completions','/market/workspace','/market/commands'];
   const applicationPaths = ['/application','/application/open','/application/commands'];
   const known = marketPaths.includes(path) || applicationPaths.includes(path) || trafficPath || trafficHistoryPath || packagePath || ['/auth/login','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-market/visibility','/model-operations','/model-operations/commands'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
   if (!known) fail(404, 'NOT_FOUND', 'API 不存在');
@@ -217,19 +218,41 @@ async function route(request, env) {
       return json(await tenantWorkspace(db,session));
     }
     if (method !== 'POST' || ['/market/catalogue','/market/workspace','/market/ranking'].includes(path)) fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
+    if(path==='/market/signup-code' || path==='/market/signup'){
+      if(env.MODEL_OPS_DEMO_OTP!=='1')fail(403,'SIGNUP_UNAVAILABLE','当前环境未开启演示注册');
+      const body=await bodyJson(request,4096);
+      if(path==='/market/signup-code'){
+        fields(body,['phone']);
+        return json(await issueSignupChallenge(db,body.phone));
+      }
+      fields(body,['phone','challengeId','code','password','consent']);
+      await initializeApplication(db);
+      const {userId,tenant}=await registerCustomer(db,body);
+      const token=await createMarketSession(db,userId,tenant.id);
+      return json({tenant},201,{'Set-Cookie':cookie(token).replace(COOKIE+'=',marketCookie+'=')});
+    }
     if (path === '/market/login') {
       const body=await bodyJson(request,4096);
-      fields(body,['tenantId','accessCode']);
-      if (!identifier(body.tenantId) || typeof body.accessCode!=='string' || body.accessCode.length<8 || body.accessCode.length>128) fail(401,'INVALID_LOGIN','客户编号或密码无效');
+      fields(body,['username','accountType','accessCode']);
+      if (typeof body.username!=='string' || !body.username.trim() || body.username.length>254 ||
+          !['enterprise','personal'].includes(body.accountType) ||
+          typeof body.accessCode!=='string' || body.accessCode.length<8 || body.accessCode.length>128) fail(401,'INVALID_LOGIN','账号类型、用户名或密码无效');
       let hashes;
       try { hashes=JSON.parse(env.MODEL_OPS_LOGIN_HASHES || '{}'); } catch { fail(503,'LOGIN_UNAVAILABLE','客户登录尚未配置'); }
-      const expected=hashes[body.tenantId];
-      const valid=await secureEqual(await digest(body.accessCode),typeof expected==='string'?expected:'0'.repeat(64));
-      if (valid && expected) await initializeApplication(db,body.tenantId);
-      const tenant=valid && expected && await marketTenant(db,body.tenantId);
-      if (!tenant) fail(401,'INVALID_LOGIN','客户编号或密码无效');
-      const token=await createMarketSession(db,tenant);
-      return json({tenant:{id:tenant.id,name:tenant.name,type:tenant.type}},200,{'Set-Cookie':cookie(token).replace(COOKIE+'=',marketCookie+'=')});
+      const username=body.username.trim().toLowerCase();
+      const received=await digest(body.accessCode);
+      let identity=await customerIdentity(db,username,'username');
+      if(!identity && Object.hasOwn(hashes,username) && typeof hashes[username]==='string' && await secureEqual(received,hashes[username])){
+        await initializeApplication(db,username);
+        identity=await customerIdentity(db,username,'username');
+      }
+      const expected=identity && Object.hasOwn(hashes,identity.user.id) && hashes[identity.user.id];
+      const valid=typeof expected==='string' ? await secureEqual(received,expected)
+        : identity && await customerPasswordMatches(db,identity.user.id,body.accessCode);
+      const tenant=identity?.spaces.find(space=>(space.type==='个人')===(body.accountType==='personal'));
+      if (!valid || !tenant) fail(401,'INVALID_LOGIN','账号类型、用户名或密码无效');
+      const token=await createMarketSession(db,identity.user.id,tenant.id);
+      return json({tenant},200,{'Set-Cookie':cookie(token).replace(COOKIE+'=',marketCookie+'=')});
     }
     const session=await marketSession(db,request);
     if (path==='/market/logout') {
@@ -237,6 +260,16 @@ async function route(request, env) {
       return json({loggedOut:true},200,{'Set-Cookie':cookie('',0).replace(COOKIE+'=',marketCookie+'=')});
     }
     if (!session) fail(401,'TENANT_SESSION_REQUIRED','请先登录模型广场');
+    if (path==='/market/switch') {
+      const body=await bodyJson(request,4096);
+      fields(body,['tenantId']);
+      const tenant=session.spaces.find(space=>space.id===body.tenantId);
+      if(!tenant)fail(403,'FORBIDDEN','当前账号无权进入该空间');
+      const written=await db.prepare('UPDATE market_sessions SET tenant_id=? WHERE token_hash=? AND user_id=? AND tenant_id=? AND expires_at>?')
+        .bind(tenant.id,session.hash,session.user.id,session.tenant.id,Date.now()).run();
+      if(!written.meta.changes)fail(409,'TENANT_CHANGED','当前空间已变化，请刷新后重试');
+      return json({tenant});
+    }
     if (path === '/market/commands') {
       const body = await bodyJson(request);
       fields(body,['operationId','tenantId','expectedRevision','action','data']);
@@ -250,10 +283,12 @@ async function route(request, env) {
           (!body.salePriceIds || Array.isArray(body.salePriceIds) || Object.keys(body.salePriceIds).length!==body.offerIds.length || body.offerIds.some(id=>!Object.hasOwn(body.salePriceIds,id) || !identifier(body.salePriceIds[id]))))) fail(400,'INVALID_INPUT','订单售价或客户无效');
       return json(await marketOrder(db,session,body.offerIds,body));
     }
-    fields(body,['requestId','model','messages','tenantId','task','images','simulateDenied']);
+    fields(body,['requestId','model','messages','tenantId','task','images','imageCount','speechMode','simulateDenied']);
     if ((body.tenantId!==undefined && !identifier(body.tenantId)) ||
         (body.task!==undefined && !['text','image','video','voice'].includes(body.task)) ||
-        ['images','simulateDenied'].some(field=>body[field]!==undefined && typeof body[field]!=='boolean')) fail(400,'INVALID_INPUT','体验参数无效');
+        ['images','simulateDenied'].some(field=>body[field]!==undefined && typeof body[field]!=='boolean') ||
+        (body.imageCount!==undefined && (body.task!=='image' || ![1,2,3,4].includes(body.imageCount))) ||
+        (body.speechMode!==undefined && (body.task!=='voice' || !['asr','tts'].includes(body.speechMode)))) fail(400,'INVALID_INPUT','体验参数无效');
     if (!identifier(body.requestId) || typeof body.model!=='string' || !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/.test(body.model) ||
         !Array.isArray(body.messages) || body.messages.length!==1 || body.messages[0]?.role!=='user' ||
         typeof body.messages[0].content!=='string' || !body.messages[0].content.trim() || body.messages[0].content.length>2000 ||

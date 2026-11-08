@@ -20,7 +20,7 @@ export function useTenantData() {
   }, [refresh]);
   useEffect(() => {
     const update = event => {
-      if(['login','logout'].includes(event.detail)){pending.current=null;setData(empty);}
+      if(['login','logout','switch'].includes(event.detail)){pending.current=null;setData(empty);}
       setRefresh(value => value+1);
     };
     window.addEventListener(MARKET_EVENT, update);
@@ -33,14 +33,16 @@ export function useTenantData() {
       const input={tenantId:data.identity.tenantId,expectedRevision,action,data:payload},signature=JSON.stringify(input);
       const receipt=pending.current?.signature===signature?pending.current:{signature,id:crypto.randomUUID()};
       pending.current=receipt;
+      let result;
       try {
-        await marketRequest('commands',{operationId:receipt.id,...input});
+        result=await marketRequest('commands',{operationId:receipt.id,...input});
       } catch(error) {
         if(error.status<500 && pending.current===receipt)pending.current=null;
         throw error;
       }
       if(pending.current===receipt)pending.current=null;
       window.dispatchEvent(new Event(MARKET_EVENT));
+      return result;
     },
   };
 }

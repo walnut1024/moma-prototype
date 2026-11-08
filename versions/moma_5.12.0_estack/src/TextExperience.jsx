@@ -202,37 +202,38 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
 
   const finish = async (id, pendingId, question, shouldFail, pendingMessages) => {
     const current=ticket.current;
-    try { await finishExperience(current,shouldFail); } catch (error) {
+    let response;
+    try { response=await finishExperience(current,{simulateDenied:shouldFail}); } catch (error) {
       if(ticket.current!==current)return;
       const stopped = pendingMessages.map(item => item.id === pendingId ? { ...item, status: 'stopped', answer: error.message } : item);
       setMessages(stopped); persist(id, stopped); setNotice(error.message); setBusy(false); return;
     }
     if(ticket.current!==current)return;
-    const result = shouldFail
+    const denied=response.invocationError;
+    const result = denied
       ? {
           id: pendingId,
           question,
           status: "error",
-          code: "10042000",
+          code: response.httpStatus,
           requestId: ticket.current.requestId,
-          error: "Model.AccessDenied",
-          message:
-            "当前账号暂无该模型的调用权限，请订购模型或切换其他可用模型。",
-          raw: 'event:error\n:HTTP_STATUS/403\ndata:{"code":"Model.AccessDenied","message":"Model access denied."}',
+          error: denied.code,
+          message: denied.message,
+          raw: JSON.stringify(denied),
         }
       : {
           id: pendingId,
           question,
           status: "success",
-          answer: mockConfig['TextExperience.jsx'].response.answer.replace('{question}',question.slice(0,32)+(question.length>32?'…':'')),
-          points: mockConfig['TextExperience.jsx'].response.points,
+          answer: response.experience?.answer || response.choices?.[0]?.message?.content,
+          points: response.experience?.points,
         };
     const next = pendingMessages.map((item) =>
       item.id === pendingId ? { ...item, ...result } : item,
     );
     setMessages(next);
     persist(id, next);
-    if (!shouldFail) { setText(""); setImages([]); }
+    if (!denied) { setText(""); setImages([]); }
     setBusy(false);
   };
 

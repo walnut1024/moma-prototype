@@ -112,10 +112,12 @@ export function tenantOrganizationChanges({state,identity,link,canManage}, data)
     const old=state.memberships.find(item=>item.id===row.id);
     const previous=before.members.find(item=>item.id===row.id);
     if(old&&JSON.stringify(previous)===JSON.stringify(row))return structuredClone(old);
-    let userId=old?.userId || before.platformAccounts.find(account=>account.account===row.account)?.sourceUserId;
+    const username=String(row.account).trim().toLowerCase();
+    let userId=old?.userId || before.platformAccounts.find(account=>account.account?.toLowerCase()===username)?.sourceUserId;
     if(!userId){
+      if(next.users.some(account=>account.login?.toLowerCase()===username))throw Error('该账号已存在，无法创建同名成员身份');
       userId='user:'+crypto.randomUUID();
-      next.users.push({id:userId,name:row.name,phone:row.phone,login:row.account,status:'正常'});
+      next.users.push({id:userId,name:row.name,phone:row.phone,login:username,status:'正常'});
     }
     return {...old,id:row.id,userId,tenantId:identity.tenantId,organizationId:departmentId(row.departmentId),
       scopeId:departmentId(row.scopeId),role:row.role==='企业管理员'?'租户管理员':row.role,

@@ -394,7 +394,13 @@ export default function ModelExperience({
     };
     const current=ticket.current;
     timer.current = setTimeout(async () => {
-      try { await finishExperience(current); } catch(error) {
+      let result;
+      try {
+        result=await finishExperience(current,{
+          ...(kind==='image'?{imageCount:Number(message.imageCount)}:{}),
+          ...(kind==='voice'?{speechMode:asr?'asr':'tts'}:{}),
+        });
+      } catch(error) {
         if(ticket.current===current){setError(error.message);setBusy(false);}
         return;
       }
@@ -403,17 +409,9 @@ export default function ModelExperience({
         ...items,
         {
           ...message,
-          answer: visualGeneration
-            ? ""
-            : asr
-              ? mockConfig['ModelExperience.jsx'].response.asr
-              : tts
-                ? message.text
-                : mockConfig['ModelExperience.jsx'].response.answer,
-          points:
-            visualGeneration || asr || tts
-              ? null
-              : mockConfig['ModelExperience.jsx'].response.points,
+          answer: result.experience?.speakInput ? message.text : result.experience?.answer || '',
+          points: result.experience?.points,
+          artifacts: result.experience?.artifacts,
         },
       ]);
       setBusy(false);
@@ -596,19 +594,11 @@ export default function ModelExperience({
                     <div
                       className={`pg-generation-result ${kind === "video" ? "is-video" : ""}`}
                     >
-                      {Array.from(
-                        {
-                          length:
-                            kind === "image" ? Number(message.imageCount) : 1,
-                        },
-                        (_, resultIndex) => (
+                      {(message.artifacts || []).map(
+                        (artifact, resultIndex) => (
                           <figure key={resultIndex}>
                             <img
-                              src={
-                                kind === "image"
-                                  ? "/moma_5.12.0_estack/assets/forthBg-982e3d97.png"
-                                  : "/moma_5.12.0_estack/assets/secondBg-c502c3d3.png"
-                              }
+                              src={artifact.url}
                               alt={
                                 kind === "image"
                                   ? `生成图片 ${resultIndex + 1}`
@@ -643,11 +633,7 @@ export default function ModelExperience({
                                   : `${message.videoMode} · ${message.sound ? "包含声音" : "静音"}`}
                               </span>
                               <a
-                                href={
-                                  kind === "image"
-                                    ? "/moma_5.12.0_estack/assets/forthBg-982e3d97.png"
-                                    : "/moma_5.12.0_estack/assets/secondBg-c502c3d3.png"
-                                }
+                                href={artifact.url}
                                 download
                               >
                                 下载

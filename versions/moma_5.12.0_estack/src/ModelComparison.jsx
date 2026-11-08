@@ -43,8 +43,9 @@ export default function ModelComparison({ onBack, owner = "" }) {
     timer.current = setTimeout(async () => {
       await Promise.all([...pending.current].map(async ([columnId,ticket])=>{
         try {
-          await finishExperience(ticket);
-          if(pending.current.get(columnId)===ticket)update(columnId,{ response:'模拟回答：先明确目标与约束，再整理输入、处理步骤和验收标准。',error:'',pending:false,input:'' });
+          const result=await finishExperience(ticket);
+          if(pending.current.get(columnId)===ticket)update(columnId,{response:result.experience?.answer || result.choices?.[0]?.message?.content || '',
+            error:result.invocationError?.message || '',pending:false,input:''});
         } catch (error) { if(pending.current.get(columnId)===ticket)update(columnId,{ error:error.message,pending:false }); }
       }));
       pending.current.clear();setBusy(false);

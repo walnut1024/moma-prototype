@@ -9,6 +9,7 @@ import { addPackageOrders, deductMockPlan } from './market-packages.js';
 import { receipt, save } from './model-commands.js';
 import { addPrototypeAccounts } from './prototype-presets.js';
 import { routingServices } from '../src/admin-v2/service-routing.js';
+import { submitEnterpriseCertification, submitRealNameCertification } from '../src/auth-state.mjs';
 
 const collections = [
   'tenants', 'users', 'memberships', 'organizations', 'projects', 'apiKeys', 'grants',
@@ -61,7 +62,7 @@ async function applicationState(db, actor) {
   const reference = JSON.parse(row.reference_json);
   const state = { ...reference, ...model, cloudOperations: false, revision: row.application_revision, identityGeneration: reference.identityGeneration || 0 };
   for (const key of collections) if (key !== 'admins') state[key] = reference[key] || [];
-  state.admins = model.admins.map(account => ({ ...(reference.admins || []).find(item => item.id === account.id), ...account }));
+  state.admins = model.admins.map(account => ({ account:account.id, ...(reference.admins || []).find(item => item.id === account.id), ...account }));
   return { row, reference, state };
 }
 
@@ -263,12 +264,13 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins)
     { id: crypto.randomUUID(), actor: actor.role, actorId: actor.id, action: label, objectId, result, createdAt }, 'application');
 }
 
-function tenantContext(state, tenant) {
+function tenantContext(state, {tenant,user:sessionUser}) {
   const row = state.tenants.find(item => item.id === tenant.id);
-  const user = state.users.find(item => item.id === row?.ownerId && item.status === '正常');
+  const user = state.users.find(item => item.id === sessionUser.id && item.status === '正常');
   const membership = state.memberships.find(item => item.userId === user?.id && item.tenantId === tenant.id && item.status === '正常');
   const personal = row?.type === '个人';
-  const identity = { userId: user?.id || null, tenantId: tenant.id, name: user?.name || tenant.name, spaceId: personal ? 'personal' : tenant.id,
+  if(!user || (personal ? row.ownerId!==user.id : !membership))issue(403,'FORBIDDEN','当前账号无权进入该空间');
+  const identity = { userId: user.id, tenantId: tenant.id, name: membership?.memberName || user.name || tenant.name, spaceId: personal ? 'personal' : tenant.id,
     key: (user?.id || 'tenant') + ':' + tenant.id, generation: state.identityGeneration };
   return { state, identity, link: { backendUserId: user?.id, backendMembershipId: membership?.id },
     canManage: Boolean(user && (personal || ['企业管理员','租户管理员'].includes(membership?.role))) };
@@ -277,7 +279,7 @@ function tenantContext(state, tenant) {
 export async function tenantWorkspace(db, session) {
   const actor = { id: session.tenant.id, role: '客户' };
   const [{ state }, catalogue, facts] = await Promise.all([applicationState(db, actor), marketCatalogue(db, session), marketFacts(db, actor.id)]);
-  const { identity, canManage } = tenantContext(state, session.tenant);
+  const { identity, canManage } = tenantContext(state, session);
   const own = item => item.tenantId === actor.id;
   const orders = [...facts.orders, ...state.orders.filter(own)];
   const plans = orders.filter(row=>['已开通','生效中'].includes(row.status) && (!row.expiresAt || Date.parse(row.expiresAt)>Date.now())).map(row => ({
@@ -290,36 +292,54 @@ export async function tenantWorkspace(db, session) {
       quotaLimit:grant?.limit ?? null,quotaType:grant?({day:'日',week:'周',month:'月',total:'总额度'}[grant.period] || '总额度'):'不限额度',
       progress:grant?.limit?Math.min(100,(grant.used || 0)/grant.limit*100):0};
   });
-  const requests = [...facts.requests, ...state.requests.filter(own)].map(row =>
+  const keyIds=new Set(keys.map(key=>key.id));
+  const requests = [...facts.requests, ...state.requests.filter(own)].filter(row=>canManage || row.userId===identity.userId || keyIds.has(row.keyId)).map(row =>
     Object.fromEntries(['id','requestId','modelId','publicModelId','serviceId','tenantId','keyId','httpStatus','usage','durationMs','ttftMs','createdAt','billingType','subscriptionId','source','stream'].filter(field => Object.hasOwn(row, field)).map(field => [field, row[field]])));
   const ids = new Set([...keys.flatMap(row=>row.modelIds || []), ...requests.map(row => row.modelId), ...catalogue.services.map(row => row.serviceModelId)]);
   const publicOrders=rows=>rows.map(({factorSnapshot:_rules,...item})=>item);
   const customer=state.tenants.find(row=>row.id===actor.id), user=state.users.find(row=>row.id===identity.userId);
-  return { identity,profile:{account:user?.login || customer.id,name:user?.nickname || user?.name || customer.name,type:customer.type,status:customer.status},
+  const organization=identity.spaceId==='personal' ? {departments:[],members:[],audit:[]} : organizationProjection(state,actor.id);
+  if(!canManage)delete organization.platformAccounts;
+  return { identity,profile:{id:user.id,account:user.login,name:user.nickname || user.name || customer.name,type:customer.type,status:customer.status,
+    phone:user.phone,realNameCertification:user.realNameCertification},
+    applications:state.customerApplications.filter(application=>application.applicantUserId===user.id),
     backendUserId:identity.userId,canManage, revision:state.revision, orders:publicOrders(orders), plans:publicOrders(plans), keys, requests,
     services: catalogue.services, projects: state.projects.filter(own), routes: state.tenantRoutes.filter(row => own(row) && (canManage || row.ownerId === identity.userId)),
     models: state.models.filter(row => ids.has(row.id)).map(({ id, modelId, name, type }) => ({ id, modelId, name, type })),
-    organization: identity.spaceId === 'personal' ? { departments: [], members: [], audit: [] } : organizationProjection(state, actor.id) };
+    organization };
 }
 
 export async function tenantCommand(db, session, body) {
   const { operationId, expectedRevision, action, data } = body, tenant = session.tenant;
   if (body.tenantId !== tenant.id) issue(409, 'TENANT_CHANGED', '客户空间已变化，请重新打开操作');
-  if (!validId(operationId) || !Number.isSafeInteger(expectedRevision) || !['keys','organization','routes','subscribe'].includes(action)) issue(400, 'INVALID_INPUT', '客户操作或修订号无效');
+  if (!validId(operationId) || !Number.isSafeInteger(expectedRevision) ||
+      !['keys','organization','routes','subscribe','certifyPersonal','certifyEnterprise'].includes(action)) issue(400, 'INVALID_INPUT', '客户操作或修订号无效');
   safeAction(data);
-  const digest = await hash(body), replay = await db.prepare('SELECT tenant_id,request_hash FROM tenant_operations WHERE id=?').bind(operationId).first();
+  const digest = await hash([session.user.id,body]), replay = await db.prepare('SELECT tenant_id,request_hash FROM tenant_operations WHERE id=?').bind(operationId).first();
   if (replay) {
     if (replay.tenant_id !== tenant.id || replay.request_hash !== digest) issue(409, 'IDEMPOTENCY_CONFLICT', '同一操作标识不能用于不同请求');
     return { operationId };
   }
-  const [{ row, state, reference }, catalogue] = await Promise.all([applicationState(db, { id: tenant.id, role: '客户' }), marketCatalogue(db, session)]);
+  const [{ row, state, reference }, catalogue] = await Promise.all([applicationState(db, { id: tenant.id, role: '客户' }),
+    ['certifyPersonal','certifyEnterprise'].includes(action) ? null : marketCatalogue(db, session)]);
   if (state.revision !== expectedRevision || !row.application_revision) conflict();
-  const context = tenantContext(state, tenant);
-  if (!context.identity.userId) issue(403, 'FORBIDDEN', '该客户尚未关联可用的账号');
-  const services=catalogue.services.map(service=>({...service,materialId:service.modelKey,modelKey:service.serviceModelId}));
+  const context = tenantContext(state, session);
+  const services=catalogue?.services.map(service=>({...service,materialId:service.modelKey,modelKey:service.serviceModelId}));
   let next, retiredIds=[];
   try {
-    if(action==='subscribe') {
+    if(action==='certifyPersonal' || action==='certifyEnterprise'){
+      const accountState={currentUserId:session.user.id,accounts:state.users,applications:state.customerApplications};
+      if(action==='certifyPersonal'){
+        const result=submitRealNameCertification(accountState,data);
+        next={...state,users:result.accounts};
+      }else{
+        const id=data?.applicationId;
+        if(id!=null && !validId(id))throw Error('认证申请标识无效');
+        const result=submitEnterpriseCertification(accountState,data,id);
+        if(!id)result.applications.at(-1).id=operationId;
+        next={...state,customerApplications:result.applications};
+      }
+    } else if(action==='subscribe') {
       if(!context.canManage)throw Error('仅可为当前客户办理订购');
       const items=data?.items;
       if(!Array.isArray(items) || !items.length || items.length>10 || new Set(items.map(row=>row?.id)).size!==items.length ||
@@ -347,7 +367,8 @@ export async function tenantCommand(db, session, body) {
       next = tenantRouteChanges(context, data.rows, services);
     }
   } catch (error) { issue(422, 'BUSINESS_BLOCKED', error.message); }
-  const now = Date.now(), actionName = { keys: '维护 API Key', organization: '维护组织成员', routes: '维护智能路由', subscribe:'订购 Token Plan' }[action];
+  const now = Date.now(), actionName = { keys: '维护 API Key', organization: '维护组织成员', routes: '维护智能路由',
+    subscribe:'订购 Token Plan',certifyPersonal:'提交个人实名认证',certifyEnterprise:'提交企业认证' }[action];
   next.audits = [{ id: operationId, tenantId: tenant.id, actorId: context.identity.userId, actor: context.identity.name,
     action:actionName,result:'成功',createdAt:new Date(now).toISOString(),prototypeFact:true },...state.audits];
   const [written] = await db.batch([

@@ -1,4 +1,4 @@
-import { activeCustomer, salesCustomer, lifecycleAccess, serviceReferences } from '../src/service-access.mjs';
+import { salesCustomer, lifecycleAccess, serviceReferences } from '../src/service-access.mjs';
 import { domainModel } from '../src/mock/model-fields.js';
 import { createMockEngine } from '../src/admin-v2/mock-onboarding-core.js';
 import { platformPublicationFingerprint } from '../src/admin-v2/platform-publication-state.js';
@@ -8,46 +8,11 @@ import { loadModelWorkspace } from './model-repository.js';
 import { listedPackages, packageOffer } from './market-packages.js';
 import { experienceTasks } from '../src/service-directory.mjs';
 import { billingPeriod } from '../src/admin-v2/mock-billing.js';
+import samples from '../src/mock/catalogues.json' with { type: 'json' };
 
 const fail = (status, code, message) => { throw Object.assign(new Error(message), { status, code }); };
 const digest = async value => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), byte => byte.toString(16).padStart(2, '0')).join('');
 const activeStages = ['gray', 'formal'];
-export const marketCookie = 'moma5120_market';
-
-export async function marketTenant(db, tenantId) {
-  const row=await db.prepare(`SELECT customer.value,(SELECT json_extract(u.value,'$.status') FROM json_each(w.reference_json,'$.users') u
-    WHERE json_extract(u.value,'$.id')=json_extract(customer.value,'$.ownerId')) AS owner_status,
-    (SELECT g.value FROM json_each(w.reference_json,'$.grants') g WHERE json_extract(g.value,'$.subjectType')='tenant'
-      AND json_extract(g.value,'$.subjectId')=?) AS tenant_grant
-    FROM model_workspace w,json_each(w.reference_json,'$.tenants') customer WHERE w.id=1 AND json_extract(customer.value,'$.id')=?`).bind(tenantId,tenantId).first();
-  const tenant=row && JSON.parse(row.value);
-  return activeCustomer(tenant) && (!tenant.ownerId || row.owner_status==='正常') ? {id:tenant.id,name:tenant.name,type:tenant.type,ownerId:tenant.ownerId,grant:JSON.parse(row.tenant_grant || 'null')} : null;
-}
-
-export async function marketSession(db, request) {
-  const token = request.headers.get('cookie')?.split(';').map(part => part.trim()).find(part => part.startsWith(marketCookie+'='))?.slice(marketCookie.length+1);
-  if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
-  const hash = await digest(token);
-  const session = await db.prepare('SELECT tenant_id FROM market_sessions WHERE token_hash=? AND expires_at>?').bind(hash,Date.now()).first();
-  const tenant = session && await marketTenant(db,session.tenant_id);
-  return tenant ? { tenant, hash } : null;
-}
-
-export async function createMarketSession(db, tenant) {
-  const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte=>byte.toString(16).padStart(2,'0')).join('');
-  const now=Date.now();
-  await db.batch([
-    db.prepare('DELETE FROM market_sessions WHERE token_hash IN (SELECT token_hash FROM market_sessions WHERE expires_at<=? LIMIT 100)').bind(now),
-    db.prepare('INSERT INTO market_sessions(token_hash,tenant_id,expires_at) VALUES(?,?,?)').bind(await digest(token),tenant.id,now+28800000),
-    ...(tenant.ownerId ? [
-      db.prepare('INSERT INTO tenant_login_events(id,user_id,created_at) VALUES(?,?,?)').bind(crypto.randomUUID(),tenant.ownerId,now),
-      db.prepare(`DELETE FROM tenant_login_events WHERE created_at<? OR id IN
-        (SELECT id FROM tenant_login_events ORDER BY created_at DESC LIMIT 100 OFFSET 200)`).bind(now-7*86400000),
-    ] : []),
-  ]);
-  return token;
-}
-
 const selectOffers = `
   SELECT o.record_id,o.id AS call_id,o.mode,o.listing_stage,o.gray_tenants_json,o.market_visible,
          o.calls_enabled,s.id AS service_id,s.record_json AS service_json,m.id AS material_id,m.record_json AS material_json,
@@ -93,7 +58,9 @@ export async function marketCatalogue(db, session) {
   const orders=tenant?(await db.prepare(`SELECT purchase.id,purchase.offer_id AS offerId,offer.id AS callId,purchase.created_at AS createdAt,CASE WHEN purchase.cancelled_at IS NOT NULL THEN 'cancelled' WHEN offer.retired_at IS NULL THEN offer.listing_stage ELSE 'withdrawn' END AS stage
     FROM market_orders purchase JOIN offers offer ON offer.record_id=purchase.offer_id WHERE purchase.tenant_id=? ORDER BY purchase.created_at DESC`).bind(tenant.id).all()).results:[];
   const packages=tenant?(await listedPackages(db,tenant)).map(packageOffer).sort((a,b)=>Number(a.displayOrder || 0)-Number(b.displayOrder || 0)):[];
-  return { tenant:tenant?{id:tenant.id,name:tenant.name,type:tenant.type}:null,services,orders,packages };
+  return { tenant:tenant?{id:tenant.id,name:tenant.name,type:tenant.type}:null,
+    account:session?{id:session.user.id,username:session.user.login,name:session.user.nickname || session.user.name}:null,
+    spaces:session?.spaces || [],services,orders,packages };
 }
 
 async function checkedOffer(db, session, field, value, { ordering = false } = {}) {
@@ -112,6 +79,7 @@ const guard = `(SELECT commit_seq FROM db_state WHERE id=1)=? AND
 export async function marketOrder(db, session, offerIds, { tenantId, salePriceIds } = {}) {
   if (tenantId && tenantId!==session.tenant.id) fail(409,'TENANT_CHANGED','客户空间已变化，请重新选择');
 
+  if (!['个人用户','企业管理员','租户管理员'].includes(session.tenant.role)) fail(403,'FORBIDDEN','仅客户管理员可以订购服务');
   const offers=await Promise.all(offerIds.map(id=>checkedOffer(db,session,'recordId',id,{ordering:true})));
   const {tenant,hash}=session, seq=offers[0].row.commit_seq;
   if (offers.some(({row})=>row.commit_seq!==seq)) fail(409,'REVISION_CONFLICT','服务配置已变化，请刷新后重新订购');
@@ -126,6 +94,16 @@ export async function marketOrder(db, session, offerIds, { tenantId, salePriceId
   return {orders:results.map(row=>({id:row.id,offerId:row.offer_id,ordered:true}))};
 }
 
+function experienceOutput({task,imageCount=1,speechMode}) {
+  if(task==='image' || task==='video'){
+    const asset=task==='image'?'forthBg-982e3d97.png':'secondBg-c502c3d3.png';
+    const url='/moma_5.12.0_estack/assets/'+asset;
+    return {artifacts:Array.from({length:task==='image'?imageCount:1},()=>({url}))};
+  }
+  if(task==='voice')return speechMode==='tts'?{speakInput:true}:{answer:samples['ModelExperience.jsx'].response.asr};
+  return {answer:'模拟调用已完成。',...(task==='text'?{points:samples['TextExperience.jsx'].response.points}:{})};
+}
+
 export async function marketCompletion(db, session, body) {
   if (body.tenantId && body.tenantId!==session.tenant.id) fail(409,'TENANT_CHANGED','客户空间已变化，请重新发送');
   const { row, model }=await checkedOffer(db,session,'callId',body.model);
@@ -135,7 +113,7 @@ export async function marketCompletion(db, session, body) {
   }
   const { tenant, hash }=session;
   if (!row.order_id) fail(403,'ORDER_REQUIRED','请先订购此渠道服务');
-  const requestHash=await digest(JSON.stringify([body.model,body.task,body.images,body.simulateDenied,body.messages[0].content]));
+  const requestHash=await digest(JSON.stringify([session.user.id,body.model,body.task,body.images,body.imageCount,body.speechMode,body.simulateDenied,body.messages[0].content]));
   const replay=async()=>{
     const receipt=await db.prepare('SELECT request_hash,response_json FROM market_calls WHERE tenant_id=? AND request_id=?').bind(tenant.id,body.requestId).first();
     if (!receipt) return null;
@@ -163,12 +141,14 @@ export async function marketCompletion(db, session, body) {
       bindings:snapshot.published.config.bindings.map(binding=>({...binding,procurementPrices:platformPriceVersions(activeSupplyPrice(state,binding.id),service.model,'采购价格')})),
     };
     ({ response, usage }=engine.callForOrder(snapshot,config,{tenantId:tenant.id,orderId:row.order_id,messages:body.messages}));
-    usage.userId=tenant.ownerId;
+    usage.userId=session.user.id;
     usage.publicAtCall=row.listing_stage==='formal' && Boolean(row.market_visible) && model.marketVisible!==false;
     response.choices[0].message.content='模拟调用已完成。';
+    response.experience=experienceOutput(body);
     if (body.simulateDenied) {
       Object.assign(usage,{ status:'failed',code:'Model.AccessDenied',usage:null,attempts:[],cost:null,saleTrial:null,billingStatus:'not_billable' });
-      Object.assign(response,{ choices:[],usage:null,httpStatus:403 });
+      Object.assign(response,{ choices:[],usage:null,httpStatus:403,experience:null,
+        invocationError:{code:'Model.AccessDenied',message:'当前账号暂无该模型的调用权限，请订购模型或切换其他可用模型。'} });
     }
   } catch {
     fail(409,'CALL_UNAVAILABLE','当前渠道无法完成调用，请检查服务和价格状态');

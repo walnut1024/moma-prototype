@@ -16,6 +16,7 @@ const enterpriseStatus = { '待处理': '审核中', '需补充': '需补充', '
 export default function AccountCenter({ auth, title = '账号中心' }) {
   useEffect(() => { const previous = document.title; document.title = `MoMA · ${title}`; return () => { document.title = previous; }; }, [title]);
   const [open, setOpen] = useState(auth.params.get('certification') === 'personal' && !['审核中', '已认证'].includes(auth.user.realNameCertification?.status)), [data, setData] = useState({ name: '', idNumber: '', consent: false }), [errors, setErrors] = useState({});
+  const [submitting,setSubmitting]=useState(false);
   const personal = auth.user.realNameCertification;
   const applications = auth.state.applications.filter(item => item.applicantUserId === auth.user.id);
   const latest = applications.at(-1);
@@ -27,12 +28,18 @@ export default function AccountCenter({ auth, title = '账号中心' }) {
   const canSubmit = !['审核中', '已认证'].includes(personal?.status);
   const update = (key, value) => { setData(current => ({ ...current, [key]: value })); setErrors({}); };
   const close = () => { setOpen(false); setData({ name: '', idNumber: '', consent: false }); setErrors({}); };
-  const submit = event => {
+  const submit = async event => {
     event.preventDefault();
     const invalid = realNameErrors(data);
     if (Object.keys(invalid).length) { setErrors(invalid); return; }
-    try { auth.commit(submitRealNameCertification(auth.state, data)); close(); toast.success('实名认证已提交'); }
+    setSubmitting(true);
+    try {
+      if(auth.certify)await auth.certify('certifyPersonal',data);
+      else auth.commit(submitRealNameCertification(auth.state,data));
+      close(); toast.success('实名认证已提交');
+    }
     catch (error) { setErrors({ submit: error.message }); }
+    finally { setSubmitting(false); }
   };
   return <div className={cn("auth-account-center", workbench && "auth-account-workbench us-page")}>
     {!choosingCertification && !workbench && <Button variant="ghost" onClick={auth.close}><ArrowLeft data-icon="inline-start" />返回使用空间</Button>}
@@ -61,6 +68,6 @@ export default function AccountCenter({ auth, title = '账号中心' }) {
       <div className="auth-field" data-invalid={Boolean(errors.idNumber)}><label htmlFor="certification-id">居民身份证号码</label><Input id="certification-id" value={data.idNumber} maxLength={18} autoComplete="off" placeholder="请输入 18 位身份证号码" onChange={event => update('idNumber', event.target.value)} aria-invalid={Boolean(errors.idNumber)} aria-describedby={errors.idNumber ? 'certification-id-error' : undefined} />{errors.idNumber && <p id="certification-id-error" className="auth-field-error" role="alert">{errors.idNumber}</p>}</div>
       <div className="auth-agreement"><div><Checkbox id="certification-consent" checked={data.consent} onCheckedChange={value => update('consent', value === true)} aria-invalid={Boolean(errors.consent)} aria-describedby={errors.consent ? 'certification-consent-error' : undefined} /><label htmlFor="certification-consent">本人确认信息真实，并授权用于身份核验</label></div>{errors.consent && <p id="certification-consent-error" className="auth-field-error" role="alert">{errors.consent}</p>}</div>
       {errors.submit && <p className="auth-field-error" role="alert">{errors.submit}</p>}
-    </form><DialogFooter><Button variant="outline" onClick={close}>取消</Button><Button type="submit" form="real-name-form" disabled={Boolean(auth.storageError)}>提交认证</Button></DialogFooter></DialogContent></Dialog>
+    </form><DialogFooter><Button variant="outline" onClick={close}>取消</Button><Button type="submit" form="real-name-form" disabled={submitting || Boolean(auth.storageError)}>提交认证</Button></DialogFooter></DialogContent></Dialog>
   </div>;
 }
