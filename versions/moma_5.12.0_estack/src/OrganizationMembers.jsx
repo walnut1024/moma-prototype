@@ -1,3 +1,4 @@
+import {marketRequest} from './CloudMarket';
 import {useTenantData} from './useTenantData';
 import FrontPageHeader from "./components/FrontPageHeader";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from "./components/FilterControls";
@@ -60,6 +61,7 @@ export default function OrganizationMembers() {
   const [notice, setNotice] = useState("");
   const [inviteMode, setInviteMode] = useState("existing");
   const [batchOpen, setBatchOpen] = useState(false);
+  const [inviteLink,setInviteLink]=useState(''),[inviteError,setInviteError]=useState('');
   const { departments: storedDepartments, members } = data;
   const departments = storedDepartments.map(item => ({ ...item, name: displayBusinessCopy(item.name), description: displayBusinessCopy(item.description) }));
   const department = departments.find(d => d.id === selectedDepartment);
@@ -101,6 +103,16 @@ export default function OrganizationMembers() {
     } else if (modal.type === "member") {
       commit({ type: "member.save", member: { ...form, status: modal.isNew ? inviteMode === "invite" ? "待加入" : "已加入" : form.status, source: modal.isNew ? inviteMode === "invite" ? "邀请加入" : "平台账号" : form.source } }, modal.isNew && inviteMode === "invite" ? "邀请已创建，成员状态为待加入" : "成员信息已保存");
     } else if (modal.type === "move") commit({ type: "member.move", ids: modal.ids, departmentId: form.departmentId }, "成员主部门已更新，管理范围保持原设置");
+  };
+  const shareInvite=async member=>{
+    setInviteError('');
+    try{
+      const invite=await marketRequest('invitations',{membershipId:member.id});
+      const url=new URL(location.href);
+      url.search='';
+      url.hash='/auth/invite?'+new URLSearchParams({token:invite.token});
+      setInviteLink(url.href);
+    }catch(error){setInviteError(error.message);}
   };
   const tree = (id, depth = 0) => {
     const node=departments.find(d=>d.id===id);
@@ -156,12 +168,23 @@ export default function OrganizationMembers() {
             <TableCell title={departmentPath(departments, m.departmentId)}>{departments.find(d => d.id === m.departmentId)?.name || "未分配部门"}</TableCell>
             <TableCell><span className="org-role">{m.role !== "普通成员" && <ShieldCheck />}{m.role}</span>{m.role === "部门管理员" && <small className="org-cell-sub" title={roleScope(m)}>{departments.find(d => d.id === m.scopeId)?.name}{m.includeChildren ? " · 含子部门" : " · 仅本部门"}</small>}</TableCell>
             <TableCell><span className={`org-status ${m.status === "已加入" ? "joined" : m.status === "待加入" ? "pending" : "disabled"}`}>{m.status}</span></TableCell>
-            <TableCell><div className="org-row-actions"><Button variant="link" size="xs" onClick={() => open({ type: "member", title: "编辑成员" }, { ...m })}>编辑</Button><Popover><PopoverTrigger asChild><Button size="icon-xs" variant="ghost" aria-label={`${m.name}更多操作`}><MoreHorizontal /></Button></PopoverTrigger><PopoverContent className="org-menu" align="end"><Button variant="ghost" onClick={() => open({ type: "detail", title: "成员详情", member: m })}>成员详情</Button><Button variant="ghost" onClick={() => move([m.id])}>移动部门</Button>{m.status === "待加入" ? <><Button variant="ghost" onClick={() => confirm("重新邀请", `为 ${m.name} 重新创建邀请？`, { type: "member.reinvite", ids: [m.id] }, "邀请已更新")}>重新邀请</Button><Button variant="ghost" onClick={() => confirm("确认加入", `确认 ${m.name} 已接受邀请并加入企业？`, { type: "member.accept", ids: [m.id] }, "成员已加入企业")}>确认加入</Button></> : <Button variant="ghost" onClick={() => confirm(m.status === "已停用" ? "恢复成员" : "停用成员", `${m.status === "已停用" ? "恢复" : "停用"} ${m.name}？成员归属和历史记录会保留。`, { type: "member.status", ids: [m.id], status: m.status === "已停用" ? "已加入" : "已停用" }, m.status === "已停用" ? "成员已恢复" : "成员已停用")}>{m.status === "已停用" ? "恢复成员" : "停用成员"}</Button>}<Button variant="ghost" className="org-danger" onClick={() => confirm(m.status === "待加入" ? "撤销邀请" : "移除成员", `${m.status === "待加入" ? "撤销" : "移除"} ${m.name} 的企业成员关系？操作记录会保留，平台账号不会被删除。`, { type: "member.remove", ids: [m.id] }, m.status === "待加入" ? "邀请已撤销" : "成员已移除")}>{m.status === "待加入" ? "撤销邀请" : "移除成员"}</Button></PopoverContent></Popover></div></TableCell>
+            <TableCell><div className="org-row-actions"><Button variant="link" size="xs" onClick={() => open({ type: "member", title: "编辑成员" }, { ...m })}>编辑</Button><Popover><PopoverTrigger asChild><Button size="icon-xs" variant="ghost" aria-label={`${m.name}更多操作`}><MoreHorizontal /></Button></PopoverTrigger><PopoverContent className="org-menu" align="end"><Button variant="ghost" onClick={() => open({ type: "detail", title: "成员详情", member: m })}>成员详情</Button><Button variant="ghost" onClick={() => move([m.id])}>移动部门</Button>{m.status === "待加入" ? <Button variant="ghost" disabled={!tenant.canManage} onClick={()=>shareInvite(m)}>生成邀请链接</Button> : <Button variant="ghost" onClick={() => confirm(m.status === "已停用" ? "恢复成员" : "停用成员", `${m.status === "已停用" ? "恢复" : "停用"} ${m.name}？成员归属和历史记录会保留。`, { type: "member.status", ids: [m.id], status: m.status === "已停用" ? "已加入" : "已停用" }, m.status === "已停用" ? "成员已恢复" : "成员已停用")}>{m.status === "已停用" ? "恢复成员" : "停用成员"}</Button>}<Button variant="ghost" className="org-danger" onClick={() => confirm(m.status === "待加入" ? "撤销邀请" : "移除成员", `${m.status === "待加入" ? "撤销" : "移除"} ${m.name} 的企业成员关系？操作记录会保留，平台账号不会被删除。`, { type: "member.remove", ids: [m.id] }, m.status === "待加入" ? "邀请已撤销" : "成员已移除")}>{m.status === "待加入" ? "撤销邀请" : "移除成员"}</Button></PopoverContent></Popover></div></TableCell>
           </TableRow>)}{!visible.length && <TableRow><TableCell colSpan={8}><div className="org-empty"><Users /><strong>{members.length ? "当前范围内没有匹配成员" : "企业暂无成员"}</strong><p>调整筛选条件，或添加成员到当前部门。</p><Button variant="outline" onClick={addMember}>添加成员</Button></div></TableCell></TableRow>}</TableBody>
         </Table>
         <div className="org-pagination"><small>共 {filtered.length} 人 · 第 {currentPage} / {pageCount} 页</small><div><Choice label="每页人数" value={String(pageSize)} onChange={value => { setPageSize(Number(value)); setPage(1); setSelectedMembers([]); }} options={PAGE_SIZES.map(size => ({ value: String(size), label: `${size} 人 / 页` }))} /><Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>上一页</Button><Button variant="outline" size="sm" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>下一页</Button></div></div>
       </section>
     </div>
+    {inviteError && <p className="org-form-error" role="alert">{inviteError}</p>}
+    <Dialog open={Boolean(inviteLink)} onOpenChange={open=>{if(!open)setInviteLink('');}}>
+      <DialogContent className="org-dialog">
+        <DialogHeader><DialogTitle>成员邀请链接</DialogTitle><DialogDescription>链接 7 天内有效，生成新链接会替换旧链接。</DialogDescription></DialogHeader>
+        <Input aria-label="成员邀请链接" value={inviteLink} readOnly onFocus={event=>event.currentTarget.select()}/>
+        <DialogFooter><Button onClick={async()=>{
+          try{await navigator.clipboard.writeText(inviteLink);setNotice('邀请链接已复制');setInviteLink('');}
+          catch{setInviteError('无法访问剪贴板，请手动复制链接');}
+        }}>复制链接</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
     {batchOpen && <OrganizationMemberBatch data={data} initialDepartment={department?.id || "unassigned"} onClose={() => setBatchOpen(false)} onApply={async (rows, mode, defaultDepartment) => {
       const outcome = applyMemberBatch(data, rows, mode, defaultDepartment, () => crypto.randomUUID());
       try { await tenant.command('organization',outcome.state,draftRevision ?? tenant.revision); }

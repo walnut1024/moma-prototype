@@ -8,7 +8,6 @@ import { loadModelWorkspace } from './model-repository.js';
 import { listedPackages, packageOffer } from './market-packages.js';
 import { experienceTasks } from '../src/service-directory.mjs';
 import { billingPeriod } from '../src/admin-v2/mock-billing.js';
-import samples from '../src/mock/catalogues.json' with { type: 'json' };
 
 const fail = (status, code, message) => { throw Object.assign(new Error(message), { status, code }); };
 const digest = async value => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -67,6 +66,7 @@ async function checkedOffer(db, session, field, value, { ordering = false } = {}
   if (!session) fail(401,'TENANT_SESSION_REQUIRED','请先登录模型广场');
   const row=await db.prepare(selectOffers + (field==='recordId'?' AND o.record_id=?':' AND o.id=?')).bind(session.tenant.id,value).first();
   if (!row) fail(404,'MODEL_UNAVAILABLE','模型服务不存在或已下架');
+  if(row.commit_seq!==session.commitSeq)fail(409,'REVISION_CONFLICT','客户权限或服务配置已变化，请重试');
   const offer=marketOffer(row,session.tenant);
   if (!activeStages.includes(row.listing_stage) || !offer.ready) fail(409,'MODEL_UNAVAILABLE','模型服务已下架或暂不可用');
   if (!offer.released || ordering && !offer.allowed) fail(403,'MODEL_FORBIDDEN','当前客户不在此服务的销售或灰度范围内');
@@ -94,14 +94,22 @@ export async function marketOrder(db, session, offerIds, { tenantId, salePriceId
   return {orders:results.map(row=>({id:row.id,offerId:row.offer_id,ordered:true}))};
 }
 
-function experienceOutput({task,imageCount=1,speechMode}) {
+export async function experienceOptions(db,task){
+  if(!['text','image','video','voice'].includes(task))fail(400,'INVALID_INPUT','体验任务无效');
+  const settings=await db.prepare('SELECT options_json FROM experience_settings WHERE task=?').bind(task).first('options_json');
+  if(!settings)fail(503,'EXPERIENCE_UNAVAILABLE','体验配置尚未初始化');
+  return JSON.parse(settings);
+}
+
+async function experienceOutput(db,{task,imageCount=1,speechMode}) {
+  if(!task)return {answer:'模拟调用已完成。'};
+  const record=await db.prepare('SELECT result_json FROM experience_settings WHERE task=?').bind(task).first('result_json');
+  if(!record)fail(503,'EXPERIENCE_UNAVAILABLE','体验配置尚未初始化');
+  const result=JSON.parse(record);
   if(task==='image' || task==='video'){
-    const asset=task==='image'?'forthBg-982e3d97.png':'secondBg-c502c3d3.png';
-    const url='/moma_5.12.0_estack/assets/'+asset;
-    return {artifacts:Array.from({length:task==='image'?imageCount:1},()=>({url}))};
+    return {artifacts:Array.from({length:task==='image'?imageCount:1},()=>({url:result.asset}))};
   }
-  if(task==='voice')return speechMode==='tts'?{speakInput:true}:{answer:samples['ModelExperience.jsx'].response.asr};
-  return {answer:'模拟调用已完成。',...(task==='text'?{points:samples['TextExperience.jsx'].response.points}:{})};
+  return task==='voice' && speechMode==='tts'?{speakInput:true}:result;
 }
 
 export async function marketCompletion(db, session, body) {
@@ -113,7 +121,8 @@ export async function marketCompletion(db, session, body) {
   }
   const { tenant, hash }=session;
   if (!row.order_id) fail(403,'ORDER_REQUIRED','请先订购此渠道服务');
-  const requestHash=await digest(JSON.stringify([session.user.id,body.model,body.task,body.images,body.imageCount,body.speechMode,body.simulateDenied,body.messages[0].content]));
+  const requestHash=await digest(JSON.stringify([session.user.id,body.model,body.task,body.images,body.imageCount,body.speechMode,
+    body.simulateDenied,body.messages[0].content,...(body.textTurn?[body.textTurn]:[])]));
   const replay=async()=>{
     const receipt=await db.prepare('SELECT request_hash,response_json FROM market_calls WHERE tenant_id=? AND request_id=?').bind(tenant.id,body.requestId).first();
     if (!receipt) return null;
@@ -144,7 +153,6 @@ export async function marketCompletion(db, session, body) {
     usage.userId=session.user.id;
     usage.publicAtCall=row.listing_stage==='formal' && Boolean(row.market_visible) && model.marketVisible!==false;
     response.choices[0].message.content='模拟调用已完成。';
-    response.experience=experienceOutput(body);
     if (body.simulateDenied) {
       Object.assign(usage,{ status:'failed',code:'Model.AccessDenied',usage:null,attempts:[],cost:null,saleTrial:null,billingStatus:'not_billable' });
       Object.assign(response,{ choices:[],usage:null,httpStatus:403,experience:null,
@@ -153,7 +161,13 @@ export async function marketCompletion(db, session, body) {
   } catch {
     fail(409,'CALL_UNAVAILABLE','当前渠道无法完成调用，请检查服务和价格状态');
   }
+  if(!body.simulateDenied){
+    response.experience=await experienceOutput(db,body);
+    if(response.experience.answer)response.choices[0].message.content=response.experience.answer;
+  }
   const at=Date.now();
+  const history=body.textTurn?JSON.stringify({...body.textTurn,modelName:material.name,
+    provider:row.source_name?`${row.provider_name}（${row.source_name}）`:row.provider_name || 'MoMA'}):null;
   const period=billingPeriod(at), charge=usage.saleTrial;
   const billable=usage.billingStatus==='billable' && charge?.currency==='CNY' && charge.unit==='micro' &&
     Number.isSafeInteger(charge.amount) && charge.amount>=0;
@@ -166,10 +180,11 @@ export async function marketCompletion(db, session, body) {
   ] : [];
   try {
     const [insert]=await db.batch([
-      db.prepare(`INSERT INTO market_calls(tenant_id,request_id,request_hash,offer_id,sale_price_id,route_version_id,usage_id,response_json,created_at)
-        SELECT ?,?,?,?,?,?,?,?,? WHERE ${guard}
+      db.prepare(`INSERT INTO market_calls(tenant_id,request_id,request_hash,offer_id,sale_price_id,route_version_id,usage_id,response_json,created_at,history_user_id,history_json)
+        SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE ${guard}
         AND NOT EXISTS(SELECT 1 FROM market_charge_receipts WHERE tenant_id=? AND request_id=?)`)
-        .bind(tenant.id,body.requestId,requestHash,row.record_id,row.sale_id,row.active_route_id,usage.id,JSON.stringify(response),at,row.commit_seq,hash,tenant.id,at,tenant.id,body.requestId),
+        .bind(tenant.id,body.requestId,requestHash,row.record_id,row.sale_id,row.active_route_id,usage.id,JSON.stringify(response),at,
+          history?session.user.id:null,history,row.commit_seq,hash,tenant.id,at,tenant.id,body.requestId),
       db.prepare("INSERT INTO simulation_records(kind,id,payload_json) SELECT 'usage',?,? WHERE EXISTS (SELECT 1 FROM market_calls WHERE usage_id=?)").bind(usage.id,JSON.stringify(usage),usage.id),
       ...chargeWrites,
     ]);
@@ -184,6 +199,33 @@ export async function marketCompletion(db, session, body) {
     fail(409,'CALL_RECEIPT_EXPIRED','此调用已计入月账单，明细已过期');
   }
   fail(409,'REVISION_CONFLICT','服务配置已变化，请重新调用');
+}
+
+export async function textConversations(db,session) {
+  const {results}=await db.prepare(`SELECT request_id,offer_id,history_json,response_json,created_at FROM market_calls
+    WHERE tenant_id=? AND history_user_id=? AND created_at>=? ORDER BY created_at DESC,request_id DESC LIMIT 400`)
+    .bind(session.tenant.id,session.user.id,Date.now()-7*86400000).all();
+  const conversations=new Map();
+  for(const row of results){
+    const turn=JSON.parse(row.history_json), response=JSON.parse(row.response_json);
+    if(!conversations.has(turn.conversationId)){
+      if(conversations.size>=20)continue;
+      conversations.set(turn.conversationId,{id:turn.conversationId,serviceId:row.offer_id,modelName:turn.modelName,
+        deepThinking:turn.deepThinking,temperature:turn.temperature,topP:turn.topP,messages:new Map()});
+    }
+    const conversation=conversations.get(turn.conversationId);
+    const original=conversation.messages.get(turn.messageId);
+    if(original){original.at=row.created_at;continue;}
+    const denied=response.invocationError;
+    conversation.messages.set(turn.messageId,{at:row.created_at,id:turn.messageId,requestId:row.request_id,question:turn.question,modelName:turn.modelName,
+      provider:turn.provider,callId:response.model,images:turn.images.map(name=>({name})),
+      ...(denied?{status:'error',code:response.httpStatus,error:denied.code,message:denied.message,raw:JSON.stringify(denied)}:
+        {status:'success',answer:response.experience?.answer,points:response.experience?.points})});
+  }
+  return {conversations:[...conversations.values()].map(row=>{
+    const messages=[...row.messages.values()].sort((a,b)=>a.at-b.at).map(({at:_at,...message})=>message);
+    return {...row,messages,title:messages[0]?.question.slice(0,22) || messages[0]?.images[0]?.name || '新对话'};
+  })};
 }
 
 async function trimMarketActivity(db, now) {

@@ -1,5 +1,3 @@
-import { prepareLinkedAccounts, LINKED_USERS, LINKED_ADMINS } from '../linked-accounts.mjs';
-import { directorySnapshot } from '../service-directory.mjs';
 import { loadAdminState, prepareModelServiceShowcase, completeModelServiceShowcase } from './CloudModelOperations';
 import { useRef, useState } from 'react';
 import { Button as LegacyButton } from '../components/ui/button';
@@ -25,10 +23,9 @@ export default function DevelopmentNotes({ admin = false }) {
   const Paragraph = admin ? Typography.Paragraph : 'p';
   const [open, setOpen] = useState(false), trigger = useRef(null);
   const [area, setArea] = useState('前台与服务');
-  const [notice, setNotice] = useState(''), [mockNotice, setMockNotice] = useState('');
+  const [mockNotice, setMockNotice] = useState('');
   const [mockBusy, setMockBusy] = useState(false);
   const service = area === '前台与服务';
-  let currentIdentity; if (open && service) { try { currentIdentity = directorySnapshot().identity; } catch {} }
   const supply = area === '渠道接入';
   const close = () => { setOpen(false); requestAnimationFrame(() => trigger.current?.focus()); };
   const showModels = catalogue => {
@@ -37,7 +34,7 @@ export default function DevelopmentNotes({ admin = false }) {
     params.set('perspective','models');
     if(catalogue==='all')params.set('catalogue','all');else{
       params.delete('catalogue');
-      const model=loadAdminState(localStorage).models.find(row=>row.id===params.get('model'));
+      const model=loadAdminState().models.find(row=>row.id===params.get('model'));
       if(model && !isServiceShowcase(model))params.delete('model');
     }
     params.delete('view');
@@ -56,21 +53,18 @@ export default function DevelopmentNotes({ admin = false }) {
       }}>导入模型运营演示包</Button>
       <Button disabled={mockBusy} variant="outline" onClick={async()=>{setMockBusy(true);try {await completeModelServiceShowcase(setMockNotice);}catch(error){setMockNotice(error.message);}finally{setMockBusy(false);}}}>完成两模型演示流程</Button>
       <Paragraph role="status">{mockNotice}</Paragraph>
-      <Heading>模型运营管理流程</Heading><Paragraph>渠道接入维护协议、地址、上游标识及凭证；模型服务依次为服务概览、路由及映射、故障转移、调用指南、操作记录。服务操作提供启用、停用和归档。模型广场维护用户侧展示许可。模型资料是唯一主档，概览只读引用。模型成本按服务商、渠道与模型关联维护采购版本；模型售价按统一服务或渠道服务维护售价；同一模型共用销售对象。内部服务可无价格完成后台技术验证和启用，缺成本保持待核算，销售费用不适用；经营服务另检查成本、售价及销售对象后上架。灰度上架独立选择有效客户，销售对象在销售设置保存。价格变更不清技术证据，不追改历史；连接、路由或能力变化要求重验。跨页保留来源对象与筛选，旧接入记录只定位现有资源，不再编辑第二套资料或价格。在启用或上架检查中验证服务。灰度上架、正式上架、下架及可见性配置在模型广场维护。正式上架结束灰度限制。关联服务商可原地新建，点击对应服务的路由策略单元格打开路由编辑，包含尚未配置状态；主表操作列直接提供编辑路由、编辑调用标识、模型映射及停用/恢复路由；路由抽屉仅维护路由配置。路由编辑只选择已有合格渠道，不提供接入新渠道；模型登记、渠道配置、检测与明确启用统一在渠道接入模块完成后，再返回配置映射。服务商页签为 API 密钥池，名称在前、短 ID 在后，按组上移或下移；改变引用中的首位密钥先完整检测再明确应用，备用排序不触碰当前配置。用户侧广场的登录、目录、订购和在线模拟调用读写 D1；既有 API Key、其他体验页与图表保持原型范围。</Paragraph>
-      <Heading>两面身份与样例</Heading><Paragraph>后台账号代表平台管理人员；前台政企用户与个人用户代表服务使用者。两面的登录状态独立。用户通过稳定 ID 关联后台用户、组织或个人客户及成员记录，不按名称、手机号或页面自报的客户 ID 猜测授权。</Paragraph>
-      <ul>{LINKED_ADMINS.map(row => <li key={row.id}>{row.name}：{row.account}，在后台顶部选择账号进入。</li>)}{LINKED_USERS.map(row => <li key={row.id}>{row.name}：{row.phone}，{row.userType === 'enterprise' ? '选择企业用户登录，使用所属组织的权限' : '选择个人用户登录，直接使用自己的权限'}。也可从前台顶部“Mock 账号”直接切换，无需验证码。</li>)}</ul>
-      <Button onClick={() => { try { const changed = prepareLinkedAccounts(); setNotice(changed ? '六个账号已准备，请载入后台新版本；前台可用顶部 Mock 账号菜单直接切换。' : '六个账号已存在，保留当前启停状态。'); } catch (error) { setNotice(error.message); } }}>准备联动账号</Button><Paragraph role="status">{notice}</Paragraph>
-      <Paragraph>准备操作可重复执行；已有 ID 或手机号冲突时停止，不覆盖现有记录，不自动登录、创建订购、凭证、模型授权或发布回执。基础客户缺失时先核对后台数据。</Paragraph>
-      <Paragraph>当前前台身份：{currentIdentity ? `${currentIdentity.name} → ${currentIdentity.tenantName}（${currentIdentity.tenantId}）` : '尚无有效身份映射'}</Paragraph>
-      <Paragraph>快速切换仅限已准备的三个前台样例账号，保留启停、成员和映射检查；不会切换后台管理员、创建授权或恢复旧任务。正常验证码登录继续保留。正式产品移除快速切换入口。</Paragraph>
+      <Heading>模型运营管理流程</Heading><Paragraph>渠道接入维护协议、地址、上游标识及凭证；模型服务依次为服务概览、路由及映射、故障转移、调用指南、操作记录。服务操作提供启用、停用和归档。模型广场维护用户侧展示许可。模型资料是唯一主档，概览只读引用。模型成本按服务商、渠道与模型关联维护采购版本；模型售价按统一服务或渠道服务维护售价；同一模型共用销售对象。内部服务可无价格完成后台技术验证和启用，缺成本保持待核算，销售费用不适用；经营服务另检查成本、售价及销售对象后上架。灰度上架独立选择有效客户，销售对象在销售设置保存。价格变更不清技术证据，不追改历史；连接、路由或能力变化要求重验。跨页保留来源对象与筛选，旧接入记录只定位现有资源，不再编辑第二套资料或价格。在启用或上架检查中验证服务。灰度上架、正式上架、下架及可见性配置在模型广场维护。正式上架结束灰度限制。关联服务商可原地新建，点击对应服务的路由策略单元格打开路由编辑，包含尚未配置状态；主表操作列直接提供编辑路由、编辑调用标识、模型映射及停用/恢复路由；路由抽屉仅维护路由配置。路由编辑只选择已有合格渠道，不提供接入新渠道；模型登记、渠道配置、检测与明确启用统一在渠道接入模块完成后，再返回配置映射。服务商页签为 API 密钥池，名称在前、短 ID 在后，按组上移或下移；改变引用中的首位密钥先完整检测再明确应用，备用排序不触碰当前配置。用户侧登录、目录、订购、API Key 和在线模拟调用读写 D1。图表保留样例。</Paragraph>
+      <Heading>账号与空间</Heading><Paragraph>用户面按用户名及账号类型登录。政企账号进入已加入的政企空间，个人账号进入自己的个人空间。组织邀请由成员本人确认，后台角色独立于客户空间。</Paragraph>
+      <ul><li>用户面：zqzh（政企账号）、grzh（个人账号）。</li><li>后台：yyg 和 admin-001（系统管理员）、admin-002（运维管理员）、admin-003（运营管理员）。</li></ul>
+      <Paragraph>本地内置账号使用统一演示密码。当前身份与可切换空间显示在顶栏账号菜单。</Paragraph>
       <Heading>目录与调用逻辑</Heading><Paragraph>模型资料、后台服务、当前客户授权与实际 mock 发布配置共同决定目录。模型广场、详情、选择器及体验入口使用稳定服务 ID；统一模型服务模式和各服务商独立服务分别判断。不复制一份已订购名单，不暴露采购价和密钥。未知能力保持未知；没有相应任务页面时显示不可体验。</Paragraph>
       <Paragraph>两模型案例默认一模型一卡，全部模型保留历史服务。点击卡片进入独立详情页，服务商报价逐行展开，API 调用区切换提供方后同步调用 ID、代码示例与体验入口；URL 保留模型和服务身份，支持刷新和返回。价格取平台发布快照，未提交输入不影响前台；不根据可调用状态推断已订购。API Key 由原管理页维护。模型选择器与新回复保留提供方，避免同名服务混淆。</Paragraph>
       <Paragraph>模型广场可见性只控制列表展示，隐藏时已有订购、API 调用及在途请求继续有效；切回可见不自动上架或发布。真正下架仍会隐藏并拒绝新请求，包括已创建的 Key 和旧成功请求的重放。发送及结果交付前重新读取最新状态，新请求核对用户、成员、客户、上架、公开性、调用开关、范围、实际发布、有效价格及供给；交付前继续核对身份和安全撤销边界。平台 trial 是独立测试身份，前台体验不能借用。</Paragraph>
       <Paragraph>在途任务冻结身份、请求代次及原凭证。普通下架阻止新请求，已合法开始的原请求按原配置完成；主动取消、身份变化、撤权及原密钥撤销仍阻断交付。已取消任务不会因重新上架自动重启。上架检查中的 24 小时验证窗口不作为运行时自动下架条件。</Paragraph>
       <Paragraph>渠道直选模式路由组头分别控制上下架和停服：下架隐藏前台提供方但保留已有 API 权限；停服拒绝该服务商调用。上架与恢复服务互不联动，下架后可确认解绑，仅停用自身路由与渠道关联，供应资源和历史保留。操作复用权限、修订冲突与原子持久化，不改变其他服务商或整个模型的请求代次。路由不展示版本管理，内部历史与并发校验保留。</Paragraph>
       <Heading>全站配置与数据</Heading><Paragraph>初始资源在 src/mock 配置，系统内置来源与用户新增、修改、删除分开记录。前台 Key、订单、组织成员、智能路由和后台使用同一份版本业务数据；客户智能路由与供应渠道路由分开。统计从共享请求和显式登录事件派生。旧无归属存档保留，不自动归给当前客户；已有工作区不因刷新或配置更新补回默认资源。配置随静态产物打包，运行数据仅同源同浏览器共享，不支持跨浏览器云同步。本轮不提供新套餐销售。</Paragraph><Heading>本地同步与历史</Heading><Paragraph>成功保存后通知同页；同源标签页通过 storage 更新，重新聚焦时复查。后台未保存表单继续使用修订冲突保护。存储损坏或写入失败时停止，不恢复默认全开放目录。前台会话与草稿按用户及客户隔离；旧无归属记录保留但不自动认领。文字及参数可刷新恢复；本地图片和录音仅在当前标签页内保留，刷新后需重新添加。</Paragraph>
-      <Heading>运维调用观测</Heading><Paragraph>调用数据统计客户最终结果，服务监控统计已派发且有独立时间的上游尝试。服务商与渠道以组合条件筛选，两类下钻保留当前组合并进入调用日志对应视图。客户请求列表、详情与 CSV 使用同一字段顺序，密钥值仅展示脱敏结果。样例由现有本地数据生成，旧尝试没有独立时间时仍可在请求详情查看。未采集的时延、上游状态和用量保持未知。</Paragraph>
-      <Heading>研发实现边界</Heading><Paragraph>以上为本地 mock 交互，未接真实认证、模型网关、计费或消息系统。前台结果使用集中配置的本地模板，完成后向共享请求集合写入 Mock 调用事实，前台日志、用量和后台观测读取同一 Request ID；未返回的 Tokens、费用保持待确认，不产生真实扣费。直接 mock 客户请求沿用既有模拟计量。真实研发必须在服务端执行同一准入逻辑，撤销缓存权限，并在异步任务交付前再次检查；浏览器隐藏按钮不能代替服务端授权。仅配置发布不等于可体验，不补造成功回执。</Paragraph>
+      <Heading>运维调用观测</Heading><Paragraph>调用数据统计客户最终结果，服务监控统计已派发且有独立时间的上游尝试。服务商与渠道以组合条件筛选，两类下钻保留当前组合并进入调用日志对应视图。客户请求列表、详情与 CSV 使用同一字段顺序，密钥值仅展示脱敏结果。旧尝试没有独立时间时仍可在请求详情查看。未采集的时延、上游状态和用量保持未知。</Paragraph>
+      <Heading>研发实现边界</Heading><Paragraph>Worker 负责原型账号验证、权限校验及模拟调用，将调用事实与计价汇总写入 D1。前台日志、用量和后台观测读取同一 Request ID。未采集的用量与费用保持待确认。直接 mock 客户请求沿用既有模拟计量。真实研发必须在服务端执行同一准入逻辑，撤销缓存权限，并在异步任务交付前再次检查；浏览器隐藏按钮不能代替服务端授权。仅配置发布不等于可体验，不补造成功回执。</Paragraph>
       <Paragraph>前台 Key、组织和客户路由编辑在打开时冻结修订，其他标签页修改后拒绝旧表单覆盖并保留输入；账号切换清除临时表单及明文 Key，筛选视图按身份隔离。Key 不限额度与 TPM/QPM 输入实际保存，不限 Key 额度仍校验客户额度及权限。统计按实际模型类型、服务和调用 ID 聚合，不显示固定套餐额度。接入流程区分采购条件已填写和采购价已发布，备用准备完成不自动投入路由。</Paragraph>
       </> : <>
       <Heading>模块职责</Heading><Paragraph>{supply ? '管理模型的供应来源、接入配置与渠道价格。页头仅提供添加服务商，模型和渠道从服务商详情分别添加。服务商资料从详情进入模型资料维护。供应模型按模型主档关联。' : '模型资料包含模型、服务商、计费项、计费单位、货币五个页签；成本和售价的计量配置共用这里的字典。模型资料描述模型身份与能力，不代表已接入、可调用或已上架。'}</Paragraph>

@@ -1,5 +1,4 @@
-import mockConfig from './mock/catalogues.json' with { type: 'json' };
-import { useServiceDirectory, beginExperience, finishExperience } from './useServiceDirectory';
+import { useServiceDirectory, useExperienceSettings, beginExperience, finishExperience } from './useServiceDirectory';
 import { readExperienceDraft, saveExperienceDraft } from './experience-drafts.mjs';
 import FrontPageHeader from "./components/FrontPageHeader";
 import { displayBusinessCopy } from './display-copy.mjs';
@@ -27,11 +26,7 @@ import SpeechRecorder from "./SpeechRecorder";
 import "./experience.css";
 import "./experience-refinements.css";
 
-const voiceCatalog = mockConfig["ModelExperience.jsx"]["voiceCatalog"];
-
-// Local presentation presets; these do not grant a model any capability.
-const videoProfile = mockConfig["ModelExperience.jsx"]["videoProfile"];
-const promptCatalog = mockConfig["ModelExperience.jsx"]["promptCatalog"];
+const emptyVideoProfile={modes:[],resolutions:[],aspects:[],durations:[],accept:'',add:'添加参考文件',sound:false};
 
 function ModelPicker({ model, options, onChange, speech = false, task, disabled }) {
   const [open, setOpen] = useState(false);
@@ -72,6 +67,8 @@ export default function ModelExperience({
 }) {
   const [mode, setMode] = useState("语音识别");
   const directory = useServiceDirectory(kind), models = directory.models;
+  const {settings,error:settingsError}=useExperienceSettings(kind);
+  const voiceCatalog=settings?.voices || [],videoProfile=settings?.video || emptyVideoProfile;
   const [draft] = useState(() => { try { return readExperienceDraft(owner, kind); } catch { return { storageError: '草稿读取失败，请核对本地存储' }; } });
   const ticket = useRef(null);
   const [model, setModel] = useState(initialServiceId || draft.model || models.find(item => item.callable)?.id || '');
@@ -103,16 +100,16 @@ export default function ModelExperience({
   const [speed, setSpeed] = useState("1");
   const [pitch, setPitch] = useState("1");
   const [volume, setVolume] = useState("50");
-  const [voice, setVoice] = useState("longxiaochun_v2");
+  const [voice, setVoice] = useState("");
   const [format, setFormat] = useState("mp3");
   const [language, setLanguage] = useState(draft.language || "auto");
   const [removeFillers, setRemoveFillers] = useState(false);
   const [imageSize, setImageSize] = useState(draft.imageSize || "1024 × 1024");
   const [imageCount, setImageCount] = useState(draft.imageCount || "1");
-  const [videoMode, setVideoMode] = useState(draft.videoMode || "全能模式");
-  const [resolution, setResolution] = useState(draft.resolution || "1080P");
-  const [aspect, setAspect] = useState(draft.aspect || "16:9");
-  const [duration, setDuration] = useState(draft.duration || "5秒");
+  const [videoMode, setVideoMode] = useState(draft.videoMode || "");
+  const [resolution, setResolution] = useState(draft.resolution || "");
+  const [aspect, setAspect] = useState(draft.aspect || "");
+  const [duration, setDuration] = useState(draft.duration || "");
   const [sound, setSound] = useState(true);
   const [previewing, setPreviewing] = useState(-1);
   const [newDialog, setNewDialog] = useState(false);
@@ -148,7 +145,18 @@ export default function ModelExperience({
     try { saveExperienceDraft(owner, kind, { model, text, file, messages, temperature, topP, systemPrompt, imageSize, imageCount, videoMode, resolution, aspect, duration, sound, language, removeFillers }); }
     catch { setError('草稿无法保存，请检查浏览器存储。'); }
   }, [owner, kind, model, text, file, messages, temperature, topP, systemPrompt, imageSize, imageCount, videoMode, resolution, aspect, duration, sound, language, removeFillers]);
-  const prompts = promptCatalog[kind] || [];
+  const prompts = settings?.prompts || [];
+  useEffect(()=>{
+    if(settings?.video){
+      const preferred=(value,options)=>options.includes(value)?value:options[0] || '';
+      setVideoMode(value=>preferred(value,settings.video.modes));
+      setResolution(value=>preferred(value,settings.video.resolutions));
+      setAspect(value=>preferred(value,settings.video.aspects));
+      setDuration(value=>preferred(value,settings.video.durations));
+      if(!settings.video.sound)setSound(false);
+    }
+    if(settings?.voices?.length)setVoice(value=>value || settings.voices[0].id);
+  },[settings]);
   useEffect(() => {
     if (!file) {
       setUrl("");
@@ -272,6 +280,7 @@ export default function ModelExperience({
   }
   function attach(value) {
     if (!value) return;
+    if(kind==='video' && !videoProfile.accept){setError('视频体验配置尚未加载');return;}
     const allowed = kind === "video"
         ? new RegExp(
             `^(${videoProfile.accept
@@ -360,6 +369,7 @@ export default function ModelExperience({
   }
   function send(event) {
     event?.preventDefault();
+    if(!settings){setError(settingsError || '体验配置尚未加载');return;}
     if (busy || !model || (asr && !file) || (!asr && !text.trim() && !file))
       return;
     try { ticket.current = beginExperience(directory, model, kind, {images:Boolean(file && kind!=='voice')}); } catch (error) { setError(error.message); return; }
@@ -510,7 +520,7 @@ export default function ModelExperience({
       className={`playground pg-${kind}-experience ${asr ? "pg-asr-experience" : ""} ${messages.length ? "has-messages" : ""}`}
     >
       <FrontPageHeader className="pg-heading" title={label} description={headingCopy} icon={kind === "voice" ? Mic : Image} actions={<div className="pg-heading-actions">{kind === "text" && <button type="button" className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button type="button" onClick={createConversation}>新建对话</button></div>} />
-      {(directory.error || directory.identityError || !selectedModel?.callable) && <p role="status">{directory.error || directory.identityError || selectedModel?.reason || "请选择可体验的模型"}</p>}
+      {(directory.error || settingsError || directory.identityError || !selectedModel?.callable) && <p role="status">{directory.error || settingsError || directory.identityError || selectedModel?.reason || "请选择可体验的模型"}</p>}
       {onKindChange && (
         <div className="pg-tabs" aria-label="视觉体验模式">
           {[

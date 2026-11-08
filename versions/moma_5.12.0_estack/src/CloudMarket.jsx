@@ -40,13 +40,15 @@ export function useCloudMarket(enabled=true) {
   },[enabled]);
   const write=async(path,body)=>{
     const result=await marketRequest(path,body);
-    const event=path==='signup'?'login':path;
+    const event=['signup','invitations/accept'].includes(path)?'login':['password','password-reset'].includes(path)?'logout':path;
     if (['login','logout','switch'].includes(event)) setView({tenant:result.tenant || null,services:[],orders:[],loading:true,error:''});
     window.dispatchEvent(new CustomEvent(MARKET_EVENT,{detail:event}));
     return result;
   };
   return {...view,refresh:()=>setRevision(current=>current+1),login:(username,accessCode,accountType)=>write('login',{username,accessCode,accountType}),
     signup:data=>write('signup',data),
+    acceptInvitation:data=>write('invitations/accept',data),
+    updatePassword:(data,recovery)=>write(recovery?'password-reset':'password',data),
     switchSpace:tenantId=>write('switch',{tenantId}),
     logout:()=>write('logout',{}),order:offers=>write('orders',{tenantId:view.tenant?.id,offerIds:offers.map(row=>row.id),
       salePriceIds:Object.fromEntries(offers.map(row=>[row.id,row.salePriceId]))})};

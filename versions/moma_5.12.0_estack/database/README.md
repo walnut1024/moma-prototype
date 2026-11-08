@@ -27,7 +27,7 @@
 
 ## 数据与事务
 
-空 D1 通过 `0001`—`0014` migration 建表，再初始化后台账号定义、`src/data/tariff-dictionary.json` 的 135 条计费字典记录和 `src/data/builtin-model-catalogue.json` 的 17 份参考主档。已有工作区启动时读取原数据。导出的空库初始化 SQL 采用同一数据范围。
+空 D1 通过 `0001`—`0016` migration 建表，再初始化后台账号定义、`src/data/tariff-dictionary.json` 的 135 条计费字典记录和 `src/data/builtin-model-catalogue.json` 的 17 份参考主档。已有工作区启动时读取原数据。导出的空库初始化 SQL 采用同一数据范围。
 
 平台管理员可在模型运营页面打开「研发人员注意 → 导入模型运营演示包」。`src/mock/model-operations.json` 提供 GLM-5.3、DeepSeek-V4-Flash-0731 和试调用所需的演示租户。导入在现有命令事务中插入缺失业务记录，复用相同 ID、编码和类型的主档。冲突时整包拒绝。检测与平台试调用通过模拟器执行，结果来源单独展示。其余模块在业务工作区首次开启时写入演示数据，后续从 D1 读取。
 
@@ -51,6 +51,12 @@
 
 ```mermaid
 erDiagram
+    CUSTOMER_ACCOUNT ||--o| CUSTOMER_CREDENTIAL : 登录凭据
+    CUSTOMER_ACCOUNT ||--o{ CUSTOMER_SESSION : 登录身份
+    TENANT ||--o{ CUSTOMER_SESSION : 当前空间
+    CUSTOMER_ACCOUNT ||--o{ MEMBERSHIP : 加入政企
+    TENANT ||--o{ MEMBERSHIP : 空间成员
+    MEMBERSHIP ||--o| INVITATION : 待本人确认
     MODEL_MATERIAL ||--o{ SUPPLIER_MODEL : 模型声明
     SUPPLIER ||--o{ SUPPLIER_MODEL : 提供
     SUPPLIER_MODEL ||--o{ CHANNEL_MODEL : 供应映射
@@ -69,6 +75,7 @@ erDiagram
     MARKET_ORDER ||--o{ MOCK_CALL : 允许体验
     SALE_PRICE_VERSION ||--o{ MOCK_CALL : 调用时版本
     MOCK_CALL ||--o| MOCK_USAGE : 产生计量
+    MOCK_CALL ||--o| TEXT_TURN : 保留文本历史
     TENANT ||--o{ MONTHLY_CHARGE : 按账期汇总
     MONTHLY_CHARGE ||--o{ MOCK_USAGE : 归集已计价用量
     MONTHLY_CHARGE ||--o| BILL : 生成账单
@@ -80,11 +87,15 @@ erDiagram
 
 `0014` 将客户会话绑定到登录用户和当前空间，已有客户会话需要重新登录。内置客户按用户名和账号类型登录，成员只可进入所属空间。个人手机号注册使用服务端演示验证码，验证码 5 分钟有效，后续发码按索引分批清理过期记录。密码只保存带盐摘要。演示发码在本地默认开启，托管环境仅在显式设置 `MODEL_OPS_DEMO_OTP=1` 时开启。
 
+`0015` 增加一次性成员邀请及密码找回。邀请链接 7 天有效，重新生成会使旧链接失效，待加入成员本人确认后才生效。密码找回仅适用于 D1 管理密码的客户账号，密码更新撤销该用户的既有会话。
+
+`0016` 保存体验选项和模拟结果配置。文本体验把提交内容和回复关联到同一调用，按当前用户和空间恢复最近 20 个会话。历史随调用明细清理；附件只保留文件名，未提交草稿仍保存在当前浏览器。
+
 计价成功的模拟调用按北京时间归入当月，D1 在写调用时按租户累加人民币微元。重复生成更新同一张待出账账单，已出账金额固定。升级从仍保留的调用明细回填月汇总，已清理明细对应的金额无法回填。
 
 ### D1 Free 控制
 
-高频数据只在实际操作时写入。客户模拟调用保留最多 400 条、最近 7 天；登录事件保留最多 200 条、最近 7 天。后续操作按索引清理过期会话、回执和用量副本。计价回执只保留租户、请求 ID 和账期，在次月有调用时分批清理。月汇总每租户每月保留一行。后台较旧的回执压缩掉可重新读取的模拟工作区快照，配置、订单和版本历史保留。工作区文档上限 1.5 MB，不写对话正文或附件，不开采集轮询和定时写入。
+高频数据只在实际操作时写入。客户模拟调用和关联的文本历史保留最多 400 条、最近 7 天；登录事件保留最多 200 条、最近 7 天。后续操作按索引清理过期会话、邀请、回执和用量副本。计价回执只保留租户、请求 ID 和账期，在次月有调用时分批清理。月汇总每租户每月保留一行。后台较旧的回执压缩掉可重新读取的模拟工作区快照，配置、订单和版本历史保留。工作区文档上限 1.5 MB，不写入附件内容，不开采集轮询和定时写入。
 
 免费额度按账户累计，迁移和索引更新也计入用量。查看 [Cloudflare D1 免费用量与限制](https://developers.cloudflare.com/d1/platform/pricing/)。本地通过不代表已经验证云端额度或延迟。
 
@@ -95,10 +106,11 @@ erDiagram
 - `GET /traffic-limits/history` 使用同一后台会话按时间倒序查询已提交的配置变更。`limit` 控制每次读取的操作数，批量操作展开实际改动的对象，`after` 续查更早的操作。
 - `GET /model-operations`：当前原型资源视图；由 SQLite 组合 JSON，Worker 直接返回，避免整库解析再序列化。
 - `POST /model-operations/commands`：模型运营、模型服务和供应维护命令；不接受客户端身份或任意集合替换。
-- `GET /package-management`、`POST /package-management/commands` 处理套餐读写和生命周期命令。模型选项来自未归档的模型服务，规则和套餐关联使用模型主档 ID。平台管理员可管理共享套餐类型。「套餐数据」通过此读取接口显示当前模拟订购和权益；保留单独的演示数据视图。
+- `GET /package-management`、`POST /package-management/commands` 处理套餐读写和生命周期命令。模型选项来自未归档的模型服务，规则和套餐关联使用模型主档 ID。平台管理员可管理共享套餐类型。「套餐数据」读取 D1 的订购和权益。
 - `saveFactorDraft` 保存「允许加入套餐」状态和抵扣规则草稿。 `publishFactorRules` 校验草稿后原子切换生效版本并写入审计。计费项来自模型当前服务模式下的生效售价，保存和发布均校验归属。允许加入套餐至少需要一条规则，且不能关闭被套餐引用的模型。已有规则且被套餐引用的旧配置保留可选状态。 `GET /package-management/factor-history?model=<模型主档ID>` 读取该模型的发布记录。
 - `GET /application`、`POST /application/open`、`POST /application/commands` 提供后台客户、业务、网关和运维工作区。
 - `GET /market/workspace` 和 `POST /market/commands` 提供当前客户的组织、Key、智能路由、套餐订购与本人认证申请。
+- `POST /market/invitations` 由企业管理员生成成员链接，`POST /market/invitations/inspect` 和 `/market/invitations/accept` 验证及接受邀请。体验选项通过 `GET /market/experience-options?task=…` 读取，`GET /market/conversations` 返回当前用户与空间的文本历史。
 - `GET /market/catalogue` 读取已发布的 D1 目录、当前客户订单和可订购套餐。`GET /market/ranking` 只统计公开正式上架模型的模拟调用。 `POST /market/login`、`/market/logout` 维护独立客户会话；`POST /market/orders` 与 `/market/completions` 校验当前渠道、客户范围及订单归属后写入 D1。后者仅运行原型模拟器。
 - `/simulation/*`：管理端模拟接入、任务、候选、试调用及发布；轮询读取精简资源，不加载整份编辑工作区。
 - 资料、服务、服务商、渠道及字典的分页查询，服务 workspace/history，可见性命令，账号自己的操作回执查询。

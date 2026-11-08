@@ -8,7 +8,7 @@ import { Button as SemiButton, Select as SemiSelect, Typography as SemiTypograph
 import DevelopmentNotes from './admin-v2/DevelopmentNotes';
 import { AdminUIContext } from './components/admin-ui-context';
 import FrontPageHeader from "./components/FrontPageHeader";
-import AuthExperience, { AuthBanner, usePrototypeAuth } from "./AuthExperience";
+import AuthExperience, { AuthBanner, useAuthNavigation } from "./AuthExperience";
 import OperationRecords from "./OperationRecords";
 import { displaySmartRouteName } from './display-copy.mjs';
 import { MODEL_ORDER_BILLING_TYPES, MODEL_ORDER_COLUMNS } from './model-order-display.mjs';
@@ -1702,7 +1702,7 @@ function PrototypeApp({ version }) {
     [filters, setFilters] = useState({}),
     [selected, setSelected] = useState(() => readModelDetail(location.search)),
     [sortMode, setSortMode] = useState("latest");
-  const auth = usePrototypeAuth();
+  const auth = useAuthNavigation();
   const market=useCloudMarket(admin==='front');
   const owner=market.tenant && market.account
     ? (market.tenant.id===market.account.id ? market.account.id : JSON.stringify([market.account.id,market.tenant.id])) : '';

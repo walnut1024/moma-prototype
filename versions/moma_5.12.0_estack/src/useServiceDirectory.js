@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { MARKET_EVENT, marketRequest, useCloudMarket } from './CloudMarket';
 
 export function useServiceDirectory(task) {
@@ -8,6 +9,20 @@ export function useServiceDirectory(task) {
     identityError:!market.loading && !market.tenant ? '请先登录客户账号' : '',
     error:market.error,
   };
+}
+
+export function useExperienceSettings(task) {
+  const [result,setResult]=useState({task,settings:null,error:''});
+  useEffect(()=>{
+    const controller=new AbortController();
+    marketRequest('experience-options?'+new URLSearchParams({task}),null,controller.signal).then(settings=>{
+      if(!controller.signal.aborted)setResult({task,settings,error:''});
+    }).catch(error=>{
+      if(!controller.signal.aborted)setResult({task,settings:null,error:error.message});
+    });
+    return ()=>controller.abort();
+  },[task]);
+  return result.task===task?result:{settings:null,error:''};
 }
 
 export function beginExperience(directory, id, task, { images=false }={}) {

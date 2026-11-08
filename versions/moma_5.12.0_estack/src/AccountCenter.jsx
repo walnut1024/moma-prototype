@@ -9,7 +9,7 @@ import { Checkbox } from './components/ui/checkbox';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, CardAction } from './components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './components/ui/dialog';
 import { maskMemberPhone } from './organization-data.mjs';
-import { realNameErrors, submitRealNameCertification } from './auth-state.mjs';
+import { realNameErrors } from './auth-state.mjs';
 
 const enterpriseStatus = { '待处理': '审核中', '需补充': '需补充', '已开通': '已认证', '已关闭': '未通过' };
 
@@ -34,8 +34,7 @@ export default function AccountCenter({ auth, title = '账号中心' }) {
     if (Object.keys(invalid).length) { setErrors(invalid); return; }
     setSubmitting(true);
     try {
-      if(auth.certify)await auth.certify('certifyPersonal',data);
-      else auth.commit(submitRealNameCertification(auth.state,data));
+      await auth.certify('certifyPersonal',data);
       close(); toast.success('实名认证已提交');
     }
     catch (error) { setErrors({ submit: error.message }); }
@@ -49,7 +48,7 @@ export default function AccountCenter({ auth, title = '账号中心' }) {
       <Card><CardHeader><CardTitle><ShieldCheck aria-hidden="true" />实名认证</CardTitle><CardDescription>核验本人身份信息</CardDescription></CardHeader><CardContent><p>填写真实姓名和居民身份证信息，提交身份核验。</p></CardContent><CardFooter><Button disabled={Boolean(auth.storageError)} onClick={() => setOpen(true)}>开始实名认证</Button></CardFooter></Card>
       <Card><CardHeader><CardTitle><Building2 aria-hidden="true" />企业认证</CardTitle><CardDescription>核验企业主体与授权关系</CardDescription></CardHeader><CardContent><p>填写单位资料，确认有权代表该单位提交认证。</p></CardContent><CardFooter><Button variant="outline" disabled={Boolean(auth.storageError) || !auth.user.phone} onClick={() => auth.navigate('enterprise')}>开始企业认证</Button></CardFooter></Card>
     </div><Button variant="link" onClick={auth.close}>稍后认证，进入使用空间</Button></> : <>
-    <Card><CardHeader><CardTitle>基本信息</CardTitle><CardDescription>使用同一个账号访问个人空间及已加入的企业空间</CardDescription></CardHeader><CardContent><dl className="auth-account-details"><div><dt>账号名称</dt><dd>{auth.user.name}</dd></div><div><dt>手机号码</dt><dd>{auth.user.phone ? maskMemberPhone(auth.user.phone) : '未绑定'}</dd></div><div><dt>登录密码</dt><dd>{auth.user.credential ? '已设置' : '未设置'}</dd></div></dl></CardContent><CardFooter>{auth.user.phone && <Button variant="outline" size="sm" onClick={() => auth.navigate('password')}>{auth.user.credential ? '修改登录密码' : '设置登录密码'}</Button>}</CardFooter></Card>
+    <Card><CardHeader><CardTitle>基本信息</CardTitle><CardDescription>使用同一个账号访问个人空间及已加入的企业空间</CardDescription></CardHeader><CardContent><dl className="auth-account-details"><div><dt>账号名称</dt><dd>{auth.user.name}</dd></div><div><dt>手机号码</dt><dd>{auth.user.phone ? maskMemberPhone(auth.user.phone) : '未绑定'}</dd></div><div><dt>登录密码</dt><dd>已设置</dd></div></dl></CardContent><CardFooter>{auth.user.passwordManaged && <Button variant="outline" size="sm" onClick={() => auth.navigate('password')}>修改登录密码</Button>}</CardFooter></Card>
     <Card className="auth-certification-summary"><CardHeader><CardTitle><h2>{uncertified ? '未实名认证' : status === '已认证' ? '已完成实名认证' : status === '审核中' ? '实名认证审核中' : '实名认证'}</h2></CardTitle><CardAction><Button variant="link" disabled={Boolean(auth.storageError) || !auth.user.phone} onClick={() => auth.navigate('enterprise', latest ? `?record=${encodeURIComponent(latest.id)}` : '')}>{latest ? '查看企业认证' : uncertified ? '企业认证' : '变更为企业用户'}</Button></CardAction></CardHeader><CardContent>
       {uncertified ? <div className="auth-certification-empty"><ShieldCheck aria-hidden="true" /><div><p role="status">您尚未完成实名认证</p><p>可填写本人身份信息进行实名认证，或使用当前账号提交企业认证。</p></div></div> : <dl className="auth-certification-grid">
         <div><dt>认证状态</dt><dd className="auth-certification-status" role="status">{status}{status === '已认证' && <CheckCircle2 aria-label="已认证" />}</dd></div>

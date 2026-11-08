@@ -16,7 +16,15 @@ import {logJSON,logStatuses} from '../src/call-log-data.mjs';
 import {simulateRequest} from '../src/admin-v2/domain.js';
 const storageFor=()=>{const map=new Map();return {getItem:key=>map.get(key)??null,setItem:(key,value)=>map.set(key,value),removeItem:key=>map.delete(key)};};
 function environment(t){const storage=storageFor(),descriptor=Object.getOwnPropertyDescriptor(globalThis,'localStorage');Object.defineProperty(globalThis,'localStorage',{configurable:true,value:storage});t.after(()=>descriptor?Object.defineProperty(globalThis,'localStorage',descriptor):delete globalThis.localStorage);return storage;}
-function linked(storage){const fixture=linkedAccountFixture(loadAdminState(storage),emptyAuthState());fixture.state=withAdminSession(fixture.state);storage.setItem(STORAGE_KEY,serializeAdminState(fixture.state));storage.setItem(AUTH_DATA_KEY,JSON.stringify(loginAuthAccount(fixture.auth,'13800002001','enterprise')));return fixture;}
+function linked(storage){
+ const fixture=linkedAccountFixture(loadAdminState(storage),emptyAuthState());
+ fixture.state=withAdminSession(fixture.state);
+ const member=fixture.state.memberships.find(row=>row.id==='member-link-enterprise-a');
+ member.projectIds=fixture.state.projects.filter(row=>row.tenantId===member.tenantId).map(row=>row.id);
+ storage.setItem(STORAGE_KEY,serializeAdminState(fixture.state));
+ storage.setItem(AUTH_DATA_KEY,JSON.stringify(loginAuthAccount(fixture.auth,'13800002001','enterprise')));
+ return fixture;
+}
 
 test('application configuration validates once, clones initial resources and preserves all saved collections including removals',()=>{
  const original=JSON.stringify(APPLICATION_CONFIG);assert.doesNotThrow(validateApplicationConfig);

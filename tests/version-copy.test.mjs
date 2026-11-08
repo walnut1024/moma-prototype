@@ -26,13 +26,16 @@ test('5.12.0 has its own source, styles, public assets and storage keys', () => 
   for (const [file, key] of [
     ['admin-v2/store.js', 'moma.adminV2.5120.v1'],
     ['auth-state.mjs', 'moma-auth-prototype-5120-v1'],
-    ['TextExperience.jsx', 'moma-text-conversations-5120-v1'],
+    ['experience-drafts.mjs', 'moma-5120-draft:'],
     ['components/SavedFilterViews.jsx', 'moma-5120-filter-views:'],
     ['admin-v2/UsageAnalysisPage.jsx', 'moma:5120:usage-analysis:card-order:v1'],
     ['organization-data.mjs', 'moma-organization:moma_5.12.0_estack'],
   ]) {
     assert.ok(fs.readFileSync(path.join(version, 'src', file), 'utf8').includes(key));
   }
+  const textExperience=fs.readFileSync(path.join(version,'src/TextExperience.jsx'),'utf8');
+  assert.match(textExperience,/marketRequest\('conversations'/);
+  assert.doesNotMatch(textExperience,/localStorage/);
 });
 
 test('the built 5.12.0 entry loads only its own JS and CSS', () => {

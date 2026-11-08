@@ -122,6 +122,36 @@ test('the preset administrator and customers share D1 while their workspaces sta
     const globalUser=(await request('application',{cookie:admin.cookie})).data.users.find(row=>row.id===account.sourceUserId);
     assert.equal(globalUser.name,account.name);
     assert.equal(globalUser.phone,account.phone);
+    const invitations=(action,body,cookie)=>request('market/invitations'+(action?'/'+action:''),{body,cookie});
+    assert.equal((await invitations('',{membershipId:renamed.id},personal.cookie)).status,403);
+    const existingInvite=await invitations('',{membershipId:renamed.id},business.cookie);
+    assert.equal(existingInvite.status,201);
+    assert.equal((await invitations('accept',{token:existingInvite.data.token,password,consent:true})).status,401);
+    assert.equal((await invitations('accept',{token:existingInvite.data.token},personal.cookie)).status,403);
+    const confirmWithoutRecipient={...edited,members:edited.members.map(row=>row.id===renamed.id?{...row,status:'已加入'}:row)};
+    assert.equal((await writeOrg(confirmWithoutRecipient)).status,422);
+
+    const invitee={id:'invite-contract',name:'新成员',account:'invite-contract@example.invalid',phone:'13900009990',
+      role:'普通成员',status:'待加入',departmentId:'root',source:'邀请加入'};
+    assert.equal((await writeOrg({...edited,members:[...edited.members,invitee]})).status,200);
+    const first=await invitations('',{membershipId:invitee.id},business.cookie);
+    const replacement=await invitations('',{membershipId:invitee.id},business.cookie);
+    assert.equal(first.status,201);assert.equal(replacement.status,201);
+    assert.equal((await invitations('inspect',{token:first.data.token})).status,404);
+    const details=await invitations('inspect',{token:replacement.data.token});
+    assert.equal(details.data.username,invitee.account);
+    assert.equal(details.data.needsPassword,true);
+    const accepted=await invitations('accept',{token:replacement.data.token,password,consent:true});
+    assert.equal(accepted.status,200,JSON.stringify(accepted.data.error));
+    assert.equal((await invitations('inspect',{token:replacement.data.token})).status,404);
+    const joined=(await request('market/workspace',{cookie:accepted.cookie})).data;
+    assert.equal(joined.identity.tenantId,'zqzh');
+    assert.equal(joined.canManage,false);
+    assert.equal(joined.organization.members.find(row=>row.id===invitee.id).status,'已加入');
+    assert.deepEqual(joined.projects,[]);
+    assert.equal((await writeKeys(accepted,'zqzh',[{id:'unauthorized-project-key',name:'未授权项目 Key',enabled:true,models:null}])).status,422);
+    assert.equal((await customerLogin(invitee.account,'enterprise',password)).status,200);
+    assert.equal((await customerLogin(invitee.account,'personal',password)).status,401);
 
     const member={id:'linked-member',login:'qa-member',phone:'13900139000',name:'双空间成员',status:'正常'};
     await local.db.prepare(`UPDATE model_workspace SET reference_json=json_insert(reference_json,
@@ -185,7 +215,11 @@ test('the preset administrator and customers share D1 while their workspaces sta
     assert.equal(createdAdmin.status,200,JSON.stringify(createdAdmin.data));
     const operator=await request('auth/login',{body:{accountId:'qa@example.invalid',accessCode:temporaryPassword}});
     assert.equal(operator.data.account.role,'运营人员');
-    assert(!JSON.stringify((await request('application',{cookie:operator.cookie})).data).includes(loginDigest));
+    const operationsView=(await request('application',{cookie:operator.cookie})).data;
+    assert(!JSON.stringify(operationsView).includes(loginDigest));
+    assert(operationsView.tenants.length>0);
+    assert(!Object.hasOwn(operationsView,'routes'));
+    assert(operationsView.admins.every(row=>!Object.hasOwn(row,'account')));
     assert.equal((await request('application/commands',{cookie:operator.cookie,body:{operationId:randomUUID(),
       expectedRevision:createdAdmin.data.revision,action:{type:'adminAccount',operation:'toggle',id:'yyg'}}})).status,403);
 
@@ -195,11 +229,35 @@ test('the preset administrator and customers share D1 while their workspaces sta
     const registeredAgain=await customerLogin(phone,'personal',password);
     assert.equal(registeredAgain.status,200);
     assert.equal(registeredAgain.data.tenant.id,registered.data.tenant.id);
+    const newPassword='updated1'+randomUUID(), recoveredPassword='recover1'+randomUUID();
+    assert.equal((await request('market/password',{cookie:registeredAgain.cookie,body:{currentPassword:newPassword,password:newPassword}})).status,403);
+    assert.equal((await request('market/password',{cookie:registeredAgain.cookie,body:{currentPassword:password,password:newPassword}})).status,200);
+    assert.equal((await request('market/workspace',{cookie:registeredAgain.cookie})).status,401);
+    assert.equal((await request('market/workspace',{cookie:registered.cookie})).status,401);
+    assert.equal((await customerLogin(phone,'personal',password)).status,401);
+    const changed=await customerLogin(phone,'personal',newPassword);
+    assert.equal(changed.status,200);
+    const resetCode=await request('market/password-code',{body:{phone}});
+    assert.equal(resetCode.status,200);
+    const recovery={phone,challengeId:resetCode.data.id,code:resetCode.data.code,password:recoveredPassword};
+    assert.equal((await request('market/signup',{body:{...recovery,consent:true}})).status,422);
+    assert.equal((await request('market/password-reset',{body:recovery})).status,200);
+    assert.equal((await request('market/password-reset',{body:recovery})).status,422);
+    assert.equal((await request('market/workspace',{cookie:changed.cookie})).status,401);
+    assert.equal((await customerLogin(phone,'personal',recoveredPassword)).status,200);
     const persisted=(await request('market/workspace',{cookie:business.cookie})).data;
     assert.equal(persisted.keys.find(row=>row.id==='linkage-test-key').secretPreview,'sk-demo*****abcd');
     assert.equal(persisted.organization.members.find(row=>row.id===renamed.id).name,renamed.name);
     assert.equal((await writeKeys(business,'zqzh',[keep,retired])).status,422);
     assert.equal((await request('application',{cookie:admin.cookie})).data.providers.length,4);
+    const batch=Array.from({length:500},(_,index)=>({
+      id:'bulk-member-'+index,name:'批量成员 '+index,phone:'139080'+String(index).padStart(5,'0'),
+      account:'bulk-'+index+'@example.invalid',role:'普通成员',status:'待加入',departmentId:'root',
+    }));
+    const imported=await writeOrg({...persisted.organization,members:[...persisted.organization.members,...batch]});
+    assert.equal(imported.status,200,JSON.stringify(imported.data.error));
+    const members=(await request('market/workspace',{cookie:business.cookie})).data.organization.members;
+    assert.equal(members.filter(row=>row.id.startsWith('bulk-member-') && row.status==='待加入').length,500);
   } finally {
     await local?.runtime.dispose();
     await rm(persistPath,{recursive:true,force:true});

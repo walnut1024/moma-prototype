@@ -33,7 +33,7 @@ export default function UserAnalysisPage({ state }) {
   const [period, setPeriod] = useState(initialPeriod.period);
   const [range, setRange] = useState(initialPeriod.range);
   const [detailDraft, setDetailDraft] = useState({model:'',customer:''}), [detailFilter, setDetailFilter] = useState({model:'',customer:''});
-  const data = useMemo(() => userBusinessData(state), [state,clock]);
+  const data = useMemo(() => userBusinessData(state,state.requests), [state,clock]);
   const metrics = useMemo(() => userMetrics(data, range, clock), [data, range, clock]);
   const rows = useMemo(() => filterAnalytics(state, { start: range.start, end: range.end }), [state, range]);
   const selectPeriod = value => { const current = Date.now(); setClock(current); setPeriod(value); setRange(usagePreset(value, current)); };

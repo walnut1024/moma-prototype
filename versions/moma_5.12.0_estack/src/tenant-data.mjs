@@ -37,11 +37,18 @@ export function saveTenantKeys(rows, { billing='按量付费', subscriptionId, e
   const services=directorySnapshot(storage).models;
   return save(state,tenantKeyChanges(context,rows,{billing,subscriptionId},services),identity,'维护 API Key',storage,raw);
 }
+export function tenantProjects({state,identity,link,canManage}) {
+  const membership=state.memberships.find(row=>row.id===link.backendMembershipId && row.tenantId===identity.tenantId);
+  return state.projects.filter(project=>project.tenantId===identity.tenantId &&
+    (canManage || project.ownerId===link.backendUserId || membership?.projectIds?.includes(project.id)));
+}
+
 export function tenantKeyChanges({state,identity,link,canManage}, rows, {billing,subscriptionId}, services) {
   const scoped=state.apiKeys.filter(row=>row.tenantId===identity.tenantId && (canManage || row.ownerId===link.backendUserId) && (row.billingType || '按量付费')===billing && (row.subscriptionId || '')===(subscriptionId || ''));
   const ids=new Set(); const next=structuredClone(state);
   if(subscriptionId&&!state.orders.some(row=>row.id===subscriptionId&&row.tenantId===identity.tenantId&&['已开通','生效中'].includes(row.status)&&(!row.expiresAt || Date.parse(row.expiresAt)>Date.now())))throw Error('套餐归属或状态无效');
   const allowed=new Set(services.filter(item=>item.callable).map(item=>item.modelKey));
+  const project=tenantProjects({state,identity,link,canManage}).find(item=>item.status==='正常');
   const mapped=rows.map(row=>{
     if(!row.id || ids.has(row.id))throw Error('API Key ID 缺失或重复');ids.add(row.id);
     const existing=state.apiKeys.find(item=>item.id===row.id);
@@ -52,7 +59,7 @@ export function tenantKeyChanges({state,identity,link,canManage}, rows, {billing
     const quotaLimit=row.quotaEnabled===false?null:row.quotaLimit;
     if(quotaLimit!==null&&quotaLimit!==undefined&&(!Number.isSafeInteger(quotaLimit)||quotaLimit<0))throw Error('额度必须为非负整数');
     for(const field of ['tpmLimit','qpmLimit'])if(row[field]!=null&&(!Number.isSafeInteger(row[field])||row[field]<1))throw Error('TPM 和 QPM 上限必须为正整数');
-    const project=state.projects.find(item=>item.tenantId===identity.tenantId && item.status==='正常');if(!project)throw Error('请先配置当前客户的项目空间');
+    if(!existing && !project)throw Error('当前账号没有已授权的可用项目空间');
     const grantId='tenant-grant:'+row.id;
     const grant=existing && next.grants.find(item=>item.subjectType==='key'&&item.subjectId===row.id&&(item.id===grantId||item.status==='生效中'));
     if(quotaLimit!==undefined){
@@ -62,7 +69,7 @@ export function tenantKeyChanges({state,identity,link,canManage}, rows, {billing
         else next.grants.push({id:grantId,subjectType:'key',subjectId:row.id,modelIds,period,limit:quotaLimit,used:0,status:'生效中'});
       }else for(const item of next.grants)if(item.subjectType==='key'&&item.subjectId===row.id)item.status='已停用';
     }
-    return {...existing,id:row.id,keyId:existing?.keyId || row.id,name,description:String(row.desc || ''),tenantId:identity.tenantId,projectId:existing?.projectId || project.id,ownerId:existing?.ownerId || link.backendUserId,modelIds,status:row.enabled?'有效':'停用',billingType:billing,quotaType:row.quotaType,quotaLimit,tpmLimit:row.tpmLimit ?? null,qpmLimit:row.qpmLimit ?? null,...(subscriptionId?{subscriptionId}:{}),ipAllowlist:parseIpAllowlist((row.ips || []).join('\n')),secretPreview:row.secretPreview || (row.key?.startsWith('sk-')?row.key.slice(0,3)+'****'+row.key.slice(-4):existing?.secretPreview || '****'),credentialVersion:row.credentialVersion || existing?.credentialVersion || 1,createdAt:existing?.createdAt || new Date().toISOString(),updatedAt:new Date().toISOString()};
+    return {...existing,id:row.id,keyId:existing?.keyId || row.id,name,description:String(row.desc || ''),tenantId:identity.tenantId,projectId:existing?.projectId ?? project?.id,ownerId:existing?.ownerId || link.backendUserId,modelIds,status:row.enabled?'有效':'停用',billingType:billing,quotaType:row.quotaType,quotaLimit,tpmLimit:row.tpmLimit ?? null,qpmLimit:row.qpmLimit ?? null,...(subscriptionId?{subscriptionId}:{}),ipAllowlist:parseIpAllowlist((row.ips || []).join('\n')),secretPreview:row.secretPreview || (row.key?.startsWith('sk-')?row.key.slice(0,3)+'****'+row.key.slice(-4):existing?.secretPreview || '****'),credentialVersion:row.credentialVersion || existing?.credentialVersion || 1,createdAt:existing?.createdAt || new Date().toISOString(),updatedAt:new Date().toISOString()};
   });
   const removed=new Set(scoped.filter(row=>!ids.has(row.id)).map(row=>row.id));
   for(const grant of next.grants)if(grant.subjectType==='key'&&removed.has(grant.subjectId))grant.status='已停用';
@@ -101,6 +108,8 @@ export function tenantOrganizationChanges({state,identity,link,canManage}, data)
   if(!data.members.some(row=>row.id===link.backendMembershipId&&row.status==='已加入'))throw Error('不能移除或停用当前登录成员');
   if(new Set(data.departments.map(row=>row.id)).size!==data.departments.length||new Set(data.members.map(row=>row.id)).size!==data.members.length)throw Error('组织或成员 ID 重复');
   for(const row of data.departments){if(row.id==='root'){if(row.name!==before.departments.find(item=>item.id==='root').name||row.parentId!==null)throw Error('根部门不可修改');}else if(!row.name?.trim()||row.name.length>30||!data.departments.some(item=>item.id===row.parentId)||descendantIds(data.departments,row.id).has(row.parentId))throw Error('部门名称或层级无效');}
+  if(data.members.some(row=>row.status!=='待加入' && before.members.some(member=>member.id===row.id && member.status==='待加入')))
+    throw Error('待加入成员须本人通过邀请链接确认');
   for(const row of data.members){const previous=before.members.find(item=>item.id===row.id);if(previous&&JSON.stringify(previous)===JSON.stringify(row))continue;if(!roles.includes(row.role)&&row.role!==previous?.role||!statuses.includes(row.status)||!row.name?.trim()||!row.account||!data.departments.some(item=>item.id===row.departmentId)&&row.departmentId!=='unassigned'||row.role==='部门管理员'&&!data.departments.some(item=>item.id===row.scopeId))throw Error('成员资料、角色或归属无效');if(previous&&row.account!==previous.account)throw Error('登录账号不能修改');if((!previous||row.phone!==previous.phone)&&memberPhoneError(row.phone))throw Error(memberPhoneError(row.phone));}
   for(const row of data.members){const previous=before.members.find(item=>item.id===row.id);if(previous&&row.phone===previous.phone&&row.account===previous.account)continue;if(data.members.some(item=>item.id!==row.id&&(row.phone&&normalizeMemberPhone(item.phone)===normalizeMemberPhone(row.phone)||item.account?.toLowerCase()===row.account.toLowerCase())))throw Error('企业中已存在相同手机号或账号');}
   for(const row of data.departments)if(row.ownerId&&!data.members.some(member=>member.id===row.ownerId&&member.status==='已加入'))throw Error('负责人必须是已加入成员');
@@ -113,9 +122,11 @@ export function tenantOrganizationChanges({state,identity,link,canManage}, data)
     const previous=before.members.find(item=>item.id===row.id);
     if(old&&JSON.stringify(previous)===JSON.stringify(row))return structuredClone(old);
     const username=String(row.account).trim().toLowerCase();
+    const invited=next.users.find(account=>account.login?.toLowerCase()===username);
     let userId=old?.userId || before.platformAccounts.find(account=>account.account?.toLowerCase()===username)?.sourceUserId;
+    if(!userId && invited?.status==='正常' && row.status==='待加入' && row.phone && normalizeMemberPhone(invited.phone)===normalizeMemberPhone(row.phone))userId=invited.id;
     if(!userId){
-      if(next.users.some(account=>account.login?.toLowerCase()===username))throw Error('该账号已存在，无法创建同名成员身份');
+      if(invited)throw Error('该账号已存在，无法创建同名成员身份');
       userId='user:'+crypto.randomUUID();
       next.users.push({id:userId,name:row.name,phone:row.phone,login:username,status:'正常'});
     }

@@ -60,6 +60,12 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
   const prices=(input,output,field)=>['输入 Token','输出 Token'].map((name,index)=>({name,unit:'百万 Token',currency:'CNY',condition:'',[field]:String(index?output:input)}));
   try {
     local=await startLocalBackend({loginHashes,persistPath,presets:true});
+    await local.db.prepare("UPDATE experience_settings SET options_json=json_set(options_json,'$.recommendations[0][0]',?),result_json=json_set(result_json,'$.answer',?) WHERE task='text'")
+      .bind('D1 推荐标题','D1 模拟结果').run();
+    const experience=await request('/market/experience-options?task=text');
+    assert.equal(experience.status,200);
+    assert.equal(experience.data.recommendations[0][0],'D1 推荐标题');
+    assert.equal((await request('/market/experience-options?task=unknown')).status,400);
     await local.db.prepare("UPDATE model_workspace SET reference_json=json_insert(reference_json,'$.tenants[#]',json(?)) WHERE id=1")
       .bind(JSON.stringify({id:c,name:'无购买权限客户',status:'正常'})).run();
     admin=await login('/auth/login','yyg');await reload();
@@ -165,22 +171,33 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal((await call(body(services[0].callId))).data.error.code,'ORDER_REQUIRED');
     const staleQuote=await request('/market/orders',{cookie:customer,body:{tenantId:a,offerIds:[services[0].id],salePriceIds:{[services[0].id]:'old-price'}}});
     assert.equal(staleQuote.data.error.code,'PRICE_CHANGED');
-    const successful=[];
+    const successful=[], conversationId=crypto.randomUUID();
     for (const source of sources.slice(0,2)) {
       const offer=services.find(row=>row.callId===source.callId);
       assert.equal(offer.salePrices[0].amount,source.retail[0]*1000000);
       const ordered=await order(offer.id);assert.equal(ordered.status,200,JSON.stringify(ordered.data));
       assert.deepEqual((await order(offer.id)).data,ordered.data);
-      const input={...body(offer.callId),tenantId:a,task:'text'}, invoked=await call(input);
+      const textTurn={conversationId,messageId:crypto.randomUUID(),question:'原型验收问题 '+source.source,images:[],
+        temperature:0.7,topP:0.8,deepThinking:false};
+      const input={...body(offer.callId),tenantId:a,task:'text',textTurn}, invoked=await call(input);
       assert.equal(invoked.status,200,JSON.stringify(invoked.data));
       assert.equal(invoked.data.source,'mock');
       assert.equal(invoked.data.experience.answer,invoked.data.choices[0].message.content);
+      assert.equal(invoked.data.experience.answer,'D1 模拟结果');
       assert.ok(invoked.data.experience.points.length);
       assert.equal((await call({...input,imageCount:2})).status,400);
       assert(!JSON.stringify(invoked.data).includes('procurement'));
       assert.deepEqual((await call(input)).data,invoked.data);
       successful.push({source,input,id:invoked.data.id});
     }
+    const history=await request('/market/conversations',{cookie:customer});
+    assert.equal(history.status,200);
+    assert.equal(history.data.conversations.length,1);
+    assert.equal(history.data.conversations[0].id,conversationId);
+    assert.deepEqual(history.data.conversations[0].messages.map(row=>row.question),successful.map(row=>row.input.textTurn.question));
+    assert(history.data.conversations[0].messages.every(row=>row.answer==='D1 模拟结果'));
+    assert.deepEqual((await request('/market/conversations',{cookie:other})).data.conversations,[]);
+    assert.equal((await request('/market/conversations')).status,401);
     const workspace=async cookie=>(await request('/market/workspace',{cookie})).data;
     const application=async()=>(await request('/application',{cookie:admin})).data;
     const apply=async action=>{
@@ -216,6 +233,15 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal(await monthly(a),initialMicros,'replayed calls must not add charges');
     await local.db.batch([
       ...['market_charge_receipts','market_monthly_charges','retired_tenant_keys'].map(table=>local.db.prepare('DROP TABLE '+table)),
+      local.db.prepare('DROP TABLE experience_settings'),
+
+      local.db.prepare('DROP INDEX market_history_owner'),
+      local.db.prepare('ALTER TABLE market_calls DROP COLUMN history_user_id'),
+      local.db.prepare('ALTER TABLE market_calls DROP COLUMN history_json'),
+
+      local.db.prepare('DROP INDEX market_sessions_user'),
+      local.db.prepare('DROP TABLE customer_invitations'),
+
       local.db.prepare('ALTER TABLE market_sessions DROP COLUMN user_id'),
       ...['customer_credentials','customer_signup_challenges'].map(table=>local.db.prepare('DROP TABLE '+table)),
       local.db.prepare('UPDATE db_state SET schema_version=12 WHERE id=1'),
@@ -339,6 +365,12 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal(ranking.status,200);
     assert.ok(ranking.data.rows.some(row=>row.id===material.id && row.tokens>=10));
     assert(!Object.hasOwn(ranking.data.rows[0],'tenantId'));
+    assert.deepEqual((await catalogue()).map(row=>row.callId),[third.callId]);
+    await command('marketVisibility',{visible:false,expectedUpdatedAt:model().updatedAt},modelId);
+    assert.deepEqual(await catalogue(),[]);
+    assert.equal((await call(body(third.callId))).status,200,'display visibility does not revoke a paid order');
+    await command('marketVisibility',{visible:true,expectedUpdatedAt:model().updatedAt},modelId);
+    assert.deepEqual((await catalogue()).map(row=>row.callId),[third.callId]);
     assert.deepEqual((await local.db.prepare('PRAGMA foreign_key_check').all()).results,[]);
   } finally {
     configureOnboardingTransport(null);

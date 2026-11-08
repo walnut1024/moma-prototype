@@ -2,7 +2,7 @@ import { initialApplicationData } from '../src/mock/application-data.js';
 import { billingPeriod } from '../src/admin-v2/mock-billing.js';
 import { canMutate, commitAdminState } from '../src/admin-v2/state-transaction.js';
 import { orderActivationCommand, simulateRequest, applyAdjustment } from '../src/admin-v2/domain.js';
-import { organizationProjection, tenantKeyChanges, tenantOrganizationChanges, tenantRouteChanges } from '../src/tenant-data.mjs';
+import { organizationProjection, tenantKeyChanges, tenantOrganizationChanges, tenantProjects, tenantRouteChanges } from '../src/tenant-data.mjs';
 import { loadModelWorkspace, modelChanges } from './model-repository.js';
 import { marketCatalogue } from './market.js';
 import { addPackageOrders, deductMockPlan } from './market-packages.js';
@@ -10,6 +10,8 @@ import { receipt, save } from './model-commands.js';
 import { addPrototypeAccounts } from './prototype-presets.js';
 import { routingServices } from '../src/admin-v2/service-routing.js';
 import { submitEnterpriseCertification, submitRealNameCertification } from '../src/auth-state.mjs';
+import { activeCustomer } from '../src/service-access.mjs';
+import { customerCredential, customerSecretHash } from './customer-identity.js';
 
 const collections = [
   'tenants', 'users', 'memberships', 'organizations', 'projects', 'apiKeys', 'grants',
@@ -143,6 +145,12 @@ export async function applicationBootstrap(db, actor) {
   const requests=[...facts.requests,...state.requests];
   if(maintenance)return maintenanceView(state,row.model_revision,requests,events);
   const { cloudMockState: _snapshot, ...view } = state;
+  if(actor.role==='运营人员'){
+    for(const key of ['routes','limits','fallbacks','releases','caches','clusters','artifacts','incidents','integrations'])delete view[key];
+    view.deployments=[];
+    view.alerts=[];
+    view.admins=state.admins.map(({id,name,role,status})=>({id,name,role,status}));
+  }
   const logins=activity.results.map(({id,user_id,created_at})=>({id,userId:user_id,type:'login',at:new Date(created_at).toISOString()}));
   return { ...view,identityEvents:[...logins,...state.identityEvents],
     users:state.users.map(user=>({...user,lastLoginAt:logins.find(row=>row.userId===user.id)?.at || user.lastLoginAt})),
@@ -269,17 +277,90 @@ function tenantContext(state, {tenant,user:sessionUser}) {
   const user = state.users.find(item => item.id === sessionUser.id && item.status === '正常');
   const membership = state.memberships.find(item => item.userId === user?.id && item.tenantId === tenant.id && item.status === '正常');
   const personal = row?.type === '个人';
-  if(!user || (personal ? row.ownerId!==user.id : !membership))issue(403,'FORBIDDEN','当前账号无权进入该空间');
+  if(!activeCustomer(row) || !user || (personal ? row.ownerId!==user.id : !membership))issue(403,'FORBIDDEN','当前账号无权进入该空间');
   const identity = { userId: user.id, tenantId: tenant.id, name: membership?.memberName || user.name || tenant.name, spaceId: personal ? 'personal' : tenant.id,
     key: (user?.id || 'tenant') + ':' + tenant.id, generation: state.identityGeneration };
   return { state, identity, link: { backendUserId: user?.id, backendMembershipId: membership?.id },
     canManage: Boolean(user && (personal || ['企业管理员','租户管理员'].includes(membership?.role))) };
 }
 
+export async function issueCustomerInvitation(db,session,membershipId) {
+  if(!['企业管理员','租户管理员'].includes(session.tenant.role))issue(403,'FORBIDDEN','只有企业管理员可以发出邀请');
+  if(!validId(membershipId))issue(400,'INVALID_INPUT','成员标识无效');
+  const token=crypto.randomUUID(), now=Date.now(), expiresAt=now+7*86400000;
+  const [written]=await db.batch([
+    db.prepare(`INSERT INTO customer_invitations(membership_id,token_hash,tenant_id,user_id,expires_at)
+      SELECT ?,?,?,json_extract(m.value,'$.userId'),? FROM model_workspace w,json_each(w.reference_json,'$.memberships') m
+      WHERE w.id=1 AND json_extract(m.value,'$.id')=? AND json_extract(m.value,'$.tenantId')=? AND json_extract(m.value,'$.status')='待加入'
+        AND (SELECT commit_seq FROM db_state WHERE id=1)=?
+        AND EXISTS (SELECT 1 FROM market_sessions WHERE token_hash=? AND user_id=? AND tenant_id=? AND expires_at>?)
+      ON CONFLICT(membership_id) DO UPDATE SET token_hash=excluded.token_hash,tenant_id=excluded.tenant_id,user_id=excluded.user_id,expires_at=excluded.expires_at`)
+      .bind(membershipId,await customerSecretHash(token),session.tenant.id,expiresAt,membershipId,session.tenant.id,
+        session.commitSeq,session.hash,session.user.id,session.tenant.id,now),
+    db.prepare('DELETE FROM customer_invitations WHERE membership_id IN (SELECT membership_id FROM customer_invitations WHERE expires_at<=? LIMIT 100)').bind(now),
+  ]);
+  if(!written.meta.changes)issue(409,'INVITATION_UNAVAILABLE','成员状态或空间已变化，请刷新后重试');
+  return {token,expiresAt};
+}
+
+async function customerInvitation(db,token) {
+  if(typeof token!=='string' || !/^[a-f0-9-]{36}$/.test(token))issue(404,'INVITATION_NOT_FOUND','邀请无效或已过期');
+  const tokenHash=await customerSecretHash(token);
+  const [invitation,row]=await Promise.all([
+    db.prepare(`SELECT i.*,EXISTS(SELECT 1 FROM customer_credentials WHERE user_id=i.user_id) AS password_managed
+      FROM customer_invitations i WHERE i.token_hash=? AND i.expires_at>?`).bind(tokenHash,Date.now()).first(),
+    referenceRow(db),
+  ]);
+  if(!invitation)issue(404,'INVITATION_NOT_FOUND','邀请无效或已过期');
+  const reference=JSON.parse(row.reference_json);
+  const tenant=reference.tenants.find(tenant=>tenant.id===invitation.tenant_id);
+  const member=reference.memberships.find(member=>member.id===invitation.membership_id && member.tenantId===tenant?.id &&
+    member.userId===invitation.user_id && member.status==='待加入');
+  const user=reference.users.find(user=>user.id===member?.userId && user.status==='正常');
+  if(!activeCustomer(tenant) || tenant.type==='个人' || !user)issue(404,'INVITATION_NOT_FOUND','邀请无效或已过期');
+  const needsPassword=!invitation.password_managed && !user.initialized && !user.invitable && user.id.startsWith('user:');
+  return {invitation,row,reference,tenant,member,user,tokenHash,needsPassword};
+}
+
+export async function inspectCustomerInvitation(db,token) {
+  const {invitation,tenant,member,user,needsPassword}=await customerInvitation(db,token);
+  return {tenant:{id:tenant.id,name:tenant.name},username:user.login,name:member.memberName || user.name,
+    role:member.role==='租户管理员'?'企业管理员':member.role,needsPassword,expiresAt:invitation.expires_at};
+}
+
+export async function acceptCustomerInvitation(db,session,{token,password,consent}) {
+  const {row,reference,tenant,member,user,tokenHash,needsPassword}=await customerInvitation(db,token);
+  if(session && session.user.id!==user.id)issue(403,'FORBIDDEN','请使用受邀账号接受邀请');
+  if(!session && !needsPassword)issue(401,'TENANT_SESSION_REQUIRED','请先登录受邀账号');
+  if(!session && consent!==true)issue(400,'INVALID_INPUT','请确认协议并设置登录密码');
+  const credential=session?null:await customerCredential(password);
+  const now=Date.now(), createdAt=new Date(now).toISOString();
+  const next={...reference,identityGeneration:(reference.identityGeneration || 0)+1,
+    memberships:reference.memberships.map(item=>item.id===member.id?{...item,status:'正常',updatedAt:createdAt}:item),
+    users:credential?reference.users.map(item=>item.id===user.id?{...item,initialized:true,updatedAt:createdAt}:item):reference.users,
+    audits:[{id:crypto.randomUUID(),tenantId:tenant.id,actorId:user.id,actor:member.memberName || user.name,
+      action:'接受组织邀请',objectId:member.id,result:'成功',createdAt,prototypeFact:true},...reference.audits]};
+  const [written]=await db.batch([
+    db.prepare(`UPDATE model_workspace SET reference_json=?,application_revision=application_revision+1 WHERE id=1
+      AND application_revision=? AND (SELECT commit_seq FROM db_state WHERE id=1)=?
+      AND EXISTS (SELECT 1 FROM customer_invitations WHERE token_hash=? AND expires_at>?)
+      AND (? IS NULL OR EXISTS (SELECT 1 FROM market_sessions WHERE token_hash=? AND user_id=? AND expires_at>?))`)
+      .bind(referenceWrite(reference,next,reference),row.application_revision,row.commit_seq,tokenHash,now,
+        session?.hash || null,session?.hash || null,user.id,now),
+    ...(credential?[db.prepare('INSERT INTO customer_credentials(user_id,salt,digest) SELECT ?,?,? WHERE changes()=1')
+      .bind(user.id,credential.salt,credential.digest)]:[]),
+    db.prepare('DELETE FROM customer_invitations WHERE changes()=1 AND token_hash=?').bind(tokenHash),
+    db.prepare('UPDATE db_state SET commit_seq=commit_seq+1 WHERE id=1 AND changes()=1'),
+  ]);
+  if(!written.meta.changes)conflict();
+  return {userId:user.id,tenant:{id:tenant.id,name:tenant.name,type:tenant.type}};
+}
+
 export async function tenantWorkspace(db, session) {
   const actor = { id: session.tenant.id, role: '客户' };
   const [{ state }, catalogue, facts] = await Promise.all([applicationState(db, actor), marketCatalogue(db, session), marketFacts(db, actor.id)]);
-  const { identity, canManage } = tenantContext(state, session);
+  const context=tenantContext(state,session);
+  const {identity,canManage}=context;
   const own = item => item.tenantId === actor.id;
   const orders = [...facts.orders, ...state.orders.filter(own)];
   const plans = orders.filter(row=>['已开通','生效中'].includes(row.status) && (!row.expiresAt || Date.parse(row.expiresAt)>Date.now())).map(row => ({
@@ -301,10 +382,10 @@ export async function tenantWorkspace(db, session) {
   const organization=identity.spaceId==='personal' ? {departments:[],members:[],audit:[]} : organizationProjection(state,actor.id);
   if(!canManage)delete organization.platformAccounts;
   return { identity,profile:{id:user.id,account:user.login,name:user.nickname || user.name || customer.name,type:customer.type,status:customer.status,
-    phone:user.phone,realNameCertification:user.realNameCertification},
+    phone:user.phone,realNameCertification:user.realNameCertification,passwordManaged:session.passwordManaged},
     applications:state.customerApplications.filter(application=>application.applicantUserId===user.id),
     backendUserId:identity.userId,canManage, revision:state.revision, orders:publicOrders(orders), plans:publicOrders(plans), keys, requests,
-    services: catalogue.services, projects: state.projects.filter(own), routes: state.tenantRoutes.filter(row => own(row) && (canManage || row.ownerId === identity.userId)),
+    services: catalogue.services, projects: tenantProjects(context), routes: state.tenantRoutes.filter(row => own(row) && (canManage || row.ownerId === identity.userId)),
     models: state.models.filter(row => ids.has(row.id)).map(({ id, modelId, name, type }) => ({ id, modelId, name, type })),
     organization };
 }
@@ -325,7 +406,7 @@ export async function tenantCommand(db, session, body) {
   if (state.revision !== expectedRevision || !row.application_revision) conflict();
   const context = tenantContext(state, session);
   const services=catalogue?.services.map(service=>({...service,materialId:service.modelKey,modelKey:service.serviceModelId}));
-  let next, retiredIds=[];
+  let next, retiredIds=[], revokedInvitations=[];
   try {
     if(action==='certifyPersonal' || action==='certifyEnterprise'){
       const accountState={currentUserId:session.user.id,accounts:state.users,applications:state.customerApplications};
@@ -359,9 +440,11 @@ export async function tenantCommand(db, session, body) {
       const remaining=new Set(next.apiKeys.map(key=>key.id));
       retiredIds=[...existingIds].filter(id=>!remaining.has(id));
     } else if (action === 'organization') {
-      if(!Array.isArray(data?.departments) || !Array.isArray(data?.members) || data.departments.length>100 || data.members.length>200 ||
+      if(!Array.isArray(data?.departments) || !Array.isArray(data?.members) || data.departments.length>100 || data.members.length>1000 ||
          [...data.departments,...data.members].some(item=>!validId(item?.id)))throw Error('组织或成员配置无效');
       next = tenantOrganizationChanges(context, { ...data, audit: [] });
+      const pending=new Set(next.memberships.filter(member=>member.tenantId===tenant.id && member.status==='待加入').map(member=>member.id));
+      revokedInvitations=state.memberships.filter(member=>member.tenantId===tenant.id && member.status==='待加入' && !pending.has(member.id)).map(member=>member.id);
     } else {
       if(!Array.isArray(data?.rows) || data.rows.length>100 || data.rows.some(item=>!validId(item?.id)))throw Error('路由配置无效');
       next = tenantRouteChanges(context, data.rows, services);
@@ -380,6 +463,8 @@ export async function tenantCommand(db, session, body) {
     db.prepare('UPDATE db_state SET commit_seq=commit_seq+1 WHERE id=1 AND changes()=1'),
     ...(retiredIds.length ? [db.prepare('INSERT INTO retired_tenant_keys(id) SELECT value FROM json_each(?) WHERE changes()=1')
       .bind(JSON.stringify(retiredIds))] : []),
+    ...(revokedInvitations.length ? [db.prepare('DELETE FROM customer_invitations WHERE changes()=1 AND tenant_id=? AND membership_id IN (SELECT value FROM json_each(?))')
+      .bind(tenant.id,JSON.stringify(revokedInvitations))] : []),
     db.prepare('DELETE FROM tenant_operations WHERE id IN (SELECT id FROM tenant_operations WHERE created_at<? LIMIT 100)').bind(now-week),
   ]);
   if (!written.meta.changes) {

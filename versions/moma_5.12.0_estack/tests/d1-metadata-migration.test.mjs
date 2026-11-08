@@ -34,7 +34,7 @@ test('v3 to current schema migration preserves every business record and foreign
     statements.push(db.prepare('INSERT INTO model_workspace VALUES(1,?,?,?)').bind(state.revision,JSON.stringify({modelData:state.modelData,updatedAt:state.updatedAt}),JSON.stringify(reference)));
     await db.batch(statements);
     await migrateEmptyDatabase(db);
-    assert.equal((await db.prepare('SELECT schema_version FROM db_state').first()).schema_version,14);
+    assert.equal((await db.prepare('SELECT schema_version FROM db_state').first()).schema_version,16);
     assert.equal((await db.prepare('PRAGMA foreign_key_check').all()).results.length,0);
     const restored=await loadModelWorkspace(db,{id:'admin-001',role:'平台管理员'});
     for(const key of ['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','serviceRoutes'])assert.deepEqual([...restored[key]].sort((a,b)=>a.id.localeCompare(b.id)),[...state[key]].sort((a,b)=>a.id.localeCompare(b.id)),key);

@@ -1,5 +1,5 @@
-import mockConfig from './mock/catalogues.json' with { type: 'json' };
-import { useServiceDirectory, beginExperience, finishExperience } from './useServiceDirectory';
+import { marketRequest } from './CloudMarket';
+import { useServiceDirectory, useExperienceSettings, beginExperience, finishExperience } from './useServiceDirectory';
 import { readExperienceDraft, saveExperienceDraft } from './experience-drafts.mjs';
 import FrontPageHeader from "./components/FrontPageHeader";
 import { Languages } from "lucide-react";
@@ -30,16 +30,6 @@ import { IMAGE_ACCEPT, supportsImageInput, imageInputError } from "./text-image-
 import "./experience.css";
 import "./experience-refinements.css";
 
-const STORAGE_KEY = "moma-text-conversations-5120-v1";
-const recommendations = mockConfig["TextExperience.jsx"]["recommendations"];
-
-const loadHistory = (owner) => {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]").filter(row => owner && row.owner === owner);
-  } catch {
-    return [];
-  }
-};
 
 function ModelPicker({ value, onChange, models, disabled }) {
   const [open, setOpen] = useState(false);
@@ -74,6 +64,8 @@ function ModelPicker({ value, onChange, models, disabled }) {
 
 export default function TextExperience({ onCompare, title = "文本生成", imageUploadEnabled = false, initialServiceId = "", owner = "" }) {
   const directory = useServiceDirectory('text'), models = directory.models;
+  const {settings,error:settingsError}=useExperienceSettings('text');
+  const recommendations=settings?.recommendations || [];
   const [draft] = useState(() => { try { return readExperienceDraft(owner, 'text'); } catch { return { storageError: '草稿读取失败，请核对本地存储' }; } });
   const ticket = useRef(null);
   const [model, setModel] = useState(initialServiceId || draft.model || models.find(item => item.callable)?.id || '');
@@ -84,10 +76,11 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
   const imageReadVersion = useRef(0);
   const currentModel = useRef(model);
   const [text, setText] = useState(draft.text || "");
-  const [messages, setMessages] = useState(draft.messages || []);
-  const [conversations, setConversations] = useState(() => loadHistory(owner));
+  const [messages, setMessages] = useState([]);
+  const [conversations, setConversations] = useState([]);
+  const historyRequest=useRef(0),resumeId=useRef(draft.conversationId);
   const [conversationId, setConversationId] = useState(draft.conversationId || "");
-  const [home, setHome] = useState(!draft.conversationId);
+  const [home, setHome] = useState(true);
   const [busy, setBusy] = useState(false);
   const [deepThinking, setDeepThinking] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -154,18 +147,38 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
   const conversationActive = !home && Boolean(conversationId);
 
   useEffect(() => () => {clearTimeout(timer.current);ticket.current=null;}, []);
-  useEffect(() => {
-    if (!owner) return;
-    try {
-      const others = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]').filter(row => row.owner !== owner);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...others, ...conversations], (key, value) => key === 'images' ? value.map(image => ({ name: image.name })) : value));
-    } catch { setNotice('对话记录无法保存，原记录未替换。'); }
-  }, [conversations, owner]);
+  function restoreConversation(row){
+    setConversationId(row.id);setMessages(row.messages);setModel(row.serviceId);
+    setDeepThinking(row.deepThinking);setTemperature(String(row.temperature));setTopP(String(row.topP));
+    setHome(false);setNotice('');
+  }
+  async function refreshHistory(signal){
+    const requestId=++historyRequest.current;
+    try{
+      const {conversations}=await marketRequest('conversations',null,signal);
+      if(requestId!==historyRequest.current)return;
+      setConversations(conversations);
+      if(resumeId.current){
+        const row=conversations.find(item=>item.id===resumeId.current);
+        resumeId.current=null;
+        if(row)restoreConversation(row);
+        else setConversationId('');
+      }
+    }catch(error){
+      if(requestId===historyRequest.current && !signal?.aborted)setNotice(error.message);
+    }
+  }
+  useEffect(()=>{
+    if(!owner)return;
+    const controller=new AbortController();
+    void refreshHistory(controller.signal);
+    return ()=>{historyRequest.current++;controller.abort();};
+  },[owner]);
   useEffect(() => {
     if (draft.storageError) { setNotice(draft.storageError); return; }
-    try { saveExperienceDraft(owner, 'text', { model, text, images, messages: messages.map(row => row.status === 'loading' ? { ...row, status: 'stopped', answer: '任务已停止，请重新发送。' } : row), conversationId, temperature, topP, systemPrompt }); }
+    try { saveExperienceDraft(owner, 'text', { model, text, images, conversationId, temperature, topP, systemPrompt }); }
     catch { setNotice('草稿无法保存，请检查浏览器存储。'); }
-  }, [owner, model, text, images, messages, conversationId, temperature, topP, systemPrompt]);
+  }, [owner, model, text, images, conversationId, temperature, topP, systemPrompt]);
   useEffect(() => {
     if (conversationActive) end.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, conversationActive]);
@@ -177,36 +190,17 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     input.style.overflowY = input.scrollHeight > 216 ? "auto" : "hidden";
   }, [text, conversationActive]);
 
-  const persist = (id, nextMessages, patch = {}) => {
-    const previous = conversations.find((item) => item.id === id);
-    const record = {
-      id,
-      owner, serviceId: model, modelName: selectedModel?.name || model,
-      title:
-        previous?.title || nextMessages[0]?.question.slice(0, 22) || "新对话",
-      updatedAt: Date.now(),
-      model,
-      deepThinking,
-      temperature,
-      topP,
-      systemPrompt,
-      ...previous,
-      messages: nextMessages,
-      ...patch,
-    };
-    setConversations((current) =>
-      [record, ...current.filter((item) => item.id !== id)]
-        .sort((a, b) => b.updatedAt - a.updatedAt),
-    );
-  };
-
   const finish = async (id, pendingId, question, shouldFail, pendingMessages) => {
     const current=ticket.current;
     let response;
-    try { response=await finishExperience(current,{simulateDenied:shouldFail}); } catch (error) {
+    try {
+      const pending=pendingMessages.find(item=>item.id===pendingId);
+      response=await finishExperience(current,{simulateDenied:shouldFail,textTurn:{conversationId:id,messageId:pendingId,question,
+        images:(pending.images || []).map(image=>image.name),deepThinking,temperature:Number(temperature),topP:Number(topP)}});
+    } catch (error) {
       if(ticket.current!==current)return;
       const stopped = pendingMessages.map(item => item.id === pendingId ? { ...item, status: 'stopped', answer: error.message } : item);
-      setMessages(stopped); persist(id, stopped); setNotice(error.message); setBusy(false); return;
+      setMessages(stopped); setNotice(error.message); setBusy(false); return;
     }
     if(ticket.current!==current)return;
     const denied=response.invocationError;
@@ -232,7 +226,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
       item.id === pendingId ? { ...item, ...result } : item,
     );
     setMessages(next);
-    persist(id, next);
+    void refreshHistory();
     if (!denied) { setText(""); setImages([]); }
     setBusy(false);
   };
@@ -251,10 +245,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     setMessages(next);
     setNotice("");
     setBusy(true);
-    persist(id, next, {
-      model,
-      title: question.replace("模拟调用失败：", "").slice(0, 22) || images[0]?.name || "图片问答",
-    });
+    resumeId.current=null;
     timer.current = setTimeout(
       () =>
         finish(
@@ -277,7 +268,6 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
         : item,
     );
     setMessages(next);
-    persist(conversationId, next);
     setBusy(false);
   };
 
@@ -290,7 +280,6 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     );
     setMessages(next);
     setBusy(true);
-    persist(conversationId, next);
     timer.current = setTimeout(
       () =>
         finish(
@@ -305,6 +294,8 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
   };
 
   const blank = () => {
+    resumeId.current=null;
+    ticket.current=null;
     imageReadVersion.current++;
     setReadingImages(false);
     images.forEach(image => URL.revokeObjectURL(image.url));
@@ -337,18 +328,18 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     <section
       className={`playground tx-page ${conversationActive ? "has-messages tx-conversation" : ""}`}
     >
-      {(directory.error || directory.identityError || !selectedModel?.callable) && <p role="status">{directory.error || directory.identityError || selectedModel?.reason || "请选择可体验的模型"}</p>}
+      {(directory.error || settingsError || directory.identityError || !selectedModel?.callable) && <p role="status">{directory.error || settingsError || directory.identityError || selectedModel?.reason || "请选择可体验的模型"}</p>}
       {conversationActive ? (
         <div className="tx-topbar">
           <button onClick={blank}>
             <ArrowLeft size={17} />
             返回
           </button>
-          <strong>{activeConversation?.title || "新对话"}</strong>
+          <strong>{activeConversation?.title || messages[0]?.question.slice(0,22) || "新对话"}</strong>
           <button onClick={requestBlank}>新建对话</button>
         </div>
       ) : (
-        <FrontPageHeader className="pg-heading" title={title} icon={Languages} description={imageUploadEnabled ? "文本生成用于问答、创作和翻译；支持图片输入的模型还可进行图文理解。" : "文本生成模型用于理解和生成文字；多模态模型还可以理解图片、视频等内容。"} actions={<div className="pg-heading-actions"><select aria-label="恢复历史对话" value="" onChange={event => { const row = conversations.find(item => item.id === event.target.value); if (!row || busy) return; setConversationId(row.id); setMessages(row.messages); setModel(row.serviceId || ''); setHome(false); setNotice(row.serviceId ? '' : '旧会话为只读记录，请重新选择模型后发送。'); }}><option value="">历史对话</option>{conversations.map(row => <option key={row.id} value={row.id}>{row.title}</option>)}</select>{onCompare && <button className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button onClick={requestBlank}>新建对话</button></div>} />
+        <FrontPageHeader className="pg-heading" title={title} icon={Languages} description={imageUploadEnabled ? "文本生成用于问答、创作和翻译；支持图片输入的模型还可进行图文理解。" : "文本生成模型用于理解和生成文字；多模态模型还可以理解图片、视频等内容。"} actions={<div className="pg-heading-actions"><select aria-label="恢复历史对话" value="" onChange={event => { const row = conversations.find(item => item.id === event.target.value); if (!row || busy) return; restoreConversation(row); }}><option value="">历史对话</option>{conversations.map(row => <option key={row.id} value={row.id}>{row.title}</option>)}</select>{onCompare && <button className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button onClick={requestBlank}>新建对话</button></div>} />
       )}
       <div className="pg-workspace">
         {conversationActive ? (

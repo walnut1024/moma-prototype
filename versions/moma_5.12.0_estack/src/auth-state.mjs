@@ -10,7 +10,7 @@ import { normalizeAdminLogin } from './admin-v2/admin-accounts.js';
 export const AUTH_STORAGE_KEY = 'moma-auth-prototype-5120-v1';
 export const AUTH_INVITE = mockConfig["auth-state.mjs"]["AUTH_INVITE"];
 export const emptyAuthState = () => structuredClone(APPLICATION_CONFIG.auth);
-export const authRoute = hash => /^#\/auth\/(login|register|account|enterprise|invite|application|activate|password)(?:\?|$)/.exec(hash)?.[1] || null;
+export const authRoute = hash => /^#\/auth\/(login|register|account|enterprise|invite|password)(?:\?|$)/.exec(hash)?.[1] || null;
 export const currentAuthUser = state => state.accounts.find(account => account.id === state.currentUserId) || null;
 export const authPhone = value => {
   const phone = normalizeMemberPhone(value), error = memberPhoneError(phone);

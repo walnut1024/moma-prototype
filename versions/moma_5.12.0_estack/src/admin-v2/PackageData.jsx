@@ -1,11 +1,10 @@
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useLayoutEffect, useRef, useState } from 'react';
-import { Button, Card, DatePicker, RadioGroup, Select, Typography } from '@douyinfe/semi-ui';
+import { Card, DatePicker, RadioGroup, Select, Typography } from '@douyinfe/semi-ui';
 import AdminPageHeading from './AdminPageHeading';
 import { format } from 'date-fns';
 import { PACKAGE_KINDS, PACKAGE_STATUS, PACKAGE_USER_TYPES } from './token-packages';
-import { filterPackageDemo, packageDemoSummary, packageDemoWindow } from './package-data-demo';
 import { operationsPeriodFromQuery, usagePreset, usagePresets, usageWindow } from './usage-analysis';
 import './package-production.css';
 
@@ -18,9 +17,14 @@ const currency = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: '
 const percent = new Intl.NumberFormat('zh-CN', { style: 'percent', maximumFractionDigits: 2 });
 const rangeText = ({ start, end }) => start === end ? start : `${start} 至 ${end}`;
 const packageName = item => item.name || '未命名套餐';
+const localDay=timestamp=>{
+  const time=Date.parse(timestamp);
+  return Number.isFinite(time)?new Date(time+8*3600000).toISOString().slice(0,10):null;
+};
 
 function pageHref(params, updates) {
   const next = new URLSearchParams(params);
+  next.delete('demo');
   for (const [key, value] of Object.entries(updates)) {
     if (value == null) next.delete(key);
     else next.set(key, value);
@@ -39,7 +43,7 @@ const entitlementColumns = [
     filters: Object.entries(PACKAGE_USER_TYPES).map(([value, text]) => ({ value, text })),
     filterMultiple: false, onFilter: (value, row) => row.accountType === value },
   { title: '套餐档位', width: 105, dataIndex: 'tier' },
-  { title: '套餐额度', width: 118, align: 'right', dataIndex: 'quota', render: value => number.format(value) },
+  { title: '套餐额度', width: 118, align: 'right', dataIndex: 'quota', render: value => Number.isFinite(value)?number.format(value):'—' },
   { title: '有效期至', width: 112, dataIndex: 'expires' },
   { title: '状态', width: 92, dataIndex: 'status', render: value => <AdminStatus value={value}/> },
   { title: '已消耗 Tokens', width: 136, align: 'right', dataIndex:'deducted',render:value=>value==null?'—':number.format(value) },
@@ -51,35 +55,29 @@ const entitlementColumns = [
 export default function PackageData({ state, params }) {
   const [page, setPage] = useState(1);
   const [dateError, setDateError] = useState('');
-  const [sample] = useState(() => packageDemoWindow(usagePreset('today').end));
   const heading = useRef(null);
   const previousPackage = useRef(null);
   const overviewScroll = useRef(0);
-  const demo = params.get('demo') === '1';
   const packageId = params.get('package');
   const kind = Object.hasOwn(PACKAGE_KINDS, params.get('kind')) ? params.get('kind') : 'all';
   const { period, range } = operationsPeriodFromQuery(params);
   const today = usagePreset('today').end;
-  const covered=!demo || range.start>=sample.start && range.end<=sample.end;
-  const unavailable='无演示数据';
-  const localDay=timestamp=>new Date(Date.parse(timestamp)+8*3600000).toISOString().slice(0,10);
   const orderFacts=(state.packageOrders || []).map(row=>({...row,day:localDay(row.createdAt),expires:localDay(row.expiresAt)}));
-  const packageFacts=id=>orderFacts.filter(row=>row.packageId===id && row.day<=range.end);
+  const packageFacts=id=>orderFacts.filter(row=>row.packageId===id && row.day && row.day<=range.end);
   const report=item=>{
-    if(demo)return covered?packageDemoSummary([filterPackageDemo(item,range)]):null;
     const rows=packageFacts(item.id);
-    return {quantity:rows.filter(row=>row.day>=range.start).length,expiredThroughEnd:rows.filter(row=>row.expires<=range.end).length,
-      averageConsumptionRate:rows.length && range.end===today?rows.reduce((sum,row)=>sum+row.used/row.entitlement,0)/rows.length:null};
+    const metered=rows.filter(row=>row.entitlement>0 && Number.isFinite(row.used));
+    return {quantity:rows.filter(row=>row.day>=range.start).length,expiredThroughEnd:rows.filter(row=>row.expires && row.expires<=range.end).length,
+      averageConsumptionRate:metered.length && range.end===today?metered.reduce((sum,row)=>sum+row.used/row.entitlement,0)/metered.length:null};
   };
-  const records = demo ? sample.records : state.tokenPackages;
+  const records = state.tokenPackages;
   const selected = packageId ? records.find(item => item.id === packageId) : null;
-  const rights=selected && covered ? demo?filterPackageDemo(selected,range).entitlements:
-    packageFacts(selected.id).filter(row=>row.expires>=range.start).map(row=>{
-      const deducted=range.end===today?row.used:null,expired=row.expires<=range.end;
+  const rights=selected ? packageFacts(selected.id).filter(row=>!row.expires || row.expires>=range.start).map(row=>{
+      const deducted=range.end===today && Number.isFinite(row.used)?row.used:null,expired=row.expires && row.expires<=range.end;
       return { id:row.id,orderedAt:row.day,packageId:row.packageId,userId:row.userId,accountName:row.accountName,
         accountType:row.accountType,tier:PACKAGE_KINDS[selected.kind],quota:row.entitlement,expires:row.expires,
-        status:expired?'已到期':row.status,deducted,remaining:deducted==null?null:expired?0:row.entitlement-deducted,cost:null };
-    }) : null;
+        status:expired?'已到期':row.status,deducted,remaining:deducted==null || !Number.isFinite(row.entitlement)?null:expired?0:row.entitlement-deducted,cost:null };
+    }) : [];
 
   useLayoutEffect(() => {
     if (packageId) {
@@ -119,27 +117,24 @@ export default function PackageData({ state, params }) {
       </Typography.Text>
     },
     { title: '资费ID', width: 160, dataIndex: 'id' },
-    { title: '新增销售数', width: 120, align: 'right', render: (_, { stats }) => stats ? number.format(stats.quantity) : unavailable },
-    { title: '累计到期数', width: 120, align: 'right', render: (_, { stats }) => stats ? number.format(stats.expiredThroughEnd) : unavailable },
+    { title: '新增销售数', width: 120, align: 'right', render: (_, { stats }) => number.format(stats.quantity) },
+    { title: '累计到期数', width: 120, align: 'right', render: (_, { stats }) => number.format(stats.expiredThroughEnd) },
     { title: '额度消耗率（平均值）', width: 180, align: 'right',
-      render: (_, { stats }) => !stats ? unavailable : stats.averageConsumptionRate === null ? '—' : percent.format(stats.averageConsumptionRate) },
+      render: (_, { stats }) => stats.averageConsumptionRate === null ? '—' : percent.format(stats.averageConsumptionRate) },
   ];
 
   const currentPage = Math.min(page, Math.max(1, Math.ceil(rows.length / pageSize)));
   return <div className="admin-page-stack">
       <AdminPageHeading title={<span ref={heading} tabIndex={-1}>{selected ? packageName(selected) : packageId ? '套餐详情' : '套餐数据'}</span>}>
-        {packageId
-          ? <Typography.Text link={{ href: overviewHref }}>返回概览</Typography.Text>
-          : <Button onClick={() => changeOverview({ demo: demo ? null : '1' })}>{demo ? '返回套餐记录' : '查看演示数据'}</Button>}
+        {packageId && <Typography.Text link={{ href: overviewHref }}>返回概览</Typography.Text>}
       </AdminPageHeading>
       {packageId ? <>
         {selected ? <>
           <Typography.Text type="tertiary">{selected.id} · {PACKAGE_KINDS[selected.kind]} · {PACKAGE_STATUS[selected.status]} · {rangeText(range)}（北京时间）</Typography.Text>
-          {demo && <Typography.Text type="tertiary" role="status">当前为演示数据。</Typography.Text>}
           <Card><section aria-label="已购权益明细">
-            <Table size="small" key={selected.id} rowKey="id" dataSource={rights ?? []} columns={entitlementColumns} scroll={{ x: 'max(100%, 1533px)' }}
+            <Table size="small" key={selected.id} rowKey="id" dataSource={rights} columns={entitlementColumns} scroll={{ x: 'max(100%, 1533px)' }}
               pagination={{ pageSize, hideOnSinglePage: true }}
-              empty={rights ? '暂无符合条件的权益记录' : unavailable}/>
+              empty="暂无符合条件的权益记录"/>
           </section></Card>
         </> : <Typography.Text role="status">套餐不存在或当前数据来源无此套餐。</Typography.Text>}
       </> : <Card>
@@ -157,9 +152,6 @@ export default function PackageData({ state, params }) {
             onChange={value => changeOverview({ kind: value === 'all' ? null : value })}/>
         </div>
         {dateError && <Typography.Text type="danger" role="alert">{dateError}</Typography.Text>}
-        {demo && <Typography.Text type="tertiary" role="status">
-          {covered ? '当前为演示数据。' : `所选时间超出演示范围（${rangeText(sample)}）。`}
-        </Typography.Text>}
         <section aria-label="套餐汇总">
           <Table size="small" rowKey="id" dataSource={rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)} columns={overviewColumns} scroll={{ x: 'max(100%, 820px)' }}
             pagination={{ pageSize, currentPage, total: rows.length, onPageChange: setPage, hideOnSinglePage: true }}

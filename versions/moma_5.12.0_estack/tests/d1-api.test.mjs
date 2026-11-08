@@ -522,31 +522,6 @@ test('acceptance cleanup is scoped, atomic, replayable and soft-archives only th
   assert.equal(state.revision,baseline.revision+3);
 });
 
-test('the user-side market reads display flags saved through the admin command without an admin session', async () => {
-  const path = '/model-market/visibility';
-  const { marketDisplayServices } = await import('../src/useMarketVisibility.js');
-  const { marketDemoModelIds } = await import('../src/mock/model-data.js');
-  const card = { modelKey: serviceId, marketVisible: true };
-  for (const visible of [false, true]) {
-    const state = (await request('/model-operations')).data;
-    const model = state.models.find(row => row.id === serviceId);
-    const id = crypto.randomUUID();
-    const saved = await request('/model-operations/commands', { method: 'POST', key: id, body: {
-      operationId: id, expectedRevision: state.revision,
-      action: { type: 'modelOperations', operation: 'marketVisibility', modelId: serviceId, data: { visible, expectedUpdatedAt: model.updatedAt } },
-    } });
-    assert.equal(saved.status, 200, JSON.stringify(saved.data));
-    const result = await request(path, { session: null });
-    assert.equal(result.status, 200);
-    assert.deepEqual(Object.keys(result.data), ['visibility']);
-    const publicIds = new Set(marketDemoModelIds());
-    assert(Object.entries(result.data.visibility).every(([id, value]) => publicIds.has(id) && typeof value === 'boolean'));
-    assert.equal(result.data.visibility[serviceId], visible);
-    assert.deepEqual(marketDisplayServices([card], result.data.visibility), visible ? [card] : []);
-  }
-  assert.equal((await request(path, { method: 'POST', session: null, body: {} })).status, 405);
-});
-
 test('model market reordering persists across bootstrap without changing service records', async () => {
   const { orderedMarketModels } = await import('../src/admin-v2/model-market-order.js');
   const before = (await request('/model-operations')).data;

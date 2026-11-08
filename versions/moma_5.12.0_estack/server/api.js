@@ -1,9 +1,10 @@
 import {modelBootstrap,modelCommand,packageBootstrap,packageCommand,packageFactorHistory,readTrafficLimits,simulationRequest,updateTrafficLimits} from './model-commands.js';
 import { initializePrototypeCatalogue } from './prototype-presets.js';
-import { marketCatalogue, marketRanking, marketCompletion, marketOrder } from './market.js';
-import { createMarketSession, customerIdentity, customerPasswordMatches, issueSignupChallenge, marketCookie, marketSession, registerCustomer } from './customer-identity.js';
-import { applicationBootstrap, applicationCommand, initializeApplication, tenantCommand, tenantWorkspace } from './application.js';
-import { marketDemoModelIds } from '../src/mock/model-data.js';
+import { experienceOptions, marketCatalogue, marketRanking, marketCompletion, marketOrder, textConversations } from './market.js';
+import { changeCustomerPassword, createMarketSession, customerIdentity, issueCustomerChallenge, marketCookie, marketSession,
+  registerCustomer, resetCustomerPassword, verifiedCustomerCredential } from './customer-identity.js';
+import { acceptCustomerInvitation, applicationBootstrap, applicationCommand, initializeApplication, inspectCustomerInvitation,
+  issueCustomerInvitation, tenantCommand, tenantWorkspace } from './application.js';
 import { API_PREFIX, isApiPath } from '../api-path.js';
 const COOKIE = 'moma5120_session';
 const encoder = new TextEncoder();
@@ -166,9 +167,12 @@ async function route(request, env) {
   const packagePath = ['/package-management', '/package-management/commands', '/package-management/factor-history'].includes(path);
   const trafficPath = path === '/traffic-limits';
   const trafficHistoryPath = path === '/traffic-limits/history';
-  const marketPaths = ['/market/catalogue','/market/ranking','/market/login','/market/signup-code','/market/signup','/market/logout','/market/switch','/market/orders','/market/completions','/market/workspace','/market/commands'];
+  const marketPaths = ['/market/catalogue','/market/ranking','/market/login','/market/signup-code','/market/signup',
+    '/market/password-code','/market/password-reset','/market/password','/market/logout','/market/switch',
+    '/market/invitations','/market/invitations/inspect','/market/invitations/accept',
+    '/market/orders','/market/completions','/market/conversations','/market/experience-options','/market/workspace','/market/commands'];
   const applicationPaths = ['/application','/application/open','/application/commands'];
-  const known = marketPaths.includes(path) || applicationPaths.includes(path) || trafficPath || trafficHistoryPath || packagePath || ['/auth/login','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-market/visibility','/model-operations','/model-operations/commands'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
+  const known = marketPaths.includes(path) || applicationPaths.includes(path) || trafficPath || trafficHistoryPath || packagePath || ['/auth/login','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-operations','/model-operations/commands'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
   if (!known) fail(404, 'NOT_FOUND', 'API 不存在');
   if (!env.MODEL_OPS_DB) fail(503, 'DATABASE_UNAVAILABLE', '模型运营数据库尚未绑定');
   const db = env.MODEL_OPS_DB;
@@ -202,28 +206,30 @@ async function route(request, env) {
     const state = await db.prepare('SELECT schema_version FROM db_state WHERE id=1').first();
     return json({ status: 'ok', version: '5.12.0', schemaVersion: state.schema_version });
   }
-  if (path === '/model-market/visibility') {
-    if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '模型广场展示仅可读取');
-    // shortcut: expose display flags only for models already shipped in the browser demo until tenant catalogue data moves to D1.
-    const { results } = await db.prepare(`SELECT id, market_visible, deleted_at FROM services
-      WHERE id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(marketDemoModelIds())).all();
-    return json({ visibility: Object.fromEntries(results.map(row => [row.id, row.deleted_at == null && Boolean(row.market_visible)])) });
-  }
   if (marketPaths.includes(path)) {
+    if(path==='/market/experience-options'){
+      if(method!=='GET')fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
+      return json(await experienceOptions(db,url.searchParams.get('task')));
+    }
     if(path==='/market/ranking' && method==='GET')return json(await marketRanking(db));
     if (path === '/market/catalogue' && method === 'GET') return json(await marketCatalogue(db,await marketSession(db,request)));
-    if (path === '/market/workspace' && method === 'GET') {
+    if (['/market/workspace','/market/conversations'].includes(path) && method === 'GET') {
       const session = await marketSession(db,request);
       if (!session) fail(401,'TENANT_SESSION_REQUIRED','请先登录客户账号');
-      return json(await tenantWorkspace(db,session));
+      return json(await (path==='/market/workspace'?tenantWorkspace(db,session):textConversations(db,session)));
     }
-    if (method !== 'POST' || ['/market/catalogue','/market/workspace','/market/ranking'].includes(path)) fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
-    if(path==='/market/signup-code' || path==='/market/signup'){
-      if(env.MODEL_OPS_DEMO_OTP!=='1')fail(403,'SIGNUP_UNAVAILABLE','当前环境未开启演示注册');
+    if (method !== 'POST' || ['/market/catalogue','/market/workspace','/market/ranking','/market/conversations'].includes(path)) fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
+    if(['/market/signup-code','/market/signup','/market/password-code','/market/password-reset'].includes(path)){
+      if(env.MODEL_OPS_DEMO_OTP!=='1')fail(403,'DEMO_OTP_UNAVAILABLE','当前环境未开启演示验证码');
       const body=await bodyJson(request,4096);
-      if(path==='/market/signup-code'){
+      if(path.endsWith('-code')){
         fields(body,['phone']);
-        return json(await issueSignupChallenge(db,body.phone));
+        return json(await issueCustomerChallenge(db,body.phone,path==='/market/signup-code'?'signup':'reset'));
+      }
+      if(path==='/market/password-reset'){
+        fields(body,['phone','challengeId','code','password']);
+        await resetCustomerPassword(db,body);
+        return json({updated:true},200,{'Set-Cookie':cookie('',0).replace(COOKIE+'=',marketCookie+'=')});
       }
       fields(body,['phone','challengeId','code','password','consent']);
       await initializeApplication(db);
@@ -247,11 +253,11 @@ async function route(request, env) {
         identity=await customerIdentity(db,username,'username');
       }
       const expected=identity && Object.hasOwn(hashes,identity.user.id) && hashes[identity.user.id];
-      const valid=typeof expected==='string' ? await secureEqual(received,expected)
-        : identity && await customerPasswordMatches(db,identity.user.id,body.accessCode);
+      const credential=identity && typeof expected!=='string' ? await verifiedCustomerCredential(db,identity.user.id,body.accessCode) : null;
+      const valid=typeof expected==='string' ? await secureEqual(received,expected) : Boolean(credential);
       const tenant=identity?.spaces.find(space=>(space.type==='个人')===(body.accountType==='personal'));
       if (!valid || !tenant) fail(401,'INVALID_LOGIN','账号类型、用户名或密码无效');
-      const token=await createMarketSession(db,identity.user.id,tenant.id);
+      const token=await createMarketSession(db,identity.user.id,tenant.id,credential);
       return json({tenant},200,{'Set-Cookie':cookie(token).replace(COOKIE+'=',marketCookie+'=')});
     }
     const session=await marketSession(db,request);
@@ -259,14 +265,37 @@ async function route(request, env) {
       if (session) await db.prepare('DELETE FROM market_sessions WHERE token_hash=?').bind(session.hash).run();
       return json({loggedOut:true},200,{'Set-Cookie':cookie('',0).replace(COOKIE+'=',marketCookie+'=')});
     }
+    if(path==='/market/invitations/inspect' || path==='/market/invitations/accept'){
+      const body=await bodyJson(request,4096);
+      if(path.endsWith('/inspect')){
+        fields(body,['token']);
+        return json(await inspectCustomerInvitation(db,body.token));
+      }
+      fields(body,['token','password','consent']);
+      const {userId,tenant}=await acceptCustomerInvitation(db,session,body);
+      const token=await createMarketSession(db,userId,tenant.id);
+      return json({tenant},200,{'Set-Cookie':cookie(token).replace(COOKIE+'=',marketCookie+'=')});
+    }
     if (!session) fail(401,'TENANT_SESSION_REQUIRED','请先登录模型广场');
+    if(path==='/market/invitations'){
+      const body=await bodyJson(request,4096);
+      fields(body,['membershipId']);
+      return json(await issueCustomerInvitation(db,session,body.membershipId),201);
+    }
+    if(path==='/market/password'){
+      const body=await bodyJson(request,4096);
+      fields(body,['currentPassword','password']);
+      await changeCustomerPassword(db,session,body);
+      return json({updated:true},200,{'Set-Cookie':cookie('',0).replace(COOKIE+'=',marketCookie+'=')});
+    }
     if (path==='/market/switch') {
       const body=await bodyJson(request,4096);
       fields(body,['tenantId']);
       const tenant=session.spaces.find(space=>space.id===body.tenantId);
       if(!tenant)fail(403,'FORBIDDEN','当前账号无权进入该空间');
-      const written=await db.prepare('UPDATE market_sessions SET tenant_id=? WHERE token_hash=? AND user_id=? AND tenant_id=? AND expires_at>?')
-        .bind(tenant.id,session.hash,session.user.id,session.tenant.id,Date.now()).run();
+      const written=await db.prepare(`UPDATE market_sessions SET tenant_id=? WHERE token_hash=? AND user_id=? AND tenant_id=? AND expires_at>?
+        AND (SELECT commit_seq FROM db_state WHERE id=1)=?`)
+        .bind(tenant.id,session.hash,session.user.id,session.tenant.id,Date.now(),session.commitSeq).run();
       if(!written.meta.changes)fail(409,'TENANT_CHANGED','当前空间已变化，请刷新后重试');
       return json({tenant});
     }
@@ -275,7 +304,7 @@ async function route(request, env) {
       fields(body,['operationId','tenantId','expectedRevision','action','data']);
       return json(await tenantCommand(db,session,body));
     }
-    const body=await bodyJson(request,8192);
+    const body=await bodyJson(request,path==='/market/completions'?32*1024:8192);
     if (path==='/market/orders') {
       fields(body,['offerIds','tenantId','salePriceIds']);
       if (!Array.isArray(body.offerIds) || !body.offerIds.length || body.offerIds.length>20 || new Set(body.offerIds).size!==body.offerIds.length || body.offerIds.some(id=>typeof id!=='string' || !/^[A-Za-z0-9:_.-]{1,512}$/.test(id))) fail(400,'INVALID_INPUT','请选择 1–20 项不同的渠道服务');
@@ -283,7 +312,7 @@ async function route(request, env) {
           (!body.salePriceIds || Array.isArray(body.salePriceIds) || Object.keys(body.salePriceIds).length!==body.offerIds.length || body.offerIds.some(id=>!Object.hasOwn(body.salePriceIds,id) || !identifier(body.salePriceIds[id]))))) fail(400,'INVALID_INPUT','订单售价或客户无效');
       return json(await marketOrder(db,session,body.offerIds,body));
     }
-    fields(body,['requestId','model','messages','tenantId','task','images','imageCount','speechMode','simulateDenied']);
+    fields(body,['requestId','model','messages','tenantId','task','images','imageCount','speechMode','simulateDenied','textTurn']);
     if ((body.tenantId!==undefined && !identifier(body.tenantId)) ||
         (body.task!==undefined && !['text','image','video','voice'].includes(body.task)) ||
         ['images','simulateDenied'].some(field=>body[field]!==undefined && typeof body[field]!=='boolean') ||
@@ -293,6 +322,16 @@ async function route(request, env) {
         !Array.isArray(body.messages) || body.messages.length!==1 || body.messages[0]?.role!=='user' ||
         typeof body.messages[0].content!=='string' || !body.messages[0].content.trim() || body.messages[0].content.length>2000 ||
         Object.keys(body.messages[0]).some(key=>!['role','content'].includes(key))) fail(400,'INVALID_INPUT','请填写当前调用标识和 1–2000 字的消息');
+    if(body.textTurn!==undefined){
+      const turn=body.textTurn;
+      fields(turn,['conversationId','messageId','question','images','temperature','topP','deepThinking']);
+      if(body.task!=='text' || !identifier(turn.conversationId) || !identifier(turn.messageId) ||
+        typeof turn.question!=='string' || turn.question.length>6000 ||
+        !Array.isArray(turn.images) || turn.images.length>8 ||
+        turn.images.some(name=>typeof name!=='string' || !name || name.length>255) ||
+        typeof turn.deepThinking!=='boolean' || !Number.isFinite(turn.temperature) || turn.temperature<0 || turn.temperature>2 ||
+        !Number.isFinite(turn.topP) || turn.topP<0 || turn.topP>1)fail(400,'INVALID_INPUT','文本对话记录无效');
+    }
     return json(await marketCompletion(db,session,body));
   }
   const actor = await authenticate(request, db);
