@@ -7,6 +7,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { Miniflare } from 'miniflare';
 import { migrateEmptyDatabase, startLocalBackend } from '../database/local-runtime.js';
 import { createSeed, initializeDatabase } from '../database/seed.js';
+import { domainModelWorkspace } from '../src/mock/model-fields.js';
 
 test('initialization is atomic, refuses an incompatible seed, and preserves zero/unknown price semantics', async () => {
   const runtime = new Miniflare({ modules: true, script: "export default {fetch(){return new Response('test')}}", compatibilityDate: '2026-07-30', d1Databases: ['MODEL_OPS_DB'] });
@@ -116,4 +117,40 @@ test('empty D1 starts with reference data and imports the two demos through the 
     assert.equal(local.initialization.initialized, false);
     assert.deepEqual(await snapshot(), state);
   } finally { await local?.runtime.dispose(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('the preset and the showcase share the same Zhipu supplier and keep both channels', async () => {
+  const accessCode = randomBytes(32).toString('hex');
+  const local = await startLocalBackend({ presets: true, loginHashes: { 'admin-001': createHash('sha256').update(accessCode).digest('hex') } });
+  const request = (path, { cookie, body, key } = {}) => local.runtime.dispatchFetch('https://example.test/api/v1' + path, {
+    ...(body ? { method: 'POST', body: JSON.stringify(body) } : {}),
+    headers: {
+      ...(body ? { origin: 'https://example.test', 'x-moma-request': '1', 'content-type': 'application/json' } : {}),
+      ...(cookie ? { cookie } : {}),
+      ...(key ? { 'idempotency-key': key } : {}),
+    },
+  });
+  try {
+    const login = await request('/auth/login', { body: { accountId: 'admin-001', accessCode } });
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get('set-cookie').split(';')[0];
+    const snapshot = async () => domainModelWorkspace(await (await request('/model-operations', { cookie })).json());
+    const before = await snapshot();
+    const preset = before.providers.filter(row => row.name === '智谱');
+    assert.equal(preset.length, 1);
+    const operationId = crypto.randomUUID();
+    const imported = await request('/model-operations/commands', { cookie, key: operationId, body: {
+      operationId, expectedRevision: before.revision, action: { type: 'modelOperations', operation: 'prepareServiceShowcase', data: { confirmed: true } },
+    } });
+    assert.equal(imported.status, 200, await imported.text());
+    const after = await snapshot();
+    const suppliers = after.providers.filter(row => row.name === '智谱');
+    assert.deepEqual(suppliers.map(row => row.id), [preset[0].id]);
+    const [supplier] = suppliers;
+    assert.equal(supplier.catalogModels.filter(row => row.modelId === 'glm-5.3').length, 1);
+    assert.deepEqual(supplier.catalogConnections.map(row => row.id).sort(), ['preset-source-zhipu-direct', 'showcase-association-zhipu-official-glm-5.3']);
+    assert.deepEqual(after.endpoints.filter(row => row.providerId === supplier.id).map(row => row.id).sort(),
+      ['preset-connection-zhipu-direct', 'showcase-channel-zhipu-official']);
+    assert.equal(await local.db.prepare("SELECT supplier_id FROM offers WHERE id='glm-5.3-zhipu'").first('supplier_id'), supplier.id);
+  } finally { await local.runtime.dispose(); }
 });

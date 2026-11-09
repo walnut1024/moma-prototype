@@ -164,8 +164,11 @@ export function modelChanges(db,before,after,{insertOnly=false}={}){
   const a=before?projectModelState(before):{},b=projectModelState(after),statements=[];
   for(const table of ['offers'])for(const [key,row]of a[table] || [])if(!b[table]?.has(key))statements.push(db.prepare('UPDATE offers SET retired_at=? WHERE record_id=?').bind(at(after.updatedAt)||Date.now(),row.record_id));
   for(const [table,rows]of Object.entries(b)){
-    const changed=[...rows].filter(([key,row])=>j(a[table]?.get(key))!==j(row)).map(([,row])=>row);
-    const statement=upsert(db,table,changed,insertOnly);if(statement)statements.push(statement);
+    const changed=[...rows].filter(([key,row])=>j(a[table]?.get(key))!==j(row));
+    const reusedSuppliers=insertOnly && table==='suppliers' ? changed.filter(([key])=>a[table]?.has(key)) : [];
+    const statement=upsert(db,table,changed.filter(row=>!reusedSuppliers.includes(row)).map(([,row])=>row),insertOnly);
+    if(statement)statements.push(statement);
+    if(reusedSuppliers.length)statements.push(upsert(db,table,reusedSuppliers.map(([,row])=>row)));
   }
   for(const [table,rows]of Object.entries(a))for(const [key,row]of rows)if(!b[table]?.has(key) && !['offers','price_versions','price_items','route_versions','route_members'].includes(table)){
     if(['materials','services','suppliers','channels'].includes(table))statements.push(db.prepare(`UPDATE ${table} SET deleted_at=? WHERE id=?`).bind(at(after.updatedAt)||Date.now(),row.id));

@@ -1,4 +1,5 @@
 import { libraryRecord, modelLibrary } from '../src/admin-v2/model-library.js';
+import { SHOWCASE_ZHIPU_PROVIDER_ID } from '../src/admin-v2/service-showcase.js';
 import { loadModelWorkspace, modelChanges } from './model-repository.js';
 import { save } from './model-commands.js';
 
@@ -39,9 +40,10 @@ export async function initializePrototypeCatalogue(db, actor) {
     ['deepseek','深度求索',[['direct','deepseek-v4-pro']]],
     ['zhipu','智谱',[['direct','glm-5.3']]],
   ]) {
-    const id=code==='mobile' && !after.providers.some(row=>row.id==='provider-self')?'provider-self':'preset-supplier-'+code;
-    if (after.providers.some(row=>row.id===id)) continue;
-    const provider={ ...stamp,id,name,code:'preset-'+code,description:'原型模拟服务商',status:'已启用',
+    const id=code==='zhipu'?SHOWCASE_ZHIPU_PROVIDER_ID:code==='mobile'?'provider-self':'preset-supplier-'+code;
+    const providerCode=code==='zhipu'?'zhipu-direct':'preset-'+code;
+    if (after.providers.some(row=>row.id===id || row.name.trim().toLowerCase()===name.toLowerCase() || row.code?.toLowerCase()===providerCode)) continue;
+    const provider={ ...stamp,id,name,code:providerCode,description:'原型模拟服务商',status:'已启用',
       sourceType:code==='mobile'?'selfHosted':'thirdParty',onboardingPresetId:'prototype-linkage',catalogModelIds:sources.map(([,slug])=>slug),catalogModels:[],catalogConnections:[],apiKeys:[] };
     for (const [origin, slug] of sources) {
       const match=modelLibrary(after).find(row=>row.modelId===slug), material=match && libraryRecord(after,match.id);
