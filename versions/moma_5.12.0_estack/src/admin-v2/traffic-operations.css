@@ -31,6 +31,13 @@
 .traffic-rate-fields .semi-form-slot { margin: 0; }
 .traffic-policy-drawer .admin-list-toolbar { margin: 0; gap: 12px; }
 .traffic-policy-account { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; overflow-wrap: anywhere; }
+.traffic-policy-model-picker {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  width: min(100%, 420px);
+}
+.traffic-policy-model-picker .semi-select { width: 100%; }
 .traffic-policy-drawer .traffic-rate-input { width: 112px; max-width: 100%; text-align: right; }
 
 @media (max-width: 580px) {

@@ -1,7 +1,8 @@
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, Form, Input, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Form, Input, Select, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
+import { IconPlus } from '@douyinfe/semi-icons';
 import { AdminModal as Modal, AdminSideSheet } from './AdminOverlay';
 import { cloudAdminRequest } from './CloudModelOperations';
 import { Choice, FieldLabel } from './ServiceUI.jsx';
@@ -209,6 +210,7 @@ function TrafficLogin({ accountId, onLogin, close }) {
 
 export default function TrafficOperations({ state, dirtyRef }) {
   const accountId = state.adminSession.accountId;
+  const modelPickerId = useId();
   const [remote, setRemote] = useState(null);
   const [login, setLogin] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -392,11 +394,14 @@ export default function TrafficOperations({ state, dirtyRef }) {
     { title: '默认值', width: ratePairWidth, render: () => <RatePair limit={global}/> },
     { title: '生效值', width: ratePairWidth, render: (_, row) => <RatePair limit={accountRule(row)?.limit} strong/> },
     { title: '规则来源', width: 98, render: (_, row) => accountRule(row)?.name || '—' },
-    { title: '一客一策', width: 82, render: (_, row) => {
+    { title: '一客一策', width: 144, render: (_, row) => {
       const { exceptions } = accountTraffic(settings, row.id);
-      return settings ? <Button size="small" theme="borderless" disabled={actionsDisabled}
-        aria-label={row.name + '的一客一策，' + exceptions.length + ' 条'}
-        onClick={event => begin(event, 'exceptions', row.id, exceptions)}>{exceptions.length} 条</Button> : '—';
+      const count = exceptions.length;
+      const label = count ? `管理策略（${count} 条）` : '添加策略';
+      return settings ? <Button size="small" theme={count ? 'borderless' : 'light'}
+        icon={count ? undefined : <IconPlus/>} disabled={actionsDisabled}
+        aria-label={count ? `${row.name}的${label}` : `为${row.name}${label}`}
+        onClick={event => begin(event, 'exceptions', row.id, exceptions)}>{label}</Button> : '—';
     } },
     { title: '操作', width: 236, className: 'traffic-row-actions', render: (_, row) => <Space spacing={4}>
       {editButton('编辑 ' + row.name, event => begin(event, 'batchAccounts', row.id, [accountRule(row)?.limit || {}]))}
@@ -432,6 +437,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
   const visualizationAccount = visualizationId && accounts.find(row => row.id === visualizationId);
   const drawer = draft?.operation === 'exceptions';
   const choices = drawer ? models.filter(row => !draft.rows.some(rule => rule.modelId === row.id)) : [];
+  const openModelPicker = drawer && !draft.before.length && Boolean(account) && choices.length > 0;
   function updateRate(index, metric, value) {
     updateRows(draft.rows.map((row, i) => i === index ? { ...row, [metric]: value } : row));
   }
@@ -484,7 +490,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
             </div>
             {!draft && errorBanner}
             <Table key={accountQuery + ':' + type} rowKey="id" empty="暂无账号"
-              scroll={{ x: 'max(100%, 1132px)' }} dataSource={accountRows} columns={accountColumns} pagination={pagination} rowSelection={rowSelection}/>
+              scroll={{ x: 'max(100%, 1200px)' }} dataSource={accountRows} columns={accountColumns} pagination={pagination} rowSelection={rowSelection}/>
           </Card>
         </div>}
       </Tabs.TabPane>
@@ -529,15 +535,20 @@ export default function TrafficOperations({ state, dirtyRef }) {
       </>}>
       <div className="traffic-policy-drawer">
         <AccountIdentity account={account || { id: draft.id }}/>
-        <div className="admin-list-toolbar">
-          <Choice label="搜索并添加模型" placeholder={choices.length ? '搜索并添加模型' : '没有可添加的模型'}
-            className="admin-list-search" filter motion={false} value="" disabled={saving || !account || !choices.length}
-            options={choices.map(row => [row.id, row.name + ' · ' + row.modelId])}
+        <div id={modelPickerId} className="traffic-policy-model-picker">
+          <Text strong id={modelPickerId + '-label'}>添加模型策略</Text>
+          {!draft.rows.length && choices.length > 0 &&
+            <Text type="secondary">选择模型后，填写 RPM 和 TPM，再保存。</Text>}
+          <Select aria-labelledby={modelPickerId + '-label'} placeholder={choices.length ? '搜索模型名称或 ID' : '没有可添加的模型'}
+            filter motion={false} value="" defaultOpen={openModelPicker} autoFocus={openModelPicker}
+            position="bottomLeft" getPopupContainer={() => document.getElementById(modelPickerId)}
+            disabled={saving || !account || !choices.length}
+            optionList={choices.map(row => ({ value: row.id, label: row.name + ' · ' + row.modelId }))}
             onSelect={modelId => updateRows([...draft.rows, ...inputRows([{ ...accountRule(account)?.limit, modelId }])])}/>
         </div>
         {errorBanner}
-        <Table rowKey="modelId" scroll={{ x: 'max(100%, 620px)' }} empty="暂无一客一策配置"
-          pagination={false} dataSource={draft.rows} columns={policyColumns}/>
+        {draft.rows.length > 0 && <Table rowKey="modelId" scroll={{ x: 'max(100%, 620px)' }}
+          pagination={false} dataSource={draft.rows} columns={policyColumns}/>}
       </div>
     </AdminSideSheet>}
     {visualizationAccount && <TrafficVisualization account={visualizationAccount} models={models} settings={settings} close={() => setVisualizationId(null)}/>}
