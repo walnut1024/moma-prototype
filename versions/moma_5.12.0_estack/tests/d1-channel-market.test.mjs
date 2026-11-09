@@ -233,6 +233,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal(await monthly(a),initialMicros,'replayed calls must not add charges');
     await local.db.batch([
       ...['market_charge_receipts','market_monthly_charges','retired_tenant_keys'].map(table=>local.db.prepare('DROP TABLE '+table)),
+      local.db.prepare('DROP TABLE customer_last_login'),
       local.db.prepare('DROP TABLE experience_settings'),
 
       local.db.prepare('DROP INDEX market_history_owner'),

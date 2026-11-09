@@ -5,8 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { supplierDirectory } from '../src/admin-v2/moma-provider.js';
+import { accountDataSourceLabel } from '../src/admin-v2/account-data-source.js';
+import { managedEnterpriseTenants, privateEnterprise } from '../src/admin-v2/enterprise.js';
+import { filterIndividualAccounts } from '../src/admin-v2/individual-users.js';
 import { supplierModelChannelGroups } from '../src/admin-v2/supplier-model-channel-table.js';
-import { startLocalBackend } from '../database/local-runtime.js';
+import { trafficAccounts } from '../src/admin-v2/traffic-limits.js';
+import { migrateEmptyDatabase, startLocalBackend } from '../database/local-runtime.js';
 
 test('the preset administrator and customers share D1 while their workspaces stay isolated after a restart', { timeout:30_000 }, async () => {
   const persistPath=await mkdtemp(join(tmpdir(),'moma5120-linkage-'));
@@ -26,6 +30,17 @@ test('the preset administrator and customers share D1 while their workspaces sta
       : customerLogin(id,id==='grzh'?'personal':'enterprise',passwords[id]);
     assert.equal((await request('market/workspace')).status,401);
     const admin=await login('yyg',true);
+    const beforeLogin=(await request('application',{cookie:admin.cookie})).data;
+    assert.equal(beforeLogin.users.find(row=>row.id==='user-personal-demo-002').lastLoginAt,undefined);
+    assert.equal(accountDataSourceLabel(beforeLogin.tenants.find(row=>row.id==='personal-demo-002')),'导入样例');
+    assert.equal(accountDataSourceLabel(beforeLogin.tenants.find(row=>row.id==='tenant-gov')),'导入样例');
+    assert.deepEqual(managedEnterpriseTenants(beforeLogin).map(row=>row.id),['zqzh']);
+    assert.equal(privateEnterprise(beforeLogin).id,'zqzh');
+    assert.deepEqual(filterIndividualAccounts(beforeLogin).map(row=>row.tenant.id),['grzh']);
+    assert.deepEqual(filterIndividualAccounts(beforeLogin,{source:'builtin'}).map(row=>row.tenant.id),['grzh']);
+    assert.deepEqual(filterIndividualAccounts(beforeLogin,{source:'registration'}),[]);
+    assert.ok(beforeLogin.memberships.some(row=>row.tenantId==='tenant-gov'));
+    for(const id of ['tenant-gov','personal-demo-002']) assert.ok(trafficAccounts(beforeLogin).some(row=>row.id===id));
     const [business,personal]=await Promise.all([login('zqzh'),login('grzh')]);
     assert.equal(admin.data.account.role,'平台管理员');
     assert.equal(business.data.tenant.type,'企业');
@@ -35,6 +50,20 @@ test('the preset administrator and customers share D1 while their workspaces sta
     assert.equal((await request('auth/login',{body:{accountId:'grzh',accessCode:passwords.grzh}})).status,401);
     assert.equal((await request('auth/me',{cookie:business.cookie})).status,401);
     assert.equal((await request('market/workspace',{cookie:admin.cookie})).status,401);
+    const personalId=beforeLogin.tenants.find(row=>row.id==='grzh').ownerId;
+    const afterLogin=(await request('application',{cookie:admin.cookie})).data;
+    const loginAt=await local.db.prepare('SELECT created_at FROM tenant_login_events WHERE user_id=?').bind(personalId).first('created_at');
+    assert.equal(afterLogin.users.find(row=>row.id===personalId).lastLoginAt,new Date(loginAt).toISOString());
+    const oldLoginAt=Date.now()-8*86400000;
+    const referenceQuery=local.db.prepare('SELECT reference_json FROM model_workspace WHERE id=1');
+    const referenceBefore=await referenceQuery.first('reference_json');
+    await local.db.batch([
+      local.db.prepare('UPDATE tenant_login_events SET created_at=? WHERE user_id=?').bind(oldLoginAt,personalId),
+      local.db.prepare('DROP TABLE customer_last_login'),
+      local.db.prepare('UPDATE db_state SET schema_version=16'),
+    ]);
+    await migrateEmptyDatabase(local.db);
+    assert.equal(await referenceQuery.first('reference_json'),referenceBefore);
     const phone='13900908070', password='qa1'+randomUUID();
     const codeResult=await request('market/signup-code',{body:{phone}});
     assert.equal(codeResult.status,200);
@@ -53,6 +82,9 @@ test('the preset administrator and customers share D1 while their workspaces sta
     assert(!JSON.stringify(signedIn).includes(password));
 
     const state=(await request('application',{cookie:admin.cookie})).data;
+    assert.equal(await local.db.prepare('SELECT id FROM tenant_login_events WHERE user_id=?').bind(personalId).first('id'),null);
+    assert.equal(state.users.find(row=>row.id===personalId).lastLoginAt,new Date(oldLoginAt).toISOString());
+    assert.deepEqual(filterIndividualAccounts(state,{source:'registration'}).map(row=>row.tenant.id),[signedIn.identity.tenantId]);
     assert.ok(state.tenants.some(row=>row.id==='zqzh'));
     assert.ok(state.tenants.some(row=>row.id==='grzh'));
     const rows=state.providers.flatMap(provider=>provider.catalogConnections.map(channel=>[provider.name,channel.sourceName]));
@@ -191,6 +223,17 @@ test('the preset administrator and customers share D1 while their workspaces sta
       const revision=(await request('application',{cookie:admin.cookie})).data.revision;
       return request('application/commands',{cookie:admin.cookie,body:{operationId:randomUUID(),expectedRevision:revision,action}});
     };
+    const enterpriseData={companyName:'验收开通企业',type:'企业',taxId:'DEMO2026',
+      countryRegion:'中国',province:'江苏省',contactName:'演示管理员',contactPhone:phone,phone};
+    const newEnterprise={type:'enterprise',operation:'create',
+      ids:{tenant:'tenant:linkage-opened',user:'user:linkage-opened',member:'member:linkage-opened',organization:'org:linkage-opened'},
+      data:{...enterpriseData,accountMode:'new',login:'linkage-opened',adminName:'演示管理员'}};
+    assert.equal((await adminCommand(newEnterprise)).status,200);
+    const opened=(await request('application',{cookie:admin.cookie})).data;
+    const openedTenant=managedEnterpriseTenants(opened).find(row=>row.id===newEnterprise.ids.tenant);
+    assert.equal(accountDataSourceLabel(openedTenant),'后台开通');
+    assert.equal(opened.users.find(row=>row.id===openedTenant.ownerId).initialized,false);
+    assert.equal((await adminCommand({...newEnterprise,mode:'private'})).status,422);
     assert.equal((await adminCommand({type:'individual',operation:'edit',tenantId:'grzh',data:{nickname:'个人演示改名'}})).status,200);
     assert.equal((await request('market/workspace',{cookie:personal.cookie})).data.profile.name,'个人演示改名');
 

@@ -1,8 +1,11 @@
+import { isManagedCustomerAccount } from './account-data-source.js';
+
 export const enterpriseTenants = state => state.tenants.filter(item => ['企业', '政府'].includes(item.type));
+export const managedEnterpriseTenants = state => enterpriseTenants(state).filter(isManagedCustomerAccount);
 export const isEnterpriseAdmin = (member, tenant) => member.tenantId === tenant.id && ['租户管理员', '企业管理员'].includes(member.role);
 export const enterpriseAdmins = (state, tenant) => state.memberships.filter(member => isEnterpriseAdmin(member, tenant));
 export const effectiveEnterpriseAdmins = (state, tenant) => enterpriseAdmins(state, tenant).filter(member => member.status === '正常' && state.users.some(user => user.id === member.userId && user.status === '正常'));
-export const privateEnterprise = state => enterpriseTenants(state).find(item => item.id === 'tenant-nanjing') || enterpriseTenants(state).toSorted((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || a.id.localeCompare(b.id))[0];
+export const privateEnterprise = state => managedEnterpriseTenants(state).toSorted((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || a.id.localeCompare(b.id))[0];
 export const enterpriseGrant = (state, tenantId) => state.grants.find(item => item.subjectType === 'tenant' && item.subjectId === tenantId);
 export function enterpriseTokenUsage(model, usage) {
   if (!['text', 'multimodal', 'embedding', 'rerank'].includes(model?.type)) return 0;
@@ -96,7 +99,7 @@ export function enterpriseTransaction(state, command) {
   let account;
   if (operation === 'create' || operation === 'add-admin') {
     if (!['new', 'existing'].includes(data.accountMode)) throw new Error('请选择账号开通方式');
-    if (operation === 'create' && mode === 'private' && enterpriseTenants(state).length) throw new Error('当前单企业容量已用完，请进入企业详情管理账号');
+    if (operation === 'create' && mode === 'private' && managedEnterpriseTenants(state).length) throw new Error('当前单企业容量已用完，请进入企业详情管理账号');
     if (operation === 'add-admin' && (!tenant || tenant.status === '停用')) throw new Error('请先解冻企业账号，再添加管理员');
     if (data.accountMode === 'existing') {
       account = state.users.find(user => user.id === data.userId);

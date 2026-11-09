@@ -10,9 +10,10 @@ import { DEFAULT_PAGE_SIZE, PAGE_SIZES, normalizePageSize, FilterReset, FilterTo
 import { displayBusinessCopy } from '../display-copy.mjs';
 import AdminPageHeading from './AdminPageHeading';
 import { Choice, CopyId, serviceOperationsUi } from './ServiceUI';
+import { accountDataSourceLabel, accountDataSourceOptions } from './account-data-source';
 import {
   filterIndividualAccounts, individualBillingTypes, individualFreezeScope, individualOrders, individualOrderDisplay,
-  individualAccounts, individualName, individualStatus, individualTabs, maskIndividualValue,
+  managedIndividualAccounts, individualName, individualStatus, individualTabs, maskIndividualValue,
 } from './individual-users';
 import './individual-users.css';
 
@@ -265,9 +266,9 @@ function UserDetails({ account, state, tab, navigate, canWrite, setEditor }) {
         <Facts rows={[
           ['用户 ID', userId ? <CopyId value={userId} label="用户 ID"/> : '未关联'],
           ['手机号码', maskIndividualValue('phone', user?.phone)], ['昵称', user?.nickname || '未设置'], ['邮箱', maskIndividualValue('email', user?.email)],
-          ['账号状态', <AccountStatus tenant={tenant}/>], ['注册方式', tenant.source || '未记录'], ['注册时间', time(user?.registeredAt)],
+          ['账号状态', <AccountStatus tenant={tenant}/>], ['数据来源', accountDataSourceLabel(tenant)], ['注册时间', time(user?.registeredAt)],
           ['手机号验证', user?.phoneVerifiedAt ? `已验证 · ${time(user.phoneVerifiedAt)}` : '未记录'],
-          ['最近登录', user?.lastLoginAt ? time(user.lastLoginAt) : user && Object.hasOwn(user, 'lastLoginAt') ? '尚未登录' : '未记录'],
+          ['最近登录', user?.lastLoginAt ? time(user.lastLoginAt) : '未记录'],
           ['备注', tenant.notes || '未填写'], ...(tenant.status === '停用' ? [['冻结原因', displayBusinessCopy(tenant.freezeReason) || '未记录']] : []),
         ]}/>
         {memberships.length > 0 && <>
@@ -332,8 +333,8 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
     setParams(next);
   };
   const userId = params.get('user');
-  const account = individualAccounts(state).find(item => item.tenant.ownerId === userId);
-  const filters = { q: params.get('q') || '', status: params.get('status') || '' };
+  const account = managedIndividualAccounts(state).find(item => item.tenant.ownerId === userId);
+  const filters = { q: params.get('q') || '', status: params.get('status') || '', source: params.get('source') || '' };
   const rows = filterIndividualAccounts(state, filters);
   const size = normalizePageSize(params.get('size'));
   const page = Math.max(1, Math.min(Math.floor(Number(params.get('page'))) || 1, Math.ceil(rows.length / size) || 1));
@@ -355,7 +356,7 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
 
   return <div className="admin-page-stack admin-individual-page">
     <AdminPageHeading title={userId ? account ? individualName(account) : '用户不存在' : '个人用户'}
-      description={userId ? account?.tenant.ownerId : '通过手机号自主注册，以个人身份订购和使用模型服务的用户。'}>
+      description={userId ? account?.tenant.ownerId : undefined}>
       {account && <Space wrap>
         <AccountStatus tenant={account.tenant}/>
         <Button disabled={!canWrite} type={account.tenant.status === '停用' ? 'primary' : 'danger'} onClick={() => setConfirmation(account)}>
@@ -373,7 +374,9 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
         <Choice label="账号状态" value={filters.status || 'all'}
           options={[[ 'all', '全部状态' ], [ '正常', '正常' ], [ '停用', '已冻结' ]]}
           onChange={value => navigate({ status: value === 'all' ? '' : value, page: '' }, true)}/>
-        <FilterReset onClick={() => navigate({ q: '', status: '', page: '' }, true)}/>
+        <Choice label="数据来源" value={filters.source || 'all'} options={accountDataSourceOptions}
+          onChange={value => navigate({ source: value === 'all' ? '' : value, page: '' }, true)}/>
+        <FilterReset onClick={() => navigate({ q: '', status: '', source: '', page: '' }, true)}/>
       </FilterToolbar>
       {selecting && <div className="admin-list-toolbar">
         <Text id="iu-selection-count" type="secondary" role="status">已选 {selectedAccounts.length} / {eligible.length} 个正常账号</Text>
@@ -382,11 +385,11 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
           取消批量操作
         </Button>
       </div>}
-      <RecordTable minWidth={selecting ? 980 : 940} columns={[
+      <RecordTable minWidth={selecting ? 1080 : 1040} columns={[
         ...(selecting ? [<Checkbox aria-label="选择本页全部正常账号" aria-describedby="iu-selection-count" disabled={!eligible.length}
           checked={selectAll} indeterminate={!selectAll && selectedAccounts.length > 0}
           onChange={event => setSelected(event.target.checked ? eligible.map(item => item.tenant.id) : [])}/>] : []),
-        '用户 / User ID', '手机号码', '账号状态', '注册时间', '最近登录时间', '操作',
+        '用户 / User ID', '手机号码', '数据来源', '账号状态', '注册时间', '最近登录时间', '操作',
       ]} rows={pageRows.map(item => [
         item.tenant.id,
         ...(selecting ? [<Checkbox aria-label={`选择用户 ${individualName(item)}`} disabled={item.tenant.status !== '正常'}
@@ -398,9 +401,9 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
             <Text size="small" type="secondary" code>{item.user?.id || item.tenant.ownerId || '未关联身份'}</Text>
           </div>
         </Space>,
-        maskIndividualValue('phone', item.user?.phone), <AccountStatus tenant={item.tenant}/>, time(item.user?.registeredAt),
-        item.user?.lastLoginAt ? time(item.user.lastLoginAt)
-          : item.user && Object.hasOwn(item.user, 'lastLoginAt') ? '尚未登录' : '未记录',
+        maskIndividualValue('phone', item.user?.phone), accountDataSourceLabel(item.tenant),
+        <AccountStatus tenant={item.tenant}/>, time(item.user?.registeredAt),
+        item.user?.lastLoginAt ? time(item.user.lastLoginAt) : '未记录',
         <Space spacing={4}>
           <Button size="small" theme="borderless" onClick={() => openAccount(item)}>详情</Button>
           <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => setConfirmation(item)}>
@@ -418,7 +421,7 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
     </>}
     {editing && account?.user && <UserEditor account={account} transact={transact} canWrite={canWrite} close={() => setEditing(false)} complete={complete}/>}
     {confirmation && <StatusDialog key={confirmation.accounts ? 'bulk' : confirmation.tenant.id} accounts={confirmation.accounts}
-      account={confirmation.accounts ? undefined : individualAccounts(state).find(item => item.tenant.id === confirmation.tenant.id) || confirmation}
+      account={confirmation.accounts ? undefined : managedIndividualAccounts(state).find(item => item.tenant.id === confirmation.tenant.id) || confirmation}
       role={state.currentRole} transact={transact} canWrite={canWrite} close={() => setConfirmation(null)} complete={complete}/>}
   </div>;
 }

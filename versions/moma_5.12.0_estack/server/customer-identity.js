@@ -155,6 +155,8 @@ export async function createMarketSession(db, userId, tenantId, credentialDigest
       WHERE ? IS NULL OR EXISTS (SELECT 1 FROM customer_credentials WHERE user_id=? AND digest=?)`)
       .bind(await customerSecretHash(token),tenantId,now+28800000,userId,credentialDigest,userId,credentialDigest),
     db.prepare('INSERT INTO tenant_login_events(id,user_id,created_at) SELECT ?,?,? WHERE changes()=1').bind(crypto.randomUUID(),userId,now),
+    db.prepare(`INSERT INTO customer_last_login(user_id,logged_at) SELECT ?,? WHERE changes()=1
+      ON CONFLICT(user_id) DO UPDATE SET logged_at=excluded.logged_at WHERE excluded.logged_at>customer_last_login.logged_at`).bind(userId,now),
     db.prepare('DELETE FROM market_sessions WHERE token_hash IN (SELECT token_hash FROM market_sessions WHERE expires_at<=? LIMIT 100)').bind(now),
     db.prepare(`DELETE FROM tenant_login_events WHERE created_at<? OR id IN
       (SELECT id FROM tenant_login_events ORDER BY created_at DESC LIMIT 100 OFFSET 200)`).bind(now-7*86400000),

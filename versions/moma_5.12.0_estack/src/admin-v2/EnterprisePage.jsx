@@ -5,7 +5,8 @@ import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { PAGE_SIZES, normalizePageSize, FilterReset, FilterToolbar } from '../components/FilterControls';
 import AdminPageHeading from './AdminPageHeading';
 import { Choice, serviceOperationsUi } from './ServiceUI';
-import { effectiveEnterpriseAdmins, enterpriseAdmins, enterpriseMetadataFields, enterpriseTenants, privateEnterprise } from './enterprise';
+import { effectiveEnterpriseAdmins, enterpriseAdmins, enterpriseMetadataFields, managedEnterpriseTenants, privateEnterprise } from './enterprise';
+import { accountDataSource, accountDataSourceLabel, accountDataSourceOptions } from './account-data-source';
 import { EnterpriseDialog, EnterpriseFacts, EnterpriseStatus, EnterpriseTable } from './EnterpriseUI';
 import EnterpriseDetails from './EnterpriseDetails';
 import EnterpriseStatusDialog from './EnterpriseStatusDialog';
@@ -242,18 +243,20 @@ export default function EnterprisePage({ state, transact, deploymentTarget }) {
     setParams(next);
   };
   const mode = params.get('scenario') === 'private' ? 'private' : 'cloud';
-  const all = enterpriseTenants(state);
+  const all = managedEnterpriseTenants(state);
   const defaultTenant = privateEnterprise(state);
   const companies = mode === 'private' ? all.filter(item => item.id === defaultTenant?.id) : all;
   const detailId = params.get('enterprise');
   const tenant = companies.find(item => item.id === detailId);
   const query = params.get('q') || '';
   const status = params.get('status') || '';
+  const source = params.get('source') || '';
   const canWrite = !state.storageError && ['平台管理员', '运营人员'].includes(state.currentRole);
   const hasCapacity = mode === 'cloud' || !all.length;
   const apply = action => transact({ ...action, mode });
   const rows = companies.filter(item =>
-    (!status || item.status === status) && [item.id, item.name].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
+    (!status || item.status === status) && (!source || accountDataSource(item) === source) &&
+    [item.id, item.name].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
   const size = normalizePageSize(params.get('size'));
   const page = Math.max(1, Math.min(Math.floor(Number(params.get('page'))) || 1, Math.ceil(rows.length / size) || 1));
   const askToggle = (tenant, member) => setConfirmation({ tenant, member });
@@ -273,7 +276,7 @@ export default function EnterprisePage({ state, transact, deploymentTarget }) {
       <Text id="admin-deployment-picker-label" type="secondary" size="small">部署方式</Text>
       <Select aria-labelledby="admin-deployment-picker-label" size="small" position="bottomRight" value={mode} disabled={Boolean(editor)}
         onSelect={value => {
-          if (value !== mode) navigate({ scenario: value === 'private' ? 'private' : '', enterprise: '', tab: '', project: '', page: '', q: '', status: '' });
+          if (value !== mode) navigate({ scenario: value === 'private' ? 'private' : '', enterprise: '', tab: '', project: '', page: '', q: '', status: '', source: '' });
         }}
         optionList={[{ value: 'cloud', label: '私有云' }, { value: 'private', label: '私有化' }]}/>
     </div>, deploymentTarget)}
@@ -299,11 +302,13 @@ export default function EnterprisePage({ state, transact, deploymentTarget }) {
           placeholder="搜索 User ID、用户名" onChange={q => navigate({ q, page: '' }, true)}/>
         <Choice label="企业状态" value={status || 'all'} options={[[ 'all', '全部状态' ], [ '正常', '已启用' ], [ '需关注', '需关注' ], [ '停用', '已冻结' ]]}
           onChange={value => navigate({ status: value === 'all' ? '' : value, page: '' }, true)}/>
-        <FilterReset onClick={() => navigate({ q: '', status: '', page: '' }, true)}/>
+        <Choice label="数据来源" value={source || 'all'} options={accountDataSourceOptions}
+          onChange={value => navigate({ source: value === 'all' ? '' : value, page: '' }, true)}/>
+        <FilterReset onClick={() => navigate({ q: '', status: '', source: '', page: '' }, true)}/>
       </FilterToolbar>
-      <EnterpriseTable minWidth={950} columns={[
+      <EnterpriseTable minWidth={1050} columns={[
         { title: '用户名 / User ID', width: 275 }, { title: '客户类型', width: 95 }, { title: '企业管理员', width: 175 },
-        { title: '成员数', width: 80, align: 'right' }, { title: '状态', width: 100 }, { title: '操作', width: 185 },
+        { title: '成员数', width: 80, align: 'right' }, { title: '数据来源', width: 100 }, { title: '状态', width: 100 }, { title: '操作', width: 185 },
       ]} rows={rows.slice((page - 1) * size, page * size).map(item => {
         const members = enterpriseAdmins(state, item);
         const primary = effectiveEnterpriseAdmins(state, item)[0] || members[0];
@@ -319,6 +324,7 @@ export default function EnterprisePage({ state, transact, deploymentTarget }) {
           <div className="admin-table-record"><Text>{primary?.name || '待配置'}{members.length > 1 ? ` 等 ${members.length} 人` : ''}</Text>
             <Text type="secondary" size="small">{user?.login || '—'}</Text></div>,
           state.memberships.filter(member => member.tenantId === item.id).length,
+          accountDataSourceLabel(item),
           <EnterpriseStatus value={item.status} enterprise/>,
           <Space spacing={4}>
             <Button size="small" theme="borderless" onClick={() => open(item)}>详情</Button>
@@ -326,7 +332,7 @@ export default function EnterprisePage({ state, transact, deploymentTarget }) {
             <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => askToggle(item)}>{item.status === '停用' ? '解冻' : '冻结'}</Button>
           </Space>,
         ] };
-      })} empty={query || status ? '没有匹配的企业，请调整筛选条件。' : '尚未创建企业，点击“新用户”开始开户。'}
+      })} empty={query || status || source ? '没有匹配的企业，请调整筛选条件。' : '尚未创建企业，点击“新用户”开始开户。'}
         pagination={{ currentPage: page, pageSize: size, total: rows.length, pageSizeOpts: PAGE_SIZES, showTotal: true, showSizeChanger: true,
           onPageChange: value => navigate({ page: String(value) }, true), onPageSizeChange: value => navigate({ size: String(value), page: '' }, true) }}/>
     </Card> : !tenant ? <Banner type="warning" closeIcon={null} description="企业不存在或不属于当前部署方式，请返回企业列表。"/> : <>

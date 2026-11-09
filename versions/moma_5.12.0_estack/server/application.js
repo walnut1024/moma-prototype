@@ -136,10 +136,11 @@ function maintenanceView(state, modelRevision, requests, audits) {
 
 export async function applicationBootstrap(db, actor) {
   const maintenance=actor.role==='运维人员';
-  const [{ state, row }, facts, audits, activity] = await Promise.all([
+  const [{ state, row }, facts, audits, activity, lastLogin] = await Promise.all([
     applicationState(db, actor), marketFacts(db, null, {includeOrders:!maintenance}),
     db.prepare("SELECT record_json FROM audit_events WHERE entity_type='application' ORDER BY created_at DESC,rowid DESC LIMIT 200").all(),
     maintenance ? null : db.prepare('SELECT id,user_id,created_at FROM tenant_login_events WHERE created_at>=? ORDER BY created_at DESC LIMIT 200').bind(Date.now()-week).all(),
+    maintenance ? null : db.prepare('SELECT user_id,logged_at FROM customer_last_login').all(),
   ]);
   const events=[...audits.results.map(row=>JSON.parse(row.record_json)),...state.audits];
   const requests=[...facts.requests,...state.requests];
@@ -152,8 +153,9 @@ export async function applicationBootstrap(db, actor) {
     view.admins=state.admins.map(({id,name,role,status})=>({id,name,role,status}));
   }
   const logins=activity.results.map(({id,user_id,created_at})=>({id,userId:user_id,type:'login',at:new Date(created_at).toISOString()}));
+  const lastLoginByUser = new Map(lastLogin.results.map(({user_id,logged_at})=>[user_id,new Date(logged_at).toISOString()]));
   return { ...view,identityEvents:[...logins,...state.identityEvents],
-    users:state.users.map(user=>({...user,lastLoginAt:logins.find(row=>row.userId===user.id)?.at || user.lastLoginAt})),
+    users:state.users.map(user=>({...user,lastLoginAt:lastLoginByUser.get(user.id)})),
     modelRevision:row.model_revision, audits:events, orders:[...facts.orders,...state.orders], requests };
 }
 

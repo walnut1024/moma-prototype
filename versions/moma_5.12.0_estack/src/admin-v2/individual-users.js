@@ -1,17 +1,20 @@
 import { initialPersonalData } from '../mock/application-data.js';
 import { enterpriseDisplayValue, validateDemoAdminCode } from './enterprise.js';
 import { MODEL_ORDER_BILLING_TYPES } from '../model-order-display.mjs';
+import { accountDataSource, isManagedCustomerAccount } from './account-data-source.js';
 
 export const individualTabs = { info: '基本信息', projects: '项目空间', keys: 'API 密钥', entitlements: '订购详情' };
 export const individualAccounts = state => state.tenants.filter(tenant => tenant.type === '个人').map(tenant => ({ tenant, user: state.users.find(user => user.id === tenant.ownerId) }));
+export const managedIndividualAccounts = state => individualAccounts(state).filter(({ tenant }) => isManagedCustomerAccount(tenant));
 export const individualName = ({ tenant, user }) => user?.nickname || tenant.name || '未设置昵称';
 export const individualStatus = tenant => tenant.status === '停用' ? '已冻结' : tenant.status === '正常' ? '正常' : tenant.status;
 export const maskIndividualValue = (field, value) => enterpriseDisplayValue(field, value) || '未填写';
 
-export function filterIndividualAccounts(state, { q = '', status = '' } = {}) {
+export function filterIndividualAccounts(state, { q = '', status = '', source = '' } = {}) {
   const query = q.trim().toLowerCase();
-  return individualAccounts(state).filter(account => {
-    return (!status || account.tenant.status === status) && [account.tenant.id, account.tenant.ownerId, account.user?.phone, individualName(account)].some(value => String(value || '').toLowerCase().includes(query));
+  return managedIndividualAccounts(state).filter(account => {
+    return (!status || account.tenant.status === status) && (!source || accountDataSource(account.tenant) === source) &&
+      [account.tenant.id, account.tenant.ownerId, account.user?.phone, individualName(account)].some(value => String(value || '').toLowerCase().includes(query));
   }).sort((a, b) => String(b.user?.registeredAt || '').localeCompare(String(a.user?.registeredAt || '')) || a.tenant.id.localeCompare(b.tenant.id));
 }
 

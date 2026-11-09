@@ -8,6 +8,7 @@ import { EnterpriseDialog, EnterpriseFacts, EnterpriseStatus, EnterpriseTable } 
 import EnterpriseMembers from './EnterpriseMembers';
 import { enterpriseProjectDepartment } from './enterprise-members';
 import { enterpriseAdmins, enterpriseDisplayValue, enterpriseGrant, enterpriseMetadataFields } from './enterprise';
+import { accountDataSourceLabel } from './account-data-source';
 
 export const enterpriseTabs = { info: '基本信息', members: '组织及成员', projects: '项目空间', keys: 'API 密钥' };
 const { Paragraph, Text, Title } = Typography;
@@ -91,7 +92,7 @@ export default function EnterpriseDetails({ state, tenant, params, navigate, can
           <Button disabled={!canWrite} onClick={() => setEditor({ kind: 'edit', tenant })}>编辑信息</Button>
         </div>
         <EnterpriseFacts rows={[
-          ['用户名称', tenant.name], ['user_id', tenant.id], ['客户类型', tenant.type],
+          ['用户名称', tenant.name], ['user_id', tenant.id], ['客户类型', tenant.type], ['数据来源', accountDataSourceLabel(tenant)],
           ['创建时间', time(tenant.createdAt)], ['最近更新', time(tenant.updatedAt)],
           ['企业根组织', organizations.find(org => org.parentId === null)?.name || '待配置'], ['备注', tenant.notes || '—'],
         ]}/>

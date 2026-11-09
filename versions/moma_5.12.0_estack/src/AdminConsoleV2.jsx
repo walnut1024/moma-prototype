@@ -28,13 +28,13 @@ const ProviderMaterials = lazy(()=>import('./admin-v2/ProviderMaterials'));
 const MaterialDictionaryPage = lazy(()=>import('./admin-v2/MaterialDictionaryPage'));
 import CustomerPage from "./admin-v2/CustomerPages";
 import IndividualUsersPage from "./admin-v2/IndividualUsersPage";
-import { individualAccounts, individualName } from "./admin-v2/individual-users";
+import { individualName, managedIndividualAccounts } from "./admin-v2/individual-users";
 import CustomerUsageDetail from "./admin-v2/CustomerUsageDetail";
 import ModelCosts from './admin-v2/ModelCosts';
 import ModelPrices from './admin-v2/ModelPrices';
 import ModelMarket from './admin-v2/ModelMarket';
 import ModelManagement from "./admin-v2/ModelManagement";
-import { privateEnterprise } from "./admin-v2/enterprise";
+import { managedEnterpriseTenants, privateEnterprise } from "./admin-v2/enterprise";
 import GatewayPage, { gatewaySettingsPages } from "./admin-v2/GatewayPages";
 import ObservabilityPage from "./admin-v2/ObservabilityPages";
 import ArtifactManagement from './admin-v2/ArtifactManagement';
@@ -147,9 +147,9 @@ function AdminConsoleV2View({bannerTarget,store}) {
   const detailModel = !canVisit ? null : detailParams.get('view') === 'template' && ['listing', 'model-templates'].includes(active) ? libraryRecord(state, detailParams.get('template'))
             : active === 'listing' ? state.models.find(item => item.id === detailParams.get('model')) : null;
   const enterpriseDetailId = canVisit && active === 'tenants' ? detailParams.get('enterprise') : null;
-  const detailEnterprise = enterpriseDetailId ? state.tenants.find(item => item.id === enterpriseDetailId && ['企业', '政府'].includes(item.type) && (detailParams.get('scenario') !== 'private' || privateEnterprise(state)?.id === item.id)) : null;
+  const detailEnterprise = enterpriseDetailId ? managedEnterpriseTenants(state).find(item => item.id === enterpriseDetailId && (detailParams.get('scenario') !== 'private' || privateEnterprise(state)?.id === item.id)) : null;
   const individualDetailId = canVisit && active === 'individual-users' ? detailParams.get('user') : null;
-  const detailIndividual = individualDetailId ? individualAccounts(state).find(account => account.tenant.ownerId === individualDetailId) : null;
+  const detailIndividual = individualDetailId ? managedIndividualAccounts(state).find(account => account.tenant.ownerId === individualDetailId) : null;
   const breadcrumbs = !canVisit ? [{ label: '无访问权限' }] : adminBreadcrumbs(active, detailParams, { onboardingIntent: state.modelOnboardings.find(row=>row.id===detailParams.get('draft'))?.intent, provider: detailProvider?.name, model: detailModel?.name, deployment: state.deployments.find(item => item.id === detailParams.get('deployment'))?.name, enterprise: detailEnterprise?.name, user: detailIndividual && individualName(detailIndividual), customer: detailTenant?.name });
   const enterAdmin = accountId => {
     if (accountId === state.adminSession?.accountId) return;

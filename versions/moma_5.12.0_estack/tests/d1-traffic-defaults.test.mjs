@@ -77,7 +77,7 @@ test('D1 seeds both defaults and upgrades a v9 database without changing its sav
       .bind(time, JSON.stringify({ before: fresh.global, after: legacy })),
   ]);
   await migrateEmptyDatabase(local.db);
-  assert.equal((await request('/health')).data.schemaVersion, 16);
+  assert.equal((await request('/health')).data.schemaVersion, 17);
   const upgraded = (await request(path)).data;
   assert.deepEqual(upgraded.global, legacy);
   assert.deepEqual(upgraded.modelDefault, fresh.modelDefault);
