@@ -292,6 +292,31 @@ test('fresh D1 imports MoMA and DeepSeek before GLM-5.3 pricing, ordering and su
       assert.equal(row.offer_id,services.find(offer=>offer.callId===source.callId).id);
       assert(row.sale_price_id && row.route_version_id);
     }
+    // A display change must never change sale stages, orders, or call authorization.
+    const cardData = () => ({ expectedRevision: state.revision });
+    const cardName = 'GLM-5.3 展示验收';
+    const cardModelId = material.id;
+    const displayOnly = services.find(offer => offer.callId === sources[1].callId);
+    const selectedScope = { type: 'selected', tenantIds: [a] };
+    const modelBeforeCard = structuredClone(model());
+    const pricesBeforeCard = structuredClone(state.modelSalePrices);
+    await command('marketCardEdit', { ...cardData(), name: cardName, description: '广场展示验收。', logo: '' }, cardModelId);
+    await command('marketCardList', { ...cardData(), scope: selectedScope, serviceIds: ['missing'] }, cardModelId, 422);
+    await command('marketCardList', { ...cardData(), scope: selectedScope, serviceIds: [third.id, displayOnly.id] }, cardModelId);
+    assert.deepEqual(new Set((await catalogue(customer)).map(offer => offer.id)), new Set([third.id, displayOnly.id]));
+    assert.equal((await catalogue(customer)).find(offer => offer.id === displayOnly.id).canOrder, false);
+    assert.equal((await catalogue(customer)).find(offer => offer.id === third.id).name, cardName);
+    assert.equal((await catalogue(other)).length, 0);
+    assert.equal((await catalogue()).length, 0);
+    await command('marketCardLink', { ...cardData(), serviceIds: [displayOnly.id] }, cardModelId, 422);
+    await command('marketCardUnlist', { ...cardData(), confirmed: true }, cardModelId);
+    assert.equal((await catalogue(customer)).length, 0);
+    assert.deepEqual(model(), modelBeforeCard);
+    assert.deepEqual(state.modelSalePrices, pricesBeforeCard);
+    const stillCallable = await call(body(third.callId), other);
+    assert.equal(stillCallable.status, 200);
+    successful.push({source:sources[2],id:stillCallable.data.id});
+    await command('marketCardList', { ...cardData(), scope: selectedScope, serviceIds: [third.id] }, cardModelId);
     await local.runtime.dispose();
     local=null;
     local=await startLocalBackend({loginHashes,persistPath});

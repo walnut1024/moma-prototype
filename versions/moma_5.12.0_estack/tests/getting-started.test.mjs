@@ -62,7 +62,7 @@ test('guide separates internal use from sales and explains current entry points'
   assert.doesNotMatch(sales, /编辑销售设置/);
   assert.doesNotMatch(sales, /上架操作/);
   const market = JSON.stringify(findOperationsGuide(guides, 'sales-release'));
-  for (const action of ['上架操作', '灰度上架', '正式上架', '下架', '允许展示', '隐藏模型']) {
+  for (const action of ['新建模型卡片', '关联服务', '模型广场 → 上架／调整上架／下架', '模型广场 → 更多 → 正式上架销售／灰度上架销售／停售服务', '卡片下架只影响广场展示']) {
     assert.ok(market.includes(action), action);
   }
   const imported = guides.flatMap(guide => guide.tasks).find(task => task.id === 'materials-import');

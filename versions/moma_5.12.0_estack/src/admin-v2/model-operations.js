@@ -8,7 +8,8 @@ import { offerKey, offerStage, offerGrayTenants, providerOffer, serviceReference
 import { channelBlockReason } from './provider-channels.js';
 import { resolveChannelAssociationModel } from './channel-association-model.js';
 import { salesChecks } from './service-sales.js';
-import { marketOrderTransaction } from './model-market-order.js';
+import { marketOrderTransaction, orderedMarketModels } from './model-market-order.js';
+import { marketCardTransaction } from '../market-cards.mjs';
 import { serviceScope } from './service-commercial.js';
 import { publicationChecks } from './model-management.js';
 import { SERVICE_PURPOSES, servicePurpose } from './service-purpose.js';
@@ -121,6 +122,9 @@ export function operationsTransaction(state, action) {
   const target=action.modelId || (action.data?.serviceId && state.models.find(row=>action.data.serviceId===`standard:${row.id}` || action.data.serviceId.startsWith(`provider:${row.id}:`))?.id);
   if (state.models.find(row => row.id === target)?.deletedAt) throw Error('模型服务已删除');
   if(state.models.find(row=>row.id===target)?.archivedAt && !['serviceRestore','serviceDelete','recordFailedOperation'].includes(action.operation) && !action.operation.startsWith('template'))throw Error('服务已归档，请先恢复服务');
+  if (['marketCardCreate', 'marketCardEdit', 'marketCardLink', 'marketCardList', 'marketCardUnlist'].includes(action.operation)) {
+    return marketCardTransaction(state, action, orderedMarketModels(state));
+  }
   if (action.operation === 'marketReorder') return marketOrderTransaction(state, action);
   if (action.operation === 'archiveAcceptanceFixture') return archiveAcceptanceFixture(state, action.data);
   if (action.operation === 'cleanModelCatalogue') return cleanModelCatalogueTransaction(state);

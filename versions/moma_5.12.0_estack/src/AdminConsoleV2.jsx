@@ -269,7 +269,7 @@ function AdminConsoleV2View({bannerTarget,store,internal,sidebarCollapsed,setSid
             : active === "admins" ? <AdminAccounts state={state} transact={transactAdminAccount} conflict={conflict}/>
             : active === 'audit-logs' ? <AuditLogsPage key={state.adminSession.accountId} accountId={state.adminSession.serverAccountId || state.adminSession.accountId}/>
             : active === 'site-configuration' ? <Suspense fallback={<AdminPageLoading label="站点配置"/>}><SiteConfiguration key={state.adminSession.accountId} dirtyRef={draftDirty}/></Suspense>
-            : active === "model-market" ? <ModelMarket state={state} transact={transactModel} conflict={conflict}/>
+            : active === "model-market" ? <ModelMarket state={state} transact={transactModel} conflict={conflict} reload={reload} internal={internal}/>
             : active === "model-prices" ? <ModelPrices state={state} transact={transactModel} conflict={conflict} reload={reload}/>
             : active === "tariff-dictionary" ? <Suspense fallback={<AdminPageLoading label="模型资料"/>}><MaterialDictionaryPage state={state} transact={transactModel} conflict={conflict}/></Suspense>
             : active === "providers" ? <ProviderManagement state={state} transact={transactModel} conflict={conflict} reload={reload}/>
