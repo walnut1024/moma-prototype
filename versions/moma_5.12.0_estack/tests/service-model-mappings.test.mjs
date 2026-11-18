@@ -5,8 +5,8 @@ import {legacySupplierState} from './legacy-supplier-fixture.mjs';
 import {commitAdminState} from '../src/admin-v2/state-transaction.js';
 import {routingServices,routingChannels} from '../src/admin-v2/service-routing.js';
 import {modelSupplies} from '../src/admin-v2/model-management.js';
-import {mappingCandidates,mappingConfig,mappingPreview,mappingSignature,mappingReadiness,mappingSourceVersion,mappingReferences} from '../src/admin-v2/service-model-mappings.js';
-import {supplierDeletionBlock} from '../src/admin-v2/provider-channels.js';
+import {mappingAddresses,mappingCandidates,mappingConfig,mappingPreview,mappingSignature,mappingReadiness,mappingSourceVersion,mappingReferences} from '../src/admin-v2/service-model-mappings.js';
+import {channelFingerprint,supplierDeletionBlock} from '../src/admin-v2/provider-channels.js';
 import {startLocalBackend} from '../database/local-runtime.js';
 import {domainModelWorkspace} from '../src/mock/model-fields.js';
 
@@ -76,11 +76,26 @@ test('HTTP/D1 mapping commands retain stable references after reload and reject 
  const original=modelSupplies(state,service.modelId)[0];assert.ok(original);const route=state.serviceRoutes.find(row=>row.serviceId===service.id);
  if(route){const stop=await run('serviceRouteStop',service.modelId,{serviceId:service.id,expectedVersion:route.activeVersion,confirmed:true});assert.equal(stop.status,200,JSON.stringify(stop.data));await refresh();}
  const remove=await run('removeServiceChannel',service.modelId,{supplyId:original.id,expectedUpdatedAt:state.models.find(m=>m.id===service.modelId).updatedAt});assert.equal(remove.status,200,JSON.stringify(remove.data));await refresh();
- const channel=mappingCandidates(state,service).find(row=>row.endpointId===original.endpointId);assert.ok(channel);const input=config(channel,service),before=structuredClone(state);
+ const channel=mappingCandidates(state,service).find(row=>row.endpointId===original.endpointId);assert.ok(channel);
+ const association=channel.provider.catalogConnections.find(row=>row.id===channel.id);
+ const messagesUrl='https://example.invalid/v1/messages';
+ association.apiAddresses=[channel.apiAddresses[0],{protocol:'Anthropic',baseUrl:messagesUrl}];
+ association.health.fingerprint=channelFingerprint({...channel,apiAddresses:association.apiAddresses});
+ await local.db.prepare('UPDATE suppliers SET record_json=? WHERE id=?').bind(JSON.stringify(channel.provider),channel.provider.id).run();
+ await refresh();
+ assert.equal(routingChannels(state,service).some(row=>mappingAddresses(service,row).some(address=>address.path==='/v1/messages')),false);
+ const input={...config(channel),additionalInterfaces:['/v1/messages']},before=structuredClone(state);
  async function mapping(operation,id,extra={}){const supply=state.modelSupplies.find(row=>row.id===id);const result=await run(operation,service.modelId,{serviceId:service.id,id,expectedRevision:supply?.mappingRevision || 0,expectedSource:mappingSourceVersion(state,service),...extra});await refresh();return result;}
+ const rejected=await mapping('serviceMappingCreate',undefined,{name:'D1映射',config:{...input,additionalInterfaces:['/v1/responses']}});
+ assert.equal(rejected.status,422);
  const saved=await mapping('serviceMappingCreate',undefined,{name:'D1映射',config:input});assert.equal(saved.status,200,JSON.stringify(saved.data));const created=state.modelSupplies.find(row=>row.mappingName==='D1映射');assert.equal(created.status,'已停用');
  assert.equal((await mapping('serviceMappingEnable',created.id,{validation:{signature:'forged'}})).status,422);
  assert.equal((await mapping('serviceMappingValidate',created.id)).status,200);assert.equal((await mapping('serviceMappingEnable',created.id)).status,200);const reloaded=state.modelSupplies.find(row=>row.id===created.id);assert.equal(reloaded.channelId,channel.id);assert.equal(reloaded.status,'已启用');
+ assert.deepEqual(reloaded.serviceMapping.additionalInterfaces,['/v1/messages']);
+ const addresses=mappingAddresses(service,routingChannels(state,service).find(row=>row.id===reloaded.id));
+ assert.deepEqual(addresses.map(row=>row.path),['/v1/chat/completions','/v1/messages']);
+ assert.deepEqual(addresses[1],{path:'/v1/messages',label:'Anthropic Messages',url:messagesUrl,forwarding:'原生转发'});
+ assert.deepEqual(mappingAddresses({...service,callId:'another-call-id'},routingChannels(state,service).find(row=>row.id===reloaded.id)).map(row=>row.path),['/v1/chat/completions']);
  const revision=state.revision;assert.equal((await mapping('serviceMappingSave',created.id,{name:'bad',config:input,expectedRevision:999})).status,422);assert.equal(state.revision,revision);
  for(const key of ['models','modelSalePrices','supplyPrices','serviceRoutes','providers'])assert.deepEqual(state[key],before[key],key);assert.equal((await local.db.prepare('PRAGMA foreign_key_check').all()).results.length,0);
  }finally{await local.runtime.dispose();}

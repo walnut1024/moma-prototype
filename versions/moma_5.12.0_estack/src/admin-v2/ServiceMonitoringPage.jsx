@@ -17,7 +17,7 @@ import {
 const { Title, Paragraph } = Typography;
 const grouping = [['channel', '渠道'], ['provider', '服务商'], ['endpoint', '端点']];
 const groupLabels = new Map(grouping);
-const filtersShown = [['endpoint', '端点'], ['callId', '对外调用标识']];
+const filtersShown = [['endpoint', '端点'], ['callId', '模型调用标识']];
 const capacityOptions = [['Rpm', 'RPM'], ['Tpm', 'TPM']];
 const signals = { '429': 'rateLimit', '超时': 'timeout', '回退': 'fallback' };
 const identity = (rows, field) => {

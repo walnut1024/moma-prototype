@@ -1,10 +1,11 @@
 import Table from './AdminTable';
-import { Banner, Button, Checkbox, Descriptions, Space, Steps, Toast, Typography, Upload } from '@douyinfe/semi-ui';
+import { Banner, Button, Checkbox, Descriptions, RadioGroup, Space, Steps, TextArea, Toast, Typography, Upload } from '@douyinfe/semi-ui';
 import { useEffect, useRef, useState } from 'react';
 import { IconDownload, IconUpload } from '@douyinfe/semi-icons';
 import { IMPORT_REPORT_HEADERS, MODEL_IMPORT_LIMIT, downloadModelCsv } from './model-import';
 import { parseDelimitedCells } from '../tabular-import.mjs';
 import { materialImportHeaders, materialImportRows, previewMaterialRows, submitMaterialRows } from './material-batch-import';
+import { previewProviderJsonRows, providerJsonRows } from './provider-json-import';
 import { TASK_OPTIONS, INPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS } from './model-profile';
 
 const typeTasks = [['文本', 'text'], ['多模态', 'multimodal'], ['视觉 · 图像', 'image'], ['视觉 · 视频', 'video'], ['语音', 'audio'], ['向量', 'embedding'], ['重排', 'rerank']];
@@ -12,8 +13,8 @@ function ImportHelp() {
   return <section className="materials-import-help" aria-labelledby="model-import-help-title">
     <Typography.Title heading={5} component="h3" id="model-import-help-title">填写提示</Typography.Title>
     <dl className="materials-import-rules">
-      <div><dt>必填信息</dt><dd>规范模型标识、模型展示名、模型类型。视觉模型还需填写视觉任务类型：图像或视频。其他字段未知时留空，不用填写 0 或“不支持”。</dd></div>
-      <div><dt>规范模型标识</dt><dd>以小写字母或数字开头，可使用 . _ : / -，最多 80 字符。已有标识不覆盖，同一批次不能重复。</dd></div>
+      <div><dt>必填信息</dt><dd>模型编码、模型展示名、模型类型。视觉模型还需填写视觉任务类型：图像或视频。其他字段未知时留空，不用填写 0 或“不支持”。</dd></div>
+      <div><dt>模型编码</dt><dd>以小写字母或数字开头，可使用 . _ : / -，最多 80 字符。已有标识不覆盖，同一批次不能重复。</dd></div>
       <div><dt>模板与字段</dt><dd>XLSX 模板将必填项排在最前：红色表头为必填，橙色表头为视觉模型必填，其余为选填。模板包含全部资料字段及“填写说明”工作表。可删除不需要的可选列或调整列顺序，请保留原表头；模板示例行请替换或删除。</dd></div>
       <div><dt>多选与能力</dt><dd>多项用“、”分隔。输入与输出模态：{INPUT_MODALITY_OPTIONS.join('、')}。结果类型：{RESULT_TYPE_OPTIONS.join('、')}。流式响应、工具调用等能力填写“支持”或“不支持”，留空表示未填写。</dd></div>
       <div><dt>日期与数值</dt><dd>日期用 YYYY-MM-DD；原厂发布日期、知识截止日期也可用 YYYY-MM。上下文窗口和最大输出使用 Token 正整数，参数规模使用 B；其他规格按表头单位填写，只填写适用于当前类型与任务的字段。</dd></div>
@@ -24,17 +25,24 @@ function ImportHelp() {
 }
 
 const importNames = { model: '模型资料', provider: '服务商资料', relation: '供应关系' };
-const summaryHeaders = { model: ['模型名称', '规范模型标识', '模型类型'], provider: ['服务商名称', '服务商编码', '供给类型'], relation: materialImportHeaders.relation };
+const summaryHeaders = { model: ['模型展示名', '模型编码', '模型类型'], provider: ['服务商名称', '服务商编码', '供给类型'], relation: materialImportHeaders.relation };
 const ready = row => row.status === 'ready';
 const issue = row => row.status === 'error' || row.status === 'failed';
 const count = (rows, status) => rows.filter(row => row.status === status).length;
+const jsonDetailLabels = {
+  author: '模型作者', listed_at: '服务商上线日期', source_checked_at: '核对日期', documentation: '资料链接', visual_type: '视觉任务类型',
+  architecture: '输入输出模态', context_length_tokens: '上下文窗口（Token）', max_output_tokens: '最大输出（Token）', streaming: '流式响应', tools: '工具调用',
+};
 
-export default function ModelBatchImport({ state, ops, transact, close, kind, providerId }) {
+export default function ModelBatchImport({ state, ops, transact, close, kind, providerId, builtinCatalogue }) {
+  const [mode, setMode] = useState('table');
+  const [jsonText, setJsonText] = useState('');
   const [step, setStep] = useState('input'), [preview, setPreview] = useState([]), [fileName, setFileName] = useState('');
   const [results, setResults] = useState({}), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [skip, setSkip] = useState(false), [onlyProblems, setOnlyProblems] = useState(false), [expandedRow, setExpandedRow] = useState(null);
   const [pagination, setPagination] = useState({ currentPage: 1, pageSize: 20 });
   const mounted = useRef(false), previewTitle = useRef(null);
+  const inputOwnerCode = useRef(null);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
@@ -43,6 +51,8 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
 
   const label = importNames[kind], headers = materialImportHeaders[kind];
   const provider = providerId && state.providers.find(row => row.id === providerId);
+  const dualMode = kind === 'model' && Boolean(providerId), json = dualMode && mode === 'json';
+  const validate = (rows, retry = false) => json ? previewProviderJsonRows(state, providerId, rows) : previewMaterialRows(state, kind, rows, { providerId, retry });
   const display = preview.map(row => {
     const outcome = results[row.rowNumber];
     return outcome ? { ...row, ...outcome } : row;
@@ -56,7 +66,39 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
     try { downloadModelCsv(name, values); Toast.success('已开始下载' + name.replace('.csv', '')); }
     catch { Toast.error('下载失败，请重试'); }
   };
-  const reportRows = rows => [[...headers, ...IMPORT_REPORT_HEADERS], ...rows.map(row => [...row.cells, row.rowNumber, row.message])];
+  const reportHeaders = json ? summaryHeaders.model : headers;
+  const reportRows = rows => [[...reportHeaders, ...IMPORT_REPORT_HEADERS], ...rows.map(row => [...reportHeaders.map(key => row.cells[headers.indexOf(key)]), row.rowNumber, row.message])];
+  const showPreview = (parsed, name) => {
+    const rows = validate(parsed);
+    if (!mounted.current) return;
+    setPreview(rows);
+    setResults({});
+    setFileName(name);
+    setStep('preview');
+    setSkip(false);
+    setOnlyProblems(false);
+    setExpandedRow(null);
+    setPagination(value => ({ ...value, currentPage: 1 }));
+    ops.dirty(true);
+  };
+  const readJson = (source = jsonText) => {
+    if (busy || !ops.can) return;
+    setBusy(true); setError('');
+    try {
+      if (!source.trim()) throw Error('请粘贴当前服务商的 JSON 内容');
+      if (new TextEncoder().encode(source).byteLength > 10 * 1024 * 1024) throw Error('JSON 内容超过 10 MB，请拆分后导入');
+      let payload;
+      try { payload = JSON.parse(source.replace(/^\uFEFF/, '')); } catch { throw Error('JSON 语法无效，请检查粘贴内容'); }
+      const parsed = providerJsonRows(payload, provider);
+      inputOwnerCode.current = payload.provider.code;
+      showPreview(parsed, 'JSON 内容');
+    } catch (issue) { if (mounted.current) setError(issue.message); }
+    finally { if (mounted.current) setBusy(false); }
+  };
+  const readBuiltinCatalogue = () => {
+    const source = JSON.stringify({ provider: { ...builtinCatalogue, id: provider.id, code: provider.code } }, null, 2);
+    setJsonText(source); readJson(source);
+  };
   const readFile = async file => {
     if (!file || busy || !ops.can) return;
     setBusy(true);
@@ -69,17 +111,7 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
         cells = await readSheet(file);
       } else if (/\.csv$/i.test(file.name)) cells = parseDelimitedCells(await file.text());
       else throw Error('请选择 XLSX 或 UTF-8 CSV 文件');
-      const rows = previewMaterialRows(state, kind, materialImportRows(kind, cells), { providerId });
-      if (!mounted.current) return;
-      setPreview(rows);
-      setResults({});
-      setFileName(file.name);
-      setStep('preview');
-      setSkip(false);
-      setOnlyProblems(false);
-      setExpandedRow(null);
-      setPagination(value => ({ ...value, currentPage: 1 }));
-      ops.dirty(true);
+      showPreview(materialImportRows(kind, cells), file.name);
     } catch (issue) {
       if (mounted.current) setError(issue.message);
     } finally {
@@ -96,12 +128,12 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
     setBusy(true);
     setError('');
     try {
-      const checked = retry ? previewMaterialRows(state, kind, selectedRows, { providerId, retry: true }) : selectedRows;
+      const checked = retry || json ? validate(selectedRows, retry) : selectedRows;
       const rows = checked.filter(ready);
       const selectedNumbers = new Set(selectedRows.map(row => row.rowNumber));
       let pending = checked.some(issue) || problems.some(row => !selectedNumbers.has(row.rowNumber));
       accept(checked.filter(row => !ready(row)).map(({ rowNumber, status, message }) => ({ rowNumber, status, message })));
-      await submitMaterialRows({ state, kind, providerId, rows, transact, active: () => mounted.current, onResult: outcome => {
+      await submitMaterialRows({ state, kind: json ? 'providerJson' : kind, providerId, providerCode: inputOwnerCode.current, rows, transact, active: () => mounted.current, onResult: outcome => {
         pending ||= outcome.some(issue);
         accept(outcome);
       } });
@@ -113,9 +145,9 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
     }
   };
   const columns = [
-    { title: '文件行', dataIndex: 'rowNumber', width: 85 },
-    ...summaryHeaders[kind].map(title => ({ title: title === '模型名称' ? '模型展示名' : title, width: 180, render: (_, row) => row.cells[headers.indexOf(title)] || '—' })),
-    { title: step === 'result' ? '处理结果' : '校验结果', width: 310, render: (_, row) => <Typography.Text type={issue(row) ? 'danger' : row.status === 'skip' ? 'tertiary' : 'success'}>
+    { title: json ? '模型序号' : '文件行', dataIndex: 'rowNumber', width: 85 },
+    ...summaryHeaders[kind].map(title => ({ title: title === '模型展示名' ? '模型展示名' : title, width: 180, render: (_, row) => row.cells[headers.indexOf(title)] || '—' })),
+    { title: step === 'result' ? '处理结果' : '校验结果', width: 310, render: (_, row) => <Typography.Text type={issue(row) ? 'danger' : row.status === 'done' ? 'success' : row.status === 'skip' ? 'tertiary' : undefined}>
       {row.masterCreated && providerId ? '主档已新增 · ' : row.modelId && providerId && row.status === 'done' ? '复用已有模型 · ' : ''}{row.message}
     </Typography.Text> },
     { title: '操作', width: 170, render: (_, row) => <Space>
@@ -123,31 +155,38 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
       {row.status === 'failed' && <Button theme="borderless" aria-label={'重试第 ' + row.rowNumber + ' 行'} disabled={busy || !ops.can} onClick={() => submit([row], true)}>重试</Button>}
     </Space> },
   ];
-  const startOver = () => { setStep('input'); setError(''); setPreview([]); setResults({}); ops.dirty(false); };
+  const startOver = () => { setStep('input'); setError(''); setPreview([]); setResults({}); ops.dirty(json && Boolean(jsonText.trim())); };
   return <div className="materials-import" aria-busy={busy}>
-    <Steps type="basic" current={['input', 'preview', 'result'].indexOf(step)}><Steps.Step title="上传表格"/><Steps.Step title="校验预览"/><Steps.Step title="导入结果"/></Steps>
+    <Steps type="basic" current={['input', 'preview', 'result'].indexOf(step)}><Steps.Step title={json ? '粘贴 JSON' : '上传表格'}/><Steps.Step title="校验预览"/><Steps.Step title="导入结果"/></Steps>
     {provider && <Typography.Text strong>服务商 {provider.name}</Typography.Text>}
     {(ops.conflict || failed.some(row => row.message.includes('提交结果待确认'))) && <Banner type="warning" description={
       <>请核对最新数据后重试。<Button theme="borderless" disabled={busy} onClick={ops.reload}>载入最新数据</Button></>}/>}
     {step === 'input' ? <>
+      {dualMode && <RadioGroup type="button" aria-label="导入方式" value={mode} disabled={busy} options={[{ label: '表格', value: 'table' }, { label: 'JSON', value: 'json' }]}
+        onChange={event => { setMode(event.target.value); setError(''); }}/>}
       <div className="materials-actions">
         <Typography.Text type="secondary">每份最多 {MODEL_IMPORT_LIMIT} 条</Typography.Text>
-        {kind === 'model'
+        {json && builtinCatalogue && <Button disabled={!ops.can || busy} onClick={readBuiltinCatalogue}>载入内置目录</Button>}
+        {json ? null : kind === 'model'
           ? <Typography.Text link={{ href: import.meta.env.BASE_URL + 'templates/model-material-import.xlsx', download: '模型资料导入模板.xlsx' }}
               icon={<IconDownload aria-hidden="true"/>}>下载模板</Typography.Text>
           : <Button theme="borderless" icon={<IconDownload aria-hidden="true"/>} onClick={() => download(label + '导入模板.csv', [headers])}>下载模板</Button>}
       </div>
-      <Upload accept=".xlsx,.csv" uploadTrigger="custom" fileList={[]} showUploadList={false} draggable dragIcon={<IconUpload aria-hidden="true"/>}
-        dragMainText={'点击上传' + label + '表格或拖拽文件到这里'} dragSubText="支持 XLSX、UTF-8 CSV，单个文件不超过 10 MB"
-        disabled={busy || !ops.can} onFileChange={files => readFile(files[0])}/>
-      {kind === 'model' ? <ImportHelp/> : <Typography.Paragraph>{kind === 'provider'
+      {json ? <TextArea className="materials-json-input" aria-label="模型 JSON 内容" placeholder="在此粘贴当前服务商的完整 JSON"
+        value={jsonText} rows={18} spellCheck={false} resize="vertical" disabled={busy || !ops.can}
+        onChange={value => { setJsonText(value); setPreview([]); setResults({}); inputOwnerCode.current = null; setError(''); ops.dirty(true); }}/>
+        : <Upload accept=".xlsx,.csv" uploadTrigger="custom" fileList={[]} showUploadList={false} draggable dragIcon={<IconUpload aria-hidden="true"/>}
+          dragMainText={'点击上传' + label + '表格或拖拽文件到这里'} dragSubText="支持 XLSX、UTF-8 CSV，单个文件不超过 10 MB"
+          disabled={busy || !ops.can} onFileChange={files => readFile(files[0])}/>}
+      {json ? <Typography.Paragraph>JSON 中的 Provider ID 和服务商编码须与当前服务商一致，内容不超过 10 MB。模型映射引用同一份 JSON 中的连接，新增渠道保存为待验证。</Typography.Paragraph>
+        : kind === 'model' ? <ImportHelp/> : <Typography.Paragraph>{kind === 'provider'
         ? '填写服务商名称、服务商编码和供给类型。供给类型填写「自有推理服务」或「第三方推理服务」。其余字段选填。'
-        : '每行填写已有服务商编码和规范模型标识，确认后登记一条供给关系。'}</Typography.Paragraph>}
+        : '每行填写已有服务商编码和模型编码，确认后登记一条供给关系。'}</Typography.Paragraph>}
     </> : <>
       <Typography.Title heading={6}><span ref={previewTitle} tabIndex={-1}>{fileName}</span></Typography.Title>
       <Banner type={problems.length ? 'warning' : 'success'} description={step === 'preview'
         ? `共 ${display.length} 条，可提交 ${available.length} 条，已存在或重复 ${count(display, 'skip')} 条，待修正 ${problems.length} 条`
-        : `${providerId || kind === 'relation' ? '新增关联' : '新增资料'} ${count(display, 'done')} 条，已存在或重复 ${count(display, 'skip')} 条，待修正 ${count(display, 'error')} 条，待重试 ${failed.length} 条`}/>
+        : `${json ? '已导入' : providerId || kind === 'relation' ? '新增关联' : '新增资料'} ${count(display, 'done')} 条，已存在或重复 ${count(display, 'skip')} 条，待修正 ${count(display, 'error')} 条，待重试 ${failed.length} 条`}/>
       <div className="materials-actions">
         <Checkbox checked={onlyProblems} onChange={event => {
           setOnlyProblems(event.target.checked); setExpandedRow(null); setPagination(value => ({ ...value, currentPage: 1 }));
@@ -157,22 +196,28 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
           {problems.length > 0 && <Button icon={<IconDownload aria-hidden="true"/>} onClick={() => download(label + '问题行.csv', reportRows(problems))}>下载问题行</Button>}
         </Space>
       </div>
-      <Table rowKey="rowNumber" columns={columns} dataSource={visible.slice((currentPage - 1) * pageSize, currentPage * pageSize)}
+      <div className="materials-import-preview"><Table rowKey="rowNumber" columns={columns} dataSource={visible.slice((currentPage - 1) * pageSize, currentPage * pageSize)}
         scroll={{ x: kind === 'relation' ? 925 : 1105 }} empty="暂无问题记录"
         pagination={{ pageSize, currentPage, total: visible.length, showSizeChanger: true, pageSizeOpts: [20, 50, 100], showTotal: true }}
-        onChange={({ pagination }) => setPagination({ currentPage: pagination.currentPage, pageSize: pagination.pageSize })}/>
+        onChange={({ pagination }) => setPagination({ currentPage: pagination.currentPage, pageSize: pagination.pageSize })}/></div>
       {selected && <>
-        <div className="materials-actions"><Typography.Title heading={6}>第 {selected.rowNumber} 行资料</Typography.Title>
+        <div className="materials-actions"><Typography.Title heading={6}>第 {selected.rowNumber} {json ? '款模型' : '行资料'}</Typography.Title>
           <Button onClick={() => setExpandedRow(null)}>收起资料</Button></div>
-        <Descriptions align="left" data={headers.map((key, i) => ({ key, value: selected.cells[i] })).filter(field => field.value)}/>
+        <Descriptions align="left" data={json ? [
+          ...summaryHeaders.model.map(key => ({ key, value: selected.cells[headers.indexOf(key)] })),
+          ...(selected.mappingPreview ? Object.entries(selected.payload.model.model_info || {}).filter(([, value]) => value != null).map(([key, value]) => ({ key: jsonDetailLabels[key], value: typeof value === 'object' ? JSON.stringify(value) : String(value) })) : []),
+          ...(selected.mappingPreview || []).map(mapping => ({ key: '渠道映射', value: `${mapping.upstreamModelId} · ${mapping.baseUrl} · ${mapping.existing ? '已存在' : '待验证'}` })),
+          ...(selected.reference ? [{ key: '上游参考', value: [selected.reference.upstreamModelId, selected.reference.url].filter(Boolean).join(' · ') }] : []),
+        ].filter(field => field.value) : headers.map((key, i) => ({ key, value: selected.cells[i] })).filter(field => field.value)}/>
       </>}
       {step === 'preview' && problems.length > 0 && available.length > 0 && <Checkbox disabled={busy} checked={skip}
         onChange={event => setSkip(event.target.checked)}>跳过 {problems.length} 条问题记录，仅提交 {available.length} 条有效记录</Checkbox>}
     </>}
     {error && <Banner type="danger" description={error}/>}
     <div className="materials-actions"><Space wrap>
-      {step === 'input' ? <Button disabled={busy} onClick={() => close(false)}>取消</Button> : <>
-        <Button disabled={busy} onClick={startOver}>重新上传</Button>
+      {step === 'input' ? <><Button disabled={busy} onClick={() => close(false)}>取消</Button>
+        {json && <Button theme="solid" loading={busy} disabled={busy || !ops.can || !jsonText.trim()} onClick={() => readJson()}>校验并预览</Button>}</> : <>
+        <Button disabled={busy} onClick={startOver}>{json ? '编辑 JSON' : '重新上传'}</Button>
         {step === 'result'
           ? <><Button disabled={busy} onClick={() => close(true)}>完成</Button>{failed.length > 1 && <Button disabled={busy || !ops.can} onClick={() => submit(failed, true)}>重试失败行</Button>}</>
           : <Button theme="solid" loading={busy} disabled={busy || !ops.can || !available.length || problems.length > 0 && !skip}

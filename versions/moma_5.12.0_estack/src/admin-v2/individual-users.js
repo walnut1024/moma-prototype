@@ -1,8 +1,9 @@
 import { initialPersonalData } from '../mock/application-data.js';
 import { enterpriseDisplayValue, validateDemoAdminCode } from './enterprise.js';
 import { MODEL_ORDER_BILLING_TYPES } from '../model-order-display.mjs';
+import { memberPhoneError, normalizeMemberPhone } from '../organization-data.mjs';
 
-export const individualTabs = { info: '基本信息', projects: '项目空间', keys: 'API 密钥', entitlements: '订购详情' };
+export const individualTabs = { info: '基本信息', projects: '默认项目', keys: 'API 密钥', entitlements: '订购与账单' };
 export const individualAccounts = state => state.tenants.filter(tenant => tenant.type === '个人').map(tenant => ({ tenant, user: state.users.find(user => user.id === tenant.ownerId) }));
 export const individualName = ({ tenant, user }) => user?.nickname || tenant.name || '未设置昵称';
 export const individualStatus = tenant => tenant.status === '停用' ? '已冻结' : tenant.status === '正常' ? '正常' : tenant.status;
@@ -21,7 +22,27 @@ export function individualSeed() {
 }
 
 export function individualTransaction(state, command, actor = state.currentRole) {
-  const { tenantId, operation, data = {} } = command;
+  const { tenantId, operation, data = {}, ids = {} } = command;
+  if (operation === 'create') {
+    if (!['existing', 'new'].includes(data.accountMode) || !ids.tenant || !ids.project) throw Error('请填写个人客户开户信息');
+    const user = data.accountMode === 'existing'
+      ? state.users.find(row => row.id === data.userId && row.status === '正常')
+      : { id:ids.user, name:String(data.name || '').trim(), phone:normalizeMemberPhone(data.phone || ''), status:'正常' };
+    if (!user?.id || !user.name || user.name.length > 40) throw Error('请选择有效账号或填写 40 字以内的姓名');
+    const phone = normalizeMemberPhone(user.phone || '');
+    const phoneError = memberPhoneError(phone);
+    if (phoneError) throw Error(phoneError);
+    if (state.users.some(row => row.id !== user.id && normalizeMemberPhone(row.phone || '') === phone)) throw Error('该手机号对应多个或其他账号，请核对登录身份');
+    if (state.tenants.some(row => row.type === '个人' && row.ownerId === user.id)) throw Error('该账号已开通个人空间');
+    const changes = [];
+    if (data.accountMode === 'new') changes.push({ type:'add', collection:'users',
+      record:{ ...user, phone, nickname:user.name, registeredAt:new Date().toISOString() } });
+    changes.push(
+      { type:'add', collection:'tenants', record:{ id:ids.tenant, defaultProjectId:ids.project, ownerId:user.id, name:user.name, type:'个人', status:'正常', source:'后台开通' } },
+      { type:'add', collection:'projects', record:{ id:ids.project, tenantId:ids.tenant, ownerId:user.id, name:'默认项目', status:'正常', modelPermissions:[] } },
+    );
+    return { type:'batch', objectId:ids.tenant, label:'开通个人客户', changes };
+  }
   if (operation === 'batch-freeze') {
     const ids = command.tenantIds;
     if (!Array.isArray(ids) || !ids.length || ids.length > 100 || new Set(ids).size !== ids.length) throw new Error('请选择 1 至 100 个不同的个人账号');
@@ -32,10 +53,10 @@ export function individualTransaction(state, command, actor = state.currentRole)
     const reason = String(data.reason || '').trim();
     if (!reason || reason.length > 500) throw new Error('请填写操作原因，最多 500 个字符');
     validateDemoAdminCode(data.challenge, { code: data.code, scope: individualFreezeScope(ids), actor });
-    return { type: 'batch', objectId: ids.slice().sort().join(','), label: '批量冻结个人账号', changes: targets.map(({ tenant }) => ({ type: 'update', collection: 'tenants', id: tenant.id, changes: { status: '停用', freezeReason: reason, statusReason: reason } })) };
+    return { type: 'batch', objectId: ids.slice().sort().join(','), label: '批量冻结个人客户', changes: targets.map(({ tenant }) => ({ type: 'update', collection: 'tenants', id: tenant.id, changes: { status: '停用', freezeReason: reason, statusReason: reason } })) };
   }
   const account = individualAccounts(state).find(item => item.tenant.id === tenantId);
-  if (!account) throw new Error('个人用户不存在，请返回列表');
+  if (!account) throw new Error('个人客户不存在，请返回列表');
   const { tenant, user } = account;
   const changes = [];
   if (operation === 'edit') {
@@ -52,8 +73,8 @@ export function individualTransaction(state, command, actor = state.currentRole)
     if (!reason || reason.length > 500) throw new Error('请填写操作原因，最多 500 个字符');
     if (data.status === '停用') validateDemoAdminCode(data.challenge, { code: data.code, scope: `individual:${tenant.id}:freeze`, actor });
     changes.push({ type: 'update', collection: 'tenants', id: tenant.id, changes: { status: data.status, freezeReason: data.status === '停用' ? reason : '', statusReason: reason } });
-  } else throw new Error('不支持的个人用户操作');
-  return { type: 'batch', objectId: tenant.id, label: operation === 'edit' ? '编辑个人用户资料' : data.status === '停用' ? '冻结个人账号' : '解冻个人账号', changes };
+  } else throw new Error('不支持的个人客户操作');
+  return { type: 'batch', objectId: tenant.id, label: operation === 'edit' ? '编辑个人客户资料' : data.status === '停用' ? '冻结个人客户' : '解冻个人客户', changes };
 }
 
 

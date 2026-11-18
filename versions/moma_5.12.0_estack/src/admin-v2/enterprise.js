@@ -1,8 +1,9 @@
+import { resourceId } from '../resource-id.mjs';
 export const enterpriseTenants = state => state.tenants.filter(item => ['企业', '政府'].includes(item.type));
 export const isEnterpriseAdmin = (member, tenant) => member.tenantId === tenant.id && ['租户管理员', '企业管理员'].includes(member.role);
 export const enterpriseAdmins = (state, tenant) => state.memberships.filter(member => isEnterpriseAdmin(member, tenant));
 export const effectiveEnterpriseAdmins = (state, tenant) => enterpriseAdmins(state, tenant).filter(member => member.status === '正常' && state.users.some(user => user.id === member.userId && user.status === '正常'));
-export const privateEnterprise = state => enterpriseTenants(state).find(item => item.id === 'tenant-nanjing') || enterpriseTenants(state).toSorted((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || a.id.localeCompare(b.id))[0];
+export const internalEnterprise = state => enterpriseTenants(state).find(item => item.id === 'tenant-nanjing') || enterpriseTenants(state).toSorted((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || a.id.localeCompare(b.id))[0];
 export const enterpriseGrant = (state, tenantId) => state.grants.find(item => item.subjectType === 'tenant' && item.subjectId === tenantId);
 export function enterpriseTokenUsage(model, usage) {
   if (!['text', 'multimodal', 'embedding', 'rerank'].includes(model?.type)) return 0;
@@ -87,16 +88,16 @@ export function validateDemoAdminCode(challenge, { code, scope, actor, now = Dat
 
 // All enterprise commands resolve to one audited transaction in the shared demo store.
 export function enterpriseTransaction(state, command) {
-  const { operation, ids = {}, tenantId, data = {}, mode = 'cloud' } = command;
+  const { operation, ids = {}, tenantId, data = {}, internal = false, deploymentMode } = command;
   const tenant = state.tenants.find(item => item.id === tenantId);
   const changes = [];
   if (operation !== 'create' && (!tenant || !enterpriseTenants(state).some(item => item.id === tenantId))) throw new Error('企业不存在，请返回列表');
-  if (operation !== 'create' && mode === 'private' && privateEnterprise(state)?.id !== tenantId) throw new Error('该企业不属于当前私有化场景');
+  if (operation !== 'create' && internal && internalEnterprise(state)?.id !== tenantId) throw new Error('请选择本站点的企业');
   const requireId = key => required(ids[key], '事务编号');
   let account;
   if (operation === 'create' || operation === 'add-admin') {
     if (!['new', 'existing'].includes(data.accountMode)) throw new Error('请选择账号开通方式');
-    if (operation === 'create' && mode === 'private' && enterpriseTenants(state).length) throw new Error('当前单企业容量已用完，请进入企业详情管理账号');
+    if (operation === 'create' && internal && internalEnterprise(state)) throw new Error('企业内用站点已开通本企业，请进入企业详情管理账号');
     if (operation === 'add-admin' && (!tenant || tenant.status === '停用')) throw new Error('请先解冻企业账号，再添加管理员');
     if (data.accountMode === 'existing') {
       account = state.users.find(user => user.id === data.userId);
@@ -110,7 +111,7 @@ export function enterpriseTransaction(state, command) {
       const name = required(data.adminName, '管理员姓名', 40);
       const login = required(data.login, '登录账号', 64);
       if (!/^[a-zA-Z0-9][a-zA-Z0-9_.@-]{2,63}$/.test(login)) throw new Error('登录账号为 3–64 位字母、数字或 . _ @ -');
-      if (state.users.some(user => user.login.toLowerCase() === login.toLowerCase())) throw new Error('登录账号已存在，请选择已有登录账号');
+      if (state.users.some(user => user.login?.toLowerCase() === login.toLowerCase())) throw new Error('登录账号已存在，请选择已有登录账号');
       const email = String(data.email || '').trim();
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('请输入有效的联系邮箱');
       account = { id: requireId('user'), name, login, email, phone: adminPhone(data.phone), status: '正常', initialized: false };
@@ -122,7 +123,8 @@ export function enterpriseTransaction(state, command) {
       if (!['企业', '政府'].includes(data.type)) throw new Error('请选择有效的客户类型');
       if (String(data.notes || '').length > 500) throw new Error('备注不能超过 500 个字符');
       targetId = requireId('tenant');
-      changes.push({ type: 'add', collection: 'tenants', record: { id: targetId, name, ...metadata(data), type: data.type, notes: data.notes?.trim() || '', ownerId: account.id, status: '正常', source: '后台创建' } });
+      if (deploymentMode && !['cloud', 'private'].includes(deploymentMode)) throw new Error('请选择有效的部署方式');
+      changes.push({ type: 'add', collection: 'tenants', record: { id: targetId, name, ...metadata(data), type: data.type, notes: data.notes?.trim() || '', ownerId: account.id, status: '正常', source: '后台创建', ...(deploymentMode ? { deploymentMode } : {}) } });
       changes.push({ type: 'add', collection: 'organizations', record: { id: requireId('organization'), tenantId: targetId, parentId: null, name, status: '正常' } });
     }
     const existing = state.memberships.find(member => member.tenantId === targetId && member.userId === account.id);
@@ -158,7 +160,7 @@ export function enterpriseTransaction(state, command) {
       changes.push({ type: 'update', collection: 'memberships', id: member.id, changes: { status: member.status === '停用' ? '正常' : '停用' } });
     } else if (operation === 'toggle-key') {
       const key = state.apiKeys.find(item => item.id === command.keyId && item.tenantId === tenantId && state.projects.some(project => project.id === item.projectId && project.tenantId === tenantId));
-      if (!key || !['有效', '停用'].includes(key.status)) throw new Error('API 密钥不存在、已撤销或归属异常');
+      if (!key || key.kind === 'experience' || !['有效', '停用'].includes(key.status)) throw new Error('API 密钥不存在、已撤销或归属异常');
       if (tenant.status === '停用' && key.status === '停用') throw new Error('请先解冻企业账号，再启用 API 密钥');
       changes.push({ type: 'update', collection: 'apiKeys', id: key.id, changes: { status: key.status === '停用' ? '有效' : '停用' } });
     } else if (operation === 'configure-grant') {
@@ -171,8 +173,9 @@ export function enterpriseTransaction(state, command) {
       const modelIds = [...new Set(data.modelIds)];
       if (grant && grant.limit === limit && JSON.stringify([...grant.modelIds].sort()) === JSON.stringify([...modelIds].sort())) throw new Error('授权及额度没有变化');
       const value = { subjectType: 'tenant', subjectId: tenantId, modelIds, limit, used, period: 'total', status: '生效中' };
-      changes.push(grant ? { type: 'update', collection: 'grants', id: grant.id, changes: value } : { type: 'add', collection: 'grants', record: { id: requireId('grant'), ...value } });
-      changes.push({ type: 'add', collection: 'ledger', record: { id: requireId('ledger'), accountId: tenantId, sourceId: requireId('ledger'), type: '企业授权额度调整', delta: limit - (grant?.limit || 0), balance: limit - used, reason, status: '已完成' } });
+      changes.push(grant ? { type: 'update', collection: 'grants', id: grant.id, changes: value } : { type: 'add', collection: 'grants', record: { id: resourceId('grant'), ...value } });
+      const ledgerId = resourceId('ledger-entry');
+      changes.push({ type: 'add', collection: 'ledger', record: { id: ledgerId, accountId: tenantId, sourceId: ledgerId, type: '企业授权额度调整', delta: limit - (grant?.limit || 0), balance: limit - used, reason, status: '已完成' } });
     } else throw new Error('未知企业操作');
   }
   return { type: 'batch', objectId: tenantId || ids.tenant, label: ({ create: '创建企业并开通管理员', 'add-admin': '添加企业管理员', edit: '编辑企业信息', 'toggle-tenant': tenant?.status === '停用' ? '解冻企业账号' : '冻结企业账号', 'toggle-admin': '变更管理员状态', 'toggle-key': '变更企业 API 密钥状态', 'configure-grant': '配置企业授权与额度' })[operation], changes };

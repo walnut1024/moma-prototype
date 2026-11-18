@@ -11783,7 +11783,8 @@
         "status": "正常",
         "notes": "",
         "source": "手机号注册",
-        "freezeReason": ""
+        "freezeReason": "",
+        "defaultProjectId": "personal-project-demo-001"
       },
       {
         "createdAt": "2026-09-29T15:30:00+08:00",
@@ -11796,7 +11797,8 @@
         "status": "正常",
         "notes": "",
         "source": "手机号注册",
-        "freezeReason": ""
+        "freezeReason": "",
+        "defaultProjectId": "personal-project-demo-002"
       },
       {
         "createdAt": "2026-09-28T09:20:00+08:00",
@@ -11809,7 +11811,8 @@
         "status": "正常",
         "notes": "",
         "source": "手机号注册",
-        "freezeReason": ""
+        "freezeReason": "",
+        "defaultProjectId": "personal-project-demo-003"
       },
       {
         "createdAt": "2026-09-27T15:30:00+08:00",
@@ -11822,7 +11825,8 @@
         "status": "停用",
         "notes": "",
         "source": "手机号注册",
-        "freezeReason": "账号异常，暂停个人空间访问"
+        "freezeReason": "账号异常，暂停个人空间访问",
+        "defaultProjectId": "personal-project-demo-004"
       },
       {
         "createdAt": "2026-09-26T09:20:00+08:00",
@@ -11835,7 +11839,8 @@
         "status": "正常",
         "notes": "",
         "source": "手机号注册",
-        "freezeReason": ""
+        "freezeReason": "",
+        "defaultProjectId": "personal-project-demo-005"
       },
       {
         "createdAt": "2026-09-25T15:30:00+08:00",
@@ -11848,7 +11853,8 @@
         "status": "正常",
         "notes": "",
         "source": "手机号注册",
-        "freezeReason": ""
+        "freezeReason": "",
+        "defaultProjectId": "personal-project-demo-006"
       },
       {
         "createdAt": "2026-09-24T09:20:00+08:00",
@@ -11861,7 +11867,8 @@
         "status": "正常",
         "notes": "",
         "source": "手机号注册",
-        "freezeReason": ""
+        "freezeReason": "",
+        "defaultProjectId": "personal-project-demo-007"
       },
       {
         "createdAt": "2026-09-23T15:30:00+08:00",
@@ -11874,7 +11881,8 @@
         "status": "正常",
         "notes": "",
         "source": "手机号注册",
-        "freezeReason": ""
+        "freezeReason": "",
+        "defaultProjectId": "personal-project-demo-008"
       },
       {
         "createdAt": "2026-09-22T09:20:00+08:00",
@@ -11887,7 +11895,8 @@
         "status": "停用",
         "notes": "",
         "source": "手机号注册",
-        "freezeReason": "账号异常，暂停个人空间访问"
+        "freezeReason": "账号异常，暂停个人空间访问",
+        "defaultProjectId": "personal-project-demo-009"
       },
       {
         "createdAt": "2026-09-21T15:30:00+08:00",
@@ -11900,7 +11909,8 @@
         "status": "正常",
         "notes": "",
         "source": "手机号注册",
-        "freezeReason": ""
+        "freezeReason": "",
+        "defaultProjectId": "personal-project-demo-010"
       },
       {
         "createdAt": "2026-09-20T09:20:00+08:00",
@@ -11913,7 +11923,8 @@
         "status": "正常",
         "notes": "",
         "source": "手机号注册",
-        "freezeReason": ""
+        "freezeReason": "",
+        "defaultProjectId": "personal-project-demo-011"
       },
       {
         "createdAt": "2026-09-19T15:30:00+08:00",
@@ -11926,7 +11937,8 @@
         "status": "正常",
         "notes": "",
         "source": "手机号注册",
-        "freezeReason": ""
+        "freezeReason": "",
+        "defaultProjectId": "personal-project-demo-012"
       }
     ],
     "projects": [
@@ -12006,6 +12018,56 @@
         "ownerId": "user-personal-demo-007",
         "status": "正常",
         "budget": 0
+      },
+      {
+        "id": "personal-project-demo-008",
+        "tenantId": "personal-demo-008",
+        "ownerId": "user-personal-demo-008",
+        "name": "默认项目",
+        "status": "正常",
+        "demo": true,
+        "createdAt": "2026-09-23T15:30:00+08:00",
+        "updatedAt": "2026-09-23T15:30:00+08:00"
+      },
+      {
+        "id": "personal-project-demo-009",
+        "tenantId": "personal-demo-009",
+        "ownerId": "user-personal-demo-009",
+        "name": "默认项目",
+        "status": "正常",
+        "demo": true,
+        "createdAt": "2026-09-22T09:20:00+08:00",
+        "updatedAt": "2026-09-22T09:20:00+08:00"
+      },
+      {
+        "id": "personal-project-demo-010",
+        "tenantId": "personal-demo-010",
+        "ownerId": "user-personal-demo-010",
+        "name": "默认项目",
+        "status": "正常",
+        "demo": true,
+        "createdAt": "2026-09-21T15:30:00+08:00",
+        "updatedAt": "2026-09-21T15:30:00+08:00"
+      },
+      {
+        "id": "personal-project-demo-011",
+        "tenantId": "personal-demo-011",
+        "ownerId": "user-personal-demo-011",
+        "name": "默认项目",
+        "status": "正常",
+        "demo": true,
+        "createdAt": "2026-09-20T09:20:00+08:00",
+        "updatedAt": "2026-09-20T09:20:00+08:00"
+      },
+      {
+        "id": "personal-project-demo-012",
+        "tenantId": "personal-demo-012",
+        "ownerId": "user-personal-demo-012",
+        "name": "默认项目",
+        "status": "正常",
+        "demo": true,
+        "createdAt": "2026-09-19T15:30:00+08:00",
+        "updatedAt": "2026-09-19T15:30:00+08:00"
       }
     ],
     "apiKeys": [

@@ -6,7 +6,7 @@ import { resolveOnboardingProvider, resolveOnboardingModel } from '../src/admin-
 import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
 import { channelDrafts, channelDraftIssue } from '../src/admin-v2/channel-onboarding.js';
 import { supplierChannelAssociations } from '../src/admin-v2/supplier-resources.js';
-import { serviceMetadataReady, serviceModelDraft } from '../src/admin-v2/model-profile.js';
+import { serviceMetadataMissingFields, serviceMetadataReady, serviceModelDraft } from '../src/admin-v2/model-profile.js';
 
 const run = (state, operation, data) => commitAdminState(state, { type: 'modelOperations', operation, data });
 const clean = () => { const state = parseAdminState(null); for (const key of ['providers', 'endpoints', 'models', 'modelTemplates', 'modelSupplies', 'supplyPrices', 'modelSalePrices', 'serviceRoutes', 'modelOnboardings']) state[key] = []; return state; };
@@ -18,6 +18,12 @@ test('custom identity previews stay read-only and never fabricate model capabili
   assert.equal(provider.name, data.newProvider.name); assert.equal(provider.code, undefined); assert.equal(provider.id, 'new-provider');
   assert.equal(model.record.name, 'custom-model-v1'); assert.equal(model.record.metadataStatus, '待完善'); assert.equal(model.record.id, 'new-model:custom-model-v1');
   assert.deepEqual(model.record.profile, { tasks: [], inputModalities: [], outputModalities: [], resultTypes: [] }); assert.ok(Object.values(model.record.capabilities).every(value => value === null));
+  assert.deepEqual(serviceMetadataMissingFields(model.record), ['模型作者', '原厂发布日期', '支持任务', '输入模态', '输出模态或结果类型', '简短介绍']);
+  const completed = { ...model.record, description: '用于校验的文本模型', profile: {
+    ...model.record.profile, author: '测试作者', releaseDate: '2026-11', tasks: ['文本生成'], inputModalities: ['文本'], resultTypes: ['结构化数据'],
+  }};
+  assert.deepEqual(serviceMetadataMissingFields(completed), []);
+  assert.equal(serviceMetadataReady(completed), true);
   provider.name = 'local edit'; model.record.profile.tasks.push('local edit'); assert.deepEqual(state, before);
 });
 
@@ -33,7 +39,7 @@ test('one save atomically registers a custom supplier, minimal canonical model, 
   assert.equal(withAlias.modelTemplates[0].name, '自定义显示名称'); assert.equal(withAlias.providers[0].catalogConnections[0].upstreamModelId, 'Vendor/ACTUAL:V1');
 });
 
-test('minimal custom material can be technically tested and enabled while incomplete service creation remains blocked', async t => {
+test('minimal custom material can be tested, enabled and used to create an inactive service', async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('technical mock must not call a real upstream'));
   const newApiKey = (await providerApiKeysDraft(['mock-custom-technical-key-value'])).apiKeys[0];
   let state = run(clean(), 'channelQuickCreate', payload({ newApiKey }));
@@ -43,7 +49,11 @@ test('minimal custom material can be technically tested and enabled while incomp
   assert.equal(association().enabled, false);
   state = providerRun('supplierModelsEnable', { endpointId: endpoint.id, associationIds: [association().id] }); assert.equal(association().enabled, true);
   const master = state.modelTemplates[0], before = structuredClone(state);
-  assert.throws(() => run(state, 'createServiceModel', { ...serviceModelDraft(master), libraryId: master.id, serviceMode: 'standard' }));
+  const saved = run(state, 'createServiceModel', { ...serviceModelDraft(master), libraryId: master.id, serviceMode: 'standard' });
+  const service = saved.models.find(row => row.templateId === master.id);
+  assert.equal(serviceMetadataReady(service), false);
+  assert.equal(service.callsEnabled, false);
+  assert.equal(service.listingStatus, '已下架');
   assert.deepEqual(state, before); assert.equal(state.models.length, 0); assert.deepEqual(master.profile.tasks, []); assert.equal(master.capabilities.tools, null);
 });
 

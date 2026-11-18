@@ -13,7 +13,7 @@ export const modelTypes = [['', '全部类型'], ['text', '语言模型'], ['mul
 export const errorSignals = [['rate-limit', '429'], ['timeout', '超时'], ['fallback', '回退']];
 
 const dimensions = ['tenant', 'model', 'callId', 'endpoint', 'user', 'key', 'source'];
-const scalarFilters = ['type', 'outcome', 'http', 'errorSource', 'signal', 'query', 'upstreamQuery'];
+const scalarFilters = ['type', 'outcome', 'http', 'errorSource', 'signal', 'query', 'upstreamQuery', 'userRecord'];
 const dateOnly = /^\d{4}-\d{2}-\d{2}$/;
 const timeOf = value => typeof value === 'number' ? value : Date.parse(value);
 const midnight = date => Date.parse(date + 'T00:00:00+08:00');
@@ -120,14 +120,17 @@ function usageFields(row, model, usage = row.usage) {
 }
 
 export function callObservations(state) {
-  const [models, users, tenants, keys, providers, endpoints] = ['models', 'users', 'tenants', 'apiKeys', 'providers', 'endpoints']
+  const [models, users, tenants, keys, providers, endpoints, projects] = ['models', 'users', 'tenants', 'apiKeys', 'providers', 'endpoints', 'projects']
     .map(collection => new Map((state[collection] || []).map(row => [row.id, row])));
   const providerName = id => providers.get(id)?.name || id;
-  const rows = [], attempts = [], seen = new Set();
+  const rows = [], attempts = [], records = new Map();
   for (const record of state.requests) {
     const id = record.requestId || record.id;
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
+    if (!id) continue;
+    const previous = records.get(id);
+    if (!previous || timeOf(record.updatedAt || record.createdAt) > timeOf(previous.updatedAt || previous.createdAt)) records.set(id, record);
+  }
+  for (const [id, record] of records) {
     const model = models.get(record.modelId);
     const key = keys.get(record.keyId);
     const modelType = record.modelType || model?.type;
@@ -142,7 +145,7 @@ export function callObservations(state) {
       callId: record.publicModelId || record.callId,
       tenant: record.tenantId, tenantName: record.tenantName || tenants.get(record.tenantId)?.name || record.tenantId,
       user: record.userId, userName: record.userName || users.get(record.userId)?.name || record.userId,
-      key: record.keyId, keyName: record.keyName || key?.name,
+      key: record.keyId, keyName: record.keyName || key?.name, keyDisplayId: key?.keyId || record.keyId,
       source: record.source || (record.evidenceSource === 'mock' ? '模拟请求' : null),
     };
     const observedAttempts = [];
@@ -167,6 +170,7 @@ export function callObservations(state) {
         outcome: attemptOutcome, status: attemptStatus, duration: number(item.durationMs),
         code, errorReason: item.errorMessage || item.message, errorSource: item.errorSource || (attemptOutcome === 'failed' ? '上游调用' : null),
         timeout: timeout(item, code), fallback: item.fallback === true, fallbackReason: item.fallbackReason,
+        recordedFallbackReason: item.fallbackReason,
         ...usageFields(item, model),
       });
     });
@@ -188,15 +192,15 @@ export function callObservations(state) {
     rows.push({
       ...request, provider, providerName: routed ? final?.providerName || record.providerName || providerName(provider) : null,
       channel, channelName: routed ? final?.channelName || record.channelName || endpoints.get(channel)?.name || channel : null,
-      modelIdentifier: request.callId || model?.modelId,
-      keyDisplayId: key?.keyId || record.keyId,
+      registeredModelId: model?.modelId,
       keyMasked: typeof key?.secretPreview === 'string' && key.secretPreview.trim() ? maskApiKey(key.secretPreview) : null,
       endpoint: final?.endpoint, endpointName: final?.endpointName,
       code, errorReason: record.errorMessage || (outcome === 'failed' ? final?.errorReason : null),
       errorSource: record.errorSource || (blocked ? '网关' : outcome === 'failed' ? final?.errorSource : null),
       duration: number(record.durationMs), firstPacket: number(record.firstPacketMs),
       ttft: streamSample ? number(record.ttftMs) : null, taskStatus: record.taskStatus,
-      attempts: observedAttempts, blocked: blocked?.error, routeVersion: record.routeVersion,
+      attempts: observedAttempts, blocked: blocked?.error, routeVersion: record.routeVersion, cacheHit: record.cacheHit === true,
+      project: record.projectName || projects.get(record.projectId)?.name || record.projectId,
       ...usageFields(record, model),
     });
     attempts.push(...observedAttempts);
@@ -219,12 +223,44 @@ export function observationOptions(rows, dimension) {
   return [...items.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
 }
 
+export function searchObservationIdentities(rows, dimension, tenants, input, limit = 20) {
+  const query = input.trim().toLowerCase();
+  const items = new Map();
+  if (!query) return { items: [], hasMore: false };
+  for (const row of rows) {
+    const id = row[dimension];
+    if (!id || items.has(id) || !matchesSelection(tenants, observationKey(row, 'tenant'))) continue;
+    const displayId = dimension === 'key' ? row.keyDisplayId || id : id;
+    const name = observationName(row, dimension);
+    const exact = id.toLowerCase() === query || displayId.toLowerCase() === query;
+    if (!exact && (!tenants?.length || !name.toLowerCase().includes(query))) continue;
+    if (items.size === limit) return { items: [...items.values()], hasMore: true };
+    items.set(id, { id, label: [...new Set([name, row.tenantName || '客户未采集', displayId])].join(' · ') });
+  }
+  return { items: [...items.values()], hasMore: false };
+}
+
+export function changeObservationTenant(rows, filters, tenant) {
+  const patch = { tenant };
+  if (tenant === null) return patch;
+  const scopedRows = rows.filter(row => matchesSelection(tenant, observationKey(row, 'tenant')));
+  for (const dimension of ['user', 'key']) {
+    const selected = filters[dimension];
+    if (!selected?.length) continue;
+    const available = new Set(scopedRows.map(row => observationKey(row, dimension)));
+    const retained = selected.filter(id => available.has(id));
+    if (retained.length !== selected.length) patch[dimension] = retained.length ? retained : null;
+  }
+  return patch;
+}
+
 export function filterObservations(rows, filters, window, { allowUntimed = false } = {}) {
   if (!window) return [];
   const query = filters.query?.trim().toLowerCase(), upstream = filters.upstreamQuery?.trim().toLowerCase();
   return rows.filter(row => (row.at >= window.start && row.at < window.end ||
     allowUntimed && !Number.isFinite(row.at) && (query || upstream)) &&
     dimensions.every(key => matchesSelection(filters[key] ?? null, observationKey(row, key))) &&
+    (!filters.userRecord || (filters.userRecord === 'uncollected') === (observationKey(row, 'user') === uncollectedObservationKey)) &&
     (filters.supply == null || filters.supply.some(([provider, channel]) =>
       (provider === null || provider === observationKey(row, 'provider')) &&
       (channel === null || channel === observationKey(row, 'channel')))) &&
@@ -235,6 +271,15 @@ export function filterObservations(rows, filters, window, { allowUntimed = false
     (!filters.signal || (filters.signal === 'rate-limit' ? row.status === 429 :
       filters.signal === 'timeout' ? row.timeout : filters.signal === 'fallback' && row.fallback)) &&
     (!query || row.requestId?.toLowerCase().includes(query)) && (!upstream || row.upstreamRequestId?.toLowerCase().includes(upstream)));
+}
+
+export function compareLogRows(a, b, field, direction) {
+  const left = a[field], right = b[field];
+  const leftKnown = Number.isFinite(left), rightKnown = Number.isFinite(right);
+  if (leftKnown !== rightKnown) return leftKnown ? -1 : 1;
+  if (leftKnown && left !== right) return direction * (left - right);
+  const time = row => Number.isFinite(row.at) ? row.at : -Infinity;
+  return time(b) - time(a) || a.id.localeCompare(b.id);
 }
 
 export function observationGroups(rows, dimension) {
@@ -288,7 +333,26 @@ export function summarizeObservations(rows) {
     rateLimit: rows.filter(row => row.status === 429).length,
     timeout: rows.filter(row => row.timeout).length,
     fallback: rows.filter(row => row.fallback).length,
+    affectedUsers: new Set(rows.filter(row => row.outcome === 'failed' && row.user).map(row => row.user)).size,
+    missingFailureUsers: rows.filter(row => row.outcome === 'failed' && !row.user).length,
+    affectedModels: new Set(rows.filter(row => row.outcome === 'failed' && row.model).map(row => row.model)).size,
+    missingFailureModels: rows.filter(row => row.outcome === 'failed' && !row.model).length,
   };
+}
+
+export function failureGroups(rows) {
+  const failures = rows.filter(row => row.outcome === 'failed');
+  const groups = new Map();
+  for (const row of failures) {
+    const source = row.errorSource || '未采集', code = row.code || '未采集', reason = row.errorReason || '未采集';
+    const type = row.timeout ? '超时' : row.status === 429 ? '限流' : [401, 403].includes(row.status) ? '认证与授权'
+      : row.status >= 500 ? '服务错误' : '其他失败';
+    const id = JSON.stringify([source, row.status, code, reason, type]);
+    if (!groups.has(id)) groups.set(id, { id, source, status: row.status, code, reason, type, count: 0 });
+    groups.get(id).count++;
+  }
+  return [...groups.values()].map(row => ({ ...row, share: row.count / failures.length * 100 }))
+    .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
 }
 
 export function attemptCapacity(rows, window) {

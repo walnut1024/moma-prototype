@@ -24,12 +24,13 @@ test('5.12.0 has its own source, styles, public assets and storage keys', () => 
   assert.ok(fs.existsSync(path.join(version, 'public/assets/jiangSuZhengWu.png')));
   assert.ok(fs.readFileSync(path.join(version, 'vite.config.mjs'), 'utf8').includes("path.join(import.meta.dirname, 'src')"));
   for (const [file, key] of [
-    ['admin-v2/store.js', 'moma.adminV2.5120.v1'],
-    ['auth-state.mjs', 'moma-auth-prototype-5120-v1'],
-    ['TextExperience.jsx', 'moma-text-conversations-5120-v1'],
-    ['components/SavedFilterViews.jsx', 'moma-5120-filter-views:'],
-    ['admin-v2/UsageAnalysisPage.jsx', 'moma:5120:usage-analysis:card-order:v1'],
-    ['organization-data.mjs', 'moma-organization:moma_5.12.0_estack'],
+    ['workspace-storage.mjs', 'moma-5120-workspace-v2:'],
+    ['admin-v2/store.js', 'ADMIN_DATA_KEY'],
+    ['auth-state.mjs', 'AUTH_DATA_KEY'],
+    ['TextExperience.jsx', "workspaceStoragePrefix + 'conversations'"],
+    ['components/SavedFilterViews.jsx', '${workspaceStoragePrefix}filter-views:'],
+    ['admin-v2/UsageAnalysisPage.jsx', "workspaceStoragePrefix + 'usage-analysis:card-order'"],
+    ['organization-data.mjs', "workspaceStoragePrefix + 'organization'"],
   ]) {
     assert.ok(fs.readFileSync(path.join(version, 'src', file), 'utf8').includes(key));
   }

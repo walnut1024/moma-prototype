@@ -1,3 +1,4 @@
+import { resourceId } from '../resource-id.mjs';
 export const DEPLOYABLE_TYPES = ['text', 'multimodal', 'embedding', 'rerank'];
 const configKeys = ['modelId', 'runtimeId', 'weightId', 'weightPath', 'clusterId', 'namespace', 'replicas', 'gpuPerReplica', 'tensorParallel', 'pipelineParallel', 'maxModelLen', 'gpuMemoryUtilization', 'startupTimeout'];
 export const deploymentConfig = item => Object.fromEntries(configKeys.map(key => [key, item[key]]));
@@ -43,7 +44,7 @@ export function deploymentTransaction(state, action) {
     if (!data.name?.trim() || data.name.trim().length > 80) throw new Error('请填写不超过80字的服务名称');
     if (state.deployments.some(row => row.deploymentId === data.deploymentId)) throw new Error('部署编码已存在');
     const checked = deploymentPreflight(state, data);
-    target = { id: `deployment-${crypto.randomUUID()}`, deploymentId: data.deploymentId, name: data.name.trim(), ...deploymentConfig(checked), status: '部署中', readyReplicas: 0, endpointId: null, configRevision: 1, events: [event('部署已提交，GPU 资源已预留；等待启动检查')] };
+    target = { id: resourceId('deployment'), deploymentId: data.deploymentId, name: data.name.trim(), ...deploymentConfig(checked), status: '部署中', readyReplicas: 0, endpointId: null, configRevision: 1, events: [event('部署已提交，GPU 资源已预留；等待启动检查')] };
     changes.push({ type: 'add', collection: 'deployments', record: target });
     const cluster = state.clusters.find(row => row.id === checked.clusterId);
     changes.push({ type: 'update', collection: 'clusters', id: cluster.id, changes: { allocatedGpu: cluster.allocatedGpu + checked.required } });
@@ -100,7 +101,7 @@ export function deploymentTransaction(state, action) {
         if (endpoint) updateEndpoint('运行中');
         else {
           if (!state.providers.some(row => row.id === 'provider-self')) throw new Error('自有推理服务商未登记，不能生成服务端点');
-          endpointId = `endpoint-${crypto.randomUUID()}`;
+          endpointId = resourceId('connection');
           changes.push({ type: 'add', collection: 'endpoints', record: { id: endpointId, endpointId: `ep-${item.deploymentId}`, name: item.name, providerId: 'provider-self', protocol: 'OpenAI', baseUrl: `https://inference.demo.invalid/${item.deploymentId}/v1`, credentialRef: 'managed-by-platform', modelIds: [item.modelId], capacity: null, health: null, status: '运行中' } });
         }
         patch = { status: '运行中', readyReplicas: item.replicas, endpointId, failureReason: '', events: [...(item.events || []), event('启动检查完成，目标副本就绪；内部OpenAI端点已启用')] };

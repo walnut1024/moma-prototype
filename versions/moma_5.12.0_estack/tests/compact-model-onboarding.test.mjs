@@ -20,14 +20,14 @@ test('metadata alone creates a delisted empty model, with exact context and no s
  for(const key of ['providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','modelTemplates','modelOnboardings','serviceRoutes'])assert.deepEqual(next[key],state[key],key);
  assert.deepEqual(state,before);assert.equal(parseAdminState(JSON.stringify(next)).models.find(item=>item.id===model.id).name,model.name);
 });
-test('all eight required metadata values reject blanks and forged single or multiple selections atomically',()=>{
+test('service creation rejects missing identity and malformed supplied metadata atomically',()=>{
  const state=createAdminSeed(), value=input(state), before=structuredClone(state);
- for(const patch of [{name:''},{modelId:''},{author:''},{releaseDate:''},{description:''},{type:''},{type:['text']},{type:'constructor'},{author:'未知作者'}, {releaseDate:'2026-02-30'}, {inputModalities:[]},{inputModalities:'文本'},{inputModalities:['文本','伪造']},{outputModalities:[]},{outputModalities:['伪造']},{serviceMode:['provider']}])assert.throws(()=>run(state,'createServiceModel',{...value,...patch}),JSON.stringify(patch));
+ for(const patch of [{name:''},{modelId:''},{type:''},{type:['text']},{type:'constructor'},{author:'未知作者'}, {releaseDate:'2026-02-30'},{inputModalities:'文本'},{inputModalities:['文本','伪造']},{outputModalities:['伪造']},{serviceMode:['provider']}])assert.throws(()=>run(state,'createServiceModel',{...value,...patch}),JSON.stringify(patch));
  assert.deepEqual(state,before);
 });
 test('call identifiers accept catalogue punctuation and retain case-insensitive uniqueness',()=>{
  const state=createAdminSeed(), value=input(state);
- for(const modelId of ['中文','a b','a?b','a#b','a'.repeat(81)])assert.throws(()=>run(state,'createServiceModel',{...value,modelId}),/调用标识/);
+ for(const modelId of ['中文','a b','a?b','a#b','a'.repeat(81)])assert.throws(()=>run(state,'createServiceModel',{...value,modelId}),/模型调用标识/);
  for(const modelId of ['author/model-3.1','a_b:free','123'])assert(run(state,'createServiceModel',{...value,modelId}));
  const next=run(state,'createServiceModel',{...value,modelId:'Custom-Model-3'});
  assert.throws(()=>run(next,'createServiceModel',{...value,libraryId:'template-compact-source-alt',modelId:'custom-model-3'}),/已存在/);

@@ -50,6 +50,25 @@ test('impact preview precisely tracks shared online mappings and rejects bypassi
   assert.doesNotThrow(() => assertDirectChannelMutation(state, 'supplierChannelSave', providerId, { endpointId: endpoint(state).id, mode: 'info', name: '新名字' }));
 });
 
+test('address-only edits require validation and preserve other protocol addresses and credentials', () => {
+  const state = fixture(), current = endpoint(state), baseUrl = 'https://address-only.example.invalid/v1';
+  const secondary = { protocol: 'Anthropic', baseUrl: 'https://other.example.invalid/v1/messages' };
+  for (const mapping of owner(state).catalogConnections.filter(row => row.endpointId === current.id)) {
+    mapping.apiAddresses = [{ protocol: 'OpenAI', baseUrl: current.baseUrl }, secondary];
+  }
+  const change = (snapshot, config = { baseUrl }) => run(snapshot, 'channelCandidateSave', { ...args(snapshot), addressOnly: true, config });
+  assert.throws(() => change(state, { baseUrl, capacity: 10 }), /仅允许修改 Base URL/);
+  assert.throws(() => change(createCandidate(state)), /现有候选配置/);
+  assert.throws(() => run(state, 'supplierChannelEdit', { ...args(state), unlinkedAddress: true, baseUrl, expectedUpdatedAt: current.updatedAt ?? null }), /已有模型/);
+  const candidate = change(state);
+  assert.equal(endpoint(candidate).baseUrl, current.baseUrl);
+  assert.throws(() => applyCandidate(candidate), /尚未测试/);
+  const next = applyCandidate(testCandidate(candidate));
+  assert.equal(endpoint(next).baseUrl, baseUrl);
+  for (const key of ['protocol', 'authMode', 'keyGroupId', 'apiKeys']) assert.deepEqual(endpoint(next)[key], current[key]);
+  for (const mapping of mappings(next)) assert.deepEqual(mapping.apiAddresses[1], secondary);
+});
+
 test('all online mappings need fresh passing candidate tests and no old success can cover a new failure', () => {
   let state = createCandidate(fixture());
   assert.throws(() => applyCandidate(state), /尚未测试/);
@@ -237,4 +256,22 @@ test('shared group rollback requires new tests and cannot revive a revoked histo
   assert.throws(() => run(revoked, 'keyGroupCandidateRollback', { ...groupArgs(revoked), targetVersion: 0 }), /未撤销/);
   const discard = run(rollback, 'keyGroupCandidateDiscard', groupArgs(rollback));
   assert.equal(owner(discard).keyGroupCandidates.length, 0); assert.equal(owner(discard).defaultApiKeyId, owner(current).defaultApiKeyId);
+});
+
+test('publishing one channel cost preserves another channel for the same model and all technical evidence', () => {
+  let state = fixture();
+  state = commitAdminState(state, { type: 'modelOperations', operation: 'provider', data: {
+    operation: 'supplierChannelCreate', objectId: providerId, values: {
+      name: '独立成本渠道', interfaceType: 'openai', protocol: 'OpenAI', baseUrl: 'https://independent-cost.example.invalid/v1',
+      authMode: 'group', keyGroupId: 'default', models: [{ libraryId: 'model-2', upstreamModelId: 'vendor/chat', scenarios: price(7) }],
+    },
+  } });
+  const independent = state.endpoints.find(row => row.name === '独立成本渠道');
+  const before = structuredClone(supplierChannelAssociations(state, owner(state), independent.id));
+  const connection = structuredClone(endpoint(state));
+  const saved = run(state, 'channelProcurementPublish', { ...quoteArgs(state), confirmed: true, scenarios: price(0) });
+  assert.deepEqual(supplierChannelAssociations(saved, owner(saved), independent.id), before);
+  assert.equal(channelProcurementSnapshot(mappings(saved)[0]).pricing.scenarios[0].listPrice, 0);
+  assert.deepEqual(endpoint(saved), connection);
+  stableBusiness(state, saved);
 });

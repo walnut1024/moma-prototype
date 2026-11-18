@@ -1,11 +1,14 @@
 import { REAL_PROVIDERS, BAICHUAN_PROVIDER } from './real-provider-catalogue.js';
 import { REAL_MODELS } from './real-model-catalogue.js';
-import { MOMA_PROVIDER } from './moma-provider.js';
+import { supplierDirectory } from './moma-provider.js';
 import { libraryRecord, modelLibrary, modelCatalogue } from './model-library.js';
 import { MODEL_TYPES } from './model-management.js';
+import { OFFICIAL_CHANNEL_PRESETS } from './official-channel-presets.js';
 
 // Presets are reference metadata, never registered supply, account entitlements or validation.
-export const ONBOARDING_PROVIDER_PRESETS = [MOMA_PROVIDER, ...REAL_PROVIDERS, BAICHUAN_PROVIDER].map(row => Object.freeze({ id: row.code, code: row.code, name: row.name, sourceType: row.sourceType, interfaceType: 'openai', defaultBaseUrl: row.baseUrl, catalogModelIds: Object.freeze([...(row.catalogModelIds || [])]), catalogueSource: row.catalogueSource || '', catalogueCheckedAt: row.catalogueCheckedAt || null }));
+const officialCodes = new Set(OFFICIAL_CHANNEL_PRESETS.map(row => row.code));
+const officialModels = OFFICIAL_CHANNEL_PRESETS.flatMap(row => row.models);
+export const ONBOARDING_PROVIDER_PRESETS = [...OFFICIAL_CHANNEL_PRESETS, ...REAL_PROVIDERS.filter(row => !officialCodes.has(row.code)), BAICHUAN_PROVIDER].map(row => Object.freeze({ id: row.code, code: row.code, name: row.name, sourceType: row.sourceType, interfaceType: 'openai', defaultBaseUrl: row.baseUrl, catalogModelIds: Object.freeze([...(row.catalogModelIds || [])]), catalogueSource: row.catalogueSource || '', catalogueCheckedAt: row.catalogueCheckedAt || null }));
 export function onboardingProviderPreset(id) {
   const preset = ONBOARDING_PROVIDER_PRESETS.find(row => row.id === id);
   if (!preset) throw new Error('服务商预设不存在，请重新选择');
@@ -34,7 +37,7 @@ export function resolveOnboardingProvider(state, { providerId, providerPresetId,
   return { ...preset, id: 'preset:' + preset.id, providerPresetId: preset.id, isDraft: true, status: '未登记', apiKeys: [] };
 }
 export function onboardingModelPreset(id) {
-  const model = REAL_MODELS.find(row => row.id === id);
+  const model = officialModels.find(row => row.id === id) || REAL_MODELS.find(row => row.id === id);
   if (!model) throw new Error('模型参考预设不存在，请重新选择');
   const { modelId, name, maker, type, description, usageUnit, profile, capabilities } = model;
   return structuredClone({ id, modelId, name, maker, type, description, ...(usageUnit ? { usageUnit } : {}), profile, capabilities, sourceCheckedAt: model.sourceCheckedAt || profile?.sourceUpdated || null });
@@ -43,7 +46,7 @@ export function resolveOnboardingModel(state, { libraryId, modelPresetId, newMod
   if ([libraryId, modelPresetId, newModel].filter(Boolean).length !== 1) throw new Error('请选择模型资料、模型参考预设或新模型，不能同时选择');
   if (newModel) {
     newFields(newModel, ['modelId', 'name', 'type'], '新模型');
-    const modelId = identityText(newModel.modelId, '模型编码', 80), name = identityText(newModel.name || modelId, '模型名称', 100);
+    const modelId = identityText(newModel.modelId, '模型编码', 80), name = identityText(newModel.name || modelId, '模型展示名', 100);
     if (!/^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('模型编码须由小写字母、数字及 . _ : / - 组成，最多80字');
     if (!Object.hasOwn(MODEL_TYPES, newModel.type)) throw new Error('请选择模型类型');
     if (modelLibrary(state).some(row => row.modelId?.toLowerCase() === modelId.toLowerCase())) throw new Error('相同模型编码的资料已存在，请明确选择已有资料');
@@ -61,6 +64,20 @@ export function onboardingModelOptions(state) {
     ...records.map(record => ({ ...structuredClone(record), libraryId: record.id, modelPresetId: '', source: 'library', sourceCheckedAt: record.sourceCheckedAt || record.profile?.sourceUpdated || null })),
     ...(state.modelData?.archivedCatalogueIds ? [] : REAL_MODELS).filter(row => !known.has(row.modelId.toLowerCase())).map(row => ({ ...onboardingModelPreset(row.id), id: 'preset:' + row.id, libraryId: '', modelPresetId: row.id, source: 'reference' })),
   ];
+}
+
+export function officialChannelReferences(state, preset, model) {
+  const [seedId, seedCode] = preset.existingProvider || [];
+  const suppliers = supplierDirectory(state).filter(row => !row.deletedAt && row.sourceType === preset.sourceType);
+  const owners = suppliers.filter(row => row.onboardingPresetId === preset.code || row.code?.toLowerCase() === preset.code);
+  const registered = owners.length === 1 ? owners[0] : owners.length === 0 ? suppliers.find(row => row.id === seedId && row.code === seedCode) : null;
+  const matches = model ? modelLibrary(state).filter(row => row.modelId?.toLowerCase() === model.modelId) : [];
+  const master = matches.length === 1 && ['text', 'multimodal'].includes(matches[0].type) ? matches[0] : null;
+  return {
+    supplier: registered ? { providerId: registered.id } : { providerPresetId: preset.code },
+    model: master ? { libraryId: master.id } : model ? { modelPresetId: model.id } : null,
+    archived: Boolean(master && state.modelData?.archivedCatalogueIds?.includes(master.id)),
+  };
 }
 export function assertOnboardingMetadata(value) {
   if (!value || typeof value !== 'object') return;

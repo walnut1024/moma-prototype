@@ -62,21 +62,20 @@ export function platformPriceVersions(price, model, path = '价格配置', at = 
     if (item.amount % divisor) issue(location, '换算后无法以整数微货币精确表示，不能舍入价格');
     if (units.has(unit)) issue(location, '多个计费项使用同一计量字段，不能重复计费');
     units.add(unit);
-    return { id: `${price.id}:${unit}`, amount: item.amount / divisor, unit, currency: item.currency, effectiveAt: price.effectiveAt, expiresAt: price.expiresAt || null };
+    return { id: `${price.id}:${unit}`,price_version_id:price.id,price_item_id:`${price.id}:item:${index}`,billing_item_id:item.billing_item_id ?? null,unit_id:item.unit_id ?? null,currency_id:item.currency_id ?? null, amount: item.amount / divisor, unit, currency: item.currency, effectiveAt: price.effectiveAt, expiresAt: price.expiresAt || null };
   });
   if (new Set(result.map(row => row.currency)).size !== 1) issue(path, '同一报价不能混合币种');
   return result;
 }
 
 function platformRoute(state, service, version, rows) {
-  const config = version.config;
-  validateRouteConfig(state,service,config,false);
+  const config = validateRouteConfig(state,service,version.config,false);
   if (!['fixed', 'weighted', 'priority', 'priority_weighted', 'load', 'tpm', 'latency', 'cost'].includes(config.strategy)) issue('路由配置', '当前路由策略不能用于平台试调用');
   if (service.mode === 'provider' && rows.length !== config.channels.filter(row => row.enabled).length) issue('供给范围', '请选择主渠道及已配置的备用渠道');
-  if (config.strategy === 'priority_weighted' && (!config.groups?.length || config.groups.some(group => group.strategy !== 'weighted'))) issue('路由配置', '优先级组内仅支持权重分流，请调整组内策略');
-  return { version: version.version, strategy: config.strategy, strategyCode:ROUTING_POLICIES[config.strategy]?.code || config.strategy, costBasis:config.advanced?.costBasis || 'input', autoFailover: config.autoFailover === true, channels: rows.map(row => {
-    const group = config.groups?.findIndex(group => group.id === row.route.groupId);
-    const priority = config.strategy === 'priority_weighted' ? group : row.route.priority;
+  const grouped = config.strategy === 'weighted' && config.groups.length > 1;
+  const strategy = grouped ? 'priority_weighted' : config.strategy;
+  return { version: version.version, strategy, strategyCode:ROUTING_POLICIES[strategy]?.code || strategy, costBasis:config.advanced?.costBasis || 'input', autoFailover: config.autoFailover === true, ...(config.retry ? {retry:config.retry} : {}), channels: rows.map(row => {
+    const priority = grouped ? config.groups.findIndex(group => group.id === row.route.groupId) : row.route.priority;
     const weighted = ['weighted', 'priority_weighted'].includes(config.strategy);
     if (!Number.isInteger(priority) || priority < 0 || weighted && (!Number.isFinite(row.route.weight) || row.route.weight <= 0)) issue('路由配置', '渠道的优先级、分组或权重无效');
     return { bindingId: row.id, priority, ...(row.route.backup ? { backup:true } : {}), ...(weighted ? { weight: row.route.weight } : {}) };
@@ -86,7 +85,7 @@ function platformRoute(state, service, version, rows) {
 export function platformCandidatePlan(state, model, { serviceId, tenantIds = [], supplyIds = [], audioProbe = '', technical = false, at = Date.now() }) {
   const service = platformServices(state, model).find(row => row.id === serviceId);
   if (!service) issue('服务模式', '请选择当前模型的统一模型服务模式或服务商服务');
-  if (!service.callId || /\s/.test(service.callId)) issue('对外调用标识', '请先完善当前服务的对外调用标识');
+  if (!service.callId || /\s/.test(service.callId)) issue('模型调用标识', '请先完善当前服务的模型调用标识');
   if (!tenantIds.length || new Set(tenantIds).size !== tenantIds.length || tenantIds.some(id => !state.tenants?.some(tenant => tenant.id === id && !['已删除', '已停用', '停用'].includes(tenant.status)))) issue('客户范围', '请明确选择有效租户');
   const version = activeRouteVersion(serviceRoute(state, service.id));
   if (!version) issue('路由配置', '请先发布当前服务的路由');
@@ -108,7 +107,7 @@ export function platformCandidatePlan(state, model, { serviceId, tenantIds = [],
     catch (error) { issue(path, `主档关联无效：${error.message}`); }
     const sameTemplate = model.templateId && (master.id === model.templateId || master.templateId === model.templateId);
     if (master.id !== model.id && !sameTemplate) issue(path, '主档关联与当前服务模型不一致，请重新关联模型资料');
-    if (!association.upstreamModelId || /\s/.test(association.upstreamModelId)) issue(path, '上游模型标识 未配置');
+    if (!association.upstreamModelId || /\s/.test(association.upstreamModelId)) issue(path, '上游模型调用标识 未配置');
     if (!supply.endpoint.interfaceType) issue(path, '接口类型未配置');
     if (supply.endpoint.authMode !== 'none' && !connectionKeys(supply.endpoint, supply.provider)[0] && !(!supply.endpoint.authMode && supply.endpoint.credentialRef)) issue(path, '缺少可用且未撤销的主要密钥');
     let procurementPrices = [];
@@ -145,7 +144,7 @@ export async function runPlatformTrial(plan, { confirmExpensive = false, isCurre
   current(); onProgress('保存服务候选');
   const existing = (await api('/services')).services.find(row => row.candidate.publicModelId === candidate.publicModelId || row.published?.config.publicModelId === candidate.publicModelId);
   const canonicalIds = new Set(candidate.bindings.map(row => row.model.id));
-  if (existing?.candidate.bindings.some(row => !canonicalIds.has(row.model.id))) issue('对外调用标识', '该对外调用标识 已被其他模型候选占用');
+  if (existing?.candidate.bindings.some(row => !canonicalIds.has(row.model.id))) issue('模型调用标识', '该模型调用标识 已被其他模型候选占用');
   current();
   const service = await api(existing ? `/services/${existing.id}` : '/services', { method: existing ? 'PATCH' : 'POST', body: { ...candidate, operationId: crypto.randomUUID(), ...(existing ? { expectedRevision: existing.revision } : {}) } });
   onCandidate(service); current(); onProgress('创建受限测试身份');

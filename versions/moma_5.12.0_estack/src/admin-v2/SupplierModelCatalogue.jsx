@@ -1,74 +1,264 @@
+import { channelIdentity, modelDisplayName } from '../model-identities.mjs';
+import ProviderRemovalDialog, { RemovalButton } from './ProviderRemovalDialog';
 import AdminStatus from './AdminStatus';
-import { AdminPagination } from './AdminTable';
-import SupplierChannelDetails from './SupplierChannelDetails';
-import { useRef, useState } from 'react';
-import { IconPlus } from '@douyinfe/semi-icons';
-import { Button } from '@douyinfe/semi-ui';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { IconChevronDown, IconChevronRight, IconMore, IconPlus } from '@douyinfe/semi-icons';
+import { Button, Dropdown, Space, Table, Typography } from '@douyinfe/semi-ui';
 import ModelFieldLabel from './ModelFieldLabel';
 import { GridTable, Row, Cell, Modal, Notice, SearchBox, CopyId } from './ModelOperationsUI';
-import { catalogueMoneyDisplay } from './provider-catalogue-pricing';
-import { modelSupplyGroups, supplierModelChannelGroups, supplierModelChannelRows, supplierChannelInterface } from './supplier-model-channel-table';
+import { supplierChannelInterface, supplierModelChannelRows } from './supplier-model-channel-table';
+import { costRecords } from './model-pricing-workspace';
+import ChannelCostCell from './ChannelCostCell';
+import ChannelCapacityEditor, { ChannelCapacityCell } from './ChannelCapacity';
+import ProcurementVersionEditor from './ProcurementVersionEditor';
 import { channelStatus } from './channel-selection';
-import { supplierChannelResources, supplierChannelName } from './supplier-resources';
+import { supplierChannelResources } from './supplier-resources';
+import { modelChannelName as channelName } from './model-channel-name.js';
 import { SupplierChannelDialog } from './SupplierResourceDialogs';
-import SupplierChannelBatchTest from './SupplierChannelBatchTest';
-import { channelLinkedModels } from './provider-channels';
-import { supplierDeletionBlock } from './provider-channels';
+import { providerCode } from './provider-management';
+import SupplierChannelBulkActions from './SupplierChannelBulkActions';
+import SupplierChannelLifecycleDialog from './SupplierChannelLifecycleDialog';
 
-export default function SupplierModelCatalogue({ state, provider, ops, onAddModel, onAddChannel, modelEntries }) {
-  const [query, setQuery] = useState(ops.params.get('channelQ') || ''), [page, setPage] = useState(Number(ops.params.get('channelPage')) || 1), [resource, setResource] = useState(()=>{const owner=state.providers.find(row=>row.id===ops.params.get('channelProvider')),association=owner?.catalogConnections?.find(row=>row.id===ops.params.get('channelDetails'));return association?{providerId:owner.id,endpointId:association.endpointId,associationId:association.id,kind:'details'}:null;}), [deleting, setDeleting] = useState(null);
-  const trigger = useRef(null);
-  const ownerId=resource?.providerId || deleting?.providerId;
-  const owner=ownerId?state.providers.find(row=>row.id===ownerId):provider;
-  const groups = modelEntries?modelSupplyGroups(state,modelEntries):supplierModelChannelGroups(state, provider), search = query.trim().toLowerCase();
-  const material = !modelEntries && ops.params.get('material');
-  const filtered = groups.filter(group => (!material || group.master?.id === material)
-    && `${group.name} ${group.modelId || ''} ${group.channels.map(channel => `${channel.name || channel.endpoint?.name || ''} ${channel.upstreamModelId || ''} ${channel.endpointId || ''}`).join(' ')}`.toLowerCase().includes(search));
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / 10)));
-  const endpoint = (owner?supplierChannelResources(state, owner):[]).find(row => row.id === resource?.endpointId);
-  const association = resource?.associationId && groups.flatMap(group => group.channels).find(row => row.id === resource.associationId);
-  const open = (event, setter, value) => { trigger.current = event.currentTarget; ops.setError(''); setter(value); };
-  const close = () => { ops.go({channelDetails:null,channelProvider:null},{saved:true,preserveScroll:true}); setResource(null); setDeleting(null); ops.setError(''); requestAnimationFrame(() => (trigger.current?.isConnected ? trigger.current : document.querySelector('.supplier-resource-toolbar input'))?.focus()); };
+const channelHeadings = ['渠道名称', '渠道状态', <ModelFieldLabel key="upstream" name="上游模型调用标识"/>, '上游 API 地址', '容量', '成本', '操作'];
+const referenceFor = group => ({
+  url: group.entry?.upstreamReference?.url,
+  upstreamModelId: group.entry?.upstreamReference?.upstreamModelId,
+});
+
+export default function SupplierModelCatalogue({ state, provider, groups, ops, onImport, onAddChannel, onShowSupplier, createdEndpointId, onLocated }) {
+  const [query, setQuery] = useState('');
+  const [batchMode, setBatchMode] = useState(false), [selectedChannels, setSelectedChannels] = useState([]), [bulkAction, setBulkAction] = useState(null);
+  const [manualConfiguration, setConfiguration] = useState(null);
+  const requestedChannel = ops.params.get('upstreamChannel');
+  const requestedChannelGroup = requestedChannel && groups.find(group=>group.channels.some(channel=>channel.id===requestedChannel));
+  const requestedAssociation = requestedChannelGroup?.channels.find(channel=>channel.id===requestedChannel);
+  const configuration = manualConfiguration || (requestedChannel ? {
+    providerId:provider?.id,groupId:requestedChannelGroup?.id,associationId:requestedChannel,endpointId:requestedAssociation?.endpointId,
+  } : null);
+  const [pricing, setPricing] = useState(null);
+  const [expanded, setExpanded] = useState([]), [removingChannel, setRemovingChannel] = useState(null);
+  const [narrow, setNarrow] = useState(() => matchMedia('(max-width: 760px)').matches);
+  useEffect(() => {
+    const media = matchMedia('(max-width: 760px)');
+    const update = event => setNarrow(event.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  const trigger = useRef(null), tableScroll = useRef(null);
+  const modelView = !provider, search = query.trim().toLowerCase();
+  const costs = new Map(costRecords(state, groups).map(record => [record.key, record]));
+  const pricingRecord = pricing && costs.get(pricing.key);
+  const material = !modelView && ops.params.get('material');
+  const focused = material && groups.find(group => group.id === material);
+  const rowKey = group => modelView ? group.owner.id : group.id;
+  const scopedGroups = groups.filter(group => (modelView || group.modelId) && (!material || group === focused));
+  const filtered = scopedGroups.filter(group => [modelView ? group.owner.name : modelDisplayName(state, group.master?.id) || group.name, modelView ? providerCode(group.owner) : '', group.master?.modelId, group.modelId, referenceFor(group).upstreamModelId,
+      ...group.channels.flatMap(channel => [channelName(group.owner, channel), channel.upstreamModelId, channel.endpointId, channelIdentity(state,channel.id)])]
+      .join(' ').toLowerCase().includes(search));
+  const channelRows = modelView ? [] : supplierModelChannelRows(state, scopedGroups, search);
+  const createdGroup = createdEndpointId && groups.find(group => group.channels.some(channel => channel.endpointId === createdEndpointId));
+  const requestedGroup = modelView ? groups.find(group => group.owner.id === ops.params.get('provider')) : createdGroup || requestedChannelGroup || focused;
+  const requestedKey = requestedGroup ? rowKey(requestedGroup) : '';
+  const [dismissed, setDismissed] = useState('');
+  const automatic = requestedKey && (createdGroup || dismissed !== requestedKey) ? requestedKey : '';
+  const expandedKeys = automatic ? [...new Set([...expanded, automatic])] : expanded;
+  useLayoutEffect(() => {
+    tableScroll.current?.scrollTo(0, 0);
+    if (requestedKey) tableScroll.current?.querySelector('[data-supply-focus]')?.scrollIntoView({ block: 'nearest' });
+  }, [material, requestedKey]);
+  useLayoutEffect(() => {
+    if (!createdEndpointId) return;
+    const button = tableScroll.current.querySelector('[data-created-channel]');
+    if (!button) {
+      setQuery('');
+      return;
+    }
+    button.closest('tr')?.scrollIntoView({ block: 'nearest' });
+    button.focus({ preventScroll: true });
+    onLocated();
+  }, [createdEndpointId, search, onLocated]);
+  const changeQuery = value => {
+    setQuery(value);
+    setSelectedChannels([]);
+    tableScroll.current.scrollTop = 0;
+  };
+  useEffect(() => { setSelectedChannels([]); setBatchMode(false); }, [material]);
+  const configurationGroup = configuration && groups.find(group => group.id === configuration.groupId && group.owner.id === configuration.providerId);
+  const association = configurationGroup?.channels.find(row => row.id === configuration.associationId && row.endpointId === configuration.endpointId && !row.unlinked);
+  const owner = configurationGroup && state.providers.find(row => row.id === configurationGroup.owner.id);
+  const endpoint = association && owner && supplierChannelResources(state, owner).find(row => row.id === association.endpointId);
+  const configure = (event, group, channel) => {
+    trigger.current = event.currentTarget;
+    ops.setError('');
+    setConfiguration({ providerId: group.owner.id, groupId: group.id, associationId: channel.id, endpointId: channel.endpointId });
+  };
+  const close = () => {
+    setConfiguration(null);
+    if (requestedChannel) ops.go({upstreamChannel:null},{saved:true,preserveScroll:true});
+    setPricing(null);
+    ops.setError('');
+    requestAnimationFrame(() => (trigger.current?.isConnected ? trigger.current : tableScroll.current)?.focus({ preventScroll: true }));
+  };
   const blocked = !ops.can || Boolean(ops.conflict);
-  const cost=(owner,association,details=false)=>{
-    const back=new URLSearchParams(location.hash.split('?')[1]);back.set('channelQ',query);back.set('channelPage',String(currentPage));back.set('channelProvider',owner.id);
-    if(details)back.set('channelDetails',association.id);else back.delete('channelDetails');
-    ops.go({provider:owner.id,association:association.id,returnTo:'#/admin-2/providers?'+back},{base:'model-costs',reset:true});
+  const details = (group, label) => <Button theme="borderless" size="small" aria-label={'详情 ' + label}
+    onClick={() => onShowSupplier(group)}>详情</Button>;
+  const configButton = (group, channel) => channel?.endpointId && !channel.unlinked && <Button theme="borderless" size="small" disabled={blocked}
+    data-created-channel={channel.endpointId === createdEndpointId ? '' : undefined}
+    aria-label={'编辑 ' + group.name + ' · ' + channelName(group.owner, channel)}
+    onClick={event => configure(event, group, channel)}>编辑</Button>;
+  const toggle = group => {
+    const key = rowKey(group);
+    const open = expandedKeys.includes(key);
+    if (requestedKey === key) setDismissed(open ? key : '');
+    setExpanded(keys => open ? keys.filter(id => id !== key) : [...keys, key]);
   };
-  const stopping=resource?.kind==='stop' && association;
-  const affected=stopping ? channelLinkedModels(state,owner,stopping) : [];
-  const deletionGroup = deleting && groups.find(row => (row.owner || provider)?.id===owner?.id && row.modelIds?.includes(deleting.modelId));
-  const deletionChannel = deleting?.endpointId && (deleting.modelId ? deletionGroup?.channels.find(row => row.id === deleting.channelId && row.endpointId === deleting.endpointId) : supplierChannelResources(state, owner).some(row => row.id === deleting.endpointId) ? { id: deleting.endpointId, endpointId: deleting.endpointId } : null);
-  const deletion = deleting && (deleting.endpointId ? deletionChannel : deletionGroup) ? supplierDeletionBlock(state, owner, deleting.modelId, deletionChannel) : { message: '该模型或渠道已变化，请关闭后重新选择。', models: [] };
-  const remove = async () => {
-    if (deletion.message || blocked) return;
-    const operation = deleting.endpointId ? deleting.modelId ? 'supplierCatalogueChannelDelete' : 'supplierChannelDelete' : 'catalogueRemove';
-    if (await ops.run('provider', { operation, objectId: owner.id, values: { modelId: deleting.modelId, endpointId: deleting.endpointId, associationId: deleting.channelId, confirmed: true } })) close();
+  const channelCells = (group, channel) => {
+    const api = supplierChannelInterface(group.owner, channel);
+    return <>
+      <Cell><div>{channelName(group.owner, channel)}</div><div><Typography.Text size="small" type="tertiary">渠道 ID：</Typography.Text><CopyId copyAtStart value={channelIdentity(state,channel.id)} label="渠道 ID"/></div><div><Typography.Text size="small" type="tertiary">连接 ID：</Typography.Text><CopyId copyAtStart value={channel.endpointId} label="连接 ID"/></div></Cell>
+      <Cell><AdminStatus value={channelStatus(group.owner, channel)}/></Cell>
+      <Cell>{channel.upstreamModelId ? <CopyId copyAtStart value={channel.upstreamModelId} label="上游模型调用标识"/> : '—'}</Cell>
+      <Cell>{api.url ? <CopyId copyAtStart value={api.url} label="上游 API 地址"/> : '—'}</Cell>
+    </>;
   };
-  const purchaseHeading = <span className="supplier-price-heading"><ModelFieldLabel name="渠道采购价" description="当前平台采购服务商的价格，用于成本及利润分析"/></span>;
+  const editPricing = (button, type, cost) => {
+    trigger.current = button;
+    ops.setError('');
+    setPricing({ type, key: cost.key });
+  };
+  const modelExpansion = group => {
+    const reference = referenceFor(group);
+    const masterSource = !modelView && group.master && (group.master.profile?.author || group.master.maker);
+    return <div className="supplier-model-expansion" role="region" aria-label={(modelView ? group.owner.name : group.name) + '的渠道和计费'}>
+      {(reference.url || reference.upstreamModelId || masterSource) && <Space wrap className="supplier-model-reference">
+        {reference.url && <><Typography.Text type="tertiary">官方参考地址</Typography.Text><CopyId copyAtStart value={reference.url} label="官方参考地址"/></>}
+        {reference.upstreamModelId && <><Typography.Text type="tertiary">参考调用标识</Typography.Text><CopyId copyAtStart value={reference.upstreamModelId} label="参考调用标识"/></>}
+        {masterSource && <Typography.Text type="tertiary">{masterSource}</Typography.Text>}
+      </Space>}
+      {group.channels.length ? <GridTable className="supplier-nested-channels" headings={channelHeadings}>
+        {group.channels.map(channel => {
+          const cost = costs.get(group.owner.id + ':' + channel.id);
+          return <Row key={channel.id}>
+            {channelCells(group, channel)}
+            <Cell><ChannelCapacityCell provider={group.owner} channel={channel} modelName={group.name}/></Cell>
+            <Cell><ChannelCostCell cost={cost}/></Cell>
+            <Cell><Space spacing={4} wrap>{configButton(group, channel)}
+              {cost && <Button theme="borderless" size="small" disabled={blocked} aria-label={'容量设置 ' + group.name + ' · ' + group.owner.name + ' · ' + channelName(group.owner, channel)} onClick={event => editPricing(event.currentTarget, 'capacity', cost)}>容量设置</Button>}
+              {cost && <Button theme="borderless" size="small" disabled={blocked}
+                aria-label={'成本设置 ' + group.name + ' · ' + group.owner.name + ' · ' + channelName(group.owner, channel)}
+                onClick={event => editPricing(event.currentTarget, 'cost', cost)}>成本设置</Button>}
+              <RemovalButton state={state} ops={ops} label="删除模型渠道" target={{ providerId: group.owner.id, endpointId: channel.endpointId, ...(channel.unlinked ? {} : { associationId: channel.id }) }} ariaLabel={'删除模型渠道 ' + channelName(group.owner, channel)}/>
+            </Space></Cell>
+          </Row>;
+        })}
+      </GridTable> : <Typography.Text type="tertiary">暂无已配置渠道</Typography.Text>}
+    </div>;
+  };
+  const closeChannelRemoval = () => {
+    setRemovingChannel(null);
+    ops.setError('');
+    requestAnimationFrame(() => (trigger.current?.isConnected ? trigger.current : tableScroll.current)?.focus({ preventScroll: true }));
+  };
   return <>
-    <div className="supplier-toolbar supplier-resource-toolbar"><SearchBox value={query} placeholder="搜索模型 / 渠道" onChange={value => { setQuery(value); setPage(1); }}/>{material && <Button size="small" onClick={() => { setPage(1); ops.go({ material: null }, { preserveScroll: true }); }}>查看全部模型</Button>}{!modelEntries && <><Button size="small" disabled={blocked} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={onAddModel}>接入新模型</Button><Button size="small" theme="light" disabled={blocked} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={event => onAddChannel(event, groups.find(group => group.master?.id === material)?.master?.id)}>接入新渠道</Button></>}</div>
-    <GridTable className="supplier-model-channel-table" headings={[modelEntries?'服务商':'模型展示名','渠道','状态',<ModelFieldLabel key="upstream" name="上游模型标识"/>,'上游 API 地址','计费项',purchaseHeading,'计费单位','操作']} empty={!filtered.length} emptyMessage="暂无匹配的模型或渠道。">
-      {filtered.slice((currentPage - 1) * 10, currentPage * 10).flatMap(group => supplierModelChannelRows(group).map(({ channel, price, channelSpan, modelSpan }, index) => {
-        const groupOwner=group.owner || provider;
-        const api = supplierChannelInterface(groupOwner, channel), status = channelStatus(groupOwner, channel);
-        const enabled=channel?.enabled && ['运行中','需关注'].includes(channel.endpoint.status);
-        return <Row key={`${groupOwner.id}:${group.id}:${channel?.id || 'empty'}:${index}`}>
-          {modelSpan > 0 && <Cell className="supplier-identity-cell" rowSpan={modelSpan}>{modelEntries?<Button type="tertiary" theme="borderless" size="small" onClick={()=>ops.go({perspective:'suppliers',provider:groupOwner.id,tab:'catalogue'})}>{groupOwner.name}</Button>:<strong>{group.name}</strong>}</Cell>}
-          {channelSpan > 0 && <><Cell rowSpan={channelSpan}>{channel?.endpointId ? <strong>{channel.sourceName || supplierChannelName(groupOwner,channel.endpoint)}</strong> : '待添加渠道'}</Cell><Cell rowSpan={channelSpan}><AdminStatus value={status}/></Cell><Cell rowSpan={channelSpan}>{channel?.upstreamModelId ? <CopyId value={channel.upstreamModelId} label="上游模型标识"/> : '—'}</Cell><Cell rowSpan={channelSpan}>{api.url ? <CopyId value={api.url} label="API 地址"/> : '—'}</Cell></>}
-          <Cell>{price?.name || '—'}{price?.condition && <small>{price.condition}</small>}</Cell>
-          <Cell className="supplier-price-number">{price?.purchasePrice == null ? '未配置' : `${price.currency || ''} ${catalogueMoneyDisplay(price.purchasePrice)}`}</Cell><Cell>{price?.unit || '—'}</Cell>
-          {channelSpan > 0 && <Cell className="supplier-action-cell" rowSpan={channelSpan}><div className="supplier-row-actions">{channel?.endpointId ? <><Button type="tertiary" theme="borderless" size="small" onClick={event=>open(event,setResource,{providerId:groupOwner.id,endpointId:channel.endpointId,associationId:channel.unlinked?null:channel.id,kind:'details'})}>详情</Button>{!channel.unlinked && <Button type="tertiary" theme="borderless" size="small" onClick={()=>cost(groupOwner,channel)}>成本</Button>}<Button type="tertiary" theme="borderless" size="small" disabled={blocked} onClick={event => open(event,setResource,{providerId:groupOwner.id,endpointId:channel.endpointId,associationId:channel.unlinked?null:channel.id,kind:'edit'})}>编辑</Button><Button type="tertiary" theme="borderless" size="small" disabled={blocked || channel.unlinked} title={channel.unlinked?'请先关联模型后测试连接':undefined} onClick={event => open(event,setResource,{providerId:groupOwner.id,endpointId:channel.endpointId,associationId:channel.id,kind:'test'})}>测试连接</Button>{!channel.unlinked && <Button type="tertiary" theme="borderless" size="small" disabled={blocked} onClick={event=>open(event,setResource,{providerId:groupOwner.id,endpointId:channel.endpointId,associationId:channel.id,kind:enabled?'stop':'test'})}>{enabled?'停用供给':'启用供给'}</Button>}<Button type="tertiary" theme="borderless" size="small" disabled={blocked} onClick={event => open(event,setDeleting,{providerId:groupOwner.id,modelId:channel.modelId || group.modelId,channelId:channel.id,endpointId:channel.endpointId,name:supplierChannelName(groupOwner,channel.endpoint)})}>删除渠道</Button></> : <><Button type="tertiary" theme="borderless" size="small" disabled={blocked} onClick={event => modelEntries?ops.go({perspective:'suppliers',provider:groupOwner.id,tab:'catalogue'}):onAddChannel(event,group.master?.id)}>接入新渠道</Button><Button type="tertiary" theme="borderless" size="small" disabled={blocked} onClick={event => open(event,setDeleting,{providerId:groupOwner.id,modelId:group.modelId,name:group.name})}>删除模型</Button></>}</div></Cell>}
-        </Row>;
-      }))}
-    </GridTable><AdminPagination total={filtered.length} currentPage={currentPage} onPageChange={setPage}/>
-    {endpoint && association && resource.kind==='details' && <SupplierChannelDetails state={state} provider={owner} association={association} ops={ops} close={close} onEdit={(kind)=>{if(kind==='price'){cost(owner,association,true);return;}setResource({...resource,kind:kind==='test'?'test':'edit'});}}/>}
-    {endpoint && resource.kind === 'edit' && <SupplierChannelDialog key={endpoint.id+':'+(association?.id || '')} state={state} provider={owner} endpoint={endpoint} association={association || undefined} mode="info" ops={ops} close={close}/>}
-    {endpoint && resource.kind === 'test' && (endpoint.interfaceType ? <SupplierChannelBatchTest state={state} provider={owner} endpointId={endpoint.id} associationIds={[association.id]} ops={ops} close={close}/> : <SupplierChannelDialog key={endpoint.id} state={state} provider={owner} endpoint={endpoint} association={association} mode="info" ops={ops} close={close}/>)}
-    {stopping && <Modal title="停用模型供给" description={owner.name+' · '+endpoint.name} onClose={close} footer={<><Button theme="light" onClick={close}>取消</Button><Button disabled={blocked} onClick={async()=>{if(await ops.run('provider',{operation:'channelDisable',objectId:owner.id,values:{modelId:stopping.modelId,channelId:stopping.id,confirmed:true}}))close();}}>确认停用供给</Button></>}><p>停用后，该模型供给不再承接新请求，其他渠道、价格和历史保留。</p>{affected.length>0 && <Notice error>关联服务：{affected.map(row=>row.name).join('、')}。请先替换这些服务的路由或停止服务；确认停用将使仍在使用该供给的请求无法完成。</Notice>}{ops.error && <Notice error>{ops.error}</Notice>}</Modal>}
-    {deleting && <Modal title={deletion.message ? '暂不能删除' : deleting.endpointId ? '删除渠道' : '删除模型'} description={`${owner.name} · ${deleting.name}`} onClose={close} footer={<><Button theme="light" onClick={close}>{deletion.message ? '我知道了' : '取消'}</Button>{!deletion.message && <Button type="danger" disabled={blocked} onClick={remove}>确认删除</Button>}</>}>
-      {deletion.message ? <><Notice error>{deletion.message}</Notice>{deletion.models.length > 0 && <div><p>先在以下服务处理路由、映射或服务商引用：</p>{deletion.models.map(model=><Button key={model.id} type="tertiary" theme="borderless" size="small" onClick={()=>ops.proceed(()=>{close();ops.go({model:model.id,panel:'routing',routeProvider:owner.id,mapping:model.serviceMode==='provider'?`provider:${model.id}:${owner.id}`:`standard:${model.id}`},{base:'listing'});})}>前往 {model.name} → 路由及映射</Button>)}</div>}</> : <p>{deleting.endpointId ? deleting.modelId ? '确认删除当前模型的此渠道？其他模型共用的渠道会保留；未被其他模型使用的渠道资源一并删除。' : '确认删除此未关联模型的渠道？' : '确认删除当前服务商的模型登记？模型资料及其他服务商的登记会保留。'}历史计费与调用记录保留。</p>}
-      {ops.error && <Notice error>{ops.error}</Notice>}
-    </Modal>}
+    <div className="supplier-toolbar supplier-resource-toolbar">
+      <SearchBox value={query} placeholder={modelView ? '搜索服务商 / 渠道' : '搜索模型 / 渠道 / ID / 上游标识'} onChange={changeQuery}/>
+      {material && <Button size="small" onClick={() => {
+        changeQuery('');
+        ops.go({ material: null }, { preserveScroll: true });
+      }}>查看全部模型渠道</Button>}
+      {!modelView && <>
+        <Button size="small" theme="solid" disabled={blocked} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={onImport}>批量新增</Button>
+        <Button size="small" theme="light" disabled={blocked} icon={<IconPlus size="small" aria-hidden="true"/>}
+          onClick={event => onAddChannel(event, focused?.master?.id)}>新增</Button>
+        {!batchMode && <Button size="small" disabled={blocked || !channelRows.length} onClick={() => setBatchMode(true)}>批量操作</Button>}
+      </>}
+    </div>
+    {!modelView && batchMode && <Space wrap className="supplier-bulk-toolbar" aria-label="渠道批量操作">
+      <Typography.Text>已选 {selectedChannels.length} 条</Typography.Text>
+      {[['name', '编辑渠道名称'], ['address', '编辑上游 API 地址'], ['test', '测试连接'], ['enable', '启用'], ['disable', '停用'], ['remove', '删除模型渠道']].map(([mode, label]) => <Button key={mode} size="small" type={mode === 'remove' ? 'danger' : 'primary'} disabled={blocked || !selectedChannels.length}
+        onClick={event => { trigger.current = event.currentTarget; ops.setError(''); setBulkAction({ mode, ids: [...selectedChannels] }); }}>{label}</Button>)}
+      <Button size="small" theme="borderless" onClick={() => { setBatchMode(false); setSelectedChannels([]); }}>退出批量操作</Button>
+    </Space>}
+    {!modelView && <Typography.Paragraph className="supplier-channel-count-summary" type="tertiary" size="small">
+      模型渠道 · 共 {channelRows.length} 条渠道
+    </Typography.Paragraph>}
+    <div className="supplier-model-list-scroll" ref={tableScroll} tabIndex={0} role="region" aria-label={modelView ? '供应服务商表格' : '模型渠道表格'}>
+      {modelView ? <Table key="suppliers" className="supplier-model-list" size="small" dataSource={filtered} rowKey={rowKey} pagination={false}
+        expandedRowKeys={expandedKeys} expandedRowRender={modelExpansion} hideExpandedColumn expandIcon={false}
+        empty="暂无匹配的服务商。" columns={[
+          { title: '服务商', width: 260, render: (_, group) => {
+            const open = expandedKeys.includes(rowKey(group));
+            return <Space>
+              <Button size="small" theme="borderless" type="tertiary" icon={open ? <IconChevronDown/> : <IconChevronRight/>}
+                aria-expanded={open} aria-label={(open ? '收起 ' : '展开 ') + group.owner.name} onClick={() => toggle(group)}/>
+              <div className="supplier-directory-identity">
+                <Button className="supplier-owner-link" theme="borderless" size="small"
+                  data-supply-focus={group === requestedGroup ? '' : undefined} onClick={() => onShowSupplier(group)}>{group.owner.name}</Button>
+                <span className="supplier-identity-code"><CopyId copyAtStart ellipsis value={providerCode(group.owner)} label="服务商编码"/></span>
+              </div>
+            </Space>;
+          } },
+          { title: '渠道数', width: 72, align: 'right', render: (_, group) => group.channels.length ? <Button
+            className="supplier-channel-count" theme="borderless" size="small" aria-expanded={expandedKeys.includes(rowKey(group))}
+            aria-label={`${expandedKeys.includes(rowKey(group)) ? '收起' : '展开'} ${group.owner.name} 的 ${group.channels.length} 个渠道`}
+            onClick={() => toggle(group)}>{group.channels.length}</Button> : 0 },
+          { title: '接入状态', width: 110, render: (_, group) => <AdminStatus value={!group.channels.length ? '未配置渠道' : group.channels.some(channel => channelStatus(group.owner, channel) === '可用') ? '可用' : '待验证'}/> },
+          { title: '操作', width: 72, render: (_, group) => details(group, group.owner.name) },
+        ]}/> : <Table key="model-channels" className="supplier-model-list supplier-flat-channels" size="small" dataSource={channelRows} rowKey="id" pagination={false}
+          scroll={{ x: batchMode ? 2298 : 2250 }} empty="暂无模型渠道，点击新增配置。"
+          rowSelection={batchMode ? { selectedRowKeys: selectedChannels, fixed: narrow ? false : 'left', width: 48,
+            getCheckboxProps: ({ group, channel }) => ({ disabled: blocked, 'aria-label': '选择渠道 ' + group.name + ' · ' + channelName(group.owner, channel) }),
+            onChange: keys => setSelectedChannels(keys) } : undefined}
+          onRow={({ group, channel }) => ({ 'data-channel-id': channelIdentity(state, channel.id),
+            'data-supply-focus': group === requestedGroup && (!requestedChannel || channel.id === requestedChannel) ? '' : undefined })}
+          columns={[
+            { title: '模型', fixed: narrow ? false : 'left', width: 280, render: (_, { group }) => <div className="supplier-directory-identity">
+              <Typography.Text title={modelDisplayName(state, group.master.id) || group.name}>{modelDisplayName(state, group.master.id) || group.name}</Typography.Text>
+              <span className="supplier-identity-code"><CopyId copyAtStart ellipsis value={group.master.modelId} label="模型编码"/></span>
+            </div> },
+            { title: '渠道名称', width: 150, ellipsis: true, render: (_, { group, channel }) => channelName(group.owner, channel) },
+            { title: '渠道 ID', width: 220, render: (_, { channel }) => <CopyId copyAtStart ellipsis value={channelIdentity(state, channel.id)} label="渠道 ID"/> },
+            { title: '渠道状态', width: 100, render: (_, { group, channel }) => <AdminStatus value={channelStatus(group.owner, channel)}/> },
+            { title: <ModelFieldLabel name="上游模型调用标识"/>, width: 210, render: (_, { channel }) => <CopyId copyAtStart ellipsis value={channel.upstreamModelId} label="上游模型调用标识"/> },
+            { title: '上游接口', width: 420, render: (_, { group, channel }) => {
+              const api = supplierChannelInterface(group.owner, channel);
+              return <div className="supplier-flat-interface"><Typography.Text>{api.protocol}</Typography.Text><CopyId copyAtStart ellipsis value={api.url} label="上游 API 地址"/></div>;
+            } },
+            { title: '容量', width: 260, render: (_, { group, channel }) => <ChannelCapacityCell provider={group.owner} channel={channel} modelName={group.name}/> },
+            { title: '成本', className: 'supplier-channel-cost-cell', width: 310, render: (_, { group, channel }) => <ChannelCostCell cost={costs.get(group.owner.id + ':' + channel.id)}/> },
+            { title: '操作', fixed: narrow ? false : 'right', width: 300, render: (_, { group, channel }) => {
+              const cost = costs.get(group.owner.id + ':' + channel.id), name = channelName(group.owner, channel);
+              return <div className="supplier-row-actions">{configButton(group, channel)}
+                {cost && <Button theme="borderless" size="small" disabled={blocked} aria-label={'容量设置 ' + group.name + ' · ' + name} onClick={event => editPricing(event.currentTarget, 'capacity', cost)}>容量设置</Button>}
+                {cost && <Button theme="borderless" size="small" disabled={blocked} aria-label={'成本设置 ' + group.name + ' · ' + name} onClick={event => editPricing(event.currentTarget, 'cost', cost)}>成本设置</Button>}
+                <Dropdown clickToHide trigger="click" position="bottomRight" render={<Dropdown.Menu>
+                  <Dropdown.Item type="danger" disabled={blocked} onClick={() => ops.proceed(() => {
+                    ops.setError(''); setRemovingChannel({ providerId: group.owner.id, endpointId: channel.endpointId, associationId: channel.id });
+                  })}>删除模型渠道</Dropdown.Item>
+                </Dropdown.Menu>}>
+                  <Button theme="borderless" size="small" disabled={blocked} icon={<IconMore/>} aria-label={'更多操作 ' + group.name + ' · ' + name}
+                    onClick={event => { trigger.current = event.currentTarget; }}/>
+                </Dropdown>
+              </div>;
+            } },
+          ]}/>}
+    </div>
+    {bulkAction && (() => {
+      const closeBulk = () => {
+      setBulkAction(null); ops.dirty(false); ops.setError('');
+      requestAnimationFrame(() => trigger.current?.isConnected && trigger.current.focus({ preventScroll: true }));
+      };
+      return bulkAction.mode === 'remove' ? <ProviderRemovalDialog state={state} ops={ops} target={{ providerId: provider.id, associationIds: bulkAction.ids }} close={closeBulk} removed={() => { setSelectedChannels([]); closeBulk(); }}/>
+        : ['enable', 'disable'].includes(bulkAction.mode) ? <SupplierChannelLifecycleDialog state={state} provider={provider} associationIds={bulkAction.ids} action={bulkAction.mode} ops={ops} close={closeBulk}/>
+          : <SupplierChannelBulkActions state={state} provider={provider} associationIds={bulkAction.ids} mode={bulkAction.mode} ops={ops} close={closeBulk}/>;
+    })()}
+    {removingChannel && <ProviderRemovalDialog state={state} ops={ops} target={removingChannel} close={closeChannelRemoval} removed={closeChannelRemoval}/>}
+    {configuration && (endpoint
+      ? <SupplierChannelDialog key={association.id} state={state} provider={owner} endpoint={endpoint} association={association} focusUpstream={Boolean(requestedChannel)} ops={ops} close={close}/>
+      : <Modal title="模型渠道已变化" onClose={() => ops.proceed(close)}><Notice error>请关闭后重新选择模型渠道。</Notice></Modal>)}
+    {pricingRecord && (pricing.type === 'cost'
+      ? <ProcurementVersionEditor key={pricingRecord.key} state={state} provider={pricingRecord.provider} association={pricingRecord.association} modelName={pricingRecord.modelName} ops={ops} close={close}/>
+      : <ChannelCapacityEditor key={pricingRecord.key} provider={pricingRecord.provider} association={pricingRecord.association} modelName={pricingRecord.modelName} ops={ops} close={close}/>)}
+    {pricing && !pricingRecord && <Modal title="模型渠道已变化" onClose={() => ops.proceed(close)}><Notice error>请关闭后重新选择模型渠道。</Notice></Modal>}
   </>;
 }

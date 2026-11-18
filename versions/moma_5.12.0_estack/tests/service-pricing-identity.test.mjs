@@ -10,6 +10,8 @@ test('prices use current supplier names and customer-facing IDs for both modes',
   const model={modelId:'unified-call',serviceProviders:[{providerId:'vendor',callId:'vendor-call'}]};
   assert.deepEqual(servicePriceIdentity(state,model),{supplierName:'平台当前名称',callId:'unified-call'});
   assert.deepEqual(servicePriceIdentity(state,model,'vendor'),{supplierName:'智谱',callId:'vendor-call'});
+  model.serviceProviders.push({providerId:'vendor',channelId:'resale',channelName:'转售',callId:'resale-call'});
+  assert.deepEqual(servicePriceIdentity(state,model,'resale'),{supplierName:'智谱',callId:'resale-call'});
   state.providers[1].name='平台更名';
   assert.equal(servicePriceIdentity(state,model).supplierName,'平台更名');
   assert.equal(servicePriceIdentity(state,model,'missing').callId,'');

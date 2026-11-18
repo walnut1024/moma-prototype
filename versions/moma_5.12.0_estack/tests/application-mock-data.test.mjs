@@ -1,12 +1,15 @@
+import { withSignedInAccount } from './auth-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {APPLICATION_CONFIG,validateApplicationConfig,initialApplicationData} from '../src/mock/application-data.js';
+import {applyModelDataset,initialWorkspace} from '../src/mock/model-data.js';
 import {createAdminSeed,loadAdminState,serializeAdminState,STORAGE_KEY,persistModelAction} from '../src/admin-v2/store.js';
-import {emptyAuthState,registerAuthAccount,persistAuthState,loginAuthAccount} from '../src/auth-state.mjs';
+import {emptyAuthState,persistAuthState,loginAuthAccount} from '../src/auth-state.mjs';
 import {AUTH_DATA_KEY} from '../src/service-access.mjs';
-import {linkedAccountFixture} from '../src/linked-accounts.mjs';
+import {siteSettlement} from '../src/site-config.mjs';
+import {linkedAccountFixture,switchLinkedUser} from '../src/linked-accounts.mjs';
 import {withAdminSession} from './admin-session-fixture.mjs';
-import {tenantData,tenantContext,saveTenantKeys,orderTenantServices,saveTenantOrganization,recordTenantExperience,saveTenantRoutes} from '../src/tenant-data.mjs';
+import {tenantData,tenantContext,createTenantProject,updateTenantProject,saveTenantKeys,saveTenantOrganization,recordTenantExperience,saveTenantRoutes,saveProjectRoute,orderTenantServices} from '../src/tenant-data.mjs';
 import {tenantUsageData,tenantUsageTypes} from '../src/usage-data.mjs';
 import {tenantLogRecords} from '../src/call-log-data.mjs';
 import {overviewBusiness} from '../src/admin-v2/overview.js';
@@ -16,7 +19,7 @@ import {logJSON,logStatuses} from '../src/call-log-data.mjs';
 import {simulateRequest} from '../src/admin-v2/domain.js';
 const storageFor=()=>{const map=new Map();return {getItem:key=>map.get(key)??null,setItem:(key,value)=>map.set(key,value),removeItem:key=>map.delete(key)};};
 function environment(t){const storage=storageFor(),descriptor=Object.getOwnPropertyDescriptor(globalThis,'localStorage');Object.defineProperty(globalThis,'localStorage',{configurable:true,value:storage});t.after(()=>descriptor?Object.defineProperty(globalThis,'localStorage',descriptor):delete globalThis.localStorage);return storage;}
-function linked(storage){const fixture=linkedAccountFixture(loadAdminState(storage),emptyAuthState());fixture.state=withAdminSession(fixture.state);storage.setItem(STORAGE_KEY,serializeAdminState(fixture.state));storage.setItem(AUTH_DATA_KEY,JSON.stringify(loginAuthAccount(fixture.auth,'13800002001','enterprise')));return fixture;}
+function linked(storage){const fixture=linkedAccountFixture(applyModelDataset(initialWorkspace(createAdminSeed())),emptyAuthState());fixture.state=withAdminSession(fixture.state);storage.setItem(STORAGE_KEY,serializeAdminState(fixture.state));storage.setItem(AUTH_DATA_KEY,JSON.stringify(loginAuthAccount(fixture.auth,'13800002001','enterprise')));return fixture;}
 
 test('application configuration validates once, clones initial resources and preserves all saved collections including removals',()=>{
  const original=JSON.stringify(APPLICATION_CONFIG);assert.doesNotThrow(validateApplicationConfig);
@@ -28,10 +31,10 @@ test('application configuration validates once, clones initial resources and pre
 });
 test('registration creates one explicitly linked backend identity; failed auth persistence rolls back the backend write',t=>{
  const storage=environment(t);loadAdminState(storage);let auth=emptyAuthState();storage.setItem(AUTH_DATA_KEY,JSON.stringify(auth));
- const next=registerAuthAccount(auth,{phone:'13899990001',name:'配置联动用户'});auth=persistAuthState(auth,next,storage);
+ const next=withSignedInAccount(auth,{phone:'13899990001',name:'配置联动用户'});auth=persistAuthState(auth,next,storage);
  const context=tenantContext(storage);assert.ok(context.state.users.some(row=>row.id===context.link.backendUserId&&row.name==='配置联动用户'));assert.equal(context.identity.spaceId,'personal');
  assert.equal(context.state.identityEvents.filter(row=>row.type==='login').length,1);
- const raw=storage.getItem(STORAGE_KEY),authRaw=storage.getItem(AUTH_DATA_KEY),another=registerAuthAccount(auth,{phone:'13899990002'});
+ const raw=storage.getItem(STORAGE_KEY),authRaw=storage.getItem(AUTH_DATA_KEY),another=withSignedInAccount(auth,{phone:'13899990002'});
  assert.throws(()=>persistAuthState(auth,another,{...storage,setItem(key,value){if(key===AUTH_DATA_KEY)throw Error('quota');storage.setItem(key,value);}}),/quota/);
  assert.equal(storage.getItem(STORAGE_KEY),raw);assert.equal(storage.getItem(AUTH_DATA_KEY),authRaw);
 });
@@ -55,14 +58,55 @@ test('request usage views agree on cache inclusion and unknown measurements, inc
 });
 test('key quota disable and restore retain usage and synchronize the saved grant',t=>{
  const storage=environment(t);linked(storage);let data=tenantData(storage);
+ const projectId=createTenantProject({name:'额度测试'}, {expectedRevision:data.revision,identityKey:data.identity.key},storage).id;
+ data=tenantData(storage);
  const row={id:'quota-roundtrip',name:'额度往返验证',enabled:true,models:[],ips:[],quotaType:'日',quotaLimit:100};
- saveTenantKeys([row],{expectedRevision:data.revision},storage);
+ saveTenantKeys([row],{projectId,expectedRevision:data.revision},storage);
  let state=JSON.parse(storage.getItem(STORAGE_KEY));state.grants.find(item=>item.subjectId===row.id).used=12;storage.setItem(STORAGE_KEY,serializeAdminState(state));
- data=tenantData(storage);saveTenantKeys([{...row,quotaEnabled:false}],{expectedRevision:data.revision},storage);
+ data=tenantData(storage);saveTenantKeys([{...row,quotaEnabled:false}],{projectId,expectedRevision:data.revision},storage);
  data=tenantData(storage);assert.equal(data.keys[0].quotaLimit,null);assert.equal(data.keys[0].quota,'不限额度');
- saveTenantKeys([{...row,quotaEnabled:true}],{expectedRevision:data.revision},storage);
+ saveTenantKeys([{...row,quotaEnabled:true}],{projectId,expectedRevision:data.revision},storage);
  state=JSON.parse(storage.getItem(STORAGE_KEY));const grant=state.grants.find(item=>item.subjectId===row.id);assert.equal(grant.status,'生效中');assert.equal(grant.used,12);
- const stale=data.revision;data=tenantData(storage);assert.throws(()=>saveTenantKeys([row],{expectedRevision:stale},storage),/数据已变化/);
+ const stale=data.revision;data=tenantData(storage);assert.throws(()=>saveTenantKeys([row],{projectId,expectedRevision:stale},storage),/数据已变化/);
+});
+test('projects and their keys stay in the selected space and preserve other projects', t => {
+  const storage = environment(t);
+  linked(storage);
+  const records = [];
+  for (const [account, tenant] of [
+    ['auth-link-enterprise-a', 'tenant-gov'],
+    ['auth-link-enterprise-b', 'tenant-nanjing'],
+    ['auth-link-personal-p', 'personal-demo-001'],
+  ]) {
+    switchLinkedUser(account, storage);
+    let data = tenantData(storage);
+    assert.equal(data.identity.tenantId, tenant);
+    const create = name => createTenantProject({name}, {expectedRevision:data.revision,identityKey:data.identity.key}, storage);
+    const personal = data.identity.spaceId === 'personal';
+    if (personal) assert.throws(() => create('额外项目'), /固定使用默认项目/);
+    const first = personal ? data.projects[0] : create('第一个项目');
+    data = tenantData(storage);
+    const second = personal ? null : create('第二个项目');
+    const selectedProjects = [first, second].filter(Boolean);
+    for (const project of selectedProjects) {
+      data = tenantData(storage);
+      const key = {id:'qa-'+project.id, name:'项目密钥', models:[], enabled:true};
+      assert.throws(() => saveTenantKeys([key], {expectedRevision:data.revision}, storage), /选择项目/);
+      saveTenantKeys([key], {projectId:project.id,expectedRevision:data.revision}, storage);
+    }
+    data = tenantData(storage);
+    assert.equal(data.keys.filter(key => key.id.startsWith('qa-') && selectedProjects.some(project => project.id === key.projectId)).length, selectedProjects.length);
+    assert.ok(records.every(id => !data.projects.some(project => project.id === id)));
+    records.push(...selectedProjects.map(project => project.id));
+  }
+  const auth = JSON.parse(storage.getItem(AUTH_DATA_KEY));
+  persistAuthState(auth, {...auth, activeSpace:'tenant-gov'}, storage);
+  const data = tenantData(storage);
+  assert.equal(data.identity.userId, auth.currentUserId);
+  assert.equal(data.canCreateProject, false);
+  assert.throws(() => createTenantProject({name:'越权'}, {expectedRevision:data.revision,identityKey:data.identity.key}, storage), /无权/);
+  assert.throws(() => saveTenantKeys([], {projectId:records.at(-1),expectedRevision:data.revision}, storage), /无权/);
+  assert.ok(records.every(id => !data.projects.some(project => project.id === id)));
 });
 test('base model filtering includes provider-specific calls without merging other models',()=>{
  const at='2026-11-02T01:00:00Z',models=[{id:'glm',modelId:'glm-5.3',type:'text'},{id:'ds',modelId:'deepseek',type:'text'}];
@@ -82,27 +126,78 @@ test('two published modes share tenant keys, orders, routes and request facts wi
  const {completeServiceShowcase}=await import('../src/admin-v2/service-showcase-client.js');
  let state=tenantContext(storage).state;state=withAdminSession(state);state=await completeServiceShowcase(state,(current,action)=>persistModelAction(current,action,storage));
  let data=tenantData(storage);assert.equal(data.services.length,3);
+ assert.throws(() => orderTenantServices(data.services.map(row => row.id),{expectedRevision:data.revision,identityKey:data.identity.key},storage), /管理员/);
+ state.memberships.find(row => row.id === 'member-link-enterprise-a').role = '租户管理员';
+ storage.setItem(STORAGE_KEY, serializeAdminState(state));
+ data=tenantData(storage);
+ orderTenantServices(data.services.map(row => row.id),{expectedRevision:data.revision,identityKey:data.identity.key},storage);
+ state=tenantContext(storage).state;state.memberships.find(row => row.id === 'member-link-enterprise-a').role = '普通成员';
+ storage.setItem(STORAGE_KEY,serializeAdminState(state));
+ data=tenantData(storage);
+ const projectId=createTenantProject({name:'前后台联动'}, {expectedRevision:data.revision,identityKey:data.identity.key},storage).id;
+ data=tenantData(storage);
+ updateTenantProject(projectId,'models',[...new Set(data.projectServices.map(row=>row.modelKey))].map(modelId=>({modelId,rpm:null,tpm:null})),
+   {expectedRevision:data.revision,identityKey:data.identity.key},storage);
+ data=tenantData(storage);
  const offer=data.services.find(row=>row.mode==='provider'),key={id:'key-tenant-qa',name:'前后台同源',key:'sk-mock-qa-never-persist',enabled:true,models:[offer.modelId],ips:[]};
- saveTenantKeys([key],{expectedRevision:data.revision},storage);let saved=JSON.parse(storage.getItem(STORAGE_KEY));assert.equal(saved.apiKeys.find(row=>row.id===key.id).tenantId,'tenant-gov');assert.ok(!JSON.stringify(saved).includes(key.key));
- data=tenantData(storage);assert.ok(data.keys.some(row=>row.id===key.id));const raw=storage.getItem(STORAGE_KEY);assert.throws(()=>saveTenantKeys([{...key,id:'key-001'}],{expectedRevision:data.revision},storage),/无权/);assert.equal(storage.getItem(STORAGE_KEY),raw);
- saveTenantKeys([{...key,quotaEnabled:false}],{expectedRevision:data.revision},storage);data=tenantData(storage);
+ saveTenantKeys([key],{projectId,expectedRevision:data.revision},storage);let saved=JSON.parse(storage.getItem(STORAGE_KEY));assert.equal(saved.apiKeys.find(row=>row.id===key.id).tenantId,'tenant-gov');assert.ok(!JSON.stringify(saved).includes(key.key));
+ data=tenantData(storage);assert.ok(data.keys.some(row=>row.id===key.id));const raw=storage.getItem(STORAGE_KEY);assert.throws(()=>saveTenantKeys([{...key,id:'key-001'}],{projectId,expectedRevision:data.revision},storage),/无权/);assert.equal(storage.getItem(STORAGE_KEY),raw);
+ saveTenantKeys([{...key,quotaEnabled:false}],{projectId,expectedRevision:data.revision},storage);data=tenantData(storage);
  let current=tenantContext(storage).state;current.grants.push({id:'qa-explicit-tenant',subjectType:'tenant',subjectId:data.identity.tenantId,modelIds:current.models.map(row=>row.id),limit:1000000,used:0,status:'生效中'});const tenantGrant=current.grants.find(row=>row.subjectType==='tenant'&&row.subjectId===data.identity.tenantId),beforeUsed=tenantGrant.used;
  const called=simulateRequest(current,{requestId:'api-qa-shared',keyId:key.id,modelId:offer.callId,usage:{input:3,cached:1,output:2}});assert.equal(called.request.httpStatus,200);assert.equal(called.state.grants.find(row=>row.id===tenantGrant.id).used,beforeUsed+5);
  assert.deepEqual(simulateRequest(called.state,{requestId:'api-qa-shared',keyId:key.id,modelId:offer.callId}).request,called.request);
  const foreignReplay=simulateRequest(called.state,{requestId:'api-qa-shared',keyId:'key-001',modelId:offer.callId});assert.equal(foreignReplay.request.httpStatus,409);assert.equal(foreignReplay.request.tenantId,undefined);assert.equal(foreignReplay.request.priceSnapshot,undefined);assert.equal(foreignReplay.state,called.state);
  const revoked=structuredClone(called.state);revoked.apiKeys.find(row=>row.id===key.id).modelIds=[];assert.equal(simulateRequest(revoked,{requestId:'api-qa-shared',keyId:key.id,modelId:offer.callId}).request.httpStatus,403);
  storage.setItem(STORAGE_KEY,serializeAdminState(called.state));data=tenantData(storage);assert.ok(tenantLogRecords(data).some(row=>row.id==='api-qa-shared'&&row.model===offer.callId&&row.total===5));
- saveTenantKeys([{...key,quotaEnabled:false,tpmLimit:4}],{expectedRevision:data.revision},storage);current=tenantContext(storage).state;assert.equal(simulateRequest(current,{requestId:'api-qa-rate',keyId:key.id,modelId:offer.callId,usage:{input:3,output:2}}).request.httpStatus,429);
- data=tenantData(storage);saveTenantKeys([{...key,quotaEnabled:false,qpmLimit:1}],{expectedRevision:data.revision},storage);current=tenantContext(storage).state;assert.equal(simulateRequest(current,{requestId:'api-qa-qpm',keyId:key.id,modelId:offer.callId,usage:{input:1,output:1}}).request.httpStatus,429);
- data=tenantData(storage);assert.throws(()=>saveTenantKeys([{...key,qpmLimit:0}],{expectedRevision:data.revision},storage),/正整数/);
+ saveTenantKeys([{...key,quotaEnabled:false,tpmLimit:4}],{projectId,expectedRevision:data.revision},storage);current=tenantContext(storage).state;assert.equal(simulateRequest(current,{requestId:'api-qa-rate',keyId:key.id,modelId:offer.callId,usage:{input:3,output:2}}).request.httpStatus,429);
+ data=tenantData(storage);saveTenantKeys([{...key,quotaEnabled:false,qpmLimit:1}],{projectId,expectedRevision:data.revision},storage);current=tenantContext(storage).state;assert.equal(simulateRequest(current,{requestId:'api-qa-qpm',keyId:key.id,modelId:offer.callId,usage:{input:1,output:1}}).request.httpStatus,429);
+ data=tenantData(storage);assert.throws(()=>saveTenantKeys([{...key,qpmLimit:0}],{projectId,expectedRevision:data.revision},storage),/正整数/);
  data=tenantData(storage);
- orderTenantServices([offer.id],data.revision,storage);data=tenantData(storage);assert.ok(data.orders.some(row=>row.serviceId===offer.id));assert.throws(()=>orderTenantServices([offer.id],data.revision,storage),/已订购/);
- saveTenantRoutes([{id:'qa-route',name:'联动路由',models:[offer.callId],strategy:'效果优先'}],data.revision,storage);data=tenantData(storage);assert.equal(data.routes[0].models[0],offer.callId);
- const ticket={requestId:'experience-qa-once',serviceId:offer.id,owner:data.identity.key,startedAt:new Date().toISOString()};recordTenantExperience(ticket,200,storage);recordTenantExperience(ticket,200,storage);
+ const {state:withOrder,identity}=tenantContext(storage);
+ withOrder.orders.push({id:'qa-route-order',tenantId:identity.tenantId,serviceId:offer.id,status:'生效中'});
+ storage.setItem(STORAGE_KEY,serializeAdminState(withOrder));
+ data=tenantData(storage);
+ assert.ok(data.orders.some(row=>row.serviceId===offer.id));
+ const routeModel=data.routeServices.find(row=>row.id===offer.id).modelKey;
+ saveTenantRoutes({action:'publish',kind:'preset',name:'linked-route',config:{models:[routeModel],providers:[],
+   sort:'default',description:'联动路由',systemPrompt:'',parameters:{}}},data.revision,storage);
+ data=tenantData(storage);
+ const preset=data.routes.find(row=>row.callId==='@preset/linked-route');
+ assert.equal(preset.versions[0].config.models[0],routeModel);
+ const fallback=data.services.find(row=>row.id!==offer.id && row.callable);
+ const projectRoute={projectId,name:'客服分流',code:'qa-project-route',defaultService:offer.id,fallback:[fallback.id],
+   rules:[{field:'apikey',value:key.id,service:offer.id},{field:'metadata._user',value:'vip',service:offer.id}]};
+ assert.throws(()=>saveProjectRoute({...projectRoute,projectId:'project-1-1'},{expectedRevision:data.revision},storage),/无权/);
+ assert.throws(()=>saveProjectRoute({...projectRoute,rules:[{field:'apikey',value:'key-001',service:offer.id}]},{expectedRevision:data.revision},storage),/当前项目/);
+ saveProjectRoute(projectRoute,{expectedRevision:data.revision},storage);
+ assert.throws(()=>saveProjectRoute(projectRoute,{expectedRevision:data.revision},storage),/已变化/);
+ data=tenantData(storage);
+ assert.deepEqual(data.projectRouting.routes[0].rules,projectRoute.rules);
+ assert.deepEqual(data.projectRouting.routes[0].fallback,[fallback.id]);
+ assert.equal(data.routes.find(row=>row.callId===preset.callId).id,preset.id);
+ const ticket={requestId:'experience-qa-once',serviceId:offer.id,projectId,owner:data.identity.key,sessionGeneration:data.identity.generation,settlement:siteSettlement(storage),startedAt:new Date().toISOString()};recordTenantExperience(ticket,200,storage);recordTenantExperience(ticket,200,storage);
  data=tenantData(storage);const record=data.requests.find(row=>row.requestId===ticket.requestId);assert.ok(record);assert.deepEqual(record.usage,{});assert.equal(data.requests.filter(row=>row.requestId===ticket.requestId).length,1);assert.equal(/procurement|fingerprint|priceSnapshot/.test(JSON.stringify(data.requests)),false);
+ assert.equal(record.projectId,projectId);
+ assert.equal(record.keyId,'experience:'+projectId);
+ assert.throws(()=>recordTenantExperience({...ticket,projectId:'project-1-1'},200,storage),/标识已用于/);
  const logs=tenantLogRecords(data);assert.ok(logs.some(row=>row.id===ticket.requestId&&row.model===offer.callId));
  assert.ok(JSON.parse(storage.getItem(STORAGE_KEY)).requests.some(row=>row.requestId===ticket.requestId));
- const auth=JSON.parse(storage.getItem(AUTH_DATA_KEY));storage.setItem(AUTH_DATA_KEY,JSON.stringify(loginAuthAccount(auth,'13800002002','enterprise')));data=tenantData(storage);assert.ok(!data.keys.some(row=>row.id===key.id));assert.ok(!data.orders.some(row=>row.serviceId===offer.id));assert.ok(!data.requests.some(row=>row.requestId===ticket.requestId));assert.equal(data.routes.length,0);
+ const auth=JSON.parse(storage.getItem(AUTH_DATA_KEY));storage.setItem(AUTH_DATA_KEY,JSON.stringify(loginAuthAccount(auth,'13800002002','enterprise')));data=tenantData(storage);assert.ok(!data.keys.some(row=>row.id===key.id));assert.ok(!data.orders.some(row=>row.serviceId===offer.id));assert.ok(!data.requests.some(row=>row.requestId===ticket.requestId));assert.equal(data.routes.length,0);assert.equal(data.projectRouting.routes.length,0);
+});
+test('usage subscriptions come from active orders in the current space, even without calls', t => {
+ const storage = environment(t);
+ const { state } = linked(storage);
+ const active = state.orders.find(order => order.tenantId === 'tenant-gov');
+ state.orders.push(
+  { ...active, id: 'duplicate', modelIds: ['model-3'] },
+  { ...active, id: 'expired', modelIds: ['model-2'], endAt: '2026-01-01T00:00:00+08:00' },
+  { ...active, id: 'cancelled', modelIds: ['model-2'], status: '已取消' },
+  { ...active, id: 'other-space', modelIds: ['model-2'], tenantId: 'tenant-nanjing' },
+ );
+ storage.setItem(STORAGE_KEY, serializeAdminState(state));
+ const { report } = tenantData(storage, { usageReport: true });
+ assert.deepEqual(report.subscribedModelIds, ['model-1', 'model-3']);
+ assert.ok(report.models.some(model => model.id === 'model-3'));
 });
 test('tenant charts and platform overview reconcile the same deduplicated requests and keep unknown metering unknown',()=>{
  const state=createAdminSeed();const at='2026-11-02T01:00:00Z';state.requests=[{id:'one',requestId:'req-one',tenantId:'tenant-gov',modelId:'model-1',createdAt:at,httpStatus:200,usage:{input:3,output:2},durationMs:200},{id:'two',requestId:'req-two',tenantId:'tenant-gov',modelId:'model-1',createdAt:at,httpStatus:200,usage:{}}];

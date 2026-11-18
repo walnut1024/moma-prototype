@@ -1,3 +1,4 @@
+import { resourceId } from '../resource-id.mjs';
 export const PACKAGE_KINDS = { subscription: '订阅套餐', pack: '资源包' };
 export const PACKAGE_STATUS = { draft: '草稿', ready: '待上架', listed: '已上架', unlisted: '已下架' };
 export const PACKAGE_PERIODS = { month: '月', quarter: '季', year: '年' };
@@ -137,7 +138,7 @@ export function packageConfig(values, publish, packageTypes, eligibleModels) {
     throw new Error('支持订购的用户类型无效');
   }
   if (publish && !userTypes.length) throw new Error('请至少选择一种支持订购的用户类型');
-  const packageType = text(values.packageType, '套餐类型', MAX_PACKAGE_TYPE_LENGTH);
+  const packageType = text(values.packageType, '套餐类型', 80);
   if (packageType && !packageTypes.some(([id]) => id === packageType)) throw new Error('请选择已有的套餐类型');
   const modelIds = values.modelIds ?? [];
   if (!Array.isArray(modelIds) || modelIds.some(id => typeof id !== 'string' || !eligibleModels.has(id))) {
@@ -206,7 +207,7 @@ export function tokenPackageTransaction(state, action) {
     if (/[\r\n]/.test(name)) throw new Error('类型名称须为单行文字');
     const normalized = name.normalize('NFKC').toLowerCase();
     if (packageTypes.some(([, label]) => label.normalize('NFKC').toLowerCase() === normalized)) throw new Error('套餐类型已存在');
-    const typeId = `TPT-${String(state.revision + 1).padStart(4, '0')}`;
+    const typeId = resourceId('token-package-type');
     return { type: 'add', collection: 'tokenPackageTypes', record: { id: typeId, name }, label: '添加套餐类型' };
   }
   if (operation === 'deleteType') {
@@ -234,7 +235,7 @@ export function tokenPackageTransaction(state, action) {
     const label = publish ? '发布套餐' : '保存套餐草稿';
     return previous
       ? { type: 'update', collection: 'tokenPackages', id, changes, label }
-      : { type: 'add', collection: 'tokenPackages', record: { id: `TP-${String(state.revision + 1).padStart(4, '0')}`, ...changes }, label };
+      : { type: 'add', collection: 'tokenPackages', record: { id: resourceId('token-package'), packageNumber: `TP-${String(state.revision + 1).padStart(4, '0')}`, ...changes }, label };
   }
   if (operation === 'list' && ['ready', 'unlisted'].includes(previous?.status)) {
     packageConfig(previous, true, packageTypes, eligibleModels);

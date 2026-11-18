@@ -26,7 +26,7 @@ test('batch imports append independently, preserve pricing and reload without ch
 
 test('invalid, duplicate-only and oversized imports fail atomically', () => {
   const seed = createAdminSeed(), before = JSON.stringify(seed), existing = providerCatalogueIds(provider(seed))[0];
-  for (const text of ['', ' \n ', existing, 'valid\ninvalid model', 'x'.repeat(201)]) assert.throws(() => commitAdminState(seed, action(text)), /请输入|均已存在|有效 Model ID/);
+  for (const text of ['', ' \n ', existing, 'valid\ninvalid model', 'x'.repeat(201)]) assert.throws(() => commitAdminState(seed, action(text)), /请输入|均已存在|有效服务商目录标识/);
   assert.throws(() => commitAdminState(seed, action('One\nTwo', 'single')), /请选择/);
   assert.throws(() => commitAdminState(seed, action('One', 'unknown')), /请选择/);
   assert.throws(() => commitAdminState(seed, action('One', 'batch', 'missing')), /服务商不存在/);

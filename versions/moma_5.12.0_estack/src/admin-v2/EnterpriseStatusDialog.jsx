@@ -11,7 +11,7 @@ export default function EnterpriseStatusDialog({ state, confirmation, apply, clo
   const target = state[collection].find(item => item.id === targetId);
   const disabling = target?.status !== '停用';
   const action = key || member ? disabling ? '停用' : '启用' : disabling ? '冻结' : '解冻';
-  const type = key ? 'API 密钥' : member ? '企业管理员' : '企业账号';
+  const type = key ? 'API 密钥' : member ? '企业管理员' : '政企客户';
   const scope = `${collection}:${targetId}:${action}`;
   const [challenge, setChallenge] = useState(null), [code, setCode] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false), [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -53,7 +53,7 @@ export default function EnterpriseStatusDialog({ state, confirmation, apply, clo
     <form id={formId} onSubmit={submit} className="admin-analytics-fields">
       <EnterpriseFacts rows={[
         ['操作对象', target?.name || (key || member || tenant).name], [key ? 'API 密钥 ID' : '对象 ID', key ? key.keyId : targetId],
-        ...((key || member) ? [['所属企业', tenant.name], ['企业 User ID', tenant.id]] : []),
+        ...((key || member) ? [['所属企业', tenant.name], ['客户 ID', tenant.id]] : []),
         ['操作角色', state.currentRole],
       ]}/>
       <Banner type={disabling ? 'warning' : 'info'} closeIcon={null} description={!key && !member

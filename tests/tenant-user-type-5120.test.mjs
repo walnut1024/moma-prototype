@@ -1,9 +1,10 @@
+import { withSignedInAccount } from '../versions/moma_5.12.0_estack/tests/auth-fixture.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { tenantUserAccess } from '../versions/moma_5.12.0_estack/src/tenant-user-type.mjs';
-import { AUTH_INVITE, emptyAuthState, registerAuthAccount, loginAuthAccount, acceptAuthInvite } from '../versions/moma_5.12.0_estack/src/auth-state.mjs';
+import { AUTH_INVITE, emptyAuthState, loginAuthAccount, acceptAuthInvite } from '../versions/moma_5.12.0_estack/src/auth-state.mjs';
 
-const registered = registerAuthAccount(emptyAuthState(), { phone: AUTH_INVITE.phone });
+const registered = withSignedInAccount(emptyAuthState(), { phone: AUTH_INVITE.phone });
 const joined = acceptAuthInvite(registered, AUTH_INVITE.id, Date.parse('2026-10-13T10:00:00+08:00'));
 test('anonymous preview distinguishes enterprise and personal without modifying account data', () => {
   const state = emptyAuthState(), before = JSON.stringify(state);

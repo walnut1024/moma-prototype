@@ -26,7 +26,7 @@ test('one save creates, checks and enables mapping then publishes route atomical
 });
 test('invalid weight, missing evidence, stale revision and readonly saves leave every collection unchanged',()=>{
  const {state,service}=fixture(),channels=routeEditorChannels(state,service).filter(row=>row.available);assert.ok(channels.length>=2);const data=payload(state,service,channels.slice(0,2),'weighted'),before=structuredClone(state);
- data.config.channels[0].weight=40;assert.throws(()=>run(state,service,data),/100/);assert.deepEqual(state,before);
+ data.config.channels[0].weight=0;assert.throws(()=>run(state,service,data),/大于 0/);assert.deepEqual(state,before);
  data.config.channels[0].weight=50;assert.throws(()=>run(state,service,{...data,sourceVersion:'stale'}),/已变化/);assert.throws(()=>run(state,service,{...data,expectedVersion:999}),/已变化/);assert.throws(()=>run(state,service,data,'运维人员'),/无权/);assert.deepEqual(state,before);
  const bad=structuredClone(data);bad.sources[0].config.upstreamModelId='another-model';assert.throws(()=>run(state,service,bad),/关联|模型/);assert.deepEqual(state,before);
  const unavailable=structuredClone(state);unavailable.endpoints.find(row=>row.id===channels[0].endpointId).baseUrl='https://changed.example.invalid/v1';const unavailableService=routingServices(unavailable).find(row=>row.id===service.id),unavailableData=payload(unavailable,unavailableService,[routeEditorChannels(unavailable,unavailableService).find(row=>row.endpointId===channels[0].endpointId)]),unchanged=structuredClone(unavailable);assert.throws(()=>run(unavailable,unavailableService,unavailableData),/检测|验证|配置/);assert.deepEqual(unavailable,unchanged);

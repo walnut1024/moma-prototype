@@ -1,11 +1,19 @@
+import { resourceId } from '../src/resource-id.mjs';
 import {modelBootstrap,modelCommand,packageBootstrap,packageCommand,packageFactorHistory,readTrafficLimits,simulationRequest,updateTrafficLimits} from './model-commands.js';
 import { createMarketSession, marketCatalogue, marketCompletion, marketCookie, marketOrder, marketSession, marketTenant } from './market.js';
 import { marketDemoModelIds } from '../src/mock/model-data.js';
+import { auditLogDetail, auditLogPage } from './audit-log.js';
+import { PRIVATE_SITE } from '../src/site-config.mjs';
+import { readPublishedAgreements, savePublishedAgreements, validateAgreements } from './site-agreements.js';
+import { AUDIT_ACTIONS, AUDIT_RESOURCES, AUDIT_RESULTS } from '../src/admin-v2/platform-audit.mjs';
+import { domainModel } from '../src/mock/model-fields.js';
+import { serviceCallsEnabled, serviceReferences, offerKey, providerOffer } from '../src/service-access.mjs';
 const PREFIX = '/api/5120';
 const COOKIE = 'moma5120_session';
 const encoder = new TextEncoder();
 const MAX_BODY = 256 * 1024;
 const WRITE_ROLES = ['平台管理员', '运营人员'];
+const LOGIN_FIELDS = new Map([['/auth/sign-in','identifier'], ['/auth/login','accountId'], ['/market/login','tenantId']]);
 
 class ApiError extends Error {
   constructor(status, code, message) { super(message); this.status = status; this.code = code; }
@@ -21,9 +29,15 @@ const fields = (body, allowed) => {
 const identifier = value => typeof value === 'string' && /^[A-Za-z0-9:_.-]{1,200}$/.test(value);
 const decode = row => row ? Object.fromEntries(Object.entries(row).map(([key, value]) => [key.endsWith('_json') ? key.slice(0, -5) : key, key.endsWith('_json') ? JSON.parse(value) : value])) : null;
 const material = row => row && ({ ...JSON.parse(row.metadata_json), record_id:row.id,canonical_slug:row.canonical_slug,name:row.name,type:row.model_type,maker:row.maker,description:row.description,revision:row.revision,created:Math.floor(row.created_at/1000),updated_at:row.updated_at });
-const service = row => row && ({ id: row.id, templateId: row.material_id, modelId: row.code, name: row.name, type: row.model_type,
-  serviceMode: row.mode, serviceModeRevision: row.mode_epoch, listingStatus: { unlisted: '未上架', listed: '已上架', withdrawn: '已下架' }[row.listing_status],
-  callsEnabled: Boolean(row.calls_enabled), marketVisible: Boolean(row.market_visible), scope: JSON.parse(row.scope_json), revision: row.revision, updatedAt: row.updated_at });
+const service = row => {
+  if (!row) return row;
+  const model = domainModel(JSON.parse(row.record_json), true);
+  const callsEnabled = serviceReferences({ models: [model] }).some(reference =>
+    Boolean(reference.callId) && serviceCallsEnabled(model, providerOffer(model, offerKey(reference))));
+  return { id: row.id, templateId: row.material_id, modelId: row.code, name: row.name, type: row.model_type,
+    serviceMode: row.mode, serviceModeRevision: row.mode_epoch, listingStatus: { unlisted: '未上架', listed: '已上架', withdrawn: '已下架' }[row.listing_status],
+    callsEnabled, marketVisible: Boolean(row.market_visible), scope: JSON.parse(row.scope_json), revision: row.revision, updatedAt: row.updated_at };
+};
 
 async function bodyJson(request,maxBody=MAX_BODY) {
   if (request.headers.get('content-type')?.split(';')[0] !== 'application/json') fail(400, 'INVALID_INPUT', '请求须使用 JSON');
@@ -53,19 +67,27 @@ async function secureEqual(a, b) {
 async function authenticate(request, db) {
   const token = request.headers.get('cookie')?.split(';').map(part => part.trim()).find(part => part.startsWith(COOKIE + '='))?.slice(COOKIE.length + 1);
   if (!token || !/^[a-f0-9]{64}$/.test(token)) fail(401, 'SESSION_EXPIRED', '请先登录后台测试账号');
-  const row = await db.prepare(`SELECT a.id,a.name,a.role,s.id AS session_id FROM admin_sessions s
+  const row = await db.prepare(`SELECT a.id,a.name,a.role,COALESCE(a.login_code,a.id) AS loginCode,s.id AS session_id FROM admin_sessions s
     JOIN admin_accounts a ON a.id=s.actor_id WHERE s.token_hash=? AND s.expires_at>? AND s.revoked_at IS NULL AND a.enabled=1`).bind(await digest(token), Date.now()).first();
   if (!row) fail(401, 'SESSION_EXPIRED', '会话已失效，请重新登录');
   return row;
 }
 
-function pagination(url) {
+async function revokeSessions(request, db) {
+  let actor;
+  try { actor = await authenticate(request, db); } catch (error) { if (error.status !== 401) throw error; }
+  if (actor) await db.prepare('UPDATE admin_sessions SET revoked_at=? WHERE id=?').bind(Date.now(), actor.session_id).run();
+  const tenant = await marketSession(db, request);
+  if (tenant) await db.prepare('DELETE FROM market_sessions WHERE token_hash=?').bind(tenant.hash).run();
+}
+
+function pagination(url, maxQueryBytes = 50) {
   const raw = url.searchParams.get('limit') || '20';
   if (!/^\d{1,3}$/.test(raw) || Number(raw) < 1 || Number(raw) > 100) fail(400, 'INVALID_INPUT', '分页大小须为 1—100');
   const after = url.searchParams.get('after') || '';
   if (after && !identifier(after)) fail(400, 'INVALID_INPUT', '分页游标无效');
   const q = (url.searchParams.get('q') || '').trim(), pattern = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
-  if (encoder.encode(pattern).byteLength > 50) fail(400, 'INVALID_INPUT', '搜索内容过长');
+  if (encoder.encode(pattern).byteLength > maxQueryBytes) fail(400, 'INVALID_INPUT', '搜索内容过长');
   return { limit: Number(raw), after, q, pattern };
 }
 function page(rows, limit, map = decode) { return { items: rows.slice(0, limit).map(map), nextCursor: rows.length > limit ? rows[limit - 1].id : null }; }
@@ -106,7 +128,11 @@ async function workspace(db, id) {
       JOIN suppliers p ON p.id=cm.supplier_id JOIN services s ON s.material_id=cm.material_id WHERE s.id=? AND cm.removed_at IS NULL ORDER BY cm.id LIMIT 101`).bind(id),
   ]);
   if (!result[0].results.length) fail(404, 'NOT_FOUND', '模型服务不存在');
-  return { service: service(result[0].results[0]), material: material(result[1].results[0]), offers: result[2].results.map(decode),
+  const header = service(result[0].results[0]);
+  const offers = result[2].results.map(row => decode({
+    ...row, calls_enabled: Number(header.callsEnabled && Boolean(row.id) && Boolean(row.calls_enabled)),
+  }));
+  return { service: header, material: material(result[1].results[0]), offers,
     channelModels: result[3].results.slice(0, 100).map(decode), hasMoreChannels: result[3].results.length > 100 };
 }
 
@@ -126,7 +152,7 @@ async function visibility(request, db, actor, id) {
   const seq = read[0].results[0].commit_seq, before = read[1].results[0];
   if (!before) fail(404, 'NOT_FOUND', '模型服务不存在');
   if (before.revision !== body.expectedRevision) fail(409, 'REVISION_CONFLICT', '模型服务已变化，请重新核对；当前输入保留');
-  const at = Date.now(), auditId = crypto.randomUUID();
+  const at = Date.now(), auditId = resourceId('audit-event');
   const response = { operationId: body.operationId, serviceId: id, revision: before.revision + 1, commitSeq: seq + 1, marketVisible: body.visible, effectiveAt: at, invalidate: [`services:${id}`, 'services'] };
   try {
     await db.batch([
@@ -162,8 +188,11 @@ async function route(request, env) {
   const packagePath = ['/package-management', '/package-management/commands', '/package-management/factor-history'].includes(path);
   const trafficPath = path === '/traffic-limits';
   const trafficHistoryPath = path === '/traffic-limits/history';
-  const marketPaths = ['/market/catalogue','/market/login','/market/logout','/market/orders','/market/completions'];
-  const known = marketPaths.includes(path) || trafficPath || trafficHistoryPath || packagePath || ['/auth/login','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-market/visibility','/model-operations','/model-operations/commands'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
+  const auditPath = /^\/audit-logs(?:\/([A-Za-z0-9:_.-]{1,200}))?$/.exec(path);
+  const marketPaths = ['/market/catalogue','/market/logout','/market/orders','/market/completions'];
+  const loginField = LOGIN_FIELDS.get(path);
+  const agreementPath = path === '/site-agreements' && (PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1');
+  const known = agreementPath || loginField || marketPaths.includes(path) || trafficPath || trafficHistoryPath || auditPath || packagePath || ['/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-market/visibility','/model-operations','/model-operations/commands'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
   if (!known) fail(404, 'NOT_FOUND', 'API 不存在');
   if (!env.MODEL_OPS_DB) fail(503, 'DATABASE_UNAVAILABLE', '模型运营数据库尚未绑定');
   const db = env.MODEL_OPS_DB;
@@ -171,17 +200,51 @@ async function route(request, env) {
   if (method !== 'GET') {
     if (request.headers.get('origin') !== url.origin || request.headers.get('x-moma-request') !== '1') fail(403, 'FORBIDDEN', '请求来源无效');
   }
-  if (path === '/auth/login' && method === 'POST') {
-    const body = await bodyJson(request); fields(body, ['accountId','accessCode']);
-    if (!identifier(body.accountId) || typeof body.accessCode !== 'string' || body.accessCode.length < 8 || body.accessCode.length > 128) fail(401, 'INVALID_LOGIN', '账号或密码无效');
+  if (agreementPath) {
+    if (method === 'GET') return json(await readPublishedAgreements(db));
+    if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    const actor = await authenticate(request, db);
+    if (actor.role !== '平台管理员') fail(403, 'FORBIDDEN', '仅系统管理员可保存站点协议');
+    const body = await bodyJson(request);
+    fields(body, ['expectedRevision', 'agreements']);
+    const next = validateAgreements(body);
+    if (!next) fail(400, 'INVALID_INPUT', '协议正文或链接无效');
+    const saved = await savePublishedAgreements(db, next);
+    if (!saved) fail(409, 'REVISION_CONFLICT', '协议已更新，请载入当前版本');
+    return json(saved);
+  }
+  if (path === '/auth/logout' && method === 'POST') {
+    await revokeSessions(request, db);
+    const response = json({ loggedOut: true }, 200, { 'Set-Cookie': cookie('', 0) });
+    response.headers.append('Set-Cookie', cookie('', 0).replace(COOKIE + '=', marketCookie + '='));
+    return response;
+  }
+  if (loginField) {
+    if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    const body = await bodyJson(request, 4096); fields(body, [loginField,'accessCode']);
+    const id = body[loginField], invalid = loginField === 'tenantId' ? '客户编号或密码无效' : '账号或密码无效';
+    if (!identifier(id) || typeof body.accessCode !== 'string' || body.accessCode.length < 8 || body.accessCode.length > 128) fail(401, 'INVALID_LOGIN', invalid);
     let hashes;
     try { hashes = JSON.parse(env.MODEL_OPS_LOGIN_HASHES || '{}'); } catch { fail(503, 'LOGIN_UNAVAILABLE', '测试账号登录尚未配置'); }
-    const expected = hashes[body.accountId], valid = await secureEqual(await digest(body.accessCode), typeof expected === 'string' ? expected : '0'.repeat(64));
-    const account = await db.prepare('SELECT id,name,role FROM admin_accounts WHERE id=? AND enabled=1').bind(body.accountId).first();
-    if (!valid || !expected || !account) fail(401, 'INVALID_LOGIN', '账号或密码无效');
+    if (!hashes || typeof hashes !== 'object' || Array.isArray(hashes)) fail(503, 'LOGIN_UNAVAILABLE', '测试账号登录尚未配置');
+    const expected = Object.hasOwn(hashes, id) ? hashes[id] : null;
+    const valid = await secureEqual(await digest(body.accessCode), typeof expected === 'string' ? expected : '0'.repeat(64));
+    if (!valid || typeof expected !== 'string') fail(401, 'INVALID_LOGIN', invalid);
+    const account = loginField !== 'tenantId' && await db.prepare('SELECT id,name,role,COALESCE(login_code,id) AS loginCode FROM admin_accounts WHERE COALESCE(login_code,id)=? AND enabled=1').bind(id).first();
+    const tenant = loginField !== 'accountId' && await marketTenant(db,id);
+    if ((!account && !tenant) || (account && tenant)) fail(401, 'INVALID_LOGIN', invalid);
+    await revokeSessions(request, db);
+    if (tenant) {
+      const token = await createMarketSession(db,tenant);
+      const response = json({tenant}, 200, {'Set-Cookie': cookie(token).replace(COOKIE+'=',marketCookie+'=')});
+      response.headers.append('Set-Cookie', cookie('', 0));
+      return response;
+    }
     const token = randomToken(), at = Date.now();
     await db.prepare('INSERT INTO admin_sessions(id,token_hash,actor_id,created_at,expires_at) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(), await digest(token), account.id, at, at + 28800000).run();
-    return json({ account, expiresAt: at + 28800000 }, 200, { 'Set-Cookie': cookie(token) });
+    const response = json({ account, expiresAt: at + 28800000 }, 200, { 'Set-Cookie': cookie(token) });
+    response.headers.append('Set-Cookie', cookie('', 0).replace(COOKIE+'=',marketCookie+'='));
+    return response;
   }
   if (path === '/health' && method === 'GET') {
     const state = await db.prepare('SELECT schema_version FROM db_state WHERE id=1').first();
@@ -197,19 +260,6 @@ async function route(request, env) {
   if (marketPaths.includes(path)) {
     if (path === '/market/catalogue' && method === 'GET') return json(await marketCatalogue(db,await marketSession(db,request)));
     if (method !== 'POST' || path === '/market/catalogue') fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
-    if (path === '/market/login') {
-      const body=await bodyJson(request,4096);
-      fields(body,['tenantId','accessCode']);
-      if (!identifier(body.tenantId) || typeof body.accessCode!=='string' || body.accessCode.length<8 || body.accessCode.length>128) fail(401,'INVALID_LOGIN','客户编号或密码无效');
-      let hashes;
-      try { hashes=JSON.parse(env.MODEL_OPS_LOGIN_HASHES || '{}'); } catch { fail(503,'LOGIN_UNAVAILABLE','客户登录尚未配置'); }
-      const expected=hashes[body.tenantId];
-      const valid=await secureEqual(await digest(body.accessCode),typeof expected==='string'?expected:'0'.repeat(64));
-      const tenant=valid && expected && await marketTenant(db,body.tenantId);
-      if (!tenant) fail(401,'INVALID_LOGIN','客户编号或密码无效');
-      const token=await createMarketSession(db,tenant);
-      return json({tenant},200,{'Set-Cookie':cookie(token).replace(COOKIE+'=',marketCookie+'=')});
-    }
     const session=await marketSession(db,request);
     if (path==='/market/logout') {
       if (session) await db.prepare('DELETE FROM market_sessions WHERE token_hash=?').bind(session.hash).run();
@@ -230,14 +280,30 @@ async function route(request, env) {
     return json(await marketCompletion(db,session,body));
   }
   const actor = await authenticate(request, db);
-  if (path === '/auth/me' && method === 'GET') return json({ account: { id: actor.id, name: actor.name, role: actor.role } });
-  if (path === '/auth/logout' && method === 'POST') {
-    await db.prepare('UPDATE admin_sessions SET revoked_at=? WHERE id=?').bind(Date.now(), actor.session_id).run();
-    return json({ loggedOut: true }, 200, { 'Set-Cookie': cookie('', 0) });
-  }
-  const pageId = trafficPath || trafficHistoryPath ? 'traffic-limits' : packagePath ? 'package-production' : dictionary ? 'tariff-dictionary' : path.startsWith('/materials') ? 'model-templates'
+  if (path === '/auth/me' && method === 'GET') return json({ account: { id: actor.id, name: actor.name, role: actor.role, loginCode: actor.loginCode } });
+  const pageId = auditPath ? 'audit-logs' : trafficPath || trafficHistoryPath ? 'traffic-limits' : packagePath ? 'package-production' : dictionary ? 'tariff-dictionary' : path.startsWith('/materials') ? 'model-templates'
     : path.startsWith('/suppliers') || path.startsWith('/channels') ? 'providers' : 'listing';
   if (!canAccessPage(actor.role, pageId)) fail(403, 'FORBIDDEN', '当前账号无此页面访问权限');
+  if (auditPath) {
+    if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    if (auditPath[1]) {
+      const event = await auditLogDetail(db, auditPath[1]);
+      if (!event) fail(404, 'NOT_FOUND', '审计记录不存在');
+      return json({ accountId: actor.id, event });
+    }
+    const params = url.searchParams, now = Date.now(), { limit, after, q } = pagination(url, 1200);
+    const from = Number(params.get('from') ?? now - 7 * 86400000);
+    const to = Number(params.get('to') ?? now);
+    if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to > 8.64e15 || from > to) fail(400, 'INVALID_INPUT', '时间范围无效');
+    const action = params.get('action'), status = params.get('status'), type = params.get('type');
+    if ((action && !Object.hasOwn(AUDIT_ACTIONS, action)) || (status && !Object.hasOwn(AUDIT_RESULTS, status)) ||
+        (type && !Object.hasOwn(AUDIT_RESOURCES, type))) fail(400, 'INVALID_INPUT', '审计筛选条件无效');
+    const account = (params.get('actor') || '').trim();
+    if (account.length > 100) fail(400, 'INVALID_INPUT', '操作人搜索内容过长');
+    const data = await auditLogPage(db, { limit, after, from, to, action, status, type, q: q.toLowerCase(), actor: account.toLowerCase() });
+    if (!data) fail(400, 'INVALID_INPUT', '分页游标无效');
+    return json({ accountId: actor.id, ...data });
+  }
   if (trafficHistoryPath) {
     if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
     return json(await trafficHistory(db, actor, url));
@@ -253,7 +319,7 @@ async function route(request, env) {
   if (path === '/package-management/factor-history' && method === 'GET') return json(await packageFactorHistory(db, url.searchParams.get('model')));
   if (path === '/package-management/commands' && method === 'POST') return json(await packageCommand(db, actor, await bodyJson(request, 16 * 1024), request.headers.get('idempotency-key')));
   if(path==='/model-operations' && method==='GET')return new Response(await modelBootstrap(db,actor),{headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
-  if(path==='/model-operations/commands' && method==='POST')return json(await modelCommand(db,actor,await bodyJson(request,1024*1024),request.headers.get('idempotency-key')));
+  if(path==='/model-operations/commands' && method==='POST')return json(await modelCommand(db,actor,await bodyJson(request,10*1024*1024+65536),request.headers.get('idempotency-key')));
   if(path.startsWith('/simulation/')){const result=await simulationRequest(db,actor,path.slice('/simulation'.length)+url.search,method,method==='GET'?{}:await bodyJson(request),request.headers.get('idempotency-key'));return json(result,result.error?422:200);}
   if (['/materials','/services','/suppliers'].includes(path) && method === 'GET') return json(await list(db, url, path.slice(1)));
   if (dictionary && method === 'GET') {
@@ -276,7 +342,9 @@ async function route(request, env) {
       return json(JSON.parse(row.response_json));
     }
     if (kind === 'services' && action === 'history' && method === 'GET') {
-      const p = pagination(url), rows = await db.prepare(`SELECT e.* FROM audit_events e JOIN audit_models a ON a.audit_id=e.id JOIN services s ON s.material_id=a.material_id WHERE s.id=? AND e.id>? ORDER BY e.id LIMIT ?`).bind(id, p.after, p.limit + 1).all();
+      const p = pagination(url), rows = await db.prepare(`SELECT e.id,e.operation_id,e.entity_type,e.entity_id,e.action,e.diff_json,e.created_at,
+        json_remove(e.record_json,'$.platformAudit') AS record_json FROM audit_events e JOIN audit_models a ON a.audit_id=e.id
+        JOIN services s ON s.material_id=a.material_id WHERE s.id=? AND e.id>? ORDER BY e.id LIMIT ?`).bind(id, p.after, p.limit + 1).all();
       return json(page(rows.results, p.limit));
     }
     if (kind === 'suppliers' && action === 'workspace' && method === 'GET') {

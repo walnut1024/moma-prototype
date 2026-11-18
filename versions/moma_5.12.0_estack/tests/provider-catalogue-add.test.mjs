@@ -1,3 +1,4 @@
+import { isResourceId } from '../src/resource-id.mjs';
 import { withAdminSession } from './admin-session-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -19,7 +20,9 @@ test('one save appends a case-preserved model and all quote rows atomically, per
   const entry = providerCataloguePrice(provider(state), 'New-Complete-Model');
   assert.equal(entry.discountFactor, 800000);
   assert.deepEqual(entry.scenarios.map(row => row.listPrice), [1250000, 0]);
-  assert.deepEqual(providerCatalogueModel(provider(state), 'New-Complete-Model'), { modelId: 'New-Complete-Model', name: '模型显示名称', type: 'text' });
+  const { id, ...record } = providerCatalogueModel(provider(state), 'New-Complete-Model');
+  assert(isResourceId(id, 'provider-model'));
+  assert.deepEqual(record, { modelId: 'New-Complete-Model', name: '模型显示名称', type: 'text' });
   const channel = provider(state).catalogConnections.find(item => item.modelId === 'New-Complete-Model');
   assert.equal(channel.name, '国内渠道');
   assert.equal(state.endpoints.find(item => item.id === channel.endpointId).baseUrl, draft.apiUrl);
@@ -117,7 +120,7 @@ test('deleted model identities cannot silently create an invisible duplicate or 
   const original = commitAdminState(createAdminSeed(), action());
   const channel = catalogueChannels(original, provider(original), 'New-Complete-Model')[0];
   const unlinked = commitAdminState(original, { type: 'modelOperations', operation: 'provider', data: { operation: 'channelDelete', objectId: 'provider-moma', values: { modelId: 'New-Complete-Model', channelId: channel.id, confirmed: true } } });
-  const removed = commitAdminState(unlinked, { type: 'modelOperations', operation: 'provider', data: { operation: 'catalogueRemove', objectId: 'provider-moma', values: { modelId: 'New-Complete-Model', confirmed: true } } });
+  const removed = unlinked;
   const before = structuredClone(removed);
   assert.throws(() => commitAdminState(removed, action()), /历史记录/);
   assert.deepEqual(removed, before);

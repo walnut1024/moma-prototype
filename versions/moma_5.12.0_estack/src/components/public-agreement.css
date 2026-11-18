@@ -1,0 +1,33 @@
+.public-agreement {
+  max-width: 1000px;
+  margin-inline: auto;
+  padding: clamp(20px, 5vw, 64px);
+  color: #202632;
+}
+
+.public-agreement nav {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid #e4e7ec;
+}
+
+.public-agreement nav a {
+  padding-block: 12px;
+  text-decoration: none;
+}
+
+.public-agreement nav a[aria-current="page"] {
+  color: #005fcc;
+  box-shadow: inset 0 -2px currentColor;
+  font-weight: 600;
+}
+
+.public-agreement main {
+  padding-block: 24px;
+}
+
+.public-agreement h1 {
+  font-size: clamp(24px, 4vw, 34px);
+  font-weight: 650;
+  margin-bottom: 24px;
+}

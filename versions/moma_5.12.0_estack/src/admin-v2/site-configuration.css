@@ -1,0 +1,79 @@
+.admin-v2 .site-config > .semi-tabs > .semi-tabs-content {
+  padding-top: 16px;
+}
+
+.admin-v2 .site-config-card {
+  max-width: 760px;
+}
+
+.admin-v2 .site-config-card .semi-form-field + .semi-form-field {
+  margin-top: 12px;
+}
+
+.admin-v2 .site-agreement-document .semi-form-field {
+  margin-block: 12px;
+}
+
+.admin-v2 .site-agreements-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-v2 .site-agreements-toolbar,
+.admin-v2 .site-agreement-controls,
+.admin-v2 .site-agreement-url {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-v2 .site-agreements-toolbar,
+.admin-v2 .site-agreement-controls {
+  justify-content: space-between;
+}
+
+.admin-v2 .site-agreement-url {
+  margin-bottom: 16px;
+}
+
+.admin-v2 .site-agreement-url a {
+  color: var(--semi-color-link);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.admin-v2 .site-agreement-text textarea {
+  min-height: clamp(440px, 65dvh, 880px);
+  resize: vertical;
+  line-height: 1.65;
+}
+
+.admin-v2 .site-config-image {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.admin-v2 .site-config-thumbnail {
+  display: grid;
+  place-items: center;
+  width: 112px;
+  min-height: 76px;
+  border: 1px solid var(--semi-color-border);
+  border-radius: var(--semi-border-radius-medium);
+  background: var(--semi-color-fill-0);
+}
+
+.admin-v2 .site-config-image-controls {
+  display: grid;
+  gap: 8px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.site-config-preview {
+  max-height: 72dvh;
+  overflow: auto;
+}

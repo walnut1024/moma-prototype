@@ -46,7 +46,8 @@ function LogDetail({ log, onClose }) {
     try { await navigator.clipboard.writeText(text); setNotice('已复制'); }
     catch { setNotice('复制失败，请选中文本后手动复制'); }
   }
-  const [status, error, suggestion] = logStatuses[log.status] || ['失败','','请联系管理员核对请求。'];
+  const [status, defaultError, suggestion] = logStatuses[log.status] || ['失败','','请联系管理员核对请求。'];
+  const error = log.error || defaultError;
   const json = logJSON(log);
   return <dialog ref={dialog} className={`cl-drawer ${expanded ? 'cl-expanded' : ''}`} aria-labelledby="cl-detail-title" onCancel={onClose} onClick={event => { if (event.target === event.currentTarget && event.clientX < event.currentTarget.getBoundingClientRect().left) onClose(); }}>
     <div className="cl-drawer-head"><div><h2 id="cl-detail-title">请求详情</h2><p>{log.billing} · {log.source}</p></div><div className="cl-actions"><IconAction label={expanded ? '收起详情' : '展开详情'} icon={expanded ? Minimize2 : Maximize2} onClick={() => setExpanded(!expanded)} /><IconAction label="关闭详情" icon={X} onClick={onClose} /></div></div>
@@ -67,16 +68,18 @@ function LogDetail({ log, onClose }) {
   </dialog>;
 }
 
-export default function CallLogs({ billing = '全部' }) {
+export default function CallLogs({ billing = '全部', projectId, requestId }) {
   const [today] = useState(shanghaiDate);
   const tenant=useTenantData();
-  const records=tenantLogRecords(tenant);
-  const defaults = billing === '全部' ? { ...defaultLogFilters, range:'1' } : defaultLogFilters;
+  const project=tenant.projects.find(row=>row.id===projectId);
+  const records=tenantLogRecords({ ...tenant, requests:projectId ? tenant.requests.filter(row=>project && row.projectId===project.id) : tenant.requests });
+  const defaults = { ...defaultLogFilters, range:projectId ? '30' : billing === '全部' ? '1' : '7', query:requestId || '' };
   const [draft, setDraft] = useState(defaults);
   const [filters, setFilters] = useState(defaults);
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
-  const [selected, setSelected] = useState(null);
+  const [selectedId, setSelected] = useState(requestId || null);
+  const selected = records.find(row => row.id === selectedId);
   const [notice, setNotice] = useState('');
   const [dateError, setDateError] = useState('');
   const unified = billing === '全部';
@@ -101,7 +104,7 @@ export default function CallLogs({ billing = '全部' }) {
   const viewPreview = [viewTime, filters.billing, filters.model ? `模型 ${filters.model}` : '全部模型', ...(filters.resource ? [filters.resource] : []), ...(filters.key ? [`Key ${scope.find(log => log.keyId === filters.key)?.keyName || filters.key}`] : []), filters.source, filters.status && `状态 ${filters.status}`, filters.query && `Request ID ${filters.query}`].filter(Boolean).join(' · ');
   const period = draft.range === 'custom' ? draft : logPeriod(draft.range,today);
   return <div className="cl-page us-page">
-    <FrontPageHeader title={unified ? "调用日志" : `${billing}调用日志`} description="查询模型调用记录与请求详情" icon={FileText} />
+    <FrontPageHeader title={unified ? "调用日志" : `${billing}调用日志`} description={project ? '所属项目 · ' + project.name : projectId ? '当前空间无权访问此项目' : '查询模型调用记录与请求详情'} icon={FileText} />
     <section className="cl-panel" aria-label={unified ? '全部调用记录' : `${billing}调用记录`}>
       <form className="cl-filters" onSubmit={query}>
         {unified ? <><FilterPresets value={draft.range} items={[["1","今日"],["yesterday","昨日"],["7","近 7 天"],["30","近 30 天"]]} onChange={range => { update('range',range);setFilters(current=>({...current,range}));setPage(1);setDateError(''); }}/><DateRange start={period.start} end={period.end} maxDays={31} onChange={value=>{setDraft(current=>({...current,...value,range:'custom'}));setFilters(current=>({...current,...value,range:'custom'}));setPage(1);setDateError('')}}/></> : <select aria-label="时间范围" value={draft.range} onChange={e => update('range', e.target.value)}><option value="7">最近 7 天</option><option value="1">今天</option><option value="30">最近 30 天</option><option value="custom">自定义时间</option></select>}
@@ -121,14 +124,14 @@ export default function CallLogs({ billing = '全部' }) {
       <div className="cl-table-scroll" tabIndex={0} aria-label="调用日志表格，可横向滚动"><table className="cl-table cl-audit-table"><thead><tr>{['请求时间', 'Request ID', '模型 ID', '服务 / 套餐', 'API Key', '状态码', '输入 Tokens', '输出 Tokens', '缓存命中 Tokens', '首 Token 时延', '总时延', '操作'].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>
         {visible.map(log => <tr key={log.id}>
           <td><time dateTime={log.time.replace(' ', 'T') + '+08:00'}>{log.time.slice(0, 10)}<small>{log.time.slice(11, 19)}</small></time></td>
-          <td><div className="cl-id"><button type="button" className="cl-request-link" title={log.id} aria-label={`查看请求 ${log.id}`} onClick={() => setSelected(log)}><code>{log.id.slice(0, 8)}…{log.id.slice(-4)}</code></button><IconAction label={`复制 Request ID ${log.id}`} icon={Copy} size="icon-xs" onClick={() => copyId(log.id)} /></div></td>
+          <td><div className="cl-id"><button type="button" className="cl-request-link" title={log.id} aria-label={`查看请求 ${log.id}`} onClick={() => setSelected(log.id)}><code>{log.id.slice(0, 8)}…{log.id.slice(-4)}</code></button><IconAction label={`复制 Request ID ${log.id}`} icon={Copy} size="icon-xs" onClick={() => copyId(log.id)} /></div></td>
           <td>{log.model}</td>
           <td>{log.resource || log.endpointName || '—'}<small>{log.billing}{(log.resourceId || log.endpointId) && ` · ${log.resourceId || log.endpointId}`}</small></td>
           <td><code>{maskApiKey(log.apiKey)}</code></td>
           <td><span className={`cl-status ${log.status === 200 ? 'cl-success' : 'cl-failed'}`} title={logStatuses[log.status]?.[0] || '未定义状态'}>{log.status ?? '—'}</span></td>
           {[log.input, log.output, log.cache].map((value, index) => <td className="cl-numeric" key={index} title={value == null ? '本次请求未返回此用量字段' : undefined}>{number(value)}</td>)}
           <td className="cl-numeric" title="首 Token 时延，单位 ms">{number(log.first)}</td><td className="cl-numeric" title="请求端到端时延，单位 ms">{number(log.duration)}</td>
-          <td><IconAction label={`查看请求详情 ${log.id}`} icon={Eye} onClick={() => setSelected(log)} /></td>
+          <td><IconAction label={`查看请求详情 ${log.id}`} icon={Eye} onClick={() => setSelected(log.id)} /></td>
         </tr>)}
         {!visible.length && <tr><td colSpan={12}><div className="cl-empty"><FileSearch aria-hidden="true" /><strong>暂无符合条件的调用日志</strong><p>试试调整时间范围或清除筛选条件。</p><Button variant="outline" onClick={reset}>重置筛选</Button></div></td></tr>}
       </tbody></table></div>

@@ -57,8 +57,8 @@ export function applyMemberBatch(state, rows, mode, defaultDepartment, createId,
   const results = validateMemberRows(state, rows, mode, defaultDepartment).map(row => {
     if (row.status !== "ready") return { ...row, status: "skipped" };
     try {
-      next = changeOrganization(next, { type: "member.save", logId: createId(), member: {
-        id: `m-${createId()}`, name: row.name, phone: row.phone, account: row.account, departmentId: row.departmentId,
+      next = changeOrganization(next, { type: "member.save", logId: createId('audit-event'), member: {
+        id: createId('membership'), name: row.name, phone: row.phone, account: row.account, departmentId: row.departmentId,
         role: "普通成员", status: mode === "invite" ? "待加入" : "已加入", source: mode === "invite" ? "邀请加入" : "平台账号",
       } }, stamp);
       return { ...row, status: "success", message: mode === "invite" ? "邀请已创建 · 待加入" : "已加入企业" };

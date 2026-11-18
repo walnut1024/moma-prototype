@@ -1,3 +1,5 @@
+import { workspaceStoragePrefix } from "../workspace-storage.mjs";
+import { resourceId } from '../resource-id.mjs';
 import { Button as SemiButton, Form, Input as SemiInput, Popover as SemiPopover, Space, Tag, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from '../admin-v2/AdminOverlay';
 import { IconBookmark, IconChevronDown, IconDelete } from '@douyinfe/semi-icons';
@@ -61,13 +63,13 @@ export function SelectedConditions({ groups, label = '已选条件' }) {
   return <div className="sfv-current"><span className="sfv-label">{label}</span>{groups.map(group => <ConditionChip key={`${group.label}-${group.text}`} group={group}/>)}</div>;
 }
 
-export default function SavedFilterViews({ scope, value, onApply, summary = '', conditions, groups, currentGroups = groups, saveDescription = '核对当前筛选条件并命名，保存后可快速应用。', showCurrent = true, disabled = false, legacyKey, notify }) {
+export default function SavedFilterViews({ scope, value, onApply, summary = '', conditions, groups, currentGroups = groups, saveDescription = '核对当前筛选条件并命名，保存后可快速应用。', showCurrent = true, disabled = false, notify }) {
   const admin = useContext(AdminUIContext);
-  const key = `moma-5120-filter-views:${scope}`;
+  const key = `${workspaceStoragePrefix}filter-views:${scope}`;
   const [views, setViews] = useState(() => {
     try {
       const stored = localStorage.getItem(key);
-      const rows = JSON.parse(stored ?? (legacyKey ? localStorage.getItem(legacyKey) : null) ?? '[]');
+      const rows = JSON.parse(stored ?? '[]');
       return Array.isArray(rows) ? rows.filter(row => row.name && (row.value || row.filters)).map(row => ({ id: row.id || crypto.randomUUID(), name: row.name, value: row.value || { filters: row.filters, granularity: row.granularity } })) : [];
     } catch { return []; }
   });
@@ -86,7 +88,7 @@ export default function SavedFilterViews({ scope, value, onApply, summary = '', 
     const label = name.trim();
     if (!label) return;
     if (views.some(view => view.name === label)) { setError('名称已存在，请使用其他名称'); return; }
-    const id = crypto.randomUUID();
+    const id = resourceId('saved-view');
     if (persist([...views, { id, name: label, value }])) { setCreating(false); setName(''); setApplied({ id, name: label, signature: signature(value) }); notify?.success('筛选视图已保存'); }
   };
   const currentConditions = (conditions ?? summary.split(' · ')).filter(Boolean);

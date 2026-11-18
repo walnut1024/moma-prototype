@@ -8,7 +8,7 @@ const quota = 1_000_000;
 const derived = row => row.id?.startsWith('usage-demo-');
 const fixture = () => {
   const state = createAdminSeed();
-  state.models[0].name = '客户手工保留的模型名称';
+  state.models[0].name = '客户手工保留的模型展示名';
   state.requests.push({ ...structuredClone(state.requests[0]), id: 'customer-real-request', requestId: 'customer_real_request', userId: 'customer-user-id', usage: { input: 123, output: 45 } });
   return state;
 };

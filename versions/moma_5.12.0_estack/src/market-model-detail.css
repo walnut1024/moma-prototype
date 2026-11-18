@@ -24,6 +24,7 @@
 
 .market-session{display:flex;gap:12px;align-items:center;margin:0 0 12px}.market-detail-session{display:flex;justify-content:flex-end;padding:8px clamp(16px,3vw,32px);background:#fff}.market-detail-session .market-session{margin:0}
 .market-action-form{display:grid;gap:12px}
+.market-usage-stats{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));max-width:none}
 .market-action-form label:not(.market-agreement){display:grid;gap:6px}
 .market-agreement{display:flex;gap:8px;align-items:center}
 .market-call-input{width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;resize:vertical}

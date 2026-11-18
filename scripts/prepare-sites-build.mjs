@@ -24,7 +24,9 @@ mkdirSync(path.join(dist, "server"), { recursive: true });
 mkdirSync(path.join(dist, ".openai"), { recursive: true });
 copyFileSync(index, path.join(client, "index.html"));
 cpSync(publicDir, client, { recursive: true });
-await build({ entryPoints: [worker], outfile: path.join(dist, 'server', 'index.js'), plugins:[modelWorkerDataPlugin], bundle: true, minify: true, format: 'esm', platform: 'browser', target: 'es2022' });
+await build({ entryPoints: [worker], outfile: path.join(dist, 'server', 'index.js'), plugins:[modelWorkerDataPlugin],
+  define: { 'import.meta.env': JSON.stringify({ VITE_MOMA_PRIVATE_SITE: process.env.VITE_MOMA_PRIVATE_SITE }) },
+  bundle: true, minify: true, format: 'esm', platform: 'browser', target: 'es2022' });
 copyFileSync(path.join(dist, 'server', 'index.js'), path.join(client, '_worker.js'));
 writeFileSync(path.join(client,'_routes.json'),JSON.stringify({version:1,include:['/api/5120','/api/5120/*'],exclude:[]}));
 copyFileSync(hosting, path.join(dist, ".openai", "hosting.json"));

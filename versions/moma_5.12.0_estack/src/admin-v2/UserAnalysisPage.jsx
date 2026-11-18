@@ -8,6 +8,7 @@ import { formatUsageNumber, usagePreset, usagePresets, operationsPeriod, operati
 import { filterAnalytics } from './analytics';
 import { userMetrics } from './user-analysis';
 import UserCallDetails from './UserCallDetails';
+import { UserActivityAnalysis } from './UserActivityAnalysis';
 import SavedFilterViews from '../components/SavedFilterViews';
 import { FilterPresets, FilterReset, FilterToolbar } from '../components/FilterControls';
 
@@ -85,6 +86,7 @@ export default function UserAnalysisPage({ state }) {
         </AnalysisMetric>;
       })}
     </div>
+    <UserActivityAnalysis state={state} range={range} clock={clock} metrics={metrics}/>
     <UserCallDetails state={state} rows={rows} start={range.start} end={range.end} draft={detailDraft} onDraftChange={setDetailDraft}
       query={detailFilter} onQueryChange={setDetailFilter} conditionGroups={detailGroups}/>
   </div>;

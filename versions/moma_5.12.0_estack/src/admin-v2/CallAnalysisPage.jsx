@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Banner, Button, Card, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Tag, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconArrowRight } from '@douyinfe/semi-icons';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
@@ -10,17 +10,20 @@ import SavedFilterViews from '../components/SavedFilterViews';
 import { HorizontalBarChart } from '../components/AnalyticsCharts';
 import { chartPalette } from '../components/chart-style.mjs';
 import { inputLengthDistribution } from './analytics';
-import { ObservationPick, ObservationPlot, ObservationSupplyPick, ObservationTimeRange, useObservationSupply } from './CallObservationControls';
 import {
-  callObservations, defaultObservationGrain, filterObservations, httpLabel, modelTypes, observationBuckets,
-  observationDrill, observationFilters, observationGrains, observationGroups, observationGroupScope, observationHash, observationNumber as fmt,
+  ObservationConditions, ObservationFilterGroup, ObservationFilterLayout, ObservationPick, ObservationPlot, ObservationSupplyPick,
+  ObservationTimeRange, observationConditions, useObservationSupply,
+} from './CallObservationControls';
+import {
+  callObservations, defaultObservationGrain, failureGroups, filterObservations, httpLabel, modelTypes, observationBuckets,
+  observationDrill, observationFilters, observationGrains, observationGroups, observationGroupScope, observationHash, observationKey, observationNumber as fmt,
   observationOptions, observationTime, observationViewFilters, observationWindow, summarizeObservations,
 } from './call-observations.mjs';
 
 const { Title, Text, Paragraph } = Typography;
-const grouping = [['callId', '对外调用标识'], ['tenant', '租户'], ['provider', '最终服务商'], ['channel', '最终渠道']];
+const grouping = [['callId', '模型调用标识'], ['tenant', '客户'], ['provider', '最终服务商'], ['channel', '最终渠道']];
 const labels = new Map(grouping);
-const selectors = [['tenant', '租户'], ['callId', '对外调用标识']];
+const selectors = [['model', '模型'], ['tenant', '客户'], ['callId', '模型调用标识']];
 const latencyChoices = [['p95', 'P95 总耗时'], ['ttft', 'P95 首 Token 时延']];
 const countChoices = [['count', '请求数'], ['tokens', '输入 Token']];
 const requestStates = [['成功', 'success', chartPalette[0]], ['失败', 'failed', chartPalette[5]], ['其他状态', 'other', chartPalette[6]]];
@@ -36,6 +39,7 @@ export default function CallAnalysisPage({ state }) {
   const [groupBy, setGroupBy] = useState(() => labels.has(initial.get('groupBy')) ? initial.get('groupBy') : 'callId');
   const [latency, setLatency] = useState('p95');
   const [lengthMetric, setLengthMetric] = useState('count');
+  const [allFailures, setAllFailures] = useState(false);
   const { requests } = useMemo(() => callObservations(state), [state]);
   const supply = useObservationSupply(requests, filters.supply);
   const window = observationWindow(filters);
@@ -47,9 +51,14 @@ export default function CallAnalysisPage({ state }) {
   const trend = buckets.map(bucket => summarizeObservations(bucket.rows));
   const timeLabels = buckets.map(bucket => bucket.label);
   const modelRows = useMemo(() => filters.type ? requests.filter(row => row.modelType === filters.type) : requests, [requests, filters.type]);
+  const callRows = filters.model === null ? modelRows : modelRows.filter(row => filters.model.includes(row.model));
   const change = patch => {
     setFilters(current => ({ ...current, ...patch }));
     if (patch.period) setGrain(null);
+  };
+  const changeModel = ({ model }) => {
+    const retained = filters.callId?.filter(id => model == null || modelRows.some(row => observationKey(row, 'callId') === id && model.includes(row.model)));
+    change({ model, callId: retained?.length ? retained : null });
   };
   const applyView = view => {
     if (!view?.filters) return false;
@@ -75,8 +84,10 @@ export default function CallAnalysisPage({ state }) {
       return { label, items: filters[dimension]?.map(id => names.get(id) || id) ?? null };
     }),
     supply.group,
-    ...(filters.model == null ? [] : [{ label: '模型', items: filters.model.map(id => state.models.find(model => model.id === id)?.name || id) }]),
   ];
+  const conditions = observationConditions(requests, filters, selectors, patch => 'model' in patch ? changeModel(patch) : change(patch));
+  if (filters.type) conditions.push(['模型类型', new Map(modelTypes).get(filters.type), () => change({ type: '' })]);
+  if (supply.group.items !== null) conditions.push([supply.group.label, supply.group.items.join('、') || '未选择', () => change({ supply: null })]);
   const grouped = observationGroups(rows, groupBy).map(group => ({ ...group, ...summarizeObservations(group.rows) }));
   const failures = new Map();
   for (const row of rows) {
@@ -86,10 +97,14 @@ export default function CallAnalysisPage({ state }) {
   }
   const statusRows = [...failures].map(([id, value]) => ({ id, value, name: httpLabel(id === 'unreported' ? null : Number(id)) }))
     .sort((a, b) => b.value - a.value || a.id.localeCompare(b.id));
+  const reasons = failureGroups(rows);
   const lengths = inputLengthDistribution(rows.map(row => ({ usage: { input: row.input } })));
   const stats = [
     ['请求数', fmt(summary.count)],
+    ['成功量', fmt(summary.success)],
     ['最终失败率', percent(summary.failureRate), fmt(summary.failed) + ' 次失败', '失败数除以成功与失败请求之和。取消、进行中和未采集单列。'],
+    ['影响用户数', fmt(summary.affectedUsers), summary.missingFailureUsers ? fmt(summary.missingFailureUsers) + ' 次失败未采集用户' : '', '失败请求中明确记录的调用用户 ID 去重；不使用客户或密钥所有者代替。'],
+    ['涉及模型数', fmt(summary.affectedModels), summary.missingFailureModels ? fmt(summary.missingFailureModels) + ' 次失败未采集模型' : '', '按失败请求中的模型 ID 去重。'],
     ['P95 总耗时', millis(summary.p95)],
     ['Token 用量', fmt(summary.total), '输入 ' + fmt(summary.input) + ' / 输出 ' + fmt(summary.output)],
     ...(summary.ttftSamples ? [['P95 首 Token 时延', millis(summary.ttft), fmt(summary.ttftSamples) + ' 个有效样本']] : []),
@@ -113,21 +128,23 @@ export default function CallAnalysisPage({ state }) {
           </ObservationTimeRange>
           <FilterReset onClick={reset}/>
         </FilterToolbar>
-        <div className="admin-analysis-filter-row">
-          <FilterToolbar>
-            <Choice label="模型类型" value={filters.type || 'all'} options={modelTypes.map(([id, label]) => [id || 'all', label])}
+        <ObservationFilterLayout primary={<>
+          <ObservationPick dimension="model" label="模型" rows={modelRows} filters={filters} onChange={changeModel}/>
+          <ObservationPick dimension="tenant" label="客户" rows={requests} filters={filters} onChange={change}/>
+        </>} actions={<SavedFilterViews notify={Toast} scope="admin-call-analysis" showCurrent={false}
+          disabled={!window} groups={viewGroups} value={{ period: filters.period, filters, granularity, groupBy }} onApply={applyView}/>}>
+          <ObservationFilterGroup label="模型与渠道">
+            <Choice size="small" label="模型类型" value={filters.type || 'all'} options={modelTypes.map(([id, label]) => [id || 'all', label])}
               onChange={value => change({ type: value === 'all' ? '' : value, callId: null, model: null })}/>
-            {selectors.map(([dimension, label]) => <ObservationPick key={dimension} dimension={dimension} label={label}
-              rows={dimension === 'callId' ? modelRows : requests} filters={filters} onChange={change}/>)}
+            <ObservationPick dimension="callId" label="模型调用标识" rows={callRows} filters={filters} onChange={change}/>
             <ObservationSupplyPick {...supply} onChange={change}/>
-            {filters.model != null && <ObservationPick dimension="model" label="模型" rows={requests} filters={filters} onChange={change}/>}
-          </FilterToolbar>
-          <SavedFilterViews notify={Toast} scope="admin-call-analysis" legacyKey="moma-admin2-5120-analytics-views" showCurrent={false}
-            disabled={!window} groups={viewGroups} value={{ period: filters.period, filters, granularity, groupBy }} onApply={applyView}/>
-        </div>
+          </ObservationFilterGroup>
+        </ObservationFilterLayout>
+        <ObservationConditions conditions={conditions}/>
       </div>
     </Card>
     {!window ? <Banner type="danger" closeIcon={null} description="请选择不超过 365 天的有效时间范围。"/> : <>
+      <Text type="tertiary" size="small">统计截止：{observationTime(window.end)}（北京时间）</Text>
       {!rows.length && <Paragraph type="secondary" role="status">所选时段暂无调用记录。</Paragraph>}
       <Card title={<Title heading={5} component="h2">调用概览</Title>} headerExtraContent={
         <Button icon={<IconArrowRight aria-hidden="true"/>} iconPosition="right" onClick={() => drill(window, { outcome: 'failed' })}>查看失败日志</Button>
@@ -159,6 +176,18 @@ export default function CallAnalysisPage({ state }) {
           } series={[{ label: new Map(countChoices).get(lengthMetric), values: lengths.map(bucket => summary.input == null
             ? null : bucket[lengthMetric === 'count' ? 'calls' : 'tokens']) }]}/>
       </div>
+      <Card title={<Title heading={5} component="h2">失败原因分析{allFailures ? '' : ' · Top 20'}</Title>}
+        headerExtraContent={reasons.length > 20 && <Button size="small" theme="borderless" onClick={() => setAllFailures(value => !value)}>{allFailures ? '仅看 Top 20' : '查看全部'}</Button>}>
+        <Table rowKey="id" size="small" dataSource={allFailures ? reasons : reasons.slice(0, 20)} pagination={{ pageSize: 20, hideOnSinglePage: true }}
+          empty="所选范围暂无失败请求" scroll={{ x: 'max(100%, 900px)' }} columns={[
+            { title: '故障归属', dataIndex: 'source', render: value => <Tag color={/上游|供应商|服务商/.test(value) ? 'orange' : /网关|平台/.test(value) ? 'blue' : 'grey'}>{value}</Tag> },
+            { title: '状态码', dataIndex: 'status', render: httpLabel },
+            { title: '错误码', dataIndex: 'code' }, { title: '失败类型', dataIndex: 'type' },
+            { title: '错误信息', dataIndex: 'reason' },
+            { title: '失败数量', dataIndex: 'count', align: 'right', render: value => <Text type="danger">{fmt(value)}</Text> },
+            { title: '占全部失败', dataIndex: 'share', align: 'right', render: percent },
+          ]}/>
+      </Card>
       <Card title={<Title heading={5} component="h2">分组明细</Title>}
         headerExtraContent={<Choice label="统计分组" value={groupBy} options={grouping} onChange={setGroupBy}/>}>
         <Table rowKey="id" size="small" dataSource={grouped} columns={columns} pagination={false}

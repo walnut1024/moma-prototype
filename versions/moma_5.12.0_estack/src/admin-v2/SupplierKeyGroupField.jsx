@@ -1,27 +1,19 @@
-import { IconHelpCircle } from '@douyinfe/semi-icons';
-import { useRef, useState } from 'react';
-import { Button, Tooltip } from '@douyinfe/semi-ui';
+import { Button, Typography } from '@douyinfe/semi-ui';
 import { Choice } from './ServiceUI';
 import { providerApiKeyRows } from './provider-management';
 import { providerKeyGroups, providerKeyGroupKeys } from './provider-key-groups';
-import { KeyEditor } from './ProviderApiKeys';
 
-export function SupplierKeyGroupField({ state, provider, value, disabled, onChange, current, ops, fixed = false, label = 'API 密钥组', actionLabel = '添加密钥', onSaved }) {
-  const [editing, setEditing] = useState(false);
-  const parentDirty = useRef(false), keyDirty = useRef(false), trigger = useRef(null);
+export function SupplierKeyGroupField({ state, provider, value, disabled, onChange, current, ops, fixed = false, label = 'API 密钥组', channelId }) {
   const keys = providerApiKeyRows(state, provider).map(row => row.apiKey);
-  const groups = providerKeyGroups(provider, keys), group = groups.find(row => row.id === value);
-  const selected = providerKeyGroupKeys(provider, value, true, keys);
-  const ready = current && value === 'current' ? current.ready : selected.length && selected[0].status !== 'disabled';
-  const close = () => { setEditing(false); ops.dirty(parentDirty.current); ops.setError(''); requestAnimationFrame(() => trigger.current?.focus()); };
-  const keyOps = { ...ops,
-    dirty: dirty => { keyDirty.current = dirty; ops.dirty(parentDirty.current || dirty); },
-    run: async (...args) => { const result = await ops.run(...args); ops.dirty(parentDirty.current || !result && keyDirty.current); if (result) onSaved?.(result); return result; },
-  };
+  const groups = providerKeyGroups(provider, keys), selected = providerKeyGroupKeys(provider, value, true, keys);
+  const available = selected.filter(key=>key.status!=='disabled' && !key.revokedAt), primary=selected[0];
+  const ready = current && value === 'current' ? current.ready : primary && primary.status!=='disabled' && !primary.revokedAt;
   return <div className="supplier-key-group-field">
-    <div className="supplier-key-group-label">{label}<Tooltip content="渠道使用所选组的主要密钥。组内第一位为主要密钥，可在服务商的「API 密钥」中管理分组。"><Button size="small" type="tertiary" theme="borderless" aria-label="API 密钥组说明" icon={<IconHelpCircle aria-hidden="true"/>}/></Tooltip></div>
-    <div className="supplier-key-group-control"><Choice label={label} value={value} options={[...(current ? [['current', current.name]] : []), ...groups.map(item => [item.id, item.name])]} disabled={disabled || fixed} onChange={onChange}/>{group && <Button type="tertiary" theme="borderless" disabled={disabled} onClick={event => { trigger.current = event.currentTarget; parentDirty.current = ops.hasUnsaved(); keyDirty.current = false; ops.setError(''); setEditing(true); }}>{actionLabel}</Button>}</div>
-    {!ready && <small className="supplier-key-pending">{selected.length ? '主要密钥已停用，请在服务商的 API 密钥中启用或更换主要密钥。' : '该组暂无 API 密钥，可先添加密钥或保存渠道后补充。'}</small>}
-    {editing && group && <KeyEditor provider={provider} group={group} ops={keyOps} close={close}/>}
+    <div className="supplier-key-group-label">{label}</div>
+    <div className="supplier-key-group-control"><Choice label={label} value={value} options={[...(current?.name ? [['current', current.name]] : []), ...groups.map(item => [item.id, item.name])]} disabled={disabled || fixed} onChange={onChange}/>
+      <Button type="tertiary" theme="borderless" disabled={disabled} onClick={()=>ops.go({provider:provider.id,tab:'api-keys',keyGroup:value==='current'?'default':value,credentialChannel:channelId || current?.endpointId || null},{base:'providers',reset:true})}>管理密钥池</Button>
+    </div>
+    {value!=='current' && <Typography.Text type="tertiary">可用 {available.length} / {selected.length} · 主要密钥：{primary ? (primary.maskedKey || '••••••••') + (ready ? '（可用）' : '（不可用）') : '未配置'}</Typography.Text>}
+    {!ready && <small className="supplier-key-pending">{selected.length ? '主要密钥不可用，请到密钥池启用或更换。' : '该组暂无可用密钥，请先到密钥池配置。'}</small>}
   </div>;
 }

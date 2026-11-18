@@ -1,0 +1,27 @@
+body:has(.tenant-semi .smart-routing) { min-width: 0; }
+.smart-routing { min-width: 0; }
+.smart-routing .semi-tabs-content { min-width: 0; }
+.smart-routing .semi-table-wrapper { max-width: 100%; border: 1px solid #e0e6f0; border-radius: 6px; }
+.smart-routing .semi-table-row-cell code { overflow-wrap: anywhere; }
+.smart-routing .route-table { overflow-x: auto; }
+.smart-routing .sr-toolbar, .smart-routing .sr-row, .smart-routing-dialog .sr-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+}
+.smart-routing .sr-toolbar { justify-content: space-between; gap: 12px; padding: 12px 0; }
+.smart-routing .sr-toolbar .semi-input-wrapper { width: 174px; }
+.smart-routing-dialog { max-width: calc(100vw - 24px); }
+.smart-routing-dialog .semi-modal-body { max-height: min(68vh, 620px); overflow-y: auto; }
+.smart-routing-dialog .sr-dialog-content { display: grid; gap: 12px; }
+.smart-routing-dialog .sr-dialog-content section { display: grid; gap: 8px; border-bottom: 1px solid #e0e6f0; padding-bottom: 14px; }
+.smart-routing-dialog .sr-dialog-content section:last-child { border-bottom: 0; padding-bottom: 0; }
+.smart-routing-dialog .sr-dialog-content h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.smart-routing-dialog .sr-dialog-content p { margin: 0; overflow-wrap: anywhere; }
+.smart-routing-dialog .sr-field { display: grid; gap: 4px; }
+.smart-routing-dialog .semi-select { width: 100%; min-width: 0; }
+.smart-routing-dialog .sr-order ol { margin: 4px 0 0; padding: 0; list-style: none; }
+.smart-routing-dialog .sr-order li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px; padding: 4px 0; }
+.smart-routing-dialog .sr-order li > span { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.smart-routing-dialog .sr-parameters { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 8px; }
+.smart-routing-dialog .sr-summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; margin: 0; }
+.smart-routing-dialog .sr-summary dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.smart-routing-dialog pre { overflow: auto; background: #f3f6fa; padding: 12px; border-radius: 6px; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

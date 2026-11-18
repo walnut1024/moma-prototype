@@ -8,12 +8,9 @@ function storageFor(state) {
   return { rows, writes: 0, getItem: key => rows.get(key) ?? null, setItem(key, value) { this.writes++; rows.set(key, value); } };
 }
 
-test('first backend visit selects an enabled system administrator and persists the selection', () => {
+test('first visit initializes business records without granting a backend session', () => {
   const storage = storageFor(), loaded = loadAdminState(storage);
-  const account = loaded.admins.find(row => row.id === loaded.adminSession?.accountId);
-  assert.equal(account?.role, '平台管理员');
-  assert.equal(account.status, '已启用');
-  assert.equal(loaded.currentRole, account.role);
+  assert.equal(loaded.adminSession, undefined);
   assert.deepEqual(JSON.parse(storage.getItem(STORAGE_KEY)).adminSession, loaded.adminSession);
   const writes = storage.writes;
   assert.deepEqual(loadAdminState(storage).adminSession, loaded.adminSession);
@@ -21,17 +18,18 @@ test('first backend visit selects an enabled system administrator and persists t
   assert.equal(storage.getItem('moma.auth.5120'), '前台会话保留');
 });
 
-test('a saved backend without a session defaults to system administrator without replacing business data', () => {
+test('loading a saved workspace does not grant administrator access or replace business data', () => {
   const state = createAdminSeed();
   state.currentRole = '运维人员';
   state.settings.environmentLabel = '已保存的工作区';
   state.customerExtension = { keep: true };
   const storage = storageFor(state), loaded = loadAdminState(storage);
-  assert.equal(loaded.adminSession?.accountId, 'admin-001');
-  assert.equal(loaded.currentRole, '平台管理员');
+  assert.equal(loaded.adminSession, undefined);
+  assert.equal(loaded.currentRole, '运维人员');
   assert.equal(loaded.settings.environmentLabel, state.settings.environmentLabel);
   assert.deepEqual(loaded.customerExtension, state.customerExtension);
-  assert.equal(loaded.revision, state.revision + 1);
+  assert.equal(loaded.revision, state.revision);
+  assert.equal(storage.writes, 0);
 });
 
 test('an existing selected account stays selected, including disabled or missing accounts', () => {
@@ -54,8 +52,8 @@ test('no enabled system administrator leaves account selection empty', () => {
   assert.equal(loadAdminState(storageFor(state)).adminSession, undefined);
 });
 
-test('a failed default-session save preserves the original stored state and exposes the error', () => {
-  const storage = storageFor(createAdminSeed()), raw = storage.getItem(STORAGE_KEY);
+test('a failed initial workspace save exposes the error without creating a session', () => {
+  const storage = storageFor(), raw = storage.getItem(STORAGE_KEY);
   storage.setItem = () => { throw new Error('quota'); };
   const loaded = loadAdminState(storage);
   assert.equal(loaded.storageError, 'quota');

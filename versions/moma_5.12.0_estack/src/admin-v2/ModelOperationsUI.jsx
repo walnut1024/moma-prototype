@@ -22,8 +22,8 @@ export function Heading({ title, description, children }) {
     {children && <div className="mo-actions">{children}</div>}
   </AdminPageHeading>;
 }
-export function SearchBox({ value, onChange, placeholder = '搜索模型展示名 / 编码 / 作者' }) { return <Input className="mo-search" prefix={<IconSearch aria-hidden="true"/>} aria-label={placeholder} placeholder={placeholder} value={value} onChange={onChange}/>; }
-export function GridTable({ headings, children, empty, emptyMessage = '没有符合条件的记录', className = '' }) {
+export function SearchBox({ value, onChange, placeholder = '搜索模型展示名 / 模型调用标识 / 作者' }) { return <Input className="mo-search" prefix={<IconSearch aria-hidden="true"/>} aria-label={placeholder} placeholder={placeholder} value={value} onChange={onChange}/>; }
+export function GridTable({ headings, children, empty, emptyMessage = '没有符合条件的记录', className = '', scrollProps }) {
   const rows = Children.toArray(children).filter(child => isValidElement(child) && child.type === Row);
   const cellsOf = row => Children.toArray(row.props.children).flatMap(node => {
     if (!isValidElement(node)) return [];
@@ -51,7 +51,7 @@ export function GridTable({ headings, children, empty, emptyMessage = '没有符
     const props = { ...(cell.colSpan != null ? { colSpan: cell.colSpan } : {}), ...(cell.rowSpan != null ? { rowSpan: cell.rowSpan } : {}), ...(cell.className ? { className: cell.className } : {}) };
     return { children: cell.children, props };
   } }));
-  return <div className="mo-table-scroll"><Table size="small" className={`mo-table ${className}`} columns={columns} dataSource={dataSource} pagination={false} empty={empty ? emptyMessage : ' '}/></div>;
+  return <div {...scrollProps} className="mo-table-scroll"><Table size="small" className={`mo-table ${className}`} columns={columns} dataSource={dataSource} pagination={false} empty={empty ? emptyMessage : ' '}/></div>;
 }
 export function Row({ children }) { return <>{children}</>; }
 export function Cell({ children }) { return <>{children}</>; }
@@ -81,7 +81,25 @@ export function useOperations({ state, transact, conflict, reload, notify = mess
     return () => { removeEventListener('hashchange', sync); removeEventListener('beforeunload', guard); document.removeEventListener('click', click, true); };
   }, []);
   const go = (patch, options = {}) => {
-    const navigate = () => { const next = new URLSearchParams(options.reset ? undefined : params); Object.entries(patch).forEach(([key, value]) => value == null ? next.delete(key) : next.set(key, value)); const hash = `#/admin-2/${options.base || base}${next.size ? '?' + next : ''}`; accepted.current = hash; setError(''); setDirty(false); dirtyRef.current = false; if (options.replace) history.replaceState(null, '', hash); else { location.hash = hash; if (!options.preserveScroll) window.scrollTo(0, 0); } setParams(next); };
+    const navigate = () => {
+      const next = new URLSearchParams(options.reset ? undefined : params);
+      Object.entries(patch).forEach(([key, value]) => value == null ? next.delete(key) : next.set(key, value));
+      const hash = `#/admin-2/${options.base || base}${next.size ? '?' + next : ''}`;
+      accepted.current = hash;
+      setError('');
+      setDirty(false);
+      dirtyRef.current = false;
+      if (!options.replace) {
+        location.hash = hash;
+        if (!options.preserveScroll) window.scrollTo(0, 0);
+      } else if (location.hash !== hash) {
+        const oldURL = location.href;
+        history.replaceState(null, '', hash);
+        // Replacing the address does not notify the shared admin navigation.
+        window.dispatchEvent(new HashChangeEvent('hashchange', { oldURL, newURL: location.href }));
+      }
+      setParams(next);
+    };
     if (options.saved) navigate(); else proceed(navigate);
   };
   const isCurrent = () => { if(state.cloudOperations)return !conflict && canMutate(state.currentRole,{type:'modelOperations'}); try { const fresh = readLinkedState(); const account = activeAdmin(fresh); return fresh.revision === state.revision && account.id === state.adminSession?.accountId && canMutate(account.role, { type: 'modelOperations' }); } catch { return false; } };

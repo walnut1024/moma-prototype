@@ -26,7 +26,7 @@ test('short guides resolve every section and task link without leaving the guide
   const guides = parseOperationsGuide(source), tasks = guides.flatMap(guide => guide.tasks);
   const ids = [...guides.map(guide => guide.id), ...tasks.map(task => task.id)];
   assert.equal(new Set(ids).size, ids.length);
-  assert.deepEqual(guides.map(guide => guide.id), ['overview', 'channels', 'services', 'market', 'costs', 'sales', 'materials', 'maintenance']);
+  assert.deepEqual(guides.map(guide => guide.id), ['overview', 'channels', 'services', 'market', 'sales', 'materials', 'maintenance']);
   for (const link of source.matchAll(/\]\(#([a-z0-9-]+)\)/g)) {
     assert.ok(ids.includes(link[1]), link[1]);
     const guide = findOperationsGuide(guides, link[1]);
@@ -40,7 +40,7 @@ test('short guides resolve every section and task link without leaving the guide
   assert.equal(findOperationsGuide(guides, 'unknown-guide'), guides[0]);
 });
 
-test('overview links to the same six model operations pages as the sidebar', () => {
+test('overview links to the same model operations pages as the sidebar', () => {
   const source = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE.md', import.meta.url), 'utf8');
   const [overview, ...guides] = parseOperationsGuide(source);
   const menu = sections.find(group => group.id === 'models').items;
@@ -55,10 +55,11 @@ test('guide separates internal use from sales and explains current entry points'
   const guides = parseOperationsGuide(source);
   assert.match(JSON.stringify(guides.find(guide => guide.id === 'overview')), /内部使用无需配置售价/);
   assert.match(JSON.stringify(guides.find(guide => guide.id === 'services')), /服务操作 → 启用/);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'costs')), /表格中按计费项查看渠道采购价/);
+  assert.match(JSON.stringify(guides.find(guide => guide.id === 'channels')), /表格中按计费项查看渠道采购价/);
   const sales = JSON.stringify(guides.find(guide => guide.id === 'sales'));
   assert.match(sales, /纯内部使用可以跳过/);
-  assert.match(sales, /编辑销售设置/);
+  assert.match(sales, /仅包含当前服务的计费项与售价版本/);
+  assert.doesNotMatch(sales, /编辑销售设置/);
   assert.doesNotMatch(sales, /上架操作/);
   const market = JSON.stringify(findOperationsGuide(guides, 'sales-release'));
   for (const action of ['上架操作', '灰度上架', '正式上架', '下架', '允许展示', '隐藏模型']) {

@@ -63,8 +63,9 @@ test('stale health and disabled supplier cannot be used to enable a channel',()=
  assert.throws(()=>run(s,'supplierModelEnable',args(channel(s))),/启用服务商/);
 });
 
-test('supplier remarks allow concise notes but reject over-limit input',()=>{
+test('supplier description allows 300 characters and rejects over-limit input',()=>{
  const s=legacySupplierState();const values={name:'简短备注服务商',code:'short-note',sourceType:'thirdParty',description:'仅用于内部接入'};
  const added=run(s,'create',values);assert.ok(added.providers.some(p=>p.code==='short-note'&&p.description===values.description));
- assert.throws(()=>run(s,'create',{...values,description:'字'.repeat(2001)}),/2000/);
+ assert.equal(run(s,'create',{...values,description:'字'.repeat(300)}).providers.find(p=>p.code==='short-note').description.length,300);
+ assert.throws(()=>run(s,'create',{...values,description:'字'.repeat(301)}),/300/);
 });

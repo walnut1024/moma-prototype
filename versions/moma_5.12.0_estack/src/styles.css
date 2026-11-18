@@ -445,21 +445,6 @@ header:not(.admin-banner) .top-actions > button.active {
   border-color: #4a8cff;
   color: #72a5ff;
 }
-.version-switch [data-slot="select-trigger"] {
-  min-width: 158px;
-  border-color: #ffffff26;
-  background: #252525;
-  color: #cbd3df;
-  font-size: 12px;
-}
-.version-switch [data-slot="select-trigger"]:hover,
-.version-switch [data-slot="select-trigger"][data-state="open"] {
-  border-color: #72a5ff;
-  color: #fff;
-}
-.version-switch [data-slot="select-trigger"] svg {
-  color: #8f9aab;
-}
 .front-main .v2-empty { padding: 42px; text-align: center; color: #98a2b3; }
 @media (max-width: 760px) {
   .brand-mark span,

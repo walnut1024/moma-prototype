@@ -1,3 +1,4 @@
+import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useId, useState } from 'react';
@@ -13,7 +14,6 @@ import { simulateRequest, orderActivationCommand } from './domain';
 import { usageTotal } from './observability';
 import { canMutate } from './store';
 
-const uid = prefix => `${prefix}-${crypto.randomUUID()}`;
 const { Text, Title } = Typography;
 const titles = { goods: '商品与套餐', orders: '订单与订阅', announcements: '公告与服务通知', metering: '计量明细',
   ledger: '账户与额度流水', bills: '客户账单', settlement: '服务商对账与结算', adjustments: '退款与调账' };
@@ -71,7 +71,7 @@ function Managed({ pageId, state, dispatch }) {
       }
       if (!record[field]) return setError('请填写全部必填项');
     }
-    if (dispatch({ type: 'add', collection, record: { id: uid(collection), ...record, status: '已启用' } })) close();
+    if (dispatch({ type: 'add', collection, record: { id: resourceId(collection === 'products' ? 'product' : 'announcement'), ...record, status: '已启用' } })) close();
   };
   return <>
     <AdminPageHeading title={title}>
@@ -108,7 +108,7 @@ function Orders({ state, dispatch }) {
     const tenant = state.tenants[0];
     if (!product || !tenant) return Toast.error('缺少可订购商品或客户');
     dispatch({ type: 'add', collection: 'orders', record: {
-      id: uid('order'), orderNo: `ORD-${Date.now()}`, tenantId: tenant.id, productId: product.id, amount: product.price,
+      id: resourceId('order'), orderNo: `ORD-${Date.now()}`, tenantId: tenant.id, productId: product.id, amount: product.price,
       entitlement: 100000000, quotaUnit: 'Token', status: '待开通', timeline: ['订单创建'],
     } });
   };
@@ -209,7 +209,7 @@ function Bills({ state, dispatch }) {
       const amount = state.requests.filter(row => row.tenantId === tenant.id && row.httpStatus === 200)
         .reduce((sum, row) => sum + usageTotal(row.usage) / 1e6 * 1.8, 0);
       return { type: 'add', collection: 'bills', record: {
-        id: uid('bill'), billNo: `BILL-${period.replace('-', '')}-${tenant.id}`, tenantId: tenant.id, period,
+        id: resourceId('bill'), billNo: `BILL-${period.replace('-', '')}-${tenant.id}`, tenantId: tenant.id, period,
         amount: Number(amount.toFixed(2)), discount: 0, paid: 0, status: '待出账',
       } };
     });
@@ -275,7 +275,7 @@ function Adjustments({ state, dispatch }) {
     const sourceId = `adjustment:${item.id}`;
     if (review.approved && !state.ledger.some(row => row.sourceId === sourceId)) {
       changes.push({ type: 'add', collection: 'ledger', record: {
-        id: uid('ledger'), accountId: bill.tenantId, sourceId, type: '账单冲正', delta: -item.amount, balance: 0, reason, status: '已完成',
+        id: resourceId('ledger-entry'), accountId: bill.tenantId, sourceId, type: '账单冲正', delta: -item.amount, balance: 0, reason, status: '已完成',
       } });
     }
     return dispatch({ type: 'batch', objectId: item.adjustmentNo, changes });

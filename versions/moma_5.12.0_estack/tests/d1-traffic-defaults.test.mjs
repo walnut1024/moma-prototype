@@ -59,7 +59,7 @@ test('D1 seeds both defaults and upgrades a v9 database without changing its sav
   assert.deepEqual(fresh.rules, []);
   assert.ok(fresh.catalogue.length > 1);
   const legacy = rate(75, 3_250_000);
-  const actor = await local.db.prepare("SELECT id FROM admin_sessions WHERE actor_id='admin-001'").first();
+  const actor = await local.db.prepare("SELECT s.id,s.actor_id FROM admin_sessions s JOIN admin_accounts a ON a.id=s.actor_id WHERE a.login_code='admin-001'").first();
   const { commit_seq } = await local.db.prepare('SELECT commit_seq FROM db_state WHERE id=1').first();
   const time = Date.now() - 1000;
   await local.db.batch([
@@ -71,13 +71,14 @@ test('D1 seeds both defaults and upgrades a v9 database without changing its sav
     local.db.prepare('UPDATE user_traffic_defaults SET rpm=?,tpm=?,revision=2 WHERE id=1').bind(legacy.rpm, legacy.tpm),
     local.db.prepare('UPDATE db_state SET schema_version=9 WHERE id=1'),
     local.db.prepare(`INSERT INTO operations(id,actor_id,session_id,idempotency_key,command,request_hash,expected_commit_seq,http_status,response_json,created_at)
-      VALUES('legacy-default','admin-001',?,'legacy-default','traffic.defaults','legacy-hash',?,200,'{}',?)`).bind(actor.id, commit_seq, time),
+      VALUES('legacy-default',?,?,'legacy-default','traffic.defaults','legacy-hash',?,200,'{}',?)`).bind(actor.actor_id, actor.id, commit_seq, time),
     local.db.prepare(`INSERT INTO audit_events(id,operation_id,entity_type,entity_id,action,diff_json,created_at,record_json)
       VALUES('legacy-audit','legacy-default','traffic-limits','user-traffic-defaults','保存全局默认限流','{}',?,?)`)
       .bind(time, JSON.stringify({ before: fresh.global, after: legacy })),
   ]);
   await migrateEmptyDatabase(local.db);
-  assert.equal((await request('/health')).data.schemaVersion, 11);
+  await local.db.prepare("UPDATE admin_accounts SET login_code='admin-001' WHERE id=?").bind(actor.actor_id).run();
+  assert.equal((await request('/health')).data.schemaVersion, 12);
   const upgraded = (await request(path)).data;
   assert.deepEqual(upgraded.global, legacy);
   assert.deepEqual(upgraded.modelDefault, fresh.modelDefault);

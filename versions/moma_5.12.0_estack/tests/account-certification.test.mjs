@@ -1,20 +1,12 @@
+import { withSignedInAccount } from './auth-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyAuthState, registerAuthAccount, authRoute, realNameErrors, submitRealNameCertification, submitEnterpriseCertification } from '../src/auth-state.mjs';
+import { emptyAuthState, authRoute, realNameErrors, submitRealNameCertification, submitEnterpriseCertification } from '../src/auth-state.mjs';
 
 const phone = '13800138000';
-const registered = () => registerAuthAccount(emptyAuthState(), { phone });
+const registered = () => withSignedInAccount(emptyAuthState(), { phone });
 const identity = { name: '张三', idNumber: '11010519491231002X', consent: true };
 const company = { subjectType: 'enterprise', companyName: '青禾科技有限公司', taxId: 'REG20261006', province: '江苏省', city: '南京市', industry: 'I', contactName: '张三', contactType: 'phone', contactIdentity: phone, authorized: true, authorizationRole: 'authorized-agent', authorizationNote: '受单位委托办理企业认证' };
-
-test('phone registration creates one signed-in account without enterprise permissions', () => {
-  const state = registered();
-  assert.equal(authRoute('#/auth/account'), 'account');
-  assert.equal(state.currentUserId, state.accounts[0].id);
-  assert.equal(state.activeSpace, 'personal');
-  assert.deepEqual(state.memberships, []);
-  assert.throws(() => registerAuthAccount(state, { phone }), /已注册/);
-});
 
 test('real-name submission validates identity syntax and consent, stores only masked data', () => {
   assert.equal(Object.keys(realNameErrors(identity)).length, 0);
@@ -50,11 +42,11 @@ test('enterprise certification belongs to the logged-in applicant and grants no 
   assert.equal(corrected.applications.length, 1);
   assert.equal(corrected.applications[0].status, '待处理');
   assert.deepEqual(corrected.accounts, state.accounts);
-  const other = registerAuthAccount(next, { phone: '13900139000' });
+  const other = withSignedInAccount(next, { phone: '13900139000' });
   assert.throws(() => submitEnterpriseCertification(other, { ...company, contactIdentity: '13900139000' }, next.applications[0].id), /无权/);
 });
 
-test('obsolete registration gallery route is unavailable', () => {
+test('registration and the obsolete flow gallery are unavailable', () => {
   assert.equal(authRoute('#/auth/flows'), null);
-  assert.equal(authRoute('#/auth/register'), 'register');
+  assert.equal(authRoute('#/auth/register'), null);
 });

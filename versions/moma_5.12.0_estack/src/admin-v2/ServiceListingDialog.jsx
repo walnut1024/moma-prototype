@@ -64,7 +64,7 @@ export default function ServiceListingDialog({state,model,ops,stage,close}) {
       <Typography.Title heading={6}>灰度客户</Typography.Title>
       <Table pagination={false} rowKey="id" dataSource={tenants} columns={[{title:'选择',width:80,render:(_,tenant)=><Checkbox aria-label={`灰度客户 ${tenant.name}`} checked={tenantIds.includes(tenant.id)} disabled={!ops.can || busy} onChange={event=>{setTenantIds(ids=>event.target.checked?[...ids,tenant.id]:ids.filter(id=>id!==tenant.id));ops.dirty(true);}}/>},{title:'客户名称',dataIndex:'name'},{title:'客户 ID',dataIndex:'id'}]} empty="暂无有效客户。"/>
     </>}
-    {(!selectOffers || selectedKeys.length>0) && <ul className="ss-checks">{checks.map((check,index)=><li key={index}><span>{check.passed?'✓':'待完成'} {check.label}</span>{!check.passed && <Button theme="borderless" disabled={busy || (check.tab==='platform' && !ops.can)} onClick={()=>ops.proceed(()=>{
+    {(!selectOffers || selectedKeys.length>0) && <ul className="ss-checks">{checks.map((check,index)=><li key={index}><span>{check.passed?'✓':'待完成'} {check.label}</span>{!check.passed && (check.tab==='platform' || serviceConfigurationTarget(model,check)) && <Button theme="borderless" disabled={busy || (check.tab==='platform' && !ops.can)} onClick={()=>ops.proceed(()=>{
       if(check.tab==='platform'){setValidation(check);return;}
       const {page,...target}=serviceConfigurationTarget(model,check);ops.go({...target,returnTo:location.hash},{base:page,reset:true});
     })}>{check.tab==='platform'?'验证当前服务':'前往配置'}</Button>}</li>)}</ul>}

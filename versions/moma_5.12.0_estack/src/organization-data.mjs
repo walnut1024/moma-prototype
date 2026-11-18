@@ -1,6 +1,7 @@
+import { workspaceStoragePrefix } from "./workspace-storage.mjs";
 import { initialOrganizationData } from './mock/application-data.js';
 import mockConfig from './mock/catalogues.json' with { type: 'json' };
-export const ORGANIZATION_STORAGE_KEY = "moma-organization:moma_5.12.0_estack";
+export const ORGANIZATION_STORAGE_KEY = workspaceStoragePrefix + 'organization';
 export const roles = ["企业管理员", "部门管理员", "普通成员", "财务审计"];
 export const statuses = ["已加入", "待加入", "已停用"];
 export const platformAccounts = mockConfig["organization-data.mjs"]["platformAccounts"];

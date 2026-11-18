@@ -1,12 +1,39 @@
+import { modelIdentity, channelIdentity } from '../model-identities.mjs';
+import { serviceReferences } from '../service-access.mjs';
+import { workspaceStoragePrefix } from "../workspace-storage.mjs";
+import { channelConversationRequest, channelConversationText } from './channel-interface.js';
+import { resourceId } from '../resource-id.mjs';
 import { withinRouteLimits } from './routing-policy.js';
-import { routingChannels, routingServices, comparableRouteCosts } from './service-routing.js';
+import { routingChannels, routingServices, comparableRouteCosts, normalizeRouteRetry } from './service-routing.js';
 import mockConfig from '../mock/catalogues.json' with { type: 'json' };
 import { assertPublishedAccess, readLinkedState as browserReadLinkedState } from '../service-access.mjs';
 export const SCENARIOS = mockConfig["admin-v2/mock-onboarding-service.js"]["SCENARIOS"];
+function activePrices(input, at) {
+  const latest = new Map();
+  for (const item of [...input].filter(row => Date.parse(row.effectiveAt) <= at).sort((a, b) => Date.parse(b.effectiveAt) - Date.parse(a.effectiveAt))) if (!latest.has(item.unit)) latest.set(item.unit, item);
+  const selected = [...latest.values()].sort((a, b) => a.id.localeCompare(b.id));
+  return selected.length && selected.every(item => !item.expiresAt || Date.parse(item.expiresAt) > at) ? selected : null;
+}
+function totalPrice(selected, usage) {
+  if (!selected) return null;
+  const items = selected.map(price => { const count = ({ request: 1, million_tokens: usage?.total_tokens, million_input_tokens: usage?.input_tokens, million_output_tokens: usage?.output_tokens, second: usage?.seconds, character: usage?.characters })[price.unit]; return count == null ? null : { amount: Math.ceil(price.amount * count / (price.unit.startsWith('million_') ? 1000000 : 1)), currency: price.currency, priceVersion: price.id }; });
+  if (items.some(item => !item) || new Set(items.map(item => item.currency)).size !== 1) return null;
+  return { amount: items.reduce((sum, item) => sum + item.amount, 0), currency: items[0].currency, unit: 'micro', priceVersion: selected.map(item => item.id).join('+'), items };
+}
+
+export function quoteMockService(prices, usage, at) {
+  const total = usage.input != null && usage.output != null ? usage.input + usage.output : null;
+  const price = totalPrice(activePrices(prices, at), {
+    input_tokens: usage.input, output_tokens: usage.output, total_tokens: total,
+    seconds: usage.seconds, characters: usage.characters,
+  });
+  return price && { micros: price.amount, currency: price.currency, versionId: price.priceVersion };
+}
+
 export function createMockEngine({initialState,storage:getStorage,notify=()=>{},localState}={}) {
 const readLinkedState=()=>localState || browserReadLinkedState();
 // Mock state is isolated from other prototype versions and never sends network requests.
-const STORAGE_KEY = 'moma-5120-model-onboarding-mock-v1';
+const STORAGE_KEY = workspaceStoragePrefix + 'onboarding-mock';
 let memory = initialState && (localState?.cloudOperations ? initialState : structuredClone(initialState)), runtime;
 const now = () => new Date(Date.now()).toISOString();
 const uid = () => crypto.randomUUID();
@@ -30,7 +57,7 @@ const requestConfiguration = channel => [channel.interfaceType, channel.baseUrl,
 const channelSignature = (state, channel) => hash([requestConfiguration(channel), credential(state, channel)?.version, credential(state, channel)?.status, channel.configVersion]);
 const channelById = (state, id) => { const channel = state.channels.find(item => item.id === id); if (!channel) fail('channel_not_found', '渠道不存在'); return channel; };
 const serviceById = (state, id) => { const service = state.services.find(item => item.id === id); if (!service) fail('service_not_found', '服务不存在'); return service; };
-function audit(state, action, objectId) { state.audits.push({ id: uid(), action, objectId, at: now(), source: 'mock' }); }
+function audit(state, action, objectId) { state.audits.push({ id: resourceId('audit-event'), action, objectId, at: now(), source: 'mock' }); }
 function once(state, action, body, execute, hideSecret = false, scope = '') {
   const operationId = text(body.operationId, '操作 ID', 200), key = scope ? `${scope}:${operationId}` : operationId, fingerprint = hash([action, body]), prior = state.operations[key];
   if (prior) { if (prior.fingerprint !== fingerprint) fail('idempotency_conflict', '同一操作 ID 不能提交不同内容'); if (prior.error) throw Object.assign(new Error(prior.error.message), copy(prior.error), { persistMockState: true }); return copy(prior.response); }
@@ -45,18 +72,20 @@ function once(state, action, body, execute, hideSecret = false, scope = '') {
     throw error;
   }
 }
-function resultFor(scenario, model, index) {
+function resultFor(scenario, model, index, channel) {
   if (scenario === 'timeout') return { status: 'unknown', code: 'request_timeout', message: '等待响应超时，执行结果未知，请先查询任务状态。', stage: model.type === 'video' ? 'poll' : 'request', upstreamStatus: null };
   const issues = mockConfig["admin-v2/mock-onboarding-service.js"]["issues"];
   const issue = issues[scenario] || scenario === 'partial' && index % 2 === 1 && [503, 'upstream_unavailable', '此模型暂不可用。'] || scenario === 'asyncfail' && (model.probe || model.type) === 'video' && [502, 'async_task_failed', '异步任务创建后执行失败。'];
   if (issue) return { status: 'failed', upstreamStatus: issue[0], code: issue[1], message: issue[2], stage: scenario === 'protocol' ? 'parse' : scenario === 'asyncfail' ? 'poll' : 'request', retryAfter: scenario === 'ratelimit' ? 30 : null };
-  return { status: 'passed', meteringUnknown: scenario === 'metering_unknown', upstreamStatus: 200, message: '任务返回有效结果。', stage: ['image', 'audio', 'video'].includes(model.type) ? 'artifact' : 'parse', code: '', usage: scenario === 'metering_unknown' ? null : ['text', 'multimodal', 'embedding', 'rerank'].includes(model.type) ? { requests: 1, input_tokens: 8, output_tokens: model.type === 'embedding' ? 0 : 2, total_tokens: model.type === 'embedding' ? 8 : 10 } : { requests: 1, seconds: ['audio', 'video'].includes(model.type) ? 1 : undefined, characters: model.type === 'audio' ? 2 : undefined } };
+  const response = channel?.interfaceType === 'openai-responses' ? {output:[{type:'message',content:[{type:'output_text',text:'你好'}]}]} : channel?.interfaceType === 'anthropic' ? {content:[{type:'text',text:'你好'}]} : {choices:[{message:{content:'你好'}}]};
+  const conversation = channel && ['text','multimodal'].includes(model.type) && channel.interfaceType!=='custom' ? {response,outputText:channelConversationText(channel.interfaceType,response)} : {};
+  return { ...conversation, status: 'passed', meteringUnknown: scenario === 'metering_unknown', upstreamStatus: 200, message: '任务返回有效结果。', stage: ['image', 'audio', 'video'].includes(model.type) ? 'artifact' : 'parse', code: '', usage: scenario === 'metering_unknown' ? null : ['text', 'multimodal', 'embedding', 'rerank'].includes(model.type) ? { requests: 1, input_tokens: 8, output_tokens: model.type === 'embedding' ? 0 : 2, total_tokens: model.type === 'embedding' ? 8 : 10 } : { requests: 1, seconds: ['audio', 'video'].includes(model.type) ? 1 : undefined, characters: model.type === 'audio' ? 2 : undefined } };
 }
 function advance(state) {
   const until = Date.now(); let clock = Math.min(state.clock || until, until), turns = 0;
   while (turns++ < 10000) {
     for (const batch of state.batches) for (const [index, item] of batch.items.entries()) if (item.status === 'running' && Date.parse(item.scheduledEndAt) <= clock) {
-      Object.assign(item, batch.cancelRequested ? { status: 'unknown', message: '已取消后续执行；已提交任务结果未知。', code: 'cancelled_after_dispatch', stage: item.stage } : resultFor(batch.scenario, item.model, index), { endedAt: new Date(clock).toISOString(), durationMs: clock - Date.parse(item.startedAt), current: batch.signature === channelSignature(state, channelById(state, batch.channelId)) });
+      Object.assign(item, batch.cancelRequested ? { status: 'unknown', message: '已取消后续执行；已提交任务结果未知。', code: 'cancelled_after_dispatch', stage: item.stage } : resultFor(batch.scenario, item.model, index, channelById(state,batch.channelId)), { endedAt: new Date(clock).toISOString(), durationMs: clock - Date.parse(item.startedAt), current: batch.signature === channelSignature(state, channelById(state, batch.channelId)) });
       item.result = ({ passed: '通过', failed: '失败', unknown: '结果未知', cancelled: '已取消' })[item.status];
     }
     const active = new Map();
@@ -87,26 +116,19 @@ const getMockScenario = () => read().scenario;
 function setMockScenario(value) { if (!SCENARIOS.some(([id]) => id === value)) fail('invalid_scenario', '请选择有效场景'); const state = readForWrite(); state.scenario = value; save(state); }
 function prices(input = []) {
   if (!Array.isArray(input)) fail('invalid_prices', '价格格式无效');
-  return input.map(item => { if (!item.id || !Number.isSafeInteger(item.amount) || item.amount < 0 || !item.currency || !item.unit || !Number.isFinite(Date.parse(item.effectiveAt))) fail('invalid_prices', '请补齐价格版本、金额、单位和生效时间'); return { id: item.id, amount: item.amount, currency: item.currency, unit: item.unit, effectiveAt: item.effectiveAt, expiresAt: item.expiresAt || null }; });
-}
-function activePrices(input, at) {
-  const latest = new Map();
-  for (const item of [...input].filter(row => Date.parse(row.effectiveAt) <= at).sort((a, b) => Date.parse(b.effectiveAt) - Date.parse(a.effectiveAt))) if (!latest.has(item.unit)) latest.set(item.unit, item);
-  const selected = [...latest.values()].sort((a, b) => a.id.localeCompare(b.id));
-  return selected.length && selected.every(item => !item.expiresAt || Date.parse(item.expiresAt) > at) ? selected : null;
-}
-function totalPrice(selected, usage) {
-  if (!selected) return null;
-  const items = selected.map(price => { const count = ({ request: 1, million_tokens: usage?.total_tokens, million_input_tokens: usage?.input_tokens, million_output_tokens: usage?.output_tokens, second: usage?.seconds, character: usage?.characters })[price.unit]; return count == null ? null : { amount: Math.ceil(price.amount * count / (price.unit.startsWith('million_') ? 1000000 : 1)), currency: price.currency, priceVersion: price.id }; });
-  if (items.some(item => !item) || new Set(items.map(item => item.currency)).size !== 1) return null;
-  return { amount: items.reduce((sum, item) => sum + item.amount, 0), currency: items[0].currency, unit: 'micro', priceVersion: selected.map(item => item.id).join('+'), items };
+  return input.map(item => { if (!item.id || !Number.isSafeInteger(item.amount) || item.amount < 0 || !item.currency || !item.unit || !Number.isFinite(Date.parse(item.effectiveAt))) fail('invalid_prices', '请补齐价格版本、金额、单位和生效时间'); return { id: item.id,price_version_id:item.price_version_id ?? null,price_item_id:item.price_item_id ?? null,billing_item_id:item.billing_item_id ?? null,unit_id:item.unit_id ?? null,currency_id:item.currency_id ?? null, amount: item.amount, currency: item.currency, unit: item.unit, effectiveAt: item.effectiveAt, expiresAt: item.expiresAt || null }; });
 }
 function normalizeCandidate(state, body, previous = {}) {
-  const input = { ...previous, ...body }, publicModelId = text(input.publicModelId, '对外调用标识');
-  if (/\s/.test(publicModelId) || !['standard', 'provider'].includes(input.mode)) fail('service_incomplete', '请配置对外调用标识 和服务模式');
+  const input = { ...previous, ...body }, publicModelId = text(input.publicModelId, '模型调用标识');
+  if (/\s/.test(publicModelId) || !['standard', 'provider'].includes(input.mode)) fail('service_incomplete', '请配置模型调用标识 和服务模式');
   const bindings = (input.bindings || []).map(binding => { channelById(state, binding.channelId); return { id: text(binding.id || `${binding.channelId}:${binding.model?.id}`, '供给 ID'), channelId: binding.channelId, model: copy(binding.model), procurementPrices: prices(binding.procurementPrices || []) }; });
   const route = input.route || { version: 1, strategy: 'priority', channels: [] };
   if (!['fixed', 'priority', 'weighted', 'priority_weighted', 'load', 'tpm', 'latency', 'cost'].includes(route.strategy || 'priority') || !Number.isInteger(route.version) || route.channels.some(row => !bindings.some(binding => binding.id === row.bindingId))) fail('invalid_route', '路由须引用明确关联的供给');
+  if (route.retry != null) {
+    try { normalizeRouteRetry(route.retry); }
+    catch (error) { fail('invalid_route', error.message); }
+    if (input.mode !== 'standard') fail('invalid_route', '渠道直选服务不支持分组重试');
+  }
   const backups = route.channels.filter(row=>row.backup === true);
   if (backups.length) {
     if (input.mode !== 'provider' || route.strategy !== 'fixed' || route.autoFailover !== true || route.channels.length !== 2 || backups.length !== 1 || route.channels.some(row=>row.enabled === false)) fail('invalid_route', '渠道直选故障转移须指定一个主渠道和一个备用渠道');
@@ -169,33 +191,53 @@ function operationalContext(service, binding, channel) {
     const local = readLinkedState();
     const model = local.models.find(row => row.platformPublications?.some(proof => proof.mockServiceId === service.id && proof.source === 'mock'));
     const proof = model?.platformPublications.find(row => row.mockServiceId === service.id && row.source === 'mock');
-    return model && proof ? {modelId:model.id,modelType:model.type,serviceId:proof.serviceId,endpointId:channel.clientChannelId,providerId:channel.providerId,supplyId:binding.id} : null;
+    const reference = model && serviceReferences(local).find(row=>row.id===proof?.serviceId);
+    const supply = local.modelSupplies?.find(row=>row.id===binding.id);
+    return model && proof ? {model_id:modelIdentity(local,model).id,model_service_id:reference?.model_service_id || null,channel_id:supply ? (supply.channelId ? channelIdentity(local,supply.channelId) : local.modelData?.resourceIds?.[supply.id] || supply.id) : null,connection_id:channel.clientChannelId || null,provider_id:channel.providerId,modelId:model.id,modelType:model.type,serviceId:proof.serviceId,endpointId:channel.clientChannelId,providerId:channel.providerId,supplyId:binding.id} : null;
   } catch { return null; }
 }
 function operationalPrice(selected, context, at) {
   const meters = {million_tokens:['总 Token','百万 Token'],million_input_tokens:['输入 Token','百万 Token'],million_output_tokens:['输出 Token','百万 Token'],request:['调用次数','次'],second:['时长','秒'],character:['语音合成字符数','字符']};
-  return {id:selected.map(row=>row.id).join(' / '),modelId:context?.modelId,serviceId:context?.serviceId,effectiveAt:selected.map(row=>row.effectiveAt).sort((a,b)=>Date.parse(b)-Date.parse(a))[0],expiresAt:selected.map(row=>row.expiresAt).filter(Boolean).sort((a,b)=>Date.parse(a)-Date.parse(b))[0] || null,selectedAt:new Date(at).toISOString(),items:selected.map(row=>({name:meters[row.unit]?.[0] || row.unit,unit:meters[row.unit]?.[1] || row.unit,currency:row.currency,amount:row.amount}))};
+  return {id:selected.map(row=>row.id).join(' / '),modelId:context?.modelId,serviceId:context?.serviceId,effectiveAt:selected.map(row=>row.effectiveAt).sort((a,b)=>Date.parse(b)-Date.parse(a))[0],expiresAt:selected.map(row=>row.expiresAt).filter(Boolean).sort((a,b)=>Date.parse(a)-Date.parse(b))[0] || null,selectedAt:new Date(at).toISOString(),model_id:context?.model_id ?? null,model_service_id:context?.model_service_id ?? null,items:selected.map(row=>({price_version_id:row.price_version_id ?? null,price_item_id:row.price_item_id ?? null,billing_item_id:row.billing_item_id ?? null,unit_id:row.unit_id ?? null,currency_id:row.currency_id ?? null,name:meters[row.unit]?.[0] || row.unit,unit:meters[row.unit]?.[1] || row.unit,currency:row.currency,amount:row.amount}))};
 }
 function pipeline(state, service, config, proofs, { identityType, identityId, messages, tenantId }) {
   const started = Date.now(), technical = config.technical === true && identityType === 'trial', sale = technical ? null : activePrices(config.salePrices, started);
   if (!technical && !sale) fail('sale_price_expired', '当前销售价格已过期');
   let lastIssue, attempt = 0; const attempts = [];
+  const retry = config.route.retry, groupAttempts = new Map();
   for (const route of routeOrder(config)) {
+    const group = config.route.strategy === 'priority_weighted' ? route.priority : 0;
+    if (retry && (attempts.length >= retry.maxAttempts ||
+        !groupAttempts.has(group) && groupAttempts.size > retry.acrossGroups)) break;
+    if (retry && (groupAttempts.get(group) ?? 0) > retry.withinGroup) continue;
+    groupAttempts.set(group, (groupAttempts.get(group) ?? 0) + 1);
     const binding = config.bindings.find(item => item.id === route.bindingId), channel = channelById(state, binding.channelId);
     let dispatched=false;
+    let retryReason;
     try {
       assertAvailable(state, channel, { live: identityType === 'client', model: binding.model });
       if (proofs.find(item => item.bindingId === binding.id)?.signature !== channelSignature(state, channel)) fail('supply_changed', '供给配置已变化，请重新检查发布');
       const procurement = activePrices(binding.procurementPrices, started); if (!technical && !procurement) fail('procurement_price_expired', '采购价已到期');
       dispatched=true;
       const result = resultFor(state.scenario, binding.model, state.scenario === 'partial' ? attempt++ === 0 ? 1 : 0 : 0);
-      if (result.status !== 'passed') fail(result.code, result.message);
+      if (result.status !== 'passed') {
+        retryReason = result.code === 'request_timeout' && result.stage === 'request' ? 'timeout'
+          : result.upstreamStatus === 429 ? '429' : result.upstreamStatus >= 500 && result.stage === 'request' ? '5xx' : undefined;
+        fail(result.code, result.message);
+      }
       const context=operationalContext(service,binding,channel);
-      attempts.push({ dispatched:true, bindingId: binding.id, channelId: channel.id, endpointId:channel.clientChannelId || null, status: 'passed', usage:result.usage || null, procurementSnapshot:procurement?{...operationalPrice(procurement,context,started),providerId:channel.providerId,endpointId:channel.clientChannelId || null,supplyId:binding.id}:null });
-      const usage = result.usage || null, cost = result.meteringUnknown ? null : totalPrice(procurement,usage), record = { id: uid(), source: 'mock', evidenceSource: 'mock', serviceId: service.id, publicModelId: config.publicModelId, serviceVersion: identityType === 'trial' ? service.candidateVersion : service.published.version, routeVersion: config.route.version, identityType, identityId, operational:context, priceSnapshot:sale?operationalPrice(sale,context,started):null,billingStatus:technical?'not_applicable':identityType==='client'?'billable':'trial',costStatus:cost?'confirmed':'pending', tenantId:identityType === 'client' ? tenantId || state.clientKeys.find(row=>row.id===identityId)?.tenantId || null : null, attempts: copy(attempts), startedAt: new Date(started).toISOString(), endedAt: now(), providerId: channel.providerId, channelId: channel.id, upstreamModelId: binding.model.upstreamModelId, usage, cost, saleTrial: result.meteringUnknown ? null : totalPrice(sale, usage), customerDebited: false, traceId: uid() };
+      attempts.push({ attempt_no:attempts.length+1,model_service_id:context?.model_service_id ?? null,channel_id:context?.channel_id ?? null,connection_id:context?.connection_id ?? null,provider_id:channel.providerId,dispatched:true, bindingId: binding.id, channelId: channel.id, endpointId:channel.clientChannelId || null, status: 'passed', usage:result.usage || null, procurementSnapshot:procurement?{...operationalPrice(procurement,context,started),providerId:channel.providerId,endpointId:channel.clientChannelId || null,supplyId:binding.id}:null });
+      const usage = result.usage || null, cost = result.meteringUnknown ? null : totalPrice(procurement,usage), record = { id: resourceId('usage-record'), requestId: resourceId('request'), source: 'mock', evidenceSource: 'mock', serviceId: service.id, publicModelId: config.publicModelId, serviceVersion: identityType === 'trial' ? service.candidateVersion : service.published.version, routeVersion: config.route.version, identityType, identityId, operational:context, priceSnapshot:sale?operationalPrice(sale,context,started):null,billingStatus:technical?'not_applicable':identityType==='client'?'billable':'trial',costStatus:cost?'confirmed':'pending', tenantId:identityType === 'client' ? tenantId || state.clientKeys.find(row=>row.id===identityId)?.tenantId || null : null, attempts: copy(attempts), startedAt: new Date(started).toISOString(), endedAt: now(), providerId: channel.providerId, channelId: channel.id, upstreamModelId: binding.model.upstreamModelId, usage, cost, saleTrial: result.meteringUnknown ? null : totalPrice(sale, usage), customerDebited: false, traceId: uid() };
       state.usage.push(record);
-      return { id: record.id, model: config.publicModelId, choices: [{ message: { role: 'assistant', content: `已处理：${messages?.at(-1)?.content || '连接检查'}` } }], usage, traceId: record.traceId, source: 'mock', attempts: copy(attempts), actualSupply: { providerId: channel.providerId, channelId: channel.id, upstreamModelId: binding.model.upstreamModelId }, routeVersion: config.route.version, cost: record.cost, saleTrial: record.saleTrial, technicalReady: true, billingReady: Boolean(record.cost && record.saleTrial), customerDebited: false };
-    } catch (error) { const selected=activePrices(binding.procurementPrices,started),context=operationalContext(service,binding,channel); attempts.push({ dispatched, bindingId: binding.id, channelId: channel.id, endpointId:channel.clientChannelId || null, status: 'failed', code: error.code || 'request_failed', usage:null, procurementSnapshot:selected?{...operationalPrice(selected,context,started),providerId:channel.providerId,endpointId:channel.clientChannelId || null}:null }); error.attempts = copy(attempts); lastIssue = error; if (!config.route.autoFailover || (error.code === 'request_timeout' && config.mode !== 'provider')) throw error; }
+      return { id: record.requestId, model: config.publicModelId, choices: [{ message: { role: 'assistant', content: `已处理：${messages?.at(-1)?.content || '连接检查'}` } }], usage, traceId: record.traceId, source: 'mock', attempts: copy(attempts), actualSupply: { providerId: channel.providerId, channelId: channel.id, upstreamModelId: binding.model.upstreamModelId }, routeVersion: config.route.version, cost: record.cost, saleTrial: record.saleTrial, technicalReady: true, billingReady: Boolean(record.cost && record.saleTrial), customerDebited: false };
+    } catch (error) {
+      const selected=activePrices(binding.procurementPrices,started),context=operationalContext(service,binding,channel);
+      attempts.push({ attempt_no:attempts.length+1,model_service_id:context?.model_service_id ?? null,channel_id:context?.channel_id ?? null,connection_id:context?.connection_id ?? null,provider_id:channel.providerId,dispatched, bindingId: binding.id, channelId: channel.id, endpointId:channel.clientChannelId || null, status: 'failed', code: error.code || 'request_failed', usage:null, procurementSnapshot:selected?{...operationalPrice(selected,context,started),providerId:channel.providerId,endpointId:channel.clientChannelId || null}:null });
+      error.attempts = copy(attempts);
+      lastIssue = error;
+      const eligible = retry ? retry.reasons.includes(retryReason) : error.code !== 'request_timeout' || config.mode === 'provider';
+      if (!config.route.autoFailover || !eligible) throw error;
+    }
   }
   throw lastIssue || new Error('没有符合当前允许范围的可用供给');
 }
@@ -219,7 +261,7 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
   const url = new URL(path, 'http://mock.invalid'), route = url.pathname, scenario = state.scenario;
   if (method === 'GET' && route === '/health') return { status: 'healthy', source: 'mock' };
   if (method === 'GET' && route === '/credentials') return { credentials: state.credentials };
-  if (method === 'POST' && route === '/credentials') return once(state, 'createCredential', body, () => { const secret = body.secret || '', row = { id: uid(), providerId: text(body.providerId, '服务商'), name: text(body.name, '密钥名称'), maskedKey: secret.length > 12 ? `${secret.slice(0, 8)}*****${secret.slice(-4)}` : '*****', version: 1, status: 'active', source: 'mock', accountRpm: body.accountRpm || null }; state.credentials.push(row); return row; });
+  if (method === 'POST' && route === '/credentials') return once(state, 'createCredential', body, () => { const secret = body.secret || '', row = { id: resourceId('credential'), providerId: text(body.providerId, '服务商'), name: text(body.name, '密钥名称'), maskedKey: secret.length > 12 ? `${secret.slice(0, 8)}*****${secret.slice(-4)}` : '*****', version: 1, status: 'active', source: 'mock', accountRpm: body.accountRpm || null }; state.credentials.push(row); return row; });
   const credentialAction = route.match(/^\/credentials\/([^/]+)\/(revoke|disable|enable)$/);
   if (method === 'POST' && credentialAction) return once(state, credentialAction[2] + 'Credential', body, () => { const row = state.credentials.find(item => item.id === credentialAction[1]); if (!row) fail('credential_not_found', '凭证引用不存在'); if (row.version !== body.expectedRevision) fail('revision_conflict', '凭证版本已变化'); if (row.status === 'revoked' && credentialAction[2] !== 'revoke') fail('credential_revoked', '已撤销凭证不能恢复'); const status = ({ revoke: 'revoked', disable: 'disabled', enable: 'active' })[credentialAction[2]]; if (row.status !== status) { row.status = status; row.version++; } return row; });
   if (method === 'GET' && route === '/channels') return { channels: state.channels.map(channel => ({ ...channel, signature: channelSignature(state, channel) })) };
@@ -230,11 +272,11 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
     const input = { ...current, ...body }, providerId = text(input.providerId, '服务商'), name = text(input.name, '渠道名称', 60);
     if (current && current.providerId !== providerId) fail('provider_immutable', '渠道不能变更服务商');
     if (state.channels.some(row => row.id !== current?.id && row.providerId === providerId && row.name === name)) fail('duplicate_name', '渠道名称重复');
-    if (!['openai', 'anthropic', 'custom'].includes(input.interfaceType)) fail('invalid_interface', '请选择明确接口类型');
+    if (!['openai', 'openai-responses', 'anthropic', 'custom'].includes(input.interfaceType)) fail('invalid_interface', '请选择明确接口类型');
     const localKeyId = input.credential?.id || null, externalVersion = input.credential?.version || 'initial', credentialId = input.authMode === 'none' ? null : localKeyId ? `${localKeyId}@${hash(externalVersion)}` : input.credentialId;
     if (input.authMode !== 'none' && !state.credentials.some(row => row.id === credentialId)) { const revoked = localKeyId && state.credentials.some(row => row.localKeyId === localKeyId && row.status === 'revoked'); state.credentials.push({ id: text(credentialId, '密钥引用'), localKeyId, externalVersion, providerId, name: '渠道密钥引用', maskedKey: '*****', status: revoked ? 'revoked' : input.credential?.status || 'active', version: 1, accountRpm: input.credential?.accountRpm || null, source: 'mock' }); }
     const key = state.credentials.find(row => row.id === credentialId); if (key && key.providerId !== providerId) fail('credential_scope', '密钥不属于此服务商');
-    const channel = { id: current?.id || uid(), providerId, name, displayName: input.displayName || name, interfaceType: input.interfaceType, baseUrl: text(input.baseUrl, '接口地址', 2048), taskUrls: copy(input.taskUrls || {}), authMode: input.authMode || 'key', credentialId, clientChannelId: input.clientChannelId || null, clientSignature: input.clientSignature || null, mockModels: copy(input.mockModels || current?.mockModels || []), apiVersion: input.apiVersion || input.adapterOptions?.apiVersion || null, workspaceId: input.workspaceId || input.adapterOptions?.workspaceId || null, tokenLimitField: input.tokenLimitField || input.adapterOptions?.tokenLimitField || null, imageSize: input.imageSize || input.adapterOptions?.imageSize || null, voice: input.voice || input.adapterOptions?.voice || null, statusPath: input.statusPath || input.adapterOptions?.statusPath || null, revision: (current?.revision || 0) + 1, configVersion: (current?.configVersion || 0) + 1, source: 'mock' };
+    const channel = { id: current?.id || resourceId('connection'), providerId, name, displayName: input.displayName || name, interfaceType: input.interfaceType, baseUrl: text(input.baseUrl, '接口地址', 2048), taskUrls: copy(input.taskUrls || {}), authMode: input.authMode || 'key', credentialId, clientChannelId: input.clientChannelId || null, clientSignature: input.clientSignature || null, mockModels: copy(input.mockModels || current?.mockModels || []), apiVersion: input.apiVersion || input.adapterOptions?.apiVersion || null, workspaceId: input.workspaceId || input.adapterOptions?.workspaceId || null, tokenLimitField: input.tokenLimitField || input.adapterOptions?.tokenLimitField || null, imageSize: input.imageSize || input.adapterOptions?.imageSize || null, voice: input.voice || input.adapterOptions?.voice || null, statusPath: input.statusPath || input.adapterOptions?.statusPath || null, revision: (current?.revision || 0) + 1, configVersion: (current?.configVersion || 0) + 1, source: 'mock' };
     if (current && hash(requestConfiguration(current)) === hash(requestConfiguration(channel))) channel.configVersion = current.configVersion;
     if (current) state.channels[state.channels.indexOf(current)] = channel; else state.channels.push(channel);
     return { ...channel, signature: channelSignature(state, channel) };
@@ -252,24 +294,24 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
     const channel = channelById(state, body.channelId); assertAvailable(state, channel);
     if (!Array.isArray(body.models) || !body.models.length || body.models.length > 50) fail('invalid_models', '请选择 1–50 个测试模型');
     if (body.models.some(model => ['image', 'video', 'audio'].includes(model.type)) && body.confirmExpensive !== true) fail('cost_confirmation_required', '请明确勾选高成本任务');
-    for (const model of body.models) { text(model.id, '模型资料 ID'); text(model.upstreamModelId, '上游模型标识'); if (!['text', 'multimodal', 'embedding', 'rerank', 'image', 'audio', 'video'].includes(model.type) || model.check && !['streaming', 'tools', 'structured'].includes(model.check)) fail('invalid_task', '模型任务或验证内容无效'); }
+    for (const model of body.models) { if(channel.interfaceType==='openai-responses' && !['text','multimodal'].includes(model.type)) fail('invalid_task','Responses 仅适用于对话模型'); text(model.id, '模型资料 ID'); text(model.upstreamModelId, '上游模型调用标识'); if (!['text', 'multimodal', 'embedding', 'rerank', 'image', 'audio', 'video'].includes(model.type) || model.check && !['streaming', 'tools', 'structured'].includes(model.check)) fail('invalid_task', '模型任务或验证内容无效'); }
     if (new Set(body.models.map(row => JSON.stringify([row.id,row.associationId]))).size !== body.models.length || new Set(body.models.map(row => row.upstreamModelId)).size !== body.models.length) fail('duplicate_model', '测试模型不能重复');
-    const batch = { id: uid(), channelId: channel.id, providerId: channel.providerId, signature: channelSignature(state, channel), configVersion: channel.configVersion, credentialId: channel.credentialId, credentialVersion: credential(state, channel)?.version || null, source: 'mock', scenario, status: 'queued', createdAt: now(), confirmExpensive: body.confirmExpensive === true, items: body.models.map(model => ({ id: uid(), model: { id: model.id, associationId: model.associationId, upstreamModelId: model.upstreamModelId, type: model.type, probe: model.probe || model.type, ...(model.check ? { check: model.check } : {}), ...(model.dimensions ? { dimensions: model.dimensions } : {}) }, status: 'queued', stage: 'queued', evidenceSource: 'mock', current: true, traceId: uid(), usage: null, cost: null, templateVersion: 1 })) }; state.batches.push(batch); return batch;
+    const batch = { id: resourceId('validation-batch'), channelId: channel.id, providerId: channel.providerId, signature: channelSignature(state, channel), configVersion: channel.configVersion, credentialId: channel.credentialId, credentialVersion: credential(state, channel)?.version || null, source: 'mock', scenario, status: 'queued', createdAt: now(), confirmExpensive: body.confirmExpensive === true, items: body.models.map(model => ({ id: resourceId('validation-result'), ...(['text','multimodal'].includes(model.type) && channel.interfaceType!=='custom' ? { request: channelConversationRequest(channel,model) } : {}), model: { id: model.id, associationId: model.associationId, upstreamModelId: model.upstreamModelId, type: model.type, probe: model.probe || model.type, ...(model.check ? { check: model.check } : {}), ...(model.dimensions ? { dimensions: model.dimensions } : {}) }, status: 'queued', stage: 'queued', evidenceSource: 'mock', current: true, traceId: uid(), usage: null, cost: null, templateVersion: 1 })) }; state.batches.push(batch); return batch;
   });
   const batchPath = route.match(/^\/tests\/([^/]+)(\/cancel)?$/);
   if (batchPath) { const batch = state.batches.find(row => row.id === batchPath[1]); if (!batch) fail('batch_not_found', '测试任务不存在'); if (method === 'GET' && !batchPath[2]) return batch; if (method === 'POST' && batchPath[2]) return once(state, 'cancelTests', body, () => { batch.cancelRequested = true; advance(state); return batch; }); }
   if (method === 'GET' && route === '/services') return { services: state.services };
-  if (method === 'POST' && route === '/services') return once(state, 'createService', body, () => { const candidate = normalizeCandidate(state, body); if (state.services.some(service => service.candidate.publicModelId === candidate.publicModelId || service.published?.config.publicModelId === candidate.publicModelId)) fail('public_model_conflict', '对外调用标识 已存在'); const service = { id: uid(), revision: 1, candidateVersion: 1, candidate, published: null, trials: [], source: 'mock' }; state.services.push(service); return service; });
+  if (method === 'POST' && route === '/services') return once(state, 'createService', body, () => { const candidate = normalizeCandidate(state, body); if (state.services.some(service => service.candidate.publicModelId === candidate.publicModelId || service.published?.config.publicModelId === candidate.publicModelId)) fail('public_model_conflict', '模型调用标识 已存在'); const service = { id: resourceId('service'), revision: 1, candidateVersion: 1, candidate, published: null, trials: [], source: 'mock' }; state.services.push(service); return service; });
   const servicePath = route.match(/^\/services\/([^/]+)(?:\/(test-identities|trial|publish|unpublish))?$/);
   if (servicePath) {
     const service = serviceById(state, servicePath[1]);
-    if (method === 'PATCH' && !servicePath[2]) return once(state, 'updateService', body, () => { if (service.revision !== body.expectedRevision) fail('revision_conflict', '服务修订已变化'); const candidate = normalizeCandidate(state, body, service.candidate); if (state.services.some(row => row.id !== service.id && (row.candidate.publicModelId === candidate.publicModelId || row.published?.config.publicModelId === candidate.publicModelId))) fail('public_model_conflict', '对外调用标识 已存在'); service.candidate = candidate; service.revision++; service.candidateVersion++; return service; });
+    if (method === 'PATCH' && !servicePath[2]) return once(state, 'updateService', body, () => { if (service.revision !== body.expectedRevision) fail('revision_conflict', '服务修订已变化'); const candidate = normalizeCandidate(state, body, service.candidate); if (state.services.some(row => row.id !== service.id && (row.candidate.publicModelId === candidate.publicModelId || row.published?.config.publicModelId === candidate.publicModelId))) fail('public_model_conflict', '模型调用标识 已存在'); service.candidate = candidate; service.revision++; service.candidateVersion++; return service; });
     if (method === 'POST' && servicePath[2] === 'test-identities') return once(state, 'createTestIdentity', body, () => { if (service.revision !== body.expectedRevision) fail('revision_conflict', '服务修订已变化'); const token = `mock-trial-${uid()}`, identity = { id: uid(), tokenHash: hash(token), serviceId: service.id, candidateVersion: service.candidateVersion, fingerprint: hash(service.candidate), expiresAt: new Date(Date.now() + 600000).toISOString() }; state.identities.push(identity); return { id: identity.id, token, serviceId: service.id, candidateVersion: service.candidateVersion, expiresAt: identity.expiresAt, source: 'mock' }; }, true);
     if (method === 'POST' && servicePath[2] === 'trial') {
       const identity = state.identities.find(row => row.tokenHash === hash(body.trialToken || ''));
       if (!identity || identity.serviceId !== service.id || identity.candidateVersion !== service.candidateVersion || identity.fingerprint !== hash(service.candidate) || Date.parse(identity.expiresAt) <= Date.now()) fail('trial_identity_invalid', '测试身份不适用于当前候选或已过期');
       return once(state, 'platformTrial', body, () => {
-        const entry = { id: uid(), fingerprint: hash([service.candidateVersion, service.candidate]), proofs: [], status: 'running', source: 'mock', candidateVersion: service.candidateVersion, routeVersion: service.candidate.route.version, startedAt: now(), at: now() }; service.trials.push(entry);
+        const entry = { id: resourceId('validation-result'), fingerprint: hash([service.candidateVersion, service.candidate]), proofs: [], status: 'running', source: 'mock', candidateVersion: service.candidateVersion, routeVersion: service.candidate.route.version, startedAt: now(), at: now() }; service.trials.push(entry);
         try {
           entry.proofs = qualify(state, service);
           const result = pipeline(state, service, service.candidate, entry.proofs, { identityType: 'trial', identityId: identity.id });
@@ -277,7 +319,7 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
           return { ...result, candidateVersion: service.candidateVersion };
         } catch (error) {
           Object.assign(entry, { status: error.code === 'request_timeout' ? 'unknown' : 'failed', code: error.code || 'request_failed', message: error.message, traceId: error.traceId || uid(), attempts: copy(error.attempts || []), usage: null, cost: null, saleTrial: null, endedAt: now(), at: now() });
-          if (entry.attempts.length) state.usage.push({ id: entry.id, source: 'mock', evidenceSource: 'mock', serviceId: service.id, publicModelId: service.candidate.publicModelId, serviceVersion: service.candidateVersion, routeVersion: service.candidate.route.version, identityType: 'trial', identityId: identity.id, status: entry.status, code: entry.code, attempts: copy(entry.attempts), startedAt: entry.startedAt, endedAt: entry.endedAt, channelId: entry.attempts.at(-1).channelId, usage: null, cost: null, saleTrial: null, customerDebited: false, traceId: entry.traceId });
+          if (entry.attempts.length) state.usage.push({ id: resourceId('usage-record'), requestId: resourceId('request'), source: 'mock', evidenceSource: 'mock', serviceId: service.id, publicModelId: service.candidate.publicModelId, serviceVersion: service.candidateVersion, routeVersion: service.candidate.route.version, identityType: 'trial', identityId: identity.id, status: entry.status, code: entry.code, attempts: copy(entry.attempts), startedAt: entry.startedAt, endedAt: entry.endedAt, channelId: entry.attempts.at(-1).channelId, usage: null, cost: null, saleTrial: null, customerDebited: false, traceId: entry.traceId });
           error.traceId = entry.traceId; error.persistMockState = true; throw error;
         }
       }, false, 'trial:' + identity.id);
@@ -285,7 +327,7 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
     if (method === 'POST' && servicePath[2] === 'publish') return once(state, 'publishService', body, () => { if (service.revision !== body.expectedRevision) fail('revision_conflict', '服务修订已变化'); const proofs = qualify(state, service), trial = service.trials.filter(row => row.fingerprint === hash([service.candidateVersion, service.candidate])).at(-1); if (!trial || trial.status !== 'passed' || hash(trial.proofs) !== hash(proofs)) fail('platform_trial_required', '当前候选、路由和价格版本尚未通过平台试调用'); service.published = { version: service.candidateVersion, config: copy(service.candidate), proofs, trialId: trial.id, publishedAt: now(), source: 'mock' }; service.disabled = false; service.revision++; return service; });
     if (method === 'POST' && servicePath[2] === 'unpublish') return once(state, 'unpublishService', body, () => { if (service.revision !== body.expectedRevision) fail('revision_conflict', '服务修订已变化'); service.disabled = true; service.revision++; return service; });
   }
-  if (method === 'POST' && route === '/client-keys') return once(state, 'createClientKey', body, () => { if (!Array.isArray(body.serviceIds) || !body.serviceIds.length) fail('invalid_scope', '请选择客户服务范围'); body.serviceIds.forEach(id => serviceById(state, id)); const clientKey = `mock-client-${uid()}`, row = { id: uid(), tokenHash: hash(clientKey), tenantId: text(body.tenantId, '租户'), serviceIds: [...new Set(body.serviceIds)], status: 'active', version: 1, expiresAt: body.expiresAt || null }; state.clientKeys.push(row); const metadata = { ...row }; delete metadata.tokenHash; return { ...metadata, clientKey }; }, true);
+  if (method === 'POST' && route === '/client-keys') return once(state, 'createClientKey', body, () => { if (!Array.isArray(body.serviceIds) || !body.serviceIds.length) fail('invalid_scope', '请选择客户服务范围'); body.serviceIds.forEach(id => serviceById(state, id)); const clientKey = `mock-client-${uid()}`, row = { id: resourceId('api-key'), tokenHash: hash(clientKey), tenantId: text(body.tenantId, '租户'), serviceIds: [...new Set(body.serviceIds)], status: 'active', version: 1, expiresAt: body.expiresAt || null }; state.clientKeys.push(row); const metadata = { ...row }; delete metadata.tokenHash; return { ...metadata, clientKey }; }, true);
   const clientAction = route.match(/^\/client-keys\/([^/]+)\/revoke$/);
   if (method === 'POST' && clientAction) return once(state, 'revokeClientKey', body, () => { const row = state.clientKeys.find(item => item.id === clientAction[1]); if (!row) fail('client_key_not_found', '客户 Key 不存在'); if (row.version !== body.expectedRevision) fail('revision_conflict', '客户 Key 修订已变化'); row.status = 'revoked'; row.version++; const metadata = { ...row }; delete metadata.tokenHash; return metadata; });
   if (method === 'POST' && route === '/client/completions') {
@@ -304,7 +346,7 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
       try { const result = pipeline(state, service, service.published.config, service.published.proofs, { identityType: 'client', identityId: key.id, messages: body.messages }); return { id: result.id, model: result.model, choices: result.choices, usage: result.usage, traceId: result.traceId, source: 'mock' }; }
       catch(error) {
         const attempts=copy(error.attempts || []),last=attempts.at(-1),binding=service.published.config.bindings.find(row=>row.id===last?.bindingId),channel=binding && channelById(state,binding.channelId),context=channel && operationalContext(service,binding,channel),sale=activePrices(service.published.config.salePrices,Date.parse(startedAt));
-        if(attempts.length){state.usage.push({id:uid(),source:'mock',identityType:'client',identityId:key.id,tenantId:key.tenantId,serviceId:service.id,publicModelId:service.published.config.publicModelId,operational:context,priceSnapshot:sale?operationalPrice(sale,context,Date.parse(startedAt)):null,attempts,status:'failed',billingStatus:'not_billable',startedAt,endedAt:now(),usage:null,cost:null,saleTrial:null,traceId:error.traceId});error.persistMockState=true;}
+        if(attempts.length){state.usage.push({id:resourceId('usage-record'),requestId:resourceId('request'),source:'mock',identityType:'client',identityId:key.id,tenantId:key.tenantId,serviceId:service.id,publicModelId:service.published.config.publicModelId,operational:context,priceSnapshot:sale?operationalPrice(sale,context,Date.parse(startedAt)):null,attempts,status:'failed',billingStatus:'not_billable',startedAt,endedAt:now(),usage:null,cost:null,saleTrial:null,traceId:error.traceId});error.persistMockState=true;}
         delete error.attempts;
         throw error;
       }
@@ -312,7 +354,7 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
   }
   const channelAction = route.match(/^\/channels\/([^/]+)\/(disable|enable)$/);
   if (method === 'POST' && channelAction) return once(state, channelAction[2] + 'Channel', body, () => { const channel = channelById(state, channelAction[1]); if (channel.revision !== body.expectedRevision) fail('revision_conflict', '渠道修订已变化'); channel.disabled = channelAction[2] === 'disable'; channel.revision++; return channel; });
-  if (method === 'POST' && route === '/configuration-changes/preview') return once(state, 'previewConfigurationChange', body, () => { const snapshot = changeSnapshot(state, body), plan = { id: uid(), status: 'preview', source: 'mock', ...snapshot, impactSignature: hash(snapshot), createdAt: now() }; state.changes.push(plan); return plan; });
+  if (method === 'POST' && route === '/configuration-changes/preview') return once(state, 'previewConfigurationChange', body, () => { const snapshot = changeSnapshot(state, body), plan = { id: resourceId('connection-candidate'), status: 'preview', source: 'mock', ...snapshot, impactSignature: hash(snapshot), createdAt: now() }; state.changes.push(plan); return plan; });
   const changePath = route.match(/^\/configuration-changes\/([^/]+)$/);
   if (method === 'GET' && changePath) { const plan = state.changes.find(row => row.id === changePath[1]); if (!plan) fail('configuration_plan_not_found', '切换计划不存在'); return plan; }
   if (method === 'POST' && route === '/configuration-changes/apply') return once(state, 'applyConfigurationChange', body, () => {
@@ -361,9 +403,41 @@ function setMockRuntimeState(local) {
 }
 
 const getMockChannelSnapshots = () => { const state = read(); return state.channels.map(channel => ({ ...copy(channel), signature: channelSignature(state, channel) })); };
-function prepareMockConfiguration({ operationId = uid(), scope = 'channels', replacements = [], unverifiedChannelIds = [], commercialUpdates = [], publications = [] }, databaseTransaction = false) {
+function testedCredentialReplacements(state, changes, operationId) {
+  const replacements = changes.map(({ channelId, clientSignature, credential: nextKey }, index) => {
+    const source = channelById(state, channelId);
+    const candidate = handle(state, '/channels', { method: 'POST', body: {
+      ...source, name: `${(source.displayName || source.name).slice(0, 45)} · ${uid().slice(0, 8)}`, credential: nextKey, clientSignature,
+      operationId: `${operationId}:credential-channel:${index}`,
+    } });
+    return { channelId, candidateChannelId: candidate.id };
+  });
+  const coverage = changeSnapshot(state, { replacements }).requiredCoverage;
+  const requests = new Map();
+  for (const { candidateChannelId, model, capabilities } of coverage) {
+    for (const check of ['', ...capabilities]) {
+      const identity = JSON.stringify([candidateChannelId, model.id, model.upstreamModelId, model.probe || model.type, check]);
+      requests.set(identity, { channelId: candidateChannelId, model: { ...model, ...(check ? { check } : {}) } });
+    }
+  }
+  for (const [index, { channelId, model }] of [...requests.values()].entries()) {
+    const batch = handle(state, '/tests', { method: 'POST', body: {
+      operationId: `${operationId}:credential-check:${index}`, channelId, models: [model], confirmExpensive: true,
+    } });
+    // Complete only this simulated check inside the same atomic save.
+    const outcome = resultFor(batch.scenario, batch.items[0].model, 0);
+    if (outcome.status !== 'passed') fail(outcome.code, outcome.message);
+    const at = now();
+    Object.assign(batch.items[0], outcome, { result: '通过', startedAt: at, endedAt: at, durationMs: 0 });
+    Object.assign(batch, { status: 'completed', startedAt: at, endedAt: at });
+  }
+  return replacements;
+}
+
+function prepareMockConfiguration({ operationId = uid(), scope = 'channels', replacements = [], credentialReplacements = [], unverifiedChannelIds = [], commercialUpdates = [], publications = [], routeReductions = [] }, databaseTransaction = false) {
   const before = read(), after = copy(before); advance(after);
   let result = null;
+  if (credentialReplacements.length) replacements = [...replacements, ...testedCredentialReplacements(after, credentialReplacements, operationId)];
   if (replacements.length) {
     const preview = handle(after, '/configuration-changes/preview', { method: 'POST', body: { operationId: operationId + ':preview', scope, replacements } });
     result = handle(after, '/configuration-changes/apply', { method: 'POST', body: { operationId, previewId: preview.id, impactSignature: preview.impactSignature } });
@@ -384,6 +458,16 @@ function prepareMockConfiguration({ operationId = uid(), scope = 'channels', rep
     if (sameCandidate) service.candidate = copy(published.config);
     service.revision++;
     audit(after, 'publishCommercialConfiguration', service.id);
+  }
+  for (const update of routeReductions) {
+    const service = serviceById(after, update.serviceId), prior = copy(service.published);
+    if (!prior || service.disabled || update.config.bindings.some(binding => !prior.config.bindings.some(old => old.id === binding.id && old.channelId === binding.channelId))) fail('invalid_route_reduction', '移除渠道不能新增供给或替换验证');
+    service.configurationHistory ||= [];
+    service.configurationHistory.push({ reason: '移除供给渠道', revision: service.revision, candidate: copy(service.candidate), published: prior });
+    handle(after, `/services/${service.id}`, { method: 'PATCH', body: { ...update.config, operationId: operationId + ':route:' + service.id, expectedRevision: service.revision } });
+    const identity = handle(after, `/services/${service.id}/test-identities`, { method: 'POST', body: { operationId: operationId + ':identity:' + service.id, expectedRevision: service.revision } });
+    handle(after, `/services/${service.id}/trial`, { method: 'POST', body: { operationId: operationId + ':trial:' + service.id, trialToken: identity.token } });
+    handle(after, `/services/${service.id}/publish`, { method: 'POST', body: { operationId: operationId + ':publish:' + service.id, expectedRevision: service.revision } });
   }
   for (const publication of publications) result = handle(after, `/services/${publication.serviceId}/publish`, {method:'POST',body:{operationId:publication.operationId,expectedRevision:publication.expectedRevision}});
   // D1 checks the workspace revision atomically; browser commits need full snapshot hashes.
@@ -454,7 +538,7 @@ function mockServiceReadiness(local, service) {
 
 function getMockOperationalRequests() {
   const convert = usage => usage ? {input:usage.input_tokens,output:usage.output_tokens,cached:usage.cached_tokens,images:usage.images,seconds:usage.seconds,characters:usage.characters} : null;
-  return read().usage.filter(row=>row.identityType==='client' && row.operational?.modelId && row.operational?.serviceId).map(row=>({id:'mock-customer:'+row.id,requestId:row.traceId || row.id,modelId:row.operational.modelId,modelType:row.operational.modelType,serviceId:row.operational.serviceId,callId:row.publicModelId,tenantId:row.tenantId,endpointId:row.operational.endpointId,providerId:row.operational.providerId,supplyId:row.operational.supplyId,routeVersion:row.routeVersion,purpose:'customer',billingStatus:row.billingStatus || 'billable',usage:convert(row.usage),usageConfirmed:!!row.usage,httpStatus:row.status==='failed'?0:200,createdAt:row.startedAt,updatedAt:row.endedAt,priceSnapshot:copy(row.priceSnapshot),procurementSnapshot:copy(row.attempts.at(-1)?.procurementSnapshot || null),attempts:row.attempts.map(attempt=>({...copy(attempt),usage:convert(attempt.usage),error:attempt.status==='passed'?null:attempt.code || 'upstream_failed'}))}));
+  return read().usage.filter(row=>row.identityType==='client' && row.operational?.modelId && row.operational?.serviceId).map(row=>({id:row.requestId || 'mock-customer:'+row.id,requestId:row.requestId || row.traceId || row.id,modelId:row.operational.modelId,modelType:row.operational.modelType,serviceId:row.operational.serviceId,callId:row.publicModelId,tenantId:row.tenantId,endpointId:row.operational.endpointId,providerId:row.operational.providerId,supplyId:row.operational.supplyId,routeVersion:row.routeVersion,purpose:'customer',billingStatus:row.billingStatus || 'billable',usage:convert(row.usage),usageConfirmed:!!row.usage,httpStatus:row.status==='failed'?0:200,createdAt:row.startedAt,updatedAt:row.endedAt,priceSnapshot:copy(row.priceSnapshot),procurementSnapshot:copy(row.attempts.at(-1)?.procurementSnapshot || null),attempts:row.attempts.map(attempt=>({...copy(attempt),usage:convert(attempt.usage),error:attempt.status==='passed'?null:attempt.code || 'upstream_failed'}))}));
 }
 
 function callForOrder(service,config,{tenantId,orderId,messages}) {

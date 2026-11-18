@@ -25,11 +25,12 @@ test('scope explicitly selects active clients and never silently expands invalid
   for(const tenantIds of [[],['stopped'],['deleted'],['missing'],['unknown'],'active']) assert.throws(()=>serviceScope(state,{openScope:'selected',tenantIds}),/客户/);
   assert.throws(()=>serviceScope(state,{openScope:'unknown',tenantIds:[]}),/客户/);
 });
-test('listing repairs target the current standard or provider mapping and sales settings',()=>{
+test('listing repairs target current mappings without linking to removed sales settings',()=>{
   const model={id:'canonical',serviceMode:'standard'};
   assert.equal(serviceConfigurationTarget(model,{tab:'routing',mapping:true}).mapping,'standard:canonical');
   assert.equal(serviceConfigurationTarget(model,{tab:'routing',providerId:'p',mapping:true}).mapping,'provider:canonical:p');
-  assert.deepEqual(serviceConfigurationTarget(model,{tab:'scope'}),{page:'model-prices',service:'standard:canonical',tab:'sales'});
+  assert.equal(serviceConfigurationTarget(model,{tab:'scope'}),null);
+  assert.equal(serviceConfigurationTarget({...model,serviceMode:'provider'},{tab:'scope'}),null);
 });
 test('material release sorting is newest first, stable for ties and missing last without fabricating month precision',()=>{
   const rows=[['missing',''],['june','2026-06-11'],['month','2026-10'],['october','2026-10-17'],['tie','2026-10-17']].map(([id,releaseDate])=>({id,profile:{releaseDate}}));

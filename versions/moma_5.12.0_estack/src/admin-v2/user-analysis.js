@@ -4,6 +4,21 @@ import { usageWindow } from './usage-analysis.js';
 const DAY = 86400000;
 const userTypes = ['企业', '个人'];
 
+export function userTokenGroups(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    const id = row.userId || '__unknown__';
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id).push(row);
+  }
+  return [...groups].map(([id, facts]) => {
+    const tokens = facts.filter(row => row.unit === 'Token');
+    const known = tokens.filter(row => row.value.complete);
+    return { id, calls: facts.length, tokens: known.length || !tokens.length ? known.reduce((sum, row) => sum + row.value.total, 0) : null,
+      pendingTokens: tokens.length - known.length };
+  });
+}
+
 // Explicit identity events for the prototype; gateway requests have no user owner.
 export function userDemo(now = Date.now()) {
   const today = Date.parse(`${dayOf(now)}T00:00:00+08:00`);
@@ -48,7 +63,7 @@ export function userMetrics(data, range, now = Date.now()) {
     active: unique(data.calls, from, to, allowed),
     keys: count(data.keys, to, allowed),
   });
-  const labels = [], dau = [], mau = [];
+  const labels = [], dau = [], mau = [], trend = [];
   const dauByType = { 企业: [], 个人: [] }, mauByType = { 企业: [], 个人: [] };
   for (let at = start; at < end; at += hourly ? 3600000 : DAY) {
     const to = Math.min(end, at + (hourly ? 3600000 : DAY));
@@ -56,6 +71,7 @@ export function userMetrics(data, range, now = Date.now()) {
     const dayStart = Date.parse(`${date}T00:00:00+08:00`);
     const monthStart = Date.parse(`${date.slice(0, 7)}-01T00:00:00+08:00`);
     labels.push(hourly ? `${String(new Date(at + 8 * 3600000).getUTCHours()).padStart(2, '0')}:00` : date.slice(5));
+    trend.push({ start: at, end: to, ...measure(at, to) });
     dau.push(unique(data.logins, dayStart, to, allowed));
     mau.push(unique(data.logins, monthStart, to, allowed));
     for (const type of userTypes) {
@@ -68,5 +84,5 @@ export function userMetrics(data, range, now = Date.now()) {
   const priorMonthStart = Date.parse(`${priorDate.slice(0, 7)}-01T00:00:00+08:00`);
   const priorDau = unique(data.logins, priorDayStart, priorEnd, allowed);
   const priorMau = unique(data.logins, priorMonthStart, priorEnd, allowed);
-  return { current: measure(start, end), previous: measure(priorStart, priorEnd), labels, dau, mau, dauByType, mauByType, priorDau, priorMau, hourly };
+  return { current: measure(start, end), previous: measure(priorStart, priorEnd), labels, trend, dau, mau, dauByType, mauByType, priorDau, priorMau, hourly };
 }

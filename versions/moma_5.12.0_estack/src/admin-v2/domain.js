@@ -1,4 +1,6 @@
-import { lifecycleAccess, assertOrderAccess } from '../service-access.mjs';
+import { lifecycleAccess, assertOrderAccess, offerKey } from '../service-access.mjs';
+import { customerProject } from '../personal-project.mjs';
+import { resourceId } from '../resource-id.mjs';
 import { MODEL_ORDER_BILLING_TYPES } from '../model-order-display.mjs';
 import { commitAdminState } from "./state-transaction.js";
 import { usageTotal } from "./observability.js";
@@ -7,9 +9,9 @@ import { availableSupplies, activeSupplySalePrice, activeSupplyPrice, priceItems
 import { activeModelSalePrice, activeProviderPrice } from './service-workspace.js';
 import { routingServices, routingChannels, serviceRoute, activeRouteVersion } from './service-routing.js';
 import { channelProcurementSnapshot } from './channel-change-management.js';
+import { projectAccessError, projectCallError, projectCallErrors, requestCharge, retainedProjectText } from '../project-call.mjs';
 
 const now = () => new Date().toISOString();
-const id = prefix => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 export function orderActivationCommand(state, orderId) {
   const order = state.orders.find(item => item.id === orderId);
@@ -26,7 +28,7 @@ export function orderActivationCommand(state, orderId) {
   if (!payg && !unit) throw new Error('订单额度单位未记录，不能发放权益');
   const sourceId = `entitlement:${order.id}`;
   const changes = [{ type: 'update', collection: 'orders', id: order.id, changes: { status: '已开通', timeline: [...(order.timeline ?? []), payg ? '服务开通' : '权益发放'] } }];
-  if (!payg && !state.ledger.some(item => item.sourceId === sourceId)) changes.push({ type: 'add', collection: 'ledger', record: { id: id('ledger'), accountId: order.tenantId, sourceId, type: '订购权益', delta: order.entitlement, balance: order.entitlement, unit, reason: order.orderNo, status: '已完成' } });
+  if (!payg && !state.ledger.some(item => item.sourceId === sourceId)) changes.push({ type: 'add', collection: 'ledger', record: { id: resourceId('ledger-entry'), accountId: order.tenantId, sourceId, type: '订购权益', delta: order.entitlement, balance: order.entitlement, unit, reason: order.orderNo, status: '已完成' } });
   return { type: 'batch', objectId: order.orderNo, changes };
 }
 
@@ -35,21 +37,51 @@ export function activateOrder(state, orderId) {
   return command ? commitAdminState(state, command, '平台管理员') : state;
 }
 
-export function simulateRequest(state, { requestId, keyId, modelId: requestedModelId, usage = { input: 1000, cached: 0, output: 200 }, forceTimeout = false, cacheKey = "demo-prompt", requirements = {}, purpose = "customer" }) {
-  const startedAt = Date.now(), services = routingServices(state);
-  const providerService=services.find(item=>item.mode==='provider' && item.callId && item.callId===requestedModelId);
-  const modelId=providerService?.modelId || state.models.find(item=>item.id===requestedModelId || item.modelId===requestedModelId)?.id || requestedModelId;
-  const service = providerService || services.find(item => item.mode === 'standard' && item.modelId === modelId);
+export function simulateRequest(state, input) {
+  const key = state.apiKeys.find(row => row.id === input.keyId && row.kind !== 'experience');
+  const routes = (state.projectRoutes || []).filter(row => row.code === input.modelId);
+  const route = routes.find(row => row.projectId === key?.projectId && row.tenantId === key?.tenantId);
+  if (!route) {
+    if (!routes.length) return simulateModelRequest(state, input);
+    return { state, request: { requestId: input.requestId, httpStatus: 403, error: 'project_route_forbidden',
+      attempts: [{ dispatched: false, error: 'project_route_forbidden' }] }, changes: [], duplicate: false };
+  }
+  const match = route.rules.find(rule => rule.value === (rule.field === 'apikey' ? key.id : input.metadata?._user));
+  const targets = [...new Set([match?.service || route.defaultService, ...route.fallback])];
+  const services = new Map(routingServices(state).map(service => [service.id, service]));
+  const previous = state.requests.find(row => row.requestId === input.requestId && row.projectRouteId === route.id);
+  if (previous) return simulateModelRequest(state, { ...input, modelId: previous.callId, projectRouteId: route.id });
+  let result;
+  for (const id of targets) {
+    const service = services.get(id);
+    if (!service) continue;
+    result = simulateModelRequest(state, { ...input, modelId: service.callId, projectRouteId: route.id });
+    if (result.duplicate || result.request.httpStatus < 400 || ![
+      'model_unavailable', 'model_not_authorized', 'model_forbidden', 'project_model_not_enabled',
+      'provider_unavailable', 'provider_price_unavailable', 'model_price_unavailable', 'no_available_endpoint',
+      'project_model_rate_limit_exceeded', 'project_token_usage_unavailable',
+    ].includes(result.request.error)) return result;
+  }
+  return result || { state, request: { requestId: input.requestId, httpStatus: 503, error: 'project_route_unavailable',
+    attempts: [{ dispatched: false, error: 'project_route_unavailable' }] }, changes: [], duplicate: false };
+}
 
-  const key = state.apiKeys.find(item => item.id === keyId), model = state.models.find(item => item.id === modelId), tenant = key && state.tenants.find(item => item.id === key.tenantId), project = key && state.projects.find(item => item.id === key.projectId), grant = key && state.grants.find(item => item.subjectId === key.id && item.status === '生效中'), route = state.routes.find(item => item.modelId === modelId && item.status === "已生效");
+function simulateModelRequest(state, { requestId, keyId, modelId: requestedModelId, usage = { input: 1000, cached: 0, output: 200 }, forceTimeout = false, cacheKey = "demo-prompt", requirements = {}, purpose = "customer", projectRouteId, content }) {
+  const startedAt = Date.now(), services = routingServices(state);
+  const selectedService=services.find(item=>item.callId && item.callId===requestedModelId);
+  const modelId=selectedService?.modelId || state.models.find(item=>item.id===requestedModelId || item.modelId===requestedModelId)?.id || requestedModelId;
+  const service = selectedService || services.find(item => item.mode === 'standard' && item.modelId === modelId);
+
+  const key = state.apiKeys.find(item => item.id === keyId && item.kind !== 'experience'), model = state.models.find(item => item.id === modelId), tenant = key && state.tenants.find(item => item.id === key.tenantId), project = key && customerProject(state, state.projects.find(item => item.id === key.projectId && item.tenantId === key.tenantId)), grant = key && state.grants.find(item => item.subjectId === key.id && item.status === '生效中'), route = state.routes.find(item => item.modelId === modelId && item.status === "已生效");
   const quantity = ['text','multimodal','embedding','rerank'].includes(model?.type) ? enterpriseTokenUsage(model,usage) : usageTotal(usage);
   const access = lifecycleAccess(state, service || (model && { model }), key?.tenantId);
   const previous = state.requests.find(item => item.requestId === requestId);
   if (previous) {
-    const sameRequest=previous.keyId===keyId&&previous.tenantId===key?.tenantId&&previous.modelId===modelId&&previous.serviceId===(service?.id || null);
+    const sameRequest=previous.keyId===keyId&&previous.tenantId===key?.tenantId&&previous.projectId===key?.projectId&&previous.modelId===modelId&&previous.serviceId===(service?.id || null)&&previous.projectRouteId===projectRouteId;
     if(!sameRequest)return {state,request:{requestId,httpStatus:409,error:'request_id_conflict',attempts:[{dispatched:false,error:'request_id_conflict'}]},changes:[],duplicate:true};
-    const authorized=access.allowed&&key?.status==='有效'&&key.modelIds.includes(modelId)&&tenant&&tenant.status!=='停用'&&project&&project.status!=='停用';
-    return { state, request: authorized ? previous : { ...previous, httpStatus: 403, error: access.code || 'auth_rejected' }, duplicate: true };
+    const error = projectAccessError(project, modelId, key, startedAt);
+    const authorized=access.allowed&&key?.status==='有效'&&key.modelIds.includes(modelId)&&tenant&&tenant.status!=='停用'&&!error;
+    return { state, request: authorized ? previous : { requestId, httpStatus: error ? projectCallErrors[error][0] : 403, error: error || access.code || 'auth_rejected' }, changes: [], duplicate: true };
   }
   const routeConfig = service && activeRouteVersion(serviceRoute(state,service.id))?.config;
   const mapped = routeConfig?.channels.filter(item => item.enabled && (!item.backup || routeConfig.autoFailover)).sort((a,b)=>Number(Boolean(a.backup))-Number(Boolean(b.backup))).map(item => item.supplyId);
@@ -70,32 +102,57 @@ export function simulateRequest(state, { requestId, keyId, modelId: requestedMod
   const keyRateExceeded=key?.qpmLimit!=null&&recent.length>=key.qpmLimit || key?.tpmLimit!=null&&recent.reduce((total,row)=>total+enterpriseTokenUsage(state.models.find(item=>item.id===row.modelId),row.usage || {}),0)+quantity>key.tpmLimit;
   const tenantGrant = enterpriseGrant(state, key?.tenantId), tenantQuantity = enterpriseTokenUsage(model, usage);
   let httpStatus = 200, error = "", endpointId = service || !route ? candidates[0]?.endpointId : route.targets.find(target => candidateIds.includes(target.endpointId))?.endpointId;
-  if (!key || key.status !== "有效" || !tenant || tenant.status === "停用" || !project || project.status === "停用") [httpStatus, error] = [401, "auth_rejected"];
+  const accessCode = projectAccessError(project, modelId, key, startedAt);
+  if (!key || key.status !== "有效" || !tenant || tenant.status === "停用" || !project) [httpStatus, error] = [401, "auth_rejected"];
+  else if (accessCode) [httpStatus, error] = [projectCallErrors[accessCode][0], accessCode];
   else if (!key.modelIds.includes(modelId)) [httpStatus, error] = [403, "model_not_authorized"];
   else if (tenantGrant && !tenantGrant.modelIds.includes(modelId)) [httpStatus, error] = [403, 'enterprise_model_not_authorized'];
   else if (tenantGrant && tenantGrant.limit - tenantGrant.used < tenantQuantity) [httpStatus, error] = [402, 'enterprise_quota_exhausted'];
   else if (!access.allowed) [httpStatus, error] = [403, access.code];
   else if (model.serviceMode==='provider' && !service) [httpStatus,error]=[403,'provider_service_required'];
-  else if (service?.mode === 'provider' && !activeProviderPrice(state,modelId,service.providerId,startedAt)) [httpStatus,error]=[503,'provider_price_unavailable'];
+  else if (service?.mode === 'provider' && !activeProviderPrice(state,modelId,offerKey(service),startedAt)) [httpStatus,error]=[503,'provider_price_unavailable'];
   else if (service?.mode === 'standard' && !activeModelSalePrice(state,modelId,startedAt)) [httpStatus,error]=[503,'model_price_unavailable'];
-  else if (!grant && key.quotaLimit !== null || grant && grant.limit - grant.used < quantity) [httpStatus, error] = [402, "quota_exhausted"];
+  else if (!grant && key.quotaLimit != null || grant && grant.limit - grant.used < quantity) [httpStatus, error] = [402, "quota_exhausted"];
   else if (keyRateExceeded || state.limits.some(item => item.scopeType === "key" && item.scopeId === key.id && item.status === "已启用")) [httpStatus, error] = [429, "rate_limit_exceeded"];
   else if (!endpointId) [httpStatus, error] = [503, "no_available_endpoint"];
   const attempts = [], cache = state.caches.find(item => item.status === "已启用"), cutoff = cache ? Date.now() - cache.ttl * 1000 : 0, cacheHit = Boolean(cache && state.requests.some(item => item.httpStatus === 200 && item.keyId === keyId && item.modelId === modelId && item.cacheKey === cacheKey && Date.parse(item.createdAt) >= Math.max(cutoff, Date.parse(cache.invalidatedAt || 0))));
   if (cacheHit && usage.input) usage = { ...usage, cached: usage.input };
+  const saleFor = supply => supply && (model.serviceMode === 'standard' ? activeModelSalePrice(state,modelId,startedAt) : model.serviceMode==='provider' ? activeProviderPrice(state,modelId,offerKey(service),startedAt) : activeSupplySalePrice(state, modelId, supply.id,startedAt));
+  const at = new Date(startedAt).toISOString();
+  const chargeFor = price => requestCharge(state, { httpStatus:200, createdAt:at, modelId, modelType:model.type, usage, priceSnapshot:price }, model, price);
+  if (!error) {
+    const price = saleFor(candidates.find(supply => supply.endpointId === endpointId));
+    const policy = projectCallError(state, project, model, key, usage, chargeFor(price), startedAt);
+    if (policy) [httpStatus, error] = [projectCallErrors[policy][0], policy];
+  }
   if (!error && forceTimeout) {
     const first = candidates.find(supply => supply.endpointId === endpointId);
     attempts.push({ dispatched: true, endpointId, supplyId: first.id, durationMs: 3000, error: "upstream_timeout", procurementSnapshot: structuredClone(procurementSnapshots.get(first.id)), configurationRevision: first.endpoint.configurationRevision || 0 });
     const fallback = !service && state.fallbacks.find(item => item.routeId === route?.id && item.status === "已启用");
     const next = service ? routeConfig.autoFailover && candidates.find(supply => supply.endpointId !== endpointId)?.endpointId : fallback?.chain.find(candidate => candidate !== endpointId && candidateIds.includes(candidate));
-    if (next) endpointId = next; else [httpStatus, error] = [504, "fallback_unavailable"];
+    if (next) {
+      const price = saleFor(candidates.find(supply => supply.endpointId === next));
+      const policy = projectCallError(state, project, model, key, usage, chargeFor(price), startedAt);
+      if (policy) [httpStatus, error] = [projectCallErrors[policy][0], policy];
+      else endpointId = next;
+    } else [httpStatus, error] = [504, "fallback_unavailable"];
   }
   const fulfilledSupply = candidates.find(supply => supply.endpointId === endpointId);
   const procurementSnapshot = fulfilledSupply && structuredClone(procurementSnapshots.get(fulfilledSupply.id));
   attempts.push({ dispatched: !error, endpointId: endpointId || null, durationMs: error ? 0 : 680, error: error || null, ...(fulfilledSupply ? { supplyId: fulfilledSupply.id, procurementSnapshot: structuredClone(procurementSnapshot), configurationRevision: fulfilledSupply.endpoint.configurationRevision || 0 } : {}) });
-  const request = { id: id("request"), requestId, tenantId: key?.tenantId || null, projectId: key?.projectId || null, keyId: key?.id || keyId, modelId, versionId: model?.defaultVersionId || null, endpointId: endpointId || null, releaseId: state.releases.find(item => item.status === "当前生效")?.id || null, source: "API 调用", attempts, usage, cacheKey, cacheHit, httpStatus, ttftMs: httpStatus === 200 && model?.capabilities.streaming ? 220 : null, durationMs: httpStatus === 200 ? attempts.reduce((sum, item) => sum + item.durationMs, 0) : 0, createdAt: now(), updatedAt: now() };
+  const request = { id: resourceId('request'), requestId, tenantId: key?.tenantId || null, projectId: key?.projectId || null, keyId: key?.id || keyId, modelId, versionId: model?.defaultVersionId || null, endpointId: endpointId || null, releaseId: state.releases.find(item => item.status === "当前生效")?.id || null, source: "API 调用", attempts, usage, cacheKey, cacheHit, httpStatus, ttftMs: httpStatus === 200 && model?.capabilities?.streaming ? 220 : null, durationMs: httpStatus === 200 ? attempts.reduce((sum, item) => sum + item.durationMs, 0) : 0, createdAt: now(), updatedAt: now() };
   const changes = [{ type: "add", collection: "requests", record: request }];
-  const price = fulfilledSupply && (model.serviceMode === 'standard' ? activeModelSalePrice(state,modelId,startedAt) : model.serviceMode==='provider' ? activeProviderPrice(state,modelId,service?.providerId,startedAt) : activeSupplySalePrice(state, modelId, fulfilledSupply.id,startedAt));
+  const price = saleFor(fulfilledSupply);
+  request.error = error || null;
+  if (projectRouteId) request.projectRouteId = projectRouteId;
+  if (attempts.some(attempt => attempt.dispatched)) request.admittedAt = at;
+  if (httpStatus === 200 && key?.billingType !== 'Token Plan') request.charge = chargeFor(price);
+  if (httpStatus === 200 && key?.billingType === 'Token Plan' && grant && tenantQuantity) request.planTokens = tenantQuantity;
+  if (request.admittedAt && project.retainContent === true && content) {
+    request.contentRetained = true;
+    request.requestBody = retainedProjectText(content.input);
+    request.responseBody = retainedProjectText(content.output);
+  }
   request.modelType = model?.type || null;
   request.purpose = purpose;
   request.billingStatus = httpStatus === 200 ? "billable" : "not_billable";
@@ -113,9 +170,9 @@ export function simulateRequest(state, { requestId, keyId, modelId: requestedMod
   request.configurationRevision = fulfilledSupply?.endpoint.configurationRevision || 0;
   if (httpStatus === 200 && grant) {
     const nextUsed = grant.used + quantity;
-    changes.push({ type: "update", collection: "grants", id: grant.id, changes: { used: nextUsed } }, { type: "add", collection: "ledger", record: { id: id("ledger"), accountId: key.id, sourceId: `request:${requestId}`, type: "调用扣减", delta: -quantity, balance: grant.limit - nextUsed, reason: requestId, status: "已完成" } });
+    changes.push({ type: "update", collection: "grants", id: grant.id, changes: { used: nextUsed } }, { type: "add", collection: "ledger", record: { id: resourceId('ledger-entry'), accountId: key.id, sourceId: `request:${requestId}`, type: "调用扣减", delta: -quantity, balance: grant.limit - nextUsed, reason: requestId, status: "已完成" } });
   }
-  if (httpStatus === 200 && tenantGrant && tenantQuantity) changes.push({ type: 'update', collection: 'grants', id: tenantGrant.id, changes: { used: tenantGrant.used + tenantQuantity } }, { type: 'add', collection: 'ledger', record: { id: id('enterprise-ledger'), accountId: tenant.id, sourceId: `enterprise-request:${requestId}`, type: '企业额度扣减', delta: -tenantQuantity, balance: tenantGrant.limit - tenantGrant.used - tenantQuantity, reason: requestId, status: '已完成' } });
+  if (httpStatus === 200 && tenantGrant && tenantQuantity) changes.push({ type: 'update', collection: 'grants', id: tenantGrant.id, changes: { used: tenantGrant.used + tenantQuantity } }, { type: 'add', collection: 'ledger', record: { id: resourceId('ledger-entry'), accountId: tenant.id, sourceId: `enterprise-request:${requestId}`, type: '企业额度扣减', delta: -tenantQuantity, balance: tenantGrant.limit - tenantGrant.used - tenantQuantity, reason: requestId, status: '已完成' } });
   return { state: commitAdminState(state, { type: "batch", objectId: requestId, changes }, "平台管理员"), request, changes, duplicate: false };
 }
 
@@ -126,6 +183,6 @@ export function applyAdjustment(state, adjustmentId, approved, reason) {
   if (!reason?.trim()) throw new Error("审批意见必填");
   if (Math.abs(adjustment.amount) > bill.amount) throw new Error("调账金额不能超过账单应收");
   const changes = [{ type: "update", collection: "adjustments", id: adjustment.id, changes: { status: approved ? "已执行" : "已拒绝", approvalReason: reason } }];
-  if (approved) changes.push({ type: "add", collection: "ledger", record: { id: id("ledger"), accountId: bill.tenantId, sourceId: `adjustment:${adjustment.id}`, type: "账单冲正", delta: -adjustment.amount, balance: 0, reason, status: "已完成" } });
+  if (approved) changes.push({ type: "add", collection: "ledger", record: { id: resourceId('ledger-entry'), accountId: bill.tenantId, sourceId: `adjustment:${adjustment.id}`, type: "账单冲正", delta: -adjustment.amount, balance: 0, reason, status: "已完成" } });
   return commitAdminState(state, { type: "batch", objectId: adjustment.adjustmentNo, changes }, "平台管理员");
 }

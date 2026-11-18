@@ -1,3 +1,4 @@
+import { isResourceId, resourceId } from '../src/resource-id.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
@@ -20,13 +21,16 @@ import { configureOnboardingTransport, onboardingApi, prepareServerChannel } fro
 import { useCloudMockSnapshot } from '../src/admin-v2/mock-onboarding-service.js';
 import { routingServices } from '../src/admin-v2/service-routing.js';
 import { routeEditorChannels, routeEditorPayload } from '../src/admin-v2/service-route-editor.js';
-import { routeEditConfig } from '../src/admin-v2/route-workspace.js';
+import { routeEditConfig, routeTableGroups } from '../src/admin-v2/route-workspace.js';
 import { commercialPriceBase } from '../src/admin-v2/service-workspace.js';
 import { platformAllowedChannels, platformCandidatePlan, publishPlatformCandidate, runPlatformTrial } from '../src/admin-v2/platform-service-client.js';
+import { salesStatus } from '../src/admin-v2/service-sales.js';
+import { builtinProviderCatalogue } from '../src/mock/reference-workspace.js';
+import { previewProviderJsonRows, providerJsonRows } from '../src/admin-v2/provider-json-import.js';
 
-test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are enforced end to end by D1',{timeout:90000},async()=>{
+test('fresh D1 imports MoMA and DeepSeek before GLM-5.3 pricing, ordering and supplier withdrawal',{timeout:90000},async()=>{
   const accessCode=randomBytes(18).toString('hex');
-  const [a,b,c]=['hospital-a','hospital-b','hospital-c'];
+  const [a,b,c]=Array.from({length:3},()=>resourceId('tenant'));
   const tenants=[{id:a,name:'A 医院',status:'正常'},{id:b,name:'B 医院',status:'正常'},{id:c,name:'C 医院',status:'正常'}];
   const loginHashes=Object.fromEntries(['admin-001',a,b,c].map(id=>[id,createHash('sha256').update(accessCode).digest('hex')]));
   const persistPath=await mkdtemp(join(tmpdir(),'moma-glm-channel-market-'));
@@ -60,7 +64,37 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     local=await startLocalBackend({loginHashes,persistPath});
     // Customers are fixture prerequisites. Every service, sale and call is created through its normal API.
     await local.db.prepare("UPDATE model_workspace SET reference_json=json_set(reference_json,'$.tenants',json(?)) WHERE id=1").bind(JSON.stringify(tenants)).run();
+    const signIn = (identifier, password = accessCode) => request('/auth/sign-in', { body: { identifier, accessCode: password } });
+    const adminSignIn = await signIn('admin-001'), marketSignIn = await signIn(a);
+    assert.equal(adminSignIn.status, 200);
+    assert(isResourceId(adminSignIn.data.account.id, 'admin-account'));
+    assert.match(adminSignIn.cookie, /^moma5120_session=/);
+    assert.equal(marketSignIn.status, 200);
+    assert.equal(marketSignIn.data.tenant.id, a);
+    assert.match(marketSignIn.cookie, /^moma5120_market=/);
+    assert.equal((await request('/auth/me', { cookie: marketSignIn.cookie })).status, 401);
+    assert.equal((await request('/market/catalogue', { cookie: adminSignIn.cookie })).data.tenant, null);
+    const assertInvalidLogin = result => {
+      assert.equal(result.status, 401);
+      assert.equal(result.cookie, undefined);
+      assert.equal(result.data.error.code, 'INVALID_LOGIN');
+      assert.equal(result.data.error.message, '账号或密码无效');
+    };
+    assertInvalidLogin(await signIn('admin-001', 'incorrect-password'));
+    assertInvalidLogin(await signIn('unknown'));
+    await local.db.prepare("UPDATE model_workspace SET reference_json=json_insert(reference_json,'$.tenants[#]',json(?)) WHERE id=1")
+      .bind(JSON.stringify({ ...tenants[0], id: 'admin-001' })).run();
+    assertInvalidLogin(await signIn('admin-001'));
+    await local.db.prepare("UPDATE model_workspace SET reference_json=json_remove(reference_json,'$.tenants[3]') WHERE id=1").run();
     admin=await login('/auth/login','admin-001');await reload();
+    assert.deepEqual(state.models, []);
+    assert.deepEqual(state.endpoints, []);
+    for (const provider of state.providers) {
+      const data = { provider: { ...builtinProviderCatalogue(provider), id: provider.id } };
+      const preview = previewProviderJsonRows(state, provider.id, providerJsonRows(data, provider));
+      assert(preview.every(row=>row.status==='ready'));
+      for (let i=0;i<preview.length;i+=5) await command('supplierJsonImport',{providerId:provider.id,expectedProviderCode:provider.code,rows:preview.slice(i,i+5).map(row=>row.payload)});
+    }
     configureOnboardingTransport(async(path,options={})=>{
       const result=await request('/simulation'+path,{cookie:admin,body:options.method==='POST'?options.body:undefined,key:options.body?.operationId});
       assert.equal(result.status,200,path+': '+JSON.stringify(result.status===200?'成功':result.data));
@@ -73,11 +107,20 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     await command('templatePublish',{id:reference.id,confirmed:true,expectedBase:materialBase(state,reference),value:{...reference,...declared}});
     const material=state.modelTemplates.find(row=>row.id===reference.id);
     const sources=[
-      {vendor:'甲云',code:'qa-cloud-a',source:'自营',callId:'glm-5.3-a-self',upstream:'vendor/GLM-native',retail:[2,8]},
-      {vendor:'甲云',code:'qa-cloud-a',source:'转售',callId:'glm-5.3-a-resale',upstream:'vendor/GLM-resale',retail:[3,10]},
+      {vendor:'移动云 MoMA',code:'moma',callId:'glm-5.3-a-self',retail:[2,8],builtin:true},
+      {vendor:'移动云 MoMA',code:'moma',source:'转售',callId:'glm-5.3-a-resale',upstream:'vendor/GLM-resale',retail:[3,10]},
       {vendor:'乙云',code:'qa-cloud-b',source:'自营',callId:'glm-5.3-b-self',upstream:'vendor/GLM-native',retail:[2.5,9]},
     ];
     for (const source of sources) {
+      if (source.builtin) {
+        const provider = state.providers.find(row=>row.code==='moma');
+        const entry = provider.catalogModels.find(row=>row.libraryId===material.id);
+        const mapping = provider.catalogConnections.find(row=>row.modelId===entry.modelId);
+        const endpoint = state.endpoints.find(row=>row.id===mapping.endpointId);
+        Object.assign(source,{providerId:provider.id,modelId:entry.modelId,endpointId:endpoint.id,channelId:mapping.id,upstream:mapping.upstreamModelId,source:mapping.sourceName || endpoint.name});
+        await command('provider',{operation:'addApiKeys',objectId:provider.id,values:{...await providerApiKeysDraft(['qa-only-moma']),groupId:'default'}});
+        continue;
+      }
       const shared=sources.find(row=>row!==source && row.code===source.code && row.endpointId);
       if (shared) {
         Object.assign(source,{providerId:shared.providerId,endpointId:shared.endpointId,modelId:shared.modelId});
@@ -97,8 +140,8 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     }
     assert.equal(sources[0].endpointId,sources[1].endpointId);
     assert.notEqual(sources[0].channelId,sources[1].channelId);
-    const aMappings=await local.db.prepare('SELECT id,upstream_model_id FROM channel_models WHERE channel_id=? ORDER BY upstream_model_id').bind(sources[0].endpointId).all();
-    assert.deepEqual(aMappings.results.map(row=>row.upstream_model_id),['vendor/GLM-native','vendor/GLM-resale']);
+    const aMappings=await local.db.prepare('SELECT id,upstream_model_id FROM channel_models WHERE channel_id=? AND material_id=? ORDER BY upstream_model_id').bind(sources[0].endpointId,material.id).all();
+    assert.deepEqual(aMappings.results.map(row=>row.upstream_model_id),sources.slice(0,2).map(source=>source.upstream).sort());
     for (const endpointId of new Set(sources.map(source=>source.endpointId))) {
       const targets=sources.filter(source=>source.endpointId===endpointId), providerId=targets[0].providerId;
       const endpoint=state.endpoints.find(row=>row.id===endpointId),server=await prepareServerChannel(owner(providerId),endpoint);
@@ -134,8 +177,9 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
       assert.equal(trial.result.technicalReady,true);
       const saved=await publishPlatformCandidate(trial.service);
       await command('recordPlatformPublication',{serviceId:service.id,mockServiceId:saved.id,publishedVersion:saved.published.version,expectedFingerprint:plan.publicationFingerprint},modelId);
+      assert.equal(model().serviceProviders.find(row=>row.channelId===source.channelId).callsEnabled,false);
+      await command('serviceProviderServing',{providerId:source.channelId,enabled:true,expectedUpdatedAt:model().updatedAt},modelId);
     }
-    await command('enableService',{expectedUpdatedAt:model().updatedAt},modelId);
     for (const source of sources) {
       await command('channelProcurementPublish',{providerId:source.providerId,endpointId:source.endpointId,associationId:source.channelId,expectedPriceRevision:0,confirmed:true,effectiveAt:new Date().toISOString(),scenarios:prices(1,4,'listPrice')});
       await command('commercialPublish',{kind:'price',providerId:source.channelId,confirmed:true,expectedBase:commercialPriceBase(state,model(),source.channelId),value:{callId:source.callId,items:prices(...source.retail,'amount')}},modelId);
@@ -145,14 +189,30 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     const keys=sources.map(row=>row.channelId);
     await command('startSales',release(keys,[c]),modelId,422);
     await command('startSales',release(keys,[a]),modelId);
+    assert.deepEqual(routeTableGroups(state,model()).map(group=>[group.providerId,group.providerName,
+      group.rows.map(row=>[row.span,row.service.channelId])]),[
+      [sources[0].providerId,'移动云 MoMA',[[1,sources[0].channelId],[1,sources[1].channelId]]],
+      [sources[2].providerId,'乙云',[[1,sources[2].channelId]]],
+    ]);
     const offers=await local.db.prepare("SELECT record_id,id,channel_model_id,listing_stage,active_sale_price_id,active_route_id,active_publication_id FROM offers WHERE service_id=? AND retired_at IS NULL ORDER BY id").bind(modelId).all();
     assert.equal(offers.results.length,3);
+    assert(isResourceId(modelId, 'service'));
+    for (const row of offers.results) {
+      assert(isResourceId(row.record_id, 'model_service'));
+      assert(isResourceId(row.channel_model_id, 'channel'));
+      assert(isResourceId(row.active_sale_price_id, 'sale-price-version'));
+      assert(isResourceId(row.active_route_id, 'route-version'));
+      assert(isResourceId(row.active_publication_id, 'publication'));
+    }
     assert(offers.results.every(row=>row.listing_stage==='gray' && row.active_sale_price_id && row.active_route_id && row.active_publication_id));
     const customer=await login('/market/login',a), other=await login('/market/login',b);
     const catalogue=async(cookie)=>{const result=await request('/market/catalogue',{cookie});assert.equal(result.status,200,JSON.stringify(result.data));return result.data.services;};
     const services=await catalogue(customer);
-    assert.deepEqual(marketModels(services).map(row=>[row.name,row.services.length]),[['GLM-5.3',3]]);
-    assert.deepEqual(services.map(row=>row.provider).sort(),['乙云（自营）','甲云（自营）','甲云（转售）'].sort());
+    assert.deepEqual(marketModels(services).map(row=>[row.name,row.services.length,[...row.providers.values()]]),[['GLM-5.3',3,['移动云 MoMA','乙云']]]);
+    for (const source of sources) {
+      const { providerId, provider, channelName }=services.find(row=>row.callId===source.callId);
+      assert.deepEqual([providerId,provider,channelName],[source.providerId,source.vendor,source.source]);
+    }
     assert.equal((await catalogue(other)).length,0);
     assert.equal((await catalogue()).length,0);
     const order=(offerId,cookie=customer)=>request('/market/orders',{cookie,body:{offerIds:[offerId]}});
@@ -166,6 +226,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
       const offer=services.find(row=>row.callId===source.callId);
       assert.equal(offer.salePrices[0].amount,source.retail[0]*1000000);
       const ordered=await order(offer.id);assert.equal(ordered.status,200,JSON.stringify(ordered.data));
+      assert(isResourceId(ordered.data.orders[0].id, 'order'));
       assert.deepEqual((await order(offer.id)).data,ordered.data);
       const input=body(offer.callId), invoked=await call(input);
       assert.equal(invoked.status,200,JSON.stringify(invoked.data));
@@ -174,12 +235,44 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
       assert.deepEqual((await call(input)).data,invoked.data);
       successful.push({source,input,id:invoked.data.id});
     }
+    const channelState = (source, enabled) => command('serviceProviderServing',
+      {providerId:source.channelId,enabled,expectedUpdatedAt:model().updatedAt},modelId);
+    const [target, sibling] = sources;
+    await channelState(target, false);
+    assert.equal(model().serviceProviders.find(row=>row.channelId===target.channelId).listingStage,'gray');
+    const blocked = await call(body(target.callId));
+    assert.equal(blocked.status,409);
+    assert.equal(blocked.data.error.message,'模型服务已停止');
+    const unaffected = await call(body(sibling.callId));
+    assert.equal(unaffected.status,200);
+    successful.push({source:sibling,id:unaffected.data.id});
+    await channelState(target, true);
+    const restarted = await call(body(target.callId));
+    assert.equal(restarted.status,200);
+    successful.push({source:target,id:restarted.data.id});
     // Verify that the third offer is callable before withdrawal, while leaving a fresh A order for afterwards.
-    const previewCustomer=await login('/market/login',b);
-    await command('startSales',release([keys[2]],[a,b]),modelId);
+    await command('startSales',release([keys[0],keys[2]],[a,b]),modelId);
+    const expiring=sources[0], expiringOffer=services.find(row=>row.callId===expiring.callId);
     const third=services.find(row=>row.callId===sources[2].callId);
-    assert.equal((await order(third.id,previewCustomer)).status,200);
-    const before=await call(body(third.callId),previewCustomer);assert.equal(before.status,200,JSON.stringify(before.data));
+    assert((await catalogue(other)).find(row=>row.id===expiringOffer.id)?.canOrder);
+    const { providerId, endpointId, channelId: associationId }=expiring;
+    const channel=owner(providerId).catalogConnections.find(row=>row.id===associationId);
+    const start=Date.now(), expires=start+2000;
+    await command('channelProcurementPublish',{providerId,endpointId,associationId,expectedPriceRevision:channel.procurementRevision,confirmed:true,
+      effectiveAt:new Date(start).toISOString(),expiresAt:new Date(expires).toISOString(),scenarios:prices(1,4,'listPrice')});
+    const seq=state.commitSeq;
+    await new Promise(resolve=>setTimeout(resolve,Math.max(0,expires-Date.now()+10)));
+    assert.deepEqual((await catalogue(other)).map(row=>row.callId),[third.callId]);
+    assert.deepEqual(new Set((await catalogue(customer)).map(row=>row.callId)),new Set([sources[1].callId,third.callId]));
+    assert.equal(salesStatus(state,model(),keys[0]),'不可销售');
+    const rejected=await request('/market/orders',{cookie:other,body:{offerIds:[expiringOffer.id,third.id]}});
+    assert.equal(rejected.status,409);
+    assert.equal(rejected.data.error.code,'MODEL_UNAVAILABLE');
+    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_orders WHERE tenant_id=?').bind(b).first('n'),0);
+    assert.equal((await call(body(expiringOffer.callId))).data.error.code,'CALL_UNAVAILABLE');
+    assert.equal(await local.db.prepare('SELECT commit_seq FROM db_state WHERE id=1').first('commit_seq'),seq);
+    assert.equal((await order(third.id,other)).status,200);
+    const before=await call(body(third.callId),other);assert.equal(before.status,200,JSON.stringify(before.data));
     successful.push({source:sources[2],id:before.data.id});
     await command('stopSales',{offerKeys:keys.slice(0,2),confirmed:true,expectedUpdatedAt:model().updatedAt},modelId);
     assert.deepEqual((await catalogue(customer)).map(row=>row.callId),[third.callId]);
@@ -193,7 +286,8 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     const after=await call(body(third.callId));assert.equal(after.status,200,JSON.stringify(after.data));
     successful.push({source:sources[2],id:after.data.id});
     for (const {source,id} of successful) {
-      const row=await local.db.prepare("SELECT json_extract(r.payload_json,'$.upstreamModelId') AS upstream,call.offer_id,call.sale_price_id,call.route_version_id FROM market_calls call JOIN simulation_records r ON r.kind='usage' AND r.id=call.usage_id WHERE call.usage_id=?").bind(id).first();
+      const row=await local.db.prepare("SELECT json_extract(r.payload_json,'$.upstreamModelId') AS upstream,call.offer_id,call.sale_price_id,call.route_version_id FROM market_calls call JOIN simulation_records r ON r.kind='usage' AND r.id=call.usage_id WHERE json_extract(r.payload_json,'$.requestId')=?").bind(id).first();
+      assert(isResourceId(id, 'request'));
       assert.equal(row.upstream,source.upstream);
       assert.equal(row.offer_id,services.find(offer=>offer.callId===source.callId).id);
       assert(row.sale_price_id && row.route_version_id);
@@ -205,7 +299,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.deepEqual((await local.db.prepare('SELECT id,listing_stage FROM offers WHERE service_id=? AND retired_at IS NULL ORDER BY id').bind(modelId).all()).results,
       sources.map((source,index)=>({id:source.callId,listing_stage:index===2?'gray':'withdrawn'})).sort((a,b)=>a.id.localeCompare(b.id)));
     assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_orders').first('n'),4);
-    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_calls').first('n'),4);
+    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_calls').first('n'),successful.length);
     assert.deepEqual((await local.db.prepare('PRAGMA foreign_key_check').all()).results,[]);
   } finally {
     configureOnboardingTransport(null);

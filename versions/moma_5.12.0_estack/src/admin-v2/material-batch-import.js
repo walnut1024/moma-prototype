@@ -12,7 +12,7 @@ const providerColumns = [
 export const materialImportHeaders = {
   model: MODEL_IMPORT_HEADERS,
   provider: providerColumns.map(([header]) => header),
-  relation: ['服务商编码', '规范模型标识'],
+  relation: ['服务商编码', '模型编码'],
 };
 const requiredHeaders = { provider: materialImportHeaders.provider.slice(0, 3), relation: materialImportHeaders.relation };
 function uniqueCodes(rows, codeOf) {
@@ -80,8 +80,8 @@ export function previewMaterialRows(state, kind, rows, { providerId, retry = fal
         return result(row, 'ready', '可新增服务商资料', { data });
       }
       const provider = byCode.get(row.cells[0].toLowerCase()), model = models.get(row.cells[1].toLowerCase());
-      if (provider === null || model === null) throw Error('服务商编码或规范模型标识匹配到多份资料，请先核对主档');
-      if (!provider || !model) throw Error([!provider && '服务商编码找不到', !model && '规范模型标识找不到'].filter(Boolean).join('，'));
+      if (provider === null || model === null) throw Error('服务商编码或模型编码匹配到多份资料，请先核对主档');
+      if (!provider || !model) throw Error([!provider && '服务商编码找不到', !model && '模型编码找不到'].filter(Boolean).join('，'));
       const key = JSON.stringify([provider.id, model.id]);
       if (seen.has(key)) return result(row, 'skip', '文件内重复，按首行处理');
       seen.add(key);
@@ -98,7 +98,7 @@ function batches(rows, size) {
   return groups;
 }
 
-export async function submitMaterialRows({ state, kind, providerId, rows, transact, onResult, active }) {
+export async function submitMaterialRows({ state, kind, providerId, providerCode: expectedProviderCode, rows, transact, onResult, active }) {
   let current = state, paused = false;
   const failed = new Set(), created = new Set();
   const report = (group, status, message) => {
@@ -123,6 +123,14 @@ export async function submitMaterialRows({ state, kind, providerId, rows, transa
   if (kind === 'provider') {
     for (const group of batches(rows, 5)) {
       if (await commit(group, 'supplierProfilesImport', { profiles: group.map(row => row.data) })) report(group, 'done', '已新增服务商资料');
+    }
+    return;
+  }
+  if (kind === 'providerJson') {
+    for (const group of batches(rows, SUPPLIER_REGISTRATION_LIMIT)) {
+      if (await commit(group, 'supplierJsonImport', { providerId, expectedProviderCode, rows: group.map(row => row.payload) })) {
+        report(group, 'done', '已导入');
+      }
     }
     return;
   }

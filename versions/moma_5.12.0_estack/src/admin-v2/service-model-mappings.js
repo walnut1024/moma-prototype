@@ -1,15 +1,101 @@
+import { resourceId } from '../resource-id.mjs';
 import { libraryRecord } from './model-library.js';
 import { resolveChannelAssociationModel } from './channel-association-model.js';
 import { supplierDirectory, displayedCatalogueIds } from './moma-provider.js';
 import { catalogueChannels, channelBlockReason, channelFingerprint, channelUrl } from './provider-channels.js';
 import { routingServices } from './service-routing.js';
 import { platformRouteInterface, routeMappingStatus } from './service-route-mapping.js';
+import { forwardingRows } from './service-route-forwarding.js';
+
+const additionalContracts = [
+  {path:'/v1/messages', label:'Anthropic Messages', protocol:'Anthropic', suffix:'/messages'},
+  {path:'/v1/responses', label:'OpenAI Responses', protocol:'OpenAI', suffix:'/responses'},
+];
+
+function requestUrl(value) {
+  try {
+    const url = new URL(value);
+    if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash) return url;
+  } catch { /* Invalid stored URLs remain unconfigured. */ }
+  return null;
+}
+
+export function additionalMappingOptions(model, channel) {
+  if (!['text', 'multimodal'].includes(model.type)) return [];
+  return additionalContracts.flatMap(contract => {
+    const address = channel?.apiAddresses?.find(({protocol,baseUrl})=>protocol===contract.protocol &&
+      requestUrl(baseUrl)?.pathname.replace(/\/$/,'').endsWith(contract.suffix));
+    return address ? [{...contract, url:address.baseUrl}] : [];
+  });
+}
+
+function checkedAdditionalInterfaces(model, channel, paths) {
+  if (paths === undefined) return [];
+  const available = additionalMappingOptions(model, channel);
+  if (!Array.isArray(paths) || new Set(paths).size!==paths.length || paths.some(path=>!available.some(option=>option.path===path))) {
+    throw Error('请选择当前渠道已配置的对外接口');
+  }
+  return available.filter(option=>paths.includes(option.path));
+}
+
+const interfaceConfig = config => ({
+  platformInterface:config.platformInterface,
+  ...(config.additionalInterfaces?.length ? {additionalInterfaces:config.additionalInterfaces} : {}),
+});
 
 export function mappingInterfaces(model) {
   const route=platformRouteInterface(model);
   return route.path ? [[route.path,route.protocol==='OpenAI'?'OpenAI Chat':route.protocol]] : [];
 }
-export const mappingConfig = (supply,model) => ({providerId:supply.providerId || supply.provider?.id || supply.endpoint?.providerId,endpointId:supply.endpointId,associationId:supply.channelId,catalogueModelId:supply.catalogueModelId || supply.upstreamModelId,upstreamModelId:supply.upstreamModelId,platformInterface:supply.serviceMapping?.platformInterface || platformRouteInterface(model).path});
+
+export function mappingAddresses(service, channel) {
+  if (!channel) return [];
+  const {mapping,serviceMapping} = channel;
+  const path = serviceMapping?.platformInterface || (mapping.valid ? mapping.platformPath : '');
+  const entries = [];
+  if (path) entries.push({
+    path,
+    label:path===mapping.platformPath ? (mapping.platformProtocol==='OpenAI' ? 'OpenAI Chat' : mapping.platformProtocol) : '',
+    url:requestUrl(channel.url) ? channel.url : '',
+    forwarding:path===mapping.platformPath ? (mapping.valid ? '原生转发' : mapping.status) : '待配置',
+  });
+  const validatedCallId = serviceMapping?.validation?.request?.platform?.model;
+  const saved = !validatedCallId || validatedCallId===service.callId ? serviceMapping?.additionalInterfaces || [] : [];
+  if (saved.length) {
+    const available = additionalMappingOptions(service.model,channel);
+    for (const {path,label} of additionalContracts.filter(item=>saved.includes(item.path))) {
+      const url = available.find(option=>option.path===path)?.url || '';
+      entries.push({path,label,url,forwarding:url ? '原生转发' : '待配置'});
+    }
+  }
+  return entries;
+}
+
+export function forwardingTargets(service, channel) {
+  if (!channel) return [];
+  const base = channel.mapping?.valid && requestUrl(channel.url)
+    ? [{path:channel.mapping.platformPath, label:channel.mapping.platformProtocol, url:channel.url}] : [];
+  return [...base, ...additionalMappingOptions(service.model, channel)];
+}
+
+export function routeMappingAddresses(service, channel, config) {
+  const native = mappingAddresses(service, channel);
+  if (service.mode !== 'provider' || !channel ||
+    !config?.channels.some(row => row.supplyId === channel.id && row.enabled && !row.backup)) return native;
+  return forwardingRows(service.model, native, config.forwarding || [], forwardingTargets(service, channel));
+}
+
+export const mappingConfig = (supply,model) => ({
+  providerId:supply.providerId || supply.provider?.id || supply.endpoint?.providerId,
+  endpointId:supply.endpointId,
+  associationId:supply.channelId,
+  catalogueModelId:supply.catalogueModelId || supply.upstreamModelId,
+  upstreamModelId:supply.upstreamModelId,
+  ...interfaceConfig({
+    platformInterface:supply.serviceMapping?.platformInterface || platformRouteInterface(model).path,
+    additionalInterfaces:supply.serviceMapping?.additionalInterfaces,
+  }),
+});
 export function mappingCandidates(state,service) {
   const master=libraryRecord(state,service.modelId);
   return supplierDirectory(state).filter(provider=>!service.providerId || provider.id===service.providerId).flatMap(provider=>displayedCatalogueIds(provider,state).flatMap(catalogueModelId=>catalogueChannels(state,provider,catalogueModelId).flatMap(channel=>{
@@ -31,7 +117,8 @@ export function mappingPreview(state,service,config) {
   if(!mappingInterfaces(service.model).some(([id])=>id===config.platformInterface))throw Error('请选择当前模型支持的平台接口');
   const check=routeMappingStatus(state,service,{modelId:service.modelId,catalogueModelId:channel.catalogueModelId,upstreamModelId:channel.upstreamModelId,provider:channel.provider,endpoint:channel.endpoint,url});
   if(!check.valid)throw Error(check.reason);
-  return {channel,request:{platform:{path:config.platformInterface,model:service.callId},upstream:{url,protocol:channel.endpoint.protocol,model:channel.upstreamModelId}},check};
+  const additional = checkedAdditionalInterfaces(service.model, channel, config.additionalInterfaces);
+  return {channel,request:{platform:{path:config.platformInterface,model:service.callId},upstream:{url,protocol:channel.endpoint.protocol,model:channel.upstreamModelId},...(additional.length ? {additional} : {})},check};
 }
 export function mappingSignature(state,service,config) {
   const {channel,request}=mappingPreview(state,service,config);
@@ -75,13 +162,15 @@ function checkedConfig(state,service,input,supply) {
   const channel=relation(state,service,config),reason=channelBlockReason(channel.provider,channel);
   if(reason)throw Error(reason);
   if(!mappingInterfaces(service.model).some(([id])=>id===config.platformInterface))throw Error('请选择当前模型支持的平台接口');
+  const additional = checkedAdditionalInterfaces(service.model, channel, input.additionalInterfaces);
+  if (additional.length) config.additionalInterfaces = additional.map(option=>option.path);
   const duplicate=state.modelSupplies.some(row=>row.id!==supply?.id && row.modelId===service.modelId && row.status!=='已移除' && (row.channelId===config.associationId || !row.channelId && row.endpointId===config.endpointId && row.upstreamModelId===config.upstreamModelId || row.serviceMapping?.pending?.config.associationId===config.associationId));
   if(duplicate)throw Error('该渠道已建立模型映射，请维护原映射');
   return config;
 }
 export function serviceMappingTransaction(state,{operation,modelId,data={}}) {
   const service=routingServices(state).find(row=>row.modelId===modelId && row.id===data.serviceId);
-  if(!service || !service.callId)throw Error('请先配置当前服务的模式和对外调用标识');
+  if(!service || !service.callId)throw Error('请先配置当前服务的模式和模型调用标识');
   if(data.expectedSource!==mappingSourceVersion(state,service))throw Error('模型或供给已变化，请载入最新数据后核对，当前输入保留');
   if(operation==='serviceMappingCreate' && data.id)throw Error('新增映射不能提交已有映射标识');
   const supply=data.id && state.modelSupplies.find(row=>row.id===data.id && row.modelId===modelId && row.status!=='已移除');
@@ -99,7 +188,7 @@ export function serviceMappingTransaction(state,{operation,modelId,data={}}) {
     if(!supply) {
       if(operation!=='serviceMappingCreate')throw Error('请选择已有映射');
       if(state.modelSupplies.filter(row=>row.modelId===modelId && row.status!=='已移除').length>=20)throw Error('每款服务最多配置20条模型映射');
-      changes.push({type:'add',collection:'modelSupplies',record:{id:'supply-'+crypto.randomUUID(),modelId,providerId:next.providerId,endpointId:next.endpointId,channelId:next.associationId,catalogueModelId:next.catalogueModelId,upstreamModelId:next.upstreamModelId,capabilities:structuredClone(service.model.capabilities),status:'已停用',validationStatus:'待验证',verifiedAt:null,validationCases:[],salesEnabled:false,mappingName:name,mappingRevision:1,serviceMapping:{platformInterface:next.platformInterface,validation:null},createdAt:time,updatedAt:time}});
+      changes.push({type:'add',collection:'modelSupplies',record:{id:resourceId('service-channel'),modelId,providerId:next.providerId,endpointId:next.endpointId,channelId:next.associationId,catalogueModelId:next.catalogueModelId,upstreamModelId:next.upstreamModelId,capabilities:structuredClone(service.model.capabilities),status:'已停用',validationStatus:'待验证',verifiedAt:null,validationCases:[],salesEnabled:false,mappingName:name,mappingRevision:1,serviceMapping:{...interfaceConfig(next),validation:null},createdAt:time,updatedAt:time}});
       const endpoint=state.endpoints.find(row=>row.id===next.endpointId);
       if(!endpoint.modelIds.includes(modelId))changes.push({type:'update',collection:'endpoints',id:endpoint.id,changes:{modelIds:[...endpoint.modelIds,modelId]}});
       label='新增模型映射';
@@ -126,7 +215,7 @@ export function serviceMappingTransaction(state,{operation,modelId,data={}}) {
       if(!pending.validation || pending.validation.signature!==mappingSignature(state,service,pending.config))throw Error('请先验证当前映射变更');
       if(data.confirmed!==true)throw Error('请确认映射变更的影响范围');
       const next=pending.config;
-      update(supply.id,{providerId:next.providerId,endpointId:next.endpointId,channelId:next.associationId,catalogueModelId:next.catalogueModelId,upstreamModelId:next.upstreamModelId,mappingName:pending.name,serviceMapping:{platformInterface:next.platformInterface,validation:pending.validation},validationStatus:'通过',verifiedAt:time});
+      update(supply.id,{providerId:next.providerId,endpointId:next.endpointId,channelId:next.associationId,catalogueModelId:next.catalogueModelId,upstreamModelId:next.upstreamModelId,mappingName:pending.name,serviceMapping:{...interfaceConfig(next),validation:pending.validation},validationStatus:'通过',verifiedAt:time});
       const endpoint=state.endpoints.find(row=>row.id===next.endpointId);
       if(!endpoint.modelIds.includes(modelId))changes.push({type:'update',collection:'endpoints',id:endpoint.id,changes:{modelIds:[...endpoint.modelIds,modelId]}});
       label='应用模型映射';

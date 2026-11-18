@@ -1,0 +1,55 @@
+{
+  "projects": [
+    { "id": "demo-support", "name": "智能客服" },
+    { "id": "demo-knowledge", "name": "知识库助手" },
+    { "id": "demo-studio", "name": "内容创作" }
+  ],
+  "keys": [
+    { "id": "demo-support-prod", "name": "客服生产 Key", "projectId": "demo-support", "billingType": "按量付费" },
+    { "id": "demo-support-test", "name": "客服测试 Key", "projectId": "demo-support", "billingType": "按量付费" },
+    { "id": "demo-knowledge-api", "name": "知识库 API Key", "projectId": "demo-knowledge", "billingType": "按量付费" },
+    { "id": "demo-studio-api", "name": "创作 API Key", "projectId": "demo-studio", "billingType": "按量付费" },
+    { "id": "demo-support-plan", "name": "客服套餐 Key", "projectId": "demo-support", "billingType": "Token Plan" },
+    { "id": "demo-knowledge-plan", "name": "知识库套餐 Key", "projectId": "demo-knowledge", "billingType": "Token Plan" }
+  ],
+  "users": [
+    { "id": "demo-user-lin", "name": "林晨" },
+    { "id": "demo-user-zhou", "name": "周宁" },
+    { "id": "demo-user-chen", "name": "陈雨" }
+  ],
+  "subscribedModelIds": [
+    "demo-deepseek", "demo-qwen", "demo-glm", "demo-image", "demo-vision", "demo-video",
+    "demo-tts", "demo-asr", "demo-embedding", "demo-rerank", "demo-unused"
+  ],
+  "models": [
+    { "id": "demo-deepseek", "modelId": "deepseek-v3", "name": "DeepSeek V3", "type": "text", "rates": { "input": 2200000, "cached": 450000, "output": 8800000 } },
+    { "id": "demo-qwen", "modelId": "qwen3-32b", "name": "Qwen3-32B", "type": "text", "rates": { "input": 1700000, "cached": 370000, "output": 6800000, "cacheWrite": 800000 } },
+    { "id": "demo-glm", "modelId": "glm-4.7", "name": "GLM-4.7", "type": "text", "rates": { "input": 2800000, "cached": 600000, "output": 11000000 } },
+    { "id": "demo-image", "modelId": "image-gen", "name": "图片生成", "type": "image", "usageUnit": "张", "rates": { "images": 80000 } },
+    { "id": "demo-vision", "modelId": "qwen-vl-demo", "name": "多模态理解", "type": "multimodal", "rates": { "input": 3500000, "cached": 950000, "output": 12000000 } },
+    { "id": "demo-video", "modelId": "video-gen", "name": "视频生成", "type": "video", "usageUnit": "秒", "rates": { "seconds": 500000 } },
+    { "id": "demo-tts", "modelId": "tts-demo", "name": "语音合成", "type": "audio", "usageUnit": "字符", "rates": { "characters": 120 } },
+    { "id": "demo-asr", "modelId": "asr-demo", "name": "语音识别", "type": "audio", "usageUnit": "秒", "rates": { "seconds": 26000 } },
+    { "id": "demo-embedding", "modelId": "embedding-demo", "name": "文本向量", "type": "embedding", "rates": { "input": 500000 } },
+    { "id": "demo-rerank", "modelId": "rerank-demo", "name": "文本排序", "type": "rerank", "rates": { "calls": 6000 } },
+    { "id": "demo-unused", "modelId": "language-demo", "name": "语言模型演示", "type": "text", "rates": {} }
+  ],
+  "profiles": [
+    { "keyId": "demo-support-prod", "userId": "demo-user-lin", "modelId": "demo-deepseek", "count": 48, "input": 4200, "output": 1200, "hit": 0.48 },
+    { "keyId": "demo-support-prod", "userId": "demo-user-zhou", "modelId": "demo-qwen", "count": 32, "input": 2800, "output": 980, "hit": 0.36 },
+    { "keyId": "demo-support-prod", "modelId": "demo-deepseek", "count": 11, "input": 3900, "output": 820, "hit": 0.33 },
+    { "keyId": "demo-support-test", "userId": "demo-user-zhou", "modelId": "demo-glm", "count": 14, "input": 2400, "output": 670, "hit": 0.12 },
+    { "keyId": "demo-knowledge-api", "userId": "demo-user-chen", "modelId": "demo-qwen", "count": 39, "input": 6400, "output": 1350, "hit": 0.57 },
+    { "keyId": "demo-knowledge-api", "userId": "demo-user-lin", "modelId": "demo-deepseek", "count": 23, "input": 7300, "output": 1500, "hit": 0.52 },
+    { "keyId": "demo-studio-api", "userId": "demo-user-chen", "modelId": "demo-glm", "count": 31, "input": 2300, "output": 1800, "hit": 0.27 },
+    { "keyId": "demo-studio-api", "userId": "demo-user-zhou", "modelId": "demo-image", "count": 8 },
+    { "keyId": "demo-support-plan", "userId": "demo-user-lin", "modelId": "demo-deepseek", "count": 27, "input": 3500, "output": 900, "hit": 0.41 },
+    { "keyId": "demo-knowledge-plan", "userId": "demo-user-chen", "modelId": "demo-qwen", "count": 20, "input": 5300, "output": 1300, "hit": 0.51 },
+    { "keyId": "demo-knowledge-api", "userId": "demo-user-chen", "modelId": "demo-vision", "count": 13, "input": 3900, "output": 680, "hit": 0.25 },
+    { "keyId": "demo-studio-api", "userId": "demo-user-chen", "modelId": "demo-video", "count": 5, "quantity": 12 },
+    { "keyId": "demo-studio-api", "userId": "demo-user-zhou", "modelId": "demo-tts", "count": 10, "quantity": 850 },
+    { "keyId": "demo-support-prod", "userId": "demo-user-lin", "modelId": "demo-asr", "count": 14, "quantity": 85 },
+    { "keyId": "demo-knowledge-api", "userId": "demo-user-chen", "modelId": "demo-embedding", "count": 22, "input": 2300 },
+    { "keyId": "demo-knowledge-api", "userId": "demo-user-lin", "modelId": "demo-rerank", "count": 18, "input": 3600 }
+  ]
+}

@@ -58,9 +58,9 @@ test('package management routes are in operations and legacy browser records are
   assert.equal(pageFromHash('#/admin-2/package-data', '运营人员'), 'package-data');
   assert.equal(canAccessPage('运营人员', 'package-data'), true);
   assert.equal(canAccessPage('运维人员', 'package-data'), false);
-  assert.deepEqual(adminBreadcrumbs('package-data', new URLSearchParams()), [{ label: '套餐运营' }, { label: '套餐数据' }]);
+  assert.deepEqual(adminBreadcrumbs('package-data', new URLSearchParams()), [{ label: '套餐运营', href: '#/admin-2/package-production' }, { label: '套餐数据' }]);
   assert.deepEqual(adminBreadcrumbs('package-production', new URLSearchParams('view=new')), [
-    { label: '套餐运营' }, { label: '套餐制作', href: '#/admin-2/package-production' }, { label: '新增套餐' },
+    { label: '套餐运营', href: '#/admin-2/package-production' }, { label: '套餐制作', href: '#/admin-2/package-production' }, { label: '新增套餐' },
   ]);
   const legacy = { ...createAdminSeed(), tokenPackages: [{ id: 'TP-0001', name: '旧套餐' }] };
   assert.deepEqual(parseAdminState(serializeAdminState(legacy)).tokenPackages, legacy.tokenPackages);

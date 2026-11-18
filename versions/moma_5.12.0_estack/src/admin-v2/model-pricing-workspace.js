@@ -1,21 +1,18 @@
+import { modelIdentity, modelServiceIdentity, modelPresentation } from '../model-identities.mjs';
 import { offerKey } from '../service-access.mjs';
-import { catalogueChannels } from './provider-channels.js';
-import { MOMA_PROVIDER, supplierDirectory, providerCatalogueIds } from './moma-provider.js';
-import { resolveChannelAssociationModel } from './channel-association-model.js';
+import { MOMA_PROVIDER } from './moma-provider.js';
 import { activeChannelProcurement } from './channel-change-management.js';
 import { serviceChannelCosts, activeModelSalePrice, activeProviderPrice } from './service-workspace.js';
 import { activeSupplyPrice, priceItems } from './model-management.js';
 import { routingServices } from './service-routing.js';
 import { salesStatus } from './service-sales.js';
 
-export function costRecords(state) {
+export function costRecords(state, groups) {
   const rows = new Map();
-  for (const provider of supplierDirectory(state)) for (const modelId of providerCatalogueIds(provider)) {
-    for (const association of catalogueChannels(state,provider,modelId)) {
+  for (const { owner: provider, master, channels } of groups) {
+    for (const association of channels) {
       const key = `${provider.id}:${association.id}`;
       if (rows.has(key)) continue;
-      let master;
-      try { master = resolveChannelAssociationModel(state,provider,association); } catch { /* Unresolved identities remain visible for repair. */ }
       const supply = state.modelSupplies.find(row => row.status !== '已移除' && (row.channelId ? row.channelId === association.id : row.endpointId === association.endpointId && (row.catalogueModelId || row.upstreamModelId) === association.modelId && row.upstreamModelId===association.upstreamModelId));
       const active = activeChannelProcurement(association);
       const legacy = !association.managed && supply ? activeSupplyPrice(state,supply.id) : null;
@@ -28,7 +25,7 @@ export function costRecords(state) {
 
 export const priceRecords = state => routingServices(state).filter(row => !row.model.archivedAt).map(service => {
   const supplierId=service.providerId || MOMA_PROVIDER.id;
-  return {...service,modelKey:JSON.stringify(['master',service.model.templateId || service.modelId]),modelName:service.model.name,supplierId,supplierName:state.providers.find(row=>row.id===supplierId)?.name || (service.providerId ? service.name : MOMA_PROVIDER.name),offerName:service.providerId?service.name:(state.providers.find(row=>row.id===supplierId)?.name || MOMA_PROVIDER.name),status:salesStatus(state,service.model,offerKey(service)),price:service.providerId ? activeProviderPrice(state,service.modelId,offerKey(service)) : activeModelSalePrice(state,service.modelId)};
+  return {...service,modelKey:JSON.stringify(['master',service.model.templateId || service.modelId]),modelName:modelPresentation(state,service.model).name,canonical_slug:modelIdentity(state,service.model).canonical_slug,model_service_id:modelServiceIdentity(state,service.model,offerKey(service)),supplierId,supplierName:state.providers.find(row=>row.id===supplierId)?.name || (service.providerId ? service.name : MOMA_PROVIDER.name),offerName:service.providerId?service.name:(state.providers.find(row=>row.id===supplierId)?.name || MOMA_PROVIDER.name),status:salesStatus(state,service.model,offerKey(service)),price:service.providerId ? activeProviderPrice(state,service.modelId,offerKey(service)) : activeModelSalePrice(state,service.modelId)};
 });
 
 export function filterPricingRecords(records,params) {
@@ -54,5 +51,17 @@ export function pricingTableRows(records,itemsFor) {
 }
 
 export function operationsReturn(value) {
-  return typeof value === 'string' && value.length <= 5000 && /^#\/admin-2\/(providers|listing|model-market|model-costs|model-prices|model-templates|provider-materials|tariff-dictionary)(?:\?[^\s#]*)?$/.test(value) ? value : null;
+  return typeof value === 'string' && value.length <= 5000 && /^#\/admin-2\/(providers|listing|model-market|model-prices|model-templates|provider-materials|tariff-dictionary)(?:\?[^\s#]*)?$/.test(value) ? value : null;
+}
+
+export function supplyCostTableRows(models, records) {
+  const costs = new Map(records.map(record => [record.key, record]));
+  return models.flatMap(model => {
+    const rows = model.groups.flatMap(group => group.channels.map(channel => {
+      const cost = channel && costs.get(group.owner.id + ':' + channel.id);
+      return { model, group, channel, cost, items: cost?.items || [],
+        tableKey: JSON.stringify([model.id, group.owner.id, channel?.id]) };
+    }));
+    return rows.map((row, index) => ({ ...row, modelSpan: index === 0 ? rows.length : 0 }));
+  });
 }

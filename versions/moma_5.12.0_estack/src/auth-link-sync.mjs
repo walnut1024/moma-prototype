@@ -1,3 +1,4 @@
+import { resourceId } from './resource-id.mjs';
 import {ADMIN_DATA_KEY} from './service-access.mjs';
 import {trackUserConfiguration} from './mock/application-data.js';
 export function authBusinessSnapshot(previous,auth,storage) {
@@ -8,7 +9,7 @@ export function authBusinessSnapshot(previous,auth,storage) {
     const userId='user:'+account.id,tenantId='personal:'+account.id,projectId='project:'+account.id;
     if(next.users.some(row=>row.id===userId)||next.tenants.some(row=>row.id===tenantId)||next.projects.some(row=>row.id===projectId))throw Error('新用户身份引用冲突');
     next.users.push({id:userId,name:account.name,nickname:account.name,phone:account.phone,status:'正常',registeredAt:account.registeredAt || at,createdAt:at});
-    next.tenants.push({id:tenantId,name:account.name,type:'个人',ownerId:userId,status:'正常',createdAt:at});
+    next.tenants.push({id:tenantId,defaultProjectId:projectId,name:account.name,type:'个人',ownerId:userId,status:'正常',createdAt:at});
     next.projects.push({id:projectId,tenantId,name:'默认项目',ownerId:userId,status:'正常',createdAt:at});
     auth.identityLinks.push({id:account.id,authUserId:account.id,spaceId:'personal',tenantId,backendUserId:userId});
   }
@@ -16,7 +17,7 @@ export function authBusinessSnapshot(previous,auth,storage) {
   next.customerApplications ||= [];
   for(const application of auth.applications){if(previous.applications.some(row=>row.id===application.id&&JSON.stringify(row)===JSON.stringify(application)))continue;const index=next.customerApplications.findIndex(row=>row.id===application.id);if(index<0)next.customerApplications.push(structuredClone(application));else next.customerApplications[index]=structuredClone(application);}
   const link=auth.identityLinks.find(row=>row.authUserId===auth.currentUserId&&row.spaceId===auth.activeSpace);
-  if(link&&(previous.currentUserId!==auth.currentUserId||previous.activeSpace!==auth.activeSpace)){next.identityEvents ||= [];next.identityEvents.push({id:crypto.randomUUID(),type:'login',userId:link.backendUserId,tenantId:link.tenantId,at});}
+  if(link&&(previous.currentUserId!==auth.currentUserId||previous.activeSpace!==auth.activeSpace)){next.identityEvents ||= [];next.identityEvents.push({id:resourceId('identity-event'),type:'login',userId:link.backendUserId,tenantId:link.tenantId,at});}
   if(JSON.stringify(state)===JSON.stringify(next))return null;
   next.revision++;next.updatedAt=at;trackUserConfiguration(state,next);return {raw,encoded:JSON.stringify(next)};
 }

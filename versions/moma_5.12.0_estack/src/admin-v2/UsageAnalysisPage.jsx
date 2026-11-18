@@ -1,3 +1,4 @@
+import { workspaceStoragePrefix } from "../workspace-storage.mjs";
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useRef, useState } from 'react';
@@ -23,7 +24,7 @@ const amount = value => formatUsageNumber(value).replace('w', '万');
 const labelFor = (collection, id) => collection.find(item => item.id === id)?.name || (id === '__unknown__' ? '未归属' : id);
 const presets = usagePresets;
 const otherUsage = row => Object.entries(row.units).filter(([, value]) => value > 0).map(([unit, value]) => `${amount(value)} ${unit}`).join(' · ') || '—';
-const cardOrderKey = 'moma:5120:usage-analysis:card-order:v1';
+const cardOrderKey = workspaceStoragePrefix + 'usage-analysis:card-order';
 const navLabels = Object.fromEntries([
   ['usage-token-trend', 'Token 调用量趋势'], ['usage-call-trend', '模型调用次数趋势'],
   ['usage-model-share', '模型调用次数占比'], ['usage-volume-share', '模型调用量占比'],

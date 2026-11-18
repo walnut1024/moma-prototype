@@ -12,6 +12,7 @@ import { overviewBusiness, overviewPeriod, overviewPresets, overviewDateTime, ov
 import { SemiDateRange as DateRange } from './SemiAnalyticsFilters';
 import { dayOf } from './analytics';
 import AnalysisMetric, { AnalysisHelp as Help } from './AnalysisMetric';
+import { TodayOperations } from './UserActivityAnalysis';
 import './overview.css';
 
 const { Title, Text, Paragraph } = Typography;
@@ -81,6 +82,7 @@ export default function OperationsOverview({state}) {
         <Space wrap><Text type="tertiary" size="small">{item.comparison || period.comparison}</Text><Change value={item.change}/></Space>
       </AnalysisMetric>
     ))}</div>
+    <TodayOperations state={state} now={now} total={period.id === 'today' ? data.total : overviewBusiness(state, now, 'today').total}/>
     <div className="ov-chart-grid">
       {[
         { key: 'total', title: 'Token 用量趋势', label: 'Token 用量', unit: 'Token', change: tokenChange },

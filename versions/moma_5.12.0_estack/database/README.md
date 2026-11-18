@@ -6,15 +6,17 @@
 
 从 `prototype/` 运行 `npm run test:backend:5120`。测试使用 Miniflare/workerd 的真实 D1 binding；持久化测试使用独立临时库，不访问云端。
 
-本地后端：给 `MODEL_OPS_LOGIN_HASHES` 传账号 ID 到8–128 字符密码的 SHA-256 摘要的 JSON，再运行 `npm run dev:backend:5120`。本地 UI 运行 `npm run dev:5120`；版本 Vite 配置将 `/api/5120` 代理到 `127.0.0.1:8787`。不要用根 Vite 开发入口验收 5.12.0。数据库默认保存在忽略的 `.local/`，重启不覆盖修改，不要删除它来处理业务错误。
+本地后端读取 `MODEL_OPS_LOGIN_HASHES`，键是登录编号（如 `admin-001`），值是 8–128 字符密码的 SHA-256 摘要。运行 `npm run dev:backend:5120` 启动后端，运行 `npm run dev:5120` 启动界面。`/api/5120` 由版本 Vite 配置代理到 `127.0.0.1:8787`。新库保存在 `.local/fresh-workspace/`，重启继续读取该库。
 
 本地引擎 compatibility date 为 `2026-07-30`，云端沿用项目 `2026-09-15`。密码和会话令牌明文不进入数据库、日志或构建产物。会话为 HttpOnly、Secure、SameSite Cookie；写入检查同源 Origin、JSON 和 `X-MoMA-Request: 1`。仅预置测试账号，不是生产 IAM。
 
 ## 数据与事务
 
-空 D1 通过 `0001`—`0011` migration 建表，再初始化后台账号定义、`src/data/tariff-dictionary.json` 的 135 条计费字典记录和 `src/data/builtin-model-catalogue.json` 的 17 份参考主档。已有工作区启动时读取原数据。导出的空库初始化 SQL 采用同一数据范围。
+渠道管理的公开管理工作区返回 `supplyRelations`，供应登记从 `supplier_models` 关联 `materials`、`suppliers` 读取，模型渠道从 `channel_models` 关联其供应登记及 `channels` 读取，排除已移除或已删除的关系。两个 tab 只改变分组方式，成员及计数共用这一集合。`suppliers.record_json` 内的配置只用于补充已保存的渠道成本、容量、检测及来源信息，不决定列表成员。模型命令的回执使用同一关系投影，字段及 ID 与刷新读取一致。登记移除和恢复同步 `supplier_models.removed_at`，多个别名仍合并为同一服务商／主档关系，不删除历史 JSON 或其他服务商记录。
 
-平台管理员可在模型运营页面打开「研发人员注意 → 导入模型运营演示包」。`src/mock/model-operations.json` 提供 GLM-5.3、DeepSeek-V4-Flash-0731 和试调用所需的演示租户。导入在现有命令事务中插入缺失业务记录，复用相同 ID、编码和类型的主档。冲突时整包拒绝。检测与平台试调用通过模拟器执行，结果来源单独展示。其他后台模块的浏览器演示数据继续通过各自入口加载。
+空 D1 通过 `0001`—`0012` 建表，初始化后台账号、135 条计费字典、17 份参考模型主档，以及移动云 MoMA（`moma`）、DeepSeek（`deepseek-official`）和各自默认密钥组。初始化业务主键使用完整英文前缀和 UUID v4，后台登录编号单独保存在 `admin_accounts.login_code`。旧业务数据不迁入。
+
+在「渠道管理 → 服务商详情 → 批量接入 → JSON → 载入内置目录」预览并导入。两份目录分别提供 26 和 2 款模型，使用当前服务商 ID，保留规范模型标识、文件内连接引用和上游调用标识。确认后生成供应关系和待验证渠道。售价、路由、上架记录、客户与订单从空白开始。浏览器使用 `moma-5120-workspace-v2:` 命名空间。
 
 `0004` 将模型文档转换为目录字段：模型展示名 `name`、规范模型标识 `canonical_slug`、上下文 `context_length`、模态 `architecture.input_modalities/output_modalities`、支持参数 `supported_parameters`、默认参数 `default_parameters`。资料表使用 `canonical_slug` 和 `metadata_json`；服务供给表以 `record_id` 保存原内部主键，以 `id` 保存对外调用标识。历史调用、价格、审计和幂等回执不重写。`created` 在资料查询接口中为平台收录时间的 Unix 秒，`release_date` 单独保存原厂发布日期。应用领域对象仅在存储边界转换，业务关联不改号。
 
@@ -30,11 +32,13 @@
 
 `record_json` 按资源保存标准属性，所有者、稳定身份、有效价格/路由/发布引用仍由关系列和外键检查。模拟资源按 kind/id 保存；幂等回执统一在 operations，模拟器不再重复保存整份回执。源码 JSON 不在刷新时重放，用户浏览器旧存档不隐式导入、合并或删除。
 
+初始化和新建业务资源使用 `<完整英文前缀>-<UUID v4>`。页面手动创建、批量导入和 API 共用这套规则。D1 的 `channels.id` 是连接 ID，`channel_models.id` 是渠道 ID，`offers.record_id` 是对外服务条目 ID。派生记录的 ID 随工作区数据在同一事务中保存，后续变更沿用已保存的 ID。服务商编码、规范模型标识和调用标识沿用各自规则。
+
 业务命令由现有领域规则在服务端执行，带 expectedRevision 和 operationId；业务修改、模拟状态、回执、审计在单个 D1 batch 中提交。失败保留输入；未知结果查询 `/operations/:id`。后台测试的未知提交通过原 operationId 找回任务，不能重复创建。供应密钥只保存掩码、版本、指纹及状态，不访问真实上游。
 
 ## 接口
 
-- `POST /auth/login`、`POST /auth/logout`、`GET /auth/me`、`GET /health`。
+- `POST /auth/sign-in` 接收账号编号和密码（`identifier`、`accessCode`），按启用的后台账号或模型广场客户记录签发对应会话。后台专用会话接口为 `POST /auth/login`、`POST /auth/logout`、`GET /auth/me`。健康检查为 `GET /health`。
 - `GET /traffic-limits` 读取两类默认、账号额度、一客一策、单模型覆盖和可配置的模型资料主档。`POST /traffic-limits` 按操作更新限流配置，并原子提交审计和回执。两者要求平台管理员或运营人员会话，写入还校验当前账号、修订号和幂等标识。每分钟请求数和 Token 数均存整数。
 - `GET /traffic-limits/history` 使用同一后台会话按时间倒序查询已提交的配置变更。`limit` 控制每次读取的操作数，批量操作展开实际改动的对象，`after` 续查更早的操作。
 - `GET /model-operations`：当前原型资源视图；由 SQLite 组合 JSON，Worker 直接返回，避免整库解析再序列化。
@@ -57,3 +61,11 @@
 6. 正式发布使用现有 `moma-prototype`、production 分支。此字段升级须与新代码配套；旧代码不能直接连接升级后的字段结构。数据库不随代码回退而删除。数据库恢复前先导出备份并核对 D1 Time Travel 恢复点，不能以删除 `.local` 或重建生产库替代恢复。
 
 当前证据及运行限制见 [PROGRESS](../docs/model-operations-d1/PROGRESS.md)。
+
+## 永久编号整改
+
+新建与存量对象均遵守 MODEL_OPERATIONS_IDENTITIES.md。模型服务只允许 model_service-UUID v4；不保留 offer- 编号或公开别名。日常命令发现旧服务身份映射时拒绝保存，须先完成专用整改。
+
+先导出完整 D1 SQL 到权限受限目录，执行 `node versions/moma_5.12.0_estack/database/normalize-identities.mjs backup.sql normalize.sql`。脚本盘点五类公开身份，对存量 ID 生成一次性映射并扫描全部持久表及文本/JSON引用，在独立 SQLite 事务演练后逐字段比较全库业务内容。输出 SQL 含修订冲突检查、外键延迟验证、服务编号写入触发器；生产库使用 `wrangler d1 execute --remote --command` 在一次查询中执行演练通过的整份 SQL，不能拆分执行，也不使用文件导入（文件导入可能跨事务导致延迟外键校验失败）。历史内容只同步编号引用，不改费用、调用标识、状态或记录数量。备份文件不进入静态产物或版本控制。
+
+整改后重新导出生产库，对同一映射逐字段比较；五类编号违规、旧 ID 残留与外键违规均须为零。维护 JSON 及 API 不接受旧编号定位。新增部署不应用备份或重放历史数据；新建服务继续由现有保存事务生成规范 ID。

@@ -13,8 +13,8 @@ export function marketSupplyGroups(state, model) {
 
   const direct = model.serviceMode === 'provider';
   if (direct) {
-    for (const { providerId } of providerServices(model)) {
-      add(providerId, state.providers.find(row => row.id === providerId));
+    for (const { providerId, providerName } of providerServices(model)) {
+      add(providerId, state.providers.find(row => row.id === providerId) || (providerName ? { name: providerName } : null));
     }
   }
 

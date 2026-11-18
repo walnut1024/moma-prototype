@@ -1,3 +1,4 @@
+import { resourceId } from './resource-id.mjs';
 import {useTenantData} from './useTenantData';
 import {saveTenantOrganization} from './tenant-data.mjs';
 import FrontPageHeader from "./components/FrontPageHeader";
@@ -31,6 +32,9 @@ function RoleFields({ form, setForm, departments }) {
   return <>
     <Choice label="管理角色" value={form.role} onChange={role => setForm({ ...form, role, scopeId: form.scopeId || (form.departmentId !== "unassigned" ? form.departmentId : "root") })} options={roles.map(role => ({ value: role, label: role }))} />
     <p className="org-hint">{({ 企业管理员: "管理企业全部部门、成员及平台配置。", 部门管理员: "在指定部门范围内管理组织与成员。", 普通成员: "使用已授权的项目与模型服务。", 财务审计: "查看企业用量与费用，不管理组织及成员。" })[form.role]}</p>
+    {form.role !== "企业管理员" && <label className="org-check">
+      <Checkbox checked={form.canCreateProjects === true} onCheckedChange={checked => setForm({ ...form, canCreateProjects: checked === true })} />允许创建项目
+    </label>}
     {form.role === "部门管理员" && <>
       <Choice label="管理范围" value={form.scopeId || "root"} onChange={scopeId => setForm({ ...form, scopeId })} options={departments.map(d => ({ value: d.id, label: departmentPath(departments, d.id) }))} />
       <label className="org-check"><Checkbox checked={!!form.includeChildren} onCheckedChange={includeChildren => setForm({ ...form, includeChildren: !!includeChildren })} />包含该部门的子部门</label>
@@ -80,16 +84,16 @@ export default function OrganizationMembers() {
   const close = () => { setModal(null); setDraftRevision(null); setError(""); };
   const commit = (action, success) => {
     try {
-      const next=changeOrganization(data,{...action,logId:crypto.randomUUID()});
+      const next=changeOrganization(data,{...action,logId:resourceId('audit-event')});
       saveTenantOrganization(next,draftRevision ?? tenant.revision);setData(next);
       setSelectedMembers([]); setNotice(success); close(); return true;
     } catch (e) { setError(e.message); return false; }
   };
-  const newDepartment = parentId => open({ type: "department", title: "新建部门" }, { id: `d-${crypto.randomUUID()}`, name: "", parentId: parentId || department?.id || "root", ownerId: "none", description: "", grantAdmin: false });
+  const newDepartment = parentId => open({ type: "department", title: "新建部门" }, { id: resourceId('department'), name: "", parentId: parentId || department?.id || "root", ownerId: "none", description: "", grantAdmin: false });
   const editDepartment = d => open({ type: "department", title: "部门设置" }, { ...d, ownerId: d.ownerId || "none", grantAdmin: false });
   const addMember = () => {
     setInviteMode("existing");
-    open({ type: "member", title: "添加成员", isNew: true }, { id: `m-${crypto.randomUUID()}`, name: "", phone: "", account: "", departmentId: department?.id || "unassigned", role: "普通成员", scopeId: department?.id || "root", includeChildren: true, status: "已加入", source: "平台账号" });
+    open({ type: "member", title: "添加成员", isNew: true }, { id: resourceId('membership'), name: "", phone: "", account: "", departmentId: department?.id || "unassigned", role: "普通成员", scopeId: department?.id || "root", includeChildren: true, status: "已加入", source: "平台账号" });
   };
   const confirm = (title, description, action, success) => open({ type: "confirm", title, description, action, success });
   const move = ids => open({ type: "move", title: "移动部门", ids }, { departmentId: "unassigned" });
@@ -163,7 +167,7 @@ export default function OrganizationMembers() {
       </section>
     </div>
     {batchOpen && <OrganizationMemberBatch data={data} initialDepartment={department?.id || "unassigned"} onClose={() => setBatchOpen(false)} onApply={(rows, mode, defaultDepartment) => {
-      const outcome = applyMemberBatch(data, rows, mode, defaultDepartment, () => crypto.randomUUID());
+      const outcome = applyMemberBatch(data, rows, mode, defaultDepartment, resourceId);
       try { saveTenantOrganization(outcome.state,draftRevision ?? tenant.revision); }
       catch (error) { throw new Error(error.message); }
       setData(outcome.state); setSelectedMembers([]); setPage(1);

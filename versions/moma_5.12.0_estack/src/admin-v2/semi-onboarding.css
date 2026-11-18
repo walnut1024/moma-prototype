@@ -2,8 +2,6 @@
 
 /* 表格列宽和滚动 */
 .mo-table.semi-table-wrapper .semi-table{width:100%}
-/* 固定列宽表格（模型渠道表等）：table-layout 需落在真 table 上，旧规则挂在 wrapper 上已失效 */
-.mo-table.semi-table-wrapper.supplier-model-channel-table .semi-table{table-layout:fixed}
 .mo-table-scroll .semi-table-wrapper{min-width:0}
 
 /* 分页布局 */
@@ -23,11 +21,10 @@
 /* 步骤条：Semi Steps 替代原 ol.supplier-onboarding-steps */
 .supplier-onboarding-steps.semi-steps{flex:1;min-width:0;padding:4px 0}
 
-/* Tabs：supplier-detail-tabs / supplier-perspective 现在是 Semi Tabs */
+/* 服务商详情页签 */
 .supplier-detail-tabs.semi-tabs{padding-block:4px}
 .supplier-detail-tabs.semi-tabs .semi-tabs-bar{padding-inline:20px}
 .supplier-detail-tabs.semi-tabs .semi-tabs-content{padding:16px 20px 20px}
-.supplier-perspective.semi-tabs .semi-tabs-bar{margin-bottom:8px}
 
 /* 统一模型目录多选：Semi Checkbox 承载原 label 布局 */
 .supplier-model-select-options .semi-checkbox-wrapper.supplier-model-option{display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 8px;border-bottom:1px solid var(--semi-color-border);cursor:pointer;width:100%}
@@ -36,8 +33,8 @@
 .supplier-model-select-options .supplier-model-option small{font-size:11px;color:var(--semi-color-text-2);font-weight:400}
 .supplier-model-select-options .supplier-model-option.semi-checkbox-wrapper-disabled{color:var(--semi-color-text-2);cursor:default}
 
-/* 渠道接入和模型服务共用两行服务商选项。 */
-:is(.supplier-sidebar-options, .mo-supplier-navigation nav) .semi-button {
+/* 模型服务的两行服务商选项。 */
+.mo-supplier-navigation nav .semi-button {
   justify-content: flex-start;
   min-height: 56px;
   height: auto;
@@ -46,13 +43,13 @@
   white-space: normal;
   text-align: left;
 }
-:is(.supplier-sidebar-options, .mo-supplier-navigation nav) .semi-button-content {
+.mo-supplier-navigation nav .semi-button-content {
   display: grid;
   gap: 2px;
   min-width: 0;
   overflow-wrap: anywhere;
 }
-:is(.supplier-sidebar-options, .mo-supplier-navigation nav) .semi-button small {
+.mo-supplier-navigation nav .semi-button small {
   font-size: 11px;
   color: var(--semi-color-text-2);
 }
@@ -68,6 +65,36 @@
 .supplier-configuration-body > * { min-width: 0; }
 .supplier-configuration-body .supplier-channel-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .supplier-configuration-body .supplier-channel-fields > * { min-width: 0; }
+.channel-source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+}
+.channel-source-card.semi-button {
+  height: auto;
+  min-height: 92px;
+  padding: 16px;
+  text-align: left;
+}
+.channel-source-card .channel-source-content {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  white-space: normal;
+}
+.channel-source-icon {
+  display: grid;
+  flex: 0 0 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: var(--semi-border-radius-medium);
+  color: var(--semi-color-primary);
+  background: var(--semi-color-primary-light-default);
+}
+.channel-source-text { display: grid; flex: 1; gap: 4px; }
+.channel-source-text strong { font-size: 16px; color: var(--semi-color-text-0); }
+.channel-source-text small { font-size: 13px; color: var(--semi-color-text-2); }
 @media (max-width: 700px) {
   .supplier-configuration-body .supplier-channel-fields { grid-template-columns: minmax(0, 1fr); }
 }

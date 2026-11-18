@@ -1,3 +1,4 @@
+import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
@@ -22,7 +23,7 @@ const limitScopes = [
   { value: 'tenant', label: '租户' }, { value: 'project', label: '项目' }, { value: 'key', label: 'API 密钥' }, { value: 'model', label: '模型' },
 ];
 const cacheScopes = ['tenant+model', 'project+model', 'key+model'].map(value => ({ value, label: value }));
-const uid = prefix => `${prefix}-${Date.now()}`;
+const idTypes = { routes: 'gateway-route', limits: 'rate-limit-policy', fallback: 'fallback-policy', cache: 'cache-policy' };
 
 function Editor({ pageId, state, dispatch, close }) {
   const [error, setError] = useState('');
@@ -46,7 +47,7 @@ function Editor({ pageId, state, dispatch, close }) {
     cache: { scope: cacheScopes[0].value, ttl: 600 },
   };
   const save = values => {
-    const id = uid(pageId), name = values.name ?? '';
+    const id = resourceId(idTypes[pageId]), name = values.name ?? '';
     let record;
     if (pageId === 'routes') {
       const { routeId, modelId, endpointA, endpointB } = values;
@@ -140,7 +141,7 @@ function Releases({ state, dispatch }) {
   const current = state.releases.find(item => item.status === '当前生效');
   const save = (record, diff) => {
     const version = `r-${String(state.releases.length + 1).padStart(3, '0')}`;
-    const next = { ...record, id: uid('release'), version, previousReleaseId: current?.id ?? null,
+    const next = { ...record, id: resourceId('gateway-release'), version, previousReleaseId: current?.id ?? null,
       diff, publishedAt: new Date().toISOString(), status: '当前生效' };
     dispatch({ type: 'batch', objectId: version, changes: [
       ...state.releases.filter(item => item.status === '当前生效').map(item => ({ type: 'update', collection: 'releases', id: item.id, changes: { status: '历史版本' } })),
@@ -179,7 +180,7 @@ function Simulator({ state, dispatch }) {
   const [timeout, setTimeoutFlag] = useState(false);
   const [result, setResult] = useState('');
   const run = () => {
-    const requestId = `req_gateway_${Date.now()}`;
+    const requestId = resourceId('request');
     const { request, changes } = simulateRequest(state, { requestId, keyId, modelId, forceTimeout: timeout, purpose: 'gateway-test' });
     if (!dispatch({ type: 'batch', objectId: requestId, changes, feedback: false })) return;
     Toast[request.httpStatus >= 400 ? 'error' : 'success'](`网关请求测试：HTTP ${request.httpStatus}`);

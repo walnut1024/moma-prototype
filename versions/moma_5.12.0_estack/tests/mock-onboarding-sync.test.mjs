@@ -6,7 +6,9 @@ import { planMockOnboardingSync } from '../src/admin-v2/mock-onboarding-sync.js'
 import { commitAdminState, parseAdminState as baseParseAdminState, persistModelAction, serializeAdminState, STORAGE_KEY } from '../src/admin-v2/store.js';
 import { prepareServerChannel, onboardingApi as api } from '../src/admin-v2/onboarding-client.js';
 import { prepareCandidateTest, submitCandidateTest, candidateTestReceipt } from '../src/admin-v2/candidate-tests.js';
-import { setMockRuntimeState } from '../src/admin-v2/mock-onboarding-service.js';
+import { setMockRuntimeState, setMockScenario } from '../src/admin-v2/mock-onboarding-service.js';
+import { credentialRotationChannels } from '../src/admin-v2/credential-rotation-scope.js';
+import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
 
 function transitionFixture() {
   const before = { id: 'endpoint', providerId: 'supplier', baseUrl: 'https://old.example.invalid/v1', protocol: 'OpenAI', credentialVersion: 'old', configurationRevision: 0, candidateConfiguration: { id: 'candidate' }, candidateTestJobs: [{ candidateId: 'candidate', endpointId: 'endpoint', serverChannelId: 'target', receivedAt: '2026-10-31T00:00:00Z' }] };
@@ -85,6 +87,35 @@ test('one persisted candidate apply switches mock published reference and preser
   assert.deepEqual(afterConfig, beforeConfig);
   assert.equal(next.endpoints.find(row => row.id === env.action.data.endpointId).baseUrl, 'https://new-sync.example.invalid/v1');
   assert.equal(JSON.parse(env.storage.getItem(STORAGE_KEY)).revision, next.revision);
+});
+
+test('one key replacement validates the published snapshot and keeps both stores on the old key if validation fails', async t => {
+  const env = await fixture(t);
+  const state = persistModelAction(env.state, { ...env.action, operation: 'channelCandidateDiscard' }, env.storage);
+  const provider = state.providers.find(row => row.id === env.action.data.providerId);
+  const key = provider.apiKeys.find(row => row.id === provider.defaultApiKeyId);
+  const secret = 'mock-sync-new-credential-for-test';
+  const { apiKeys: [newApiKey] } = await providerApiKeysDraft([secret]);
+  const action = { type: 'modelOperations', operation: 'credentialReplace', data: {
+    providerId: provider.id, keyId: key.id, expectedFingerprint: key.fingerprint,
+    expectedEndpointIds: credentialRotationChannels(state, provider, key.id).map(row => row.id), newApiKey,
+  } };
+  setMockScenario('auth');
+  const before = new Map(env.records);
+  assert.throws(() => persistModelAction(state, action, env.storage), issue => issue.code === 'upstream_unauthorized');
+  assert.deepEqual(env.records, before);
+  setMockScenario('success');
+  const next = persistModelAction(state, action, env.storage);
+  assert.deepEqual(next.providers.find(row => row.id === provider.id).apiKeys.find(row => row.id === key.id), { ...key, maskedKey: newApiKey.maskedKey, fingerprint: newApiKey.fingerprint });
+  assert.deepEqual(next.serviceRoutes, state.serviceRoutes);
+  const current = (await api('/services')).services.find(row => row.id === env.published.id);
+  const binding = current.published.config.bindings[0];
+  assert.notEqual(binding.channelId, env.source.id);
+  assert.equal(binding.id, 'binding-fixed');
+  assert.equal(binding.needsValidation, false);
+  const channels = (await api('/channels')).channels;
+  assert.equal(channels.find(row => row.id === binding.channelId).clientChannelId, env.action.data.endpointId);
+  assert(!JSON.stringify([...env.records]).includes(secret));
 });
 
 test('a failed main write leaves both current stores intact', async t => {

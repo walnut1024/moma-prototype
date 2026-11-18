@@ -1,3 +1,4 @@
+import { projectRole } from '../project-access.mjs';
 import { useState } from 'react';
 import { Avatar, Banner, Button, Card, Checkbox, Input, Space, Tree, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
@@ -35,7 +36,7 @@ export default function EnterpriseMembers({ state, tenant, projects, canWrite, s
   const select = value => { setSelection(value); setPage(1); };
   const reset = () => { setQuery(''); setRole('all'); setStatus('all'); setPage(1); };
   const projectScope = member => isEnterpriseAdmin(member, tenant) ? '企业全部项目'
-    : projects.filter(project => member.projectIds?.includes(project.id)).map(project => project.name).join('、') || '未分配项目';
+    : projects.filter(project => projectRole(project,member)).map(project => project.name).join('、') || '未分配项目';
   const lastAdmin = member => validAdmins.some(admin => admin.id === member.id) && validAdmins.length <= 1;
   const canToggle = member => canWrite && tenant.status !== '停用' && !lastAdmin(member)
     && !(member.status === '停用' && userFor(member)?.status !== '正常');

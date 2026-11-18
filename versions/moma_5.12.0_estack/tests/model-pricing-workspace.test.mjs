@@ -1,20 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createAdminSeed} from '../src/admin-v2/store.js';
+import {initialModelWorkspace, modelSupplyRelations} from '../server/model-repository.js';
+import {channelManagementDirectory} from '../src/admin-v2/supplier-model-channel-table.js';
+import {supplierDirectory} from '../src/admin-v2/moma-provider.js';
 import {costRecords,priceRecords,operationsReturn} from '../src/admin-v2/model-pricing-workspace.js';
 import {priceItems} from '../src/admin-v2/model-management.js';
 import {activeModelSalePrice,activeProviderPrice} from '../src/admin-v2/service-workspace.js';
 import {sections,canAccessPage} from '../src/admin-v2/navigation.mjs';
 
 test('model operations modules share operator permissions while measurement stays a page-level destination',()=>{
-  assert.deepEqual(sections.find(row=>row.id==='models').items.map(row=>row.label),['渠道接入','模型服务','模型广场','模型成本','模型售价','模型资料']);
-  for(const page of ['model-market','model-costs','model-prices','tariff-dictionary']){
+  assert.deepEqual(sections.find(row=>row.id==='models').items.map(row=>row.label),['渠道管理','模型服务','模型广场','模型售价','模型资料']);
+  for(const page of ['model-market','model-prices','tariff-dictionary']){
     assert.equal(canAccessPage('运营人员',page),true);assert.equal(canAccessPage('运维人员',page),false);
   }
 });
 
 test('cost and sale projections retain their stable owners without changing stored data',()=>{
-  const state=createAdminSeed(),before=structuredClone(state),costs=costRecords(state),prices=priceRecords(state);
+  const state=initialModelWorkspace(),before=structuredClone(state),costs=costRecords(state,channelManagementDirectory(state,supplierDirectory(state),modelSupplyRelations(structuredClone(state))).models.flatMap(model=>model.groups)),prices=priceRecords(state);
   assert.ok(costs.length);assert.equal(new Set(costs.map(row=>row.key)).size,costs.length);
   for(const row of costs){assert.equal(row.association.endpoint.providerId,row.provider.id);assert.ok(row.association.id);}
   for(const row of prices)if(row.providerId)assert.ok(row.model.serviceProviders.some(entry=>entry.providerId===row.providerId));
@@ -30,7 +33,7 @@ test('expired latest sale never revives an older price for either service mode',
 });
 
 test('cross-page return accepts only supported local management destinations',()=>{
-  for(const path of ['#/admin-2/model-costs?provider=p&association=a','#/admin-2/model-prices?service=provider%3Am%3Ap','#/admin-2/listing?model=m&panel=access','#/admin-2/model-market?model=m&listing=gray'])assert.equal(operationsReturn(path),path);
+  for(const path of ['#/admin-2/providers?perspective=models&costProvider=p&costAssociation=a','#/admin-2/model-prices?service=provider%3Am%3Ap','#/admin-2/listing?model=m&panel=access','#/admin-2/model-market?model=m&listing=gray'])assert.equal(operationsReturn(path),path);
   for(const path of ['https://example.com','#/admin-2/admins','#/admin-2/listing\nhttps://example.com',null])assert.equal(operationsReturn(path),null);
 });
 
@@ -89,4 +92,25 @@ test('cost table keeps each channel and tariff, including explicit zero and chan
     {name:'输出',amount:2500000,unit:'百万 Token',currency:'USD'},
     null,
   ]);
+});
+
+test('model table uses one row per channel, retains every tariff and keeps missing costs distinct from zero', async () => {
+  const { supplyCostTableRows } = await import('../src/admin-v2/model-pricing-workspace.js');
+  const models = [{ id: 'm', groups: [
+    { owner: { id: 'p' }, channels: [{ id: 'a' }, { id: 'b' }] },
+    { owner: { id: 'q' }, referenceOnly: true, channels: [] },
+  ] }];
+  const records = [
+    { key: 'p:a', items: [{ name: '输入', amount: 0, currency: 'CNY' }, { name: '输出', amount: 2500000, currency: 'USD' }] },
+    { key: 'p:b', items: [], status: '待配置' },
+  ];
+  const before = structuredClone({ models, records });
+  const rows = supplyCostTableRows(models, records);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map(row => row.modelSpan), [2, 0]);
+  assert.deepEqual(rows.map(row => row.channel.id), ['a', 'b']);
+  assert.deepEqual(rows.map(row => row.items), [records[0].items, []]);
+  assert.equal(rows[1].cost.key, 'p:b');
+  assert.equal(new Set(rows.map(row => row.tableKey)).size, rows.length);
+  assert.deepEqual({ models, records }, before);
 });

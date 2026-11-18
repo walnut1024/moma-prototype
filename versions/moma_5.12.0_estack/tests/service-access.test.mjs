@@ -15,8 +15,13 @@ test('six accounts are explicit, repeatable, preserve disabled identities and ne
   assert.equal(auth.currentUserId, null); assert.equal(state.adminSession, undefined);
   for (const account of auth.accounts) {
     const signed = loginAuthAccount(auth, account.phone, account.userType), identity = resolveUserIdentity(state,signed);
-    assert.equal(availableAuthSpaces(signed).length,1); assert.equal(identity.userId, account.id);
+    assert.equal(availableAuthSpaces(signed).length,account.userType === 'personal' ? 2 : 1); assert.equal(identity.userId, account.id);
     assert.equal(signed.activeSpace === 'personal', account.userType === 'personal');
+    if (account.userType === 'personal') {
+      const company = resolveUserIdentity(state, {...signed, activeSpace:'tenant-gov'});
+      assert.equal(company.userId, identity.userId);
+      assert.equal(company.tenantId, 'tenant-gov');
+    }
   }
   auth.accounts[0].status='停用'; state.admins.find(row=>row.id==='admin-link-system').status='已停用';
   assert.deepEqual(linkedAccountFixture(state,auth),{state,auth});
@@ -45,7 +50,7 @@ test('explicit preparation is idempotent and an auth write failure rolls back on
 });
 test('manager identity controls permission and audit regardless of a forged role; user session stays separate', () => {
   const {state}=fixture(), storage=storageFor(state);
-  assert.throws(()=>persistAdminAction(state,{type:'setSettings',changes:{}},storage),/后台 mock 账号/);
+  assert.throws(()=>persistAdminAction(state,{type:'setSettings',changes:{}},storage),/请先登录有效的后台账号/);
   let next=persistAdminAction(state,{type:'enterAdmin',accountId:'admin-link-maintenance'},storage);
   assert.throws(()=>persistAdminAction({...next,currentRole:'平台管理员'},{type:'update',collection:'models',id:next.models[0].id,changes:{name:'越权'}},storage),/无权/);
   next=persistAdminAction(next,{type:'enterAdmin',accountId:'admin-link-system'},storage);

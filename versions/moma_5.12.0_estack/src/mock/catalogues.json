@@ -148,28 +148,34 @@
       {
         "id": "auth-link-enterprise-a",
         "name": "政企用户 A",
+        "scenario": "对外企业员工",
         "phone": "13800002001",
         "userType": "enterprise",
         "tenantId": "tenant-gov",
         "backendUserId": "user-link-enterprise-a",
-        "backendMembershipId": "member-link-enterprise-a"
+        "backendMembershipId": "member-link-enterprise-a",
+        "projectId": "project-1-1"
       },
       {
         "id": "auth-link-enterprise-b",
         "name": "政企用户 B",
+        "scenario": "内部员工",
         "phone": "13800002002",
         "userType": "enterprise",
         "tenantId": "tenant-nanjing",
         "backendUserId": "user-link-enterprise-b",
-        "backendMembershipId": "member-link-enterprise-b"
+        "backendMembershipId": "member-link-enterprise-b",
+        "projectId": "project-2-1"
       },
       {
         "id": "auth-link-personal-p",
         "name": "个人用户 P",
+        "scenario": "个人用户",
         "phone": "13800001001",
         "userType": "personal",
         "tenantId": "personal-demo-001",
-        "backendUserId": "user-personal-demo-001"
+        "backendUserId": "user-personal-demo-001",
+        "additionalSpace": "tenant-gov"
       }
     ]
   },
@@ -7563,8 +7569,8 @@
   "admin-v2/model-import.js": {
     "MODEL_IMPORT_EXAMPLES": [
       {
-        "规范模型标识": "catalog/chat-001",
-        "模型名称": "智能对话",
+        "模型编码": "catalog/chat-001",
+        "模型展示名": "智能对话",
         "模型类型": "文本",
         "支持任务": "对话",
         "输入模态": "文本",
@@ -7580,8 +7586,8 @@
         "流式响应": "支持"
       },
       {
-        "规范模型标识": "catalog/image-001",
-        "模型名称": "图像创作",
+        "模型编码": "catalog/image-001",
+        "模型展示名": "图像创作",
         "模型类型": "视觉",
         "支持任务": "文生图",
         "输入模态": "文本、图片",
@@ -7593,8 +7599,8 @@
         "视觉任务类型": "图像"
       },
       {
-        "规范模型标识": "catalog/video-001",
-        "模型名称": "视频创作",
+        "模型编码": "catalog/video-001",
+        "模型展示名": "视频创作",
         "模型类型": "视觉",
         "支持任务": "文生视频",
         "输入模态": "文本、图片",

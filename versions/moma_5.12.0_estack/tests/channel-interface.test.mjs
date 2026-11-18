@@ -5,7 +5,7 @@ import { CHANNEL_INTERFACES, prepareChannelInterface, suggestChannelRoot, modelT
 const openai = { interfaceType: 'openai', baseUrl: 'https://api.example.com/v1' };
 
 test('presets keep explicitly supplied roots and append only the selected task', () => {
-  assert.deepEqual(CHANNEL_INTERFACES.map(row => row.id), ['openai', 'anthropic', 'custom']);
+  assert.deepEqual(CHANNEL_INTERFACES.map(row => row.id), ['openai', 'openai-responses', 'anthropic']);
   assert.deepEqual(prepareChannelInterface({ ...openai, baseUrl: `${openai.baseUrl}/` }), { ...openai, protocol: 'OpenAI', addressMode: 'base', taskUrls: {} });
   assert.equal(modelTaskUrl(openai, 'text'), 'https://api.example.com/v1/chat/completions');
   assert.equal(modelTaskUrl(openai, 'multimodal'), 'https://api.example.com/v1/chat/completions');
@@ -74,4 +74,29 @@ test('explicit adapter options validate and participate in configuration evidenc
   assert.equal(connectionFingerprint({ ...openai, adapterOptions: {} }), before);
   assert.notEqual(connectionFingerprint({ ...openai, adapterOptions: options }), before);
   assert.equal(connectionFingerprint({ ...openai, adapterOptions: options }), connectionFingerprint({ ...openai, adapterOptions: Object.fromEntries(Object.entries(options).reverse()) }));
+});
+
+test('Responses has independent paths, request fields and response parsing', async()=>{
+  const {channelConversationRequest,channelConversationText}=await import('../src/admin-v2/channel-interface.js');
+  const endpoint={interfaceType:'openai-responses',baseUrl:'https://example.invalid/v1'};
+  const model={upstreamModelId:'vendor/model',type:'text',check:'streaming'};
+  assert.equal(modelTaskUrl(endpoint,'multimodal'),'https://example.invalid/v1/responses');
+  assert.throws(()=>modelTaskUrl(endpoint,'embedding'),/尚不支持/);
+  assert.equal(suggestChannelRoot({...endpoint,baseUrl:endpoint.baseUrl+'/responses'}),endpoint.baseUrl);
+  const request=channelConversationRequest(endpoint,model);
+  assert.equal(request.url,endpoint.baseUrl+'/responses');assert.equal(request.body.model,model.upstreamModelId);assert.equal(request.body.stream,true);assert.equal(typeof request.body.input,'string');assert.equal(request.body.max_output_tokens,32);assert.equal('messages' in request.body,false);
+  const response={output:[{type:'reasoning',summary:[]},{type:'message',content:[{type:'output_text',text:'你好'}]}]};
+  assert.equal(channelConversationText(endpoint.interfaceType,response),'你好');
+  assert.throws(()=>channelConversationText(endpoint.interfaceType,{choices:[{message:{content:'错误格式'}}]}),/格式不匹配/);
+  assert.equal(channelConversationText('openai',{choices:[{message:{content:'Chat'}}]}),'Chat');
+  assert.equal(channelConversationText('anthropic',{content:[{type:'text',text:'Messages'}]}),'Messages');
+  assert.equal('messages' in channelConversationRequest({...endpoint,interfaceType:'openai'},model).body,true);
+  assert.equal(channelConversationRequest({...endpoint,interfaceType:'anthropic'},model).body.max_tokens,32);
+});
+
+test('all model supply address readers respect the selected Responses task',async()=>{
+ const {supplyModelUrl}=await import('../src/admin-v2/model-management.js');
+ const endpoint={interfaceType:'openai-responses',protocol:'OpenAI',baseUrl:'https://example.invalid/v1'};
+ assert.equal(supplyModelUrl({endpoint},{type:'text'}),'https://example.invalid/v1/responses');
+ assert.equal(supplyModelUrl({endpoint},{type:'embedding'}),'');
 });

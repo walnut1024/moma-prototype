@@ -1,4 +1,7 @@
+import { workspaceStoragePrefix } from "./workspace-storage.mjs";
+import { resourceId } from './resource-id.mjs';
 import {recordTenantExperience} from './tenant-data.mjs';
+import { mockTextUsage } from './project-call.mjs';
 import mockConfig from './mock/catalogues.json' with { type: 'json' };
 import { useServiceDirectory } from './useServiceDirectory';
 import { beginExperience, validateExperience } from './service-directory.mjs';
@@ -32,7 +35,7 @@ import { IMAGE_ACCEPT, supportsImageInput, imageInputError } from "./text-image-
 import "./experience.css";
 import "./experience-refinements.css";
 
-const STORAGE_KEY = "moma-text-conversations-5120-v1";
+const STORAGE_KEY = workspaceStoragePrefix + 'conversations';
 const recommendations = mockConfig["TextExperience.jsx"]["recommendations"];
 
 const loadHistory = (owner) => {
@@ -74,8 +77,9 @@ function ModelPicker({ value, onChange, models, disabled }) {
   );
 }
 
-export default function TextExperience({ onCompare, title = "文本生成", imageUploadEnabled = false, initialServiceId = "", owner = "" }) {
-  const directory = useServiceDirectory('text'), models = directory.models;
+export default function TextExperience({ onCompare, title = "文本生成", imageUploadEnabled = false, initialServiceId = "", owner = "", project }) {
+  const directory = useServiceDirectory('text', project), models = directory.models;
+  const projectId = project.id;
   const [draft] = useState(() => { try { return readExperienceDraft(owner, 'text'); } catch { return { storageError: '草稿读取失败，请核对本地存储' }; } });
   const ticket = useRef(null);
   const [model, setModel] = useState(initialServiceId || draft.model || models.find(item => item.callable)?.id || '');
@@ -209,12 +213,19 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     );
   };
 
+  const mockAnswer = question => mockConfig['TextExperience.jsx'].response.answer.replace('{question}',question.slice(0,32)+(question.length>32?'…':''));
   const finish = (id, pendingId, question, shouldFail, pendingMessages) => {
     try { validateExperience(ticket.current); } catch (error) {
       const stopped = pendingMessages.map(item => item.id === pendingId ? { ...item, status: 'stopped', answer: error.message } : item);
       setMessages(stopped); persist(id, stopped); setNotice(error.message); setBusy(false); return;
     }
-    try{recordTenantExperience(ticket.current,shouldFail?403:200);}catch(error){setNotice(error.message);setBusy(false);return;}
+    const answer = shouldFail ? undefined : mockAnswer(question);
+    try { recordTenantExperience(ticket.current, shouldFail ? 403 : 200, undefined, {
+      input: question, output: answer && [answer, ...mockConfig['TextExperience.jsx'].response.points].join('\n'),
+    }); } catch (error) {
+      const stopped = pendingMessages.map(item => item.id === pendingId ? { ...item, status:'stopped', answer:error.message } : item);
+      setMessages(stopped); persist(id, stopped); setNotice(error.message); setBusy(false); return;
+    }
     const result = shouldFail
       ? {
           id: pendingId,
@@ -231,7 +242,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
           id: pendingId,
           question,
           status: "success",
-          answer: mockConfig['TextExperience.jsx'].response.answer.replace('{question}',question.slice(0,32)+(question.length>32?'…':'')),
+          answer,
           points: mockConfig['TextExperience.jsx'].response.points,
         };
     const next = pendingMessages.map((item) =>
@@ -247,9 +258,13 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
     const question = prompt.trim();
     if ((!question && !images.length) || busy || readingImages) return;
     if (images.length && !canUploadImages) { setNotice("当前模型不支持图片输入。"); return; }
-    try { ticket.current = beginExperience(model, 'text', { images: images.length > 0 }); } catch (error) { setNotice(error.message); return; }
-    const id = conversationId || crypto.randomUUID();
-    const pendingId = crypto.randomUUID();
+    try {
+      ticket.current = beginExperience(model, 'text', { projectId, images: images.length > 0,
+        usage: mockTextUsage([systemPrompt, question].filter(Boolean).join('\n'), [mockAnswer(question), ...mockConfig['TextExperience.jsx'].response.points].join('\n')),
+      });
+    } catch (error) { setNotice(error.message); return; }
+    const id = conversationId || resourceId('conversation');
+    const pendingId = resourceId('message');
     const pending = { id: pendingId, question, images, modelName: ticket.current.modelName, provider: selectedModel.provider, callId: selectedModel.callId, status: "loading" };
     const next = [...(conversationId ? messages : []), pending];
     setConversationId(id);
@@ -289,7 +304,11 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
   const regenerate = (index) => {
     if (busy) return;
     const original = messages[index];
-    try { ticket.current = beginExperience(model, 'text', { images: Boolean(original.images?.length) }); } catch (error) { setNotice(error.message); return; }
+    try {
+      ticket.current = beginExperience(model, 'text', { projectId, images: Boolean(original.images?.length),
+        usage: mockTextUsage([systemPrompt, original.question].filter(Boolean).join('\n'), [mockAnswer(original.question), ...mockConfig['TextExperience.jsx'].response.points].join('\n')),
+      });
+    } catch (error) { setNotice(error.message); return; }
     const next = messages.map((item, i) =>
       i === index ? { ...item, modelName: ticket.current.modelName, provider: selectedModel.provider, callId: selectedModel.callId, status: "loading" } : item,
     );
@@ -563,7 +582,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
         </form>
         <p className="pg-quota-note">
           AI
-          回复可能存在偏差，使用前请自行核实。使用本服务会消耗免费额度，用尽后会产生费用。
+          回复可能存在偏差，使用前请自行核实。用量与费用归属当前项目，具体以调用记录为准。
         </p>
       </div>
 

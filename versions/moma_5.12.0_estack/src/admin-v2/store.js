@@ -1,12 +1,14 @@
 import {commitAdminState,canMutate} from './state-transaction.js';
 export {commitAdminState,canMutate} from './state-transaction.js';
 import {initialApplicationData} from "../mock/application-data.js";
-import {initialWorkspace,MODEL_DATA_COLLECTIONS,systemModelData,systemModelOrigin,applyModelDataset} from "../mock/model-data.js";
+import {initialWorkspace,MODEL_DATA_COLLECTIONS,systemModelData,systemModelOrigin} from "../mock/model-data.js";
 
 
 
 import { activeAdmin } from '../linked-accounts.mjs';
 import {readLinkedState,notifyLinkedState,LINK_EVENT} from "../service-access.mjs";
+import { readSiteConfig, SITE_CONFIG_KEY } from '../site-config.mjs';
+import { prepareCustomerLogins, writeCustomerState } from '../customer-identity.mjs';
 import { MODEL_OPERATIONS_EXAMPLE_ID } from './model-operations-examples.js';
 import { usageDemoRequests } from './usage-demo.js';
 import { useEffect, useRef, useState } from "react";
@@ -20,8 +22,10 @@ import { useEffect, useRef, useState } from "react";
 
 import { prepareMockOnboardingSync, commitMockOnboardingSync } from './mock-onboarding-sync.js';
 import { assertNewMockPublications } from './mock-publication-gate.js';
+import { ADMIN_DATA_KEY } from '../workspace-storage.mjs';
+import { referenceWorkspace } from '../mock/reference-workspace.js';
 
-export const STORAGE_KEY = "moma.adminV2.5120.v1";
+export const STORAGE_KEY = ADMIN_DATA_KEY;
 const isDerivedUsageRequest = request => request.id?.startsWith('usage-demo-');
 
 export function serializeAdminState(state) {
@@ -40,12 +44,12 @@ export function parseAdminState(raw) {
   if (!raw) return initialWorkspace(createAdminSeed());
   const value = JSON.parse(raw);
   if (value?.version !== 1 || !Array.isArray(value.models) || !Array.isArray(value.apiKeys)) throw new Error("数据格式不兼容");
-  const seed = createAdminSeed();
+  const seed = value.modelData?.sourceScope === 'reference-only-v2' ? value : createAdminSeed();
   const restored = { ...seed, ...value, ...Object.fromEntries(["serviceRoutes", "modelOnboardings", "tariffDictionary", "modelTemplates", "modelSupplies", "modelSalePrices", "users", "organizations", "modelVersions", "validations", "clusters", "artifacts", "deployments", "supplyPrices", "memberships", "grants", "ledger", "routes", "limits", "fallbacks", "releases", "caches", "requests", "alerts", "incidents", "products", "prices", "orders", "bills", "settlements", "adjustments", "announcements", "admins", "approvals", "integrations"].map(key => [key, Array.isArray(value[key]) ? value[key] : seed[key]])) };
   // Stored business records are authoritative; never refill deleted models or channels.
   restored.modelData = value.modelData;
   restored.initialData = value.initialData;
-  for (const key of Object.keys(seed.initialData.builtinIds)) restored[key] = Array.isArray(value[key]) ? value[key] : [];
+  for (const key of Object.keys(seed.initialData?.builtinIds || {})) restored[key] = Array.isArray(value[key]) ? value[key] : [];
   for (const key of MODEL_DATA_COLLECTIONS) restored[key] = Array.isArray(value[key]) ? value[key] : [];
   restored.requests = [...restored.requests.filter(item => !isDerivedUsageRequest(item)), ...usageDemoRequests(restored,Date.now())];
   return restored;
@@ -113,10 +117,18 @@ export function persistEnterpriseAction(state, action, storage, expectedRevision
   if (state.storageError) throw new Error('本地数据尚未就绪，请先重新加载');
   const raw = storage.getItem(STORAGE_KEY);
   if (expectedRevision !== state.revision || (raw && JSON.parse(raw).revision !== state.revision)) throw new Error('数据已变化，请载入新版本后重试；当前输入保留');
-  const account = action.type === 'enterAdmin' ? null : activeAdmin(state);
-  const next = commitAdminState(state, action, account?.role);
-  if (account && next.audits[0]) next.audits[0].actorId = account.id;
-  storage.setItem(STORAGE_KEY, serializeAdminState(next));
+  const account = activeAdmin(state);
+  const internal = !readSiteConfig(storage.getItem(SITE_CONFIG_KEY)).personalEnabled;
+  const next = commitAdminState(state, { ...action, internal }, account.role);
+  if (next.audits[0]) next.audits[0].actorId = account.id;
+  let login;
+  if (['create', 'add-admin'].includes(action.operation)) {
+    const tenantId = action.tenantId || action.ids.tenant;
+    const userId = action.data.accountMode === 'existing' ? action.data.userId : action.ids.user;
+    const member = next.memberships.find(row => row.tenantId === tenantId && row.userId === userId);
+    login = prepareCustomerLogins(next, [{ tenantId, userId, memberId:member?.id }], storage);
+  }
+  writeCustomerState(storage, raw, serializeAdminState(next), login);
   notifyLinkedState();
   return next;
 }
@@ -124,12 +136,16 @@ export function persistEnterpriseAction(state, action, storage, expectedRevision
 export function persistIndividualAction(state, action, storage, expectedRevision = state.revision) {
   if (action.type !== 'individual') throw new Error('此入口仅支持个人用户操作');
   if (state.storageError) throw new Error('本地数据尚未就绪，请先重新加载');
+  if (!readSiteConfig(storage.getItem(SITE_CONFIG_KEY)).personalEnabled) throw Error('当前站点仅开放本企业空间');
   const raw = storage.getItem(STORAGE_KEY);
   if (expectedRevision !== state.revision || (raw && JSON.parse(raw).revision !== state.revision)) throw new Error('数据已变化，请载入新版本后重试；当前输入保留');
-  const account = action.type === 'enterAdmin' ? null : activeAdmin(state);
-  const next = commitAdminState(state, action, account?.role);
-  if (account && next.audits[0]) next.audits[0].actorId = account.id;
-  storage.setItem(STORAGE_KEY, serializeAdminState(next));
+  const account = activeAdmin(state);
+  const next = commitAdminState(state, action, account.role);
+  if (next.audits[0]) next.audits[0].actorId = account.id;
+  const login = action.operation === 'create' ? prepareCustomerLogins(next, [{
+    tenantId:action.ids.tenant, userId:action.data.accountMode === 'existing' ? action.data.userId : action.ids.user,
+  }], storage) : null;
+  writeCustomerState(storage, raw, serializeAdminState(next), login);
   notifyLinkedState();
   return next;
 }
@@ -149,12 +165,8 @@ export function persistAdminAccountAction(state, action, storage, expectedRevisi
 
 export function loadAdminState(storage) {
   const raw = storage.getItem(STORAGE_KEY);
-  const state = parseAdminState(raw);
-  let completed = raw ? state : applyModelDataset(state);
-  if (!completed.adminSession?.accountId) {
-    const account = completed.admins.find(row => row.role === '平台管理员' && row.status === '已启用');
-    if (account) completed = { ...completed, adminSession: { accountId: account.id }, currentRole: account.role };
-  }
+  const state = raw ? parseAdminState(raw) : referenceWorkspace();
+  const completed = state;
   const storedRequests = raw ? JSON.parse(raw).requests : [];
   if (completed === state && raw && (!Array.isArray(storedRequests) || !storedRequests.some(isDerivedUsageRequest))) return state;
   const next = raw ? { ...completed, revision: state.revision + 1 } : completed;
@@ -165,6 +177,15 @@ export function loadAdminState(storage) {
   } catch (error) {
     return { ...state, storageError: error.message };
   }
+}
+
+export function acceptAdminSession(account, storage = globalThis.localStorage) {
+  const state = loadAdminState(storage);
+  const local = state.admins.find(row => row.id === account.id)
+    || (account.loginCode && state.admins.find(row => row.loginCode === account.loginCode));
+  if (!local || local.status !== '已启用' || local.role !== account.role) throw Error('后台账号与工作区权限不一致，请联系平台管理员');
+  if (state.adminSession?.accountId === local.id && state.adminSession?.serverAccountId === account.id && state.currentRole === account.role) return state;
+  return persistAdminAction(state, { type: 'enterAdmin', accountId: local.id, serverAccountId: account.id }, storage);
 }
 
 export function prepareModelOperationsExamples(storage = globalThis.localStorage) {

@@ -1,3 +1,8 @@
+import ModelResourceJsonPage from './ModelResourceJsonPage';
+import ModelResourceTransfer, { openResourceJson } from './ModelResourceTransfer';
+import MarketContentEditor from './MarketContentEditor';
+import { modelIdentity, modelServiceIdentity, modelPresentation } from '../model-identities.mjs';
+import { serviceReferences } from '../service-access.mjs';
 import AdminStatus from './AdminStatus';
 import Table, { AdminPagination } from './AdminTable';
 import AdminActionMenu from './AdminActionMenu';
@@ -10,10 +15,11 @@ import { rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useS
 import { CSS } from '@dnd-kit/utilities';
 import { useOperations } from './ModelOperationsUI';
 import { Choice, CopyId, Field, Modal, Notice, serviceOperationsUi } from './ServiceUI';
-import { libraryRecord, MODEL_CATALOGUE_TYPES } from './model-library';
+import { MODEL_CATALOGUE_TYPES } from './model-library';
 import { modelCategory, moneyDisplay, priceItems } from './model-management';
 import { modelProfileDraft } from './model-profile';
-import { activeModelSalePrice, serviceHeaderStatus } from './service-workspace';
+import { activeModelSalePrice, providerServices, serviceCallIdentifiers } from './service-workspace';
+import { offerKey } from '../service-access.mjs';
 import ModelModuleHeading from './ModelModuleHeading';
 import ServiceListingDialog from './ServiceListingDialog';
 import { marketSupplyGroups } from './model-market-supplies';
@@ -30,6 +36,14 @@ const cardSupplierLimit = 3;
 const viewOptions = [{ label: '列表', value: 'list' }, { label: '卡片', value: 'cards' }];
 const emptyMessage = '没有符合条件的模型服务';
 const cardCollision = args => args.pointerCoordinates ? pointerWithin(args) : closestCenter(args);
+const marketListingStatus = model => model.listingStatus === '已上架'
+  ? model.releaseStage === 'gray' ? '灰度上架' : '正式上架'
+  : '已下架';
+
+function MarketListing({ model }) {
+  const reason = model.callsEnabled === true ? '' : model.lifecycleStopReason === 'channel-unavailable' ? '渠道未接入' : model.lifecycleStopReason === 'channel-removal' ? '渠道待移除' : '';
+  return <Space vertical align="start" spacing={4}><AdminStatus value={marketListingStatus(model)}/>{reason && <Typography.Text type="tertiary" size="small">{reason}</Typography.Text>}</Space>;
+}
 
 function MarketSupplies({ groups, expandedProviderId = null }) {
   if (!groups.length) return <Typography.Text type="tertiary">待关联服务商和渠道</Typography.Text>;
@@ -48,6 +62,12 @@ function MarketSupplies({ groups, expandedProviderId = null }) {
 
 function MarketVisibility({ model }) {
   return <AdminStatus value={model.marketVisible === false ? '隐藏' : '允许展示'}/>;
+}
+
+function ModelCallIdentifiers({ model }) {
+  const identifiers = serviceCallIdentifiers(model);
+  return identifiers.length ? <Space vertical align="start" spacing={4}>{identifiers.map(value =>
+    <CopyId key={value} value={value} label="模型调用标识" ellipsis={{ showTooltip: true }}/>)}</Space> : <Typography.Text type="tertiary">未配置</Typography.Text>;
 }
 
 const modalityIcons = { 文本: IconTextStroked, 图片: IconImageStroked, 音频: IconMicrophoneStroked, 视频: IconVideoStroked };
@@ -71,7 +91,7 @@ function MarketCard({ state, model, position, canReorder, savingOrder, actions, 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: model.id, disabled: !canReorder || savingOrder, data: { name: model.name },
   });
-  const source = libraryRecord(state, model.id) || model;
+  const source = modelPresentation(state, model);
   const profile = modelProfileDraft(source);
   const outputModalities = profile.outputModalities || [];
   const resultTypes = (profile.resultTypes || []).filter(value => value !== '生成文本' || !outputModalities.includes('文本'));
@@ -90,7 +110,7 @@ function MarketCard({ state, model, position, canReorder, savingOrder, actions, 
   return <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} data-dragging={isDragging || undefined}>
     <Card className="market-model-card" footer={<div className="market-card-footer">
       <Space wrap>
-        <AdminStatus value={serviceHeaderStatus(model).service}/>
+        <MarketListing model={model}/>
         <MarketVisibility model={model}/>
       </Space>
       {actions}
@@ -99,7 +119,9 @@ function MarketCard({ state, model, position, canReorder, savingOrder, actions, 
         <MarketLogo key={profile.logo || ''} src={profile.logo}/>
         <div className="market-card-identity">
           <Typography.Title heading={6} component="h3" ellipsis={{ rows: 2, showTooltip: true }}>{model.name}</Typography.Title>
-          <CopyId value={model.modelId} label="模型编码" ellipsis={{ showTooltip: true }}/>
+          <CopyId value={modelIdentity(state,model).canonical_slug} label="模型编码"/>
+          {serviceReferences({...state,models:[model]}).map(service=><CopyId key={service.id} value={service.model_service_id} label="模型服务 ID" ellipsis={{showTooltip:true}}/>)}
+          <ModelCallIdentifiers model={model}/>
         </div>
         <Button theme="borderless" size="small" className="market-order-handle market-card-order"
           icon={<IconHandle size="small" aria-hidden="true"/>} {...attributes} {...listeners}
@@ -143,6 +165,7 @@ function MarketCard({ state, model, position, canReorder, savingOrder, actions, 
 export default function ModelMarket(props) {
   const ops = useOperations({ ...props, ...serviceOperationsUi }, 'model-market');
   const { params, go } = ops;
+  const [contentModel, setContentModel] = useState(null);
   const [editing, setEditing] = useState(null);
   const [supplyDetail, setSupplyDetail] = useState(null);
   const [orderEdit, setOrderEdit] = useState(null);
@@ -156,12 +179,12 @@ export default function ModelMarket(props) {
   const query = params.get('q') || '';
   const search = query.trim().toLowerCase();
   const type = params.get('type'), status = params.get('status'), visibility = params.get('visibility');
-  const ordered = orderedMarketModels(props.state);
+  const ordered = orderedMarketModels(props.state).map(model=>modelPresentation(props.state,model));
   const positions = new Map(ordered.map((model, index) => [model.id, index + 1]));
   const rows = ordered.filter(model =>
-    [model.name, model.modelId].join(' ').toLowerCase().includes(search) &&
+    [model.name, modelIdentity(props.state,model).id, modelIdentity(props.state,model).canonical_slug, ...serviceReferences({ ...props.state, models:[model] }).map(service=>service.model_service_id), ...serviceCallIdentifiers(model)].join(' ').toLowerCase().includes(search) &&
     (!type || modelCategory(model.type) === type) &&
-    (!status || serviceHeaderStatus(model).service === status) &&
+    (!status || marketListingStatus(model) === status) &&
     (!visibility || (model.marketVisible === false ? 'hidden' : 'visible') === visibility));
   const currentPage = Math.min(Math.max(1, Number.parseInt(params.get('page'), 10) || 1), Math.ceil(rows.length / pageSize) || 1);
   const pageRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -224,25 +247,42 @@ export default function ModelMarket(props) {
     ops.setError('');
     setEditing({ id: row.id, name: row.name, action, visible: row.marketVisible === false, revision: row.updatedAt });
   };
+  const toggleChannelVisibility = async (entry, button) => {
+    setBusy(true);
+    try {
+      await ops.run('serviceProviderListing', {
+        providerId: offerKey(entry), enabled: entry.marketVisible === false, expectedUpdatedAt: supplyModel.updatedAt,
+      }, supplyModel.id);
+    } finally {
+      setBusy(false);
+      requestAnimationFrame(() => button.focus());
+    }
+  };
   const listingActions = row => [
     { node: 'item', name: '正式上架', onClick: () => ops.go({ model: row.id, listing: 'formal' }) },
     { node: 'item', name: '灰度上架', onClick: () => ops.go({ model: row.id, listing: 'gray' }) },
     { node: 'item', name: '下架', disabled: row.listingStatus !== '已上架', onClick: button => { trigger.current = button; if (row.serviceMode==='provider') ops.go({model:row.id,listing:'withdrawn'}); else open(row,'stopSales'); } },
   ];
   const actions = row => <Space wrap>
+    <Button theme="borderless" onClick={() => openResourceJson(ops, { level: 'model', model_id: modelIdentity(props.state, row).id })}>查看 JSON</Button>
+    <Button theme="borderless" disabled={!ops.can || busy} onClick={()=>setContentModel(row.id)}>展示信息</Button>
     <AdminActionMenu label={`上架操作 ${row.name}`} items={listingActions(row)} disabled={!ops.can || busy}>上架操作</AdminActionMenu>
     <Button theme="borderless" disabled={!ops.can || busy} onClick={event => { trigger.current = event.currentTarget; open(row, 'marketVisibility'); }}>{row.marketVisible === false ? '允许展示' : '隐藏模型'}</Button>
+    {row.serviceMode === 'provider' && providerServices(row).length > 0 &&
+      <Button theme="borderless" onClick={event => openSupplies(event, row.id)}>渠道展示</Button>}
   </Space>;
   const stop = editing?.action === 'stopSales';
   const actionTitle = stop ? '下架' : editing?.visible ? '允许展示' : '隐藏模型';
 
+  if (params.get('resourceJson') === '1') return <ModelResourceJsonPage state={props.state} ops={ops} scope="market"/>;
   return <div className="semi-services sp-workspace">
     <ModelModuleHeading module="market">
+      <ModelResourceTransfer state={props.state} ops={ops} scope="market"/>
       <RadioGroup type="button" aria-label="模型广场视图" options={viewOptions} value={view}
         onChange={event => go({ view: event.target.value === 'list' ? 'list' : null }, { replace: true, preserveScroll: true })}/>
     </ModelModuleHeading>
     <div className="sp-filters">
-      <Input prefix={<IconSearch aria-hidden="true"/>} showClear aria-label="搜索模型展示名或模型编码" placeholder="模型展示名 / 模型编码" value={query} onChange={q => changeFilters({ q: q || null })}/>
+      <Input prefix={<IconSearch aria-hidden="true"/>} showClear aria-label="搜索模型展示名、模型编码、模型服务 ID 或模型调用标识" placeholder="模型展示名 / 模型编码 / 模型服务 ID / 模型调用标识" value={query} onChange={q => changeFilters({ q: q || null })}/>
       {filters.map(({ key, label, options }) => <Field key={key} label={label}>
         <Choice label={`筛选${label}`} value={params.get(key) || 'all'} options={options}
           onChange={value => changeFilters({ [key]: value === 'all' ? null : value })}/>
@@ -272,7 +312,7 @@ export default function ModelMarket(props) {
       </DndContext>
       <AdminPagination className="market-card-pagination" total={rows.length} pageSize={pageSize} currentPage={currentPage} onPageChange={changePage}/>
     </> : <Empty description={emptyMessage}/> : <Table size="small" rowKey="id" dataSource={pageRows}
-      scroll={{ x: 1180 }} pagination={{ pageSize, currentPage, total: rows.length, onPageChange: changePage }} empty={emptyMessage}
+      scroll={{ x: 1690 }} pagination={{ pageSize, currentPage, total: rows.length, onPageChange: changePage }} empty={emptyMessage}
       onRow={row => ({
         className: dropTarget === row.id ? 'market-order-target' : undefined,
         onDragOver: event => {
@@ -289,17 +329,34 @@ export default function ModelMarket(props) {
         },
       })} columns={[
       { title: '序号', width: 88, render: (_, row) => orderButton(row) },
-      { title: '模型展示名', dataIndex: 'name' },
-      { title: '模型编码', dataIndex: 'modelId' },
+      { title: '模型展示名', dataIndex: 'name', width:180 },
+      { title: '模型编码', width:180, render: (_,row)=><CopyId value={modelIdentity(props.state,row).canonical_slug} label="模型编码"/> },
+      { title: '模型服务 ID', width:260, render: (_,row)=><Space vertical align="start">{serviceReferences({...props.state,models:[row]}).map(service=><CopyId key={service.id} value={service.model_service_id} label="模型服务 ID" ellipsis={{showTooltip:true}}/>)}</Space> },
+      { title: '模型调用标识', width:200, render: (_, row) => <ModelCallIdentifiers model={row}/> },
       { title: '服务商与渠道', width: 260, render: (_, row) => <MarketSupplies groups={marketSupplyGroups(props.state, row)}/> },
-      { title: '上架状态', render: (_, row) => <AdminStatus value={serviceHeaderStatus(row).service}/> },
+      { title: '上架状态', render: (_, row) => <MarketListing model={row}/> },
       { title: '广场展示设置', render: (_, row) => <MarketVisibility model={row}/> },
-      { title: '操作', width: 206, fixed: 'right', render: (_, row) => actions(row) },
+      { title: '操作', width: 260, fixed: 'right', render: (_, row) => actions(row) },
     ]}/>}
-    {supplyModel && <Modal title="服务商与渠道" description={supplyModel.name} wide centered onClose={closeSupplies}
-      footer={<Button onClick={closeSupplies}>关闭</Button>}>
+    {contentModel && <MarketContentEditor state={props.state} model={props.state.models.find(model=>model.id===contentModel)} ops={ops} close={()=>ops.proceed(()=>{setContentModel(null);ops.dirty(false);})}/>}
+    {supplyModel && <Modal title="服务商与渠道" description={supplyModel.name} wide centered onClose={() => !busy && closeSupplies()}
+      footer={<Button disabled={busy} onClick={closeSupplies}>关闭</Button>}>
       <div className="market-supply-detail">
         <MarketSupplies groups={marketSupplyGroups(props.state, supplyModel)} expandedProviderId={supplyDetail.providerId}/>
+        {supplyModel.serviceMode === 'provider' && providerServices(supplyModel).length > 0 && (
+          <Table rowKey={offerKey} dataSource={providerServices(supplyModel)} pagination={false}
+            columns={[
+              { title: '渠道', render: (_, row) => row.channelName || props.state.providers.find(provider => provider.id === row.providerId)?.name || '—' },
+              { title: '模型服务 ID', render: (_,row)=><CopyId value={modelServiceIdentity(props.state,supplyModel,offerKey(row))} label="模型服务 ID"/> },
+              { title: '模型调用标识', dataIndex: 'callId', render: value => value || '待配置' },
+              { title: '上架状态', render: (_, row) => <Space vertical align="start" spacing={4}><AdminStatus value={row.listingStage === 'formal' ? '正式上架' : row.listingStage === 'gray' ? '灰度上架' : '已下架'}/>{row.callsEnabled === false && row.channelUnavailableReason && <Typography.Text type="tertiary" size="small">{row.channelUnavailableReason}</Typography.Text>}</Space> },
+              { title: '广场展示', render: (_, row) => <MarketVisibility model={row}/> },
+              { title: '操作', render: (_, row) => <Button theme="borderless" disabled={!ops.can} aria-disabled={busy}
+                aria-label={`${row.marketVisible === false ? '允许展示' : '隐藏'} ${row.callId || row.channelName || row.providerId}`}
+                onClick={event => { if (!busy) void toggleChannelVisibility(row, event.currentTarget); }}>{row.marketVisible === false ? '允许展示' : '隐藏'}</Button> },
+            ]}/>
+        )}
+        {ops.error && <Notice error>{ops.error}</Notice>}
       </div>
     </Modal>}
     {orderEdit && <Modal title="调整序号" description={orderEdit.name} onClose={() => !busy && closeOrder()} footer={<>
@@ -330,7 +387,7 @@ export default function ModelMarket(props) {
         } finally { setBusy(false); }
       }}>确认{stop ? '下架' : editing.visible ? '展示' : '隐藏'}</Button>
     </>}>
-      <p>{stop ? '下架后，客户无法新订购或调用此模型服务。' : editing.visible ? '允许符合上架、启用和客户授权条件的模型在用户侧广场展示。' : '从用户侧模型广场及其详情隐藏此模型。'}</p>
+      <p>{stop ? '下架后，客户无法新订购或调用此模型服务。' : editing.visible ? '允许符合上架、启动和客户授权条件的模型在用户侧广场展示。' : '从用户侧模型广场及其详情隐藏此模型。'}</p>
       {changed && <Notice error>服务配置已变化，请关闭后重新核对。</Notice>}
       {ops.error && <Notice error>{ops.error}</Notice>}
     </Modal>}

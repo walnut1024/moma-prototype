@@ -26,7 +26,10 @@ export function linkedAccountFixture(state, auth) {
     } else {
       if (next.users.some(item => item.id !== row.backendUserId && item.phone === row.phone)) throw new Error('后台用户手机号已被占用');
       ensure(next.users, { id: row.backendUserId, name: row.name, phone: row.phone, status: '正常' }, ['phone']);
-      ensure(next.memberships, { id: row.backendMembershipId, userId: row.backendUserId, tenantId: row.tenantId, role: '普通成员', status: '正常' }, ['userId', 'tenantId']);
+      const projectIds = next.projects.some(item => item.id === row.projectId && item.tenantId === tenant.id) ? [row.projectId] : [];
+      ensure(next.memberships, { id: row.backendMembershipId, userId: row.backendUserId, tenantId: row.tenantId, role: '普通成员', status: '正常', projectIds }, ['userId', 'tenantId']);
+      const member = next.memberships.find(item => item.id === row.backendMembershipId);
+      if (member.status === '正常' && member.canCreateProjects === undefined) member.canCreateProjects = true;
       ensure(login.memberships, { id: row.backendMembershipId, userId: row.id, enterpriseId: row.tenantId, enterprise: tenant.name, role: '普通成员', status: '已加入' }, ['userId', 'enterpriseId']);
     }
     ensure(login.accounts, { id: row.id, name: row.name, phone: row.phone, userType: row.userType, status: '正常' }, ['phone', 'userType']);
@@ -34,6 +37,16 @@ export function linkedAccountFixture(state, auth) {
     const link = { id: row.id, authUserId: row.id, spaceId, tenantId: row.tenantId, backendUserId: row.backendUserId, ...(row.backendMembershipId ? { backendMembershipId: row.backendMembershipId } : {}) };
     if (login.identityLinks.some(item => item.id !== link.id && item.authUserId === row.id && item.spaceId === spaceId)) throw new Error('用户身份映射存在冲突');
     ensure(login.identityLinks, link, Object.keys(link));
+    if (row.additionalSpace) {
+      const enterprise = next.tenants.find(item => item.id === row.additionalSpace && ['企业', '政府'].includes(item.type));
+      if (!enterprise) throw Error('项目演示所需企业空间缺失');
+      const membershipId = 'member-' + row.id + ':' + enterprise.id;
+      ensure(next.memberships, { id: membershipId, userId: row.backendUserId, tenantId: enterprise.id, role: '普通成员', status: '正常' }, ['userId', 'tenantId']);
+      ensure(login.memberships, { id: membershipId, userId: row.id, enterpriseId: enterprise.id, enterprise: enterprise.name, role: '普通成员', status: '已加入' }, ['userId', 'enterpriseId']);
+      const enterpriseLink = { id: membershipId, authUserId: row.id, spaceId: enterprise.id, tenantId: enterprise.id, backendUserId: row.backendUserId, backendMembershipId: membershipId };
+      if (login.identityLinks.some(item => item.id !== membershipId && item.authUserId === row.id && item.spaceId === enterprise.id)) throw Error('用户身份映射存在冲突');
+      ensure(login.identityLinks, enterpriseLink, Object.keys(enterpriseLink));
+    }
   }
   return { state: next, auth: login };
 }
@@ -53,7 +66,7 @@ export function prepareLinkedAccounts(storage = globalThis.localStorage) {
 }
 export function activeAdmin(state) {
   const account = state.admins.find(row => row.id === state.adminSession?.accountId);
-  if (!account || account.status !== '已启用') throw new Error('请先选择有效的后台 mock 账号');
+  if (!account || account.status !== '已启用') throw new Error('请先登录有效的后台账号');
   return account;
 }
 
@@ -66,7 +79,7 @@ export function switchLinkedUser(userId, storage = globalThis.localStorage) {
   if (!account) throw new Error('请先在研发人员注意中准备联动账号');
   if (account.phone !== fixture.phone || account.userType !== fixture.userType) throw new Error('Mock 账号身份冲突，请核对账号资料');
   const next = loginAuthAccount(auth, fixture.phone, fixture.userType, ['phone']);
-  const identity = resolveUserIdentity(state, next);
+  const identity = resolveUserIdentity(state, next, storage);
   if (identity.userId !== fixture.id || identity.tenantId !== fixture.tenantId) throw new Error('Mock 账号身份映射不匹配');
   if (auth.currentUserId === next.currentUserId && auth.activeSpace === next.activeSpace) return auth;
   return persistAuthState(auth, next, storage);

@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sections, pages, canAccessPage } from '../src/admin-v2/navigation.mjs';
+import { buildRequestTrace, readRequestBody } from '../src/admin-v2/call-log-detail.mjs';
+import { createCallLogSimulation, simulateLogRequest, routingDemoRequestId } from '../src/admin-v2/call-log-simulation.mjs';
 import {
-  attemptCapacity, callObservations, filterObservations, logCsv, observationBuckets, observationDrill,
-  observationFilters, observationGroups, observationGroupScope, observationHash, observationViewFilters, observationWindow, summarizeObservations,
+  attemptCapacity, callObservations, changeObservationTenant, compareLogRows, filterObservations, logCsv, observationBuckets, observationDrill,
+  observationFilters, observationGroups, observationGroupScope, observationHash, observationViewFilters, observationWindow,
+  searchObservationIdentities, summarizeObservations,
 } from '../src/admin-v2/call-observations.mjs';
 
 const now = Date.parse('2026-11-08T11:15:15+08:00');
@@ -55,10 +58,11 @@ test('request outcome and duration observations are independent of attempts and 
   assert.equal(request.channel, 'b');
   assert.equal(request.userName, '示例用户');
   assert.equal(request.keyName, '生产 Key');
-  assert.equal(request.modelIdentifier, 'model/v1');
+  assert.equal(request.callId, 'model/v1');
   assert.equal(request.keyDisplayId, 'ak-fixture');
   assert.equal(request.keyMasked, 'sensitiv*****ture');
-  assert.equal(rejected.modelIdentifier, 'model-default');
+  assert.equal(rejected.callId, undefined);
+  assert.equal(rejected.registeredModelId, 'model-default');
   assert.equal(rejected.keyMasked, null);
   assert.equal(rejected.provider, null);
   assert.equal(rejected.attempts.length, 0);
@@ -67,6 +71,26 @@ test('request outcome and duration observations are independent of attempts and 
   assert.ok(!JSON.stringify(data).includes('sensitive-fixture'));
   assert.equal(data.attempts[0].fallback, true);
   assert.equal(data.attempts[1].outcome, 'success');
+});
+
+test('tenant scope includes anonymous calls and narrows identity searches and filters independently', () => {
+  const rows = [
+    { id: 'human', at: 1, tenant: 'a', tenantName: 'Tenant A', user: 'user-a', userName: 'Alex', key: 'old-key', keyName: 'App' },
+    { id: 'application', at: 2, tenant: 'a', tenantName: 'Tenant A', key: 'old-key', keyName: 'App' },
+    { id: 'other', at: 3, tenant: 'b', tenantName: 'Tenant B', user: 'user-b', userName: 'Alex', key: 'key-b', keyDisplayId: 'ak-b', keyName: 'App' },
+  ];
+  const window = { start: 0, end: 4 };
+  assert.deepEqual(filterObservations(rows, { tenant: ['a'] }, window).map(row => row.id), ['human', 'application']);
+  assert.deepEqual(filterObservations(rows, { tenant: ['a'], user: ['user-a'] }, window).map(row => row.id), ['human']);
+  assert.deepEqual(filterObservations(rows, { tenant: ['a'], userRecord: 'uncollected' }, window).map(row => row.id), ['application']);
+  assert.deepEqual(searchObservationIdentities(rows, 'user', ['a'], 'alex').items.map(item => item.id), ['user-a']);
+  assert.deepEqual(searchObservationIdentities(rows, 'key', null, '').items, []);
+  assert.deepEqual(searchObservationIdentities(rows, 'key', null, 'app').items, []);
+  assert.deepEqual(searchObservationIdentities(rows, 'key', ['a'], 'app').items.map(item => item.id), ['old-key']);
+  assert.deepEqual(searchObservationIdentities(rows, 'key', null, 'AK-B').items.map(item => item.id), ['key-b']);
+  assert.equal(searchObservationIdentities(rows, 'key', ['a', 'b'], 'app', 1).hasMore, true);
+  assert.deepEqual(changeObservationTenant(rows, { user: ['user-a'], key: ['old-key', 'key-b'] }, ['b']),
+    { tenant: ['b'], user: null, key: ['key-b'] });
 });
 
 test('drill-down preserves the exact half-open window, view and failure conditions', () => {
@@ -127,6 +151,104 @@ test('capacity uses observed minutes and keeps absent attempt usage distinct fro
   assert.equal(attemptCapacity([], window).averageTpm, null);
 });
 
+test('log sort keeps uncollected values last in both directions and breaks ties by latest time', () => {
+  const rows = [
+    { id: 'missing', duration: null, at: now },
+    { id: 'old', duration: 20, at: now - 10 },
+    { id: 'new', duration: 20, at: now - 1 },
+    { id: 'zero', duration: 0, at: NaN },
+  ];
+  const sort = (field, direction) => [...rows].sort((a, b) => compareLogRows(a, b, field, direction)).map(row => row.id);
+  assert.deepEqual(sort('duration', 1), ['zero', 'new', 'old', 'missing']);
+  assert.deepEqual(sort('duration', -1), ['new', 'old', 'zero', 'missing']);
+  assert.deepEqual(sort('at', -1), ['missing', 'new', 'old', 'zero']);
+});
+
 test('CSV keeps missing and zero distinct, quotes names and prevents formula execution', () => {
   assert.equal(logCsv([['渠道,"A"', null, 0, '  =formula']]), '\ufeff"渠道,""A""","","0","\'  =formula"');
+});
+
+test('the routing demo shows group retry, cross-group switching and backup model under one request', () => {
+  const simulation = createCallLogSimulation(now);
+  const parent = callObservations(simulation.data).requests.find(row => row.id === routingDemoRequestId);
+  const trace = buildRequestTrace(parent, simulation.evidence[parent.id]);
+  assert.equal(parent.status, 200);
+  assert.equal(trace.attemptCount, 4);
+  assert.deepEqual(trace.nodes.filter(row => row.attempt).map(row => row.attempt.channelName), ['渠道 A','渠道 B','渠道 C','渠道 D']);
+  assert.deepEqual(trace.nodes.filter(row => row.attempt).map(row => row.attempt.upstreamModelId), [
+    'deepseek-v4-pro','deepseek-v4-pro','deepseek-v4-pro','deepseek-v4-flash',
+  ]);
+  assert.deepEqual(trace.nodes.filter(row => ['group-retry','group-switch','model-fallback'].includes(row.id)).map(row => row.label), [
+    '组内重试','跨组切换','切换备用模型服务',
+  ]);
+});
+
+test('a sorted attempt links to its original parent node even without an upstream ID', () => {
+  const simulation = createCallLogSimulation(now);
+  const { requests, attempts: upstream } = callObservations(simulation.data);
+  const parent = requests.find(row => row.requestId === 'req-73F2');
+  const trace = buildRequestTrace(parent, simulation.evidence[parent.id]);
+  const selected = upstream.filter(row => row.parentId === parent.id).sort((a, b) => compareLogRows(a, b, 'index', -1));
+  assert.deepEqual(selected.map(row => trace.nodes.find(node => node.id === row.id)?.attempt.index), [2, 1]);
+  assert.equal(selected[1].upstreamRequestId, undefined);
+  assert.equal(trace.nodes.find(node => node.id === selected[1].id).offset, 20);
+  assert.equal(trace.attemptCount, 2);
+  assert.equal(trace.longest.id, selected[1].id);
+});
+
+test('a closed retention simulation returns an ID without changing either history view', () => {
+  const initial = createCallLogSimulation(now);
+  const recorded = simulateLogRequest(initial, now);
+  const closed = simulateLogRequest({ ...recorded, retainNew: false }, now + 1);
+  assert.equal(closed.data, recorded.data);
+  assert.equal(closed.evidence, recorded.evidence);
+  assert.notEqual(closed.latestRequestId, recorded.latestRequestId);
+  const { requests, attempts: upstream } = callObservations(closed.data);
+  const window = observationWindow(observationFilters(undefined, '24h'), now + 2);
+  const search = (rows, query) => filterObservations(rows, { query }, window, { allowUntimed: rows === upstream });
+  assert.equal(search(requests, closed.latestRequestId).length, 0);
+  assert.equal(search(upstream, closed.latestRequestId).length, 0);
+  assert.equal(search(requests, recorded.latestRequestId).length, 1);
+  assert.equal(search(requests, 'req-73F2').length, 1);
+  assert.equal(search(upstream, 'req-73F2').length, 2);
+  assert.equal(readRequestBody(closed.evidence['req-61AE']).state, 'available');
+  const resumed = simulateLogRequest({ ...closed, retainNew: true }, now + 2);
+  assert.equal(resumed.data.requests.some(row => row.requestId === closed.latestRequestId), false);
+  assert.equal(resumed.evidence[resumed.latestRequestId].traceState, 'not-retained');
+});
+
+test('trace distinguishes missing start, invalid interval and confirmed zero attempts', () => {
+  const simulation = createCallLogSimulation(now);
+  const { requests } = callObservations(simulation.data);
+  const read = id => {
+    const row = requests.find(request => request.id === id);
+    return buildRequestTrace(row, simulation.evidence[id]);
+  };
+  const partial = read('req-19BF');
+  assert.equal(partial.attemptCount, null);
+  assert.equal(partial.recordedCount, 1);
+  assert.equal(partial.nodes[0].attempt.index, 2);
+  assert.equal(partial.nodes[0].offset, null);
+  assert.equal(partial.nodes[0].duration, 410);
+  assert.equal(partial.hasChart, false);
+  assert.equal(read('req-49C1').attemptCount, 0);
+  assert.equal(read('req-52C0').attemptCount, 1);
+  const interrupted = requests.find(row => row.id === 'req-82D1');
+  assert.equal(interrupted.status, 200);
+  assert.equal(interrupted.outcome, 'failed');
+  const invalid = buildRequestTrace({ ...interrupted, duration: 10 });
+  assert.equal(invalid.nodes[0].timingConflict, true);
+  assert.equal(invalid.hasChart, false);
+});
+
+test('body permissions and per-segment retention are enforced before presentation', () => {
+  const simulation = createCallLogSimulation(now);
+  const body = simulation.evidence['req-61AE'].body;
+  assert.deepEqual(readRequestBody({ body: { ...body, allowed: false } }), { state: 'denied', segments: [] });
+  assert.equal(readRequestBody(simulation.evidence['req-73F2']).state, 'not-retained');
+  const details = readRequestBody(simulation.evidence['req-52C0']);
+  assert.equal(details.segments[0].state, 'expired');
+  assert.equal(details.segments[0].text, null);
+  assert.match(details.segments[1].text, /up-A-6C0/);
+  assert.doesNotMatch(JSON.stringify(callObservations(simulation.data)), /列出三个服务巡检项/);
 });

@@ -11,17 +11,17 @@ test('drafts stay with their user/customer and preserve local attachments across
   assert.deepEqual(readExperienceDraft('B:org','text'),{});
   assert.deepEqual(readExperienceDraft('A:other-org','text'),{});
   assert.equal(readExperienceDraft('A:org','text').file,draft.file);
-  const persisted=JSON.parse(rows.get('moma-5120-draft:A:org:text'));
+  const persisted=JSON.parse(rows.get('moma-5120-workspace-v2:draft:A:org:text'));
   assert.equal(persisted.text,'A draft'); assert.equal(persisted.images,undefined);assert.equal(persisted.file,undefined);assert.equal(persisted.messages[0].owner,'A:org');
   saveExperienceDraft('','text',{text:'anonymous'});assert.equal(rows.size,1);
 });
 
 test('corrupt drafts and failed storage writes surface errors without replacing persisted data', t => {
-  const descriptor=Object.getOwnPropertyDescriptor(globalThis,'localStorage'),rows=new Map([['moma-5120-draft:broken:voice','{invalid']]);
+  const descriptor=Object.getOwnPropertyDescriptor(globalThis,'localStorage'),rows=new Map([['moma-5120-workspace-v2:draft:broken:voice','{invalid']]);
   Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:key=>rows.get(key)??null,setItem:()=>{throw Error('quota');}}});
   t.after(()=>{if(descriptor)Object.defineProperty(globalThis,'localStorage',descriptor);else delete globalThis.localStorage;});
   assert.throws(()=>readExperienceDraft('broken','voice'));
   assert.throws(()=>saveExperienceDraft('quota','voice',{text:'recover in this tab'}),/quota/);
-  assert.equal(rows.get('moma-5120-draft:broken:voice'),'{invalid');
+  assert.equal(rows.get('moma-5120-workspace-v2:draft:broken:voice'),'{invalid');
   assert.equal(rows.size,1);
 });

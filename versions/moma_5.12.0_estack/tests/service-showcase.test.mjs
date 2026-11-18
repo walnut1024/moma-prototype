@@ -52,9 +52,9 @@ test('explicit preparation preserves unrelated records and old histories; replay
   assert.equal(prepareServiceShowcase(next), next);
 });
 
-test('new workspace starts with two cases; existing workspace changes only through explicit action', () => {
+test('new browser workspace starts without demonstration cases', () => {
   const values = new Map(), storage = { getItem: key => values.get(key) || null, setItem: (key, value) => values.set(key, value) };
-  assert.equal(serviceDirectoryModels(loadAdminState(storage)).length, 2);
+  assert.equal(serviceDirectoryModels(loadAdminState(storage)).length, 0);
   const raw = storage.getItem(STORAGE_KEY); loadAdminState(storage); assert.equal(storage.getItem(STORAGE_KEY), raw);
   const existing = withAdminSession(createAdminSeed()); values.set(STORAGE_KEY, JSON.stringify(existing));
   assert.equal(loadAdminState(storage).models.some(row => row.serviceShowcase), false);
@@ -102,12 +102,18 @@ test('all two fixtures complete actual mock channel tests, trial, publication an
   assert.ok(serviceDirectoryModels(state).every(model => model.listingStatus === '已上架'));
   assert.equal(getMockServiceSnapshots().length, 3);
   assert.ok(getMockServiceSnapshots().every(service => inspectMockPublication(service.id).ready));
+  const beforeOrder = directorySnapshot(storage);
+  assert.ok(beforeOrder.models.filter(row => row.callId && row.serviceAvailable === false).some(row => row.reason.includes('订购')));
+  state.orders.push(...beforeOrder.models.filter(row => row.orderable).map(row => ({
+    id:'test-order-' + row.id, tenantId:'tenant-gov', serviceId:row.id, status:'生效中',
+  })));
+  storage.setItem(STORAGE_KEY, JSON.stringify(state));
   const snapshot = directorySnapshot(storage), cards = marketModels(snapshot.models);
   assert.equal(cards.length, 2);
   assert.equal(cards.flatMap(row => row.services).length, 3);
   for (const card of cards) for (const offer of card.services) {
     assert.equal(offer.callable, true);
-    assert.equal(validateExperience(beginExperience(offer.id, 'text')), true);
+    assert.equal(validateExperience(beginExperience(offer.id, 'text', {projectId:'project-1-1'})), true);
     const model = state.models.find(row => row.id === offer.modelKey), service = routingServices(state).find(row => row.id === offer.id);
     assert.equal(offer.name, model.name);
     assert.equal(offer.releaseDate, model.profile.releaseDate);

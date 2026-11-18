@@ -197,7 +197,7 @@ function PackageEditor({ record, mode, canWrite, canManageTypes, packageTypes, c
                 <Button type="tertiary" disabled={busy} onClick={event => setTypeDialog({ ...selectedCustomType, trigger: event.currentTarget })}>删除类型</Button>
               </div>}
             </div>
-            {record && <Typography.Paragraph type="tertiary" size="small">套餐编号 {record.id}</Typography.Paragraph>}
+            {record && <Typography.Paragraph type="tertiary" size="small">套餐编号 {record.packageNumber || record.id}</Typography.Paragraph>}
           </fieldset>
           <PackageModelSelection models={modelOptions} selected={selectedModelIds} change={ids => change('modelIds', ids)} locked={locked} readOnly={readOnly}/>
           <fieldset><legend>额度与售价</legend>

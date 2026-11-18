@@ -1,6 +1,6 @@
 import { Children, cloneElement, isValidElement, useId } from 'react';
 import { Banner, Button, Form, Input, InputNumber, Select, TextArea, Space, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
-import { IconHelpCircle } from '@douyinfe/semi-icons';
+import { IconCopy, IconHelpCircle, IconTick } from '@douyinfe/semi-icons';
 import { AdminModal, AdminSideSheet } from './AdminOverlay';
 import { modelFieldDescriptions } from './model-field-descriptions';
 import './semi-services.css';
@@ -55,8 +55,33 @@ export function MultiChoice({ label, choices, value = [], onChange, disabled, gr
     </Select>
   </>;
 }
-export function CopyId({ value, label = '对外调用标识', ellipsis }) {
-  return <Typography.Text className="ss-code" ellipsis={ellipsis} copyable={{ content: value, successTip: `${label} 已复制`, onError: () => Toast.error('复制失败，请选择文本复制') }}>{value}</Typography.Text>;
+export function CopyId({ value, label = '模型调用标识', ellipsis, displayValue = value, alignCopy = false, copyAtStart = false }) {
+  const copied = `${label} 已复制`;
+  if (copyAtStart) {
+    if (!value) return '—';
+    const copyLabel = '复制 ' + label;
+    const button = <Button theme="borderless" size="small" aria-label={copyLabel} icon={<IconCopy aria-hidden="true"/>}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          Toast.success(copied);
+        } catch {
+          Toast.error('复制失败，请选择文本复制');
+        }
+      }}/>;
+    if (ellipsis) {
+      return <Tooltip content={<span className="ss-code-tooltip">{value}</span>} closeOnEsc>
+        <span className="ss-code-leading ss-code-single-line">{button}<code>{displayValue}</code></span>
+      </Tooltip>;
+    }
+    return <span className="ss-code-leading">
+      <Tooltip content={copyLabel}>{button}</Tooltip>
+      <code>{displayValue}</code>
+    </span>;
+  }
+  const successTip = alignCopy ? <span role="status"><IconTick aria-hidden="true"/><span className="sr-only">{copied}</span></span> : copied;
+  return <Typography.Text className={alignCopy ? 'ss-code ss-code-aligned' : 'ss-code'} ellipsis={ellipsis}
+    copyable={{ content: value, successTip, onError: () => Toast.error('复制失败，请选择文本复制') }}>{displayValue}</Typography.Text>;
 }
 export function FieldLabel({ name, description }) {
   const help = description || modelFieldDescriptions[name];

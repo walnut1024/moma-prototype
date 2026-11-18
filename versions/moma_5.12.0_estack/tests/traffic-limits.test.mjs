@@ -1,10 +1,11 @@
+import { withSignedInAccount } from './auth-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAdminSeed, parseAdminState, serializeAdminState, STORAGE_KEY } from '../src/admin-v2/store.js';
 import { commitAdminState } from '../src/admin-v2/state-transaction.js';
 import { accountTraffic, effectiveTraffic, trafficAccounts } from '../src/admin-v2/traffic-limits.js';
 import { parseTrafficRate, trafficRateText } from '../src/admin-v2/traffic-rates.js';
-import { emptyAuthState, persistAuthState, registerAuthAccount } from '../src/auth-state.mjs';
+import { emptyAuthState, persistAuthState } from '../src/auth-state.mjs';
 import { withAdminSession } from './admin-session-fixture.mjs';
 
 const pair = rpm => ({ rpm, tpm: rpm * 1000 });
@@ -20,7 +21,7 @@ test('personal signup and enterprise onboarding use the current global default',
   const values = new Map([[STORAGE_KEY, serializeAdminState(state)]]);
   const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
   const auth = emptyAuthState();
-  const registered = persistAuthState(auth, registerAuthAccount(auth, { phone: '13800001234' }), storage);
+  const registered = persistAuthState(auth, withSignedInAccount(auth, { phone: '13800001234' }), storage);
   state = parseAdminState(storage.getItem(STORAGE_KEY));
   const accountIds = ['traffic-test-company', `personal:${registered.currentUserId}`];
   for (const id of accountIds) {

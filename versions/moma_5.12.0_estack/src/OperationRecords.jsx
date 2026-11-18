@@ -1,14 +1,27 @@
 import {useTenantData} from './useTenantData';
 import {LINK_EVENT} from './service-access.mjs';
 import { useState } from 'react';
+import { Banner, Button, DatePicker, Empty, Input, Table } from '@douyinfe/semi-ui';
 import { Download, History, RefreshCw } from 'lucide-react';
 import FrontPageHeader from './components/FrontPageHeader';
-import { Button } from './components/ui/button';
-import { Input } from './components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './components/ui/table';
-import { DEFAULT_PAGE_SIZE, FilterPagination, FilterReset } from './components/FilterControls';
+import { AdminPagination } from './admin-v2/AdminTable';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from './components/FilterControls';
 import { displayBusinessCopy } from './display-copy.mjs';
-import { filterOperationRecords, operationRecordsCsv, } from './operation-records.mjs';
+import { filterOperationRecords, operationRecordsCsv } from './operation-records.mjs';
+
+const columns = [
+  { title: '操作时间', dataIndex: 'time', width: 172 },
+  { title: '操作人', dataIndex: 'actor', width: 120, render: actor => actor || '—' },
+  { title: '功能', width: 120, render: () => '组织及成员' },
+  { title: '操作内容', dataIndex: 'description' },
+];
+
+const dateText = date => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export default function OperationRecords() {
   const tenant=useTenantData();
@@ -16,9 +29,15 @@ export default function OperationRecords() {
   const [filters, setFilters] = useState({ query: '', start: '', end: '' });
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
-  const records = data.records.map(record => ({ ...record, description: displayBusinessCopy(record.description) }));
+  const records = data.records.map((record, index) => ({
+    ...record, rowKey: record.id || `${record.time}-${index}`, description: displayBusinessCopy(record.description),
+  }));
   const filtered = filterOperationRecords(records, filters);
   const invalidRange = filters.start && filters.end && filters.start > filters.end;
+  const error = data.error || (invalidRange ? '开始日期不能晚于结束日期，请调整日期范围。' : '');
+  const total = error ? 0 : filtered.length;
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(total / size)));
+  const visible = error ? [] : filtered.slice((currentPage - 1) * size, currentPage * size);
   const update = value => { setFilters(current => ({ ...current, ...value })); setPage(1); };
   const reset = () => { setFilters({ query: '', start: '', end: '' }); setPage(1); };
   const exportRecords = () => {
@@ -30,18 +49,35 @@ export default function OperationRecords() {
     <FrontPageHeader title="操作记录" description="查看组织架构、成员归属与管理权限的变更记录，保留最近 200 条" icon={History} />
     <section className="operation-panel" aria-label="操作记录列表">
       <div className="operation-filters">
-        <Input className="operation-search" aria-label="搜索操作记录" placeholder="搜索操作人、操作内容" value={filters.query} onChange={event => update({ query: event.target.value })} />
-        <div className="operation-dates"><span>操作日期</span><Input type="date" aria-label="操作开始日期" value={filters.start} max={filters.end || undefined} onChange={event => update({ start: event.target.value })} /><span>—</span><Input type="date" aria-label="操作结束日期" value={filters.end} min={filters.start || undefined} onChange={event => update({ end: event.target.value })} /></div>
-        <FilterReset onClick={reset} />
-        <Button variant="outline" size="icon" aria-label="刷新操作记录" title="刷新操作记录" onClick={() => { window.dispatchEvent(new Event(LINK_EVENT)); setPage(1); }}><RefreshCw /></Button>
-        <Button variant="outline" size="icon" aria-label="导出操作记录" title="导出操作记录" disabled={!!data.error || !!invalidRange || !filtered.length} onClick={exportRecords}><Download /></Button>
+        <Input className="operation-search" aria-label="搜索操作记录" placeholder="搜索操作人、操作内容" value={filters.query} onChange={query => update({ query })} showClear />
+        <div className="operation-dates">
+          <span>操作日期</span>
+          <span id="operation-start-label" className="sr-only">操作开始日期</span>
+          <DatePicker aria-labelledby="operation-start-label" placeholder="开始日期" format="yyyy-MM-dd" value={filters.start || null} showClear
+            disabledDate={date => Boolean(filters.end && dateText(date) > filters.end)}
+            onChange={(_, start) => update({ start: start || '' })} />
+          <span aria-hidden="true">—</span>
+          <span id="operation-end-label" className="sr-only">操作结束日期</span>
+          <DatePicker aria-labelledby="operation-end-label" placeholder="结束日期" format="yyyy-MM-dd" value={filters.end || null} showClear
+            disabledDate={date => Boolean(filters.start && dateText(date) < filters.start)}
+            onChange={(_, end) => update({ end: end || '' })} />
+        </div>
+        <Button type="tertiary" theme="borderless" onClick={reset}>重置筛选</Button>
+        <Button type="tertiary" aria-label="刷新操作记录" title="刷新操作记录" icon={<RefreshCw size={16} aria-hidden="true" />} onClick={() => { window.dispatchEvent(new Event(LINK_EVENT)); setPage(1); }} />
+        <Button type="tertiary" aria-label="导出操作记录" title="导出操作记录" icon={<Download size={16} aria-hidden="true" />} disabled={!total} onClick={exportRecords} />
       </div>
-      {(data.error || invalidRange) && <p className="operation-error" role="alert">{data.error || '开始日期不能晚于结束日期，请调整日期范围。'}</p>}
-      <div className="operation-table-scroll"><Table className="operation-table"><TableHeader><TableRow>{['操作时间', '操作人', '功能', '操作内容'].map(label => <TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>
-        {!data.error && !invalidRange && filtered.slice((page - 1) * size, page * size).map((record, index) => <TableRow key={record.id || `${record.time}-${index}`}><TableCell>{record.time}</TableCell><TableCell>{record.actor || '—'}</TableCell><TableCell>组织及成员</TableCell><TableCell>{record.description}</TableCell></TableRow>)}
-        {!data.error && !invalidRange && !filtered.length && <TableRow><TableCell colSpan={4}><div className="operation-empty"><History aria-hidden="true" className="mx-auto mb-3 size-6" /><strong>{records.length ? '没有匹配的操作记录' : '暂无操作记录'}</strong><p>{records.length ? '调整搜索或日期条件后重试。' : '组织架构和成员信息发生变更后，记录会显示在这里。'}</p>{records.length > 0 && <Button variant="outline" onClick={reset}>重置筛选</Button>}</div></TableCell></TableRow>}
-      </TableBody></Table></div>
-      <FilterPagination total={invalidRange || data.error ? 0 : filtered.length} page={page} size={size} onPageChange={setPage} onSizeChange={value => { setSize(value); setPage(1); }} />
+      {error && <Banner type="danger" description={error} closeIcon={null} />}
+      <div className="operation-table-scroll" tabIndex={visible.length ? 0 : undefined} aria-label="操作记录表格，可横向滚动">
+        <Table className="operation-table" columns={columns} dataSource={visible} pagination={false} size="small"
+          rowKey="rowKey"
+          scroll={{ x: visible.length ? 680 : undefined, y: 'max(240px, calc(100dvh - 360px))' }}
+          empty={error ? null : <Empty title={records.length ? '没有匹配的操作记录' : '暂无操作记录'}
+            description={records.length ? '调整搜索或日期条件后重试。' : '组织架构和成员信息发生变更后，记录会显示在这里。'}>
+            {records.length > 0 && <Button theme="light" onClick={reset}>重置筛选</Button>}
+          </Empty>} />
+      </div>
+      <AdminPagination className="operation-pagination" total={total} currentPage={currentPage} pageSize={size} pageSizeOpts={PAGE_SIZES}
+        showSizeChanger onPageChange={setPage} onPageSizeChange={value => { setSize(value); setPage(1); }} />
     </section>
   </div>;
 }

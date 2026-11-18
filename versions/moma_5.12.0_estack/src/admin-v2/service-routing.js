@@ -1,4 +1,5 @@
-import { offerKey, providerOffer } from '../service-access.mjs';
+import { resourceId } from '../resource-id.mjs';
+import { offerKey, providerOffer, serviceCallsEnabled } from '../service-access.mjs';
 import { ROUTING_POLICIES, unifiedRouteStrategies, withinRouteLimits } from './routing-policy.js';
 import { modelSupplies, availableSupplies, activeSupplyPrice, supplyModelUrl, priceItems } from './model-management.js';
 import { connectionFingerprint, connectionBlockReason } from './connection-state.js';
@@ -6,11 +7,14 @@ import { catalogueChannels, channelBlockReason, channelUrl } from './provider-ch
 import { providerServices, providerServiceId, serviceChannelId, serviceChannelCosts } from './service-workspace.js';
 import { billingItemKey } from './provider-catalogue-pricing.js';
 import { routeMappingStatus } from './service-route-mapping.js';
-import { mappingReadiness } from './service-model-mappings.js';
+import { forwardingTargets, mappingReadiness } from './service-model-mappings.js';
+import { normalizeForwarding, validateForwarding } from './service-route-forwarding.js';
 
 export const ROUTING_STRATEGIES = { fixed:'固定', random:'随机分流', weighted:'加权随机路由', priority_weighted:'优先级 + 加权分流', latency:'最低延迟路由', load:'最少并发路由', tpm:'最低 TPM 路由', cost:'最低成本路由', priority:'主备优先', ...Object.fromEntries(Object.entries(ROUTING_POLICIES).map(([id,item])=>[id,item.label])) };
 const GROUP_STRATEGIES=['fixed','random','weighted','latency','load','tpm','cost'];
 export const ROUTE_ADVANCED_DEFAULTS={timeoutSeconds:60,maxRetries:0,failureThreshold:3,recoverySeconds:30,latencyWindowSeconds:60,costBasis:'input'};
+export const ROUTE_RETRY_REASONS = [['timeout', '上游超时'], ['429', '上游限流（429）'], ['5xx', '上游服务异常（5xx）']];
+export const ROUTE_RETRY_DEFAULTS = { withinGroup: 0, acrossGroups: 0, maxAttempts: 1, reasons: [] };
 // shortcut: these service-level prototype versions do not execute gateway traffic; production needs a server-side publisher.
 
 function costRevision(price) {
@@ -36,7 +40,7 @@ export function routingChannels(state, service, at = Date.now(), { runtime = fal
     if (!reason && !ready.has(supply.id)) reason='平台模型映射或能力需验证';
     if (!reason && !url) reason='请求地址待完善';
     if (!reason && runtime && (!costs.length || costs.some(item=>item.amount==null))) reason='渠道供应成本待配置';
-    const row={...supply,channelId:channel ? serviceChannelId(channel) : supply.channelId || supply.endpointId,channelUpdatedAt:channel?.updatedAt,channelHealth:channel?.health,channelName:channel?.name || supply.endpoint?.name,verifiedAt:channel?.health?.testedAt || supply.verifiedAt,url,costItems:costs,costVersion:costRevision([channel?.pricing,activeSupplyPrice(state,supply.id,at)]),p95LatencyMs:metric([channel?.p95LatencyMs,channel?.metrics?.p95LatencyMs,supply.endpoint?.p95LatencyMs,supply.endpoint?.metrics?.p95LatencyMs]),activeRequests:metric([channel?.activeRequests,channel?.metrics?.activeRequests,supply.endpoint?.activeRequests,supply.endpoint?.metrics?.activeRequests],true)};
+    const row={...supply,apiAddresses:channel?.apiAddresses,channelId:channel ? serviceChannelId(channel) : supply.channelId || supply.endpointId,channelUpdatedAt:channel?.updatedAt,channelHealth:channel?.health,channelName:channel?.name || supply.endpoint?.name,verifiedAt:channel?.health?.testedAt || supply.verifiedAt,url,costItems:costs,costVersion:costRevision([channel?.pricing,activeSupplyPrice(state,supply.id,at)]),p95LatencyMs:metric([channel?.p95LatencyMs,channel?.metrics?.p95LatencyMs,supply.endpoint?.p95LatencyMs,supply.endpoint?.metrics?.p95LatencyMs]),activeRequests:metric([channel?.activeRequests,channel?.metrics?.activeRequests,supply.endpoint?.activeRequests,supply.endpoint?.metrics?.activeRequests],true)};
     for(const key of ['tokensPerMinute','requestsPerMinute','rpmLimit','tpmLimit'])row[key]=key.endsWith('Limit')?[channel?.[key],channel?.metrics?.[key],supply.endpoint?.[key],supply.endpoint?.metrics?.[key]].find(value=>value!=null) ?? null:metric([channel?.[key],channel?.metrics?.[key],supply.endpoint?.[key],supply.endpoint?.metrics?.[key]],true);
     const mapping=routeMappingStatus(state,{...service,callId},row);
     if (!reason && !mapping.valid) reason=mapping.reason;
@@ -48,12 +52,15 @@ export function routingChannels(state, service, at = Date.now(), { runtime = fal
 export const serviceRoute = (state, serviceId) => (state.serviceRoutes || []).find(item => item.serviceId === serviceId);
 export const activeRouteVersion = route => route?.versions.find(item => item.version === route.activeVersion);
 export const lastRouteVersion = route => route?.versions.reduce((last,item)=>!last || item.version>last.version?item:last,null);
-export const routeStopReason = service => service.model.listingStatus==='已上架' && service.model.callsEnabled!==false && (!service.providerId || providerOffer(service.model,offerKey(service))?.callsEnabled!==false) ? (service.providerId?'请先停服当前服务商，再停用路由。其他服务商不受影响。':'请先在模型页头下架并停用服务，再停用路由。隐藏模型不能代替停服。') : '';
+export const routeStopReason = service => serviceCallsEnabled(service.model, providerOffer(service.model, offerKey(service)))
+  ? '请先停止服务，再停用对应路由。' : '';
 export const emptyRouteConfig = service => ({ strategy:service?.mode==='standard'?'weighted':'fixed', groups:[{id:'P1',name:'默认组',strategy:service?.mode==='standard'?'weighted':'fixed'}], channels: [], autoFailover:false, excludeAbnormal:true, autoRecover:false, advanced:{...ROUTE_ADVANCED_DEFAULTS} });
 
 export function routeGroups(config) {
   return config?.groups || [{id:'P1',name:'主用组',strategy:GROUP_STRATEGIES.includes(config?.strategy)?config.strategy:'weighted'}];
 }
+
+export const routeGroupLabel = order => `P${order}`;
 
 export function routeSourceVersion(state, service) {
   return JSON.stringify([service.id, service.model.updatedAt, service.model.capabilities, routingChannels(state, service).sort((a,b)=>a.id.localeCompare(b.id)).map(item => [item.id, item.channelId, item.channelUpdatedAt, item.channelHealth, item.reason, item.mapping, item.p95LatencyMs, item.activeRequests, item.tokensPerMinute, item.requestsPerMinute, item.rpmLimit, item.tpmLimit, item.provider?.id, item.endpointId, item.upstreamModelId, item.status, item.validationStatus, item.capabilities, item.updatedAt, item.endpoint?.updatedAt, item.endpoint && connectionFingerprint(item.endpoint), item.endpoint?.connectionTest, item.provider?.status, item.costVersion])]);
@@ -77,7 +84,7 @@ export function normalizeRouteConfig(input) {
     const groupId=row.groupId ?? groups[0].id,group=groups.find(item=>item.id===groupId);
     if (!group) throw new Error('渠道所属优先级组不存在');
     const text = String(row.weight ?? '').trim() || '0';
-    if (!/^\d+(?:\.\d{1,2})?$/.test(text) || Number(text)>100) throw new Error('渠道权重须为 0–100，最多两位小数');
+    if (!/^\d+(?:\.\d{1,2})?$/.test(text) || !Number.isSafeInteger(Math.trunc(Number(text)))) throw new Error('请输入有效的渠道权重，最多两位小数');
     const priority=row.priority ?? index+1;
     if (!/^\d+$/.test(String(priority)) || Number(priority)<1 || Number(priority)>1000) throw new Error('渠道优先级须为 1–1000 的整数');
     return { supplyId: row.supplyId, enabled: row.enabled !== false, groupId, weight:Number(text), priority:Number(priority), ...(row.backup === true ? {backup:true} : {}) };
@@ -91,7 +98,23 @@ export function normalizeRouteConfig(input) {
   }
   advanced.costBasis=input.advanced?.costBasis ?? advanced.costBasis;
   if (!['input','output','total'].includes(advanced.costBasis)) throw new Error('请选择输入、输出或合计成本口径');
-  return { strategy: input.strategy, groups, channels, autoFailover: input.autoFailover === true, excludeAbnormal:input.excludeAbnormal!==false, autoRecover:input.autoRecover!==false, advanced };
+  const retry = input.retry == null ? null : normalizeRouteRetry(input.retry);
+  const forwarding = input.forwarding === undefined ? [] : normalizeForwarding(input.forwarding);
+  return { strategy: input.strategy, groups, channels, autoFailover: input.autoFailover === true, excludeAbnormal:input.excludeAbnormal!==false, autoRecover:input.autoRecover!==false, advanced, ...(retry ? {retry} : {}), ...(forwarding.length ? {forwarding} : {}) };
+}
+
+export function normalizeRouteRetry(input) {
+  const {withinGroup, acrossGroups, maxAttempts, reasons} = input;
+  if (![withinGroup, acrossGroups, maxAttempts].every(Number.isSafeInteger) ||
+      withinGroup < 0 || withinGroup > 10 || acrossGroups < 0 || acrossGroups > 9 ||
+      maxAttempts < 1 || maxAttempts > 20) throw Error('请填写有效的组内重试、跨组切换和总尝试上限');
+  if (!Array.isArray(reasons) || new Set(reasons).size !== reasons.length ||
+      reasons.some(reason => !ROUTE_RETRY_REASONS.some(([id]) => id === reason))) throw Error('请选择有效的重试触发条件');
+  if (withinGroup || acrossGroups) {
+    if (!reasons.length) throw Error('启用重试时至少选择一个触发条件');
+    if (maxAttempts < 2) throw Error('启用重试时总尝试上限至少为 2 次');
+  }
+  return {withinGroup, acrossGroups, maxAttempts, reasons};
 }
 
 export function comparableRouteCosts(channels,basis) {
@@ -111,7 +134,7 @@ export function comparableRouteCosts(channels,basis) {
 }
 
 function validateSelectionStrategy(strategy,rows,candidates,config) {
-  if (strategy==='weighted' && (rows.some(row=>row.weight<=0) || rows.reduce((sum,row)=>sum+Math.round(row.weight*100),0)!==10000)) throw new Error('参与分流的渠道权重须大于 0，且合计必须等于 100%');
+  if (strategy==='weighted' && rows.some(row=>row.weight<=0)) throw new Error('参与分流的渠道权重须大于 0');
   const channels=rows.map(row=>candidates.find(item=>item.id===row.supplyId));
   if (strategy==='fixed') {
     if (rows.length!==1) throw new Error('固定策略只能选择一个供应渠道');
@@ -127,10 +150,12 @@ function validateModeSelection(service, config) {
   const selected = config.channels.filter(row => row.enabled);
   const backups = config.channels.filter(row => row.backup);
   if (service.mode === 'standard') {
+    if (config.forwarding) throw Error('接口路由仅适用于渠道直选服务');
     if (!unifiedRouteStrategies.includes(config.strategy)) throw Error('统一模型服务模式仅支持加权随机、最少并发、最低 TPM、最低延迟和最低成本五种路由策略');
     if (backups.length) throw Error('统一模型服务模式在参与路由的渠道内执行故障转移');
   } else {
     if (config.strategy !== 'fixed') throw Error('渠道直选模式只能选择一个主渠道');
+    if (config.retry) throw Error('渠道直选服务不支持优先级组重试');
     if (selected.filter(row => !row.backup).length > 1) throw Error('渠道直选模式只能选择一个主渠道');
     if (backups.length > 1 || backups.some(row => !row.enabled) || backups.length && !config.autoFailover) throw Error('故障转移只能启用一个备用渠道');
   }
@@ -140,18 +165,26 @@ export function validateRouteConfig(state, service, input, requireHealthy = true
   const config = normalizeRouteConfig(input);
   validateModeSelection(service, config);
   const selected = config.channels.filter(item => item.enabled);
-  if (!selected.length) throw new Error('至少选择一个参与调度的供应渠道');
+  if (!selected.length) throw new Error(config.strategy === 'weighted'
+    ? `${routeGroupLabel(1)} 至少需要一个参与调度的渠道` : '至少选择一个参与调度的供应渠道');
   const candidates = routingChannels(state, service);
+  if (config.forwarding) {
+    const primary = candidates.find(channel => channel.id === selected.find(row => !row.backup)?.supplyId);
+    validateForwarding(service.model, config.forwarding, forwardingTargets(service, primary));
+  }
   for (const row of selected) {
     const channel = candidates.find(item => item.id === row.supplyId);
     if (!channel) throw new Error('所选渠道不属于当前模型或指定服务商，请重新选择');
     if (requireHealthy && !channel.available) throw new Error(`${channel.provider?.name || row.supplyId}：${channel.reason}`);
   }
   if (config.channels.some(row=>!candidates.some(channel=>channel.id===row.supplyId))) throw new Error('所选渠道不属于当前模型或指定服务商，请重新选择');
-  if (config.strategy==='priority_weighted') for (const group of config.groups) {
+  const maxGroupSwitches = config.strategy === 'weighted' ? config.groups.length - 1 : 0;
+  if (config.retry?.acrossGroups > maxGroupSwitches) throw Error('跨组切换次数不能超过可切换的组数，请先调整故障转移配置');
+  if (config.strategy === 'weighted' && config.groups.length > 1) for (const [index, group] of config.groups.entries()) {
     const rows=selected.filter(row=>row.groupId===group.id);
-    if (!rows.length) throw new Error(`${group.name}至少需要一个参与调度的渠道`);
-    validateSelectionStrategy(group.strategy,rows,candidates,config);
+    if (!rows.length) throw new Error(`${routeGroupLabel(index + 1)} 至少需要一个参与调度的渠道`);
+    if (group.strategy !== 'weighted') throw Error('优先级组仅支持按权重分流');
+    validateSelectionStrategy('weighted',rows,candidates,config);
   }
   else validateSelectionStrategy(config.strategy,selected.filter(row=>!row.backup),candidates,config);
   const backup = selected.find(row=>row.backup);
@@ -171,6 +204,12 @@ export function routingStatus(state, service) {
   catch (error) { return { label: '需调整', good: false, reason: error.message }; }
 }
 
+export function relativeWeightShares(rows) {
+  const total = rows.reduce((sum, row) => sum + Number(row.weight), 0);
+  if (!total || rows.some(row => !Number.isFinite(Number(row.weight)) || Number(row.weight) <= 0)) return new Map();
+  return new Map(rows.map(row => [row.supplyId, Number(row.weight) / total * 100]));
+}
+
 export function routePreview(state, service, input, failedSupplyId = '') {
   const config = validateRouteConfig(state, service, input, false), channels = routingChannels(state, service);
   const selected = config.channels.filter(row => row.enabled);
@@ -179,7 +218,7 @@ export function routePreview(state, service, input, failedSupplyId = '') {
   const distribute=(strategy,rows)=>{
     rows=rows.filter(row=>withinRouteLimits(channels.find(channel=>channel.id===row.supplyId)));
     if (!rows.length) return new Map();
-    if (strategy==='weighted') {const total=rows.reduce((sum,row)=>sum+row.weight,0);return new Map(rows.map(row=>[row.supplyId,row.weight/total*100]));}
+    if (strategy==='weighted') return relativeWeightShares(rows);
     if (strategy==='random') return new Map(rows.map(row=>[row.supplyId,100/rows.length]));
     let chosen=rows.slice().sort((a,b)=>a.priority-b.priority).slice(0,1);
     if (['latency','load','tpm','cost'].includes(strategy)) {
@@ -190,9 +229,12 @@ export function routePreview(state, service, input, failedSupplyId = '') {
     return new Map(chosen.map(row=>[row.supplyId,100/chosen.length]));
   };
   let strategy=config.strategy, pool=selected.filter(row=>!row.backup);
-  if (config.strategy==='priority_weighted') {
-    const group=config.groups.find(item=>selected.some(row=>row.groupId===item.id && (!config.autoFailover || !unavailable.has(row.supplyId))));
-    strategy=group?.strategy;pool=group?selected.filter(row=>row.groupId===group.id):[];
+  if (config.strategy === 'weighted' && config.groups.length > 1) {
+    const groups = !config.autoFailover ? config.groups.slice(0, 1) :
+      config.retry ? config.groups.slice(0, 1 + config.retry.acrossGroups) : config.groups;
+    const group = groups.find(item => pool.some(row => row.groupId === item.id && !unavailable.has(row.supplyId) &&
+      withinRouteLimits(channels.find(channel => channel.id === row.supplyId))));
+    pool = pool.filter(row => row.groupId === group?.id && !unavailable.has(row.supplyId));
   }
   let shares=distribute(strategy,config.autoFailover?pool.filter(row=>!unavailable.has(row.supplyId)):pool);
   if (!shares.size && config.autoFailover) shares=distribute('fixed',selected.filter(row=>row.backup && !unavailable.has(row.supplyId)));
@@ -204,7 +246,7 @@ export function routingTransaction(state, { operation, data = {} }) {
   if (!service) throw new Error('服务引用已不存在，请返回列表重新选择');
   const route = serviceRoute(state, service.id), current = route?.activeVersion || 0;
   if (data.expectedVersion !== current) throw new Error('生效路由已变化，请重新载入并核对');
-  const id = route?.id || `service-route-${crypto.randomUUID()}`;
+  const id = route?.id || resourceId('service-route');
   let changes, label;
   if (operation==='serviceRouteStop') {
     if (!route || !route.activeVersion && !route.draft) throw new Error('当前没有可停用的路由或草稿');
@@ -219,7 +261,7 @@ export function routingTransaction(state, { operation, data = {} }) {
     changes = { draft, draftUpdatedAt: new Date().toISOString() };
     label = '保存路由草稿';
   } else if (['serviceRoutePublish','serviceRouteRollback','serviceRouteRestore','serviceFailoverConfigure'].includes(operation)) {
-    if (!service.callId) throw new Error('请先在服务内容配置对外调用标识');
+    if (!service.callId) throw new Error('请先在服务内容配置模型调用标识');
     if (data.sourceVersion !== routeSourceVersion(state, service)) throw new Error('供应渠道、模型或成本已变化，请重新校验并确认');
     const restoring=operation==='serviceRouteRestore';
     if(restoring && (current || !lastRouteVersion(route)))throw new Error('当前路由未停用或没有可恢复的配置');
@@ -237,7 +279,8 @@ export function routingTransaction(state, { operation, data = {} }) {
         if (typeof data.backupSupplyId !== 'string' || !data.backupSupplyId || active.config.channels.some(row => row.enabled && !row.backup && row.supplyId === data.backupSupplyId)) throw Error('请选择与主渠道不同的备用渠道');
         channels.push({supplyId:data.backupSupplyId, groupId:channels.find(row=>row.enabled)?.groupId || routeGroups(active.config)[0].id, enabled:true, backup:true, weight:0, priority:2});
       } else if (data.backupSupplyId) throw Error('当前设置不接受独立备用渠道');
-      input = {...active.config, channels, autoFailover:data.enabled};
+      if (data.retry != null && service.mode !== 'standard') throw Error('渠道直选服务不支持优先级组重试');
+      input = {...active.config, channels, autoFailover:data.enabled, ...(data.retry != null ? {retry:data.retry} : {})};
     }
     const config = validateRouteConfig(state, service, input, !configuringFailover);
     if (configuringFailover && data.enabled && service.mode === 'provider') {
@@ -245,7 +288,7 @@ export function routingTransaction(state, { operation, data = {} }) {
       if (!backup?.available) throw Error(backup?.reason || '备用渠道不可用');
     }
     const version = Math.max(0, ...(route?.versions || []).map(item => item.version)) + 1;
-    const snapshot = { id: crypto.randomUUID(), version, config, publishedAt: new Date().toISOString(), actor: state.currentRole, rollbackFrom: !restoring && previous?.version || null, ...(restoring?{restoredFrom:previous.version}:{}), costVersions: Object.fromEntries(routingChannels(state, service).filter(item => config.channels.some(row => row.supplyId === item.id)).map(item => [item.id, item.costVersion])) };
+    const snapshot = { id: resourceId('route-version'), version, config, publishedAt: new Date().toISOString(), actor: state.currentRole, rollbackFrom: !restoring && previous?.version || null, ...(restoring?{restoredFrom:previous.version}:{}), costVersions: Object.fromEntries(routingChannels(state, service).filter(item => config.channels.some(row => row.supplyId === item.id)).map(item => [item.id, item.costVersion])) };
     changes = { draft: null, draftUpdatedAt: null, activeVersion: version, versions: [...(route?.versions || []), snapshot] };
     label = configuringFailover?'保存故障转移':restoring?'恢复服务路由':previous ? `回滚路由至 v${previous.version}，生成 v${version}` : `发布路由 v${version}`;
   } else throw new Error('未知路由操作');

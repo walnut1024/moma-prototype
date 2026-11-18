@@ -1,11 +1,13 @@
+import { resourceId } from '../src/resource-id.mjs';
 import { commitAdminState } from '../src/admin-v2/state-transaction.js';
 import { createMockEngine } from '../src/admin-v2/mock-onboarding-core.js';
 import { prepareMockOnboardingSync } from '../src/admin-v2/mock-onboarding-sync.js';
 import { assertNewMockPublications } from '../src/admin-v2/mock-publication-gate.js';
-import { modelWorkspacePayload, loadModelWorkspace, loadSimulationWorkspace, modelChanges, simulatorChanges } from './model-repository.js';
+import { modelWorkspacePayload, loadModelWorkspace, loadSimulationWorkspace, modelChanges, simulatorChanges, modelSupplyRelations } from './model-repository.js';
 import { storedModel, domainModel } from '../src/mock/model-fields.js';
 import { canManagePackages, packageFactorVersion, tokenPackageTransaction } from '../src/admin-v2/token-packages.js';
 import { validTrafficLimit } from '../src/admin-v2/traffic-rates.js';
+import { auditEvidence } from './audit-evidence.js';
 
 const collections=['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','modelVersions','validations','modelOnboardings','serviceRoutes','tariffDictionary','tenants','audits'];
 const canonical=value=>value && typeof value==='object'?Array.isArray(value)?value.map(canonical):Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])])):value;
@@ -34,15 +36,18 @@ async function receipt(db,actor,key,hash,id){
 async function save(db,actor,state,key,id,hash,command,response,statements,audit,entityType='model-operations'){
   const time=Date.now();
   const operation=db.prepare('INSERT INTO operations(id,actor_id,session_id,idempotency_key,command,request_hash,expected_commit_seq,http_status,response_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(id,actor.id,actor.session_id,key,command,hash,state.commitSeq,200,JSON.stringify(response),time);
-  const auditId=audit?.id || crypto.randomUUID(),event=audit || {id:auditId,action:command,objectId:id,result:'成功',createdAt:new Date(time).toISOString(),actor:actor.role,actorId:actor.id};
+  const auditId=audit?.id || resourceId('audit-event'),event=audit || {id:auditId,action:command,objectId:id,result:'成功',createdAt:new Date(time).toISOString(),actor:actor.role,actorId:actor.id};
+  if ([response, event].some(value => new TextEncoder().encode(JSON.stringify(value)).byteLength > 1900000)) issue(413,'SCOPE_TOO_LARGE','本次完整数据超出单次保存上限，请减少本次录入的模型或渠道；文件与输入保留');
   const write=[db.prepare('PRAGMA defer_foreign_keys=ON'),operation,...statements,
     db.prepare('INSERT INTO audit_events(id,operation_id,entity_type,entity_id,action,diff_json,created_at,record_json) VALUES(?,?,?,?,?,?,?,?)').bind(auditId,id,entityType,event.objectId || id,event.action,JSON.stringify({result:event.result}),time,JSON.stringify(event))];
-  for(const modelId of event.relatedModelIds || []){
-    const model=state.models.find(m=>m.id===modelId),materialId=model?.templateId || modelId;
-    if(state.models.some(m=>m.id===modelId) || state.modelTemplates.some(m=>m.id===modelId))write.push(db.prepare('INSERT OR IGNORE INTO audit_models(audit_id,material_id,created_at) VALUES(?,?,?)').bind(auditId,materialId,time));
-  }
+  const materialIds = [...new Set((event.relatedModelIds || []).flatMap(id => {
+    const model = state.models.find(row => row.id === id);
+    return model || state.modelTemplates.some(row => row.id === id) ? [model?.templateId || id] : [];
+  }))];
+  if (materialIds.length) write.push(db.prepare('INSERT OR IGNORE INTO audit_models(audit_id,material_id,created_at) SELECT ?,value,? FROM json_each(?)').bind(auditId,time,JSON.stringify(materialIds)));
   if(write.length>26)issue(413,'SCOPE_TOO_LARGE','本次原子修改范围过大，请减少批量数量');
   try{await db.batch(write);}catch(error){
+    if (/SQLITE_TOOBIG|string or blob too big/.test(String(error))) issue(413,'SCOPE_TOO_LARGE','本次完整数据超出单次保存上限，请减少本次录入的模型或渠道；文件与输入保留');
     if(String(error).includes('session_invalid'))issue(401,'SESSION_EXPIRED','会话已失效');
     if(/commit_conflict|UNIQUE constraint/.test(String(error))){const replay=await receipt(db,actor,key,hash,id);if(replay)return replay;console.warn('Model transaction constraint:',String(error).slice(0,250));issue(409,'REVISION_CONFLICT','数据已有并发提交，请重新核对；当前输入保留');}
     throw error;
@@ -153,7 +158,7 @@ export async function updateTrafficLimits(db, actor, body, key) {
       json_extract(value,'$.after.rpm'),json_extract(value,'$.after.tpm') FROM json_each(?) WHERE 1
     ON CONFLICT(scope,object_id,model_id) DO UPDATE SET rpm=excluded.rpm,tpm=excluded.tpm`).bind(JSON.stringify(upsert)));
   const result = { revision: current.revision + 1, accountId };
-  const audit = { id: crypto.randomUUID(), objectId: id || 'traffic-limits', action: changes[0]?.action || '保存限流配置',
+  const audit = { id: resourceId('audit-event'), objectId: id || 'traffic-limits', action: changes[0]?.action || '保存限流配置',
     result: '成功', actor: actor.role, actorId: actor.id, actorName: actor.name, createdAt: new Date().toISOString(), trafficChanges: changes };
   return save(db, actor, current, key, operationId, hash, 'traffic.update', result, statements, audit, 'traffic-limits');
 }
@@ -252,7 +257,7 @@ export async function packageCommand(db, actor, body, key) {
     : before
       ? db.prepare('UPDATE token_package_records SET workspace_revision=?, record_json=? WHERE collection=? AND id=?').bind(revision, stored, collection, record.id)
       : db.prepare('INSERT INTO token_package_records(workspace_revision,record_json,collection,id) VALUES(?,?,?,?)').bind(revision, stored, collection, record.id);
-  const audit = { id: crypto.randomUUID(), actor: actor.role, actorId: actor.id, objectId: record.id, action: label,
+  const audit = { id: resourceId('audit-event'), actor: actor.role, actorId: actor.id, objectId: record.id, action: label,
     result: '成功', createdAt: timestamp, before, after: record };
   if (action.operation === 'publishFactorRules') {
     const itemIds = new Set([...before.rules, ...record.rules].map(rule => rule.billingItemId));
@@ -273,12 +278,23 @@ export async function modelCommand(db,actor,body,key){
   const before=await loadModelWorkspace(db,actor,{command:true});
   if(before.revision!==body.expectedRevision)issue(409,'REVISION_CONFLICT','模型运营已有修订，请载入最新数据；当前输入保留');
   const dictionaryChange = body.action.operation === 'tariffDictionary' ? body.action.data : null;
-  if (body.action.operation === 'serviceArchive' && typeof body.action.modelId === 'string') {
+  if (['serviceArchive','serviceDelete'].includes(body.action.operation) && typeof body.action.modelId === 'string') {
     const reference = await db.prepare(`SELECT 1 FROM token_package_records p, json_each(p.record_json, '$.modelIds') model
       JOIN services s ON s.material_id=model.value
       WHERE p.collection='tokenPackages' AND json_extract(p.record_json, '$.deletedAt') IS NULL AND s.id=? LIMIT 1`)
       .bind(body.action.modelId).first();
-    if (reference) issue(422, 'BUSINESS_BLOCKED', '该模型服务仍被套餐引用，请先调整套餐的支持模型再归档');
+    if (reference) issue(422, 'BUSINESS_BLOCKED', '该模型服务仍被套餐引用，请先调整套餐的支持模型');
+  }
+  if (body.action.operation === 'serviceDelete' && typeof body.action.modelId === 'string') {
+    const target = body.action.data?.model_service_id;
+    if (target !== undefined && !validId(target)) issue(422, 'INVALID_INPUT', '模型服务 ID 无效');
+    const history = await db.prepare('SELECT 1 FROM offers f WHERE f.service_id=?' + (target === undefined ? '' : ' AND f.record_id=?') + ' AND (EXISTS(SELECT 1 FROM market_orders o WHERE o.offer_id=f.record_id) OR EXISTS(SELECT 1 FROM market_calls c WHERE c.offer_id=f.record_id)) LIMIT 1').bind(body.action.modelId, ...(target === undefined ? [] : [target])).first();
+    if (history) issue(422, 'BUSINESS_BLOCKED', '服务已有订单或调用记录，请使用归档保留历史关联');
+  }
+  if (body.action.operation === 'createServiceModels' && Array.isArray(body.action.data?.libraryIds) && body.action.data.libraryIds.length <= 5) {
+    const { results } = await db.prepare("SELECT record_json FROM services WHERE deleted_at IS NOT NULL AND json_extract(record_json,'$.templateId') IN (SELECT value FROM json_each(?))")
+      .bind(JSON.stringify(body.action.data.libraryIds)).all();
+    for (const row of results) { const model = domainModel(JSON.parse(row.record_json), true); if (!before.models.some(item => item.id === model.id)) before.models.push(model); }
   }
   if (dictionaryChange?.operation === 'delete' && typeof dictionaryChange.id === 'string') {
     const reference = await db.prepare(`SELECT 1 FROM token_package_model_factors f
@@ -286,6 +302,11 @@ export async function modelCommand(db,actor,body,key){
          OR EXISTS (SELECT 1 FROM json_each(f.record_json, '$.draft.rules') WHERE json_extract(value, '$.billingItemId')=?1)
       LIMIT 1`).bind(dictionaryChange.id).first();
     if (reference) issue(422, 'BUSINESS_BLOCKED', '该计费项仍被套餐抵扣规则引用，请先调整规则再删除');
+  }
+  if (body.action.operation === 'providerIntake' && typeof body.action.data?.document?.provider?.code === 'string') {
+    const code = body.action.data.document.provider.code.trim().toLowerCase();
+    const archived = await db.prepare('SELECT record_json FROM suppliers WHERE code=? AND deleted_at IS NOT NULL').bind(code).first('record_json');
+    if (archived && !before.providers.some(row => row.code === code)) before.providers.push(JSON.parse(archived));
   }
   const engine=createMockEngine({initialState:before.cloudMockState,localState:before});engine.setMockRuntimeState(before);engine.invoke('/audits');before.cloudMockState=engine.snapshot();
   const action=structuredClone(body.action);
@@ -298,9 +319,11 @@ export async function modelCommand(db,actor,body,key){
     assertNewMockPublications(before,next,action,sync?.after);
     next.cloudMockState=sync?.after || engine.snapshot();next.cloudMockState.operations={};
   }catch(error){issue(422,'BUSINESS_BLOCKED',error.message);}
-  const result={operationId:body.operationId,revision:next.revision,patches:patches(before,next),modelData:next.modelData,mockState:next.cloudMockState,updatedAt:next.updatedAt};
   const statements=[...modelChanges(db,before,next,{insertOnly:importingDemo}),...simulatorChanges(db,before.cloudMockState,next.cloudMockState)];
-  return save(db,actor,before,key,body.operationId,hash,action.operation,result,statements,next.audits[0]);
+  const result={operationId:body.operationId,revision:next.revision,patches:patches(before,next),modelData:next.modelData,supplyRelations:modelSupplyRelations(next),mockState:next.cloudMockState,updatedAt:next.updatedAt};
+  const evidence = auditEvidence(before, next, action, actor);
+  const audit = next.audits[0];
+  return save(db,actor,before,key,body.operationId,hash,action.operation,result,statements,evidence ? { ...audit, platformAudit: evidence } : audit);
 }
 
 export async function simulationRequest(db,actor,path,method,body,key){

@@ -4,7 +4,7 @@ import ModelModuleHeading from './ModelModuleHeading';
 import { TARIFF_KINDS } from './tariff-dictionary';
 import './semi-materials.css';
 
-const materialPages = [['model-templates', '模型'], ['provider-materials', '服务商'], ...Object.entries(TARIFF_KINDS)];
+const materialPages = [['model-templates', '模型'], ...Object.entries(TARIFF_KINDS)];
 export const materialOperationsUi = {
   notify: message => Toast.success(message),
   renderLeaveDialog: ({ cancel, discard }) => <Modal visible className="semi-materials" title="有未保存的配置" onCancel={cancel} footer={<Space><Button onClick={cancel}>继续编辑</Button><Button type="danger" onClick={discard}>放弃本次修改</Button></Space>}>放弃修改后继续离开，当前生效配置保留。</Modal>,

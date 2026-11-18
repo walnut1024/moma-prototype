@@ -5,7 +5,10 @@ import {supplierMaterialReturn,supplierModelSelection} from '../src/admin-v2/sup
 import {startLocalBackend} from '../database/local-runtime.js';
 import {domainModelWorkspace} from '../src/mock/model-fields.js';
 import {libraryRecord} from '../src/admin-v2/model-library.js';
-import {serviceModelSourceDraft} from '../src/admin-v2/model-profile.js';
+import {serviceMetadataMissingFields,serviceModelSourceDraft} from '../src/admin-v2/model-profile.js';
+import {materialBase} from '../src/admin-v2/model-operations.js';
+import {providerApiKeysDraft} from '../src/admin-v2/provider-management.js';
+import {connectionKeys} from '../src/admin-v2/connection-state.js';
 
 test('material maintenance returns to the supplier selection without accepting external routes or malformed selection',()=>{
   const address=supplierMaterialReturn('#/admin-2/providers?provider=provider-moma&selectedModels='+encodeURIComponent('["template-a"]'),'template-b');
@@ -37,13 +40,53 @@ test('HTTP and D1 preserve canonical material, explicit channel protocol and can
     const connected=await command('supplierChannelRegister',channel);assert.equal(connected.status,200,JSON.stringify(connected.data));await refresh();
     const endpoint=state.endpoints.find(row=>row.name===channel.name),association=state.providers.find(row=>row.id===owner.id).catalogConnections.find(row=>row.endpointId===endpoint.id);
     assert.equal(endpoint.protocol,'Anthropic');assert.equal(endpoint.interfaceType,'anthropic');assert.equal(endpoint.status,'草稿');assert.equal(association.enabled,false);assert.equal(state.modelSupplies.length,baseline.modelSupplies.length);
+    const privateInput = 'temporary-channel-only-key';
+    const [channelApiKey] = (await providerApiKeysDraft([privateInput])).apiKeys;
+    const quick = {
+      newProvider: { name: '手动接入服务商' },
+      channelApiKey,
+      values: {
+        name: '手动接入渠道', interfaceType: 'openai', baseUrl: 'https://manual.example.invalid/v1',
+        authMode: 'group', keyGroupId: 'default', models: [{ libraryId: material.id, upstreamModelId: 'vendor/manual-glm' }],
+      },
+    };
+    const rejected = await command('channelQuickCreate', { ...quick, channelApiKey: { ...channelApiKey, raw: privateInput } });
+    assert.equal(rejected.status, 422);
+    await refresh();
+    assert.equal(state.providers.some(row => row.name === quick.newProvider.name), false);
+    const created = await command('channelQuickCreate', quick);
+    assert.equal(created.status, 200, JSON.stringify(created.data));
+    await refresh();
+    const privateOwner = state.providers.find(row => row.name === quick.newProvider.name);
+    const privateChannel = state.endpoints.find(row => row.name === quick.values.name);
+    assert.equal(privateChannel.providerId, privateOwner.id);
+    assert.equal(privateChannel.status, '草稿');
+    assert.deepEqual(privateOwner.apiKeys || [], []);
+    assert.equal(connectionKeys(privateChannel, privateOwner)[0].fingerprint, channelApiKey.fingerprint);
+    assert.equal(privateChannel.apiKeys[0].scope, 'channel');
+    assert.equal(privateOwner.catalogConnections.find(row => row.endpointId === privateChannel.id).upstreamModelId, 'vendor/manual-glm');
+    assert.equal(JSON.stringify(state).includes(privateInput), false);
     const edit={providerId:owner.id,endpointId:endpoint.id,associationId:association.id,modelId:catalogue.modelId,upstreamModelId:channel.upstreamModelId,name:endpoint.name,protocol:'OpenAI',baseUrl:channel.baseUrl,expectedUpdatedAt:endpoint.updatedAt,expectedProviderUpdatedAt:state.providers.find(row=>row.id===owner.id).updatedAt};
     const changed=await command('supplierChannelEdit',edit);assert.equal(changed.status,200,JSON.stringify(changed.data));await refresh();
     const pending=state.endpoints.find(row=>row.id===endpoint.id);assert.equal(pending.protocol,'Anthropic');assert.equal(pending.baseUrl,channel.baseUrl);assert.equal(pending.candidateConfiguration.config.protocol,'OpenAI');
-    const create=await command('createServiceModel',{...serviceModelSourceDraft(state,material),libraryId:material.id,modelId:'glm-5.5-service',serviceMode:'standard'});assert.equal(create.status,200,JSON.stringify(create.data));await refresh();
-    const service=state.models.find(row=>row.templateId===material.id);assert.equal(service.name,material.name);assert.equal(service.description,material.description);assert.equal(service.serviceMode,'standard');assert.equal(service.callsEnabled,false);assert.equal(service.listingStatus,'已下架');assert.equal(service.modelId,'glm-5.5-service');
-    const duplicate=await command('createServiceModel',{...serviceModelSourceDraft(state,material),libraryId:material.id,modelId:'another'});assert.equal(duplicate.status,422);
+    const create=await command('createServiceModel',{...serviceModelSourceDraft(state,material),libraryId:material.id,name:'GLM-5.5 业务服务',modelId:'glm-5.5-service',serviceMode:'standard'});assert.equal(create.status,200,JSON.stringify(create.data));await refresh();
+    const service=state.models.find(row=>row.templateId===material.id);assert.equal(service.name,material.name);assert.equal(service.serviceName,'GLM-5.5 业务服务');assert.equal(service.description,material.description);assert.equal(service.serviceMode,'standard');assert.equal(service.callsEnabled,false);assert.equal(service.listingStatus,'已下架');assert.equal(service.modelId,'glm-5.5-service');
+    const renamed=await command('templatePublish',{id:material.id,expectedBase:materialBase(state,material),confirmed:true,value:{...material,name:'GLM-5.5 模型资料'}});assert.equal(renamed.status,200,JSON.stringify(renamed.data));await refresh();
+    assert.equal(libraryRecord(state,service.id).name,'GLM-5.5 模型资料');
+    assert.equal(state.models.find(row=>row.id===service.id).serviceName,service.serviceName);
+    const duplicate=await command('createServiceModel',{...serviceModelSourceDraft(state,material),libraryId:material.id,modelId:'another',serviceMode:'provider'});assert.equal(duplicate.status,422);
     await refresh();for(const key of ['modelSalePrices','supplyPrices','serviceRoutes'])assert.deepEqual(state[key],baseline[key],key);for(const row of baseline.endpoints)assert.deepEqual(state.endpoints.find(current=>current.id===row.id),row);
+    const ocr=libraryRecord(state,'builtin-pp-ocrv6'), missing=serviceMetadataMissingFields(ocr);
+    assert.ok(missing.includes('模型作者'));
+    const ocrData={...serviceModelSourceDraft(state,ocr),libraryId:ocr.id,serviceMode:'provider'};
+    assert.equal((await command('createServiceModel',ocrData)).status,422);
+    const registration=await command('supplierModelsRegister',{providerId:owner.id,libraryIds:[ocr.id]});
+    assert.equal(registration.status,200,JSON.stringify(registration.data));await refresh();
+    const ocrCreate=await command('createServiceModel',ocrData);
+    assert.equal(ocrCreate.status,200,JSON.stringify(ocrCreate.data));await refresh();
+    const ocrService=state.models.find(row=>row.templateId===ocr.id);
+    assert.deepEqual(serviceMetadataMissingFields(ocrService),missing);
+    assert.equal(ocrService.callsEnabled,false);assert.equal(ocrService.listingStatus,'已下架');
     assert.equal((await local.db.prepare('PRAGMA foreign_key_check').all()).results.length,0);
   }finally{await local.runtime.dispose();}
 });

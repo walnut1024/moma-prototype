@@ -10,7 +10,7 @@ const initial = { providers: [provider], models: [], modelTemplates: [], endpoin
 test('relationship preview distinguishes valid, repeated, unknown and registered rows by stable IDs', () => {
   const state = { ...initial, modelTemplates: [model, { ...model, id: 'template-y', modelId: 'model-y' }] };
   const rows = materialImportRows('relation', [
-    ['服务商编码', '规范模型标识', '原文件行', '处理结果'],
+    ['服务商编码', '模型编码', '原文件行', '处理结果'],
     ['alpha', 'model-x', '3', '请重试'], ['unknown', 'model-x'], [], ['alpha', 'model-x'], ['alpha', 'model-y'],
   ]);
   const preview = previewMaterialRows(state, 'relation', rows);
@@ -33,7 +33,7 @@ test('retry only registers a model whose material was already committed', async 
     }
     return state;
   };
-  const rows = materialImportRows('model', [['模型名称', '规范模型标识', '模型类型'], [model.name, model.modelId, '文本']]);
+  const rows = materialImportRows('model', [['模型展示名', '模型编码', '模型类型'], [model.name, model.modelId, '文本']]);
   const submit = async retry => {
     const preview = previewMaterialRows(state, 'model', rows, { providerId: provider.id, retry });
     assert.equal(preview[0].status, 'ready');
@@ -59,7 +59,7 @@ test('retry only registers a model whose material was already committed', async 
 test('one failed registration batch leaves later valid rows able to commit', async () => {
   const models = Array.from({ length: 6 }, (_, index) => ({ ...model, id: 'template-' + index, modelId: 'model-' + index }));
   const state = { ...initial, modelTemplates: models };
-  const rows = materialImportRows('relation', [['服务商编码', '规范模型标识'], ...models.map(row => [provider.code, row.modelId])]);
+  const rows = materialImportRows('relation', [['服务商编码', '模型编码'], ...models.map(row => [provider.code, row.modelId])]);
   const sizes = [], outcomes = [];
   await submitMaterialRows({
     state, kind: 'relation', rows: previewMaterialRows(state, 'relation', rows), active: () => true,

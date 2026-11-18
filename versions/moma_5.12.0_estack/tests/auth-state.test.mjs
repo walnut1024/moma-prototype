@@ -1,20 +1,35 @@
+import { withSignedInAccount } from './auth-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AUTH_INVITE, authRoute, emptyAuthState, authPhone, enterpriseLoginPolicy, normalizeAuthLogin, verifyAuthCode, registerAuthAccount, loginAuthAccount, availableAuthSpaces, acceptAuthInvite, submitAuthApplication, queryAuthApplication, applicationErrors, activationAccount, activateAuthAccount, encodeAuthPassword, matchesAuthPassword } from '../src/auth-state.mjs';
+import { AUTH_INVITE, authRoute, emptyAuthState, authPhone, enterpriseLoginPolicy, normalizeAuthLogin, verifyAuthCode, loginAuthAccount, availableAuthSpaces, acceptAuthInvite, submitAuthApplication, queryAuthApplication, applicationErrors, activationAccount, activateAuthAccount, encodeAuthPassword, matchesAuthPassword } from '../src/auth-state.mjs';
 
-test('phone registration is unique and does not silently register during login', () => {
-  const state = registerAuthAccount(emptyAuthState(), { phone: '+86 13800138000' });
+test('login accepts only existing accounts and never creates an account', () => {
+  const state = withSignedInAccount(emptyAuthState(), { phone: '+86 13800138000' });
   assert.equal(state.accounts[0].phone, '13800138000');
-  assert.throws(() => registerAuthAccount(state, { phone: '13800138000' }), /已注册/);
-  assert.throws(() => loginAuthAccount(state, '13900139000', 'personal'), /尚未注册/);
+  assert.throws(() => loginAuthAccount(state, '13900139000', 'personal'), /未开通账号/);
   assert.throws(() => authPhone('123'), /格式错误/);
   assert.equal(authRoute('#/auth/invite?token=abc'), 'invite');
   assert.equal(authRoute('#/admin-2/accounts'), null);
 });
 
+test('login determines the space from the account and active memberships', () => {
+  const personal = withSignedInAccount(emptyAuthState(), { phone: AUTH_INVITE.phone });
+  const joined = acceptAuthInvite(personal, AUTH_INVITE.id);
+  const member = { ...joined.accounts[0], userType: 'enterprise', email: 'member@example.com' };
+  const enterprise = { ...joined, accounts: [member] };
+  assert.equal(loginAuthAccount(joined, member.phone).activeSpace, 'personal');
+  assert.equal(loginAuthAccount(enterprise, member.phone).activeSpace, AUTH_INVITE.enterpriseId);
+  assert.equal(loginAuthAccount(enterprise, ' MEMBER@example.com ').activeSpace, AUTH_INVITE.enterpriseId);
+  const multiple = { ...enterprise, memberships: [...enterprise.memberships, { ...enterprise.memberships[0], enterpriseId: 'second' }] };
+  assert.equal(loginAuthAccount(multiple, member.email).activeSpace, null);
+  assert.throws(() => loginAuthAccount(enterprise, member.email, undefined, ['phone']), /手机号/);
+  assert.throws(() => loginAuthAccount({ ...enterprise, accounts: [{ ...member, status: '停用' }] }, member.email), /停用/);
+  assert.throws(() => loginAuthAccount({ ...enterprise, accounts: [member, { ...member, id: 'duplicate' }] }, member.email), /多条身份/);
+});
+
 test('verification binds the code to the phone, purpose, expiry and retry limit', () => {
-  const challenge = { identity: '13800138000', type: 'phone', code: '123456', purpose: 'register', issuedAt: 1000, attempts: 0 };
-  const data = { identity: '13800138000', type: 'phone', code: '123456', purpose: 'register', now: 2000 };
+  const challenge = { identity: '13800138000', type: 'phone', code: '123456', purpose: 'login', issuedAt: 1000, attempts: 0 };
+  const data = { identity: '13800138000', type: 'phone', code: '123456', purpose: 'login', now: 2000 };
   assert.equal(verifyAuthCode(challenge, data), true);
   assert.throws(() => verifyAuthCode(challenge, { ...data, identity: '13900139000' }), /已变化/);
   assert.throws(() => verifyAuthCode(challenge, { ...data, purpose: 'password' }), /已变化/);
@@ -24,7 +39,7 @@ test('verification binds the code to the phone, purpose, expiry and retry limit'
 });
 
 test('only the invited phone may join and repeated acceptance keeps one relationship', () => {
-  const state = registerAuthAccount(emptyAuthState(), { phone: AUTH_INVITE.phone });
+  const state = withSignedInAccount(emptyAuthState(), { phone: AUTH_INVITE.phone });
   const joined = acceptAuthInvite(state, AUTH_INVITE.id, Date.parse('2026-10-05T12:00:00+08:00'));
   assert.equal(joined.memberships.length, 1);
   assert.equal(joined.memberships[0].role, '普通成员');
@@ -32,7 +47,7 @@ test('only the invited phone may join and repeated acceptance keeps one relation
   assert.equal(loginAuthAccount({ ...joined, currentUserId: null }, AUTH_INVITE.phone, 'enterprise').activeSpace, AUTH_INVITE.enterpriseId);
   assert.equal(acceptAuthInvite(joined, AUTH_INVITE.id).memberships.length, 1);
   assert.throws(() => acceptAuthInvite({ ...joined, memberships: joined.memberships.map(member => ({ ...member, enterpriseFrozen: true })) }, AUTH_INVITE.id), /已冻结/);
-  const other = registerAuthAccount(state, { phone: '13900139000' });
+  const other = withSignedInAccount(state, { phone: '13900139000' });
   assert.throws(() => acceptAuthInvite(other, AUTH_INVITE.id), /不一致/);
   assert.throws(() => acceptAuthInvite(state, 'revoked'), /不存在/);
   assert.throws(() => acceptAuthInvite(state, AUTH_INVITE.id, Date.parse(AUTH_INVITE.expiresAt)), /已过期/);
@@ -95,7 +110,7 @@ test('administrator activation requires a valid link, active membership and matc
 });
 
 test('personal freezing does not revoke an active enterprise membership; stopped identities cannot log in', () => {
-  const state = acceptAuthInvite(registerAuthAccount(emptyAuthState(), { phone: AUTH_INVITE.phone }), AUTH_INVITE.id);
+  const state = acceptAuthInvite(withSignedInAccount(emptyAuthState(), { phone: AUTH_INVITE.phone }), AUTH_INVITE.id);
   const frozen = { ...state, accounts: state.accounts.map(user => ({ ...user, personalFrozen: true })) };
   assert.deepEqual(availableAuthSpaces(frozen).map(space => space.id), [AUTH_INVITE.enterpriseId]);
   const stopped = { ...state, accounts: state.accounts.map(user => ({ ...user, status: '停用' })) };
@@ -104,7 +119,7 @@ test('personal freezing does not revoke an active enterprise membership; stopped
 });
 
 test('login enters the selected user type and never silently falls back to another space', () => {
-  const personal = registerAuthAccount(emptyAuthState(), { phone: AUTH_INVITE.phone });
+  const personal = withSignedInAccount(emptyAuthState(), { phone: AUTH_INVITE.phone });
   assert.throws(() => loginAuthAccount(personal, AUTH_INVITE.phone, 'enterprise'), /暂无可进入的企业/);
   assert.throws(() => loginAuthAccount(personal, AUTH_INVITE.phone, 'unknown'), /请选择/);
   const joined = acceptAuthInvite(personal, AUTH_INVITE.id);

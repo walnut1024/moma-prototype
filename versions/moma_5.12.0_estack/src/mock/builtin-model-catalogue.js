@@ -1,11 +1,12 @@
 import catalogue from '../data/builtin-model-catalogue.json' with { type: 'json' };
 import { modelLibrary } from '../admin-v2/model-library.js';
+import { resourceId } from '../resource-id.mjs';
 
 export const BUILTIN_MODEL_CATALOGUE = catalogue;
 const configuredFields = value => value && typeof value === 'object' ? Array.isArray(value) ? value.map(configuredFields) : Object.fromEntries(Object.keys(value).filter(key => !['createdAt', 'updatedAt'].includes(key)).sort().map(key => [key, configuredFields(value[key])])) : value;
 
 // Explicit installation only. Existing user records and removed catalogue entries stay user-owned.
-export function builtinModelCatalogueChanges(state, ids) {
+export function builtinModelCatalogueChanges(state, ids, makeId = () => resourceId('model')) {
   if (!Array.isArray(ids) || !ids.length || ids.length > 5 || new Set(ids).size !== ids.length || ids.some(id => !catalogue.models.some(row => row.id === id))) throw Error('请选择 1–5 个有效的内置模型');
   const changes = [], masters = modelLibrary(state), timestamp = new Date().toISOString();
   for (const id of ids) {
@@ -22,7 +23,7 @@ export function builtinModelCatalogueChanges(state, ids) {
       changes.push({ type: 'update', collection: state.models.some(row => row.id === master.id) ? 'models' : 'modelTemplates', id: master.id, changes: { name: spec.name, type: spec.type, profile, updatedAt: timestamp, revision: (master.revision || 0) + 1 } });
     } else {
       if ([...state.models, ...state.modelTemplates].some(row => row.id === id)) throw Error(`${spec.name} 的内置 ID 已被占用`);
-      changes.push({ type: 'add', collection: 'modelTemplates', record: { id, modelId: spec.modelId, name: spec.name, type: spec.type, maker: '', description: '', profile: { releaseDate: spec.releaseDate }, capabilities: {}, revision: 1, builtinCatalogue: catalogue.id, createdAt: timestamp, updatedAt: timestamp } });
+      changes.push({ type: 'add', collection: 'modelTemplates', record: { id: makeId(spec), modelId: spec.modelId, name: spec.name, type: spec.type, maker: '', description: '', profile: { releaseDate: spec.releaseDate }, capabilities: {}, revision: 1, builtinCatalogue: catalogue.id, createdAt: timestamp, updatedAt: timestamp } });
     }
   }
   return { type: 'batch', changes, objectId: catalogue.id, label: '更新内置模型目录', catalogueIds: ids };
@@ -43,7 +44,7 @@ export function seedBuiltinModelCatalogue(source) {
   const state = structuredClone(source);
   for (let offset = 0; offset < catalogue.models.length; offset += 5) {
     const ids = catalogue.models.slice(offset, offset + 5).map(row => row.id);
-    const transaction = builtinModelCatalogueChanges(state, ids);
+    const transaction = builtinModelCatalogueChanges(state, ids, spec => spec.id);
     for (const change of transaction.changes) {
       if (change.type === 'add') state[change.collection].push(change.record);
       else Object.assign(state[change.collection].find(row => row.id === change.id), change.changes);

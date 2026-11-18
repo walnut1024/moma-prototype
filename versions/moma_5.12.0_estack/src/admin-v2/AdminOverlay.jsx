@@ -59,11 +59,15 @@ export function AdminSideSheet({ title, label, footer, mask = true, maskClosable
       dialog.setAttribute('aria-modal', 'true');
       dialog.addEventListener('keydown', keepSheetTabInside);
     }
+    let focusFrame;
     if (!dialog.contains(document.activeElement)) {
       opener.current ??= document.activeElement;
-      dialog.focus({ preventScroll: true });
+      focusFrame = requestAnimationFrame(() => {
+        if (document.activeElement === opener.current || document.activeElement === document.body) dialog.focus({ preventScroll: true });
+      });
     }
     return () => {
+      if (focusFrame) cancelAnimationFrame(focusFrame);
       dialog.removeEventListener('keydown', keepSheetTabInside);
       dialog.removeAttribute('aria-modal');
     };

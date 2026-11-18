@@ -1,7 +1,9 @@
+import { isResourceId, resourceId } from '../resource-id.mjs';
 import { initialTariffDictionary } from '../mock/application-data.js';
 
 export const TARIFF_KINDS = { scenario: '计费项', unit: '计费单位', currency: '货币' };
 export async function tariffDictionaryId(id) {
+  if (['billing-item', 'billing-unit', 'currency'].some(type => isResourceId(id, type))) return id;
   // Keep stored references intact; derive a stable UUIDv5 for the compact list identifier.
   const namespace = Uint8Array.from('6ba7b8119dad11d180b400c04fd430c8'.match(/../g), hex => parseInt(hex, 16));
   const name = new TextEncoder().encode(`https://moma-prototype.pages.dev/tariff-dictionary/${id}`);
@@ -92,7 +94,7 @@ export function tariffDictionaryTransaction(state, data) {
       fields.description = description.trim();
     }
     if (!current && tariffDictionaryEntries(state).filter(item => item.kind === kind).length >= 200) throw new Error('每类字典最多维护 200 个条目');
-    change = current ? { type: 'update', collection: 'tariffDictionary', id: current.id, changes: fields } : { type: 'add', collection: 'tariffDictionary', record: { id: `tariff-${crypto.randomUUID()}`, kind, ...fields, ...(kind === 'scenario' ? {} : {status: '已启用'}), builtin: false } };
+    change = current ? { type: 'update', collection: 'tariffDictionary', id: current.id, changes: fields } : { type: 'add', collection: 'tariffDictionary', record: { id: resourceId({ scenario: 'billing-item', unit: 'billing-unit', currency: 'currency' }[kind]), kind, ...fields, ...(kind === 'scenario' ? {} : {status: '已启用'}), builtin: false } };
     label = `保存${TARIFF_KINDS[kind]}`;
   } else if (data.operation === 'status') {
     if (current?.kind === 'scenario') throw new Error('计费项不设启用或停用状态');

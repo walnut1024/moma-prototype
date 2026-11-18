@@ -16,7 +16,7 @@ export const TASK_OPTIONS = {
   embedding: ['文本向量化', '图像向量化', '多模态向量化'],
   rerank: ['文档重排', '多模态重排'],
 };
-export const IDENTITY_FIELDS = [field('family', '模型系列'), field('version', '模型版本'), field('releaseDate', '原厂发布日期', 'date'), field('lifecycle', '版本状态', 'lifecycle'), field('retirementDate', '退役日期', 'date'), field('replacement', '替代模型规范标识')];
+export const IDENTITY_FIELDS = [field('family', '模型系列'), field('version', '模型版本'), field('releaseDate', '原厂发布日期', 'date'), field('lifecycle', '版本状态', 'lifecycle'), field('retirementDate', '退役日期', 'date'), field('replacement', '替代模型编码')];
 export const TECHNICAL_FIELDS = [field('license', '许可协议', 'license'), field('architecture', '模型架构', 'architecture'), { ...field('parameters', '总参数', 'decimal'), unit: 'B' }, { ...field('activeParameters', '激活参数', 'decimal'), unit: 'B' }, field('openWeights', '开放权重', 'support'), field('baseModel', '基础模型'), field('precision', '量化精度'), field('knowledgeCutoff', '知识截止日期', 'date'), field('huggingFaceId', 'Hugging Face 模型标识'), field('instructType', '指令格式')];
 export const PRESENTATION_FIELDS = [field('author', '模型作者'), field('logo', '模型 Logo', 'image'), field('scenarios', '适用场景', 'scenarios'), field('languages', '支持语言', 'languages')];
 export const COMMON_FIELDS = [field('tasks', '支持任务', 'tasks'), field('inputModalities', '输入模态', 'modalities'), field('outputModalities', '输出模态', 'modalities'), field('resultTypes', '结果类型', 'results')];
@@ -131,7 +131,7 @@ export function serviceModelDraft(model) {
   return { name:model?.name || '', modelId:model?.modelId || '', type:model?.type || '', author:profile.author || model?.maker || '', releaseDate:profile.releaseDate || '', tasks:profile.tasks || [], inputModalities:profile.inputModalities || [], outputModalities:[...new Set([...(profile.outputModalities || []), ...(profile.resultTypes || []).filter(value=>SERVICE_OUTPUT_MODALITIES.includes(value))])], context:context ? String(context / (contextUnit==='M'?1048576:1024)) : '', contextUnit, description:model?.description || '' };
 }
 export function serviceModelSourceDraft(state, model) {
-  const draft=serviceModelDraft(model), used=new Set(state.models.filter(row=>row.id!==model.id).map(row=>row.modelId.toLowerCase()));
+  const draft=serviceModelDraft(model), used=new Set(state.models.filter(row=>!row.deletedAt && row.id!==model.id).map(row=>row.modelId.toLowerCase()));
   if(used.has(draft.modelId.toLowerCase())){
     const base=draft.modelId.slice(0,60);let code=base+'-service',suffix=2;
     while(used.has(code.toLowerCase()))code=base+'-service-'+suffix++;
@@ -139,25 +139,46 @@ export function serviceModelSourceDraft(state, model) {
   }
   return draft;
 }
-export function serviceMetadataReady(model) {
+export function serviceMetadataMissingFields(model) {
   const data=serviceModelDraft(model);
-  return Boolean(data.name.trim() && data.modelId.trim() && data.type && data.author.trim() && /^\d{4}-\d{2}(-\d{2})?$/.test(data.releaseDate) && data.tasks.length && data.inputModalities.length && data.outputModalities.length && data.description.trim());
+  return [
+    [data.name.trim(), '模型展示名'],
+    [data.modelId.trim(), '模型编码'],
+    [data.type, '模型类型'],
+    [data.author.trim(), '模型作者'],
+    [/^\d{4}-\d{2}(-\d{2})?$/.test(data.releaseDate), '原厂发布日期'],
+    [data.tasks.length, '支持任务'],
+    [data.inputModalities.length, '输入模态'],
+    [data.outputModalities.length, '输出模态或结果类型'],
+    [data.description.trim(), '简短介绍'],
+  ].filter(([present]) => !present).map(([, label]) => label);
 }
-export function normalizeServiceModel(state, data, existing) {
-  const text = (value,label,max) => { if(typeof value!=='string' || !value.trim() || value.length>max) throw new Error(`${label}必填，最多 ${max} 字符`); return value.trim(); };
-  const name=text(data.name,'模型名称',100), modelId=existing?.modelId || text(data.modelId,'对外调用标识',80);
-  if(!existing && !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('对外调用标识须为英文字母、数字或 . _ : / -，最多 80 字符');
-  const author=text(data.author,'模型作者',100);
-  if(!modelAuthors(state).includes(author)) throw new Error('请选择已有模型作者');
-  const releaseDate=text(data.releaseDate,'发布时间',10);
-  if(!/^\d{4}-(0[1-9]|1[0-2])(-\d{2})?$/.test(releaseDate) || Number.isNaN(Date.parse(releaseDate)) || new Date(releaseDate).toISOString().slice(0,releaseDate.length)!==releaseDate) throw new Error('请选择有效的发布时间');
-  const selected=(value,options,label)=>{if(!Array.isArray(value) || !value.length || value.some(item=>!options.includes(item))) throw new Error(`请选择有效的${label}`); return [...new Set(value)];};
+export function serviceMetadataReady(model) {
+  return serviceMetadataMissingFields(model).length === 0;
+}
+export function normalizeServiceModel(state, data, existing, allowIncompleteProfile = false) {
+  const text = (value,label,max,required = true) => {
+    if (value == null && !required) return '';
+    if (typeof value !== 'string' || (required && !value.trim()) || value.length > max) throw new Error(`${label}${required ? '必填，' : ''}最多 ${max} 字符`);
+    return value.trim();
+  };
+  const name=text(data.name,'模型服务名称',100), modelId=existing?.modelId || text(data.modelId,'模型调用标识',80);
+  if(!existing && !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('模型调用标识须为英文字母、数字或 . _ : / -，最多 80 字符');
+  const author=text(data.author,'模型作者',100,!allowIncompleteProfile);
+  if(author && !modelAuthors(state).includes(author)) throw new Error('请选择已有模型作者');
+  const releaseDate=text(data.releaseDate,'发布时间',10,!allowIncompleteProfile);
+  if(releaseDate && (!/^\d{4}-(0[1-9]|1[0-2])(-\d{2})?$/.test(releaseDate) || Number.isNaN(Date.parse(releaseDate)) || new Date(releaseDate).toISOString().slice(0,releaseDate.length)!==releaseDate)) throw new Error('请选择有效的发布时间');
+  const selected=(value,options,label)=>{
+    if (value == null && allowIncompleteProfile) return [];
+    if (!Array.isArray(value) || (!allowIncompleteProfile && !value.length) || value.some(item=>!options.includes(item))) throw new Error(`请选择有效的${label}`);
+    return [...new Set(value)];
+  };
   const inputModalities=selected(data.inputModalities,INPUT_MODALITY_OPTIONS,'输入模态'), outputs=selected(data.outputModalities,SERVICE_OUTPUT_MODALITIES,'输出模态 / 结果类型');
   if(!['K','M'].includes(data.contextUnit)) throw new Error('上下文单位请选择 K 或 M');
   const amount=String(data.context ?? '').trim();
   const context=amount ? Number(amount) * (data.contextUnit==='M'?1048576:1024) : null;
   if(amount && (!/^\d+(?:\.\d+)?$/.test(amount) || !Number.isSafeInteger(context) || context<=0)) throw new Error('上下文须为正数，换算后的 Token 数必须为有效整数');
-  return {name,modelId,type:data.type,maker:author,description:text(data.description,'模型简介',1000),usageUnit:existing?.usageUnit,profile:{...existing?.profile,...(data.tasks?{tasks: [...new Set(data.tasks)]}:{}),author,releaseDate,inputModalities,outputModalities:outputs.filter(value=>INPUT_MODALITY_OPTIONS.includes(value)),resultTypes:outputs.filter(value=>!INPUT_MODALITY_OPTIONS.includes(value))},capabilities:{...existing?.capabilities,context}};
+  return {name,modelId,type:data.type,maker:author,description:text(data.description,'模型简介',1000,!allowIncompleteProfile),usageUnit:existing?.usageUnit,profile:{...existing?.profile,...(data.tasks?{tasks: [...new Set(data.tasks)]}:{}),author,releaseDate,inputModalities,outputModalities:outputs.filter(value=>INPUT_MODALITY_OPTIONS.includes(value)),resultTypes:outputs.filter(value=>!INPUT_MODALITY_OPTIONS.includes(value))},capabilities:{...existing?.capabilities,context}};
 }
 
 export function modelKeySpecs(model) {

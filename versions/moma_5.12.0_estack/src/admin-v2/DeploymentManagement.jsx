@@ -9,6 +9,7 @@ import { FilterToolbar, FilterReset, PAGE_SIZES, normalizePageSize } from '../co
 import AdminPageHeading from './AdminPageHeading';
 import { Choice, CopyId, serviceOperationsUi } from './ServiceUI';
 import { canMutate } from './store';
+import { serviceCallIdentifiers } from './service-workspace';
 import { DEPLOYABLE_TYPES, runnableArtifact, deploymentGpu, deploymentConfig, deploymentPreflight, deploymentTransaction } from './deployments';
 import './deployment-management.css';
 
@@ -251,7 +252,7 @@ function DeploymentDetail({ item, state, can, go, ask, tab }) {
         {tab === 'config' ? <>
           <Title heading={5} component="h2">模型与运行环境</Title>
           <Facts values={[
-            ['模型', model?.name], ['模型编码', model?.modelId], ['模型权重', item.weightId ? artifactName(item.weightId) : item.weightPath],
+            ['模型展示名', model?.name], ['模型调用标识', model ? serviceCallIdentifiers(model).join('、') : '—'], ['模型权重', item.weightId ? artifactName(item.weightId) : item.weightPath],
             ['运行时镜像', artifactName(item.runtimeId)], ['原登记制品', artifactName(item.artifactId)], ['命名空间', item.namespace],
             ['集群', cluster?.name], ['GPU 型号', cluster?.gpuType], ['目标副本数', item.replicas], ['每副本 GPU', item.gpuPerReplica],
             ['张量并行 / 流水线并行', item.tensorParallel ? `${item.tensorParallel} / ${item.pipelineParallel}` : '—'],

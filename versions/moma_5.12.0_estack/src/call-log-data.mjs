@@ -52,7 +52,7 @@ export function logJSON(row) {
     api_key_id: row.keyId, api_key_name: row.keyName, api_key: row.apiKey ? maskApiKey(row.apiKey) : null, client_ip: row.clientIp ?? null,
     endpoint_id: row.endpointId ?? null, endpoint_name: row.endpointName ?? null,
     resource_id: row.resourceId ?? null, resource_name: row.resource,
-    status: row.status, error_code: logStatuses[row.status]?.[1] || null,
+    status: row.status, error_code: row.error || logStatuses[row.status]?.[1] || null,
     input_tokens: row.input, output_tokens: row.output, total_tokens: row.total, cache_tokens: row.cache,
     thinking_tokens: row.thinking ?? null, ttft: row.first, tpot: row.tpot ?? null, duration_ms: row.duration,
     is_timeout: row.isTimeout ?? null, is_canceled: row.isCanceled ?? null,
@@ -68,6 +68,6 @@ export function logsCSV(rows) {
   return '\ufeff' + values.map(row => row.map(escape).join(',')).join('\r\n');
 }
 
-export function tenantLogRecords({requests=[],models=[],keys=[]}) {
-  return requests.map(row=>{const usage=row.usage||{},key=keys.find(item=>item.id===row.keyId),model=models.find(item=>item.id===row.modelId),input=usage.input??null,output=usage.output??null;return {id:row.requestId||row.id,billing:row.billingType||'按量付费',time:new Date(row.createdAt).toLocaleString('sv-SE',{timeZone:'Asia/Shanghai',hour12:false}),model:row.publicModelId||model?.modelId||row.modelId,source:row.source==='网页端调用'?'模型体验':row.source||'API 调用',keyId:row.keyId||'',keyName:key?.name||'',apiKey:key?.secretPreview||'',resource:row.subscriptionId||null,input,output,total:input!==null&&output!==null?input+output:null,cache:usage.cached??null,first:row.ttftMs??null,duration:row.durationMs??null,status:row.httpStatus,stream:row.stream??null,endpointId:row.serviceId||null};});
+export function tenantLogRecords({requests=[],models=[],keys=[],logKeys=keys}) {
+  return requests.map(row=>{const usage=row.usage||{},key=logKeys.find(item=>item.id===row.keyId),model=models.find(item=>item.id===row.modelId),input=usage.input??null,output=usage.output??null;return {id:row.requestId||row.id,billing:row.billingType||'按量付费',time:new Date(row.createdAt).toLocaleString('sv-SE',{timeZone:'Asia/Shanghai',hour12:false}),model:row.publicModelId||model?.modelId||row.modelId,source:row.source==='网页端调用'?'模型体验':row.source||'API 调用',keyId:row.keyId||'',keyName:key?.name||'',apiKey:key?.secretPreview||'',resource:row.subscriptionId||null,input,output,total:input!==null&&output!==null?input+output:null,cache:usage.cached??null,first:row.ttftMs??null,duration:row.durationMs??null,status:row.httpStatus,error:row.error,finishedAt:row.updatedAt ? new Date(row.updatedAt).toLocaleString('sv-SE',{timeZone:'Asia/Shanghai',hour12:false}) : null,requestBody:row.requestBody,responseBody:row.responseBody,stream:row.stream??null,endpointId:row.serviceId||null};});
 }

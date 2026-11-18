@@ -1,3 +1,4 @@
+import { resourceId } from './resource-id.mjs';
 import {APPLICATION_CONFIG} from './mock/application-data.js';
 import mockConfig from './mock/catalogues.json' with {type:'json'};
 import {authBusinessSnapshot} from './auth-link-sync.mjs';
@@ -7,10 +8,11 @@ import { memberPhoneError, normalizeMemberPhone } from './organization-data.mjs'
 import { normalizeAdminLogin } from './admin-v2/admin-accounts.js';
 
 // Browser-local interaction state; never authorizes backend or gateway access.
-export const AUTH_STORAGE_KEY = 'moma-auth-prototype-5120-v1';
+export { AUTH_DATA_KEY as AUTH_STORAGE_KEY } from './workspace-storage.mjs';
+import { AUTH_DATA_KEY as AUTH_STORAGE_KEY } from './workspace-storage.mjs';
 export const AUTH_INVITE = mockConfig["auth-state.mjs"]["AUTH_INVITE"];
 export const emptyAuthState = () => structuredClone(APPLICATION_CONFIG.auth);
-export const authRoute = hash => /^#\/auth\/(login|register|account|enterprise|invite|application|activate|password)(?:\?|$)/.exec(hash)?.[1] || null;
+export const authRoute = hash => /^#\/auth\/(login|account|enterprise|invite|application|activate|password)(?:\?|$)/.exec(hash)?.[1] || null;
 export const currentAuthUser = state => state.accounts.find(account => account.id === state.currentUserId) || null;
 export const authPhone = value => {
   const phone = normalizeMemberPhone(value), error = memberPhoneError(phone);
@@ -41,29 +43,29 @@ export function verifyAuthCode(challenge, { identity, type = 'phone', code, purp
   return true;
 }
 
-export function registerAuthAccount(state, { phone, name = '' }, allowExisting = false) {
-  phone = authPhone(phone);
-  const existing = state.accounts.find(account => account.phone === phone);
-  if (existing && !allowExisting) throw new Error('该手机号已注册，请直接登录');
-  if (existing?.status === '停用') throw new Error('该账号已停用，请联系平台管理员');
-  if (existing?.activation) throw new Error('账号尚未激活，请使用收到的激活链接');
-  const account = existing || { id: `auth-user-${crypto.randomUUID()}`, phone, name: name.trim() || `用户${phone.slice(-4)}`, status: '正常', registeredAt: new Date().toISOString() };
-  return { ...state, accounts: existing ? state.accounts : [...state.accounts, account], currentUserId: account.id, activeSpace: availableAuthSpaces({ ...state, currentUserId: account.id }).some(space => space.id === state.activeSpace) ? state.activeSpace : 'personal' };
+export function findAuthAccount(state, identifier) {
+  const isEmail = identifier.includes('@');
+  const normalized = isEmail ? identifier.trim().toLowerCase() : normalizeMemberPhone(identifier);
+  const accounts = state.accounts.filter(item => isEmail ? String(item.email || '').trim().toLowerCase() === normalized : item.phone === normalized);
+  if (accounts.length > 1) throw new Error('登录账号对应多条身份，请联系平台管理员');
+  return accounts[0];
 }
 
 export function loginAuthAccount(state, identifier, userType, policy = AUTH_ENTERPRISE_LOGIN) {
-  if (!['personal', 'enterprise'].includes(userType)) throw new Error('请选择个人用户或企业用户');
-  const normalized = normalizeAuthLogin(identifier, userType, policy), isEmail = normalized.includes('@');
-  const accounts = state.accounts.filter(item => isEmail ? String(item.email || '').trim().toLowerCase() === normalized : item.phone === normalized);
-  if (accounts.length > 1) throw new Error('登录账号对应多条身份，请联系平台管理员');
-  const account = accounts[0];
-  if (!account) throw new Error(isEmail ? '该邮箱未登记，请联系企业管理员' : '该手机号尚未注册，请前往注册');
+  const normalized = userType === undefined ? identifier : normalizeAuthLogin(identifier, userType, policy);
+  const isEmail = normalized.includes('@');
+  const account = findAuthAccount(state, normalized);
+  if (!account) throw new Error(isEmail ? '该邮箱未登记，请联系企业管理员' : '该手机号未开通账号，请联系管理员');
   if (account.status !== '正常') throw new Error('该账号已停用，请联系平台管理员');
   if (account.activation) throw new Error('账号尚未激活，请使用收到的激活链接');
   const next = { ...state, currentUserId: account.id };
   const spaces = availableAuthSpaces(next);
+  if (userType === undefined) {
+    userType = !isEmail && spaces.some(space => space.id === 'personal') ? 'personal' : 'enterprise';
+    normalizeAuthLogin(identifier, userType, policy);
+  }
   if (userType === 'personal') {
-    if (!spaces.some(space => space.id === 'personal')) throw new Error('个人账号已停用，请联系平台管理员或选择企业用户登录');
+    if (!spaces.some(space => space.id === 'personal')) throw new Error('个人账号已停用，请联系平台管理员');
     return { ...next, activeSpace: 'personal' };
   }
   const enterprises = spaces.filter(space => space.id !== 'personal');
@@ -119,7 +121,8 @@ export function submitAuthApplication(state, data, verification, applicationId =
   values.adminType = values.contactType;
   values.adminIdentity = values.contactIdentity;
   if (state.applications.some(item => item.id !== applicationId && item.taxId === values.taxId && item.status !== '已关闭')) throw new Error('该主体已有开通申请，请查看申请进度');
-  const application = { ...previous, ...values, countryRegion: '中国', id: previous?.id || `APP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, status: '待处理', createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const id = previous?.id || resourceId('customer-application');
+  const application = { ...previous, ...values, countryRegion: '中国', id, applicationNumber: previous?.applicationNumber || previous?.id || applicationNumber(id), status: '待处理', createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
   // Application intake never creates an identity, session, subject or membership.
   return { ...state, applications: previous ? state.applications.map(item => item.id === applicationId ? application : item) : [...state.applications, application] };
 }
@@ -165,14 +168,18 @@ export function submitEnterpriseCertification(state, data, applicationId = null)
   if (applicationId && (!previous || previous.applicantUserId !== user.id)) throw new Error('无权修改该认证申请');
   if (previous && previous.status !== '需补充') throw new Error('当前认证申请不能修改');
   if (state.applications.some(item => item.id !== applicationId && item.taxId === values.taxId && item.status !== '已关闭')) throw new Error('该主体已有认证申请，请查看认证记录');
-  const record = { ...previous, ...values, authorized: true, applicantUserId: user.id, purpose: 'enterprise-certification', countryRegion: '中国', id: previous?.id || `APP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, status: '待处理', createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const id = previous?.id || resourceId('customer-application');
+  const record = { ...previous, ...values, authorized: true, applicantUserId: user.id, purpose: 'enterprise-certification', countryRegion: '中国', id, applicationNumber: previous?.applicationNumber || previous?.id || applicationNumber(id), status: '待处理', createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
   return { ...state, applications: previous ? state.applications.map(item => item.id === previous.id ? record : item) : [...state.applications, record] };
 }
+
+const applicationNumber = id => 'APP-' + id.slice('customer-application-'.length, 'customer-application-'.length + 8).toUpperCase();
 
 export function queryAuthApplication(state, id, verification) {
   verifyAuthCode(verification.challenge, { ...verification, purpose: 'application' });
   const contactIdentity = normalizeAdminLogin(verification.identity, verification.type);
-  const result = state.applications.find(item => item.id === id.trim().toUpperCase() && item.contactType === verification.type && item.contactIdentity === contactIdentity);
+  const value = id.trim().toUpperCase();
+  const result = state.applications.find(item => (item.id.toUpperCase() === value || item.applicationNumber === value) && item.contactType === verification.type && item.contactIdentity === contactIdentity);
   if (!result) throw new Error('申请编号与联系人不匹配，请核对后重试');
   return result;
 }

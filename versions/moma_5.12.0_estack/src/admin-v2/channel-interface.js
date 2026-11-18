@@ -1,12 +1,13 @@
 export const CHANNEL_INTERFACES = [
-  { id: 'openai', label: 'OpenAI 兼容', protocol: 'OpenAI' },
-  { id: 'anthropic', label: 'Anthropic 原生', protocol: 'Anthropic' },
-  { id: 'custom', label: '自定义任务端点', protocol: '其他' },
+  { id: 'openai', label: 'OpenAI 兼容 API（Chat Completions）', protocol: 'OpenAI' },
+  { id: 'openai-responses', label: 'OpenAI 兼容 API（Responses）', protocol: 'OpenAI' },
+  { id: 'anthropic', label: 'Anthropic Messages API', protocol: 'Anthropic' },
 ];
 
 const modelTypes = ['text', 'multimodal', 'embedding', 'rerank', 'image', 'video', 'audio'];
 const completePaths = {
   openai: ['/chat/completions', '/embeddings', '/responses', '/images/generations', '/audio/transcriptions', '/audio/speech'],
+  'openai-responses': ['/responses', '/chat/completions'],
   anthropic: ['/messages'],
 };
 
@@ -52,7 +53,7 @@ export function suggestChannelRoot({ interfaceType, baseUrl, allowHttp = false }
 }
 
 export function prepareChannelInterface({ interfaceType, baseUrl, taskUrls = {}, allowHttp = false }) {
-  const preset = CHANNEL_INTERFACES.find(row => row.id === interfaceType);
+  const preset = CHANNEL_INTERFACES.find(row => row.id === interfaceType) || (interfaceType === 'custom' ? { protocol: '其他' } : null);
   if (!preset) throw new Error('请选择已支持的接口类型');
   const url = checkedUrl(baseUrl, allowHttp);
   if (interfaceType !== 'custom') {
@@ -83,9 +84,26 @@ export function modelTaskUrl(endpoint, modelType, { probe } = {}) {
   if (!endpoint || !modelTypes.includes(modelType)) throw new Error('请选择已支持的模型任务');
   const { interfaceType, baseUrl, taskUrls } = prepareChannelInterface({ ...endpoint, allowHttp: endpoint.allowHttp === true });
   if (interfaceType === 'custom') return taskUrls[modelType] || baseUrl;
-  const task = interfaceType === 'anthropic'
-    ? ['text', 'multimodal'].includes(modelType) ? 'messages' : null
+  const task = ['anthropic', 'openai-responses'].includes(interfaceType)
+    ? ['text', 'multimodal'].includes(modelType) ? interfaceType === 'anthropic' ? 'messages' : 'responses' : null
     : ({ text: 'chat/completions', multimodal: 'chat/completions', embedding: 'embeddings', image: 'images/generations', audio: probe === 'speech' ? 'audio/speech' : probe === 'transcription' ? 'audio/transcriptions' : null })[modelType];
   if (!task) throw new Error('当前接口预设尚不支持此模型任务，请使用已支持的自定义任务端点');
   return `${baseUrl}/${task}`;
+}
+
+export function channelConversationRequest(endpoint, model) {
+  const body = { model: model.upstreamModelId, stream: model.check === 'streaming' };
+  const prompt = '请回复你好。';
+  if (endpoint.interfaceType === 'openai-responses') Object.assign(body, { input: prompt, max_output_tokens: 32 });
+  else if (endpoint.interfaceType === 'anthropic') Object.assign(body, { messages: [{ role: 'user', content: prompt }], max_tokens: 32 });
+  else Object.assign(body, { messages: [{ role: 'user', content: prompt }], [endpoint.tokenLimitField || endpoint.adapterOptions?.tokenLimitField || 'max_completion_tokens']: 32 });
+  return { method: 'POST', url: modelTaskUrl(endpoint, model.type), body };
+}
+
+export function channelConversationText(interfaceType, response) {
+  const text = interfaceType === 'openai-responses'
+    ? response?.output?.filter(item => item.type === 'message').flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('')
+    : interfaceType === 'anthropic' ? response?.content?.filter(item => item.type === 'text').map(item => item.text).join('') : response?.choices?.[0]?.message?.content;
+  if (typeof text !== 'string' || !text.trim()) throw new Error('上游响应格式不匹配或未返回文本');
+  return text;
 }

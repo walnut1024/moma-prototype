@@ -30,6 +30,7 @@ export function officialSupplyRecords() {
 }
 
 export function officialCatalogueTransaction(state) {
+  if (state.modelData?.sourceScope === 'reference-only-v2') throw Error('当前工作区请通过渠道管理导入内置服务商目录');
   const records = officialSupplyRecords(), changes = [];
   for (const collection of ['providers', 'endpoints']) for (const record of records[collection]) {
     if (!state[collection].some(item => item.id === record.id)) changes.push({ type: 'add', collection, record });

@@ -2,7 +2,8 @@ import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAdminState as baseParseAdminState, commitAdminState, persistModelAction, serializeAdminState } from '../src/admin-v2/store.js';
-import { ONBOARDING_PROVIDER_PRESETS, onboardingProviderPreset, resolveOnboardingProvider, onboardingModelOptions, onboardingModelPreset } from '../src/admin-v2/onboarding-presets.js';
+import { ONBOARDING_PROVIDER_PRESETS, onboardingProviderPreset, resolveOnboardingProvider, onboardingModelOptions, onboardingModelPreset, officialChannelReferences } from '../src/admin-v2/onboarding-presets.js';
+import { OFFICIAL_CHANNEL_PRESETS } from '../src/admin-v2/official-channel-presets.js';
 import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
 import { providerKeyGroups } from '../src/admin-v2/provider-key-groups.js';
 import { connectionKeys } from '../src/admin-v2/connection-state.js';
@@ -16,9 +17,88 @@ const values = (extra = {}) => ({ name: '快捷渠道', interfaceType: 'openai',
 const created = state => state.endpoints.find(row => row.id === state.audits[0].objectId);
 const keyMetadata = async value => (await providerApiKeysDraft([value])).apiKeys[0];
 
+test('official templates create draft channels for every provider with the documented model ID and base URL', async () => {
+  const state = clean(), before = structuredClone(state), newApiKey = await keyMetadata('temporary-official-template-key');
+  assert.deepEqual(OFFICIAL_CHANNEL_PRESETS.map(row => row.code), ['moma', 'bailian', 'volcengine', 'zhipu', 'deepseek', 'moonshot', 'minimax']);
+  for (const preset of OFFICIAL_CHANNEL_PRESETS) {
+    const selected = preset.models[0], references = officialChannelReferences(state, preset, selected);
+    const next = run(state, 'channelQuickCreate', { ...references.supplier, newApiKey, values: values({
+      name: selected.name, baseUrl: selected.baseUrl,
+      models: [{ ...references.model, upstreamModelId: selected.upstreamModelId }],
+    }) });
+    const endpoint = created(next), owner = next.providers.find(row => row.id === endpoint.providerId);
+    const [association] = supplierChannelAssociations(next, owner, endpoint.id);
+    assert.equal(owner.name, preset.name);
+    assert.equal(endpoint.baseUrl, selected.baseUrl);
+    assert.equal(endpoint.status, '草稿');
+    assert.equal(association.upstreamModelId, selected.upstreamModelId);
+    assert.equal(association.enabled, false);
+    assert.deepEqual(association.pricing.scenarios, []);
+    assert.equal(next.modelTemplates[0].profile.documentation, selected.profile.documentation);
+    assert.deepEqual(next.serviceRoutes, []);
+  }
+  assert.deepEqual(state, before);
+});
+
+test('MoMA templates reuse the existing supplier and save the selected model’s gateway and upstream ID', () => {
+  const state = parseAdminState(null), preset = OFFICIAL_CHANNEL_PRESETS.find(row => row.code === 'moma');
+  const cases = [
+    ['kimi/kimi-k3.1-pro', 'https://moma.cmecloud.cn/v1'],
+    ['deepseek-v4.1-flash-1017', 'https://vip.moma.cmecloud.cn/v1'],
+    ['glm-5.3', 'https://zhenze-huhehaote.cmecloud.cn/v1'],
+  ];
+  for (const [upstreamModelId, baseUrl] of cases) {
+    const selected = preset.models.find(row => row.upstreamModelId === upstreamModelId);
+    const refs = officialChannelReferences(state, preset, selected);
+    assert.deepEqual(refs.supplier, { providerId: 'provider-moma' });
+    assert.equal(selected.baseUrl, baseUrl);
+    const next = run(state, 'channelQuickCreate', { ...refs.supplier, values: values({ name: selected.name, baseUrl: selected.baseUrl,
+      models: [{ ...refs.model, upstreamModelId: selected.upstreamModelId }],
+    }) });
+    const endpoint = created(next), owner = next.providers.find(row => row.id === endpoint.providerId);
+    assert.equal(next.providers.length, state.providers.length);
+    assert.equal(endpoint.baseUrl, baseUrl);
+    assert.equal(endpoint.status, '草稿');
+    assert.deepEqual(supplierChannelAssociations(next, owner, endpoint.id).map(row => [row.upstreamModelId, row.enabled]), [[upstreamModelId, false]]);
+    assert.deepEqual(next.serviceRoutes, state.serviceRoutes);
+  }
+});
+
+test('official template selection reuses a known supplier and flags archived model material', () => {
+  const state = clean(), preset = OFFICIAL_CHANNEL_PRESETS.find(row => row.code === 'deepseek'), model = preset.models[0];
+  state.providers = [
+    { id: 'provider-cmss', code: 'deepseek', sourceType: 'thirdParty' },
+    { id: 'provider-deepseek-official', code: 'deepseek-official', sourceType: 'thirdParty' },
+  ];
+  state.modelTemplates = [{ id: 'existing-master', modelId: model.modelId, type: 'text' }];
+  state.modelData.archivedCatalogueIds = ['existing-master'];
+  assert.deepEqual(officialChannelReferences(state, preset, model), {
+    supplier: { providerId: 'provider-deepseek-official' }, model: { libraryId: 'existing-master' }, archived: true,
+  });
+});
+
+test('DeepSeek V4.1 Flash uses the model ID published by each provider', () => {
+  const expected = [
+    ['deepseek', 'deepseek-flash', 'https://api.deepseek.com'],
+    ['bailian', 'deepseek-v4.1-flash-1017', 'https://dashscope.aliyuncs.com/compatible-mode/v1'],
+    ['volcengine', 'deepseek-v4-1-flash-261017', 'https://ark.cn-beijing.volces.com/api/v3'],
+  ];
+  for (const [code, upstreamModelId, baseUrl] of expected) {
+    const supplier = OFFICIAL_CHANNEL_PRESETS.find(row => row.code === code);
+    const model = supplier.models.find(row => row.upstreamModelId === upstreamModelId);
+    assert.equal(supplier.baseUrl, baseUrl);
+    assert.equal(model.name, 'DeepSeek-V4.1-Flash-1017');
+    assert.equal(onboardingModelPreset(model.id).maker, 'DeepSeek');
+    assert.equal(onboardingModelPreset(model.id).modelId, code === 'deepseek' ? 'deepseek-flash' : 'deepseek-v4.1-flash-1017');
+  }
+  for (const supplier of OFFICIAL_CHANNEL_PRESETS) {
+    assert.equal(new Set(supplier.models.map(row => row.id)).size, supplier.models.length);
+  }
+});
+
 test('supplier presets contain only reference identity and choosing references never registers resources', () => {
   const state = clean(), before = structuredClone(state);
-  assert.ok(ONBOARDING_PROVIDER_PRESETS.some(row => row.id === 'moma'));
+  assert.equal(ONBOARDING_PROVIDER_PRESETS.filter(row => row.id === 'moma').length, 1);
   for (const row of ONBOARDING_PROVIDER_PRESETS) assert.deepEqual(Object.keys(row).sort(), ['id', 'code', 'name', 'sourceType', 'interfaceType', 'defaultBaseUrl', 'catalogModelIds', 'catalogueSource', 'catalogueCheckedAt'].sort());
   const provider = resolveOnboardingProvider(state, { providerPresetId: 'deepseek' }); assert.equal(provider.isDraft, true); assert.equal(provider.id, 'preset:deepseek');
   const options = onboardingModelOptions(state); assert.ok(options.some(row => row.modelPresetId === 'model-2' && !row.libraryId && row.sourceCheckedAt));

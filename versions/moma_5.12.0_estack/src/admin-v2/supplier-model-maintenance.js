@@ -1,3 +1,4 @@
+import { resourceId } from '../resource-id.mjs';
 import { catalogueChannels } from './provider-channels.js';
 import { providerCatalogueIds } from './moma-provider.js';
 import { supplierModelFields } from './supply-models.js';
@@ -76,7 +77,7 @@ export function supplierModelMaintenance(state, { operation, objectId, data = {}
     if (data.copyListPrice) {
       const active = activeSupplierListPrice(current);
       if (!active) throw new Error('来源模型没有有效刊例价');
-      copiedPrice = { ...supplierListPriceDraft({ ...active, scenarios: cataloguePriceDraft(active.pricing).scenarios, effectiveAt: new Date().toISOString(), expiresAt: active.expiresAt }, modelId), id: crypto.randomUUID(), version: 1, status: '已发布', publishedAt: new Date().toISOString(), createdAt: new Date().toISOString(), operator: state.currentRole };
+      copiedPrice = { ...supplierListPriceDraft({ ...active, scenarios: cataloguePriceDraft(active.pricing).scenarios, effectiveAt: new Date().toISOString(), expiresAt: active.expiresAt }, modelId), id: resourceId('list-price-version'), version: 1, status: '已发布', publishedAt: new Date().toISOString(), createdAt: new Date().toISOString(), operator: state.currentRole };
     }
     fields.catalogModels = fields.catalogModels.map(row => row.modelId === modelId ? { ...row, supplyProfile: profile, supplyProfileRevision: (row.supplyProfileRevision || 0) + 1, copiedFrom: { providerId: provider.id, modelId: data.modelId }, ...(copiedPrice ? { listPriceRevision: (row.listPriceRevision || 0) + 1, listPriceVersions: [...(row.listPriceVersions || []), { ...copiedPrice, version: (row.listPriceRevision || 0) + 1 }] } : {}) } : row);
     return update(target, fields, '复制创建供应模型');
@@ -89,7 +90,7 @@ export function supplierModelMaintenance(state, { operation, objectId, data = {}
     const price = supplierListPriceDraft(data, data.modelId);
     if (price.expiresAt && Date.parse(price.expiresAt) <= Date.now()) throw new Error('刊例价已经到期，不能发布');
     const revision = (association.listPriceRevision || 0) + 1;
-    const next = { ...price, id: crypto.randomUUID(), version: revision, status: '已发布', publishedAt: new Date().toISOString(), createdAt: new Date().toISOString(), operator: state.currentRole };
+    const next = { ...price, id: resourceId('list-price-version'), version: revision, status: '已发布', publishedAt: new Date().toISOString(), createdAt: new Date().toISOString(), operator: state.currentRole };
     const records = provider.catalogConnections || [];
     const stored = records.find(row => !row.deletedAt && row.modelId === data.modelId && row.endpointId === data.endpointId && (row.id || association.id) === association.id);
     const record = { ...(stored || { id: association.id, modelId: data.modelId, endpointId: data.endpointId }), listPriceRevision: revision, listPriceVersions: [...(association.listPriceVersions || []), next] };
@@ -101,7 +102,7 @@ export function supplierModelMaintenance(state, { operation, objectId, data = {}
     if (data.confirmed !== true) throw new Error('请确认发布刊例价，采购价和客户售价保持不变');
     const price = supplierListPriceDraft(data, data.modelId);
     if (price.expiresAt && Date.parse(price.expiresAt) <= Date.now()) throw new Error('刊例价已经到期，不能发布');
-    const next = { ...price, id: crypto.randomUUID(), version: revision, status: '已发布', publishedAt: new Date().toISOString(), createdAt: new Date().toISOString(), operator: state.currentRole };
+    const next = { ...price, id: resourceId('list-price-version'), version: revision, status: '已发布', publishedAt: new Date().toISOString(), createdAt: new Date().toISOString(), operator: state.currentRole };
     return save({ ...current, listPriceRevision: revision, listPriceVersions: [...versions, next] }, '发布服务商刊例价');
   }
   throw new Error('未知服务商模型维护操作');

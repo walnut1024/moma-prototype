@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { normalizeModelLogo } from './model-profile';
 
-export default function MaterialLogo({ src, alt, preview = false }) {
+export default function MaterialLogo({ src, alt, preview = false, fallback = '—' }) {
   const [failed, setFailed] = useState(false);
   return src && !failed
     ? <img className={preview ? 'materials-logo-preview' : 'materials-logo'} src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)}/>
-    : '—';
+    : fallback;
 }
 
 export async function readMaterialLogo(file, maxSize = 1024 * 1024) {

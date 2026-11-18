@@ -1,4 +1,5 @@
 import {recordTenantExperience} from './tenant-data.mjs';
+import { mockTextUsage } from './project-call.mjs';
 import mockConfig from './mock/catalogues.json' with { type: 'json' };
 import { useServiceDirectory } from './useServiceDirectory';
 import { beginExperience, validateExperience } from './service-directory.mjs';
@@ -70,10 +71,11 @@ export default function ModelExperience({
   kind = "text",
   groupLabel,
   onKindChange,
-  onCompare, initialServiceId = "", owner = "",
+  onCompare, initialServiceId = "", owner = "", project,
 }) {
   const [mode, setMode] = useState("语音识别");
-  const directory = useServiceDirectory(kind), models = directory.models;
+  const directory = useServiceDirectory(kind, project), models = directory.models;
+  const projectId = project.id;
   const [draft] = useState(() => { try { return readExperienceDraft(owner, kind); } catch { return { storageError: '草稿读取失败，请核对本地存储' }; } });
   const ticket = useRef(null);
   const [model, setModel] = useState(initialServiceId || draft.model || models.find(item => item.callable)?.id || '');
@@ -368,12 +370,18 @@ export default function ModelExperience({
     event?.preventDefault();
     if (busy || !model || (asr && !file) || (!asr && !text.trim() && !file))
       return;
-    try { ticket.current = beginExperience(model, kind); if (file && kind !== 'voice' && !selectedModel?.inputModalities.includes('image')) throw new Error('所选模型不支持参考图片'); } catch (error) { setError(error.message); return; }
+    const prompt = text.trim() || (kind === 'text' && file ? '请分析这个文件' : '');
+    const response = visualGeneration ? '' : asr ? mockConfig['ModelExperience.jsx'].response.asr
+      : tts ? prompt : mockConfig['ModelExperience.jsx'].response.answer;
+    const usage = kind === 'text' ? mockTextUsage(prompt, response)
+      : asr && recordSeconds ? { seconds: recordSeconds }
+      : tts ? { characters: Array.from(prompt).length } : {};
+    try { ticket.current = beginExperience(model, kind, {projectId, usage, images:Boolean(file && kind !== 'voice')}); } catch (error) { setError(error.message); return; }
     setError('');
     setNotice('');
     setBusy(true);
     const message = {
-      text: text.trim() || (kind === "text" && file ? "请分析这个文件" : ""),
+      text: prompt,
       file: file?.name,
       model: selectedModel?.name, serviceId: model, owner,
       mode,
@@ -401,18 +409,13 @@ export default function ModelExperience({
     // ponytail: local mock response only; replace with model API when integration is requested.
     timer.current = setTimeout(() => {
       try { validateExperience(ticket.current); } catch (error) { setError(error.message); setBusy(false); return; }
-      try{recordTenantExperience(ticket.current,200);}catch(error){setError(error.message);setBusy(false);return;}
+      try { recordTenantExperience(ticket.current, 200, undefined, {input:prompt, output:response}); }
+      catch(error) { setError(error.message); setBusy(false); return; }
       setMessages((items) => [
         ...items,
         {
           ...message,
-          answer: visualGeneration
-            ? ""
-            : asr
-              ? mockConfig['ModelExperience.jsx'].response.asr
-              : tts
-                ? message.text
-                : mockConfig['ModelExperience.jsx'].response.answer,
+          answer: response,
           points:
             visualGeneration || asr || tts
               ? null
@@ -1290,7 +1293,7 @@ export default function ModelExperience({
             ? "AI 生成内容可能存在偏差，使用前请自行核实。使用本服务会消耗已订购额度，具体以用量记录为准。"
             : asr
               ? "识别结果可能存在偏差，请结合录音核对。"
-              : "体验产生的用量将从您已订购的模型额度中扣除，具体以用量记录为准。"}
+              : "体验用量与费用归属当前项目，具体以调用记录为准。"}
         </p>
         {tts && !messages.length && (
           <section

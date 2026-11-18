@@ -50,6 +50,13 @@ test('first-key changes stage a candidate, preserve current calls and require pa
   for(const key of ['models','serviceRoutes','modelSalePrices'])assert.deepEqual(applied[key],state[key],key);
   const rollback=candidate(applied,'keyGroupCandidateRollback',{targetVersion:0});assert.deepEqual(owner(rollback).keyGroupCandidates[0].keyIds,group(state).keyIds);
 });
+test('dragging a key across two positions stages the moved order and rejects targets outside the group', () => {
+  const state = legacySupplierState();
+  const staged = run(state, 'KEY-003', undefined, { targetKeyId: 'KEY-001' });
+  assert.deepEqual(owner(staged).keyGroupCandidates[0].keyIds, ['KEY-003', 'KEY-001', 'KEY-002']);
+  assert.deepEqual(group(staged).keyIds, group(state).keyIds);
+  assert.throws(() => run(state, 'KEY-003', undefined, { targetKeyId: 'foreign' }));
+});
 test('unreferenced groups save primary order directly; disabled or revoked new primaries are rejected',()=>{
   const state=legacySupplierState();state.endpoints=state.endpoints.filter(row=>row.providerId!=='provider-moma');
   const next=run(state,'KEY-002','up');assert.equal(owner(next).defaultApiKeyId,'KEY-002');assert.ok(!owner(next).keyGroupCandidates?.length);

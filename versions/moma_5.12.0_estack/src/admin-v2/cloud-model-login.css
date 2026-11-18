@@ -7,7 +7,3 @@
   padding: 24px 16px;
   background: var(--semi-color-bg-0);
 }
-.mo-cloud-login-card { width: min(100%, 400px); }
-.mo-cloud-login-card form { margin-top: 12px; }
-.mo-cloud-login-card form > .semi-button { margin-top: 12px; }
-.mo-cloud-login-card .semi-banner { margin-top: 16px; }

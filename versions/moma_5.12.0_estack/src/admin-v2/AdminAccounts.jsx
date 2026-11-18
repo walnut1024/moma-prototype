@@ -1,3 +1,4 @@
+import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
@@ -52,7 +53,7 @@ function AccountEditor({ account, revision, canWrite, transact, close, complete 
       transact({
         type: 'adminAccount',
         operation: account ? 'edit' : 'create',
-        id: account?.id || `admin-${crypto.randomUUID()}`,
+        id: account?.id || resourceId('admin-account'),
         values: { ...draft, account: login },
       }, revision);
       complete(account ? '后台账号已更新' : '后台账号已新建', password ? { account: login, password, label: '初始密码' } : null);
@@ -195,7 +196,7 @@ export default function AdminAccounts({ state, transact, conflict }) {
   const verb = resetting ? '重置' : disabling ? '停用' : '启用';
   return (
     <div className="aa-page admin-page-stack">
-      <AdminPageHeading title="账号管理" description="管理后台人员的账号、手机号码、角色及启停状态。">
+      <AdminPageHeading title="后台账号" description="管理后台人员的账号、手机号码、角色及启停状态。">
         <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite} onClick={() => setEditor({ account: null, revision: state.revision })}>新建账号</Button>
       </AdminPageHeading>
       {!canWrite && <Banner type="warning" closeIcon={null}

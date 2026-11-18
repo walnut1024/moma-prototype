@@ -1,8 +1,10 @@
+import { modelTaskUrl } from './channel-interface.js';
+import { resourceId } from '../resource-id.mjs';
 import { offerKey } from '../service-access.mjs';
 import { servicePurpose } from './service-purpose.js';
 import {serviceModelSources} from './supply-models.js';
 import { normalizeModelProfile, requireModelBasics, normalizeServiceModel, serviceMetadataReady } from './model-profile.js';
-import { activeModelSalePrice, activeProviderPrice, providerServices, providerServiceId, serviceDirectoryModels } from './service-workspace.js';
+import { activeModelSalePrice, activeProviderPrice, providerServices, providerServiceId, serviceSourceIds, serviceNameInUse, DUPLICATE_SERVICE_NAME } from './service-workspace.js';
 import { routingChannels, routingStatus } from './service-routing.js';
 import { addCatalogueExamples } from './model-catalogue-examples.js';
 import { catalogueMetadata } from './real-model-catalogue.js';
@@ -14,6 +16,7 @@ import { libraryRecord } from './model-library.js';
 import { platformPublicationCheck, platformPublicationFingerprint } from './platform-publication-state.js';
 
 export const MODEL_TYPES = { text: '语言模型', multimodal: '视觉理解', image: '图像生成', video: '视频生成', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
+export const SERVICE_MODEL_TYPES = { text: '语言模型', visual: '视觉模型', multimodal: '多模态模型', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
 export const MODEL_CATEGORIES = { text: '语言模型', multimodal: '视觉理解', visual: '视觉生成', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
 export const MODEL_CATEGORY_DESCRIPTIONS = {
   text: '以对话、写作和推理为主，也可理解图片、视频。',
@@ -26,6 +29,7 @@ export const MODEL_CATEGORY_DESCRIPTIONS = {
 export const modelCategory = type => ['image', 'video'].includes(type) ? 'visual' : type;
 export const modelCode = model => model.modelId;
 export function supplyModelUrl(supply, model) {
+  if (supply.endpoint?.interfaceType && model?.type) { try { return modelTaskUrl(supply.endpoint, model.type); } catch { return ''; } }
   const path = supply.provider?.catalogModels?.find(item => item.modelId === (supply.catalogueModelId || supply.upstreamModelId))?.endpoint?.trim();
   const base = supply.endpoint?.baseUrl?.trim() || '';
   if (path) { try { return new URL(path, base || undefined).href; } catch { return ''; } }
@@ -51,7 +55,6 @@ export function modelSupplierRows(model, supplies) {
   return [...groups.values()];
 }
 export const MODEL_TABS = { basic: '基本信息', supplies: '服务商', pricing: '价格配置', publication: '上架配置', history: '变更记录' };
-const uid = prefix => `${prefix}-${crypto.randomUUID()}`;
 const add = (collection, record) => ({ type: 'add', collection, record });
 const update = (collection, id, changes) => ({ type: 'update', collection, id, changes });
 const timestamp = () => new Date().toISOString();
@@ -123,7 +126,7 @@ export function publicationChecks(state, model, { technical = false, serviceId }
         const provider=state.providers.find(item=>item.id===entry.providerId), price=activeProviderPrice(state,model.id,offerKey(entry)), service={id:providerServiceId(model.id,offerKey(entry)),modelId:model.id,model,providerId:entry.providerId,channelId:entry.channelId,mode:'provider',callId:entry.callId};
         const channels=routingChannels(state,service);
         const priceReady=provider?.status==='已启用' && Boolean(entry.callId) && (technical || servicePurpose(model,offerKey(entry))!=='internal' && Boolean(price?.items.length) && price.items.every(item=>item.amount!=null)), routeReady=routingStatus(state,service).good;
-        return [{label:`${provider?.name || '服务商'}：${technical?(entry.callId?'对外调用标识 已配置':'对外调用标识 待配置'):priceReady?'调用 ID 和售价已配置':!entry.callId?'对外调用标识 待配置':'缺少对外售价'}`,passed:priceReady,tab:'pricing',providerId:offerKey(entry)},
+        return [{label:`${provider?.name || '服务商'}：${technical?(entry.callId?'模型调用标识 已配置':'模型调用标识 待配置'):priceReady?'模型调用标识和售价已配置':!entry.callId?'模型调用标识 待配置':'缺少对外售价'}`,passed:priceReady,tab:'pricing',providerId:offerKey(entry)},
           {label:`${provider?.name || '服务商'}：${routeReady?'已发布可用渠道路由':channels.length?'路由尚未发布':'未关联可用渠道'}`,passed:routeReady,tab:'routing',providerId:offerKey(entry),mapping:!channels.length}];
       }),
       platformPublicationCheck(state,model,Date.now(),serviceId),
@@ -204,39 +207,62 @@ export function modelTransaction(state, action) {
     return { type: 'batch', label: `批量导入 ${data.models.length} 个模型`, objectId: 'models', changes };
   }
   const changes = [], at = timestamp();
-  const creating = operation === 'create' || operation === 'createServiceModel';
+  const creatingService = operation === 'createServiceModel';
+  // A service needs a stable identity before any supplier is registered.
+  const draftId = creatingService && !action.deferServiceMode && !Object.hasOwn(data, 'libraryId') ? resourceId('service') : null;
+  if (draftId) {
+    const { name, type, serviceMode } = data;
+    if (typeof name !== 'string' || !name.trim() || name.length > 100) throw new Error('模型服务名称必填，最多 100 字符');
+    if (typeof type !== 'string' || !Object.hasOwn(SERVICE_MODEL_TYPES, type)) throw new Error('请选择有效的模型类型');
+    data = { name: name.trim(), type, serviceMode, modelId: 'model-' + draftId.slice('service-'.length) };
+  }
+  const creating = operation === 'create' || creatingService;
   let model = creating ? null : state.models.find(item => item.id === action.modelId);
   if (!creating && !model) throw new Error('模型不存在');
   if(model?.archivedAt && !action.catalogue)throw Error('服务已归档，请先恢复服务');
   let objectId = model?.id;
   if (creating || operation === 'basic' || operation === 'serviceBasics') {
-    const libraryId = operation === 'createServiceModel' ? data.libraryId : model?.templateId;
+    const libraryId = creatingService ? data.libraryId : model?.templateId;
     const source = libraryId ? libraryRecord(state, libraryId) : null;
-    if (operation === 'createServiceModel' && (!libraryId || !serviceModelSources(state).some(record=>record.id===libraryId))) throw new Error('请选择模型接入中已登记的模型；供应关系可能已变化');
+    if (creatingService && !draftId && (!libraryId || !serviceModelSources(state).some(record=>record.id===libraryId))) throw new Error('请选择模型接入中已登记的模型；供应关系可能已变化');
     if (libraryId && !source) throw new Error('来源模型资料已变化，请重新选择');
-    if (operation === 'createServiceModel' && source && serviceDirectoryModels(state).some(row => row.id === source.id || row.templateId === source.id)) throw new Error('该模型资料已有模型服务，请进入现有服务配置');
-    if(operation==='createServiceModel' && source && state.models.some(row=>row.id===source.id)){
+    if (creatingService && source && serviceSourceIds(state).has(source.id)) throw new Error('该模型资料已有模型服务，请进入现有服务配置');
+    const deletedService = creatingService && source && state.models.find(row => row.deletedAt && (row.templateId || row.id) === source.id);
+    if (deletedService) { model = deletedService; objectId = model.id; }
+    if(creatingService && source && !deletedService && state.models.some(row=>row.id===source.id)){
       model=state.models.find(row=>row.id===source.id);objectId=model.id;
       // A historical master already owns a unique D1 service; preserve its master under the same stable ID.
       changes.push(add('modelTemplates',structuredClone(source)));
       changes.push(update('models',model.id,{listingStatus:'已下架',status:'停用',callsEnabled:false,visibility:'内部'}));
     }
     if (source && data.type !== source.type) throw new Error('服务模型类型须与引用的模型资料一致');
-    const compact = operation === 'createServiceModel' || operation === 'serviceBasics';
-    if(operation==='createServiceModel' && data.purpose!=null && !['internal','commercial'].includes(data.purpose)) throw Error('请选择有效的服务用途');
-    if(operation==='createServiceModel' && data.serviceMode!=null && data.serviceMode!=='' && !['standard','provider'].includes(data.serviceMode)) throw new Error('请选择一种服务方式');
+    const compact = (creatingService && !draftId) || operation === 'serviceBasics';
+    const allowIncompleteProfile = creatingService && action.allowIncompleteProfile === true;
+    const initializingService = creatingService && action.deferServiceMode !== true;
+    if(creatingService && data.purpose!=null && !['internal','commercial'].includes(data.purpose)) throw Error('请选择有效的服务用途');
+    if(initializingService && !['standard','provider'].includes(data.serviceMode)) throw new Error('请选择一种有效的服务模式');
     if(operation==='serviceBasics' && data.expectedUpdatedAt!==model.updatedAt) throw new Error('模型资料已有并发修订，请重新打开核对');
-    if(compact) data={...normalizeServiceModel(state,data,operation==='createServiceModel' && model?{...model,modelId:data.modelId}:model),serviceMode:data.serviceMode,purpose:data.purpose};
+    if(compact) data={...normalizeServiceModel(state,data,creatingService && model?{...model,modelId:data.modelId}:model,allowIncompleteProfile),serviceMode:data.serviceMode,purpose:data.purpose};
     const modelId = creating ? data.modelId?.trim() : model.modelId;
-    if (!modelId || !compact && !/^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('模型编码需使用小写字母、数字或 . _ : / -，最多 80 字符');
-    if (!data.name?.trim() || !action.catalogue && !data.description?.trim()) throw new Error('模型展示名称和介绍必填');
-    if (typeof data.type!=='string' || !Object.hasOwn(MODEL_TYPES,data.type)) throw new Error('请选择有效的模型类型');
-    if (state.models.some(item => item.id !== model?.id && item.modelId.toLowerCase() === modelId.toLowerCase())) throw new Error('模型编码已存在');
+    const identifierLabel = action.catalogue ? '模型编码' : '模型调用标识';
+    if (!modelId || !compact && !/^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error(identifierLabel + '需使用小写字母、数字或 . _ : / -，最多 80 字符');
+    if (!data.name?.trim() || !draftId && !action.catalogue && !allowIncompleteProfile && !data.description?.trim()) throw new Error('模型展示名和介绍必填');
+    if (!draftId && (typeof data.type!=='string' || !Object.hasOwn(MODEL_TYPES,data.type))) throw new Error('请选择有效的模型类型');
+    if (state.models.some(item => item.id !== model?.id && item.modelId.toLowerCase() === modelId.toLowerCase())) throw new Error(identifierLabel + '已存在');
+    if (creatingService && serviceNameInUse(state, data.name, model?.id)) throw new Error(DUPLICATE_SERVICE_NAME);
     const declaredCapabilities = capabilities(data.capabilities, data.type, true);
     const profile = normalizeModelProfile({ ...source?.profile, ...(data.profile ?? model?.profile) }, data.type, data.usageUnit);
     if (operation === 'create' && !action.catalogue) requireModelBasics(profile);
     if (profile.maxInput && declaredCapabilities.context && profile.maxInput > declaredCapabilities.context) throw new Error('最大输入不能超过上下文上限');
-    const fields = { modelId, name: data.name.trim(), maker: profile.author || data.maker || model?.maker || '', description: data.description?.trim() || '', type: data.type, usageUnit: data.usageUnit, profile, capabilities: declaredCapabilities, ...(operation==='createServiceModel'?{serviceManaged:true,...(source?{templateId:source.id}:{}),...(data.serviceMode?{serviceMode:data.serviceMode}:{}),purpose:data.purpose || 'commercial'}:{}) };
+    const fields = {
+      modelId, name: initializingService && source ? source.name : data.name.trim(),
+      maker: profile.author || data.maker || model?.maker || '', description: data.description?.trim() || '',
+      type: data.type, usageUnit: data.usageUnit, profile, capabilities: declaredCapabilities,
+      ...(creatingService && { serviceManaged: true, purpose: data.purpose || 'commercial' }),
+      ...(creatingService && source && { templateId: source.id }),
+      ...(initializingService && { serviceName: data.name, serviceMode: data.serviceMode }),
+      ...(deletedService && { deletedAt: null, archivedAt: null, serviceModeRevision: (deletedService.serviceModeRevision || 1) + 1 }),
+    };
     if (model) {
       changes.push(update('models', model.id, fields));
       const previousProfile = normalizeModelProfile(model.profile, model.type, model.usageUnit);
@@ -247,8 +273,14 @@ export function modelTransaction(state, action) {
       if (state.modelVersions.some(version => version.id === model.defaultVersionId)) changes.push(update('modelVersions', model.defaultVersionId, { capabilities: fields.capabilities }));
     }
     else {
-      objectId = action.recordId || uid('model');
-      const versionId = uid('version');
+      objectId = draftId || resourceId(action.catalogue ? 'model' : 'service');
+      if (!source && !action.catalogue) {
+        const templateId = resourceId('model');
+        const { modelId, name, maker, description, type, usageUnit, profile, capabilities } = fields;
+        changes.push(add('modelTemplates', { id: templateId, modelId, name, maker, description, type, usageUnit, profile, capabilities, revision: 1 }));
+        fields.templateId = templateId;
+      }
+      const versionId = resourceId('service-version');
       changes.push(add('models', { id: objectId, ...fields, listingStatus: '已下架', status: '停用', callsEnabled: false, visibility: '内部', defaultVersionId: versionId }), add('modelVersions', { id: versionId, modelId: objectId, version: 'v1.0', capabilities: fields.capabilities, validationStatus: '未验证', isDefault: true, status: '草稿' }));
     }
   } else if (operation === 'recordPlatformPublication') {
@@ -260,10 +292,10 @@ export function modelTransaction(state, action) {
     const endpoint = state.endpoints.find(item => item.id === data.endpointId), supply = data.id && state.modelSupplies.find(item => item.id === data.id && item.modelId === model.id);
     if (data.id && !supply) throw new Error('供应服务不存在');
     if (!endpoint) throw new Error('请选择有效接入渠道');
-    if (!data.upstreamModelId?.trim() || /\s/.test(data.upstreamModelId)) throw new Error('上游模型标识 必填且不能包含空格');
+    if (!data.upstreamModelId?.trim() || /\s/.test(data.upstreamModelId)) throw new Error('上游模型调用标识 必填且不能包含空格');
     if (state.modelSupplies.some(item => item.id !== supply?.id && item.modelId === model.id && item.endpointId === endpoint.id && item.status !== '已移除')) throw new Error('该渠道已关联此模型');
     const fields = { modelId: model.id, endpointId: endpoint.id, upstreamModelId: data.upstreamModelId.trim(), capabilities: capabilities(data.capabilities, model.type, true), validationStatus: '待验证', verifiedAt: null, validationCases: [], status: '已停用' };
-    changes.push(supply ? update('modelSupplies', supply.id, fields) : add('modelSupplies', { id: uid('supply'), ...fields }));
+    changes.push(supply ? update('modelSupplies', supply.id, fields) : add('modelSupplies', { id: resourceId('service-channel'), ...fields }));
     if (!endpoint.modelIds.includes(model.id)) changes.push(update('endpoints', endpoint.id, { modelIds: [...endpoint.modelIds, model.id] }));
   } else if (['verify', 'enableSupply', 'disableSupply', 'removeSupply'].includes(operation)) {
     const supply = state.modelSupplies.find(item => item.id === data.id && item.modelId === model.id && item.status !== '已移除');
@@ -294,7 +326,7 @@ export function modelTransaction(state, action) {
     if (state.modelSalePrices.some(price => price.supplyId === supply.id && price.status === '已发布' && price.effectiveAt === effectiveAt)) throw new Error('该生效时间已有价格版本');
     const version = Math.max(0, ...state.modelSalePrices.filter(price => price.modelId === model.id).map(price => price.version)) + 1;
     const floorDiscountBps = data.floorDiscountPercent === undefined ? activeSupplySalePrice(state, model.id, supply.id)?.floorDiscountBps : parseFloorDiscount(data.floorDiscountPercent);
-    changes.push(add('modelSalePrices', { id: uid('sale'), modelId: model.id, supplyId: supply.id, items, ...(floorDiscountBps == null ? {} : { floorDiscountBps }), version, sourceVersion: procurementVersion(cost), sourceLabel: procurementLabel(cost), effectiveAt, status: operation === 'priceDraft' ? '草稿' : '已发布' }));
+    changes.push(add('modelSalePrices', { id: resourceId('sale-price-version'), modelId: model.id, supplyId: supply.id, items, ...(floorDiscountBps == null ? {} : { floorDiscountBps }), version, sourceVersion: procurementVersion(cost), sourceLabel: procurementLabel(cost), effectiveAt, status: operation === 'priceDraft' ? '草稿' : '已发布' }));
   } else if (['enableService', 'disableService', 'stopSales'].includes(operation)) {
     if (data.expectedUpdatedAt !== model.updatedAt) throw new Error('服务已有并发修订，请重新核对');
     if (operation === 'enableService') {
@@ -311,6 +343,6 @@ export function modelTransaction(state, action) {
     const fields = { publish: { listingStatus: '已上架', visibility: '公开', callsEnabled: true, status: '运行中', firstPublishedAt:model.firstPublishedAt || at, lifecycleStopReason: null }, unlist: { listingStatus: '已下架', visibility: '内部', callsEnabled: false, status: '停用', lifecycleStopReason: 'operator' } }[operation];
     changes.push(update('models', model.id, fields));
   } else throw new Error('未知模型操作');
-  const labels = { enableService:'启用技术服务', disableService:'停用技术服务', stopSales:'停止销售', recordPlatformPublication:'记录平台发布验证', createServiceModel:'添加模型', serviceBasics:'修改模型资料', create: '创建模型', basic: '编辑模型', supply: '保存供应服务', verify: '验证供应服务', enableSupply: '启用供应服务', disableSupply: '停用供应服务', removeSupply: '移除供应服务', priceDraft: '保存价格草稿', pricePublish: '发布销售价格', publish: '模型上架', unlist: '模型下架' };
+  const labels = { enableService:'启动模型服务', disableService:'停止模型服务', stopSales:'停止销售', recordPlatformPublication:'记录平台发布验证', createServiceModel:'添加模型', serviceBasics:'修改模型资料', create: '创建模型', basic: '编辑模型', supply: '保存供应服务', verify: '验证供应服务', enableSupply: '启用供应服务', disableSupply: '停用供应服务', removeSupply: '移除供应服务', priceDraft: '保存价格草稿', pricePublish: '发布销售价格', publish: '模型上架', unlist: '模型下架' };
   return { type: 'batch', label: labels[operation], objectId, changes };
 }

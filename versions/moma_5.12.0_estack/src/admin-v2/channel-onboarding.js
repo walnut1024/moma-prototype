@@ -1,3 +1,4 @@
+import { resourceId } from '../resource-id.mjs';
 import { resolveOnboardingProvider, onboardingModelPreset, resolveOnboardingModel } from './onboarding-presets.js';
 import { libraryRecord, modelLibrary } from './model-library.js';
 import { MODEL_TYPES } from './model-management.js';
@@ -71,9 +72,9 @@ function draftFields(state, data) {
     if (!Array.isArray(row.scenarios || [])) throw new Error('采购价格式无效');
     if ([row.libraryId, row.modelPresetId, row.newModel].filter(Boolean).length > 1) throw new Error('草稿模型资料、参考预设与新模型只能选择一项');
     if (row.newModel && (typeof row.newModel !== 'object' || Array.isArray(row.newModel) || Object.keys(row.newModel).some(key => !['modelId', 'name', 'type'].includes(key)))) throw new Error('新模型草稿包含不支持的字段');
-    const newModel = row.newModel && { modelId: text(row.newModel.modelId || '', '模型编码', 80, false), ...(row.newModel.name ? { name: text(row.newModel.name, '模型名称', 100, false) } : {}), type: text(row.newModel.type || '', '模型类型', 20, false) };
+    const newModel = row.newModel && { modelId: text(row.newModel.modelId || '', '模型编码', 80, false), ...(row.newModel.name ? { name: text(row.newModel.name, '模型展示名', 100, false) } : {}), type: text(row.newModel.type || '', '模型类型', 20, false) };
     const scenarios = (row.scenarios || []).map(item => ({ name: text(item.name || '', '计费项', 100, false), listPrice: String(item.listPrice ?? ''), unit: text(item.unit || '', '计费单位', 100, false), currency: text(item.currency || 'CNY', '币种', 10), condition: text(item.condition || '', '条件', 160, false) }));
-    return { id: text(row.id || `row-${index + 1}`, '模型行标识', 100), libraryId: row.libraryId || '', ...(row.modelPresetId ? { modelPresetId: text(row.modelPresetId, '模型参考预设', 100) } : {}), ...(newModel ? { newModel } : {}), upstreamModelId: text(row.upstreamModelId || '', '上游模型标识', 200, false), selected: row.selected !== false, confirmed: row.confirmed === true, source: ['upstream', 'reference', 'manual'].includes(row.source) ? row.source : 'manual', scenarios };
+    return { id: text(row.id || `row-${index + 1}`, '模型行标识', 100), libraryId: row.libraryId || '', ...(row.modelPresetId ? { modelPresetId: text(row.modelPresetId, '模型参考预设', 100) } : {}), ...(newModel ? { newModel } : {}), upstreamModelId: text(row.upstreamModelId || '', '上游模型调用标识', 200, false), selected: row.selected !== false, confirmed: row.confirmed === true, source: ['upstream', 'reference', 'manual'].includes(row.source) ? row.source : 'manual', scenarios };
   });
   const endpoint = data.endpointId && state.endpoints.find(row => row.id === data.endpointId && row.providerId === provider.id && !row.deletedAt);
   if (data.endpointId && !endpoint) throw new Error('草稿渠道不属于当前服务商');
@@ -87,8 +88,8 @@ export function previewChannelModels(state, providerId, models, { source = 'upst
   const seen = new Set(), library = modelLibrary(state);
   const existing = endpointId ? (provider.catalogConnections || []).filter(row => row.endpointId === endpointId && !row.deletedAt) : [];
   return { source, complete, rows: models.flatMap(input => {
-    const id = text(typeof input === 'string' ? input : input.id, '上游模型标识', 200);
-    if (/\s/u.test(id)) throw new Error('上游模型标识 不能包含空白');
+    const id = text(typeof input === 'string' ? input : input.id, '上游模型调用标识', 200);
+    if (/\s/u.test(id)) throw new Error('上游模型调用标识 不能包含空白');
     if (seen.has(id)) return []; seen.add(id);
     const saved = existing.find(row => row.upstreamModelId === id);
     const candidates = library.filter(model => model.modelId === id || model.profile?.upstreamAliases?.[providerId]?.includes(id));
@@ -155,7 +156,7 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
       return finish('保存草稿并创建接入', current.id, [...transaction.changes, update('modelOnboardings', current.id, { status: '已完成', draftRevision: current.draftRevision + 1 })]);
     }
     if (operation === 'channelDraftSave') {
-      const fields = draftFields(state, { ...data, intent: data.intent || current?.intent, guided: current?.guided || data.guided }), id = current?.id || `channel-draft-${crypto.randomUUID()}`;
+      const fields = draftFields(state, { ...data, intent: data.intent || current?.intent, guided: current?.guided || data.guided }), id = current?.id || resourceId('onboarding-task');
       const record = { ...fields, draftRevision: (current?.draftRevision || 0) + 1, updatedAt: now, createdBy: current?.createdBy || state.currentRole };
       return finish('保存接入草稿', id, [current ? update('modelOnboardings', id, record) : add('modelOnboardings', { id, ...record })]);
     }
@@ -165,7 +166,7 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
   }
   if (operation === 'channelMetadataCreate') {
     assertNoSecrets(data);
-    const name = text(data.name, '模型名称', 100), modelId = text(data.modelId, '模型编码', 80), type = data.type;
+    const name = text(data.name, '模型展示名', 100), modelId = text(data.modelId, '模型编码', 80), type = data.type;
     if (!/^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('模型编码须由小写字母、数字及 . _ : / - 组成，最多80字');
     if (!Object.hasOwn(MODEL_TYPES, type)) throw new Error('请选择模型类型');
     if (modelLibrary(state).some(row => row.modelId.toLowerCase() === modelId.toLowerCase())) throw new Error('相同模型编码的资料已存在');
@@ -173,7 +174,7 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
     const requiredChoices = [['tasks', TASK_OPTIONS[type]], ['inputModalities', INPUT_MODALITY_OPTIONS]];
     for (const [key, options] of requiredChoices) if (!Array.isArray(profile[key]) || !profile[key].length || profile[key].some(value => !options.includes(value))) throw new Error('请选择有效的任务和输入类型');
     if (!(profile.outputModalities?.length || profile.resultTypes?.length) || profile.outputModalities?.some(value => !OUTPUT_MODALITY_OPTIONS.includes(value)) || profile.resultTypes?.some(value => !RESULT_TYPE_OPTIONS.includes(value))) throw new Error('请选择有效的输出类型或结果');
-    const id = `template-${crypto.randomUUID()}`;
+    const id = resourceId('model');
     return finish('新建模型基础资料', id, [add('modelTemplates', { id, name, modelId, type, description: '', maker: '', capabilities: { context: null, output: null, streaming: null, tools: null }, profile, revision: 1, updatedAt: now })]);
   }
   if (operation === 'channelDiscoveryPreview') {
@@ -244,7 +245,7 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
     const provider = state.providers.find(row => row.id === data.providerId), endpoint = state.endpoints.find(row => row.id === data.endpointId && row.providerId === provider?.id);
     const association = provider && catalogueChannels(state, provider, data.modelId).find(row => row.id === data.associationId && row.endpointId === endpoint?.id);
     if (!association) throw new Error('测试对象已变化');
-    const record = { id: crypto.randomUUID(), testedAt: now, source: 'local-preview', result: ['通过', '失败', '已取消', '结果未知'].includes(data.result) ? data.result : '结果未知', task: text(data.task || '基础调用', '测试任务', 60), message: text(data.message || '', '测试说明', 2000, false), signature: text(data.signature || '', '配置签名', 10000, false), credentialVersion: endpoint.credentialVersion || '', operator: state.currentRole };
+    const record = { id: resourceId('validation-result'), testedAt: now, source: 'local-preview', result: ['通过', '失败', '已取消', '结果未知'].includes(data.result) ? data.result : '结果未知', task: text(data.task || '基础调用', '测试任务', 60), message: text(data.message || '', '测试说明', 2000, false), signature: text(data.signature || '', '配置签名', 10000, false), credentialVersion: endpoint.credentialVersion || '', operator: state.currentRole };
     const catalogConnections = (provider.catalogConnections || []).map(row => row.id === association.id ? { ...row, testHistory: [...(row.testHistory || []), record] } : row);
     return finish('记录接入测试', record.id, [update('providers', provider.id, { catalogConnections })]);
   }
@@ -257,14 +258,14 @@ export function validateChannelRows(state, rows, endpoint) {
   for (const row of selected) {
     const master = libraryRecord(state, row.libraryId), id = row.upstreamModelId.trim();
     if (!master) errors.push({ rowId: row.id, field: 'libraryId', message: '请选择有效的模型资料' });
-    if (!id || /\s|\p{Cc}/u.test(id)) errors.push({ rowId: row.id, field: 'upstreamModelId', message: '填写有效的上游模型标识，不能有空白或控制字符' });
+    if (!id || /\s|\p{Cc}/u.test(id)) errors.push({ rowId: row.id, field: 'upstreamModelId', message: '填写有效的上游模型调用标识，不能有空白或控制字符' });
     if (master && masters.has(master.id)) errors.push({ rowId: row.id, field: 'libraryId', message: '重复的模型资料' });
-    if (ids.has(id)) errors.push({ rowId: row.id, field: 'upstreamModelId', message: '重复的上游模型标识' });
+    if (ids.has(id)) errors.push({ rowId: row.id, field: 'upstreamModelId', message: '重复的上游模型调用标识' });
     if (master) masters.add(master.id); ids.add(id);
     if (['upstream', 'reference'].includes(row.source) && !row.confirmed) errors.push({ rowId: row.id, field: 'confirmed', message: '请确认模型身份匹配' });
     if (row.scenarios.some(item => !item.name?.trim() || !item.unit?.trim() || String(item.listPrice).trim() === '' || !Number.isFinite(Number(item.listPrice)) || Number(item.listPrice) < 0)) errors.push({ rowId: row.id, field: 'scenarios', message: '补齐已填写的采购价，或清空后稍后配置' });
     if (master && endpoint?.interfaceType) {
-      const task = endpoint.interfaceType === 'anthropic' ? ['text', 'multimodal'] : endpoint.interfaceType === 'openai' ? ['text', 'multimodal', 'embedding', 'image', 'audio'] : Object.keys(MODEL_TYPES);
+      const task = ['anthropic','openai-responses'].includes(endpoint.interfaceType) ? ['text', 'multimodal'] : endpoint.interfaceType === 'openai' ? ['text', 'multimodal', 'embedding', 'image', 'audio'] : Object.keys(MODEL_TYPES);
       if (!task.includes(master.type)) errors.push({ rowId: row.id, field: 'libraryId', message: '当前接口类型不支持此模型任务' });
     }
   }

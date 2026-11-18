@@ -5,7 +5,8 @@ import AdminActionMenu from './AdminActionMenu';
 import Table from './AdminTable';
 import { Choice, Notice } from './ServiceUI';
 import { SearchBox, useOperations } from './ModelOperationsUI';
-import MaterialsHeader, { materialOperationsUi } from './MaterialsHeader';
+import AdminPageHeading from './AdminPageHeading';
+import { materialOperationsUi } from './MaterialsHeader';
 import ProviderMaterialProfile from './ProviderMaterialProfile';
 import MaterialLogo from './MaterialLogo';
 import ModelBatchImport from './ModelBatchImport';
@@ -68,7 +69,7 @@ function ProviderModels({ state, ops, provider }) {
   const update = patch => ops.go(patch, { replace: true, preserveScroll: true });
   return <>
     <div className="materials-toolbar">
-      <div className="materials-filters"><SearchBox placeholder="搜索模型展示名或规范模型标识" value={query}
+      <div className="materials-filters"><SearchBox placeholder="搜索模型展示名或模型编码" value={query}
         onChange={modelQ => update({ modelQ: modelQ || null, modelPage: null })}/></div>
       <Space wrap>
         <Button disabled={!ops.can} onClick={() => ops.go({ view: 'modelImport' })}>批量导入并登记</Button>
@@ -79,7 +80,7 @@ function ProviderModels({ state, ops, provider }) {
       pagination={{ pageSize, currentPage: page, total: rows.length, onPageChange: modelPage => update({ modelPage }) }} columns={[
       { title: '模型展示名', width: 200, render: (_, { master }) => <Button theme="borderless" onClick={() =>
         ops.go({ view: 'template', template: master.id, materialMode: 'view', returnTo: materialSource(location.hash) }, { base: 'model-templates', reset: true })}>{master.name}</Button> },
-      { title: '规范模型标识', width: 220, render: (_, { master }) => <Typography.Text className="materials-code">{master.modelId}</Typography.Text> },
+      { title: '模型编码', width: 220, render: (_, { master }) => <Typography.Text className="materials-code">{master.modelId}</Typography.Text> },
       { title: '模型类型', width: 120, render: (_, { master }) => catalogueType(master.type) },
       { title: '渠道数', align: 'right', width: 80, render: (_, row) => materialChannelCount(row) },
       { title: '操作', width: 110, render: (_, { master }) => <Button theme="borderless" onClick={() => viewMaterialChannels(ops, provider.id, master.id)}>查看渠道</Button> },
@@ -105,18 +106,14 @@ export default function ProviderMaterials(props) {
   const title = useRef(null);
   useEffect(() => { title.current?.focus({ preventScroll: true }); }, [providerId, view]);
   const back = () => returnTo ? ops.proceed(() => { location.hash = returnTo; }) : go(listParams);
-  const saved = id => {
-    if (view === 'new' && returnTo?.startsWith('#/admin-2/providers')) {
-      go({ provider: id, perspective: 'suppliers', tab: 'catalogue' }, { base: 'providers', reset: true, saved: true });
-    } else go({ provider: id, view: null, edit: null, tab: view === 'new' ? null : 'profile' }, { saved: true });
-  };
+  const saved = id => go({ provider: id, view: null, edit: null, tab: view === 'new' ? null : 'profile' }, { saved: true });
   const importKind = view === 'modelImport' && provider ? 'model' : view === 'import' ? 'provider' : view === 'relations' ? 'relation' : null;
   return <div className="semi-materials materials-page">
-    <MaterialsHeader active="provider-materials" ops={ops}/>
+    <AdminPageHeading title="服务商资料" className="materials-heading"/>
     {!importKind && ops.conflict && <div className="materials-description"><Notice error>资料已有修订，当前输入保留。<Button theme="borderless" onClick={ops.reload}>载入最新数据</Button></Notice></div>}
     {(providerId || view) && <div className="materials-description">
       <Button theme="borderless" onClick={importKind && provider ? () => go({ view: null }) : back}>
-        {importKind && provider ? '返回供应模型' : returnTo?.startsWith('#/admin-2/providers') ? '返回渠道接入' : returnTo ? '返回来源页面' : '返回服务商列表'}
+        {importKind && provider ? '返回供应模型' : returnTo?.startsWith('#/admin-2/providers') ? '返回渠道管理' : returnTo ? '返回来源页面' : '返回服务商列表'}
       </Button>
     </div>}
     {importKind ? <div className="materials-description">

@@ -1,14 +1,24 @@
+import { modelPresentation } from './model-identities.mjs';
+import { resourceId } from './resource-id.mjs';
 import { modelOperationsView } from './mock/model-data.js';
 import { isServiceShowcase } from './admin-v2/service-showcase.js';
 import { libraryRecord } from './admin-v2/model-library.js';
-import { AUTH_DATA_KEY, readLinkedState, resolveUserIdentity, serviceReferences, serviceAccess, accessError } from './service-access.mjs';
+import { AUTH_DATA_KEY, readLinkedState, resolveUserIdentity, serviceReferences, serviceAccess, accessError,
+  offerKey, salesCustomer, workspaceServiceOrdered } from './service-access.mjs';
+import { siteSettlement } from './site-config.mjs';
+import { servicePurpose } from './admin-v2/service-purpose.js';
 import { getMockServiceSnapshots, mockServiceReadiness } from './admin-v2/mock-onboarding-service.js';
 import { connectionKeys } from './admin-v2/connection-state.js';
+import { projectAccess, requireProject } from './project-access.mjs';
+import { projectCallError, projectCallErrors, projectAccessError } from './project-call.mjs';
+import { quoteMockService } from './admin-v2/mock-onboarding-core.js';
 import { serviceGuideRequest } from './admin-v2/service-guide.js';
 import { MODEL_CATEGORIES, modelCategory } from './admin-v2/model-management.js';
+import { MOMA_PROVIDER } from './admin-v2/moma-provider.js';
 import { IDENTITY_FIELDS, TECHNICAL_FIELDS, INTERFACE_FIELDS, FEATURE_FIELDS, ARCHITECTURE_OPTIONS, LICENSE_OPTIONS, specificationFields, normalizeModelLogo, modelProfileDraft } from './admin-v2/model-profile.js';
 
 function presentation(model) {
+  model = modelPresentation(null, model);
   const profile = modelProfileDraft(model), support = value => value == null ? '' : value ? '支持' : '暂无';
   const facts = descriptors => descriptors.map(({ key, label, kind, unit }) => {
     const value = profile[key], choices = kind === 'architecture' ? ARCHITECTURE_OPTIONS : kind === 'license' ? LICENSE_OPTIONS : kind === 'lifecycle' ? [['stable', '稳定版'], ['preview', '预览版'], ['deprecated', '已退役']] : [];
@@ -35,6 +45,7 @@ export function experienceTasks(model) {
 export function cloudMarketPresentation(offer) {
   const profile=offer.profile || {}, inputs=profile.inputModalities || [], outputs=profile.outputModalities || [];
   return {...presentation(offer),...offer,desc:offer.description,context:offer.capabilities?.context ? Math.round(offer.capabilities.context/1024)+'K' : '未填写',
+    offerName:offer.channelName ? `${offer.provider}（${offer.channelName}）` : offer.provider,
     contextTokens:offer.capabilities?.context ?? null,series:profile.family || '',input:inputs,outputModalities:outputs,
     businessTasks:profile.tasks || [],tasks:experienceTasks(offer),documentation:profile.documentation || '',
     date:profile.releaseDate || '',guideRequest:serviceGuideRequest(offer,offer.callId)};
@@ -48,7 +59,10 @@ export function marketModels(services, scope = 'showcase') {
     if (group) group.services.push(row);
     else groups.set(row.modelKey, { ...row, services: [row] });
   }
-  return [...groups.values()].map(row => ({ ...row, providers: row.services.map(service => service.provider), provider: row.services.map(service => service.provider).join('、'), callable: row.services.some(service => service.callable) }));
+  return [...groups.values()].map(row => {
+    const providers = new Map(row.services.map(service => [service.providerId, service.provider]));
+    return { ...row, providers, provider: [...providers.values()].join('、'), callable: row.services.some(service => service.callable) };
+  });
 }
 export function customerPriceRows(prices, at = Date.now()) {
   const labels = { million_input_tokens: ['输入 Token', '百万 Token'], million_output_tokens: ['输出 Token', '百万 Token'], million_tokens: ['总 Token', '百万 Token'], request: ['请求数', '次'], second: ['时长', '秒'], character: ['字符数', '字符'] };
@@ -57,8 +71,9 @@ export function customerPriceRows(prices, at = Date.now()) {
 export function directorySnapshot(storage = globalThis.localStorage) {
   const state = readLinkedState(storage), auth = JSON.parse(storage.getItem(AUTH_DATA_KEY) || 'null');
   let identity = null, identityError = '';
-  try { identity = resolveUserIdentity(state, auth); } catch (error) { identityError = error.message; }
+  try { identity = resolveUserIdentity(state, auth, storage); } catch (error) { identityError = error.message; }
   const published = getMockServiceSnapshots();
+  const settlement = siteSettlement(storage);
   const defaultModelIds = new Set(modelOperationsView(state).models.map(row=>row.id));
   const models = serviceReferences(state).flatMap(service => {
     if (service.providerId && service.model.serviceProviders.find(row=>row.providerId===service.providerId)?.marketVisible===false) return [];
@@ -71,30 +86,70 @@ export function directorySnapshot(storage = globalThis.localStorage) {
     let access = identity ? serviceAccess(state, service, identity.tenantId, live) : { allowed: false, reason: identityError };
     if (access.code === 'model_forbidden' || access.code === 'customer_unavailable') return [];
     if (access.allowed) access = mockServiceReadiness(state, live);
+    const salePrices = live?.published?.config.salePrices?.map(({ id, amount, currency, unit, effectiveAt, expiresAt }) =>
+      ({ id, amount, currency, unit, effectiveAt, expiresAt })) || [];
+    const ordered = identity && settlement === 'customer' && workspaceServiceOrdered(state, identity.tenantId, service);
+    const orderable = access.allowed && settlement === 'customer' && servicePurpose(model, offerKey(service)) !== 'internal' &&
+      salesCustomer(model, identity.tenantId) && customerPriceRows(salePrices).length > 0;
+    if (access.allowed && settlement === 'customer' && !ordered) access = { allowed:false, reason:'请先在当前使用空间订购此服务' };
     const tasks = experienceTasks(model), supplier = service.providerId ? state.providers?.find(row => row.id === service.providerId)?.name : '平台统一模型服务模式';
-    return [{ ...presentation(model), modelKey: model.id, marketVisible: model.marketVisible !== false, mode: model.serviceMode, showcase: isServiceShowcase(model), defaultCatalogue: defaultModelIds.has(model.id), guideRequest: serviceGuideRequest(model, service.callId, service.providerId), id: service.id, callId: service.callId, name: model.name, type: model.type === 'audio' ? 'voice' : model.type, provider: supplier || '未配置', maker: model.profile?.author || model.maker || '未填写', desc: model.description || '', description: model.description || '', context: model.capabilities?.context ? `${Math.round(model.capabilities.context / 1024)}K` : '未填写', contextTokens: model.capabilities?.context ?? null, date: model.updatedAt?.slice(0,10) || '', series: model.profile?.family || '', input: (model.profile?.inputModalities || []).map(item => item === '图片' ? '图像' : item), outputModalities: [...new Set([...(model.profile?.outputModalities || []), ...(model.profile?.resultTypes || [])])].map(item => item === '图片' ? '图像' : item), businessTasks: model.profile?.tasks || [], output: model.capabilities?.output ?? '未填写', tags: model.tags || [], tasks, inputModalities: (model.profile?.inputModalities || []).map(item => ({ 文本: 'text', 图片: 'image', 音频: 'audio', 视频: 'video' }[item] || item)), documentation: model.profile?.documentation || '', billing: '按量计费', salePrices: live?.published?.config.salePrices?.map(({ amount, currency, unit, effectiveAt, expiresAt }) => ({ amount, currency, unit, effectiveAt, expiresAt })) || [], icon: 1, callable: access.allowed && tasks.length > 0, reason: access.reason || (tasks.length ? '' : '当前任务暂无在线体验入口'), generation: model.accessGeneration || 0 }];
+    return [{ ...presentation(model), modelKey: model.id, marketVisible: model.marketVisible !== false, mode: model.serviceMode, showcase: isServiceShowcase(model), defaultCatalogue: defaultModelIds.has(model.id), guideRequest: serviceGuideRequest(model, service.callId, service.providerId), id: service.id, callId: service.callId, name: modelPresentation(state,model).name, type: model.type === 'audio' ? 'voice' : model.type, providerId: service.providerId || MOMA_PROVIDER.id, provider: supplier || '未配置', maker: modelPresentation(state,model).profile?.author || modelPresentation(state,model).maker || '未填写', desc: modelPresentation(state,model).description || '', description: modelPresentation(state,model).description || '', context: model.capabilities?.context ? `${Math.round(model.capabilities.context / 1024)}K` : '未填写', contextTokens: model.capabilities?.context ?? null, date: model.updatedAt?.slice(0,10) || '', series: model.profile?.family || '', input: (model.profile?.inputModalities || []).map(item => item === '图片' ? '图像' : item), outputModalities: [...new Set([...(model.profile?.outputModalities || []), ...(model.profile?.resultTypes || [])])].map(item => item === '图片' ? '图像' : item), businessTasks: model.profile?.tasks || [], output: model.capabilities?.output ?? '未填写', tags: model.tags || [], tasks, inputModalities: (model.profile?.inputModalities || []).map(item => ({ 文本: 'text', 图片: 'image', 音频: 'audio', 视频: 'video' }[item] || item)), documentation: modelPresentation(state,model).profile?.documentation || '', billing: '按量计费', salePrices, ordered, orderable, icon: 1, serviceAvailable: access.allowed, callable: access.allowed && tasks.length > 0, reason: access.reason || (tasks.length ? '' : '当前任务暂无在线体验入口'), generation: model.accessGeneration || 0 }];
   });
   return { models, identity, identityError, error: '' };
 }
-export function beginExperience(serviceId, task, { images = false } = {}) {
-  const snapshot = directorySnapshot();
+function experienceModel(snapshot, serviceId, task, images) {
   if (!snapshot.identity) throw accessError('identity_unavailable', snapshot.identityError);
   const model = snapshot.models.find(row => row.id === serviceId);
   if (!model?.callable) throw accessError('model_unavailable', model?.reason || '模型服务已不可用，请重新选择');
   if (!model.tasks.includes(task) || images && !model.inputModalities.includes('image')) throw accessError('task_unsupported', '所选模型不支持当前任务');
+  return model;
+}
+export function assertExperienceSelection(serviceId, task) {
+  experienceModel(directorySnapshot(), serviceId, task, false);
+}
+export function beginExperience(serviceId, task, { projectId, images = false, usage = {} } = {}) {
+  const snapshot = directorySnapshot();
+  const model = experienceModel(snapshot, serviceId, task, images);
   const state = readLinkedState(), service = serviceReferences(state).find(row => row.id === serviceId);
+  const project = requireProject(experienceProjects(state, snapshot.identity), projectId);
   const proof = service.model.platformPublications.find(row => row.serviceId === serviceId && row.source === 'mock');
   const published = getMockServiceSnapshots().find(row => row.id === proof.mockServiceId);
   const credentials = published.published.config.bindings.flatMap(binding => {
     const supply = state.modelSupplies.find(row => row.id === binding.id), endpoint = state.endpoints.find(row => row.id === supply?.endpointId), provider = state.providers.find(row => row.id === endpoint?.providerId);
     return connectionKeys(endpoint, provider).map(key => ({ providerId: provider?.id, endpointId: endpoint.id, id: key.id, fingerprint: key.fingerprint }));
   });
-  return { requestId:crypto.randomUUID(),startedAt:new Date().toISOString(), serviceId, callId:service.callId, modelId:service.modelId, task, images, modelName: model.name, owner: snapshot.identity.key, sessionGeneration: snapshot.identity.generation, requestGeneration: service.model.requestGeneration || 0, credentials };
+  const at = Date.now();
+  const settlement = siteSettlement(globalThis.localStorage);
+  const config = published.published.config;
+  let charge = quoteMockService(config.salePrices, usage, at);
+  if (settlement === 'internal') {
+    // shortcut: web mock has no channel receipt, book cost only if every eligible channel quotes the same amount.
+    const quotes = config.route.channels.filter(channel => channel.enabled !== false).map(channel =>
+      quoteMockService(config.bindings.find(binding => binding.id === channel.bindingId)?.procurementPrices || [], usage, at));
+    const first = quotes[0];
+    charge = first && quotes.every(quote => quote?.micros === first.micros && quote.currency === first.currency) ? first : null;
+  }
+  const error = projectCallError(state, project, service.model, null, usage, charge, at);
+  if (error) throw accessError(error, projectCallErrors[error][1]);
+  return { requestId:resourceId('request'),startedAt:new Date(at).toISOString(), projectId, serviceId, callId:service.callId, modelId:service.modelId, task, images, modelName: model.name, owner: snapshot.identity.key, sessionGeneration: snapshot.identity.generation, requestGeneration: service.model.requestGeneration || 0, credentials,
+    usage, charge, settlement, retainContent: project.retainContent === true };
+}
+function experienceProjects(state, identity) {
+  const auth = JSON.parse(globalThis.localStorage.getItem(AUTH_DATA_KEY) || 'null');
+  const link = auth.identityLinks.find(row => row.authUserId === identity.userId && row.spaceId === identity.spaceId);
+  return projectAccess(state, identity, link).projects;
 }
 export function validateExperience(ticket) {
   const state = readLinkedState(), auth = JSON.parse(globalThis.localStorage.getItem(AUTH_DATA_KEY) || 'null'), identity = resolveUserIdentity(state, auth);
   const service = serviceReferences(state).find(row => row.id === ticket.serviceId);
   if (identity.key !== ticket.owner || identity.generation !== ticket.sessionGeneration || !service || (service.model.requestGeneration || 0) !== ticket.requestGeneration) throw accessError('task_cancelled', '身份或服务权限已变化，本次任务已停止，请重新发送');
+  const settlement = siteSettlement(globalThis.localStorage);
+  if (settlement !== ticket.settlement || (settlement === 'customer' && !workspaceServiceOrdered(state, identity.tenantId, service))) {
+    throw accessError('task_cancelled', '站点或订购权益已变化，请重新发送');
+  }
+  const project = requireProject(experienceProjects(state, identity), ticket.projectId);
+  const error = projectAccessError(project, service.modelId, null, Date.now());
+  if (error) throw accessError(error, projectCallErrors[error][1]);
   const proof = service.model.platformPublications?.find(row => row.serviceId === service.id && row.source === 'mock'), published = getMockServiceSnapshots().find(row => row.id === proof?.mockServiceId);
   // Ordinary downlisting blocks admission; an admitted request keeps its original configuration.
   const admitted = service.model.lifecycleStopReason === 'operator' ? { ...service, model: { ...service.model, listingStatus: '已上架', visibility: '公开', callsEnabled: true } } : service;
