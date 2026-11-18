@@ -17,5 +17,4 @@ CREATE INDEX tenant_login_expiry ON tenant_login_events(created_at);
 CREATE INDEX operations_activity_expiry ON operations(created_at);
 
 CREATE INDEX market_calls_expiry ON market_calls(created_at);
-INSERT OR IGNORE INTO admin_accounts(id,name,role,enabled) VALUES('yyg','系统管理员','平台管理员',1);
 UPDATE db_state SET schema_version=12 WHERE id=1;

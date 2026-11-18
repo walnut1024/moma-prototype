@@ -1,3 +1,4 @@
+import { resourceId } from '../resource-id.mjs';
 import { createPortal } from 'react-dom';
 import { useId, useEffect, useRef, useState } from 'react';
 import { Avatar, Banner, Button, Card, Form, Input, Radio, RadioGroup, Select, Space, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
@@ -5,7 +6,9 @@ import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { PAGE_SIZES, normalizePageSize, FilterReset, FilterToolbar } from '../components/FilterControls';
 import AdminPageHeading from './AdminPageHeading';
 import { Choice, serviceOperationsUi } from './ServiceUI';
-import { effectiveEnterpriseAdmins, enterpriseAdmins, enterpriseMetadataFields, managedEnterpriseTenants, privateEnterprise } from './enterprise';
+import { effectiveEnterpriseAdmins, enterpriseAdmins, enterpriseMetadataFields, managedEnterpriseTenants } from './enterprise';
+import { internalSpace } from '../operating-space.mjs';
+import { encodeAuthPassword } from '../auth-state.mjs';
 import { accountDataSource, accountDataSourceLabel, accountDataSourceOptions } from './account-data-source';
 import { EnterpriseDialog, EnterpriseFacts, EnterpriseStatus, EnterpriseTable } from './EnterpriseUI';
 import EnterpriseDetails from './EnterpriseDetails';
@@ -13,7 +16,7 @@ import EnterpriseStatusDialog from './EnterpriseStatusDialog';
 import { countries, chinaRegions, industries, changeEnterpriseLocation } from './enterprise-options';
 
 const { Text, Paragraph, Title } = Typography;
-const newIds = () => Object.fromEntries(['tenant', 'user', 'member', 'organization'].map(key => [key, `${key}-${crypto.randomUUID()}`]));
+const newIds = () => Object.fromEntries(['tenant', 'user', 'member', 'organization'].map(key => [key, resourceId(key)]));
 
 function DropdownField({ label, value, options, onChange, placeholder = '请选择', disabled = false }) {
   const list = options.map(option => [option.value, option.label]);
@@ -22,9 +25,10 @@ function DropdownField({ label, value, options, onChange, placeholder = '请选�
     onChange={onChange} placeholder={placeholder} disabled={disabled} motion={false}/></Form.Slot>;
 }
 
-function EnterpriseEditor({ state, tenant, kind, mode, apply, close, complete, inline = false, canWrite = true }) {
+function EnterpriseEditor({ state, tenant, kind, deploymentMode, apply, close, complete, inline = false, canWrite = true }) {
   const admins = tenant ? enterpriseAdmins(state, tenant) : [];
   const [form, setForm] = useState({ type: tenant?.type || '企业', notes: tenant?.notes || '', ...Object.fromEntries(enterpriseMetadataFields.map(field => [field.key, tenant?.[field.key] || (field.key === 'countryRegion' ? '中国' : field.key === 'companyName' && kind === 'edit' ? tenant.name : '')])), accountMode: 'new', adminName: '', login: '', email: '', phone: '', userId: '', adminPhones: Object.fromEntries(admins.map(member => [member.userId, state.users.find(user => user.id === member.userId)?.phone || ''])) });
+  const [initialPassword,setInitialPassword]=useState('');
   const [dirty, setDirty] = useState(false), [discard, setDiscard] = useState(false), [error, setError] = useState(''), [query, setQuery] = useState(''), [busy, setBusy] = useState(false);
   const pendingLeave = useRef(null);
   useEffect(() => {
@@ -75,7 +79,8 @@ function EnterpriseEditor({ state, tenant, kind, mode, apply, close, complete, i
     event.preventDefault(); if (busy || !canWrite) return; setBusy(true); setError('');
     try {
       const ids = newIds();
-      const next = await apply({ type: 'enterprise', operation: kind, tenantId: tenant?.id, mode, ids, data: form });
+      const loginProof=!edit && form.accountMode==='new' ? await encodeAuthPassword(initialPassword) : undefined;
+      const next = await apply({ type:'enterprise', operation:kind, tenantId:tenant?.id, deploymentMode:form.deploymentMode || deploymentMode, ids, data:form, loginProof });
       const company = next.tenants.find(item => item.id === (tenant?.id || ids.tenant));
       if (edit) complete({ edited: true, tenant: company });
       else complete({ tenant: company, user: next.users.find(user => user.id === (form.accountMode === 'existing' ? form.userId : ids.user)), added: addAdmin });
@@ -98,14 +103,14 @@ function EnterpriseEditor({ state, tenant, kind, mode, apply, close, complete, i
   </>;
   const content = <>
     <form id={formId} className="admin-analytics-fields admin-enterprise-form" onSubmit={submit}
-      aria-label={edit ? '编辑政企用户信息' : addAdmin ? '添加企业管理员' : '新用户'}>
+      aria-label={edit ? '编辑政企客户信息' : addAdmin ? '添加企业管理员' : '开通政企客户'}>
       {inline && <div className="admin-page-heading">
-        <div><Title heading={5} component="h2">编辑信息</Title><Text type="secondary">User ID：{tenant.id}</Text></div>
+        <div><Title heading={5} component="h2">编辑信息</Title><Text type="secondary">客户 ID：{tenant.id}</Text></div>
         <div className="admin-form-actions">{buttons}</div>
       </div>}
       {edit && <>
         <section className="admin-enterprise-form-section">
-          <Title heading={5} component="h3">用户信息</Title>
+          <Title heading={5} component="h3">客户信息</Title>
           <div className="admin-enterprise-fields">
             <DropdownField label="客户类型" value={form.type} options={['政府', '企业'].map(value => ({ value, label: value }))}
               onChange={value => update('type', value)} disabled={!canWrite}/>
@@ -119,7 +124,7 @@ function EnterpriseEditor({ state, tenant, kind, mode, apply, close, complete, i
             const id = `ent-phone-${member.id}`;
             return <div className="admin-enterprise-fields" key={member.id}>
               <Form.Slot label="姓名"><Text>{user?.name || member.name}</Text></Form.Slot>
-              <Form.Slot label="账号"><Text>{user?.login || '登录身份缺失'}</Text></Form.Slot>
+              <Form.Slot label="登录账号"><Text>{user?.login || '登录身份缺失'}</Text></Form.Slot>
               <Form.Slot label={{ text: `手机号 *（${user?.login || member.name}）`, name: id }}>
                 <Input id={id} required type="tel" maxLength={24} value={form.adminPhones[member.userId] || ''}
                   disabled={!canWrite} placeholder="中国大陆手机号，或 + 国际区号"
@@ -128,12 +133,14 @@ function EnterpriseEditor({ state, tenant, kind, mode, apply, close, complete, i
               <Form.Slot label="邮箱"><Text>{user?.email || '未填写'}</Text></Form.Slot>
             </div>;
           }) : <Paragraph type="secondary">待配置，可在组织及成员中添加管理员。</Paragraph>}
-          <Paragraph type="secondary">手机号保存到该账号，供其所属政企用户共用。</Paragraph>
+          <Paragraph type="secondary">手机号保存到该登录账号，在其所属企业共用。</Paragraph>
         </section>
       </>}
       {!addAdmin && <section className="admin-enterprise-form-section">
         <Title heading={5} component="h3">企业信息</Title>
         <div className="admin-enterprise-fields">
+          {!edit && <Form.Slot label="部署方式"><Choice label="开户部署方式" value={form.deploymentMode || deploymentMode}
+            options={[[ '私有化','私有化' ],[ '私有云','私有云' ]]} onChange={value=>update('deploymentMode',value)} disabled={!canWrite}/></Form.Slot>}
           {field('companyName', '公司/机构名称 *', { maxLength: 120, required: true, placeholder: '企业或机构主体全称' })}
           {field('taxId', '税号/统一社会信用代码 *', { maxLength: 32, required: true, placeholder: '填写主体税务标识' })}
         </div>
@@ -150,7 +157,11 @@ function EnterpriseEditor({ state, tenant, kind, mode, apply, close, complete, i
             {field('adminName', '管理员姓名 *', { maxLength: 40, required: true, placeholder: '请输入姓名' })}
             {field('login', '登录账号 *', { minLength: 3, maxLength: 64, required: true, placeholder: '如 zhangsan' })}
             {field('phone', '手机号码 *', { type: 'tel', maxLength: 24, required: true, placeholder: '中国大陆手机号，或 + 国际区号' })}
-            {field('email', '管理员邮箱', { type: 'email', placeholder: '选填' })}
+            {field('email', '管理员邮箱', { type:'email', placeholder:'选填' })}
+            <Form.Slot label={{text:'初始密码 *',name:'ent-initial-password'}}>
+              <Input id="ent-initial-password" mode="password" autoComplete="new-password" value={initialPassword} minLength={8}
+                maxLength={64} disabled={!canWrite} required onChange={value=>{setInitialPassword(value);setDirty(true);setError('');}}/>
+            </Form.Slot>
           </div>
           <Paragraph type="secondary">登录账号支持 3–64 位字母、数字或 . _ @ -，不区分大小写。</Paragraph>
         </> : <>
@@ -213,13 +224,13 @@ function EnterpriseEditor({ state, tenant, kind, mode, apply, close, complete, i
     </form>
     {discard && serviceOperationsUi.renderLeaveDialog({ cancel: () => { pendingLeave.current = null; setDiscard(false); }, discard: abandon })}
   </>;
-  return inline ? content : <EnterpriseDialog wide title={addAdmin ? '添加企业管理员' : '新用户'} close={requestClose} closeOnEsc={!discard} footer={buttons}
+  return inline ? content : <EnterpriseDialog wide title={addAdmin ? '添加企业管理员' : '开通政企客户'} close={requestClose} closeOnEsc={!discard} footer={buttons}
     description={addAdmin ? `所属企业：${tenant.name}` : '建立政企主体，并开通首位企业管理员。'}>{content}</EnterpriseDialog>;
 }
 
 export default function EnterprisePage({ state, transact, deploymentTarget }) {
   const [params, setParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
-  const [editor, setEditor] = useState(null);
+  const [editor, setEditor] = useState(() => new URLSearchParams(location.hash.split('?')[1] || '').get('create') === 'enterprise' ? { kind: 'create' } : null);
   const [result, setResult] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
   useEffect(() => {
@@ -242,72 +253,71 @@ export default function EnterprisePage({ state, transact, deploymentTarget }) {
     else location.hash = hash;
     setParams(next);
   };
-  const mode = params.get('scenario') === 'private' ? 'private' : 'cloud';
-  const all = managedEnterpriseTenants(state);
-  const defaultTenant = privateEnterprise(state);
-  const companies = mode === 'private' ? all.filter(item => item.id === defaultTenant?.id) : all;
-  const detailId = params.get('enterprise');
+  const scenario=params.get('scenario') || '';
+  const deploymentMode=scenario==='cloud' ? '私有云' : '私有化';
+  const internalSite=state.spacePolicy?.operatingMode==='internal';
+  const all=managedEnterpriseTenants(state);
+  const companies=internalSite ? all.filter(item=>internalSpace(state.spacePolicy,item)) : all;
+  const detailId=internalSite ? state.spacePolicy.internalTenantId : params.get('enterprise');
   const tenant = companies.find(item => item.id === detailId);
   const query = params.get('q') || '';
   const status = params.get('status') || '';
   const source = params.get('source') || '';
   const canWrite = !state.storageError && ['平台管理员', '运营人员'].includes(state.currentRole);
-  const hasCapacity = mode === 'cloud' || !all.length;
-  const apply = action => transact({ ...action, mode });
+  const apply = action => transact(action);
   const rows = companies.filter(item =>
-    (!status || item.status === status) && (!source || accountDataSource(item) === source) &&
+    (!status || item.status === status) && (!params.get('scenario') || item.deploymentMode === deploymentMode) && (!source || accountDataSource(item) === source) &&
     [item.id, item.name].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
   const size = normalizePageSize(params.get('size'));
   const page = Math.max(1, Math.min(Math.floor(Number(params.get('page'))) || 1, Math.ceil(rows.length / size) || 1));
   const askToggle = (tenant, member) => setConfirmation({ tenant, member });
-  const open = (item, tab = '') => navigate({ enterprise: item.id, tab, project: '' });
+  const open = (item, tab = '') => navigate({ enterprise: item.id, tab, project: '', create: '' });
   const editing = editor?.kind === 'edit';
   const handover = result ? [
-    '【企业账号交接信息】', `企业：${result.tenant.name}`, `user_id：${result.tenant.id}`, `管理员：${result.user.name}`,
+    '【政企客户账号交接信息】', `企业：${result.tenant.name}`, `客户 ID：${result.tenant.id}`, `管理员：${result.user.name}`,
     `登录账号：${result.user.login}`, `手机号码：${result.user.phone || '未填写'}`,
-    `账号初始化：${result.user.initialized ? '已完成，沿用现有登录方式' : '待设置密码'}`,
+    `账号初始化：${result.user.initialized ? '已完成' : '待设置密码'}`,
   ].join('\n') : '';
   const copy = async () => {
     try { await navigator.clipboard.writeText(handover); Toast.success('已复制账号交接信息'); }
     catch { Toast.error('复制失败，请选择交接信息文本手动复制'); }
   };
   return <div className="admin-page-stack admin-enterprise-page">
-    {deploymentTarget && createPortal(<div className="admin-banner-field">
+    {deploymentTarget && !internalSite && createPortal(<div className="admin-banner-field">
       <Text id="admin-deployment-picker-label" type="secondary" size="small">部署方式</Text>
-      <Select aria-labelledby="admin-deployment-picker-label" size="small" position="bottomRight" value={mode} disabled={Boolean(editor)}
+      <Select aria-labelledby="admin-deployment-picker-label" size="small" position="bottomRight" value={scenario || 'all'} disabled={Boolean(editor)}
         onSelect={value => {
-          if (value !== mode) navigate({ scenario: value === 'private' ? 'private' : '', enterprise: '', tab: '', project: '', page: '', q: '', status: '', source: '' });
+          navigate({ scenario: value==='all' ? '' : value, enterprise:'', tab:'', project:'', page:'' });
         }}
-        optionList={[{ value: 'cloud', label: '私有云' }, { value: 'private', label: '私有化' }]}/>
+        optionList={[{value:'all',label:'全部部署'},{value:'cloud',label:'私有云'},{value:'private',label:'私有化'}]}/>
     </div>, deploymentTarget)}
-    <AdminPageHeading title={detailId ? tenant?.name || '政企详情' : '政企用户'} description={detailId
+    <AdminPageHeading title={internalSite ? '本企业' : detailId ? tenant?.name || '政企客户详情' : '政企客户'} description={detailId
       ? '管理企业管理员、查看组织成员、项目空间及 API 密钥。'
       : '以政府机构或企业为主体开通，由管理员统一管理组织成员及模型服务资源。'}>
       {tenant && <Space wrap>
         <EnterpriseStatus value={tenant.status} enterprise/>
         <Button type={tenant.status === '停用' ? 'primary' : 'danger'} disabled={!canWrite || editing} onClick={() => askToggle(tenant)}>
-          {tenant.status === '停用' ? '账号解冻' : '账号冻结'}
+          {tenant.status === '停用' ? '解冻客户' : '冻结客户'}
         </Button>
       </Space>}
-      {!detailId && <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite || !hasCapacity}
-        title={!hasCapacity ? '单企业容量已用完，请进入企业详情管理账号' : !canWrite ? '当前角色仅可查看' : undefined}
-        onClick={() => setEditor({ kind: 'create' })}>新用户</Button>}
+      {!detailId && !internalSite && <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite}
+        title={!canWrite ? '当前角色仅可查看' : undefined}
+        onClick={() => setEditor({ kind: 'create' })}>开通政企客户</Button>}
     </AdminPageHeading>
-    {mode === 'private' && <Banner type="info" closeIcon={null} description={`默认企业：${defaultTenant?.name || '尚未开户'}。当前部署仅管理默认企业。`}/>}
     {!canWrite && <Banner type="info" closeIcon={null} description={state.storageError ? '数据读取失败，请恢复数据后再操作。'
-      : '当前角色仅可查看企业信息。平台管理员和运营人员可执行开户及账号管理。'}/>}
+      : '当前角色仅可查看企业信息。平台管理员和运营人员可开户和管理企业成员。'}/>}
     {!detailId ? <Card>
       <FilterToolbar className="admin-list-toolbar">
-        <Input className="admin-list-search" aria-label="搜索企业" prefix={<IconSearch aria-hidden="true"/>} showClear value={query}
-          placeholder="搜索 User ID、用户名" onChange={q => navigate({ q, page: '' }, true)}/>
-        <Choice label="企业状态" value={status || 'all'} options={[[ 'all', '全部状态' ], [ '正常', '已启用' ], [ '需关注', '需关注' ], [ '停用', '已冻结' ]]}
+        <Input className="admin-list-search" aria-label="搜索政企客户" prefix={<IconSearch aria-hidden="true"/>} showClear value={query}
+          placeholder="搜索客户名称或客户 ID" onChange={q => navigate({ q, page: '' }, true)}/>
+        <Choice label="客户状态" value={status || 'all'} options={[[ 'all', '全部状态' ], [ '正常', '已启用' ], [ '需关注', '需关注' ], [ '停用', '已冻结' ]]}
           onChange={value => navigate({ status: value === 'all' ? '' : value, page: '' }, true)}/>
         <Choice label="数据来源" value={source || 'all'} options={accountDataSourceOptions}
           onChange={value => navigate({ source: value === 'all' ? '' : value, page: '' }, true)}/>
         <FilterReset onClick={() => navigate({ q: '', status: '', source: '', page: '' }, true)}/>
       </FilterToolbar>
       <EnterpriseTable minWidth={1050} columns={[
-        { title: '用户名 / User ID', width: 275 }, { title: '客户类型', width: 95 }, { title: '企业管理员', width: 175 },
+        { title: '客户名称 / 客户 ID', width: 275 }, { title:'客户类型',width:95 }, { title:'部署方式',width:95 }, { title:'企业管理员', width: 175 },
         { title: '成员数', width: 80, align: 'right' }, { title: '数据来源', width: 100 }, { title: '状态', width: 100 }, { title: '操作', width: 185 },
       ]} rows={rows.slice((page - 1) * size, page * size).map(item => {
         const members = enterpriseAdmins(state, item);
@@ -320,7 +330,7 @@ export default function EnterprisePage({ state, transact, deploymentTarget }) {
               <Text size="small" type="secondary" code>{item.id}</Text>
             </div>
           </Space>,
-          item.type,
+          item.type, item.deploymentMode || '未记录',
           <div className="admin-table-record"><Text>{primary?.name || '待配置'}{members.length > 1 ? ` 等 ${members.length} 人` : ''}</Text>
             <Text type="secondary" size="small">{user?.login || '—'}</Text></div>,
           state.memberships.filter(member => member.tenantId === item.id).length,
@@ -332,28 +342,28 @@ export default function EnterprisePage({ state, transact, deploymentTarget }) {
             <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => askToggle(item)}>{item.status === '停用' ? '解冻' : '冻结'}</Button>
           </Space>,
         ] };
-      })} empty={query || status || source ? '没有匹配的企业，请调整筛选条件。' : '尚未创建企业，点击“新用户”开始开户。'}
+      })} empty={query || status || source ? '没有匹配的企业，请调整筛选条件。' : '尚未创建企业，点击“开通政企客户”开始开户。'}
         pagination={{ currentPage: page, pageSize: size, total: rows.length, pageSizeOpts: PAGE_SIZES, showTotal: true, showSizeChanger: true,
           onPageChange: value => navigate({ page: String(value) }, true), onPageSizeChange: value => navigate({ size: String(value), page: '' }, true) }}/>
     </Card> : !tenant ? <Banner type="warning" closeIcon={null} description="企业不存在或不属于当前部署方式，请返回企业列表。"/> : <>
       {tenant.status === '停用' && <Banner type="warning" closeIcon={null} description="企业账号已冻结，所属成员和资源记录保留。解冻后可继续管理账号。"/>}
       <EnterpriseDetails key={tenant.id} state={state} tenant={tenant} params={params} navigate={navigate} canWrite={canWrite}
         setEditor={setEditor} setResult={setResult} askToggle={askToggle} askKey={key => setConfirmation({ tenant, key })} editing={editing}
-        editForm={editing && <EnterpriseEditor key={`edit-${tenant.id}`} inline state={state} tenant={tenant} kind="edit" mode={mode}
-          apply={apply} canWrite={canWrite} close={() => setEditor(null)} complete={() => { setEditor(null); Toast.success('政企用户信息已保存'); }}/>}/>
+        editForm={editing && <EnterpriseEditor key={`edit-${tenant.id}`} inline state={state} tenant={tenant} kind="edit" deploymentMode={deploymentMode}
+          apply={apply} canWrite={canWrite} close={() => setEditor(null)} complete={() => { setEditor(null); Toast.success('政企客户信息已保存'); }}/>}/>
     </>}
     {editor && !editing && <EnterpriseEditor key={`${editor.kind}-${editor.tenant?.id || 'new'}`} state={state} tenant={editor.tenant}
-      kind={editor.kind} mode={mode} apply={apply} canWrite={canWrite} close={() => setEditor(null)}
+      kind={editor.kind} deploymentMode={deploymentMode} apply={apply} canWrite={canWrite} close={() => { setEditor(null); if (params.has('create')) location.hash = '#/admin-2/tenants'; }}
       complete={value => { setEditor(null); setResult(value); }}/>}
-    {result && <EnterpriseDialog title={result.handover ? '账号交接信息' : result.added ? '企业管理员已添加' : '企业账号已开通'}
-      description="请核对企业与管理员信息，妥善保管账号交接资料。" close={() => setResult(null)} footer={<>
+    {result && <EnterpriseDialog title={result.handover ? '账号交接信息' : result.added ? '企业管理员已添加' : '政企客户已开通'}
+      description="请核对企业与管理员信息，妥善保管账号交接资料。" close={() => { setResult(null); if (params.has('create')) location.hash = '#/admin-2/tenants'; }} footer={<>
       <Button onClick={copy}>复制交接信息</Button>
       <Button theme="solid" onClick={() => { open(result.tenant, 'members'); setResult(null); }}>查看企业</Button>
     </>}>
       <EnterpriseFacts rows={[
-        ['用户名称', result.tenant.name], ['user_id', result.tenant.id], ['管理员', result.user.name],
+        ['客户名称', result.tenant.name], ['客户 ID', result.tenant.id], ['管理员', result.user.name],
         ['登录账号', result.user.login], ['手机号码', result.user.phone || '未填写'],
-        ['账号初始化', result.user.initialized ? '已完成，沿用现有登录方式' : '待设置密码'],
+        ['账号初始化', result.user.initialized ? '已完成' : '待设置密码'],
       ]}/>
       <Form.Slot label={{ text: '账号交接信息', name: 'ent-handover' }}><TextArea id="ent-handover" readOnly value={handover}/></Form.Slot>
     </EnterpriseDialog>}

@@ -62,14 +62,14 @@ export async function startLocalBackend({ persistPath, loginHashes, port = 0, lo
   const runtime = new Miniflare({ modules: true, script: bundled.outputFiles[0].text, host: '127.0.0.1', port,
     // The installed local engine supports this date; production compatibility is verified at deployment.
     compatibilityDate: '2026-07-30', d1Databases: ['MODEL_OPS_DB'], d1Persist: persistPath || false,
-    bindings: { MODEL_OPS_LOGIN_HASHES: JSON.stringify(loginHashes || {}), MODEL_OPS_DEMO_OTP:'1' }, ...(log ? { log } : {}) });
+    bindings: { MODEL_OPS_LOGIN_HASHES: JSON.stringify(loginHashes || {}), MODEL_OPS_DEMO_OTP:'1', MOMA_PRIVATE_SITE: process.env.VITE_MOMA_PRIVATE_SITE || '' }, ...(log ? { log } : {}) });
   try {
     const db = await runtime.getD1Database('MODEL_OPS_DB');
     await migrateEmptyDatabase(db);
     if (demo && !await db.prepare('SELECT id FROM model_workspace WHERE id=1').first()) {
       await initializeDatabase(db, await createSeed());
     }
-    const initialization = await initializeModelWorkspace(db, { demo });
+    const initialization = await initializeModelWorkspace(db, { demo, presets });
     if (presets) {
       await initializePrototypeCatalogue(db);
       await initializeApplication(db);

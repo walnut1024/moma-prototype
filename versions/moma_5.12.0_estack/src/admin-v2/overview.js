@@ -1,3 +1,4 @@
+import { diagnosticRequest, latestRequests } from '../request-identity.mjs';
 import {userBusinessData} from '../business-facts.mjs';
 import mockConfig from '../mock/catalogues.json' with { type: 'json' };
 import { dayOf } from './analytics.js';
@@ -120,14 +121,15 @@ export function overviewDemo(now = Date.now(), periodId = 'day', range) {
 export function overviewBusiness(state, now=Date.now(), periodId='day',range) {
   const period=overviewPeriod(now,periodId,range);
   if(!period)throw new RangeError('无效统计时间范围');
+  const requests = latestRequests(state.requests).filter(row => !diagnosticRequest(row));
   const aggregateFacts=(start,end)=>{
-    const summary=empty(),tenants=new Map(),modelMap=new Map(),pairs=new Map(),buckets=new Map(),hours=new Map(),seen=new Set();
+    const summary=empty(),tenants=new Map(),modelMap=new Map(),pairs=new Map(),buckets=new Map(),hours=new Map();
     const step=period.hourly?HOUR:DAY;
     for(let at=start;at<end;at+=step)buckets.set(at,{at,label:period.hourly?new Date(at+OFFSET).toISOString().slice(11,16):dayOf(at).slice(5),...empty()});
-    for(const request of state.requests){const id=request.requestId||request.id,time=Date.parse(request.createdAt);if(seen.has(id)||time<start||time>=end||!Number.isFinite(time))continue;seen.add(id);
+    for(const request of requests){const time=Date.parse(request.createdAt);if(time<start||time>=end||!Number.isFinite(time))continue;
       const model=state.models.find(row=>row.id===request.modelId),tenant=state.tenants.find(row=>row.id===request.tenantId),usage=request.usage||{},token=['text','multimodal','embedding','rerank'].includes(model?.type)&&Number.isFinite(usage.input)&&Number.isFinite(usage.output)?usage.input+usage.output:0;
       const row={total:token,calls:1,successfulCalls:request.httpStatus>=200&&request.httpStatus<300?1:0,self:0,partner:0};
-      const endpoint=state.endpoints.find(row=>row.id===request.endpointId),provider=state.providers.find(row=>row.id===endpoint?.providerId);
+      const endpoint=state.endpoints.find(row=>row.id===request.endpointId),provider=state.providers.find(row=>row.id===(request.providerId || endpoint?.providerId));
       if(provider?.sourceType==='selfHosted')row.self=token;else if(provider)row.partner=token;
       const cid=tenant?.id||request.tenantId||'__unknown__',mid=model?.id||request.modelId||'__unknown__',key=cid+'/'+mid;
       if(!tenants.has(cid))tenants.set(cid,{id:cid,name:tenant?.name||cid,...empty(),modelIds:new Set()});if(!modelMap.has(mid))modelMap.set(mid,{id:mid,name:model?.name||mid,...empty(),customerIds:new Set()});if(!pairs.has(key))pairs.set(key,{customerId:cid,customerName:tenant?.name||cid,modelId:mid,modelName:model?.name||mid,...empty()});

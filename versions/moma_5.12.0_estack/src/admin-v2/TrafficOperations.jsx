@@ -4,7 +4,8 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { Banner, Button, Card, Form, Input, Select, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconPlus } from '@douyinfe/semi-icons';
 import { AdminModal as Modal, AdminSideSheet } from './AdminOverlay';
-import { cloudAdminRequest } from './CloudModelOperations';
+import { cloudAdminRequest } from './admin-client.mjs';
+import { openLogin } from '../login-navigation.mjs';
 import { Choice, FieldLabel } from './ServiceUI.jsx';
 import { accountTraffic, effectiveTraffic, modelTraffic, trafficAccounts } from './traffic-limits.js';
 import { parseTrafficRate, trafficRateText, trafficUnits, validTrafficLimit } from './traffic-rates.js';
@@ -16,7 +17,7 @@ const metrics = ['rpm', 'tpm'];
 const rateWidths = { rpm: 156, tpm: 202 };
 const ratePairWidth = 168;
 const match = (query, ...fields) => fields.some(value => String(value ?? '').toLowerCase().includes(query.trim().toLowerCase()));
-const loginRequired = issue => issue?.status === 401 || issue?.status === 403;
+const loginRequired = issue => issue?.status === 401;
 const rateLabel = metric => metric.toUpperCase() + '（' + trafficUnits[metric] + '）';
 const userDefaultHelp = '账号未单独设置时使用的通用额度。对应模型的一客一策优先。';
 const modelDefaultHelp = '模型未单独设置时使用的共享上限。调用同一模型的所有账号共用该额度。';
@@ -72,7 +73,7 @@ function HistoryValue({ value, scope }) {
   return <Text type="secondary">{label}</Text>;
 }
 
-function TrafficHistory({ accountId, accounts, models, session, login, requestLogin, close }) {
+function TrafficHistory({ accountId, accounts, models, session, requestLogin, close }) {
   const [history, setHistory] = useState({ items: [], loading: true });
   const request = useRef(null);
 
@@ -119,7 +120,7 @@ function TrafficHistory({ accountId, accounts, models, session, login, requestLo
     </div> },
   ];
 
-  return <AdminSideSheet visible title="变更历史" width="min(1120px, 100vw)" closeOnEsc={!login} onCancel={close}
+  return <AdminSideSheet visible title="变更历史" width="min(1120px, 100vw)" closeOnEsc onCancel={close}
     footer={<Button onClick={close}>关闭</Button>}>
     <div className="traffic-policy-drawer">
       {history.loading && <Text role="status" type="secondary">正在读取限流变更…</Text>}
@@ -135,8 +136,11 @@ function TrafficHistory({ accountId, accounts, models, session, login, requestLo
   </AdminSideSheet>;
 }
 
-function TrafficVisualization({ account, models, settings, close }) {
+function TrafficVisualization({ account, models, projects, settings, close }) {
   const [query, setQuery] = useState('');
+  const [projectId, setProjectId] = useState('');
+  const project = projects.find(row => row.id === projectId);
+  const projectRules = new Map(project?.modelPermissions?.map(rule => [rule.modelId, rule]));
   const policy = accountTraffic(settings, account.id);
   const general = effectiveTraffic(settings, policy).hit;
   const rows = models.filter(row => match(query, row.name, row.modelId)).map(row => ({
@@ -152,7 +156,14 @@ function TrafficVisualization({ account, models, settings, close }) {
       <RatePair limit={row.model.limit}/>
       <Text size="small" type="secondary">{row.model.custom ? '模型自定义' : '模型默认'}</Text>
     </div> },
-    { title: <FieldLabel name="最终上限" description={finalLimitHelp}/>, width: 186, className: 'traffic-final-cell',
+    ...(project ? [{ title: '项目模型限流', width: 186, render: (_, row) => {
+      const rule = projectRules.get(row.id);
+      if (project.status !== '正常') return '项目不可用';
+      if (!rule) return Array.isArray(project.modelPermissions) ? '项目未开通' : '继承空间授权';
+      if (rule.rpm == null && rule.tpm == null) return '项目未设上限';
+      return <RatePair limit={rule}/>;
+    } }] : []),
+    { title: <FieldLabel name={project ? '账号与模型额度' : '最终上限'} description={finalLimitHelp}/>,  width: 186, className: 'traffic-final-cell',
       render: (_, row) => <RatePair limit={row.finalLimit} strong/> },
   ];
   return <AdminSideSheet visible title="限流可视化" width="min(1000px, 100vw)" closeOnEsc onCancel={close}
@@ -165,7 +176,9 @@ function TrafficVisualization({ account, models, settings, close }) {
         <div className="traffic-rate-cell"><Text type="secondary">通用生效额度</Text><RatePair limit={general?.limit} strong/></div>
       </div>
       <div className="admin-list-toolbar">
-        <Input className="admin-list-search" showClear aria-label="搜索模型" placeholder="搜索模型名称或标识"
+        <Choice label="项目" value={projectId} options={[[ '', '查看项目限流' ], ...projects.map(row => [row.id, row.name + ' · ' + row.id])]}
+          onSelect={setProjectId} disabled={!projects.length}/>
+        <Input className="admin-list-search" showClear aria-label="搜索模型" placeholder="搜索模型展示名或模型编码"
           value={query} onChange={setQuery}/>
       </div>
       <Table key={query} rowKey="id" scroll={{ x: 'max(100%, 760px)' }} empty="暂无匹配模型"
@@ -174,45 +187,10 @@ function TrafficVisualization({ account, models, settings, close }) {
   </AdminSideSheet>;
 }
 
-function TrafficLogin({ accountId, onLogin, close }) {
-  const [accessCode, setCode] = useState('');
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState('');
-  const passwordId = useId();
-
-  async function submit(event) {
-    event?.preventDefault();
-    if (pending || !accessCode) return;
-    setPending(true);
-    setError('');
-    try {
-      await cloudAdminRequest('/auth/login', { method: 'POST', body: { accountId, accessCode } });
-      await onLogin();
-    } catch (issue) {
-      setError(issue.message);
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return <Modal visible title="后台登录" okText="登录" onOk={submit} okButtonProps={{ loading: pending, disabled: !accessCode }}
-    cancelButtonProps={{ disabled: pending }} onCancel={() => { if (!pending) close(); }}>
-    <form onSubmit={submit}>
-      <Text>账号：{accountId}</Text>
-      <Form.Slot label={{ text: '后台密码', name: passwordId, required: true }}>
-        <Input id={passwordId} mode="password" value={accessCode} onChange={setCode} autoComplete="current-password" autoFocus/>
-      </Form.Slot>
-      {error && <Banner type="danger" description={error} closeIcon={null}/>}
-      <button type="submit" hidden/>
-    </form>
-  </Modal>;
-}
-
 export default function TrafficOperations({ state, dirtyRef }) {
   const accountId = state.adminSession.accountId;
   const modelPickerId = useId();
   const [remote, setRemote] = useState(null);
-  const [login, setLogin] = useState(false);
   const [saving, setSaving] = useState(false);
   const settings = remote?.value;
   const global = settings?.global;
@@ -376,13 +354,13 @@ export default function TrafficOperations({ state, dirtyRef }) {
   const editButton = (label, action) => <Button size="small" theme="borderless" onClick={action} disabled={actionsDisabled} aria-label={label}>编辑</Button>;
   const errorBanner = error && <Banner type="danger" description={<>{error.message}
     {revisionConflict && <Button size="small" disabled={saving} onClick={() => discard(() => { finish(); clearSelection(); refresh(); })}>载入最新配置</Button>}
-    {loginRequired(error) && <Button size="small" onClick={() => setLogin(true)}>重新登录</Button>}
+    {loginRequired(error) && <Button size="small" onClick={() => openLogin()}>重新登录</Button>}
   </>} closeIcon={null}/>;
   const loadStatus = <>
     <Text type="secondary" role="status">{remote?.error
       ? loginRequired(remote.error) ? '登录后台后查看额度' : remote.error.message : '正在读取额度…'}</Text>
     {remote?.error && (loginRequired(remote.error)
-      ? <Button size="small" onClick={() => setLogin(true)}>登录后台</Button>
+      ? <Button size="small" onClick={() => openLogin()}>登录后台</Button>
       : <Button size="small" onClick={refresh}>重新加载</Button>)}
   </>;
   const accountRule = row => effectiveTraffic(settings, accountTraffic(settings, row.id)).hit;
@@ -421,7 +399,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
     ...row, ...modelTraffic(settings, row.id),
   }));
   const modelColumns = [
-    { title: '模型名称', dataIndex: 'name' }, { title: '模型标识', dataIndex: 'modelId' },
+    { title: '模型展示名', dataIndex: 'name' }, { title: '模型编码', dataIndex: 'modelId' },
     { title: '默认值', width: ratePairWidth, render: () => <RatePair limit={modelDefault}/> },
     { title: '生效值', width: ratePairWidth, render: (_, row) => <RatePair limit={row.limit} strong/> },
     { title: '规则来源', width: 98, render: (_, row) => row.custom ? '模型自定义' : '模型默认' },
@@ -497,7 +475,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
       <Tabs.TabPane tab="模型限流" itemKey="models">
         {tab === 'models' && <div className="traffic-tab"><Card className="traffic-list">
           <div className="admin-list-toolbar">
-            <Input className="admin-list-search" showClear value={modelQuery} aria-label="搜索模型" placeholder="搜索模型名称或标识"
+            <Input className="admin-list-search" showClear value={modelQuery} aria-label="搜索模型" placeholder="搜索模型展示名或模型编码"
               onChange={setModelQuery} disabled={Boolean(draft)}/>
             <DefaultInline title="模型默认" description={modelDefaultHelp}>
               {modelDefault ? <>
@@ -514,7 +492,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
       </Tabs.TabPane>
     </Tabs>
     {draft && !drawer && <Modal visible title={dialogTitle} okText="保存" onOk={save} onCancel={() => discard()}
-      closeOnEsc={!confirmation && !login} cancelButtonProps={{ disabled: saving }}
+      closeOnEsc={!confirmation} cancelButtonProps={{ disabled: saving }}
       okButtonProps={{ loading: saving, disabled: saveBlocked }}>
       <form className="traffic-rate-dialog" onSubmit={event => { event.preventDefault(); if (!saveBlocked) void save(); }}>
         {defaultsEditing && <Text type="secondary">{userDefaultHelp}</Text>}
@@ -539,7 +517,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
           <Text strong id={modelPickerId + '-label'}>添加模型策略</Text>
           {!draft.rows.length && choices.length > 0 &&
             <Text type="secondary">选择模型后，填写 RPM 和 TPM，再保存。</Text>}
-          <Select aria-labelledby={modelPickerId + '-label'} placeholder={choices.length ? '搜索模型名称或 ID' : '没有可添加的模型'}
+          <Select aria-labelledby={modelPickerId + '-label'} placeholder={choices.length ? '搜索模型展示名或规范模型标识' : '没有可添加的模型'}
             filter motion={false} value="" defaultOpen={openModelPicker} autoFocus={openModelPicker}
             position="bottomLeft" getPopupContainer={() => document.getElementById(modelPickerId)}
             disabled={saving || !account || !choices.length}
@@ -551,19 +529,14 @@ export default function TrafficOperations({ state, dirtyRef }) {
           pagination={false} dataSource={draft.rows} columns={policyColumns}/>}
       </div>
     </AdminSideSheet>}
-    {visualizationAccount && <TrafficVisualization account={visualizationAccount} models={models} settings={settings} close={() => setVisualizationId(null)}/>}
-    {historyOpen && <TrafficHistory accountId={accountId} accounts={accounts} models={models} session={settings} login={login}
-      requestLogin={() => setLogin(true)} close={() => setHistoryOpen(false)}/>}
+    {visualizationAccount && <TrafficVisualization key={visualizationAccount.id} account={visualizationAccount} models={models}
+      projects={(state.projects || []).filter(row => row.tenantId === visualizationAccount.id)} settings={settings} close={() => setVisualizationId(null)}/>}
+    {historyOpen && <TrafficHistory accountId={accountId} accounts={accounts} models={models} session={settings}
+      requestLogin={() => openLogin()} close={() => setHistoryOpen(false)}/>}
     {confirmation && <Modal visible title={confirmation.title} okText={confirmation.okText}
       cancelText={confirmation.cancelText} okButtonProps={confirmation.okButtonProps} closeOnEsc
       onCancel={() => closeConfirmation(false)} onOk={() => closeConfirmation(true)}>
       {confirmation.content}
     </Modal>}
-    {login && <TrafficLogin accountId={accountId} close={() => setLogin(false)} onLogin={async () => {
-      const value = await loadLimits();
-      setLogin(false);
-      setError(draft && draft.revision !== value.revision
-        ? Object.assign(new Error('限流配置已更新，当前输入已保留。'), { code: 'REVISION_CONFLICT' }) : null);
-    }}/>}
   </section>;
 }

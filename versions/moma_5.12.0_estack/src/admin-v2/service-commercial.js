@@ -1,4 +1,5 @@
 import { activeCustomer } from '../service-access.mjs';
+import { priceItemReferences } from '../model-identities.mjs';
 import { billingItemKey, parseSaleAmount } from './provider-catalogue-pricing.js';
 import { tariffOptions, normalizeCurrency } from './tariff-dictionary.js';
 
@@ -18,7 +19,9 @@ export function retailItems(state, rows, previous = []) {
     if (!previous.some(old => billingItemKey(old) === billingItemKey(row))) {
       for (const [kind, value] of [['scenario', row.name], ['unit', row.unit], ['currency', row.currency]]) if (!tariffOptions(state, kind).includes(value)) throw Error('新增计费项须从模型资料字典选择，计费单位和货币须选择已启用项');
     }
-    return row;
+    const refs = priceItemReferences(state, row);
+    for (const key of ['billing_item_id', 'unit_id', 'currency_id']) if (item[key] != null && item[key] !== refs[key]) throw Error('计费项、单位或币种 ID 与当前字典不一致');
+    return { ...row, ...refs };
   });
   if (new Set(items.map(billingItemKey)).size !== items.length) throw Error('计费项、条件与单位不能重复');
   return items;

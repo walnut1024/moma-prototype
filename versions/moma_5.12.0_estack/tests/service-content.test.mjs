@@ -79,11 +79,13 @@ test('channel removal checks route references; supplier unbinding requires downl
  assert.throws(()=>run(foreign,'removeServiceProvider',f.model.id,{providerId:f.provider.id,expectedUpdatedAt:f.model.updatedAt}),/其他服务路由引用/);
  const removed=run(published,'removeServiceProvider',f.model.id,{providerId:f.provider.id,expectedUpdatedAt:f.model.updatedAt});
  assert.equal(serviceRoute(removed,service.id).activeVersion,0);assert.deepEqual(serviceRoute(removed,service.id).versions,serviceRoute(published,service.id).versions);
- assert.throws(()=>run(published,'serviceRouteStop',null,{serviceId:service.id,expectedVersion:1}),/确认/);
- const stopped=run(published,'serviceRouteStop',null,{serviceId:service.id,expectedVersion:1,confirmed:true});
+ assert.throws(()=>run(published,'serviceRouteStop',null,{serviceId:service.id,expectedVersion:1,confirmed:true}),/先停止服务/);
+ const stoppedService=run(published,'serviceProviderServing',f.model.id,{providerId:f.provider.id,enabled:false,expectedUpdatedAt:f.model.updatedAt});
+ assert.throws(()=>run(stoppedService,'serviceRouteStop',null,{serviceId:service.id,expectedVersion:1}),/确认/);
+ const stopped=run(stoppedService,'serviceRouteStop',null,{serviceId:service.id,expectedVersion:1,confirmed:true});
  assert.deepEqual(serviceRoute(stopped,service.id).versions,serviceRoute(published,service.id).versions);
  assert.equal(serviceRoute(stopped,service.id).activeVersion,0);
- assert.doesNotThrow(()=>run(stopped,'removeServiceProvider',f.model.id,{providerId:f.provider.id,expectedUpdatedAt:f.model.updatedAt}));
+ assert.doesNotThrow(()=>run(stopped,'removeServiceProvider',f.model.id,{providerId:f.provider.id,expectedUpdatedAt:stopped.models.find(row=>row.id===f.model.id).updatedAt}));
  const unlinked=run(f.state,'removeServiceProvider',f.model.id,{providerId:f.provider.id,expectedUpdatedAt:f.model.updatedAt});
  assert.equal(providerServices(unlinked.models.find(item=>item.id===f.model.id)).length,0);assert.deepEqual(unlinked.providers,f.state.providers);assert.deepEqual(unlinked.modelSalePrices,f.state.modelSalePrices);
 });

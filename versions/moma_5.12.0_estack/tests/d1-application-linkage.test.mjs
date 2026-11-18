@@ -6,11 +6,13 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { supplierDirectory } from '../src/admin-v2/moma-provider.js';
 import { accountDataSourceLabel } from '../src/admin-v2/account-data-source.js';
+import { encodeAuthPassword } from '../src/auth-state.mjs';
 import { managedEnterpriseTenants, privateEnterprise } from '../src/admin-v2/enterprise.js';
 import { filterIndividualAccounts } from '../src/admin-v2/individual-users.js';
 import { supplierModelChannelGroups } from '../src/admin-v2/supplier-model-channel-table.js';
 import { trafficAccounts } from '../src/admin-v2/traffic-limits.js';
 import { migrateEmptyDatabase, startLocalBackend } from '../database/local-runtime.js';
+import { issueCustomerChallenge, registerCustomer } from '../server/customer-identity.js';
 
 test('the preset administrator and customers share D1 while their workspaces stay isolated after a restart', { timeout:30_000 }, async () => {
   const persistPath=await mkdtemp(join(tmpdir(),'moma5120-linkage-'));
@@ -18,7 +20,7 @@ test('the preset administrator and customers share D1 while their workspaces sta
   const loginHashes=Object.fromEntries(Object.entries(passwords).map(([id,password])=>[id,createHash('sha256').update(password).digest('hex')]));
   let local;
   try {
-    local=await startLocalBackend({ persistPath, loginHashes });
+    local=await startLocalBackend({ persistPath, loginHashes, presets:true });
     const request=async (path,{ cookie, body }={})=>{
       const headers={ ...(cookie?{ Cookie:cookie }:{}), ...(body?{ 'X-MoMA-Request':'1', Origin:local.url.origin,'Content-Type':'application/json' }:{}) };
       if (path==='application/commands') headers['Idempotency-Key']=body.operationId;
@@ -29,8 +31,16 @@ test('the preset administrator and customers share D1 while their workspaces sta
     const login=(id,admin=false)=>admin ? request('auth/login',{body:{accountId:id,accessCode:passwords[id]}})
       : customerLogin(id,id==='grzh'?'personal':'enterprise',passwords[id]);
     assert.equal((await request('market/workspace')).status,401);
-    const admin=await login('yyg',true);
+    const signIn=(identifier,accessCode=passwords[identifier])=>request('auth/sign-in',{body:{identifier,accessCode}});
+    const invalid=await signIn('yyg',randomUUID());
+    assert.equal(invalid.status,401);
+    assert.equal(invalid.cookie,undefined);
+    assert.equal(invalid.data.error.code,'INVALID_LOGIN');
+    const admin=await signIn('yyg');
+    assert.equal(admin.status,200);
+    assert.match(admin.cookie,/^moma5120_v2_session=/);
     const beforeLogin=(await request('application',{cookie:admin.cookie})).data;
+    assert.ok(beforeLogin.adminLoginIds.includes(admin.data.account.id));
     assert.equal(beforeLogin.users.find(row=>row.id==='user-personal-demo-002').lastLoginAt,undefined);
     assert.equal(accountDataSourceLabel(beforeLogin.tenants.find(row=>row.id==='personal-demo-002')),'导入样例');
     assert.equal(accountDataSourceLabel(beforeLogin.tenants.find(row=>row.id==='tenant-gov')),'导入样例');
@@ -41,7 +51,10 @@ test('the preset administrator and customers share D1 while their workspaces sta
     assert.deepEqual(filterIndividualAccounts(beforeLogin,{source:'registration'}),[]);
     assert.ok(beforeLogin.memberships.some(row=>row.tenantId==='tenant-gov'));
     for(const id of ['tenant-gov','personal-demo-002']) assert.ok(trafficAccounts(beforeLogin).some(row=>row.id===id));
-    const [business,personal]=await Promise.all([login('zqzh'),login('grzh')]);
+    const [business,personal]=await Promise.all([signIn('zqzh'),signIn('grzh')]);
+    assert.equal(business.status,200);
+    assert.equal(personal.status,200);
+    assert.match(business.cookie,/^moma5120_v2_market=/);
     assert.equal(admin.data.account.role,'平台管理员');
     assert.equal(business.data.tenant.type,'企业');
     assert.equal(personal.data.tenant.type,'个人');
@@ -65,16 +78,14 @@ test('the preset administrator and customers share D1 while their workspaces sta
     await migrateEmptyDatabase(local.db);
     assert.equal(await referenceQuery.first('reference_json'),referenceBefore);
     const phone='13900908070', password='qa1'+randomUUID();
-    const codeResult=await request('market/signup-code',{body:{phone}});
-    assert.equal(codeResult.status,200);
-    assert.equal((await request('market/signup-code',{body:{phone}})).status,429);
-    const signup={phone,challengeId:codeResult.data.id,code:codeResult.data.code,password,consent:true};
-    const badCode=signup.code==='000000'?'999999':'000000';
-    assert.equal((await request('market/signup',{body:{...signup,code:badCode}})).status,422);
-    const registered=await request('market/signup',{body:signup});
-    assert.equal(registered.status,201,JSON.stringify(registered.data.error));
+    assert.equal((await request('market/signup-code',{body:{phone}})).status,404);
+    const challenge=await issueCustomerChallenge(local.db,phone,'signup');
+    const signup={phone,challengeId:challenge.id,code:challenge.code,password,consent:true};
+    assert.equal((await request('market/signup',{body:signup})).status,404);
+    await registerCustomer(local.db,signup);
+    const registered=await signIn(phone,password);
+    assert.equal(registered.status,200,JSON.stringify(registered.data.error));
     assert.equal(registered.data.tenant.type,'个人');
-    assert.equal((await request('market/signup',{body:signup})).status,422);
     const signedIn=(await request('market/workspace',{cookie:registered.cookie})).data;
     assert.equal(signedIn.profile.account,phone);
     assert.equal(signedIn.projects.length,1);
@@ -90,7 +101,8 @@ test('the preset administrator and customers share D1 while their workspaces sta
     const rows=state.providers.flatMap(provider=>provider.catalogConnections.map(channel=>[provider.name,channel.sourceName]));
     assert.deepEqual(rows, [['移动云','自营'],['移动云','原厂转售'],['阿里云','自营'],['阿里云','原厂转售'],['深度求索','自营'],['智谱','自营']]);
     const visible=supplierDirectory(state);
-    assert.equal(visible.length,4);
+    assert.deepEqual(new Set(visible.filter(row=>row.catalogConnections?.length).map(row=>row.name)),new Set(['移动云','阿里云','深度求索','智谱']));
+    assert.ok(visible.every(row=>row.catalogConnections?.length || row.builtinCatalogue));
     assert.equal(visible.flatMap(provider=>supplierModelChannelGroups(state,provider)).filter(group=>group.modelId).flatMap(group=>group.channels).length,6);
     for(const id of ['glm-5.3','deepseek-flash','deepseek-v4-pro','seedance-2.5']) assert.ok(state.modelTemplates.some(row=>row.modelId===id),id);
     assert.equal((await local.db.prepare('PRAGMA foreign_key_check').all()).results.length,0);
@@ -98,7 +110,7 @@ test('the preset administrator and customers share D1 while their workspaces sta
     assert.equal(workspace.data.identity.tenantId,'zqzh');
     assert.equal(workspace.data.organization.members[0].role,'企业管理员');
     const operation={ operationId:randomUUID(), tenantId:'zqzh', expectedRevision:workspace.data.revision, action:'keys',
-      data:{ billing:'按量付费',rows:[{id:'linkage-test-key',name:'原型验收 Key',enabled:true,models:null,secretPreview:'sk-demo*****abcd'}] } };
+      data:{ projectId:workspace.data.projects[0].id,billing:'按量付费',rows:[{id:'linkage-test-key',name:'原型验收 Key',enabled:true,models:null,secretPreview:'sk-demo*****abcd'}] } };
     assert.equal((await request('market/commands',{cookie:personal.cookie,body:operation})).status,409);
     assert.equal((await request('market/commands',{cookie:business.cookie,body:operation})).status,200);
     assert.equal((await request('market/commands',{cookie:business.cookie,body:operation})).status,200);
@@ -111,11 +123,13 @@ test('the preset administrator and customers share D1 while their workspaces sta
     assert.equal(maintenance.data.account.role,'运维人员');
     const restricted=await request('application/open',{cookie:maintenance.cookie,body:{}});
     assert.equal(restricted.status,200,JSON.stringify(restricted.data.error));
-    for(const field of ['users','memberships','projects','apiKeys','grants','orders','bills','ledger','identityEvents','modelSalePrices','supplyPrices']){
+    for(const field of ['users','memberships','apiKeys','grants','orders','bills','ledger','identityEvents','modelSalePrices','supplyPrices']){
       assert(!Object.hasOwn(restricted.data,field),field);
     }
     assert.deepEqual(restricted.data.gatewayKeyOptions.find(row=>row.id==='linkage-test-key'),
-      {id:'linkage-test-key',keyId:'linkage-test-key',status:'有效'});
+      {id:'linkage-test-key',keyId:'linkage-test-key',status:'有效',tenantId:'zqzh',projectId:workspace.data.projects[0].id});
+    assert(restricted.data.projects.some(row=>row.id===workspace.data.projects[0].id && row.tenantId==='zqzh'));
+    assert(restricted.data.projects.every(row=>!Object.hasOwn(row,'ownerId') && !Object.hasOwn(row,'memberRoles')));
     assert(restricted.data.tenants.every(row=>!Object.hasOwn(row,'ownerId')));
     assert.equal(restricted.data.clusters.length,app.clusters.length);
 
@@ -126,7 +140,7 @@ test('the preset administrator and customers share D1 while their workspaces sta
     const [keep]=operation.data.rows;
     const retired={...keep,id:'linkage-retired-key',quotaLimit:987654,quotaType:'日'};
     const unlimited={...keep,id:'linkage-retired-unlimited-key'};
-    const writeKeys=(login,tenantId,rows)=>tenantCommand(login,tenantId,'keys',{billing:'按量付费',rows});
+    const writeKeys=(login,tenantId,rows)=>tenantCommand(login,tenantId,'keys',{projectId:'project-'+tenantId,billing:'按量付费',rows});
     assert.equal((await writeKeys(business,'zqzh',[keep,retired,unlimited])).status,200);
     assert.equal((await writeKeys(business,'zqzh',[keep])).status,200);
     const afterDelete=(await request('application',{cookie:admin.cookie})).data;
@@ -187,9 +201,10 @@ test('the preset administrator and customers share D1 while their workspaces sta
 
     const member={id:'linked-member',login:'qa-member',phone:'13900139000',name:'双空间成员',status:'正常'};
     await local.db.prepare(`UPDATE model_workspace SET reference_json=json_insert(reference_json,
-      '$.users[#]',json(?),'$.tenants[#]',json(?),'$.memberships[#]',json(?)) WHERE id=1`)
+      '$.users[#]',json(?),'$.tenants[#]',json(?),'$.memberships[#]',json(?),'$.projects[#]',json(?)) WHERE id=1`)
       .bind(JSON.stringify(member),JSON.stringify({id:'member-private-space',type:'个人',status:'正常',ownerId:member.id,name:'个人空间'}),
-        JSON.stringify({id:'linked-member-business',userId:member.id,tenantId:'zqzh',role:'普通成员',status:'正常'})).run();
+        JSON.stringify({id:'linked-member-business',userId:member.id,tenantId:'zqzh',role:'普通成员',status:'正常'}),
+        JSON.stringify({id:'member-default-project',tenantId:'member-private-space',ownerId:member.id,name:'默认项目',status:'正常'})).run();
     const memberSession=await customerLogin(member.login,'enterprise',passwords[member.id]);
     assert.equal(memberSession.status,200);
     const memberWorkspace=(await request('market/workspace',{cookie:memberSession.cookie})).data;
@@ -233,7 +248,35 @@ test('the preset administrator and customers share D1 while their workspaces sta
     const openedTenant=managedEnterpriseTenants(opened).find(row=>row.id===newEnterprise.ids.tenant);
     assert.equal(accountDataSourceLabel(openedTenant),'后台开通');
     assert.equal(opened.users.find(row=>row.id===openedTenant.ownerId).initialized,false);
-    assert.equal((await adminCommand({...newEnterprise,mode:'private'})).status,422);
+    const openingPassword='Accept-Test-' + randomUUID();
+    const ids=Object.fromEntries(['tenant','user','member','organization'].map(key=>[key,key+':second-tenant']));
+    const loginProof=await encodeAuthPassword(openingPassword);
+    const openedSecond=await adminCommand({...newEnterprise,ids,loginProof,deploymentMode:'私有化',
+      data:{...newEnterprise.data,login:'workspace-test-company',phone:'19900001997',companyName:'第二家私有化企业'}});
+    assert.equal(openedSecond.status,200,JSON.stringify(openedSecond.data));
+    const second=await request('auth/sign-in',{body:{identifier:'workspace-test-company',accessCode:openingPassword}});
+    assert.equal(second.status,200);
+    assert.equal(second.data.tenant.id,ids.tenant);
+    const personalOpen={type:'individual',operation:'create',ids:{tenant:'customer-test-personal',project:'project-test-personal'},
+      data:{accountMode:'existing',userId:ids.user}};
+    const openResult=await adminCommand(personalOpen);
+    assert.equal(openResult.status,200,JSON.stringify(openResult.data));
+    assert.equal((await adminCommand(personalOpen)).status,422);
+    const dual=await request('auth/sign-in',{body:{identifier:'workspace-test-company',accessCode:openingPassword}});
+    assert.deepEqual(dual.data.spaces.map(row=>row.id).sort(),[personalOpen.ids.tenant,ids.tenant].sort());
+    const personalWork=(await request('market/workspace',{cookie:dual.cookie})).data;
+    assert.deepEqual(personalWork.projects.map(row=>[row.id,row.name]),[[personalOpen.ids.project,'默认项目']]);
+    assert.deepEqual(personalWork.organization.departments,[]);
+    assert.equal((await request('market/switch',{cookie:dual.cookie,body:{tenantId:ids.tenant}})).status,200);
+    assert.equal((await request('market/workspace',{cookie:dual.cookie})).data.projects.length,0);
+    const newPerson={type:'individual',operation:'create',ids:{tenant:'workspace-new-personal',user:'workspace-new-user',project:'workspace-new-project'},
+      data:{accountMode:'new',name:'演示个人客户',phone:'19900001998'},loginProof:await encodeAuthPassword(openingPassword)};
+    assert.equal((await adminCommand({...newPerson,loginProof:undefined})).status,400);
+    const personalResult=await adminCommand(newPerson);
+    assert.equal(personalResult.status,200,JSON.stringify(personalResult.data));
+    const openedPersonal=await request('auth/sign-in',{body:{identifier:newPerson.data.phone,accessCode:openingPassword}});
+    assert.equal(openedPersonal.status,200);
+    assert.equal(openedPersonal.data.tenant.id,newPerson.ids.tenant);
     assert.equal((await adminCommand({type:'individual',operation:'edit',tenantId:'grzh',data:{nickname:'个人演示改名'}})).status,200);
     assert.equal((await request('market/workspace',{cookie:personal.cookie})).data.profile.name,'个人演示改名');
 
@@ -283,7 +326,6 @@ test('the preset administrator and customers share D1 while their workspaces sta
     const resetCode=await request('market/password-code',{body:{phone}});
     assert.equal(resetCode.status,200);
     const recovery={phone,challengeId:resetCode.data.id,code:resetCode.data.code,password:recoveredPassword};
-    assert.equal((await request('market/signup',{body:{...recovery,consent:true}})).status,422);
     assert.equal((await request('market/password-reset',{body:recovery})).status,200);
     assert.equal((await request('market/password-reset',{body:recovery})).status,422);
     assert.equal((await request('market/workspace',{cookie:changed.cookie})).status,401);
@@ -292,7 +334,7 @@ test('the preset administrator and customers share D1 while their workspaces sta
     assert.equal(persisted.keys.find(row=>row.id==='linkage-test-key').secretPreview,'sk-demo*****abcd');
     assert.equal(persisted.organization.members.find(row=>row.id===renamed.id).name,renamed.name);
     assert.equal((await writeKeys(business,'zqzh',[keep,retired])).status,422);
-    assert.equal((await request('application',{cookie:admin.cookie})).data.providers.length,4);
+    assert.deepEqual(new Set((await request('application',{cookie:admin.cookie})).data.providers.map(row=>row.id)),new Set(beforeLogin.providers.map(row=>row.id)));
     const batch=Array.from({length:500},(_,index)=>({
       id:'bulk-member-'+index,name:'批量成员 '+index,phone:'139080'+String(index).padStart(5,'0'),
       account:'bulk-'+index+'@example.invalid',role:'普通成员',status:'待加入',departmentId:'root',

@@ -1,7 +1,9 @@
+import { ADMIN_DATA_KEY } from '../workspace-storage.mjs';
+import { referenceWorkspace } from '../mock/reference-workspace.js';
 import {commitAdminState,canMutate} from './state-transaction.js';
 export {commitAdminState,canMutate} from './state-transaction.js';
 import {initialApplicationData} from "../mock/application-data.js";
-import {initialWorkspace,MODEL_DATA_COLLECTIONS,systemModelData,systemModelOrigin,applyModelDataset} from "../mock/model-data.js";
+import {initialWorkspace,MODEL_DATA_COLLECTIONS,systemModelData,systemModelOrigin} from "../mock/model-data.js";
 
 
 
@@ -21,7 +23,7 @@ import { useEffect, useRef, useState } from "react";
 import { prepareMockOnboardingSync, commitMockOnboardingSync } from './mock-onboarding-sync.js';
 import { assertNewMockPublications } from './mock-publication-gate.js';
 
-export const STORAGE_KEY = "moma.adminV2.5120.v1";
+export const STORAGE_KEY = ADMIN_DATA_KEY;
 const isDerivedUsageRequest = request => request.id?.startsWith('usage-demo-');
 
 export function serializeAdminState(state) {
@@ -40,12 +42,12 @@ export function parseAdminState(raw) {
   if (!raw) return initialWorkspace(createAdminSeed());
   const value = JSON.parse(raw);
   if (value?.version !== 1 || !Array.isArray(value.models) || !Array.isArray(value.apiKeys)) throw new Error("数据格式不兼容");
-  const seed = createAdminSeed();
+  const seed = value.modelData?.sourceScope === 'reference-only-v2' ? value : createAdminSeed();
   const restored = { ...seed, ...value, ...Object.fromEntries(["serviceRoutes", "modelOnboardings", "tariffDictionary", "modelTemplates", "modelSupplies", "modelSalePrices", "users", "organizations", "modelVersions", "validations", "clusters", "artifacts", "deployments", "supplyPrices", "memberships", "grants", "ledger", "routes", "limits", "fallbacks", "releases", "caches", "requests", "alerts", "incidents", "products", "prices", "orders", "bills", "settlements", "adjustments", "announcements", "admins", "approvals", "integrations"].map(key => [key, Array.isArray(value[key]) ? value[key] : seed[key]])) };
   // Stored business records are authoritative; never refill deleted models or channels.
   restored.modelData = value.modelData;
   restored.initialData = value.initialData;
-  for (const key of Object.keys(seed.initialData.builtinIds)) restored[key] = Array.isArray(value[key]) ? value[key] : [];
+  for (const key of Object.keys(seed.initialData?.builtinIds || {})) restored[key] = Array.isArray(value[key]) ? value[key] : [];
   for (const key of MODEL_DATA_COLLECTIONS) restored[key] = Array.isArray(value[key]) ? value[key] : [];
   restored.requests = [...restored.requests.filter(item => !isDerivedUsageRequest(item)), ...usageDemoRequests(restored,Date.now())];
   return restored;
@@ -149,8 +151,8 @@ export function persistAdminAccountAction(state, action, storage, expectedRevisi
 
 export function loadAdminState(storage) {
   const raw = storage.getItem(STORAGE_KEY);
-  const state = parseAdminState(raw);
-  let completed = raw ? state : applyModelDataset(state);
+  const state = raw ? parseAdminState(raw) : referenceWorkspace();
+  let completed = state;
   if (!completed.adminSession?.accountId) {
     const account = completed.admins.find(row => row.role === '平台管理员' && row.status === '已启用');
     if (account) completed = { ...completed, adminSession: { accountId: account.id }, currentRole: account.role };

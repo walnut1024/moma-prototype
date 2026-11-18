@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Banner, Button, Card, Dropdown, Typography } from '@douyinfe/semi-ui';
 import { IconChevronDown } from '@douyinfe/semi-icons';
 import Table from './AdminTable';
@@ -9,15 +9,16 @@ import { chartPalette } from '../components/chart-style.mjs';
 import { ObservationPick, ObservationPlot, ObservationSupplyPick, ObservationTimeRange, useObservationSupply } from './CallObservationControls';
 import { monitoringLinks } from './navigation.mjs';
 import {
-  attemptCapacity, callObservations, defaultObservationGrain, errorSignals, filterObservations, observationBuckets,
+  attemptCapacity, callObservations, changeObservationTenant, defaultObservationGrain, errorSignals, filterObservations, observationBuckets,
   observationDrill, observationFilters, observationGrains, observationGroups, observationGroupScope, observationHash, observationKey,
   observationName, observationNumber as fmt, observationWindow, summarizeObservations,
 } from './call-observations.mjs';
 
 const { Title, Paragraph } = Typography;
-const grouping = [['channel', '渠道'], ['provider', '服务商'], ['endpoint', '端点']];
+const grouping = [['channel', '渠道'], ['provider', '服务商'], ['endpoint', '端点'], ['project', '项目']];
 const groupLabels = new Map(grouping);
-const filtersShown = [['endpoint', '端点'], ['callId', '对外调用标识']];
+const filtersShown = [['endpoint', '端点'], ['callId', '模型调用标识']];
+const customerPurpose = ['customer'];
 const capacityOptions = [['Rpm', 'RPM'], ['Tpm', 'TPM']];
 const signals = { '429': 'rateLimit', '超时': 'timeout', '回退': 'fallback' };
 const identity = (rows, field) => {
@@ -26,10 +27,15 @@ const identity = (rows, field) => {
 };
 
 export default function ServiceMonitoringPage({ state, navigate, params }) {
-  const [filters, setFilters] = useState(() => observationFilters(params, '24h'));
+  const [filters, setFilters] = useState(() => observationFilters(params, '24h', customerPurpose));
   const [grain, setGrain] = useState(() => params.get('grain'));
   const [groupBy, setGroupBy] = useState(() => groupLabels.has(params.get('groupBy')) ? params.get('groupBy') : 'channel');
   const [capacity, setCapacity] = useState('Rpm');
+  useEffect(() => {
+    setFilters(observationFilters(params, '24h', customerPurpose));
+    setGrain(params.get('grain'));
+    setGroupBy(groupLabels.has(params.get('groupBy')) ? params.get('groupBy') : 'channel');
+  }, [params]);
   const { attempts } = useMemo(() => callObservations(state), [state]);
   const supply = useObservationSupply(attempts, filters.supply);
   const window = observationWindow(filters);
@@ -52,10 +58,19 @@ export default function ServiceMonitoringPage({ state, navigate, params }) {
   const capacitySeries = [['平均', 'average'], ['分钟峰值', 'peak']].map(([label, prefix]) =>
     ({ label: label + ' ' + capacity.toUpperCase(), values: capacityStats.map(stats => stats[prefix + capacity]) }));
   const change = patch => {
-    setFilters(current => ({ ...current, ...patch }));
+    const next = { ...filters, ...patch };
+    setFilters(next);
     if (patch.period) setGrain(null);
+    history.replaceState(history.state, '', observationHash('monitoring', next, { grain: patch.period ? null : granularity, groupBy }));
   };
-  const reset = () => { setFilters(observationFilters(undefined, '24h')); setGrain(null); setGroupBy('channel'); };
+  const projectRows = attempts.filter(row => filters.tenant == null || filters.tenant.includes(observationKey(row, 'tenant')));
+  const changeTenant = ({ tenant }) => change(changeObservationTenant(attempts, filters, tenant));
+  const reset = () => {
+    setFilters(observationFilters(undefined, '24h', customerPurpose));
+    setGrain(null);
+    setGroupBy('channel');
+    history.replaceState(history.state, '', '#/admin-2/monitoring');
+  };
   const drill = (range, extra) => {
     if (!range) return;
     history.replaceState(history.state, '', observationHash('monitoring', filters, { grain: granularity, groupBy }));
@@ -68,12 +83,13 @@ export default function ServiceMonitoringPage({ state, navigate, params }) {
   const table = grouped.map(group => ({
     id: group.id, scope: observationGroupScope(groupBy, group),
     provider: identity(group.rows, 'provider'), channel: identity(group.rows, 'channel'), endpoint: identity(group.rows, 'endpoint'),
+    project: identity(group.rows, 'project'),
     ...summarizeObservations(group.rows), ...attemptCapacity(group.rows, window),
   }));
   const numberColumn = ([title, dataIndex]) => ({ title, dataIndex, align: 'right', render: fmt,
     sorter: (a, b) => (a[dataIndex] ?? -1) - (b[dataIndex] ?? -1) });
   const columns = [
-    ...[['服务商', 'provider'], ['渠道', 'channel'], ['端点', 'endpoint']].map(([title, dataIndex]) => ({
+    ...[['服务商', 'provider'], ['渠道', 'channel'], ['端点', 'endpoint'], ['项目', 'project']].map(([title, dataIndex]) => ({
       title, dataIndex, render: (value, row) => dataIndex === groupBy
         ? <Button theme="borderless" size="small" onClick={() => drill(window, row.scope)}>{value}</Button> : value,
     })),
@@ -99,6 +115,9 @@ export default function ServiceMonitoringPage({ state, navigate, params }) {
           <FilterReset onClick={reset}/>
         </FilterToolbar>
         <FilterToolbar>
+          <ObservationPick dimension="tenant" label="客户" rows={attempts} filters={filters} onChange={changeTenant}/>
+          <ObservationPick dimension="project" label="项目" rows={projectRows} filters={filters} onChange={change}/>
+          <ObservationPick dimension="purpose" label="调用类型" rows={attempts} filters={filters} onChange={change}/>
           <ObservationSupplyPick {...supply} onChange={change}/>
           {filtersShown.map(([dimension, label]) => <ObservationPick key={dimension} dimension={dimension} label={label}
             rows={attempts} filters={filters} onChange={change}/>)}

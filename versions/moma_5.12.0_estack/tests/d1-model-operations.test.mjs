@@ -16,15 +16,16 @@ import {platformCandidatePlan,runPlatformTrial,publishPlatformCandidate} from '.
 import {providerApiKeysDraft} from '../src/admin-v2/provider-management.js';
 import {operationsTransaction,materialBase} from '../src/admin-v2/model-operations.js';
 import {offerKey} from '../src/service-access.mjs';
+import {serviceIndexModels} from '../src/admin-v2/service-workspace.js';
 
-test('cloud service configuration leaves the original workspace and simulation history unchanged',()=>{
+test('rejected cloud mode change preserves the workspace and simulation history',()=>{
   const state=initialModelWorkspace(),before=structuredClone(state),model=state.models.find(m=>m.id==='model-glm53');
   const freeze=value=>{if(value && typeof value==='object'){Object.values(value).forEach(freeze);Object.freeze(value);}};
   freeze(state);
-  const transaction=operationsTransaction(state,{operation:'serviceMode',modelId:model.id,data:{serviceMode:'standard',expectedUpdatedAt:model.updatedAt,confirmedReset:true}});
-  const changes=Object.assign({},...transaction.changes.filter(row=>row.collection==='models' && row.id===model.id).map(row=>row.changes));
-  assert.equal(changes.serviceMode,'standard');
-  assert.equal(changes.listingStatus,'已下架');
+  assert.throws(() => operationsTransaction(state, {
+    operation: 'serviceMode', modelId: model.id,
+    data: { serviceMode: 'standard', expectedUpdatedAt: model.updatedAt, confirmedReset: true },
+  }), /服务模式设置后不可修改/);
   assert.deepEqual(state,before);
 });
 
@@ -100,6 +101,17 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     fresh=(await api('/model-operations')).data;const gray=fresh.models.find(m=>m.id===releaseModel.id);assert.equal(gray.releaseStage,'gray');assert.deepEqual(gray.releaseTenantIds,['tenant-gov']);assert.deepEqual({openScope:gray.openScope,tenantIds:gray.tenantIds},releaseScope);
     state=await save(fresh,{type:'modelOperations',operation:'startSales',modelId:gray.id,data:{releaseStage:'formal',confirmed:true,expectedUpdatedAt:gray.updatedAt}});
     fresh=(await api('/model-operations')).data;assert.equal(fresh.models.find(m=>m.id===gray.id).releaseStage,'formal');assert.deepEqual(fresh.models.find(m=>m.id===gray.id).releaseTenantIds,[]);
+    const unifiedBefore=fresh.models.find(m=>m.id===gray.id);
+    const filter=status=>serviceIndexModels(state,new URLSearchParams({catalogue:'all',mode:'standard',status}),{byCall:true}).some(row=>row.id===gray.id);
+    assert(filter('started'));assert(!filter('stopped'));
+    state=await save(fresh,{type:'modelOperations',operation:'disableService',modelId:gray.id,data:{expectedUpdatedAt:unifiedBefore.updatedAt}});
+    assert(filter('stopped'));assert(!filter('started'));
+    assert.equal(state.models.find(m=>m.id===gray.id).releaseStage,'formal');
+    const stoppedUnified=(await api('/model-operations')).data.models.find(m=>m.id===gray.id);
+    assert.equal(stoppedUnified.callsEnabled,false);
+    state=await save(state,{type:'modelOperation',operation:'enableService',modelId:gray.id,data:{expectedUpdatedAt:stoppedUnified.updatedAt}});
+    assert(filter('started'));assert(!filter('stopped'));
+    fresh=(await api('/model-operations')).data;
     const model=fresh.models.find(m=>m.serviceMode==='provider'),prices=structuredClone(fresh.modelSalePrices);
     state=await save(fresh,{type:'modelOperations',operation:'stopSales',modelId:model.id,data:{offerKeys,confirmed:true,expectedUpdatedAt:model.updatedAt}});
     assert.equal(state.models.find(m=>m.id===model.id).callsEnabled,true);
@@ -162,10 +174,11 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     const secret='qa-only-'+randomBytes(16).toString('hex'),keyDraft=await providerApiKeysDraft([secret]);
     state=await provider('addApiKeys',{...keyDraft,groupId:group.id});
     assert(!JSON.stringify(state).includes(secret));
-    assert.equal((await local.db.prepare('SELECT count(*) AS n FROM key_group_members WHERE group_id=?').bind('provider-moma:'+group.id).first()).n,1);
+    assert.equal((await local.db.prepare('SELECT count(*) AS n FROM key_group_members WHERE group_id=? AND supplier_id=?').bind(group.id,'provider-moma').first()).n,1);
+    const previousChannelCount=await local.db.prepare('SELECT count(*) AS n FROM channel_models WHERE removed_at IS NULL').first('n');
     state=await provider('supplierChannelCreate',{name:'D1验收渠道',protocol:'OpenAI',baseUrl:'https://qa.example.invalid/v1/chat/completions',keyGroupId:group.id,models:[{libraryId:'template-glm-5.3',upstreamModelId:'glm-d1-qa',scenarios:[{name:'输入 Token',listPrice:'0',unit:'百万 Token',currency:'CNY'},{name:'输出 Token',listPrice:'8.5',unit:'百万 Token',currency:'CNY'}]}]});
     assert.equal(state.endpoints.length,baseline.endpoints.length+1);assert.equal(state.modelSupplies.length,baseline.modelSupplies.length);
-    assert.equal((await local.db.prepare('SELECT count(*) AS n FROM channel_models WHERE removed_at IS NULL').first()).n,74);
+    assert.equal((await local.db.prepare('SELECT count(*) AS n FROM channel_models WHERE removed_at IS NULL').first()).n,previousChannelCount+1);
     const channel=state.endpoints.find(e=>e.name==='D1验收渠道');
     const association=()=>state.providers.find(p=>p.id==='provider-moma').catalogConnections.find(a=>a.endpointId===channel.id);
     const procurement=amount=>save(state,{type:'modelOperations',operation:'channelProcurementPublish',data:{confirmed:true,providerId:'provider-moma',endpointId:channel.id,associationId:association().id,expectedPriceRevision:association().procurementRevision || 0,effectiveAt:new Date().toISOString(),scenarios:[{name:'输入 Token',listPrice:amount,unit:'百万 Token',currency:'CNY'},{name:'输出 Token',listPrice:'0',unit:'百万 Token',currency:'CNY'}]}});
@@ -194,12 +207,13 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     await assert.rejects(save(dictionaryBefore,dictionaryAction('冲突计费项')),/修订|变化/);
     await assert.rejects(save(state,{type:'modelOperations',operation:'tariffDictionary',data:{operation:'status',id:entry.id,status:'已停用'}}),/计费项不设/);
     assert.deepEqual((await api('/model-operations')).data,afterEntry);
-    for(const mode of ['standard','provider']){
-      const current=state.models.find(m=>m.id===model.id);
-      state=await save(state,{type:'modelOperations',operation:'serviceMode',modelId:model.id,data:{serviceMode:mode,expectedUpdatedAt:current.updatedAt,confirmedReset:true}});
-    }
-    assert.equal(state.models.find(m=>m.id===model.id).serviceModeRevision,3);
-    assert(state.models.find(m=>m.id===model.id).serviceProviders.every(p=>p.status==='已移除'));
+    const currentMode = state.models.find(m => m.id === model.id);
+    const beforeModeChange = (await api('/model-operations')).data;
+    await assert.rejects(save(state, {
+      type: 'modelOperations', operation: 'serviceMode', modelId: model.id,
+      data: { serviceMode: 'standard', expectedUpdatedAt: currentMode.updatedAt, confirmedReset: true },
+    }), { status: 422, message: /服务模式设置后不可修改/ });
+    assert.deepEqual((await api('/model-operations')).data, beforeModeChange);
     assert((await local.db.prepare('SELECT count(*) AS n FROM publications').first()).n>=3);
     const unregistered=state.modelTemplates.find(row=>row.id==='builtin-pp-ocrv6'),beforeRejected=structuredClone(state);
     await assert.rejects(save(state,{type:'modelOperations',operation:'createServiceModel',data:{...serviceModelSourceDraft(state,unregistered),libraryId:unregistered.id}}),/已登记/);
@@ -207,9 +221,9 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     state=await save(state,{type:'modelOperations',operation:'supplierModelsRegister',data:{providerId:'provider-moma',libraryIds:['model-2']}});
     state=(await api('/model-operations')).data;
     const source=serviceModelSources(state).find(row=>row.id==='model-2'),beforeCreate=structuredClone(state);
-    state=await save(state,{type:'modelOperations',operation:'createServiceModel',data:{...serviceModelSourceDraft(state,source),libraryId:source.id}});
+    state=await save(state,{type:'modelOperations',operation:'createServiceModel',data:{...serviceModelSourceDraft(state,source),libraryId:source.id,name:'  GLM-5.2 验收服务  ',serviceMode:'standard'}});
     const reloaded=(await api('/model-operations')).data,created=reloaded.models.find(row=>row.templateId===source.id);
-    assert(created);assert.equal(created.id,source.id);assert.equal(created.modelId,source.modelId);assert.equal(created.callsEnabled,false);assert.equal(created.listingStatus,'已下架');
+    assert(created);assert.equal(created.serviceName,'GLM-5.2 验收服务');assert.equal(created.serviceMode,'standard');assert.equal(created.id,source.id);assert.equal(created.modelId,source.modelId);assert.equal(created.callsEnabled,false);assert.equal(created.listingStatus,'已下架');
     const retained=reloaded.modelTemplates.find(row=>row.id===source.id);
     for(const key of ['id','modelId','name','profile','capabilities'])assert.deepEqual(retained[key],source[key],key);
     const sorted=rows=>[...rows].sort((a,b)=>a.id.localeCompare(b.id));
@@ -249,6 +263,16 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     assert.equal(readback.modelSalePrices.some(row=>row.modelId===internalId),false);
     const usage=readback.cloudMockState.usage.find(row=>row.id===trial.result.id);
     assert.equal(usage.billingStatus,'not_applicable');assert.equal(usage.costStatus,'pending');assert.equal(usage.priceSnapshot,null);
+    const persisted=async()=>(await api('/services/'+internalId+'/workspace')).data;
+    const started=await persisted();
+    assert.equal(started.service.listingStatus,'已下架');
+    assert.equal(started.service.callsEnabled,true);
+    assert.equal(started.offers[0].calls_enabled,1);
+    state=await commit('disableService',{expectedUpdatedAt:internal().updatedAt},internalId);
+    const stopped=await persisted();
+    assert.equal(stopped.service.listingStatus,'已下架');
+    assert.equal(stopped.service.callsEnabled,false);
+    assert.equal(stopped.offers[0].calls_enabled,0);
     }
     assert.equal((await local.db.prepare('PRAGMA foreign_key_check').all()).results.length,0);
   }finally{configureOnboardingTransport(null);await local.runtime.dispose();}

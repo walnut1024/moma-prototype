@@ -1,3 +1,4 @@
+import { projectRole } from '../project-access.mjs';
 import { useState } from 'react';
 import { Avatar, Banner, Button, Card, Checkbox, Input, Space, Tree, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
@@ -10,7 +11,7 @@ import { enterpriseMemberView } from './enterprise-members';
 
 const { Paragraph, Text, Title } = Typography;
 
-export default function EnterpriseMembers({ state, tenant, projects, canWrite, setEditor, setResult, askToggle }) {
+export default function EnterpriseMembers({ state, tenant, projects, canWrite, setEditor, setResult, askToggle, openProject }) {
   const [selection, setSelection] = useState('all');
   const [treeQuery, setTreeQuery] = useState('');
   const [expanded, setExpanded] = useState(null);
@@ -34,8 +35,18 @@ export default function EnterpriseMembers({ state, tenant, projects, canWrite, s
   const inspectUser = inspect && userFor(inspect);
   const select = value => { setSelection(value); setPage(1); };
   const reset = () => { setQuery(''); setRole('all'); setStatus('all'); setPage(1); };
-  const projectScope = member => isEnterpriseAdmin(member, tenant) ? '企业全部项目'
-    : projects.filter(project => member.projectIds?.includes(project.id)).map(project => project.name).join('、') || '未分配项目';
+  const projectScope = member => {
+    if (member.status !== '正常' || userFor(member)?.status !== '正常') return '当前不可用';
+    if (isEnterpriseAdmin(member, tenant)) return '企业全部项目';
+    const assignments = projects.flatMap(project => {
+      const role = projectRole(project, member);
+      return role && project.status !== '已删除' ? [{ project, role }] : [];
+    });
+    return assignments.length ? <Space wrap>{assignments.map(({ project, role }) =>
+      <Button key={project.id} size="small" theme="borderless" onClick={() => openProject(project.id)}>
+        {project.name} · {role}
+      </Button>)}</Space> : '未分配项目';
+  };
   const lastAdmin = member => validAdmins.some(admin => admin.id === member.id) && validAdmins.length <= 1;
   const canToggle = member => canWrite && tenant.status !== '停用' && !lastAdmin(member)
     && !(member.status === '停用' && userFor(member)?.status !== '正常');
@@ -144,7 +155,8 @@ export default function EnterpriseMembers({ state, tenant, projects, canWrite, s
       <EnterpriseFacts rows={[
         ['成员 ID', inspect.id], ['登录身份 ID', inspect.userId], ['登录账号', inspectUser?.login || inspect.userId],
         ['手机号码', (inspect.memberPhone ?? inspectUser?.phone) || '未填写'], ['主部门', pathFor(inspect)], ['企业角色', inspect.role],
-        ['项目范围', projectScope(inspect)], ['登录身份状态', inspectUser ? <EnterpriseStatus value={inspectUser.status}/> : '身份不存在'],
+        ['项目范围', projectScope(inspect)], ['创建项目', isEnterpriseAdmin(inspect, tenant) || inspect.canCreateProjects === true ? '已授权' : '未授权'],
+        ['登录身份状态', inspectUser ? <EnterpriseStatus value={inspectUser.status}/> : '身份不存在'],
         ['账号初始化', inspectUser?.initialized ? '已完成' : '待初始化'], ['本企业成员状态', <EnterpriseStatus value={inspect.status}/>],
       ]}/>
     </EnterpriseDialog>}

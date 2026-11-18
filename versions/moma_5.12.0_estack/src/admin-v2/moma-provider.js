@@ -7,6 +7,7 @@ import { OFFICIAL_SUPPLY_CATALOGUE } from './official-supply-catalogue.js';
 const regionalOnlyModelIds = new Set(['Qwen3.5-35B']);
 
 export const MOMA_PROVIDER = mockConfig["admin-v2/moma-provider.js"]["MOMA_PROVIDER"];
+export const isBuiltinMoma = provider => provider.id === MOMA_PROVIDER.id || provider.builtinCatalogue === 'moma';
 
 export const DEFAULT_SUPPLIERS = mockConfig["admin-v2/moma-provider.js"]["DEFAULT_SUPPLIERS"];
 const defaultSupplierIds = DEFAULT_SUPPLIERS.map(provider => provider.id);

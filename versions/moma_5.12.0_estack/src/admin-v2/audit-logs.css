@@ -1,0 +1,18 @@
+.audit-logs-page .audit-log-filters,
+.audit-logs-page .audit-log-extra-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.audit-logs-page .audit-log-filters { margin-bottom: 16px; }
+.audit-logs-page .audit-log-extra-filters { flex-basis: 100%; }
+.audit-logs-page .audit-log-filters .semi-input-wrapper { width: min(250px, 100%); }
+.audit-logs-page .audit-log-pagination { display: flex; justify-content: flex-end; margin-top: 12px; }
+
+.audit-log-detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.audit-log-detail .semi-typography-h6 { margin-bottom: 8px; }
+.audit-log-detail .semi-descriptions,
+.audit-log-detail .semi-table-row-cell,
+.audit-logs-page .semi-table-row-cell { white-space: pre-line; overflow-wrap: anywhere; }

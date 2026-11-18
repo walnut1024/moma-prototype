@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
-import { Button, Card, Cascader, Typography } from '@douyinfe/semi-ui';
-import { IconCalendar } from '@douyinfe/semi-icons';
+import { useId, useMemo, useState } from 'react';
+import { Button, Card, Cascader, Select, Space, Tag, Typography } from '@douyinfe/semi-ui';
+import { IconCalendar, IconFilter } from '@douyinfe/semi-icons';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
-import { FilterPresets } from '../components/FilterControls';
+import { FilterPresets, FilterToolbar } from '../components/FilterControls';
 import { dayOf } from './analytics';
 import {
-  callPresets, observationKey, observationName, observationOptions, observationTime, uncollectedObservationKey,
+  callPresets, observationKey, observationName, observationOptions, observationTime, searchObservationIdentities, uncollectedObservationKey,
 } from './call-observations.mjs';
 import { SemiDateRange, SemiMultiPick } from './SemiAnalyticsFilters';
 import { AnalysisHelp } from './AnalysisMetric';
@@ -33,6 +33,72 @@ export function ObservationPick({ dimension, label, rows, filters, onChange }) {
   const selected = (value || []).filter(id => !options.some(item => item.id === id)).map(id => ({ id, name: id }));
   return <SemiMultiPick compact label={label} items={selected.length ? [...options, ...selected] : options}
     value={value} onChange={ids => onChange({ [dimension]: ids })}/>;
+}
+
+export function ObservationIdentitySearch({ dimension, label, rows, filters, onChange }) {
+  const [query, setQuery] = useState('');
+  const id = useId();
+  const scoped = Boolean(filters.tenant?.length);
+  const hint = scoped ? `按名称或完整 ID 搜索${label}` : `按完整 ID 搜索${label}，或先选客户`;
+  const { items, hasMore } = searchObservationIdentities(rows, dimension, filters.tenant, query);
+  const selected = filters[dimension] || [];
+  return <>
+    <span className="sr-only" id={id}>{label}筛选</span>
+    <Select size="small" className="admin-observe-identity" aria-labelledby={id} filter remote value={null}
+      placeholder={hint} searchPosition="trigger" dropdownMatchSelectWidth={false} inputProps={{ 'aria-label': hint }}
+      onSearch={setQuery} onDropdownVisibleChange={visible => { if (!visible) setQuery(''); }}
+      optionList={items.map(item => ({ value: item.id, label: item.label, disabled: selected.includes(item.id) }))}
+      emptyContent={<span role="status">{query.trim() ? '无匹配结果' : hint}</span>}
+      innerBottomSlot={hasMore ? <Typography.Text type="secondary">仅显示前 20 项，请缩小搜索范围</Typography.Text> : null}
+      onSelect={value => onChange({ [dimension]: [...selected, value] })}/>
+  </>;
+}
+
+export function ObservationFilterLayout({ primary, actions, children }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return <>
+    <div className="admin-analysis-filter-row">
+      <FilterToolbar>
+        {primary}
+        <Button size="small" icon={<IconFilter aria-hidden="true"/>} aria-expanded={open} aria-controls={id}
+          onClick={() => setOpen(value => !value)}>{open ? '收起筛选' : '更多筛选'}</Button>
+      </FilterToolbar>
+      {actions}
+    </div>
+    <div id={id} hidden={!open}>
+      {open && <div className="admin-observe-filter-groups">{children}</div>}
+    </div>
+  </>;
+}
+
+export function ObservationFilterGroup({ label, children }) {
+  return <div role="group" aria-label={label} className="admin-observe-filter-group">
+    <Typography.Text type="secondary">{label}</Typography.Text>
+    <Space wrap>{children}</Space>
+  </div>;
+}
+
+export function ObservationConditions({ conditions }) {
+  return conditions.length > 0 && <div role="group" aria-label="已选条件">
+    <Space wrap>{conditions.map(([label, value, clear, id = label]) =>
+      <Tag key={id} closable onClose={clear}>{label}：{value}</Tag>)}</Space>
+  </div>;
+}
+
+export function observationConditions(rows, filters, dimensions, onChange) {
+  return dimensions.flatMap(([dimension, label]) => {
+    const selected = filters[dimension];
+    if (selected == null) return [];
+    const names = new Map(observationOptions(rows, dimension).map(item => [item.id, item.name]));
+    if (selected.length && (dimension === 'user' || dimension === 'key')) {
+      return selected.map(id => [label, names.get(id) || id,
+        () => onChange({ [dimension]: selected.length === 1 ? null : selected.filter(value => value !== id) }),
+        JSON.stringify([dimension, id])]);
+    }
+    const value = selected.map(id => names.get(id) || id).join('、') || '未选择';
+    return [[label, value, () => onChange({ [dimension]: null })]];
+  });
 }
 
 const supplyLabel = '服务商 / 渠道';

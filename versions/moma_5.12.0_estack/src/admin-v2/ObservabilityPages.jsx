@@ -1,3 +1,4 @@
+import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useState } from 'react';
@@ -23,7 +24,7 @@ export function Alerts({ state, dispatch, navigate }) {
     const now = Date.now();
     const changes = [
       { type: 'update', collection: 'alerts', id: item.id, changes: { status: '已转事件' } },
-      { type: 'add', collection: 'incidents', record: { id: `incident-${now}`, incidentId: `INC-${now}`, title: item.title,
+      { type: 'add', collection: 'incidents', record: { id: resourceId('incident'), incidentId: `INC-${now}`, title: item.title,
         alertIds: [item.id], impact: '待评估', assignee: item.assignee, resolution: '', status: '处理中', timeline: ['由告警转入事件'] } },
     ];
     if (await dispatch({ type: 'batch', objectId: item.id, changes })) navigate('incidents');

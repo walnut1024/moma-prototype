@@ -19,6 +19,11 @@
 .admin-v2 .supplier-group-key-table th:nth-child(5){width:12%}
 .admin-v2 .supplier-group-key-table th:nth-child(6){width:26%}
 .admin-v2 .supplier-workbench .supplier-group-key-table td:first-child{width:auto;max-width:none;min-width:0;font-variant-numeric:tabular-nums}
+.admin-v2 .supplier-key-priority{width:max-content;position:relative}
+.admin-v2 .supplier-key-priority button:not(:disabled){cursor:grab;touch-action:none}
+.admin-v2 .supplier-key-priority[data-dragging]{z-index:2}
+.admin-v2 .supplier-key-priority[data-dragging] button{cursor:grabbing;background:var(--semi-color-primary-light-default)}
+.admin-v2 .supplier-key-priority[data-drop-target] button{color:var(--semi-color-primary)}
 .admin-v2 .supplier-group-key-table td:nth-child(2) code{white-space:nowrap}
 .admin-v2 .supplier-group-key-table .supplier-row-actions{flex-wrap:wrap;gap:4px 8px}
 .admin-v2 .supplier-group-key-table th:last-child,.admin-v2 .supplier-group-key-table td:last-child{position:sticky;right:0;background:var(--semi-color-bg-0)}

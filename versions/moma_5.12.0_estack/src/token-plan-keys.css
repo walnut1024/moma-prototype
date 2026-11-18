@@ -33,3 +33,46 @@
 .token-plan-drawer-context { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e4e8ef; font-size: 13px; }
 .token-plan-drawer-context strong, .token-plan-drawer-context small { display: block; margin-top: 6px; }
 .token-plan-drawer-context small { color: #7c879d; }
+
+body:has(.tenant-semi .api-key-unified) { min-width: 0; }
+.tenant-key-tabs { background: var(--semi-color-bg-0); }
+.tenant-keys-panel { min-width: 0; padding: 12px; background: var(--semi-color-bg-0); }
+.key-toolbar, .key-actions, .key-switch-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.key-toolbar { padding-bottom: 12px; }
+.key-toolbar h2 { margin: 0; font-size: 14px; }
+.key-search { flex: 1; min-width: 170px; max-width: 340px; margin-left: auto; }
+.key-identity { display: grid; justify-items: start; gap: 4px; overflow-wrap: anywhere; }
+.key-identity code { font-size: 11px; }
+.key-identity small { color: var(--semi-color-text-2); }
+.key-actions { gap: 2px; }
+.tenant-key-form, .tenant-key-form fieldset { display: grid; gap: 12px; min-width: 0; }
+.tenant-key-form fieldset { margin: 0; padding: 12px; border: 1px solid var(--semi-color-border); }
+.tenant-key-form label:not(.semi-checkbox):not(.semi-radio) { display: grid; gap: 6px; }
+.tenant-key-form legend { padding-inline: 4px; font-weight: 600; }
+.tenant-key-form p { margin: 0; color: var(--semi-color-text-2); }
+.key-switch-row .semi-input-wrapper { flex: 1; min-width: 80px; }
+.key-model-options { display: flex; flex-wrap: wrap; gap: 8px; max-height: 240px; overflow: auto; padding-block: 8px; }
+.key-secret { overflow-wrap: anywhere; user-select: all; }
+.token-plan-item .semi-button-content { display: grid; justify-items: start; gap: 4px; }
+@media (max-width: 760px) {
+  .token-plan-workspace { grid-template-columns: minmax(0,1fr); }
+  .token-plan-sidebar { border-right: 0; border-bottom: 1px solid var(--semi-color-border); }
+  .key-search { margin-left: 0; }
+}
+
+.tenant-key-tabs {
+  border: 1px solid var(--semi-color-border);
+  border-radius: var(--semi-border-radius-medium);
+  overflow: hidden;
+}
+.tenant-key-tabs > .semi-tabs-bar { padding-inline: 16px; }
+.tenant-key-empty { padding: 36px 16px; }
+.tenant-key-empty .semi-empty-content { margin-top: 12px; }
+.tenant-keys-panel > .filter-pagination {
+  margin-top: 12px;
+  border-top: 1px solid var(--semi-color-border);
+}
+@media (max-width: 760px) {
+  .key-toolbar .key-search { flex-basis: 100%; max-width: none; order: 1; }
+  .key-toolbar > button[aria-label="刷新 API Key"] { margin-left: auto; }
+}

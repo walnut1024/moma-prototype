@@ -1,3 +1,4 @@
+import { isResourceId } from '../src/resource-id.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
@@ -20,24 +21,32 @@ import { channelTestModels, channelTestRequest, channelBatchTerminal } from '../
 import { configureOnboardingTransport, onboardingApi, prepareServerChannel } from '../src/admin-v2/onboarding-client.js';
 import { useCloudMockSnapshot } from '../src/admin-v2/mock-onboarding-service.js';
 import { routingServices } from '../src/admin-v2/service-routing.js';
+import { serviceDirectoryRows } from '../src/admin-v2/service-directory.js';
 import { routeEditorChannels, routeEditorPayload } from '../src/admin-v2/service-route-editor.js';
-import { routeEditConfig } from '../src/admin-v2/route-workspace.js';
+import { routeEditConfig, routeTableGroups } from '../src/admin-v2/route-workspace.js';
+import { salesStatus } from '../src/admin-v2/service-sales.js';
 import { EMPTY_PACKAGE } from '../src/admin-v2/token-packages.js';
 import { commercialPriceBase } from '../src/admin-v2/service-workspace.js';
 import { platformAllowedChannels, platformCandidatePlan, publishPlatformCandidate, runPlatformTrial } from '../src/admin-v2/platform-service-client.js';
 
 test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are enforced end to end by D1',{timeout:90000},async()=>{
+  process.env.VITE_MOMA_PRIVATE_SITE='1';
   const accessCode=randomBytes(18).toString('hex');
   const [a,b,c]=['zqzh','grzh','hospital-c'];
   const loginHashes=Object.fromEntries(['yyg','admin-002',a,b,c].map(id=>[id,createHash('sha256').update(accessCode).digest('hex')]));
   const persistPath=await mkdtemp(join(tmpdir(),'moma-glm-channel-market-'));
   let local,state,admin;
-  async function request(path,{body,cookie,key}={}){
+  async function request(path,{body,cookie,key,authorization,requestId}={}){
     const response=await local.runtime.dispatchFetch('https://example.test/api/v1'+path,{method:body?'POST':'GET',
-      headers:{...(cookie?{cookie}:{}),...(body?{origin:'https://example.test','x-moma-request':'1','content-type':'application/json'}:{}),...(key?{'idempotency-key':key}:{})},
+      headers:{...(cookie?{cookie}:{}),...(body?{'content-type':'application/json'}:{}),
+        ...(body && !authorization ? {origin:'https://example.test','x-moma-request':'1'} : {}),
+        ...(key?{'idempotency-key':key}:{}),...(authorization?{authorization}:{}),...(requestId?{'x-request-id':requestId}:{})},
       ...(body?{body:JSON.stringify(body)}:{})});
     return {status:response.status,data:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]};
   }
+  const bearer=(secret,model,{requestId=crypto.randomUUID(),metadata,routing}={})=>request('/chat/completions',{
+    authorization:'Bearer '+secret,requestId,body:{model,metadata,routing,messages:[{role:'user',content:'验收 API Key 调用'}]},
+  });
   const login=async(path,id)=>{
     const result=await request(path,{body:path.includes('market')
       ? {username:id,accountType:id===b?'personal':'enterprise',accessCode} : {accountId:id,accessCode}});
@@ -142,8 +151,9 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
       assert.equal(trial.result.technicalReady,true);
       const saved=await publishPlatformCandidate(trial.service);
       await command('recordPlatformPublication',{serviceId:service.id,mockServiceId:saved.id,publishedVersion:saved.published.version,expectedFingerprint:plan.publicationFingerprint},modelId);
+      assert.equal(model().serviceProviders.find(row=>row.channelId===source.channelId).callsEnabled,false);
+      await command('serviceProviderServing',{providerId:source.channelId,enabled:true,expectedUpdatedAt:model().updatedAt},modelId);
     }
-    await command('enableService',{expectedUpdatedAt:model().updatedAt},modelId);
     for (const source of sources) {
       await command('channelProcurementPublish',{providerId:source.providerId,endpointId:source.endpointId,associationId:source.channelId,expectedPriceRevision:0,confirmed:true,effectiveAt:new Date().toISOString(),scenarios:prices(1,4,'listPrice')});
       await command('commercialPublish',{kind:'price',providerId:source.channelId,confirmed:true,expectedBase:commercialPriceBase(state,model(),source.channelId),value:{callId:source.callId,items:prices(...source.retail,'amount')}},modelId);
@@ -153,18 +163,47 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     const keys=sources.map(row=>row.channelId);
     await command('startSales',release(keys,[c]),modelId,422);
     await command('startSales',release(keys,[a]),modelId);
+    assert.deepEqual(routeTableGroups(state,model()).map(group=>[group.providerId,group.providerName,
+      group.rows.map(row=>[row.span,row.service.channelId])]),[
+      [sources[0].providerId,'甲云',[[1,sources[0].channelId],[1,sources[1].channelId]]],
+      [sources[2].providerId,'乙云',[[1,sources[2].channelId]]],
+    ]);
     const offers=await local.db.prepare("SELECT record_id,id,channel_model_id,listing_stage,active_sale_price_id,active_route_id,active_publication_id FROM offers WHERE service_id=? AND retired_at IS NULL ORDER BY id").bind(modelId).all();
     assert.equal(offers.results.length,3);
+    for (const row of offers.results) assert(isResourceId(row.record_id, 'model_service'));
     assert(offers.results.every(row=>row.listing_stage==='gray' && row.active_sale_price_id && row.active_route_id && row.active_publication_id));
     let customer=await login('/market/login',a), other=await login('/market/login',b);
     const catalogue=async(cookie)=>{const result=await request('/market/catalogue',{cookie});assert.equal(result.status,200,JSON.stringify(result.data));return result.data.services;};
     const services=await catalogue(customer);
-    assert.deepEqual(marketModels(services).map(row=>[row.name,row.services.length]),[['GLM-5.3',3]]);
+    assert.deepEqual(marketModels(services).map(row=>[row.name,row.services.length,[...row.providers.values()]]),[['GLM-5.3',3,['甲云','乙云']]]);
     assert.deepEqual(services.map(row=>row.provider).sort(),['乙云（自营）','甲云（自营）','甲云（转售）'].sort());
+    for (const source of sources) {
+      const { providerId, providerName }=services.find(row=>row.callId===source.callId);
+      assert.deepEqual([providerId,providerName],[source.providerId,source.vendor]);
+    }
     assert.equal((await catalogue(other)).length,0);
     assert.equal((await catalogue()).length,0);
+    const attached = sources[0], endpoint = state.endpoints.find(row => row.id === attached.endpointId);
+    const deleteMapping = (associationId, endpointId, expected = 200) => command('provider', {
+      operation: 'supplierCatalogueChannelDelete', objectId: attached.providerId,
+      values: { modelId: attached.modelId, associationId, endpointId, confirmed: true },
+    }, undefined, expected);
+    await deleteMapping(attached.channelId, endpoint.id, 422);
+    for (const shared of [true, false]) {
+      const upstreamModelId = shared ? 'vendor/unused-shared' : 'vendor/unused-separate';
+      await command('supplierChannelRegister', { providerId: attached.providerId, modelId: attached.modelId, upstreamModelId, sourceName: '闲置来源',
+        ...(shared ? { endpointId: endpoint.id, expectedEndpointUpdatedAt: state.endpoints.find(row => row.id === endpoint.id).updatedAt }
+          : { name: '闲置渠道', baseUrl: 'https://unused.example.invalid/v1', protocol: 'OpenAI', authMode: 'group', keyGroupId: 'default' }) });
+      const unused = owner(attached.providerId).catalogConnections.find(row => row.upstreamModelId === upstreamModelId);
+      await deleteMapping(unused.id, unused.endpointId);
+      assert.ok(owner(attached.providerId).catalogConnections.find(row => row.id === unused.id).deletedAt);
+      assert.equal(state.endpoints.some(row => row.id === unused.endpointId), shared);
+    }
     const order=(offerId,cookie=customer)=>request('/market/orders',{cookie,body:{offerIds:[offerId]}});
-    const body=(model)=>({requestId:crypto.randomUUID(),model,messages:[{role:'user',content:'验收请求'}]});
+    const workspace=async cookie=>(await request('/market/workspace',{cookie})).data;
+    const project=(await workspace(customer)).projectRouting.projects.find(row=>row.canEdit);
+    assert(project);
+    const body=(model)=>({requestId:crypto.randomUUID(),projectId:project.id,model,messages:[{role:'user',content:'验收请求'}]});
     const call=(input,cookie=customer)=>request('/market/completions',{cookie,body:input});
     assert.equal((await order(services[0].id,admin)).status,401);
     assert.equal((await order(services[0].id,other)).status,403);
@@ -198,7 +237,6 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert(history.data.conversations[0].messages.every(row=>row.answer==='D1 模拟结果'));
     assert.deepEqual((await request('/market/conversations',{cookie:other})).data.conversations,[]);
     assert.equal((await request('/market/conversations')).status,401);
-    const workspace=async cookie=>(await request('/market/workspace',{cookie})).data;
     const application=async()=>(await request('/application',{cookie:admin})).data;
     const apply=async action=>{
       const operationId=crypto.randomUUID(), expectedRevision=(await application()).revision;
@@ -208,9 +246,53 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
       const expectedRevision=(await workspace(cookie)).revision;
       return request('/market/commands',{cookie,body:{operationId,tenantId,expectedRevision,action,data}});
     };
+    const routeWorkspace=await workspace(customer);
+    const [firstService,backupService]=sources.slice(0,2).map(source=>services.find(service=>service.callId===source.callId));
+    const projectRoute={projectId:project.id,name:'客服路由验收',code:'support-contract',
+      defaultService:firstService.projectServiceId,fallback:[backupService.projectServiceId],
+      rules:[{field:'metadata._user',value:'vip',service:firstService.projectServiceId}]};
+    const invalidRule={field:'apikey',value:'foreign-key-id',service:services[0].projectServiceId};
+    const foreignKeyRoute=await tenantWrite(customer,a,'projectRoute',{route:{...projectRoute,rules:[invalidRule]}});
+    assert.equal(foreignKeyRoute.status,422);
+    assert.match(foreignKeyRoute.data.error.message,/当前项目/);
+    const projectOperation=crypto.randomUUID();
+    const projectBody={operationId:projectOperation,tenantId:a,expectedRevision:routeWorkspace.revision,
+      action:'projectRoute',data:{route:projectRoute}};
+    const savedRoute=await request('/market/commands',{cookie:customer,body:projectBody});
+    assert.equal(savedRoute.status,200,JSON.stringify(savedRoute.data));
+    assert.equal((await request('/market/commands',{cookie:customer,body:projectBody})).status,200);
+    const savedWorkspace=await workspace(customer);
+    assert.deepEqual(savedWorkspace.projectRouting.routes,[{id:'project-route-'+projectOperation,tenantId:a,...projectRoute}]);
+    assert.deepEqual(savedWorkspace.routes,routeWorkspace.routes);
+    assert.deepEqual((await workspace(other)).projectRouting.routes,[]);
+    const routeKey={id:'route-test-key',name:'路由验收 Key',enabled:true,models:null,secretPreview:'sk-demo*****test'};
+    assert.equal((await tenantWrite(customer,a,'keys',{projectId:project.id,billing:'按量付费',rows:[routeKey]})).status,200);
+    const unpurchased=await apply({type:'simulateInvocation',data:{requestId:crypto.randomUUID(),keyId:routeKey.id,
+      modelId:sources[2].callId,purpose:'gateway-test'}});
+    assert.equal(unpurchased.data.request.error,'order_required');
+    assert.equal(unpurchased.data.request.attempts[0].dispatched,false);
+    const routed=await apply({type:'simulateInvocation',data:{requestId:crypto.randomUUID(),keyId:routeKey.id,
+      modelId:'project@support-contract',purpose:'gateway-test',forceTimeout:true,metadata:{_user:'vip'}}});
+    assert.equal(routed.status,200,JSON.stringify(routed.data));
+    assert.equal(routed.data.request.httpStatus,200,JSON.stringify(routed.data.request));
+    assert.equal(routed.data.request.callId,backupService.callId);
+    assert.deepEqual(routed.data.request.routeMatch,{field:'metadata._user',ruleIndex:0});
+    const dispatched=routed.data.request.attempts.filter(attempt=>attempt.dispatched);
+    assert.deepEqual(dispatched.map(attempt=>[attempt.serviceId,attempt.error]),[
+      [firstService.projectServiceId,'upstream_timeout'],[backupService.projectServiceId,null],
+    ]);
+    assert(dispatched.every(attempt=>Number.isFinite(Date.parse(attempt.startedAt))));
+    assert(!(await workspace(customer)).requests.some(row=>row.requestId===routed.data.request.requestId));
+    assert.equal((await tenantWrite(customer,a,'projectRoute',{route:savedWorkspace.projectRouting.routes[0],remove:true})).status,200);
+    assert.deepEqual((await workspace(customer)).projectRouting.routes,[]);
     assert.deepEqual((await request('/market/ranking')).data.rows,[],'灰度用量不可公开');
     const usage=(await workspace(customer)).requests;
-    assert.equal(usage.find(row=>row.requestId===successful[0].input.requestId).usage.input,8);
+    const projectUsage=usage.find(row=>row.requestId===successful[0].input.requestId);
+    assert.equal(projectUsage.usage.input,8);
+    assert.equal(projectUsage.projectId,project.id);
+    assert.equal(projectUsage.keyId,'experience:'+project.id);
+    assert.equal(projectUsage.requestBody,undefined);
+    assert.equal((await workspace(customer)).logKeys.find(row=>row.id===projectUsage.keyId).name,'在线体验');
     assert.equal((await workspace(other)).requests.length,0);
     const beforeBills=await application();
     const fact=beforeBills.requests.find(row=>row.requestId===successful[0].input.requestId);
@@ -260,6 +342,8 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     const draft=(await application()).bills.find(row=>row.tenantId===a && row.period===billingPeriod());
     assert.equal(draft.status,'待出账');
     assert.equal(draft.amount,Math.round(initialMicros/10000)/100);
+    assert.deepEqual(draft.projectBreakdown,[{projectId:project.id,projectName:project.name,amountMicros:initialMicros}]);
+    assert.equal(draft.unassignedMicros,0);
 
     const packageState=async()=>(await request('/package-management',{cookie:admin})).data;
     const packageCommand=async (operation,values,record)=>{
@@ -289,8 +373,11 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal(plan.entitlement,10000);
     assert.equal(plan.packageRevision,pack.revision);
     assert(!Object.hasOwn(plan,'factorSnapshot'));
-    const planKey={id:'plan-test-key',name:'套餐验收 Key',enabled:true,models:null,secretPreview:'sk-demo*****plan'};
-    assert.equal((await tenantWrite(customer,a,'keys',{billing:'Token Plan',subscriptionId:plan.id,rows:[planKey]})).status,200);
+    const planSecret='sk-'+randomBytes(16).toString('hex');
+    const planDigest=createHash('sha256').update(planSecret).digest('hex');
+    const planKey={id:'plan-test-key',name:'套餐验收 Key',enabled:true,models:null,secretPreview:'sk-demo*****plan',
+      credentialDigest:planDigest};
+    assert.equal((await tenantWrite(customer,a,'keys',{projectId:project.id,billing:'Token Plan',subscriptionId:plan.id,rows:[planKey]})).status,200);
     assert.equal((await workspace(other)).plans.length,0);
     assert.equal((await packageState()).packageOrders[0].id,plan.id);
     const meteringId=crypto.randomUUID();
@@ -298,14 +385,169 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal(metered.status,200,JSON.stringify(metered.data.error));
     const meter=(await application()).requests.find(row=>row.requestId===meteringId);
     assert.equal(meter.httpStatus,200,JSON.stringify(meter.attempts.map(row=>row.error)));
-    assert.ok((await packageState()).packageOrders[0].used>0);
+    assert.equal((await packageState()).packageOrders[0].used,0,'后台诊断不扣减套餐额度');
+    assert(!(await workspace(customer)).requests.some(row=>row.requestId===meteringId));
+    assert(!JSON.stringify(await workspace(customer)).includes(planDigest));
+    assert(!JSON.stringify(await application()).includes(planDigest));
+    assert.equal((await tenantWrite(customer,a,'projectRoute',{route:projectRoute})).status,200);
+    const planRequestId=crypto.randomUUID();
+    const routeInput={requestId:planRequestId,metadata:{_user:'vip'}};
+    const paidPlan=await bearer(planSecret,'project@support-contract',routeInput);
+    assert.equal(paidPlan.status,200,JSON.stringify(paidPlan.data));
+    assert.equal(paidPlan.data.source,'mock');
+    assert.equal(paidPlan.data.id,planRequestId);
+    assert.equal(paidPlan.data.model,firstService.callId);
+    const beforePlanCap=(await packageState()).packageOrders[0].used;
+    assert(beforePlanCap>0);
+    assert.deepEqual((await bearer(planSecret,'project@support-contract',routeInput)).data,paidPlan.data);
+    assert.equal((await packageState()).packageOrders[0].used,beforePlanCap);
+    assert.equal(await monthly(a),initialMicros,'套餐抵扣不产生按量账单金额');
+    assert.equal((await call({...body(sources[0].callId),requestId:planRequestId})).data.error.code,'REQUEST_ID_CONFLICT');
+    const {credentialDigest:_digest,...planEdit}=planKey;
+    assert.equal((await tenantWrite(customer,a,'keys',{projectId:project.id,billing:'Token Plan',subscriptionId:plan.id,
+      rows:[{...planEdit,planBudgetTokens:beforePlanCap}]})).status,200);
+    const capped=await bearer(planSecret,sources[0].callId);
+    assert.equal(capped.status,402,JSON.stringify(capped.data));
+    assert.equal(capped.data.error.code,'key_budget_exceeded');
+    assert.equal((await packageState()).packageOrders[0].used,beforePlanCap);
+
+    let routingSecret;
+    {
+    const modelKey=firstService.modelKey;
+    const routeConfig={models:[modelKey],providers:[],sort:'default',fallbackModel:modelKey};
+    for (const [callId,config] of [
+      ['moma/auto',{...routeConfig,preventOverrides:true}],
+      ['moma/performance',{...routeConfig,sort:'price'}],
+      ['moma/cost',{...routeConfig,fallbackModel:''}],
+    ]) {
+      const result=await tenantWrite(customer,a,'routes',{projectId:project.id,kind:'auto',action:'publish',callId,config});
+      assert.equal(result.status,200,JSON.stringify(result.data));
+    }
+    const routeRecords=(await workspace(customer)).routes;
+    assert.equal(routeRecords.find(row=>row.callId==='moma/auto').versions[0].config.preventOverrides,true);
+    assert.equal(routeRecords.find(row=>row.callId==='moma/performance').versions[0].config.sort,'price');
+    assert.equal(routeRecords.find(row=>row.callId==='moma/cost').versions[0].config.fallbackModel,'');
+    const presetCallId='@preset/routing-contract';
+    const preset=await tenantWrite(customer,a,'routes',{projectId:project.id,kind:'preset',action:'publish',name:'routing-contract',
+      config:{...routeConfig,sort:'price',label:'路由验收',description:'',systemPrompt:'仅使用验收资料',parameters:{temperature:0}}});
+    assert.equal(preset.status,200,JSON.stringify(preset.data));
+    routingSecret='sk-'+randomBytes(16).toString('hex');
+    const routingKey={...routeKey,id:'smart-route-contract-key',credentialDigest:createHash('sha256').update(routingSecret).digest('hex')};
+    const keysSaved=await tenantWrite(customer,a,'keys',{projectId:project.id,billing:'按量付费',rows:[routeKey,routingKey]});
+    assert.equal(keysSaved.status,200,JSON.stringify(keysSaved.data));
+    for (const callId of ['moma/auto','moma/performance','moma/cost',presetCallId]) {
+      const result=await bearer(routingSecret,callId);
+      assert.equal(result.status,200,JSON.stringify(result.data));
+      assert.equal(result.data.model,backupService.callId);
+    }
+    const split=await tenantWrite(customer,a,'projectCreate',{name:'智能路由隔离项目'});
+    assert.equal(split.status,200,JSON.stringify(split.data));
+    const splitId='project-'+split.data.operationId;
+    assert.equal((await tenantWrite(customer,a,'projectUpdate',{projectId:splitId,type:'models',input:[{modelId,rpm:null,tpm:null}]})).status,200);
+    const splitSecret='sk-'+randomBytes(16).toString('hex');
+    const splitKey={...routingKey,id:'split-routing-key',credentialDigest:createHash('sha256').update(splitSecret).digest('hex')};
+    assert.equal((await tenantWrite(customer,a,'keys',{projectId:splitId,billing:'按量付费',rows:[splitKey]})).status,200);
+    assert.equal((await bearer(splitSecret,'moma/auto')).data.error.code,'tenant_route_forbidden');
+    assert.equal((await bearer(splitSecret,presetCallId)).data.error.code,'tenant_route_forbidden');
+    const original=routeRecords.find(row=>row.callId==='moma/auto');
+    assert.equal((await tenantWrite(customer,a,'routes',{projectId:splitId,id:original.id,kind:'auto',action:'stop',callId:'moma/auto'})).status,422);
+    assert.equal((await tenantWrite(customer,a,'routes',{projectId:splitId,kind:'auto',action:'publish',callId:'moma/auto',config:{...routeConfig,sort:'price'}})).status,200);
+    assert.equal((await bearer(splitSecret,'moma/auto')).status,200);
+    assert.equal((await tenantWrite(customer,a,'routes',{projectId:splitId,kind:'preset',action:'publish',name:'routing-contract',
+      config:{...routeConfig,description:'隔离项目',systemPrompt:'不同提示词',parameters:{}}})).status,200);
+    const grouped=(await workspace(customer)).routes.filter(row=>row.callId===presetCallId);
+    assert.equal(grouped.length,2);
+    assert.deepEqual(new Set(grouped.map(row=>row.projectId)),new Set([project.id,splitId]));
+    assert.equal(new Set(grouped.map(row=>row.id)).size,2);
+    const splitCallId=crypto.randomUUID();
+    const splitCall=await bearer(splitSecret,presetCallId,{requestId:splitCallId});
+    assert.equal(splitCall.status,200,JSON.stringify(splitCall.data));
+    assert.equal((await bearer(routingSecret,presetCallId,{requestId:splitCallId})).status,409);
+    const splitWeb=await call({...body(presetCallId),projectId:splitId,task:'text'});
+    assert.equal(splitWeb.status,200,JSON.stringify(splitWeb.data));
+    successful.push({source:sources.find(row=>row.callId===splitWeb.data.model),id:splitWeb.data.id});
+    const apiFact=(await application()).requests.find(row=>row.requestId===splitCallId);
+    assert.equal(apiFact.projectId,splitId);
+    assert.equal(apiFact.tenantRouteId,grouped.find(row=>row.projectId===splitId).id);
+    assert.equal((await workspace(customer)).routes.find(row=>row.id===original.id).projectId,project.id);
+    assert.equal((await tenantWrite(customer,a,'routes',{projectId:splitId,id:original.id,kind:'auto',action:'publish',callId:'moma/auto',config:routeConfig})).status,422);
+    const lockedRoute=await bearer(routingSecret,'moma/auto',{routing:{cost_tier:'low'}});
+    assert.equal(lockedRoute.status,200,JSON.stringify(lockedRoute.data));
+    assert.equal(lockedRoute.data.model,backupService.callId);
+    assert.equal((await bearer(routingSecret,'moma/cost',{routing:{cost_tier:'high'}})).status,400);
+    const routeConversation={...body(presetCallId),tenantId:a,task:'text',textTurn:{
+      conversationId:crypto.randomUUID(),messageId:crypto.randomUUID(),question:'试用路由',images:[],
+      temperature:0.7,topP:0.8,deepThinking:false,
+    }};
+    const tried=await call(routeConversation);
+    assert.equal(tried.status,200,JSON.stringify(tried.data));
+    assert.equal(tried.data.model,backupService.callId);
+    assert.deepEqual(tried.data.routing,{id:presetCallId,version:1,modelName:'GLM-5.3',provider:backupService.provider});
+    assert.deepEqual((await call(routeConversation)).data,tried.data);
+    const replayedHistory=(await request('/market/conversations',{cookie:customer})).data.conversations
+      .find(row=>row.id===routeConversation.textTurn.conversationId);
+    assert.equal(replayedHistory.serviceId,presetCallId);
+    assert.deepEqual(replayedHistory.messages[0].routing,tried.data.routing);
+    assert.equal((await call({...body(presetCallId),task:'text',images:true})).status,400);
+    const foreignProject=(await workspace(other)).projects.find(row=>row.status==='正常');
+    assert.equal((await call({...body(presetCallId),task:'text',projectId:foreignProject.id})).status,403);
+    }
 
     // Verify that the third offer is callable before withdrawal, while leaving a fresh A order for afterwards.
-    const previewCustomer=await login('/market/login',b);
-    await command('startSales',release([keys[2]],[a,b]),modelId);
+    await command('startSales',release([keys[0],keys[2]],[a,b]),modelId);
+    const channelState = (channel, enabled) => command('serviceProviderServing',
+      {providerId:channel.channelId,enabled,expectedUpdatedAt:model().updatedAt},modelId);
+    await channelState(sources[0], false);
+    assert.equal(model().serviceProviders.find(row=>row.channelId===sources[0].channelId).listingStage,'gray');
+    assert.deepEqual(serviceDirectoryRows([model()],state,'stopped').map(row=>row.callId),[sources[0].callId]);
+    assert.deepEqual(new Set(serviceDirectoryRows([model()],state,'started').map(row=>row.callId)),new Set(sources.slice(1).map(row=>row.callId)));
+    const rejectedWhileStopped = await call(body(sources[0].callId));
+    assert.equal(rejectedWhileStopped.status,409);
+    assert.equal(rejectedWhileStopped.data.error.message,'模型服务已停止');
+    const apiStopped=await bearer(routingSecret,sources[0].callId);
+    assert.equal(apiStopped.status,403,JSON.stringify(apiStopped.data));
+    assert.equal(apiStopped.data.error.code,'provider_unavailable');
+    assert.equal((await bearer(routingSecret,sources[1].callId)).status,200);
+    const serviceDetail=await request('/services/'+encodeURIComponent(modelId)+'/workspace',{cookie:admin});
+    assert.equal(serviceDetail.status,200,JSON.stringify(serviceDetail.data));
+    assert.equal(serviceDetail.data.service.callsEnabled,true);
+    assert.equal(serviceDetail.data.offers.find(row=>row.id===sources[0].callId).calls_enabled,0);
+    assert.equal(serviceDetail.data.offers.find(row=>row.id===sources[1].callId).calls_enabled,1);
+    const sibling = await call(body(sources[1].callId));
+    assert.equal(sibling.status,200,JSON.stringify(sibling.data));
+    successful.push({source:sources[1],id:sibling.data.id});
+    await channelState(sources[0], true);
+    assert.deepEqual(serviceDirectoryRows([model()],state,'stopped'),[]);
+    const restarted = await call(body(sources[0].callId));
+    assert.equal(restarted.status,200,JSON.stringify(restarted.data));
+    assert.equal((await bearer(routingSecret,sources[0].callId)).status,200);
+    successful.push({source:sources[0],id:restarted.data.id});
+    const source=sources[0], expiringOffer=services.find(row=>row.callId===source.callId);
     const third=services.find(row=>row.callId===sources[2].callId);
-    assert.equal((await order(third.id,previewCustomer)).status,200);
-    const before=await call(body(third.callId),previewCustomer);assert.equal(before.status,200,JSON.stringify(before.data));
+    assert((await catalogue(other)).find(row=>row.id===expiringOffer.id)?.canOrder);
+    const { providerId, endpointId, channelId: associationId }=source;
+    const channel=owner(providerId).catalogConnections.find(row=>row.id===associationId);
+    const start=Date.now(), expires=start+2000;
+    await command('channelProcurementPublish',{providerId,endpointId,associationId,expectedPriceRevision:channel.procurementRevision,confirmed:true,
+      effectiveAt:new Date(start).toISOString(),expiresAt:new Date(expires).toISOString(),scenarios:prices(1,4,'listPrice')});
+    const seq=state.commitSeq;
+    await new Promise(resolve=>setTimeout(resolve,Math.max(0,expires-Date.now()+10)));
+    assert.deepEqual((await catalogue(other)).map(row=>row.callId),[third.callId]);
+    assert.deepEqual(new Set((await catalogue(customer)).map(row=>row.callId)),new Set([sources[1].callId,third.callId]));
+    assert.equal(salesStatus(state,model(),keys[0]),'不可销售');
+    const rejected=await request('/market/orders',{cookie:other,body:{offerIds:[expiringOffer.id,third.id]}});
+    assert.equal(rejected.status,409);
+    assert.equal(rejected.data.error.code,'MODEL_UNAVAILABLE');
+    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_orders WHERE tenant_id=?').bind(b).first('n'),0);
+    const expiredInput=body(expiringOffer.callId);
+    assert.equal((await call(expiredInput)).data.error.code,'CALL_UNAVAILABLE');
+    assert.equal(await local.db.prepare('SELECT commit_seq FROM db_state WHERE id=1').first('commit_seq'),seq+1);
+    assert.equal((await workspace(customer)).requests.find(row=>row.requestId===expiredInput.requestId).error,'CALL_UNAVAILABLE');
+    assert.equal((await call(expiredInput)).data.error.code,'CALL_UNAVAILABLE');
+    assert.equal(await local.db.prepare('SELECT commit_seq FROM db_state WHERE id=1').first('commit_seq'),seq+1);
+    assert.equal((await order(third.id,other)).status,200);
+    const otherProject=(await workspace(other)).projects.find(row=>row.status==='正常');
+    const before=await call({...body(third.callId),projectId:otherProject.id},other);assert.equal(before.status,200,JSON.stringify(before.data));
     successful.push({source:sources[2],id:before.data.id});
     await command('stopSales',{offerKeys:keys.slice(0,2),confirmed:true,expectedUpdatedAt:model().updatedAt},modelId);
     assert.deepEqual((await catalogue(customer)).map(row=>row.callId),[third.callId]);
@@ -332,7 +574,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.deepEqual((await local.db.prepare('SELECT id,listing_stage FROM offers WHERE service_id=? AND retired_at IS NULL ORDER BY id').bind(modelId).all()).results,
       sources.map((source,index)=>({id:source.callId,listing_stage:index===2?'gray':'withdrawn'})).sort((a,b)=>a.id.localeCompare(b.id)));
     assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_orders').first('n'),4);
-    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_calls').first('n'),4);
+    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_calls').first('n'),8);
     const activeOrder=(await request('/market/catalogue',{cookie:customer})).data.orders.find(row=>row.offerId===third.id);
     assert.equal((await apply({type:'cancelMarketOrder',id:activeOrder.id})).status,200);
     assert.equal((await call(body(third.callId))).data.error.code,'ORDER_REQUIRED');
@@ -372,6 +614,209 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal((await call(body(third.callId))).status,200,'display visibility does not revoke a paid order');
     await command('marketVisibility',{visible:true,expectedUpdatedAt:model().updatedAt},modelId);
     assert.deepEqual((await catalogue()).map(row=>row.callId),[third.callId]);
+    const visibility=enabled=>command('serviceProviderListing',{providerId:keys[2],enabled,expectedUpdatedAt:model().updatedAt},modelId);
+    await visibility(false);
+    assert.deepEqual(await catalogue(),[]);
+    assert.equal((await call(body(third.callId))).status,200,'hiding one channel does not revoke a paid order');
+    await visibility(true);
+    assert.deepEqual((await catalogue()).map(row=>row.callId),[third.callId]);
+
+    const created=await tenantWrite(customer,a,'projectCreate',{name:'项目策略验收'});
+    assert.equal(created.status,200,JSON.stringify(created.data));
+    const projectId='project-'+created.data.operationId;
+    const invoke=(overrides={},cookie=customer)=>call({...body(third.callId),projectId,...overrides},cookie);
+    const configure=(type,input)=>tenantWrite(customer,a,'projectUpdate',{projectId,type,input});
+    assert.equal((await invoke()).data.error.code,'project_model_not_enabled');
+    assert.equal((await invoke({},other)).data.error.code,'project_unavailable');
+    assert.equal((await configure('models',[{modelId:'foreign-model',rpm:1,tpm:null}])).status,422);
+    assert.equal((await configure('models',[{modelId,rpm:1,tpm:99999}])).status,200);
+    const sharedCodeRoute={name:projectRoute.name,code:projectRoute.code,defaultService:third.projectServiceId,rules:[],fallback:[]};
+    assert.equal((await tenantWrite(customer,a,'projectRoute',{route:{...sharedCodeRoute,projectId}})).status,200);
+    assert.equal((await tenantWrite(other,b,'projectRoute',{route:{...sharedCodeRoute,projectId:otherProject.id}})).status,200);
+    assert.equal((await tenantWrite(customer,a,'projectRoute',{route:{...sharedCodeRoute,projectId}})).status,422);
+    const settings={name:'项目策略验收',amount:'',warnAt:80,stop:false,retainContent:true};
+    assert.equal((await configure('settings',settings)).status,200);
+    const requestId=crypto.randomUUID();
+    const message='项目验收 sk-should-never-be-retained';
+    const called=await invoke({requestId,messages:[{role:'user',content:message}]});
+    assert.equal(called.status,200,JSON.stringify(called.data));
+    assert.equal((await invoke()).data.error.code,'project_model_rate_limit_exceeded');
+    assert.equal((await invoke({requestId,messages:[{role:'user',content:message}]})).data.id,called.data.id);
+    const afterProjectCall=await workspace(customer);
+    const stored=afterProjectCall.requests.find(row=>row.requestId===requestId);
+    assert.match(stored.requestBody,/已脱敏/);
+    assert(!stored.requestBody.includes('sk-should'));
+    assert(stored.responseBody);
+    const charge=afterProjectCall.report.records.find(row=>row.requestId===requestId).charge;
+    assert(charge.micros>0);
+    assert.equal((await configure('models',[{modelId,rpm:null,tpm:1}])).status,200);
+    assert.equal((await invoke()).data.error.code,'project_model_rate_limit_exceeded');
+    assert.equal((await configure('models',[{modelId,rpm:null,tpm:null}])).status,200);
+    assert.equal((await configure('settings',{...settings,amount:String(charge.micros/1_000_000),stop:true,retainContent:false})).status,200);
+    const blockedId=crypto.randomUUID();
+    const overBudget=await invoke({requestId:blockedId});
+    assert.equal(overBudget.status,402);
+    assert.equal(overBudget.data.error.code,'project_budget_exceeded');
+    const budgetFact=(await application()).requests.find(row=>row.requestId===blockedId);
+    assert.equal(budgetFact.projectId,projectId);
+    assert.deepEqual(budgetFact.attempts.map(row=>[row.dispatched,row.error]),[[false,'project_budget_exceeded']]);
+    assert(Number.isFinite(Date.parse(budgetFact.attempts[0].startedAt)));
+    assert.equal((await configure('settings',{...settings,retainContent:false})).status,200);
+    const manual={ id:'project-policy-key',name:'项目策略 Key',enabled:true,models:null,budgetMicros:1,secretPreview:'sk-demo*****abcd' };
+    const saveKeys=rows=>tenantWrite(customer,a,'keys',{projectId,billing:'按量付费',rows});
+    assert.equal((await saveKeys([manual])).status,200);
+    const apiInvoke=async()=>{
+      const requestId=crypto.randomUUID();
+      const result=await apply({type:'simulateInvocation',data:{requestId,keyId:manual.id,modelId:third.callId,purpose:'gateway-test'}});
+      assert.equal(result.status,200,JSON.stringify(result.data));
+      return (await application()).requests.find(row=>row.requestId===requestId);
+    };
+    assert.equal((await apiInvoke()).error,'key_budget_exceeded');
+    assert.equal((await saveKeys([{...manual,expiresAt:new Date(Date.now()-1000).toISOString()}])).status,200);
+    assert.equal((await apiInvoke()).error,'key_expired');
+    assert.equal((await saveKeys([])).status,200);
+    const finalScope=await workspace(customer);
+    assert(!finalScope.keys.some(row=>row.id===manual.id));
+    assert(finalScope.logKeys.some(row=>row.id===manual.id));
+    assert(finalScope.projectAudits.some(row=>row.objectId===manual.id && row.action==='删除 API Key'));
+    const grants=limit=>apply({type:'enterprise',operation:'configure-grant',tenantId:a,
+      ids:{grant:crypto.randomUUID(),ledger:crypto.randomUUID()},data:{limit,modelIds:[modelId],reason:'共享额度验收'}});
+    const used=async()=>(await application()).grants.find(row=>row.subjectType==='tenant' && row.subjectId===a).used;
+    const granted=await grants(10000);
+    assert.equal(granted.status,200,JSON.stringify(granted.data));
+    assert.equal((await invoke()).status,200);
+    const webUsed=await used();
+    assert(webUsed>0);
+    const raw='sk-'+randomBytes(16).toString('hex');
+    const paygKey={...manual,id:'paid-project-key',budgetMicros:null,credentialDigest:createHash('sha256').update(raw).digest('hex')};
+    assert.equal((await saveKeys([paygKey])).status,200);
+    const paidId=crypto.randomUUID(), beforePaid=await monthly(a);
+    const [paid,replayed]=await Promise.all([bearer(raw,third.callId,{requestId:paidId}),bearer(raw,third.callId,{requestId:paidId})]);
+    assert.equal(paid.status,200,JSON.stringify(paid.data));
+    assert.deepEqual(replayed.data,paid.data);
+    const paidFact=(await workspace(customer)).requests.find(row=>row.requestId===paidId);
+    assert.equal(paidFact.publicModelId,third.callId);
+    assert.equal(paidFact.projectId,projectId);
+    const paidRecord=(await workspace(customer)).report.records.find(row=>row.requestId===paidId);
+    assert.equal(await monthly(a),beforePaid+paidRecord.charge.micros);
+    assert.equal(await used(),webUsed+paid.data.usage.total_tokens);
+    assert.equal((await call({...body(third.callId),projectId:otherProject.id,requestId:paidId},other)).status,200);
+    const otherMonthly=await monthly(b);
+    const historicalMicros=123456;
+    await local.db.prepare('UPDATE market_monthly_charges SET amount_micros=amount_micros+? WHERE period=? AND tenant_id=?')
+      .bind(historicalMicros,billingPeriod(),b).run();
+    assert.equal((await apply({type:'generateBills'})).status,200);
+    const otherBill=(await application()).bills.find(row=>row.tenantId===b && row.period===billingPeriod());
+    assert.equal(otherBill.unassignedMicros,historicalMicros);
+    assert.deepEqual(otherBill.projectBreakdown,[{projectId:otherProject.id,projectName:otherProject.name,amountMicros:otherMonthly}]);
+    const baseConfig={models:[third.modelKey],providers:[],sort:'default',parameters:{},fallbackModel:''};
+    const autoRoute={projectId,action:'publish',kind:'auto',callId:'moma/auto',config:baseConfig};
+    assert.equal((await tenantWrite(other,b,'routes',{...autoRoute,config:{...baseConfig,models:['unavailable-model']}})).status,422);
+    const automatic=await tenantWrite(customer,a,'routes',autoRoute);
+    assert.equal(automatic.status,200,JSON.stringify(automatic.data));
+    assert.equal((await bearer(raw,'moma/auto')).data.model,third.callId);
+    const presetConfig={...baseConfig,providers:[third.providerId],sort:'manual',description:'客服预设',systemPrompt:'你是一名客服助理。',
+      parameters:{temperature:0.4,top_p:0.8,max_tokens:128}};
+    const createdPreset=await tenantWrite(customer,a,'routes',{projectId,action:'publish',kind:'preset',name:'support-preset',config:presetConfig});
+    assert.equal(createdPreset.status,200,JSON.stringify(createdPreset.data));
+    const preset=(await workspace(customer)).routes.find(row=>row.callId==='@preset/support-preset');
+    assert.deepEqual(preset.versions[0].config.parameters,presetConfig.parameters);
+    assert.equal((await workspace(other)).routes.some(row=>row.id===preset.id),false);
+    const presetOperation={projectId,kind:'preset',id:preset.id,callId:preset.callId};
+    assert.equal((await tenantWrite(other,b,'routes',{...presetOperation,action:'stop'})).status,422);
+    assert.equal((await tenantWrite(customer,a,'routes',{...presetOperation,action:'publish',config:{...presetConfig,description:'更新描述'}})).status,200);
+    assert.equal((await tenantWrite(customer,a,'routes',{...presetOperation,action:'switch',version:1})).status,200);
+    const rolled=(await workspace(customer)).routes.find(row=>row.id===preset.id);
+    assert.equal(rolled.activeVersion,1);
+    assert.equal(rolled.versions.length,2);
+    const presetRequest={requestId:crypto.randomUUID()};
+    const completed=await bearer(raw,preset.callId,presetRequest);
+    assert.equal(completed.status,200,JSON.stringify(completed.data));
+    assert.equal(completed.data.model,third.callId);
+    assert.deepEqual((await bearer(raw,preset.callId,presetRequest)).data,completed.data);
+    assert.equal((await tenantWrite(customer,a,'routes',{...presetOperation,action:'stop'})).status,200);
+    assert.equal((await bearer(raw,preset.callId)).data.error.code,'tenant_route_forbidden');
+    const beforeQuota=await monthly(a);
+    assert.equal((await grants(await used())).status,200);
+    assert.equal((await invoke()).data.error.code,'enterprise_quota_exhausted');
+    assert.equal((await bearer(raw,third.callId)).data.error.code,'enterprise_quota_exhausted');
+    assert.equal(await monthly(a),beforeQuota);
+    assert.equal((await configure('status',{status:'停用'})).status,200);
+    assert.equal((await invoke()).data.error.code,'project_unavailable');
+    assert.equal((await configure('status',{status:'已删除'})).status,200);
+    assert((await workspace(customer)).requests.some(row=>row.requestId===requestId));
+    const policy=(body,cookie=admin)=>request('/project-space-policy',{cookie,body});
+    const factory={expectedRevision:0,personalEnabled:true,operatingMode:'factory',internalTenantId:a};
+    assert.equal((await policy(factory,other)).status,401);
+    assert.equal((await policy({...factory,internalTenantId:b})).status,422);
+    assert.equal((await policy(factory)).status,200);
+    assert.equal((await policy(factory)).status,409);
+    const internalData=(await request('/market/catalogue',{cookie:customer})).data;
+    const internalOffer=internalData.services.find(row=>row.callId===third.callId);
+    assert.equal(internalData.tenant.internal,true);
+    assert(internalOffer.callable && !internalOffer.canOrder && !internalOffer.ordered);
+    assert.deepEqual(internalOffer.salePrices,[]);
+    assert.deepEqual(internalData.orders,[]);
+    assert.equal((await order(third.id)).data.error.code,'INTERNAL_SPACE');
+    await apply({type:'cancelMarketOrder',id:(await application()).orders.find(row=>row.tenantId===a && row.serviceId===third.id && row.status==='生效中').id});
+    await grants(1000000);
+    const organizationId=(await application()).organizations.find(row=>row.tenantId===a && !row.parentId).id;
+    const internalProject=await tenantWrite(customer,a,'projectCreate',{name:'内用成本验收',departmentId:organizationId});
+    assert.equal(internalProject.status,200,JSON.stringify(internalProject.data));
+    const internalProjectId='project-'+internalProject.data.operationId;
+    assert.equal((await tenantWrite(customer,a,'projectUpdate',{projectId:internalProjectId,type:'models',input:[{modelId,rpm:null,tpm:null}]})).status,200);
+    const inner=await tenantWrite(customer,a,'keys',{projectId:internalProjectId,billing:'按量付费',rows:[
+      {id:'internal-cost-key',name:'内用验收 Key',enabled:true,models:null,secretPreview:'sk-test*****qaaa',
+        credentialDigest:createHash('sha256').update('sk-'+ 'a'.repeat(32)).digest('hex')},
+    ]});
+    assert.equal(inner.status,200,JSON.stringify(inner.data));
+    const webId=crypto.randomUUID(), apiId=crypto.randomUUID(), spendBefore=await monthly(a);
+    const internalRequest={...body(third.callId),requestId:webId,projectId:internalProjectId,tenantId:a};
+    assert.equal((await call(internalRequest)).status,200,'enterprise access does not depend on an order');
+    assert.equal((await bearer('sk-'+'a'.repeat(32),third.callId,{requestId:apiId})).status,200);
+    const adminFacts=(await application()).requests;
+    const workspaceInternal=await workspace(customer);
+    for(const id of [webId,apiId]){
+      const cost=adminFacts.find(row=>row.requestId===id);
+      assert.equal(cost.tenantId,a);
+      assert.equal(cost.projectId,internalProjectId);
+      assert.equal(cost.departmentId,organizationId);
+      assert.equal(cost.settlement,'internal');
+      assert(cost.internalCost?.micros>0);
+      const report=workspaceInternal.report.records.find(row=>row.requestId===id);
+      assert.deepEqual(report.charge,cost.internalCost);
+      assert(!report.billPeriod);
+      assert(!Object.hasOwn(report,'procurementSnapshot'));
+      assert(!(await workspace(other)).requests.some(row=>row.requestId===id));
+    }
+    assert.deepEqual(workspaceInternal.report.bills,[]);
+    assert.equal(await monthly(a),spendBefore);
+    const extReport=(await workspace(other)).report;
+    assert.equal(extReport.records.find(row=>row.requestId===paidId).billPeriod,billingPeriod());
+    assert.equal(extReport.bills.find(row=>row.period===billingPeriod()).projectBreakdown[0].amountMicros,otherMonthly);
+    assert.equal((await policy({...factory,expectedRevision:1,operatingMode:'internal'})).status,200);
+    assert.equal((await request('/market/workspace',{cookie:other})).status,401);
+    assert.equal((await call({...internalRequest,requestId:crypto.randomUUID(),projectId:otherProject.id})).data.error.code,'project_unavailable');
+    assert.equal((await policy({...factory,expectedRevision:2})).status,200);
+    assert.equal((await request('/market/workspace',{cookie:other})).status,200);
+    const retired=sources[2];
+    await command('stopSales',{offerKeys:[retired.channelId],confirmed:true,expectedUpdatedAt:model().updatedAt},modelId);
+    await channelState(retired,false);
+    await command('removeServiceProvider',{providerId:retired.channelId,confirmed:true,expectedUpdatedAt:model().updatedAt},modelId);
+    const supply=state.modelSupplies.find(row=>row.channelId===retired.channelId);
+    assert.equal(supply.status,'已移除');
+    await command('provider',{operation:'supplierCatalogueChannelDelete',objectId:retired.providerId,
+      values:{modelId:retired.modelId,endpointId:retired.endpointId,associationId:retired.channelId,confirmed:true}});
+    assert(!state.endpoints.some(row=>row.id===retired.endpointId));
+    await command('marketVisibility',{visible:false,expectedUpdatedAt:model().updatedAt},modelId);
+    assert.equal(model().marketVisible,false);
+    assert.deepEqual(JSON.parse(await local.db.prepare('SELECT record_json FROM service_supply_records WHERE id=?').bind(supply.id).first('record_json')),supply);
+    const retiredNumber=await local.db.prepare("SELECT MAX(CAST(substr(code,4) AS INTEGER)) AS number FROM channels WHERE code GLOB 'CH-[0-9]*'").first('number');
+    await command('supplierModelsRegister',{providerId:retired.providerId,libraryIds:[model().templateId || modelId]});
+    await command('supplierChannelRegister',{providerId:retired.providerId,modelId:retired.modelId,name:'替换渠道',
+      upstreamModelId:'vendor/after-retirement',baseUrl:'https://after-retirement.example.invalid/v1',protocol:'OpenAI',authMode:'group',keyGroupId:'default'});
+    const replacement=owner(retired.providerId).catalogConnections.find(row=>row.upstreamModelId==='vendor/after-retirement');
+    assert.equal(Number(state.endpoints.find(row=>row.id===replacement.endpointId).channelCode.slice(3)),retiredNumber+1);
     assert.deepEqual((await local.db.prepare('PRAGMA foreign_key_check').all()).results,[]);
   } finally {
     configureOnboardingTransport(null);

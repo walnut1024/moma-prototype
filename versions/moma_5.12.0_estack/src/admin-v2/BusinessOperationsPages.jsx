@@ -1,7 +1,8 @@
+import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useId, useState } from 'react';
-import { Banner, Button, Card, Form, Input, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Descriptions, Form, Input, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus, IconSearch, IconUpload } from '@douyinfe/semi-icons';
 import { DEFAULT_PAGE_SIZE, FilterReset, FilterToolbar, PAGE_SIZES } from '../components/FilterControls';
@@ -9,12 +10,15 @@ import OperationInputDialog from '../components/OperationInputDialog';
 import { displayBusinessCopy } from '../display-copy.mjs';
 import AdminPageHeading from './AdminPageHeading';
 import { Choice } from './ServiceUI';
-import { usageTotal } from './observability';
+import { latestRequests, requestIdentity } from '../request-identity.mjs';
+import { requestCharge } from '../project-call.mjs';
+import { usageMeter, usageValue } from './usage-analysis.js';
 import { canMutate } from './store';
 import { routingServices } from './service-routing.js';
-import { mockCharge, billingPeriod } from './mock-billing.js';
+import { billingPeriod } from './mock-billing.js';
+import { customerKeys, projectBillAmount, yuanMicros } from './customer-projects.mjs';
 
-const uid = prefix => `${prefix}-${crypto.randomUUID()}`;
+
 const { Text, Title } = Typography;
 const titles = { goods: '商品与套餐', orders: '订单与订阅', announcements: '公告与服务通知', metering: '计量明细',
   ledger: '账户与额度流水', bills: '客户账单', settlement: '服务商对账与结算', adjustments: '退款与调账' };
@@ -31,11 +35,11 @@ const statusColumn = { title: '状态', dataIndex: 'status', width: 100, render:
 const money = amount => amount == null ? '—' : `¥${amount}`;
 const actionColumn = render => ({ title: '操作', key: 'actions', width: 155, render: (_, row) => render(row) });
 
-function BusinessTable({ rows, columns, minWidth = 850, children, empty = '暂无记录', tableKey }) {
+function BusinessTable({ rows, columns, minWidth = 850, children, empty = '暂无记录', tableKey, rowKey = 'id' }) {
   const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
   return <Card>
     {children}
-    <Table key={tableKey} size="small" rowKey="id" dataSource={rows} columns={columns} scroll={{ x: `max(100%, ${minWidth}px)` }}
+    <Table key={tableKey} size="small" rowKey={rowKey} dataSource={rows} columns={columns} scroll={{ x: `max(100%, ${minWidth}px)` }}
       empty={empty} pagination={{ pageSize: size, pageSizeOpts: PAGE_SIZES, showSizeChanger: true, showTotal: true, onPageSizeChange: setSize }}/>
   </Card>;
 }
@@ -72,7 +76,7 @@ function Managed({ pageId, state, dispatch }) {
       }
       if (!record[field]) return setError('请填写全部必填项');
     }
-    if (await dispatch({ type: 'add', collection, record: { id: uid(collection), ...record, status: '已启用' } })) close();
+    if (await dispatch({ type: 'add', collection, record: { id: resourceId(collection === 'announcements' ? 'announcement' : 'product'), ...record, status: '已启用' } })) close();
   };
   return <>
     <AdminPageHeading title={title}>
@@ -109,7 +113,7 @@ function Orders({ state, dispatch }) {
     const tenant = state.tenants[0];
     if (!product || !tenant) return Toast.error('缺少可订购商品或客户');
     dispatch({ type: 'add', collection: 'orders', record: {
-      id: uid('order'), orderNo: `ORD-${Date.now()}`, tenantId: tenant.id, productId: product.id, amount: product.price,
+      id: resourceId('order'), orderNo: `ORD-${Date.now()}`, tenantId: tenant.id, productId: product.id, amount: product.price,
       entitlement: 100000000, quotaUnit: 'Token', status: '待开通', timeline: ['订单创建'],
     } });
   };
@@ -142,17 +146,24 @@ function Orders({ state, dispatch }) {
 }
 
 function Metering({ state, dispatch }) {
-  const [keyId, setKeyId] = useState(state.apiKeys.find(row => row.status === '有效')?.id || '');
+  const keys = customerKeys(state);
+  const [keyId, setKeyId] = useState(keys.find(row => row.status === '有效')?.id || '');
   const [modelId,setModelId]=useState(routingServices(state).find(row=>row.callId)?.callId || '');
   const [result, setResult] = useState(null);
+  const key = keys.find(row => row.id === keyId);
+  const models = new Map(state.models.map(model => [model.id, model]));
+  const modelFor = row => models.get(row.modelId) || { type:row.modelType };
   const run = async () => {
+    if (!key) return;
     try {
       const requestId = crypto.randomUUID();
+      const identity = requestIdentity({ tenantId:key.tenantId, requestId });
       const next = await dispatch({ type: 'simulateInvocation', data: { requestId, keyId, modelId, purpose: 'metering-test' }, feedback: false });
-      const request = next?.requests.find(row => row.requestId === requestId);
-      if (!request) return;
+      if (!next) return;
+      const request = next.requests.find(row => requestIdentity(row) === identity && row.keyId === key.id && row.projectId === key.projectId);
+      if (!request) { setResult({ failed:true, message:'未查到当前项目的调用结果，请重新载入核对。' }); return; }
       const { httpStatus, attempts } = request;
-      setResult({ failed: httpStatus >= 400, message: `HTTP ${httpStatus} · ${requestId} · ${attempts?.at(-1)?.error || '已计量扣减'}` });
+      setResult({ failed: httpStatus >= 400, message: `HTTP ${httpStatus} · ${requestId} · ${request.error || attempts?.at(-1)?.error || '模拟计量完成'}` });
     } catch (error) { setResult({ failed: true, message: error.message }); }
   };
   return <>
@@ -160,21 +171,29 @@ function Metering({ state, dispatch }) {
     <Card title={<Title heading={5} component="h2">调用测试</Title>}>
       <div className="admin-analytics-fields">
         <FilterToolbar>
-          <Choice label="调用测试 API 密钥" value={keyId} options={state.apiKeys.map(row => [row.id, row.keyId])} onChange={setKeyId}/>
+          <Choice label="调用测试 API 密钥" value={keyId} options={keys.map(row => [row.id, row.keyId])} onChange={setKeyId}/>
           <Choice label="调用测试模型" value={modelId} options={routingServices(state).filter(row=>row.callId).map(row=>[row.callId,row.callId])} onChange={setModelId}/>
-          <Button theme="solid" disabled={!keyId || !modelId || !editable(state, 'requests')} onClick={run}>发送请求</Button>
+          <Button theme="solid" disabled={!key || !modelId || !editable(state, 'requests')} onClick={run}>发送请求</Button>
         </FilterToolbar>
         {result && <Banner type={result.failed ? 'danger' : 'success'} closeIcon={null} description={result.message}/>}
       </div>
     </Card>
-    <BusinessTable rows={state.requests.slice(0, 40)} minWidth={980} columns={[
+    <BusinessTable rows={latestRequests(state.requests).toSorted((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 40)}
+      rowKey={requestIdentity} minWidth={1080} columns={[
       { title: 'Request ID', dataIndex: 'requestId', render: value => <Text code>{value}</Text> },
       { title: '客户', render: (_, row) => state.tenants.find(tenant => tenant.id === row.tenantId)?.name },
-      { title: 'Model ID', render: (_, row) => state.models.find(model => model.id === row.modelId)?.modelId },
-      { title: '计量项', key: 'usage-fields', dataIndex: 'usage', render: usage => Object.keys(usage || {}).join(' / ') || '—' },
-      { title: '数量', dataIndex: 'usage', align: 'right', render: usage => usageTotal(usage).toLocaleString() },
+      { title: '项目', render: (_, row) => state.projects.find(project => project.id === row.projectId && project.tenantId === row.tenantId)?.name || row.projectId || '未归属' },
+      { title: 'Model ID', render: (_, row) => row.publicModelId || modelFor(row).modelId || row.modelId || '—' },
+      { title: '计量用量', align:'right', render: (_, row) => {
+        const meter = usageMeter(modelFor(row), row);
+        const value = usageValue(row, meter.fields);
+        return value.complete ? value.total.toLocaleString('zh-CN') + ' ' + meter.unit : '未记录';
+      } },
       { title: '价格快照', render: (_,row) => row.priceVersionId || '未记录' },
-      { title: '金额', align: 'right', render: (_,row) => { const charge=mockCharge(state,row);return charge?`${charge.currency} ${charge.amount}`:'—'; } },
+      { title: '金额', align: 'right', render: (_, row) => {
+        const charge = requestCharge(state, row, modelFor(row));
+        return !charge ? '未记录' : charge.currency === 'CNY' ? yuanMicros(charge.micros) : charge.currency + ' ' + charge.micros / 1_000_000;
+      } },
       { ...statusColumn, dataIndex: 'httpStatus', render: value => <AdminStatus value={value === 200 ? '已计量' : '不计费'}/> },
     ]}/>
   </>;
@@ -197,25 +216,88 @@ function Ledger({ state }) {
   </>;
 }
 
-function Bills({ state, dispatch }) {
+function Bills({ state, dispatch, params }) {
+  const [inspectId, setInspectId] = useState(null);
   const canWrite = editable(state, 'bills');
-  const period=billingPeriod();
-  const generate=()=>dispatch({type:'generateBills'});
+  const period = billingPeriod();
+  const customerId = params.get('tenant') || '';
+  const projectId = params.get('project') || '';
+  const selectedPeriod = params.get('period') || '';
+  const tenants = new Map(state.tenants.map(row => [row.id, row]));
+  const projects = state.projects.filter(row => !customerId || row.tenantId === customerId);
+  const project = projects.find(row => row.id === projectId);
+  const scopeInvalid = (customerId && !tenants.has(customerId)) || (projectId && !project);
+  const scopedTenant = customerId || project?.tenantId || '';
+  const customerBills = state.bills.filter(row => !scopeInvalid && (!scopedTenant || row.tenantId === scopedTenant));
+  const periods = [...new Set(customerBills.map(row => row.period).filter(Boolean))].sort().reverse();
+  const rows = customerBills.filter(row => (!selectedPeriod || row.period === selectedPeriod) &&
+    (!project || projectBillAmount(row, project.id) !== null))
+    .toSorted((left, right) => String(right.period || '').localeCompare(String(left.period || '')));
+  const inspect = rows.find(row => row.id === inspectId);
+  const select = patch => {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    }
+    setInspectId(null);
+    location.hash = '#/admin-2/bills' + (next.size ? '?' + next : '');
+  };
+  const billItems = inspect && Array.isArray(inspect.projectBreakdown) ? [
+    ...inspect.projectBreakdown.map(entry => ({
+      id:'project:' + entry.projectId, name:entry.projectName || entry.projectId, projectId:entry.projectId, amountMicros:entry.amountMicros,
+    })),
+    ...(inspect.unassignedMicros > 0 ? [{ id:'unassigned', name:'未归属项目', amountMicros:inspect.unassignedMicros }] : []),
+  ] : null;
   return <>
     <AdminPageHeading title={titles.bills}>
-      <Button theme="solid" disabled={!canWrite} onClick={generate}>生成 {period} 模拟账单</Button>
+      <Button theme="solid" disabled={!canWrite || scopeInvalid} onClick={() => dispatch({type:'generateBills', ...(scopedTenant && {tenantId:scopedTenant})})}>生成 {period} 模拟账单</Button>
     </AdminPageHeading>
-    <BusinessTable rows={state.bills} minWidth={940} columns={[
+    {scopeInvalid && <Banner type="warning" closeIcon={null} description="所选客户或项目不存在，请调整筛选条件。"/>}
+    <BusinessTable rows={rows} minWidth={project ? 1110 : 940} tableKey={params.toString()} columns={[
       { title: '账单号', dataIndex: 'billNo', width: 240 },
-      { title: '租户', render: (_, row) => state.tenants.find(tenant => tenant.id === row.tenantId)?.name },
+      { title: '客户', render: (_, row) => tenants.get(row.tenantId)?.name || row.tenantId },
       { title: '账期', dataIndex: 'period' },
-      { title: '应收', dataIndex: 'amount', align: 'right', render: money },
+      { title: '客户应收', dataIndex: 'amount', align: 'right', render: money },
+      ...(project ? [{ title: '项目金额', align: 'right', render: (_, row) => yuanMicros(projectBillAmount(row, project.id)) }] : []),
       { title: '优惠', dataIndex: 'discount', align: 'right', render: money },
       { title: '实收', dataIndex: 'paid', align: 'right', render: money },
       statusColumn,
-      actionColumn(row => row.status === '待出账' && <Button size="small" theme="borderless" disabled={!canWrite}
-        onClick={() => dispatch({ type: 'update', collection: 'bills', id: row.id, changes: { status: '已出账' } })}>确认出账</Button>),
-    ]}/>
+      actionColumn(row => <Space>
+        <Button size="small" theme="borderless" onClick={() => setInspectId(row.id)}>详情</Button>
+        {row.status === '待出账' && <Button size="small" theme="borderless" disabled={!canWrite}
+          onClick={() => dispatch({ type:'update', collection:'bills', id:row.id, changes:{ status:'已出账' } })}>确认出账</Button>}
+      </Space>),
+    ]}>
+      <FilterToolbar>
+        <Choice label="账单客户" value={scopedTenant} options={[[ '', '全部客户' ],
+          ...state.tenants.map(row => [row.id, row.name]), ...(customerId && !tenants.has(customerId) ? [[customerId, '客户不存在']] : [])]}
+          onChange={tenant => select({ tenant, project:'', period:'' })}/>
+        <Choice label="账单项目" value={projectId} options={[[ '', '全部项目' ],
+          ...projects.map(row => [row.id, scopedTenant ? row.name : row.name + ' · ' + (tenants.get(row.tenantId)?.name || row.tenantId)]),
+          ...(projectId && !project ? [[projectId, '项目不存在']] : [])]}
+          onChange={id => select({ tenant:customerId || projects.find(row => row.id === id)?.tenantId || '', project:id, period:'' })}/>
+        <Choice label="账期" value={selectedPeriod} options={[[ '', '全部账期' ], ...periods.map(value => [value, value]),
+          ...(selectedPeriod && !periods.includes(selectedPeriod) ? [[selectedPeriod, selectedPeriod]] : [])]}
+          onChange={value => select({ period:value })}/>
+        <FilterReset onClick={() => select({ tenant:'', project:'', period:'' })}/>
+      </FilterToolbar>
+    </BusinessTable>
+    {inspect && <Modal visible title="账单详情" width="min(680px, calc(100vw - 32px))" onCancel={() => setInspectId(null)}
+      closeOnEsc maskClosable={false} footer={<Button onClick={() => setInspectId(null)}>关闭</Button>}>
+      <div className="admin-analytics-fields">
+        <Descriptions align="left" data={[
+          { key:'账单号', value:inspect.billNo }, { key:'客户', value:tenants.get(inspect.tenantId)?.name || inspect.tenantId },
+          { key:'账期', value:inspect.period }, { key:'客户应收', value:money(inspect.amount) },
+        ]}/>
+        <Title heading={5}>项目费用明细</Title>
+        {billItems ? <Table size="small" rowKey="id" dataSource={billItems} pagination={false} empty="本期没有已归集的项目费用"
+          columns={[
+            { title:'项目', dataIndex:'name' }, { title:'项目 ID', dataIndex:'projectId', render:value => value || '—' },
+            { title:'金额', dataIndex:'amountMicros', align:'right', render:yuanMicros },
+          ]}/> : <Text type="secondary">该账单未记录项目费用明细。</Text>}
+      </div>
+    </Modal>}
   </>;
 }
 
@@ -282,7 +364,7 @@ function Adjustments({ state, dispatch }) {
 const pages = { goods: Managed, announcements: Managed, orders: Orders, metering: Metering, ledger: Ledger,
   bills: Bills, settlement: Settlements, adjustments: Adjustments };
 
-export default function BusinessOperationsPage({ pageId, state, dispatch }) {
+export default function BusinessOperationsPage({ pageId, state, dispatch, params = new URLSearchParams() }) {
   const Page = pages[pageId];
-  return Page ? <div className="admin-page-stack"><Page pageId={pageId} state={state} dispatch={dispatch}/></div> : null;
+  return Page ? <div className="admin-page-stack"><Page pageId={pageId} state={state} dispatch={dispatch} params={params}/></div> : null;
 }

@@ -1,6 +1,7 @@
+import { workspaceStoragePrefix } from "./workspace-storage.mjs";
 import { initialOrganizationData } from './mock/application-data.js';
 import mockConfig from './mock/catalogues.json' with { type: 'json' };
-export const ORGANIZATION_STORAGE_KEY = "moma-organization:moma_5.12.0_estack";
+export const ORGANIZATION_STORAGE_KEY = workspaceStoragePrefix + 'organization';
 export const roles = ["企业管理员", "部门管理员", "普通成员", "财务审计"];
 export const statuses = ["已加入", "待加入", "已停用"];
 export const platformAccounts = mockConfig["organization-data.mjs"]["platformAccounts"];
@@ -79,6 +80,8 @@ export function changeOrganization(state, action, stamp = new Date().toLocaleStr
     if (!department || department.id === "root") fail("企业根节点不能删除");
     if (departments.some(d => d.parentId === action.id) || members.some(m => m.departmentId === action.id)) fail("请先迁移成员并删除子部门，再删除该部门");
     if (members.some(m => m.role === "部门管理员" && m.scopeId === action.id)) fail("该部门仍被用于管理范围，请先调整对应成员角色");
+    const project = state.projects?.find(row => row.status !== '已删除' && row.organizationId === action.id);
+    if (project) fail('请先调整「' + project.name + '」的所属部门');
     departments = departments.filter(d => d.id !== action.id);
     description = `删除部门：${department.name}`;
   } else if (action.type === "member.save") {

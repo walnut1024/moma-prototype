@@ -22,7 +22,7 @@ test('merged supplier directory preserves all model identities and every shared 
 import { commitAdminState } from '../src/admin-v2/store.js';
 import { withAdminSession } from './admin-session-fixture.mjs';
 import { activeSupplierListPrice } from '../src/admin-v2/supplier-model-maintenance.js';
-import { supplierModelChannelRows } from '../src/admin-v2/supplier-model-channel-table.js';
+import { costRecords } from '../src/admin-v2/model-pricing-workspace.js';
 
 const fixture = () => {
   const state = withAdminSession(legacySupplierState());
@@ -56,31 +56,31 @@ test('channel list price persists independently without changing old quotes, pro
   assert.throws(() => publish(next, provider, modelId, endpoint.id, 'quote-a'), /已变化/);
   const second = publish(next, provider, modelId, 'quote-channel-b', 'quote-b', { scenarios: [{ ...price.scenarios[0], listPrice: '3' }] });
   const groups = supplierModelChannelGroups(second, second.providers.find(row => row.id === provider.id));
-  const rows = supplierModelChannelRows(groups.find(row => row.modelId === modelId));
-  assert.deepEqual(rows.map(row => row.modelSpan), [2, 0]);
-  assert.deepEqual(rows.map(row => row.channelSpan), [1, 1]);
-  assert.equal(rows[0].price.purchasePrice, 123);
-  assert.equal(rows[1].price, null);
+  const group = groups.find(row => row.modelId === modelId);
+  const ownerAfter = second.providers.find(row => row.id === provider.id);
+  const beforeGroup = supplierModelChannelGroups(state, provider).find(row => row.modelId === modelId);
+  assert.deepEqual(costRecords(second, [{...group,owner:ownerAfter}]).map(row => row.items), costRecords(state, [{...beforeGroup,owner:provider}]).map(row => row.items));
 });
 
-test('missing prices and channels retain placeholder rows; model quote never becomes a channel quote', () => {
-  const { state, provider, modelId } = fixture();
-  const group = supplierModelChannelGroups(state, provider).find(row => row.modelId === modelId);
-  assert.equal(supplierModelChannelRows(group)[0].price.purchasePrice, 123);
-  assert.equal(supplierModelChannelRows(group)[1].price, null);
-  assert.deepEqual(supplierModelChannelRows({ channels: [] }), [{ channel: null, price: null, channelSpan: 1, modelSpan: 1 }]);
-});
-
-test('procurement rows preserve model and channel spans and show explicit cost or discounted directory price without using channel list quotes', () => {
-  const group = { channels: [
-    { id: 'a', pricing: { discountFactor: 500000, scenarios: [{name:'输入',listPrice:4000000,currency:'CNY',unit:'百万 Token'},{name:'输出',listPrice:9000000,purchasePrice:0,currency:'CNY',unit:'百万 Token'}] }, listPriceVersions:[{status:'已发布',version:1,effectiveAt:'2020-01-01',pricing:{scenarios:[{name:'不应显示的刊例价',listPrice:999000000}]}}] },
-    { id: 'b', pricing: { scenarios: [{name:'输入',listPrice:null,purchasePrice:3000000,currency:'USD',unit:'百万 Token'},{name:'缺价',listPrice:null,currency:'USD',unit:'次'}] } },
-  ] }, before = structuredClone(group), rows = supplierModelChannelRows(group);
-  assert.deepEqual(rows.map(row=>row.modelSpan),[4,0,0,0]);
-  assert.deepEqual(rows.map(row=>row.channelSpan),[2,0,2,0]);
-  assert.deepEqual(rows.map(row=>row.price.purchasePrice),[2000000,0,3000000,null]);
-  assert.deepEqual(rows.map(row=>row.price.currency),['CNY','CNY','USD','USD']);
-  assert.deepEqual(group,before);
+test('channel detail and directory share active procurement costs, preserving zero and expiry without stale quote fallback', () => {
+  const pricing = { scenarios: [{ name: '旧报价', listPrice: 999000000, currency: 'CNY', unit: '次' }] };
+  const current = { id: 'current', modelId: 'local-model', endpointId: 'ep-current', managed: true, pricing,
+    procurementVersions: [{ id: 'v1', version: 1, status: '已发布', effectiveAt: '2020-01-01', pricing: { scenarios: [
+      { name: '输入 Token', listPrice: 1000000, currency: 'CNY', unit: '百万 Token' },
+      { name: '输出 Token', listPrice: 0, currency: 'CNY', unit: '百万 Token' },
+    ] } }] };
+  const expired = { ...current, id: 'expired', endpointId: 'ep-expired', procurementVersions: [{ ...current.procurementVersions[0], expiresAt: '2021-01-01' }] };
+  const group = { owner: { id: 'provider' }, master: { id: 'master', name: '模型' }, channels: [current, expired] };
+  const before = structuredClone(group);
+  const rows = costRecords({ modelSupplies: [], supplyPrices: [] }, [group]);
+  assert.deepEqual(rows[0].items.map(({name,amount,unit,currency})=>({name,amount,unit,currency})), [
+    { name: '输入 Token', amount: 1000000, unit: '百万 Token', currency: 'CNY' },
+    { name: '输出 Token', amount: 0, unit: '百万 Token', currency: 'CNY' },
+  ]);
+  assert.equal(rows[0].status, '已配置');
+  assert.deepEqual(rows[1].items, []);
+  assert.equal(rows[1].status, '已失效');
+  assert.deepEqual(group, before);
 });
 
 test('publishing validates exact live association, confirmation, amounts, dates and role', () => {
@@ -117,7 +117,7 @@ import { persistModelAction } from '../src/admin-v2/store.js';
 
 test('supplier table presents the exact upstream address and distinguishes Chat, Responses and Anthropic without inventing missing addresses',()=>{
  const provider={};
- for(const [url,protocol,label] of [['https://api.example.invalid/v1/chat/completions','OpenAI','OpenAI Chat'],['https://api.example.invalid/v1/responses','OpenAI','OpenAI Response'],['https://api.example.invalid/v1/messages','Anthropic','Anthropic'],['https://api.example.invalid/v1/embeddings','OpenAI','OpenAI']]) {
+ for(const [url,protocol,label] of [['https://api.example.invalid/v1/chat/completions','OpenAI','OpenAI Chat'],['https://api.example.invalid/v1/responses','OpenAI','OpenAI Responses'],['https://api.example.invalid/v1/messages','Anthropic','Anthropic'],['https://api.example.invalid/v1/embeddings','OpenAI','OpenAI']]) {
    assert.deepEqual(supplierChannelInterface(provider,{endpointId:'endpoint',unlinked:true,endpoint:{baseUrl:url,protocol}}),{url,protocol:label});
  }
  assert.deepEqual(supplierChannelInterface(provider,null),{protocol:'—',url:''});

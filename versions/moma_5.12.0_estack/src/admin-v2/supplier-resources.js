@@ -1,3 +1,4 @@
+import { resourceId } from '../resource-id.mjs';
 import { supplierModelFields } from './supply-models.js';
 import { libraryRecord } from './model-library.js';
 import { providerCatalogueIds, displayedCatalogueIds } from './moma-provider.js';
@@ -17,6 +18,7 @@ const knownSupplierKeys = (provider, resources) => {
 export function supplierChannelResources(state, provider) {
   return state.endpoints.filter(row => row.providerId === provider.id && !row.deletedAt);
 }
+export const supplierBaseUrls = (state, provider) => provider ? [...new Set(supplierChannelResources(state, provider).map(row => row.baseUrl).filter(Boolean))] : [];
 export const supplierChannelAssociations = (state, provider, endpointId) => providerCatalogueIds(provider).flatMap(id => catalogueChannels(state, provider, id)).filter(row => row.endpointId && (!endpointId || row.endpointId === endpointId));
 export const supplierChannelCode = endpoint => endpoint.channelCode || endpoint.id;
 export const supplierChannelName = (provider, endpoint) => endpoint.supplierChannel ? endpoint.name : provider.catalogConnections?.find(row => row.endpointId === endpoint.id && !row.deletedAt)?.name || endpoint.name;
@@ -48,10 +50,10 @@ function modelBatch(state, models) {
   return models.map((row, index) => {
     const master = row && libraryRecord(state, row.libraryId);
     if (!master) throw new Error(`第 ${index + 1} 行模型资料不存在，请重新选择`);
-    const upstreamModelId = required(row.upstreamModelId, '上游 Model ID');
-    if (/\s|\p{Cc}/u.test(upstreamModelId)) throw new Error(`第 ${index + 1} 行上游 Model ID 不能包含空白或控制字符`);
+    const upstreamModelId = required(row.upstreamModelId, '上游模型调用标识');
+    if (/\s|\p{Cc}/u.test(upstreamModelId)) throw new Error(`第 ${index + 1} 行上游模型调用标识 不能包含空白或控制字符`);
     if (masters.has(master.id)) throw new Error(`第 ${index + 1} 行重复选择模型资料`);
-    if (upstreamIds.has(upstreamModelId)) throw new Error(`第 ${index + 1} 行上游 Model ID 重复`);
+    if (upstreamIds.has(upstreamModelId)) throw new Error(`第 ${index + 1} 行上游模型调用标识 重复`);
     masters.add(master.id); upstreamIds.add(upstreamModelId);
     return { ...row, libraryId: master.id, upstreamModelId, scenarios: row.scenarios === undefined ? [] : row.scenarios };
   });
@@ -79,7 +81,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
       if (group?.id === 'default') throw new Error('默认 API 密钥组不可重命名');
       const name = required(data.name, 'API 密钥组名称', 60);
       if (/\p{Cc}/u.test(name) || groups.some(row => row.id !== group?.id && row.name === name)) throw new Error('API 密钥组名称无效或已存在');
-      const apiKeyGroups = group ? groups.map(row => row.id === group.id ? { ...row, name } : row) : [...groups, { id: `key-group-${crypto.randomUUID()}`, name, keyIds: [] }];
+      const apiKeyGroups = group ? groups.map(row => row.id === group.id ? { ...row, name } : row) : [...groups, { id: resourceId('key-group'), name, keyIds: [] }];
       return finish(group ? '重命名 API 密钥组' : '创建 API 密钥组', [update('providers', objectId, { apiKeyGroups })]);
     }
     if (!group) throw new Error('请选择 API 密钥组');
@@ -206,22 +208,29 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     const name = mode === 'credentials' ? endpoint.name : required(data.name, '渠道名称', 60);
     if (mode !== 'credentials' && resources.some(row => row.id !== endpoint?.id && supplierChannelName(provider, row) === name)) throw new Error('服务商的渠道名称不可重复');
     if (mode === 'info') {
-      if (data.expectedUpdatedAt !== undefined && data.expectedUpdatedAt !== endpoint.updatedAt || data.expectedProviderUpdatedAt !== undefined && data.expectedProviderUpdatedAt !== provider.updatedAt) throw new Error('渠道或模型标识已变化，请重新载入后编辑');
-      let catalogConnections = (provider.catalogConnections || []).map(row => row.endpointId === endpoint.id && !row.deletedAt ? { ...row, name } : row);
+      if (data.expectedUpdatedAt !== undefined && data.expectedUpdatedAt !== endpoint.updatedAt || data.expectedProviderUpdatedAt !== undefined && data.expectedProviderUpdatedAt !== provider.updatedAt) throw new Error('渠道或上游模型调用标识已变化，请重新载入后编辑');
+      const sourceName = data.sourceName === undefined ? undefined : required(data.sourceName, '渠道名称', 60);
+      if (sourceName !== undefined && (!data.associationId || name !== supplierChannelName(provider, endpoint))) throw new Error('渠道名称须定位当前模型渠道；连接名称请在连接明细中修改');
+      let catalogConnections = sourceName === undefined
+        ? (provider.catalogConnections || []).map(row => row.endpointId === endpoint.id && !row.deletedAt ? { ...row, name } : row)
+        : [...(provider.catalogConnections || [])];
       if (data.associationId) {
         const associations = supplierChannelAssociations(state, provider, endpoint.id), current = associations.find(row => row.id === data.associationId);
         if (!current || current.modelId !== data.modelId) throw new Error('模型与渠道的关联已变化');
-        const upstreamModelId = required(data.upstreamModelId, '模型标识');
-        if (/\s|\p{Cc}/u.test(upstreamModelId)) throw new Error('模型标识不能包含空白或控制字符');
-        if (associations.some(row => row.id !== current.id && row.upstreamModelId === upstreamModelId)) throw new Error('同一渠道的模型标识不可重复');
-        if (current.upstreamModelId !== upstreamModelId) {
-          if (channelRouteRefs(state, provider, current).length || state.modelSupplies.some(row => row.endpointId === endpoint.id && (row.catalogueModelId || row.upstreamModelId) === current.modelId && row.status !== '已移除')) throw new Error('此关联仍被服务引用，请先解除服务映射再修改模型标识');
+        const upstreamModelId = required(data.upstreamModelId, '上游模型调用标识');
+        if (/\s|\p{Cc}/u.test(upstreamModelId)) throw new Error('上游模型调用标识不能包含空白或控制字符');
+        if (associations.some(row => row.id !== current.id && row.upstreamModelId === upstreamModelId)) throw new Error('同一渠道的上游模型调用标识不可重复');
+        const upstreamChanged = current.upstreamModelId !== upstreamModelId;
+        if (upstreamChanged || sourceName !== undefined) {
+          if (upstreamChanged && (channelRouteRefs(state, provider, current).length || state.modelSupplies.some(row => row.endpointId === endpoint.id && (row.catalogueModelId || row.upstreamModelId) === current.modelId && row.status !== '已移除'))) throw new Error('此关联仍被服务引用，请先解除服务映射再修改上游模型调用标识');
           const index = catalogConnections.findIndex(row => !row.deletedAt && row.endpointId === endpoint.id && row.modelId === current.modelId && (!row.id || row.id === current.id));
-          const record = { ...(index < 0 ? {} : catalogConnections[index]), id: current.id, modelId: current.modelId, endpointId: endpoint.id, name, upstreamModelId, enabled: false, health: null, protocolTests: {}, updatedAt: new Date().toISOString() };
+          const record = { ...(index < 0 ? { name } : catalogConnections[index]), id: current.id, modelId: current.modelId, endpointId: endpoint.id, upstreamModelId,
+            ...(sourceName === undefined ? { name } : { sourceName }),
+            ...(upstreamChanged ? { enabled: false, health: null, protocolTests: {} } : {}), updatedAt: new Date().toISOString() };
           if (index < 0) catalogConnections.push(record); else catalogConnections[index] = record;
         }
       } else if (data.upstreamModelId !== undefined) throw new Error('请选择当前渠道的模型关联');
-      return finish('保存渠道信息', [update('endpoints', endpoint.id, { name }), update('providers', objectId, { catalogConnections })]);
+      return finish('保存渠道信息', [...(sourceName === undefined ? [update('endpoints', endpoint.id, { name })] : []), update('providers', objectId, { catalogConnections })]);
     }
     if (!['inherit', 'specific', 'none', 'group'].includes(data.authMode)) throw new Error('请选择 API 凭证方式');
     if (data.authMode === 'none' && provider.sourceType !== 'selfHosted') throw new Error('仅自有推理服务可选择无需认证');
@@ -247,7 +256,8 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     const changed = !endpoint || endpoint.baseUrl !== normalized.baseUrl || endpoint.protocol !== normalized.protocol || JSON.stringify([endpoint.interfaceType, endpoint.addressMode, endpoint.taskUrls]) !== JSON.stringify([normalized.interfaceType, normalized.addressMode, normalized.taskUrls]) || authChanged;
     const references = endpoint ? supplierChannelAssociations(state, provider, endpoint.id) : [];
     if (changed && references.length && !data.confirmed) throw new Error('请确认共享渠道变更影响的所有模型');
-    const channelCode = endpoint?.channelCode || `CH-${String(1 + Math.max(0, ...state.endpoints.map(row => /^CH-\d+$/.test(row.channelCode || '') ? Number(row.channelCode.slice(3)) : 0))).padStart(3, '0')}`;
+    const lastChannelNumber = Math.max(state.lastSupplierChannelNumber || 0, ...state.endpoints.map(row => /^CH-\d+$/.test(row.channelCode || '') ? Number(row.channelCode.slice(3)) : 0));
+    const channelCode = endpoint?.channelCode || `CH-${String(lastChannelNumber + 1).padStart(3, '0')}`;
     const fields = { supplierChannel: true, channelCode, authMode: data.authMode, apiKeyId: data.authMode === 'specific' ? data.apiKeyId : '', ...(data.authMode === 'group' ? { keyGroupId: data.keyGroupId } : endpoint?.authMode === 'group' ? { keyGroupId: '' } : {}), credentialVersion: changed ? crypto.randomUUID() : endpoint?.credentialVersion, ...(changed ? { connectionTest: null, status: '草稿' } : { connectionTest: endpoint.connectionTest, status: endpoint.status }) };
     if (change.type === 'add') Object.assign(change.record, fields); else Object.assign(change.changes, fields);
     const ids = endpoint && changed ? [endpoint.id] : [];
@@ -307,7 +317,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     return finish('启用供应渠道', [update('endpoints', endpoint.id, { status: '运行中', activationChangedAt: new Date().toISOString(), connectionQualification: structuredClone(endpoint.connectionTest) })]);
   }
   if (operation !== 'supplierAssociationSave') throw new Error('未知供应资源操作');
-  const modelId = required(data.modelId, '模型 ID');
+  const modelId = required(data.modelId, '服务商目录标识');
   if (!providerCatalogueIds(provider).includes(modelId)) throw new Error('模型不属于当前服务商');
   const existing = data.associationId && catalogueChannels(state, provider, modelId).find(row => row.id === data.associationId && row.endpointId === endpoint.id);
   if (data.associationId && !existing) throw new Error('模型与渠道的关联已变化');
@@ -315,15 +325,16 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
   const sourceName = data.sourceName == null ? existing?.sourceName : required(data.sourceName, '渠道来源名称');
   if (!existing && !sourceName && catalogueChannels(state,provider,modelId).some(row=>row.endpointId===endpoint.id)) throw Error('此模型已关联该连接，新增来源须填写渠道来源名称');
   if (sourceName && (sourceName.length > 60 || /[\r\n]/.test(sourceName))) throw new Error('渠道来源名称最多60字，不能换行');
-  const upstreamModelId = required(data.upstreamModelId, '上游 Model ID');
-  if (/\s|\p{Cc}/u.test(upstreamModelId)) throw new Error('上游 Model ID 不能包含空白或控制字符');
-  if (supplierChannelAssociations(state, provider, endpoint.id).some(row => row.id !== existing?.id && row.upstreamModelId === upstreamModelId)) throw new Error('同一连接的上游模型标识不可重复');
-  if (existing && existing.upstreamModelId !== upstreamModelId && state.modelSupplies.some(row => row.endpointId === endpoint.id && (row.catalogueModelId || row.upstreamModelId) === modelId && row.status !== '已移除')) throw new Error('此关联仍被服务引用，请先解除服务映射再修改上游 Model ID');
+  const upstreamModelId = required(data.upstreamModelId, '上游模型调用标识');
+  if (/\s|\p{Cc}/u.test(upstreamModelId)) throw new Error('上游模型调用标识 不能包含空白或控制字符');
+  if (supplierChannelAssociations(state, provider, endpoint.id).some(row => row.id !== existing?.id && row.upstreamModelId === upstreamModelId)) throw new Error('同一连接的上游模型调用标识不可重复');
+  if (existing && existing.upstreamModelId !== upstreamModelId && state.modelSupplies.some(row => row.endpointId === endpoint.id && (row.catalogueModelId || row.upstreamModelId) === modelId && row.status !== '已移除')) throw new Error('此关联仍被服务引用，请先解除服务映射再修改上游模型调用标识');
+  if (existing?.upstreamModelId === upstreamModelId && data.preservePricing === true && data.sourceName !== undefined && sourceName !== existing.sourceName) return finish('保存模型渠道名称', [update('providers', objectId, { catalogConnections: provider.catalogConnections.map(row => row.id === existing.id ? { ...row, sourceName } : row) })]);
   if (existing?.upstreamModelId === upstreamModelId) return { ...connect(state, { operation: 'channelPrice', objectId, data: { modelId, channelId: existing.id, scenarios: data.scenarios } }), label: '保存模型渠道关联' };
   if (!Array.isArray(data.scenarios)) throw new Error('请填写有效的采购计费项');
-  const pricing = normalizePrice(provider, { modelId, discountFactor: '1', scenarios: data.scenarios.map(row => ({ ...row, purchasePrice: undefined })) });
-  if (pricing.scenarios.some(row => row.listPrice == null)) throw new Error('请填写完整采购价，免费请填 0');
-  const record = { ...(existing ? provider.catalogConnections?.find(row => !row.deletedAt && row.modelId === modelId && row.endpointId === endpoint.id && (!row.id || row.id === existing.id)) : { onboardingCreated: true }), id: existing?.id || `association-${crypto.randomUUID()}`, modelId, endpointId: endpoint.id, name: supplierChannelName(provider, endpoint), ...(sourceName ? { sourceName } : {}), origin: existing?.origin || 'undisclosed', upstreamModelId, pricing, updatedAt: new Date().toISOString() };
+  const pricing = existing && data.preservePricing === true ? existing.pricing : normalizePrice(provider, { modelId, discountFactor: '1', scenarios: data.scenarios.map(row => ({ ...row, purchasePrice: undefined })) });
+  if (!data.preservePricing && pricing.scenarios.some(row => row.listPrice == null)) throw new Error('请填写完整采购价，免费请填 0');
+  const record = { ...(existing ? provider.catalogConnections?.find(row => !row.deletedAt && row.modelId === modelId && row.endpointId === endpoint.id && (!row.id || row.id === existing.id)) : { onboardingCreated: true }), id: existing?.id || resourceId('channel'), modelId, endpointId: endpoint.id, name: supplierChannelName(provider, endpoint), ...(sourceName ? { sourceName } : {}), origin: existing?.origin || 'undisclosed', upstreamModelId, pricing, updatedAt: new Date().toISOString() };
   if (!existing || existing.upstreamModelId !== upstreamModelId) { record.enabled = false; record.health = null; record.protocolTests = {}; }
   return finish('保存模型渠道关联', [update('providers', objectId, { catalogConnections: [...(provider.catalogConnections || []).filter(row => row.id !== record.id), record] })]);
 }

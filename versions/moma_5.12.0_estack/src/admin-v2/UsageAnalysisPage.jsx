@@ -1,6 +1,7 @@
+import { workspaceStoragePrefix } from "../workspace-storage.mjs";
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Banner, Button, Card, Input, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconArrowUp, IconCalendar, IconChevronLeft, IconChevronRight, IconDownload, IconHandle, IconRefresh, IconSave, IconSearch } from '@douyinfe/semi-icons';
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -13,7 +14,10 @@ import { Choice } from './ServiceUI';
 import UsageTrend from './UsageTrend';
 import { UsageShare, UsageDistribution } from './UsageComposition';
 import { defaultTrend, validTrendView, trendDimensions, tokenMetrics, usageDimensions, supplySummary } from './usage-trends';
-import { formatUsageNumber, usageFacts, usageGroups, usageModelTypes, usagePreset, usagePresets, operationsPeriod, usageFilterOptions, usageTotals } from './usage-analysis';
+import { formatUsageNumber, usageFacts, usageGroups, usageModelTypes, usagePreset, usagePresets, operationsPeriod, operationsPeriodFromQuery, usageFilterOptions, usageTotals } from './usage-analysis';
+import { logCsv } from './call-observations.mjs';
+import { analysisProjects, unassignedProject } from './analysis-projects.mjs';
+import { latestRequests } from '../request-identity.mjs';
 import { defaultCardOrder, moveCard, normalizeCardOrder } from './usage-card-order';
 import './semi-usage-analysis.css';
 
@@ -23,7 +27,7 @@ const amount = value => formatUsageNumber(value).replace('w', '万');
 const labelFor = (collection, id) => collection.find(item => item.id === id)?.name || (id === '__unknown__' ? '未归属' : id);
 const presets = usagePresets;
 const otherUsage = row => Object.entries(row.units).filter(([, value]) => value > 0).map(([unit, value]) => `${amount(value)} ${unit}`).join(' · ') || '—';
-const cardOrderKey = 'moma:5120:usage-analysis:card-order:v1';
+const cardOrderKey = workspaceStoragePrefix + 'usage-analysis:card-order';
 const navLabels = Object.fromEntries([
   ['usage-token-trend', 'Token 调用量趋势'], ['usage-call-trend', '模型调用次数趋势'],
   ['usage-model-share', '模型调用次数占比'], ['usage-volume-share', '模型调用量占比'],
@@ -58,22 +62,36 @@ function SortableNavItem({ id, label, active, onSelect, onMove }) {
 
 const emptyFilters = () => ({ types: null, tenant: null, model: null, providers: [], channels: null, user: null });
 
-function csvCell(value) { return `"${String(value ?? '').replaceAll('"', '""')}"`; }
-
 export default function UsageAnalysisPage({ state }) {
   const route = new URLSearchParams(location.hash.split('?')[1] || '');
+  const [scope, setScope] = useState(() => ({ tenant: route.get('tenant') || '', project: route.get('project') || '' }));
   const [clock, setClock] = useState(() => Date.now());
-  const initial = operationsPeriod(route.has('start') && route.has('end') ? 'custom' : 'yesterday', { start: route.get('start'), end: route.get('end') }, clock);
+  const initial = operationsPeriodFromQuery(route, clock);
   const [period, setPeriod] = useState(initial.period);
   const [range, setRange] = useState(initial.range);
   const [panelFilters, setPanelFilters] = useState(() => Object.fromEntries(filterPanelIds.map(id => [id, { ...emptyFilters(), user: route.has('user') ? [route.get('user')] : null, model: route.has('model') ? [route.get('model')] : null }])));
   const [trends, setTrends] = useState(() => Object.fromEntries(trendIds.map(id => [id, defaultTrend()])));
   const [shares, setShares] = useState(() => Object.fromEntries(shareIds.map(id => [id, { dimension: 'modelId', metric: 'total' }])));
-  const [detailMode, setDetailMode] = useState('tenantId'), [query, setQuery] = useState(''), [page, setPage] = useState(0), [size, setSize] = useState(DEFAULT_PAGE_SIZE), [sort, setSort] = useState('total');
+  const [detailMode, setDetailMode] = useState(route.has('project') ? 'projectId' : 'tenantId'), [query, setQuery] = useState(''), [page, setPage] = useState(0), [size, setSize] = useState(DEFAULT_PAGE_SIZE), [sort, setSort] = useState('total');
   const [navOpen, setNavOpen] = useState(true), [activeSection, setActiveSection] = useState('usage-token-trend');
   const [savedOrder, setSavedOrder] = useState(readCardOrder), [cardOrder, setCardOrder] = useState(savedOrder), [saveError, setSaveError] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const navLock = useRef(0);
+  useEffect(() => {
+    const restore = () => {
+      const [page, query] = location.hash.split('?');
+      if (page !== '#/admin-2/usage-analysis') return;
+      const params = new URLSearchParams(query);
+      const now = Date.now(), selected = operationsPeriodFromQuery(params, now);
+      setScope({ tenant: params.get('tenant') || '', project: params.get('project') || '' });
+      setClock(now);
+      setPeriod(selected.period);
+      setRange(selected.range);
+      setPage(0);
+    };
+    addEventListener('hashchange', restore);
+    return () => removeEventListener('hashchange', restore);
+  }, []);
   const navItems = [...cardOrder.overview, 'usage-detail'].map(id => [id, navLabels[id]]);
   const customOrder = Object.keys(defaultCardOrder).some(group => cardOrder[group].some((id, index) => id !== defaultCardOrder[group][index]));
   const unsavedOrder = Object.keys(defaultCardOrder).some(group => cardOrder[group].some((id, index) => id !== savedOrder[group][index]));
@@ -95,30 +113,63 @@ export default function UsageAnalysisPage({ state }) {
     catch { setSaveError(true); Toast.error("布局保存失败，请检查浏览器存储"); }
   };
   const setPanelFilter = (id, value) => setPanelFilters(previous => ({ ...previous, [id]: value }));
-  const choosePeriod = value => { const current = Date.now(); setClock(current); setPeriod(value); setRange(usagePreset(value, current)); setPage(0); };
-  const result = usageFacts(state, range, emptyFilters(), clock);
+  const choosePeriod = value => {
+    const now = Date.now(), nextRange = usagePreset(value, now);
+    setClock(now);
+    setPeriod(value);
+    setRange(nextRange);
+    setPage(0);
+    writeRoute({ period: value, ...nextRange });
+  };
+  const projects = useMemo(() => analysisProjects(state, scope.tenant), [state, scope.tenant]);
+  const scopedState = useMemo(() => ({ ...state, requests: latestRequests(state.requests).filter(row =>
+    (!scope.tenant || row.tenantId === scope.tenant) && (!scope.project || (row.projectId || unassignedProject) === scope.project)) }), [state, scope]);
+  const result = usageFacts(scopedState, range, emptyFilters(), clock);
   const current = result?.current || [], usageWindow = result?.window;
   const tokenRows = current.filter(row => row.unit === 'Token');
   const totals = usageTotals(tokenRows, ['input', 'output']);
-  const customers = usageGroups(current, 'tenantId'), models = usageGroups(current, 'modelId');
-  const collection = detailMode === 'tenantId' ? state.tenants : state.models;
-  const detailRows = (detailMode === 'tenantId' ? customers : models).filter(row => labelFor(collection, row.id).toLowerCase().includes(query.trim().toLowerCase())).sort((a, b) => b[sort] - a[sort] || a.id.localeCompare(b.id));
+  const projectMode = detailMode === 'projectId';
+  const collection = { tenantId: state.tenants, modelId: state.models, projectId: projects }[detailMode];
+  const detailLabel = { tenantId: '客户名称/ID', modelId: '模型展示名/ID', projectId: '项目名称/ID' }[detailMode];
+  const projectFor = id => projects.find(project => project.id === (id === '__unknown__' ? unassignedProject : id));
+  const name = id => projectMode && id === '__unknown__' ? '未记录项目' : labelFor(collection, id);
+  const detailRows = usageGroups(current, detailMode).filter(row => (name(row.id) + ' ' + row.id).toLowerCase().includes(query.trim().toLowerCase()))
+    .sort((a, b) => b[sort] - a[sort] || a.id.localeCompare(b.id));
+  const projectHref = id => {
+    const customer = projectFor(id)?.tenantId;
+    return customer ? '#/admin-2/customer-usage-detail?' + new URLSearchParams({ customer, project: id, period, start: range.start, end: range.end }) : null;
+  };
+  const writeRoute = patch => {
+    const params = new URLSearchParams(location.hash.split('?')[1] || '');
+    for (const [key, value] of Object.entries(patch)) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
+    history.replaceState(history.state, '', '#/admin-2/usage-analysis' + (params.size ? '?' + params : ''));
+  };
+  const changeScope = next => {
+    writeRoute(next);
+    setScope(next);
+    setPage(0);
+  };
   const detailPages = Math.max(1, Math.ceil(detailRows.length / size));
   const detailPage = Math.min(page, detailPages - 1);
   const periodName = period === 'custom' ? `${range.start}—${range.end}` : presets.find(([id]) => id === period)?.[1];
   const viewGroups = [
+    { label: '客户', text: scope.tenant ? labelFor(state.tenants, scope.tenant) : '全部客户' },
+    { label: '项目', text: scope.project ? labelFor(projects, scope.project) : '全部项目' },
     { label: '时间', text: `${period === 'custom' ? '自定义' : periodName}（${range.start} — ${range.end}）` },
   ];
-  const filterOptions = usageFilterOptions(state);
+  const filterOptions = usageFilterOptions(scopedState);
   const curveOptions = { modelId: filterOptions.models, category: usageModelTypes, providerId: filterOptions.providers, tenantId: state.tenants };
   const savedGroups = [...viewGroups, ...Object.entries(panelFilters).map(([id, value]) => ({ label: navLabels[id], text: [
     ['model', '模型', filterOptions.models], ['channels', '渠道', filterOptions.channels], ['user', '用户', filterOptions.users],
   ].map(([key, label, items]) => key === 'channels' && value.providers.length ? supplySummary(value, filterOptions, true) : value[key] === null ? `全部${label}` : value[key].map(item => labelFor(items, item)).join('、') || `未选择${label}`).concat(trends[id] ? [trendDimensions.find(([key]) => key === trends[id].dimension)[1], ...(id === 'usage-token-trend' ? [tokenMetrics.find(([key]) => key === trends[id].metric)[1]] : []), trends[id].showTotal ? '显示范围合计' : '', trends[id].dimension !== 'total' ? trends[id].curves === null ? '默认曲线' : `已选曲线：${trends[id].curves.map(key => labelFor(curveOptions[trends[id].dimension] || [], key)).join('、') || '无'}` : ''] : shares[id] ? [usageDimensions.find(([key]) => key === shares[id].dimension)[1], ...(id === 'usage-volume-share' ? [tokenMetrics.find(([key]) => key === shares[id].metric)[1]] : [])] : []).filter(Boolean).join(' · ') }))];
   const exportCsv = () => {
     try {
-    const header = [detailMode === 'tenantId' ? '用户名/ID' : '模型展示名/ID', 'Token 调用量', '输入 Token', '输出 Token', '其他用量（分单位）', '模型调用次数', 'Token 占比'];
-    const data = detailRows.map(row => [labelFor(collection, row.id), row.tokenCalls ? row.total : '—', row.tokenCalls ? row.input : '—', row.tokenCalls ? row.output : '—', otherUsage(row), row.calls, percent(row.total, totals.total)]);
-    const csv = '\ufeff' + [[`统计范围：${range.start}—${range.end}`, '北京时间'], header, ...data].map(row => row.map(csvCell).join(',')).join('\r\n');
+    const header = [detailLabel, ...(projectMode ? ['项目 ID', '客户 ID'] : []), 'Token 调用量', '输入 Token', '输出 Token', '其他用量（分单位）', '模型调用次数', 'Token 占比'];
+    const data = detailRows.map(row => [name(row.id), ...(projectMode ? [row.id === '__unknown__' ? '' : row.id, projectFor(row.id)?.tenantId || ''] : []), row.tokenCalls ? row.total : '—', row.tokenCalls ? row.input : '—', row.tokenCalls ? row.output : '—', otherUsage(row), row.calls, percent(row.total, totals.total)]);
+    const csv = logCsv([[`统计范围：${range.start}—${range.end}`, '北京时间', '客户 ID', scope.tenant, '项目 ID', scope.project], header, ...data]);
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a'); link.href = url; link.download = `用量明细-${range.start}-${range.end}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 0); Toast.success("已开始下载用量明细");
     } catch { Toast.error("导出失败，请重试"); }
@@ -130,6 +181,7 @@ export default function UsageAnalysisPage({ state }) {
     setPeriod(selected.period);
     setRange(selected.range);
     setPage(0);
+    writeRoute({ period: selected.period, ...selected.range });
   };
   const applyView = view => {
     if (!validTrendView(view, filterPanelIds, trendIds, shareIds)) {
@@ -141,13 +193,24 @@ export default function UsageAnalysisPage({ state }) {
     setClock(current);
     setPeriod(restored.period);
     setRange(restored.range);
+    const nextScope = view.scope && ['tenant', 'project'].every(key => typeof view.scope[key] === 'string')
+      ? view.scope : { tenant: '', project: '' };
+    setScope(nextScope);
+    writeRoute({ ...nextScope, period: restored.period, ...restored.range });
     setPanelFilters(Object.fromEntries(filterPanelIds.map(id => [id, view.panelFilters[id]])));
     setTrends(view.trends);
     setShares(view.shares);
     setPage(0);
   };
   const columns = [
-    { title: detailMode === 'tenantId' ? '用户名/ID' : '模型展示名/ID', dataIndex: 'id', render: id => labelFor(collection, id) },
+    { title: detailLabel, dataIndex: 'id', render: id => {
+      const href = projectMode && projectHref(id);
+      return href ? <Text link={{ href }}>{name(id)}</Text> : name(id);
+    } },
+    ...(projectMode ? [{ title: '客户', dataIndex: 'id', key: 'tenant', render: id => {
+      const tenant = projectFor(id)?.tenantId;
+      return tenant ? labelFor(state.tenants, tenant) : '—';
+    } }] : []),
     ...[['Token 调用量', 'total'], ['输入 Token', 'input'], ['输出 Token', 'output']].map(([title, dataIndex]) => ({
       title, dataIndex, align: 'right', render: (value, row) => amount(row.tokenCalls ? value : null),
     })),
@@ -156,11 +219,11 @@ export default function UsageAnalysisPage({ state }) {
     { title: 'Token 占比', key: 'share', align: 'right', render: (_, row) => percent(row.total, totals.total) },
   ];
   const renderCard = id => {
-    if (id === 'usage-distribution') return <UsageDistribution state={state} range={range} clock={clock}/>;
+    if (id === 'usage-distribution') return <UsageDistribution state={scopedState} range={range} clock={clock}/>;
     const filters = panelFilters[id], onChange = value => setPanelFilter(id, value);
-    if (shareIds.includes(id)) return <UsageShare state={state} range={range} clock={clock} filters={filters} onChange={onChange}
+    if (shareIds.includes(id)) return <UsageShare state={scopedState} range={range} clock={clock} filters={filters} onChange={onChange}
       volume={id === 'usage-volume-share'} settings={shares[id]} onSettings={value => setShares(previous => ({ ...previous, [id]: value }))}/>;
-    return <UsageTrend state={state} range={range} clock={clock} filters={filters} onChange={onChange} calls={id === 'usage-call-trend'}
+    return <UsageTrend state={scopedState} range={range} clock={clock} filters={filters} onChange={onChange} calls={id === 'usage-call-trend'}
       settings={trends[id]} onSettings={value => setTrends(previous => ({ ...previous, [id]: value }))} onCopy={() => {
         const target = trendIds.find(item => item !== id);
         setPanelFilter(target, structuredClone(panelFilters[id]));
@@ -178,11 +241,16 @@ export default function UsageAnalysisPage({ state }) {
               自定义 · {range.start === range.end ? range.start : `${range.start} — ${range.end}`}
             </Button>} allowLongRange onChange={applyDate}/>
           <Text type="secondary" title="时间范围作用于全部图表与明细">北京时间</Text>
-          <FilterReset onClick={() => choosePeriod('yesterday')}/>
+          <Choice label="客户" value={scope.tenant} options={[[ '', '全部客户' ], ...state.tenants.map(row => [row.id, row.name])]}
+            onSelect={tenant => changeScope({ tenant, project: '' })}/>
+          <Choice label="项目" value={scope.project} options={[[ '', '全部项目' ], ...projects.map(row => [row.id, row.id === unassignedProject ? row.name : row.name + ' · ' + row.id]),
+            ...(scope.project && !projects.some(row => row.id === scope.project) ? [[scope.project, scope.project]] : [])]}
+            onSelect={project => changeScope({ ...scope, project })}/>
+          <FilterReset onClick={() => { choosePeriod('yesterday'); changeScope({ tenant: '', project: '' }); }}/>
         </FilterToolbar>
         <SavedFilterViews notify={Toast} scope="admin-usage-analysis-composition" showCurrent={false}
           saveDescription="保存时间、各图筛选、趋势展示方式、Token 口径及占比统计维度。"
-          value={{ period, range, panelFilters, trends, shares }} onApply={applyView} groups={savedGroups} currentGroups={viewGroups} disabled={!usageWindow}/>
+          value={{ period, range, scope, panelFilters, trends, shares }} onApply={applyView} groups={savedGroups} currentGroups={viewGroups} disabled={!usageWindow}/>
       </div>
     </Card>
     {!usageWindow ? <Banner type="danger" closeIcon={null} description="请选择有效日期范围：不超过 365 天，且不能晚于今日。"/> : (
@@ -227,7 +295,7 @@ export default function UsageAnalysisPage({ state }) {
               headerExtraContent={<Button icon={<IconDownload aria-hidden="true"/>} disabled={!detailRows.length} onClick={exportCsv}>导出</Button>}>
               <div className="admin-list-toolbar">
                 <div className="admin-time-presets" role="group" aria-label="明细汇总维度">
-                  {[[ 'tenantId', '按客户' ], [ 'modelId', '按模型' ]].map(([value, label]) => (
+                  {[[ 'tenantId', '按客户' ], [ 'modelId', '按模型' ], [ 'projectId', '按项目' ]].map(([value, label]) => (
                     <Button key={value} size="small" theme={detailMode === value ? 'solid' : 'light'} aria-pressed={detailMode === value}
                       onClick={() => { if (value !== detailMode) { setDetailMode(value); setPage(0); setQuery(''); } }}>{label}</Button>
                   ))}

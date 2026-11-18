@@ -7,6 +7,9 @@ import { createHash, randomBytes } from 'node:crypto';
 import { Miniflare } from 'miniflare';
 import { migrateEmptyDatabase, startLocalBackend } from '../database/local-runtime.js';
 import { createSeed, initializeDatabase } from '../database/seed.js';
+import { isResourceId } from '../src/resource-id.mjs';
+import { builtinProviderCatalogue } from '../src/mock/reference-workspace.js';
+import { providerJsonRows, previewProviderJsonRows } from '../src/admin-v2/provider-json-import.js';
 import { domainModelWorkspace } from '../src/mock/model-fields.js';
 
 test('initialization is atomic, refuses an incompatible seed, and preserves zero/unknown price semantics', async () => {
@@ -51,7 +54,7 @@ test('D1 state survives runtime restart and reinitialization never replaces an e
   } finally { await local?.runtime.dispose(); await rm(dir, { recursive: true, force: true }); }
 });
 
-test('empty D1 starts with reference data and imports the two demos through the administrator command', async () => {
+test('fresh D1 starts with UUID references and imports both provider catalogues without legacy business data', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'moma-5120-reference-'));
   const accessCode = randomBytes(32).toString('hex');
   const hash = createHash('sha256').update(accessCode).digest('hex');
@@ -81,7 +84,17 @@ test('empty D1 starts with reference data and imports the two demos through the 
     const before = await snapshot();
     assert.equal(before.tariffDictionary.length, 135);
     assert.equal(before.modelTemplates.length, 17);
-    for (const name of ['models','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','serviceRoutes','validations','tenants','orders','requests']) assert.deepEqual(before[name], [], name);
+    for (const name of ['models','endpoints','modelSupplies','modelSalePrices','supplyPrices','serviceRoutes','validations','tenants','orders','requests']) assert.deepEqual(before[name], [], name);
+    assert.deepEqual(before.providers.map(row=>row.code), ['moma', 'deepseek-official']);
+    assert(before.providers.every(row=>isResourceId(row.id, 'provider') && !row.catalogModels.length));
+    assert(before.modelTemplates.every(row=>isResourceId(row.record_id, 'model')));
+    assert(before.modelTemplates.every(row=>!row.defaultVersionId && !row.serviceReviewCase && !row.serviceProviders));
+    assert(before.admins.every(row=>isResourceId(row.id, 'admin-account')));
+    const units = new Set(before.tariffDictionary.filter(row=>row.kind==='unit').map(row=>row.id));
+    assert(before.tariffDictionary.every(row=>isResourceId(row.id, {scenario:'billing-item',unit:'billing-unit',currency:'currency'}[row.kind]) && (!row.unitId || units.has(row.unitId))));
+    const storedGroups = (await local.db.prepare('SELECT id,supplier_id FROM key_groups').all()).results;
+    assert.equal(storedGroups.length, 2);
+    assert(storedGroups.every(row=>isResourceId(row.id, 'key-group') && before.providers.some(provider=>provider.id===row.supplier_id)));
     assert.deepEqual(before.cloudMockState.batches, []);
     assert.deepEqual(before.cloudMockState.usage, []);
 
@@ -91,66 +104,45 @@ test('empty D1 starts with reference data and imports the two demos through the 
     assert.equal((await command('demo-stale', 1, 'prepareServiceShowcase', { confirmed: true })).status, 409);
     assert.deepEqual(await snapshot(), before);
 
-    const reference = await local.db.prepare('SELECT reference_json FROM model_workspace WHERE id=1').first('reference_json');
-    const collision = { id: 'tenant-model-operations-demo', name: '已维护的租户', status: '正常' };
-    await local.db.prepare("UPDATE model_workspace SET reference_json=json_set(reference_json,'$.tenants',json(?)) WHERE id=1").bind(JSON.stringify([collision])).run();
-    const withCollision = await snapshot();
-    assert.equal((await command('demo-conflict', 0, 'prepareServiceShowcase', { confirmed: true })).status, 422);
-    assert.deepEqual(await snapshot(), withCollision);
-    await local.db.prepare('UPDATE model_workspace SET reference_json=? WHERE id=1').bind(reference).run();
-
-    const imported = await command('demo-import', 0, 'prepareServiceShowcase', { confirmed: true });
-    assert.equal(imported.status, 200, JSON.stringify(imported.data.error));
+    assert.equal((await command('demo-import', 0, 'prepareServiceShowcase', { confirmed: true })).status, 422);
+    for (const [code, expected, mappings] of [['moma', 26, 12], ['deepseek-official', 2, 2]]) {
+      const current = domainModelWorkspace(await snapshot());
+      const provider = current.providers.find(row=>row.code===code);
+      const input = { provider: { ...builtinProviderCatalogue(provider), id: provider.id } };
+      const preview = previewProviderJsonRows(current, provider.id, providerJsonRows(input, provider));
+      assert.equal(preview.length, expected);
+      assert(preview.every(row=>row.status==='ready'), JSON.stringify(preview.filter(row=>row.status!=='ready')));
+      assert.deepEqual(domainModelWorkspace(await snapshot()), current);
+      let revision = current.revision;
+      for (let i=0;i<preview.length;i+=5) {
+        const imported = await command('builtin-' + code + '-' + i, revision, 'supplierJsonImport', {
+          providerId: provider.id, expectedProviderCode: provider.code, rows: preview.slice(i,i+5).map(row=>row.payload),
+        });
+        assert.equal(imported.status, 200, JSON.stringify(imported.data.error));
+        revision = imported.data.revision;
+      }
+      const read = domainModelWorkspace(await snapshot()), saved = read.providers.find(row=>row.id===provider.id);
+      assert.deepEqual(current.modelTemplates.map(model => read.modelTemplates.find(row => row.id === model.id)), current.modelTemplates);
+      assert.equal(saved.catalogModels.length, expected);
+      assert.equal(saved.catalogConnections.length, mappings);
+      assert(saved.catalogModels.every(row=>isResourceId(row.id,'provider-model') && read.modelTemplates.some(model=>model.id===row.libraryId && model.modelId===row.modelId)));
+      assert(saved.catalogConnections.every(row=>isResourceId(row.id,'channel') && isResourceId(row.endpointId,'connection') && !row.enabled));
+      assert(previewProviderJsonRows(read, provider.id, providerJsonRows(input, saved)).every(row=>row.status==='skip'));
+    }
     const state = await snapshot();
-    assert.equal(state.models.length, 2);
-    assert.equal(state.providers.length, 3);
+    assert.equal(state.models.length, 0);
+    assert.equal(state.providers.length, 2);
     assert.equal(state.endpoints.length, 4);
-    assert.deepEqual(state.tenants.map(row => [row.id, row.source]), [['tenant-model-operations-demo', 'mock']]);
-    assert(state.models.every(row => row.listingStatus === '已下架' && !row.callsEnabled));
-    assert.deepEqual(state.modelTemplates, before.modelTemplates);
+    assert.deepEqual(state.tenants, []);
+    assert(state.endpoints.every(row=>row.status==='草稿'));
+    assert(state.modelTemplates.every(row=>isResourceId(row.record_id,'model')));
     assert.deepEqual(state.tariffDictionary, before.tariffDictionary);
     assert.deepEqual(state.cloudMockState.batches, []);
     assert.deepEqual(state.cloudMockState.usage, []);
-    assert.deepEqual(await command('demo-import', 0, 'prepareServiceShowcase', { confirmed: true }), imported);
+    assert.deepEqual((await local.db.prepare('PRAGMA foreign_key_check').all()).results, []);
     await local.runtime.dispose();
     local = await startLocalBackend(options);
     assert.equal(local.initialization.initialized, false);
     assert.deepEqual(await snapshot(), state);
   } finally { await local?.runtime.dispose(); await rm(dir, { recursive: true, force: true }); }
-});
-
-test('the preset and the showcase share the same Zhipu supplier and keep both channels', async () => {
-  const accessCode = randomBytes(32).toString('hex');
-  const local = await startLocalBackend({ presets: true, loginHashes: { 'admin-001': createHash('sha256').update(accessCode).digest('hex') } });
-  const request = (path, { cookie, body, key } = {}) => local.runtime.dispatchFetch('https://example.test/api/v1' + path, {
-    ...(body ? { method: 'POST', body: JSON.stringify(body) } : {}),
-    headers: {
-      ...(body ? { origin: 'https://example.test', 'x-moma-request': '1', 'content-type': 'application/json' } : {}),
-      ...(cookie ? { cookie } : {}),
-      ...(key ? { 'idempotency-key': key } : {}),
-    },
-  });
-  try {
-    const login = await request('/auth/login', { body: { accountId: 'admin-001', accessCode } });
-    assert.equal(login.status, 200);
-    const cookie = login.headers.get('set-cookie').split(';')[0];
-    const snapshot = async () => domainModelWorkspace(await (await request('/model-operations', { cookie })).json());
-    const before = await snapshot();
-    const preset = before.providers.filter(row => row.name === '智谱');
-    assert.equal(preset.length, 1);
-    const operationId = crypto.randomUUID();
-    const imported = await request('/model-operations/commands', { cookie, key: operationId, body: {
-      operationId, expectedRevision: before.revision, action: { type: 'modelOperations', operation: 'prepareServiceShowcase', data: { confirmed: true } },
-    } });
-    assert.equal(imported.status, 200, await imported.text());
-    const after = await snapshot();
-    const suppliers = after.providers.filter(row => row.name === '智谱');
-    assert.deepEqual(suppliers.map(row => row.id), [preset[0].id]);
-    const [supplier] = suppliers;
-    assert.equal(supplier.catalogModels.filter(row => row.modelId === 'glm-5.3').length, 1);
-    assert.deepEqual(supplier.catalogConnections.map(row => row.id).sort(), ['preset-source-zhipu-direct', 'showcase-association-zhipu-official-glm-5.3']);
-    assert.deepEqual(after.endpoints.filter(row => row.providerId === supplier.id).map(row => row.id).sort(),
-      ['preset-connection-zhipu-direct', 'showcase-channel-zhipu-official']);
-    assert.equal(await local.db.prepare("SELECT supplier_id FROM offers WHERE id='glm-5.3-zhipu'").first('supplier_id'), supplier.id);
-  } finally { await local.runtime.dispose(); }
 });

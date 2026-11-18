@@ -1,8 +1,10 @@
+import { exportModelResources } from '../src/admin-v2/model-resource-transfer.js';
 import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAdminSeed as baseCreateAdminSeed, commitAdminState, parseAdminState as baseParseAdminState, persistModelAction } from '../src/admin-v2/store.js';
 import { commercialPriceBase, serviceDirectoryModels, serviceIndexModels, selectServiceModel, serviceSupplyRows, activeModelSalePrice, modelSaleRevision, availableServiceChannels } from '../src/admin-v2/service-workspace.js';
+import { callStateLabel, modelServiceStarted, serviceDirectoryRows } from '../src/admin-v2/service-directory.js';
 import { modelSupplies, publicationChecks } from '../src/admin-v2/model-management.js';
 import { routingServices, routingChannels, routeSourceVersion } from '../src/admin-v2/service-routing.js';
 import { providerCatalogueIds } from '../src/admin-v2/moma-provider.js';
@@ -12,15 +14,74 @@ const transact=(state,operation,modelId,data)=>commitAdminState(state,{type:'mod
 const setup=()=>{const state=createAdminSeed(), model=state.models.find(item=>item.id==='catalog-demo-kimi');model.serviceMode='standard';for(const endpoint of state.endpoints.filter(item=>state.modelSupplies.some(supply=>supply.modelId===model.id && supply.endpointId===item.id))){if(!endpoint.baseUrl.endsWith('/chat/completions'))endpoint.baseUrl=endpoint.baseUrl.replace(/\/$/,'')+'/chat/completions';endpoint.connectionTest={fingerprint:connectionFingerprint(endpoint),result:'通过',testedAt:'2026-01-01'};}return {state,model};};
 const pricing=(state,model,items=[{name:'输入 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'0.000001'},{name:'输出 Token',unit:'百万 Token',currency:'CNY',condition:'',amount:'0'}])=>({items,expectedUpdatedAt:model.updatedAt,expectedSaleVersion:modelSaleRevision(state,model.id)});
 
+test('service list keeps independent public call references and shows each channel service launch state', () => {
+ const providers = [{ id: 'moma', name: '移动云 MoMA' }, { id: 'other', name: '其他服务商' }];
+ const serviceProviders = [
+  { providerId: 'moma', channelId: 'east', channelName: '华东', callId: 'moma/east', callsEnabled: true },
+  { providerId: 'moma', channelId: 'west', channelName: '华西', callId: 'moma/west', callsEnabled: false },
+  { providerId: 'other', callId: '', callsEnabled: true },
+  { providerId: 'other', channelId: 'removed', callId: 'removed', status: '已移除' },
+ ];
+ const model = { id: 'model-1', modelId: 'platform/alias', type: 'text', serviceMode: 'provider', callsEnabled: true, serviceProviders };
+ const unified = { ...model, id: 'unified', serviceMode: 'standard' };
+ const archived = { ...unified, id: 'archived', archivedAt: '2026-11-12T00:00:00Z' };
+ const image = { ...unified, id: 'image', type: 'image' };
+ const unconfigured = { ...model, id: 'unconfigured', serviceProviders: [] };
+ const rows = serviceDirectoryRows([unified, model, archived, image, unconfigured], { providers });
+ assert.deepEqual(rows.map(row => [row.id, row.callId, row.started]), [
+  ['standard:unified', 'platform/alias', true],
+  ['provider:model-1:east', 'moma/east', true],
+  ['provider:model-1:west', 'moma/west', false],
+  ['provider:model-1:other', '', false],
+  ['standard:archived', 'platform/alias', false],
+  ['standard:image', 'platform/alias', true],
+  ['unconfigured', '', false],
+ ]);
+ assert.deepEqual(rows.slice(1, 4).map(row => [row.providerName, row.channelName]), [
+  ['移动云 MoMA', '华东'], ['移动云 MoMA', '华西'], ['其他服务商', undefined],
+ ]);
+ assert.deepEqual(rows.map(row => row.endpoints.map(endpoint => [endpoint.protocol, endpoint.path])), [
+  [['OpenAI Chat', '/api/v1/chat/completions']],
+  [['OpenAI Chat', '/api/v1/chat/completions']],
+  [['OpenAI Chat', '/api/v1/chat/completions']],
+  [],
+  [['OpenAI Chat', '/api/v1/chat/completions']],
+  [],
+  [],
+ ]);
+ assert.ok(serviceDirectoryRows([{ ...model, callsEnabled: false }], { providers }).every(row => !row.started));
+ assert.deepEqual(serviceDirectoryRows([model], { providers }, 'stopped').map(row => [row.callId, callStateLabel(row.started)]), [
+  ['moma/west', '已停止'], ['', '已停止'],
+ ]);
+ assert.equal(callStateLabel(modelServiceStarted({ ...model, marketVisible: false, listingStatus: '已下架' })), '已启动');
+ assert.equal(callStateLabel(modelServiceStarted({ ...model, serviceProviders: serviceProviders.slice(1) })), '已停止');
+});
+
 test('model index search and filters compose without changing total records or data',()=>{
- const state=createAdminSeed(), before=structuredClone(state), kimi=state.models.find(item=>item.id==='catalog-demo-kimi');kimi.serviceMode='provider';
+ const state=createAdminSeed(), kimi=state.models.find(item=>item.id==='catalog-demo-kimi');
+ Object.assign(kimi,{serviceMode:'provider',callsEnabled:true,serviceProviders:[
+   {providerId:'moma',channelId:'east',callId:'kimi-east',callsEnabled:true},
+   {providerId:'moma',channelId:'west',callId:'kimi-west',callsEnabled:false},
+ ]});
+ const before=structuredClone(state);
  const total=state.models.length;
  assert.equal(serviceIndexModels(state,new URLSearchParams()).length,total);
  assert.equal(new Set(serviceDirectoryModels(state).map(model=>model.type)).size,new Set(state.models.map(model=>model.type)).size);
  assert.ok(serviceIndexModels(state,new URLSearchParams({q:'KIMI'})).every(item=>[item.name,item.modelId].join(' ').toLowerCase().includes('kimi')));
- assert.deepEqual(serviceIndexModels(state,new URLSearchParams({q:'kimi-k3',type:'text',mode:'provider',status:'listed'})).map(item=>item.id),[kimi.id]);
+ assert.deepEqual(serviceIndexModels(state,new URLSearchParams({q:'kimi-k3',type:'text',mode:'provider',status:'started'})).map(item=>item.id),[kimi.id]);
+ const stopped = new URLSearchParams({q:'kimi-k3',type:'text',mode:'provider',status:'stopped'});
+ assert.deepEqual(serviceIndexModels(state,stopped),[]);
+ assert.deepEqual(serviceIndexModels(state,stopped,{byCall:true}).map(item=>item.id),[kimi.id]);
  assert.equal(serviceIndexModels(state,new URLSearchParams({q:'no-such-model'})).length,0);
- assert.equal(state.models.length,total);delete kimi.serviceMode;assert.deepEqual(state,before);
+ assert.equal(state.models.length,total);
+ assert.deepEqual(state,before);
+});
+test('model search matches active provider-specific invocation names',()=>{
+ const {state,model} = setup();
+ model.serviceMode = 'provider';
+ model.serviceProviders = [{callId:'tenant-inference'}, {callId:'retired-inference',status:'已移除'}];
+ assert.deepEqual(serviceIndexModels(state,new URLSearchParams({q:'TENANT-INFERENCE',mode:'provider'})).map(row=>row.id),[model.id]);
+ assert.deepEqual(serviceIndexModels(state,new URLSearchParams({q:'retired-inference'})),[]);
 });
 test('model directory keeps custom records and existing examples visible without deleting data',()=>{
  const state=createAdminSeed();
@@ -126,15 +187,29 @@ test('a unified model with no supplies explicitly maps an existing channel from 
 function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
 function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }
 
-test('service header separates release badges from market visibility without changing saved state',async()=>{
-  const {serviceHeaderStatus}=await import('../src/admin-v2/service-workspace.js');
-  const model={listingStatus:'已上架',releaseStage:'formal',marketVisible:true,callsEnabled:false};
-  const before=structuredClone(model);
-  assert.deepEqual(serviceHeaderStatus(model),{service:'正式上架',visibility:'用户可见'});
-  assert.deepEqual(serviceHeaderStatus({...model,releaseStage:'gray'}),{service:'灰度上架',visibility:'灰度用户可见'});
-  assert.deepEqual(serviceHeaderStatus({...model,releaseStage:'gray',marketVisible:false}),{service:'灰度上架',visibility:'用户不可见'});
-  assert.deepEqual(serviceHeaderStatus({...model,listingStatus:'已下架'}),{service:'已下架',visibility:'用户可见'});
-  assert.equal(serviceHeaderStatus({...model,listingStatus:'已下架',releaseStage:'gray'}).visibility,'灰度用户可见');
-  assert.deepEqual(serviceHeaderStatus({}),{service:'已下架',visibility:'用户可见'});
-  assert.deepEqual(model,before);
+test('service list displays the same permanent entry ID as maintenance exports after a call rename', () => {
+ const model = { id: 'service-config', modelId: 'call-before', serviceMode: 'standard', type: 'text' };
+ const state = { models: [model], providers: [], modelTemplates: [], endpoints: [], modelSupplies: [], serviceRoutes: [], modelSalePrices: [], tariffDictionary: [], modelData: { resourceIds: { 'standard:service-config': 'model_service-56880aeb-c507-4949-9ef2-12420fa683fc' } } };
+ const before = structuredClone(state);
+ const rows = serviceDirectoryRows([model], state);
+ assert.equal(rows[0].model_service_id, 'model_service-56880aeb-c507-4949-9ef2-12420fa683fc');
+ assert.equal(rows[0].model_service_id, exportModelResources(state, 'services').rows[0].id);
+ model.modelId = 'call-after';
+ assert.equal(serviceDirectoryRows([model], state)[0].model_service_id, 'model_service-56880aeb-c507-4949-9ef2-12420fa683fc');
+ model.modelId = 'call-before';
+ assert.deepEqual(state, before);
+});
+
+
+test('list joins only the service channels and never substitutes connection IDs for channel IDs', () => {
+ const model = { id: 'service-config', name: '模型服务', modelId: 'call', serviceMode: 'standard', type: 'text' };
+ const provider = {id:'provider-a',name:'服务商 A',catalogConnections:[{id:'channel-a',endpointId:'connection-a',modelId:'source-model',upstreamModelId:'source-call',sourceName:'独立账号'}]};
+ const state = {models:[model],providers:[provider],modelTemplates:[],endpoints:[{id:'connection-a',providerId:provider.id},{id:'connection-missing-id',providerId:provider.id}],modelSupplies:[{id:'supply-a',modelId:model.id,endpointId:'connection-a',upstreamModelId:'source-call',catalogueModelId:'source-model',status:'已启用'},{id:'supply-b',modelId:model.id,endpointId:'connection-missing-id',status:'已停用'},{id:'supply-removed',modelId:model.id,endpointId:'connection-a',status:'已移除'}]};
+ const before=structuredClone(state), row=serviceDirectoryRows([model],state)[0];
+ assert.deepEqual(row.channels,[{key:'channel-a',id:'channel-a',providerName:'服务商 A',name:'独立账号'},{key:'supply-b',id:'',providerName:'服务商 A',name:'渠道名称未配置'}]);
+ assert.deepEqual(row.endpoints.map(({method,protocol,path})=>[method,protocol,path]),[['POST','OpenAI Chat','/api/v1/chat/completions']]);
+ model.serviceMode='provider';model.serviceProviders=[{providerId:'provider-a',channelId:'channel-a',channelName:'旧名称',callId:'entry-a'},{providerId:'provider-a',channelId:'channel-b',channelName:'另一个账号',callId:'entry-b'}];
+ const rows=serviceDirectoryRows([model],state);
+ assert.deepEqual(rows.map(row=>row.channels.map(channel=>channel.id)),[['channel-a'],['channel-b']]);assert.equal(new Set(rows.map(row=>row.model_service_id)).size,2);
+ model.serviceMode=before.models[0].serviceMode;delete model.serviceProviders;assert.deepEqual(state,before);
 });

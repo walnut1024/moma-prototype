@@ -2,28 +2,28 @@ import {useTenantData} from '../useTenantData';
 import {tenantUsageData,tenantUsageTypes} from '../usage-data.mjs';
 import FrontPageHeader from "./FrontPageHeader";
 import { Activity, ChartNoAxesCombined } from "lucide-react";
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Download, Info, RefreshCw } from 'lucide-react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Button, Popover, RadioGroup, Select, Tabs, Tooltip } from '@douyinfe/semi-ui';
 import SavedFilterViews from './SavedFilterViews';
 import { FilterField, FilterPresets, FilterReset, FilterToolbar, FilterViewRow } from './FilterControls';
-import { DateRange, MultiPick } from '../admin-v2/AnalyticsFilters';
+import { SemiDateRange as DateRange, SemiMultiPick as MultiPick } from '../admin-v2/SemiAnalyticsFilters';
 import { TimeSeriesChart } from './AnalyticsCharts';
 import { bucketLabel, dateRange, fields, usageCSV, usageNumber, observationView, selectedMeteringView, selectedUsageTypes, usagePeriod, usageModelGroups } from '../usage-data.mjs';
 import './usage-statistics.css';
 import { maskApiKey } from '../api-key-utils.mjs';
 
 function Choice({ label, value, onChange, options }) {
-  return <Select value={value} onValueChange={onChange}><SelectTrigger aria-label={label}><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{options.map(([id, text]) => <SelectItem key={id} value={id}>{text}</SelectItem>)}</SelectGroup></SelectContent></Select>;
+  const labelId=useId();
+  return <><span id={labelId} className="sr-only">{label}</span>
+    <Select value={value} onChange={onChange} aria-labelledby={labelId}
+      optionList={options.map(([value,label])=>({value,label}))} />
+  </>;
 }
 function Hint({ label, children }) {
-  return <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={`${label}说明`} className="us-info"><Info /></Button></TooltipTrigger><TooltipContent className="max-w-72">{children}</TooltipContent></Tooltip>;
+  return <Tooltip content={<div className="us-tooltip-copy">{children}</div>}>
+    <Button theme="borderless" type="tertiary" size="small" icon={<Info size={14}/>} aria-label={`${label}说明`} className="us-info"/>
+  </Tooltip>;
 }
 const languageChartHints = {
   '总 Token 数': '输入 Token 数 + 输出 Token 数；读缓存命中已包含在输入 Token 中，不重复相加。',
@@ -76,8 +76,13 @@ function ChartNavigation({ charts, type }) {
     return () => window.removeEventListener('scroll', update);
   }, [type]);
   return <aside className={`us-chart-nav${open ? '' : ' is-collapsed'}`} aria-label="图表导航">
-    <div className="us-chart-nav-head"><strong>{open && '图表导航'}</strong><Button variant="ghost" size="icon" aria-label={open ? '收起图表导航' : '展开图表导航'} aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</Button></div>
-    {open && <><nav>{charts.map(([title], index) => <button key={title} type="button" className={active === index ? 'active' : ''} aria-current={active === index ? 'location' : undefined} onClick={() => { setActive(index); document.getElementById(`usage-chart-${index}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>{title}</button>)}</nav><button type="button" className="us-back-top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={14} />回到顶部</button></>}
+    <div className="us-chart-nav-head"><strong>{open && '图表导航'}</strong><Button theme="borderless" type="tertiary"
+      aria-label={open ? '收起图表导航' : '展开图表导航'} aria-expanded={open}
+      icon={open ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>} onClick={() => setOpen(value => !value)} /></div>
+    {open && <><nav>{charts.map(([title], index) => <Button key={title} theme="borderless" type="tertiary"
+      className={active === index ? 'active' : ''} aria-current={active === index ? 'location' : undefined}
+      onClick={() => { setActive(index); document.getElementById(`usage-chart-${index}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>{title}</Button>)}</nav>
+      <Button className="us-back-top" type="tertiary" icon={<ArrowUp size={14}/>} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>回到顶部</Button></>}
   </aside>;
 }
 function Metrics({ title, keys, summary }) {
@@ -98,42 +103,52 @@ function UsageOverview({ summary, view, days }) {
   ];
   return <><div className="us-overview-groups" style={{ '--overview-count': groups.length }}>{groups.map(group => <OverviewGroup key={group.label} {...group} />)}</div>{view.nonTokenSummary?.length > 0 && <Metrics title="其他计量" keys={view.nonTokenSummary} summary={summary} />}</>;
 }
-export default function UsageStatistics({ observation = false }) {
+export default function UsageStatistics({ observation = false, projectScope, overview = false, onSpaceLogs }) {
   const tenant=useTenantData();
+  const scopedProject=tenant.projects.find(row=>row.id===projectScope?.id);
+  const records=projectScope?.id ? tenant.requests.filter(row=>scopedProject && row.projectId===scopedProject.id &&
+    (!projectScope.modelId || row.modelId===projectScope.modelId)) : tenant.requests;
+  const scopedModel=tenant.models.find(row=>row.id===projectScope?.modelId);
+  const scopedKey=tenant.logKeys.find(row=>row.id===projectScope?.keyId && row.projectId===scopedProject?.id);
+  const scopedDays=[7,30].includes(projectScope?.days) ? projectScope.days : 1;
   const [billing, setBilling] = useState(observation ? '全部' : '按量付费');
   const [category, setCategory] = useState(observation ? '文本模型' : '语言模型');
   const [visual, setVisual] = useState('视觉理解'), [audio, setAudio] = useState('语音合成');
   const type = category === '视觉模型' ? visual : category === '音频模型' ? audio : category;
   const [modelIds, setModelIds] = useState(null);
-  const [apiKeyId, setApiKeyId] = useState(null);
+  const [apiKeyId, setApiKeyId] = useState(projectScope?.keyId || null);
   const [apiKeyIds, setApiKeyIds] = useState(null);
-  const [keySearch, setKeySearch] = useState('');
-  const [keyPickerOpen, setKeyPickerOpen] = useState(false);
-  const keyOptions = tenant.keys.filter(row=>(row.billingType || '按量付费')===billing);
+  const scopeKeys = projectScope?.id ? tenant.logKeys.filter(row=>scopedProject && row.projectId===scopedProject.id) : tenant.logKeys;
+  const keyOptions = scopeKeys.filter(row=>(row.billingType || '按量付费')===billing);
   const selectedKey = keyOptions.find(key => key.id === apiKeyId);
   const groups = useMemo(() => [category], [category]);
   const selectedTypes = selectedUsageTypes(groups, null);
-  const modelOptions=tenant.models.filter(row=>tenant.requests.some(request=>request.modelId===row.id)||tenant.services.some(service=>service.modelKey===row.id)).map(row=>({id:row.modelId,name:row.name}));
+  const modelOptions=tenant.models.filter(row=>records.some(request=>request.modelId===row.id)||(!projectScope?.id && tenant.services.some(service=>service.modelKey===row.id))).map(row=>({id:row.modelId,name:row.name}));
   const [now, setNow] = useState(() => new Date());
   const [autoRefresh, setAutoRefresh] = useState(0);
-  const [range, setRange] = useState(() => observation ? dateRange(1) : usagePeriod('today'));
-  const [preset, setPreset] = useState(observation ? '1' : 'today'), [minutes, setMinutes] = useState('60');
+  const [range, setRange] = useState(() => dateRange(scopedDays));
+  const [preset, setPreset] = useState(observation ? '1' : scopedDays > 1 ? 'custom' : 'today'), [minutes, setMinutes] = useState('60');
   const [notice, setNotice] = useState('');
+  useEffect(() => {
+    if (scopedKey?.billingType) setBilling(scopedKey.billingType);
+    const category = {text:'语言模型',multimodal:'多模态理解',image:'视觉模型',video:'视觉模型',audio:'语音模型',embedding:'向量模型',rerank:'排序模型'}[scopedModel?.type];
+    if (category) setCategory(category);
+  }, [scopedKey?.billingType,scopedModel?.type]);
   const observationModels=observation?modelOptions:[];
-  const observationKeys=tenant.keys.map(key=>({id:key.id,name:key.name,searchText:key.keyId}));
+  const observationKeys=scopeKeys.map(key=>({id:key.id,name:key.name,searchText:key.keyId}));
   const streaming = observation && ['文本模型', '视觉理解'].includes(type);
   const view = observation ? { ...observationView, charts: [...observationView.charts, ...(streaming ? [['首 Token 时延', ['ttft']], ['输出吞吐', ['outputSecond']]] : [])] } : selectedMeteringView(selectedTypes, modelIds);
   const rangeDays = (Date.parse(range.end) - Date.parse(range.start)) / 86400000 + 1;
   const error = !Number.isFinite(rangeDays) || rangeDays < 1 ? '请选择有效的起止日期。' : rangeDays > 31 ? '单次最多查看 31 天，请缩小日期范围。' : !observation && !selectedTypes.length ? '请选择至少一个模型 ID。' : '';
   const bucketMinutes = observation ? Number(minutes) : rangeDays === 1 ? 10 : 60;
-  const data = useMemo(()=>tenantUsageData({records:tenant.requests,models:tenant.models,billing,modelIds,apiKeyIds:observation?apiKeyIds:null,apiKeyId:observation?null:apiKeyId,...range,minutes:bucketMinutes,now,types:tenantUsageTypes(category,observation&&category==='视觉模型'?visual:undefined)}),[tenant.requests,tenant.models,billing,modelIds,apiKeyIds,apiKeyId,range,bucketMinutes,now,observation,category,visual]);
+  const data = useMemo(()=>tenantUsageData({records,models:tenant.models,billing,modelIds,apiKeyIds:observation?apiKeyIds:null,apiKeyId:observation?null:apiKeyId,...range,minutes:bucketMinutes,now,types:tenantUsageTypes(category,observation&&category==='视觉模型'?visual:undefined)}),[records,tenant.models,billing,modelIds,apiKeyIds,apiKeyId,range,bucketMinutes,now,observation,category,visual]);
   const changeType = (value, setter) => { setter(value); setModelIds(null); };
   function exportData() {
     const label = observation ? type : category;
     const url = URL.createObjectURL(new Blob([usageCSV(data, view, billing, label)], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a'); link.href = url; link.download = `${billing}-${label}-${range.start}-${range.end}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); setNotice('已导出当前筛选范围的用量趋势');
   }
-  const changeBilling = value => { setBilling(value); setApiKeyId(null); setKeySearch(''); };
+  const changeBilling = value => { setBilling(value); setApiKeyId(null); };
   const refreshUsage = automatic => {
     const next = new Date();
     setNow(next);
@@ -181,26 +196,57 @@ export default function UsageStatistics({ observation = false }) {
   const datePicker = <DateRange start={range.start} end={range.end} maxDays={31} onChange={value => { setRange(value); setPreset('custom'); }}/>;
   const resetFilters = () => {
     const current = new Date(); setNow(current); setPreset(observation ? '1' : 'today'); setRange(observation ? observationPeriod('1', current) : usagePeriod('today', current));
-    setCategory(observation ? '文本模型' : '语言模型'); setBilling(observation ? '全部' : '按量付费'); setVisual('视觉理解'); setAudio('语音合成'); setApiKeyIds(null); setMinutes('60'); setModelIds(null); setApiKeyId(null); setKeySearch(''); setKeyPickerOpen(false);
+    setCategory(observation ? '文本模型' : '语言模型'); setBilling(observation ? '全部' : '按量付费'); setVisual('视觉理解'); setAudio('语音合成'); setApiKeyIds(null); setMinutes('60'); setModelIds(null); setApiKeyId(null);
   };
-  return <TooltipProvider><div className={observation ? "us-page us-observation" : "us-page us-metering"}><FrontPageHeader title={observation ? "调用观测" : "用量统计"} description={observation ? "查看调用成功率、响应时延与运行趋势" : "查看不同计费方式下的实际模型用量"} icon={observation ? Activity : ChartNoAxesCombined} />
-    <Tabs value={category} onValueChange={value => { if (observation) changeType(value, setCategory); else { setCategory(value); setModelIds(null); } }}><TabsList variant="line" className="us-tabs">{(observation ? observationCategories : usageModelGroups.map(group => [group.id, group.id])).map(([id, label]) => <TabsTrigger key={id} value={id}>{label}</TabsTrigger>)}</TabsList>
-    <TabsContent value={category} className="us-content">
+  return <div className={observation ? "us-page us-observation" : "us-page us-metering"}><FrontPageHeader title={overview ? "空间总览" : observation ? "调用观测" : "用量统计"}
+      description={overview ? "汇总当前空间内你有权查看的用量" : observation ? "查看调用成功率、响应时延与运行趋势" : "查看不同计费方式下的实际模型用量"}
+      actions={onSpaceLogs && <Button type="tertiary" onClick={onSpaceLogs}>空间调用日志</Button>} icon={observation ? Activity : ChartNoAxesCombined} />
+    {projectScope?.id && <p className="us-foot" role="status">{scopedProject ? '所属项目 · ' + scopedProject.name : tenant.error || (!tenant.identity ? '正在加载项目…' : '当前空间无权访问此项目')}</p>}
+    {tenant.internal && !observation && <p className="us-foot">企业内用 · 项目费用为内部成本</p>}
+    <Tabs className="us-category-tabs" activeKey={category}
+      onChange={value => { if (observation) changeType(value, setCategory); else { setCategory(value); setModelIds(null); } }}
+      tabList={(observation ? observationCategories : usageModelGroups.map(group => [group.id, group.id])).map(([itemKey,tab])=>({itemKey,tab}))} />
+    <div className="us-content">
       <div className="us-filter-panel"><FilterToolbar className="us-filters">
         <FilterPresets value={preset} onChange={value => { const current = new Date(); setNow(current); setPreset(value); setRange(observation ? observationPeriod(value, current) : usagePeriod(value, current)); }} items={observation ? [['1', '今日'], ['yesterday', '昨日'], ['7', '近 7 天'], ['30', '近 30 天']] : undefined} />
         {datePicker}
         {observation && category === '视觉模型' && <Choice label="视觉任务类型" value={visual} onChange={value => changeType(value, setVisual)} options={['视觉理解', '图片生成', '视频生成'].map(x => [x, x])} />}
         {observation && category === '音频模型' && <Choice label="音频任务类型" value={audio} onChange={value => changeType(value, setAudio)} options={['语音合成', '语音识别'].map(x => [x, x])} />}
         <FilterField label="模型 ID"><MultiPick key={category} label="模型 ID" value={modelIds} onChange={setModelIds} items={observation ? observationModels : modelOptions} searchPlaceholder="搜索模型，如 DeepSeek-V4-Pro" /></FilterField>
-        {observation ? <FilterField label="API Key"><MultiPick label="API Key" value={apiKeyIds} onChange={setApiKeyIds} items={observationKeys} searchPlaceholder="搜索 API Key 名称或 ID" /></FilterField> : <FilterField label="API Key"><Popover open={keyPickerOpen} onOpenChange={setKeyPickerOpen}><PopoverTrigger asChild><Button variant="outline" aria-label="API Key 筛选" title={selectedKey?.id}>{selectedKey?.name ?? '全部 Key'}<ChevronDown size={14}/></Button></PopoverTrigger><PopoverContent align="start" className="us-key-picker"><Input aria-label="搜索 API Key" placeholder="搜索 Key 名称或 Key ID" value={keySearch} onChange={e => setKeySearch(e.target.value)}/><div role="listbox" aria-label="API Key 选项"><button role="option" aria-selected={apiKeyId === null} onClick={() => { setApiKeyId(null); setKeyPickerOpen(false); }}>全部 Key</button>{keyOptions.filter(key => `${key.name} ${key.id}`.toLowerCase().includes(keySearch.trim().toLowerCase())).map(key => <Tooltip key={key.id}><TooltipTrigger asChild><button role="option" aria-selected={apiKeyId === key.id} onClick={() => { setApiKeyId(key.id); setKeyPickerOpen(false); }}>{maskApiKey(key.secretPreview)} ({key.name})<small>{key.id}</small></button></TooltipTrigger><TooltipContent>{key.id}</TooltipContent></Tooltip>)}{!keyOptions.some(key => `${key.name} ${key.id}`.toLowerCase().includes(keySearch.trim().toLowerCase())) && <p>无匹配的 API Key</p>}</div></PopoverContent></Popover></FilterField>}
-        {observation ? <FilterField label="统计粒度"><Choice label="统计粒度" value={minutes} onChange={setMinutes} options={[["5", "5 分钟"], ["60", "1 小时"], ["1440", "1 天"]]} /></FilterField> : <FilterField label="数据范围"><ToggleGroup type="single" value={billing} onValueChange={value => value && changeBilling(value)} variant="outline" size="sm" className="us-segmented" aria-label="数据范围">{['按量付费', 'Token Plan'].map(value => <ToggleGroupItem key={value} value={value}>{value}</ToggleGroupItem>)}</ToggleGroup></FilterField>}
+        {observation ? <FilterField label="API Key"><MultiPick label="API Key" value={apiKeyIds} onChange={setApiKeyIds} items={observationKeys} searchPlaceholder="搜索 API Key 名称或 ID" /></FilterField> : <FilterField label="API Key" labelId="usage-key-filter-label">
+          <Select className="us-key-select" aria-labelledby="usage-key-filter-label" value={apiKeyId || ''} onChange={value => setApiKeyId(value || null)}
+            placeholder="全部 Key" filter={(query,option) => String(option.search || option.label).toLowerCase().includes(query.trim().toLowerCase())}
+            optionList={[{value:'',label:'全部 Key'}, ...keyOptions.map(key=>({
+              value:key.id, label:`${maskApiKey(key.secretPreview)} (${key.name})`, search:`${key.name} ${key.id}`,
+            }))]} />
+        </FilterField>}
+        {observation ? <FilterField label="统计粒度"><Choice label="统计粒度" value={minutes} onChange={setMinutes}
+          options={[["5", "5 分钟"], ["60", "1 小时"], ["1440", "1 天"]]} /></FilterField> : <FilterField label="数据范围">
+          <RadioGroup type="button" value={billing} onChange={event => changeBilling(event.target.value)}
+            aria-label="数据范围" options={['按量付费','Token Plan'].map(value=>({value,label:value}))}/>
+        </FilterField>}
         <FilterReset onClick={resetFilters}/>
-        <div className="us-actions"><div className={observation ? '' : 'us-refresh-group'}><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" aria-label={observation ? '立即刷新调用观测' : '立即刷新用量'} onClick={() => refreshUsage(false)}><RefreshCw /></Button></TooltipTrigger><TooltipContent>立即刷新</TooltipContent></Tooltip>{!observation && <Popover><PopoverTrigger asChild><Button variant="outline" className={autoRefresh ? 'us-refresh-settings is-active' : 'us-refresh-settings'} aria-label={`自动刷新设置${autoLabel ? `，每 ${autoLabel}` : '，已关闭'}`}><span>{autoLabel ? `自动 · ${autoLabel}` : '自动刷新'}</span><ChevronDown size={14} /></Button></PopoverTrigger><PopoverContent className="us-refresh-popover" align="end"><strong>自动刷新</strong><p>按设定频率更新当前筛选结果</p><fieldset><legend className="sr-only">自动刷新频率</legend>{[[0, '关闭'], [30, '每 30 秒'], [60, '每 1 分钟'], [300, '每 5 分钟']].map(([seconds, label]) => <label key={seconds}><input type="radio" name="usage-auto-refresh" checked={autoRefresh === seconds} onChange={() => { setAutoRefresh(seconds); if (seconds) refreshUsage(false); }} />{label}</label>)}</fieldset><small>上次刷新：{refreshTime(now)}{autoRefresh > 0 && <> · 下次刷新：{refreshTime(new Date(now.getTime() + autoRefresh * 1000))}</>}</small></PopoverContent></Popover>}</div><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" aria-label={observation ? '导出调用观测' : '导出用量'} disabled={!!error || !data.summary.requests} onClick={exportData}><Download /></Button></TooltipTrigger><TooltipContent>导出当前趋势</TooltipContent></Tooltip></div>
+        <div className="us-actions">
+          <Button type="tertiary" aria-label={observation ? '立即刷新调用观测' : '立即刷新用量'} title="立即刷新"
+            icon={<RefreshCw size={16}/>} onClick={() => refreshUsage(false)} />
+          {!observation && <Popover trigger="click" position="bottomRight" content={<div className="us-refresh-popover">
+            <strong>自动刷新</strong>
+            <RadioGroup value={autoRefresh} aria-label="自动刷新频率"
+              onChange={event => { const seconds=event.target.value; setAutoRefresh(seconds); if (seconds) refreshUsage(false); }}
+              options={[[0,'关闭'],[30,'每 30 秒'],[60,'每 1 分钟'],[300,'每 5 分钟']].map(([value,label])=>({value,label}))} />
+            <small>上次刷新：{refreshTime(now)}{autoRefresh > 0 && <> · 下次刷新：{refreshTime(new Date(now.getTime() + autoRefresh * 1000))}</>}</small>
+          </div>}>
+            <Button type="tertiary" icon={<ChevronDown size={14}/>} iconPosition="right"
+              aria-label={`自动刷新设置${autoLabel ? `，每 ${autoLabel}` : '，已关闭'}`}>{autoLabel ? `自动 · ${autoLabel}` : '自动刷新'}</Button>
+          </Popover>}
+          <Button type="tertiary" aria-label={observation ? '导出调用观测' : '导出用量'} title="导出当前趋势"
+            icon={<Download size={16}/>} disabled={!!error || !data.summary.requests} onClick={exportData} />
+        </div>
       </FilterToolbar>
-      <FilterViewRow className="us-view-row"><SavedFilterViews scope={`${tenant.identity?.key || 'anonymous'}:${observation ? 'tenant-observation' : 'tenant-usage'}`} value={savedValue} onApply={applySaved} groups={viewGroups} disabled={!!error}/></FilterViewRow></div>
+      <FilterViewRow className="us-view-row"><SavedFilterViews scope={`${tenant.identity?.key || 'anonymous'}:${observation ? 'tenant-observation' : 'tenant-usage'}:${projectScope?.id || 'space'}`} value={savedValue} onApply={applySaved} groups={viewGroups} disabled={!!error}/></FilterViewRow></div>
       {error ? <p className="us-error" role="alert">{error}</p> : <><section className="us-summary">{observation ? <Metrics keys={view.summary} summary={data.summary} /> : <UsageOverview summary={data.summary} view={view} days={rangeDays} />}</section>
       <div className="us-chart-layout"><div className="us-charts">{view.charts.map(([title, keys, options], index) => <Trend key={`${type}-${title}`} id={`usage-chart-${index}`} title={title} keys={keys} options={options} data={data} scaled={!observation} language={!observation && category === '语言模型'} />)}</div><ChartNavigation key={view.charts.map(([title]) => title).join('|')} charts={view.charts} type={category} /></div></>}
       <div className="us-foot"><span role="status">{notice}</span><span>北京时间</span></div>
-    </TabsContent></Tabs>
-  </div></TooltipProvider>;
+    </div>
+  </div>;
 }

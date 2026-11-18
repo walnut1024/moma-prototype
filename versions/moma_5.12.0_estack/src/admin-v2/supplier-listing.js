@@ -1,3 +1,4 @@
+import { workspaceStoragePrefix } from "../workspace-storage.mjs";
 import { catalogueModelMatch, modelLibrary, libraryRecord, supplySalesStatus } from './model-operations.js';
 import { supplierDirectory, providerCatalogueIds, providerCatalogueModel } from './moma-provider.js';
 import { providerCataloguePrice } from './moma-catalogue-prices.js';
@@ -7,8 +8,8 @@ import { cataloguePurchasePrice, saleItemsDraft } from './provider-catalogue-pri
 import { connectionBlockReason } from './connection-state.js';
 import { commitAdminState } from './state-transaction.js';
 
-export const LISTING_PREFERENCES_KEY = 'moma:5120:model-management:views';
-export const LISTING_FILTER_KEYS = ['q', 'type', 'mode', 'model', 'status', 'attention', 'provider', 'page', 'size', 'supplier', 'supplierQ', 'catalogueQ', 'catalogueType', 'catalogueStatus', 'cataloguePage', 'catalogueSize'];
+export const LISTING_PREFERENCES_KEY = workspaceStoragePrefix + 'model-management:views';
+export const LISTING_FILTER_KEYS = ['q', 'type', 'mode', 'model', 'status', 'attention', 'provider', 'page', 'size', 'shown', 'supplier', 'supplierQ', 'catalogue', 'catalogueQ', 'catalogueType', 'catalogueStatus', 'cataloguePage', 'catalogueSize'];
 export function listingAddress(params, perspective) {
   const query = new URLSearchParams();
   for (const key of LISTING_FILTER_KEYS) if (params.has(key)) query.set(key, params.get(key));

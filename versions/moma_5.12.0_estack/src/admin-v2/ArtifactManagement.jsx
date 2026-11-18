@@ -1,3 +1,4 @@
+import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useState } from 'react';
@@ -16,7 +17,7 @@ export default function ArtifactManagement({ state, dispatch }) {
   const add = () => {
     const now = Date.now();
     dispatch({ type: 'add', collection: 'artifacts', record: {
-      id: `artifact-${now}`, name: `${category} ${state.artifacts.length + 1}`, type: category,
+      id: resourceId('artifact'), name: `${category} ${state.artifacts.length + 1}`, type: category,
       version: 'v1.0', digest: `sha256:${now.toString(16)}`, size: '1.2 GB', validation: '待验证', status: '不可运行',
     } });
   };

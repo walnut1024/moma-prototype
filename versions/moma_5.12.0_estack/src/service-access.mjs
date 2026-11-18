@@ -1,5 +1,6 @@
-export const ADMIN_DATA_KEY = 'moma.adminV2.5120.v1';
-export const AUTH_DATA_KEY = 'moma-auth-prototype-5120-v1';
+import { modelIdentity, modelServiceIdentity } from './model-identities.mjs';
+import { ADMIN_DATA_KEY } from './workspace-storage.mjs';
+export { ADMIN_DATA_KEY, AUTH_DATA_KEY } from './workspace-storage.mjs';
 export const LINK_EVENT = 'moma-5120-state-change';
 
 export const notifyLinkedState = () => { if (typeof window !== 'undefined') window.dispatchEvent(new Event(LINK_EVENT)); };
@@ -18,6 +19,7 @@ export const lifecycleSignature = model => JSON.stringify([model.listingStatus, 
 
 export const offerKey = entry => entry?.channelId || entry?.providerId || '';
 export const providerOffer = (model, key) => model.serviceProviders?.find(entry => entry.status !== '已移除' && offerKey(entry) === key);
+export const serviceCallsEnabled = (model, entry) => !model.archivedAt && model.callsEnabled === true && entry?.callsEnabled !== false;
 export const offerStage = (model, entry) => entry?.listingStage ?? (model.listingStatus === '已上架' ? model.releaseStage === 'gray' ? 'gray' : 'formal' : model.firstPublishedAt ? 'withdrawn' : 'unlisted');
 export const offerGrayTenants = (model, entry) => (entry?.listingStage ? entry.grayTenantIds : model.releaseTenantIds) || [];
 export const salesCustomer = (model, tenantId) => model.salesScope?.openScope === 'all' || model.salesScope?.openScope === 'selected' && model.salesScope.tenantIds?.includes(tenantId);
@@ -25,7 +27,10 @@ export const salesCustomer = (model, tenantId) => model.salesScope?.openScope ==
 export function serviceReferences(state) {
   return (state.models || []).flatMap(model => model.serviceMode === 'standard'
     ? [{ id: `standard:${model.id}`, modelId: model.id, callId: model.modelId, providerId: null, model }]
-    : model.serviceMode === 'provider' ? (model.serviceProviders || []).filter(row => row.status !== '已移除').map(row => ({ id: `provider:${model.id}:${offerKey(row)}`, modelId: model.id, callId: row.callId, providerId: row.providerId, ...(row.channelId ? { channelId: row.channelId } : {}), model })) : []);
+    : model.serviceMode === 'provider' ? (model.serviceProviders || []).filter(row => row.status !== '已移除').map(row => ({ id: `provider:${model.id}:${offerKey(row)}`, modelId: model.id, callId: row.callId, providerId: row.providerId, ...(row.channelId ? { channelId: row.channelId } : {}), model })) : [])
+    .map(service => ({ ...service, model_service_id: modelServiceIdentity(state, service.model, offerKey(service)),
+      model_id: modelIdentity(state, service.model).id, canonical_slug: modelIdentity(state, service.model).canonical_slug,
+      model_service_config_id: service.model.id, call_id: service.callId }));
 }
 
 export function lifecycleAccess(state, service, tenantId) {
@@ -33,9 +38,10 @@ export function lifecycleAccess(state, service, tenantId) {
   const { model } = service;
   const entry = service.providerId ? providerOffer(model, offerKey(service)) : null;
   const stage = offerStage(model, entry);
-  if (!['formal', 'gray'].includes(stage) || model.visibility !== '公开' || model.callsEnabled !== true || model.archivedAt) return reject('model_unavailable', '模型服务已下架，请选择其他模型');
+  if (!serviceCallsEnabled(model)) return reject('model_unavailable', '模型服务已停止，请选择其他模型');
+  if (!['formal', 'gray'].includes(stage) || model.visibility !== '公开') return reject('model_unavailable', '模型服务已下架，请选择其他模型');
   if (service.providerId) {
-    if (!entry || entry.callsEnabled===false) return reject('provider_unavailable', '该供应商服务已停服，请选择其他供应商');
+    if (!entry || !serviceCallsEnabled(model, entry)) return reject('provider_unavailable', '该渠道服务已停止，请选择其他渠道');
   }
   if (!activeCustomer(state.tenants?.find(row => row.id === tenantId))) return reject('customer_unavailable', '当前用户或组织不可用');
   if (stage === 'gray' && !offerGrayTenants(model, entry).includes(tenantId)) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');

@@ -1,4 +1,5 @@
 import { libraryRecord, modelLibrary, modelCatalogue } from './model-library.js';
+import { resourceId } from '../resource-id.mjs';
 import { displayedCatalogueIds, providerCatalogueModel, supplierDirectory, providerCatalogueIds } from './moma-provider.js';
 
 export function supplyModelRecord(state, provider, modelId) {
@@ -11,6 +12,17 @@ export function supplyModelRecord(state, provider, modelId) {
 export function supplierModelIds(state, provider, modelId) {
   const master = supplyModelRecord(state, provider, modelId);
   return master ? providerCatalogueIds(provider).filter(id => supplyModelRecord(state, provider, id)?.id === master.id) : [modelId];
+}
+export function retiredSupplierModelIds(state, provider, remainingChannels, modelIds) {
+  const removed = new Set(provider.removedCatalogModelIds || []);
+  const endpoints = new Set(state.endpoints.filter(row => row.providerId === provider.id && !row.deletedAt).map(row => row.id));
+  for (const modelId of modelIds) {
+    const aliases = supplierModelIds(state, provider, modelId);
+    if (!remainingChannels.some(channel => endpoints.has(channel.endpointId) && aliases.includes(channel.modelId))) {
+      for (const alias of aliases) removed.add(alias);
+    }
+  }
+  return [...removed];
 }
 export function supplyModelDirectory(state, providers = supplierDirectory(state).filter(row => !row.id.startsWith('service-review-provider-'))) {
   const groups = new Map(modelCatalogue(state).map(master => [master.id, { id: master.id, master, name: master.name, code: master.modelId, entries: [] }]));
@@ -29,14 +41,14 @@ export function supplierModelFields(state, provider, libraryId) {
   if (!master) throw new Error('模型资料不存在，请重新选择模型');
   const ids = providerCatalogueIds(provider), existing = [...ids, ...(provider.removedCatalogModelIds || [])].find(id => supplyModelRecord(state, provider, id)?.id === master.id);
   const modelId = existing || master.modelId;
-  if (!modelId) throw new Error('请先完善模型资料的模型 ID');
-  if (!existing && (ids.includes(modelId) || provider.catalogModels?.some(row => row.modelId === modelId) || provider.removedCatalogModelIds?.includes(modelId))) throw new Error('服务商中已有该模型 ID，请先核对并关联模型资料');
+  if (!modelId) throw new Error('请先完善模型资料的模型编码');
+  if (!existing && (ids.includes(modelId) || provider.catalogModels?.some(row => row.modelId === modelId) || provider.removedCatalogModelIds?.includes(modelId))) throw new Error('服务商中已有该服务商目录标识，请先核对并关联模型资料');
   if (!ids.includes(modelId) && ids.length >= 2000) throw new Error('模型目录最多 2000 个模型');
   const current = providerCatalogueModel(provider, modelId);
   return { modelId, fields: {
     catalogModelIds: ids.includes(modelId) ? ids : [...ids, modelId],
     removedCatalogModelIds: (provider.removedCatalogModelIds || []).filter(id => id !== modelId),
-    catalogModels: [...(provider.catalogModels || []).filter(row => row.modelId !== modelId), { ...current, modelId, name: current?.name || master.name, type: current?.type || master.type, libraryId: master.id }],
+    catalogModels: [...(provider.catalogModels || []).filter(row => row.modelId !== modelId), { ...current, ...(current ? {} : { id: resourceId('provider-model') }), modelId, name: current?.name || master.name, type: current?.type || master.type, libraryId: master.id }],
   } };
 }
 

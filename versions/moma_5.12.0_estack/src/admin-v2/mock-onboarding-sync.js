@@ -1,8 +1,8 @@
 import { offerKey, providerOffer } from '../service-access.mjs';
 import { platformCandidatePlan } from './platform-service-client.js';
-import { platformPublicationServices } from './platform-publication-state.js';
+import { platformPublicationServices, platformPublicationFingerprint } from './platform-publication-state.js';
 import { assertMockModelPublication } from './mock-publication-gate.js';
-import { connectionFingerprint } from './connection-state.js';
+import { connectionFingerprint, connectionKeys } from './connection-state.js';
 import { commitMockConfiguration, mockContext, setMockRuntimeState } from './mock-onboarding-service.js';
 
 const changedEndpoints = (previous, next) => (previous.endpoints || []).flatMap(before => {
@@ -47,14 +47,29 @@ export function planMockOnboardingSync(previous, next, snapshots) {
 export function prepareMockOnboardingSync(previous, next, action) {
   const {getMockChannelSnapshots,getMockServiceSnapshots,prepareMockConfiguration}=mockContext(previous);
   const commercialUpdates = [], publications = action?.operation==='guidedPublish' ? [{serviceId:action.data.mockServiceId,expectedRevision:action.data.expectedMockRevision,operationId:action.data.operationId}] : [];
-  const snapshots = getMockServiceSnapshots();
+  const snapshots = getMockServiceSnapshots(), routeReductions = [], receipts = [];
+  if (action?.operation === 'providerRemovalPrepare') for (const route of next.serviceRoutes) {
+    const old = previous.serviceRoutes.find(row => row.id === route.id);
+    if (!route.activeVersion || route.activeVersion === old?.activeVersion) continue;
+    const model = next.models.find(row => platformPublicationServices(row).some(service => service.id === route.serviceId));
+    const before = previous.models.find(row => row.id === model?.id), proof = before?.platformPublications?.find(row => row.serviceId === route.serviceId && row.source === 'mock');
+    if (!proof) continue;
+    assertMockModelPublication(previous, before, route.serviceId, true);
+    const snapshot = snapshots.find(row => row.id === proof.mockServiceId), config = route.versions.find(row => row.version === route.activeVersion).config;
+    const plan = platformCandidatePlan(next, model, { serviceId: route.serviceId, tenantIds: snapshot.published.config.tenantIds,
+      supplyIds: config.channels.filter(row => row.enabled !== false).map(row => row.supplyId), technical: snapshot.published.config.technical === true,
+      audioProbe: snapshot.published.config.bindings.find(row => row.model.type === 'audio')?.model.probe || '' });
+    routeReductions.push({ serviceId: snapshot.id, config: plan.candidate });
+    receipts.push({ model, proof, before });
+  }
   for (const model of next.models) {
     const before = previous.models.find(row => row.id === model.id);
     if (!before) continue;
     for (const [key, receipt] of Object.entries(model.commercialPublications || {})) {
       if (before.commercialPublications?.[key]?.version === receipt.version) continue;
       for (const service of platformPublicationServices(before).filter(row => offerKey(row) === receipt.providerId)) {
-        const snapshot = snapshots.find(row => row.published?.config.publicModelId === service.callId);
+        const proof = before.platformPublications?.find(row => row.serviceId === service.id && row.source === 'mock');
+        const snapshot = snapshots.find(row => row.id === proof?.mockServiceId);
         if (!snapshot) { if(service.providerId && providerOffer(before,offerKey(service))?.pendingPublication)continue; if (before.listingStatus === '已上架') throw new Error('当前服务缺少有效发布配置，请先完成平台验证'); continue; }
         assertMockModelPublication(previous, before, service.id, true);
         const plan = platformCandidatePlan(next, model, { serviceId: service.id, tenantIds: snapshot.published.config.tenantIds, supplyIds: snapshot.published.config.bindings.map(row => row.id), technical:snapshot.published.config.technical===true,audioProbe: snapshot.published.config.bindings.find(row => row.model.type === 'audio')?.model.probe || '' });
@@ -62,10 +77,28 @@ export function prepareMockOnboardingSync(previous, next, action) {
       }
     }
   }
-  if (!changedEndpoints(previous, next).length && !commercialUpdates.length && !publications.length) return null;
-  const plan = planMockOnboardingSync(previous, next, getMockChannelSnapshots());
-  if (!plan.replacements.length && !plan.unverifiedChannelIds.length && !commercialUpdates.length && !publications.length) return null;
-  return prepareMockConfiguration({ operationId: `local-sync-${next.audits?.[0]?.id || crypto.randomUUID()}`, scope: plan.scope, commercialUpdates, publications, replacements: plan.replacements, unverifiedChannelIds: plan.unverifiedChannelIds }, previous.cloudOperations === true);
+  if (!changedEndpoints(previous, next).length && !commercialUpdates.length && !publications.length && !routeReductions.length) return null;
+  const channels = getMockChannelSnapshots();
+  const plan = planMockOnboardingSync(previous, next, channels);
+  const credentialReplacements = action?.operation === 'credentialReplace' ? plan.unverifiedChannelIds.map(channelId => {
+    const source = channels.find(row => row.id === channelId);
+    const endpoint = next.endpoints.find(row => row.id === source.clientChannelId);
+    const provider = next.providers.find(row => row.id === endpoint.providerId);
+    const [key] = connectionKeys(endpoint, provider);
+    if (!key) throw new Error('替换后的渠道缺少可用密钥');
+    return { channelId, clientSignature: connectionFingerprint(endpoint), credential: {
+      id: key.id, version: key.version || key.fingerprint, status: 'active', accountRpm: key.accountRpm ?? endpoint.capacity ?? null,
+    } };
+  }) : [];
+  if (!plan.replacements.length && !plan.unverifiedChannelIds.length && !commercialUpdates.length && !publications.length && !routeReductions.length) return null;
+  const prepared = prepareMockConfiguration({ operationId: `local-sync-${next.audits?.[0]?.id || crypto.randomUUID()}`, scope: plan.scope, commercialUpdates, publications, routeReductions, replacements: plan.replacements, credentialReplacements, unverifiedChannelIds: credentialReplacements.length ? [] : plan.unverifiedChannelIds }, previous.cloudOperations === true);
+  for (const { model, proof, before } of receipts) {
+    const snapshot = prepared.after.services.find(row => row.id === proof.mockServiceId);
+    model.platformPublicationHistory = [...(before.platformPublicationHistory || []), proof];
+    model.platformPublications = model.platformPublications.map(row => row === proof || row.serviceId === proof.serviceId ? { ...row, publishedVersion: snapshot.published.version,
+      recordedAt: new Date().toISOString(), fingerprint: platformPublicationFingerprint(next, model, proof.serviceId) } : row);
+  }
+  return prepared;
 }
 
 export function commitMockOnboardingSync(prepared, next) {

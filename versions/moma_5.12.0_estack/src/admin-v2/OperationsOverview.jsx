@@ -124,8 +124,12 @@ export default function OperationsOverview({state}) {
       <div className="admin-analytics-fields">
         <Paragraph type="secondary">{period.label} · {overviewDateTime(period.start)} 至 {overviewDateTime(period.end)}</Paragraph>
         {selected ? <>
-          <div><Button size="small" theme="borderless" icon={<IconArrowLeft aria-hidden="true"/>}
-            onClick={() => openList(detail.kind)}>返回全部{detail.kind === 'customer' ? '客户' : '模型'}</Button></div>
+          <Space wrap><Button size="small" theme="borderless" icon={<IconArrowLeft aria-hidden="true"/>}
+            onClick={() => openList(detail.kind)}>返回全部{detail.kind === 'customer' ? '客户' : '模型'}</Button>
+            {detail.kind === 'customer' && selected.id !== '__unknown__' && <Text link={{ href: '#/admin-2/customer-usage-detail?' + new URLSearchParams({
+              customer: selected.id, period: 'custom', start: dayOf(period.start), end: dayOf(Math.max(period.start, period.end - 1)),
+            }) }}>查看项目用量</Text>}
+          </Space>
           <dl className="ov-detail-summary">
             {[['Token 用量', number(selected.total)], ['模型请求次数', number(selected.calls)], ['占平台用量', percent(selected.total, data.total)],
               ['自产 / 引入', `${percent(selected.self, selected.total)} / ${percent(selected.partner, selected.total)}`]].map(([label, value]) =>

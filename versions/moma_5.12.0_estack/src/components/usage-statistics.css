@@ -129,3 +129,9 @@
 .us-key-picker small { display: block; color: #71809b; font-size: 11px; margin-top: 3px; overflow-wrap: anywhere; }
 .us-key-picker p { padding: 10px; color: #71809b; font-size: 12px; }
 .us-view-row{display:flex;justify-content:flex-end;margin:0 0 8px}
+
+@media (max-width: 600px) {
+  .us-page .us-filter-panel .us-view-row { width: auto; min-width: 0; }
+  .us-page .us-view-row .sfv-actions { width: 100%; min-width: 0; }
+  .us-page .us-view-row .sfv-controls { max-width: 100%; flex-wrap: wrap; }
+}

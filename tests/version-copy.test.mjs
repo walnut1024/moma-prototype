@@ -24,12 +24,13 @@ test('5.12.0 has its own source, styles, public assets and storage keys', () => 
   assert.ok(fs.existsSync(path.join(version, 'public/assets/jiangSuZhengWu.png')));
   assert.ok(fs.readFileSync(path.join(version, 'vite.config.mjs'), 'utf8').includes("path.join(import.meta.dirname, 'src')"));
   for (const [file, key] of [
-    ['admin-v2/store.js', 'moma.adminV2.5120.v1'],
-    ['auth-state.mjs', 'moma-auth-prototype-5120-v1'],
-    ['experience-drafts.mjs', 'moma-5120-draft:'],
-    ['components/SavedFilterViews.jsx', 'moma-5120-filter-views:'],
-    ['admin-v2/UsageAnalysisPage.jsx', 'moma:5120:usage-analysis:card-order:v1'],
-    ['organization-data.mjs', 'moma-organization:moma_5.12.0_estack'],
+    ['workspace-storage.mjs', 'moma-5120-workspace-v2:'],
+    ['admin-v2/store.js', 'ADMIN_DATA_KEY'],
+    ['auth-state.mjs', 'AUTH_DATA_KEY'],
+    ['experience-drafts.mjs', 'workspaceStoragePrefix}draft:'],
+    ['components/SavedFilterViews.jsx', "workspaceStoragePrefix + 'filter-views:'"],
+    ['admin-v2/UsageAnalysisPage.jsx', "workspaceStoragePrefix + 'usage-analysis:card-order'"],
+    ['organization-data.mjs', "workspaceStoragePrefix + 'organization'"],
   ]) {
     assert.ok(fs.readFileSync(path.join(version, 'src', file), 'utf8').includes(key));
   }
@@ -53,7 +54,7 @@ test('the built 5.12.0 keeps order table, checkout and confirmation layout', () 
   const html = fs.readFileSync(path.join(root, 'dist/client/moma_5.12.0_estack/index.html'), 'utf8');
   const cssPath = [...html.matchAll(/href="([^"]+\.css)"/g)][0][1];
   const css = fs.readFileSync(path.join(root, 'dist/client', cssPath), 'utf8');
-  for (const selector of ['.legacy-order-row', '.service-order-row', '.service-order-footer', '.order-confirm-backdrop']) {
-    assert.ok(css.includes(selector + '{'), 'Missing order layout: ' + selector);
+  for (const selector of ['.model-order-table', '.service-order-table', '.service-order-footer', '.order-confirm-modal']) {
+    assert.match(css, new RegExp(selector.replace('.', '\\.') + '(?=[,{\\s])'), 'Missing order layout: ' + selector);
   }
 });

@@ -255,7 +255,7 @@ test('an existing service-derived model association remains editable without cha
 });
 
 test('fusion preserves saved resources, exact models, existing default keys, prices and service histories and never re-adds removed fixtures',()=>{
- const s=createAdminSeed(),p=owner(s);p.apiKeys=[{id:'manual-key',name:'我的凭证',fingerprint:'f'.repeat(64),maskedKey:'test••••••••2222'}];p.defaultApiKeyId='manual-key';p.catalogModels=[{modelId:'GLM-5.2',name:'我的模型名称',type:'text'}];
+ const s=createAdminSeed(),p=owner(s);p.apiKeys=[{id:'manual-key',name:'我的凭证',fingerprint:'f'.repeat(64),maskedKey:'test••••••••2222'}];p.defaultApiKeyId='manual-key';p.catalogModels=[{modelId:'GLM-5.2',name:'我的模型展示名',type:'text'}];
  const legacy=legacySupplierState();s.endpoints.push(...legacy.endpoints.filter(row=>['supplier-review-CH-001','supplier-review-CH-002'].includes(row.id)));p.catalogConnections=owner(legacy).catalogConnections;
  const before=structuredClone(s),next=prepareSupplierReviewCases(s);
  assert.equal(owner(next).defaultApiKeyId,'manual-key');assert.deepEqual(owner(next).apiKeys[0],p.apiKeys[0]);assert.deepEqual(owner(next).catalogModels[0],p.catalogModels[0]);
@@ -290,8 +290,8 @@ test('model removal requires all channels to be unlinked, including disabled cha
   if(index===0)assert.throws(()=>run(next,'catalogueRemove',{modelId,confirmed:true}),/请先删除.*全部渠道/);
  }
  assert.equal(catalogueChannels(next,owner(next),modelId).length,0);
- assert.ok(displayedCatalogueIds(owner(next),next).includes(modelId));
- const removed=run(next,'catalogueRemove',{modelId,confirmed:true});
+ assert.ok(!displayedCatalogueIds(owner(next),next).includes(modelId));
+ const removed=next;
  assert.ok(!displayedCatalogueIds(owner(removed),removed).includes(modelId));
  assert.deepEqual(removed.endpoints,s.endpoints);
  assert.equal(catalogueChannels(removed,owner(removed),'DeepSeek-V4-Flash-0731').length,1);

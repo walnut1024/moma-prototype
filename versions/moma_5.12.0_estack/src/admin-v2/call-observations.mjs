@@ -1,3 +1,4 @@
+import { diagnosticRequest, latestRequests, requestIdentity } from '../request-identity.mjs';
 import { matchesSelection } from './analytics.js';
 import { percentile } from './observability.js';
 import { usageMeter, usagePreset } from './usage-analysis.js';
@@ -7,13 +8,14 @@ const minute = 60_000, hour = 60 * minute, day = 24 * hour, week = 7 * day, beij
 const grains = [['minute', '按分钟', minute, 2 * hour], ['hour', '按小时', hour, week],
   ['day', '按天', day, 31 * day], ['week', '按周', week, 365 * day]];
 export const callPresets = [['today', '今日'], ['1h', '近 1 小时'], ['24h', '近 24 小时'], ['7d', '近 7 天'], ['30d', '近 30 天']];
+export const purposeLabels = { customer: '客户调用', diagnostic: '测试调用' };
 export const outcomes = { success: '成功', failed: '失败', canceled: '已取消', pending: '进行中', unknown: '未采集' };
 export const modelTypes = [['', '全部类型'], ['text', '语言模型'], ['multimodal', '多模态模型'], ['image', '图片生成'],
   ['video', '视频生成'], ['audio', '语音模型'], ['embedding', '向量模型'], ['rerank', '重排模型']];
 export const errorSignals = [['rate-limit', '429'], ['timeout', '超时'], ['fallback', '回退']];
 
-const dimensions = ['tenant', 'model', 'callId', 'endpoint', 'user', 'key', 'source'];
-const scalarFilters = ['type', 'outcome', 'http', 'errorSource', 'signal', 'query', 'upstreamQuery'];
+const dimensions = ['tenant', 'project', 'purpose', 'model', 'callId', 'endpoint', 'user', 'key', 'source'];
+const scalarFilters = ['type', 'outcome', 'http', 'errorSource', 'signal', 'query', 'request', 'upstreamQuery', 'userRecord'];
 const dateOnly = /^\d{4}-\d{2}-\d{2}$/;
 const timeOf = value => typeof value === 'number' ? value : Date.parse(value);
 const midnight = date => Date.parse(date + 'T00:00:00+08:00');
@@ -49,12 +51,13 @@ function parseSupply(value) {
   catch { return []; }
 }
 
-export function observationFilters(params = new URLSearchParams(), preset = 'today') {
+export function observationFilters(params = new URLSearchParams(), preset = 'today', defaultPurpose = null) {
   const keys = key => !params.has(key) ? null : params.get(key) === '__none__' ? [] : params.get(key).split(',').filter(Boolean);
   return observationViewFilters({
     period: params.get('period') || (params.has('start') || params.has('end') ? 'custom' : preset),
     start: params.get('start') || '', end: params.get('end') || '',
     ...Object.fromEntries(dimensions.map(key => [key, keys(key)])),
+    purpose: params.get('purpose') === 'all' ? null : params.has('purpose') ? keys('purpose') : defaultPurpose,
     supply: params.has('supply') ? parseSupply(params.get('supply')) : undefined,
     provider: keys('provider'), channel: keys('channel'),
     ...Object.fromEntries(scalarFilters.map(key => [key, params.get(key) || ''])),
@@ -81,6 +84,7 @@ export const defaultObservationGrain = (filters, window) => filters.period === '
 export function observationHash(page, filters, extra = {}) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries({ ...filters, ...extra })) {
+    if (key === 'purpose' && value === null) params.set(key, 'all');
     if (value == null || value === '') continue;
     params.set(key, key === 'supply' ? JSON.stringify(value) : Array.isArray(value) ? value.join(',') || '__none__' : String(value));
   }
@@ -120,15 +124,13 @@ function usageFields(row, model, usage = row.usage) {
 }
 
 export function callObservations(state) {
-  const [models, users, tenants, keys, providers, endpoints] =
-    [state.models, state.users, state.tenants, state.gatewayKeyOptions ?? state.apiKeys, state.providers, state.endpoints]
+  const [models, users, tenants, keys, providers, endpoints, projects] =
+    [state.models, state.users, state.tenants, state.gatewayKeyOptions ?? state.apiKeys, state.providers, state.endpoints, state.projects]
       .map(collection => new Map((collection || []).map(row => [row.id, row])));
   const providerName = id => providers.get(id)?.name || id;
-  const rows = [], attempts = [], seen = new Set();
-  for (const record of state.requests) {
-    const id = record.requestId || record.id;
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
+  const rows = [], attempts = [];
+  for (const record of latestRequests(state.requests)) {
+    const id = requestIdentity(record);
     const model = models.get(record.modelId);
     const key = keys.get(record.keyId);
     const modelType = record.modelType || model?.type;
@@ -142,8 +144,11 @@ export function callObservations(state) {
       modelName: record.modelName || model?.name || record.modelId,
       callId: record.publicModelId || record.callId,
       tenant: record.tenantId, tenantName: record.tenantName || tenants.get(record.tenantId)?.name || record.tenantId,
+      project: record.projectId, projectName: record.projectName || projects.get(record.projectId)?.name || record.projectId,
+      projectRouteId: record.projectRouteId, routeMatch: record.routeMatch,
       user: record.userId, userName: record.userName || users.get(record.userId)?.name || record.userId,
-      key: record.keyId, keyName: record.keyName || key?.name,
+      key: record.keyId, keyName: record.keyName || key?.name, keyDisplayId: key?.keyId || record.keyId,
+      purpose: diagnosticRequest(record) ? 'diagnostic' : 'customer',
       source: record.source || (record.evidenceSource === 'mock' ? '模拟请求' : null),
     };
     const observedAttempts = [];
@@ -164,10 +169,11 @@ export function callObservations(state) {
         ...request, id: JSON.stringify([id, index + 1]), parentId: id, index: index + 1,
         at: timeOf(item.startedAt ?? item.createdAt), upstreamRequestId: item.upstreamRequestId, upstreamModelId: item.upstreamModelId,
         provider, providerName: item.providerName || providerName(provider), channel, channelName: item.channelName || endpoints.get(channel)?.name || channel,
-        endpoint: item.endpointId, endpointName: item.endpointName || endpoint?.endpointId || item.endpointId,
+        serviceId: item.serviceId, endpoint: item.endpointId, endpointName: item.endpointName || endpoint?.endpointId || item.endpointId,
         outcome: attemptOutcome, status: attemptStatus, duration: number(item.durationMs),
         code, errorReason: item.errorMessage || item.message, errorSource: item.errorSource || (attemptOutcome === 'failed' ? '上游调用' : null),
         timeout: timeout(item, code), fallback: item.fallback === true, fallbackReason: item.fallbackReason,
+        recordedFallbackReason: item.fallbackReason,
         ...usageFields(item, model),
       });
     });
@@ -181,7 +187,8 @@ export function callObservations(state) {
     });
     const final = observedAttempts.at(-1);
     const routed = Boolean(final) || !trail.length && record.cacheHit !== true;
-    const provider = routed ? final?.provider || record.providerId || record.procurementSnapshot?.providerId : null;
+    const endpoint = routed ? final?.endpoint || record.endpointId : null;
+    const provider = routed ? final?.provider || record.providerId || record.procurementSnapshot?.providerId || endpoints.get(endpoint)?.providerId : null;
     const channel = routed ? final?.channel || record.channelId : null;
     const blocked = trail.findLast(item => item.error && (item.dispatched === false ||
       item.dispatched !== true && preflight.has(item.error)));
@@ -189,15 +196,14 @@ export function callObservations(state) {
     rows.push({
       ...request, provider, providerName: routed ? final?.providerName || record.providerName || providerName(provider) : null,
       channel, channelName: routed ? final?.channelName || record.channelName || endpoints.get(channel)?.name || channel : null,
-      modelIdentifier: request.callId || model?.modelId,
-      keyDisplayId: key?.keyId || record.keyId,
+      registeredModelId: model?.modelId,
       keyMasked: typeof key?.secretPreview === 'string' && key.secretPreview.trim() ? maskApiKey(key.secretPreview) : null,
-      endpoint: final?.endpoint, endpointName: final?.endpointName,
+      endpoint, endpointName: final?.endpointName || endpoints.get(endpoint)?.endpointId || endpoint,
       code, errorReason: record.errorMessage || (outcome === 'failed' ? final?.errorReason : null),
       errorSource: record.errorSource || (blocked ? '网关' : outcome === 'failed' ? final?.errorSource : null),
       duration: number(record.durationMs), firstPacket: number(record.firstPacketMs),
       ttft: streamSample ? number(record.ttftMs) : null, taskStatus: record.taskStatus,
-      attempts: observedAttempts, blocked: blocked?.error, routeVersion: record.routeVersion,
+      attempts: observedAttempts, blocked: blocked?.error, routeVersion: record.routeVersion, cacheHit: record.cacheHit === true,
       ...usageFields(record, model),
     });
     attempts.push(...observedAttempts);
@@ -207,25 +213,59 @@ export function callObservations(state) {
 
 export const observationKey = (row, dimension) => row[dimension] ?? uncollectedObservationKey;
 export function observationName(row, dimension) {
-  return row[dimension + 'Name'] || row[dimension] || '未采集';
+  return (dimension === 'purpose' ? purposeLabels[row.purpose] : row[dimension + 'Name']) || row[dimension] || '未采集';
 }
 
 export function observationOptions(rows, dimension) {
   const items = new Map();
   for (const row of rows) {
     const id = observationKey(row, dimension);
-    if (!items.has(id)) items.set(id, { id, name: observationName(row, dimension),
+    if (!items.has(id)) items.set(id, { id, name: dimension === 'project' && row.project
+      ? [...new Set([observationName(row, dimension), row.tenantName, row.project].filter(Boolean))].join(' · ')
+      : observationName(row, dimension),
       searchText: dimension === 'callId' ? row.modelName : '' });
   }
   return [...items.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
 }
 
+export function searchObservationIdentities(rows, dimension, tenants, input, limit = 20) {
+  const query = input.trim().toLowerCase();
+  const items = new Map();
+  if (!query) return { items: [], hasMore: false };
+  for (const row of rows) {
+    const id = row[dimension];
+    if (!id || items.has(id) || !matchesSelection(tenants, observationKey(row, 'tenant'))) continue;
+    const displayId = dimension === 'key' ? row.keyDisplayId || id : id;
+    const name = observationName(row, dimension);
+    const exact = id.toLowerCase() === query || displayId.toLowerCase() === query;
+    if (!exact && (!tenants?.length || !name.toLowerCase().includes(query))) continue;
+    if (items.size === limit) return { items: [...items.values()], hasMore: true };
+    items.set(id, { id, label: [...new Set([name, row.tenantName || '客户未采集', displayId])].join(' · ') });
+  }
+  return { items: [...items.values()], hasMore: false };
+}
+
+export function changeObservationTenant(rows, filters, tenant) {
+  const patch = { tenant };
+  if (tenant === null) return patch;
+  const scopedRows = rows.filter(row => matchesSelection(tenant, observationKey(row, 'tenant')));
+  for (const dimension of ['project', 'user', 'key']) {
+    const selected = filters[dimension];
+    if (!selected?.length) continue;
+    const available = new Set(scopedRows.map(row => observationKey(row, dimension)));
+    const retained = selected.filter(id => available.has(id));
+    if (retained.length !== selected.length) patch[dimension] = retained.length ? retained : null;
+  }
+  return patch;
+}
+
 export function filterObservations(rows, filters, window, { allowUntimed = false } = {}) {
   if (!window) return [];
-  const query = filters.query?.trim().toLowerCase(), upstream = filters.upstreamQuery?.trim().toLowerCase();
+  const query = filters.query?.trim().toLowerCase(), exact = filters.request?.trim(), upstream = filters.upstreamQuery?.trim().toLowerCase();
   return rows.filter(row => (row.at >= window.start && row.at < window.end ||
-    allowUntimed && !Number.isFinite(row.at) && (query || upstream)) &&
+    allowUntimed && !Number.isFinite(row.at) && (query || exact || upstream)) &&
     dimensions.every(key => matchesSelection(filters[key] ?? null, observationKey(row, key))) &&
+    (!filters.userRecord || (filters.userRecord === 'uncollected') === (observationKey(row, 'user') === uncollectedObservationKey)) &&
     (filters.supply == null || filters.supply.some(([provider, channel]) =>
       (provider === null || provider === observationKey(row, 'provider')) &&
       (channel === null || channel === observationKey(row, 'channel')))) &&
@@ -235,7 +275,16 @@ export function filterObservations(rows, filters, window, { allowUntimed = false
     (!filters.errorSource || row.errorSource === filters.errorSource) &&
     (!filters.signal || (filters.signal === 'rate-limit' ? row.status === 429 :
       filters.signal === 'timeout' ? row.timeout : filters.signal === 'fallback' && row.fallback)) &&
-    (!query || row.requestId?.toLowerCase().includes(query)) && (!upstream || row.upstreamRequestId?.toLowerCase().includes(upstream)));
+    (!exact || row.requestId === exact) && (!query || row.requestId?.toLowerCase().includes(query)) && (!upstream || row.upstreamRequestId?.toLowerCase().includes(upstream)));
+}
+
+export function compareLogRows(a, b, field, direction) {
+  const left = a[field], right = b[field];
+  const leftKnown = Number.isFinite(left), rightKnown = Number.isFinite(right);
+  if (leftKnown !== rightKnown) return leftKnown ? -1 : 1;
+  if (leftKnown && left !== right) return direction * (left - right);
+  const time = row => Number.isFinite(row.at) ? row.at : -Infinity;
+  return time(b) - time(a) || a.id.localeCompare(b.id);
 }
 
 export function observationGroups(rows, dimension) {
@@ -251,7 +300,8 @@ export function observationGroups(rows, dimension) {
 
 export function observationGroupScope(dimension, { id, rows }) {
   return dimension === 'channel' ? { channel: [id], provider: [...new Set(rows.map(row => observationKey(row, 'provider')))] }
-    : { [dimension]: [id] };
+    : dimension === 'project' ? { project: [id], tenant: [...new Set(rows.map(row => observationKey(row, 'tenant')))] }
+      : { [dimension]: [id] };
 }
 
 export function observationBuckets(rows, window, granularity) {

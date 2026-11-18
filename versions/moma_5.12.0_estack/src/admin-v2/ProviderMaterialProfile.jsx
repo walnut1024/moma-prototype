@@ -54,7 +54,7 @@ export default function ProviderMaterialProfile({ provider, editing, ops, edit, 
     return <Field label={label} required={editing && options.required} hint={editing ? options.hint : undefined}>
       {editing
         ? <InputComponent aria-label={label} disabled={disabled} readonly={options.readOnly} required={options.required}
-            maxLength={options.maxLength} value={value} onChange={value => set(key, key === 'code' ? value.toLowerCase() : value)}/>
+            maxLength={options.maxLength} {...(options.maxCount ? { maxCount: options.maxCount, getValueLength: value => [...value].length } : {})} value={value} onChange={value => set(key, key === 'code' ? value.toLowerCase() : value)}/>
         : <Typography.Text className="materials-code" link={readLink ? { href: value, target: '_blank', rel: 'noopener noreferrer' } : undefined}>{value || '—'}</Typography.Text>}
     </Field>;
   };
@@ -83,6 +83,7 @@ export default function ProviderMaterialProfile({ provider, editing, ops, edit, 
             {values.logo && <Button theme="borderless" type="danger" disabled={disabled || uploading} onClick={() => set('logo', '')}>移除图片</Button>}
           </>}
         </Space>
+        {editing && <Input aria-label="服务商图标 URL" placeholder="或输入图片 URL" value={values.logo.startsWith('data:') ? '' : values.logo} disabled={disabled || uploading} onChange={value => set('logo', value)}/>}
       </Field>
       {text('introduction', '简介', { multiline: true, maxLength: 1000 })}
       {text('website', '官网', { link: true, maxLength: 1000 })}
@@ -92,7 +93,7 @@ export default function ProviderMaterialProfile({ provider, editing, ops, edit, 
     <div className="materials-field-grid">
       {text('contact', '联系人')}
       {text('contactInfo', '联系人号码或邮箱')}
-      {text('description', '备注', { multiline: true, maxLength: 2000 })}
+      {text('description', '描述', { multiline: true, maxCount: 300 })}
     </div>
     {ops.error && <Notice error>{ops.error}</Notice>}
     {stale && <Notice error>服务商资料已有修订，请重新打开核对。</Notice>}

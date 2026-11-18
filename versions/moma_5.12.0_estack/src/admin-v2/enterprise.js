@@ -1,4 +1,5 @@
 import { isManagedCustomerAccount } from './account-data-source.js';
+import { assertProjectAdministratorsPreserved } from '../project-access.mjs';
 
 export const enterpriseTenants = state => state.tenants.filter(item => ['企业', '政府'].includes(item.type));
 export const managedEnterpriseTenants = state => enterpriseTenants(state).filter(isManagedCustomerAccount);
@@ -90,16 +91,14 @@ export function validateDemoAdminCode(challenge, { code, scope, actor, now = Dat
 
 // All enterprise commands resolve to one audited transaction in the shared demo store.
 export function enterpriseTransaction(state, command) {
-  const { operation, ids = {}, tenantId, data = {}, mode = 'cloud' } = command;
+  const { operation, ids = {}, tenantId, data = {}, deploymentMode, loginProof } = command;
   const tenant = state.tenants.find(item => item.id === tenantId);
   const changes = [];
   if (operation !== 'create' && (!tenant || !enterpriseTenants(state).some(item => item.id === tenantId))) throw new Error('企业不存在，请返回列表');
-  if (operation !== 'create' && mode === 'private' && privateEnterprise(state)?.id !== tenantId) throw new Error('该企业不属于当前私有化场景');
   const requireId = key => required(ids[key], '事务编号');
   let account;
   if (operation === 'create' || operation === 'add-admin') {
     if (!['new', 'existing'].includes(data.accountMode)) throw new Error('请选择账号开通方式');
-    if (operation === 'create' && mode === 'private' && managedEnterpriseTenants(state).length) throw new Error('当前单企业容量已用完，请进入企业详情管理账号');
     if (operation === 'add-admin' && (!tenant || tenant.status === '停用')) throw new Error('请先解冻企业账号，再添加管理员');
     if (data.accountMode === 'existing') {
       account = state.users.find(user => user.id === data.userId);
@@ -116,7 +115,7 @@ export function enterpriseTransaction(state, command) {
       if (state.users.some(user => user.login.toLowerCase() === login.toLowerCase())) throw new Error('登录账号已存在，请选择已有登录账号');
       const email = String(data.email || '').trim();
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('请输入有效的联系邮箱');
-      account = { id: requireId('user'), name, login, email, phone: adminPhone(data.phone), status: '正常', initialized: false };
+      account = { id: requireId('user'), name, login, email, phone: adminPhone(data.phone), status: '正常', initialized: Boolean(loginProof) };
       changes.push({ type: 'add', collection: 'users', record: account });
     }
     let targetId = tenantId;
@@ -124,8 +123,9 @@ export function enterpriseTransaction(state, command) {
       const name = required(data.companyName, '公司/机构名称', 120);
       if (!['企业', '政府'].includes(data.type)) throw new Error('请选择有效的客户类型');
       if (String(data.notes || '').length > 500) throw new Error('备注不能超过 500 个字符');
+      if (deploymentMode !== undefined && !['私有云','私有化'].includes(deploymentMode)) throw Error('请选择有效的部署方式');
       targetId = requireId('tenant');
-      changes.push({ type: 'add', collection: 'tenants', record: { id: targetId, name, ...metadata(data), type: data.type, notes: data.notes?.trim() || '', ownerId: account.id, status: '正常', source: '后台创建' } });
+      changes.push({ type: 'add', collection: 'tenants', record: { id: targetId, name, ...metadata(data), type: data.type, notes: data.notes?.trim() || '', ownerId: account.id, status: '正常', source: '后台创建', ...(deploymentMode && {deploymentMode}) } });
       changes.push({ type: 'add', collection: 'organizations', record: { id: requireId('organization'), tenantId: targetId, parentId: null, name, status: '正常' } });
     }
     const existing = state.memberships.find(member => member.tenantId === targetId && member.userId === account.id);
@@ -158,10 +158,15 @@ export function enterpriseTransaction(state, command) {
       if (!member) throw new Error('管理员关系不存在');
       if (member.status === '停用' && !state.users.some(user => user.id === member.userId && user.status === '正常')) throw new Error('登录账号已停用或不存在，不能启用管理员');
       if (effectiveEnterpriseAdmins(state, tenant).some(item => item.id === member.id) && effectiveEnterpriseAdmins(state, tenant).length <= 1) throw new Error('至少保留一位有效企业管理员，请先添加其他管理员');
-      changes.push({ type: 'update', collection: 'memberships', id: member.id, changes: { status: member.status === '停用' ? '正常' : '停用' } });
+      const status = member.status === '停用' ? '正常' : '停用';
+      if (status === '停用') {
+        const memberships = state.memberships.map(row => row.id === member.id ? { ...row, status } : row);
+        assertProjectAdministratorsPreserved(state, { ...state, memberships }, tenantId);
+      }
+      changes.push({ type: 'update', collection: 'memberships', id: member.id, changes: { status } });
     } else if (operation === 'toggle-key') {
       const key = state.apiKeys.find(item => item.id === command.keyId && item.tenantId === tenantId && state.projects.some(project => project.id === item.projectId && project.tenantId === tenantId));
-      if (!key || !['有效', '停用'].includes(key.status)) throw new Error('API 密钥不存在、已撤销或归属异常');
+      if (!key || key.kind === 'experience' || !['有效', '停用'].includes(key.status)) throw new Error('API 密钥不存在、已撤销或归属异常');
       if (tenant.status === '停用' && key.status === '停用') throw new Error('请先解冻企业账号，再启用 API 密钥');
       changes.push({ type: 'update', collection: 'apiKeys', id: key.id, changes: { status: key.status === '停用' ? '有效' : '停用' } });
     } else if (operation === 'configure-grant') {

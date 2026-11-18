@@ -1,3 +1,4 @@
+import { modelIdentity, modelServiceIdentity, modelPresentation } from '../model-identities.mjs';
 import { offerKey, providerOffer } from '../service-access.mjs';
 import { modelOperationsView } from '../mock/model-data.js';
 import { modelCategory, modelCode, modelSupplies, activeSupplyPrice, activeSupplySalePrice, priceItems, supplyModelUrl, publicationChecks } from './model-management.js';
@@ -5,34 +6,41 @@ import { catalogueChannels, channelUrl, channelBlockReason, channelFingerprint }
 import { MOMA_PROVIDER, providerCatalogueIds, supplierDirectory, displayedCatalogueIds } from './moma-provider.js';
 import { cataloguePurchasePrice } from './provider-catalogue-pricing.js';
 import { activeChannelProcurement } from './channel-change-management.js';
+import { hasMatchingCallStatus, matchesCallStatus, modelServiceStarted } from './service-directory.js';
 
 export function serviceDirectoryModels(state, linkedId, catalogue) {
-  return modelOperationsView(state,catalogue,linkedId).models;
+  return modelOperationsView(state,catalogue,linkedId).models.filter(model => !model.deletedAt);
 }
 
-export function serviceIndexModels(state, params) {
+export function serviceSourceIds(state) {
+  const configured = state.models.filter(model => !model.deletedAt && ['standard', 'provider'].includes(model.serviceMode));
+  return new Set([...serviceDirectoryModels(state), ...configured].flatMap(model => [model.id, model.templateId]));
+}
+
+export const serviceDisplayName = model => model?.serviceName || model?.name;
+
+export const DUPLICATE_SERVICE_NAME = '模型服务名称已存在';
+// Keep service creation within the existing D1 atomic statement budget.
+export const SERVICE_CREATION_LIMIT = 5;
+
+export function serviceNameInUse(state, name, currentId) {
+  const key = name.trim().toLowerCase();
+  return Boolean(key && state.models.some(model =>
+    !model.deletedAt && model.id !== currentId && serviceDisplayName(model)?.trim().toLowerCase() === key));
+}
+
+export function serviceIndexModels(state, params, { byCall = false } = {}) {
   const query = (params.get('q') || '').trim().toLowerCase(), type = params.get('type'), mode = params.get('mode'), status = params.get('status');
   return serviceDirectoryModels(state, params.get('model'), params.get('catalogue')).filter(model =>
     (status==='archived'?Boolean(model.archivedAt):!model.archivedAt) &&
-    (!query || [model.name, modelCode(model)].join(' ').toLowerCase().includes(query)) &&
+    (!query || [model.serviceName, modelPresentation(state,model).name, modelCode(model), modelIdentity(state,model).canonical_slug, modelIdentity(state,model).id, modelServiceIdentity(state,model), ...providerServices(model).flatMap(service=>[service.callId, modelServiceIdentity(state,model,service.channelId || service.providerId)])].join(' ').toLowerCase().includes(query)) &&
     (!type || type === 'all' || modelCategory(model.type) === type) &&
     (!mode || mode === 'all' || (mode === 'unset' ? !model.serviceMode : model.serviceMode === mode)) &&
-    (!status || status === 'all' || (status==='listed' && model.listingStatus==='已上架' || serviceLifecycle(model)==={listed:'已上架',unlisted:'已下架',unpublished:'未上架',archived:'已归档'}[status])));
+    (byCall ? hasMatchingCallStatus(model, status) : matchesCallStatus(status, modelServiceStarted(model))));
 }
 
 export function selectServiceModel(rows, requestedId) {
   return requestedId !== null ? rows.find(model => model.id === requestedId) : rows.find(model => model.serviceReviewCase === 'video') || rows[0];
-}
-export function serviceLifecycle(model) {
-  if(model.archivedAt)return '已归档';
-  if (model.listingStatus==='已上架') return model.releaseStage==='gray'?'灰度上架':'已上架';
-  return (model.serviceManaged || model.serviceReviewCase) && !model.firstPublishedAt?'未上架':'已下架';
-}
-export function serviceHeaderStatus(model) {
-  return {
-    service: model.archivedAt ? '已归档' : model.listingStatus === '已上架' ? model.releaseStage === 'gray' ? '灰度上架' : '正式上架' : '已下架',
-    visibility: model.marketVisible === false ? '用户不可见' : model.releaseStage === 'gray' ? '灰度用户可见' : '用户可见',
-  };
 }
 export function serviceConfiguration(state,model) {
   const issues=publicationChecks(state,model,{technical:true}).filter(check=>!check.passed),setupIssues=issues.filter(check=>check.tab!=='platform');
@@ -41,8 +49,8 @@ export function serviceConfiguration(state,model) {
 
 export function serviceConfigurationTarget(model,check) {
   const base={page:'listing',model:model.id,panel:'routing',providerEdit:null,providerAdd:null,providerChannels:null,providerAssociate:null,routeProvider:null,service:null,mapping:null};
-  if (check.tab==='technical' || check.tab==='purpose') return {...base,panel:'materials'};
-  if (check.tab==='scope') return {page:'model-prices',service:model.serviceMode==='provider'?providerServiceId(model.id,offerKey(providerServices(model)[0])):'standard:'+model.id,tab:'sales'};
+  if (check.tab==='technical' || check.tab==='purpose') return base;
+  if (check.tab==='scope') return null;
   if (check.tab==='serviceMode') return {...base,panel:'routing'};
   if (check.tab==='pricing' && model.serviceMode==='provider' && !providerOffer(model,check.providerId)?.callId) return {...base,panel:'routing',identityProvider:check.providerId};
   if (check.tab==='supplies' && model.serviceMode==='provider') return {...base,panel:'routing',providerAdd:'1'};
@@ -84,6 +92,8 @@ export function unifiedBillingDraft(state, model) {
 }
 
 export const providerServices = model => (model.serviceProviders || []).filter(item=>item.status !== '已移除');
+export const serviceCallIdentifiers = model => [...new Set((model.serviceMode === 'provider'
+  ? providerServices(model).map(service => service.callId) : [model.modelId]).filter(Boolean))];
 export const providerServiceId = (modelId, providerId) => `provider:${modelId}:${providerId}`;
 export const activeProviderPrice = (state, modelId, providerId, at = Date.now()) => currentSale( state.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && (price.channelId || price.providerId)===providerId && price.status==='已发布' && (price.serviceModeRevision || 0)===(state.models.find(model=>model.id===modelId)?.serviceModeRevision || 0) && Date.parse(price.effectiveAt)<=at).sort((a,b)=>Date.parse(b.effectiveAt)-Date.parse(a.effectiveAt) || b.version-a.version),at);
 export const providerPriceRevision = (state, modelId, providerId) => state.modelSalePrices.filter(price=>price.modelId===modelId && price.scope==='provider' && offerKey(price)===providerId).sort((a,b)=>b.version-a.version)[0]?.id || '';
@@ -105,12 +115,5 @@ export function commercialPriceBase(state, model, providerId = '') {
 export function servicePriceIdentity(state, model, providerId = '') {
   const entry = providerOffer(model, providerId);
   const provider = state.providers.find(row => row.id === (entry?.providerId || MOMA_PROVIDER.id));
-  return { supplierName: entry?.channelName ? `${provider?.name || '服务商已不存在'}（${entry.channelName}）` : provider?.name || '服务商已不存在', callId: providerId ? entry?.callId || '' : model.modelId || '' };
-}
-
-export function currentServiceCosts(state,model,providerId='') {
-  const route=state.serviceRoutes.find(row=>row.serviceId===(providerId?providerServiceId(model.id,providerId):`standard:${model.id}`));
-  const config=route?.versions.find(row=>row.version===route.activeVersion)?.config;
-  const selected=new Set((config?.channels || []).filter(row=>row.enabled).map(row=>row.supplyId));
-  return serviceSupplyRows(state,model).filter(row=>selected.has(row.id)).map(row=>({name:row.channelName,items:row.cost?.items || []}));
+  return { supplierName: provider?.name || '服务商已不存在', callId: providerId ? entry?.callId || '' : model.modelId || '' };
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Button, Slider } from '@douyinfe/semi-ui';
 import { Check, Mic, Pause, Play, RotateCcw, Square, Trash2 } from "lucide-react";
 
 const clock = (value) => {
@@ -98,17 +99,20 @@ export default function SpeechRecorder({ file, url, recording, requesting, secon
     <div className={`sr-recorder${recording ? " is-recording" : ""}`}>
       <div className="sr-status" role="status">{file && <Check size={15} aria-hidden="true" />}{status}</div>
       <div className="sr-player">
-        <button type="button" className="sr-play" disabled={disabled || requesting} onClick={recording ? onStop : file ? togglePlayback : onStart} aria-label={recording ? "停止录音" : file ? playing ? "暂停试听" : "播放录音" : "开始录音"}>
+        <Button theme="solid" className="sr-play" disabled={disabled || requesting} onClick={recording ? onStop : file ? togglePlayback : onStart} aria-label={recording ? "停止录音" : file ? playing ? "暂停试听" : "播放录音" : "开始录音"}>
           {recording ? <Square size={25} fill="currentColor" /> : file ? playing ? <Pause size={29} fill="currentColor" /> : <Play size={29} fill="currentColor" /> : <Mic size={31} />}
-        </button>
+        </Button>
         <div className="sr-track">
           <canvas ref={canvas} aria-hidden="true" />
-          {file && <input className="sr-seek" type="range" aria-label="试听进度" min="0" max={duration || 1} step="0.1" value={position} onChange={(event) => { const next = Number(event.target.value); audio.current.currentTime = next; setPosition(next); }} />}
+          {file && <Slider className="sr-seek" aria-label="试听进度" min={0} max={duration || 1} step={0.1}
+            value={position} onChange={next => { audio.current.currentTime = next; setPosition(next); }} />}
           <div className="sr-time">{file ? `${clock(position)} / ${clock(duration)}` : `${clock(recording ? seconds : 0)} / 01:00`}</div>
         </div>
       </div>
       <div className="sr-actions">
-        {file ? <><button type="button" disabled={disabled} onClick={onStart}><RotateCcw size={18} />重新录音</button><button type="button" disabled={disabled} onClick={onRemove}><Trash2 size={18} />删除</button></> : <span>{recording ? "点击停止按钮结束录音，60 秒后自动停止" : "允许使用麦克风后即可录音，最长 60 秒"}</span>}
+        {file ? <><Button theme="borderless" type="tertiary" disabled={disabled} icon={<RotateCcw size={18}/>} onClick={onStart}>重新录音</Button>
+          <Button theme="borderless" type="danger" disabled={disabled} icon={<Trash2 size={18}/>} onClick={onRemove}>删除</Button></>
+          : <span>{recording ? "点击停止按钮结束录音，60 秒后自动停止" : "允许使用麦克风后即可录音，最长 60 秒"}</span>}
       </div>
       {url && <audio ref={audio} src={url} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)} onLoadedMetadata={(event) => { if (Number.isFinite(event.currentTarget.duration)) setDuration(event.currentTarget.duration); }} />}
       {error && <p className="sr-error" role="status">{error}</p>}

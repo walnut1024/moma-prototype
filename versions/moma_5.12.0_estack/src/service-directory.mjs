@@ -1,3 +1,5 @@
+import { modelPresentation } from './model-identities.mjs';
+import { resourceId } from './resource-id.mjs';
 import { modelOperationsView } from './mock/model-data.js';
 import { isServiceShowcase } from './admin-v2/service-showcase.js';
 import { libraryRecord } from './admin-v2/model-library.js';
@@ -6,9 +8,11 @@ import { getMockServiceSnapshots, mockServiceReadiness } from './admin-v2/mock-o
 import { connectionKeys } from './admin-v2/connection-state.js';
 import { serviceGuideRequest } from './admin-v2/service-guide.js';
 import { MODEL_CATEGORIES, modelCategory } from './admin-v2/model-management.js';
+import { MOMA_PROVIDER } from './admin-v2/moma-provider.js';
 import { IDENTITY_FIELDS, TECHNICAL_FIELDS, INTERFACE_FIELDS, FEATURE_FIELDS, ARCHITECTURE_OPTIONS, LICENSE_OPTIONS, specificationFields, normalizeModelLogo, modelProfileDraft } from './admin-v2/model-profile.js';
 
 function presentation(model) {
+  model = modelPresentation(null, model);
   const profile = modelProfileDraft(model), support = value => value == null ? '' : value ? '支持' : '暂无';
   const facts = descriptors => descriptors.map(({ key, label, kind, unit }) => {
     const value = profile[key], choices = kind === 'architecture' ? ARCHITECTURE_OPTIONS : kind === 'license' ? LICENSE_OPTIONS : kind === 'lifecycle' ? [['stable', '稳定版'], ['preview', '预览版'], ['deprecated', '已退役']] : [];
@@ -37,7 +41,7 @@ export function cloudMarketPresentation(offer) {
   return {...presentation(offer),...offer,desc:offer.description,context:offer.capabilities?.context ? Math.round(offer.capabilities.context/1024)+'K' : '未填写',
     contextTokens:offer.capabilities?.context ?? null,series:profile.family || '',input:inputs,outputModalities:outputs,
     businessTasks:profile.tasks || [],tasks:experienceTasks(offer),inputModalities:inputs.map(item=>({文本:'text',图片:'image',音频:'audio',视频:'video'}[item] || item)),
-    output:offer.capabilities?.output ?? '未填写',icon:1,billing:'按量计费',reason:offer.callable ? '' : '请先订购此模型服务',documentation:profile.documentation || '',
+    output:offer.capabilities?.output ?? '未填写',icon:1,billing:offer.internal ? '内部使用' : '按量计费',reason:offer.callable ? '' : '请先订购此模型服务',documentation:profile.documentation || '',
     date:profile.releaseDate || '',guideRequest:serviceGuideRequest(offer,offer.callId)};
 }
 
@@ -49,7 +53,10 @@ export function marketModels(services, scope = 'showcase') {
     if (group) group.services.push(row);
     else groups.set(row.modelKey, { ...row, services: [row] });
   }
-  return [...groups.values()].map(row => ({ ...row, providers: row.services.map(service => service.provider), provider: row.services.map(service => service.provider).join('、'), callable: row.services.some(service => service.callable) }));
+  return [...groups.values()].map(row => {
+    const providers = new Map(row.services.map(service => [service.providerId, service.providerName]));
+    return { ...row, providers, provider: [...providers.values()].join('、'), callable: row.services.some(service => service.callable) };
+  });
 }
 export function customerPriceRows(prices, at = Date.now()) {
   const labels = { million_input_tokens: ['输入 Token', '百万 Token'], million_output_tokens: ['输出 Token', '百万 Token'], million_tokens: ['总 Token', '百万 Token'], request: ['请求数', '次'], second: ['时长', '秒'], character: ['字符数', '字符'] };
@@ -73,7 +80,7 @@ export function directorySnapshot(storage = globalThis.localStorage) {
     if (access.code === 'model_forbidden' || access.code === 'customer_unavailable') return [];
     if (access.allowed) access = mockServiceReadiness(state, live);
     const tasks = experienceTasks(model), supplier = service.providerId ? state.providers?.find(row => row.id === service.providerId)?.name : '平台统一模型服务模式';
-    return [{ ...presentation(model), modelKey: model.id, marketVisible: model.marketVisible !== false, mode: model.serviceMode, showcase: isServiceShowcase(model), defaultCatalogue: defaultModelIds.has(model.id), guideRequest: serviceGuideRequest(model, service.callId, service.providerId), id: service.id, callId: service.callId, name: model.name, type: model.type === 'audio' ? 'voice' : model.type, provider: supplier || '未配置', maker: model.profile?.author || model.maker || '未填写', desc: model.description || '', description: model.description || '', context: model.capabilities?.context ? `${Math.round(model.capabilities.context / 1024)}K` : '未填写', contextTokens: model.capabilities?.context ?? null, date: model.updatedAt?.slice(0,10) || '', series: model.profile?.family || '', input: (model.profile?.inputModalities || []).map(item => item === '图片' ? '图像' : item), outputModalities: [...new Set([...(model.profile?.outputModalities || []), ...(model.profile?.resultTypes || [])])].map(item => item === '图片' ? '图像' : item), businessTasks: model.profile?.tasks || [], output: model.capabilities?.output ?? '未填写', tags: model.tags || [], tasks, inputModalities: (model.profile?.inputModalities || []).map(item => ({ 文本: 'text', 图片: 'image', 音频: 'audio', 视频: 'video' }[item] || item)), documentation: model.profile?.documentation || '', billing: '按量计费', salePrices: live?.published?.config.salePrices?.map(({ amount, currency, unit, effectiveAt, expiresAt }) => ({ amount, currency, unit, effectiveAt, expiresAt })) || [], icon: 1, callable: access.allowed && tasks.length > 0, reason: access.reason || (tasks.length ? '' : '当前任务暂无在线体验入口'), generation: model.accessGeneration || 0 }];
+    return [{ ...presentation(model), modelKey: model.id, marketVisible: model.marketVisible !== false, mode: model.serviceMode, showcase: isServiceShowcase(model), defaultCatalogue: defaultModelIds.has(model.id), guideRequest: serviceGuideRequest(model, service.callId, service.providerId), id: service.id, callId: service.callId, name: modelPresentation(state,model).name, type: model.type === 'audio' ? 'voice' : model.type, providerId: service.providerId || MOMA_PROVIDER.id, providerName: supplier || '未配置', provider: supplier || '未配置', maker: modelPresentation(state,model).profile?.author || modelPresentation(state,model).maker || '未填写', desc: modelPresentation(state,model).description || '', description: modelPresentation(state,model).description || '', context: model.capabilities?.context ? `${Math.round(model.capabilities.context / 1024)}K` : '未填写', contextTokens: model.capabilities?.context ?? null, date: model.updatedAt?.slice(0,10) || '', series: model.profile?.family || '', input: (model.profile?.inputModalities || []).map(item => item === '图片' ? '图像' : item), outputModalities: [...new Set([...(model.profile?.outputModalities || []), ...(model.profile?.resultTypes || [])])].map(item => item === '图片' ? '图像' : item), businessTasks: model.profile?.tasks || [], output: model.capabilities?.output ?? '未填写', tags: model.tags || [], tasks, inputModalities: (model.profile?.inputModalities || []).map(item => ({ 文本: 'text', 图片: 'image', 音频: 'audio', 视频: 'video' }[item] || item)), documentation: modelPresentation(state,model).profile?.documentation || '', billing: '按量计费', salePrices: live?.published?.config.salePrices?.map(({ amount, currency, unit, effectiveAt, expiresAt }) => ({ amount, currency, unit, effectiveAt, expiresAt })) || [], icon: 1, callable: access.allowed && tasks.length > 0, reason: access.reason || (tasks.length ? '' : '当前任务暂无在线体验入口'), generation: model.accessGeneration || 0 }];
   });
   return { models, identity, identityError, error: '' };
 }
@@ -90,7 +97,7 @@ export function beginExperience(serviceId, task, { images = false } = {}) {
     const supply = state.modelSupplies.find(row => row.id === binding.id), endpoint = state.endpoints.find(row => row.id === supply?.endpointId), provider = state.providers.find(row => row.id === endpoint?.providerId);
     return connectionKeys(endpoint, provider).map(key => ({ providerId: provider?.id, endpointId: endpoint.id, id: key.id, fingerprint: key.fingerprint }));
   });
-  return { requestId:crypto.randomUUID(),startedAt:new Date().toISOString(), serviceId, callId:service.callId, modelId:service.modelId, task, images, modelName: model.name, owner: snapshot.identity.key, sessionGeneration: snapshot.identity.generation, requestGeneration: service.model.requestGeneration || 0, credentials };
+  return { requestId:resourceId('request'),startedAt:new Date().toISOString(), serviceId, callId:service.callId, modelId:service.modelId, task, images, modelName: model.name, owner: snapshot.identity.key, sessionGeneration: snapshot.identity.generation, requestGeneration: service.model.requestGeneration || 0, credentials };
 }
 export function validateExperience(ticket) {
   const state = readLinkedState(), auth = JSON.parse(globalThis.localStorage.getItem(AUTH_DATA_KEY) || 'null'), identity = resolveUserIdentity(state, auth);

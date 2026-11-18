@@ -1,23 +1,34 @@
+import { assertPersonalProjects } from '../src/personal-project.mjs';
+import { isResourceId, resourceId } from '../src/resource-id.mjs';
+import { activeTenantVersion, changeTenantRoute, isTenantRouteCall, keyTenantRoute, visibleProjectRoutes } from '../src/tenant-routing.mjs';
 import { initialApplicationData } from '../src/mock/application-data.js';
 import { billingPeriod } from '../src/admin-v2/mock-billing.js';
 import { canMutate, commitAdminState } from '../src/admin-v2/state-transaction.js';
 import { orderActivationCommand, simulateRequest, applyAdjustment } from '../src/admin-v2/domain.js';
-import { organizationProjection, tenantKeyChanges, tenantOrganizationChanges, tenantProjects, tenantRouteChanges } from '../src/tenant-data.mjs';
+import { organizationProjection, tenantOrganizationChanges, projectRouting, projectRouteChanges } from '../src/tenant-data.mjs';
+import { activeProjectMembers, experienceKeyId, projectAccess, projectRole } from '../src/project-access.mjs';
+import { changeProject, newProject } from '../src/project-configuration.mjs';
+import { changeProjectKeys } from '../src/project-keys.mjs';
+import { diagnosticCall, mockTextUsage, projectCallErrors, projectSpend, requestCharge } from '../src/project-call.mjs';
+import { mergeProjectFacts, projectChargeWrites, projectFactWrite, readProjectFact, readProjectFacts } from './project-facts.js';
 import { loadModelWorkspace, modelChanges } from './model-repository.js';
 import { marketCatalogue } from './market.js';
-import { addPackageOrders, deductMockPlan } from './market-packages.js';
+import { addPackageOrders } from './market-packages.js';
 import { receipt, save } from './model-commands.js';
 import { addPrototypeAccounts } from './prototype-presets.js';
 import { routingServices } from '../src/admin-v2/service-routing.js';
 import { submitEnterpriseCertification, submitRealNameCertification } from '../src/auth-state.mjs';
 import { activeCustomer } from '../src/service-access.mjs';
-import { customerCredential, customerSecretHash } from './customer-identity.js';
+import { customerCredential, customerIdentity, customerSecretHash, dualDemoUserId, dualDemoAdminLogin, dualDemoTenantId } from './customer-identity.js';
+import { readProjectSpacePolicy } from './project-space-policy.js';
+import { normalizeMemberPhone } from '../src/organization-data.mjs';
+import { allowsSpace, internalSpace } from '../src/operating-space.mjs';
 
 const collections = [
   'tenants', 'users', 'memberships', 'organizations', 'projects', 'apiKeys', 'grants',
   'orders', 'products', 'prices', 'bills', 'ledger', 'settlements', 'adjustments', 'announcements',
   'routes', 'limits', 'fallbacks', 'releases', 'caches', 'requests', 'alerts', 'incidents', 'integrations',
-  'clusters', 'artifacts', 'deployments', 'admins', 'tenantRoutes', 'identityEvents', 'customerApplications', 'audits',
+  'clusters', 'artifacts', 'deployments', 'admins', 'tenantRoutes', 'projectRoutes', 'identityEvents', 'customerApplications', 'audits',
 ];
 const directCollections = new Set(['products','prices','orders','bills','settlements','adjustments','announcements','routes','limits','fallbacks','releases','caches','alerts','incidents','integrations','clusters','artifacts']);
 const usageFields = usage => usage ? {input:usage.input_tokens,output:usage.output_tokens,cached:usage.cached_tokens,seconds:usage.seconds,characters:usage.characters,images:usage.images} : null;
@@ -32,6 +43,15 @@ const encoded = value => {
 };
 const conflict = () => issue(409, 'REVISION_CONFLICT', '工作区已有更新，请载入新版本；当前输入保留');
 const validId = value => typeof value === 'string' && /^[a-zA-Z0-9:_.-]{1,200}$/.test(value);
+export const validCallMetadata = metadata => metadata === undefined || metadata && typeof metadata === 'object' &&
+  !Array.isArray(metadata) && Object.keys(metadata).every(field=>field==='_user') &&
+  (metadata._user === undefined || typeof metadata._user === 'string' && metadata._user.trim().length > 0 && metadata._user.length <= 128);
+export const validCallModel = model => typeof model === 'string' &&
+  (/^@preset\/[A-Za-z0-9_.:-]{2,50}$/.test(model) || /^project@[A-Za-z0-9][A-Za-z0-9_-]{1,49}$/.test(model) || /^[A-Za-z0-9][A-Za-z0-9._/:-]{0,199}$/.test(model));
+
+const activeMarketOrders = async (db,tenantId) => (await db.prepare(`SELECT p.tenant_id AS tenantId,o.id AS callId
+  FROM market_orders p JOIN offers o ON o.record_id=p.offer_id
+  WHERE p.tenant_id=? AND p.cancelled_at IS NULL AND o.retired_at IS NULL`).bind(tenantId).all()).results;
 
 async function referenceRow(db) {
   const row = await db.prepare('SELECT reference_json, application_revision, revision AS model_revision, (SELECT commit_seq FROM db_state WHERE id=1) AS commit_seq FROM model_workspace WHERE id=1').first();
@@ -47,7 +67,7 @@ export async function initializeApplication(db, tenantId) {
   if (tenantId && !initial.tenants.some(tenant => tenant.id === tenantId)) return;
   const reference = JSON.parse(row.reference_json);
   for (const key of collections) {
-    const byId = new Map(initial[key].map(item => [item.id, item]));
+    const byId = new Map((initial[key] || []).map(item => [item.id, item]));
     for (const item of reference[key] || []) byId.set(item.id, item);
     reference[key] = [...byId.values()];
   }
@@ -64,8 +84,33 @@ async function applicationState(db, actor) {
   const reference = JSON.parse(row.reference_json);
   const state = { ...reference, ...model, cloudOperations: false, revision: row.application_revision, identityGeneration: reference.identityGeneration || 0 };
   for (const key of collections) if (key !== 'admins') state[key] = reference[key] || [];
-  state.admins = model.admins.map(account => ({ account:account.id, ...(reference.admins || []).find(item => item.id === account.id), ...account }));
+  state.admins = model.admins.map(account => ({ account:account.loginCode || account.id, ...(reference.admins || []).find(item => item.id === account.id), ...account }));
   return { row, reference, state };
+}
+
+export async function dualDemoIdentity(db) {
+  const tenantId=dualDemoTenantId, memberId='member-'+dualDemoUserId;
+  const row=await referenceRow(db);
+  const state=JSON.parse(row.reference_json);
+  if (!state.tenants.some(tenant=>tenant.id===tenantId && tenant.demo===true &&
+      tenant.type==='企业' && activeCustomer(tenant))) return null;
+  const user=state.users.find(item=>item.id===dualDemoUserId);
+  const member=state.memberships.find(item=>item.id===memberId);
+  if (!user && !member) {
+    const at=new Date().toISOString();
+    state.users.push({id:dualDemoUserId,login:dualDemoAdminLogin,name:'系统管理员',
+      status:'正常',initialized:true,source:'内置演示',createdAt:at});
+    const root=state.organizations.find(item=>item.tenantId===tenantId && item.parentId===null);
+    state.memberships.push({id:memberId,tenantId,userId:dualDemoUserId,organizationId:root?.id,
+      role:'租户管理员',status:'正常',createdAt:at});
+    const [written]=await db.batch([
+      db.prepare(`UPDATE model_workspace SET reference_json=?,application_revision=application_revision+1
+        WHERE id=1 AND (SELECT commit_seq FROM db_state WHERE id=1)=?`).bind(encoded(state),row.commit_seq),
+      db.prepare('UPDATE db_state SET commit_seq=commit_seq+1 WHERE id=1 AND changes()=1'),
+    ]);
+    if (!written.meta.changes) conflict();
+  }
+  return customerIdentity(db,dualDemoUserId);
 }
 
 async function marketFacts(db, tenantId, { includeOrders = true } = {}) {
@@ -103,6 +148,27 @@ async function marketFacts(db, tenantId, { includeOrders = true } = {}) {
 const pick = (row, fields) => Object.fromEntries(fields.filter(field=>Object.hasOwn(row,field)).map(field=>[field,row[field]]));
 const runtimeModel = ({id,name,modelId,type,usageUnit,capabilities,archivedAt,deletedAt}) =>
   ({id,name,modelId,type,usageUnit,capabilities:{context:capabilities?.context},archivedAt,deletedAt});
+const safeKey = ({key:_key,secret:_secret,credentialDigest:_digest,...value}) => value;
+const runtimeProjects = state => state.projects.map(row=>pick(row,['id','name','tenantId','status','modelPermissions']));
+const withRequestScope = (state, row) => ({
+  ...row, tenantName:state.tenants.find(item=>item.id===row.tenantId)?.name,
+  projectName:state.projects.find(item=>item.id===row.projectId && item.tenantId===row.tenantId)?.name,
+});
+const operationalRequest = row => ({
+  ...pick(row,['id','requestId','traceId','createdAt','startedAt','admittedAt','httpStatus','modelId','modelType','publicModelId','callId',
+    'tenantId','tenantName','projectId','projectName','projectRouteId','routeMatch','purpose','userId','actorUserId','keyId','source',
+    'providerId','channelId','endpointId','evidenceSource','status','finalStatus','requestStatus','isCanceled','isTimeout','streamInterrupted','finishReason',
+    'stream','errorCode','error','errorSource','cacheHit','durationMs','firstPacketMs','ttftMs','taskStatus','routeVersion','releaseId','usageUnit','usageConfirmed']),
+  providerId:row.providerId || row.procurementSnapshot?.providerId,
+  usage:row.usage && pick(row.usage,['input','output','cached','seconds','characters','images']),
+  attempts:row.attempts?.map(attempt=>({
+    ...pick(attempt,['dispatched','endpointId','supplyId','serviceId','modelId','channelId','status','httpStatus','statusCode','startedAt','createdAt',
+      'upstreamRequestId','upstreamModelId','durationMs','error','errorCode','code','errorSource','isTimeout',
+      'fallback','fallbackReason','usageConfirmed','usageUnit']),
+    providerId:attempt.providerId || attempt.procurementSnapshot?.providerId,
+    usage:attempt.usage && pick(attempt.usage,['input','output','cached','seconds','characters','images']),
+  })),
+});
 
 function maintenanceView(state, modelRevision, requests, audits) {
   const { currentRole, adminSession, revision, routes, limits, fallbacks, releases, caches, alerts, incidents,
@@ -112,40 +178,35 @@ function maintenanceView(state, modelRevision, requests, audits) {
     clusters, artifacts, deployments, modelOnboardings:[],
     admins:state.admins.map(({id,name,role,status})=>({id,name,role,status})),
     tenants:state.tenants.map(({id,name,type})=>({id,name,type})),
+    projects:runtimeProjects(state),
     models:state.models.map(runtimeModel), modelTemplates:state.modelTemplates.map(runtimeModel),
     providers:state.providers.map(({id,name})=>({id,name})),
     endpoints:state.endpoints.map(({id,endpointId,name,providerId,modelIds,status})=>({id,endpointId,name,providerId,modelIds,status})),
-    gatewayKeyOptions:state.apiKeys.map(({id,keyId,status})=>({id,keyId,status})),
+    gatewayKeyOptions:state.apiKeys.filter(row=>row.kind!=='experience' && row.status!=='已删除').map(({id,keyId,status,tenantId,projectId})=>({id,keyId,status,tenantId,projectId})),
     gatewayModelOptions:routingServices(state).map(({callId})=>callId).filter(Boolean),
+    gatewayProjectRoutes:state.projectRoutes.map(({code,tenantId,projectId})=>({model:'project@'+code,tenantId,projectId})),
     audits:audits.filter(row=>deploymentIds.has(row.objectId)).map(({id,action,actor,objectId,createdAt,result})=>({id,action,actor,objectId,createdAt,result})),
-    requests:requests.map(row=>({
-      ...pick(row,['id','requestId','createdAt','startedAt','httpStatus','modelId','modelType','publicModelId','callId','tenantId','userId','keyId','source',
-        'providerId','channelId','endpointId','evidenceSource','status','finalStatus','requestStatus','isCanceled','isTimeout','streamInterrupted','finishReason',
-        'stream','errorCode','error','errorMessage','errorSource','cacheHit','durationMs','firstPacketMs','ttftMs','taskStatus','routeVersion','releaseId','usageUnit','usageConfirmed']),
-      providerId:row.providerId || row.procurementSnapshot?.providerId,
-      usage:row.usage && pick(row.usage,['input','output','cached','seconds','characters','images']),
-      attempts:(row.attempts || []).map(attempt=>({
-        ...pick(attempt,['dispatched','endpointId','channelId','status','httpStatus','statusCode','startedAt','createdAt','upstreamRequestId','upstreamModelId',
-          'durationMs','error','errorCode','code','errorMessage','message','errorSource','isTimeout','fallback','fallbackReason','usageConfirmed','usageUnit']),
-        providerId:attempt.providerId || attempt.procurementSnapshot?.providerId,
-        usage:attempt.usage && pick(attempt.usage,['input','output','cached','seconds','characters','images']),
-      })),
-    })),
+    requests:requests.map(operationalRequest),
   };
 }
 
-export async function applicationBootstrap(db, actor) {
+export async function applicationBootstrap(db, actor, configured = []) {
   const maintenance=actor.role==='运维人员';
-  const [{ state, row }, facts, audits, activity, lastLogin] = await Promise.all([
+  const [{ state, row }, facts, audits, activity, lastLogin, projectFacts, credentials, adminCredentials, spacePolicy] = await Promise.all([
     applicationState(db, actor), marketFacts(db, null, {includeOrders:!maintenance}),
     db.prepare("SELECT record_json FROM audit_events WHERE entity_type='application' ORDER BY created_at DESC,rowid DESC LIMIT 200").all(),
     maintenance ? null : db.prepare('SELECT id,user_id,created_at FROM tenant_login_events WHERE created_at>=? ORDER BY created_at DESC LIMIT 200').bind(Date.now()-week).all(),
     maintenance ? null : db.prepare('SELECT user_id,logged_at FROM customer_last_login').all(),
+    readProjectFacts(db),
+    maintenance ? null : db.prepare('SELECT user_id FROM customer_credentials').all(),
+    maintenance ? null : db.prepare('SELECT id,login_name,role,access_hash IS NOT NULL AS saved FROM admin_accounts WHERE enabled=1').all(),
+    maintenance ? null : readProjectSpacePolicy(db),
   ]);
   const events=[...audits.results.map(row=>JSON.parse(row.record_json)),...state.audits];
-  const requests=[...facts.requests,...state.requests];
+  const requests=mergeProjectFacts(projectFacts, [...facts.requests, ...state.requests])
+    .map(({requestBody:_request,responseBody:_response,requestHash:_hash,rejection:_rejection,...fact}) => withRequestScope(state,fact));
   if(maintenance)return maintenanceView(state,row.model_revision,requests,events);
-  const { cloudMockState: _snapshot, ...view } = state;
+  const { cloudMockState: _snapshot, projectRoutes: _projectRoutes, ...view } = state;
   if(actor.role==='运营人员'){
     for(const key of ['routes','limits','fallbacks','releases','caches','clusters','artifacts','incidents','integrations'])delete view[key];
     view.deployments=[];
@@ -154,7 +215,24 @@ export async function applicationBootstrap(db, actor) {
   }
   const logins=activity.results.map(({id,user_id,created_at})=>({id,userId:user_id,type:'login',at:new Date(created_at).toISOString()}));
   const lastLoginByUser = new Map(lastLogin.results.map(({user_id,logged_at})=>[user_id,new Date(logged_at).toISOString()]));
-  return { ...view,identityEvents:[...logins,...state.identityEvents],
+  const accountIds=new Set([...configured,...credentials.results.map(row=>row.user_id)]);
+  const activeAdmins=adminCredentials.results.filter(row=>row.saved || configured.includes(row.login_name || row.id));
+  if (activeAdmins.some(row=>row.login_name===dualDemoAdminLogin && row.role==='平台管理员')) {
+    accountIds.add(dualDemoUserId);
+  }
+  const activeTenants=new Map(state.tenants.filter(tenant=>activeCustomer(tenant) && allowsSpace(spacePolicy,tenant)).map(tenant=>[tenant.id,tenant]));
+  const activeUsers=new Set([...activeTenants.values()].filter(tenant=>tenant.type==='个人' && spacePolicy.personalEnabled)
+    .map(tenant=>tenant.ownerId));
+  for (const membership of state.memberships) {
+    const tenant=activeTenants.get(membership.tenantId);
+    if (membership.status==='正常' && tenant && tenant.type!=='个人' &&
+        (membership.userId!==dualDemoUserId || tenant.id===dualDemoTenantId)) activeUsers.add(membership.userId);
+  }
+  return { ...view,apiKeys:state.apiKeys.map(safeKey),identityEvents:[...logins,...state.identityEvents],
+    adminLoginIds:activeAdmins.map(admin=>admin.id),
+    accountUserIds:state.users.filter(user=>user.status==='正常' && accountIds.has(user.id) && activeUsers.has(user.id)).map(user=>user.id),
+    gatewayProjectRoutes:state.projectRoutes.map(({code,tenantId,projectId})=>({model:'project@'+code,tenantId,projectId})),
+    spacePolicy, customerOrderScope:'space',
     users:state.users.map(user=>({...user,lastLoginAt:lastLoginByUser.get(user.id)})),
     modelRevision:row.model_revision, audits:events, orders:[...facts.orders,...state.orders], requests };
 }
@@ -168,6 +246,87 @@ function referenceWrite(before, after, reference) {
       ...rows.filter(row=>!row.prototypeFact)];
   }
   return encoded(next);
+}
+
+function allowedKeyIp(key, address) {
+  if (!key.ipAllowlist?.length) return true;
+  const addressParts=address?.split('.');
+  if (addressParts?.length!==4 || addressParts.some(part=>!/^\d{1,3}$/.test(part) || Number(part)>255)) return false;
+  const ipv4=parts=>parts.reduce((value,part)=>value*256+Number(part),0);
+  return key.ipAllowlist.some(entry=>{
+    const [network,prefix='32']=entry.split('/'), block=2**(32-Number(prefix));
+    return Math.floor(ipv4(addressParts)/block)===Math.floor(ipv4(network.split('.'))/block);
+  });
+}
+
+export async function customerInvocation(db,credentialDigest,body,clientIp,privateSite) {
+  const { row,state,reference }=await applicationState(db,{id:'customer-api',role:'客户'});
+  const keys=state.apiKeys.filter(item=>item.credentialDigest===credentialDigest && item.kind!=='experience');
+  const key=keys.length===1 ? keys[0] : null;
+  if (key?.status!=='有效' || !key.tenantId || !key.projectId) issue(401,'auth_rejected','API Key 无效');
+  if (key.expiresAt && !(Date.parse(key.expiresAt)>Date.now())) issue(401,'key_expired',projectCallErrors.key_expired[1]);
+  if (!allowedKeyIp(key,clientIp)) issue(403,'ip_not_allowed','当前来源不在 API Key 的 IP 白名单内');
+  const tenant=state.tenants.find(item=>item.id===key.tenantId);
+  const policy=privateSite ? await readProjectSpacePolicy(db) : null, internal=internalSpace(policy,tenant);
+  if (!activeCustomer(tenant) || !allowsSpace(policy,tenant)) {
+    issue(403,'customer_unavailable','当前客户空间不可用');
+  }
+  if (internal && key.billingType==='Token Plan') issue(403,'INTERNAL_SPACE','企业内用空间不使用套餐密钥');
+  const {requestId,model,messages,metadata}=body;
+  const answer='模拟调用已完成。';
+  const requestHash=await hash([key.id,key.credentialVersion,model,messages,metadata?._user?.trim(),...(body.routing ? [body.routing] : [])]);
+  const route = isTenantRouteCall(model) && keyTenantRoute(state, key, model);
+  const version = route?.enabled ? activeTenantVersion(route) : null;
+  const input = messages.map(item => item.content).join('\n');
+  const effectiveInput = version?.config.systemPrompt ? version.config.systemPrompt + '\n' + input : input;
+  const cacheKey=await hash(version ? [version.config.systemPrompt, version.config.parameters, messages] : messages);
+  const [facts,marketOrders]=await Promise.all([readProjectFacts(db,key.tenantId),activeMarketOrders(db,key.tenantId)]);
+  const previous=facts.find(item=>item.requestId===requestId);
+  if (previous && (previous.requestHash!==requestHash || previous.source!=='API 调用')) {
+    issue(409,'REQUEST_ID_CONFLICT','调用标识已用于其他请求');
+  }
+  const simulationState={...state,requests:mergeProjectFacts(facts,state.requests)};
+  const result=simulateRequest(simulationState,{requestId,keyId:key.id,modelId:model,
+    metadata:{_user:metadata?._user?.trim()},marketOrders,cacheKey,internal,allowedModelTypes:['text','multimodal'],
+    costTier:body.routing?.cost_tier,
+    usage:mockTextUsage(effectiveInput,answer),
+    content:{input,output:answer}});
+  const respond=fact=>{
+    if (fact.httpStatus>=400) issue(fact.httpStatus,fact.error,projectCallErrors[fact.error]?.[1] || '当前模型服务无法完成调用');
+    const {input,output}=fact.usage;
+    return {id:fact.requestId,object:'chat.completion',created:Math.floor(Date.parse(fact.createdAt)/1000),
+      model:fact.callId,source:'mock',choices:[{index:0,message:{role:'assistant',content:answer},finish_reason:'stop'}],
+      usage:{prompt_tokens:input,completion_tokens:output,total_tokens:input+output}};
+  };
+  if (result.duplicate) {
+    if (!previous) issue(409,'REQUEST_ID_CONFLICT','调用标识已用于其他请求');
+    return respond(result.request);
+  }
+  const fact={...result.request,requestHash};
+  delete fact.userId;
+  const at=Date.parse(fact.createdAt);
+  const writes=result.changes.filter(change=>['grants','ledger','orders'].includes(change.collection));
+  for (const change of writes.filter(item=>item.collection==='ledger')) {
+    const entry=result.state.ledger.find(item=>item.id===change.record.id);
+    if (entry) entry.prototypeFact=true;
+  }
+  const commitGuard='(SELECT commit_seq FROM db_state WHERE id=1)=?';
+  try {
+    const [insert]=await db.batch([
+      projectFactWrite(db,fact,commitGuard,row.commit_seq),
+      ...(writes.length ? [db.prepare('UPDATE model_workspace SET reference_json=?,application_revision=application_revision+1 WHERE id=1 AND changes()=1')
+        .bind(referenceWrite(state,{...state,grants:result.state.grants,orders:result.state.orders,ledger:result.state.ledger},reference))] : []),
+      ...projectChargeWrites(db,fact,at),
+      db.prepare('UPDATE db_state SET commit_seq=commit_seq+1 WHERE id=1 AND changes()=1'),
+    ]);
+    if (insert.meta.changes) return respond(fact);
+  } catch (error) {
+    if (!/UNIQUE constraint/.test(String(error))) throw error;
+  }
+  const committed=await readProjectFact(db,key.tenantId,requestId);
+  if (committed?.requestHash===requestHash && committed.source==='API 调用') return respond(committed);
+  if (committed) issue(409,'REQUEST_ID_CONFLICT','调用标识已用于其他请求');
+  conflict();
 }
 
 function safeAction(action) {
@@ -203,7 +362,8 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins)
   if (replay) return replay;
   const { row, reference, state } = await applicationState(db, actor);
   if (state.revision !== expectedRevision || !row.application_revision) conflict();
-  let next, cancellation;
+  let next, cancellation, invocationFact, projectAudit, initialCredential;
+  const policy=await readProjectSpacePolicy(db);
   try {
     if (action.type==='cancelMarketOrder' && canMutate(actor.role,{type:'update',collection:'orders'})) {
       if(!validId(action.id)) throw Error('订单标识无效');
@@ -212,33 +372,97 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins)
       if(cancellation.cancelled_at)return {operationId,revision:state.revision};
       next={...state,revision:state.revision+1,audits:[{action:'退订模型服务',objectId:action.id,result:'成功',createdAt:new Date().toISOString()},...state.audits]};
     } else if (action.type==='generateBills' && canMutate(actor.role,{type:'update',collection:'bills'})) {
-      const period=billingPeriod();
-      const {results}=await db.prepare('SELECT tenant_id,amount_micros FROM market_monthly_charges WHERE period=?').bind(period).all();
+      const period=billingPeriod(), tenantId=action.tenantId ?? null;
+      if (tenantId!==null && (!validId(tenantId) || !state.tenants.some(row=>row.id===tenantId))) throw Error('账单客户不存在');
+      const [totals,projectCharges] = await db.batch([
+        db.prepare('SELECT tenant_id,amount_micros FROM market_monthly_charges WHERE period=? AND (? IS NULL OR tenant_id=?)').bind(period,tenantId,tenantId),
+        db.prepare(`WITH amounts AS (
+          SELECT r.tenant_id,json_extract(s.payload_json,'$.projectId') AS projectId,
+            COALESCE(json_extract(s.payload_json,'$.charge.micros'),json_extract(s.payload_json,'$.charge.amount')) AS micros
+          FROM market_charge_receipts r JOIN simulation_records s
+          ON s.kind='project-usage' AND s.id=r.tenant_id||char(1)||r.request_id
+          WHERE r.period=? AND (? IS NULL OR r.tenant_id=?) AND json_extract(s.payload_json,'$.billingStatus')='billable'
+            AND json_extract(s.payload_json,'$.charge.currency')='CNY'
+        ) SELECT tenant_id,projectId,SUM(micros) AS amountMicros FROM amounts
+          WHERE projectId IS NOT NULL AND typeof(micros)='integer' AND micros>=0
+          GROUP BY tenant_id,projectId ORDER BY projectId`).bind(period,tenantId,tenantId),
+      ]);
       const changes=[];
-      for(const {tenant_id:tenantId,amount_micros:micros} of results){
+      for(const {tenant_id:tenantId,amount_micros:micros} of totals.results){
         const bill=state.bills.find(row=>row.tenantId===tenantId && row.period===period);
         const amount=Math.round(micros/10000)/100;
-        if(!bill)changes.push({type:'add',collection:'bills',record:{id:crypto.randomUUID(),billNo:'BILL-'+period.replace('-','')+'-'+tenantId,
-          tenantId,period,amount,discount:0,paid:0,status:'待出账'}});
-        else if(bill.status==='待出账' && bill.amount!==amount)changes.push({type:'update',collection:'bills',id:bill.id,changes:{amount}});
+        const projectBreakdown=projectCharges.results.filter(row=>row.tenant_id===tenantId).map(({projectId,amountMicros})=>({
+          projectId, amountMicros, projectName:state.projects.find(row=>row.tenantId===tenantId && row.id===projectId)?.name,
+        }));
+        const unassignedMicros=micros-projectBreakdown.reduce((sum,row)=>sum+row.amountMicros,0);
+        const values={amount,amountMicros:micros,
+          ...(unassignedMicros>=0 ? {projectBreakdown,unassignedMicros} : {})};
+        if(!bill)changes.push({type:'add',collection:'bills',record:{id:resourceId('bill'),billNo:'BILL-'+period.replace('-','')+'-'+tenantId,
+          tenantId,period,...values,discount:0,paid:0,status:'待出账'}});
+        else if(bill.status==='待出账' && Object.entries(values).some(([field,value])=>JSON.stringify(bill[field])!==JSON.stringify(value))) {
+          changes.push({type:'update',collection:'bills',id:bill.id,changes:values});
+        }
       }
       next=changes.length?commitAdminState(state,{type:'batch',label:'生成模拟账单',changes},actor.role):state;
     } else if (action.type === 'adjustment' && actor.role === '平台管理员') {
       next = applyAdjustment(state, action.id, action.approved === true, action.reason);
     } else if (action.type === 'simulateInvocation' && ['平台管理员', '运维人员'].includes(actor.role)) {
-      const { requestId, keyId, modelId, forceTimeout, purpose } = action.data || {};
-      if (![requestId,keyId].every(validId) || typeof modelId!=='string' || !/^[A-Za-z0-9][A-Za-z0-9._/:-]{0,199}$/.test(modelId) || !['gateway-test','metering-test'].includes(purpose)) throw Error('模拟调用配置无效');
-      const result = simulateRequest(state, { requestId, keyId, modelId, forceTimeout: forceTimeout === true, purpose });
-      next = result.state;
-      if (next!==state) {
-        const fact=next.requests.find(item=>item.requestId===requestId);
-        fact.prototypeFact=true;
-        if(fact.httpStatus===200 && fact.subscriptionId)deductMockPlan(next,fact,state.models.find(row=>row.id===fact.modelId));
-        for(const entry of next.ledger) if(entry.sourceId?.endsWith('request:'+requestId))entry.prototypeFact=true;
+      const { requestId,keyId,modelId,forceTimeout,purpose,metadata } = action.data || {};
+      if (![requestId,keyId].every(validId) || !validCallModel(modelId) || !validCallMetadata(metadata) ||
+          forceTimeout!==undefined && typeof forceTimeout!=='boolean' || !diagnosticCall({purpose})) throw Error('模拟调用配置无效');
+      const keyRecord=state.apiKeys.find(item=>item.id===keyId && item.kind!=='experience' && item.status!=='已删除');
+      if (!keyRecord?.tenantId || !keyRecord.projectId) throw Error('请选择已归属项目的 API Key');
+      const requestHash=await hash([actor.id,keyId,modelId,forceTimeout===true,purpose,metadata?._user?.trim()]);
+      const [existing,marketOrders] = await Promise.all([readProjectFacts(db,keyRecord.tenantId),activeMarketOrders(db,keyRecord.tenantId)]);
+      const previous=existing.find(item=>item.requestId===requestId);
+      if (previous) {
+        if (previous.requestHash!==requestHash) issue(409,'REQUEST_ID_CONFLICT','调用标识已用于其他请求');
+        return {operationId,revision:state.revision,request:operationalRequest(withRequestScope(state,previous))};
       }
+      const simulationState={...state,requests:mergeProjectFacts(existing,state.requests)};
+      const result=simulateRequest(simulationState,{requestId,keyId,modelId,forceTimeout:forceTimeout===true,
+        purpose,metadata:{_user:metadata?._user?.trim()},marketOrders});
+      if (result.duplicate) issue(409,'REQUEST_ID_CONFLICT','调用标识已用于其他请求');
+      invocationFact={...result.request,requestHash};
+      next={...state,revision:result.state.revision,audits:result.state.audits};
     } else {
       const command = adminAction(state, actor, action);
+      if (policy.operatingMode==='internal' && (action.type==='individual' || action.type==='enterprise' &&
+          (action.operation==='create' || action.tenantId!==policy.internalTenantId))) {
+        issue(403,'INTERNAL_SPACE','企业内用站点仅管理本企业');
+      }
+      const openingPersonal=action.type==='individual' && action.operation==='create';
+      const openingEnterprise=action.type==='enterprise' && ['create','add-admin'].includes(action.operation);
+      if (openingPersonal && (!policy.personalEnabled || ![action.ids?.tenant,action.ids?.project].every(validId) ||
+          action.data?.accountMode==='existing' && (!validId(action.data.userId) || action.data.userId===dualDemoUserId ||
+            !configuredAdmins.includes(action.data.userId) &&
+            !await db.prepare('SELECT 1 FROM customer_credentials WHERE user_id=?').bind(action.data.userId).first()))) {
+        issue(422,'BUSINESS_BLOCKED','个人空间需开放且关联已激活的登录账号');
+      }
+      if ((openingPersonal || openingEnterprise) && action.data?.accountMode==='new' && (openingPersonal || action.loginProof!==undefined)) {
+        const {salt,digest:proof}=action.loginProof || {};
+        if (!/^[a-f0-9-]{36}$/.test(salt || '') || !/^[a-f0-9]{64}$/.test(proof || '') || !validId(action.ids?.user)) {
+          issue(400,'INVALID_INPUT','管理员密码凭证无效');
+        }
+        initialCredential=db.prepare('INSERT INTO customer_credentials(user_id,salt,digest) VALUES(?,?,?)')
+          .bind(action.ids.user,salt,proof);
+      }
       next = command ? commitAdminState(state, command, actor.role) : state;
+      if (initialCredential) {
+        const user=next.users.find(item=>item.id===action.ids.user);
+        const loginValues=account=>[account.login?.trim().toLowerCase(),account.email?.trim().toLowerCase(),normalizeMemberPhone(account.phone || '')].filter(Boolean);
+        const values=new Set(loginValues(user));
+        if (state.users.some(item=>loginValues(item).some(value=>values.has(value))) ||
+            await db.prepare('SELECT 1 FROM admin_accounts WHERE LOWER(id) IN (SELECT value FROM json_each(?)) OR LOWER(login_name) IN (SELECT value FROM json_each(?))')
+              .bind(JSON.stringify([...values]),JSON.stringify([...values])).first()) {
+          issue(409,'LOGIN_CONFLICT','登录信息已存在，请选择已有账号');
+        }
+      }
+      if (action.type==='enterprise' && action.operation==='toggle-key') {
+        const updated=next.apiKeys.find(item=>item.id===action.keyId && item.tenantId===action.tenantId);
+        if (updated?.projectId) projectAudit={tenantId:updated.tenantId,projectId:updated.projectId,objectId:updated.id,
+          action:updated.status==='有效'?'启用 API Key':'停用 API Key'};
+      }
     }
   } catch (error) {
     if (error.status) throw error;
@@ -248,13 +472,16 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins)
   const audit=next.audits[0];
   next.audits=state.audits;
   const statements=[db.prepare('UPDATE model_workspace SET reference_json=?,application_revision=application_revision+1 WHERE id=1').bind(referenceWrite(state,next,reference))];
+  if (initialCredential) statements.push(initialCredential);
+  if (invocationFact) statements.push(projectFactWrite(db, invocationFact));
   if(cancellation)statements.push(db.prepare('UPDATE market_orders SET cancelled_at=? WHERE id=? AND cancelled_at IS NULL').bind(Date.now(),action.id));
   if (action.type==='adminAccount') {
     const withSecret=['create','resetPassword'].includes(action.operation);
     if(withSecret && !/^[a-f0-9]{64}$/.test(action.loginDigest || ''))issue(400,'INVALID_INPUT','缺少演示账号密码摘要');
     const {results}=await db.prepare('SELECT id FROM admin_accounts WHERE access_hash IS NOT NULL').all();
-    const configured=new Set([...configuredAdmins,...results.map(row=>row.id),...(withSecret?[action.id]:[])]);
-    if (!next.admins.some(account => account.role==='平台管理员' && account.status==='已启用' && configured.has(account.id))) {
+    const configured=new Set([...results.map(row=>row.id),...(withSecret?[action.id]:[])]);
+    if (!next.admins.some(account => account.role==='平台管理员' && account.status==='已启用' &&
+      (configured.has(account.id) || configuredAdmins.includes(account.loginCode || account.id)))) {
       issue(422, 'BUSINESS_BLOCKED', '须保留至少一个可登录的系统管理员');
     }
     const changed = next.admins.filter(account => JSON.stringify(account) !== JSON.stringify(state.admins.find(item => item.id === account.id)));
@@ -270,8 +497,9 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins)
   }
   const { action: label, objectId, result, createdAt } = audit;
   return save(db, actor, state, key, operationId, digest, 'application.'+action.type,
-    { operationId, revision: next.revision }, statements,
-    { id: crypto.randomUUID(), actor: actor.role, actorId: actor.id, action: label, objectId, result, createdAt }, 'application');
+    { operationId, revision: next.revision, ...(invocationFact ? {request:operationalRequest(withRequestScope(state,invocationFact))} : {}) }, statements,
+    { id: resourceId('audit-event'), actor: actor.role, actorId: actor.id, action: label, objectId, result, createdAt,
+      ...(projectAudit ? {projectAudit} : {}) }, 'application');
 }
 
 function tenantContext(state, {tenant,user:sessionUser}) {
@@ -280,7 +508,7 @@ function tenantContext(state, {tenant,user:sessionUser}) {
   const membership = state.memberships.find(item => item.userId === user?.id && item.tenantId === tenant.id && item.status === '正常');
   const personal = row?.type === '个人';
   if(!activeCustomer(row) || !user || (personal ? row.ownerId!==user.id : !membership))issue(403,'FORBIDDEN','当前账号无权进入该空间');
-  const identity = { userId: user.id, tenantId: tenant.id, name: membership?.memberName || user.name || tenant.name, spaceId: personal ? 'personal' : tenant.id,
+  const identity = { userId: user.id, tenantId: tenant.id, tenantName:tenant.name, name: membership?.memberName || user.name || tenant.name, spaceId: personal ? 'personal' : tenant.id,
     key: (user?.id || 'tenant') + ':' + tenant.id, generation: state.identityGeneration };
   return { state, identity, link: { backendUserId: user?.id, backendMembershipId: membership?.id },
     canManage: Boolean(user && (personal || ['企业管理员','租户管理员'].includes(membership?.role))) };
@@ -320,7 +548,7 @@ async function customerInvitation(db,token) {
     member.userId===invitation.user_id && member.status==='待加入');
   const user=reference.users.find(user=>user.id===member?.userId && user.status==='正常');
   if(!activeCustomer(tenant) || tenant.type==='个人' || !user)issue(404,'INVITATION_NOT_FOUND','邀请无效或已过期');
-  const needsPassword=!invitation.password_managed && !user.initialized && !user.invitable && user.id.startsWith('user:');
+  const needsPassword=!invitation.password_managed && !user.initialized && !user.invitable && isResourceId(user.id,'user');
   return {invitation,row,reference,tenant,member,user,tokenHash,needsPassword};
 }
 
@@ -340,7 +568,7 @@ export async function acceptCustomerInvitation(db,session,{token,password,consen
   const next={...reference,identityGeneration:(reference.identityGeneration || 0)+1,
     memberships:reference.memberships.map(item=>item.id===member.id?{...item,status:'正常',updatedAt:createdAt}:item),
     users:credential?reference.users.map(item=>item.id===user.id?{...item,initialized:true,updatedAt:createdAt}:item):reference.users,
-    audits:[{id:crypto.randomUUID(),tenantId:tenant.id,actorId:user.id,actor:member.memberName || user.name,
+    audits:[{id:resourceId('audit-event'),tenantId:tenant.id,actorId:user.id,actor:member.memberName || user.name,
       action:'接受组织邀请',objectId:member.id,result:'成功',createdAt,prototypeFact:true},...reference.audits]};
   const [written]=await db.batch([
     db.prepare(`UPDATE model_workspace SET reference_json=?,application_revision=application_revision+1 WHERE id=1
@@ -360,43 +588,86 @@ export async function acceptCustomerInvitation(db,session,{token,password,consen
 
 export async function tenantWorkspace(db, session) {
   const actor = { id: session.tenant.id, role: '客户' };
-  const [{ state }, catalogue, facts] = await Promise.all([applicationState(db, actor), marketCatalogue(db, session), marketFacts(db, actor.id)]);
+  const [{ state }, catalogue, facts, projectFacts] = await Promise.all([
+    applicationState(db, actor), marketCatalogue(db, session), marketFacts(db, actor.id), readProjectFacts(db, actor.id),
+  ]);
   const context=tenantContext(state,session);
   const {identity,canManage}=context;
   const own = item => item.tenantId === actor.id;
-  const orders = [...facts.orders, ...state.orders.filter(own)];
+  const access = projectAccess(state, identity, context.link);
+  const projects = access.projects;
+  const byProject = new Map(projects.map(project => [project.id, project]));
+  const effectiveKeys = state.apiKeys.filter(row => own(row) && (canManage || byProject.has(row.projectId) &&
+    (byProject.get(row.projectId).canManage || row.ownerId === identity.userId)));
+  const internal=session.tenant.internal===true;
+  const orders = internal ? [] : [...facts.orders, ...state.orders.filter(own)];
+  const billable = internal || !canManage ? [] : (await db.prepare('SELECT request_id,period FROM market_charge_receipts WHERE tenant_id=? ORDER BY period DESC')
+    .bind(actor.id).all()).results;
+  const billed = new Map(billable.map(({request_id,period})=>[request_id,period]));
   const plans = orders.filter(row=>['已开通','生效中'].includes(row.status) && (!row.expiresAt || Date.parse(row.expiresAt)>Date.now())).map(row => ({
     ...row, product:row.product || state.products.find(item=>item.id===row.productId),
   })).filter(row => /Plan|预付费|订阅/.test(row.product?.billingMode || row.product?.name));
-  const keys = state.apiKeys.filter(item => own(item) && (canManage || item.ownerId === identity.userId)).map(item => {
-    const { key: _key, secret: _secret, ...value } = item;
+  const keys = effectiveKeys.filter(row => row.status !== '已删除' && row.kind !== 'experience').map(item => {
+    const value=safeKey(item);
     const grant=state.grants.find(row=>row.subjectType==='key' && row.subjectId===item.id && row.status==='生效中');
     return {...value,quota:grant?String(grant.used || 0)+' / '+grant.limit:'不限额度',
       quotaLimit:grant?.limit ?? null,quotaType:grant?({day:'日',week:'周',month:'月',total:'总额度'}[grant.period] || '总额度'):'不限额度',
       progress:grant?.limit?Math.min(100,(grant.used || 0)/grant.limit*100):0};
   });
   const keyIds=new Set(keys.map(key=>key.id));
-  const requests = [...facts.requests, ...state.requests.filter(own)].filter(row=>canManage || row.userId===identity.userId || keyIds.has(row.keyId)).map(row =>
-    Object.fromEntries(['id','requestId','modelId','publicModelId','serviceId','tenantId','keyId','httpStatus','usage','durationMs','ttftMs','createdAt','billingType','subscriptionId','source','stream'].filter(field => Object.hasOwn(row, field)).map(field => [field, row[field]])));
+  const allRequests = mergeProjectFacts(projectFacts, [...facts.requests, ...state.requests.filter(own)]);
+  const modelById = new Map(state.models.map(model => [model.id, model]));
+  const visible = allRequests.filter(row => !diagnosticCall(row) && (canManage || (!row.projectId || byProject.has(row.projectId)) &&
+    (byProject.get(row.projectId)?.canManage || (row.actorUserId || (!row.projectId && row.userId)) === identity.userId || keyIds.has(row.keyId))));
+  const requests = visible.map(row => ({
+    ...pick(row,['id','requestId','modelId','publicModelId','serviceId','tenantId','projectId','projectRouteId','routeMatch','keyId','httpStatus','error','usage','durationMs','ttftMs','createdAt','updatedAt','billingType','subscriptionId','source','stream','purpose']),
+    ...(row.contentRetained && byProject.get(row.projectId)?.canManage ? pick(row,['requestBody','responseBody']) : {}),
+  }));
+  const logKeys = effectiveKeys.map(row => pick(row,['id','name','projectId','billingType','secretPreview']));
+  for (const project of projects) if (visible.some(row => row.keyId === experienceKeyId(project.id))) {
+    logKeys.push({ id:experienceKeyId(project.id), name:'在线体验', projectId:project.id, billingType:'按量付费', kind:'experience' });
+  }
+  const activeMembers = activeProjectMembers(state,actor.id);
+  const projectMembers = Object.fromEntries(projects.map(project => [project.id, activeMembers.flatMap(member => {
+    const role = projectRole(project, member);
+    return role || project.canManage ? [{ id:member.id, name:member.name, role,
+      departmentId:member.organizationId || member.departmentId, self:member.id === context.link.backendMembershipId }] : [];
+  })]));
+  const projectAudits = state.audits.filter(row => own(row) && byProject.get(row.projectId)?.canManage)
+    .map(row => pick(row,['id','projectId','createdAt','actor','action','objectId','result']));
+  const projectBudgets = Object.fromEntries(projects.filter(row => row.canManage && row.spendBudget?.amountMicros)
+    .map(project => [project.id, projectSpend({ ...state, requests:allRequests }, project, null, Date.now(), internal)]));
+  const projectServices = catalogue.services.filter(service => service.canOrder || service.callable);
   const ids = new Set([...keys.flatMap(row=>row.modelIds || []), ...requests.map(row => row.modelId), ...catalogue.services.map(row => row.serviceModelId)]);
+  const models = state.models.filter(row => ids.has(row.id)).map(row => pick(row,['id','modelId','name','type','usageUnit']));
+  const report = {
+    asOf:new Date(), models, keys:logKeys.map(row=>pick(row,['id','name','projectId','billingType'])),
+    records:visible.map(row => ({ ...pick(row,['id','requestId','tenantId','projectId','modelId','modelType','publicModelId',
+      'usageUnit','usage','usageConfirmed','usageStatus','cacheHit','httpStatus','billingType','keyId','createdAt','updatedAt','planTokens']),
+      charge:internal ? row.internalCost ?? null : row.billingType==='Token Plan' ? null : requestCharge(state,row,modelById.get(row.modelId) || {type:row.modelType}),
+      ...(billed.has(row.requestId) && {billPeriod:billed.get(row.requestId)}) })),
+    bills:internal || !canManage ? [] : state.bills.filter(own)
+      .map(row=>pick(row,['id','billNo','period','amount','amountMicros','status','projectBreakdown','unassignedMicros'])),
+  };
   const publicOrders=rows=>rows.map(({factorSnapshot:_rules,...item})=>item);
   const customer=state.tenants.find(row=>row.id===actor.id), user=state.users.find(row=>row.id===identity.userId);
   const organization=identity.spaceId==='personal' ? {departments:[],members:[],audit:[]} : organizationProjection(state,actor.id);
-  if(!canManage)delete organization.platformAccounts;
+  if(!canManage){delete organization.platformAccounts;organization.audit=[];}
   return { identity,profile:{id:user.id,account:user.login,name:user.nickname || user.name || customer.name,type:customer.type,status:customer.status,
     phone:user.phone,realNameCertification:user.realNameCertification,passwordManaged:session.passwordManaged},
     applications:state.customerApplications.filter(application=>application.applicantUserId===user.id),
-    backendUserId:identity.userId,canManage, revision:state.revision, orders:publicOrders(orders), plans:publicOrders(plans), keys, requests,
-    services: catalogue.services, projects: tenantProjects(context), routes: state.tenantRoutes.filter(row => own(row) && (canManage || row.ownerId === identity.userId)),
-    models: state.models.filter(row => ids.has(row.id)).map(({ id, modelId, name, type }) => ({ id, modelId, name, type })),
-    organization };
+    backendUserId:identity.userId,canManage,internal, revision:state.revision, orders:publicOrders(orders), plans:publicOrders(plans), keys, requests, logKeys,
+    services: catalogue.services, projectServices, canCreateProject:access.canCreate,
+    projects:projects.map(({memberRoles:_roles,...project})=>project), projectRouting:projectRouting(context),
+    routes: visibleProjectRoutes(context),
+    models, organization, projectMembers, projectAudits, projectBudgets, report };
 }
 
 export async function tenantCommand(db, session, body) {
   const { operationId, expectedRevision, action, data } = body, tenant = session.tenant;
   if (body.tenantId !== tenant.id) issue(409, 'TENANT_CHANGED', '客户空间已变化，请重新打开操作');
   if (!validId(operationId) || !Number.isSafeInteger(expectedRevision) ||
-      !['keys','organization','routes','subscribe','certifyPersonal','certifyEnterprise'].includes(action)) issue(400, 'INVALID_INPUT', '客户操作或修订号无效');
+      !['keys','organization','routes','projectRoute','projectCreate','projectUpdate','subscribe','certifyPersonal','certifyEnterprise'].includes(action)) issue(400, 'INVALID_INPUT', '客户操作或修订号无效');
   safeAction(data);
   const digest = await hash([session.user.id,body]), replay = await db.prepare('SELECT tenant_id,request_hash FROM tenant_operations WHERE id=?').bind(operationId).first();
   if (replay) {
@@ -404,11 +675,14 @@ export async function tenantCommand(db, session, body) {
     return { operationId };
   }
   const [{ row, state, reference }, catalogue] = await Promise.all([applicationState(db, { id: tenant.id, role: '客户' }),
-    ['certifyPersonal','certifyEnterprise'].includes(action) ? null : marketCatalogue(db, session)]);
-  if (state.revision !== expectedRevision || !row.application_revision) conflict();
+    ['keys','routes','projectRoute','subscribe'].includes(action) || action === 'projectUpdate' && data?.type === 'models' ? marketCatalogue(db, session) : null]);
+  if (state.revision !== expectedRevision || session.commitSeq!==row.commit_seq || !row.application_revision) conflict();
+  if (tenant.internal && (action==='subscribe' || action==='keys' && data?.billing==='Token Plan')) {
+    issue(403,'INTERNAL_SPACE','企业内用空间不使用订购套餐');
+  }
   const context = tenantContext(state, session);
-  const services=catalogue?.services.map(service=>({...service,materialId:service.modelKey,modelKey:service.serviceModelId}));
-  let next, retiredIds=[], revokedInvitations=[];
+  const services=(catalogue?.services || []).map(service=>({...service,materialId:service.modelKey,modelKey:service.serviceModelId}));
+  let next, retiredIds=[], revokedInvitations=[], projectAudits=[];
   try {
     if(action==='certifyPersonal' || action==='certifyEnterprise'){
       const accountState={currentUserId:session.user.id,accounts:state.users,applications:state.customerApplications};
@@ -428,8 +702,17 @@ export async function tenantCommand(db, session, body) {
       if(!Array.isArray(items) || !items.length || items.length>10 || new Set(items.map(row=>row?.id)).size!==items.length ||
           items.some(row=>!validId(row?.id) || !Number.isSafeInteger(row.revision) || row.revision<1))throw Error('请选择有效的套餐及版本');
       next=await addPackageOrders(db,state,{...tenant,ownerId:context.identity.userId},operationId,items,catalogue.services);
+    } else if (action === 'projectCreate') {
+      const project = newProject(context, data, 'project-' + operationId);
+      next = { ...state, projects:[...state.projects, project] };
+      projectAudits = [{ projectId:project.id, action:'创建项目', objectId:project.id }];
+    } else if (action === 'projectUpdate') {
+      if (!validId(data?.projectId)) throw Error('项目 ID 无效');
+      const { projects, audit } = changeProject(context, data.projectId, data.type, data.input, services.filter(row => row.canOrder || row.callable));
+      next = { ...state, projects };
+      projectAudits = [audit];
     } else if (action === 'keys') {
-      if (!Array.isArray(data?.rows) || data.rows.length > 100 || !['按量付费','Token Plan'].includes(data.billing) ||
+      if (!validId(data?.projectId) || !Array.isArray(data?.rows) || data.rows.length > 100 || !['按量付费','Token Plan'].includes(data.billing) ||
           (data.billing === 'Token Plan') !== Boolean(data.subscriptionId) ||
           data.rows.some(item => !validId(item?.id) || item.secretPreview && !/^(?:[\w-]{0,8})\*{4,5}(?:[\w-]{0,4})$/.test(item.secretPreview))) throw Error('密钥配置无效');
       const existingIds=new Set(state.apiKeys.map(key=>key.id));
@@ -437,25 +720,36 @@ export async function tenantCommand(db, session, body) {
       if(newIds.length && await db.prepare('SELECT 1 FROM retired_tenant_keys WHERE id IN (SELECT value FROM json_each(?)) LIMIT 1')
         .bind(JSON.stringify(newIds)).first())throw Error('已删除的 API Key ID 不能再次使用');
       const plan=data.subscriptionId && state.orders.find(row=>row.id===data.subscriptionId && row.tenantId===tenant.id);
-      const planServices=plan?.packageId ? services.map(row=>({...row,callable:row.canOrder && plan.product.modelIds.includes(row.materialId)})) : services;
-      next=tenantKeyChanges(context,data.rows,data,planServices);
-      const remaining=new Set(next.apiKeys.map(key=>key.id));
-      retiredIds=[...existingIds].filter(id=>!remaining.has(id));
+      const eligible = services.filter(row => row.canOrder || row.callable);
+      const planServices=plan?.packageId ? eligible.filter(row=>plan.modelIds.includes(row.serviceModelId)) : eligible;
+      const changes=changeProjectKeys(context,data.rows,data,planServices);
+      next=changes.next;
+      projectAudits=changes.actions.map(entry=>({...entry,projectId:data.projectId}));
+      retiredIds=changes.actions.filter(entry=>entry.action==='删除 API Key').map(entry=>entry.objectId);
     } else if (action === 'organization') {
       if(!Array.isArray(data?.departments) || !Array.isArray(data?.members) || data.departments.length>100 || data.members.length>1000 ||
          [...data.departments,...data.members].some(item=>!validId(item?.id)))throw Error('组织或成员配置无效');
       next = tenantOrganizationChanges(context, { ...data, audit: [] });
       const pending=new Set(next.memberships.filter(member=>member.tenantId===tenant.id && member.status==='待加入').map(member=>member.id));
       revokedInvitations=state.memberships.filter(member=>member.tenantId===tenant.id && member.status==='待加入' && !pending.has(member.id)).map(member=>member.id);
+    } else if (action === 'projectRoute') {
+      const routeServices = services.filter(row=>row.projectServiceId).map(row=>({...row,id:row.projectServiceId}));
+      next = projectRouteChanges(context, data?.route, {remove:data?.remove === true, operationId}, routeServices);
+      projectAudits = [{ projectId:data.route.projectId, action:data.remove ? '删除项目路由' : data.route.id ? '编辑项目路由' : '创建项目路由',
+        objectId:data.route.id || 'project-route-' + operationId }];
     } else {
-      if(!Array.isArray(data?.rows) || data.rows.length>100 || data.rows.some(item=>!validId(item?.id)))throw Error('路由配置无效');
-      next = tenantRouteChanges(context, data.rows, services);
+      if (!data || data.id != null && !validId(data.id)) throw Error('路由配置无效');
+      next = changeTenantRoute(context, data, catalogue.services, 'route-' + operationId);
+      projectAudits = [{ projectId:data.projectId, action:'维护智能路由', objectId:data.id || 'route-' + operationId }];
     }
+    assertPersonalProjects(state, next);
   } catch (error) { issue(422, 'BUSINESS_BLOCKED', error.message); }
-  const now = Date.now(), actionName = { keys: '维护 API Key', organization: '维护组织成员', routes: '维护智能路由',
+  const now = Date.now(), actionName = { keys: '维护 API Key', organization: '维护组织成员', routes: '维护智能路由', projectRoute: '维护项目路由',
     subscribe:'订购 Token Plan',certifyPersonal:'提交个人实名认证',certifyEnterprise:'提交企业认证' }[action];
-  next.audits = [{ id: operationId, tenantId: tenant.id, actorId: context.identity.userId, actor: context.identity.name,
-    action:actionName,result:'成功',createdAt:new Date(now).toISOString(),prototypeFact:true },...state.audits];
+  const audits = projectAudits.length ? projectAudits : action === 'keys' ? [] : [{action:actionName,prototypeFact:true}];
+  next.audits = [...audits.map((entry,index)=>({ id:index ? operationId + ':' + index : operationId, tenantId:tenant.id,
+    actorId:context.identity.userId, actor:context.identity.name, result:'成功', createdAt:new Date(now).toISOString(), ...entry })),
+    ...state.audits];
   const [written] = await db.batch([
     db.prepare(`UPDATE model_workspace SET reference_json=?,application_revision=application_revision+1 WHERE id=1 AND application_revision=?
       AND (SELECT commit_seq FROM db_state WHERE id=1)=?

@@ -1,3 +1,4 @@
+import { diagnosticRequest, latestRequests } from '../request-identity.mjs';
 import { dayOf } from './analytics.js';
 
 const displayNumber = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
@@ -87,7 +88,7 @@ export function usageValue(row, fields) {
 
 export function usageSource(state, row) {
   const endpoint = state.endpoints.find(item => item.id === row.endpointId);
-  const provider = state.providers.find(item => item.id === endpoint?.providerId);
+  const provider = state.providers.find(item => item.id === (row.providerId || endpoint?.providerId));
   return provider?.sourceType === 'selfHosted' ? 'selfHosted' : provider?.sourceType === 'thirdParty' ? 'thirdParty' : 'unknown';
 }
 
@@ -96,28 +97,24 @@ export function usageFacts(state, range, filters, now = Date.now()) {
   if (!window) return null;
   const models = new Map(state.models.map(item => [item.id, item]));
   const endpoints = new Map(state.endpoints.map(item => [item.id, item]));
-  const requests = new Map();
-  for (const row of state.requests) {
+  const modelFor = row => models.get(row.modelId) || { type: row.modelType };
+  const providerFor = row => row.providerId || endpoints.get(row.endpointId)?.providerId || '__unknown__';
+  const facts = latestRequests(state.requests).filter(row => {
+    if (diagnosticRequest(row)) return false;
     const at = Date.parse(row.createdAt);
-    if (!Number.isFinite(at) || at < window.priorStart || at >= window.end || at > now) continue;
-    const key = row.requestId || row.id;
-    if (!key) continue;
-    const existing = requests.get(key);
-    if (!existing || Date.parse(existing.updatedAt || existing.createdAt) <= Date.parse(row.updatedAt || row.createdAt)) requests.set(key, row);
-  }
-  const facts = [...requests.values()].filter(row => {
-    const model = models.get(row.modelId);
-    const modelType = model?.type;
+    if (!Number.isFinite(at) || at < window.priorStart || at >= window.end || at > now) return false;
+    const modelType = modelFor(row).type;
     if (!usageCategory(modelType) || (filters.types !== null && !filters.types.includes(usageCategory(modelType)))) return false;
-    const providerId = endpoints.get(row.endpointId)?.providerId || '__unknown__';
+    const providerId = providerFor(row);
     if ((filters.channels != null || filters.providers?.length) && !filters.channels?.includes(row.endpointId || '__unknown__') && !filters.providers?.includes(providerId)) return false;
     if (filters.user != null && !filters.user.includes(row.userId || '__unknown__')) return false;
-    if (filters.tenant !== null && !filters.tenant.includes(row.tenantId)) return false;
+    if (filters.tenant != null && !filters.tenant.includes(row.tenantId)) return false;
+    if (filters.project != null && !filters.project.includes(row.projectId || '__uncollected__')) return false;
     if (filters.model !== null && !filters.model.includes(row.modelId)) return false;
     const source = usageSource(state, row);
     if (filters.source && source !== filters.source) return false;
     return true;
-  }).map(row => { const model = models.get(row.modelId), meter = usageMeter(model, row); return { ...row, providerId: endpoints.get(row.endpointId)?.providerId || '__unknown__', modelType: model.type, category: usageCategory(model.type), unit: meter.unit, at: Date.parse(row.createdAt), source: usageSource(state, row), value: usageValue(row, meter.fields) }; });
+  }).map(row => { const model = modelFor(row), meter = usageMeter(model, row); return { ...row, providerId: providerFor(row), modelType: model.type, category: usageCategory(model.type), unit: meter.unit, at: Date.parse(row.createdAt), source: usageSource(state, row), value: usageValue(row, meter.fields) }; });
   return { window, current: facts.filter(row => row.at >= window.start && row.at < window.end), prior: facts.filter(row => row.at >= window.priorStart && row.at < window.priorEnd) };
 }
 

@@ -1,6 +1,7 @@
 import { withAdminSession } from './admin-session-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { isResourceId } from '../src/resource-id.mjs';
 import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction, parseAdminState as baseParseAdminState } from '../src/admin-v2/store.js';
 import { providerApiKeysDraft, providerApiKeyId, PROVIDER_API_KEY_LIMIT, maskProviderApiKey, providerModelConnectivityTest, MODEL_CONNECTIVITY_SCENARIOS } from '../src/admin-v2/provider-management.js';
 
@@ -23,7 +24,7 @@ test('batch keys persist atomically in primary/backup order using only masked me
   assert.equal(keys.length, 3);
   assert.deepEqual(keys.slice(0, 2), initial);
   assert.equal(new Set(keys.map(k => k.id)).size, 3);
-  assert.ok(keys.every(key => /^[a-f0-9]{8}$/.test(key.id)));
+  assert.ok(keys.every(key => isResourceId(key.id, 'credential')));
   const legacy = { id: 'provider-key-a8ab224f-f6db-4d2e-b21a-998efc931062' };
   assert.equal(providerApiKeyId(legacy), 'a8ab224f');
   assert.equal(legacy.id, 'provider-key-a8ab224f-f6db-4d2e-b21a-998efc931062');
@@ -108,7 +109,7 @@ test('model previews reject invalid identities, model-address links and request 
     const invalid = { ...state, endpoints: state.endpoints.map(item => item.id === endpoint.id ? { ...item, ...patch } : item) };
     assert.throws(() => providerModelConnectivityTest(invalid, request), /地址无效|协议无效/);
   }
-  for (const patch of [{ modelId: 'missing' }, { upstreamId: '' }, { upstreamId: 'bad id' }, { upstreamId: 'a'.repeat(201) }, { prompt: '' }, { prompt: 'a'.repeat(2001) }, { scenario: '__proto__' }]) assert.throws(() => providerModelConnectivityTest(state, { ...request, ...patch }), /目录模型|Model ID|测试内容|预览状态/);
+  for (const patch of [{ modelId: 'missing' }, { upstreamId: '' }, { upstreamId: 'bad id' }, { upstreamId: 'a'.repeat(201) }, { prompt: '' }, { prompt: 'a'.repeat(2001) }, { scenario: '__proto__' }]) assert.throws(() => providerModelConnectivityTest(state, { ...request, ...patch }), /目录模型|上游模型调用标识|测试内容|预览状态/);
   const addressKey = (await providerApiKeysDraft([second])).apiKeys[0];
   const addressState = { ...state, endpoints: state.endpoints.map(item => item.id === endpoint.id ? { ...item, apiKeys: [addressKey] } : item) };
   assert.equal(providerModelConnectivityTest(addressState, { ...request, keyId: addressKey.id }).result, '通过');
@@ -146,16 +147,17 @@ test('catalogue tests can use existing credential references or self-hosted acce
   assert.equal(JSON.stringify(hosted), before);
 });
 
-test('short generated IDs avoid collisions with the visible prefix of existing UUIDs', async t => {
+test('credentials sharing a UUID display prefix retain distinct full IDs', async t => {
   const seed = createAdminSeed(), provider = seed.providers.find(row => row.id === 'provider-moma');
   const old = (await providerApiKeysDraft([first])).apiKeys[0];
   provider.apiKeys = [{ ...old, id: 'provider-key-12345678-1234-1234-1234-123456789abc', name: '原密钥' }];
   const draft = await providerApiKeysDraft([second]), random = crypto.randomUUID.bind(crypto);
   let calls = 0;
-  t.mock.method(crypto, 'randomUUID', () => ++calls === 1 ? '12345678-aaaa-bbbb-cccc-123456789abc' : random());
+  t.mock.method(crypto, 'randomUUID', () => ++calls === 1 ? '12345678-aaaa-4bbb-8ccc-123456789abc' : random());
   const next = commitAdminState(seed, action(draft)), keys = next.providers.find(row => row.id === provider.id).apiKeys;
-  assert.notEqual(keys[1].id, '12345678');
-  assert.match(keys[1].id, /^[a-f0-9]{8}$/);
+  assert.notEqual(keys[1].id, keys[0].id);
+  assert.equal(providerApiKeyId(keys[1]), providerApiKeyId(keys[0]));
+  assert.ok(isResourceId(keys[1].id, 'credential'));
   assert.deepEqual(keys[0], provider.apiKeys[0]);
 });
 

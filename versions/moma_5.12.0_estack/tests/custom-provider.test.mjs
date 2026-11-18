@@ -20,7 +20,8 @@ test('custom supplier creation lowercases unique codes, preserves existing ident
   assert.deepEqual(parseAdminState(JSON.stringify(state)).providers.find(p => p.id === provider.id), provider);
   assert.throws(() => register(state, { ...input, name: '另一个名称', code: 'MY-SERVICE' }), /不可重复/);
   assert.throws(() => register(state, { ...input, name: '第三个名称', code: 'MOMA' }), /不可重复/);
-  const edited = register(state, { ...provider, code: 'attempt-change', catalogModelIds: ['Model/Beta'] }, provider.id);
+  assert.throws(() => register(state, { ...provider, code: 'attempt-change', catalogModelIds: ['Model/Beta'] }, provider.id), /创建后不可修改/);
+  const edited = register(state, { ...provider, catalogModelIds: ['Model/Beta'] }, provider.id);
   assert.equal(edited.providers.find(p => p.id === provider.id).code, 'my-service');
   assert.deepEqual(edited.providers.find(p => p.id === provider.id).catalogModelIds, ['Model/Alpha', 'Model/Beta']);
 });
@@ -30,8 +31,8 @@ test('catalogue batch append keeps Model ID casing, skips duplicate lines and re
   assert.deepEqual(appendProviderCatalogue(current, 'Model/Alpha\nModel/Beta\nmodel/alpha\n'), ['Model/Alpha', 'Model/Beta', 'model/alpha']);
   assert.deepEqual(current, ['Model/Alpha']);
   for (const text of ['', ' \n ', 'Model/Alpha']) assert.throws(() => appendProviderCatalogue(current, text), /请输入|均已存在/);
-  assert.throws(() => appendProviderCatalogue(current, 'valid\ninvalid model'), /有效 Model ID/);
-  assert.throws(() => appendProviderCatalogue(current, 'x'.repeat(201)), /有效 Model ID/);
+  assert.throws(() => appendProviderCatalogue(current, 'valid\ninvalid model'), /有效服务商目录标识/);
+  assert.throws(() => appendProviderCatalogue(current, 'x'.repeat(201)), /有效服务商目录标识/);
   const full = Array.from({ length: 2000 }, (_, i) => `Model/${i}`);
   assert.throws(() => appendProviderCatalogue(full, 'extra'), /最多 2000/);
   assert.equal(full.length, 2000);
@@ -44,6 +45,6 @@ test('case-insensitive uniqueness includes historical codes without rewriting sa
   assert.throws(() => register(seed, { ...input, code: 'historical' }), /不可重复/);
   assert.equal(JSON.stringify(seed), original);
   for (const code of ['', '1start', 'has space', '中文', 'a'.repeat(33)]) assert.throws(() => register(seed, { ...input, code }), /英文编码/);
-  assert.throws(() => register(seed, { ...input, catalogModelIds: ['bad model'] }), /有效 Model ID/);
+  assert.throws(() => register(seed, { ...input, catalogModelIds: ['bad model'] }), /有效服务商目录标识/);
   assert.equal(JSON.stringify(seed), original);
 });

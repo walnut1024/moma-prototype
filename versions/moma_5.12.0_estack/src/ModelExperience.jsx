@@ -2,7 +2,7 @@ import { useServiceDirectory, useExperienceSettings, beginExperience, finishExpe
 import { readExperienceDraft, saveExperienceDraft } from './experience-drafts.mjs';
 import FrontPageHeader from "./components/FrontPageHeader";
 import { displayBusinessCopy } from './display-copy.mjs';
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   ArrowDownRight,
   ArrowRight,
@@ -21,6 +21,7 @@ import {
   Volume2,
   X,
 } from "lucide-react";
+import { Button, Checkbox, Input, Modal, Select, Slider, TextArea } from '@douyinfe/semi-ui';
 import ModelSelectDialog from "./ModelSelectDialog";
 import SpeechRecorder from "./SpeechRecorder";
 import "./experience.css";
@@ -28,15 +29,20 @@ import "./experience-refinements.css";
 
 const emptyVideoProfile={modes:[],resolutions:[],aspects:[],durations:[],accept:'',add:'添加参考文件',sound:false};
 
+function ExperienceSelect({ label, ...props }) {
+  const id=useId();
+  return <><span className="sr-only" id={id}>{label}</span><Select aria-labelledby={id} {...props}/></>;
+}
+
 function ModelPicker({ model, options, onChange, speech = false, task, disabled }) {
   const [open, setOpen] = useState(false);
   const selected =
     options.find((option) => option.id === model) || { name: '请选择模型' };
   return (
     <div className="pg-model-picker">
-      <button
+      <Button theme="borderless" type="tertiary"
         className="pg-model"
-        type="button"
+
         disabled={disabled}
         aria-label="选择模型"
         aria-haspopup="dialog"
@@ -46,7 +52,7 @@ function ModelPicker({ model, options, onChange, speech = false, task, disabled 
         {speech && <Volume2 size={18} aria-hidden="true" />}
         <span>{speech ? selected.name.split("/").reverse().join(" · ") : selected.name}</span>
         <ChevronDown size={15} aria-hidden="true" />
-      </button>
+      </Button>
       <ModelSelectDialog
         open={open}
         task={task}
@@ -63,16 +69,18 @@ export default function ModelExperience({
   kind = "text",
   groupLabel,
   onKindChange,
-  onCompare, initialServiceId = "", owner = "",
+  onCompare, initialServiceId = "", owner = "", project,
 }) {
-  const [mode, setMode] = useState("语音识别");
-  const directory = useServiceDirectory(kind), models = directory.models;
+  const mode = "语音识别";
+  const directory = useServiceDirectory(kind,project), models = directory.models;
   const {settings,error:settingsError}=useExperienceSettings(kind);
   const voiceCatalog=settings?.voices || [],videoProfile=settings?.video || emptyVideoProfile;
   const [draft] = useState(() => { try { return readExperienceDraft(owner, kind); } catch { return { storageError: '草稿读取失败，请核对本地存储' }; } });
   const ticket = useRef(null);
   const [model, setModel] = useState(initialServiceId || draft.model || models.find(item => item.callable)?.id || '');
   const selectedModel = models.find(item => item.id === model);
+  const defaultModel = models.find(item => item.callable)?.id;
+  useEffect(() => { if (!model && defaultModel) setModel(defaultModel); }, [model,defaultModel]);
   const [text, setText] = useState(draft.text || '');
   const [file, setFile] = useState(draft.file || null);
   const [url, setUrl] = useState("");
@@ -118,8 +126,6 @@ export default function ModelExperience({
   const timer = useRef();
   const end = useRef();
   const input = useRef();
-  const dialog = useRef();
-  const settingsDialog = useRef();
   const recorder = useRef(null);
   const microphone = useRef(null);
   const recordTimer = useRef(null);
@@ -182,16 +188,6 @@ export default function ModelExperience({
     if (messages.length)
       end.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [messages, busy]);
-  useEffect(() => {
-    if (newDialog) dialog.current?.showModal();
-    else dialog.current?.close();
-  }, [newDialog]);
-  useEffect(() => {
-    if (settingsOpen && !settingsDialog.current?.open)
-      settingsDialog.current?.showModal();
-    else if (!settingsOpen && settingsDialog.current?.open)
-      settingsDialog.current.close();
-  }, [settingsOpen]);
   function reset() {
     clearTimeout(timer.current); ticket.current=null;
     recordSession.current += 1;
@@ -407,6 +403,7 @@ export default function ModelExperience({
       let result;
       try {
         result=await finishExperience(current,{
+          prompt:message.text,
           ...(kind==='image'?{imageCount:Number(message.imageCount)}:{}),
           ...(kind==='voice'?{speechMode:asr?'asr':'tts'}:{}),
         });
@@ -519,7 +516,7 @@ export default function ModelExperience({
     <section
       className={`playground pg-${kind}-experience ${asr ? "pg-asr-experience" : ""} ${messages.length ? "has-messages" : ""}`}
     >
-      <FrontPageHeader className="pg-heading" title={label} description={headingCopy} icon={kind === "voice" ? Mic : Image} actions={<div className="pg-heading-actions">{kind === "text" && <button type="button" className="pg-compare-entry" onClick={onCompare}>模型对比</button>}<button type="button" onClick={createConversation}>新建对话</button></div>} />
+      <FrontPageHeader className="pg-heading" title={label} description={headingCopy} icon={kind === "voice" ? Mic : Image} actions={<div className="pg-heading-actions">{kind === "text" && <Button theme="borderless" type="tertiary"  className="pg-compare-entry" onClick={onCompare}>模型对比</Button>}<Button theme="solid" onClick={createConversation}>新建对话</Button></div>} />
       {(directory.error || settingsError || directory.identityError || !selectedModel?.callable) && <p role="status">{directory.error || settingsError || directory.identityError || selectedModel?.reason || "请选择可体验的模型"}</p>}
       {onKindChange && (
         <div className="pg-tabs" aria-label="视觉体验模式">
@@ -527,8 +524,8 @@ export default function ModelExperience({
             ["image", "图片生成"],
             ["video", "视频生成"],
           ].map(([value, text]) => (
-            <button
-              type="button"
+            <Button theme="borderless" type="tertiary"
+
               aria-pressed={kind === value}
               key={value}
               onClick={() => onKindChange(value)}
@@ -539,30 +536,7 @@ export default function ModelExperience({
                 <Video size={16} aria-hidden="true" />
               )}
               {text}
-            </button>
-          ))}
-        </div>
-      )}
-      {kind === "voice" && (
-        <div className="pg-tabs" aria-label="语音体验模式">
-          {["语音识别"].map((value) => (
-            <button
-              type="button"
-              aria-pressed={mode === value}
-              key={value}
-              onClick={() => {
-                reset();
-                setMode(value);
-                setModel('');
-              }}
-            >
-              {value === "语音识别" ? (
-                <Mic size={16} aria-hidden="true" />
-              ) : (
-                <Volume2 size={16} aria-hidden="true" />
-              )}
-              {value}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -616,8 +590,8 @@ export default function ModelExperience({
                               }
                             />
                             {kind === "video" && (
-                              <button
-                                type="button"
+                              <Button theme="borderless" type="tertiary"
+
                                 aria-label={
                                   previewing === index
                                     ? "暂停视频预览"
@@ -634,7 +608,7 @@ export default function ModelExperience({
                                 ) : (
                                   <Play size={25} aria-hidden="true" />
                                 )}
-                              </button>
+                              </Button>
                             )}
                             <figcaption>
                               <span>
@@ -672,22 +646,22 @@ export default function ModelExperience({
                         )}
                       </div>
                       <div className="pg-answer-actions" aria-label="回答操作">
-                        <button
-                          type="button"
+                        <Button theme="borderless" type="tertiary"
+
                           title="复制为 Markdown"
                           onClick={() => copyResponse(message, true)}
                         >
                           复制 MD
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button theme="borderless" type="tertiary"
+
                           title="复制纯文本"
                           onClick={() => copyResponse(message)}
                         >
                           复制
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button theme="borderless" type="tertiary"
+
                           aria-pressed={ratings[index] === "up"}
                           onClick={() =>
                             setRatings((values) => ({
@@ -697,9 +671,9 @@ export default function ModelExperience({
                           }
                         >
                           有帮助
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button theme="borderless" type="tertiary"
+
                           aria-pressed={ratings[index] === "down"}
                           onClick={() =>
                             setRatings((values) => ({
@@ -709,21 +683,21 @@ export default function ModelExperience({
                           }
                         >
                           没帮助
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button theme="borderless" type="tertiary"
+
                           aria-label="试听"
                           onClick={() => speak(message)}
                         >
                           朗读
-                        </button>
+                        </Button>
                         {message.mode === "语音合成" && kind === "voice" && (
-                          <button
-                            type="button"
+                          <Button theme="borderless" type="tertiary"
+
                             onClick={() => window.speechSynthesis?.cancel()}
                           >
                             停止播放
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </>
@@ -743,14 +717,14 @@ export default function ModelExperience({
           <div className="pg-prompts" aria-label="快捷提示">
             <div>
               {prompts.map((item) => (
-                <button
-                  type="button"
+                <Button theme="borderless" type="tertiary"
+
                   key={item.label}
                   onClick={() => setText(item.prompt)}
                 >
                   <span>{item.label}</span>
                   <ArrowDownRight size={14} aria-hidden="true" />
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -807,18 +781,18 @@ export default function ModelExperience({
                   <small>{(file.size / 1024 / 1024).toFixed(2)} MB</small>
                 </span>
               </div>
-              <button type="button" onClick={() => setFile(null)}>
+              <Button theme="borderless" type="tertiary"  onClick={() => setFile(null)}>
                 移除
-              </button>
+              </Button>
             </div>
           )}
           {!asr && (
-            <textarea
+            <TextArea borderless autosize={{minRows:3,maxRows:9}}
               aria-label="体验输入"
               disabled={busy}
               maxLength={6000}
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(next) => setText(next)}
               onKeyDown={(e) => {
                 if (
                   e.key === "Enter" &&
@@ -832,66 +806,35 @@ export default function ModelExperience({
           )}
           <div className="pg-toolbar">
             {kind === "text" ? (
-              <button
+              <Button theme="borderless" type="tertiary"
                 className="pg-settings-trigger"
-                type="button"
+
                 aria-label="参数设置"
                 title={`${topP} · ${temperature} · ${thinkingBudget}`}
                 onClick={openModelSettings}
               >
                 <SlidersHorizontal size={20} aria-hidden="true" />
-              </button>
+              </Button>
             ) : (
-              <details className="pg-settings">
-                <summary aria-label="参数设置" title="参数设置">
-                  <SlidersHorizontal size={20} aria-hidden="true" />
+              <div className="pg-settings">
+                <Button type="tertiary" theme="borderless" aria-label="参数设置" title="参数设置"
+                  icon={<SlidersHorizontal size={18}/>} onClick={() => setSettingsOpen(true)}>
                   {asr && <span>参数设置</span>}
-                </summary>
-                <div className="pg-settings-panel">
-                  <header>
-                    <div>
-                      <strong>生成参数</strong>
-                      <small>
-                        {kind === "image"
-                          ? "对应图片生成接口"
-                          : kind === "video"
-                            ? "对应视频生成接口"
-                            : tts
-                              ? "对应 CosyVoice 合成接口"
-                              : asr
-                                ? "对应 SenseVoice 识别接口"
-                                : "调整模型的输出风格"}
-                      </small>
-                    </div>
-                  </header>
+                </Button>
+                <Modal visible={settingsOpen} title="生成参数" width="min(500px, calc(100vw - 24px))"
+                  onCancel={() => setSettingsOpen(false)}
+                  footer={<Button theme="solid" onClick={() => setSettingsOpen(false)}>完成</Button>}>
+                <div className="pg-semi-settings">
                   {kind === "image" ? (
                     <>
                       <div className="pg-api-grid">
                         <label>
                           <span>图片尺寸</span>
-                          <select
-                            aria-label="图片尺寸"
-                            value={imageSize}
-                            onChange={(e) => setImageSize(e.target.value)}
-                          >
-                            <option>1024 × 1024</option>
-                            <option>1280 × 720</option>
-                            <option>720 × 1280</option>
-                          </select>
-                          <small>size</small>
+                          <ExperienceSelect label="图片尺寸" value={imageSize} onChange={next => setImageSize(next)} optionList={[{"value":"1024 × 1024","label":"1024 × 1024"},{"value":"1280 × 720","label":"1280 × 720"},{"value":"720 × 1280","label":"720 × 1280"}]} />
                         </label>
                         <label>
                           <span>生成数量</span>
-                          <select
-                            aria-label="生成数量"
-                            value={imageCount}
-                            onChange={(e) => setImageCount(e.target.value)}
-                          >
-                            <option value="1">1 张</option>
-                            <option value="2">2 张</option>
-                            <option value="4">4 张</option>
-                          </select>
-                          <small>n</small>
+                          <ExperienceSelect label="生成数量" value={imageCount} onChange={next => setImageCount(next)} optionList={[{"value":"1","label":"1 张"},{"value":"2","label":"2 张"},{"value":"4","label":"4 张"}]} />
                         </label>
                       </div>
                     </>
@@ -900,65 +843,25 @@ export default function ModelExperience({
                       <div className="pg-api-grid">
                         <label>
                           <span>生成模式</span>
-                          <select
-                            aria-label="生成模式"
-                            value={videoMode}
-                            onChange={(e) => setVideoMode(e.target.value)}
-                          >
-                            <option>全能模式</option>
-                            <option>首帧生视频</option>
-                            <option>参考生视频</option>
-                          </select>
-                          <small>mode</small>
+                          <ExperienceSelect label="生成模式" value={videoMode} onChange={next => setVideoMode(next)} optionList={[{"value":"全能模式","label":"全能模式"},{"value":"首帧生视频","label":"首帧生视频"},{"value":"参考生视频","label":"参考生视频"}]} />
                         </label>
                         <label>
                           <span>分辨率</span>
-                          <select
-                            aria-label="视频分辨率"
-                            value={resolution}
-                            onChange={(e) => setResolution(e.target.value)}
-                          >
-                            <option>1080P</option>
-                            <option>720P</option>
-                          </select>
-                          <small>resolution</small>
+                          <ExperienceSelect label="视频分辨率" value={resolution} onChange={next => setResolution(next)} optionList={[{"value":"1080P","label":"1080P"},{"value":"720P","label":"720P"}]} />
                         </label>
                         <label>
                           <span>画面比例</span>
-                          <select
-                            aria-label="视频比例"
-                            value={aspect}
-                            onChange={(e) => setAspect(e.target.value)}
-                          >
-                            <option>16:9</option>
-                            <option>9:16</option>
-                            <option>1:1</option>
-                          </select>
-                          <small>ratio</small>
+                          <ExperienceSelect label="视频比例" value={aspect} onChange={next => setAspect(next)} optionList={[{"value":"16:9","label":"16:9"},{"value":"9:16","label":"9:16"},{"value":"1:1","label":"1:1"}]} />
                         </label>
                         <label>
                           <span>视频时长</span>
-                          <select
-                            aria-label="视频时长"
-                            value={duration}
-                            onChange={(e) => setDuration(e.target.value)}
-                          >
-                            <option>5秒</option>
-                            <option>10秒</option>
-                          </select>
-                          <small>duration</small>
+                          <ExperienceSelect label="视频时长" value={duration} onChange={next => setDuration(next)} optionList={[{"value":"5秒","label":"5秒"},{"value":"10秒","label":"10秒"}]} />
                         </label>
                       </div>
                       <label className="pg-check">
-                        <input
-                          aria-label="生成声音"
-                          type="checkbox"
-                          checked={sound}
-                          onChange={(e) => setSound(e.target.checked)}
-                        />
+                        <Checkbox aria-label="生成声音" checked={sound} onChange={(e) => setSound(e.target.checked)} />
                         <span>
                           <b>生成声音</b>
-                          <small>audio_enabled</small>
                         </span>
                       </label>
                       <p className="pg-param-tip">
@@ -970,30 +873,11 @@ export default function ModelExperience({
                       <div className="pg-api-grid">
                         <label>
                           <span>发音人</span>
-                          <select
-                            aria-label="发音人"
-                            value={voice}
-                            onChange={(e) => setVoice(e.target.value)}
-                          >
-                            <option value="longxiaochun_v2">龙小淳</option>
-                            <option value="longcheng_v2">龙橙</option>
-                            <option value="longhua_v2">龙华</option>
-                            <option value="longshu_v2">龙书</option>
-                          </select>
-                          <small>voice</small>
+                          <ExperienceSelect label="发音人" value={voice} onChange={next => setVoice(next)} optionList={[{"value":"longxiaochun_v2","label":"龙小淳"},{"value":"longcheng_v2","label":"龙橙"},{"value":"longhua_v2","label":"龙华"},{"value":"longshu_v2","label":"龙书"}]} />
                         </label>
                         <label>
                           <span>输出格式</span>
-                          <select
-                            aria-label="输出格式"
-                            value={format}
-                            onChange={(e) => setFormat(e.target.value)}
-                          >
-                            <option value="mp3">MP3</option>
-                            <option value="wav">WAV</option>
-                            <option value="pcm">PCM</option>
-                          </select>
-                          <small>format</small>
+                          <ExperienceSelect label="输出格式" value={format} onChange={next => setFormat(next)} optionList={[{"value":"mp3","label":"MP3"},{"value":"wav","label":"WAV"},{"value":"pcm","label":"PCM"}]} />
                         </label>
                       </div>
                       <label className="pg-param">
@@ -1001,48 +885,24 @@ export default function ModelExperience({
                           <b>语速</b>
                           <output>{speed} 倍</output>
                         </span>
-                        <small>rate · 0.5–2.0</small>
-                        <input
-                          aria-label="语速"
-                          type="range"
-                          min="0.5"
-                          max="2"
-                          step="0.1"
-                          value={speed}
-                          onChange={(e) => setSpeed(e.target.value)}
-                        />
+                        <small>0.5–2.0 倍</small>
+                        <Slider aria-label="语速" min={0.5} max={2} step={0.1} value={Number(speed)} onChange={next => setSpeed(String(next))} />
                       </label>
                       <label className="pg-param">
                         <span>
                           <b>音调</b>
                           <output>{pitch} 倍</output>
                         </span>
-                        <small>pitch · 0.5–2.0</small>
-                        <input
-                          aria-label="音调"
-                          type="range"
-                          min="0.5"
-                          max="2"
-                          step="0.1"
-                          value={pitch}
-                          onChange={(e) => setPitch(e.target.value)}
-                        />
+                        <small>0.5–2.0 倍</small>
+                        <Slider aria-label="音调" min={0.5} max={2} step={0.1} value={Number(pitch)} onChange={next => setPitch(String(next))} />
                       </label>
                       <label className="pg-param">
                         <span>
                           <b>音量</b>
                           <output>{volume}</output>
                         </span>
-                        <small>volume · 0–100</small>
-                        <input
-                          aria-label="音量"
-                          type="range"
-                          min="0"
-                          max="100"
-                          step="1"
-                          value={volume}
-                          onChange={(e) => setVolume(e.target.value)}
-                        />
+                        <small>0–100</small>
+                        <Slider aria-label="音量" min={0} max={100} step={1} value={Number(volume)} onChange={next => setVolume(String(next))} />
                       </label>
                     </>
                   ) : asr ? (
@@ -1050,31 +910,13 @@ export default function ModelExperience({
                       <div className="pg-api-grid pg-api-grid-single">
                         <label>
                           <span>识别语种</span>
-                          <select
-                            aria-label="识别语种"
-                            value={language}
-                            onChange={(e) => setLanguage(e.target.value)}
-                          >
-                            <option value="auto">自动检测</option>
-                            <option value="zh">中文</option>
-                            <option value="en">英语</option>
-                            <option value="yue">粤语</option>
-                            <option value="ja">日语</option>
-                            <option value="ko">韩语</option>
-                          </select>
-                          <small>language_hints</small>
+                          <ExperienceSelect label="识别语种" value={language} onChange={next => setLanguage(next)} optionList={[{"value":"auto","label":"自动检测"},{"value":"zh","label":"中文"},{"value":"en","label":"英语"},{"value":"yue","label":"粤语"},{"value":"ja","label":"日语"},{"value":"ko","label":"韩语"}]} />
                         </label>
                       </div>
                       <label className="pg-check">
-                        <input
-                          aria-label="过滤语气词"
-                          type="checkbox"
-                          checked={removeFillers}
-                          onChange={(e) => setRemoveFillers(e.target.checked)}
-                        />
+                        <Checkbox aria-label="过滤语气词" checked={removeFillers} onChange={(e) => setRemoveFillers(e.target.checked)} />
                         <span>
                           <b>过滤语气词</b>
-                          <small>disfluency_removal_enabled</small>
                         </span>
                       </label>
                       <p className="pg-param-tip">
@@ -1089,15 +931,7 @@ export default function ModelExperience({
                           <output>{temperature}</output>
                         </span>
                         <small>值越高，回答越有创造性</small>
-                        <input
-                          aria-label="Temperature"
-                          type="range"
-                          min="0"
-                          max="2"
-                          step="0.1"
-                          value={temperature}
-                          onChange={(e) => setTemperature(e.target.value)}
-                        />
+                        <Slider aria-label="Temperature" min={0} max={2} step={0.1} value={Number(temperature)} onChange={next => setTemperature(String(next))} />
                         <i>
                           <span>精准 0</span>
                           <span>创意 2</span>
@@ -1109,15 +943,7 @@ export default function ModelExperience({
                           <output>{topP}</output>
                         </span>
                         <small>控制模型考虑的候选词范围</small>
-                        <input
-                          aria-label="Top P"
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={topP}
-                          onChange={(e) => setTopP(e.target.value)}
-                        />
+                        <Slider aria-label="Top P" min={0} max={1} step={0.05} value={Number(topP)} onChange={next => setTopP(String(next))} />
                         <i>
                           <span>收敛 0</span>
                           <span>丰富 1</span>
@@ -1129,12 +955,13 @@ export default function ModelExperience({
                     </>
                   )}
                 </div>
-              </details>
+                </Modal>
+              </div>
             )}
             {kind === "text" && (
               <div className="pg-text-tools">
-                <button
-                  type="button"
+                <Button theme="borderless" type="tertiary"
+
                   aria-label={deepThinking ? "关闭深度思考" : "开启深度思考"}
                   title={deepThinking ? "深度思考已开启" : "开启深度思考"}
                   aria-pressed={deepThinking}
@@ -1146,75 +973,43 @@ export default function ModelExperience({
                   }}
                 >
                   <BrainCircuit size={19} aria-hidden="true" />
-                </button>
+                </Button>
               </div>
             )}
             {kind === "video" && (
               <div className="pg-video-options" aria-label="视频生成选项">
                 <label>
                   <span>模式</span>
-                  <select
-                    aria-label="生成模式"
-                    value={videoMode}
-                    onChange={(e) => setVideoMode(e.target.value)}
-                  >
-                    {videoProfile.modes.map((value) => (
-                      <option key={value}>{value}</option>
-                    ))}
-                  </select>
+                  <ExperienceSelect label="生成模式" value={videoMode} onChange={next => setVideoMode(next)} optionList={videoProfile.modes.map(value => ({value,label:value}))} />
                 </label>
                 <label>
                   <span>清晰度</span>
-                  <select
-                    aria-label="视频分辨率"
-                    value={resolution}
-                    onChange={(e) => setResolution(e.target.value)}
-                  >
-                    {videoProfile.resolutions.map((value) => (
-                      <option key={value}>{value}</option>
-                    ))}
-                  </select>
+                  <ExperienceSelect label="视频分辨率" value={resolution} onChange={next => setResolution(next)} optionList={videoProfile.resolutions.map(value => ({value,label:value}))} />
                 </label>
                 <label>
                   <span>比例</span>
-                  <select
-                    aria-label="视频比例"
-                    value={aspect}
-                    onChange={(e) => setAspect(e.target.value)}
-                  >
-                    {videoProfile.aspects.map((value) => (
-                      <option key={value}>{value}</option>
-                    ))}
-                  </select>
+                  <ExperienceSelect label="视频比例" value={aspect} onChange={next => setAspect(next)} optionList={videoProfile.aspects.map(value => ({value,label:value}))} />
                 </label>
                 <label>
                   <span>时长</span>
-                  <select
-                    aria-label="视频时长"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                  >
-                    {videoProfile.durations.map((value) => (
-                      <option key={value}>{value}</option>
-                    ))}
-                  </select>
+                  <ExperienceSelect label="视频时长" value={duration} onChange={next => setDuration(next)} optionList={videoProfile.durations.map(value => ({value,label:value}))} />
                 </label>
                 {videoProfile.sound && (
-                  <button
-                    type="button"
+                  <Button theme="borderless" type="tertiary"
+
                     aria-pressed={sound}
                     onClick={() => setSound((value) => !value)}
                   >
                     <Volume2 size={16} aria-hidden="true" />
                     声音
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
             {upload && !asr && (
-              <button
+              <Button theme="borderless" type="tertiary"
                 className="pg-add pg-add-icon"
-                type="button"
+
                 aria-label={
                   kind === "video"
                     ? file
@@ -1232,7 +1027,7 @@ export default function ModelExperience({
                 onClick={() => input.current.click()}
               >
                 <CirclePlus size={24} aria-hidden="true" />
-              </button>
+              </Button>
             )}
             <div className="pg-primary-actions">
               <span className="pg-count">
@@ -1246,9 +1041,9 @@ export default function ModelExperience({
                 options={models}
                 onChange={changeModel}
               />
-              <button
+              <Button htmlType="submit" theme="solid"
                 className="pg-send"
-                type="submit"
+
                 aria-label={
                   asr
                     ? "开始识别"
@@ -1274,13 +1069,13 @@ export default function ModelExperience({
                 ) : (
                   "发送"
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </form>
         <p className="pg-quota-note">
           {visualGeneration
-            ? "AI 生成内容可能存在偏差，使用前请自行核实。使用本服务会消耗已订购额度，具体以用量记录为准。"
+            ? "AI 生成内容可能存在偏差，使用前请自行核实。用量以当前项目的调用记录为准。"
             : asr
               ? "识别结果可能存在偏差，请结合录音核对。"
               : "体验产生的用量将从您已订购的模型额度中扣除，具体以用量记录为准。"}
@@ -1292,14 +1087,14 @@ export default function ModelExperience({
           >
             <header>
               <h3 id="voice-library-title">音色库</h3>
-              <button type="button">
+              <Button theme="borderless" type="tertiary" >
                 查看更多 <ArrowRight size={17} aria-hidden="true" />
-              </button>
+              </Button>
             </header>
             <div>
               {voiceCatalog.map((item) => (
-                <button
-                  type="button"
+                <Button theme="borderless" type="tertiary"
+
                   key={item.id}
                   aria-pressed={voice === item.id}
                   onClick={() => previewVoice(item)}
@@ -1310,7 +1105,7 @@ export default function ModelExperience({
                     <small>{item.desc}</small>
                   </span>
                   <Play size={15} aria-hidden="true" />
-                </button>
+                </Button>
               ))}
             </div>
           </section>
@@ -1332,37 +1127,20 @@ export default function ModelExperience({
         )}
       </div>
       {kind === "text" && (
-        <dialog
-          ref={settingsDialog}
-          className="pg-settings-dialog"
-          aria-label="模型设置"
-          onCancel={(event) => {
-            event.preventDefault();
-            setSettingsOpen(false);
-          }}
-        >
-          <form onSubmit={saveModelSettings}>
-            <header>
-              <strong>{model} 模型设置</strong>
-              <button
-                type="button"
-                aria-label="关闭模型设置"
-                onClick={() => setSettingsOpen(false)}
-              >
-                <X size={20} aria-hidden="true" />
-              </button>
-            </header>
+        <Modal visible={settingsOpen} title={model+' 模型设置'} width="min(520px, calc(100vw - 24px))"
+          onCancel={() => setSettingsOpen(false)} footer={null}>
+          <form className="pg-semi-settings" onSubmit={saveModelSettings}>
             <label className="pg-system-field">
               <span>
                 system <CircleHelp size={14} aria-hidden="true" />
               </span>
-              <textarea
+              <TextArea
                 aria-label="System Prompt"
                 value={settingsDraft.systemPrompt}
-                onChange={(e) =>
+                onChange={(next) =>
                   setSettingsDraft((value) => ({
                     ...value,
-                    systemPrompt: e.target.value,
+                    systemPrompt: next,
                   }))
                 }
                 placeholder="系统人设，例如‘你是一个 AI 助手’。"
@@ -1373,20 +1151,11 @@ export default function ModelExperience({
                 top_p <CircleHelp size={14} aria-hidden="true" />
               </span>
               <div>
-                <input
-                  aria-label="Top P"
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={settingsDraft.topP}
-                  onChange={(e) =>
+                <Slider aria-label="Top P" min={0} max={1} step={0.05} value={Number(settingsDraft.topP)} onChange={next =>
                     setSettingsDraft((value) => ({
                       ...value,
-                      topP: e.target.value,
-                    }))
-                  }
-                />
+                      topP: String(next),
+                    }))} />
                 <output>{settingsDraft.topP}</output>
               </div>
             </label>
@@ -1395,31 +1164,31 @@ export default function ModelExperience({
                 <span>
                   stop <CircleHelp size={14} aria-hidden="true" />
                 </span>
-                <button
-                  type="button"
+                <Button theme="borderless" type="tertiary"
+
                   aria-label="添加停止词"
                   onClick={() =>
                     setSettingsDraft((value) => ({ ...value, showStop: true }))
                   }
                 >
                   <Plus size={17} aria-hidden="true" />
-                </button>
+                </Button>
               </div>
               {settingsDraft.showStop && (
                 <div>
-                  <input
+                  <Input
                     aria-label="停止词"
                     value={settingsDraft.stop}
-                    onChange={(e) =>
+                    onChange={(next) =>
                       setSettingsDraft((value) => ({
                         ...value,
-                        stop: e.target.value,
+                        stop: next,
                       }))
                     }
                     placeholder="输入停止序列"
                   />
-                  <button
-                    type="button"
+                  <Button theme="borderless" type="tertiary"
+
                     aria-label="移除停止词"
                     onClick={() =>
                       setSettingsDraft((value) => ({
@@ -1430,7 +1199,7 @@ export default function ModelExperience({
                     }
                   >
                     <X size={16} aria-hidden="true" />
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -1439,20 +1208,11 @@ export default function ModelExperience({
                 temperature <CircleHelp size={14} aria-hidden="true" />
               </span>
               <div>
-                <input
-                  aria-label="Temperature"
-                  type="range"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  value={settingsDraft.temperature}
-                  onChange={(e) =>
+                <Slider aria-label="Temperature" min={0} max={2} step={0.1} value={Number(settingsDraft.temperature)} onChange={next =>
                     setSettingsDraft((value) => ({
                       ...value,
-                      temperature: e.target.value,
-                    }))
-                  }
-                />
+                      temperature: String(next),
+                    }))} />
                 <output>{settingsDraft.temperature}</output>
               </div>
             </label>
@@ -1461,55 +1221,27 @@ export default function ModelExperience({
                 thinking_budget <CircleHelp size={14} aria-hidden="true" />
               </span>
               <div>
-                <input
-                  aria-label="Thinking Budget"
-                  type="range"
-                  min="0"
-                  max="32000"
-                  step="1000"
-                  value={settingsDraft.thinkingBudget}
-                  onChange={(e) =>
+                <Slider aria-label="Thinking Budget" min={0} max={32000} step={1000} value={Number(settingsDraft.thinkingBudget)} onChange={next =>
                     setSettingsDraft((value) => ({
                       ...value,
-                      thinkingBudget: e.target.value,
-                    }))
-                  }
-                />
+                      thinkingBudget: String(next),
+                    }))} />
                 <output>{settingsDraft.thinkingBudget}</output>
               </div>
             </label>
             <footer>
-              <button type="button" onClick={() => setSettingsOpen(false)}>
+              <Button theme="borderless" type="tertiary"  onClick={() => setSettingsOpen(false)}>
                 取消
-              </button>
-              <button type="submit">保存</button>
+              </Button>
+              <Button htmlType="submit" theme="solid" >保存</Button>
             </footer>
           </form>
-        </dialog>
+        </Modal>
       )}
-      <dialog
-        ref={dialog}
-        className="pg-new-dialog"
-        onCancel={(event) => {
-          event.preventDefault();
-          setNewDialog(false);
-        }}
-      >
-        <h2>开始新对话？</h2>
-        <p>
-          {busy
-            ? "当前回复仍在生成。新建后将停止生成并清空当前内容。"
-            : "新建后将清空当前对话和未发送的内容。"}
-        </p>
-        <div>
-          <button type="button" onClick={() => setNewDialog(false)}>
-            取消
-          </button>
-          <button type="button" onClick={confirmConversation}>
-            确认新建
-          </button>
-        </div>
-      </dialog>
+      <Modal visible={newDialog} title="开始新对话？" width="min(440px, calc(100vw - 24px))"
+        okText="确认新建" cancelText="取消" onCancel={() => setNewDialog(false)} onOk={confirmConversation}>
+        <p>{busy ? "当前回复仍在生成。新建后将停止生成并清空当前内容。" : "新建后将清空当前对话和未发送的内容。"}</p>
+      </Modal>
     </section>
   );
 }

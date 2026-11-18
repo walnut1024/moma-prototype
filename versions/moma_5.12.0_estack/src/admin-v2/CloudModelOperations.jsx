@@ -1,12 +1,11 @@
-import { API_PREFIX } from '../../api-path.js';
 import AdminPageLoading from './AdminPageLoading';
 import {useEffect,useRef,useState} from 'react';
-import {Banner, Button, Card, Form, Input, Toast, Typography} from '@douyinfe/semi-ui';
+import {Banner, Button, Toast} from '@douyinfe/semi-ui';
+import { cloudAdminRequest as api } from './admin-client.mjs';
 import {configureOnboardingTransport} from './onboarding-client.js';
 import {useCloudMockSnapshot,clearCloudMockSnapshot} from './mock-onboarding-service.js';
 import {completeServiceShowcase} from './service-showcase-client.js';
 import './cloud-model-login.css';
-import {domainModelWorkspace} from '../mock/model-fields.js';
 
 let currentCloudState,acceptCloudState;
 export const loadAdminState=()=>currentCloudState || {models:[]};
@@ -14,18 +13,9 @@ async function saveCloudState(previous,action){const operationId=crypto.randomUU
 export async function prepareModelServiceShowcase(){if(!currentCloudState)throw Error('请先进入模型运营并登录');if(currentCloudState.modelData?.datasetId || currentCloudState.models.some(m=>m.serviceShowcase))return false;await saveCloudState(currentCloudState,{type:'modelOperations',operation:'prepareServiceShowcase',data:{confirmed:true}});return true;}
 export async function completeModelServiceShowcase(onProgress){if(!currentCloudState)throw Error('请先进入模型运营并登录');return completeServiceShowcase(currentCloudState,saveCloudState,{onProgress});}
 
-async function api(path,{method='GET',body,operationId,signal}={}){
-  const response=await fetch(API_PREFIX+path,{method,credentials:'same-origin',signal,headers:{...(method==='GET'?{}:{'content-type':'application/json','x-moma-request':'1'}),...(operationId?{'Idempotency-Key':operationId}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});
-  const data=await response.json();
-  if(!response.ok || data.error)throw Object.assign(new Error(data.error?.message || '请求失败'),{code:data.error?.code,status:response.status});
-  return path==='/model-operations'?domainModelWorkspace(data):data;
-}
-export { api as cloudAdminRequest };
-export const loadPackageFactorHistory = (modelId, signal) =>
-  api('/package-management/factor-history?' + new URLSearchParams({ model: modelId }), { signal });
 function applyResult(state,result){
   if(result.revision<state.revision)return state;
-  const next={...state,revision:result.revision,updatedAt:result.updatedAt || state.updatedAt,modelData:result.modelData || state.modelData,cloudMockState:result.mockState || state.cloudMockState};
+  const next={...state,revision:result.revision,updatedAt:result.updatedAt || state.updatedAt,modelData:result.modelData || state.modelData,supplyRelations:result.supplyRelations || state.supplyRelations,cloudMockState:result.mockState || state.cloudMockState};
   for(const [key,patch]of Object.entries(result.patches || {})){
     const rows=new Map((state[key] || []).map(r=>[r.id,r]));for(const id of patch.remove)rows.delete(id);for(const row of patch.upsert)rows.set(row.id,row);
     next[key]=[...patch.upsert,...[...rows.values()].filter(row=>!patch.upsert.some(r=>r.id===row.id))];
@@ -34,7 +24,7 @@ function applyResult(state,result){
 }
 
 export default function CloudModelOperations({children, packageWorkspace=false, applicationWorkspace=false}){
-  const [state,setState]=useState(null),[error,setError]=useState(''),[conflict,setConflict]=useState(false),[login,setLogin]=useState(null),[code,setCode]=useState(''),[busy,setBusy]=useState(false);
+  const [state,setState]=useState(null),[error,setError]=useState(''),[conflict,setConflict]=useState(false);
   const current=useRef(null),queue=useRef(Promise.resolve()),alive=useRef(true);
   const modelWorkspace = !packageWorkspace && !applicationWorkspace;
   const workspacePath=applicationWorkspace?'/application':packageWorkspace?'/package-management':'/model-operations';
@@ -45,7 +35,7 @@ export default function CloudModelOperations({children, packageWorkspace=false, 
     if(modelWorkspace){currentCloudState=next;useCloudMockSnapshot(next,next.cloudMockState);}
     setState(next);
   };
-  const load=async()=>{try{const next=await (applicationWorkspace?api('/application/open',{method:'POST',body:{}}):api(workspacePath));accept(next);setConflict(false);setError('');setLogin(null);}catch(issue){if(issue.status===401 || issue.status===403)setLogin({accountId:'yyg'});setError(issue.message);}};
+  const load=async()=>{try{const next=await (applicationWorkspace?api('/application/open',{method:'POST',body:{}}):api(workspacePath));accept(next);setConflict(false);setError('');}catch(issue){setError(issue.message);}};
   useEffect(()=>{
     alive.current=true;
     if(modelWorkspace) acceptCloudState=accept;
@@ -72,7 +62,7 @@ export default function CloudModelOperations({children, packageWorkspace=false, 
       try{result=await api(workspacePath+'/commands',{method:'POST',body,operationId:id});}
       catch(issue){
         if(!issue.status || issue.status>=500){try{result=await api('/operations/'+id);}catch{throw new Error('提交结果待确认，请保留当前输入并重载核对；操作 ID：'+id);}}
-        else{if(issue.status===409)setConflict(true);if(issue.status===401 && !packageWorkspace)setLogin({accountId:current.current.adminSession.accountId});throw issue;}
+        else{if(issue.status===409)setConflict(true);throw issue;}
       }
       let next;
       try { next=applicationWorkspace?await api(workspacePath):applyResult(current.current,result); }
@@ -82,7 +72,6 @@ export default function CloudModelOperations({children, packageWorkspace=false, 
     const result=queue.current.then(execute);queue.current=result.catch(()=>{});return result;
   };
   const dispatch=async action=>{
-    if(action.type==='enterAdmin'){setCode('');setError('');setLogin({accountId:action.accountId});return null;}
     if(!applicationWorkspace)throw Error('此操作不属于当前工作区');
     try {
       const next=await transact(action);
@@ -90,22 +79,6 @@ export default function CloudModelOperations({children, packageWorkspace=false, 
       return next;
     } catch (issue) {Toast.error(issue.message);return null;}
   };
-  const submit=async event=>{event.preventDefault();if(busy || !login?.accountId || !code)return;setBusy(true);setError('');try{await api('/auth/login',{method:'POST',body:{accountId:login.accountId,accessCode:code}});setCode('');await load();}catch(issue){setError(issue.message);}finally{setBusy(false);}};
-  if(login)return <div className="mo-cloud-login">
-    <Card className="mo-cloud-login-card">
-      <Typography.Title heading={3} id="mo-cloud-login-title">{workspaceLabel}登录</Typography.Title>
-      <form onSubmit={submit} aria-labelledby="mo-cloud-login-title">
-        <Form.Slot label={{ text: '后台账号', name: 'mo-cloud-account' }}>
-          <Input id="mo-cloud-account" autoComplete="username" value={login.accountId} onChange={accountId=>setLogin({accountId})}/>
-        </Form.Slot>
-        <Form.Slot label={{ text: '后台密码', name: 'mo-cloud-password' }}>
-          <Input id="mo-cloud-password" mode="password" autoComplete="current-password" value={code} onChange={setCode}/>
-        </Form.Slot>
-        <Button block theme="solid" htmlType="submit" loading={busy} disabled={!login.accountId || !code}>登录</Button>
-      </form>
-      {error && <Banner type="danger" closeIcon={null} description={error}/>}
-    </Card>
-  </div>;
   if(!state)return <div className="mo-cloud-login">{error
     ? <Banner type="danger" closeIcon={null} description={<>{error} <Button onClick={()=>void load()}>重新加载</Button></>}/>
     : <AdminPageLoading label={workspaceLabel}/>}</div>;

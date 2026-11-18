@@ -1,146 +1,272 @@
 import AdminStatus from './AdminStatus';
-import Table from './AdminTable';
 import AdminActionMenu from './AdminActionMenu';
-import {useRef,useState} from 'react';
-import { IconPlus } from '@douyinfe/semi-icons';
+import { useRef, useState } from 'react';
 import { Button, Input, Typography, Descriptions, Space } from '@douyinfe/semi-ui';
-import {Choice, Field} from './ServiceUI';
-import { Modal, Notice, CopyId } from './ServiceUI';
-import {modelSupplies,displayTime} from './model-management';
-import {SERVICE_MODES} from './model-operations';
-import {mappingCandidates,mappingConfig,mappingInterfaces,mappingPreview,mappingSourceVersion,mappingState} from './service-model-mappings';
+import { Choice, Field, Modal, Notice, CopyId } from './ServiceUI';
+import { modelSupplies } from './model-management';
+import { activeRouteVersion, routingChannels, serviceRoute } from './service-routing';
+import { additionalMappingOptions, mappingCandidates, mappingConfig, mappingInterfaces, mappingPreview, mappingReferences, mappingSourceVersion, mappingState, routeMappingAddresses } from './service-model-mappings';
 
-export default function ServiceModelMappings({state,service,services,onServiceChange,sectionRef,ops,showPageError,onRoute}) {
-  const [editor,setEditor]=useState(null),[preview,setPreview]=useState(null),[confirm,setConfirm]=useState(null),[busy,setBusy]=useState(false);
-  const trigger=useRef(null),candidates=mappingCandidates(state,service),interfaces=mappingInterfaces(service.model);
-  const modelRows=modelSupplies(state,service.modelId);
-  const rows=modelRows.filter(row=>(!service.providerId || row.provider?.id===service.providerId) && (!service.channelId || row.channelId===service.channelId));
-  const qualified=candidates.filter(row=>!row.reason);
-  const withoutMapping=excludedId=>qualified.filter(row=>!modelRows.some(supply=>supply.id!==excludedId &&
-    (supply.endpointId===row.endpointId || supply.serviceMapping?.pending?.config.endpointId===row.endpointId)));
-  const newChoices=withoutMapping();
-  const canAdd=Boolean(service.callId && interfaces.length && newChoices.length);
-  const blocked=!ops.can || Boolean(ops.conflict) || busy;
-  const payload=supply=>({id:supply?.id,serviceId:service.id,expectedRevision:supply?.mappingRevision || 0,expectedSource:mappingSourceVersion(state,service)});
-  const restoreFocus=()=>requestAnimationFrame(()=>{
-    const button=trigger.current;
-    (button?.isConnected && !button.disabled ? button : sectionRef.current)?.focus();
-  });
-  const closePreview=()=>{setPreview(null);restoreFocus();};
-  const closeConfirmation=()=>{setConfirm(null);restoreFocus();};
-  const close=(saved=false)=>{
-    const finish=()=>{
-      setEditor(null);
-      setPreview(null);
-      setConfirm(null);
-      ops.setError('');
-      ops.dirty(false);
-      restoreFocus();
-    };
-    if(saved)finish();else ops.proceed(finish);
-  };
-  const open=(event,supply)=>{
-    const button=event.currentTarget;
-    ops.proceed(()=>{
-      trigger.current=button;
-      const box=button.getBoundingClientRect();
-      const config=supply ? (supply.serviceMapping?.pending?.config || mappingConfig(supply,service.model)) : {providerId:service.providerId || '',platformInterface:interfaces.length===1 ? interfaces[0][0] : ''};
-      setEditor({
-        supply,config,
-        name:supply?.serviceMapping?.pending?.name || supply?.mappingName || (supply ? `${supply.provider?.name || ''} · ${supply.endpoint?.name || '映射'}` : ''),
-        side:box.left+box.width/2<window.innerWidth/2 ? 'right' : 'left',
-        base:payload(supply),
-      });
-      ops.setError('');
+const mappingName = supply => supply.mappingName || supply.endpoint?.name || '模型映射';
+const payload = (state, service, supply) => ({
+  id:supply?.id, serviceId:service.id, expectedRevision:supply?.mappingRevision || 0,
+  expectedSource:mappingSourceVersion(state,service),
+});
+
+export function mappingOptions(state, service, excludedId) {
+  const candidates = mappingCandidates(state,service);
+  const qualified = candidates.filter(row=>!row.reason);
+  const reserved = new Set(modelSupplies(state,service.modelId)
+    .filter(supply=>supply.id!==excludedId)
+    .flatMap(supply=>[supply.endpointId, supply.serviceMapping?.pending?.config.endpointId]));
+  return {candidates, qualified, available:qualified.filter(row=>!reserved.has(row.endpointId))};
+}
+
+export function MappingSummary({supply, status, routed, compact}) {
+  const pending = supply.serviceMapping?.pending;
+  const references = [...new Set(status.references.map(row=>row.kind).filter(kind=>!(routed || compact) || kind!=='当前使用'))];
+  const showStatus = !compact || status.label!=='待验证';
+  return <>
+    {(showStatus || pending || references.length>0) && <Space wrap spacing={6}>
+      {showStatus && <AdminStatus value={status.label}/>}
+      {pending && <Typography.Text type="warning" size="small">{pending.validation ? '变更待应用' : '变更待验证'}</Typography.Text>}
+      {references.length>0 && <Typography.Text type="tertiary" size="small">{references.join('、')}</Typography.Text>}
+    </Space>}
+    {!compact && status.issue && <Typography.Text type="danger" size="small">{status.issue}</Typography.Text>}
+  </>;
+}
+
+export function MappingRowActions({supply, service, status, actions, canWrite, blocked, serviceItems = []}) {
+  const used = status.references.length>0;
+  const pending = supply.serviceMapping?.pending;
+  const open = (mode, operation) => button=>actions.open(button, service, supply, mode, operation);
+  const run = operation => ()=>actions.runFromRow(service,supply,operation);
+  const items = used ? [] : [{node:'item',name:'编辑映射',disabled:blocked,onClick:open('edit')}];
+  if (pending) items.push({node:'item',name:'验证变更',disabled:blocked,onClick:run('serviceMappingValidate')});
+  if (pending) {
+    items.push(
+      {node:'item',name:'应用变更',disabled:blocked || used || !pending.validation,onClick:open('confirm','serviceMappingApply')},
+      {node:'item',name:'放弃变更',disabled:blocked,onClick:open('confirm','serviceMappingDiscard')},
+    );
+  } else if (!used) {
+    items.push(supply.status==='已启用'
+      ? {node:'item',name:'停用映射',disabled:blocked,onClick:open('confirm','serviceMappingDisable')}
+      : {node:'item',name:'启用映射',disabled:blocked || Boolean(status.issue) || !supply.serviceMapping?.validation,onClick:run('serviceMappingEnable')});
+  }
+  if (!used && supply.status!=='已启用') {
+    items.push({node:'item',name:'解除映射',disabled:blocked,onClick:open('confirm','serviceMappingRemove')});
+  }
+  const menu = canWrite ? [...items, ...(items.length && serviceItems.length ? [{node:'divider'}] : []), ...serviceItems] : serviceItems;
+  return <Space spacing={4} className="ss-mapping-row-actions">
+    <Button size="small" theme="borderless" aria-label={'查看映射 '+mappingName(supply)}
+      onClick={event=>open('view')(event.currentTarget)}>查看映射</Button>
+    {menu.length>0 && <AdminActionMenu label={'更多映射操作 '+mappingName(supply)} items={menu}/>}
+  </Space>;
+}
+
+export function useServiceMappingActions(state, services, ops, fallbackFocus) {
+  const [dialog,setDialog] = useState(null);
+  const [busy,setBusy] = useState(false);
+  const trigger = useRef(null);
+  const service = dialog && services.find(item=>item.id===dialog.serviceId);
+  const blocked = !ops.can || Boolean(ops.conflict) || busy;
+  const open = (button, target, supply, mode, operation) => ops.proceed(()=>{
+    trigger.current = button;
+    const box = button?.getBoundingClientRect();
+    setDialog({
+      serviceId:target.id, supply, mode, operation, base:mode==='view' ? null : payload(state,target,supply),
+      side:box && box.left+box.width/2>=window.innerWidth/2 ? 'left' : 'right',
     });
+    ops.setError('');
+  });
+  const close = (saved=false) => {
+    const finish = ()=>{
+      setDialog(null);
+      ops.dirty(false);
+      ops.setError('');
+      requestAnimationFrame(()=>{
+        const button = trigger.current;
+        (button?.isConnected && !button.disabled ? button : fallbackFocus.current)?.focus();
+      });
+    };
+    if (saved) finish();
+    else ops.proceed(finish);
   };
-  const set=patch=>{setEditor(current=>({...current,...patch,request:null}));ops.dirty(true);ops.setError('');};
-  const command=async(operation,data)=>{if(blocked)return;setBusy(true);try{return await ops.run(operation,data,service.modelId);}finally{setBusy(false);}};
-  const prepare=()=>{try{const next=mappingPreview(state,service,editor.config);setEditor(current=>({...current,request:next.request}));ops.setError('');}catch(error){ops.setError(error.message);}};
-  const save=async()=>{const next=await command(editor.supply?'serviceMappingSave':'serviceMappingCreate',{...editor.base,name:editor.name.trim() || selected?.name || selected?.endpoint?.name || selected?.upstreamModelId,config:editor.config});if(next)close(true);};
-  const read=(button,supply)=>{try{trigger.current=button;setPreview({name:supply.mappingName || supply.endpoint?.name,request:mappingPreview(state,service,mappingConfig(supply,service.model)).request});ops.setError('');}catch(error){ops.setError(error.message);}};
-  const ask=(button,supply,operation)=>{trigger.current=button;setConfirm({supply,operation,base:payload(supply)});ops.setError('');};
-  const providerId=editor?.config.providerId;
-  const editorChoices=editor?.supply ? withoutMapping(editor.supply.id) : newChoices;
-  const providerChoices=[...new Map((editor?.supply ? candidates : editorChoices).map(row=>[row.provider.id,row.provider.name]))];
-  const formChoices=editorChoices.filter(row=>row.provider.id===providerId);
-  const selected=editor && formChoices.find(row=>row.id===editor.config.associationId && row.endpointId===editor.config.endpointId);
-  const sourceChanged=editor && editor.base.expectedSource!==mappingSourceVersion(state,service);
-  const updateLocked=Boolean(editor?.supply && mappingState(state,service,editor.supply).references.length);
-  const ready=Boolean(editor?.config.associationId && editor.config.platformInterface);
-  const selectSupply=id=>{
-    const row=formChoices.find(item=>item.selectionId===id);
+  const command = async (operation,data,target)=>{
+    if (blocked) return;
+    setBusy(true);
+    try { return await ops.run(operation,data,target.modelId); }
+    finally { setBusy(false); }
+  };
+  return {
+    active:Boolean(dialog && service), busy, open,
+    runFromRow:(target,supply,operation)=>ops.proceed(()=>command(operation,payload(state,target,supply),target)),
+    overlay:dialog && service && <MappingDialog state={state} service={service} dialog={dialog} ops={ops}
+      blocked={blocked} busy={busy} close={close} command={(operation,data)=>command(operation,data,service)}/>,
+  };
+}
+
+const confirmationCopy = {
+  serviceMappingApply:['应用模型映射','确认应用映射','应用后使用已验证的供给。可在编辑路由时选择此渠道。'],
+  serviceMappingDiscard:['放弃映射变更','确认放弃变更','放弃待应用变更，继续使用当前映射。'],
+  serviceMappingDisable:['停用模型映射','确认停用映射','停用后该映射不可用于路由。'],
+  serviceMappingRemove:['解除模型映射','确认解除映射','解除当前服务与该渠道模型的映射。'],
+};
+
+function MappingDialog({state,service,dialog,ops,blocked,busy,close,command}) {
+  const {mode,supply,operation,base,side} = dialog;
+  if (mode==='view') return <MappingDetails state={state} service={service} supply={supply} side={side} close={close}/>;
+  if (mode==='confirm') {
+    const [title,action,description] = confirmationCopy[operation];
+    return <Modal wide title={title} description={mappingName(supply)} onClose={()=>!busy && close()} footer={<>
+      <Button theme="light" disabled={busy} onClick={()=>close()}>取消</Button>
+      <Button theme="solid" loading={busy} disabled={blocked} onClick={async()=>{
+        if(await command(operation,{...base,confirmed:true})) close(true);
+      }}>{action}</Button>
+    </>}>
+      <Typography.Paragraph>{description}</Typography.Paragraph>
+      {operation==='serviceMappingApply' && <RequestPreview request={supply.serviceMapping?.pending?.validation?.request}/>}
+      {ops.error && <Notice error>{ops.error}</Notice>}
+    </Modal>;
+  }
+  return <MappingEditor state={state} service={service} dialog={dialog} ops={ops}
+    blocked={blocked} busy={busy} close={close} command={command}/>;
+}
+
+function MappingDetails({state,service,supply,side,close}) {
+  const channel = routingChannels(state,service).find(row=>row.id===supply.id);
+  const addresses = routeMappingAddresses(service,channel,activeRouteVersion(serviceRoute(state,service.id))?.config);
+  const issue = channel ? mappingState(state,service,supply).issue : '该渠道的映射已不存在。';
+  return <Modal drawer drawerSide={side} title="映射详情" description={mappingName(supply)} onClose={()=>close()}
+    footer={<Button theme="light" onClick={()=>close()}>关闭</Button>}>
+    <Descriptions data={[
+      {key:'模型调用标识',value:service.callId ? <CopyId value={service.callId}/> : '待配置'},
+      {key:'上游模型调用标识',value:supply.upstreamModelId ? <CopyId value={supply.upstreamModelId} label="上游模型调用标识"/> : '待配置'},
+      {key:'上游协议',value:channel?.mapping.upstreamProtocol || supply.endpoint?.protocol || '待配置'},
+    ]}/>
+    <section className="ss-route-editor-section">
+      <Typography.Title heading={6}>API 地址映射</Typography.Title>
+      {addresses.length ? addresses.map(({label,path,url,forwarding})=><Descriptions key={path} className="ss-mapping-address" data={[
+        {key:'对外协议 / 接口路径',value:<Space wrap spacing={8}>
+          <Typography.Text strong>{label || '—'}</Typography.Text><code className="ss-code">POST {path}</code>
+        </Space>},
+        {key:'上游请求地址',value:url ? <CopyId value={url} label="上游请求地址"/> : '—'},
+        {key:'转发方式',value:forwarding},
+      ]}/>) : <Typography.Text type="secondary">暂无已配置的 API 地址映射</Typography.Text>}
+    </section>
+    {issue && <Notice error>{issue}</Notice>}
+  </Modal>;
+}
+
+function MappingEditor({state,service,dialog,ops,blocked,busy,close,command}) {
+  const {supply,base,side,mode} = dialog;
+  const interfaces = mappingInterfaces(service.model);
+  const [editor,setEditor] = useState(()=>{
+    const config = supply
+      ? (mode==='edit' && supply.serviceMapping?.pending?.config || mappingConfig(supply,service.model))
+      : {providerId:service.providerId || '',platformInterface:interfaces.length===1 ? interfaces[0][0] : ''};
+    const name = supply ? (mode==='edit' && supply.serviceMapping?.pending?.name || mappingName(supply)) : '';
+    return {config,name,request:null};
+  });
+  const {config,name,request} = editor;
+  const options = mappingOptions(state,service,supply?.id);
+  const providers = options && [...new Map((supply ? options.candidates : options.available).map(row=>[row.provider.id,row.provider.name]))];
+  const choices = options?.available.filter(row=>row.provider.id===config.providerId) || [];
+  const selected = choices.find(row=>row.id===config.associationId && row.endpointId===config.endpointId);
+  const additional = additionalMappingOptions(service.model,selected);
+  const sourceChanged = base.expectedSource!==mappingSourceVersion(state,service);
+  const nowUsed = mode==='edit' && mappingReferences(state,supply).length>0;
+  const ready = config.associationId && config.platformInterface;
+  const set = patch=>{
+    setEditor(current=>({...current,...patch,request:null}));
+    ops.dirty(true);
+    ops.setError('');
+  };
+  const selectSupply = id=>{
+    const row = choices.find(item=>item.selectionId===id);
     if (!row) return;
-    set({config:{providerId:row.provider.id,endpointId:row.endpointId,associationId:row.id,catalogueModelId:row.catalogueModelId,upstreamModelId:row.upstreamModelId,platformInterface:editor.config.platformInterface}});
+    set({config:{
+      providerId:row.provider.id, endpointId:row.endpointId, associationId:row.id,
+      catalogueModelId:row.catalogueModelId, upstreamModelId:row.upstreamModelId, platformInterface:config.platformInterface,
+    }});
   };
-  return <section ref={sectionRef} tabIndex={-1} className="ss-mappings" aria-label={`${service.name}模型映射`}>
-    <div className="ss-route-column-heading">
-      <Typography.Title heading={6}>模型映射</Typography.Title>
-      <Space wrap>
-        {services.length > 1 && <Choice label="映射列表服务商" value={service.id} options={services.map(row=>[row.id,row.name])} style={{width:180}} disabled={busy} onChange={onServiceChange}/>}
-        <Button icon={<IconPlus aria-hidden="true"/>} theme="light" disabled={blocked || ops.hasUnsaved?.() || !canAdd} onClick={event=>open(event)}>新增映射</Button>
-      </Space>
-    </div>
-    {service.callId && interfaces.length > 0 && !newChoices.length && <div className="ss-change-actions">
-      <Typography.Text type="tertiary">{qualified.length ? '可用供给均已关联。' : '暂无已验证并启用的供给。'}</Typography.Text>
-      {!qualified.length && <Button theme="borderless" onClick={()=>ops.go({perspective:'suppliers',provider:service.providerId || null,tab:'catalogue',origin:location.hash},{base:'providers'})}>前往渠道接入</Button>}
-    </div>}
-    {!service.callId && <Notice>请先配置当前服务商服务的对外调用标识。</Notice>}
-    {!interfaces.length && <Notice>当前模型任务尚无可用的平台接口，请先完善模型资料或使用支持的接口。</Notice>}
-    {showPageError && ops.error && !editor && !confirm && <Notice error>{ops.error}</Notice>}
-    <Table pagination={false} rowKey="id" scroll={{x:750}} empty="暂无映射。" columns={['映射 / 渠道','上游模型标识','接口映射','状态 / 引用','操作'].map((title,index)=>({title,render:(_,row)=>row['c'+index]}))} dataSource={rows.map(supply=>{const status=mappingState(state,service,supply),pending=supply.serviceMapping?.pending,used=status.references.length>0;return ({id:supply.id,c0: <><strong>{supply.mappingName || supply.endpoint?.name || '待补齐映射'}</strong>{!service.providerId && <small>{supply.provider?.name}</small>}{pending && <small>{pending.validation?'变更已验证，待应用':'有待验证变更'}</small>}</>,c1: <>{supply.upstreamModelId?<CopyId value={supply.upstreamModelId} label="上游模型标识"/>:'待配置'}</>,c2: <>{interfaces.find(([id])=>id===(supply.serviceMapping?.platformInterface || interfaces[0]?.[0]))?.[1] || '待配置'} → {supply.endpoint?.protocol || '待配置'}</>,c3: <><AdminStatus value={status.label}/><small>{status.references.length?status.references.map(row=>row.kind).join('、'):'备用 · 未参与'}</small>{status.issue && <small>{status.issue}</small>}{used && <Button theme="borderless" onClick={onRoute}>处理路由引用</Button>}</>,c4: <><div className="ss-mapping-actions"><Button theme="borderless" disabled={blocked || ops.hasUnsaved?.()} onClick={event=>open(event,supply)}>编辑</Button>
-          {!used && !pending && (status.issue || supply.status!=='已启用') && <Button theme="borderless" disabled={blocked} onClick={()=>command(status.issue?'serviceMappingValidate':supply.status==='已启用'?'serviceMappingValidate':'serviceMappingEnable',payload(supply))}>{status.issue?'验证映射':supply.status==='已启用'?'重新验证':'启用映射'}</Button>}
-          <AdminActionMenu label={'更多映射操作 '+(supply.mappingName || supply.endpoint?.name)} items={[
- {node:'item',name:'预览映射',onClick:button=>read(button,supply)},
- {node:'item',name:pending?'验证变更':'验证映射',disabled:blocked,onClick:()=>command('serviceMappingValidate',payload(supply))},
- ...(pending?[{node:'item',name:'应用映射',disabled:blocked || !pending.validation,onClick:button=>ask(button,supply,'serviceMappingApply')},{node:'item',name:'放弃变更',disabled:blocked,onClick:button=>ask(button,supply,'serviceMappingDiscard')}]:[{node:'item',name:supply.status==='已启用'?'停用映射':'启用映射',disabled:blocked || used,onClick:button=>supply.status==='已启用'?ask(button,supply,'serviceMappingDisable'):command('serviceMappingEnable',payload(supply))}]),
- {node:'item',name:'解除映射',disabled:blocked || supply.status==='已启用' || used,onClick:button=>ask(button,supply,'serviceMappingRemove')},
- ...(used?[{node:'title',name:'仍被路由引用，先处理引用后停用、解除。'}]:[]),
-]}/>
-        </div></>});})}/>
-    {editor && <Modal drawer wide drawerSide={editor.side} className="ss-mapping-editor" title={editor.supply?'编辑映射':'新增映射'} onClose={()=>!busy && close()} footer={<><Button theme="light" disabled={busy} onClick={()=>editor.request?setEditor({...editor,request:null}):close()}>{editor.request?'返回修改':'取消'}</Button><Button theme="solid" loading={busy} disabled={blocked || sourceChanged || !ready} onClick={editor.request?save:prepare}>{editor.request?'保存映射':'预览映射'}</Button></>}>
-      <Descriptions data={[
-        {key:'模型服务',value:service.model.name},
-        {key:'服务模式',value:SERVICE_MODES[service.mode]?.label},
-        {key:'对外调用标识',value:<CopyId value={service.callId}/>},
-        ...(service.providerId ? [{key:'服务商',value:service.name}] : []),
-      ]}/>
-      {sourceChanged && <Notice error>供给或模型资料已变化，当前输入保留。请关闭后载入最新数据再核对。</Notice>}
-      {editor.request?<RequestPreview request={editor.request}/>:<div className="ss-mapping-fields">
-        {!service.providerId && <Field label="服务商 *"><Choice label="映射服务商" value={providerId || undefined} placeholder="请选择服务商" options={providerChoices} disabled={blocked || updateLocked} onChange={id=>set({config:{providerId:id,platformInterface:editor.config.platformInterface}})}/></Field>}
+  const prepare = ()=>{
+    try {
+      const {request:nextRequest} = mappingPreview(state,service,config);
+      setEditor(current=>({...current,request:nextRequest}));
+      ops.setError('');
+    } catch (error) { ops.setError(error.message); }
+  };
+  const save = async ()=>{
+    const next = await command(supply ? 'serviceMappingSave' : 'serviceMappingCreate',{
+      ...base,name:name.trim() || selected?.name || selected?.endpoint?.name || selected?.upstreamModelId,config,
+    });
+    if (next) close(true);
+  };
+  return <Modal drawer wide drawerSide={side}
+    title={supply ? '编辑映射' : '新增映射'} onClose={()=>!busy && close()} footer={<>
+      <Button theme="light" disabled={busy} onClick={()=>request ? setEditor({...editor,request:null}) : close()}>{request ? '返回修改' : '取消'}</Button>
+      <Button theme="solid" loading={busy} disabled={blocked || sourceChanged || nowUsed || !ready}
+        onClick={request ? save : prepare}>{request ? '保存映射' : '预览映射'}</Button>
+    </>}>
+    <Descriptions data={[
+      {key:'模型服务',value:service.model.name},
+      {key:'模型调用标识',value:<CopyId value={service.callId}/>},
+      ...(service.providerId ? [{key:'服务商 / 渠道',value:service.name}] : []),
+    ]}/>
+    {sourceChanged && <Notice error>供给或模型资料已变化，请关闭后载入最新数据。</Notice>}
+    {nowUsed && <Notice error>映射已被路由引用。请在「编辑路由」中处理该渠道。</Notice>}
+    {request ? <RequestPreview request={request}/> : <div className="ss-mapping-fields">
+      <>
+        {!service.providerId && <Field label="服务商 *"><Choice label="映射服务商" value={config.providerId || undefined}
+          placeholder="请选择服务商" options={providers} disabled={blocked || nowUsed}
+          onChange={providerId=>set({config:{providerId,platformInterface:config.platformInterface}})}/></Field>}
         <Field label="渠道模型供给 *">
           <Choice label="渠道模型供给" value={selected?.selectionId || undefined}
-            placeholder={providerId ? '请选择已验证并启用的供给' : '请先选择服务商'}
-            options={formChoices.map(row=>[row.selectionId,`${row.name} · ${row.upstreamModelId}`])}
-            disabled={blocked || updateLocked || !providerId || !formChoices.length} filter onChange={selectSupply}/>
+            placeholder={config.providerId ? '请选择已验证并启用的供给' : '请先选择服务商'}
+            options={choices.map(row=>[row.selectionId,row.name+' · '+row.upstreamModelId])}
+            disabled={blocked || nowUsed || !choices.length} filter onChange={selectSupply}/>
         </Field>
         <Descriptions data={[
-          {key:'上游模型标识',value:editor.config.upstreamModelId ? <CopyId value={editor.config.upstreamModelId} label="上游模型标识"/> : '—'},
-          ...(interfaces.length===1 ? [{key:'平台接口',value:<><code>{interfaces[0][0]}</code> · {interfaces[0][1]}</>}] : []),
-          ...(selected ? [
-            {key:'上游协议',value:selected.endpoint.protocol},
-            {key:'上游 API 地址',value:<code className="ss-code">{selected.apiAddresses?.[0]?.baseUrl || selected.endpoint.baseUrl}</code>},
-          ] : []),
+          {key:'上游模型调用标识',value:config.upstreamModelId ? <CopyId value={config.upstreamModelId} label="上游模型调用标识"/> : '—'},
+          ...(interfaces.length===1 ? [{key:'平台接口',value:interfaces[0][1]}] : []),
         ]}/>
-        {updateLocked && <Typography.Paragraph>在用映射只能修改名称。更换渠道或接口，请新增映射后切换路由。</Typography.Paragraph>}
-        {interfaces.length!==1 && <Field label="平台接口 *"><Choice label="映射平台接口" value={editor.config.platformInterface || undefined} placeholder="请选择平台接口" options={interfaces} disabled={blocked || updateLocked} onChange={platformInterface=>set({config:{...editor.config,platformInterface}})}/></Field>}
-        <Field label="映射名称（选填）"><Input aria-label="映射名称" placeholder="留空时使用渠道名称" value={editor.name} maxLength={60} disabled={blocked} onChange={name=>set({name})}/></Field>
-      </div>}
-      <Typography.Paragraph>保存不启用、不分配流量。映射验证复用当前供给检测结果，核对调用标识和接口，不产生新用量。</Typography.Paragraph>
-      {ops.error && <Notice error>{ops.error}</Notice>}
-    </Modal>}
-    {preview && <Modal wide title="映射预览" description={preview.name} onClose={closePreview} footer={<Button theme="light" onClick={closePreview}>关闭预览</Button>}><RequestPreview request={preview.request}/><Typography.Paragraph>仅展示标识替换，不发送请求，不展示鉴权内容。</Typography.Paragraph></Modal>}
-    {confirm && <Modal wide title={({'serviceMappingApply':'应用模型映射','serviceMappingDiscard':'放弃映射变更','serviceMappingDisable':'停用模型映射','serviceMappingRemove':'解除模型映射'})[confirm.operation]} description={confirm.supply.mappingName || confirm.supply.endpoint?.name} onClose={()=>!busy && closeConfirmation()} footer={<>
-        <Button theme="light" disabled={busy} onClick={closeConfirmation}>取消</Button><Button theme="solid" disabled={blocked} onClick={async()=>{if(await command(confirm.operation,{...confirm.base,confirmed:true}))closeConfirmation();}}>{({'serviceMappingApply':'确认应用映射','serviceMappingDiscard':'确认放弃变更','serviceMappingDisable':'确认停用映射','serviceMappingRemove':'确认解除映射'})[confirm.operation]}</Button>
-      </>}>
-      <Typography.Paragraph>{confirm.operation==='serviceMappingApply'?'应用后使用已验证的新供给关系，未参与的路由不会自动选用它。':confirm.operation==='serviceMappingDiscard'?'放弃待验证变更，保留当前有效映射。':confirm.operation==='serviceMappingRemove'?'仅解除当前服务映射，供应渠道、价格和历史保留。':'停用后不能被新路由选择，映射和历史继续保留。'}</Typography.Paragraph>
-      {confirm.supply.serviceMapping?.pending && confirm.operation==='serviceMappingApply' && <RequestPreview request={confirm.supply.serviceMapping.pending.validation?.request}/>}
-      {ops.error && <Notice error>{ops.error}</Notice>}
-    </Modal>}
-    {rows.some(row=>row.serviceMapping?.validation) && <Typography.Paragraph className="ss-mapping-note">最近核验：{displayTime(rows.filter(row=>row.serviceMapping?.validation).at(-1)?.serviceMapping.validation.checkedAt)}。验证结果绑定当前调用标识及供给配置。</Typography.Paragraph>}
-  </section>;
+        {interfaces.length!==1 && <Field label="平台接口 *"><Choice label="映射平台接口"
+          value={config.platformInterface || undefined} placeholder="请选择平台接口" options={interfaces}
+          disabled={blocked || nowUsed} onChange={platformInterface=>set({config:{...config,platformInterface}})}/></Field>}
+        {(additional.length>0 || config.additionalInterfaces?.length>0) && <Field label="附加对外接口">
+          <Choice label="附加对外接口" multiple showClear placeholder="请选择附加对外接口"
+            value={config.additionalInterfaces || []} options={additional.map(option=>[option.path,option.label])}
+            disabled={blocked || nowUsed} onChange={additionalInterfaces=>set({config:{...config,additionalInterfaces}})}/>
+        </Field>}
+      </>
+      <Field label="映射名称（选填）"><Input aria-label="映射名称"
+        placeholder="留空时使用渠道名称" value={name} maxLength={60}
+        disabled={blocked || nowUsed} onChange={name=>set({name})}/></Field>
+    </div>}
+    <Typography.Paragraph type="secondary">映射保存后可验证并启用。分流配置在「编辑路由」中生效。</Typography.Paragraph>
+    {ops.error && <Notice error>{ops.error}</Notice>}
+  </Modal>;
 }
+
 function RequestPreview({request}) {
-  if(!request)return null;
-  return <div className="ss-mapping-preview"><section><Typography.Title heading={6}>客户请求平台</Typography.Title><Descriptions data={[{key:<>接口路径</>,value:<><code>{request.platform.path}</code></>},{key:<>model</>,value:<><code>{request.platform.model}</code></>}]}/></section><section><Typography.Title heading={6}>平台请求服务商</Typography.Title><Descriptions data={[{key:<>请求地址</>,value:<><code>{request.upstream.url}</code></>},{key:<>协议</>,value:<>{request.upstream.protocol}</>},{key:<>model</>,value:<><code>{request.upstream.model}</code></>}]}/></section></div>;
+  if (!request) return null;
+  return <><div className="ss-request-preview">
+    <section><Typography.Title heading={6}>客户请求平台</Typography.Title><Descriptions data={[
+      {key:'接口路径',value:<code className="ss-code">{request.platform.path}</code>},
+      {key:'model',value:<code className="ss-code">{request.platform.model}</code>},
+    ]}/></section>
+    <section><Typography.Title heading={6}>平台请求服务商</Typography.Title><Descriptions data={[
+      {key:'请求地址',value:<code className="ss-code">{request.upstream.url}</code>},
+      {key:'协议',value:request.upstream.protocol},
+      {key:'model',value:<code className="ss-code">{request.upstream.model}</code>},
+    ]}/></section>
+  </div>
+    {request.additional?.length>0 && <section className="ss-route-editor-section">
+      <Typography.Title heading={6}>附加对外接口</Typography.Title>
+      <Descriptions data={request.additional.map(({label,path,url})=>({
+        key:<>{label} <code>{path}</code></>,value:<CopyId value={url} label="上游请求地址"/>,
+      }))}/>
+    </section>}
+  </>;
 }

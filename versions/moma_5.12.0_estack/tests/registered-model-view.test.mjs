@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { initialModelWorkspace } from '../server/model-repository.js';
+import { initialModelWorkspace, modelSupplyRelations } from '../server/model-repository.js';
 import { commitAdminState } from '../src/admin-v2/state-transaction.js';
 import { modelCatalogue, libraryRecord } from '../src/admin-v2/model-library.js';
 import { supplyModelDirectory, serviceModelSources } from '../src/admin-v2/supply-models.js';
@@ -9,8 +9,11 @@ import { serviceModelSourceDraft } from '../src/admin-v2/model-profile.js';
 import { serviceDirectoryModels } from '../src/admin-v2/service-workspace.js';
 import { catalogueMappingRows } from '../src/admin-v2/channel-selection.js';
 import { supplierDirectory } from '../src/admin-v2/moma-provider.js';
-import { supplierModelChannelGroups } from '../src/admin-v2/supplier-model-channel-table.js';
+import { channelManagementDirectory, supplierModelChannelGroups } from '../src/admin-v2/supplier-model-channel-table.js';
+import { MOMA_BUILTIN_MODELS, OFFICIAL_CHANNEL_PRESETS } from '../src/admin-v2/official-channel-presets.js';
 import { supplierDeletionBlock } from '../src/admin-v2/provider-channels.js';
+import { referenceWorkspace } from '../src/mock/reference-workspace.js';
+import { planProviderJsonModel } from '../src/admin-v2/provider-json-import.js';
 
 test('materials contain seventeen masters while model onboarding lists only registered models and their actual supplier channels', () => {
   const state=initialModelWorkspace(),before=structuredClone(state),directory=supplyModelDirectory(state);
@@ -40,17 +43,92 @@ test('supplier registration adds the selected material to the aggregated view, e
   assert.ok(!supplyModelDirectory(removed).some(row=>row.id===id));assert.ok(libraryRecord(removed,id));
   assert.deepEqual(supplyModelDirectory(JSON.parse(JSON.stringify(removed))).map(row=>row.id),supplyModelDirectory(state).map(row=>row.id));
 });
+
+test('empty registrations stay empty in both perspectives while reference catalogues remain available for onboarding', () => {
+  const state = referenceWorkspace(), before = structuredClone(state), providers = supplierDirectory(state);
+  const relations = modelSupplyRelations(structuredClone(state));
+  const { byProvider, models } = channelManagementDirectory(state, providers, relations);
+  assert.equal(models.length, 0);
+  assert.equal([...byProvider.values()].flat().filter(group => group.modelId).length, 0);
+  assert.ok(MOMA_BUILTIN_MODELS.length);
+  assert.deepEqual(state, before);
+});
+
+test('JSON imports match canonical codes and preserve distinct identities with the same display name', () => {
+  const state = referenceWorkspace(), before = structuredClone(state), provider = state.providers[0], master = state.modelTemplates[0];
+  const input = { canonical_slug: 'another-model-version', model_name: master.name, model_type: master.type };
+  const created = planProviderJsonModel(state, provider.id, { model: input, connections: [] });
+  const added = created.state.modelTemplates.find(row => row.modelId === input.canonical_slug);
+  assert.equal(created.existing, false);
+  assert.equal(added.name, master.name);
+  assert.notEqual(added.id, master.id);
+  assert.equal(created.state.modelTemplates.length, state.modelTemplates.length + 1);
+  assert.deepEqual(created.state.modelTemplates.filter(row => row.id !== added.id), before.modelTemplates);
+  assert.equal(created.state.providers[0].catalogModels[0].libraryId, added.id);
+  const repeated = planProviderJsonModel(created.state, provider.id, { model: { ...input, model_name: '新的展示名' }, connections: [] });
+  assert.equal(repeated.existing, true);
+  assert.deepEqual(repeated.changes, []);
+  assert.deepEqual(repeated.state, created.state);
+  const reused = planProviderJsonModel(state, provider.id, { model: { ...input, canonical_slug: master.modelId, model_name: '另一个展示名' }, connections: [] });
+  assert.equal(reused.existing, true);
+  assert.equal(reused.state.providers[0].catalogModels[0].libraryId, master.id);
+  assert.equal(reused.state.modelTemplates.length, state.modelTemplates.length);
+  assert.deepEqual(reused.state.modelTemplates, before.modelTemplates);
+  assert.deepEqual(state, before);
+});
+
+test('MoMA catalogue uses distinct dated records and excludes Jiutian from both references and onboarding', () => {
+  const templates = OFFICIAL_CHANNEL_PRESETS.find(row => row.code === 'moma').models;
+  const refs = MOMA_BUILTIN_MODELS;
+  assert.ok([...refs, ...templates].every(row => !/jiutian|九天/i.test(row.name)));
+  assert.equal(new Set(refs.map(row => row.modelId)).size, refs.length);
+  assert.ok(refs.every(row => row.listedAt >= '2026-06-01' && row.profile.documentation.endsWith(encodeURIComponent(row.name))));
+  const streaming = refs.find(row => row.modelId === 'qwen-audio-3.0-asr-flash-streaming');
+  assert.equal(streaming.upstreamModelId, 'qwen/qwen-audio-3.0-asr-flash-streaming');
+  assert.match(streaming.baseUrl, /^wss:\/\//);
+  assert.ok(!templates.some(row => row.id === streaming.id));
+  assert.equal(refs.find(row => row.modelId === 'qwen3.8-27b').upstreamModelId, undefined);
+});
+
+test('both perspectives share exactly the channel-backed supplier/model pairs and channel identities', () => {
+  const state = commitAdminState(initialModelWorkspace(), { type: 'modelOperations', operation: 'supplierModelsRegister',
+    data: { providerId: 'provider-zhipu-direct', libraryIds: ['model-2'] } }, '平台管理员');
+  const before = structuredClone(state), providers = supplierDirectory(state), relations = modelSupplyRelations(structuredClone(state));
+  const { byProvider, models } = channelManagementDirectory(state, providers, relations);
+  const supplierPairs = [...byProvider.values()].flat().filter(group => group.modelId);
+  assert.deepEqual(supplierPairs.map(group => [group.owner.id, group.id]).sort(), models.flatMap(model => model.groups.map(group => [group.owner.id, model.id])).sort());
+  assert(relations.models.some(row => row.materialId === 'model-2' && row.providerId === 'provider-zhipu-direct'));
+  assert(!models.some(row => row.id === 'model-2'));
+  assert.ok(!models.some(row => row.code === 'kimi-k3.1-pro'));
+  for (const group of supplierPairs) assert.deepEqual(group.channels.map(channel => channel.relationId).sort(), relations.channels.filter(row => row.providerId === group.owner.id && row.materialId === group.id).map(row => row.id).sort());
+  assert.deepEqual(state, before);
+});
+
+test('relational registration and mapping IDs determine membership even when JSON catalogue membership is stale', () => {
+  const state = initialModelWorkspace(), providers = supplierDirectory(state);
+  const relations = modelSupplyRelations(structuredClone(state));
+  const before = channelManagementDirectory(state, providers, relations);
+  const owner = providers.find(row => row.id === 'provider-moma');
+  owner.catalogModelIds = ['pp-ocrv6'];
+  owner.catalogModels.push({ modelId: 'pp-ocrv6', libraryId: 'builtin-pp-ocrv6' });
+  const after = channelManagementDirectory(state, providers, relations);
+  assert.deepEqual(after.models.map(row => row.id), before.models.map(row => row.id));
+  assert.ok(!after.models.some(row => row.code === 'pp-ocrv6'));
+  assert.deepEqual(after.models.flatMap(row => row.groups.flatMap(group => group.channels.map(channel => channel.relationId))).sort(),
+    before.models.flatMap(row => row.groups.flatMap(group => group.channels.map(channel => channel.relationId))).sort());
+});
+
 test('registered historical model masters reuse their service identity and retain a separate unchanged master',()=>{
   const initial=initialModelWorkspace(),id='model-2';
   const state=commitAdminState(initial,{type:'modelOperations',operation:'supplierModelsRegister',data:{providerId:'provider-moma',libraryIds:[id]}},'平台管理员');
   const master=serviceModelSources(state).find(row=>row.id===id);
   assert(master);assert(!modelOperationsView(state).models.some(row=>row.id===id));
-  const before=structuredClone(state),data={...serviceModelSourceDraft(state,master),libraryId:id};
+  const before=structuredClone(state),data={...serviceModelSourceDraft(state,master),libraryId:id,serviceMode:'provider'};
   assert.equal(data.modelId,master.modelId);
   const saved=commitAdminState(state,{type:'modelOperations',operation:'createServiceModel',data},'平台管理员');
   const service=serviceDirectoryModels(saved).find(row=>row.templateId===id);
   assert(service);assert.equal(service.id,id);assert.equal(service.modelId,data.modelId);
-  assert.equal(service.callsEnabled,false);assert.equal(service.listingStatus,'已下架');
+  assert.equal(service.callsEnabled,false);assert.equal(service.listingStatus,'已下架');assert.equal(service.serviceMode,'provider');
   const retained=libraryRecord(saved,id);for(const key of ['id','modelId','name','profile','capabilities'])assert.deepEqual(retained[key],master[key],key);
   assert.equal(modelCatalogue(saved).filter(row=>row.id===id).length,1);
   for(const key of ['providers','endpoints','modelSupplies','modelSalePrices','serviceRoutes'])assert.deepEqual(saved[key],state[key],key);

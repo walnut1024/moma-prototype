@@ -85,7 +85,7 @@ test('channel and model removal require confirmation, retain history and never r
   assert.throws(() => commitAdminState(deleted, act('catalogueRemove', owner.id, { modelId: 'kimi-k3', confirmed: true })), /请先删除.*全部渠道/);
   const remaining = catalogueChannels(deleted, provider(deleted, owner.id), 'kimi-k3')[0];
   const cleared = commitAdminState(deleted, act('channelDelete', owner.id, { modelId: 'kimi-k3', channelId: remaining.id, confirmed: true }));
-  const removed = commitAdminState(cleared, act('catalogueRemove', owner.id, { modelId: 'kimi-k3', confirmed: true }));
+  const removed = cleared;
   assert.deepEqual(providerCatalogueIds(provider(removed, owner.id)), []);
   assert.deepEqual(removed.modelSalePrices, seed.modelSalePrices);
   assert.deepEqual(removed.endpoints, seed.endpoints);

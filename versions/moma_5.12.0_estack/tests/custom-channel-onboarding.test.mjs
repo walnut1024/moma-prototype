@@ -6,7 +6,7 @@ import { resolveOnboardingProvider, resolveOnboardingModel } from '../src/admin-
 import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
 import { channelDrafts, channelDraftIssue } from '../src/admin-v2/channel-onboarding.js';
 import { supplierChannelAssociations } from '../src/admin-v2/supplier-resources.js';
-import { serviceMetadataReady, serviceModelDraft } from '../src/admin-v2/model-profile.js';
+import { serviceMetadataMissingFields, serviceMetadataReady, serviceModelDraft } from '../src/admin-v2/model-profile.js';
 
 const run = (state, operation, data) => commitAdminState(state, { type: 'modelOperations', operation, data });
 const clean = () => { const state = parseAdminState(null); for (const key of ['providers', 'endpoints', 'models', 'modelTemplates', 'modelSupplies', 'supplyPrices', 'modelSalePrices', 'serviceRoutes', 'modelOnboardings']) state[key] = []; return state; };
@@ -18,6 +18,12 @@ test('custom identity previews stay read-only and never fabricate model capabili
   assert.equal(provider.name, data.newProvider.name); assert.equal(provider.code, undefined); assert.equal(provider.id, 'new-provider');
   assert.equal(model.record.name, 'custom-model-v1'); assert.equal(model.record.metadataStatus, '待完善'); assert.equal(model.record.id, 'new-model:custom-model-v1');
   assert.deepEqual(model.record.profile, { tasks: [], inputModalities: [], outputModalities: [], resultTypes: [] }); assert.ok(Object.values(model.record.capabilities).every(value => value === null));
+  assert.deepEqual(serviceMetadataMissingFields(model.record), ['模型作者', '原厂发布日期', '支持任务', '输入模态', '输出模态或结果类型', '简短介绍']);
+  const completed = { ...model.record, description: '用于校验的文本模型', profile: {
+    ...model.record.profile, author: '测试作者', releaseDate: '2026-11', tasks: ['文本生成'], inputModalities: ['文本'], resultTypes: ['结构化数据'],
+  }};
+  assert.deepEqual(serviceMetadataMissingFields(completed), []);
+  assert.equal(serviceMetadataReady(completed), true);
   provider.name = 'local edit'; model.record.profile.tasks.push('local edit'); assert.deepEqual(state, before);
 });
 

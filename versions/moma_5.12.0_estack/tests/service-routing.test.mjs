@@ -31,15 +31,15 @@ test('route services reference existing stable model and supplier call IDs witho
   assert.equal(routingServices(state).find(item => item.id === id).model.name, '新的展示名称');
 });
 
-test('weighted routing validates positive exact percentages, duplicate and foreign references', () => {
+test('weighted routing validates positive relative weights, duplicate and foreign references', () => {
   const { state, service, config } = baseline();
   assert.equal(validateRouteConfig(state, service, config).channels[0].weight, 70);
-  for (const value of [NaN, Infinity, -1, 101, '1e2', '0.001']) {
+  for (const value of [NaN, Infinity, -1, 0, '1e2', '0.001']) {
     const next = structuredClone(config); next.channels[0].weight = value;
     assert.throws(() => validateRouteConfig(state, service, next), /权重/);
   }
-  const next = structuredClone(config); next.channels[1].weight = 29.99;
-  assert.throws(() => validateRouteConfig(state, service, next), /100%/);
+  const next = structuredClone(config); next.channels[1].weight = 140.25;
+  assert.equal(validateRouteConfig(state, service, next).channels[1].weight, 140.25);
   assert.throws(() => validateRouteConfig(state, service, { ...config, channels: [config.channels[0], config.channels[0]] }), /重复/);
   assert.throws(() => validateRouteConfig(state, service, { ...config, channels: [{ supplyId: 'missing', weight: 100 }] }), /不属于/);
   assert.throws(() => validateRouteConfig(state, service, { ...config, channels: [] }), /至少/);
@@ -104,7 +104,7 @@ test('draft saves incomplete weights without activation and restores through nor
   assert.equal(serviceRoute(next, service.id).activeVersion, 0);
   assert.equal(serviceRoute(next, service.id).versions.length, 0);
   assert.deepEqual(parseAdminState(JSON.stringify(next)).serviceRoutes, next.serviceRoutes);
-  assert.throws(() => commitAdminState(next, action(next, service, config)), /100%/);
+  assert.throws(() => commitAdminState(next, action(next, service, config)), /大于 0/);
 });
 
 test('publish produces an immutable version and preserves all models, supply, prices, gateway rules and service visibility', () => {
@@ -185,16 +185,29 @@ function threeChannels() {
   return data;
 }
 test('priority groups normalize and validate per-group weights, membership and nonempty enabled groups',()=>{
-  const {state,service,config}=threeChannels();
+  const {state,service,config:legacy}=threeChannels();
+  const config={...legacy,strategy:'weighted',channels:legacy.channels.map((row,index)=>({...row,weight:[10,20,75][index]}))};
   assert.equal(normalizeRouteConfig(config).channels.length,3);
-  assert.throws(()=>validateRouteConfig(state,service,config),/统一模型服务模式/);
-  for (const change of [value=>{value.groups[1].id='P1';},value=>{value.groups[0].name='';},value=>{value.channels[0].groupId='P9';},value=>{value.channels[2].weight=99;},value=>{value.channels[2].enabled=false;},value=>{value.groups=Array.from({length:11},(_,index)=>({id:'G'+index,name:'组',strategy:'random'}));}]) {
+  assert.deepEqual(validateRouteConfig(state,service,config).groups.map(row=>row.id),['P1','P2']);
+  for (const change of [value=>{value.groups[1].id='P1';},value=>{value.groups[0].name='';},value=>{value.channels[0].groupId='P9';},value=>{value.channels[2].weight=0;},value=>{value.channels[2].enabled=false;},value=>{value.groups=Array.from({length:11},(_,index)=>({id:'G'+index,name:'组',strategy:'random'}));}]) {
     const value=structuredClone(config);change(value);assert.throws(()=>validateRouteConfig(state,service,value));
   }
-  assert.throws(()=>validateRouteConfig(state,service,{...config,strategy:'weighted'}),/100%/);
+  assert.deepEqual(routePreview(state,service,config).map(row=>Math.round(row.share * 100)),[3333,6667,0]);
+  assert.deepEqual(routePreview(state,service,config,config.channels.slice(0,2).map(row=>row.supplyId)).map(row=>row.share),[0,0,100]);
   const normal=normalizeRouteConfig({...config,channels:config.channels.map((row,index)=>({...row,enabled:index!==0}))});
-  assert.equal(normal.channels[0].weight,70);
+  assert.equal(normal.channels[0].weight,10);
   assert.deepEqual(routeGroups({strategy:'random'}),[{id:'P1',name:'主用组',strategy:'random'}]);
+});
+test('retry settings use the existing route version transaction and reject invalid cross-group limits',()=>{
+  const {state,service,config:legacy}=threeChannels();
+  const published=commitAdminState(state,action(state,service,{...legacy,strategy:'weighted'}));
+  const retry={withinGroup:1,acrossGroups:1,maxAttempts:3,reasons:['timeout','5xx']};
+  const saveRetry=retry=>action(published,service,null,'serviceFailoverConfigure',{confirmed:true,enabled:true,retry});
+  const next=commitAdminState(published,saveRetry(retry));
+  assert.deepEqual(activeRouteVersion(serviceRoute(next,service.id)).config.retry,retry);
+  assert.equal(activeRouteVersion(serviceRoute(published,service.id)).config.retry,undefined);
+  assert.throws(()=>commitAdminState(published,saveRetry({...retry,acrossGroups:2})),/可切换的组数/);
+  assert.throws(()=>commitAdminState(published,saveRetry({...retry,reasons:[]})),/触发条件/);
 });
 test('obsolete unified priority policy cannot activate or overwrite its stored history',()=>{
  const {state,service,config}=threeChannels(),before=structuredClone(state),source=structuredClone(config);

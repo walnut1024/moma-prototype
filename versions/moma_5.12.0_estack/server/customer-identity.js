@@ -1,7 +1,13 @@
+import { resourceId } from '../src/resource-id.mjs';
+import { allowsSpace, internalSpace } from '../src/operating-space.mjs';
 import { activeCustomer } from '../src/service-access.mjs';
 import { authPhone, encodeAuthPassword, matchesAuthPassword } from '../src/auth-state.mjs';
+import { normalizeMemberPhone } from '../src/organization-data.mjs';
 
-export const marketCookie = 'moma5120_market';
+export const marketCookie = 'moma5120_v2_market';
+export const dualDemoUserId = 'front-demo-admin-001';
+export const dualDemoAdminLogin = 'admin-001';
+export const dualDemoTenantId = 'zqzh';
 export const customerSecretHash = async value => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),
   byte=>byte.toString(16).padStart(2,'0')).join('');
 const fail=(status,code,message)=>{throw Object.assign(new Error(message),{status,code});};
@@ -55,11 +61,12 @@ export async function registerCustomer(db,{phone,challengeId,code,password,conse
   if(consent!==true)fail(400,'INVALID_INPUT','请确认协议');
   const proof=await verifyCustomerChallenge(db,username,'signup',challengeId,code);
   const credential=await customerCredential(password);
-  const userId=crypto.randomUUID(), tenantId=crypto.randomUUID(), now=new Date(at).toISOString(), name='用户'+username.slice(-4);
+  const userId=resourceId('user'), tenantId=resourceId('tenant'), now=new Date(at).toISOString(), name='用户'+username.slice(-4);
   const stamp={status:'正常',createdAt:now,updatedAt:now};
   const user={...stamp,id:userId,login:username,phone:username,name,nickname:name,initialized:true,registeredAt:now};
   const tenant={...stamp,id:tenantId,name,type:'个人',ownerId:userId,source:'手机号注册'};
-  const project={...stamp,id:crypto.randomUUID(),tenantId,ownerId:userId,name:'默认项目',budget:0};
+  const project={...stamp,id:resourceId('project'),tenantId,ownerId:userId,name:'默认项目',budget:0};
+  tenant.defaultProjectId=project.id;
   const [written]=await db.batch([
     db.prepare(`UPDATE model_workspace SET reference_json=json_insert(reference_json,
         '$.users[#]',json(?),'$.tenants[#]',json(?),'$.projects[#]',json(?)),application_revision=application_revision+1
@@ -110,9 +117,14 @@ export async function changeCustomerPassword(db,session,{currentPassword,passwor
 }
 
 export async function customerIdentity(db, value, field = 'id', tenantId = null) {
+  const lookup = field === 'login'
+    ? "(LOWER(json_extract(u.value,'$.login'))=? OR LOWER(json_extract(u.value,'$.email'))=? OR json_extract(u.value,'$.phone')=?)"
+    : field === 'username' ? "LOWER(json_extract(u.value,'$.login'))=?" : "json_extract(u.value,'$.id')=?";
+  const identity = field === 'login' ? [value, value, normalizeMemberPhone(value)] : [value];
   const {results}=await db.prepare(`SELECT u.value AS user_json,
     EXISTS(SELECT 1 FROM customer_credentials WHERE user_id=json_extract(u.value,'$.id')) AS password_managed,
     (SELECT commit_seq FROM db_state WHERE id=1) AS commit_seq,
+    (SELECT payload_json FROM simulation_records WHERE kind='project-space-policy' AND id='published') AS space_policy,
     (SELECT g.value FROM json_each(w.reference_json,'$.grants') g
       WHERE json_extract(g.value,'$.subjectType')='tenant' AND json_extract(g.value,'$.subjectId')=?) AS grant_json,
     (SELECT json_group_array(json(t.value)) FROM json_each(w.reference_json,'$.tenants') t
@@ -124,14 +136,20 @@ export async function customerIdentity(db, value, field = 'id', tenantId = null)
     (SELECT json_group_array(json(m.value)) FROM json_each(w.reference_json,'$.memberships') m
       WHERE json_extract(m.value,'$.userId')=json_extract(u.value,'$.id') AND json_extract(m.value,'$.status')='正常') AS memberships_json
     FROM model_workspace w,json_each(w.reference_json,'$.users') u
-    WHERE w.id=1 AND ${field==='username'?"LOWER(json_extract(u.value,'$.login'))":"json_extract(u.value,'$.id')"}=?
-      AND json_extract(u.value,'$.status')='正常' LIMIT 2`).bind(tenantId,value).all();
+    WHERE w.id=1 AND ${lookup}
+      AND json_extract(u.value,'$.status')='正常'
+      AND (json_extract(u.value,'$.id')<>? OR EXISTS(
+        SELECT 1 FROM admin_accounts WHERE login_name=? AND enabled=1 AND role='平台管理员'
+      )) LIMIT 2`).bind(tenantId,...identity,dualDemoUserId,dualDemoAdminLogin).all();
   if(results.length!==1)return null;
   const row=results[0], user=JSON.parse(row.user_json), memberships=JSON.parse(row.memberships_json);
+  const policy=JSON.parse(row.space_policy || 'null');
   const spaces=JSON.parse(row.tenants_json).filter(activeCustomer).flatMap(tenant=>{
+    if (user.id===dualDemoUserId && tenant.id!==dualDemoTenantId) return [];
     const membership=memberships.find(item=>item.tenantId===tenant.id);
-    if(tenant.type==='个人' ? tenant.ownerId!==user.id : !membership)return [];
-    return [{id:tenant.id,name:tenant.name,type:tenant.type,role:tenant.type==='个人'?'个人用户':membership.role}];
+    if(!allowsSpace(policy,tenant) || (tenant.type==='个人' ? tenant.ownerId!==user.id : !membership))return [];
+    return [{id:tenant.id,name:tenant.name,type:tenant.type,role:tenant.type==='个人'?'个人用户':membership.role,
+      ...(internalSpace(policy,tenant) && {internal:true})}];
   });
   return {user,spaces,passwordManaged:Boolean(row.password_managed),commitSeq:row.commit_seq,grant:JSON.parse(row.grant_json || 'null')};
 }
@@ -154,7 +172,7 @@ export async function createMarketSession(db, userId, tenantId, credentialDigest
     db.prepare(`INSERT INTO market_sessions(token_hash,tenant_id,expires_at,user_id) SELECT ?,?,?,?
       WHERE ? IS NULL OR EXISTS (SELECT 1 FROM customer_credentials WHERE user_id=? AND digest=?)`)
       .bind(await customerSecretHash(token),tenantId,now+28800000,userId,credentialDigest,userId,credentialDigest),
-    db.prepare('INSERT INTO tenant_login_events(id,user_id,created_at) SELECT ?,?,? WHERE changes()=1').bind(crypto.randomUUID(),userId,now),
+    db.prepare('INSERT INTO tenant_login_events(id,user_id,created_at) SELECT ?,?,? WHERE changes()=1').bind(resourceId('identity-event'),userId,now),
     db.prepare(`INSERT INTO customer_last_login(user_id,logged_at) SELECT ?,? WHERE changes()=1
       ON CONFLICT(user_id) DO UPDATE SET logged_at=excluded.logged_at WHERE excluded.logged_at>customer_last_login.logged_at`).bind(userId,now),
     db.prepare('DELETE FROM market_sessions WHERE token_hash IN (SELECT token_hash FROM market_sessions WHERE expires_at<=? LIMIT 100)').bind(now),

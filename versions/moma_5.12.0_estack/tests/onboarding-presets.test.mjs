@@ -2,7 +2,8 @@ import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAdminState as baseParseAdminState, commitAdminState, persistModelAction, serializeAdminState } from '../src/admin-v2/store.js';
-import { ONBOARDING_PROVIDER_PRESETS, onboardingProviderPreset, resolveOnboardingProvider, onboardingModelOptions, onboardingModelPreset } from '../src/admin-v2/onboarding-presets.js';
+import { ONBOARDING_PROVIDER_PRESETS, onboardingProviderPreset, resolveOnboardingProvider, onboardingModelOptions, onboardingModelPreset, officialChannelReferences } from '../src/admin-v2/onboarding-presets.js';
+import { OFFICIAL_CHANNEL_PRESETS } from '../src/admin-v2/official-channel-presets.js';
 import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
 import { providerKeyGroups } from '../src/admin-v2/provider-key-groups.js';
 import { connectionKeys } from '../src/admin-v2/connection-state.js';
@@ -15,6 +16,29 @@ const clean = () => { const state = parseAdminState(null); for (const key of ['p
 const values = (extra = {}) => ({ name: '快捷渠道', interfaceType: 'openai', baseUrl: 'https://quick.example.invalid/v1', authMode: 'group', keyGroupId: 'default', models: [{ modelPresetId: 'model-2', upstreamModelId: 'vendor/raw:model.v2', scenarios: [] }], ...extra });
 const created = state => state.endpoints.find(row => row.id === state.audits[0].objectId);
 const keyMetadata = async value => (await providerApiKeysDraft([value])).apiKeys[0];
+
+test('official templates create draft channels for every provider with the documented model ID and base URL', async () => {
+  const state = clean(), before = structuredClone(state), newApiKey = await keyMetadata('temporary-official-template-key');
+  assert.deepEqual(OFFICIAL_CHANNEL_PRESETS.map(row => row.code), ['moma', 'deepseek']);
+  for (const preset of OFFICIAL_CHANNEL_PRESETS) {
+    const selected = preset.models[0], references = officialChannelReferences(state, preset, selected);
+    const next = run(state, 'channelQuickCreate', { ...references.supplier, newApiKey, values: values({
+      name: selected.name, baseUrl: selected.baseUrl,
+      models: [{ ...references.model, upstreamModelId: selected.upstreamModelId }],
+    }) });
+    const endpoint = created(next), owner = next.providers.find(row => row.id === endpoint.providerId);
+    const [association] = supplierChannelAssociations(next, owner, endpoint.id);
+    assert.equal(owner.name, preset.name);
+    assert.equal(endpoint.baseUrl, selected.baseUrl);
+    assert.equal(endpoint.status, '草稿');
+    assert.equal(association.upstreamModelId, selected.upstreamModelId);
+    assert.equal(association.enabled, false);
+    assert.deepEqual(association.pricing.scenarios, []);
+    assert.equal(next.modelTemplates[0].profile.documentation, selected.profile.documentation);
+    assert.deepEqual(next.serviceRoutes, []);
+  }
+  assert.deepEqual(state, before);
+});
 
 test('supplier presets contain only reference identity and choosing references never registers resources', () => {
   const state = clean(), before = structuredClone(state);
@@ -130,6 +154,30 @@ test('a pending preset draft reuses supplier and material registered by another 
   assert.equal(next.endpoints.length, 2); assert.notEqual(secondEndpoint.id, firstEndpoint.id); assert.equal(secondEndpoint.providerId, supplierId);
   assert.deepEqual(supplierChannelAssociations(next, supplier, secondEndpoint.id).map(row => row.upstreamModelId), [originalAlias]); assert.deepEqual(next.endpoints.find(row => row.id === firstEndpoint.id), firstEndpoint);
   const completed = next.modelOnboardings.find(row => row.id === draft.id); assert.equal(completed.status, '已完成'); assert.equal(completed.draftRevision, draft.draftRevision + 1); assert.equal(completed.createdEndpointId, secondEndpoint.id); assert.equal(currentDraft.status, '配置中');
+});
+
+test('MoMA templates reuse the existing supplier and save the selected model’s gateway and upstream ID', () => {
+  const state = parseAdminState(null), preset = OFFICIAL_CHANNEL_PRESETS.find(row => row.code === 'moma');
+  const cases = [
+    ['kimi/kimi-k3.1-pro', 'https://moma.cmecloud.cn/v1'],
+    ['deepseek-v4.1-flash-1017', 'https://vip.moma.cmecloud.cn/v1'],
+    ['glm-5.3', 'https://zhenze-huhehaote.cmecloud.cn/v1'],
+  ];
+  for (const [upstreamModelId, baseUrl] of cases) {
+    const selected = preset.models.find(row => row.upstreamModelId === upstreamModelId);
+    const refs = officialChannelReferences(state, preset, selected);
+    assert.deepEqual(refs.supplier, { providerId: 'provider-moma' });
+    assert.equal(selected.baseUrl, baseUrl);
+    const next = run(state, 'channelQuickCreate', { ...refs.supplier, values: values({ name: selected.name, baseUrl: selected.baseUrl,
+      models: [{ ...refs.model, upstreamModelId: selected.upstreamModelId }],
+    }) });
+    const endpoint = created(next), owner = next.providers.find(row => row.id === endpoint.providerId);
+    assert.equal(next.providers.length, state.providers.length);
+    assert.equal(endpoint.baseUrl, baseUrl);
+    assert.equal(endpoint.status, '草稿');
+    assert.deepEqual(supplierChannelAssociations(next, owner, endpoint.id).map(row => [row.upstreamModelId, row.enabled]), [[upstreamModelId, false]]);
+    assert.deepEqual(next.serviceRoutes, state.serviceRoutes);
+  }
 });
 
 function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }

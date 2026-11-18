@@ -143,3 +143,58 @@ test('inline credential repair accepts missing old keys and an explicitly correc
   assert.equal(candidate.config.baseUrl,'https://repaired.example.invalid/v1');assert.equal(candidate.config.authMode,'specific');assert.equal(next.endpoints.find(row=>row.id===endpoint.id).authMode,'group');
   assert.deepEqual(next.providers.find(row=>row.id===provider.id).apiKeyGroups.find(row=>row.id==='default').keyIds,[]);
 });
+
+test('Chat and Responses remain distinct even though both use the OpenAI protocol',()=>{
+ const state=initial(),{endpoint}=context(state);
+ Object.assign(endpoint,{interfaceType:'openai',addressMode:'base',baseUrl:'https://root.example.invalid/v1',taskUrls:{}});
+ const next=run(state,{protocol:'OpenAI',interfaceType:'openai-responses',baseUrl:endpoint.baseUrl,prepareConnection:true});
+ const current=next.endpoints.find(row=>row.id===endpoint.id);
+ assert.equal(current.interfaceType,'openai');assert.equal(current.candidateConfiguration.config.interfaceType,'openai-responses');
+ assert.equal(current.candidateConfiguration.config.protocol,'OpenAI');
+ assert.throws(()=>run(state,{protocol:'Anthropic',interfaceType:'openai-responses',prepareConnection:true}),/不匹配/);
+});
+
+
+test('model channel rename persists the displayed source name while preserving a shared connection and sibling sources', async () => {
+  const state=initial(), {provider,association,endpoint}=context(state);
+  const original=provider.catalogConnections.find(row=>row.id===association.id);
+  original.sourceName='导入旧渠道名';
+  const before=structuredClone(state), next=run(state,{sourceName:'转售渠道'});
+  const savedProvider=next.providers.find(row=>row.id===provider.id), saved=savedProvider.catalogConnections.find(row=>row.id===association.id);
+  assert.equal(saved.sourceName,'转售渠道');
+  assert.deepEqual(saved,{...original,sourceName:'转售渠道',updatedAt:saved.updatedAt});
+  assert.deepEqual(next.endpoints,state.endpoints);
+  assert.deepEqual(savedProvider.catalogConnections.filter(row=>row.id!==association.id),provider.catalogConnections.filter(row=>row.id!==association.id));
+  assert.deepEqual(next.providers.filter(row=>row.id!==provider.id),state.providers.filter(row=>row.id!==provider.id));
+  for(const key of ['modelSalePrices','supplyPrices','modelSupplies','serviceRoutes','models'])assert.deepEqual(next[key],state[key]);
+  const refreshed=parseAdminState(JSON.stringify(next)), {catalogueChannels}=await import('../src/admin-v2/provider-channels.js');
+  const owner=refreshed.providers.find(row=>row.id===provider.id);
+  assert.equal(catalogueChannels(refreshed,owner,association.modelId).find(row=>row.id===association.id).name,'转售渠道');
+  assert.equal(refreshed.endpoints.find(row=>row.id===endpoint.id).name,endpoint.name);
+  assert.deepEqual(state,before);
+});
+
+test('invalid or unscoped channel source names reject the edit atomically', () => {
+  const state=initial(), before=structuredClone(state);
+  for(const patch of [{sourceName:''},{sourceName:'x'.repeat(61)},{sourceName:'line\nbreak'},{sourceName:42},{sourceName:'新渠道名',associationId:undefined},{sourceName:'新渠道名',associationId:'foreign'},{sourceName:'新渠道名',expectedProviderUpdatedAt:'stale'}]) {
+    assert.throws(()=>run(state,patch));assert.deepEqual(state,before);
+  }
+  assert.throws(()=>run({...state,currentRole:'只读审计员'},{sourceName:'无权限改名'}),/权限|账号|无权/);
+});
+
+
+test('a channel name edited with a candidate address is deferred until the tested configuration is saved', () => {
+  const state=initial(), {provider,association,endpoint}=context(state);
+  const staged=run(state,{sourceName:'候选渠道名',baseUrl:'https://candidate-name.example.invalid/v1/chat/completions',prepareConnection:true});
+  assert.deepEqual(context(staged).provider.catalogConnections,provider.catalogConnections);
+  const candidate=context(staged).endpoint.candidateConfiguration;
+  const config={providerId:provider.id,endpointId:endpoint.id,candidateId:candidate.id,expectedRevision:endpoint.configurationRevision || 0};
+  const tested=commitAdminState(staged,{type:'modelOperations',operation:'channelCandidateTest',data:config});
+  const {baseUrl:_baseUrl,...info}=values(tested);
+  const next=commitAdminState(tested,{type:'modelOperations',operation:'supplierChannelEdit',data:{...info,...config,sourceName:'候选渠道名',confirmed:true}});
+  const saved=context(next).provider.catalogConnections.find(row=>row.id===association.id);
+  assert.equal(saved.sourceName,'候选渠道名');
+  assert.equal(context(next).endpoint.name,endpoint.name);
+  assert.equal(context(next).endpoint.baseUrl,'https://candidate-name.example.invalid/v1/chat/completions');
+  assert.deepEqual(context(next).provider.catalogConnections.filter(row=>row.id!==association.id).map(row=>row.sourceName),provider.catalogConnections.filter(row=>row.id!==association.id).map(row=>row.sourceName));
+});

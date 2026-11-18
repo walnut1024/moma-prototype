@@ -2,7 +2,7 @@ import {writeFile} from 'node:fs/promises';
 import {startLocalBackend} from './local-runtime.js';
 
 // Offline release artifact only. This never reads a user's browser or QA database.
-const local=await startLocalBackend({ presets:true });
+const local=await startLocalBackend();
 try {
   const {results:schema}=await local.db.prepare("SELECT name,type,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY rowid").all();
   const quote=value=>value===null?'NULL':typeof value==='number'?String(value):"'"+String(value).replaceAll("'","''")+"'";
@@ -22,7 +22,7 @@ try {
   if(lines.some(line=>Buffer.byteLength(line)>90000))throw Error('导入语句超出 D1 长度预算');
   lines.push(...schema.filter(r=>r.type!=='table').map(r=>r.sql+';'));
   if((await local.db.prepare('PRAGMA foreign_key_check').all()).results.length)throw Error('初始化引用不完整');
-  const filename=new URL('./.local/initial-model-operations.sql',import.meta.url);
+  const filename=new URL('./.local/initial-fresh-workspace.sql',import.meta.url);
   await writeFile(filename,lines.join('\n'),{mode:0o600});
   console.log(JSON.stringify({file:filename.pathname,counts,bytes:Buffer.byteLength(lines.join('\n'))}));
 }finally{await local.runtime.dispose();}

@@ -27,6 +27,8 @@
 
 ## 数据与事务
 
+渠道管理的公开管理工作区返回 `supplyRelations`，供应登记从 `supplier_models` 关联 `materials`、`suppliers` 读取，模型渠道从 `channel_models` 关联其供应登记及 `channels` 读取，排除已移除或已删除的关系。两个 tab 只改变分组方式，成员及计数共用这一集合。`suppliers.record_json` 内的配置只用于补充已保存的渠道成本、容量、检测及来源信息，不决定列表成员。模型命令的回执使用同一关系投影，字段及 ID 与刷新读取一致。登记移除和恢复同步 `supplier_models.removed_at`，多个别名仍合并为同一服务商／主档关系，不删除历史 JSON 或其他服务商记录。
+
 空 D1 通过 `0001`—`0017` migration 建表，再初始化后台账号定义、`src/data/tariff-dictionary.json` 的 135 条计费字典记录和 `src/data/builtin-model-catalogue.json` 的 17 份参考主档。已有工作区启动时读取原数据。导出的空库初始化 SQL 采用同一数据范围。
 
 平台管理员可在模型运营页面打开「研发人员注意 → 导入模型运营演示包」。`src/mock/model-operations.json` 提供 GLM-5.3、DeepSeek-V4-Flash-0731 和试调用所需的演示租户。导入在现有命令事务中插入缺失业务记录，复用相同 ID、编码和类型的主档。冲突时整包拒绝。检测与平台试调用通过模拟器执行，结果来源单独展示。其余模块在业务工作区首次开启时写入演示数据，后续从 D1 读取。
@@ -103,7 +105,7 @@ erDiagram
 
 ## 接口
 
-- `POST /auth/login`、`POST /auth/logout`、`GET /auth/me`、`GET /health`。
+- `POST /auth/sign-in` 根据账号标识和密码签发客户或后台会话，支持已登记用户名、手机号和邮箱。客户可访问的空间由服务端返回。后台专用接口为 `POST /auth/login`、`POST /auth/logout`、`GET /auth/me`，健康检查为 `GET /health`。
 - `GET /traffic-limits` 读取两类默认、账号额度、一客一策、单模型覆盖和可配置的模型资料主档。`POST /traffic-limits` 按操作更新限流配置，并原子提交审计和回执。两者要求平台管理员或运营人员会话，写入还校验当前账号、修订号和幂等标识。每分钟请求数和 Token 数均存整数。
 - `GET /traffic-limits/history` 使用同一后台会话按时间倒序查询已提交的配置变更。`limit` 控制每次读取的操作数，批量操作展开实际改动的对象，`after` 续查更早的操作。
 - `GET /model-operations`：当前原型资源视图；由 SQLite 组合 JSON，Worker 直接返回，避免整库解析再序列化。
@@ -129,3 +131,11 @@ erDiagram
 6. 正式发布使用现有 `moma-prototype`、production 分支。此字段升级须与新代码配套；旧代码不能直接连接升级后的字段结构。数据库不随代码回退而删除。数据库恢复前先导出备份并核对 D1 Time Travel 恢复点，不能以删除 `.local` 或重建生产库替代恢复。
 
 当前证据及运行限制见 [PROGRESS](../docs/model-operations-d1/PROGRESS.md)。
+
+## 永久编号整改
+
+新建与存量对象均遵守 MODEL_OPERATIONS_IDENTITIES.md。模型服务只允许 model_service-UUID v4；不保留 offer- 编号或公开别名。日常命令发现旧服务身份映射时拒绝保存，须先完成专用整改。
+
+先导出完整 D1 SQL 到权限受限目录，执行 `node versions/moma_5.12.0_estack/database/normalize-identities.mjs backup.sql normalize.sql`。脚本盘点五类公开身份，对存量 ID 生成一次性映射并扫描全部持久表及文本/JSON引用，在独立 SQLite 事务演练后逐字段比较全库业务内容。输出 SQL 含修订冲突检查、外键延迟验证、服务编号写入触发器；生产库使用 `wrangler d1 execute --remote --command` 在一次查询中执行演练通过的整份 SQL，不能拆分执行，也不使用文件导入（文件导入可能跨事务导致延迟外键校验失败）。历史内容只同步编号引用，不改费用、调用标识、状态或记录数量。备份文件不进入静态产物或版本控制。
+
+整改后重新导出生产库，对同一映射逐字段比较；五类编号违规、旧 ID 残留与外键违规均须为零。维护 JSON 及 API 不接受旧编号定位。新增部署不应用备份或重放历史数据；新建服务继续由现有保存事务生成规范 ID。

@@ -15,9 +15,9 @@ function providerFixture() {
   return { state, modelId: model.id, providerId: provider.id };
 }
 
-test('five workspace tabs resolve metadata, mapping, pricing and contextual task links', () => {
-  assert.deepEqual(SERVICE_WORKSPACE_TABS.map(row => row[1]), ['服务概览', '路由及映射', '故障转移', '调用指南', '操作记录']);
-  for (const [params, expected] of [[{}, 'materials'], [{panel:'editMetadata'}, 'materials'], [{panel:'routing'}, 'routing'], [{panel:'associate'}, 'routing'], [{panel:'guide'}, 'guide'], [{panel:'guide',providerChannels:'p',routeProvider:'p'}, 'guide'], [{providerAdd:'1'}, 'routing'], [{identityProvider:'p'}, 'routing'], [{providerAssociate:'1'}, 'routing'], [{panel:'access'}, 'materials'], [{panel:'materials',scopeEdit:'1'}, 'materials'], [{panel:'failover'}, 'failover'], [{panel:'trial',routeProvider:'p'}, 'materials'], [{panel:'history'}, 'history']]) assert.equal(serviceWorkspaceTab(new URLSearchParams(params)), expected);
+test('routing is the default workspace tab and contextual links select the right tab', () => {
+  assert.deepEqual(SERVICE_WORKSPACE_TABS.map(row => row[1]), ['路由及映射', '故障转移', '操作记录']);
+  for (const [params, expected] of [[{}, 'routing'], [{panel:'materials'}, 'routing'], [{panel:'editMetadata'}, 'routing'], [{panel:'routing'}, 'routing'], [{panel:'associate'}, 'routing'], [{panel:'guide'}, 'routing'], [{panel:'guide',providerChannels:'p',routeProvider:'p'}, 'routing'], [{providerAdd:'1'}, 'routing'], [{identityProvider:'p'}, 'routing'], [{providerAssociate:'1'}, 'routing'], [{panel:'access'}, 'routing'], [{panel:'materials',scopeEdit:'1'}, 'routing'], [{panel:'failover'}, 'failover'], [{panel:'trial',routeProvider:'p'}, 'routing'], [{panel:'history'}, 'history']]) assert.equal(serviceWorkspaceTab(new URLSearchParams(params)), expected);
 });
 
 test('provider call-ID mapping is independent of prices, routes, resources and customer scope', () => {
@@ -40,7 +40,7 @@ test('publishing a price cannot carry a call-ID change into a different service'
   state=run(state,'configureServiceIdentity',modelId,{providerId,callId:'moma/identity-price',expectedUpdatedAt:model.updatedAt});
   model=state.models.find(row=>row.id===modelId);
   const before=structuredClone(state);
-  assert.throws(()=>run(state,'commercialPublish',modelId,{kind:'price',providerId,expectedBase:commercialPriceBase(state,model,providerId),value:{callId:'sneaked/identity',items:[{name:'输入 Token',condition:'',unit:'百万 Token',currency:'CNY',amount:'2'}]},confirmed:true}),/调用标识/);
+  assert.throws(()=>run(state,'commercialPublish',modelId,{kind:'price',providerId,expectedBase:commercialPriceBase(state,model,providerId),value:{callId:'sneaked/identity',items:[{name:'输入 Token',condition:'',unit:'百万 Token',currency:'CNY',amount:'2'}]},confirmed:true}),/模型调用标识/);
   assert.deepEqual(state,before);
 });
 

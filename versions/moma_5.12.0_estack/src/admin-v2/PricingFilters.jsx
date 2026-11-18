@@ -7,7 +7,7 @@ export default function PricingFilters({records,ops,kind}) {
   const {params,go}=ops,options=pricingFilterOptions(records);
   const statuses=kind==='cost'?['已配置','待配置','已失效']:['未上架','在售','灰度在售','已停售','服务不可用','不可销售','不销售'];
   const change=patch=>go({...patch,page:null},{replace:true,preserveScroll:true});
-  const placeholder=kind==='cost'?'搜索模型展示名 / 服务商 / 渠道':'搜索模型展示名 / 服务商 / 对外调用标识';
+  const placeholder=kind==='cost'?'搜索模型展示名 / 服务商 / 渠道':'搜索模型展示名 / 服务商 / 模型调用标识';
   return <div className="sp-filters admin-list-toolbar">
     <Input prefix={<IconSearch aria-hidden="true"/>} showClear aria-label={placeholder} placeholder={placeholder} value={params.get('q') || ''} onChange={q=>change({q:q || null})}/>
     <Field label="模型展示名"><Choice label="筛选模型展示名" filter value={params.get('filterModel') || 'all'} options={[[ 'all','全部模型' ],...options.models]} onChange={value=>change({filterModel:value==='all'?null:value})}/></Field>

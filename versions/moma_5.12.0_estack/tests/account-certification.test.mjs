@@ -56,5 +56,5 @@ test('enterprise certification belongs to the logged-in applicant and grants no 
 
 test('obsolete registration gallery route is unavailable', () => {
   assert.equal(authRoute('#/auth/flows'), null);
-  assert.equal(authRoute('#/auth/register'), 'register');
+  assert.equal(authRoute('#/auth/register'), null);
 });

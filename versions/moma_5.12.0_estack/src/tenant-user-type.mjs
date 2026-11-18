@@ -1,6 +1,7 @@
+import { workspaceStoragePrefix } from "./workspace-storage.mjs";
 import { availableAuthSpaces, currentAuthUser } from './auth-state.mjs';
 
-export const TENANT_USER_TYPE_KEY = 'moma-tenant-user-type-5120-v1';
+export const TENANT_USER_TYPE_KEY = workspaceStoragePrefix + 'tenant-user-type';
 export function tenantUserAccess(state, previewType) {
   if (!currentAuthUser(state)) {
     const userType = previewType === 'personal' ? 'personal' : 'enterprise';

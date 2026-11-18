@@ -39,6 +39,7 @@ export function assertNewMockPublications(previous, next, action, snapshot = nul
   if(action?.operation==='serviceProviderServing' && action.data?.enabled)assertMockModelPublication(next,next.models.find(row=>row.id===action.modelId),`provider:${action.modelId}:${action.data.providerId}`,false,snapshot);
   for (const model of next.models.filter(row=>{
     const before=previous.models.find(old=>old.id===row.id);
-    return !selected && row.listingStatus==='已上架' && before?.listingStatus!=='已上架' || row.callsEnabled===true && before?.callsEnabled!==true;
+    return (!selected && row.listingStatus==='已上架' && before?.listingStatus!=='已上架')
+      || (action?.operation!=='serviceProviderServing' && row.callsEnabled===true && before?.callsEnabled!==true);
   })) assertMockModelPublication(next,model,undefined,false,snapshot);
 }

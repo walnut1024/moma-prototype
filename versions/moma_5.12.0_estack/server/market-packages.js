@@ -53,27 +53,3 @@ export async function addPackageOrders(db,state,tenant,operationId,items,availab
     balance:order.entitlement,unit:'Token',reason:order.orderNo,status:'已完成',createdAt,
   })),...state.ledger]};
 }
-
-export function deductMockPlan(state,request,model) {
-  const plan=state.orders.find(row=>row.id===request.subscriptionId && row.tenantId===request.tenantId);
-  if(!plan?.packageId)return;
-  if(!['已开通','生效中'].includes(plan.status) || Date.parse(plan.expiresAt)<=Date.now())fail('套餐已失效');
-  const rules=plan.factorSnapshot[model.templateId || model.id];
-  if(!rules?.length || !plan.modelIds.includes(model.id))fail('套餐不支持该模型');
-  const usage=request.usage, input=usage.input ?? 0;
-  const quantity=(request.priceSnapshot?.items || []).filter(item=>item.unit==='百万 Token').map(item=>{
-    const id=state.tariffDictionary.find(row=>row.kind==='scenario' && row.name===item.name)?.id;
-    const factor=rules.find(row=>row.billingItemId===id && (row.lower==null || input>row.lower) && (row.upper==null || input<=row.upper))?.factor;
-    const value=/缓存/.test(item.name)?usage.cached ?? 0:/输出/.test(item.name)?usage.output:/(总|用量)/.test(item.name)?input+(usage.output ?? 0):input;
-    if(!Number.isFinite(value) || !Number.isFinite(Number(factor)) || Number(factor)<=0)fail('套餐缺少当前计费项的抵扣规则');
-    return value*Number(factor);
-  });
-  if(!quantity.length)fail('套餐当前没有可抵扣的 Token 计量');
-  const deduction=Math.ceil(quantity.reduce((sum,value)=>sum+value,0));
-  if(!Number.isSafeInteger(deduction) || deduction<0 || plan.used+deduction>plan.entitlement)fail('套餐额度不足');
-  plan.used+=deduction;
-  request.planDeduction=deduction;
-  state.ledger.unshift({id:'plan-usage:'+request.requestId,accountId:plan.id,sourceId:'request:'+request.requestId,type:'套餐抵扣',
-    delta:-deduction,balance:plan.entitlement-plan.used,unit:'Token',status:'已完成',reason:request.requestId,
-    prototypeFact:true,createdAt:request.createdAt});
-}

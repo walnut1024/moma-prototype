@@ -1,3 +1,4 @@
+import { resourceId } from './resource-id.mjs';
 import {ADMIN_DATA_KEY} from './service-access.mjs';
 import {trackUserConfiguration} from './mock/application-data.js';
 export function authBusinessSnapshot(previous,auth,storage) {
@@ -16,7 +17,7 @@ export function authBusinessSnapshot(previous,auth,storage) {
   next.customerApplications ||= [];
   for(const application of auth.applications){if(previous.applications.some(row=>row.id===application.id&&JSON.stringify(row)===JSON.stringify(application)))continue;const index=next.customerApplications.findIndex(row=>row.id===application.id);if(index<0)next.customerApplications.push(structuredClone(application));else next.customerApplications[index]=structuredClone(application);}
   const link=auth.identityLinks.find(row=>row.authUserId===auth.currentUserId&&row.spaceId===auth.activeSpace);
-  if(link&&(previous.currentUserId!==auth.currentUserId||previous.activeSpace!==auth.activeSpace)){next.identityEvents ||= [];next.identityEvents.push({id:crypto.randomUUID(),type:'login',userId:link.backendUserId,tenantId:link.tenantId,at});}
+  if(link&&(previous.currentUserId!==auth.currentUserId||previous.activeSpace!==auth.activeSpace)){next.identityEvents ||= [];next.identityEvents.push({id:resourceId('identity-event'),type:'login',userId:link.backendUserId,tenantId:link.tenantId,at});}
   if(JSON.stringify(state)===JSON.stringify(next))return null;
   next.revision++;next.updatedAt=at;trackUserConfiguration(state,next);return {raw,encoded:JSON.stringify(next)};
 }

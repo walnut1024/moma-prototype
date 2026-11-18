@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { ADMIN_DATA_KEY, workspaceStoragePrefix } from '../src/workspace-storage.mjs';
 import { mockOnboardingApi as api, getMockScenario, setMockScenario, SCENARIOS, setMockRuntimeState as rawSetMockRuntimeState, prepareMockConfiguration, commitMockConfiguration, getMockServiceSnapshots, inspectMockPublication } from '../src/admin-v2/mock-onboarding-service.js';
+
+const mockStorageKey = workspaceStoragePrefix + 'onboarding-mock';
 
 function fixture(t) {
   setMockRuntimeState(null);
@@ -19,12 +22,12 @@ function fixture(t) {
   const trial = async current => { const identity = await post(`/services/${current.id}/test-identities`, { expectedRevision: current.revision }); return post(`/services/${current.id}/trial`, { trialToken: identity.token }); };
   const publish = async current => {
     await trial(current); const published = await post(`/services/${current.id}/publish`, { expectedRevision: current.revision });
-    const local = JSON.parse(stored.get('moma.adminV2.5120.v1') || '{"models":[],"tenants":[],"providers":[],"endpoints":[]}');
+    const local = JSON.parse(stored.get(ADMIN_DATA_KEY) || '{"models":[],"tenants":[],"providers":[],"endpoints":[]}');
     const config = published.published.config;
     const record = { id: current.id, modelId: config.publicModelId, serviceMode: 'standard', listingStatus: '已上架', visibility: '公开', callsEnabled: true, openScope: 'all', platformPublications: [{ serviceId: `standard:${current.id}`, mockServiceId: current.id, source: 'mock' }] };
     local.models = [...local.models.filter(row => row.id !== record.id), record];
     for (const id of [...config.tenantIds, 'tenant-a', 'tenant-b']) if (!local.tenants.some(row => row.id === id)) local.tenants.push({ id, status: '正常' });
-    const mock = JSON.parse(stored.get('moma-5120-model-onboarding-mock-v1'));
+    const mock = JSON.parse(stored.get(mockStorageKey));
     for (const channel of mock.channels) {
       if (!local.providers.some(row => row.id === channel.providerId)) local.providers.push({ id: channel.providerId, status: '已启用', catalogModels: [{ modelId: 'mapped-model', libraryId: model.id }], catalogConnections: [] });
       if (!local.endpoints.some(row => row.id === channel.clientChannelId)) {
@@ -32,7 +35,7 @@ function fixture(t) {
         local.providers.find(row => row.id === channel.providerId).catalogConnections.push({ id: model.associationId, modelId: 'mapped-model', endpointId: channel.clientChannelId, upstreamModelId: model.upstreamModelId, enabled: true });
       }
     }
-    stored.set('moma.adminV2.5120.v1', JSON.stringify(local)); return published;
+    stored.set(ADMIN_DATA_KEY, JSON.stringify(local)); return published;
   };
   return { op, post, channel, model, prove, price, service, trial, publish, stored, advance: ms => { clock += ms; }, clock: () => clock, fetchCalls: () => fetchCalls };
 }
@@ -44,7 +47,7 @@ test('mock credentials and normal requests never fetch or persist raw secrets', 
   const ch = await env.channel('channel', key.id); await env.prove(ch); const current = await env.service(ch); await env.publish(current);
   const client = await env.post('/client-keys', { tenantId: 'tenant-a', serviceIds: [current.id] });
   const response = await api('/client/completions', { method: 'POST', token: client.clientKey, body: { operationId: env.op(), model: current.candidate.publicModelId, messages: [{ role: 'user', content: 'customer text remains visible' }] } });
-  assert.equal(JSON.parse(env.stored.get('moma-5120-model-onboarding-mock-v1')).usage.find(row=>row.identityType==='client').billingStatus,'billable');
+  assert.equal(JSON.parse(env.stored.get(mockStorageKey)).usage.find(row=>row.identityType==='client').billingStatus,'billable');
   assert.match(response.choices[0].message.content, /customer text remains visible/); assert.equal(response.source, 'mock'); assert.equal('cost' in response, false); assert.equal('actualSupply' in response, false); assert.equal(env.fetchCalls(), 0); assert.equal([...env.stored.values()].join('').includes(client.clientKey), false);
 });
 
@@ -242,8 +245,8 @@ test('publication inspection rejects nonmock proof provenance, uncommitted candi
 function setMockRuntimeState(local) {
   rawSetMockRuntimeState(local);
   if (local && globalThis.localStorage) {
-    const current = JSON.parse(localStorage.getItem('moma.adminV2.5120.v1') || '{"models":[],"tenants":[]}');
-    localStorage.setItem('moma.adminV2.5120.v1', JSON.stringify({ ...current, ...local }));
+    const current = JSON.parse(localStorage.getItem(ADMIN_DATA_KEY) || '{"models":[],"tenants":[]}');
+    localStorage.setItem(ADMIN_DATA_KEY, JSON.stringify({ ...current, ...local }));
   }
 }
 
@@ -253,7 +256,7 @@ test('unlisting one model stops both provider services and old keys while anothe
   const first=await env.service(a,{mode:'provider'}), second=await env.service(b,{mode:'provider'}), other=await env.service(a);
   for(const item of [first,second,other]) await env.publish(item);
   const key=await env.post('/client-keys',{tenantId:'tenant-a',serviceIds:[first.id,second.id,other.id]});
-  const mainKey='moma.adminV2.5120.v1', local=JSON.parse(env.stored.get(mainKey));
+  const mainKey=ADMIN_DATA_KEY, local=JSON.parse(env.stored.get(mainKey));
   const common={...local.models.find(row=>row.id===first.id),id:'multi',modelId:'multi',serviceMode:'provider',serviceProviders:[{providerId:'supplier-a',callId:first.candidate.publicModelId},{providerId:'supplier-b',callId:second.candidate.publicModelId}],platformPublications:[{source:'mock',serviceId:'provider:multi:supplier-a',mockServiceId:first.id},{source:'mock',serviceId:'provider:multi:supplier-b',mockServiceId:second.id}]};
   local.models=[common,local.models.find(row=>row.id===other.id)];env.stored.set(mainKey,JSON.stringify(local));
   const bodies=[first,second,other].map(item=>({operationId:env.op(),model:item.candidate.publicModelId,messages:[{role:'user',content:'scope'}]}));
@@ -298,7 +301,7 @@ test('technical trials publish without sale or procurement prices and replay wit
   const first=await api(`/services/${current.id}/trial`,{method:'POST',body});
   assert.equal(first.technicalReady,true);assert.equal(first.billingReady,false);assert.equal(first.cost,null);assert.equal(first.saleTrial,null);assert.equal(first.customerDebited,false);
   assert.deepEqual(await api(`/services/${current.id}/trial`,{method:'POST',body}),first);
-  const stored=JSON.parse(env.stored.get('moma-5120-model-onboarding-mock-v1'));
+  const stored=JSON.parse(env.stored.get(mockStorageKey));
   assert.equal(stored.usage.length,1);assert.equal(stored.usage[0].billingStatus,'not_applicable');assert.equal(stored.usage[0].costStatus,'pending');assert.equal(stored.usage[0].priceSnapshot,null);assert.equal(stored.usage[0].attempts[0].procurementSnapshot,null);
   const published=await env.post(`/services/${current.id}/publish`,{expectedRevision:current.revision});
   assert.equal(published.published.config.technical,true);assert.equal(inspectMockPublication(current.id).ready,true);
@@ -310,8 +313,45 @@ test('technical trial costs freeze their own price version and later costs never
   const first=await env.trial(current);assert.equal(first.cost.amount,1000000);assert.equal(first.saleTrial,null);
   const changed=await api(`/services/${current.id}`,{method:'PATCH',body:{operationId:env.op(),expectedRevision:current.revision,bindings:[{id:'binding',channelId:ch.id,model:env.model,procurementPrices:[env.price('cost-v2',{amount:2000000})]}]}});
   const second=await env.trial(changed);assert.equal(second.cost.amount,2000000);
-  const records=JSON.parse(env.stored.get('moma-5120-model-onboarding-mock-v1')).usage;
+  const records=JSON.parse(env.stored.get(mockStorageKey)).usage;
   assert.equal(records.find(row=>row.id===first.id).cost.amount,1000000);
   assert.equal(records.find(row=>row.id===first.id).attempts[0].procurementSnapshot.id,'cost');
   assert.equal(records.find(row=>row.id===second.id).attempts[0].procurementSnapshot.id,'cost-v2');
+});
+
+test('removing a route member revalidates and publishes retained supply while preserving the prior publication', async t => {
+  const env = fixture(t), first = await env.channel('removal-first'), second = await env.channel('removal-second');
+  await env.prove(first); await env.prove(second);
+  const current = await env.service(first, { bindings: [
+    { id: 'first', channelId: first.id, model: env.model, procurementPrices: [env.price('first-cost')] },
+    { id: 'second', channelId: second.id, model: env.model, procurementPrices: [env.price('second-cost')] },
+  ], route: { version: 1, strategy: 'weighted', channels: [{ bindingId: 'first', weight: 1 }, { bindingId: 'second', weight: 1 }] } });
+  const published = await env.publish(current), config = structuredClone(published.published.config);
+  config.bindings = config.bindings.filter(row => row.id === 'second');
+  config.route.channels = config.route.channels.filter(row => row.bindingId === 'second'); config.route.version++;
+  const prepared = prepareMockConfiguration({ operationId: env.op(), routeReductions: [{ serviceId: current.id, config }] });
+  assert.deepEqual(getMockServiceSnapshots().find(row => row.id === current.id).published, published.published);
+  commitMockConfiguration(prepared);
+  const next = getMockServiceSnapshots().find(row => row.id === current.id);
+  assert.deepEqual(next.configurationHistory.at(-1).published, published.published);
+  assert.equal(next.published.config.bindings.length, 1);
+  assert.equal(next.published.config.bindings[0].id, 'second');
+  assert.equal(inspectMockPublication(current.id).ready, true);
+  assert.ok(next.trials.length > published.trials.length);
+  assert.equal(env.fetchCalls(), 0);
+});
+
+test('conversation probes keep Chat, Responses and Messages request and response contracts separate',async t=>{
+ const env=fixture(t);
+ for(const [interfaceType,path,field] of [['openai','chat/completions','messages'],['openai-responses','responses','input'],['anthropic','messages','messages']]){
+  const channel=await env.channel(interfaceType,'opaque-key',{interfaceType});
+  const batch=await env.post('/tests',{channelId:channel.id,models:[env.model]});
+  assert.equal(batch.items[0].request.url,'https://gateway.mock.invalid/v1/'+path);
+  assert.ok(batch.items[0].request.body[field]);
+  if(interfaceType==='openai-responses')assert.equal('messages' in batch.items[0].request.body,false);
+  env.advance(1000);const result=await api('/tests/'+batch.id);
+  assert.equal(result.items[0].status,'passed');assert.equal(result.items[0].outputText,'你好');
+  if(interfaceType==='openai-responses')await assert.rejects(env.post('/tests',{channelId:channel.id,models:[{...env.model,type:'embedding'}]}),e=>e.code==='invalid_task');
+ }
+ assert.equal(env.fetchCalls(),0);
 });

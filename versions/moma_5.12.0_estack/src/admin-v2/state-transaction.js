@@ -1,3 +1,5 @@
+import { resourceId } from '../resource-id.mjs';
+import { assertPersonalProjects } from '../personal-project.mjs';
 import {trackUserConfiguration} from "../mock/application-data.js";
 import {prepareServiceShowcase} from './service-showcase.js';
 import {trackModelUserChanges} from "../mock/model-data.js";
@@ -14,6 +16,7 @@ import { adminAccountTransaction } from './admin-accounts.js';
 import { deploymentTransaction, deploymentUsesArtifact } from './deployments.js';
 import { operationsTransaction } from './model-operations.js';
 import { lifecycleSignature, assertOrderAccess } from '../service-access.mjs';
+import { channelIdentity } from '../model-identities.mjs';
 const now='2026-09-15T10:30:00+08:00';
 const record=(id,value)=>({id,createdAt:now,updatedAt:now,...value});
 export function canMutate(role, action) {
@@ -52,7 +55,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   const commercialKind = publishingCommercial ? action.data?.kind : null;
   const ordinaryListing = action.type === 'modelOperation' && ['publish', 'unlist'].includes(action.operation);
   // Supplier controls must not cancel in-flight tasks belonging to other suppliers.
-  const supplierLifecycle = action.type === 'modelOperations' && ['serviceProviderListing','serviceProviderServing','removeServiceProvider'].includes(action.operation);
+  const supplierLifecycle = action.type === 'modelOperations' && ['serviceProviderListing','serviceProviderServing','removeServiceProvider','providerRemovalPrepare','providerRemovalCommit'].includes(action.operation);
   const deletingLibrary = action.type === 'modelOperations' && action.operation === 'templateDelete';
   const directChanges=action.type==='batch'?action.changes:[action];
   if (directChanges?.some(change => change.type === 'setSettings' && Object.hasOwn(change.changes || {}, 'trafficLimits')
@@ -73,9 +76,21 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   if (action.type === 'providerOperation') action = providerTransaction(state, action);
   if (action.type === 'adminAccount') action = adminAccountTransaction(state, action);
   if (action.type === 'deploymentOperation') action = deploymentTransaction(state, action);
+  for (const change of action.type === 'batch' ? action.changes : [action]) {
+    if (change.type === 'update' && Object.hasOwn(change.changes || {}, 'id') && change.changes.id !== change.id) throw Error('永久 ID 创建后不可修改');
+  }
   if (action.type === 'update' && action.collection === 'artifacts' && action.changes.status === '已删除' && state.deployments.some(item => deploymentUsesArtifact(item, action.id))) throw new Error('该制品被部署或回滚配置引用，不能删除');
   if ((action.type === 'batch' ? action.changes : [action]).some(change => change.type === 'remove' && change.collection === 'providers' && change.id === MOMA_PROVIDER.id)) throw new Error('内置平台服务商不可删除');
   const next = state.cloudOperations ? {...state,...Object.fromEntries(['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','modelVersions','validations','modelOnboardings','serviceRoutes','tariffDictionary','modelData',...(preparingDataset?['tenants']:[])].map(key=>[key,structuredClone(state[key])])),audits:[...state.audits]} : structuredClone(state), timestamp = new Date().toISOString();
+  const identityChanges = action.type === 'batch' ? action.changes : [action];
+  const providerChanges = new Set(identityChanges.filter(change=>change.collection==='providers').map(change=>change.id));
+  const supplyChanges = new Set(identityChanges.filter(change=>change.collection==='modelSupplies').map(change=>change.id));
+  for (const provider of state.providers || []) for (const channel of provider.catalogConnections || []) {
+    if (!channel.id || state.modelData?.mappingIds?.[channel.id] || !providerChanges.has(provider.id) && !(state.modelSupplies || []).some(row=>row.channelId===channel.id && supplyChanges.has(row.id))) continue;
+    const id = channelIdentity(state,channel.id);
+    if (id === channel.id) continue;
+    next.modelData ||= {}; next.modelData.mappingIds ||= {}; next.modelData.mappingIds[channel.id] = id;
+  }
   if (action.type === "setRole") next.currentRole = action.role;
   else if (action.type === "setSettings") next.settings = { ...next.settings, ...action.changes };
   else if (action.type === "add") {
@@ -105,6 +120,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   for (const order of next.orders.filter(row => !state.orders.some(old => old.id === row.id) || row.status === '已开通' && state.orders.find(old => old.id === row.id)?.status !== '已开通')) assertOrderAccess(next, order);
   for (const model of next.models) {
     const before = state.models.find(row => row.id === model.id);
+    if (!before?.deletedAt && ['standard','provider'].includes(before?.serviceMode) && before.serviceMode !== model.serviceMode) throw new Error('服务模式设置后不可修改');
     if (before && publishingCommercial && Object.entries(model.commercialPublications || {}).some(([key, value]) => before.commercialPublications?.[key]?.version !== value.version)) {
       model.platformPublications = (model.platformPublications || []).map(row => row.fingerprint === platformPublicationFingerprint(state, before, row.serviceId) ? { ...row, fingerprint: platformPublicationFingerprint(next, model, row.serviceId) } : row);
     }
@@ -118,7 +134,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   if (currentAdmin) next.currentRole = currentAdmin.role;
   next.revision += 1; next.updatedAt = timestamp;
   const auditBefore = modelAuditContext(state, action), auditAfter = modelAuditContext(next, action);
-  if (action.type !== "setRole") next.audits.unshift(record(`audit-${next.revision}`, { createdAt: timestamp, updatedAt: timestamp, actor, action: action.label || action.type, objectId: action.record?.id || action.id || action.objectId || "batch", objectLabel: auditAfter.objectLabel, relatedModelIds: [...new Set([...auditBefore.relatedModelIds, ...auditAfter.relatedModelIds])], relatedEndpointIds:[...new Set([...auditBefore.relatedEndpointIds,...auditAfter.relatedEndpointIds])], result: action.auditFailure ? '失败' : '成功', changes: modelAuditChanges(state,action), ...(action.auditFailure ? { reason: action.auditFailure } : {}), before: isEnterprise ? action.changes.filter(change => change.type === 'update').map(change => ({ collection: change.collection, id: change.id, values: Object.fromEntries(Object.keys(change.changes).map(key => [key, state[change.collection].find(item => item.id === change.id)?.[key]])) })) : null, after: action.record || action.changes,
+  if (action.type !== "setRole") next.audits.unshift(record(resourceId('audit-event'), { createdAt: timestamp, updatedAt: timestamp, actor, action: action.label || action.type, objectId: action.record?.id || action.id || action.objectId || "batch", objectLabel: auditAfter.objectLabel, relatedModelIds: [...new Set([...auditBefore.relatedModelIds, ...auditAfter.relatedModelIds])], relatedEndpointIds:[...new Set([...auditBefore.relatedEndpointIds,...auditAfter.relatedEndpointIds])], result: action.auditFailure ? '失败' : '成功', changes: modelAuditChanges(state,action), ...(action.auditFailure ? { reason: action.auditFailure } : {}), before: isEnterprise ? action.changes.filter(change => change.type === 'update').map(change => ({ collection: change.collection, id: change.id, values: Object.fromEntries(Object.keys(change.changes).map(key => [key, state[change.collection].find(item => item.id === change.id)?.[key]])) })) : null, after: action.record || action.changes,
   }));
   if (preparingDataset) next.modelData = prepareServiceShowcase(state).modelData;
   else if (installingCatalogue) {
@@ -127,6 +143,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   } else if (cleaningCatalogue || archivingAcceptance) next.modelData = { ...next.modelData, archivedCatalogueIds: action.archivedCatalogueIds };
   else if (reorderingMarket) next.modelData = { ...next.modelData, marketOrder: action.marketOrder };
   else trackModelUserChanges(state, next);
+  assertPersonalProjects(state, next);
   if(!state.cloudOperations)trackUserConfiguration(state, next);
   return next;
 }

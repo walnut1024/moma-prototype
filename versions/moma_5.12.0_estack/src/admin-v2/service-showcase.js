@@ -4,6 +4,7 @@ export const SHOWCASE_ZHIPU_PROVIDER_ID = 'provider-zhipu-direct';
 export const SERVICE_SHOWCASE_MODELS = MODEL_DATASET.collections.models.map(model => ({ code:model.modelId, name:model.name, author:model.profile.author, date:model.profile.releaseDate, mode:model.serviceMode }));
 export const isServiceShowcase = model => Boolean(model.serviceShowcase) && SERVICE_SHOWCASE_MODELS.some(spec => spec.code === model.modelId);
 export function prepareServiceShowcase(state) {
+  if (state.modelData?.sourceScope === 'reference-only-v2') throw Error('当前工作区请通过渠道管理导入内置服务商目录');
   if (!state.cloudOperations) return applyModelDataset(state);
   const { id, version, scenarioId, demoTenant, collections } = MODEL_DATASET;
   if (state.modelData?.datasetId === id || state.models.some(isServiceShowcase)) return state;

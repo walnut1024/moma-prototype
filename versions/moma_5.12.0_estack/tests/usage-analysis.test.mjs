@@ -232,3 +232,30 @@ test('customer drill-down inherits URL dates, restores presets and bounds invali
   assert.deepEqual(operationsPeriodFromQuery(new URLSearchParams('start=2026-09-23&end=2099-01-01'),now).range,{start:'2026-09-23',end:'2026-09-24'});
   for(const query of ['start=bad&end=bad','start=2020-01-01&end=2026-09-01','start=2026-09-20&end=2026-09-01'])assert.deepEqual(operationsPeriodFromQuery(new URLSearchParams(query),now),operationsPeriod('yesterday',null,now));
 });
+
+test('project usage counts the final revision of each customer request and keeps unattributed requests', () => {
+  const at = '2026-09-24T08:00:00+08:00';
+  const fixture = { ...state, requests: [
+    request('same', at, 'a', { input: 1, output: 0 }, { projectId: 'pa' }),
+    request('same', at, 'a', { input: 4, output: 0 }, { projectId: 'pa', updatedAt: '2026-09-24T08:01:00+08:00' }),
+    request('same', at, 'b', { input: 2, output: 0 }, { projectId: 'pb' }),
+    request('legacy', at, 'b', { input: 0, output: 0 }),
+  ] };
+  const range = usagePreset('today', now);
+  const all = usageFacts(fixture, range, filters, now).current;
+  assert.deepEqual(usageGroups(all, 'projectId').map(row => [row.id, row.calls, row.total]),
+    [['pa', 1, 4], ['pb', 1, 2], ['__unknown__', 1, 0]]);
+  assert.deepEqual(usageFacts(fixture, range, { ...filters, tenant: ['b'], project: ['__uncollected__'] }, now).current.map(row => row.id), ['legacy']);
+});
+
+test('project usage keeps customer requests with test-like IDs and excludes tagged diagnostics', () => {
+  const at = '2026-09-24T08:00:00+08:00';
+  const fixture = { ...state, requests: [
+    request('req_demo_customer', at, 'a', { input: 4, output: 0 }, { projectId: 'pa', purpose: 'customer' }),
+    request('test', at, 'a', { input: 10, output: 0 }, { projectId: 'pa', purpose: 'metering-test' }),
+  ] };
+  const range = usagePreset('today', now);
+  const scope = { ...filters, tenant: ['a'], project: ['pa'] };
+  assert.deepEqual(usageFacts(fixture, range, scope, now).current.map(row => row.id), ['req_demo_customer']);
+  assert.deepEqual(usageFacts(fixture, range, { ...scope, project: ['missing'] }, now).current, []);
+});

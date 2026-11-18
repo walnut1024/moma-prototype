@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Banner, Button, Card, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconArrowRight } from '@douyinfe/semi-icons';
 import Table from './AdminTable';
@@ -10,17 +10,21 @@ import SavedFilterViews from '../components/SavedFilterViews';
 import { HorizontalBarChart } from '../components/AnalyticsCharts';
 import { chartPalette } from '../components/chart-style.mjs';
 import { inputLengthDistribution } from './analytics';
-import { ObservationPick, ObservationPlot, ObservationSupplyPick, ObservationTimeRange, useObservationSupply } from './CallObservationControls';
 import {
-  callObservations, defaultObservationGrain, filterObservations, httpLabel, modelTypes, observationBuckets,
-  observationDrill, observationFilters, observationGrains, observationGroups, observationGroupScope, observationHash, observationNumber as fmt,
+  ObservationConditions, ObservationFilterGroup, ObservationFilterLayout, ObservationPick, ObservationPlot, ObservationSupplyPick,
+  ObservationTimeRange, observationConditions, useObservationSupply,
+} from './CallObservationControls';
+import {
+  callObservations, changeObservationTenant, defaultObservationGrain, filterObservations, httpLabel, modelTypes, observationBuckets,
+  observationDrill, observationFilters, observationGrains, observationGroups, observationGroupScope, observationHash, observationKey, observationNumber as fmt,
   observationOptions, observationTime, observationViewFilters, observationWindow, summarizeObservations,
 } from './call-observations.mjs';
 
 const { Title, Text, Paragraph } = Typography;
-const grouping = [['callId', '对外调用标识'], ['tenant', '租户'], ['provider', '最终服务商'], ['channel', '最终渠道']];
+const grouping = [['callId', '模型调用标识'], ['tenant', '客户'], ['project', '项目'], ['provider', '最终服务商'], ['channel', '最终渠道']];
 const labels = new Map(grouping);
-const selectors = [['tenant', '租户'], ['callId', '对外调用标识']];
+const selectors = [['model', '模型'], ['tenant', '客户'], ['project', '项目'], ['callId', '模型调用标识'], ['purpose', '调用类型']];
+const customerPurpose = ['customer'];
 const latencyChoices = [['p95', 'P95 总耗时'], ['ttft', 'P95 首 Token 时延']];
 const countChoices = [['count', '请求数'], ['tokens', '输入 Token']];
 const requestStates = [['成功', 'success', chartPalette[0]], ['失败', 'failed', chartPalette[5]], ['其他状态', 'other', chartPalette[6]]];
@@ -31,11 +35,23 @@ const millis = value => value == null ? '—' : fmt(value) + ' ms';
 
 export default function CallAnalysisPage({ state }) {
   const [initial] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
-  const [filters, setFilters] = useState(() => observationFilters(initial));
+  const [filters, setFilters] = useState(() => observationFilters(initial, 'today', customerPurpose));
   const [grain, setGrain] = useState(() => initial.get('grain'));
   const [groupBy, setGroupBy] = useState(() => labels.has(initial.get('groupBy')) ? initial.get('groupBy') : 'callId');
   const [latency, setLatency] = useState('p95');
   const [lengthMetric, setLengthMetric] = useState('count');
+  useEffect(() => {
+    const restore = () => {
+      const [route, query] = location.hash.split('?');
+      if (route !== '#/admin-2/call-analysis') return;
+      const params = new URLSearchParams(query);
+      setFilters(observationFilters(params, 'today', customerPurpose));
+      setGrain(params.get('grain'));
+      setGroupBy(labels.has(params.get('groupBy')) ? params.get('groupBy') : 'callId');
+    };
+    addEventListener('hashchange', restore);
+    return () => removeEventListener('hashchange', restore);
+  }, []);
   const { requests } = useMemo(() => callObservations(state), [state]);
   const supply = useObservationSupply(requests, filters.supply);
   const window = observationWindow(filters);
@@ -47,18 +63,32 @@ export default function CallAnalysisPage({ state }) {
   const trend = buckets.map(bucket => summarizeObservations(bucket.rows));
   const timeLabels = buckets.map(bucket => bucket.label);
   const modelRows = useMemo(() => filters.type ? requests.filter(row => row.modelType === filters.type) : requests, [requests, filters.type]);
+  const callRows = filters.model === null ? modelRows : modelRows.filter(row => filters.model.includes(row.model));
   const change = patch => {
-    setFilters(current => ({ ...current, ...patch }));
+    const next = { ...filters, ...patch };
+    setFilters(next);
     if (patch.period) setGrain(null);
+    history.replaceState(history.state, '', observationHash('call-analysis', next, { grain: patch.period ? null : granularity, groupBy }));
+  };
+  const changeTenant = ({ tenant }) => change(changeObservationTenant(requests, filters, tenant));
+  const projectRows = requests.filter(row => filters.tenant == null || filters.tenant.includes(observationKey(row, 'tenant')));
+  const changeModel = ({ model }) => {
+    const retained = filters.callId?.filter(id => model == null || modelRows.some(row => observationKey(row, 'callId') === id && model.includes(row.model)));
+    change({ model, callId: retained?.length ? retained : null });
   };
   const applyView = view => {
     if (!view?.filters) return false;
-    setFilters({ ...observationFilters(), ...observationViewFilters(view.filters), period: view.period || 'custom', key: null, source: null });
+    setFilters({ ...observationFilters(undefined, 'today', customerPurpose), ...observationViewFilters(view.filters), period: view.period || 'custom', key: null, source: null });
     setGrain(view.granularity);
     if (labels.has(view.groupBy)) setGroupBy(view.groupBy);
     return true;
   };
-  const reset = () => { setFilters(observationFilters()); setGrain(null); setGroupBy('callId'); };
+  const reset = () => {
+    setFilters(observationFilters(undefined, 'today', customerPurpose));
+    setGrain(null);
+    setGroupBy('callId');
+    history.replaceState(history.state, '', '#/admin-2/call-analysis');
+  };
   const drill = (range, extra) => {
     if (!range) return;
     history.replaceState(history.state, '', observationHash('call-analysis', filters, { grain: granularity, groupBy }));
@@ -75,8 +105,10 @@ export default function CallAnalysisPage({ state }) {
       return { label, items: filters[dimension]?.map(id => names.get(id) || id) ?? null };
     }),
     supply.group,
-    ...(filters.model == null ? [] : [{ label: '模型', items: filters.model.map(id => state.models.find(model => model.id === id)?.name || id) }]),
   ];
+  const conditions = observationConditions(requests, filters, selectors, patch => 'model' in patch ? changeModel(patch) : 'tenant' in patch ? changeTenant(patch) : change(patch));
+  if (filters.type) conditions.push(['模型类型', new Map(modelTypes).get(filters.type), () => change({ type: '' })]);
+  if (supply.group.items !== null) conditions.push([supply.group.label, supply.group.items.join('、') || '未选择', () => change({ supply: null })]);
   const grouped = observationGroups(rows, groupBy).map(group => ({ ...group, ...summarizeObservations(group.rows) }));
   const failures = new Map();
   for (const row of rows) {
@@ -113,18 +145,23 @@ export default function CallAnalysisPage({ state }) {
           </ObservationTimeRange>
           <FilterReset onClick={reset}/>
         </FilterToolbar>
-        <div className="admin-analysis-filter-row">
-          <FilterToolbar>
-            <Choice label="模型类型" value={filters.type || 'all'} options={modelTypes.map(([id, label]) => [id || 'all', label])}
+        <ObservationFilterLayout primary={<>
+          <ObservationPick dimension="model" label="模型" rows={modelRows} filters={filters} onChange={changeModel}/>
+          <ObservationPick dimension="tenant" label="客户" rows={requests} filters={filters} onChange={changeTenant}/>
+          <ObservationPick dimension="project" label="项目" rows={projectRows} filters={filters} onChange={change}/>
+        </>} actions={<SavedFilterViews notify={Toast} scope="admin-call-analysis" legacyKey="moma-admin2-5120-analytics-views" showCurrent={false}
+          disabled={!window} groups={viewGroups} value={{ period: filters.period, filters, granularity, groupBy }} onApply={applyView}/>}>
+          <ObservationFilterGroup label="调用方">
+            <ObservationPick dimension="purpose" label="调用类型" rows={requests} filters={filters} onChange={change}/>
+          </ObservationFilterGroup>
+          <ObservationFilterGroup label="模型与渠道">
+            <Choice size="small" label="模型类型" value={filters.type || 'all'} options={modelTypes.map(([id, label]) => [id || 'all', label])}
               onChange={value => change({ type: value === 'all' ? '' : value, callId: null, model: null })}/>
-            {selectors.map(([dimension, label]) => <ObservationPick key={dimension} dimension={dimension} label={label}
-              rows={dimension === 'callId' ? modelRows : requests} filters={filters} onChange={change}/>)}
+            <ObservationPick dimension="callId" label="模型调用标识" rows={callRows} filters={filters} onChange={change}/>
             <ObservationSupplyPick {...supply} onChange={change}/>
-            {filters.model != null && <ObservationPick dimension="model" label="模型" rows={requests} filters={filters} onChange={change}/>}
-          </FilterToolbar>
-          <SavedFilterViews notify={Toast} scope="admin-call-analysis" legacyKey="moma-admin2-5120-analytics-views" showCurrent={false}
-            disabled={!window} groups={viewGroups} value={{ period: filters.period, filters, granularity, groupBy }} onApply={applyView}/>
-        </div>
+          </ObservationFilterGroup>
+        </ObservationFilterLayout>
+        <ObservationConditions conditions={conditions}/>
       </div>
     </Card>
     {!window ? <Banner type="danger" closeIcon={null} description="请选择不超过 365 天的有效时间范围。"/> : <>

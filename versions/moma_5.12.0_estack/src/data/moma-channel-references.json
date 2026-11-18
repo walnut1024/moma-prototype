@@ -1,0 +1,70 @@
+[
+  {
+    "name": "AICC-doubao-seedance-2.5", "modelId": "aicc-doubao-seedance-2.5",
+    "type": "visual", "visualType": "video", "maker": "火山引擎", "listedAt": "2026-10-25",
+    "baseUrl": "https://zhenze-huhehaote.cmecloud.cn/api/v3"
+  },
+  {
+    "name": "PP-OCRv6", "modelId": "pp-ocrv6",
+    "type": "visual", "visualType": "image", "maker": "百度飞桨", "listedAt": "2026-10-22"
+  },
+  {
+    "name": "qwen-audio-3.0-asr-flash", "modelId": "qwen-audio-3.0-asr-flash",
+    "type": "audio", "maker": "阿里云", "listedAt": "2026-09-11",
+    "upstreamModelId": "qwen/qwen-audio-3.0-asr-flash", "baseUrl": "https://moma.cmecloud.cn"
+  },
+  {
+    "name": "qwen-audio-3.0-tts-flash", "modelId": "qwen-audio-3.0-tts-flash",
+    "type": "audio", "maker": "阿里云", "listedAt": "2026-09-11",
+    "upstreamModelId": "qwen/qwen-audio-3.0-tts-flash", "baseUrl": "https://moma.cmecloud.cn"
+  },
+  {
+    "name": "GLM-5.3-Flash", "modelId": "glm-5.3-flash",
+    "type": "multimodal", "maker": "智谱 AI", "listedAt": "2026-09-10",
+    "upstreamModelId": "zhipu/glm-5.3-flash", "baseUrl": "https://moma.cmecloud.cn/v1/messages"
+  },
+  {
+    "name": "Qwen3.8-27B", "modelId": "qwen3.8-27b",
+    "type": "multimodal", "maker": "阿里云", "listedAt": "2026-09-08"
+  },
+  {
+    "name": "MiniMax-H3", "modelId": "minimax-h3",
+    "type": "visual", "visualType": "video", "maker": "MiniMax", "listedAt": "2026-09-06",
+    "upstreamModelId": "minimax/minimax-h3", "baseUrl": "https://moma.cmecloud.cn/v1/videos"
+  },
+  {
+    "name": "MiniMax-H3-Max", "modelId": "minimax-h3-max",
+    "type": "visual", "visualType": "video", "maker": "MiniMax", "listedAt": "2026-09-06",
+    "upstreamModelId": "minimax/minimax-h3-max", "baseUrl": "https://moma.cmecloud.cn/v1/videos"
+  },
+  {
+    "name": "qwen-audio-3.0-asr-flash-streaming", "modelId": "qwen-audio-3.0-asr-flash-streaming",
+    "type": "audio", "maker": "阿里云", "listedAt": "2026-08-28",
+    "upstreamModelId": "qwen/qwen-audio-3.0-asr-flash-streaming", "baseUrl": "wss://moma.cmecloud.cn/api-ws/v1/inference"
+  },
+  {
+    "name": "qwen-image-3.0", "modelId": "qwen-image-3.0",
+    "type": "visual", "visualType": "image", "maker": "阿里云", "listedAt": "2026-07-28",
+    "upstreamModelId": "qwen/qwen-image-3.0", "baseUrl": "https://moma.cmecloud.cn/api/v1/services/aigc/multimodal-generation/generation"
+  },
+  {
+    "name": "qwen-image-3.0-pro", "modelId": "qwen-image-3.0-pro",
+    "type": "visual", "visualType": "image", "maker": "阿里云", "listedAt": "2026-07-28",
+    "upstreamModelId": "qwen/qwen-image-3.0-pro", "baseUrl": "https://moma.cmecloud.cn/api/v1/services/aigc/multimodal-generation/generation"
+  },
+  {
+    "name": "happyhorse-1.1-r2v", "modelId": "happyhorse-1.1-r2v",
+    "type": "visual", "visualType": "video", "maker": "阿里云", "listedAt": "2026-07-10",
+    "upstreamModelId": "qwen/happyhorse-1.1-r2v", "baseUrl": "https://moma.cmecloud.cn/api/v1/services/aigc/video-generation/video-synthesis"
+  },
+  {
+    "name": "happyhorse-1.1-t2v", "modelId": "happyhorse-1.1-t2v",
+    "type": "visual", "visualType": "video", "maker": "阿里云", "listedAt": "2026-07-10",
+    "upstreamModelId": "qwen/happyhorse-1.1-t2v", "baseUrl": "https://moma.cmecloud.cn/api/v1/services/aigc/video-generation/video-synthesis"
+  },
+  {
+    "name": "happyhorse-1.1-i2v", "modelId": "happyhorse-1.1-i2v",
+    "type": "visual", "visualType": "video", "maker": "阿里云", "listedAt": "2026-07-10",
+    "upstreamModelId": "qwen/happyhorse-1.1-i2v", "baseUrl": "https://moma.cmecloud.cn/api/v1/services/aigc/video-generation/video-synthesis"
+  }
+]

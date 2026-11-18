@@ -1,13 +1,15 @@
 export const matchesSelection = (selected, id) => selected == null || selected.includes(id);
+import { diagnosticRequest, latestRequests } from '../request-identity.mjs';
 import { percentile } from './observability.js';
 import { usageMeter, usageValue } from './usage-analysis.js';
 export const dayOf = value => new Date((typeof value === "number" ? value : Date.parse(value)) + 8 * 3600000).toISOString().slice(0, 10);
 export const tokens = row => Number(row.usage?.input || 0) + Number(row.usage?.output || 0);
 export function filterAnalytics(state, filters) {
-  return state.requests.filter(row => {
+  return latestRequests(state.requests).filter(row => {
+    if (diagnosticRequest(row)) return false;
     const provider = state.endpoints.find(e => e.id === row.endpointId)?.providerId;
     const type = state.models.find(m => m.id === row.modelId)?.type;
-    return Date.parse(row.createdAt) <= Date.now() && (!filters.start || dayOf(row.createdAt) >= filters.start) && (!filters.end || dayOf(row.createdAt) <= filters.end) && matchesSelection(filters.tenant, row.tenantId) && matchesSelection(filters.model, row.modelId) && matchesSelection(filters.provider, provider) && (!filters.type || type === filters.type) && (!filters.key || row.keyId === filters.key) && (!filters.source || state.providers.find(p => p.id === provider)?.sourceType === filters.source);
+    return Date.parse(row.createdAt) <= Date.now() && (!filters.start || dayOf(row.createdAt) >= filters.start) && (!filters.end || dayOf(row.createdAt) <= filters.end) && matchesSelection(filters.tenant, row.tenantId) && matchesSelection(filters.project, row.projectId || '__uncollected__') && matchesSelection(filters.model, row.modelId) && matchesSelection(filters.provider, provider) && (!filters.type || type === filters.type) && (!filters.key || row.keyId === filters.key) && (!filters.source || state.providers.find(p => p.id === provider)?.sourceType === filters.source);
   });
 }
 export function summarize(rows) {

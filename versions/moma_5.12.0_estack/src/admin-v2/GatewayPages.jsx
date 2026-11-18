@@ -1,8 +1,9 @@
+import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Banner, Button, Card, Checkbox, Form, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Checkbox, Form, Input, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus } from '@douyinfe/semi-icons';
 import { Choice, serviceOperationsUi } from './ServiceUI';
@@ -22,7 +23,7 @@ const limitScopes = [
   { value: 'tenant', label: '租户' }, { value: 'project', label: '项目' }, { value: 'key', label: 'API 密钥' }, { value: 'model', label: '模型' },
 ];
 const cacheScopes = ['tenant+model', 'project+model', 'key+model'].map(value => ({ value, label: value }));
-const uid = prefix => `${prefix}-${Date.now()}`;
+
 
 function Editor({ pageId, state, dispatch, close }) {
   const [error, setError] = useState('');
@@ -46,7 +47,7 @@ function Editor({ pageId, state, dispatch, close }) {
     cache: { scope: cacheScopes[0].value, ttl: 600 },
   };
   const save = async values => {
-    const id = uid(pageId), name = values.name ?? '';
+    const id = resourceId(pageId), name = values.name ?? '';
     let record;
     if (pageId === 'routes') {
       const { routeId, modelId, endpointA, endpointB } = values;
@@ -140,7 +141,7 @@ function Releases({ state, dispatch }) {
   const current = state.releases.find(item => item.status === '当前生效');
   const save = (record, diff) => {
     const version = `r-${String(state.releases.length + 1).padStart(3, '0')}`;
-    const next = { ...record, id: uid('release'), version, previousReleaseId: current?.id ?? null,
+    const next = { ...record, id: resourceId('release'), version, previousReleaseId: current?.id ?? null,
       diff, publishedAt: new Date().toISOString(), status: '当前生效' };
     dispatch({ type: 'batch', objectId: version, changes: [
       ...state.releases.filter(item => item.status === '当前生效').map(item => ({ type: 'update', collection: 'releases', id: item.id, changes: { status: '历史版本' } })),
@@ -175,18 +176,25 @@ function Releases({ state, dispatch }) {
 
 function Simulator({ state, dispatch }) {
   const keys=state.gatewayKeyOptions ?? state.apiKeys;
-  const modelIds=state.gatewayModelOptions ?? routingServices(state).map(row=>row.callId).filter(Boolean);
+  const directModels=state.gatewayModelOptions ?? routingServices(state).map(row=>row.callId).filter(Boolean);
   const [keyId,setKeyId]=useState(keys.find(row=>row.status==='有效')?.id || '');
-  const [modelId,setModelId]=useState(modelIds[0] || '');
+  const [selectedModel,setModelId]=useState(directModels[0] || '');
   const [timeout, setTimeoutFlag] = useState(false);
+  const [userLabel,setUserLabel]=useState('');
   const [result, setResult] = useState('');
+  const key=keys.find(item=>item.id===keyId);
+  const modelIds=[...new Set([...directModels,...(state.gatewayProjectRoutes || [])
+    .filter(route=>route.tenantId===key?.tenantId && route.projectId===key?.projectId).map(route=>route.model)])];
+  const modelId=modelIds.includes(selectedModel) ? selectedModel : modelIds[0] || '';
   const run = async () => {
     const requestId = crypto.randomUUID();
-    const next = await dispatch({ type: 'simulateInvocation', data: { requestId, keyId, modelId, forceTimeout: timeout, purpose: 'gateway-test' }, feedback: false });
-    const request = next?.requests.find(row => row.requestId === requestId);
+    const next=await dispatch({type:'simulateInvocation',data:{requestId,keyId,modelId,forceTimeout:timeout,purpose:'gateway-test',
+      ...(modelId.startsWith('project@') && userLabel.trim() ? {metadata:{_user:userLabel.trim()}} : {})},feedback:false});
+    const request=next?.requests.find(row=>row.requestId===requestId && row.tenantId===key.tenantId && row.projectId===key.projectId);
     if (!request) return;
     Toast[request.httpStatus >= 400 ? 'error' : 'success'](`网关请求测试：HTTP ${request.httpStatus}`);
-    const outcome = request.cacheHit ? '缓存命中' : request.attempts.length > 1 ? '回退成功' : request.attempts.at(-1)?.error || '路由成功';
+    const outcome=request.httpStatus>=400 ? request.error || request.attempts.at(-1)?.error :
+      request.cacheHit ? '缓存命中' : request.attempts.length>1 ? '回退成功' : '路由成功';
     setResult(`${request.httpStatus} · ${outcome} · ${request.releaseId || '无发布版本'}`);
   };
   return <Card>
@@ -197,9 +205,10 @@ function Simulator({ state, dispatch }) {
       </div>
       <Space wrap>
         <Choice label="API 密钥 ID" value={keyId} options={keys.map(item => [item.id, item.keyId])} onSelect={setKeyId}/>
-        <Choice label="Model ID" value={modelId} options={modelIds.map(id=>[id,id])} onSelect={setModelId}/>
+        <Choice label="模型调用标识" value={modelId} options={modelIds.map(id=>[id,id])} onSelect={setModelId}/>
+        {modelId.startsWith('project@') && <Input aria-label="用户标签" placeholder="用户标签" maxLength={128} value={userLabel} onChange={setUserLabel} />}
         <Checkbox checked={timeout} onChange={event => setTimeoutFlag(event.target.checked)}>主端点超时场景</Checkbox>
-        <Button theme="solid" onClick={run}>发送请求</Button>
+        <Button theme="solid" disabled={!key || !modelId} onClick={run}>发送请求</Button>
       </Space>
     </div>
   </Card>;

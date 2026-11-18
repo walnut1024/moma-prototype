@@ -124,7 +124,8 @@ test('rechecking procurement revisions preserves updated draft prices while the 
 
 test('view preferences and selections are version-scoped, preserve separate filters and tolerate unavailable storage', () => {
   const values = new Map(), storage = { getItem: key => values.get(key), setItem: (key, value) => values.set(key, value) }, provider = { id: 'p', catalogModelIds: ['a', 'b'] };
-  const address = listingAddress(new URLSearchParams('q=Qwen&page=3&model=private&view=price&supplier=p'), 'models');
+  const address = listingAddress(new URLSearchParams('q=Qwen&shown=40&model=private&view=price&supplier=p'), 'models');
+  assert.equal(new URLSearchParams(address.split('?')[1]).get('shown'), '40');
   assert.equal(new URLSearchParams(address.split('?')[1]).get('model'), 'private');
   assert.equal(new URLSearchParams(address.split('?')[1]).has('view'), false);
   rememberListing(storage, { perspective: 'suppliers', models: { address, scrollY: 500 } });

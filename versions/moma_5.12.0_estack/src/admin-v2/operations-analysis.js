@@ -1,3 +1,4 @@
+import { diagnosticRequest, requestIdentity } from '../request-identity.mjs';
 import { usageFacts, usageWindow, usageMeter, usageValue } from './usage-analysis.js';
 import { priceItems } from './model-management.js';
 
@@ -5,7 +6,7 @@ export const analysisFilters = () => ({ types: null, tenant: null, model: null, 
 export function operationFacts(state, range, filters, now = Date.now(), upstream = false) {
   const models=new Map(state.models.map(model=>[model.id,model]));
   for(const request of state.requests)if(request.modelId && request.modelType && !models.has(request.modelId))models.set(request.modelId,{id:request.modelId,type:request.modelType});
-  const facts = (usageFacts({...state,models:[...models.values()]}, range, upstream ? {...filters,providers:[],channels:null} : filters, now)?.current || []).filter(row=>!diagnosticRequest(row));
+  const facts = (usageFacts({...state,models:[...models.values()]}, range, upstream ? {...filters,providers:[],channels:null} : filters, now)?.current || []);
   if (!upstream || !filters.providers?.length && filters.channels == null) return facts;
   const selected = attempt => {
     const provider = attempt.procurementSnapshot?.providerId || state.endpoints.find(item => item.id === attempt.endpointId)?.providerId;
@@ -52,7 +53,7 @@ export function supplyGroups(state, rows, channels = false) {
       const providerId = attempt.procurementSnapshot?.providerId || (attempt.endpointId === row.endpointId ? row.procurementSnapshot?.providerId : null) || state.endpoints.find(item => item.id === attempt.endpointId)?.providerId || '__unknown__';
       const id = channels ? attempt.endpointId : providerId;
       if (!groups.has(id)) groups.set(id, new Map());
-      const requests = groups.get(id), requestId = row.requestId || row.id;
+      const requests = groups.get(id), requestId = requestIdentity(row);
       if (!requests.has(requestId)) requests.set(requestId, {...row,providerId,served:false,attempts:[]});
       const entry = requests.get(requestId);
       entry.attempts.push(attempt);
@@ -140,9 +141,6 @@ export function salesService(row, price) {
   if (row.serviceId && byPrice && row.serviceId !== byPrice || price?.modelId && price.modelId !== row.modelId) return null;
   return row.serviceId || byPrice || null;
 }
-function diagnosticRequest(row) {
-  return ['trial','gateway-test','metering-test','platform-trial'].some(value=>row.identityType===value || row.purpose===value) || /^req_(gateway|demo)_/.test(row.requestId || '');
-}
 export function customerRequest(row) {
   if (diagnosticRequest(row)) return false;
   return row.purpose === 'customer' || row.identityType === 'client' || !!(row.serviceId || row.callId || row.priceSnapshot || row.priceVersionId);
@@ -163,11 +161,11 @@ export function procurementFacts(state, row) {
     const free = attempt.billingStatus === 'not_billable';
     const measured = usage ? usageValue({...row,usage,usageConfirmed:true},usageMeter(model,{...row,usage}).fields) : null;
     const cost = free ? {currency:price?.items?.[0]?.currency || null,amount:0,breakdown:[],versionId:price?.id || 'not-billable'} : usage ? priceRequest(price,{...row,usage,usageConfirmed:true,value:measured},model) : null;
-    return [{id:(row.requestId || row.id) + ':' + index,requestId:row.requestId || row.id,modelId:row.modelId,modelName:model.name || row.modelId,createdAt:row.createdAt,error:attempt.error || attempt.code || '',order:index+1,providerId,provider:state.providers.find(item=>item.id===providerId)?.name || providerId || '未归属',endpointId:attempt.endpointId,channel:state.endpoints.find(item=>item.id===attempt.endpointId)?.name || attempt.endpointId,status:upstreamOutcome(attempt) === true ? '成功' : upstreamOutcome(attempt) === false ? '失败' : '结果待确认',durationMs:attempt.durationMs ?? null,usage,cost,reason:cost ? '' : !usage ? '上游计量缺失' : !price ? '采购价格快照缺失' : '采购计费项或计量无法核算',price,final:index===final}];
+    return [{id:JSON.stringify([requestIdentity(row), index]),requestId:row.requestId || row.id,modelId:row.modelId,modelName:model.name || row.modelId,createdAt:row.createdAt,error:attempt.error || attempt.code || '',order:index+1,providerId,provider:state.providers.find(item=>item.id===providerId)?.name || providerId || '未归属',endpointId:attempt.endpointId,channel:state.endpoints.find(item=>item.id===attempt.endpointId)?.name || attempt.endpointId,status:upstreamOutcome(attempt) === true ? '成功' : upstreamOutcome(attempt) === false ? '失败' : '结果待确认',durationMs:attempt.durationMs ?? null,usage,cost,reason:cost ? '' : !usage ? '上游计量缺失' : !price ? '采购价格快照缺失' : '采购计费项或计量无法核算',price,final:index===final}];
   });
 }
 export function businessFacts(state, rows) {
-  return rows.filter(customerRequest).map(row => {
+  return rows.filter(row=>row.settlement!=='internal' && customerRequest(row)).map(row => {
     const prices = requestPrices(state,row), serviceId = salesService(row,prices.sale), model = state.models.find(item=>item.id===row.modelId) || {id:row.modelId,type:row.modelType};
     const sale = serviceId && row.billingStatus === 'not_billable' ? {currency:prices.sale?.items?.[0]?.currency || null,amount:0,breakdown:[],versionId:prices.sale?.id || 'not-billable'} : serviceId && row.httpStatus >= 200 && row.httpStatus < 300 ? priceRequest(prices.sale,row,model) : null;
     const purchases = procurementFacts(state,row), costCurrencies = [...new Set(purchases.map(item=>item.cost?.currency).filter(Boolean))];

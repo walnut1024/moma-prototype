@@ -20,7 +20,7 @@ export default function MaterialCatalogue({ state, ops }) {
   const currentPage = Math.min(pagination.currentPage, Math.ceil(rows.length / pageSize) || 1);
   const columns = [
     { title: '模型展示名', dataIndex: 'name', width: 230, render: (name, row) => <Button theme="borderless" onClick={event => open(event, row, 'view')}>{name}</Button> },
-    { title: '规范模型标识', dataIndex: 'modelId', width: 240, render: value => <Typography.Text className="materials-code" copyable>{value}</Typography.Text> },
+    { title: '模型编码', dataIndex: 'modelId', width: 240, render: value => <Typography.Text className="materials-code" copyable>{value}</Typography.Text> },
     { title: '作者', width: 140, render: (_, row) => modelProfileDraft(row).author || row.maker || '—' },
     { title: '原厂发布日期', width: 130, render: (_, row) => modelProfileDraft(row).releaseDate || '—' },
     { title: '模型类型', width: 100, render: (_, row) => MODEL_CATALOGUE_TYPES[modelCategory(row.type)] },
@@ -31,7 +31,7 @@ export default function MaterialCatalogue({ state, ops }) {
   ];
   const close = () => { setRemoving(null); ops.setError(''); requestAnimationFrame(() => trigger.current?.isConnected && trigger.current.focus()); };
   return <>
-    <div className="materials-toolbar"><div className="materials-filters"><Input prefix={<IconSearch aria-hidden/>} showClear aria-label="搜索模型展示名 / 作者 / 规范标识" placeholder="搜索模型展示名 / 作者 / 规范标识" value={query} onChange={value=>{setQuery(value);setPagination(current=>({...current,currentPage:1}));}}/><Typography.Text id="material-type-filter" className="sr-only">模型类型</Typography.Text><Select aria-labelledby="material-type-filter" value={type} onChange={value=>{setType(value);setPagination(current=>({...current,currentPage:1}));}} optionList={[[ 'all', '全部类型' ], ...Object.entries(MODEL_CATALOGUE_TYPES)].map(([value, label]) => ({value, label}))}/><Button onClick={() => { setQuery(''); setType('all'); setPagination(current=>({...current,currentPage:1})); }}>重置筛选</Button></div></div>
+    <div className="materials-toolbar"><div className="materials-filters"><Input prefix={<IconSearch aria-hidden/>} showClear aria-label="搜索模型展示名 / 作者 / 模型编码" placeholder="搜索模型展示名 / 作者 / 模型编码" value={query} onChange={value=>{setQuery(value);setPagination(current=>({...current,currentPage:1}));}}/><Typography.Text id="material-type-filter" className="sr-only">模型类型</Typography.Text><Select aria-labelledby="material-type-filter" value={type} onChange={value=>{setType(value);setPagination(current=>({...current,currentPage:1}));}} optionList={[[ 'all', '全部类型' ], ...Object.entries(MODEL_CATALOGUE_TYPES)].map(([value, label]) => ({value, label}))}/><Button onClick={() => { setQuery(''); setType('all'); setPagination(current=>({...current,currentPage:1})); }}>重置筛选</Button></div></div>
     <Table rowKey="id" columns={columns} dataSource={rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)} scroll={{ x: 1540 }}
       pagination={{ pageSize, currentPage, total: rows.length, showSizeChanger: true, pageSizeOpts: [20, 50, 100], showTotal: true }}
       onChange={({ pagination }) => setPagination({ currentPage: pagination.currentPage, pageSize: pagination.pageSize })}

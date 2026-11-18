@@ -1,10 +1,11 @@
+import { resourceId } from '../resource-id.mjs';
 import { credentialRotationChannels } from './credential-rotation-scope.js';
 import { supplierModelMaintenance } from './supplier-model-maintenance.js';
 import { modelLibrary } from './model-library.js';
 import { normalizeModelLogo } from './model-profile.js';
 import { supplierModelFields } from './supply-models.js';
 import { canonicalMomaScenarios } from './moma-billing-items.js';
-import { providerCatalogueIds } from './moma-provider.js';
+import { isBuiltinMoma, providerCatalogueIds } from './moma-provider.js';
 import { availableSupplies, modelTransaction } from './model-management.js';
 import { connectionFingerprint, connectionTestCurrent, connectionTestPassed, connectionCredentialsReady, connectionKeys, connectionQualification, connectionTestPending } from './connection-state.js';
 import { supplierResourceTransaction, invalidateSupplierChannels } from './supplier-resources.js';
@@ -23,34 +24,33 @@ export const PROVIDER_TYPES = { thirdParty: '第三方推理服务', selfHosted:
 export const PROTOCOLS = ['OpenAI', 'Anthropic', '其他'];
 export const SUPPLIER_MODEL_TYPES = { text: '语言模型', multimodal: '多模态理解', visual: '视觉模型', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
 export function normalizeProviderCatalogue(ids = []) {
-  if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('模型目录必须是 Model ID 列表');
+  if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('模型目录必须是服务商目录标识列表');
   const result = [...new Set(ids.map(id => id.trim()).filter(Boolean))];
-  if (result.some(id => /\s/.test(id) || id.length > 200) || result.length > 2000) throw new Error('模型目录每行填写一个有效 Model ID，最多 2000 个');
+  if (result.some(id => /\s/.test(id) || id.length > 200) || result.length > 2000) throw new Error('模型目录每行填写一个有效服务商目录标识，最多 2000 个');
   return result;
 }
 
 export function appendProviderCatalogue(current, text) {
-  if (typeof text !== 'string' || !text.trim()) throw new Error('请输入上游 Model ID，每行一个。');
+  if (typeof text !== 'string' || !text.trim()) throw new Error('请输入上游模型调用标识，每行一个。');
   const result = normalizeProviderCatalogue([...current, ...text.split(/\r?\n/)]);
-  if (result.length === current.length) throw new Error('输入的 Model ID 均已存在。');
+  if (result.length === current.length) throw new Error('输入的服务商目录标识均已存在。');
   return result;
 }
 export function normalizeProviderPrice(provider, draft) {
   const entry = normalizeCataloguePrice(draft);
-  if (provider.id === 'provider-moma') {
+  if (isBuiltinMoma(provider)) {
     if (entry.scenarios.some(row => !isMomaCataloguePrice(row))) throw new Error('移动云 MoMA 模型目录仅支持按量计费；请移除省市节点、资源包、抵扣或 TPM 预留报价');
     entry.scenarios = canonicalMomaScenarios(entry.scenarios);
   }
   return entry;
 }
-const uid = prefix => `${prefix}-${crypto.randomUUID()}`;
 const add = (collection, record) => ({ type: 'add', collection, record });
 const update = (collection, id, changes) => ({ type: 'update', collection, id, changes });
 
 export const maskProviderApiKey = value => typeof value === 'string' && value.length > 8 ? `${value.slice(0, 4)}••••••••${value.slice(-4)}` : '••••••••';
 export const providerApiKeyName = key => typeof key.name === 'string' && key.name.trim() ? key.name : `API 密钥 ${(key.id || key.fingerprint).slice(-6)}`;
 export function providerApiKeyId(key) {
-  const uuid = key.id.match(/^(?:provider-key-)?([a-f0-9]{8})(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i)?.[1];
+  const uuid = key.id.match(/^(?:(?:provider-key|credential)-)?([a-f0-9]{8})(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i)?.[1];
   if (uuid || key.id.length <= 12) return uuid || key.id;
   let hash = 2166136261;
   for (const char of key.id) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
@@ -106,7 +106,7 @@ export function providerModelConnectivityTest(state, { providerId, keyId, endpoi
   const configured = catalogueConnections(state, provider, modelId);
   if (configured.length && !configured.some(item => item.id === endpointId)) throw new Error('接入地址与所选目录模型不匹配');
   const callId = typeof upstreamId === 'string' ? upstreamId.trim() : '';
-  if (!callId || callId.length > 200 || /\s/.test(callId)) throw new Error('调用 Model ID 须为 1–200 位字符，不含空格或换行');
+  if (!callId || callId.length > 200 || /\s/.test(callId)) throw new Error('上游模型调用标识 须为 1–200 位字符，不含空格或换行');
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 2000) throw new Error('请填写测试内容，最多 2000 字');
   if (!Object.hasOwn(MODEL_CONNECTIVITY_SCENARIOS, scenario)) throw new Error('请选择有效的结果预览状态');
   const type = provider.catalogModels?.find(row => row.modelId === modelId)?.type;
@@ -118,20 +118,25 @@ export function modelConnectivityPreview(context, scenario) {
   const responses = {
     success: { result: '通过', title: '测试成功', status: 200, durationMs: 486, message: '模型已返回测试响应。', response: { model: callId, choices: [{ message: { role: 'assistant', content: 'OK' } }] } },
     unauthorized: { result: '失败', title: '鉴权失败', status: 401, durationMs: 128, message: 'API 密钥无效或没有访问该模型的权限。', hint: '请核对 API 密钥的有效期、服务商账号权限与模型授权。', response: { error: { code: 'invalid_api_key', message: 'Authentication failed' } } },
-    unavailable: { result: '失败', title: '模型不可用', status: 404, durationMs: 156, message: '当前地址下未找到该模型，或模型尚未开放。', hint: '请核对调用 Model ID 的大小写、接入地址与服务商模型目录。', response: { error: { code: 'model_not_found', message: 'Model is unavailable' } } },
+    unavailable: { result: '失败', title: '模型不可用', status: 404, durationMs: 156, message: '当前地址下未找到该模型，或模型尚未开放。', hint: '请核对上游模型调用标识 的大小写、接入地址与服务商模型目录。', response: { error: { code: 'model_not_found', message: 'Model is unavailable' } } },
     timeout: { result: '失败', title: '请求超时', status: null, durationMs: 10000, message: '等待模型响应超过 10 秒。', hint: '请检查服务状态与网络连接，稍后重新测试。', response: { error: { code: 'request_timeout', message: 'No response received within 10 seconds' } } },
   };
   return { ...responses[scenario], ...context, simulated: true };
 }
-export function checkedConnectionKeys(keys) {
+export function checkedConnectionKeys(keys, savedKeys = []) {
   if (!Array.isArray(keys) || keys.length > PROVIDER_API_KEY_LIMIT || keys.some(item => !item || !/^[\x21-\x7e]{4}•{8}[\x21-\x7e]{4}$/.test(item.maskedKey || '') || !/^[a-f0-9]{64}$/.test(item.fingerprint || ''))) throw new Error('连接 API 密钥配置无效，请重新输入');
   if (new Set(keys.map(item => item.fingerprint)).size !== keys.length) throw new Error('同一连接不能配置相同的 API 密钥');
-  return keys.map(item => ({ id: item.id || uid('connection-key'), maskedKey: item.maskedKey, fingerprint: item.fingerprint, ...(item.name ? { name: item.name } : {}), ...(item.createdAt ? { createdAt: item.createdAt } : {}) }));
+  const normalized = keys.map(item => {
+    const saved = savedKeys.find(saved => saved.id === item.id) || savedKeys.find(saved => saved.fingerprint === item.fingerprint);
+    return { id: saved?.id || resourceId('credential'), maskedKey: item.maskedKey, fingerprint: item.fingerprint, ...(item.name ? { name: item.name } : {}), ...(item.createdAt ? { createdAt: item.createdAt } : {}) };
+  });
+  if (new Set(normalized.map(item => item.id)).size !== normalized.length) throw new Error('同一连接不能重复引用同一个 API 密钥');
+  return normalized;
 }
 export async function providerConnectionDraft(value) {
   const inputs = (value.keyInputs || []).map(row => row.value);
   const added = inputs.some(input => input.trim()) ? (await providerApiKeysDraft(inputs)).apiKeys : [];
-  return { name: value.name, protocol: value.protocol, baseUrl: value.baseUrl, credentialRef: added.length ? '' : value.credentialRef, capacity: value.capacity, timeoutSeconds: value.timeoutSeconds, apiKeys: checkedConnectionKeys([...(value.apiKeys || []), ...added]) };
+  return { name: value.name, protocol: value.protocol, baseUrl: value.baseUrl, credentialRef: added.length ? '' : value.credentialRef, capacity: value.capacity, timeoutSeconds: value.timeoutSeconds, apiKeys: checkedConnectionKeys([...(value.apiKeys || []), ...added], value.apiKeys) };
 }
 // shortcut: Store ordered masked metadata only; real invocation and failover require a server-side credential store.
 export async function providerApiKeysDraft(inputs) {
@@ -189,7 +194,7 @@ export function providerTransaction(state, action) {
     if (data.endpointId && !endpoint) throw new Error('接入地址不存在或不属于此服务商');
     if (operation === 'connectionKeys' && !endpoint) throw new Error('请选择要配置 API 密钥的接入地址');
     if (operation === 'catalogueConnection' && !providerCatalogueIds(provider).includes(data.modelId)) throw new Error('该模型不在服务商目录中');
-    const fields = { ...endpoint, ...(operation === 'connectionKeys' ? { apiKeys: checkedConnectionKeys(data.apiKeys), credentialRef: data.credentialRef ?? endpoint.credentialRef } : { protocol: data.protocol, baseUrl: typeof data.baseUrl === 'string' ? data.baseUrl.trim().replace(/\/$/, '') : data.baseUrl }), providerId: provider.id, name: endpoint?.name || data.modelId + ' 接入' };
+    const fields = { ...endpoint, ...(operation === 'connectionKeys' ? { apiKeys: checkedConnectionKeys(data.apiKeys, endpoint.apiKeys), credentialRef: data.credentialRef ?? endpoint.credentialRef } : { protocol: data.protocol, baseUrl: typeof data.baseUrl === 'string' ? data.baseUrl.trim().replace(/\/$/, '') : data.baseUrl }), providerId: provider.id, name: endpoint?.name || data.modelId + ' 接入' };
     const changed = endpoint && connectionFingerprint(endpoint) !== connectionFingerprint(fields);
     const previous = operation === 'catalogueConnection' ? catalogueConnections(state, provider, data.modelId) : [];
     const supplies = state.modelSupplies.filter(item => item.status !== '已移除' && state.endpoints.some(ep => ep.id === item.endpointId && ep.providerId === provider.id) && (item.catalogueModelId === data.modelId || item.upstreamModelId === data.modelId));
@@ -202,7 +207,7 @@ export function providerTransaction(state, action) {
     const endpointId = endpoint?.id || changes.find(item => item.collection === 'endpoints').record.id;
     if (operation === 'catalogueConnection') {
       const existing = provider.catalogConnections?.find(item => item.modelId === data.modelId);
-      changes.push(update('providers', provider.id, { catalogConnections: [...(provider.catalogConnections || []).filter(item => item.modelId !== data.modelId), { ...existing, id: existing?.id || channelIdentity(provider.id, data.modelId, endpointId), modelId: data.modelId, endpointId, name: existing?.name || '默认渠道', origin: existing?.origin || 'undisclosed', upstreamModelId: existing?.upstreamModelId || data.modelId, enabled: false, health: null }] }));
+      changes.push(update('providers', provider.id, { catalogConnections: [...(provider.catalogConnections || []).filter(item => item.modelId !== data.modelId), { ...existing, id: existing ? existing.id || channelIdentity(provider.id, data.modelId, existing.endpointId) : resourceId('channel'), modelId: data.modelId, endpointId, name: existing?.name || '默认渠道', origin: existing?.origin || 'undisclosed', upstreamModelId: existing?.upstreamModelId || data.modelId, enabled: false, health: null }] }));
       supplies.filter(item => item.endpointId !== endpointId).forEach(item => changes.push(update('modelSupplies', item.id, { endpointId, status: '已停用', validationStatus: '待验证', verifiedAt: null, validationCases: [] })));
       if (rebinding) {
         const movedIds = new Set(supplies.map(item => item.id));
@@ -217,14 +222,14 @@ export function providerTransaction(state, action) {
   }
   if (operation === 'catalogueAdd') {
     if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
-    if (typeof data.modelId !== 'string' || !data.modelId.trim()) throw new Error('请填写模型ID');
+    if (typeof data.modelId !== 'string' || !data.modelId.trim()) throw new Error('请填写服务商目录标识');
     if (!Object.hasOwn(SUPPLIER_MODEL_TYPES, data.modelType)) throw new Error('请选择有效的模型类型');
     const [modelId] = normalizeProviderCatalogue([data.modelId]);
-    if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/.test(modelId)) throw new Error('模型 ID 仅支持英文字母、数字和中划线，中划线不能在首尾或连续出现');
+    if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/.test(modelId)) throw new Error('服务商目录标识仅支持英文字母、数字和中划线，中划线不能在首尾或连续出现');
     const channelName = typeof data.channelName === 'string' ? data.channelName.trim() : '';
     if (!channelName || channelName.length > 60 || /\p{Cc}/u.test(channelName)) throw new Error('请填写渠道名称，最多 60 字');
     const modelName = typeof data.modelName === 'string' ? data.modelName.trim() : '';
-    if (modelName.length > 100 || /\p{Cc}/u.test(modelName)) throw new Error('模型显示名最多 100 字，不能包含控制字符');
+    if (modelName.length > 100 || /\p{Cc}/u.test(modelName)) throw new Error('模型展示名最多 100 字，不能包含控制字符');
     const apiUrl = typeof data.apiUrl === 'string' ? data.apiUrl.trim() : '';
     let url;
     try { url = new URL(apiUrl); } catch { throw new Error('请填写包含协议、域名和接口路径的完整 API URL'); }
@@ -232,15 +237,15 @@ export function providerTransaction(state, action) {
     const protocol = data.modelType === 'text' ? data.protocol ?? 'OpenAI' : '其他';
     if (data.modelType === 'text' && protocol !== 'OpenAI') throw new Error('语言模型目前仅支持 OpenAI 协议');
     const currentIds = providerCatalogueIds(provider);
-    if (currentIds.includes(modelId) || provider.catalogModelIds?.includes(modelId) || provider.catalogModels?.some(item => item.modelId === modelId)) throw new Error('该 Model ID 已在服务商目录或历史记录中，请使用其他 ID');
+    if (currentIds.includes(modelId) || provider.catalogModelIds?.includes(modelId) || provider.catalogModels?.some(item => item.modelId === modelId)) throw new Error('该 服务商目录标识 已在服务商目录或历史记录中，请使用其他 ID');
     const catalogModelIds = normalizeProviderCatalogue([...currentIds, modelId]);
     const entry = normalizeProviderPrice(provider, { ...data, modelId });
     if (!entry.scenarios.length || entry.scenarios.some(row => row.listPrice == null)) throw new Error('请至少填写一条完整计费项、目录价和计费单位；免费请填 0');
     const catalogPricing = [...(provider.catalogPricing || []), entry];
-    const catalogModels = [...(provider.catalogModels || []), { modelId, name: modelName || modelId, type: data.modelType }];
+    const catalogModels = [...(provider.catalogModels || []), { id: resourceId('provider-model'), modelId, name: modelName || modelId, type: data.modelType }];
     const connection = providerTransaction(state, { operation: 'connection', data: { providerId: provider.id, name: channelName, protocol, baseUrl: apiUrl, timeoutSeconds: 60 } });
     const endpointId = connection.changes.find(item => item.collection === 'endpoints').record.id;
-    const catalogConnections = [...(provider.catalogConnections || []), { id: channelIdentity(provider.id, modelId, endpointId), modelId, endpointId, name: channelName, origin: 'undisclosed', upstreamModelId: modelId, enabled: false, health: null }];
+    const catalogConnections = [...(provider.catalogConnections || []), { id: resourceId('channel'), modelId, endpointId, name: channelName, origin: 'undisclosed', upstreamModelId: modelId, enabled: false, health: null }];
     const fields = { catalogModelIds, catalogPricing, catalogModels, catalogConnections };
     return { type: 'batch', label: '添加服务商目录模型', objectId: provider.id, changes: [update('providers', provider.id, fields), ...connection.changes] };
   }
@@ -259,7 +264,7 @@ export function providerTransaction(state, action) {
   }
   if (['cataloguePrice', 'catalogueDiscount', 'catalogueCost'].includes(operation)) {
     if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
-    if (!providerCatalogueIds(provider).includes(data.modelId)) throw new Error('该 Model ID 不在服务商目录中，请重新载入目录');
+    if (!providerCatalogueIds(provider).includes(data.modelId)) throw new Error('该 服务商目录标识 不在服务商目录中，请重新载入目录');
     const current = provider.catalogPricing?.find(item => item.modelId === data.modelId) || providerCataloguePrice(provider, data.modelId);
     let entry;
     if (operation === 'catalogueDiscount') entry = { ...current, discountFactor: normalizeCatalogueDiscount(data.discountFactor) };
@@ -287,14 +292,11 @@ export function providerTransaction(state, action) {
     if (fingerprints.size !== existing.length + data.apiKeys.length) throw new Error('此服务商已配置相同的 API 密钥，或本次输入有重复项。');
     const createdAt = new Date().toISOString();
     const names = new Set(providerApiKeyRows(state, provider).map(row => providerApiKeyName(row.apiKey)));
-    const ids = new Set(providerApiKeyRows(state, provider).map(row => providerApiKeyId(row.apiKey)));
     const added = data.apiKeys.map(item => {
       let index = 1;
       while (names.has(`API 密钥 ${index}`)) index++;
       const name = `API 密钥 ${index}`; names.add(name);
-      let id;
-      do { id = crypto.randomUUID().slice(0, 8); } while (ids.has(id));
-      ids.add(id);
+      const id = resourceId('credential');
       if (item.accountRpm != null && (!Number.isSafeInteger(item.accountRpm) || item.accountRpm < 1)) throw new Error('账号 RPM 必须为正整数');
       return { id, name, maskedKey: item.maskedKey, fingerprint: item.fingerprint, ...(item.accountRpm != null ? { accountRpm: item.accountRpm } : {}), createdAt };
     });
@@ -336,20 +338,24 @@ export function providerTransaction(state, action) {
     const transaction = modelTransaction(state, { type: 'modelOperation', operation, modelId: operation === 'supply' ? data.modelId : supply.modelId, data });
     return { ...transaction, objectId: provider.id };
   }
-  if (['create', 'profile'].includes(operation)) {
-    if (operation === 'profile' && !provider) throw new Error('服务商不存在');
-    if (operation === 'profile' && Object.hasOwn(data, 'expectedUpdatedAt') && data.expectedUpdatedAt !== (provider.updatedAt ?? null)) throw new Error('服务商资料已有修订，请重新打开核对');
-    const name = data.name?.trim();
+  if (['create', 'profile', 'summary'].includes(operation)) {
+    const summary = operation === 'summary';
+    if (operation !== 'create' && (!provider || provider.deletedAt || provider.id !== objectId)) throw new Error('服务商不存在');
+    if ((summary || operation === 'profile' && Object.hasOwn(data, 'expectedUpdatedAt')) && data.expectedUpdatedAt !== (provider.updatedAt ?? null)) throw new Error('服务商资料已有修订，请重新打开核对');
+    const name = typeof data.name === 'string' ? data.name.trim() : '';
     if (!name) throw new Error('请填写服务商名称');
     if (state.providers.some(item => item.id !== provider?.id && item.name.trim().toLowerCase() === name.toLowerCase())) throw new Error('服务商名称已存在');
-    if (!Object.hasOwn(PROVIDER_TYPES, data.sourceType)) throw new Error('请选择有效的供给类型');
-    const code = operation === 'create' ? data.code?.trim().toLowerCase() : null;
-    if (operation === 'create' && (!/^[a-z][a-z0-9-]{1,31}$/.test(code || '') || state.providers.some(item => providerCode(item).toLowerCase() === code))) throw new Error('服务商英文编码需为 2–32 位小写字母、数字或连字符，且不可重复');
-    const description = data.description?.trim() || '';
-    if ([...description].length > 2000 && description !== provider?.description?.trim()) throw new Error('备注最多 2000 字');
-    const fields = { name, sourceType: data.sourceType, contact: data.contact?.trim() || '', contactInfo: data.contactInfo?.trim() || '', description, ...(operation === 'create' ? { code, catalogModelIds: normalizeProviderCatalogue(data.catalogModelIds ?? []) } : {}) };
+    if (!summary && !Object.hasOwn(PROVIDER_TYPES, data.sourceType)) throw new Error('请选择有效的供给类型');
+    const code = typeof data.code === 'string' ? data.code.trim().toLowerCase() : '';
+    if (operation !== 'create' && Object.hasOwn(data, 'code') && code !== providerCode(provider)) throw new Error('服务商编码创建后不可修改');
+    const changeCode = operation === 'create';
+    if (changeCode && (!/^[a-z][a-z0-9-]{1,31}$/.test(code) || state.providers.some(item => item.id !== provider?.id && providerCode(item).toLowerCase() === code))) throw new Error('服务商英文编码需为 2–32 位小写字母、数字或连字符，且不可重复');
+    if (!summary && data.description != null && typeof data.description !== 'string') throw new Error('描述需填写文本');
+    const description = summary ? '' : data.description?.trim() || '';
+    if ([...description].length > 300 && description !== provider?.description?.trim()) throw new Error('描述最多 300 字');
+    const fields = { name, ...(changeCode ? { code } : {}), ...(summary ? {} : { sourceType: data.sourceType, contact: data.contact?.trim() || '', contactInfo: data.contactInfo?.trim() || '', description }), ...(operation === 'create' ? { catalogModelIds: normalizeProviderCatalogue(data.catalogModelIds ?? []) } : {}) };
     for (const [key, label] of [['introduction', '简介'], ['website', '官网'], ['documentation', '官方文档链接'], ['logo', '服务商 Logo']]) {
-      if (!Object.hasOwn(data, key)) continue;
+      if (summary && key !== 'logo' || !Object.hasOwn(data, key)) continue;
       if (typeof data[key] !== 'string') throw new Error(`${label}格式无效`);
       const value = data[key].trim();
       if (key === 'logo' && value) {
@@ -364,9 +370,9 @@ export function providerTransaction(state, action) {
       }
       fields[key] = value;
     }
-    if (operation === 'create') changes.push(add('providers', { id: data.id || uid('provider'), ...fields, status: '已启用', contractEnd: null }));
+    if (operation === 'create') changes.push(add('providers', { id: resourceId('provider'), ...fields, status: '已启用', contractEnd: null }));
     else {
-      if (provider.sourceType !== fields.sourceType && state.endpoints.some(endpoint => endpoint.providerId === provider.id)) throw new Error('已有接入配置，不能变更供给类型');
+      if (!summary && provider.sourceType !== fields.sourceType && state.endpoints.some(endpoint => endpoint.providerId === provider.id)) throw new Error('已有接入配置，不能变更供给类型');
       changes.push(update('providers', provider.id, fields));
     }
   } else if (['enableProvider', 'disableProvider'].includes(operation)) {
@@ -385,7 +391,7 @@ export function providerTransaction(state, action) {
       if (url.protocol !== 'https:' && !(provider.sourceType === 'selfHosted' && url.protocol === 'http:')) throw new Error('第三方服务地址须使用 HTTPS；自有推理服务可使用 HTTP');
       if (url.username || url.password || url.search || url.hash) throw new Error('服务地址不能包含账号、密码、查询参数或片段');
       const credentialRef = data.credentialRef?.trim() || '';
-      const apiKeys = checkedConnectionKeys(data.apiKeys ?? endpoint?.apiKeys ?? []);
+      const apiKeys = checkedConnectionKeys(data.apiKeys ?? endpoint?.apiKeys ?? [], endpoint?.apiKeys);
       if (credentialRef && !/^(env:[A-Z_][A-Z0-9_]*|secret:[a-zA-Z0-9_./-]+)$/.test(credentialRef) && endpoint?.credentialRef !== credentialRef) throw new Error('凭证引用无效');
       const capacity = data.capacity == null || String(data.capacity).trim() === '' ? null : Number(data.capacity), timeoutSeconds = Number(data.timeoutSeconds);
       if ((capacity != null && (!Number.isSafeInteger(capacity) || capacity < 1)) || !Number.isSafeInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 600) throw new Error('RPM 如填写必须为正整数；超时须为 1–600 秒');
@@ -393,8 +399,8 @@ export function providerTransaction(state, action) {
       const fields = { name: data.name.trim(), providerId: provider.id, protocol: data.protocol, baseUrl: url.toString().replace(/\/$/, ''), credentialRef, apiKeys, capacity, timeoutSeconds, ...interfaceFields };
       const changed = !endpoint || connectionFingerprint(endpoint) !== connectionFingerprint(fields);
       if (!endpoint) {
-        const id = uid('endpoint');
-        changes.push(add('endpoints', { id, endpointId: id, ...fields, modelIds: [], status: '停用', health: null, connectionTest: null }));
+        const id = resourceId('connection');
+        changes.push(add('endpoints', { id, endpointId: 'endpoint-' + id.slice('connection-'.length), ...fields, modelIds: [], status: '停用', health: null, connectionTest: null }));
       } else {
         changes.push(update('endpoints', endpoint.id, { ...fields, ...(changed ? { status: '停用', connectionTest: null } : {}) }));
         if (changed) state.modelSupplies.filter(supply => supply.endpointId === endpoint.id && supply.status !== '已移除').forEach(supply => changes.push(update('modelSupplies', supply.id, { status: '已停用', validationStatus: '待验证', verifiedAt: null, validationCases: [] })));
@@ -421,5 +427,5 @@ export function providerTransaction(state, action) {
       } else throw new Error('未知服务商操作');
     }
   }
-  return { type: 'batch', label: ({ create: '新增模型服务商', profile: '更新服务商资料', connection: '保存服务商接入配置', testConnection: '连接测试', enableProvider: '启用服务商', disableProvider: '停用服务商', enableConnection: '启用接入', disableConnection: '停用接入' })[operation], objectId: objectId || changes[0]?.record?.id, changes };
+  return { type: 'batch', label: ({ create: '新增模型服务商', profile: '更新服务商资料', summary: '更新服务商资料', connection: '保存服务商接入配置', testConnection: '连接测试', enableProvider: '启用服务商', disableProvider: '停用服务商', enableConnection: '启用接入', disableConnection: '停用接入' })[operation], objectId: objectId || changes[0]?.record?.id, changes };
 }

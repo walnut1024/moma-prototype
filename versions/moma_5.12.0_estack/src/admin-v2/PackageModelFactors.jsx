@@ -4,7 +4,7 @@ import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { Banner, Button, Card, Input, Select, Spin, Switch, Tag, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal, AdminSideSheet } from './AdminOverlay';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '../components/FilterControls';
-import { loadPackageFactorHistory } from './CloudModelOperations';
+import { loadPackageFactorHistory } from './admin-client.mjs';
 import { canManagePackages, MAX_PACKAGE_FACTOR_RULES, packageFactorRange, packageFactorRuleInputs, packageFactorRules, packageModelBillingItems, packageModelsWithRules } from './token-packages';
 import './package-production.css';
 

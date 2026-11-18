@@ -15,18 +15,21 @@ test('configuration has valid stable relationships and fails on broken fixtures 
   const config=structuredClone(MODEL_DATASET);damage(config);assert.throws(()=>validateModelDataset(config),/配置无效/);
  }
 });
-test('new workspace uses one initial dataset for library, suppliers and services and never mutates configuration',()=>{
- const before=JSON.stringify(MODEL_DATASET),storage=storageFor(),state=loadAdminState(storage),view=modelOperationsView(state);
+test('explicit demo preparation uses one dataset for library, suppliers and services without mutating configuration',()=>{
+ const before=JSON.stringify(MODEL_DATASET),state=applyModelDataset(createAdminSeed()),view=modelOperationsView(state);
  assert.equal(view.models.length,2);assert.equal(modelLibrary(view).length,2);assert.equal(supplierDirectory(view).length,3);assert.equal(view.endpoints.length,4);
  assert.deepEqual(serviceDirectoryModels(state).map(row=>row.id),view.models.map(row=>row.id));
  assert.equal(state.models.filter(row=>row.modelId==='glm-5.3').length,1);
  assert.equal(state.modelTemplates.filter(row=>row.modelId==='glm-5.3').length,1);
  assert.equal(view.models.find(row=>row.modelId==='glm-5.3').id,'model-glm53');
  for(const model of view.models){assert.ok(modelLibrary(view).some(row=>row.id===model.templateId));assert.equal(model.listingStatus,'已下架');assert.equal(model.callsEnabled,false);assert.equal(model.platformPublications?.length || 0,0);}
- const stored=storage.getItem(STORAGE_KEY); loadAdminState(storage);assert.equal(storage.getItem(STORAGE_KEY),stored);assert.equal(JSON.stringify(MODEL_DATASET),before);
+ const stored=serializeAdminState(state),storage=storageFor(stored);
+ assert.deepEqual(serviceDirectoryModels(loadAdminState(storage)).map(row=>row.id),view.models.map(row=>row.id));
+ const prepared=storage.getItem(STORAGE_KEY);loadAdminState(storage);
+ assert.equal(storage.getItem(STORAGE_KEY),prepared);assert.equal(JSON.stringify(MODEL_DATASET),before);
 });
 test('saved manual records, removed defaults, credentials, drafts and histories are not refilled or overwritten',()=>{
- const state=loadAdminState(storageFor());
+ const state=applyModelDataset(createAdminSeed());
  state.models[0].name='手工名称'; state.models[0].commercialDrafts={price:{items:[{amount:'9'}]}};
  state.providers[0].description='手工资料'; state.modelTemplates=[]; state.modelSupplies=[];state.endpoints=[];
  const raw=serializeAdminState(state),storage=storageFor(raw),loaded=loadAdminState(storage);
@@ -44,7 +47,7 @@ test('unattributed existing data is user-owned and is not hidden, seeded or mark
  assert.equal(serviceDirectoryModels(loaded,null,'all').length,loaded.models.length);
 });
 test('user changes stay separate from builtin identities and remain visible in the current scenario after reload',()=>{
- let state=withAdminSession(loadAdminState(storageFor()));const model=modelOperationsView(state).models[0];
+ let state=withAdminSession(applyModelDataset(createAdminSeed()));const model=modelOperationsView(state).models[0];
  state=commitAdminState(state,{type:'modelOperations',operation:'templateSave',data:{name:'用户资料',modelId:'user-material',type:'text',description:'手工登记',profile:{tasks:['对话'],inputModalities:['文本'],outputModalities:['文本']}}});
  const master=state.modelTemplates.find(row=>row.name==='用户资料');assert.ok(master);
  assert.ok(state.modelData.userIds.modelTemplates.includes(master.id));assert.ok(!state.modelData.builtinIds.modelTemplates.includes(master.id));
@@ -64,7 +67,7 @@ test('same-code user records cannot be silently replaced or duplicated by prepar
  assert.throws(()=>applyModelDataset(state),/编码.*冲突/);assert.deepEqual(state,before);
 });
 test('editing an initial provider records a user override without exposing archived catalogues',()=>{
- let state=withAdminSession(loadAdminState(storageFor()));
+ let state=withAdminSession(applyModelDataset(createAdminSeed()));
  const provider=state.providers.find(row=>row.id==='provider-moma');
  state=commitAdminState(state,{type:'update',collection:'providers',id:provider.id,changes:{contact:'手工联系人'}});
  assert.ok(state.modelData.builtinIds.providers.includes(provider.id));assert.ok(state.modelData.userIds.providers.includes(provider.id));

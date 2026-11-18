@@ -1,3 +1,4 @@
+import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import { useId, useMemo, useState } from 'react';
 import { Banner, Button, Card, Form, Input, Progress, Space, Typography } from '@douyinfe/semi-ui';
@@ -41,7 +42,7 @@ export function ClusterManagement({ state, dispatch }) {
       return;
     }
     if (dispatch({ type: 'add', collection: 'clusters', record: {
-      id: `cluster-${Date.now()}`, ...values, totalGpu, allocatedGpu: 0, nodes, status: '运行中',
+      id: resourceId('cluster'), ...values, totalGpu, allocatedGpu: 0, nodes, status: '运行中',
     } })) setCreating(false);
   };
   return <div className="admin-page-stack">

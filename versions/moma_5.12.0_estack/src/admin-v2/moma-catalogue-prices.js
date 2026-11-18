@@ -1,6 +1,6 @@
 import { canonicalMomaScenarios } from './moma-billing-items.js';
 import { MOMA_PRICE_DATA } from './moma-price-data.js';
-import { providerCatalogueIds } from './moma-provider.js';
+import { isBuiltinMoma, providerCatalogueIds } from './moma-provider.js';
 import { normalizeCataloguePrice } from './provider-catalogue-pricing.js';
 
 export const MOMA_CATALOGUE_PRICES = MOMA_PRICE_DATA;
@@ -12,7 +12,8 @@ export const isMomaCataloguePrice = row => isPayAsYouGoPrice(row) && !/^自营�
 export function providerCataloguePrice(provider, modelId) {
   if (!providerCatalogueIds(provider).includes(modelId)) return undefined;
   const configured = provider.catalogPricing?.find(item => item.modelId === modelId);
-  const official = provider.id === 'provider-moma' && Object.hasOwn(MOMA_CATALOGUE_PRICES, modelId) && MOMA_CATALOGUE_PRICES[modelId];
+  const moma = isBuiltinMoma(provider);
+  const official = moma && Object.hasOwn(MOMA_CATALOGUE_PRICES, modelId) && MOMA_CATALOGUE_PRICES[modelId];
   const entry = configured || normalizeCataloguePrice({ modelId, scenarios: official?.scenarios || [] });
-  return { ...entry, discountFactor: entry.discountFactor ?? 1000000, scenarios: provider.id === 'provider-moma' ? canonicalMomaScenarios(entry.scenarios.filter(isMomaCataloguePrice)) : entry.scenarios };
+  return { ...entry, discountFactor: entry.discountFactor ?? 1000000, scenarios: moma ? canonicalMomaScenarios(entry.scenarios.filter(isMomaCataloguePrice)) : entry.scenarios };
 }

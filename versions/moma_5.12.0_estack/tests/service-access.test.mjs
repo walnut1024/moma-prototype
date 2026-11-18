@@ -45,7 +45,7 @@ test('explicit preparation is idempotent and an auth write failure rolls back on
 });
 test('manager identity controls permission and audit regardless of a forged role; user session stays separate', () => {
   const {state}=fixture(), storage=storageFor(state);
-  assert.throws(()=>persistAdminAction(state,{type:'setSettings',changes:{}},storage),/后台 mock 账号/);
+  assert.throws(()=>persistAdminAction(state,{type:'setSettings',changes:{}},storage),/请先登录有效的后台账号/);
   let next=persistAdminAction(state,{type:'enterAdmin',accountId:'admin-link-maintenance'},storage);
   assert.throws(()=>persistAdminAction({...next,currentRole:'平台管理员'},{type:'update',collection:'models',id:next.models[0].id,changes:{name:'越权'}},storage),/无权/);
   next=persistAdminAction(next,{type:'enterAdmin',accountId:'admin-link-system'},storage);

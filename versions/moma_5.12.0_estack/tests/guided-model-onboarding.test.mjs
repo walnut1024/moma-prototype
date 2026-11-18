@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { workspaceStoragePrefix } from '../src/workspace-storage.mjs';
 import { withAdminSession } from './admin-session-fixture.mjs';
 import { parseAdminState, commitAdminState, persistModelAction, serializeAdminState, STORAGE_KEY } from '../src/admin-v2/store.js';
 import { guidedOnboarding, pendingGuidedOnboardings } from '../src/admin-v2/guided-onboarding.js';
@@ -122,7 +123,7 @@ for (const mode of ['standard', 'provider']) test(`${mode}: one exact model comp
   const activeTrial=await runPlatformTrial(activePlan),restored=recoverPlatformTrial(activePlan);assert.ok(restored);assert.equal(restored.result.traceId,activeTrial.result.traceId);
   const apply={type:'modelOperations',operation:'guidedPublish',modelId:active.model.id,data:{draftId:activeId,expectedDraftRevision:active.draft.draftRevision,serviceId:targetService.id,mockServiceId:activeTrial.service.id,expectedMockRevision:activeTrial.service.revision,publishedVersion:activeTrial.service.candidateVersion,expectedFingerprint:activeTrial.publicationFingerprint,operationId:crypto.randomUUID(),confirmed:true}};
   const mainBefore=storage.getItem(STORAGE_KEY),mockBefore=JSON.stringify(getMockServiceSnapshots());
-  const broken={...storage,setItem(key,value){if(key==='moma-5120-model-onboarding-mock-v1')throw Error('mock quota');storage.setItem(key,value);}};
+  const broken={...storage,setItem(key,value){if(key===workspaceStoragePrefix + 'onboarding-mock')throw Error('mock quota');storage.setItem(key,value);}};
   Object.defineProperty(globalThis,'localStorage',{configurable:true,value:broken});assert.throws(()=>persistModelAction(state,apply,broken),/mock quota/);Object.defineProperty(globalThis,'localStorage',{configurable:true,value:storage});
   assert.equal(storage.getItem(STORAGE_KEY),mainBefore);assert.equal(JSON.stringify(getMockServiceSnapshots()),mockBefore);
   state=persistModelAction(state,apply,storage);assert.equal(guidedOnboarding(state,activeId).completed,true);assert.deepEqual(state.modelSalePrices,prices);
@@ -140,7 +141,7 @@ test('sales validation is atomic and rejects missing money, stale revisions, cha
   assert.equal(guidedOnboarding(live, id).listed, false, 'an already listed model does not complete a new channel task');
   assert.throws(() => run(live, 'guidedServiceConfigure', valid, context.model.id), /已上架服务/);
   state = run(state, 'guidedServiceConfigure', valid, context.model.id);
-  assert.throws(() => run(state, 'guidedServiceConfigure', { ...sales(state, id), serviceMode: 'provider' }, context.model.id), /不能.*重置/);
+  assert.throws(() => run(state, 'guidedServiceConfigure', { ...sales(state, id), serviceMode: 'provider' }, context.model.id), /服务模式设置后不可修改/);
   assert.deepEqual(state.serviceRoutes, before.serviceRoutes, 'configuring a new channel never replaces existing routes');
   const configured = guidedOnboarding(state, id);
   state = run(state, 'guidedProfileSave', { draftId: id, expectedDraftRevision: configured.draft.draftRevision, values: { ...serviceModelDraft(configured.model), context: '8', contextUnit: 'K', expectedUpdatedAt: configured.model.updatedAt } }, configured.model.id);

@@ -226,6 +226,9 @@ test('provider material commands preserve stable identities, validate display fi
   const current = state.providers.find(row => row.id === provider.id);
   assert.equal((await commit('provider', { operation: 'profile', objectId: provider.id, values: {
     ...values, code: 'replacement-code', documentation: 'https://example.test/docs', expectedUpdatedAt: current.updatedAt,
+  } })).status, 422);
+  assert.equal((await commit('provider', { operation: 'profile', objectId: provider.id, values: {
+    ...values, documentation: 'https://example.test/docs', expectedUpdatedAt: current.updatedAt,
   } })).status, 200);
   state = (await request('/model-operations')).data;
   const edited = state.providers.find(row => row.id === provider.id);
@@ -235,6 +238,84 @@ test('provider material commands preserve stable identities, validate display fi
   assert.equal(await local.db.prepare('SELECT COUNT(*) AS count FROM supplier_models WHERE supplier_id=? AND material_id=? AND removed_at IS NULL').bind(provider.id, model.id).first('count'), 1);
   assert.equal(await local.db.prepare('SELECT COUNT(*) AS count FROM channel_models WHERE supplier_id=?').bind(provider.id).first('count'), 0);
   assert.equal((await commit('provider', { operation: 'profile', objectId: provider.id, values: { ...values, expectedUpdatedAt: 'stale' } })).status, 422);
+  const summary = { name: '总表编辑 ' + code, code, logo: 'https://example.test/icon.png', expectedUpdatedAt: edited.updatedAt };
+  const duplicate = state.providers.find(row => row.id !== provider.id && row.code && /^[a-z][a-z0-9-]{1,31}$/.test(row.code));
+  const editSummary = values => commit('provider', { operation: 'summary', objectId: provider.id, values });
+  assert.equal((await editSummary({ ...summary, code: duplicate.code })).status, 422);
+  assert.equal((await editSummary({ ...summary, expectedUpdatedAt: 'stale' })).status, 422);
+  assert.equal((await editSummary({ ...summary, contact: '无关资料' })).status, 200);
+  state = (await request('/model-operations')).data;
+  const updated = state.providers.find(row => row.id === provider.id);
+  for (const key of ['name', 'code', 'logo']) assert.equal(updated[key], summary[key]);
+  for (const key of ['sourceType', 'contact', 'documentation', 'catalogModels', 'apiKeys']) assert.deepEqual(updated[key], edited[key]);
+  assert.equal(await local.db.prepare('SELECT code FROM suppliers WHERE id=?').bind(provider.id).first('code'), summary.code);
+
+  assert.equal((await commit('provider', { operation: 'connection', values: { providerId: provider.id, name: '待配置渠道', protocol: 'OpenAI', baseUrl: 'https://initial.example.test/v1', timeoutSeconds: 60 } })).status, 200);
+  state = (await request('/model-operations')).data;
+  const endpoint = state.endpoints.find(row => row.providerId === provider.id);
+  const changeAddress = values => commit('supplierChannelEdit', { providerId: provider.id, endpointId: endpoint.id, unlinkedAddress: true, expectedUpdatedAt: endpoint.updatedAt, ...values });
+  assert.equal((await changeAddress({ baseUrl: 'https://new.example.test/v1?token=secret' })).status, 422);
+  assert.equal((await changeAddress({ baseUrl: 'https://new.example.test/v1', expectedUpdatedAt: 'stale' })).status, 422);
+  assert.equal((await changeAddress({ baseUrl: 'https://new.example.test/v1' })).status, 200);
+  const savedEndpoint = (await request('/model-operations')).data.endpoints.find(row => row.id === endpoint.id);
+  assert.equal(savedEndpoint.baseUrl, 'https://new.example.test/v1');
+  assert.equal(savedEndpoint.status, '停用');
+  assert.deepEqual(savedEndpoint.apiKeys, endpoint.apiKeys);
+});
+
+test('provider JSON import validates ownership, atomically imports shared draft mappings and is safe to repeat', async () => {
+  const { providerJsonRows, previewProviderJsonRows } = await import('../src/admin-v2/provider-json-import.js');
+  let state = (await request('/model-operations')).data;
+  const provider = state.providers.find(row => row.id === 'provider-deepseek-official');
+  const suffix = randomBytes(4).toString('hex');
+  const connection = { connection_id: 'qa-openai', interface_type: 'openai', protocol: 'OpenAI', base_url: `https://${suffix}.import.example.invalid/v1` };
+  const model = index => ({ canonical_slug: `qa-json-${suffix}-${index}`, model_name: `JSON 验收 ${index}`, model_type: 'text',
+    model_info: { architecture: { input_modalities: ['text'], output_modalities: ['text'] } },
+    mappings: [{ connection_id: connection.connection_id, upstream_model_id: `vendor/model-${index}` }] });
+  const file = { provider: { id: provider.id, code: provider.code, models: [model(1), model(2)], connections: [connection] } };
+  const preview = rows => previewProviderJsonRows(state, provider.id, providerJsonRows(rows, provider));
+  assert.throws(() => preview({ provider: { ...file.provider, id: 'provider-moma' } }), /Provider ID 或编码/);
+  assert.throws(() => preview({ provider: { ...file.provider, connections: [{ ...connection, api_key: 'forbidden' }] } }), /未知字段/);
+  const duplicate = { ...file.provider, models: [model(1), model(1)] };
+  assert.deepEqual(preview({ provider: duplicate }).map(row => row.status), ['ready', 'error']);
+  const archived = state.modelTemplates.find(row => state.modelData.archivedCatalogueIds.includes(row.id));
+  assert.match(preview({ provider: { ...file.provider, models: [{ ...model(1), canonical_slug: archived.modelId.toLowerCase() }] } })[0].message, /归档/);
+  const sensitive = { ...model(1), model_info: { documentation: 'https://example.test/docs?access_token=do-not-import' } };
+  assert.match(preview({ provider: { ...file.provider, models: [sensitive] } })[0].message, /凭据/);
+  const rows = preview(file);
+  assert.deepEqual(rows.map(row => row.status), ['ready', 'ready']);
+  const commit = async (rows, session, expectedRevision = state.revision, expectedProviderCode = provider.code) => {
+    const operationId = crypto.randomUUID();
+    return request('/model-operations/commands', { method: 'POST', session, key: operationId,
+      body: { operationId, expectedRevision, action: { type: 'modelOperations', operation: 'supplierJsonImport', data: { providerId: provider.id, expectedProviderCode, rows } } } });
+  };
+  const payload = rows.map(row => row.payload);
+  assert.equal((await commit(payload, readonlyToken)).status, 403);
+  assert.equal((await commit(payload, token, state.revision - 1)).status, 409);
+  assert.equal((await commit(payload, token, state.revision, 'wrong-provider')).status, 422);
+  const invalid = { ...payload[1], model: { ...model(2), mappings: [{ connection_id: 'not-in-file', upstream_model_id: 'vendor/model-2' }] } };
+  assert.equal((await commit([payload[0], invalid])).status, 422);
+  assert.equal((await request('/model-operations')).data.revision, state.revision);
+  const result = await commit(payload);
+  assert.equal(result.status, 200, JSON.stringify(result.data.error));
+  state = (await request('/model-operations')).data;
+  const endpoints = state.endpoints.filter(row => row.providerId === provider.id && row.baseUrl === connection.base_url);
+  assert.equal(endpoints.length, 1);
+  assert.equal(endpoints[0].status, '草稿');
+  assert.equal(endpoints[0].connectionTest, null);
+  assert.deepEqual(endpoints[0].apiKeys, []);
+  const saved = state.providers.find(row => row.id === provider.id);
+  assert.deepEqual(saved.apiKeys, provider.apiKeys);
+  const mappings = saved.catalogConnections.filter(row => row.endpointId === endpoints[0].id);
+  assert.equal(mappings.length, 2);
+  assert.ok(mappings.every(row => row.enabled === false && !row.pricing.scenarios.length));
+  assert.equal(await local.db.prepare('SELECT COUNT(*) AS count FROM channel_models WHERE channel_id=?').bind(endpoints[0].id).first('count'), 2);
+  assert.deepEqual(preview(file).map(row => row.status), ['skip', 'skip']);
+  assert.equal((await commit(payload)).status, 200);
+  const again = (await request('/model-operations')).data;
+  assert.deepEqual(again.providers, state.providers);
+  assert.deepEqual(again.endpoints, state.endpoints);
+  assert.deepEqual(again.modelTemplates, state.modelTemplates);
 });
 
 test('channel name and upstream identifier save together through HTTP and D1 without changing procurement history',async()=>{
@@ -363,7 +444,7 @@ test('deletion HTTP contract requires service unbinding even after delisting and
   assert.ok(archived.deletedAt); assert.deepEqual(archived.pricing, mapping.pricing);
   const stored = await local.db.prepare('SELECT deleted_at,record_json FROM channels WHERE id=?').bind(endpointId).first(); assert.ok(stored.deleted_at); assert.equal(JSON.parse(stored.record_json).id, endpointId);
   const templates = structuredClone(state.modelTemplates), prices = structuredClone(state.modelSalePrices);
-  result = await providerCommand(state, 'catalogueRemove', { modelId: mapping.modelId, confirmed: true }); assert.equal(result.status, 200, JSON.stringify(result.data));
+  assert(!state.supplyRelations.models.some(row => row.providerId === providerId && row.modelId === mapping.modelId));
   state = await fresh(); assert.ok(state.providers.find(row => row.id === providerId).removedCatalogModelIds.includes(mapping.modelId));
   assert.deepEqual(state.modelTemplates, templates); assert.deepEqual(state.modelSalePrices, prices);
 });
@@ -437,17 +518,21 @@ test('explicit builtin catalogue upgrade is atomic, idempotent and preserves exi
   const legacy = structuredClone(before);
   legacy.modelTemplates = legacy.modelTemplates.filter(row => row.id !== spec.id);
   legacy.modelData.catalogueIds = legacy.modelData.catalogueIds.filter(id => id !== spec.id);
-  await local.db.batch(modelChanges(local.db,before,legacy));
+  // The older schema fixture never contained this catalogue entry.
+  await local.db.batch([...modelChanges(local.db,before,legacy),
+    local.db.prepare('DELETE FROM model_template_records WHERE id=?').bind(spec.id),
+    local.db.prepare('DELETE FROM materials WHERE id=?').bind(spec.id)]);
   const state = (await request('/model-operations')).data, id = crypto.randomUUID();
   const body = {operationId:id,expectedRevision:state.revision,action:{type:'modelOperations',operation:'installModelCatalogue',data:{catalogueIds:[spec.id]}}};
   const saved = await request('/model-operations/commands',{method:'POST',key:id,body});
   assert.equal(saved.status,200,JSON.stringify(saved.data));
   assert.deepEqual((await request('/model-operations/commands',{method:'POST',key:id,body})).data,saved.data);
   const fresh = (await request('/model-operations')).data;
-  assert.equal(fresh.modelTemplates.find(row => row.id === spec.id).name,spec.name);
-  assert.ok(fresh.modelData.builtinIds.modelTemplates.includes(spec.id));
-  assert.ok(!fresh.modelData.userIds.modelTemplates?.includes(spec.id));
-  assert.deepEqual(fresh.modelTemplates.filter(row => row.id !== spec.id),state.modelTemplates);
+  const installed=fresh.modelTemplates.find(row => row.modelId === spec.modelId);
+  assert.equal(installed.name,spec.name);
+  assert.ok(fresh.modelData.builtinIds.modelTemplates.includes(installed.id));
+  assert.ok(!fresh.modelData.userIds.modelTemplates?.includes(installed.id));
+  assert.deepEqual(fresh.modelTemplates.filter(row => row.id !== installed.id),state.modelTemplates);
   for (const key of ['models','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','serviceRoutes']) assert.deepEqual(fresh[key],state[key]);
   const submit = (data, session = token, expectedRevision = fresh.revision) => { const key = crypto.randomUUID(); return request('/model-operations/commands',{method:'POST',key,session,body:{operationId:key,expectedRevision,action:{type:'modelOperations',operation:'installModelCatalogue',data}}}); };
   assert.equal((await submit({catalogueIds:['foreign']})).status,422);
@@ -546,4 +631,81 @@ test('model market reordering persists across bootstrap without changing service
   assert.deepEqual(after.audits[0].changes, [{ object: before.models.find(row => row.id === modelId).name, field: '序号', before: initial.length, after: 1 }]);
   assert.equal((await submit(before.revision, move)).status, 409);
   assert.equal((await submit(after.revision, move)).status, 422);
+});
+
+test('model channel connectivity changes take effect only when a passing candidate is explicitly saved', async () => {
+  const { supplierChannelAssociations } = await import('../src/admin-v2/supplier-resources.js');
+  const { providerApiKeysDraft } = await import('../src/admin-v2/provider-management.js');
+  const providerId = 'provider-moma';
+  const name = 'HTTP连通性验证渠道';
+  const savedName = 'HTTP已验证渠道';
+  const initialAddress = 'https://initial-connectivity.example.invalid/v1';
+  const newAddress = 'https://verified-connectivity.example.invalid/v1';
+  const read = async () => (await request('/model-operations')).data;
+  let state = await read();
+  const command = (operation, data, session = token) => {
+    const id = crypto.randomUUID();
+    return request('/model-operations/commands', { method: 'POST', key: id, session, body: {
+      operationId: id, expectedRevision: state.revision, action: { type: 'modelOperations', operation, data },
+    } });
+  };
+  const apiKey = (await providerApiKeysDraft(['test-only-connectivity-key'])).apiKeys[0];
+  const created = await command('supplierChannelRegister', {
+    providerId, modelId: 'glm-5.3', name, protocol: 'OpenAI', baseUrl: initialAddress, upstreamModelId: 'vendor/contract-connectivity',
+    authMode: 'independent', apiKey, scenarios: [],
+  });
+  assert.equal(created.status, 200, JSON.stringify(created.data));
+  state = await read();
+  const owner = () => state.providers.find(row => row.id === providerId);
+  const channel = () => state.endpoints.find(row => row.id === endpointId);
+  const endpointId = state.endpoints.find(row => row.providerId === providerId && row.name === name).id;
+  const mapping = supplierChannelAssociations(state, owner(), endpointId)[0];
+  const base = { providerId, endpointId, modelId: mapping.modelId, associationId: mapping.id };
+  const timestamps = () => ({ expectedUpdatedAt: channel().updatedAt, expectedProviderUpdatedAt: owner().updatedAt });
+  const draft = {
+    ...base, ...timestamps(), prepareConnection: true, baseUrl: newAddress, name: savedName, upstreamModelId: 'vendor/unsaved',
+  };
+  assert.equal((await command('supplierChannelEdit', { ...draft, upstreamModelId: 'invalid identifier' })).status, 422);
+  const prepare = await command('supplierChannelEdit', draft);
+  assert.equal(prepare.status, 200, JSON.stringify(prepare.data));
+  state = await read();
+  const context = { providerId, endpointId, candidateId: channel().candidateConfiguration.id, expectedRevision: channel().configurationRevision || 0 };
+  const save = (patch = {}, session) => command('supplierChannelEdit', {
+    ...base, ...context, ...timestamps(), confirmed: true, name: savedName, upstreamModelId: mapping.upstreamModelId, ...patch,
+  }, session);
+  const assertCurrent = () => {
+    assert.equal(channel().baseUrl, initialAddress);
+    assert.equal(channel().name, name);
+    assert.equal(channel().candidateConfiguration.config.baseUrl, newAddress);
+    assert.equal(supplierChannelAssociations(state, owner(), endpointId)[0].upstreamModelId, mapping.upstreamModelId);
+  };
+  assertCurrent();
+  assert.equal((await save()).status, 422);
+  const fail = await command('channelCandidateTest', { ...context, scenarios: { [mapping.id]: 'timeout' } });
+  assert.equal(fail.status, 200, JSON.stringify(fail.data));
+  state = await read();
+  assert.equal(channel().candidateConfiguration.tests.at(-1).result, '失败');
+  assert.equal((await save()).status, 422);
+  assertCurrent();
+
+  const pass = await command('channelCandidateTest', context);
+  assert.equal(pass.status, 200, JSON.stringify(pass.data));
+  state = await read();
+  assert.equal(channel().candidateConfiguration.tests.at(-1).result, '通过');
+  assertCurrent();
+  assert.equal((await save({}, readonlyToken)).status, 403);
+  assert.equal((await save({ expectedProviderUpdatedAt: 'stale' })).status, 422);
+  assert.equal((await save({ baseUrl: 'https://untested.example.invalid/v1' })).status, 422);
+  assert.equal((await save({ upstreamModelId: 'invalid identifier' })).status, 422);
+  state = await read();
+  assertCurrent();
+  const saved = await save();
+  assert.equal(saved.status, 200, JSON.stringify(saved.data));
+  state = await read();
+  assert.equal(channel().baseUrl, newAddress);
+  assert.equal(channel().name, savedName);
+  assert.equal(channel().configurationRevision, context.expectedRevision + 1);
+  assert.equal(channel().candidateConfiguration, null);
+  assert.equal(channel().connectionTest.result, '通过');
+  assert.deepEqual(supplierChannelAssociations(state, owner(), endpointId)[0].pricing, mapping.pricing);
 });

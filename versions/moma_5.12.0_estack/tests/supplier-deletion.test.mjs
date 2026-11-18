@@ -14,7 +14,7 @@ function fixture() {
   const provider = state.providers.find(row => row.id === providerId), channel = catalogueChannels(state, provider, provider.catalogModelIds[0])[0];
   return { state, providerId, modelId: channel.modelId, channel, values: { modelId: channel.modelId, endpointId: channel.endpointId, associationId: channel.id, confirmed: true } };
 }
-test('deleting the last channel then its model retains immutable records, other suppliers and the master through refresh', () => {
+test('deleting the last channel retires its registration and retains immutable records through refresh', () => {
   const { state, providerId, modelId, channel, values } = fixture(), before = structuredClone(state);
   assert.throws(() => run(state, providerId, 'catalogueRemove', { modelId, confirmed: true }), /先删除.*全部渠道/);
   const next = run(state, providerId, 'supplierCatalogueChannelDelete', values), provider = next.providers.find(row => row.id === providerId);
@@ -22,7 +22,7 @@ test('deleting the last channel then its model retains immutable records, other 
   const archived = provider.catalogConnections.find(row => row.id === channel.id);
   assert.ok(archived.deletedAt); assert.equal(archived.enabled, false); assert.deepEqual(archived.pricing, channel.pricing);
   assert.ok(next.endpoints.find(row => row.id === channel.endpointId).deletedAt);
-  const removed = run(next, providerId, 'catalogueRemove', { modelId, confirmed: true });
+  const removed = next;
   assert.ok(!displayedCatalogueIds(removed.providers.find(row => row.id === providerId), removed).includes(modelId));
   const restored = parseAdminState(JSON.stringify(removed));
   assert.equal(catalogueChannels(restored, restored.providers.find(row => row.id === providerId), modelId).length, 0);
@@ -39,7 +39,7 @@ test('a shared endpoint remains usable by sibling models when one model channel 
   assert.deepEqual(next.providers.find(row => row.id === providerId).catalogConnections.find(row => row.id === sibling.id), sibling);
   assert.equal(catalogueChannels(next, next.providers.find(row => row.id === providerId), modelId).length, 0);
   next.endpoints.find(row => row.id === channel.endpointId).serverTestJobs = [{ id: 'sibling-test', associationIds: [sibling.id] }];
-  assert.doesNotThrow(() => run(next, providerId, 'catalogueRemove', { modelId, confirmed: true }));
+  assert(!displayedCatalogueIds(next.providers.find(row => row.id === providerId), next).includes(modelId));
 });
 test('existing service mappings block deletion regardless of listing, visibility, serving or supply activation', () => {
   const { state, providerId, modelId, channel, values } = fixture();
@@ -52,9 +52,26 @@ test('existing service mappings block deletion regardless of listing, visibility
     assert.deepEqual(current, before);
   }
 });
+test('an unused association can be removed while the same model and connection serve a sibling', () => {
+  const { state, providerId, channel, values } = fixture();
+  const provider = state.providers.find(row => row.id === providerId);
+  const original = provider.catalogConnections.find(row => row.id === channel.id);
+  const unused = { ...original, id: 'unused-association', upstreamModelId: 'vendor/unused' };
+  provider.catalogConnections.push(unused);
+  const service = state.models.find(row => row.id === 'model-2');
+  Object.assign(service, { serviceMode: 'provider', serviceProviders: [{ providerId, channelId: channel.id, status: '已关联' }] });
+  assert.throws(() => run(state, providerId, 'supplierCatalogueChannelDelete', values), /路由引用/);
+  const next = run(state, providerId, 'supplierCatalogueChannelDelete', { ...values, associationId: unused.id });
+  const saved = next.providers.find(row => row.id === providerId);
+  assert.deepEqual(saved.catalogConnections.find(row => row.id === channel.id), original);
+  assert.ok(saved.catalogConnections.find(row => row.id === unused.id).deletedAt);
+  assert.deepEqual(next.endpoints, state.endpoints);
+  assert.deepEqual(next.models, state.models);
+});
 test('a provider association alone also protects a model without channels until explicitly unbound', () => {
   const { state, providerId, modelId, values } = fixture();
-  const next = run(state, providerId, 'supplierCatalogueChannelDelete', values), service = next.models.find(row => row.id === 'model-2');
+  const cleared = run(state, providerId, 'supplierCatalogueChannelDelete', values);
+  const next = commitAdminState(cleared, { type: 'modelOperations', operation: 'supplierModelsRegister', data: { providerId, libraryIds: ['model-2'] } }), service = next.models.find(row => row.id === 'model-2');
   Object.assign(service, { serviceMode: 'provider', listingStatus: '已下架', serviceProviders: [{ providerId, status: '已关联', marketVisible: false, callsEnabled: false }] });
   assert.throws(() => run(next, providerId, 'catalogueRemove', { modelId, confirmed: true }), /模型服务/);
   service.serviceProviders[0].status = '已移除';

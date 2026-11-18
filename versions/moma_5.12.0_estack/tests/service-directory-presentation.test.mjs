@@ -71,7 +71,7 @@ test('provider services reuse the same presentation while preserving distinct se
   assert.notEqual(rows[0].callId, rows[1].callId);
   assert.deepEqual(rows[0].detailSections, rows[1].detailSections);
   assert.equal(marketModels(rows).length, 1);
-  assert.deepEqual(marketModels(rows)[0].providers, ['移动云 MoMA', '原厂']);
+  assert.deepEqual([...marketModels(rows)[0].providers], [['moma','移动云 MoMA'], ['original','原厂']]);
   assert.deepEqual(rows.map(row => row.guideRequest.body.model), ['moma/model', 'original/model']);
   env.model.listingStatus = '已下架';
   env.storage.setItem(ADMIN_DATA_KEY, JSON.stringify(env.state));
@@ -79,9 +79,10 @@ test('provider services reuse the same presentation while preserving distinct se
 });
 
 test('market groups stable identities, scopes examples without deleting historical offers, and does not merge equal names', () => {
-  const rows = [{ modelKey: 'a', id: 'a1', name: '同名', showcase: true, provider: '甲', callable: false }, { modelKey: 'a', id: 'a2', name: '同名', showcase: true, provider: '乙', callable: true }, { modelKey: 'b', id: 'b1', name: '同名', defaultCatalogue: false, provider: '甲', callable: true }];
+  const rows = [{ modelKey: 'a', id: 'a1', name: '同名', showcase: true, providerId: 'p1', providerName: '甲', callable: false }, { modelKey: 'a', id: 'a2', name: '同名', showcase: true, providerId: 'p2', providerName: '甲', callable: true }, { modelKey: 'b', id: 'b1', name: '同名', defaultCatalogue: false, providerId: 'p1', providerName: '甲', callable: true }];
   assert.equal(marketModels(rows).length, 1);
   assert.equal(marketModels(rows)[0].callable, true);
+  assert.deepEqual([...marketModels(rows)[0].providers.keys()], ['p1', 'p2']);
   assert.equal(marketModels(rows, 'all').length, 2);
   assert.equal(rows.length, 3);
   assert.deepEqual(marketModels([]), []);

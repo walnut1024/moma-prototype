@@ -67,7 +67,7 @@ export default function MaterialMetadataForm({model,initial,readOnly,can,dirty,o
   </>;
   return <Form id={formId} onSubmit={async()=>{
     if(!editable || saving || uploading)return;
-    if(!form.name.trim() || !form.modelId.trim()){setError('请填写模型展示名和规范模型标识');return;}
+    if(!form.name.trim() || !form.modelId.trim()){setError('请填写模型展示名和模型编码');return;}
     setSaving(true);try{await onSubmit({...form,capabilities:['text','multimodal','embedding','rerank'].includes(form.type)?form.capabilities:{streaming:form.type==='audio'?form.capabilities.streaming:null,tools:null,context:null,output:null}});}finally{setSaving(false);}
   }}>
     <Typography.Title heading={6}>基本信息</Typography.Title>
@@ -76,7 +76,7 @@ export default function MaterialMetadataForm({model,initial,readOnly,can,dirty,o
       {slot('模型 Logo',<Space vertical align="start">{form.profile.logo?<img className="materials-logo-preview" src={form.profile.logo} alt="模型 Logo"/>:readOnly?<Typography.Text type="tertiary">未填写</Typography.Text>:null}{!readOnly && <Space><Upload accept="image/png,image/jpeg,image/webp" uploadTrigger="custom" fileList={[]} showUploadList={false} disabled={!editable || uploading} onFileChange={logoUpload}><Button icon={<IconUpload aria-hidden/>} loading={uploading} disabled={!editable}>{form.profile.logo?'更换图片':'上传图片'}</Button></Upload>{form.profile.logo && <Button type="danger" theme="borderless" disabled={!editable} onClick={()=>{version.current++;setUploading(false);profileChange('logo','');}}>移除图片</Button>}</Space>}{!readOnly && <Typography.Text type="tertiary" size="small">PNG、JPEG、WebP，最大 1 MB</Typography.Text>}</Space>)}
       {slot('模型类型',readOnly?<Typography.Text>{MODEL_CATALOGUE_TYPES[modelCategory(form.type)]}</Typography.Text>:<Select aria-label="模型类型" value={modelCategory(form.type)} optionList={optionList(Object.entries(MODEL_CATALOGUE_TYPES))} disabled={!editable} onChange={value=>change('type',value==='visual'?'image':value)}/>)}
       {modelCategory(form.type)==='visual' && slot('视觉任务类型',readOnly?<Typography.Text>{form.type==='video'?'视频':'图像'}</Typography.Text>:<Select aria-label="视觉任务类型" value={form.type} optionList={optionList([['image','图像'],['video','视频']])} disabled={!editable} onChange={value=>change('type',value)}/>)}
-      {field('规范模型标识'+(readOnly?'':' *'),form.modelId,value=>change('modelId',value),{readonly:Boolean(model)})}
+      {field('模型编码'+(readOnly?'':' *'),form.modelId,value=>change('modelId',value),{readonly:Boolean(model)})}
       {fields([...PRESENTATION_FIELDS.filter(item=>item.key==='author'),...IDENTITY_FIELDS.filter(item=>['family','version','releaseDate'].includes(item.key))])}
       {slot('简短介绍',readOnly?<Typography.Text>{display(form.description)}</Typography.Text>:<TextArea aria-label="简短介绍" rows={3} value={form.description} disabled={!editable} onChange={value=>change('description',value)}/>,'description',true)}
     </div>

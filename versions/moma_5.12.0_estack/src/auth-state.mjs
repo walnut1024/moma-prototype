@@ -1,3 +1,5 @@
+import { AUTH_DATA_KEY } from './workspace-storage.mjs';
+import { resourceId } from './resource-id.mjs';
 import {APPLICATION_CONFIG} from './mock/application-data.js';
 import mockConfig from './mock/catalogues.json' with {type:'json'};
 import {authBusinessSnapshot} from './auth-link-sync.mjs';
@@ -7,10 +9,10 @@ import { memberPhoneError, normalizeMemberPhone } from './organization-data.mjs'
 import { normalizeAdminLogin } from './admin-v2/admin-accounts.js';
 
 // Browser-local interaction state; never authorizes backend or gateway access.
-export const AUTH_STORAGE_KEY = 'moma-auth-prototype-5120-v1';
+export const AUTH_STORAGE_KEY = AUTH_DATA_KEY;
 export const AUTH_INVITE = mockConfig["auth-state.mjs"]["AUTH_INVITE"];
 export const emptyAuthState = () => structuredClone(APPLICATION_CONFIG.auth);
-export const authRoute = hash => /^#\/auth\/(login|register|account|enterprise|invite|password)(?:\?|$)/.exec(hash)?.[1] || null;
+export const authRoute = hash => /^#\/auth\/(login|account|enterprise|invite|password)(?:\?|$)/.exec(hash)?.[1] || null;
 export const currentAuthUser = state => state.accounts.find(account => account.id === state.currentUserId) || null;
 export const authPhone = value => {
   const phone = normalizeMemberPhone(value), error = memberPhoneError(phone);
@@ -47,7 +49,7 @@ export function registerAuthAccount(state, { phone, name = '' }, allowExisting =
   if (existing && !allowExisting) throw new Error('该手机号已注册，请直接登录');
   if (existing?.status === '停用') throw new Error('该账号已停用，请联系平台管理员');
   if (existing?.activation) throw new Error('账号尚未激活，请使用收到的激活链接');
-  const account = existing || { id: `auth-user-${crypto.randomUUID()}`, phone, name: name.trim() || `用户${phone.slice(-4)}`, status: '正常', registeredAt: new Date().toISOString() };
+  const account = existing || { id: resourceId('user'), phone, name: name.trim() || `用户${phone.slice(-4)}`, status: '正常', registeredAt: new Date().toISOString() };
   return { ...state, accounts: existing ? state.accounts : [...state.accounts, account], currentUserId: account.id, activeSpace: availableAuthSpaces({ ...state, currentUserId: account.id }).some(space => space.id === state.activeSpace) ? state.activeSpace : 'personal' };
 }
 
@@ -119,7 +121,7 @@ export function submitAuthApplication(state, data, verification, applicationId =
   values.adminType = values.contactType;
   values.adminIdentity = values.contactIdentity;
   if (state.applications.some(item => item.id !== applicationId && item.taxId === values.taxId && item.status !== '已关闭')) throw new Error('该主体已有开通申请，请查看申请进度');
-  const application = { ...previous, ...values, countryRegion: '中国', id: previous?.id || `APP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, status: '待处理', createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const application = { ...previous, ...values, countryRegion: '中国', id: previous?.id || resourceId('enterprise-application'), status: '待处理', createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
   // Application intake never creates an identity, session, subject or membership.
   return { ...state, applications: previous ? state.applications.map(item => item.id === applicationId ? application : item) : [...state.applications, application] };
 }
@@ -165,14 +167,14 @@ export function submitEnterpriseCertification(state, data, applicationId = null)
   if (applicationId && (!previous || previous.applicantUserId !== user.id)) throw new Error('无权修改该认证申请');
   if (previous && previous.status !== '需补充') throw new Error('当前认证申请不能修改');
   if (state.applications.some(item => item.id !== applicationId && item.taxId === values.taxId && item.status !== '已关闭')) throw new Error('该主体已有认证申请，请查看认证记录');
-  const record = { ...previous, ...values, authorized: true, applicantUserId: user.id, purpose: 'enterprise-certification', countryRegion: '中国', id: previous?.id || `APP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, status: '待处理', createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const record = { ...previous, ...values, authorized: true, applicantUserId: user.id, purpose: 'enterprise-certification', countryRegion: '中国', id: previous?.id || resourceId('enterprise-application'), status: '待处理', createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
   return { ...state, applications: previous ? state.applications.map(item => item.id === previous.id ? record : item) : [...state.applications, record] };
 }
 
 export function queryAuthApplication(state, id, verification) {
   verifyAuthCode(verification.challenge, { ...verification, purpose: 'application' });
   const contactIdentity = normalizeAdminLogin(verification.identity, verification.type);
-  const result = state.applications.find(item => item.id === id.trim().toUpperCase() && item.contactType === verification.type && item.contactIdentity === contactIdentity);
+  const result = state.applications.find(item => item.id.toLowerCase() === id.trim().toLowerCase() && item.contactType === verification.type && item.contactIdentity === contactIdentity);
   if (!result) throw new Error('申请编号与联系人不匹配，请核对后重试');
   return result;
 }

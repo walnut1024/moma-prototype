@@ -5,9 +5,9 @@ import { MODEL_IMPORT_HEADERS, MODEL_IMPORT_TEMPLATE, modelRowsFromCells, valida
 
 test('import distinguishes visual understanding from image and video generation without changing stored data', () => {
   const state = createAdminSeed(), before = JSON.stringify(state);
-  assert.deepEqual(MODEL_IMPORT_HEADERS.slice(0, 2), ['规范模型标识', '模型名称']);
+  assert.deepEqual(MODEL_IMPORT_HEADERS.slice(0, 2), ['模型编码', '模型展示名']);
   assert.throws(() => modelRowsFromCells([['模型ID', ...MODEL_IMPORT_HEADERS.slice(1)], MODEL_IMPORT_TEMPLATE[1]]), /表头不匹配/);
-  const values = { '规范模型标识': 'catalog/vision-001', '模型名称': '视觉分析', '模型类型': '多模态', '支持任务': '图像理解', '输入模态': '文本、图片', '输出模态': '文本', '上下文窗口（Token）': '32768', '最大输出（Token）': '8192', '简短介绍': '分析图片并回答问题。' };
+  const values = { '模型编码': 'catalog/vision-001', '模型展示名': '视觉分析', '模型类型': '多模态', '支持任务': '图像理解', '输入模态': '文本、图片', '输出模态': '文本', '上下文窗口（Token）': '32768', '最大输出（Token）': '8192', '简短介绍': '分析图片并回答问题。' };
   const understanding = MODEL_IMPORT_HEADERS.map(label => values[label] || '');
   const rows = validateModelRows(state, modelRowsFromCells([MODEL_IMPORT_HEADERS, ...MODEL_IMPORT_TEMPLATE.slice(1), understanding]));
   assert.deepEqual(rows.map(row => row.status), ['ready', 'ready', 'ready', 'ready']);

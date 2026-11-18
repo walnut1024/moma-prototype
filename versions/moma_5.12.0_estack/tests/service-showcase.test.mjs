@@ -52,9 +52,9 @@ test('explicit preparation preserves unrelated records and old histories; replay
   assert.equal(prepareServiceShowcase(next), next);
 });
 
-test('new workspace starts with two cases; existing workspace changes only through explicit action', () => {
+test('new and existing workspaces require explicit preparation of demonstration cases', () => {
   const values = new Map(), storage = { getItem: key => values.get(key) || null, setItem: (key, value) => values.set(key, value) };
-  assert.equal(serviceDirectoryModels(loadAdminState(storage)).length, 2);
+  assert.equal(serviceDirectoryModels(loadAdminState(storage)).length, 0);
   const raw = storage.getItem(STORAGE_KEY); loadAdminState(storage); assert.equal(storage.getItem(STORAGE_KEY), raw);
   const existing = withAdminSession(createAdminSeed()); values.set(STORAGE_KEY, JSON.stringify(existing));
   assert.equal(loadAdminState(storage).models.some(row => row.serviceShowcase), false);

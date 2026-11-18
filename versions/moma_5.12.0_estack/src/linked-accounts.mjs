@@ -53,7 +53,7 @@ export function prepareLinkedAccounts(storage = globalThis.localStorage) {
 }
 export function activeAdmin(state) {
   const account = state.admins.find(row => row.id === state.adminSession?.accountId);
-  if (!account || account.status !== '已启用') throw new Error('请先选择有效的后台 mock 账号');
+  if (!account || account.status !== '已启用') throw new Error('请先登录有效的后台账号');
   return account;
 }
 
