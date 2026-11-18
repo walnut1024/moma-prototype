@@ -5,6 +5,7 @@ import {toast} from 'sonner';
 import { useServiceDirectory } from './useServiceDirectory';
 import { marketModels, customerPriceRows } from './service-directory.mjs';
 import MarketModelDetail from './MarketModelDetail';
+import { useDeploymentLicense } from './useDeploymentLicense';
 import { MarketAction, MarketSessionControl, useCloudMarket } from './CloudMarket';
 import { readModelDetail, modelDetailLocation } from './model-detail-route.mjs';
 import { Button as SemiButton, ConfigProvider, Select as SemiSelect, Tabs as SemiTabs, Typography as SemiTypography } from '@douyinfe/semi-ui';
@@ -915,6 +916,7 @@ function VersionIndex() {
 
 function PrototypeApp({ version }) {
   const site = useSiteConfig();
+  const deploymentLicense = useDeploymentLicense();
   useSiteChrome(site);
   useState(()=>{try{loadAdminState(localStorage);}catch{/* Existing storage errors are surfaced by the affected workspace. */}return null;});
   const auth = usePrototypeAuth();
@@ -942,7 +944,7 @@ function PrototypeApp({ version }) {
     [sortMode, setSortMode] = useState("latest");
   const openMarketLogin = () => auth.navigate('login');
   const internal = !site.personalEnabled;
-  const workspaceCatalogue = internal || Boolean(owner);
+  const workspaceCatalogue = Boolean(owner) || internal && !deploymentLicense?.managed;
   const personal = projectTenant.identity?.spaceId === 'personal';
   const market=useCloudMarket(admin==='front' && !workspaceCatalogue && !auth.route && ['模型广场','模型详情'].includes(activePage));
   const marketServices=market.services;
@@ -1284,7 +1286,7 @@ function PrototypeApp({ version }) {
             project={project} onExperience={projectExperience} onConfigure={row => showProjects(row, 'models')}
             onPlanOrder={() => window.open('/moma_5.12.0_estack/order/serviceOrder/', '_blank', 'noopener,noreferrer')}/>
         ) : activePage === "模型详情" ? (
-          <><div className="market-detail-session"><MarketSessionControl market={market} onLogin={openMarketLogin}/></div>{market.loading || market.error ? <p className="content" role="status">{market.error || '正在加载模型广场…'}</p> : <MarketModelDetail services={marketServices} selected={selected} onSelect={selectDetailService} onBack={returnToMarket}
+          <><div className="market-detail-session"><MarketSessionControl market={market} onLogin={openMarketLogin}/></div>{market.loading || market.error ? <p className="content" role="status">{market.error || '正在加载模型广场…'}</p> : <MarketModelDetail internal={internal} services={marketServices} selected={selected} onSelect={selectDetailService} onBack={returnToMarket}
             projectOffers={projectOffers} onProjectExperience={offer => {
               if (!project) { showProjects(); return; }
               const local = projectOffers.get(offer.id);

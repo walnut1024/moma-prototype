@@ -3,8 +3,8 @@ import { Button, Checkbox, Input, RadioGroup, Select, Space, TextArea, Typograph
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { CopyId, Field, Modal, Notice } from './ServiceUI';
-import { activeCustomer } from '../service-access.mjs';
-import { marketCardIssues, marketCardServices } from '../market-cards.mjs';
+import { internalEnterprise } from './enterprise';
+import { marketCardIssues, marketCardServices, marketScopeOptions, scopeFields } from '../market-cards.mjs';
 import { MODEL_CATALOGUE_TYPES } from './model-library';
 import { modelCategory } from './model-management';
 import { normalizeModelLogo } from './model-profile';
@@ -94,6 +94,8 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
   const selected = linking ? linked : shown;
   const entries = (linking ? services : services.filter(service => linked.includes(service.id)))
     .filter(service => service.callId.toLowerCase().includes(search.trim().toLowerCase()));
+  const scopeOptions = marketScopeOptions(state);
+  const companyId = internal ? internalEnterprise(state)?.id : null;
   const updateScope = value => { setScope(value); ops.dirty(true); };
   const issues = linking ? [] : marketCardIssues({
     ...row.card, content: row.card.content || { name: row.name, description: row.description }, shown, scope,
@@ -125,15 +127,17 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
     </> : <>
       <Field label="可见范围">
         <RadioGroup aria-label="可见范围" value={scope.type}
-          options={[{ value: 'all', label: '全部用户' }, { value: 'selected', label: internal ? '指定企业' : '指定客户' }]}
+          options={[{ value: 'all', label: '全部用户' }, { value: 'selected', label: '指定范围' }]}
           onChange={event => updateScope({ type: event.target.value, tenantIds: [] })}/>
       </Field>
-      {scope.type === 'selected' && <Field label={internal ? '可见企业' : '可见客户'} required>
-        <Select multiple filter maxTagCount={3} showRestTagsPopover style={{ width: '100%' }} value={scope.tenantIds}
-          optionList={state.tenants.filter(tenant => activeCustomer(tenant) && (!internal || tenant.type !== '个人'))
-            .map(tenant => ({ value: tenant.id, label: tenant.name }))}
-          onChange={tenantIds => updateScope({ ...scope, tenantIds })}/>
-      </Field>}
+      {scope.type === 'selected' && Object.entries(scopeFields).filter(([key]) => !internal || key !== 'tenantIds').map(([key, label]) => (
+        <Field key={key} label={'可见' + label}>
+          <Select multiple filter maxTagCount={3} showRestTagsPopover style={{ width: '100%' }} value={scope[key] || []}
+            optionList={scopeOptions[key].filter(row => !internal || row.tenantId === companyId)}
+            placeholder={'选择' + label} onChange={ids => updateScope({ ...scope, [key]: ids })}/>
+        </Field>
+      ))}
+      <Typography.Text type="tertiary">命中任一所选范围即可查看。模型调用仍按现有权限校验。</Typography.Text>
       {issues.map(issue => <Notice key={issue} error>{issue}</Notice>)}
       {!issues.length && <Typography.Text type="success">上架检查通过</Typography.Text>}
     </>}

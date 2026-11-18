@@ -288,7 +288,7 @@ export default function PackageProduction({ state, transact, conflict, params, d
   const tab = params.get('tab') === 'factors' ? 'factors' : 'packages';
   const editor = ['new', 'edit', 'detail'].includes(view);
   const record = state.tokenPackages.find(row => row.id === id);
-  const canWrite = !conflict && canManagePackages(state.currentRole);
+  const canWrite = !state.commerceReadOnly && !conflict && canManagePackages(state.currentRole);
   const packageTypes = packageTypeOptions(state);
   const packageTypeLabels = new Map(packageTypes);
 
@@ -400,11 +400,11 @@ export default function PackageProduction({ state, transact, conflict, params, d
     } },
   ];
   return <div className="admin-page-stack">
-    <AdminPageHeading title={<span tabIndex={-1} ref={listTitle}>套餐制作</span>}>
+    <AdminPageHeading title={<span tabIndex={-1} ref={listTitle}>套餐管理</span>}>
       {tab === 'packages' && <Button id="package-new" theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite}
         onClick={event => open('new', null, event.currentTarget)}>新增套餐</Button>}
     </AdminPageHeading>
-    <Tabs type="line" activeKey={tab} keepDOM={false} aria-label="套餐制作"
+    <Tabs type="line" activeKey={tab} keepDOM={false} aria-label="套餐管理"
       onChange={key => { location.hash = key === 'factors' ? `${route}?tab=factors` : route; }}>
       <Tabs.TabPane itemKey="packages" tab="套餐列表">
         <Card>

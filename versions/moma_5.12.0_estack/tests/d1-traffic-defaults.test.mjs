@@ -78,7 +78,7 @@ test('D1 seeds both defaults and upgrades a v9 database without changing its sav
   ]);
   await migrateEmptyDatabase(local.db);
   await local.db.prepare("UPDATE admin_accounts SET login_code='admin-001' WHERE id=?").bind(actor.actor_id).run();
-  assert.equal((await request('/health')).data.schemaVersion, 12);
+  assert.equal((await request('/health')).data.schemaVersion, 13);
   const upgraded = (await request(path)).data;
   assert.deepEqual(upgraded.global, legacy);
   assert.deepEqual(upgraded.modelDefault, fresh.modelDefault);

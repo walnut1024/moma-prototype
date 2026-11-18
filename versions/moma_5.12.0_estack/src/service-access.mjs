@@ -1,4 +1,4 @@
-import { readSiteConfig, SITE_CONFIG_KEY } from './site-config.mjs';
+import { siteSettlement } from './site-config.mjs';
 import { modelIdentity, modelServiceIdentity } from './model-identities.mjs';
 import { internalEnterprise } from './admin-v2/enterprise.js';
 import { ADMIN_DATA_KEY } from './workspace-storage.mjs';
@@ -25,6 +25,8 @@ export const providerOffer = (model, key) => model.serviceProviders?.find(entry 
 export const serviceCallsEnabled = (model, entry) => !model.archivedAt && model.callsEnabled === true && entry?.callsEnabled !== false;
 export const offerStage = (model, entry) => entry?.listingStage ?? (model.listingStatus === '已上架' ? model.releaseStage === 'gray' ? 'gray' : 'formal' : model.firstPublishedAt ? 'withdrawn' : 'unlisted');
 export const offerGrayTenants = (model, entry) => (entry?.listingStage ? entry.grayTenantIds : model.releaseTenantIds) || [];
+export const salesPaused = (model, key) => (model.serviceMode === 'provider'
+  ? providerOffer(model, key)?.salesPaused : model.salesPaused) === true;
 export const salesCustomer = (model, tenantId) => model.salesScope?.openScope === 'all' || model.salesScope?.openScope === 'selected' && model.salesScope.tenantIds?.includes(tenantId);
 
 export function workspaceServiceOrdered(state, tenantId, service, at = Date.now()) {
@@ -94,7 +96,7 @@ export function resolveUserIdentity(state, auth, storage = globalThis.localStora
   if (links.length !== 1) throw accessError('identity_unmapped', '当前用户尚未关联可用身份');
   const link = links[0], backend = state.users?.find(row => row.id === link.backendUserId), tenant = state.tenants?.find(row => row.id === link.tenantId);
   if (backend?.status !== '正常' || !activeCustomer(tenant)) throw accessError('customer_unavailable', '当前用户或组织已停用');
-  if (!readSiteConfig(storage?.getItem(SITE_CONFIG_KEY)).personalEnabled && tenant.id !== internalEnterprise(state)?.id) {
+  if (siteSettlement(storage) === 'internal' && tenant.id !== internalEnterprise(state)?.id) {
     throw accessError('space_unavailable', '当前站点仅开放本企业空间');
   }
   if (auth.activeSpace === 'personal') {

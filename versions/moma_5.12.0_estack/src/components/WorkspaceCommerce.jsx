@@ -21,7 +21,11 @@ export default function WorkspaceCommerce({ tenant, services, internal, view, on
   const personal = tenant.identity?.spaceId === 'personal';
   const billing = view === 'billing';
   const title = billing ? '订购与账单' : view === 'order' ? '开通模型服务' : '模型广场';
-  const rows = services.filter(service => internal ? service.serviceAvailable : service.marketVisible && (service.orderable || service.ordered));
+  const rows = services.filter(service => {
+    const visible = service.marketVisible || service.marketProjectIds?.includes(project?.id);
+    return internal ? service.serviceAvailable && (!service.marketCardManaged || visible)
+      : visible && (service.orderable || service.ordered);
+  });
   const billRows = (tenant.report?.records || []).filter(row => row.settlement !== 'internal' &&
     row.httpStatus >= 200 && row.httpStatus < 300 && row.billingType !== 'Token Plan');
   const projects = tenant.projects.filter(row => row.status === '正常');

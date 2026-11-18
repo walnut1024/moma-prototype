@@ -1,3 +1,4 @@
+import { licenseSnapshot } from './deployment-license.mjs';
 import { workspaceStoragePrefix } from "./workspace-storage.mjs";
 export const PRIVATE_SITE = import.meta.env?.VITE_MOMA_PRIVATE_SITE === '1';
 export const SITE_CONFIG_KEY = workspaceStoragePrefix + 'site-config';
@@ -61,6 +62,10 @@ export function saveSiteConfig(storage, expected, config) {
   return true;
 }
 
+export function sitePersonalEnabled(config, license = licenseSnapshot()) {
+  return license?.managed ? license.commercial : config.personalEnabled;
+}
+
 export function siteSettlement(storage) {
-  return readSiteConfig(storage?.getItem(SITE_CONFIG_KEY)).personalEnabled ? 'customer' : 'internal';
+  return sitePersonalEnabled(readSiteConfig(storage?.getItem(SITE_CONFIG_KEY))) ? 'customer' : 'internal';
 }

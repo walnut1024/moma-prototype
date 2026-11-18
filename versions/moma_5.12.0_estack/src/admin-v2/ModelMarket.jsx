@@ -1,7 +1,7 @@
 import ModelResourceJsonPage from './ModelResourceJsonPage';
 import ModelResourceTransfer, { openResourceJson } from './ModelResourceTransfer';
 import MarketCardDialogs from './MarketCardDialogs';
-import { marketCardIndex } from '../market-cards.mjs';
+import { marketCardIndex, scopeFields } from '../market-cards.mjs';
 import { modelIdentity, modelServiceIdentity } from '../model-identities.mjs';
 import { serviceReferences } from '../service-access.mjs';
 import AdminStatus from './AdminStatus';
@@ -22,7 +22,6 @@ import { modelProfileDraft } from './model-profile';
 import { providerServices, serviceCallIdentifiers } from './service-workspace';
 import { offerKey } from '../service-access.mjs';
 import ModelModuleHeading from './ModelModuleHeading';
-import ServiceListingDialog from './ServiceListingDialog';
 import { marketSupplyGroups } from './model-market-supplies';
 import { orderedMarketModels } from './model-market-order';
 import './model-market.css';
@@ -38,7 +37,11 @@ const viewOptions = [{ label: '列表', value: 'list' }, { label: '卡片', valu
 const emptyMessage = '没有符合条件的模型卡片';
 const cardCollision = args => args.pointerCoordinates ? pointerWithin(args) : closestCenter(args);
 const displayStatus = { draft: '未上架', listed: '已上架', withdrawn: '已下架' };
-const scopeLabel = card => card.status === 'draft' ? '未设置' : card.scope.type === 'all' ? '全部用户' : `指定范围（${card.scope.tenantIds.length}）`;
+function scopeLabel(card) {
+  if (card.status === 'draft') return '未设置';
+  if (card.scope.type === 'all') return '全部用户';
+  return Object.entries(scopeFields).flatMap(([key, label]) => card.scope[key]?.length ? [label + '（' + card.scope[key].length + '）'] : []).join('、');
+}
 
 function MarketSupplies({ groups, expandedProviderId = null }) {
   if (!groups.length) return <Typography.Text type="tertiary">待关联服务商和渠道</Typography.Text>;
@@ -150,7 +153,6 @@ export default function ModelMarket(props) {
   const ops = useOperations({ ...props, ...serviceOperationsUi }, 'model-market');
   const { params, go } = ops;
   const [cardDialog, setCardDialog] = useState(null);
-  const [editing, setEditing] = useState(null);
   const [supplyDetail, setSupplyDetail] = useState(null);
   const [orderEdit, setOrderEdit] = useState(null);
   const [drag, setDrag] = useState(null);
@@ -192,7 +194,6 @@ export default function ModelMarket(props) {
   const view = params.get('view') === 'cards' ? 'cards' : 'list';
   const changePage = page => go({ page: page === 1 ? null : page }, { replace: true, preserveScroll: true });
   const changeFilters = patch => go({ ...patch, page: null }, { replace: true, preserveScroll: true });
-  const model = editing && props.state.models.find(row => row.id === editing.id);
   const supplyModel = supplyDetail && props.state.models.find(row => row.id === supplyDetail.modelId);
   const openSupplies = (event, modelId, providerId = null) => {
     trigger.current = event.currentTarget;
@@ -200,15 +201,6 @@ export default function ModelMarket(props) {
   };
   const closeSupplies = () => {
     setSupplyDetail(null);
-    requestAnimationFrame(() => trigger.current?.focus());
-  };
-  const changed = editing && (!model || model.archivedAt || model.updatedAt !== editing.revision);
-  const stage = ops.params.get('listing');
-  const listingModel = ['formal', 'gray', 'withdrawn'].includes(stage) && props.state.models.find(row =>
-    row.id === ops.params.get('model') && !row.archivedAt && row.serviceMode);
-  const close = () => {
-    setEditing(null);
-    ops.setError('');
     requestAnimationFrame(() => trigger.current?.focus());
   };
   const closeOrder = () => ops.proceed(() => {
@@ -244,10 +236,6 @@ export default function ModelMarket(props) {
   const orderChanged = orderEdit && orderEdit.revision !== props.state.revision;
   const position = Number(orderEdit?.position);
   const validPosition = Number.isSafeInteger(position) && position >= 1 && position <= ordered.length;
-  const open = (row, action) => {
-    ops.setError('');
-    setEditing({ id: row.id, name: row.name, action, visible: row.marketVisible === false, revision: row.updatedAt });
-  };
   const toggleChannelVisibility = async (entry, button) => {
     setBusy(true);
     try {
@@ -259,11 +247,6 @@ export default function ModelMarket(props) {
       requestAnimationFrame(() => button.focus());
     }
   };
-  const listingActions = row => [
-    { node: 'item', name: '正式上架', onClick: () => ops.go({ model: row.id, listing: 'formal' }) },
-    { node: 'item', name: '灰度上架', onClick: () => ops.go({ model: row.id, listing: 'gray' }) },
-    { node: 'item', name: '下架', disabled: row.listingStatus !== '已上架', onClick: button => { trigger.current = button; if (row.serviceMode==='provider') ops.go({model:row.id,listing:'withdrawn'}); else open(row,'stopSales'); } },
-  ];
   const actions = row => <Space wrap>
     <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('edit', row.modelId, event.currentTarget)}>展示信息</Button>
     <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('link', row.modelId, event.currentTarget)}>关联服务</Button>
@@ -273,12 +256,8 @@ export default function ModelMarket(props) {
     {row.serviceMode && <AdminActionMenu label={`${row.name} 的更多操作`} items={[
       { node: 'item', name: '查看 JSON', onClick: () => openResourceJson(ops, { level: 'model', model_id: row.modelId }) },
       { node: 'item', name: '服务商与渠道', onClick: button => { trigger.current = button; setSupplyDetail({ modelId: row.id, displayCard: !row.legacy }); } },
-      ...(!props.internal ? listingActions(row).map(item => ({ ...item, name: item.name === '下架' ? '停售服务' : item.name + '销售' })) : []),
     ]}>更多</AdminActionMenu>}
   </Space>;
-  const stop = editing?.action === 'stopSales';
-  const actionTitle = stop ? '下架' : editing?.visible ? '允许展示' : '隐藏模型';
-
   if (params.get('resourceJson') === '1') return <ModelResourceJsonPage state={props.state} ops={ops} scope="market"/>;
   return <div className="semi-services sp-workspace">
     <ModelModuleHeading module="market">
@@ -296,7 +275,7 @@ export default function ModelMarket(props) {
       </Field>)}
       <Button onClick={() => changeFilters({ q: null, type: null, status: null, visibility: null })}>重置筛选</Button>
     </div>
-    {!editing && !orderEdit && !cardDialog && ops.error && <Notice error>{ops.error}</Notice>}
+    {!orderEdit && !cardDialog && ops.error && <Notice error>{ops.error}</Notice>}
     {view === 'cards' ? rows.length ? <>
       <DndContext sensors={sensors} collisionDetection={cardCollision} accessibility={{
         screenReaderInstructions: { draggable: '按空格开始拖动，用方向键移动，再按空格放下，按 Esc 取消。' },
@@ -382,25 +361,6 @@ export default function ModelMarket(props) {
       </Field>
       {orderChanged && <Notice error>模型广场已有修订，请重新打开后调整。</Notice>}
       {!validPosition && <Notice error>{`序号须为 1 到 ${ordered.length} 的整数`}</Notice>}
-      {ops.error && <Notice error>{ops.error}</Notice>}
-    </Modal>}
-    {listingModel && <ServiceListingDialog key={listingModel.id + stage} state={props.state} model={listingModel} ops={ops} stage={stage}
-      close={() => ops.proceed(() => {
-        ops.go({ model: null, listing: null }, { saved: true, replace: true, preserveScroll: true });
-        requestAnimationFrame(() => trigger.current?.focus());
-      })}/>}
-    {editing && <Modal title={actionTitle} description={editing.name} onClose={() => !busy && close()} footer={<>
-      <Button theme="light" disabled={busy} onClick={close}>取消</Button>
-      <Button loading={busy} disabled={!ops.can || changed || busy} onClick={async () => {
-        setBusy(true);
-        try {
-          const data = stop ? { confirmed: true } : { visible: editing.visible };
-          if (await ops.run(editing.action, { ...data, expectedUpdatedAt: editing.revision }, editing.id)) close();
-        } finally { setBusy(false); }
-      }}>确认{stop ? '下架' : editing.visible ? '展示' : '隐藏'}</Button>
-    </>}>
-      <p>{stop ? '下架后，客户无法新订购或调用此模型服务。' : editing.visible ? '允许符合上架、启动和客户授权条件的模型在用户侧广场展示。' : '从用户侧模型广场及其详情隐藏此模型。'}</p>
-      {changed && <Notice error>服务配置已变化，请关闭后重新核对。</Notice>}
       {ops.error && <Notice error>{ops.error}</Notice>}
     </Modal>}
     {ops.leaveDialog}

@@ -24,7 +24,7 @@ export function adminBreadcrumbs(active, params, names = {}) {
   const groupHome = group.home || group.items[0].children[0][0];
   const crumbs = [];
   const add = (label, target) => crumbs.push({ label, ...(target && target !== currentHref ? { href: target } : {}) });
-  add(page.group, group.direct || group.id === 'models' ? null : `#/admin-2/${groupHome}`);
+  add(page.group, group.direct || ['models', 'commerce'].includes(group.id) ? null : `#/admin-2/${groupHome}`);
   const view = active === 'listing' && params.get('view') === 'add' ? null : params.get('view');
   if (active === 'package-production') {
     const labels = { new: '新增套餐', edit: '编辑套餐', detail: '套餐详情' };
@@ -72,8 +72,8 @@ export function adminBreadcrumbs(active, params, names = {}) {
     else if (view === 'onboarding') add('接入模型');
     else if (view === 'supplier-batch') add('批量配置与上架');
   } else if (active === 'model-prices' && params.has('service')) {
-    add(page.label,href(active,{},['association','provider','service','edit','tab']));
-    add('服务售价详情');
+    add(page.label,href(active,{},['association','provider','service','edit','tab','add']));
+    add('销售配置');
   } else if (active === 'tariff-dictionary') {
     const tab = params.get('tab');
     add('模型资料', '#/admin-2/model-templates');

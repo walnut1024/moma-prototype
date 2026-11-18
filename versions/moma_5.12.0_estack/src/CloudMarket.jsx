@@ -21,16 +21,18 @@ export function refreshCloudMarket() {
 export function useCloudMarket(enabled=true) {
   const [view,setView]=useState({tenant:null,services:[],orders:[],loading:true,error:''});
   const [revision,setRevision]=useState(0);
+  const [project,setProject]=useState('');
   useEffect(()=>{
     if (!enabled) return;
     const controller=new AbortController();
-    marketRequest('catalogue',null,controller.signal).then(data=>{
+    const query = project ? '?' + new URLSearchParams({ project }) : '';
+    marketRequest('catalogue' + query,null,controller.signal).then(data=>{
       if (!controller.signal.aborted) setView({...data,services:data.services.map(cloudMarketPresentation),loading:false,error:''});
     }).catch(error=>{
-      if (!controller.signal.aborted) setView({tenant:null,services:[],orders:[],loading:false,error:error.message});
+      if (!controller.signal.aborted) setView(previous => ({ ...previous, services: [], orders: [], loading:false, error:error.message }));
     });
     return ()=>controller.abort();
-  },[enabled,revision]);
+  },[enabled,revision,project]);
   useEffect(()=>{
     if (!enabled) return;
     const refresh=()=>setRevision(current=>current+1);
@@ -40,11 +42,16 @@ export function useCloudMarket(enabled=true) {
   },[enabled]);
   const write=async(path,body)=>{
     const result=await marketRequest(path,body);
-    if (path==='logout') setView({tenant:null,services:[],orders:[],loading:true,error:''});
+    if (path==='logout') { setProject(''); setView({tenant:null,services:[],orders:[],loading:true,error:''}); }
     refreshCloudMarket();
     return result;
   };
-  return {...view,refresh:()=>setRevision(current=>current+1),
+  const selectProject = next => {
+    if (next === project) return;
+    setView(previous => ({ ...previous, services: [], loading:true, error:'' }));
+    setProject(next);
+  };
+  return {...view,project,selectProject,refresh:()=>setRevision(current=>current+1),
     logout:()=>write('logout',{}),order:offerIds=>write('orders',{offerIds})};
 }
 
@@ -52,7 +59,11 @@ export function MarketSessionControl({ market, onLogin }) {
   const [busy,setBusy]=useState(false),[error,setError]=useState('');
   return <div className="market-session">
     {market.tenant ? <>
-      <span>{market.tenant.name}</span><Button variant="outline" disabled={busy} onClick={async()=>{
+      <span>{market.tenant.name}</span>
+      {market.projects?.length > 0 && <select aria-label="当前项目" value={market.project} onChange={event => market.selectProject(event.target.value)}>
+        <option value="">未选择项目</option>{market.projects.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
+      </select>}
+      <Button variant="outline" disabled={busy} onClick={async()=>{
         setBusy(true);setError('');
         try {await market.logout();} catch (issue) {setError(issue.message);} finally {setBusy(false);}
       }}>退出广场</Button>{error && <span role="alert">{error}</span>}

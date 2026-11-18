@@ -9,10 +9,12 @@ const row = (id, extra={}) => ({ id,requestId:id,createdAt:'2026-10-30T10:00:00+
 const price = (id, effectiveAt, amount=1000000, extra={}) => ({ id,effectiveAt,status:'已发布',items:[{name:'输入 Token',unit:'百万 Token',currency:'CNY',amount}],...extra });
 test('remaining analytics destinations preserve workspace role boundaries',()=>{
   for(const id of ['usage-analysis','user-analysis']) { assert.ok(pages[id]); assert.equal(canAccessPage('运营人员',id),true); assert.equal(canAccessPage('运维人员',id),false); }
-  for (const id of ['supply-analysis','business-analysis']) {
-    assert.equal(canAccessPage('平台管理员',id),false);
-    assert.equal(pageFromHash('#/admin-2/'+id,'平台管理员'),'dashboard');
-  }
+  assert.equal(canAccessPage('平台管理员','supply-analysis'),false);
+  assert.equal(pageFromHash('#/admin-2/supply-analysis','平台管理员'),'dashboard');
+  assert.equal(pages['business-analysis'].groupId,'commerce');
+  assert.equal(canAccessPage('运营人员','business-analysis',{commercial:true}),true);
+  assert.equal(canAccessPage('运营人员','business-analysis',{commercial:false}),false);
+  assert.equal(canAccessPage('运维人员','business-analysis',{commercial:true}),false);
 });
 test('supply facts deduplicate and use actual channel supplier, never model manufacturer',()=>{
   const facts=operationFacts({...state,requests:[row('one'),row('one',{durationMs:200}),row('two',{endpointId:'f',httpStatus:500}),row('future',{createdAt:'2027-01-01T00:00:00Z'})]},range,analysisFilters(),now);

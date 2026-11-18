@@ -7,7 +7,8 @@ import {initialWorkspace,MODEL_DATA_COLLECTIONS,systemModelData,systemModelOrigi
 
 import { activeAdmin } from '../linked-accounts.mjs';
 import {readLinkedState,notifyLinkedState,LINK_EVENT} from "../service-access.mjs";
-import { readSiteConfig, SITE_CONFIG_KEY } from '../site-config.mjs';
+import { commercialModelWrite, licenseSnapshot, LICENSE_UNAVAILABLE } from '../deployment-license.mjs';
+import { siteSettlement } from '../site-config.mjs';
 import { prepareCustomerLogins, writeCustomerState } from '../customer-identity.mjs';
 import { MODEL_OPERATIONS_EXAMPLE_ID } from './model-operations-examples.js';
 import { usageDemoRequests } from './usage-demo.js';
@@ -69,6 +70,7 @@ export function persistAdminAction(state, action, storage) {
 }
 
 export function persistModelAction(state, action, storage) {
+  if (licenseSnapshot()?.commerceWritable === false && commercialModelWrite(action)) throw Error(LICENSE_UNAVAILABLE);
   if (!['modelOperation', 'modelOperations'].includes(action.type)) throw new Error('此入口仅支持模型操作');
   if (state.storageError) throw new Error('本地数据尚未就绪，请先重新加载');
   const raw = storage.getItem(STORAGE_KEY);
@@ -118,7 +120,8 @@ export function persistEnterpriseAction(state, action, storage, expectedRevision
   const raw = storage.getItem(STORAGE_KEY);
   if (expectedRevision !== state.revision || (raw && JSON.parse(raw).revision !== state.revision)) throw new Error('数据已变化，请载入新版本后重试；当前输入保留');
   const account = activeAdmin(state);
-  const internal = !readSiteConfig(storage.getItem(SITE_CONFIG_KEY)).personalEnabled;
+  const internal = siteSettlement(storage) === 'internal';
+  if (!internal && licenseSnapshot()?.commerceWritable === false) throw Error(LICENSE_UNAVAILABLE);
   const next = commitAdminState(state, { ...action, internal }, account.role);
   if (next.audits[0]) next.audits[0].actorId = account.id;
   let login;
@@ -136,7 +139,8 @@ export function persistEnterpriseAction(state, action, storage, expectedRevision
 export function persistIndividualAction(state, action, storage, expectedRevision = state.revision) {
   if (action.type !== 'individual') throw new Error('此入口仅支持个人用户操作');
   if (state.storageError) throw new Error('本地数据尚未就绪，请先重新加载');
-  if (!readSiteConfig(storage.getItem(SITE_CONFIG_KEY)).personalEnabled) throw Error('当前站点仅开放本企业空间');
+  if (siteSettlement(storage) === 'internal') throw Error('当前站点仅开放本企业空间');
+  if (licenseSnapshot()?.commerceWritable === false) throw Error(LICENSE_UNAVAILABLE);
   const raw = storage.getItem(STORAGE_KEY);
   if (expectedRevision !== state.revision || (raw && JSON.parse(raw).revision !== state.revision)) throw new Error('数据已变化，请载入新版本后重试；当前输入保留');
   const account = activeAdmin(state);

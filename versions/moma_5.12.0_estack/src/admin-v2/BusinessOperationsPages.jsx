@@ -15,8 +15,8 @@ import { usageTotal } from './observability';
 import { canMutate } from './store';
 
 const { Text, Title } = Typography;
-const titles = { goods: '商品与套餐', orders: '订单与订阅', announcements: '公告与服务通知', metering: '计量明细',
-  ledger: '账户与额度流水', bills: '客户账单', settlement: '服务商对账与结算', adjustments: '退款与调账' };
+const titles = { goods: '商品与套餐', orders: '订购记录', announcements: '公告与服务通知', metering: '消费明细',
+  ledger: '账户与额度流水', bills: '账单', settlement: '服务商对账与结算', adjustments: '退款与调账' };
 const configs = {
   goods: { collection: 'products', fields: [
     ['code', '商品编码'], ['name', '商品名称'], ['billingMode', '计费方式'], ['price', '基础价格', 'number'],
@@ -25,7 +25,7 @@ const configs = {
     ['title', '标题'], ['audience', '受众'], ['channel', '渠道'], ['effectiveAt', '生效时间', 'date'],
   ] },
 };
-const editable = (state, collection) => !state.storageError && canMutate(state.currentRole, { type: 'update', collection });
+const editable = (state, collection) => !state.commerceReadOnly && !state.storageError && canMutate(state.currentRole, { type: 'update', collection });
 const statusColumn = { title: '状态', dataIndex: 'status', width: 100, render: value => <AdminStatus value={value === '草稿' ? '未发布' : value}/> };
 const money = amount => amount == null ? '—' : `¥${amount}`;
 const actionColumn = render => ({ title: '操作', key: 'actions', width: 155, render: (_, row) => render(row) });
@@ -150,6 +150,7 @@ function Metering({ state, dispatch }) {
   const [modelId, setModelId] = useState(state.models[0]?.id || '');
   const [result, setResult] = useState(null);
   const run = () => {
+    if (state.commerceReadOnly) return;
     try {
       const requestId = `req_demo_${Date.now()}`;
       const planned = simulateRequest(state, { requestId, keyId, modelId, purpose: 'metering-test' });

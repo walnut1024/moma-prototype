@@ -7,6 +7,18 @@ export function AdminModal({
 }) {
   const titleId = useId();
   const bodyId = titleId + '-body';
+  const focusModal = useCallback(node => {
+    if (!node) return;
+    const dialog = node.closest('[role="dialog"]');
+    const opener = document.activeElement;
+    const frame = requestAnimationFrame(() => {
+      if (!dialog.contains(document.activeElement) &&
+          (document.activeElement === opener || document.activeElement === document.body)) {
+        dialog.focus({ preventScroll: true });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const labelModal = modal => {
     // Semi uses the same title and body IDs for each portal.
     const [header, body, footer] = modal.props.children;
@@ -19,8 +31,11 @@ export function AdminModal({
     const labeledHeader = isValidElement(header)
       ? cloneElement(header, {}, Children.map(header.props.children, labelHeaderChild))
       : header;
-    const describedBody = body?.props.id ? cloneElement(body, { id: bodyId }) : body;
+    const describedBody = isValidElement(body)
+      ? cloneElement(body, { ref: focusModal, ...(body.props.id ? { id: bodyId } : {}) })
+      : body;
     return cloneElement(modal, {
+      tabIndex: -1,
       'aria-labelledby': title != null ? titleId : undefined,
       'aria-describedby': body?.props.id ? bodyId : undefined,
     }, labeledHeader, describedBody, footer);

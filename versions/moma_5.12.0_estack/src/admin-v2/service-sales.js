@@ -1,4 +1,4 @@
-import { offerKey, offerStage, providerOffer } from '../service-access.mjs';
+import { offerKey, offerStage, providerOffer, salesPaused } from '../service-access.mjs';
 import { publicationChecks } from './model-management.js';
 import { platformServices, platformAllowedChannels, platformCandidatePlan } from './platform-service-client.js';
 import { servicePurpose } from './service-purpose.js';
@@ -31,6 +31,7 @@ export function salesChecks(state, model, keys) {
 
 export function salesStatus(state, model, providerId) {
   if (servicePurpose(model,providerId) === 'internal') return '不销售';
+  if (salesPaused(model, providerId)) return '已停售';
   const entry=providerOffer(model,providerId), stage=offerStage(model,entry);
   if (stage==='unlisted' || stage==='withdrawn') return stage==='withdrawn'?'已停售':'未上架';
   if (!model.callsEnabled || entry?.callsEnabled===false) return '服务不可用';

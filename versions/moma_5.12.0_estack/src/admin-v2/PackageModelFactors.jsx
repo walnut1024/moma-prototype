@@ -219,7 +219,7 @@ export default function PackageModelFactors({ state, transact, conflict, dirty }
   const candidates = models.filter(item => !item.configured);
   const rows = models.filter(item => item.configured && `${item.name} ${item.code}`.toLowerCase().includes(keyword));
   const currentPage = Math.min(page, Math.max(1, Math.ceil(rows.length / size)));
-  const canWrite = !conflict && canManagePackages(state.currentRole, 'saveFactorDraft');
+  const canWrite = !state.commerceReadOnly && !conflict && canManagePackages(state.currentRole, 'saveFactorDraft');
   const run = (operation, values) => transact({ type: 'tokenPackage', operation, values });
   const focusModel = (trigger, id) => requestAnimationFrame(() => {
     const edit = id && document.getElementById(`factor-edit-${id}`);

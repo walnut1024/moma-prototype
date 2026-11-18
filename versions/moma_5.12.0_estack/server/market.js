@@ -1,8 +1,9 @@
-import { marketCardVisible } from '../src/market-cards.mjs';
+import { marketAudience, marketCardVisible } from '../src/market-cards.mjs';
+import { internalEnterprise } from '../src/admin-v2/enterprise.js';
 import { servicePurpose } from '../src/admin-v2/service-purpose.js';
 import { modelPresentation } from '../src/model-identities.mjs';
 import { resourceId } from '../src/resource-id.mjs';
-import { activeCustomer, salesCustomer, lifecycleAccess, serviceReferences, serviceCallsEnabled, offerKey } from '../src/service-access.mjs';
+import { activeCustomer, salesCustomer, lifecycleAccess, serviceReferences, serviceCallsEnabled, offerKey, salesPaused } from '../src/service-access.mjs';
 import { domainModel } from '../src/mock/model-fields.js';
 import { createMockEngine } from '../src/admin-v2/mock-onboarding-core.js';
 import { platformPublicationFingerprint } from '../src/admin-v2/platform-publication-state.js';
@@ -22,18 +23,35 @@ export async function marketTenant(db, tenantId) {
   return activeCustomer(tenant) ? { id: tenant.id, name: tenant.name } : null;
 }
 
+export async function marketReference(db) {
+  return JSON.parse(await db.prepare('SELECT reference_json FROM model_workspace WHERE id=1').first('reference_json'));
+}
+
+export async function marketMember(db, id, tenantId) {
+  const record = await db.prepare(`SELECT m.value AS member
+    FROM model_workspace w, json_each(w.reference_json,'$.memberships') m, json_each(w.reference_json,'$.users') u
+    WHERE w.id=1 AND json_extract(m.value,'$.id')=?1
+      AND (?2 IS NULL OR json_extract(m.value,'$.tenantId')=?2)
+      AND json_extract(m.value,'$.status')='正常' AND json_extract(u.value,'$.status')='正常'
+      AND json_extract(u.value,'$.id')=json_extract(m.value,'$.userId') LIMIT 1`).bind(id, tenantId ?? null).first('member');
+  return record ? JSON.parse(record) : null;
+}
+
 export async function marketSession(db, request) {
   const token = request.headers.get('cookie')?.split(';').map(part => part.trim()).find(part => part.startsWith(marketCookie+'='))?.slice(marketCookie.length+1);
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
   const hash = await digest(token);
-  const session = await db.prepare('SELECT tenant_id FROM market_sessions WHERE token_hash=? AND expires_at>?').bind(hash,Date.now()).first();
+  const session = await db.prepare('SELECT tenant_id,member_id FROM market_sessions WHERE token_hash=? AND expires_at>?').bind(hash,Date.now()).first();
   const tenant = session && await marketTenant(db,session.tenant_id);
-  return tenant ? { tenant, hash } : null;
+  if (!tenant) return null;
+  const member = session.member_id ? await marketMember(db, session.member_id, tenant.id) : null;
+  if (session.member_id && !member) return null;
+  return { tenant, member, hash };
 }
 
-export async function createMarketSession(db, tenant) {
+export async function createMarketSession(db, tenant, member) {
   const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte=>byte.toString(16).padStart(2,'0')).join('');
-  await db.prepare('INSERT INTO market_sessions(token_hash,tenant_id,expires_at) VALUES(?,?,?)').bind(await digest(token),tenant.id,Date.now()+28800000).run();
+  await db.prepare('INSERT INTO market_sessions(token_hash,tenant_id,expires_at,member_id) VALUES(?,?,?,?)').bind(await digest(token),tenant.id,Date.now()+28800000,member?.id || null).run();
   return token;
 }
 
@@ -64,8 +82,9 @@ function marketOffer(row, tenant, at = Date.now()) {
     (!['weighted','priority_weighted'].includes(route.strategy) || channel.weight > 0)).map(channel => channel.supplyId);
   const allowed = Boolean(tenant && salesCustomer(model,tenant.id));
   const released = activeStages.includes(row.listing_stage) && !model.archivedAt &&
-    (row.listing_stage!=='gray' || allowed && JSON.parse(row.gray_tenants_json).includes(tenant.id));
-  return { model, price, supplyIds, released, allowed, ready: Boolean(model.visibility==='公开' && model.callsEnabled && row.calls_enabled && row.source_ready && supplyIds.length && row.active_publication_id && price) };
+    (row.listing_stage !== 'gray' || tenant && JSON.parse(row.gray_tenants_json).includes(tenant.id));
+  const providerKey = offerKey(model.serviceProviders?.find(entry => entry.callId === row.call_id));
+  return { model, price, supplyIds, released, allowed, providerKey, paused: salesPaused(model, providerKey), ready: Boolean(model.visibility==='公开' && model.callsEnabled && row.calls_enabled && row.source_ready && supplyIds.length && row.active_publication_id && price) };
 }
 
 async function loadMarketProcurement(db, offers) {
@@ -102,23 +121,29 @@ function marketSalePrices(offer, procurement, at) {
   }
 }
 
-export async function marketCatalogue(db, session) {
+export async function marketCatalogue(db, session, { projectId, commercial = true, commerceWritable = true } = {}) {
   const tenant = session?.tenant || null;
+  const context = session?.member ? await marketReference(db) : {};
+  if (!commercial && (!session?.member || internalEnterprise(context)?.id !== tenant?.id)) {
+    return { tenant: null, services: [], orders: [], projects: [] };
+  }
+  const audience = marketAudience(context, { tenantId: tenant?.id, member: session?.member, projectId });
+  if (projectId && !audience.projectId) fail(403, 'PROJECT_FORBIDDEN', '当前成员无权查看此项目');
+  const projects = audience.projects.map(({id, name}) => ({ id, name }));
   const { results } = await db.prepare(selectOffers({ includeCard: true }) + " AND (market_card IS NOT NULL OR (o.listing_stage IN ('gray','formal') AND o.market_visible=1 AND s.market_visible=1)) ORDER BY m.name,p.created_at,p.name,o.created_at,o.record_id").bind(tenant?.id || '').all();
   const offers = results.flatMap(row => {
     const card = row.market_card && JSON.parse(row.market_card);
     const offer = marketOffer(row, tenant);
-    if (!card) return offer.released && offer.ready ? [{ row, ...offer }] : [];
-    const providerKey = offerKey(offer.model.serviceProviders?.find(entry => entry.callId === row.call_id));
-    if (!marketCardVisible(card, row.record_id, tenant?.id) || !serviceCallsEnabled(offer.model) ||
-      !row.calls_enabled || !row.source_ready || servicePurpose(offer.model, providerKey) === 'internal' ||
-      (row.listing_stage === 'gray' && !offer.released)) return [];
+    if (!card) return commercial && offer.released && offer.ready ? [{ row, ...offer }] : [];
+    if (!marketCardVisible(card, row.record_id, audience) || !serviceCallsEnabled(offer.model) ||
+      !row.calls_enabled || !row.source_ready || (commercial && (servicePurpose(offer.model, offer.providerKey) === 'internal' ||
+      (row.listing_stage === 'gray' && !offer.released)))) return [];
     return [{ row, ...offer, card }];
   });
-  const procurement = await loadMarketProcurement(db,offers.filter(offer => offer.released && offer.ready)), at = Date.now();
+  const procurement = commercial ? await loadMarketProcurement(db,offers.filter(offer => offer.released && offer.ready)) : null, at = Date.now();
   const services = offers.flatMap(offer => {
     const { row, card } = offer;
-    const prices = offer.released && offer.ready ? marketSalePrices(offer,procurement,at) : null;
+    const prices = procurement && offer.released && offer.ready ? marketSalePrices(offer,procurement,at) : null;
     if (!card && !prices) return [];
     const material = modelPresentation(null, { ...domainModel(JSON.parse(row.material_json)),
       marketContent: card?.content || JSON.parse(row.service_json).marketContent });
@@ -128,12 +153,12 @@ export async function marketCatalogue(db, session) {
       maker:material.profile?.author || material.maker || '', type:material.type, description:material.description || '',
       profile:material.profile || {}, capabilities:material.capabilities || {},
       salePrices:(prices || []).map(({amount,currency,unit,effectiveAt,expiresAt})=>({amount,currency,unit,effectiveAt,expiresAt})),
-      canOrder:Boolean(prices && offer.allowed), ordered:Boolean(row.order_id), orderedAt:row.order_created_at, callable:Boolean(prices && tenant && row.order_id), stage:row.listing_stage,
+      canOrder:Boolean(commerceWritable && !session?.member && !offer.paused && prices && offer.allowed), ordered:Boolean(commercial && !session?.member && row.order_id), orderedAt:commercial && !session?.member ? row.order_created_at : null, callable:Boolean(!session?.member && prices && tenant && row.order_id), stage:row.listing_stage,
     }];
   });
-  const orders=tenant?(await db.prepare(`SELECT purchase.id,purchase.offer_id AS offerId,offer.id AS callId,purchase.created_at AS createdAt,CASE WHEN offer.retired_at IS NULL THEN offer.listing_stage ELSE 'withdrawn' END AS stage
+  const orders=commercial && tenant && !session?.member?(await db.prepare(`SELECT purchase.id,purchase.offer_id AS offerId,offer.id AS callId,purchase.created_at AS createdAt,CASE WHEN offer.retired_at IS NULL THEN offer.listing_stage ELSE 'withdrawn' END AS stage
     FROM market_orders purchase JOIN offers offer ON offer.record_id=purchase.offer_id WHERE purchase.tenant_id=? ORDER BY purchase.created_at DESC`).bind(tenant.id).all()).results:[];
-  return { tenant, services, orders };
+  return { tenant, services, orders, projects };
 }
 
 async function checkedOffer(db, session, field, value, { ordering = false } = {}) {
@@ -145,6 +170,7 @@ async function checkedOffer(db, session, field, value, { ordering = false } = {}
     fail(409, 'MODEL_UNAVAILABLE', '模型服务已停止');
   }
   if (!activeStages.includes(row.listing_stage) || !offer.ready) fail(409,'MODEL_UNAVAILABLE','模型服务已下架或暂不可用');
+  if (ordering && offer.paused) fail(409, 'MODEL_UNAVAILABLE', '此模型服务已停售');
   if (!offer.released || ordering && !offer.allowed) fail(403,'MODEL_FORBIDDEN','当前客户不在此服务的销售或灰度范围内');
   return { row, ...offer };
 }

@@ -1,3 +1,4 @@
+import { projectRole } from './project-access.mjs';
 import { modelCatalogue } from './admin-v2/model-library.js';
 import { normalizeModelLogo } from './admin-v2/model-profile.js';
 import { modelIdentity, modelPresentation } from './model-identities.mjs';
@@ -49,9 +50,53 @@ export function marketCardIndex(state, orderedModels) {
   }).sort((a, b) => rank(a) - rank(b));
 }
 
-export function marketCardVisible(card, serviceId, tenantId) {
-  return card.status === 'listed' && card.shown.includes(serviceId) &&
-    (card.scope.type === 'all' || card.scope.tenantIds.includes(tenantId));
+export const scopeFields = { organizationIds: '组织', projectIds: '项目', tenantIds: '客户' };
+const emptyScope = { type: 'all', tenantIds: [], organizationIds: [], projectIds: [] };
+const countScope = scope => Object.keys(scopeFields).reduce((count, key) => count + (scope[key]?.length || 0), 0);
+
+export function marketScopeOptions(state) {
+  const tenants = new Map((state.tenants || []).filter(activeCustomer).map(row => [row.id, row]));
+  const option = row => ({ value: row.id, label: row.name, tenantId: row.tenantId });
+  const qualified = row => ({ ...option(row), label: tenants.get(row.tenantId).name + ' · ' + row.name });
+  return {
+    tenantIds: [...tenants.values()].map(option),
+    organizationIds: (state.organizations || []).filter(row => row.status === '正常' && tenants.has(row.tenantId)).map(qualified),
+    projectIds: (state.marketProjects || state.projects || []).filter(row => row.status === '正常' && tenants.has(row.tenantId)).map(qualified),
+  };
+}
+
+function checkedMarketScope(state, input) {
+  if (!['all', 'selected'].includes(input?.type)) throw Error('请选择可见范围');
+  const choices = marketScopeOptions(state);
+  const scope = { ...emptyScope, type: input.type };
+  for (const key of Object.keys(scopeFields)) {
+    const ids = input[key] ?? [];
+    if (!Array.isArray(ids) || ids.length > 100 || new Set(ids).size !== ids.length ||
+      ids.some(id => !choices[key].some(row => row.value === id))) throw Error('可见范围包含无效的' + scopeFields[key]);
+    scope[key] = ids;
+  }
+  if ((scope.type === 'all') === Boolean(countScope(scope))) throw Error('可见范围无效');
+  return scope;
+}
+
+export function marketAudience(state, { tenantId, member, projectId } = {}) {
+  const organizations = new Set();
+  const projects = [];
+  if (member?.status === '正常' && tenantId && member.tenantId === tenantId) {
+    const own = new Map((state.organizations || []).filter(row => row.tenantId === tenantId && row.status === '正常').map(row => [row.id, row]));
+    for (let id = member.organizationId; own.has(id) && !organizations.has(id); id = own.get(id).parentId) organizations.add(id);
+    const admin = ['租户管理员', '企业管理员'].includes(member.role);
+    projects.push(...(state.projects || []).filter(row => row.tenantId === tenantId && row.status === '正常' && (admin || projectRole(row, member))));
+  }
+  return { tenantId, organizations, projects, projectId: projects.some(row => row.id === projectId) ? projectId : null };
+}
+
+export function marketCardVisible(card, serviceId, audience) {
+  const { scope } = card;
+  return card.status === 'listed' && card.shown.includes(serviceId) && (scope.type === 'all' ||
+    scope.tenantIds?.includes(audience.tenantId) ||
+    scope.projectIds?.includes(audience.projectId) ||
+    scope.organizationIds?.some(id => audience.organizations.has(id)));
 }
 
 export function marketCardIssues(card, services) {
@@ -60,7 +105,7 @@ export function marketCardIssues(card, services) {
     !card.content?.name?.trim() || !card.content?.description?.trim() ? '请补齐模型展示名称和简介' : '',
     !card.shown.length || card.shown.some(id => !card.linked.includes(id) || !available.has(id))
       ? '请至少选择一个已启动的关联服务' : '',
-    card.scope.type === 'selected' && !card.scope.tenantIds.length ? '请选择可见范围' : '',
+    card.scope.type === 'selected' && !countScope(card.scope) ? '请选择可见范围' : '',
   ].filter(Boolean);
 }
 
@@ -102,14 +147,8 @@ export function marketCardTransaction(state, action, orderedModels) {
       label = '保存模型卡片关联服务';
     } else if (operation === 'marketCardList') {
       const { scope, serviceIds } = data;
-      if (!Array.isArray(serviceIds) || new Set(serviceIds).size !== serviceIds.length ||
-        !['all', 'selected'].includes(scope?.type) || !Array.isArray(scope.tenantIds) ||
-        new Set(scope.tenantIds).size !== scope.tenantIds.length ||
-        (scope.type === 'all' && scope.tenantIds.length) ||
-        scope.tenantIds.some(id => !state.tenants.some(row => row.id === id && activeCustomer(row)))) {
-        throw Error('可见范围或展示服务无效');
-      }
-      card = { ...card, shown: serviceIds, scope: { type: scope.type, tenantIds: scope.tenantIds }, status: 'listed' };
+      if (!Array.isArray(serviceIds) || new Set(serviceIds).size !== serviceIds.length) throw Error('展示服务无效');
+      card = { ...card, shown: serviceIds, scope: checkedMarketScope(state, scope), status: 'listed' };
       const issues = marketCardIssues(card, services);
       if (issues.length) throw Error(issues.join('、'));
       label = existing.card.status === 'listed' ? '调整模型卡片上架' : '上架模型卡片';

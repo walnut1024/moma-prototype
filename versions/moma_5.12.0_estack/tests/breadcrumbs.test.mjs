@@ -113,7 +113,8 @@ test('section breadcrumbs open a real landing page and current pages remain plai
   assert.deepEqual(build('providers'), [{ label: '模型运营' }, { label: '渠道管理' }]);
   assert.deepEqual(labels(build('logs')), ['网关管理', '调用日志']);
   assert.equal(build('logs')[0].href, '#/admin-2/routes');
-  assert.equal(build('users')[0].href, '#/admin-2/tenants');
+  assert.equal(build('users')[0].href, undefined);
+  assert.deepEqual(labels(build('tenants')), ['商业运营', '客户管理']);
   assert.equal(build('deployments')[0].href, '#/admin-2/clusters');
   assert.deepEqual(labels(build('monitoring')), ['网关管理', '服务监控']);
   assert.equal(build('limits')[1].href, '#/admin-2/routes');
@@ -123,7 +124,7 @@ test('section breadcrumbs open a real landing page and current pages remain plai
 });
 
 test('model operations is a navigation group, not a link to a sibling model-service page', () => {
-  for (const page of ['providers', 'listing', 'model-market', 'model-prices', 'model-templates', 'tariff-dictionary', 'provider-materials']) {
+  for (const page of ['providers', 'listing', 'model-market', 'model-templates', 'tariff-dictionary', 'provider-materials']) {
     for (const query of ['', 'perspective=models', 'provider=p1&listQ=MoMA&listPage=2']) {
       assert.deepEqual(build(page, query)[0], { label: '模型运营' });
     }

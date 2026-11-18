@@ -9,6 +9,7 @@ import {
   IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_SITE_TEXT, MAX_SITE_URL,
   SITE_CONFIG_EVENT, SITE_IMAGES, readSiteConfig, saveSiteConfig, siteImage,
 } from '../site-config.mjs';
+import { useDeploymentLicense } from '../useDeploymentLicense';
 import { useSiteConfigSnapshot } from '../useSiteConfig';
 import './site-configuration.css';
 
@@ -69,6 +70,7 @@ function SiteImageField({ field, value, disabled, onChange, onUpload }) {
 }
 
 export default function SiteConfiguration({ dirtyRef }) {
+  const license = useDeploymentLicense();
   const raw = useSiteConfigSnapshot();
   const [draft, setDraft] = useState(null);
   const [tab, setTab] = useState('basic');
@@ -147,11 +149,11 @@ export default function SiteConfiguration({ dirtyRef }) {
             <Input id="site-title" aria-label="浏览器标题" value={config.title} maxLength={MAX_SITE_TEXT} placeholder="留空使用默认标题"
               disabled={Boolean(busy)} onChange={value => update('title', value)} />
           </Form.Slot>
-          <Form.Slot label="运营方式">
+          {license && !license.managed && <Form.Slot label="运营方式">
             <Choice label="运营方式" value={config.personalEnabled ? 'factory' : 'internal'}
               disabled={Boolean(busy)} onChange={value => update('personalEnabled', value === 'factory')}
               options={[[ 'internal', '企业内用' ], [ 'factory', '工厂外营' ]]}/>
-          </Form.Slot>
+          </Form.Slot>}
           {SITE_IMAGES.map(field => <SiteImageField key={field[0]} field={field} value={config[field[0]]} disabled={Boolean(busy)}
             onChange={value => update(field[0], value)} onUpload={file => upload(field[0], file)} />)}
         </Card>

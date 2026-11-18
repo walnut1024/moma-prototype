@@ -32,7 +32,8 @@ test('fresh D1 imports MoMA and DeepSeek before GLM-5.3 pricing, ordering and su
   const accessCode=randomBytes(18).toString('hex');
   const [a,b,c]=Array.from({length:3},()=>resourceId('tenant'));
   const tenants=[{id:a,name:'A 医院',status:'正常'},{id:b,name:'B 医院',status:'正常'},{id:c,name:'C 医院',status:'正常'}];
-  const loginHashes=Object.fromEntries(['admin-001',a,b,c].map(id=>[id,createHash('sha256').update(accessCode).digest('hex')]));
+  const orgMember = 'qa-member-org', projectMember = 'qa-member-project', org = 'qa-org', childOrg = 'qa-org-child', projectId = 'qa-project';
+  const loginHashes=Object.fromEntries(['admin-001',a,b,c,orgMember,projectMember].map(id=>[id,createHash('sha256').update(accessCode).digest('hex')]));
   const persistPath=await mkdtemp(join(tmpdir(),'moma-glm-channel-market-'));
   let local,state,admin;
   async function request(path,{body,cookie,key}={}){
@@ -86,6 +87,14 @@ test('fresh D1 imports MoMA and DeepSeek before GLM-5.3 pricing, ordering and su
       .bind(JSON.stringify({ ...tenants[0], id: 'admin-001' })).run();
     assertInvalidLogin(await signIn('admin-001'));
     await local.db.prepare("UPDATE model_workspace SET reference_json=json_remove(reference_json,'$.tenants[3]') WHERE id=1").run();
+    await local.db.prepare("UPDATE model_workspace SET reference_json=json_set(reference_json,'$.organizations',json(?),'$.projects',json(?),'$.memberships',json(?),'$.users',json(?)) WHERE id=1")
+      .bind(
+        JSON.stringify([{id:org,tenantId:a,name:'研发中心',status:'正常'}, {id:childOrg,tenantId:a,parentId:org,name:'平台组',status:'正常'}]),
+        JSON.stringify([{id:projectId,tenantId:b,name:'知识库',status:'正常',memberRoles:{[projectMember]:'项目成员'}}]),
+        JSON.stringify([{id:orgMember,tenantId:a,userId:'qa-user-org',organizationId:childOrg,role:'成员',status:'正常'}, {id:projectMember,tenantId:b,userId:'qa-user-project',role:'成员',status:'正常'}]),
+        JSON.stringify([{id:'qa-user-org',status:'正常'}, {id:'qa-user-project',status:'正常'}]),
+      ).run();
+
     admin=await login('/auth/login','admin-001');await reload();
     assert.deepEqual(state.models, []);
     assert.deepEqual(state.endpoints, []);
@@ -309,6 +318,19 @@ test('fresh D1 imports MoMA and DeepSeek before GLM-5.3 pricing, ordering and su
     assert.equal((await catalogue(other)).length, 0);
     assert.equal((await catalogue()).length, 0);
     await command('marketCardLink', { ...cardData(), serviceIds: [displayOnly.id] }, cardModelId, 422);
+    const orgCookie = await login('/market/login', orgMember);
+    const projectCookie = await login('/market/login', projectMember);
+    await command('marketCardList', { ...cardData(), scope:{ type:'selected', organizationIds:[org], projectIds:[projectId] }, serviceIds:[third.id] }, cardModelId);
+    assert.equal((await catalogue(customer)).length, 0);
+    assert.equal((await catalogue(orgCookie))[0]?.id, third.id);
+    assert.equal((await catalogue(projectCookie)).length, 0);
+    const projectCatalogue = await request('/market/catalogue?project=' + projectId, { cookie:projectCookie });
+    assert.equal(projectCatalogue.data.services[0]?.id, third.id);
+    assert.equal(projectCatalogue.data.services[0].canOrder,false);
+    assert.deepEqual(projectCatalogue.data.projects.map(row=>row.id), [projectId]);
+    assert.equal((await request('/market/catalogue?project=' + projectId, { cookie:other })).status,403);
+    assert.equal((await request('/market/catalogue?project=' + projectId, { cookie:orgCookie })).status,403);
+    assert.equal((await order(third.id, projectCookie)).status,403);
     await command('marketCardUnlist', { ...cardData(), confirmed: true }, cardModelId);
     assert.equal((await catalogue(customer)).length, 0);
     assert.deepEqual(model(), modelBeforeCard);
@@ -317,6 +339,16 @@ test('fresh D1 imports MoMA and DeepSeek before GLM-5.3 pricing, ordering and su
     assert.equal(stillCallable.status, 200);
     successful.push({source:sources[2],id:stillCallable.data.id});
     await command('marketCardList', { ...cardData(), scope: selectedScope, serviceIds: [third.id] }, cardModelId);
+    const pauses = () => ({offerKey:keys[2],expectedUpdatedAt:model().updatedAt,confirmed:true});
+    await command('pauseSales', pauses(), modelId);
+    assert.equal(salesStatus(state,model(),keys[2]), '已停售');
+    assert.equal((await catalogue(customer))[0].canOrder,false);
+    assert.equal((await order(third.id)).status,409);
+    const continued = await call(body(third.callId), other);
+    assert.equal(continued.status,200);
+    successful.push({source:sources[2],id:continued.data.id});
+    await command('startSales', release([keys[2]],[a,b]), modelId);
+    assert.equal((await catalogue(customer))[0].canOrder,true);
     await local.runtime.dispose();
     local=null;
     local=await startLocalBackend({loginHashes,persistPath});

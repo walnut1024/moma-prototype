@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useSyncExternalStore } from 'react';
-import { DEFAULT_SITE_LOGO, DEFAULT_SITE_TITLE, PRIVATE_SITE, readSiteConfig, SITE_CONFIG_EVENT, SITE_CONFIG_KEY } from './site-config.mjs';
+import { useDeploymentLicense } from './useDeploymentLicense';
+import { sitePersonalEnabled, DEFAULT_SITE_LOGO, DEFAULT_SITE_TITLE, PRIVATE_SITE, readSiteConfig, SITE_CONFIG_EVENT, SITE_CONFIG_KEY } from './site-config.mjs';
 
 function subscribe(onChange) {
   if (!PRIVATE_SITE) return () => {};
@@ -26,7 +27,11 @@ export function useSiteConfigSnapshot() {
 
 export function useSiteConfig() {
   const raw = useSiteConfigSnapshot();
-  return useMemo(() => readSiteConfig(raw), [raw]);
+  const license = useDeploymentLicense();
+  return useMemo(() => {
+    const config = readSiteConfig(raw);
+    return { ...config, personalEnabled: sitePersonalEnabled(config, license) };
+  }, [raw, license]);
 }
 
 export function restoreSiteImage(event, fallback) {

@@ -1,3 +1,4 @@
+import { marketAudience, marketCardVisible } from './market-cards.mjs';
 import { modelPresentation } from './model-identities.mjs';
 import { resourceId } from './resource-id.mjs';
 import { modelOperationsView } from './mock/model-data.js';
@@ -5,6 +6,8 @@ import { isServiceShowcase } from './admin-v2/service-showcase.js';
 import { libraryRecord } from './admin-v2/model-library.js';
 import { AUTH_DATA_KEY, readLinkedState, resolveUserIdentity, serviceReferences, serviceAccess, accessError,
   offerKey, salesCustomer, workspaceServiceOrdered } from './service-access.mjs';
+import { licenseSnapshot } from './deployment-license.mjs';
+import { salesPaused } from './service-access.mjs';
 import { siteSettlement } from './site-config.mjs';
 import { servicePurpose } from './admin-v2/service-purpose.js';
 import { getMockServiceSnapshots, mockServiceReadiness } from './admin-v2/mock-onboarding-service.js';
@@ -74,6 +77,9 @@ export function directorySnapshot(storage = globalThis.localStorage) {
   try { identity = resolveUserIdentity(state, auth, storage); } catch (error) { identityError = error.message; }
   const published = getMockServiceSnapshots();
   const settlement = siteSettlement(storage);
+  const link = identity && auth.identityLinks.find(row => row.authUserId === identity.userId && row.spaceId === identity.spaceId);
+  const member = link && state.memberships.find(row => row.id === link.backendMembershipId);
+  const audience = marketAudience(state, { tenantId: identity?.tenantId, member });
   const defaultModelIds = new Set(modelOperationsView(state).models.map(row=>row.id));
   const models = serviceReferences(state).flatMap(service => {
     if (service.providerId && service.model.serviceProviders.find(row=>row.providerId===service.providerId)?.marketVisible===false) return [];
@@ -90,10 +96,15 @@ export function directorySnapshot(storage = globalThis.localStorage) {
       ({ id, amount, currency, unit, effectiveAt, expiresAt })) || [];
     const ordered = identity && settlement === 'customer' && workspaceServiceOrdered(state, identity.tenantId, service);
     const orderable = access.allowed && settlement === 'customer' && servicePurpose(model, offerKey(service)) !== 'internal' &&
+      licenseSnapshot()?.commerceWritable !== false && !salesPaused(model, offerKey(service)) &&
       salesCustomer(model, identity.tenantId) && customerPriceRows(salePrices).length > 0;
     if (access.allowed && settlement === 'customer' && !ordered) access = { allowed:false, reason:'请先在当前使用空间订购此服务' };
+    const display = state.modelData?.marketCards?.[service.model_id];
+    const marketVisible = display ? marketCardVisible(display, service.model_service_id, audience) : model.marketVisible !== false;
+    const marketProjectIds = display?.status === 'listed' && display.shown.includes(service.model_service_id)
+      ? audience.projects.filter(row => display.scope.projectIds?.includes(row.id)).map(row => row.id) : [];
     const tasks = experienceTasks(model), supplier = service.providerId ? state.providers?.find(row => row.id === service.providerId)?.name : '平台统一模型服务模式';
-    return [{ ...presentation(model), modelKey: model.id, marketVisible: model.marketVisible !== false, mode: model.serviceMode, showcase: isServiceShowcase(model), defaultCatalogue: defaultModelIds.has(model.id), guideRequest: serviceGuideRequest(model, service.callId, service.providerId), id: service.id, callId: service.callId, name: modelPresentation(state,model).name, type: model.type === 'audio' ? 'voice' : model.type, providerId: service.providerId || MOMA_PROVIDER.id, provider: supplier || '未配置', maker: modelPresentation(state,model).profile?.author || modelPresentation(state,model).maker || '未填写', desc: modelPresentation(state,model).description || '', description: modelPresentation(state,model).description || '', context: model.capabilities?.context ? `${Math.round(model.capabilities.context / 1024)}K` : '未填写', contextTokens: model.capabilities?.context ?? null, date: model.updatedAt?.slice(0,10) || '', series: model.profile?.family || '', input: (model.profile?.inputModalities || []).map(item => item === '图片' ? '图像' : item), outputModalities: [...new Set([...(model.profile?.outputModalities || []), ...(model.profile?.resultTypes || [])])].map(item => item === '图片' ? '图像' : item), businessTasks: model.profile?.tasks || [], output: model.capabilities?.output ?? '未填写', tags: model.tags || [], tasks, inputModalities: (model.profile?.inputModalities || []).map(item => ({ 文本: 'text', 图片: 'image', 音频: 'audio', 视频: 'video' }[item] || item)), documentation: modelPresentation(state,model).profile?.documentation || '', billing: '按量计费', salePrices, ordered, orderable, icon: 1, serviceAvailable: access.allowed, callable: access.allowed && tasks.length > 0, reason: access.reason || (tasks.length ? '' : '当前任务暂无在线体验入口'), generation: model.accessGeneration || 0 }];
+    return [{ ...presentation(model), modelKey: model.id, marketVisible, marketProjectIds, marketCardManaged: Boolean(display), mode: model.serviceMode, showcase: isServiceShowcase(model), defaultCatalogue: defaultModelIds.has(model.id), guideRequest: serviceGuideRequest(model, service.callId, service.providerId), id: service.id, callId: service.callId, name: modelPresentation(state,model).name, type: model.type === 'audio' ? 'voice' : model.type, providerId: service.providerId || MOMA_PROVIDER.id, provider: supplier || '未配置', maker: modelPresentation(state,model).profile?.author || modelPresentation(state,model).maker || '未填写', desc: modelPresentation(state,model).description || '', description: modelPresentation(state,model).description || '', context: model.capabilities?.context ? `${Math.round(model.capabilities.context / 1024)}K` : '未填写', contextTokens: model.capabilities?.context ?? null, date: model.updatedAt?.slice(0,10) || '', series: model.profile?.family || '', input: (model.profile?.inputModalities || []).map(item => item === '图片' ? '图像' : item), outputModalities: [...new Set([...(model.profile?.outputModalities || []), ...(model.profile?.resultTypes || [])])].map(item => item === '图片' ? '图像' : item), businessTasks: model.profile?.tasks || [], output: model.capabilities?.output ?? '未填写', tags: model.tags || [], tasks, inputModalities: (model.profile?.inputModalities || []).map(item => ({ 文本: 'text', 图片: 'image', 音频: 'audio', 视频: 'video' }[item] || item)), documentation: modelPresentation(state,model).profile?.documentation || '', billing: '按量计费', salePrices, ordered, orderable, icon: 1, serviceAvailable: access.allowed, callable: access.allowed && tasks.length > 0, reason: access.reason || (tasks.length ? '' : '当前任务暂无在线体验入口'), generation: model.accessGeneration || 0 }];
   });
   return { models, identity, identityError, error: '' };
 }
