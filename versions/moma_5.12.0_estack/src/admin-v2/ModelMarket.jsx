@@ -247,7 +247,7 @@ export default function ModelMarket(props) {
       requestAnimationFrame(() => button.focus());
     }
   };
-  const actions = row => <Space wrap>
+  const actions = (row, inList = false) => <Space wrap={!inList} spacing={inList ? 4 : 8} className={inList ? 'market-list-actions' : undefined}>
     <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('edit', row.modelId, event.currentTarget)}>展示信息</Button>
     <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('link', row.modelId, event.currentTarget)}>关联服务</Button>
     <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('list', row.modelId, event.currentTarget)}>{row.card.status === 'listed' ? '调整上架' : '上架'}</Button>
@@ -260,12 +260,14 @@ export default function ModelMarket(props) {
   </Space>;
   if (params.get('resourceJson') === '1') return <ModelResourceJsonPage state={props.state} ops={ops} scope="market"/>;
   return <div className="semi-services sp-workspace">
-    <ModelModuleHeading module="market">
-      <ModelResourceTransfer state={props.state} ops={ops} scope="market"/>
-      <Button theme="solid" icon={<IconPlus/>} disabled={!ops.can || busy}
-        onClick={event => openCard('create', null, event.currentTarget)}>新建模型卡片</Button>
-      <RadioGroup type="button" aria-label="模型广场视图" options={viewOptions} value={view}
-        onChange={event => go({ view: event.target.value === 'cards' ? 'cards' : null }, { replace: true, preserveScroll: true })}/>
+    <ModelModuleHeading module="market" className="market-heading">
+      <Space wrap spacing={12} className="market-heading-actions">
+        <ModelResourceTransfer state={props.state} ops={ops} scope="market"/>
+        <Button theme="solid" icon={<IconPlus/>} disabled={!ops.can || busy}
+          onClick={event => openCard('create', null, event.currentTarget)}>新建模型卡片</Button>
+        <RadioGroup type="button" aria-label="模型广场视图" options={viewOptions} value={view}
+          onChange={event => go({ view: event.target.value === 'cards' ? 'cards' : null }, { replace: true, preserveScroll: true })}/>
+      </Space>
     </ModelModuleHeading>
     <div className="sp-filters">
       <Input prefix={<IconSearch aria-hidden="true"/>} showClear aria-label="搜索模型展示名、模型编码、模型服务 ID 或模型调用标识" placeholder="模型展示名 / 模型编码 / 模型服务 ID / 模型调用标识" value={query} onChange={q => changeFilters({ q: q || null })}/>
@@ -297,8 +299,8 @@ export default function ModelMarket(props) {
         </SortableContext>
       </DndContext>
       <AdminPagination className="market-card-pagination" total={rows.length} pageSize={pageSize} currentPage={currentPage} onPageChange={changePage}/>
-    </> : <Empty description={emptyMessage}/> : <Table size="small" rowKey="id" dataSource={pageRows}
-      scroll={{ x: 920 }} pagination={{ pageSize, currentPage, total: rows.length, onPageChange: changePage }} empty={emptyMessage}
+    </> : <Empty description={emptyMessage}/> : <Table className="market-model-table" size="small" rowKey="id" dataSource={pageRows}
+      scroll={{ x: '100%' }} pagination={{ pageSize, currentPage, total: rows.length, onPageChange: changePage }} empty={emptyMessage}
       onRow={row => ({
         className: dropTarget === row.id ? 'market-order-target' : undefined,
         onDragOver: event => {
@@ -314,18 +316,18 @@ export default function ModelMarket(props) {
           void saveOrder(drag.id, positions.get(row.id), drag.revision);
         },
       })} columns={[
-      { title: '序号', width: 88, render: (_, row) => orderButton(row) },
-      { title: '模型', width: 200, render: (_, row) => <Space vertical align="start" spacing={2}>
-        <Typography.Text strong>{row.name}</Typography.Text>
-        <CopyId value={row.canonicalSlug} label="模型编码"/>
+      { title: '序号', width: '9%', render: (_, row) => orderButton(row) },
+      { title: '模型', render: (_, row) => <Space className="market-list-identity" vertical align="start" spacing={2}>
+        <Typography.Text strong ellipsis={{ showTooltip: true }}>{row.name}</Typography.Text>
+        <CopyId value={row.canonicalSlug} label="模型编码" ellipsis={{ showTooltip: true }}/>
       </Space> },
-      { title: '类型', width: 88, render: (_, row) => MODEL_CATALOGUE_TYPES[modelCategory(row.type)] || row.type },
-      { title: '关联服务', width: 105, render: (_, row) => row.card.linked.length
+      { title: '类型', width: '8%', render: (_, row) => MODEL_CATALOGUE_TYPES[modelCategory(row.type)] || row.type },
+      { title: '关联服务', width: '12%', render: (_, row) => row.card.linked.length
         ? <Button size="small" theme="borderless" onClick={event => openCard('link', row.modelId, event.currentTarget)}>{row.card.linked.length} 个服务</Button>
         : '未关联' },
-      { title: '可见范围', width: 120, render: (_, row) => scopeLabel(row.card) },
-      { title: '上架状态', width: 92, render: (_, row) => <AdminStatus value={displayStatus[row.card.status]}/> },
-      { title: '操作', width: 300, render: (_, row) => actions(row) },
+      { title: '可见范围', width: '14%', render: (_, row) => scopeLabel(row.card) },
+      { title: '上架状态', width: '9%', render: (_, row) => <AdminStatus value={displayStatus[row.card.status]}/> },
+      { title: '操作', width: 320, render: (_, row) => actions(row, true) },
     ]}/>}
     {cardDialog && (cardDialog.kind === 'create' || cardRow) && <MarketCardDialogs
       key={cardDialog.kind + ':' + cardDialog.modelId} kind={cardDialog.kind} row={cardRow} state={props.state}

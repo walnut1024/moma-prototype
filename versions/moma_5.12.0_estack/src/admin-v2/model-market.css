@@ -1,3 +1,9 @@
+.market-heading-actions { margin-inline-start: auto; justify-content: flex-end; }
+.market-model-table .semi-table { min-width: 980px; table-layout: fixed; }
+.market-list-identity,
+.market-list-identity > .semi-typography { width: 100%; min-width: 0; }
+.market-list-actions .semi-button { padding-inline: 4px; white-space: nowrap; }
+
 .market-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr));
