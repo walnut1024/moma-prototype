@@ -9,6 +9,7 @@ import { changeCustomerPassword, createMarketSession, customerIdentity, dualDemo
 import { acceptCustomerInvitation, applicationBootstrap, applicationCommand, customerInvocation, dualDemoIdentity, initializeApplication, inspectCustomerInvitation,
   issueCustomerInvitation, tenantCommand, tenantWorkspace, validCallMetadata, validCallModel } from './application.js';
 import { API_PREFIX, isApiPath } from '../api-path.js';
+import { commercialModelWrite, deploymentLicense, LICENSE_UNAVAILABLE } from '../src/deployment-license.mjs';
 import { auditLogDetail, auditLogPage } from './audit-log.js';
 import { PRIVATE_SITE } from '../src/site-config.mjs';
 import { isTenantRouteCall, validRouteOptions } from '../src/tenant-routing.mjs';
@@ -85,12 +86,12 @@ async function adminLoginAccount(db, username, received, hashes) {
   return valid && typeof expected === 'string' ? { id:account.id, name:account.name, role:account.role, loginName:account.login_name } : null;
 }
 
-async function customerLoginAccount(db, username, accessCode, received, hashes, accountType) {
+async function customerLoginAccount(db, username, accessCode, received, hashes, accountType, license) {
   const field = accountType ? 'username' : 'login';
-  let identity = await customerIdentity(db, username, field);
+  let identity = await customerIdentity(db, username, field, null, license);
   if (!identity && Object.hasOwn(hashes, username) && typeof hashes[username] === 'string' && await secureEqual(received, hashes[username])) {
     await initializeApplication(db, username);
-    identity = await customerIdentity(db, username, field);
+    identity = await customerIdentity(db, username, field, null, license);
   }
   if (!identity) return null;
   const expected = Object.hasOwn(hashes, identity.user.id) && hashes[identity.user.id];
@@ -235,10 +236,20 @@ async function route(request, env, requestId) {
   const loginField = LOGIN_FIELDS.get(path);
   const agreementPath = path === '/site-agreements' && (PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1');
   const spacePolicyPath = path === '/project-space-policy' && (PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1');
-  const known = path===CHAT_COMPLETIONS || agreementPath || spacePolicyPath || loginField || marketPaths.includes(path) || applicationPaths.includes(path) || trafficPath || trafficHistoryPath || auditPath || packagePath || ['/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-operations','/model-operations/commands'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
+  const known = path===CHAT_COMPLETIONS || agreementPath || spacePolicyPath || loginField || marketPaths.includes(path) || applicationPaths.includes(path) || trafficPath || trafficHistoryPath || auditPath || packagePath || ['/deployment/license','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-operations','/model-operations/commands'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
   if (!known) fail(404, 'NOT_FOUND', 'API 不存在');
   if (!env.MODEL_OPS_DB) fail(503, 'DATABASE_UNAVAILABLE', '模型运营数据库尚未绑定');
   const db = env.MODEL_OPS_DB;
+  const boundLicense = deploymentLicense(env);
+  const license = !boundLicense.managed && (await readProjectSpacePolicy(db)).operatingMode === 'internal'
+    ? { ...boundLicense, edition:'internal', commercial:false, commerceWritable:false } : boundLicense;
+  const requireCommerce = (write = false) => {
+    if (write ? !license.commerceWritable : !license.commercial) fail(403,'LICENSE_REQUIRED',LICENSE_UNAVAILABLE);
+  };
+  if (path === '/deployment/license') {
+    if (method !== 'GET') fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
+    return json(license);
+  }
   if (path===CHAT_COMPLETIONS) {
     if (method!=='POST') fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
     const credential=/^Bearer (sk-[0-9a-f]{32})$/i.exec(request.headers.get('authorization') || '')?.[1];
@@ -309,7 +320,7 @@ async function route(request, env, requestId) {
     if (!hashes || typeof hashes !== 'object' || Array.isArray(hashes)) fail(503, 'LOGIN_UNAVAILABLE', '测试账号登录尚未配置');
     const username = login.trim().toLowerCase(), received = await digest(body.accessCode);
     const account = customerOnly ? null : await adminLoginAccount(db, username, received, hashes);
-    const customer = adminOnly ? null : await customerLoginAccount(db, username, body.accessCode, received, hashes, body.accountType);
+    const customer = adminOnly ? null : await customerLoginAccount(db, username, body.accessCode, received, hashes, body.accountType, license);
     if ((!account && !customer) || (account && customer)) fail(401, 'INVALID_LOGIN', '账号或密码无效');
     await revokeSessions(request,db);
     if (customer) {
@@ -355,9 +366,13 @@ async function route(request, env, requestId) {
       return json(await experienceOptions(db,url.searchParams.get('task')));
     }
     if(path==='/market/ranking' && method==='GET')return json(await marketRanking(db));
-    if (path === '/market/catalogue' && method === 'GET') return json(await marketCatalogue(db,await marketSession(db,request)));
+    if (path === '/market/catalogue' && method === 'GET') {
+      const projectId = url.searchParams.get('project');
+      if (projectId && !identifier(projectId)) fail(400,'INVALID_INPUT','项目标识无效');
+      return json(await marketCatalogue(db,await marketSession(db,request,license),{ projectId, display:true, license }));
+    }
     if (['/market/workspace','/market/conversations'].includes(path) && method === 'GET') {
-      const session = await marketSession(db,request);
+      const session = await marketSession(db,request,license);
       if (!session) fail(401,'TENANT_SESSION_REQUIRED','请先登录客户账号');
       return json(await (path==='/market/workspace'?tenantWorkspace(db,session):textConversations(db,session)));
     }
@@ -373,7 +388,7 @@ async function route(request, env, requestId) {
       await resetCustomerPassword(db,body);
       return json({updated:true},200,{'Set-Cookie':cookie('',0).replace(COOKIE+'=',marketCookie+'=')});
     }
-    const session=await marketSession(db,request);
+    const session=await marketSession(db,request,license);
     if (path==='/market/logout') {
       if (session) await db.prepare('DELETE FROM market_sessions WHERE token_hash=?').bind(session.hash).run();
       return json({loggedOut:true},200,{'Set-Cookie':cookie('',0).replace(COOKIE+'=',marketCookie+'=')});
@@ -415,10 +430,12 @@ async function route(request, env, requestId) {
     if (path === '/market/commands') {
       const body = await bodyJson(request);
       fields(body,['operationId','tenantId','expectedRevision','action','data']);
+      if (body.action === 'subscribe') requireCommerce(true);
       return json(await tenantCommand(db,session,body));
     }
     const body=await bodyJson(request,path==='/market/completions'?32*1024:8192);
     if (path==='/market/orders') {
+      requireCommerce(true);
       fields(body,['offerIds','tenantId','salePriceIds']);
       if (!Array.isArray(body.offerIds) || !body.offerIds.length || body.offerIds.length>20 || new Set(body.offerIds).size!==body.offerIds.length || body.offerIds.some(id=>typeof id!=='string' || !/^[A-Za-z0-9:_.-]{1,512}$/.test(id))) fail(400,'INVALID_INPUT','请选择 1–20 项不同的渠道服务');
       if ((body.tenantId!==undefined && !identifier(body.tenantId)) || (body.salePriceIds!==undefined &&
@@ -462,7 +479,7 @@ async function route(request, env, requestId) {
     if (path === '/application/commands' && method === 'POST') {
       const body = await bodyJson(request);
       fields(body,['operationId','expectedRevision','action']);
-      return json(await applicationCommand(db,actor,body,request.headers.get('idempotency-key'),configured));
+      return json(await applicationCommand(db,actor,body,request.headers.get('idempotency-key'),configured,license));
     }
     fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
   }
@@ -507,11 +524,23 @@ async function route(request, env, requestId) {
     fields(body, ['operationId', 'expectedRevision', 'accountId', 'operation', 'id', 'data']);
     return json(await updateTrafficLimits(db, actor, body, request.headers.get('idempotency-key')));
   }
+  if (packagePath) requireCommerce(path === '/package-management/commands');
   if (path === '/package-management' && method === 'GET') return json(await packageBootstrap(db, actor));
   if (path === '/package-management/factor-history' && method === 'GET') return json(await packageFactorHistory(db, url.searchParams.get('model')));
   if (path === '/package-management/commands' && method === 'POST') return json(await packageCommand(db, actor, await bodyJson(request, 16 * 1024), request.headers.get('idempotency-key')));
   if(path==='/model-operations' && method==='GET')return new Response(await modelBootstrap(db,actor),{headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
-  if(path==='/model-operations/commands' && method==='POST')return json(await modelCommand(db,actor,await bodyJson(request,10*1024*1024+65536),request.headers.get('idempotency-key')));
+  if (path === '/model-operations/commands' && method === 'POST') {
+    const body = await bodyJson(request,10*1024*1024+65536);
+    if (commercialModelWrite(body.action)) requireCommerce(true);
+    if (!license.commercial && body.action?.operation === 'marketCardList') {
+      const scope = body.action.data?.scope;
+      const { internalTenantId } = await readProjectSpacePolicy(db);
+      const reference = JSON.parse(await db.prepare('SELECT reference_json FROM model_workspace WHERE id=1').first('reference_json'));
+      if (scope?.tenantIds?.length || Object.entries({ organizationIds:'organizations', projectIds:'projects' }).some(([key, collection]) =>
+        Array.isArray(scope?.[key]) && scope[key].some(id => !(reference[collection] || []).some(row => row.id === id && row.tenantId === internalTenantId)))) requireCommerce();
+    }
+    return json(await modelCommand(db,actor,body,request.headers.get('idempotency-key'),license));
+  }
   if(path.startsWith('/simulation/')){const result=await simulationRequest(db,actor,path.slice('/simulation'.length)+url.search,method,method==='GET'?{}:await bodyJson(request),request.headers.get('idempotency-key'));return json(result,result.error?422:200);}
   if (['/materials','/services','/suppliers'].includes(path) && method === 'GET') return json(await list(db, url, path.slice(1)));
   if (dictionary && method === 'GET') {

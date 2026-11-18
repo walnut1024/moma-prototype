@@ -9,11 +9,11 @@ import { serviceConfigurationTarget } from './service-workspace';
 import { routingServices } from './service-routing';
 import { offerKey, offerStage, providerOffer, salesCustomer } from '../service-access.mjs';
 
-export default function ServiceListingDialog({state,model,ops,stage,close}) {
+export default function ServiceListingDialog({state,model,ops,stage,close,initialOfferKey}) {
   const [tenantIds,setTenantIds]=useState(model.serviceMode==='provider' ? [] : model.releaseTenantIds || []),[revision]=useState(model.updatedAt),[busy,setBusy]=useState(false);
-  const [selected,setSelected]=useState([]),[validation,setValidation]=useState(null);
+  const [selected,setSelected]=useState(initialOfferKey ? [initialOfferKey] : []),[validation,setValidation]=useState(null);
   const gray=stage==='gray',withdraw=stage==='withdrawn',selectOffers=model.serviceMode==='provider';
-  const label=withdraw?'下架':gray?'灰度上架':'正式上架';
+  const label=withdraw?'下架':gray?'灰度开售':'开售模型服务';
   const tenants=scopeTenants(state).filter(tenant=>!selectOffers || salesCustomer(model,tenant.id));
   const changed=revision!==model.updatedAt;
   const groups=new Map();
@@ -43,7 +43,7 @@ export default function ServiceListingDialog({state,model,ops,stage,close}) {
   if (validation) return <PlatformTrialDialog state={state} model={model} ops={ops} providerId={validation.providerId} close={()=>setValidation(null)} onPublished={close}/>;
   return <Modal wide title={label} description={model.name} onClose={()=>!busy && close()} footer={<>
     <Button disabled={busy} onClick={close}>取消</Button>
-    <Button loading={busy} disabled={!ops.can || Boolean(ops.conflict) || busy || changed || invalid || checks.some(row=>!row.passed)} onClick={submit}>确认{label}</Button>
+    <Button loading={busy} disabled={!ops.can || Boolean(ops.conflict) || busy || changed || invalid || checks.some(row=>!row.passed)} onClick={submit}>{withdraw ? "确认下架" : gray ? "确认灰度开售" : "确认开售"}</Button>
   </>}>
     {selectOffers && <div>
       <Typography.Title heading={6}>渠道服务</Typography.Title>

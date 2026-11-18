@@ -4,11 +4,12 @@ import { importModelResources } from './model-resource-transfer.js';
 import { normalizeModelLogo } from './model-profile.js';
 import { providerIntakeTransaction } from './provider-intake.js';
 import { resourceId } from '../resource-id.mjs';
-import { offerKey, offerStage, offerGrayTenants, providerOffer, serviceReferences, salesCustomer } from '../service-access.mjs';
+import { offerKey, offerStage, offerGrayTenants, providerOffer, serviceReferences, salesCustomer, salesPaused } from '../service-access.mjs';
 import { channelBlockReason } from './provider-channels.js';
 import { resolveChannelAssociationModel } from './channel-association-model.js';
 import { salesChecks } from './service-sales.js';
-import { marketOrderTransaction } from './model-market-order.js';
+import { marketOrderTransaction, orderedMarketModels } from './model-market-order.js';
+import { marketCardTransaction } from '../market-cards.mjs';
 import { serviceScope } from './service-commercial.js';
 import { publicationChecks } from './model-management.js';
 import { SERVICE_PURPOSES, servicePurpose } from './service-purpose.js';
@@ -121,6 +122,9 @@ export function operationsTransaction(state, action) {
   const target=action.modelId || (action.data?.serviceId && state.models.find(row=>action.data.serviceId===`standard:${row.id}` || action.data.serviceId.startsWith(`provider:${row.id}:`))?.id);
   if (state.models.find(row => row.id === target)?.deletedAt) throw Error('模型服务已删除');
   if(state.models.find(row=>row.id===target)?.archivedAt && !['serviceRestore','serviceDelete','recordFailedOperation'].includes(action.operation) && !action.operation.startsWith('template'))throw Error('服务已归档，请先恢复服务');
+  if (['marketCardCreate', 'marketCardEdit', 'marketCardLink', 'marketCardList', 'marketCardUnlist'].includes(action.operation)) {
+    return marketCardTransaction(state, action, orderedMarketModels(state));
+  }
   if (action.operation === 'marketReorder') return marketOrderTransaction(state, action);
   if (action.operation === 'archiveAcceptanceFixture') return archiveAcceptanceFixture(state, action.data);
   if (action.operation === 'cleanModelCatalogue') return cleanModelCatalogueTransaction(state);
@@ -158,7 +162,21 @@ export function operationsTransaction(state, action) {
   if (operation.startsWith('guided')) assertOnboardingMetadata(data);
   let objectId = modelId, label;
   const modelForSale = working.models.find(row=>row.id===modelId);
-  if (['startSales','stopSales'].includes(operation) && modelForSale?.serviceMode==='provider' && (data.offerKeys || providerServices(modelForSale).some(row=>row.channelId))) {
+  if (operation === 'pauseSales') {
+    const model = modelForSale;
+    const key = data.offerKey || '';
+    const provider = model?.serviceMode === 'provider';
+    const entry = provider ? providerOffer(model, key) : null;
+    if (!model || (provider ? !entry : model.serviceMode !== 'standard' || key) ||
+      data.confirmed !== true || data.expectedUpdatedAt !== model.updatedAt ||
+      !['gray', 'formal'].includes(offerStage(model, entry)) || salesPaused(model, key)) {
+      throw Error('销售状态已变化，请重新核对要停售的服务');
+    }
+    update('models', model.id, provider ? {
+      serviceProviders: model.serviceProviders.map(row => row === entry ? { ...row, salesPaused: true } : row),
+    } : { salesPaused: true });
+    label = '停售模型服务';
+  } else if (['startSales','stopSales'].includes(operation) && modelForSale?.serviceMode==='provider' && (data.offerKeys || providerServices(modelForSale).some(row=>row.channelId))) {
     const model=modelForSale, keys=data.offerKeys;
     if (data.expectedUpdatedAt!==model.updatedAt || data.confirmed!==true) throw Error('销售配置已变化，请核对并明确确认');
     if (!Array.isArray(keys) || !keys.length || keys.length>20 || new Set(keys).size!==keys.length || keys.some(key=>typeof key!=='string' || !providerOffer(model,key))) throw Error('请选择有效渠道服务');
@@ -173,7 +191,7 @@ export function operationsTransaction(state, action) {
       throw Error('所选渠道服务已下架，请刷新后重新选择');
     }
     const serviceProviders=model.serviceProviders.map(row=>row.status==='已移除' ? row : keys.includes(offerKey(row))
-      ? {...row,listingStage:stage,grayTenantIds}
+      ? {...row,listingStage:stage,grayTenantIds,...(operation === 'startSales' ? { salesPaused: false } : {})}
       : {...row,listingStage:offerStage(model,row),grayTenantIds:offerGrayTenants(model,row)});
     const active=serviceProviders.filter(row=>row.status!=='已移除' && ['formal','gray'].includes(row.listingStage));
     const formal=active.some(row=>offerStage(model,row)==='formal');
@@ -192,7 +210,7 @@ export function operationsTransaction(state, action) {
       const releaseStage=data.releaseStage || 'formal';
       if(!['gray','formal'].includes(releaseStage))throw Error('请选择灰度上架或正式上架');
       const releaseTenantIds=releaseStage==='gray'?serviceScope(working,{openScope:'selected',tenantIds:data.releaseTenantIds}).tenantIds:[];
-      update('models',modelId,{listingStatus:'已上架',visibility:'公开',releaseStage,releaseTenantIds,firstPublishedAt:model.firstPublishedAt || new Date().toISOString()});label=releaseStage==='gray'?'灰度上架':'正式上架';
+      update('models',modelId,{listingStatus:'已上架',visibility:'公开',releaseStage,releaseTenantIds,salesPaused:false,firstPublishedAt:model.firstPublishedAt || new Date().toISOString()});label=releaseStage==='gray'?'灰度上架':'正式上架';
     }
   } else if (['enableService','disableService','stopSales'].includes(operation)) {
     label=modelOp(operation,modelId,data).label;

@@ -24,9 +24,9 @@ export default function CustomerPage(props) {
   const q = params.get('q') || '', type = params.get('type') || '', status = params.get('status') || '';
   const rows = state.tenants.filter(tenant => isManagedCustomerAccount(tenant) && (!params.get("source") || accountDataSource(tenant) === params.get("source")) && (!type || (type === '个人' ? tenant.type === '个人' : ['企业', '政府'].includes(tenant.type))) && (!status || tenant.status === status) && `${tenant.name} ${tenant.id}`.toLowerCase().includes(q.trim().toLowerCase()));
   const size = normalizePageSize(params.get('size')), page = Math.max(1, Math.min(Number(params.get('page')) || 1, Math.ceil(rows.length / size) || 1));
-  const canWrite = !conflict && !state.storageError && ['平台管理员', '运营人员'].includes(state.currentRole);
+  const canWrite = !state.commerceReadOnly && !conflict && !state.storageError && ['平台管理员', '运营人员'].includes(state.currentRole);
   return <div className="admin-page-stack admin-enterprise-page">
-    <AdminPageHeading title="租户管理"><Space wrap>
+    <AdminPageHeading title="客户管理"><Space wrap>
       <Button disabled={!canWrite} onClick={() => { location.hash = '#/admin-2/tenants?create=personal'; }}>开通个人租户</Button>
       <Button theme="solid" disabled={!canWrite} onClick={() => { location.hash = '#/admin-2/tenants?create=enterprise'; }}>开通政企租户</Button>
     </Space></AdminPageHeading>

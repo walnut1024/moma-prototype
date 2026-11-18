@@ -73,8 +73,15 @@ function auditValue(value,key,state) {
   return Object.fromEntries(Object.entries(value).filter(([field])=>auditFields[field]).map(([field,item])=>[auditFields[field],auditValue(item,field,state)]));
 }
 export function modelAuditChanges(state,action) {
+  if (action.marketCard) {
+    const { modelId, card } = action.marketCard;
+    const before = state.modelData?.marketCards?.[modelId];
+    const fields = { status: '展示状态', linked: '关联服务', shown: '展示服务', scope: '可见范围' };
+    return Object.entries(fields).filter(([key]) => JSON.stringify(before?.[key]) !== JSON.stringify(card[key]))
+      .map(([key, field]) => ({ object: card.content.name, field, before: before?.[key] ?? null, after: card[key] }));
+  }
   if (action.marketPosition) {
-    return [{ object: state.models.find(model => model.id === action.objectId)?.name, field: '序号', ...action.marketPosition }];
+    return [{ object: (state.models.find(model => model.id === action.objectId) || state.modelTemplates.find(model => model.id === action.objectId))?.name, field: '序号', ...action.marketPosition }];
   }
   return (action.type==='batch'?action.changes:action.collection?[action]:[]).flatMap(change=>{
     const old=state[change.collection]?.find(row=>row.id===change.id),value=change.changes || change.record || {};

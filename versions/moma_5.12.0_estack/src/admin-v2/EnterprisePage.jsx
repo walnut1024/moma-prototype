@@ -263,7 +263,7 @@ export default function EnterprisePage({ state, transact, deploymentTarget }) {
   const query = params.get('q') || '';
   const status = params.get('status') || '';
   const source = params.get('source') || '';
-  const canWrite = !state.storageError && ['平台管理员', '运营人员'].includes(state.currentRole);
+  const canWrite = !state.commerceReadOnly && !state.storageError && ['平台管理员', '运营人员'].includes(state.currentRole);
   const apply = action => transact(action);
   const rows = companies.filter(item =>
     (!status || item.status === status) && (!params.get('scenario') || item.deploymentMode === deploymentMode) && (!source || accountDataSource(item) === source) &&

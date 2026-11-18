@@ -368,7 +368,7 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
   const size = normalizePageSize(params.get('size'));
   const page = Math.max(1, Math.min(Math.floor(Number(params.get('page'))) || 1, Math.ceil(rows.length / size) || 1));
   const tab = Object.hasOwn(individualTabs, params.get('tab')) ? params.get('tab') : 'info';
-  const canWrite = !conflict && !state.storageError && ['平台管理员', '运营人员'].includes(state.currentRole);
+  const canWrite = !state.commerceReadOnly && !conflict && !state.storageError && ['平台管理员', '运营人员'].includes(state.currentRole);
   useEffect(() => { if (!canWrite) { setSelected([]); setBulkMode(false); } }, [canWrite]);
   const selecting = bulkMode && canWrite && !userId;
   const complete = text => {

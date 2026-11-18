@@ -354,7 +354,7 @@ function adminAction(state, actor, action) {
   return action;
 }
 
-export async function applicationCommand(db, actor, body, key, configuredAdmins) {
+export async function applicationCommand(db, actor, body, key, configuredAdmins, license) {
   const { operationId, expectedRevision, action } = body;
   if (!validId(operationId) || key !== operationId || !Number.isSafeInteger(expectedRevision) || typeof action?.type !== 'string') issue(400, 'INVALID_INPUT', '操作标识或修订号无效');
   safeAction(action);
@@ -363,7 +363,16 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins)
   const { row, reference, state } = await applicationState(db, actor);
   if (state.revision !== expectedRevision || !row.application_revision) conflict();
   let next, cancellation, invocationFact, projectAudit, initialCredential;
-  const policy=await readProjectSpacePolicy(db);
+  const savedPolicy=await readProjectSpacePolicy(db);
+  const policy=license?.managed ? { ...savedPolicy, operatingMode:license.commercial ? 'factory' : 'internal' } : savedPolicy;
+  const commerceCollections = ['products','orders','bills','ledger','settlements','adjustments','announcements'];
+  const changes = Array.isArray(action.changes) ? action.changes : [action];
+  if (license && !license.commerceWritable && (['activateOrder','cancelMarketOrder','generateBills','adjustment','individual'].includes(action.type) ||
+      (license.commercial && action.type === 'enterprise') ||
+      (action.type === 'simulateInvocation' && action.data?.purpose === 'metering-test') ||
+      changes.some(change => commerceCollections.includes(change?.collection)))) {
+    issue(403,'LICENSE_REQUIRED','商业运营授权不可用');
+  }
   try {
     if (action.type==='cancelMarketOrder' && canMutate(actor.role,{type:'update',collection:'orders'})) {
       if(!validId(action.id)) throw Error('订单标识无效');

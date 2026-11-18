@@ -22,6 +22,8 @@ export const providerOffer = (model, key) => model.serviceProviders?.find(entry 
 export const serviceCallsEnabled = (model, entry) => !model.archivedAt && model.callsEnabled === true && entry?.callsEnabled !== false;
 export const offerStage = (model, entry) => entry?.listingStage ?? (model.listingStatus === '已上架' ? model.releaseStage === 'gray' ? 'gray' : 'formal' : model.firstPublishedAt ? 'withdrawn' : 'unlisted');
 export const offerGrayTenants = (model, entry) => (entry?.listingStage ? entry.grayTenantIds : model.releaseTenantIds) || [];
+export const salesPaused = (model, key) => (model.serviceMode === 'provider'
+  ? providerOffer(model, key)?.salesPaused : model.salesPaused) === true;
 export const salesCustomer = (model, tenantId) => model.salesScope?.openScope === 'all' || model.salesScope?.openScope === 'selected' && model.salesScope.tenantIds?.includes(tenantId);
 
 export function serviceReferences(state) {

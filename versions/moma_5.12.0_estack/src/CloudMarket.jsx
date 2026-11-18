@@ -27,20 +27,28 @@ async function request(path, body, signal) {
 export function useCloudMarket(enabled=true) {
   const [view,setView]=useState({tenant:null,services:[],orders:[],loading:true,error:''});
   const [revision,setRevision]=useState(0);
+  const [project,selectProject]=useState('');
   useEffect(()=>{
     if (!enabled) return;
     const controller=new AbortController();
-    marketRequest('catalogue',null,controller.signal).then(data=>{
-      if (!controller.signal.aborted) setView({...data,services:data.services.map(cloudMarketPresentation),loading:false,error:''});
+    marketRequest('catalogue'+(project ? '?project='+encodeURIComponent(project) : ''),null,controller.signal).then(data=>{
+      if (!controller.signal.aborted) setView({...data,project,services:data.services.map(cloudMarketPresentation),loading:false,error:''});
     }).catch(error=>{
+      if (!controller.signal.aborted && error.code==='PROJECT_FORBIDDEN' && project) {
+        selectProject('');
+        return;
+      }
       if (!controller.signal.aborted) setView({tenant:null,services:[],orders:[],loading:false,error:error.message});
     });
     return ()=>controller.abort();
-  },[enabled,revision]);
+  },[enabled,revision,project]);
   useEffect(()=>{
     if (!enabled) return;
     const refresh=event=>{
-      if(['login','logout','switch'].includes(event.detail))setView({tenant:null,services:[],orders:[],loading:true,error:''});
+      if(['login','logout','switch'].includes(event.detail)) {
+        selectProject('');
+        setView({tenant:null,services:[],orders:[],loading:true,error:''});
+      }
       setRevision(current=>current+1);
     };
     window.addEventListener(MARKET_EVENT,refresh);
@@ -59,7 +67,8 @@ export function useCloudMarket(enabled=true) {
     if (result.tenant) window.dispatchEvent(new CustomEvent(MARKET_EVENT, {detail:'login'}));
     return result;
   };
-  return {...view,refresh:()=>setRevision(current=>current+1),login,
+  const pendingProject=(view.project || '')!==project;
+  return {...view,...(pendingProject && {services:[],loading:true}),selectProject,refresh:()=>setRevision(current=>current+1),login,
     acceptInvitation:data=>write('invitations/accept',data),
     updatePassword:(data,recovery)=>write(recovery?'password-reset':'password',data),
     switchSpace:tenantId=>write('switch',{tenantId}),

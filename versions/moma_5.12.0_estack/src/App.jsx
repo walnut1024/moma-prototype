@@ -521,6 +521,8 @@ function PrototypeApp({ version }) {
   const { project, select:selectProject, active:activeProjects } =
     useProjectSelection(owner, owner ? projectTenant.projects : [], projectScope);
   const selectedProject = project?.id || '';
+  const selectMarketProject = market.selectProject;
+  useEffect(() => { selectMarketProject(selectedProject); }, [selectedProject, selectMarketProject]);
   const internal=market.tenant?.internal===true;
   const personal=market.tenant?.type==='个人';
   const [activeRoute, routeParams] = frontDestination(activePage);

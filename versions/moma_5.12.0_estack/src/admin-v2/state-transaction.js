@@ -41,6 +41,7 @@ export function canMutate(role, action) {
 
 export function commitAdminState(state, action, actor = state.currentRole) {
   const archivingAcceptance = action.type === 'modelOperations' && action.operation === 'archiveAcceptanceFixture';
+  const writingMarketCard = action.type === 'modelOperations' && ['marketCardCreate', 'marketCardEdit', 'marketCardLink', 'marketCardList', 'marketCardUnlist'].includes(action.operation);
   const reorderingMarket = action.type === 'modelOperations' && action.operation === 'marketReorder';
   if (action.type === 'setRole') throw new Error('请通过后台 mock 账号切换身份');
   if (action.type === 'enterAdmin') {
@@ -55,13 +56,13 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   const commercialKind = publishingCommercial ? action.data?.kind : null;
   const ordinaryListing = action.type === 'modelOperation' && ['publish', 'unlist'].includes(action.operation);
   // Supplier controls must not cancel in-flight tasks belonging to other suppliers.
-  const supplierLifecycle = action.type === 'modelOperations' && ['serviceProviderListing','serviceProviderServing','removeServiceProvider','providerRemovalPrepare','providerRemovalCommit'].includes(action.operation);
+  const supplierLifecycle = action.type === 'modelOperations' && ['pauseSales','serviceProviderListing','serviceProviderServing','removeServiceProvider','providerRemovalPrepare','providerRemovalCommit'].includes(action.operation);
   const deletingLibrary = action.type === 'modelOperations' && action.operation === 'templateDelete';
   const directChanges=action.type==='batch'?action.changes:[action];
   if (directChanges?.some(change => change.type === 'setSettings' && Object.hasOwn(change.changes || {}, 'trafficLimits')
     || change.collection === 'tenants' && Object.hasOwn(change.changes || change.record || {}, 'trafficPolicy'))) throw new Error('限流配置须通过流量运营维护');
   if (action.type === 'tokenPackage' || directChanges?.some(change => ['tokenPackages', 'tokenPackageTypes', 'tokenPackageFactors'].includes(change.collection))) throw new Error('套餐须通过 D1 套餐管理接口维护');
-  if (action.type!=='modelOperations' && directChanges?.some(change=>change.collection==='models' && ['callsEnabled','listingStatus','releaseStage','releaseTenantIds','salesScope','purpose','archivedAt','marketVisible','openScope','tenantIds','commercialDrafts','commercialPublications','materialDraft','materialPublication','lifecycleStopReason','requestGeneration','serviceProviders','serviceMode','serviceModeRevision'].some(key=>Object.hasOwn(change.changes || change.record || {},key)) || change.collection==='modelSalePrices' && ['model','provider'].includes((change.record || change.changes)?.scope || state.modelSalePrices.find(price=>price.id===change.id)?.scope))) throw new Error('模型服务关联及售价须通过服务管理操作');
+  if (action.type!=='modelOperations' && directChanges?.some(change=>change.collection==='models' && ['callsEnabled','listingStatus','releaseStage','releaseTenantIds','salesScope','salesPaused','purpose','archivedAt','marketVisible','openScope','tenantIds','commercialDrafts','commercialPublications','materialDraft','materialPublication','lifecycleStopReason','requestGeneration','serviceProviders','serviceMode','serviceModeRevision'].some(key=>Object.hasOwn(change.changes || change.record || {},key)) || change.collection==='modelSalePrices' && ['model','provider'].includes((change.record || change.changes)?.scope || state.modelSalePrices.find(price=>price.id===change.id)?.scope))) throw new Error('模型服务关联及售价须通过服务管理操作');
   if (action.type !== 'modelOperations' && directChanges?.some(change => change.collection === 'modelTemplates' && ['materialDraft', 'materialPublication'].some(key => Object.hasOwn(change.changes || change.record || {}, key)))) throw new Error('模型资料须通过模型资料维护操作');
   if (action.type!=='modelOperations' && directChanges?.some(change=>change.collection==='endpoints' && Object.hasOwn(change.changes || change.record || {},'frozen'))) throw new Error('渠道冻结状态须通过供应管理操作');
   const isEnterprise = ['enterprise', 'individual', 'adminAccount'].includes(action.type);
@@ -130,6 +131,10 @@ export function commitAdminState(state, action, actor = state.currentRole) {
     }
   }
   if (['users', 'tenants', 'memberships', 'grants'].some(key => JSON.stringify(state[key]) !== JSON.stringify(next[key]))) next.identityGeneration = (state.identityGeneration || 0) + 1;
+  if (action.marketCard && action.type === 'batch' && action.marketCard.modelId === action.objectId && writingMarketCard) {
+    const { modelId, card } = action.marketCard;
+    next.modelData = { ...next.modelData, marketCards: { ...next.modelData?.marketCards, [modelId]: card } };
+  }
   const currentAdmin = next.admins.find(row => row.id === next.adminSession?.accountId);
   if (currentAdmin) next.currentRole = currentAdmin.role;
   next.revision += 1; next.updatedAt = timestamp;

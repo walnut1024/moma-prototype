@@ -203,8 +203,27 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     const workspace=async cookie=>(await request('/market/workspace',{cookie})).data;
     const project=(await workspace(customer)).projectRouting.projects.find(row=>row.canEdit);
     assert(project);
+    const org = state.marketOrganizations.find(row=>row.tenantId===a);
+    assert(org && state.marketProjects.some(row=>row.id===project.id));
+    const scope = { type:'selected', organizationIds:[], tenantIds:[], projectIds:[project.id] };
+    const serviceIds = services.map(row=>row.id);
+    const setCardScope = scope => command('marketCardList',{ scope, serviceIds, expectedRevision:state.revision },material.id);
+    await setCardScope(scope);
+    assert.deepEqual((await catalogue(customer)),[]);
+    const projectCatalogue = await request('/market/catalogue?project='+project.id,{cookie:customer});
+    assert.deepEqual(projectCatalogue.data.services.map(row=>row.id).sort(),serviceIds.sort());
+    assert.equal((await request('/market/catalogue?project='+project.id,{cookie:other})).status,403);
+    await setCardScope({ ...scope, projectIds:[], organizationIds:[org.id] });
+    assert.equal((await catalogue(customer)).length,3);
+    await local.db.prepare("UPDATE model_workspace SET meta_json=json_remove(meta_json,?) WHERE id=1")
+      .bind('$.modelData.marketCards.'+JSON.stringify(material.id)).run();
+    await reload();
     const body=(model)=>({requestId:crypto.randomUUID(),projectId:project.id,model,messages:[{role:'user',content:'验收请求'}]});
     const call=(input,cookie=customer)=>request('/market/completions',{cookie,body:input});
+    const pausedOffer = services.find(row=>row.callId===sources[2].callId);
+    await command('pauseSales',{offerKey:sources[2].channelId,expectedUpdatedAt:model().updatedAt,confirmed:true},modelId);
+    assert.equal((await order(pausedOffer.id)).status,409);
+    await command('startSales',release([sources[2].channelId],[a]),modelId);
     assert.equal((await order(services[0].id,admin)).status,401);
     assert.equal((await order(services[0].id,other)).status,403);
     assert.equal((await call(body(services[0].callId))).data.error.code,'ORDER_REQUIRED');

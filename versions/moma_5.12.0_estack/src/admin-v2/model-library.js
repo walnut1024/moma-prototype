@@ -27,6 +27,7 @@ export function modelCatalogue(state) {
 export function libraryRemovalIssue(state, id) {
   const record = libraryRecord(state, id);
   if (!record) return '模型资料不存在';
+  if (Object.hasOwn(state.modelData?.marketCards || {}, record.id)) return '模型资料仍被广场卡片引用';
   if (state.models.some(row => row.id === record.id || row.templateId === record.id)) return '已进入服务管理，不能删除模型资料';
   if (state.providers.some(provider => providerCatalogueIds(provider).some(code => {
     const entry = provider.catalogModels?.find(row => row.modelId === code);

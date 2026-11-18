@@ -14,18 +14,19 @@ export const sections = [
     { id: "channels", label: "渠道管理", children: [["providers", "渠道管理"]] },
     { id: "warehouse", label: "模型服务", children: [["listing", "模型服务"]] },
     { id: "market", label: "模型广场", children: [["model-market", "模型广场"]] },
-    { id: "prices", label: "模型售价", children: [["model-prices", "模型售价"]] },
     { id: "materials", label: "模型资料", children: [["model-templates", "模型"], ["tariff-dictionary", "计费项"]] },
   ]},
-  { id: "packages", workspace: "operations", title: "套餐运营", items: [
-    { id: "package-production", label: "套餐制作", children: [["package-production", "套餐制作"]] },
-    { id: "package-data", label: "套餐数据", children: [["package-data", "套餐数据"]] },
+  { id: "commerce", workspace: "operations", title: "商业运营", items: [
+    { id: "prices", label: "模型销售", children: [["model-prices", "模型销售"]] },
+    { id: "enterprise", label: "客户管理", children: [["tenants", "客户管理"]] },
+    { id: "commerce-orders", label: "订购与账单", children: [["orders", "订购记录"], ["bills", "账单"], ["metering", "消费明细"]] },
+    { id: "package-production", label: "套餐管理", children: [["package-production", "套餐管理"], ["package-data", "套餐数据"]] },
+    { id: "business-analysis", label: "经营分析", children: [["business-analysis", "经营分析"]] },
   ]},
   { id: "traffic", workspace: "operations", title: "流量运营", items: [
     { id: "traffic-limits", label: "限流配置", children: [["traffic-limits", "限流配置"]] },
   ]},
   { id: "customers", workspace: "operations", title: "访问控制", items: [
-    { id: "enterprise", label: "租户管理", children: [["tenants", "租户管理"]] },
     { id: "individual", label: "用户管理", children: [["users", "用户管理"]] },
   ]},
   { id: "runtime", workspace: "maintenance", title: "运行分析", items: [
@@ -46,6 +47,7 @@ export const sections = [
     { id: "accounts", label: "后台账号", children: [["admins", "后台账号"]] },
     { id: "audit-logs", label: "审计日志", children: [["audit-logs", "审计日志"]] },
     { id: "site-configuration", label: "站点配置", children: [["site-configuration", "站点配置"]] },
+    { id: "license", label: "License 管理", children: [["license", "License 管理"]] },
   ]},
   { id: "getting-started", workspace: "operations", title: "入门指导", items: [
     { id: "getting-started", label: "模型运营", children: [["getting-started", "模型运营"]] },
@@ -55,7 +57,7 @@ export const sections = [
 export const pages = {
   ...Object.fromEntries(sections.flatMap(group => group.items.flatMap(item => item.children.map(([id, label]) => [id, { id, label, area: item.id, areaLabel: item.label, group: group.title, groupId: group.id }])))),
   ...Object.fromEntries(monitoringLinks.map(([id, label]) => [id, { id, label, area: 'monitoring', areaLabel: '服务监控', group: '网关管理', groupId: 'gateway' }])),
-  ...Object.fromEntries([['goods', '商品与套餐'], ['orders', '订单与订阅'], ['announcements', '公告与服务通知'], ['metering', '计量明细'], ['ledger', '账户与额度流水'], ['bills', '客户账单'], ['settlement', '服务商对账与结算'], ['adjustments', '退款与调账']].map(([id, label]) => [id, { id, label, area: 'warehouse', areaLabel: '模型服务', group: '模型运营', groupId: 'models' }])),
+  ...Object.fromEntries([['goods', '商品与套餐'], ['announcements', '公告与服务通知'], ['ledger', '账户与额度流水'], ['settlement', '服务商对账与结算'], ['adjustments', '退款与调账']].map(([id, label]) => [id, { id, label, area: 'commerce-orders', areaLabel: '订购与账单', group: '商业运营', groupId: 'commerce' }])),
   'provider-materials': { id: 'provider-materials', label: '服务商', area: 'materials', areaLabel: '模型资料', group: '模型运营', groupId: 'models' },
   'customer-usage-detail': { id: 'customer-usage-detail', label: '客户详情', area: 'users-analysis', areaLabel: '用户数据', group: '运营分析', groupId: 'analytics' },
 };
@@ -71,7 +73,10 @@ export function pageWorkspace(id) {
   return sections.find(group => group.id === pages[id]?.groupId)?.workspace;
 }
 
-export function canAccessPage(role, id) {
+export const commercialPage = id => pages[id]?.groupId === 'commerce';
+
+export function canAccessPage(role, id, license) {
+  if (license && id !== 'tenants' && commercialPage(id) && !license.commercial) return false;
   if (!Object.hasOwn(pages, id) || (id === 'site-configuration' && !PRIVATE_SITE)) return false;
   return pages[id].groupId === 'platform' ? role === '平台管理员' : availableWorkspaces(role).includes(pageWorkspace(id));
 }

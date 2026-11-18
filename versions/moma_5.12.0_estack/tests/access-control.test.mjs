@@ -23,9 +23,11 @@ test('user project affiliations stay inside explicit tenant membership', () => {
   assert.deepEqual(userAffiliations(state, 'missing'), []);
 });
 
-test('access navigation exposes only tenants and users with existing role guards', () => {
+test('access control keeps users and commercial operations owns customers', () => {
   const group = sections.find(row => row.title === '访问控制');
-  assert.deepEqual(group.items.map(row => row.children[0]), [['tenants', '租户管理'], ['users', '用户管理']]);
+  assert.deepEqual(group.items.map(row => row.children[0]), [['users', '用户管理']]);
+  const customers = sections.find(row => row.id === 'commerce').items.find(row => row.id === 'enterprise');
+  assert.deepEqual(customers.children, [['tenants', '客户管理']]);
   assert.equal(canAccessPage('运营人员', 'users'), true);
   assert.equal(canAccessPage('运维人员', 'users'), false);
 });

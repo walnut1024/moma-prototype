@@ -709,3 +709,32 @@ test('model channel connectivity changes take effect only when a passing candida
   assert.equal(channel().connectionTest.result, '通过');
   assert.deepEqual(supplierChannelAssociations(state, owner(), endpointId)[0].pricing, mapping.pricing);
 });
+
+test('market card creation persists without a service and rejects duplicates, stale writes and foreign services', async () => {
+  let state = (await request('/model-operations')).data;
+  const { modelCatalogue } = await import('../src/admin-v2/model-library.js');
+  const material = modelCatalogue(state).find(row =>
+    !state.models.some(model => model.id === row.id || model.templateId === row.id));
+  assert.ok(material);
+  const submit = (operation, data, session = token) => {
+    const operationId = crypto.randomUUID();
+    return request('/model-operations/commands', { method: 'POST', key: operationId, session, body: {
+      operationId, expectedRevision: state.revision, action: {
+        type: 'modelOperations', operation, modelId: material.id, data: { expectedRevision: state.revision, ...data },
+      },
+    } });
+  };
+  const content = { name: '展示草稿', description: '独立模型卡片验收', logo: '' };
+  assert.equal((await submit('marketCardCreate', content, readonlyToken)).status, 403);
+  assert.equal((await submit('marketCardCreate', { ...content, expectedRevision: state.revision - 1 })).status, 422);
+  const result = await submit('marketCardCreate', content);
+  assert.equal(result.status, 200, JSON.stringify(result.data));
+  const oldModels = state.models;
+  state = (await request('/model-operations')).data;
+  assert.deepEqual(state.models, oldModels);
+  assert.equal(state.modelData.marketCards[material.id].status, 'draft');
+  assert.equal(state.modelData.marketCards[material.id].content.name, content.name);
+  assert.equal((await submit('marketCardCreate', content)).status, 422);
+  assert.equal((await submit('marketCardLink', { serviceIds: ['service-of-another-model'] })).status, 422);
+  assert.equal((await submit('marketCardList', { serviceIds: [], scope: { type: 'all', tenantIds: [] } })).status, 422);
+});

@@ -291,6 +291,9 @@ const supplyRelationsSql = `json_object('models',${arraySql(`SELECT json_object(
   WHERE cm.removed_at IS NULL AND sm.removed_at IS NULL AND s.deleted_at IS NULL AND m.deleted_at IS NULL AND c.deleted_at IS NULL ORDER BY cm.id`)})`;
 async function workspacePayload(db,actor,command=false,simulation=true){
   const fields=[`'supplyRelations',${supplyRelationsSql}`];
+  fields.push(`'marketProjects',${arraySql("SELECT json_object('id',json_extract(value,'$.id'),'tenantId',json_extract(value,'$.tenantId'),'name',json_extract(value,'$.name'),'status',json_extract(value,'$.status')) AS record_json FROM json_each(w.reference_json,'$.projects')")}`);
+  fields.push(`'marketOrganizations',${arraySql("SELECT json_object('id',json_extract(value,'$.id'),'tenantId',json_extract(value,'$.tenantId'),'name',json_extract(value,'$.name'),'status',json_extract(value,'$.status')) AS record_json FROM json_each(w.reference_json,'$.organizations')")}`);
+  fields.push("'spacePolicy',json((SELECT payload_json FROM simulation_records WHERE kind='project-space-policy' AND id='published'))");
   if(command)fields.push("'lastSupplierChannelNumber',COALESCE((SELECT MAX(CAST(substr(code,4) AS INTEGER)) FROM channels WHERE code GLOB 'CH-[0-9]*' AND substr(code,4) NOT GLOB '*[^0-9]*'),0)");
   for(const [collection,table]of Object.entries(entityTables)){
     const where=['services','suppliers','channels'].includes(table)?'deleted_at IS NULL':['model_template_records','service_supply_records','model_versions','model_validations','service_route_records'].includes(table)?'removed_at IS NULL':'1';

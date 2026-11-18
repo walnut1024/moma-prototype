@@ -1,3 +1,5 @@
+import { marketCardIndex } from '../market-cards.mjs';
+
 export function orderedMarketModels(state) {
   const ranks = new Map((state.modelData?.marketOrder || []).map((id, index) => [id, index]));
   const rank = id => ranks.get(id) ?? ranks.size;
@@ -7,7 +9,7 @@ export function orderedMarketModels(state) {
 
 export function marketOrderTransaction(state, { modelId, data }) {
   if (data?.expectedRevision !== state.revision) throw new Error('模型广场已有修订，请载入最新数据后重试');
-  const ids = orderedMarketModels(state).map(model => model.id);
+  const ids = marketCardIndex(state, orderedMarketModels(state)).map(model => model.id);
   const from = ids.indexOf(modelId), position = data?.position;
   if (from < 0) throw new Error('模型不在广场管理列表中');
   if (!Number.isSafeInteger(position) || position < 1 || position > ids.length) {

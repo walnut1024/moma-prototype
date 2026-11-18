@@ -69,7 +69,7 @@ function SiteImageField({ field, value, disabled, onChange, onUpload }) {
   </Form.Slot>;
 }
 
-function SiteProjectSpaces({ onDirtyChange, state, onSaved }) {
+function SiteProjectSpaces({ onDirtyChange, state, onSaved, license }) {
   const [policy, setPolicy] = useState(null);
   const [draft, setDraft] = useState(null);
   const [error, setError] = useState('');
@@ -97,6 +97,7 @@ function SiteProjectSpaces({ onDirtyChange, state, onSaved }) {
     finally { setBusy(false); }
   }
   const current=draft || policy;
+  const operatingMode = license.managed ? license.commercial ? 'factory' : 'internal' : current?.operatingMode;
   const change=(key,value)=>{
     const next={...current,[key]:value};
     setDraft(next.personalEnabled===policy.personalEnabled && next.operatingMode===policy.operatingMode &&
@@ -104,24 +105,24 @@ function SiteProjectSpaces({ onDirtyChange, state, onSaved }) {
   };
   return <Card className="site-config-card" title="使用空间">
     <Space wrap>
-      <Choice label="运营方式" value={current?.operatingMode} disabled={!policy || busy}
-        options={[[ 'factory','工厂外营' ],[ 'internal','企业内用' ]]} onChange={value=>change('operatingMode',value)}/>
+      {!license.managed && <Choice label="运营方式" value={current?.operatingMode} disabled={!policy || busy}
+        options={[[ 'factory','工厂外营' ],[ 'internal','企业内用' ]]} onChange={value=>change('operatingMode',value)}/>}
       <Choice label="本企业空间" value={current?.internalTenantId || 'none'} disabled={!policy || busy}
         options={[[ 'none','未指定' ],...enterpriseTenants(state).filter(row=>row.status==='正常').map(row=>[row.id,row.name])]}
         onChange={value=>change('internalTenantId',value==='none'?'':value)}/>
-      {current?.operatingMode!=='internal' && <><Switch aria-label="开放个人空间" checked={current?.personalEnabled ?? false}
+      {operatingMode!=='internal' && <><Switch aria-label="开放个人空间" checked={current?.personalEnabled ?? false}
         disabled={!policy || busy} onChange={value=>change('personalEnabled',value)}/><span>开放个人空间</span></>}
-      <Button disabled={!draft || busy || current?.operatingMode==='internal' && !current.internalTenantId}
+      <Button disabled={!draft || busy || operatingMode==='internal' && !current.internalTenantId}
         loading={busy} onClick={save}>保存使用空间</Button>
     </Space>
-    <p>{current?.operatingMode==='internal' ? '此站点只接受本企业成员登录。'
+    <p>{operatingMode==='internal' ? '此站点只接受本企业成员登录。'
       : '对外开通政企和个人客户，可同时为本企业提供内部模型使用。'}</p>
     {error && <Banner type="danger" closeIcon={null} description={<><span role="alert">{error}</span> <Button disabled={busy}
       onClick={() => { setDraft(null); setError(''); setPolicy(null); setAttempt(value => value + 1); }}>重新读取</Button></>} />}
   </Card>;
 }
 
-export default function SiteConfiguration({ dirtyRef, accountId, state, onSpaceSaved }) {
+export default function SiteConfiguration({ dirtyRef, accountId, state, onSpaceSaved, license }) {
   const raw = useSiteConfigSnapshot();
   const [draft, setDraft] = useState(null);
   const [tab, setTab] = useState('basic');
@@ -203,7 +204,7 @@ export default function SiteConfiguration({ dirtyRef, accountId, state, onSpaceS
           {SITE_IMAGES.map(field => <SiteImageField key={field[0]} field={field} value={config[field[0]]} disabled={Boolean(busy)}
             onChange={value => update(field[0], value)} onUpload={file => upload(field[0], file)} />)}
         </Card>
-        <SiteProjectSpaces state={state} onSaved={onSpaceSaved} onDirtyChange={setSpacesDirty} />
+        <SiteProjectSpaces state={state} license={license} onSaved={onSpaceSaved} onDirtyChange={setSpacesDirty} />
       </Tabs.TabPane>
       <Tabs.TabPane tab="协议管理" itemKey="agreements">
         <SiteAgreementsEditor legacy={saved} onDirtyChange={setAgreementDirty} />

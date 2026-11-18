@@ -116,7 +116,7 @@ export async function changeCustomerPassword(db,session,{currentPassword,passwor
   if(!updated.meta.changes)fail(409,'PASSWORD_CONFLICT','密码或会话已变化，请重新登录');
 }
 
-export async function customerIdentity(db, value, field = 'id', tenantId = null) {
+export async function customerIdentity(db, value, field = 'id', tenantId = null, license) {
   const lookup = field === 'login'
     ? "(LOWER(json_extract(u.value,'$.login'))=? OR LOWER(json_extract(u.value,'$.email'))=? OR json_extract(u.value,'$.phone')=?)"
     : field === 'username' ? "LOWER(json_extract(u.value,'$.login'))=?" : "json_extract(u.value,'$.id')=?";
@@ -143,7 +143,8 @@ export async function customerIdentity(db, value, field = 'id', tenantId = null)
       )) LIMIT 2`).bind(tenantId,...identity,dualDemoUserId,dualDemoAdminLogin).all();
   if(results.length!==1)return null;
   const row=results[0], user=JSON.parse(row.user_json), memberships=JSON.parse(row.memberships_json);
-  const policy=JSON.parse(row.space_policy || 'null');
+  const savedPolicy=JSON.parse(row.space_policy || 'null');
+  const policy=license?.managed ? { ...savedPolicy, operatingMode:license.commercial ? 'factory' : 'internal' } : savedPolicy;
   const spaces=JSON.parse(row.tenants_json).filter(activeCustomer).flatMap(tenant=>{
     if (user.id===dualDemoUserId && tenant.id!==dualDemoTenantId) return [];
     const membership=memberships.find(item=>item.tenantId===tenant.id);
@@ -154,13 +155,13 @@ export async function customerIdentity(db, value, field = 'id', tenantId = null)
   return {user,spaces,passwordManaged:Boolean(row.password_managed),commitSeq:row.commit_seq,grant:JSON.parse(row.grant_json || 'null')};
 }
 
-export async function marketSession(db, request) {
+export async function marketSession(db, request, license) {
   const token=request.headers.get('cookie')?.split(';').map(part=>part.trim()).find(part=>part.startsWith(marketCookie+'='))?.slice(marketCookie.length+1);
   if(!token || !/^[a-f0-9]{64}$/.test(token))return null;
   const hash=await customerSecretHash(token);
   const session=await db.prepare('SELECT user_id,tenant_id FROM market_sessions WHERE token_hash=? AND expires_at>?').bind(hash,Date.now()).first();
   if(!session?.user_id)return null;
-  const identity=await customerIdentity(db,session.user_id,'id',session.tenant_id);
+  const identity=await customerIdentity(db,session.user_id,'id',session.tenant_id,license);
   const tenant=identity?.spaces.find(space=>space.id===session.tenant_id);
   return tenant ? {...identity,tenant:{...tenant,grant:identity.grant},hash} : null;
 }
