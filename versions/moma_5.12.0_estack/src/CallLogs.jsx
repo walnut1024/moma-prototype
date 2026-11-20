@@ -65,7 +65,7 @@ function LogDetail({ log, onClose }) {
   </SideSheet>;
 }
 
-export default function CallLogs({ billing = '全部', projectId, requestId, space = false }) {
+export default function CallLogs({ billing = '全部', projectId, requestId, space = false, openRetention }) {
   const [today] = useState(shanghaiDate);
   const tenant=useTenantData();
   const project=tenant.projects.find(row=>row.id===projectId);
@@ -131,7 +131,8 @@ export default function CallLogs({ billing = '全部', projectId, requestId, spa
       <IconAction label={`查看请求详情 ${log.id}`} icon={Eye} onClick={()=>setSelected(log.id)} /> },
   ];
   return <div className="cl-page us-page">
-    <FrontPageHeader title={space ? "空间调用日志" : unified ? "调用日志" : `${billing}调用日志`} description={project ? '所属项目 · ' + project.name : projectId ? '当前空间无权访问此项目' : '当前空间内你有权查看的调用记录'} icon={FileText} />
+    <FrontPageHeader title={space ? "空间调用日志" : unified ? "调用日志" : `${billing}调用日志`} description={project ? '所属项目 · ' + project.name : projectId ? '当前空间无权访问此项目' : '当前空间内你有权查看的调用记录'} icon={FileText}
+      actions={project?.canManage && openRetention && <Button theme="borderless" onClick={()=>openRetention(project)}>日志留存设置</Button>} />
     <section className="cl-panel" aria-label={unified ? '全部调用记录' : `${billing}调用记录`}>
       <form className="cl-filters" onSubmit={query}>
         {unified ? <>

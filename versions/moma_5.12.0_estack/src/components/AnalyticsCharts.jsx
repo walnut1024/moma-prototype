@@ -47,7 +47,7 @@ function ChartData({ label, headings, rows, compact = false }) {
   </div>;
 }
 
-function Chart({ option, height, label, onClick, onLegend }) {
+export function Chart({ option, height, label, onClick, onLegend }) {
   const element = useRef(null), chart = useRef(null);
   useEffect(() => {
     const instance = echarts.init(element.current, null, { renderer: 'svg' });
@@ -67,7 +67,7 @@ function Chart({ option, height, label, onClick, onLegend }) {
   return <div className="ua-echart unified-chart-canvas" ref={element} style={{ height }} role="img" aria-label={label} />;
 }
 
-export function TimeSeriesChart({ labels, series, unit = '', label, axisUnit, tickScale, height = 250, valueFormatter, type = 'line', stacked = false, domain, tickFormatter, overview = false, className = '', showData = true, compact = false, selectedNames, onSelectNames, onChoose }) {
+export function TimeSeriesChart({ labels, series, unit = '', label, axisUnit, tickScale, height = 250, valueFormatter, type = 'line', stacked = false, domain, tickFormatter, overview = false, className = '', showData = true, compact = false, legendAtTop = false, selectedNames, onSelectNames, onChoose }) {
   const admin = useContext(AdminUIContext);
   const theme = chartTheme(admin);
   const { muted, fontFamily } = theme;
@@ -96,18 +96,39 @@ export function TimeSeriesChart({ labels, series, unit = '', label, axisUnit, ti
     const zeros = compact && type !== 'bar' ? items.filter(item => item.value === 0).length : 0;
     return `<div>${safe(interval)}${temporal ? ' · 北京时间' : ''}</div>${ordered.map(item => `<div>${item.marker} ${safe(item.seriesName)}：<b>${safe(formatter(Number.isFinite(item.value) ? item.value / scale : item.value))}${Number.isFinite(item.value) ? `${suffix} ${safe(unit)}` : ''}</b></div>`).join('')}${zeros ? `<div>${zeros === items.length ? '当前' : '另 '}${zeros} 项本时段无用量</div>` : ''}`;
   };
+  const hasRightAxis = series.some(item => item.rightAxis);
+  const yAxis = { type: 'value', min: domain?.[0] ?? 0, max: domain?.[1], minInterval: ['次','人','个','张','个客户'].includes(unit) ? 1 : undefined, splitNumber: 4, name: axis.name, nameTextStyle: { color: muted, fontSize: 12, align: 'left' }, axisLabel: { color: muted, fontSize: 12, formatter: tickFormatter || (value => formatter(value / axis.scale)) }, splitLine: { lineStyle: { color: theme.border, type: 'dashed' } } };
   const option = {
     animation: false,
     ...(admin && { textStyle: { fontFamily } }),
     color: series.map(seriesColor),
-    grid: { top: compact ? 34 : 66, left: 8, right: 16, bottom: compact ? 42 : 12, containLabel: true },
-    legend: { show: !compact || type !== 'bar' || series.length > 1, type: 'scroll', data: legendNames, top: compact ? undefined : 0, bottom: compact ? 0 : undefined, right: 8, left: 8, selected: Object.fromEntries(series.map(item => [item.label, selected.includes(item.label)])), icon: 'rect', itemWidth: 18, itemHeight: 3, inactiveColor: theme.inactive, pageTextStyle: { color: muted }, tooltip: { show: compact }, textStyle: { color: muted, fontSize: 12, ...(compact ? { width: 160, overflow: 'truncate' } : {}) } },
+    grid: { top: legendAtTop ? 48 : compact ? 34 : 66, left: 8, right: 16, bottom: compact && !legendAtTop ? 42 : 12, containLabel: true },
+    legend: { show: !compact || type !== 'bar' || series.length > 1, type: 'scroll', data: legendNames, top: compact && !legendAtTop ? undefined : 0, bottom: compact && !legendAtTop ? 0 : undefined, right: 8, left: legendAtTop ? undefined : 8, selected: Object.fromEntries(series.map(item => [item.label, selected.includes(item.label)])), icon: 'rect', itemWidth: 18, itemHeight: 3, inactiveColor: theme.inactive, pageTextStyle: { color: muted }, tooltip: { show: compact }, textStyle: { color: muted, fontSize: 12, ...(compact ? { width: 160, overflow: 'truncate' } : {}) } },
     tooltip: { trigger: 'axis', confine: true, axisPointer: { type: type === 'bar' ? 'shadow' : 'line', lineStyle: { color: admin ? theme.axis : '#b8c7e8', type: 'dashed' } }, backgroundColor: theme.surface, borderColor: theme.border, extraCssText: `max-height:60vh;overflow-y:auto;border-radius:6px;box-shadow:${admin ? '0 4px 12px rgba(38,50,71,.12)' : '0 4px 16px #17243b12'}`, textStyle: { color: theme.text, fontSize: 12 }, formatter: tooltip },
     xAxis: { type: 'category', data: labels, boundaryGap: type === 'bar', axisTick: { show: false }, axisLine: { lineStyle: { color: theme.axis } }, axisLabel: { color: muted, fontSize: 12, hideOverlap: !showAllBarLabels, formatter: value => singleDay ? value.slice(6) : overview && /^\d{2}-\d{2}$/.test(value) ? value.replace('-', '/') : value, interval: showAllBarLabels ? 0 : labels.length > 16 ? Math.ceil(labels.length / 6) - 1 : 'auto' } },
-    yAxis: { type: 'value', min: domain?.[0] ?? 0, max: domain?.[1], minInterval: ['次','人','个','张','个客户'].includes(unit) ? 1 : undefined, splitNumber: 4, name: axis.name, nameTextStyle: { color: muted, fontSize: 12, align: 'left' }, axisLabel: { color: muted, fontSize: 12, formatter: tickFormatter || (value => formatter(value / axis.scale)) }, splitLine: { lineStyle: { color: theme.border, type: 'dashed' } } },
-    series: series.map((item, index) => ({ name: item.label, type: type === 'bar' ? 'bar' : 'line', data: item.values, label: type === 'bar' && item.showValues ? { show: true, position: 'top', color: muted, fontSize: 12 } : undefined, smooth: .2, connectNulls: false, showSymbol: Boolean(onChoose) || compact && (labels.length === 1 || item.showPoints === true), showAllSymbol: item.showPoints === true ? true : 'auto', symbolSize: compact ? 6 : undefined, stack: stacked && type !== 'line' ? 'total' : undefined, areaStyle: type === 'area' ? { opacity: .12 } : undefined, barMaxWidth: 24, lineStyle: { width: item.total || /^(总|累计)/.test(item.label) ? 2.5 : 2, type: item.dashed ? 'dashed' : admin ? ['solid', 'dashed', 'dotted'][index % 3] : 'solid' }, emphasis: { focus: 'series' } })),
+    yAxis: hasRightAxis ? [yAxis, { ...yAxis, name: '', splitLine: { show: false } }] : yAxis,
+    series: series.map((item, index) => {
+      const seriesType = item.rightAxis || type !== 'bar' ? 'line' : 'bar';
+      const showSymbol = Boolean(onChoose) || compact && (labels.length === 1 || item.showPoints === true);
+      const isIsolated = i => Number.isFinite(item.values[i]) &&
+        !Number.isFinite(item.values[i - 1]) && !Number.isFinite(item.values[i + 1]);
+      const showIsolated = seriesType === 'line' && !showSymbol && item.values.some((_, i) => isIsolated(i));
+      return {
+        name: item.label, type: seriesType, data: item.values,
+        yAxisIndex: item.rightAxis ? 1 : 0,
+        label: type === 'bar' && item.showValues ? { show: true, position: 'top', color: muted, fontSize: 12 } : undefined,
+        smooth: .2, connectNulls: false, showSymbol: showSymbol || showIsolated,
+        ...(showIsolated && { symbol: (_, params) => isIsolated(params.dataIndex) ? 'emptyCircle' : 'none' }),
+        showAllSymbol: item.showPoints === true || showIsolated ? true : 'auto', symbolSize: compact ? 6 : undefined,
+        stack: stacked && type !== 'line' && !item.rightAxis ? 'total' : undefined,
+        areaStyle: type === 'area' && !item.dashed ? { opacity: .12 } : undefined,
+        barMaxWidth: 24, lineStyle: { width: item.total || /^(总|累计)/.test(item.label) ? 2.5 : 2,
+          type: item.dashed ? 'dashed' : item.rightAxis ? 'solid' : admin ? ['solid', 'dashed', 'dotted'][index % 3] : 'solid' },
+        emphasis: { focus: 'series' },
+      };
+    }),
   };
-  const chartType = type === 'bar' && stacked ? '堆叠柱状图' : { line: '折线图', bar: series.length > 1 ? '分组柱状图' : '柱状图', area: '面积图' }[type];
+  const chartType = hasRightAxis ? '柱状图与折线图' : type === 'bar' && stacked ? '堆叠柱状图' : { line: '折线图', bar: series.length > 1 ? '分组柱状图' : '柱状图', area: '面积图' }[type];
   return <div className={`unified-chart ${className}`} role="group" aria-label={`${label}（${chartType}）`}>
     {!compact && series.length > 1 && <div className="unified-chart-tools">{admin
       ? <Typography.Text size="small" type="tertiary">{shown}</Typography.Text>
@@ -149,8 +170,8 @@ export function HorizontalBarChart({ rows, unit = '', label, height, onChoose, s
     grid: { top: 12, left: 8, right: 88, bottom: 28, containLabel: true },
     tooltip: { trigger: 'axis', confine: true, backgroundColor: theme.surface, borderColor: theme.border, textStyle: { color: theme.text, fontSize: 12 }, axisPointer: { type: 'shadow' }, formatter: items => `${safe(rows[items[0]?.dataIndex]?.name)}<br/>${safe(label)}：<b>${chartNumber(rows[items[0]?.dataIndex]?.value)} ${safe(unit)}</b>` },
     xAxis: { type: 'value', min: unit === '%' ? 0 : undefined, max: unit === '%' ? 100 : undefined, name: unit, nameTextStyle: { color: theme.muted, fontSize: 12 }, axisLabel: { color: theme.muted, fontSize: 12, formatter: chartNumber }, splitLine: { lineStyle: { color: theme.border, type: 'dashed' } } },
-    yAxis: { type: 'category', inverse: true, data: rows.map(row=>row.name), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: theme.muted, fontSize: 12, width: 150, overflow: 'truncate' } },
-    series: [{ type: 'bar', barMaxWidth: 18, data: rows.map(row=>({ value: row.value, itemStyle: { color: row.value < 0 ? theme.danger : theme.primary }, label: { position: row.value < 0 ? 'left' : 'right' } })), label: { show: true, distance: 6, color: theme.text, fontSize: 12, formatter: item=>unit === '%' ? Number(item.value).toFixed(2)+'%' : chartNumber(item.value) } }],
+    yAxis: { type: 'category', inverse: true, data: rows.map(row=>row.name), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: theme.muted, fontSize: 12, width: rows.some(row => row.color) ? 190 : 150, overflow: 'truncate' } },
+    series: [{ type: 'bar', barMaxWidth: 18, data: rows.map(row=>({ value: row.value, itemStyle: { color: row.color || (row.value < 0 ? theme.danger : theme.primary), ...(row.color && { borderRadius: [0, 7, 7, 0] }) }, label: { position: row.value < 0 ? 'left' : 'right' } })), label: { show: true, distance: 6, color: theme.text, fontSize: 12, formatter: item=>unit === '%' ? Number(item.value).toFixed(2)+'%' : chartNumber(item.value) } }],
   };
   return <>
     <Chart option={option} height={height || Math.max(220,rows.length*32+60)} label={`${label}（横向条形图）：${rows.map(row=>`${row.name} ${chartNumber(row.value)} ${unit}`).join('；')}`} onClick={event=>{if(rows[event.dataIndex])onChoose?.(rows[event.dataIndex].id);}}/>
@@ -186,7 +207,7 @@ export function RankingChart({ rows, metric, unit, collection, scale, onChoose, 
   </>;
 }
 
-export function DonutChart({ rows, unit = '', label, height = 200, centerValue, centerLabel, showData = true, onChoose }) {
+export function DonutChart({ rows, unit = '', label, height = 200, centerValue, centerLabel, showData = true, onChoose, seamless = false }) {
   const admin = useContext(AdminUIContext);
   const theme = chartTheme(admin);
   const total = rows.reduce((sum, row) => sum + row.value, 0);
@@ -194,9 +215,9 @@ export function DonutChart({ rows, unit = '', label, height = 200, centerValue, 
     animation: false,
     ...(admin && { textStyle: { fontFamily: theme.fontFamily } }),
     tooltip: { trigger: 'item', confine: true, backgroundColor: theme.surface, borderColor: theme.border, textStyle: { color: theme.text, fontSize: 12 }, formatter: item => `${safe(item.name)}：<b>${chartNumber(item.value)} ${safe(unit)}</b><br/>占比 ${total ? (item.value / total * 100).toFixed(1) + '%' : '—'}` },
-    series: [{ type: 'pie', radius: ['64%', '84%'], center: ['50%', '50%'], startAngle: 90, padAngle: 3, stillShowZeroSum: false,
+    series: [{ type: 'pie', radius: ['64%', '84%'], center: ['50%', '50%'], startAngle: 90, padAngle: seamless ? 0 : 3, stillShowZeroSum: false,
       label: { show: false }, labelLine: { show: false },
-      itemStyle: { borderRadius: 7 }, emphasis: { scaleSize: 5 },
+      itemStyle: { borderRadius: seamless ? 0 : 7 }, emphasis: { scaleSize: 5 },
       data: rows.map((row, index) => {
         const color = row.color || chartPalette[index % chartPalette.length];
         return { name: row.label, value: row.value, itemStyle: { color: admin ? adminChartColor(color, theme.primary) : color } };

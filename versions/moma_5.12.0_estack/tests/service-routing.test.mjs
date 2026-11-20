@@ -2,7 +2,7 @@ import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction, parseAdminState as baseParseAdminState } from '../src/admin-v2/store.js';
-import { routingServices, routingChannels, serviceRoute, activeRouteVersion, routeSourceVersion, normalizeRouteConfig, validateRouteConfig, routingStatus, routePreview, routeGroups, comparableRouteCosts } from '../src/admin-v2/service-routing.js';
+import { routingServices, routingChannels, serviceRoute, activeRouteVersion, routeSourceVersion, normalizeRouteConfig, validateRouteConfig, routingStatus, routePreview, routeGroups, comparableRouteCosts, routeDirectoryOrder } from '../src/admin-v2/service-routing.js';
 import { activeSupplyPrice } from '../src/admin-v2/model-management.js';
 import { connectionFingerprint } from '../src/admin-v2/connection-state.js';
 import { canAccessPage, pageFromHash, pages } from '../src/admin-v2/navigation.mjs';
@@ -136,6 +136,22 @@ test('stale active version and invalid rollback never overwrite an active route'
   assert.throws(() => commitAdminState(next, action(next, service, config, 'serviceRoutePublish', { expectedVersion: 0 })), /生效路由已变化/);
   assert.throws(() => commitAdminState(next, action(next, service, config, 'serviceRouteRollback', { version: 999 })), /历史版本/);
   assert.throws(() => commitAdminState(next, action(next, service, config, 'serviceRouteRollback', { version: 1 })), /历史版本/);
+});
+
+test('directory reordering saves only a scoped draft, validates membership and rejects concurrent changes', () => {
+  const { state, service, config } = baseline();
+  const live = commitAdminState(state, action(state, service, config));
+  const plan = routeDirectoryOrder(live, service, 'P1');
+  const [first, second] = plan.rows.map(row => row.supplyId);
+  const patch = { groupId: 'P1', expectedSignature: plan.signature, order: [second, first], weights: { [first]: 70, [second]: 40 }, confirmed: true };
+  const save = action(live, service, null, 'serviceRouteDirectoryOrder', patch);
+  assert.throws(() => commitAdminState(live, action(live, service, null, 'serviceRouteDirectoryOrder', { ...patch, order: [first, 'foreign'] })), /所选渠道/);
+  const next = commitAdminState(live, save);
+  const current = serviceRoute(next, service.id);
+  assert.equal(current.activeVersion, 1);
+  assert.deepEqual(activeRouteVersion(current), activeRouteVersion(serviceRoute(live, service.id)));
+  assert.deepEqual(current.draft.channels.map(row => [row.supplyId, row.priority, row.weight]), [[first, 2, 70], [second, 1, 40]]);
+  assert.throws(() => commitAdminState(next, save), /草稿或渠道范围/);
 });
 
 test('rollback revalidates live channels and creates a new version without deleting history', () => {

@@ -1,23 +1,30 @@
 import { customerProject, personalDefaultProject } from '../personal-project.mjs';
 import { useState } from 'react';
 import { internalSpace } from '../operating-space.mjs';
-import { Banner, Button, Input, Space, Typography } from '@douyinfe/semi-ui';
-import { IconSearch } from '@douyinfe/semi-icons';
+import { Banner, Button, Input, Space, Spin, Toast, Typography } from '@douyinfe/semi-ui';
+import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { maskApiKey } from '../api-key-utils.mjs';
 import { DEFAULT_PAGE_SIZE, FilterToolbar, PAGE_SIZES } from '../components/FilterControls';
-import { projectRole } from '../project-access.mjs';
+import { projectModelEnabled, projectRole } from '../project-access.mjs';
 import { projectSpend } from '../project-call.mjs';
+import { activeProjectSpendBudget, millionTokens, PROJECT_BUDGET_PERIODS } from '../project-token-budget.mjs';
 import { EnterpriseDialog, EnterpriseFacts, EnterpriseStatus, EnterpriseTable } from './EnterpriseUI';
 import { Choice } from './ServiceUI';
 import { customerKeys, customerModelIds, keyProjectAccess, yuanMicros } from './customer-projects.mjs';
 import { enterpriseProjectDepartment } from './enterprise-members';
 import { canAccessPage } from './navigation.mjs';
+import { adminProjectHref } from './access-control.mjs';
+import { useTenantData } from '../useTenantData';
+import { ProjectCreateDialog } from '../components/ProjectConfiguration';
+import AdminActionMenu from './AdminActionMenu';
 
 const { Text, Title } = Typography;
 const time = value => Number.isFinite(Date.parse(value))
   ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '未记录';
 const quantity = (amount, unit) => Number.isFinite(amount) ? amount.toLocaleString('zh-CN') + ' ' + unit : '—';
-const budget = project => project.spendBudget ? yuanMicros(project.spendBudget.amountMicros)
+const budget = project => Object.hasOwn(project,'tokenBudget')
+  ? project.tokenBudget?.limit ? millionTokens(project.tokenBudget.limit) + ' 百万 Tokens' : '不限'
+  : project.spendBudget ? yuanMicros(project.spendBudget.amountMicros)
   : project.budget > 0 ? quantity(project.budget, 'Token') : '未配置';
 const owner = (state, project) => state.users.find(row => row.id === project.ownerId)?.name || project.ownerId || '未记录';
 const projectRows = (state, tenant) => state.projects.filter(row => row.tenantId === tenant.id).map(row => {
@@ -27,10 +34,9 @@ const links = [
   ['customer-usage-detail', '项目用量', 'customer'],
   ['logs', '调用日志', 'tenant'],
   ['audit-logs', '审计日志', 'tenant'],
-  ['bills', '客户账单', 'tenant'],
 ];
 
-export function CustomerProjectKeys({ state, tenant, projectId = '', onProjectChange, askKey, canWrite }) {
+export function CustomerProjectKeys({ state, tenant, projectId = '', onProjectChange }) {
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
@@ -76,14 +82,9 @@ export function CustomerProjectKeys({ state, tenant, projectId = '', onProjectCh
           return { id:key.id, cells:[
             <div className="admin-table-record"><Text>{key.name}</Text><Text type="secondary" size="small">{key.keyId}</Text></div>,
             maskApiKey(key.secretPreview), ...(onProjectChange ? [byProject.get(key.projectId)?.name || '归属异常'] : []),
-            <Button size="small" theme="borderless" onClick={() => setInspectId(key.id)}>{reason ? '不可用' : models.length + ' 个'}</Button>,
+            reason ? '不可用' : models.length + ' 个',
             <EnterpriseStatus value={key.status}/>, key.expiresAt ? time(key.expiresAt) : '长期有效',
-            <Space spacing={4}>
-              <Button size="small" theme="borderless" onClick={() => setInspectId(key.id)}>详情</Button>
-              {askKey && ['有效', '停用'].includes(key.status) && <Button size="small" theme="borderless"
-                disabled={!canWrite || (tenant.status === '停用' && key.status === '停用')}
-                onClick={() => askKey(key)}>{key.status === '停用' ? '启用' : '停用'}</Button>}
-            </Space>,
+            <Button size="small" theme="borderless" aria-label={'查看 '+key.name+' 密钥详情'} onClick={()=>setInspectId(key.id)}>详情</Button>,
           ] };
         })}
         pagination={{ currentPage:current, pageSize:size, total:rows.length, pageSizeOpts:PAGE_SIZES, showTotal:true, showSizeChanger:true,
@@ -106,7 +107,38 @@ export function CustomerProjectKeys({ state, tenant, projectId = '', onProjectCh
   </>;
 }
 
-export default function CustomerProjectDetails({ state, tenant, projectId, navigate, askKey, canWrite }) {
+export function EnterpriseProjectTable({ state, tenant, projects, onProject, onKeys, pagination, empty = "该客户尚无项目" }) {
+  const available = customerModelIds(state,tenant.id);
+  const keyCounts = new Map();
+  for (const key of customerKeys(state, tenant.id)) keyCounts.set(key.projectId, (keyCounts.get(key.projectId) || 0) + 1);
+  return <EnterpriseTable pagination={pagination} minWidth={990} columns={['项目名称 / ID', '所属部门', '负责人',
+    '项目预算', '可用模型数', 'API 密钥', '创建人', '创建时间', '状态']} empty={empty}
+    rows={projects.map(project => {
+      const keyCount = keyCounts.get(project.id) || 0;
+      return {id:project.id,cells:[
+        <div className="admin-table-record"><Button size="small" theme="borderless" onClick={()=>onProject(project.id)}>
+          {project.name}</Button><Text size="small" type="secondary">{project.id}</Text></div>,
+        enterpriseProjectDepartment(state,project), owner(state,project), budget(project),
+        project.status==='正常' ? [...available].filter(modelId=>projectModelEnabled(project,modelId)).length : 0,
+        keyCount ? <Button size="small" theme="borderless" aria-label={'查看 '+project.name+' 的 API 密钥'}
+          onClick={()=>onKeys(project.id)}>{keyCount} 个</Button> : '0 个',
+        project.createdBy || '未记录', time(project.createdAt), <EnterpriseStatus value={project.status}/>,
+      ]};
+    })}/>;
+}
+
+function TenantProjectCreate({ tenantId, onClose, onCreated }) {
+  const tenant = useTenantData({adminTenantId:tenantId});
+  if (tenant.identity && tenant.canCreateProject) return <ProjectCreateDialog tenant={tenant} onClose={onClose} onCreated={onCreated}/>;
+  return <EnterpriseDialog title="新建项目" close={onClose} footer={<Button onClick={onClose}>取消</Button>}>
+    {tenant.error || tenant.identity
+      ? <Banner type="warning" closeIcon={null} description={tenant.error || '当前租户不可新建项目'}/>
+      : <Spin spinning aria-label="正在加载租户项目配置"/>}
+  </EnterpriseDialog>;
+}
+
+export default function CustomerProjectDetails({ state, tenant, projectId, navigate, manageProjects, createProjects, reload }) {
+  const [creating,setCreating] = useState(false);
   const projects = projectRows(state, tenant);
   const enterprise = tenant.type !== '个人';
   if (!enterprise) {
@@ -117,24 +149,24 @@ export default function CustomerProjectDetails({ state, tenant, projectId, navig
     } catch (error) { return <Banner type="warning" closeIcon={null} description={error.message}/>; }
   }
   if (!projectId) {
-    const keyCounts = new Map();
-    for (const key of customerKeys(state, tenant.id)) keyCounts.set(key.projectId, (keyCounts.get(key.projectId) || 0) + 1);
     return <>
-      <Title heading={5} component="h2">项目管理</Title>
-      <EnterpriseTable minWidth={850} columns={['项目名称 / ID', ...(enterprise ? ['所属部门', '负责人'] : []),
-        '项目预算', 'API 密钥', '创建时间', '状态']} empty="该客户尚无项目"
-        rows={projects.map(project => ({ id:project.id, cells:[
-          <div className="admin-table-record"><Button size="small" theme="borderless" onClick={() => navigate({ project:project.id })}>
-            {project.name}</Button><Text size="small" type="secondary">{project.id}</Text></div>,
-          ...(enterprise ? [enterpriseProjectDepartment(state, project), owner(state, project)] : []), budget(project),
-          <Button size="small" theme="borderless" onClick={() => navigate({ tab:'keys', project:project.id })}>{keyCounts.get(project.id) || 0} 个</Button>,
-          time(project.createdAt), <EnterpriseStatus value={project.status}/>,
-        ] }))}/>
+      <div className="admin-page-heading">
+        <Title heading={5} component="h2">项目列表</Title>
+        {createProjects && <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} onClick={()=>setCreating(true)}>新建项目</Button>}
+      </div>
+      <EnterpriseProjectTable state={state} tenant={tenant} projects={projects}
+        onProject={project => navigate({ project })} onKeys={project => navigate({ tab:'keys', project })}/>
+      {creating && <TenantProjectCreate tenantId={tenant.id} onClose={()=>setCreating(false)}
+        onCreated={()=>{
+          setCreating(false);
+          Toast.success('项目已创建');
+          void reload();
+        }}/>}
     </>;
   }
   const project = projects.find(row => row.id === projectId);
   if (!project) return <>
-    <Button onClick={() => navigate({ project:'' })}>返回项目空间</Button>
+    <Button onClick={() => navigate({ project:'' })}>返回项目列表</Button>
     <Banner type="warning" closeIcon={null} description="项目不存在或不属于当前客户。"/>
   </>;
   const allowedModels = customerModelIds(state, tenant.id);
@@ -143,7 +175,17 @@ export default function CustomerProjectDetails({ state, tenant, projectId, navig
     project.modelPermissions?.find(row => row.modelId === modelId) || {modelId})
     : project.modelPermissions ?? [...allowedModels].map(modelId => ({ modelId }));
   const internal=internalSpace(state.spacePolicy,tenant);
-  const spend = project.spendBudget && projectSpend(state, project, null, Date.now(), internal);
+  const records = links.filter(([page])=>canAccessPage(state.currentRole,page)).map(([page,label,tenantParam])=>{
+    const params = new URLSearchParams({
+      [tenantParam]:tenant.id, project:project.id,
+      ...(page==='customer-usage-detail' && {period:'today',...(internal && {scope:'organization'})}),
+      ...(page==='logs' && {view:'requests'}),
+    });
+    return {node:'item',key:page,name:internal && page==='customer-usage-detail' ? '项目成本归集' : label,
+      onClick:()=>window.open('#/admin-2/'+page+'?'+params,'_blank','noopener')};
+  });
+  const spendBudget = activeProjectSpendBudget(project);
+  const spend = spendBudget && projectSpend(state, project, null, Date.now(), internal);
   const members = enterprise ? state.memberships.flatMap(member => {
     const role = projectRole(project, { ...member, status:'正常' });
     if (!role) return [];
@@ -157,18 +199,29 @@ export default function CustomerProjectDetails({ state, tenant, projectId, navig
         <Title heading={5} component="h2">{project.name}</Title>
         <EnterpriseStatus value={project.status}/>
       </Space>
-      {enterprise && <Button onClick={() => navigate({ project:'' })}>返回项目管理</Button>}
+      <Space wrap>
+        {enterprise && <Button theme="borderless" type="tertiary" onClick={()=>navigate({project:''})}>返回项目列表</Button>}
+        {records.length>0 && <AdminActionMenu label="查看项目记录" items={records}>查看记录</AdminActionMenu>}
+        {manageProjects && project.status!=='已删除' && <Button onClick={()=>
+          window.open(adminProjectHref({tenant:tenant.id,project:project.id}),'_blank','noopener')}>配置项目</Button>}
+      </Space>
     </div>
-    <Space wrap>{links.filter(([page]) => canAccessPage(state.currentRole, page) && (!internal || page!=='bills')).map(([page, label, tenantParam]) =>
-      <a key={page} href={'#/admin-2/' + page + '?' + new URLSearchParams({ [tenantParam]:tenant.id, project:project.id, ...(page==='customer-usage-detail' && {period:'today'}) })}>{internal && page==='customer-usage-detail' ? '项目成本归集' : label}</a>)}</Space>
     <EnterpriseFacts rows={[
       ['项目 ID', project.id], ['项目说明', project.description || '—'], ['负责人', owner(state, project)],
       ...(enterprise ? [['所属部门', enterpriseProjectDepartment(state, project)]] : []),
-      ['创建时间', time(project.createdAt)], ['最近更新', time(project.updatedAt)], ['项目预算', budget(project)],
+      ['创建人', project.createdBy || '未记录'], ['创建时间', time(project.createdAt)],
+      ['最近更新', time(project.updatedAt)], ['项目预算', budget(project)],
+      ...(project.tokenBudget ? [
+        ['预算周期', PROJECT_BUDGET_PERIODS[project.tokenBudget.period]],
+        ['项目 TPM', quantity(project.tokenBudget.tpm, 'Tokens/分钟')],
+        ['项目 RPM', quantity(project.tokenBudget.rpm, '次/分钟')],
+        ['每日批处理 Token 限额', project.tokenBudget.dailyBatchLimit == null ? '—'
+          : millionTokens(project.tokenBudget.dailyBatchLimit) + ' 百万 Tokens'],
+      ] : []),
       ...(spend ? [[internal ? '累计内部成本' : '累计已核算费用', yuanMicros(spend.spent)],
         ...(spend.unpriced ? [['未核算调用', quantity(spend.unpriced, '次')]] : []),
-        ['预警阈值', quantity(project.spendBudget.warnAt, '%')],
-        ['达到上限后', project.spendBudget.stop ? '停止按量调用' : '继续调用']] : []),
+        ['预警阈值', quantity(spendBudget.warnAt, '%')],
+        ['达到上限后', spendBudget.stop ? '停止按量调用' : '继续调用']] : []),
       ['输入输出留存', project.retainContent ? '已开启' : '仅保存元数据'],
     ]}/>
     {enterprise && <>
@@ -182,6 +235,6 @@ export default function CustomerProjectDetails({ state, tenant, projectId, navig
         quantity(rpm, '次/分钟'), quantity(tpm, 'Token/分钟'), project.status !== '正常' ? '项目当前不可用'
           : allowedModels.has(modelId) ? '已开通' : '空间订购、授权或服务状态受限',
       ] }))}/>
-    <CustomerProjectKeys key={project.id} state={state} tenant={tenant} projectId={project.id} askKey={askKey} canWrite={canWrite}/>
+    <CustomerProjectKeys key={project.id} state={state} tenant={tenant} projectId={project.id}/>
   </>;
 }

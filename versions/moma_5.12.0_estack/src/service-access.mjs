@@ -1,3 +1,4 @@
+import { tenantModelAllowed } from './tenant-service-policy.mjs';
 import { modelIdentity, modelServiceIdentity } from './model-identities.mjs';
 import { ADMIN_DATA_KEY } from './workspace-storage.mjs';
 export { ADMIN_DATA_KEY, AUTH_DATA_KEY } from './workspace-storage.mjs';
@@ -45,10 +46,11 @@ export function lifecycleAccess(state, service, tenantId) {
   if (service.providerId) {
     if (!entry || !serviceCallsEnabled(model, entry)) return reject('provider_unavailable', '该渠道服务已停止，请选择其他渠道');
   }
-  if (!activeCustomer(state.tenants?.find(row => row.id === tenantId))) return reject('customer_unavailable', '当前用户或组织不可用');
+  const tenant = state.tenants?.find(row => row.id === tenantId);
+  if (!activeCustomer(tenant)) return reject('customer_unavailable', '当前用户或组织不可用');
   if (stage === 'gray' && !offerGrayTenants(model, entry).includes(tenantId)) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');
   const grant = state.grants?.find(row => row.subjectType === 'tenant' && row.subjectId === tenantId);
-  if (grant && (grant.status !== '生效中' || !grant.modelIds?.includes(model.id))) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');
+  if (!tenantModelAllowed(tenant, grant, model.id)) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');
   return { allowed: true, reason: '' };
 }
 

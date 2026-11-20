@@ -13,9 +13,10 @@ export const outcomes = { success: '成功', failed: '失败', canceled: '已取
 export const modelTypes = [['', '全部类型'], ['text', '语言模型'], ['multimodal', '多模态模型'], ['image', '图片生成'],
   ['video', '视频生成'], ['audio', '语音模型'], ['embedding', '向量模型'], ['rerank', '重排模型']];
 export const errorSignals = [['rate-limit', '429'], ['timeout', '超时'], ['fallback', '回退']];
+export const preflightTypes = [['auth', '认证与授权'], ['rate-limit', '限流'], ['parameters', '参数校验'], ['other', '其他前置错误']];
 
-const dimensions = ['tenant', 'project', 'purpose', 'model', 'callId', 'endpoint', 'user', 'key', 'source'];
-const scalarFilters = ['type', 'outcome', 'http', 'errorSource', 'signal', 'query', 'request', 'upstreamQuery', 'userRecord'];
+const dimensions = ['tenant', 'project', 'purpose', 'model', 'callId', 'upstreamModelId', 'endpoint', 'user', 'key', 'source'];
+const scalarFilters = ['type', 'outcome', 'http', 'query', 'request', 'userRecord', 'preflightType'];
 const dateOnly = /^\d{4}-\d{2}-\d{2}$/;
 const timeOf = value => typeof value === 'number' ? value : Date.parse(value);
 const midnight = date => Date.parse(date + 'T00:00:00+08:00');
@@ -91,17 +92,17 @@ export function observationHash(page, filters, extra = {}) {
   return '#/admin-2/' + page + (params.size ? '?' + params : '');
 }
 
-export function observationDrill(filters, window, view, { provider, channel, ...extra } = {}) {
+export function observationDrill(filters, window, { provider, channel, ...extra } = {}) {
   const supply = narrowSupply(filters.supply ?? null, provider, channel);
   return observationHash('logs', filters, { period: 'custom', start: new Date(window.start).toISOString(),
-    end: new Date(window.end).toISOString(), view, supply, ...extra });
+    end: new Date(window.end).toISOString(), supply, ...extra });
 }
 
 const httpStatus = value => Number.isInteger(value) && (value === 0 || value >= 100 && value <= 599) ? value : null;
 const outcomeCodes = new Map([['success', 'success'], ['succeeded', 'success'], ['passed', 'success'], ['failed', 'failed'],
   ['canceled', 'canceled'], ['cancelled', 'canceled'], ['pending', 'pending'], ['running', 'pending'], ['unknown', 'unknown']]);
 const explicitOutcome = value => value === true ? 'success' : value === false ? 'failed' : outcomeCodes.get(value);
-function resultOf(row, status) {
+export function requestOutcome(row, status = httpStatus(row.httpStatus)) {
   if (row.isCanceled === true) return 'canceled';
   if (row.isTimeout === true || row.streamInterrupted === true || row.finishReason === 'error') return 'failed';
   return explicitOutcome(row.finalStatus ?? row.requestStatus ?? row.status)
@@ -111,7 +112,14 @@ function resultOf(row, status) {
 const timeout = (row, code) => row.isTimeout === true || /(?:^|_)timeout(?:$|_)/i.test(code || '');
 const preflight = new Set(['auth_rejected', 'model_not_authorized', 'enterprise_model_not_authorized', 'enterprise_quota_exhausted',
   'model_scope_rejected', 'quota_exhausted', 'rate_limit_exceeded', 'no_available_endpoint', 'provider_service_required',
-  'provider_price_unavailable', 'model_price_unavailable']);
+  'provider_price_unavailable', 'model_price_unavailable', 'invalid_request']);
+const errorCode = row => row.errorCode || row.code || row.error;
+function preflightType(code, status) {
+  if (status === 429 || /rate_limit/.test(code)) return 'rate-limit';
+  if ([401, 403].includes(status) || /auth|scope|forbidden/.test(code)) return 'auth';
+  if (/param|invalid_request|malformed/.test(code)) return 'parameters';
+  return 'other';
+}
 
 function usageFields(row, model, usage = row.usage) {
   const { unit, fields } = usageMeter(model, { ...row, usage });
@@ -136,7 +144,7 @@ export function callObservations(state) {
     const modelType = record.modelType || model?.type;
     const streamSample = record.stream === true || record.stream == null && (!modelType || ['text', 'multimodal'].includes(modelType));
     const status = httpStatus(record.httpStatus);
-    const outcome = resultOf(record, status);
+    const outcome = requestOutcome(record, status);
     const trail = Array.isArray(record.attempts) ? record.attempts : [];
     const started = timeOf(record.startedAt ?? record.createdAt);
     const request = {
@@ -153,7 +161,7 @@ export function callObservations(state) {
     };
     const observedAttempts = [];
     trail.forEach((item, index) => {
-      const code = item.errorCode || item.code || item.error;
+      const code = errorCode(item);
       const legacyEvidence = item.endpointId && !preflight.has(code) &&
         (Number.isFinite(item.durationMs) || item.status || item.httpStatus != null || Object.hasOwn(item, 'error'));
       if (item.dispatched !== true && (item.dispatched === false || !legacyEvidence)) return;
@@ -162,15 +170,22 @@ export function callObservations(state) {
       // An endpoint in the existing channel catalogue carries the channel identity.
       const channel = item.channelId || endpoint?.id;
       const attemptStatus = httpStatus(item.httpStatus ?? item.statusCode);
-      const explicit = explicitOutcome(item.status);
-      const attemptOutcome = explicit || (item.isTimeout === true || code ? 'failed' : attemptStatus != null
-        ? resultOf(item, attemptStatus) : item.error === null ? 'success' : 'unknown');
+      const explicit = explicitOutcome(item.finalStatus ?? item.requestStatus ?? item.status);
+      const attemptOutcome = item.isCanceled === true || item.isTimeout === true || item.streamInterrupted === true || item.finishReason === 'error'
+        ? requestOutcome(item, attemptStatus) : explicit || (code ? 'failed' : attemptStatus != null
+          ? requestOutcome(item, attemptStatus) : item.error === null ? 'success' : 'unknown');
       observedAttempts.push({
         ...request, id: JSON.stringify([id, index + 1]), parentId: id, index: index + 1,
         at: timeOf(item.startedAt ?? item.createdAt), upstreamRequestId: item.upstreamRequestId, upstreamModelId: item.upstreamModelId,
         provider, providerName: item.providerName || providerName(provider), channel, channelName: item.channelName || endpoints.get(channel)?.name || channel,
         serviceId: item.serviceId, endpoint: item.endpointId, endpointName: item.endpointName || endpoint?.endpointId || item.endpointId,
+        channelModel: JSON.stringify([provider ?? null, channel ?? null, item.upstreamModelId ?? null]),
+        channelModelName: [item.channelName || endpoints.get(channel)?.name || channel || '渠道未采集',
+          item.upstreamModelId || '模型未采集'].join(' · '),
         outcome: attemptOutcome, status: attemptStatus, duration: number(item.durationMs),
+        ttft: item.stream === false ? null : number(item.ttftMs),
+        generationDuration: number(item.generationDurationMs),
+        selectionReason: item.selectionReason, successReason: item.successReason, nextAction: item.nextAction,
         code, errorReason: item.errorMessage || item.message, errorSource: item.errorSource || (attemptOutcome === 'failed' ? '上游调用' : null),
         timeout: timeout(item, code), fallback: item.fallback === true, fallbackReason: item.fallbackReason,
         recordedFallbackReason: item.fallbackReason,
@@ -186,24 +201,30 @@ export function callObservations(state) {
       if (attempt.fallback && !attempt.fallbackReason) attempt.fallbackReason = attempt.code;
     });
     const final = observedAttempts.at(-1);
-    const routed = Boolean(final) || !trail.length && record.cacheHit !== true;
+    const rejected = trail.findLast(item => errorCode(item) && (item.dispatched === false ||
+      item.dispatched !== true && preflight.has(errorCode(item))));
+    const recordedCode = errorCode(record);
+    const blocked = rejected ? errorCode(rejected) : !trail.length && !record.admittedAt && preflight.has(recordedCode) ? recordedCode : null;
+    const gatewayOnly = !record.admittedAt && trail.every(item => item.dispatched === false ||
+      item.dispatched !== true && preflight.has(errorCode(item)));
+    const kind = outcome === 'failed' && !final && gatewayOnly && blocked ? preflightType(blocked, status) : null;
+    const routed = Boolean(final) || !kind && !trail.length && record.cacheHit !== true;
     const endpoint = routed ? final?.endpoint || record.endpointId : null;
     const provider = routed ? final?.provider || record.providerId || record.procurementSnapshot?.providerId || endpoints.get(endpoint)?.providerId : null;
     const channel = routed ? final?.channel || record.channelId : null;
-    const blocked = trail.findLast(item => item.error && (item.dispatched === false ||
-      item.dispatched !== true && preflight.has(item.error)));
-    const code = record.errorCode || record.error || blocked?.error || (outcome === 'failed' ? final?.code : null);
+    const code = recordedCode || blocked || (outcome === 'failed' ? final?.code : null);
     rows.push({
       ...request, provider, providerName: routed ? final?.providerName || record.providerName || providerName(provider) : null,
       channel, channelName: routed ? final?.channelName || record.channelName || endpoints.get(channel)?.name || channel : null,
       registeredModelId: model?.modelId,
       keyMasked: typeof key?.secretPreview === 'string' && key.secretPreview.trim() ? maskApiKey(key.secretPreview) : null,
       endpoint, endpointName: final?.endpointName || endpoints.get(endpoint)?.endpointId || endpoint,
-      code, errorReason: record.errorMessage || (outcome === 'failed' ? final?.errorReason : null),
+      code, errorReason: record.errorMessage || rejected?.errorMessage || (outcome === 'failed' ? final?.errorReason : null),
       errorSource: record.errorSource || (blocked ? '网关' : outcome === 'failed' ? final?.errorSource : null),
       duration: number(record.durationMs), firstPacket: number(record.firstPacketMs),
       ttft: streamSample ? number(record.ttftMs) : null, taskStatus: record.taskStatus,
-      attempts: observedAttempts, blocked: blocked?.error, routeVersion: record.routeVersion, cacheHit: record.cacheHit === true,
+      attempts: observedAttempts, blocked, preflightType: kind, routeVersion: record.routeVersion, cacheHit: record.cacheHit === true,
+      selectionReason: record.selectionReason,
       ...usageFields(record, model),
     });
     attempts.push(...observedAttempts);
@@ -259,11 +280,10 @@ export function changeObservationTenant(rows, filters, tenant) {
   return patch;
 }
 
-export function filterObservations(rows, filters, window, { allowUntimed = false } = {}) {
+export function filterObservations(rows, filters, window) {
   if (!window) return [];
-  const query = filters.query?.trim().toLowerCase(), exact = filters.request?.trim(), upstream = filters.upstreamQuery?.trim().toLowerCase();
-  return rows.filter(row => (row.at >= window.start && row.at < window.end ||
-    allowUntimed && !Number.isFinite(row.at) && (query || exact || upstream)) &&
+  const query = filters.query?.trim().toLowerCase(), exact = filters.request?.trim();
+  return rows.filter(row => row.at >= window.start && row.at < window.end &&
     dimensions.every(key => matchesSelection(filters[key] ?? null, observationKey(row, key))) &&
     (!filters.userRecord || (filters.userRecord === 'uncollected') === (observationKey(row, 'user') === uncollectedObservationKey)) &&
     (filters.supply == null || filters.supply.some(([provider, channel]) =>
@@ -272,10 +292,8 @@ export function filterObservations(rows, filters, window, { allowUntimed = false
     (!filters.type || row.modelType === filters.type) &&
     (!filters.outcome || (filters.outcome === 'other' ? !['success', 'failed'].includes(row.outcome) : row.outcome === filters.outcome)) &&
     (!filters.http || String(row.status ?? 'unreported') === filters.http) &&
-    (!filters.errorSource || row.errorSource === filters.errorSource) &&
-    (!filters.signal || (filters.signal === 'rate-limit' ? row.status === 429 :
-      filters.signal === 'timeout' ? row.timeout : filters.signal === 'fallback' && row.fallback)) &&
-    (!exact || row.requestId === exact) && (!query || row.requestId?.toLowerCase().includes(query)) && (!upstream || row.upstreamRequestId?.toLowerCase().includes(upstream)));
+    (!filters.preflightType || row.preflightType === filters.preflightType) &&
+    (!exact || row.requestId === exact) && (!query || row.requestId?.toLowerCase().includes(query)));
 }
 
 export function compareLogRows(a, b, field, direction) {
@@ -326,9 +344,21 @@ const sum = (rows, field) => {
   const values = rows.map(row => row[field]).filter(value => value != null);
   return values.length ? values.reduce((total, value) => total + value, 0) : null;
 };
+const attemptMetrics = {
+  failed: row => row.outcome === 'failed',
+  rateLimit: row => row.status === 429,
+  timeout: row => row.timeout,
+  fallback: row => row.fallback,
+  ttft: row => row.ttft != null,
+  otps: row => row.outcome === 'success' && row.output > 0 && row.generationDuration > 0,
+};
+export function attemptsForMetric(rows, metric) {
+  return metric ? rows.filter(attemptMetrics[metric]) : rows;
+}
+
 export function summarizeObservations(rows) {
   const success = rows.filter(row => row.outcome === 'success').length;
-  const failed = rows.filter(row => row.outcome === 'failed').length;
+  const failed = attemptsForMetric(rows, 'failed').length;
   const ttfts = rows.map(row => row.ttft).filter(Number.isFinite);
   return {
     count: rows.length, success, failed, other: rows.length - success - failed,
@@ -336,9 +366,9 @@ export function summarizeObservations(rows) {
     p95: percentile(rows.map(row => row.duration).filter(Number.isFinite), .95),
     ttft: percentile(ttfts, .95), ttftSamples: ttfts.length,
     input: sum(rows, 'input'), output: sum(rows, 'output'), total: sum(rows, 'total'),
-    rateLimit: rows.filter(row => row.status === 429).length,
-    timeout: rows.filter(row => row.timeout).length,
-    fallback: rows.filter(row => row.fallback).length,
+    rateLimit: attemptsForMetric(rows, 'rateLimit').length,
+    timeout: attemptsForMetric(rows, 'timeout').length,
+    fallback: attemptsForMetric(rows, 'fallback').length,
   };
 }
 
@@ -361,6 +391,15 @@ export function attemptCapacity(rows, window) {
   }
   return { averageRpm: rows.length / duration, peakRpm,
     averageTpm: observed && !incomplete ? tokens / duration : null, peakTpm: observed && !incomplete ? peakTpm : null };
+}
+
+export function attemptPerformance(rows) {
+  const ttft = attemptsForMetric(rows, 'ttft').map(row => row.ttft);
+  const outputSamples = attemptsForMetric(rows, 'otps');
+  const generationDuration = sum(outputSamples, 'generationDuration');
+  return { ttft: percentile(ttft, .95), ttftSamples: ttft.length,
+    otps: generationDuration > 0 ? sum(outputSamples, 'output') * 1000 / generationDuration : null, otpsSamples: outputSamples.length,
+    timeoutRate: rows.length ? attemptsForMetric(rows, 'timeout').length * 100 / rows.length : null };
 }
 
 export function logCsv(rows) {

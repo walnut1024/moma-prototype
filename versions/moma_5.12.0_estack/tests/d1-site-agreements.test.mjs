@@ -21,10 +21,12 @@ test('only a private site administrator may publish, and anonymous visitors read
   });
   const origin = 'https://example.test';
   const path = '/site-agreements';
+  const portalPath = '/site-portal';
   process.env.VITE_MOMA_PRIVATE_SITE = '0';
   const publicBuild = await startLocalBackend();
   try {
     assert.equal((await publicBuild.runtime.dispatchFetch(origin + prefix + path)).status, 404);
+    assert.equal((await publicBuild.runtime.dispatchFetch(origin + prefix + portalPath)).status, 404);
   } finally {
     await publicBuild.runtime.dispose();
   }
@@ -59,5 +61,21 @@ test('only a private site administrator may publish, and anonymous visitors read
   assert.equal((await request(path, { body: invalid, cookie: administrator })).status, 400);
   const writes = await Promise.all([1, 2].map(() => request(path, { body, cookie: administrator })));
   assert.deepEqual(writes.map(result => result.status).sort(), [200, 409]);
+  assert.deepEqual((await request(path)).data, { revision: 1, agreements: body.agreements });
+
+  const portal = { expectedRevision: 0, url: 'https://portal.example.test/landing' };
+  assert.deepEqual((await request(portalPath)).data, { revision: 0, url: '' });
+  assert.equal((await request(portalPath, { body: portal })).status, 401);
+  assert.equal((await request(portalPath, { body: portal, cookie: operator })).status, 403);
+  assert.equal((await request(portalPath, { body: portal, cookie: administrator, requestOrigin: 'https://other.test' })).status, 403);
+  for (const url of ['javascript:alert(1)', 'https://user:password@example.test/', origin + '/moma_5.12.0_estack/']) {
+    assert.equal((await request(portalPath, { body: { ...portal, url }, cookie: administrator })).status, 400);
+  }
+  const portalWrites = await Promise.all([1, 2].map(() => request(portalPath, { body: portal, cookie: administrator })));
+  assert.deepEqual(portalWrites.map(result => result.status).sort(), [200, 409]);
+  assert.deepEqual((await request(portalPath)).data, { revision: 1, url: portal.url });
+  const cleared = await request(portalPath, { body: { expectedRevision: 1, url: '' }, cookie: administrator });
+  assert.equal(cleared.status, 200);
+  assert.deepEqual((await request(portalPath)).data, { revision: 2, url: '' });
   assert.deepEqual((await request(path)).data, { revision: 1, agreements: body.agreements });
 });

@@ -55,7 +55,7 @@ export async function migrateEmptyDatabase(db) {
   } finally { sqlite.close(); }
 }
 
-export async function startLocalBackend({ persistPath, loginHashes, port = 0, log, demo = false, presets = false, licenseEdition, licenseExpiresAt } = {}) {
+export async function startLocalBackend({ persistPath, loginHashes, port = 0, log, demo = false, licensePublicKey, licenseDeploymentId, presets = false, licenseEdition, licenseExpiresAt } = {}) {
   const source = fileURLToPath(new URL('../server/api.js', import.meta.url));
   const bundled = await build({ stdin: { contents: `import {handleModelOperations} from ${JSON.stringify(source)}; export default {fetch:handleModelOperations};`, resolveDir: process.cwd() },
     plugins:[modelWorkerDataPlugin], bundle: true, write: false, format: 'esm', platform: 'browser', target: 'es2022' });
@@ -63,7 +63,7 @@ export async function startLocalBackend({ persistPath, loginHashes, port = 0, lo
     // The installed local engine supports this date; production compatibility is verified at deployment.
     compatibilityDate: '2026-07-30', d1Databases: ['MODEL_OPS_DB'], d1Persist: persistPath || false,
     bindings: { MODEL_OPS_LOGIN_HASHES: JSON.stringify(loginHashes || {}), MODEL_OPS_DEMO_OTP:'1', MOMA_PRIVATE_SITE: process.env.VITE_MOMA_PRIVATE_SITE || '',
-      MOMA_LICENSE_EDITION: licenseEdition || '', MOMA_LICENSE_EXPIRES_AT: licenseExpiresAt || '' }, ...(log ? { log } : {}) });
+      MOMA_LICENSE_EDITION: licenseEdition || '', MOMA_LICENSE_EXPIRES_AT: licenseExpiresAt || '', MOMA_LICENSE_PUBLIC_KEY:licensePublicKey || '', MOMA_LICENSE_DEPLOYMENT_ID:licenseDeploymentId || '' }, ...(log ? { log } : {}) });
   try {
     const db = await runtime.getD1Database('MODEL_OPS_DB');
     await migrateEmptyDatabase(db);

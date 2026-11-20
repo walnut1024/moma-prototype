@@ -2,18 +2,18 @@ import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useId, useEffect, useState } from 'react';
-import { Avatar, Banner, Button, Card, Checkbox, Descriptions, Form, Input, Progress, Space, Tabs, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
+import { Avatar, Banner, Button, Card, Checkbox, Descriptions, Form, Input, Space, Tabs, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconSearch } from '@douyinfe/semi-icons';
-import { MODEL_ORDER_COLUMNS } from '../model-order-display.mjs';
+import { TenantServiceSettings } from './TenantServiceSettings';
 import CustomerProjectDetails, { CustomerProjectKeys } from './CustomerProjectDetails';
-import { DEFAULT_PAGE_SIZE, PAGE_SIZES, normalizePageSize, FilterReset, FilterToolbar } from '../components/FilterControls';
+import { PAGE_SIZES, normalizePageSize, FilterReset, FilterToolbar } from '../components/FilterControls';
 import { displayBusinessCopy } from '../display-copy.mjs';
 import AdminPageHeading from './AdminPageHeading';
 import { Choice, CopyId, serviceOperationsUi } from './ServiceUI';
 import { accountDataSourceLabel, accountDataSourceOptions } from './account-data-source';
 import {
-  filterIndividualAccounts, individualBillingTypes, individualFreezeScope, individualOrders, individualOrderDisplay,
+  filterIndividualAccounts, individualFreezeScope,
   individualAccounts, managedIndividualAccounts, individualName, individualStatus, individualTabs, maskIndividualValue,
 } from './individual-users';
 import './individual-users.css';
@@ -23,8 +23,6 @@ const beijingDate = new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
 });
 const time = value => value && Number.isFinite(Date.parse(value)) ? beijingDate.format(new Date(value)) : '未记录';
-const quantity = (value, unit) => value == null || String(value).trim() === '' || !Number.isFinite(Number(value)) ? '未记录'
-  : Number(value).toLocaleString('zh-CN') + (unit ? ' ' + unit : '（单位未记录）');
 const restoreBulkFocus = () => requestAnimationFrame(() => document.getElementById('iu-bulk-action')?.focus());
 
 function OpenIndividual({ state, transact, close, complete, canWrite }) {
@@ -85,16 +83,6 @@ function RecordTable({ columns, rows, empty, pagination = false, minWidth = 520 
   return <Table size="small" rowKey="id" dataSource={rows.map(([id, ...cells]) => ({ id, cells }))}
     columns={columns.map((title, index) => ({ title, key: index, render: (_, row) => row.cells[index] }))}
     empty={empty} pagination={pagination} scroll={{ x: `max(100%, ${minWidth}px)` }}/>;
-}
-
-function DetailsModal({ title, description, children, close }) {
-  return <Modal visible title={title} width="min(600px, calc(100vw - 32px))" closeOnEsc maskClosable={false}
-    onCancel={close} footer={<Button onClick={close}>关闭</Button>}>
-    <div className="admin-analytics-fields admin-individual-dialog">
-      <Paragraph type="secondary">{description}</Paragraph>
-      {children}
-    </div>
-  </Modal>;
 }
 
 function UserEditor({ account, transact, canWrite, close, complete }) {
@@ -229,68 +217,7 @@ function StatusDialog({ account, accounts, role, transact, canWrite, close, comp
   </Modal>;
 }
 
-function SubscriptionDetails({ state, tenantId }) {
-  const entries = individualOrders(state, tenantId).map(entry => ({ ...entry, display: individualOrderDisplay(state, entry) }));
-  const [billing, setBilling] = useState('all');
-  const [status, setStatus] = useState('all');
-  const [inspect, setInspect] = useState(null);
-  const [query, setQuery] = useState('');
-  const [page, setPage] = useState(1);
-  const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
-  const statuses = [...new Set(entries.map(item => item.display.status))];
-  const records = entries.filter(item =>
-    (billing === 'all' || item.billingType === billing) && (status === 'all' || item.display.status === status)
-    && [item.display.name, item.display.modelNames, item.order.orderNo, item.order.id]
-      .some(value => String(value || '').toLowerCase().includes(query.trim().toLowerCase())));
-  const unknown = entries.filter(item => !item.billingType).length;
-  const currentPage = Math.min(page, Math.ceil(records.length / size) || 1);
-  const hasProgress = inspect && inspect.billingType !== 'payg' && typeof inspect.order.entitlement === 'number'
-    && inspect.order.entitlement > 0 && typeof inspect.order.used === 'number' && inspect.order.used >= 0;
-
-  return <div className="admin-analytics-fields">
-    <FilterToolbar>
-      <Input className="admin-list-search" prefix={<IconSearch aria-hidden="true"/>} showClear aria-label="搜索订购记录"
-        value={query} placeholder="搜索模型、套餐或订单编号" onChange={value => { setQuery(value); setPage(1); }}/>
-      <Choice label="计费方式" value={billing} options={[[ 'all', '全部计费方式' ], ...Object.entries(individualBillingTypes)]}
-        onChange={value => { setBilling(value); setQuery(''); setPage(1); }}/>
-      <Choice label="订购状态" value={status} options={[[ 'all', '全部状态' ], ...statuses.map(value => [value, value])]}
-        onChange={value => { setStatus(value); setPage(1); }}/>
-      <FilterReset onClick={() => { setBilling('all'); setStatus('all'); setQuery(''); setPage(1); }}/>
-    </FilterToolbar>
-    <RecordTable minWidth={1120} columns={['模型 / 套餐名称', '计费方式', ...MODEL_ORDER_COLUMNS]}
-      rows={records.slice((currentPage - 1) * size, currentPage * size).map(entry => {
-        const { order, display } = entry;
-        return [
-          order.id, display.name, individualBillingTypes[entry.billingType] || '未记录', display.type, display.provider, display.tariff,
-          display.catalogPrice, <AdminStatus value={display.status}/>,
-          time(display.orderedAt), time(display.expiresAt),
-          <Button size="small" theme="borderless" aria-label={`查看 ${display.name} 订购详情`} onClick={() => setInspect(entry)}>详情</Button>,
-        ];
-      })}
-      empty={query.trim() || status !== 'all' ? '没有匹配的订购记录' : billing === 'all' ? '暂无订购记录' : `暂无${individualBillingTypes[billing]}记录`}
-      pagination={{ currentPage, pageSize: size, total: records.length, pageSizeOpts: PAGE_SIZES, showTotal: true, showSizeChanger: true,
-        onPageChange: setPage, onPageSizeChange: value => { setSize(value); setPage(1); } }}/>
-    {unknown > 0 && <Paragraph type="secondary">有 {unknown} 条订购记录尚未填写计费类型，可在全部计费方式中查看。</Paragraph>}
-    {inspect && <DetailsModal title="订购详情" description={inspect.display.name} close={() => setInspect(null)}>
-      <Facts rows={[
-        ['订单编号', inspect.order.orderNo || inspect.order.id], ['计费方式', individualBillingTypes[inspect.billingType] || '未记录'],
-        ['商品名称', inspect.product?.name || '未记录'], ['模型', inspect.display.modelNames], ['类型', inspect.display.type],
-        ['模型服务商', inspect.display.provider], ['资费场景', inspect.display.tariff], ['目录价', inspect.display.catalogPrice],
-        ['订购状态', inspect.display.status], ['订购时间', time(inspect.display.orderedAt)], ['生效时间', time(inspect.order.startAt)],
-        ['到期时间', time(inspect.display.expiresAt)], ...(inspect.billingType === 'payg' ? [] : [
-          ['订购额度', quantity(inspect.order.entitlement, inspect.order.quotaUnit)], ['已用额度', quantity(inspect.order.used, inspect.order.quotaUnit)],
-        ]),
-      ]}/>
-      {hasProgress && <>
-        <Text>额度使用情况</Text>
-        <Progress aria-label="订购额度使用比例" percent={Math.min(100, inspect.order.used / inspect.order.entitlement * 100)}/>
-        <Text type="secondary">剩余 {quantity(Math.max(0, inspect.order.entitlement - inspect.order.used), inspect.order.quotaUnit)}</Text>
-      </>}
-    </DetailsModal>}
-  </div>;
-}
-
-function UserDetails({ account, state, tab, projectId, navigate, canWrite, setEditor }) {
+function UserDetails({ account, state, tab, projectId, navigate, canWrite, transact, setEditor }) {
   const { tenant, user } = account;
   const memberships = state.memberships.filter(member => member.userId === tenant.ownerId)
     .map(member => ({ member, enterprise: state.tenants.find(item => item.id === member.tenantId && ['企业', '政府'].includes(item.type)) }))
@@ -305,6 +232,7 @@ function UserDetails({ account, state, tab, projectId, navigate, canWrite, setEd
         <Title heading={5} component="h2">客户信息</Title>
         <Facts rows={[
           ['客户 ID', <CopyId value={tenant.id} label="客户 ID"/>], ['客户状态', <AccountStatus tenant={tenant}/>],
+          ['服务等级', <TenantServiceSettings state={state} tenant={tenant} section="level" canWrite={canWrite} transact={transact}/>],
           ['备注', tenant.notes || '未填写'], ...(tenant.status === '停用' ? [['冻结原因', displayBusinessCopy(tenant.freezeReason) || '未记录']] : []),
         ]}/>
         <div className="admin-page-heading">
@@ -314,7 +242,7 @@ function UserDetails({ account, state, tab, projectId, navigate, canWrite, setEd
         <Facts rows={[
           ['用户 ID', userId ? <CopyId value={userId} label="用户 ID"/> : '未关联'],
           ['手机号码', maskIndividualValue('phone', user?.phone)], ['昵称', user?.nickname || '未设置'], ['邮箱', maskIndividualValue('email', user?.email)],
-          ['数据来源', accountDataSourceLabel(tenant)], ['注册时间', time(user?.registeredAt)],
+          ['注册时间', time(user?.registeredAt)],
           ['手机号验证', user?.phoneVerifiedAt ? `已验证 · ${time(user.phoneVerifiedAt)}` : '未记录'],
           ['最近登录', user?.lastLoginAt ? time(user.lastLoginAt) : '未记录'],
         ]}/>
@@ -324,9 +252,9 @@ function UserDetails({ account, state, tab, projectId, navigate, canWrite, setEd
             rows={memberships.map(({ member, enterprise }) => [member.id, enterprise.name, member.role, member.status])}/>
         </>}
       </>}
-      {tab === 'entitlements' && <><Text link={{href:'#/admin-2/bills?tenant='+encodeURIComponent(tenant.id)}}>查看客户账单</Text>
-        <SubscriptionDetails state={state} tenantId={tenant.id}/></>}
-      {tab === 'projects' && <CustomerProjectDetails state={state} tenant={tenant} projectId={projectId} navigate={navigate}/>}
+      {tab==='models' && <TenantServiceSettings state={state} tenant={tenant} section="models" canWrite={canWrite} transact={transact}/>}
+      {tab==='projects' && <CustomerProjectDetails state={state} tenant={tenant} projectId={projectId} navigate={navigate}
+        manageProjects={state.currentRole==='平台管理员' && ['正常','需关注'].includes(tenant.status)}/>}
       {tab === 'keys' && <CustomerProjectKeys state={state} tenant={tenant} projectId={projectId}
         />}
     </div>
@@ -448,7 +376,7 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
         `个人客户已冻结，个人空间访问和个人 API 密钥调用受限。${account.tenant.freezeReason ? `原因：${displayBusinessCopy(account.tenant.freezeReason)}` : ''}`
       }/>}
       <UserDetails key={account.tenant.id} account={account} state={state} tab={tab} projectId={params.get('project') || ''}
-        navigate={navigate} canWrite={canWrite} setEditor={setEditing}/>
+        navigate={navigate} canWrite={canWrite} transact={transact} setEditor={setEditing}/>
     </>}
     {opening && <OpenIndividual state={state} transact={transact} canWrite={canWrite} close={()=>{setOpening(false);if(params.has("create"))location.hash="#/admin-2/tenants";}}
       complete={tenant=>{setOpening(false);Toast.success('个人空间和默认项目已开通');navigate({personal:tenant.ownerId,create:'',tab:'projects',project:''});}}/>}

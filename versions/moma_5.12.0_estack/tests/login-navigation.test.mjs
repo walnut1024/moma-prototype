@@ -21,8 +21,8 @@ test('login rejects external, other-version, normalized traversal and recursive 
 test('customers return to their source, and customer logins cannot enter an admin destination', () => {
   const source = LOGIN_BASE + '?page=model-detail&model=a';
   assert.equal(loginDestination(source), source);
-  assert.equal(loginDestination(LOGIN_BASE + '#/admin-2/admins'), LOGIN_BASE + '?page=space-overview');
-  assert.equal(loginDestination(null), LOGIN_BASE + '?page=space-overview');
+  assert.equal(loginDestination(LOGIN_BASE + '#/admin-2/admins'), LOGIN_BASE + '?page=home');
+  assert.equal(loginDestination(null), LOGIN_BASE + '?page=home');
 });
 
 test('backend identities land on an allowed home and only resume pages permitted by their role', () => {

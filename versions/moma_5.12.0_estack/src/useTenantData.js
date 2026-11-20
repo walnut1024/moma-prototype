@@ -1,27 +1,32 @@
 import { maskedProjectKeys } from './project-keys.mjs';
 import { useEffect, useRef, useState } from 'react';
+import { cloudAdminRequest } from './admin-v2/admin-client.mjs';
 import { MARKET_EVENT, marketRequest } from './CloudMarket';
 import { cloudMarketPresentation } from './service-directory.mjs';
 
 const empty = { keys:[], routes:[], orders:[], plans:[], services:[], projects:[], requests:[], models:[],
-  projectServices:[], logKeys:[], projectMembers:{}, projectAudits:[], projectBudgets:{},
+  projectServices:[], logKeys:[], projectMembers:{}, projectAudits:[], projectBudgets:{}, accountProjects:[],
   organization:{ departments:[], members:[], audit:[] }, error:'' };
 
-export function useTenantData({ enabled = true } = {}) {
+export function useTenantData({ enabled = true, adminTenantId } = {}) {
   const [data, setData] = useState(empty);
   const [refresh, setRefresh] = useState(0);
   const pending=useRef(null);
+  const request = (path, body, signal) => adminTenantId
+    ? cloudAdminRequest('/tenants/' + encodeURIComponent(adminTenantId) + '/' + path,
+      {method:body ? 'POST' : 'GET', body:body || undefined, signal})
+    : marketRequest(path, body, signal);
   useEffect(() => {
     if (!enabled) { setData(empty); return; }
     const controller = new AbortController();
-    marketRequest('workspace', null, controller.signal).then(result => {
+    request('workspace', null, controller.signal).then(result => {
       if (!controller.signal.aborted) setData({ ...result, services:result.services.map(cloudMarketPresentation),
         projectServices:(result.projectServices || []).map(row => ({ ...cloudMarketPresentation(row), modelKey:row.serviceModelId, materialId:row.modelKey })), error:'' });
     }).catch(error => {
       if (!controller.signal.aborted) setData({ ...empty, error:error.message });
     });
     return () => controller.abort();
-  }, [enabled,refresh]);
+  }, [enabled,refresh,adminTenantId]);
   useEffect(() => {
     if (!enabled) return;
     const update = event => {
@@ -39,7 +44,7 @@ export function useTenantData({ enabled = true } = {}) {
       pending.current=receipt;
       let result;
       try {
-        result=await marketRequest('commands',{operationId:receipt.id,...input});
+        result=await request('commands',{operationId:receipt.id,...input});
       } catch(error) {
         if(error.status<500 && pending.current===receipt)pending.current=null;
         throw error;
@@ -51,7 +56,7 @@ export function useTenantData({ enabled = true } = {}) {
   const checkSpace = identityKey => {
     if (data.identity?.key !== identityKey) throw Error('当前使用空间已变化，请重新打开操作');
   };
-  return { ...data, report:data.report ? { ...data.report, asOf:new Date(data.report.asOf) } : undefined, reload:() => setRefresh(value => value+1), command,
+  return { ...data, report:data.report ? { ...data.report, asOf:new Date(data.report.asOf) } : undefined, reload:() => setRefresh(value => value+1), command, inviteMember:membershipId=>request('invitations',{membershipId}),
     createProject:async (input, options) => {
       checkSpace(options.identityKey);
       const { operationId } = await command('projectCreate', input, options.expectedRevision);

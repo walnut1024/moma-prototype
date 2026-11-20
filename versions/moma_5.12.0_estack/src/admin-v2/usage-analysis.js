@@ -162,12 +162,12 @@ export function usageGroups(rows, key) {
   for (const row of rows) {
     const id = row[key] || '__unknown__';
     const group = groups.get(id) || { id, input: 0, output: 0, total: 0, units: {}, calls: 0, tokenCalls: 0, complete: true, models: new Set() };
-    if (row.unit === 'Token') {
+    if (row.unit === 'Token' && row.value.complete && Number.isSafeInteger(row.value.total) && row.value.total >= 0) {
       group.tokenCalls++;
       group.input += row.value.input ?? 0;
       group.output += row.value.output ?? 0;
       group.total += row.value.total;
-    } else group.units[row.unit] = (group.units[row.unit] || 0) + row.value.total;
+    } else if (row.unit !== 'Token') group.units[row.unit] = (group.units[row.unit] || 0) + row.value.total;
     group.calls++;
     group.complete &&= row.value.complete;
     if (row.modelId) group.models.add(row.modelId);

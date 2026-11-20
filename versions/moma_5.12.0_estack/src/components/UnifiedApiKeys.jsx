@@ -14,14 +14,16 @@ import FrontPageHeader from './FrontPageHeader';
 const billingTypes = ['按量付费', 'Token Plan'];
 const newSecret = () => 'sk-' + crypto.randomUUID().replaceAll('-', '');
 
-export default function UnifiedApiKeys({ project, internal, embedded = false, onProjects, onModels, onAudit }) {
+export default function UnifiedApiKeys({ project, internal, onProjects, onModels, onAudit }) {
   if (!project) return <div className="api-key-unified us-page">
     <FrontPageHeader title="API 密钥" description="选择项目后管理其 API 密钥" icon={KeyRound} />
     <Button onClick={onProjects}>前往项目管理</Button>
   </div>;
   return <div className="api-key-unified us-page">
-    {!embedded && <FrontPageHeader title="API 密钥" description={`所属项目 · ${project.name}`} icon={KeyRound} />}
-    {embedded && project.canManage && <Button theme="borderless" onClick={onAudit}>查看操作记录</Button>}
+    <FrontPageHeader title="API 密钥" description={`所属项目 · ${project.name}`} icon={KeyRound} actions={project.canManage && <>
+      <Button theme="borderless" onClick={onModels}>配额管理</Button>
+      <Button theme="borderless" onClick={onAudit}>查看操作记录</Button>
+    </>} />
     {internal ? <ApiKeys billing="按量付费" project={project} onModels={onModels} /> : <Tabs className="tenant-key-tabs" defaultActiveKey="按量付费" aria-label="API 密钥计费方式" keepDOM>
       {billingTypes.map(type=><Tabs.TabPane key={type} itemKey={type} tab={type==='Token Plan'?'订阅套餐':type}>
         {type==='Token Plan'?<TokenPlanApiKeys project={project} onModels={onModels}/>

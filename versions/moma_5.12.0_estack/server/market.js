@@ -9,10 +9,12 @@ import { platformPublicationFingerprint } from '../src/admin-v2/platform-publica
 import { platformPriceVersions } from '../src/admin-v2/platform-service-client.js';
 import { activeSupplyPrice } from '../src/admin-v2/model-management.js';
 import { MOMA_PROVIDER } from '../src/admin-v2/moma-provider.js';
+import { classificationIndex, existingClassification, modelClassificationFor } from '../src/admin-v2/model-classification.js';
 import { loadModelWorkspace } from './model-repository.js';
 import { listedPackages, packageOffer } from './market-packages.js';
 import { experienceTasks } from '../src/service-directory.mjs';
 import { billingPeriod } from '../src/admin-v2/mock-billing.js';
+import { tenantModelAllowed, tenantQuotaEnabled, tenantQuotaError } from '../src/tenant-service-policy.mjs';
 import { enterpriseGrant, enterpriseTokenUsage } from '../src/admin-v2/enterprise.js';
 import { mockTextUsage, projectAccessError, projectCallError, projectCallErrors } from '../src/project-call.mjs';
 import { marketProjectFact, projectCallContext, projectChargeWrites, projectFactWrite, readProjectFact } from './project-facts.js';
@@ -44,7 +46,7 @@ function marketOffer(row, tenant, at = Date.now()) {
   const route = row.route_json && JSON.parse(row.route_json);
   const supplyIds = (route?.channels || []).filter(channel => channel.enabled !== false &&
     (!['weighted','priority_weighted'].includes(route.strategy) || channel.weight > 0)).map(channel => channel.supplyId);
-  const accessible=!tenant?.grant || tenant.grant.status==='生效中' && tenant.grant.modelIds?.includes(row.service_id);
+  const accessible=tenantModelAllowed(tenant,tenant?.grant,row.service_id);
   const allowed=Boolean(tenant && accessible && salesCustomer(model,tenant.id));
   const released=accessible && activeStages.includes(row.listing_stage) && !model.archivedAt &&
     (row.listing_stage!=='gray' || tenant && JSON.parse(row.gray_tenants_json).includes(tenant.id));
@@ -90,9 +92,12 @@ function marketSalePrices(offer, procurement, at) {
 export async function marketCatalogue(db, session, { display = false, projectId, license } = {}) {
   const tenant = session?.tenant || null, internal = tenant?.internal === true;
   if (display && license?.commercial === false && !internal) return { tenant:null, account:null, spaces:[], services:[], orders:[], packages:[], projects:[] };
-  const workspace = display && await db.prepare('SELECT meta_json, reference_json FROM model_workspace WHERE id=1').first();
-  const cards = workspace ? JSON.parse(workspace.meta_json).modelData?.marketCards || {} : {};
-  const reference = workspace && session ? JSON.parse(workspace.reference_json) : {};
+  const workspace = await db.prepare(display
+    ? 'SELECT meta_json, reference_json FROM model_workspace WHERE id=1'
+    : 'SELECT meta_json FROM model_workspace WHERE id=1').first();
+  const modelData = workspace && JSON.parse(workspace.meta_json).modelData;
+  const cards = display ? modelData?.marketCards || {} : {};
+  const reference = display && workspace && session ? JSON.parse(workspace.reference_json) : {};
   const member = reference.memberships?.find(row => row.tenantId === tenant?.id && row.userId === session.user.id && row.status === '正常');
   const audience = marketAudience(reference, { tenantId:tenant?.id, member, projectId });
   if (projectId && !audience.projectId) fail(403,'PROJECT_FORBIDDEN','当前成员无权查看此项目');
@@ -100,6 +105,11 @@ export async function marketCatalogue(db, session, { display = false, projectId,
   const conditions = display ? '(' + legacy + ' OR m.id IN (SELECT value FROM json_each(?)))' : legacy;
   const { results } = await db.prepare(selectOffers + ' AND ' + conditions + ' ORDER BY m.name,p.created_at,p.name,o.created_at,o.record_id')
     .bind(tenant?.id || '', ...(display ? [JSON.stringify(Object.keys(cards))] : [])).all();
+  const materials = new Map();
+  for (const row of results) if (!materials.has(row.material_id)) {
+    materials.set(row.material_id, domainModel(JSON.parse(row.material_json)));
+  }
+  const classification = classificationIndex(modelData?.modelClassification || existingClassification(materials.values()));
   const offers = results.map(row => ({ row, ...marketOffer(row,tenant), card:Object.hasOwn(cards,row.material_id) ? cards[row.material_id] : null }))
     .filter(offer => {
       const { row, card, allowed, released } = offer;
@@ -113,12 +123,15 @@ export async function marketCatalogue(db, session, { display = false, projectId,
     const { row, card } = offer;
     const prices = offer.ready && offer.released ? marketSalePrices(offer,procurement,at) : null;
     if (!prices && !card) return [];
-    const material=modelPresentation(null,{...domainModel(JSON.parse(row.material_json)),marketContent:card?.content || JSON.parse(row.service_json).marketContent});
+    const master = materials.get(row.material_id);
+    const { author, series } = modelClassificationFor(classification, master);
+    const material = modelPresentation(null, { ...master, marketContent: card?.content || JSON.parse(row.service_json).marketContent });
     return [{
       id:row.record_id, model_service_id:row.record_id, model_id:row.material_id, canonical_slug:material.modelId, call_id:row.call_id, provider_id:row.provider_id || MOMA_PROVIDER.id, callId:row.call_id, modelId:material.modelId, modelKey:row.material_id, serviceModelId:row.service_id, mode:row.mode, name:material.name,
       providerId:row.provider_id || MOMA_PROVIDER.id, providerName:row.provider_name || MOMA_PROVIDER.name,
       provider:row.source_name ? `${row.provider_name}（${row.source_name}）` : row.provider_name || 'MoMA',
       maker:material.profile?.author || material.maker || '', type:material.type, description:material.description || '',
+      classification: { authorId: author?.id, author: author?.name, seriesId: series?.id, series: series?.name },
       profile:{...offer.model.profile,...material.profile}, capabilities:material.capabilities || {},
       salePrices:internal ? [] : (prices || []).map(({amount,currency,unit,effectiveAt,expiresAt})=>({amount,currency,unit,effectiveAt,expiresAt})),
       ...(internal && {internal:true}),
@@ -360,16 +373,15 @@ export async function marketCompletion(db, session, body) {
   const grantIndex = grant ? projectState.grants.indexOf(grant) : -1;
   const quantity = body.simulateDenied ? 0 : enterpriseTokenUsage(service.model,projectFact.usage);
   if (!body.simulateDenied) {
-    if (grant && grant.limit - grant.used < quantity) {
-      return reject(402,'enterprise_quota_exhausted',projectCallErrors.enterprise_quota_exhausted[1]);
-    }
+    const quotaError = tenantQuotaError(grant,quantity,at,tenant.internal);
+    if (quotaError) return reject(projectCallErrors[quotaError][0],quotaError,projectCallErrors[quotaError][1]);
     const code = projectCallError(projectState, project, service.model, null, projectFact.usage, projectFact.internalCost || projectFact.charge, at, tenant.internal);
     if (code) return reject(projectCallErrors[code][0],code,projectCallErrors[code][1]);
   }
   const history=body.textTurn?JSON.stringify({...body.textTurn,modelName:material.name,
     provider:response.routing?.provider || (row.source_name?`${row.provider_name}（${row.source_name}）`:row.provider_name || 'MoMA')}):null;
   const marketCallInserted = 'EXISTS (SELECT 1 FROM market_calls WHERE usage_id=?)';
-  const grantWrite = grant && quantity ? [
+  const grantWrite = tenantQuotaEnabled(grant,tenant.internal) && quantity ? [
     db.prepare(`UPDATE model_workspace SET reference_json=json_set(reference_json,?,?),
       application_revision=application_revision+1 WHERE id=1 AND ${marketCallInserted}`)
       .bind('$.grants['+grantIndex+'].used',grant.used+quantity,usage.id),

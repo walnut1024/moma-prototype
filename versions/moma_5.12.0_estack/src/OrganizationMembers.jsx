@@ -1,7 +1,4 @@
 import { resourceId } from './resource-id.mjs';
-import {marketRequest} from './CloudMarket';
-import {useTenantData} from './useTenantData';
-import FrontPageHeader from "./components/FrontPageHeader";
 import { DEFAULT_PAGE_SIZE, FilterPagination } from "./components/FilterControls";
 import { displayBusinessCopy } from './display-copy.mjs';
 import { useEffect, useId, useState } from "react";
@@ -26,7 +23,6 @@ function RoleFields({ form, setForm, departments }) {
   return <>
     <Choice label="管理角色" value={form.role} onChange={role => setForm({ ...form, role, scopeId: form.scopeId || (form.departmentId !== "unassigned" ? form.departmentId : "root") })} options={roles.map(role => ({ value: role, label: role }))} />
     <p className="org-hint">{({ 企业管理员: "管理企业全部部门、成员及平台配置。", 部门管理员: "在指定部门范围内管理组织与成员。", 普通成员: "使用已授权的项目与模型服务。", 财务审计: "查看企业用量与费用，不管理组织及成员。" })[form.role]}</p>
-    {form.role !== '企业管理员' && <Checkbox className="org-check" checked={form.canCreateProjects === true} onChange={({target}) => setForm({ ...form, canCreateProjects: target.checked })}>允许创建项目</Checkbox>}
     {form.role === "部门管理员" && <>
       <Choice label="管理范围" value={form.scopeId || "root"} onChange={scopeId => setForm({ ...form, scopeId })} options={departments.map(d => ({ value: d.id, label: departmentPath(departments, d.id) }))} />
       <Checkbox className="org-check" checked={!!form.includeChildren} onChange={({target}) => setForm({ ...form, includeChildren: target.checked })}>包含该部门的子部门</Checkbox>
@@ -35,8 +31,10 @@ function RoleFields({ form, setForm, departments }) {
   </>;
 }
 
-export default function OrganizationMembers() {
-  const tenant=useTenantData();
+export default function OrganizationMembers({ tenant }) {
+  const canManage = tenant.canManageOrganization ?? tenant.canManage;
+  const departmentOnly = canManage && !tenant.canManage;
+  const canEditMember = member => canManage && (!departmentOnly || member.role === '普通成员');
   const platformAccounts=tenant.organization.platformAccounts || [];
   const [data,setData]=useState(tenant.organization);
   useEffect(()=>setData(tenant.organization),[tenant.revision,tenant.identity?.key]);
@@ -72,9 +70,10 @@ export default function OrganizationMembers() {
   const currentPage = Math.min(page, pageCount);
   const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const checked = members.filter(m => selectedMembers.includes(m.id));
-  const departmentOptions = [{ value: "unassigned", label: "未分配部门" }, ...departments.map(d => ({ value: d.id, label: departmentPath(departments, d.id) }))];
+  const defaultDepartment = department?.id || (departmentOnly ? departments[0]?.id : 'unassigned');
+  const departmentOptions = [...(departmentOnly ? [] : [{ value: 'unassigned', label: '未分配部门' }]), ...departments.map(d => ({ value: d.id, label: departmentPath(departments, d.id) }))];
   const selectDepartment = id => { setSelectedDepartment(id); setSelectedMembers([]); setPage(1); };
-  const open = (nextModal, nextForm = {}) => { if(nextModal.type!=='detail'&&!tenant.canManage){setError('只有企业管理员可以维护组织成员');return;} setDraftRevision(tenant.revision); setModal(nextModal); setForm(nextForm); setError(""); };
+  const open = (nextModal, nextForm = {}) => { if(nextModal.type!=='detail'&&!canManage){setError('只有企业管理员可以维护组织成员');return;} setDraftRevision(tenant.revision); setModal(nextModal); setForm(nextForm); setError(""); };
   const close = () => { setModal(null); setDraftRevision(null); setError(""); };
   const commit = async (action, success) => {
     if (saving) return false;
@@ -90,10 +89,10 @@ export default function OrganizationMembers() {
   const editDepartment = d => open({ type: "department", title: "部门设置" }, { ...d, ownerId: d.ownerId || "none", grantAdmin: false });
   const addMember = () => {
     setInviteMode("existing");
-    open({ type: "member", title: "添加成员", isNew: true }, { id: resourceId('membership'), name: "", phone: "", account: "", departmentId: department?.id || "unassigned", role: "普通成员", scopeId: department?.id || "root", includeChildren: true, status: "已加入", source: "平台账号" });
+    open({ type: "member", title: "添加成员", isNew: true }, { id: resourceId('membership'), name: "", phone: "", account: "", departmentId: defaultDepartment, role: "普通成员", scopeId: department?.id || "root", includeChildren: true, status: "已加入", source: "平台账号" });
   };
   const confirm = (title, description, action, success) => open({ type: "confirm", title, description, action, success });
-  const move = ids => open({ type: "move", title: "移动部门", ids }, { departmentId: "unassigned" });
+  const move = ids => open({ type: "move", title: "移动部门", ids }, { departmentId: defaultDepartment });
   const roleScope = m => m.role === "部门管理员" ? `${departmentPath(departments, m.scopeId)}${m.includeChildren ? "（含子部门）" : "（仅本部门）"}` : m.role === "普通成员" ? "按项目授权" : "全企业";
   const submit = async e => {
     e.preventDefault();
@@ -107,7 +106,7 @@ export default function OrganizationMembers() {
   const shareInvite=async member=>{
     setInviteError('');
     try{
-      const invite=await marketRequest('invitations',{membershipId:member.id});
+      const invite=await tenant.inviteMember(member.id);
       const url=new URL(location.href);
       url.search='';
       url.hash='/auth/invite?'+new URLSearchParams({token:invite.token});
@@ -143,13 +142,17 @@ export default function OrganizationMembers() {
   };
 
   const modalFooter = modal?.type === 'detail'
-    ? <Button theme="solid" disabled={!tenant.canManage} onClick={() => open({ type: 'member', title: '编辑成员' }, { ...modal.member })}>编辑成员</Button>
+    ? <Button theme="solid" disabled={!canEditMember(modal.member)} onClick={() => open({ type: 'member', title: '编辑成员' }, { ...modal.member })}>编辑成员</Button>
     : <><Button theme="outline" disabled={saving} onClick={close}>取消</Button>
       {modal?.type === 'confirm' ? <Button theme="solid" loading={saving}
         type={['删除部门', '移除成员', '撤销邀请', '停用成员', '批量停用成员'].includes(modal.title) ? 'danger' : 'primary'}
         onClick={async () => { if (await commit(modal.action, modal.success) && modal.action.type === 'department.remove') selectDepartment('all'); }}>确认</Button>
         : <Button theme="solid" htmlType="submit" form="org-edit-form" loading={saving}>{modal?.isNew && inviteMode === 'invite' ? '创建邀请' : '保存'}</Button>}
     </>;
+  const memberProjects = modal?.type==='detail' ? tenant.projects.flatMap(project => {
+    const assignment = tenant.projectMembers?.[project.id]?.find(row=>row.id===modal.member.id);
+    return assignment?.role ? [{id:project.id,name:project.name,role:assignment.role}] : [];
+  }) : [];
   const modalContent = modal && <>
     {modal.type === 'confirm' && <p>{modal.description}</p>}
       <div className="org-dialog-body">
@@ -166,10 +169,10 @@ export default function OrganizationMembers() {
           {modal.isNew && inviteMode === "existing" ? <><Choice label="选择平台账号" value={form.account || "none"} onChange={account => { const identity = platformAccounts.find(a => a.account === account); if (identity) setForm({ ...form, ...identity, phone: identity.phone || "" }); }} options={[{ value: "none", label: "请选择已有平台账号" }, ...platformAccounts.filter(a => !members.some(m => m.account === a.account)).map(a => ({ value: a.account, label: `${a.name} · ${a.account}` }))]} /><p className="org-hint">选择已有平台账号，加入当前企业。</p></> : <><label className="org-field"><span>成员姓名 <b>*</b></span><Input aria-label="成员姓名" value={form.name} maxLength={30} required onChange={value => setForm({ ...form, name: value })} placeholder="输入成员姓名" /></label><label className="org-field"><span>{modal.isNew ? "邮箱（选填）" : "登录账号"}</span><Input aria-label={modal.isNew ? "成员邮箱" : "登录账号"} type={modal.isNew ? "email" : "text"} value={form.account} readonly={!modal.isNew} onChange={value => setForm({ ...form, account: value })} placeholder="选填，不填写时使用手机号作为账号" /></label>{modal.isNew && <p className="org-hint">创建后为“待加入”，可在列表中确认加入。</p>}</>}
           <label className="org-field"><span>手机号 <b>*</b></span><Input aria-label="手机号" type="tel" autoComplete="tel" required value={form.phone || ""} onChange={value => setForm({ ...form, phone: value })} placeholder="11 位大陆手机号或 +国家区号号码" /></label><p className="org-hint">手机号用于识别成员，必须填写；列表和详情中脱敏展示。</p>
           <Choice label="主部门" value={form.departmentId} onChange={departmentId => setForm({ ...form, departmentId })} options={departmentOptions} />
-          <RoleFields form={form} setForm={setForm} departments={departments} />
+          {!departmentOnly && <RoleFields form={form} setForm={setForm} departments={departments} />}
         </form>}
         {modal?.type === "move" && <form id="org-edit-form" onSubmit={submit} className="org-form"><p>将 {members.filter(m => modal.ids.includes(m.id)).map(m => m.name).join("、")} 的主部门调整为：</p><Choice label="目标部门" value={form.departmentId} onChange={departmentId => setForm({ ...form, departmentId })} options={departmentOptions} /><p className="org-hint">管理角色与管理范围保持不变。此操作会保留操作记录。</p></form>}
-        {modal?.type === "detail" && <><div className="org-profile"><span className="org-avatar">{modal.member.name.slice(-2)}</span><div><strong>{modal.member.name}</strong><p>{displayMemberAccount(modal.member.account)}</p></div></div><dl className="org-detail">{[["手机号", maskMemberPhone(modal.member.phone)], ["成员 ID", modal.member.id], ["主部门", departmentPath(departments, modal.member.departmentId)], ["管理角色", modal.member.role], ["管理范围", roleScope(modal.member)], ["成员状态", modal.member.status], ["成员来源", modal.member.source], ["邀请时间", modal.member.invitedAt], ["加入时间", modal.member.joinedAt || "尚未加入"]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></>}
+        {modal?.type === "detail" && <><div className="org-profile"><span className="org-avatar">{modal.member.name.slice(-2)}</span><div><strong>{modal.member.name}</strong><p>{displayMemberAccount(modal.member.account)}</p></div></div><dl className="org-detail">{[["手机号", maskMemberPhone(modal.member.phone)], ["成员 ID", modal.member.id], ["主部门", departmentPath(departments, modal.member.departmentId)], ["管理角色", modal.member.role], ["管理范围", roleScope(modal.member)], ["成员状态", modal.member.status], ["成员来源", modal.member.source], ["邀请时间", modal.member.invitedAt], ["加入时间", modal.member.joinedAt || "尚未加入"]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>{memberProjects.length>0 && <section aria-label="项目归属"><h3>项目归属</h3><ul>{memberProjects.map(row=><li key={row.id}>{row.name} · {row.role}</li>)}</ul></section>}</>}
 
       </div>
       {error && <p className="org-form-error" role="alert">{error}</p>}
@@ -177,8 +180,7 @@ export default function OrganizationMembers() {
   const centerModal = modal?.type === 'confirm' || modal?.isNew;
 
   return <div className="org-page front-members-workspace">
-    <FrontPageHeader title="组织及成员" description="维护企业组织架构、成员归属与管理权限" icon={Users} />
-    {!tenant.canManage&&!tenant.error&&<p className="org-demo-note">当前身份可查看组织；成员和部门由企业管理员维护。</p>}
+    {!canManage&&!tenant.error&&<p className="org-demo-note">当前身份可查看组织；成员和部门由企业管理员维护。</p>}
     {tenant.error&&<p role="alert">{tenant.error}</p>}
     {storageError && <div className="org-demo-note" role="alert"><strong>数据保存失败，本次修改无法保存，请稍后重试。</strong></div>}
     {notice && <div className="org-notice" role="status">{notice}<Button theme="borderless" type="tertiary" size="small" onClick={() => setNotice("")}>关闭</Button></div>}
@@ -189,14 +191,14 @@ export default function OrganizationMembers() {
         </div>
         <div className="org-directory-group" role="group" aria-label="组织架构"><div className="org-directory-heading"><h3 className="org-directory-title">组织架构</h3><Button size="small" theme="borderless" type="tertiary" disabled={!tenant.canManage} aria-label="新建部门" title="新建部门" onClick={() => newDepartment()}><FolderPlus /></Button></div>
         <div className="org-tree-tools"><div className="org-search"><Input prefix={<Search size={14}/>} aria-label="搜索部门" placeholder="搜索部门" value={treeQuery} onChange={setTreeQuery} /></div></div>
-        <div className="org-tree">{tree("root")}{treeQuery && !departments.some(d => d.name.includes(treeQuery.trim())) && <p className="org-hint">未找到匹配部门</p>}</div>
+        <div className="org-tree">{departments.filter(row=>!departments.some(parent=>parent.id===row.parentId)).map(row=>tree(row.id))}{treeQuery && !departments.some(d => d.name.includes(treeQuery.trim())) && <p className="org-hint">未找到匹配部门</p>}</div>
         </div>
       </aside>
       <section className="org-members-panel" aria-label="成员列表">
         <div className="org-department-head"><div className="org-department-icon">{department ? <Folder /> : selectedDepartment === "admins" ? <ShieldCheck /> : <Users />}</div><div className="org-department-info"><h2>{title}</h2>{department?.id !== "root" && <p>{department ? departmentPath(departments, department.id) : selectedDepartment === "all" ? "查看企业内所有部门及未分配部门的成员" : selectedDepartment === "admins" ? "查看企业管理员及成员状态" : "已加入企业，尚未设置主部门的成员"}</p>}<small>{department && <>负责人：{members.find(m => m.id === department.ownerId)?.name || "未设置"}<i /> </>}已加入 {scopedMembers.filter(m => m.status === "已加入").length} 人 <i />待加入 {scopedMembers.filter(m => m.status === "待加入").length} 人 <i />已停用 {scopedMembers.filter(m => m.status === "已停用").length} 人</small></div><div className="org-head-actions">{department && department.id !== "root" && tenant.canManage && <Button theme="outline" onClick={() => editDepartment(department)}>部门设置</Button>}<Dropdown trigger="click" clickToHide position="bottomRight" menu={[
           { node: 'item', name: '单个添加', onClick: addMember },
           { node: 'item', name: '批量添加', onClick: () => { setDraftRevision(tenant.revision); setBatchOpen(true); } },
-        ]}><Button disabled={!tenant.canManage} theme="solid" icon={<UserPlus size={15}/>}>添加成员<ChevronDown size={14}/></Button></Dropdown></div></div>
+        ]}><Button disabled={!canManage} theme="solid" icon={<UserPlus size={15}/>}>添加成员<ChevronDown size={14}/></Button></Dropdown></div></div>
         <form className="org-filters" onSubmit={e => { e.preventDefault(); setApplied(filters); setPage(1); setSelectedMembers([]); }}>
           <div className="org-search"><Input prefix={<Search size={14}/>} aria-label="搜索成员" placeholder="姓名、手机号或登录账号" value={filters.query} onChange={value => setFilters({ ...filters, query: value })} /></div>
           <Choice label="成员状态" value={filters.status} onChange={status => setFilters({ ...filters, status })} options={[{ value: "all", label: "全部状态" }, ...statuses.map(s => ({ value: s, label: s }))]} />
@@ -208,15 +210,15 @@ export default function OrganizationMembers() {
         {checked.length > 0 && <div className="org-member-tools"><div><small>已选择 {checked.length} 人</small><Button theme="outline" onClick={() => move(selectedMembers)}>移动部门</Button><Button theme="outline" disabled={checked.some(m => m.status !== "已加入")} onClick={() => confirm("批量停用成员", `停用所选 ${checked.length} 位成员？成员归属与历史操作记录会保留。`, { type: "member.status", ids: selectedMembers, status: "已停用" }, "所选成员已停用")}>批量停用</Button><Button theme="borderless" type="tertiary" onClick={() => setSelectedMembers([])}>取消选择</Button></div></div>}
         <div className="org-member-scroll">
           <Table className="org-member-table" rowKey="id" size="small" pagination={false} dataSource={visible}
-            empty={<div className="org-empty"><Users /><strong>{members.length ? "当前范围内没有匹配成员" : "企业暂无成员"}</strong><p>调整筛选条件，或添加成员到当前部门。</p><Button theme="outline" disabled={!tenant.canManage} onClick={addMember}>添加成员</Button></div>}
+            empty={<div className="org-empty"><Users /><strong>{members.length ? "当前范围内没有匹配成员" : "企业暂无成员"}</strong><p>调整筛选条件，或添加成员到当前部门。</p><Button theme="outline" disabled={!canManage} onClick={addMember}>添加成员</Button></div>}
             columns={[
               { key: 'selection', width: 46, title: <Checkbox aria-label="选择当前页全部成员"
-                checked={visible.length > 0 && visible.every(m => selectedMembers.includes(m.id))}
-                indeterminate={visible.some(m => selectedMembers.includes(m.id)) && !visible.every(m => selectedMembers.includes(m.id))}
-                disabled={!tenant.canManage || !visible.length} onChange={({target}) => setSelectedMembers(target.checked
-                  ? [...new Set([...selectedMembers, ...visible.map(m => m.id)])]
+                checked={visible.some(canEditMember) && visible.filter(canEditMember).every(m => selectedMembers.includes(m.id))}
+                indeterminate={visible.some(m => selectedMembers.includes(m.id)) && !visible.filter(canEditMember).every(m => selectedMembers.includes(m.id))}
+                disabled={!visible.some(canEditMember)} onChange={({target}) => setSelectedMembers(target.checked
+                  ? [...new Set([...selectedMembers, ...visible.filter(canEditMember).map(m => m.id)])]
                   : selectedMembers.filter(id => !visible.some(m => m.id === id)))}/>,
-              render: (_, m) => <Checkbox aria-label={'选择' + m.name} disabled={!tenant.canManage} checked={selectedMembers.includes(m.id)}
+              render: (_, m) => <Checkbox aria-label={'选择' + m.name} disabled={!canEditMember(m)} checked={selectedMembers.includes(m.id)}
                 onChange={({target}) => setSelectedMembers(target.checked ? [...selectedMembers, m.id] : selectedMembers.filter(id => id !== m.id))}/> },
               { title: '成员', key: 'member', render: (_, m) => <Button className="org-member-name" size="small" theme="borderless" type="tertiary"
                 onClick={() => open({ type: 'detail', title: '成员详情', member: m })}><span className="org-avatar">{m.name.slice(-2)}</span><span>{m.name}{m.userId === tenant.backendUserId && <small>当前账号</small>}</span></Button> },
@@ -227,10 +229,10 @@ export default function OrganizationMembers() {
                 {role === '部门管理员' && <small className="org-cell-sub" title={roleScope(m)}>{departments.find(d => d.id === m.scopeId)?.name}{m.includeChildren ? ' · 含子部门' : ' · 仅本部门'}</small>}</> },
               { title: '状态', dataIndex: 'status', render: status => <Tag color={status === '已加入' ? 'green' : status === '待加入' ? 'amber' : 'grey'}>{status}</Tag> },
               { title: '操作', key: 'actions', render: (_, m) => <div className="org-row-actions">
-                <Button theme="borderless" size="small" disabled={!tenant.canManage} onClick={() => open({ type: 'member', title: '编辑成员' }, { ...m })}>编辑</Button>
+                <Button theme="borderless" size="small" disabled={!canEditMember(m)} onClick={() => open({ type: 'member', title: '编辑成员' }, { ...m })}>编辑</Button>
                 <AdminActionMenu label={m.name + '更多操作'} items={[
                   { node: 'item', name: '成员详情', onClick: () => open({ type: 'detail', title: '成员详情', member: m }) },
-                  ...(tenant.canManage ? [
+                  ...(canEditMember(m) ? [
                     { node: 'item', name: '移动部门', onClick: () => move([m.id]) },
                     m.status === '待加入'
                       ? { node: 'item', name: '生成邀请链接', onClick: () => shareInvite(m) }
@@ -259,7 +261,7 @@ export default function OrganizationMembers() {
       <Input aria-label="成员邀请链接" value={inviteLink} readonly onFocus={event => event.currentTarget.select()}/>
       {inviteError && <p className="org-form-error" role="alert">{inviteError}</p>}
     </AdminModal>}
-    {batchOpen && <OrganizationMemberBatch data={data} initialDepartment={department?.id || "unassigned"} onClose={() => setBatchOpen(false)} onApply={async (rows, mode, defaultDepartment) => {
+    {batchOpen && <OrganizationMemberBatch data={data} initialDepartment={defaultDepartment} scoped={departmentOnly} onClose={() => setBatchOpen(false)} onApply={async (rows, mode, defaultDepartment) => {
       const outcome = applyMemberBatch(data, rows, mode, defaultDepartment, () => resourceId('membership'));
       try { await tenant.command('organization',outcome.state,draftRevision ?? tenant.revision); }
       catch (error) { throw new Error(error.message); }

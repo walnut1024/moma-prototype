@@ -2,6 +2,7 @@ import mockConfig from '../mock/catalogues.json' with {type:'json'};
 import { parseDelimitedCells } from '../tabular-import.mjs';
 import { modelTransaction } from './model-management.js';
 import { MODEL_CATALOGUE_TYPES, modelCatalogue, modelLibrary } from './model-library.js';
+import { classificationIndex, classifiedProfile, modelClassification } from './model-classification.js';
 import { IDENTITY_FIELDS, TECHNICAL_FIELDS, PRESENTATION_FIELDS, COMMON_FIELDS, INTERFACE_FIELDS, RECORD_FIELDS, FEATURE_FIELDS, ARCHITECTURE_OPTIONS, LICENSE_OPTIONS, TASK_OPTIONS, specificationFields } from './model-profile.js';
 
 export const MODEL_IMPORT_LIMIT = 500;
@@ -43,6 +44,7 @@ const choices = {
 };
 export function validateModelRows(state, rows, { catalogue = true, reuseExisting = false } = {}) {
   const seen = new Set();
+  const classification = classificationIndex(modelClassification(state));
   const library = new Map();
   for (const model of modelLibrary(state)) {
     const code = model.modelId.toLowerCase();
@@ -78,15 +80,17 @@ export function validateModelRows(state, rows, { catalogue = true, reuseExisting
       if (catalogue && existing === null) throw new Error('模型编码匹配到多份资料，请先核对主档');
       if (existing && !reuseExisting) throw new Error('模型编码已存在，请维护已有模型资料');
       if (existing && !active.has(existing.id)) throw new Error('模型编码已被归档资料使用，请核对');
+      data.profile = classifiedProfile(classification, data.profile, { strict: true, existing });
       const validationState = existing ? { ...state, models: state.models.filter(model => model.modelId.toLowerCase() !== code) } : state;
       const record = modelTransaction(validationState, { operation: 'create', data, catalogue }).changes[0].record;
       if (seen.has(code)) throw new Error('批次内模型编码重复');
       if (existing) {
+        const existingProfile = classifiedProfile(classification, existing.profile, { existing });
         const same = (left, right) => JSON.stringify(Array.isArray(left) ? [...left].sort() : left)
           === JSON.stringify(Array.isArray(right) ? [...right].sort() : right);
         const differences = MODEL_IMPORT_FIELDS.filter(({ target, key, header }) => {
           if (!values[header] || ['modelId', 'visualType'].includes(key)) return false;
-          const before = (target === 'model' ? existing : existing[target])?.[key];
+          const before = (target === 'model' ? existing : target === 'profile' ? existingProfile : existing[target])?.[key];
           const after = (target === 'model' ? record : record[target])?.[key];
           return before != null && before !== '' && after != null && !same(before, after);
         });

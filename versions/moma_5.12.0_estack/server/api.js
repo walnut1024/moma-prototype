@@ -1,21 +1,23 @@
 import { domainModel } from '../src/mock/model-fields.js';
 import { serviceCallsEnabled, serviceReferences, offerKey, providerOffer } from '../src/service-access.mjs';
 import { resourceId } from '../src/resource-id.mjs';
-import {modelBootstrap,modelCommand,packageBootstrap,packageCommand,packageFactorHistory,readTrafficLimits,simulationRequest,updateTrafficLimits} from './model-commands.js';
+import {modelBootstrap,modelCommand,packageBootstrap,packageCommand,packageFactorHistory,readTrafficLimits,simulationRequest,updateTrafficLimits, channelIndexCheck, channelCredentialAccess} from './model-commands.js';
 import { initializePrototypeCatalogue } from './prototype-presets.js';
 import { experienceOptions, marketCatalogue, marketRanking, marketCompletion, marketOrder, textConversations } from './market.js';
-import { changeCustomerPassword, createMarketSession, customerIdentity, dualDemoAdminLogin, issueCustomerChallenge, marketCookie, marketSession,
+import { changeCustomerPassword, createMarketSession, customerIdentity, dualDemoAdminLogin, dualDemoUserId, issueCustomerChallenge, marketCookie, marketSession,
   resetCustomerPassword, verifiedCustomerCredential } from './customer-identity.js';
 import { acceptCustomerInvitation, applicationBootstrap, applicationCommand, customerInvocation, dualDemoIdentity, initializeApplication, inspectCustomerInvitation,
-  issueCustomerInvitation, tenantCommand, tenantWorkspace, validCallMetadata, validCallModel } from './application.js';
+  adminTenantSession, issueCustomerInvitation, tenantCommand, tenantWorkspace, validCallMetadata, validCallModel } from './application.js';
 import { API_PREFIX, isApiPath } from '../api-path.js';
 import { commercialModelWrite, deploymentLicense, LICENSE_UNAVAILABLE } from '../src/deployment-license.mjs';
+import { effectiveInstalledLicense, licenseDetails, readInstalledLicense, saveInstalledLicense, verifyDeploymentLicense } from './deployment-license.js';
 import { auditLogDetail, auditLogPage } from './audit-log.js';
 import { PRIVATE_SITE } from '../src/site-config.mjs';
 import { isTenantRouteCall, validRouteOptions } from '../src/tenant-routing.mjs';
-import { readPublishedAgreements, savePublishedAgreements, validateAgreements } from './site-agreements.js';
+import { readPublishedSiteSetting, savePublishedSiteSetting, validateAgreements } from './site-settings.js';
+import { PORTAL_HOME_ENDPOINT, portalHomeUrl } from '../src/portal-home.mjs';
 import { readProjectSpacePolicy, saveProjectSpacePolicy } from './project-space-policy.js';
-import { AUDIT_ACTIONS, AUDIT_RESOURCES, AUDIT_RESULTS } from '../src/admin-v2/platform-audit.mjs';
+import { AUDIT_ACTIONS, AUDIT_RESOURCES, AUDIT_RESULTS, AUDIT_SOURCES } from '../src/admin-v2/platform-audit.mjs';
 const COOKIE = 'moma5120_v2_session';
 const encoder = new TextEncoder();
 const MAX_BODY = 256 * 1024;
@@ -105,7 +107,7 @@ async function customerLoginAccount(db, username, accessCode, received, hashes, 
 async function authenticate(request, db) {
   const token = request.headers.get('cookie')?.split(';').map(part => part.trim()).find(part => part.startsWith(COOKIE + '='))?.slice(COOKIE.length + 1);
   if (!token || !/^[a-f0-9]{64}$/.test(token)) fail(401, 'SESSION_EXPIRED', '请先登录后台测试账号');
-  const row = await db.prepare(`SELECT a.id,a.name,a.role,s.id AS session_id FROM admin_sessions s
+  const row = await db.prepare(`SELECT a.id,a.name,a.role,a.login_name,s.id AS session_id FROM admin_sessions s
     JOIN admin_accounts a ON a.id=s.actor_id WHERE s.token_hash=? AND s.expires_at>? AND s.revoked_at IS NULL AND a.enabled=1`).bind(await digest(token), Date.now()).first();
   if (!row) fail(401, 'SESSION_EXPIRED', '会话已失效，请重新登录');
   return row;
@@ -232,23 +234,51 @@ async function route(request, env, requestId) {
     '/market/password-code','/market/password-reset','/market/password','/market/logout','/market/switch',
     '/market/invitations','/market/invitations/inspect','/market/invitations/accept',
     '/market/orders','/market/completions','/market/conversations','/market/experience-options','/market/workspace','/market/commands'];
+  const tenantResources = /^\/tenants\/([A-Za-z0-9:_.-]{1,200})\/(workspace|commands|invitations)$/.exec(path);
   const applicationPaths = ['/application','/application/open','/application/commands'];
   const loginField = LOGIN_FIELDS.get(path);
   const agreementPath = path === '/site-agreements' && (PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1');
+  const portalPath = path === PORTAL_HOME_ENDPOINT && (PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1');
   const spacePolicyPath = path === '/project-space-policy' && (PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1');
-  const known = path===CHAT_COMPLETIONS || agreementPath || spacePolicyPath || loginField || marketPaths.includes(path) || applicationPaths.includes(path) || trafficPath || trafficHistoryPath || auditPath || packagePath || ['/deployment/license','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-operations','/model-operations/commands'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
+  const credentialPath = /^\/channels\/([A-Za-z0-9:_.-]{1,200})\/verify-credential$/.exec(path);
+  const known = path===CHAT_COMPLETIONS || agreementPath || portalPath || spacePolicyPath || loginField || marketPaths.includes(path) || applicationPaths.includes(path) || tenantResources || trafficPath || trafficHistoryPath || auditPath || credentialPath || packagePath || ['/deployment/license','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-operations','/model-operations/commands','/channels/consistency'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
   if (!known) fail(404, 'NOT_FOUND', 'API 不存在');
   if (!env.MODEL_OPS_DB) fail(503, 'DATABASE_UNAVAILABLE', '模型运营数据库尚未绑定');
   const db = env.MODEL_OPS_DB;
-  const boundLicense = deploymentLicense(env);
+  const installedLicense = await readInstalledLicense(db);
+  const boundLicense = installedLicense ? effectiveInstalledLicense(installedLicense) : deploymentLicense(env);
   const license = !boundLicense.managed && (await readProjectSpacePolicy(db)).operatingMode === 'internal'
     ? { ...boundLicense, edition:'internal', commercial:false, commerceWritable:false } : boundLicense;
   const requireCommerce = (write = false) => {
     if (write ? !license.commerceWritable : !license.commercial) fail(403,'LICENSE_REQUIRED',LICENSE_UNAVAILABLE);
   };
   if (path === '/deployment/license') {
-    if (method !== 'GET') fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
-    return json(license);
+    if (method === 'GET' && url.searchParams.get('details') !== '1') return json(license);
+    if (!['GET','POST'].includes(method)) fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
+    const actor = await authenticate(request, db);
+    if (actor.role !== '平台管理员') fail(403,'FORBIDDEN','仅平台管理员可管理 License');
+    if (method === 'GET') return json(licenseDetails(license, installedLicense));
+    if (request.headers.get('origin') !== url.origin || request.headers.get('x-moma-request') !== '1') {
+      fail(403,'FORBIDDEN','请求来源无效');
+    }
+    const body = await bodyJson(request, 9 * 1024);
+    fields(body,['license','expectedRevision','confirmReduction']);
+    const expected = body.expectedRevision;
+    if (!Number.isSafeInteger(expected) || expected < 0 || expected >= Number.MAX_SAFE_INTEGER ||
+        typeof body.license !== 'string' || body.license.length > 8192 ||
+        body.confirmReduction !== undefined && typeof body.confirmReduction !== 'boolean') {
+      fail(400,'INVALID_INPUT','License 提交内容无效');
+    }
+    if (expected !== (installedLicense?.revision ?? 0)) {
+      fail(409,'REVISION_CONFLICT','当前授权已变更，请核对后重试。');
+    }
+    const verified = await verifyDeploymentLicense(body.license.trim(), env);
+    if (license.commercial && verified.edition === 'internal' && !body.confirmReduction) {
+      fail(409,'LICENSE_SCOPE_REDUCTION','当前部署的授权范围将缩小。');
+    }
+    const saved = await saveInstalledLicense(db, expected, verified, actor.id);
+    if (!saved) fail(409,'REVISION_CONFLICT','当前授权已变更，请核对后重试。');
+    return json(licenseDetails(effectiveInstalledLicense(saved), saved));
   }
   if (path===CHAT_COMPLETIONS) {
     if (method!=='POST') fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
@@ -274,7 +304,8 @@ async function route(request, env, requestId) {
     if (request.headers.get('origin') !== url.origin || request.headers.get('x-moma-request') !== '1') fail(403, 'FORBIDDEN', '请求来源无效');
   }
   if (agreementPath) {
-    if (method === 'GET') return json(await readPublishedAgreements(db));
+    const key = 'site-agreements';
+    if (method === 'GET') return json(await readPublishedSiteSetting(db, key) || { revision: 0, agreements: {} });
     if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
     const actor = await authenticate(request, db);
     if (actor.role !== '平台管理员') fail(403, 'FORBIDDEN', '仅系统管理员可保存站点协议');
@@ -282,8 +313,26 @@ async function route(request, env, requestId) {
     fields(body, ['expectedRevision', 'agreements']);
     const next = validateAgreements(body);
     if (!next) fail(400, 'INVALID_INPUT', '协议正文或链接无效');
-    const saved = await savePublishedAgreements(db, next);
+    const saved = await savePublishedSiteSetting(db, key, next);
     if (!saved) fail(409, 'REVISION_CONFLICT', '协议已更新，请载入当前版本');
+    return json(saved);
+  }
+  if (portalPath) {
+    const key = 'site-portal';
+    if (method === 'GET') return json(await readPublishedSiteSetting(db, key) || { revision: 0, url: '' });
+    if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    const actor = await authenticate(request, db);
+    if (actor.role !== '平台管理员') fail(403, 'FORBIDDEN', '仅平台管理员可保存门户首页地址');
+    const body = await bodyJson(request, 16 * 1024);
+    fields(body, ['expectedRevision', 'url']);
+    const { expectedRevision, url: value } = body;
+    const address = portalHomeUrl(value, url.origin);
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision >= Number.MAX_SAFE_INTEGER ||
+        typeof value !== 'string' || (value.trim() && !address)) {
+      fail(400, 'INVALID_INPUT', '请填写有效的 HTTP 或 HTTPS 门户首页地址，或留空。门户地址不能指向 MoMA 首页。');
+    }
+    const saved = await savePublishedSiteSetting(db, key, { revision: expectedRevision + 1, url: address });
+    if (!saved) fail(409, 'REVISION_CONFLICT', '门户首页地址已更新，请载入已保存地址。');
     return json(saved);
   }
   if (spacePolicyPath) {
@@ -310,7 +359,7 @@ async function route(request, env, requestId) {
     if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
     const customerOnly = loginField === 'username', adminOnly = loginField === 'accountId';
     const body = await bodyJson(request, 4096);
-    fields(body, customerOnly ? ['username','accountType','accessCode'] : [loginField,'accessCode']);
+    fields(body, customerOnly ? ['username','accountType','accessCode'] : adminOnly ? [loginField,'accessCode'] : [loginField,'accessCode','tenantId']);
     const login = body[loginField];
     if (typeof login !== 'string' || !login.trim() || login.length > 254 || typeof body.accessCode !== 'string' ||
         body.accessCode.length < 8 || body.accessCode.length > 128 ||
@@ -322,6 +371,16 @@ async function route(request, env, requestId) {
     const account = customerOnly ? null : await adminLoginAccount(db, username, received, hashes);
     const customer = adminOnly ? null : await customerLoginAccount(db, username, body.accessCode, received, hashes, body.accountType, license);
     if ((!account && !customer) || (account && customer)) fail(401, 'INVALID_LOGIN', '账号或密码无效');
+    let linked;
+    if (!adminOnly && account?.loginName===dualDemoAdminLogin && account.role==='平台管理员' &&
+        (PRIVATE_SITE || env.MOMA_PRIVATE_SITE==='1')) {
+      await initializeApplication(db);
+      linked=await dualDemoIdentity(db,license);
+    }
+    const spaces = linked?.spaces || [];
+    const tenant = body.tenantId === undefined ? spaces[0] : spaces.find(space=>space.id===body.tenantId);
+    if (body.tenantId !== undefined && !tenant) fail(403,'FORBIDDEN','请选择当前账号可管理的企业空间');
+    if (spaces.length > 1 && body.tenantId === undefined) return json({spaces,selectEnterprise:true});
     await revokeSessions(request,db);
     if (customer) {
       const {userId, tenant, credential, spaces} = customer;
@@ -335,26 +394,18 @@ async function route(request, env, requestId) {
       db.prepare('DELETE FROM admin_sessions WHERE id IN (SELECT id FROM admin_sessions WHERE expires_at<=? LIMIT 100)').bind(at),
       db.prepare('INSERT INTO admin_sessions(id,token_hash,actor_id,created_at,expires_at) VALUES(?,?,?,?,?)').bind(sessionId,await digest(token),account.id,at,at+28800000),
     ]);
-    let linked;
     if(account.id==='yyg' && account.role==='平台管理员') {
       await initializePrototypeCatalogue(db,{...account,session_id:sessionId});
       await initializeApplication(db);
     }
-    if (!adminOnly && account.loginName===dualDemoAdminLogin && account.role==='平台管理员' &&
-        (PRIVATE_SITE || env.MOMA_PRIVATE_SITE==='1')) {
-      await initializeApplication(db);
-      linked=await dualDemoIdentity(db);
-    }
     const sessionHeaders=new Headers({'Set-Cookie':cookie(token)});
-    const {user,spaces}=linked || {};
-    const tenant=spaces?.[0];
     if (tenant) {
-      const marketToken=await createMarketSession(db,user.id,tenant.id);
+      const marketToken=await createMarketSession(db,linked.user.id,tenant.id);
       sessionHeaders.append('Set-Cookie',cookie(marketToken).replace(COOKIE+'=',marketCookie+'='));
     }
     if(!tenant)sessionHeaders.append('Set-Cookie',cookie('',0).replace(COOKIE+'=',marketCookie+'='));
     const { id, name, role } = account;
-    return json({account:{id,name,role},expiresAt:at+28800000,...(tenant && {tenant,spaces})},200,sessionHeaders);
+    return json({account:{id,name,role},expiresAt:at+28800000,...(tenant && {tenant,spaces:[tenant]})},200,sessionHeaders);
   }
   if (path === '/health' && method === 'GET') {
     const state = await db.prepare('SELECT schema_version FROM db_state WHERE id=1').first();
@@ -466,7 +517,44 @@ async function route(request, env, requestId) {
     return json(await marketCompletion(db,session,body));
   }
   const actor = await authenticate(request, db);
-  if (path === '/auth/me' && method === 'GET') return json({ account: { id: actor.id, name: actor.name, role: actor.role } });
+  if (tenantResources) {
+    if (actor.role !== '平台管理员') fail(403,'FORBIDDEN','只有系统管理员可以管理指定租户的资源');
+    const [,tenantId,resource] = tenantResources;
+    const session = await adminTenantSession(db,actor,tenantId,license);
+    if (resource === 'workspace' && method === 'GET') return json(await tenantWorkspace(db,session));
+    if (resource === 'workspace' || method !== 'POST') fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
+    const body = await bodyJson(request);
+    if (resource === 'invitations') {
+      fields(body,['membershipId']);
+      return json(await issueCustomerInvitation(db,session,body.membershipId),201);
+    }
+    fields(body,['operationId','tenantId','expectedRevision','action','data']);
+    if (!['organization','projectCreate','projectUpdate','projectRoute','keys'].includes(body.action)) {
+      fail(403,'FORBIDDEN','此入口仅支持组织及项目管理');
+    }
+    if (body.action === 'projectUpdate' && body.data?.type === 'exit') fail(403,'FORBIDDEN','当前身份没有项目成员关系');
+    return json(await tenantCommand(db,session,body));
+  }
+  if (credentialPath) {
+    if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    if (actor.role !== '平台管理员') fail(403, 'FORBIDDEN', '仅平台管理员可验证后查看凭证摘要');
+    const body = await bodyJson(request, 4096);
+    fields(body, ['keyId', 'accessCode']);
+    if (!identifier(body.keyId) || typeof body.accessCode !== 'string' || body.accessCode.length < 8 || body.accessCode.length > 128) fail(400, 'INVALID_INPUT', '请输入当前账号访问码');
+    let hashes;
+    try { hashes = JSON.parse(env.MODEL_OPS_LOGIN_HASHES || '{}'); } catch { fail(503, 'LOGIN_UNAVAILABLE', '当前账号验证尚未配置'); }
+    if (!hashes || typeof hashes !== 'object' || Array.isArray(hashes)) fail(503, 'LOGIN_UNAVAILABLE', '当前账号验证尚未配置');
+    const account = await adminLoginAccount(db, actor.id, await digest(body.accessCode), hashes);
+    const result = await channelCredentialAccess(db, actor, credentialPath[1], body.keyId, account?.id === actor.id);
+    if (!result.verified) fail(403, 'INVALID_CREDENTIAL_ACCESS_CODE', '当前账号访问码不正确');
+    return json(result);
+  }
+  if (path === '/auth/me' && method === 'GET') {
+    const session = actor.login_name===dualDemoAdminLogin && actor.role==='平台管理员'
+      ? await marketSession(db,request,license) : null;
+    const {id, name} = session?.user.id===dualDemoUserId ? session.tenant : {};
+    return json({ account: { id: actor.id, name: actor.name, role: actor.role, ...(id && {selectedEnterprise:{id,name}}) } });
+  }
   if (applicationPaths.includes(path)) {
     if (!['平台管理员','运营人员','运维人员'].includes(actor.role)) fail(403,'FORBIDDEN','当前账号无业务工作区权限');
     const configured=Object.entries(JSON.parse(env.MODEL_OPS_LOGIN_HASHES || '{}'))
@@ -502,14 +590,16 @@ async function route(request, env, requestId) {
     const from = Number(params.get('from') ?? now - 7 * 86400000);
     const to = Number(params.get('to') ?? now);
     if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to > 8.64e15 || from > to) fail(400, 'INVALID_INPUT', '时间范围无效');
-    const action = params.get('action'), status = params.get('status'), type = params.get('type');
+    const action = params.get('action'), status = params.get('status'), type = params.get('type'), source = params.get('source');
+    const eventId = (params.get('event_id') || '').trim();
     const tenant=params.get('tenant') || '', project=params.get('project') || '';
     if ((tenant && !identifier(tenant)) || (project && !identifier(project))) fail(400,'INVALID_INPUT','空间或项目筛选无效');
     if ((action && !Object.hasOwn(AUDIT_ACTIONS, action)) || (status && !Object.hasOwn(AUDIT_RESULTS, status)) ||
-        (type && !Object.hasOwn(AUDIT_RESOURCES, type))) fail(400, 'INVALID_INPUT', '审计筛选条件无效');
+        (type && !Object.hasOwn(AUDIT_RESOURCES, type)) || (source && !Object.hasOwn(AUDIT_SOURCES, source))) fail(400, 'INVALID_INPUT', '审计筛选条件无效');
+    if (eventId && !identifier(eventId)) fail(400, 'INVALID_INPUT', '事件 ID 格式无效');
     const account = (params.get('actor') || '').trim();
     if (account.length > 100) fail(400, 'INVALID_INPUT', '操作人搜索内容过长');
-    const data = await auditLogPage(db, { limit, after, from, to, action, status, type, tenant, project, q:q.toLowerCase(), actor:account.toLowerCase() });
+    const data = await auditLogPage(db, { limit, after, from, to, eventId, action, status, type, source, tenant, project, q:q.toLowerCase(), actor:account.toLowerCase() });
     if (!data) fail(400, 'INVALID_INPUT', '分页游标无效');
     return json({ accountId: actor.id, ...data });
   }
@@ -529,6 +619,10 @@ async function route(request, env, requestId) {
   if (path === '/package-management/factor-history' && method === 'GET') return json(await packageFactorHistory(db, url.searchParams.get('model')));
   if (path === '/package-management/commands' && method === 'POST') return json(await packageCommand(db, actor, await bodyJson(request, 16 * 1024), request.headers.get('idempotency-key')));
   if(path==='/model-operations' && method==='GET')return new Response(await modelBootstrap(db,actor),{headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
+  if (path === '/channels/consistency') {
+    if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    return json(await channelIndexCheck(db, actor));
+  }
   if (path === '/model-operations/commands' && method === 'POST') {
     const body = await bodyJson(request,10*1024*1024+65536);
     if (commercialModelWrite(body.action)) requireCommerce(true);
@@ -539,7 +633,8 @@ async function route(request, env, requestId) {
       if (scope?.tenantIds?.length || Object.entries({ organizationIds:'organizations', projectIds:'projects' }).some(([key, collection]) =>
         Array.isArray(scope?.[key]) && scope[key].some(id => !(reference[collection] || []).some(row => row.id === id && row.tenantId === internalTenantId)))) requireCommerce();
     }
-    return json(await modelCommand(db,actor,body,request.headers.get('idempotency-key'),license));
+    const auditSource = request.headers.get('sec-fetch-site') === 'same-origin' ? 'web' : undefined;
+    return json(await modelCommand(db,actor,body,request.headers.get('idempotency-key'),license,auditSource));
   }
   if(path.startsWith('/simulation/')){const result=await simulationRequest(db,actor,path.slice('/simulation'.length)+url.search,method,method==='GET'?{}:await bodyJson(request),request.headers.get('idempotency-key'));return json(result,result.error?422:200);}
   if (['/materials','/services','/suppliers'].includes(path) && method === 'GET') return json(await list(db, url, path.slice(1)));

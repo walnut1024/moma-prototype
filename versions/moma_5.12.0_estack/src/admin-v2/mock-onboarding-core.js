@@ -1,4 +1,6 @@
 import { channelConversationRequest, channelConversationText } from './channel-interface.js';
+import { customForwarding, normalizeCustomAdapter, parseCustomManagement } from './channel-custom-adapter.js';
+import { normalizeChannelRequestRules } from './channel-request-rules.js';
 import { modelIdentity, channelIdentity } from '../model-identities.mjs';
 import { serviceReferences } from '../service-access.mjs';
 import { resourceId } from '../resource-id.mjs';
@@ -31,7 +33,7 @@ function read() {
 const readForWrite = () => localState?.cloudOperations ? copy(read()) : read();
 function save(state) { getStorage?.()?.setItem(STORAGE_KEY, JSON.stringify(state)); memory = localState?.cloudOperations ? state : copy(state); notify(); }
 const credential = (state, channel) => state.credentials.find(item => item.id === channel.credentialId);
-const requestConfiguration = channel => [channel.interfaceType, channel.baseUrl, channel.taskUrls || {}, channel.authMode, channel.credentialId, channel.apiVersion, channel.workspaceId, channel.tokenLimitField, channel.imageSize, channel.voice, channel.statusPath];
+const requestConfiguration = channel => [channel.interfaceType, channel.baseUrl, channel.taskUrls || {}, channel.authMode, channel.credentialId, channel.apiVersion, channel.workspaceId, channel.tokenLimitField, channel.imageSize, channel.voice, channel.statusPath, ...(channel.customAdapter ? [channel.customAdapter] : []), ...(channel.requestRules ? [channel.requestRules] : [])];
 const channelSignature = (state, channel) => hash([requestConfiguration(channel), credential(state, channel)?.version, credential(state, channel)?.status, channel.configVersion]);
 const channelById = (state, id) => { const channel = state.channels.find(item => item.id === id); if (!channel) fail('channel_not_found', '渠道不存在'); return channel; };
 const serviceById = (state, id) => { const service = state.services.find(item => item.id === id); if (!service) fail('service_not_found', '服务不存在'); return service; };
@@ -51,10 +53,16 @@ function once(state, action, body, execute, hideSecret = false, scope = '') {
   }
 }
 function resultFor(scenario, model, index, channel) {
+  if (channel?.requestRules && ['text', 'multimodal'].includes(model.type)) {
+    const request = channelConversationRequest(channel, model);
+    if (request.rejected) return { status: 'failed', upstreamStatus: null, mappedStatus: request.rejected.statusCode,
+      code: 'request_rule_rejected', message: request.rejected.message, stage: 'request' };
+  }
   if (scenario === 'timeout') return { status: 'unknown', code: 'request_timeout', message: '等待响应超时，执行结果未知，请先查询任务状态。', stage: model.type === 'video' ? 'poll' : 'request', upstreamStatus: null };
   const issues = mockConfig["admin-v2/mock-onboarding-service.js"]["issues"];
   const issue = issues[scenario] || scenario === 'partial' && index % 2 === 1 && [503, 'upstream_unavailable', '此模型暂不可用。'] || scenario === 'asyncfail' && (model.probe || model.type) === 'video' && [502, 'async_task_failed', '异步任务创建后执行失败。'];
-  if (issue) return { status: 'failed', upstreamStatus: issue[0], code: issue[1], message: issue[2], stage: scenario === 'protocol' ? 'parse' : scenario === 'asyncfail' ? 'poll' : 'request', retryAfter: scenario === 'ratelimit' ? 30 : null };
+  if (issue) return { status: 'failed', upstreamStatus: issue[0], ...(channel?.requestRules?.statusCodes[issue[0]] ? { mappedStatus: channel.requestRules.statusCodes[issue[0]] } : {}),
+    code: issue[1], message: issue[2], stage: scenario === 'protocol' ? 'parse' : scenario === 'asyncfail' ? 'poll' : 'request', retryAfter: scenario === 'ratelimit' ? 30 : null };
   const response = channel?.interfaceType === 'openai-responses' ? {output:[{type:'message',content:[{type:'output_text',text:'你好'}]}]} : channel?.interfaceType === 'anthropic' ? {content:[{type:'text',text:'你好'}]} : {choices:[{message:{content:'你好'}}]};
   const conversation = channel && ['text','multimodal'].includes(model.type) && channel.interfaceType!=='custom' ? {response,outputText:channelConversationText(channel.interfaceType,response)} : {};
   return { ...conversation, status: 'passed', meteringUnknown: scenario === 'metering_unknown', upstreamStatus: 200, message: '任务返回有效结果。', stage: ['image', 'audio', 'video'].includes(model.type) ? 'artifact' : 'parse', code: '', usage: scenario === 'metering_unknown' ? null : ['text', 'multimodal', 'embedding', 'rerank'].includes(model.type) ? { requests: 1, input_tokens: 8, output_tokens: model.type === 'embedding' ? 0 : 2, total_tokens: model.type === 'embedding' ? 8 : 10 } : { requests: 1, seconds: ['audio', 'video'].includes(model.type) ? 1 : undefined, characters: model.type === 'audio' ? 2 : undefined } };
@@ -72,7 +80,7 @@ function advance(state) {
       if (!['queued', 'running'].includes(batch.status) || Date.parse(batch.createdAt) > clock) continue;
       if (batch.cancelRequested) for (const item of batch.items) if (item.status === 'queued') Object.assign(item, { status: 'cancelled', result: '已取消', endedAt: new Date(clock).toISOString(), stage: 'queued', message: '待执行测试已取消。' });
       for (const item of batch.items) if (!batch.cancelRequested && item.status === 'queued' && (active.get(batch.channelId) || 0) < 2) {
-        try { assertAvailable(state, channelById(state, batch.channelId)); } catch (issue) { Object.assign(item, { status: 'failed', result: '失败', code: issue.code, message: issue.message, endedAt: new Date(clock).toISOString(), stage: 'request', current: false }); continue; }
+        try { assertAvailable(state, channelById(state, batch.channelId), { model: item.model }); } catch (issue) { Object.assign(item, { status: 'failed', result: '失败', code: issue.code, message: issue.message, endedAt: new Date(clock).toISOString(), stage: 'request', current: false }); continue; }
         const key = credential(state, channelById(state, batch.channelId));
         if (key?.accountRpm) {
           state.rateEvents ||= {}; const recent = (state.rateEvents[key.id] || []).filter(time => time > clock - 60000);
@@ -131,6 +139,11 @@ function assertAvailable(state, channel, { live = false, model } = {}) {
   if (runtime) {
     const provider = runtime.providers.find(row => row.id === channel.providerId), key = credential(state, channel), localKey = key?.localKeyId && runtime.keys.find(row => row.providerId === channel.providerId && row.id === key.localKeyId);
     if (key?.localKeyId && (!localKey || localKey.revokedAt || localKey.status === 'disabled')) fail('credential_unavailable', '当前密钥已移除、停用或撤销');
+    const forwarding = model && customForwarding(channel.customAdapter, channel, model.type, model.upstreamModelId);
+    if (forwarding?.auth === 'credential' && !runtime.keys.some(row => row.id === forwarding.credentialId &&
+      row.providerId === channel.providerId && row.endpointId === null && row.status !== 'disabled' && !row.revokedAt)) {
+      fail('credential_unavailable', '接口独立凭证不可用');
+    }
     if (live) {
       const endpoint = runtime.endpoints.find(row => row.id === channel.clientChannelId);
       if (!provider || provider.status !== '已启用' || !endpoint || endpoint.deletedAt || endpoint.frozen || !['运行中', '需关注'].includes(endpoint.status)) fail('supply_unavailable', '当前服务商或渠道已停用');
@@ -268,26 +281,49 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
     if (input.authMode !== 'none' && !state.credentials.some(row => row.id === credentialId)) { const revoked = localKeyId && state.credentials.some(row => row.localKeyId === localKeyId && row.status === 'revoked'); state.credentials.push({ id: text(credentialId, '密钥引用'), localKeyId, externalVersion, providerId, name: '渠道密钥引用', maskedKey: '*****', status: revoked ? 'revoked' : input.credential?.status || 'active', version: 1, accountRpm: input.credential?.accountRpm || null, source: 'mock' }); }
     const key = state.credentials.find(row => row.id === credentialId); if (key && key.providerId !== providerId) fail('credential_scope', '密钥不属于此服务商');
     const channel = { id: current?.id || resourceId('connection'), providerId, name, displayName: input.displayName || name, interfaceType: input.interfaceType, baseUrl: text(input.baseUrl, '接口地址', 2048), taskUrls: copy(input.taskUrls || {}), authMode: input.authMode || 'key', credentialId, clientChannelId: input.clientChannelId || null, clientSignature: input.clientSignature || null, mockModels: copy(input.mockModels || current?.mockModels || []), apiVersion: input.apiVersion || input.adapterOptions?.apiVersion || null, workspaceId: input.workspaceId || input.adapterOptions?.workspaceId || null, tokenLimitField: input.tokenLimitField || input.adapterOptions?.tokenLimitField || null, imageSize: input.imageSize || input.adapterOptions?.imageSize || null, voice: input.voice || input.adapterOptions?.voice || null, statusPath: input.statusPath || input.adapterOptions?.statusPath || null, revision: (current?.revision || 0) + 1, configVersion: (current?.configVersion || 0) + 1, source: 'mock' };
+    if (input.customAdapter) {
+      if (input.interfaceType !== 'custom') fail('invalid_interface', '高级规则仅适用于自定义连接');
+      channel.customAdapter = normalizeCustomAdapter(input.customAdapter);
+    }
+    if (input.requestRules) channel.requestRules = normalizeChannelRequestRules(input.requestRules, input.interfaceType);
     if (current && hash(requestConfiguration(current)) === hash(requestConfiguration(channel))) channel.configVersion = current.configVersion;
     if (current) state.channels[state.channels.indexOf(current)] = channel; else state.channels.push(channel);
     return { ...channel, signature: channelSignature(state, channel) };
   });
   if (method === 'POST' && route === '/discover') {
     const channel = channelById(state, body.channelId);
-    if (channel.interfaceType === 'custom') fail('discovery_unsupported', '此任务接口不支持通用模型发现，请手动添加或从参考目录选择');
+    if (channel.interfaceType === 'custom' && !channel.customAdapter?.models) fail('discovery_unsupported', '此任务接口尚未配置模型列表');
     const issue = resultFor(scenario, { type: 'text' }, 0);
     if (['auth', 'forbidden', 'ratelimit', 'timeout', 'protocol', 'balance'].includes(scenario)) fail(issue.code, issue.message);
     const models = scenario === 'empty' ? [] : channel.mockModels.length ? channel.mockModels : mockConfig["admin-v2/mock-onboarding-service.js"]["discoveryModels"];
-    return { models: copy(scenario === 'partial' ? models.slice(0, 1) : models), complete: scenario !== 'partial', source: 'mock', signature: channelSignature(state, channel), discoveredAt: now() };
+    const data = scenario === 'partial' ? models.slice(0, 1) : models;
+    const parsed = channel.customAdapter?.models ? parseCustomManagement(channel.customAdapter, 'models', {
+      data: data.map(model => typeof model === 'string' ? { id: model } : model), complete: scenario !== 'partial',
+    }) : { models: data, complete: scenario !== 'partial' };
+    return { ...parsed, models: copy(parsed.models), source: 'mock', signature: channelSignature(state, channel), discoveredAt: now() };
+  }
+  if (method === 'POST' && route === '/balance') {
+    const channel = channelById(state, body.channelId);
+    if (!channel.customAdapter?.balance) fail('balance_unsupported', '此连接未配置余额查询接口');
+    if (['auth', 'forbidden', 'ratelimit', 'timeout', 'protocol', 'balance'].includes(scenario)) {
+      const issue = resultFor(scenario, { type: 'text' }, 0);
+      fail(issue.code, issue.message);
+    }
+    const parsed = parseCustomManagement(channel.customAdapter, 'balance', { remaining: 125, currency: 'CNY', used: 4 });
+    return { ...parsed, source: 'mock', signature: channelSignature(state, channel), checkedAt: now() };
   }
   if (method === 'GET' && route === '/tests' && url.searchParams.has('operationId')) { const entry = state.operations[url.searchParams.get('operationId')], batch = entry?.action === 'startTests' && state.batches.find(row => row.id === entry.response.id); if (!batch) fail('submission_not_found', '未找到此操作 ID 的测试提交'); return batch; }
+  const customTestRequest = (channel, model) => {
+    const forwarding = customForwarding(channel.customAdapter, channel, model.type, model.upstreamModelId);
+    return forwarding ? { request: { method: forwarding.method, url: forwarding.url, auth: forwarding.auth, conversion: forwarding.conversion } } : {};
+  };
   if (method === 'POST' && route === '/tests') return once(state, 'startTests', body, () => {
     const channel = channelById(state, body.channelId); assertAvailable(state, channel);
     if (!Array.isArray(body.models) || !body.models.length || body.models.length > 50) fail('invalid_models', '请选择 1–50 个测试模型');
     if (body.models.some(model => ['image', 'video', 'audio'].includes(model.type)) && body.confirmExpensive !== true) fail('cost_confirmation_required', '请明确勾选高成本任务');
     for (const model of body.models) { if(channel.interfaceType==='openai-responses' && !['text','multimodal'].includes(model.type)) fail('invalid_task','Responses 仅适用于对话模型'); text(model.id, '模型资料 ID'); text(model.upstreamModelId, '上游模型调用标识'); if (!['text', 'multimodal', 'embedding', 'rerank', 'image', 'audio', 'video'].includes(model.type) || model.check && !['streaming', 'tools', 'structured'].includes(model.check)) fail('invalid_task', '模型任务或验证内容无效'); }
     if (new Set(body.models.map(row => JSON.stringify([row.id,row.associationId]))).size !== body.models.length || new Set(body.models.map(row => row.upstreamModelId)).size !== body.models.length) fail('duplicate_model', '测试模型不能重复');
-    const batch = { id: resourceId('validation-batch'), channelId: channel.id, providerId: channel.providerId, signature: channelSignature(state, channel), configVersion: channel.configVersion, credentialId: channel.credentialId, credentialVersion: credential(state, channel)?.version || null, source: 'mock', scenario, status: 'queued', createdAt: now(), confirmExpensive: body.confirmExpensive === true, items: body.models.map(model => ({ id: uid(), ...(['text','multimodal'].includes(model.type) && channel.interfaceType!=='custom' ? { request: channelConversationRequest(channel,model) } : {}), model: { id: model.id, associationId: model.associationId, upstreamModelId: model.upstreamModelId, type: model.type, probe: model.probe || model.type, ...(model.check ? { check: model.check } : {}), ...(model.dimensions ? { dimensions: model.dimensions } : {}) }, status: 'queued', stage: 'queued', evidenceSource: 'mock', current: true, traceId: uid(), usage: null, cost: null, templateVersion: 1 })) }; state.batches.push(batch); return batch;
+    const batch = { id: resourceId('validation-batch'), channelId: channel.id, providerId: channel.providerId, signature: channelSignature(state, channel), configVersion: channel.configVersion, credentialId: channel.credentialId, credentialVersion: credential(state, channel)?.version || null, source: 'mock', scenario, status: 'queued', createdAt: now(), confirmExpensive: body.confirmExpensive === true, items: body.models.map(model => ({ id: uid(), ...(['text','multimodal'].includes(model.type) && channel.interfaceType!=='custom' ? { request: channelConversationRequest(channel,model) } : customTestRequest(channel,model)), model: { id: model.id, associationId: model.associationId, upstreamModelId: model.upstreamModelId, type: model.type, probe: model.probe || model.type, ...(model.check ? { check: model.check } : {}), ...(model.dimensions ? { dimensions: model.dimensions } : {}) }, status: 'queued', stage: 'queued', evidenceSource: 'mock', current: true, traceId: uid(), usage: null, cost: null, templateVersion: 1 })) }; state.batches.push(batch); return batch;
   });
   const batchPath = route.match(/^\/tests\/([^/]+)(\/cancel)?$/);
   if (batchPath) { const batch = state.batches.find(row => row.id === batchPath[1]); if (!batch) fail('batch_not_found', '测试任务不存在'); if (method === 'GET' && !batchPath[2]) return batch; if (method === 'POST' && batchPath[2]) return once(state, 'cancelTests', body, () => { batch.cancelRequested = true; advance(state); return batch; }); }
@@ -388,7 +424,11 @@ function setMockRuntimeState(local) {
   runtime = {
     providers: (local.providers || []).map(({ id, status }) => ({ id, status })),
     endpoints: (local.endpoints || []).map(({ id, providerId, status, deletedAt, frozen }) => ({ id, providerId, status, deletedAt, frozen })),
-    keys: (local.providers || []).flatMap(provider => [...(provider.apiKeys || []), ...(local.endpoints || []).filter(endpoint => endpoint.providerId === provider.id).flatMap(endpoint => endpoint.apiKeys || [])].map(({ id, status, revokedAt }) => ({ id, status, revokedAt, providerId: provider.id }))),
+    keys: (local.providers || []).flatMap(provider => [
+      ...(provider.apiKeys || []).map(key => ({ ...key, endpointId: null })),
+      ...(local.endpoints || []).filter(endpoint => endpoint.providerId === provider.id).flatMap(endpoint =>
+        (endpoint.apiKeys || []).map(key => ({ ...key, endpointId: endpoint.id }))),
+    ].map(({ id, status, revokedAt, endpointId }) => ({ id, status, revokedAt, endpointId, providerId: provider.id }))),
     associations: (local.providers || []).flatMap(provider => (provider.catalogConnections || []).map(({ id, modelId, endpointId, upstreamModelId, enabled, deletedAt }) => ({ id, modelId, endpointId, upstreamModelId, enabled, deletedAt, providerId: provider.id, masterId: provider.catalogModels?.find(model => model.modelId === modelId)?.libraryId }))),
   };
 }

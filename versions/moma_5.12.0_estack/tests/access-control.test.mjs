@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tenantHref, userAffiliations } from '../src/admin-v2/access-control.mjs';
 import { sections, canAccessPage } from '../src/admin-v2/navigation.mjs';
+import { tenantServiceTransaction } from '../src/admin-v2/tenant-service-settings.mjs';
 
 test('tenant detail links preserve list filters and distinguish accounts from tenants', () => {
   const href = tenantHref({ id:'personal-space', ownerId:'u1', type:'个人' }, { tab:'projects' }, new URLSearchParams('q=Alice&type=个人&enterprise=old&create=personal'));
@@ -23,11 +24,29 @@ test('user project affiliations stay inside explicit tenant membership', () => {
   assert.deepEqual(userAffiliations(state, 'missing'), []);
 });
 
-test('access control keeps users and commercial operations owns customers', () => {
+test('access control owns tenant management while resource pages require the system administrator', () => {
   const group = sections.find(row => row.title === '访问控制');
-  assert.deepEqual(group.items.map(row => row.children[0]), [['users', '用户管理']]);
-  const customers = sections.find(row => row.id === 'commerce').items.find(row => row.id === 'enterprise');
-  assert.deepEqual(customers.children, [['tenants', '客户管理']]);
-  assert.equal(canAccessPage('运营人员', 'users'), true);
-  assert.equal(canAccessPage('运维人员', 'users'), false);
+  assert.deepEqual(group.items.map(row => row.children[0]), [['tenants', '租户管理']]);
+  assert(!sections.find(row => row.id === 'commerce').items.some(row=>row.id==='enterprise'));
+  assert.equal(canAccessPage('运营人员', 'tenants'), true);
+  assert.equal(canAccessPage('运维人员', 'tenants'), false);
+  assert.equal(canAccessPage('运营人员', 'organization-members'), false);
+  assert.equal(canAccessPage('平台管理员', 'organization-members'), true);
+});
+
+test('opening, limiting and removing a model preserve other models already granted to the tenant', () => {
+  const existing = {modelId:'alpha',rpm:80,tpm:4000};
+  const tenant = {id:'a',status:'正常',modelRules:[existing]};
+  const model = (id, salesScope)=>({id,modelId:id,serviceMode:'standard',listingStatus:'已上架',
+    visibility:'公开',callsEnabled:true,type:'text',salesScope});
+  const state = {tenants:[tenant],grants:[],models:[model('alpha'),model('beta'),
+    model('restricted',{openScope:'selected',tenantIds:['b']})]};
+  const apply = (operation,data) => tenantServiceTransaction(state,{tenantId:'a',operation,data}).changes[0].changes.modelRules;
+  assert.throws(()=>apply('open-models',{modelIds:['beta','restricted']}),/无法开通/);
+  assert.deepEqual(tenant.modelRules,[existing]);
+  tenant.modelRules = apply('open-models',{modelIds:['beta']});
+  assert.deepEqual(tenant.modelRules,[{modelId:'beta',rpm:null,tpm:null},existing]);
+  tenant.modelRules = apply('model-limits',{modelId:'beta',rpm:30,tpm:1000});
+  assert.deepEqual(tenant.modelRules,[{modelId:'beta',rpm:30,tpm:1000},existing]);
+  assert.deepEqual(apply('remove-model',{modelId:'beta'}),[existing]);
 });

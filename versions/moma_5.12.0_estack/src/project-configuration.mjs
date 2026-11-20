@@ -1,5 +1,6 @@
 import { activeProjectMembers, projectAccess, projectRole, requireProject, PROJECT_ADMIN, PROJECT_MEMBER } from './project-access.mjs';
 import { parseBudgetAmount } from './project-call.mjs';
+import { projectTokenBudget } from './project-token-budget.mjs';
 
 function projectDetails(state, identity, { name, description, departmentId }) {
   name = String(name || '').trim();
@@ -14,24 +15,31 @@ function projectDetails(state, identity, { name, description, departmentId }) {
 export function newProject({ state, identity, link }, input, id, at = new Date().toISOString()) {
   if (identity.spaceId === 'personal') throw Error('个人空间固定使用默认项目');
   if (!projectAccess(state, identity, link).canCreate) throw Error('当前身份无权创建项目');
+  const administrator = link.systemAdministrator
+    ? activeProjectMembers(state, identity.tenantId).find(row => row.id === input.administratorId)
+    : { id:link.backendMembershipId, userId:link.backendUserId };
+  if (!administrator?.id) throw Error('请选择本企业的有效项目管理员');
   return {
-    id: id, tenantId: identity.tenantId, ownerId: link.backendUserId,
+    id: id, tenantId: identity.tenantId, ownerId: administrator.userId,
     ...projectDetails(state, identity, input), status: '正常', createdAt: at, updatedAt: at,
     modelPermissions: [], retainContent: false,
-    ...(link.backendMembershipId ? { memberRoles: { [link.backendMembershipId]: PROJECT_ADMIN } } : {}),
+    memberRoles: { [administrator.id]: PROJECT_ADMIN },
   };
 }
 
 export function changeProject({ state, identity, link }, projectId, action, input, services) {
-  const project = projectAccess(state, identity, link).projects.find(row => row.id === projectId);
-  if (!project || project.status === '已删除' || action !== 'exit' && !project.canManage) throw Error('无权操作该项目');
+  const { projects, managesSpace } = projectAccess(state, identity, link);
+  const project = projects.find(row => row.id === projectId);
+  if (!project?.canManage || project.status === '已删除') throw Error('无权操作该项目');
   const personal = identity.spaceId === 'personal';
   if (personal && ['status', 'members', 'exit'].includes(action)) throw Error('个人默认项目状态随客户管理');
   if (personal && action === 'settings' && input.name !== '默认项目') throw Error('个人默认项目不可重命名');
   const changes = {};
   let label, objectId;
   if (action === 'settings') {
-    Object.assign(changes, projectDetails(state, identity, input));
+    const { organizationId, ...details } = projectDetails(state, identity, input);
+    Object.assign(changes, details);
+    if (input.departmentId !== undefined) changes.organizationId = organizationId;
     if (personal) changes.name = state.projects.find(row => row.id === projectId).name;
     const amountMicros = parseBudgetAmount(input.amount);
     const warnAt = Number(input.warnAt);
@@ -39,6 +47,10 @@ export function changeProject({ state, identity, link }, projectId, action, inpu
     changes.spendBudget = amountMicros ? { amountMicros, warnAt, stop: input.stop === true } : null;
     changes.retainContent = input.retainContent === true;
     label = '保存项目设置';
+  } else if (action === 'tokenBudget') {
+    if (personal) throw Error('仅企业项目支持设置 Token 额度');
+    changes.tokenBudget = projectTokenBudget(input);
+    label = '设置项目额度';
   } else if (action === 'models') {
     requireProject([project], projectId, true);
     const allowed = new Set(services.map(row => row.modelKey));
@@ -76,6 +88,7 @@ export function changeProject({ state, identity, link }, projectId, action, inpu
     label = action === 'exit' ? '退出项目' : role ? oldRole ? '调整项目成员角色' : '添加项目成员' : '移除项目成员';
     objectId = member.id;
   } else if (action === 'status') {
+    if (!managesSpace) throw Error('只有租户管理员可以修改项目状态');
     if (!['正常', '停用', '已删除'].includes(input.status) || input.status === project.status) throw Error('项目状态无效');
     changes.status = input.status;
     label = { 正常: '启用项目', 停用: '停用项目', 已删除: '删除项目' }[input.status];

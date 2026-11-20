@@ -16,7 +16,7 @@ export default function AccountCenter({ auth, title = '账号中心' }) {
   const personal = auth.user.realNameCertification;
   const applications = auth.state.applications.filter(item => item.applicantUserId === auth.user.id);
   const latest = applications.at(-1);
-  const workbench = title === '账号认证';
+  const workbench = title === '账户管理';
   const enterpriseVerified = latest?.status === '已开通';
   const uncertified = !personal && !enterpriseVerified;
   const status = enterpriseVerified ? '已认证' : personal?.status || '未认证';

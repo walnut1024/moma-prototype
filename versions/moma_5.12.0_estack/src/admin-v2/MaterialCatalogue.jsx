@@ -1,5 +1,5 @@
 import Table from './AdminTable';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Banner, Button, Input, Select, Space, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
@@ -8,20 +8,44 @@ import { modelCategory } from './model-management';
 import { modelProfileDraft } from './model-profile';
 import { materialModalitiesLabel } from './material-catalogue';
 import { materialDrawerSide } from './model-material-drawer';
+import { classificationIndex, modelClassification, modelClassificationFor } from './model-classification';
 import MaterialLogo from './MaterialLogo';
 
 export default function MaterialCatalogue({ state, ops }) {
   const [query, setQuery] = useState(''), [type, setType] = useState('all'), [removing, setRemoving] = useState(null), [busy, setBusy] = useState(false);
+  const [authorId, setAuthorId] = useState(), [seriesId, setSeriesId] = useState();
   const trigger = useRef(null);
   const [pagination,setPagination]=useState({currentPage:1,pageSize:20});
   const open = (event, record, mode) => { trigger.current = event.currentTarget; ops.go({ view: 'template', template: record.id, materialMode: mode, materialTab: null, drawerSide: materialDrawerSide(event.currentTarget.getBoundingClientRect(), window.innerWidth) }, { preserveScroll: true }); };
-  const rows = modelCatalogue(state).filter(row => (!query || [row.name, row.modelId, row.profile?.author, row.maker].join(' ').toLowerCase().includes(query.trim().toLowerCase())) && (type === 'all' || modelCategory(row.type) === type)).sort(modelReleaseOrder);
+  const dictionary = useMemo(() => modelClassification(state), [state]);
+  const classified = useMemo(() => {
+    const index = classificationIndex(dictionary);
+    return modelCatalogue(state).sort(modelReleaseOrder).map(row => ({ ...row, classification: modelClassificationFor(index, row) }));
+  }, [state, dictionary]);
+  const rows = classified.filter(({ name, modelId, type: rowType, classification }) => {
+    const { author, series, authorName, seriesName } = classification;
+    const text = [name, modelId, authorName, seriesName, author?.name, series?.name, ...(author?.aliases || []), ...(series?.aliases || [])].join(' ').toLowerCase();
+    return text.includes(query.trim().toLowerCase()) && (type === 'all' || modelCategory(rowType) === type)
+      && (!authorId || (authorId === 'pending' ? Boolean(authorName && !author) : author?.id === authorId))
+      && (!seriesId || (seriesId === 'pending' ? Boolean(seriesName && !series) : series?.id === seriesId));
+  });
+  const firstPage = () => setPagination(current => ({ ...current, currentPage: 1 }));
+  const authorNames = new Map(dictionary.authors.map(row => [row.id, row.name]));
+  const options = (entries, pending) => [
+    ...entries.map(row => ({
+      value: row.id,
+      label: row.name + (row.authorId && !authorId ? ' · ' + authorNames.get(row.authorId) : '') + (row.active ? '' : '（已停用）'),
+    })),
+    ...(pending ? [{ value: 'pending', label: '待核对' }] : []),
+  ];
   const { pageSize } = pagination;
   const currentPage = Math.min(pagination.currentPage, Math.ceil(rows.length / pageSize) || 1);
   const columns = [
     { title: '模型展示名', dataIndex: 'name', width: 230, render: (name, row) => <Button theme="borderless" onClick={event => open(event, row, 'view')}>{name}</Button> },
     { title: '模型编码', dataIndex: 'modelId', width: 240, render: value => <Typography.Text className="materials-code" copyable>{value}</Typography.Text> },
-    { title: '作者', width: 140, render: (_, row) => modelProfileDraft(row).author || row.maker || '—' },
+    { title: '作者', width: 140, render: (_, { classification: { author, authorName } }) => author?.name || (authorName && authorName + '（待核对）') || '—' },
+    { title: '模型系列', width: 140, render: (_, { classification: { series, seriesName } }) => series?.name || (seriesName && seriesName + '（待核对）') || '—' },
+    { title: '模型版本', width: 120, render: (_, row) => row.profile?.version || '—' },
     { title: '原厂发布日期', width: 130, render: (_, row) => modelProfileDraft(row).releaseDate || '—' },
     { title: '模型类型', width: 100, render: (_, row) => MODEL_CATALOGUE_TYPES[modelCategory(row.type)] },
     { title: '模型展示 Logo', width: 130, render: (_, row) => <MaterialLogo key={modelProfileDraft(row).logo || ''} src={modelProfileDraft(row).logo} alt={row.name+'的模型展示 Logo'}/> },
@@ -31,8 +55,22 @@ export default function MaterialCatalogue({ state, ops }) {
   ];
   const close = () => { setRemoving(null); ops.setError(''); requestAnimationFrame(() => trigger.current?.isConnected && trigger.current.focus()); };
   return <>
-    <div className="materials-toolbar"><div className="materials-filters"><Input prefix={<IconSearch aria-hidden/>} showClear aria-label="搜索模型展示名 / 作者 / 模型编码" placeholder="搜索模型展示名 / 作者 / 模型编码" value={query} onChange={value=>{setQuery(value);setPagination(current=>({...current,currentPage:1}));}}/><Typography.Text id="material-type-filter" className="sr-only">模型类型</Typography.Text><Select aria-labelledby="material-type-filter" value={type} onChange={value=>{setType(value);setPagination(current=>({...current,currentPage:1}));}} optionList={[[ 'all', '全部类型' ], ...Object.entries(MODEL_CATALOGUE_TYPES)].map(([value, label]) => ({value, label}))}/><Button onClick={() => { setQuery(''); setType('all'); setPagination(current=>({...current,currentPage:1})); }}>重置筛选</Button></div></div>
-    <Table rowKey="id" columns={columns} dataSource={rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)} scroll={{ x: 1540 }}
+    <div className="materials-toolbar"><div className="materials-filters">
+      <Input prefix={<IconSearch aria-hidden/>} showClear aria-label="搜索模型名称、编码、作者或系列" placeholder="搜索模型名称 / 编码 / 作者 / 系列" value={query} onChange={value => { setQuery(value); firstPage(); }}/>
+      <Typography.Text id="material-type-filter" className="sr-only">模型类型</Typography.Text>
+      <Select aria-labelledby="material-type-filter" value={type} onChange={value => { setType(value); firstPage(); }} optionList={[[ 'all', '全部类型' ], ...Object.entries(MODEL_CATALOGUE_TYPES)].map(([value, label]) => ({value, label}))}/>
+      <Typography.Text id="material-author-filter" className="sr-only">模型作者</Typography.Text>
+      <Select aria-labelledby="material-author-filter" placeholder="全部作者" filter showClear value={authorId}
+        optionList={options(dictionary.authors, classified.some(({ classification: item }) => item.authorName && !item.author))}
+        onChange={value => { setAuthorId(value); setSeriesId(undefined); firstPage(); }}/>
+      <Typography.Text id="material-series-filter" className="sr-only">模型系列</Typography.Text>
+      <Select aria-labelledby="material-series-filter" placeholder="全部系列" filter showClear value={seriesId}
+        optionList={options(dictionary.series.filter(row => !authorId || row.authorId === authorId),
+          classified.some(({ classification: item }) => item.seriesName && !item.series && (!authorId || item.author?.id === authorId || authorId === 'pending' && !item.author)))}
+        onChange={value => { setSeriesId(value); firstPage(); }}/>
+      <Button onClick={() => { setQuery(''); setType('all'); setAuthorId(undefined); setSeriesId(undefined); firstPage(); }}>重置筛选</Button>
+    </div></div>
+    <Table rowKey="id" columns={columns} dataSource={rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)} scroll={{ x: 1800 }}
       pagination={{ pageSize, currentPage, total: rows.length, showSizeChanger: true, pageSizeOpts: [20, 50, 100], showTotal: true }}
       onChange={({ pagination }) => setPagination({ currentPage: pagination.currentPage, pageSize: pagination.pageSize })}
       empty="没有符合条件的模型资料"/>

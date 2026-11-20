@@ -12,9 +12,9 @@ function download(name, rows) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function OrganizationMemberBatch({ data, initialDepartment, onClose, onApply }) {
+export default function OrganizationMemberBatch({ data, initialDepartment, scoped, onClose, onApply }) {
   const departmentLabelId = useId();
-  const departmentOptions = [{ id: 'unassigned' }, ...data.departments]
+  const departmentOptions = [...(scoped ? [] : [{ id: 'unassigned' }]), ...data.departments]
     .map(({id}) => ({ value: id, label: departmentPath(data.departments, id) }));
   const platformAccounts=data.platformAccounts || [];
   const [mode, setMode] = useState("existing"), [entry, setEntry] = useState("manual"), [step, setStep] = useState("input");

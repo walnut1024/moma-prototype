@@ -253,7 +253,7 @@ function RouteHistory({ route, models, changeStatus, busy, canWrite }) {
   </div>;
 }
 
-export default function SmartRouting({ tenant, projectId, projectRules, view, navigate, setDirty, saveRoute,
+export default function SmartRouting({ tenant, projectId, projectRules, embedded = false, view, navigate, setDirty, saveRoute,
   openKeys, openOrders, openExperience, apiUrl, projectCallId }) {
   const [query, setQuery] = useState('');
   const [api, setApi] = useState(null);
@@ -338,14 +338,17 @@ export default function SmartRouting({ tenant, projectId, projectRules, view, na
     navigate({routeType:'preset',...(callId && {preset:callId})},true);
   };
   const detailTab = view.panel || 'config';
-  if (projectRules) return <div className="smart-routing">
+  if (projectRules) return <div className={embedded ? "smart-routing" : "route-page smart-routing"}>
+    {!embedded && <FrontPageHeader title="项目分流" icon={Route} description={project?.name}
+      actions={<Button theme="borderless" onClick={()=>navigate({})}>返回智能路由</Button>} />}
     <ProjectRoutes key={projectId} tenant={tenant} projectId={projectId} openApi={row=>setApi({...row,callId:projectCallId(row.code),projectRoute:true,
       hasUserRule:row.rules.some(rule=>rule.field==='metadata._user')})}/>
     {api && <Modal visible title="API 示例" footer={null} onCancel={()=>setApi(null)} width={660} className="smart-routing-dialog">
       <ApiExample route={api} apiUrl={apiUrl} openKeys={openKeys} projectId={projectId}/></Modal>}
   </div>;
   return <div className="route-page smart-routing">
-    <FrontPageHeader title="智能路由" icon={Route} description={project ? `所属项目 · ${project.name}` : undefined} />
+    <FrontPageHeader title="智能路由" icon={Route} description={project ? `所属项目 · ${project.name}` : undefined}
+      actions={project && <Button theme="borderless" onClick={()=>navigate({routeType:'project'})}>项目分流</Button>} />
     {tenant.error && type !== 'project' && <Banner type="warning" description={tenant.error} />}
     {error && <Banner type="danger" description={error} />}
     <Tabs activeKey={tab} onChange={key => navigate(key === 'auto' ? {} : {routeType:'preset'})} keepDOM={false} tabPaneMotion={false}>

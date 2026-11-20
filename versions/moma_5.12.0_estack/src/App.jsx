@@ -2,6 +2,8 @@ import {useTenantData} from './useTenantData';
 import { marketModels, customerPriceRows } from './service-directory.mjs';
 import MarketModelDetail from './MarketModelDetail';
 import ConsoleNavigation from './components/ConsoleNavigation';
+import OrganizationWorkspace from './components/OrganizationWorkspace';
+import ConsoleHome from './components/ConsoleHome';
 import { consoleActiveItem } from './console-navigation.mjs';
 import { projectModelEnabled } from './project-access.mjs';
 import WorkspaceBilling from './components/WorkspaceBilling';
@@ -14,11 +16,10 @@ import { AdminSideSheet as SideSheet } from './admin-v2/AdminOverlay';
 import { AdminUIContext } from './components/admin-ui-context';
 import FrontPageHeader from "./components/FrontPageHeader";
 import AuthExperience, { AuthBanner, CustomerSessionGate, useAuthNavigation } from "./AuthExperience";
-import { DEFAULT_SITE_LOGO, PRIVATE_SITE } from "./site-config.mjs";
+import { DEFAULT_SITE_LOGO, DEFAULT_USER_CONSOLE_NAME, DEFAULT_WORKBENCH_NAME, PRIVATE_SITE } from "./site-config.mjs";
 import { agreementFromHash } from "./agreement-route.mjs";
 import PublicAgreement from "./components/PublicAgreement";
 import { restoreSiteImage, useSiteChrome, useSiteConfig } from "./useSiteConfig";
-import OperationRecords from "./OperationRecords";
 import SmartRouting from "./components/SmartRouting";
 import ProjectWorkspace from "./components/ProjectWorkspace";
 import { ProjectBudgetNotice } from "./components/ProjectOverview";
@@ -26,9 +27,9 @@ import UnifiedApiKeys from "./components/UnifiedApiKeys";
 import { experiencePages, readProjectScope, useProjectSelection } from "./useProjectSelection";
 import { MODEL_ORDER_BILLING_TYPES, MODEL_ORDER_BILLING_LABELS, MODEL_ORDER_COLUMNS } from './model-order-display.mjs';
 import { DEFAULT_PAGE_SIZE, FilterPagination } from "./components/FilterControls";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import UsageStatistics from "./components/UsageStatistics";
-import OrganizationMembers from "./OrganizationMembers";
+import { ProjectModels, ProjectSettings } from "./components/ProjectConfiguration";
 import "./styles.css";
 import "./token-plan-keys.css";
 import "./version-index.css";
@@ -51,17 +52,18 @@ import {
   Images,
   KeyRound,
   History,
+  House,
   Languages,
   RefreshCw,
   Route,
   Search,
   SlidersHorizontal,
+  Plug,
   X,
   ShoppingCart,
   ShieldCheck,
   Store,
   FolderKanban,
-  Users,
   Video,
 } from "lucide-react";
 
@@ -69,9 +71,12 @@ import "./frontend-pages.css";
 
 const A = "/moma_5.12.0_estack/assets/";
 
+const ToolConnection = lazy(() => import('./components/ToolConnection'));
+
 const navIcons = {
+  首页: House, 项目: FolderKanban, 工具接入: Plug,
   概览: ChartNoAxesCombined, 项目概览: ChartNoAxesCombined, 模型体验: Languages, 使用设置: SlidersHorizontal, 项目设置: SlidersHorizontal,
-  项目管理: FolderKanban,
+  项目管理: FolderKanban, 我的项目: FolderKanban,
   空间总览: ChartNoAxesCombined,
   模型广场: Store,
   智能路由: Route,
@@ -84,11 +89,11 @@ const navIcons = {
   订购与账单: FileText,
   用量统计: ChartNoAxesCombined,
   调用观测: Activity,
+  运行表现: Activity,
   调用日志: FileText,
-  "API 密钥": KeyRound,
-  组织及成员: Users,
+  "API Key": KeyRound, "API 密钥": KeyRound,
   操作记录: History,
-  账号认证: ShieldCheck,
+  账户管理: ShieldCheck,
   按量付费: KeyRound,
   "Token Plan": Calculator,
 };
@@ -235,7 +240,7 @@ function ModelOrderList({
     <main className="auth-enterprise-shell">{waitingForSession ? <CustomerSessionGate auth={auth} market={market} />
       : <AuthExperience auth={auth} market={market} />}</main>
   </ConfigProvider>;
-  if (market.tenant?.internal) return <div className="content"><h1>企业内用</h1><p>模型使用权限由项目管理员分配。</p><a href={`/${versionId}/?page=space-overview`}>返回空间总览</a></div>;
+  if (market.tenant?.internal) return <div className="content"><h1>企业内用</h1><p>模型使用权限由项目管理员分配。</p><a href={`/${versionId}/?page=model-market`}>返回模型广场</a></div>;
   if (standalone) {
     const packageOffers=(market.packages || []).filter(row=>row.coding===(tab===MODEL_ORDER_BILLING_TYPES.coding));
     const packageRows=packageOffers.map(row=>[row.id,row.name,row.kind==='pack'?'资源包':'订阅套餐','平台',
@@ -463,17 +468,20 @@ function VersionIndex() {
 }
 
 const frontPages = {
-  'model-market':'模型广场','model-detail':'模型详情','model-order':'模型订购','organization-members':'组织及成员',
-  'operation-records':'操作记录','api-keys':'API 密钥','projects':'项目管理','smart-route':'智能路由',
-  'account-certification':'账号认证','call-logs':'调用日志','usage-statistics':'用量统计','call-observation':'调用观测',
+  home:'首页','model-ranking':'模型排行','tool-connection':'工具接入',
+  'model-market':'模型广场','model-detail':'模型详情','model-order':'模型订购',
+  'api-keys':'API 密钥','projects':'项目管理','my-projects':'我的项目','smart-route':'智能路由',
+  'organization-members':'组织及成员','account-certification':'账户管理','call-logs':'调用日志','usage-statistics':'用量统计','call-observation':'调用观测',
+  'project-models':'配额管理','project-logs':'调用日志留存','project-audit':'密钥操作记录',
   'space-overview':'空间总览', billing:'订购与账单', 'project-overview':'项目概览', 'project-settings':'项目设置',
 };
-const projectPages = new Set(['project-overview','project-settings','smart-route','api-keys','experience','usage-statistics','call-observation','call-logs']);
+const projectConfigPages = ['project-models','project-logs','project-audit'];
+const projectPages = new Set(['project-overview','project-settings','smart-route','api-keys','experience','usage-statistics','call-observation','call-logs',...projectConfigPages]);
 const projectReportPages = new Set(['usage-statistics','call-observation','call-logs']);
 
 function frontPage(params) {
   const page=params.get('page');
-  return (page==='experience' ? experiencePages[params.get('task')] : frontPages[page]) || '模型广场';
+  return (page==='experience' ? experiencePages[params.get('task')] : frontPages[page]) || '首页';
 }
 function frontDestination(label) {
   const task=Object.keys(experiencePages).find(key=>experiencePages[key]===label);
@@ -482,6 +490,7 @@ function frontDestination(label) {
 
 function PrototypeApp({ version }) {
   const site = useSiteConfig();
+  const workbenchName = site.workbenchName || DEFAULT_WORKBENCH_NAME;
   useSiteChrome(site);
   const auth = useAuthNavigation();
   const modeFromHash = () =>
@@ -506,6 +515,7 @@ function PrototypeApp({ version }) {
   const waitingForSession=admin==='front' && auth.requiresSession && !market.tenant;
   const projectTenant=useTenantData({ enabled:admin === 'front' && Boolean(market.tenant) });
   const [projectScope, setProjectScope] = useState(readProjectScope);
+  const [projectAction, setProjectAction] = useState(null);
   const routingDirty = useRef(false);
   const routingLocation = useRef(location.href);
   const setRoutingDirty = useCallback(dirty => {
@@ -526,11 +536,18 @@ function PrototypeApp({ version }) {
   const internal=market.tenant?.internal===true;
   const personal=market.tenant?.type==='个人';
   const [activeRoute, routeParams] = frontDestination(activePage);
+  const detailRoute = ['project-overview','project-settings'].includes(activeRoute);
+  const workspaceRoute = detailRoute || ['projects','my-projects'].includes(activeRoute);
+  const requestedSource = new URLSearchParams(location.search).get('from');
+  const detailProject = owner && projectScope.id ? projectTenant.projects.find(row=>row.id===projectScope.id) : project;
+  const projectList = projectTenant.canCreateProject && (activeRoute==='projects' || requestedSource==='projects' ||
+    (requestedSource!=='my-projects' && detailRoute && detailProject &&
+      !projectTenant.accountProjects.some(row=>row.id===detailProject.id))) ? 'projects' : 'my-projects';
   const spaceLogs = activeRoute==='call-logs' && projectScope.space && !projectScope.id && market.tenant?.type!=='个人';
   const reportScope = { ...projectScope, id:projectScope.id || selectedProject };
   const projectRequired = projectPages.has(activeRoute) &&
-    (projectReportPages.has(activeRoute) ? !spaceLogs && !reportScope.id : !project);
-  const openProjectPage = (row, page = 'projects', extra = {}, replace = false) => {
+    (projectReportPages.has(activeRoute) ? !spaceLogs && !reportScope.id : detailRoute ? personal && !detailProject : !project);
+  const openProjectPage = (row, page = 'my-projects', extra = {}, replace = false) => {
     const query = new URLSearchParams({page,...(row ? {project:row.id} : {}),...extra});
     const next = location.pathname + '?' + query + location.hash;
     if (next !== location.pathname + location.search + location.hash) {
@@ -539,16 +556,32 @@ function PrototypeApp({ version }) {
       if (replace) history.replaceState(null, '', next);
       else history.pushState(null, '', next);
     }
-    if (row?.status === '正常') selectProject(row.id);
+    if (row?.status === '正常' && (!row.tenantId || row.tenantId === market.tenant?.id)) selectProject(row.id);
     setSelected(null);
     setProjectScope(readProjectScope(query));
     setEntryService(query.get('service') || '');
     setMarketAction(null);
+    setProjectAction(null);
     if (page === 'experience') setTextCompare(false);
     setActivePage(frontPage(query));
+    return true;
+  };
+  const openProjectTab = (row, view, from = projectList, params = {}) => {
+    const page = personal && view==='keys' ? 'api-keys' : personal && view!=='overview' ? 'project-settings' : 'project-overview';
+    return openProjectPage(row,page,{...params,...(!personal ? {from} : {}),...(['overview','members'].includes(view) ? {} : {view})});
+  };
+  const enterProject = async (row, action) => {
+    try {
+      if (row.tenantId && row.tenantId !== market.tenant?.id) {
+        if (routingDirty.current && !window.confirm('放弃未保存的修改？')) return;
+        await market.switchSpace(row.tenantId);
+        routingDirty.current = false;
+      }
+      if (openProjectTab(row,action ? projectScope.view || 'members' : 'members',projectList) && action) setProjectAction(action);
+    } catch(error) { Toast.error(error.message); }
   };
   useEffect(() => {
-    if (personal && project && ['space-overview','projects'].includes(activeRoute)) openProjectPage(project,'project-overview',{},true);
+    if (personal && project && ['space-overview','projects','my-projects'].includes(activeRoute)) openProjectPage(project,'project-overview',{},true);
   },[personal,project?.id,activeRoute]);
   const projectExperience = (row, service) => openProjectPage(row, 'experience',
     { task:service?.tasks?.[0] || 'text', ...(service ? {service:service.id} : {}) });
@@ -566,7 +599,7 @@ function PrototypeApp({ version }) {
     }
     if (!row) { setEntryChoice({kind:'project',service}); return; }
     if (!projectModelEnabled(row,service.serviceModelId)) {
-      setEntryChoice({kind:'models',service,project:row,message:row.canManage ? '当前项目尚未开通此模型，请到项目设置分配模型权限。' : '当前项目尚未开通此模型，请联系项目管理员授权。'}); return;
+      setEntryChoice({kind:'models',service,project:row,message:row.canManage ? '当前项目尚未开通此模型。' : '当前项目尚未开通此模型，请联系项目管理员授权。'}); return;
     }
     setEntryChoice(null);
     if (service.tasks?.length) projectExperience(row,service);
@@ -603,14 +636,12 @@ function PrototypeApp({ version }) {
   const openModelDetails = (_event, model) => {
     const service = model.services.find(row => row.providerId === filters.provider) || model.services.find(row => row.callable) || model.services[0];
     selectedCard.current = model.modelKey;
-    history.replaceState(null, '', modelDetailLocation(location.href));
     history.pushState({ marketFromList: true }, '', modelDetailLocation(location.href, service));
     setSelected({ modelKey: service.modelKey, id: service.id }); setActivePage('模型详情');
   };
   const returnToMarket = () => {
     if (history.state?.marketFromList) { history.back(); return; }
-    history.replaceState(null, '', modelDetailLocation(location.href));
-    setSelected(null);setMarketAction(null);setActivePage('模型广场');
+    openProjectPage(undefined,'model-market',{},true);
   };
   const [compactFilters, setCompactFilters] = useState(() => window.matchMedia('(max-width: 900px)').matches);
   const [filtersExpanded, setFiltersExpanded] = useState(() => !window.matchMedia('(max-width: 900px)').matches);
@@ -620,34 +651,32 @@ function PrototypeApp({ version }) {
     media.addEventListener('change', change);
     return () => media.removeEventListener('change', change);
   }, []);
-  const enterprisePagesAllowed = Boolean(market.tenant && market.tenant.type!=='个人');
+  const enterpriseSpace = Boolean(market.tenant && market.tenant.type!=='个人');
   const tenantShell = useRef(null);
   const getTenantPopupContainer = useCallback(() => tenantShell.current ?? document.body, []);
   const currentNav = consoleActiveItem(activePage,personal);
   const navigateTenant = item => {
-    const [page, params]=item === '概览' ? ['project-overview',{}]
+    const [page, params]=item === '项目管理' ? ['my-projects',{}]
       : item === '使用设置' ? ['project-settings',{}] : frontDestination(item);
     openProjectPage(projectPages.has(page) ? project : undefined, page, params);
   };
   const changeCurrentProject = id => {
     const next=activeProjects.find(row=>row.id===id);
     if (!next) return;
-    if (activeRoute==='projects' || projectPages.has(activeRoute) && !spaceLogs) {
+    if (!personal && workspaceRoute) {
+      const scope = projectList==='my-projects' && projectTenant.canCreateProject && !projectTenant.accountProjects.some(row=>row.id===id)
+        ? 'projects' : projectList;
+      openProjectTab(next,projectScope.view || 'members',scope);
+    }
+    else if (projectPages.has(activeRoute) && !spaceLogs) {
       openProjectPage(next,activeRoute,{...routeParams,...(projectScope.view ? {view:projectScope.view} : {}),
-        ...(activeRoute==='smart-route' ? (projectScope.routing.type==='preset' ? {routeType:'preset'} :
+        ...(activeRoute==='smart-route' ? (projectScope.projectRules ? {routeType:'project'} : projectScope.routing.type==='preset' ? {routeType:'preset'} :
           projectScope.routing.settings ? {routing:'settings',strategy:projectScope.routing.strategy} : {}) : {})});
     } else selectProject(next.id);
   };
   useEffect(() => {
-    if (market.tenant && ((!enterprisePagesAllowed && ['组织及成员', '操作记录'].includes(activePage)) || (activePage==='操作记录' && projectTenant.identity && !projectTenant.canManage))) {
-      setActivePage('模型广场');
-      const query = new URLSearchParams(location.search);
-      if (['organization-members', 'operation-records', 'call-logs'].includes(query.get('page'))) {
-        query.delete('page');
-        history.replaceState(null, '', location.pathname + (query.size ? '?' + query : '') + location.hash);
-      }
-    }
-  }, [enterprisePagesAllowed, activePage, market.tenant, projectTenant.identity, projectTenant.canManage]);
+    if (owner && enterpriseSpace && !projectTenant.canCreateProject && activeRoute==='projects') openProjectPage(undefined,'my-projects',{},true);
+  }, [projectTenant.canCreateProject, enterpriseSpace, activeRoute, owner]);
   useEffect(() => {
     const sync = () => {
       if (location.hash.startsWith("#/admin") && !location.hash.startsWith("#/admin-2")) {
@@ -677,7 +706,15 @@ function PrototypeApp({ version }) {
       ...current,
       [group]: current[group] === value ? "" : value,
     }));
-  const meta = m => ({ task: ({ text: ['文本与代码'], multimodal: ['多模态', '文本与代码'], image: ['图像'], video: ['视频'], voice: ['音频'], embedding: ['向量'], rerank: ['重排'] })[m.type] || [], input: m.input, output: m.outputModalities, author: m.maker });
+  const marketAuthors = new Map(), marketSeries = new Map();
+  for (const model of models) {
+    const item = model.classification;
+    if (item?.authorId) marketAuthors.set(item.authorId, item.author);
+    if (item?.seriesId && (!filters.author || item.authorId === filters.author)) {
+      marketSeries.set(item.seriesId, filters.author ? item.series : `${item.series} · ${item.author}`);
+    }
+  }
+  const meta = m => ({ task: ({ text: ['文本与代码'], multimodal: ['多模态', '文本与代码'], image: ['图像'], video: ['视频'], voice: ['音频'], embedding: ['向量'], rerank: ['重排'] })[m.type] || [], input: m.input, output: m.outputModalities, author: m.classification?.authorId });
   const visible = useMemo(
     () =>
       models
@@ -691,7 +728,7 @@ function PrototypeApp({ version }) {
                 (group === "context"
                   ? m.contextTokens != null && m.contextTokens / 1024 <= Number(value)
                   : group === "series"
-                  ? m.series === value
+                  ? m.classification?.seriesId === value
                   : group === "provider"
                   ? m.providers.has(value)
                   : Array.isArray(data[group])
@@ -712,7 +749,9 @@ function PrototypeApp({ version }) {
     const selected = filters[group] === value;
     return <SemiButton key={value} className="filter-option" size="small"
       type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'}
-      aria-pressed={selected} onClick={() => toggleFilter(group, value)}>{label}</SemiButton>;
+      aria-pressed={selected} onClick={() => group === 'author'
+        ? setFilters(current => ({ ...current, author: current.author === value ? '' : value, series: '' }))
+        : toggleFilter(group, value)}>{label}</SemiButton>;
   };
   const resetFilters = () => { setFilters({}); setQuery(""); };
   const catalogueFilters = (<div className="filters" id="catalogue-filters">
@@ -763,8 +802,11 @@ function PrototypeApp({ version }) {
                   />
                 </FilterSection>
                 <FilterSection title="模型作者" count={filters.author ? 1 : 0}>
-                  {[...new Set(models.map(model => model.maker))].map((x) => option("author", x))}
+                  {[...marketAuthors].map(([id, name]) => option("author", id, name))}
                 </FilterSection>
+                {marketSeries.size > 0 && <FilterSection title="模型系列" count={filters.series ? 1 : 0}>
+                  {[...marketSeries].map(([id, name]) => option("series", id, name))}
+                </FilterSection>}
                 <FilterSection
                   title="推理服务商"
                   count={filters.provider ? 1 : 0}
@@ -807,14 +849,18 @@ function PrototypeApp({ version }) {
     </div>}
   </section>;
 
+  const marketTabs = <SemiTabs className="console-market-tabs" aria-label="模型广场"
+    activeKey={activePage==='模型排行' ? 'model-ranking' : 'model-market'}
+    tabList={[{itemKey:'model-market',tab:'模型列表'},{itemKey:'model-ranking',tab:'模型排行'}]}
+    onChange={page=>openProjectPage(undefined,page)} />;
   const shell = (
     <AdminUIContext.Provider value={admin === "v2"}><div ref={tenantShell} className={`app-shell ${admin === "front" ? "tenant-semi" : ""} ${auth.route ? "auth-shell auth-enterprise-shell" : ""}`}>
-      <header className={admin === "v2" ? "admin-banner" : undefined}>
+      <header className={admin === "v2" ? "admin-banner" : !auth.route ? "tenant-banner" : undefined}>
         <div className="brand-mark">
           <img src={site.logo || DEFAULT_SITE_LOGO} alt="" onError={event => restoreSiteImage(event, DEFAULT_SITE_LOGO)} />
           {admin === "v2"
-            ? <SemiTypography.Text strong>{site.name || '大模型服务平台运营运维中心'}</SemiTypography.Text>
-            : <span>{site.name || '模型服务平台 MoMA 政企版'}</span>}
+            ? <SemiTypography.Text strong>{workbenchName}</SemiTypography.Text>
+            : <span>{site.userConsoleName || DEFAULT_USER_CONSOLE_NAME}</span>}
         </div>
         <div className="top-actions">
           {admin === "v2" && (
@@ -827,20 +873,19 @@ function PrototypeApp({ version }) {
             <SemiButton theme="borderless" onClick={() => navigateAdmin("v2")}>后台</SemiButton>
           ) : null}
           {admin === "v2" ? <AuthBanner auth={auth} market={market} admin/> : !waitingForSession && auth.route !== 'login' ? <AuthBanner auth={auth} market={market}
-            onSwitchSpace={()=>openProjectPage(undefined,'space-overview',{},true)}/> : null}
+            onSwitchSpace={()=>openProjectPage(undefined,'home',{},true)}/> : null}
         </div>
         {admin === "v2" && (
           <SemiButton className="admin-banner-return" type="tertiary" theme="borderless" size="small" onClick={() => navigateAdmin("front")}>返回前台</SemiButton>
         )}
       </header>
       {admin === "front" && !auth.route && !waitingForSession && (
-        <ConsoleNavigation personal={personal} internal={internal} canManage={projectTenant.canManage}
-          spaceName={personal ? '个人空间' : market.tenant?.name || '企业空间'} projectId={selectedProject}
+        <ConsoleNavigation personal={personal} internal={internal} canManage={projectTenant.canManage} canManageOrganization={Boolean(owner && projectTenant.canManageOrganization)} projectId={selectedProject}
           projects={activeProjects} enabled={Boolean(owner)} onProjectChange={changeCurrentProject}
           active={currentNav} navigate={navigateTenant} icons={navIcons}/>
       )}
       <main key={auth.route ? "auth" : admin === "front" ? owner || "anonymous" : "admin"} className={admin !== "front" ? "admin-main" : "front-main"}>
-        {admin === 'front' && !auth.route && projectPages.has(activeRoute) && activeRoute!=='billing' && !spaceLogs && project?.canManage &&
+        {admin === 'front' && !auth.route && !detailRoute && projectPages.has(activeRoute) && !spaceLogs && project?.canManage &&
           <div className="project-page-notice"><ProjectBudgetNotice project={project} spend={projectTenant.projectBudgets?.[project.id]} /></div>}
         {entryChoice && <Modal visible title={entryChoice.kind==='project' ? '选择体验项目' : '模型体验'} footer={null}
           onCancel={()=>setEntryChoice(null)} className="project-modal">
@@ -849,7 +894,7 @@ function PrototypeApp({ version }) {
             optionList={activeProjects.map(row=>({value:row.id,label:row.name}))}
             onChange={id=>beginExperience(entryChoice.service,activeProjects.find(row=>row.id===id))}/></div> : <p>暂无可访问的项目，请联系企业管理员。</p>)}
           {entryChoice.kind==='models' && entryChoice.project.canManage && <SemiButton theme="solid"
-            onClick={()=>{openProjectPage(entryChoice.project,'project-settings',{view:'models'});setEntryChoice(null);}}>配置模型权限</SemiButton>}
+            onClick={()=>{openProjectPage(entryChoice.project,'project-models');setEntryChoice(null);}}>配置模型权限</SemiButton>}
           {entryChoice.kind==='order' && <SemiButton theme="solid" onClick={()=>{setMarketAction({kind:'order',service:entryChoice.service});setEntryChoice(null);}}>订购模型</SemiButton>}
         </Modal>}
         {waitingForSession ? (
@@ -857,38 +902,61 @@ function PrototypeApp({ version }) {
         ) : auth.route ? (
           <AuthExperience key={auth.route} auth={auth} market={market} />
         ) : admin === "v2" ? (
-          <AdminConsoleV2 bannerTarget={adminBannerTarget} />
+          <AdminConsoleV2 bannerTarget={adminBannerTarget} workbenchName={workbenchName} adminAccount={auth.adminAccount} />
         ) : internal && ['model-order','billing'].includes(activeRoute) ? (
           <div className="project-panel project-experience-empty"><h2>企业内用</h2><p>模型使用权限由项目管理员分配。</p>
-            <SemiButton theme="solid" onClick={()=>openProjectPage(undefined,'space-overview')}>返回空间总览</SemiButton></div>
+            <SemiButton theme="solid" onClick={()=>openProjectPage(undefined,'model-market')}>返回模型广场</SemiButton></div>
         ) : projectRequired ? (
           <div className="project-panel project-experience-empty"><h2>{activePage}</h2>
             <p role="status">{projectTenant.error || (!owner ? '正在加载项目…' : projectScope.id ? '当前项目不可用，请重新选择。' : '请先选择项目。')}</p>
-            <SemiButton theme="solid" onClick={personal ? projectTenant.reload : () => openProjectPage()}>{personal ? '重新加载' : '前往项目管理'}</SemiButton>
+            <SemiButton theme="solid" onClick={personal ? projectTenant.reload : () => openProjectPage()}>{personal ? '重新加载' : '前往项目'}</SemiButton>
           </div>
+        ) : activePage === "首页" ? (
+          <ConsoleHome tenant={projectTenant} personal={personal} internal={internal}
+            models={marketModels(owner ? projectTenant.services : [],'all')}
+            onOpenModel={model=>openModelDetails(null,model)}
+            onPage={page=>openProjectPage(projectPages.has(page) ? project : undefined,page)} />
         ) : activePage === "空间总览" ? (
           <UsageStatistics key={owner+':space-overview'} overview
-            onSpaceLogs={enterprisePagesAllowed ? ()=>openProjectPage(undefined,'call-logs',{scope:'space'}) : undefined}/>
-        ) : ["项目管理","项目概览","项目设置"].includes(activePage) ? (
-          <ProjectWorkspace key={owner+':'+selectedProject+':'+activeRoute} tenant={projectTenant}
-            view={activeRoute==='project-settings' ? 'settings' : 'overview'} initialTab={projectScope.view}
-            projectId={activeRoute==='projects' ? projectScope.id : selectedProject} onOpen={row=>openProjectPage(row,'project-overview')}
-            onList={() => openProjectPage()} onExperience={projectExperience}
-            onNavigate={(row, page, params) => openProjectPage(row, ({route:'project-settings',settings:'project-settings',keys:'api-keys',usage:'usage-statistics',logs:'call-logs'})[page],
-              page === 'route' ? {view:'routes'} : params)}
-            renderRoutes={row=><SmartRouting tenant={projectTenant} projectId={row.id} projectRules view={projectScope.routing}
-              setDirty={setRoutingDirty} navigate={params=>openProjectPage(row,'project-settings',{...params,view:'routes'})}
+            onSpaceLogs={enterpriseSpace ? ()=>openProjectPage(undefined,'call-logs',{scope:'space'}) : undefined}/>
+        ) : activeRoute === 'organization-members' ? (
+          <div className="project-workspace">
+            <FrontPageHeader title="组织及成员" description={market.tenant?.name}/>
+            <OrganizationWorkspace key={owner} tenant={projectTenant} tab={new URLSearchParams(location.search).get('tab')}
+              onTabChange={tab=>openProjectPage(undefined,'organization-members',{tab})}/>
+          </div>
+        ) : workspaceRoute ? (
+          <ProjectWorkspace key={owner+':'+projectList} tenant={projectTenant}
+            view={!personal ? 'detail' : activeRoute==='project-settings' ? 'settings' : 'overview'}
+            initialTab={projectScope.view || (activeRoute==='project-settings' ? 'settings' : 'overview')}
+            listMode={projectList} projectId={detailRoute ? projectScope.id || detailProject?.id : undefined}
+            currentProjectId={selectedProject} onSelect={selectProject}
+            initialAction={projectAction} onActionClose={()=>setProjectAction(null)}
+            onOpen={enterProject} onList={()=>openProjectPage(undefined,projectList)} onListModeChange={page=>openProjectPage(undefined,page)} onExperience={projectExperience}
+            onNavigate={(row,page,params)=>page==='tab' ? openProjectTab(row,params.view,projectList)
+              : page==='route' ? openProjectPage(row,'smart-route',{routeType:'project'}) : openProjectPage(row,page==='usage' ? 'usage-statistics' : 'call-logs',params)}
+            renderRoutes={row=><SmartRouting tenant={projectTenant} projectId={row.id} projectRules embedded view={projectScope.routing}
+              setDirty={setRoutingDirty} navigate={params=>openProjectPage(row,'smart-route',params)}
               saveRoute={(input,revision)=>projectTenant.command('routes',input,revision)} projectCallId={code=>'project@'+code}
               apiUrl={location.origin+'/api/v1/chat/completions'} openOrders={()=>openProjectPage(undefined,'billing')}
               openExperience={route=>openProjectPage(row,'experience',{task:'text',service:route.callId})}
               openKeys={()=>openProjectPage(row,'api-keys')} />} />
+        ) : projectConfigPages.includes(activeRoute) ? (
+          <div className="project-workspace">
+            <FrontPageHeader title={activePage} description={project.name} />
+            {project.canManage && activeRoute === 'project-models' ? <ProjectModels key={project.id} tenant={projectTenant} project={project}
+              onExperience={service=>projectExperience(project,service)} />
+              : project.canManage ? <ProjectSettings key={project.id+':'+activeRoute} tenant={projectTenant} project={project}
+                mode={activeRoute==='project-logs' ? 'logs' : 'audit'} />
+              : <p role="status">只有项目管理员可以查看此配置。</p>}
+          </div>
         ) : activePage === "模型详情" ? (
           <>{market.loading || market.error ? <p className="content" role="status">{market.error || '正在加载模型广场…'}</p> : <MarketModelDetail services={marketServices} selected={selected} onSelect={selectDetailService} onBack={returnToMarket} onExperience={beginExperience} onOrder={service=>projectTenant.canManage ? setMarketAction({kind:'order',service}) : setEntryChoice({kind:'blocked',message:'请联系企业管理员订购此模型服务。'})}/>}
           {marketAction && <MarketAction key={marketAction.kind+marketAction.service.id} action={marketAction} market={market} project={project} close={()=>setMarketAction(null)}/>}</>
         ) : activePage === "智能路由" ? (
           <SmartRouting key={JSON.stringify([owner, selectedProject])}
             tenant={projectTenant} projectId={selectedProject}
-            view={projectScope.routing} setDirty={setRoutingDirty}
+            projectRules={projectScope.projectRules} view={projectScope.routing} setDirty={setRoutingDirty}
             navigate={(params,replace) => openProjectPage(project,'smart-route',params,replace)}
             saveRoute={(input, revision) => projectTenant.command('routes', {...input,projectId:selectedProject}, revision)}
             projectCallId={code => 'project@' + code}
@@ -897,7 +965,11 @@ function PrototypeApp({ version }) {
             openExperience={route => openProjectPage(project, 'experience', { task:'text',service:route.callId })}
             openKeys={id => openProjectPage(projectTenant.projects.find(row => row.id === id), 'api-keys')} />
         ) : activePage === "模型排行" ? (
-          <ModelRanking />
+          <>{marketTabs}<ModelRanking /></>
+        ) : activePage === "工具接入" ? (
+          <Suspense fallback={<p role="status">正在加载工具接入指南…</p>}>
+            <ToolConnection onKeys={()=>navigateTenant('API 密钥')} onModels={()=>openProjectPage(undefined,'model-market')} />
+          </Suspense>
         ) : activePage === "文本生成" ? (
           textCompare ? (
             <ModelComparison key={owner+':'+selectedProject} owner={owner} project={project}
@@ -929,22 +1001,21 @@ function PrototypeApp({ version }) {
           <WorkspaceBilling key={owner} tenant={projectTenant} onOrder={()=>openProjectPage(undefined,'model-order')}/>
         ) : activePage === "模型订购" ? (
           <ModelOrderList versionId={version.id} auth={auth} />
-        ) : activePage === "账号认证" ? (
-          <AuthExperience auth={{ ...auth, route:"account",close:()=>setActivePage("模型广场") }} market={market} accountTitle="账号认证" />
+        ) : activePage === "账户管理" ? (
+          <AuthExperience auth={{ ...auth, route:"account",close:()=>openProjectPage(undefined,'home') }} market={market} accountTitle="账户管理" />
         ) : activePage === "API 密钥" ? (
-          <UnifiedApiKeys key={project?.id || "no-project"} project={project} internal={internal} onProjects={() => openProjectPage()} onModels={() => openProjectPage(project,'project-settings',{view:'models'})} />
-        ) : activePage === "操作记录" && enterprisePagesAllowed && projectTenant.canManage ? (
-          <OperationRecords />
-        ) : activePage === "组织及成员" && enterprisePagesAllowed ? (
-          <OrganizationMembers/>
+          <UnifiedApiKeys key={project?.id || "no-project"} project={project} internal={internal} onProjects={() => openProjectPage()}
+            onModels={project?.canManage ? () => openProjectPage(project,'project-models') : undefined}
+            onAudit={() => openProjectPage(project,'project-audit')} />
         ) : activePage === "调用观测" || activePage === "用量统计" ? (
           <UsageStatistics key={activeRoute+':'+owner+':'+selectedProject} observation={activePage==='调用观测'} projectScope={reportScope}/>
         ) : activePage === "调用日志" ? (
           <CallLogs key={owner+':'+(spaceLogs ? 'space' : reportScope.id+':'+reportScope.requestId)}
-            projectId={spaceLogs ? '' : reportScope.id} requestId={spaceLogs ? '' : reportScope.requestId} space={spaceLogs} />
+            projectId={spaceLogs ? '' : reportScope.id} requestId={spaceLogs ? '' : reportScope.requestId} space={spaceLogs}
+            openRetention={row=>openProjectPage(row,'project-logs')} />
         ) : (
           <div className="content">
-
+            {marketTabs}
                 {(market.loading || market.error) && <p role="status">{market.error || '正在加载模型广场…'}</p>}
             {catalogueToolbar}
             <section className={`catalog catalogue-layout ${compactFilters || !filtersExpanded ? 'catalogue-collapsed' : ''}`}>

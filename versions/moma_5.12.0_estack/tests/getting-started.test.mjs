@@ -40,11 +40,12 @@ test('short guides resolve every section and task link without leaving the guide
   assert.equal(findOperationsGuide(guides, 'unknown-guide'), guides[0]);
 });
 
-test('overview links to the same model operations pages as the sidebar', () => {
+test('overview links to each model operations module and the channel guide documents the alternate entry', () => {
   const source = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE.md', import.meta.url), 'utf8');
   const [overview, ...guides] = parseOperationsGuide(source);
-  const menu = [...sections.find(group => group.id === 'models').items];
-  menu.splice(3, 0, sections.find(group => group.id === 'commerce').items[0]);
+  const menu = sections.find(group => group.id === 'models').items.filter(item => !['channels-new', 'channels-reference'].includes(item.id));
+  assert.match(source, /模型运营 → 渠道管理（新）/);
+  menu.splice(menu.findIndex(item => item.id === 'materials'), 0, sections.find(group => group.id === 'commerce').items[0]);
   const links = overview.blocks.filter(block => block.type === 'table').flatMap(block => block.rows)
     .flatMap(([cell]) => [...cell.matchAll(/^\[([^\]]+)\]\(#\/admin-2\/([^?)]+)(?:\?[^)]+)?\)$/g)]);
   assert.deepEqual(links.map(([, label, page]) => [label, page]), menu.map(item => [item.label, item.children[0][0]]));
@@ -55,7 +56,9 @@ test('guide separates internal use from sales and explains current entry points'
   const source = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE.md', import.meta.url), 'utf8');
   const guides = parseOperationsGuide(source);
   assert.match(JSON.stringify(guides.find(guide => guide.id === 'overview')), /内部使用无需配置售价/);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'services')), /服务操作 → 启用/);
+  const services = JSON.stringify(guides.find(guide => guide.id === 'services'));
+  assert.match(services, /点击当前行的「路由及映射」或「故障转移配置」/);
+  assert.match(services, /更多 → 启动服务/);
   assert.match(JSON.stringify(guides.find(guide => guide.id === 'channels')), /表格中按计费项查看渠道采购价/);
   const sales = JSON.stringify(guides.find(guide => guide.id === 'sales'));
   assert.match(sales, /纯内部使用可以跳过/);

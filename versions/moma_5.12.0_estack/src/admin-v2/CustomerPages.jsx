@@ -4,10 +4,11 @@ import { IconSearch } from '@douyinfe/semi-icons';
 import { PAGE_SIZES, normalizePageSize, FilterReset, FilterToolbar } from '../components/FilterControls';
 import AdminPageHeading from './AdminPageHeading';
 import { Choice } from './ServiceUI';
+import { enterpriseAdmins } from './enterprise';
 import { EnterpriseStatus, EnterpriseTable } from './EnterpriseUI';
 import EnterprisePage from './EnterprisePage';
 import IndividualUsersPage from './IndividualUsersPage';
-import { isManagedCustomerAccount, accountDataSource, accountDataSourceLabel, accountDataSourceOptions } from './account-data-source';
+import { isManagedCustomerAccount, accountDataSource, accountDataSourceOptions } from './account-data-source';
 import { tenantHref } from './access-control.mjs';
 
 export default function CustomerPage(props) {
@@ -26,9 +27,9 @@ export default function CustomerPage(props) {
   const size = normalizePageSize(params.get('size')), page = Math.max(1, Math.min(Number(params.get('page')) || 1, Math.ceil(rows.length / size) || 1));
   const canWrite = !state.commerceReadOnly && !conflict && !state.storageError && ['平台管理员', '运营人员'].includes(state.currentRole);
   return <div className="admin-page-stack admin-enterprise-page">
-    <AdminPageHeading title="客户管理"><Space wrap>
-      <Button disabled={!canWrite} onClick={() => { location.hash = '#/admin-2/tenants?create=personal'; }}>开通个人租户</Button>
-      <Button theme="solid" disabled={!canWrite} onClick={() => { location.hash = '#/admin-2/tenants?create=enterprise'; }}>开通政企租户</Button>
+    <AdminPageHeading title="租户管理"><Space wrap>
+      {state.spacePolicy?.personalEnabled!==false && <Button disabled={!canWrite} onClick={() => { location.hash = '#/admin-2/tenants?create=personal'; }}>开通个人租户</Button>}
+      <Button theme="solid" disabled={!canWrite} onClick={() => { location.hash = '#/admin-2/tenants?create=enterprise'; }}>开通企业租户</Button>
     </Space></AdminPageHeading>
     {(conflict || state.storageError) && <Banner type="warning" closeIcon={null} description={conflict ? '数据已变化，请载入新版本后再操作。' : '数据读取失败，请恢复数据后再操作。'}/>}
     <Card><FilterToolbar>
@@ -38,11 +39,10 @@ export default function CustomerPage(props) {
       <Choice label="数据来源" value={params.get("source") || "all"} options={accountDataSourceOptions} onChange={source => update({ source:source === "all" ? "" : source, page:"" })}/>
       <FilterReset onClick={() => update({ q:'', type:'', status:'', source:'', page:'' })}/>
     </FilterToolbar>
-    <EnterpriseTable columns={['租户名称 / ID', '租户类型', '成员数', '项目数', '数据来源', '状态', '操作']} rows={rows.slice((page - 1) * size, page * size).map(tenant => ({ id:tenant.id, cells:[
+    <EnterpriseTable columns={['租户名称 / ID', '租户类型', '管理员 / 持有人', '服务等级', '状态', '开户时间', '操作']} rows={rows.slice((page - 1) * size, page * size).map(tenant => ({ id:tenant.id, cells:[
       <div className="admin-table-record"><Typography.Text link={{ href:tenantHref(tenant, {}, params) }}>{tenant.name}</Typography.Text><Typography.Text code size="small" type="secondary">{tenant.id}</Typography.Text></div>,
-      tenant.type, tenant.type === '个人' ? 1 : state.memberships.filter(member => member.tenantId === tenant.id).length,
-      state.projects.filter(project => project.tenantId === tenant.id && project.status !== '已删除').length,
-      accountDataSourceLabel(tenant), <EnterpriseStatus value={tenant.status} enterprise/>, <Typography.Text link={{ href:tenantHref(tenant, {}, params) }}>详情</Typography.Text>,
+      tenant.type, state.users.find(user=>user.id===(tenant.type==='个人' ? tenant.ownerId : enterpriseAdmins(state,tenant)[0]?.userId))?.name || '—',
+      tenant.serviceLevel || '—', <EnterpriseStatus value={tenant.status} enterprise/>, tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString('zh-CN',{timeZone:'Asia/Shanghai'}) : '—', <Typography.Text link={{ href:tenantHref(tenant, {}, params) }}>详情</Typography.Text>,
     ] }))} empty="暂无匹配的租户" pagination={{ currentPage:page, pageSize:size, total:rows.length, pageSizeOpts:PAGE_SIZES, showTotal:true, showSizeChanger:true, onPageChange:page => update({ page:String(page) }), onPageSizeChange:size => update({ size:String(size), page:'' }) }}/></Card>
   </div>;
 }

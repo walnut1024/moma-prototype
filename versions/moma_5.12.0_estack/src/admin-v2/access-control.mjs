@@ -1,8 +1,13 @@
 import { projectRole } from '../project-access.mjs';
 
+export function adminProjectHref(filters = {}) {
+  const params = new URLSearchParams(filters);
+  return '#/admin-2/projects' + (params.size ? '?' + params : '');
+}
+
 export function tenantHref(tenant, patch = {}, filters) {
   const params = new URLSearchParams(filters);
-  ['enterprise', 'personal', 'user', 'tab', 'project', 'create'].forEach(key => params.delete(key));
+  ['enterprise','personal','user','tab','project','create','organizationView'].forEach(key => params.delete(key));
   params.set(tenant.type === '个人' ? 'personal' : 'enterprise', tenant.type === '个人' ? tenant.ownerId : tenant.id);
   for (const [key, value] of Object.entries(patch)) params.set(key, value);
   return '#/admin-2/tenants?' + params;

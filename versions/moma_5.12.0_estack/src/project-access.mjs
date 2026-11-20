@@ -1,6 +1,8 @@
 import { customerProject, personalDefaultProject } from './personal-project.mjs';
 export const PROJECT_ADMIN = '项目管理员';
 export const PROJECT_MEMBER = '项目成员';
+export const projectRoleLabel = role => role === PROJECT_MEMBER ? '普通成员' : role;
+export const tenantProjectAdmin = member => ['租户管理员', '企业管理员'].includes(member?.role);
 
 export function activeProjectMembers(state, tenantId) {
   const users = new Map(state.users.filter(row => row.status === '正常').map(row => [row.id, row]));
@@ -40,7 +42,7 @@ export function projectAccess(state, identity, link) {
   const member = state.memberships.find(row => row.id === link.backendMembershipId);
   const personal = identity.spaceId === 'personal';
   const defaultProject = personal ? personalDefaultProject(state, identity.tenantId) : null;
-  const managesSpace = identity.spaceId === 'personal' || ['租户管理员', '企业管理员'].includes(member?.role);
+  const managesSpace = link.systemAdministrator === true || identity.spaceId === 'personal' || tenantProjectAdmin(member);
   const projects = state.projects.flatMap(project => {
     if (project.tenantId !== identity.tenantId || personal && project.id !== defaultProject.id) return [];
     const role = projectRole(project, member);
@@ -50,7 +52,8 @@ export function projectAccess(state, identity, link) {
       canEdit: project.status === '正常' && canManage }];
   });
   return {
-    canCreate: !personal && (managesSpace || member?.canCreateProjects === true),
+    managesSpace,
+    canCreate: !personal && managesSpace,
     projects,
   };
 }

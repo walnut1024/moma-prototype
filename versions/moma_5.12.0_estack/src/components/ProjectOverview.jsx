@@ -5,6 +5,7 @@ import { shanghaiDate } from '../call-log-data.mjs';
 import { bucketLabel } from '../usage-data.mjs';
 import { tenantUsageReport, usageMoney, usageRanking, usageSuccessRate, UNASSIGNED, USAGE_OVERVIEW } from '../tenant-usage-report.mjs';
 import { experienceKeyId, projectModelEnabled } from '../project-access.mjs';
+import { activeProjectSpendBudget } from '../project-token-budget.mjs';
 import { projectMoney, projectTime } from './ProjectConfiguration';
 
 const DAY = 86_400_000;
@@ -19,7 +20,7 @@ function change(value, previous, points = false) {
 }
 
 export function ProjectBudgetNotice({ project, spend }) {
-  const budget=project?.spendBudget;
+  const budget=activeProjectSpendBudget(project);
   if (!budget?.amountMicros || !spend) return null;
   const percentUsed=spend.spent/budget.amountMicros*100;
   if (percentUsed < budget.warnAt) return null;

@@ -9,16 +9,18 @@ export const sections = [
   { id: "analytics", workspace: "operations", title: "运营分析", items: [
     { id: "usage", label: "用量数据", children: [["usage-analysis", "用量数据"]] },
     { id: "users-analysis", label: "用户数据", children: [["user-analysis", "用户数据"]] },
+    { id: "customers-analysis", label: "客户数据", children: [["customer-analysis", "客户数据"]] },
   ]},
   { id: "models", workspace: "operations", title: "模型运营", home: "listing?perspective=models", items: [
     { id: "channels", label: "渠道管理", children: [["providers", "渠道管理"]] },
+    { id: "channels-new", label: "渠道管理（新）", children: [["providers-new", "渠道管理（新）"]] },
+    { id: "channels-reference", label: "渠道管理（new）", children: [["providers-reference", "渠道管理（new）"]] },
     { id: "warehouse", label: "模型服务", children: [["listing", "模型服务"]] },
     { id: "market", label: "模型广场", children: [["model-market", "模型广场"]] },
     { id: "materials", label: "模型资料", children: [["model-templates", "模型"], ["tariff-dictionary", "计费项"]] },
   ]},
   { id: "commerce", workspace: "operations", title: "商业运营", items: [
     { id: "prices", label: "模型销售", children: [["model-prices", "模型销售"]] },
-    { id: "enterprise", label: "客户管理", children: [["tenants", "客户管理"]] },
     { id: "commerce-orders", label: "订购与账单", children: [["orders", "订购记录"], ["bills", "账单"], ["metering", "消费明细"]] },
     { id: "package-production", label: "套餐管理", children: [["package-production", "套餐管理"], ["package-data", "套餐数据"]] },
     { id: "business-analysis", label: "经营分析", children: [["business-analysis", "经营分析"]] },
@@ -27,7 +29,7 @@ export const sections = [
     { id: "traffic-limits", label: "限流配置", children: [["traffic-limits", "限流配置"]] },
   ]},
   { id: "customers", workspace: "operations", title: "访问控制", items: [
-    { id: "individual", label: "用户管理", children: [["users", "用户管理"]] },
+    { id: "enterprise", label: "租户管理", children: [["tenants", "租户管理"]] },
   ]},
   { id: "runtime", workspace: "maintenance", title: "运行分析", items: [
     { id: "calls", label: "调用数据", children: [["call-analysis", "调用数据"]] },
@@ -56,9 +58,12 @@ export const sections = [
 
 export const pages = {
   ...Object.fromEntries(sections.flatMap(group => group.items.flatMap(item => item.children.map(([id, label]) => [id, { id, label, area: item.id, areaLabel: item.label, group: group.title, groupId: group.id }])))),
+  'organization-members': {id:'organization-members',label:'组织及成员',area:'enterprise',areaLabel:'租户管理',group:'访问控制',groupId:'customers'},
+  projects: {id:'projects',label:'项目管理',area:'enterprise',areaLabel:'租户管理',group:'访问控制',groupId:'customers'},
   ...Object.fromEntries(monitoringLinks.map(([id, label]) => [id, { id, label, area: 'monitoring', areaLabel: '服务监控', group: '网关管理', groupId: 'gateway' }])),
   ...Object.fromEntries([['goods', '商品与套餐'], ['announcements', '公告与服务通知'], ['ledger', '账户与额度流水'], ['settlement', '服务商对账与结算'], ['adjustments', '退款与调账']].map(([id, label]) => [id, { id, label, area: 'commerce-orders', areaLabel: '订购与账单', group: '商业运营', groupId: 'commerce' }])),
   'provider-materials': { id: 'provider-materials', label: '服务商', area: 'materials', areaLabel: '模型资料', group: '模型运营', groupId: 'models' },
+  'customer-analysis-detail': { id: 'customer-analysis-detail', label: '客户详情', area: 'customers-analysis', areaLabel: '客户数据', group: '运营分析', groupId: 'analytics' },
   'customer-usage-detail': { id: 'customer-usage-detail', label: '客户详情', area: 'users-analysis', areaLabel: '用户数据', group: '运营分析', groupId: 'analytics' },
 };
 
@@ -75,8 +80,27 @@ export function pageWorkspace(id) {
 
 export const commercialPage = id => pages[id]?.groupId === 'commerce';
 
+export const adminSections = sections.map(group => group.id==='commerce'
+  ? { ...group, items:group.items.filter(item=>!['commerce-orders','business-analysis'].includes(item.id)) }
+  : group);
+
+export function isOrganizationPage(id, internalSite) {
+  return internalSite && ['tenants','customer-usage-detail'].includes(id);
+}
+
+export function providerManagementPerspective(page, params) {
+  const perspective = params.get('perspective');
+  if (perspective === 'models') return 'models';
+  if (perspective === 'suppliers' || params.has('provider')) return 'suppliers';
+  return page === 'providers-new' ? 'models' : 'suppliers';
+}
+
 export function canAccessPage(role, id, license) {
-  if (license && id !== 'tenants' && commercialPage(id) && !license.commercial) return false;
+  if (license && !license.commercial && (
+    commercialPage(id) && !['tenants','projects'].includes(id) ||
+    ['customer-analysis','customer-analysis-detail'].includes(id)
+  )) return false;
+  if (['organization-members','projects'].includes(id) && role !== '平台管理员') return false;
   if (!Object.hasOwn(pages, id) || (id === 'site-configuration' && !PRIVATE_SITE)) return false;
   return pages[id].groupId === 'platform' ? role === '平台管理员' : availableWorkspaces(role).includes(pageWorkspace(id));
 }

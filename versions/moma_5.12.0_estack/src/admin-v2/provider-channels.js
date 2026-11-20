@@ -58,7 +58,7 @@ export function channelInterfaceIssue(provider, channel) {
   if (channel.endpoint.interfaceType) {
     const probe = channel.probe || channelProbe(channel);
     if (channel.endpoint.interfaceType === 'openai' && type === 'audio' && !probe) return '';
-    try { return modelApiIssue(type, modelTaskUrl(channel.endpoint, type, { probe })); }
+    try { return modelApiIssue(type, modelTaskUrl(channel.endpoint, type, { probe, upstreamModelId: channel.upstreamModelId })); }
     catch (error) { return error.message; }
   }
   return channelAddresses(provider, channel).map(address => modelApiIssue(type, address.baseUrl)).find(Boolean) || '';

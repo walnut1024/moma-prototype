@@ -47,6 +47,9 @@ test('an authenticated system demo user receives distinct sessions and samples s
   assert.notEqual(admin.split('=')[1],market.split('=')[1]);
   assert.equal((await request('auth/me',{cookie:market})).status,401);
   assert.equal((await request('market/workspace',{cookie:admin})).status,401);
+  assert.equal((await request('auth/me',{cookie:admin})).data.account.selectedEnterprise,undefined);
+  assert.deepEqual((await request('auth/me',{cookie:admin+'; '+market})).data.account.selectedEnterprise,
+    {id:tenant.id,name:tenant.name});
   const front=await request('market/workspace',{cookie:market});
   assert.equal(front.status,200);
   assert.equal(front.data.identity.tenantId,'zqzh');
@@ -64,7 +67,52 @@ test('an authenticated system demo user receives distinct sessions and samples s
   assert.deepEqual(userBusinessData(state,[]).users.map(row=>row.id).sort(),state.accountUserIds);
   assert.equal(state.memberships.filter(row=>row.userId==='front-demo-admin-001').length,1);
   assert.equal(state.users.filter(row=>row.login==='admin-001').length,1);
-  await local.db.prepare("UPDATE admin_accounts SET enabled=0 WHERE login_name='admin-001'").run();
+
+  const second = {...tenant,id:'enterprise-two',name:'第二企业'};
+  const memberOnly = {...tenant,id:'member-only',name:'仅普通成员企业'};
+  const otherEnterprise = {...tenant,id:'other-enterprise',name:'其他企业'};
+  const personal = {...tenant,id:'personal-space',type:'个人',name:'个人空间'};
+  const secondProject = {...project,id:resourceId('project'),tenantId:second.id,name:'第二企业项目'};
+  const references=JSON.parse(await local.db.prepare('SELECT reference_json FROM model_workspace WHERE id=1').first('reference_json'));
+  references.tenants.push(second,memberOnly,otherEnterprise,personal);
+  references.projects.push(secondProject);
+  references.memberships.push(
+    {id:'member-second',tenantId:second.id,userId:tenant.ownerId,status:'正常',role:'企业管理员'},
+    {id:'member-read',tenantId:memberOnly.id,userId:tenant.ownerId,status:'正常',role:'普通成员'},
+  );
+  await local.db.prepare('UPDATE model_workspace SET reference_json=? WHERE id=1').bind(JSON.stringify(references)).run();
+
+  const chooser=await signIn('admin-001');
+  assert.equal(chooser.status,200);
+  assert.equal(chooser.data.selectEnterprise,true);
+  assert.deepEqual(chooser.data.spaces.map(space=>space.id).sort(),[second.id,tenant.id].sort());
+  assert.deepEqual(chooser.cookies,[]);
+  const pickSpace=tenantId=>request('auth/sign-in',{body:{identifier:'admin-001',accessCode,tenantId}});
+  for(const blocked of [memberOnly.id,otherEnterprise.id,personal.id]) assert.equal((await pickSpace(blocked)).status,403);
+  assert.equal((await request('market/switch',{body:{tenantId:second.id},cookie:market})).status,403);
+  const signOut=await request('auth/logout',{body:{},cookie:admin+'; '+market});
+  assert.equal(signOut.status,200);
+  assert.equal((await request('auth/me',{cookie:admin})).status,401);
   assert.equal((await request('market/workspace',{cookie:market})).status,401);
+
+  const selected=await pickSpace(second.id);
+  assert.equal(selected.status,200);
+  const [nextAdmin,nextMarket]=selected.cookies;
+  const nextPair=nextAdmin+'; '+nextMarket;
+  const me=await request('auth/me',{cookie:nextPair});
+  assert.deepEqual(me.data.account.selectedEnterprise,{id:second.id,name:second.name});
+  assert.equal((await request('auth/me',{cookie:other.cookies[0]+'; '+nextMarket})).data.account.selectedEnterprise,undefined);
+  const scopedWorkspace=await request('market/workspace',{cookie:nextMarket});
+  assert.equal(scopedWorkspace.status,200);
+  assert.deepEqual(scopedWorkspace.data.projects.map(row=>row.id),[secondProject.id]);
+  assert.deepEqual(scopedWorkspace.data.accountProjects.map(row=>row.id),[secondProject.id]);
+
+  references.memberships.find(row=>row.id==='member-second').status='停用';
+  await local.db.prepare('UPDATE model_workspace SET reference_json=? WHERE id=1').bind(JSON.stringify(references)).run();
+  assert.equal((await request('auth/me',{cookie:nextPair})).data.account.selectedEnterprise,undefined);
+  assert.equal((await request('market/workspace',{cookie:nextMarket})).status,401);
+  assert.equal((await pickSpace(second.id)).status,403);
+  await local.db.prepare("UPDATE admin_accounts SET enabled=0 WHERE login_name='admin-001'").run();
+  assert.equal((await request('auth/me',{cookie:nextAdmin})).status,401);
   assert.equal((await signIn('admin-001')).status,401);
 });

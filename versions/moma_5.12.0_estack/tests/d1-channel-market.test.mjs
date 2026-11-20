@@ -10,6 +10,7 @@ import { billingPeriod } from '../src/admin-v2/mock-billing.js';
 import { domainModelWorkspace } from '../src/mock/model-fields.js';
 import { offerKey } from '../src/service-access.mjs';
 import { materialBase } from '../src/admin-v2/model-operations.js';
+import { classificationIndex, modelClassification, modelClassificationFor } from '../src/admin-v2/model-classification.js';
 import { BUILTIN_MODEL_CATALOGUE } from '../src/mock/builtin-model-catalogue.js';
 import { marketModels } from '../src/service-directory.mjs';
 import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
@@ -174,8 +175,17 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert(offers.results.every(row=>row.listing_stage==='gray' && row.active_sale_price_id && row.active_route_id && row.active_publication_id));
     let customer=await login('/market/login',a), other=await login('/market/login',b);
     const catalogue=async(cookie)=>{const result=await request('/market/catalogue',{cookie});assert.equal(result.status,200,JSON.stringify(result.data));return result.data.services;};
+    const { author, series } = modelClassificationFor(classificationIndex(modelClassification(state)), material);
+    assert.ok(author);
+    await command('modelClassificationSave', { ...author, kind: 'authors', name: '智谱（目录标准名称）' });
+    const savedAuthor = state.modelData.modelClassification.authors.find(row => row.id === author.id);
+    assert.equal(savedAuthor.name, '智谱（目录标准名称）');
+    assert.ok(savedAuthor.formerNames.includes(author.name));
+    await command('modelClassificationSave', { kind: 'authors', name: author.name, aliases: [], active: true }, undefined, 422);
     const services=await catalogue(customer);
+
     assert.deepEqual(marketModels(services).map(row=>[row.name,row.services.length,[...row.providers.values()]]),[['GLM-5.3',3,['甲云','乙云']]]);
+    assert.ok(services.every(row => row.classification.authorId === author.id && row.classification.author === savedAuthor.name && row.classification.seriesId === series?.id));
     assert.deepEqual(services.map(row=>row.provider).sort(),['乙云（自营）','甲云（自营）','甲云（转售）'].sort());
     for (const source of sources) {
       const { providerId, providerName }=services.find(row=>row.callId===source.callId);
@@ -760,6 +770,49 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal((await invoke()).data.error.code,'enterprise_quota_exhausted');
     assert.equal((await bearer(raw,third.callId)).data.error.code,'enterprise_quota_exhausted');
     assert.equal(await monthly(a),beforeQuota);
+
+    const tenantSettings = (operation,data)=>apply({type:'tenantServiceSettings',tenantId:a,operation,
+      ids:{grant:crypto.randomUUID(),ledger:crypto.randomUUID()},data});
+    assert.equal((await tenantSettings('level',{level:'L6'})).status,422);
+    assert.equal((await tenantSettings('level',{level:'L5'})).status,200);
+    assert.equal((await application()).tenants.find(row=>row.id===a).serviceLevel,'L5');
+    const alreadyUsed = await used();
+    const expiry = new Date(Date.now()+86_400_000).toISOString();
+    assert.equal((await tenantSettings('quota',{enabled:true,limit:1,expiresAt:expiry,reason:'不得低于已用'})).status,422);
+    const enabled = await tenantSettings('quota',{enabled:true,limit:alreadyUsed+10000,expiresAt:expiry,reason:'启用租户预付额度'});
+    assert.equal(enabled.status,200,JSON.stringify(enabled.data));
+    assert.equal(await used(),alreadyUsed);
+    assert.equal((await invoke()).status,200);
+    const quotaMetered = await bearer(raw,third.callId);
+    assert.equal(quotaMetered.status,200,JSON.stringify(quotaMetered.data));
+    assert(await used()>=alreadyUsed+quotaMetered.data.usage.total_tokens);
+    const ref = JSON.parse(await local.db.prepare('SELECT reference_json FROM model_workspace WHERE id=1').first('reference_json'));
+    ref.grants.find(row=>row.subjectType==='tenant' && row.subjectId===a).expiresAt=new Date(Date.now()-1000).toISOString();
+    await local.db.prepare('UPDATE model_workspace SET reference_json=? WHERE id=1').bind(JSON.stringify(ref)).run();
+    assert.equal((await invoke()).data.error.code,'tenant_quota_expired');
+    assert.equal((await bearer(raw,third.callId)).data.error.code,'tenant_quota_expired');
+    const usedBeforeDisable = await used();
+    assert.equal((await tenantSettings('quota',{enabled:false,reason:'停用预付费配额'})).status,200);
+    assert.equal((await invoke()).status,200);
+    assert.equal(await used(),usedBeforeDisable);
+    assert.equal((await tenantSettings('open-models',{modelIds:[modelId]})).status,422,'already open');
+    assert.equal((await tenantSettings('model-limits',{modelId,rpm:0,tpm:null})).status,422);
+    assert.equal((await tenantSettings('model-limits',{modelId,rpm:1,tpm:null})).status,200);
+    assert.equal((await invoke()).data.error.code,'tenant_model_rate_limit_exceeded');
+    assert.equal((await bearer(raw,third.callId)).data.error.code,'tenant_model_rate_limit_exceeded');
+    assert.equal((await tenantSettings('model-limits',{modelId,rpm:null,tpm:1})).status,200);
+    assert.equal((await invoke()).data.error.code,'tenant_model_rate_limit_exceeded');
+    assert.equal((await bearer(raw,third.callId)).data.error.code,'tenant_model_rate_limit_exceeded');
+    assert.equal((await tenantSettings('remove-model',{modelId})).status,200);
+    assert.equal((await invoke()).status,403);
+    assert.equal((await bearer(raw,third.callId)).status,403);
+    assert.equal((await tenantSettings('model-limits',{modelId,rpm:null,tpm:null})).status,422);
+    assert.equal((await tenantSettings('open-models',{modelIds:[modelId,'missing-model']})).status,422);
+    assert.deepEqual((await application()).tenants.find(row=>row.id===a).modelRules,[]);
+    assert.equal((await tenantSettings('open-models',{modelIds:[modelId]})).status,200);
+    assert.deepEqual((await application()).tenants.find(row=>row.id===a).modelRules,[{modelId,rpm:null,tpm:null}]);
+    assert.equal((await bearer(raw,third.callId)).status,200);
+    assert.equal((await invoke()).status,200);
     assert.equal((await configure('status',{status:'停用'})).status,200);
     assert.equal((await invoke()).data.error.code,'project_unavailable');
     assert.equal((await configure('status',{status:'已删除'})).status,200);
@@ -810,6 +863,17 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     }
     assert.deepEqual(workspaceInternal.report.bills,[]);
     assert.equal(await monthly(a),spendBefore);
+    assert.equal((await tenantWrite(customer,a,'projectUpdate',{projectId:internalProjectId,type:'tokenBudget',
+      input:{limit:'0.000001',period:'total'}})).status,200);
+    const rejectedExperience=await call({...internalRequest,requestId:crypto.randomUUID()});
+    const rejectedAPI=await bearer('sk-'+'a'.repeat(32),third.callId);
+    for (const rejected of [rejectedExperience,rejectedAPI]) {
+      assert.equal(rejected.status,402);
+      assert.equal(rejected.data.error.code,'project_token_budget_exceeded');
+    }
+    assert.equal((await workspace(customer)).projectBudgets[internalProjectId].tokens,
+      [webId,apiId].map(id=>workspaceInternal.report.records.find(row=>row.requestId===id).usage)
+        .reduce((total,usage)=>total + (usage.input ?? 0) + (usage.output ?? 0),0));
     const extReport=(await workspace(other)).report;
     assert.equal(extReport.records.find(row=>row.requestId===paidId).billPeriod,billingPeriod());
     assert.equal(extReport.bills.find(row=>row.period===billingPeriod()).projectBreakdown[0].amountMicros,otherMonthly);

@@ -65,7 +65,7 @@ export async function registerCustomer(db,{phone,challengeId,code,password,conse
   const stamp={status:'正常',createdAt:now,updatedAt:now};
   const user={...stamp,id:userId,login:username,phone:username,name,nickname:name,initialized:true,registeredAt:now};
   const tenant={...stamp,id:tenantId,name,type:'个人',ownerId:userId,source:'手机号注册'};
-  const project={...stamp,id:resourceId('project'),tenantId,ownerId:userId,name:'默认项目',budget:0};
+  const project={...stamp,id:resourceId('project'),tenantId,ownerId:userId,name:'默认项目',createdBy:name,budget:0};
   tenant.defaultProjectId=project.id;
   const [written]=await db.batch([
     db.prepare(`UPDATE model_workspace SET reference_json=json_insert(reference_json,
@@ -146,13 +146,14 @@ export async function customerIdentity(db, value, field = 'id', tenantId = null,
   const savedPolicy=JSON.parse(row.space_policy || 'null');
   const policy=license?.managed ? { ...savedPolicy, operatingMode:license.commercial ? 'factory' : 'internal' } : savedPolicy;
   const spaces=JSON.parse(row.tenants_json).filter(activeCustomer).flatMap(tenant=>{
-    if (user.id===dualDemoUserId && tenant.id!==dualDemoTenantId) return [];
     const membership=memberships.find(item=>item.tenantId===tenant.id);
+    if (user.id===dualDemoUserId && (tenant.type==='个人' || !['企业管理员','租户管理员'].includes(membership?.role))) return [];
     if(!allowsSpace(policy,tenant) || (tenant.type==='个人' ? tenant.ownerId!==user.id : !membership))return [];
     return [{id:tenant.id,name:tenant.name,type:tenant.type,role:tenant.type==='个人'?'个人用户':membership.role,
       ...(internalSpace(policy,tenant) && {internal:true})}];
   });
-  return {user,spaces,passwordManaged:Boolean(row.password_managed),commitSeq:row.commit_seq,grant:JSON.parse(row.grant_json || 'null')};
+  return {user,spaces,passwordManaged:Boolean(row.password_managed),commitSeq:row.commit_seq,grant:JSON.parse(row.grant_json || 'null'),
+    modelRules:JSON.parse(row.tenants_json).find(tenant=>tenant.id===tenantId)?.modelRules};
 }
 
 export async function marketSession(db, request, license) {
@@ -163,7 +164,9 @@ export async function marketSession(db, request, license) {
   if(!session?.user_id)return null;
   const identity=await customerIdentity(db,session.user_id,'id',session.tenant_id,license);
   const tenant=identity?.spaces.find(space=>space.id===session.tenant_id);
-  return tenant ? {...identity,tenant:{...tenant,grant:identity.grant},hash} : null;
+  if (!tenant) return null;
+  return {...identity,spaces:identity.user.id===dualDemoUserId ? [tenant] : identity.spaces,
+    tenant:{...tenant,grant:identity.grant,modelRules:identity.modelRules},hash};
 }
 
 export async function createMarketSession(db, userId, tenantId, credentialDigest = null) {

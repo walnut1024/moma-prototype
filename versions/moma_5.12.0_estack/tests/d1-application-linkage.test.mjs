@@ -266,6 +266,8 @@ test('the preset administrator and customers share D1 while their workspaces sta
     assert.deepEqual(dual.data.spaces.map(row=>row.id).sort(),[personalOpen.ids.tenant,ids.tenant].sort());
     const personalWork=(await request('market/workspace',{cookie:dual.cookie})).data;
     assert.deepEqual(personalWork.projects.map(row=>[row.id,row.name]),[[personalOpen.ids.project,'默认项目']]);
+    const afterPersonalOpen=(await request('application',{cookie:admin.cookie})).data;
+    assert.equal(afterPersonalOpen.projects.find(row=>row.id===personalOpen.ids.project).createdBy,admin.data.account.name);
     assert.deepEqual(personalWork.organization.departments,[]);
     assert.equal((await request('market/switch',{cookie:dual.cookie,body:{tenantId:ids.tenant}})).status,200);
     assert.equal((await request('market/workspace',{cookie:dual.cookie})).data.projects.length,0);

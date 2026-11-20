@@ -241,11 +241,35 @@ export function routePreview(state, service, input, failedSupplyId = '') {
   return selected.map(row=>({...row,channel:channels.find(item=>item.id===row.supplyId),share:unavailable.has(row.supplyId)?0:shares.get(row.supplyId)||0,failed:unavailable.has(row.supplyId)}));
 }
 
+export function routeDirectoryOrder(state, service, groupId) {
+  const route = serviceRoute(state, service.id);
+  const config = route?.draft || activeRouteVersion(route)?.config;
+  const group = config?.groups?.find(row => row.id === groupId);
+  if (!group) throw Error('请选择当前服务的路由分组');
+  const routeMembers = new Map(routingChannels(state, service).map(row => [row.id, row]));
+  const rows = config.channels.filter(row => row.groupId === group.id && row.enabled && !row.backup)
+    .sort((left, right) => left.priority - right.priority).map(row => ({ ...row, channel: routeMembers.get(row.supplyId) }));
+  return { rows, group, config, version: route.activeVersion, signature: JSON.stringify([route.id, route.activeVersion,
+    route.draftUpdatedAt, route.draft || null, rows.map(row => [row.supplyId, row.channel?.endpointId, row.channel?.channelUpdatedAt])]) };
+}
+
 export function routingTransaction(state, { operation, data = {} }) {
   const service = routingServices(state).find(item => item.id === data.serviceId);
   if (!service) throw new Error('服务引用已不存在，请返回列表重新选择');
   const route = serviceRoute(state, service.id), current = route?.activeVersion || 0;
   if (data.expectedVersion !== current) throw new Error('生效路由已变化，请重新载入并核对');
+  if (operation === 'serviceRouteDirectoryOrder') {
+    const plan = routeDirectoryOrder(state, service, data.groupId);
+    if (plan.signature !== data.expectedSignature) throw Error('路由草稿或渠道范围已变化，请重新核对');
+    const ids = plan.rows.map(row => row.supplyId), { order, weights } = data;
+    if (!ids.length || plan.rows.some(row => !row.channel) || !Array.isArray(order) || order.length !== ids.length ||
+      new Set(order).size !== ids.length || order.some(id => !ids.includes(id)) || !weights || typeof weights !== 'object' || Array.isArray(weights) ||
+      Object.keys(weights).length !== ids.length || ids.some(id => !Object.hasOwn(weights, id)) || data.confirmed !== true) throw Error('请确认同一分组中完整且有效的所选渠道');
+    const changedOrder = ids.some((id, index) => order[index] !== id);
+    const config = { ...plan.config, channels: plan.config.channels.map(row => ids.includes(row.supplyId)
+      ? { ...row, weight: weights[row.supplyId], priority: changedOrder ? order.indexOf(row.supplyId) + 1 : row.priority } : row) };
+    return routingTransaction(state, { operation: 'serviceRouteDraft', data: { ...data, config } });
+  }
   const id = route?.id || resourceId('service-route');
   let changes, label;
   if (operation==='serviceRouteStop') {

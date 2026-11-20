@@ -1,8 +1,6 @@
-import {useTenantData} from './useTenantData';
 import { useState } from 'react';
 import { Banner, Button, DatePicker, Empty, Input, Table } from '@douyinfe/semi-ui';
-import { Download, History, RefreshCw } from 'lucide-react';
-import FrontPageHeader from './components/FrontPageHeader';
+import { Download, RefreshCw } from 'lucide-react';
 import { projectTime } from './components/ProjectConfiguration';
 import { AdminPagination } from './admin-v2/AdminTable';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from './components/FilterControls';
@@ -23,8 +21,7 @@ const dateText = date => {
   return `${year}-${month}-${day}`;
 };
 
-export default function OperationRecords() {
-  const tenant=useTenantData();
+export default function OperationRecords({ tenant }) {
   const data={records:tenant.organization.audit,error:tenant.error};
   const [filters, setFilters] = useState({ query: '', start: '', end: '' });
   const [page, setPage] = useState(1);
@@ -46,7 +43,6 @@ export default function OperationRecords() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   return <div className="operation-page">
-    <FrontPageHeader title="操作记录" description="查看组织架构、成员归属与管理权限的变更记录，保留最近 200 条" icon={History} />
     <section className="operation-panel" aria-label="操作记录列表">
       <div className="operation-filters">
         <Input className="operation-search" aria-label="搜索操作记录" placeholder="搜索操作人、操作内容" value={filters.query} onChange={query => update({ query })} showClear />

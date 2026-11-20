@@ -3,13 +3,14 @@ import { isResourceId, resourceId } from '../src/resource-id.mjs';
 import { activeTenantVersion, changeTenantRoute, isTenantRouteCall, keyTenantRoute, visibleProjectRoutes } from '../src/tenant-routing.mjs';
 import { initialApplicationData } from '../src/mock/application-data.js';
 import { billingPeriod } from '../src/admin-v2/mock-billing.js';
+import { tenantServiceTransaction } from '../src/admin-v2/tenant-service-settings.mjs';
 import { canMutate, commitAdminState } from '../src/admin-v2/state-transaction.js';
 import { orderActivationCommand, simulateRequest, applyAdjustment } from '../src/admin-v2/domain.js';
-import { organizationProjection, tenantOrganizationChanges, projectRouting, projectRouteChanges } from '../src/tenant-data.mjs';
-import { activeProjectMembers, experienceKeyId, projectAccess, projectRole } from '../src/project-access.mjs';
+import { organizationManagementScope, scopedOrganization, tenantOrganizationChanges, projectRouting, projectRouteChanges } from '../src/tenant-data.mjs';
+import { activeProjectMembers, experienceKeyId, projectAccess, projectRole, PROJECT_ADMIN, tenantProjectAdmin } from '../src/project-access.mjs';
 import { changeProject, newProject } from '../src/project-configuration.mjs';
 import { changeProjectKeys } from '../src/project-keys.mjs';
-import { diagnosticCall, mockTextUsage, projectCallErrors, projectSpend, requestCharge } from '../src/project-call.mjs';
+import { diagnosticCall, mockTextUsage, projectBudgetUsage, projectCallErrors, projectSpend, requestCharge } from '../src/project-call.mjs';
 import { mergeProjectFacts, projectChargeWrites, projectFactWrite, readProjectFact, readProjectFacts } from './project-facts.js';
 import { loadModelWorkspace, modelChanges } from './model-repository.js';
 import { marketCatalogue } from './market.js';
@@ -88,15 +89,15 @@ async function applicationState(db, actor) {
   return { row, reference, state };
 }
 
-export async function dualDemoIdentity(db) {
+export async function dualDemoIdentity(db, license) {
   const tenantId=dualDemoTenantId, memberId='member-'+dualDemoUserId;
   const row=await referenceRow(db);
   const state=JSON.parse(row.reference_json);
-  if (!state.tenants.some(tenant=>tenant.id===tenantId && tenant.demo===true &&
-      tenant.type==='企业' && activeCustomer(tenant))) return null;
   const user=state.users.find(item=>item.id===dualDemoUserId);
   const member=state.memberships.find(item=>item.id===memberId);
   if (!user && !member) {
+    if (!state.tenants.some(tenant=>tenant.id===tenantId && tenant.demo===true &&
+        tenant.type==='企业' && activeCustomer(tenant))) return null;
     const at=new Date().toISOString();
     state.users.push({id:dualDemoUserId,login:dualDemoAdminLogin,name:'系统管理员',
       status:'正常',initialized:true,source:'内置演示',createdAt:at});
@@ -110,7 +111,7 @@ export async function dualDemoIdentity(db) {
     ]);
     if (!written.meta.changes) conflict();
   }
-  return customerIdentity(db,dualDemoUserId);
+  return customerIdentity(db,dualDemoUserId,'id',null,license);
 }
 
 async function marketFacts(db, tenantId, { includeOrders = true } = {}) {
@@ -226,7 +227,7 @@ export async function applicationBootstrap(db, actor, configured = []) {
   for (const membership of state.memberships) {
     const tenant=activeTenants.get(membership.tenantId);
     if (membership.status==='正常' && tenant && tenant.type!=='个人' &&
-        (membership.userId!==dualDemoUserId || tenant.id===dualDemoTenantId)) activeUsers.add(membership.userId);
+        (membership.userId!==dualDemoUserId || ['企业管理员','租户管理员'].includes(membership.role))) activeUsers.add(membership.userId);
   }
   return { ...view,apiKeys:state.apiKeys.map(safeKey),identityEvents:[...logins,...state.identityEvents],
     adminLoginIds:activeAdmins.map(admin=>admin.id),
@@ -435,7 +436,20 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins,
       invocationFact={...result.request,requestHash};
       next={...state,revision:result.state.revision,audits:result.state.audits};
     } else {
-      const command = adminAction(state, actor, action);
+      let command;
+      if (action.type==='tenantServiceSettings') {
+        if (actor.role!=='平台管理员') issue(403,'FORBIDDEN','只有系统管理员可以配置租户服务');
+        if (!validId(action.tenantId) || Object.values(action.ids || {}).some(id=>!validId(id))) issue(400,'INVALID_INPUT','租户或配置标识无效');
+        const tenant = state.tenants.find(row=>row.id===action.tenantId);
+        if (!tenant || !allowsSpace(policy,tenant)) issue(403,'FORBIDDEN','目标租户不在当前使用范围内');
+        if (action.operation==='quota' && (!license?.commerceWritable || internalSpace(policy,tenant))) {
+          issue(403,'LICENSE_REQUIRED','预付费配额仅开放给商业租户');
+        }
+        const result=tenantServiceTransaction(state,action);
+        command={type:'batch',objectId:action.tenantId,...result};
+      } else {
+        command = adminAction(state, actor, action);
+      }
       if (policy.operatingMode==='internal' && (action.type==='individual' || action.type==='enterprise' &&
           (action.operation==='create' || action.tenantId!==policy.internalTenantId))) {
         issue(403,'INTERNAL_SPACE','企业内用站点仅管理本企业');
@@ -456,6 +470,7 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins,
         initialCredential=db.prepare('INSERT INTO customer_credentials(user_id,salt,digest) VALUES(?,?,?)')
           .bind(action.ids.user,salt,proof);
       }
+      if (openingPersonal) command = {...command,createdBy:actor.name};
       next = command ? commitAdminState(state, command, actor.role) : state;
       if (initialCredential) {
         const user=next.users.find(item=>item.id===action.ids.user);
@@ -511,11 +526,16 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins,
       ...(projectAudit ? {projectAudit} : {}) }, 'application');
 }
 
-function tenantContext(state, {tenant,user:sessionUser}) {
+function tenantContext(state, {tenant,user:sessionUser,admin}) {
   const row = state.tenants.find(item => item.id === tenant.id);
   const user = state.users.find(item => item.id === sessionUser.id && item.status === '正常');
   const membership = state.memberships.find(item => item.userId === user?.id && item.tenantId === tenant.id && item.status === '正常');
   const personal = row?.type === '个人';
+  if (admin && activeCustomer(row)) {
+    return { state, canManage:true, link:{ systemAdministrator:true },
+      identity:{ userId:admin.id, tenantId:row.id, tenantName:row.name, name:admin.name,
+        spaceId:personal ? 'personal' : row.id, key:'admin:' + admin.id + ':' + row.id } };
+  }
   if(!activeCustomer(row) || !user || (personal ? row.ownerId!==user.id : !membership))issue(403,'FORBIDDEN','当前账号无权进入该空间');
   const identity = { userId: user.id, tenantId: tenant.id, tenantName:tenant.name, name: membership?.memberName || user.name || tenant.name, spaceId: personal ? 'personal' : tenant.id,
     key: (user?.id || 'tenant') + ':' + tenant.id, generation: state.identityGeneration };
@@ -523,19 +543,36 @@ function tenantContext(state, {tenant,user:sessionUser}) {
     canManage: Boolean(user && (personal || ['企业管理员','租户管理员'].includes(membership?.role))) };
 }
 
+function tenantSessionGuard(session, now) {
+  if (session.admin) {
+    return { sql:`EXISTS(SELECT 1 FROM admin_sessions s JOIN admin_accounts a ON a.id=s.actor_id
+      WHERE s.id=? AND s.actor_id=? AND s.expires_at>? AND s.revoked_at IS NULL AND a.enabled=1 AND a.role='平台管理员')`,
+      values:[session.admin.session_id,session.admin.id,now] };
+  }
+  return { sql:'EXISTS(SELECT 1 FROM market_sessions WHERE token_hash=? AND tenant_id=? AND expires_at>?)',
+    values:[session.hash,session.tenant.id,now] };
+}
+
 export async function issueCustomerInvitation(db,session,membershipId) {
-  if(!['企业管理员','租户管理员'].includes(session.tenant.role))issue(403,'FORBIDDEN','只有企业管理员可以发出邀请');
+  if(!session.admin && !['企业管理员','租户管理员','部门管理员'].includes(session.tenant.role))issue(403,'FORBIDDEN','只有企业管理员可以发出邀请');
   if(!validId(membershipId))issue(400,'INVALID_INPUT','成员标识无效');
+  if (!session.admin && session.tenant.role === '部门管理员') {
+    const {state} = await applicationState(db,{id:session.tenant.id,role:'客户'});
+    const context = tenantContext(state,session);
+    const {members} = scopedOrganization(context);
+    if (!members.some(row => row.id === membershipId && row.role === '普通成员')) issue(403,'FORBIDDEN','成员不在管理范围内');
+  }
   const token=crypto.randomUUID(), now=Date.now(), expiresAt=now+7*86400000;
+  const sessionGuard = tenantSessionGuard(session, now);
   const [written]=await db.batch([
     db.prepare(`INSERT INTO customer_invitations(membership_id,token_hash,tenant_id,user_id,expires_at)
       SELECT ?,?,?,json_extract(m.value,'$.userId'),? FROM model_workspace w,json_each(w.reference_json,'$.memberships') m
       WHERE w.id=1 AND json_extract(m.value,'$.id')=? AND json_extract(m.value,'$.tenantId')=? AND json_extract(m.value,'$.status')='待加入'
         AND (SELECT commit_seq FROM db_state WHERE id=1)=?
-        AND EXISTS (SELECT 1 FROM market_sessions WHERE token_hash=? AND user_id=? AND tenant_id=? AND expires_at>?)
+        AND ${sessionGuard.sql}
       ON CONFLICT(membership_id) DO UPDATE SET token_hash=excluded.token_hash,tenant_id=excluded.tenant_id,user_id=excluded.user_id,expires_at=excluded.expires_at`)
       .bind(membershipId,await customerSecretHash(token),session.tenant.id,expiresAt,membershipId,session.tenant.id,
-        session.commitSeq,session.hash,session.user.id,session.tenant.id,now),
+        session.commitSeq,...sessionGuard.values),
     db.prepare('DELETE FROM customer_invitations WHERE membership_id IN (SELECT membership_id FROM customer_invitations WHERE expires_at<=? LIMIT 100)').bind(now),
   ]);
   if(!written.meta.changes)issue(409,'INVITATION_UNAVAILABLE','成员状态或空间已变化，请刷新后重试');
@@ -595,6 +632,17 @@ export async function acceptCustomerInvitation(db,session,{token,password,consen
   return {userId:user.id,tenant:{id:tenant.id,name:tenant.name,type:tenant.type}};
 }
 
+export async function adminTenantSession(db, actor, tenantId, license) {
+  const [row, policy] = await Promise.all([referenceRow(db), readProjectSpacePolicy(db)]);
+  const { tenants, grants } = JSON.parse(row.reference_json);
+  const tenant = tenants?.find(item => item.id === tenantId);
+  const internal = !license.commercial;
+  if (!activeCustomer(tenant) || !allowsSpace(policy,tenant) || (internal && !internalSpace(policy,tenant))) {
+    issue(403,'FORBIDDEN','目标租户不可管理');
+  }
+  return { admin:actor, user:actor, tenant:{ ...tenant, grant:grants?.find(grant=>grant.subjectType==='tenant' && grant.subjectId===tenantId), internal:internal || internalSpace(policy,tenant) }, spaces:[], commitSeq:row.commit_seq };
+}
+
 export async function tenantWorkspace(db, session) {
   const actor = { id: session.tenant.id, role: '客户' };
   const [{ state }, catalogue, facts, projectFacts] = await Promise.all([
@@ -605,6 +653,20 @@ export async function tenantWorkspace(db, session) {
   const own = item => item.tenantId === actor.id;
   const access = projectAccess(state, identity, context.link);
   const projects = access.projects;
+  const accountProjects = identity.spaceId === 'personal' ? [] : session.spaces.flatMap(space => {
+    if (space.type === '个人') return [];
+    const tenant = state.tenants.find(row => row.id === space.id);
+    const member = state.memberships.find(row => row.tenantId === space.id && row.userId === identity.userId && row.status === '正常');
+    if (!activeCustomer(tenant) || !member) return [];
+    return state.projects.flatMap(row => {
+      if (row.tenantId !== tenant.id || row.status === '已删除') return [];
+      const role = projectRole(row,member);
+      return role ? [{
+        ...pick(row,['id','name','status','createdAt']),role,tenantId:tenant.id,tenantName:tenant.name,
+        canExit:role === PROJECT_ADMIN || tenantProjectAdmin(member),
+      }] : [];
+    });
+  });
   const byProject = new Map(projects.map(project => [project.id, project]));
   const effectiveKeys = state.apiKeys.filter(row => own(row) && (canManage || byProject.has(row.projectId) &&
     (byProject.get(row.projectId).canManage || row.ownerId === identity.userId)));
@@ -644,8 +706,12 @@ export async function tenantWorkspace(db, session) {
   })]));
   const projectAudits = state.audits.filter(row => own(row) && byProject.get(row.projectId)?.canManage)
     .map(row => pick(row,['id','projectId','createdAt','actor','action','objectId','result']));
-  const projectBudgets = Object.fromEntries(projects.filter(row => row.canManage && row.spendBudget?.amountMicros)
-    .map(project => [project.id, projectSpend({ ...state, requests:allRequests }, project, null, Date.now(), internal)]));
+  const budgetAt = Date.now();
+  const projectBudgets = Object.fromEntries(projects.filter(row => row.canManage && (row.spendBudget?.amountMicros || row.tokenBudget?.limit))
+    .map(project => [project.id, {
+      ...(project.spendBudget?.amountMicros && projectSpend({ ...state, requests:allRequests }, project, null, budgetAt, internal)),
+      ...(project.tokenBudget?.limit && { tokens:projectBudgetUsage(allRequests, project, budgetAt).tokens }),
+    }]));
   const projectServices = catalogue.services.filter(service => service.canOrder || service.callable);
   const ids = new Set([...keys.flatMap(row=>row.modelIds || []), ...requests.map(row => row.modelId), ...catalogue.services.map(row => row.serviceModelId)]);
   const models = state.models.filter(row => ids.has(row.id)).map(row => pick(row,['id','modelId','name','type','usageUnit']));
@@ -660,16 +726,41 @@ export async function tenantWorkspace(db, session) {
   };
   const publicOrders=rows=>rows.map(({factorSnapshot:_rules,...item})=>item);
   const customer=state.tenants.find(row=>row.id===actor.id), user=state.users.find(row=>row.id===identity.userId);
-  const organization=identity.spaceId==='personal' ? {departments:[],members:[],audit:[]} : organizationProjection(state,actor.id);
-  if(!canManage){delete organization.platformAccounts;organization.audit=[];}
-  return { identity,profile:{id:user.id,account:user.login,name:user.nickname || user.name || customer.name,type:customer.type,status:customer.status,
+  const organization=scopedOrganization(context);
+  const canManageOrganization=identity.spaceId!=='personal' && (canManage || Boolean(organizationManagementScope(context)));
+  const visibleProjects = projects.map(({memberRoles:_roles,...project}) => {
+    if (!project.canManage) {
+      delete project.spendBudget;
+      delete project.tokenBudget;
+      if (project.modelPermissions) project.modelPermissions = project.modelPermissions.map(({modelId}) => ({modelId}));
+    }
+    return project;
+  });
+  return { identity,canManageOrganization, systemAdministrator:Boolean(session.admin), profile:user && {id:user.id,account:user.login,name:user.nickname || user.name || customer.name,type:customer.type,status:customer.status,
     phone:user.phone,realNameCertification:user.realNameCertification,passwordManaged:session.passwordManaged},
-    applications:state.customerApplications.filter(application=>application.applicantUserId===user.id),
+    applications:user ? state.customerApplications.filter(application=>application.applicantUserId===user.id) : [],
     backendUserId:identity.userId,canManage,internal, revision:state.revision, orders:publicOrders(orders), plans:publicOrders(plans), keys, requests, logKeys,
     services: catalogue.services, projectServices, canCreateProject:access.canCreate,
-    projects:projects.map(({memberRoles:_roles,...project})=>project), projectRouting:projectRouting(context),
+    projects:visibleProjects, accountProjects, projectRouting:projectRouting(context),
     routes: visibleProjectRoutes(context),
     models, organization, projectMembers, projectAudits, projectBudgets, report };
+}
+
+function organizationAuditDepartments(state,next,context) {
+  const before=scopedOrganization(context);
+  const after=scopedOrganization({...context,state:next});
+  const changed = new Set();
+  for (const field of ['members','departments']) {
+    const previous = new Map(before[field].map(row=>[row.id,row]));
+    const current = new Map(after[field].map(row=>[row.id,row]));
+    for (const id of new Set([...previous.keys(),...current.keys()])) {
+      const old=previous.get(id), row=current.get(id);
+      if (JSON.stringify(old)!==JSON.stringify(row)) {
+        for (const value of [old,row]) if (value) changed.add(field==='members' ? value.departmentId : value.id);
+      }
+    }
+  }
+  return [...changed];
 }
 
 export async function tenantCommand(db, session, body) {
@@ -678,7 +769,7 @@ export async function tenantCommand(db, session, body) {
   if (!validId(operationId) || !Number.isSafeInteger(expectedRevision) ||
       !['keys','organization','routes','projectRoute','projectCreate','projectUpdate','subscribe','certifyPersonal','certifyEnterprise'].includes(action)) issue(400, 'INVALID_INPUT', '客户操作或修订号无效');
   safeAction(data);
-  const digest = await hash([session.user.id,body]), replay = await db.prepare('SELECT tenant_id,request_hash FROM tenant_operations WHERE id=?').bind(operationId).first();
+  const digest = await hash([session.admin ? 'admin:' + session.admin.id : session.user.id,body]), replay = await db.prepare('SELECT tenant_id,request_hash FROM tenant_operations WHERE id=?').bind(operationId).first();
   if (replay) {
     if (replay.tenant_id !== tenant.id || replay.request_hash !== digest) issue(409, 'IDEMPOTENCY_CONFLICT', '同一操作标识不能用于不同请求');
     return { operationId };
@@ -712,7 +803,7 @@ export async function tenantCommand(db, session, body) {
           items.some(row=>!validId(row?.id) || !Number.isSafeInteger(row.revision) || row.revision<1))throw Error('请选择有效的套餐及版本');
       next=await addPackageOrders(db,state,{...tenant,ownerId:context.identity.userId},operationId,items,catalogue.services);
     } else if (action === 'projectCreate') {
-      const project = newProject(context, data, 'project-' + operationId);
+      const project = { ...newProject(context, data, 'project-' + operationId), createdBy:context.identity.name };
       next = { ...state, projects:[...state.projects, project] };
       projectAudits = [{ projectId:project.id, action:'创建项目', objectId:project.id }];
     } else if (action === 'projectUpdate') {
@@ -755,15 +846,17 @@ export async function tenantCommand(db, session, body) {
   } catch (error) { issue(422, 'BUSINESS_BLOCKED', error.message); }
   const now = Date.now(), actionName = { keys: '维护 API Key', organization: '维护组织成员', routes: '维护智能路由', projectRoute: '维护项目路由',
     subscribe:'订购 Token Plan',certifyPersonal:'提交个人实名认证',certifyEnterprise:'提交企业认证' }[action];
-  const audits = projectAudits.length ? projectAudits : action === 'keys' ? [] : [{action:actionName,prototypeFact:true}];
+  const audits = projectAudits.length ? projectAudits : action === 'keys' ? [] : [{action:actionName,prototypeFact:true,
+    ...(action==='organization' && {departmentIds:organizationAuditDepartments(state,next,context)})}];
   next.audits = [...audits.map((entry,index)=>({ id:index ? operationId + ':' + index : operationId, tenantId:tenant.id,
-    actorId:context.identity.userId, actor:context.identity.name, result:'成功', createdAt:new Date(now).toISOString(), ...entry })),
+    actorId:context.identity.userId, actor:context.identity.name, ...(session.admin && {actorRole:'系统管理员'}), result:'成功', createdAt:new Date(now).toISOString(), ...entry })),
     ...state.audits];
+  const sessionGuard = tenantSessionGuard(session, now);
   const [written] = await db.batch([
     db.prepare(`UPDATE model_workspace SET reference_json=?,application_revision=application_revision+1 WHERE id=1 AND application_revision=?
       AND (SELECT commit_seq FROM db_state WHERE id=1)=?
-      AND EXISTS(SELECT 1 FROM market_sessions WHERE token_hash=? AND tenant_id=? AND expires_at>?)`)
-      .bind(referenceWrite(state,next,reference),expectedRevision,row.commit_seq,session.hash,tenant.id,now),
+      AND ${sessionGuard.sql}`)
+      .bind(referenceWrite(state,next,reference),expectedRevision,row.commit_seq,...sessionGuard.values),
     db.prepare('INSERT INTO tenant_operations(id,tenant_id,request_hash,created_at) SELECT ?,?,?,? WHERE changes()=1').bind(operationId,tenant.id,digest,now),
     db.prepare('UPDATE db_state SET commit_seq=commit_seq+1 WHERE id=1 AND changes()=1'),
     ...(retiredIds.length ? [db.prepare('INSERT INTO retired_tenant_keys(id) SELECT value FROM json_each(?) WHERE changes()=1')

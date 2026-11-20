@@ -9,18 +9,21 @@ import { modelCategory } from './model-management';
 import { MODEL_CATALOGUE_TYPES } from './model-library';
 import { IDENTITY_FIELDS, TECHNICAL_FIELDS, PRESENTATION_FIELDS, COMMON_FIELDS, INTERFACE_FIELDS, RECORD_FIELDS, FEATURE_FIELDS, ARCHITECTURE_OPTIONS, LICENSE_OPTIONS, LANGUAGE_OPTIONS, INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, SCENARIO_OPTIONS, TASK_OPTIONS, specificationFields } from './model-profile';
 import { readMaterialLogo } from './MaterialLogo';
+import { classificationHref, classificationIndex, classificationKey, modelClassification, modelClassificationFor } from './model-classification';
 
 const supports = [['unknown','未填写'],['supported','支持'],['unsupported','不支持']];
 const optionList = entries => entries.map(([value,label])=>({value,label}));
 const display = value => value == null || value === '' ? '—' : Array.isArray(value) ? value.join('、') || '—' : typeof value === 'object' ? JSON.stringify(value) : String(value);
 
-export default function MaterialMetadataForm({model,initial,readOnly,can,dirty,onCancel,onSubmit,sourceLabel,footerTarget}) {
+export default function MaterialMetadataForm({state,conflict,reload,model,initial,readOnly,can,dirty,onCancel,onSubmit,sourceLabel,footerTarget}) {
   const [form,setForm] = useState(()=>blankModel(model || initial)), [error,setError] = useState(''), [uploading,setUploading] = useState(false), [saving,setSaving] = useState(false);
   const [contextUnit,setContextUnit] = useState(form.capabilities.context > 0 && form.capabilities.context % 1024 === 0 ? 'K' : 'Token');
   const version = useRef(0);
   const formId = useId();
   useEffect(()=>()=>{version.current++;},[]);
   const editable = !readOnly && can;
+  const dictionary = modelClassification(state), index = classificationIndex(dictionary);
+  const { author, series, authorName, seriesName } = modelClassificationFor(index, form);
   const change = (key,value) => {
     setForm(current=>{
       const next={...current,[key]:value};
@@ -29,6 +32,8 @@ export default function MaterialMetadataForm({model,initial,readOnly,can,dirty,o
         next.profile=Object.fromEntries(descriptors.filter(field=>current.profile[field.key]!=null).map(field=>[field.key,current.profile[field.key]]));
         next.profile.tasks=(current.profile.tasks || []).filter(task=>TASK_OPTIONS[value].includes(task));
         next.profile.detailDescription=current.profile.detailDescription;
+        next.profile.authorId=current.profile.authorId;
+        next.profile.familyId=current.profile.familyId;
       }
       return next;
     });setError('');dirty(true);
@@ -47,6 +52,22 @@ export default function MaterialMetadataForm({model,initial,readOnly,can,dirty,o
   };
   const slot = (label,children,key=label,wide=false) => <Form.Slot key={key} label={{text:<Space>{label}{modelFieldDescriptions[label.replace(' *','')] && <Tooltip content={modelFieldDescriptions[label.replace(' *','')]}><Button theme="borderless" type="tertiary" size="small" icon={<IconHelpCircle aria-hidden/>} aria-label={label.replace(' *','')+'说明'}/></Tooltip>}</Space>,id:'material-label-'+key}} className={wide?'materials-wide-field':undefined}>{children?.type===Select?cloneElement(children,{'aria-labelledby':'material-label-'+key}):children}</Form.Slot>;
   const field = (label,value,onChange,extra={}) => slot(label,readOnly?<Typography.Text>{display(value)}</Typography.Text>:<Input aria-label={label.replace(' *','')} value={value ?? ''} disabled={!editable} onChange={onChange} {...extra}/>);
+  const classificationField = (label, selected, oldName, options, onChange, disabled = false) => slot(label, readOnly
+    ? <Typography.Text>{selected?.name || (oldName && oldName + '（待核对）') || '—'}</Typography.Text>
+    : <Select aria-label={label} value={selected?.id} disabled={!editable || disabled} showClear
+      placeholder={oldName && !selected ? oldName + '（待核对）' : '请选择'}
+      optionList={options.filter(row => row.active || row.id === selected?.id).map(row => ({
+        value: row.id, label: row.name + (row.active ? '' : '（已停用）'), names: [row.name, ...row.aliases, ...(row.formerNames || [])],
+      }))}
+      filter={(query, option) => option.names.some(name => classificationKey(name).includes(classificationKey(query)))}
+      onChange={onChange}/>);
+  const selectClassification = (nextAuthor, nextSeries) => {
+    setForm(current => ({ ...current, maker: nextAuthor?.name || '', profile: {
+      ...current.profile, author: nextAuthor?.name || '', authorId: nextAuthor?.id || '', family: nextSeries?.name || '', familyId: nextSeries?.id || '',
+    } }));
+    setError('');
+    dirty(true);
+  };
   const fields = descriptors => descriptors.map(({key,label,kind,placeholder,unit})=>{
     const value=form.profile[key];
     const choices=kind==='architecture'?ARCHITECTURE_OPTIONS:kind==='license'?LICENSE_OPTIONS:kind==='confirmation'?[['pending','待核对'],['confirmed','已核对']]:kind==='lifecycle'?[['stable','稳定版'],['preview','预览版'],['deprecated','已退役']]:kind==='support'?supports:null;
@@ -77,9 +98,16 @@ export default function MaterialMetadataForm({model,initial,readOnly,can,dirty,o
       {slot('模型类型',readOnly?<Typography.Text>{MODEL_CATALOGUE_TYPES[modelCategory(form.type)]}</Typography.Text>:<Select aria-label="模型类型" value={modelCategory(form.type)} optionList={optionList(Object.entries(MODEL_CATALOGUE_TYPES))} disabled={!editable} onChange={value=>change('type',value==='visual'?'image':value)}/>)}
       {modelCategory(form.type)==='visual' && slot('视觉任务类型',readOnly?<Typography.Text>{form.type==='video'?'视频':'图像'}</Typography.Text>:<Select aria-label="视觉任务类型" value={form.type} optionList={optionList([['image','图像'],['video','视频']])} disabled={!editable} onChange={value=>change('type',value)}/>)}
       {field('模型编码'+(readOnly?'':' *'),form.modelId,value=>change('modelId',value),{readonly:Boolean(model)})}
-      {fields([...PRESENTATION_FIELDS.filter(item=>item.key==='author'),...IDENTITY_FIELDS.filter(item=>['family','version','releaseDate'].includes(item.key))])}
+      {classificationField('模型作者', author, authorName, dictionary.authors, id => selectClassification(index.authors.get(id), undefined))}
+      {classificationField('模型系列', series, seriesName, dictionary.series.filter(row => row.authorId === author?.id),
+        id => selectClassification(author, index.series.get(id)), !author || !author.active)}
+      {fields(IDENTITY_FIELDS.filter(item=>['version','releaseDate'].includes(item.key)))}
       {slot('简短介绍',readOnly?<Typography.Text>{display(form.description)}</Typography.Text>:<TextArea aria-label="简短介绍" rows={3} value={form.description} disabled={!editable} onChange={value=>change('description',value)}/>,'description',true)}
     </div>
+    {!readOnly && <Space>
+      <a href={classificationHref} target="_blank" rel="noopener noreferrer">打开分类字典</a>
+      {conflict && reload && <Button theme="borderless" onClick={reload}>载入最新数据</Button>}
+    </Space>}
     <Collapse keepDOM>
       <AdminCollapsePanel header="模态与任务" itemKey="modalities"><div className="materials-field-grid">{fields([...COMMON_FIELDS,...PRESENTATION_FIELDS.filter(item=>['languages','scenarios'].includes(item.key))])}</div></AdminCollapsePanel>
       <AdminCollapsePanel header="调用能力" itemKey="capabilities"><div className="materials-field-grid">{capabilities}{fields(FEATURE_FIELDS.filter(item=>['text','multimodal'].includes(form.type) || item.key==='batch'))}{fields(specificationFields(form.type,form.usageUnit,form.profile))}</div></AdminCollapsePanel>

@@ -58,6 +58,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   // Supplier controls must not cancel in-flight tasks belonging to other suppliers.
   const supplierLifecycle = action.type === 'modelOperations' && ['pauseSales','serviceProviderListing','serviceProviderServing','removeServiceProvider','providerRemovalPrepare','providerRemovalCommit'].includes(action.operation);
   const deletingLibrary = action.type === 'modelOperations' && action.operation === 'templateDelete';
+  const savingClassification = action.type === 'modelOperations' && action.operation === 'modelClassificationSave';
   const directChanges=action.type==='batch'?action.changes:[action];
   if (directChanges?.some(change => change.type === 'setSettings' && Object.hasOwn(change.changes || {}, 'trafficLimits')
     || change.collection === 'tenants' && Object.hasOwn(change.changes || change.record || {}, 'trafficPolicy'))) throw new Error('限流配置须通过流量运营维护');
@@ -135,12 +136,20 @@ export function commitAdminState(state, action, actor = state.currentRole) {
     const { modelId, card } = action.marketCard;
     next.modelData = { ...next.modelData, marketCards: { ...next.modelData?.marketCards, [modelId]: card } };
   }
+  if (savingClassification) next.modelData = { ...next.modelData, modelClassification: action.modelClassification };
   const currentAdmin = next.admins.find(row => row.id === next.adminSession?.accountId);
+
   if (currentAdmin) next.currentRole = currentAdmin.role;
   next.revision += 1; next.updatedAt = timestamp;
   const auditBefore = modelAuditContext(state, action), auditAfter = modelAuditContext(next, action);
   if (action.type !== "setRole") next.audits.unshift(record(resourceId('audit-event'), { createdAt: timestamp, updatedAt: timestamp, actor, action: action.label || action.type, objectId: action.record?.id || action.id || action.objectId || "batch", objectLabel: auditAfter.objectLabel, relatedModelIds: [...new Set([...auditBefore.relatedModelIds, ...auditAfter.relatedModelIds])], relatedEndpointIds:[...new Set([...auditBefore.relatedEndpointIds,...auditAfter.relatedEndpointIds])], result: action.auditFailure ? '失败' : '成功', changes: modelAuditChanges(state,action), ...(action.auditFailure ? { reason: action.auditFailure } : {}), before: isEnterprise ? action.changes.filter(change => change.type === 'update').map(change => ({ collection: change.collection, id: change.id, values: Object.fromEntries(Object.keys(change.changes).map(key => [key, state[change.collection].find(item => item.id === change.id)?.[key]])) })) : null, after: action.record || action.changes,
   }));
+  if (action.archiveResults) next.audits[0].archiveResults = action.archiveResults;
+  if (savingClassification) {
+    next.audits[0].before = action.classificationBefore;
+    next.audits[0].after = action.classificationEntry;
+  }
+  if (action.directoryOperationResults) next.audits[0].directoryOperationResults = action.directoryOperationResults;
   if (preparingDataset) next.modelData = prepareServiceShowcase(state).modelData;
   else if (installingCatalogue) {
     const added = next.modelTemplates.filter(row => !state.modelTemplates.some(before => before.id === row.id)).map(row => row.id);

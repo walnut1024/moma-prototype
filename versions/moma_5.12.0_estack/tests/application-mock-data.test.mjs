@@ -9,7 +9,7 @@ import {withAdminSession} from './admin-session-fixture.mjs';
 import {tenantData,tenantContext,saveTenantKeys,orderTenantServices,saveTenantOrganization,recordTenantExperience,saveTenantRoutes} from '../src/tenant-data.mjs';
 import {tenantUsageData,tenantUsageTypes} from '../src/usage-data.mjs';
 import {tenantLogRecords} from '../src/call-log-data.mjs';
-import {overviewBusiness} from '../src/admin-v2/overview.js';
+import {overviewTimeline} from '../src/admin-v2/overview.js';
 import {changeOrganization} from '../src/organization-data.mjs';
 import {observedUsageTotal} from '../src/business-facts.mjs';
 import {logJSON,logStatuses} from '../src/call-log-data.mjs';
@@ -58,7 +58,7 @@ test('organization edits update the tenant membership and reject unauthorized or
  bad.departments.push({id:backend.organizations.find(row=>row.tenantId==='tenant-nanjing').id,name:'foreign',parentId:'root'});
  const raw=storage.getItem(STORAGE_KEY);assert.throws(()=>saveTenantOrganization(bad,latest.revision,storage),/归属冲突/);assert.equal(storage.getItem(STORAGE_KEY),raw);
  const removed=structuredClone(latest.organization);removed.members=removed.members.filter(row=>row.id!==member.id);assert.throws(()=>saveTenantOrganization(removed,latest.revision,storage),/当前登录成员/);
- backend.memberships.find(row=>row.id===member.id).role='普通成员';storage.setItem(STORAGE_KEY,serializeAdminState(backend));assert.throws(()=>saveTenantOrganization(next,backend.revision,storage),/只有企业管理员/);
+ backend.memberships.find(row=>row.id===member.id).role='普通成员';storage.setItem(STORAGE_KEY,serializeAdminState(backend));assert.throws(()=>saveTenantOrganization(next,backend.revision,storage),/无组织管理权限/);
 });
 test('request usage views agree on cache inclusion and unknown measurements, including timeout logs',()=>{
  assert.equal(observedUsageTotal({input:2400,output:720,cached:600}),3120);
@@ -171,6 +171,6 @@ test('two published modes share tenant keys, orders, routes and request facts wi
 test('tenant charts and platform overview reconcile the same deduplicated requests and keep unknown metering unknown',()=>{
  const state=createAdminSeed();const at='2026-11-02T01:00:00Z';state.requests=[{id:'one',requestId:'req-one',tenantId:'tenant-gov',modelId:'model-1',createdAt:at,httpStatus:200,usage:{input:3,output:2},durationMs:200},{id:'two',requestId:'req-two',tenantId:'tenant-gov',modelId:'model-1',createdAt:at,httpStatus:200,usage:{}}];
  const data=tenantUsageData({records:[...state.requests,state.requests[0]],models:state.models,start:'2026-11-02',end:'2026-11-02',now:new Date('2026-11-02T02:00:00Z')});assert.equal(data.summary.requests,2);assert.equal(data.summary.total,5);assert.equal(data.buckets.reduce((n,row)=>n+row.requests,0),2);
- const overview=overviewBusiness(state,Date.parse('2026-11-02T02:00:00Z'),'today');assert.equal(overview.calls,2);assert.equal(overview.total,5);
+ const overview=overviewTimeline(state,Date.parse('2026-11-02T02:00:00Z')).today;assert.equal(overview.calls,2);assert.equal(overview.total,5);assert.equal(overview.pending,1);
  const unknown=tenantUsageData({records:[state.requests[1]],models:state.models,start:'2026-11-02',end:'2026-11-02',now:new Date('2026-11-02T02:00:00Z')});assert.equal(unknown.summary.total,undefined);
 });

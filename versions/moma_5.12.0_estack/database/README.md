@@ -146,4 +146,4 @@ erDiagram
 
 模型广场沿用已有的登录账号和空间会话。服务端读取当前有效成员、组织及项目角色，并从「使用空间」读取企业内用版的本企业空间。卡片配置存入现有模型工作区，继续使用 schema 17。项目调用沿用原有权限和 Key 校验。
 
-这组绑定用于原型验证。实际签名 License 的签发、验签服务及部署配置由交付环境提供。
+配置 `MOMA_LICENSE_PUBLIC_KEY`（P-256 公钥 JWK）与 `MOMA_LICENSE_DEPLOYMENT_ID` 以启用页面导入。签发方提供紧凑格式的 ES256 JWS，载荷含 `aud`（部署 ID）、`edition`（`internal` 或 `commercial`）、`jti`（授权编号）、`sub`（授权对象）及 Unix 秒级时间 `nbf`、`exp`。成功导入后以持久化授权为准，系统仅保存已验签的授权信息，不记录原始 License。未配置签发公钥时继续使用现有部署配置。

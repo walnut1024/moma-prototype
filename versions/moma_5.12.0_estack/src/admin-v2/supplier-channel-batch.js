@@ -70,19 +70,23 @@ export function channelBatchRowResult(tasks, results, associationId, activeKey, 
   return { status: '等待中', message: '' };
 }
 
-export function supplierChannelLifecyclePlan(state, providerId, associationIds, action) {
+export function supplierChannelLifecyclePlan(state, providerId, associationIds, action, { modelOnly = false } = {}) {
   if (!['enable', 'disable'].includes(action)) throw Error('请选择启用或停用渠道');
   const plan = supplierChannelBatchPlan(state, providerId, associationIds);
   const selections = plan.selected.map(association => channelSelectionSnapshot({ provider: plan.provider, modelId: association.modelId, association }));
   const references = providerRemovalPlan(state, { providerId, associationIds });
   const blockers = [...references.blockers];
   if (action === 'enable') for (const connection of plan.connections) {
+    if (modelOnly && !['运行中', '需关注'].includes(connection.endpoint.status)) {
+      blockers.push('请先在连接行启用连接');
+      continue;
+    }
     try { prepareChannelEnableConfirmation(state, providerId, connection.endpoint.id, connection.selected.map(row => row.id)); }
     catch (error) { blockers.push(error.message); }
   }
   const serviceImpact = channelSelectionServiceImpact(state, selections);
   const shared = plan.connections.flatMap(({ endpoint, rows }) => rows.filter(row => !associationIds.includes(row.id)).map(row => ({ ...row,
     effect: action === 'enable' && !['运行中', '需关注'].includes(endpoint.status) ? '连接恢复，未选渠道保持停用' : '保持原状' })));
-  const signature = JSON.stringify([plan.signature, action, selections, plan.selected.map(row => row.enabled), references.signature, serviceImpact]);
+  const signature = JSON.stringify([plan.signature, action, modelOnly, selections, plan.selected.map(row => row.enabled), references.signature, serviceImpact]);
   return { ...plan, selections, serviceImpact, references, shared, blockers: [...new Set(blockers)], signature };
 }

@@ -247,7 +247,7 @@ export default function SupplierModelCatalogue({ state, provider, groups, ops, o
     })()}
     {removingChannel && <ProviderRemovalDialog state={state} ops={ops} target={removingChannel} close={closeChannelRemoval} removed={closeChannelRemoval}/>}
     {configuration && (endpoint
-      ? <SupplierChannelDialog key={association.id} state={state} provider={owner} endpoint={endpoint} association={association} mode="info" ops={ops} close={close}/>
+      ? <SupplierChannelDialog key={association.id} state={state} provider={owner} endpoint={endpoint} association={association} ops={ops} close={close}/>
       : <Modal title="模型渠道已变化" onClose={() => ops.proceed(close)}><Notice error>请关闭后重新选择模型渠道。</Notice></Modal>)}
     {pricingRecord && (pricing.type === 'cost'
       ? <ProcurementVersionEditor key={pricingRecord.key} state={state} provider={pricingRecord.provider} association={pricingRecord.association} modelName={pricingRecord.modelName} ops={ops} close={close}/>

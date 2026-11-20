@@ -1,10 +1,9 @@
 import { normalizeMemberPhone, memberPhoneError } from '../organization-data.mjs';
 import { initialPersonalData } from '../mock/application-data.js';
 import { enterpriseDisplayValue, validateDemoAdminCode } from './enterprise.js';
-import { MODEL_ORDER_BILLING_TYPES } from '../model-order-display.mjs';
 import { accountDataSource, isManagedCustomerAccount } from './account-data-source.js';
 
-export const individualTabs = { info: '基本信息', projects: '默认项目', keys: 'API 密钥', entitlements:'订购与账单' };
+export const individualTabs = { info: '基本信息', models:'模型开通', projects:'项目', keys:'API 密钥' };
 export const individualAccounts = state => state.tenants.filter(tenant => tenant.type === '个人').map(tenant => ({ tenant, user: state.users.find(user => user.id === tenant.ownerId) }));
 export const managedIndividualAccounts = state => individualAccounts(state).filter(({ tenant }) => isManagedCustomerAccount(tenant));
 export const individualName = ({ tenant, user }) => user?.nickname || tenant.name || '未设置昵称';
@@ -43,7 +42,7 @@ export function individualTransaction(state, command, actor = state.currentRole)
         initialized:Boolean(loginProof),registeredAt:at,createdAt:at,updatedAt:at}}] : []),
       {type:'add',collection:'tenants',record:{id:ids.tenant,ownerId:userId,defaultProjectId:ids.project,name,type:'个人',status:'正常',source:'后台创建',createdAt:at,updatedAt:at}},
       {type:'add',collection:'projects',record:{id:ids.project,tenantId:ids.tenant,ownerId:userId,name:'默认项目',
-        status:'正常',modelPermissions:[],retainContent:false,createdAt:at,updatedAt:at}},
+        ...(command.createdBy && {createdBy:command.createdBy}),status:'正常',modelPermissions:[],retainContent:false,createdAt:at,updatedAt:at}},
     ] };
   }
   if (operation === 'batch-freeze') {
@@ -82,35 +81,3 @@ export function individualTransaction(state, command, actor = state.currentRole)
 
 
 export const individualFreezeScope = ids => 'individual:batch-freeze:' + [...ids].sort().join(',');
-export const individualBillingTypes = MODEL_ORDER_BILLING_TYPES;
-export function individualOrders(state, tenantId) {
-  return state.orders.filter(order => order.tenantId === tenantId).map(order => {
-    const product = order.product || state.products.find(item => item.id === order.productId);
-    const explicit = order.billingType || product?.billingType;
-    if (explicit === 'package') return null;
-    const billingType = explicit ? Object.hasOwn(individualBillingTypes, explicit) ? explicit : null : product?.billingMode === '按量付费' ? 'payg' : product?.code?.startsWith('TOKEN-') ? 'plan' : product?.code?.startsWith('CODING-') ? 'coding' : null;
-    return { order, product, billingType };
-  }).filter(Boolean);
-}
-
-export function individualOrderDisplay(state, { order, product, billingType }) {
-  const modelIds = order.modelIds ?? product?.modelIds ?? [];
-  const models = modelIds.map(id => state.models.find(model => model.id === id));
-  const modelNames = models.map((model, index) => model?.name || modelIds[index]).join('、') || '未记录';
-  const modelTypes = { text: '文本模型', multimodal: '多模态模型', image: '视觉模型', video: '视觉模型', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
-  const providerId = order.providerId ?? product?.providerId;
-  const price = order.catalogPrice ?? product?.catalogPrice;
-  const priceUnit = order.priceUnit ?? product?.priceUnit;
-  const catalogPrice = typeof price === 'string' && price.trim() ? price : typeof price === 'number' && Number.isFinite(price) && price >= 0 ? price.toLocaleString('zh-CN') + (priceUnit ? ' ' + priceUnit : '（单位未记录）') : '未记录';
-  return {
-    name: billingType === 'payg' && modelIds.length ? modelNames : product?.name || '商品未记录',
-    modelNames,
-    type: order.modelType || product?.modelType || ({ plan: 'Token Plan', coding: 'Coding Plan' })[billingType] || [...new Set(models.map(model => modelTypes[model?.type] || '未记录'))].join('、') || '未记录',
-    provider: order.providerName || product?.providerName || state.providers.find(provider => provider.id === providerId)?.name || '未记录',
-    tariff: order.tariffScenario || product?.tariffScenario || '未记录',
-    catalogPrice,
-    status: order.status || '未记录',
-    orderedAt: order.createdAt,
-    expiresAt: order.expiresAt || order.endAt,
-  };
-}

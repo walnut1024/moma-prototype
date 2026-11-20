@@ -23,7 +23,7 @@ export function loginDestination(returnTo, account) {
     const page = hash?.match(/^#\/admin-2\/([^/?]+)/)?.[1];
     return target && new URL(target, 'https://moma.invalid').pathname === LOGIN_BASE && page && canAccessPage(account.role, page) ? target : LOGIN_BASE + '#/admin-2/' + home;
   }
-  return target && !hash.startsWith('#/admin') ? target : LOGIN_BASE + '?page=space-overview';
+  return target && !hash.startsWith('#/admin') ? target : LOGIN_BASE + '?page=home';
 }
 
 export function openLogin(returnTo = location.pathname + location.search + location.hash) {

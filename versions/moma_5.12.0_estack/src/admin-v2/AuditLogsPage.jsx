@@ -1,28 +1,37 @@
 import { useEffect, useId, useState } from 'react';
-import { Banner, Button, Card, DatePicker, Descriptions, Input, Space, Spin, Tag, Typography } from '@douyinfe/semi-ui';
-import { IconSearch } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, DatePicker, Descriptions, Empty, Input, Space, Spin, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { IconRefresh, IconSearch } from '@douyinfe/semi-icons';
 import AdminPageHeading from './AdminPageHeading';
 import AdminTable from './AdminTable';
 import { AdminSideSheet } from './AdminOverlay';
 import { openLogin } from '../login-navigation.mjs';
-import { Choice } from './ServiceUI';
+import { Choice, CopyId } from './ServiceUI';
+import JsonDocument from './JsonDocument';
 import { cloudAdminRequest } from './admin-client.mjs';
 import { ADMIN_ROLE_LABELS } from './admin-accounts';
 import { ROUTING_STRATEGIES } from './service-routing';
-import { AUDIT_ACTIONS, AUDIT_DOMAINS, AUDIT_RESOURCES, AUDIT_RESULTS } from './platform-audit.mjs';
+import { AUDIT_ACTIONS, AUDIT_DOMAINS, AUDIT_RESOURCES, AUDIT_RESULTS, AUDIT_SOURCES } from './platform-audit.mjs';
 import './audit-logs.css';
 
 const { Text, Title } = Typography;
 const time = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', dateStyle: 'short', timeStyle: 'medium' });
-const initialFilters = { period: '7', dates: [], action: '', q: '', actor: '', status: '', type: '', tenant: '', project: '' };
+const initialFilters = { period: '7', dates: [], event_id: '', actor: '', action: '', source: '', q: '', status: '', type: '', tenant: '', project: '' };
 const periods = { '1': '近 24 小时', '7': '近 7 天', '30': '近 30 天', custom: '自定义日期' };
+const auditModules = {
+  'service_route.publish': '模型运营 / 模型服务',
+  'supplier_key_group.rotate': '模型运营 / 渠道管理',
+  'supplier_key.replace': '模型运营 / 渠道管理',
+  'model_supply.disable': '模型运营 / 渠道管理',
+};
 const fieldLabels = { active_version: '生效路由版本', strategy: '路由策略', channel_weights: '渠道权重', status: '映射状态',
-  configuration_version: '配置版本', active_key_id: '首位密钥 ID', enabled: '供给状态', validation_id: '验证记录 ID',
-  personal_space_enabled: '开放个人空间' };
+  configuration_version: '配置版本', active_key_id: '首位密钥 ID', enabled: '供给状态', validation_id: '验证记录 ID', personal_space_enabled: '开放个人空间' };
 const itemLabels = { succeeded: '已停用', unchanged: '无变化', unknown: '原状态未记录' };
 const roleLabels = { target: '操作目标', changed: '实际变更', related: '关联对象' };
 const actorName = actor => actor.name || actor.id || '未记录';
 const resourceName = resource => resource?.name || resource?.id || '未记录';
+const auditTime = value => time.format(new Date(value));
+const moduleName = row => auditModules[row.action_code] || AUDIT_DOMAINS[row.domain] || '—';
+const clientName = source => AUDIT_SOURCES[source] || '未记录';
 const resultTag = status => <Tag color={status === 'succeeded' ? 'green' : status === 'failed' ? 'red' : 'grey'} size="small">{AUDIT_RESULTS[status]}</Tag>;
 const loginRequired = issue => issue?.status === 401;
 
@@ -43,9 +52,54 @@ function fieldValue(field, value) {
   return String(data);
 }
 
+function AuditChanges({ event }) {
+  return <div className="audit-log-changes">
+    {event.item_results.length > 0 && <section>
+      <Title heading={6}>逐项结果</Title>
+      <AdminTable rowKey="resource_ref" pagination={false} dataSource={event.item_results} columns={[
+        { title: '模型渠道供给', dataIndex: 'resource_ref', render: value => resourceName(event.resources.find(resource => resource.type + ':' + resource.id === value)) },
+        { title: '结果', dataIndex: 'status', render: value => itemLabels[value] },
+      ]}/>
+    </section>}
+    <section>
+      <Title heading={6}>变更内容</Title>
+      <AdminTable rowKey={change => change.resource_ref + ':' + change.field} pagination={false}
+        empty="此记录未保留字段变更摘要" dataSource={event.changes} tableLayout="fixed" columns={[
+          { title: '字段 / 对象', width: '40%', render: (_, change) => <><Text>{fieldLabels[change.field] || change.field}</Text><br/>
+            <Text type="tertiary" size="small">{change.resource_ref}</Text></> },
+          { title: '变更前', width: '30%', render: (_, change) => fieldValue(change.field, change.before) },
+          { title: '变更后', width: '30%', render: (_, change) => fieldValue(change.field, change.after) },
+        ]}/>
+    </section>
+    <section>
+      <Title heading={6}>操作对象及关联对象</Title>
+      <AdminTable rowKey={resource => resource.type + ':' + resource.id} pagination={false} empty="此记录未保留对象"
+        dataSource={event.resources} columns={[
+          { title: '对象', render: (_, resource) => <>{resourceName(resource)}{resource.name && <><br/><Text type="tertiary" size="small">{resource.id}</Text></>}</> },
+          { title: '类型', dataIndex: 'type', render: value => AUDIT_RESOURCES[value] },
+          { title: '关系', dataIndex: 'roles', render: values => values.map(role => roleLabels[role]).join('、') },
+        ]}/>
+    </section>
+  </div>;
+}
+
+function AuditEvidenceJson({ label, data, fullWidth, toggleFullWidth }) {
+  if (!data) return <Empty description={'此事件未记录' + label}/>;
+  const text = JSON.stringify(data, null, 2);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); Toast.success('审计 JSON 已复制'); }
+    catch { Toast.error('复制失败，请选择文本复制'); }
+  };
+  return <JsonDocument text={text} label={label + ' JSON'} actions={<>
+    <Button size="small" onClick={copy}>复制审计 JSON</Button>
+    <Button size="small" onClick={toggleFullWidth}>{fullWidth ? '退出全屏' : '全屏查看'}</Button>
+  </>}/>;
+}
+
 function AuditDetails({ row, accountId, close, onLogin, tenantName, projectName }) {
   const [loaded, setLoaded] = useState(null);
   const [retry, setRetry] = useState(0);
+  const [fullWidth, setFullWidth] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     readAudit('/audit-logs/' + encodeURIComponent(row.event_id), accountId, controller.signal).then(
@@ -55,52 +109,43 @@ function AuditDetails({ row, accountId, close, onLogin, tenantName, projectName 
     return () => controller.abort();
   }, [accountId, row.event_id, retry]);
   const event = loaded?.event;
-  return <AdminSideSheet visible closeOnEsc width="min(760px, 100vw)" title="审计详情" onCancel={close}>
+  const jsonViewProps = { fullWidth, toggleFullWidth: () => setFullWidth(current => !current) };
+  return <AdminSideSheet visible closeOnEsc width={fullWidth ? '100vw' : 'min(760px, 100vw)'} title="审计详情" onCancel={close}>
     <div className="audit-log-detail">
-      <Space wrap><Title heading={5}>{AUDIT_ACTIONS[row.action_code]}</Title>{resultTag(row.outcome.status)}</Space>
       {!loaded && <Spin aria-label="正在加载审计详情"/>}
       {loaded?.issue && <Banner type="danger" closeIcon={null} description={<>{loaded.issue.message} <Button size="small"
         onClick={loginRequired(loaded.issue) ? onLogin : () => { setLoaded(null); setRetry(retry + 1); }}>{loginRequired(loaded.issue) ? '后台登录' : '重试'}</Button></>}/>}
       {event && <>
-        <Descriptions data={[
-          { key: '发生时间', value: time.format(new Date(event.occurred_at)) + '（北京时间）' },
+        <Descriptions row column={2} size="small" data={[
+          { key: '事件 ID', value: <CopyId label="事件 ID" value={event.event_id}/> },
+          { key: '时间', value: auditTime(event.occurred_at) + '（北京时间）' },
           { key: '操作人', value: [actorName(event.actor), event.actor.name && event.actor.id, ADMIN_ROLE_LABELS[event.actor.role]].filter(Boolean).join(' · ') },
-          { key: '审计 ID', value: event.event_id },
+          { key: '操作类型', value: AUDIT_ACTIONS[event.action_code] },
+          { key: '模块', value: moduleName(event) },
+          { key: '原始操作 Code', value: <CopyId label="原始操作 Code" value={event.action_code}/> },
+          { key: 'IP 地址', value: event.ip_address || '未记录' },
+          { key: '客户端', value: clientName(event.source) },
+          { key: '租户', value: tenantName(event.scope?.tenant_id) || '—' },
+          { key: '项目', value: projectName(event.scope?.project_id) || '—' },
+          { key: '结果', value: resultTag(event.outcome.status) },
           { key: '操作 ID', value: event.operation_id },
           { key: '阶段', value: '配置提交' },
-          ...(event.scope.type === 'project' ? [
-            { key:'客户', value:tenantName(event.scope.tenant_id) },
-            { key:'项目', value:projectName(event.scope.project_id) },
-          ] : []),
           ...(event.links?.candidate_id ? [{ key: '候选 ID', value: event.links.candidate_id }] : []),
           ...(event.links?.validation_batch_ids?.length ? [{ key: '验证批次', value: event.links.validation_batch_ids.join('、') }] : []),
         ]}/>
-        {event.item_results.length > 0 && <section>
-          <Title heading={6}>逐项结果</Title>
-          <AdminTable rowKey="resource_ref" pagination={false} dataSource={event.item_results} columns={[
-            { title: '模型渠道供给', dataIndex: 'resource_ref', render: value => resourceName(event.resources.find(resource => resource.type + ':' + resource.id === value)) },
-            { title: '结果', dataIndex: 'status', render: value => itemLabels[value] },
-          ]}/>
-        </section>}
-        <section>
-          <Title heading={6}>变更内容</Title>
-          <AdminTable rowKey={change => change.resource_ref + ':' + change.field} pagination={false}
-            empty="此记录未保留字段变更摘要" dataSource={event.changes} tableLayout="fixed" columns={[
-              { title: '字段 / 对象', width: '40%', render: (_, change) => <><Text>{fieldLabels[change.field] || change.field}</Text><br/>
-                <Text type="tertiary" size="small">{change.resource_ref}</Text></> },
-              { title: '变更前', width: '30%', render: (_, change) => fieldValue(change.field, change.before) },
-              { title: '变更后', width: '30%', render: (_, change) => fieldValue(change.field, change.after) },
-            ]}/>
-        </section>
-        <section>
-          <Title heading={6}>操作对象及关联对象</Title>
-          <AdminTable rowKey={resource => resource.type + ':' + resource.id} pagination={false} empty="此记录未保留对象"
-            dataSource={event.resources} columns={[
-              { title: '对象', render: (_, resource) => <>{resourceName(resource)}{resource.name && <><br/><Text type="tertiary" size="small">{resource.id}</Text></>}</> },
-              { title: '类型', dataIndex: 'type', render: value => AUDIT_RESOURCES[value] },
-              { title: '关系', dataIndex: 'roles', render: values => values.map(role => roleLabels[role]).join('、') },
-            ]}/>
-        </section>
+        <Tabs defaultActiveKey="changes" lazyRender onChange={() => setFullWidth(false)} size="small">
+          <Tabs.TabPane itemKey="request" tab="请求证据">
+            {event.request_evidence?.parameters === null && <Text type="tertiary">此事件未留存请求参数</Text>}
+            <AuditEvidenceJson label="请求证据" data={event.request_evidence} {...jsonViewProps}/>
+          </Tabs.TabPane>
+          <Tabs.TabPane itemKey="response" tab="响应证据">
+            <AuditEvidenceJson label="响应证据" data={event.response_evidence} {...jsonViewProps}/>
+          </Tabs.TabPane>
+          <Tabs.TabPane itemKey="changes" tab="变更证据"><AuditChanges event={event}/></Tabs.TabPane>
+          <Tabs.TabPane itemKey="raw" tab="原始详情">
+            <AuditEvidenceJson label="审计事件" data={event} {...jsonViewProps}/>
+          </Tabs.TabPane>
+        </Tabs>
       </>}
     </div>
   </AdminSideSheet>;
@@ -134,79 +179,91 @@ export default function AuditLogsPage({ accountId, params, tenants = [], project
     );
     return () => controller.abort();
   }, [accountId, after, filters, retry]);
-  const update = (field, value) => setDraft(current => ({ ...current, [field]: value, ...(field === 'tenant' && { project:'' }) }));
+  const update = (field, value) => setDraft(current => ({ ...current, [field]: value, ...(field === 'tenant' && { project: '' }) }));
   const refresh = () => { setLoaded(null); setRetry(current => current + 1); };
   const changeFilters = next => { setFilters(next); setCursors(['']); setRangeError(''); refresh(); };
   const apply = event => {
     event.preventDefault();
     if (draft.period === 'custom' && draft.dates.length !== 2) { setRangeError('请选择开始和结束日期'); return; }
-    changeFilters(draft);
+    changeFilters({ ...draft, event_id: draft.event_id.trim(), actor: draft.actor.trim(), q: draft.q.trim() });
   };
   const page = next => { setLoaded(null); setCursors(next); };
-  const hasFilters = filters.period !== '7' || Boolean(filters.q || filters.action || filters.actor || filters.status || filters.type || filters.tenant || filters.project);
+  const hasFilters = Object.keys(initialFilters).some(field => field !== 'dates' && filters[field] !== initialFilters[field]);
   const tenantName = id => tenants.find(tenant => tenant.id === id)?.name || id;
   const projectName = id => projects.find(project => project.id === id)?.name || id;
   const availableProjects = projects.filter(project => !draft.tenant || project.tenantId === draft.tenant);
   const scopeOptions = (rows, value, allLabel) => [['',allLabel], ...rows.map(row=>[row.id,row.name]),
     ...(value && !rows.some(row=>row.id === value) ? [[value,value]] : [])];
   const columns = [
-    { title: '发生时间', width: 155, dataIndex: 'occurred_at', render: value => time.format(new Date(value)) },
-    { title: '操作人', width: 125, dataIndex: 'actor', render: actorName },
-    { title: '模块', width: 95, dataIndex:'domain', render: domain => AUDIT_DOMAINS[domain] },
-    { title: '操作动作', width: 150, render: (_, row) => <Button size="small" theme="borderless" aria-label={AUDIT_ACTIONS[row.action_code] + '详情'}
-      onClick={() => setDetail(row)}>{AUDIT_ACTIONS[row.action_code]}</Button> },
-    { title: '操作对象', width: 230, render: (_, row) => <>
+    { title: '事件 ID', width: 226, dataIndex: 'event_id', render: (value, row) => <Button size="small" theme="borderless"
+      className="audit-event-link" title={value} onClick={() => setDetail(row)}>{value}</Button> },
+    { title: '时间', width: 174, dataIndex: 'occurred_at', render: value => <span className="audit-log-time">{auditTime(value)}</span> },
+    { title: '操作人', width: 105, dataIndex: 'actor', render: actor => <div className="audit-log-actor"
+      title={[actor.name, actor.id].filter(Boolean).join('\n')}>
+      <span>{actorName(actor)}</span>
+      {actor.name && actor.id && <Text type="tertiary" size="small">{actor.id}</Text>}
+    </div> },
+    { title: '操作类型', width: 122, dataIndex: 'action_code', render: value => AUDIT_ACTIONS[value] },
+    { title: '模块', width: 165, render: (_, row) => moduleName(row) },
+    { title: 'IP 地址', width: 106, dataIndex: 'ip_address', render: value => value || '—' },
+    { title: '客户端', width: 77, dataIndex: 'source', render: clientName },
+    { title: '租户', width: 70, render: (_, row) => tenantName(row.scope?.tenant_id) || '—' },
+    { title: '项目', width: 70, render: (_, row) => projectName(row.scope?.project_id) || '—' },
+    { title: '结果', width: 77, render: (_, row) => resultTag(row.outcome.status) },
+    { title: '操作对象', width: 172, render: (_, row) => <>
       {row.target_count > 1 ? row.target_count + ' 个模型渠道供给'
         : row.target?.type === 'project' ? projectName(row.target.id) : resourceName(row.target)}
-      {row.scope.type === 'project' && <><br/><Text size="small" type="tertiary">
-        {tenantName(row.scope.tenant_id)} · {projectName(row.scope.project_id)}
-      </Text></>}
       {row.matched?.roles.includes('related') && <><br/><Text size="small" type="tertiary">关联命中 · {resourceName(row.matched)}</Text></>}
     </> },
-    { title: '结果', width: 85, render: (_, row) => resultTag(row.outcome.status) },
   ];
   return <div className="admin-page-stack audit-logs-page">
-    <AdminPageHeading title="审计日志"/>
+    <AdminPageHeading title="审计日志">
+      <Button icon={<IconRefresh aria-hidden="true"/>} onClick={() => { setCursors(['']); refresh(); }}>刷新</Button>
+    </AdminPageHeading>
     <Card>
       <form className="audit-log-filters" aria-label="筛选审计日志" onSubmit={apply}>
-        <Choice label="时间范围" value={draft.period} onSelect={value => update('period', value)} options={Object.entries(periods)}/>
+        <Choice label="时间范围" value={draft.period} onChange={value => update('period', value)} options={Object.entries(periods)}/>
         {draft.period === 'custom' && <><span id={dateLabel} className="sr-only">自定义日期</span>
           <DatePicker aria-labelledby={dateLabel} aria-invalid={Boolean(rangeError)} type="dateRange" format="yyyy-MM-dd"
             onChangeWithDateFirst={false} placeholder={['开始日期', '结束日期']}
             value={draft.dates} onChange={value => update('dates', Array.isArray(value) ? value.filter(Boolean) : [])}/>
         </>}
-        <Input aria-label="搜索对象或记录 ID" placeholder="对象名称 / 对象 ID / 记录 ID" prefix={<IconSearch aria-hidden="true"/>}
-          value={draft.q} maxLength={200} onChange={value => update('q', value)} showClear/>
-        <Choice label="操作动作" value={draft.action} onSelect={value => update('action', value)}
-          options={Object.entries({ '': '全部动作', ...AUDIT_ACTIONS })}/>
-        <Choice label="操作结果" value={draft.status} onSelect={value => update('status', value)}
-          options={Object.entries({ '': '全部结果', ...AUDIT_RESULTS })}/>
+        <Input aria-label="事件 ID" placeholder="事件 ID" prefix={<IconSearch aria-hidden="true"/>}
+          value={draft.event_id} maxLength={200} onChange={value => update('event_id', value)} showClear/>
+        <Input aria-label="操作人" placeholder="操作人名称 / 账号 ID" maxLength={100} value={draft.actor} onChange={value => update('actor', value)} showClear/>
+        <Choice label="操作类型" value={draft.action} onChange={value => update('action', value)}
+          options={Object.entries({ '': '全部操作类型', ...AUDIT_ACTIONS })}/>
+        <Choice label="客户端类型" value={draft.source} onChange={value => update('source', value)}
+          options={Object.entries({ '': '全部客户端类型', ...AUDIT_SOURCES })}/>
         <Button aria-expanded={more} onClick={() => setMore(!more)}>{more ? '收起筛选' : '更多筛选'}</Button>
         <Button theme="solid" htmlType="submit">查询</Button>
         <Button onClick={() => { setDraft(initialFilters); changeFilters(initialFilters); }}>重置</Button>
         {more && <div className="audit-log-extra-filters">
-          <Choice label="客户" value={draft.tenant} onSelect={value => update('tenant',value)}
+          <Choice label="客户" value={draft.tenant} onChange={value => update('tenant',value)}
             options={scopeOptions(tenants,draft.tenant,'全部客户')}/>
-          <Choice label="项目" value={draft.project} onSelect={value => update('project',value)}
+          <Choice label="项目" value={draft.project} onChange={value => update('project',value)}
             options={scopeOptions(availableProjects,draft.project,'全部项目')}/>
-          <Input aria-label="操作人" placeholder="操作人名称 / 账号 ID" maxLength={100} value={draft.actor} onChange={value => update('actor', value)} showClear/>
-          <Choice label="对象类型" value={draft.type} onSelect={value => update('type', value)}
+
+          <Input aria-label="搜索对象或记录 ID" placeholder="对象名称 / 对象 ID / 记录 ID"
+            value={draft.q} maxLength={200} onChange={value => update('q', value)} showClear/>
+          <Choice label="操作结果" value={draft.status} onChange={value => update('status', value)}
+            options={Object.entries({ '': '全部结果', ...AUDIT_RESULTS })}/>
+          <Choice label="对象类型" value={draft.type} onChange={value => update('type', value)}
             options={Object.entries({ '': '全部对象类型', ...AUDIT_RESOURCES })}/>
         </div>}
       </form>
       {rangeError && <Banner type="warning" description={rangeError} closeIcon={null}/>}
       {loaded?.issue ? <Banner type="danger" closeIcon={null} description={<>{loaded.issue.message} <Button size="small"
         onClick={loginRequired(loaded.issue) ? () => openLogin() : refresh}>{loginRequired(loaded.issue) ? '后台登录' : '重试'}</Button></>}/>
-        : <AdminTable rowKey="event_id" dataSource={loaded?.items || []} columns={columns} loading={!loaded}
+        : <AdminTable className="audit-log-table" rowKey="event_id" dataSource={loaded?.items || []} columns={columns} loading={!loaded}
           empty={hasFilters ? '没有符合筛选条件的审计记录' : '暂无审计记录'}
-          scroll={{ x: 'max(100%, 840px)' }} pagination={false}/>}
+          scroll={{ x: `max(100%, ${columns.reduce((width, column) => width + column.width, 0)}px)` }} tableLayout="fixed" pagination={false}/>}
       {loaded && !loaded.issue && (cursors.length > 1 || loaded.nextCursor) && <Space className="audit-log-pagination" role="group" aria-label="分页">
         <Button size="small" disabled={cursors.length < 2} onClick={() => page(cursors.slice(0, -1))}>上一页</Button>
         <Text aria-live="polite">第 {cursors.length} 页</Text>
         <Button size="small" disabled={!loaded.nextCursor} onClick={() => page([...cursors, loaded.nextCursor])}>下一页</Button>
       </Space>}
     </Card>
-    {detail && <AuditDetails row={detail} accountId={accountId} tenantName={tenantName} projectName={projectName}
-      close={() => setDetail(null)} onLogin={() => openLogin()}/>}
+    {detail && <AuditDetails row={detail} accountId={accountId} tenantName={tenantName} projectName={projectName} close={() => setDetail(null)} onLogin={() => openLogin()}/>}
   </div>;
 }

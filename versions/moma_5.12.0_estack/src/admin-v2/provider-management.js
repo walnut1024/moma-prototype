@@ -8,6 +8,7 @@ import { canonicalMomaScenarios } from './moma-billing-items.js';
 import { isBuiltinMoma, providerCatalogueIds } from './moma-provider.js';
 import { availableSupplies, modelTransaction } from './model-management.js';
 import { connectionFingerprint, connectionTestCurrent, connectionTestPassed, connectionCredentialsReady, connectionKeys, connectionQualification, connectionTestPending } from './connection-state.js';
+import { connectionRecoveryIssue } from './connection-state.js';
 import { supplierResourceTransaction, invalidateSupplierChannels } from './supplier-resources.js';
 import { prepareChannelInterface, prepareChannelAdapterOptions } from './channel-interface.js';
 import { catalogueConnections, connectionCatalogueIds } from './provider-model-connections.js';
@@ -409,6 +410,7 @@ export function providerTransaction(state, action) {
       if (!endpoint) throw new Error('接入配置不存在');
       const owner = state.providers.find(item => item.id === endpoint.providerId);
       if (operation === 'testConnection') {
+        if (endpoint.adapterDraft) throw Error('请先为待适配连接配置可用适配器');
         if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在服务商密钥页签配置此接入地址的凭证');
         const scenarios = { 成功: ['通过', '服务地址、凭证和协议检查通过'], 超时: ['失败', '上游连接超时，请检查服务地址与网络'], 鉴权失败: ['失败', '鉴权失败，请检查凭证引用与权限'], 协议错误: ['失败', '协议不兼容，请核对接入协议'] };
         const result = scenarios[data.scenario];
@@ -416,14 +418,16 @@ export function providerTransaction(state, action) {
         const qualification = connectionQualification(endpoint);
         changes.push(update('endpoints', endpoint.id, { ...(qualification ? { connectionQualification: structuredClone(qualification) } : {}), connectionTest: { result: result[0], message: result[1], simulated: true, testedAt: new Date().toISOString(), fingerprint: connectionFingerprint(endpoint) }, ...(result[0] !== '通过' && ['运行中', '需关注'].includes(endpoint.status) ? { status: '需关注' } : {}) }));
       } else if (operation === 'enableConnection') {
+        const recovery = connectionRecoveryIssue(endpoint);
+        if (recovery) throw Error(recovery);
         if (connectionTestPending(endpoint)) throw new Error('当前配置的测试尚未完成，请等待结果');
         if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在服务商密钥页签配置此接入地址的凭证');
         if (owner?.status !== '已启用') throw new Error('请先启用服务商');
         if (!connectionTestPassed(endpoint)) throw new Error('当前接入配置须先通过连接测试');
-        changes.push(update('endpoints', endpoint.id, { status: '运行中', activationChangedAt: new Date().toISOString(), connectionQualification: structuredClone(endpoint.connectionTest) }));
+        changes.push(update('endpoints', endpoint.id, { status: '运行中', activationSource: null, activationChangedAt: new Date().toISOString(), connectionQualification: structuredClone(endpoint.connectionTest) }));
       } else if (operation === 'disableConnection') {
         if (!data.confirmed) throw new Error('请先确认停用影响');
-        changes.push(update('endpoints', endpoint.id, { status: '停用', activationChangedAt: new Date().toISOString() }));
+        changes.push(update('endpoints', endpoint.id, { status: '停用', activationSource: 'manual', activationChangedAt: new Date().toISOString() }));
       } else throw new Error('未知服务商操作');
     }
   }

@@ -94,6 +94,9 @@ export function normalizeModelProfile(value = {}, type, usageUnit) {
   if (result.activeParameters && result.parameters && result.activeParameters > result.parameters) throw new Error('激活参数不能超过总参数');
   if (result.retirementDate && result.releaseDate && result.retirementDate < result.releaseDate) throw new Error('退役日期不能早于发布日期');
   if (result.benchmarkResult && (!result.benchmark || !result.benchmarkDataset || !result.benchmarkConditions || !result.benchmarkDate)) throw new Error('填写评测结果时，请同时填写任务与指标、数据集版本、测试条件和日期');
+  for (const key of ['authorId', 'familyId']) {
+    if (typeof value[key] === 'string' && value[key]) result[key] = value[key];
+  }
   return result;
 }
 export function modelProfileDraft(model) {

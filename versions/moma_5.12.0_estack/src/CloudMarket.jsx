@@ -62,8 +62,8 @@ export function useCloudMarket(enabled=true) {
     window.dispatchEvent(new CustomEvent(MARKET_EVENT,{detail:event}));
     return result;
   };
-  const login = async (identifier, accessCode) => {
-    const result = await request('/auth/sign-in', {identifier, accessCode});
+  const login = async (identifier, accessCode, tenantId) => {
+    const result = await request('/auth/sign-in', {identifier, accessCode, tenantId});
     if (result.tenant) window.dispatchEvent(new CustomEvent(MARKET_EVENT, {detail:'login'}));
     return result;
   };

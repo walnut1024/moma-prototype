@@ -3,6 +3,7 @@ import { ArrowRight, Check, ChevronDown, Clock3, LogOut, UserRound } from 'lucid
 import { Button, Checkbox, Input, Popover, RadioGroup, Select, Steps, Toast } from '@douyinfe/semi-ui';
 import { AuthBrand, LoginPage, PasswordLoginForm } from './components/LoginPage';
 import { LOGIN_BASE, loginReturn, loginDestination, openLogin } from './login-navigation.mjs';
+import { ADMIN_ROLE_LABELS } from './admin-v2/admin-accounts';
 import { cloudAdminRequest } from './admin-v2/admin-client.mjs';
 import SiteAgreementLinks from './components/SiteAgreementLinks';
 import { PRIVATE_SITE } from './site-config.mjs';
@@ -23,8 +24,11 @@ export function useAuthNavigation() {
   useEffect(()=>{const sync=()=>setHash(location.hash);addEventListener('hashchange',sync);return()=>removeEventListener('hashchange',sync);},[]);
   useEffect(()=>{
     const controller=new AbortController();
-    cloudAdminRequest('/auth/me',{signal:controller.signal}).then(({account})=>{if(!controller.signal.aborted)setAdminAccount(account);},()=>{if(!controller.signal.aborted)setAdminAccount(null);});
-    return()=>controller.abort();
+    const refresh=()=>cloudAdminRequest('/auth/me',{signal:controller.signal})
+      .then(({account})=>{if(!controller.signal.aborted)setAdminAccount(account);},()=>{if(!controller.signal.aborted)setAdminAccount(null);});
+    void refresh();
+    addEventListener('focus',refresh);
+    return()=>{controller.abort();removeEventListener('focus',refresh);};
   },[route]);
   const requireLogin=useCallback(()=>{if(!isPublicAuthRoute(authRoute(location.hash))&&!location.hash.startsWith('#/admin'))openLogin();},[]);
   const navigate=(target,params='')=>{
@@ -54,17 +58,22 @@ export function CustomerSessionGate({auth,market}) {
 export function AuthBanner({ auth, market, onSwitchSpace, admin = false }) {
   const [open,setOpen]=useState(false), [switching,setSwitching]=useState(false);
   if(admin)return auth.adminAccount ? <Popover trigger="click" position="bottomRight" showArrow={false}
-    content={<div className="auth-account-menu"><div className="auth-menu-profile"><b>{auth.adminAccount.name}</b><span>{auth.adminAccount.role}</span></div>
-      <Button theme="borderless" icon={<LogOut size={16}/>} onClick={async()=>{try{await market.logout();openLogin(LOGIN_BASE);}catch(error){Toast.error(error.message);}}}>退出登录</Button></div>}>
+    content={<div className="auth-account-menu"><div className="auth-menu-profile"><b>{auth.adminAccount.name}</b><span>{ADMIN_ROLE_LABELS[auth.adminAccount.role] || auth.adminAccount.role}</span></div>
+    <Button theme="borderless" icon={<LogOut size={16}/>} onClick={async()=>{
+      try {
+        await market.logout();
+        openLogin(LOGIN_BASE);
+      } catch(error) {Toast.error(error.message);}
+    }}>退出登录</Button></div>}>
     <Button theme="borderless" className="auth-banner-user" aria-label="账号菜单" icon={<UserRound size={16}/>}>{auth.adminAccount.name}<ChevronDown size={14}/></Button>
   </Popover> : null;
   async function switchSpace(id) {
     if (switching || id===market.tenant.id) return;
     setSwitching(true);
     try {
-      await market.switchSpace(id);
+      const {tenant} = await market.switchSpace(id);
       setOpen(false);
-      onSwitchSpace?.();
+      onSwitchSpace?.(tenant);
     }
     catch (error) { Toast.error(error.message); }
     finally { setSwitching(false); }
@@ -122,8 +131,10 @@ export default function AuthExperience({auth,market,accountTitle='账号中心'}
 function TenantLogin({auth,market}) {
   const [spaces,setSpaces]=useState([]), [spaceId,setSpaceId]=useState('');
   const [busy,setBusy]=useState(false), [error,setError]=useState('');
-  const finish = () => {
-    if(auth.params.get('next')==='account') auth.navigate('account');
+  const enterpriseLogin = useRef(null);
+  const finish = account => {
+    if(account) location.assign(loginDestination(auth.params.get('returnTo'),account));
+    else if(auth.params.get('next')==='account') auth.navigate('account');
     else if(auth.params.get('next')==='invite') auth.navigate('invite','?'+new URLSearchParams({token:auth.params.get('token') || ''}));
     else location.assign(loginDestination(auth.params.get('returnTo')));
   };
@@ -131,27 +142,41 @@ function TenantLogin({auth,market}) {
     const loginHash = location.hash;
     const result = await market.login(identifier,accessCode);
     if (location.hash !== loginHash) return;
-    if (result.account) {
-      location.assign(loginDestination(auth.params.get('returnTo'),result.account));
-      return;
-    }
-    if (result.spaces.length > 1) {
+    if (result.selectEnterprise) {
+      enterpriseLogin.current = {identifier, accessCode};
       setSpaces(result.spaces);
       return;
     }
-    finish();
+    if (!result.account && result.spaces.length > 1) {
+      setSpaces(result.spaces);
+      return;
+    }
+    finish(result.account);
   }
   async function enterSpace(event) {
     event.preventDefault();
     if (busy || !spaceId) return;
     setBusy(true);setError('');
-    try { await market.switchSpace(spaceId);finish(); }
+    try {
+      const credentials = enterpriseLogin.current;
+      const {account} = credentials
+        ? await market.login(credentials.identifier,credentials.accessCode,spaceId)
+        : await market.switchSpace(spaceId);
+      enterpriseLogin.current = null;
+      finish(account);
+    }
     catch (issue) { setError(issue.message); }
     finally { setBusy(false); }
   }
-  return <LoginPage title={spaces.length ? '选择使用空间' : '登录'} onBack={market.tenant && !spaces.length ? auth.close : undefined}>
+  const enterprise = Boolean(enterpriseLogin.current);
+  const resetEnterpriseLogin = () => {
+    enterpriseLogin.current = null;
+    setSpaces([]);setSpaceId('');setError('');
+  };
+  return <LoginPage title={enterprise ? '选择企业空间' : spaces.length ? '选择使用空间' : '登录'}
+    onBack={enterprise ? (busy ? undefined : resetEnterpriseLogin) : market.tenant && !spaces.length ? auth.close : undefined}>
     {spaces.length ? <form className="auth-form" onSubmit={enterSpace}>
-      <FormSelect id="login-space" label="使用空间" options={spaces.map(space=>[space.id,space.type==='个人'?'个人空间':space.name])}
+      <FormSelect id="login-space" label={enterprise ? '企业空间' : '使用空间'} options={spaces.map(space=>[space.id,space.type==='个人'?'个人空间':space.name])}
         value={spaceId} onChange={setSpaceId} disabled={busy}/>
       {error && <p className="auth-field-error" role="alert">{error}</p>}
       <Button theme="solid" htmlType="submit" loading={busy} disabled={!spaceId}>进入空间</Button>

@@ -3,7 +3,7 @@ import { resolveOnboardingProvider, onboardingModelPreset, resolveOnboardingMode
 import { libraryRecord, modelLibrary } from './model-library.js';
 import { MODEL_TYPES } from './model-management.js';
 import { TASK_OPTIONS, INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, modelProfileDraft } from './model-profile.js';
-import { connectionFingerprint, connectionQualification } from './connection-state.js';
+import { connectionFingerprint, connectionKeys, connectionQualification } from './connection-state.js';
 import { providerTransaction } from './provider-management.js';
 import { catalogueChannels, channelFingerprint, channelQualification } from './provider-channels.js';
 import { supplierChannelAssociations } from './supplier-resources.js';
@@ -97,6 +97,32 @@ export function previewChannelModels(state, providerId, models, { source = 'upst
     return [{ id: crypto.randomUUID(), upstreamModelId: id, libraryId: match, candidates: candidates.map(row => row.id), confirmed: false, selected: false, source, status: saved ? '已存在' : candidates.length > 1 ? '待确认' : match ? '待确认匹配' : '待关联资料', type: typeof input === 'object' && Object.hasOwn(MODEL_TYPES, input.type) ? input.type : null, scenarios: [] }];
   }), missing: complete ? existing.filter(row => !seen.has(row.upstreamModelId)).map(row => row.id) : [] };
 }
+export const channelDiscoveryRevision = (provider, endpointId) => JSON.stringify((provider?.catalogConnections || []).filter(row => row.endpointId === endpointId && !row.deletedAt).map(row => [row.id, row.modelId, row.upstreamModelId]).sort(([left], [right]) => String(left).localeCompare(String(right))));
+export const directoryDiscoverySignature = (provider, endpoint) => JSON.stringify([
+  connectionFingerprint(endpoint), channelDiscoveryRevision(provider, endpoint.id),
+]);
+
+export function directoryDiscoveryReceipt(result) {
+  if (!result || result.source !== 'mock' || typeof result.complete !== 'boolean' || !Array.isArray(result.models) || result.models.length > 2000) {
+    throw Error('模型发现回执无效');
+  }
+  const models = result.models.map(model => {
+    const id = typeof model === 'string' ? model : model?.id;
+    if (typeof id !== 'string' || !id || id.length > 200 || /\s|\p{Cc}/u.test(id) || /\bsk-[\w-]{6,}/i.test(id)) throw Error('上游列表含无效模型标识');
+    if (typeof model === 'string') return { id };
+    return {
+      id,
+      ...(typeof model.name === 'string' && model.name.length <= 200 && !/\bsk-[\w-]{6,}|\bBearer\s+\S+/i.test(model.name) ? { name: model.name } : {}),
+      ...(['text', 'multimodal', 'image', 'video', 'audio', 'embedding', 'rerank'].includes(model.type) ? { type: model.type } : {}),
+      ...(Number.isSafeInteger(model.context_length) && model.context_length > 0 ? { context_length: model.context_length } : {}),
+      capabilities: Object.fromEntries(['streaming', 'tools', 'structured'].filter(key => typeof model.capabilities?.[key] === 'boolean')
+        .map(key => [key, model.capabilities[key]])),
+    };
+  });
+  return { models, source: 'mock', complete: result.complete };
+}
+
+
 export function channelOnboardingTransaction(state, { operation, data = {} }) {
   const now = new Date().toISOString(), finish = (label, objectId, changes) => ({ type: 'batch', label, objectId, changes });
   if (/^channelTemporaryTest(Job|Receipt)$/.test(operation)) {
@@ -177,6 +203,22 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
     const id = resourceId('model');
     return finish('新建模型基础资料', id, [add('modelTemplates', { id, name, modelId, type, description: '', maker: '', capabilities: { context: null, output: null, streaming: null, tools: null }, profile, revision: 1, updatedAt: now })]);
   }
+  if (operation === 'channelDiscoveryRecord') {
+    if (!Array.isArray(data.rows) || !data.rows.length || data.rows.length > 100 || new Set(data.rows.map(row => row?.endpointId)).size !== data.rows.length) {
+      throw Error('请选择 1–100 条不重复的连接');
+    }
+    const taskId = text(data.taskId, '检测任务 ID', 100);
+    const changes = data.rows.map(row => {
+      const provider = state.providers.find(item => item.id === row?.providerId && !item.deletedAt);
+      const endpoint = state.endpoints.find(item => item.id === row?.endpointId && item.providerId === provider?.id && !item.deletedAt);
+      if (!provider || !endpoint || row.signature !== directoryDiscoverySignature(provider, endpoint)) throw Error('连接或当前模型关联已经变化，请重新检测');
+      const result = row.result ? directoryDiscoveryReceipt(row.result) : null;
+      if (!result && !['连接配置暂不支持检测', '上游模型列表检测失败'].includes(row.reason)) throw Error('未获取原因无效');
+      const reason = result ? '' : row.reason;
+      return update('endpoints', endpoint.id, { directoryDiscovery: { taskId, signature: row.signature, result, reason, discoveredAt: now } });
+    });
+    return finish('记录上游模型检测', taskId, changes);
+  }
   if (operation === 'channelDiscoveryPreview') {
     assertNoSecrets(data);
     const endpoint = data.endpointId && state.endpoints.find(row => row.id === data.endpointId && row.providerId === data.providerId && !row.deletedAt);
@@ -189,7 +231,7 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
     if (!provider || !endpoint) throw new Error('测试渠道已变化');
     const jobs = endpoint.serverTestJobs || [];
     if (operation === 'channelTestEvidenceJob') {
-      const batchId = data.batchId ? text(data.batchId, '测试任务 ID', 120) : '', operationId = text(data.operationId || data.batchId, '提交操作 ID', 120), signature = text(data.signature, '配置签名', 10000);
+      const batchId = data.batchId ? text(data.batchId, '测试任务 ID', 120) : '', operationId = text(data.operationId || data.batchId, '提交操作 ID', 120), signature = text(data.signature, '配置签名', 40000);
       assertNoSecrets(data.request);
       const previous = jobs.find(row => row.operationId === operationId);
       if (!Array.isArray(data.associationIds) || !data.associationIds.length || data.associationIds.length > 50 || new Set(data.associationIds).size !== data.associationIds.length) throw new Error('测试任务须引用1–50个不重复模型');
@@ -215,7 +257,7 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
     if (job.receivedAt) return finish('接入测试结果已记录', batch.id, []);
     if (batch.items.length !== job.associationIds.length || new Set(batch.items.map(item => item.model?.associationId)).size !== batch.items.length) throw new Error('测试回执模型集合与原提交不一致');
     const current = connectionFingerprint(endpoint) === job.signature;
-    const passed = [], connections = structuredClone(provider.catalogConnections || []), changed = [], known = supplierChannelAssociations(state, provider, endpoint.id);
+    const passed = [], evaluated = [], connections = structuredClone(provider.catalogConnections || []), changed = [], known = supplierChannelAssociations(state, provider, endpoint.id);
     for (const item of batch.items) {
       const projection = known.find(row => row.id === item.model?.associationId);
       if (!projection || !job.associationIds.includes(projection.id)) throw new Error('测试回执含其他渠道模型');
@@ -228,6 +270,7 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
       if (index < 0) connections.push(association); else connections[index] = association;
       const result = ({ passed: '通过', failed: '失败', cancelled: '已取消', unknown: '结果未知' })[item.status] || '结果未知';
       const record = { id: text(item.id, '测试记录 ID', 120), source: 'mock', simulated: true, current: itemCurrent, ...channelTestDiagnostics({ providerId: provider.id, endpointId: endpoint.id, associationId: association.id, operator: job.operator, configurationRevision: job.configurationRevision, serverChannelId: job.serverChannelId }, batch, item), fingerprint: itemCurrent ? channelFingerprint({ ...association, endpoint }) : JSON.stringify(['old-config', job.signature]) };
+      if (itemCurrent && !item.model.check) evaluated.push(record);
       association.testHistory = [...(association.testHistory || []), record];
       if (itemCurrent) association.type = master.type;
       if (itemCurrent && !item.model.check && (!association.health?.testedAt || Date.parse(record.testedAt) >= Date.parse(association.health.testedAt))) { const qualified = channelQualification({ ...projection, ...association, endpoint }); if (qualified) association.qualification = structuredClone(qualified); association.health = record; if (result === '通过') passed.push(record); }
@@ -237,7 +280,36 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
     changed.push(update('providers', provider.id, { catalogConnections: connections }));
     const endpointPatch = { ...(connectionQualification(endpoint) ? { connectionQualification: structuredClone(connectionQualification(endpoint)) } : {}), serverTestJobs: jobs.map(row => row.batchId === batch.id ? { ...row, receivedAt: now, status: batch.status } : row) };
     const latestPass = passed.sort((left, right) => Date.parse(right.testedAt) - Date.parse(left.testedAt))[0];
-    if (current && latestPass && !job.check && (!endpoint.connectionTest?.testedAt || Date.parse(latestPass.testedAt) >= Date.parse(endpoint.connectionTest.testedAt))) endpointPatch.connectionTest = { result: '通过', fingerprint: connectionFingerprint(endpoint), testedAt: latestPass.testedAt, source: 'mock', simulated: true, serverBatchId: batch.id };
+    if (current && latestPass && !job.check && (!endpoint.connectionTest?.testedAt || Date.parse(latestPass.testedAt) >= Date.parse(endpoint.connectionTest.testedAt))) endpointPatch.connectionTest = { result: '通过', fingerprint: connectionFingerprint(endpoint), testedAt: latestPass.testedAt, durationMs: latestPass.durationMs, source: 'mock', simulated: true, serverBatchId: batch.id };
+    const policy = endpoint.directoryAutoStop;
+    const isPool = endpoint.authMode === 'pool';
+    const localKey = isPool ? state.cloudMockState?.credentials?.find(row => row.id === batch.credentialId)?.localKeyId : null;
+    const targetsCurrentKey = !isPool || endpoint.keyPool?.some(row => row.keyId === localKey && row.enabled);
+    if (policy?.enabled && targetsCurrentKey && !job.check && evaluated.length === known.length && evaluated.length === job.associationIds.length && batch.status === 'completed' &&
+      ['运行中', '需关注'].includes(endpoint.status) && Date.parse(job.createdAt) >= Date.parse(policy.updatedAt)) {
+      const evaluatedAt = evaluated.map(row => row.testedAt).sort().at(-1);
+      const previous = isPool ? endpoint.directoryKeyEvidence?.[localKey] : endpoint.directoryStopEvidence;
+      if (!previous || Date.parse(evaluatedAt) > Date.parse(previous.evaluatedAt)) {
+        const allDenied = evaluated.every(row => row.result === '失败' && [401, 403].includes(row.statusCode));
+        const consecutive = allDenied ? (previous?.signature === job.signature ? previous.consecutive : 0) + 1 : 0;
+        const evidence = { evaluatedAt, consecutive, signature: job.signature };
+        if (isPool) endpointPatch.directoryKeyEvidence = { ...endpoint.directoryKeyEvidence, [localKey]: evidence };
+        else endpointPatch.directoryStopEvidence = evidence;
+        if (consecutive >= policy.threshold) {
+          const reason = '连续 ' + consecutive + ' 次模拟检测均为上游鉴权失败';
+          if (isPool) {
+            const keyPool = endpoint.keyPool.map(row => row.keyId === localKey ? { ...row, enabled: false } : row);
+            const hasOther = connectionKeys({ ...endpoint, keyPool }, provider).length > 0;
+            Object.assign(endpointPatch, {
+              keyPool, poolPaused: !hasOther, status: hasOther ? '需关注' : '停用',
+              directoryKeyStops: { ...endpoint.directoryKeyStops, [localKey]: { reason, stoppedAt: evaluatedAt } },
+              ...(hasOther ? {} : { activationSource: 'automatic', activationChangedAt: evaluatedAt, activationReason: reason }),
+            });
+          } else Object.assign(endpointPatch, { status: '停用', activationSource: 'automatic',
+            activationChangedAt: evaluatedAt, activationReason: reason });
+        }
+      }
+    }
     changed.push(update('endpoints', endpoint.id, endpointPatch));
     return finish('记录接入测试结果', batch.id, changed);
   }

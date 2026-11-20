@@ -2,6 +2,7 @@ import { lifecycleAccess, assertOrderAccess, offerKey, salesCustomer } from '../
 import { MODEL_ORDER_BILLING_TYPES } from '../model-order-display.mjs';
 import { commitAdminState } from "./state-transaction.js";
 import { usageTotal } from "./observability.js";
+import { tenantModelAllowed, tenantQuotaEnabled, tenantQuotaError } from '../tenant-service-policy.mjs';
 import { enterpriseGrant, enterpriseTokenUsage } from './enterprise.js';
 import { availableSupplies, activeSupplySalePrice, activeSupplyPrice, priceItems, procurementVersion } from "./model-management.js";
 import { activeModelSalePrice, activeProviderPrice } from './service-workspace.js';
@@ -143,14 +144,15 @@ function simulateModelRequest(state, { requestId, keyId, modelId:requestedModelI
   const recent=state.requests.filter(row=>!diagnosticCall(row) && row.keyId===keyId&&Date.parse(row.admittedAt || row.createdAt)>startedAt-60000&&Date.parse(row.admittedAt || row.createdAt)<=startedAt && (row.admittedAt || row.httpStatus===200));
   const keyRateExceeded=key?.qpmLimit!=null&&recent.length>=key.qpmLimit || key?.tpmLimit!=null&&recent.reduce((total,row)=>total+enterpriseTokenUsage(state.models.find(item=>item.id===row.modelId),row.usage || {}),0)+quantity>key.tpmLimit;
   const tenantGrant = enterpriseGrant(state, key?.tenantId), tenantQuantity = enterpriseTokenUsage(model, usage);
+  const quotaError = tenantQuotaError(tenantGrant,tenantQuantity,startedAt,internal);
   let httpStatus = 200, error = "", endpointId = service || !route ? candidates[0]?.endpointId : route.targets.find(target => candidateIds.includes(target.endpointId))?.endpointId;
   const accessCode = projectAccessError(project, modelId, key, startedAt);
   if (!key || key.status !== "有效" || !tenant || tenant.status === "停用" || !project) [httpStatus, error] = [401, "auth_rejected"];
   else if (routeError) [httpStatus,error] = [projectCallErrors[routeError][0],routeError];
   else if (accessCode) [httpStatus, error] = [projectCallErrors[accessCode][0], accessCode];
   else if (!key.modelIds.includes(modelId)) [httpStatus, error] = [403, "model_not_authorized"];
-  else if (tenantGrant && !tenantGrant.modelIds.includes(modelId)) [httpStatus, error] = [403, 'enterprise_model_not_authorized'];
-  else if (tenantGrant && tenantGrant.limit - tenantGrant.used < tenantQuantity) [httpStatus, error] = [402, 'enterprise_quota_exhausted'];
+  else if (!tenantModelAllowed(tenant,tenantGrant,modelId)) [httpStatus, error] = [403, 'enterprise_model_not_authorized'];
+  else if (quotaError) [httpStatus, error] = [projectCallErrors[quotaError][0], quotaError];
   else if (!access.allowed) [httpStatus, error] = [403, access.code];
   else if (internal && !salesCustomer(model,tenant.id)) [httpStatus,error]=[403,'model_forbidden'];
   else if (allowedModelTypes && !allowedModelTypes.includes(model.type)) [httpStatus,error]=[422,'task_unsupported'];
@@ -238,7 +240,7 @@ function simulateModelRequest(state, { requestId, keyId, modelId:requestedModelI
     const nextUsed = grant.used + quantity;
     changes.push({ type: "update", collection: "grants", id: grant.id, changes: { used: nextUsed } }, { type: "add", collection: "ledger", record: { id: id("ledger"), accountId: key.id, sourceId: `request:${requestId}`, type: "调用扣减", delta: -quantity, balance: grant.limit - nextUsed, reason: requestId, status: "已完成" } });
   }
-  if (httpStatus === 200 && !diagnostic && tenantGrant && tenantQuantity) changes.push({ type: 'update', collection: 'grants', id: tenantGrant.id, changes: { used: tenantGrant.used + tenantQuantity } }, { type: 'add', collection: 'ledger', record: { id: id('enterprise-ledger'), accountId: tenant.id, sourceId: `enterprise-request:${requestId}`, type: '企业额度扣减', delta: -tenantQuantity, balance: tenantGrant.limit - tenantGrant.used - tenantQuantity, reason: requestId, status: '已完成' } });
+  if (httpStatus === 200 && !diagnostic && tenantQuotaEnabled(tenantGrant,internal) && tenantQuantity) changes.push({ type: 'update', collection: 'grants', id: tenantGrant.id, changes: { used: tenantGrant.used + tenantQuantity } }, { type: 'add', collection: 'ledger', record: { id: id('enterprise-ledger'), accountId: tenant.id, sourceId: `enterprise-request:${requestId}`, type: '企业额度扣减', delta: -tenantQuantity, balance: tenantGrant.limit - tenantGrant.used - tenantQuantity, reason: requestId, status: '已完成' } });
   if (httpStatus === 200 && !diagnostic && plan) changes.push(
     { type:'update', collection:'orders', id:plan.plan.id, changes:{used:plan.plan.used + plan.deduction} },
     { type:'add', collection:'ledger', record:{ id:id('plan-ledger'), accountId:plan.plan.id, sourceId:`request:${requestId}`,

@@ -66,20 +66,62 @@ export function orderTenantServices(serviceIds,expectedRevision,storage=globalTh
 export function organizationProjection(state,tenantId) {
   const root=state.organizations.find(row=>row.tenantId===tenantId&&!row.parentId);
   const id=row=>row===root?.id?'root':row;
-  return {rootId:root?.id,platformAccounts:state.users.filter(row=>row.invitable&&row.status==='正常').map(row=>({sourceUserId:row.id,name:row.name,account:row.login,phone:row.phone})),departments:state.organizations.filter(row=>row.tenantId===tenantId).map(row=>({...row,id:id(row.id),parentId:id(row.parentId),ownerId:state.memberships.find(member=>member.tenantId===tenantId&&member.userId===row.ownerId)?.id || null})),members:state.memberships.filter(row=>row.tenantId===tenantId).map(row=>{const user=state.users.find(item=>item.id===row.userId);return {...row,name:row.memberName ?? (user?.name || row.name || '未填写'),phone:row.memberPhone ?? (user?.phone || ''),account:user?.login || user?.email || user?.phone || row.userId,departmentId:id(row.organizationId || row.departmentId) || 'unassigned',role:row.role==='租户管理员'?'企业管理员':row.role,status:row.status==='正常'?'已加入':row.status==='停用'?'已停用':'待加入'};}),audit:state.audits.filter(row=>row.tenantId===tenantId).map(row=>({id:row.id,time:row.createdAt,actor:row.actor,description:row.action}))};
+  return {rootId:root?.id,platformAccounts:state.users.filter(row=>row.invitable&&row.status==='正常').map(row=>({sourceUserId:row.id,name:row.name,account:row.login,phone:row.phone})),departments:state.organizations.filter(row=>row.tenantId===tenantId).map(row=>({...row,id:id(row.id),parentId:id(row.parentId),ownerId:state.memberships.find(member=>member.tenantId===tenantId&&member.userId===row.ownerId)?.id || null})),members:state.memberships.filter(row=>row.tenantId===tenantId).map(row=>{const user=state.users.find(item=>item.id===row.userId);return {...row,name:row.memberName ?? (user?.name || row.name || '未填写'),phone:row.memberPhone ?? (user?.phone || ''),account:user?.login || user?.email || user?.phone || row.userId,departmentId:id(row.organizationId || row.departmentId) || 'unassigned',role:row.role==='租户管理员'?'企业管理员':row.role,status:row.status==='正常'?'已加入':row.status==='停用'?'已停用':'待加入'};}),audit:state.audits.filter(row=>row.tenantId===tenantId).map(row=>({id:row.id,time:row.createdAt,actor:row.actorRole ? row.actor + '（' + row.actorRole + '）' : row.actor,description:row.action,departmentIds:row.departmentIds}))};
 }
 export function saveTenantOrganization(data,expectedRevision,storage=globalThis.localStorage) {
   const context=tenantContext(storage), {state,identity}=context, raw=storage.getItem(ADMIN_DATA_KEY);
   if(state.revision!==expectedRevision)throw Error('数据已变化，请刷新后重试');
   return save(state,tenantOrganizationChanges(context,data),identity,data.audit[0]?.description || '维护组织成员',storage,raw);
 }
-export function tenantOrganizationChanges({state,identity,link,canManage}, data) {
-  if(!canManage || identity.spaceId==='personal')throw Error('只有企业管理员可以维护组织成员');
+export function organizationManagementScope({state,identity,link}) {
+  const member = state.memberships.find(row=>row.id===link.backendMembershipId && row.tenantId===identity.tenantId && row.status==='正常');
+  if (member?.role !== '部门管理员') return null;
+  const departments = state.organizations.filter(row=>row.tenantId===identity.tenantId && row.status!=='停用');
+  const scope = departments.find(row=>row.id===member.scopeId);
+  if (!scope) return null;
+  const ids = member.includeChildren ? descendantIds(departments,scope.id) : new Set([scope.id]);
+  return new Set(departments.filter(row=>ids.has(row.id)).map(row=>row.parentId===null ? 'root' : row.id));
+}
+export function scopedOrganization(context) {
+  const {state,identity,canManage}=context;
+  if (identity.spaceId==='personal') return {departments:[],members:[],audit:[]};
+  const full = organizationProjection(state,identity.tenantId);
+  if (canManage) return full;
+  const scope = organizationManagementScope(context);
+  if (!scope) return { departments:full.departments, members:full.members.filter(row=>row.id===context.link.backendMembershipId), audit:[] };
+  return { ...full, departments:full.departments.filter(row=>scope.has(row.id)),
+    members:full.members.filter(row=>scope.has(row.departmentId)),
+    audit:full.audit.filter(row=>row.departmentIds?.length && row.departmentIds.every(id=>scope.has(id))) };
+}
+export function tenantOrganizationChanges(context, data) {
+  const {state,identity,canManage}=context;
+  if (identity.spaceId==='personal') throw Error('个人空间不支持组织管理');
+  if (canManage) return applyTenantOrganization(context,data);
+  const scope = organizationManagementScope(context);
+  if (!scope) throw Error('当前账号无组织管理权限');
+  const visible = scopedOrganization(context);
+  const members = new Map(visible.members.map(row=>[row.id,row]));
+  if (JSON.stringify(data.departments)!==JSON.stringify(visible.departments)) throw Error('部门管理员不能变更组织架构');
+  for (const row of data.members) {
+    const old = members.get(row.id);
+    if (old && JSON.stringify(row)===JSON.stringify(old)) continue;
+    if ((old && old.role!=='普通成员') || row.role!=='普通成员' || !scope.has(row.departmentId)) {
+      throw Error('只可管理授权部门内的普通成员');
+    }
+  }
+  const present = new Set(data.members.map(row=>row.id));
+  if (visible.members.some(row=>!present.has(row.id) && row.role!=='普通成员')) throw Error('不能移除组织管理员');
+  const full = organizationProjection(state,identity.tenantId);
+  const outside = full.members.filter(row=>!members.has(row.id));
+  return applyTenantOrganization(context,{ ...full,members:[...outside,...data.members] });
+}
+function applyTenantOrganization({state,identity,link}, data) {
+  if(identity.spaceId==='personal')throw Error('只有企业管理员可以维护组织成员');
   const next=structuredClone(state),root=state.organizations.find(row=>row.tenantId===identity.tenantId&&!row.parentId);
   if(!root || !data.departments.some(row=>row.id==='root') || !data.members.some(row=>row.role==='企业管理员'&&row.status==='已加入'))throw Error('必须保留根部门和有效企业管理员');
 
   const before=organizationProjection(state,identity.tenantId);
-  if(!data.members.some(row=>row.id===link.backendMembershipId&&row.status==='已加入'))throw Error('不能移除或停用当前登录成员');
+  if(!link.systemAdministrator && !data.members.some(row=>row.id===link.backendMembershipId&&row.status==='已加入'))throw Error('不能移除或停用当前登录成员');
   if(new Set(data.departments.map(row=>row.id)).size!==data.departments.length||new Set(data.members.map(row=>row.id)).size!==data.members.length)throw Error('组织或成员 ID 重复');
   for(const row of data.departments){if(row.id==='root'){if(row.name!==before.departments.find(item=>item.id==='root').name||row.parentId!==null)throw Error('根部门不可修改');}else if(!row.name?.trim()||row.name.length>30||!data.departments.some(item=>item.id===row.parentId)||descendantIds(data.departments,row.id).has(row.parentId))throw Error('部门名称或层级无效');}
   if(data.members.some(row=>row.status!=='待加入' && before.members.some(member=>member.id===row.id && member.status==='待加入')))
@@ -107,7 +149,7 @@ export function tenantOrganizationChanges({state,identity,link,canManage}, data)
     return {...old,id:row.id,userId,tenantId:identity.tenantId,organizationId:departmentId(row.departmentId),
       scopeId:departmentId(row.scopeId),role:row.role==='企业管理员'?'租户管理员':row.role,
       status:row.status==='已加入'?'正常':row.status==='已停用'?'停用':'待加入',
-      includeChildren:row.includeChildren,canCreateProjects:row.canCreateProjects === true,source:old?.source || row.source,
+      includeChildren:row.includeChildren,source:old?.source || row.source,
       memberName:row.name===previous?.name ? old?.memberName : row.name,
       memberPhone:row.phone===previous?.phone ? old?.memberPhone : row.phone};
   });

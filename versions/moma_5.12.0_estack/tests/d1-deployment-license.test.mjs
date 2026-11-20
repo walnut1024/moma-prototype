@@ -3,14 +3,25 @@ import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { API_PREFIX } from '../api-path.js';
 import { startLocalBackend } from '../database/local-runtime.js';
-import { canAccessPage, commercialPage, sections } from '../src/admin-v2/navigation.mjs';
+import { adminSections, canAccessPage, commercialPage, isOrganizationPage } from '../src/admin-v2/navigation.mjs';
 import { deploymentLicense } from '../src/deployment-license.mjs';
 
-test('deployment capability separates the five commerce entries from shared model operations', () => {
-  const { items } = sections.find(row => row.id === 'commerce');
-  assert.deepEqual(items.map(row => row.label), ['模型销售', '客户管理', '订购与账单', '套餐管理', '经营分析']);
+test('tenant management is shared and resource management requires the system administrator', () => {
   const internal = deploymentLicense({ MOMA_LICENSE_EDITION: 'internal' });
   const commercial = deploymentLicense({ MOMA_LICENSE_EDITION: 'commercial' });
+  const commercialGroup = adminSections.find(row=>row.id==='commerce');
+  const access = adminSections.find(row=>row.id==='customers');
+  assert.deepEqual(commercialGroup.items.map(row=>row.label), ['模型销售','套餐管理']);
+  assert.deepEqual(access.items.map(row=>row.label), ['租户管理']);
+  assert(!adminSections.some(row=>row.id==='organization'));
+  assert(canAccessPage('平台管理员','projects',commercial));
+  assert(canAccessPage('平台管理员','organization-members',internal));
+  assert(!canAccessPage('运营人员','projects',commercial));
+  assert(!canAccessPage('运维人员','organization-members',internal));
+  assert(isOrganizationPage('tenants', true));
+  assert(!isOrganizationPage('projects', false));
+  assert(!isOrganizationPage('orders', false));
+  assert.equal(canAccessPage('运营人员', 'customer-analysis', internal), false);
   assert(canAccessPage('运营人员', 'model-market', internal));
   assert(canAccessPage('运营人员', 'tenants', internal));
   for (const id of ['model-prices', 'orders', 'bills', 'metering', 'package-production', 'business-analysis']) {

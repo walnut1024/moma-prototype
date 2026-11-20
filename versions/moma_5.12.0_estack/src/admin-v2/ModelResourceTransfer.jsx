@@ -3,7 +3,7 @@ import { Button, Space, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
 import Table from './AdminTable';
 import { AdminSideSheet } from './AdminOverlay';
 import { Notice } from './ServiceUI';
-import { exportModelResources, importModelResources, resourceRows } from './model-resource-transfer.js';
+import { exportModelResources, importModelResources, resourceFieldChanges, resourceRows } from './model-resource-transfer.js';
 import { operationsTransaction } from './model-operations.js';
 import './model-resource-transfer.css';
 import { RESOURCE_SCHEMA, resourcePageTarget, resourceTargetLabel, resourceKey } from './model-resource-scope.js';
@@ -17,7 +17,12 @@ export function openResourceJson(ops, target, onView) {
   });
 }
 
-export default function ModelResourceTransfer({ state, ops, scope, target: selectedTarget, onView, hideView = false }) {
+const channelTypes = { provider: '服务商', provider_model: '模型登记', connection: '连接', channel: '模型渠道' };
+const channelFields = { name: '名称', base_url: '上游 API 地址', protocol: '协议', interface_type: '接口类型',
+  upstream_model_id: '上游模型调用标识', capacity_limits: '容量限额', procurement: '采购成本', enabled: '启用状态' };
+const fieldValue = value => value == null || value === '' ? '—' : typeof value === 'string' ? value : JSON.stringify(value);
+
+export default function ModelResourceTransfer({ state, ops, scope, target: selectedTarget, onView, hideView = false, reviewFields = false }) {
   const [open, setOpen] = useState(false), [text, setText] = useState(''), [plan, setPlan] = useState(null);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const close = () => { if (!busy) ops.proceed(() => { setOpen(false); setText(''); setPlan(null); setError(''); ops.dirty(false); }); };
@@ -40,7 +45,8 @@ export default function ModelResourceTransfer({ state, ops, scope, target: selec
       if (value?.scope !== scope) throw Error('JSON 范围与当前模块不一致');
       const result = importModelResources(state, value, operationsTransaction, target);
       const affected = new Set(result.changes.filter(change => change.collection === 'endpoints' && ['baseUrl','protocol','interfaceType','taskUrls'].some(field => Object.hasOwn(change.changes || {}, field))).map(change => change.id));
-      setPlan({ value, changes: result.changes.length, impacts: resourceRows(state, 'channels').filter(row => row.type === 'channel' && affected.has(row.connection_id)) });
+      setPlan({ value, changes: result.changes.length, impacts: resourceRows(state, 'channels').filter(row => row.type === 'channel' && affected.has(row.connection_id)),
+        ...(reviewFields ? { fields: resourceFieldChanges(state, value) } : {}) });
       ops.dirty(result.changes.length > 0);
     } catch (issue) { setError(issue.message); }
   };
@@ -65,6 +71,20 @@ export default function ModelResourceTransfer({ state, ops, scope, target: selec
         }}>确认保存</Button>
       </>}>
       <div className="model-resource-content">
+        {reviewFields && plan ? <>
+          <Notice>{plan.value.rows.length} 行已校验，{new Set(plan.fields.map(row => row.type + ':' + row.id)).size} 行发生变更。</Notice>
+          <Typography.Title heading={5} component="h3">变更预览</Typography.Title>
+          <Table rowKey="key" dataSource={plan.fields} pagination={{ pageSize: 10 }} scroll={{ x: 850 }}
+            empty="与当前记录一致，无需保存" columns={[
+              { title: '对象', width: 110, render: (_, row) => channelTypes[row.type] || row.type },
+              { title: '永久 ID', dataIndex: 'id', width: 210 },
+              { title: '字段', width: 140, render: (_, row) => channelFields[row.field] || row.field },
+              { title: '当前值', render: (_, row) => fieldValue(row.before) },
+              { title: '新值', render: (_, row) => fieldValue(row.after) },
+            ]}/>
+          {plan.impacts.length > 0 && <Notice>共享连接变更将影响 {plan.impacts.length} 条模型渠道，保存需满足原连接验证要求。</Notice>}
+          <Button onClick={() => { setPlan(null); setError(''); ops.dirty(Boolean(text.trim())); }} disabled={busy}>返回 JSON 编辑</Button>
+        </> : <>
         <Typography.Paragraph>保留永久 ID 和只读关联，修改配置后校验并预览。每批最多 500 行；价格变更生成新版本。</Typography.Paragraph>
         <Space wrap>
           <Button onClick={copy} disabled={!text || busy}>复制完整 JSON</Button>
@@ -88,6 +108,7 @@ export default function ModelResourceTransfer({ state, ops, scope, target: selec
               { title: '上游模型调用标识', dataIndex: 'upstream_model_id', width: 220 }, { title: 'Provider ID', dataIndex: 'provider_id', width: 280 },
             ]}/>
           </>}</>}
+        </>}
         {(error || ops.error) && <Notice error>{error || ops.error}</Notice>}
       </div>
     </AdminSideSheet>}

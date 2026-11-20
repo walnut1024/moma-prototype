@@ -200,6 +200,62 @@ function upsert(db,table,rows,insertOnly=false){
   return db.prepare(`INSERT INTO ${table}(${columns.join(',')}) SELECT ${columns.map(c=>`json_extract(value,'$.${c}')`).join(',')} FROM json_each(?) WHERE true${insertOnly?'':` ON CONFLICT(${keys.join(',')}) DO UPDATE SET ${update}`}`).bind(j(rows));
 }
 
+export async function channelIndexPlan(db, state) {
+  const tables = projectModelState(structuredClone(state));
+  const versions = new Set([...(tables.offers?.values() || [])].map(row => row.active_route_id).filter(Boolean));
+  const expectedChannels = [...(tables.channel_models?.values() || [])].filter(row => !row.removed_at && JSON.parse(row.mapping_json).sourceAssociationId);
+  const expectedMembers = [...(tables.route_members?.values() || [])].filter(row => versions.has(row.route_version_id));
+  const [{ results: channelRows }, { results: routeRows }] = await db.batch([
+    db.prepare('SELECT cm.* FROM channel_models cm JOIN channels c ON cm.channel_id=c.id WHERE c.deleted_at IS NULL'),
+    db.prepare('SELECT * FROM route_members WHERE route_version_id IN (SELECT value FROM json_each(?))').bind(j([...versions])),
+  ]);
+  const indexed = new Map(channelRows.map(row => [row.id, row]));
+  const memberKey = row => row.route_version_id + '/' + row.channel_model_id;
+  const members = new Map(routeRows.map(row => [memberKey(row), row]));
+  const desiredMembers = new Set(expectedMembers.map(memberKey)), desiredChannels = new Set(expectedChannels.map(row => row.id));
+  const issues = [];
+  const fields = ['upstream_model_id', 'mapping_json', 'enabled', 'config_epoch', 'revision', 'removed_at'];
+  for (const want of expectedChannels) {
+    const have = indexed.get(want.id);
+    const ownership = ['channel_id', 'supplier_id', 'supplier_model_id', 'material_id'];
+    const unsafe = have && ownership.some(key => have[key] !== want[key]);
+    if (!have || unsafe || fields.some(key => have[key] !== want[key])) {
+      issues.push({ id: 'channel/' + want.id, type: '模型渠道索引', endpointId: want.channel_id,
+        reference: want.id, reason: unsafe ? '索引归属和供应登记不一致' : have ? '索引字段与供应登记不一致' : '缺少模型渠道索引',
+        repairable: !unsafe, before: have && Object.fromEntries([...ownership, ...fields].map(key => [key, have[key]])),
+        row: have ? { ...have, ...Object.fromEntries(fields.map(key => [key, want[key]])) } : want });
+    }
+  }
+  for (const have of channelRows) if (!have.removed_at && !desiredChannels.has(have.id) && JSON.parse(have.mapping_json).sourceAssociationId) {
+    issues.push({ id: 'channel/' + have.id, type: '模型渠道索引', endpointId: have.channel_id, reference: have.id,
+      reason: '找不到对应的当前供应登记', repairable: false, before: { channel_id: have.channel_id, supplier_id: have.supplier_id } });
+  }
+  for (const want of expectedMembers) {
+    const key = memberKey(want), have = members.get(key);
+    if (!have || ['offer_id', 'weight', 'position'].some(field => have[field] !== want[field])) {
+      issues.push({ id: 'route/' + key, type: '生效路由索引', endpointId: tables.channel_models.get(want.channel_model_id)?.channel_id,
+        reference: want.route_version_id, reason: have ? '索引成员与已发布版本不一致' : '缺少已发布路由成员',
+        repairable: true, before: have, row: want });
+    }
+  }
+  for (const have of routeRows) if (!desiredMembers.has(memberKey(have))) {
+    issues.push({ id: 'route/' + memberKey(have), type: '生效路由索引', endpointId: indexed.get(have.channel_model_id)?.channel_id,
+      reference: have.route_version_id, reason: '索引含有已发布版本未选中的成员', repairable: true, before: have, remove: true });
+  }
+  return issues.sort((left, right) => left.id.localeCompare(right.id));
+}
+
+export function channelIndexRepairStatements(db, issues) {
+  const channelRows = issues.filter(issue => issue.type === '模型渠道索引').map(issue => issue.row);
+  const routeRows = issues.filter(issue => issue.type === '生效路由索引' && !issue.remove).map(issue => issue.row);
+  const extras = issues.filter(issue => issue.remove).map(issue => issue.before);
+  return [
+    upsert(db, 'channel_models', channelRows),
+    upsert(db, 'route_members', routeRows),
+    extras.length && db.prepare("DELETE FROM route_members WHERE EXISTS (SELECT 1 FROM json_each(?) WHERE route_members.route_version_id=json_extract(value,'$.route_version_id') AND route_members.channel_model_id=json_extract(value,'$.channel_model_id'))").bind(j(extras)),
+  ].filter(Boolean);
+}
+
 export function modelChanges(db,before,after,{insertOnly=false}={}){
   const a=before?projectModelState(before):{};
   // Preserve internal relationship keys for non-service resources.
@@ -327,7 +383,7 @@ export async function loadSimulationWorkspace(db){
     db.prepare("SELECT json_object('id',id,'status',json_extract(record_json,'$.status'),'apiKeys',json_extract(record_json,'$.apiKeys'),'catalogModels',json_extract(record_json,'$.catalogModels'),'catalogConnections',json_extract(record_json,'$.catalogConnections')) AS record_json FROM suppliers WHERE deleted_at IS NULL"),
     db.prepare("SELECT json_object('id',id,'providerId',supplier_id,'status',json_extract(record_json,'$.status'),'deletedAt',json_extract(record_json,'$.deletedAt'),'frozen',json_extract(record_json,'$.frozen'),'apiKeys',json_extract(record_json,'$.apiKeys')) AS record_json FROM channels WHERE deleted_at IS NULL"),
     db.prepare("SELECT json_object('id',id,'type',json_extract(record_json,'$.type'),'platformPublications',json_extract(record_json,'$.platformPublications')) AS record_json FROM services WHERE deleted_at IS NULL"),
-    db.prepare("SELECT kind,id,payload_json FROM simulation_records WHERE kind NOT IN ('operations','site-agreements','project-usage','project-space-policy')")]);
+    db.prepare("SELECT kind,id,payload_json FROM simulation_records WHERE kind NOT IN ('operations','site-agreements','project-usage','project-space-policy','site-portal')")]);
   const snapshot=createMockEngine().snapshot();
   for(const kind of new Set(rows[5].results.map(r=>r.kind))){const records=rows[5].results.filter(r=>r.kind===kind);if(kind==='meta')Object.assign(snapshot,JSON.parse(records[0].payload_json));else snapshot[kind]=kind==='rateEvents'?Object.fromEntries(records.map(r=>[r.id,JSON.parse(r.payload_json)])):records.map(r=>JSON.parse(r.payload_json));}
   return {cloudOperations:true,revision:rows[0].results[0].revision,commitSeq:rows[1].results[0].commit_seq,providers:rows[2].results.map(r=>JSON.parse(r.record_json)),endpoints:rows[3].results.map(r=>JSON.parse(r.record_json)),models:rows[4].results.map(r=>JSON.parse(r.record_json)),modelTemplates:[],cloudMockState:snapshot};

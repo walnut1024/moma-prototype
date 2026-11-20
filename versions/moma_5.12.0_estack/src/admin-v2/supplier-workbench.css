@@ -36,7 +36,7 @@
 .supplier-workbench .supplier-model-panel .supplier-model-list{min-width:650px}
 .supplier-workbench .supplier-model-list tr:has([data-supply-focus]) > td{background:var(--semi-color-primary-light-default)}
 .supplier-workbench .supplier-model-list > .semi-table-container > .semi-table-body > table > thead{position:sticky;top:0;z-index:2}
-.supplier-workbench :is(.supplier-model-list,.supplier-connection-list) :is(code,.semi-table-row-cell){overflow-wrap:anywhere}
+.supplier-workbench .supplier-model-list :is(code,.semi-table-row-cell){overflow-wrap:anywhere}
 .supplier-workbench .supplier-model-expansion{display:grid;gap:12px;padding:4px 8px 8px;min-width:0}
 .supplier-workbench .supplier-model-expansion .mo-table-scroll{max-height:none}
 .supplier-workbench .mo-table.supplier-nested-channels{min-width:1240px}
@@ -152,6 +152,11 @@
 .supplier-workbench .supplier-model-cost-table p{margin:0}
 .supplier-workbench .supplier-model-cost-table .supplier-cost-model code{font-size:12px;color:var(--semi-color-text-2)}
 .supplier-workbench .supplier-model-cost-table th[colspan]{text-align:center}
+.supplier-workbench .channel-directory-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.supplier-workbench .channel-directory-table th.semi-table-row-head{text-align:left}
+.supplier-workbench .channel-directory-table .supplier-cost-source,.supplier-workbench .channel-directory-table .supplier-cost-model{min-width:0}
+.supplier-workbench .channel-directory-table :is(.supplier-cost-source,.supplier-cost-model)>*{max-width:100%}
+.supplier-workbench .channel-directory-table .supplier-cost-line{display:block;overflow-wrap:anywhere}
 .supplier-workbench .supplier-cost-amount{font-variant-numeric:tabular-nums;white-space:nowrap}
 
 .supplier-workbench .supplier-cost-line{display:inline-block}

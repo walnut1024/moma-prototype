@@ -15,7 +15,7 @@ export function RemovalButton({ state, ops, target, label = '删除', onRemoved,
       removed={() => { setOpen(false); onRemoved?.(); }}/>}</>;
 }
 
-export default function ProviderRemovalDialog({ state, ops, target, close, removed }) {
+export default function ProviderRemovalDialog({ state, ops, target, close, removed, title }) {
   const [step, setStep] = useState(0), [accepted, setAccepted] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
   let plan, missing;
   try { plan = providerRemovalPlan(state, target); } catch (error) { missing = error.message; }
@@ -33,7 +33,7 @@ export default function ProviderRemovalDialog({ state, ops, target, close, remov
     finally { setBusy(false); }
   };
   const cancel = () => { if (!busy) { ops.setError(''); close(); } };
-  return <AdminModal visible title={(target.associationIds ? '批量删除模型渠道' : channelScope ? '删除模型渠道' : '删除服务商') + (plan ? ' · ' + plan.name : '')}
+  return <AdminModal visible title={(title || (target.associationIds ? '批量删除模型渠道' : channelScope ? '删除模型渠道' : '删除服务商')) + (plan ? ' · ' + plan.name : '')}
     width="min(1120px, calc(100vw - 32px))" className="provider-removal-modal" onCancel={cancel} closeOnEsc
     footer={<Space><Button disabled={busy} onClick={cancel}>取消</Button>{step === 1
       ? <><Button disabled={busy} onClick={() => { setStep(0); setError(''); ops.setError(''); }}>返回检查</Button>

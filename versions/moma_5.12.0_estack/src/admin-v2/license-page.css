@@ -1,0 +1,29 @@
+.admin-v2 main[data-admin-page="license"] { min-height: calc(100dvh - 92px); background:#f7f8fa; }
+.admin-v2 .v2-content > main[data-admin-page="license"] { padding:24px; }
+.admin-v2 .license-page { gap:20px; }
+.license-card { border:1px solid #e1e5ec; border-radius:8px; overflow:hidden; }
+.license-summary { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:24px; background:#f9fbff; border-bottom:1px solid #e8ecf3; }
+.license-summary-info { display:flex; align-items:center; gap:14px; min-width:0; }
+.license-summary-copy { display:grid; gap:4px; min-width:0; }
+.license-summary-copy h2 { letter-spacing:0; font-weight:650; overflow-wrap:anywhere; }
+.license-summary-icon { display:grid; place-items:center; width:42px; height:42px; flex:none; color:#0064e0; background:#eaf2ff; border-radius:8px; }
+.license-fact-label { color:#596371; font-size:13px; line-height:20px; }
+.license-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px 28px; margin:0; padding:23px 24px 25px; }
+.license-facts dt { margin:0 0 5px; }
+.license-facts dd { display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px; margin:0; color:#202630; font-size:14px; line-height:22px; font-weight:500; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+.license-dialog { top:128px; }
+.license-form { display:grid; gap:8px; }
+.license-form label { font-weight:600; }
+.license-form label span { color:var(--semi-color-danger); }
+.license-form .semi-input-textarea-wrapper { border:1px solid #e1e5ec; background:#f8f9fb; }
+@media(max-width:1000px) {
+  .license-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:600px) {
+  .admin-v2 .v2-content > main[data-admin-page="license"] { padding:16px; }
+  .license-summary { flex-wrap:wrap; padding:18px; }
+  .license-summary-info { gap:10px; }
+  .license-summary-copy h2 { font-size:18px; line-height:26px; }
+  .license-facts { padding:18px; gap:16px; }
+  .license-dialog { top:72px; }
+}

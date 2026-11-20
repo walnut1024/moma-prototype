@@ -2,6 +2,7 @@ import { enterpriseTokenUsage } from './admin-v2/enterprise.js';
 import { priceRequest, requestPrices } from './admin-v2/operations-analysis.js';
 import { usageMeter, usageValue } from './admin-v2/usage-analysis.js';
 import { projectModelEnabled } from './project-access.mjs';
+import { activeProjectSpendBudget, projectBudgetStart } from './project-token-budget.mjs';
 
 export const PROJECT_CURRENCY = 'CNY';
 const MICROS = 1_000_000;
@@ -11,12 +12,16 @@ export const projectCallErrors = {
   project_model_not_enabled: [403, '该模型未在当前项目开通'],
   project_model_rate_limit_exceeded: [429, '已达到项目模型限流上限，请稍后重试'],
   project_budget_exceeded: [402, '已达到项目消费预算上限'],
+  project_token_budget_exceeded: [402, '已达到项目 Token 预算上限'],
+  project_rate_limit_exceeded: [429, '已达到项目速率上限，请稍后重试'],
   key_budget_exceeded: [402, '已达到 API Key 消费预算上限'],
   key_expired: [401, 'API Key 已过期'],
   budget_charge_unavailable: [503, '当前调用的人民币费用无法确认，不能执行预算校验'],
   project_token_usage_unavailable: [503, '当前调用的 Token 用量无法确认，不能执行 TPM 校验'],
   order_required: [403, '请先订购此模型服务'],
-  enterprise_quota_exhausted: [402, '企业额度不足'],
+  enterprise_quota_exhausted: [402, '租户 Token 额度不足'],
+  tenant_quota_expired: [402, '租户 Token 配额已到期'],
+  tenant_model_rate_limit_exceeded: [429, '租户模型限流已触发'],
   plan_unavailable: [402, '套餐已失效或额度不足'],
   plan_model_unavailable: [403, '套餐不支持该模型'],
   plan_meter_unavailable: [503, '套餐缺少当前计费项的抵扣规则'],
@@ -27,6 +32,32 @@ export const projectCallErrors = {
 };
 
 export const diagnosticCall = row => ['gateway-test', 'metering-test'].includes(row.purpose);
+
+function recordedTokens(usage) {
+  const input = usage?.input ?? 0, output = usage?.output ?? 0;
+  const total = input + output;
+  return [input, output, total].every(value => Number.isSafeInteger(value) && value >= 0) ? total : 0;
+}
+
+export function projectBudgetUsage(requests, project, at = Date.now()) {
+  const { limit, period, tpm, rpm } = project.tokenBudget;
+  const start = limit ? projectBudgetStart(period, at) : Infinity;
+  let tokens = 0, minuteTokens = 0, minuteRequests = 0;
+  for (const row of requests) {
+    if (row.tenantId !== project.tenantId || row.projectId !== project.id || diagnosticCall(row)) continue;
+    const time = Date.parse(row.createdAt);
+    const success = row.httpStatus >= 200 && row.httpStatus < 300;
+    const used = row.usageConfirmed === false ? 0 : recordedTokens(row.usage);
+    if (success && time >= start && time <= at) tokens += used;
+    if (!tpm && !rpm) continue;
+    const admitted = row.admittedAt ? Date.parse(row.admittedAt) : success ? time : NaN;
+    if (admitted > at - 60_000 && admitted <= at) {
+      minuteRequests++;
+      minuteTokens += used;
+    }
+  }
+  return { tokens, minuteTokens, minuteRequests };
+}
 
 export function parseBudgetAmount(value) {
   const text = String(value ?? '').trim();
@@ -81,36 +112,55 @@ export function planKeyBudgetExceeded(requests, key, units, excludeId) {
   return spent >= key.planBudgetTokens || units > key.planBudgetTokens - spent;
 }
 
-export function projectCallError(state, project, model, key, usage, charge, at = Date.now(), internal = false) {
-  const access = projectAccessError(project, model.id, key, at);
-  if (access) return access;
-  const limit = project.modelPermissions?.find(row => row.modelId === model.id);
+function modelRateError(state, tenantId, projectId, model, limit, usage, at, exceededCode) {
   if (limit?.rpm || limit?.tpm) {
     const recent = state.requests.flatMap(row => {
       const time = Date.parse(row.admittedAt || row.createdAt);
-      if (diagnosticCall(row) || row.tenantId!==project.tenantId || row.projectId!==project.id ||
+      if (diagnosticCall(row) || row.tenantId!==tenantId || projectId && row.projectId!==projectId ||
           !(time>at-60_000 && time<=at)) return [];
       const attempts=row.attempts?.filter(attempt=>attempt.dispatched && (attempt.modelId || row.modelId)===model.id);
       if (attempts?.length) return [{usage:row.modelId===model.id ? row.usage : attempts.at(-1).usage}];
       return !row.attempts?.length && row.modelId===model.id && (row.admittedAt || row.httpStatus>=200 && row.httpStatus<300)
         ? [{usage:row.usage}] : [];
     });
-    if (limit.rpm && recent.length >= limit.rpm) return 'project_model_rate_limit_exceeded';
+    if (limit.rpm && recent.length >= limit.rpm) return exceededCode;
     if (limit.tpm) {
       const tokenCount = rowUsage => rowUsage && (Number.isSafeInteger(rowUsage.input) || Number.isSafeInteger(rowUsage.output))
         ? enterpriseTokenUsage(model, rowUsage) : null;
       const counts = [...recent.map(row => tokenCount(row.usage)), tokenCount(usage)];
       if (counts.includes(null)) return 'project_token_usage_unavailable';
-      if (counts.reduce((sum, tokens) => sum + tokens, 0) > limit.tpm) return 'project_model_rate_limit_exceeded';
+      if (counts.reduce((sum, tokens) => sum + tokens, 0) > limit.tpm) return exceededCode;
     }
+  }
+  return '';
+}
+
+export function projectCallError(state, project, model, key, usage, charge, at = Date.now(), internal = false) {
+  const access = projectAccessError(project, model.id, key, at);
+  if (access) return access;
+  const tenant = state.tenants?.find(row=>row.id===project.tenantId);
+  const tenantRate = modelRateError(state,project.tenantId,undefined,model,
+    tenant?.modelRules?.find(row=>row.modelId===model.id),usage,at,'tenant_model_rate_limit_exceeded');
+  if (tenantRate) return tenantRate;
+  const projectRate = modelRateError(state,project.tenantId,project.id,model,
+    project.modelPermissions?.find(row=>row.modelId===model.id),usage,at,'project_model_rate_limit_exceeded');
+  if (projectRate) return projectRate;
+  const budget = project.tokenBudget;
+  if (budget && (budget.limit || budget.tpm || budget.rpm)) {
+    const { tokens, minuteTokens, minuteRequests } = projectBudgetUsage(state.requests, project, at);
+    const quantity = recordedTokens(usage);
+    if (budget.limit && quantity > 0 && quantity > budget.limit - tokens) return 'project_token_budget_exceeded';
+    if (budget.rpm && minuteRequests >= budget.rpm ||
+        budget.tpm && quantity > 0 && quantity > budget.tpm - minuteTokens) return 'project_rate_limit_exceeded';
   }
   // Token Plan calls consume subscription entitlement. The subscription purchase belongs to the space.
   if (key?.billingType === 'Token Plan') {
     if (state.orders?.some(row => row.id === key.subscriptionId && row.packageId)) return null;
     return planKeyBudgetExceeded(state.requests,key,enterpriseTokenUsage(model,usage)) ? 'key_budget_exceeded' : null;
   }
+  const spendBudget = activeProjectSpendBudget(project);
   for (const [cap, keyId, code] of [
-    [project.spendBudget?.stop && project.spendBudget.amountMicros, null, 'project_budget_exceeded'],
+    [spendBudget?.stop && spendBudget.amountMicros, null, 'project_budget_exceeded'],
     [key?.budgetMicros, key?.id, 'key_budget_exceeded'],
   ]) {
     if (!cap) continue;

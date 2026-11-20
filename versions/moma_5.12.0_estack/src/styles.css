@@ -87,8 +87,8 @@
   .cl-page { padding: 22px 20px; }
 }
 
-/* Keep the front and version pages independent of the Semi body font. */
-#root:where(:not(:has(> .app-shell > .admin-banner))) { font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+/* Keep the auth and version pages independent of the Semi body font. */
+#root:where(:not(:has(> .app-shell > :is(.admin-banner,.tenant-banner)))) { font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
 
 :root {
   font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif;

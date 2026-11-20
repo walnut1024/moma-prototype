@@ -256,7 +256,7 @@ export function modelTransaction(state, action) {
     if (profile.maxInput && declaredCapabilities.context && profile.maxInput > declaredCapabilities.context) throw new Error('最大输入不能超过上下文上限');
     const fields = {
       modelId, name: initializingService && source ? source.name : data.name.trim(),
-      maker: profile.author || data.maker || model?.maker || '', description: data.description?.trim() || '',
+      maker: data.profile?.authorId === '' && data.profile.author === '' ? '' : profile.author || data.maker || model?.maker || '', description: data.description?.trim() || '',
       type: data.type, usageUnit: data.usageUnit, profile, capabilities: declaredCapabilities,
       ...(creatingService && { serviceManaged: true, purpose: data.purpose || 'commercial' }),
       ...(creatingService && source && { templateId: source.id }),

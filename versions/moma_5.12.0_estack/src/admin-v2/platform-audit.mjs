@@ -30,6 +30,7 @@ export const AUDIT_ACTIONS = {
 };
 
 export const AUDIT_RESULTS = { succeeded: '成功', failed: '失败', unknown: '未记录' };
+export const AUDIT_SOURCES = { web: 'Web', unknown: '未记录' };
 export const AUDIT_DOMAINS = { model_operations:'模型运营', projects:'项目管理', site:'站点配置' };
 
 export const AUDIT_RESOURCES = {

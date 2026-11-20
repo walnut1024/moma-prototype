@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { personalDefaultProject, customerProject, assertPersonalProjects } from '../src/personal-project.mjs';
 import { projectAccess, projectModelEnabled } from '../src/project-access.mjs';
 import { newProject, changeProject } from '../src/project-configuration.mjs';
-import { projectAccessError, projectCallError } from '../src/project-call.mjs';
+import { projectAccessError, projectBudgetUsage, projectCallError } from '../src/project-call.mjs';
+import { millionTokens, projectBudgetStart, projectTokenBudget } from '../src/project-token-budget.mjs';
 import { loadAdminState, commitAdminState } from '../src/admin-v2/store.js';
 
 const personal = () => ({
@@ -40,6 +41,41 @@ test('web experience and API checks inherit personal model eligibility while enf
   assert.equal(projectAccessError({...project,status:'停用'},'purchased-model',null,Date.now()),'project_unavailable');
 });
 
+test('project Token budget resets on Beijing calendar boundaries and shares usage across models and Keys', () => {
+  const at=Date.parse('2026-11-30T16:00:30Z');
+  for (const [period, start] of Object.entries({
+    hour:'2026-11-30T16:00:00Z', day:'2026-11-30T16:00:00Z',
+    week:'2026-11-29T16:00:00Z', month:'2026-11-30T16:00:00Z',
+  })) assert.equal(projectBudgetStart(period, at), Date.parse(start));
+  assert.equal(projectBudgetStart('total', at), -Infinity);
+  const project={id:'project',tenantId:'enterprise',status:'正常',
+    tokenBudget:projectTokenBudget({limit:'0.000050',period:'day',rpm:'2',tpm:'30'})};
+  const current={tenantId:project.tenantId,projectId:project.id,keyId:'key-1',modelId:'different-model',
+    createdAt:'2026-11-30T16:00:00Z',usage:{input:20,output:5,cached:20},httpStatus:200,billingType:'Token Plan'};
+  const previous={...current,createdAt:'2026-11-30T15:59:00Z'};
+  const state={requests:[current,previous,{...current,purpose:'gateway-test'},
+    {...current,projectId:'other-project'}, {...current,tenantId:'other-tenant'}, {...current,httpStatus:402}]};
+  assert.deepEqual(projectBudgetUsage(state.requests,project,at),{tokens:25,minuteTokens:25,minuteRequests:1});
+  const check=(usage,key={id:'key-2'})=>projectCallError(state,project,{id:'model'},key,usage,null,at);
+  assert.equal(check({input:5}),null);
+  assert.equal(check({input:6}),'project_rate_limit_exceeded');
+  assert.equal(check({input:26},{billingType:'Token Plan'}),'project_token_budget_exceeded');
+  project.tokenBudget.tpm=null;
+  assert.equal(check({input:25}),null);
+  state.requests.push({...current,httpStatus:504,admittedAt:current.createdAt,usage:null});
+  assert.equal(check({input:1}),'project_rate_limit_exceeded');
+  assert.equal(projectTokenBudget({period:'total'}),null);
+  project.spendBudget={stop:true,amountMicros:1};
+  project.tokenBudget=null;
+  assert.equal(check({input:1}),null);
+  delete project.tokenBudget;
+  assert.equal(check({input:1}),'budget_charge_unavailable');
+  const precise = millionTokens(Number.MAX_SAFE_INTEGER);
+  assert.equal(projectTokenBudget({period:'total',limit:precise}).limit,Number.MAX_SAFE_INTEGER);
+  assert.throws(()=>projectTokenBudget({period:'forever',limit:'1'}),/预算周期/);
+  assert.throws(()=>projectTokenBudget({period:'total',limit:'0.0000001'}),/6 位小数/);
+});
+
 test('personal invariant rejects extra, replaced, deleted or renamed defaults without changing original records', () => {
   const state=personal();
   assert.equal(personalDefaultProject(state,'person').id,'default');
@@ -58,7 +94,7 @@ test('personal invariant rejects extra, replaced, deleted or renamed defaults wi
 test('enterprise administrators create projects while members only see assigned projects', () => {
   const state=personal();
   state.tenants.push({id:'enterprise',type:'企业'});
-  state.memberships.push({id:'member',tenantId:'enterprise',userId:'owner',role:'普通成员',status:'正常'});
+  state.memberships.push({id:'member',tenantId:'enterprise',userId:'owner',role:'普通成员',status:'正常',canCreateProjects:true});
   state.projects.push({id:'enterprise-project',tenantId:'enterprise',name:'客服',ownerId:'admin',status:'正常',memberRoles:{member:'项目成员'},modelPermissions:[]});
   const enterpriseIdentity={tenantId:'enterprise',spaceId:'enterprise'};
   const enterpriseLink={backendMembershipId:'member',backendUserId:'owner'};
@@ -67,6 +103,11 @@ test('enterprise administrators create projects while members only see assigned 
   assert.deepEqual(access.projects.map(row=>row.id),['enterprise-project']);
   assert.equal(access.projects[0].canEdit,false);
   assert.equal(projectModelEnabled(access.projects[0],'model'),false);
+  const context={state,identity:enterpriseIdentity,link:enterpriseLink};
+  assert.throws(()=>newProject(context,{name:'无权限项目'},'blocked'),/无权创建项目/);
+  state.projects.at(-1).memberRoles.member='项目管理员';
+  assert.equal(projectAccess(state,enterpriseIdentity,enterpriseLink).projects[0].canManage,true);
+  assert.throws(()=>newProject(context,{name:'无权限项目'},'blocked'),/无权创建项目/);
   state.memberships[0].role='租户管理员';
   const project=newProject({state,identity:enterpriseIdentity,link:enterpriseLink},{name:'new',description:''},'new');
   assert.equal(project.tenantId,'enterprise');

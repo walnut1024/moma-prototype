@@ -198,7 +198,7 @@ export default function UsageStatistics({ observation = false, projectScope, ove
     const current = new Date(); setNow(current); setPreset(observation ? '1' : 'today'); setRange(observation ? observationPeriod('1', current) : usagePeriod('today', current));
     setCategory(observation ? '文本模型' : '语言模型'); setBilling(observation ? '全部' : '按量付费'); setVisual('视觉理解'); setAudio('语音合成'); setApiKeyIds(null); setMinutes('60'); setModelIds(null); setApiKeyId(null);
   };
-  return <div className={observation ? "us-page us-observation" : "us-page us-metering"}><FrontPageHeader title={overview ? "空间总览" : observation ? "调用观测" : "用量统计"}
+  return <div className={observation ? "us-page us-observation" : "us-page us-metering"}><FrontPageHeader title={overview ? "空间用量" : observation ? "调用观测" : "用量统计"}
       description={overview ? "汇总当前空间内你有权查看的用量" : observation ? "查看调用成功率、响应时延与运行趋势" : "查看不同计费方式下的实际模型用量"}
       actions={onSpaceLogs && <Button type="tertiary" onClick={onSpaceLogs}>空间调用日志</Button>} icon={observation ? Activity : ChartNoAxesCombined} />
     {projectScope?.id && <p className="us-foot" role="status">{scopedProject ? '所属项目 · ' + scopedProject.name : tenant.error || (!tenant.identity ? '正在加载项目…' : '当前空间无权访问此项目')}</p>}

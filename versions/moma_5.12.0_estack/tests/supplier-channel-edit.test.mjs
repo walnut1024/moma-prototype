@@ -198,3 +198,35 @@ test('a channel name edited with a candidate address is deferred until the teste
   assert.equal(context(next).endpoint.baseUrl,'https://candidate-name.example.invalid/v1/chat/completions');
   assert.deepEqual(context(next).provider.catalogConnections.filter(row=>row.id!==association.id).map(row=>row.sourceName),provider.catalogConnections.filter(row=>row.id!==association.id).map(row=>row.sourceName));
 });
+
+
+test('advanced settings and rollback save through the model-channel editor without changing services or losing history', () => {
+  const before=initial();
+  const candidateAction=(state,operation,extra={})=>{
+    const {provider,endpoint}=context(state);
+    return commitAdminState(state,{type:'modelOperations',operation,data:{providerId:provider.id,endpointId:endpoint.id,expectedRevision:endpoint.configurationRevision||0,candidateId:endpoint.candidateConfiguration?.id,...extra}});
+  };
+  const save=state=>{
+    const {provider,endpoint}=context(state);
+    return candidateAction(state,'supplierChannelEdit',{confirmed:true,expectedUpdatedAt:endpoint.updatedAt,expectedProviderUpdatedAt:provider.updatedAt});
+  };
+  let state=candidateAction(before,'channelCandidateSave',{config:{timeoutSeconds:83}});
+  assert.throws(()=>save(state),/测试|验证|通过/);
+  state=candidateAction(state,'channelCandidateTest');
+  state=save(state);
+  assert.equal(context(state).endpoint.timeoutSeconds,83);
+  const versions=structuredClone(context(state).endpoint.configurationVersions);
+  assert(versions.length>=2);
+  const historical=versions[0];
+  state=candidateAction(state,'channelCandidateRollback',{targetVersion:historical.version});
+  assert.equal(context(state).endpoint.timeoutSeconds,83,'rollback must remain a candidate until validated and saved');
+  assert.throws(()=>save(state),/测试|验证|通过/);
+  state=candidateAction(state,'channelCandidateTest');
+  state=save(state);
+  assert.equal(context(state).endpoint.timeoutSeconds,historical.config.timeoutSeconds);
+  assert.deepEqual(context(state).endpoint.configurationVersions.slice(0,versions.length),versions);
+  assert.equal(context(state).endpoint.configurationVersions.at(-1).rollbackOf,historical.version);
+  assert.equal(context(state).endpoint.id,context(before).endpoint.id);
+  for(const key of ['modelSalePrices','supplyPrices','modelSupplies','serviceRoutes','callLogs','modelTemplates']) assert.deepEqual(state[key],before[key],key);
+  assert.deepEqual(context(state).provider.catalogConnections.map(row=>[row.id,row.endpointId,row.modelId,row.enabled]).sort((a,b)=>a[0].localeCompare(b[0])),context(before).provider.catalogConnections.map(row=>[row.id,row.endpointId,row.modelId,row.enabled]).sort((a,b)=>a[0].localeCompare(b[0])));
+});

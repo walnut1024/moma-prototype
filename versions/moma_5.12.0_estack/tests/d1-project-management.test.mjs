@@ -10,7 +10,7 @@ test('personal, commercial employee and internal employee use the same isolated 
     if (previous === undefined) delete process.env.VITE_MOMA_PRIVATE_SITE;
     else process.env.VITE_MOMA_PRIVATE_SITE = previous;
   });
-  const credentials = Object.fromEntries(['yyg','grzh','zqzh','qa-external','qa-internal'].map(id => [id,randomUUID()]));
+  const credentials = Object.fromEntries(['yyg','grzh','zqzh','qa-external','qa-internal','qa-internal-admin'].map(id => [id,randomUUID()]));
   const loginHashes = Object.fromEntries(Object.entries(credentials).map(([id,value]) => [id,createHash('sha256').update(value).digest('hex')]));
   const local = await startLocalBackend({ loginHashes, presets:true });
   t.after(() => local.runtime.dispose());
@@ -18,17 +18,19 @@ test('personal, commercial employee and internal employee use the same isolated 
   const staff = [
     { id:'qa-external', login:'qa-external', name:'商业企业员工', ...stamp },
     { id:'qa-internal', login:'qa-internal', name:'内部员工', ...stamp },
+    { id:'qa-internal-admin', login:'qa-internal-admin', name:'内部企业管理员', ...stamp },
   ];
   const addMember = (id,userId,tenantId,canCreateProjects) => ({
     id, userId, tenantId, canCreateProjects, role:'普通成员', ...stamp,
   });
   const external = addMember('qa-external-member','qa-external','zqzh',true);
   const internal = addMember('qa-internal-member','qa-internal','tenant-nanjing',true);
+  const internalAdmin = {...addMember('qa-internal-admin-member','qa-internal-admin','tenant-nanjing',false),role:'企业管理员'};
   const dual = addMember('qa-dual-member','grzh','zqzh',false);
   const reference = await local.db.prepare('SELECT reference_json FROM model_workspace WHERE id=1').first('reference_json');
   const data = JSON.parse(reference);
   data.users.push(...staff);
-  data.memberships.push(external,internal,dual);
+  data.memberships.push(external,internal,internalAdmin,dual);
   await local.db.prepare('UPDATE model_workspace SET reference_json=? WHERE id=1').bind(JSON.stringify(data)).run();
   const origin = 'https://prototype.test';
   async function request(path, {cookie,body,requestOrigin=origin}={}) {
@@ -55,6 +57,8 @@ test('personal, commercial employee and internal employee use the same isolated 
   };
   const change=(cookie,projectId,type,input)=>command(cookie,'projectUpdate',{projectId,type,input});
   const switchTo=(cookie,tenantId)=>request('market/switch',{cookie,body:{tenantId}});
+  const enterpriseAdmin = await login('zqzh');
+  const teamAdmin = await login('qa-internal-admin');
   const sessions=[];
   for (const [id, tenantId, name] of [['grzh','grzh','个人项目'], ['qa-external','zqzh','商业企业项目'], ['qa-internal','tenant-nanjing','内部项目']]) {
     const signed=await login(id);
@@ -63,20 +67,33 @@ test('personal, commercial employee and internal employee use the same isolated 
     const view=await workspace(signed.cookie);
     assert.equal(view.identity.tenantId,tenantId);
     if(id!=='grzh'){assert.deepEqual(view.organization.audit,[]);assert(!Object.hasOwn(view.organization,'platformAccounts'));}
-    assert.equal(view.canCreateProject,id!=='grzh');
+    assert.equal(view.canCreateProject,false);
     if(id!=='grzh') assert.equal(view.canManage,false);
-    const created=await command(signed.cookie,'projectCreate',{name});
-    assert.equal(created.status,id==='grzh' ? 422 : 200,JSON.stringify(created.data));
-    const projectId=id==='grzh' ? view.projects[0].id : 'project-'+created.data.operationId;
+    assert.equal((await command(signed.cookie,'projectCreate',{name})).status,422);
+    let projectId=view.projects[0]?.id;
     if(id==='grzh') {
       assert.equal(view.projects.length,1);
       assert.equal(view.projects[0].name,'默认项目');
       assert.equal(view.projects[0].inheritsSpaceModels,true);
+      assert.deepEqual(view.accountProjects,[]);
       for (const status of ['停用','已删除']) assert.equal((await change(signed.cookie,projectId,'status',{status})).status,422);
       assert.equal((await change(signed.cookie,projectId,'settings',{name:'改名'})).status,422);
       const settings={name:'默认项目',description:'使用设置',amount:'10',warnAt:80,stop:true,retainContent:true};
       assert.equal((await change(signed.cookie,projectId,'settings',settings)).status,200);
       assert.equal((await workspace(signed.cookie)).projects[0].spendBudget.amountMicros,10_000_000);
+    } else {
+      const admin = id==='qa-external' ? enterpriseAdmin : teamAdmin;
+      const member = id==='qa-external' ? external : internal;
+      assert.equal((await workspace(admin.cookie)).canCreateProject,true);
+      const created=await command(admin.cookie,'projectCreate',{name});
+      assert.equal(created.status,200,JSON.stringify(created.data));
+      projectId='project-'+created.data.operationId;
+      const creator=(await workspace(admin.cookie)).projectMembers[projectId].find(row=>row.self);
+      assert.equal((await change(admin.cookie,projectId,'members',{memberId:member.id,role:'项目管理员'})).status,200);
+      assert.equal((await change(admin.cookie,projectId,'members',{memberId:creator.id,role:null})).status,200);
+      assert.equal((await command(signed.cookie,'projectCreate',{name})).status,422);
+      assert.equal((await change(signed.cookie,projectId,'status',{status:'已删除'})).status,422);
+      assert.equal((await change(signed.cookie,projectId,'models',[])).status,200);
     }
     assert.equal((await workspace(signed.cookie)).projects.find(row=>row.id===projectId).role,'项目管理员');
     const rows=[{id:randomUUID(),name:'独立密钥',enabled:true,models:null,secretPreview:'sk-demo*****abcd'}];
@@ -95,8 +112,15 @@ test('personal, commercial employee and internal employee use the same isolated 
   assert(!joined.projects.some(row=>row.id===personal.projectId));
   assert(!joined.keys.some(row=>row.id===commercial.keyId));
   assert.equal(joined.projects.find(row=>row.id===commercial.projectId).role,'项目成员');
+  assert(joined.accountProjects.some(row=>row.id===commercial.projectId && row.canExit===false));
+  assert(joined.projectMembers[commercial.projectId].every(row=>row.role));
+  assert(!joined.accountProjects.some(row=>row.id===personal.projectId || row.id===employee.projectId));
   assert.equal((await command(personal.cookie,'projectCreate',{name:'越权'})).status,422);
-  assert.equal((await change(personal.cookie,commercial.projectId,'exit',{})).status,200);
+  for (const [type,input] of [
+    ['exit',{}], ['members',{memberId:dual.id,role:'项目管理员'}], ['models',[]],
+    ['tokenBudget',{limit:'2',period:'month'}], ['settings',{name:'无权限改名'}],
+  ]) assert.equal((await change(personal.cookie,commercial.projectId,type,input)).status,422);
+  assert.equal((await change(commercial.cookie,commercial.projectId,'members',{memberId:dual.id,role:null})).status,200);
   assert(!(await workspace(personal.cookie)).projects.some(row=>row.id===commercial.projectId));
   assert.equal((await switchTo(personal.cookie,'grzh')).status,200);
   assert((await workspace(personal.cookie)).projects.some(row=>row.id===personal.projectId));
@@ -108,11 +132,61 @@ test('personal, commercial employee and internal employee use the same isolated 
   assert.equal(handedOver.projects.find(row=>row.id===commercial.projectId).ownerId,'grzh');
   assert(handedOver.keys.some(row=>row.id===commercial.keyId));
   assert.equal((await switchTo(personal.cookie,'grzh')).status,200);
-  assert.equal((await change(employee.cookie,employee.projectId,'status',{status:'停用'})).status,200);
-  assert.equal((await change(employee.cookie,employee.projectId,'status',{status:'正常'})).status,200);
-  assert.equal((await change(employee.cookie,employee.projectId,'status',{status:'已删除'})).status,200);
+  const managed = await workspace(teamAdmin.cookie);
+  assert(managed.projects.some(row=>row.id===employee.projectId && row.role==='项目管理员'));
+  assert(!managed.accountProjects.some(row=>row.id===employee.projectId));
+  assert.equal((await change(employee.cookie,employee.projectId,'status',{status:'停用'})).status,422);
+  const current = JSON.parse(await local.db.prepare('SELECT reference_json FROM model_workspace WHERE id=1').first('reference_json'));
+  const crossMember = addMember('qa-cross-member','qa-external','tenant-nanjing',false);
+  current.memberships.push(crossMember);
+  const employeeProject = current.projects.find(row=>row.id===employee.projectId);
+  employeeProject.memberRoles[crossMember.id]='项目成员';
+  employeeProject.memberRoles[internalAdmin.id]='项目成员';
+  employeeProject.organizationId='qa-preserved-department';
+  await local.db.prepare('UPDATE model_workspace SET reference_json=? WHERE id=1').bind(JSON.stringify(current)).run();
+  const account = await workspace(commercial.cookie);
+  assert(!account.projects.some(row=>row.id===employee.projectId));
+  const crossProject = account.accountProjects.find(row=>row.id===employee.projectId);
+  assert.deepEqual(Object.keys(crossProject).sort(),['canExit','createdAt','id','name','role','status','tenantId','tenantName']);
+  assert.equal(crossProject.tenantId,'tenant-nanjing');
+  assert.equal(crossProject.canExit,false);
+  const joinedAdmin = await workspace(teamAdmin.cookie);
+  assert.equal(joinedAdmin.accountProjects.find(row=>row.id===employee.projectId)?.role,'项目成员');
+  assert.equal(joinedAdmin.projects.find(row=>row.id===employee.projectId)?.role,'项目管理员');
+  assert.equal((await change(teamAdmin.cookie,employee.projectId,'settings',{
+    name:'项目名称更新',description:'项目描述更新',amount:'125',warnAt:80,stop:false,retainContent:false,
+  })).status,200);
+  const updatedProject = (await workspace(teamAdmin.cookie)).projects.find(row=>row.id===employee.projectId);
+  assert.equal(updatedProject.organizationId,'qa-preserved-department');
+  assert.equal(updatedProject.name,'项目名称更新');
+  assert.equal(updatedProject.description,'项目描述更新');
+  assert.equal(updatedProject.spendBudget.amountMicros,125_000_000);
+  const tokenBudget = { limit:'1.25', period:'week', tpm:'90000', rpm:'800', dailyBatchLimit:'0.5' };
+  assert.equal((await switchTo(commercial.cookie,'tenant-nanjing')).status,200);
+  assert.equal((await change(commercial.cookie,employee.projectId,'tokenBudget',tokenBudget)).status,422);
+  assert.equal((await switchTo(commercial.cookie,'zqzh')).status,200);
+  assert.equal((await change(teamAdmin.cookie,employee.projectId,'tokenBudget',{...tokenBudget,rpm:'0.2'})).status,422);
+  assert.equal((await change(employee.cookie,employee.projectId,'tokenBudget',tokenBudget)).status,200);
+  assert.equal((await change(teamAdmin.cookie,employee.projectId,'tokenBudget',tokenBudget)).status,200);
+  const withBudget = await workspace(teamAdmin.cookie);
+  const quotaProject = withBudget.projects.find(row=>row.id===employee.projectId);
+  assert.deepEqual(quotaProject.tokenBudget,{limit:1_250_000,period:'week',tpm:90_000,rpm:800,dailyBatchLimit:500_000});
+  assert.deepEqual(quotaProject.spendBudget,updatedProject.spendBudget);
+  assert.equal(quotaProject.organizationId,updatedProject.organizationId);
+  assert.equal(withBudget.projectBudgets[employee.projectId].tokens,0);
+  assert(withBudget.projectAudits.some(row=>row.projectId===employee.projectId && row.action==='设置项目额度'));
+  assert.equal((await switchTo(commercial.cookie,'tenant-nanjing')).status,200);
+  const readonlyProject=(await workspace(commercial.cookie)).projects.find(row=>row.id===employee.projectId);
+  assert.equal(readonlyProject.canManage,false);
+  assert(!Object.hasOwn(readonlyProject,'tokenBudget'));
+  assert(!Object.hasOwn(readonlyProject,'spendBudget'));
+  assert.equal((await switchTo(commercial.cookie,'zqzh')).status,200);
+  assert.equal((await change(teamAdmin.cookie,employee.projectId,'status',{status:'停用'})).status,200);
+  assert.equal((await change(teamAdmin.cookie,employee.projectId,'status',{status:'正常'})).status,200);
+  assert.equal((await change(teamAdmin.cookie,employee.projectId,'status',{status:'已删除'})).status,200);
   const archived=await workspace(employee.cookie);
   assert.equal(archived.projects.find(row=>row.id===employee.projectId).status,'已删除');
+  assert(!archived.accountProjects.some(row=>row.id===employee.projectId));
   assert(archived.projectAudits.some(row=>row.projectId===employee.projectId && row.action==='删除项目'));
   assert.equal((await command(employee.cookie,'keys',{projectId:employee.projectId,rows:[],billing:'按量付费'})).status,422);
 

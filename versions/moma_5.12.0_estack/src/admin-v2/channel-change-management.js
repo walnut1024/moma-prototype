@@ -8,10 +8,13 @@ import { providerKeyGroups } from './provider-key-groups.js';
 import { credentialRotationChannels } from './credential-rotation-scope.js';
 import { checkedConnectionKeys, providerTransaction, providerApiKeyRows, modelConnectivityPreview, normalizeProviderPrice } from './provider-management.js';
 import { channelTestDiagnostics } from './channel-test-diagnostics.js';
+import { normalizeChannelRequestRules } from './channel-request-rules.js';
+import { customAdapterCredentialIds, normalizeCustomAdapter } from './channel-custom-adapter.js';
+import { normalizeChannelNetwork } from './channel-network-settings.js';
 
 export const CHANNEL_EVIDENCE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const connectionFields = ['protocol', 'baseUrl', 'interfaceType', 'addressMode', 'taskUrls', 'adapterOptions', 'allowHttp', 'authMode', 'apiKeyId', 'keyGroupId', 'keyPool', 'credentialRef', 'apiKeys', 'capacity', 'timeoutSeconds', 'credentialVersion', 'adapterVersion'];
-const editableFields = ['protocol', 'baseUrl', 'interfaceType', 'taskUrls', 'adapterOptions', 'authMode', 'apiKeyId', 'keyGroupId', 'keyPool', 'capacity', 'timeoutSeconds', 'adapterVersion'];
+const connectionFields = ['protocol', 'baseUrl', 'interfaceType', 'addressMode', 'taskUrls', 'adapterOptions', 'allowHttp', 'authMode', 'apiKeyId', 'keyGroupId', 'keyPool', 'keyStrategy', 'credentialRef', 'apiKeys', 'capacity', 'timeoutSeconds', 'credentialVersion', 'adapterVersion', 'requestRules', 'networkSettings', 'customAdapter', 'poolPaused', 'adapterDraft'];
+const editableFields = ['protocol', 'baseUrl', 'interfaceType', 'taskUrls', 'adapterOptions', 'authMode', 'apiKeyId', 'keyGroupId', 'keyPool', 'keyStrategy', 'capacity', 'timeoutSeconds', 'adapterVersion', 'requestRules', 'networkSettings', 'customAdapter'];
 const update = (collection, id, changes) => ({ type: 'update', collection, id, changes });
 const snapshot = endpoint => structuredClone(Object.fromEntries(connectionFields.filter(key => Object.hasOwn(endpoint, key)).map(key => [key, endpoint[key]])));
 const requestSignature = request => JSON.stringify([request?.operationId, request?.channelId, request?.confirmExpensive === true, request?.models?.map(model => Object.entries(model).sort(([left], [right]) => left.localeCompare(right)))]);
@@ -27,40 +30,71 @@ function expectedRevision(endpoint, value) {
   if (value !== (endpoint.configurationRevision || 0)) throw new Error('渠道配置已有修订，请重新载入后操作');
 }
 function liveKeys(endpoint, provider) {
-  return connectionKeys(endpoint, provider).map(key => ({ id: key.id, version: key.version || key.fingerprint, fingerprint: key.fingerprint, status: key.status, revokedAt: key.revokedAt || null }));
+  const ids = customAdapterCredentialIds(endpoint.customAdapter);
+  const credentials = connectionKeys(endpoint, provider);
+  const additional = (provider.apiKeys || []).filter(key => ids.includes(key.id) && !credentials.some(existing => existing.id === key.id));
+  return [...credentials, ...additional].map(key => ({ id: key.id, version: key.version || key.fingerprint, fingerprint: key.fingerprint, status: key.status, revokedAt: key.revokedAt || null }));
 }
 function configSignature(endpoint, provider) {
   return JSON.stringify([snapshot(endpoint), liveKeys(endpoint, provider)]);
 }
+function assertAdapterCredentials(config, provider) {
+  if (customAdapterCredentialIds(config).some(id => !provider.apiKeys?.some(key => key.id === id && key.status !== 'disabled' && !key.revokedAt))) {
+    throw Error('接口独立凭证已停用、撤销或不属于当前服务商');
+  }
+}
 function assertCredentials(endpoint, provider) {
-  if (endpoint.authMode === 'pool') normalizeChannelKeyPool(endpoint.keyPool, provider);
+  assertAdapterCredentials(endpoint.customAdapter, provider);
+  if (endpoint.authMode === 'pool') normalizeChannelKeyPool(endpoint.keyPool, provider, endpoint.apiKeys);
   if (!connectionCredentialsReady(endpoint, provider) || liveKeys(endpoint, provider).some(key => key.revokedAt)) throw new Error('候选配置缺少可用凭证，或凭证已经撤销');
 }
-function configuredEndpoint(state, provider, endpoint, input) {
+function configuredEndpoint(state, provider, endpoint, input, extraOwnedKeys = []) {
   if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !editableFields.includes(key))) throw new Error('候选配置包含不支持或敏感字段');
   let value = { ...snapshot(endpoint), ...structuredClone(input), credentialVersion: resourceId('credential-version') };
   value.adapterOptions = prepareChannelAdapterOptions(value.adapterOptions || {});
   if (value.interfaceType) value = { ...value, ...prepareChannelInterface({ ...value, allowHttp: provider.sourceType === 'selfHosted' }), allowHttp: provider.sourceType === 'selfHosted' };
+  if (value.requestRules || Object.hasOwn(input, 'requestRules')) value.requestRules = normalizeChannelRequestRules(value.requestRules, value.interfaceType);
+  if (value.networkSettings || Object.hasOwn(input, 'networkSettings')) value.networkSettings = normalizeChannelNetwork(value.networkSettings, {
+    interfaceType: value.interfaceType, internal: provider.sourceType === 'selfHosted',
+  });
+  if (value.customAdapter || Object.hasOwn(input, 'customAdapter')) {
+    if (value.customAdapter && value.interfaceType !== 'custom') throw Error('接口规则仅适用于自定义适配器');
+    value.customAdapter = normalizeCustomAdapter(value.customAdapter);
+    assertAdapterCredentials(value.customAdapter, provider);
+  }
   const retainedReference = !Object.hasOwn(input, 'authMode') && !endpoint.authMode && (endpoint.credentialRef || endpoint.apiKeys?.length);
   if (!retainedReference && !['group', 'specific', 'inherit', 'none', 'pool'].includes(value.authMode)) throw new Error('请选择候选配置的凭证方式');
-  if (value.authMode === 'pool') value.keyPool = normalizeChannelKeyPool(value.keyPool, provider);
+  const ownedKeys = [...new Map([...extraOwnedKeys, ...(endpoint.apiKeys || [])]
+    .filter(key => key.scope === 'channel').map(key => [key.id, key])).values()];
+  if (value.authMode === 'pool') {
+    value.keyPool = normalizeChannelKeyPool(value.keyPool, provider, ownedKeys);
+    if (value.keyStrategy !== undefined && !['priority', 'random', 'roundRobin'].includes(value.keyStrategy)) throw Error('请选择多密钥选择策略');
+  } else if (Object.hasOwn(input, 'keyStrategy')) throw Error('多密钥选择策略仅适用于密钥池');
+  if (value.authMode !== 'pool' && value.poolPaused) value.poolPaused = false;
   if (value.authMode === 'none' && provider.sourceType !== 'selfHosted') throw new Error('仅自有推理服务可无需认证');
   if (value.authMode === 'group' && !providerKeyGroups(provider).some(group => group.id === value.keyGroupId)) throw new Error('密钥组不属于当前服务商');
-  if (value.authMode === 'specific' && !provider.apiKeys?.some(key => key.id === value.apiKeyId) && !endpoint.apiKeys?.some(key => key.scope === 'channel' && key.id === value.apiKeyId)) throw new Error('指定密钥不属于当前服务商或渠道');
+  const selectedOwnedKey = value.authMode === 'specific' && ownedKeys.find(key => key.id === value.apiKeyId);
+  if (value.authMode === 'specific' && !selectedOwnedKey && !provider.apiKeys?.some(key => key.id === value.apiKeyId)) throw new Error('指定密钥不属于当前服务商或渠道');
   if (Object.hasOwn(input, 'authMode') || Object.hasOwn(input, 'keyGroupId') || Object.hasOwn(input, 'apiKeyId')) {
     value.apiKeys = []; value.credentialRef = '';
     if (value.authMode !== 'specific') value.apiKeyId = '';
     if (value.authMode !== 'group') value.keyGroupId = '';
     if (value.authMode !== 'pool') value.keyPool = [];
   }
+  if (endpoint.adapterDraft && value.interfaceType) value.adapterDraft = null;
   const transaction = providerTransaction(state, { operation: 'connection', objectId: endpoint.id, data: { ...endpoint, ...value, name: endpoint.name, providerId: provider.id, timeoutSeconds: value.timeoutSeconds || 60 } });
   const normalized = transaction.changes.find(change => change.collection === 'endpoints' && change.id === endpoint.id).changes;
   value = { ...value, ...snapshot(normalized) };
-  if (value.apiKeys) value.apiKeys = value.apiKeys.map(key => endpoint.apiKeys?.some(saved => saved.scope === 'channel' && saved.id === key.id && saved.fingerprint === key.fingerprint) ? { ...key, scope: 'channel' } : key);
+  if (selectedOwnedKey) value.apiKeys = [selectedOwnedKey];
+  if (value.authMode === 'pool') value.apiKeys = ownedKeys.filter(key => value.keyPool.some(row => row.keyId === key.id));
   const prepared = { ...endpoint, ...value };
-  for (const mapping of supplierChannelAssociations(state, provider, endpoint.id)) {
+  const mappings = supplierChannelAssociations(state, provider, endpoint.id);
+  if (Object.values(value.requestRules?.aliases || {}).some(id => !mappings.some(mapping => mapping.upstreamModelId === id))) {
+    throw Error('模型重定向只能指向此连接已接入的上游模型');
+  }
+  for (const mapping of mappings) {
     const master = resolveChannelAssociationModel(state, provider, mapping);
-    const issue = channelInterfaceIssue(provider, { ...mapping, type: master.type, endpoint: prepared, apiAddresses: [{ protocol: prepared.protocol, baseUrl: channelModelUrl(prepared, master.type) }] });
+    const issue = channelInterfaceIssue(provider, { ...mapping, type: master.type, endpoint: prepared, apiAddresses: [{ protocol: prepared.protocol, baseUrl: channelModelUrl(prepared, master.type, { upstreamModelId: mapping.upstreamModelId }) }] });
     if (issue) throw new Error(`${mapping.modelId}：${issue}`);
   }
   return value;
@@ -114,7 +148,7 @@ function candidateChecks(state, provider, endpoint, candidate, { at = Date.now()
   const impact = channelChangeImpact(state, provider.id, endpoint.id);
   const impactChanged = candidate.impactRevision !== impact.revision;
   const enabledIds = impact.mappings.filter(row => row.enabled).map(row => row.id);
-  const requiredIds = allAssociations ? impact.mappings.map(row => row.id) : impact.activeAssociationIds.length ? impact.activeAssociationIds : enabledIds.length ? enabledIds : impact.mappings.map(row => row.id);
+  const requiredIds = allAssociations || candidate.allAssociations ? impact.mappings.map(row => row.id) : impact.activeAssociationIds.length ? impact.activeAssociationIds : enabledIds.length ? enabledIds : impact.mappings.map(row => row.id);
   const projected = { ...endpoint, ...candidate.config };
   const keyIds = projected.authMode === 'pool' ? connectionKeys(projected, provider).map(key => key.id) : [null];
   const checks = requiredIds.map(id => {
@@ -171,13 +205,26 @@ function appliedCandidate(state, provider, endpoint, candidate, data) {
   if (data.confirmed !== true) throw new Error('请确认应用候选配置及其服务影响');
   if (provider.status !== '已启用') throw new Error('服务商已停用，不能应用候选配置');
   const requireReal = data.requireReal === true || candidate.requireReal === true;
-  const status = candidateChecks(state, provider, endpoint, candidate, { requireReal });
+  const status = candidateChecks(state, provider, endpoint, candidate, { requireReal, allAssociations: data.allAssociations === true });
   if (status.impact.revision !== candidate.impactRevision) throw new Error('关联模型或服务引用已变化，请重新检查影响并创建候选配置');
-  if (!status.ready) throw new Error(status.credentialError || status.checks.find(check => !check.passed)?.reason || '候选配置尚未完成验证');
   const at = new Date().toISOString(), revision = (endpoint.configurationRevision || 0) + 1;
   const next = { ...endpoint, ...candidate.config, configurationRevision: revision };
+  const keyStops = endpoint.directoryKeyStops ? {
+    directoryKeyStops: Object.fromEntries(Object.entries(endpoint.directoryKeyStops).filter(([id]) =>
+      next.authMode === 'pool' && next.keyPool?.some(row => row.keyId === id && !row.enabled))),
+  } : {};
   const versions = endpoint.configurationVersions || [{ version: endpoint.configurationRevision || 0, config: snapshot(endpoint), appliedAt: endpoint.updatedAt || at }];
   const mappings = status.impact.mappings;
+  if (data.unlinked === true) {
+    if (mappings.length || state.modelSupplies.some(row => row.endpointId === endpoint.id && row.status !== '已移除')) throw new Error('连接已有模型或服务，须完成候选测试');
+    if (status.credentialError) throw new Error(status.credentialError);
+    return [update('endpoints', endpoint.id, {
+      ...candidate.config, ...keyStops, configurationRevision: revision,
+      configurationVersions: [...versions, { version: revision, config: snapshot(next), appliedAt: at, candidateId: candidate.id, rollbackOf: candidate.rollbackOf ?? null, evidenceIds: [] }],
+      candidateConfiguration: null, connectionTest: null, connectionQualification: null, status: '停用',
+    })];
+  }
+  if (!status.ready) throw new Error(status.credentialError || status.checks.find(check => !check.passed)?.reason || '候选配置尚未完成验证');
   const tested = new Map();
   for (const mapping of mappings) {
     const signature = channelEvidenceSignature(state, provider.id, mapping, next);
@@ -195,13 +242,13 @@ function appliedCandidate(state, provider, endpoint, candidate, data) {
     if (!evidence) return { ...row, enabled: false, health: null, qualification: null, protocolTests: {} };
     const master = resolveChannelAssociationModel(state, provider, mapping);
     row.type = master.type;
-    const apiAddresses = [{ protocol: next.protocol, baseUrl: channelModelUrl(next, master.type, { probe: evidence.task }) },
+    const apiAddresses = [{ protocol: next.protocol, baseUrl: channelModelUrl(next, master.type, { probe: evidence.task, upstreamModelId: mapping.upstreamModelId }) },
       ...(candidate.addressOnly ? (mapping.apiAddresses || []).slice(1) : [])];
     const channel = { ...mapping, endpoint: next, apiAddresses };
     const health = { ...evidence, fingerprint: channelFingerprint(channel) };
     return { ...row, apiAddresses, ...(evidence.task ? { task: evidence.task } : {}), health, qualification: structuredClone(health), protocolTests: { [next.protocol]: health } };
   })];
-  const changes = [update('endpoints', endpoint.id, { ...candidate.config, configurationRevision: revision, configurationVersions: [...versions, { version: revision, config: snapshot(next), appliedAt: at, candidateId: candidate.id, rollbackOf: candidate.rollbackOf ?? null, evidenceIds: [...tested.values()].map(row => row.id) }], candidateConfiguration: null, connectionTest: next.connectionTest, connectionQualification: structuredClone(next.connectionTest) }), update('providers', provider.id, { catalogConnections })];
+  const changes = [update('endpoints', endpoint.id, { ...candidate.config, ...keyStops, configurationRevision: revision, configurationVersions: [...versions, { version: revision, config: snapshot(next), appliedAt: at, candidateId: candidate.id, rollbackOf: candidate.rollbackOf ?? null, evidenceIds: [...tested.values()].map(row => row.id) }], candidateConfiguration: null, connectionTest: next.connectionTest, connectionQualification: structuredClone(next.connectionTest) }), update('providers', provider.id, { catalogConnections })];
   for (const supply of state.modelSupplies.filter(row => row.endpointId === endpoint.id && row.status !== '已移除')) {
     const mapping = mappings.find(row => row.upstreamModelId === supply.upstreamModelId && row.modelId === (supply.catalogueModelId || supply.upstreamModelId));
     const evidence = mapping && tested.get(mapping.id);
@@ -457,6 +504,57 @@ function checkedNewCredential(value) {
   return value;
 }
 
+function prepareKeyPoolCandidate(state, data) {
+  const { provider, endpoint } = context(state, data.providerId, data.endpointId);
+  expectedRevision(endpoint, data.expectedRevision);
+  const existing = endpoint.candidateConfiguration;
+  const signature = configSignature(endpoint, provider);
+  const impact = channelChangeImpact(state, provider.id, endpoint.id);
+  if (existing?.id !== data.candidateId || existing && existing.baseSignature !== signature || data.expectedImpactRevision !== impact.revision) {
+    throw new Error('生效配置、候选或影响范围已变化，请重新打开');
+  }
+  if (existing?.pendingTests?.length) throw new Error('请先处理未完成的候选检测');
+  const { mode, keyPool, keyStrategy, newKeys = [], replaceKeyId } = data;
+  if (!['edit', 'append', 'replace', 'rotate'].includes(mode) ||
+    !['priority', 'random', 'roundRobin'].includes(keyStrategy) ||
+    !Array.isArray(keyPool) || keyPool.length > 20 ||
+    keyPool.some(row => !row || typeof row !== 'object' || !Number.isSafeInteger(row.priority)) ||
+    !Array.isArray(newKeys) || (mode === 'edit' ? newKeys.length !== 0 : !newKeys.length) ||
+    mode === 'rotate' && (newKeys.length !== 1 || !keyPool.some(row => row.keyId === replaceKeyId))) {
+    throw new Error('请核对密钥池操作、选择策略和输入数量');
+  }
+  const knownKeys = [...new Map([...(existing?.config.apiKeys || []), ...(endpoint.apiKeys || [])]
+    .filter(key => key.scope === 'channel').map(key => [key.id, key])).values()];
+  for (const key of newKeys) {
+    checkedNewCredential(key);
+    if (Object.keys(key).some(field => !['maskedKey', 'fingerprint'].includes(field))) throw new Error('专属密钥只接受掩码和指纹');
+    if ([...knownKeys, ...(provider.apiKeys || [])].some(item => item.revokedAt && item.fingerprint === key.fingerprint)) throw new Error('该密钥已撤销');
+  }
+  const imported = checkedConnectionKeys(newKeys, knownKeys).map(key => ({ ...key, scope: 'channel' }));
+  const owned = [...new Map([...imported, ...knownKeys].map(key => [key.id, key])).values()];
+  const from = Math.max(0, ...keyPool.map(row => row.priority));
+  let rows = keyPool;
+  if (mode === 'append' || mode === 'replace') {
+    const offset = mode === 'append' ? from : 0;
+    rows = [...(mode === 'append' ? keyPool : []), ...imported.map((key, index) => ({
+      keyId: key.id, priority: Math.min(100, offset + index + 1), enabled: true,
+    }))];
+  } else if (mode === 'rotate') {
+    rows = keyPool.map(row => row.keyId === replaceKeyId ? { ...row, keyId: imported[0].id, enabled: true } : row);
+  }
+  const fingerprints = rows.map(row => [...owned, ...(provider.apiKeys || [])].find(key => key.id === row.keyId)?.fingerprint).filter(Boolean);
+  if (new Set(fingerprints).size !== fingerprints.length) throw new Error('同一连接不能配置相同的 API 密钥');
+  const previous = Object.fromEntries(editableFields.filter(key => Object.hasOwn(existing?.config || {}, key))
+    .map(key => [key, existing.config[key]]));
+  const config = configuredEndpoint(state, provider, endpoint, { ...previous, authMode: 'pool', keyPool: rows, keyStrategy }, owned);
+  if (endpoint.poolPaused) config.poolPaused = false;
+  const candidateConfiguration = {
+    id: resourceId('connection-candidate'), baseRevision: endpoint.configurationRevision || 0,
+    baseSignature: signature, impactRevision: impact.revision, config, tests: [], createdAt: new Date().toISOString(), allAssociations: true,
+  };
+  return { type: 'batch', objectId: endpoint.id, label: '保存渠道密钥池候选', changes: [update('endpoints', endpoint.id, { candidateConfiguration })] };
+}
+
 function replaceProviderCredential(state, data) {
   const provider = state.providers.find(row => row.id === data.providerId && !row.deletedAt);
   const keys = provider ? providerApiKeyRows(state, provider) : [];
@@ -519,6 +617,18 @@ function prepareCredentialCandidate(state, operation, data) {
     if (data.expectedImpactRevision !== channelChangeImpact(state, provider.id, endpoint.id).revision) throw new Error('渠道模型或服务引用已变化，请重新核对替换范围');
     const key = connectionKeys(endpoint, provider, true)[0];
     if ((data.expectedKeyId || '') !== (key?.id || '') || (data.expectedFingerprint || '') !== (key?.fingerprint || '')) throw new Error('渠道当前密钥或绑定范围已变化，请重新打开');
+    if (data.channelOwned === true) {
+      if (endpoint.candidateConfiguration) throw new Error('渠道已有待处理的候选配置');
+      const [normalized] = checkedConnectionKeys([data.newApiKey]);
+      const ownedKey = { ...normalized, scope: 'channel' };
+      const config = configuredEndpoint(state, provider, endpoint, { ...data.config, authMode: 'specific', apiKeyId: ownedKey.id }, [ownedKey]);
+      const candidateConfiguration = {
+        id: resourceId('connection-candidate'), baseRevision: endpoint.configurationRevision || 0,
+        baseSignature: configSignature(endpoint, provider), impactRevision: data.expectedImpactRevision,
+        config, tests: [], createdAt: new Date().toISOString(), allAssociations: true,
+      };
+      return { type: 'batch', objectId: endpoint.id, label: '准备渠道专属密钥候选', changes: [update('endpoints', endpoint.id, { candidateConfiguration })] };
+    }
     groupId = key && providerKeyGroups(provider).find(group => group.keyIds.includes(key.id))?.id;
     if (!groupId) {
       const names = new Set(providerKeyGroups(provider).map(group => group.name));
@@ -542,6 +652,17 @@ function prepareCredentialCandidate(state, operation, data) {
 
 export function channelChangeTransaction(state, { operation, data = {} }) {
   if (operation === 'credentialReplace') return replaceProviderCredential(state, data);
+  if (operation === 'channelCandidatePoolSave') return prepareKeyPoolCandidate(state, data);
+  if (operation === 'channelCandidatePoolPause') {
+    const { provider, endpoint } = context(state, data.providerId, data.endpointId);
+    expectedRevision(endpoint, data.expectedRevision);
+    if (data.confirmed !== true || endpoint.authMode !== 'pool' || endpoint.poolPaused || endpoint.candidateConfiguration ||
+      endpoint.serverTestJobs?.some(row => !row.receivedAt && !row.canceledAt) ||
+      channelChangeImpact(state, provider.id, endpoint.id).revision !== data.expectedImpactRevision) throw Error('请检查未完成任务及全部连接影响后再停用');
+    return { type: 'batch', objectId: endpoint.id, label: '停用连接全部密钥', changes: [update('endpoints', endpoint.id, {
+      poolPaused: true, status: '停用', activationSource: 'manual', activationChangedAt: new Date().toISOString(), connectionQualification: null,
+    })] };
+  }
   if (['channelCandidateCredentialPrepare', 'keyGroupCandidatePrepare'].includes(operation)) return prepareCredentialCandidate(state, operation, data);
   if (/^(channel|keyGroup)CandidateTest(Job|Receipt)$/.test(operation)) return candidateReceiptTransaction(state, operation, data);
   if (operation.startsWith('keyGroupCandidate') || operation === 'keyGroupPriority') return keyGroupTransaction(state, operation, data);
@@ -557,18 +678,26 @@ export function channelChangeTransaction(state, { operation, data = {} }) {
   if (operation === 'channelCandidateSave' || operation === 'channelCandidateRollback') {
     const { provider, endpoint } = context(state, data.providerId, data.endpointId);
     expectedRevision(endpoint, data.expectedRevision);
-    let config = data.config;
+    let config = data.config, ownedKeys;
     const existing = endpoint.candidateConfiguration;
     const addressOnly = operation === 'channelCandidateSave' && data.addressOnly === true;
     if (addressOnly && (typeof config?.baseUrl !== 'string' || Object.keys(config).length !== 1 || existing && !existing.addressOnly)) throw new Error('请先处理现有候选配置；此操作仅允许修改 Base URL');
-    if (operation === 'channelCandidateSave' && existing?.baseSignature === configSignature(endpoint, provider) && config && typeof config === 'object' && !Array.isArray(config)) config = { ...Object.fromEntries(editableFields.filter(key => Object.hasOwn(existing.config, key)).map(key => [key, existing.config[key]])), ...config };
+    if (operation === 'channelCandidateSave' && existing?.baseSignature === configSignature(endpoint, provider) && config && typeof config === 'object' && !Array.isArray(config)) {
+      config = { ...Object.fromEntries(editableFields.filter(key => Object.hasOwn(existing.config, key)).map(key => [key, existing.config[key]])), ...config };
+      ownedKeys = existing.config.apiKeys;
+    }
     if (operation === 'channelCandidateRollback') {
       const version = endpoint.configurationVersions?.find(row => row.version === data.targetVersion);
       if (!version || data.targetVersion === (endpoint.configurationRevision || 0)) throw new Error('请选择已有的其他配置版本');
+      if (version.config.adapterDraft) throw Error('历史待适配配置不可回滚，须先选择可用的适配器');
       config = Object.fromEntries(editableFields.filter(key => Object.hasOwn(version.config, key)).map(key => [key, version.config[key]]));
+      for (const key of ['requestRules', 'networkSettings', 'customAdapter']) {
+        if (endpoint[key] && !Object.hasOwn(config, key)) config[key] = null;
+      }
+      if (data.allAssociations === true) ownedKeys = version.config.apiKeys;
     }
-    const prepared = configuredEndpoint(state, provider, endpoint, config);
-    const candidate = { id: resourceId('connection-candidate'), baseRevision: endpoint.configurationRevision || 0, baseSignature: configSignature(endpoint, provider), impactRevision: channelChangeImpact(state, provider.id, endpoint.id).revision, config: prepared, tests: [], createdAt: new Date().toISOString(), ...(addressOnly ? { addressOnly: true } : {}), ...(operation === 'channelCandidateRollback' ? { rollbackOf: data.targetVersion } : {}) };
+    const prepared = configuredEndpoint(state, provider, endpoint, config, ownedKeys);
+    const candidate = { id: resourceId('connection-candidate'), baseRevision: endpoint.configurationRevision || 0, baseSignature: configSignature(endpoint, provider), impactRevision: channelChangeImpact(state, provider.id, endpoint.id).revision, config: prepared, tests: [], createdAt: new Date().toISOString(), ...(addressOnly ? { addressOnly: true } : {}), ...(data.allAssociations === true || existing?.allAssociations ? { allAssociations: true } : {}), ...(operation === 'channelCandidateRollback' ? { rollbackOf: data.targetVersion } : {}) };
     return { type: 'batch', objectId: endpoint.id, label: operation === 'channelCandidateRollback' ? '准备配置回滚并重新测试' : '保存候选配置', changes: [update('endpoints', endpoint.id, { candidateConfiguration: candidate })] };
   }
   const { provider, endpoint, candidate } = candidateContext(state, data);
