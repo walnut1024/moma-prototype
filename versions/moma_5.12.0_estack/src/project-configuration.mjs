@@ -29,7 +29,8 @@ export function newProject({ state, identity, link }, input, id, at = new Date()
 }
 
 export function changeProject({ state, identity, link }, projectId, action, input, services) {
-  const project = projectAccess(state, identity, link).projects.find(row => row.id === projectId);
+  const { projects, managesSpace } = projectAccess(state, identity, link);
+  const project = projects.find(row => row.id === projectId);
   if (!project || project.status === '已删除' || action !== 'exit' && !project.canManage) throw Error('无权操作该项目');
   if (identity.spaceId === 'personal' && ['status', 'members', 'exit'].includes(action)) throw Error('个人默认项目状态随客户管理');
   if (identity.spaceId === 'personal' && action === 'settings' && input.name !== '默认项目') throw Error('个人默认项目不可重命名');
@@ -80,6 +81,7 @@ export function changeProject({ state, identity, link }, projectId, action, inpu
     label = action === 'exit' ? '退出项目' : role ? oldRole ? '调整项目成员角色' : '添加项目成员' : '移除项目成员';
     objectId = member.id;
   } else if (action === 'status') {
+    if (!managesSpace) throw Error('只有企业管理员可以停用、启用或删除项目');
     if (!['正常', '停用', '已删除'].includes(input.status) || input.status === project.status) throw Error('项目状态无效');
     changes.status = input.status;
     label = { 正常: '启用项目', 停用: '停用项目', 已删除: '删除项目' }[input.status];

@@ -1,230 +1,270 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Button, Card, Progress, Select, Space, Tabs, Typography } from '@douyinfe/semi-ui';
+import { IconArrowLeft, IconChevronRight } from '@douyinfe/semi-icons';
 import Table from './AdminTable';
-import AdminPageHeading from './AdminPageHeading';
-import { useMemo, useState } from 'react';
-import { Button, Card, Space, Toast, Typography } from '@douyinfe/semi-ui';
-import { AdminModal as Modal } from './AdminOverlay';
-import { IconArrowLeft, IconArrowRight, IconMaximize, IconRefresh } from '@douyinfe/semi-icons';
-import { TimeSeriesChart, DonutChart, RankingChart } from '../components/AnalyticsCharts';
-import { adminChartColor, chartPalette } from '../components/chart-style.mjs';
-import SavedFilterViews from '../components/SavedFilterViews';
-import { FilterToolbar, FilterPresets, FilterReset } from '../components/FilterControls';
-import { overviewBusiness, overviewPeriod, overviewPresets, overviewDateTime, overviewChange, compactCount } from './overview';
-import { SemiDateRange as DateRange } from './SemiAnalyticsFilters';
+import { AdminModal } from './AdminOverlay';
+import { AnalysisHelp } from './AnalysisMetric';
+import { DonutChart, TimeSeriesChart } from '../components/AnalyticsCharts';
 import { dayOf } from './analytics';
-import AnalysisMetric, { AnalysisHelp as Help } from './AnalysisMetric';
-import { TodayOperations } from './UserActivityAnalysis';
+import { compactCount, overviewChange, overviewCustomers, overviewDateTime, overviewMetrics, overviewRanks, overviewTimeline } from './overview';
 import './overview.css';
 
-const { Title, Text, Paragraph } = Typography;
-const number = value => value == null ? '—' : value.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
-const percent = (value, total) => total ? `${(value / total * 100).toFixed(1)}%` : '—';
-const signed = value => `${value > 0 ? '+' : ''}${number(value)}`;
-export default function OperationsOverview({state}) {
-  const [now, setNow] = useState(() => Date.now()), [periodId, setPeriodId] = useState('day');
-  const [customRange, setCustomRange] = useState(null);
-  const [detail, setDetail] = useState(null);
-  const data = useMemo(() => overviewBusiness(state, now, periodId, customRange), [state, now, periodId, customRange]);
-  const { period, previous } = data;
-  const choosePeriod = (id, range = null) => { const current = Date.now(); if (!overviewPeriod(current, id, range)) { Toast.error('请选择不晚于今天且不超过 365 天的日期范围'); return; } setPeriodId(id); setCustomRange(range); setNow(current); setDetail(null); };
-  const tokenChange = overviewChange(data.total, previous.total), monthlyActive = data.monthlyActive;
-  const comparisonNote = `${period.comparison}：${overviewDateTime(period.previousStart)} 至 ${overviewDateTime(period.previousEnd)}。`;
-  const topCustomers = data.customers.slice(0, 10), topModels = data.models.slice(0, 10);
-  const selected = detail?.id ? data[detail.kind === 'customer' ? 'customers' : 'models'].find(r => r.id === detail.id) : null;
-  const related = selected ? data.pairs.filter(row => detail.kind === 'customer' ? row.customerId === selected.id : row.modelId === selected.id).sort((a, b) => b.total - a.total) : [];
-  const metrics = [
-    { label: '注册用户总数', value: number(data.registrations.total), unit: '人', change: overviewChange(data.registrations.total, previous.registrations.total), breakdown: data.registrations, note: '截至统计结束时，累计注册的政企和个人用户数。同一用户只计一次。' },
-    { label: '月活跃用户数', value: number(monthlyActive.total), unit: '人', change: overviewChange(monthlyActive.total, monthlyActive.previousTotal), comparison: '对比上月同期', monthly: true, comparisonNote: '与上月相同进度比较；上月天数不足时取全月。', note: '截至昨日，昨日所在自然月成功登录过的用户数，同一用户只计一次。按北京时间自然月统计，不受时间筛选影响。' },
-    { label: '模型请求次数', value: compactCount(data.calls), unit: '次', change: overviewChange(data.calls, previous.calls), note: '所选时间内发起的模型请求次数，包含成功和失败请求。同一次请求的重试或服务商切换只计一次。' },
-    { label: 'Token 使用总量', value: compactCount(data.total), unit: 'Token', change: tokenChange, note: '所选时间内，模型实际使用的输入和输出 Token 总量。缓存 Token 只计一次，图片张数、音频时长等不计入。' },
-    { label: '日均 Token 调用量', value: data.rates.averageTpd == null ? '—' : compactCount(data.rates.averageTpd), unit: 'Token / 天', change: data.rates.averageTpd == null || data.previous.rates.averageTpd == null ? null : overviewChange(data.rates.averageTpd, data.previous.rates.averageTpd), note: '所选时段 Token 使用总量 ÷ 北京时间自然日数，包含无调用日。今日及包含今日的自定义时段按实际已发生用量计算，不预测全天用量。' },
-    { label: '最大小时峰值消耗', value: data.peakHourlyTokens == null ? '—' : compactCount(data.peakHourlyTokens), unit: data.peakHourlyTokens == null ? '' : 'Token', change: overviewChange(data.peakHourlyTokens, previous.peakHourlyTokens), note: '所选时段内，单个北京时间自然小时 Token 消耗总量的最大值。未结束的小时只统计截至当前时刻的实际用量，不外推整小时。' },
-  ];
-  const openList = kind => setDetail({ kind });
-  const openRow = (kind, row) => setDetail({ kind, id: row.id });
-  const timeGroup = {
-    label: '统计时间',
-    text: period.id === 'custom' ? `自定义（${period.range}）` : period.label,
-    scope: '用量指标、趋势、供给和排行；月活固定按昨日所在自然月统计',
-  };
+const { Title, Text } = Typography;
+const countFormat = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
+const number = value => value == null ? '—' : countFormat.format(value);
+const percent = (value, total) => total ? number(value / total * 100) + '%' : '—';
+const welcomeImage = 'url(' + import.meta.env.BASE_URL + 'assets/token-workbench-welcome.webp)';
+const windows = ['近一周工作日日均', '近一月工作日日均'];
+
+export default function OperationsOverview({ state, workbenchName, shortcuts, onNavigate }) {
+  const [now] = useState(() => Date.now());
+  const [mode, setMode] = useState('day');
+  const [selectedMonth, setSelectedMonth] = useState(null);
+  const [history, setHistory] = useState(false);
+  const data = useMemo(() => overviewTimeline(state, now), [state, now]);
+  const month = selectedMonth || data.months.at(-1).id;
+  const customers = useMemo(() => overviewCustomers(data, mode === 'month' ? month : null), [data, mode, month]);
+  const metrics = overviewMetrics(data);
+
   return <div className="admin-page-stack ov-page">
-    <AdminPageHeading title="概览"/>
-    <Card>
-      <FilterToolbar>
-        <Text type="secondary">统计时间</Text>
-        <FilterPresets value={periodId} items={overviewPresets} onChange={choosePeriod}>
-          <DateRange start={dayOf(period.start)} end={dayOf(Math.max(period.start, period.end - 1))}
-            trigger={<Button aria-label="自定义日期范围" aria-pressed={periodId === 'custom'}>{periodId === 'custom' ? period.range : '自定义'}</Button>}
-            presets={[]} allowLongRange rangeHint="单次最多 365 天；单日按小时，多日按天汇总" onChange={range => choosePeriod('custom', range)}/>
-        </FilterPresets>
-        <Text type="secondary">北京时间</Text>
-        <FilterReset onClick={() => choosePeriod('day')}/>
-        <Button icon={<IconRefresh aria-hidden="true"/>} onClick={() => { setNow(Date.now()); Toast.success('数据已刷新'); }}>刷新</Button>
-      </FilterToolbar>
-      <div className="ov-view-row">
-        <SavedFilterViews notify={Toast} scope="admin-overview-operations" value={{ periodId, customRange }}
-          onApply={view => choosePeriod(view?.periodId, view?.customRange)} groups={[timeGroup]}
-          saveDescription="保存用量统计时间；月活始终按昨日所在自然月统计。快捷时间在应用时按当前日期重新计算，自定义保存具体日期。"/>
-        <Text type="tertiary" size="small">更新于 {new Date(now).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}</Text>
+    <section className="ov-hero" aria-labelledby="ov-welcome" style={{ '--ov-welcome-image': welcomeImage }}>
+      <div className="ov-hero-content">
+        <Title heading={1} component="h1" id="ov-welcome">欢迎使用<br/><span>{workbenchName}</span></Title>
+        <Text className="ov-hero-time" size="small" type="secondary">更新于 {overviewDateTime(now)}（北京时间）</Text>
       </div>
+    </section>
+
+    <Card className="ov-panel ov-kpi-panel">
+      <dl className="ov-kpis" aria-label="今日指标">
+        {metrics.map(metric => <div key={metric.label}>
+          <dt>{metric.label}</dt>
+          <dd className="ov-kpi-value" title={metric.value == null ? undefined : number(metric.value) + ' ' + metric.unit}>
+            <strong>{metric.unit === '%' ? number(metric.value) : metric.value == null ? '—' : compactCount(metric.value)}</strong>
+            {metric.value != null && <span>{metric.unit}</span>}
+          </dd>
+          <dd className="ov-kpi-compare">
+            <Change value={metric.change} unit={metric.changeUnit}/>
+            <Text size="small" type="secondary">较昨日同时段</Text>
+            {metric.pending > 0 && <AnalysisHelp label="Token 计量待确认">
+              {number(metric.pending)} 次请求的 Token 计量待确认。总量为已完整计量的 Token。
+            </AnalysisHelp>}
+          </dd>
+        </div>)}
+      </dl>
     </Card>
-    <div className="admin-analysis-metrics">{metrics.map(item => (
-      <AnalysisMetric key={item.label} title={item.label} value={item.value} unit={item.unit} help={
-        <div className="ov-help-content">
-          <Paragraph>{item.note}</Paragraph>
-          <Paragraph>{item.comparisonNote || comparisonNote}上期为 0 时，变化显示“—”。</Paragraph>
-          {item.monthly && <>
-            <Paragraph>统计月：{overviewDateTime(monthlyActive.start)} 至 {overviewDateTime(monthlyActive.end)}</Paragraph>
-            <Paragraph>上一月：{overviewDateTime(monthlyActive.previousStart)} 至 {overviewDateTime(monthlyActive.previousEnd)}</Paragraph>
-          </>}
+
+    <nav aria-labelledby="ov-quick-title">
+      <Card className="ov-panel ov-quick">
+        <Title heading={6} component="h2" id="ov-quick-title">快速使用</Title>
+        <div className="ov-grid ov-shortcuts">
+          {shortcuts.map(({ id, label, Icon }) => <Button key={id} block theme="borderless" type="tertiary"
+            icon={<Icon aria-hidden="true"/>} onClick={() => onNavigate(id)}>
+            <span>{label}</span><IconChevronRight aria-hidden="true"/>
+          </Button>)}
         </div>
-      }>
-        {item.breakdown && <Space wrap><Text size="small">政企 {number(item.breakdown.enterprise)}</Text><Text size="small">个人 {number(item.breakdown.personal)}</Text></Space>}
-        <Space wrap><Text type="tertiary" size="small">{item.comparison || period.comparison}</Text><Change value={item.change}/></Space>
-      </AnalysisMetric>
-    ))}</div>
-    <TodayOperations state={state} now={now} total={period.id === 'today' ? data.total : overviewBusiness(state, now, 'today').total}/>
-    <div className="ov-chart-grid">
-      {[
-        { key: 'total', title: 'Token 用量趋势', label: 'Token 用量', unit: 'Token', change: tokenChange },
-        { key: 'calls', title: '模型请求趋势', label: '模型请求次数', unit: '次', change: overviewChange(data.calls, previous.calls) },
-      ].map(chart => <Card key={chart.key} title={<ChartTitle>{chart.title}</ChartTitle>}>
-        <Paragraph type="secondary">{period.label} · {period.hourly ? '按小时汇总' : '按天汇总'}</Paragraph>
-        {data.trend.length ? <TimeSeriesChart showData={false} labels={data.trend.map(row => row.label)}
-          series={[{ label: chart.label, values: data.trend.map(row => row[chart.key]) }]} unit={chart.unit} label={chart.title} height={225}/>
-          : <Paragraph type="secondary" className="ov-empty">本期暂无调用记录</Paragraph>}
-        <Space wrap>
-          <Text size="small" type="tertiary">{period.comparison}</Text><Change value={chart.change}/>
-          <Text size="small" type="tertiary">{period.partial ? '截至当前时刻 · 非完整自然日' : '完整自然日'}</Text>
-        </Space>
-      </Card>)}
-    </div>
-    <div className="ov-chart-grid">
-      {[['customer', '客户', topCustomers], ['model', '模型', topModels]].map(([kind, label, rows]) => (
-        <Card key={kind} title={<ChartTitle>{label}用量 Top 10</ChartTitle>}
-          headerExtraContent={<Button size="small" theme="borderless" icon={<IconArrowRight aria-hidden="true"/>} iconPosition="right"
-            aria-label={`查看全部${label}用量`} onClick={() => openList(kind)}>查看全部</Button>}>
-          <Paragraph type="secondary" className="ov-caption">{kind === 'customer'
-            ? `前 10 名客户合计占平台用量 ${percent(topCustomers.reduce((sum, row) => sum + row.total, 0), data.total)}`
-            : '按对外模型汇总 · 多个服务商合并统计'}</Paragraph>
-          <UsageTable rows={rows} kind={kind} total={data.total} onSelect={row => openRow(kind, row)} label={`${label}用量排行`}/>
-        </Card>
-      ))}
-      <Composition title="供给构成" caption="Token 用量占比" empty="本期暂无 Token 用量" total={data.total} unit="Token"
-        centerLabel="Token 总量" centerValue={compactCount(data.total)} rows={[
-          { label: '自产', value: data.self, color: chartPalette[0] }, { label: '引入', value: data.partner, color: '#13aaa7' },
-        ]} help="按承接客户调用的实际供给来源汇总 Token 用量。自产指自有推理服务，引入指外部服务；占比以本期平台 Token 总量为分母。"/>
-      <Composition title="用户构成" caption="累计注册用户" empty="暂无注册用户" total={data.registrations.total} unit="人"
-        centerLabel="注册用户总数" centerValue={number(data.registrations.total)} rows={[
-          { label: '政企', value: data.registrations.enterprise, color: chartPalette[0] }, { label: '个人', value: data.registrations.personal, color: '#8b5cf6' },
-        ]} help="截至统计结束时的注册用户构成，政企与个人数量之和等于注册用户总数。按用户 ID 去重，分类沿用用户分析的身份记录。"/>
-      {[['customer', '客户', data.customers], ['model', '模型', data.models]].map(([kind, label, rows]) =>
-        <CallRankPanel key={kind} title={`模型调用次数 Top 10 ${label}`} rows={rows} total={data.calls}
-          limits={kind === 'customer' ? [30, 50, 100] : [30, 50]} onChoose={id => openRow(kind, rows.find(row => row.id === id))}/>)}
-    </div>
-    {detail && <Modal visible title={selected ? `${selected.name} · 用量详情` : `全部${detail.kind === 'customer' ? '客户' : '模型'}用量`}
-      width="min(800px, calc(100vw - 32px))" closeOnEsc footer={null} onCancel={() => setDetail(null)}>
-      <div className="admin-analytics-fields">
-        <Paragraph type="secondary">{period.label} · {overviewDateTime(period.start)} 至 {overviewDateTime(period.end)}</Paragraph>
-        {selected ? <>
-          <div><Button size="small" theme="borderless" icon={<IconArrowLeft aria-hidden="true"/>}
-            onClick={() => openList(detail.kind)}>返回全部{detail.kind === 'customer' ? '客户' : '模型'}</Button></div>
-          <dl className="ov-detail-summary">
-            {[['Token 用量', number(selected.total)], ['模型请求次数', number(selected.calls)], ['占平台用量', percent(selected.total, data.total)],
-              ['自产 / 引入', `${percent(selected.self, selected.total)} / ${percent(selected.partner, selected.total)}`]].map(([label, value]) =>
-              <div key={label}><dt><Text type="tertiary">{label}</Text></dt><dd><Text strong>{value}</Text></dd></div>)}
-          </dl>
-          <Table size="small" pagination={false} rowKey={row => `${row.customerId}/${row.modelId}`}
-            dataSource={related} scroll={{ x: 'max(100%, 420px)', y: 360 }} columns={[
-              { title: detail.kind === 'customer' ? '使用模型' : '调用客户', dataIndex: detail.kind === 'customer' ? 'modelName' : 'customerName' },
-              { title: 'Token 用量', dataIndex: 'total', align: 'right', render: number },
-              { title: '模型请求次数', dataIndex: 'calls', align: 'right', render: number },
+      </Card>
+    </nav>
+
+    <section className="ov-section" aria-labelledby="ov-operations-title">
+      <div className="ov-heading"><Title heading={4} component="h2" id="ov-operations-title">累计经营指标</Title></div>
+      <div className="ov-grid ov-economy">
+        <div className="ov-grid ov-averages">
+          {data.averages.map(({ start, end, days, value }, index) => <Card key={index} className="ov-panel ov-average">
+            <Title heading={6} component="h3">{windows[index]}</Title>
+            <div className="ov-kpi-value" title={value == null ? undefined : number(value) + ' Token'}>
+              <strong>{value == null ? '—' : compactCount(value)}</strong><span>Token</span>
+            </div>
+            <Text type="secondary" size="small">{start.slice(5)} 至 {end.slice(5)} · {days} 个工作日</Text>
+          </Card>)}
+        </div>
+        <OverviewPlot title="月度工作日 Token 用量" note={'工作日按周一至周五 · 截至 ' + data.daily.at(-1).date}>
+          <TimeSeriesChart label="月度工作日 Token 用量" labels={data.months.map(row => row.label)}
+            compact legendAtTop showData={false} type="bar" stacked unit="Token" height={213}
+            series={[
+              ...data.supplyTypes.flatMap(([, label, color], index) =>
+                index !== 2 || data.months.some(row => row.supply[index] > 0)
+                  ? [{ label, color, values: data.months.map(row => row.supply[index]) }] : []),
+              { label: '单日峰值（右轴）', color: '#6262bd', values: data.months.map(row => row.peak), rightAxis: true, showPoints: true },
             ]}/>
-        </> : <UsageTable rows={data[detail.kind === 'customer' ? 'customers' : 'models']} kind={detail.kind} total={data.total}
-          onSelect={row => openRow(detail.kind, row)} label={`全部${detail.kind === 'customer' ? '客户' : '模型'}用量`} expanded/>}
+        </OverviewPlot>
       </div>
-    </Modal>}
+      <OverviewPlot title="月度活跃客户数" note={'按自然月去重 · 最后统计日 ' + data.daily.at(-1).date}>
+        <TimeSeriesChart label="月度活跃客户数" labels={data.months.map(row => row.label)}
+          compact legendAtTop showData={false} type="bar" stacked unit="个" height={224}
+          series={data.customerTypes.flatMap(({ label, color }, index) =>
+            index !== 2 || data.months.some(row => row.customers[index] > 0)
+              ? [{ label, color, values: data.months.map(row => row.customers[index]) }] : [])}/>
+      </OverviewPlot>
+      <OverviewPlot title="每日 Token 用量（TPD）" note="近 30 个完整自然日 · 已计量 Token">
+        <TimeSeriesChart label="每日 Token 用量" labels={data.daily.map(row => row.date.slice(5))}
+          compact legendAtTop showData={false} type="area" unit="Token" height={262}
+          series={[
+            { label: '每日 Token', color: '#256be3', values: data.daily.map(row => row.total), showPoints: true },
+            { label: '近 30 天均值', color: '#7d92b4', values: data.daily.map(() => data.mean), dashed: true },
+          ]}/>
+      </OverviewPlot>
+    </section>
+
+    <section className="ov-section" aria-labelledby="ov-customers-title">
+      <div className="ov-heading ov-customer-heading">
+        <Title heading={4} component="h2" id="ov-customers-title">客户核心指标</Title>
+        <Space spacing={4} role="group" aria-label="客户统计周期">
+          {[['day', '昨日'], ['month', '按月']].map(([id, label]) => <Button key={id} size="small"
+            theme={mode === id ? 'light' : 'borderless'} type={mode === id ? 'primary' : 'tertiary'}
+            aria-pressed={mode === id} onClick={() => setMode(id)}>{label}</Button>)}
+        </Space>
+        {mode === 'month' && <>
+          <span className="sr-only" id="ov-month-label">选择统计月份</span>
+          <Select className="ov-month" aria-labelledby="ov-month-label" size="small" value={month}
+            onChange={setSelectedMonth} optionList={data.months.toReversed().map(row => ({ label: row.id, value: row.id }))}/>
+        </>}
+        <Button className="ov-history-link" size="small" theme="borderless" onClick={() => setHistory(true)}
+          icon={<IconChevronRight aria-hidden="true"/>} iconPosition="right">查看历史数据</Button>
+      </div>
+      <div className="ov-grid ov-customers-grid">
+        <CustomerActivity activity={customers}/>
+        <Card className="ov-panel ov-tiers-panel">
+          <div className="ov-panel-heading">
+            <Title heading={6} component="h3">按日均 Token 用量分级</Title>
+            <AnalysisHelp label="按日均 Token 用量分级">按客户已计量 Token 除以所选周期内的完整自然日数分档。计量待确认与无 Token 类调用分别列示。</AnalysisHelp>
+          </div>
+          <div className="ov-tiers">
+            <CustomerDonut rows={customers.tiers} count={customers.count} label="日均 Token 用量分级" />
+            <ul>{customers.tiers.map(row => <li key={row.label}>
+              <span className="ov-dot" style={{ backgroundColor: row.color }} aria-hidden="true"/>
+              <Text size="small" type="secondary">{row.label}</Text><Text strong size="small">{number(row.value)}</Text>
+            </li>)}</ul>
+          </div>
+        </Card>
+      </div>
+      <Card className="ov-panel ov-types-panel">
+        <Title heading={6} component="h3">客户类型分布</Title>
+        <div className="ov-types">
+          <CustomerDonut rows={customers.types} count={customers.count} label="客户类型分布" />
+          {customers.types.filter((row, index) => index < 2 || row.value > 0).map(row => <div className="ov-mini" key={row.label}>
+            <Text size="small" type="secondary"><span className="ov-dot" style={{ backgroundColor: row.color }} aria-hidden="true"/>{row.label}</Text>
+            <strong>{number(row.value)} <small>个</small></strong>
+            <Text size="small" type="secondary">占比 {percent(row.value, customers.count)}</Text>
+          </div>)}
+        </div>
+      </Card>
+    </section>
+
+    {history && <OverviewHistory state={state} activity={customers} onClose={() => setHistory(false)}/>}
   </div>;
 }
 
-function ChartTitle({ children }) {
-  return <Title heading={5} component="h2">{children}</Title>;
+function Change({ value, unit = '%' }) {
+  const rounded = value == null ? null : Number(value.toFixed(2));
+  const direction = rounded > 0 ? 'up' : rounded < 0 ? 'down' : 'flat';
+  return <span className="ov-delta" data-direction={direction}>
+    {rounded == null ? '—' : (rounded > 0 ? '+' : '') + number(rounded) + (unit === '%' ? unit : ' ' + unit)}
+  </span>;
 }
 
-
-function Change({ value }) {
-  value = value == null ? null : Number(value.toFixed(2)) || 0;
-  return <Text size="small" type={value == null || value === 0 ? 'tertiary' : value > 0 ? 'success' : 'warning'}>
-    {value == null ? '—' : `${signed(value)}%`}
-  </Text>;
+function OverviewPlot({ title, note, children }) {
+  return <Card className="ov-panel ov-plot">
+    <div className="ov-plot-heading"><Title heading={6} component="h3">{title}</Title><Text type="secondary" size="small">{note}</Text></div>
+    {children}
+  </Card>;
 }
 
-function UsageTable({ rows, kind, total, onSelect, label, expanded }) {
-  const customer = kind === 'customer';
-  return <section aria-label={label}>
-    <Table size="small" pagination={false} rowKey="id" dataSource={rows} empty="本期暂无调用记录"
-      scroll={{ x: 'max(100%, 380px)', ...(expanded ? { y: 360 } : {}) }} columns={[
-        { title: '排名', key: 'rank', width: 68, render: (_, __, index) => index + 1 },
-        { title: customer ? '客户' : '模型', dataIndex: 'name', render: (name, row) =>
-          <Button size="small" theme="borderless" className="ov-rank-name" title={name} onClick={() => onSelect(row)}>{name}</Button> },
-        { title: 'Token 用量', dataIndex: 'total', align: 'right', render: value => <span title={`${number(value)} Token`}>{compactCount(value)}</span> },
-        customer ? { title: '用量占比', key: 'share', align: 'right', render: (_, row) => percent(row.total, total) }
-          : { title: '模型请求次数', dataIndex: 'calls', align: 'right', render: value => <span title={`${number(value)} 次`}>{compactCount(value)}</span> },
-      ]}/>
-  </section>;
-}
-
-function Composition({ title, caption, empty, total, unit, centerLabel, centerValue, rows, help }) {
-  return <Card title={<ChartTitle>{title}</ChartTitle>} headerExtraContent={<Help label={title}>{help}</Help>}>
-    <Paragraph type="secondary">{caption}</Paragraph>
-    {total > 0 ? <DonutChart showData={false} rows={rows} unit={unit} label={`${title}环形图`} height={190}
-      centerValue={centerValue} centerLabel={centerLabel}/> : <Paragraph className="ov-empty" type="secondary">{empty}</Paragraph>}
-    <div className="ov-composition-values">
-      {rows.map(row => <div key={row.label}>
-        <Space><span className="ov-dot" style={{ background: adminChartColor(row.color) }} aria-hidden="true"/><Text>{row.label}</Text><Text type="secondary">{percent(row.value, total)}</Text></Space>
-        <Text strong title={`${number(row.value)} ${unit}`}>{unit === 'Token' ? compactCount(row.value) : number(row.value)} {unit}</Text>
-      </div>)}
+function CustomerActivity({ activity }) {
+  const peak = Math.max(activity.count, activity.previous);
+  return <Card className="ov-panel ov-active-panel">
+    <Title heading={6} component="h3">调用活跃客户数</Title>
+    <div className="ov-active-value" aria-live="polite">
+      <div className="ov-kpi-value"><strong>{number(activity.count)}</strong><span>个</span></div>
+      <Change value={overviewChange(activity.count, activity.previous)}/>
+      <Text size="small" type="secondary">新增客户 {number(activity.added)} 个</Text>
+    </div>
+    <div className="ov-activity-bars">
+      {[[activity.label, activity.count], [activity.previousLabel, activity.previous]].map(([label, value], index) =>
+        <div key={label}>
+          <Text type="secondary" size="small">{label}</Text>
+          <div aria-hidden="true"><Progress percent={peak ? value / peak * 100 : 0} showInfo={false}
+            stroke={index ? '#9cbfff' : '#337cf2'} strokeWidth={7}/></div>
+          <Text size="small" strong>{number(value)}</Text>
+        </div>)}
+    </div>
+    <div className="ov-grid ov-activity-minis">
+      {[['期末近 7 日活跃', activity.recent7], ['期末近 30 日活跃', activity.recent30], ['沉默客户', activity.dormant]].map(([label, value]) =>
+        <div className="ov-mini" key={label}>
+          <div><Text type="secondary" size="small">{label}</Text>
+            {label === '沉默客户' && <AnalysisHelp label="沉默客户">截至期末已开户满 30 天，最近 30 天无调用记录。</AnalysisHelp>}
+          </div>
+          <strong>{number(value)}</strong>
+        </div>)}
     </div>
   </Card>;
 }
 
-function RankingSegments({ items, value, onChange, label }) {
-  return <div className="admin-time-presets" role="group" aria-label={label}>
-    {items.map(([id, name]) => <Button key={id} size="small" theme={value === id ? 'solid' : 'light'}
-      aria-pressed={value === id} onClick={() => onChange(id)}>{name}</Button>)}
-  </div>;
+function CustomerDonut({ rows, count, label }) {
+  return count > 0 ? <DonutChart rows={rows.filter(row => row.value > 0)} unit="个" label={label} height={142}
+    centerValue={number(count)} centerLabel="活跃客户" showData={false}/>
+    : <div className="ov-donut-empty"><Text type="secondary" size="small">暂无活跃客户</Text></div>;
 }
 
-function CallRankPanel({ title, rows, total, limits, onChoose }) {
-  const [scale, setScale] = useState('linear');
-  const [open, setOpen] = useState(false);
-  const [limit, setLimit] = useState(30);
-  const ranked = rows.filter(row => row.id !== '__unknown__' && row.calls > 0).sort((a, b) => b.calls - a.calls || a.id.localeCompare(b.id));
-  const top = ranked.slice(0, 10), expanded = ranked.slice(0, limit);
-  const scaleControl = <RankingSegments label={`${title}刻度`} items={[[ 'linear', '线性' ], [ 'log', '指数' ]]} value={scale} onChange={setScale}/>;
-  const expandedTitle = title.replace('Top 10', `Top ${limit}`);
-  const chart = (values, label) => values.length
-    ? <RankingChart label={label} rows={values} metric="calls" unit="次" collection={rows} scale={scale} onChoose={onChoose}/>
-    : <Paragraph type="secondary" className="ov-empty">所选范围暂无排行数据</Paragraph>;
-  return <>
-    <Card title={<ChartTitle>{title}</ChartTitle>} headerExtraContent={
-      <Button size="small" theme="borderless" icon={<IconMaximize aria-hidden="true"/>} aria-label={`放大${title}排行榜`} onClick={() => setOpen(true)}/>
-    }>
-      <div className="ov-rank-controls">
-        <Text size="small" type="secondary">Top 10 占比 {percent(top.reduce((sum, row) => sum + row.calls, 0), total)}</Text>
-        <Space wrap>{scaleControl}<Help label="排行刻度">指数模式使用 log10(数值＋1) 压缩条长；排序、标签和悬浮数值保持原始值。</Help></Space>
-      </div>
-      {chart(top, title)}
-    </Card>
-    {open && <Modal visible title={expandedTitle} closeOnEsc footer={null}
-      width="min(1100px, calc(100vw - 32px))" onCancel={() => setOpen(false)}>
-      <div className="admin-analytics-fields">
-        <Paragraph type="secondary">共 {ranked.length} 个有调用的对象，当前展示 {expanded.length} 个 · 单位：次 · 点击条形查看明细</Paragraph>
-        <div className="ov-rank-controls">
-          <RankingSegments label="排行数量" value={limit} onChange={setLimit} items={limits.map(value => [value, `Top ${value}`])}/>
-          {scaleControl}
+function OverviewHistory({ state, activity, onClose }) {
+  const [kind, setKind] = useState('customer');
+  const [metric, setMetric] = useState('total');
+  const [selected, setSelected] = useState(null);
+  const historyContent = useRef(null);
+  const lastRank = useRef(null);
+  const label = kind === 'customer' ? '客户' : '模型';
+  const otherKind = kind === 'customer' ? 'model' : 'customer';
+  const ranked = useMemo(() => overviewRanks(activity.rows, kind, state, metric), [activity.rows, kind, state, metric]);
+  const related = useMemo(() => selected
+    ? overviewRanks(activity.rows.filter(row => row[kind === 'customer' ? 'tenantId' : 'modelId'] === selected.id), otherKind, state, metric)
+    : [], [activity.rows, kind, metric, otherKind, selected, state]);
+  useEffect(() => {
+    if (selected) historyContent.current?.querySelector('.ov-detail-back')?.focus();
+    else if (lastRank.current) {
+      const control = [...(historyContent.current?.querySelectorAll('.ov-rank-name') || [])]
+        .find(button => button.dataset.rankId === lastRank.current);
+      control?.focus();
+      lastRank.current = null;
+    }
+  }, [selected]);
+  const renderToken = (value, row) => <span title={row.pending ? number(row.pending) + ' 次计量待确认' : undefined}>
+    {value == null ? '—' : compactCount(value)}{value != null && row.pending > 0 ? ' · 部分待确认' : ''}
+  </span>;
+  const columns = [
+    { title: '排名', key: 'rank', width: 62, render: (_, __, index) => index + 1 },
+    { title: label, dataIndex: 'name', render: (name, row) =>
+      <Button size="small" theme="borderless" className="ov-rank-name" data-rank-id={row.id}
+        onClick={() => { lastRank.current = row.id; setSelected(row); }}>{name}</Button> },
+    { title: '已计量 Token', dataIndex: 'total', align: 'right', render: renderToken },
+    { title: '请求次数', dataIndex: 'calls', align: 'right', render: number },
+    { title: '占比', key: 'share', align: 'right', render: (_, row) =>
+      metric === 'total' ? row.total == null ? '—' : percent(row.total, activity.totals.total) : percent(row.calls, activity.rows.length) },
+  ];
+  return <AdminModal visible title={selected ? selected.name + ' · 用量详情' : '历史数据'} footer={null} closeOnEsc
+    width="min(860px, calc(100vw - 24px))" onCancel={selected ? () => setSelected(null) : onClose}>
+    <div className="ov-history" ref={historyContent}>
+      <Text type="secondary" size="small">{dayOf(activity.start)} 至 {dayOf(activity.end - 1)} · 北京时间</Text>
+      {selected ? <>
+        <div><Button size="small" theme="borderless" className="ov-detail-back" icon={<IconArrowLeft aria-hidden="true"/>} onClick={() => setSelected(null)}>返回{label}排行</Button></div>
+        <Space wrap><Text>已计量 Token {number(selected.total)}</Text><Text>请求次数 {number(selected.calls)}</Text></Space>
+        <Table size="small" pagination={false} rowKey="id" dataSource={related} scroll={{ x: 410, y: 360 }}
+          columns={[
+            { title: kind === 'customer' ? '模型' : '客户', dataIndex: 'name' },
+            { title: '已计量 Token', dataIndex: 'total', align: 'right', render: renderToken },
+            { title: '请求次数', dataIndex: 'calls', align: 'right', render: number },
+          ]}/>
+      </> : <>
+        <Tabs type="button" size="small" activeKey={kind} onChange={setKind} aria-label="排行对象">
+          <Tabs.TabPane tab="客户排行" itemKey="customer"/>
+          <Tabs.TabPane tab="模型排行" itemKey="model"/>
+        </Tabs>
+        <div>
+          <span className="sr-only" id="ov-sort-label">排序指标</span>
+          <Select aria-labelledby="ov-sort-label" size="small" value={metric} onChange={setMetric}
+            optionList={[{ label: '按 Token 用量', value: 'total' }, { label: '按请求次数', value: 'calls' }]}/>
         </div>
-        <div className="ov-expanded-scroll">{chart(expanded, expandedTitle)}</div>
-      </div>
-    </Modal>}
-  </>;
+        <Table key={kind + metric} size="small" pagination={false} rowKey="id" dataSource={ranked} scroll={{ x: 540, y: 360 }}
+          columns={columns} empty="本期暂无排行数据"/>
+      </>}
+    </div>
+  </AdminModal>;
 }

@@ -5,19 +5,13 @@ import { shanghaiDate } from '../call-log-data.mjs';
 import { bucketLabel, fields, meteringView, usageModelGroups, usagePeriod } from '../usage-data.mjs';
 import { NATIVE_METERS, tenantUsageActivity, tenantUsageCategory, tenantUsageMeter, tenantUsageReport, UNASSIGNED, USAGE_ACTIVITY_DAYS, USAGE_OVERVIEW, usageCacheRate, usageDimensionRows, usageMetricValue, usageModelsInScope, usageMoney, usageRanking, usageReportCSV, usageSubscribedTrends, usageSuccessRate, usageWeekday } from '../tenant-usage-report.mjs';
 import { tenantUsageDemo } from '../mock/tenant-usage.mjs';
-import { DateRange, MultiPick } from '../admin-v2/AnalyticsFilters';
+import { SemiDateRange as DateRange, SemiMultiPick as MultiPick } from '../admin-v2/SemiAnalyticsFilters';
 import { DonutChart, TimeSeriesChart } from './AnalyticsCharts';
 import { chartPalette } from './chart-style.mjs';
 import { FilterField, FilterPresets, FilterReset, FilterToolbar, FilterViewRow, TIME_PRESETS } from './FilterControls';
 import FrontPageHeader from './FrontPageHeader';
 import SavedFilterViews from './SavedFilterViews';
-import { Button } from './ui/button';
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from './ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Button, Popover, Select, Tabs, Tooltip } from '@douyinfe/semi-ui';
 import './usage-statistics.css';
 
 const ALL = '__all__';
@@ -60,49 +54,30 @@ function formatQuantity(value, currency) {
 }
 
 function Pick({ label, value, onChange, items, all }) {
-  return <Select value={value || ALL} onValueChange={next => onChange(next === ALL ? null : next)}>
-    <SelectTrigger aria-label={label}><SelectValue /></SelectTrigger>
-    <SelectContent>
-      {all && <SelectItem value={ALL}>{all}</SelectItem>}
-      {items.map(({ id, name }) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
-    </SelectContent>
-  </Select>;
+  return <Select aria-label={label} value={value || ALL} onChange={next => onChange(next === ALL ? null : next)}
+    optionList={[...(all ? [{value:ALL,label:all}] : []), ...items.map(({id,name}) => ({value:id,label:name}))]}/>;
 }
 
 function KeyPicker({ value, onChange, items }) {
-  const [open, setOpen] = useState(false);
-  const selected = items.find(item => item.id === value);
-  const choose = id => { onChange(id); setOpen(false); };
-  return <Popover open={open} onOpenChange={setOpen}>
-    <PopoverTrigger asChild><Button variant="outline" aria-label="API Key 筛选" title={selected?.name}>
-      <span className="us-report-key-name">{selected?.name ?? '全部 Key'}</span><ChevronDown size={14} />
-    </Button></PopoverTrigger>
-    <PopoverContent align="start" className="us-key-picker us-report-key-picker" aria-label="选择 API Key">
-      <Command>
-        <CommandInput aria-label="搜索 API Key" placeholder="搜索 Key 名称或 ID" />
-        <CommandList>
-          <CommandEmpty>无匹配的 API Key</CommandEmpty>
-          <CommandItem value="全部 Key" onSelect={() => choose(null)}>全部 Key</CommandItem>
-          {items.map(({ id, name }) => <CommandItem key={id} value={id} keywords={[name]} onSelect={() => choose(id)}>
-            {name}<small>{id}</small>
-          </CommandItem>)}
-        </CommandList>
-      </Command>
-    </PopoverContent>
-  </Popover>;
+  return <Select aria-label="API Key 筛选" value={value || ALL} onChange={next => onChange(next === ALL ? null : next)}
+    filter={(query, option) => (option.name + ' ' + option.value).toLowerCase().includes(query.trim().toLowerCase())}
+    searchPlaceholder="搜索 Key 名称或 ID" emptyContent="无匹配的 API Key"
+    renderSelectedItem={option => option.name}
+    optionList={[{value:ALL,label:'全部 Key',name:'全部 Key'}, ...items.map(({id,name}) => ({
+      value:id, name, label:<>{name} <small>{id}</small></>,
+    }))]}/>;
 }
 
 function Switch({ label, value, onChange, options }) {
-  return <ToggleGroup type="single" value={value} onValueChange={next => next && onChange(next)}
-    variant="outline" size="sm" className="us-segmented" aria-label={label}>
-    {options.map(([id, name]) => <ToggleGroupItem key={id} value={id}>{name}</ToggleGroupItem>)}
-  </ToggleGroup>;
+  return <div role="group" className="us-segmented" aria-label={label}>
+    {options.map(([id, name]) => <Button key={id} size="small" theme={value === id ? 'solid' : 'light'}
+      aria-pressed={value === id} onClick={() => onChange(id)}>{name}</Button>)}
+  </div>;
 }
 
 function Hint({ label, children }) {
-  return <Tooltip><TooltipTrigger asChild><Button type="button" variant="ghost" size="icon-sm"
-    className="us-info" aria-label={label + '说明'}><Info /></Button></TooltipTrigger>
-    <TooltipContent className="max-w-72">{children}</TooltipContent></Tooltip>;
+  return <Tooltip content={children}><Button theme="borderless" type="tertiary" size="small" icon={<Info size={14}/>}
+    className="us-info" aria-label={label + '说明'}/></Tooltip>;
 }
 
 function optionList(items, records, field, unknown) {
@@ -203,13 +178,10 @@ function ActivityHeatmap({ daily, points, mode }) {
           const period = byWeek && end !== time ? date + ' — ' + shanghaiDate(new Date(end)) : date;
           const amount = value === null ? '无 Token 计量' : measure + ' ' + value.toLocaleString('zh-CN') + ' Token';
           const level = value === null ? 'unknown' : value === 0 ? 0 : Math.ceil(value / peak * 5);
-          return <Tooltip key={time}>
-            <TooltipTrigger asChild>
+          return <Tooltip key={time} content={period + ' · ' + amount}>
               <span className="us-activity-day" role="img" aria-label={period + '：' + amount} data-level={level}
                 tabIndex={index === active ? 0 : -1} ref={cell => { cells.current[index] = cell; }}
                 onFocus={() => setActive(index)} onKeyDown={event => moveFocus(event, index)} />
-            </TooltipTrigger>
-            <TooltipContent>{period} · {amount}</TooltipContent>
           </Tooltip>;
         })}
       </div>
@@ -592,18 +564,17 @@ function UsageDashboard({ demo, tenant, scope, ChartNavigation, projectScope, wo
   const renderTrend = chart => <MeterTrend key={chart.id} chart={chart} report={report}
     labels={labels} modelLabel={modelLabel} currency={currency} />;
   const exportLabel = overview ? '导出概览用量' : '导出用量趋势';
-  return <TooltipProvider><div className="us-page us-metering us-report">
+  return <div className="us-page us-metering us-report">
     <FrontPageHeader title={workspaceOverview ? '空间总览' : '用量统计'} icon={ChartNoAxesCombined} className="us-report-header"
       description={scopedProject ? '当前项目 · ' + scopedProject.name : tenant.identity?.tenantName}
       actions={hasSource && <>
         {demo && <span className="us-report-badge">模拟数据</span>}
         <span className="us-report-asof">快照更新 <time dateTime={asOf.toISOString()}>{dateTime.format(asOf)}</time>（北京时间）</span>
       </>} />
-    <Tabs value={category} onValueChange={value => patch({ category: value, modelIds: null })}>
-      <TabsList id="tenant-usage-view-tabs" variant="line" className="us-tabs" aria-label="用量视图">
-        {USAGE_TABS.map(id => <TabsTrigger key={id} value={id}>{id}</TabsTrigger>)}
-      </TabsList>
-      <TabsContent value={category} className="us-content">
+    <Tabs id="tenant-usage-view-tabs" aria-label="用量视图" activeKey={category}
+      onChange={value => patch({ category:value, modelIds:null })}
+      tabList={USAGE_TABS.map(tab => ({itemKey:tab,tab}))}/>
+    <div className="us-content">
         {!hasSource ? <div className="us-chart"><Empty>{tenant.error || (projectScope?.id ? '当前项目不可访问' : '当前空间暂无可用用量数据')}</Empty></div> : <>
           {activity && <>
             <TokenActivity activity={activity} scopeLabel={scopedProject?.name || (demo || tenant.canManage ? '当前空间' : '当前可见用量')} internal={internal}/>
@@ -613,30 +584,30 @@ function UsageDashboard({ demo, tenant, scope, ChartNavigation, projectScope, wo
             <FilterToolbar className="us-filters us-report-filters">
               <FilterPresets value={preset} onChange={value => patch({ preset: value })} />
               <DateRange start={range.start} end={range.end} maxDays={31}
-                trigger={<Button type="button" className="us-custom-date" variant={preset === 'custom' ? 'default' : 'outline'}
-                  aria-label="日期范围"><CalendarDays aria-hidden="true" />自定义</Button>}
+                trigger={<Button className="us-custom-date" aria-pressed={preset === 'custom'} icon={<CalendarDays aria-hidden="true"/>}
+                  aria-label="日期范围">自定义</Button>}
                 rangeHint={overview ? '概览单日按小时，多日按天，单次最多 31 天' : '模型趋势单日按 10 分钟，多日按天，单次最多 31 天'}
                 onChange={next => { setCustomRange(next); patch({ preset: 'custom' }); }} />
               {!internal && <FilterField label="计费方式"><Switch label="计费方式" value={billing} onChange={value => changeScope({ billing: value })} options={BILLINGS} /></FilterField>}
               {!scopedProject && <FilterField label="项目"><Pick label="项目筛选" value={projectId} onChange={value => changeScope({ projectId: value })} items={projects} all="全部项目" /></FilterField>}
-              <Button type="button" variant="outline" className="us-more-filters" aria-expanded={moreOpen}
+              <Button theme="outline" className="us-more-filters" aria-expanded={moreOpen}
                 aria-controls="tenant-usage-more-filters" onClick={() => setMoreOpen(value => !value)}>
                 <ListFilter aria-hidden="true" />{moreOpen ? '收起筛选' : '更多筛选'}{extraCount > 0 && <span className="us-extra-count">{extraCount}</span>}
               </Button>
               <FilterReset onClick={() => { setFilters({ ...initialFilters, category }); setCustomRange(null); setRankMetric(null); setNotice(''); }} />
               <div className="us-actions">
                 <div className="us-refresh-group">
-                  <Button variant="outline" size="icon" aria-label="刷新用量" title="刷新用量" onClick={() => { refresh(); setNotice('已刷新当前范围的用量'); }}><RefreshCw /></Button>
-                  <Popover><PopoverTrigger asChild><Button variant="outline" className={'us-refresh-settings' + (autoRefresh ? ' is-active' : '')} aria-label="自动刷新设置">
-                    <span>{autoRefresh ? '自动刷新已开启' : '自动刷新'}</span><ChevronDown size={14} />
-                  </Button></PopoverTrigger><PopoverContent className="us-refresh-popover" align="end">
+                  <Button theme="outline" size="small" aria-label="刷新用量" title="刷新用量" onClick={() => { refresh(); setNotice('已刷新当前范围的用量'); }}><RefreshCw /></Button>
+                  <Popover trigger="click" position="bottomRight" content={<div className="us-refresh-popover">
                     <fieldset><legend>自动刷新</legend>{REFRESH.map(([seconds, label]) => <label key={seconds}>
                       <input type="radio" name="report-auto-refresh" checked={autoRefresh === seconds}
                         onChange={() => { setAutoRefresh(seconds); if (seconds) refresh(); }} />{label}
                     </label>)}</fieldset>
-                  </PopoverContent></Popover>
+                  </div>}><Button theme="outline" className={'us-refresh-settings' + (autoRefresh ? ' is-active' : '')} aria-label="自动刷新设置">
+                    <span>{autoRefresh ? '自动刷新已开启' : '自动刷新'}</span><ChevronDown size={14} />
+                  </Button></Popover>
                 </div>
-                <Button variant="outline" size="icon" aria-label={exportLabel} title={exportLabel} disabled={!summary.requests} onClick={exportCSV}><Download /></Button>
+                <Button theme="outline" size="small" aria-label={exportLabel} title={exportLabel} disabled={!summary.requests} onClick={exportCSV}><Download /></Button>
               </div>
             </FilterToolbar>
             <div id="tenant-usage-more-filters" hidden={!moreOpen}>
@@ -699,7 +670,6 @@ function UsageDashboard({ demo, tenant, scope, ChartNavigation, projectScope, wo
             <ChartNavigation key={nav.map(([id]) => id).join('|')} items={nav} />
           </div>}
         </>}
-      </TabsContent>
-    </Tabs>
-  </div></TooltipProvider>;
+      </div>
+  </div>;
 }

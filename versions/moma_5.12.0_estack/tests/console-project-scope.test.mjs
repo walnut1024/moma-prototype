@@ -5,6 +5,8 @@ import { projectAccess, projectModelEnabled } from '../src/project-access.mjs';
 import { newProject, changeProject } from '../src/project-configuration.mjs';
 import { projectAccessError, projectCallError } from '../src/project-call.mjs';
 import { loadAdminState, commitAdminState } from '../src/admin-v2/store.js';
+import { accountProjects } from '../src/tenant-data.mjs';
+import { ADMIN_DATA_KEY } from '../src/workspace-storage.mjs';
 
 const personal = () => ({
   tenants:[{id:'person',type:'个人',ownerId:'owner',defaultProjectId:'default'}],
@@ -71,6 +73,42 @@ test('enterprise administrators create projects while members only see assigned 
   const project=newProject({state,identity:enterpriseIdentity,link:enterpriseLink},{name:'new',description:''},'new');
   assert.equal(project.tenantId,'enterprise');
   assert.deepEqual(project.modelPermissions,[]);
+});
+
+test('my projects uses the same project membership checks in every accessible enterprise', () => {
+  const state = { ...personal(), models:[] };
+  const account = { id:'login', status:'正常' };
+  const auth = { currentUserId:account.id, accounts:[account], memberships:[], identityLinks:[] };
+  const spaces = ['a','b','frozen'].map(id => {
+    state.tenants.push({ id, name:id, type:'企业', status:'正常' });
+    state.users.push({ id, status:'正常' });
+    state.memberships.push({ id, userId:id, tenantId:id, role:'普通成员', status:id === 'frozen' ? '停用' : '正常' });
+    state.projects.push({ id:`project-${id}`, tenantId:id, status:'正常', name:id, memberRoles:{[id]:'项目成员'} });
+    auth.memberships.push({ userId:account.id, enterpriseId:id, status:'已加入' });
+    auth.identityLinks.push({ authUserId:account.id, spaceId:id, tenantId:id, backendUserId:id, backendMembershipId:id });
+    return { id };
+  });
+  state.projects.push({ id:'unassigned', tenantId:'a', status:'正常', name:'未授权项目', memberRoles:{} });
+  const storage = { getItem:key => key === ADMIN_DATA_KEY ? JSON.stringify(state) : null };
+  assert.deepEqual(accountProjects(auth, spaces, storage).map(({ id, canExit }) => [id, canExit]),
+    [['project-a', true], ['project-b', true]]);
+});
+
+test('project administrators must hand over before exit and enterprise administrators manage project status', () => {
+  const state = personal();
+  state.tenants.push({ id:'enterprise', type:'企业' });
+  state.users.push({ id:'owner', status:'正常' });
+  const member = { id:'member', tenantId:'enterprise', userId:'owner', role:'普通成员', status:'正常' };
+  state.memberships.push(member);
+  state.projects.push({ id:'team-project', tenantId:'enterprise', ownerId:'owner', name:'项目', status:'正常',
+    memberRoles:{member:'项目管理员'} });
+  const context = { state, identity:{tenantId:'enterprise',spaceId:'enterprise'}, link:{backendMembershipId:member.id} };
+  assert.throws(() => changeProject(context,'team-project','exit',{},[]), /另一位有效的项目管理员/);
+  assert.throws(() => changeProject(context,'team-project','status',{status:'已删除'},[]), /只有企业管理员/);
+  member.role = '企业管理员';
+  const result = changeProject(context,'team-project','status',{status:'已删除'},[]);
+  assert.equal(result.projects.find(row => row.id === 'team-project').status, '已删除');
+  assert.equal(result.audit.projectId, 'team-project');
 });
 
 test('backend customer transactions cannot bypass the single personal project rule', () => {

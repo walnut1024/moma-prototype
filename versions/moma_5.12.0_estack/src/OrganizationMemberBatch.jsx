@@ -1,13 +1,7 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { CheckCircle2, Download, Plus, Trash2, Upload } from "lucide-react";
-import { Button } from "./components/ui/button";
-import { Checkbox } from "./components/ui/checkbox";
-import { Input } from "./components/ui/input";
-import { Textarea } from "./components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./components/ui/dialog";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table";
+import { Button, Checkbox, Input, Select, Steps, Table, Tabs, TextArea } from '@douyinfe/semi-ui';
+import { AdminModal } from './admin-v2/AdminOverlay';
 import { departmentPath, platformAccounts } from "./organization-data.mjs";
 import { MEMBER_IMPORT_HEADERS, MEMBER_IMPORT_LIMIT, memberCsv, memberRowsFromCells, parseMemberText, validateMemberRows } from "./organization-import.mjs";
 
@@ -19,6 +13,9 @@ function download(name, rows) {
 }
 
 export default function OrganizationMemberBatch({ data, initialDepartment, onClose, onApply }) {
+  const departmentLabelId = useId();
+  const departmentOptions = [{ id: 'unassigned' }, ...data.departments]
+    .map(({id}) => ({ value: id, label: departmentPath(data.departments, id) }));
   const [mode, setMode] = useState("existing"), [entry, setEntry] = useState("manual"), [step, setStep] = useState("input");
   const [rows, setRows] = useState([blankRow()]), [paste, setPaste] = useState("");
   const [defaultDepartment, setDefaultDepartment] = useState(initialDepartment);
@@ -70,46 +67,90 @@ export default function OrganizationMemberBatch({ data, initialDepartment, onClo
     const identity = platformAccounts.find(a => a.account === account);
     setRows(rows.map(r => r.key === key ? { ...r, name: identity.name, account: identity.account, phone: identity.phone || "" } : r));
   };
-  return <Dialog open onOpenChange={open => { if (!open) close(); }}><DialogContent className="org-dialog org-batch-dialog" onInteractOutside={event => event.preventDefault()}>
-    <DialogHeader><DialogTitle>批量添加成员</DialogTitle><DialogDescription>手机号必填。批量加入已有账号或创建新成员邀请，提交前核对成员与部门。</DialogDescription></DialogHeader>
-    <ol className="org-batch-steps" aria-label="添加步骤">{[["input", "录入成员"], ["preview", "校验确认"], ["result", "处理结果"]].map(([id, title], i) => <li key={id} aria-current={step === id ? "step" : undefined}><span>{i + 1}</span>{title}</li>)}</ol>
+  const footer = <div className="org-batch-footer"><span className="org-hint">{step === "result" ? "邀请记录显示待加入，已有账号显示已加入。" : "手机号用于识别成员；重复记录不会覆盖现有资料与角色。"}</span>{step === "result" ? <Button theme="solid" onClick={close}>完成</Button> : <><Button theme="outline" onClick={() => step === "preview" ? (setStep("input"), setOnlyProblems(false)) : close()}>{step === "preview" ? "返回录入" : "取消"}</Button><Button theme="solid" loading={busy} disabled={busy || step === "preview" && (!ready || invalid + duplicate > 0 && !skipProblems)} onClick={step === "input" ? next : submit}>{step === "input" ? "下一步：校验成员" : mode === "invite" ? `创建 ${ready} 条邀请` : `添加 ${ready} 位成员`}</Button></>}</div>;
+  return <AdminModal visible title="批量添加成员" className="org-dialog org-batch-dialog"
+    width="min(1080px, calc(100vw - 24px))" onCancel={close} footer={footer}>
+    <p className="org-hint">手机号必填。批量加入已有账号或创建新成员邀请，提交前核对成员与部门。</p>
+    <Steps type="basic" size="small" className="org-batch-steps" aria-label="添加步骤"
+      current={['input', 'preview', 'result'].indexOf(step)}>
+      {['录入成员', '校验确认', '处理结果'].map(title => <Steps.Step key={title} title={title}/>)}
+    </Steps>
     <div className="org-dialog-body org-batch-body">
       {step !== "result" && <>
-        <div className="org-batch-settings"><Tabs value={mode} onValueChange={value => { setMode(value); setSkipProblems(false); setError(""); }}><TabsList><TabsTrigger value="existing">已有平台账号</TabsTrigger><TabsTrigger value="invite">邀请新成员</TabsTrigger></TabsList></Tabs>
-          <label className="org-field"><span>默认主部门</span><Select value={defaultDepartment} onValueChange={value => { setDefaultDepartment(value); setSkipProblems(false); }}><SelectTrigger aria-label="默认主部门"><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{[{ id: "unassigned", name: "未分配部门" }, ...data.departments].map(d => <SelectItem key={d.id} value={d.id}>{departmentPath(data.departments, d.id)}</SelectItem>)}</SelectGroup></SelectContent></Select></label>
+        <div className="org-batch-settings"><Tabs activeKey={mode} onChange={value => { setMode(value); setSkipProblems(false); setError(""); }} tabList={[{ itemKey: 'existing', tab: '已有平台账号' }, { itemKey: 'invite', tab: '邀请新成员' }]}/>
+          <div className="org-field"><span id={departmentLabelId}>默认主部门</span>
+          <Select aria-labelledby={departmentLabelId} value={defaultDepartment} optionList={departmentOptions}
+            onChange={value => { setDefaultDepartment(value); setSkipProblems(false); }}/></div>
         </div><p className="org-hint">{mode === "existing" ? "匹配已有平台账号，自动带出姓名和登记手机号；缺失号码需补齐。" : "姓名、手机号必填，邮箱选填；未填写邮箱时使用手机号作为账号，创建后为待加入。"} 主部门留空使用默认值，统一添加为普通成员。</p>
       </>}
       {step === "input" ? <>
-        <div className="org-batch-entry"><Tabs value={entry} onValueChange={setEntry}><TabsList><TabsTrigger value="manual">直接录入</TabsTrigger><TabsTrigger value="file">表格导入 / 粘贴</TabsTrigger></TabsList></Tabs><Button variant="outline" size="sm" onClick={() => download("批量添加成员模板.csv", [MEMBER_IMPORT_HEADERS])}><Download data-icon="inline-start" />下载模板</Button></div>
+        <div className="org-batch-entry"><Tabs activeKey={entry} onChange={setEntry} tabList={[{ itemKey: 'manual', tab: '直接录入' }, { itemKey: 'file', tab: '表格导入 / 粘贴' }]}/><Button theme="outline" size="small" onClick={() => download("批量添加成员模板.csv", [MEMBER_IMPORT_HEADERS])}><Download data-icon="inline-start" />下载模板</Button></div>
         {entry === "manual" ? <>
-          <div className="org-batch-scroll"><Table className="org-batch-table"><TableHeader><TableRow><TableHead>姓名{mode === "invite" && " *"}</TableHead><TableHead>手机号 *</TableHead><TableHead>{mode === "existing" ? "平台账号" : "邮箱（选填）"}</TableHead><TableHead>主部门</TableHead><TableHead /></TableRow></TableHeader><TableBody>{rows.map((r, i) => <TableRow key={r.key}>
-            <TableCell><Input aria-label={`第${i + 1}行姓名`} value={r.name} maxLength={30} readOnly={mode === "existing"} onChange={e => update(r.key, "name", e.target.value)} placeholder={mode === "existing" ? "选择账号后带出" : "成员姓名"} /></TableCell>
-            <TableCell><Input aria-label={`第${i + 1}行手机号`} type="tel" value={r.phone} onChange={e => update(r.key, "phone", e.target.value)} placeholder="必填" /></TableCell>
-            <TableCell>{mode === "existing" ? <Select value={r.account || undefined} onValueChange={account => selectAccount(r.key, account)}><SelectTrigger aria-label={`第${i + 1}行平台账号`}><SelectValue placeholder="选择平台账号" /></SelectTrigger><SelectContent><SelectGroup>{platformAccounts.map(a => <SelectItem key={a.account} value={a.account}>{a.name} · {a.account}</SelectItem>)}</SelectGroup></SelectContent></Select> : <Input aria-label={`第${i + 1}行邮箱`} value={r.account} onChange={e => update(r.key, "account", e.target.value)} placeholder="选填" />}</TableCell>
-            <TableCell><Input aria-label={`第${i + 1}行主部门`} value={r.department} onChange={e => update(r.key, "department", e.target.value)} placeholder="使用默认主部门" /></TableCell>
-            <TableCell><Button variant="ghost" size="icon-xs" aria-label={`删除第${i + 1}行`} disabled={rows.length === 1} onClick={() => setRows(rows.filter(row => row.key !== r.key))}><Trash2 /></Button></TableCell>
-          </TableRow>)}</TableBody></Table></div><Button variant="outline" size="sm" disabled={rows.length >= MEMBER_IMPORT_LIMIT} onClick={() => setRows([...rows, blankRow()])}><Plus data-icon="inline-start" />增加一行</Button>
+          <div className="org-batch-scroll">
+            <Table className="org-batch-table" size="small" pagination={false} rowKey="key" dataSource={rows}
+              columns={[
+                { title: mode === 'invite' ? '姓名 *' : '姓名', dataIndex: 'name', render: (name, row, i) => <Input
+                  aria-label={'第' + (i + 1) + '行姓名'} value={name} maxLength={30} readonly={mode === 'existing'}
+                  onChange={value => update(row.key, 'name', value)} placeholder={mode === 'existing' ? '选择账号后带出' : '成员姓名'}/> },
+                { title: '手机号 *', dataIndex: 'phone', render: (phone, row, i) => <Input
+                  aria-label={'第' + (i + 1) + '行手机号'} type="tel" value={phone} onChange={value => update(row.key, 'phone', value)} placeholder="必填"/> },
+                { title: mode === 'existing' ? '平台账号' : '邮箱（选填）', dataIndex: 'account', render: (account, row, i) => mode === 'existing'
+                  ? <><span id={departmentLabelId + '-account-' + i} className="sr-only">{'第' + (i + 1) + '行平台账号'}</span>
+                    <Select value={account || undefined} aria-labelledby={departmentLabelId + '-account-' + i} placeholder="选择平台账号"
+                      optionList={platformAccounts.map(a => ({ value: a.account, label: a.name + ' · ' + a.account }))}
+                      onChange={value => selectAccount(row.key, value)}/></>
+                  : <Input aria-label={'第' + (i + 1) + '行邮箱'} value={account} onChange={value => update(row.key, 'account', value)} placeholder="选填"/> },
+                { title: '主部门', dataIndex: 'department', render: (department, row, i) => <Input
+                  aria-label={'第' + (i + 1) + '行主部门'} value={department}
+                  onChange={value => update(row.key, 'department', value)} placeholder="使用默认主部门"/> },
+                { key: 'remove', render: (_, row, i) => <Button theme="borderless" type="tertiary" size="small" disabled={rows.length === 1}
+                  aria-label={'删除第' + (i + 1) + '行'} icon={<Trash2 size={14}/>} onClick={() => setRows(rows.filter(item => item.key !== row.key))}/> },
+              ]}/>
+          </div><Button theme="outline" size="small" disabled={rows.length >= MEMBER_IMPORT_LIMIT} onClick={() => setRows([...rows, blankRow()])}><Plus data-icon="inline-start" />增加一行</Button>
         </> : <>
-          <div className="org-batch-upload" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (!busy) readFile(e.dataTransfer.files[0]); }}><Upload aria-hidden="true" /><strong>上传成员表格，或将文件拖到这里</strong><p>支持 .xlsx、UTF-8 .csv，每批最多 {MEMBER_IMPORT_LIMIT} 条，文件不超过 10 MB</p><Button variant="outline" disabled={busy} onClick={() => fileInput.current.click()}>{busy ? "正在读取文件…" : "选择文件"}</Button><input ref={fileInput} type="file" accept=".xlsx,.csv" aria-label="上传成员文件" hidden onChange={e => { readFile(e.target.files[0]); e.target.value = ""; }} /></div>
-          <label className="org-field"><span>或从 Excel 粘贴成员信息</span><Textarea aria-label="粘贴成员信息" value={paste} onChange={e => setPaste(e.target.value)} placeholder={"每行一位成员，列顺序：姓名、手机号、账号/邮箱、主部门\n支持制表符或逗号分隔，可包含模板表头"} /></label>
-          <Button variant="ghost" size="sm" onClick={() => setPaste(mode === "existing" ? "姓名\t手机号\t账号/邮箱\t主部门\n林雨\t13800000101\tlinyu@example.com\t研发中心\n周然\t13800000102\tzhouran@example.com\t产品中心\n何川\t\thechuan@example.com\t算法部" : "姓名\t手机号\t账号/邮箱\t主部门\n沈宁\t13700000101\tshenning@example.com\t研发中心\n顾言\t13700000102\t\t产品中心\n林川\t\tlinchuan@example.com\t算法部\n宋悦\t13700000101\tsongyue@example.com\t研发中心\n周航\t13700000105\tzhouhang@example.com\t待建部门")}>填入成员信息</Button>
+          <div className="org-batch-upload" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (!busy) readFile(e.dataTransfer.files[0]); }}><Upload aria-hidden="true" /><strong>上传成员表格，或将文件拖到这里</strong><p>支持 .xlsx、UTF-8 .csv，每批最多 {MEMBER_IMPORT_LIMIT} 条，文件不超过 10 MB</p><Button theme="outline" disabled={busy} onClick={() => fileInput.current.click()}>{busy ? "正在读取文件…" : "选择文件"}</Button><input ref={fileInput} type="file" accept=".xlsx,.csv" aria-label="上传成员文件" hidden onChange={e => { readFile(e.target.files[0]); e.target.value = ""; }} /></div>
+          <label className="org-field"><span>或从 Excel 粘贴成员信息</span><TextArea aria-label="粘贴成员信息" value={paste} onChange={setPaste} placeholder={"每行一位成员，列顺序：姓名、手机号、账号/邮箱、主部门\n支持制表符或逗号分隔，可包含模板表头"} /></label>
+          <Button theme="borderless" size="small" onClick={() => setPaste(mode === "existing" ? "姓名\t手机号\t账号/邮箱\t主部门\n林雨\t13800000101\tlinyu@example.com\t研发中心\n周然\t13800000102\tzhouran@example.com\t产品中心\n何川\t\thechuan@example.com\t算法部" : "姓名\t手机号\t账号/邮箱\t主部门\n沈宁\t13700000101\tshenning@example.com\t研发中心\n顾言\t13700000102\t\t产品中心\n林川\t\tlinchuan@example.com\t算法部\n宋悦\t13700000101\tsongyue@example.com\t研发中心\n周航\t13700000105\tzhouhang@example.com\t待建部门")}>填入成员信息</Button>
         </>}
       </> : <>
         <div className="org-batch-summary" role="status">{step === "result" ? <><CheckCircle2 aria-hidden="true" /><strong>处理完成</strong><span>成功 {results.filter(r => r.status === "success").length} 条</span><span>失败 {results.filter(r => r.status === "failed").length} 条</span><span>跳过 {results.filter(r => r.status === "skipped").length} 条</span></> : <><strong>共 {rows.length} 条</strong><span>可添加 {ready} 条</span><span>重复 {duplicate} 条</span><span>错误 {invalid} 条</span></>}</div>
-        <div className="org-batch-review-tools"><label className="org-check"><Checkbox checked={onlyProblems} onCheckedChange={value => setOnlyProblems(!!value)} />只看问题记录</label><Button variant="outline" size="sm" onClick={exportResults}><Download data-icon="inline-start" />下载{step === "result" ? "处理结果" : "校验清单"}</Button></div>
-        <div className="org-batch-scroll"><Table className="org-batch-table"><TableHeader><TableRow>{["行", "姓名", "手机号 *", "账号 / 邮箱", "主部门", "处理结果", ...(step === "preview" ? [""] : [])].map((label, i) => <TableHead key={i}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{shown.map(r => <TableRow key={r.key}>
-          <TableCell>{r.rowNumber}</TableCell><TableCell>{step === "preview" && mode === "invite" ? <Input aria-label={`第${r.rowNumber}行姓名`} value={rows.find(row => row.key === r.key).name} maxLength={30} onChange={e => update(r.key, "name", e.target.value)} placeholder="填写姓名" /> : r.name || "未填写"}</TableCell>
-          <TableCell>{step === "preview" ? <Input aria-label={`第${r.rowNumber}行手机号`} type="tel" aria-invalid={r.status === "error" && !r.phone || undefined} value={rows.find(row => row.key === r.key).phone} onChange={e => update(r.key, "phone", e.target.value)} placeholder="填写手机号" /> : r.phone || "未填写"}</TableCell>
-          <TableCell>{step === "preview" ? <Input aria-label={`第${r.rowNumber}行账号`} value={rows.find(row => row.key === r.key).account} onChange={e => update(r.key, "account", e.target.value)} placeholder={mode === "existing" ? "平台账号" : "邮箱选填"} /> : r.account}</TableCell>
-          <TableCell>{step === "preview" ? <Select value={r.departmentIssue ? "" : r.departmentId} onValueChange={id => update(r.key, "department", departmentPath(data.departments, id))}><SelectTrigger aria-label={`第${r.rowNumber}行部门`}><SelectValue placeholder="选择已有部门" /></SelectTrigger><SelectContent><SelectGroup>{[{ id: "unassigned" }, ...data.departments].map(d => <SelectItem key={d.id} value={d.id}>{departmentPath(data.departments, d.id)}</SelectItem>)}</SelectGroup></SelectContent></Select> : departmentPath(data.departments, r.departmentId)}</TableCell>
-          <TableCell><span className={`org-batch-row-status org-batch-${r.status}`}>{r.message}</span>{r.status === "error" && r.department && <small className="org-cell-sub">原部门：{r.department}</small>}</TableCell>
-          {step === "preview" && <TableCell><Button variant="ghost" size="icon-xs" aria-label={`移除第${r.rowNumber}行`} onClick={() => { setRows(rows.filter(row => row.key !== r.key)); setSkipProblems(false); }}><Trash2 /></Button></TableCell>}
-        </TableRow>)}{!shown.length && <TableRow><TableCell colSpan={7}>没有匹配的记录</TableCell></TableRow>}</TableBody></Table></div>
-        {step === "preview" && invalid + duplicate > 0 && <label className="org-check"><Checkbox checked={skipProblems} onCheckedChange={value => setSkipProblems(!!value)} />跳过 {invalid + duplicate} 条问题记录，仅提交 {ready} 条有效记录</label>}
-        {step === "result" && results.some(r => r.status === "failed") && <Button variant="outline" onClick={() => { const failed = new Set(results.filter(r => r.status === "failed").map(r => r.key)); useRows(rows.filter(r => failed.has(r.key))); }}>仅重试失败项</Button>}
+        <div className="org-batch-review-tools"><Checkbox className="org-check" checked={onlyProblems} onChange={({target}) => setOnlyProblems(target.checked)}>只看问题记录</Checkbox><Button theme="outline" size="small" onClick={exportResults}><Download data-icon="inline-start" />下载{step === "result" ? "处理结果" : "校验清单"}</Button></div>
+        <div className="org-batch-scroll">
+          <Table className="org-batch-table" size="small" pagination={false} rowKey="key" dataSource={shown} empty="没有匹配的记录"
+            columns={[
+              { title: '行', dataIndex: 'rowNumber' },
+              { title: '姓名', dataIndex: 'name', render: (name, row) => step === 'preview' && mode === 'invite'
+                ? <Input aria-label={'第' + row.rowNumber + '行姓名'} value={rows.find(item => item.key === row.key).name}
+                  maxLength={30} placeholder="填写姓名" onChange={value => update(row.key, 'name', value)}/>
+                : name || '未填写' },
+              { title: '手机号 *', dataIndex: 'phone', render: (phone, row) => step === 'preview'
+                ? <Input aria-label={'第' + row.rowNumber + '行手机号'} type="tel" value={rows.find(item => item.key === row.key).phone}
+                  validateStatus={row.status === 'error' && !phone ? 'error' : undefined} placeholder="填写手机号"
+                  onChange={value => update(row.key, 'phone', value)}/>
+                : phone || '未填写' },
+              { title: '账号 / 邮箱', dataIndex: 'account', render: (account, row) => step === 'preview'
+                ? <Input aria-label={'第' + row.rowNumber + '行账号'} value={rows.find(item => item.key === row.key).account}
+                  placeholder={mode === 'existing' ? '平台账号' : '邮箱选填'} onChange={value => update(row.key, 'account', value)}/>
+                : account },
+              { title: '主部门', dataIndex: 'departmentId', render: (id, row) => step === 'preview'
+                ? <><span id={departmentLabelId + '-' + row.rowNumber} className="sr-only">{'第' + row.rowNumber + '行部门'}</span>
+                  <Select aria-labelledby={departmentLabelId + '-' + row.rowNumber} value={row.departmentIssue ? undefined : id}
+                    placeholder="选择已有部门" optionList={departmentOptions}
+                    onChange={value => update(row.key, 'department', departmentPath(data.departments, value))}/></>
+                : departmentPath(data.departments, id) },
+              { title: '处理结果', dataIndex: 'message', render: (message, row) => <>
+                <span className={'org-batch-row-status org-batch-' + row.status}>{message}</span>
+                {row.status === 'error' && row.department && <small className="org-cell-sub">原部门：{row.department}</small>}
+              </> },
+              ...(step === 'preview' ? [{ key: 'remove', render: (_, row) => <Button theme="borderless" type="tertiary" size="small"
+                aria-label={'移除第' + row.rowNumber + '行'} icon={<Trash2 size={14}/>}
+                onClick={() => { setRows(rows.filter(item => item.key !== row.key)); setSkipProblems(false); }}/> }] : []),
+            ]}/>
+        </div>
+        {step === "preview" && invalid + duplicate > 0 && <Checkbox className="org-check" checked={skipProblems} onChange={({target}) => setSkipProblems(target.checked)}>跳过 {invalid + duplicate} 条问题记录，仅提交 {ready} 条有效记录</Checkbox>}
+        {step === "result" && results.some(r => r.status === "failed") && <Button theme="outline" onClick={() => { const failed = new Set(results.filter(r => r.status === "failed").map(r => r.key)); useRows(rows.filter(r => failed.has(r.key))); }}>仅重试失败项</Button>}
       </>}
       {error && <p className="org-form-error" role="alert">{error}</p>}
     </div>
-    <DialogFooter><span className="org-hint">{step === "result" ? "邀请记录显示待加入，已有账号显示已加入。" : "手机号用于识别成员；重复记录不会覆盖现有资料与角色。"}</span>{step === "result" ? <Button onClick={close}>完成</Button> : <><Button variant="outline" disabled={busy} onClick={() => step === "preview" ? (setStep("input"), setOnlyProblems(false)) : close()}>{step === "preview" ? "返回录入" : "取消"}</Button><Button disabled={busy || step === "preview" && (!ready || invalid + duplicate > 0 && !skipProblems)} onClick={step === "input" ? next : submit}>{step === "input" ? "下一步：校验成员" : mode === "invite" ? `创建 ${ready} 条邀请` : `添加 ${ready} 位成员`}</Button></>}</DialogFooter>
-  </DialogContent></Dialog>;
+  </AdminModal>;
 }

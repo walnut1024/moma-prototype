@@ -8,19 +8,20 @@ import { operationsReturn } from './model-pricing-workspace';
 import { pendingGuidedOnboardings } from './guided-onboarding';
 import ChannelServiceContext from './ChannelServiceContext';
 import { useEffect, useRef, useState } from 'react';
-import { Button, Card, Descriptions, Empty, Input, Space, Tabs, Popover, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Descriptions, Empty, Input, Space, Popover, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { IconSearch } from '@douyinfe/semi-icons';
 import { Choice, CopyId, Notice, Modal } from './ServiceUI';
 import ModelFieldLabel from './ModelFieldLabel';
 import { displayTime, SERVICE_MODEL_TYPES } from './model-management';
 import { SERVICE_MODES } from './model-operations';
-import { serviceIndexModels, selectServiceModel } from './service-workspace';
-import { callStateLabel, modelServiceStarted, serviceDirectoryRows } from './service-directory';
+import { serviceDisplayName, serviceIndexModels, selectServiceModel } from './service-workspace';
+import { callStateLabel, modelServiceStarted, serviceDirectoryRows, serviceReferenceStarted } from './service-directory';
 import { ServiceMappingsContent } from './ServiceContent';
 import { ServiceIdentityDialog } from './ServiceConfigurationDialogs';
-import { SERVICE_WORKSPACE_TABS, serviceWorkspaceTab } from './service-workspace-panels';
+import { SERVICE_PANEL_LABELS, serviceDrawerTarget, serviceWorkspacePanel } from './service-workspace-panels';
 import ServiceFailover from './ServiceFailover';
 import { modelOperationHistory } from './model-operation-history';
+import { AdminSideSheet } from './AdminOverlay';
 
 function ModelStatusSummary({ state, model, ops }) {
   const task = pendingGuidedOnboardings(state).find(row => row.model?.id === model.id);
@@ -55,6 +56,22 @@ const callStatusFilter = value => ['started', 'stopped'].includes(value) ? value
 
 const serviceBatchSize = 20;
 
+function serviceActions(model, { started, callId, providerKey, model_service_id }, ops, act) {
+  const action = (name, kind, target = null, serviceId) => ({
+    node:'item', name, disabled:!ops.can, onClick:button => act(model,kind,target,button,serviceId),
+  });
+  return [
+    ...(model.archivedAt
+      ? [action('恢复','serviceRestore')]
+      : [
+        ...(model.serviceMode !== 'provider' || providerKey && callId
+          ? [action(started ? '停止服务' : '启动服务', started ? 'disableService' : 'enableService', providerKey)] : []),
+        action('归档','serviceArchive',null,model_service_id),
+      ]),
+    action('删除','serviceDelete',providerKey,model_service_id),
+  ];
+}
+
 export function ServiceModelList({ state, sourceState = state, ops, open, act }) {
   const { params, go } = ops;
   const query = params.get('q') || '', status = callStatusFilter(params.get('status'));
@@ -84,7 +101,7 @@ export function ServiceModelList({ state, sourceState = state, ops, open, act })
   </div>;
   const columns = [
     { title: '模型服务名称 / ID', width: 240, fixed: 'left', render: (_, row) => <div className="ss-service-identity">
-      <Button theme="borderless" size="small" onClick={() => open(row.model, row)}>{row.name}</Button>
+      <Typography.Text strong>{row.name}</Typography.Text>
       {row.model_service_id ? <CopyId value={row.model_service_id} label="模型服务 ID" alignCopy ellipsis={{ showTooltip: true, pos: 'middle' }}/> : <Typography.Text type="tertiary">待配置</Typography.Text>}
     </div> },
     { title: <ModelFieldLabel name="模型调用标识"/>, width: 190, render: (_, row) => row.callId ? <CopyId value={row.callId} label="模型调用标识" alignCopy ellipsis={{ showTooltip: true, pos: 'middle' }}/> : '待配置' },
@@ -104,10 +121,20 @@ export function ServiceModelList({ state, sourceState = state, ops, open, act })
         <Button theme="borderless" size="small" aria-label={`查看 ${row.model_service_id || row.name} 的全部 API 端点`}>+{row.endpoints.length - 1} 个端点</Button>
       </Popover>}
     </div> : '—' },
-    { title: '操作', width: 130, fixed: 'right', render: (_, row) => <Space spacing={4}>
-      <Button theme="borderless" size="small" onClick={() => open(row.model, row)}>详情</Button>
-      <Button theme="borderless" type="danger" size="small" disabled={!ops.can} aria-label={`删除模型服务 ${row.model_service_id || row.name}`} onClick={event => act(row.model, 'serviceDelete', row.providerKey, event.currentTarget, row.model_service_id)}>删除</Button>
-    </Space> },
+    { title: '操作', width: 296, fixed: 'right', render: (_, row) => {
+      const failoverReason = row.channelId ? '当前服务固定绑定单一渠道，不支持故障转移。'
+        : !row.model_service_id ? '请先在「路由及映射」中配置服务。' : '';
+      return <Space spacing={4} className="ss-service-list-actions">
+        <Button theme="borderless" size="small" onClick={event => open(row,'routing',event.currentTarget)}>路由及映射</Button>
+        {failoverReason
+          ? <Tooltip content={failoverReason}><span tabIndex={0} aria-label={`故障转移配置不可用：${failoverReason}`}><Button theme="borderless" size="small" disabled>故障转移配置</Button></span></Tooltip>
+          : <Button theme="borderless" size="small" onClick={event => open(row,'failover',event.currentTarget)}>故障转移配置</Button>}
+        <AdminActionMenu label={`更多：${row.callId || row.name}`} items={[
+          {node:'item',name:'操作记录',onClick:button => open(row,'history',button)},
+          ...serviceActions(row.model,row,ops,act),
+        ]}>更多</AdminActionMenu>
+      </Space>;
+    } },
   ];
   const serviceCount = allRows.filter(row => row.model_service_id).length, pendingCount = allRows.length - serviceCount;
   return <section aria-label="模型服务列表">
@@ -118,7 +145,7 @@ export function ServiceModelList({ state, sourceState = state, ops, open, act })
         {modelFilters.map(({ key, label, options }) => <Choice key={key} label={label} options={options} value={key === 'status' ? status : params.get(key) || 'all'} onChange={value => update({ [key]: value === 'all' ? null : value, shown: null })}/>)}
         {hasFilters && <Button theme="borderless" onClick={() => update({ q: null, type: null, mode: null, status: null, shown: null })}>重置筛选</Button>}
       </div>
-      <Table className="ss-service-list-table" rowKey="id" columns={columns} dataSource={rows} scroll={{ x: 'max(100%, 1835px)' }} empty="没有符合条件的模型服务" pagination={false}/>
+      <Table className="ss-service-list-table" rowKey="id" columns={columns} dataSource={rows} scroll={{ x: 'max(100%, 2001px)' }} empty="没有符合条件的模型服务" pagination={false}/>
       <div ref={loadTarget} className="ss-section-bar">
         <Typography.Text type="tertiary" role="status">{hasMore ? `已显示 ${shown} / ${allRows.length} 项` : `共 ${serviceCount} 个模型服务${pendingCount ? ` · ${pendingCount} 项待配置` : ''}`}</Typography.Text>
         {hasMore && <Button size="small" theme="borderless" onClick={loadMore}>加载更多</Button>}
@@ -150,51 +177,53 @@ function ServiceCallIdentity({ model, service, ops }) {
   </>;
 }
 
-export default function ServiceManagementWorkspace({state,sourceState=state,ops,act}) {
+export default function ServiceManagementWorkspace({state,sourceState=state,ops,act,close}) {
   const {params,go} = ops;
   const selected = selectServiceModel(state.models, params.get('model'));
-  const activeTab = serviceWorkspaceTab(params);
-  const started = selected && modelServiceStarted(selected);
-  const currentService = selected && serviceReferences({...sourceState, models:[selected]}).find(row => row.id === params.get('service') || offerKey(row) === params.get('routeProvider') || selected.serviceMode === 'standard');
-  const actions = !selected ? [] : selected.archivedAt ? [
-    {node:'item',name:'恢复',disabled:!ops.can,onClick:button => act(selected,'serviceRestore',null,button)},
-    {node:'item',name:'删除',disabled:!ops.can,onClick:button => act(selected,'serviceDelete',currentService?.providerId ? offerKey(currentService) : null,button,currentService?.model_service_id)},
-  ] : [
-    ...(selected.serviceMode === 'provider' ? [] : [
-      {node:'item',name:started?'停止服务':'启动服务',disabled:!ops.can,onClick:button => act(selected,started?'disableService':'enableService',null,button)},
-    ]),
-    {node:'item',name:'归档',disabled:!ops.can,onClick:button => act(selected,'serviceArchive',null,button)},
-    {node:'item',name:'删除',disabled:!ops.can,onClick:button => act(selected,'serviceDelete',currentService?.providerId ? offerKey(currentService) : null,button,currentService?.model_service_id)},
-  ];
-  return <section className="semi-services ss-workspace" aria-label="模型服务工作台">
-      <ChannelServiceContext state={state} ops={ops}/>{params.has('returnOnboarding') && <Notice><Button theme="borderless" onClick={() => go({view:'onboarding',draft:params.get('returnOnboarding'),step:'2',panel:null,model:null,returnOnboarding:null,providerAdd:null,providerEdit:null})}>返回接入任务</Button></Notice>}
+  const panel = serviceWorkspacePanel(params);
+  const service = selected && serviceDrawerTarget(sourceState,selected,params);
+  const missing = !selected || selected.deletedAt || !service && (params.has('serviceRecord') || params.has('routeProvider') || panel === 'failover');
+  const started = selected && (service ? serviceReferenceStarted(selected,service) : modelServiceStarted(selected));
+  const identities = !selected ? [] : service ? [service] : serviceReferences({...sourceState,models:[selected]});
+  const configOps = { ...ops, can:ops.can && !selected?.archivedAt };
+  const switchPanel = next => go({panel:next},{preserveScroll:true,replace:true});
+  const title = [SERVICE_PANEL_LABELS[panel], selected && serviceDisplayName(selected), service?.callId].filter(Boolean).join(' · ');
+  return <AdminSideSheet visible className="semi-services ss-service-sheet" title={title}
+    width="min(1280px, 100vw)" closeOnEsc onCancel={event => {
+      if (event?.key === 'Escape' && !event.target.closest?.('[role="dialog"]')?.closest('.ss-service-sheet')) return;
+      close();
+    }}>
+    {missing ? <Empty className="ss-empty" title="未找到指定模型服务"/> : <section className="ss-service-panel">
+      <ChannelServiceContext state={state} ops={ops}/>{params.has('returnOnboarding') && <Notice><Button theme="borderless" onClick={() => go({view:'onboarding',draft:params.get('returnOnboarding'),step:'2',panel:null,model:null,serviceRecord:null,routeProvider:null,returnOnboarding:null,providerAdd:null,providerEdit:null})}>返回接入任务</Button></Notice>}
       <div className="ss-heading">
-        <div className="ss-model-heading">
-          {selected && <AdminStatus value={callStateLabel(started)}/>}
-        </div>
-        {selected && <Space wrap><ModelResourceTransfer state={sourceState} ops={ops} scope="services"/>{operationsReturn(params.get('returnTo')) && <Button onClick={() => ops.proceed(() => {location.hash=params.get('returnTo');})}>返回来源页面</Button>}<AdminActionMenu label="服务操作" items={actions}>服务操作</AdminActionMenu></Space>}
+        <AdminStatus value={callStateLabel(started)}/>
+        <Space wrap>
+          {panel === 'routing' && <ModelResourceTransfer state={sourceState} ops={ops} scope="services"/>}
+          {operationsReturn(params.get('returnTo')) && <Button onClick={() => ops.proceed(() => {location.hash=params.get('returnTo');})}>返回来源页面</Button>}
+          {selected.archivedAt && <AdminActionMenu label="服务操作" items={[
+            {node:'item',name:panel === 'history' ? '路由及映射' : '操作记录',onClick:() => switchPanel(panel === 'history' ? 'routing' : 'history')},
+            ...serviceActions(selected,{started,providerKey:offerKey(service),model_service_id:service?.model_service_id},ops,act),
+          ]}>服务操作</AdminActionMenu>}
+        </Space>
       </div>
-      {selected ? <>
+      {panel === 'routing' && <>
         <div className="ss-identity-summary" aria-label="模型与服务标识">
           <div className="ss-identity-fields">
             <Descriptions align="left" data={[{key:'模型编码',value:<CopyId value={modelIdentity(state,selected).canonical_slug} label="模型编码"/>}]}/>
             <Descriptions align="left" data={[{key:'模型 ID',value:<CopyId value={modelIdentity(state,selected).id} label="模型 ID"/>}]}/>
           </div>
-          {serviceReferences({...state,models:[selected]}).map(service=><div className="ss-identity-fields" key={service.model_service_id}>
+          {identities.map(service=><div className="ss-identity-fields" key={service.model_service_id}>
             <Descriptions align="left" data={[{key:'模型调用标识',value:service.callId ? <ServiceCallIdentity model={selected} service={service} ops={ops}/> : '待配置'}]}/>
             <Descriptions align="left" data={[{key:'模型服务 ID',value:<CopyId value={service.model_service_id} label="模型服务 ID"/>}]}/>
           </div>)}
         </div>
         <ModelStatusSummary state={state} model={selected} ops={ops}/>
-        <Tabs activeKey={activeTab} keepDOM={false} onChange={value => go({panel:value,service:null,mapping:null,tab:null,providerEdit:null,providerAdd:null,identityProvider:null,providerChannels:null,providerAssociate:null,routeProvider:value === 'failover' ? params.get('routeProvider') : null},{preserveScroll:true})}>
-          {SERVICE_WORKSPACE_TABS.map(([value,label]) => <Tabs.TabPane key={value} itemKey={value} tab={label}><div className="ss-tab-content">
-            {value === 'routing' && <ServiceMappingsContent key={selected.id} state={state} sourceState={sourceState} model={selected} ops={{...ops,can:ops.can && !selected.archivedAt}} act={act}/>}
-            {value === 'failover' && <ServiceFailover key={selected.id} state={state} model={selected} ops={{...ops,can:ops.can && !selected.archivedAt}}/>}
-            {value === 'history' && <ModelOperationRecords key={selected.id} state={state} model={selected}/>}
-          </div></Tabs.TabPane>)}
-        </Tabs>
-        {ops.conflict && <Notice error>其他页面的数据已变化，当前输入保留。<Button theme="borderless" onClick={ops.reload}>载入最新数据</Button></Notice>}
-      </> : <Empty className="ss-empty" title={params.has('model') ? '未找到指定模型' : '请选择模型'}
-        description="从页头下拉框搜索并选择模型服务。"/>}
-  </section>;
+        <ServiceMappingsContent key={selected.id} state={state} sourceState={sourceState} model={selected} ops={configOps} act={act} service={service}/>
+      </>}
+      {panel === 'failover' && <ServiceFailover state={state} service={{...service,mode:selected.serviceMode}} ops={configOps}
+        openRouting={() => switchPanel('routing')}/>}
+      {panel === 'history' && <ModelOperationRecords key={selected.id} state={state} model={selected}/>}
+      {ops.conflict && <Notice error>其他页面的数据已变化，当前输入保留。<Button theme="borderless" onClick={ops.reload}>载入最新数据</Button></Notice>}
+    </section>}
+  </AdminSideSheet>;
 }

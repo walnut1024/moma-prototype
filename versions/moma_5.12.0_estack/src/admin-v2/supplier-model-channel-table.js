@@ -4,6 +4,8 @@ import { modelCatalogue } from './model-library.js';
 import { supplyModelDirectory } from './supply-models.js';
 import { catalogueChannels, channelUrl } from './provider-channels.js';
 import { supplierChannelResources, supplierChannelAssociations } from './supplier-resources.js';
+import { channelStatus } from './channel-selection.js';
+import { modelChannelName } from './model-channel-name.js';
 
 export function supplierModelChannelGroups(state, provider) {
   const groups = supplyModelDirectory(state, [provider]).map(({ id, master, name, entries }) => {
@@ -66,6 +68,23 @@ export function supplierChannelInterface(provider, channel) {
   const protocol=channel.endpoint.protocol || '';
   const path=url?.split(/[?#]/)[0].replace(/\/$/,'') || '';
   return {url,protocol:protocol==='Anthropic'?'Anthropic':protocol==='OpenAI'?(path.endsWith('/responses')?'OpenAI Responses':path.endsWith('/chat/completions')?'OpenAI Chat':'OpenAI'):protocol || '—'};
+}
+
+export function filterChannelDirectory(state, models, query, status) {
+  const search = query.trim().toLowerCase();
+  const matches = value => String(value ?? '').toLowerCase().includes(search);
+  return models.flatMap(model => {
+    const matchesModel = [modelDisplayName(state, model.id), model.name, model.code].some(matches);
+    const groups = model.groups.flatMap(group => {
+      const { owner } = group;
+      const matchesGroup = matchesModel || matches(owner.name);
+      const channels = group.channels.filter(channel =>
+        (!status || channelStatus(owner, channel) === status) &&
+        (matchesGroup || [modelChannelName(owner, channel), channelIdentity(state, channel.id)].some(matches)));
+      return channels.length ? [{ ...group, channels }] : [];
+    });
+    return groups.length ? [{ ...model, groups }] : [];
+  });
 }
 
 export function supplierModelChannelRows(state, groups, query = '') {

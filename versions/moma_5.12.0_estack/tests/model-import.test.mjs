@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { readSheet } from 'read-excel-file/node';
 import { createAdminSeed } from '../src/admin-v2/store.js';
 import { operationsTransaction } from '../src/admin-v2/model-operations.js';
+import { modelClassification, saveClassification } from '../src/admin-v2/model-classification.js';
 import { MODEL_IMPORT_FIELDS, MODEL_IMPORT_HEADERS, MODEL_IMPORT_REQUIRED_HEADERS, MODEL_IMPORT_TEMPLATE_HEADERS, MODEL_IMPORT_TEMPLATE, modelCsv, modelRowsFromCells, parseModelText, validateModelRows } from '../src/admin-v2/model-import.js';
 import { IDENTITY_FIELDS, TECHNICAL_FIELDS, PRESENTATION_FIELDS, COMMON_FIELDS, INTERFACE_FIELDS, RECORD_FIELDS, FEATURE_FIELDS, TASK_OPTIONS, specificationFields } from '../src/admin-v2/model-profile.js';
 
@@ -53,11 +54,23 @@ test('catalogue import requires only the current form basics and preserves unkno
 });
 
 test('rich metadata survives validation and the existing atomic catalogue transaction without creating services or supply', () => {
-  const state = createAdminSeed(), before = structuredClone(state);
+  const state = createAdminSeed();
+  const author = saveClassification(modelClassification(state), { kind: 'authors', name: '测试作者', aliases: ['Test Author'], active: true });
+  const series = saveClassification(author.dictionary, { kind: 'series', authorId: author.entry.id, name: '测试系列', aliases: ['Test Series'], active: true });
+  state.modelData.modelClassification = series.dictionary;
+  const before = structuredClone(state);
   const values = { ...base, '模型作者': '测试作者', '原厂发布日期': '2026-10', '知识截止日期': '2026-09', '模型系列': '测试系列', '模型版本': 'v2', '模型 Logo': 'https://example.test/logo.png', '简短介绍': '用于校验资料导入', '支持任务': '对话、代码生成', '输入模态': '文本', '输出模态': '文本', '结果类型': '结构化数据', '支持语言': '中文、英文', '适用场景': '编程、办公', '上下文窗口（Token）': 32768, '最大输出（Token）': 8192, '流式响应': '支持', '工具调用': '不支持', '深度思考': '支持', '支持参数': 'temperature、max_tokens', '默认参数': '{"temperature":0.7,"max_tokens":4096}', '模型架构': 'MoE（混合专家）', '许可协议': 'Apache 2.0', '总参数（B）': 100, '激活参数（B）': 10, '版本状态': '稳定版', '资料状态': '已核对', '资料链接': 'https://example.test/docs', '详细介绍': '第一行\n第二行，含"引号"' };
-  const [result] = validateModelRows(state, parseModelText(modelCsv([MODEL_IMPORT_HEADERS, row(values)])));
+  const [result, mismatch, unknown] = validateModelRows(state, parseModelText(modelCsv([MODEL_IMPORT_HEADERS,
+    row({ ...values, '模型作者': 'Test Author', '模型系列': 'Test Series' }),
+    row({ ...values, '模型编码': 'qa/mismatched-series', '模型作者': '' }),
+    row({ ...values, '模型编码': 'qa/unknown-author', '模型作者': '未登记作者' }),
+  ])));
   assert.equal(result.status, 'ready', result.message);
   assert.equal(result.data.profile.author, '测试作者');
+  assert.equal(result.data.profile.family, '测试系列');
+  assert.equal(result.data.profile.familyId, series.entry.id);
+  assert.match(mismatch.message, /模型系列/);
+  assert.match(unknown.message, /模型作者/);
   assert.equal(result.data.profile.releaseDate, '2026-10');
   assert.equal(result.data.profile.knowledgeCutoff, '2026-09');
   assert.deepEqual(result.data.profile.defaultParameters, { temperature: 0.7, max_tokens: 4096 });

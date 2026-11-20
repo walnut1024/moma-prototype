@@ -9,6 +9,7 @@ import { startLocalBackend } from '../database/local-runtime.js';
 import { domainModelWorkspace } from '../src/mock/model-fields.js';
 import { offerKey } from '../src/service-access.mjs';
 import { materialBase } from '../src/admin-v2/model-operations.js';
+import { classificationIndex, modelClassification, modelClassificationFor } from '../src/admin-v2/model-classification.js';
 import { BUILTIN_MODEL_CATALOGUE } from '../src/mock/builtin-model-catalogue.js';
 import { marketModels } from '../src/service-directory.mjs';
 import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
@@ -216,8 +217,16 @@ test('fresh D1 imports MoMA and DeepSeek before GLM-5.3 pricing, ordering and su
     assert(offers.results.every(row=>row.listing_stage==='gray' && row.active_sale_price_id && row.active_route_id && row.active_publication_id));
     const customer=await login('/market/login',a), other=await login('/market/login',b);
     const catalogue=async(cookie)=>{const result=await request('/market/catalogue',{cookie});assert.equal(result.status,200,JSON.stringify(result.data));return result.data.services;};
+    const { author, series } = modelClassificationFor(classificationIndex(modelClassification(state)), material);
+    assert.ok(author);
+    await command('modelClassificationSave', { ...author, kind: 'authors', name: '智谱（目录标准名称）' });
+    const savedAuthor = state.modelData.modelClassification.authors.find(row => row.id === author.id);
+    assert.equal(savedAuthor.name, '智谱（目录标准名称）');
+    assert.ok(savedAuthor.formerNames.includes(author.name));
+    await command('modelClassificationSave', { kind: 'authors', name: author.name, aliases: [], active: true }, undefined, 422);
     const services=await catalogue(customer);
     assert.deepEqual(marketModels(services).map(row=>[row.name,row.services.length,[...row.providers.values()]]),[['GLM-5.3',3,['移动云 MoMA','乙云']]]);
+    assert.ok(services.every(row => row.classification.authorId === author.id && row.classification.author === savedAuthor.name && row.classification.seriesId === series?.id));
     for (const source of sources) {
       const { providerId, provider, channelName }=services.find(row=>row.callId===source.callId);
       assert.deepEqual([providerId,provider,channelName],[source.providerId,source.vendor,source.source]);

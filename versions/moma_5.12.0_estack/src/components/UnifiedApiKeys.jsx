@@ -1,7 +1,8 @@
 import { resourceId } from '../resource-id.mjs';
+import { AdminModal, AdminSideSheet } from '../admin-v2/AdminOverlay';
 import { useEffect, useState } from 'react';
-import { Check, Copy, Info, KeyRound, RefreshCw, Search, Settings } from 'lucide-react';
-import { toast } from 'sonner';
+import { Check, Copy, KeyRound, RefreshCw, Search, Settings } from 'lucide-react';
+import { AutoComplete, Banner, Button, Empty, Input, Progress, Switch, Table, Tabs, Tag, TextArea, Toast } from '@douyinfe/semi-ui';
 import { useTenantData } from '../useTenantData';
 import { maskApiKey, parseIpAllowlist } from '../api-key-utils.mjs';
 import { projectModelEnabled } from '../project-access.mjs';
@@ -9,10 +10,6 @@ import { parseBudgetAmount } from '../project-call.mjs';
 import { projectMoney, projectTime } from './ProjectConfiguration';
 import { DEFAULT_PAGE_SIZE, FilterPagination } from './FilterControls';
 import FrontPageHeader from './FrontPageHeader';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 
 const billingTypes = ['按量付费', 'Token Plan'];
 
@@ -23,12 +20,12 @@ export default function UnifiedApiKeys({ project, embedded = false, onProjects, 
   </div>;
   return <div className="api-key-unified us-page">
     {!embedded && <FrontPageHeader title="API Key 管理" description={`所属项目 · ${project.name}`} icon={KeyRound} />}
-    {embedded && project.canManage && <Button variant="link" onClick={onAudit}>查看操作记录</Button>}
-    {internal ? <ApiKeys billing="按量付费" project={project} hideHeading onModels={onModels} internal/> : <Tabs defaultValue="按量付费">
-      <TabsList variant="line" className="us-tabs" aria-label="API Key 计费方式">
-        {billingTypes.map(type => <TabsTrigger key={type} value={type}>{type}</TabsTrigger>)}
-      </TabsList>
-      {billingTypes.map(type => <TabsContent key={type} value={type} forceMount className="api-key-billing-panel">{type === "Token Plan" ? <TokenPlanApiKeys project={project} onModels={onModels} /> : <ApiKeys billing={type} project={project} hideHeading onModels={onModels} />}</TabsContent>)}
+    {embedded && project.canManage && <Button theme="borderless" onClick={onAudit}>查看操作记录</Button>}
+    {internal ? <ApiKeys billing="按量付费" project={project} onModels={onModels} internal={internal}/> : <Tabs className="tenant-key-tabs" defaultActiveKey="按量付费" aria-label="API Key 计费方式" keepDOM>
+      {billingTypes.map(type=><Tabs.TabPane key={type} itemKey={type} tab={type}>
+        {type==='Token Plan'?<TokenPlanApiKeys project={project} onModels={onModels}/>
+          :<ApiKeys billing={type} project={project} onModels={onModels}/>}
+      </Tabs.TabPane>)}
     </Tabs>}
   </div>;
 }
@@ -41,29 +38,30 @@ function TokenPlanApiKeys({ project, onModels }) {
   const selectedPlan = tokenPlanSubscriptions.find(plan => plan.id === planId) || tokenPlanSubscriptions[0];
   const effectivePlanId=selectedPlan?.id;
   const visiblePlans = tokenPlanSubscriptions.filter(plan => `${plan.name} ${plan.id}`.toLowerCase().includes(planQuery.trim().toLowerCase()));
-  if (!selectedPlan) return <div className="v2-empty">暂无 Token Plan 订阅，<a href="?page=model-order">前往模型订购</a></div>;
+  if (!selectedPlan) return <Empty className="tenant-key-empty" title="暂无 Token Plan 订阅">
+    <Button theme="outline" onClick={()=>{location.href='?page=model-order';}}>前往模型订购</Button>
+  </Empty>;
   return <div className="token-plan-workspace">
     <nav className="token-plan-sidebar" aria-label="已购 Token Plan">
       <h2>已购套餐</h2>
-      <div className="token-plan-search"><Search size={16} aria-hidden="true" /><Input aria-label="搜索套餐名称或订阅编号" placeholder="搜索套餐名称或编号" value={planQuery} onChange={e => setPlanQuery(e.target.value)} /></div>
+      <Input prefix={<Search size={16}/>} aria-label="搜索套餐名称或订阅编号" placeholder="搜索套餐名称或编号" value={planQuery} onChange={setPlanQuery} />
       <div className="token-plan-list">
-        {visiblePlans.map(plan => <Button key={plan.id} variant="ghost" className="token-plan-item" aria-label={`选择套餐：${plan.name} ${plan.id}`} aria-pressed={plan.id === effectivePlanId} onClick={() => setPlanId(plan.id)}>
+        {visiblePlans.map(plan => <Button key={plan.id} theme="borderless" type="tertiary" className="token-plan-item" aria-label={`选择套餐：${plan.name} ${plan.id}`} aria-pressed={plan.id === effectivePlanId} onClick={() => setPlanId(plan.id)}>
           <strong>{plan.name}</strong><span>{plan.id}</span><small>{plan.startAt} 至 {plan.endAt}</small>
         </Button>)}
         {!visiblePlans.length && <p className="token-plan-empty" role="status">没有匹配的套餐</p>}
       </div>
     </nav>
     <div className="token-plan-detail">
-      {tokenPlanSubscriptions.map(plan => <div key={plan.id} hidden={plan.id !== effectivePlanId}><ApiKeys billing="Token Plan" subscription={plan} project={project} hideHeading onModels={onModels} /></div>)}
+      {tokenPlanSubscriptions.map(plan => <div key={plan.id} hidden={plan.id !== effectivePlanId}><ApiKeys billing="Token Plan" subscription={plan} project={project} onModels={onModels} /></div>)}
     </div>
   </div>;
 }
 
 const keyExpiryInput = value => Number.isFinite(Date.parse(value)) ? new Date(Date.parse(value) + 8 * 3600000).toISOString().slice(0, 16) : '';
 
-function ApiKeys({ billing, subscription, project, hideHeading = false, onModels, internal }) {
+function ApiKeys({ billing, subscription, project, onModels, internal }) {
   const tenant=useTenantData();
-  const keyScope=subscription?.id || billing;
   const [reveal, setReveal] = useState(null);
   const [secretFeedback, setSecretFeedback] = useState('');
   const [budgetAmount, setBudgetAmount] = useState('');
@@ -78,15 +76,13 @@ function ApiKeys({ billing, subscription, project, hideHeading = false, onModels
       await tenant.saveProjectKeys(rows, {projectId:project.id,billing,subscriptionId:subscription?.id,expectedRevision:panel?.revision ?? action?.revision ?? tenant.revision});
       return true;
     } catch (error) {
-      setFormError(error.message); toast.error(error.message); return false;
+      setFormError(error.message); Toast.error(error.message); return false;
     } finally { setSaving(false); }
   };
   const revealSecret = value => { setSecretFeedback(''); setReveal(value); };
-  const     [query, setQuery] = useState(""),
+  const [query, setQuery] = useState(""),
     [selectedSearchId, setSelectedSearchId] = useState(null),
     [page, setPage] = useState(1), [size, setSize] = useState(DEFAULT_PAGE_SIZE),
-    [searchOpen, setSearchOpen] = useState(false),
-    [activeSuggestion, setActiveSuggestion] = useState(0),
     [panel, setPanel] = useState(null),
     [name, setName] = useState(""),
     [desc, setDesc] = useState(""),
@@ -128,7 +124,7 @@ function ApiKeys({ billing, subscription, project, hideHeading = false, onModels
     setModelScope(key?.models ? "限定范围" : "全选");
   };
   const save = async () => {
-    if (name.trim().length < 2) return;
+    if (saving || !project.canEdit || name.trim().length < 2) return;
     let ips, budgetMicros, expiresAt, planBudgetTokens = null;
     try {
       ips = parseIpAllowlist(ipList);
@@ -179,197 +175,144 @@ function ApiKeys({ billing, subscription, project, hideHeading = false, onModels
         setCopiedValue(value);
       })
       .catch(() => { setCopiedValue(""); setCopied("复制失败，请允许剪贴板访问后重试"); });
-  const suggestions = keys.filter((k) => `${k.name} ${k.id}`.toLowerCase().includes(query.trim().toLowerCase()));
-  const filteredKeys = selectedSearchId ? keys.filter((k) => k.id === selectedSearchId) : suggestions;
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(filteredKeys.length / size)));
-  const visibleKeys = filteredKeys.slice((currentPage - 1) * size, currentPage * size);
-  const chooseSuggestion = (key) => {
-    setPage(1);
-    setSelectedSearchId(key.id);
-    setQuery(key.name);
-    setSearchOpen(false);
+  const suggestions=keys.filter(key=>`${key.name} ${key.id}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const filteredKeys=selectedSearchId?keys.filter(key=>key.id===selectedSearchId):suggestions;
+  const currentPage=Math.min(page,Math.max(1,Math.ceil(filteredKeys.length/size)));
+  const visibleKeys=filteredKeys.slice((currentPage-1)*size,currentPage*size);
+  const actionTitles={models:'可访问模型',ip:'IP 白名单',reset:'重置 API Key',delete:'删除 API Key'};
+  const actionDescriptions={
+    models:'查看此 Key 允许访问的模型',
+    ip:'仅允许白名单来源调用，留空表示不限制。',
+    reset:'重置后旧密钥立即失效，请及时替换业务系统中的密钥。Key ID、额度和访问权限保持不变。',
+    delete:'删除后该 Key 将无法继续调用，且不可恢复。',
   };
-  return (
-    <div className="api-key-page">
-      {tenant.error && <p role="alert">{tenant.error}</p>}
-      {!hideHeading && <div className="api-key-heading">
-        <h1>API Key 管理</h1>
-        <span>{billing}</span>
-      </div>}
-      <div className="api-key-tools">
-        <div className="api-key-tools-leading">
-        {subscription && <h2 className="token-plan-title" title={subscription.name}>{subscription.name}</h2>}
-        {project.canEdit && <button className="primary" onClick={() => openPanel("create")}>
-          创建 API Key
-        </button>}
-        </div>
-        <div>
-          <div className="api-key-search" onBlur={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget)) setSearchOpen(false);
-          }}>
-            <label>
-              <Search size={16} />
-              <input
-                role="combobox"
-                aria-label="搜索 Key 名称或 Key ID"
-                aria-autocomplete="list"
-                aria-expanded={searchOpen}
-                aria-controls={`api-key-suggestions-${keyScope}`}
-                value={query}
-                onFocus={() => setSearchOpen(true)}
-                onChange={(e) => { setQuery(e.target.value); setPage(1); setSelectedSearchId(null); setActiveSuggestion(0); setSearchOpen(true); }}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setSearchOpen(false);
-                  if (e.key === "ArrowDown") { e.preventDefault(); setSearchOpen(true); setActiveSuggestion((activeSuggestion + 1) % Math.max(suggestions.length, 1)); }
-                  if (e.key === "ArrowUp") { e.preventDefault(); setActiveSuggestion((activeSuggestion - 1 + Math.max(suggestions.length, 1)) % Math.max(suggestions.length, 1)); }
-                  if (e.key === "Enter" && searchOpen && suggestions.length) { e.preventDefault(); chooseSuggestion(suggestions[activeSuggestion]); }
-                }}
-                placeholder="搜索 Key 名称或 Key ID"
-              />
-            </label>
-            {searchOpen && <div className="api-key-search-menu" id={`api-key-suggestions-${keyScope}`} role="listbox" aria-label="Key 搜索建议">
-              <button role="option" aria-selected={!query} onClick={() => { setQuery(""); setSelectedSearchId(null); setSearchOpen(false); }}>全部 Key</button>
-              {suggestions.map((key, index) => <button key={key.id} role="option" aria-selected={selectedSearchId === key.id} className={index === activeSuggestion ? "is-active" : ""} onClick={() => chooseSuggestion(key)}><strong>{key.name}</strong><small>{key.id}</small></button>)}
-              {!suggestions.length && <p>没有匹配的 Key</p>}
-            </div>}
+  const saveAction=async()=>{
+    if(saving || !action || !project.canEdit)return;
+    const target=action.key.id;
+    if(action.kind==='ip'){
+      let ips;
+      try{ips=parseIpAllowlist(ipList);}catch(error){setFormError(error.message);return;}
+      if(!await setKeys(keys.map(key=>key.id===target?{...key,ips}:key)))return;
+      setCopied('IP 白名单已保存');
+    }else if(action.kind==='reset'){
+      const secret = 'sk-' + crypto.randomUUID().replaceAll('-', '');
+      if(!await setKeys(keys.map(key=>key.id===target?{...key,key:secret,credentialVersion:(key.credentialVersion || 1)+1}:key)))return;
+      revealSecret(secret);
+    }else if(action.kind==='delete'){
+      if(!await setKeys(keys.filter(key=>key.id!==target)))return;
+      setCopied('API Key 已删除');
+    }
+    setAction(null);
+  };
+  const showIp=key=>{
+    setIpList(key.ips.join('\n'));setFormError('');setAction({kind:'ip',key});
+  };
+  const ipLink=key=><Button theme="borderless" size="small" onClick={()=>showIp(key)}>
+    IP 白名单：{key.ips.length?key.ips.length+' 项':'不限制'}
+  </Button>;
+  const scopeModels=action?.key.models===null?editModels.map(([model])=>model):action?.key.models || [];
+  const scopeOptions=scopeModels.filter(model=>model.toLowerCase().includes(scopeQuery.trim().toLowerCase()));
+  const columns=[
+    {title:'Key 名称 / Key ID',width:220,render:(_,key)=><div className="key-identity">
+      <strong>{key.name}</strong><div><code>{key.id}</code>
+        <Button theme="borderless" size="small" icon={copiedValue===key.id?<Check size={14}/>:<Copy size={14}/>}
+          aria-label={'复制 Key ID '+key.name} onClick={()=>copyText(key.id,'Key ID')} />
+      </div><small>创建于 {key.created}</small>
+    </div>},
+    {title:'API Key',width:142,render:(_,key)=><code>{maskApiKey(key.key)}</code>},
+    {title:'状态',width:125,render:(_,key)=><div className="key-identity">
+      <Switch checked={key.enabled} disabled={!project.canEdit || saving}
+        aria-label={(key.enabled?'停用':'启用')+key.name} onChange={()=>toggle(key)}/>
+      {key.expiresAt && <small title={projectTime(key.expiresAt)}>{Date.parse(key.expiresAt)<=Date.now()?'已过期':'到期 '+projectTime(key.expiresAt)}</small>}
+    </div>},
+    {title:subscription?'访问权限':'访问范围',width:176,render:(_,key)=><div className="key-identity">
+      {key.models===null?<Tag>无限制</Tag>:<Button theme="borderless" size="small"
+        onClick={()=>{setScopeQuery('');setAction({kind:'models',key});}}>{key.models.length} 个模型</Button>}
+      {subscription && <>{ipLink(key)}{key.desc && <small>{key.desc}</small>}
+        {key.planBudgetTokens!=null && <small>套餐抵扣预算 {key.planBudgetTokens.toLocaleString('zh-CN')} Token</small>}</>}
+    </div>},
+    ...(!subscription?[{title:'安全与额度',width:200,render:(_,key)=><div className="key-identity">
+      <strong>{key.quotaLimit==null?'Token 不限额':key.quota+' Token'}</strong>
+      {key.quotaLimit!=null && <Progress percent={Math.min(100,Math.max(0,key.progress || 0))} size="small" />}
+      {key.budgetMicros!=null && <small>消费预算 {projectMoney(key.budgetMicros/1_000_000)}</small>}
+      {ipLink(key)}{key.desc && <small>{key.desc}</small>}
+    </div>}]:[]),
+    {title:'操作',width:142,fixed:'right',render:(_,key)=>project.canEdit?<div className="key-actions">
+      <Button theme="borderless" size="small" onClick={()=>openPanel('edit',key)}>编辑</Button>
+      <Button theme="borderless" size="small" onClick={()=>setAction({kind:'reset',key})}>重置</Button>
+      <Button theme="borderless" size="small" type="danger" onClick={()=>setAction({kind:'delete',key})}>删除</Button>
+    </div>:'—'},
+  ];
+  return <div className="tenant-keys-panel">
+    {tenant.error && <Banner type="danger" description={tenant.error}/>}
+    <div className="key-toolbar">
+      {subscription && <h2>{subscription.name}</h2>}
+      {project.canEdit && <Button theme="solid" onClick={()=>openPanel('create')}>创建 API Key</Button>}
+      <AutoComplete className="key-search" aria-label="搜索 Key 名称或 Key ID" placeholder="搜索 Key 名称或 Key ID"
+        prefix={<Search size={16}/>} showClear value={query}
+        data={[{value:'',label:'全部 Key'},...suggestions.map(key=>({value:key.id,label:key.name}))]}
+        renderItem={item=><span>{item.label}{item.value && <small> · {item.value}</small>}</span>}
+        renderSelectedItem={item=>item.value?item.label:''} onSelectWithObject
+        onSearch={value=>{setQuery(value);setSelectedSearchId(null);setPage(1);}}
+        onSelect={item=>{setQuery(item.value?item.label:'');setSelectedSearchId(item.value || null);setPage(1);}} />
+      <Button type="tertiary" aria-label="刷新" icon={<RefreshCw size={16}/>} onClick={tenant.reload}/>
+      <Button type="tertiary" aria-label="设置" icon={<Settings size={16}/>}/>
+    </div>
+    <Table className="tenant-keys-table" rowKey="id" dataSource={visibleKeys} columns={columns} size="small" pagination={false}
+      scroll={{x:subscription?850:1000}} empty={<Empty className="tenant-key-empty"
+        title={query?'没有匹配的 API Key':'暂无 API Key'} />} />
+    <FilterPagination total={filteredKeys.length} page={currentPage} size={size} onPageChange={setPage}
+      onSizeChange={setSize} />
+    {copied && <div className="copy-toast" role="status">{copied}</div>}
+
+    {action && <AdminModal visible title={actionTitles[action.kind]} width="min(500px, calc(100vw - 24px))"
+      onCancel={()=>{if(!saving)setAction(null);}} closable={!saving} closeOnEsc={!saving} maskClosable={false}
+      footer={<><Button type="tertiary" disabled={saving} onClick={()=>setAction(null)}>{action.kind==='models'?'关闭':'取消'}</Button>
+        {action.kind!=='models' && project.canEdit && <Button theme="solid" type={action.kind==='delete'?'danger':'primary'}
+          loading={saving} onClick={saveAction}>{action.kind==='ip'?'保存':action.kind==='reset'?'确认重置':'确认删除'}</Button>}
+      </>}>
+      <p>{action.key.name} · {actionDescriptions[action.kind]}</p>
+      {action.kind==='models' && <>
+        <Input aria-label="搜索可访问模型" placeholder="搜索模型名称" value={scopeQuery} onChange={setScopeQuery}/>
+        <div className="key-model-options">{scopeOptions.map(model=><Tag key={model}>{model}</Tag>)}
+          {!scopeOptions.length && <p>没有匹配的模型</p>}</div>
+      </>}
+      {action.kind==='ip' && <TextArea aria-label="IP 白名单" rows={5} readonly={!project.canEdit} value={ipList}
+        onChange={value=>{setIpList(value);setFormError('');}} placeholder={'例如：10.0.1.100\n192.168.1.0/24'} />}
+      {formError && <Banner type="danger" description={formError}/>}
+    </AdminModal>}
+    {reveal && <AdminModal visible title="保存 API Key" width="min(500px, calc(100vw - 24px))"
+      onCancel={()=>setReveal(null)} maskClosable={false} footer={<>
+        <Button onClick={async()=>{try{await navigator.clipboard.writeText(reveal);setSecretFeedback('API Key 已复制');}
+          catch{setSecretFeedback('复制失败，请选中密钥后手动复制');}}}>复制 API Key</Button>
+        <Button theme="solid" onClick={()=>setReveal(null)}>完成</Button>
+      </>}>
+      <p>密钥明文仅展示一次，请保存后关闭。</p>
+      <code className="key-secret" aria-label="API Key 明文">{reveal}</code>
+      {secretFeedback && <p role="status">{secretFeedback}</p>}
+    </AdminModal>}
+    {panel && <AdminSideSheet visible title={(panel.kind === 'edit' ? '编辑' : '创建') + ' API Key'} width="min(560px, 100vw)"
+      onCancel={()=>{if(!saving)setPanel(null);}} closable={!saving} closeOnEsc={!saving} maskClosable={!saving}
+      footer={<div className="key-editor-footer">
+        {formError && <p className="key-error" role="alert">{formError}</p>}
+        <div className="key-editor-actions">
+          <span>已选范围 <small>{modelScope === '全选' ? '全部模型和服务' : selectedModels.length + ' 个模型'}</small></span>
+          <div className="key-actions">
+            <Button type="tertiary" disabled={saving} onClick={()=>setPanel(null)}>取消</Button>
+            <Button theme="solid" loading={saving} disabled={name.trim().length < 2} onClick={save}>确定</Button>
           </div>
-          <button aria-label="刷新" onClick={tenant.reload}>
-            <RefreshCw size={17} />
-          </button>
-          <button aria-label="设置">
-            <Settings size={17} />
-          </button>
         </div>
-      </div>
-      <div className="api-key-table">
-        <div className="api-key-row api-key-head">
-          {[
-            "Key 名称/Key ID",
-            "API Key",
-            "状态",
-            ...(subscription ? ["访问权限"] : ["访问范围", "安全与额度"]),
-            "操作",
-          ].map((x) => (
-            <span key={x}>{x}</span>
-          ))}
-        </div>
-        {visibleKeys
-          .map((k) => (
-            <div className="api-key-row" key={k.id}>
-              <span className="api-key-identity">
-                <b>{k.name}</b>
-                <small className="key-id-line">
-                  {k.id}
-                  <button
-                    className="inline-action"
-                    aria-label={copiedValue === k.id ? "Key ID 已复制到剪贴板" : "复制 Key ID"}
-                    title={copiedValue === k.id ? "已复制到剪贴板" : "复制 Key ID"}
-                    onClick={() => copyText(k.id, "Key ID")}
-                  >
-                    {copiedValue === k.id ? <Check size={14} className="copy-success" /> : <Copy size={14} />}
-                  </button>
-                </small>
-                <small>创建于 {k.created}</small>
-              </span>
-              <span className="api-key-value">
-                {maskApiKey(k.key)}
-              </span>
-              <span>
-                <button
-                  className={`switch ${k.enabled ? "on" : ""}`}
-                  aria-label={`${k.enabled ? "停用" : "启用"}${k.name}`}
-                  disabled={!project.canEdit || saving}
-                  onClick={() => toggle(k)}
-                >
-                  <i />
-                </button>
-                {k.expiresAt && <small title={projectTime(k.expiresAt)}>{Date.parse(k.expiresAt) <= Date.now() ? '已过期' : `到期 ${projectTime(k.expiresAt)}`}</small>}
-              </span>
-              <span className={subscription ? "api-key-security" : undefined}>
-                {k.models === null ? <span className="key-unrestricted">无限制</span> : <button className="key-scope-link" onClick={() => { setAction({ kind: "models", key: k }); setScopeQuery(""); }}>{k.models.length} 个模型</button>}
-                {subscription && <small><button className="key-ip-link" onClick={() => { setAction({ kind: "ip", key: k }); setIpList(k.ips.join("\n")); setFormError(""); }}>IP 白名单：{k.ips.length ? `${k.ips.length} 项` : "不限制"}</button>{k.desc ? ` · ${k.desc}` : ""}</small>}
-                {subscription && k.planBudgetTokens != null && <small>套餐抵扣预算 {k.planBudgetTokens.toLocaleString('zh-CN')} Token</small>}
-              </span>
-              {!subscription && <span className="api-key-security">
-                <b>{k.quotaLimit == null ? 'Token 不限额' : k.quota + ' Token'}</b>
-                {k.quotaLimit != null && <i className="quota-bar">
-                  <i style={{ width: `${k.progress || 0}%` }} />
-                </i>}
-                {k.budgetMicros != null && <small>消费预算 {projectMoney(k.budgetMicros / 1_000_000)}</small>}
-                <small>
-                  <button className="key-ip-link" onClick={() => { setAction({ kind: "ip", key: k }); setIpList(k.ips.join("\n")); setFormError(""); }}>IP 白名单：{k.ips.length ? `${k.ips.length} 项` : "不限制"}</button>
-                  {k.desc ? ` · ${k.desc}` : ""}
-                </small>
-              </span>}
-              <span className="api-key-actions">
-                {project.canEdit ? <><button onClick={() => openPanel("edit", k)}>编辑</button>
-                <button onClick={() => setAction({ kind: "reset", key: k })}>重置</button>
-                <button className="danger-link" onClick={() => setAction({ kind: "delete", key: k })}>删除</button></> : '—'}
-              </span>
-            </div>
-          ))}
-      </div>
-      {!visibleKeys.length && <div className="v2-empty">{query ? "没有匹配的 API Key" : "暂无 API Key"}</div>}
-      {copied && (
-        <div className="copy-toast" role="status">
-          {copied}
-        </div>
-      )}
-      <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) setAction(null); }}>
-        <DialogContent className="key-action-dialog sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{action?.kind === "models" ? "可访问模型" : action?.kind === "ip" ? "IP 白名单" : action?.kind === "reset" ? "重置 API Key" : "删除 API Key"}</DialogTitle>
-            <DialogDescription>{action?.key.name} · {action?.kind === "models" ? "查看此 Key 允许访问的模型" : action?.kind === "ip" ? "仅允许白名单来源调用；留空表示不限制。" : action?.kind === "reset" ? "重置后旧密钥立即失效，请及时替换业务系统中的密钥。Key ID、额度和访问权限保持不变。" : "删除后该 Key 将无法继续调用，且不可恢复。"}</DialogDescription>
-          </DialogHeader>
-          {action?.kind === "models" && <><input aria-label="搜索可访问模型" className="key-dialog-input" placeholder="搜索模型名称" value={scopeQuery} onChange={e => setScopeQuery(e.target.value)} /><div className="key-model-list">{(action.key.models === null ? editModels.map(([model]) => model) : action.key.models).filter(model => model.toLowerCase().includes(scopeQuery.toLowerCase())).map(model => <div key={model}>{model}</div>)}{!(action.key.models === null ? editModels.map(([model]) => model) : action.key.models).some(model => model.toLowerCase().includes(scopeQuery.toLowerCase())) && <div>没有匹配的模型</div>}</div><small>{action.key.models === null ? "可访问当前已授权的全部模型。" : `共 ${action.key.models.length} 个模型`}</small></>}
-          {action?.kind === "ip" && <label className="key-ip-field">IPv4 地址 / CIDR 网段<textarea aria-label="IP 白名单" rows={5} value={ipList} onChange={e => { setIpList(e.target.value); setFormError(""); }} placeholder={"例如：10.0.1.100\n192.168.1.0/24"}/><small>多个地址用逗号或换行分隔，重复项自动合并。</small>{formError && <span role="alert" className="key-error">{formError}</span>}</label>}
-          <DialogFooter><Button variant="outline" onClick={() => setAction(null)}>{action?.kind === "models" ? "关闭" : "取消"}</Button>{action?.kind !== "models" && <Button variant={action?.kind === "delete" ? "destructive" : "default"} disabled={saving} onClick={async () => {
-            const target = action.key.id;
-            if (action.kind === "ip") { let ips; try { ips = parseIpAllowlist(ipList); } catch (error) { setFormError(error.message); return; } if(!await setKeys(keys.map(key => key.id === target ? { ...key, ips } : key)))return; setCopied("IP 白名单已保存"); }
-            else if (action.kind === "reset") {
-              const secret = 'sk-' + crypto.randomUUID().replaceAll('-', '');
-              if(!await setKeys(keys.map(key => key.id === target ? { ...key, key:secret,credentialVersion:(key.credentialVersion || 1)+1 } : key)))return;
-              revealSecret(secret);
-            }
-            else { if(!await setKeys(keys.filter(key => key.id !== target)))return; setCopied("API Key 已删除"); }
-            setAction(null);
-          }}>{action?.kind === "ip" ? "保存" : action?.kind === "reset" ? "确认重置" : "确认删除"}</Button>}</DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={Boolean(reveal)} onOpenChange={open => { if (!open) setReveal(null); }}>
-        {reveal && <DialogContent><DialogHeader><DialogTitle>保存 API Key</DialogTitle>
-          <DialogDescription>密钥明文仅展示一次，请保存后关闭。</DialogDescription></DialogHeader>
-          <code className="break-all" aria-label="API Key 明文">{reveal}</code>
-          {secretFeedback && <p role="status">{secretFeedback}</p>}
-          <DialogFooter><Button variant="outline" onClick={async () => {
-            try { await navigator.clipboard.writeText(reveal); setSecretFeedback('API Key 已复制'); }
-            catch { setSecretFeedback('复制失败，请选中密钥后手动复制'); }
-          }}>复制 API Key</Button><Button onClick={() => setReveal(null)}>完成</Button></DialogFooter>
-        </DialogContent>}
-      </Dialog>
-      <FilterPagination total={filteredKeys.length} page={currentPage} size={size} onPageChange={setPage} onSizeChange={setSize}/>
-      {panel && (
-        <div className="drawer-backdrop" onClick={() => setPanel(null)}>
-          <aside
-            className={`api-key-drawer ${panel.kind === "edit" ? "edit-drawer" : ""}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <header>
-              <h2>{panel.kind === "edit" ? "编辑" : "创建"} API Key</h2>
-              <button aria-label="关闭" onClick={() => setPanel(null)}>
-                ×
-              </button>
-            </header>
-            <div className="drawer-form">
+      </div>}>
+      <div className="drawer-form tenant-key-form">
               <div className="token-plan-drawer-context">所属项目<strong>{project.name}</strong></div>
               {subscription && <div className="token-plan-drawer-context">所属 Token Plan<strong>{subscription.name}</strong><small>订阅编号：{subscription.id}</small></div>}
-              {!editModels.length && onModels && <div className="token-plan-drawer-context">当前项目尚未开通模型<Button variant="link" onClick={onModels}>查看模型权限</Button></div>}
+              {!editModels.length && onModels && <div className="token-plan-drawer-context">当前项目尚未开通模型<Button theme="borderless" onClick={onModels}>查看模型权限</Button></div>}
               <section className="edit-section">
                 <h3>消费预算与有效期</h3>
-                <label><span>{subscription ? '套餐抵扣预算（Token）' : '累计消费预算（人民币）'}</span><input inputMode={subscription ? 'numeric' : 'decimal'} value={budgetAmount}
-                  placeholder="留空表示不限" onChange={event => setBudgetAmount(event.target.value)} /></label>
-                <label><span>有效期（北京时间）</span><input type="datetime-local" value={expiry}
-                  onChange={event => setExpiry(event.target.value)} /></label>
+                <label><span>{subscription ? '套餐抵扣预算（Token）' : '累计消费预算（人民币）'}</span><Input inputMode={subscription ? 'numeric' : 'decimal'} value={budgetAmount}
+                  placeholder="留空表示不限" onChange={setBudgetAmount} /></label>
+                <label><span>有效期（北京时间）</span><Input type="datetime-local" value={expiry}
+                  onChange={setExpiry} /></label>
               </section>
               {panel.kind === "edit" ? (
                 <>
@@ -380,9 +323,9 @@ function ApiKeys({ billing, subscription, project, hideHeading = false, onModels
                         <i>*</i> Key 名称
                       </span>
                       <div>
-                        <input
+                        <Input
                           value={name}
-                          onChange={(e) => setName(e.target.value)}
+                          onChange={setName}
                           placeholder="请输入 Key 名称"
                         />
                         <small>
@@ -392,10 +335,10 @@ function ApiKeys({ billing, subscription, project, hideHeading = false, onModels
                     </label>
                     <label>
                       <span>描述</span>
-                      <textarea
-                        maxLength="200"
+                      <TextArea
+                        maxLength={200}
                         value={desc}
-                        onChange={(e) => setDesc(e.target.value)}
+                        onChange={setDesc}
                         placeholder="请输入描述"
                       />
                     </label>
@@ -457,9 +400,9 @@ function ApiKeys({ billing, subscription, project, hideHeading = false, onModels
                                 <select>
                                   <option>1日</option>
                                 </select>
-                                <input value="00:00:00" readOnly />
+                                <Input value="00:00:00" readonly />
                                 <b>至</b>
-                                <input value="每月30/31日 23:59:00" readOnly />
+                                <Input value="每月30/31日 23:59:00" readonly />
                                 <small>自动续配</small>
                                 <button
                                   className="switch"
@@ -469,18 +412,17 @@ function ApiKeys({ billing, subscription, project, hideHeading = false, onModels
                                 </button>
                               </div>
                             ) : (
-                              <input value="00:00:00 ~ 23:59:59" readOnly />
+                              <Input value="00:00:00 ~ 23:59:59" readonly />
                             )}
                           </label>
                         )}
                         <label>
                           <span>额度上限</span>
                           <div className="quota-input">
-                            <input
+                            <Input
                               value={quota}
                               placeholder="请输入限额"
-                              onChange={(e) =>
-                                setQuota(e.target.value.replace(/\D/g, ""))
+                              onChange={value => setQuota(value.replace(/\D/g, ""))
                               }
                             />
                             <b>Tokens</b>
@@ -493,40 +435,30 @@ function ApiKeys({ billing, subscription, project, hideHeading = false, onModels
                         <label>
                           <span>TPM 限制</span>
                           <div className="rate-limit">
-                            <button
-                              className={`switch ${tpmEnabled ? "on" : ""}`}
-                              onClick={() => setTpmEnabled(!tpmEnabled)}
-                            >
-                              <i />
-                            </button>
+                            <Switch aria-label="TPM 限制" checked={tpmEnabled} onChange={setTpmEnabled}/>
                             <small>
                               当实时TPM达到设定阈值时，将触发限流策略
                             </small>
-                            <input
+                            <Input
                               disabled={!tpmEnabled}
-                              aria-label="TPM 上限" value={tpmLimit} onChange={e=>setTpmLimit(e.target.value)}
+                              aria-label="TPM 上限" value={tpmLimit} onChange={setTpmLimit}
                             />
                           </div>
                         </label>
                         <label>
                           <span>QPM 限制</span>
                           <div className="rate-limit">
-                            <button
-                              className={`switch ${qpmEnabled ? "on" : ""}`}
-                              onClick={() => setQpmEnabled(!qpmEnabled)}
-                            >
-                              <i />
-                            </button>
+                            <Switch aria-label="QPM 限制" checked={qpmEnabled} onChange={setQpmEnabled}/>
                             <small>
                               当实时QPM达到设定阈值时，将触发限流策略
                             </small>
-                            <input aria-label="QPM 上限" disabled={!qpmEnabled} value={qpmLimit} onChange={e=>setQpmLimit(e.target.value)} />
+                            <Input aria-label="QPM 上限" disabled={!qpmEnabled} value={qpmLimit} onChange={setQpmLimit} />
                           </div>
                         </label>
                       </>
                     )}
                   </section>}
-                  <section className="edit-section"><h3>IP 白名单</h3><label><span>允许的来源</span><div><textarea aria-label="编辑 IP 白名单" value={ipList} onChange={e => setIpList(e.target.value)} placeholder="IPv4 或 CIDR 网段，用逗号或换行分隔；留空不限制"/></div></label></section>
+                  <section className="edit-section"><h3>IP 白名单</h3><label><span>允许的来源</span><div><TextArea aria-label="编辑 IP 白名单" value={ipList} onChange={setIpList} placeholder="IPv4 或 CIDR 网段，用逗号或换行分隔；留空不限制"/></div></label></section>
                   <section className="edit-section access-edit">
                     <h3>可访问范围</h3>
                     <label>
@@ -557,7 +489,7 @@ function ApiKeys({ billing, subscription, project, hideHeading = false, onModels
                             <option>全部模型服务商</option>
                           </select>
                           <label>
-                            <input placeholder="按规格名称搜索" />
+                            <Input placeholder="按规格名称搜索" />
                             <Search size={16} />
                           </label>
                           <label className="hide-models">
@@ -606,25 +538,25 @@ function ApiKeys({ billing, subscription, project, hideHeading = false, onModels
                 <>
                   <label>
                     <span>Key 名称</span>
-                    <input
+                    <Input
                       value={name}
-                      onChange={(e) => setName(e.target.value)}
+                      onChange={setName}
                       placeholder="请输入 Key 名称"
                     />
                   </label>
                   <label>
                     <span>说明（选填）</span>
-                    <textarea
+                    <TextArea
                       value={desc}
-                      onChange={(e) => setDesc(e.target.value)}
+                      onChange={setDesc}
                       placeholder="用于区分 Key 的用法"
                     />
                   </label>
                   <label>
                     <span>IP 白名单（选填）</span>
-                    <textarea
+                    <TextArea
                       value={ipList}
-                      onChange={(e) => setIpList(e.target.value)}
+                      onChange={setIpList}
                       placeholder={
                         "多个 IP 用逗号或换行分隔，例如：\n10.0.1.100, 10.0.1.101"
                       }
@@ -665,15 +597,14 @@ function ApiKeys({ billing, subscription, project, hideHeading = false, onModels
                       </label>
                       <label>
                         <span>生效范围</span>
-                        <input disabled value="00:00:00 ~ 23:59:59" readOnly />
+                        <Input disabled value="00:00:00 ~ 23:59:59" readonly />
                       </label>
                       <label>
                         <span>额度上限</span>
                         <div className="quota-input">
-                          <input
+                          <Input
                             value={quota}
-                            onChange={(e) =>
-                              setQuota(e.target.value.replace(/\D/g, ""))
+                            onChange={value => setQuota(value.replace(/\D/g, ""))
                             }
                           />
                           <b>tokens</b>
@@ -698,26 +629,6 @@ function ApiKeys({ billing, subscription, project, hideHeading = false, onModels
                 </>
               )}
             </div>
-            {formError && <p role="alert" className="key-error">{formError}</p>}
-            <footer>
-              <span>
-                已选范围　<small>{modelScope === "全选" ? "全部模型和服务" : `${selectedModels.length} 个模型`}</small>
-              </span>
-              <div>
-                <button onClick={() => setPanel(null)}>取消</button>
-                <button
-                  className="primary"
-                  disabled={saving || name.trim().length < 2}
-                  onClick={save}
-                >
-                  确定
-                </button>
-              </div>
-            </footer>
-          </aside>
-        </div>
-      )}
-    </div>
-  );
+    </AdminSideSheet>}
+  </div>;
 }
-

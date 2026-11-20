@@ -1,13 +1,15 @@
 import { resourceId } from '../src/resource-id.mjs';
-import {modelBootstrap,modelCommand,packageBootstrap,packageCommand,packageFactorHistory,readTrafficLimits,simulationRequest,updateTrafficLimits} from './model-commands.js';
+import {modelBootstrap,modelCommand,packageBootstrap,packageCommand,packageFactorHistory,readTrafficLimits,simulationRequest,updateTrafficLimits,channelIndexCheck,channelCredentialAccess} from './model-commands.js';
 import { commercialModelWrite, deploymentLicense, LICENSE_UNAVAILABLE } from '../src/deployment-license.mjs';
+import { effectiveInstalledLicense, licenseDetails, readInstalledLicense, saveInstalledLicense, verifyDeploymentLicense } from './deployment-license.js';
 import { marketReference, marketMember, createMarketSession, marketCatalogue, marketCompletion, marketCookie, marketOrder, marketSession, marketTenant } from './market.js';
 import { internalEnterprise } from '../src/admin-v2/enterprise.js';
 import { marketDemoModelIds } from '../src/mock/model-data.js';
 import { auditLogDetail, auditLogPage } from './audit-log.js';
 import { PRIVATE_SITE } from '../src/site-config.mjs';
-import { readPublishedAgreements, savePublishedAgreements, validateAgreements } from './site-agreements.js';
-import { AUDIT_ACTIONS, AUDIT_RESOURCES, AUDIT_RESULTS } from '../src/admin-v2/platform-audit.mjs';
+import { readPublishedSiteSetting, savePublishedSiteSetting, validateAgreements } from './site-settings.js';
+import { PORTAL_HOME_ENDPOINT, portalHomeUrl } from '../src/portal-home.mjs';
+import { AUDIT_ACTIONS, AUDIT_RESOURCES, AUDIT_RESULTS, AUDIT_SOURCES } from '../src/admin-v2/platform-audit.mjs';
 import { domainModel } from '../src/mock/model-fields.js';
 import { serviceCallsEnabled, serviceReferences, offerKey, providerOffer } from '../src/service-access.mjs';
 const PREFIX = '/api/5120';
@@ -185,33 +187,63 @@ async function route(request, env) {
   const url = new URL(request.url), method = request.method;
   let path;
   try { path = decodeURIComponent(url.pathname.slice(PREFIX.length)); } catch { fail(400, 'INVALID_INPUT', '路径编码无效'); }
-  const license = deploymentLicense(env);
-  if (path === '/deployment/license') {
-    if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
-    return json(license);
-  }
-  const requireCommerce = (write = false) => {
-    if (write ? !license.commerceWritable : !license.commercial) fail(403, 'LICENSE_REQUIRED', LICENSE_UNAVAILABLE);
-  };
+
   const resource = /^\/(materials|services|suppliers|channels|operations)\/([A-Za-z0-9:_.-]{1,200})(?:\/(workspace|visibility|history))?$/.exec(path);
   const dictionary = /^\/dictionary\/(items|units|currencies)$/.exec(path);
   const packagePath = ['/package-management', '/package-management/commands', '/package-management/factor-history'].includes(path);
   const trafficPath = path === '/traffic-limits';
   const trafficHistoryPath = path === '/traffic-limits/history';
   const auditPath = /^\/audit-logs(?:\/([A-Za-z0-9:_.-]{1,200}))?$/.exec(path);
+  const credentialPath = /^\/channels\/([A-Za-z0-9:_.-]{1,200})\/verify-credential$/.exec(path);
   const marketPaths = ['/market/catalogue','/market/logout','/market/orders','/market/completions'];
   const loginField = LOGIN_FIELDS.get(path);
-  const agreementPath = path === '/site-agreements' && (PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1');
-  const known = agreementPath || loginField || marketPaths.includes(path) || trafficPath || trafficHistoryPath || auditPath || packagePath || ['/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-market/visibility','/model-operations','/model-operations/commands'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
+  const privateSite = PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1';
+  const agreementPath = privateSite && path === '/site-agreements';
+  const portalPath = privateSite && path === PORTAL_HOME_ENDPOINT;
+  const known = path === '/deployment/license' || agreementPath || portalPath || loginField || marketPaths.includes(path) || trafficPath || trafficHistoryPath || auditPath || credentialPath || packagePath || ['/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-market/visibility','/model-operations','/model-operations/commands','/channels/consistency'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
   if (!known) fail(404, 'NOT_FOUND', 'API 不存在');
   if (!env.MODEL_OPS_DB) fail(503, 'DATABASE_UNAVAILABLE', '模型运营数据库尚未绑定');
   const db = env.MODEL_OPS_DB;
+  const installedLicense = await readInstalledLicense(db);
+  const license = installedLicense ? effectiveInstalledLicense(installedLicense) : deploymentLicense(env);
+  if (path === '/deployment/license') {
+    if (method === 'GET' && url.searchParams.get('details') !== '1') return json(license);
+    if (!['GET','POST'].includes(method)) fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
+    const actor = await authenticate(request, db);
+    if (actor.role !== '平台管理员') fail(403,'FORBIDDEN','仅平台管理员可管理 License');
+    if (method === 'GET') return json(licenseDetails(license, installedLicense));
+    if (request.headers.get('origin') !== url.origin || request.headers.get('x-moma-request') !== '1') {
+      fail(403,'FORBIDDEN','请求来源无效');
+    }
+    const body = await bodyJson(request, 9 * 1024);
+    fields(body,['license','expectedRevision','confirmReduction']);
+    const expected = body.expectedRevision;
+    if (!Number.isSafeInteger(expected) || expected < 0 || expected >= Number.MAX_SAFE_INTEGER ||
+        typeof body.license !== 'string' || body.license.length > 8192 ||
+        body.confirmReduction !== undefined && typeof body.confirmReduction !== 'boolean') {
+      fail(400,'INVALID_INPUT','License 提交内容无效');
+    }
+    if (expected !== (installedLicense?.revision ?? 0)) {
+      fail(409,'REVISION_CONFLICT','当前授权已变更，请核对后重试。');
+    }
+    const verified = await verifyDeploymentLicense(body.license.trim(), env);
+    if (license.commercial && verified.edition === 'internal' && !body.confirmReduction) {
+      fail(409,'LICENSE_SCOPE_REDUCTION','当前部署的授权范围将缩小。');
+    }
+    const saved = await saveInstalledLicense(db, expected, verified, actor.id);
+    if (!saved) fail(409,'REVISION_CONFLICT','当前授权已变更，请核对后重试。');
+    return json(licenseDetails(effectiveInstalledLicense(saved), saved));
+  }
+  const requireCommerce = (write = false) => {
+    if (write ? !license.commerceWritable : !license.commercial) fail(403, 'LICENSE_REQUIRED', LICENSE_UNAVAILABLE);
+  };
   if (!['GET','POST','PATCH','DELETE'].includes(method)) fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
   if (method !== 'GET') {
     if (request.headers.get('origin') !== url.origin || request.headers.get('x-moma-request') !== '1') fail(403, 'FORBIDDEN', '请求来源无效');
   }
   if (agreementPath) {
-    if (method === 'GET') return json(await readPublishedAgreements(db));
+    const key = 'site-agreements';
+    if (method === 'GET') return json(await readPublishedSiteSetting(db, key) || { revision: 0, agreements: {} });
     if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
     const actor = await authenticate(request, db);
     if (actor.role !== '平台管理员') fail(403, 'FORBIDDEN', '仅系统管理员可保存站点协议');
@@ -219,8 +251,26 @@ async function route(request, env) {
     fields(body, ['expectedRevision', 'agreements']);
     const next = validateAgreements(body);
     if (!next) fail(400, 'INVALID_INPUT', '协议正文或链接无效');
-    const saved = await savePublishedAgreements(db, next);
+    const saved = await savePublishedSiteSetting(db, key, next);
     if (!saved) fail(409, 'REVISION_CONFLICT', '协议已更新，请载入当前版本');
+    return json(saved);
+  }
+  if (portalPath) {
+    const key = 'site-portal';
+    if (method === 'GET') return json(await readPublishedSiteSetting(db, key) || { revision: 0, url: '' });
+    if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    const actor = await authenticate(request, db);
+    if (actor.role !== '平台管理员') fail(403, 'FORBIDDEN', '仅平台管理员可保存门户首页地址');
+    const body = await bodyJson(request, 16 * 1024);
+    fields(body, ['expectedRevision', 'url']);
+    const { expectedRevision, url: value } = body;
+    const address = portalHomeUrl(value, url.origin);
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision >= Number.MAX_SAFE_INTEGER ||
+        typeof value !== 'string' || (value.trim() && !address)) {
+      fail(400, 'INVALID_INPUT', '请填写有效的 HTTP 或 HTTPS 门户首页地址，或留空。门户地址不能指向 MoMA 首页。');
+    }
+    const saved = await savePublishedSiteSetting(db, key, { revision: expectedRevision + 1, url: address });
+    if (!saved) fail(409, 'REVISION_CONFLICT', '门户首页地址已更新，请载入已保存地址。');
     return json(saved);
   }
   if (path === '/auth/logout' && method === 'POST') {
@@ -298,6 +348,20 @@ async function route(request, env) {
     return json(await marketCompletion(db,session,body));
   }
   const actor = await authenticate(request, db);
+  if (credentialPath) {
+    if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    if (actor.role !== '平台管理员') fail(403, 'FORBIDDEN', '仅平台管理员可验证后查看凭证摘要');
+    const body = await bodyJson(request, 4096);
+    fields(body, ['keyId', 'accessCode']);
+    if (!identifier(body.keyId) || typeof body.accessCode !== 'string' || body.accessCode.length < 8 || body.accessCode.length > 128) fail(400, 'INVALID_INPUT', '请输入当前账号访问码');
+    let hashes;
+    try { hashes = JSON.parse(env.MODEL_OPS_LOGIN_HASHES || '{}'); } catch { fail(503, 'LOGIN_UNAVAILABLE', '当前账号验证尚未配置'); }
+    const expected = hashes && Object.hasOwn(hashes, actor.loginCode) ? hashes[actor.loginCode] : null;
+    const verified = await secureEqual(await digest(body.accessCode), typeof expected === 'string' ? expected : '0'.repeat(64));
+    const result = await channelCredentialAccess(db, actor, credentialPath[1], body.keyId, verified && typeof expected === 'string');
+    if (!result.verified) fail(403, 'INVALID_CREDENTIAL_ACCESS_CODE', '当前账号访问码不正确');
+    return json(result);
+  }
   if (path === '/auth/me' && method === 'GET') return json({ account: { id: actor.id, name: actor.name, role: actor.role, loginCode: actor.loginCode } });
   const pageId = auditPath ? 'audit-logs' : trafficPath || trafficHistoryPath ? 'traffic-limits' : packagePath ? 'package-production' : dictionary ? 'tariff-dictionary' : path.startsWith('/materials') ? 'model-templates'
     : path.startsWith('/suppliers') || path.startsWith('/channels') ? 'providers' : 'listing';
@@ -313,12 +377,14 @@ async function route(request, env) {
     const from = Number(params.get('from') ?? now - 7 * 86400000);
     const to = Number(params.get('to') ?? now);
     if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to > 8.64e15 || from > to) fail(400, 'INVALID_INPUT', '时间范围无效');
-    const action = params.get('action'), status = params.get('status'), type = params.get('type');
+    const action = params.get('action'), status = params.get('status'), type = params.get('type'), source = params.get('source');
+    const eventId = (params.get('event_id') || '').trim();
     if ((action && !Object.hasOwn(AUDIT_ACTIONS, action)) || (status && !Object.hasOwn(AUDIT_RESULTS, status)) ||
-        (type && !Object.hasOwn(AUDIT_RESOURCES, type))) fail(400, 'INVALID_INPUT', '审计筛选条件无效');
+        (type && !Object.hasOwn(AUDIT_RESOURCES, type)) || (source && !Object.hasOwn(AUDIT_SOURCES, source))) fail(400, 'INVALID_INPUT', '审计筛选条件无效');
+    if (eventId && !identifier(eventId)) fail(400, 'INVALID_INPUT', '事件 ID 格式无效');
     const account = (params.get('actor') || '').trim();
     if (account.length > 100) fail(400, 'INVALID_INPUT', '操作人搜索内容过长');
-    const data = await auditLogPage(db, { limit, after, from, to, action, status, type, q: q.toLowerCase(), actor: account.toLowerCase() });
+    const data = await auditLogPage(db, { limit, after, from, to, eventId, action, status, type, source, q: q.toLowerCase(), actor: account.toLowerCase() });
     if (!data) fail(400, 'INVALID_INPUT', '分页游标无效');
     return json({ accountId: actor.id, ...data });
   }
@@ -338,6 +404,10 @@ async function route(request, env) {
   if (path === '/package-management/factor-history' && method === 'GET') return json(await packageFactorHistory(db, url.searchParams.get('model')));
   if (path === '/package-management/commands' && method === 'POST') return json(await packageCommand(db, actor, await bodyJson(request, 16 * 1024), request.headers.get('idempotency-key')));
   if(path==='/model-operations' && method==='GET')return new Response(await modelBootstrap(db,actor),{headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
+  if (path === '/channels/consistency') {
+    if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    return json(await channelIndexCheck(db, actor));
+  }
   if (path === '/model-operations/commands' && method === 'POST') {
     const body = await bodyJson(request, 10 * 1024 * 1024 + 65536);
     if (commercialModelWrite(body.action)) requireCommerce(true);
@@ -352,7 +422,8 @@ async function route(request, env) {
         requireCommerce();
       }
     }
-    return json(await modelCommand(db, actor, body, request.headers.get('idempotency-key'), license));
+    const auditSource = request.headers.get('sec-fetch-site') === 'same-origin' ? 'web' : undefined;
+    return json(await modelCommand(db, actor, body, request.headers.get('idempotency-key'), license, { auditSource }));
   }
   if(path.startsWith('/simulation/')){const result=await simulationRequest(db,actor,path.slice('/simulation'.length)+url.search,method,method==='GET'?{}:await bodyJson(request),request.headers.get('idempotency-key'));return json(result,result.error?422:200);}
   if (['/materials','/services','/suppliers'].includes(path) && method === 'GET') return json(await list(db, url, path.slice(1)));

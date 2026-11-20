@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createSeed, initializeDatabase } from './seed.js';
+import { runLocalChannelDiscovery } from '../server/local-channel-discovery.js';
 import { initializeModelWorkspace } from '../server/model-repository.js';
 
 // Tooling only: SQLite parses the original migration, D1 executes every resulting DDL statement.
@@ -43,7 +44,7 @@ export async function migrateEmptyDatabase(db) {
   } finally { sqlite.close(); }
 }
 
-export async function startLocalBackend({ persistPath, loginHashes, port = 0, log, demo = false, licenseEdition = process.env.MOMA_LICENSE_EDITION, licenseExpiresAt = process.env.MOMA_LICENSE_EXPIRES_AT } = {}) {
+export async function startLocalBackend({ persistPath, loginHashes, port = 0, log, demo = false, scheduledDiscovery = false, licensePublicKey, licenseDeploymentId, licenseEdition = process.env.MOMA_LICENSE_EDITION, licenseExpiresAt = process.env.MOMA_LICENSE_EXPIRES_AT } = {}) {
   const source = fileURLToPath(new URL('../server/api.js', import.meta.url));
   const bundled = await build({ stdin: { contents: `import {handleModelOperations} from ${JSON.stringify(source)}; export default {fetch:handleModelOperations};`, resolveDir: process.cwd() },
     plugins:[modelWorkerDataPlugin], bundle: true, write: false, format: 'esm', platform: 'browser', target: 'es2022' });
@@ -52,7 +53,7 @@ export async function startLocalBackend({ persistPath, loginHashes, port = 0, lo
     compatibilityDate: '2026-07-30', d1Databases: ['MODEL_OPS_DB'], d1Persist: persistPath || false,
     bindings: { MODEL_OPS_LOGIN_HASHES: JSON.stringify(loginHashes || {}), MOMA_PRIVATE_SITE: process.env.VITE_MOMA_PRIVATE_SITE || '',
       MOMA_LICENSE_EDITION: licenseEdition || '',
-      MOMA_LICENSE_EXPIRES_AT: licenseExpiresAt || '' },
+      MOMA_LICENSE_EXPIRES_AT: licenseExpiresAt || '', MOMA_LICENSE_PUBLIC_KEY:licensePublicKey || '', MOMA_LICENSE_DEPLOYMENT_ID:licenseDeploymentId || '' },
     ...(log ? { log } : {}) });
   try {
     const db = await runtime.getD1Database('MODEL_OPS_DB');
@@ -61,6 +62,20 @@ export async function startLocalBackend({ persistPath, loginHashes, port = 0, lo
       await initializeDatabase(db, await createSeed());
     }
     const initialization = await initializeModelWorkspace(db, { demo });
-    return { runtime, db, initialization, url: await runtime.ready };
+    const url = await runtime.ready;
+    if (scheduledDiscovery) {
+      let active;
+      const tick = () => {
+        if (active) return;
+        active = runLocalChannelDiscovery(db, { MOMA_LICENSE_EDITION: licenseEdition, MOMA_LICENSE_EXPIRES_AT: licenseExpiresAt })
+          .catch(error => console.warn('本地定期渠道检测未完成', error.message))
+          .finally(() => { active = null; });
+      };
+      const timer = setInterval(tick, 30000);
+      timer.unref();
+      const dispose = runtime.dispose.bind(runtime);
+      runtime.dispose = async () => { clearInterval(timer); await active; return dispose(); };
+    }
+    return { runtime, db, initialization, url };
   } catch (error) { await runtime.dispose(); throw error; }
 }

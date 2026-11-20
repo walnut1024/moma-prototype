@@ -9,6 +9,7 @@ import { MODEL_ORDER_COLUMNS } from '../model-order-display.mjs';
 import { maskApiKey } from '../api-key-utils.mjs';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES, normalizePageSize, FilterReset, FilterToolbar } from '../components/FilterControls';
 import { displayBusinessCopy } from '../display-copy.mjs';
+import { adminProjectHref } from './access-control.mjs';
 import AdminPageHeading from './AdminPageHeading';
 import { Choice, CopyId, serviceOperationsUi } from './ServiceUI';
 import {
@@ -334,7 +335,8 @@ function UserDetails({ account, state, tab, navigate, canWrite, setEditor }) {
         <Text link={{ href:`#/admin-2/customer-usage-detail?customer=${encodeURIComponent(tenant.id)}&period=today` }}>查看用量账单</Text>
       </>}
       {tab === 'projects' && <>
-        <Title heading={5} component="h2">默认项目</Title>
+        <div className="admin-page-heading"><Title heading={5} component="h2">默认项目</Title>
+          <Text link={{ href:adminProjectHref({ customer:tenant.id }) }}>查看全部项目</Text></div>
         <Paragraph>个人空间固定使用一个默认项目，模型体验、API 密钥和用量均归属该项目。</Paragraph>
         {projects.filter(project => project.status !== '已删除').length !== 1 && <Banner type="danger" closeIcon={null} description="默认项目记录异常，请核对原始项目及历史用量归属。" />}
         {projects.length === 1 && <Facts rows={[

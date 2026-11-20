@@ -1,5 +1,10 @@
 import { projectRole } from '../project-access.mjs';
 
+export function adminProjectHref(filters = {}) {
+  const params = new URLSearchParams(filters);
+  return '#/admin-2/projects' + (params.size ? '?' + params : '');
+}
+
 export function tenantHref(tenant, patch = {}, filters) {
   const params = new URLSearchParams(filters);
   ['enterprise', 'personal', 'user', 'tab', 'project', 'create'].forEach(key => params.delete(key));

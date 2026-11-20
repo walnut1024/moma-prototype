@@ -1,11 +1,10 @@
 import { AGREEMENTS, MAX_AGREEMENT_TEXT, siteUrl } from '../src/site-config.mjs';
 
-const key = 'site-agreements';
 const id = 'published';
 
-export async function readPublishedAgreements(db) {
+export async function readPublishedSiteSetting(db, key) {
   const payload = await db.prepare('SELECT payload_json FROM simulation_records WHERE kind=? AND id=?').bind(key, id).first('payload_json');
-  return payload ? JSON.parse(payload) : { revision: 0, agreements: {} };
+  return payload ? JSON.parse(payload) : null;
 }
 
 export function validateAgreements(body) {
@@ -24,7 +23,7 @@ export function validateAgreements(body) {
   return { revision: expectedRevision + 1, agreements: values };
 }
 
-export async function savePublishedAgreements(db, next) {
+export async function savePublishedSiteSetting(db, key, next) {
   const expected = next.revision - 1;
   // shortcut: keep one namespaced record in the prototype store until site settings have a dedicated table
   const saved = await db.prepare(`

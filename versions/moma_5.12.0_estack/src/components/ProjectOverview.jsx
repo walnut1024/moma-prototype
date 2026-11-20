@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button } from './ui/button';
+import { Banner, Button, Select, Table } from '@douyinfe/semi-ui';
 import { TimeSeriesChart } from './AnalyticsCharts';
 import { shanghaiDate } from '../call-log-data.mjs';
 import { bucketLabel } from '../usage-data.mjs';
@@ -25,7 +25,7 @@ export function ProjectBudgetNotice({ project, spend }) {
   if (percentUsed < budget.warnAt) return null;
   const label=percentUsed >= 100 ? budget.stop ? '项目预算已达上限，按量调用已停止' : '项目预算已达上限'
     : '项目预算已达到预警阈值';
-  return <p className="project-budget-alert" role="status">{label} · 已用 {percent(percentUsed)}</p>;
+  return <Banner className="project-budget-alert" type="warning" closeIcon={null} description={label + ' · 已用 ' + percent(percentUsed)} />;
 }
 
 export default function ProjectOverview({ tenant, project, department, openTab, onNavigate }) {
@@ -72,14 +72,21 @@ export default function ProjectOverview({ tenant, project, department, openTab, 
   ];
   const labels = current.buckets.map(row => days === 1 ? bucketLabel(row.time) : bucketLabel(row.time).slice(0, 5));
   const ranked = [['模型', 'modelId', models], ['API Key', 'keyId', source?.keys || []]];
+  const recentColumns = [
+    { title:'时间',dataIndex:'createdAt',render:projectTime },
+    { title:'请求 ID',render:(_,row) => <Button theme="borderless"
+      onClick={() => onNavigate('logs',{requestId:row.requestId || row.id})}>{row.requestId || row.id}</Button> },
+    { title:'模型',render:(_,row) => row.publicModelId || row.modelId || '—' },
+    { title:'调用来源',render:(_,row) => row.keyId === experienceKeyId(project.id) ? '在线体验' : row.source || '—' },
+    { title:'状态码',render:(_,row) => row.httpStatus ?? '—' },
+  ];
   return <>
 <ProjectBudgetNotice project={project} spend={spend} />
     <div className="project-controls project-overview-toolbar">
-      <label>统计时间 <select value={days} onChange={event => setDays(Number(event.target.value))}>
-        <option value={1}>今日</option><option value={7}>近 7 天</option><option value={30}>近 30 天</option>
-      </select></label>
-      {currencies.length > 1 && <label>币种 <select value={currency} onChange={event => setCurrency(event.target.value)}>{currencies.map(code => <option key={code}>{code}</option>)}</select></label>}
-      <Button variant="link" onClick={() => onNavigate('usage', { days })}>查看用量统计</Button>
+      <label>统计时间 <Select aria-label="统计时间" value={days} onChange={setDays}
+        optionList={[{value:1,label:'今日'},{value:7,label:'近 7 天'},{value:30,label:'近 30 天'}]} /></label>
+      {currencies.length > 1 && <label>币种 <Select aria-label="币种" value={currency} onChange={setCurrency} optionList={currencies.map(value => ({ value,label:value }))} /></label>}
+      <Button theme="borderless" onClick={() => onNavigate('usage', { days })}>查看用量统计</Button>
     </div>
     <div className="project-metrics">
       {tiles.map(([label, value, prior, format]) => <div key={label} className="project-panel">
@@ -96,7 +103,8 @@ export default function ProjectOverview({ tenant, project, department, openTab, 
       </section>)}
     </div>
     <div className="project-controls">
-      <label>排行指标 <select value={metric} onChange={event => setMetric(event.target.value)}><option value="fees">{amountLabel}</option><option value="requests">请求数</option></select></label>
+      <label>排行指标 <Select aria-label="排行指标" value={metric} onChange={setMetric}
+        optionList={[{value:'fees',label:amountLabel},{value:'requests',label:'请求数'}]} /></label>
     </div>
     <div className="project-overview-grid">
       {ranked.map(([title, dimension, names]) => {
@@ -106,7 +114,7 @@ export default function ProjectOverview({ tenant, project, department, openTab, 
           {rows.length ? <ol className="project-ranking">{rows.map(({ id, amount }) => {
             const label = names.find(row => row.id === id)?.name || (id === UNASSIGNED ? '未归属' : id);
             return <li key={id}>
-              <Button variant="link" onClick={() => onNavigate('usage', { [dimension]:id, days })}>{label}</Button>
+              <Button theme="borderless" onClick={() => onNavigate('usage', { [dimension]:id, days })}>{label}</Button>
               <strong>{metric === 'fees' ? money(amount) : number(amount)}</strong>
             </li>;
           })}</ol> : <p className="project-empty">当前范围暂无排行</p>}
@@ -116,7 +124,7 @@ export default function ProjectOverview({ tenant, project, department, openTab, 
     <section className="project-panel" aria-label="项目配置">
       <h2>配置摘要</h2>
       <dl className="project-facts">{links.map(([label, value, open]) => <div key={label}><dt>{label}</dt>
-        <dd><Button variant="link" onClick={open}>{value}</Button></dd></div>)}</dl>
+        <dd><Button theme="borderless" onClick={open}>{value}</Button></dd></div>)}</dl>
       {spend?.unpriced > 0 && <p className="project-muted">{spend.unpriced} 次成功调用暂未计入人民币预算</p>}
     </section>
     <section className="project-panel" aria-label="项目信息">
@@ -128,16 +136,9 @@ export default function ProjectOverview({ tenant, project, department, openTab, 
       </dl>
     </section>
     <section className="project-panel" aria-label="最近调用">
-      <div className="project-panel-heading"><h2>最近调用</h2><Button variant="link" onClick={() => onNavigate('logs')}>查看项目日志</Button></div>
-      {recent.length ? <div className="project-table-scroll" tabIndex={0} aria-label="项目调用记录">
-        <table><thead><tr>{['时间', '请求 ID', '模型', '调用来源', '状态码'].map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead>
-          <tbody>{recent.slice(0, 8).map(row => <tr key={row.requestId || row.id}>
-            <td>{projectTime(row.createdAt)}</td><td><Button variant="link" onClick={() => onNavigate('logs', { requestId:row.requestId || row.id })}>{row.requestId || row.id}</Button></td>
-            <td>{row.publicModelId || row.modelId || '—'}</td>
-            <td>{row.keyId === experienceKeyId(project.id) ? '在线体验' : row.source || '—'}</td><td>{row.httpStatus ?? '—'}</td>
-          </tr>)}</tbody>
-        </table>
-      </div> : <p className="project-empty">暂无调用记录</p>}
+      <div className="project-panel-heading"><h2>最近调用</h2><Button theme="borderless" onClick={() => onNavigate('logs')}>查看项目日志</Button></div>
+      <Table columns={recentColumns} dataSource={recent.slice(0,8)} rowKey={row => row.requestId || row.id}
+        size="small" pagination={false} scroll={{x:580}} empty="暂无调用记录" />
     </section>
   </>;
 }

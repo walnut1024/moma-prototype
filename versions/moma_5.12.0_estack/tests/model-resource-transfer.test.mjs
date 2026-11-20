@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { commitAdminState } from '../src/admin-v2/store.js';
 import { withAdminSession } from './admin-session-fixture.mjs';
 import { modelServiceIdentity, modelIdentity, modelPresentation } from '../src/model-identities.mjs';
-import { exportModelResources, importModelResources } from '../src/admin-v2/model-resource-transfer.js';
+import { exportModelResources, importModelResources, resourceFieldChanges } from '../src/admin-v2/model-resource-transfer.js';
 import { operationsTransaction } from '../src/admin-v2/model-operations.js';
 import { projectModelState, initialModelWorkspace } from '../server/model-repository.js';
 import { resourceId } from '../src/resource-id.mjs';
@@ -23,6 +23,17 @@ test('resource DTOs preserve stored identities and export round trips do not wri
     assert.deepEqual(plan(state, JSON.parse(JSON.stringify(file))).changes, []);
   }
   assert.deepEqual(state, before);
+});
+
+test('batch channel maintenance previews a changed field without mutating the saved connection', () => {
+  const state = seed(), file = exportModelResources(state, 'channels');
+  const connection = file.rows.find(row => row.type === 'connection');
+  const before = connection.name;
+  connection.name = '本地核对';
+  assert.deepEqual(resourceFieldChanges(state, file), [{
+    key: resourceKey(connection) + ':name', id: connection.id, type: 'connection', field: 'name', before, after: '本地核对',
+  }]);
+  assert.equal(exportModelResources(state, 'channels').rows.find(row => resourceKey(row) === resourceKey(connection)).name, before);
 });
 
 test('renaming a public call keeps model and service IDs, price owners and routes', () => {

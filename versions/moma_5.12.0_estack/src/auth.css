@@ -38,7 +38,7 @@ body:has(.auth-shell, .auth-login-page) { min-width: 0; }
 .auth-account-title p { margin: 0; color: var(--muted-foreground); font-size: 14px; }
 .auth-account-center.auth-account-workbench { width: 100%; max-width: none; margin: 0; gap: 0; }
 .auth-account-workbench > [data-slot="card"] { border: 1px solid #e4eaf3; border-radius: 6px; box-shadow: none; margin-bottom: 12px; gap: 16px; }
-.auth-account-workbench [data-slot="card-header"], .auth-account-workbench [data-slot="card-content"], .auth-account-workbench [data-slot="card-footer"] { padding-inline: 20px; }
+.auth-account-workbench .semi-card-header, .auth-account-workbench [data-slot="card-content"], .auth-account-workbench [data-slot="card-footer"] { padding-inline: 20px; }
 .auth-account-workbench [data-slot="card-title"], .auth-account-workbench .auth-certification-summary [data-slot="card-title"] h2 { font-size: 14px; font-weight: 600; }
 .auth-account-workbench [data-slot="card-description"] { font-size: 12px; line-height: 20px; }
 .auth-account-workbench [data-slot="card-footer"] { background: #fff; border-top: 1px solid #edf1f6; }
@@ -65,7 +65,7 @@ body:has(.auth-shell, .auth-login-page) { min-width: 0; }
 .auth-certification-empty p + p { margin-top: 4px; font-size: 12px; color: var(--muted-foreground); }
 .auth-certification-summary .auth-section-note { margin-top: 20px; }
 .auth-enterprise-progress { display: flex; flex-wrap: wrap; gap: 8px 20px; padding-top: 16px; margin-top: 20px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted-foreground); }
-@media (max-width: 640px) { .auth-account-center { margin-block: 24px; padding-inline: 20px; } .auth-certification-grid { grid-template-columns: 1fr; gap: 14px; } .auth-certification-summary [data-slot="card-header"] { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; } }
+@media (max-width: 640px) { .auth-account-center { margin-block: 24px; padding-inline: 20px; } .auth-certification-grid { grid-template-columns: 1fr; gap: 14px; } .auth-certification-summary .semi-card-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; } }
 .auth-tabs { display: flex; width: 100%; margin: 25px 0 24px; border-bottom: 1px solid #e9edf3; gap: 24px; justify-content: flex-start; }
 .auth-tabs [data-slot="tabs-trigger"] { flex: 0 0 auto; padding: 0 0 12px; font-size: 13px; color: #617086; }
 .auth-tabs [data-slot="tabs-trigger"][data-state="active"] { color: var(--primary); }
@@ -73,7 +73,7 @@ body:has(.auth-shell, .auth-login-page) { min-width: 0; }
 .auth-form { display: flex; flex-direction: column; gap: 20px; }
 .auth-field { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
 .auth-field > label { font-size: 12px; font-weight: 500; color: #45546a; }
-.auth-field [data-slot="input"], .auth-field [data-slot="input-group"], .auth-field [data-slot="select-trigger"] { min-height: 42px; width: 100%; border-radius: 6px; font-size: 13px; }
+.auth-field [data-slot="input"], .auth-field [data-slot="input-group"], .auth-field .semi-select, .auth-field .semi-input-wrapper { min-height: 42px; width: 100%; border-radius: 6px; font-size: 13px; }
 .auth-field [data-slot="input-group"] [data-slot="input"] { min-height: 40px; }
 .auth-field [data-slot="select-trigger"] { box-shadow: none; }
 .auth-field [data-slot="input"][readonly] { background: #f7f9fc; color: #617086; }
@@ -232,7 +232,7 @@ body:has(.auth-shell, .auth-login-page) { min-width: 0; }
 .auth-identity-page .auth-layout { margin-block: auto; }
 .auth-identity-page .auth-enterprise-brand { padding-top: 0; }
 .auth-identity-page .auth-form { padding-top: 12px; }
-.auth-application-page .auth-tabs [data-slot="tabs-trigger"] { font-size: 13px; }
+.auth-application-page .auth-tabs .semi-tabs-tab { font-size: 13px; }
 .auth-application-page .auth-submit { min-height: 42px; height: 42px; font-size: 14px; background: #087f5b; color: #fff; }
 .auth-application-page .auth-form-footer, .auth-application-page .auth-form-footer button { font-size: 13px; }
 .auth-application-page .auth-form-note { font-size: 13px; margin: 0; }

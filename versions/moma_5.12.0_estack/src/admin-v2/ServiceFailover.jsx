@@ -1,23 +1,16 @@
-import { offerKey } from '../service-access.mjs';
 import { useState } from 'react';
 import { Button, Descriptions, RadioGroup, Radio, Typography, InputNumber, CheckboxGroup, Checkbox } from '@douyinfe/semi-ui';
 import { Choice, CopyId, Field, Notice } from './ServiceUI';
-import { platformServices } from './platform-service-client';
 import { activeRouteVersion, routeSourceVersion, routingChannels, serviceRoute, routeGroups, ROUTE_RETRY_DEFAULTS, ROUTE_RETRY_REASONS } from './service-routing';
 
-export default function ServiceFailover({state, model, ops}) {
-  const services = platformServices(state, model);
-  const [serviceId, setServiceId] = useState(() => services.find(row=>offerKey(row)===ops.params.get('routeProvider'))?.id || services[0]?.id);
-  const service = services.find(row=>row.id===serviceId);
+export default function ServiceFailover({state, service, ops, openRouting}) {
   return <section className="ss-model-form" aria-label="故障转移配置">
-    {services.length > 1 && <Field label="渠道服务"><Choice label="渠道服务" value={serviceId} options={services.map(row=>[row.id,row.name])} onChange={id=>ops.proceed(()=>{
-      setServiceId(id);ops.dirty(false);ops.setError('');
-    })}/></Field>}
-    {service?.channelId ? <Notice>当前渠道服务固定调用绑定渠道。</Notice> : service ? <FailoverSettings key={service.id} state={state} service={service} ops={ops}/> : <Notice>请先配置模型服务及渠道。</Notice>}
+    {service.channelId ? <Notice>当前服务固定绑定单一渠道，不支持故障转移。</Notice>
+      : <FailoverSettings key={service.id} state={state} service={service} ops={ops} openRouting={openRouting}/>}
   </section>;
 }
 
-function FailoverSettings({state, service, ops}) {
+function FailoverSettings({state, service, ops, openRouting}) {
   const route = serviceRoute(state,service.id), active = activeRouteVersion(route);
   const channels = routingChannels(state,service);
   const selected = active?.config.channels.filter(row=>row.enabled && !row.backup) || [];
@@ -40,7 +33,7 @@ function FailoverSettings({state, service, ops}) {
   const maxSwitches = active?.config.strategy === 'weighted' ? routeGroups(active.config).length - 1 : 0;
   const modified = enabled!==savedEnabled || explicit && enabled && backupSupplyId!==savedBackup ||
     JSON.stringify(retry) !== JSON.stringify(savedRetry);
-  if (!active || explicit && (selected.length!==1 || active.config.strategy!=='fixed')) return <Notice>请先在“路由及映射”保存{explicit ? '一个主渠道' : '路由配置'}。</Notice>;
+  if (!active || explicit && (selected.length!==1 || active.config.strategy!=='fixed')) return <Notice>请先在「路由及映射」保存{explicit ? '一个主渠道' : '路由配置'}。<Button theme="borderless" onClick={openRouting}>前往配置路由</Button></Notice>;
   const update = patch => {
     const next = {...(draft || {enabled:savedEnabled,backupSupplyId:savedBackup,expectedVersion:active.version,sourceVersion}),...patch};
     setDraft(next);
@@ -64,7 +57,7 @@ function FailoverSettings({state, service, ops}) {
     <Descriptions data={[{key:'模型调用标识',value:<CopyId value={service.callId} label="模型调用标识"/>},explicit ? {key:'主渠道',value:primary?.channelName || '渠道已失效'} : {key:'参与路由',value:selected.length+' 条渠道'}]}/>
     <Field label="故障转移"><RadioGroup aria-label="故障转移" value={enabled ? 'on' : 'off'} disabled={blocked} onChange={event=>update({enabled:event.target.value==='on'})}><Radio value="off">关闭</Radio><Radio value="on">开启</Radio></RadioGroup></Field>
     {explicit && enabled && <Field label="备用渠道"><Choice label="备用渠道" value={backupSupplyId || undefined} placeholder="请选择一个备用渠道" disabled={blocked} options={[...backups.map(row=>[row.id,`${row.channelName} · ${row.upstreamModelId}`]),...(backupSupplyId && !backups.some(row=>row.id===backupSupplyId) ? [[backupSupplyId,unavailableBackup ? unavailableBackup.channelName+'（不可用）' : '当前备用渠道不可用']] : [])]} onChange={id=>update({backupSupplyId:id})}/></Field>}
-    {explicit && enabled && !backups.length && <Notice>请先在「路由及映射」中验证并启用同服务商的备用渠道映射。</Notice>}
+    {explicit && enabled && !backups.length && <Notice>请先在「路由及映射」中验证并启用同服务商的备用渠道映射。<Button theme="borderless" onClick={openRouting}>前往路由及映射</Button></Notice>}
     {explicit ? <Typography.Paragraph>主渠道不可用或调用失败时，尝试备用渠道。</Typography.Paragraph> : enabled && <>
       <Field label="重试触发条件"><CheckboxGroup aria-label="重试触发条件" direction="horizontal" value={retry.reasons}
         disabled={blocked} onChange={reasons=>update({retry:{...retry,reasons}})}>

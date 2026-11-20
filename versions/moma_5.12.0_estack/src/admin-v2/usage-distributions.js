@@ -25,20 +25,38 @@ export function usageShare(rows, key, metric = 'calls') {
   return { total, count: known.length, ranked, slices, unknownValue: unknown?.value || 0, pendingCalls };
 }
 
+const reportBands = [
+  '0-128K', '0-256K', '0-32K', '0-512K', '1080', '1080P', '128K-256K', '256K-1M', '2K',
+  '32K-128K', '32K-1M', '32K-200K', '480', '480P', '512K-1M', '720', '720P', '768P',
+  'hasVideoInput1080P', 'hasVideoInput480P/720P', 'noVideoInput480P/720P', '其他',
+];
+
 export function usageDistributions(rows) {
   const customers = ['1–10', '11–100', '101–1,000', '1,001–10,000', '10,001及以上'].map(label => ({ label, value: 0 }));
   const tokens = ['0', '1–1,000', '1,001–4,000', '4,001–16,000', '16,001–64,000', '64,001及以上'].map(label => ({ label, value: 0 }));
+  const tokenCustomers = ['大于等于 100 亿', '50 亿至 100 亿', '30 亿至 50 亿', '10 亿至 30 亿', '小于 10 亿'].map(label => ({ label, value: 0 }));
   const callsByCustomer = new Map();
-  let unknownCustomerCalls = 0, tokenCalls = 0, pendingTokenCalls = 0, nonTokenCalls = 0;
+  const tokensByCustomer = new Map();
+  const billingBands = new Map(reportBands.map(label => [label, 0]));
+  let unknownCustomerCalls = 0, tokenCalls = 0, pendingTokenCalls = 0, nonTokenCalls = 0, missingBillingBands = 0;
   for (const row of rows) {
-    if (row.tenantId && row.tenantId !== '__unknown__') callsByCustomer.set(row.tenantId, (callsByCustomer.get(row.tenantId) || 0) + 1);
+    const customer = row.tenantId && row.tenantId !== '__unknown__' ? row.tenantId : null;
+    if (customer) callsByCustomer.set(customer, (callsByCustomer.get(customer) || 0) + 1);
     else unknownCustomerCalls++;
+    const recordedBand = typeof row.usagePriceBand === 'string' ? row.usagePriceBand.trim().replace(/[–—]/g, '-') : '';
+    if (!recordedBand) missingBillingBands++;
+    const band = billingBands.has(recordedBand) ? recordedBand : '其他';
+    billingBands.set(band, billingBands.get(band) + 1);
     if (row.unit !== 'Token') { nonTokenCalls++; continue; }
     const value = usageTokenValue(row);
     if (value === null) { pendingTokenCalls++; continue; }
     tokenCalls++;
+    if (customer) tokensByCustomer.set(customer, (tokensByCustomer.get(customer) || 0) + value);
     tokens[[0, 1000, 4000, 16000, 64000, Infinity].findIndex(limit => value <= limit)].value++;
   }
   for (const calls of callsByCustomer.values()) customers[[10, 100, 1000, 10000, Infinity].findIndex(limit => calls <= limit)].value++;
-  return { customers, tokens, customerCount: callsByCustomer.size, unknownCustomerCalls, tokenCalls, pendingTokenCalls, nonTokenCalls };
+  for (const total of tokensByCustomer.values()) tokenCustomers[[1e10, 5e9, 3e9, 1e9, 0].findIndex(limit => total >= limit)].value++;
+  return { customers, tokens, customerCount: callsByCustomer.size, unknownCustomerCalls, tokenCalls, pendingTokenCalls, nonTokenCalls,
+    tokenCustomers, tokenCustomerCount: tokensByCustomer.size, missingBillingBands,
+    billingBands: [...billingBands].map(([label, value]) => ({ label, value })) };
 }

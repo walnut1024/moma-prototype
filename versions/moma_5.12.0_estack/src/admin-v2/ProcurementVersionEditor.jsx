@@ -14,12 +14,14 @@ import './procurement-cost.css';
 const time = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '—';
 const localTime = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 16);
 
-export default function ProcurementVersionEditor({ state, provider, association, modelName, ops, close }) {
+export default function ProcurementVersionEditor({ state, provider, association, modelName, ops, close, directory = false }) {
   const current = provider.catalogConnections?.find(row => row.id === association.id && !row.deletedAt) || association;
   const active = activeChannelProcurement(current);
   const quote = active === undefined ? current.pricing : active?.pricing;
-  const [scenarios, setScenarios] = useState(() => cataloguePriceDraft({ scenarios: (quote?.scenarios || []).map(item => ({
-    ...item, listPrice: cataloguePurchasePrice(item.listPrice, quote.discountFactor, item.purchasePrice), purchasePrice: undefined,
+  const draft = directory && !quote && current.procurementVersions?.find(row => row.status === '草稿')?.pricing;
+  const initialQuote = quote || draft;
+  const [scenarios, setScenarios] = useState(() => cataloguePriceDraft({ scenarios: (initialQuote?.scenarios || []).map(item => ({
+    ...item, listPrice: cataloguePurchasePrice(item.listPrice, initialQuote.discountFactor, item.purchasePrice), purchasePrice: undefined,
   })) }).scenarios);
   const [expectedRevision] = useState(current.procurementRevision || 0);
   const [effectiveAt, setEffectiveAt] = useState(localTime), [expiresAt, setExpiresAt] = useState('');
@@ -41,7 +43,7 @@ export default function ProcurementVersionEditor({ state, provider, association,
       ops.setError('');
     } catch (error) { ops.setError(error.message); }
   };
-  const status = version => version.status === '草稿' ? '历史未发布' : version.expiresAt && Date.parse(version.expiresAt) <= Date.now() ? '已到期'
+  const status = version => directory && version.status === '草稿' ? '历史未发布' : version.expiresAt && Date.parse(version.expiresAt) <= Date.now() ? '已到期'
     : Date.parse(version.effectiveAt) > Date.now() ? '待生效' : active?.id === version.id ? '生效中' : '历史';
   const publish = async () => {
     if (blocked || !publishing) return;
@@ -66,7 +68,7 @@ export default function ProcurementVersionEditor({ state, provider, association,
     </>}>
     <div className="procurement-cost-scope">
       <dl><div><dt>服务商</dt><dd>{provider.name}</dd></div><div><dt>模型</dt><dd>{modelName || association.modelId}</dd></div></dl>
-      <AdminStatus value={quote?.scenarios?.length ? '已配置' : active === null ? '已失效' : '待配置'}/>
+      <AdminStatus value={quote?.scenarios?.length ? '已配置' : draft ? '报价草稿' : active === null ? '已失效' : '待配置'}/>
     </div>
     {stale && <Notice error>该渠道采购价已有新版本，当前输入保留，请关闭并重新打开。</Notice>}
     {publishing ? <section className="ss-body">
@@ -89,7 +91,7 @@ export default function ProcurementVersionEditor({ state, provider, association,
           {item.name}{item.condition ? '（' + item.condition + '）' : ''} · {item.currency} {catalogueMoneyDisplay(cataloguePurchasePrice(item.listPrice, version.pricing.discountFactor, item.purchasePrice))} / {item.unit}
         </Typography.Paragraph>) },
         { title: '状态', width: 90, render: (_, version) => <AdminStatus value={status(version)}/> },
-        { title: '操作', width: 100, render: (_, version) => <Button theme="borderless" size="small" disabled={blocked} onClick={() => {
+        { title: '操作', width: 100, render: (_, version) => <Button theme="borderless" size="small" disabled={blocked || directory && !version.pricing?.scenarios?.length} onClick={() => {
           changed(setScenarios)(cataloguePriceDraft({ scenarios: version.pricing.scenarios.map(item => ({ ...item, listPrice: cataloguePurchasePrice(item.listPrice, version.pricing.discountFactor, item.purchasePrice), purchasePrice: undefined })) }).scenarios);
           setHistory(false);
         }}>沿用报价</Button> },

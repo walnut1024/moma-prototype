@@ -1,6 +1,6 @@
 import {loadAdminState} from './admin-v2/store.js';
 import {useTenantData} from './useTenantData';
-import {saveTenantRoutes} from './tenant-data.mjs';
+import {accountProjects, saveTenantRoutes} from './tenant-data.mjs';
 import {toast} from 'sonner';
 import { useServiceDirectory } from './useServiceDirectory';
 import { marketModels, customerPriceRows } from './service-directory.mjs';
@@ -8,20 +8,20 @@ import MarketModelDetail from './MarketModelDetail';
 import { useDeploymentLicense } from './useDeploymentLicense';
 import { MarketAction, MarketSessionControl, useCloudMarket } from './CloudMarket';
 import { readModelDetail, modelDetailLocation } from './model-detail-route.mjs';
-import { Button as SemiButton, ConfigProvider, Select as SemiSelect, Tabs as SemiTabs, Typography as SemiTypography } from '@douyinfe/semi-ui';
+import { Button as SemiButton, Checkbox, ConfigProvider, Input, Select as SemiSelect, Slider, Table, Tabs as SemiTabs, Tag, Typography as SemiTypography } from '@douyinfe/semi-ui';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import DevelopmentNotes from './admin-v2/DevelopmentNotes';
 import { AdminUIContext } from './components/admin-ui-context';
 import FrontPageHeader from "./components/FrontPageHeader";
 import AuthExperience, { AuthBanner, usePrototypeAuth } from "./AuthExperience";
-import { DEFAULT_SITE_LOGO, PRIVATE_SITE } from "./site-config.mjs";
+import { DEFAULT_SITE_LOGO, DEFAULT_USER_CONSOLE_NAME, DEFAULT_WORKBENCH_NAME, PRIVATE_SITE } from "./site-config.mjs";
 import { agreementFromHash } from "./agreement-route.mjs";
 import PublicAgreement from "./components/PublicAgreement";
 import { restoreSiteImage, useSiteChrome, useSiteConfig } from "./useSiteConfig";
 import OperationRecords from "./OperationRecords";
 import { MODEL_ORDER_BILLING_TYPES, MODEL_ORDER_COLUMNS } from './model-order-display.mjs';
 import { DEFAULT_PAGE_SIZE, FilterPagination } from "./components/FilterControls";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import ConsoleObservation from "./components/ConsoleObservation";
 import UsageStatistics from "./components/UsageStatistics";
 import SmartRouting from "./components/SmartRouting";
@@ -37,26 +37,17 @@ import "./version-index.css";
 import "./model-order.css";
 import "./ranking.css";
 import ModelExperience from "./ModelExperience";
-import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs";
 import TextExperience from "./TextExperience";
 import { tenantUserAccess } from "./tenant-user-type.mjs";
 import ModelComparison from "./ModelComparison";
 import AdminConsoleV2 from "./AdminConsoleV2";
 import { shanghaiDate } from "./call-log-data.mjs";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./components/ui/select";
-import {
   Activity,
   ArrowRight,
   AudioLines,
   Calculator,
   ChartNoAxesCombined,
-  Check,
   ExternalLink,
   FileText,
   FolderKanban,
@@ -65,6 +56,7 @@ import {
   KeyRound,
   History,
   Languages,
+  Plug,
   RefreshCw,
   Route,
   Search,
@@ -77,12 +69,11 @@ import {
   Video,
 } from "lucide-react";
 
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./components/ui/dialog";
-import { Button } from "./components/ui/button";
-import { Input } from "./components/ui/input";
+import { AdminModal, AdminSideSheet } from './admin-v2/AdminOverlay';
 import "./frontend-pages.css";
 
 const A = "/moma_5.12.0_estack/assets/";
+const ToolAccess = lazy(() => import("./components/ToolAccess"));
 
 const navIcons = {
   模型广场: Store,
@@ -95,6 +86,7 @@ const navIcons = {
   模型订购: ShoppingCart,
   项目概览: FolderKanban,
   项目设置: ShieldCheck,
+  我的项目: FolderKanban,
   模型体验: Languages,
   项目管理: FolderKanban,
   空间总览: FolderKanban,
@@ -103,6 +95,7 @@ const navIcons = {
   调用观测: Activity,
   调用日志: FileText,
   "API Key 管理": KeyRound,
+  工具接入: Plug,
   组织及成员: Users,
   操作记录: History,
   账号认证: ShieldCheck,
@@ -111,10 +104,11 @@ const navIcons = {
 };
 const frontPages = {
   'project-overview':'项目概览', 'project-settings':'项目设置',
-  workspace:'空间总览', projects:'项目管理', market:'模型广场', 'model-detail':'模型详情',
+  workspace:'空间总览', 'my-projects':'我的项目', projects:'项目管理', market:'模型广场', 'model-detail':'模型详情',
   'model-order':'模型订购', billing:'订购与账单', 'api-keys':'API Key 管理',
   'organization-members':'组织及成员', 'operation-records':'操作记录', 'account-certification':'账号认证',
   'call-logs':'调用日志', 'usage-statistics':'用量统计', 'call-observation':'调用观测', 'smart-route':'智能路由',
+  'tool-access':'工具接入',
 };
 const projectPages = {
   '项目概览':['project-overview'], '项目设置':['project-settings'],
@@ -372,10 +366,10 @@ function ModelOrderList({
   const byCallId=new Map(orderServices.map(service=>[service.callId,service]));
   const allRows=orderServices.map(service=>{
     const prices=customerPriceRows(service.salePrices);
-    return [service.callId,service.mode==='standard'?'统一模型服务模式':'渠道直选模式',service.typeLabel,service.provider,prices.map(row=>row.name).join(' / '),prices.map(row=>row.currency+' '+row.amount+' / '+row.unit).join('\n'),service.ordered?'使用中':'未订购',service.orderedAt ? shanghaiDate(new Date(service.orderedAt)) : '—','长期有效'];
+    return [service.callId,service.mode==='standard'?'统一模型服务模式':'渠道直选模式',service.typeLabel,service.provider,prices.map(row=>row.name).join(' / '),prices.map(row=>row.currency+' '+row.amount+' / '+row.unit).join('\n'),service.ordered?'使用中':'未订购',service.orderedAt ? shanghaiDate(new Date(service.orderedAt)) : '—','长期有效',service.id];
   });
-  const historicalRows=market.orders.filter(order=>!market.services.some(service=>service.id===order.offerId)).map(order=>[order.callId,'—','—','—','—','—',['gray','formal'].includes(order.stage)?'已订购':'已下架',shanghaiDate(new Date(order.createdAt)),'—']);
-  const subscriptions = {'Token Plan订阅':tenant.plans.filter(row=>!row.product.name.includes('Coding')).map(row=>[row.product.name,'平台','Token Plan','平台','套餐权益',String(row.amount),'已订购',row.createdAt || '—',row.expiresAt || '长期有效']),'Coding Plan订阅':tenant.plans.filter(row=>row.product.name.includes('Coding')).map(row=>[row.product.name,'平台','Coding Plan','平台','套餐权益',String(row.amount),'已订购',row.createdAt || '—',row.expiresAt || '长期有效'])};
+  const historicalRows=market.orders.filter(order=>!market.services.some(service=>service.id===order.offerId)).map(order=>[order.callId,'—','—','—','—','—',['gray','formal'].includes(order.stage)?'已订购':'已下架',shanghaiDate(new Date(order.createdAt)),'—',order.id]);
+  const subscriptions = {'Token Plan订阅':tenant.plans.filter(row=>!row.product.name.includes('Coding')).map(row=>[row.product.name,'平台','Token Plan','平台','套餐权益',String(row.amount),'已订购',row.createdAt || '—',row.expiresAt || '长期有效',row.id]),'Coding Plan订阅':tenant.plans.filter(row=>row.product.name.includes('Coding')).map(row=>[row.product.name,'平台','Coding Plan','平台','套餐权益',String(row.amount),'已订购',row.createdAt || '—',row.expiresAt || '长期有效',row.id])};
   const rows = (historical || tab === "按Token用量计费" ? [...allRows,...historicalRows] : subscriptions[tab] || []).filter(row => row[0].toLowerCase().includes(query.trim().toLowerCase()));
   const current = Math.min(page, Math.max(1, Math.ceil(rows.length / size)));
   const visibleRows = rows.slice((current - 1) * size, current * size);
@@ -387,6 +381,7 @@ function ModelOrderList({
       "noopener",
     );
   const closeOrder = () => (standalone ? window.close() : setOrdering(false));
+  const lines = cell => cell.split("\n").map((text, index) => <small key={index}>{text}</small>);
   const toggleOrder = (name) =>
     setSelectedOrders((current) =>
       current.includes(name)
@@ -421,6 +416,35 @@ function ModelOrderList({
       setSelectedOrders([]);
       setAgreed(false);
     };
+    const columns = [
+      { key:'select', width:50, title:<Checkbox aria-label="全选可订购规格" disabled={!availableNames.length}
+        checked={allAvailableSelected} onChange={() => setSelectedOrders(allAvailableSelected
+          ? selectedOrders.filter(name => !availableNames.includes(name))
+          : [...new Set([...selectedOrders, ...availableNames])])}/>,
+        render:(_, {row}) => <Checkbox aria-label={'选择 ' + row[0]} disabled={row[6] !== '未订购'}
+          checked={selectedOrders.includes(row[0])} onChange={() => toggleOrder(row[0])}/> },
+      { title:'模型名称', width:250, render:(_, {row}) => <div className="order-record"><b>{row[0]}</b><small>{row[1]}</small></div> },
+      { title:'模型服务商', width:140, render:(_, {row}) => row[3] },
+      { title:'模型类别', width:140, render:(_, {row}) => row[2] },
+      { title:'状态', width:100, render:(_, {row}) => <Tag color={row[6] === '未订购' ? 'blue' : 'grey'}>{row[6] === '未订购' ? '可订购' : '已订购'}</Tag> },
+      { title:'资费场景', width:200, render:(_, {row}) => <div className="order-record">{lines(row[4])}
+        {row[4].startsWith('共 ') && <SemiButton theme="borderless" size="small" onClick={() => setDetail({
+          title:row[0] + ' 资费场景', content:row[4] + '，参考价格 ' + row[5],
+        })}>查看详情</SemiButton>}</div> },
+      { title:'参考价格', width:180, render:(_, {row}) => <div className="order-record">{lines(row[5])}</div> },
+    ];
+    async function submitOrder() {
+      if (submitting) return;
+      setSubmitting(true);
+      try {
+        if (tab !== '按Token用量计费') throw Error('暂无可订购套餐');
+        const ids = selectedOrders.map(callId => market.services.find(row => row.callId === callId && row.canOrder)?.id);
+        if (ids.some(id => !id)) throw Error('所选服务已有变化，请重新选择');
+        await market.order(ids);
+        setOrdered(true);
+      } catch (error) { toast.error(error.message); }
+      finally { setSubmitting(false); }
+    }
     return (
       <div className="legacy-page legacy-service-order">
         <div className="service-order-title">
@@ -445,14 +469,14 @@ function ModelOrderList({
                   ["Coding Plan订阅", "AI编程订阅套餐"],
                 ]
             ).map(([x, description]) => (
-              <button
+              <SemiButton
                 className={tab === x ? "active" : ""}
                 onClick={() => resetSelection(x)}
                 key={x}
               >
                 <b>{x}</b>
                 <small>{description}</small>
-              </button>
+              </SemiButton>
             ))}
           </div>
           <p className="rate-tip">
@@ -462,134 +486,20 @@ function ModelOrderList({
             <strong>
               <i>*</i> 资源规格
             </strong>
-            <select value={series} onChange={(e) => setSeries(e.target.value)}>
-              <option>全部模型系列</option>
-              <option>DeepSeek</option>
-              <option>GLM</option>
-              <option>Kimi</option>
-              <option>AICC</option>
-            </select>
-            <select
-              value={modelType}
-              onChange={(e) => setModelType(e.target.value)}
-            >
-              <option>全部模型类别</option>
-              {[...new Set(allRows.map(row=>row[2]))].map(name=><option key={name}>{name}</option>)}
-            </select>
-            <select
-              value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-            >
-              <option value="">全部模型服务商</option>
-              {[...new Map(orderServices.map(service=>[service.providerId,service.provider]))].map(([id,name])=><option key={id} value={id}>{name}</option>)}
-            </select>
-            <label>
-              <input
-                value={query}
-                onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-                placeholder="按模型名称搜索"
-              />
-              <Search size={15} />
-            </label>
-            <label className="hide-ordered">
-              <input
-                type="checkbox"
-                checked={hideOrdered}
-                onChange={(e) => setHideOrdered(e.target.checked)}
-              />{" "}
-              隐藏已订购规格
-            </label>
+            <SemiSelect aria-label="模型系列" value={series} onChange={setSeries}
+              optionList={['全部模型系列','DeepSeek','GLM','Kimi','AICC'].map(value => ({value,label:value}))}/>
+            <SemiSelect aria-label="模型类别" value={modelType} onChange={setModelType}
+              optionList={['全部模型类别', ...new Set(allRows.map(row => row[2]))].map(value => ({value,label:value}))}/>
+            <SemiSelect aria-label="模型服务商" value={provider} onChange={setProvider}
+              optionList={[{value:'',label:'全部模型服务商'}, ...Array.from(new Map(orderServices.map(service =>
+                [service.providerId,service.provider])), ([value,label]) => ({value,label}))]}/>
+            <Input className="order-search" aria-label="按模型名称搜索" prefix={<Search size={15}/>}
+              value={query} onChange={value => { setQuery(value); setPage(1); }} placeholder="按模型名称搜索"/>
+            <Checkbox className="hide-ordered" checked={hideOrdered} onChange={event => setHideOrdered(event.target.checked)}>隐藏已订购规格</Checkbox>
           </div>
           {tab !== '按Token用量计费' && <p role="status">本轮暂不提供新套餐订购；已有订阅读取后台订单，可在订购管理中查看。</p>}
-          <div className="service-order-table">
-            <div className="service-order-row head">
-              {[
-                "",
-                "模型名称",
-                "模型服务商",
-                "模型类别",
-                "状态",
-                "资费场景",
-                "参考价格",
-              ].map((x, i) => (
-                <span key={i}>
-                  {i === 0 ? (
-                    <input
-                      aria-label="全选可订购规格"
-                      type="checkbox"
-                      disabled={!availableNames.length}
-                      checked={allAvailableSelected}
-                      onChange={() =>
-                        setSelectedOrders(
-                          allAvailableSelected
-                            ? selectedOrders.filter(
-                                (name) => !availableNames.includes(name),
-                              )
-                            : [
-                                ...new Set([
-                                  ...selectedOrders,
-                                  ...availableNames,
-                                ]),
-                              ],
-                        )
-                      }
-                    />
-                  ) : (
-                    x
-                  )}
-                </span>
-              ))}
-            </div>
-            {orderRows.map((row) => {
-              const available = row[6] === "未订购";
-              return (
-                <div className="service-order-row" key={row[0]}>
-                  <span>
-                    <input
-                      type="checkbox"
-                      disabled={!available}
-                      checked={selectedOrders.includes(row[0])}
-                      onChange={() => toggleOrder(row[0])}
-                    />
-                  </span>
-                  <span>
-                    <b>{row[0]}</b>
-                    <em>{row[1]}</em>
-                  </span>
-                  <span>{row[3]}</span>
-                  <span>{row[2]}</span>
-                  <span>
-                    <small className={available ? "available" : "subscribed"}>
-                      {available ? "可订购" : "已订购"}
-                    </small>
-                  </span>
-                  <span>
-                    {row[4].split("\n").map((x) => (
-                      <small key={x}>{x}</small>
-                    ))}
-                    {row[4].startsWith("共 ") && (
-                      <button
-                        className="scenario-detail"
-                        onClick={() =>
-                          setDetail({
-                            title: `${row[0]} 资费场景`,
-                            content: `${row[4]}，参考价格 ${row[5]}`,
-                          })
-                        }
-                      >
-                        查看详情
-                      </button>
-                    )}
-                  </span>
-                  <span className="price">
-                    {row[5].split("\n").map((x) => (
-                      <small key={x}>{x}</small>
-                    ))}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          <Table className="service-order-table" columns={columns} dataSource={orderRows.map(row => ({id:row[9],row}))}
+            rowKey="id" size="small" pagination={false} scroll={{x:1060}} empty="暂无符合条件的规格"/>
           <div className="selected-count">
             当前已选中 <b>{selectedOrders.length}</b> 个规格
           </div>
@@ -600,14 +510,7 @@ function ModelOrderList({
           <strong>
             <i>*</i> 服务协议
           </strong>
-          <label>
-            <input
-              type="checkbox"
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-            />{" "}
-            我已阅读并同意
-          </label>
+          <Checkbox checked={agreed} onChange={event => setAgreed(event.target.checked)}>我已阅读并同意</Checkbox>
           <div className="agreements">
             {[
               "移动云产品销售协议",
@@ -615,7 +518,7 @@ function ModelOrderList({
               "模型服务平台MoMA服务使用声明",
               "模型服务平台MoMA服务等级协议",
             ].map((title) => (
-              <button
+              <SemiButton
                 key={title}
                 onClick={() =>
                   setDetail({
@@ -626,7 +529,7 @@ function ModelOrderList({
                 }
               >
                 《{title}》
-              </button>
+              </SemiButton>
             ))}
           </div>
         </section>
@@ -634,7 +537,7 @@ function ModelOrderList({
           <div>
             配置费用：<b>{feeLabel}</b>
             <small>参考价格，具体扣费请以账单为准</small>
-            <button
+            <SemiButton
               className="billing-detail"
               onClick={() =>
                 setDetail({
@@ -649,93 +552,31 @@ function ModelOrderList({
               }
             >
               了解计费详情
-            </button>
+            </SemiButton>
           </div>
-          <button
+          <SemiButton theme="solid"
             disabled={!market.tenant || !selectedOrders.length || !agreed}
             onClick={() => setConfirming(true)}
           >
             确认订单
-          </button>
+          </SemiButton>
         </footer>
-        {confirming && (
-          <div
-            className="order-confirm-backdrop"
-            onClick={() => setConfirming(false)}
-          >
-            <div onClick={(e) => e.stopPropagation()}>
-              <button className="close" onClick={() => setConfirming(false)}>
-                ×
-              </button>
-              {ordered ? (
-                <div className="order-success">
-                  <Check size={32} />
-                  <h2>模型服务已开通</h2>
-                  <p>订购记录已保存，可返回订购管理查看。</p>
-                  <button
-                    onClick={() => {
-                      setConfirming(false);
-                      closeOrder();
-                    }}
-                  >
-                    返回订购管理
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <h2>确认订单</h2>
-                  <p>请确认以下模型规格及计费方式。</p>
-                  <dl>
-                    <dt>计费方式</dt>
-                    <dd>{tab}</dd>
-                    <dt>订购规格</dt>
-                    <dd>{selectedOrders.join("、")}</dd>
-                    <dt>配置费用</dt>
-                    <dd>{feeLabel}</dd>
-                  </dl>
-                  <div className="confirm-actions">
-                    <button onClick={() => setConfirming(false)}>取消</button>
-                    <button
-                      className="primary"
-                      disabled={submitting}
-                      onClick={async()=>{
-                        setSubmitting(true);
-                        try {
-                          if(tab!=='按Token用量计费')throw Error('暂无可订购套餐');
-                          const ids=selectedOrders.map(callId=>market.services.find(row=>row.callId===callId && row.canOrder)?.id);
-                          if(ids.some(id=>!id))throw Error('所选服务已有变化，请重新选择');
-                          await market.order(ids);setOrdered(true);
-                        }catch(error){toast.error(error.message);}
-                        finally{setSubmitting(false);}
-                      }}
-                    >
-                      确认订购
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-        {detail && (
-          <div
-            className="order-confirm-backdrop"
-            onClick={() => setDetail(null)}
-          >
-            <div onClick={(e) => e.stopPropagation()}>
-              <button className="close" onClick={() => setDetail(null)}>
-                ×
-              </button>
-              <h2>{detail.title}</h2>
-              <p>{detail.content}</p>
-              <div className="confirm-actions">
-                <button className="primary" onClick={() => setDetail(null)}>
-                  我知道了
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {confirming && <AdminModal visible title={ordered ? '模型服务已开通' : '确认订单'} closable={!submitting}
+          closeOnEsc={!submitting} maskClosable={!submitting} onCancel={() => setConfirming(false)}
+          footer={ordered
+            ? <SemiButton theme="solid" onClick={() => { setConfirming(false); closeOrder(); }}>返回订购管理</SemiButton>
+            : <><SemiButton disabled={submitting} onClick={() => setConfirming(false)}>取消</SemiButton>
+              <SemiButton theme="solid" loading={submitting} onClick={submitOrder}>确认订购</SemiButton></>}>
+          {ordered ? <p>订购记录已保存，可返回订购管理查看。</p> : <>
+            <p>请确认以下模型规格及计费方式。</p>
+            <dl className="order-confirm-facts"><dt>计费方式</dt><dd>{tab}</dd>
+              <dt>订购规格</dt><dd>{selectedOrders.join('、')}</dd><dt>配置费用</dt><dd>{feeLabel}</dd></dl>
+          </>}
+        </AdminModal>}
+        {detail && <AdminModal visible title={detail.title} onCancel={() => setDetail(null)} maskClosable
+          footer={<SemiButton theme="solid" onClick={() => setDetail(null)}>我知道了</SemiButton>}>
+          <p>{detail.content}</p>
+        </AdminModal>}
       </div>
     );
   }
@@ -755,11 +596,8 @@ function ModelOrderList({
           <p>查看付费模型订购情况</p>
         </div>
       </section>}
-      {!historical ? <div className="us-page"><Tabs value={tab} onValueChange={changeTab}>
-        <TabsList variant="line" className="us-tabs" aria-label="模型订购计费方式">
-          {Object.values(MODEL_ORDER_BILLING_TYPES).map(type => <TabsTrigger key={type} value={type}>{type}</TabsTrigger>)}
-        </TabsList>
-      </Tabs></div> : <nav className="legacy-tabs">
+      {!historical ? <div className="us-page"><SemiTabs activeKey={tab} onChange={changeTab} aria-label="模型订购计费方式"
+        tabList={Object.values(MODEL_ORDER_BILLING_TYPES).map(tab => ({itemKey:tab,tab}))}/></div> : <nav className="legacy-tabs">
         {(historical
           ? ["按Token用量计费", "Token Plan订阅"]
           : [
@@ -768,77 +606,44 @@ function ModelOrderList({
               "Coding Plan订阅",
             ]
         ).map((x) => (
-          <button
+          <SemiButton
             className={tab === x ? "active" : ""}
             onClick={() => setTab(x)}
             key={x}
           >
             {x}
-          </button>
+          </SemiButton>
         ))}
       </nav>}
       <section className="legacy-panel">
         <MarketSessionControl market={market} onLogin={openMarketLogin}/>{market.error && <p role="alert">{market.error}</p>}
         <div className="legacy-order-tools">
           <span>
-            <button className="legacy-primary" onClick={() => openOrder()}>
+            <SemiButton theme="solid" className="legacy-primary" onClick={() => openOrder()}>
               <ShoppingCart size={15} />
               立即订购
-            </button>
-            <button disabled>批量退订</button>
+            </SemiButton>
+            <SemiButton disabled>批量退订</SemiButton>
           </span>
-          <label>
-            <input
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-              placeholder={tab === "按Token用量计费" ? "请按模型名称搜索" : "搜索套餐名称"}
-            />
-            <Search size={15} />
-          </label>
-          <button aria-label="刷新" onClick={tenant.reload}>
-            <RefreshCw size={15} />
-          </button>
+          <Input className="order-search" prefix={<Search size={15}/>} aria-label="搜索订购记录"
+            value={query} onChange={value => { setQuery(value); setPage(1); }}
+            placeholder={tab === '按Token用量计费' ? '请按模型名称搜索' : '搜索套餐名称'}/>
+          <SemiButton theme="borderless" aria-label="刷新" icon={<RefreshCw size={15}/>} onClick={tenant.reload}/>
         </div>
-        <div className="legacy-order-table">
-          <div className="legacy-order-row head">
-            {[
-              "",
-              historical || tab === "按Token用量计费" ? "模型名称" : "套餐名称",
-              historical ? "模型类别" : "类型",
-              ...MODEL_ORDER_COLUMNS.slice(1),
-            ].map((x, i) => (
-              <span key={i}>{i === 0 ? <input type="checkbox" /> : x}</span>
-            ))}
-          </div>
-          {visibleRows.map((row) => (
-            <div className="legacy-order-row" key={row[0]}>
-              <span>
-                <input type="checkbox" />
-              </span>
-              <span>
-                <b>{row[0]}</b>
-                <em>{row[1]}</em>
-              </span>
-              {row.slice(2).map((cell, j) => (
-                <span
-                  key={j}
-                  className={j === 3 ? "price" : j === 4 ? "state" : ""}
-                >
-                  {cell.split("\n").map((x) => (
-                    <small key={x}>{x}</small>
-                  ))}
-                </span>
-              ))}
-              <span>
-                {row[6] === "未订购" && (
-                  <button onClick={() => openOrder(row[0])}>订购</button>
-                )}
-                <button>更多 ⌄</button>
-              </span>
-            </div>
-          ))}
-        </div>
-        {!historical && !rows.length && <div className="v2-empty">暂无符合条件的订购记录</div>}
+        <Table className="legacy-order-table" rowKey="id" dataSource={visibleRows.map(row => ({id:row[9],row}))}
+          size="small" pagination={false} scroll={{x:1060}} empty={historical ? '' : '暂无符合条件的订购记录'}
+          columns={[
+            { key:'select', width:50, title:<Checkbox aria-label="全选订购记录"/>, render:() => <Checkbox aria-label="选择订购记录"/> },
+            { title:historical || tab === '按Token用量计费' ? '模型名称' : '套餐名称', width:240,
+              render:(_, {row}) => <div className="order-record"><b>{row[0]}</b><small>{row[1]}</small></div> },
+            ...[historical ? '模型类别' : '类型', ...MODEL_ORDER_COLUMNS.slice(1,-1)].map((title,index) => ({
+              title, key:title, render:(_, {row}) => <div className="order-record">{lines(row[index + 2])}</div>,
+            })),
+            { title:'操作', width:116, render:(_, {row}) => <>
+              {row[6] === '未订购' && <SemiButton size="small" theme="borderless" onClick={() => openOrder(row[0])}>订购</SemiButton>}
+              <SemiButton size="small" theme="borderless">更多 ⌄</SemiButton>
+            </> },
+          ]}/>
         <FilterPagination total={rows.length} page={current} size={size} onPageChange={setPage} onSizeChange={value => { setSize(value); setPage(1); }}/>
       </section>
     </div>
@@ -916,6 +721,7 @@ function VersionIndex() {
 
 function PrototypeApp({ version }) {
   const site = useSiteConfig();
+  const workbenchName = site.workbenchName || DEFAULT_WORKBENCH_NAME;
   const deploymentLicense = useDeploymentLicense();
   useSiteChrome(site);
   useState(()=>{try{loadAdminState(localStorage);}catch{/* Existing storage errors are surfaced by the affected workspace. */}return null;});
@@ -923,15 +729,16 @@ function PrototypeApp({ version }) {
   const modeFromHash = () =>
     location.hash.startsWith("#/admin") ? "v2" : "front";
   if (location.pathname.includes("/order/serviceOrder")) {
-    return site.personalEnabled ? <ModelOrderList standalone versionId={version.id} auth={auth} />
+    return site.personalEnabled ? <ConfigProvider locale={zhCN}><ModelOrderList standalone versionId={version.id} auth={auth} /></ConfigProvider>
       : <div className="project-workspace"><FrontPageHeader title="内部模型服务"/>
-        <a href={import.meta.env.BASE_URL}>返回使用空间</a></div>;
+        <a href={import.meta.env.BASE_URL + (PRIVATE_SITE ? '?page=workspace' : '')}>返回使用空间</a></div>;
   }
   const directory = useServiceDirectory();
   const projectTenant = useTenantData({ usageReport:true });
   const [catalogueScope, setCatalogueScope] = useState('showcase');
   const owner = directory.identity?.key || '';
   const [projectScope, setProjectScope] = useState(readProjectScope);
+  const [projectAction, setProjectAction] = useState(null);
   const [entryService, setEntryService] = useState(() => new URLSearchParams(location.search).get('service') || '');
   const [marketAction,setMarketAction]=useState(null);
   const [activePage, setActivePage] = useState(() => frontPage(new URLSearchParams(location.search))),
@@ -957,21 +764,38 @@ function PrototypeApp({ version }) {
   const selectedCard = useRef('');
   const projects = owner && projectTenant.identity?.key === owner ? projectTenant.projects : [];
   const { project, select:rememberProject } = useProjectSelection(owner, projects, activePage, projectScope);
+  const projectParams = new URLSearchParams(location.search);
+  const projectSource = !personal && projectTenant.canManage && (activePage === '项目管理' || projectParams.get('from') === 'projects') ? 'projects'
+    : projectParams.get('from') === 'api-keys' ? 'api-keys' : 'my-projects';
+  const projectTab = projectParams.get('tab');
   const openProjectPage = (row, page = 'projects', extra = {}) => {
     const query = new URLSearchParams({page,...(row ? {project:row.id} : {}),...extra});
-    if (row?.status === '正常') rememberProject(row.id);
+    if (row?.status === '正常' && (!row.spaceId || row.spaceId === projectTenant.identity?.spaceId)) rememberProject(row.id);
     const next = location.pathname + '?' + query + location.hash;
     if (next !== location.pathname + location.search + location.hash) history.pushState(null, '', next);
     setProjectScope(readProjectScope(query));
     setEntryService(query.get('service') || '');
+    setProjectAction(null);
     if (page === 'experience') setTextCompare(false);
     setActivePage(frontPage(query));
   };
-  const showProjects = (row, tab) => openProjectPage(row, tab === 'keys' ? 'api-keys' : row ? tab && tab !== 'overview' ? 'project-settings' : 'project-overview' : 'projects', tab ? {tab} : {});
+  const showProjects = (row, tab, from = projectSource, action) => {
+    if (!row) { openProjectPage(null, from === 'projects' ? 'projects' : 'my-projects'); return; }
+    if (row.spaceId && row.spaceId !== auth.state.activeSpace) {
+      try {
+        if (!auth.spaces.some(space => space.id === row.spaceId)) throw Error('该空间当前不可访问');
+        auth.commit({ ...auth.state, activeSpace:row.spaceId });
+      } catch (error) { toast.error(error.message); return; }
+    }
+    const page = personal && tab === 'keys' ? 'api-keys'
+      : personal && tab && tab !== 'overview' ? 'project-settings' : 'project-overview';
+    openProjectPage(row, page, { ...(tab ? {tab} : {}), ...(!personal ? {from} : {}) });
+    if (action) setProjectAction(action);
+  };
   const projectExperience = (row, service) => openProjectPage(row, 'experience',
     {task:service?.tasks?.[0] || 'text', ...(service ? {service:service.id} : {}) });
   useEffect(() => {
-    if (personal && project && ['空间总览', '项目管理'].includes(activePage)) openProjectPage(project, 'project-overview');
+    if (personal && project && ['空间总览', '我的项目', '项目管理'].includes(activePage)) openProjectPage(project, 'project-overview');
   }, [personal, project?.id, activePage]);
   useEffect(() => {
     const syncDetail = () => {
@@ -980,6 +804,7 @@ function PrototypeApp({ version }) {
       const query = new URLSearchParams(location.search);
       setProjectScope(readProjectScope(query));
       setEntryService(query.get('service') || '');
+      setProjectAction(null);
       setActivePage(detail ? '模型详情' : frontPage(query));
     };
     window.addEventListener('popstate', syncDetail);
@@ -1015,27 +840,34 @@ function PrototypeApp({ version }) {
     return () => media.removeEventListener('change', change);
   }, []);
   const tenantAccess = tenantUserAccess(auth.state, 'personal');
-  const enterprisePagesAllowed = Boolean(owner) && !auth.storageError && tenantAccess.canViewOrganization;
+  const enterprisePagesAllowed = Boolean(owner) && projectTenant.canManage && !auth.storageError && tenantAccess.canViewOrganization;
+  let myProjects;
+  if (activePage === '我的项目' && owner && !personal && !auth.storageError) {
+    try { myProjects = accountProjects(auth.state, auth.spaces); }
+    catch { /* The project page surfaces storage errors from the current tenant. */ }
+  }
   const tenantShell = useRef(null);
   const getTenantPopupContainer = useCallback(() => tenantShell.current ?? document.body, []);
   const spaceNav = [
     ...(owner && !personal ? [["", "空间总览"]] : []),
     ["", "模型广场"], ["", "智能路由"],
-    ...(!internal && projectTenant.canManage ? [["", "订购与账单"]] : []),
-    ...(!personal && owner ? [["", "项目管理"]] : []),
-    ...(enterprisePagesAllowed ? [["", "组织及成员"]] : []),
+    ...(!personal && owner ? [["", "我的项目"]] : []),
+    ["", "工具接入"],
   ];
   const projectNav = [
-    ["", "项目概览", personal ? "概览" : "项目概览"],
     ["", "模型体验"], ["", "API Key 管理", "API Key"],
-    ["", "调用观测"], ["", "项目设置", personal ? "使用设置" : "项目设置"],
+    ["", "调用观测"],
   ];
-  const tenantNav = personal ? [projectNav[0], ...spaceNav, ...projectNav.slice(1)] : [...spaceNav, ...projectNav];
+  const billingNav = !internal && projectTenant.canManage ? [["", "订购与账单"]] : [];
+  const tenantNav = personal ? [["", "项目概览", "概览"], ...spaceNav, ...projectNav, ...billingNav, ["", "项目设置", "使用设置"]]
+    : [...spaceNav, ...projectNav, ...billingNav, ...(enterprisePagesAllowed ? [["企业管理", "项目管理"], ["", "组织及成员"]] : [])];
   const currentNav = activePage === "模型详情" ? "模型广场"
     : Object.values(experiencePages).includes(activePage) ? "模型体验"
+    : !personal && ["项目概览", "项目设置"].includes(activePage) ? frontPages[projectSource]
     : ['用量统计', '调用日志'].includes(activePage) ? '调用观测' : activePage;
   const navigateTenant = item => {
-    if (item === "项目管理") { showProjects(); return; }
+    if (item === "项目管理") { openProjectPage(null, 'projects'); return; }
+    if (item === "API Key 管理" && !personal && project) { showProjects(project, 'keys', 'api-keys'); return; }
     if (projectPages[item]) {
       const [page, extra] = projectPages[item];
       openProjectPage(project, page, extra);
@@ -1050,6 +882,7 @@ function PrototypeApp({ version }) {
     if (item === "文本生成") setTextCompare(false);
   };
   useEffect(() => {
+    if (owner && !personal && !enterprisePagesAllowed && activePage === '项目管理') openProjectPage(null, 'my-projects');
     if (!enterprisePagesAllowed && (['组织及成员', '操作记录'].includes(activePage) || activePage === '调用日志' && !projectScope.id)) {
       setActivePage('模型广场');
       const query = new URLSearchParams(location.search);
@@ -1058,7 +891,7 @@ function PrototypeApp({ version }) {
         history.replaceState(null, '', location.pathname + (query.size ? '?' + query : '') + location.hash);
       }
     }
-  }, [enterprisePagesAllowed, activePage, projectScope.id]);
+  }, [enterprisePagesAllowed, activePage, projectScope.id, owner, personal]);
   useEffect(() => {
     const sync = () => {
       if (location.hash.startsWith("#/admin") && !location.hash.startsWith("#/admin-2")) {
@@ -1086,7 +919,15 @@ function PrototypeApp({ version }) {
       ...current,
       [group]: current[group] === value ? "" : value,
     }));
-  const meta = m => ({ task: ({ text: ['文本与代码'], multimodal: ['多模态', '文本与代码'], image: ['图像'], video: ['视频'], voice: ['音频'], embedding: ['向量'], rerank: ['重排'] })[m.type] || [], input: m.input, output: m.outputModalities, author: m.maker });
+  const marketAuthors = new Map(), marketSeries = new Map();
+  for (const model of models) {
+    const item = model.classification;
+    if (item?.authorId) marketAuthors.set(item.authorId, item.author);
+    if (item?.seriesId && (!filters.author || item.authorId === filters.author)) {
+      marketSeries.set(item.seriesId, filters.author ? item.series : `${item.series} · ${item.author}`);
+    }
+  }
+  const meta = m => ({ task: ({ text: ['文本与代码'], multimodal: ['多模态', '文本与代码'], image: ['图像'], video: ['视频'], voice: ['音频'], embedding: ['向量'], rerank: ['重排'] })[m.type] || [], input: m.input, output: m.outputModalities, author: m.classification?.authorId });
   const visible = useMemo(
     () =>
       models
@@ -1100,7 +941,7 @@ function PrototypeApp({ version }) {
                 (group === "context"
                   ? m.contextTokens != null && m.contextTokens / 1024 <= Number(value)
                   : group === "series"
-                  ? m.series === value
+                  ? m.classification?.seriesId === value
                   : group === "provider"
                   ? m.providers.has(value)
                   : Array.isArray(data[group])
@@ -1121,7 +962,9 @@ function PrototypeApp({ version }) {
     <button
       key={value}
       className={`filter-option ${filters[group] === value ? "selected" : ""}`}
-      onClick={() => toggleFilter(group, value)}
+      onClick={() => group === 'author'
+        ? setFilters(current => ({ ...current, author: current.author === value ? '' : value, series: '' }))
+        : toggleFilter(group, value)}
     >
       <i />
       {label}
@@ -1166,19 +1009,15 @@ function PrototypeApp({ version }) {
                     <span>4K</span>
                     <span>1M</span>
                   </div>
-                  <input
-                    className="filter-range"
-                    type="range"
-                    min="4"
-                    max="1024"
-                    value={filters.context || 1024}
-                    onChange={event => setFilters(current => ({...current, context:Number(event.target.value)}))}
-                    aria-label="上下文长度上限"
-                  />
+                  <Slider className="filter-range" min={4} max={1024} value={filters.context || 1024}
+                    onChange={context => setFilters(current => ({...current, context}))} aria-label="上下文长度上限" />
                 </FilterSection>
                 <FilterSection title="模型作者" count={filters.author ? 1 : 0}>
-                  {[...new Set(models.map(model => model.maker))].map((x) => option("author", x))}
+                  {[...marketAuthors].map(([id, name]) => option("author", id, name))}
                 </FilterSection>
+                {marketSeries.size > 0 && <FilterSection title="模型系列" count={filters.series ? 1 : 0}>
+                  {[...marketSeries].map(([id, name]) => option("series", id, name))}
+                </FilterSection>}
                 <FilterSection
                   title="推理服务商"
                   count={filters.provider ? 1 : 0}
@@ -1189,25 +1028,33 @@ function PrototypeApp({ version }) {
   const filterLabels = {task:'任务分类', input:'输入', output:'输出', context:'上下文上限', author:'模型作者', provider:'推理服务商', series:'模型系列'};
   const activeFilters = Object.entries(filters).filter(([, value]) => Boolean(value));
   const removeFilter = group => setFilters(current => { const next = {...current}; delete next[group]; return next; });
-  const filterToggle = <Button variant="outline" aria-expanded={filtersExpanded} aria-controls="catalogue-filters" onClick={compactFilters ? undefined : () => setFiltersExpanded(value => !value)}><SlidersHorizontal/>{filtersExpanded ? '收起筛选' : '展开筛选'}{activeFilters.length > 0 && ' · ' + activeFilters.length}</Button>;
   const catalogueToolbar = <section className="catalogue-tools" aria-label="模型查找">
     <div className="catalogue-toolbar">
-      {compactFilters ? <Dialog open={filtersExpanded} onOpenChange={setFiltersExpanded}><DialogTrigger asChild>{filterToggle}</DialogTrigger><DialogContent className="catalogue-filter-drawer"><DialogHeader><DialogTitle>模型筛选</DialogTitle><DialogDescription className="sr-only">选择筛选条件查找模型</DialogDescription></DialogHeader>{catalogueFilters}</DialogContent></Dialog> : filterToggle}
-      <div className="catalogue-search"><Search aria-hidden="true"/><Input aria-label="搜索模型" value={query} placeholder="搜索模型名称或模型 ID" onChange={event => { setQuery(event.target.value); }}/>{query && <Button variant="ghost" size="icon" aria-label="清除搜索" onClick={() => setQuery('')}><X/></Button>}</div>
+      <SemiButton theme="outline" aria-expanded={filtersExpanded} aria-controls="catalogue-filters"
+        icon={<SlidersHorizontal/>} onClick={() => setFiltersExpanded(value => !value)}>
+        {filtersExpanded ? '收起筛选' : '展开筛选'}{activeFilters.length > 0 && ' · ' + activeFilters.length}
+      </SemiButton>
+      {compactFilters && filtersExpanded && <AdminSideSheet visible title="模型筛选" placement="left" width="min(360px, 100vw)"
+        onCancel={() => setFiltersExpanded(false)} className="catalogue-filter-sheet">{catalogueFilters}</AdminSideSheet>}
+      <Input className="catalogue-search-input" aria-label="搜索模型" prefix={<Search size={15} aria-hidden="true"/>}
+        value={query} placeholder="搜索模型名称或模型 ID" onChange={setQuery} showClear/>
       <span className="catalogue-count" role="status">{query.trim() || activeFilters.length ? '找到 ' : '模型 '}{visible.length} 个</span>
-      <Select value={catalogueScope} onValueChange={setCatalogueScope}><SelectTrigger aria-label="模型目录范围"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="showcase">演示模型</SelectItem><SelectItem value="all">全部模型</SelectItem></SelectContent></Select><Select value={sortMode} onValueChange={setSortMode}><SelectTrigger aria-label="模型排序"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="latest">最新</SelectItem><SelectItem value="recommended">推荐</SelectItem></SelectContent></Select>
+      <SemiSelect value={catalogueScope} onChange={setCatalogueScope} aria-label="模型目录范围"
+        optionList={[{value:'showcase',label:'演示模型'},{value:'all',label:'全部模型'}]} />
+      <SemiSelect value={sortMode} onChange={setSortMode} aria-label="模型排序"
+        optionList={[{value:'latest',label:'最新'},{value:'recommended',label:'推荐'}]} />
     </div>
-    {(query.trim() || activeFilters.length > 0) && <div className="catalogue-conditions" aria-label="已选条件"><span>已选条件</span>{query.trim() && <Button variant="outline" size="sm" aria-label="移除搜索条件" onClick={() => setQuery('')}>搜索：{query.trim()}<X/></Button>}{activeFilters.map(([group,value]) => <Button key={group} variant="outline" size="sm" aria-label={'移除' + (filterLabels[group] || group) + '条件'} onClick={() => removeFilter(group)}>{filterLabels[group] || group}：{group === 'provider' ? marketProviders.get(value) || '服务商已不可用' : value}{group === 'context' ? 'K' : ''}<X/></Button>)}<Button variant="ghost" size="sm" onClick={resetFilters}>清空</Button></div>}
+    {(query.trim() || activeFilters.length > 0) && <div className="catalogue-conditions" aria-label="已选条件"><span>已选条件</span>{query.trim() && <SemiButton theme="outline" size="small" aria-label="移除搜索条件" onClick={() => setQuery('')}>搜索：{query.trim()}<X/></SemiButton>}{activeFilters.map(([group,value]) => <SemiButton key={group} theme="outline" size="small" aria-label={'移除' + (filterLabels[group] || group) + '条件'} onClick={() => removeFilter(group)}>{filterLabels[group] || group}：{group === 'provider' ? marketProviders.get(value) || '服务商已不可用' : value}{group === 'context' ? 'K' : ''}<X/></SemiButton>)}<SemiButton theme="borderless" size="small" onClick={resetFilters}>清空</SemiButton></div>}
   </section>;
 
   const shell = (
     <AdminUIContext.Provider value={admin === "v2"}><div ref={tenantShell} className={`app-shell ${admin === "front" ? "tenant-semi" : ""} ${auth.route ? "auth-shell auth-enterprise-shell" : ""}`}>
-      <header className={admin === "v2" ? "admin-banner" : undefined}>
+      <header className={admin === "v2" ? "admin-banner" : auth.route ? undefined : "tenant-banner"}>
         <div className="brand-mark">
           <img src={site.logo || DEFAULT_SITE_LOGO} alt="" onError={event => restoreSiteImage(event, DEFAULT_SITE_LOGO)} />
           {admin === "v2"
-            ? <SemiTypography.Text strong>{site.name || '大模型服务平台运营运维中心'}</SemiTypography.Text>
-            : <span>{site.name || '模型服务平台 MoMA 政企版'}</span>}
+            ? <SemiTypography.Text strong>{workbenchName}</SemiTypography.Text>
+            : <SemiTypography.Text strong>{site.userConsoleName || DEFAULT_USER_CONSOLE_NAME}</SemiTypography.Text>}
         </div>
         <div className="top-actions">
           {admin === "v2" && (
@@ -1228,7 +1075,7 @@ function PrototypeApp({ version }) {
       {admin === "front" && !auth.route && (
         <aside className="tenant-nav" role="navigation" aria-label="用户面导航">
           {owner && <div className="tenant-space-name">{personal ? '个人空间' : projectTenant.identity?.tenantName}</div>}
-          {tenantNav.map(([, item, label = item], index) => {
+          {tenantNav.map(([group, item, label = item], index) => {
             const NavIcon = navIcons[item];
             return <div key={item} className="tenant-nav-item">
               {!personal && owner && index === spaceNav.length && <div className="tenant-project-context">
@@ -1239,10 +1086,14 @@ function PrototypeApp({ version }) {
                     const next = projects.find(row => row.id === id && row.status === '正常');
                     if (!next) return;
                     rememberProject(id);
-                    const target = projectPages[activePage];
-                    if (target) openProjectPage(next, ...target);
+                    if (['项目概览', '项目设置'].includes(activePage)) showProjects(next, projectTab || undefined);
+                    else {
+                      const target = projectPages[activePage];
+                      if (target) openProjectPage(next, ...target);
+                    }
                   }} />
               </div>}
+              {group && <div className="tenant-nav-group-label">{group}</div>}
               <SemiButton theme="borderless" type="tertiary" className={currentNav === item ? "active" : undefined}
                 aria-current={currentNav === item ? "page" : undefined}
                 icon={NavIcon && <NavIcon size={15} aria-hidden="true" />} onClick={() => navigateTenant(item)}>{label}</SemiButton>
@@ -1257,23 +1108,26 @@ function PrototypeApp({ version }) {
       )}
       <main key={auth.route ? "auth" : admin === "front" ? owner || "anonymous" : "admin"} className={admin !== "front" ? "admin-main" : "front-main"}>
         {admin === 'front' && !auth.route && Object.values(experiencePages).includes(activePage) &&
-          <div className="console-experience-tabs"><Tabs value={activePage} onValueChange={page => openProjectPage(project, 'experience', {task:Object.keys(experiencePages).find(task => experiencePages[task] === page)})}>
-            <TabsList variant="line" aria-label="体验类型">{Object.values(experiencePages).map(page => <TabsTrigger key={page} value={page}>{page}</TabsTrigger>)}</TabsList>
-          </Tabs></div>}
+          <div className="console-experience-tabs"><SemiTabs activeKey={activePage} onChange={page => openProjectPage(project, 'experience', {task:Object.keys(experiencePages).find(task => experiencePages[task] === page)})}
+            aria-label="体验类型" tabList={Object.values(experiencePages).map(page => ({itemKey:page,tab:page}))} /></div>}
         {admin === 'front' && !auth.route && projectPages[activePage] && project?.canManage &&
           <div className="project-page-notice"><ProjectBudgetNotice project={project} spend={projectTenant.projectBudgets?.[project.id]} /></div>}
         {auth.route ? (
           <AuthExperience key={auth.route} auth={auth} />
         ) : admin === "v2" ? (
-          <AdminConsoleV2 bannerTarget={adminBannerTarget} />
-        ) : ["项目管理", "项目概览", "项目设置"].includes(activePage) ? (
-          <ProjectWorkspace key={owner + activePage + projectScope.id} tenant={projectTenant}
-            view={activePage === "项目管理" ? "detail" : activePage === "项目设置" ? "settings" : "overview"}
-            initialTab={new URLSearchParams(location.search).get("tab") || undefined}
-            projectId={activePage === "项目管理" ? projectScope.id : projectScope.id || project?.id} onOpen={showProjects} onList={() => showProjects()}
+          <AdminConsoleV2 bannerTarget={adminBannerTarget} workbenchName={workbenchName} />
+        ) : ["我的项目", "项目管理", "项目概览", "项目设置"].includes(activePage) ? (
+          <ProjectWorkspace key={JSON.stringify([owner, activePage, projectScope.id, projectTab])} tenant={projectTenant}
+            listMode={activePage === '我的项目' ? 'mine' : 'manage'} myProjects={myProjects}
+            listLabel={projectSource === 'projects' ? '项目管理' : '我的项目'}
+            view={!personal ? 'detail' : activePage === "项目设置" ? "settings" : "overview"}
+            initialTab={projectTab || (activePage === '项目设置' ? 'settings' : undefined)}
+            initialAction={projectAction} onActionClose={() => setProjectAction(null)}
+            projectId={['我的项目', '项目管理'].includes(activePage) ? projectScope.id : projectScope.id || project?.id}
+            onOpen={showProjects} onList={() => showProjects()}
             onLogin={() => auth.navigate('login')} onExperience={projectExperience}
-            onNavigate={(row, page, params) => openProjectPage(row, page === 'route' ? 'project-settings' : 'call-observation',
-              page === 'route' ? {tab:'routes'} : {view:page === 'logs' ? 'logs' : 'usage', ...params})}
+            onNavigate={(row, page, params) => page === 'route' ? showProjects(row, 'routes')
+              : openProjectPage(row, 'call-observation', {view:page === 'logs' ? 'logs' : 'usage', ...params})}
             renderKeys={(row,onModels,onAudit) => <UnifiedApiKeys key={row.id} project={row} onModels={onModels} onAudit={onAudit} internal={internal} embedded />} />
         ) : activePage === '空间总览' ? (
           <UsageStatistics key={owner} workspaceOverview internal={internal}/>
@@ -1308,7 +1162,7 @@ function PrototypeApp({ version }) {
         ) : Object.values(experiencePages).includes(activePage) && !project ? (
           <div className="project-panel project-experience-empty">
             <h2>{activePage}</h2><p>选择项目后开始在线体验。</p>
-            <Button onClick={() => owner ? showProjects() : auth.navigate('login')}>{owner ? '前往项目管理' : '登录'}</Button>
+            <SemiButton onClick={() => owner ? showProjects() : auth.navigate('login')}>{owner ? '前往项目管理' : '登录'}</SemiButton>
           </div>
         ) : activePage === "文本生成" ? (
           textCompare ? (
@@ -1340,6 +1194,10 @@ function PrototypeApp({ version }) {
           <AuthExperience auth={{ ...auth, route: "account", close: () => setActivePage("模型广场") }} accountTitle="账号认证" />
         ) : activePage === "API Key 管理" ? (
           <UnifiedApiKeys key={project?.id || 'no-project'} project={project} onProjects={() => showProjects()} onModels={() => showProjects(project, 'models')} onAudit={() => showProjects(project, 'settings')} internal={internal}/>
+        ) : activePage === "工具接入" ? (
+          <Suspense fallback={<p role="status">正在加载工具接入指南…</p>}>
+            <ToolAccess onOpenMarket={() => navigateTenant('模型广场')} onOpenKeys={() => navigateTenant('API Key 管理')} />
+          </Suspense>
         ) : ['操作记录', '组织及成员'].includes(activePage) && enterprisePagesAllowed ? (
           <div className="console-organization"><SemiTabs activeKey={activePage === '操作记录' || new URLSearchParams(location.search).get('tab') === 'audit' ? 'audit' : 'members'}
             onChange={tab => openProjectPage(null, 'organization-members', {tab})}
@@ -1408,7 +1266,7 @@ function PrototypeApp({ version }) {
                     );
                   })}
                 </div>
-                {!visible.length && <div className="empty">未找到符合条件的模型<Button variant="link" onClick={resetFilters}>清空条件</Button></div>}
+                {!visible.length && <div className="empty">未找到符合条件的模型<SemiButton theme="borderless" onClick={resetFilters}>清空条件</SemiButton></div>}
               </div>
             </section>
           </div>

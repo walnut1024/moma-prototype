@@ -3,13 +3,13 @@ import { IconUpload } from '@douyinfe/semi-icons';
 import { Banner, Button, Card, Form, Image, Input, Space, Tabs, Toast } from '@douyinfe/semi-ui';
 import SiteAgreementsEditor from './SiteAgreementsEditor';
 import AdminPageHeading from './AdminPageHeading';
-import { Choice } from './ServiceUI';
+import { cloudAdminRequest } from './admin-client.mjs';
+import { PORTAL_HOME_ENDPOINT, portalHomeUrl } from '../portal-home.mjs';
 import { notifyLinkedState } from '../service-access.mjs';
 import {
-  IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_SITE_TEXT, MAX_SITE_URL,
+  DEFAULT_USER_CONSOLE_NAME, DEFAULT_WORKBENCH_NAME, IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_SITE_TEXT, MAX_SITE_URL,
   SITE_CONFIG_EVENT, SITE_IMAGES, readSiteConfig, saveSiteConfig, siteImage,
 } from '../site-config.mjs';
-import { useDeploymentLicense } from '../useDeploymentLicense';
 import { useSiteConfigSnapshot } from '../useSiteConfig';
 import './site-configuration.css';
 
@@ -70,23 +70,34 @@ function SiteImageField({ field, value, disabled, onChange, onUpload }) {
 }
 
 export default function SiteConfiguration({ dirtyRef }) {
-  const license = useDeploymentLicense();
   const raw = useSiteConfigSnapshot();
   const [draft, setDraft] = useState(null);
   const [tab, setTab] = useState('basic');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
   const [agreementDirty, setAgreementDirty] = useState(false);
+  const [portal, setPortal] = useState(null);
+  const [portalDraft, setPortalDraft] = useState(null);
+  const [portalError, setPortalError] = useState('');
+  const [portalLoad, setPortalLoad] = useState(0);
   const operation = useRef(null);
   const saved = readSiteConfig(raw);
   const config = draft?.config || saved;
   const conflict = Boolean(draft && draft.base !== raw);
 
   useEffect(() => {
-    dirtyRef.current = Boolean(draft || busy || agreementDirty);
+    dirtyRef.current = Boolean(draft || portalDraft !== null || busy || agreementDirty);
     return () => { dirtyRef.current = false; };
-  }, [dirtyRef, draft, busy, agreementDirty]);
+  }, [dirtyRef, draft, portalDraft, busy, agreementDirty]);
   useEffect(() => () => operation.current?.abort(), []);
+  useEffect(() => {
+    const controller = new AbortController();
+    cloudAdminRequest(PORTAL_HOME_ENDPOINT, { signal: controller.signal }).then(
+      value => { if (!controller.signal.aborted) setPortal(value); },
+      () => { if (!controller.signal.aborted) setPortalError('门户首页地址加载失败。'); },
+    );
+    return () => controller.abort();
+  }, [portalLoad]);
 
   const update = (key, value) => {
     setError('');
@@ -102,30 +113,49 @@ export default function SiteConfiguration({ dirtyRef }) {
   }
 
   async function save() {
-    if (!draft || conflict || operation.current || busy) return;
-    const next = readSiteConfig(JSON.stringify(config));
+    if ((!draft && portalDraft === null) || conflict || operation.current || busy ||
+        (portalDraft !== null && (!portal || portalError))) return;
+    const nextPortalUrl = portalDraft === null ? '' : portalHomeUrl(portalDraft, location.origin);
+    if (portalDraft?.trim() && !nextPortalUrl) {
+      setError('请填写有效的 HTTP 或 HTTPS 门户首页地址，或留空。门户地址不能指向 MoMA 首页。');
+      return;
+    }
     const controller = new AbortController();
     operation.current = controller;
     setError('');
     setBusy('save');
+    let brandSaved = false;
     try {
-      await Promise.all(SITE_IMAGES.map(async ([key, label]) => {
-        if (config[key].trim() && !next[key]) throw new Error(label + '须使用有效的 HTTP 或 HTTPS 图片链接。');
-        if (next[key] && next[key] !== saved[key]) await checkImage(next[key], label);
-      }));
-      if (controller.signal.aborted) return;
-      if (!saveSiteConfig(localStorage, draft.base, next)) throw new Error('配置已在其他页面更新。');
-      setDraft(null);
-      window.dispatchEvent(new Event(SITE_CONFIG_EVENT));
-      notifyLinkedState();
+      if (draft) {
+        const next = readSiteConfig(JSON.stringify(config));
+        await Promise.all(SITE_IMAGES.map(async ([key, label]) => {
+          if (config[key].trim() && !next[key]) throw new Error(label + '须使用有效的 HTTP 或 HTTPS 图片链接。');
+          if (next[key] && next[key] !== saved[key]) await checkImage(next[key], label);
+        }));
+        if (controller.signal.aborted) return;
+        if (!saveSiteConfig(localStorage, draft.base, next)) throw new Error('配置已在其他页面更新。');
+        brandSaved = true;
+        setDraft(null);
+        window.dispatchEvent(new Event(SITE_CONFIG_EVENT));
+        notifyLinkedState();
+      }
+      if (portalDraft !== null) {
+        const value = await cloudAdminRequest(PORTAL_HOME_ENDPOINT, {
+          method: 'POST', signal: controller.signal, body: { expectedRevision: portal.revision, url: nextPortalUrl },
+        });
+        if (controller.signal.aborted) return;
+        setPortal(value);
+        setPortalDraft(null);
+      }
       Toast.success('站点配置已保存');
     } catch (issue) {
       if (controller.signal.aborted) return;
-      if (issue instanceof DOMException) setError('无法保存到浏览器，请检查存储权限或空间。');
-      else {
-        setTab('basic');
-        setError(issue.message);
-      }
+      setTab('basic');
+      const message = (brandSaved ? '其他基础配置已保存。' : '') + (issue instanceof DOMException
+        ? '无法保存到浏览器，请检查存储权限或空间。'
+        : issue.message);
+      if (issue.status === 409) setPortalError(message);
+      else setError(message);
     } finally {
       operation.current = null;
       if (!controller.signal.aborted) setBusy('');
@@ -134,26 +164,40 @@ export default function SiteConfiguration({ dirtyRef }) {
 
   return <section className="admin-page-stack site-config">
     <AdminPageHeading title="站点配置">
-      {tab === 'basic' && <Button theme="solid" onClick={save} disabled={!draft || Boolean(busy) || conflict} loading={busy === 'save'}>保存</Button>}
+      {tab === 'basic' && <Button theme="solid" onClick={save} disabled={(!draft && portalDraft === null) ||
+        Boolean(busy) || conflict || (portalDraft !== null && (!portal || Boolean(portalError)))} loading={busy === 'save'}>保存</Button>}
     </AdminPageHeading>
     {conflict && <Banner type="warning" closeIcon={null} description={<>配置已在其他页面更新。 <Button disabled={Boolean(busy)} onClick={() => { setDraft(null); setError(''); }}>载入已保存配置</Button></>} />}
     {error && <Banner type="danger" closeIcon={null} description={<span role="alert">{error}</span>} />}
     <Tabs keepDOM type="line" activeKey={tab} onChange={setTab} aria-label="站点配置">
       <Tabs.TabPane tab="基础配置" itemKey="basic">
         <Card className="site-config-card">
-          <Form.Slot label={{ text: '平台名称', name: 'site-name' }}>
-            <Input id="site-name" aria-label="平台名称" value={config.name} maxLength={MAX_SITE_TEXT} placeholder="留空使用默认名称"
-              disabled={Boolean(busy)} onChange={value => update('name', value)} />
+          <Form.Slot label={{ text: '用户控制台展示名称', name: 'site-user-console-name' }}>
+            <Input id="site-user-console-name" aria-label="用户控制台展示名称" value={config.userConsoleName} maxLength={MAX_SITE_TEXT}
+              placeholder={DEFAULT_USER_CONSOLE_NAME} disabled={Boolean(busy)} onChange={value => update('userConsoleName', value)} />
+          </Form.Slot>
+          <Form.Slot label={{ text: '管理工作台展示名称', name: 'site-workbench-name' }}>
+            <Input id="site-workbench-name" aria-label="管理工作台展示名称" value={config.workbenchName} maxLength={MAX_SITE_TEXT}
+              placeholder={DEFAULT_WORKBENCH_NAME} disabled={Boolean(busy)} onChange={value => update('workbenchName', value)} />
           </Form.Slot>
           <Form.Slot label={{ text: '浏览器标题', name: 'site-title' }}>
             <Input id="site-title" aria-label="浏览器标题" value={config.title} maxLength={MAX_SITE_TEXT} placeholder="留空使用默认标题"
               disabled={Boolean(busy)} onChange={value => update('title', value)} />
           </Form.Slot>
-          {license && !license.managed && <Form.Slot label="运营方式">
-            <Choice label="运营方式" value={config.personalEnabled ? 'factory' : 'internal'}
-              disabled={Boolean(busy)} onChange={value => update('personalEnabled', value === 'factory')}
-              options={[[ 'internal', '企业内用' ], [ 'factory', '工厂外营' ]]}/>
-          </Form.Slot>}
+          <Form.Slot label={{ text: '门户首页地址', name: 'site-portal-home' }}>
+            <Input id="site-portal-home" aria-label="门户首页地址" value={portalDraft ?? portal?.url ?? ''} maxLength={MAX_SITE_URL}
+              placeholder="留空使用默认首页" disabled={Boolean(busy) || !portal || Boolean(portalError)}
+              onChange={value => { setError(''); setPortalDraft(value === portal.url ? null : value); }} />
+            {portalError && <Banner type="warning" closeIcon={null} description={<>
+              <span role="alert">{portalError}</span>
+              <Button size="small" disabled={Boolean(busy)} onClick={() => {
+                setPortal(null);
+                setPortalDraft(null);
+                setPortalError('');
+                setPortalLoad(value => value + 1);
+              }}>{portal ? '载入已保存地址' : '重试'}</Button>
+            </>} />}
+          </Form.Slot>
           {SITE_IMAGES.map(field => <SiteImageField key={field[0]} field={field} value={config[field[0]]} disabled={Boolean(busy)}
             onChange={value => update(field[0], value)} onUpload={file => upload(field[0], file)} />)}
         </Card>

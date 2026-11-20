@@ -7,8 +7,9 @@ import { libraryRemovalIssue } from '../src/admin-v2/model-library.js';
 import { resolveChannelAssociationModel } from '../src/admin-v2/channel-association-model.js';
 import { channelEvidenceSignature, candidateTestPlan } from '../src/admin-v2/channel-change-management.js';
 import { catalogueChannels, channelBlockReason } from '../src/admin-v2/provider-channels.js';
-import { connectionFingerprint } from '../src/admin-v2/connection-state.js';
+import { connectionFingerprint, connectionTestKey } from '../src/admin-v2/connection-state.js';
 import { activeSupplyPrice, priceItems } from '../src/admin-v2/model-management.js';
+import { supplierChannelAssociations } from '../src/admin-v2/supplier-resources.js';
 const state = () => legacySupplierState();
 const value = { providerId: 'provider-moma', name: '持久草稿', interfaceType: 'openai', baseUrl: 'https://example.com/v1', keyGroupId: 'default' };
 const rows = [{ id: 'r1', libraryId: 'model-2', upstreamModelId: 'vendor/model-1', scenarios: [] }];
@@ -155,6 +156,67 @@ function ordinaryBatch(job, status = 'passed', endedAt = new Date().toISOString(
   return { id: crypto.randomUUID(), channelId: job.serverChannelId, providerId: job.providerId, source: 'mock', status: 'completed', signature: 'mock-task-signature', endedAt, items: job.request.models.map(model => ({ id: crypto.randomUUID(), model: { ...model, probe: model.probe || model.type }, status, evidenceSource: 'mock', current: true, endedAt, message: status, usage: null, cost: null })) };
 }
 const ordinaryReceive = (s, f, batch) => run(s, 'channelTestEvidenceReceipt', { providerId: f.providerId, endpointId: f.endpointId, batch });
+
+test('opted-in single-key connections stop after consecutive auth failures and require fresh recovery evidence', () => {
+  const s = run(state(), 'channelQuickCreate', { providerId: value.providerId,
+    values: { ...value, authMode: 'group', models: rows } });
+  const endpointId = s.audits[0].objectId, provider = s.providers.find(row => row.id === value.providerId);
+  const association = supplierChannelAssociations(s, provider, endpointId)[0];
+  const f = { s, providerId: provider.id, endpointId, associationId: association.id, modelId: association.modelId };
+  const get = state => state.endpoints.find(row => row.id === f.endpointId);
+  get(f.s).status = '运行中';
+  get(f.s).directoryAutoStop = { enabled: true, threshold: 2, updatedAt: '2026-01-01T00:00:00.000Z' };
+  get(f.s).connectionTest = { result: '通过', fingerprint: connectionFingerprint(get(f.s)), testedAt: '2026-01-02T00:00:00.000Z' };
+  const baseline = Date.now();
+  const attempt = (s, status, code, seconds) => {
+    const job = ordinaryJob(s, f);
+    const batch = ordinaryBatch(job, status, new Date(baseline + seconds * 1000).toISOString());
+    batch.items[0].upstreamStatus = code;
+    return ordinaryReceive(run(s, 'channelTestEvidenceJob', { ...job, batchId: batch.id }), f, batch);
+  };
+  let current = attempt(f.s, 'failed', 401, 1);
+  assert.equal(get(current).status, '运行中');
+  current = attempt(current, 'failed', 403, 2);
+  assert.equal(get(current).activationSource, 'automatic');
+  assert.equal(get(current).status, '停用');
+  const enable = s => run(s, 'provider', { operation: 'supplierChannelEnable', objectId: f.providerId, values: { endpointId: f.endpointId } });
+  assert.throws(() => enable(current), /复测/);
+  current = attempt(current, 'passed', 200, 3);
+  assert.equal(get(current).status, '停用');
+  assert.equal(get(enable(current)).status, '运行中');
+});
+
+test('round-robin simulation counts matching jobs and isolates the opted-in failing key', () => {
+  const initial = run(state(), 'channelQuickCreate', { providerId: value.providerId, values: { ...value, models: rows } });
+  const endpointId = initial.audits[0].objectId, owner = initial.providers.find(row => row.id === value.providerId);
+  const association = supplierChannelAssociations(initial, owner, endpointId)[0];
+  const f = { s: initial, providerId: owner.id, endpointId, associationId: association.id, modelId: association.modelId };
+  const endpoint = s => s.endpoints.find(row => row.id === f.endpointId);
+  const provider = s => s.providers.find(row => row.id === f.providerId);
+  endpoint(f.s).apiKeys = ['private-one', 'private-two'].map(id => ({ id, scope: 'channel', fingerprint: id, status: 'enabled' }));
+  endpoint(f.s).keyPool = endpoint(f.s).apiKeys.map((key, index) => ({ keyId: key.id, enabled: true, priority: index + 1 }));
+  Object.assign(endpoint(f.s), { authMode: 'pool', keyStrategy: 'roundRobin', status: '运行中',
+    directoryAutoStop: { enabled: true, threshold: 2, updatedAt: '2026-01-01T00:00:00Z' } });
+  f.s.cloudMockState = { ...f.s.cloudMockState, credentials: ['one', 'two'].map(n => ({ id: 'sim-' + n, localKeyId: 'private-' + n })) };
+  const baseline = Date.now();
+  const check = (s, n, status, offset) => {
+    const job = ordinaryJob(s, f);
+    const batch = { ...ordinaryBatch(job, status, new Date(baseline + offset * 1000).toISOString()), credentialId: 'sim-' + n };
+    batch.items[0].upstreamStatus = status === 'failed' ? 401 : 200;
+    return ordinaryReceive(run(s, 'channelTestEvidenceJob', { ...job, batchId: batch.id }), f, batch);
+  };
+  assert.equal(connectionTestKey(endpoint(f.s), provider(f.s)), 'private-one');
+  assert.equal(connectionTestKey({ ...endpoint(f.s), keyStrategy: 'random' }, provider(f.s), () => 0.9), 'private-two');
+  let next = check(f.s, 'one', 'failed', 1);
+  assert.equal(connectionTestKey(endpoint(next), provider(next)), 'private-two');
+  next = check(next, 'two', 'passed', 2);
+  assert.equal(connectionTestKey(endpoint(next), provider(next)), 'private-one');
+  next = check(next, 'one', 'failed', 3);
+  assert.deepEqual(endpoint(next).keyPool.map(row => row.enabled), [false, true]);
+  assert.equal(endpoint(next).status, '需关注');
+  assert.match(endpoint(next).directoryKeyStops['private-one'].reason, /连续 2 次/);
+  assert.equal(connectionTestKey(endpoint(next), provider(next)), 'private-two');
+});
 
 test('ordinary jobs and candidate plans resolve an implicit model by exact supply identity without name guessing', () => {
   const f = ordinaryFixture(true), provider = f.s.providers.find(row => row.id === f.providerId), association = ordinaryRow(f.s, f);

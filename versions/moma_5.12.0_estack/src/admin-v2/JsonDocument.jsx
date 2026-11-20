@@ -2,6 +2,7 @@ import { useId, useMemo, useState } from 'react';
 import { Button, Space } from '@douyinfe/semi-ui';
 import { IconChevronDown, IconChevronRight } from '@douyinfe/semi-icons';
 import { jsonDocument } from './json-document.mjs';
+import './json-document.css';
 
 function JsonNode({ node, collapsed, toggle, id }) {
   const folded = collapsed.has(node.key), childrenId = `${id}-${encodeURIComponent(node.key)}`;
@@ -21,7 +22,7 @@ function JsonNode({ node, collapsed, toggle, id }) {
   </>;
 }
 
-export default function JsonDocument({ text }) {
+export default function JsonDocument({ text, label = '模型运营维护 JSON', actions }) {
   const document = useMemo(() => jsonDocument(JSON.parse(text)), [text]);
   const [collapsed, setCollapsed] = useState(() => new Set());
   const id = useId();
@@ -30,10 +31,11 @@ export default function JsonDocument({ text }) {
     if (next.has(key)) next.delete(key); else next.add(key);
     return next;
   });
-  return <div className="model-resource-document" role="region" aria-label="模型运营维护 JSON">
+  return <div className="model-resource-document" role="region" aria-label={label}>
     <Space className="model-json-toolbar" wrap>
       <Button size="small" disabled={!collapsed.size} onClick={() => setCollapsed(new Set())}>全部展开</Button>
       <Button size="small" disabled={collapsed.size === document.containerKeys.length} onClick={() => setCollapsed(new Set(document.containerKeys))}>全部收起</Button>
+      {actions}
     </Space>
     <JsonNode node={document.root} collapsed={collapsed} toggle={toggle} id={id}/>
   </div>;

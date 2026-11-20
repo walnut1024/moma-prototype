@@ -104,7 +104,7 @@ export function useOperations({ state, transact, conflict, reload, notify = mess
   };
   const isCurrent = () => { if(state.cloudOperations)return !conflict && canMutate(state.currentRole,{type:'modelOperations'}); try { const fresh = readLinkedState(); const account = activeAdmin(fresh); return fresh.revision === state.revision && account.id === state.adminSession?.accountId && canMutate(account.role, { type: 'modelOperations' }); } catch { return false; } };
   const can = !conflict && !state.storageError && isCurrent();
-  const run = async (operation, data = {}, modelId, legacy = false) => { if(running.current)return null;running.current=true;try { if (!can) throw new Error(conflict ? '请先载入最新数据，再保存配置；当前输入保留' : '当前无法保存，请检查角色权限和数据状态'); const next = await transact({ type: legacy ? 'modelOperation' : 'modelOperations', operation, modelId, data }); setError(''); setDirty(false); dirtyRef.current = false; notify(next.audits[0].action + '成功'); return next; } catch (issue) {
+  const run = async (operation, data = {}, modelId, legacy = false, { silent = false } = {}) => { if(running.current)return null;running.current=true;try { if (!can) throw new Error(conflict ? '请先载入最新数据，再保存配置；当前输入保留' : '当前无法保存，请检查角色权限和数据状态'); const next = await transact({ type: legacy ? 'modelOperation' : 'modelOperations', operation, modelId, data }); setError(''); setDirty(false); dirtyRef.current = false; if (!silent) notify(next.audits[0].action + '成功'); return next; } catch (issue) {
     let message = issue instanceof Error ? issue.message : String(issue);
     const target = modelOperationTarget(state, modelId, data);
     if (can && isCurrent() && target && operation !== 'recordFailedOperation') {

@@ -5,7 +5,7 @@ import AdminCollapsePanel from './AdminCollapsePanel';
 import { AdminSideSheet } from './AdminOverlay';
 import AdminStatus from './AdminStatus';
 import { httpLabel, observationNumber as fmt, observationTime, outcomes } from './call-observations.mjs';
-import { buildRequestTrace, readRequestBody } from './call-log-detail.mjs';
+import { buildRequestTrace, readRequestBody, requestLogSections } from './call-log-detail.mjs';
 
 const { Text, Title } = Typography;
 const headerFields = new Set(['requestId', 'outcome', 'status', 'duration']);
@@ -43,15 +43,14 @@ function RequestFacts({ row, trace, resultLabel }) {
   </dl>;
 }
 
-function RequestMetadata({ row, sections }) {
+function RequestMetadata({ row }) {
   const extra = [
     ['登记的模型标识', row.registeredModelId],
     ['错误类型', row.code], ['错误来源', row.errorSource], ['失败原因', row.errorReason],
-    ...(row.project == null ? [] : [['项目', row.project]]),
     ...(row.taskStatus == null ? [] : [['任务终态', row.taskStatus]]),
   ];
   return <div className="admin-request-log-pane admin-analytics-fields">
-    {sections.map(([title, fields]) => <section key={title}>
+    {requestLogSections.map(([title, fields]) => <section key={title}>
       <Title heading={6} component="h3">{title}</Title>
       <Descriptions data={fields.filter(([, field]) => !headerFields.has(field)).map(([key, field, format]) => {
         const value = row[field];
@@ -82,7 +81,9 @@ function TraceNodeDetails({ node, complete }) {
   ];
   if (attempt) {
     fields.push(
-      ...[['失败原因', attempt.errorReason], ['后续动作', node.next]].filter(([, value]) => value != null),
+      ...(attempt.outcome === 'success' ? [['成功原因', attempt.successReason]]
+        : attempt.outcome === 'failed' ? [['失败原因', attempt.errorReason ?? attempt.code]] : []),
+      ...[['选中原因', attempt.selectionReason], ['后续动作', node.next]].filter(([, value]) => value != null),
       ['上游 HTTP 状态', httpLabel(attempt.status)], ['上游 Request ID', attempt.upstreamRequestId],
       ['尝试开始时间', observationTime(attempt.at)], ['服务商', attempt.providerName], ['渠道', attempt.channelName],
       ['端点', attempt.endpointName], ['上游模型调用标识', attempt.upstreamModelId],
@@ -100,7 +101,7 @@ function TraceNodeDetails({ node, complete }) {
 
 const ticks = [0, 25, 50, 75, 100];
 
-function RequestTrace({ trace, state, selected, onSelect, onSummary }) {
+function RequestTrace({ trace, state, finalChannel, selected, onSelect, onSummary }) {
   const root = useRef(null);
   useEffect(() => {
     root.current?.querySelector('button[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -110,8 +111,8 @@ function RequestTrace({ trace, state, selected, onSelect, onSummary }) {
   const complete = trace.attemptCount === trace.recordedCount;
   const lastAttempt = trace.nodes.reduce((last, item) =>
     item.attempt && (!last || item.attempt.index > last.attempt.index) ? item : last, null);
-  const caption = trace.incomplete ? '仅展示已记录的节点' : trace.attemptCount === 0 ? '未发起上游尝试'
-    : trace.longest ? '最长阶段 · ' + trace.longest.label + ' ' + ms(trace.longest.duration) : '';
+  const caption = trace.attemptCount === 0 ? '未发起上游尝试' : [finalChannel && '最终渠道 · ' + finalChannel,
+    trace.incomplete && '仅展示已记录的节点'].filter(Boolean).join(' · ');
   return <section ref={root} aria-label="请求链路" className={trace.hasChart ? 'admin-request-trace has-chart' : 'admin-request-trace'}>
     <div className="admin-request-trace-heading">
       <Title heading={6} component="h3">{trace.hasChart ? '耗时拆解' : '已记录的链路'}</Title>
@@ -165,9 +166,9 @@ function RequestBody({ body, attemptIndex, onSummary }) {
   </section>;
 }
 
-export default function RequestLogDetail({ row, attemptId, evidence, sections, close }) {
+export default function RequestLogDetail({ row, attemptId, evidence, canViewFullLog, close }) {
   const trace = buildRequestTrace(row, evidence);
-  const [tab, setTab] = useState(() => trace.nodes.length ? 'trace' : 'summary');
+  const [tab, setTab] = useState('trace');
   const [selected, setSelected] = useState(() => attemptId
     ?? trace.nodes.find(node => node.tone === 'red')?.id
     ?? trace.nodes.find(node => node.attempt)?.id
@@ -179,6 +180,7 @@ export default function RequestLogDetail({ row, attemptId, evidence, sections, c
   };
   const title = <div className="admin-request-log-title">
     <Title heading={5} component="h2">请求详情</Title>
+    {(row.tenantName || row.projectName) && <Text type="secondary">{[row.tenantName, row.projectName].filter(Boolean).join(' · ')}</Text>}
     <Space wrap>
       <Text code>{row.requestId ?? 'Request ID 未采集'}</Text>
       {row.requestId && <Button size="small" theme="borderless" icon={<IconCopy aria-hidden="true"/>}
@@ -189,18 +191,18 @@ export default function RequestLogDetail({ row, attemptId, evidence, sections, c
   return <AdminSideSheet visible closeOnEsc width="min(920px, 100vw)" className="admin-request-log-sheet"
     label="请求详情" title={title} onCancel={close}>
     <div ref={tabsRoot}>
-      <Tabs activeKey={tab} onChange={setTab} keepDOM={false} tabPaneMotion={false}
+      <Tabs activeKey={tab === 'raw' && !canViewFullLog ? 'trace' : tab} onChange={setTab} keepDOM={false} tabPaneMotion={false}
         aria-label="请求详情视图" renderTabBar={(props, TabBar) => <div className="admin-request-log-context">
           <TabBar {...props}/>
           <RequestFacts row={row} trace={trace} resultLabel={evidence?.resultLabel}/>
         </div>}>
-        <Tabs.TabPane itemKey="summary" tab="摘要日志"><RequestMetadata row={row} sections={sections}/></Tabs.TabPane>
+        <Tabs.TabPane itemKey="summary" tab="摘要日志"><RequestMetadata row={row}/></Tabs.TabPane>
         <Tabs.TabPane itemKey="trace" tab="请求链路">
-          <RequestTrace trace={trace} state={evidence?.traceState} selected={selected} onSelect={setSelected} onSummary={showSummary}/>
+          <RequestTrace trace={trace} state={evidence?.traceState} finalChannel={row.channelName} selected={selected} onSelect={setSelected} onSummary={showSummary}/>
         </Tabs.TabPane>
-        <Tabs.TabPane itemKey="raw" tab="完整日志">
+        {canViewFullLog && <Tabs.TabPane itemKey="raw" tab="完整日志">
           {tab === 'raw' && <RequestBody body={readRequestBody(evidence)} attemptIndex={attemptIndex} onSummary={showSummary}/>}
-        </Tabs.TabPane>
+        </Tabs.TabPane>}
       </Tabs>
     </div>
   </AdminSideSheet>;

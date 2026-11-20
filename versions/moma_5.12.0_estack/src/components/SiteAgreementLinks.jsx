@@ -1,6 +1,5 @@
-import { Fragment, useRef, useState } from 'react';
-import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Fragment, useState } from 'react';
+import { Button, Modal, Typography } from '@douyinfe/semi-ui';
 import { AGREEMENTS, PRIVATE_SITE } from '../site-config.mjs';
 import { agreementHref } from '../agreement-route.mjs';
 import { useSiteConfig } from '../useSiteConfig';
@@ -13,26 +12,20 @@ export function AgreementContent({ agreement }) {
 export default function SiteAgreementLinks() {
   const config = useSiteConfig();
   const [active, setActive] = useState(null);
-  const trigger = useRef(null);
   const [key, label] = active || [];
   const agreement = config[key] || {};
   return <>
     {AGREEMENTS.map(([id, name], index) => <Fragment key={id}>
       {index > 0 && <span>和</span>}
       {PRIVATE_SITE
-        ? <Button variant="link" asChild><a href={agreementHref(id)} target="_blank" rel="noreferrer">{name}</a></Button>
+        ? <Typography.Text link={{href:agreementHref(id),target:'_blank',rel:'noreferrer'}}>{name}</Typography.Text>
         : config[id].url
-        ? <Button variant="link" asChild><a href={config[id].url} target="_blank" rel="noreferrer">{name}</a></Button>
-        : <Button variant="link" type="button" onClick={event => { trigger.current = event.currentTarget; setActive([id, name]); }}>{name}</Button>}
+        ? <Typography.Text link={{href:config[id].url,target:'_blank',rel:'noreferrer'}}>{name}</Typography.Text>
+        : <Button theme="borderless" size="small" onClick={() => setActive([id, name])}>{name}</Button>}
     </Fragment>)}
-    <Dialog open={Boolean(active)} onOpenChange={open => { if (!open) setActive(null); }}>
-      <DialogContent className="auth-dialog" onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus(); }}>
-        <DialogHeader><DialogTitle>{label}</DialogTitle>
-          <DialogDescription className="sr-only">{label}正文</DialogDescription>
-        </DialogHeader>
+    <Modal visible={Boolean(active)} title={label} onCancel={() => setActive(null)}
+      width="min(640px, calc(100vw - 24px))" footer={<Button onClick={() => setActive(null)}>关闭</Button>}>
         <div tabIndex={0} style={{ maxHeight: '60dvh', overflow: 'auto' }}><AgreementContent agreement={agreement} /></div>
-        <DialogFooter><Button type="button" onClick={() => setActive(null)}>关闭</Button></DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </Modal>
   </>;
 }

@@ -1,0 +1,152 @@
+.tool-access-page {
+  padding: 16px;
+  min-width: 0;
+  background: var(--semi-color-bg-1);
+}
+
+.tool-access-page :is(h2, h3, h4, p, ul, ol, dl, pre) { margin: 0; }
+.tool-access-page h2 { font-size: 18px; font-weight: 600; }
+.tool-access-page h3 { font-size: 16px; font-weight: 600; }
+.tool-access-page h4 { font-size: 14px; font-weight: 600; }
+.tool-access-page p { color: var(--semi-color-text-1); overflow-wrap: anywhere; }
+.tool-access-page :is(a, .tool-access-check) { color: var(--semi-color-primary); }
+
+.tool-access-picker, .tool-access-guide, .tool-access-toc {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--semi-color-border);
+  border-radius: 8px;
+  background: var(--semi-color-bg-0);
+}
+
+.tool-access-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.tool-access-row .semi-input-wrapper { width: min(100%, 240px); }
+.tool-access-guide .tool-access-row .semi-button { flex-shrink: 0; text-decoration: none; }
+
+.tool-access-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr));
+  gap: 12px;
+  margin-block: 12px 0;
+}
+.tool-access-options .semi-button {
+  height: 100%;
+  padding: 12px;
+  color: var(--semi-color-text-0);
+  text-align: left;
+  white-space: normal;
+}
+.tool-access-options .semi-button-content { width: 100%; }
+.tool-access-options .semi-button[aria-pressed="true"] {
+  border-color: var(--semi-color-primary);
+  background: var(--semi-color-primary-light-default);
+}
+.tool-access-option {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.tool-access-mark {
+  display: grid;
+  place-items: center;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--semi-color-fill-0);
+  font-weight: 700;
+}
+.tool-access-description {
+  grid-column: 1 / -1;
+  color: var(--semi-color-text-2);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.tool-access-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 172px;
+  align-items: start;
+  gap: 16px;
+  margin-top: 16px;
+}
+.tool-access-toc {
+  position: sticky;
+  top: calc(var(--tenant-banner-height) + 16px);
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+.tool-access-guide { line-height: 1.65; }
+.tool-access-guide > section {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--semi-color-border);
+  scroll-margin-top: calc(var(--tenant-banner-height) + 12px);
+}
+.tool-access-preparation, .tool-access-guide .steps { padding-inline-start: 22px; }
+.tool-access-preparation { list-style: disc; }
+.tool-access-guide .steps { list-style: decimal; }
+.tool-access-guide .steps > li::marker { color: var(--semi-color-primary); font-weight: 600; }
+.tool-access-guide .steps > li { padding-inline-start: 4px; }
+.tool-access-guide .steps > li + li { margin-top: 16px; }
+.tool-access-guide .steps :is(p, .form-guide, .callout, .success, .code-box, .cc-table-scroll) { margin-top: 6px; }
+.tool-access-guide .form-guide,
+.tool-access-guide .code-box,
+.tool-access-parameters {
+  border: 1px solid var(--semi-color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.tool-access-guide :is(.form-row, .guide-title),
+.tool-access-parameters > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 26%) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  overflow-wrap: anywhere;
+}
+.tool-access-guide .guide-title,
+.tool-access-guide .code-header {
+  background: var(--semi-color-fill-0);
+  font-weight: 600;
+}
+.tool-access-guide .form-row,
+.tool-access-parameters > div + div { border-top: 1px solid var(--semi-color-border); }
+.tool-access-guide :is(dd, .copy-cell, .code-header) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px 8px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+.tool-access-guide :is(.code-header, pre, .route, .callout, .success) { padding: 8px 12px; }
+.tool-access-guide :is(.route, .callout, .success) { background: var(--semi-color-fill-0); margin-block: 8px; border-radius: 6px; }
+.tool-access-guide .route { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.tool-access-guide pre { overflow: auto; }
+.tool-access-guide pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-access-guide .cc-table-scroll { overflow: auto; }
+.tool-access-guide .cc-model-table { width: 100%; border-collapse: collapse; text-align: left; }
+.tool-access-guide .cc-model-table :is(th, td) { padding: 6px 8px; border-bottom: 1px solid var(--semi-color-border); overflow-wrap: anywhere; }
+.tool-access-guide .faq { margin-top: 12px; }
+.tool-access-guide .faq details { border-bottom: 1px solid var(--semi-color-border); padding-block: 8px; }
+.tool-access-guide .faq summary { cursor: pointer; font-weight: 500; }
+.tool-access-guide .faq details p { margin-top: 4px; }
+
+@media (max-width: 980px) {
+  .tool-access-layout { grid-template-columns: minmax(0, 1fr); }
+  .tool-access-toc { display: none; }
+}
+@media (max-width: 700px) {
+  .tool-access-page, .tool-access-picker, .tool-access-guide { padding: 12px; }
+  .tool-access-guide > section { scroll-margin-top: calc(var(--tenant-banner-height) + 58px); }
+}

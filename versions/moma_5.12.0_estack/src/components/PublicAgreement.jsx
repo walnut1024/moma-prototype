@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Button } from '@douyinfe/semi-ui';
 import { agreementHref } from '../agreement-route.mjs';
 import { agreementWithDefault } from '../default-site-terms.mjs';
 import { AGREEMENTS } from '../site-config.mjs';
@@ -34,7 +35,7 @@ export default function PublicAgreement({ documentKey }) {
     </nav>
     <main>
       <h1>{label}</h1>
-      {error ? <p role="alert">无法加载协议。 <button type="button" onClick={() => { setError(false); setAttempt(count => count + 1); }}>重试</button></p>
+      {error ? <p role="alert">无法加载协议。 <Button size="small" theme="borderless" onClick={() => { setError(false); setAttempt(count => count + 1); }}>重试</Button></p>
         : !agreement ? <p role="status">正在加载协议…</p>
         : agreement.url ? <a href={agreement.url} rel="noreferrer">打开{label}</a>
         : <AgreementContent agreement={agreement} />}

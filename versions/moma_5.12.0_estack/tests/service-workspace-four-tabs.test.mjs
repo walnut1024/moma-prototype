@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SERVICE_WORKSPACE_TABS, serviceWorkspaceTab } from '../src/admin-v2/service-workspace-panels.js';
+import { SERVICE_PANEL_LABELS, serviceDrawerTarget, serviceWorkspacePanel } from '../src/admin-v2/service-workspace-panels.js';
+import { serviceDirectoryRows } from '../src/admin-v2/service-directory.js';
+import { routeTableGroups } from '../src/admin-v2/route-workspace.js';
 import { createAdminSeed, commitAdminState, persistModelAction, STORAGE_KEY } from '../src/admin-v2/store.js';
 import { withAdminSession } from './admin-session-fixture.mjs';
 import { modelOperationHistory, modelOperationTarget, MODEL_OPERATION_NAMES } from '../src/admin-v2/model-operation-history.js';
@@ -15,9 +17,37 @@ function providerFixture() {
   return { state, modelId: model.id, providerId: provider.id };
 }
 
-test('routing is the default workspace tab and contextual links select the right tab', () => {
-  assert.deepEqual(SERVICE_WORKSPACE_TABS.map(row => row[1]), ['路由及映射', '故障转移', '操作记录']);
-  for (const [params, expected] of [[{}, 'routing'], [{panel:'materials'}, 'routing'], [{panel:'editMetadata'}, 'routing'], [{panel:'routing'}, 'routing'], [{panel:'associate'}, 'routing'], [{panel:'guide'}, 'routing'], [{panel:'guide',providerChannels:'p',routeProvider:'p'}, 'routing'], [{providerAdd:'1'}, 'routing'], [{identityProvider:'p'}, 'routing'], [{providerAssociate:'1'}, 'routing'], [{panel:'access'}, 'routing'], [{panel:'materials',scopeEdit:'1'}, 'routing'], [{panel:'failover'}, 'failover'], [{panel:'trial',routeProvider:'p'}, 'routing'], [{panel:'history'}, 'history']]) assert.equal(serviceWorkspaceTab(new URLSearchParams(params)), expected);
+test('service actions and contextual links open the requested drawer', () => {
+  assert.deepEqual(Object.values(SERVICE_PANEL_LABELS), ['路由及映射', '故障转移配置', '操作记录']);
+  for (const [query, expected] of [['', 'routing'], ['panel=history&providerChannels=p', 'routing'], ['panel=associate', 'routing'], ['panel=failover', 'failover'], ['panel=history', 'history']]) {
+    assert.equal(serviceWorkspacePanel(new URLSearchParams(query)), expected);
+  }
+});
+
+test('row actions target the permanent service ID, never another service under the same model', () => {
+  const {state,modelId} = providerFixture();
+  const model = state.models.find(row => row.id === modelId);
+  const original = model.serviceProviders[0];
+  model.serviceProviders = [
+    {...original, channelId:'channel-first', callId:'call-first', record_id:'model_service-00000000-0000-4000-8000-000000000001'},
+    {...original, channelId:'channel-second', callId:'call-second', record_id:'model_service-00000000-0000-4000-8000-000000000002'},
+  ];
+  state.modelData = {...state.modelData, resourceIds:{
+    [`provider:${model.id}:channel-first`]:model.serviceProviders[0].record_id,
+    [`provider:${model.id}:channel-second`]:model.serviceProviders[1].record_id,
+  }};
+  const [first, second] = serviceDirectoryRows([model],state);
+  const select = serviceRecord => serviceDrawerTarget(state,model,new URLSearchParams({serviceRecord,routeProvider:first.channelId}));
+  const target = select(second.model_service_id);
+  assert.equal(target.model_service_id,model.serviceProviders[1].record_id);
+  assert.equal(target.callId,second.callId);
+  assert.equal(target.channelId,second.channelId);
+  assert.equal(select(first.model_service_id).callId,first.callId);
+  assert.equal(select('missing'),undefined);
+  assert.equal(serviceDrawerTarget(state,model,new URLSearchParams('routeProvider=missing')),undefined);
+  assert.equal(serviceDrawerTarget(state,model,new URLSearchParams('panel=failover')),undefined);
+  const subjects = routeTableGroups(state,model,target.id).flatMap(group => group.rows.map(row => row.service.id));
+  assert.deepEqual([...new Set(subjects)],[target.id]);
 });
 
 test('provider call-ID mapping is independent of prices, routes, resources and customer scope', () => {

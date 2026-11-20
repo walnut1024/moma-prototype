@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { sections, canAccessPage, pageFromHash, pageWorkspace } from '../src/admin-v2/navigation.mjs';
 import { adminBreadcrumbs } from '../src/admin-v2/breadcrumbs.mjs';
 import { readFileSync } from 'node:fs';
-import { findOperationsGuide, parseOperationsGuide } from '../src/admin-v2/model-operations-guide.mjs';
+import { parseOperationsGuide } from '../src/admin-v2/model-operations-guide.mjs';
+
+const source = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE.md', import.meta.url), 'utf8');
 
 test('getting started is the last operations group with role access and reloadable route', () => {
   const group = sections.find(item => item.id === 'getting-started');
@@ -13,62 +15,33 @@ test('getting started is the last operations group with role access and reloadab
     assert.equal(visible.at(-1).id, 'getting-started');
   }
   assert.equal(group.title, '入门指导');
-  assert.equal(group.items[0].label, '模型运营');
+  assert.deepEqual(group.items.map(item => item.label), ['渠道管理']);
   assert.equal(pageWorkspace('getting-started'), 'operations');
   assert.equal(pageFromHash('#/admin-2/getting-started', '运营人员'), 'getting-started');
   for (const role of ['平台管理员', '运营人员']) assert.equal(canAccessPage(role, 'getting-started'), true);
   for (const role of ['运维人员', '未知角色']) assert.equal(canAccessPage(role, 'getting-started'), false);
-  assert.deepEqual(adminBreadcrumbs('getting-started', new URLSearchParams()), [{ label: '入门指导' }, { label: '模型运营' }]);
+  assert.deepEqual(adminBreadcrumbs('getting-started', new URLSearchParams()), [{ label: '入门指导' }, { label: '渠道管理' }]);
 });
 
-test('short guides resolve every section and task link without leaving the guide route', () => {
-  const source = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE.md', import.meta.url), 'utf8');
-  const guides = parseOperationsGuide(source), tasks = guides.flatMap(guide => guide.tasks);
-  const ids = [...guides.map(guide => guide.id), ...tasks.map(task => task.id)];
-  assert.equal(new Set(ids).size, ids.length);
-  assert.deepEqual(guides.map(guide => guide.id), ['overview', 'channels', 'services', 'market', 'sales', 'materials', 'maintenance']);
-  for (const link of source.matchAll(/\]\(#([a-z0-9-]+)\)/g)) {
-    assert.ok(ids.includes(link[1]), link[1]);
-    const guide = findOperationsGuide(guides, link[1]);
-    assert.ok(guide.id === link[1] || guide.tasks.some(task => task.id === link[1]));
-  }
-  for (const guide of guides) {
-    assert.equal(findOperationsGuide(guides, guide.id), guide);
-    for (const task of guide.tasks) assert.equal(findOperationsGuide(guides, task.id), guide);
-  }
-  assert.equal(findOperationsGuide(guides, null), guides[0]);
-  assert.equal(findOperationsGuide(guides, 'unknown-guide'), guides[0]);
-});
-
-test('overview links to the same model operations pages as the sidebar', () => {
-  const source = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE.md', import.meta.url), 'utf8');
-  const [overview, ...guides] = parseOperationsGuide(source);
-  const menu = [...sections.find(group => group.id === 'models').items];
-  menu.splice(3, 0, sections.find(group => group.id === 'commerce').items[0]);
-  const links = overview.blocks.filter(block => block.type === 'table').flatMap(block => block.rows)
-    .flatMap(([cell]) => [...cell.matchAll(/^\[([^\]]+)\]\(#\/admin-2\/([^?)]+)(?:\?[^)]+)?\)$/g)]);
-  assert.deepEqual(links.map(([, label, page]) => [label, page]), menu.map(item => [item.label, item.children[0][0]]));
-  assert.deepEqual(guides.slice(0, -1).map(guide => guide.title), menu.map(item => item.label));
-});
-
-test('guide separates internal use from sales and explains current entry points', () => {
-  const source = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE.md', import.meta.url), 'utf8');
+test('getting started renders one channel guide with working task and management links', () => {
   const guides = parseOperationsGuide(source);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'overview')), /内部使用无需配置售价/);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'services')), /服务操作 → 启用/);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'channels')), /表格中按计费项查看渠道采购价/);
-  const sales = JSON.stringify(guides.find(guide => guide.id === 'sales'));
-  assert.match(sales, /纯内部使用可以跳过/);
-  assert.match(sales, /仅包含当前服务的计费项与售价版本/);
-  assert.doesNotMatch(sales, /编辑销售设置/);
-  assert.doesNotMatch(sales, /上架操作/);
-  const market = JSON.stringify(findOperationsGuide(guides, 'sales-release'));
-  for (const action of ['新建模型卡片', '关联服务', '模型广场 → 上架／调整上架／下架', '商业运营 → 模型销售 → 开售／灰度开售／停售', '卡片下架只影响广场展示']) {
-    assert.ok(market.includes(action), action);
-  }
-  const imported = guides.flatMap(guide => guide.tasks).find(task => task.id === 'materials-import');
-  assert.match(JSON.stringify(imported), /XLSX 或 UTF-8 CSV/);
-  assert.match(JSON.stringify(imported), /已有规范标识不覆盖/);
+  assert.deepEqual(guides.map(({ id, title }) => [id, title]), [['channels', '渠道管理']]);
+  const [guide] = guides;
+  assert.deepEqual([...source.matchAll(/\]\(#([a-z0-9-]+)\)/g)].map(([, id]) => id), guide.tasks.map(task => task.id));
+  const routes = [...source.matchAll(/\]\(#\/admin-2\/([^)]+)\)/g)].map(([, route]) => route);
+  assert.deepEqual([...new Set(routes)], ['providers', 'providers-new']);
+  for (const route of routes) assert.equal(pageFromHash('#/admin-2/' + route, '运营人员'), route);
+});
+
+test('the guide walks through three provider setups and names the unavailable video presets', () => {
+  const [guide] = parseOperationsGuide(source);
+  const providers = guide.blocks.find(block => block.type === 'table').rows;
+  assert.deepEqual(providers.map(([name]) => name), ['硅基流动', '深度求索 DeepSeek', '火山引擎方舟（北京）']);
+  assert(providers.every(([, , key]) => /^`EXAMPLE_[A-Z]+_KEY`$/.test(key)));
+  assert.deepEqual(guide.tasks.map(task => task.id), ['channel-connect', 'siliconflow', 'deepseek', 'volcengine', 'video', 'channel-maintenance']);
+  const video = guide.tasks.find(task => task.id === 'video');
+  assert(video.blocks.some(block => block.text?.includes('协议预设无法配置')));
+  assert.equal(video.blocks.find(block => block.type === 'table').rows.length, 2);
 });
 
 test('guide parser preserves numbered steps across a field table', () => {

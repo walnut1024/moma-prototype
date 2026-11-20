@@ -4,10 +4,10 @@ import ChannelDiscovery from './ChannelDiscovery';
 import ChannelAdvancedFields from './ChannelAdvancedFields';
 import { useEffect, useRef, useState } from 'react';
 import { IconDelete, IconPlus } from '@douyinfe/semi-icons';
-import { Button, Checkbox, Input, Select, Steps, Typography } from '@douyinfe/semi-ui';
+import { Button, Checkbox, Input, Select, Steps, TextArea, Typography } from '@douyinfe/semi-ui';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import { Choice, Field } from './ServiceUI';
-import { CopyId, Disclosure, Notice } from './ModelOperationsUI';
+import { CopyId, Disclosure, Modal, Notice } from './ModelOperationsUI';
 import { supplierDirectory } from './moma-provider';
 import { libraryRecord } from './model-library';
 import { MODEL_TYPES } from './model-management';
@@ -17,7 +17,7 @@ import { providerApiKeysDraft, providerApiKeyRows } from './provider-management'
 import { providerKeyGroups, providerKeyGroupKeys } from './provider-key-groups';
 import { ONBOARDING_PROVIDER_PRESETS, resolveOnboardingProvider, resolveOnboardingModel, onboardingModelOptions, similarOnboardingProviders } from './onboarding-presets';
 import { CHANNEL_INTERFACES, prepareChannelInterface, prepareChannelAdapterOptions } from './channel-interface';
-import { validateChannelRows } from './channel-onboarding';
+import { previewChannelModels, validateChannelRows } from './channel-onboarding';
 import SupplierChannelBatchTest from './SupplierChannelBatchTest';
 import { supplierChannelResources, supplierChannelName } from './supplier-resources';
 
@@ -27,7 +27,7 @@ function ProviderChoice({value,options,disabled,onChange}) {
 }
 const presetFor = provider => ONBOARDING_PROVIDER_PRESETS.find(row => row.id === provider?.onboardingPresetId || row.code === provider?.code);
 const modelRow = (state, libraryId = '') => ({ id: crypto.randomUUID(), libraryId, upstreamModelId: '', scenarios: [], source: libraryId ? 'reference' : 'manual', selected: true, confirmed: Boolean(libraryId) });
-export default function SupplierChannelConfiguration({ state, provider: initialProvider, libraryId = '', endpoint: initialEndpoint, initialRows, ops, close, draft, guidedStep: initialStep, onStepChange, onConnected }) {
+export default function SupplierChannelConfiguration({ state, provider: initialProvider, libraryId = '', endpoint: initialEndpoint, initialRows, ops, close, draft, guidedStep: initialStep, onStepChange, onConnected, directory = false, cancelLabel, reference = false }) {
   const guided = initialStep !== undefined;
   const [guidedStep, setGuidedStep] = useState(initialStep);
   useEffect(()=>{onStepChange?.(guidedStep);},[guidedStep,onStepChange]);
@@ -35,6 +35,9 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
   const [intent,setIntent]=useState(draft?.intent || 'onboard');
   const [rows, setRows] = useState(() => draft ? structuredClone(draft.rows) : initialRows?.length ? structuredClone(initialRows) : [modelRow(state, initialEndpoint ? '' : libraryId)]);
   const [endpointId, setEndpointId] = useState(draft?.endpointId || initialEndpoint?.id || ''), [saved, setSaved] = useState(null), [priceRow, setPriceRow] = useState(null), [suggestedRoot, setSuggestedRoot] = useState('');
+  const [discovering, setDiscovering] = useState(false);
+  const [pasting, setPasting] = useState(false), [pasted, setPasted] = useState(''), [pasteError, setPasteError] = useState('');
+  const [approvedScope, setApprovedScope] = useState(false);
   const [draftId] = useState(draft?.id || ''), [draftRevision] = useState(draft?.draftRevision || 0), [errors, setErrors] = useState([]), [page, setPage] = useState(1);
   const [rawKey, setRawKey] = useState(''), [keyMetadata, setKeyMetadata] = useState(null), [keyError, setKeyError] = useState(''), [keyMode, setKeyMode] = useState('auto');
   const [saving, setSaving] = useState(false), saveLock = useRef(false), allowed = useRef(ops.can); allowed.current = ops.can;
@@ -64,12 +67,37 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
   const discoveryConfiguration = endpoint || { ...value, id: creationId.current, providerId: provider?.id, protocol: CHANNEL_INTERFACES.find(row => row.id === value.interfaceType)?.protocol, ...(useNewKey ? { authMode: 'specific', apiKeyId: previewKey?.id, apiKeys: previewKey ? [previewKey] : [], credentialVersion: keyMetadata?.fingerprint || '' } : {}) };
   const dirty = () => { ops.dirty(true); ops.setError(''); setErrors([]); setNameError(''); };
   const set = patch => { setValue(current => ({ ...current, ...patch })); dirty(); setSuggestedRoot(''); };
-  const changeRows = next => { setRows(next); dirty(); };
+  const changeRows = next => { setRows(next); setApprovedScope(false); dirty(); };
   const setRow = (id, patch) => changeRows(rows.map(row => row.id === id ? { ...row, ...patch } : row));
   const setNewProviderName = name => { setValue(current => { const previousName = current.newProvider?.name.trim(), oldDefault = previousName ? previousName.slice(0, 54) + '渠道' : '新渠道'; return { ...current, newProvider: { name }, name: !current.name || current.name === oldDefault ? name.trim() ? name.trim().slice(0, 54) + '渠道' : '新渠道' : current.name }; }); dirty(); };
   const startNewModel = row => setRow(row.id, { libraryId: '', modelPresetId: '', newModel: { modelId: row.upstreamModelId.trim().toLowerCase(), name: row.upstreamModelId.trim(), type: 'text' }, source: 'manual', confirmed: true });
-  const selectModel = (row, id, next = state) => { const model = onboardingModelOptions(next).find(item => item.id === id) || libraryRecord(next, id); setRow(row.id, { libraryId: model?.libraryId || (model?.modelPresetId ? '' : id), modelPresetId: model?.modelPresetId || '', newModel: null, upstreamModelId: pickerValue(row) === id ? row.upstreamModelId : '', scenarios: pickerValue(row) === id ? row.scenarios : [], source: 'reference', confirmed: true }); };
+  const selectModel = (row, id, next = state) => {
+    const model = onboardingModelOptions(next).find(item => item.id === id) || libraryRecord(next, id);
+    const sameModel = pickerValue(row) === id;
+    setRow(row.id, {
+      libraryId: model?.libraryId || (model?.modelPresetId ? '' : id), modelPresetId: model?.modelPresetId || '', newModel: null,
+      upstreamModelId: sameModel || initialEndpoint && (row.source === 'upstream' || directory && row.pasted) ? row.upstreamModelId : '',
+      scenarios: sameModel ? row.scenarios : [], source: 'reference', confirmed: true,
+    });
+  };
   const cancel = () => ops.proceed(close);
+  const pasteRows = () => {
+    try {
+      const ids = pasted.split(/[\s,，]+/u).filter(Boolean);
+      const preview = previewChannelModels(state, provider.id, ids, { endpointId: endpoint.id, complete: false, source: 'reference' });
+      const existing = rows.filter(row => row.libraryId || row.modelPresetId || row.newModel || row.upstreamModelId);
+      const present = new Set(existing.map(row => row.upstreamModelId.trim()));
+      const archived = new Set(state.modelData?.archivedCatalogueIds || []);
+      const additions = preview.rows.filter(row => row.status !== '已存在' && !present.has(row.upstreamModelId)).map(row => ({
+        ...row, pasted: true, selected: true, libraryId: archived.has(libraryRecord(state, row.libraryId)?.id) ? '' : row.libraryId,
+      }));
+      if (!additions.length) throw Error('这些标识已在当前连接或草稿中，请输入其他模型');
+      if (existing.length + additions.length > 50) throw Error('每批最多接入 50 款模型');
+      changeRows([...existing, ...additions]);
+      setPage(Math.floor(existing.length / 10) + 1);
+      setPasting(false); setPasted(''); setPasteError('');
+    } catch (error) { setPasteError(error.message); }
+  };
   const connection = () => ({ ...prepareChannelInterface({ interfaceType: value.interfaceType, baseUrl: value.baseUrl, taskUrls: value.taskUrls || {}, allowHttp: provider?.sourceType === 'selfHosted' }), adapterOptions: prepareChannelAdapterOptions(value.adapterOptions) });
   const nextStep = () => {
     try {
@@ -88,10 +116,11 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
     return () => cancelAnimationFrame(frame);
   }, [ops.error, endpointId]);
   const save = async () => {
-    if (saveLock.current || !ops.can) return;
+    if (saveLock.current || !ops.can || directory && initialEndpoint && !approvedScope) return;
     saveLock.current = true; setSaving(true);
     try {
       if (!provider) throw new Error(providerIssue || '请选择服务商');
+      if (initialEndpoint && !endpoint) throw new Error('连接已变化，请重新选择');
       if (!endpoint) { const issue = nameIssue(); if (issue) { showNameError(issue); return; } }
       const identityErrors = rows.filter(row => row.selected !== false && row.newModel).flatMap(row => { try { resolveOnboardingModel(state, row); return []; } catch (error) { return [{ rowId: row.id, field: 'newModel', message: error.message }]; } });
       const checked = [...identityErrors, ...validateChannelRows(validationState, rows.map(row => ({ ...row, libraryId: pickerValue(row) })), endpoint || { interfaceType: value.interfaceType })];
@@ -106,6 +135,7 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
       const channel = endpoint || result.endpoints.find(row => row.id === result.audits[0].objectId), owner = result.providers.find(row => row.id === channel.providerId), upstreamIds = new Set(models.map(row => row.upstreamModelId.trim()));
       const associations = owner.catalogConnections.filter(row => row.endpointId === channel.id && !row.deletedAt && upstreamIds.has(row.upstreamModelId));
       if (guided) onConnected(result, draftId || result.modelOnboardings.find(row => row.createdEndpointId === channel.id && row.guided && row.createdAssociationIds?.includes(associations[0]?.id))?.id);
+      else if (initialEndpoint && onConnected) onConnected(result, channel.id);
       else setSaved({ endpointId: channel.id, associationIds: associations.map(row => row.id), libraryId: owner.catalogModels.find(row => row.modelId === associations[0]?.modelId)?.libraryId || libraryId });
       setRawKey(''); setPriceRow(null);
     } catch (error) { if (mounted.current) { ops.setError(error.message); setSuggestedRoot(error.suggestedBaseUrl || ''); } }
@@ -136,9 +166,16 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
       {(row.source === 'upstream' || row.source === 'reference' && !row.confirmed) && <Checkbox aria-label={`确认身份匹配：第 ${(currentPage - 1) * 10 + index + 1} 行`} checked={row.confirmed === true} disabled={saving || !ops.can} onChange={event => setRow(row.id, { confirmed: event.target.checked })}>确认身份匹配</Checkbox>}</> },
     { title: '上游模型调用标识', dataIndex: 'upstreamModelId', render: (_, row, index) => <><Input aria-label={`第 ${(currentPage - 1) * 10 + index + 1} 行上游模型调用标识`} placeholder="填写上游模型调用标识" value={row.upstreamModelId} maxLength={row.newModel ? 80 : 200} aria-invalid={Boolean(rowError(row.id))} disabled={saving || !ops.can} onChange={upstreamModelId => setRow(row.id, { upstreamModelId, ...(row.newModel ? { newModel: { ...row.newModel, modelId: upstreamModelId.trim().toLowerCase(), name: upstreamModelId.trim() } } : {}) })}/>{rowError(row.id) && <small role="alert" className="supplier-key-error">{rowError(row.id)}</small>}</> },
     { title: '采购价（选填）', dataIndex: 'scenarios', width: 110, render: (_, row) => row.scenarios.length ? `${row.scenarios.length} 个计费项` : '待配置' },
-    { title: '操作', dataIndex: 'actions', width: 150, render: (_, row, index) => <div className="supplier-row-actions"><Button type="tertiary" theme="borderless" disabled={saving || !ops.can} onClick={() => setPriceRow(priceRow === row.id ? null : row.id)}>配置采购价</Button><Button icon={<IconDelete aria-hidden="true"/>} theme="borderless" size="small" aria-label={`移除模型行 ${(currentPage - 1) * 10 + index + 1}`} disabled={saving || !ops.can || rows.length === 1} onClick={() => changeRows(rows.filter(item => item.id !== row.id))}/></div> },
-  ];
-  const modelFields = !guided && <section className="supplier-combined-models"><div className="supplier-model-entry-heading"><Typography.Title heading={5} component="h3">模型</Typography.Title><Button theme="light" disabled={saving || !ops.can || rows.length >= 50} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={() => { changeRows([...rows, modelRow(state)]); setPage(Math.ceil((rows.length + 1) / 10)); }}>添加模型</Button></div>
+    { title: '操作', dataIndex: 'actions', width: 150, render: (_, row, index) => <div className="supplier-row-actions">{!reference && <Button type="tertiary" theme="borderless" disabled={saving || !ops.can} onClick={() => setPriceRow(priceRow === row.id ? null : row.id)}>配置采购价</Button>}<Button icon={<IconDelete aria-hidden="true"/>} theme="borderless" size="small" aria-label={`移除模型行 ${(currentPage - 1) * 10 + index + 1}`} disabled={saving || !ops.can || rows.length === 1} onClick={() => changeRows(rows.filter(item => item.id !== row.id))}/></div> },
+  ].filter(column => !reference || column.dataIndex !== 'scenarios');
+  const modelFields = !guided && <section className="supplier-combined-models"><div className="supplier-model-entry-heading"><Typography.Title heading={5} component="h3">{initialEndpoint ? '选择模型' : '模型'}</Typography.Title><div className="supplier-row-actions">
+      {!reference && initialEndpoint && <Button theme="light" disabled={saving || !ops.can || !endpoint} onClick={() => setDiscovering(true)}>从上游获取</Button>}
+      {!reference && directory && initialEndpoint && <>
+        <Button theme="light" disabled={saving || !ops.can || !endpoint} onClick={() => setPasting(true)}>粘贴模型列表</Button>
+        <Button theme="borderless" disabled={saving || !ops.can || !rows.some(row => row.upstreamModelId || row.libraryId || row.modelPresetId || row.newModel)}
+          onClick={() => ops.proceed(() => { changeRows([modelRow(state)]); setPage(1); })}>清空模型草稿</Button>
+      </>}
+      {!(reference && initialRows?.length) && <Button theme="light" disabled={saving || !ops.can || rows.length >= 50} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={() => { changeRows([...rows, modelRow(state)]); setPage(Math.ceil((rows.length + 1) / 10)); }}>{initialEndpoint ? '手工添加' : '添加模型'}</Button>}</div></div>
       {rows.length > 1 && <div className="supplier-row-actions"><Checkbox aria-label="选择全部模型行" disabled={saving || !ops.can} checked={rows.length > 0 && selected.length === rows.length} indeterminate={selected.length > 0 && selected.length < rows.length} onChange={event => changeRows(rows.map(row => ({ ...row, selected: event.target.checked })))}>全部 {rows.length} 项</Checkbox><span>已选 {selected.length}</span></div>}
       <div className="mo-table-scroll"><Table size="small" className={`supplier-onboarding-models${rows.length === 1 && selected.length === 1 ? ' supplier-onboarding-single' : ''}`} rowKey="id" columns={modelColumns} dataSource={pageRows} pagination={false} onRow={row => ({ 'data-channel-row': row.id })}/></div>{rows.length > 10 && <AdminPagination total={rows.length} currentPage={currentPage} onPageChange={setPage}/>}
 
@@ -146,14 +183,16 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
     </section>;
   const chooseChannel = id => { setEndpointId(id === 'new' ? '' : id); setRows(current=>current.map(row=>{const master=masterFor(row),matches=provider.catalogConnections?.filter(item=>item.endpointId===id && !item.deletedAt && provider.catalogModels.some(record=>record.modelId===item.modelId && libraryRecord(state,record.libraryId)?.id===master?.id)) || [];return {...row,upstreamModelId:!guided && row.upstreamModelId ? row.upstreamModelId : matches.length===1?matches[0].upstreamModelId:''};}));dirty(); };
   if (saved) return <SupplierChannelBatchTest state={state} provider={state.providers.find(row => row.id === state.endpoints.find(item => item.id === saved.endpointId)?.providerId)} endpointId={saved.endpointId} associationIds={saved.associationIds} ops={ops} close={() => close(saved.libraryId)} />;
-  return <><SupplierCreationDialog wide embedded={guided} title={guided ? guidedStep === 0 ? '选择模型' : '接通供应' : initialEndpoint ? '添加关联模型' : '新模型&渠道'} description="选择服务商和模型，填写连接信息，保存后测试并启用。" cancel={cancel} cancelLabel={guided ? '退出接入' : '取消'} disabled={saving || !ops.can || (guidedStep===0 ? !rows.every(row=>Boolean(resolvedModel(row))) : !provider)} action={saving ? '保存中…' : guidedStep === 0 ? '下一步：接通供应' : guided ? endpoint ? '复用供应并继续' : '保存连接并进入测试' : initialEndpoint ? '保存模型关联' : '保存模型及渠道'} submit={guidedStep === 0 ? nextStep : save} footer={guidedStep === 1 && <Button theme="light" onClick={() => setGuidedStep(0)}>上一步</Button>}>
-    {!guided && <div className="supplier-row-actions"><Steps className="supplier-onboarding-steps" current={0} aria-label="接入步骤"><Steps.Step title="配置接入"/><Steps.Step title="测试与启用"/></Steps></div>}
-    {!guided && initialProvider && <div className="supplier-onboarding-context"><span>服务商</span><strong>{initialProvider.name}</strong></div>}
+  const discoveryDescription = initialEndpoint ? [initialProvider?.name, initialEndpoint.name].filter(Boolean).join(' / ') : '';
+  return <><SupplierCreationDialog wide drawer={Boolean(initialEndpoint)} drawerSide={directory ? "right" : "left"} embedded={guided} title={guided ? guidedStep === 0 ? '选择模型' : '接通供应' : initialEndpoint ? '新增模型渠道' : '新模型&渠道'} description={discoveryDescription || '选择服务商和模型，填写连接信息，保存后测试并启用。'} cancel={cancel} cancelLabel={cancelLabel || (guided ? '退出接入' : '取消')} disabled={saving || !ops.can || directory && initialEndpoint && !approvedScope || (guidedStep===0 ? !rows.every(row=>Boolean(resolvedModel(row))) : !provider)} action={saving ? '保存中…' : guidedStep === 0 ? '下一步：接通供应' : guided ? endpoint ? '复用供应并继续' : '保存连接并进入测试' : initialEndpoint ? '确认接入' : '保存模型及渠道'} submit={guidedStep === 0 ? nextStep : save} footer={guidedStep === 1 && <Button theme="light" onClick={() => setGuidedStep(0)}>上一步</Button>}>
+    {!guided && !initialEndpoint && <div className="supplier-row-actions"><Steps className="supplier-onboarding-steps" current={0} aria-label="接入步骤"><Steps.Step title="配置接入"/><Steps.Step title="测试与启用"/></Steps></div>}
+    {!guided && initialProvider && !initialEndpoint && <div className="supplier-onboarding-context"><span>服务商</span><strong>{initialProvider.name}</strong></div>}
+    {initialEndpoint && endpoint && <div className="supplier-onboarding-context"><span>复用的上游地址</span><CopyId copyAtStart value={endpoint.baseUrl} label="上游 API 地址"/></div>}
     {modelFields}
     {!guided && !initialProvider && supplierField}
-    {!guided && <Typography.Title heading={5} component="h3">渠道</Typography.Title>}
+    {!guided && !initialEndpoint && <Typography.Title heading={5} component="h3">渠道</Typography.Title>}
     {!guided && !initialEndpoint && provider && !provider.isDraft && <Field label="接入渠道"><Choice label="接入渠道" value={endpointId || 'new'} options={[[ 'new', '新建渠道' ], ...supplierChannelResources(state, provider).map(row=>[row.id,supplierChannelName(provider,row)])]} disabled={saving || !ops.can} onChange={chooseChannel}/></Field>}
-    {!guided && endpoint && <div className="supplier-onboarding-context">{initialEndpoint && <strong>{supplierChannelName(provider,endpoint)}</strong>}<span>{endpoint.protocol}</span><CopyId copyAtStart value={endpoint.baseUrl} label="Base URL"/></div>}
+    {!guided && endpoint && !initialEndpoint && <div className="supplier-onboarding-context"><span>{endpoint.protocol}</span><CopyId copyAtStart value={endpoint.baseUrl} label="Base URL"/></div>}
     {(!endpoint || guidedStep === 0) && <>
       {guidedStep !== 0 && <div className="supplier-channel-fields">{guided && supplierField}{!guided && <Field label="渠道名称 *" error={nameError}><Input ref={nameInput} aria-label="渠道名称" value={value.name} maxLength={60} disabled={saving || !ops.can} onChange={value => set({ name: value })}/></Field>}</div>}
       {guidedStep !== 0 && !endpoint && <>
@@ -176,7 +215,29 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
       </div>)}
       {guidedStep===0 && rows.some(row=>{const master=masterFor(row);return master && state.models.some(model=>model.id===master.id || model.templateId===master.id);}) && <Field label="本次目标 *"><Choice label="新增供应目标" value={intent} options={[[ 'onboard','请选择本次目标' ],['reserve','准备备用供应'],['activate','投入当前服务']]} onChange={value=>{setIntent(value);dirty();}}/></Field>}
       {guidedStep===1 && rows.map(row=>{const existing=endpoint && provider?.catalogConnections?.find(item=>item.endpointId===endpoint.id && !item.deletedAt && item.upstreamModelId===row.upstreamModelId && provider.catalogModels.some(record=>record.modelId===item.modelId && libraryRecord(state,record.libraryId)?.id===masterFor(row)?.id));return <section key={row.id} className="onboarding-form-section"><Field label="上游模型调用标识 *"><Input aria-label="上游模型调用标识" value={row.upstreamModelId} maxLength={200} onChange={value=>setRow(row.id,{upstreamModelId:value})}/></Field><Typography.Title heading={5} component="h3">采购条件</Typography.Title>{existing?<p>复用已有模型关联，原采购报价保持不变。保存后核对当前采购条件。</p>:<SupplierPriceFields state={state} ops={ops} scenarios={row.scenarios} disabled={!ops.can} onChange={scenarios=>setRow(row.id,{scenarios})}/>}</section>;})}
-    {!guided && <Disclosure title="自动发现模型"><ChannelDiscovery state={discoveryState} provider={previewProvider} configuration={discoveryConfiguration} ops={{ ...ops, can: ops.can && (!useNewKey || Boolean(keyMetadata)) }} onAppend={discovered => { changeRows([...rows.filter(row => row.libraryId || row.modelPresetId || row.newModel || row.upstreamModelId), ...discovered]); }}/></Disclosure>}
+    {!guided && !initialEndpoint && <Disclosure title="自动发现模型"><ChannelDiscovery state={discoveryState} provider={previewProvider} configuration={discoveryConfiguration} ops={{ ...ops, can: ops.can && (!useNewKey || Boolean(keyMetadata)) }} onAppend={discovered => { changeRows([...rows.filter(row => row.libraryId || row.modelPresetId || row.newModel || row.upstreamModelId), ...discovered]); }}/></Disclosure>}
+    {initialEndpoint && <Notice>确认接入后，模型渠道进入待验证状态。</Notice>}
+    {directory && initialEndpoint && <Checkbox checked={approvedScope} disabled={saving || !ops.can || !selected.length}
+      onChange={event => setApprovedScope(event.target.checked)}>已核对所选 {selected.length} 款模型属于采购范围</Checkbox>}
     {errors.filter(error => guided || !error.rowId).map(error => <Notice error key={error.rowId + ':' + error.field}>{error.message}</Notice>)}{ops.error && !nameError && <Notice error>{ops.error}</Notice>}
-  </SupplierCreationDialog></>;
+  </SupplierCreationDialog>
+  {pasting && <Modal wide title="粘贴模型列表" description={discoveryDescription} onClose={() => setPasting(false)}
+    footer={<><Button onClick={() => setPasting(false)}>返回</Button><Button theme="solid" disabled={!ops.can || !endpoint || !pasted.trim()} onClick={pasteRows}>带入接入草稿</Button></>}>
+    <Field label="上游模型调用标识"><TextArea aria-label="粘贴上游模型调用标识" maxLength={10500} autosize={{ minRows: 5, maxRows: 12 }}
+      placeholder="可用换行、逗号或空格分隔" value={pasted} onChange={value => { setPasted(value); setPasteError(''); }}/></Field>
+    {pasteError && <Notice error>{pasteError}</Notice>}
+  </Modal>}
+  {discovering && endpoint && <Modal wide title="上游模型候选" description={discoveryDescription}
+    onClose={() => setDiscovering(false)} footer={<Button onClick={() => setDiscovering(false)}>取消</Button>}>
+    <Notice>按该服务商的采购范围勾选需要接入的模型。</Notice>
+    <ChannelDiscovery state={state} provider={provider} configuration={endpoint} ops={ops} mode="attach" onAppend={discovered => {
+      const retained = rows.filter(row => row.libraryId || row.modelPresetId || row.newModel || row.upstreamModelId);
+      const ids = new Set(retained.map(row => row.upstreamModelId.trim()));
+      const additions = discovered.filter(row => !ids.has(row.upstreamModelId));
+      if (retained.length + additions.length > 50) throw Error('每批最多接入 50 款模型');
+      changeRows([...retained, ...additions]);
+      setDiscovering(false);
+    }}/>
+  </Modal>}
+  </>;
 }

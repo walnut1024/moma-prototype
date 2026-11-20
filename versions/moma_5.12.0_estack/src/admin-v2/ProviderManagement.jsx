@@ -2,6 +2,7 @@ import ModelResourceJsonPage from './ModelResourceJsonPage';
 import AdminStatus from './AdminStatus';
 import SupplierChannelBatchTest from './SupplierChannelBatchTest';
 import SupplyModelView, { SupplyModelDirectory } from './SupplyModelView';
+import ChannelDirectory from './ChannelDirectory';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { IconPlay, IconPlus } from '@douyinfe/semi-icons';
 import { Button, Card, Empty, Space, Tabs, Typography } from '@douyinfe/semi-ui';
@@ -17,13 +18,14 @@ import SupplierAddDialog from './SupplierAddDialog';
 import CreateChannelDrawer from './CreateChannelDrawer';
 import ModelResourceTransfer from './ModelResourceTransfer';
 import AdminPageHeading from './AdminPageHeading';
-import { pages } from './navigation.mjs';
+import { pages, providerManagementPerspective } from './navigation.mjs';
 import { operationsReturn } from './model-pricing-workspace';
 import { builtinProviderCatalogue } from '../mock/reference-workspace.js';
 import './supplier-workbench.css';
 
 export default function ProviderManagement(props) {
-  const { state } = props, ops = useOperations(props, 'providers'), { params, go } = ops;
+  const { state, page } = props, ops = useOperations(props, page), { params, go } = ops;
+  const channelFirst = page === 'providers-new';
   const [creating, setCreating] = useState(() => params.get('addingModel')==='1' ? 'model' : null), [creationLibraryId,setCreationLibraryId]=useState('');
   const [createdEndpointId, setCreatedEndpointId] = useState('');
   const creationTrigger = useRef(null);
@@ -35,13 +37,15 @@ export default function ProviderManagement(props) {
   const { byProvider, models } = channelManagementDirectory(state, providers);
   const providerGroups = byProvider.get(provider?.id) || [];
   const detail = (id, options) => go({ provider: id, listQ: params.get('listQ'), listPage: params.get('listPage'),
-    modelListQ: params.get('modelListQ'), modelListPage: params.get('modelListPage') }, { reset: true, ...options });
+    modelListQ: params.get('modelListQ'), modelListPage: params.get('modelListPage'), channelStatus: params.get('channelStatus'),
+    ...(channelFirst ? { channelProvider: params.get('channelProvider') } : {}) }, { reset: true, ...options });
   const returnTo = operationsReturn(params.get('returnTo'));
-  const perspective = params.get('perspective') === 'models' ? 'models' : 'suppliers';
+  const perspective = providerManagementPerspective(page, params);
   const closeCreation = () => { setCreating(null); if(params.has('addingModel')) go({addingModel:null,selectedModels:null},{saved:true}); ops.setError(''); requestAnimationFrame(() => (creationTrigger.current?.isConnected ? creationTrigger.current : document.getElementById('supplier-create-trigger'))?.focus()); };
   const requestedModel = params.get('supplyModel');
   const selectedModel = models.find(row => row.id === requestedModel);
   const modelList = perspective === 'models' && !requestedModel;
+  const connectionDetail = channelFirst && modelList && params.has('connection');
   useLayoutEffect(() => {
     if (!modelList) return;
     const frame = requestAnimationFrame(() => window.scrollTo(0, modelListScroll.current));
@@ -54,7 +58,8 @@ export default function ProviderManagement(props) {
     perspective: null, provider: group.owner.id, tab: 'catalogue', material: group.id, channelView: null, supplyModel: null, view: null,
   });
   const changePerspective = next => go({
-    perspective: next === 'models' ? 'models' : null, supplyModel: null, provider: null, material: null, view: null, tab: null,
+    perspective: next === 'models' ? 'models' : channelFirst ? 'suppliers' : null, supplyModel: null, provider: null, material: null, view: null, tab: null,
+    connection: null, modelQ: null,
   }, { preserveScroll: true });
   const startCreation = (mode, event, libraryId='') => { setCreationLibraryId(libraryId); creationTrigger.current = event?.currentTarget; ops.setError(''); setCreating(mode); };
   const channelSaved = (next, endpointId) => {
@@ -99,23 +104,26 @@ export default function ProviderManagement(props) {
   else content = <ProviderDirectory state={state} providers={providers} byProvider={byProvider} ops={ops} onDetails={detail}/>;
   const returnEndpoint = state.endpoints.find(row => row.id === params.get('returnTestEndpoint') && row.providerId === provider?.id && !row.deletedAt);
   let returnIds = []; try { const parsed = JSON.parse(params.get('returnTestAssociations') || '[]'); if (Array.isArray(parsed) && parsed.length <= 50 && parsed.every(id => typeof id === 'string')) returnIds = parsed; } catch { /* Invalid return context does not open an operation. */ }
-  if (params.get('resourceJson') === '1') return <ModelResourceJsonPage state={state} ops={ops} scope="channels"/>;
+  if (params.get('resourceJson') === '1') return <ModelResourceJsonPage state={state} ops={ops} scope="channels" readOnly={channelFirst}/>;
+  const supplierTab = <Tabs.TabPane key="suppliers" tab="服务商视图" itemKey="suppliers">{content}</Tabs.TabPane>;
+  const modelTab = <Tabs.TabPane key="models" tab={channelFirst ? '渠道视图' : '模型视图'} itemKey="models">
+    {modelList && (channelFirst ? <ChannelDirectory state={state} providers={providers} ops={ops}/> : <SupplyModelDirectory state={state} models={models} ops={ops} onDetails={id => {
+      modelListScroll.current = window.scrollY;
+      openModel(id);
+    }}/>)}
+  </Tabs.TabPane>;
   return <div className="admin-page-stack supplier-workbench">
     {returnTo && <div><Button theme="borderless" onClick={() => ops.proceed(() => { location.hash = returnTo; })}>返回来源页面</Button></div>}
     {params.get('origin')?.startsWith('#/admin-2/listing') && <Notice><Button type="tertiary" theme="borderless" onClick={() => ops.proceed(() => { location.hash = params.get('origin'); })}>返回服务配置</Button></Notice>}
     {params.get('onboarding') && <Notice>上架进度已保留。<Button type="tertiary" theme="borderless" onClick={() => ops.go({ view: 'add', draft: params.get('onboarding'), onboarding: null, provider: null, tab: null, step: state.modelOnboardings.find(item => item.id === params.get('onboarding'))?.step || 'select' }, { base: 'listing' })}>返回上架流程</Button></Notice>}
-    <AdminPageHeading title={pages.providers.label}>{!providerId && !requestedModel && <ModelResourceTransfer state={state} ops={ops} scope="channels"/>}{perspective === 'suppliers' && !providerId && <Space wrap>
+    {!connectionDetail && <AdminPageHeading title={pages[page].label}>{!providerId && !requestedModel && <ModelResourceTransfer state={state} ops={ops} scope="channels" reviewFields={channelFirst}/>}{perspective === 'suppliers' && !providerId && <Space wrap>
       <Button id="supplier-create-trigger" theme="solid" disabled={!ops.can} icon={<IconPlus aria-hidden="true"/>} onClick={event => startCreation('provider', event)}>录入服务商</Button>
-    </Space>}</AdminPageHeading>
+    </Space>}</AdminPageHeading>}
     {(perspective === 'models' ? requestedModel : providerId) ? <div className="supplier-body">{content}</div>
-      : <Tabs className="supplier-perspective" type="line" activeKey={perspective} onChange={changePerspective} keepDOM={false} tabPaneMotion={false} contentStyle={{ paddingBlock: 'var(--admin-section-gap) 0' }}>
-        <Tabs.TabPane tab="服务商视图" itemKey="suppliers">{content}</Tabs.TabPane>
-        <Tabs.TabPane tab="模型视图" itemKey="models">
-          {modelList && <SupplyModelDirectory state={state} models={models} ops={ops} onDetails={id => {
-            modelListScroll.current = window.scrollY;
-            openModel(id);
-          }}/>}
-        </Tabs.TabPane>
+      : <Tabs className="supplier-perspective" type="line" activeKey={perspective} onChange={changePerspective} keepDOM={false} tabPaneMotion={false}
+        tabBarStyle={connectionDetail ? { display: 'none' } : undefined}
+        contentStyle={{ paddingBlock: connectionDetail ? 0 : 'var(--admin-section-gap) 0' }}>
+        {channelFirst ? [modelTab, supplierTab] : [supplierTab, modelTab]}
       </Tabs>}
     {creating === 'provider' && <ProviderIntakeDrawer state={state} ops={ops} close={closeCreation} saved={id => { setCreating(null); detail(id, { saved: true }); }}/>} 
     {creating === 'channel' && <CreateChannelDrawer state={state} providers={providers}

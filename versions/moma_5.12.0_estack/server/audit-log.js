@@ -1,6 +1,7 @@
 import { AUDIT_ACTIONS } from '../src/admin-v2/platform-audit.mjs';
 
-const eventSource = `SELECT e.id, e.operation_id, e.entity_id, e.created_at, e.action, e.record_json, o.command, o.actor_id
+const eventColumns = 'e.id, e.operation_id, e.entity_id, e.created_at, e.action, e.record_json, o.command, o.actor_id';
+const eventSource = `
   FROM audit_events e JOIN operations o ON o.id=e.operation_id
   WHERE e.entity_type='model-operations' AND (
     o.command IN ('serviceRouteConfigure','serviceRoutePublish','keyGroupCandidateApply','credentialReplace')
@@ -65,7 +66,7 @@ async function historicalEvidence(db, row, record) {
   };
 }
 
-async function eventFromRow(db, row) {
+async function eventFromRow(db, row, detail = false) {
   const record = JSON.parse(row.record_json);
   const evidence = record.platformAudit || await historicalEvidence(db, row, record);
   if (!evidence) return null;
@@ -75,21 +76,33 @@ async function eventFromRow(db, row) {
     schema_version: 1, event_id: row.id, operation_id: row.operation_id, action_code: evidence.action_code,
     domain: 'model_operations', occurred_at, recorded_at: occurred_at,
     actor: { type: 'admin_account', id: row.actor_id, name: evidence.actor_name || record.actorName, role: evidence.actor_role || record.actor },
-    observer: 'model_operations_service', source: 'unknown', provenance: { environment: 'prototype', mode: 'actual' },
+    observer: 'model_operations_service', source: evidence.source === 'web' ? 'web' : 'unknown',
+    provenance: { environment: 'prototype', mode: 'actual' },
     scope: { type: 'platform' }, stage: 'commit', outcome: { status },
     resources: evidence.resources, changes: evidence.changes || [], item_results: evidence.item_results || [],
     ...(evidence.links && { links: evidence.links }), ...(status === 'succeeded' && { effect_scope: 'configuration' }),
+    ...(detail && {
+      request_evidence: {
+        operation_id: row.operation_id, command: row.command, parameters: evidence.request_parameters ?? null,
+      },
+      response_evidence: {
+        operation_id: row.operation_id, http_status: row.http_status, outcome: status,
+        ...(Number.isSafeInteger(row.response_revision) && { revision: row.response_revision }),
+      },
+    }),
   };
 }
 
 export async function auditLogDetail(db, id) {
-  const row = await db.prepare(eventSource + ' AND e.id=?').bind(id).first();
-  return row ? eventFromRow(db, row) : null;
+  const row = await db.prepare(`SELECT ${eventColumns}, o.http_status,
+    json_extract(o.response_json,'$.revision') AS response_revision` + eventSource + ' AND e.id=?').bind(id).first();
+  return row ? eventFromRow(db, row, true) : null;
 }
 
-function matches(event, { action, status, type, q, actor }) {
+function matches(event, { action, status, type, q, actor, source }) {
   const includes = (query, values) => values.some(value => typeof value === 'string' && value.toLowerCase().includes(query));
   return (!action || action === event.action_code) && (!status || status === event.outcome.status)
+    && (!source || source === event.source)
     && (!type || event.resources.some(resource => resource.type === type))
     && (!actor || includes(actor, [event.actor.id, event.actor.name]))
     && (!q || includes(q, [event.event_id, event.operation_id, AUDIT_ACTIONS[event.action_code],
@@ -97,15 +110,16 @@ function matches(event, { action, status, type, q, actor }) {
 }
 
 export async function auditLogPage(db, filters) {
-  const { limit, from, to, after } = filters;
+  const { limit, from, to, after, eventId } = filters;
   let cursor = after ? await db.prepare('SELECT id,created_at FROM audit_events WHERE id=?').bind(after).first() : null;
   if (after && !cursor) return null;
   const items = [];
-  const statement = db.prepare(eventSource + ` AND e.created_at>=? AND e.created_at<=?
+  const statement = db.prepare('SELECT ' + eventColumns + eventSource + (eventId ? ' AND e.id=?' : '') + ` AND e.created_at>=? AND e.created_at<=?
     AND (? IS NULL OR (e.created_at,e.id)<(?,?))
     ORDER BY e.created_at DESC,e.id DESC LIMIT 50`);
   while (items.length <= limit) {
-    const { results } = await statement.bind(from, to, cursor?.created_at ?? null, cursor?.created_at ?? null, cursor?.id ?? null).all();
+    const { results } = await statement.bind(...(eventId ? [eventId] : []), from, to,
+      cursor?.created_at ?? null, cursor?.created_at ?? null, cursor?.id ?? null).all();
     for (const row of results) {
       const event = await eventFromRow(db, row);
       if (!event || !matches(event, filters)) continue;

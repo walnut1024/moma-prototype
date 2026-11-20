@@ -23,7 +23,7 @@ function StandardContent({state,sourceState,model,ops}) {
   const close=()=>ops.proceed(()=>{setIdentity(false);ops.dirty(false);ops.setError('');});
   return <><RouteWorkbench state={state} sourceState={sourceState} model={model} ops={ops} onIdentity={()=>ops.proceed(()=>setIdentity(true))}/>{identity && <ServiceIdentityDialog model={model} ops={ops} close={close}/>}</>;
 }
-function ProviderContent({state,sourceState,model,ops,act}) {
+function ProviderContent({state,sourceState,model,ops,act,service}) {
   const formId = useId();
   const [providerId,setProviderId]=useState(''), [channelId,setChannelId]=useState(''), [editing,setEditing]=useState(null), [removing,setRemoving]=useState(null), trigger=useRef(null);
   const entries=providerServices(model), suppliers=supplierDirectory(state);
@@ -37,9 +37,10 @@ function ProviderContent({state,sourceState,model,ops,act}) {
     return {...entry,name:entry.channelName ? provider?.name+'（'+entry.channelName+'）' : provider?.name};
   });
   const close=()=>ops.proceed(()=>{setEditing(null);setRemoving(null);setProviderId('');setChannelId('');ops.dirty(false);ops.setError('');if(ops.params.has('providerEdit') || ops.params.has('providerAdd') || ops.params.has('identityProvider'))ops.go({providerEdit:null,providerAdd:null,identityProvider:null},{saved:true,preserveScroll:true});requestAnimationFrame(()=>{if(trigger.current?.isConnected)trigger.current.focus();});});
-  const editProviderId=editing || ops.params.get('identityProvider');
+  const requestedIdentity = ops.params.get('identityProvider');
+  const editProviderId=editing || (!service || offerKey(service) === requestedIdentity ? requestedIdentity : null);
   return <>
-    <RouteWorkbench state={state} sourceState={sourceState} model={model} ops={ops}
+    <RouteWorkbench state={state} sourceState={sourceState} model={model} ops={ops} serviceId={service?.id}
       onAddProvider={button=>{
         trigger.current = button;
         ops.go({providerAdd:'1',providerChannels:null},{preserveScroll:true});
@@ -62,16 +63,16 @@ function ProviderContent({state,sourceState,model,ops,act}) {
       </Notice>}{ops.error && <Notice error>{ops.error}</Notice>}</form></Modal>}
     {editProviderId && <ServiceIdentityDialog key={editProviderId} model={model} providerId={editProviderId} ops={ops} close={close} onSaved={editing ? ()=>{
       setEditing(null);setProviderId('');setChannelId('');
-      ops.go({identityProvider:null,providerChannels:editProviderId,routeProvider:editProviderId},{saved:true,preserveScroll:true});
+      ops.go({identityProvider:null,serviceRecord:null,providerChannels:editProviderId,routeProvider:editProviderId},{saved:true,preserveScroll:true});
     } : close}/>}
     {removing && <Modal title="解绑渠道服务" description={removing.name} onClose={close} footer={<><Button theme="light" onClick={close}>取消</Button><Button disabled={!ops.can} onClick={async ()=>{if(await ops.run('removeServiceProvider',{providerId:offerKey(removing),expectedUpdatedAt:model.updatedAt},model.id))close();}}>确认解绑</Button></>}><Typography.Paragraph>解绑会停用此服务路由并解除渠道关联。接入资源、售价和调用历史保留。</Typography.Paragraph>{ops.error && <Notice error>{ops.error}</Notice>}</Modal>}
   </>;
 }
-export function ServiceMappingsContent({state,sourceState=state,model,ops,act}) {
+export function ServiceMappingsContent({state,sourceState=state,model,ops,act,service}) {
   const Content=model.serviceMode==='provider' ? ProviderContent : StandardContent;
   return <div className="ss-routing-content">
     <ServiceModeBar model={model} ops={ops} act={act}/>
-    <Content key={model.id} state={state} sourceState={sourceState} model={model} ops={ops} act={act}/>
+    <Content key={model.id} state={state} sourceState={sourceState} model={model} ops={ops} act={act} service={service}/>
   </div>;
 }
 

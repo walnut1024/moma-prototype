@@ -77,7 +77,15 @@ test('priority groups and retry limits are saved together as route versions thro
 
 test('supplier and service operations share a scoped, redacted audit trail through HTTP/D1',{timeout:60000},async()=>{
   const accessCode=randomBytes(24).toString('hex'),local=await startLocalBackend({ demo: true, loginHashes:{'admin-001':createHash('sha256').update(accessCode).digest('hex'),'admin-002':createHash('sha256').update(accessCode).digest('hex')}});let cookie,state,lastBody;
-  async function api(path,body,key){const response=await local.runtime.dispatchFetch('https://example.test/api/5120'+path,{method:body?'POST':'GET',headers:{...(cookie?{cookie}:{}),...(body?{origin:'https://example.test','x-moma-request':'1','content-type':'application/json'}:{}),...(key?{'idempotency-key':key}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:response.status,data:await response.json(),headers:response.headers};}
+  async function api(path,body,key){
+    const response=await local.runtime.dispatchFetch('https://example.test/api/5120'+path,{
+      method:body?'POST':'GET',
+      headers:{...(cookie?{cookie}:{}),...(body?{origin:'https://example.test','x-moma-request':'1','content-type':'application/json'}:{}),
+        ...(body?.action?.operation==='supplierSelection'?{'sec-fetch-site':'same-origin'}:{}),...(key?{'idempotency-key':key}:{})},
+      ...(body?{body:JSON.stringify(body)}:{}),
+    });
+    return {status:response.status,data:await response.json(),headers:response.headers};
+  }
   const reload=async()=>{state=domainModelWorkspace((await api('/model-operations')).data);useCloudMockSnapshot(state,state.cloudMockState);};
   const command=async(operation,data,modelId)=>{const operationId=crypto.randomUUID();lastBody={operationId,expectedRevision:state.revision,action:{type:'modelOperations',operation,modelId,data}};const result=await api('/model-operations/commands',lastBody,operationId);assert.equal(result.status,200,operation+': '+JSON.stringify(result.data));await reload();};
   try{
@@ -113,8 +121,9 @@ test('supplier and service operations share a scoped, redacted audit trail throu
     const channels=routeEditorChannels(state,service()),target=channels.find(row=>row.endpointId===endpointId);assert(target.available && target.candidate);
     const config={...routeEditConfig(service(),serviceRoute(state,service().id)),strategy:'fixed',channels:[{supplyId:target.id,enabled:true,priority:1,weight:100,groupId:'P1'}]};
     await command('serviceRouteConfigure',routeEditorPayload(state,service(),config,channels),modelId);
-    const routeOperationId=lastBody.operationId;
-    assert.equal((await api('/model-operations/commands',lastBody,routeOperationId)).status,200);
+    const routeRequest=lastBody,routeOperationId=routeRequest.operationId;
+    const routeReceipt=await api('/model-operations/commands',routeRequest,routeOperationId);
+    assert.equal(routeReceipt.status,200);
     const active=activeRouteVersion(serviceRoute(state,service().id)),supply=state.modelSupplies.find(row=>row.id===active.config.channels[0].supplyId);assert.equal(supply.endpointId,endpointId);assert.equal(supply.upstreamModelId,'vendor/GLM-5.3');assert.equal(supply.status,'已启用');assert.equal(supply.validationStatus,'通过');assert.equal(active.config.channels.length,1);
     assert.deepEqual(state.models.filter(row=>row.id!==modelId),baseline.models.filter(row=>row.id!==modelId));assert.deepEqual(state.modelSalePrices,baseline.modelSalePrices);assert.equal(model().listingStatus,baseline.models.find(row=>row.id===modelId).listingStatus);
     assert(secrets.every(secret=>!JSON.stringify(state).includes(secret)));assert.equal((await local.db.prepare('PRAGMA foreign_key_check').all()).results.length,0);
@@ -173,7 +182,7 @@ test('supplier and service operations share a scoped, redacted audit trail throu
       operation:'supplierSelection',data:{action:'disable',confirmed:true,selections:[selections[0],{...selections[1],expectedFingerprint:'stale'}]}}},rejected)).status,422);
     assert(supplierChannelAssociations(state,owner(),endpointId).some(row=>row.id===selections[0].associationId && row.enabled));
     await command('supplierSelection',{action:'disable',confirmed:true,selections});
-    const disableOperationId=lastBody.operationId;
+    const disableOperationId=lastBody.operationId,disableRequestRevision=lastBody.expectedRevision;
 
     const list=await api('/audit-logs');
     assert.equal(list.status,200);
@@ -185,7 +194,15 @@ test('supplier and service operations share a scoped, redacted audit trail throu
     const established=items.filter(item=>item!==replacementAudit);
     assert.deepEqual(established.map(item=>item.operation_id),[disableOperationId,rotationOperationId,routeOperationId]);
     assert.equal(items[0].target_count,2);
-    assert(items.every(item=>item.changes===undefined && item.resources===undefined));
+    assert(items.every(item=>item.changes===undefined && item.resources===undefined &&
+      item.request_evidence===undefined && item.response_evidence===undefined));
+    assert.equal(items[0].source,'web');
+    assert.deepEqual((await api('/audit-logs?source=web&event_id='+items[0].event_id)).data.items.map(row=>row.event_id),[items[0].event_id]);
+    assert.deepEqual((await api('/audit-logs?source=unknown')).data.items.map(row=>row.event_id),items.slice(1).map(row=>row.event_id));
+    assert.deepEqual((await api('/audit-logs?source=unknown&event_id='+items[0].event_id)).data.items,[]);
+    assert.deepEqual((await api('/audit-logs?event_id='+items[0].event_id.slice(0,-1))).data.items,[]);
+    assert.equal((await api('/audit-logs?source=__proto__')).status,400);
+    assert.equal((await api('/audit-logs?event_id=%2F')).status,400);
     const first=await api('/audit-logs?limit=1');
     assert.equal(first.data.nextCursor,items[0].event_id);
     assert.equal((await api('/audit-logs?limit=1&after='+first.data.nextCursor)).data.items[0].event_id,items[1].event_id);
@@ -200,24 +217,42 @@ test('supplier and service operations share a scoped, redacted audit trail throu
 
     const detail=async row=>(await api('/audit-logs/'+row.event_id)).data.event;
     const routeAudit=await detail(established[2]);
+    assert.deepEqual(routeAudit.request_evidence,{operation_id:routeOperationId,command:'serviceRouteConfigure',parameters:{
+      service_id:service().id,expected_version:routeRequest.action.data.expectedVersion,expected_revision:routeRequest.expectedRevision,
+    }});
+    assert.deepEqual(routeAudit.response_evidence,{operation_id:routeOperationId,http_status:routeReceipt.status,
+      outcome:'succeeded',revision:routeReceipt.data.revision});
     assert(routeAudit.changes.some(change=>change.field==='active_version' && change.after.value===active.version));
     assert(routeAudit.resources.some(resource=>resource.type==='service_mapping' && resource.roles.includes('changed')));
     assert(routeAudit.resources.some(resource=>resource.type==='model_supply' && resource.id===association.id));
     const rotateAudit=await detail(established[1]);
+    assert.equal(rotateAudit.request_evidence.parameters.candidate_id,candidateId);
+    assert.equal(rotateAudit.request_evidence.parameters.provider_id,providerId);
     assert.equal(rotateAudit.links.candidate_id,candidateId);
     assert(rotateAudit.changes.some(change=>change.field==='active_key_id' && change.after.value===activeKeyId));
     assert(rotateAudit.resources.some(resource=>resource.id===endpointId && resource.roles.includes('changed')));
     const batchAudit=await detail(established[0]);
+    assert.deepEqual(batchAudit.request_evidence.parameters,{expected_revision:disableRequestRevision,action:'disable',selected_count:2});
+    assert.equal(batchAudit.source,'web');
     assert.deepEqual(batchAudit.item_results.map(row=>row.status),['succeeded','unchanged']);
     assert(batchAudit.changes.some(change=>change.field==='enabled' && change.before.value===true && change.after.value===false));
     assert(batchAudit.resources.some(resource=>resource.type==='model_material' && resource.id===master.id));
-    assert.doesNotMatch(JSON.stringify([routeAudit,rotateAudit,batchAudit,await detail(replacementAudit)]),/qa-only|fingerprint|maskedKey|catalogConnections|mapping-contract\.example/);
+    const replacementDetail=await detail(replacementAudit);
+    assert.deepEqual(replacementDetail.request_evidence.parameters,{expected_revision:beforeReplace,provider_id:providerId,
+      key_id:activeKeyId,expected_connection_count:replacement.expectedEndpointIds.length});
+    assert.doesNotMatch(JSON.stringify([routeAudit,rotateAudit,batchAudit,replacementDetail]),
+      /qa-only|fingerprint|maskedKey|catalogConnections|mapping-contract\.example|newApiKey|request_hash|response_json/);
 
     for (const item of established) {
       const original=await local.db.prepare('SELECT record_json FROM audit_events WHERE id=?').bind(item.event_id).first('record_json');
       await local.db.prepare("UPDATE audit_events SET record_json=json_remove(record_json,'$.platformAudit') WHERE id=?").bind(item.event_id).run();
       const historical=await detail(item);
       assert.equal(historical.action_code,item.action_code);
+      assert.equal(historical.source,'unknown');
+      assert.equal(historical.request_evidence.operation_id,item.operation_id);
+      assert.equal(historical.request_evidence.parameters,null);
+      assert.equal(historical.response_evidence.http_status,200);
+      assert.equal(historical.response_evidence.outcome,'succeeded');
       assert.doesNotMatch(JSON.stringify(historical),/qa-only|fingerprint|maskedKey|catalogConnections|mapping-contract\.example/);
       await local.db.prepare('UPDATE audit_events SET record_json=? WHERE id=?').bind(original,item.event_id).run();
     }

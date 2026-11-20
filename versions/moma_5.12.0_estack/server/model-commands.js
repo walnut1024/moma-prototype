@@ -4,11 +4,12 @@ import { commitAdminState } from '../src/admin-v2/state-transaction.js';
 import { createMockEngine } from '../src/admin-v2/mock-onboarding-core.js';
 import { prepareMockOnboardingSync } from '../src/admin-v2/mock-onboarding-sync.js';
 import { assertNewMockPublications } from '../src/admin-v2/mock-publication-gate.js';
-import { modelWorkspacePayload, loadModelWorkspace, loadSimulationWorkspace, modelChanges, simulatorChanges, modelSupplyRelations } from './model-repository.js';
+import { modelWorkspacePayload, loadModelWorkspace, loadSimulationWorkspace, modelChanges, simulatorChanges, modelSupplyRelations, channelIndexPlan, channelIndexRepairStatements } from './model-repository.js';
 import { storedModel, domainModel } from '../src/mock/model-fields.js';
 import { canManagePackages, packageFactorVersion, tokenPackageTransaction } from '../src/admin-v2/token-packages.js';
 import { validTrafficLimit } from '../src/admin-v2/traffic-rates.js';
 import { auditEvidence } from './audit-evidence.js';
+import { connectionKeys } from '../src/admin-v2/connection-state.js';
 
 const collections=['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','modelVersions','validations','modelOnboardings','serviceRoutes','tariffDictionary','tenants','audits'];
 const canonical=value=>value && typeof value==='object'?Array.isArray(value)?value.map(canonical):Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])])):value;
@@ -57,6 +58,17 @@ async function save(db,actor,state,key,id,hash,command,response,statements,audit
 }
 
 export async function modelBootstrap(db,actor){return modelWorkspacePayload(db,actor);}
+
+export async function channelIndexCheck(db, actor) {
+  const state = await loadModelWorkspace(db, actor, { command: true });
+  const changes = await channelIndexPlan(db, state);
+  const safeFields = ['upstream_model_id', 'enabled', 'config_epoch', 'weight', 'position'];
+  const describe = row => row ? Object.fromEntries(safeFields.filter(key => row[key] !== undefined).map(key => [key, row[key]])) : null;
+  return { revision: state.revision, signature: await digest(changes), issues: changes.map(issue => ({
+    id: issue.id, type: issue.type, endpointId: issue.endpointId, reference: issue.reference, reason: issue.reason,
+    repairable: issue.repairable, source: describe(issue.row), indexed: describe(issue.before),
+  })) };
+}
 
 async function loadTrafficLimits(db) {
   const [defaults, rules, catalogue] = await db.batch([
@@ -268,7 +280,7 @@ export async function packageCommand(db, actor, body, key) {
   return save(db, actor, state, key, operationId, hash, 'package.' + action.operation, result, [statement], audit, entityTypes[collection]);
 }
 
-export async function modelCommand(db,actor,body,key,license){
+export async function modelCommand(db,actor,body,key,license,{ executionSource, auditSource } = {}){
   if(!['平台管理员','运营人员'].includes(actor.role))issue(403,'FORBIDDEN','当前账号无模型运营修改权限');
   if(!validId(key) || !validId(body?.operationId) || !Number.isSafeInteger(body.expectedRevision) || !body.action || !['modelOperations','modelOperation','providerOperation'].includes(body.action.type) || typeof body.action.operation!=='string')issue(400,'INVALID_INPUT','业务命令、操作标识或修订号无效');
   if(Object.keys(body.action).some(k=>!['type','operation','modelId','data'].includes(k)))issue(400,'INVALID_INPUT','不允许提交身份或底层集合写入');
@@ -278,6 +290,19 @@ export async function modelCommand(db,actor,body,key,license){
   const hash=await digest(body),prior=await receipt(db,actor,key,hash,body.operationId);if(prior)return prior;
   const before=await loadModelWorkspace(db,actor,{command:true});
   if(before.revision!==body.expectedRevision)issue(409,'REVISION_CONFLICT','模型运营已有修订，请载入最新数据；当前输入保留');
+  let indexRepairs = [];
+  if (body.action.operation === 'channelDirectoryRepair') {
+    const data = body.action.data;
+    if (body.action.type !== 'modelOperations' || data?.confirmed !== true || !Array.isArray(data.issueIds) || !data.issueIds.length ||
+      data.issueIds.length > 100 || data.issueIds.some(id => typeof id !== 'string' || id.length > 500) ||
+      new Set(data.issueIds).size !== data.issueIds.length || typeof data.signature !== 'string' || !/^[a-f0-9]{64}$/.test(data.signature)) {
+      issue(400, 'INVALID_INPUT', '请核对并确认 1–100 条不重复的一致性问题');
+    }
+    const current = await channelIndexPlan(db, before);
+    if (await digest(current) !== data.signature) issue(422, 'BUSINESS_BLOCKED', '索引或源配置已变化，请重新检查');
+    indexRepairs = data.issueIds.map(id => current.find(item => item.id === id && item.repairable));
+    if (indexRepairs.some(item => !item)) issue(422, 'BUSINESS_BLOCKED', '所选问题不存在或需要人工核对');
+  }
   const dictionaryChange = body.action.operation === 'tariffDictionary' ? body.action.data : null;
   if (['serviceArchive','serviceDelete'].includes(body.action.operation) && typeof body.action.modelId === 'string') {
     const reference = await db.prepare(`SELECT 1 FROM token_package_records p, json_each(p.record_json, '$.modelIds') model
@@ -315,7 +340,10 @@ export async function modelCommand(db,actor,body,key,license){
   let next;
   try{
     next=commitAdminState(before,action,actor.role);
-    if(next.audits[0])next.audits[0].actorId=actor.id;
+    if(next.audits[0]) {
+      next.audits[0].actorId=actor.id;
+      if(executionSource) next.audits[0].executionSource=executionSource;
+    }
     const sync=prepareMockOnboardingSync(before,next,action);
     assertNewMockPublications(before,next,action,sync?.after);
     next.cloudMockState=sync?.after || engine.snapshot();next.cloudMockState.operations={};
@@ -323,16 +351,24 @@ export async function modelCommand(db,actor,body,key,license){
   if (license && !license.commerceWritable && commercialConfigurationChanged(before, next)) {
     issue(403, 'LICENSE_REQUIRED', LICENSE_UNAVAILABLE);
   }
-  const statements=[...modelChanges(db,before,next,{insertOnly:importingDemo}),...simulatorChanges(db,before.cloudMockState,next.cloudMockState)];
+  const statements=[...modelChanges(db,before,next,{insertOnly:importingDemo}),...simulatorChanges(db,before.cloudMockState,next.cloudMockState),
+    ...channelIndexRepairStatements(db, indexRepairs)];
+  if (indexRepairs.length) {
+    next.audits[0].indexRepairResults = indexRepairs.map(row => ({
+      id: row.id, endpointId: row.endpointId, reference: row.reference, status: '已修复',
+    }));
+    next.audits[0].relatedEndpointIds = [...new Set(indexRepairs.map(row => row.endpointId).filter(Boolean))];
+  }
   const result={operationId:body.operationId,revision:next.revision,patches:patches(before,next),modelData:next.modelData,supplyRelations:modelSupplyRelations(next),mockState:next.cloudMockState,updatedAt:next.updatedAt};
-  const evidence = auditEvidence(before, next, action, actor);
+  const evidence = auditEvidence(before, next, action, actor, body.expectedRevision);
   const audit = next.audits[0];
-  return save(db,actor,before,key,body.operationId,hash,action.operation,result,statements,evidence ? { ...audit, platformAudit: evidence } : audit);
+  return save(db,actor,before,key,body.operationId,hash,action.operation,result,statements,
+    evidence ? { ...audit, platformAudit: { ...evidence, ...(auditSource && { source: auditSource }) } } : audit);
 }
 
 export async function simulationRequest(db,actor,path,method,body,key){
   if(!['平台管理员','运营人员'].includes(actor.role))issue(403,'FORBIDDEN','当前账号无模型运营权限');
-  if(!/^\/(scenario|health|credentials|channels|discover|tests|services|configuration-changes|usage|audits)(\/|\?|$)/.test(path))issue(404,'NOT_FOUND','模拟接口不在管理端范围');
+  if(!/^\/(scenario|health|credentials|channels|discover|balance|tests|services|configuration-changes|usage|audits)(\/|\?|$)/.test(path))issue(404,'NOT_FOUND','模拟接口不在管理端范围');
   rejectSecrets(body);
   if(method!=='GET' && (!validId(key) || !validId(body?.operationId)))issue(400,'INVALID_INPUT','模拟操作须提供稳定操作标识');
   const hash=method==='GET'?null:await digest([path,method,body]),id=body?.operationId;
@@ -351,4 +387,23 @@ export async function simulationRequest(db,actor,path,method,body,key){
   const response={result,mockState:snapshot,revision:state.revision};
   if(method==='GET')return response;
   return save(db,actor,state,key,id,hash,`simulation.${method}.${path}`,response,simulatorChanges(db,state.cloudMockState,snapshot));
+}
+
+export async function channelCredentialAccess(db, actor, endpointId, keyId, verified) {
+  if (actor.role !== '平台管理员') issue(403, 'FORBIDDEN', '仅平台管理员可验证后查看凭证摘要');
+  const failureCount = await db.prepare(`SELECT COUNT(*) AS count FROM audit_events a JOIN operations o ON o.id=a.operation_id
+    WHERE o.actor_id=? AND o.command='channel.credential.verify' AND a.created_at>? AND json_extract(a.record_json,'$.result')='失败'`)
+    .bind(actor.id, Date.now() - 60000).first('count');
+  if (failureCount >= 5) issue(429, 'TOO_MANY_ATTEMPTS', '验证次数过多，请一分钟后重试');
+  const state = await loadModelWorkspace(db, actor);
+  const endpoint = state.endpoints.find(row => row.id === endpointId && !row.deletedAt);
+  const provider = endpoint && state.providers.find(row => row.id === endpoint.providerId && !row.deletedAt);
+  const key = endpoint && provider && connectionKeys(endpoint, provider, true).find(row => row.id === keyId && !row.revokedAt);
+  if (!key) issue(404, 'NOT_FOUND', '凭证不属于当前连接或已撤销');
+  const id = resourceId('credential-view'), at = Date.now();
+  const event = { id: resourceId('audit-event'), action: '凭证查看身份验证', objectId: key.id, endpointId, providerId: provider.id,
+    result: verified ? '成功' : '失败', createdAt: new Date(at).toISOString(), actor: actor.role, actorId: actor.id };
+  const result = verified ? { verified: true, keyId, maskedKey: key.maskedKey, expiresAt: new Date(at + 30000).toISOString() } : { verified: false };
+  await save(db, actor, state, id, id, await digest([endpointId, keyId, verified]), 'channel.credential.verify', { recorded: true }, [], event);
+  return result;
 }

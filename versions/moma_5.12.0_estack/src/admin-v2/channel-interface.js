@@ -1,3 +1,6 @@
+import { customForwarding } from './channel-custom-adapter.js';
+import { previewChannelRequestRules } from './channel-request-rules.js';
+
 export const CHANNEL_INTERFACES = [
   { id: 'openai', label: 'OpenAI 兼容 API（Chat Completions）', protocol: 'OpenAI' },
   { id: 'openai-responses', label: 'OpenAI 兼容 API（Responses）', protocol: 'OpenAI' },
@@ -80,10 +83,15 @@ export function prepareChannelInterface({ interfaceType, baseUrl, taskUrls = {},
   return { interfaceType, protocol: preset.protocol, addressMode: 'task', baseUrl: urlText(url), taskUrls: preparedTasks };
 }
 
-export function modelTaskUrl(endpoint, modelType, { probe } = {}) {
+export function modelTaskUrl(endpoint, modelType, { probe, upstreamModelId } = {}) {
   if (!endpoint || !modelTypes.includes(modelType)) throw new Error('请选择已支持的模型任务');
   const { interfaceType, baseUrl, taskUrls } = prepareChannelInterface({ ...endpoint, allowHttp: endpoint.allowHttp === true });
-  if (interfaceType === 'custom') return taskUrls[modelType] || baseUrl;
+  if (interfaceType === 'custom') {
+    const route = customForwarding(endpoint.customAdapter, endpoint, modelType, upstreamModelId);
+    if (route) return route.url;
+    if (upstreamModelId && endpoint.customAdapter?.routes.some(row => row.task === modelType)) throw Error('没有匹配当前模型的自定义转发规则');
+    return taskUrls[modelType] || baseUrl;
+  }
   const task = ['anthropic', 'openai-responses'].includes(interfaceType)
     ? ['text', 'multimodal'].includes(modelType) ? interfaceType === 'anthropic' ? 'messages' : 'responses' : null
     : ({ text: 'chat/completions', multimodal: 'chat/completions', embedding: 'embeddings', image: 'images/generations', audio: probe === 'speech' ? 'audio/speech' : probe === 'transcription' ? 'audio/transcriptions' : null })[modelType];
@@ -97,7 +105,11 @@ export function channelConversationRequest(endpoint, model) {
   if (endpoint.interfaceType === 'openai-responses') Object.assign(body, { input: prompt, max_output_tokens: 32 });
   else if (endpoint.interfaceType === 'anthropic') Object.assign(body, { messages: [{ role: 'user', content: prompt }], max_tokens: 32 });
   else Object.assign(body, { messages: [{ role: 'user', content: prompt }], [endpoint.tokenLimitField || endpoint.adapterOptions?.tokenLimitField || 'max_completion_tokens']: 32 });
-  return { method: 'POST', url: modelTaskUrl(endpoint, model.type), body };
+  const forwarding = customForwarding(endpoint.customAdapter, endpoint, model.type, model.upstreamModelId);
+  const request = { method: forwarding?.method || 'POST', url: modelTaskUrl(endpoint, model.type, { upstreamModelId: model.upstreamModelId }), body };
+  if (!endpoint.requestRules) return request;
+  const demo = previewChannelRequestRules(endpoint.requestRules, body, 200, { interfaceType: endpoint.interfaceType });
+  return demo.error ? { ...request, body: null, rejected: demo.error } : { ...request, ...demo.request };
 }
 
 export function channelConversationText(interfaceType, response) {

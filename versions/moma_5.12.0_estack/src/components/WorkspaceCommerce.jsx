@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Banner, Button, Modal, Select, Tabs } from '@douyinfe/semi-ui';
+import { Banner, Button, Modal, Select, Table, Tabs } from '@douyinfe/semi-ui';
 import { ShoppingCart, Store } from 'lucide-react';
 import FrontPageHeader from './FrontPageHeader';
 import { chargeTotals, formatRequestCharge } from '../project-call.mjs';
@@ -48,47 +48,61 @@ export default function WorkspaceCommerce({ tenant, services, internal, view, on
   return <div className="project-workspace">
     <FrontPageHeader title={title} description={tenant.identity?.tenantName} icon={billing ? ShoppingCart : Store}
       actions={tenant.identity && !internal && tenant.canManage &&
-        <Button onClick={billing ? onOrder : onBilling}>{billing ? '开通模型服务' : '订购与账单'}</Button>} />
+        <Button theme="solid" onClick={billing ? onOrder : onBilling}>{billing ? '开通模型服务' : '订购与账单'}</Button>} />
     {tenant.error && <Banner type="danger" description={tenant.error} closeIcon={null} />}
     {!tenant.identity ? <Button onClick={onLogin}>登录</Button> : billing ? tenant.canManage ? <>
       <Tabs activeKey={tab} onChange={setTab} tabList={[
         {itemKey:'services',tab:'已开通服务'}, {itemKey:'plans',tab:'Token Plan'}, {itemKey:'bills',tab:'账单'},
       ]} />
       <section className="project-panel">
-        {tab === 'services' && <div className="project-table-scroll"><table><thead><tr>
-          <th>订单号</th><th>模型服务</th><th>开通时间</th><th>状态</th>
-        </tr></thead><tbody>{tenant.orders.filter(row => !row.subscriptionId && row.billingType !== 'Token Plan').map(order => <tr key={order.id}>
-          <td>{order.orderNo || order.id}</td><td>{order.productName || order.serviceId || '未记录'}</td>
-          <td>{time(order.activatedAt)}</td><td>{order.status}</td>
-        </tr>)}</tbody></table>{!tenant.orders.length && <p>暂无订购记录</p>}</div>}
-        {tab === 'plans' && <div className="project-table-scroll"><Button onClick={onPlanOrder}>订购 Token Plan</Button><table><thead><tr>
-          <th>订阅 ID</th><th>套餐</th><th>生效时间</th><th>到期时间</th><th>状态</th>
-        </tr></thead><tbody>{tenant.plans.filter(row => !row.product.name.includes('Coding')).map(plan => <tr key={plan.id}>
-          <td>{plan.id}</td><td>{plan.product.name}</td><td>{time(plan.activatedAt)}</td><td>{time(plan.expiresAt || plan.endAt)}</td><td>{plan.status}</td>
-        </tr>)}</tbody></table>{!tenant.plans.length && <p>暂无套餐订阅</p>}</div>}
+        {tab === 'services' && <Table rowKey="id" size="small" pagination={false} scroll={{x:560}}
+          dataSource={tenant.orders.filter(row => !row.subscriptionId && row.billingType !== 'Token Plan')} empty="暂无订购记录"
+          columns={[
+            {title:'订单号', render:(_, order) => order.orderNo || order.id},
+            {title:'模型服务', render:(_, order) => order.productName || order.serviceId || '未记录'},
+            {title:'开通时间', dataIndex:'activatedAt',render:time},
+            {title:'状态', dataIndex:'status'},
+          ]}/>}
+        {tab === 'plans' && <>
+          <Button theme="solid" onClick={onPlanOrder}>订购 Token Plan</Button>
+          <Table rowKey="id" size="small" pagination={false} scroll={{x:640}}
+            dataSource={tenant.plans.filter(row => !row.product.name.includes('Coding'))} empty="暂无套餐订阅"
+            columns={[
+              {title:'订阅 ID', dataIndex:'id'},
+              {title:'套餐', render:(_, plan) => plan.product.name},
+              {title:'生效时间', dataIndex:'activatedAt', render:time},
+              {title:'到期时间', render:(_, plan) => time(plan.expiresAt || plan.endAt)},
+              {title:'状态', dataIndex:'status'},
+            ]}/>
+        </>}
         {tab === 'bills' && <>
           <div className="project-panel-heading"><h2>按量用量账单</h2><strong>已核算 {chargeTotals(billRows.map(row => row.charge)) || '—'}</strong></div>
-          <div className="project-table-scroll"><table><thead><tr>
-            <th>调用时间</th>{!personal && <th>项目</th>}<th>模型服务</th><th>费用</th><th>请求 ID</th>
-          </tr></thead><tbody>{billRows.map(row => <tr key={row.id}>
-            <td>{time(row.createdAt)}</td>{!personal && <td>{tenant.projects.find(project => project.id === row.projectId)?.name || '未归属'}</td>}
-            <td>{row.publicModelId || row.modelId}</td><td>{row.charge ? formatRequestCharge(row.charge) : '待核算'}</td><td>{row.requestId}</td>
-          </tr>)}</tbody></table>{!billRows.length && <p>暂无按量调用费用</p>}</div>
+          <Table rowKey="id" size="small" pagination={false} scroll={{x:640}} dataSource={billRows} empty="暂无按量调用费用"
+            columns={[
+              {title:'调用时间', dataIndex:'createdAt', render:time},
+              ...(!personal ? [{title:'项目', dataIndex:'projectId', render:id => tenant.projects.find(project => project.id === id)?.name || '未归属'}] : []),
+              {title:'模型服务', render:(_, row) => row.publicModelId || row.modelId},
+              {title:'费用', dataIndex:'charge', align:'right', render:charge => charge ? formatRequestCharge(charge) : '待核算'},
+              {title:'请求 ID', dataIndex:'requestId'},
+            ]}/>
         </>}
       </section>
     </> : <p>请由企业管理员查看订购与账单。</p> : <section className="project-panel">
       {feedback && <p role="status">{feedback}</p>}
-      <div className="project-table-scroll"><table aria-label="模型服务">
-        <thead><tr><th>模型服务</th><th>模型调用名</th>{!internal && <th>按量价格</th>}<th>操作</th></tr></thead>
-        <tbody>{rows.map(service => <tr key={service.id}>
-          <td>{service.name}<small>{service.provider}</small></td><td>{service.callId}</td>
-          {!internal && <td>{customerPriceRows(service.salePrices).map(row => <small key={row.name}>{row.name} {row.amount} {row.currency}/{row.unit}</small>)}</td>}
-          <td><Button theme="borderless" onClick={() => start(service)}>体验</Button>
+      <Table aria-label="模型服务" rowKey="id" size="small" pagination={false} scroll={{x:680}} dataSource={rows} empty="暂无可用模型服务"
+        columns={[
+          {title:'模型服务', render:(_, service) => <div className="project-record">{service.name}<small>{service.provider}</small></div>},
+          {title:'模型调用名',dataIndex:'callId'},
+          ...(!internal ? [{title:'按量价格',render:(_, service) => <div className="project-record">
+            {customerPriceRows(service.salePrices).map(row => <small key={row.name}>{row.name} {row.amount} {row.currency}/{row.unit}</small>)}
+          </div>}] : []),
+          {title:'操作',render:(_, service) => <>
+            <Button size="small" theme="borderless" onClick={() => start(service)}>体验</Button>
             {!internal && (service.ordered ? <span>已开通</span> : tenant.canManage
-              ? <Button theme="borderless" onClick={() => { setError(''); setConfirmation({service,identityKey:tenant.identity.key,expectedRevision:tenant.revision}); }}>开通按量服务</Button>
-              : <span>由企业管理员开通</span>)}</td>
-        </tr>)}</tbody>
-      </table>{!rows.length && <p>暂无可用模型服务</p>}</div>
+              ? <Button size="small" theme="borderless" onClick={() => { setError(''); setConfirmation({service,identityKey:tenant.identity.key,expectedRevision:tenant.revision}); }}>开通按量服务</Button>
+              : <span>由企业管理员开通</span>)}
+          </>},
+        ]}/>
     </section>}
     <Modal visible={Boolean(entry)} title={'体验 ' + (entry?.name || '')} onCancel={() => setEntry(null)} footer={null}>
       {entry && <div className="project-form">

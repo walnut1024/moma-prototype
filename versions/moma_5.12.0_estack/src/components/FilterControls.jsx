@@ -1,7 +1,6 @@
 import { useContext } from 'react';
-import { Button as SemiButton } from '@douyinfe/semi-ui';
+import { Button, Pagination } from '@douyinfe/semi-ui';
 import { AdminUIContext } from './admin-ui-context';
-import { Button } from './ui/button';
 import './filter-controls.css';
 
 export const PAGE_SIZES = [20, 50, 100];
@@ -18,20 +17,22 @@ export function FilterToolbar({ children, className = '' }) {
 
 export function FilterPresets({ label = '时间筛选', value, onChange, items = TIME_PRESETS, children, className = '' }) {
   const admin = useContext(AdminUIContext);
-  if (admin) return <div className="admin-time-presets" role="group" aria-label={label}>
-    {items.map(([id, text]) => <SemiButton key={id} theme={value === id ? 'solid' : 'light'} aria-pressed={value === id} onClick={() => onChange(id)}>{text}</SemiButton>)}
+  const classes = admin ? 'admin-time-presets' : `filter-presets ${className}`.trim();
+  return <div className={classes} role="group" aria-label={label}>
+    {items.map(([id, text]) => <Button key={id} theme={value === id ? 'solid' : 'light'}
+      aria-pressed={value === id} onClick={() => onChange(id)}>{text}</Button>)}
     {children}
   </div>;
-  return <div className={`filter-presets ${className}`.trim()} role="group" aria-label={label}>{items.map(([id, text]) => <Button key={id} type="button" variant={value === id ? 'default' : 'outline'} aria-pressed={value === id} onClick={() => onChange(id)}>{text}</Button>)}{children}</div>;
 }
 
 export function FilterReset({ onClick }) {
-  if (useContext(AdminUIContext)) return <SemiButton type="tertiary" theme="borderless" onClick={onClick}>重置筛选</SemiButton>;
-  return <Button type="button" variant="ghost" size="sm" className="filter-reset" onClick={onClick}>重置筛选</Button>;
+  const admin = useContext(AdminUIContext);
+  return <Button type="tertiary" theme="borderless" size={admin ? 'default' : 'small'}
+    className={admin ? undefined : 'filter-reset'} onClick={onClick}>重置筛选</Button>;
 }
 
-export function FilterField({ label, children, className = '' }) {
-  return <div className={`filter-field ${className}`.trim()}><span>{label}</span>{children}</div>;
+export function FilterField({ label, labelId, children, className = '' }) {
+  return <div className={`filter-field ${className}`.trim()}><span id={labelId}>{label}</span>{children}</div>;
 }
 
 export function FilterViewRow({ children, className = '' }) {
@@ -39,14 +40,10 @@ export function FilterViewRow({ children, className = '' }) {
 }
 
 export function FilterPagination({ total, page, size, onPageChange, onSizeChange }) {
-  const pages = Math.max(1, Math.ceil(total / size));
-  const current = Math.min(page, pages);
-  return <div className="filter-pagination"><span>共 {total} 条</span><div>
-    <select aria-label="每页条数" value={size} onChange={event => onSizeChange(Number(event.target.value))}>
-      {PAGE_SIZES.map(value => <option key={value} value={value}>{value} 条 / 页</option>)}
-    </select>
-    <Button type="button" variant="outline" size="sm" disabled={current === 1} onClick={() => onPageChange(current - 1)}>上一页</Button>
-    <span aria-live="polite">{current} / {pages}</span>
-    <Button type="button" variant="outline" size="sm" disabled={current === pages} onClick={() => onPageChange(current + 1)}>下一页</Button>
-  </div></div>;
+  const current = Math.min(page, Math.max(1, Math.ceil(total / size)));
+  return <div className="filter-pagination"><span>共 {total} 条</span>
+    {total > 0 && <Pagination total={total} currentPage={current} pageSize={size} size="small"
+      showSizeChanger pageSizeOpts={PAGE_SIZES} preventPageChangeOnPageSizeChange
+      onPageChange={onPageChange} onPageSizeChange={onSizeChange} />}
+  </div>;
 }

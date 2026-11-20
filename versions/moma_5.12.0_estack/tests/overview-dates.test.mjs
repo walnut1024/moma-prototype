@@ -1,31 +1,96 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { overviewPeriod, overviewDemo } from '../src/admin-v2/overview.js';
-const time = text => Date.parse(text + '+08:00');
-const now = time('2026-10-24T10:30:00');
-test('today uses Beijing midnight and previous day at equal elapsed time', () => {
- const p = overviewPeriod(now, 'today');
- assert.equal(p.start, time('2026-10-24T00:00:00'));
- assert.equal(p.end, now);
- assert.equal(p.previousEnd, time('2026-10-23T10:30:00'));
- const d = overviewDemo(now,'today');
- assert.equal(d.trend.length,11);
- for (const key of ['total','calls']) for(const list of ['trend','customers','models','pairs']) assert.equal(d[list].reduce((n,r)=>n+r[key],0),d[key]);
- assert.equal(overviewDemo(time('2026-10-24T00:00:00'),'today').total,0);
+import { overviewCustomers, overviewMetrics, overviewRanks, overviewTimeline } from '../src/admin-v2/overview.js';
+
+const time = value => Date.parse(value + '+08:00');
+const now = time('2026-11-18T10:30:00');
+const call = (id, at, usage = { input: 10, output: 2 }, extra = {}) => ({
+  id, requestId: id, modelId: 'model-a', tenantId: 'enterprise', endpointId: 'self',
+  createdAt: new Date(time(at)).toISOString(), httpStatus: 200, usage, ...extra,
 });
-test('custom supports full days and today with same-progress comparison', () => {
- const p = overviewPeriod(now,'custom',{start:'2026-10-20',end:'2026-10-22'});
- assert.equal(p.end,time('2026-10-23T00:00:00'));
- assert.equal(p.previousStart,time('2026-10-17T00:00:00'));
- assert.equal(p.previousEnd,time('2026-10-20T00:00:00'));
- assert.equal(p.partial,false);
- const current=overviewPeriod(now,'custom',{start:'2026-10-23',end:'2026-10-24'});
- assert.equal(current.end,now);
- assert.equal(current.previousEnd,time('2026-10-22T10:30:00'));
- assert.equal(overviewDemo(now,'custom',{start:'2026-10-23',end:'2026-10-23'}).total,overviewDemo(now,'day').total);
- assert.deepEqual(overviewDemo(now,'today').monthlyActive,overviewDemo(now,'day').monthlyActive);
+const state = requests => ({
+  requests,
+  models: [{ id: 'model-a', type: 'text', name: '模型 A' }, { id: 'image-model', type: 'image' }],
+  tenants: [
+    { id: 'enterprise', name: '企业 A', type: '企业', createdAt: '2026-10-01T00:00:00+08:00' },
+    { id: 'personal', name: '个人 A', type: '个人', createdAt: '2026-11-16T00:00:00+08:00' },
+    { id: 'dormant', type: '政府', createdAt: '2026-10-01T00:00:00+08:00' },
+    { id: 'dormant-at-cutoff', type: '政府', createdAt: '2026-10-19T00:00:00+08:00' },
+  ],
+  endpoints: [{ id: 'self', providerId: 'first' }, { id: 'external', providerId: 'second' }],
+  providers: [{ id: 'first', sourceType: 'selfHosted' }, { id: 'second', sourceType: 'thirdParty' }],
 });
-test('invalid saved custom ranges are rejected', () => {
- for(const range of [null,{start:'2026-02-30',end:'2026-03-02'},{start:'2026-10-24',end:'2026-10-23'},{start:'2026-10-24',end:'2026-10-25'},{start:'2025-01-01',end:'2026-10-24'}]) assert.equal(overviewPeriod(now,'custom',range),null);
- assert.equal(overviewPeriod(now,'missing'),null);
+
+test('today comparisons use the same elapsed time in Beijing and classify terminal outcomes', () => {
+  const latest = call('revised', '2026-11-18T08:15:00', { input: 30, output: 2 });
+  const data = overviewTimeline(state([
+    call('revised', '2026-11-18T08:15:00', { input: 99, output: 99 }),
+    { ...latest, updatedAt: '2026-11-18T00:30:00Z' },
+    call('pending', '2026-11-18T08:00:00', {}, { finalStatus: 'pending' }),
+    call('failed', '2026-11-18T07:00:00', { input: 8, output: 3 }, { isTimeout: true, usageConfirmed: false }),
+    call('not-yet', '2026-11-18T11:00:00'),
+    call('yesterday', '2026-11-17T09:00:00'),
+    call('yesterday-late', '2026-11-17T11:00:00'),
+  ]), now);
+  assert.equal(data.today.calls, 3);
+  assert.equal(data.today.total, 32);
+  assert.equal(data.today.pending, 2);
+  assert.equal(data.today.successRate, 50);
+  assert.equal(data.yesterday.calls, 1);
+  assert.equal(data.yesterday.successRate, 100);
+  assert.equal(overviewMetrics(data)[2].change, -50);
+  assert.equal(overviewMetrics(data)[2].changeUnit, '个百分点');
+});
+
+test('monthly customer counts, day-average tiers and history use the same bounded facts', () => {
+  const workspace = state([
+    call('day-1', '2026-11-17T08:00:00', { input: 3e9, output: 0 }),
+    call('earlier-in-month', '2026-11-01T08:00:00', {}, { tenantId: 'personal', endpointId: 'external' }),
+    call('non-token', '2026-11-16T08:00:00', { images: 7 }, { tenantId: 'old-partner', modelId: 'image-model' }),
+    call('unattributed', '2026-11-16T08:00:00', { input: 40, output: 2 }, { tenantId: undefined }),
+    call('late-in-prior-month', '2026-10-18T08:00:00', undefined, { tenantId: 'dormant' }),
+    call('prior-month', '2026-10-17T08:00:00'),
+  ]);
+  const timeline = overviewTimeline(workspace, now);
+  const yesterday = overviewCustomers(timeline, null);
+  const month = overviewCustomers(timeline, '2026-11');
+  assert.equal(yesterday.count, 1);
+  assert.equal(month.count, 3);
+  assert.equal(month.previous, 1);
+  assert.equal(month.previousEnd, time('2026-10-18T00:00:00'));
+  assert.equal(month.previousLabel, '上月同期');
+  assert.equal(month.added, 1);
+  assert.equal(month.recent7, 2);
+  assert.equal(month.dormant, 2);
+  assert.deepEqual(month.types.map(row => row.value), [1, 1, 1]);
+  assert.deepEqual(timeline.months.at(-1).customers, [1, 1, 1]);
+  assert.equal(month.tiers.find(row => row.label === '1–10 亿').value, 1);
+  assert.equal(month.tiers.find(row => row.label === 'Token 未确认').value, 1);
+  assert.equal(month.tiers.find(row => row.label === '无 Token 类调用').value, 1);
+  assert.deepEqual(overviewRanks(month.rows, 'customer', workspace, 'total').map(row => row.id),
+    ['enterprise', 'old-partner', 'personal']);
+});
+
+test('workday rollups reconcile supply, peak and daily values and show pending-only days as unknown', () => {
+  const data = overviewTimeline(state([
+    call('workday', '2026-11-13T08:00:00', { input: 10, output: 0 }),
+    call('weekend', '2026-11-14T08:00:00', { input: 100, output: 0 }),
+    call('pending', '2026-11-17T08:00:00', {}, { endpointId: 'external' }),
+    call('external', '2026-11-16T08:00:00', { input: 20, output: 0 }, { endpointId: 'external' }),
+    call('source-missing', '2026-11-16T09:00:00', { input: 3, output: 0 }, { endpointId: null }),
+  ]), now);
+  assert.equal(data.averages[0].value, 33 / 5);
+  assert.equal(data.daily.find(row => row.date === '2026-11-14').total, 100);
+  assert.equal(data.daily.at(-1).total, null);
+  assert.equal(data.mean, 133 / 29);
+  assert.deepEqual(data.months.at(-1).supply, [10, 20, 3]);
+  assert.equal(data.months.at(-1).peak, 23);
+});
+
+test('first day of the year can show the previous December', () => {
+  const data = overviewTimeline(state([]), time('2027-01-01T00:00:00'));
+  assert.equal(data.months.at(-1).id, '2026-12');
+  assert.equal(data.today.calls, 0);
+  assert.equal(data.today.successRate, null);
+  assert.equal(overviewMetrics(data)[1].change, null);
 });

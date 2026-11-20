@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { channelDiscoveryPreview, channelDiscoveryRevision } from '../src/admin-v2/channel-discovery-diff.js';
+import { channelDiscoveryPreview, channelDiscoveryRevision, directoryDiscoveryPolicy, ignoredDiscoveryModel } from '../src/admin-v2/channel-discovery-diff.js';
 
 const fixture = () => {
   const master = { id: 'master-a', modelId: 'vendor/chat', name: 'Maintained name', type: 'text', capabilities: { context: 32000, tools: true, streaming: null } };
@@ -31,4 +31,14 @@ test('mapping revision is stable across ordering and changes when the explicit m
   const { provider } = fixture(), initial = channelDiscoveryRevision(provider, 'channel-a');
   provider.catalogConnections.reverse(); assert.equal(channelDiscoveryRevision(provider, 'channel-a'), initial);
   provider.catalogConnections[0].upstreamModelId = 'vendor/new-upstream-id'; assert.notEqual(channelDiscoveryRevision(provider, 'channel-a'), initial);
+});
+
+test('ignore rules preserve exact and prefix matches and validate bounded anchored regexes', () => {
+  const input = { enabled: true, intervalMinutes: 5, ignored: ['exact', 'preview-*', 're:^test-[0-9]+$'], whitelist: ['glm-5.3'] };
+  const policy = directoryDiscoveryPolicy(input);
+  assert.deepEqual(['exact', 'preview-next', 'test-123', 'x-test-123', 'test-abc', 'glm-5.3'].map(id => ignoredDiscoveryModel(policy, id)),
+    [true, true, true, false, false, false]);
+  for (const pattern of ['re:test', 're:^(a+)+$', 're:^x[9-0]+$']) {
+    assert.throws(() => directoryDiscoveryPolicy({ ...input, ignored: [pattern] }), /限定正则/);
+  }
 });

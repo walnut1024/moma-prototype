@@ -140,7 +140,7 @@ export function salesService(row, price) {
   if (row.serviceId && byPrice && row.serviceId !== byPrice || price?.modelId && price.modelId !== row.modelId) return null;
   return row.serviceId || byPrice || null;
 }
-function diagnosticRequest(row) {
+export function diagnosticRequest(row) {
   return ['trial','gateway-test','metering-test','platform-trial'].some(value=>row.identityType===value || row.purpose===value) || /^req_(gateway|demo)_/.test(row.requestId || '');
 }
 export function customerRequest(row) {

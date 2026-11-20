@@ -10,6 +10,7 @@ import { platformPublicationFingerprint } from '../src/admin-v2/platform-publica
 import { platformPriceVersions } from '../src/admin-v2/platform-service-client.js';
 import { activeSupplyPrice } from '../src/admin-v2/model-management.js';
 import { MOMA_PROVIDER } from '../src/admin-v2/moma-provider.js';
+import { classificationIndex, existingClassification, modelClassificationFor } from '../src/admin-v2/model-classification.js';
 import { loadModelWorkspace } from './model-repository.js';
 
 const fail = (status, code, message) => { throw Object.assign(new Error(message), { status, code }); };
@@ -130,7 +131,13 @@ export async function marketCatalogue(db, session, { projectId, commercial = tru
   const audience = marketAudience(context, { tenantId: tenant?.id, member: session?.member, projectId });
   if (projectId && !audience.projectId) fail(403, 'PROJECT_FORBIDDEN', '当前成员无权查看此项目');
   const projects = audience.projects.map(({id, name}) => ({ id, name }));
-  const { results } = await db.prepare(selectOffers({ includeCard: true }) + " AND (market_card IS NOT NULL OR (o.listing_stage IN ('gray','formal') AND o.market_visible=1 AND s.market_visible=1)) ORDER BY m.name,p.created_at,p.name,o.created_at,o.record_id").bind(tenant?.id || '').all();
+  const [{ results }, { results: [workspace] }] = await db.batch([
+    db.prepare(selectOffers({ includeCard: true }) + " AND (market_card IS NOT NULL OR (o.listing_stage IN ('gray','formal') AND o.market_visible=1 AND s.market_visible=1)) ORDER BY m.name,p.created_at,p.name,o.created_at,o.record_id").bind(tenant?.id || ''),
+    db.prepare("SELECT json_extract(meta_json,'$.modelData.modelClassification') AS dictionary FROM model_workspace WHERE id=1"),
+  ]);
+  const materials = new Map();
+  for (const row of results) if (!materials.has(row.material_id)) materials.set(row.material_id, domainModel(JSON.parse(row.material_json)));
+  const classification = classificationIndex(workspace?.dictionary ? JSON.parse(workspace.dictionary) : existingClassification(materials.values()));
   const offers = results.flatMap(row => {
     const card = row.market_card && JSON.parse(row.market_card);
     const offer = marketOffer(row, tenant);
@@ -145,12 +152,15 @@ export async function marketCatalogue(db, session, { projectId, commercial = tru
     const { row, card } = offer;
     const prices = procurement && offer.released && offer.ready ? marketSalePrices(offer,procurement,at) : null;
     if (!card && !prices) return [];
-    const material = modelPresentation(null, { ...domainModel(JSON.parse(row.material_json)),
+    const master = materials.get(row.material_id);
+    const { author, series } = modelClassificationFor(classification, master);
+    const material = modelPresentation(null, { ...master,
       marketContent: card?.content || JSON.parse(row.service_json).marketContent });
     return [{
       id:row.record_id, model_service_id:row.record_id, model_id:row.material_id, canonical_slug:material.modelId, call_id:row.call_id, provider_id:row.provider_id || MOMA_PROVIDER.id, callId:row.call_id, modelId:material.modelId, modelKey:row.material_id, mode:row.mode, name:material.name,
       providerId:row.provider_id || MOMA_PROVIDER.id, provider:row.provider_name || MOMA_PROVIDER.name, channelName:row.source_name,
       maker:material.profile?.author || material.maker || '', type:material.type, description:material.description || '',
+      classification: { authorId: author?.id, author: author?.name, seriesId: series?.id, series: series?.name },
       profile:material.profile || {}, capabilities:material.capabilities || {},
       salePrices:(prices || []).map(({amount,currency,unit,effectiveAt,expiresAt})=>({amount,currency,unit,effectiveAt,expiresAt})),
       canOrder:Boolean(commerceWritable && !session?.member && !offer.paused && prices && offer.allowed), ordered:Boolean(commercial && !session?.member && row.order_id), orderedAt:commercial && !session?.member ? row.order_created_at : null, callable:Boolean(!session?.member && prices && tenant && row.order_id), stage:row.listing_stage,

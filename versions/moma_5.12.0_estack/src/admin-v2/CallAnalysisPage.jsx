@@ -71,7 +71,7 @@ export default function CallAnalysisPage({ state }) {
   const drill = (range, extra) => {
     if (!range) return;
     history.replaceState(history.state, '', observationHash('call-analysis', filters, { grain: granularity, groupBy }));
-    location.hash = observationDrill(filters, range, 'requests', extra);
+    location.hash = observationDrill(filters, range, extra);
   };
 
   const viewGroups = [

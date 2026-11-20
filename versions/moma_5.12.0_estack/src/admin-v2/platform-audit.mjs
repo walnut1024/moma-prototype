@@ -7,6 +7,8 @@ export const AUDIT_ACTIONS = {
 
 export const AUDIT_RESULTS = { succeeded: '成功', failed: '失败', unknown: '未记录' };
 
+export const AUDIT_SOURCES = { web: 'Web', unknown: '未记录' };
+
 export const AUDIT_RESOURCES = {
   service_route: '服务路由',
   model_service: '模型服务',

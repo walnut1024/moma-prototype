@@ -63,6 +63,10 @@ export function usageDemoRequests(state, now) {
         const attempt = { dispatched: true, startedAt: createdAt, endpointId: endpoint.id, channelId: endpoint.id,
           providerId: endpoint.providerId, durationMs, error: failed ? 'upstream_timeout' : null, usage, usageUnit: unit };
         const row = { id: `usage-demo-${id}`, requestId: `req_${id}`, tenantId: customer.tenant.id, projectId: project.id, keyId: key.id, userId: anonymous ? undefined : actor?.userId, modelId: model.id, publicModelId: model.modelId, versionId: model.defaultVersionId, endpointId: endpoint.id, releaseId: 'release-2', source: random() < 0.92 ? 'API 调用' : '网页端调用', attempts: [attempt], usage, usageUnit: unit, usageConfirmed: true, httpStatus: failed ? 504 : 200, ttftMs, durationMs, createdAt, updatedAt: createdAt };
+        const traffic = hash(id);
+        row.usageScene = traffic % 40 === 0 ? 'internal' : traffic % 24 === 0 ? 'dedicated' : 'marketplace';
+        if (!failed && row.usageScene !== 'internal') row.usageBillingClass = traffic % 29 === 0 ? 'free' : 'paid';
+        if (unit === 'Token' && !failed) row.usagePriceBand = total <= 32000 ? '0–32K' : '32K–128K';
         // Generate the whole hour before clipping, so reloads keep earlier requests stable.
         if (at < now && ids.models.has(row.modelId) && ids.tenants.has(row.tenantId) && ids.projects.has(row.projectId) && ids.apiKeys.has(row.keyId) && ids.endpoints.has(row.endpointId)) {
           const currentKey=state.apiKeys.find(item=>item.id===row.keyId);

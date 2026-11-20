@@ -2,6 +2,7 @@ import {Banner, Button, Typography} from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import MaterialsHeader, {materialOperationsUi} from './MaterialsHeader';
 import MaterialCatalogue, {NewMaterialButton} from './MaterialCatalogue';
+import ModelClassificationDictionary from './ModelClassificationDictionary';
 import ModelMaterialDrawer from './ModelMaterialDrawer';
 import ModelBatchImport from './ModelBatchImport';
 import {useOperations} from './ModelOperationsUI';
@@ -22,7 +23,8 @@ export default function ModelMaterials(props) {
   };
   const fromElsewhere=['returnTo','returnProvider','returnListing','returnModel','returnDraft'].some(key=>params.has(key));
   return <div className="semi-materials materials-page">
-    {view==='templateImport'?<><Typography.Title heading={4}>批量导入模型资料</Typography.Title><section className="materials-description"><ModelBatchImport kind="model" state={state} ops={ops} transact={props.transact} close={saved=>go({view:'templates'},{saved:saved===true})}/></section></>:<>
+    {view==='classification' ? <><MaterialsHeader active="classification" ops={ops}/><ModelClassificationDictionary state={state} ops={ops}/></>
+      : view==='templateImport'?<><Typography.Title heading={4}>批量导入模型资料</Typography.Title><section className="materials-description"><ModelBatchImport kind="model" state={state} ops={ops} transact={props.transact} close={saved=>go({view:'templates'},{saved:saved===true})}/></section></>:<>
       <MaterialsHeader active="model-templates" ops={ops}>{supplierMaterialReturn(params.get('returnProvider')) && <Button onClick={()=>returnFromLibrary()}>返回服务商接入</Button>}<Button disabled={!ops.can} onClick={()=>go({view:'templateImport'})}>批量导入模型资料</Button><NewMaterialButton ops={ops}/></MaterialsHeader>
       <MaterialCatalogue state={state} ops={ops}/>
       {view==='template' && (params.get('template') && !template?<Modal visible className="semi-materials" title="模型资料不存在" footer={null} onCancel={()=>returnFromLibrary()}><Banner type="danger" description="该模型资料可能已移除。"/></Modal>:<ModelMaterialDrawer state={state} record={template} ops={ops} initial={state.modelOnboardings.find(row=>row.id===params.get('returnDraft'))?.model || {modelId:params.get('code') || '',name:params.get('code') || ''}} onClose={()=>returnFromLibrary(template?.id)} onSaved={(_next,id)=>fromElsewhere?returnFromLibrary(id,true):go({template:id,materialMode:'view'},{saved:true,replace:true,preserveScroll:true})}/>)}

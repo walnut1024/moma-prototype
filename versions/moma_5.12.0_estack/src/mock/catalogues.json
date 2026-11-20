@@ -6419,22 +6419,6 @@
       "video": 2
     }
   },
-  "admin-v2/overview.js": {
-    "models": [
-      "DeepSeek-V4-Pro",
-      "Qwen3.8-Max",
-      "GLM-5.2",
-      "Kimi-K3",
-      "DeepSeek-V4-Flash",
-      "Qwen3.5-Plus",
-      "GLM-5.3",
-      "MiniMax-H3",
-      "BGE-M3",
-      "Qwen3.5-VL",
-      "Qwen3-Embedding",
-      "GLM-4.6V"
-    ]
-  },
   "admin-v2/mock-onboarding-service.js": {
     "SCENARIOS": [
       [
@@ -7579,7 +7563,6 @@
         "上下文窗口（Token）": "32768",
         "最大输出（Token）": "8192",
         "简短介绍": "面向知识问答和文本生成。",
-        "模型作者": "示例作者",
         "原厂发布日期": "2026-10",
         "支持参数": "temperature、max_tokens",
         "默认参数": "{\"temperature\":0.7,\"max_tokens\":4096}",

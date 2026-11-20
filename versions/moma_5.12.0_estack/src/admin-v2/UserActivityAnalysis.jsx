@@ -2,27 +2,11 @@ import { useMemo } from 'react';
 import { Card, Typography } from '@douyinfe/semi-ui';
 import Table from './AdminTable';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
-import { userBusinessData } from '../business-facts.mjs';
-import { userMetrics, userTokenGroups } from './user-analysis';
-import { usagePreset } from './usage-analysis';
+import { userTokenGroups } from './user-analysis';
 import { analysisFilters, operationFacts } from './operations-analysis';
 
 const { Title, Text, Paragraph } = Typography;
 const count = value => value == null ? '未采集' : value.toLocaleString('zh-CN');
-
-export function TodayOperations({ state, now, total }) {
-  const today = usagePreset('today', now);
-  const users = useMemo(() => userMetrics(userBusinessData(state), today, now), [state, today.start, now]);
-  return <Card title={<Title heading={5} component="h2">今日运营数据</Title>}>
-    <Text type="tertiary" size="small">{today.start} · 北京时间 · 截至 {new Date(now).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}</Text>
-    <div className="admin-analysis-metrics admin-analysis-metrics-four">{[
-      ['新增用户', users?.current.added ?? null], ['登录用户', users?.current.login ?? null],
-      ['调用活跃用户', users?.current.active ?? null], ['Token 消耗', total],
-    ].map(([title, value]) => <div key={title} className="admin-analysis-metric">
-      <Text type="secondary">{title}</Text><Title heading={4} component="span">{count(value)}</Title>
-    </div>)}</div>
-  </Card>;
-}
 
 export function UserActivityAnalysis({ state, range, clock, metrics }) {
   const rows = useMemo(() => operationFacts(state, range, analysisFilters(), clock), [state, range, clock]);

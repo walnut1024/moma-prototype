@@ -4,13 +4,14 @@ import { useState } from 'react';
 import { Banner, Button, DatePicker, Empty, Input, Table } from '@douyinfe/semi-ui';
 import { Download, History, RefreshCw } from 'lucide-react';
 import FrontPageHeader from './components/FrontPageHeader';
+import { projectTime } from './components/ProjectConfiguration';
 import { AdminPagination } from './admin-v2/AdminTable';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from './components/FilterControls';
 import { displayBusinessCopy } from './display-copy.mjs';
 import { filterOperationRecords, operationRecordsCsv } from './operation-records.mjs';
 
 const columns = [
-  { title: '操作时间', dataIndex: 'time', width: 172 },
+  { title: '操作时间', dataIndex: 'time', width: 190, render: projectTime },
   { title: '操作人', dataIndex: 'actor', width: 120, render: actor => actor || '—' },
   { title: '功能', width: 120, render: () => '组织及成员' },
   { title: '操作内容', dataIndex: 'description' },

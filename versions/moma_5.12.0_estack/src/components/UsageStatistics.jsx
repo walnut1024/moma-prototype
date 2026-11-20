@@ -2,16 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Activity, ArrowUp, ChevronLeft, ChevronRight, Download, Info, RefreshCw } from 'lucide-react';
 import { useTenantData } from '../useTenantData';
 import { bucketLabel, dateRange, fields, observationView, tenantUsageData, tenantUsageTypes, usageCSV, usagePeriod, usageNumber } from '../usage-data.mjs';
-import { DateRange, MultiPick } from '../admin-v2/AnalyticsFilters';
+import { SemiDateRange as DateRange, SemiMultiPick as MultiPick } from '../admin-v2/SemiAnalyticsFilters';
 import { TimeSeriesChart } from './AnalyticsCharts';
 import { FilterField, FilterPresets, FilterReset, FilterToolbar, FilterViewRow } from './FilterControls';
 import FrontPageHeader from './FrontPageHeader';
 import SavedFilterViews from './SavedFilterViews';
 import TenantUsageStatistics from './TenantUsageStatistics';
-import { Button } from './ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Button, Select, Tabs, Tooltip } from '@douyinfe/semi-ui';
 import './usage-statistics.css';
 
 const categories = [['文本模型', '语言模型'], ['多模态模型', '多模态理解'], ['视觉模型', '视觉模型'], ['音频模型', '语音模型'], ['向量模型', '向量模型'], ['重排模型', '排序模型']];
@@ -19,12 +16,12 @@ const observationPeriod = (preset, now) => preset === 'yesterday' ? usagePeriod(
 const periods = [['1', '今日'], ['yesterday', '昨日'], ['7', '近 7 天'], ['30', '近 30 天']];
 
 function Choice({ label, value, onChange, options }) {
-  return <Select value={value} onValueChange={onChange}><SelectTrigger aria-label={label}><SelectValue /></SelectTrigger>
-    <SelectContent>{options.map(([id, text]) => <SelectItem key={id} value={id}>{text}</SelectItem>)}</SelectContent></Select>;
+  return <Select aria-label={label} value={value} onChange={onChange}
+    optionList={options.map(([value, label]) => ({value,label}))}/>;
 }
 function Hint({ label, children }) {
-  return <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={label + '说明'} className="us-info"><Info /></Button></TooltipTrigger>
-    <TooltipContent className="max-w-72">{children}</TooltipContent></Tooltip>;
+  return <Tooltip content={children}><Button theme="borderless" type="tertiary" size="small" icon={<Info size={14}/>}
+    aria-label={label + '说明'} className="us-info"/></Tooltip>;
 }
 
 function Trend({ id, title, keys: defaultKeys, options = {}, data }) {
@@ -54,7 +51,7 @@ function ChartNavigation({ items }) {
     return () => window.removeEventListener('scroll', update);
   }, [items]);
   return <aside className={`us-chart-nav${open ? '' : ' is-collapsed'}`} aria-label="图表导航">
-    <div className="us-chart-nav-head"><strong>{open && '图表导航'}</strong><Button variant="ghost" size="icon" aria-label={open ? '收起图表导航' : '展开图表导航'} aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</Button></div>
+    <div className="us-chart-nav-head"><strong>{open && '图表导航'}</strong><Button theme="borderless" size="small" aria-label={open ? '收起图表导航' : '展开图表导航'} aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</Button></div>
     {open && <><nav>{items.map(([id, title], index) => <button key={id} type="button" className={active === index ? 'active' : ''} aria-current={active === index ? 'location' : undefined} onClick={() => { setActive(index); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>{title}</button>)}</nav><button type="button" className="us-back-top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={14} />回到顶部</button></>}
   </aside>;
 }
@@ -120,10 +117,9 @@ function CallObservation({ projectScope }) {
   const reset = () => {
     updateTime('1'); setCategory('文本模型'); setVisual('视觉理解'); setAudio('语音合成'); setApiKeyIds(null); setMinutes('60'); setModelIds(null);
   };
-  return <TooltipProvider><div className="us-page us-observation"><FrontPageHeader title="调用观测" description="查看调用成功率、响应时延与运行趋势" icon={Activity} />
-    <Tabs value={category} onValueChange={value => changeType(value, setCategory)}>
-      <TabsList variant="line" className="us-tabs">{categories.map(([id, label]) => <TabsTrigger key={id} value={id}>{label}</TabsTrigger>)}</TabsList>
-      <TabsContent value={category} className="us-content">
+  return <div className="us-page us-observation"><FrontPageHeader title="调用观测" description="查看调用成功率、响应时延与运行趋势" icon={Activity} />
+    <Tabs activeKey={category} onChange={value => changeType(value, setCategory)} tabList={categories.map(([itemKey, tab]) => ({itemKey,tab}))}/>
+    <div className="us-content">
         <div className="us-filter-panel"><FilterToolbar className="us-filters">
           <FilterPresets value={preset} onChange={updateTime} items={periods} />
           <DateRange start={range.start} end={range.end} maxDays={31} onChange={value => { setRange(value); setPreset('custom'); }} />
@@ -134,8 +130,8 @@ function CallObservation({ projectScope }) {
           <FilterField label="统计粒度"><Choice label="统计粒度" value={minutes} onChange={setMinutes} options={[['5', '5 分钟'], ['60', '1 小时'], ['1440', '1 天']]} /></FilterField>
           <FilterReset onClick={reset} />
           <div className="us-actions">
-            <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" aria-label="立即刷新调用观测" onClick={refresh}><RefreshCw /></Button></TooltipTrigger><TooltipContent>立即刷新</TooltipContent></Tooltip>
-            <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" aria-label="导出调用观测" disabled={!!error || !data.summary.requests} onClick={exportData}><Download /></Button></TooltipTrigger><TooltipContent>导出当前趋势</TooltipContent></Tooltip>
+            <Tooltip content="立即刷新"><Button theme="outline" size="small" aria-label="立即刷新调用观测" onClick={refresh}><RefreshCw /></Button></Tooltip>
+            <Tooltip content="导出当前趋势"><Button theme="outline" size="small" aria-label="导出调用观测" disabled={!!error || !data.summary.requests} onClick={exportData}><Download /></Button></Tooltip>
           </div>
         </FilterToolbar><FilterViewRow className="us-view-row"><SavedFilterViews scope={(tenant.identity?.key || 'anonymous') + ':tenant-observation:' + (projectScope?.id || 'space')} value={savedValue} onApply={applySaved} groups={viewGroups} disabled={!!error} /></FilterViewRow></div>
         {error ? <p className="us-error" role="alert">{error}</p> : <>
@@ -148,9 +144,8 @@ function CallObservation({ projectScope }) {
             <ChartNavigation key={charts.map(([title]) => title).join('|')} items={charts.map(([title], index) => [`usage-chart-${index}`, title])} /></div>
         </>}
         <div className="us-foot"><span role="status">{notice}</span><span>北京时间</span></div>
-      </TabsContent>
-    </Tabs>
-  </div></TooltipProvider>;
+      </div>
+  </div>;
 }
 
 export default function UsageStatistics({ observation = false, projectScope, workspaceOverview, internal }) {

@@ -10,8 +10,9 @@ import EnterpriseMembers from './EnterpriseMembers';
 import { enterpriseProjectDepartment } from './enterprise-members';
 import { enterpriseAdmins, enterpriseDisplayValue, enterpriseGrant, enterpriseMetadataFields } from './enterprise';
 import { SubscriptionDetails } from './IndividualUsersPage';
+import { adminProjectHref } from './access-control.mjs';
 
-export const enterpriseTabs = { info: '基本信息', members: '组织及成员', projects: '项目', keys: 'API 密钥' };
+export const enterpriseTabs = { info: '基本信息', members: '组织及成员', projects: '项目空间', keys: 'API 密钥' };
 const { Paragraph, Text, Title } = Typography;
 const time = value => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—';
 const number = value => Number(value || 0).toLocaleString('zh-CN');
@@ -20,6 +21,26 @@ function MetadataFacts({ tenant, fields }) {
   return <EnterpriseFacts rows={fields.map(field => [
     field.label, enterpriseDisplayValue(field.key, tenant[field.key]) || (field.key === 'countryRegion' ? '中国' : '未填写'),
   ])}/>;
+}
+
+export function EnterpriseProjectFacts({ state, tenant, project }) {
+  const administrators = Object.entries(project.memberRoles || {}).filter(([, role]) => role === '项目管理员').map(([id]) => {
+    const member = state.memberships.find(row => row.id === id && row.tenantId === tenant.id);
+    return state.users.find(row => row.id === member?.userId)?.name || id;
+  });
+  return <EnterpriseFacts rows={[
+    ['项目 ID', project.id],
+    ['所属空间', tenant.name],
+    ['主责部门', enterpriseProjectDepartment(state, project)],
+    ['状态', project.status],
+    ['模型权限', project.modelPermissions == null ? '继承空间授权' : project.modelPermissions
+      .map(row => state.models.find(model => model.id === row.modelId)?.name || row.modelId).join('、') || '未开通模型'],
+    ['项目管理员', administrators.join('、') || state.users.find(row => row.id === project.ownerId)?.name || '未登记'],
+    ['预算', project.spendBudget ? number(project.spendBudget.amountMicros / 1_000_000) + ' 元' : '不限'],
+    ['预算处理', project.spendBudget ? project.spendBudget.warnAt + '% 预警 · ' + (project.spendBudget.stop ? '达到上限停止按量调用' : '仅预警') : '—'],
+    ['调用日志', project.retainContent ? '保存输入输出及元数据' : '仅保存元数据'],
+    ['项目分流', (state.projectRoutes || []).filter(row => row.tenantId === tenant.id && row.projectId === project.id).length + ' 条'],
+  ]}/>;
 }
 
 function ScopeList({ state, tenant, projects, keys, params, navigate, askKey, canWrite }) {
@@ -83,8 +104,9 @@ export default function EnterpriseDetails({ state, tenant, params, navigate, can
   const [inspectedProject, setInspectedProject] = useState(null);
   const tabs = internal ? enterpriseTabs : { ...enterpriseTabs, entitlements:'订购与账单' };
   const tab = Object.hasOwn(tabs, params.get('tab')) ? params.get('tab') : 'info';
+  const projectScope = internal ? { scope:'organization' } : { customer:tenant.id };
   const usageLink = project => '#/admin-2/customer-usage-detail?' + new URLSearchParams({
-    customer:tenant.id, period:'today', ...(project ? { project:project.id } : {}),
+    customer:tenant.id, period:'today', ...(internal && projectScope), ...(project ? { project:project.id } : {}),
   });
   const projects = state.projects.filter(item => item.tenantId === tenant.id);
   const keys = state.apiKeys.filter(item => item.tenantId === tenant.id && item.kind !== 'experience');
@@ -128,7 +150,8 @@ export default function EnterpriseDetails({ state, tenant, params, navigate, can
         setEditor={setEditor} setResult={setResult} askToggle={askToggle}/>}
       {tab === 'projects' && <>
         <div className="admin-page-heading"><Title heading={5} component="h2">企业项目</Title>
-          <Text link={{ href:usageLink() }}>{internal ? '查看成本归集' : '查看企业用量'}</Text></div>
+          <Space wrap><Text link={{ href:adminProjectHref(projectScope) }}>查看全部项目</Text>
+            <Text link={{ href:usageLink() }}>{internal ? '查看成本归集' : '查看企业用量'}</Text></Space></div>
         <EnterpriseTable minWidth={900} columns={['项目名称 / 编号', '所属部门', '负责人',
           { title: '项目预算', align: 'right' }, 'API 密钥', '状态', '操作']} empty="该企业尚无项目"
           rows={projects.map(project => ({ id: project.id, cells: [
@@ -150,19 +173,7 @@ export default function EnterpriseDetails({ state, tenant, params, navigate, can
     </div>
     {inspectedProject && <EnterpriseDialog title="项目配置" description={tenant.name + ' · ' + inspectedProject.name}
       close={() => setInspectedProject(null)} footer={<Button onClick={() => setInspectedProject(null)}>关闭</Button>}>
-      <EnterpriseFacts rows={[
-        ['项目 ID', inspectedProject.id], ['所属客户', tenant.name],
-        ['主责部门', enterpriseProjectDepartment(state, inspectedProject)],
-        ['状态', inspectedProject.status],
-        ['模型权限', inspectedProject.modelPermissions == null ? '继承空间授权' : inspectedProject.modelPermissions.map(row => state.models.find(model => model.id === row.modelId)?.name || row.modelId).join('、') || '未开通模型'],
-        ['项目管理员', Object.entries(inspectedProject.memberRoles || {}).filter(([,role]) => role === '项目管理员').map(([id]) => {
-          const member = state.memberships.find(row => row.id === id && row.tenantId === tenant.id);
-          return state.users.find(row => row.id === member?.userId)?.name || id;
-        }).join('、') || state.users.find(row => row.id === inspectedProject.ownerId)?.name || '未登记'],
-        ['预算', inspectedProject.spendBudget ? number(inspectedProject.spendBudget.amountMicros / 1_000_000) + ' 元' : '不限'],
-        ['调用日志', inspectedProject.retainContent ? '保存输入输出及元数据' : '仅保存元数据'],
-        ['项目分流', (state.projectRoutes || []).filter(row => row.tenantId === tenant.id && row.projectId === inspectedProject.id).length + ' 条'],
-      ]}/>
+      <EnterpriseProjectFacts state={state} tenant={tenant} project={inspectedProject} />
     </EnterpriseDialog>}
   </Card>;
 }

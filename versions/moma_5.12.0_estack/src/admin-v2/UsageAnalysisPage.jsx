@@ -1,8 +1,8 @@
 import { workspaceStoragePrefix } from "../workspace-storage.mjs";
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
-import { useEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, Input, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Banner, Button, Card, DatePicker, Input, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconArrowUp, IconCalendar, IconChevronLeft, IconChevronRight, IconDownload, IconHandle, IconRefresh, IconSave, IconSearch } from '@douyinfe/semi-icons';
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -12,9 +12,12 @@ import SavedFilterViews from '../components/SavedFilterViews';
 import { SemiDateRange as DateRange } from './SemiAnalyticsFilters';
 import { Choice } from './ServiceUI';
 import UsageTrend from './UsageTrend';
+import UsageReport from './UsageReport';
+import { dayOf } from './analytics';
 import { UsageShare, UsageDistribution } from './UsageComposition';
 import { defaultTrend, validTrendView, trendDimensions, tokenMetrics, usageDimensions, supplySummary } from './usage-trends';
-import { formatUsageNumber, usageFacts, usageGroups, usageModelTypes, usagePreset, usagePresets, operationsPeriod, usageFilterOptions, usageTotals } from './usage-analysis';
+import { formatUsageNumber, usageFacts, usageGroups, usageModelTypes, usagePreset, usagePresets, operationsPeriod, usageFilterOptions } from './usage-analysis';
+import { usageShare } from './usage-distributions';
 import { defaultCardOrder, moveCard, normalizeCardOrder } from './usage-card-order';
 import './semi-usage-analysis.css';
 
@@ -23,12 +26,12 @@ const percent = (value, total) => total > 0 ? `${(value / total * 100).toFixed(2
 const amount = value => formatUsageNumber(value).replace('w', '万');
 const labelFor = (collection, id) => collection.find(item => item.id === id)?.name || (id === '__unknown__' ? '未归属' : id);
 const presets = usagePresets;
+const calendarDay = new Intl.DateTimeFormat('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit' });
 const otherUsage = row => Object.entries(row.units).filter(([, value]) => value > 0).map(([unit, value]) => `${amount(value)} ${unit}`).join(' · ') || '—';
 const cardOrderKey = workspaceStoragePrefix + 'usage-analysis:card-order';
 const navLabels = Object.fromEntries([
   ['usage-token-trend', 'Token 调用量趋势'], ['usage-call-trend', '模型调用次数趋势'],
   ['usage-model-share', '模型调用次数占比'], ['usage-volume-share', '模型调用量占比'],
-  ['usage-distribution', '客户调用量分层与 Token 分段'],
   ['usage-detail', '用量明细'],
 ]);
 const trendIds = ['usage-token-trend', 'usage-call-trend'];
@@ -63,10 +66,14 @@ function csvCell(value) { return `"${String(value ?? '').replaceAll('"', '""')}"
 
 export default function UsageAnalysisPage({ state }) {
   const route = new URLSearchParams(location.hash.split('?')[1] || '');
+  const routeUser = route.get('user'), routeModel = route.get('model');
+  const baseFilters = useMemo(() => ({ ...emptyFilters(), user: routeUser ? [routeUser] : null, model: routeModel ? [routeModel] : null }), [routeUser, routeModel]);
   const [clock, setClock] = useState(() => Date.now());
   const initial = operationsPeriod(route.has('start') && route.has('end') ? 'custom' : 'yesterday', { start: route.get('start'), end: route.get('end') }, clock);
   const [period, setPeriod] = useState(initial.period);
   const [range, setRange] = useState(initial.range);
+  const [provider, setProvider] = useState(null);
+  const single = range.start === range.end;
   const [panelFilters, setPanelFilters] = useState(() => Object.fromEntries(filterPanelIds.map(id => [id, { ...emptyFilters(), user: route.has('user') ? [route.get('user')] : null, model: route.has('model') ? [route.get('model')] : null }])));
   const [trends, setTrends] = useState(() => Object.fromEntries(trendIds.map(id => [id, defaultTrend()])));
   const [shares, setShares] = useState(() => Object.fromEntries(shareIds.map(id => [id, { dimension: 'modelId', metric: 'total' }])));
@@ -75,11 +82,11 @@ export default function UsageAnalysisPage({ state }) {
   const [savedOrder, setSavedOrder] = useState(readCardOrder), [cardOrder, setCardOrder] = useState(savedOrder), [saveError, setSaveError] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const navLock = useRef(0);
-  const navItems = [...cardOrder.overview, 'usage-detail'].map(id => [id, navLabels[id]]);
+  const navItems = ['usage-distribution', ...cardOrder.overview, 'usage-detail'];
   const customOrder = Object.keys(defaultCardOrder).some(group => cardOrder[group].some((id, index) => id !== defaultCardOrder[group][index]));
   const unsavedOrder = Object.keys(defaultCardOrder).some(group => cardOrder[group].some((id, index) => id !== savedOrder[group][index]));
   useEffect(() => {
-    const sections = navItems.map(([id]) => document.getElementById(id)).filter(Boolean);
+    const sections = navItems.map(id => document.getElementById(id)).filter(Boolean);
     const update = () => { if (performance.now() >= navLock.current) setActiveSection((sections.filter(section => section.getBoundingClientRect().top <= 160).at(-1) || sections[0])?.id || 'usage-token-trend'); };
     update();
     document.defaultView.addEventListener('scroll', update, { passive: true });
@@ -96,14 +103,13 @@ export default function UsageAnalysisPage({ state }) {
     catch { setSaveError(true); Toast.error("布局保存失败，请检查浏览器存储"); }
   };
   const setPanelFilter = (id, value) => setPanelFilters(previous => ({ ...previous, [id]: value }));
-  const choosePeriod = value => { const current = Date.now(); setClock(current); setPeriod(value); setRange(usagePreset(value, current)); setPage(0); };
-  const result = usageFacts(state, range, emptyFilters(), clock);
+  const choosePeriod = value => { const current = Date.now(); setClock(current); setPeriod(value); setRange(usagePreset(value, current)); setProvider(null); setPage(0); };
+  const result = useMemo(() => usageFacts(state, range, baseFilters, clock), [state, range, baseFilters, clock]);
   const current = result?.current || [], usageWindow = result?.window;
-  const tokenRows = current.filter(row => row.unit === 'Token');
-  const totals = usageTotals(tokenRows, ['input', 'output']);
-  const customers = usageGroups(current, 'tenantId'), models = usageGroups(current, 'modelId');
+  const totalTokens = useMemo(() => usageShare(current, 'modelId', 'total').total, [current]);
+  const groups = useMemo(() => usageGroups(current, detailMode), [current, detailMode]);
   const collection = detailMode === 'tenantId' ? state.tenants : state.models;
-  const detailRows = (detailMode === 'tenantId' ? customers : models).filter(row => labelFor(collection, row.id).toLowerCase().includes(query.trim().toLowerCase())).sort((a, b) => b[sort] - a[sort] || a.id.localeCompare(b.id));
+  const detailRows = groups.filter(row => labelFor(collection, row.id).toLowerCase().includes(query.trim().toLowerCase())).sort((a, b) => b[sort] - a[sort] || a.id.localeCompare(b.id));
   const detailPages = Math.max(1, Math.ceil(detailRows.length / size));
   const detailPage = Math.min(page, detailPages - 1);
   const periodName = period === 'custom' ? `${range.start}—${range.end}` : presets.find(([id]) => id === period)?.[1];
@@ -117,8 +123,8 @@ export default function UsageAnalysisPage({ state }) {
   ].map(([key, label, items]) => key === 'channels' && value.providers.length ? supplySummary(value, filterOptions, true) : value[key] === null ? `全部${label}` : value[key].map(item => labelFor(items, item)).join('、') || `未选择${label}`).concat(trends[id] ? [trendDimensions.find(([key]) => key === trends[id].dimension)[1], ...(id === 'usage-token-trend' ? [tokenMetrics.find(([key]) => key === trends[id].metric)[1]] : []), trends[id].showTotal ? '显示范围合计' : '', trends[id].dimension !== 'total' ? trends[id].curves === null ? '默认曲线' : `已选曲线：${trends[id].curves.map(key => labelFor(curveOptions[trends[id].dimension] || [], key)).join('、') || '无'}` : ''] : shares[id] ? [usageDimensions.find(([key]) => key === shares[id].dimension)[1], ...(id === 'usage-volume-share' ? [tokenMetrics.find(([key]) => key === shares[id].metric)[1]] : [])] : []).filter(Boolean).join(' · ') }))];
   const exportCsv = () => {
     try {
-    const header = [detailMode === 'tenantId' ? '用户名/ID' : '模型展示名/ID', 'Token 调用量', '输入 Token', '输出 Token', '其他用量（分单位）', '模型调用次数', 'Token 占比'];
-    const data = detailRows.map(row => [labelFor(collection, row.id), row.tokenCalls ? row.total : '—', row.tokenCalls ? row.input : '—', row.tokenCalls ? row.output : '—', otherUsage(row), row.calls, percent(row.total, totals.total)]);
+    const header = [detailMode === 'tenantId' ? '客户名称/ID' : '模型展示名/ID', 'Token 调用量', '输入 Token', '输出 Token', '其他用量（分单位）', '模型调用次数', 'Token 占比'];
+    const data = detailRows.map(row => [labelFor(collection, row.id), row.tokenCalls ? row.total : '—', row.tokenCalls ? row.input : '—', row.tokenCalls ? row.output : '—', otherUsage(row), row.calls, row.tokenCalls ? percent(row.total, totalTokens) : '—']);
     const csv = '\ufeff' + [[`统计范围：${range.start}—${range.end}`, '北京时间'], header, ...data].map(row => row.map(csvCell).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a'); link.href = url; link.download = `用量明细-${range.start}-${range.end}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 0); Toast.success("已开始下载用量明细");
@@ -130,6 +136,7 @@ export default function UsageAnalysisPage({ state }) {
     setClock(current);
     setPeriod(selected.period);
     setRange(selected.range);
+    setProvider(null);
     setPage(0);
   };
   const applyView = view => {
@@ -145,19 +152,19 @@ export default function UsageAnalysisPage({ state }) {
     setPanelFilters(Object.fromEntries(filterPanelIds.map(id => [id, view.panelFilters[id]])));
     setTrends(view.trends);
     setShares(view.shares);
+    setProvider(null);
     setPage(0);
   };
   const columns = [
-    { title: detailMode === 'tenantId' ? '用户名/ID' : '模型展示名/ID', dataIndex: 'id', render: id => labelFor(collection, id) },
+    { title: detailMode === 'tenantId' ? '客户名称/ID' : '模型展示名/ID', dataIndex: 'id', render: id => labelFor(collection, id) },
     ...[['Token 调用量', 'total'], ['输入 Token', 'input'], ['输出 Token', 'output']].map(([title, dataIndex]) => ({
       title, dataIndex, align: 'right', render: (value, row) => amount(row.tokenCalls ? value : null),
     })),
     { title: '其他用量', key: 'other', align: 'right', render: (_, row) => otherUsage(row) },
     { title: '模型调用次数', dataIndex: 'calls', align: 'right', render: amount },
-    { title: 'Token 占比', key: 'share', align: 'right', render: (_, row) => percent(row.total, totals.total) },
+    { title: 'Token 占比', key: 'share', align: 'right', render: (_, row) => row.tokenCalls ? percent(row.total, totalTokens) : '—' },
   ];
   const renderCard = id => {
-    if (id === 'usage-distribution') return <UsageDistribution state={state} range={range} clock={clock}/>;
     const filters = panelFilters[id], onChange = value => setPanelFilter(id, value);
     if (shareIds.includes(id)) return <UsageShare state={state} range={range} clock={clock} filters={filters} onChange={onChange}
       volume={id === 'usage-volume-share'} settings={shares[id]} onSettings={value => setShares(previous => ({ ...previous, [id]: value }))}/>;
@@ -169,15 +176,20 @@ export default function UsageAnalysisPage({ state }) {
       }}/>;
   };
   return <div className="admin-page-stack ua-native-usage">
-    <AdminPageHeading title="用量数据"/>
+    <AdminPageHeading title="用量数据"><Button icon={<IconDownload aria-hidden="true"/>} disabled={!detailRows.length} onClick={exportCsv}>导出用量明细</Button></AdminPageHeading>
     <Card className="ua-native-time">
       <div className="admin-analysis-filter-row">
         <FilterToolbar>
+          <div className="admin-time-presets" role="group" aria-label="统计方式">
+            <Button size="small" theme={single ? 'solid' : 'light'} aria-pressed={single} onClick={() => !single && applyDate({ start: range.end, end: range.end })}>按日</Button>
+            <Button size="small" theme={single ? 'light' : 'solid'} aria-pressed={!single} onClick={() => single && choosePeriod('7d')}>按时间范围</Button>
+          </div>
+          {single ? <DatePicker aria-label="统计日期" type="date" format="yyyy-MM-dd" value={range.end} showClear={false}
+            onChangeWithDateFirst={false} disabledDate={date => calendarDay.format(date) > dayOf(Date.now())}
+            onChange={date => { if (typeof date === 'string' && date) applyDate({ start: date, end: date }); }}/> :
+            <DateRange presets={presets} start={range.start} end={range.end} granularity={usageWindow?.weekly ? 'week' : 'day'}
+              trigger={<Button icon={<IconCalendar aria-hidden="true"/>} aria-label="日期范围">{range.start} — {range.end}</Button>} allowLongRange onChange={applyDate}/>}
           <FilterPresets label="统计时间范围" value={period} onChange={choosePeriod} items={presets}/>
-          <DateRange presets={presets} start={range.start} end={range.end} granularity={usageWindow?.weekly ? 'week' : 'day'}
-            trigger={<Button icon={<IconCalendar aria-hidden="true"/>} aria-label="日期范围">
-              自定义 · {range.start === range.end ? range.start : `${range.start} — ${range.end}`}
-            </Button>} allowLongRange onChange={applyDate}/>
           <Text type="secondary" title="时间范围作用于全部图表与明细">北京时间</Text>
           <FilterReset onClick={() => choosePeriod('yesterday')}/>
         </FilterToolbar>
@@ -186,6 +198,10 @@ export default function UsageAnalysisPage({ state }) {
           value={{ period, range, panelFilters, trends, shares }} onApply={applyView} groups={savedGroups} currentGroups={viewGroups} disabled={!usageWindow}/>
       </div>
     </Card>
+    {result && <UsageReport state={state} range={range} result={result} filters={baseFilters} clock={clock} provider={provider} onProvider={setProvider}/>}
+    {usageWindow && <section className="ua-report-distribution" id="usage-distribution">
+      <UsageDistribution facts={current} single={single}/>
+    </section>}
     {!usageWindow ? <Banner type="danger" closeIcon={null} description="请选择有效日期范围：不超过 365 天，且不能晚于今日。"/> : (
       <div className="ua-native-layout" data-nav-open={navOpen}>
         <aside className="ua-native-nav" aria-label="图表导航">
@@ -206,6 +222,9 @@ export default function UsageAnalysisPage({ state }) {
                 if (over && navGroups[active.id] === navGroups[over.id]) setCardOrder(order => moveCard(order, navGroups[active.id], active.id, over.id));
               }}>
                 <nav aria-label="跳转及排序图表">
+                  <Button block size="small" theme={activeSection === 'usage-distribution' ? 'light' : 'borderless'}
+                    aria-current={activeSection === 'usage-distribution' ? 'location' : undefined}
+                    onClick={() => goTo('usage-distribution')}>{single ? '客户分层与 Token 分段' : '客户调用量分层'}</Button>
                   {Object.entries(defaultCardOrder).map(([group]) => (
                     <SortableContext key={group} items={cardOrder[group]} strategy={verticalListSortingStrategy}>
                       {cardOrder[group].map(id => <SortableNavItem key={id} id={id} label={navLabels[id]} active={activeSection === id}

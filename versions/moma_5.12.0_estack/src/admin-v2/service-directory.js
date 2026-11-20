@@ -52,8 +52,8 @@ export function serviceDirectoryRows(models, state, status) {
       return {
         id: service?.id || model.id,
         model,
-        serviceKey: service?.id || '',
         providerKey: service?.providerId ? offerKey(service) : null,
+        channelId: service?.channelId,
         name: model.serviceName || model.name,
         canonical_slug: modelIdentity(state, model).canonical_slug,
         channels: referenceChannels(model, service, state),

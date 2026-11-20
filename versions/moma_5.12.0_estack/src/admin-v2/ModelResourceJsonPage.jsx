@@ -8,7 +8,7 @@ import { Notice } from './ServiceUI';
 import ModelResourceTransfer from './ModelResourceTransfer';
 import JsonDocument from './JsonDocument';
 
-export default function ModelResourceJsonPage({ state, ops, scope }) {
+export default function ModelResourceJsonPage({ state, ops, scope, readOnly = false }) {
   const result = useMemo(() => {
     try {
       const target = resourcePageTarget(state, scope, ops.params);
@@ -34,7 +34,7 @@ export default function ModelResourceJsonPage({ state, ops, scope }) {
     <AdminPageHeading title={result.title}><Space wrap>
       <Button onClick={() => ops.go({ resourceJson: null, resourceTarget: null }, { preserveScroll: true })}>返回来源页面</Button>
       <Button onClick={copy} disabled={!text}>复制完整 JSON</Button>
-      {!result.error && scope !== 'services' && <ModelResourceTransfer state={state} ops={ops} scope={scope} target={result.target} hideView/>}
+      {!readOnly && !result.error && scope !== 'services' && <ModelResourceTransfer state={state} ops={ops} scope={scope} target={result.target} hideView/>}
     </Space></AdminPageHeading>
     {!result.error && scope === 'channels' && <Typography.Paragraph type="tertiary">
       {[['provider', '服务商'], ['provider_model', '模型登记'], ['connection', '连接'], ['channel', '模型渠道']].map(([type, label]) => `${label} ${result.rows.filter(row => row.type === type).length}`).join(' · ')}

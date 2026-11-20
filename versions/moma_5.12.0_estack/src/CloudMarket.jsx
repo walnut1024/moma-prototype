@@ -1,7 +1,7 @@
 import { resourceId } from './resource-id.mjs';
-import { useEffect, useRef, useState } from 'react';
-import { Button } from './components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './components/ui/dialog';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Banner, Button, Checkbox, Select, TextArea } from '@douyinfe/semi-ui';
+import { AdminModal } from './admin-v2/AdminOverlay';
 import { cloudMarketPresentation } from './service-directory.mjs';
 
 const changed='moma5120-market-change';
@@ -60,25 +60,25 @@ export function MarketSessionControl({ market, onLogin }) {
   return <div className="market-session">
     {market.tenant ? <>
       <span>{market.tenant.name}</span>
-      {market.projects?.length > 0 && <select aria-label="当前项目" value={market.project} onChange={event => market.selectProject(event.target.value)}>
-        <option value="">未选择项目</option>{market.projects.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
-      </select>}
-      <Button variant="outline" disabled={busy} onClick={async()=>{
+      {market.projects?.length > 0 && <Select aria-label="当前项目" value={market.project} onChange={market.selectProject}
+        optionList={[{value:'',label:'未选择项目'}, ...market.projects.map(row => ({value:row.id,label:row.name}))]} />}
+      <Button theme="outline" disabled={busy} onClick={async()=>{
         setBusy(true);setError('');
         try {await market.logout();} catch (issue) {setError(issue.message);} finally {setBusy(false);}
       }}>退出广场</Button>{error && <span role="alert">{error}</span>}
-    </> : <Button variant="outline" onClick={onLogin}>登录模型广场</Button>}
+    </> : <Button theme="outline" onClick={onLogin}>登录模型广场</Button>}
   </div>;
 }
 
 export function MarketAction({ action, market, close }) {
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[result,setResult]=useState(null);
   const [message,setMessage]=useState(''),[accepted,setAccepted]=useState(false);
+  const formId=useId();
   const pending=useRef(null);
   const { service, kind }=action, ordering=kind==='order';
   async function submit(event) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || (ordering ? !accepted : !message.trim())) return;
     setBusy(true);setError('');setResult(null);
     try {
       if (ordering) {await market.order([service.id]);close();return;}
@@ -89,16 +89,18 @@ export function MarketAction({ action, market, close }) {
     } catch (issue) {setError(issue.message);}
     finally {setBusy(false);}
   }
-  return <Dialog open onOpenChange={value=>{if(!value && !busy)close();}}>
-    <DialogContent>
-      <DialogHeader><DialogTitle>{ordering?'确认订购':'在线调用'}</DialogTitle><DialogDescription>{service.name} · {service.offerName} · {service.callId}</DialogDescription></DialogHeader>
-      <form className="market-action-form" onSubmit={submit}>
-        {ordering ? <label className="market-agreement"><input type="checkbox" checked={accepted} onChange={event=>setAccepted(event.target.checked)}/>确认按此渠道公布的单价按量计费</label> :
-          <label>消息<textarea className="market-call-input" required maxLength={2000} rows={4} value={message} disabled={busy} onChange={event=>setMessage(event.target.value)}/></label>}
-        {error && <p role="alert">{error}</p>}
+  return <AdminModal visible title={ordering?'确认订购':'在线调用'} onCancel={()=>{if(!busy)close();}}
+    closable={!busy} maskClosable={!busy} closeOnEsc={!busy}
+    footer={<><Button disabled={busy} onClick={close}>取消</Button><Button theme="solid" htmlType="submit" form={formId} loading={busy}
+      disabled={ordering?!accepted:!message.trim()}>{busy?'提交中…':ordering?'确认订购':'发送'}</Button></>}>
+      <form id={formId} className="market-action-form" onSubmit={submit}>
+        <p>{service.name} · {service.offerName} · <code>{service.callId}</code></p>
+        {ordering ? <Checkbox checked={accepted} disabled={busy} onChange={event=>setAccepted(event.target.checked)}>确认按此渠道公布的单价按量计费</Checkbox> :
+          <label className="market-call-field" htmlFor={formId+'-message'}>消息
+            <TextArea id={formId+'-message'} maxLength={2000} rows={4} value={message} disabled={busy} onChange={setMessage}/>
+          </label>}
+        {error && <Banner type="danger" description={error} />}
         {result && <div role="status"><p>{result.choices[0].message.content}</p><small>模拟调用 · 请求 ID {result.id}</small></div>}
-        <DialogFooter><Button type="submit" disabled={busy || (ordering?!accepted:!message.trim())}>{busy?'提交中…':ordering?'确认订购':'发送'}</Button></DialogFooter>
       </form>
-    </DialogContent>
-  </Dialog>;
+  </AdminModal>;
 }

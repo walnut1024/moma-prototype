@@ -2,14 +2,29 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { startLocalBackend } from '../database/local-runtime.js';
-import { canAccessPage, commercialPage, sections } from '../src/admin-v2/navigation.mjs';
+import { adminSections, canAccessPage, commercialPage, isOrganizationPage } from '../src/admin-v2/navigation.mjs';
 import { deploymentLicense } from '../src/deployment-license.mjs';
 
-test('deployment capability separates the five commerce entries from shared model operations', () => {
-  const { items } = sections.find(row => row.id === 'commerce');
-  assert.deepEqual(items.map(row => row.label), ['模型销售', '客户管理', '订购与账单', '套餐管理', '经营分析']);
+test('both operations sections are adjacent and scoped links keep deployment permissions', () => {
   const internal = deploymentLicense({ MOMA_LICENSE_EDITION: 'internal' });
   const commercial = deploymentLicense({ MOMA_LICENSE_EDITION: 'commercial' });
+  const index = adminSections.findIndex(({ id }) => id === 'commerce');
+  const [commercialGroup, internalGroup] = adminSections.slice(index, index + 2);
+  assert.equal(internalGroup.id, 'organization');
+  assert.equal(internalGroup.workspace, commercialGroup.workspace);
+  assert.equal(commercialGroup.title, '商业运营');
+  assert.deepEqual(commercialGroup.items.map(row => row.label), ['模型销售', '客户管理', '套餐管理']);
+  assert.equal(internalGroup.title, '组织运营');
+  assert.deepEqual(internalGroup.items.map(row => row.label), ['本组织', '项目管理']);
+  assert(canAccessPage('运营人员', 'projects', commercial));
+  assert(canAccessPage('运营人员', 'projects', internal));
+  assert.equal(canAccessPage('运维人员', 'projects', internal), false);
+  const scope = new URLSearchParams('scope=organization');
+  assert(isOrganizationPage('projects', scope, false));
+  assert(isOrganizationPage('tenants', new URLSearchParams(), true));
+  assert(!isOrganizationPage('projects', new URLSearchParams('customer=other'), false));
+  assert(!isOrganizationPage('orders', scope, false));
+  assert.equal(canAccessPage('运营人员', 'customer-analysis', internal), false);
   assert(canAccessPage('运营人员', 'model-market', internal));
   assert(canAccessPage('运营人员', 'tenants', internal));
   for (const id of ['model-prices', 'orders', 'bills', 'metering', 'package-production', 'business-analysis']) {

@@ -4,13 +4,15 @@ export const routingDemoRequestId = 'req-ROUTE-001';
 const tenant = { id: 'demo-log-tenant', name: '示例客户' };
 const project = { id: 'demo-log-project', name: '客服机器人' };
 const provider = { id: 'demo-log-provider', name: '示例服务商' };
+const day = 86_400_000;
+export const defaultLogPolicy = { captureBody: false, projectId: 'all', sampleRate: 25, retentionDays: 30, maxSamples: 5000 };
 const channels = ['A', 'B', 'C', 'D'].map(letter => ({
   id: 'demo-channel-' + letter, name: '渠道 ' + letter, endpointId: 'endpoint-' + letter, providerId: provider.id,
 }));
 
 const request = (requestId, startedAt, fields) => ({
   requestId, startedAt, modelId: model.id, publicModelId: 'support-chat', tenantId: tenant.id,
-  projectId: project.id, source: '模拟请求', ...fields,
+  projectId: project.id, source: '模拟请求', purpose: 'gateway-test', ...fields,
 });
 const attempt = (channel, fields) => ({
   dispatched: true, channelId: channel.id, endpointId: channel.id, upstreamModelId: model.modelId, ...fields,
@@ -37,7 +39,8 @@ export function createCallLogSimulation(now = Date.now()) {
       attempt(b, { startedAt: startedAt+330, durationMs: 200, httpStatus: 503, errorMessage: '上游服务不可用' }),
       attempt(c, { startedAt: startedAt+540, durationMs: 310, isTimeout: true, code: 'upstream_timeout',
         errorMessage: '备用优先级组等待首包超时', fallback: true, fallbackReason: '主模型服务已达到总尝试上限' }),
-      attempt(d, { startedAt: startedAt+860, durationMs: 400, httpStatus: 200,
+      attempt(d, { startedAt: startedAt+860, durationMs: 400, httpStatus: 200, ttftMs: 214, generationDurationMs: 180,
+        usage: { input: 42, output: 44 }, successReason: '备用模型返回首个 Token，响应正常结束', nextAction: '向客户返回结果',
         upstreamModelId: backupModel.modelId, upstreamRequestId: 'up-D-ROUTE-001' }),
     ],
   });
@@ -46,16 +49,26 @@ export function createCallLogSimulation(now = Date.now()) {
     attempts: [
       attempt(a, { startedAt: age(2) + 20, durationMs: 800, httpStatus: 0, isTimeout: true, code: 'upstream_timeout',
         errorMessage: '等待首包超时', fallback: true, fallbackReason: '首选渠道超时' }),
-      attempt(b, { startedAt: age(2) + 835, durationMs: 385, httpStatus: 200, upstreamRequestId: 'up-B-29D' }),
+      attempt(b, { startedAt: age(2) + 835, durationMs: 385, httpStatus: 200, ttftMs: 176, generationDurationMs: 205,
+        usage: { input: 42, output: 44 }, successReason: '渠道回退后响应正常结束', upstreamRequestId: 'up-B-29D' }),
     ],
   });
   const full = request('req-61AE', age(4), {
     durationMs: 620, ttftMs: 260, httpStatus: 200, usage: { input: 20, output: 22 },
-    attempts: [attempt(b, { startedAt: age(4) + 20, durationMs: 600, httpStatus: 200, upstreamRequestId: 'up-B-17E' })],
+    attempts: [attempt(b, { startedAt: age(4) + 20, durationMs: 600, httpStatus: 200, ttftMs: 232, generationDurationMs: 360,
+      usage: { input: 20, output: 22 }, successReason: '首选渠道响应正常结束', upstreamRequestId: 'up-B-17E' })],
   });
   const blocked = request('req-49C1', age(6), {
     durationMs: 16, httpStatus: 429, errorMessage: '超过项目的模型请求速率限制',
     attempts: [{ dispatched: false, error: 'rate_limit_exceeded' }],
+  });
+  const unauthorized = request('req-49D3', age(7), {
+    durationMs: 8, httpStatus: 401, errorMessage: 'API 密钥未通过认证', tenantId: null, projectId: null,
+    modelId: null, publicModelId: null, attempts: [{ dispatched: false, error: 'auth_rejected' }],
+  });
+  const invalid = request('req-4A92', age(9), {
+    durationMs: 8, httpStatus: 400, errorMessage: '缺少必填参数 messages',
+    attempts: [{ dispatched: false, error: 'invalid_request' }],
   });
   const summary = request('req-20D4', age(8), {
     durationMs: 487, httpStatus: 200, providerId: provider.id, channelId: b.id, usage: { input: 22, output: 36 },
@@ -76,10 +89,11 @@ export function createCallLogSimulation(now = Date.now()) {
       upstreamRequestId: 'up-B-82D1', errorMessage: '流式输出中断' })],
   });
   return {
-    retainNew: true, latestRequestId: '', callNumber: 0,
+    retainNew: true, latestRequestId: '', callNumber: 0, policy: defaultLogPolicy,
+    preflightEvents: [blocked, unauthorized, invalid],
     data: {
       models: [model, backupModel], tenants: [tenant], projects: [project], providers: [provider], endpoints: channels,
-      requests: [routingDemo, recovered, full, blocked, summary, partial, upstreamLimited, interrupted],
+      requests: [routingDemo, recovered, full, blocked, unauthorized, summary, invalid, partial, upstreamLimited, interrupted],
     },
     evidence: {
       [routingDemo.requestId]: {
@@ -91,7 +105,7 @@ export function createCallLogSimulation(now = Date.now()) {
             ['目标模型服务', model.name], ['备用模型服务', backupModel.name],
           ]),
           phase('channel-route', '优先级组 P1 选路', 15, 5, [
-            ['组内权重', '渠道 A 70%，渠道 B 30%'], ['选中渠道', '渠道 A'],
+            ['组内权重', '渠道 A 70%，渠道 B 30%'], ['选中渠道', '渠道 A'], ['选中原因', '渠道 A 在 P1 候选组内按权重命中'],
             ['重试条件', '上游超时、上游 5xx'], ['每组重试次数', '1 次'],
             ['跨组切换次数', '1 次'], ['主模型总尝试上限', '3 次'],
           ]),
@@ -148,17 +162,47 @@ export function createCallLogSimulation(now = Date.now()) {
   };
 }
 
-export function simulateLogRequest(simulation, now = Date.now()) {
+export function applyLogPolicy(simulation, policy, now = Date.now()) {
+  const { sampleRate, retentionDays, maxSamples, projectId } = policy;
+  if (!Number.isInteger(sampleRate) || sampleRate < 1 || sampleRate > 100
+      || !Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 365
+      || !Number.isSafeInteger(maxSamples) || maxSamples < 100
+      || (projectId !== 'all' && !simulation.data.projects.some(row => row.id === projectId))) return null;
+  const preflightIds = new Set(simulation.preflightEvents.map(row => row.requestId));
+  const retained = simulation.data.requests.filter(row => preflightIds.has(row.requestId))
+    .filter(row => now - row.startedAt < retentionDays * day)
+    .toSorted((a, b) => b.startedAt - a.startedAt).slice(0, maxSamples);
+  const samples = new Set(retained.map(row => row.requestId));
+  return { ...simulation, policy, data: { ...simulation.data,
+    requests: simulation.data.requests.filter(row => !preflightIds.has(row.requestId) || samples.has(row.requestId)) } };
+}
+
+export function simulateLogRequest(simulation, now = Date.now(), { preflight = false, random = Math.random } = {}) {
   const callNumber = simulation.callNumber + 1;
   const latestRequestId = 'req-sim-' + String(callNumber).padStart(3, '0');
   const next = { ...simulation, callNumber, latestRequestId };
+  if (preflight) {
+    const row = request(latestRequestId, now - 20, {
+      durationMs: 8, httpStatus: 400, errorMessage: '缺少必填参数 messages', attempts: [{ dispatched: false, error: 'invalid_request' }],
+    });
+    const updated = { ...next, preflightEvents: [row, ...next.preflightEvents] };
+    if (next.retainNew && random() * 100 < next.policy.sampleRate) {
+      updated.data = { ...next.data, requests: [row, ...next.data.requests] };
+    }
+    return applyLogPolicy(updated, next.policy, now);
+  }
   if (!next.retainNew) return next;
   const row = request(latestRequestId, now - 1_000, {
     durationMs: 487, httpStatus: 200, providerId: provider.id, channelId: channels[1].id,
     usage: { input: 12, output: 18 },
   });
+  const capture = next.policy.captureBody && (next.policy.projectId === 'all' || next.policy.projectId === row.projectId);
+  const evidence = capture ? { ...summaryOnly, body: { allowed: true, segments: [
+    segment('request', '客户请求', { model: row.publicModelId, messages: [{ role: 'user', content: '执行一次服务巡检。' }] }),
+    segment('response', '返回客户的最终响应', { id: row.requestId, status: 200, message: '巡检完成。' }),
+  ] } } : summaryOnly;
   return {
     ...next, data: { ...next.data, requests: [row, ...next.data.requests] },
-    evidence: { ...next.evidence, [row.requestId]: summaryOnly },
+    evidence: { ...next.evidence, [row.requestId]: evidence },
   };
 }

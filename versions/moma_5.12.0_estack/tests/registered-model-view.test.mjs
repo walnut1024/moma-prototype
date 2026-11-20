@@ -7,9 +7,10 @@ import { supplyModelDirectory, serviceModelSources } from '../src/admin-v2/suppl
 import { modelOperationsView } from '../src/mock/model-data.js';
 import { serviceModelSourceDraft } from '../src/admin-v2/model-profile.js';
 import { serviceDirectoryModels } from '../src/admin-v2/service-workspace.js';
-import { catalogueMappingRows } from '../src/admin-v2/channel-selection.js';
+import { channelIdentity } from '../src/model-identities.mjs';
+import { catalogueMappingRows, channelStatus } from '../src/admin-v2/channel-selection.js';
 import { supplierDirectory } from '../src/admin-v2/moma-provider.js';
-import { channelManagementDirectory, supplierModelChannelGroups } from '../src/admin-v2/supplier-model-channel-table.js';
+import { channelManagementDirectory, filterChannelDirectory, supplierModelChannelGroups } from '../src/admin-v2/supplier-model-channel-table.js';
 import { MOMA_BUILTIN_MODELS, OFFICIAL_CHANNEL_PRESETS } from '../src/admin-v2/official-channel-presets.js';
 import { supplierDeletionBlock } from '../src/admin-v2/provider-channels.js';
 import { referenceWorkspace } from '../src/mock/reference-workspace.js';
@@ -102,6 +103,19 @@ test('both perspectives share exactly the channel-backed supplier/model pairs an
   assert.ok(!models.some(row => row.code === 'kimi-k3.1-pro'));
   for (const group of supplierPairs) assert.deepEqual(group.channels.map(channel => channel.relationId).sort(), relations.channels.filter(row => row.providerId === group.owner.id && row.materialId === group.id).map(row => row.id).sort());
   assert.deepEqual(state, before);
+});
+
+test('channel directory search and status filter keep only matching channels in each model group', () => {
+  const state = initialModelWorkspace();
+  const { models } = channelManagementDirectory(state, supplierDirectory(state), modelSupplyRelations(structuredClone(state)));
+  const model = models.find(row => row.groups.length > 1);
+  const group = model.groups.find(row => row.channels.length > 1);
+  const [channel] = group.channels;
+  const matches = filterChannelDirectory(state, models, channelIdentity(state, channel.id), channelStatus(group.owner, channel));
+  assert.deepEqual(matches.map(row => row.id), [model.id]);
+  assert.deepEqual(matches[0].groups[0].channels.map(row => row.id), [channel.id]);
+  assert.deepEqual(filterChannelDirectory(state, models, group.owner.name, '不存在的状态'), []);
+  assert.ok(group.channels.length > 1);
 });
 
 test('relational registration and mapping IDs determine membership even when JSON catalogue membership is stale', () => {

@@ -1,12 +1,7 @@
 import { assertExperienceSelection } from './service-directory.mjs';
 import { Search, X } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
-import { Button } from './components/ui/button';
-import { Checkbox } from './components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from './components/ui/dialog';
-import { Input } from './components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
+import { Banner, Button, Checkbox, Input, Modal, Radio, Select, Table, Tabs, Tag } from '@douyinfe/semi-ui';
 import { chooseModel, filterModels, modelCategory, modelSupplier } from './model-selection.mjs';
 import './model-select-dialog.css';
 
@@ -38,49 +33,78 @@ export default function ModelSelectDialog({ open, models, value, multiple = fals
   const validSelection = selected.length >= min && selected.length <= max && selected.every(id => models.some(model => model.id === id && model.callable));
 
   function choose(model) { setSelected(items => chooseModel(items, model, multiple, max)); }
+  const disabled = model => !model.callable || (multiple && !selected.includes(model.id) && selected.length >= max);
+  const columns = [
+    { title:<span className="sr-only">选择</span>, width:56, render:(_,model) => {
+      const Control = multiple ? Checkbox : Radio;
+      return <div onClick={event => event.stopPropagation()}>
+        <Control name={selectionId} checked={selected.includes(model.id)} disabled={disabled(model)}
+          aria-label={`选择 ${model.name} · ${model.provider}`} onChange={() => choose(model)} />
+      </div>;
+    } },
+    { title:'模型名称', width:240, render:(_,model) => <>
+      <span className="model-select-name" title={[model.name, model.desc].filter(Boolean).join('：')}>{model.name}</span>
+      <small className="model-select-model-id">{model.provider} · {model.callId}</small>
+    </> },
+    { title:'类型', width:82, render:(_,model) => modelCategory(model.type) },
+    { title:'计费方式', dataIndex:'billing', width:104 },
+    { title:'体验状态', width:118, render:(_,model) => <Tag color={model.callable?'green':'grey'}>{model.callable ? '可体验' : model.reason}</Tag> },
+  ];
+  const footer = <div className="model-select-footer">
+    <div className="model-select-current">{multiple ? <>
+      <span>已选 {selected.length} 个模型（{min}–{max} 个）</span>
+      {selected.map(id => {
+        const model = models.find(model => model.id === id);
+        const label = model ? `${model.name} · ${modelSupplier(model)}` : '已不可用';
+        return <Button type="tertiary" size="small" key={id} title={label} aria-label={`移除 ${label}`}
+          icon={<X size={12}/>} iconPosition="right" onClick={() => setSelected(items => items.filter(item => item !== id))}>
+          {label}
+        </Button>;
+      })}
+    </> : <><span>已选：</span><strong title={selected[0]}>{models.find(model => model.id === selected[0])?.name || '请选择模型'}</strong></>}</div>
+    <Button type="tertiary" onClick={onClose}>取消</Button>
+    <Button theme="solid" disabled={!validSelection} onClick={() => {
+      try { selected.forEach(id => assertExperienceSelection(id, task)); if (onApply(multiple ? selected : selected[0]) !== false) onClose(); }
+      catch (issue) { setError(issue.message); }
+    }}>应用</Button>
+  </div>;
 
-  return <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
-    <DialogContent className="model-select-dialog" showCloseButton={false}>
-      <header className="model-select-heading">
-        <div><DialogTitle>{multiple ? '添加对比模型' : '选择模型'}</DialogTitle><DialogDescription>按供应商和模型类型查找</DialogDescription></div>
-        <Button type="button" variant="ghost" size="icon" aria-label="关闭模型选择" onClick={onClose}><X size={20}/></Button>
-      </header>
+  return <Modal visible={open} title={multiple ? '添加对比模型' : '选择模型'} onCancel={onClose}
+    width="min(960px, calc(100vw - 20px))" className="model-select-dialog" footer={footer}>
+      {error && <Banner type="danger" description={error} />}
       <div className="model-select-body">
-        <aside className="model-select-suppliers" aria-label="模型供应商">
+        <section className="model-select-suppliers" aria-label="模型供应商">
           <h3>供应商</h3>
-          <label className="model-select-search"><Search size={16} aria-hidden="true"/><Input aria-label="搜索供应商" placeholder="搜索供应商" value={supplierQuery} onChange={event => setSupplierQuery(event.target.value)}/></label>
+          <Input prefix={<Search size={16} aria-hidden="true"/>} aria-label="搜索供应商" placeholder="搜索供应商" value={supplierQuery} onChange={setSupplierQuery} />
           <nav aria-label="供应商筛选">{providers.filter(item => item.toLowerCase().includes(supplierQuery.trim().toLowerCase())).map(item => {
             const count = item === '全部供应商' ? supplierCounts.length : supplierCounts.filter(model => modelSupplier(model) === item).length;
-            return <Button type="button" variant="ghost" className={provider === item ? 'active' : ''} aria-pressed={provider === item} key={item} onClick={() => setProvider(item)}><span>{item}</span><small>{count}</small></Button>;
+            return <Button type={provider === item?'primary':'tertiary'} theme={provider === item?'light':'borderless'}
+              aria-pressed={provider === item} key={item} onClick={() => setProvider(item)}><span>{item}</span><small>{count}</small></Button>;
           })}</nav>
           {providers.every(item => !item.toLowerCase().includes(supplierQuery.trim().toLowerCase())) && <p className="model-select-supplier-empty">无匹配供应商</p>}
-        </aside>
+        </section>
         <section className="model-select-results" aria-label="模型目录">
           <div className="model-select-toolbar">
-            <label className="model-select-search"><Search size={17} aria-hidden="true"/><Input autoFocus aria-label="搜索模型" placeholder="搜索模型名称" value={query} onChange={event => setQuery(event.target.value)}/></label>
-            <Select value={billing} onValueChange={setBilling}><SelectTrigger className="model-select-billing" aria-label="计费方式"><SelectValue/></SelectTrigger><SelectContent>{['全部计费', ...new Set(models.map(model => model.billing))].map(item => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
-            <label className="model-select-subscribed"><Checkbox checked={callableOnly} onCheckedChange={checked => setCallableOnly(checked === true)}/>仅看可体验</label>
+            <Input className="model-select-search" prefix={<Search size={16} aria-hidden="true"/>} autoFocus aria-label="搜索模型"
+              placeholder="搜索模型名称" value={query} onChange={setQuery} />
+            <Select value={billing} onChange={setBilling} className="model-select-billing" aria-label="计费方式"
+              optionList={['全部计费', ...new Set(models.map(model => model.billing))].map(value => ({value,label:value}))} />
+            <Checkbox checked={callableOnly} onChange={event => setCallableOnly(event.target.checked)}>仅看可体验</Checkbox>
           </div>
-          <div className="model-select-categories"><Tabs value={category} onValueChange={setCategory}><TabsList variant="line" aria-label="模型类型筛选">{categories.map(item => <TabsTrigger key={item} value={item}>{item}<small>{item === '全部' ? categoryCounts.length : categoryCounts.filter(model => modelCategory(model.type) === item).length}</small></TabsTrigger>)}</TabsList></Tabs><span aria-live="polite">共 {visible.length} 个模型</span></div>
-          <div className="model-select-table-scroll">
-            <table className="model-select-table" aria-label="模型列表">
-              <colgroup><col className="model-col-select"/><col/><col className="model-col-type"/><col className="model-col-billing"/><col className="model-col-status"/></colgroup>
-              <thead><tr><th scope="col"><span className="sr-only">选择</span></th><th scope="col">模型名称</th><th scope="col">类型</th><th scope="col">计费方式</th><th scope="col">体验状态</th></tr></thead>
-              <tbody>{visible.map(model => {
-                const checked = selected.includes(model.id);
-                const disabled = !model.callable || (multiple && !checked && selected.length >= max);
-                return <tr key={model.id} data-selected={checked} data-unavailable={!model.callable} onClick={() => !disabled && choose(model)}>
-                  <td><input type={multiple ? 'checkbox' : 'radio'} name={selectionId} checked={checked} disabled={disabled} aria-label={`选择 ${model.name} · ${model.provider}`} onClick={event => event.stopPropagation()} onChange={() => choose(model)}/></td>
-                  <td><span className="model-select-name" title={[model.name, model.desc].filter(Boolean).join('：')}>{model.name}</span><small>{model.provider} · {model.callId}</small></td><td>{modelCategory(model.type)}</td><td>{model.billing}</td>
-                  <td><span className="model-select-status">{model.callable ? '可体验' : model.reason}</span></td>
-                </tr>;
-              })}</tbody>
-            </table>
-            {!visible.length && <div className="model-select-empty"><p>没有匹配的模型</p><Button type="button" variant="link" onClick={() => { setQuery(''); setSupplierQuery(''); setProvider('全部供应商'); setCategory('全部'); setBilling('全部计费'); setCallableOnly(false); }}>清除筛选，查看全部模型</Button></div>}
+          <div className="model-select-categories">
+            <Tabs activeKey={category} onChange={setCategory} aria-label="模型类型筛选"
+              tabList={categories.map(item => ({itemKey:item,tab:<>{item}<small>{item === '全部' ? categoryCounts.length : categoryCounts.filter(model => modelCategory(model.type) === item).length}</small></>}))} />
+            <span aria-live="polite">共 {visible.length} 个模型</span>
           </div>
+          <Table className="model-select-table" aria-label="模型列表" columns={columns} dataSource={visible} rowKey="id"
+            size="small" pagination={false} scroll={{x:600,y:330}} onRow={model => ({
+              'data-selected':selected.includes(model.id), 'data-unavailable':disabled(model),
+              onClick:() => { if (!disabled(model)) choose(model); },
+            })}
+            empty={<div><p>没有匹配的模型</p><Button theme="borderless" onClick={() => {
+              setQuery(''); setSupplierQuery(''); setProvider('全部供应商'); setCategory('全部'); setBilling('全部计费'); setCallableOnly(false);
+            }}>清除筛选，查看全部模型</Button></div>} />
         </section>
       </div>
-      {error && <p role="alert">{error}</p>}<footer className="model-select-footer"><div className="model-select-current">{multiple ? <><span>已选 {selected.length} 个模型（{min}–{max} 个）</span>{selected.map(name => <Button type="button" variant="outline" size="xs" key={name} aria-label={`移除 ${name}`} onClick={() => setSelected(items => items.filter(item => item !== name))}>{models.find(model => model.id === name)?.name || '已不可用'}<X size={12}/></Button>)}</> : <><span>已选：</span><strong title={selected[0]}>{models.find(model => model.id === selected[0])?.name || '请选择模型'}</strong></>}</div><Button type="button" variant="outline" onClick={onClose}>取消</Button><Button type="button" className="model-select-apply" disabled={!validSelection} onClick={() => { try { selected.forEach(id => assertExperienceSelection(id, task)); if (onApply(multiple ? selected : selected[0]) !== false) onClose(); } catch (issue) { setError(issue.message); } }}>应用</Button></footer>
-    </DialogContent>
-  </Dialog>;
+  </Modal>;
 }

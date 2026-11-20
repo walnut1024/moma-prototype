@@ -1,5 +1,5 @@
 export const defaultCardOrder = {
-  overview: ['usage-token-trend', 'usage-call-trend', 'usage-model-share', 'usage-volume-share', 'usage-distribution'],
+  overview: ['usage-token-trend', 'usage-call-trend', 'usage-model-share', 'usage-volume-share'],
 };
 
 export function normalizeCardOrder(saved) {

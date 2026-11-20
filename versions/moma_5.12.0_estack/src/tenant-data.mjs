@@ -2,7 +2,7 @@ import { assertPersonalProjects } from './personal-project.mjs';
 import { resourceId } from './resource-id.mjs';
 import { changeTenantRoute, tenantRouteVisible } from './tenant-routing.mjs';
 import {descendantIds,roles,statuses,memberPhoneError,normalizeMemberPhone} from './organization-data.mjs';
-import { AUTH_DATA_KEY, ADMIN_DATA_KEY, resolveUserIdentity, notifyLinkedState, serviceReferences, lifecycleAccess, accessError, workspaceServiceOrdered } from './service-access.mjs';
+import { AUTH_DATA_KEY, ADMIN_DATA_KEY, resolveUserIdentity, readLinkedState, notifyLinkedState, serviceReferences, lifecycleAccess, accessError, workspaceServiceOrdered } from './service-access.mjs';
 import { siteSettlement } from './site-config.mjs';
 import { loadAdminState, serializeAdminState } from './admin-v2/store.js';
 import { trackUserConfiguration } from './mock/application-data.js';
@@ -21,6 +21,24 @@ export function tenantContext(storage = globalThis.localStorage) {
   const link = auth.identityLinks.find(row => row.authUserId === identity.userId && row.spaceId === identity.spaceId);
   const member = state.memberships.find(row => row.id === link.backendMembershipId);
   return { state, identity, link, canManage: identity.spaceId === 'personal' || ['租户管理员','企业管理员'].includes(member?.role) };
+}
+
+export function accountProjects(auth, spaces, storage = globalThis.localStorage) {
+  const state = readLinkedState(storage);
+  const projectsById = new Map(state.projects.map(row => [row.id, row]));
+  return spaces.filter(space => space.id !== 'personal').flatMap(space => {
+    let identity;
+    try { identity = resolveUserIdentity(state, { ...auth, activeSpace:space.id }, storage); }
+    catch { return []; }
+    const link = auth.identityLinks.find(row => row.authUserId === identity.userId && row.spaceId === space.id);
+    const member = state.memberships.find(row => row.id === link.backendMembershipId);
+    return projectAccess(state, identity, link).projects
+      .filter(row => row.status !== '已删除')
+      .map(({ id, name, status, createdAt, role }) => ({
+        id, name, status, createdAt, role, spaceId:space.id, tenantName:identity.tenantName,
+        canExit:Boolean(projectRole(projectsById.get(id), member)),
+      }));
+  });
 }
 const tenantRequestFields = ['id','requestId','modelId','publicModelId','serviceId','tenantId','projectId','keyId','httpStatus','error','usage','durationMs','ttftMs','createdAt','updatedAt','billingType','subscriptionId','source','stream','finalStatus','isCanceled','isTimeout','streamInterrupted','finishReason','modelType','usageUnit','usageConfirmed'];
 const tenantRequest = (row, includeContent = false) => ({

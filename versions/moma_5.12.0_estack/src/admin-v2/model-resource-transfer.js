@@ -86,6 +86,19 @@ export function exportModelResources(state, scope, target = { level: 'module' })
     references: resourceReferences(state, scope, scope === 'channels' ? all : [...resourceRows(state, 'channels'), ...all], rows, target) };
 }
 
+export function resourceFieldChanges(state, file) {
+  const snapshot = exportModelResources(state, file.scope, file.target);
+  const current = new Map(snapshot.rows.map(row => [resourceKey(row), row]));
+  return file.rows.flatMap(row => {
+    const original = current.get(resourceKey(row));
+    if (!original) return [];
+    return Object.keys(row).filter(field => !same(original[field], row[field])).map(field => ({
+      key: resourceKey(row) + ':' + field, type: row.type, id: row.id, field,
+      before: original[field], after: row[field],
+    }));
+  });
+}
+
 // Reuse business commands so import obeys the same lifecycle and price validation as editing.
 export function importModelResources(state, file, run, expectedTarget) {
   if (!file || file.schema !== RESOURCE_SCHEMA || !['update', 'link'].includes(file.operation) || !Object.hasOwn(scopeTypes,file.scope)

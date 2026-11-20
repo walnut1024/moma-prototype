@@ -1,0 +1,85 @@
+.channel-directory-table .semi-table-body > table { table-layout: fixed; }
+.supplier-workbench .channel-directory-filters { display: grid; gap: 8px; margin-bottom: 8px; }
+.supplier-workbench .channel-directory-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.supplier-workbench .channel-directory-view-tools { margin-inline-start: auto; }
+.supplier-workbench .channel-directory-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border-radius: var(--semi-border-radius-small);
+  background: var(--semi-color-fill-0);
+}
+.channel-identity { display: grid; min-width: 0; gap: 3px; }
+.channel-identity > * { min-width: 0; max-width: 100%; }
+.channel-identity .channel-name-link.semi-button { justify-self: start; padding-inline: 0; }
+.channel-name-link :is(.semi-button-content, .semi-typography) { min-width: 0; color: inherit; }
+.channel-connection-details { min-width: 0; }
+.channel-editor-section-heading, .channel-candidate-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-block: 8px;
+}
+.channel-candidate-banner { justify-content: flex-start; }
+.channel-connection-details .channel-model-table td { vertical-align: middle; }
+.channel-connection-details .channel-model-table td .supplier-cost-line { overflow-wrap: anywhere; }
+.channel-connection-details .channel-model-actions .semi-button { padding-inline: 6px; }
+.channel-operation-fields, .channel-operation-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 235px), 1fr)); gap: 16px; }
+.channel-operation-facts { margin: 12px 0; overflow-wrap: anywhere; }
+.channel-operation-facts dt { color: var(--semi-color-text-2); }
+.channel-operation-facts dd { margin: 4px 0 0; }
+.channel-connection-editor .supplier-configuration-body > :is(h3, .semi-radioGroup) { margin-top: 8px; }
+.channel-connection-editor .channel-editor-address { grid-column: 1 / -1; max-width: 640px; }
+.channel-connection-editor .channel-editor-model-table :is(th, td):first-child { width: 68px; }
+.channel-connection-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 415px), 1fr)); gap: 12px; }
+.channel-connection-cards > * { min-width: 0; }
+.channel-card-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0; }
+.channel-card-fields dt { color: var(--semi-color-text-2); }
+.channel-card-fields dd { margin: 4px 0 0; min-width: 0; }
+
+.channel-management-card { min-width: 0; }
+.channel-management-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-block: 0 12px;
+}
+.semi-tabs-content .channel-management-toolbar { margin-top: 8px; }
+.channel-management-toolbar .mo-search { width: min(100%, 284px); }
+.channel-management-new .channel-management-creation { display: grid; }
+.channel-management-facts { display: grid; gap: 0; margin: 0; }
+.channel-management-facts > div {
+  display: grid;
+  grid-template-columns: minmax(90px, 150px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--semi-color-border);
+}
+.channel-management-facts > div:last-child { border-bottom: 0; }
+.channel-management-facts dt { color: var(--semi-color-text-2); }
+.channel-management-facts dd { margin: 0; overflow-wrap: anywhere; }
+.channel-test-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 320px));
+  gap: 12px;
+}
+.channel-test-default {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.channel-test-default > .admin-form-field { width: min(100%, 320px); }
+.channel-test-result { display: grid; justify-items: start; gap: 4px; }
+.channel-test-table .semi-table-row-cell { vertical-align: middle; }
+.channel-test-dialog .semi-modal-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.channel-test-dialog .semi-modal-footer > .semi-button { margin: 0; }

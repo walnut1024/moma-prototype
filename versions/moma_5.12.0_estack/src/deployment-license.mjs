@@ -1,4 +1,4 @@
-export const LICENSE_NAMES = { internal: '企业内用版', commercial: '商业运营版' };
+export const LICENSE_NAMES = { internal: '对内组织运营', commercial: '对外商业运营' };
 export const LICENSE_UNAVAILABLE = '商业运营授权不可用';
 
 export function deploymentLicense(env = {}, now = Date.now()) {

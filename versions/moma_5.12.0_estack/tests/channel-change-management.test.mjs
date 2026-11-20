@@ -7,6 +7,7 @@ import { channelBlockReason } from '../src/admin-v2/provider-channels.js';
 import { connectionFingerprint } from '../src/admin-v2/connection-state.js';
 import { channelChangeImpact, channelCandidateStatus, channelEvidenceSignature, activeChannelProcurement, channelProcurementSnapshot, assertDirectChannelMutation, keyGroupCandidateStatus, CHANNEL_EVIDENCE_MAX_AGE_MS } from '../src/admin-v2/channel-change-management.js';
 import { providerKeyGroups } from '../src/admin-v2/provider-key-groups.js';
+import { connectionDirectoryRows, filterConnections } from '../src/admin-v2/channel-connection-directory.js';
 
 const providerId = 'provider-moma';
 const owner = state => state.providers.find(row => row.id === providerId);
@@ -30,6 +31,91 @@ const createCandidate = (state, config = { baseUrl: 'https://candidate.example.i
 const testCandidate = (state, patch = {}) => run(state, 'channelCandidateTest', { ...args(state), ...patch });
 const applyCandidate = state => run(state, 'channelCandidateApply', { ...args(state), confirmed: true });
 const stableBusiness = (before, after) => { for (const field of ['models', 'modelSalePrices', 'supplyPrices', 'serviceRoutes']) assert.deepEqual(after[field], before[field], field); };
+
+test('the connection directory groups models by ID and keeps empty connections and sibling model rows', () => {
+  const state = fixture(), current = endpoint(state);
+  state.endpoints.push({ ...current, id: 'empty-connection', status: '停用', connectionTest: null });
+  const rows = connectionDirectoryRows(state, [owner(state)]);
+  const shared = rows.find(row => row.id === current.id);
+  const empty = rows.find(row => row.id === 'empty-connection');
+  assert.equal(shared.modelCount, 2);
+  assert.deepEqual(shared.models.map(row => row.association.id), mappings(state).map(row => row.id));
+  assert.equal(shared.name, empty.name);
+  assert.equal(empty.modelCount, 0);
+  assert.deepEqual(filterConnections(rows, { query: 'vendor/chat', providerId, status: '已启用' }), [shared]);
+  assert.deepEqual(filterConnections(rows, { query: 'vendor/chat', providerId: 'other' }), []);
+});
+
+test('testing an inactive connection does not make it look manually stopped', () => {
+  const state = fixture(), current = endpoint(state);
+  const tested = { ...current, status: '停用', activationSource: undefined, configurationRevision: 1 };
+  state.endpoints.push({ ...tested, id: 'tested-not-enabled' },
+    { ...tested, id: 'manually-stopped', activationSource: 'manual' },
+    { ...tested, id: 'automatically-stopped', activationSource: 'automatic' });
+  const rows = connectionDirectoryRows(state, [owner(state)]);
+  assert.equal(rows.find(row => row.id === 'tested-not-enabled').status, '未启用');
+  assert.equal(rows.find(row => row.id === 'manually-stopped').status, '已停用');
+  assert.equal(rows.find(row => row.id === 'automatically-stopped').status, '自动停用');
+});
+
+test('a shared connection change checks even disabled model mappings and preserves each model channel name', () => {
+  const state = fixture(), [first, second] = mappings(state);
+  const disabled = owner(state).catalogConnections.find(row => row.id === second.id);
+  Object.assign(disabled, { enabled: false, sourceName: '保留模型渠道名' });
+  const prepared = run(state, 'channelCandidateSave', { ...args(state), allAssociations: true, config: { baseUrl: 'https://candidate.example.invalid/v1' } });
+  const staged = testCandidate(prepared, { associationIds: [first.id] });
+  const applyConnection = current => run(current, 'supplierChannelEdit', {
+    ...args(current), confirmed: true, allAssociations: true, connectionNameOnly: true, name: '共享连接新名称',
+    expectedUpdatedAt: endpoint(current).updatedAt, expectedProviderUpdatedAt: owner(current).updatedAt,
+  });
+  assert.throws(() => applyConnection(staged), /尚未测试/);
+  assert.throws(() => applyCandidate(staged), /尚未测试/);
+  assert.throws(() => run(staged, 'channelCandidateApply', { ...args(staged), confirmed: true, unlinked: true }), /已有模型/);
+  assert.equal(endpoint(staged).baseUrl, endpoint(state).baseUrl);
+  const next = applyConnection(testCandidate(staged, { associationIds: [second.id] }));
+  const current = next.endpoints.find(row => row.id === endpoint(state).id);
+  const model = supplierChannelAssociations(next, owner(next), current.id).find(row => row.id === second.id);
+  assert.equal(current.name, '共享连接新名称');
+  assert.equal(current.baseUrl, 'https://candidate.example.invalid/v1');
+  assert.equal(model.sourceName, disabled.sourceName);
+  assert.equal(model.enabled, false);
+  assert.deepEqual(model.pricing, second.pricing);
+});
+
+test('channel-owned credential candidates do not add a reusable credential to the provider pool', async () => {
+  const { providerApiKeysDraft, providerApiKeyRows } = await import('../src/admin-v2/provider-management.js');
+  const state = fixture(), current = endpoint(state), provider = owner(state);
+  const key = (await providerApiKeysDraft(['mock-private-connection-credential'])).apiKeys[0];
+  const staged = run(state, 'supplierChannelEdit', {
+    ...args(state), baseUrl: current.baseUrl, prepareConnection: true, channelOwned: true, newApiKey: key,
+    expectedUpdatedAt: current.updatedAt, expectedProviderUpdatedAt: provider.updatedAt,
+  });
+  const candidate = endpoint(staged).candidateConfiguration;
+  assert.deepEqual(endpoint(staged).apiKeys, current.apiKeys);
+  assert.equal(candidate.config.apiKeys[0].scope, 'channel');
+  assert.equal(candidate.config.apiKeys[0].id, candidate.config.apiKeyId);
+  assert.throws(() => applyCandidate(staged), /尚未测试/);
+  const next = applyCandidate(testCandidate(staged));
+  assert.equal(endpoint(next).apiKeyId, candidate.config.apiKeyId);
+  assert.deepEqual(owner(next).apiKeys, provider.apiKeys);
+  assert.ok(!providerApiKeyRows(next, owner(next)).some(row => row.apiKey.id === candidate.config.apiKeyId));
+  assert.ok(!JSON.stringify(next).includes('mock-private-connection-credential'));
+});
+
+test('an empty connection can save a new configuration without fabricating evidence or enabling supply', () => {
+  const state = fixture(), current = endpoint(state);
+  owner(state).catalogConnections = owner(state).catalogConnections.filter(row => row.endpointId !== current.id);
+  const staged = createCandidate(state);
+  assert.throws(() => applyCandidate(staged), /尚未完成验证/);
+  const next = run(staged, 'channelCandidateApply', { ...args(staged), confirmed: true, unlinked: true });
+  const saved = endpoint(next);
+  assert.equal(saved.status, '停用');
+  assert.equal(saved.baseUrl, 'https://candidate.example.invalid/v1');
+  assert.equal(saved.connectionTest, null);
+  assert.equal(saved.connectionQualification, null);
+  assert.deepEqual(saved.configurationVersions.at(-1).evidenceIds, []);
+  stableBusiness(state, next);
+});
 
 test('saving and testing a candidate leave current address, credentials, health and service configuration intact', () => {
   const state = fixture(), original = structuredClone(state), candidate = createCandidate(state), tested = testCandidate(candidate);

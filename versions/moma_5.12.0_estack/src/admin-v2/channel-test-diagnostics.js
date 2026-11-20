@@ -27,6 +27,7 @@ export function channelTestDiagnostics(context, batch, item) {
     serverBatchId: batch.id, serverChannelId: context.serverChannelId || batch.channelId, serverSignature: summary(batch.signature, 10000),
     operator: context.operator || null, result, check: summary(item.model?.check || '', 100), task: summary(item.model?.probe || item.model?.type, 100),
     testedAt: endedAt, endedAt, startedAt: timestamp(item.startedAt) || timestamp(batch.startedAt), durationMs: number(item.durationMs), status, statusCode: status,
+    ...(number(item.mappedStatus) != null ? { mappedStatus: item.mappedStatus } : {}),
     message: summary(item.message || (result === '通过' ? '模型返回有效响应' : result)), code: summary(item.code || '', 100),
     traceId: summary(item.traceId || batch.id, 200), usage: usageSummary(item.usage), cost: costSummary(item.cost),
     taskId: summary(item.taskId, 120), stage: summary(item.stage, 100), suggestion: summary(item.suggestion), retryAfter: number(item.retryAfter), upstreamRequestId: summary(item.upstreamRequestId, 200),

@@ -219,7 +219,8 @@ function EnterpriseEditor({ state, tenant, kind, apply, close, complete, inline 
 
 export default function EnterprisePage({ state, transact, deploymentTarget, internal }) {
   const [params, setParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
-  const [editor, setEditor] = useState(() => new URLSearchParams(location.hash.split('?')[1] || '').get('create') === 'enterprise' ? { kind: 'create' } : null);
+  const [editor, setEditor] = useState(() => !internal &&
+    new URLSearchParams(location.hash.split('?')[1] || '').get('create') === 'enterprise' ? { kind: 'create' } : null);
   const [result, setResult] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
   useEffect(() => {
@@ -246,7 +247,7 @@ export default function EnterprisePage({ state, transact, deploymentTarget, inte
   const all = enterpriseTenants(state);
   const defaultTenant = internalEnterprise(state);
   const companies = internal ? all.filter(item => item.id === defaultTenant?.id) : all;
-  const detailId = params.get('enterprise') || (internal ? defaultTenant?.id : null);
+  const detailId = internal ? defaultTenant?.id : params.get('enterprise');
   const tenant = companies.find(item => item.id === detailId);
   const query = params.get('q') || '';
   const status = params.get('status') || '';
@@ -275,7 +276,7 @@ export default function EnterprisePage({ state, transact, deploymentTarget, inte
         onSelect={value => navigate({ deployment:value })}
         optionList={[{ value: 'cloud', label: '私有云' }, { value: 'private', label: '私有化' }]}/>
     </div>, deploymentTarget)}
-    <AdminPageHeading title={detailId ? tenant?.name || '政企客户详情' : internal ? '本企业' : '政企客户'} description={detailId
+    <AdminPageHeading title={detailId ? tenant?.name || '政企客户详情' : internal ? '本组织' : '政企客户'} description={detailId
       ? '管理企业管理员、查看组织成员、项目空间及 API 密钥。'
       : '以政府机构或企业为主体开通，由管理员统一管理组织成员及模型服务资源。'}>
       {tenant && <Space wrap>
@@ -285,7 +286,7 @@ export default function EnterprisePage({ state, transact, deploymentTarget, inte
         </Button>
       </Space>}
       {!detailId && <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite}
-        onClick={() => setEditor({ kind: 'create' })}>{internal ? '开通本企业' : '开通政企客户'}</Button>}
+        onClick={() => setEditor({ kind: 'create' })}>{internal ? '开通本组织' : '开通政企客户'}</Button>}
     </AdminPageHeading>
     {!canWrite && <Banner type="info" closeIcon={null} description={state.storageError ? '数据读取失败，请恢复数据后再操作。'
       : '当前角色仅可查看企业信息。平台管理员和运营人员可开户和管理企业成员。'}/>}

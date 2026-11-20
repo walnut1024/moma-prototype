@@ -2,20 +2,21 @@ import Table from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useState } from 'react';
-import { Card, Collapse, Space, Typography } from '@douyinfe/semi-ui';
+import { Card, Collapse, Typography } from '@douyinfe/semi-ui';
 import source from '../../MODEL_OPERATIONS_GUIDE.md?raw';
-import { findOperationsGuide, parseOperationsGuide } from './model-operations-guide.mjs';
+import { parseOperationsGuide } from './model-operations-guide.mjs';
 import './getting-started.css';
 
-const sections = parseOperationsGuide(source);
+const [guide] = parseOperationsGuide(source);
 const guideHref = id => `#/admin-2/getting-started?guide=${encodeURIComponent(id)}`;
 
 function inline(text) {
-  return text.split(/(`[^`]+`|\[[^\]]+\]\(#[^)]+\))/g).filter(Boolean).map((part, index) => {
+  return text.split(/(`[^`]+`|\[[^\]]+\]\((?:#|https:\/\/)[^)]+\))/g).filter(Boolean).map((part, index) => {
     if (part.startsWith('`')) return <Typography.Text key={index} code>{part.slice(1, -1)}</Typography.Text>;
-    const link = part.match(/^\[([^\]]+)\]\(#([^)]+)\)$/);
+    const link = part.match(/^\[([^\]]+)\]\((#[^)]+|https:\/\/[^)\s]+)\)$/);
     if (!link) return part;
-    const href = link[2].startsWith('/admin-2/') ? `#${link[2]}` : guideHref(link[2]);
+    if (link[2].startsWith('https://')) return <Typography.Text key={index} link={{ href: link[2], target: '_blank', rel: 'noreferrer' }}>{link[1]}</Typography.Text>;
+    const href = link[2].startsWith('#/admin-2/') ? link[2] : guideHref(link[2].slice(1));
     return <Typography.Text key={index} link={{ href }}>{link[1]}</Typography.Text>;
   });
 }
@@ -54,30 +55,20 @@ function GuideTasks({ tasks, guideId }) {
 }
 
 export default function GettingStarted({ guideId }) {
-  const section = findOperationsGuide(sections, guideId);
   useEffect(() => {
     if (!guideId) return;
-    const target = document.getElementById(guideId) || document.getElementById(section.id);
+    const target = document.getElementById(guideId);
     const focus = target?.closest('[role="button"]') ?? target;
     focus?.scrollIntoView({ block: 'start' });
     focus?.focus({ preventScroll: true });
-  }, [guideId, section.id]);
+  }, [guideId]);
   return (
-    <article className="getting-started admin-page-stack">
-      <AdminPageHeading title="模型运营"/>
-      <nav aria-label="模型运营指导">
-        <Space wrap spacing={16}>
-          {sections.map(guide => <Typography.Text key={guide.id} strong={section.id === guide.id}
-            link={{ href: guideHref(guide.id), 'aria-current': section.id === guide.id ? 'page' : undefined }}>{guide.title}</Typography.Text>)}
-        </Space>
-      </nav>
-      <section key={section.id} aria-labelledby={section.id}>
-        <Card>
-          <Typography.Title heading={4} component="h2" id={section.id} tabIndex={-1}>{section.title}</Typography.Title>
-          <div className="gs-copy"><Blocks blocks={section.blocks}/></div>
-          {section.tasks.length > 0 && <GuideTasks tasks={section.tasks} guideId={guideId}/>}
-        </Card>
-      </section>
+    <article id={guide.id} className="getting-started admin-page-stack" tabIndex={-1}>
+      <AdminPageHeading title={guide.title}/>
+      <Card>
+        <div className="gs-copy"><Blocks blocks={guide.blocks}/></div>
+        <GuideTasks tasks={guide.tasks} guideId={guideId}/>
+      </Card>
     </article>
   );
 }

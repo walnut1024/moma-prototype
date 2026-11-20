@@ -26,6 +26,7 @@ export function projectAccess(state, identity, link) {
       canEdit: project.status === '正常' && canManage }];
   });
   return {
+    managesSpace,
     canCreate: !personal && (managesSpace || member?.canCreateProjects === true),
     projects,
   };

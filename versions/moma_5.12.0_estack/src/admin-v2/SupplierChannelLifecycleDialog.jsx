@@ -4,9 +4,9 @@ import { Modal, CopyId } from './ModelOperationsUI';
 import { supplierChannelLifecyclePlan } from './supplier-channel-batch';
 import { channelIdentity } from '../model-identities.mjs';
 
-export default function SupplierChannelLifecycleDialog({ state, provider, associationIds, action, ops, close }) {
+export default function SupplierChannelLifecycleDialog({ state, provider, associationIds, action, ops, close, modelOnly = false }) {
   let plan, error;
-  try { plan = supplierChannelLifecyclePlan(state, provider.id, associationIds, action); } catch (issue) { error = issue.message; }
+  try { plan = supplierChannelLifecyclePlan(state, provider.id, associationIds, action, { modelOnly }); } catch (issue) { error = issue.message; }
   const [signature] = useState(plan?.signature), [confirmed, setConfirmed] = useState(false), [busy, setBusy] = useState(false);
   const saving = useRef(false), verb = action === 'enable' ? '启用' : '停用';
   const stale = signature !== plan?.signature;
@@ -15,11 +15,11 @@ export default function SupplierChannelLifecycleDialog({ state, provider, associ
     if (saving.current || disabled || !confirmed) return;
     saving.current = true; setBusy(true);
     try {
-      const next = await ops.run('supplierChannelBatchLifecycle', { providerId: provider.id, associationIds, action, expectedSignature: signature, confirmed: true });
+      const next = await ops.run('supplierChannelBatchLifecycle', { providerId: provider.id, associationIds, action, modelOnly, expectedSignature: signature, confirmed: true });
       if (next) close();
     } finally { saving.current = false; setBusy(false); }
   };
-  return <Modal drawer wide title={'批量' + verb + '渠道'} description={provider.name} onClose={() => !busy && close()}
+  return <Modal drawer wide title={modelOnly ? verb + '模型渠道' : '批量' + verb + '渠道'} description={provider.name} onClose={() => !busy && close()}
     footer={<Space><Button disabled={busy} onClick={close}>取消</Button><Button theme="solid" type={action === 'disable' ? 'danger' : 'primary'} disabled={disabled || !confirmed} loading={busy} onClick={submit}>确认{verb}</Button></Space>}>
     {error ? <Banner type="danger" description={error}/> : <>
       <Typography.Paragraph>已选 {plan.selected.length} 条渠道，涉及 {plan.connections.length} 个连接。{action === 'enable' ? '启用前校验当前连接及每款模型的有效测试；不自动启用其他渠道或上架。' : '仅停用所选模型渠道，不停用共享连接；相关服务可能暂时不可用。'}</Typography.Paragraph>

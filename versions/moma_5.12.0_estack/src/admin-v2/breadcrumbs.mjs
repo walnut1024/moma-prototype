@@ -1,9 +1,9 @@
-import { pages, sections } from './navigation.mjs';
+import { pages, providerManagementPerspective, sections } from './navigation.mjs';
 import { TARIFF_KINDS } from './tariff-dictionary.js';
 
 export function adminBreadcrumbs(active, params, names = {}) {
   const page = pages[active];
-  if (['providers', 'listing', 'model-market', 'model-prices'].includes(active) && params.get('resourceJson') === '1') {
+  if (['providers', 'providers-new', 'listing', 'model-market', 'model-prices'].includes(active) && params.get('resourceJson') === '1') {
     const origin = new URLSearchParams(params);
     origin.delete('resourceJson');
     origin.delete('resourceTarget');
@@ -24,7 +24,8 @@ export function adminBreadcrumbs(active, params, names = {}) {
   const groupHome = group.home || group.items[0].children[0][0];
   const crumbs = [];
   const add = (label, target) => crumbs.push({ label, ...(target && target !== currentHref ? { href: target } : {}) });
-  add(page.group, group.direct || ['models', 'commerce'].includes(group.id) ? null : `#/admin-2/${groupHome}`);
+  add(names.internal ? '组织运营' : page.group,
+    names.internal || group.direct || ['models', 'commerce'].includes(group.id) ? null : `#/admin-2/${groupHome}`);
   const view = active === 'listing' && params.get('view') === 'add' ? null : params.get('view');
   if (active === 'package-production') {
     const labels = { new: '新增套餐', edit: '编辑套餐', detail: '套餐详情' };
@@ -34,18 +35,29 @@ export function adminBreadcrumbs(active, params, names = {}) {
   } else if (active === 'package-data' && params.get('package')) {
     add(page.label, href(active, {}, ['package']));
     add('套餐详情');
-  } else if (active === 'providers') {
-    const modelView = params.get('perspective') === 'models';
+  } else if (active === 'providers-reference' || active === 'providers-new' && params.has('connection')) {
+    const detail = Boolean(params.get('connection'));
+    add(page.label, detail ? href(active, {}, ['connection', 'tab', 'modelQ']) : null);
+    if (detail) add(names.connection || '渠道不存在');
+  } else if (active === 'providers' || active === 'providers-new') {
+    const modelView = providerManagementPerspective(active, params) === 'models';
     const provider = params.has('provider') && !modelView;
     const model = modelView && params.has('supplyModel');
     const keys = ['listQ', 'listPage', 'modelListQ', 'modelListPage'];
+    if (active === 'providers-new') keys.push('channelStatus', 'channelProvider');
     const list = new URLSearchParams();
     for (const key of keys) if (params.has(key)) list.set(key, params.get(key));
-    add(page.label, provider || modelView ? '#/admin-2/providers' + (list.size ? '?' + list : '') : null);
-    if (modelView) {
-      list.set('perspective', 'models');
-      add('模型', model ? '#/admin-2/providers?' + list : null);
+    if (active === 'providers-new') {
+      if (provider) list.set('perspective', 'suppliers');
+      add(page.label, provider || model ? `#/admin-2/${active}${list.size ? '?' + list : ''}` : null);
       if (model) add('模型详情');
+    } else {
+      add(page.label, provider || modelView ? '#/admin-2/providers' + (list.size ? '?' + list : '') : null);
+      if (modelView) {
+        list.set('perspective', 'models');
+        add('模型', model ? '#/admin-2/providers?' + list : null);
+        if (model) add('模型详情');
+      }
     }
     if (provider) add(names.provider || '服务商不存在', view === 'modelImport' ? href(active, {}, ['view']) : null);
     if (provider && view === 'modelImport') add('批量新增');
@@ -56,18 +68,15 @@ export function adminBreadcrumbs(active, params, names = {}) {
     if (provider) add(names.provider || '服务商不存在', view === 'modelImport' ? href(active, { tab: 'models' }, ['view', 'edit']) : null);
     const label = { new: '添加服务商', import: '批量导入服务商资料', relations: '批量导入供应关系', modelImport: '批量导入并登记' };
     if (Object.hasOwn(label, view)) add(label[view]);
+  } else if (active === 'listing-new' && params.has('service')) {
+    add(page.label, href(active, {}, ['service', 'tab']));
+    add('服务详情');
   } else if (active === 'listing' && view === 'onboarding') {
     add(names.onboardingIntent==='reserve'?'准备备用供应':names.onboardingIntent==='activate'?'投入当前服务':'接入并上架模型');
   } else if (['listing', 'model-templates'].includes(active)) {
     if (active === 'model-templates') add('模型资料', '#/admin-2/model-templates');
-    const modelDetail = active === 'listing' && !view && params.has('model');
-    const serviceHome = modelDetail ? href(active, { perspective: params.get('perspective') || 'models' }, [
-      'model', 'panel', 'tab', 'service', 'mapping', 'routeProvider', 'providerEdit', 'providerAdd',
-      'identityProvider', 'providerChannels', 'providerAssociate', 'listingReturn', 'returnTo', 'view', 'sourceLibrary',
-    ]) : null;
-    add(page.label, modelDetail ? serviceHome : view && view !== 'templates' ? listHref : null);
-    if (modelDetail) add(names.model || '未找到指定模型');
-    else if (view === 'template') add(params.has('template') ? names.model || '模型资料不存在' : '新建模型资料');
+    add(view === 'classification' && active === 'model-templates' ? '分类字典' : page.label, view && !['templates', 'classification'].includes(view) ? listHref : null);
+    if (view === 'template') add(params.has('template') ? names.model || '模型资料不存在' : '新建模型资料');
     else if (['import', 'templateImport'].includes(view)) add(view === 'import' ? '批量导入模型' : '批量导入模型资料');
     else if (view === 'onboarding') add('接入模型');
     else if (view === 'supplier-batch') add('批量配置与上架');
@@ -82,12 +91,25 @@ export function adminBreadcrumbs(active, params, names = {}) {
     add('模型部署', params.has('deployment') || view === 'create' ? href(active, {}, ['deployment', 'view', 'tab']) : null);
     if (params.has('deployment')) add(names.deployment || '部署不存在', view === 'edit' ? href(active, { view: null, tab: 'overview' }) : null);
     if (view === 'create' || view === 'edit') add(view === 'edit' ? '更新部署配置' : '部署模型');
+  } else if (active === 'customer-analysis-detail') {
+    add('客户数据', href('customer-analysis', {}, ['customer', 'source']));
+    add('客户详情');
   } else if (active === 'customer-usage-detail') {
-    add('用户数据', href('user-analysis', {}, ['customer']));
+    if (names.internal) {
+      add(params.has('project') ? '项目管理' : '本组织', params.has('project')
+        ? href('projects', { scope:'organization' }, ['customer', 'period', 'start', 'end'])
+        : '#/admin-2/tenants?scope=organization');
+    } else {
+      add('用户数据', href('user-analysis', {}, ['customer']));
+    }
     add(names.customer || '客户不存在');
+  } else if (active === 'projects') {
+    add(page.label, params.has('project') ? href(active, {}, ['project']) : null);
+    if (params.has('project')) add('项目详情');
   } else if (active === 'tenants' || active === 'users') {
     const key = active === 'tenants' ? params.has('personal') ? 'personal' : 'enterprise' : 'user';
-    add(page.label, params.has(key) ? href(active, {}, [key, 'tab', 'project', 'create']) : null);
+    add(active === 'tenants' && names.internal ? '本组织' : page.label,
+      params.has(key) ? href(active, {}, [key, 'tab', 'project', 'create']) : null);
     if (params.has('create')) add('开通租户');
     if (params.has(key)) add(names[key] || (key === 'user' ? '用户不存在' : '租户不存在'));
   } else {
