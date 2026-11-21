@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes,createHash} from 'node:crypto';
-import {supplierMaterialReturn,supplierModelSelection} from '../src/admin-v2/supplier-model-registration.js';
 import {startLocalBackend} from '../database/local-runtime.js';
 import {domainModelWorkspace} from '../src/mock/model-fields.js';
 import {libraryRecord} from '../src/admin-v2/model-library.js';
@@ -9,15 +8,6 @@ import {serviceMetadataMissingFields,serviceModelSourceDraft} from '../src/admin
 import {materialBase} from '../src/admin-v2/model-operations.js';
 import {providerApiKeysDraft} from '../src/admin-v2/provider-management.js';
 import {connectionKeys} from '../src/admin-v2/connection-state.js';
-
-test('material maintenance returns to the supplier selection without accepting external routes or malformed selection',()=>{
-  const address=supplierMaterialReturn('#/admin-2/providers?provider=provider-moma&selectedModels='+encodeURIComponent('["template-a"]'),'template-b');
-  const params=new URLSearchParams(address.split('?')[1]);
-  assert.equal(params.get('provider'),'provider-moma');assert.equal(params.get('addingModel'),'1');
-  assert.deepEqual(supplierModelSelection(params.get('selectedModels')),['template-a','template-b']);
-  for(const bad of [null,'https://outside.invalid','#/admin-2/listing','#/admin-2/providers-extra?provider=x','#/admin-2/providers'])assert.equal(supplierMaterialReturn(bad),null);
-  for(const bad of ['not-json','{}','[1]','["<script>"]',JSON.stringify(Array(6).fill('a'))])assert.deepEqual(supplierModelSelection(bad),[]);
-});
 
 test('HTTP and D1 preserve canonical material, explicit channel protocol and candidate edits across the first onboarding stage',{timeout:60000},async()=>{
   const accessCode=randomBytes(24).toString('hex');

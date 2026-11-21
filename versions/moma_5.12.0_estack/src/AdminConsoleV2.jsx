@@ -27,7 +27,6 @@ import AnalyticsPages from "./admin-v2/AnalyticsPages";
 import "./admin-v2/admin-shell.css";
 import { useAdminStore } from "./admin-v2/store";
 import { ClusterManagement, ModelDeployments, ModelObservability } from "./admin-v2/InferencePages";
-import ProviderManagement from "./admin-v2/ProviderManagement";
 import { ChannelManagementNew } from './admin-v2/ChannelDirectory';
 const CustomerAnalysis = lazy(() => import('./admin-v2/CustomerAnalysis'));
 const TrafficOperations = lazy(() => import('./admin-v2/TrafficOperations'));
@@ -43,7 +42,6 @@ import UsersPage from "./admin-v2/UsersPage";
 import CustomerUsageDetail from "./admin-v2/CustomerUsageDetail";
 import ModelPrices from './admin-v2/ModelPrices';
 import ModelMarket from './admin-v2/ModelMarket';
-import ModelManagement from "./admin-v2/ModelManagement";
 import { internalEnterprise } from "./admin-v2/enterprise";
 import { useDeploymentLicense } from './useDeploymentLicense';
 import { LICENSE_UNAVAILABLE } from './deployment-license.mjs';
@@ -67,10 +65,7 @@ const NAVIGATION_ICONS = {
   usage: IconBarChartVStroked,
   'users-analysis': IconUserGroup,
   'customers-analysis': IconUserStroked,
-  channels: IconChainStroked,
-  'channels-new': IconChainStroked,
   'channels-reference': IconChainStroked,
-  warehouse: IconLayers,
   'warehouse-new': IconLayers,
   market: IconAppCenter,
   prices: IconPriceTag,
@@ -97,7 +92,7 @@ const NAVIGATION_ICONS = {
   'site-configuration': IconSetting,
   'getting-started': IconBookOpenStroked,
 };
-const overviewShortcuts = ['usage-analysis', 'user-analysis', 'listing', 'providers'].map(id => ({
+const overviewShortcuts = ['usage-analysis', 'user-analysis', 'listing-new', 'providers-reference'].map(id => ({
   id, label: pages[id].label, Icon: NAVIGATION_ICONS[pages[id].area],
 }));
 
@@ -135,7 +130,7 @@ function AdminWorkspace(props) {
   const [hash,setHash]=useState(location.hash);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   useEffect(()=>{const sync=()=>setHash(location.hash);addEventListener('hashchange',sync);return()=>removeEventListener('hashchange',sync);},[]);
-  const cloud = ['listing', 'listing-new', 'providers', 'providers-new', 'providers-reference', 'model-market', 'model-prices',
+  const cloud = ['listing-new', 'providers-reference', 'model-market', 'model-prices',
     'model-templates', 'provider-materials', 'tariff-dictionary'].includes(pageFromHash(hash));
   const packageWorkspace=/^#\/admin-2\/(?:package-production|package-data)(?:[/?]|$)/.test(hash);
   if (!license) return <AdminPageLoading label="部署授权"/>;
@@ -234,15 +229,15 @@ function AdminConsoleV2View({bannerTarget,workbenchName,store,internal,license,s
     location.hash = lastVisits.current[nextWorkspace];
   };
   const page = pages[active];
-  const detailProvider = ['providers', 'providers-new', 'provider-materials'].includes(active) ? state.providers.find(item => item.id === detailParams.get("provider")) : null;
-  const detailConnection = ['providers-new', 'providers-reference'].includes(active) && detailParams.has('connection')
+  const detailProvider = active === 'provider-materials' ? state.providers.find(item => item.id === detailParams.get("provider")) : null;
+  const detailConnection = active === 'providers-reference' && detailParams.has('connection')
     ? state.endpoints.find(item => item.id === detailParams.get('connection') && !item.deletedAt) : null;
   const activeGroup = organizationView ? 'organization' : page.groupId;
   const activeArea = organizationView && active === 'customer-usage-detail'
     ? (detailParams.has('project') ? 'projects' : 'enterprise') : page.area;
   const activeModule = sections.find(group => group.id === page.groupId)?.items.find(item => item.id === page.area);
   const detailTenant = active === 'customer-usage-detail' ? organizationState.tenants.find(item => item.id === detailParams.get('customer')) : null;
-  const detailModel = detailParams.get('view') === 'template' && ['listing', 'model-templates'].includes(active) ? libraryRecord(state, detailParams.get('template')) : null;
+  const detailModel = detailParams.get('view') === 'template' && active === 'model-templates' ? libraryRecord(state, detailParams.get('template')) : null;
   const enterpriseDetailId = active === 'tenants' && !organizationView ? detailParams.get('enterprise') : null;
   const detailEnterprise = enterpriseDetailId ? state.tenants.find(item => item.id === enterpriseDetailId && ['企业', '政府'].includes(item.type) && (!internal || company?.id === item.id)) : null;
   const detailUser = active === 'users' ? state.users.find(user => user.id === detailParams.get('user')) : null;
@@ -324,12 +319,10 @@ function AdminConsoleV2View({bannerTarget,workbenchName,store,internal,license,s
             : active === "model-market" ? <ModelMarket state={state} transact={transactModel} conflict={conflict} reload={reload} internal={internal}/>
             : active === "model-prices" ? <ModelPrices state={state} transact={transactModel} conflict={conflict} reload={reload} readOnly={commerceReadOnly}/>
             : active === "tariff-dictionary" ? <Suspense fallback={<AdminPageLoading label="模型资料"/>}><MaterialDictionaryPage state={state} transact={transactModel} conflict={conflict}/></Suspense>
-            : ['providers', 'providers-new'].includes(active) ? <ProviderManagement key={active} page={active} state={state} transact={transactModel} conflict={conflict} reload={reload}/>
             : active === 'providers-reference' ? <ChannelManagementNew state={state} transact={transactModel} conflict={conflict} reload={reload}/>
             : active === 'provider-materials' ? <Suspense fallback={<AdminPageLoading label="服务商资料"/>}><ProviderMaterials state={state} transact={transactModel} conflict={conflict} reload={reload}/></Suspense>
             : active === 'model-templates' ? <Suspense fallback={<AdminPageLoading label="模型资料"/>}><ModelMaterials state={modelOperationsView(state,'all')} transact={transactModel} conflict={conflict} reload={reload}/></Suspense>
-            : active === 'listing' ? <ModelManagement sourceState={state} state={modelOperationsView(state,detailParams.get('catalogue'))} transact={transactModel} conflict={conflict} reload={reload}/>
-            : active === 'listing-new' ? <Suspense fallback={<AdminPageLoading label="模型服务（新）"/>}><ModelServicesNew state={factState} params={detailParams} dirtyRef={draftDirty} sourceConflict={conflict}/></Suspense>
+            : active === 'listing-new' ? <Suspense fallback={<AdminPageLoading label={pages[active].label}/>}><ModelServicesNew state={factState} params={detailParams} dirtyRef={draftDirty} sourceConflict={conflict}/></Suspense>
             : active === "package-data" ? <PackageData state={state} params={detailParams}/>
             : active === "package-production" ? <PackageProduction state={state} transact={transact} conflict={conflict} params={detailParams} dirty={draftDirty}/>
             : active === 'traffic-limits' ? <Suspense fallback={<AdminPageLoading label="限流配置"/>}><TrafficOperations key={state.adminSession.accountId} state={state} dirtyRef={draftDirty}/></Suspense>

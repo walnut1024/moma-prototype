@@ -18,9 +18,9 @@
 <a id="channel-connect"></a>
 ### 先录入三家服务商和密钥
 
-1. 打开[渠道管理](#/admin-2/providers)的「服务商视图」。已有的服务商直接打开。第一次接的点「录入服务商」，填服务商名称和编码。「供给类型」选「第三方推理服务」，再点「确认录入」。三家的示例编码是 `siliconflow`、`deepseek-official`、`volcengine-ark`。
-2. 点服务商名称，打开「服务商 API 密钥池」。选「默认 API 密钥组」，点「添加 API 密钥」。例如在硅基流动下把密钥命名为「硅基流动采购」，粘贴这家控制台发给你的 Key。DeepSeek 和火山方舟各做一次。如果服务商已在用其他账号的密钥，可点「新建组」单独维护。
-3. 回到「模型渠道」。先看同一家的模型能不能用同一套上游协议、根地址和密钥组。能共用就建 1 条连接。再看调用时 `model` 能填几个不同的值。每个要使用的值登记 1 条模型渠道。
+1. 打开[基础资料 → 服务商](#/admin-2/provider-materials)。第一次接的点「添加服务商」，填写名称和编码，供给类型选择「第三方推理服务」。三家的示例编码是 `siliconflow`、`deepseek-official`、`volcengine-ark`。
+2. 到[渠道管理 → 渠道列表](#/admin-2/providers-reference)点「添加新的渠道」。选择服务商、模型协议并填写 Base URL 和 API Key。已有渠道可点进详情，在「服务商 API 密钥池」查看该服务商的凭证。
+3. 打开渠道详情的「模型列表」。可通过「获取模型列表」发现上游模型，或用「自定义添加模型」登记上游调用标识。多个模型使用同一协议、地址和密钥时可共用同一条渠道。
 
 服务根地址是各接口共用的那一段。比如硅基流动的对话完整地址以 `/chat/completions` 结尾，生图以 `/images/generations` 结尾。表单里的「上游 API 地址」填 `https://api.siliconflow.cn/v1`。系统会按模型类型加上后面的路径。
 
@@ -37,7 +37,7 @@
 
 三条可以共用 1 条连接。对话选择「OpenAI 兼容 API（Chat Completions）」，图像生成页面显示为「OpenAI 兼容 API」。两者在连接里都用 `openai`，系统根据模型类型选路径。
 
-在硅基流动的「模型渠道 → 批量新增 → JSON」一起登记这三条。JSON 外层 `provider` 里的 `id` 和 `code` 填 MoMA 当前服务商的 Provider ID 和服务商编码。连接清单只写下面这条。把三款模型填在 `models`，每款模型的 `mappings` 都引用 `sf-main`。
+在硅基流动的渠道详情「模型列表」登记以上模型。下表补充说明供应关系 JSON 的结构。JSON 外层 `provider` 使用当前服务商的身份，三款模型的 `mappings` 都引用示例连接 `sf-main`。
 
 | 写在哪 | 示例怎么填 |
 | --- | --- |
@@ -46,7 +46,7 @@
 | Flash 的 `mappings` 中的一条 | `connection_id` 填 `sf-main`，`upstream_model_id` 填 `deepseek-ai/DeepSeek-V4.1-Flash`，`channel_name` 填 `硅基流动 · Flash`。 |
 | GLM 和 MOSS 的模型资料及 `mappings` | 补上各自的模型名称和编码，GLM 的 `model_type` 填 `text`，MOSS 填 `image`。各写一条映射，`connection_id` 都是 `sf-main`，`upstream_model_id` 分别用上表的值。 |
 
-点「校验并预览」，检查三条记录的地址和调用标识，再点「确认导入」。真实 Key 放在密钥池，JSON 里只引用密钥组 ID。
+登记前核对三条模型记录的地址和调用标识。真实 Key 在渠道或密钥池维护，示例 JSON 只引用密钥组 ID。
 
 如果硅基流动为这款 Flash 提供了不同的推理来源，先看你的账号拿到了几个可以自己选的入口。这里用供给 A 和供给 B 举例。
 
@@ -61,7 +61,7 @@
 <a id="deepseek"></a>
 ### DeepSeek 官方接两款对话模型
 
-现在你直接拿到了 DeepSeek 官方的 Key。进入 DeepSeek 的「模型渠道 → 新增」，按下表分别保存两条。两条的「API 密钥来源」都选「服务商 API 密钥池」，再选 DeepSeek 自己的默认密钥组。
+拿到 DeepSeek 官方 Key 后，在「渠道列表」按下表添加两条渠道，再到各自的「模型列表」登记对应模型。
 
 | 字段 | Flash 用 Chat Completions | Pro 用 Messages |
 | --- | --- | --- |
@@ -72,7 +72,7 @@
 | 上游 API 地址 | `https://api.deepseek.com` | `https://api.deepseek.com/anthropic/v1` |
 | 接口地址预览 | `https://api.deepseek.com/chat/completions` | `https://api.deepseek.com/anthropic/v1/messages` |
 
-点「保存渠道」。这个例子用了两种请求格式，所以是 2 条连接、2 条模型渠道。若业务只用 Chat Completions，Flash 和 Pro 都可用 `https://api.deepseek.com`，批量登记到同一条连接。这两款是对话模型。Flash 能看图并用文字回答，生图和生视频用本指南里的专用模型。[DeepSeek 首次调用](https://api-docs.deepseek.com/zh-cn/) · [DeepSeek Messages API](https://api-docs.deepseek.com/zh-cn/api/create-message/)
+保存后在渠道列表核对两条渠道。这个例子用了两种请求格式，所以是 2 条连接、2 条模型渠道。若业务只用 Chat Completions，Flash 和 Pro 都可用 `https://api.deepseek.com`，批量登记到同一条连接。这两款是对话模型。Flash 能看图并用文字回答，生图和生视频用本指南里的专用模型。[DeepSeek 首次调用](https://api-docs.deepseek.com/zh-cn/) · [DeepSeek Messages API](https://api-docs.deepseek.com/zh-cn/api/create-message/)
 
 <a id="volcengine"></a>
 ### 火山方舟先接对话和 Seedream 生图
@@ -85,7 +85,7 @@
 | DeepSeek V4.1 Flash 1017 · 视觉理解 | `deepseek-v4-1-flash-261017` | `/chat/completions` |
 | Doubao Seedream 5.5 · 图像生成 | `doubao-seedream-5-5-261028` | `/images/generations` |
 
-按硅基流动的批量步骤，在火山方舟下建立 1 条连接，例如 `ark-main`。`base_url` 换成 `https://ark.cn-beijing.volces.com/api/v3`，密钥组换成火山方舟自己的组，三条模型记录引用 `ark-main`。对话和生图各按实际结果测试。两家生图 API 都用 `/images/generations`，硅基流动的图片在 `images` 字段，方舟在 `data` 字段，验证时要确认 MoMA 能取到图片。
+按硅基流动的建渠道和登记模型步骤，在火山方舟下建立 1 条连接，例如 `ark-main`。`base_url` 换成 `https://ark.cn-beijing.volces.com/api/v3`，密钥组换成火山方舟自己的组，三条模型记录引用 `ark-main`。对话和生图各按实际结果测试。两家生图 API 都用 `/images/generations`，硅基流动的图片在 `images` 字段，方舟在 `data` 字段，验证时要确认 MoMA 能取到图片。
 
 登记 Flash 时，确认三个来源都是 1017 版本，再选同一份模型资料。硅基流动、DeepSeek 官方和火山方舟各有自己的连接和调用标识，所以这款模型在 MoMA 有 3 条供给记录。[火山方舟模型列表](https://console.volcengine.com/ark/region:cn-beijing/docs/model-list) · [方舟地址与鉴权](https://console.volcengine.com/ark/region:cn-beijing/docs/base-url-and-authentication) · [方舟图片生成 API](https://console.volcengine.com/ark/region:cn-beijing/docs/image-generation-api)
 
@@ -106,10 +106,10 @@
 <a id="channel-maintenance"></a>
 ### 接完后怎么测试、填成本和启用
 
-1. 回到服务商的「模型渠道」，对要用的每一行点「编辑 → 测试连接」。共用连接也要逐条测。对话要收到文字，生图要能拿到图片，视频要等任务结束再拿到可用的文件。当前原型使用模拟结果。正式接入还要用对应账号真实验证。
-2. 去[渠道管理（新）](#/admin-2/providers-new)找到连接，点模型数量展开。在目标模型行点「成本设置」，填这一路的实际采购价。对话按合同填输入、输出等计费项，生图按合同填每张或实际约定单位，视频按约定的计费口径填。缺报价先留待配置。点「下一步：预览发布」核对生效时间。
-3. 在服务商的「模型渠道」点「批量操作」，勾选通过验证的行，点「启用」。如果服务商尚未启用，先在服务商详情点「启用服务商」。租户要使用模型，还需在「模型服务」配置可用渠道和路由，再按需上架。
+1. 在「渠道列表」对目标渠道点「测试连接」。进入渠道详情的「模型列表」，点模型行的「测试」或使用「批量测试」。当前原型使用模拟结果。正式接入需用对应账号验证。
+2. 去[渠道管理（新）](#/admin-2/providers-reference)找到连接，点模型数量展开。在目标模型行点「成本设置」，填这一路的实际采购价。对话按合同填输入、输出等计费项，生图按合同填每张或实际约定单位，视频按约定的计费口径填。缺报价先留待配置。点「下一步：预览发布」核对生效时间。
+3. 回到「渠道列表」，从目标行操作启用通过检查的渠道。再到「模型服务 → 渠道模型」为服务关联可用渠道，按需配置优先级和权重。
 
-按本例配置，当前表单覆盖 4 条连接、8 条模型渠道。硅基流动 1 条连接接 3 条，DeepSeek 官方 2 条连接各接 1 条，火山方舟 1 条连接接 3 条。两条视频方案待适配，硅基流动供给 A/B 是单独的判断示例。「渠道视图」一行显示一条连接。展开连接，就能看到共用这套设置的模型渠道。
+按本例配置，当前表单覆盖 4 条连接、8 条模型渠道。硅基流动 1 条连接接 3 条，DeepSeek 官方 2 条连接各接 1 条，火山方舟 1 条连接接 3 条。两条视频方案待适配，硅基流动供给 A/B 是单独的判断示例。「渠道列表」一行显示一条连接。点击渠道名称，在「模型列表」核对共用该连接的模型。
 
 后面若只调某一路 Flash 的采购价或容量，改该渠道这一行。若更换共用的地址或主密钥，先查哪些模型用了它，逐条通过测试后再应用新配置。

@@ -123,7 +123,6 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
       ]}/>
     {linking ? <>
       <Typography.Text type="tertiary">已选择 {linked.length} 个服务。解除关联前，请先在「调整上架」中移除正在展示的服务。</Typography.Text>
-      {!services.length && <Button theme="borderless" onClick={() => ops.go({}, { base: 'listing', reset: true })}>前往模型服务</Button>}
     </> : <>
       <Field label="可见范围">
         <RadioGroup aria-label="可见范围" value={scope.type}

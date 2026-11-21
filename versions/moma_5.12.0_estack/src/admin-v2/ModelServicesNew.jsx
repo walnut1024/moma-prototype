@@ -21,7 +21,7 @@ import {
 import './model-services-new.css';
 
 const pageHref = '#/admin-2/listing-new';
-const channelHref = '#/admin-2/providers?perspective=models';
+const channelHref = '#/admin-2/providers-reference';
 const { Text, Title } = Typography;
 const tabs = [['basic', '基本信息'], ['limits', '限流策略'], ['channels', '渠道模型'], ['grants', '开通管理'], ['batch', '批处理配置']];
 const batchModes = [
@@ -372,7 +372,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
   return <div className="admin-page-stack new-model-services">
     {data.error && <Banner type="danger" description={data.error} closeIcon={null}/>}
     {!serviceId ? <>
-      <AdminPageHeading title="模型服务（新）"/>
+      <AdminPageHeading title="模型服务"/>
       <Card>
         <div className="new-service-toolbar">
           <Input className="new-service-search" prefix={<IconSearch aria-hidden="true"/>} showClear
@@ -420,7 +420,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
           </Tabs.TabPane>)}
         </Tabs>
       </Card>
-    </> : <Card><Empty description="未找到指定模型服务"><Button onClick={() => { location.hash = pageHref; }}>返回模型服务（新）</Button></Empty></Card>}
+    </> : <Card><Empty description="未找到指定模型服务"><Button onClick={() => { location.hash = pageHref; }}>返回模型服务</Button></Empty></Card>}
     {dialog && <Modal title={titles[kind]} wide={kind === 'context'} onClose={() => dirty ? setEditState(current => ({ ...current, discard: true })) : close()}
       maskClosable={false} footer={<>
         <Button onClick={() => dirty ? setEditState(current => ({ ...current, discard: true })) : close()}>取消</Button>

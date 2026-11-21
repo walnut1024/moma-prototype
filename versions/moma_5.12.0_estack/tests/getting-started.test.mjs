@@ -29,7 +29,7 @@ test('getting started renders one channel guide with working task and management
   const [guide] = guides;
   assert.deepEqual([...source.matchAll(/\]\(#([a-z0-9-]+)\)/g)].map(([, id]) => id), guide.tasks.map(task => task.id));
   const routes = [...source.matchAll(/\]\(#\/admin-2\/([^)]+)\)/g)].map(([, route]) => route);
-  assert.deepEqual([...new Set(routes)], ['providers', 'providers-new']);
+  assert.deepEqual([...new Set(routes)], ['provider-materials', 'providers-reference']);
   for (const route of routes) assert.equal(pageFromHash('#/admin-2/' + route, '运营人员'), route);
 });
 

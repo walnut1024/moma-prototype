@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAdminSeed, commitAdminState, parseAdminState } from '../src/admin-v2/store.js';
-import { supplierListingRows, supplierBatchEntry, supplierPublishEntry, previewSupplierBatch, listingPreferences, rememberListing, selectedCatalogueIds, rememberCatalogueSelection, listingAddress, validListingReturn, LISTING_PREFERENCES_KEY } from '../src/admin-v2/supplier-listing.js';
+import { supplierListingRows, supplierBatchEntry, supplierPublishEntry, previewSupplierBatch } from '../src/admin-v2/supplier-listing.js';
 import { markedUpItems } from '../src/admin-v2/provider-catalogue-pricing.js';
 import { activeSupplyPrice, procurementVersion } from '../src/admin-v2/model-management.js';
 const op = (state, operation, data) => commitAdminState(state, { type: 'modelOperations', operation, data });
@@ -120,18 +120,4 @@ test('rechecking procurement revisions preserves updated draft prices while the 
   const drafts=rechecked.modelOnboardings.filter(item=>item.providerId===providerId);
   assert.ok(drafts.every(item=>item.status!=='已完成' && rechecked.models.find(model=>model.id===item.modelId).listingStatus==='已下架'));
   assert.deepEqual(drafts.find(item=>item.catalogueModelId==='batch-model-a').prices.map(item=>Number(item.amount)),[3.6,2.4]);
-});
-
-test('view preferences and selections are version-scoped, preserve separate filters and tolerate unavailable storage', () => {
-  const values = new Map(), storage = { getItem: key => values.get(key), setItem: (key, value) => values.set(key, value) }, provider = { id: 'p', catalogModelIds: ['a', 'b'] };
-  const address = listingAddress(new URLSearchParams('q=Qwen&shown=40&model=private&view=price&supplier=p'), 'models');
-  assert.equal(new URLSearchParams(address.split('?')[1]).get('shown'), '40');
-  assert.equal(new URLSearchParams(address.split('?')[1]).get('model'), 'private');
-  assert.equal(new URLSearchParams(address.split('?')[1]).has('view'), false);
-  rememberListing(storage, { perspective: 'suppliers', models: { address, scrollY: 500 } });
-  rememberCatalogueSelection(storage, provider, ['a', 'foreign', 'a']);
-  assert.deepEqual(selectedCatalogueIds(storage, provider), ['a']); assert.equal(listingPreferences(storage).models.address, address);
-  assert.ok(LISTING_PREFERENCES_KEY.includes('5120')); assert.equal(validListingReturn('https://external.invalid'), null); assert.equal(validListingReturn('#/admin-2/listing-other'), null);
-  assert.deepEqual(listingPreferences({ getItem() { throw Error('blocked'); } }), {});
-  assert.doesNotThrow(() => rememberListing({ getItem() { return '{bad'; }, setItem() { throw Error('quota'); } }, { perspective: 'models' }));
 });

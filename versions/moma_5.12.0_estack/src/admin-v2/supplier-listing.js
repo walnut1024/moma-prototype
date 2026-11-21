@@ -1,4 +1,3 @@
-import { workspaceStoragePrefix } from "../workspace-storage.mjs";
 import { catalogueModelMatch, modelLibrary, libraryRecord, supplySalesStatus } from './model-operations.js';
 import { supplierDirectory, providerCatalogueIds, providerCatalogueModel } from './moma-provider.js';
 import { providerCataloguePrice } from './moma-catalogue-prices.js';
@@ -8,33 +7,6 @@ import { cataloguePurchasePrice, saleItemsDraft } from './provider-catalogue-pri
 import { connectionBlockReason } from './connection-state.js';
 import { commitAdminState } from './state-transaction.js';
 
-export const LISTING_PREFERENCES_KEY = workspaceStoragePrefix + 'model-management:views';
-export const LISTING_FILTER_KEYS = ['q', 'type', 'mode', 'model', 'status', 'attention', 'provider', 'page', 'size', 'shown', 'supplier', 'supplierQ', 'catalogue', 'catalogueQ', 'catalogueType', 'catalogueStatus', 'cataloguePage', 'catalogueSize'];
-export function listingAddress(params, perspective) {
-  const query = new URLSearchParams();
-  for (const key of LISTING_FILTER_KEYS) if (params.has(key)) query.set(key, params.get(key));
-  query.set('perspective', perspective);
-  return '#/admin-2/listing?' + query;
-}
-export function validListingReturn(value) {
-  return typeof value === 'string' && /^#\/admin-2\/listing(?:\?|$)/.test(value) ? value : null;
-}
-export function listingPreferences(storage) {
-  try { const value = JSON.parse(storage.getItem(LISTING_PREFERENCES_KEY)); return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; } catch { return {}; }
-}
-export function rememberListing(storage, patch) {
-  const next = { ...listingPreferences(storage), ...patch };
-  try { storage.setItem(LISTING_PREFERENCES_KEY, JSON.stringify(next)); } catch { /* View preferences must not block business operations. */ }
-  return next;
-}
-export function selectedCatalogueIds(storage, provider) {
-  const values = listingPreferences(storage).selections?.[provider?.id];
-  const available = provider ? providerCatalogueIds(provider) : [];
-  return Array.isArray(values) ? [...new Set(values.filter(value => typeof value === 'string' && available.includes(value)))].slice(0, 100) : [];
-}
-export function rememberCatalogueSelection(storage, provider, ids) {
-  rememberListing(storage, { selections: { ...listingPreferences(storage).selections, [provider.id]: ids } });
-}
 export function supplierListingRows(state, provider) {
   if (!provider) return [];
   const library = modelLibrary(state);

@@ -364,7 +364,7 @@ async function route(request, env) {
   }
   if (path === '/auth/me' && method === 'GET') return json({ account: { id: actor.id, name: actor.name, role: actor.role, loginCode: actor.loginCode } });
   const pageId = auditPath ? 'audit-logs' : trafficPath || trafficHistoryPath ? 'traffic-limits' : packagePath ? 'package-production' : dictionary ? 'tariff-dictionary' : path.startsWith('/materials') ? 'model-templates'
-    : path.startsWith('/suppliers') || path.startsWith('/channels') ? 'providers' : 'listing';
+    : path.startsWith('/suppliers') || path.startsWith('/channels') ? 'providers-reference' : 'listing-new';
   if (!canAccessPage(actor.role, pageId)) fail(403, 'FORBIDDEN', '当前账号无此页面访问权限');
   if (auditPath) {
     if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');

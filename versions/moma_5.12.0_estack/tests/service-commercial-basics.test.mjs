@@ -27,8 +27,8 @@ test('scope explicitly selects active clients and never silently expands invalid
 });
 test('listing repairs target current mappings without linking to removed sales settings',()=>{
   const model={id:'canonical',serviceMode:'standard'};
-  assert.equal(serviceConfigurationTarget(model,{tab:'routing',mapping:true}).mapping,'standard:canonical');
-  assert.equal(serviceConfigurationTarget(model,{tab:'routing',providerId:'p',mapping:true}).mapping,'provider:canonical:p');
+  assert.equal(serviceConfigurationTarget(model,{tab:'routing',mapping:true}),null);
+  assert.equal(serviceConfigurationTarget(model,{tab:'routing',providerId:'p',mapping:true}),null);
   assert.equal(serviceConfigurationTarget(model,{tab:'scope'}),null);
   assert.equal(serviceConfigurationTarget({...model,serviceMode:'provider'},{tab:'scope'}),null);
 });

@@ -167,9 +167,6 @@ export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, c
         onClick={() => { const ids = selectedKeys.map(row => row.id); setProbeQueue(ids); setProbeKey(ids[0]); setProbeRun(crypto.randomUUID()); }}>测试选中（基础检测）</Button>}
       {probeQueue.length > 0 && <Button onClick={() => setProbeQueue([])}>停止后续逐钥测试</Button>}
       <Choice label="密钥状态" value={stateFilter} options={Object.entries(filters)} onChange={setStateFilter}/>
-      <Button theme="borderless" onClick={() => window.open('#/admin-2/providers-new?' + new URLSearchParams({
-        perspective: 'suppliers', provider: provider.id, tab: 'api-keys',
-      }), '_blank', 'noopener')}>打开服务商 API 密钥池</Button>
       {state.currentRole === '平台管理员' && <Button theme="borderless" onClick={() => setAudit(true)}>查看凭证审计</Button>}
     </Space>}
     {directory && endpoint.poolPaused && <Notice>当前连接的密钥已全部停用。应用已通过验证的密钥池候选后，可另行启用连接。</Notice>}

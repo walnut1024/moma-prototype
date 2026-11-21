@@ -10,7 +10,7 @@ import {activeModelSalePrice,activeProviderPrice} from '../src/admin-v2/service-
 import {sections,canAccessPage} from '../src/admin-v2/navigation.mjs';
 
 test('model operations modules share operator permissions while measurement stays a page-level destination',()=>{
-  assert.deepEqual(sections.find(row=>row.id==='models').items.map(row=>row.label),['渠道管理','渠道管理（新）','模型服务','模型广场','模型资料']);
+  assert.deepEqual(sections.find(row=>row.id==='models').items.map(row=>row.children[0][0]),['providers-reference','listing-new','model-market','model-templates']);
   assert.equal(sections.find(row=>row.id==='commerce').items[0].label,'模型销售');
   for(const page of ['model-market','model-prices','tariff-dictionary']){
     assert.equal(canAccessPage('运营人员',page),true);assert.equal(canAccessPage('运维人员',page),false);
@@ -34,8 +34,8 @@ test('expired latest sale never revives an older price for either service mode',
 });
 
 test('cross-page return accepts only supported local management destinations',()=>{
-  for(const path of ['#/admin-2/providers?perspective=models&costProvider=p&costAssociation=a','#/admin-2/model-prices?service=provider%3Am%3Ap','#/admin-2/listing?model=m&panel=access','#/admin-2/model-market?model=m&listing=gray'])assert.equal(operationsReturn(path),path);
-  for(const path of ['https://example.com','#/admin-2/admins','#/admin-2/listing\nhttps://example.com',null])assert.equal(operationsReturn(path),null);
+  for(const path of ['#/admin-2/providers-reference?connection=c1&tab=model-costs','#/admin-2/model-prices?service=provider%3Am%3Ap','#/admin-2/listing-new?service=s1','#/admin-2/model-market?model=m&listing=gray'])assert.equal(operationsReturn(path),path);
+  for(const path of ['#/admin-2/listing','#/admin-2/providers','#/admin-2/providers-new','https://example.com','#/admin-2/admins','#/admin-2/listing\nhttps://example.com',null])assert.equal(operationsReturn(path),null);
 });
 
 test('combined pricing filters use stable model and supplier IDs, preserve zero-cost rows and reject missing selections',async()=>{

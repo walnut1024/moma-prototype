@@ -23,8 +23,7 @@ test('audio technical readiness excludes price while sales keeps its own configu
   assert.equal(issues.some(issue=>issue.tab==='pricing'),false);
   const price=publicationChecks(state,audio).find(issue=>issue.tab==='pricing'),mapping=issues.find(issue=>issue.tab==='routing');
   assert.equal(serviceConfigurationTarget(audio,price).service,`provider:${audio.id}:${price.providerId}`);assert.equal(serviceConfigurationTarget(audio,price).page,'model-prices');
-  const target=serviceConfigurationTarget(audio,mapping);
-  assert.equal(target.panel,'routing');assert.equal(target.mapping,`provider:${audio.id}:${mapping.providerId}`);assert.equal(target.providerAssociate,null);
+  assert.equal(serviceConfigurationTarget(audio,mapping), null);
 });
 test('new service saves its selected mode and requires routing before publication',()=>{
   const state=parseAdminState(null),source=structuredClone(state.models.find(model=>model.serviceReviewCase==='deepseek'));source.id='template-new-review-service';source.modelId='new-review-source';delete source.templateId;state.modelTemplates.push(source);const provider=state.providers.find(row=>row.id==='provider-moma');provider.catalogModelIds.push(source.modelId);provider.catalogModels.push({modelId:source.modelId,libraryId:source.id,type:source.type,name:source.name});const data={...serviceModelDraft(source),libraryId:source.id,name:'新增服务',modelId:'new-review-service',purpose:'commercial',serviceMode:'standard'};

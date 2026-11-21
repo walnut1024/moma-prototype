@@ -56,7 +56,6 @@ export default function ProviderRemovalDialog({ state, ops, target, close, remov
           { title: '受影响渠道', dataIndex: 'channelName', width: 160 },
           { title: '调用状态', width: 135, render: (_, row) => !row.callsEnabled ? '已停服' : row.keepServing ? row.routeActive ? '待退出当前渠道路由' : '其他渠道继续服务' : '已启用' },
           { title: '广场状态', width: 130, render: (_, row) => !row.listed ? '未上架 / 已下架' : row.keepServing ? '其他供给保持上架' : '已上架（含灰度）' },
-          { title: '处理', width: 110, render: (_, row) => <Button theme="borderless" size="small" disabled={busy} onClick={() => { cancel(); ops.go({ model: row.modelId, panel: 'routing' }, { base: 'listing', reset: true, saved: true }); }}>查看服务</Button> },
         ]}/>
       {plan.blockers.map(message => <Banner type="danger" description={message} key={message}/>)}
       {plan.routes.some(row => row.remainingError) && <Banner type="warning" description="部分剩余路由无法通过校验，对应服务将停服并下架；其他服务不受影响。"/>}

@@ -743,7 +743,7 @@ Gemini 原生、Azure、Bedrock、Vertex 等不能用“其他”冒充已支持
 - [后台视觉实施与验收](../../docs/PAGE-SPEC.md#后台视觉实施与验收)：样式隔离、组件复用及界面检查要求，不等于本次已完成界面验收。
 - [现有术语表](./GLOSSARY.md)：采用后追加的“统一模型服务模式／渠道直选模式”定义；不恢复已被覆盖的逐渠道零售价方案。
 - [旧设计访谈](./docs/model-supply-design.md)：仅作历史背景，其中旧待定项和代码事实不能覆盖当前规则。
-- [供应入口](./src/admin-v2/ProviderManagement.jsx)、[渠道创建](./src/admin-v2/SupplierChannelConfiguration.jsx)、[资源编辑](./src/admin-v2/SupplierResourceDialogs.jsx)。
+- [渠道管理](./src/admin-v2/ChannelDirectory.jsx)、[创建渠道](./src/admin-v2/ChannelDirectoryCreation.jsx)、[编辑渠道及模型](./src/admin-v2/ChannelConnectionEditors.jsx)。
 - [模型选择与原地资料创建](./src/admin-v2/SupplyModelPicker.jsx)、[资料表单](./src/admin-v2/ModelMetadataForm.jsx)。
 - [渠道测试界面](./src/admin-v2/SupplierChannelTest.jsx)、[模拟测试与协议定义](./src/admin-v2/provider-management.js)。
 - [供应事务与价格约束](./src/admin-v2/supplier-resources.js)、[渠道有效性](./src/admin-v2/provider-channels.js)、[密钥组](./src/admin-v2/provider-key-groups.js)。

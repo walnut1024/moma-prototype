@@ -10,11 +10,10 @@ import {
 test('the new service catalogue and detail have independent routes', () => {
   const params = new URLSearchParams({ service: 'new-service', tab: 'channels' });
   assert.equal(pageFromHash('#/admin-2/listing-new?' + params), 'listing-new');
-  assert.equal(pageFromHash('#/admin-2/listing?perspective=models'), 'listing');
   assert.equal(canAccessPage('平台管理员', 'listing-new'), true);
   assert.equal(canAccessPage('运维人员', 'listing-new'), false);
   assert.deepEqual(adminBreadcrumbs('listing-new', params).slice(1), [
-    { label: '模型服务（新）', href: '#/admin-2/listing-new' }, { label: '服务详情' },
+    { label: '模型服务', href: '#/admin-2/listing-new' }, { label: '服务详情' },
   ]);
 });
 

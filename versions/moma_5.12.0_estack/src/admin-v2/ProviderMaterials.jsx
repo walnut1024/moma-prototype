@@ -113,7 +113,7 @@ export default function ProviderMaterials(props) {
     {!importKind && ops.conflict && <div className="materials-description"><Notice error>资料已有修订，当前输入保留。<Button theme="borderless" onClick={ops.reload}>载入最新数据</Button></Notice></div>}
     {(providerId || view) && <div className="materials-description">
       <Button theme="borderless" onClick={importKind && provider ? () => go({ view: null }) : back}>
-        {importKind && provider ? '返回供应模型' : returnTo?.startsWith('#/admin-2/providers') ? '返回渠道管理' : returnTo ? '返回来源页面' : '返回服务商列表'}
+        {importKind && provider ? '返回供应模型' : returnTo?.startsWith('#/admin-2/providers-reference') ? '返回渠道管理' : returnTo ? '返回来源页面' : '返回服务商列表'}
       </Button>
     </div>}
     {importKind ? <div className="materials-description">

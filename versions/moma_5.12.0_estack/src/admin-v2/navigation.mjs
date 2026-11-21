@@ -11,12 +11,9 @@ export const sections = [
     { id: "users-analysis", label: "用户数据", children: [["user-analysis", "用户数据"]] },
     { id: "customers-analysis", label: "客户数据", children: [["customer-analysis", "客户数据"]] },
   ]},
-  { id: "models", workspace: "operations", title: "模型运营", home: "listing?perspective=models", items: [
-    { id: "channels", label: "渠道管理", children: [["providers", "渠道管理"]] },
-    { id: "channels-new", label: "渠道管理（新）", children: [["providers-new", "渠道管理（新）"]] },
-    { id: "channels-reference", label: "渠道管理（new）", children: [["providers-reference", "渠道管理（new）"]] },
-    { id: "warehouse", label: "模型服务", children: [["listing", "模型服务"]] },
-    { id: "warehouse-new", label: "模型服务（新）", children: [["listing-new", "模型服务（新）"]] },
+  { id: "models", workspace: "operations", title: "模型运营", items: [
+    { id: "channels-reference", label: "渠道管理", children: [["providers-reference", "渠道管理"]] },
+    { id: "warehouse-new", label: "模型服务", children: [["listing-new", "模型服务"]] },
     { id: "market", label: "模型广场", children: [["model-market", "模型广场"]] },
     { id: "materials", label: "模型资料", children: [["model-templates", "模型"], ["tariff-dictionary", "计费项"]] },
   ]},
@@ -98,13 +95,6 @@ export const adminSections = sections.flatMap(group =>
 export function isOrganizationPage(id, params, internalSite) {
   return ['tenants', 'projects', 'customer-usage-detail'].includes(id) &&
     (internalSite || params.get('scope') === 'organization');
-}
-
-export function providerManagementPerspective(page, params) {
-  const perspective = params.get('perspective');
-  if (perspective === 'models') return 'models';
-  if (perspective === 'suppliers' || params.has('provider')) return 'suppliers';
-  return page === 'providers-new' ? 'models' : 'suppliers';
 }
 
 export function canAccessPage(role, id, license) {

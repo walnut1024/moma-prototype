@@ -8,6 +8,8 @@ import { SearchBox } from './ModelOperationsUI';
 import { MODEL_TYPES } from './model-management';
 import { pages } from './navigation.mjs';
 
+import { operationsReturn } from './model-pricing-workspace';
+
 function ChannelModels({ channel, ops, open }) {
   const query = ops.params.get('modelQ') || '';
   const keyword = query.trim().toLowerCase();
@@ -120,11 +122,17 @@ export default function ChannelManagementView({ state, connections, ops, open, f
   }
 
   const query = params.get('q') || '';
+  const providerId = params.get('channelProvider');
+  const modelKey = params.get('channelModel');
+  const filtered = providerId || modelKey;
+  const returnTo = operationsReturn(params.get('returnTo'));
   const allowedSizes = [10, 20, 50, 100];
   const requestedSize = Number(params.get('size'));
   const pageSize = allowedSizes.includes(requestedSize) ? requestedSize : 10;
   const keyword = query.trim().toLowerCase();
-  const matches = connections.filter(row => row.name.toLowerCase().includes(keyword));
+  const matches = connections.filter(row => row.name.toLowerCase().includes(keyword) &&
+    (!providerId || row.provider.id === providerId) &&
+    (!modelKey || row.models.some(model => model.modelKey === modelKey)));
   const page = Math.min(Math.max(1, Number.parseInt(params.get('page'), 10) || 1), Math.ceil(matches.length / pageSize) || 1);
   const rows = matches.slice((page - 1) * pageSize, page * pageSize);
   const view = id => {
@@ -137,11 +145,13 @@ export default function ChannelManagementView({ state, connections, ops, open, f
       <div className="channel-management-toolbar">
         <SearchBox placeholder="按渠道名称搜索" value={query}
           onChange={value => go({ q: value || null, page: null }, { replace: true })}/>
+        {filtered && <Button theme="borderless" onClick={() => go({ channelProvider: null, channelModel: null, page: null })}>清除来源筛选</Button>}
+        {returnTo && <Button theme="borderless" onClick={() => ops.proceed(() => { location.hash = returnTo; })}>返回来源页面</Button>}
         <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can}
           onClick={event => open(event, 'create')}>添加新的渠道</Button>
       </div>
       <AdminTable aria-label="渠道列表" rowKey="id" pagination={false} dataSource={rows}
-        empty={query.trim() ? '没有匹配的渠道' : '暂无渠道'}
+        empty={query.trim() || filtered ? '没有匹配的渠道' : '暂无渠道'}
         scroll={{ x: 'max(100%, 840px)' }} columns={[
           { title: '渠道名称', dataIndex: 'name', width: 173 },
           { title: '渠道类型', dataIndex: 'interfaceLabel', width: 145, render: value => value || '—' },
