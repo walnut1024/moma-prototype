@@ -51,7 +51,7 @@ test('the built 5.12.0 keeps order table, checkout and confirmation layout', () 
   const html = fs.readFileSync(path.join(root, 'dist/client/moma_5.12.0_estack/index.html'), 'utf8');
   const cssPath = [...html.matchAll(/href="([^"]+\.css)"/g)][0][1];
   const css = fs.readFileSync(path.join(root, 'dist/client', cssPath), 'utf8');
-  for (const selector of ['.legacy-order-row', '.service-order-row', '.service-order-footer', '.order-confirm-backdrop']) {
+  for (const selector of ['.legacy-order-table', '.service-order-table', '.service-order-footer', '.order-confirm-facts']) {
     assert.ok(css.includes(selector + '{'), 'Missing order layout: ' + selector);
   }
 });
