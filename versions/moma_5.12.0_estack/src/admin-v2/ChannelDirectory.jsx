@@ -129,7 +129,7 @@ export function ChannelManagementNew(props) {
     {operation?.type === 'create' &&
       <ChannelDirectoryCreation state={state} providers={providers} connections={connections} ops={ops} close={close} locate={locate} reference/>}
     {current && operation.type === 'edit' &&
-      <ChannelConnectionEditor key={current.id} connection={current} state={state} ops={ops} close={close} reference/>}
+      <ChannelConnectionEditor key={current.id} connection={current} state={state} ops={ops} close={close}/>}
     {current && operation.type === 'add' && <SupplierChannelConfiguration state={state} provider={current.provider}
       endpoint={current.endpoint} initialRows={operation.initialRows} ops={ops} close={close} onConnected={() => closeOperation(null)} directory reference
       cancelLabel={operation.back?.type === 'discovery' ? '返回获取模型列表' : undefined}/>}
@@ -145,8 +145,7 @@ export function ChannelManagementNew(props) {
     {current && operation.type === 'remove' && (!operation.modelKey || model) && <ProviderRemovalDialog state={state} ops={ops} close={close} removed={close}
       title={model ? '删除模型渠道' : '删除连接'}
       target={{ providerId: current.provider.id, endpointId: current.id, ...(model ? { associationId: model.association.id, keepEndpoint: true } : {}) }}/>}
-    {model && operation.type === 'model' && <ChannelModelEditor key={model.key} model={model} connection={current} ops={ops} close={close}
-      cancelLabel={operation.back ? '返回连接配置' : '取消'} reference/>}
+    {model && operation.type === 'model' && <ChannelModelEditor key={model.key} model={model} connection={current} ops={ops} close={close}/>}
     {model && operation.type === 'capacity' && <ChannelCapacityEditor key={model.key} provider={current.provider}
       association={model.association} modelName={model.modelName} ops={ops} close={close}/>}
     {model && operation.type === 'cost' && <ProcurementVersionEditor directory key={model.key} state={state} provider={current.provider}

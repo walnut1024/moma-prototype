@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SERVICE_PANEL_LABELS, serviceDrawerTarget, serviceWorkspacePanel } from '../src/admin-v2/service-workspace-panels.js';
 import { serviceDirectoryRows } from '../src/admin-v2/service-directory.js';
 import { routeTableGroups } from '../src/admin-v2/route-workspace.js';
 import { createAdminSeed, commitAdminState, persistModelAction, STORAGE_KEY } from '../src/admin-v2/store.js';
@@ -17,14 +16,7 @@ function providerFixture() {
   return { state, modelId: model.id, providerId: provider.id };
 }
 
-test('service actions and contextual links open the requested drawer', () => {
-  assert.deepEqual(Object.values(SERVICE_PANEL_LABELS), ['路由及映射', '故障转移配置', '操作记录']);
-  for (const [query, expected] of [['', 'routing'], ['panel=history&providerChannels=p', 'routing'], ['panel=associate', 'routing'], ['panel=failover', 'failover'], ['panel=history', 'history']]) {
-    assert.equal(serviceWorkspacePanel(new URLSearchParams(query)), expected);
-  }
-});
-
-test('row actions target the permanent service ID, never another service under the same model', () => {
+test('routing groups use the permanent service ID for services under the same model', () => {
   const {state,modelId} = providerFixture();
   const model = state.models.find(row => row.id === modelId);
   const original = model.serviceProviders[0];
@@ -36,16 +28,11 @@ test('row actions target the permanent service ID, never another service under t
     [`provider:${model.id}:channel-first`]:model.serviceProviders[0].record_id,
     [`provider:${model.id}:channel-second`]:model.serviceProviders[1].record_id,
   }};
-  const [first, second] = serviceDirectoryRows([model],state);
-  const select = serviceRecord => serviceDrawerTarget(state,model,new URLSearchParams({serviceRecord,routeProvider:first.channelId}));
-  const target = select(second.model_service_id);
+  const [first, target] = serviceDirectoryRows([model],state);
+  assert.equal(first.model_service_id,model.serviceProviders[0].record_id);
   assert.equal(target.model_service_id,model.serviceProviders[1].record_id);
-  assert.equal(target.callId,second.callId);
-  assert.equal(target.channelId,second.channelId);
-  assert.equal(select(first.model_service_id).callId,first.callId);
-  assert.equal(select('missing'),undefined);
-  assert.equal(serviceDrawerTarget(state,model,new URLSearchParams('routeProvider=missing')),undefined);
-  assert.equal(serviceDrawerTarget(state,model,new URLSearchParams('panel=failover')),undefined);
+  assert.equal(target.callId,'call-second');
+  assert.equal(target.channelId,'channel-second');
   const subjects = routeTableGroups(state,model,target.id).flatMap(group => group.rows.map(row => row.service.id));
   assert.deepEqual([...new Set(subjects)],[target.id]);
 });

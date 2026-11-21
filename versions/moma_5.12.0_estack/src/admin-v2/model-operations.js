@@ -725,7 +725,7 @@ export function operationsTransaction(state, action) {
         } else {
           if (existing.length !== 1 || endpoint.candidateConfiguration) throw Error('需存在唯一模型渠道，且当前连接没有待验证配置');
           const impact = channelChangeImpact(working, provider.id, endpoint.id);
-          if (impact.services.some(service => service.associationIds.includes(existing[0].id))) throw Error('该模型渠道仍被生效服务引用，请在服务路由逐条处理');
+          if (impact.services.some(service => service.associationIds.includes(existing[0].id))) throw Error('该模型渠道仍被生效服务引用，暂时无法替换');
           apply(operationsTransaction(working, { operation: 'supplierChannelEdit', data: {
             providerId: provider.id, endpointId: endpoint.id, associationId: existing[0].id, name: endpoint.name,
             modelId: data.modelId, upstreamModelId: data.upstreamModelId, baseUrl: endpoint.baseUrl,
@@ -1259,7 +1259,7 @@ export function operationsTransaction(state, action) {
     if (!model || !supply) throw new Error('模型或渠道关联不存在');
     if (!['standard','provider'].includes(model.serviceMode)) throw new Error('请先配置服务模式');
     if (data.expectedUpdatedAt!==model.updatedAt) throw new Error('模型服务已有并发修订，请重新核对');
-    if (serviceBindingInUse(working,modelId,[supply])) throw new Error('渠道被生效路由或草稿引用，请先在路由及映射移除引用');
+    if (serviceBindingInUse(working,modelId,[supply])) throw new Error('渠道仍被生效路由或路由草稿引用，暂时无法解除关联');
     update('modelSupplies',supply.id,{status:'已移除',salesEnabled:false});objectId=modelId;label='解除渠道关联';
   } else if (operation === 'associateServiceChannelsBatch') {
     const model=working.models.find(item=>item.id===modelId);
