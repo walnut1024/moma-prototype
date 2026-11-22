@@ -6,6 +6,7 @@ import ChannelDirectoryDiscovery from './ChannelDirectoryDiscovery';
 import ChannelCapacityEditor from './ChannelCapacity';
 import ChannelDirectoryCreation from './ChannelDirectoryCreation';
 import ChannelManagementView from './ChannelManagementView';
+import ChannelModelBatchAdd from './ChannelModelBatchAdd';
 import { ChannelConnectionEditor, ChannelModelEditor } from './ChannelConnectionEditors';
 import { Modal, Notice, useOperations } from './ModelOperationsUI';
 import ProcurementVersionEditor from './ProcurementVersionEditor';
@@ -153,9 +154,11 @@ export function ChannelManagementNew(props) {
     {connection && operation.type === 'edit' && <ChannelConnectionEditor key={connection.id} state={state} connection={connection} ops={ops} close={close}/>}
     {connection && operation.type === 'discovery' && <ChannelDirectoryDiscovery state={state} connections={[connection]} ops={ops} close={close}
       append={chooseModels} initialConnectionId={operation.activeId} initialSelection={operation.selection} reference/>}
+    {connection && operation.type === 'quickAdd' && <ChannelModelBatchAdd key={connection.id} state={state} channel={connection}
+      ops={ops} close={finish} manual={event => open(event, 'add', connection.id, null, operation)}/>}
     {connection && operation.type === 'add' && <SupplierChannelConfiguration state={state} provider={connection.provider}
       endpoint={connection.endpoint} initialRows={operation.initialRows} ops={ops} close={close} onConnected={finish} directory reference
-      cancelLabel={operation.back ? '返回获取模型列表' : undefined}/>}
+      cancelLabel={operation.back?.type === 'discovery' ? '返回获取模型列表' : operation.back ? '返回添加渠道模型' : undefined}/>}
     {model && operation.type === 'model' && <ChannelModelEditor key={model.key} model={model} connection={connection} ops={ops} close={close}/>}
     {model && operation.type === 'capacity' && <ChannelCapacityEditor key={model.key} provider={connection.provider}
       association={model.association} modelName={model.modelName} ops={ops} close={close}/>}

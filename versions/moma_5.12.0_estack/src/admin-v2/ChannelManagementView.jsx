@@ -33,7 +33,7 @@ function ChannelModels({ channel, ops, open }) {
       <Space wrap spacing={8}>
         <Button disabled={!ops.can} onClick={event => open(event, 'test', channel.id)}>{t('批量测试')}</Button>
         <Button disabled={!canAdd} onClick={event => open(event, 'discovery', channel.id)}>{t('获取模型列表')}</Button>
-        <Button theme="solid" disabled={!canAdd} onClick={event => open(event, 'add', channel.id)}>{t('自定义添加模型')}</Button>
+        <Button theme="solid" disabled={!canAdd} onClick={event => open(event, 'quickAdd', channel.id)}>{t('添加渠道模型')}</Button>
       </Space>
     </div>
     <Typography.Paragraph type="tertiary">自动获取模型列表需要渠道提供 OpenAI 兼容的模型列表接口（GET /v1/models）。</Typography.Paragraph>
