@@ -1,3 +1,4 @@
+import { changeNewModelService, inspectNewModelService, newModelServices } from './new-model-services.js';
 import { domainModel } from '../src/mock/model-fields.js';
 import { serviceCallsEnabled, serviceReferences, offerKey, providerOffer } from '../src/service-access.mjs';
 import { resourceId } from '../src/resource-id.mjs';
@@ -17,7 +18,11 @@ import { isTenantRouteCall, validRouteOptions } from '../src/tenant-routing.mjs'
 import { readPublishedSiteSetting, savePublishedSiteSetting, validateAgreements } from './site-settings.js';
 import { PORTAL_HOME_ENDPOINT, portalHomeUrl } from '../src/portal-home.mjs';
 import { readProjectSpacePolicy, saveProjectSpacePolicy } from './project-space-policy.js';
-import { AUDIT_ACTIONS, AUDIT_RESOURCES, AUDIT_RESULTS, AUDIT_SOURCES } from '../src/admin-v2/platform-audit.mjs';
+import { AUDIT_ACTIONS, AUDIT_RESOURCES, AUDIT_RESULTS } from '../src/admin-v2/platform-audit.mjs';
+import { loadModelWorkspace } from './model-repository.js';
+import { supplierDirectory } from '../src/admin-v2/moma-provider.js';
+import { connectionDirectoryRows } from '../src/admin-v2/channel-connection-directory.js';
+import { channelHealthCatalogue } from '../src/admin-v2/channel-health-catalogue.mjs';
 const COOKIE = 'moma5120_v2_session';
 const encoder = new TextEncoder();
 const MAX_BODY = 256 * 1024;
@@ -241,7 +246,8 @@ async function route(request, env, requestId) {
   const portalPath = path === PORTAL_HOME_ENDPOINT && (PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1');
   const spacePolicyPath = path === '/project-space-policy' && (PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1');
   const credentialPath = /^\/channels\/([A-Za-z0-9:_.-]{1,200})\/verify-credential$/.exec(path);
-  const known = path===CHAT_COMPLETIONS || agreementPath || portalPath || spacePolicyPath || loginField || marketPaths.includes(path) || applicationPaths.includes(path) || tenantResources || trafficPath || trafficHistoryPath || auditPath || credentialPath || packagePath || ['/deployment/license','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-operations','/model-operations/commands','/channels/consistency'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
+  const newServices = path === '/model-services-new';
+  const known = path === '/channel-health' || newServices || path===CHAT_COMPLETIONS || agreementPath || portalPath || spacePolicyPath || loginField || marketPaths.includes(path) || applicationPaths.includes(path) || tenantResources || trafficPath || trafficHistoryPath || auditPath || credentialPath || packagePath || ['/deployment/license','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-operations','/model-operations/commands','/channels/consistency'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
   if (!known) fail(404, 'NOT_FOUND', 'API 不存在');
   if (!env.MODEL_OPS_DB) fail(503, 'DATABASE_UNAVAILABLE', '模型运营数据库尚未绑定');
   const db = env.MODEL_OPS_DB;
@@ -576,9 +582,26 @@ async function route(request, env, requestId) {
       if (!row) fail(404, 'NOT_FOUND', '未查到已提交操作，请使用原标识核对或重试');
       return json(JSON.parse(row.response_json));
     }
-  const pageId = auditPath ? 'audit-logs' : trafficPath || trafficHistoryPath ? 'traffic-limits' : packagePath ? 'package-production' : dictionary ? 'tariff-dictionary' : path.startsWith('/materials') ? 'model-templates'
-    : path.startsWith('/suppliers') || path.startsWith('/channels') ? 'providers' : 'listing';
+  if (newServices) {
+    if (!WRITE_ROLES.includes(actor.role)) fail(403, 'FORBIDDEN', '当前账号无模型运营访问权限');
+    if (method === 'GET') {
+      const inspect = url.searchParams.get('inspect');
+      return json(inspect === null ? await newModelServices(db) : await inspectNewModelService(db, inspect));
+    }
+    if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    const body = await bodyJson(request);
+    fields(body, ['action', 'id', 'revision', 'row', 'operationId']);
+    return json(await changeNewModelService(db, actor, body, request.headers.get('idempotency-key')));
+  }
+  const pageId = path === '/channel-health' ? 'providers-health' : auditPath ? 'audit-logs' : trafficPath || trafficHistoryPath ? 'traffic-limits' : packagePath ? 'package-production' : dictionary ? 'tariff-dictionary' : path.startsWith('/materials') ? 'model-templates'
+    : path.startsWith('/suppliers') || path.startsWith('/channels') ? 'providers-reference' : 'listing-new';
   if (!canAccessPage(actor.role, pageId)) fail(403, 'FORBIDDEN', '当前账号无此页面访问权限');
+  if (path === '/channel-health') {
+    if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    const state = await loadModelWorkspace(db, actor, { simulation: false });
+    const providers = supplierDirectory(state).filter(row => !row.deletedAt && !row.id.startsWith('service-review-provider-'));
+    return json({ catalogue: channelHealthCatalogue(connectionDirectoryRows(state, providers), canAccessPage(actor.role, 'providers-reference')) });
+  }
   if (auditPath) {
     if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
     if (auditPath[1]) {
@@ -590,16 +613,14 @@ async function route(request, env, requestId) {
     const from = Number(params.get('from') ?? now - 7 * 86400000);
     const to = Number(params.get('to') ?? now);
     if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to > 8.64e15 || from > to) fail(400, 'INVALID_INPUT', '时间范围无效');
-    const action = params.get('action'), status = params.get('status'), type = params.get('type'), source = params.get('source');
-    const eventId = (params.get('event_id') || '').trim();
+    const action = params.get('action'), status = params.get('status'), type = params.get('type');
     const tenant=params.get('tenant') || '', project=params.get('project') || '';
     if ((tenant && !identifier(tenant)) || (project && !identifier(project))) fail(400,'INVALID_INPUT','空间或项目筛选无效');
     if ((action && !Object.hasOwn(AUDIT_ACTIONS, action)) || (status && !Object.hasOwn(AUDIT_RESULTS, status)) ||
-        (type && !Object.hasOwn(AUDIT_RESOURCES, type)) || (source && !Object.hasOwn(AUDIT_SOURCES, source))) fail(400, 'INVALID_INPUT', '审计筛选条件无效');
-    if (eventId && !identifier(eventId)) fail(400, 'INVALID_INPUT', '事件 ID 格式无效');
+        (type && !Object.hasOwn(AUDIT_RESOURCES, type))) fail(400, 'INVALID_INPUT', '审计筛选条件无效');
     const account = (params.get('actor') || '').trim();
     if (account.length > 100) fail(400, 'INVALID_INPUT', '操作人搜索内容过长');
-    const data = await auditLogPage(db, { limit, after, from, to, eventId, action, status, type, source, tenant, project, q:q.toLowerCase(), actor:account.toLowerCase() });
+    const data = await auditLogPage(db, { limit, after, from, to, action, status, type, tenant, project, q:q.toLowerCase(), actor:account.toLowerCase() });
     if (!data) fail(400, 'INVALID_INPUT', '分页游标无效');
     return json({ accountId: actor.id, ...data });
   }
@@ -626,15 +647,14 @@ async function route(request, env, requestId) {
   if (path === '/model-operations/commands' && method === 'POST') {
     const body = await bodyJson(request,10*1024*1024+65536);
     if (commercialModelWrite(body.action)) requireCommerce(true);
-    if (!license.commercial && body.action?.operation === 'marketCardList') {
+    if (!license.commercial && body.action?.operation === 'marketCardSetStatus' && body.action.data?.listing_stage === 'gray') {
       const scope = body.action.data?.scope;
       const { internalTenantId } = await readProjectSpacePolicy(db);
       const reference = JSON.parse(await db.prepare('SELECT reference_json FROM model_workspace WHERE id=1').first('reference_json'));
       if (scope?.tenantIds?.length || Object.entries({ organizationIds:'organizations', projectIds:'projects' }).some(([key, collection]) =>
         Array.isArray(scope?.[key]) && scope[key].some(id => !(reference[collection] || []).some(row => row.id === id && row.tenantId === internalTenantId)))) requireCommerce();
     }
-    const auditSource = request.headers.get('sec-fetch-site') === 'same-origin' ? 'web' : undefined;
-    return json(await modelCommand(db,actor,body,request.headers.get('idempotency-key'),license,auditSource));
+    return json(await modelCommand(db,actor,body,request.headers.get('idempotency-key'),license));
   }
   if(path.startsWith('/simulation/')){const result=await simulationRequest(db,actor,path.slice('/simulation'.length)+url.search,method,method==='GET'?{}:await bodyJson(request),request.headers.get('idempotency-key'));return json(result,result.error?422:200);}
   if (['/materials','/services','/suppliers'].includes(path) && method === 'GET') return json(await list(db, url, path.slice(1)));

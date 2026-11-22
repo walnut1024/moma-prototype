@@ -1,0 +1,29 @@
+.new-model-services .new-service-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.new-model-services .new-service-search { flex: 0 1 auto; width: 17rem; max-width: 100%; }
+.new-model-services .new-service-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.new-model-services .new-service-tab { padding-top: 16px; }
+.new-model-services .new-service-route-bar {
+  padding: 8px 12px;
+  border-radius: var(--semi-border-radius-small);
+  background: var(--semi-color-fill-0);
+}
+.new-model-services .new-service-route-preview {
+  justify-content: flex-start;
+  margin: 12px 0 0;
+}
+.new-model-services .new-service-cell { display: grid; gap: 4px; min-width: 0; }
+.new-model-services .new-service-cell > * { justify-self: start; max-width: 100%; }
+.new-model-services .new-service-sort-title { padding-inline: 0; height: auto; font: inherit; color: inherit; }
+.new-model-services .new-service-channel-actions .semi-button { padding-inline: 4px; }
+.new-service-form { display: grid; gap: 12px; }
+.new-service-form .new-service-fields { display: flex; flex-wrap: wrap; gap: 12px; }
+.new-service-form .new-service-weight-table { min-width: 0; }
+.new-service-form .semi-input-number { width: 100%; }

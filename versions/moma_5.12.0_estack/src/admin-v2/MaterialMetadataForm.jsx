@@ -1,120 +1,163 @@
-import AdminCollapsePanel from './AdminCollapsePanel';
 import { cloneElement, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Banner, Button, Collapse, Form, Input, InputNumber, Select, Space, TextArea, Tooltip, Typography, Upload } from '@douyinfe/semi-ui';
-import { IconHelpCircle, IconUpload } from '@douyinfe/semi-icons';
-import {modelFieldDescriptions} from './model-field-descriptions';
-import { modelMetadataDraft as blankModel } from './model-metadata-draft';
-import { modelCategory } from './model-management';
-import { MODEL_CATALOGUE_TYPES } from './model-library';
-import { IDENTITY_FIELDS, TECHNICAL_FIELDS, PRESENTATION_FIELDS, COMMON_FIELDS, INTERFACE_FIELDS, RECORD_FIELDS, FEATURE_FIELDS, ARCHITECTURE_OPTIONS, LICENSE_OPTIONS, LANGUAGE_OPTIONS, INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, SCENARIO_OPTIONS, TASK_OPTIONS, specificationFields } from './model-profile';
+import { Banner, Button, DatePicker, Form, Input, InputNumber, Select, Space, TagInput, TextArea, Typography, Upload } from '@douyinfe/semi-ui';
+import { IconUpload } from '@douyinfe/semi-icons';
+import { modelMetadataDraft } from './model-metadata-draft';
+import { MODEL_TYPES } from './model-management';
+import { INPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, TASK_OPTIONS } from './model-profile';
+import { materialContextLabel, materialContextUnit, materialContextUnits } from './model-material-fields';
 import { readMaterialLogo } from './MaterialLogo';
 import { classificationHref, classificationIndex, classificationKey, modelClassification, modelClassificationFor } from './model-classification';
 
-const supports = [['unknown','未填写'],['supported','支持'],['unsupported','不支持']];
-const optionList = entries => entries.map(([value,label])=>({value,label}));
-const display = value => value == null || value === '' ? '—' : Array.isArray(value) ? value.join('、') || '—' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+const choices = values => values.map(value => ({ value, label: value }));
+const typeOptions = Object.entries(MODEL_TYPES).map(([value, label]) => ({ value, label }));
+const inputOptions = choices(INPUT_MODALITY_OPTIONS);
+const outputOptions = choices([...INPUT_MODALITY_OPTIONS, ...RESULT_TYPE_OPTIONS]);
+const contextOptions = choices(Object.keys(materialContextUnits));
+const display = value => Array.isArray(value) ? value.join('、') || '—' : value || '—';
 
-export default function MaterialMetadataForm({state,conflict,reload,model,initial,readOnly,can,dirty,onCancel,onSubmit,sourceLabel,footerTarget}) {
-  const [form,setForm] = useState(()=>blankModel(model || initial)), [error,setError] = useState(''), [uploading,setUploading] = useState(false), [saving,setSaving] = useState(false);
-  const [contextUnit,setContextUnit] = useState(form.capabilities.context > 0 && form.capabilities.context % 1024 === 0 ? 'K' : 'Token');
+export default function MaterialMetadataForm({state, conflict, reload, model, initial, readOnly, can, dirty, onCancel, onSubmit, footerTarget}) {
+  const [form, setForm] = useState(() => modelMetadataDraft(model || initial));
+  const [error, setError] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [unit, setUnit] = useState(() => materialContextUnit(form.capabilities.context));
+  const [context, setContext] = useState(() => form.capabilities.context ? String(form.capabilities.context / materialContextUnits[unit]) : '');
   const version = useRef(0);
   const formId = useId();
-  useEffect(()=>()=>{version.current++;},[]);
+  useEffect(() => () => { version.current++; }, []);
   const editable = !readOnly && can;
-  const dictionary = modelClassification(state), index = classificationIndex(dictionary);
-  const { author, series, authorName, seriesName } = modelClassificationFor(index, form);
-  const change = (key,value) => {
-    setForm(current=>{
-      const next={...current,[key]:value};
-      if(key==='type'){
-        const descriptors=[...IDENTITY_FIELDS,...TECHNICAL_FIELDS,...PRESENTATION_FIELDS,...COMMON_FIELDS,...INTERFACE_FIELDS,...RECORD_FIELDS,...FEATURE_FIELDS,...specificationFields(value,current.usageUnit,current.profile)];
-        next.profile=Object.fromEntries(descriptors.filter(field=>current.profile[field.key]!=null).map(field=>[field.key,current.profile[field.key]]));
-        next.profile.tasks=(current.profile.tasks || []).filter(task=>TASK_OPTIONS[value].includes(task));
-        next.profile.detailDescription=current.profile.detailDescription;
-        next.profile.authorId=current.profile.authorId;
-        next.profile.familyId=current.profile.familyId;
-      }
-      return next;
-    });setError('');dirty(true);
+  const { profile } = form;
+  const tokens = context.trim() ? Number(context) * materialContextUnits[unit] : null;
+  const dictionary = modelClassification(state);
+  const index = classificationIndex(dictionary);
+  const { series, seriesName } = modelClassificationFor(index, form);
+  const seriesOptions = dictionary.series.filter(option => option.id === series?.id || option.active && index.authors.get(option.authorId)?.active)
+    .map(option => ({
+      value: option.id,
+      label: option.name + ' · ' + index.authors.get(option.authorId)?.name,
+      names: [option.name, ...option.aliases, ...(option.formerNames || []), index.authors.get(option.authorId)?.name],
+    }));
+  const outputs = [...new Set([...(profile.outputModalities || []), ...(profile.resultTypes || [])])];
+
+  const markDirty = () => { setError(''); dirty(true); };
+  const change = (key, value) => { setForm(current => ({ ...current, [key]: value })); markDirty(); };
+  const changeProfile = fields => {
+    setForm(current => ({ ...current, profile: { ...current.profile, ...fields } }));
+    markDirty();
   };
-  const profileChange = (key,value) => {setForm(current=>({...current,capabilities:{...current.capabilities,...(key==='supportedParameters' && value.includes('tools')?{tools:true}:{})},profile:{...current.profile,[key]:value,...(key==='supportedParameters' && value.includes('reasoning')?{reasoning:'supported'}:{}),...(key==='supportedParameters' && value.includes('structured_outputs')?{structured:'supported'}:{})}}));setError('');dirty(true);};
-  const capabilityChange = (key,value) => change('capabilities',{...form.capabilities,[key]:value});
-  const logoUpload = async files => {
-    const file=files[0];if(!file)return;
-    const current=++version.current;
-    setUploading(true);setError('');
-    try{
-      const logo=await readMaterialLogo(file);
-      if(version.current===current)profileChange('logo',logo);
-    }catch(error){if(version.current===current)setError(error.message);}
-    finally{if(version.current===current)setUploading(false);}
+  const changeSeries = id => {
+    const next = index.series.get(id);
+    const author = index.authors.get(next.authorId);
+    setForm(current => ({
+      ...current, maker: author.name, profile: { ...current.profile, author: author.name, authorId: author.id, family: next.name, familyId: next.id },
+    }));
+    markDirty();
   };
-  const slot = (label,children,key=label,wide=false) => <Form.Slot key={key} label={{text:<Space>{label}{modelFieldDescriptions[label.replace(' *','')] && <Tooltip content={modelFieldDescriptions[label.replace(' *','')]}><Button theme="borderless" type="tertiary" size="small" icon={<IconHelpCircle aria-hidden/>} aria-label={label.replace(' *','')+'说明'}/></Tooltip>}</Space>,id:'material-label-'+key}} className={wide?'materials-wide-field':undefined}>{children?.type===Select?cloneElement(children,{'aria-labelledby':'material-label-'+key}):children}</Form.Slot>;
-  const field = (label,value,onChange,extra={}) => slot(label,readOnly?<Typography.Text>{display(value)}</Typography.Text>:<Input aria-label={label.replace(' *','')} value={value ?? ''} disabled={!editable} onChange={onChange} {...extra}/>);
-  const classificationField = (label, selected, oldName, options, onChange, disabled = false) => slot(label, readOnly
-    ? <Typography.Text>{selected?.name || (oldName && oldName + '（待核对）') || '—'}</Typography.Text>
-    : <Select aria-label={label} value={selected?.id} disabled={!editable || disabled} showClear
-      placeholder={oldName && !selected ? oldName + '（待核对）' : '请选择'}
-      optionList={options.filter(row => row.active || row.id === selected?.id).map(row => ({
-        value: row.id, label: row.name + (row.active ? '' : '（已停用）'), names: [row.name, ...row.aliases, ...(row.formerNames || [])],
-      }))}
-      filter={(query, option) => option.names.some(name => classificationKey(name).includes(classificationKey(query)))}
-      onChange={onChange}/>);
-  const selectClassification = (nextAuthor, nextSeries) => {
-    setForm(current => ({ ...current, maker: nextAuthor?.name || '', profile: {
-      ...current.profile, author: nextAuthor?.name || '', authorId: nextAuthor?.id || '', family: nextSeries?.name || '', familyId: nextSeries?.id || '',
-    } }));
+  const uploadLogo = async files => {
+    if (!files.length) return;
+    const request = ++version.current;
+    setUploading(true);
     setError('');
-    dirty(true);
+    try {
+      const logo = await readMaterialLogo(files[0]);
+      if (version.current === request) changeProfile({ logo });
+    } catch (error) {
+      if (version.current === request) setError(error.message);
+    } finally {
+      if (version.current === request) setUploading(false);
+    }
   };
-  const fields = descriptors => descriptors.map(({key,label,kind,placeholder,unit})=>{
-    const value=form.profile[key];
-    const choices=kind==='architecture'?ARCHITECTURE_OPTIONS:kind==='license'?LICENSE_OPTIONS:kind==='confirmation'?[['pending','待核对'],['confirmed','已核对']]:kind==='lifecycle'?[['stable','稳定版'],['preview','预览版'],['deprecated','已退役']]:kind==='support'?supports:null;
-    const multi={languages:LANGUAGE_OPTIONS,modalities:key==='inputModalities'?INPUT_MODALITY_OPTIONS:OUTPUT_MODALITY_OPTIONS,tasks:TASK_OPTIONS[form.type],results:RESULT_TYPE_OPTIONS,scenarios:SCENARIO_OPTIONS,methods:['文件上传','URL','Base64','文本内容'],parameters:['temperature','top_p','top_k','max_tokens','seed','stop','tools','tool_choice','reasoning','include_reasoning','structured_outputs','response_format','frequency_penalty','presence_penalty']}[kind];
-    if(readOnly)return slot(label,<Typography.Text>{choices?choices.find(([id])=>id===value)?.[1] || '未填写':display(value)+(value!=null && value!=='' && unit?' '+unit:'')}</Typography.Text>,key,kind==='json');
-    const options=choices && [['unknown','未填写'],...choices.filter(([id])=>id!=='unknown'),...(value && value!=='unknown' && !choices.some(([id])=>id===value)?[[value,value]]:[])];
-    const control=multi?<Select aria-label={label} multiple filter showClear value={value || []} optionList={[...new Set([...multi,...(value || [])])].map(value=>({value,label:value}))} disabled={!editable} onChange={value=>profileChange(key,value)}/>:choices?<Select aria-label={label} value={value || 'unknown'} optionList={optionList(options)} disabled={!editable} onChange={value=>profileChange(key,value)}/>:kind==='json'?<TextArea aria-label={label} value={typeof value==='string'?value:JSON.stringify(value ?? {},null,2)} rows={4} disabled={!editable} onChange={value=>profileChange(key,value)}/>:['number','decimal'].includes(kind)?<InputNumber aria-label={label} value={value ?? ''} min={kind==='decimal'?0:1} step={kind==='decimal'?0.1:1} suffix={unit} disabled={!editable} onChange={value=>profileChange(key,value)}/>:<Input aria-label={label} value={value ?? ''} placeholder={kind==='date'?'YYYY-MM-DD 或 YYYY-MM':placeholder} disabled={!editable} onChange={value=>profileChange(key,value)}/>;
-    return slot(label,control,key,kind==='json');
-  });
-  const capabilities = <>
-    {['text','multimodal','embedding','rerank'].includes(form.type) && slot('上下文窗口',readOnly?<Typography.Text>{form.capabilities.context?form.capabilities.context.toLocaleString()+' Token':'—'}</Typography.Text>:<InputNumber aria-label="上下文窗口" value={form.capabilities.context==null || form.capabilities.context===''?'':Number(form.capabilities.context)/(contextUnit==='K'?1024:1)} min={1} step={1} disabled={!editable} suffix={<Select aria-label="上下文窗口单位" value={contextUnit} optionList={optionList([['K','K Token'],['Token','Token']])} onChange={setContextUnit}/>} onChange={value=>capabilityChange('context',value===''?'':Number(value)*(contextUnit==='K'?1024:1))}/>)}
-    {['text','multimodal'].includes(form.type) && slot('最大输出',readOnly?<Typography.Text>{form.capabilities.output?form.capabilities.output.toLocaleString()+' Token':'—'}</Typography.Text>:<InputNumber aria-label="最大输出" value={form.capabilities.output ?? ''} min={1} suffix="Token" disabled={!editable} onChange={value=>capabilityChange('output',value)}/>)}
-    {['text','multimodal','audio'].includes(form.type) && ['streaming',...(['text','multimodal'].includes(form.type)?['tools']:[])].map(key=>slot(key==='streaming'?'流式响应':'工具调用',readOnly?<Typography.Text>{form.capabilities[key]==null?'未填写':form.capabilities[key]?'支持':'不支持'}</Typography.Text>:<Select aria-label={key==='streaming'?'流式响应':'工具调用'} value={form.capabilities[key]==null?'unknown':form.capabilities[key]?'supported':'unsupported'} optionList={optionList(supports)} disabled={!editable} onChange={value=>capabilityChange(key,value==='unknown'?null:value==='supported')}/>))}
-  </>;
-  const footer = <>
-    <Button onClick={onCancel}>{readOnly ? '关闭' : '取消'}</Button>
-    {!readOnly && <Button form={formId} htmlType="submit" theme="solid" loading={saving} disabled={!editable || uploading}>保存</Button>}
-  </>;
-  return <Form id={formId} onSubmit={async()=>{
-    if(!editable || saving || uploading)return;
-    if(!form.name.trim() || !form.modelId.trim()){setError('请填写模型展示名和模型编码');return;}
-    setSaving(true);try{await onSubmit({...form,capabilities:['text','multimodal','embedding','rerank'].includes(form.type)?form.capabilities:{streaming:form.type==='audio'?form.capabilities.streaming:null,tools:null,context:null,output:null}});}finally{setSaving(false);}
-  }}>
-    <Typography.Title heading={6}>基本信息</Typography.Title>
+  const slot = (key, label, value, control, { required = true, wide = false } = {}) => {
+    const id = formId + '-' + key;
+    return <Form.Slot key={key} label={{ id, text: label + (required && !readOnly ? ' *' : '') }} className={wide ? 'materials-wide-field' : undefined}>
+      {readOnly ? <Typography.Text>{display(value)}</Typography.Text>
+        : cloneElement(control, control.type === Select ? { 'aria-labelledby': id, 'aria-required': required } : {})}
+    </Form.Slot>;
+  };
+  const input = (key, label, value, onChange, extra) => slot(key, label, value,
+    <Input aria-label={label} aria-required value={value || ''} disabled={!editable} onChange={onChange} {...extra}/>);
+  const textArea = (key, label, value, onChange) => slot(key, label, value,
+    <TextArea aria-label={label} aria-required value={value || ''} rows={3} disabled={!editable} onChange={onChange}/>);
+  const submit = async () => {
+    if (!editable || uploading || saving) return;
+    const required = [
+      ['模型展示名称', form.name.trim()], ['模型编码', form.modelId.trim()], ['模型图标', profile.logo],
+      ['模型中文简介', form.description.trim()], ['模型英文简介', profile.descriptionEn?.trim()],
+      ['模型类型', Object.hasOwn(MODEL_TYPES, form.type)], ['上下文窗口', tokens !== null],
+      ['模型系列', series], ['输入模态', profile.inputModalities?.length], ['输出模态', outputs.length],
+      ['模型精度', profile.precision?.trim()], ['模型标签', profile.tags?.length], ['模型发布日期', profile.releaseDate],
+    ];
+    const missing = required.filter(([, value]) => !value).map(([label]) => label);
+    if (missing.length) { setError('请填写必填项：' + missing.join('、')); return; }
+    if (!Number.isSafeInteger(tokens) || tokens < 1) { setError('上下文窗口换算后须为正整数 Token'); return; }
+    const tasks = profile.tasks?.filter(task => TASK_OPTIONS[form.type].includes(task));
+    setSaving(true);
+    try {
+      await onSubmit({ ...form, profile: { ...profile, tasks }, capabilities: { ...form.capabilities, context: tokens } });
+    } finally { setSaving(false); }
+  };
+
+  return <Form id={formId} onSubmit={submit}>
     <div className="materials-field-grid">
-      {field('模型展示名'+(readOnly?'':' *'),form.name,value=>change('name',value))}
-      {slot('模型 Logo',<Space vertical align="start">{form.profile.logo?<img className="materials-logo-preview" src={form.profile.logo} alt="模型 Logo"/>:readOnly?<Typography.Text type="tertiary">未填写</Typography.Text>:null}{!readOnly && <Space><Upload accept="image/png,image/jpeg,image/webp" uploadTrigger="custom" fileList={[]} showUploadList={false} disabled={!editable || uploading} onFileChange={logoUpload}><Button icon={<IconUpload aria-hidden/>} loading={uploading} disabled={!editable}>{form.profile.logo?'更换图片':'上传图片'}</Button></Upload>{form.profile.logo && <Button type="danger" theme="borderless" disabled={!editable} onClick={()=>{version.current++;setUploading(false);profileChange('logo','');}}>移除图片</Button>}</Space>}{!readOnly && <Typography.Text type="tertiary" size="small">PNG、JPEG、WebP，最大 1 MB</Typography.Text>}</Space>)}
-      {slot('模型类型',readOnly?<Typography.Text>{MODEL_CATALOGUE_TYPES[modelCategory(form.type)]}</Typography.Text>:<Select aria-label="模型类型" value={modelCategory(form.type)} optionList={optionList(Object.entries(MODEL_CATALOGUE_TYPES))} disabled={!editable} onChange={value=>change('type',value==='visual'?'image':value)}/>)}
-      {modelCategory(form.type)==='visual' && slot('视觉任务类型',readOnly?<Typography.Text>{form.type==='video'?'视频':'图像'}</Typography.Text>:<Select aria-label="视觉任务类型" value={form.type} optionList={optionList([['image','图像'],['video','视频']])} disabled={!editable} onChange={value=>change('type',value)}/>)}
-      {field('模型编码'+(readOnly?'':' *'),form.modelId,value=>change('modelId',value),{readonly:Boolean(model)})}
-      {classificationField('模型作者', author, authorName, dictionary.authors, id => selectClassification(index.authors.get(id), undefined))}
-      {classificationField('模型系列', series, seriesName, dictionary.series.filter(row => row.authorId === author?.id),
-        id => selectClassification(author, index.series.get(id)), !author || !author.active)}
-      {fields(IDENTITY_FIELDS.filter(item=>['version','releaseDate'].includes(item.key)))}
-      {slot('简短介绍',readOnly?<Typography.Text>{display(form.description)}</Typography.Text>:<TextArea aria-label="简短介绍" rows={3} value={form.description} disabled={!editable} onChange={value=>change('description',value)}/>,'description',true)}
+      {input('name', '模型展示名称', form.name, value => change('name', value))}
+      {input('code', '模型编码', form.modelId, value => change('modelId', value), { readonly: Boolean(model) })}
+      <Form.Slot label={{ text: '模型图标' + (readOnly ? '' : ' *') }} className="materials-wide-field">
+        <Space align="start">
+          {profile.logo ? <img src={profile.logo} alt="模型图标" className="materials-logo-preview"/> : readOnly ? '—' : null}
+          {!readOnly && <Upload accept="image/png,image/jpeg,image/webp" uploadTrigger="custom" fileList={[]} showUploadList={false}
+            disabled={!editable || uploading} onFileChange={uploadLogo}>
+            <Button icon={<IconUpload aria-hidden/>} loading={uploading} disabled={!editable}>{profile.logo ? '更换图片' : '上传图片'}</Button>
+          </Upload>}
+        </Space>
+      </Form.Slot>
+      {textArea('description', '模型中文简介', form.description, value => change('description', value))}
+      {textArea('description-en', '模型英文简介', profile.descriptionEn, value => changeProfile({ descriptionEn: value }))}
+      {slot('type', '模型类型', MODEL_TYPES[form.type],
+        <Select value={form.type} optionList={typeOptions} disabled={!editable} onChange={value => change('type', value)}/>)}
+      {slot('context', '上下文窗口', materialContextLabel(tokens),
+        <Space className="materials-context-field">
+          <Input aria-label="上下文窗口" aria-required inputMode="decimal" value={context} disabled={!editable}
+            onChange={value => { setContext(value); markDirty(); }}/>
+          <span id={formId + '-context-unit'} className="sr-only">上下文窗口单位</span>
+          <Select className="materials-context-unit" aria-labelledby={formId + '-context-unit'} value={unit} optionList={contextOptions} disabled={!editable}
+            onChange={value => {
+              if (tokens !== null && Number.isFinite(tokens)) setContext(String(tokens / materialContextUnits[value]));
+              setUnit(value);
+            }}/>
+        </Space>)}
+      {slot('series', '模型系列', series?.name || seriesName,
+        <Select value={series?.id} optionList={seriesOptions} disabled={!editable} placeholder={seriesName || '请选择'}
+          filter={(query, option) => option.names.some(name => classificationKey(name).includes(classificationKey(query)))} onChange={changeSeries}/>)}
+      {slot('input', '输入模态', profile.inputModalities,
+        <Select multiple value={profile.inputModalities || []} optionList={inputOptions} disabled={!editable}
+          onChange={value => changeProfile({ inputModalities: value })}/>)}
+      {slot('output', '输出模态', outputs,
+        <Select multiple value={outputs} optionList={outputOptions} disabled={!editable}
+          onChange={value => changeProfile({
+            outputModalities: value.filter(item => INPUT_MODALITY_OPTIONS.includes(item)),
+            resultTypes: value.filter(item => RESULT_TYPE_OPTIONS.includes(item)),
+          })}/>)}
+      {input('precision', '模型精度', profile.precision, value => changeProfile({ precision: value }))}
+      {slot('tags', '模型标签', profile.tags,
+        <TagInput aria-label="模型标签" value={profile.tags || []} max={20} maxLength={50} addOnBlur disabled={!editable}
+          placeholder="输入后按回车" onChange={value => changeProfile({ tags: value })}/>)}
+      {slot('release-date', '模型发布日期', profile.releaseDate,
+        <DatePicker aria-labelledby={formId + '-release-date'} aria-required type="date" onChangeWithDateFirst={false} format="yyyy-MM-dd" disabled={!editable}
+          value={profile.releaseDate?.length === 10 ? profile.releaseDate : undefined} placeholder={profile.releaseDate || '选择日期'}
+          onChange={value => changeProfile({ releaseDate: value || '' })}/>)}
+      {slot('parameters', '参数量（B）', profile.parameters,
+        <InputNumber aria-label="参数量（B）" value={profile.parameters ?? ''} min={0} step={0.1} suffix="B" disabled={!editable}
+          onChange={value => changeProfile({ parameters: value })}/>, { required: false })}
     </div>
     {!readOnly && <Space>
-      <a href={classificationHref} target="_blank" rel="noopener noreferrer">打开分类字典</a>
+      <a href={classificationHref('series')} target="_blank" rel="noopener noreferrer">维护模型系列</a>
       {conflict && reload && <Button theme="borderless" onClick={reload}>载入最新数据</Button>}
     </Space>}
-    <Collapse keepDOM>
-      <AdminCollapsePanel header="模态与任务" itemKey="modalities"><div className="materials-field-grid">{fields([...COMMON_FIELDS,...PRESENTATION_FIELDS.filter(item=>['languages','scenarios'].includes(item.key))])}</div></AdminCollapsePanel>
-      <AdminCollapsePanel header="调用能力" itemKey="capabilities"><div className="materials-field-grid">{capabilities}{fields(FEATURE_FIELDS.filter(item=>['text','multimodal'].includes(form.type) || item.key==='batch'))}{fields(specificationFields(form.type,form.usageUnit,form.profile))}</div></AdminCollapsePanel>
-      <AdminCollapsePanel header="支持参数" itemKey="parameters"><div className="materials-field-grid">{fields(INTERFACE_FIELDS)}</div></AdminCollapsePanel>
-      <AdminCollapsePanel header="技术与来源" itemKey="source"><div className="materials-field-grid">{slot('资料来源',<Typography.Text>{sourceLabel}</Typography.Text>)}{fields(TECHNICAL_FIELDS)}{fields(IDENTITY_FIELDS.filter(item=>['lifecycle','retirementDate','replacement'].includes(item.key)))}{fields(RECORD_FIELDS)}{slot('详细介绍',readOnly?<Typography.Text>{display(form.profile.detailDescription)}</Typography.Text>:<TextArea aria-label="详细介绍" rows={4} value={form.profile.detailDescription || ''} disabled={!editable} onChange={value=>profileChange('detailDescription',value)}/>,'detailDescription',true)}</div></AdminCollapsePanel>
-    </Collapse>
     {error && <Banner type="danger" description={error}/>}
-    {footerTarget && createPortal(footer, footerTarget)}
+    {footerTarget && createPortal(<>
+      <Button onClick={onCancel}>{readOnly ? '关闭' : '取消'}</Button>
+      {!readOnly && <Button form={formId} htmlType="submit" theme="solid" loading={saving} disabled={!editable || uploading}>保存</Button>}
+    </>, footerTarget)}
   </Form>;
 }

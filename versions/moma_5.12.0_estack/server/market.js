@@ -1,7 +1,7 @@
 import { modelPresentation } from '../src/model-identities.mjs';
 import { resourceId } from '../src/resource-id.mjs';
 import { salesCustomer, lifecycleAccess, serviceReferences, serviceCallsEnabled, offerKey, salesPaused } from '../src/service-access.mjs';
-import { marketAudience, marketCardVisible } from '../src/market-cards.mjs';
+import { marketAudience, marketCardCatalogueEntry, marketCardModelId, marketCardsByModel, marketCardVisible } from '../src/market-cards.mjs';
 import { servicePurpose } from '../src/admin-v2/service-purpose.js';
 import { domainModel } from '../src/mock/model-fields.js';
 import { createMockEngine } from '../src/admin-v2/mock-onboarding-core.js';
@@ -10,7 +10,7 @@ import { platformPriceVersions } from '../src/admin-v2/platform-service-client.j
 import { activeSupplyPrice } from '../src/admin-v2/model-management.js';
 import { MOMA_PROVIDER } from '../src/admin-v2/moma-provider.js';
 import { classificationIndex, existingClassification, modelClassificationFor } from '../src/admin-v2/model-classification.js';
-import { loadModelWorkspace } from './model-repository.js';
+import { loadModelWorkspace, stoppedOfferSql } from './model-repository.js';
 import { listedPackages, packageOffer } from './market-packages.js';
 import { experienceTasks } from '../src/service-directory.mjs';
 import { billingPeriod } from '../src/admin-v2/mock-billing.js';
@@ -25,7 +25,7 @@ const digest = async value => Array.from(new Uint8Array(await crypto.subtle.dige
 const activeStages = ['gray', 'formal'];
 const selectOffers = `
   SELECT o.record_id,o.id AS call_id,o.mode,o.listing_stage,o.gray_tenants_json,o.market_visible,
-         o.calls_enabled,s.id AS service_id,s.record_json AS service_json,m.id AS material_id,m.record_json AS material_json,
+         o.calls_enabled,${stoppedOfferSql} AS stopped,s.id AS service_id,s.record_json AS service_json,m.id AS material_id,m.record_json AS material_json,
          o.supplier_id AS provider_id,p.name AS provider_name,COALESCE(json_extract(cm.mapping_json,'$.sourceName'),c.name) AS source_name,
          (o.channel_model_id IS NULL OR (p.enabled=1 AND p.deleted_at IS NULL AND cm.enabled=1 AND cm.removed_at IS NULL
            AND c.deleted_at IS NULL AND COALESCE(json_extract(c.record_json,'$.frozen'),0)=0
@@ -91,26 +91,41 @@ function marketSalePrices(offer, procurement, at) {
 
 export async function marketCatalogue(db, session, { display = false, projectId, license } = {}) {
   const tenant = session?.tenant || null, internal = tenant?.internal === true;
-  if (display && license?.commercial === false && !internal) return { tenant:null, account:null, spaces:[], services:[], orders:[], packages:[], projects:[] };
+  if (display && license?.commercial === false && !internal) return { tenant:null, account:null, spaces:[], cards:[], services:[], orders:[], packages:[], projects:[] };
   const workspace = await db.prepare(display
     ? 'SELECT meta_json, reference_json FROM model_workspace WHERE id=1'
     : 'SELECT meta_json FROM model_workspace WHERE id=1').first();
   const modelData = workspace && JSON.parse(workspace.meta_json).modelData;
   const cards = display ? modelData?.marketCards || {} : {};
+  const cardsByModel = marketCardsByModel(cards);
   const reference = display && workspace && session ? JSON.parse(workspace.reference_json) : {};
   const member = reference.memberships?.find(row => row.tenantId === tenant?.id && row.userId === session.user.id && row.status === '正常');
   const audience = marketAudience(reference, { tenantId:tenant?.id, member, projectId });
   if (projectId && !audience.projectId) fail(403,'PROJECT_FORBIDDEN','当前成员无权查看此项目');
   const legacy = "(o.listing_stage IN ('gray','formal') AND o.market_visible=1 AND s.market_visible=1)";
   const conditions = display ? '(' + legacy + ' OR m.id IN (SELECT value FROM json_each(?)))' : legacy;
-  const { results } = await db.prepare(selectOffers + ' AND ' + conditions + ' ORDER BY m.name,p.created_at,p.name,o.created_at,o.record_id')
-    .bind(tenant?.id || '', ...(display ? [JSON.stringify(Object.keys(cards))] : [])).all();
+  const { results } = await db.prepare(selectOffers + ' AND NOT ' + stoppedOfferSql + ' AND ' + conditions + ' ORDER BY m.name,p.created_at,p.name,o.created_at,o.record_id')
+    .bind(tenant?.id || '', ...(display ? [JSON.stringify([...cardsByModel.keys()])] : [])).all();
   const materials = new Map();
   for (const row of results) if (!materials.has(row.material_id)) {
     materials.set(row.material_id, domainModel(JSON.parse(row.material_json)));
   }
+  const visibleCards = Object.entries(cards).filter(([, card]) => ['preview', 'listed'].includes(card.status));
+  const modelIds = visibleCards.map(([cardId, card]) => marketCardModelId(cardId, card)).filter(Boolean);
+  const { results: cardMaterials } = modelIds.length ? await db.prepare(
+    'SELECT id,canonical_slug FROM materials WHERE deleted_at IS NULL AND id IN (SELECT value FROM json_each(?))'
+  ).bind(JSON.stringify(modelIds)).all() : { results: [] };
   const classification = classificationIndex(modelData?.modelClassification || existingClassification(materials.values()));
-  const offers = results.map(row => ({ row, ...marketOffer(row,tenant), card:Object.hasOwn(cards,row.material_id) ? cards[row.material_id] : null }))
+  const slugs = new Map(cardMaterials.map(row => [row.id, row.canonical_slug]));
+  const catalogueCards = visibleCards.flatMap(([cardId, record]) => {
+    const modelId = marketCardModelId(cardId, record);
+    if (modelId && !slugs.has(modelId)) return [];
+    const card = marketCardCatalogueEntry(record, modelId, slugs.get(modelId) || '', audience, cardId);
+    if (!card) return [];
+    const { author, series } = modelClassificationFor(classification, card);
+    return [{ ...card, classification: { authorId: author?.id, author: author?.name, seriesId: series?.id, series: series?.name } }];
+  });
+  const offers = results.map(row => ({ row, ...marketOffer(row,tenant), card:cardsByModel.get(row.material_id) || null }))
     .filter(offer => {
       const { row, card, allowed, released } = offer;
       const grayVisible = row.listing_stage !== 'gray' || (released && (allowed || row.order_id));
@@ -124,8 +139,8 @@ export async function marketCatalogue(db, session, { display = false, projectId,
     const prices = offer.ready && offer.released ? marketSalePrices(offer,procurement,at) : null;
     if (!prices && !card) return [];
     const master = materials.get(row.material_id);
-    const { author, series } = modelClassificationFor(classification, master);
     const material = modelPresentation(null, { ...master, marketContent: card?.content || JSON.parse(row.service_json).marketContent });
+    const { author, series } = modelClassificationFor(classification, card ? material : master);
     return [{
       id:row.record_id, model_service_id:row.record_id, model_id:row.material_id, canonical_slug:material.modelId, call_id:row.call_id, provider_id:row.provider_id || MOMA_PROVIDER.id, callId:row.call_id, modelId:material.modelId, modelKey:row.material_id, serviceModelId:row.service_id, mode:row.mode, name:material.name,
       providerId:row.provider_id || MOMA_PROVIDER.id, providerName:row.provider_name || MOMA_PROVIDER.name,
@@ -133,6 +148,7 @@ export async function marketCatalogue(db, session, { display = false, projectId,
       maker:material.profile?.author || material.maker || '', type:material.type, description:material.description || '',
       classification: { authorId: author?.id, author: author?.name, seriesId: series?.id, series: series?.name },
       profile:{...offer.model.profile,...material.profile}, capabilities:material.capabilities || {},
+      ...(card && { features: card.content.features, description_en: card.content.description_en, heat: card.content.heat, tags: card.content.tags }),
       salePrices:internal ? [] : (prices || []).map(({amount,currency,unit,effectiveAt,expiresAt})=>({amount,currency,unit,effectiveAt,expiresAt})),
       ...(internal && {internal:true}),
       salePriceId:internal || !prices ? undefined : row.sale_id,
@@ -148,7 +164,7 @@ export async function marketCatalogue(db, session, { display = false, projectId,
   return { tenant:tenant?{id:tenant.id,name:tenant.name,type:tenant.type,...(internal && {internal:true})}:null,
     account:session?{id:session.user.id,username:session.user.login,name:session.user.nickname || session.user.name}:null,
     spaces:session?.spaces || [],services,orders,packages,
-    ...(display && { projects:audience.projects.map(({id,name})=>({id,name})) }) };
+    ...(display && { cards:catalogueCards, projects:audience.projects.map(({id,name})=>({id,name})) }) };
 }
 
 async function checkedOffer(db, session, field, value, { ordering = false } = {}) {
@@ -156,6 +172,7 @@ async function checkedOffer(db, session, field, value, { ordering = false } = {}
   const row=await db.prepare(selectOffers + (field==='recordId'?' AND o.record_id=?':' AND o.id=?')).bind(session.tenant.id,value).first();
   if (!row) fail(404,'MODEL_UNAVAILABLE','模型服务不存在或已下架');
   if(row.commit_seq!==session.commitSeq)fail(409,'REVISION_CONFLICT','客户权限或服务配置已变化，请重试');
+  if (row.stopped) fail(409,'MODEL_UNAVAILABLE','模型服务已停止');
   const offer=marketOffer(row,session.tenant);
   if (!ordering && (!serviceCallsEnabled(offer.model) || !row.calls_enabled)) {
     fail(409, 'MODEL_UNAVAILABLE', '模型服务已停止');

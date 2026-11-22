@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Button, Checkbox, Empty, InputNumber, Space, Table, TextArea, Typography } from '@douyinfe/semi-ui';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Button, Checkbox, Empty, InputNumber, Pagination, Space, Table, TextArea, Typography } from '@douyinfe/semi-ui';
 import { Modal, Notice, CopyId } from './ModelOperationsUI';
 import { channelDiscoveryPreview, directoryDiscoveryPolicy, directoryDiscoveryReceipt, directoryDiscoverySignature, ignoredDiscoveryModel } from './channel-discovery-diff';
 import { connectionCredentialsReady } from './connection-state';
@@ -8,12 +8,14 @@ import { onboardingApi, prepareServerChannel } from './onboarding-client';
 import OnboardingScenarioControl from './OnboardingScenarioControl';
 import { Field } from './ServiceUI';
 
-export default function ChannelDirectoryDiscovery({ state, connections, ops, close, append, initialSelection, reference = false }) {
+export default function ChannelDirectoryDiscovery({ state, connections, ops, close, append, initialConnectionId, initialSelection, reference = false }) {
   const [checking, setChecking] = useState(false);
   const [progress, setProgress] = useState(null);
   const [selection, setSelection] = useState(initialSelection || {});
+  const selectionSummaryId = useId();
   const [policyDraft, setPolicyDraft] = useState(null), [review, setReview] = useState(null), [applying, setApplying] = useState(false);
-  const [activeId, setActiveId] = useState(connections.length === 1 ? connections[0].id : '');
+  const [activeId, setActiveId] = useState(() => connections.some(row => row.id === initialConnectionId)
+    ? initialConnectionId : connections.length === 1 ? connections[0].id : '');
   const [error, setError] = useState('');
   const stop = useRef(false), mounted = useRef(true), lock = useRef(false);
   const scope = useRef({}); scope.current = { ops, connections };
@@ -36,6 +38,10 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
   const active = rows.find(row => row.id === activeId);
   const selected = selection[activeId] || [];
   const chosen = active?.additions.filter(row => selected.includes(row.upstreamModelId)) || [];
+  const hasCandidates = Boolean(active?.additions.length);
+  const allSelected = hasCandidates && chosen.length === active.additions.length;
+  const configureDisabled = !ops.can || checking || !chosen.length || chosen.length > 50 || Boolean(active?.endpoint.candidateConfiguration);
+  const configureSelected = event => append(event, active.id, chosen.map(row => ({ ...row, selected: true, confirmed: false })), selection);
   const bulk = rows.flatMap(row => {
     const eligible = row.result?.complete ? row.additions.filter(model => selection[row.id]?.includes(model.upstreamModelId) && model.libraryId && model.candidates.length === 1) : [];
     return eligible.length ? [{ endpointId: row.id, providerId: row.provider.id, name: row.name, taskId: row.receipt.taskId,
@@ -44,7 +50,9 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
   const load = async (targets, automated = false) => {
     if (lock.current || checking || !targets.length || !ops.can) return;
     if (targets.length > 100) { setError('每个任务最多检测 100 条连接，请按筛选范围分批检测'); return; }
-    lock.current = true; stop.current = false; setChecking(true); setError(''); setSelection({});
+    lock.current = true; stop.current = false; setChecking(true); setError('');
+    const testedIds = new Set(targets.map(row => row.id));
+    setSelection(current => Object.fromEntries(Object.entries(current).filter(([id]) => !testedIds.has(id))));
     const taskId = crypto.randomUUID(), results = [];
     try {
       for (const [index, row] of targets.entries()) {
@@ -109,7 +117,12 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
   const apply = async () => {
     setApplying(true);
     try {
-      if (await ops.run('channelDirectoryApplyDiscovery', { targets: review, confirmed: true })) { setReview(null); setSelection({}); }
+      if (await ops.run('channelDirectoryApplyDiscovery', { targets: review, confirmed: true })) {
+        const applied = new Map(review.map(row => [row.endpointId, new Set(row.modelIds)]));
+        setSelection(current => Object.fromEntries(Object.entries(current).map(([id, ids]) =>
+          [id, ids.filter(model => !applied.get(id)?.has(model))])));
+        setReview(null);
+      }
     } finally { setApplying(false); }
   };
   const summary = active?.result && [...active.additions.map(row => ({ ...row, kind: row.libraryId ? '可新增' : '待核对' })),
@@ -120,7 +133,8 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
     onClose={() => !checking && close()} footer={<Space wrap>
       <Button disabled={checking} onClick={close}>关闭</Button>
       {checking ? <Button disabled={stop.current} onClick={() => { stop.current = true; }}>完成当前检测后停止</Button> :
-        <Button theme="solid" disabled={!ops.can || !connections.length} onClick={() => load(rows)}>{reference ? '获取上游模型' : connections.length === 1 ? '立即检测' : '检测全部所选连接'}</Button>}
+        <Button theme={reference && hasCandidates ? 'light' : 'solid'} disabled={!ops.can || !connections.length} onClick={() => load(rows)}>{reference ? '获取上游模型' : connections.length === 1 ? '立即检测' : '检测全部所选连接'}</Button>}
+      {reference && hasCandidates && <Button theme="solid" disabled={configureDisabled} onClick={configureSelected}>配置所选模型</Button>}
       {!reference && !checking && <Button disabled={!ops.can || !due().length} onClick={() => load(due().slice(0, 10), true)}>检查到期连接</Button>}
       {!reference && !checking && <Button disabled={!ops.can || !bulk.length || bulk.length > 10 || bulk.reduce((n, row) => n + row.modelIds.length, 0) > 25}
         onClick={() => setReview(bulk)}>核对批量接入</Button>}
@@ -148,18 +162,26 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
       <Typography.Title heading={5}>{reference ? '上游模型' : active.name + ' · 模型差异'}</Typography.Title>
       <Typography.Text>{active.result.complete ? '完整列表' : reference ? '部分列表' : '部分列表 · 无法判断移除项'} · {new Date(active.receipt.discoveredAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</Typography.Text>
       <Table size="small" rowKey="upstreamModelId" dataSource={reference ? active.result.rows : summary} empty={<Empty description={reference ? '未获取到模型' : '未发现模型差异'}/>}
-        pagination={{ pageSize: 10, hideOnSinglePage: true }} columns={[
+        pagination={reference && active.result.rows.length <= 10 ? false : { pageSize: 10, hideOnSinglePage: true }}
+        renderPagination={reference ? pagination => <Pagination {...pagination} showTotal={false} style={{ marginInlineStart: 'auto' }}/> : undefined} columns={[
           ...(!reference ? [{ title: '变化', dataIndex: 'kind' }] : []),
           { title: '上游模型调用标识', render: (_, row) => <CopyId value={row.upstreamModelId} label="上游模型调用标识"/> },
           { title: '当前资料', render: (_, row) => archivedModel(row) ? '模型资料已归档' : libraryRecord(state, row.libraryId)?.name || row.modelId || '待关联资料' },
           ...(!reference ? [{ title: '处理方式', render: (_, row) => row.kind === '疑似移除' ? '保留现有供给，经复测与影响核对再处理' :
             row.kind === '属性差异' ? row.attributes.filter(item => item.different).map(item => item.label + '：' + item.current + ' → ' + item.observed).join('、') : '确认采购范围和模型身份' }] : []),
-          { title: '选择', render: (_, row) => reference && row.existingAssociationId ? '已添加' : active.additions.some(item => item.upstreamModelId === row.upstreamModelId) &&
+          { title: reference ? <>
+            <Checkbox aria-label="全选上游模型" aria-describedby={selectionSummaryId} checked={allSelected} indeterminate={chosen.length > 0 && !allSelected}
+              disabled={!ops.can || checking || !hasCandidates} onChange={event => setSelection(current => ({
+                ...current, [active.id]: event.target.checked ? active.additions.map(row => row.upstreamModelId) : [],
+              }))}>全选</Checkbox>
+            <span className="sr-only" id={selectionSummaryId}>已选 {chosen.length} 款，可选 {active.additions.length} 款</span>
+          </> : '选择',
+            render: (_, row) => reference && row.existingAssociationId ? '已添加' : active.additions.some(item => item.upstreamModelId === row.upstreamModelId) &&
             <Checkbox aria-label={'选择上游模型 ' + row.upstreamModelId} checked={selected.includes(row.upstreamModelId)} disabled={!ops.can || checking}
               onChange={event => setSelection(current => ({ ...current, [active.id]: event.target.checked ? [...selected, row.upstreamModelId] : selected.filter(id => id !== row.upstreamModelId) }))}/> },
         ]}/>
-      <Button theme="light" disabled={!ops.can || checking || !chosen.length || chosen.length > 50 || Boolean(active.endpoint.candidateConfiguration)}
-        onClick={event => append(event, active.id, chosen.map(row => ({ ...row, selected: true, confirmed: false })), selection)}>核对所选 {chosen.length} 款模型</Button>
+      {reference && chosen.length > 50 && <Typography.Text type="secondary" role="status">每批最多接入 50 款模型，请减少所选模型。</Typography.Text>}
+      {!reference && <Button theme="light" disabled={configureDisabled} onClick={configureSelected}>核对所选 {chosen.length} 款模型</Button>}
     </section>}
     {(error || ops.error) && <Notice error>{error || ops.error}</Notice>}
   </Modal>
@@ -168,7 +190,7 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
     <Button theme="solid" disabled={applying || !ops.can || !active} onClick={savePolicy}>保存同步策略</Button>
   </>}>
     <Notice>使用「检查到期连接」运行扫描。仅完整列表中身份唯一、在采购白名单内的模型会自动接入为待验证供给。</Notice>
-    <Checkbox checked={policyDraft.enabled} disabled={applying} onChange={event => setPolicyDraft(value => ({ ...value, enabled: event.target.checked }))}>定期检测</Checkbox>
+    <Checkbox checked={policyDraft.enabled} disabled={applying} onChange={event => setPolicyDraft(value => ({ ...value, enabled: event.target.checked }))}>启用到期检测规则</Checkbox>
     <Field label="间隔（分钟）"><InputNumber aria-label="检测间隔" min={5} max={1440} value={policyDraft.intervalMinutes}
       disabled={applying} onChange={intervalMinutes => setPolicyDraft(value => ({ ...value, intervalMinutes: Number(intervalMinutes) }))}/></Field>
     <Field label="忽略模型（每行一项）"><TextArea aria-label="忽略模型" value={policyDraft.ignored} placeholder="模型标识、test-model-* 或 re:^test-[0-9]+$"

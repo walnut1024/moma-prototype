@@ -1,6 +1,6 @@
 import { modelServiceKey, modelServiceIdentity, channelIdentity, modelDisplayName, priceItemReferences } from '../model-identities.mjs';
 import { serviceReferences, offerKey } from '../service-access.mjs';
-import { modelCatalogue } from './model-library.js';
+import { modelIdentityCatalogue } from './model-library.js';
 import { providerKeyGroups } from './provider-key-groups.js';
 import { activeChannelProcurement } from './channel-change-management.js';
 import { cataloguePurchasePrice, catalogueAmountInput } from './provider-catalogue-pricing.js';
@@ -68,7 +68,7 @@ export function resourceReferences(state, scope, all, rows, target) {
     return groups.map(group => ({ type: 'key_group', id: group.id, provider_id: provider.id, name: group.name,
       keys: group.keyIds.map(id => provider.apiKeys?.find(key => key.id === id)).filter(Boolean).map(key => ({ id: key.id, name: key.name || '', status: key.status || null, masked_value: key.masked || key.maskedValue || '' })) }));
   });
-  const models = modelCatalogue(state).filter(model => modelIds.has(model.id)).map(model => ({ type: 'model', id: model.id,
+  const models = modelIdentityCatalogue(state).filter(model => modelIds.has(model.id)).map(model => ({ type: 'model', id: model.id,
     canonical_slug: model.modelId, name: modelDisplayName(state, model.id) || model.name, model_type: model.type }));
   const dictionaryIds = new Set(rows.flatMap(row => [...(row.items || []), ...(row.procurement?.items || [])]).flatMap(item => [item.billing_item_id, item.unit_id, item.currency_id]).filter(Boolean));
   const dictionary = (state.tariffDictionary || []).filter(row => dictionaryIds.has(row.id)).map(row => ({ type: 'dictionary', id: row.id, kind: row.kind, name: row.name, code: row.code || null }));

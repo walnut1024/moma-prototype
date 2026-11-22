@@ -3,6 +3,7 @@ import { matchesSelection } from './analytics.js';
 import { percentile } from './observability.js';
 import { usageMeter, usagePreset } from './usage-analysis.js';
 import { maskApiKey } from '../api-key-utils.mjs';
+import { MODEL_TASK_LABELS } from '../model-types.mjs';
 
 const minute = 60_000, hour = 60 * minute, day = 24 * hour, week = 7 * day, beijing = 8 * hour;
 const grains = [['minute', '按分钟', minute, 2 * hour], ['hour', '按小时', hour, week],
@@ -10,8 +11,7 @@ const grains = [['minute', '按分钟', minute, 2 * hour], ['hour', '按小时',
 export const callPresets = [['today', '今日'], ['1h', '近 1 小时'], ['24h', '近 24 小时'], ['7d', '近 7 天'], ['30d', '近 30 天']];
 export const purposeLabels = { customer: '客户调用', diagnostic: '测试调用' };
 export const outcomes = { success: '成功', failed: '失败', canceled: '已取消', pending: '进行中', unknown: '未采集' };
-export const modelTypes = [['', '全部类型'], ['text', '语言模型'], ['multimodal', '多模态模型'], ['image', '图片生成'],
-  ['video', '视频生成'], ['audio', '语音模型'], ['embedding', '向量模型'], ['rerank', '重排模型']];
+export const modelTypes = [['', '全部类型'], ...Object.entries(MODEL_TASK_LABELS)];
 export const errorSignals = [['rate-limit', '429'], ['timeout', '超时'], ['fallback', '回退']];
 export const preflightTypes = [['auth', '认证与授权'], ['rate-limit', '限流'], ['parameters', '参数校验'], ['other', '其他前置错误']];
 
@@ -174,11 +174,14 @@ export function callObservations(state) {
       const attemptOutcome = item.isCanceled === true || item.isTimeout === true || item.streamInterrupted === true || item.finishReason === 'error'
         ? requestOutcome(item, attemptStatus) : explicit || (code ? 'failed' : attemptStatus != null
           ? requestOutcome(item, attemptStatus) : item.error === null ? 'success' : 'unknown');
+      const usage = usageFields(item, model);
+      const cached = usage.input == null ? null : number(item.usage?.cached);
       observedAttempts.push({
         ...request, id: JSON.stringify([id, index + 1]), parentId: id, index: index + 1,
         at: timeOf(item.startedAt ?? item.createdAt), upstreamRequestId: item.upstreamRequestId, upstreamModelId: item.upstreamModelId,
         provider, providerName: item.providerName || providerName(provider), channel, channelName: item.channelName || endpoints.get(channel)?.name || channel,
         serviceId: item.serviceId, endpoint: item.endpointId, endpointName: item.endpointName || endpoint?.endpointId || item.endpointId,
+        endpointBaseUrl: endpoint?.baseUrl,
         channelModel: JSON.stringify([provider ?? null, channel ?? null, item.upstreamModelId ?? null]),
         channelModelName: [item.channelName || endpoints.get(channel)?.name || channel || '渠道未采集',
           item.upstreamModelId || '模型未采集'].join(' · '),
@@ -189,7 +192,7 @@ export function callObservations(state) {
         code, errorReason: item.errorMessage || item.message, errorSource: item.errorSource || (attemptOutcome === 'failed' ? '上游调用' : null),
         timeout: timeout(item, code), fallback: item.fallback === true, fallbackReason: item.fallbackReason,
         recordedFallbackReason: item.fallbackReason,
-        ...usageFields(item, model),
+        ...usage, cached: cached != null && cached <= usage.input ? cached : null,
       });
     });
     observedAttempts.forEach((attempt, index) => {

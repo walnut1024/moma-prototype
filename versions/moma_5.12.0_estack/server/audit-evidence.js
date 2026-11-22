@@ -42,8 +42,7 @@ function publishEvidence(before, next, { modelId, data }) {
     if (supply.channelId) resources.push(ref('model_supply', supply.channelId, null, 'related'));
     if (supply.endpointId) resources.push(ref('supplier_connection', supply.endpointId, byId(next.endpoints, supply.endpointId)?.name, 'related'));
   }
-  return { action_code: 'service_route.publish', resources, changes,
-    request_parameters: { service_id: data.serviceId, expected_version: data.expectedVersion } };
+  return { action_code: 'service_route.publish', resources, changes };
 }
 
 function rotateEvidence(before, next, data) {
@@ -77,8 +76,7 @@ function rotateEvidence(before, next, data) {
     }
   }
   const validationIds = [...new Set((candidate.tests || []).map(row => row.batchId).filter(Boolean))];
-  return { action_code: 'supplier_key_group.rotate', resources, changes, links: { candidate_id: candidateId, validation_batch_ids: validationIds },
-    request_parameters: { provider_id: providerId, key_group_id: groupId, candidate_id: candidateId } };
+  return { action_code: 'supplier_key_group.rotate', resources, changes, links: { candidate_id: candidateId, validation_batch_ids: validationIds } };
 }
 
 function disableEvidence(before, next, selections) {
@@ -96,11 +94,10 @@ function disableEvidence(before, next, selections) {
     resources.push(ref('supplier', providerId, provider.name, 'related'),
       ref('supplier_connection', endpointId, current.endpoint?.name, 'related'));
   }
-  return { action_code: 'model_supply.disable', resources, changes, item_results,
-    request_parameters: { action: 'disable', selected_count: selections.length } };
+  return { action_code: 'model_supply.disable', resources, changes, item_results };
 }
 
-export function auditEvidence(before, next, action, actor, expectedRevision) {
+export function auditEvidence(before, next, action, actor) {
   let evidence;
   if (['serviceRouteConfigure', 'serviceRoutePublish'].includes(action.operation)) evidence = publishEvidence(before, next, action);
   if (action.operation === 'keyGroupCandidateApply') evidence = rotateEvidence(before, next, action.data);
@@ -115,12 +112,10 @@ export function auditEvidence(before, next, action, actor, expectedRevision) {
         ['configuration_version', byId(before.endpoints, id)?.configurationRevision ?? 0, endpoint.configurationRevision],
       ]);
     }
-    evidence = { action_code: 'supplier_key.replace', resources, changes,
-      request_parameters: { provider_id: providerId, key_id: keyId, expected_connection_count: expectedEndpointIds.length } };
+    evidence = { action_code: 'supplier_key.replace', resources, changes };
   }
   if (action.operation === 'supplierSelection' && action.data.action === 'disable') evidence = disableEvidence(before, next, action.data.selections);
   if (!evidence) return null;
   evidence.resources = [...new Map(evidence.resources.map(resource => [resource.type + ':' + resource.id, resource])).values()];
-  return { ...evidence, request_parameters: { expected_revision: expectedRevision, ...evidence.request_parameters },
-    actor_name: actor.name, actor_role: actor.role };
+  return { ...evidence, actor_name: actor.name, actor_role: actor.role };
 }

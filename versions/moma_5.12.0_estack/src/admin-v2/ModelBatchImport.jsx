@@ -7,32 +7,33 @@ import { parseDelimitedCells } from '../tabular-import.mjs';
 import { materialImportHeaders, materialImportRows, previewMaterialRows, submitMaterialRows } from './material-batch-import';
 import { previewProviderJsonRows, providerJsonRows } from './provider-json-import';
 import { TASK_OPTIONS, INPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS } from './model-profile';
+import { MODEL_TYPES } from './model-management';
+import { MODEL_TYPE_LABELS, modelTypeLabel } from '../model-types.mjs';
 
-const typeTasks = [['文本', 'text'], ['多模态', 'multimodal'], ['视觉 · 图像', 'image'], ['视觉 · 视频', 'video'], ['语音', 'audio'], ['向量', 'embedding'], ['重排', 'rerank']];
 function ImportHelp() {
   return <section className="materials-import-help" aria-labelledby="model-import-help-title">
     <Typography.Title heading={5} component="h3" id="model-import-help-title">填写提示</Typography.Title>
     <dl className="materials-import-rules">
-      <div><dt>必填信息</dt><dd>模型编码、模型展示名、模型类型。视觉模型还需填写视觉任务类型：图像或视频。其他字段未知时留空，不用填写 0 或“不支持”。</dd></div>
+      <div><dt>必填信息</dt><dd>模型编码、模型资料名称、模型类型。视觉模型还需填写视觉任务类型：图像或视频。其他字段未知时留空，不用填写 0 或“不支持”。</dd></div>
       <div><dt>模型编码</dt><dd>以小写字母或数字开头，可使用 . _ : / -，最多 80 字符。已有标识不覆盖，同一批次不能重复。</dd></div>
-      <div><dt>模型作者与系列</dt><dd>填写分类字典中的标准名称或别名。填写系列时一并填写所属作者。</dd></div>
+      <div><dt>模型作者与系列</dt><dd>填写「模型作者」和「模型系列」页签中的标准名称或别名。填写系列时一并填写所属作者。</dd></div>
       <div><dt>模板与字段</dt><dd>XLSX 模板将必填项排在最前：红色表头为必填，橙色表头为视觉模型必填，其余为选填。模板包含全部资料字段及“填写说明”工作表。可删除不需要的可选列或调整列顺序，请保留原表头；模板示例行请替换或删除。</dd></div>
       <div><dt>多选与能力</dt><dd>多项用“、”分隔。输入与输出模态：{INPUT_MODALITY_OPTIONS.join('、')}。结果类型：{RESULT_TYPE_OPTIONS.join('、')}。流式响应、工具调用等能力填写“支持”或“不支持”，留空表示未填写。</dd></div>
-      <div><dt>日期与数值</dt><dd>日期用 YYYY-MM-DD；原厂发布日期、知识截止日期也可用 YYYY-MM。上下文窗口和最大输出使用 Token 正整数，参数规模使用 B；其他规格按表头单位填写，只填写适用于当前类型与任务的字段。</dd></div>
-      <div><dt>参数与来源</dt><dd>支持参数填写参数名，如 temperature、max_tokens；默认参数为 JSON 对象，例如 {'{"temperature":0.7}'}，其中的参数名须已声明支持。版本状态：稳定版、预览版、已退役；资料状态：待核对、已核对。许可协议与架构使用资料表单中的选项名称或标识。模型 Logo、资料链接填写无凭据的 http / https 地址；批量导入不上传 Logo 图片。</dd></div>
+      <div><dt>日期与数值</dt><dd>日期用 YYYY-MM-DD；原厂发布日期、知识截止日期也可用 YYYY-MM。上下文长度和最大输出 Token 数使用 Token 正整数，参数规模使用 B；其他规格按表头单位填写，只填写适用于当前类型与任务的字段。</dd></div>
+      <div><dt>参数与来源</dt><dd>支持的参数填写参数名，如 temperature、max_tokens；默认参数为 JSON 对象，例如 {'{"temperature":0.7}'}，其中的参数名须已声明支持。版本状态：稳定版、预览版、已退役；资料状态：待核对、已核对。许可协议与架构使用资料表单中的选项名称或标识。模型 Logo、资料链接填写无凭据的 http / https 地址；批量导入不上传 Logo 图片。</dd></div>
     </dl>
-    <div className="materials-import-tasks"><Typography.Title heading={6} component="h4">模型类型与支持任务</Typography.Title><dl>{typeTasks.map(([label, type]) => <div key={type}><dt>{label}</dt><dd>{TASK_OPTIONS[type].join('、')}</dd></div>)}</dl></div>
+    <div className="materials-import-tasks"><Typography.Title heading={6} component="h4">模型类型与支持任务</Typography.Title><dl>{Object.entries({ ...MODEL_TYPES, other: MODEL_TYPE_LABELS.other }).map(([type, label]) => <div key={type}><dt>{label}</dt><dd>{TASK_OPTIONS[type].join('、')}</dd></div>)}</dl></div>
   </section>;
 }
 
 const importNames = { model: '模型资料', provider: '服务商资料', relation: '供应关系' };
-const summaryHeaders = { model: ['模型展示名', '模型编码', '模型类型'], provider: ['服务商名称', '服务商编码', '供给类型'], relation: materialImportHeaders.relation };
+const summaryHeaders = { model: ['模型资料名称', '模型编码', '模型类型'], provider: ['服务商名称', '服务商编码', '供给类型'], relation: materialImportHeaders.relation };
 const ready = row => row.status === 'ready';
 const issue = row => row.status === 'error' || row.status === 'failed';
 const count = (rows, status) => rows.filter(row => row.status === status).length;
 const jsonDetailLabels = {
   author: '模型作者', listed_at: '服务商上线日期', source_checked_at: '核对日期', documentation: '资料链接', visual_type: '视觉任务类型',
-  architecture: '输入输出模态', context_length_tokens: '上下文窗口（Token）', max_output_tokens: '最大输出（Token）', streaming: '流式响应', tools: '工具调用',
+  architecture: '输入输出模态', context_length_tokens: '上下文长度（Token）', max_output_tokens: '最大输出 Token 数（Token）', streaming: '流式响应', tools: '工具调用',
 };
 
 export default function ModelBatchImport({ state, ops, transact, close, kind, providerId, builtinCatalogue }) {
@@ -147,7 +148,8 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
   };
   const columns = [
     { title: json ? '模型序号' : '文件行', dataIndex: 'rowNumber', width: 85 },
-    ...summaryHeaders[kind].map(title => ({ title: title === '模型展示名' ? '模型展示名' : title, width: 180, render: (_, row) => row.cells[headers.indexOf(title)] || '—' })),
+    ...summaryHeaders[kind].map(title => ({ title, width: 180, render: (_, row) =>
+      (title === '模型类型' && modelTypeLabel(row.data?.type)) || row.cells[headers.indexOf(title)] || '—' })),
     ...(kind === 'model' && !json ? [
       { title: '模型作者', width: 140, render: (_, row) => row.data?.profile?.author || '—' },
       { title: '模型系列', width: 140, render: (_, row) => row.data?.profile?.family || '—' },

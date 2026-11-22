@@ -87,7 +87,7 @@ async function historicalEvidence(db, row, record) {
   };
 }
 
-async function eventFromRow(db, row, detail = false) {
+async function eventFromRow(db, row) {
   const record = JSON.parse(row.record_json);
   if (row.domain !== 'model_operations') return scopedEvent(row, record);
   const evidence = record.platformAudit || await historicalEvidence(db, row, record);
@@ -98,19 +98,10 @@ async function eventFromRow(db, row, detail = false) {
     schema_version: 1, event_id: row.id, operation_id: row.operation_id, action_code: evidence.action_code,
     domain: 'model_operations', occurred_at, recorded_at: occurred_at,
     actor: { type: 'admin_account', id: row.actor_id, name: evidence.actor_name || record.actorName, role: evidence.actor_role || record.actor },
-    observer: 'model_operations_service', source: evidence.source === 'web' ? 'web' : 'unknown', provenance: { environment: 'prototype', mode: 'actual' },
+    observer: 'model_operations_service', source: 'unknown', provenance: { environment: 'prototype', mode: 'actual' },
     scope: { type: 'platform' }, stage: 'commit', outcome: { status },
     resources: evidence.resources, changes: evidence.changes || [], item_results: evidence.item_results || [],
     ...(evidence.links && { links: evidence.links }), ...(status === 'succeeded' && { effect_scope: 'configuration' }),
-    ...(detail && {
-      request_evidence: {
-        operation_id: row.operation_id, command: row.command, parameters: evidence.request_parameters ?? null,
-      },
-      response_evidence: {
-        operation_id: row.operation_id, http_status: row.http_status, outcome: status,
-        ...(Number.isSafeInteger(row.response_revision) && { revision: row.response_revision }),
-      },
-    }),
   };
 }
 
@@ -141,16 +132,13 @@ function scopedEvent(row, record) {
 }
 
 export async function auditLogDetail(db, id) {
-  const row = await db.prepare(eventSource + ` SELECT e.*, o.http_status,
-    json_extract(o.response_json,'$.revision') AS response_revision FROM events e
-    LEFT JOIN operations o ON o.id=e.operation_id AND e.domain='model_operations' WHERE e.id=?`).bind(id).first();
-  return row ? eventFromRow(db, row, true) : null;
+  const row = await db.prepare(eventSource + ' SELECT * FROM events WHERE id=?').bind(id).first();
+  return row ? eventFromRow(db, row) : null;
 }
 
-function matches(event, { action, status, type, q, actor, source }) {
+function matches(event, { action, status, type, q, actor }) {
   const includes = (query, values) => values.some(value => typeof value === 'string' && value.toLowerCase().includes(query));
   return (!action || action === event.action_code) && (!status || status === event.outcome.status)
-    && (!source || source === event.source)
     && (!type || event.resources.some(resource => resource.type === type))
     && (!actor || includes(actor, [event.actor.id, event.actor.name]))
     && (!q || includes(q, [event.event_id, event.operation_id, AUDIT_ACTIONS[event.action_code],
@@ -158,16 +146,16 @@ function matches(event, { action, status, type, q, actor, source }) {
 }
 
 export async function auditLogPage(db, filters) {
-  const { limit, from, to, after, eventId, tenant, project } = filters;
+  const { limit, from, to, after, tenant, project } = filters;
   let cursor = after ? await db.prepare(eventSource + ' SELECT id,created_at FROM events WHERE id=?').bind(after).first() : null;
   if (after && !cursor) return null;
   const items = [];
   const statement = db.prepare(eventSource + ` SELECT * FROM events WHERE created_at>=? AND created_at<=?
-    AND (? IS NULL OR id=?) AND (? IS NULL OR tenant_id=?) AND (? IS NULL OR project_id=?)
+    AND (? IS NULL OR tenant_id=?) AND (? IS NULL OR project_id=?)
     AND (? IS NULL OR (created_at,id)<(?,?))
     ORDER BY created_at DESC,id DESC LIMIT 50`);
   while (items.length <= limit) {
-    const { results } = await statement.bind(from, to, eventId || null, eventId || null, tenant || null, tenant || null, project || null, project || null,
+    const { results } = await statement.bind(from, to, tenant || null, tenant || null, project || null, project || null,
       cursor?.created_at ?? null, cursor?.created_at ?? null, cursor?.id ?? null).all();
     for (const row of results) {
       const event = await eventFromRow(db, row);

@@ -24,6 +24,7 @@
 }
 .v2-sidebar-desktop > .v2-sidebar { flex: 1; overflow-y: auto; scrollbar-width: thin; }
 .v2-sidebar-toggle { align-self: flex-end; }
+.v2-sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 2px; width: 100%; }
 .v2-sidebar nav { display: grid; gap: 12px; margin-top: 12px; }
 .v2-sidebar nav section { display: grid; gap: 2px; }
 .v2-sidebar nav section > span { margin: 0 8px 2px; }

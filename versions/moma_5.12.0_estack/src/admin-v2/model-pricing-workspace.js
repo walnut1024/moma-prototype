@@ -51,7 +51,7 @@ export function pricingTableRows(records,itemsFor) {
 }
 
 export function operationsReturn(value) {
-  return typeof value === 'string' && value.length <= 5000 && /^#\/admin-2\/(providers(?:-new)?|listing|model-market|model-prices|model-templates|provider-materials|tariff-dictionary)(?:\?[^\s#]*)?$/.test(value) ? value : null;
+  return typeof value === 'string' && value.length <= 5000 && /^#\/admin-2\/(providers-reference|listing-new|model-market|model-prices|model-templates|provider-materials|tariff-dictionary)(?:\?[^\s#]*)?$/.test(value) ? value : null;
 }
 
 export function supplyCostTableRows(models, records) {

@@ -1,5 +1,6 @@
 import { diagnosticRequest, latestRequests } from '../request-identity.mjs';
 import { dayOf } from './analytics.js';
+import { MODEL_TYPE_LABELS } from '../model-types.mjs';
 
 const displayNumber = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
 export function formatUsageNumber(value) {
@@ -13,13 +14,13 @@ const dayStart = day => Date.parse(`${day}T00:00:00+08:00`);
 const addDays = (day, count) => dayOf(dayStart(day) + count * DAY);
 
 export const usageModelTypes = [
-  { id: 'text', name: '语言模型', types: ['text'], color: '#18a69a' },
-  { id: 'multimodal', name: '多模态理解', types: ['multimodal'], color: '#f09b38' },
-  { id: 'visual', name: '视觉模型', types: ['image', 'video'], color: '#dd659d' },
-  { id: 'audio', name: '语音模型', types: ['audio'], color: '#865bd6' },
-  { id: 'embedding', name: '向量模型', types: ['embedding'], color: '#7199ca' },
-  { id: 'rerank', name: '排序模型', types: ['rerank'], color: '#8a97ac' },
-];
+  { id: 'text', types: ['text'], color: '#18a69a' },
+  { id: 'multimodal', types: ['multimodal'], color: '#f09b38' },
+  { id: 'visual', types: ['image', 'video'], color: '#dd659d' },
+  { id: 'audio', types: ['audio'], color: '#865bd6' },
+  { id: 'embedding', types: ['embedding'], color: '#7199ca' },
+  { id: 'rerank', types: ['rerank'], color: '#8a97ac' },
+].map(group => ({ ...group, name: MODEL_TYPE_LABELS[group.id] }));
 export const tokenModelTypes = usageModelTypes.filter(type => ['text', 'multimodal', 'embedding', 'rerank'].includes(type.id));
 export const usageCategory = type => usageModelTypes.find(item => item.types.includes(type))?.id;
 export function usageFilterOptions(state) {

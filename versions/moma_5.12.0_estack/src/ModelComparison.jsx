@@ -58,7 +58,7 @@ export default function ModelComparison({ onBack, owner = "", project }) {
     try { await navigator.clipboard.writeText(text); setNotice('已复制结果'); } catch { setNotice('复制失败，请手动选择文本'); }
   }
   return <section className="compare-page">
-    <FrontPageHeader className="compare-heading" title="模型对比" description="向多个文本模型发送同一问题，直观比较回答质量、速度与参数差异" icon={Columns3}
+    <FrontPageHeader className="compare-heading" title="模型对比" description="向多个语言模型发送同一问题，直观比较回答质量、速度与参数差异" icon={Columns3}
       actions={<div className="compare-head-actions">
         <Button type="tertiary" icon={<ArrowLeft size={16}/>} onClick={onBack}>返回单模型</Button>
         <div className="compare-sync"><span id={labelId+'-sync'}>同步输入</span>

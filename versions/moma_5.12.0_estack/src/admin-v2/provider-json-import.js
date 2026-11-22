@@ -80,7 +80,7 @@ export function providerJsonRows(file, provider) {
   }
   return catalogue.models.map((model, index) => {
     const type = typeof model?.model_type === 'string' ? model.model_type : '';
-    const summary = { '模型编码': model?.canonical_slug, '模型展示名': model?.model_name, '模型类型': MODEL_CATALOGUE_TYPES[type] || MODEL_TYPES[type] };
+    const summary = { '模型编码': model?.canonical_slug, '模型资料名称': model?.model_name, '模型类型': MODEL_CATALOGUE_TYPES[type] || MODEL_TYPES[type] };
     const cells = MODEL_IMPORT_HEADERS.map(label => typeof summary[label] === 'string' ? summary[label] : '');
     try {
       object(model, 'model', '模型');
@@ -137,8 +137,8 @@ export function planProviderJsonModel(state, providerId, { model, connections })
   const code = string(model.canonical_slug, '模型编码', 80, /^[a-z0-9][a-z0-9._:/-]*$/);
   const matches = modelLibrary(state).filter(row => row.modelId.toLowerCase() === code);
   if (matches.length > 1) throw Error('模型编码匹配到多份主档');
-  const existing = matches[0];
-  if (existing && !modelCatalogue(state).some(row => row.id === existing.id)) throw Error('模型编码已被归档资料使用，请核对');
+  const existing = matches[0] && modelCatalogue(state).find(row => row.id === matches[0].id);
+  if (matches[0] && !existing) throw Error('模型编码已被归档资料使用，请核对');
   const { material, listedAt } = modelData(provider, model, existing);
   const reference = upstreamReference(model.upstream_reference);
   const mappings = model.mappings ?? [];

@@ -1,11 +1,11 @@
-import { libraryRecord, modelCatalogue } from './model-library.js';
+import { libraryRecord, modelIdentityCatalogue } from './model-library.js';
 import { providerCatalogueIds } from './moma-provider.js';
 import { modelDisplayName } from '../model-identities.mjs';
 import { isResourceId } from '../resource-id.mjs';
 
 // Use persisted supplier-model relations, never the built-in reference catalogue, as evidence of registration.
 export function registeredResourceModels(state, provider) {
-  const visible = new Map(modelCatalogue(state).map(model => [model.id, model]));
+  const visible = new Map(modelIdentityCatalogue(state).map(model => [model.id, model]));
   const codes = new Set(providerCatalogueIds(provider));
   const entries = (provider.catalogModels || []).filter(entry => entry.libraryId && !entry.deletedAt && codes.has(entry.modelId));
   let relations = state.supplyRelations?.models.filter(row => row.providerId === provider.id);

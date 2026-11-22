@@ -1,4 +1,4 @@
-import { isResourceId } from '../src/resource-id.mjs';
+import { isResourceId, resourceId } from '../src/resource-id.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
@@ -28,6 +28,8 @@ import { routeEditConfig, routeTableGroups } from '../src/admin-v2/route-workspa
 import { salesStatus } from '../src/admin-v2/service-sales.js';
 import { EMPTY_PACKAGE } from '../src/admin-v2/token-packages.js';
 import { commercialPriceBase } from '../src/admin-v2/service-workspace.js';
+import { mappingCandidates } from '../src/admin-v2/service-model-mappings.js';
+import { channelFingerprint } from '../src/admin-v2/provider-channels.js';
 import { platformAllowedChannels, platformCandidatePlan, publishPlatformCandidate, runPlatformTrial } from '../src/admin-v2/platform-service-client.js';
 
 test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are enforced end to end by D1',{timeout:90000},async()=>{
@@ -217,7 +219,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert(org && state.marketProjects.some(row=>row.id===project.id));
     const scope = { type:'selected', organizationIds:[], tenantIds:[], projectIds:[project.id] };
     const serviceIds = services.map(row=>row.id);
-    const setCardScope = scope => command('marketCardList',{ scope, serviceIds, expectedRevision:state.revision },material.id);
+    const setCardScope = scope => command('marketCardSetStatus',{ listing_stage:'gray', scope, serviceIds, expectedRevision:state.revision },material.id);
     await setCardScope(scope);
     assert.deepEqual((await catalogue(customer)),[]);
     const projectCatalogue = await request('/market/catalogue?project='+project.id,{cookie:customer});
@@ -863,6 +865,59 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     }
     assert.deepEqual(workspaceInternal.report.bills,[]);
     assert.equal(await monthly(a),spendBefore);
+    const lifecycleEndpoint='/model-services-new';
+    const lifecycleId=resourceId('model-service');
+    const lifecycleRow={id:lifecycleId,name:third.name,callId:third.callId,modelId:material.id,
+      type:'text',listed:true,channels:[],createdAt:new Date().toISOString(),createdBy:'测试管理员'};
+    await local.db.prepare('INSERT INTO new_model_services (id,call_id,revision,record_json,created_at,imported) VALUES (?,?,1,?,?,0)')
+      .bind(lifecycleId,third.callId,JSON.stringify(lifecycleRow),Date.now()).run();
+    const inspectLifecycle=async()=>(await request(lifecycleEndpoint+'?inspect='+lifecycleId,{cookie:admin})).data;
+    const updateLifecycle=(action,revision,row)=>{
+      const operationId=resourceId('operation');
+      return request(lifecycleEndpoint,{cookie:admin,key:operationId,body:{action,id:lifecycleId,revision,row,operationId}});
+    };
+    const metaBefore=await local.db.prepare('SELECT meta_json FROM model_workspace WHERE id=1').first('meta_json');
+    const setTestCard=async card=>{
+      const meta=JSON.parse(metaBefore);
+      meta.modelData.marketCards={...meta.modelData.marketCards,[material.id]:card};
+      await local.db.prepare('UPDATE model_workspace SET meta_json=? WHERE id=1').bind(JSON.stringify(meta)).run();
+    };
+    const testCard={linked:[third.id],shown:[third.id],scope:{type:'all'},status:'listed'};
+    const projectChoicesBefore=(await workspace(customer)).projectServices.map(row=>row.id);
+    assert(projectChoicesBefore.includes(third.id));
+    await setTestCard(testCard);
+    assert.deepEqual(await inspectLifecycle(),{revision:1,marketLinked:true,marketListed:true,
+      stopIssue:'请先在模型广场下架关联模型',deleteIssue:'请先停止模型服务'});
+    assert.match((await updateLifecycle('save',1,{...lifecycleRow,listed:false})).data.error.message,/下架/);
+    await setTestCard({...testCard,status:'withdrawn'});
+    const stopped = await updateLifecycle('save',1,{...lifecycleRow,listed:false});
+    assert.equal(stopped.status,200,JSON.stringify(stopped.data));
+    assert.equal((await inspectLifecycle()).deleteIssue,'请先解除模型广场关联');
+    assert.equal((await updateLifecycle('delete',2)).status,400);
+    await reload();
+    assert.deepEqual(state.stoppedModelOfferIds,[third.id]);
+    assert(!(await catalogue(customer)).some(row=>row.id===third.id));
+    assert.deepEqual((await workspace(customer)).projectServices.map(row=>row.id),projectChoicesBefore.filter(id=>id!==third.id));
+    assert.equal((await call({...internalRequest,requestId:crypto.randomUUID()})).data.error.code,'MODEL_UNAVAILABLE');
+    assert.equal((await bearer('sk-'+'a'.repeat(32),third.callId)).data.error.code,'model_unavailable');
+    const lifecycleSource=mappingCandidates(state,{modelId:material.id}).find(row=>!row.reason);
+    assert(lifecycleSource);
+    const reenabled=await updateLifecycle('save',2,{...stopped.data.row,listed:true,channels:[{
+      id:resourceId('service-channel'),channelId:lifecycleSource.id,fingerprint:channelFingerprint(lifecycleSource),enabled:true,priority:0,weight:100,
+    }]});
+    assert.equal(reenabled.status,200,JSON.stringify(reenabled.data));
+    assert((await workspace(customer)).projectServices.some(row=>row.id===third.id));
+    assert.equal((await updateLifecycle('save',3,{...reenabled.data.row,listed:false})).status,200);
+    await setTestCard({...testCard,status:'withdrawn',linked:[],shown:[]});
+    assert.equal((await inspectLifecycle()).deleteIssue,'');
+    assert.equal((await updateLifecycle('delete',4)).status,200);
+    await reload();
+    assert.deepEqual(state.stoppedModelOfferIds,[third.id]);
+    await local.db.batch([
+      local.db.prepare('DELETE FROM new_model_services WHERE id=?').bind(lifecycleId),
+      local.db.prepare('UPDATE model_workspace SET meta_json=? WHERE id=1').bind(metaBefore),
+    ]);
+    await reload();
     assert.equal((await tenantWrite(customer,a,'projectUpdate',{projectId:internalProjectId,type:'tokenBudget',
       input:{limit:'0.000001',period:'total'}})).status,200);
     const rejectedExperience=await call({...internalRequest,requestId:crypto.randomUUID()});

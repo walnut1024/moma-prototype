@@ -14,9 +14,10 @@ import { IDENTITY_FIELDS, TECHNICAL_FIELDS, INTERFACE_FIELDS, FEATURE_FIELDS, AR
 function presentation(model) {
   model = modelPresentation(null, model);
   const profile = modelProfileDraft(model), support = value => value == null ? '' : value ? '支持' : '暂无';
+  const cardLabels = typeof model.preview === 'boolean' ? { precision: '模型精度', parameters: '参数量' } : {};
   const facts = descriptors => descriptors.map(({ key, label, kind, unit }) => {
     const value = profile[key], choices = kind === 'architecture' ? ARCHITECTURE_OPTIONS : kind === 'license' ? LICENSE_OPTIONS : kind === 'lifecycle' ? [['stable', '稳定版'], ['preview', '预览版'], ['deprecated', '已退役']] : [];
-    return { label, value: value == null || value === '' || value === 'unknown' ? '' : kind === 'support' ? (value === 'supported' ? '支持' : '暂无') : Array.isArray(value) ? value.join('、') : (choices.find(([id]) => id === value)?.[1] || String(value)) + (unit ? ` ${unit}` : '') };
+    return { label: cardLabels[key] || label, value: value == null || value === '' || value === 'unknown' ? '' : kind === 'support' ? (value === 'supported' ? '支持' : '暂无') : Array.isArray(value) ? value.join('、') : (choices.find(([id]) => id === value)?.[1] || String(value)) + (unit ? ` ${unit}` : '') };
   }).filter(row => row.value !== '');
   let logo = ''; try { if (profile.logo) logo = normalizeModelLogo(profile.logo); } catch { /* Invalid stored images are not rendered. */ }
   const sections = [
@@ -36,18 +37,21 @@ export function experienceTasks(model) {
     tasks.includes('语音识别') && 'voice',
   ].filter(Boolean);
 }
-export function cloudMarketPresentation(offer) {
-  const profile=offer.profile || {}, inputs=profile.inputModalities || [], outputs=profile.outputModalities || [];
-  return {...presentation(offer),...offer,desc:offer.description,context:offer.capabilities?.context ? Math.round(offer.capabilities.context/1024)+'K' : '未填写',
+export function cloudMarketPresentation(record) {
+  const offer = { ...record, modelId: record.canonical_slug, modelKey: record.model_id || record.card_id };
+  const profile=modelProfileDraft(offer), inputs=profile.inputModalities || [];
+  const outputs=[...new Set([...(profile.outputModalities || []), ...(profile.resultTypes || [])])];
+  return {...presentation(offer),...offer,desc:offer.description,context:offer.capabilities?.context ? Number(offer.capabilities.context).toLocaleString('zh-CN')+' Token' : '未填写',
+    maker: offer.maker || profile.author, hot: offer.heat > 0, score: offer.heat,
     contextTokens:offer.capabilities?.context ?? null,series:profile.family || '',input:inputs,outputModalities:outputs,
     businessTasks:profile.tasks || [],tasks:experienceTasks(offer),inputModalities:inputs.map(item=>({文本:'text',图片:'image',音频:'audio',视频:'video'}[item] || item)),
     output:offer.capabilities?.output ?? '未填写',icon:1,billing:offer.internal ? '内部使用' : '按量计费',reason:offer.callable ? '' : '请先订购此模型服务',documentation:profile.documentation || '',
     date:profile.releaseDate || '',guideRequest:serviceGuideRequest(offer,offer.callId)};
 }
 
-export function marketModels(services, scope = 'showcase') {
+export function marketModels(services, scope = 'showcase', cards = []) {
   const rows = services.filter(row => row.marketVisible !== false && (scope === 'all' || row.defaultCatalogue !== false));
-  const groups = new Map();
+  const groups = new Map(cards.map(card => [card.modelKey, { ...card, services: [] }]));
   for (const row of rows) {
     const group = groups.get(row.modelKey);
     if (group) group.services.push(row);

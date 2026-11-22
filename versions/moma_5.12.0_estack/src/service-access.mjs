@@ -41,7 +41,10 @@ export function lifecycleAccess(state, service, tenantId) {
   const { model } = service;
   const entry = service.providerId ? providerOffer(model, offerKey(service)) : null;
   const stage = offerStage(model, entry);
-  if (!serviceCallsEnabled(model)) return reject('model_unavailable', '模型服务已停止，请选择其他模型');
+  const serviceId = service.model_service_id || modelServiceIdentity(state, model, offerKey(service));
+  if (!serviceCallsEnabled(model) || state.stoppedModelOfferIds?.includes(serviceId)) {
+    return reject('model_unavailable', '模型服务已停止，请选择其他模型');
+  }
   if (!['formal', 'gray'].includes(stage) || model.visibility !== '公开') return reject('model_unavailable', '模型服务已下架，请选择其他模型');
   if (service.providerId) {
     if (!entry || !serviceCallsEnabled(model, entry)) return reject('provider_unavailable', '该渠道服务已停止，请选择其他渠道');

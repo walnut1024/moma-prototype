@@ -55,7 +55,7 @@ test('unknown metadata stays absent and unsafe stored logos are not rendered', t
   const env = fixture(t, { type: 'image', capabilities: {}, profile: { logo: 'javascript:alert(1)', tasks: [], architecture: 'unknown' } });
   const [row] = env.snapshot().models;
   assert.equal(row.logo, '');
-  assert.equal(row.typeLabel, '视觉生成');
+  assert.equal(row.typeLabel, '视觉模型');
   assert.equal(row.releaseDate, '');
   assert.equal(row.detailDescription, '');
   assert.deepEqual(row.detailSections, []);

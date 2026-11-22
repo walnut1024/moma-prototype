@@ -183,10 +183,10 @@ test('only self-hosted suppliers can create channels without authentication', ()
   assert.equal(ep.authMode, 'none'); assert.equal(ep.allowHttp, true);
 });
 
-test('an incompatible later metadata change remains readable and blocks the mapping instead of crashing the catalogue', () => {
+test('an incompatible saved channel type remains readable and blocks the mapping instead of crashing the catalogue', () => {
   const state = run(legacySupplierState(), 'supplierChannelCreate', { ...draft, models: [models[0]] });
-  const entry = owner(state).catalogModels.find(row => row.libraryId === models[0].libraryId);
-  entry.type = 'rerank';
+  const affected = mappings(state)[0].id;
+  owner(state).catalogConnections.find(row => row.id === affected).type = 'rerank';
   const row = mappings(state)[0];
   assert.equal(channelUrl(owner(state), row), '');
   assert.match(channelInterfaceIssue(owner(state), row), /不支持/);

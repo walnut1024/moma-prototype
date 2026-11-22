@@ -181,7 +181,8 @@ test('expired or revoked sessions cannot read data or replay a success', async (
   assert.equal((await request('/does-not-exist', { session: null })).status, 404);
 });
 
-test('card updates persist through HTTP without requiring hidden tasks or discarding technical data',async()=>{
+test('reference edits persist through HTTP without requiring hidden tasks or discarding technical data',async()=>{
+ const { modelMaterial }=await import('../src/admin-v2/model-library.js');
  const {metadata,materialBase}=await import('../src/admin-v2/model-operations.js');
  let state=(await request('/model-operations')).data;
  const model=state.models.find(row=>row.id==='model-2'),code='card-contract-'+randomBytes(6).toString('hex');
@@ -191,7 +192,7 @@ test('card updates persist through HTTP without requiring hidden tasks or discar
  const record=state.modelTemplates.find(row=>row.modelId===code),before=structuredClone(record),id=crypto.randomUUID();
  const body={operationId:id,expectedRevision:state.revision,action:{type:'modelOperations',operation:'templatePublish',data:{id:record.id,expectedBase:materialBase(state,record),confirmed:true,value:{...metadata(record),name:'卡片修改已保存',profile:{...record.profile,tasks:[],releaseDate:'2026-11-03'}}}}};
  const saved=await request('/model-operations/commands',{method:'POST',key:id,body});assert.equal(saved.status,200,JSON.stringify(saved.data));
- const next=(await request('/model-operations')).data,current=next.modelTemplates.find(row=>row.id===record.id);
+ const next=(await request('/model-operations')).data,current=modelMaterial(next,record.id);
  assert.equal(current.name,'卡片修改已保存');assert.equal(current.profile.releaseDate,'2026-11-03');assert.equal(current.profile.tasks?.length || 0,0);
  for(const key of ['license','architecture','supportedParameters'])assert.deepEqual(current.profile[key],before.profile[key]);
  assert.deepEqual(current.capabilities,before.capabilities);assert.deepEqual(next.providers,state.providers);

@@ -10,6 +10,7 @@ import { FilterField, FilterPresets, FilterReset, FilterToolbar, FilterViewRow }
 import { SemiDateRange as DateRange, SemiMultiPick as MultiPick } from '../admin-v2/SemiAnalyticsFilters';
 import { TimeSeriesChart } from './AnalyticsCharts';
 import { bucketLabel, dateRange, fields, usageCSV, usageNumber, observationView, selectedMeteringView, selectedUsageTypes, usagePeriod, usageModelGroups } from '../usage-data.mjs';
+import { MODEL_TYPE_LABELS, modelTypeLabel } from '../model-types.mjs';
 import './usage-statistics.css';
 import { maskApiKey } from '../api-key-utils.mjs';
 
@@ -41,7 +42,9 @@ const languageChartHints = {
   '平均输入 Token（TPR）': 'TPR 指 Tokens Per Request（每请求 Token 数）。每请求输入 Token 的平均值＝输入 Token 总数 ÷ 有输入计量的请求数。',
   '平均输出 Token（TPR）': 'TPR 指 Tokens Per Request（每请求 Token 数）。每请求输出 Token 的平均值＝输出 Token 总数 ÷ 有输出计量的请求数。',
 };
-const observationCategories = [['文本模型', '语言模型'], ['多模态模型', '多模态理解'], ['视觉模型', '视觉模型'], ['音频模型', '语音模型'], ['向量模型', '向量模型'], ['重排模型', '排序模型']];
+const observationCategories = [['文本模型', MODEL_TYPE_LABELS.text], ['多模态模型', MODEL_TYPE_LABELS.multimodal],
+  ['视觉模型', MODEL_TYPE_LABELS.visual], ['音频模型', MODEL_TYPE_LABELS.audio], ['向量模型', MODEL_TYPE_LABELS.embedding],
+  ['重排模型', MODEL_TYPE_LABELS.rerank]];
 const observationPeriod = (preset, now) => preset === 'yesterday' ? usagePeriod('yesterday', now) : dateRange(Number(preset) || 3, now);
 function Trend({ id, title, keys: defaultKeys, options = {}, data, scaled = false, language = false }) {
   const [variant, setVariant] = useState(Object.keys(options.variants || {})[0]);
@@ -131,9 +134,11 @@ export default function UsageStatistics({ observation = false, projectScope, ove
   const [notice, setNotice] = useState('');
   useEffect(() => {
     if (scopedKey?.billingType) setBilling(scopedKey.billingType);
-    const category = {text:'语言模型',multimodal:'多模态理解',image:'视觉模型',video:'视觉模型',audio:'语音模型',embedding:'向量模型',rerank:'排序模型'}[scopedModel?.type];
-    if (category) setCategory(category);
-  }, [scopedKey?.billingType,scopedModel?.type]);
+    const label = modelTypeLabel(scopedModel?.type);
+    const group = observation ? observationCategories.find(([, name]) => name === label)?.[0]
+      : usageModelGroups.find(row => row.name === label)?.id;
+    if (group) setCategory(group);
+  }, [scopedKey?.billingType,scopedModel?.type,observation]);
   const observationModels=observation?modelOptions:[];
   const observationKeys=scopeKeys.map(key=>({id:key.id,name:key.name,searchText:key.keyId}));
   const streaming = observation && ['文本模型', '视觉理解'].includes(type);
@@ -144,7 +149,8 @@ export default function UsageStatistics({ observation = false, projectScope, ove
   const data = useMemo(()=>tenantUsageData({records,models:tenant.models,billing,modelIds,apiKeyIds:observation?apiKeyIds:null,apiKeyId:observation?null:apiKeyId,...range,minutes:bucketMinutes,now,types:tenantUsageTypes(category,observation&&category==='视觉模型'?visual:undefined)}),[records,tenant.models,billing,modelIds,apiKeyIds,apiKeyId,range,bucketMinutes,now,observation,category,visual]);
   const changeType = (value, setter) => { setter(value); setModelIds(null); };
   function exportData() {
-    const label = observation ? type : category;
+    const label = observation ? observationCategories.find(([id]) => id === category)?.[1] || category
+      : usageModelGroups.find(group => group.id === category)?.name || category;
     const url = URL.createObjectURL(new Blob([usageCSV(data, view, billing, label)], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a'); link.href = url; link.download = `${billing}-${label}-${range.start}-${range.end}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); setNotice('已导出当前筛选范围的用量趋势');
   }
@@ -205,7 +211,7 @@ export default function UsageStatistics({ observation = false, projectScope, ove
     {tenant.internal && !observation && <p className="us-foot">企业内用 · 项目费用为内部成本</p>}
     <Tabs className="us-category-tabs" activeKey={category}
       onChange={value => { if (observation) changeType(value, setCategory); else { setCategory(value); setModelIds(null); } }}
-      tabList={(observation ? observationCategories : usageModelGroups.map(group => [group.id, group.id])).map(([itemKey,tab])=>({itemKey,tab}))} />
+      tabList={(observation ? observationCategories : usageModelGroups.map(group => [group.id, group.name])).map(([itemKey,tab])=>({itemKey,tab}))} />
     <div className="us-content">
       <div className="us-filter-panel"><FilterToolbar className="us-filters">
         <FilterPresets value={preset} onChange={value => { const current = new Date(); setNow(current); setPreset(value); setRange(observation ? observationPeriod(value, current) : usagePeriod(value, current)); }} items={observation ? [['1', '今日'], ['yesterday', '昨日'], ['7', '近 7 天'], ['30', '近 30 天']] : undefined} />

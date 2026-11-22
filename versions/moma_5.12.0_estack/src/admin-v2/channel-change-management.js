@@ -13,8 +13,8 @@ import { customAdapterCredentialIds, normalizeCustomAdapter } from './channel-cu
 import { normalizeChannelNetwork } from './channel-network-settings.js';
 
 export const CHANNEL_EVIDENCE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const connectionFields = ['protocol', 'baseUrl', 'interfaceType', 'addressMode', 'taskUrls', 'adapterOptions', 'allowHttp', 'authMode', 'apiKeyId', 'keyGroupId', 'keyPool', 'keyStrategy', 'credentialRef', 'apiKeys', 'capacity', 'timeoutSeconds', 'credentialVersion', 'adapterVersion', 'requestRules', 'networkSettings', 'customAdapter', 'poolPaused', 'adapterDraft'];
-const editableFields = ['protocol', 'baseUrl', 'interfaceType', 'taskUrls', 'adapterOptions', 'authMode', 'apiKeyId', 'keyGroupId', 'keyPool', 'keyStrategy', 'capacity', 'timeoutSeconds', 'adapterVersion', 'requestRules', 'networkSettings', 'customAdapter'];
+const connectionFields = ['protocol', 'baseUrl', 'endpointPath', 'modelProtocol', 'interfaceType', 'addressMode', 'taskUrls', 'adapterOptions', 'allowHttp', 'authMode', 'apiKeyId', 'keyGroupId', 'keyPool', 'keyStrategy', 'credentialRef', 'apiKeys', 'capacity', 'timeoutSeconds', 'credentialVersion', 'adapterVersion', 'requestRules', 'networkSettings', 'customAdapter', 'poolPaused', 'adapterDraft'];
+const editableFields = ['protocol', 'baseUrl', 'endpointPath', 'modelProtocol', 'interfaceType', 'taskUrls', 'adapterOptions', 'authMode', 'apiKeyId', 'keyGroupId', 'keyPool', 'keyStrategy', 'capacity', 'timeoutSeconds', 'adapterVersion', 'requestRules', 'networkSettings', 'customAdapter'];
 const update = (collection, id, changes) => ({ type: 'update', collection, id, changes });
 const snapshot = endpoint => structuredClone(Object.fromEntries(connectionFields.filter(key => Object.hasOwn(endpoint, key)).map(key => [key, endpoint[key]])));
 const requestSignature = request => JSON.stringify([request?.operationId, request?.channelId, request?.confirmExpensive === true, request?.models?.map(model => Object.entries(model).sort(([left], [right]) => left.localeCompare(right)))]);
@@ -120,7 +120,7 @@ export function assertDirectChannelMutation(state, operation, providerId, data =
   let endpoints = [];
   if (operation === 'supplierChannelSave' && data.mode !== 'info') {
     const endpoint = state.endpoints.find(row => row.id === data.endpointId && row.providerId === provider.id);
-    const changed = endpoint && ['baseUrl', 'protocol', 'interfaceType', 'taskUrls', 'adapterOptions', 'authMode', 'keyGroupId', 'apiKeyId'].some(key => Object.hasOwn(data, key) && JSON.stringify(data[key]) !== JSON.stringify(endpoint[key]));
+    const changed = endpoint && ['baseUrl', 'protocol', 'interfaceType', 'endpointPath', 'modelProtocol', 'taskUrls', 'adapterOptions', 'authMode', 'keyGroupId', 'apiKeyId'].some(key => Object.hasOwn(data, key) && JSON.stringify(data[key]) !== JSON.stringify(endpoint[key]));
     if (changed) endpoints = [endpoint];
   } else if (['keyGroupPrimary', 'defaultApiKey', 'editApiKey'].includes(operation)) {
     if (operation === 'keyGroupPrimary' && providerKeyGroups(provider).find(group => group.id === data.groupId)?.keyIds[0] === data.keyId || operation === 'defaultApiKey' && provider.defaultApiKeyId === data.keyId) return;
@@ -463,7 +463,29 @@ function keyGroupTransaction(state, operation, data) {
   return { type: 'batch', objectId: group.id, label: '原子应用密钥组配置', changes };
 }
 
+export const CHANNEL_PROCUREMENT_BATCH_LIMIT = 50;
+
 function procurementTransaction(state, operation, data) {
+  if (operation === 'channelProcurementBatchPublish') {
+    const { rows, providerId, endpointId, scenarios, expiresAt, confirmed } = data;
+    if (!Array.isArray(rows) || !rows.length || rows.length > CHANNEL_PROCUREMENT_BATCH_LIMIT ||
+      rows.some(row => typeof row?.associationId !== 'string' || !Number.isSafeInteger(row.expectedPriceRevision)) ||
+      new Set(rows.map(row => row.associationId)).size !== rows.length) {
+      throw new Error(`请选择 1–${CHANNEL_PROCUREMENT_BATCH_LIMIT} 款不同的渠道模型`);
+    }
+    const { provider } = context(state, providerId, endpointId);
+    const effectiveAt = data.effectiveAt || new Date().toISOString();
+    let working = state;
+    let changes;
+    for (const { associationId, expectedPriceRevision } of rows) {
+      ({ changes } = procurementTransaction(working, 'channelProcurementPublish', {
+        providerId, endpointId, associationId, expectedPriceRevision, scenarios, effectiveAt, expiresAt, confirmed,
+      }));
+      working = { ...working, providers: working.providers.map(item =>
+        item.id === provider.id ? { ...item, ...changes[0].changes } : item) };
+    }
+    return { type: 'batch', objectId: endpointId, label: '批量发布渠道采购价', changes };
+  }
   if (operation !== 'channelProcurementPublish') throw new Error('未知采购价版本操作');
   const { provider, endpoint } = context(state, data.providerId, data.endpointId);
   const projected = supplierChannelAssociations(state, provider, endpoint.id).find(row => row.id === data.associationId);
@@ -504,7 +526,7 @@ function checkedNewCredential(value) {
   return value;
 }
 
-function prepareKeyPoolCandidate(state, data) {
+export function prepareKeyPoolCandidate(state, data, connectionChanges = {}) {
   const { provider, endpoint } = context(state, data.providerId, data.endpointId);
   expectedRevision(endpoint, data.expectedRevision);
   const existing = endpoint.candidateConfiguration;
@@ -546,7 +568,7 @@ function prepareKeyPoolCandidate(state, data) {
   if (new Set(fingerprints).size !== fingerprints.length) throw new Error('同一连接不能配置相同的 API 密钥');
   const previous = Object.fromEntries(editableFields.filter(key => Object.hasOwn(existing?.config || {}, key))
     .map(key => [key, existing.config[key]]));
-  const config = configuredEndpoint(state, provider, endpoint, { ...previous, authMode: 'pool', keyPool: rows, keyStrategy }, owned);
+  const config = configuredEndpoint(state, provider, endpoint, { ...previous, ...connectionChanges, authMode: 'pool', keyPool: rows, keyStrategy }, owned);
   if (endpoint.poolPaused) config.poolPaused = false;
   const candidateConfiguration = {
     id: resourceId('connection-candidate'), baseRevision: endpoint.configurationRevision || 0,
@@ -681,7 +703,7 @@ export function channelChangeTransaction(state, { operation, data = {} }) {
     let config = data.config, ownedKeys;
     const existing = endpoint.candidateConfiguration;
     const addressOnly = operation === 'channelCandidateSave' && data.addressOnly === true;
-    if (addressOnly && (typeof config?.baseUrl !== 'string' || Object.keys(config).length !== 1 || existing && !existing.addressOnly)) throw new Error('请先处理现有候选配置；此操作仅允许修改 Base URL');
+    if (addressOnly && (typeof config?.baseUrl !== 'string' || Object.keys(config).length !== 1 || existing && !existing.addressOnly)) throw new Error('请先处理现有候选配置；此操作仅允许修改服务地址（Base URL）');
     if (operation === 'channelCandidateSave' && existing?.baseSignature === configSignature(endpoint, provider) && config && typeof config === 'object' && !Array.isArray(config)) {
       config = { ...Object.fromEntries(editableFields.filter(key => Object.hasOwn(existing.config, key)).map(key => [key, existing.config[key]])), ...config };
       ownedKeys = existing.config.apiKeys;

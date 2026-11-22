@@ -16,7 +16,10 @@ test('intake atomically saves two URLs, two masked keys and the requested profil
   const next = run(state, { document: file, apiKeys, confirmed: true }), provider = next.providers.find(row => row.code === file.provider.code);
   assert.deepEqual(supplierChannelResources(next, provider).map(row => row.baseUrl).sort(), file.provider.connections.map(row => row.base_url).sort());
   assert.equal(providerApiKeyRows(next, provider).length, 2);
-  assert.equal(provider.apiKeys[0].id, provider.defaultApiKeyId);
+  assert.equal(provider.defaultApiKeyId || '', '');
+  assert.ok(provider.apiKeys.every(key => key.standalone));
+  assert.ok(supplierChannelResources(next, provider).every(row =>
+    row.authMode === 'specific' && row.apiKeyId === provider.apiKeys[0].id && !row.keyGroupId));
   assert.deepEqual([provider.website, provider.logo, provider.description], [file.provider.website, file.provider.logo, file.provider.description]);
   for (const secret of secrets) assert(!JSON.stringify(next).includes(secret));
   for (const key of ['models', 'modelTemplates', 'modelSupplies', 'modelSalePrices']) assert.deepEqual(next[key], before[key]);

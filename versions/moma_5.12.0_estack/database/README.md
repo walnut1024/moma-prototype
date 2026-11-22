@@ -105,6 +105,8 @@ erDiagram
 
 ## 接口
 
+「模型服务（新）」的同源接口为 GET /api/v1/model-services-new 和 POST /api/v1/model-services-new。平台管理员和运营人员通过后台会话访问。变更带记录修订号和操作 ID，数据、回执与审计一起提交。生产 D1 先应用 0018_new_model_services.sql。浏览器旧记录按原 ID 单条导入，已导入或已删除的同 ID 不重新创建。
+
 - `POST /auth/sign-in` 根据账号标识和密码签发客户或后台会话，支持已登记用户名、手机号和邮箱。客户可访问的空间由服务端返回。后台专用接口为 `POST /auth/login`、`POST /auth/logout`、`GET /auth/me`，健康检查为 `GET /health`。
 - `GET /traffic-limits` 读取两类默认、账号额度、一客一策、单模型覆盖和可配置的模型资料主档。`POST /traffic-limits` 按操作更新限流配置，并原子提交审计和回执。两者要求平台管理员或运营人员会话，写入还校验当前账号、修订号和幂等标识。每分钟请求数和 Token 数均存整数。
 - `GET /traffic-limits/history` 使用同一后台会话按时间倒序查询已提交的配置变更。`limit` 控制每次读取的操作数，批量操作展开实际改动的对象，`after` 续查更早的操作。

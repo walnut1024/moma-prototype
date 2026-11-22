@@ -1,32 +1,35 @@
+import { ChannelLanguageContext, channelEnglish } from './admin-v2/channel-language';
 import AdminPageLoading from './admin-v2/AdminPageLoading';
 import {
   IconActivity, IconApartment, IconAppCenter, IconBarChartVStroked, IconBellStroked,
   IconBookOpenStroked, IconBookStroked, IconBox, IconChainStroked, IconChecklistStroked,
   IconComponentStroked, IconFlowChartStroked, IconGridStroked, IconLayers,
-  IconDoubleChevronLeft, IconDoubleChevronRight,
+  IconDoubleChevronLeft, IconDoubleChevronRight, IconLanguage,
   IconMenu, IconMonitorStroked, IconPlayCircle, IconPriceTag, IconPulse, IconServerStroked, IconSetting,
   IconShield, IconUserGroup, IconUserSetting, IconUserStroked,
 } from '@douyinfe/semi-icons';
 import CloudModelOperations from './admin-v2/CloudModelOperations';
 import { modelOperationsView } from './mock/model-data.js';
-import GettingStarted from './admin-v2/GettingStarted';
-import { Badge, Banner, Breadcrumb, Button, ConfigProvider, Tabs, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { ModelOperationsGuide } from './admin-v2/GettingStarted';
+import { Badge, Banner, Breadcrumb, Button, ConfigProvider, Dropdown, Tabs, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './admin-v2/AdminOverlay';
+import enUS from '@douyinfe/semi-ui/lib/es/locale/source/en_US.js';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
-import { adminSections, sections, pages, WORKSPACES, WORKSPACE_HOME, availableWorkspaces, pageWorkspace, canAccessPage, commercialPage, isOrganizationPage, pageFromHash } from './admin-v2/navigation.mjs';
+import { adminSections, sections, pages, WORKSPACES, WORKSPACE_HOME, availableWorkspaces, pageWorkspace, canAccessPage, commercialPage, isOrganizationPage, pageFromHash, channelManagementListRoute } from './admin-v2/navigation.mjs';
 import { adminBreadcrumbs } from './admin-v2/breadcrumbs.mjs';
-import { libraryRecord } from './admin-v2/model-operations';
+import { modelMaterial } from './admin-v2/model-library';
 import OperationsOverview from './admin-v2/OperationsOverview';
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import AnalyticsPages from "./admin-v2/AnalyticsPages";
 import "./admin-v2/admin-shell.css";
 import { ClusterManagement, ModelDeployments, ModelObservability } from "./admin-v2/InferencePages";
-import ProviderManagement from "./admin-v2/ProviderManagement";
 import { ChannelManagementNew } from "./admin-v2/ChannelDirectory";
 const CustomerAnalysis = lazy(() => import('./admin-v2/CustomerAnalysis'));
 const TrafficOperations = lazy(() => import('./admin-v2/TrafficOperations'));
 const SiteConfiguration = lazy(() => import('./admin-v2/SiteConfiguration'));
 const ModelMaterials = lazy(()=>import('./admin-v2/ModelMaterials'));
+const ModelServicesNew = lazy(()=>import('./admin-v2/ModelServicesNew'));
+const ModelLinks = lazy(() => import('./admin-v2/ModelLinks'));
 const ProviderMaterials = lazy(()=>import('./admin-v2/ProviderMaterials'));
 const MaterialDictionaryPage = lazy(()=>import('./admin-v2/MaterialDictionaryPage'));
 import CustomerPage from "./admin-v2/CustomerPages";
@@ -34,7 +37,6 @@ import { managedIndividualAccounts } from "./admin-v2/individual-users";
 import CustomerUsageDetail from "./admin-v2/CustomerUsageDetail";
 import ModelPrices from './admin-v2/ModelPrices';
 import ModelMarket from './admin-v2/ModelMarket';
-import ModelManagement from "./admin-v2/ModelManagement";
 import { managedEnterpriseTenants } from "./admin-v2/enterprise";
 import { useDeploymentLicense } from './useDeploymentLicense';
 import { LICENSE_UNAVAILABLE } from './deployment-license.mjs';
@@ -60,10 +62,9 @@ const NAVIGATION_ICONS = {
   usage: IconBarChartVStroked,
   'users-analysis': IconUserGroup,
   'customers-analysis': IconUserStroked,
-  channels: IconChainStroked,
-  'channels-new': IconChainStroked,
   'channels-reference': IconChainStroked,
-  warehouse: IconLayers,
+  'warehouse-new': IconLayers,
+  'model-links': IconFlowChartStroked,
   market: IconAppCenter,
   prices: IconPriceTag,
   materials: IconBookStroked,
@@ -88,24 +89,35 @@ const NAVIGATION_ICONS = {
   'business-analysis': IconBarChartVStroked,
   license: IconShield,
   'site-configuration': IconSetting,
-  'getting-started': IconBookOpenStroked,
+  'model-operations-guide': IconBookOpenStroked,
 };
-const overviewShortcuts = ['usage-analysis', 'user-analysis', 'listing', 'providers'].map(id => ({
-  id, label: pages[id].label, Icon: NAVIGATION_ICONS[pages[id].area],
+const overviewShortcuts = ['usage-analysis', 'user-analysis', 'listing-new', 'providers-reference'].map(id => ({
+  id, label: id === 'providers-reference' ? pages[id].areaLabel : pages[id].label, Icon: NAVIGATION_ICONS[pages[id].area],
 }));
+
+const GUIDE_LANGUAGE_KEY = 'moma-5120-admin-guide-language';
 
 export default function AdminConsoleV2(props) {
   const license = useDeploymentLicense();
   const [hash,setHash]=useState(location.hash);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [english, setEnglish] = useState(() => {
+    try { return localStorage.getItem(GUIDE_LANGUAGE_KEY) === 'en'; }
+    catch { return false; }
+  });
+  const changeLanguage = value => {
+    setEnglish(value);
+    try { localStorage.setItem(GUIDE_LANGUAGE_KEY, value ? 'en' : 'zh-CN'); }
+    catch { /* The current selection still applies when storage is unavailable. */ }
+  };
   useEffect(()=>{const sync=()=>setHash(location.hash);addEventListener('hashchange',sync);return()=>removeEventListener('hashchange',sync);},[]);
-  const cloud=/^#\/admin-2\/(listing|providers(?:-new|-reference)?|model-market|model-prices|model-templates|provider-materials|tariff-dictionary)(?:[/?]|$)/.test(hash);
+  const cloud=/^#\/admin-2\/(listing-new|providers-reference|model-market|model-prices|model-templates|provider-materials|tariff-dictionary)(?:[/?]|$)/.test(hash);
   const packageWorkspace=license?.commercial && /^#\/admin-2\/(?:package-production|package-data)(?:[/?]|$)/.test(hash);
   const area = packageWorkspace ? 'packages' : cloud ? 'models' : 'application';
   if (!license) return <AdminPageLoading label="部署授权"/>;
-  return <ConfigProvider locale={zhCN}><CloudModelOperations key={area} packageWorkspace={packageWorkspace} applicationWorkspace={!cloud && !packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store} license={license} sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed}/>}</CloudModelOperations></ConfigProvider>;
+  return <ChannelLanguageContext.Provider value={english}><ConfigProvider locale={english && ['providers-reference', 'providers-health'].includes(pageFromHash(hash)) ? enUS : zhCN}><CloudModelOperations key={area} packageWorkspace={packageWorkspace} applicationWorkspace={!cloud && !packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store} license={license} sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} english={english} changeLanguage={changeLanguage}/>}</CloudModelOperations></ConfigProvider></ChannelLanguageContext.Provider>;
 }
-function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sidebarCollapsed,setSidebarCollapsed}) {
+function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sidebarCollapsed,setSidebarCollapsed,english,changeLanguage}) {
   const { state: workspaceState, dispatch: persist, transact, transactModel, transactIndividual, transactAdminAccount, reload, conflict } = store;
   const internalSite = !deploymentLicense.commercial || (!deploymentLicense.managed && workspaceState.spacePolicy?.operatingMode==='internal');
   const license = internalSite ? { ...deploymentLicense, commercial:false, commerceWritable:false } : deploymentLicense;
@@ -190,13 +202,13 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
     location.hash = lastVisits.current[nextWorkspace];
   };
   const page = pages[active];
-  const detailProvider = ['providers', 'providers-new', 'provider-materials'].includes(active) ? state.providers.find(item => item.id === detailParams.get("provider")) : null;
-  const detailConnection = ['providers-new', 'providers-reference'].includes(active) ? state.endpoints.find(item => item.id === detailParams.get('connection') && !item.deletedAt) : null;
+  const detailProvider = active === 'provider-materials' ? state.providers.find(item => item.id === detailParams.get("provider")) : null;
+  const detailConnection = active === 'providers-reference' ? state.endpoints.find(item => item.id === detailParams.get('connection') && !item.deletedAt) : null;
   const activeGroup = page.groupId;
   const activeArea = page.area;
   const activeModule = sections.find(group => group.id === page.groupId)?.items.find(item => item.id === page.area);
   const detailTenant = active === 'customer-usage-detail' ? pageState.tenants.find(item => item.id === detailParams.get('customer')) : null;
-  const detailModel = !canVisit ? null : detailParams.get('view') === 'template' && ['listing', 'model-templates'].includes(active) ? libraryRecord(state, detailParams.get('template')) : null;
+  const detailModel = !canVisit ? null : detailParams.get('view') === 'template' && active === 'model-templates' ? modelMaterial(state, detailParams.get('template')) : null;
   const enterpriseDetailId = canVisit && active === 'tenants' ? (organizationView ? organizationTenant?.id : detailParams.get('enterprise')) : null;
   const detailEnterprise = enterpriseDetailId ? managedEnterpriseTenants(pageState).find(item => item.id === enterpriseDetailId) : null;
   const personalTenant = canVisit && active === 'tenants' ? managedIndividualAccounts(state).find(row => row.tenant.ownerId === detailParams.get('personal'))?.tenant : null;
@@ -214,7 +226,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
           const Icon = NAVIGATION_ICONS[item.id];
           const selected = activeGroup === group.id && activeArea === item.id;
           const target = item.children[0][0];
-          const label = item.label;
+          const label = english && item.id === 'channels-reference' ? channelEnglish(item.label) : item.label;
           const collapsedLabel = (item.id === 'projects' ? `${group.title} · ${label}` : label) + (reason ? `（${reason}）` : '');
           const button = <Button key={item.id} disabled={Boolean(reason)} block icon={<Icon aria-hidden="true"/>} type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'}
             aria-current={selected ? 'page' : undefined} aria-label={collapsed ? collapsedLabel : undefined} onClick={() => navigate(target)}>{collapsed ? null : label}</Button>;
@@ -228,22 +240,35 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   useEffect(() => { const media = matchMedia('(min-width: 901px)'); const close = () => { if (media.matches) setNavOpen(false); }; media.addEventListener('change', close); return () => media.removeEventListener('change', close); }, []);
   const alertCount = state.alerts.filter(item => !["已恢复", "已转事件"].includes(item.status)).length;
   const sidebarToggleLabel = sidebarCollapsed ? '展开侧边栏' : '收起侧边栏';
+  const renderLanguage = collapsed =>
+    <Dropdown trigger="click" position="topLeft" render={<Dropdown.Menu>
+      <Dropdown.Item active={!english} onClick={() => changeLanguage(false)}><span lang="zh-CN">简体中文</span></Dropdown.Item>
+      <Dropdown.Item active={english} onClick={() => changeLanguage(true)}><span lang="en">English</span></Dropdown.Item>
+    </Dropdown.Menu>}>
+      <Button theme="borderless" type="tertiary" size="small" icon={<IconLanguage aria-hidden="true"/>}
+        aria-label={english ? 'Language: English' : '语言：简体中文'} aria-haspopup="menu">
+        {collapsed ? null : english ? 'English' : '简体中文'}
+      </Button>
+    </Dropdown>;
   return <AdminUIContext.Provider value={true}><div className="admin-v2">
     {!navOpen && <aside className="v2-sidebar-desktop" data-collapsed={sidebarCollapsed}>
       <div id="admin-desktop-navigation" className="v2-sidebar">{renderNavigation(sidebarCollapsed)}</div>
+      <div className="v2-sidebar-footer">
+        {renderLanguage(sidebarCollapsed)}
       <Tooltip content={sidebarToggleLabel} position="top" clickToHide closeOnEsc>
         <Button className="v2-sidebar-toggle" type="tertiary" theme="borderless"
           icon={sidebarCollapsed ? <IconDoubleChevronRight aria-hidden="true"/> : <IconDoubleChevronLeft aria-hidden="true"/>}
           aria-label={sidebarToggleLabel} aria-controls="admin-desktop-navigation" aria-expanded={!sidebarCollapsed}
           onClick={() => setSidebarCollapsed(collapsed => !collapsed)}/>
       </Tooltip>
+      </div>
     </aside>}
     <div className="v2-content">
       <header className="admin-context-bar">
         <Button className="admin-nav-toggle" type="tertiary" theme="borderless" icon={<IconMenu aria-hidden="true"/>} aria-label="展开后台导航" aria-haspopup="dialog" aria-expanded={navOpen} onClick={() => setNavOpen(true)}/>
         <div className="admin-breadcrumb">
           <Breadcrumb aria-label="面包屑">{breadcrumbs.map(({ label, href }, index) => (
-            <Breadcrumb.Item key={index} noLink>{href ? <a data-model-list-breadcrumb data-admin-breadcrumb href={href}>{label}</a> : <span title={label} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{label}</span>}</Breadcrumb.Item>
+            <Breadcrumb.Item key={index} noLink>{href ? <a data-model-list-breadcrumb data-admin-breadcrumb href={href}>{english && activeArea === 'channels-reference' && (href || index < 2 || !detailParams.has('connection')) ? channelEnglish(label) : label}</a> : <span title={english && activeArea === 'channels-reference' && (href || index < 2 || !detailParams.has('connection')) ? channelEnglish(label) : label} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{english && activeArea === 'channels-reference' && (href || index < 2 || !detailParams.has('connection')) ? channelEnglish(label) : label}</span>}</Breadcrumb.Item>
           ))}</Breadcrumb>
           {detailTenant && <Typography.Text type="tertiary" size="small" className="us-breadcrumb-meta">{detailTenant.id} · {detailTenant.type} · {detailTenant.status}</Typography.Text>}
         </div>
@@ -252,9 +277,11 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
       {state.storageError && <Banner type="danger" closeIcon={null} description={<>本地数据异常：{state.storageError.toLowerCase().includes('quota') ? '浏览器本地存储空间不足，原数据未更改。' : state.storageError} <Button onClick={reload}>重新加载</Button></>}/>}
       {conflict && <Banner type="warning" closeIcon={null} description={<>检测到其他页面的新版本数据。 <Button onClick={reload}>载入新版本</Button></>}/>}
       {showPage && !organizationView && commercialPage(active) && active !== 'tenants' && commerceReadOnly && <Banner type="warning" closeIcon={null} description={license.status === 'expired' ? '商业运营授权已到期，可查阅已保存的记录。' : '商业运营授权不可用，可查阅已保存的记录。'}/>}
-      {showPage && activeModule?.children.length > 1 && activeModule.id !== 'materials' && (
-        <Tabs className="v2-module-tabs" activeKey={active} onChange={navigate}>
-          {activeModule.children.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={label}/>)}
+      {showPage && activeModule?.children.length > 1 && activeModule.id !== 'materials' &&
+        !(active === 'providers-reference' && detailParams.get('connection')) && (
+        <Tabs className={activeArea === 'channels-reference' ? 'v2-module-tabs channel-management-tabs' : 'v2-module-tabs'}
+          activeKey={active} onChange={activeArea === 'channels-reference' ? id => navigate(channelManagementListRoute(id, new URLSearchParams(location.hash.split('?')[1]))) : navigate}>
+          {activeModule.children.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={english && activeArea === 'channels-reference' ? channelEnglish(label) : label}/>)}
         </Tabs>
       )}
       <main data-admin-page={active}>
@@ -262,7 +289,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
           {!hasAccount ? <Banner title="后台账号不可用" description={<a href="#/auth/login">重新登录</a>} closeIcon={null}/> : !canVisit ? (
             <Banner type="warning" title="无访问权限" description={<Button onClick={() => navigate(WORKSPACE_HOME[allowedWorkspaces[0]] || 'dashboard')}>返回首页</Button>} closeIcon={null}/>
           ) : organizationView && !organizationTenant ? <Banner type="warning" title="尚未配置默认企业租户" closeIcon={null}/> : <>
-            {active === "getting-started" ? <GettingStarted guideId={detailParams.get('guide')}/>
+            {active === "model-operations-guide" ? <ModelOperationsGuide english={english}/>
             : active === "dashboard" ? <OperationsOverview state={factState} workbenchName={workbenchName} onNavigate={navigate}
               shortcuts={overviewShortcuts.filter(({ id }) => canAccessPage(state.currentRole, id, license))}/>
             : ["usage-analysis", "user-analysis", "call-analysis"].includes(active) ? <AnalyticsPages pageId={active} state={factState}/>
@@ -276,12 +303,12 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === 'business-analysis' ? <CommerceAnalysis state={state}/>
             : active === "model-market" ? <ModelMarket state={state} transact={transactModel} conflict={conflict} internal={internalSite}/>
             : active === "model-prices" ? <ModelPrices state={state} transact={transactModel} conflict={conflict} reload={reload} readOnly={commerceReadOnly}/>
-            : active === "tariff-dictionary" ? <Suspense fallback={<AdminPageLoading label="模型资料"/>}><MaterialDictionaryPage state={state} transact={transactModel} conflict={conflict}/></Suspense>
-            : ['providers', 'providers-new'].includes(active) ? <ProviderManagement key={active} page={active} state={state} transact={transactModel} conflict={conflict} reload={reload}/>
+            : active === "tariff-dictionary" ? <Suspense fallback={<AdminPageLoading label="基础资料"/>}><MaterialDictionaryPage state={state} transact={transactModel} conflict={conflict}/></Suspense>
             : active === 'providers-reference' ? <ChannelManagementNew state={state} transact={transactModel} conflict={conflict} reload={reload}/>
             : active === 'provider-materials' ? <Suspense fallback={<AdminPageLoading label="服务商资料"/>}><ProviderMaterials state={state} transact={transactModel} conflict={conflict} reload={reload}/></Suspense>
-            : active === 'model-templates' ? <Suspense fallback={<AdminPageLoading label="模型资料"/>}><ModelMaterials state={modelOperationsView(state,'all')} transact={transactModel} conflict={conflict} reload={reload}/></Suspense>
-            : active === 'listing' ? <ModelManagement sourceState={state} state={modelOperationsView(state,detailParams.get('catalogue'))} transact={transactModel} conflict={conflict} reload={reload}/>
+            : active === 'model-templates' ? <Suspense fallback={<AdminPageLoading label="基础资料"/>}><ModelMaterials state={modelOperationsView(state,'all')} transact={transactModel} conflict={conflict} reload={reload}/></Suspense>
+            : active === 'listing-new' ? <Suspense fallback={<AdminPageLoading label={pages[active].label}/>}><ModelServicesNew state={factState} params={detailParams} dirtyRef={draftDirty} sourceConflict={conflict} reloadWorkspace={reload}/></Suspense>
+            : active === 'model-links' ? <Suspense fallback={<AdminPageLoading label={pages[active].label}/>}><ModelLinks/></Suspense>
             : active === "package-data" ? <PackageData state={state} params={detailParams}/>
             : active === "package-production" ? <PackageProduction state={state} transact={transact} conflict={conflict} params={detailParams} dirty={draftDirty}/>
             : active === 'traffic-limits' ? <Suspense fallback={<AdminPageLoading label="限流配置"/>}><TrafficOperations key={state.adminSession.accountId} state={state} dirtyRef={draftDirty}/></Suspense>
@@ -293,7 +320,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
                 ? {tab:'projects',...(detailParams.get('project') && {project:detailParams.get('project')})} : {tab:'organization'})}
               onTabChange={tab=>navigate(active + '?' + new URLSearchParams({tenant:resourceTenant.id,tab}))}/>
             : gatewaySettings ? <GatewayPage key={active} pageId={active} state={state} dispatch={dispatch}/>
-            : ["monitoring", "logs", "alerts", "incidents", "sla"].includes(active) ? <ObservabilityPage pageId={active} params={detailParams}
+            : ["providers-health", "monitoring", "logs", "alerts", "incidents", "sla"].includes(active) ? <ObservabilityPage pageId={active} params={detailParams}
               state={factState} dispatch={dispatch} navigate={navigate} simulation={logSimulation} setSimulation={setLogSimulation}
               canViewFullLog={state.currentRole === '平台管理员'}/>
             : active === "clusters" ? <ClusterManagement state={state} dispatch={dispatch}/>
@@ -309,7 +336,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
       setLeave(null);
       leave();
     } })}
-    <Modal title="后台导航" visible={navOpen} footer={null} width="min(320px, calc(100vw - 32px))" closeOnEsc onCancel={() => setNavOpen(false)} bodyStyle={{ maxHeight: '65dvh', overflow: 'auto' }}>
+    <Modal title="后台导航" visible={navOpen} footer={navOpen ? <div className="v2-sidebar-footer">{renderLanguage(false)}</div> : null} width="min(320px, calc(100vw - 32px))" closeOnEsc onCancel={() => setNavOpen(false)} bodyStyle={{ maxHeight: '65dvh', overflow: 'auto' }}>
       {navOpen && <div className="v2-sidebar">{renderNavigation()}</div>}
     </Modal>
   </div></AdminUIContext.Provider>;

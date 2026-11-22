@@ -167,9 +167,9 @@ function RequestBody({ body, attemptIndex, onSummary }) {
   </section>;
 }
 
-export default function RequestLogDetail({ row, attemptId, evidence, canViewFullLog, close }) {
+export default function RequestLogDetail({ row, attemptId, evidence, canViewFullLog, close, fromCallLogs = false }) {
   const trace = buildRequestTrace(row, evidence);
-  const [tab, setTab] = useState('trace');
+  const [tab, setTab] = useState(() => fromCallLogs && !trace.nodes.length ? 'summary' : 'trace');
   const [selected, setSelected] = useState(() => attemptId
     ?? trace.nodes.find(node => node.tone === 'red')?.id
     ?? trace.nodes.find(node => node.attempt)?.id
@@ -191,7 +191,8 @@ export default function RequestLogDetail({ row, attemptId, evidence, canViewFull
     </Space>
   </div>;
   const attemptIndex = row.attempts.find(attempt => attempt.id === selected)?.index;
-  return <AdminSideSheet visible closeOnEsc width="min(920px, 100vw)" className="admin-request-log-sheet"
+  return <AdminSideSheet visible closeOnEsc width="min(920px, 100vw)"
+    className={fromCallLogs ? 'admin-request-log-sheet admin-call-log-detail' : 'admin-request-log-sheet'}
     label="请求详情" title={title} onCancel={close}>
     <div ref={tabsRoot}>
       <Tabs activeKey={tab === 'raw' && !canViewFullLog ? 'trace' : tab} onChange={setTab} keepDOM={false} tabPaneMotion={false}

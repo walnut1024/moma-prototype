@@ -1,23 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes,createHash} from 'node:crypto';
-import {supplierMaterialReturn,supplierModelSelection} from '../src/admin-v2/supplier-model-registration.js';
 import {startLocalBackend} from '../database/local-runtime.js';
 import {domainModelWorkspace} from '../src/mock/model-fields.js';
-import {libraryRecord} from '../src/admin-v2/model-library.js';
+import {libraryRecord,modelMaterial} from '../src/admin-v2/model-library.js';
 import {serviceModelSourceDraft} from '../src/admin-v2/model-profile.js';
 import {materialBase} from '../src/admin-v2/model-operations.js';
 import {providerApiKeysDraft} from '../src/admin-v2/provider-management.js';
 import {connectionKeys} from '../src/admin-v2/connection-state.js';
-
-test('material maintenance returns to the supplier selection without accepting external routes or malformed selection',()=>{
-  const address=supplierMaterialReturn('#/admin-2/providers?provider=provider-moma&selectedModels='+encodeURIComponent('["template-a"]'),'template-b');
-  const params=new URLSearchParams(address.split('?')[1]);
-  assert.equal(params.get('provider'),'provider-moma');assert.equal(params.get('addingModel'),'1');
-  assert.deepEqual(supplierModelSelection(params.get('selectedModels')),['template-a','template-b']);
-  for(const bad of [null,'https://outside.invalid','#/admin-2/listing','#/admin-2/providers-extra?provider=x','#/admin-2/providers'])assert.equal(supplierMaterialReturn(bad),null);
-  for(const bad of ['not-json','{}','[1]','["<script>"]',JSON.stringify(Array(6).fill('a'))])assert.deepEqual(supplierModelSelection(bad),[]);
-});
+import {marketCardIndex} from '../src/market-cards.mjs';
+import {connectionDirectoryRows} from '../src/admin-v2/channel-connection-directory.js';
+import {mappingCandidates} from '../src/admin-v2/service-model-mappings.js';
+import {exportModelResources} from '../src/admin-v2/model-resource-transfer.js';
+import {resourceId} from '../src/resource-id.mjs';
 
 test('HTTP and D1 preserve canonical material, explicit channel protocol and candidate edits across the first onboarding stage',{timeout:60000},async()=>{
   const accessCode=randomBytes(24).toString('hex');
@@ -69,13 +64,76 @@ test('HTTP and D1 preserve canonical material, explicit channel protocol and can
     const edit={providerId:owner.id,endpointId:endpoint.id,associationId:association.id,modelId:catalogue.modelId,upstreamModelId:channel.upstreamModelId,name:endpoint.name,protocol:'OpenAI',baseUrl:channel.baseUrl,expectedUpdatedAt:endpoint.updatedAt,expectedProviderUpdatedAt:state.providers.find(row=>row.id===owner.id).updatedAt};
     const changed=await command('supplierChannelEdit',edit);assert.equal(changed.status,200,JSON.stringify(changed.data));await refresh();
     const pending=state.endpoints.find(row=>row.id===endpoint.id);assert.equal(pending.protocol,'Anthropic');assert.equal(pending.baseUrl,channel.baseUrl);assert.equal(pending.candidateConfiguration.config.protocol,'OpenAI');
+    const cardResult=await command('marketCardCreate',{expectedRevision:state.revision,name:material.name,description:material.description,logo:material.profile?.logo || ''},material.id);
+    assert.equal(cardResult.status,200,JSON.stringify(cardResult.data));await refresh();
     const create=await command('createServiceModel',{...serviceModelSourceDraft(state,material),libraryId:material.id,name:'GLM-5.5 业务服务',modelId:'glm-5.5-service',serviceMode:'standard'});assert.equal(create.status,200,JSON.stringify(create.data));await refresh();
     const service=state.models.find(row=>row.templateId===material.id);assert.equal(service.name,material.name);assert.equal(service.serviceName,'GLM-5.5 业务服务');assert.equal(service.description,material.description);assert.equal(service.serviceMode,'standard');assert.equal(service.callsEnabled,false);assert.equal(service.listingStatus,'已下架');assert.equal(service.modelId,'glm-5.5-service');
-    const renamed=await command('templatePublish',{id:material.id,expectedBase:materialBase(state,material),confirmed:true,value:{...material,name:'GLM-5.5 模型资料'}});assert.equal(renamed.status,200,JSON.stringify(renamed.data));await refresh();
-    assert.equal(libraryRecord(state,service.id).name,'GLM-5.5 模型资料');
+    const newServiceRow={
+      id:resourceId('model-service'), name:'从资料复制的新模型服务', callId:'qa-copy-new-service',
+      modelId:material.id, type:material.type, listed:false, channels:[],
+    };
+    const persistNewService=(row,revision=0)=>{
+      const operationId=resourceId('operation');
+      return api('/model-services-new',{action:'save',id:row.id,revision,row,operationId},operationId);
+    };
+    const invalidDetails=await persistNewService({...newServiceRow, modelDetails:{context:-1}});
+    assert.equal(invalidDetails.status,400);
+    const copied=await persistNewService(newServiceRow);
+    assert.equal(copied.status,200,JSON.stringify(copied.data));
+    const readNewService=async()=> (await api('/model-services-new')).data.rows.find(row=>row.id===newServiceRow.id);
+    assert.equal(copied.data.row.modelDetails.name,material.name);
+    assert.equal(copied.data.row.modelDetails.context,material.capabilities.context);
+    await refresh();
+    const configured=structuredClone(state);
+    const businessExports = current => ['channels','services','market','prices'].map(scope => {
+      const { rows, references } = exportModelResources(current,scope,{level:'model',model_id:material.id});
+      return { rows, references };
+    });
+    const beforeExports=businessExports(configured);
+    assert.ok(beforeExports[0].rows.some(row=>row.type==='provider_model'));
+    assert.ok(beforeExports[2].rows.some(row=>row.type==='market_model'));
+    const beforeCandidates=mappingCandidates(configured,{modelId:material.id});
+    const renamed=await command('templatePublish',{id:material.id,expectedBase:materialBase(state,material),confirmed:true,value:{...material,name:'GLM-5.5 模型资料',capabilities:{...material.capabilities,context:65536}}});assert.equal(renamed.status,200,JSON.stringify(renamed.data));await refresh();
+    assert.equal(modelMaterial(state,material.id).name,'GLM-5.5 模型资料');
+    assert.equal(modelMaterial(state,material.id).capabilities.context,65536);
+    assert.deepEqual(await readNewService(),copied.data.row);
+    assert.deepEqual(businessExports(state),beforeExports);
+    const persisted=await command('templateDelete',{id:material.id,confirmed:true});assert.equal(persisted.status,200,JSON.stringify(persisted.data));await refresh();
+    assert.equal(modelMaterial(state,material.id),undefined);
+    assert.deepEqual(await readNewService(),copied.data.row);
+    assert.deepEqual(businessExports(state),beforeExports);
+    for(const key of ['models','providers','endpoints','modelSupplies','validations','serviceRoutes','supplyRelations']) assert.deepEqual(state[key],configured[key],key);
+    assert.deepEqual(state.modelData.marketCards,configured.modelData.marketCards);
+    assert.equal(marketCardIndex(state,state.models).find(row=>row.modelId===material.id).name,material.name);
+    const savedChannel=connectionDirectoryRows(state,state.providers).find(row=>row.id===privateChannel.id);
+    assert.equal(savedChannel.models[0].modelName,material.name);
+    assert.deepEqual(mappingCandidates(state,{modelId:material.id}),beforeCandidates);
     assert.equal(state.models.find(row=>row.id===service.id).serviceName,service.serviceName);
+    const editOwn=await persistNewService({...copied.data.row,modelDetails:{name:'服务自己维护',context:16384}},1);
+    assert.equal(editOwn.status,200,JSON.stringify(editOwn.data));
+    assert.equal((await readNewService()).modelDetails.name,'服务自己维护');
+    assert.equal((await readNewService()).modelDetails.context,16384);
+    assert.equal((await readNewService()).modelDetails.code,material.modelId);
+    await refresh();
+    const deletedSource=await persistNewService({...newServiceRow,id:resourceId('model-service'),callId:'qa-use-deleted-reference'});
+    assert.equal(deletedSource.status,400);
     const duplicate=await command('createServiceModel',{...serviceModelSourceDraft(state,material),libraryId:material.id,modelId:'another',serviceMode:'provider'});assert.equal(duplicate.status,422);
-    await refresh();for(const key of ['modelSalePrices','supplyPrices','serviceRoutes'])assert.deepEqual(state[key],baseline[key],key);for(const row of baseline.endpoints)assert.deepEqual(state.endpoints.find(current=>current.id===row.id),row);
+    await refresh();
+    const currentOwner=state.providers.find(row=>row.id===privateOwner.id);
+    const currentAssociation=currentOwner.catalogConnections.find(row=>row.endpointId===privateChannel.id);
+    const ownName='渠道独立维护的展示名称';
+    const channelRename=await command('supplierChannelEdit',{
+      providerId:currentOwner.id,endpointId:privateChannel.id,associationId:currentAssociation.id,
+      modelId:currentAssociation.modelId,name:privateChannel.name,upstreamModelId:currentAssociation.upstreamModelId,
+      baseUrl:privateChannel.baseUrl,modelDisplayName:ownName,expectedUpdatedAt:privateChannel.updatedAt,expectedProviderUpdatedAt:currentOwner.updatedAt,
+    });
+    assert.equal(channelRename.status,200,JSON.stringify(channelRename.data));await refresh();
+    const renamedChannel=connectionDirectoryRows(state,state.providers).find(row=>row.id===privateChannel.id);
+    assert.equal(renamedChannel.models[0].modelName,ownName);
+    assert.deepEqual(renamedChannel.endpoint,privateChannel);
+    assert.deepEqual(state.models,configured.models);
+    assert.deepEqual(state.modelData.marketCards,configured.modelData.marketCards);
+    for(const key of ['modelSalePrices','supplyPrices','serviceRoutes'])assert.deepEqual(state[key],baseline[key],key);for(const row of baseline.endpoints)assert.deepEqual(state.endpoints.find(current=>current.id===row.id),row);
     assert.equal((await local.db.prepare('PRAGMA foreign_key_check').all()).results.length,0);
   }finally{await local.runtime.dispose();}
 });

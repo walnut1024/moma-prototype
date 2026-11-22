@@ -95,7 +95,7 @@ export function projectModelState(state, previousTables){
     const credentialId=e.authMode==='inherit'?state.providers.find(p=>p.id===e.providerId)?.defaultApiKeyId:e.apiKeyId || e.apiKeys?.[0]?.id;
     const group=groupIds.get(e.providerId+':'+(e.keyGroupId || e.apiKeyGroupId || 'default'));
     const validMode=mode==='group'&&tables.key_groups?.has(group)?'group':mode==='pool'?'pool':tables.credentials?.has(credentialId)?mode:'none';
-    add('channels',{id:e.id,supplier_id:e.providerId,code:e.channelCode || e.endpointId || e.id,name:e.name,protocol:e.protocol || 'OpenAI',base_url:e.baseUrl || '',connection_json:j({interfaceType:e.interfaceType,timeoutSeconds:e.timeoutSeconds,adapterOptions:e.adapterOptions,taskUrls:e.taskUrls}),credential_mode:validMode,credential_id:['direct','default'].includes(validMode)?credentialId:null,key_group_id:validMode==='group'?group:null,enabled:bool(e.status),config_epoch:(e.configurationRevision || 0)+1,revision:e.revision || 1,created_at:at(e.createdAt),updated_at:at(e.updatedAt),deleted_at:e.deletedAt?at(e.deletedAt):null,record_json:j(e)});
+    add('channels',{id:e.id,supplier_id:e.providerId,code:e.channelCode || e.endpointId || e.id,name:e.name,protocol:e.protocol || 'OpenAI',base_url:e.baseUrl || '',connection_json:j({interfaceType:e.interfaceType,timeoutSeconds:e.timeoutSeconds,adapterOptions:e.adapterOptions,taskUrls:e.taskUrls,endpointPath:e.endpointPath,modelProtocol:e.modelProtocol}),credential_mode:validMode,credential_id:['direct','default'].includes(validMode)?credentialId:null,key_group_id:validMode==='group'?group:null,enabled:bool(e.status),config_epoch:(e.configurationRevision || 0)+1,revision:e.revision || 1,created_at:at(e.createdAt),updated_at:at(e.updatedAt),deleted_at:e.deletedAt?at(e.deletedAt):null,record_json:j(e)});
     for(const [position,k]of (e.authMode==='pool'?(e.keyPool || []).map(row=>({...row,id:row.keyId})):(e.apiKeys || [])).entries())if(tables.credentials?.has(k.id))add('channel_keys',{channel_id:e.id,supplier_id:e.providerId,credential_id:k.id,priority:k.priority || 1,position,enabled:Number(k.enabled!==false && !k.revokedAt && k.status!=='disabled')});
   }
   for(const m of state.models){
@@ -345,8 +345,15 @@ const supplyRelationsSql = `json_object('models',${arraySql(`SELECT json_object(
   FROM channel_models cm JOIN supplier_models sm ON sm.id=cm.supplier_model_id AND sm.material_id=cm.material_id AND sm.supplier_id=cm.supplier_id
   JOIN suppliers s ON s.id=cm.supplier_id JOIN materials m ON m.id=cm.material_id JOIN channels c ON c.id=cm.channel_id AND c.supplier_id=cm.supplier_id
   WHERE cm.removed_at IS NULL AND sm.removed_at IS NULL AND s.deleted_at IS NULL AND m.deleted_at IS NULL AND c.deleted_at IS NULL ORDER BY cm.id`)})`;
+export const stoppedOfferSql = `COALESCE((SELECT NOT json_extract(n.record_json,'$.listed')
+  FROM new_model_services n WHERE n.call_id=o.id
+    AND json_extract(n.record_json,'$.modelId')=o.material_id
+    AND json_extract(n.record_json,'$.controlledOfferId')=o.record_id
+  ORDER BY (n.deleted_at IS NULL) DESC,n.deleted_at DESC LIMIT 1),0)`;
+
 async function workspacePayload(db,actor,command=false,simulation=true){
   const fields=[`'supplyRelations',${supplyRelationsSql}`];
+  fields.push(`'stoppedModelOfferIds',${arraySql(`SELECT json_quote(o.record_id) AS record_json FROM offers o WHERE o.retired_at IS NULL AND ${stoppedOfferSql}`)}`);
   fields.push(`'marketProjects',${arraySql("SELECT json_object('id',json_extract(value,'$.id'),'tenantId',json_extract(value,'$.tenantId'),'name',json_extract(value,'$.name'),'status',json_extract(value,'$.status')) AS record_json FROM json_each(w.reference_json,'$.projects')")}`);
   fields.push(`'marketOrganizations',${arraySql("SELECT json_object('id',json_extract(value,'$.id'),'tenantId',json_extract(value,'$.tenantId'),'name',json_extract(value,'$.name'),'status',json_extract(value,'$.status')) AS record_json FROM json_each(w.reference_json,'$.organizations')")}`);
   fields.push("'spacePolicy',json((SELECT payload_json FROM simulation_records WHERE kind='project-space-policy' AND id='published'))");

@@ -11,7 +11,7 @@ const integer = (value, label, max = 1000000) => { const number = Number(value);
 
 export function deploymentPreflight(state, values, existing) {
   const model=deployableModels(state).find(item=>item.id===values.modelId);
-  if(!model) throw new Error('请选择语言、多模态理解、向量或重排模型；当前运行环境不支持图像、视频或语音生成');
+  if(!model) throw new Error('请选择语言模型、多模态理解、向量模型或重排序模型；当前运行环境不支持图像、视频或语音生成');
   const runtime = state.artifacts.find(item => item.id === values.runtimeId);
   if (!runnableArtifact(runtime, '运行时镜像')) throw new Error('请选择验证通过且可运行的运行时镜像');
   if (values.weightId) {

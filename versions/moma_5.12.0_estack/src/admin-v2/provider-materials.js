@@ -22,6 +22,6 @@ export function materialSource(hash) {
 }
 
 export function viewMaterialChannels(ops, providerId, materialId) {
-  ops.go({ provider: providerId, perspective: 'suppliers', tab: 'catalogue', material: materialId, returnTo: materialSource(location.hash) },
-    { base: 'providers', reset: true });
+  ops.go({ channelProvider: providerId, channelModel: materialId ? JSON.stringify(['master', materialId]) : null, returnTo: materialSource(location.hash) },
+    { base: 'providers-reference', reset: true });
 }

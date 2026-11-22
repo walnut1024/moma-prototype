@@ -1,7 +1,10 @@
+import { MODEL_TYPE_LABELS } from '../model-types.mjs';
+
 export const chartPalette = ['#3568f9', '#18a69a', '#f09b38', '#865bd6', '#7199ca', '#dd659d', '#8a97ac', '#946d42', '#3d8a66', '#b46b85', '#547dc0', '#a68a35'];
 export const adminChartColor = (color, primary = 'var(--semi-color-primary)') => color === chartPalette[0] ? primary : color;
 
-const semantic = { '语言模型': 1, '多模态理解': 2, '视觉模型': 3, '语音模型': 5, '向量模型': 4, '排序模型': 6 };
+const semantic = { [MODEL_TYPE_LABELS.text]: 1, [MODEL_TYPE_LABELS.multimodal]: 2, [MODEL_TYPE_LABELS.visual]: 3,
+  [MODEL_TYPE_LABELS.audio]: 5, [MODEL_TYPE_LABELS.embedding]: 4, [MODEL_TYPE_LABELS.rerank]: 6 };
 export function chartColor(item) {
   if (item.color) return item.color;
   if (item.total || /^(总|累计)/.test(item.label)) return chartPalette[0];

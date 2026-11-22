@@ -1,5 +1,5 @@
 const textInterfaces = new Map([
-  ['/v1/chat/completions', 'OpenAI Chat Completions'],
+  ['/v1/chat/completions', 'OpenAI Chat'],
   ['/v1/messages', 'Anthropic Messages'],
   ['/v1/responses', 'OpenAI Responses'],
 ]);

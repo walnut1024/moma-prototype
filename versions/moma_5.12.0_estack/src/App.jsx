@@ -101,8 +101,8 @@ const prototypeVersions = [
   {
     id: "moma_5.12.0_estack",
     state: "当前版本",
+    label: "5.12.0",
     releaseDate: "10月8日",
-    changes: "基于 5.11.0 复制，独立迭代。",
   },
 ];
 
@@ -181,11 +181,13 @@ function ModelOrderList({
   standalone = false,
   versionId = "moma_5.12.0_estack",
   auth,
+  initialCheckout,
 }) {
   const initialModel = standalone
     ? new URLSearchParams(location.search).get("model")
     : "";
-  const [tab, setTab] = useState("按Token用量计费"),
+  const [embeddedCheckout, setEmbeddedCheckout] = useState(Boolean(initialCheckout));
+  const [tab, setTab] = useState(initialCheckout || MODEL_ORDER_BILLING_TYPES.payg),
     [query, setQuery] = useState(""),
     [selectedOrders, setSelectedOrders] = useState(
       initialModel ? [initialModel] : [],
@@ -199,6 +201,7 @@ function ModelOrderList({
     [ordered, setOrdered] = useState(false),
     [detail, setDetail] = useState(null), [page, setPage] = useState(1), [size, setSize] = useState(DEFAULT_PAGE_SIZE);
   const market=useCloudMarket(), tenant=useTenantData({enabled:Boolean(market.tenant)});
+  const canCheckout=tenant.canManage && tenant.identity?.tenantId === market.tenant?.id;
   const orderOwner=useRef(market.tenant?.id), [submitting,setSubmitting]=useState(false),[quote,setQuote]=useState([]);
   useEffect(()=>{
     if(orderOwner.current!==market.tenant?.id){
@@ -223,12 +226,27 @@ function ModelOrderList({
   const visibleRows = rows.slice((current - 1) * size, current * size);
   const changeTab = value => { setTab(value); setQuery(""); setPage(1); };
   const orderListUrl = `/${versionId}/?page=model-order`;
-  const openOrder = (name) =>
-    window.open(
-      `/${versionId}/order/serviceOrder/?serviceType=presetModelService${name ? `&model=${encodeURIComponent(name)}` : ""}`,
-      "_blank",
-      "noopener",
-    );
+  const openOrder = name => {
+    setSelectedOrders(name ? [name] : []);
+    setQuery('');
+    setAgreed(false);
+    setOrdered(false);
+    setEmbeddedCheckout(true);
+    window.scrollTo(0, 0);
+  };
+  const backToOrders = () => {
+    if (standalone) { location.assign(orderListUrl); return; }
+    const next = new URL(location.href);
+    next.searchParams.delete('checkout');
+    if (next.href !== location.href) history.replaceState(history.state, '', next);
+    setConfirming(false);
+    setSelectedOrders([]);
+    setQuote([]);
+    setAgreed(false);
+    setOrdered(false);
+    setEmbeddedCheckout(false);
+    setPage(1);
+  };
   const toggleOrder = (name) =>
     setSelectedOrders((current) =>
       current.includes(name)
@@ -241,7 +259,7 @@ function ModelOrderList({
       : <AuthExperience auth={auth} market={market} />}</main>
   </ConfigProvider>;
   if (market.tenant?.internal) return <div className="content"><h1>企业内用</h1><p>模型使用权限由项目管理员分配。</p><a href={`/${versionId}/?page=model-market`}>返回模型广场</a></div>;
-  if (standalone) {
+  if (standalone || embeddedCheckout && canCheckout) {
     const packageOffers=(market.packages || []).filter(row=>row.coding===(tab===MODEL_ORDER_BILLING_TYPES.coding));
     const packageRows=packageOffers.map(row=>[row.id,row.name,row.kind==='pack'?'资源包':'订阅套餐','平台',
       Number(row.quota).toLocaleString('zh-CN')+' 万 Token','CNY '+row.price,'未订购']);
@@ -292,7 +310,7 @@ function ModelOrderList({
     ];
     return <ConfigProvider locale={zhCN}><div className="service-order-page tenant-semi">
       <div className="service-order-title">
-        <nav aria-label="面包屑"><a href={orderListUrl}>模型订购</a><span aria-hidden="true">/</span><span aria-current="page">订购模型服务</span></nav>
+        <nav aria-label="面包屑">{standalone ? <a href={orderListUrl}>模型订购</a> : <SemiButton theme="borderless" onClick={backToOrders}>模型订购</SemiButton>}<span aria-hidden="true">/</span><span aria-current="page">订购模型服务</span></nav>
         <h1>订购模型服务</h1>
       </div>
       <section className="service-order-panel">
@@ -351,7 +369,7 @@ function ModelOrderList({
       <Modal visible={confirming} title={ordered?'模型服务已开通':'确认订单'} className="order-confirm-modal"
         width="min(520px, calc(100vw - 24px))" onCancel={()=>{if(!submitting)setConfirming(false);}}
         maskClosable={false} closeOnEsc={!submitting} closable={!submitting}
-        footer={ordered ? <SemiButton theme="solid" onClick={()=>location.assign(orderListUrl)}>返回订购管理</SemiButton> : <>
+        footer={ordered ? <SemiButton theme="solid" onClick={backToOrders}>返回订购管理</SemiButton> : <>
           <SemiButton type="tertiary" disabled={submitting} onClick={()=>setConfirming(false)}>取消</SemiButton>
           <SemiButton theme="solid" loading={submitting} onClick={submitOrder}>确认订购</SemiButton>
         </>}>
@@ -373,11 +391,12 @@ function ModelOrderList({
       title,width:[116,115,170,180,94,112,112][index],
       render:(_,row)=>index===4 ? <Tag color={['使用中','已订购'].includes(row[index+2])?'green':'grey'}>{row[index+2]}</Tag> : lines(row[index+2]),
     })),
-    {title:'操作',width:76,fixed:'right',render:(_,row)=>row[6]==='未订购'
+    {title:'操作',width:76,fixed:'right',render:(_,row)=>row[6]==='未订购' && canCheckout
       ? <SemiButton theme="borderless" size="small" onClick={()=>openOrder(row[0])}>订购</SemiButton> : '—'},
   ];
   return <div className="model-orders-page us-page">
-    <FrontPageHeader title="模型订购" description="查看付费模型订购情况" icon={ShoppingCart} />
+    <FrontPageHeader title="模型订购" description="查看付费模型订购情况" icon={ShoppingCart}
+      actions={canCheckout && <SemiButton theme="solid" onClick={()=>openOrder()}>开通模型服务</SemiButton>}/>
     <SemiTabs className="model-order-tabs" activeKey={tab} onChange={changeTab}
       tabList={billingOptions.map(({value:itemKey,label:tab})=>({itemKey,tab}))}/>
     <section className="model-order-panel">
@@ -436,7 +455,6 @@ function VersionIndex() {
               <tr>
                 <th>版本号</th>
                 <th>发布时间</th>
-                <th>迭代内容</th>
                 <th>状态</th>
                 <th><span className="sr-only">操作</span></th>
               </tr>
@@ -444,9 +462,8 @@ function VersionIndex() {
             <tbody>
               {prototypeVersions.map((version) => (
                 <tr key={version.id}>
-                  <td><strong>{version.id}</strong></td>
+                  <td><strong>{version.label}</strong></td>
                   <td><time>{version.releaseDate}</time></td>
-                  <td><p>{version.changes}</p></td>
                   <td>
                     <span className={`version-state ${version.state === "历史版本" ? "archived" : ""}`}>
                       {version.state}
@@ -536,6 +553,7 @@ function PrototypeApp({ version }) {
   const internal=market.tenant?.internal===true;
   const personal=market.tenant?.type==='个人';
   const [activeRoute, routeParams] = frontDestination(activePage);
+  const checkoutKind = new URLSearchParams(location.search).get('checkout');
   const detailRoute = ['project-overview','project-settings'].includes(activeRoute);
   const workspaceRoute = detailRoute || ['projects','my-projects'].includes(activeRoute);
   const requestedSource = new URLSearchParams(location.search).get('from');
@@ -586,7 +604,7 @@ function PrototypeApp({ version }) {
   const projectExperience = (row, service) => openProjectPage(row, 'experience',
     { task:service?.tasks?.[0] || 'text', ...(service ? {service:service.id} : {}) });
   const marketServices=market.services;
-  const models = useMemo(() => marketModels(marketServices, catalogueScope), [marketServices, catalogueScope]);
+  const models = useMemo(() => marketModels(marketServices, catalogueScope, market.cards), [marketServices, catalogueScope, market.cards]);
   const marketProviders = new Map(models.flatMap(model => [...model.providers]));
   const selectedCard = useRef('');
   useEffect(()=>{setMarketAction(null);setEntryChoice(null);},[owner]);
@@ -634,10 +652,11 @@ function PrototypeApp({ version }) {
     history.replaceState(history.state, '', modelDetailLocation(location.href, service));
   };
   const openModelDetails = (_event, model) => {
-    const service = model.services.find(row => row.providerId === filters.provider) || model.services.find(row => row.callable) || model.services[0];
+    const target = market.cards.some(card => card.modelKey === model.modelKey) ? { modelKey: model.modelKey } :
+      model.services.find(row => row.providerId === filters.provider) || model.services.find(row => row.callable) || model.services[0];
     selectedCard.current = model.modelKey;
-    history.pushState({ marketFromList: true }, '', modelDetailLocation(location.href, service));
-    setSelected({ modelKey: service.modelKey, id: service.id }); setActivePage('模型详情');
+    history.pushState({ marketFromList: true }, '', modelDetailLocation(location.href, target));
+    setSelected({ modelKey: target.modelKey, id: target.id }); setActivePage('模型详情');
   };
   const returnToMarket = () => {
     if (history.state?.marketFromList) { history.back(); return; }
@@ -714,7 +733,7 @@ function PrototypeApp({ version }) {
       marketSeries.set(item.seriesId, filters.author ? item.series : `${item.series} · ${item.author}`);
     }
   }
-  const meta = m => ({ task: ({ text: ['文本与代码'], multimodal: ['多模态', '文本与代码'], image: ['图像'], video: ['视频'], voice: ['音频'], embedding: ['向量'], rerank: ['重排'] })[m.type] || [], input: m.input, output: m.outputModalities, author: m.classification?.authorId });
+  const meta = m => ({ task: ({ text: ['文本与代码'], multimodal: ['多模态', '文本与代码'], image: ['图像'], video: ['视频'], voice: ['音频'], audio: ['音频'], embedding: ['向量'], rerank: ['重排'] })[m.type] || [], input: m.input, output: m.outputModalities, author: m.classification?.authorId });
   const visible = useMemo(
     () =>
       models
@@ -740,7 +759,7 @@ function PrototypeApp({ version }) {
         .sort((a, b) =>
           sortMode === "latest"
             ? (b.releaseDate || b.date).localeCompare(a.releaseDate || a.date)
-            : Number(Boolean(b.hot)) - Number(Boolean(a.hot)) ||
+            : (b.heat ?? 0) - (a.heat ?? 0) ||
               models.indexOf(a) - models.indexOf(b),
         ),
     [query, filters, sortMode, models],
@@ -951,7 +970,7 @@ function PrototypeApp({ version }) {
               : <p role="status">只有项目管理员可以查看此配置。</p>}
           </div>
         ) : activePage === "模型详情" ? (
-          <>{market.loading || market.error ? <p className="content" role="status">{market.error || '正在加载模型广场…'}</p> : <MarketModelDetail services={marketServices} selected={selected} onSelect={selectDetailService} onBack={returnToMarket} onExperience={beginExperience} onOrder={service=>projectTenant.canManage ? setMarketAction({kind:'order',service}) : setEntryChoice({kind:'blocked',message:'请联系企业管理员订购此模型服务。'})}/>}
+          <>{market.loading || market.error ? <p className="content" role="status">{market.error || '正在加载模型广场…'}</p> : <MarketModelDetail usageRecords={owner ? projectTenant.requests : null} services={marketServices} cards={market.cards} selected={selected} onSelect={selectDetailService} onBack={returnToMarket} onExperience={beginExperience} onOrder={service=>projectTenant.canManage ? setMarketAction({kind:'order',service}) : setEntryChoice({kind:'blocked',message:'请联系企业管理员订购此模型服务。'})}/>}
           {marketAction && <MarketAction key={marketAction.kind+marketAction.service.id} action={marketAction} market={market} project={project} close={()=>setMarketAction(null)}/>}</>
         ) : activePage === "智能路由" ? (
           <SmartRouting key={JSON.stringify([owner, selectedProject])}
@@ -998,9 +1017,11 @@ function PrototypeApp({ version }) {
             groupLabel="语音识别"
           />
         ) : activePage === "订购与账单" ? (
-          <WorkspaceBilling key={owner} tenant={projectTenant} onOrder={()=>openProjectPage(undefined,'model-order')}/>
+          <WorkspaceBilling key={owner} tenant={owner ? projectTenant : { ...projectTenant, identity: null }} orders={owner ? market.orders : []}
+            onOrder={kind=>openProjectPage(undefined,'model-order',{ checkout:kind })}/>
         ) : activePage === "模型订购" ? (
-          <ModelOrderList versionId={version.id} auth={auth} />
+          <ModelOrderList key={owner + ':' + (checkoutKind || '')} versionId={version.id} auth={auth}
+            initialCheckout={Object.hasOwn(MODEL_ORDER_BILLING_TYPES, checkoutKind) ? MODEL_ORDER_BILLING_TYPES[checkoutKind] : undefined}/>
         ) : activePage === "账户管理" ? (
           <AuthExperience auth={{ ...auth, route:"account",close:()=>openProjectPage(undefined,'home') }} market={market} accountTitle="账户管理" />
         ) : activePage === "API 密钥" ? (
@@ -1035,14 +1056,15 @@ function PrototypeApp({ version }) {
                       <article
                         className="model-card"
                         data-model-key={m.modelKey}
-                        key={m.id}
-                        tabIndex={0} role="button" onKeyDown={event => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); openModelDetails(event, m); } }}
-                        onClick={event => openModelDetails(event, m)}
+                        key={m.modelKey}
+                        {...(!m.preview && { tabIndex: 0, role: "button", onKeyDown: event => {
+                          if (["Enter", " "].includes(event.key)) { event.preventDefault(); openModelDetails(event, m); }
+                        }, onClick: event => openModelDetails(event, m) })}
                       >
                         {m.hot && (
-                          <img className="hot" src={`${A}hot-7601e629.svg`} />
+                          <img className="hot" alt="热门" src={`${A}hot-7601e629.svg`} />
                         )}{" "}
-                        {m.score && <span className="score">{m.score}</span>}
+                        {m.score != null && <span className="score">{m.score}</span>}
                         <h4>
                           {m.logo ? <img className="model-card-logo" src={m.logo} alt="" onError={event => { event.currentTarget.hidden = true; }}/> : <FileText aria-hidden="true" />}
                           {m.name}
@@ -1064,8 +1086,8 @@ function PrototypeApp({ version }) {
                           />
                           <span>{outputs.map(type => { const OutputIcon = icons[type] || FileText; return <OutputIcon key={type} aria-label={type}/>; })}</span>
                         </div>
-                        <div className="context">上下文窗口：{m.context}</div>
-                        <footer>{m.callable ? "可体验" : m.reason}{m.date && ` · 更新于 ${m.date}`}</footer>
+                        <div className="context">上下文长度：{m.context}</div>
+                        {m.preview ? <footer>敬请期待</footer> : <footer>{m.callable && m.features?.online_experience !== false ? "可体验" : !m.callable && m.reason}{m.date && ` · 发布于 ${m.date}`}</footer>}
                       </article>
                     );
                   })}

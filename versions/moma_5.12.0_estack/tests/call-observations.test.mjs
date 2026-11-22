@@ -1,3 +1,4 @@
+import { filterCallLogs, logFilters } from '../src/admin-v2/call-log-filters.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sections, pages, canAccessPage } from '../src/admin-v2/navigation.mjs';
@@ -36,6 +37,116 @@ const state = {
   ],
 };
 
+test('channel health keeps inactive inventory and drills into failed upstream attempts within the same snapshot', async () => {
+  const { channelHealthRows } = await import('../src/admin-v2/channel-health-observations.mjs');
+  const { channelHealthCatalogue } = await import('../src/admin-v2/channel-health-catalogue.mjs');
+  const inventory = channelHealthCatalogue(['a', 'b', 'idle'].map(id => ({
+    id, name: id, status: id === 'idle' ? '已停用' : '已启用', provider: { id: 'provider', name: '服务商' },
+    endpoint: { baseUrl: id === 'idle' ? 'https://user:secret@example.test/v1' : 'https://example.test/v1' },
+    models: [{ key: id, association: { upstreamModelId: 'm', enabled: true } }],
+  })));
+  const attempts = inventory.slice(0, 2).map((item, index) => ({
+    ...item, at: 5, outcome: index ? 'failed' : 'success', channelModelName: item.channel,
+  }));
+  const filters = observationFilters();
+  const groups = observationGroups(attempts, 'channelModel');
+  const result = channelHealthRows(inventory, groups, filters, attempts, 10);
+  assert.deepEqual(result.map(row => [row.channel, row.health, row.uptime?.available ?? null]), [
+    ['a', '样本不足', 100], ['b', '样本不足', 0], ['idle', '暂无观测', null],
+  ]);
+  assert.equal(result[2].enabledLabel, '已停用');
+  assert.equal(result[0].baseUrl, 'https://example.test/v1');
+  assert.equal(result[2].baseUrl, undefined);
+  assert.deepEqual(channelHealthRows(inventory, [], { supply: [['provider', 'idle']] }, [], 10).map(row => row.channel), ['idle']);
+  const range = { start: 0, end: 10 };
+  const hash = observationDrill(filters, range, { provider: ['provider'], channel: ['b'], upstreamModelId: ['m'], view: 'upstream', outcome: 'failed' });
+  const query = new URLSearchParams(hash.split('?')[1]);
+  assert.equal(query.get('view'), 'upstream');
+  assert.deepEqual(filterObservations(attempts, observationFilters(query), observationWindow(observationFilters(query))), [attempts[1]]);
+});
+
+test('channel availability counts three days of responses while health uses qualified minutes', async () => {
+  const { channelHealthRows } = await import('../src/admin-v2/channel-health-observations.mjs');
+  const { channelHealthCatalogue } = await import('../src/admin-v2/channel-health-catalogue.mjs');
+  const [channel] = channelHealthCatalogue([{ id: 'a', name: 'a', status: '已启用', provider: { id: 'p', name: '服务商' },
+    models: [{ association: { upstreamModelId: 'm', enabled: true } }] }]);
+  const observations = (at, count, success, extra = {}) => Array.from({ length: count }, (_, index) => ({
+    ...channel, at: Date.parse(at) + index * 100, outcome: index < success ? 'success' : 'failed', ...extra,
+  }));
+  const attempts = [
+    ...observations('2026-11-18T12:59:00Z', 10, 10),
+    ...observations('2026-11-18T23:59:00Z', 10, 0),
+    ...observations('2026-11-19T00:00:00Z', 10, 8),
+    ...observations('2026-11-19T00:00:05Z', 12, 0, { status: 429 }),
+    ...observations('2026-11-20T09:30:00Z', 9, 0),
+    ...observations('2026-11-20T09:30:20Z', 3, 0, { status: 400 }),
+    ...observations('2026-11-20T09:30:20Z', 3, 0, { code: 'upstream_rate_limit' }),
+    ...observations('2026-11-20T09:30:20Z', 3, 0, { outcome: 'canceled' }),
+    ...observations('2026-11-21T12:00:00Z', 10, 7),
+  ];
+  const [row] = channelHealthRows([channel], [], {}, attempts, Date.parse('2026-11-21T13:00:00Z'));
+  assert.equal(row.count, 0);
+  assert.equal(row.health, '异常');
+  assert.equal(row.uptime.available, 15 * 100 / 57);
+  assert.deepEqual(row.uptime.periods.map(period => [period.success, period.count, period.rate]), [
+    [8, 32, 25], [0, 15, 0], [7, 10, 70],
+  ]);
+});
+
+test('channel trends use per-request P50 and cache telemetry from the upstream attempt', async () => {
+  const { channelHealthPerformance } = await import('../src/admin-v2/channel-health-observations.mjs');
+  const records = [[100, 2, 1, 0], [200, 10, 2, 10], [900, 900, 30, undefined]].map(([ttftMs, output, duration, cached], index) => ({
+    ...base, requestId: 'channel-metric-' + index, usage: { input: 100, cached: 90 },
+    attempts: [{ dispatched: true, startedAt: time(index), status: 'success', ttftMs,
+      generationDurationMs: duration * 1000, usage: { input: 10 + index * 10, output, cached } }],
+  }));
+  const rows = callObservations({ ...state, requests: records }).attempts;
+  assert.deepEqual(rows.map(row => row.cached), [0, 10, null]);
+  assert.deepEqual(channelHealthPerformance(rows), { ttft: 200, otps: 5, cacheRate: 100 / 3 });
+  assert.deepEqual(channelHealthPerformance(rows.slice(2)), { ttft: 900, otps: 30, cacheRate: null });
+});
+
+test('channel health simulation compares upstream channels and covers all four health states', async () => {
+  const { channelHealthPerformance, channelHealthRows } = await import('../src/admin-v2/channel-health-observations.mjs');
+  for (const clock of [now, Date.parse('2026-11-08T23:55:00Z')]) {
+    const simulation = createCallLogSimulation(clock, { channelTrend: true });
+    const { attempts } = callObservations(simulation.data);
+    const filters = { ...observationFilters(), ...simulation.channelTrendFilters };
+    const window = observationWindow(filters, clock);
+    const observed = filterObservations(attempts, filters, window);
+    const rows = channelHealthRows(simulation.channelTrendCatalogue, observationGroups(observed, 'channelModel'), filters, attempts, clock);
+    assert.equal(rows.length, 6);
+    assert.equal(new Set(rows.map(row => row.provider)).size, 3);
+    assert(rows.every(row => typeof row.baseUrl === 'string' && URL.canParse(row.baseUrl) && !row.baseUrl.includes('.example.invalid')));
+    assert.equal(new Set(rows.map(row => row.upstreamModelId)).size, 3);
+    assert.equal(rows.filter(row => row.upstreamModelId === 'deepseek-v4-pro').length, 3);
+    assert.deepEqual(rows.filter(row => row.upstreamModelId === 'deepseek-v4-pro').map(row => row.uptime.available).sort((a, b) => a - b),
+      [70 * 100 / 86, 71 * 100 / 74, 92 * 100 / 94]);
+    assert.deepEqual(rows.find(row => row.channelName === '直连主线').costs[0].items.map(item => item.amount),
+      [2_200_000, 8_800_000]);
+    for (const row of rows) {
+      assert.equal(row.costs[0].items.length, 2);
+      assert(row.costs[0].items.every(item => item.amount > 0));
+      const trend = observationBuckets(observed.filter(attempt => attempt.channelModel === row.id), window, 'day')
+        .filter(bucket => bucket.rows.length).map(bucket => channelHealthPerformance(bucket.rows));
+      if (row.endpoint === 'demo-health-ark-reserve') {
+        assert.equal(row.enabledLabel, '已停用');
+        assert.equal(row.health, '暂无观测');
+        assert.equal(row.uptime, undefined);
+        assert.deepEqual([row.ttft, row.otps, row.cacheRate], [null, null, null]);
+        assert.equal(trend.length, 0);
+      } else {
+        assert.equal(row.enabledLabel, '已启用');
+        assert.equal(row.health, row.channelName === '直连备线' ? '异常' : row.upstreamModelId === 'deepseek-v4-flash' ? '样本不足' : '健康');
+        assert.equal(row.uptime.periods.filter(period => Number.isFinite(period.rate)).length, 3);
+        assert.equal(trend.length, 3);
+        assert(trend.every(bucket => [bucket.ttft, bucket.otps, bucket.cacheRate].every(Number.isFinite)));
+      }
+    }
+  }
+  assert.equal(createCallLogSimulation(now).channelTrendCatalogue, undefined);
+});
+
 test('independent maintenance navigation keeps the gateway configuration tabs', () => {
   const { items } = sections.find(section => section.id === 'gateway');
   assert.deepEqual(items.map(item => item.id), ['gateway', 'logs', 'monitoring']);
@@ -45,6 +156,12 @@ test('independent maintenance navigation keeps the gateway configuration tabs', 
     assert.equal(canAccessPage('运营人员', id), false);
   }
   assert.equal(pages.alerts.area, 'monitoring');
+  const channelManagement = sections.find(section => section.id === 'models').items.find(item => item.id === 'channels-reference');
+  assert.deepEqual(channelManagement.children, [['providers-reference', '渠道列表'], ['providers-health', '渠道健康']]);
+  assert.equal(canAccessPage('运营人员', 'providers-health'), true);
+  assert.equal(canAccessPage('运维人员', 'providers-health'), false);
+  assert.equal(canAccessPage('平台管理员', 'providers-health'), true);
+  assert.equal(canAccessPage('平台管理员', 'channel-health'), false);
 });
 
 test('request outcome and duration observations are independent of attempts and HTTP acceptance', () => {
@@ -383,4 +500,19 @@ test('diagnostic project calls remain traceable with their purpose across drills
   assert.deepEqual(filterObservations(upstream, filters, window).map(row => row.requestId), ['probe', 'probe']);
   const all = observationHash('monitoring', { ...customer, purpose: null });
   assert.equal(observationFilters(new URLSearchParams(all.split('?')[1]), '24h', ['customer']).purpose, null);
+});
+
+test('log search matches a customer request ID or an upstream request ID in the attempt time window', () => {
+  const sample = createCallLogSimulation(now);
+  const data = callObservations(sample.data);
+  const window = observationWindow({ period: '24h' }, now);
+  const ids = query => filterCallLogs(data.attempts, { query }, window, true).map(row => [row.requestId, row.index]);
+  assert.deepEqual(ids(' UP-D-ROUTE-001 '), [[routingDemoRequestId, 4]]);
+  assert.deepEqual(ids(routingDemoRequestId), [1, 2, 3, 4].map(index => [routingDemoRequestId, index]));
+  assert.deepEqual(filterCallLogs(data.requests, { query: 'up-D-ROUTE-001' }, window), []);
+  const preflight = data.requests.filter(row => row.preflightType);
+  const matching = filterCallLogs(preflight, logFilters(new URLSearchParams('errorCode=auth_rejected')), window);
+  assert.deepEqual(matching.map(row => row.code), ['auth_rejected']);
+  assert.deepEqual(filterCallLogs(data.requests, logFilters(new URLSearchParams('request=req-73F2')), window)
+    .map(row => row.requestId), ['req-73F2']);
 });

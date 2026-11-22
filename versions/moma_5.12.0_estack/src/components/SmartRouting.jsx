@@ -216,7 +216,7 @@ function RouteEditor({ route, services, models, revision, saveRoute, openOrders,
       <label className="sr-field">说明（选填）<TextArea aria-label="预设说明" value={config.description} maxLength={200} rows={2}
         onChange={description => change({description})} /></label>
     </section>}
-    {!models.length && <Banner type="info" description="当前项目暂无可配置的文本模型。" />}
+    {!models.length && <Banner type="info" description="当前项目暂无可配置的语言模型。" />}
     {revision !== expectedRevision && <div className="sr-stack">
       <Banner type="warning" description="工作区配置已更新，请核对最新配置再保存。" />
       <div className="sr-row">

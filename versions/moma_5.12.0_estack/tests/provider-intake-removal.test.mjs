@@ -150,3 +150,32 @@ test('large intake previews 500 models against one connection without mutating t
   assert.equal(JSON.stringify(state), before);
   assert.equal(plan.changes.filter(row => row.collection === 'providers').length, 1);
 });
+
+test('removing a registered supplier model preserves its provider, connection and model material', () => {
+  const { state, provider } = fixture();
+  const channel = provider.catalogConnections[0];
+  const next = removal(state, { providerId: provider.id, catalogueId: channel.modelId });
+  const saved = next.providers.find(row => row.id === provider.id);
+  assert.ok(saved.removedCatalogModelIds.includes(channel.modelId));
+  assert.ok(!saved.deletedAt);
+  assert.ok(!next.endpoints.find(row => row.id === channel.endpointId).deletedAt);
+  assert.deepEqual(next.modelTemplates, state.modelTemplates);
+});
+
+test('supplier Excel rows preserve protocol-specific URLs through registration and edit', async () => {
+  const { excelOffers, offerHeaders } = await import('../src/admin-v2/supplier-offer-fields.js');
+  const { state, provider } = fixture();
+  const rows = [offerHeaders,
+    ['供应名称','vendor-chat','offer-test','文本','OpenAI Chat Completions','https://chat.example/v1/chat/completions'],
+    ['供应名称','vendor-responses','offer-test','文本','OpenAI Responses','https://responses.example/v1/responses']];
+  const offers = excelOffers(rows,provider);
+  const save = (state,offers) => op(state,'supplierOffersSave',{providerId:provider.id,offers});
+  const saved = save(state,offers);
+  const entry = state => state.providers.find(p => p.id === provider.id).catalogModels.find(m => m.modelId === 'offer-test');
+  assert.deepEqual(entry(saved).offerFields,offers[0]);
+  const edited = save(saved,[{...offers[0],name:'新名称'}]);
+  assert.equal(entry(edited).offerFields.name,'新名称');
+  assert.equal(entry(edited).libraryId,entry(saved).libraryId);
+  rows[2][5] = rows[1][5];
+  assert.throws(() => excelOffers(rows,provider),/匹配/);
+});

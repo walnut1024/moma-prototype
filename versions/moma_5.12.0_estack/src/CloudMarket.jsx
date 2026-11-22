@@ -6,6 +6,7 @@ import { projectModelEnabled } from './project-access.mjs';
 import { cloudMarketPresentation } from './service-directory.mjs';
 
 export const MARKET_EVENT='moma5120-market-change';
+const emptyCatalogue = { cards: [], services: [], orders: [] };
 
 export function marketRequest(path, body, signal) {
   return request('/market/'+path, body, signal);
@@ -25,20 +26,20 @@ async function request(path, body, signal) {
 }
 
 export function useCloudMarket(enabled=true) {
-  const [view,setView]=useState({tenant:null,services:[],orders:[],loading:true,error:''});
+  const [view,setView]=useState({tenant:null,...emptyCatalogue,loading:true,error:''});
   const [revision,setRevision]=useState(0);
   const [project,selectProject]=useState('');
   useEffect(()=>{
     if (!enabled) return;
     const controller=new AbortController();
     marketRequest('catalogue'+(project ? '?project='+encodeURIComponent(project) : ''),null,controller.signal).then(data=>{
-      if (!controller.signal.aborted) setView({...data,project,services:data.services.map(cloudMarketPresentation),loading:false,error:''});
+      if (!controller.signal.aborted) setView({...data,project,cards:data.cards.map(cloudMarketPresentation),services:data.services.map(cloudMarketPresentation),loading:false,error:''});
     }).catch(error=>{
       if (!controller.signal.aborted && error.code==='PROJECT_FORBIDDEN' && project) {
         selectProject('');
         return;
       }
-      if (!controller.signal.aborted) setView({tenant:null,services:[],orders:[],loading:false,error:error.message});
+      if (!controller.signal.aborted) setView({tenant:null,...emptyCatalogue,loading:false,error:error.message});
     });
     return ()=>controller.abort();
   },[enabled,revision,project]);
@@ -47,7 +48,7 @@ export function useCloudMarket(enabled=true) {
     const refresh=event=>{
       if(['login','logout','switch'].includes(event.detail)) {
         selectProject('');
-        setView({tenant:null,services:[],orders:[],loading:true,error:''});
+        setView({tenant:null,...emptyCatalogue,loading:true,error:''});
       }
       setRevision(current=>current+1);
     };
@@ -58,7 +59,7 @@ export function useCloudMarket(enabled=true) {
   const write=async(path,body)=>{
     const result=await marketRequest(path,body);
     const event=['signup','invitations/accept'].includes(path)?'login':['password','password-reset'].includes(path)?'logout':path;
-    if (['login','logout','switch'].includes(event)) setView({tenant:result.tenant || null,services:[],orders:[],loading:true,error:''});
+    if (['login','logout','switch'].includes(event)) setView({tenant:result.tenant || null,...emptyCatalogue,loading:true,error:''});
     window.dispatchEvent(new CustomEvent(MARKET_EVENT,{detail:event}));
     return result;
   };
@@ -68,7 +69,7 @@ export function useCloudMarket(enabled=true) {
     return result;
   };
   const pendingProject=(view.project || '')!==project;
-  return {...view,...(pendingProject && {services:[],loading:true}),selectProject,refresh:()=>setRevision(current=>current+1),login,
+  return {...view,...(pendingProject && {cards:[],services:[],loading:true}),selectProject,refresh:()=>setRevision(current=>current+1),login,
     acceptInvitation:data=>write('invitations/accept',data),
     updatePassword:(data,recovery)=>write(recovery?'password-reset':'password',data),
     switchSpace:tenantId=>write('switch',{tenantId}),

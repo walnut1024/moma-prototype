@@ -43,6 +43,8 @@
 .channel-card-fields dt { color: var(--semi-color-text-2); }
 .channel-card-fields dd { margin: 4px 0 0; min-width: 0; }
 
+.channel-directory-create-dialog .semi-modal { max-width: 720px; }
+
 .channel-management-card { min-width: 0; }
 .channel-management-toolbar {
   display: flex;
@@ -54,6 +56,7 @@
 }
 .semi-tabs-content .channel-management-toolbar { margin-top: 8px; }
 .channel-management-toolbar .mo-search { width: min(100%, 284px); }
+.channel-management-new .channel-name-link.semi-button { height: auto; text-align: start; }
 .channel-management-new .channel-management-creation { display: grid; }
 .channel-management-facts { display: grid; gap: 0; margin: 0; }
 .channel-management-facts > div {

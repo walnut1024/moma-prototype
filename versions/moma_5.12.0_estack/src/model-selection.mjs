@@ -1,4 +1,6 @@
-export const modelCategory = type => ({ text: '文本', multimodal: '多模态', image: '图片', video: '视频', voice: '语音' }[type] || type || '未填写');
+import { modelTypeLabel } from './model-types.mjs';
+
+export const modelCategory = type => modelTypeLabel(type) || type || '未填写';
 export const modelSupplier = model => model.provider || '未填写';
 
 export function filterModels(models, { query = '', category = '全部', provider = '全部供应商', billing = '全部计费', callableOnly = true } = {}) {

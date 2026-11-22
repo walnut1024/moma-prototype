@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { appendCommonTariffScenarios, tariffDictionarySeed } from '../src/admin-v2/tariff-dictionary.js';
-import { sections, pages, pageFromHash, pageWorkspace, canAccessPage } from '../src/admin-v2/navigation.mjs';
+import { adminSections, sections, pages, pageFromHash, pageWorkspace, canAccessPage } from '../src/admin-v2/navigation.mjs';
 
 const unit = '百万 Token', currency = 'CNY', state = { tariffDictionary: tariffDictionarySeed() };
 const blank = { name: '', unit: '', currency, listPrice: '' };
@@ -35,9 +35,17 @@ test('empty, unavailable, duplicate-only and over-capacity selections never part
 });
 
 test('materials management keeps model-library and tariff routes with normal workspace permissions', () => {
-  const models = sections.find(item => item.id === 'models');
-  assert.deepEqual(models.items.map(item => item.children[0][0]), ['providers', 'providers-new', 'providers-reference', 'listing', 'model-market', 'model-templates']);
-  assert.deepEqual(models.items.find(item => item.id === 'materials').children, [['model-templates', '模型'], ['tariff-dictionary', '计费项']]);
+  const models = adminSections.find(item => item.id === 'models');
+  assert.deepEqual(models.items.map(item => item.children[0][0]), ['providers-reference', 'listing-new', 'model-links', 'model-market', 'model-templates']);
+  assert.equal(pageWorkspace('model-links'), 'operations');
+  assert.equal(canAccessPage('运营人员', 'model-links'), true);
+  assert.equal(canAccessPage('运维人员', 'model-links'), false);
+  assert.equal(pageFromHash('#/admin-2/model-links', '运营人员'), 'model-links');
+  for (const retired of ['listing', 'providers', 'providers-new']) {
+    assert.equal(canAccessPage('运营人员', retired), false);
+    assert.equal(pageFromHash('#/admin-2/' + retired + '?connection=c1', '运营人员'), 'dashboard');
+  }
+  assert.deepEqual(models.items.find(item => item.id === 'materials').children, [['model-templates', '模型'], ['provider-materials', '服务商'], ['tariff-dictionary', '计费项']]);
   assert.equal(pageFromHash('#/admin-2/provider-materials?provider=provider-moma', '运营人员'), 'provider-materials');
   assert.equal(canAccessPage('运维人员', 'provider-materials'), false);
   for (const tab of ['scenario', 'unit', 'currency', 'invalid']) assert.equal(pageFromHash(`#/admin-2/tariff-dictionary?tab=${tab}`, '平台管理员'), 'tariff-dictionary');
@@ -45,7 +53,7 @@ test('materials management keeps model-library and tariff routes with normal wor
   assert.equal(pageWorkspace('tariff-dictionary'), 'operations');
   assert.equal(pages['model-templates'].area,'materials');
   assert.equal(pages['tariff-dictionary'].area,'materials');
-  assert.equal(pages['tariff-dictionary'].areaLabel,'模型资料');
+  assert.equal(pages['tariff-dictionary'].areaLabel,'基础资料');
   assert.equal(canAccessPage('平台管理员', 'tariff-dictionary'), true);
   assert.equal(canAccessPage('运营人员', 'tariff-dictionary'), true);
   for (const role of ['运维人员', '只读观察员', '财务人员']) assert.equal(canAccessPage(role, 'tariff-dictionary'), false);

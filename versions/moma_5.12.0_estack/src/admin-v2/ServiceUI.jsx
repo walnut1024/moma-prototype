@@ -11,7 +11,7 @@ export function Notice({ children, error = false }) {
 const textControls = new Set([Input, InputNumber, TextArea]);
 const fieldControls = new Set([...textControls, Select, Choice, MultiChoice]);
 
-export function Field({ label, hint, error, required, children }) {
+export function Field({ label, hint, error, help, required, children }) {
   const id = useId();
   const labelId = id + '-label';
   const elements = Children.toArray(children);
@@ -30,7 +30,9 @@ export function Field({ label, hint, error, required, children }) {
       ...(error && { 'aria-invalid': true, validateStatus: 'error' }),
     });
   }
-  return <Form.Slot className="admin-form-field" label={{ id: labelId, name: inputId, text: markedRequired ? label.slice(0, -2) : label, required: isRequired }}
+  const name = markedRequired ? label.slice(0, -2) : label;
+  return <Form.Slot className="admin-form-field" label={{ id: labelId, name: inputId,
+    text: help ? <FieldLabel name={name} description={help}/> : name, required: isRequired }}
     error={error ? <span id={id + '-error'} role="alert">{error}</span> : undefined}>
     {elements}
     {hint && <Typography.Paragraph id={id + '-hint'} type="tertiary">{hint}</Typography.Paragraph>}
@@ -85,7 +87,7 @@ export function CopyId({ value, label = '模型调用标识', ellipsis, displayV
 }
 export function FieldLabel({ name, description }) {
   const help = description || modelFieldDescriptions[name];
-  return <Space spacing={4}>{name}{help && <Tooltip content={help}><Button theme="borderless" type="tertiary" icon={<IconHelpCircle aria-hidden="true"/>} aria-label={`${name}说明`}/></Tooltip>}</Space>;
+  return <Space spacing={4}>{name}{help && <Tooltip content={help} closeOnEsc><Button size="small" theme="borderless" type="tertiary" icon={<IconHelpCircle aria-hidden="true"/>} aria-label={`${name}说明`}/></Tooltip>}</Space>;
 }
 export function Modal({ title, description, children, onClose, wide, centered, drawer = false, drawerSide = 'right', footer, className = '', maskClosable }) {
   const content = <div className="ss-dialog-content">

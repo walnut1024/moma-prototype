@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { sections, canAccessPage, pageFromHash, pageWorkspace } from '../src/admin-v2/navigation.mjs';
 import { adminBreadcrumbs } from '../src/admin-v2/breadcrumbs.mjs';
 import { readFileSync } from 'node:fs';
-import { findOperationsGuide, parseOperationsGuide } from '../src/admin-v2/model-operations-guide.mjs';
+import { parseOperationsGuide } from '../src/admin-v2/model-operations-guide.mjs';
 
 test('getting started is the last operations group with role access and reloadable route', () => {
   const group = sections.find(item => item.id === 'getting-started');
@@ -13,65 +13,12 @@ test('getting started is the last operations group with role access and reloadab
     assert.equal(visible.at(-1).id, 'getting-started');
   }
   assert.equal(group.title, '入门指导');
-  assert.equal(group.items[0].label, '模型运营');
-  assert.equal(pageWorkspace('getting-started'), 'operations');
-  assert.equal(pageFromHash('#/admin-2/getting-started', '运营人员'), 'getting-started');
-  for (const role of ['平台管理员', '运营人员']) assert.equal(canAccessPage(role, 'getting-started'), true);
-  for (const role of ['运维人员', '未知角色']) assert.equal(canAccessPage(role, 'getting-started'), false);
-  assert.deepEqual(adminBreadcrumbs('getting-started', new URLSearchParams()), [{ label: '入门指导' }, { label: '模型运营' }]);
-});
-
-test('short guides resolve every section and task link without leaving the guide route', () => {
-  const source = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE.md', import.meta.url), 'utf8');
-  const guides = parseOperationsGuide(source), tasks = guides.flatMap(guide => guide.tasks);
-  const ids = [...guides.map(guide => guide.id), ...tasks.map(task => task.id)];
-  assert.equal(new Set(ids).size, ids.length);
-  assert.deepEqual(guides.map(guide => guide.id), ['overview', 'channels', 'services', 'market', 'sales', 'materials', 'maintenance']);
-  for (const link of source.matchAll(/\]\(#([a-z0-9-]+)\)/g)) {
-    assert.ok(ids.includes(link[1]), link[1]);
-    const guide = findOperationsGuide(guides, link[1]);
-    assert.ok(guide.id === link[1] || guide.tasks.some(task => task.id === link[1]));
-  }
-  for (const guide of guides) {
-    assert.equal(findOperationsGuide(guides, guide.id), guide);
-    for (const task of guide.tasks) assert.equal(findOperationsGuide(guides, task.id), guide);
-  }
-  assert.equal(findOperationsGuide(guides, null), guides[0]);
-  assert.equal(findOperationsGuide(guides, 'unknown-guide'), guides[0]);
-});
-
-test('overview links to each model operations module and the channel guide documents the alternate entry', () => {
-  const source = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE.md', import.meta.url), 'utf8');
-  const [overview, ...guides] = parseOperationsGuide(source);
-  const menu = sections.find(group => group.id === 'models').items.filter(item => !['channels-new', 'channels-reference'].includes(item.id));
-  assert.match(source, /模型运营 → 渠道管理（新）/);
-  menu.splice(menu.findIndex(item => item.id === 'materials'), 0, sections.find(group => group.id === 'commerce').items[0]);
-  const links = overview.blocks.filter(block => block.type === 'table').flatMap(block => block.rows)
-    .flatMap(([cell]) => [...cell.matchAll(/^\[([^\]]+)\]\(#\/admin-2\/([^?)]+)(?:\?[^)]+)?\)$/g)]);
-  assert.deepEqual(links.map(([, label, page]) => [label, page]), menu.map(item => [item.label, item.children[0][0]]));
-  assert.deepEqual(guides.slice(0, -1).map(guide => guide.title), menu.map(item => item.label));
-});
-
-test('guide separates internal use from sales and explains current entry points', () => {
-  const source = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE.md', import.meta.url), 'utf8');
-  const guides = parseOperationsGuide(source);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'overview')), /内部使用无需配置售价/);
-  const services = JSON.stringify(guides.find(guide => guide.id === 'services'));
-  assert.match(services, /点击当前行的「路由及映射」或「故障转移配置」/);
-  assert.match(services, /更多 → 启动服务/);
-  assert.match(JSON.stringify(guides.find(guide => guide.id === 'channels')), /表格中按计费项查看渠道采购价/);
-  const sales = JSON.stringify(guides.find(guide => guide.id === 'sales'));
-  assert.match(sales, /纯内部使用可以跳过/);
-  assert.match(sales, /仅包含当前服务的计费项与售价版本/);
-  assert.doesNotMatch(sales, /编辑销售设置/);
-  assert.doesNotMatch(sales, /上架操作/);
-  const market = JSON.stringify(findOperationsGuide(guides, 'sales-release'));
-  for (const action of ['新建模型卡片', '关联服务', '模型广场 → 上架／调整上架／下架', '商业运营 → 模型销售 → 开售／灰度开售／停售', '卡片下架只影响广场展示']) {
-    assert.ok(market.includes(action), action);
-  }
-  const imported = guides.flatMap(guide => guide.tasks).find(task => task.id === 'materials-import');
-  assert.match(JSON.stringify(imported), /XLSX 或 UTF-8 CSV/);
-  assert.match(JSON.stringify(imported), /已有规范标识不覆盖/);
+  assert.deepEqual(group.items.map(item => item.label), ['模型运营']);
+  assert.equal(pageWorkspace('model-operations-guide'), 'operations');
+  assert.equal(pageFromHash('#/admin-2/getting-started', '运营人员'), 'dashboard');
+  assert.equal(pageFromHash('#/admin-2/model-operations-guide', '运营人员'), 'model-operations-guide');
+  for (const role of ['平台管理员', '运营人员']) assert.equal(canAccessPage(role, 'model-operations-guide'), true);
+  for (const role of ['运维人员', '未知角色']) assert.equal(canAccessPage(role, 'model-operations-guide'), false);
 });
 
 test('guide parser preserves numbered steps across a field table', () => {
@@ -85,4 +32,23 @@ test('guide treats unsupported HTML as text and never turns it into an executabl
   assert.equal(result[0].blocks[0].type, 'paragraph');
   assert.equal(result[0].blocks[0].text, '<script>alert(1)</script>');
   assert.deepEqual(result[0].blocks[1].items, ['First', 'Second']);
+});
+
+test('model operations opens a single glossary with complete definitions in both languages', () => {
+  const route = 'model-operations-guide';
+  assert.equal(pageFromHash('#/admin-2/' + route, '运营人员'), route);
+  assert.deepEqual(adminBreadcrumbs(route, new URLSearchParams()), [{ label: '入门指导' }, { label: '模型运营' }]);
+  const content = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE_FIELDS.md', import.meta.url), 'utf8');
+  const guides = parseOperationsGuide(content);
+  assert.equal(guides.length, 1);
+  const [section] = guides;
+  assert.equal(section.title, '关键概念和字段');
+  assert.equal(section.tasks.length, 0);
+  assert.equal(section.blocks.length, 1);
+  const [table] = section.blocks;
+  assert.deepEqual(table.headings, ['字段中文', '字段英文', '定义', 'Definition']);
+  assert(table.rows.every(row => row.length === 4 && row.every(Boolean)));
+  const names = new Set(table.rows.map(([name]) => name));
+  assert.equal(names.size, table.rows.length);
+  for (const name of ['模型档案 ID', '模型调用标识', '上游模型调用标识']) assert(names.has(name));
 });

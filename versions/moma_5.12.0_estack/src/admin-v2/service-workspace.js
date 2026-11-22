@@ -48,18 +48,11 @@ export function serviceConfiguration(state,model) {
 }
 
 export function serviceConfigurationTarget(model,check) {
-  const base={page:'listing',model:model.id,panel:'routing',providerEdit:null,providerAdd:null,providerChannels:null,providerAssociate:null,routeProvider:null,service:null,mapping:null};
-  if (check.tab==='technical' || check.tab==='purpose') return base;
-  if (check.tab==='scope') return null;
-  if (check.tab==='serviceMode') return {...base,panel:'routing'};
-  if (check.tab==='pricing' && model.serviceMode==='provider' && !providerOffer(model,check.providerId)?.callId) return {...base,panel:'routing',identityProvider:check.providerId};
-  if (check.tab==='supplies' && model.serviceMode==='provider') return {...base,panel:'routing',providerAdd:'1'};
-  if (check.tab==='basic') return {page:'model-templates',view:'template',template:model.templateId || model.id,materialMode:'edit',returnModel:model.id};
-  if (check.tab==='routing') {
-    const id=check.providerId?providerServiceId(model.id,check.providerId):'standard:'+model.id;
-    return {...base,panel:'routing',routeProvider:check.providerId || null,[check.mapping?'mapping':'service']:id};
+  if (check.tab==='basic') return {page:'model-templates',view:'template',template:model.templateId || model.id,materialMode:'edit'};
+  if (check.tab==='pricing' && (model.serviceMode!=='provider' || providerOffer(model,check.providerId)?.callId)) {
+    return {page:'model-prices',service:model.serviceMode==='provider'?providerServiceId(model.id,check.providerId):'standard:'+model.id,tab:'pricing'};
   }
-  return {page:'model-prices',service:model.serviceMode==='provider'?providerServiceId(model.id,check.providerId):'standard:'+model.id,tab:'pricing'};
+  return null;
 }
 export function serviceSupplyRows(state, model) {
   if (!['standard','provider'].includes(model.serviceMode)) return [];

@@ -7,7 +7,7 @@ export function providerKeyGroups(provider, keys = provider.apiKeys || []) {
     assigned.add(id); return true;
   }) }));
   const saved = provider.apiKeyGroups?.find(group => group.id === 'default');
-  const keyIds = [...new Set([...(saved?.keyIds || []), ...keys.map(key => key.id)])].filter(id => known.has(id) && !assigned.has(id));
+  const keyIds = [...new Set([...(saved?.keyIds || []), ...keys.filter(key => !key.standalone).map(key => key.id)])].filter(id => known.has(id) && !assigned.has(id));
   if (!saved && keyIds.includes(provider.defaultApiKeyId)) keyIds.splice(0, 0, ...keyIds.splice(keyIds.indexOf(provider.defaultApiKeyId), 1));
   return [{ id: 'default', name: '默认 API 密钥组', keyIds }, ...groups];
 }

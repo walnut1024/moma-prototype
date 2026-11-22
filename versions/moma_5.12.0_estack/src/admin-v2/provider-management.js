@@ -1,7 +1,7 @@
 import { resourceId } from '../resource-id.mjs';
 import { credentialRotationChannels } from './credential-rotation-scope.js';
 import { supplierModelMaintenance } from './supplier-model-maintenance.js';
-import { modelLibrary } from './model-library.js';
+import { MODEL_CATALOGUE_TYPES as SUPPLIER_MODEL_TYPES, modelLibrary } from './model-library.js';
 import { normalizeModelLogo } from './model-profile.js';
 import { supplierModelFields } from './supply-models.js';
 import { canonicalMomaScenarios } from './moma-billing-items.js';
@@ -23,7 +23,7 @@ export { connectionFingerprint, connectionTestCurrent } from './connection-state
 export const providerCode = provider => provider.code || ({ mobile: 'cmcc', unicom: 'cucc', telecom: 'ctcc', alibaba: 'bailian' }[provider.id.replace(/^(catalog-provider-|provider-)/, '')] || provider.id.replace(/^(catalog-provider-|provider-)/, ''));
 export const PROVIDER_TYPES = { thirdParty: '第三方推理服务', selfHosted: '自有推理服务' };
 export const PROTOCOLS = ['OpenAI', 'Anthropic', '其他'];
-export const SUPPLIER_MODEL_TYPES = { text: '语言模型', multimodal: '多模态理解', visual: '视觉模型', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
+export { SUPPLIER_MODEL_TYPES };
 export function normalizeProviderCatalogue(ids = []) {
   if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('模型目录必须是服务商目录标识列表');
   const result = [...new Set(ids.map(id => id.trim()).filter(Boolean))];
@@ -234,7 +234,7 @@ export function providerTransaction(state, action) {
     const apiUrl = typeof data.apiUrl === 'string' ? data.apiUrl.trim() : '';
     let url;
     try { url = new URL(apiUrl); } catch { throw new Error('请填写包含协议、域名和接口路径的完整 API URL'); }
-    if (apiUrl.length > 2048 || /[\s\\\p{Cc}]/u.test(apiUrl) || !/^https?:\/\//i.test(apiUrl) || url.pathname === '/' || /^\/v\d+\/?$/i.test(url.pathname)) throw new Error('请填写包含完整接口路径的 API URL，不能只填写 Base URL');
+    if (apiUrl.length > 2048 || /[\s\\\p{Cc}]/u.test(apiUrl) || !/^https?:\/\//i.test(apiUrl) || url.pathname === '/' || /^\/v\d+\/?$/i.test(url.pathname)) throw new Error('请填写包含完整接口路径的 API URL，不能只填写服务地址（Base URL）');
     const protocol = data.modelType === 'text' ? data.protocol ?? 'OpenAI' : '其他';
     if (data.modelType === 'text' && protocol !== 'OpenAI') throw new Error('语言模型目前仅支持 OpenAI 协议');
     const currentIds = providerCatalogueIds(provider);
@@ -284,6 +284,8 @@ export function providerTransaction(state, action) {
     if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
     if (!Array.isArray(data.apiKeys) || !data.apiKeys.length || data.apiKeys.length > PROVIDER_API_KEY_LIMIT || data.apiKeys.some(item => !item || !/^[\x21-\x7e]{4}•{8}[\x21-\x7e]{4}$/.test(item.maskedKey || '') || !/^[a-f0-9]{64}$/.test(item.fingerprint || ''))) throw new Error('API 密钥配置无效，请重新输入。');
     const keys = provider.apiKeys || [];
+    const standalone = data.standalone === true;
+    if (standalone && data.groupId) throw Error('添加独立密钥时不能指定分组');
     const groupId = data.groupId || 'default', groups = providerKeyGroups(provider, providerApiKeyRows(state, provider).map(row => row.apiKey));
     const group = groups.find(row => row.id === groupId);
     if (!group) throw new Error('API 密钥组不存在，请重新选择');
@@ -299,10 +301,10 @@ export function providerTransaction(state, action) {
       const name = `API 密钥 ${index}`; names.add(name);
       const id = resourceId('credential');
       if (item.accountRpm != null && (!Number.isSafeInteger(item.accountRpm) || item.accountRpm < 1)) throw new Error('账号 RPM 必须为正整数');
-      return { id, name, maskedKey: item.maskedKey, fingerprint: item.fingerprint, ...(item.accountRpm != null ? { accountRpm: item.accountRpm } : {}), createdAt };
+      return { id, name, maskedKey: item.maskedKey, fingerprint: item.fingerprint, ...(standalone ? { standalone: true } : {}), ...(item.accountRpm != null ? { accountRpm: item.accountRpm } : {}), createdAt };
     });
-    changes.push(update('providers', provider.id, { apiKeys: [...keys, ...added], ...(data.groupId || provider.apiKeyGroups ? { apiKeyGroups: groups.map(row => row.id === groupId ? { ...row, keyIds: [...row.keyIds, ...added.map(key => key.id)] } : row) } : {}), ...(groupId === 'default' && !group.keyIds.length && !provider.defaultApiKeyId ? { defaultApiKeyId: added[0].id } : {}) }));
-    if (!group.keyIds.length) changes.push(...invalidateSupplierChannels(state, provider, state.endpoints.filter(row => !row.deletedAt && row.providerId === provider.id && (row.authMode === 'group' && row.keyGroupId === groupId || groupId === 'default' && row.authMode === 'inherit')).map(row => row.id)));
+    changes.push(update('providers', provider.id, { apiKeys: [...keys, ...added], ...(!standalone && (data.groupId || provider.apiKeyGroups) ? { apiKeyGroups: groups.map(row => row.id === groupId ? { ...row, keyIds: [...row.keyIds, ...added.map(key => key.id)] } : row) } : {}), ...(!standalone && groupId === 'default' && !group.keyIds.length && !provider.defaultApiKeyId ? { defaultApiKeyId: added[0].id } : {}) }));
+    if (!standalone && !group.keyIds.length) changes.push(...invalidateSupplierChannels(state, provider, state.endpoints.filter(row => !row.deletedAt && row.providerId === provider.id && (row.authMode === 'group' && row.keyGroupId === groupId || groupId === 'default' && row.authMode === 'inherit')).map(row => row.id)));
     return { type: 'batch', label: '添加 API 密钥', objectId: provider.id, changes };
   }
   if (operation === 'editApiKey' || operation === 'deleteApiKey') {

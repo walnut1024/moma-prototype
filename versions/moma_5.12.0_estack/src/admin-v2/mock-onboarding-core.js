@@ -1,4 +1,4 @@
-import { channelConversationRequest, channelConversationText } from './channel-interface.js';
+import { channelConversationRequest, channelConversationText, modelTaskUrl, prepareChannelInterface } from './channel-interface.js';
 import { customForwarding, normalizeCustomAdapter, parseCustomManagement } from './channel-custom-adapter.js';
 import { normalizeChannelRequestRules } from './channel-request-rules.js';
 import { modelIdentity, channelIdentity } from '../model-identities.mjs';
@@ -33,7 +33,7 @@ function read() {
 const readForWrite = () => localState?.cloudOperations ? copy(read()) : read();
 function save(state) { getStorage?.()?.setItem(STORAGE_KEY, JSON.stringify(state)); memory = localState?.cloudOperations ? state : copy(state); notify(); }
 const credential = (state, channel) => state.credentials.find(item => item.id === channel.credentialId);
-const requestConfiguration = channel => [channel.interfaceType, channel.baseUrl, channel.taskUrls || {}, channel.authMode, channel.credentialId, channel.apiVersion, channel.workspaceId, channel.tokenLimitField, channel.imageSize, channel.voice, channel.statusPath, ...(channel.customAdapter ? [channel.customAdapter] : []), ...(channel.requestRules ? [channel.requestRules] : [])];
+const requestConfiguration = channel => [channel.interfaceType, channel.baseUrl, channel.taskUrls || {}, channel.authMode, channel.credentialId, channel.apiVersion, channel.workspaceId, channel.tokenLimitField, channel.imageSize, channel.voice, channel.statusPath, ...(channel.endpointPath ? [channel.endpointPath, channel.modelProtocol] : []), ...(channel.customAdapter ? [channel.customAdapter] : []), ...(channel.requestRules ? [channel.requestRules] : [])];
 const channelSignature = (state, channel) => hash([requestConfiguration(channel), credential(state, channel)?.version, credential(state, channel)?.status, channel.configVersion]);
 const channelById = (state, id) => { const channel = state.channels.find(item => item.id === id); if (!channel) fail('channel_not_found', '渠道不存在'); return channel; };
 const serviceById = (state, id) => { const service = state.services.find(item => item.id === id); if (!service) fail('service_not_found', '服务不存在'); return service; };
@@ -281,6 +281,10 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
     if (input.authMode !== 'none' && !state.credentials.some(row => row.id === credentialId)) { const revoked = localKeyId && state.credentials.some(row => row.localKeyId === localKeyId && row.status === 'revoked'); state.credentials.push({ id: text(credentialId, '密钥引用'), localKeyId, externalVersion, providerId, name: '渠道密钥引用', maskedKey: '*****', status: revoked ? 'revoked' : input.credential?.status || 'active', version: 1, accountRpm: input.credential?.accountRpm || null, source: 'mock' }); }
     const key = state.credentials.find(row => row.id === credentialId); if (key && key.providerId !== providerId) fail('credential_scope', '密钥不属于此服务商');
     const channel = { id: current?.id || resourceId('connection'), providerId, name, displayName: input.displayName || name, interfaceType: input.interfaceType, baseUrl: text(input.baseUrl, '接口地址', 2048), taskUrls: copy(input.taskUrls || {}), authMode: input.authMode || 'key', credentialId, clientChannelId: input.clientChannelId || null, clientSignature: input.clientSignature || null, mockModels: copy(input.mockModels || current?.mockModels || []), apiVersion: input.apiVersion || input.adapterOptions?.apiVersion || null, workspaceId: input.workspaceId || input.adapterOptions?.workspaceId || null, tokenLimitField: input.tokenLimitField || input.adapterOptions?.tokenLimitField || null, imageSize: input.imageSize || input.adapterOptions?.imageSize || null, voice: input.voice || input.adapterOptions?.voice || null, statusPath: input.statusPath || input.adapterOptions?.statusPath || null, revision: (current?.revision || 0) + 1, configVersion: (current?.configVersion || 0) + 1, source: 'mock' };
+    if (input.endpointPath != null) {
+      const config = prepareChannelInterface({ ...input, allowHttp: input.allowHttp === true });
+      Object.assign(channel, { endpointPath: config.endpointPath, modelProtocol: input.modelProtocol, allowHttp: input.allowHttp === true });
+    }
     if (input.customAdapter) {
       if (input.interfaceType !== 'custom') fail('invalid_interface', '高级规则仅适用于自定义连接');
       channel.customAdapter = normalizeCustomAdapter(input.customAdapter);
@@ -315,13 +319,14 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
   if (method === 'GET' && route === '/tests' && url.searchParams.has('operationId')) { const entry = state.operations[url.searchParams.get('operationId')], batch = entry?.action === 'startTests' && state.batches.find(row => row.id === entry.response.id); if (!batch) fail('submission_not_found', '未找到此操作 ID 的测试提交'); return batch; }
   const customTestRequest = (channel, model) => {
     const forwarding = customForwarding(channel.customAdapter, channel, model.type, model.upstreamModelId);
-    return forwarding ? { request: { method: forwarding.method, url: forwarding.url, auth: forwarding.auth, conversion: forwarding.conversion } } : {};
+    if (forwarding) return { request: { method: forwarding.method, url: forwarding.url, auth: forwarding.auth, conversion: forwarding.conversion } };
+    return channel.endpointPath ? { request: { method: 'POST', url: modelTaskUrl(channel, model.type) } } : {};
   };
   if (method === 'POST' && route === '/tests') return once(state, 'startTests', body, () => {
     const channel = channelById(state, body.channelId); assertAvailable(state, channel);
     if (!Array.isArray(body.models) || !body.models.length || body.models.length > 50) fail('invalid_models', '请选择 1–50 个测试模型');
     if (body.models.some(model => ['image', 'video', 'audio'].includes(model.type)) && body.confirmExpensive !== true) fail('cost_confirmation_required', '请明确勾选高成本任务');
-    for (const model of body.models) { if(channel.interfaceType==='openai-responses' && !['text','multimodal'].includes(model.type)) fail('invalid_task','Responses 仅适用于对话模型'); text(model.id, '模型资料 ID'); text(model.upstreamModelId, '上游模型调用标识'); if (!['text', 'multimodal', 'embedding', 'rerank', 'image', 'audio', 'video'].includes(model.type) || model.check && !['streaming', 'tools', 'structured'].includes(model.check)) fail('invalid_task', '模型任务或验证内容无效'); }
+    for (const model of body.models) { if(channel.interfaceType==='openai-responses' && !['text','multimodal'].includes(model.type)) fail('invalid_task','Responses 仅适用于语言模型和多模态理解模型'); text(model.id, '模型资料 ID'); text(model.upstreamModelId, '上游模型调用标识'); if (!['text', 'multimodal', 'embedding', 'rerank', 'image', 'audio', 'video'].includes(model.type) || model.check && !['streaming', 'tools', 'structured'].includes(model.check)) fail('invalid_task', '模型任务或验证内容无效'); }
     if (new Set(body.models.map(row => JSON.stringify([row.id,row.associationId]))).size !== body.models.length || new Set(body.models.map(row => row.upstreamModelId)).size !== body.models.length) fail('duplicate_model', '测试模型不能重复');
     const batch = { id: resourceId('validation-batch'), channelId: channel.id, providerId: channel.providerId, signature: channelSignature(state, channel), configVersion: channel.configVersion, credentialId: channel.credentialId, credentialVersion: credential(state, channel)?.version || null, source: 'mock', scenario, status: 'queued', createdAt: now(), confirmExpensive: body.confirmExpensive === true, items: body.models.map(model => ({ id: uid(), ...(['text','multimodal'].includes(model.type) && channel.interfaceType!=='custom' ? { request: channelConversationRequest(channel,model) } : customTestRequest(channel,model)), model: { id: model.id, associationId: model.associationId, upstreamModelId: model.upstreamModelId, type: model.type, probe: model.probe || model.type, ...(model.check ? { check: model.check } : {}), ...(model.dimensions ? { dimensions: model.dimensions } : {}) }, status: 'queued', stage: 'queued', evidenceSource: 'mock', current: true, traceId: uid(), usage: null, cost: null, templateVersion: 1 })) }; state.batches.push(batch); return batch;
   });

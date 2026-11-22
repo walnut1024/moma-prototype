@@ -7,7 +7,8 @@ import { channelBlockReason } from '../src/admin-v2/provider-channels.js';
 import { connectionFingerprint } from '../src/admin-v2/connection-state.js';
 import { channelChangeImpact, channelCandidateStatus, channelEvidenceSignature, activeChannelProcurement, channelProcurementSnapshot, assertDirectChannelMutation, keyGroupCandidateStatus, CHANNEL_EVIDENCE_MAX_AGE_MS } from '../src/admin-v2/channel-change-management.js';
 import { providerKeyGroups } from '../src/admin-v2/provider-key-groups.js';
-import { connectionDirectoryRows, filterConnections } from '../src/admin-v2/channel-connection-directory.js';
+import { CHANNEL_LIST_TYPES, channelListPaths, channelListType, channelProtocolPaths, channelProtocolUsesFullAddress, connectionDirectoryRows, filterConnections, prepareListedChannelInterface } from '../src/admin-v2/channel-connection-directory.js';
+import { modelTaskUrl } from '../src/admin-v2/channel-interface.js';
 
 const providerId = 'provider-moma';
 const owner = state => state.providers.find(row => row.id === providerId);
@@ -39,11 +40,68 @@ test('the connection directory groups models by ID and keeps empty connections a
   const shared = rows.find(row => row.id === current.id);
   const empty = rows.find(row => row.id === 'empty-connection');
   assert.equal(shared.modelCount, 2);
+  assert.equal(channelListType(shared), 'OpenAI Chat Completions');
+  assert.deepEqual(channelListPaths(shared), ['/v1/chat/completions']);
   assert.deepEqual(shared.models.map(row => row.association.id), mappings(state).map(row => row.id));
   assert.equal(shared.name, empty.name);
   assert.equal(empty.modelCount, 0);
   assert.deepEqual(filterConnections(rows, { query: 'vendor/chat', providerId, status: '已启用' }), [shared]);
   assert.deepEqual(filterConnections(rows, { query: 'vendor/chat', providerId: 'other' }), []);
+});
+
+test('channel list names the configured interface and distinguishes the video API paths', () => {
+  const label = (endpoint, models = [], interfaceLabel = '其他') => channelListType({ endpoint, models, interfaceLabel });
+  assert.equal(label({ interfaceType: 'openai-responses' }), 'OpenAI Responses');
+  assert.equal(label({ interfaceType: 'anthropic' }), 'Anthropic Messages');
+  assert.equal(label({ interfaceType: 'openai' }, [{ master: { type: 'embedding' } }]), 'OpenAI Embeddings');
+  for (const [path, name] of [
+    ['/v1/embeddings', 'OpenAI Embeddings'],
+    ['/api/v3/contents/generations/tasks', '火山方舟 Video Generation'],
+    ['/api/v1/services/aigc/video-generation/video-synthesis', 'DashScope Video Generation'],
+    ['/api/v1/services/aigc/image2video/video-synthesis', 'DashScope Video Generation'],
+    ['/v1/video_generation', 'MiniMax Video Generation'],
+  ]) assert.equal(label({ baseUrl: 'https://api.example.invalid' + path + '/' }), name);
+  assert.equal(label({ interfaceType: 'custom', baseUrl: 'https://api.example.invalid/v1/generate',
+    taskUrls: { video: 'https://api.example.invalid/v1/video_generation' } }), 'MiniMax Video Generation');
+  assert.equal(label({ baseUrl: 'https://api.example.invalid/v1/video_generation', adapterDraft: {} }, [], '待适配'), '待适配');
+  assert.equal(label({ baseUrl: 'https://api.example.invalid/v1/custom' }), '其他');
+});
+
+test('the channel creation choices round-trip to the same list type and model request address', () => {
+  const origin = 'https://api.example.invalid';
+  const choices = [
+    ['openai', 'OpenAI Chat Completions', '/v1', 'text', '/v1/chat/completions'],
+    ['openai-responses', 'OpenAI Responses', '/v1', 'text', '/v1/responses'],
+    ['anthropic', 'Anthropic Messages', '/v1', 'text', '/v1/messages'],
+    ['openai-embeddings', 'OpenAI Embeddings', '/v1/embeddings', 'embedding', '/v1/embeddings'],
+    ['ark-video', '火山方舟 Video Generation', '/api/v3/contents/generations/tasks', 'video', '/api/v3/contents/generations/tasks'],
+    ['dashscope-video', 'DashScope Video Generation', '/api/v1/services/aigc/video-generation/video-synthesis', 'video', '/api/v1/services/aigc/video-generation/video-synthesis'],
+    ['minimax-video', 'MiniMax Video Generation', '/v1/video_generation', 'video', '/v1/video_generation'],
+  ];
+  assert.deepEqual(CHANNEL_LIST_TYPES.map(({ id, label }) => [id, label]), choices.map(([id, label]) => [id, label]));
+  for (const [interfaceType, label, basePath, modelType, taskPath] of choices) {
+    const endpoint = prepareListedChannelInterface({ interfaceType, baseUrl: origin + basePath });
+    assert.equal(endpoint.baseUrl, origin + basePath);
+    assert.equal(channelListType({ endpoint, models: [] }), label);
+    assert.equal(modelTaskUrl(endpoint, modelType), origin + taskPath);
+    assert.deepEqual(channelListPaths({ endpoint, models: [] }), [taskPath]);
+    assert.deepEqual(channelProtocolPaths({ interfaceType, baseUrl: origin + basePath }), [taskPath]);
+    assert.equal(channelProtocolPaths({ interfaceType, baseUrl: '' })[0], taskPath);
+  }
+  assert.throws(() => prepareListedChannelInterface({ interfaceType: 'ark-video', baseUrl: origin + '/v1/video_generation' }), /完整接口地址/);
+  assert.throws(() => prepareListedChannelInterface({ interfaceType: 'openai-embeddings', baseUrl: origin + '/v1' }), /完整/);
+  assert.throws(() => prepareListedChannelInterface({ interfaceType: 'anthropic', baseUrl: origin + '/v1/embeddings' }), /不匹配/);
+});
+
+test('endpoint previews honor gateway prefixes, configured tasks, and saved embedding roots', () => {
+  const baseUrl = 'https://api.example.invalid/tenant/v2';
+  assert.deepEqual(channelProtocolPaths({ interfaceType: '', baseUrl }), []);
+  assert.deepEqual(channelProtocolPaths({ interfaceType: 'openai-responses', baseUrl }), ['/tenant/v2/responses']);
+  const taskPath = '/api/v1/services/aigc/image2video/video-synthesis';
+  assert.deepEqual(channelProtocolPaths({ interfaceType: 'dashscope-video', baseUrl: 'https://api.example.invalid' + taskPath }), [taskPath]);
+  const current = { endpoint: { interfaceType: 'openai', baseUrl: baseUrl + '/old' }, models: [{ master: { type: 'embedding' } }] };
+  assert.equal(channelProtocolUsesFullAddress('openai-embeddings', current), false);
+  assert.deepEqual(channelProtocolPaths({ interfaceType: 'openai-embeddings', baseUrl }, current), ['/tenant/v2/embeddings']);
 });
 
 test('a shared connection change checks even disabled model mappings and preserves each model channel name', () => {
@@ -105,6 +163,25 @@ test('an empty connection can save a new configuration without fabricating evide
   stableBusiness(state, next);
 });
 
+test('editing a named task protocol replaces previous task addresses only after applying the candidate', () => {
+  const state = fixture(), current = endpoint(state), provider = owner(state);
+  provider.catalogConnections = provider.catalogConnections.filter(row => row.endpointId !== current.id);
+  const oldPath = '/v1/video_generation';
+  Object.assign(current, { interfaceType: 'custom', protocol: '其他', baseUrl: 'https://active.example.invalid' + oldPath,
+    taskUrls: { video: 'https://active.example.invalid' + oldPath } });
+  const newPath = '/api/v3/contents/generations/tasks';
+  const data = { ...args(state), expectedUpdatedAt: current.updatedAt, expectedProviderUpdatedAt: provider.updatedAt,
+    prepareConnection: true, allAssociations: true, modelProtocol: 'ark-video', baseUrl: 'https://candidate.example.invalid' + newPath };
+  assert.throws(() => run(state, 'supplierChannelEdit', { ...data, baseUrl: current.baseUrl }), /完整接口地址/);
+  const staged = run(state, 'supplierChannelEdit', data);
+  assert.equal(endpoint(staged).baseUrl, current.baseUrl);
+  assert.deepEqual(endpoint(staged).taskUrls, current.taskUrls);
+  assert.deepEqual(endpoint(staged).candidateConfiguration.config.taskUrls, {});
+  const next = run(staged, 'channelCandidateApply', { ...args(staged), confirmed: true, unlinked: true });
+  assert.deepEqual(channelListPaths({ endpoint: endpoint(next), models: [] }), [newPath]);
+  assert.equal(channelListType({ endpoint: endpoint(next), models: [] }), '火山方舟 Video Generation');
+});
+
 test('saving and testing a candidate leave current address, credentials, health and service configuration intact', () => {
   const state = fixture(), original = structuredClone(state), candidate = createCandidate(state), tested = testCandidate(candidate);
   assert.equal(endpoint(tested).baseUrl, endpoint(state).baseUrl);
@@ -131,7 +208,7 @@ test('address-only edits require validation and preserve other protocol addresse
     mapping.apiAddresses = [{ protocol: 'OpenAI', baseUrl: current.baseUrl }, secondary];
   }
   const change = (snapshot, config = { baseUrl }) => run(snapshot, 'channelCandidateSave', { ...args(snapshot), addressOnly: true, config });
-  assert.throws(() => change(state, { baseUrl, capacity: 10 }), /仅允许修改 Base URL/);
+  assert.throws(() => change(state, { baseUrl, capacity: 10 }), /仅允许修改服务地址（Base URL）/);
   assert.throws(() => change(createCandidate(state)), /现有候选配置/);
   assert.throws(() => run(state, 'supplierChannelEdit', { ...args(state), unlinkedAddress: true, baseUrl, expectedUpdatedAt: current.updatedAt ?? null }), /已有模型/);
   const candidate = change(state);
@@ -348,4 +425,20 @@ test('publishing one channel cost preserves another channel for the same model a
   assert.equal(channelProcurementSnapshot(mappings(saved)[0]).pricing.scenarios[0].listPrice, 0);
   assert.deepEqual(endpoint(saved), connection);
   stableBusiness(state, saved);
+});
+
+test('channel list paths retain gateway prefixes and configured task paths without inventing URLs', () => {
+  const origin = 'https://api.example.invalid';
+  const paths = (endpoint, models = []) => channelListPaths({ endpoint, models });
+  assert.deepEqual(paths({ interfaceType: 'openai', baseUrl: origin + '/tenant/gateway/v2' },
+    [{ master: { type: 'embedding' } }]), ['/tenant/gateway/v2/embeddings']);
+  const dashscopePath = '/api/v1/services/aigc/image2video/video-synthesis';
+  assert.deepEqual(paths({ baseUrl: origin + dashscopePath + '/' }), [dashscopePath]);
+  assert.deepEqual(paths({ interfaceType: 'custom', baseUrl: origin + '/v2/generate',
+    taskUrls: { video: origin + '/v2/video', text: origin + '/v2/generate' },
+    customAdapter: { routes: [{ path: '/v2/chat' }, { path: '/v2/video' }] } }),
+  ['/v2/video', '/v2/generate', '/v2/chat']);
+  assert.deepEqual(paths({ interfaceType: 'custom', baseUrl: '未配置' }), []);
+  assert.deepEqual(paths({ baseUrl: origin + '/v1' }), []);
+  assert.deepEqual(paths({ baseUrl: origin + dashscopePath, adapterDraft: {} }), []);
 });

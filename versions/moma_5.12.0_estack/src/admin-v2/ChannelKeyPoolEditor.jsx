@@ -45,9 +45,10 @@ function CredentialVerification({ endpoint, credential, reload, close }) {
   </Modal>;
 }
 
-export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, close, directory = false }) {
+export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, close, directory = false, closeLabel = '关闭' }) {
   const candidate = endpoint.candidateConfiguration;
-  const [rows, setRows] = useState(() => structuredClone(candidate?.config.authMode === 'pool' ? candidate.config.keyPool : endpoint.authMode === 'pool' ? endpoint.keyPool : connectionKeys(endpoint, provider).slice(0, 1).map(key => ({ keyId: key.id, priority: 1, enabled: true }))));
+  const active = new Set(connectionKeys(endpoint, provider).map(key => key.id));
+  const [rows, setRows] = useState(() => structuredClone(candidate?.config.authMode === 'pool' ? candidate.config.keyPool : endpoint.authMode === 'pool' ? endpoint.keyPool : connectionKeys(endpoint, provider, true).filter(key => !key.revokedAt).map((key, index) => ({ keyId: key.id, priority: index + 1, enabled: active.has(key.id) }))));
   const [strategy, setStrategy] = useState(candidate?.config.keyStrategy || endpoint.keyStrategy || 'priority');
   const keys = [...new Map([
     ...(directory ? [...(endpoint.apiKeys || []), ...(candidate?.config.apiKeys || [])].filter(key => key.scope === 'channel') : []),
@@ -72,7 +73,6 @@ export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, c
   const [expectedImpactRevision] = useState(impact.revision);
   const projected = { ...endpoint, ...candidate?.config };
   const available = projected.authMode === 'pool' ? connectionKeys(projected, provider) : [];
-  const active = new Set(connectionKeys(endpoint, provider).map(key => key.id));
   const lookup = new Map(rows.map(row => [row.keyId, row]));
   const disabledForWrite = !ops.can || testing || saving || directory && Boolean(candidate?.pendingTests?.length || probeQueue.length);
   const unlinked = directory && !impact.mappings.length && !state.modelSupplies.some(row => row.endpointId === endpoint.id && row.status !== '已移除');
@@ -144,9 +144,9 @@ export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, c
       if (await ops.run('channelCandidateApply', { ...context, confirmed: true, ...(unlinked ? { unlinked: true } : {}) })) close();
     } finally { lock.current = false; if (mounted.current) setSaving(false); }
   };
-  return <><Modal drawer wide title="渠道密钥池" description={`${provider.name} · ${endpoint.name}`}
+  return <><Modal drawer wide title={directory ? '连接密钥池' : '渠道密钥池'} description={`${provider.name} · ${endpoint.name}`}
     onClose={() => !saving && ops.proceed(close)} footer={<>
-      <Button theme="light" disabled={saving} onClick={() => ops.proceed(close)}>关闭</Button>
+      <Button theme="light" disabled={saving} onClick={() => ops.proceed(close)}>{closeLabel}</Button>
       <Button theme="light" disabled={disabledForWrite} onClick={save}>保存密钥池候选</Button>
       <Button theme="solid" disabled={!canApply} onClick={apply}>{unlinked ? '保存未启用的密钥池' : '应用密钥池'}</Button>
     </>}>
@@ -167,8 +167,8 @@ export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, c
         onClick={() => { const ids = selectedKeys.map(row => row.id); setProbeQueue(ids); setProbeKey(ids[0]); setProbeRun(crypto.randomUUID()); }}>测试选中（基础检测）</Button>}
       {probeQueue.length > 0 && <Button onClick={() => setProbeQueue([])}>停止后续逐钥测试</Button>}
       <Choice label="密钥状态" value={stateFilter} options={Object.entries(filters)} onChange={setStateFilter}/>
-      <Button theme="borderless" onClick={() => window.open('#/admin-2/providers-new?' + new URLSearchParams({
-        perspective: 'suppliers', provider: provider.id, tab: 'api-keys',
+      <Button theme="borderless" onClick={() => window.open('#/admin-2/providers-reference?' + new URLSearchParams({
+        connection: endpoint.id, tab: 'api-keys',
       }), '_blank', 'noopener')}>打开服务商 API 密钥池</Button>
       {state.currentRole === '平台管理员' && <Button theme="borderless" onClick={() => setAudit(true)}>查看凭证审计</Button>}
     </Space>}

@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Checkbox, Empty, Input, Typography } from '@douyinfe/semi-ui';
 import { modelReleaseOrder, modelCatalogue } from './model-library';
 import { SUPPLIER_REGISTRATION_LIMIT } from './supplier-model-registration';
+import { modelTypeLabel } from '../model-types.mjs';
 
-export const catalogueType = type => ({ text: '文本', visual: '视觉', image: '视觉 · 图像', video: '视觉 · 视频', multimodal: '多模态', audio: '语音', embedding: '向量', rerank: '重排' }[type] || type);
+export const catalogueType = type => modelTypeLabel(type) || type;
 export default function SupplierModelMultiSelect({ state, registered, value, disabled, onChange }) {
   const [query, setQuery] = useState('');
   const options = modelCatalogue(state).sort(modelReleaseOrder).filter(row => [row.name, row.modelId, row.profile?.version, catalogueType(row.type)].join(' ').toLowerCase().includes(query.trim().toLowerCase()));

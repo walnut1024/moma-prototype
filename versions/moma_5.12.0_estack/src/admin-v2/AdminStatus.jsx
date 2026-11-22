@@ -13,7 +13,7 @@ const statusColors = new Map([
   ['blue', ['允许展示', '用户可见']],
 ].flatMap(([color, labels]) => labels.map(label => [label, color])));
 
-export default function AdminStatus({ value, prefix, color = statusColors.get(value) ?? 'grey' }) {
+export default function AdminStatus({ value, label = value, prefix, color = statusColors.get(value) ?? 'grey' }) {
   if (value == null || value === '' || value === '—') return '—';
-  return <Tag size="small" color={color}>{prefix ? `${prefix}：${value}` : value}</Tag>;
+  return <Tag size="small" color={color}>{prefix ? `${prefix}：${label}` : label}</Tag>;
 }

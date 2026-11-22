@@ -282,7 +282,7 @@ export async function packageCommand(db, actor, body, key) {
   return save(db, actor, state, key, operationId, hash, 'package.' + action.operation, result, [statement], audit, entityTypes[collection]);
 }
 
-export async function modelCommand(db,actor,body,key,license,auditSource){
+export async function modelCommand(db,actor,body,key,license){
   if(!['平台管理员','运营人员'].includes(actor.role))issue(403,'FORBIDDEN','当前账号无模型运营修改权限');
   if(!validId(key) || !validId(body?.operationId) || !Number.isSafeInteger(body.expectedRevision) || !body.action || !['modelOperations','modelOperation','providerOperation'].includes(body.action.type) || typeof body.action.operation!=='string')issue(400,'INVALID_INPUT','业务命令、操作标识或修订号无效');
   if(Object.keys(body.action).some(k=>!['type','operation','modelId','data'].includes(k)))issue(400,'INVALID_INPUT','不允许提交身份或底层集合写入');
@@ -359,9 +359,9 @@ export async function modelCommand(db,actor,body,key,license,auditSource){
     next.audits[0].relatedEndpointIds = [...new Set(indexRepairs.map(row => row.endpointId).filter(Boolean))];
   }
   const result={operationId:body.operationId,revision:next.revision,patches:patches(before,next),modelData:next.modelData,supplyRelations:modelSupplyRelations(next),mockState:next.cloudMockState,updatedAt:next.updatedAt};
-  const evidence = auditEvidence(before, next, action, actor, body.expectedRevision);
+  const evidence = auditEvidence(before, next, action, actor);
   const audit = next.audits[0];
-  return save(db,actor,before,key,body.operationId,hash,action.operation,result,statements,evidence ? { ...audit, platformAudit: { ...evidence, ...(auditSource && { source: auditSource }) } } : audit);
+  return save(db,actor,before,key,body.operationId,hash,action.operation,result,statements,evidence ? { ...audit, platformAudit: evidence } : audit);
 }
 
 export async function simulationRequest(db,actor,path,method,body,key){

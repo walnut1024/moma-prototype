@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ReceiptText } from 'lucide-react';
-import { Button, Table } from '@douyinfe/semi-ui';
+import { Button, Table, Tabs } from '@douyinfe/semi-ui';
 import { DEFAULT_PAGE_SIZE, FilterPagination } from './FilterControls';
 import FrontPageHeader from './FrontPageHeader';
 import { projectTime } from './ProjectConfiguration';
@@ -8,7 +8,8 @@ import { projectTime } from './ProjectConfiguration';
 const money=(micros,currency='CNY')=>Number.isSafeInteger(micros)
   ? (currency==='CNY'?'¥ ':currency+' ')+(micros/1_000_000).toLocaleString('zh-CN',{maximumFractionDigits:6}) : '未记录';
 
-export default function WorkspaceBilling({ tenant, project, requestedProject, onOrder }) {
+export default function WorkspaceBilling({ tenant, project, requestedProject, orders = [], onOrder }) {
+  const [tab, setTab] = useState('orders');
   const [page,setPage]=useState(1), [size,setSize]=useState(DEFAULT_PAGE_SIZE);
   const invalid=requestedProject && project?.id!==requestedProject;
   const records=(tenant.report?.records || []).filter(row=>row.billPeriod && (!project || row.projectId===project.id))
@@ -17,6 +18,21 @@ export default function WorkspaceBilling({ tenant, project, requestedProject, on
   const projectName=id=>tenant.projects.find(row=>row.id===id)?.name || id || '未归属项目';
   const current=Math.max(1,Math.min(page,Math.ceil(records.length/size)));
   const allowed=tenant.canManage && !invalid;
+  const activeOrders = orders.filter(row => !['cancelled', 'withdrawn'].includes(row.stage));
+  const tokenPlans = tenant.plans.filter(row => !row.product?.name?.includes('Coding'));
+  const orderColumns = [
+    { title: '订单号', dataIndex: 'id' },
+    { title: '模型服务', dataIndex: 'callId' },
+    { title: '开通时间', render: (_, row) => projectTime(row.createdAt) },
+    { title: '状态', render: () => '已开通' },
+  ];
+  const planColumns = [
+    { title: '订阅 ID', dataIndex: 'id' },
+    { title: '套餐', render: (_, row) => row.product?.name || '—' },
+    { title: '生效时间', render: (_, row) => projectTime(row.activatedAt || row.createdAt) },
+    { title: '到期时间', render: (_, row) => projectTime(row.expiresAt || row.endAt) },
+    { title: '状态', dataIndex: 'status' },
+  ];
   const billColumns=[
     {title:'账期',dataIndex:'period'},
     {title:'账单号',dataIndex:'billNo'},
@@ -35,10 +51,23 @@ export default function WorkspaceBilling({ tenant, project, requestedProject, on
   return <div className="project-workspace">
     <FrontPageHeader title="订购与账单" icon={ReceiptText}
       description={tenant.identity && [tenant.identity.tenantName,project?.name].filter(Boolean).join(' · ')}
-      actions={allowed && <Button type="tertiary" onClick={onOrder}>查看模型订购</Button>}/>
+      actions={allowed && <Button type="tertiary" onClick={()=>onOrder('payg')}>开通模型服务</Button>}/>
     {!tenant.identity ? <p className="project-empty" role="status">{tenant.error || '正在加载账单…'}</p>
       : !allowed ? <p className="project-empty" role="status">{invalid ? '当前空间无权访问此项目' : '仅空间管理员可查看客户账单'}</p>
       : <>
+        <Tabs activeKey={tab} onChange={setTab} tabList={[
+          { itemKey: 'orders', tab: '已开通服务' }, { itemKey: 'plans', tab: 'Token Plan' }, { itemKey: 'bills', tab: '账单' },
+        ]}/>
+        {tab === 'orders' && <section className="project-panel" aria-label="已开通服务">
+          <Table columns={orderColumns} dataSource={activeOrders} rowKey="id" pagination={false} size="small"
+            scroll={{x:600}} empty="当前空间暂无已开通的模型服务。"/>
+        </section>}
+        {tab === 'plans' && <section className="project-panel" aria-label="Token Plan">
+          <Button theme="light" onClick={()=>onOrder('plan')}>订购 Token Plan</Button>
+          <Table columns={planColumns} dataSource={tokenPlans} rowKey="id" pagination={false} size="small"
+            scroll={{x:660}} empty="当前空间暂无 Token Plan 订阅。"/>
+        </section>}
+        {tab === 'bills' && <>
         <section className="project-panel" aria-label="客户账单">
           <h2>客户账单</h2>
           <Table columns={billColumns} dataSource={bills} rowKey="id" pagination={false} size="small"
@@ -52,6 +81,7 @@ export default function WorkspaceBilling({ tenant, project, requestedProject, on
           {records.length > 0 && <FilterPagination total={records.length} page={current} size={size} onPageChange={setPage}
             onSizeChange={value=>{setSize(value);setPage(1);}}/>}
         </section>
+        </>}
       </>}
   </div>;
 }

@@ -76,7 +76,7 @@ export function useOperations({ state, transact, conflict, reload, notify = mess
   useEffect(() => {
     const sync = () => { const next = location.hash; if (dirtyRef.current && !bypass.current) { history.replaceState(null, '', accepted.current); setLeave(() => () => { accepted.current = next; location.hash = next; setParams(new URLSearchParams(next.split('?')[1] || '')); }); } else { accepted.current = next; setParams(new URLSearchParams(next.split('?')[1] || '')); } };
     const guard = event => { if (dirtyRef.current) { event.preventDefault(); event.returnValue = ''; } };
-    const click = event => { const target = event.target.closest('.v2-sidebar button, .v2-sidebar [role="tab"], .v2-sidebar a, [data-model-list-breadcrumb]'); if (dirtyRef.current && target && !bypass.current) { event.preventDefault(); event.stopPropagation(); setLeave(() => () => { bypass.current = true; target.click(); bypass.current = false; }); } };
+    const click = event => { const target = event.target.closest('.v2-sidebar button, .v2-sidebar [role="tab"], .v2-sidebar a, .channel-management-tabs [role="tab"], [data-model-list-breadcrumb]'); if (dirtyRef.current && target && !bypass.current) { event.preventDefault(); event.stopPropagation(); setLeave(() => () => { bypass.current = true; target.click(); bypass.current = false; }); } };
     addEventListener('hashchange', sync); addEventListener('beforeunload', guard); document.addEventListener('click', click, true);
     return () => { removeEventListener('hashchange', sync); removeEventListener('beforeunload', guard); document.removeEventListener('click', click, true); };
   }, []);
@@ -124,7 +124,7 @@ export function ConnectionFields({ value, onChange, disabled, optionalKey = fals
   const set = (key, input) => onChange({ ...value, [key]: input });
   return <div className="mo-form-grid supplier-connection-fields">
     <Field label="协议 *"><Choice label={prefix + '协议'} value={value.protocol} options={PROTOCOLS.map(value => [value, value])} disabled={disabled} onChange={value => set('protocol', value)}/></Field>
-    <Field label="Base URL *"><Input required aria-label={prefix + 'Base URL'} placeholder="https://api.example.com/v1" value={value.baseUrl} disabled={disabled} onChange={value => set('baseUrl', value)}/></Field>
+    <Field label="服务地址（Base URL） *"><Input required aria-label={prefix + '服务地址（Base URL）'} placeholder="https://api.example.com/v1" value={value.baseUrl} disabled={disabled} onChange={value => set('baseUrl', value)}/></Field>
     <ConnectionApiKeys value={value} onChange={onChange} disabled={disabled} optionalKey={optionalKey} prefix={prefix}/>
   </div>;
 }

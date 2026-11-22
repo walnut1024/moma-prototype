@@ -1,7 +1,10 @@
 import { resourceId } from '../resource-id.mjs';
 import { modelLibrary } from './model-library.js';
 
-export const classificationHref = '#/admin-2/model-templates?view=classification';
+export const CLASSIFICATION_KINDS = { authors: '模型作者', series: '模型系列' };
+export const classificationKind = params => params.get('tab') === 'series' ? 'series' : 'authors';
+export const classificationQuery = kind => kind === 'series' ? { view: 'classification', tab: kind } : { view: 'classification' };
+export const classificationHref = kind => '#/admin-2/model-templates?' + new URLSearchParams(classificationQuery(kind));
 export const classificationKey = name => String(name ?? '').normalize('NFKC').trim().replace(/\s+/gu, ' ').toLowerCase();
 const scopedKey = (author, name) => JSON.stringify([author, classificationKey(name)]);
 const names = entry => [entry.name, ...entry.aliases, ...(entry.formerNames || [])];

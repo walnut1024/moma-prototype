@@ -356,7 +356,7 @@ export default function TextExperience({ onCompare, title = "文本生成", imag
           <Button theme="borderless" type="tertiary" onClick={requestBlank}>新建对话</Button>
         </div>
       ) : (
-        <FrontPageHeader className="pg-heading" title={title} icon={Languages} description={imageUploadEnabled ? "文本生成用于问答、创作和翻译；支持图片输入的模型还可进行图文理解。" : "文本生成模型用于理解和生成文字；多模态模型还可以理解图片、视频等内容。"}
+        <FrontPageHeader className="pg-heading" title={title} icon={Languages} description={imageUploadEnabled ? "文本生成用于问答、创作和翻译；支持图片输入的模型还可进行图文理解。" : "文本生成模型用于理解和生成文字；多模态理解模型还可以分析图片、视频等内容。"}
           actions={<div className="pg-heading-actions">
             <Select aria-label="恢复历史对话" placeholder="历史对话" value="" disabled={busy}
               optionList={conversations.map(row => ({value:row.id,label:row.title}))}

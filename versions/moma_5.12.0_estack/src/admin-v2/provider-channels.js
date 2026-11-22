@@ -7,8 +7,8 @@ import { connectionFingerprint, connectionTestPassed, connectionCredentialsReady
 import { supplyModelUrl } from './model-management.js';
 import { modelTaskUrl } from './channel-interface.js';
 import { activeChannelProcurement } from './channel-change-management.js';
-import { supplyModelRecord, supplierModelIds, retiredSupplierModelIds } from './supply-models.js';
-import { libraryRecord } from './model-library.js';
+import { supplyModelRecord, supplierModelIds, retiredSupplierModelIds, supplyModelSnapshot } from './supply-models.js';
+import { libraryRecord, modelMaterial } from './model-library.js';
 
 export const CHANNEL_ORIGINS = { undisclosed: '未披露', direct: '自营', resale: '转售' };
 const channelProbe = channel => [channel.task, channel.health?.task, channel.qualification?.task].find(task => ['speech', 'transcription'].includes(task));
@@ -203,7 +203,11 @@ export function providerChannelTransaction(state, { operation, objectId, data = 
     const shared = current?.endpointId && (state.modelSupplies.some(item => item.endpointId === current.endpointId && item.status !== '已移除') || entries.some(item => item.endpointId === current.endpointId && item.modelId !== data.modelId));
     if (shared && connectionChanged && !data.confirmed) throw new Error('请确认共享接入地址变更会使关联模型需要重新验证');
     const pricing = channelCosts(provider, data.modelId, data.scenarios, normalizePrice, true);
-    next = { ...(current?.listPriceVersions ? { listPriceVersions: current.listPriceVersions, listPriceRevision: current.listPriceRevision } : {}), id: current?.id || resourceId('channel'), modelId: data.modelId, endpointId: endpoint.id, apiAddresses, name, origin: data.origin, upstreamProvider, upstreamModelId, pricing, enabled: current?.enabled || false, health: current ? currentHealth(current) : null, source: current?.source, checkedAt: current?.checkedAt, sourceNote: current?.sourceNote, updatedAt: new Date().toISOString() };
+    const entry = provider.catalogModels?.find(row => row.modelId === data.modelId);
+    const material = !current && entry?.libraryId && modelMaterial(state, entry.libraryId);
+    if (!current && entry?.libraryId && !material) throw Error('模型资料不存在，请重新选择');
+    const modelSnapshot = current?.modelSnapshot || (material && supplyModelSnapshot(material));
+    next = { ...(modelSnapshot && { modelSnapshot, type: current?.type || modelSnapshot.type }), ...(current?.listPriceVersions ? { listPriceVersions: current.listPriceVersions, listPriceRevision: current.listPriceRevision } : {}), id: current?.id || resourceId('channel'), modelId: data.modelId, endpointId: endpoint.id, apiAddresses, name, origin: data.origin, upstreamProvider, upstreamModelId, pricing, enabled: current?.enabled || false, health: current ? currentHealth(current) : null, source: current?.source, checkedAt: current?.checkedAt, sourceNote: current?.sourceNote, updatedAt: new Date().toISOString() };
     const changed = !current || channelFingerprint({ ...next, endpoint }) !== channelFingerprint(current);
     next.protocolTests = changed ? {} : current?.protocolTests;
     if (changed) { next.enabled = false; next.health = null; }

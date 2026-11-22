@@ -12,12 +12,13 @@ import { connectionFingerprint, connectionTestPassed, connectionBlockReason } fr
 import { providerCataloguePrice } from './moma-catalogue-prices.js';
 import { cataloguePurchasePrice, billingItemKey, parseSaleAmount } from './provider-catalogue-pricing.js';
 import { activeChannelProcurement } from './channel-change-management.js';
-import { libraryRecord } from './model-library.js';
+import { modelMaterial, MODEL_CATALOGUE_TYPES } from './model-library.js';
 import { platformPublicationCheck, platformPublicationFingerprint } from './platform-publication-state.js';
+import { MODEL_TASK_LABELS as MODEL_TYPES, MODEL_TYPE_LABELS, modelCategory } from '../model-types.mjs';
 
-export const MODEL_TYPES = { text: '语言模型', multimodal: '视觉理解', image: '图像生成', video: '视频生成', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
-export const SERVICE_MODEL_TYPES = { text: '语言模型', visual: '视觉模型', multimodal: '多模态模型', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
-export const MODEL_CATEGORIES = { text: '语言模型', multimodal: '视觉理解', visual: '视觉生成', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
+export { MODEL_TYPES };
+export const SERVICE_MODEL_TYPES = MODEL_CATALOGUE_TYPES;
+export const MODEL_CATEGORIES = MODEL_TYPE_LABELS;
 export const MODEL_CATEGORY_DESCRIPTIONS = {
   text: '以对话、写作和推理为主，也可理解图片、视频。',
   multimodal: '以图片、视频分析为主，如识图、图表解读和视频问答。',
@@ -25,8 +26,9 @@ export const MODEL_CATEGORY_DESCRIPTIONS = {
   audio: '将语音转成文字，或将文字转成语音。',
   embedding: '将内容转成向量，用于查找相似内容。',
   rerank: '按相关程度重新排列检索结果。',
+  other: '用于分类、审核、翻译或 3D 生成等专用任务。',
 };
-export const modelCategory = type => ['image', 'video'].includes(type) ? 'visual' : type;
+export { modelCategory };
 export const modelCode = model => model.modelId;
 export function supplyModelUrl(supply, model) {
   if (supply.endpoint?.interfaceType && model?.type) { try { return modelTaskUrl(supply.endpoint, model.type); } catch { return ''; } }
@@ -222,8 +224,8 @@ export function modelTransaction(state, action) {
   if(model?.archivedAt && !action.catalogue)throw Error('服务已归档，请先恢复服务');
   let objectId = model?.id;
   if (creating || operation === 'basic' || operation === 'serviceBasics') {
-    const libraryId = creatingService ? data.libraryId : model?.templateId;
-    const source = libraryId ? libraryRecord(state, libraryId) : null;
+    const libraryId = creatingService ? data.libraryId : null;
+    const source = libraryId ? modelMaterial(state, libraryId) : null;
     if (creatingService && !draftId && (!libraryId || !serviceModelSources(state).some(record=>record.id===libraryId))) throw new Error('请选择模型接入中已登记的模型；供应关系可能已变化');
     if (libraryId && !source) throw new Error('来源模型资料已变化，请重新选择');
     if (creatingService && source && serviceSourceIds(state).has(source.id)) throw new Error('该模型资料已有模型服务，请进入现有服务配置');
@@ -247,7 +249,9 @@ export function modelTransaction(state, action) {
     const identifierLabel = action.catalogue ? '模型编码' : '模型调用标识';
     if (!modelId || !compact && !/^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error(identifierLabel + '需使用小写字母、数字或 . _ : / -，最多 80 字符');
     if (!data.name?.trim() || !draftId && !action.catalogue && !allowIncompleteProfile && !data.description?.trim()) throw new Error('模型展示名和介绍必填');
-    if (!draftId && (typeof data.type!=='string' || !Object.hasOwn(MODEL_TYPES,data.type))) throw new Error('请选择有效的模型类型');
+    if (!draftId && (typeof data.type !== 'string' || (data.type !== 'other' && !Object.hasOwn(MODEL_TYPES, data.type)))) {
+      throw new Error('请选择有效的模型类型');
+    }
     if (state.models.some(item => item.id !== model?.id && item.modelId.toLowerCase() === modelId.toLowerCase())) throw new Error(identifierLabel + '已存在');
     if (creatingService && serviceNameInUse(state, data.name, model?.id)) throw new Error(DUPLICATE_SERVICE_NAME);
     const declaredCapabilities = capabilities(data.capabilities, data.type, true);

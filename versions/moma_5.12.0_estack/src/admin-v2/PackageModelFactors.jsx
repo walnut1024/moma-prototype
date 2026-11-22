@@ -260,7 +260,7 @@ export default function PackageModelFactors({ state, transact, conflict, dirty }
   ];
 
   return <div className="admin-page-stack">
-    <Typography.Paragraph type="secondary">可从平台的 <Typography.Text link={{ href: '#/admin-2/listing' }}>模型服务</Typography.Text> 添加未归档的模型。发布后，允许加入套餐的模型仍须在具体套餐中选入。</Typography.Paragraph>
+    <Typography.Paragraph type="secondary">发布后，允许加入套餐的模型仍须在具体套餐中选入。</Typography.Paragraph>
     <Banner type="info" fullMode={false} closeIcon={null} title="抵扣系数如何计算"
       description="套餐扣减额度 = 各计费项实际用量 × 对应抵扣系数，再将结果相加。例如，输入 1,000 Token，输入系数为 1.5，则输入部分扣减 1,500 套餐 Token。分档时按本次请求的输入 Token 数选档，整笔按命中的系数计算。"/>
     <Card>

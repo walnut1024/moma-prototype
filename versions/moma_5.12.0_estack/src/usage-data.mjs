@@ -1,6 +1,7 @@
 import mockConfig from './mock/catalogues.json' with { type: 'json' };
 import { apiKeyOptions } from './api-key-data.mjs';
 import { shanghaiDate } from './call-log-data.mjs';
+import { MODEL_TYPE_LABELS } from './model-types.mjs';
 
 export const usageModels = mockConfig["usage-data.mjs"]["usageModels"];
 
@@ -9,12 +10,12 @@ export const usageModels = mockConfig["usage-data.mjs"]["usageModels"];
 
 export const languageMetering = mockConfig["usage-data.mjs"]["languageMetering"];
 export const usageModelGroups = [
-  { id: '语言模型', name: '语言模型', types: ['文本模型'] },
-  { id: '多模态理解', name: '多模态理解', types: ['多模态模型'] },
-  { id: '视觉模型', name: '视觉模型', types: ['视觉理解', '图片生成', '视频生成'] },
-  { id: '语音模型', name: '语音模型', types: ['语音合成', '语音识别'] },
-  { id: '向量模型', name: '向量模型', types: ['向量模型'] },
-  { id: '排序模型', name: '排序模型', types: ['重排模型'] },
+  { id: '语言模型', name: MODEL_TYPE_LABELS.text, types: ['文本模型'] },
+  { id: '多模态理解', name: MODEL_TYPE_LABELS.multimodal, types: ['多模态模型'] },
+  { id: '视觉模型', name: MODEL_TYPE_LABELS.visual, types: ['视觉理解', '图片生成', '视频生成'] },
+  { id: '语音模型', name: MODEL_TYPE_LABELS.audio, types: ['语音合成', '语音识别'] },
+  { id: '向量模型', name: MODEL_TYPE_LABELS.embedding, types: ['向量模型'] },
+  { id: '排序模型', name: MODEL_TYPE_LABELS.rerank, types: ['重排模型'] },
 ];
 export const fields = {
   successRate: ['成功率', '%', '成功次数 ÷ 请求次数。'],
