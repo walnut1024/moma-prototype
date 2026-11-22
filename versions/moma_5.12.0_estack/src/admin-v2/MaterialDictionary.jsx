@@ -12,7 +12,7 @@ function DictionaryEditor({entry,kind,ops,close}) {
   const [saving,setSaving]=useState(false);
   const change=(key,input)=>{setValue(current=>({...current,[key]:input}));ops.dirty(true);ops.setError('');};
   const cancel=()=>ops.proceed(close);
-  return <Modal visible className="semi-materials" title={entry?'编辑'+TARIFF_KINDS[kind]:kind==='unit'?'新增单位':'新增'+TARIFF_KINDS[kind]} onCancel={cancel} footer={<><Button onClick={cancel}>取消</Button><Button form={formId} htmlType="submit" theme="solid" loading={saving} disabled={!ops.can}>保存字典项</Button></>}>
+  return <Modal visible className="semi-materials" title={entry?'编辑'+TARIFF_KINDS[kind]:kind==='unit'?'新增单位':'新增货币'} onCancel={cancel} footer={<><Button onClick={cancel}>取消</Button><Button form={formId} htmlType="submit" theme="solid" loading={saving} disabled={!ops.can}>保存字典项</Button></>}>
     <Typography.Paragraph type="secondary">{kind==='scenario'?'成本与售价共用此计费项。已被引用的名称不能更改。':'用于采购与平台售价。已被引用的名称、单位及货币代码不能更改；停用后已有配置和历史保留。'}</Typography.Paragraph>
     <Form id={formId} onSubmit={async()=>{if(saving || !ops.can)return;setSaving(true);try{if(await ops.run('tariffDictionary',{operation:'save',id:entry?.id,kind,...value}))close();}finally{setSaving(false);}}}>
       <Form.Slot label={kind==='scenario'?'计费项名称':'中文名称'}><Input aria-label={kind==='scenario'?'计费项名称':'中文名称'} maxLength={kind==='unit'?40:80} value={value.name} disabled={!ops.can} onChange={input=>change('name',input)}/></Form.Slot>
@@ -39,9 +39,12 @@ export default function MaterialDictionary({state,ops,kind}) {
     {title:'操作',width:220,fixed:'right',render:(_,row)=>row.builtin?<Typography.Text type="tertiary">内置只读</Typography.Text>:<Space><Button theme="borderless" disabled={!ops.can} aria-label={'编辑 '+row.name} onClick={event=>{trigger.current=event.currentTarget;ops.setError('');setEditing({entry:row,kind});}}>编辑</Button>{kind!=='scenario' && <Button theme="borderless" disabled={!ops.can || busy} aria-label={(row.status==='已启用'?'停用 ':'启用 ')+row.name} onClick={async()=>{setBusy(true);try{await ops.run('tariffDictionary',{operation:'status',id:row.id,status:row.status==='已启用'?'已停用':'已启用'});}finally{setBusy(false);}}}>{row.status==='已启用'?'停用':'启用'}</Button>}<Button type="danger" theme="borderless" disabled={!ops.can} aria-label={'删除 '+row.name} onClick={event=>{trigger.current=event.currentTarget;ops.setError('');setRemoving(row);}}>删除</Button></Space>},
   ];
   return <>
-    <div className="materials-toolbar"><div className="materials-filters"><Input prefix={<IconSearch aria-hidden/>} showClear aria-label={'搜索'+label} placeholder={kind==='scenario'?'搜索计费项名称':'搜索'+label+'名称、英文或 ID'} value={query} onChange={setQuery}/></div><Button theme="solid" icon={<IconPlus aria-hidden/>} disabled={!ops.can} onClick={event=>{trigger.current=event.currentTarget;ops.setError('');setEditing({kind});}}>{kind==='unit'?'新增单位':'新增'+label}</Button></div>
+    <div className="materials-toolbar">
+      <div className="materials-filters"><Input prefix={<IconSearch aria-hidden/>} showClear aria-label={'搜索'+label} placeholder={kind==='scenario'?'搜索计费项名称':'搜索'+label+'名称、英文或 ID'} value={query} onChange={setQuery}/></div>
+      {kind!=='scenario' && <Button className="materials-toolbar-actions" theme="solid" icon={<IconPlus aria-hidden/>} disabled={!ops.can} onClick={event=>{trigger.current=event.currentTarget;ops.setError('');setEditing({kind});}}>{kind==='unit'?'新增单位':'新增货币'}</Button>}
+    </div>
     {idError && <Banner type="danger" description={idError}/>}
-    <Table rowKey="id" columns={columns} dataSource={rows} scroll={{x:kind==='scenario'?700:1000,y:'calc(100vh - 365px)'}} pagination={false} empty={'没有符合条件的'+label}/>
+    <Table rowKey="id" columns={columns} dataSource={rows} scroll={{x:kind==='scenario'?'max(100%, 700px)':'max(100%, 1060px)',y:'calc(100vh - 365px)'}} pagination={false} empty={'没有符合条件的'+label}/>
     {editing && <DictionaryEditor key={editing.entry?.id || kind} {...editing} ops={ops} close={close}/>}
     <Modal visible={Boolean(removing)} className="semi-materials" title="删除自定义字典项" onCancel={close} okText="确认删除" cancelText="取消" confirmLoading={busy} okButtonProps={{type:'danger',disabled:!ops.can}} onOk={async()=>{setBusy(true);try{if(await ops.run('tariffDictionary',{operation:'delete',id:removing.id}))close();}finally{setBusy(false);}}}>
       <Typography.Paragraph>确认删除“{removing?.name}”？仅可删除未被价格、草稿或计费项引用的条目。{kind!=='scenario' && '已有历史引用时，可改为停用。'}</Typography.Paragraph>{ops.error && <Banner type="danger" description={ops.error}/>}

@@ -44,3 +44,36 @@ test('channel model autofill requires the same provider, base URL and effective 
   assert.equal(matchesChannelModel(rows.get('other-address'), { ...filters, baseUrl: otherAddress.baseUrl, query: 'vendor/remote' }), true);
   assert.equal(matchesChannelModel(rows.get('other-format'), { ...filters, format: 'openai-responses' }), true);
 });
+
+test('provider candidates follow the registered model list and its saved API bindings', () => {
+  const provider = {
+    id: 'provider-registered', code: 'deepseek', sourceType: 'thirdParty',
+    catalogModelIds: ['registered-offer'],
+    catalogModels: [{
+      modelId: 'registered-offer', libraryId: 'registered-offer',
+      offerFields: { name: '服务商登记名称', bindings: [{
+        protocol: 'OpenAI Chat Completions', url: 'https://api.deepseek.com/v1/chat/completions', upstream: 'vendor/registered',
+      }] },
+    }],
+  };
+  const endpoint = {
+    id: 'channel-target', providerId: provider.id, interfaceType: 'openai',
+    endpointPath: '/v1/chat/completions', baseUrl: 'https://api.deepseek.com',
+  };
+  const modelTemplates = [
+    { id: 'registered-offer', modelId: 'registered-offer', name: '模型库名称', type: 'text' },
+    { id: 'official-only', modelId: 'deepseek-v4-pro', name: 'DeepSeek 官方参考', type: 'text' },
+  ];
+  const state = { modelTemplates, models: [], modelSupplies: [], providers: [provider], endpoints: [endpoint], modelData: {} };
+  const rows = channelModelCandidates(state, { provider, endpoint, models: [] });
+  assert.deepEqual(rows.filter(row => row.supplied).map(row => row.id), ['registered-offer']);
+  const [registered, official] = rows;
+  assert.equal(registered.providerModelName, '服务商登记名称');
+  assert.equal(registered.defaultSource.upstreamModelId, 'vendor/registered');
+  assert.equal(registered.defaultSource.baseUrl, endpoint.baseUrl);
+  assert.equal(official.sources[0].name, '官方参考');
+  assert.equal(official.supplied, false);
+  assert.equal(matchesChannelModel(registered, {
+    query: '服务商登记', format: 'openai', baseUrl: endpoint.baseUrl, targetFormat: 'openai', targetBaseUrl: endpoint.baseUrl,
+  }), true);
+});

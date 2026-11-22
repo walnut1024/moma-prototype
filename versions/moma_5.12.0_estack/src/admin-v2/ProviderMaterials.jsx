@@ -39,7 +39,7 @@ function ProviderList({ state, ops, providers }) {
         <Choice label="筛选供给类型" value={sourceType} options={[[ 'all', '全部供给类型' ], ...Object.entries(PROVIDER_TYPES)]}
           onChange={type => update({ type: type === 'all' ? null : type, page: null })}/>
       </div>
-      <Space wrap>
+      <Space wrap className="materials-toolbar-actions">
         <Button disabled={!ops.can} onClick={() => ops.go({ view: 'import' })}>批量导入服务商资料</Button>
         <Button disabled={!ops.can} onClick={() => ops.go({ view: 'relations' })}>批量导入供应关系</Button>
         <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can} onClick={() => ops.go({ view: 'new' })}>添加服务商</Button>
@@ -51,7 +51,7 @@ function ProviderList({ state, ops, providers }) {
       { title: '服务商编码', width: 160, render: (_, row) => <Typography.Text className="materials-code">{providerCode(row)}</Typography.Text> },
       { title: '服务商 Logo', width: 120, render: (_, row) => <MaterialLogo key={row.logo || ''} src={row.logo} alt={row.name + '的服务商 Logo'}/> },
       { title: '供给类型', width: 150, render: (_, row) => PROVIDER_TYPES[row.sourceType] || '—' },
-      { title: '已登记模型数', align: 'right', width: 130, render: (_, row) => <Button theme="borderless" aria-label={`查看 ${row.name} 的供应模型`} onClick={() => open(row)}>{providerMaterialModels(state, row).length}</Button> },
+      { title: '已登记模型数', align: 'right', width: 130, render: (_, row) => <Button theme="borderless" aria-label={`查看 ${row.name} 的模型列表`} onClick={() => open(row)}>{providerMaterialModels(state, row).length}</Button> },
       { title: '操作', width: 150, render: (_, row) => <Space>
         <Button theme="borderless" disabled={!ops.can} onClick={() => open(row, true)}>编辑</Button>
         <Button theme="borderless" onClick={() => viewMaterialChannels(ops, row.id)}>查看渠道</Button>
@@ -73,7 +73,7 @@ function ProviderModels({ state, ops, provider }) {
     <div className="materials-toolbar">
       <div className="materials-filters"><SearchBox placeholder="搜索模型展示名、标识或编码" value={query}
         onChange={modelQ => update({ modelQ: modelQ || null, modelPage: null })}/></div>
-      <Space wrap>
+      <Space wrap className="materials-toolbar-actions">
         <Button disabled={!ops.can} onClick={() => ops.go({ view: 'modelImport' })}>批量导入并登记</Button>
         <Button theme="solid" disabled={!ops.can} onClick={event => { trigger.current = event.currentTarget; setRegistering(true); }}>登记供应模型</Button>
       </Space>
@@ -116,7 +116,7 @@ export default function ProviderMaterials(props) {
     {!importKind && ops.conflict && <div className="materials-description"><Notice error>资料已有修订，当前输入保留。<Button theme="borderless" onClick={ops.reload}>载入最新数据</Button></Notice></div>}
     {(view || (providerId && !provider)) && <div className="materials-description">
       <Button theme="borderless" onClick={importKind && provider ? () => go({ view: null }) : back}>
-        {importKind && provider ? '返回供应模型' : returnTo?.startsWith('#/admin-2/providers-reference') ? '返回渠道管理' : returnTo ? '返回来源页面' : '返回服务商列表'}
+        {importKind && provider ? '返回模型列表' : returnTo?.startsWith('#/admin-2/providers-reference') ? '返回渠道管理' : returnTo ? '返回来源页面' : '返回服务商列表'}
       </Button>
     </div>}
     {importKind ? <div className="materials-description">
@@ -129,7 +129,7 @@ export default function ProviderMaterials(props) {
     </> : provider ? <>
       <Typography.Title heading={4}><span ref={title} tabIndex={-1}>{provider.name}</span></Typography.Title>
       <Tabs activeKey={tab} onChange={tab => go({ tab: tab === 'profile' ? tab : null, edit: null }, { preserveScroll: true })} aria-label="服务商资料详情">
-        <Tabs.TabPane itemKey="models" tab="供应模型">{tab === 'models' && <ProviderModels key={provider.id} state={state} ops={ops} provider={provider}/>}</Tabs.TabPane>
+        <Tabs.TabPane itemKey="models" tab="模型列表">{tab === 'models' && <ProviderModels key={provider.id} state={state} ops={ops} provider={provider}/>}</Tabs.TabPane>
         <Tabs.TabPane itemKey="profile" tab="基础资料">{tab === 'profile' && <ProviderMaterialProfile
           key={provider.id + (editing ? ':edit' : ':view:' + provider.updatedAt)} provider={provider}
           editing={editing} ops={ops} saved={saved} edit={() => go({ edit: '1' })} cancel={() => go({ edit: null })}/>}</Tabs.TabPane>

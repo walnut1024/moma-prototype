@@ -5,6 +5,7 @@ import { officialChannelReferences } from './onboarding-presets.js';
 import { OFFICIAL_CHANNEL_PRESETS } from './official-channel-presets.js';
 import { channelInterfaceIssue } from './provider-channels.js';
 import { providerMaterialModels } from './provider-materials.js';
+import { offerFields } from './supplier-offer-fields.js';
 import { modelTypeLabel } from '../model-types.mjs';
 
 export const sourceFormat = endpoint => endpoint.modelProtocol || endpoint.interfaceType || endpoint.protocol || '';
@@ -21,7 +22,8 @@ function taskUrl(endpoint, model) {
 export function channelModelCandidates(state, channel) {
   const { provider, endpoint, models } = channel;
   const sources = new Map();
-  const supplied = new Set();
+  const supplied = new Map(providerMaterialModels(state, provider).map(group => [group.master.id, group]));
+  const format = sourceFormat(endpoint), baseUrl = sourceBaseUrl(endpoint.baseUrl);
   const added = new Map(models.map(row => [row.master?.id, row.association.upstreamModelId]));
   const existingIds = new Set([
     ...models.map(row => row.association.upstreamModelId),
@@ -36,16 +38,27 @@ export function channelModelCandidates(state, channel) {
   const addSource = (id, source) => {
     if (!sources.has(id)) sources.set(id, []);
     sources.get(id).push(source);
-    supplied.add(id);
   };
-  for (const group of providerMaterialModels(state, provider)) {
-    supplied.add(group.master.id);
+  for (const [id, group] of supplied) {
+    if (group.entry?.offerFields) {
+      const targetUrl = taskUrl(endpoint, group.master);
+      for (const { protocol, url, upstream } of offerFields(group, provider).bindings) {
+        const type = CHANNEL_LIST_TYPES.find(row => row.label === protocol);
+        const requestUrl = sourceBaseUrl(url);
+        const path = type?.paths.find(suffix => requestUrl.endsWith(suffix));
+        if (!path) continue;
+        const sourceBase = type.id === format && requestUrl === targetUrl ? baseUrl
+          : type.task ? requestUrl : requestUrl.slice(0, -path.length);
+        addSource(id, { name: '服务商模型资料', format: type.id, baseUrl: sourceBase, upstreamModelId: upstream, requestUrl });
+      }
+      continue;
+    }
     for (const row of group.channels) {
       if (!row.endpointId || row.endpoint.deletedAt || row.endpoint.adapterDraft) continue;
       const explicit = knownIds.has(sourceKey(row.endpointId, row.modelId, row.upstreamModelId));
-      addSource(group.master.id, {
+      addSource(id, {
         name: row.name, format: sourceFormat(row.endpoint), baseUrl: sourceBaseUrl(row.endpoint.baseUrl),
-        upstreamModelId: explicit ? row.upstreamModelId : '', endpoint: row.endpoint,
+        upstreamModelId: explicit ? row.upstreamModelId : '', endpointId: row.endpointId, requestUrl: taskUrl(row.endpoint, group.master),
       });
     }
   }
@@ -54,24 +67,24 @@ export function channelModelCandidates(state, channel) {
     if (officialChannelReferences(state, preset).supplier.providerId !== provider.id) continue;
     for (const row of preset.models) {
       const matches = catalogue.filter(model => model.onboardingPresetId === row.id || model.modelId?.toLowerCase() === row.modelId);
-      if (matches.length !== 1 || matches[0].type !== row.type) continue;
+      if (matches.length !== 1 || matches[0].type !== row.type || supplied.has(matches[0].id)) continue;
       const baseUrl = sourceBaseUrl(row.baseUrl);
       addSource(matches[0].id, {
         name: '官方参考', format: 'openai', baseUrl, upstreamModelId: row.upstreamModelId,
-        endpoint: { interfaceType: 'openai', baseUrl },
+        requestUrl: taskUrl({ interfaceType: 'openai', baseUrl }, matches[0]),
       });
     }
   }
-  const format = sourceFormat(endpoint), baseUrl = sourceBaseUrl(endpoint.baseUrl);
   return catalogue.map(model => {
     const options = sources.get(model.id) || [];
     const targetUrl = taskUrl(endpoint, model);
+    const group = supplied.get(model.id);
     const matches = options.filter(source => validUpstreamId(source.upstreamModelId)
       && source.format === format && source.baseUrl && source.baseUrl === baseUrl
-      && (source.endpoint.id === endpoint.id || Boolean(targetUrl && targetUrl === taskUrl(source.endpoint, model))));
+      && (source.endpointId === endpoint.id || Boolean(targetUrl && targetUrl === source.requestUrl)));
     const ids = new Set(matches.map(source => source.upstreamModelId));
     return {
-      id: model.id, model, supplied: supplied.has(model.id), sources: options,
+      id: model.id, model, supplied: Boolean(group), providerModelName: group?.entry?.offerFields?.name || group?.master.name, sources: options,
       defaultSource: ids.size === 1 ? matches[0] : undefined,
       added: added.has(model.id), currentUpstreamId: added.get(model.id),
       issue: channelInterfaceIssue(provider, { type: model.type, endpoint }),
@@ -88,6 +101,6 @@ export function matchesChannelModel(row, { format, baseUrl, query, targetFormat,
   const defaultFilters = (!format || format === targetFormat) && (!baseUrl || baseUrl === targetBaseUrl);
   if (!matchingSources.length && (format || baseUrl) && !(defaultFilters && !row.sources.length)) return false;
   const keyword = query.trim().toLowerCase();
-  return !keyword || [row.model.name, row.model.modelId, modelTypeLabel(row.model.type), ...matchingSources.map(source => source.upstreamModelId)]
+  return !keyword || [row.model.name, row.providerModelName, row.model.modelId, modelTypeLabel(row.model.type), ...matchingSources.map(source => source.upstreamModelId)]
     .some(value => value?.toLowerCase().includes(keyword));
 }

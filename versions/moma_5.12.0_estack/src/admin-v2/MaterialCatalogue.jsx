@@ -76,7 +76,11 @@ export default function MaterialCatalogue({ state, ops }) {
         onChange={value => { setSeriesId(value); firstPage(); }}/>
       <Button onClick={() => { setQuery(''); setType('all'); setAuthorId(undefined); setSeriesId(undefined); firstPage(); }}>重置筛选</Button>
     </div>
-      <Button disabled={!ops.can} onClick={() => ops.go({ view: 'templateImport' })} style={{ marginInlineStart: 'auto' }}>批量导入模型资料</Button>
+      <Space wrap className="materials-toolbar-actions">
+        <Button disabled={!ops.can} onClick={() => ops.go({ view: 'templateImport' })}>批量导入模型资料</Button>
+        <Button theme="solid" icon={<IconPlus aria-hidden/>} disabled={!ops.can}
+          onClick={event => ops.go({ view: 'template', template: null, materialMode: 'edit', drawerSide: materialDrawerSide(event.currentTarget.getBoundingClientRect(), window.innerWidth) }, { preserveScroll: true })}>新建资料</Button>
+      </Space>
     </div>
     <Table rowKey="id" columns={columns} dataSource={rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)} scroll={{ x: 'max(100%, 1523px)' }}
       pagination={{ pageSize, currentPage, total: rows.length, showSizeChanger: true, pageSizeOpts: [20, 50, 100], showTotal: true }}
@@ -86,8 +90,4 @@ export default function MaterialCatalogue({ state, ops }) {
       <Typography.Paragraph>确认删除“{removing?.name}”？已保存的模型服务、渠道配置和广场展示将保留。</Typography.Paragraph>{ops.error && <Banner type="danger" description={ops.error}/>}
     </Modal>
   </>;
-}
-
-export function NewMaterialButton({ ops }) {
-  return <Button theme="solid" icon={<IconPlus aria-hidden/>} disabled={!ops.can} onClick={event => ops.go({view:'template',template:null,materialMode:'edit',drawerSide:materialDrawerSide(event.currentTarget.getBoundingClientRect(),window.innerWidth)},{preserveScroll:true})}>新建资料</Button>;
 }

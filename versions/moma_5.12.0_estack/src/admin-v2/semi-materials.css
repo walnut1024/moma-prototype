@@ -3,7 +3,8 @@
 .materials-heading, .materials-toolbar, .materials-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .materials-heading { margin-bottom: 20px; }
 .materials-toolbar { margin: 20px 0; }
-.materials-filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.materials-toolbar-actions { margin-inline-start: auto; max-width: 100%; }
+.materials-filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; min-width: 0; max-width: 100%; }
 .materials-filters > .semi-input-wrapper { width: 320px; max-width: 100%; }
 .materials-filters > .semi-select { min-width: 160px; }
 .materials-code { overflow-wrap: anywhere; }
@@ -26,7 +27,7 @@
 .materials-logo { width: 32px; height: 32px; object-fit: contain; }
 .materials-logo-preview { width: 64px; height: 64px; object-fit: contain; }
 .semi-materials .provider-material-profile { display: grid; gap: 16px; padding-block: 20px; }
-@media (max-width: 760px) { .semi-materials.materials-page { padding: 16px; } .materials-field-grid { grid-template-columns: minmax(0, 1fr); } .materials-filters > .semi-input-wrapper { width: 100%; } }
+@media (max-width: 760px) { .semi-materials.materials-page { padding: 16px; } .materials-field-grid { grid-template-columns: minmax(0, 1fr); } .materials-filters, .materials-filters > .semi-input-wrapper { width: 100%; } }
 .materials-editor-body { height: 100%; overflow: auto; padding-right: 8px; }
 @media (max-width: 760px) {
   .semi-materials .semi-table-pagination-outer { flex-wrap: wrap; gap: 12px; }

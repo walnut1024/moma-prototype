@@ -50,12 +50,13 @@ export default function ChannelModelBatchAdd({ state, channel, ops, close, manua
     else if (!upstreamModelId) status = 'missing';
     else if (!validUpstreamId(upstreamModelId)) status = 'invalid';
     else if (row.existingIds.has(upstreamModelId) || (upstreamIds.get(upstreamModelId) || 0) > Number(selected)) status = 'duplicate';
-    return { ...row, value, upstreamModelId, selected, status };
+    const displayName = tab === 'provider' && row.providerModelName || row.model.name;
+    return { ...row, displayName, value, upstreamModelId, selected, status };
   });
   const ready = rows.filter(row => row.selected && row.status === 'ready');
   const pending = selection.size - ready.length;
-  const visible = rows.filter(row => onlySelected ? row.selected : (tab === 'library' || row.supplied)
-    && matchesChannelModel(row, { format, baseUrl, query, targetFormat, targetBaseUrl }));
+  const visible = rows.filter(row => (tab === 'library' || row.supplied)
+    && (onlySelected ? row.selected : matchesChannelModel(row, { format, baseUrl, query, targetFormat, targetBaseUrl })));
   const selectable = visible.filter(row => row.status === 'ready');
   const checked = selectable.length > 0 && selectable.every(row => row.selected);
   const atLimit = selection.size >= batchLimit;
@@ -101,6 +102,7 @@ export default function ChannelModelBatchAdd({ state, channel, ops, close, manua
       } else {
         updateSelection(remaining);
         setSavedCount(total);
+        if (rows.some(row => remaining.has(row.id) && !row.supplied)) setTab('library');
         changeFilter(setOnlySelected, true);
       }
     } finally {
@@ -114,17 +116,17 @@ export default function ChannelModelBatchAdd({ state, channel, ops, close, manua
       indeterminate={!checked && selectable.some(row => row.selected)}
       disabled={locked || !selectable.length || atLimit && !checked}
       onChange={event => toggleRows(selectable, event.target.checked)}/></Tooltip>, width: 48,
-    render: (_, row) => <Checkbox aria-label={t('选择模型') + ' ' + row.model.name}
+    render: (_, row) => <Checkbox aria-label={t('选择模型') + ' ' + row.displayName}
       disabled={locked || !row.selected && (row.status === 'added' || row.status === 'incompatible' || atLimit)}
       checked={row.selected} onChange={event => toggleRows([row], event.target.checked)}/> },
-    { title: t('模型名称 / 编码'), width: 190, render: (_, { model }) => <div className="channel-identity">
-      <Typography.Text strong ellipsis={{ showTooltip: true }}>{model.name}</Typography.Text>
+    { title: t('模型名称 / 编码'), width: 190, render: (_, { model, displayName }) => <div className="channel-identity">
+      <Typography.Text strong ellipsis={{ showTooltip: true }}>{displayName}</Typography.Text>
       <Typography.Text type="tertiary" size="small" ellipsis={{ showTooltip: true }}>{model.modelId}</Typography.Text>
     </div> },
     { title: t('上游模型调用标识'), width: 250, render: (_, row) => {
       const candidates = options(row.sources.map(source => source.upstreamModelId)).filter(validUpstreamId);
       if (row.status === 'added' || row.status === 'incompatible') return row.value || '—';
-      const props = { 'aria-label': t('上游模型调用标识') + ' · ' + row.model.name, size: 'small',
+      const props = { 'aria-label': t('上游模型调用标识') + ' · ' + row.displayName, size: 'small',
         placeholder: t(candidates.length ? '选择或填写标识' : '填写上游模型调用标识'),
         disabled: locked || atLimit && !row.selected, value: row.value, onChange: value => editId(row, value) };
       return candidates.length ? <AutoComplete {...props} data={candidates} style={{ width: '100%' }}/>
@@ -154,6 +156,10 @@ export default function ChannelModelBatchAdd({ state, channel, ops, close, manua
     [t('接口格式'), sourceFormatLabel(targetFormat)],
     ['Base URL', endpoint.baseUrl],
   ];
+  const providerTab = tab === 'provider';
+  const maintenanceHref = providerTab
+    ? '#/admin-2/provider-materials?' + new URLSearchParams({ provider: provider.id })
+    : '#/admin-2/model-templates';
   return <Modal drawer wide title={t('添加渠道模型')} description="" onClose={cancel} className="channel-model-batch-add"
     footer={<div className="channel-model-batch-footer">
       <Space wrap>
@@ -179,8 +185,8 @@ export default function ChannelModelBatchAdd({ state, channel, ops, close, manua
       <Tabs.TabPane itemKey="library" tab={t('全部模型')}/>
     </Tabs>
     <Space wrap>
-      <Typography.Text type="secondary">{t('模型资料来自「基础资料 → 模型」')}</Typography.Text>
-      <Typography.Text link={{ href: '#/admin-2/model-templates', target: '_blank', rel: 'noopener noreferrer' }}>
+      <Typography.Text type="secondary">{t(providerTab ? '模型来自「基础资料 → 服务商 → 模型列表」' : '模型资料来自「基础资料 → 模型」')}</Typography.Text>
+      <Typography.Text link={{ href: maintenanceHref, target: '_blank', rel: 'noopener noreferrer' }}>
         {t('维护模型')}
       </Typography.Text>
     </Space>
