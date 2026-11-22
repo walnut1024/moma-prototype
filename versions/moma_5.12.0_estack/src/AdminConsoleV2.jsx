@@ -166,8 +166,8 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const [workspace, setWorkspace] = useState(pageWorkspace(initialPage) || availableWorkspaces(state.currentRole)[0] || 'operations');
   const [detailParams, setDetailParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
   const organizationView = isOrganizationPage(active, internalSite);
-  const organizationTenant = state.tenants.find(row=>row.id===state.spacePolicy?.internalTenantId);
-  const resourceTenant = state.tenants.find(row=>row.id===detailParams.get('tenant') && (!internalSite || row.id===organizationTenant?.id));
+  const organizationTenant = state.tenants?.find(row=>row.id===state.spacePolicy?.internalTenantId);
+  const resourceTenant = state.tenants?.find(row=>row.id===detailParams.get('tenant') && (!internalSite || row.id===organizationTenant?.id));
   const pageState = organizationView ? {
     ...state, tenants: state.tenants.filter(tenant => tenant.id === organizationTenant?.id),
     spacePolicy: { ...state.spacePolicy, operatingMode: 'internal', internalTenantId: organizationTenant?.id },
