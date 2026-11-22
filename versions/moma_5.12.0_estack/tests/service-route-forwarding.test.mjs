@@ -2,8 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModelWorkspace} from '../server/model-repository.js';
 import {activeRouteVersion, routingServices, serviceRoute} from '../src/admin-v2/service-routing.js';
-import {routeEditorChannels, routeEditorPayload} from '../src/admin-v2/service-route-editor.js';
-import {routeEditConfig} from '../src/admin-v2/route-workspace.js';
+import {routeCommandCandidates, routeCommandPayload,routeCommandConfig} from './service-route-command-fixture.mjs';
 import {routeMappingAddresses} from '../src/admin-v2/service-model-mappings.js';
 import {forwardingChanges, publicRouteAddress} from '../src/admin-v2/service-route-forwarding.js';
 import {commitAdminState} from '../src/admin-v2/state-transaction.js';
@@ -12,8 +11,8 @@ test('channel interface routes publish together, use registered addresses, and k
   const state = initialModelWorkspace();
   const service = routingServices(state).find(row => row.callId === 'glm-5.3-moma');
   const route = serviceRoute(state, service.id);
-  const config = routeEditConfig(service, route);
-  const channels = routeEditorChannels(state, service);
+  const config = routeCommandConfig(service, route);
+  const channels = routeCommandCandidates(state, service);
   const channel = channels.find(row => row.id === config.channels.find(member => member.enabled && !member.backup)?.supplyId);
   const chat = '/v1/chat/completions';
   const messages = '/v1/messages';
@@ -22,7 +21,7 @@ test('channel interface routes publish together, use registered addresses, and k
   assert.equal(current.find(row => row.path === messages).forwarding, '原生转发');
   const submit = forwarding => commitAdminState(state, {
     type:'modelOperations', operation:'serviceRouteConfigure', modelId:service.modelId,
-    data:routeEditorPayload(state, service, {...config, forwarding}, channels),
+    data:routeCommandPayload(state, service, {...config, forwarding}, channels),
   }, '平台管理员');
   const next = submit([{path:responses, upstreamPath:chat}, {path:messages, upstreamPath:chat}]);
   const nextRoute = serviceRoute(next, service.id);

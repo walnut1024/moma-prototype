@@ -1,5 +1,7 @@
 # MoMA 5.12.0 模型运营 UX v1.0 分阶段实施计划
 
+> 历史 UX v1.0 实施台账。现行验收见[当前模型运营验收](MODEL_ONBOARDING_ACCEPTANCE.md#当前模型运营验收)。
+
 日期：2026-11-01。基线：[已确认设计 v1.0](MODEL_OPERATIONS_UX_DESIGN.md)。  
 当前状态：P0—P3 已完成本地实施；P4 技术集成验证已执行，真人新人试用按用户要求保留待验收，由用户后续安排。本轮不部署。实际证据、两项既有回归失败和覆盖限制见 [实施台账](MODEL_ONBOARDING_PROGRESS.md)。
 

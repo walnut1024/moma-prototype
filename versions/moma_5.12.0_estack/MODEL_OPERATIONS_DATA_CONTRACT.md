@@ -38,7 +38,7 @@
 
 OpenRouter 兼容接口使用调用标识作为 `id` 或请求体 `model`，MoMA 管理接口按 `model_id` 和 `model_service_id` 定位。接入管理使用 `base_url` 和 `key_group_id` 识别服务地址和密钥组，分别沿用现有物理字段。
 
-既有模型编码、调用值和 ID 不做批量格式修复。旧内部键 `modelTemplates.modelId` 表示模型编码，`models.modelId` 在统一服务中表示调用值，关联记录的 `modelId` 可能表示内部引用；必须按对象解析，不能按同名键直接联表。
+既有模型编码、调用值和 ID 不做批量格式修复。旧内部键 `modelTemplates.modelId` 表示模型编码，历史 `models.modelId` 在存量服务中可表示调用值，关联记录的 `modelId` 可能表示内部引用；必须按对象解析，不能按同名键直接联表。
 
 旧服务商目录接口中的 `catalogModels[].modelId`、`catalogModelIds` 是服务商范围内的目录标识，保留已有大小写及专用输入校验；它既不是模型永久 ID，也不能直接充当全局模型编码。当前接入通过 `libraryId`／明确模型档案 ID 建立身份引用，新流程不新增通用“Model ID”同义字段。
 
@@ -49,7 +49,7 @@ OpenRouter 兼容接口使用调用标识作为 `id` 或请求体 `model`，MoMA
 | 模块 | 稳定关联 | 本模块维护 |
 | --- | --- | --- |
 | 渠道管理 | provider.id、connection.id、channel.id、model_id | 来源、连接配置、上游调用值、实际能力、采购配置 |
-| 模型服务 | model_service.id、model_id；映射和路由的渠道引用 | 服务名称、保存的模型字段、平台调用值、模式、路由、技术配置及启停 |
+| 模型服务 | model_service.id、model_id；映射和路由的渠道引用 | 服务名称、保存的模型字段、平台调用值、路由、故障转移配置及启停 |
 | 模型广场 | model_id 管理公共内容，model_service_id 管理具体服务 | 展示名、介绍、图标、作者等展示内容及上架、展示设置 |
 | 模型售价 | model_service_id、价格版本、计费项／单位／币种 ID | 销售价格、条件、价格版本和销售范围 |
 | 基础资料 → 模型 | 保留既有档案记录与模型身份引用 | 参考名称、类型、规格、能力及来源 |
@@ -92,7 +92,7 @@ OpenRouter 兼容接口使用调用标识作为 `id` 或请求体 `model`，MoMA
 | provider_model | id、provider_id、catalogue_model_id、catalogue_model_ids、model_id、canonical_slug、name、model_type、capabilities、registered | 全部只读；新增登记走已有接入／登记流程 |
 | connection | id、provider_id、name、base_url、protocol、interface_type、address_mode、task_urls、timeout_seconds、adapter_options、auth_mode、key_group_id、api_key_id、key_pool、configuration_revision | name、base_url、protocol、interface_type、task_urls；其余只读。协议和接口类型须一致；配置变更遵守原共享影响、候选、验证及依赖规则 |
 | channel | id、provider_id、connection_id、model_id、canonical_slug、name、upstream_model_id、enabled、api_addresses、capacity_limits、capacity_revision、procurement、procurement_history；异常关联包含 association_issue | name、upstream_model_id、capacity_limits、procurement 中的计费项和生效／到期时间；身份、状态、修订及历史只读 |
-| model_service | id、model_id、canonical_slug、model_service_config_id、call_id、provider_id、channel_id、calls_enabled、interface、mappings、routing | 仅 call_id；须满足原停用及下架等条件。模式、状态、映射和路由只读，变更仍走验证和发布流程 |
+| model_service | id、model_id、canonical_slug、model_service_config_id、call_id、provider_id、channel_id、calls_enabled、interface、mappings、routing | 仅 call_id；须满足原停用及下架等条件。状态、映射和路由只读，变更仍走验证和发布流程 |
 | market_model | id、model_id、canonical_slug、name、description、profile | name、description、profile；不回写模型资料库 |
 | market_service | id、model_id、model_service_id、model_service_config_id、canonical_slug、call_id、listing_stage、market_visible、gray_customer_ids | listing_stage、market_visible、gray_customer_ids；沿用上架／下架及灰度校验 |
 | sale_price | id、model_id、model_service_id、model_service_config_id、canonical_slug、call_id、price_version_id、effective_at、expires_at、sales_scope、items | 仅 items；销售范围和时间等当前信息只读，仍在原销售设置流程维护 |

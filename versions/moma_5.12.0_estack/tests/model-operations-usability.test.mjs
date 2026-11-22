@@ -7,7 +7,7 @@ import {parseAdminState,commitAdminState} from '../src/admin-v2/store.js';
 import {withAdminSession} from './admin-session-fixture.mjs';
 import {serviceModelSourceDraft} from '../src/admin-v2/model-profile.js';
 import {serviceArchiveIssues,checkedServiceCallId} from '../src/admin-v2/service-maintenance.js';
-import {serviceIndexModels,serviceConfiguration} from '../src/admin-v2/service-workspace.js';
+import {serviceConfiguration} from '../src/admin-v2/service-workspace.js';
 import {modelAuditChanges} from '../src/admin-v2/model-operation-history.js';
 import {commonTariffNames} from '../src/admin-v2/tariff-dictionary.js';
 import {storedModel,domainModel,domainModelWorkspace} from '../src/mock/model-fields.js';
@@ -19,7 +19,7 @@ test('archive retains stable identity and history, checks all dependencies, and 
   let s=state(),m={...structuredClone(s.models[0]),id:'ux-service',modelId:'ux-call',serviceProviders:[],listingStatus:'已下架',callsEnabled:false,serviceManaged:true};s.models.push(m);
   assert.deepEqual(serviceArchiveIssues(s,m),[]);
   const before=structuredClone(s);s=run(s,'serviceArchive',m);m=s.models.find(row=>row.id===m.id);
-  assert.ok(m.archivedAt);assert.ok(!serviceIndexModels(s,new URLSearchParams()).some(row=>row.id===m.id));assert.ok(serviceIndexModels(s,new URLSearchParams({status:'archived'})).some(row=>row.id===m.id));
+  assert.ok(m.archivedAt);
   for(const key of ['providers','endpoints','modelTemplates','modelSupplies','modelSalePrices','orders','serviceRoutes'])assert.deepEqual(s[key],before[key],key);
   assert.throws(()=>run(s,'marketVisibility',m,{visible:true}),/归档/);
   assert.throws(()=>commitAdminState(s,{type:'modelOperation',operation:'publish',modelId:m.id}),/归档/);

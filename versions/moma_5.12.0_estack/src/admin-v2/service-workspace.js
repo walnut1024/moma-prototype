@@ -1,12 +1,10 @@
-import { modelIdentity, modelServiceIdentity, modelPresentation } from '../model-identities.mjs';
 import { offerKey, providerOffer } from '../service-access.mjs';
 import { modelOperationsView } from '../mock/model-data.js';
-import { modelCategory, modelCode, modelSupplies, activeSupplyPrice, activeSupplySalePrice, priceItems, supplyModelUrl, publicationChecks } from './model-management.js';
+import { modelSupplies, activeSupplyPrice, activeSupplySalePrice, priceItems, supplyModelUrl, publicationChecks } from './model-management.js';
 import { catalogueChannels, channelUrl, channelBlockReason, channelFingerprint } from './provider-channels.js';
-import { MOMA_PROVIDER, providerCatalogueIds, supplierDirectory, displayedCatalogueIds } from './moma-provider.js';
+import { MOMA_PROVIDER, providerCatalogueIds } from './moma-provider.js';
 import { cataloguePurchasePrice } from './provider-catalogue-pricing.js';
 import { activeChannelProcurement } from './channel-change-management.js';
-import { hasMatchingCallStatus, matchesCallStatus, modelServiceStarted } from './service-directory.js';
 
 export function serviceDirectoryModels(state, linkedId, catalogue) {
   return modelOperationsView(state,catalogue,linkedId).models.filter(model => !model.deletedAt);
@@ -29,19 +27,6 @@ export function serviceNameInUse(state, name, currentId) {
     !model.deletedAt && model.id !== currentId && serviceDisplayName(model)?.trim().toLowerCase() === key));
 }
 
-export function serviceIndexModels(state, params, { byCall = false } = {}) {
-  const query = (params.get('q') || '').trim().toLowerCase(), type = params.get('type'), mode = params.get('mode'), status = params.get('status');
-  return serviceDirectoryModels(state, params.get('model'), params.get('catalogue')).filter(model =>
-    (status==='archived'?Boolean(model.archivedAt):!model.archivedAt) &&
-    (!query || [model.serviceName, modelPresentation(state,model).name, modelCode(model), modelIdentity(state,model).canonical_slug, modelIdentity(state,model).id, modelServiceIdentity(state,model), ...providerServices(model).flatMap(service=>[service.callId, modelServiceIdentity(state,model,service.channelId || service.providerId)])].join(' ').toLowerCase().includes(query)) &&
-    (!type || type === 'all' || modelCategory(model.type) === type) &&
-    (!mode || mode === 'all' || (mode === 'unset' ? !model.serviceMode : model.serviceMode === mode)) &&
-    (byCall ? hasMatchingCallStatus(model, status) : matchesCallStatus(status, modelServiceStarted(model))));
-}
-
-export function selectServiceModel(rows, requestedId) {
-  return requestedId !== null ? rows.find(model => model.id === requestedId) : rows.find(model => model.serviceReviewCase === 'video') || rows[0];
-}
 export function serviceConfiguration(state,model) {
   const issues=publicationChecks(state,model,{technical:true}).filter(check=>!check.passed),setupIssues=issues.filter(check=>check.tab!=='platform');
   return {label:!model.serviceMode?'未配置':setupIssues.length?'待配置':issues.length?'待验证':model.callsEnabled?'已启用':'可启用',issues,setupIssues};
@@ -64,10 +49,6 @@ export function serviceSupplyRows(state, model) {
 export function availableServiceChannels(state, provider, catalogueModelId) {
   if (!provider || !providerCatalogueIds(provider).includes(catalogueModelId)) return [];
   return catalogueChannels(state, provider, catalogueModelId).map(channel => ({ ...channel, reason: channelBlockReason(provider, channel) }));
-}
-export function serviceAssociationChannels(state) {
-  return supplierDirectory(state).flatMap(provider => displayedCatalogueIds(provider,state).flatMap(catalogueModelId =>
-    availableServiceChannels(state,provider,catalogueModelId).map(channel => ({...channel,provider,catalogueModelId,selectionId:JSON.stringify([provider.id,catalogueModelId,channel.id])}))));
 }
 export const serviceChannelRevision = channel => JSON.stringify([channelFingerprint(channel), channel.pricing, channel.enabled, channel.health]);
 export const serviceChannelId = channel => channel.managed ? channel.id : channel.endpoint.endpointId || channel.endpointId;

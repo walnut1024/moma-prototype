@@ -1,5 +1,16 @@
 # MoMA 运营后台模型接入优化 Spec
 
+## 当前接入与维护
+
+- 主体在「基础资料 → 服务商」维护。供应模型在服务商详情登记或导入，登记使用稳定的模型档案 ID。
+- 「模型运营 → 渠道管理 → 渠道列表 → 添加新的渠道」创建独立连接。保存后查看新渠道，初始状态为停用。在详情的「模型列表」从服务商或基础资料批量添加、获取上游模型列表，或手工录入。核对上游模型调用标识、协议匹配和采购范围后保存。
+- 从渠道详情测试模型、维护容量和采购成本。地址、接口格式及密钥变更走候选验证；验证通过并明确应用后更新有效配置。密钥仅保存掩码、指纹与引用，采购价格独立版本化。
+- 「模型服务 → 添加模型服务」可先保存基本信息。关联资料后，在「渠道模型」配置已登记渠道模型及其优先级组。路由策略继承全局，故障转移策略可单独配置。启用、广场展示及开售分别走其当前入口。
+- 连接配置、渠道模型、采购版本与服务写入通过版本 API 提交，校验角色、引用、修订及操作标识。失败保留当前输入；已保存的配置及历史按事务保护。
+- 具体现行页面和校验见[页面规格](PAGE-SPEC.md)及[当前模型运营验收](MODEL_ONBOARDING_ACCEPTANCE.md#当前模型运营验收)。以下保留先前方案的原编号、规则和上下文，供追溯。
+
+## 历史接入设计与规则
+
 | 项目 | 内容 |
 | --- | --- |
 | 文档版本 | 五模块管理端同步版 · 2026-11-06 |
@@ -744,8 +755,8 @@ Gemini 原生、Azure、Bedrock、Vertex 等不能用“其他”冒充已支持
 - [现有术语表](./GLOSSARY.md)：按具体模型服务核对调用标识和售价。
 - [旧设计访谈](./docs/model-supply-design.md)：仅作历史背景，其中旧待定项和代码事实不能覆盖当前规则。
 - [渠道管理](./src/admin-v2/ChannelDirectory.jsx)、[创建渠道](./src/admin-v2/ChannelDirectoryCreation.jsx)、[编辑渠道及模型](./src/admin-v2/ChannelConnectionEditors.jsx)。
-- [模型选择与原地资料创建](./src/admin-v2/SupplyModelPicker.jsx)、[资料表单](./src/admin-v2/ModelMetadataForm.jsx)。
-- [渠道测试界面](./src/admin-v2/SupplierChannelTest.jsx)、[模拟测试与协议定义](./src/admin-v2/provider-management.js)。
+- [模型选择与原地资料创建](./src/admin-v2/SupplyModelPicker.jsx)、`ModelMetadataForm.jsx`。
+- `SupplierChannelTest.jsx`、[模拟测试与协议定义](./src/admin-v2/provider-management.js)。
 - [供应事务与价格约束](./src/admin-v2/supplier-resources.js)、[渠道有效性](./src/admin-v2/provider-channels.js)、[密钥组](./src/admin-v2/provider-key-groups.js)。
 - [服务关系与配置状态](./src/admin-v2/service-workspace.js)、[路由策略与校验](./src/admin-v2/service-routing.js)。
 

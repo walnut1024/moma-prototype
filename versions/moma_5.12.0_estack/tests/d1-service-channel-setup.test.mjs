@@ -9,8 +9,7 @@ import {libraryRecord} from '../src/admin-v2/model-library.js';
 import {supplierModelChannelGroups} from '../src/admin-v2/supplier-model-channel-table.js';
 import {supplierChannelAssociations} from '../src/admin-v2/supplier-resources.js';
 import {routingServices,serviceRoute,activeRouteVersion,routeSourceVersion} from '../src/admin-v2/service-routing.js';
-import {routeEditorChannels,routeEditorPayload} from '../src/admin-v2/service-route-editor.js';
-import {routeEditConfig} from '../src/admin-v2/route-workspace.js';
+import {routeCommandCandidates,routeCommandPayload,routeCommandConfig} from './service-route-command-fixture.mjs';
 import {configureOnboardingTransport,prepareServerChannel,onboardingApi} from '../src/admin-v2/onboarding-client.js';
 import {useCloudMockSnapshot} from '../src/admin-v2/mock-onboarding-service.js';
 import {connectionFingerprint} from '../src/admin-v2/connection-state.js';
@@ -42,15 +41,15 @@ test('priority groups and retry limits are saved together as route versions thro
       operationId:crypto.randomUUID(),expectedRevision:state.revision,
       action:{type:'modelOperations',operation,modelId:service().modelId,data},
     });
-    const channels=routeEditorChannels(state,service());
-    const config=routeEditConfig(service(),route());
+    const channels=routeCommandCandidates(state,service());
+    const config=routeCommandConfig(service(),route());
     const groups=[{id:'P1',name:'P1',strategy:'weighted'},{id:'P2',name:'P2',strategy:'weighted'}];
     const supplies=channels.filter(row=>row.available).slice(0,3);
     assert.equal(supplies.length,3);
     const grouped={...config,strategy:'weighted',groups,channels:supplies.map((row,index)=>({
       supplyId:row.id,enabled:true,priority:index+1,weight:[10,20,70][index],groupId:index===2?'P2':'P1',
     }))};
-    const publish=await command('serviceRouteConfigure',routeEditorPayload(state,service(),grouped,channels));
+    const publish=await command('serviceRouteConfigure',routeCommandPayload(state,service(),grouped,channels));
     assert.equal(publish.status,200,await publish.text());
     state=await reload();
     assert.deepEqual(activeRouteVersion(route()).config.groups,groups);
@@ -91,7 +90,7 @@ test('supplier and service operations share a scoped, redacted audit trail throu
     await command('associateServiceProvider',{providerId,expectedUpdatedAt:model().updatedAt},modelId);
     await command('configureServiceIdentity',{providerId,callId:'glm-5.3-contract-new',expectedUpdatedAt:model().updatedAt},modelId);
     const service=()=>routingServices(state).find(row=>row.modelId===modelId && row.providerId===providerId);
-    assert.equal(routeEditorChannels(state,service()).length,0);
+    assert.equal(routeCommandCandidates(state,service()).length,0);
     await command('supplierModelsRegister',{providerId,libraryIds:[master.id]});
     const registered=supplierModelChannelGroups(state,owner()).find(row=>row.master?.id===master.id);assert(registered);
     const secrets=['qa-only-mapping-key-one','qa-only-mapping-key-two','qa-only-mapping-key-three'];await provider('addApiKeys',{...await providerApiKeysDraft(secrets),groupId:'default'});
@@ -105,16 +104,16 @@ test('supplier and service operations share a scoped, redacted audit trail throu
     const staleId=crypto.randomUUID();assert.equal((await api('/model-operations/commands',{...priorityBody,operationId:staleId},staleId)).status,409);
     await command('supplierChannelRegister',{providerId,modelId:registered.modelId,name:'新供应模型渠道',upstreamModelId:'vendor/GLM-5.3',baseUrl:'https://mapping-contract.example.invalid/v1',protocol:'OpenAI',authMode:'group',keyGroupId:'default',scenarios:[]});
     const endpointId=state.audits[0].objectId,endpoint=()=>state.endpoints.find(row=>row.id===endpointId),association=supplierChannelAssociations(state,owner(),endpointId).find(row=>row.modelId===registered.modelId);
-    assert.equal(association.enabled,false);assert.equal(serviceRoute(state,service().id),undefined);assert(routeEditorChannels(state,service()).every(row=>!row.available));
+    assert.equal(association.enabled,false);assert.equal(serviceRoute(state,service().id),undefined);assert(routeCommandCandidates(state,service()).every(row=>!row.available));
     const server=await prepareServerChannel(owner(),endpoint()),request={operationId:crypto.randomUUID(),channelId:server.id,models:[{id:master.id,associationId:association.id,upstreamModelId:association.upstreamModelId,type:'text'}]},job={providerId,endpointId,operationId:request.operationId,serverChannelId:server.id,signature:connectionFingerprint(endpoint()),associationIds:[association.id],request};
     await command('channelTestEvidenceJob',job);let batch=await onboardingApi('/tests',{method:'POST',body:request});await command('channelTestEvidenceJob',{...job,batchId:batch.id});
     for(let i=0;i<40 && batch.items.some(row=>!['passed','failed','cancelled'].includes(row.status));i++){await new Promise(resolve=>setTimeout(resolve,100));batch=await onboardingApi('/tests/'+batch.id);}
     assert(batch.items.every(row=>row.status==='passed'));await command('channelTestEvidenceReceipt',{providerId,endpointId,batch});
-    assert(routeEditorChannels(state,service()).every(row=>!row.available),'passing tests do not enable supply');
+    assert(routeCommandCandidates(state,service()).every(row=>!row.available),'passing tests do not enable supply');
     await provider('supplierModelsEnable',{endpointId,associationIds:[association.id]});
-    const channels=routeEditorChannels(state,service()),target=channels.find(row=>row.endpointId===endpointId);assert(target.available && target.candidate);
-    const config={...routeEditConfig(service(),serviceRoute(state,service().id)),strategy:'fixed',channels:[{supplyId:target.id,enabled:true,priority:1,weight:100,groupId:'P1'}]};
-    await command('serviceRouteConfigure',routeEditorPayload(state,service(),config,channels),modelId);
+    const channels=routeCommandCandidates(state,service()),target=channels.find(row=>row.endpointId===endpointId);assert(target.available && target.candidate);
+    const config={...routeCommandConfig(service(),serviceRoute(state,service().id)),strategy:'fixed',channels:[{supplyId:target.id,enabled:true,priority:1,weight:100,groupId:'P1'}]};
+    await command('serviceRouteConfigure',routeCommandPayload(state,service(),config,channels),modelId);
     const routeOperationId=lastBody.operationId;
     assert.equal((await api('/model-operations/commands',lastBody,routeOperationId)).status,200);
     const active=activeRouteVersion(serviceRoute(state,service().id)),supply=state.modelSupplies.find(row=>row.id===active.config.channels[0].supplyId);assert.equal(supply.endpointId,endpointId);assert.equal(supply.upstreamModelId,'vendor/GLM-5.3');assert.equal(supply.status,'已启用');assert.equal(supply.validationStatus,'通过');assert.equal(active.config.channels.length,1);

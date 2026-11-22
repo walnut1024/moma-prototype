@@ -9,7 +9,7 @@
 | [application.json](src/mock/application.json) | 客户、用户、成员、项目、Key、额度、订单、账单、网关规则、集群、部署、后台账号等非模型初始资源；仅创建工作区时载入 |
 | [system-model-catalogue.json](src/mock/system-model-catalogue.json) | 系统内置模型主档及既有业务所引用的模型稳定 ID |
 | [initial-workspace.json](src/mock/initial-workspace.json) | 历史评审模型资源的初始化差异；不在恢复存档时重放 |
-| [model-operations.json](src/mock/model-operations.json) | 当前统一服务和分供应商案例的模型、供应及销售配置 |
+| [model-operations.json](src/mock/model-operations.json) | 模型运营演示包的模型、供给及销售配置，导入保留案例的历史结构 |
 | [catalogues.json](src/mock/catalogues.json) | 官方参考目录、供应参考项、连接模拟响应、语音/视频/提示词素材，以及旧独立页面的参考样例；以原模块名分组，参考资料不是运行资源 |
 | [application-data.js](src/mock/application-data.js)、[model-data.js](src/mock/model-data.js) | 校验、克隆、组合初始配置及记录来源；不复制领域事务 |
 

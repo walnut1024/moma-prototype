@@ -1,5 +1,7 @@
 # MoMA 5.12.0 新人运营流程与页面组织设计
 
+> 历史 UX v1.0 设计基线。现行入口及业务规则见[页面规格](PAGE-SPEC.md)。
+
 版本：v1.0（已确认设计基线）  
 日期：2026-11-01  
 状态：用户已于 2026-11-01 确认整体方案；规格已同步，P1—P3 已完成本地实现，P4 规则/mock 和受影响界面集成检查已执行；真人新人试用由用户后续安排，整体用户验收保持待完成。
@@ -360,8 +362,8 @@ flowchart LR
 
 | 现状 | 本方案目标 | 依据 |
 | --- | --- | --- |
-| 已有四步向导，但采购、销售子页和内部确认较分散 | 复用现有能力，按业务四阶段组织，首次明确一次发布上架 | [ModelOnboarding.jsx](src/admin-v2/ModelOnboarding.jsx)、[ModelOnboardingSales.jsx](src/admin-v2/ModelOnboardingSales.jsx) |
-| 页头保存按面板绑定不同目标 | 分任务、具名保存和发布 | [ServiceManagementWorkspace.jsx](src/admin-v2/ServiceManagementWorkspace.jsx) |
+| 已有四步向导，但采购、销售子页和内部确认较分散 | 复用现有能力，按业务四阶段组织，首次明确一次发布上架 | `ModelOnboarding.jsx`、`ModelOnboardingSales.jsx` |
+| 页头保存按面板绑定不同目标 | 分任务、具名保存和发布 | `ServiceManagementWorkspace.jsx` |
 | 保存售价创建立即有效价格记录；前台串联 mock 仍使用已发布服务快照 | 草稿与发布分开，展示、后台和客户计价统一生效边界 | [model-operations.js](src/admin-v2/model-operations.js)、[domain.js](src/admin-v2/domain.js)、[mock-onboarding-service.js](src/admin-v2/mock-onboarding-service.js) |
 | 主档名称、介绍保存会直接同步引用服务 | 保存草稿不更新客户，明确发布后同步共享展示 | [model-operations.js](src/admin-v2/model-operations.js) |
 | 现有下架已停止已有客户新调用 | 保留该业务效果并明确命名，补齐执行中请求、订单入口及恢复验收 | [model-management.js](src/admin-v2/model-management.js)、[service-access.mjs](src/service-access.mjs) |

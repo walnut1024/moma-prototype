@@ -1,9 +1,10 @@
+import { storedServiceChannels } from './legacy-service-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createAdminSeed,commitAdminState,parseAdminState} from '../src/admin-v2/store.js';
 import {prepareServiceReviewCases,SERVICE_REVIEW_CASES,SERVICE_REVIEW_VERSION} from '../src/admin-v2/service-review-cases.js';
 import {modelSupplies,publicationChecks} from '../src/admin-v2/model-management.js';
-import {activeModelSalePrice,activeProviderPrice,providerServices,serviceAssociationChannels,serviceSupplyRows} from '../src/admin-v2/service-workspace.js';
+import {activeModelSalePrice,activeProviderPrice,providerServices,serviceSupplyRows} from '../src/admin-v2/service-workspace.js';
 import {routingServices,routingChannels,serviceRoute,activeRouteVersion,validateRouteConfig} from '../src/admin-v2/service-routing.js';
 
 const prepared=()=>prepareServiceReviewCases(createAdminSeed());
@@ -47,7 +48,7 @@ test('configured fixtures have complete valid routes, independent Provider IDs a
 
 test('video maintenance can bind a sixth existing channel without resource creation or automatic route changes',()=>{
   const state=prepared(),model=byCase(state,'video'),supplies=modelSupplies(state,model.id);
-  const extra=serviceAssociationChannels(state).find(channel=>channel.catalogueModelId===model.modelId && !channel.reason && !supplies.some(supply=>supply.endpointId===channel.endpointId));
+  const extra=storedServiceChannels(state).find(channel=>channel.catalogueModelId===model.modelId && !channel.reason && !supplies.some(supply=>supply.endpointId===channel.endpointId));
   assert.ok(extra);
   const next=commitAdminState(state,{type:'modelOperations',operation:'associateServiceChannels',modelId:model.id,data:{providerId:extra.provider.id,catalogueModelId:extra.catalogueModelId,channelIds:[extra.id],confirmedIdentity:true,expectedUpdatedAt:model.updatedAt}});
   assert.equal(modelSupplies(next,model.id).length,6);assert.equal(next.endpoints.length,state.endpoints.length);assert.deepEqual(next.providers,state.providers);assert.deepEqual(next.serviceRoutes,state.serviceRoutes);assert.deepEqual(next.modelSalePrices,state.modelSalePrices);

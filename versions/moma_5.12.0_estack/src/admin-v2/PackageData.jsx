@@ -6,6 +6,7 @@ import AdminPageHeading from './AdminPageHeading';
 import { format } from 'date-fns';
 import { PACKAGE_KINDS, PACKAGE_STATUS, PACKAGE_USER_TYPES } from './token-packages';
 import { operationsPeriodFromQuery, usagePreset, usagePresets, usageWindow } from './usage-analysis';
+import { packageOrdersThrough, summarizePackageOrders } from './package-order-report.js';
 import './package-production.css';
 
 const route = '#/admin-2/package-data';
@@ -17,11 +18,6 @@ const currency = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: '
 const percent = new Intl.NumberFormat('zh-CN', { style: 'percent', maximumFractionDigits: 2 });
 const rangeText = ({ start, end }) => start === end ? start : `${start} 至 ${end}`;
 const packageName = item => item.name || '未命名套餐';
-const localDay=timestamp=>{
-  const time=Date.parse(timestamp);
-  return Number.isFinite(time)?new Date(time+8*3600000).toISOString().slice(0,10):null;
-};
-
 function pageHref(params, updates) {
   const next = new URLSearchParams(params);
   next.delete('demo');
@@ -62,14 +58,8 @@ export default function PackageData({ state, params }) {
   const kind = Object.hasOwn(PACKAGE_KINDS, params.get('kind')) ? params.get('kind') : 'all';
   const { period, range } = operationsPeriodFromQuery(params);
   const today = usagePreset('today').end;
-  const orderFacts=(state.packageOrders || []).map(row=>({...row,day:localDay(row.createdAt),expires:localDay(row.expiresAt)}));
-  const packageFacts=id=>orderFacts.filter(row=>row.packageId===id && row.day && row.day<=range.end);
-  const report=item=>{
-    const rows=packageFacts(item.id);
-    const metered=rows.filter(row=>row.entitlement>0 && Number.isFinite(row.used));
-    return {quantity:rows.filter(row=>row.day>=range.start).length,expiredThroughEnd:rows.filter(row=>row.expires && row.expires<=range.end).length,
-      averageConsumptionRate:metered.length && range.end===today?metered.reduce((sum,row)=>sum+row.used/row.entitlement,0)/metered.length:null};
-  };
+  const orderFacts = packageOrdersThrough(state.packageOrders || [], range.end);
+  const packageFacts = id => orderFacts.filter(row => row.packageId === id);
   const records = state.tokenPackages;
   const selected = packageId ? records.find(item => item.id === packageId) : null;
   const rights=selected ? packageFacts(selected.id).filter(row=>!row.expires || row.expires>=range.start).map(row=>{
@@ -109,7 +99,7 @@ export default function PackageData({ state, params }) {
 
   const rows = packageId ? [] : records
     .filter(item => kind === 'all' || item.kind === kind)
-    .map(item => ({ ...item, stats:report(item) }));
+    .map(item => ({ ...item, stats:summarizePackageOrders(packageFacts(item.id), range, today) }));
   const overviewColumns = [
     { title: '套餐名称', width: 240, render: (_, item) =>
       <Typography.Text link={{ href: pageHref(params, { package: item.id }), id: `package-data-link-${item.id}` }}>

@@ -54,7 +54,7 @@
 
 OpenRouter 字段依据：[模型目录接口](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties)。同名字段不表示两端值域完全相同，也不把其调用 id 解释为 MoMA 永久主键。表中的管理字段按对象限定含义；维护文件的 provider 行用 name／slug，connection、channel 行用各自的 name。
 
-既有模型编码、调用值和 ID 不做批量格式修复。旧内部键 `modelTemplates.modelId` 表示模型编码，`models.modelId` 在统一服务中表示调用值，关联记录的 `modelId` 可能表示内部引用；必须按对象解析，不能按同名键直接联表。
+既有模型编码、调用值和 ID 不做批量格式修复。旧内部键 `modelTemplates.modelId` 表示模型编码，历史 `models.modelId` 在存量服务中可表示调用值，关联记录的 `modelId` 可能表示内部引用；必须按对象解析，不能按同名键直接联表。
 
 旧服务商目录接口中的 `catalogModels[].modelId`、`catalogModelIds` 是服务商范围内的目录标识，保留已有大小写及专用输入校验；它既不是模型永久 ID，也不能直接充当全局模型编码。当前接入通过 `libraryId`／明确模型档案 ID 建立身份引用，新流程不新增通用“Model ID”同义字段。
 

@@ -4,7 +4,6 @@ import {randomBytes,createHash} from 'node:crypto';
 import {parseAdminState,commitAdminState} from '../src/admin-v2/store.js';
 import {withAdminSession} from './admin-session-fixture.mjs';
 import {routingServices,routingChannels,serviceRoute,activeRouteVersion,lastRouteVersion,routeSourceVersion,emptyRouteConfig,routingStatus} from '../src/admin-v2/service-routing.js';
-import {routeEditConfig} from '../src/admin-v2/route-workspace.js';
 import {mappingReferences} from '../src/admin-v2/service-model-mappings.js';
 import {startLocalBackend} from '../database/local-runtime.js';
 import {domainModelWorkspace} from '../src/mock/model-fields.js';
@@ -16,11 +15,11 @@ const fixed=id=>({...emptyRouteConfig({mode:'standard'}),channels:[{supplyId:id,
 function run(f,operation,extra={},role='平台管理员'){const service=routingServices(f.state).find(row=>row.id===f.service.id);return commitAdminState(f.state,{type:'modelOperations',operation,data:{serviceId:service.id,expectedVersion:serviceRoute(f.state,service.id)?.activeVersion || 0,sourceVersion:routeSourceVersion(f.state,service),...extra}},role);}
 
 test('single-channel weighted route creation and replacement are atomic; stop releases references and restore preserves history without resuming service',()=>{
- const f=fixture(),before=structuredClone(f.state);assert.equal(routeEditConfig(f.service,null).strategy,'weighted');
+ const f=fixture(),before=structuredClone(f.state);assert.equal(emptyRouteConfig(f.service).strategy,'weighted');
  f.state=run(f,'serviceRoutePublish',{config:fixed(f.channels[0].id)});const first=structuredClone(serviceRoute(f.state,f.service.id));
  assert.throws(()=>run(f,'serviceRoutePublish',{config:fixed(f.channels[1].id),sourceVersion:'stale'}),/已变化/);assert.deepEqual(serviceRoute(f.state,f.service.id),first);
  f.state=run(f,'serviceRoutePublish',{config:fixed(f.channels[1].id)});const replacement=structuredClone(serviceRoute(f.state,f.service.id));assert.equal(activeRouteVersion(replacement).config.channels[0].supplyId,f.channels[1].id);assert.deepEqual(replacement.versions[0],first.versions[0]);
- assert.throws(()=>run(f,'serviceRouteStop',{confirmed:'true'}),/确认/);f.state=run(f,'serviceRouteStop',{confirmed:true});const stopped=serviceRoute(f.state,f.service.id);assert.equal(stopped.activeVersion,0);assert.deepEqual(stopped.versions,replacement.versions);assert.equal(mappingReferences(f.state,f.channels[1]).length,0);assert.equal(routingStatus(f.state,f.service).label,'已停用');assert.equal(routeEditConfig(f.service,stopped).channels[0].supplyId,f.channels[1].id);
+ assert.throws(()=>run(f,'serviceRouteStop',{confirmed:'true'}),/确认/);f.state=run(f,'serviceRouteStop',{confirmed:true});const stopped=serviceRoute(f.state,f.service.id);assert.equal(stopped.activeVersion,0);assert.deepEqual(stopped.versions,replacement.versions);assert.equal(mappingReferences(f.state,f.channels[1]).length,0);assert.equal(routingStatus(f.state,f.service).label,'已停用');assert.equal(lastRouteVersion(stopped).config.channels[0].supplyId,f.channels[1].id);
  const stoppedCopy=structuredClone(f.state);assert.throws(()=>run(f,'serviceRouteRestore',{confirmed:false}),/确认/);assert.throws(()=>run(f,'serviceRouteRestore',{confirmed:true},'运维人员'),/无权/);assert.deepEqual(f.state,stoppedCopy);
  f.state=run(f,'serviceRouteRestore',{confirmed:true,config:fixed(f.channels[0].id)});const restored=serviceRoute(f.state,f.service.id);assert.deepEqual(activeRouteVersion(restored).config,lastRouteVersion(stopped).config);assert.equal(activeRouteVersion(restored).restoredFrom,2);assert.deepEqual(restored.versions.slice(0,2),replacement.versions);
  for(const key of ['models','modelSupplies','providers','endpoints','supplyPrices','modelSalePrices'])assert.deepEqual(f.state[key],before[key],key);

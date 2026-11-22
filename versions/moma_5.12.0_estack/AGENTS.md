@@ -15,8 +15,8 @@
 | 模型身份、价格、供给与销售术语 | [GLOSSARY.md](GLOSSARY.md) |
 | 模型运营字段命名 | [关键概念和字段](MODEL_OPERATIONS_GUIDE_FIELDS.md#关键概念和字段) |
 | 永久 ID、对象引用、维护接口或导入导出 | [模型运营数据契约](MODEL_OPERATIONS_DATA_CONTRACT.md) |
-| 接入模型、密钥轮换、恢复或日常维护 | 页面规格的接入章节及 [MODEL_ONBOARDING_SPEC.md](MODEL_ONBOARDING_SPEC.md)相关流程 |
-| 接入验收与当前交付状态 | [MODEL_ONBOARDING_ACCEPTANCE.md](MODEL_ONBOARDING_ACCEPTANCE.md)、[MODEL_ONBOARDING_PROGRESS.md](MODEL_ONBOARDING_PROGRESS.md) |
+| 接入模型、密钥轮换、恢复或日常维护 | 页面规格的接入章节及 [当前接入与维护](MODEL_ONBOARDING_SPEC.md#当前接入与维护) |
+| 接入验收与当前交付状态 | [当前模型运营验收](MODEL_ONBOARDING_ACCEPTANCE.md#当前模型运营验收)、[MODEL_ONBOARDING_PROGRESS.md](MODEL_ONBOARDING_PROGRESS.md) |
 | 字段命名或旧路径差异核查 | [MODEL_OPERATIONS_TERMS_REVIEW.md](MODEL_OPERATIONS_TERMS_REVIEW.md) |
 | 前台认证、日志、客户或后台账号 | [共享页面约束](../../docs/PAGE-SPEC.md)中明确适用 5.12.0 的章节 |
 | 后台发布与历史验收 | 本地保留的[项目 PROGRESS](../../docs/admin-v2/PROGRESS.md)对应记录；缺失或旧阶段状态均不能确认当前发布结论 |

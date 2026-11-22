@@ -2,7 +2,6 @@ import mockConfig from '../mock/catalogues.json' with { type: 'json' };
 import { connectionFingerprint } from './connection-state.js';
 import { channelFingerprint } from './provider-channels.js';
 import { routingServices, routingChannels, validateRouteConfig } from './service-routing.js';
-import { serviceDirectoryModels, serviceConfiguration } from './service-workspace.js';
 
 export const SERVICE_REVIEW_VERSION = 1;
 export const SERVICE_REVIEW_CASES = mockConfig["admin-v2/service-review-cases.js"]["SERVICE_REVIEW_CASES"];
@@ -111,27 +110,5 @@ function prepareServiceCases(source, cases, prefix) {
     route.versions.push({id:`${route.id}-v${version}`,version,config,publishedAt:at,actor:'平台管理员',rollbackFrom:null,costVersions:Object.fromEntries(channels.map(item=>[item.id,item.costVersion]))});
     Object.assign(route,{activeVersion:version,draft:null,draftUpdatedAt:null,updatedAt:at});
   }
-  return state;
-}
-
-export function completeServiceProviderExample(source) {
-  if (source.serviceProviderExampleVersion === 1) return source;
-  const state = structuredClone(source);
-  state.serviceProviderExampleVersion = 1;
-  const ready = serviceDirectoryModels(source).some(model => model.serviceMode === 'provider' && !serviceConfiguration(source, model).setupIssues.length);
-  if (ready) return state;
-  const collections = ['models', 'modelVersions', 'providers', 'endpoints', 'modelSupplies', 'modelSalePrices', 'serviceRoutes'];
-  let prefix = 'service-delivery', serial = 1;
-  while (collections.some(key => source[key].some(item => item.id.startsWith(prefix + '-')))) prefix = `service-delivery-${++serial}`;
-  const occupied = new Set(source.models.flatMap(model => [model.modelId, ...(model.serviceProviders || []).map(entry => entry.callId)]));
-  let modelId = 'qwen3.8-max', suffix = 1;
-  while ([modelId, ...['aliyun', 'siliconflow', 'aggregate'].map(key => `${modelId}-${key}`)].some(id => occupied.has(id))) modelId = `qwen3.8-max-provider-${suffix++}`;
-  const isolated = { ...source, ...Object.fromEntries(collections.map(key => [key, []])) };
-  const sample = prepareServiceCases(isolated, [{ ...SERVICE_REVIEW_CASES.find(item => item.key === 'qwen'), id: `${prefix}-model-qwen`, modelId }], prefix);
-  const model = sample.models[0];
-  model.serviceManaged = true;
-  delete model.serviceReviewCase;
-  delete model.serviceReviewVersion;
-  for (const key of collections) state[key].push(...sample[key]);
   return state;
 }

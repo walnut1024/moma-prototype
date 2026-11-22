@@ -3,7 +3,7 @@ import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAdminSeed as baseCreateAdminSeed, commitAdminState, parseAdminState as baseParseAdminState, persistModelAction } from '../src/admin-v2/store.js';
-import { commercialPriceBase, serviceDirectoryModels, serviceIndexModels, selectServiceModel, serviceSupplyRows, activeModelSalePrice, modelSaleRevision, availableServiceChannels } from '../src/admin-v2/service-workspace.js';
+import { commercialPriceBase, serviceDirectoryModels, serviceSupplyRows, activeModelSalePrice, modelSaleRevision, availableServiceChannels } from '../src/admin-v2/service-workspace.js';
 import { callStateLabel, modelServiceStarted, serviceDirectoryRows } from '../src/admin-v2/service-directory.js';
 import { modelSupplies, publicationChecks } from '../src/admin-v2/model-management.js';
 import { routingServices, routingChannels, routeSourceVersion } from '../src/admin-v2/service-routing.js';
@@ -57,32 +57,6 @@ test('service list keeps independent public call references and shows each chann
  assert.equal(callStateLabel(modelServiceStarted({ ...model, serviceProviders: serviceProviders.slice(1) })), '已停止');
 });
 
-test('model index search and filters compose without changing total records or data',()=>{
- const state=createAdminSeed(), kimi=state.models.find(item=>item.id==='catalog-demo-kimi');
- Object.assign(kimi,{serviceMode:'provider',callsEnabled:true,serviceProviders:[
-   {providerId:'moma',channelId:'east',callId:'kimi-east',callsEnabled:true},
-   {providerId:'moma',channelId:'west',callId:'kimi-west',callsEnabled:false},
- ]});
- const before=structuredClone(state);
- const total=state.models.length;
- assert.equal(serviceIndexModels(state,new URLSearchParams()).length,total);
- assert.equal(new Set(serviceDirectoryModels(state).map(model=>model.type)).size,new Set(state.models.map(model=>model.type)).size);
- assert.ok(serviceIndexModels(state,new URLSearchParams({q:'KIMI'})).every(item=>[item.name,item.modelId].join(' ').toLowerCase().includes('kimi')));
- assert.deepEqual(serviceIndexModels(state,new URLSearchParams({q:'kimi-k3',type:'text',mode:'provider',status:'started'})).map(item=>item.id),[kimi.id]);
- const stopped = new URLSearchParams({q:'kimi-k3',type:'text',mode:'provider',status:'stopped'});
- assert.deepEqual(serviceIndexModels(state,stopped),[]);
- assert.deepEqual(serviceIndexModels(state,stopped,{byCall:true}).map(item=>item.id),[kimi.id]);
- assert.equal(serviceIndexModels(state,new URLSearchParams({q:'no-such-model'})).length,0);
- assert.equal(state.models.length,total);
- assert.deepEqual(state,before);
-});
-test('model search matches active provider-specific invocation names',()=>{
- const {state,model} = setup();
- model.serviceMode = 'provider';
- model.serviceProviders = [{callId:'tenant-inference'}, {callId:'retired-inference',status:'已移除'}];
- assert.deepEqual(serviceIndexModels(state,new URLSearchParams({q:'TENANT-INFERENCE',mode:'provider'})).map(row=>row.id),[model.id]);
- assert.deepEqual(serviceIndexModels(state,new URLSearchParams({q:'retired-inference'})),[]);
-});
 test('model directory keeps custom records and existing examples visible without deleting data',()=>{
  const state=createAdminSeed();
  const custom={...state.models[0],id:'model-user-created',name:'My model',createdAt:'2026-10-25'};
@@ -90,20 +64,9 @@ test('model directory keeps custom records and existing examples visible without
  const before=structuredClone(state), directory=serviceDirectoryModels(state);
  assert.equal(directory.length,state.models.length);assert.equal(new Set(directory.map(model=>model.type)).size,new Set(state.models.map(model=>model.type)).size);
  assert.ok(directory.includes(custom));assert.ok(directory.some(model=>model.id==='catalog-demo-kimi'));
- assert.deepEqual(serviceIndexModels(state,new URLSearchParams({q:'My model'})),[custom]);
- assert.equal(serviceIndexModels(state,new URLSearchParams({q:'kimi-k3'})).length,1);
  state.models.push(...Array.from({length:5},(_,index)=>({...custom,id:'custom-'+index})));
  assert.equal(serviceDirectoryModels(state).length,before.models.length+5);
  state.models.splice(-5);assert.deepEqual(state,before);
-});
-test('an explicit old model URL remains visible and never silently selects a different model',()=>{
- const state=parseAdminState(null),params=new URLSearchParams({model:'catalog-demo-kimi'});
- const rows=serviceIndexModels(state,params),selected=selectServiceModel(rows,params.get('model'));
- assert.equal(selected.id,'catalog-demo-kimi');
- assert.ok(serviceDirectoryModels(state,params.get('model')).some(model=>model.id===selected.id));
- assert.equal(selectServiceModel(rows,'no-such-model'),undefined);
- assert.equal(selectServiceModel(serviceIndexModels(state,new URLSearchParams({model:'catalog-demo-kimi',q:'no-match'})),'catalog-demo-kimi'),undefined);
- assert.equal(selectServiceModel(rows,null).serviceReviewCase,'video');
 });
 test('unified pricing is model-scoped, exact to six decimals, versioned and independent of channel prices',()=>{
  let {state,model}=setup();const channels=structuredClone(state.modelSupplies), prices=structuredClone(state.modelSalePrices), oldModel=structuredClone(model);

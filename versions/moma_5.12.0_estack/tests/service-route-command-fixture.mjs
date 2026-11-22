@@ -1,9 +1,9 @@
-import {mappingCandidates, mappingConfig, mappingPreview, mappingSourceVersion} from './service-model-mappings.js';
-import {routingChannels, routeSourceVersion, serviceRoute} from './service-routing.js';
-import {platformRouteInterface} from './service-route-mapping.js';
+import {mappingCandidates, mappingConfig, mappingPreview, mappingSourceVersion} from '../src/admin-v2/service-model-mappings.js';
+import {routingChannels, routeSourceVersion, serviceRoute, activeRouteVersion, emptyRouteConfig} from '../src/admin-v2/service-routing.js';
+import {platformRouteInterface} from '../src/admin-v2/service-route-mapping.js';
 
-// Candidate keys exist only in the editor; persisted routes always reference stable supply IDs.
-export function routeEditorChannels(state, service) {
+// Builds command input for existing service records with versioned routes.
+export function routeCommandCandidates(state, service) {
   const existing = routingChannels(state, service);
   const candidates = mappingCandidates(state, service);
   return [...existing.map(row => ({...row, selectable: !row.serviceMapping?.pending && candidates.some(source => source.endpointId === row.endpointId && source.id === row.channelId && !source.reason), source: mappingConfig(row, service.model)})), ...candidates.filter(row => !existing.some(supply => supply.endpointId === row.endpointId)).map(row => {
@@ -14,7 +14,11 @@ export function routeEditorChannels(state, service) {
   })];
 }
 
-export function routeEditorPayload(state, service, config, channels, removeIds = []) {
+export function routeCommandPayload(state, service, config, channels, removeIds = []) {
   return {serviceId: service.id, expectedVersion: serviceRoute(state, service.id)?.activeVersion || 0, sourceVersion: routeSourceVersion(state, service), mappingSource: mappingSourceVersion(state, service), config, sources: config.channels.filter(row => row.enabled && channels.find(channel => channel.id === row.supplyId)?.candidate).map(row => ({key: row.supplyId, config: channels.find(channel => channel.id === row.supplyId).source})), removeIds, confirmed: true};
 }
 
+
+export function routeCommandConfig(service, route) {
+  return structuredClone(activeRouteVersion(route)?.config ?? emptyRouteConfig(service));
+}

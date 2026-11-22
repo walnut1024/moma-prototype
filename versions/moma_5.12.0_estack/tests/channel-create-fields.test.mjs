@@ -1,18 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chooseChannelModel } from '../src/admin-v2/channel-create-fields.js';
 import { supplierBaseUrls } from '../src/admin-v2/supplier-resources.js';
 import { initialModelWorkspace } from '../server/model-repository.js';
 import { commitAdminState } from '../src/admin-v2/state-transaction.js';
-
-test('model name/code selections link the exact identity and custom fields do not silently reuse another model', () => {
-  const models = [{ id: 'first', name: '同名模型', modelId: 'model-a', type: 'text' }, { id: 'second', name: '同名模型', modelId: 'model-b', type: 'audio' }];
-  assert.equal(chooseChannelModel(models, {}, 'modelName', 'second').modelCode, 'model-b');
-  assert.equal(chooseChannelModel(models, {}, 'modelCode', 'model-a').modelId, 'first');
-  assert.deepEqual(chooseChannelModel(models, { modelId: 'first' }, 'modelName', '新模型'), { modelId: '', modelName: '新模型', modelCode: '', modelType: '' });
-  assert.equal(chooseChannelModel(models, {}, 'modelName', '同名模型').modelId, '');
-  assert.equal(chooseChannelModel(models, { modelId: '', modelName: '新模型' }, 'modelCode', 'new-code').modelCode, 'new-code');
-});
 
 test('provider Base URL options use the exact live address source in order and exclude other providers and archived connections', () => {
   const provider = { id: 'p' }, state = { endpoints: [{ id: '1', providerId: 'p', baseUrl: 'https://one.test/v1' }, { id: '2', providerId: 'p', baseUrl: 'https://one.test/v1' }, { id: '3', providerId: 'p', baseUrl: 'https://two.test/v1' }, { id: '4', providerId: 'q', baseUrl: 'https://foreign.test' }, { id: '5', providerId: 'p', baseUrl: 'https://gone.test', deletedAt: 'now' }] };

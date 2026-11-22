@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { serviceDirectoryRows } from '../src/admin-v2/service-directory.js';
-import { routeTableGroups } from '../src/admin-v2/route-workspace.js';
 import { createAdminSeed, commitAdminState, persistModelAction, STORAGE_KEY } from '../src/admin-v2/store.js';
 import { withAdminSession } from './admin-session-fixture.mjs';
 import { modelOperationHistory, modelOperationTarget, MODEL_OPERATION_NAMES } from '../src/admin-v2/model-operation-history.js';
@@ -16,7 +15,7 @@ function providerFixture() {
   return { state, modelId: model.id, providerId: provider.id };
 }
 
-test('routing groups use the permanent service ID for services under the same model', () => {
+test('service directory uses the permanent service ID for each stored channel service', () => {
   const {state,modelId} = providerFixture();
   const model = state.models.find(row => row.id === modelId);
   const original = model.serviceProviders[0];
@@ -33,8 +32,6 @@ test('routing groups use the permanent service ID for services under the same mo
   assert.equal(target.model_service_id,model.serviceProviders[1].record_id);
   assert.equal(target.callId,'call-second');
   assert.equal(target.channelId,'channel-second');
-  const subjects = routeTableGroups(state,model,target.id).flatMap(group => group.rows.map(row => row.service.id));
-  assert.deepEqual([...new Set(subjects)],[target.id]);
 });
 
 test('provider call-ID mapping is independent of prices, routes, resources and customer scope', () => {

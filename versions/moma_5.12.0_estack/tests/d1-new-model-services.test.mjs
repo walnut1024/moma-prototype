@@ -2,14 +2,19 @@ import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import test from 'node:test';
 import { startLocalBackend } from '../database/local-runtime.js';
+import { initializeApplication } from '../server/application.js';
 import { resourceId } from '../src/resource-id.mjs';
+import { domainModelWorkspace } from '../src/mock/model-fields.js';
+import { mappingCandidates } from '../src/admin-v2/service-model-mappings.js';
+import { channelFingerprint } from '../src/admin-v2/provider-channels.js';
+import { initialRoutingParameters, globalPolicyDefaults } from '../src/admin-v2/global-routing-parameters.mjs';
 
-test('new model services share D1, preserve the imported ID, and protect concurrent edits', async t => {
+test('new model services share D1, protect imported records, and inherit the persisted global route strategy', async t => {
   const origin = 'https://example.test';
   const endpoint = '/model-services-new';
   const accessCode = randomBytes(18).toString('hex');
   const hash = createHash('sha256').update(accessCode).digest('hex');
-  const { db, runtime } = await startLocalBackend({ loginHashes: { 'admin-001': hash, 'admin-002': hash } });
+  const { db, runtime } = await startLocalBackend({ demo: true, loginHashes: { 'admin-001': hash, 'admin-002': hash } });
   t.after(() => runtime.dispose());
 
   async function request(path, { cookie, body, site = origin, operationId = body?.operationId } = {}) {
@@ -92,4 +97,45 @@ test('new model services share D1, preserve the imported ID, and protect concurr
   assert.deepEqual((await request(endpoint, { cookie: chrome })).data, { defaults: {timeout:60,numRetries:2,allowedFails:3,cooldownTime:30,retryConditions:['429','超时','5xx'],failoverEnabled:true,strategy:'simple-shuffle'}, rows: [], deletedIds: [model.id] });
   assert.equal(await db.prepare("SELECT COUNT(*) AS n FROM audit_events WHERE entity_type='new-model-service'").first('n'), 5);
   assert.equal((await request('/health')).data.schemaVersion, 18);
+
+  const materialId = 'template-glm-5.3';
+  const workspace = await request('/model-operations', { cookie: chrome });
+  assert.equal(workspace.status, 200);
+  const candidates = mappingCandidates(domainModelWorkspace(workspace.data), { modelId: materialId })
+    .filter(candidate => !candidate.reason);
+  assert.ok(candidates.length >= 2);
+  const service = { id: resourceId('model-service'), name: 'GLM 新模型服务', callId: 'glm-test-new-service',
+    modelId: '', type: 'text', listed: false, channels: [] };
+  const created = await run(command('save', service));
+  assert.equal(created.status, 200, JSON.stringify(created.data));
+  assert.deepEqual(created.data.row.channels, []);
+  assert.equal(created.data.row.routingCustom, false);
+
+  const channels = candidates.slice(0, 2).map((candidate, index) => ({
+    id: resourceId('service-channel'), channelId: candidate.id, fingerprint: channelFingerprint(candidate),
+    name: candidate.name, upstreamId: candidate.upstreamModelId, provider: candidate.provider.name,
+    enabled: true, priority: 2, weight: index ? 30 : 70,
+  }));
+  const update = { ...created.data.row, modelId: materialId, channels, priorityGroups: [0, 2] };
+  assert.equal((await run(command('save', { ...update, channels: [channels[0], channels[0]] }, 1))).status, 400);
+  assert.equal((await run(command('save', { ...update, channels: [{ ...channels[0], fingerprint: 'stale' }] }, 1))).status, 400);
+  const linked = await run(command('save', update, 1));
+  assert.equal(linked.status, 200, JSON.stringify(linked.data));
+  assert.deepEqual(linked.data.row.channels, channels);
+  assert.deepEqual(linked.data.row.priorityGroups, [0, 2]);
+  assert.equal(linked.data.row.modelId, materialId);
+
+  await initializeApplication(db);
+  const app = await request('/application', { cookie: chrome });
+  assert.equal(app.status, 200);
+  const operationId = resourceId('operation');
+  const global = await request('/application/commands', { cookie: chrome, body: {
+    operationId, expectedRevision: app.data.revision,
+    action: { type: 'saveGlobalRoutingParameters', values: { ...initialRoutingParameters, ...globalPolicyDefaults, strategy: 'least-busy' } },
+  } });
+  assert.equal(global.status, 200, JSON.stringify(global.data));
+  const refreshed = (await request(endpoint, { cookie: inApp })).data;
+  assert.equal(refreshed.defaults.strategy, 'least-busy');
+  assert.deepEqual(refreshed.rows.find(row => row.id === service.id), linked.data.row);
+
 });

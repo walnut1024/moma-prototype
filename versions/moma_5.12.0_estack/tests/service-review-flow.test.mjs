@@ -1,8 +1,9 @@
+import { storedServiceChannels } from './legacy-service-fixture.mjs';
 import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createAdminSeed as baseCreateAdminSeed,commitAdminState,parseAdminState as baseParseAdminState,persistModelAction} from '../src/admin-v2/store.js';
-import {serviceDirectoryModels,serviceConfiguration,serviceIndexModels,serviceConfigurationTarget,serviceAssociationChannels,modelSaleRevision} from '../src/admin-v2/service-workspace.js';
+import {serviceDirectoryModels,serviceConfiguration,serviceConfigurationTarget,modelSaleRevision} from '../src/admin-v2/service-workspace.js';
 import {modelServiceStarted} from '../src/admin-v2/service-directory.js';
 import {serviceModelDraft} from '../src/admin-v2/model-profile.js';
 import {publicationChecks} from '../src/admin-v2/model-management.js';
@@ -14,8 +15,6 @@ test('configured historical review scenarios retain distinct progress and lifecy
   assert.deepEqual(models.map(model=>model.serviceReviewCase),['deepseek','qwen','image','video','audio']);
   assert.deepEqual(models.map(modelServiceStarted),[false,true,false,true,false]);
   assert.deepEqual(models.map(model=>serviceConfiguration(state,model).label),['待验证','待验证','未配置','待验证','待配置']);
-  for(const status of ['started','stopped'])assert.ok(serviceIndexModels(state,new URLSearchParams({status})).every(model=>modelServiceStarted(model)===(status==='started')));
-  assert.equal(serviceIndexModels(state,new URLSearchParams({mode:'provider'})).filter(model=>model.serviceReviewCase).length,2);
 });
 test('audio technical readiness excludes price while sales keeps its own configuration target',()=>{
   const state=parseAdminState(null),audio=state.models.find(model=>model.serviceReviewCase==='audio'),issues=serviceConfiguration(state,audio).issues;
@@ -60,7 +59,7 @@ test('image first configuration completes metadata, price and routing while pers
   run('serviceMode',{serviceMode:'standard',expectedUpdatedAt:model().updatedAt});
   run('serviceBasics',{...serviceModelDraft(model()),releaseDate:'2026-10-01',description:'根据文本和参考图片生成图像。',expectedUpdatedAt:model().updatedAt});
   run('unifiedPrice',{items:[{name:'图像输出（按张）',unit:'张',condition:'',currency:'CNY',amount:'0.2'}],expectedUpdatedAt:model().updatedAt,expectedSaleVersion:modelSaleRevision(state,id)});
-  const channel=serviceAssociationChannels(state).find(item=>item.catalogueModelId===model().modelId && !item.reason);
+  const channel=storedServiceChannels(state).find(item=>item.catalogueModelId===model().modelId && !item.reason);
   run('associateServiceChannelsBatch',{groups:[{providerId:channel.provider.id,catalogueModelId:channel.catalogueModelId,channelIds:[channel.id]}],confirmedIdentity:true,expectedUpdatedAt:model().updatedAt});
   const service=routingServices(state).find(item=>item.modelId===id),mapped=routingChannels(state,service);
   run('serviceRoutePublish',{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'weighted',autoFailover:true,channels:[{supplyId:mapped[0].id,enabled:true,priority:1,weight:100}]}});
@@ -72,7 +71,7 @@ test('image first configuration completes metadata, price and routing while pers
 });
 test('video sixth-channel association leaves published routing unchanged until a revised route is explicitly published',()=>{
   let state=parseAdminState(null);const model=state.models.find(item=>item.serviceReviewCase==='video'),service=routingServices(state).find(item=>item.modelId===model.id),before=structuredClone(activeRouteVersion(serviceRoute(state,service.id)));
-  const candidate=serviceAssociationChannels(state).find(item=>item.name.includes('备用') && item.catalogueModelId===model.modelId);
+  const candidate=storedServiceChannels(state).find(item=>item.name.includes('备用') && item.catalogueModelId===model.modelId);
   state=commitAdminState(state,{type:'modelOperations',operation:'associateServiceChannelsBatch',modelId:model.id,data:{groups:[{providerId:candidate.provider.id,catalogueModelId:candidate.catalogueModelId,channelIds:[candidate.id]}],confirmedIdentity:true,expectedUpdatedAt:model.updatedAt}});
   assert.equal(routingChannels(state,service).length,6);assert.deepEqual(activeRouteVersion(serviceRoute(state,service.id)),before);
   const current=routingServices(state).find(item=>item.id===service.id),weights=[30,20,15,15,10,10],config={strategy:'weighted',autoFailover:true,channels:routingChannels(state,current).map((item,index)=>({supplyId:item.id,enabled:true,weight:weights[index]}))};

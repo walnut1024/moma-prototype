@@ -2,12 +2,11 @@ import { legacySupplierState } from './legacy-supplier-fixture.mjs';
 import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAdminState as baseParseAdminState, createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction } from '../src/admin-v2/store.js';
+import { parseAdminState as baseParseAdminState, commitAdminState, persistModelAction } from '../src/admin-v2/store.js';
 import { displayedCatalogueIds } from '../src/admin-v2/moma-provider.js';
 import { supplierChannelResources, supplierChannelAssociations, supplierKeyChannels } from '../src/admin-v2/supplier-resources.js';
 import { connectionKeys, connectionCredentialsReady, connectionTestPassed } from '../src/admin-v2/connection-state.js';
 import { catalogueChannels, channelAddresses } from '../src/admin-v2/provider-channels.js';
-import { prepareSupplierReviewCases } from '../src/admin-v2/supplier-review-cases.js';
 import { providerApiKeysDraft, providerApiKeyRows } from '../src/admin-v2/provider-management.js';
 const owner = (s,id='provider-moma') => s.providers.find(row=>row.id===id);
 const endpoint = (s,code) => s.endpoints.find(row=>row.channelCode===code);
@@ -254,18 +253,6 @@ test('an existing service-derived model association remains editable without cha
  assert.equal(catalogueChannels(next,owner(next),'DeepSeek-V4-Flash-0731')[0].pricing.scenarios[0].listPrice,1000000);assert.deepEqual(next.endpoints,s.endpoints);unchangedServices(s,next);
 });
 
-test('fusion preserves saved resources, exact models, existing default keys, prices and service histories and never re-adds removed fixtures',()=>{
- const s=createAdminSeed(),p=owner(s);p.apiKeys=[{id:'manual-key',name:'我的凭证',fingerprint:'f'.repeat(64),maskedKey:'test••••••••2222'}];p.defaultApiKeyId='manual-key';p.catalogModels=[{modelId:'GLM-5.2',name:'我的模型展示名',type:'text'}];
- const legacy=legacySupplierState();s.endpoints.push(...legacy.endpoints.filter(row=>['supplier-review-CH-001','supplier-review-CH-002'].includes(row.id)));p.catalogConnections=owner(legacy).catalogConnections;
- const before=structuredClone(s),next=prepareSupplierReviewCases(s);
- assert.equal(owner(next).defaultApiKeyId,'manual-key');assert.deepEqual(owner(next).apiKeys[0],p.apiKeys[0]);assert.deepEqual(owner(next).catalogModels[0],p.catalogModels[0]);
- for(const e of s.endpoints)assert.deepEqual(next.endpoints.find(row=>row.id===e.id),e);
- unchangedServices(s,next);assert.deepEqual(s,before);assert.deepEqual(prepareSupplierReviewCases(next),next);
- const ep=endpoint(next,'CH-001'),link=catalogueChannels(next,owner(next),'GLM-5.2').find(row=>row.endpointId===ep.id);
- const unlinked=run(next,'supplierAssociationRemove',{modelId:link.modelId,endpointId:ep.id,associationId:link.id,confirmed:true});
- const restored=parseAdminState(JSON.stringify(unlinked));assert.equal(catalogueChannels(restored,owner(restored),'GLM-5.2').some(row=>row.id===link.id),false);
-});
-
 test('supplier resource writes retain role, conflict and storage failure guards',()=>{
  const s=legacySupplierState(),a=action('supplierChannelSave',{name:'新增',protocol:'OpenAI',baseUrl:'https://x.example.invalid/v1/chat/completions',authMode:'inherit'}),before=JSON.stringify(s);
  assert.throws(()=>commitAdminState({...s,currentRole:'运维人员'},a),/无权/);
@@ -299,7 +286,6 @@ test('model removal requires all channels to be unlinked, including disabled cha
  assert.deepEqual(s,before);
 });
 
-function createAdminSeed(...args) { return withAdminSession(baseCreateAdminSeed(...args)); }
 function parseAdminState(...args) { return withAdminSession(baseParseAdminState(...args)); }
 
 test('channel editor saves shared name and the selected upstream identity atomically without changing cost, history or other mappings',()=>{

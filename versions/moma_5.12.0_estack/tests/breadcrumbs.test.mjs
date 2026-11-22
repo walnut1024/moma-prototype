@@ -116,6 +116,14 @@ test('section breadcrumbs open a real landing page and current pages remain plai
   assert.equal(alerts.at(-1).href, undefined);
 });
 
+test('retired model operations addresses resolve to the role workspace home', () => {
+  for (const page of ['listing', 'providers', 'providers-new', 'model-costs', 'getting-started']) {
+    assert.equal(pageFromHash('#/admin-2/' + page + '?q=GLM', '运营人员'), 'dashboard');
+    assert.equal(pageFromHash('#/admin-2/' + page, '运维人员'), 'call-analysis');
+    assert.equal(canAccessPage('平台管理员', page), false);
+  }
+});
+
 test('model operations is a navigation group, not a link to a sibling model-service page', () => {
   for (const page of ['providers-reference', 'listing-new', 'model-market', 'model-templates', 'tariff-dictionary', 'provider-materials']) {
     for (const query of ['', 'perspective=models', 'provider=p1&listQ=MoMA&listPage=2']) {

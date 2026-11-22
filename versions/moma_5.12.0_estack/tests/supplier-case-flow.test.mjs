@@ -1,8 +1,7 @@
 import { legacySupplierState } from './legacy-supplier-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createAdminSeed,commitAdminState} from '../src/admin-v2/store.js';
-import {prepareSupplierReviewCases} from '../src/admin-v2/supplier-review-cases.js';
+import {commitAdminState} from '../src/admin-v2/store.js';
 import {supplierChannelResources,supplierChannelAssociations,supplierCredentialIssues,supplierChannelReadiness} from '../src/admin-v2/supplier-resources.js';
 import {displayedCatalogueIds} from '../src/admin-v2/moma-provider.js';
 import {catalogueChannels,channelInterfaceIssue,channelBlockReason} from '../src/admin-v2/provider-channels.js';
@@ -12,8 +11,17 @@ import {providerApiKeysDraft} from '../src/admin-v2/provider-management.js';
 const owner=(s,id='provider-moma')=>s.providers.find(p=>p.id===id);
 const run=(s,id,operation,values)=>commitAdminState(s,{type:'modelOperations',operation:'provider',data:{operation,objectId:id,values}});
 
+function workspaceWithUnassociatedChannel() {
+ const state = legacySupplierState();
+ const existing = state.endpoints.find(row => row.channelCode === 'CH-001');
+ const endpoint = { ...existing, id: 'endpoint-moma', endpointId: 'endpoint-moma', channelCode: 'legacy-unassociated', name: '未关联历史渠道',
+   authMode: undefined, apiKeys: [], apiKeyId: '', credentialRef: '', modelIds: [], connectionTest: null };
+ state.endpoints.push(endpoint);
+ return { state, endpoint };
+}
+
 test('an unassociated legacy resource does not make configured supplier models appear broken',()=>{
- const s=prepareSupplierReviewCases(createAdminSeed()),p=owner(s),legacy=s.endpoints.find(row=>row.id==='endpoint-moma');
+ const { state: s, endpoint: legacy } = workspaceWithUnassociatedChannel(), p = owner(s);
  assert.ok(legacy);assert.equal(connectionCredentialsReady(legacy,p),false);
  assert.equal(supplierChannelAssociations(s,p,legacy.id).length,0);
  assert.deepEqual(supplierCredentialIssues(s,p,displayedCatalogueIds(p,s)),[]);
@@ -22,7 +30,7 @@ test('an unassociated legacy resource does not make configured supplier models a
 });
 
 test('a legacy inherited-credential choice takes effect only after the channel configuration is saved',()=>{
- const s=prepareSupplierReviewCases(createAdminSeed()),p=owner(s),legacy=s.endpoints.find(row=>row.id==='endpoint-moma');
+ const { state: s, endpoint: legacy } = workspaceWithUnassociatedChannel(), p = owner(s);
  assert.equal(legacy.authMode,undefined);assert.equal(connectionCredentialsReady(legacy,p),false);
  const next=run(s,p.id,'supplierChannelSave',{endpointId:legacy.id,name:legacy.name,protocol:'OpenAI',baseUrl:'https://moma.example.invalid/v1/chat/completions',authMode:'inherit'});
  const saved=next.endpoints.find(row=>row.id===legacy.id);

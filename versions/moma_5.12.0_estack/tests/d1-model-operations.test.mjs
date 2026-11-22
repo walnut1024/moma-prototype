@@ -17,7 +17,7 @@ import {platformCandidatePlan,runPlatformTrial,publishPlatformCandidate} from '.
 import {providerApiKeysDraft} from '../src/admin-v2/provider-management.js';
 import {operationsTransaction,materialBase} from '../src/admin-v2/model-operations.js';
 import {offerKey} from '../src/service-access.mjs';
-import {serviceIndexModels} from '../src/admin-v2/service-workspace.js';
+import { modelServiceStarted } from '../src/admin-v2/service-directory.js';
 
 test('rejected cloud mode change preserves the workspace and simulation history',()=>{
   const state=initialModelWorkspace(),before=structuredClone(state),model=state.models.find(m=>m.id==='model-glm53');
@@ -103,15 +103,15 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     state=await save(fresh,{type:'modelOperations',operation:'startSales',modelId:gray.id,data:{releaseStage:'formal',confirmed:true,expectedUpdatedAt:gray.updatedAt}});
     fresh=(await api('/model-operations')).data;assert.equal(fresh.models.find(m=>m.id===gray.id).releaseStage,'formal');assert.deepEqual(fresh.models.find(m=>m.id===gray.id).releaseTenantIds,[]);
     const unifiedBefore=fresh.models.find(m=>m.id===gray.id);
-    const filter=status=>serviceIndexModels(state,new URLSearchParams({catalogue:'all',mode:'standard',status}),{byCall:true}).some(row=>row.id===gray.id);
-    assert(filter('started'));assert(!filter('stopped'));
+    const started = () => modelServiceStarted(state.models.find(row => row.id === gray.id));
+    assert.equal(started(), true);
     state=await save(fresh,{type:'modelOperations',operation:'disableService',modelId:gray.id,data:{expectedUpdatedAt:unifiedBefore.updatedAt}});
-    assert(filter('stopped'));assert(!filter('started'));
+    assert.equal(started(), false);
     assert.equal(state.models.find(m=>m.id===gray.id).releaseStage,'formal');
     const stoppedUnified=(await api('/model-operations')).data.models.find(m=>m.id===gray.id);
     assert.equal(stoppedUnified.callsEnabled,false);
     state=await save(state,{type:'modelOperation',operation:'enableService',modelId:gray.id,data:{expectedUpdatedAt:stoppedUnified.updatedAt}});
-    assert(filter('started'));assert(!filter('stopped'));
+    assert.equal(started(), true);
     fresh=(await api('/model-operations')).data;
     const model=fresh.models.find(m=>m.serviceMode==='provider'),prices=structuredClone(fresh.modelSalePrices);
     state=await save(fresh,{type:'modelOperations',operation:'stopSales',modelId:model.id,data:{offerKeys,confirmed:true,expectedUpdatedAt:model.updatedAt}});

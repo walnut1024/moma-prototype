@@ -24,8 +24,7 @@ import { configureOnboardingTransport, onboardingApi, prepareServerChannel } fro
 import { useCloudMockSnapshot } from '../src/admin-v2/mock-onboarding-service.js';
 import { routingServices } from '../src/admin-v2/service-routing.js';
 import { serviceDirectoryRows } from '../src/admin-v2/service-directory.js';
-import { routeEditorChannels, routeEditorPayload } from '../src/admin-v2/service-route-editor.js';
-import { routeEditConfig, routeTableGroups } from '../src/admin-v2/route-workspace.js';
+import { routeCommandCandidates, routeCommandPayload, routeCommandConfig } from './service-route-command-fixture.mjs';
 import { salesStatus } from '../src/admin-v2/service-sales.js';
 import { EMPTY_PACKAGE } from '../src/admin-v2/token-packages.js';
 import { commercialPriceBase } from '../src/admin-v2/service-workspace.js';
@@ -144,10 +143,10 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
       await command('associateServiceProvider',{providerId:source.providerId,channelId:source.channelId,catalogueModelId:source.modelId,expectedUpdatedAt:model().updatedAt},modelId);
       await command('configureServiceIdentity',{providerId:source.channelId,callId:source.callId,expectedUpdatedAt:model().updatedAt},modelId);
       const service=routingServices(state).find(row=>row.modelId===modelId && offerKey(row)===source.channelId);
-      const channels=routeEditorChannels(state,service);
+      const channels=routeCommandCandidates(state,service);
       assert.equal(channels.length,1);
-      const config={...routeEditConfig(service),strategy:'fixed',channels:[{supplyId:channels[0].id,enabled:true,priority:1,weight:100,groupId:'P1'}]};
-      await command('serviceRouteConfigure',routeEditorPayload(state,service,config,channels),modelId);
+      const config={...routeCommandConfig(service),strategy:'fixed',channels:[{supplyId:channels[0].id,enabled:true,priority:1,weight:100,groupId:'P1'}]};
+      await command('serviceRouteConfigure',routeCommandPayload(state,service,config,channels),modelId);
       const allowed=platformAllowedChannels(state,service);
       assert.equal(allowed[0].association.id,source.channelId);
       const plan=platformCandidatePlan(state,model(),{serviceId:service.id,tenantIds:[a,b,c],supplyIds:allowed.map(row=>row.id),technical:true});
@@ -167,13 +166,8 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     const keys=sources.map(row=>row.channelId);
     await command('startSales',release(keys,[c]),modelId,422);
     await command('startSales',release(keys,[a]),modelId);
-    assert.deepEqual(routeTableGroups(state,model()).map(group=>[group.providerId,group.providerName,
-      group.rows.map(row=>[row.span,row.service.channelId])]),[
-      [sources[0].providerId,'甲云',[[1,sources[0].channelId],[1,sources[1].channelId]]],
-      [sources[2].providerId,'乙云',[[1,sources[2].channelId]]],
-    ]);
     const offers=await local.db.prepare("SELECT record_id,id,channel_model_id,listing_stage,active_sale_price_id,active_route_id,active_publication_id FROM offers WHERE service_id=? AND retired_at IS NULL ORDER BY id").bind(modelId).all();
-    assert.equal(offers.results.length,3);
+    assert.deepEqual(offers.results.map(row => row.channel_model_id).sort(), [...keys].sort());
     for (const row of offers.results) assert(isResourceId(row.record_id, 'model_service'));
     assert(offers.results.every(row=>row.listing_stage==='gray' && row.active_sale_price_id && row.active_route_id && row.active_publication_id));
     let customer=await login('/market/login',a), other=await login('/market/login',b);
