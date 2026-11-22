@@ -43,7 +43,22 @@
 .channel-card-fields dt { color: var(--semi-color-text-2); }
 .channel-card-fields dd { margin: 4px 0 0; min-width: 0; }
 
-.channel-directory-create-dialog .semi-modal { max-width: 720px; }
+.channel-directory-create-dialog .semi-modal { max-width: 720px; margin-block: clamp(16px, 4dvh, 40px); }
+.channel-directory-create-dialog .semi-modal-body { max-height: calc(100dvh - 190px); overflow-y: auto; }
+.channel-directory-create-dialog .admin-form-field { padding-block: 4px; }
+.channel-create-section { display: grid; min-width: 0; gap: 8px; }
+.channel-create-section > * { min-width: 0; }
+.channel-create-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-height: 28px;
+  padding-top: 8px;
+  border-top: 1px solid var(--semi-color-border);
+}
+.channel-material-preview { overflow-wrap: anywhere; }
 
 .channel-management-card { min-width: 0; }
 .channel-management-toolbar {

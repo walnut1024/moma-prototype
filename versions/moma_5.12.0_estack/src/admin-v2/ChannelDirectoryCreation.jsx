@@ -6,6 +6,7 @@ import ChannelAdvancedFields from './ChannelAdvancedFields';
 import ChannelProtocolFields from './ChannelProtocolFields';
 import { Modal, Notice } from './ModelOperationsUI';
 import { Choice, Field } from './ServiceUI';
+import { AdminModal } from './AdminOverlay';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import { ChannelKeyStrategyField } from './ChannelCredentials';
 import SupplierApiKeyField from './SupplierApiKeyField';
@@ -14,9 +15,47 @@ import { CHANNEL_INTERFACES, prepareChannelAdapterOptions, prepareChannelInterfa
 import { PROVIDER_API_KEY_LIMIT, maskProviderApiKey, providerApiKeysDraft } from './provider-management';
 import { workspaceStoragePrefix } from '../workspace-storage.mjs';
 import { adapterDraftTypes, normalizeAdapterDraft } from './channel-adapter-catalogue';
+import { channelMaterialOptions } from './channel-material-import';
 
 const keyInput = () => ({ id: crypto.randomUUID(), raw: '', name: '' });
 const adapters = [...CHANNEL_INTERFACES.map(row => ({ ...row, label: workbenchProtocolLabel(row.label) })), { id: 'custom', label: '自定义任务 API', protocol: '其他' }];
+const emptyInterface = { interfaceType: '', endpointPath: null, baseUrl: '' };
+
+function ChannelMaterialImport({ providers, providerId, disabled, close, apply }) {
+  const t = useChannelText();
+  const [selectedProviderId, selectProvider] = useState(providerId);
+  const [selectedOption, selectOption] = useState();
+  const provider = providers.find(row => row.id === selectedProviderId);
+  const options = channelMaterialOptions(provider);
+  const option = options.length === 1 ? options[0] : options[selectedOption];
+  return <AdminModal visible title={t('从基础资料导入')} onCancel={close}
+    cancelText={t('取消')} okText={t('导入')} onOk={() => {
+      if (!disabled && provider && (!options.length || option)) apply(provider.id, option);
+    }} okButtonProps={{ disabled: disabled || !provider || Boolean(options.length && !option) }}>
+    <div className="channel-create-section">
+      <Field label={t('服务商')} required>
+        <Choice label={t('服务商')} value={provider?.id} placeholder={t('请选择服务商')} filter
+          options={providers.map(row => [row.id, row.name])} onChange={id => {
+            selectProvider(id);
+            selectOption(undefined);
+          }}/>
+      </Field>
+      {options.length > 1 && <Field label={t('接口资料')} required>
+        <Choice label={t('接口资料')} value={selectedOption} placeholder={t('请选择接口资料')} options={options.map((row, index) => {
+          const format = CHANNEL_LIST_TYPES.find(type => type.id === row.interfaceType);
+          return [String(index), workbenchProtocolLabel(format.label) + ' · ' + new URL(row.baseUrl).origin + row.endpointPath];
+        })} onChange={selectOption}/>
+      </Field>}
+      {options.length === 1 && <Typography.Paragraph className="channel-material-preview">
+        {workbenchProtocolLabel(CHANNEL_LIST_TYPES.find(type => type.id === option.interfaceType).label)}
+        <br/>{new URL(option.baseUrl).origin + option.endpointPath}
+      </Typography.Paragraph>}
+      {provider && !options.length && <Typography.Text type="secondary">
+        {t('该服务商暂无接口资料，导入后可手工填写。')}
+      </Typography.Text>}
+    </div>
+  </AdminModal>;
+}
 
 export default function ChannelDirectoryCreation({ state, providers, connections, source, ops, close, locate, reference = false }) {
   const t = useChannelText();
@@ -48,9 +87,13 @@ export default function ChannelDirectoryCreation({ state, providers, connections
   const [failed, setFailed] = useState({});
   const [suggestedRoot, setSuggestedRoot] = useState('');
   const [busy, setBusy] = useState(false);
+  const [importingMaterial, setImportingMaterial] = useState(false);
   const listedType = reference ? CHANNEL_LIST_TYPES.find(item => item.id === value.interfaceType) : null;
   const channelSourceType = value.channelSourceType ??
     (CHANNEL_SOURCE_TYPES.includes(provider?.sourceType) ? provider.sourceType : 'thirdParty');
+  const eligibleProviders = reference ? providers.filter(row =>
+    row.status === '已启用' && row.sourceType === channelSourceType) : [];
+  const eligibleProvider = eligibleProviders.find(row => row.id === providerId);
   const allowHttp = provider?.sourceType === 'selfHosted';
   const endpointPath = reference ? value.endpointPath ??
     channelProtocolPaths({ interfaceType: value.interfaceType, baseUrl: value.baseUrl, allowHttp })[0] ?? '' : undefined;
@@ -154,6 +197,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
     ops.setError('');
     try {
       if (!provider) throw Error('请选择服务商');
+      if (reference && !eligibleProvider) throw Error(t('请选择匹配渠道类型的已启用服务商。'));
       if (!pendingType && value.authMode === 'specific' && !provider.apiKeys?.some(key => key.id === value.apiKeyId && key.status !== 'disabled' && !key.revokedAt)) throw Error('请选择可用的 API 密钥');
       const adapterDraft = pendingType ? normalizeAdapterDraft({ kind: pendingType.id, values: pendingValues }) : null;
       const address = { ...value, endpointPath, allowHttp };
@@ -273,53 +317,83 @@ export default function ChannelDirectoryCreation({ state, providers, connections
     {createdConnections}
   </Modal>;
 
-  if (reference && !preview) return <SupplierCreationDialog wide className="channel-directory-create-dialog"
-    title={t('添加新的渠道')} cancelLabel={t('取消')} cancel={() => !busy && ops.proceed(close)}
-    submit={review} action={batch ? t('预览批量创建') : t('创建 1 个渠道')}
-    disabled={writing || !provider || !listedType || !value.name.trim() || !value.baseUrl.trim() || !endpointPath.trim() ||
-      (batch || multi ? inputs.filter(row => row.raw.trim()).length < (multi ? 2 : 1) : !inputs[0].raw.trim())}>
-    <Field label={t(batch ? '渠道名称前缀' : '渠道名称')} required help={t('填写便于识别的名称，同一服务商下不可重复。')} hint={batch ? t('根据录入行号添加编号，例如「渠道-01」。') : undefined}>
-      <Input aria-label={t(batch ? '渠道名称前缀' : '渠道名称')} value={value.name} maxLength={batch ? 57 : 60}
-        disabled={writing} onChange={name => set({ name })}/>
-    </Field>
-    <Field label={t('服务商')} required help={t('选择提供上游服务的已启用服务商。')}><Choice label={t('服务商')} value={providerId} disabled={writing}
-      options={[[ 'unselected', t('请选择服务商') ], ...providers.filter(row => row.status === '已启用').map(row => [row.id, row.name])]}
-      onChange={id => { setProviderId(id); change(); }}/></Field>
-    <Field label={t('渠道类型')} required help={t('选择第三方模型服务或自有模型推理服务。选择服务商时会带出默认值。')}>
-      <Choice label={t('渠道类型')} value={channelSourceType} disabled={writing}
-        options={CHANNEL_SOURCE_TYPES.map(type => [type, t(channelSourceTypeLabel(type))])}
-        onChange={channelSourceType => set({ channelSourceType })}/>
-    </Field>
-    <ChannelProtocolFields protocol={value.interfaceType} baseUrl={value.baseUrl} allowHttp={allowHttp}
-      disabled={writing} root={suggestedRoot} endpointPath={value.endpointPath} showHelp
-      onProtocolChange={interfaceType => set({ interfaceType, endpointPath: null })}
-      onEndpointPathChange={endpointPath => set({ endpointPath })} onBaseUrlChange={baseUrl => set({ baseUrl })}/>
-    <Field label={t('创建方式')}><Choice label={t('创建方式')} value={value.mode} disabled={writing} options={[
-      ['single', t('单密钥')], ['batch', t('批量创建渠道')], ['multi', t('一个渠道使用多把密钥')],
-    ]} onChange={mode => {
-      if (mode === 'multi' && inputs.length === 1) setInputs(items => [...items, keyInput()]);
-      set({ mode });
-    }}/></Field>
-    {(batch || multi) && <Typography.Text type="secondary">{batch
-      ? t('每行一把密钥，可在输入框中粘贴多行。预览时核对渠道名称、重复项和创建数量。')
-      : t('多把密钥组成同一个渠道的密钥池。可在输入框中粘贴多行，至少填写两把不同密钥。')}</Typography.Text>}
-    {(batch || multi ? inputs : inputs.slice(0, 1)).map((input, index) => {
-      const label = batch || multi ? t('API 密钥') + ' ' + (index + 1) : t('API 密钥');
-      return <Field key={input.id} label={label} required={!batch && !multi} help={!batch && !multi ? t('填写上游服务商签发的 API 密钥。') : undefined}>
-        <Input aria-label={label} mode="password" autoComplete="new-password" value={input.raw}
-          maxLength={512} disabled={writing} onChange={raw => editInput(input.id, { raw })}
-          onPaste={batch || multi ? event => pasteKeys(event, index) : undefined}
-          suffix={(batch || multi) && inputs.length > 1 ? <Button theme="borderless" size="small" type="tertiary" disabled={writing}
-            aria-label={'移除第 ' + (index + 1) + ' 把密钥'}
-            onClick={() => { setInputs(items => items.filter(row => row.id !== input.id)); change(); }}>移除</Button> : undefined}/>
-      </Field>;
-    })}
-    {(batch || multi) && <Space><Button theme="light" disabled={writing || inputs.length >= PROVIDER_API_KEY_LIMIT}
-      onClick={() => { setInputs(items => [...items, keyInput()]); change(); }}>{t('添加一把密钥')}</Button></Space>}
-    {multi && <ChannelKeyStrategyField value={value.keyStrategy} disabled={writing} onChange={keyStrategy => set({ keyStrategy })}/>}
-    <Field label={t('简介')}><TextArea aria-label={t('简介')} value={value.note} maxLength={300} disabled={writing} onChange={note => set({ note })}/></Field>
-    {ops.error && <Notice error>{ops.error}</Notice>}
-  </SupplierCreationDialog>;
+  if (reference && !preview) return <>
+    <SupplierCreationDialog wide className="channel-directory-create-dialog" description=""
+      title={t('添加新的渠道')} cancelLabel={t('取消')} cancel={() => !busy && !importingMaterial && ops.proceed(close)}
+      submit={review} action={batch ? t('预览批量创建') : t('创建 1 个渠道')}
+      disabled={writing || importingMaterial || !eligibleProvider || !listedType || !value.name.trim() || !value.baseUrl.trim() || !endpointPath.trim() ||
+        (batch || multi ? inputs.filter(row => row.raw.trim()).length < (multi ? 2 : 1) : !inputs[0].raw.trim())}>
+      <Field label={t('渠道类型')} required>
+        <Choice label={t('渠道类型')} value={channelSourceType} disabled={writing}
+          options={CHANNEL_SOURCE_TYPES.map(type => [type, t(channelSourceTypeLabel(type))])}
+          onChange={next => {
+            if (next === channelSourceType) return;
+            setProviderId('unselected');
+            set({ channelSourceType: next, ...emptyInterface });
+          }}/>
+      </Field>
+      <section className="channel-create-section" aria-label={t('上游接口')}>
+        <div className="channel-create-section-header">
+          <Typography.Title heading={5} component="h3">{t('上游接口')}</Typography.Title>
+          <Button theme="borderless" disabled={writing || !eligibleProviders.length}
+            onClick={() => setImportingMaterial(true)}>{t('从基础资料导入')}</Button>
+        </div>
+        <Field label={t('服务商')} required>
+          <Choice label={t('服务商')} value={eligibleProvider?.id} placeholder={t('请选择服务商')} filter disabled={writing}
+            options={eligibleProviders.map(row => [row.id, row.name])} onChange={id => {
+              if (id === providerId) return;
+              setProviderId(id);
+              if (eligibleProvider) set(emptyInterface);
+              else change();
+            }}/>
+        </Field>
+        <ChannelProtocolFields protocol={value.interfaceType} baseUrl={value.baseUrl} allowHttp={allowHttp}
+          disabled={writing} root={suggestedRoot} endpointPath={value.endpointPath} showHelp
+          onProtocolChange={interfaceType => set({ interfaceType, endpointPath: null })}
+          onEndpointPathChange={endpointPath => set({ endpointPath })} onBaseUrlChange={baseUrl => set({ baseUrl })}/>
+      </section>
+      <section className="channel-create-section" aria-label={t('渠道信息')}>
+        <div className="channel-create-section-header">
+          <Typography.Title heading={5} component="h3">{t('渠道信息')}</Typography.Title>
+        </div>
+        <Field label={t(batch ? '渠道名称前缀' : '渠道名称')} required help={t('填写便于识别的名称，同一服务商下不可重复。')} hint={batch ? t('根据录入行号添加编号，例如「渠道-01」。') : undefined}>
+          <Input aria-label={t(batch ? '渠道名称前缀' : '渠道名称')} value={value.name} maxLength={batch ? 57 : 60}
+            disabled={writing} onChange={name => set({ name })}/>
+        </Field>
+        <Field label={t('创建方式')}><Choice label={t('创建方式')} value={value.mode} disabled={writing} options={[
+          ['single', t('单密钥')], ['batch', t('批量创建渠道')], ['multi', t('一个渠道使用多把密钥')],
+        ]} onChange={mode => {
+          if (mode === 'multi' && inputs.length === 1) setInputs(items => [...items, keyInput()]);
+          set({ mode });
+        }}/></Field>
+        {(batch || multi) && <Typography.Text type="secondary">{batch
+          ? t('每行一把密钥，可在输入框中粘贴多行。预览时核对渠道名称、重复项和创建数量。')
+          : t('多把密钥组成同一个渠道的密钥池。可在输入框中粘贴多行，至少填写两把不同密钥。')}</Typography.Text>}
+        {(batch || multi ? inputs : inputs.slice(0, 1)).map((input, index) => {
+          const label = batch || multi ? t('API 密钥') + ' ' + (index + 1) : t('API 密钥');
+          return <Field key={input.id} label={label} required={!batch && !multi} help={!batch && !multi ? t('填写上游服务商签发的 API 密钥。') : undefined}>
+            <Input aria-label={label} mode="password" autoComplete="new-password" value={input.raw}
+              maxLength={512} disabled={writing} onChange={raw => editInput(input.id, { raw })}
+              onPaste={batch || multi ? event => pasteKeys(event, index) : undefined}
+              suffix={(batch || multi) && inputs.length > 1 ? <Button theme="borderless" size="small" type="tertiary" disabled={writing}
+                aria-label={'移除第 ' + (index + 1) + ' 把密钥'}
+                onClick={() => { setInputs(items => items.filter(row => row.id !== input.id)); change(); }}>移除</Button> : undefined}/>
+          </Field>;
+        })}
+        {(batch || multi) && <Space><Button theme="light" disabled={writing || inputs.length >= PROVIDER_API_KEY_LIMIT}
+          onClick={() => { setInputs(items => [...items, keyInput()]); change(); }}>{t('添加一把密钥')}</Button></Space>}
+        {multi && <ChannelKeyStrategyField value={value.keyStrategy} disabled={writing} onChange={keyStrategy => set({ keyStrategy })}/>}
+        <Field label={t('简介')}><TextArea aria-label={t('简介')} value={value.note} rows={2} maxLength={300} disabled={writing} onChange={note => set({ note })}/></Field>
+      </section>
+      {ops.error && <Notice error>{ops.error}</Notice>}
+    </SupplierCreationDialog>
+    {importingMaterial && <ChannelMaterialImport providers={eligibleProviders} providerId={eligibleProvider?.id} disabled={writing}
+      close={() => setImportingMaterial(false)} apply={(id, option) => {
+        setProviderId(id);
+        set(option ?? (id === providerId ? {} : emptyInterface));
+        setImportingMaterial(false);
+      }}/>}
+  </>;
 
   if (preview) {
     const createCount = preview.rows.filter(row => !row.error).length;
