@@ -1,5 +1,5 @@
 import { channelIdentity, modelDisplayName } from '../model-identities.mjs';
-import { CHANNEL_INTERFACES } from './channel-interface.js';
+import { CHANNEL_INTERFACES, modelTaskUrl, prepareChannelInterface } from './channel-interface.js';
 import { directoryDisabledKind } from './channel-directory-archive.js';
 import { connectionKeys, connectionTestCurrent, connectionTestPending } from './connection-state.js';
 import { costRecords } from './model-pricing-workspace.js';
@@ -7,6 +7,109 @@ import { supplyModelRecord } from './supply-models.js';
 import { supplierChannelAssociations, supplierChannelResources } from './supplier-resources.js';
 
 export const CONNECTION_STATUSES = ['已启用', '已停用', '自动停用', '未启用'];
+
+export const CHANNEL_SOURCE_TYPES = ['thirdParty', 'selfHosted'];
+
+export function channelSourceTypeLabel(sourceType) {
+  switch (sourceType) {
+    case 'thirdParty': return '第三方模型服务';
+    case 'selfHosted': return '自有模型推理服务';
+    default: return '—';
+  }
+}
+
+export const CHANNEL_LIST_TYPES = [
+  { id: 'openai', label: 'OpenAI Chat Completions', format: 'OpenAI Chat', paths: ['/chat/completions'] },
+  { id: 'openai-responses', label: 'OpenAI Responses', paths: ['/responses'] },
+  { id: 'anthropic', label: 'Anthropic Messages', paths: ['/messages'] },
+  { id: 'openai-embeddings', label: 'OpenAI Embeddings', paths: ['/embeddings'], task: true },
+  { id: 'ark-video', label: '火山方舟 Video Generation', format: 'Ark Video', paths: ['/contents/generations/tasks'], task: true, prefix: '/api/v3' },
+  { id: 'dashscope-video', label: 'DashScope Video Generation', format: 'DashScope Video', prefix: '/api/v1', paths: [
+    '/services/aigc/video-generation/video-synthesis', '/services/aigc/image2video/video-synthesis',
+  ], task: true },
+  { id: 'minimax-video', label: 'MiniMax Video Generation', format: 'MiniMax Video', paths: ['/video_generation'], task: true },
+];
+export const channelApiFormatLabel = label => CHANNEL_LIST_TYPES.find(type => type.label === label)?.format ?? label;
+const channelTypeById = id => CHANNEL_LIST_TYPES.find(type => type.id === id);
+const channelTypeForUrl = url => {
+  const normalized = url?.replace(/\/+$/, '');
+  return CHANNEL_LIST_TYPES.find(type => type.paths.some(path => normalized?.endsWith(path)));
+};
+
+export function prepareListedChannelInterface({ interfaceType, baseUrl, endpointPath, allowHttp }) {
+  const type = channelTypeById(interfaceType);
+  if (!type) throw Error('请选择接口格式');
+  if (endpointPath == null && type.task && channelTypeForUrl(baseUrl?.trim()) !== type) {
+    throw Error(`请填写 ${type.format ?? type.label} 的完整接口地址，路径以 ${type.paths.join(' 或 ')} 结尾`);
+  }
+  const config = prepareChannelInterface({ interfaceType: type.task ? 'custom' : type.id, baseUrl, endpointPath, allowHttp });
+  const addressType = channelTypeForUrl(config.baseUrl);
+  if (endpointPath == null && addressType && addressType !== type) throw Error(`服务地址与所选接口格式 ${type.format ?? type.label} 不匹配`);
+  return endpointPath == null ? config : { ...config, modelProtocol: type.id };
+}
+
+export function channelListType({ endpoint, models, interfaceLabel }) {
+  if (endpoint.adapterDraft) return interfaceLabel;
+  const selected = channelTypeById(endpoint.modelProtocol);
+  if (selected) return selected.label;
+  if (['anthropic', 'openai-responses'].includes(endpoint.interfaceType)) return channelTypeById(endpoint.interfaceType).label;
+
+  const baseType = channelTypeForUrl(endpoint.baseUrl);
+  if (baseType) return baseType.label;
+  if (endpoint.interfaceType === 'openai') {
+    if (models.length && models.every(({ master, association }) => (master?.type || association.type) === 'embedding')) return channelTypeById('openai-embeddings').label;
+    return channelTypeById('openai').label;
+  }
+
+  return channelTypeForUrl(endpoint.taskUrls?.video)?.label || interfaceLabel || '—';
+}
+
+export function channelListPaths(row) {
+  const { endpoint } = row;
+  if (endpoint.adapterDraft) return [];
+  const { interfaceType, baseUrl, taskUrls, customAdapter, addressMode } = endpoint;
+  const urls = Object.values(taskUrls || {});
+  if (CHANNEL_INTERFACES.some(option => option.id === interfaceType)) {
+    const task = channelListType(row) === channelTypeById('openai-embeddings').label ? 'embedding' : 'text';
+    try { urls.push(modelTaskUrl(endpoint, task)); }
+    catch { if (channelTypeForUrl(baseUrl)) urls.push(baseUrl); }
+  } else if (endpoint.endpointPath) {
+    urls.push(new URL(baseUrl).origin + endpoint.endpointPath);
+  } else if (interfaceType === 'custom' || addressMode === 'task' || channelTypeForUrl(baseUrl)) {
+    urls.push(baseUrl);
+  }
+  const paths = new Set();
+  for (const url of urls) {
+    try {
+      const path = new URL(url).pathname.replace(/\/+$/, '');
+      if (path) paths.add(path);
+    } catch { /* 遗留记录可能缺少完整地址。 */ }
+  }
+  for (const { path } of customAdapter?.routes || []) paths.add(path);
+  return [...paths];
+}
+
+export function channelProtocolUsesFullAddress(interfaceType, current) {
+  const type = channelTypeById(interfaceType);
+  const legacyEmbeddingsRoot = type?.id === 'openai-embeddings' && current?.endpoint.interfaceType === 'openai' &&
+    channelTypeForUrl(current.endpoint.baseUrl) !== type;
+  return !current?.endpoint.endpointPath && (interfaceType === 'custom' || Boolean(type?.task && !legacyEmbeddingsRoot));
+}
+
+export function channelProtocolPaths({ interfaceType, baseUrl, allowHttp }, current) {
+  if (current?.endpoint.endpointPath && current.endpoint.modelProtocol === interfaceType) return [current.endpoint.endpointPath];
+  if (current && baseUrl.trim() === (current.endpoint.baseUrl || '')) return channelListPaths(current);
+  if (!interfaceType) return [];
+  const type = channelTypeById(interfaceType);
+  try {
+    const endpoint = !type || type.task && !channelProtocolUsesFullAddress(interfaceType, current)
+      ? prepareChannelInterface({ ...current?.endpoint, interfaceType: type ? 'openai' : 'custom', baseUrl, allowHttp })
+      : prepareListedChannelInterface({ interfaceType, baseUrl, allowHttp });
+    return channelListPaths({ ...current, endpoint: { ...current?.endpoint, ...endpoint, allowHttp }, models: current?.models || [] });
+  } catch {
+    return type ? type.paths.map(path => (type.prefix || '/v1') + path) : [];
+  }
+}
 
 export function connectionDirectoryRows(state, providers) {
   return providers.flatMap(provider => {

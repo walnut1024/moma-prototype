@@ -7,6 +7,7 @@ export const CHANNEL_INTERFACES = [
   { id: 'anthropic', label: 'Anthropic Messages API', protocol: 'Anthropic' },
 ];
 
+const listedTasks = { 'openai-embeddings': 'embedding', 'ark-video': 'video', 'dashscope-video': 'video', 'minimax-video': 'video' };
 const modelTypes = ['text', 'multimodal', 'embedding', 'rerank', 'image', 'video', 'audio'];
 const completePaths = {
   openai: ['/chat/completions', '/embeddings', '/responses', '/images/generations', '/audio/transcriptions', '/audio/speech'],
@@ -55,10 +56,22 @@ export function suggestChannelRoot({ interfaceType, baseUrl, allowHttp = false }
   return urlText(url);
 }
 
-export function prepareChannelInterface({ interfaceType, baseUrl, taskUrls = {}, allowHttp = false }) {
+function checkedChannelPath(serviceUrl, value) {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || /[\s\\?#]/u.test(value)) {
+    throw Error('接口端点须填写以 / 开头的路径，不含域名、参数或片段');
+  }
+  return checkedUrl(serviceUrl.origin + value, serviceUrl.protocol === 'http:').pathname;
+}
+
+export function prepareChannelInterface({ interfaceType, baseUrl, taskUrls = {}, endpointPath, modelProtocol, allowHttp = false }) {
   const preset = CHANNEL_INTERFACES.find(row => row.id === interfaceType) || (interfaceType === 'custom' ? { protocol: '其他' } : null);
   if (!preset) throw new Error('请选择已支持的接口类型');
   const url = checkedUrl(baseUrl, allowHttp);
+  const path = endpointPath == null ? null : checkedChannelPath(url, endpointPath);
+  if (modelProtocol != null && (!path || (Object.hasOwn(listedTasks, modelProtocol) ? interfaceType !== 'custom' : modelProtocol !== interfaceType))) {
+    throw Error('接口格式与接口端点配置不一致');
+  }
+  const pathConfig = endpointPath === undefined ? {} : { endpointPath: path };
   if (interfaceType !== 'custom') {
     if (!taskUrls || typeof taskUrls !== 'object' || Array.isArray(taskUrls) || Object.keys(taskUrls).length) throw new Error('预设接口按模型任务生成地址，不能覆盖任务地址');
     const suggestedBaseUrl = suggestChannelRoot({ interfaceType, baseUrl, allowHttp });
@@ -68,9 +81,9 @@ export function prepareChannelInterface({ interfaceType, baseUrl, taskUrls = {},
       error.suggestedBaseUrl = suggestedBaseUrl;
       throw error;
     }
-    return { interfaceType, protocol: preset.protocol, addressMode: 'base', baseUrl: urlText(url), taskUrls: {} };
+    return { interfaceType, protocol: preset.protocol, addressMode: 'base', baseUrl: urlText(url), taskUrls: {}, ...pathConfig };
   }
-  if (url.pathname === '/' || /^\/v\d+\/?$/.test(url.pathname)) throw new Error('自定义 API 地址需要包含完整任务接口路径');
+  if (!path && (url.pathname === '/' || /^\/v\d+\/?$/.test(url.pathname))) throw new Error('自定义 API 地址需要包含完整任务接口路径');
   if (!taskUrls || typeof taskUrls !== 'object' || Array.isArray(taskUrls)) throw new Error('任务地址配置无效');
   const preparedTasks = {};
   for (const [type, value] of Object.entries(taskUrls)) {
@@ -80,22 +93,26 @@ export function prepareChannelInterface({ interfaceType, baseUrl, taskUrls = {},
     if (taskUrl.pathname === '/' || /^\/v\d+\/?$/.test(taskUrl.pathname)) throw new Error('任务地址需要包含完整接口路径');
     preparedTasks[type] = urlText(taskUrl);
   }
-  return { interfaceType, protocol: preset.protocol, addressMode: 'task', baseUrl: urlText(url), taskUrls: preparedTasks };
+  return { interfaceType, protocol: preset.protocol, addressMode: path ? 'base' : 'task', baseUrl: urlText(url), taskUrls: preparedTasks, ...pathConfig };
 }
 
 export function modelTaskUrl(endpoint, modelType, { probe, upstreamModelId } = {}) {
   if (!endpoint || !modelTypes.includes(modelType)) throw new Error('请选择已支持的模型任务');
-  const { interfaceType, baseUrl, taskUrls } = prepareChannelInterface({ ...endpoint, allowHttp: endpoint.allowHttp === true });
+  const { interfaceType, baseUrl, taskUrls, endpointPath } = prepareChannelInterface({ ...endpoint, allowHttp: endpoint.allowHttp === true });
   if (interfaceType === 'custom') {
+    if (endpointPath && Object.hasOwn(listedTasks, endpoint.modelProtocol) && listedTasks[endpoint.modelProtocol] !== modelType) {
+      throw Error('当前接口格式不适用于此模型任务');
+    }
     const route = customForwarding(endpoint.customAdapter, endpoint, modelType, upstreamModelId);
     if (route) return route.url;
     if (upstreamModelId && endpoint.customAdapter?.routes.some(row => row.task === modelType)) throw Error('没有匹配当前模型的自定义转发规则');
-    return taskUrls[modelType] || baseUrl;
+    return endpointPath ? new URL(baseUrl).origin + endpointPath : taskUrls[modelType] || baseUrl;
   }
   const task = ['anthropic', 'openai-responses'].includes(interfaceType)
     ? ['text', 'multimodal'].includes(modelType) ? interfaceType === 'anthropic' ? 'messages' : 'responses' : null
     : ({ text: 'chat/completions', multimodal: 'chat/completions', embedding: 'embeddings', image: 'images/generations', audio: probe === 'speech' ? 'audio/speech' : probe === 'transcription' ? 'audio/transcriptions' : null })[modelType];
   if (!task) throw new Error('当前接口预设尚不支持此模型任务，请使用已支持的自定义任务端点');
+  if (endpointPath && ['chat/completions', 'messages', 'responses'].includes(task)) return new URL(baseUrl).origin + endpointPath;
   return `${baseUrl}/${task}`;
 }
 

@@ -4,7 +4,10 @@ import { Button, Card, Empty, Space, Tabs, Tag, Typography } from '@douyinfe/sem
 import AdminPageHeading from './AdminPageHeading';
 import AdminStatus from './AdminStatus';
 import AdminTable, { AdminPagination } from './AdminTable';
-import { SearchBox } from './ModelOperationsUI';
+import { CopyId, SearchBox } from './ModelOperationsUI';
+import { ChannelKeySummary, channelKeyMode, channelKeyStrategyLabel } from './ChannelCredentials';
+import { useChannelText } from './channel-language';
+import { channelApiFormatLabel, channelListPaths, channelListType, channelSourceTypeLabel } from './channel-connection-directory';
 import { MODEL_TYPES } from './model-management';
 import { pages } from './navigation.mjs';
 
@@ -45,14 +48,21 @@ function ChannelModels({ channel, ops, open }) {
 }
 
 export function ChannelDetails({ channel, creation, ops, open, modelList }) {
+  const t = useChannelText();
   const { id, name, endpoint, credentials, interfaceLabel, status } = channel;
   const tab = ops.params.get('tab') === 'models' ? 'models' : 'overview';
   const fields = [
-    ['类型', interfaceLabel], ['渠道名称', name], ['API 地址', endpoint.baseUrl],
-    ['API Key', credentials.join('、') || (endpoint.authMode === 'none' ? '无需认证' : '')],
-    ['状态', <AdminStatus value={status}/>],
-    ['简介', endpoint.directoryNote],
-    ...(creation ? [['创建人 / 创建时间', <CreationInfo creation={creation}/>]] : []),
+    [t('渠道名称 / ID'), <div className="channel-identity"><span>{name}</span><CopyId value={id} label={t('渠道 ID')}/></div>],
+    [t('服务商'), channel.provider.name],
+    [t('渠道类型'), t(channelSourceTypeLabel(endpoint.channelSourceType ?? channel.provider.sourceType))],
+    [t('接口格式'), channelApiFormatLabel(channelListType(channel))], [t('接口端点'), channelListPaths(channel).join('、')],
+    [t('服务地址'), endpoint.baseUrl],
+    [t('密钥配置'), t(channelKeyMode(endpoint))],
+    [t('API 密钥'), <ChannelKeySummary endpoint={endpoint} provider={channel.provider}/>],
+    ...(endpoint.authMode === 'pool' ? [[t('密钥选择策略'), t(channelKeyStrategyLabel(endpoint.keyStrategy))]] : []),
+    [t('简介'), endpoint.directoryNote],
+    [t('状态'), <AdminStatus value={status} label={t(status)}/>],
+    ...(creation ? [[t('创建人 / 创建时间'), <CreationInfo creation={creation}/>]] : []),
   ];
   const connectionFields = [
     ['服务商', channel.provider.name], ['连接 ID', id], ['协议', interfaceLabel],
