@@ -47,7 +47,7 @@ export default function ModelMaterialDrawer({state,record,ops,initial,onClose,on
     opened.current=true;
   },[editing]);
   const metadata = <ModelLibraryEditor footerTarget={footerTarget} key={`${record?.id || 'new'}:${editing?'edit':record?.updatedAt}`}
-    state={state} record={record} initial={initial} onboardingId={ops.params.get('returnDraft')} ops={ops} readOnly={!editing} scrollable
+    state={state} record={record} initial={initial} onboardingId={ops.params.get('returnDraft')} ops={ops} readOnly={!editing}
     onCancel={record && editing ? () => ops.proceed(() => changeMode('view')) : onClose}
     onSaved={(next,id) => { scroll.current=body.current?.scrollTop || 0; onSaved(next,id); }}/>;
   return <SideSheet visible className="semi-materials" label={record?.name || '新建模型资料'} title={<Space><Typography.Text strong>{record?.name || '新建模型资料'}</Typography.Text>{!editing && !suppliers && <Button disabled={!ops.can} onClick={()=>changeMode('edit')}>编辑</Button>}</Space>} placement={ops.params.get('drawerSide')==='left'?'left':'right'} width="min(880px, 100vw)" closeOnEsc onCancel={onClose} footer={suppliers ? null : <div className="admin-sheet-actions" ref={setFooterTarget}/>} bodyStyle={{overflow:'hidden',padding:24}}>

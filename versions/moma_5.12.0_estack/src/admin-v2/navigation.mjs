@@ -12,15 +12,14 @@ export const sections = [
     { id: "customers-analysis", label: "客户数据", children: [["customer-analysis", "客户数据"]] },
   ]},
   { id: "models", workspace: "operations", title: "模型运营", items: [
-    { id: "channels-reference", label: "渠道管理", children: [["providers-reference", "渠道管理"]] },
+    { id: "channels-reference", label: "渠道管理", children: [["providers-reference", "渠道列表"], ["providers-health", "渠道健康"]] },
     { id: "warehouse-new", label: "模型服务", children: [["listing-new", "模型服务"]] },
+    { id: "model-links", label: "模型链路", children: [["model-links", "模型链路"]] },
     { id: "market", label: "模型广场", children: [["model-market", "模型广场"]] },
-    { id: "materials", label: "模型资料", children: [["model-templates", "模型"], ["tariff-dictionary", "计费项"]] },
+    { id: "materials", label: "基础资料", children: [["model-templates", "模型"], ["provider-materials", "服务商"], ["tariff-dictionary", "计费项"]] },
   ]},
   { id: "commerce", workspace: "operations", title: "商业运营", items: [
     { id: "prices", label: "模型销售", children: [["model-prices", "模型销售"]] },
-    { id: "enterprise", label: "客户管理", children: [["tenants", "客户管理"]] },
-    { id: "projects", label: "项目管理", children: [["projects", "项目管理"]] },
     { id: "commerce-orders", label: "订购与账单", children: [["orders", "订购记录"], ["bills", "账单"], ["metering", "消费明细"]] },
     { id: "package-production", label: "套餐管理", children: [["package-production", "套餐管理"], ["package-data", "套餐数据"]] },
     { id: "business-analysis", label: "经营分析", children: [["business-analysis", "经营分析"]] },
@@ -29,7 +28,7 @@ export const sections = [
     { id: "traffic-limits", label: "限流配置", children: [["traffic-limits", "限流配置"]] },
   ]},
   { id: "customers", workspace: "operations", title: "访问控制", items: [
-    { id: "individual", label: "用户管理", children: [["users", "用户管理"]] },
+    { id: "enterprise", label: "租户管理", children: [["tenants", "租户管理"]] },
   ]},
   { id: "runtime", workspace: "maintenance", title: "运行分析", items: [
     { id: "calls", label: "调用数据", children: [["call-analysis", "调用数据"]] },
@@ -52,15 +51,15 @@ export const sections = [
     { id: "license", label: "License 管理", children: [["license", "License 管理"]] },
   ]},
   { id: "getting-started", workspace: "operations", title: "入门指导", items: [
-    { id: "getting-started", label: "渠道管理", children: [["getting-started", "渠道管理"]] },
+    { id: "model-operations-guide", label: "模型运营", children: [["model-operations-guide", "模型运营"]] },
   ]},
 ];
 
 export const pages = {
   ...Object.fromEntries(sections.flatMap(group => group.items.flatMap(item => item.children.map(([id, label]) => [id, { id, label, area: item.id, areaLabel: item.label, group: group.title, groupId: group.id }])))),
+  projects: { id: 'projects', label: '项目管理', area: 'enterprise', areaLabel: '租户管理', group: '访问控制', groupId: 'customers' },
   ...Object.fromEntries(monitoringLinks.map(([id, label]) => [id, { id, label, area: 'monitoring', areaLabel: '服务监控', group: '网关管理', groupId: 'gateway' }])),
   ...Object.fromEntries([['goods', '商品与套餐'], ['announcements', '公告与服务通知'], ['ledger', '账户与额度流水'], ['settlement', '服务商对账与结算'], ['adjustments', '退款与调账']].map(([id, label]) => [id, { id, label, area: 'commerce-orders', areaLabel: '订购与账单', group: '商业运营', groupId: 'commerce' }])),
-  'provider-materials': { id: 'provider-materials', label: '服务商', area: 'materials', areaLabel: '模型资料', group: '模型运营', groupId: 'models' },
   'customer-analysis-detail': { id: 'customer-analysis-detail', label: '客户详情', area: 'customers-analysis', areaLabel: '客户数据', group: '运营分析', groupId: 'analytics' },
   'customer-usage-detail': { id: 'customer-usage-detail', label: '客户详情', area: 'users-analysis', areaLabel: '用户数据', group: '运营分析', groupId: 'analytics' },
 };
@@ -78,19 +77,9 @@ export function pageWorkspace(id) {
 
 export const commercialPage = id => pages[id]?.groupId === 'commerce';
 
-const organizationSection = {
-  id: 'organization', workspace: 'operations', title: '组织运营',
-  items: [
-    { id: 'enterprise', label: '本组织', children: [['tenants', '本组织']] },
-    { id: 'projects', label: '项目管理', children: [['projects', '项目管理']] },
-  ],
-};
-
-export const adminSections = sections.flatMap(group =>
-  group.id === 'commerce' ? [
-    { ...group, items: group.items.filter(item => !['projects', 'commerce-orders', 'business-analysis'].includes(item.id)) },
-    organizationSection,
-  ] : [group]);
+export const adminSections = sections.map(group => group.id === 'commerce'
+  ? { ...group, items: group.items.filter(item => !['commerce-orders', 'business-analysis'].includes(item.id)) }
+  : group);
 
 export function isOrganizationPage(id, params, internalSite) {
   return ['tenants', 'projects', 'customer-usage-detail'].includes(id) &&
@@ -102,8 +91,17 @@ export function canAccessPage(role, id, license) {
     commercialPage(id) && !['tenants', 'projects'].includes(id) ||
     ['customer-analysis', 'customer-analysis-detail'].includes(id)
   )) return false;
+  if (id === 'projects' && role !== '平台管理员') return false;
   if (!Object.hasOwn(pages, id) || (id === 'site-configuration' && !PRIVATE_SITE)) return false;
   return pages[id].groupId === 'platform' ? role === '平台管理员' : availableWorkspaces(role).includes(pageWorkspace(id));
+}
+
+export function channelManagementListRoute(id, params, query) {
+  const list = new URLSearchParams(query);
+  for (const key of ['q', 'page', 'size', 'channelProvider', 'channelModel', 'returnTo']) {
+    if (params.has(key)) list.set(key, params.get(key));
+  }
+  return id + (list.size ? '?' + list : '');
 }
 
 export function pageFromHash(hash, role) {

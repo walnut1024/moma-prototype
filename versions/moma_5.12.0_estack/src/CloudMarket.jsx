@@ -5,6 +5,7 @@ import { AdminModal } from './admin-v2/AdminOverlay';
 import { cloudMarketPresentation } from './service-directory.mjs';
 
 const changed='moma5120-market-change';
+const emptyCatalogue = { cards: [], services: [], orders: [] };
 
 async function marketRequest(path, body, signal) {
   const response=await fetch('/api/5120/market/'+path,{credentials:'same-origin',signal,
@@ -19,7 +20,7 @@ export function refreshCloudMarket() {
 }
 
 export function useCloudMarket(enabled=true) {
-  const [view,setView]=useState({tenant:null,services:[],orders:[],loading:true,error:''});
+  const [view,setView]=useState({tenant:null,...emptyCatalogue,loading:true,error:''});
   const [revision,setRevision]=useState(0);
   const [project,setProject]=useState('');
   useEffect(()=>{
@@ -27,9 +28,9 @@ export function useCloudMarket(enabled=true) {
     const controller=new AbortController();
     const query = project ? '?' + new URLSearchParams({ project }) : '';
     marketRequest('catalogue' + query,null,controller.signal).then(data=>{
-      if (!controller.signal.aborted) setView({...data,services:data.services.map(cloudMarketPresentation),loading:false,error:''});
+      if (!controller.signal.aborted) setView({...data,cards:data.cards.map(cloudMarketPresentation),services:data.services.map(cloudMarketPresentation),loading:false,error:''});
     }).catch(error=>{
-      if (!controller.signal.aborted) setView(previous => ({ ...previous, services: [], orders: [], loading:false, error:error.message }));
+      if (!controller.signal.aborted) setView(previous => ({ ...previous, ...emptyCatalogue, loading:false, error:error.message }));
     });
     return ()=>controller.abort();
   },[enabled,revision,project]);
@@ -42,13 +43,13 @@ export function useCloudMarket(enabled=true) {
   },[enabled]);
   const write=async(path,body)=>{
     const result=await marketRequest(path,body);
-    if (path==='logout') { setProject(''); setView({tenant:null,services:[],orders:[],loading:true,error:''}); }
+    if (path==='logout') { setProject(''); setView({tenant:null,...emptyCatalogue,loading:true,error:''}); }
     refreshCloudMarket();
     return result;
   };
   const selectProject = next => {
     if (next === project) return;
-    setView(previous => ({ ...previous, services: [], loading:true, error:'' }));
+    setView(previous => ({ ...previous, cards: [], services: [], loading:true, error:'' }));
     setProject(next);
   };
   return {...view,project,selectProject,refresh:()=>setRevision(current=>current+1),

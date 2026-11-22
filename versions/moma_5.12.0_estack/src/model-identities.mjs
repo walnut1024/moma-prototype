@@ -25,7 +25,8 @@ export function priceItemReferences(state, item) {
 
 export function modelPresentation(state, model) {
   const content = model.marketContent || model;
-  return { ...model, name: content.name, description: content.description || '', profile: content.profile || {},
+  return { ...model, type: content.type || model.type, capabilities: content.capabilities || model.capabilities,
+    name: content.name, description: content.description || '', profile: content.profile || {},
     maker: model.marketContent ? content.profile?.author || '' : model.maker };
 }
 

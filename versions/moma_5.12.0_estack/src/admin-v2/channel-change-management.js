@@ -463,7 +463,29 @@ function keyGroupTransaction(state, operation, data) {
   return { type: 'batch', objectId: group.id, label: '原子应用密钥组配置', changes };
 }
 
+export const CHANNEL_PROCUREMENT_BATCH_LIMIT = 50;
+
 function procurementTransaction(state, operation, data) {
+  if (operation === 'channelProcurementBatchPublish') {
+    const { rows, providerId, endpointId, scenarios, expiresAt, confirmed } = data;
+    if (!Array.isArray(rows) || !rows.length || rows.length > CHANNEL_PROCUREMENT_BATCH_LIMIT ||
+      rows.some(row => typeof row?.associationId !== 'string' || !Number.isSafeInteger(row.expectedPriceRevision)) ||
+      new Set(rows.map(row => row.associationId)).size !== rows.length) {
+      throw new Error(`请选择 1–${CHANNEL_PROCUREMENT_BATCH_LIMIT} 款不同的渠道模型`);
+    }
+    const { provider } = context(state, providerId, endpointId);
+    const effectiveAt = data.effectiveAt || new Date().toISOString();
+    let working = state;
+    let changes;
+    for (const { associationId, expectedPriceRevision } of rows) {
+      ({ changes } = procurementTransaction(working, 'channelProcurementPublish', {
+        providerId, endpointId, associationId, expectedPriceRevision, scenarios, effectiveAt, expiresAt, confirmed,
+      }));
+      working = { ...working, providers: working.providers.map(item =>
+        item.id === provider.id ? { ...item, ...changes[0].changes } : item) };
+    }
+    return { type: 'batch', objectId: endpointId, label: '批量发布渠道采购价', changes };
+  }
   if (operation !== 'channelProcurementPublish') throw new Error('未知采购价版本操作');
   const { provider, endpoint } = context(state, data.providerId, data.endpointId);
   const projected = supplierChannelAssociations(state, provider, endpoint.id).find(row => row.id === data.associationId);

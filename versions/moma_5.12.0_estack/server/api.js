@@ -12,6 +12,10 @@ import { PORTAL_HOME_ENDPOINT, portalHomeUrl } from '../src/portal-home.mjs';
 import { AUDIT_ACTIONS, AUDIT_RESOURCES, AUDIT_RESULTS, AUDIT_SOURCES } from '../src/admin-v2/platform-audit.mjs';
 import { domainModel } from '../src/mock/model-fields.js';
 import { serviceCallsEnabled, serviceReferences, offerKey, providerOffer } from '../src/service-access.mjs';
+import { loadModelWorkspace } from './model-repository.js';
+import { supplierDirectory } from '../src/admin-v2/moma-provider.js';
+import { connectionDirectoryRows } from '../src/admin-v2/channel-connection-directory.js';
+import { channelHealthCatalogue } from '../src/admin-v2/channel-health-observations.mjs';
 const PREFIX = '/api/5120';
 const COOKIE = 'moma5120_session';
 const encoder = new TextEncoder();
@@ -200,7 +204,7 @@ async function route(request, env) {
   const privateSite = PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1';
   const agreementPath = privateSite && path === '/site-agreements';
   const portalPath = privateSite && path === PORTAL_HOME_ENDPOINT;
-  const known = path === '/deployment/license' || agreementPath || portalPath || loginField || marketPaths.includes(path) || trafficPath || trafficHistoryPath || auditPath || credentialPath || packagePath || ['/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-market/visibility','/model-operations','/model-operations/commands','/channels/consistency'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
+  const known = path === '/channel-health' || path === '/deployment/license' || agreementPath || portalPath || loginField || marketPaths.includes(path) || trafficPath || trafficHistoryPath || auditPath || credentialPath || packagePath || ['/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-market/visibility','/model-operations','/model-operations/commands','/channels/consistency'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
   if (!known) fail(404, 'NOT_FOUND', 'API 不存在');
   if (!env.MODEL_OPS_DB) fail(503, 'DATABASE_UNAVAILABLE', '模型运营数据库尚未绑定');
   const db = env.MODEL_OPS_DB;
@@ -363,9 +367,15 @@ async function route(request, env) {
     return json(result);
   }
   if (path === '/auth/me' && method === 'GET') return json({ account: { id: actor.id, name: actor.name, role: actor.role, loginCode: actor.loginCode } });
-  const pageId = auditPath ? 'audit-logs' : trafficPath || trafficHistoryPath ? 'traffic-limits' : packagePath ? 'package-production' : dictionary ? 'tariff-dictionary' : path.startsWith('/materials') ? 'model-templates'
+  const pageId = path === '/channel-health' ? 'providers-health' : auditPath ? 'audit-logs' : trafficPath || trafficHistoryPath ? 'traffic-limits' : packagePath ? 'package-production' : dictionary ? 'tariff-dictionary' : path.startsWith('/materials') ? 'model-templates'
     : path.startsWith('/suppliers') || path.startsWith('/channels') ? 'providers-reference' : 'listing-new';
   if (!canAccessPage(actor.role, pageId)) fail(403, 'FORBIDDEN', '当前账号无此页面访问权限');
+  if (path === '/channel-health') {
+    if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    const state = await loadModelWorkspace(db, actor);
+    const providers = supplierDirectory(state).filter(row => !row.deletedAt && !row.id.startsWith('service-review-provider-'));
+    return json({ catalogue: channelHealthCatalogue(connectionDirectoryRows(state, providers), canAccessPage(actor.role, 'providers-reference')) });
+  }
   if (auditPath) {
     if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
     if (auditPath[1]) {
@@ -411,7 +421,7 @@ async function route(request, env) {
   if (path === '/model-operations/commands' && method === 'POST') {
     const body = await bodyJson(request, 10 * 1024 * 1024 + 65536);
     if (commercialModelWrite(body.action)) requireCommerce(true);
-    if (!license.commercial && body.action?.operation === 'marketCardList') {
+    if (!license.commercial && body.action?.operation === 'marketCardSetStatus' && body.action.data?.listing_stage === 'gray') {
       const scope = body.action.data?.scope;
       const reference = await marketReference(db);
       const own = internalEnterprise(reference)?.id;

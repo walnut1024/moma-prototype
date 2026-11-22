@@ -7,11 +7,14 @@
 .materials-filters > .semi-input-wrapper { width: 320px; max-width: 100%; }
 .materials-filters > .semi-select { min-width: 160px; }
 .materials-code { overflow-wrap: anywhere; }
+.semi-materials .materials-model-name { height: auto; min-width: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; }
 .materials-classification-fields { display: grid; gap: 16px; }
 .materials-classification-fields > div, .materials-classification-fields > label { display: grid; gap: 6px; }
 .materials-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
 .materials-field-grid > * { min-width: 0; }
 .materials-field-grid .semi-select, .materials-field-grid .semi-input-number { width: 100%; }
+.materials-context-field { display: flex; }
+.materials-field-grid .materials-context-unit { width: 108px; flex-shrink: 0; }
 .materials-wide-field { grid-column: 1 / -1; }
 .materials-description { margin: 16px 0; }
 .materials-import { display: flex; flex-direction: column; gap: 24px; }

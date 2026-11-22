@@ -9,7 +9,7 @@ export function modelDetailLocation(href, service) {
   if (service) {
     url.searchParams.set('page', 'model-detail');
     url.searchParams.set('model', service.modelKey);
-    url.searchParams.set('service', service.id);
+    if (service.id) url.searchParams.set('service', service.id);
   }
   return url.pathname + url.search + url.hash;
 }

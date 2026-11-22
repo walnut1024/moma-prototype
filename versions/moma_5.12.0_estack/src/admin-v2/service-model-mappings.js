@@ -97,10 +97,10 @@ export const mappingConfig = (supply,model) => ({
   }),
 });
 export function mappingCandidates(state,service) {
-  const master=libraryRecord(state,service.modelId);
+  const modelId = libraryRecord(state, service.modelId)?.id || service.modelId;
   return supplierDirectory(state).filter(provider=>!service.providerId || provider.id===service.providerId).flatMap(provider=>displayedCatalogueIds(provider,state).flatMap(catalogueModelId=>catalogueChannels(state,provider,catalogueModelId).flatMap(channel=>{
     let source;try{source=resolveChannelAssociationModel(state,provider,channel);}catch{return [];}
-    if(!master || source.id!==master.id || service.channelId && channel.id!==service.channelId)return [];
+    if(!modelId || source.id!==modelId || service.channelId && channel.id!==service.channelId)return [];
     return [{...channel,provider,catalogueModelId,selectionId:JSON.stringify([provider.id,channel.id]),reason:channelBlockReason(provider,channel)}];
   })));
 }

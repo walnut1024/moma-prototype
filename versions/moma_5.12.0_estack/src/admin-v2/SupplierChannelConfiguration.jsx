@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import Table, { AdminPagination } from './AdminTable';
 import { pendingGuidedOnboardings } from './guided-onboarding';
 import ChannelDiscovery from './ChannelDiscovery';
@@ -13,8 +14,7 @@ import { libraryRecord } from './model-library';
 import { MODEL_TYPES } from './model-management';
 import SupplyModelPicker from './SupplyModelPicker';
 import SupplierPriceFields from './SupplierPriceFields';
-import { providerApiKeysDraft, providerApiKeyRows } from './provider-management';
-import { providerKeyGroups, providerKeyGroupKeys } from './provider-key-groups';
+import { providerApiKeysDraft, providerApiKeyName, maskProviderApiKey } from './provider-management';
 import { ONBOARDING_PROVIDER_PRESETS, resolveOnboardingProvider, resolveOnboardingModel, onboardingModelOptions, similarOnboardingProviders } from './onboarding-presets';
 import { CHANNEL_INTERFACES, prepareChannelInterface, prepareChannelAdapterOptions } from './channel-interface';
 import { previewChannelModels, validateChannelRows } from './channel-onboarding';
@@ -28,10 +28,11 @@ function ProviderChoice({value,options,disabled,onChange}) {
 const presetFor = provider => ONBOARDING_PROVIDER_PRESETS.find(row => row.id === provider?.onboardingPresetId || row.code === provider?.code);
 const modelRow = (state, libraryId = '') => ({ id: crypto.randomUUID(), libraryId, upstreamModelId: '', scenarios: [], source: libraryId ? 'reference' : 'manual', selected: true, confirmed: Boolean(libraryId) });
 export default function SupplierChannelConfiguration({ state, provider: initialProvider, libraryId = '', endpoint: initialEndpoint, initialRows, ops, close, draft, guidedStep: initialStep, onStepChange, onConnected, directory = false, cancelLabel, reference = false }) {
+  const t = useChannelText();
   const guided = initialStep !== undefined;
   const [guidedStep, setGuidedStep] = useState(initialStep);
   useEffect(()=>{onStepChange?.(guidedStep);},[guidedStep,onStepChange]);
-  const [value, setValue] = useState(() => draft ? structuredClone(draft.value) : { providerId: initialProvider?.id || 'unselected', name: initialProvider ? `${initialProvider.name}渠道` : '', interfaceType: initialProvider?.defaultProtocol?.includes('Anthropic') ? 'anthropic' : initialProvider?.defaultProtocol?.includes('OpenAI') ? 'openai' : presetFor(initialProvider)?.interfaceType || 'unselected', baseUrl: initialProvider?.baseUrl || presetFor(initialProvider)?.defaultBaseUrl || '', keyGroupId: 'default', authMode: 'group', capacity: '', timeoutSeconds: 60, taskUrls: {}, adapterOptions: {} });
+  const [value, setValue] = useState(() => draft ? { ...structuredClone(draft.value), authMode: draft.value.authMode === 'none' ? 'none' : 'specific' } : { providerId: initialProvider?.id || 'unselected', name: initialProvider ? `${initialProvider.name}渠道` : '', interfaceType: initialProvider?.defaultProtocol?.includes('Anthropic') ? 'anthropic' : initialProvider?.defaultProtocol?.includes('OpenAI') ? 'openai' : presetFor(initialProvider)?.interfaceType || 'unselected', baseUrl: initialProvider?.baseUrl || presetFor(initialProvider)?.defaultBaseUrl || '', apiKeyId: '', authMode: 'specific', capacity: '', timeoutSeconds: 60, taskUrls: {}, adapterOptions: {} });
   const [intent,setIntent]=useState(draft?.intent || 'onboard');
   const [rows, setRows] = useState(() => draft ? structuredClone(draft.rows) : initialRows?.length ? structuredClone(initialRows) : [modelRow(state, initialEndpoint ? '' : libraryId)]);
   const [endpointId, setEndpointId] = useState(draft?.endpointId || initialEndpoint?.id || ''), [saved, setSaved] = useState(null), [priceRow, setPriceRow] = useState(null), [suggestedRoot, setSuggestedRoot] = useState('');
@@ -57,14 +58,13 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
   const duplicates=guided ? pendingGuidedOnboardings(state).filter(task=>task.draft.id!==draftId && (task.master?.id===resolvedModel(rows[0])?.record.id || task.draft.rows[0]?.newModel?.modelId && task.draft.rows[0].newModel.modelId===rows[0]?.newModel?.modelId)) : [];
   const pickerValue = row => { const model = resolvedModel(row); return model?.isDraft && row.modelPresetId ? 'preset:' + row.modelPresetId : model?.record.id || ''; };
   const validationState = { ...state, modelTemplates: [...state.modelTemplates, ...modelOptions.filter(row => row.modelPresetId), ...rows.filter(row => row.newModel).map(row => masterFor(row)).filter(Boolean)] };
-  const keys = provider ? providerApiKeyRows(state, provider).map(row => row.apiKey) : [], groups = providerKeyGroups(provider || {}, keys);
-  const primaryKey = providerKeyGroupKeys(provider || {}, value.keyGroupId, true, keys)[0];
-  const existingKeys = primaryKey && primaryKey.status !== 'disabled' && !primaryKey.revokedAt ? [primaryKey] : [];
+  const keys = (provider?.apiKeys || []).filter(key => key.scope !== 'channel' && key.status !== 'disabled' && !key.revokedAt);
+  const apiKeyId = value.apiKeyId || keys[0]?.id || '';
   const previewKey = keyMetadata && { ...keyMetadata, id: 'pending:' + provider?.id + ':' + keyMetadata.fingerprint.slice(0, 16) };
-  const useNewKey = !endpoint && value.authMode !== 'none' && (keyMode === 'new' || keyMode === 'auto' && !existingKeys.length);
+  const useNewKey = !endpoint && value.authMode !== 'none' && (keyMode === 'new' || keyMode === 'auto' && !apiKeyId);
   const previewProvider = useNewKey && provider ? { ...provider, apiKeys: previewKey ? [previewKey] : [] } : provider;
   const discoveryState = provider && !state.providers.some(row => row.id === provider.id) ? { ...validationState, providers: [...state.providers, previewProvider] } : validationState;
-  const discoveryConfiguration = endpoint || { ...value, id: creationId.current, providerId: provider?.id, protocol: CHANNEL_INTERFACES.find(row => row.id === value.interfaceType)?.protocol, ...(useNewKey ? { authMode: 'specific', apiKeyId: previewKey?.id, apiKeys: previewKey ? [previewKey] : [], credentialVersion: keyMetadata?.fingerprint || '' } : {}) };
+  const discoveryConfiguration = endpoint || { ...value, id: creationId.current, apiKeyId, providerId: provider?.id, protocol: CHANNEL_INTERFACES.find(row => row.id === value.interfaceType)?.protocol, ...(useNewKey ? { authMode: 'specific', apiKeyId: previewKey?.id, apiKeys: previewKey ? [previewKey] : [], credentialVersion: keyMetadata?.fingerprint || '' } : {}) };
   const dirty = () => { ops.dirty(true); ops.setError(''); setErrors([]); setNameError(''); };
   const set = patch => { setValue(current => ({ ...current, ...patch })); dirty(); setSuggestedRoot(''); };
   const changeRows = next => { setRows(next); setApprovedScope(false); dirty(); };
@@ -126,7 +126,7 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
       const checked = [...identityErrors, ...validateChannelRows(validationState, rows.map(row => ({ ...row, libraryId: pickerValue(row) })), endpoint || { interfaceType: value.interfaceType })];
       if (checked.length) { setErrors(checked); const rowIndex = rows.findIndex(row => row.id === checked[0].rowId); if (rowIndex >= 0) setPage(Math.floor(rowIndex / 10) + 1); requestAnimationFrame(() => document.querySelector(`[data-channel-row="${checked[0].rowId}"]`)?.querySelector('input, button, .semi-select')?.focus()); return; }
       const models = rows.filter(row => row.selected !== false).map(({ libraryId, modelPresetId, newModel, upstreamModelId, scenarios }) => ({ ...(newModel ? { newModel } : modelPresetId ? { modelPresetId } : { libraryId }), upstreamModelId, scenarios }));
-      const values = endpoint ? { endpointId: endpoint.id, models } : { ...value, ...connection(), models };
+      const values = endpoint ? { endpointId: endpoint.id, models } : { ...value, ...connection(), apiKeyId, models };
       let newApiKey;
       if (!endpoint && useNewKey) newApiKey = (await providerApiKeysDraft([rawKey])).apiKeys[0];
       if (!mounted.current || !allowed.current) return;
@@ -144,14 +144,14 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
   const chooseProvider = selection => { const apply=() => {
         setEndpointId('');
         if (selection === 'new') {
-          setValue(current => ({ ...current, providerId: '', providerPresetId: '', newProvider: { name: '' }, name: '新渠道', interfaceType: 'openai', baseUrl: '', keyGroupId: 'default', authMode: 'group', taskUrls: {}, adapterOptions: {} }));
+          setValue(current => ({ ...current, providerId: '', providerPresetId: '', newProvider: { name: '' }, name: '新渠道', interfaceType: 'openai', baseUrl: '', apiKeyId: '', authMode: 'specific', taskUrls: {}, adapterOptions: {} }));
           setRawKey(''); setKeyMode('auto'); dirty(); return;
         }
         const choice = selection.startsWith('preset:') ? { providerId: '', providerPresetId: selection.slice(7), newProvider: null } : { providerId: selection, providerPresetId: '', newProvider: null };
         let next; try { next = resolveOnboardingProvider(state, choice); } catch (error) { ops.setError(error.message); return; }
         const preset = presetFor(next), used = new Set(supplierChannelResources(state, next).map(row => supplierChannelName(next, row)));
         let name = next.name + '渠道', suffix = 2; while (used.has(name)) name = next.name + '渠道 ' + suffix++;
-        setValue(current => ({ ...current, ...choice, name, interfaceType: next.defaultProtocol?.includes('Anthropic') ? 'anthropic' : next.defaultProtocol?.includes('OpenAI') ? 'openai' : preset?.interfaceType || 'unselected', baseUrl: preset?.defaultBaseUrl || '', keyGroupId: 'default', authMode: 'group', taskUrls: {}, adapterOptions: {} })); setRawKey(''); setKeyMode('auto'); dirty();
+        setValue(current => ({ ...current, ...choice, name, interfaceType: next.defaultProtocol?.includes('Anthropic') ? 'anthropic' : next.defaultProtocol?.includes('OpenAI') ? 'openai' : preset?.interfaceType || 'unselected', baseUrl: preset?.defaultBaseUrl || '', apiKeyId: '', authMode: 'specific', taskUrls: {}, adapterOptions: {} })); setRawKey(''); setKeyMode('auto'); dirty();
       };
       if(value.providerId!=='unselected'&&value.providerId || value.providerPresetId || value.newProvider || value.baseUrl || rawKey)ops.proceed(apply);else apply();
   };
@@ -176,6 +176,10 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
           onClick={() => ops.proceed(() => { changeRows([modelRow(state)]); setPage(1); })}>清空模型草稿</Button>
       </>}
       {!(reference && initialRows?.length) && <Button theme="light" disabled={saving || !ops.can || rows.length >= 50} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={() => { changeRows([...rows, modelRow(state)]); setPage(Math.ceil((rows.length + 1) / 10)); }}>{initialEndpoint ? '手工添加' : '添加模型'}</Button>}</div></div>
+      {reference && initialEndpoint && <Typography.Paragraph type="tertiary">
+        下拉选项读取<Typography.Text link={{ href: '#/admin-2/model-templates', target: '_blank', rel: 'noopener' }}>基础资料 → 模型</Typography.Text>
+        中维护的模型{modelOptions.some(option => option.source === 'reference') ? '，并包含内置参考模型。' : '。'}
+      </Typography.Paragraph>}
       {rows.length > 1 && <div className="supplier-row-actions"><Checkbox aria-label="选择全部模型行" disabled={saving || !ops.can} checked={rows.length > 0 && selected.length === rows.length} indeterminate={selected.length > 0 && selected.length < rows.length} onChange={event => changeRows(rows.map(row => ({ ...row, selected: event.target.checked })))}>全部 {rows.length} 项</Checkbox><span>已选 {selected.length}</span></div>}
       <div className="mo-table-scroll"><Table size="small" className={`supplier-onboarding-models${rows.length === 1 && selected.length === 1 ? ' supplier-onboarding-single' : ''}`} rowKey="id" columns={modelColumns} dataSource={pageRows} pagination={false} onRow={row => ({ 'data-channel-row': row.id })}/></div>{rows.length > 10 && <AdminPagination total={rows.length} currentPage={currentPage} onPageChange={setPage}/>}
 
@@ -187,7 +191,7 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
   return <><SupplierCreationDialog wide drawer={Boolean(initialEndpoint)} drawerSide={directory ? "right" : "left"} embedded={guided} title={guided ? guidedStep === 0 ? '选择模型' : '接通供应' : initialEndpoint ? '新增模型渠道' : '新模型&渠道'} description={discoveryDescription || '选择服务商和模型，填写连接信息，保存后测试并启用。'} cancel={cancel} cancelLabel={cancelLabel || (guided ? '退出接入' : '取消')} disabled={saving || !ops.can || directory && initialEndpoint && !approvedScope || (guidedStep===0 ? !rows.every(row=>Boolean(resolvedModel(row))) : !provider)} action={saving ? '保存中…' : guidedStep === 0 ? '下一步：接通供应' : guided ? endpoint ? '复用供应并继续' : '保存连接并进入测试' : initialEndpoint ? '确认接入' : '保存模型及渠道'} submit={guidedStep === 0 ? nextStep : save} footer={guidedStep === 1 && <Button theme="light" onClick={() => setGuidedStep(0)}>上一步</Button>}>
     {!guided && !initialEndpoint && <div className="supplier-row-actions"><Steps className="supplier-onboarding-steps" current={0} aria-label="接入步骤"><Steps.Step title="配置接入"/><Steps.Step title="测试与启用"/></Steps></div>}
     {!guided && initialProvider && !initialEndpoint && <div className="supplier-onboarding-context"><span>服务商</span><strong>{initialProvider.name}</strong></div>}
-    {initialEndpoint && endpoint && <div className="supplier-onboarding-context"><span>复用的上游地址</span><CopyId copyAtStart value={endpoint.baseUrl} label="上游 API 地址"/></div>}
+    {initialEndpoint && endpoint && <div className="supplier-onboarding-context"><span>{reference ? t('服务地址') : '复用的上游地址'}</span><CopyId copyAtStart value={endpoint.baseUrl} label={reference ? t('服务地址') : '上游 API 地址'}/></div>}
     {modelFields}
     {!guided && !initialProvider && supplierField}
     {!guided && !initialEndpoint && <Typography.Title heading={5} component="h3">渠道</Typography.Title>}
@@ -199,8 +203,8 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
       {guided && <Field label="渠道名称 *" error={nameError}><Input ref={nameInput} aria-label="渠道名称" value={value.name} maxLength={60} disabled={saving || !ops.can} onChange={value => set({ name: value })}/></Field>}
       <div className="supplier-channel-fields"><Field label="接口类型 *"><Choice label="接口类型" value={value.interfaceType} options={[[ 'unselected', '请选择接口类型' ], ...CHANNEL_INTERFACES.map(item => [item.id, item.label])]} disabled={saving || !ops.can} onChange={interfaceType => value.baseUrl ? ops.proceed(() => set({ interfaceType, baseUrl: '', taskUrls: {}, adapterOptions: {} })) : set({ interfaceType, baseUrl: '', taskUrls: {}, adapterOptions: {} })}/></Field><Field label={value.interfaceType === 'custom' ? '完整任务地址 *' : '服务根地址 *'}><Input aria-label="渠道 API 地址" maxLength={2048} placeholder={value.interfaceType === 'custom' ? 'https://gateway.example.com/完整接口路径' : 'https://gateway.example.com/v1'} value={value.baseUrl} disabled={saving || !ops.can} onChange={value => set({ baseUrl: value })}/></Field></div>
       {suggestedRoot && <Notice>识别到完整任务地址。<Button type="tertiary" theme="borderless" onClick={() => set({ baseUrl: suggestedRoot })}>使用根地址 {suggestedRoot}</Button></Notice>}
-      {provider?.sourceType === 'selfHosted' && <Field label="认证方式"><Choice label="认证方式" value={value.authMode} options={[[ 'group', 'API 密钥组' ], [ 'none', '无需认证' ]]} disabled={saving || !ops.can} onChange={authMode => { setRawKey(''); set({ authMode }); }}/></Field>}
-      {provider && value.authMode !== 'none' && <div className="supplier-inline-key">{keys.length > 0 && <Field label="API 密钥"><Choice label="API 密钥来源" value={useNewKey ? 'new' : value.keyGroupId} options={[...groups.map(group => [group.id, group.name]), ['new', '输入新密钥']]} disabled={saving || !ops.can} onChange={selection => { setRawKey(''); setKeyMode(selection === 'new' ? 'new' : 'existing'); if (selection !== 'new') set({ keyGroupId: selection }); else dirty(); }}/></Field>}{useNewKey ? <Field label={keys.length ? '新 API 密钥 *' : 'API 密钥 *'}><Input mode="password" autoComplete="new-password" aria-label="API 密钥" value={rawKey} placeholder="输入服务商提供的 API 密钥" maxLength={512} disabled={saving || !ops.can} onChange={value => { setRawKey(value); setKeyMetadata(null); dirty(); }}/><small className="supplier-price-hint">保存后仅展示脱敏值。</small>{keyError && <small className="supplier-key-error" role="alert">{keyError}</small>}</Field> : !existingKeys.length && <Notice error>所选密钥组暂无可用的主要密钥，请输入新密钥或更换分组。</Notice>}</div>}
+      {provider?.sourceType === 'selfHosted' && <Field label="认证方式"><Choice label="认证方式" value={value.authMode} options={[[ 'specific', 'API 密钥' ], [ 'none', '无需认证' ]]} disabled={saving || !ops.can} onChange={authMode => { setRawKey(''); set({ authMode }); }}/></Field>}
+      {provider && value.authMode !== 'none' && <div className="supplier-inline-key">{keys.length > 0 && <Field label="API 密钥"><Choice label="API 密钥来源" value={useNewKey ? 'new' : apiKeyId} options={[...keys.map(key => [key.id, providerApiKeyName(key) + '（' + maskProviderApiKey(key.maskedKey) + '）']), ['new', '输入新密钥']]} disabled={saving || !ops.can} onChange={selection => { setRawKey(''); setKeyMode(selection === 'new' ? 'new' : 'existing'); if (selection !== 'new') set({ apiKeyId: selection }); else dirty(); }}/></Field>}{useNewKey ? <Field label={keys.length ? '新 API 密钥 *' : 'API 密钥 *'}><Input mode="password" autoComplete="new-password" aria-label="API 密钥" value={rawKey} placeholder="输入服务商提供的 API 密钥" maxLength={512} disabled={saving || !ops.can} onChange={value => { setRawKey(value); setKeyMetadata(null); dirty(); }}/><small className="supplier-price-hint">保存后仅展示脱敏值。</small>{keyError && <small className="supplier-key-error" role="alert">{keyError}</small>}</Field> : !keys.some(key => key.id === apiKeyId) && <Notice error>请选择可用的 API 密钥或输入新密钥。</Notice>}</div>}
       <ChannelAdvancedFields value={value} onChange={set} disabled={saving || !ops.can}/>
       </>}
     </>}

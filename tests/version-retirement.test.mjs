@@ -5,9 +5,10 @@ import test from 'node:test';
 
 const root = path.resolve(import.meta.dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+const retiredVersions = ['moma_5.13.0_estack', 'moma_5.11.0_estack', 'moma_5.10.2_estack'];
 
 test('retired 5.13.0, 5.11.0 and 5.10.2 have no source, public output, deployed output or executable task', () => {
-  for (const id of ['moma_5.13.0_estack', 'moma_5.11.0_estack', 'moma_5.10.2_estack']) {
+  for (const id of retiredVersions) {
     for (const directory of [`versions/${id}`, `public/${id}`, `dist/client/${id}`]) {
       assert.equal(fs.existsSync(path.join(root, directory)), false, directory);
     }
@@ -27,7 +28,17 @@ test('the directory retains the 5.12.0 release only, listed by the version app a
   assert.match(versions, /id: "moma_5\.12\.0_estack",\s*state: "当前版本"/);
   const index = read('index.html');
   assert.ok(index.includes('href="/moma_5.12.0_estack/"'));
-  for (const id of ['moma_5.13.0_estack', 'moma_5.11.0_estack', 'moma_5.10.2_estack']) assert.ok(!index.includes(id));
+  for (const id of retiredVersions) {
+    const version = id.split('_')[1];
+    assert.ok(!index.includes(version), version);
+    assert.ok(!versions.includes(version), version);
+  }
+});
+
+test('the Pages build redirects retired entries and their nested paths to the current version', () => {
+  const rules = read('dist/client/_redirects').trim().split('\n');
+  assert.deepEqual(rules.sort(), retiredVersions.flatMap(id =>
+    ['', '/', '/*'].map(suffix => `/${id}${suffix} /moma_5.12.0_estack/ 301`)).sort());
 });
 
 test('the root and isolated 5.12.0 build retain resolvable runtime assets', () => {
@@ -37,7 +48,7 @@ test('the root and isolated 5.12.0 build retain resolvable runtime assets', () =
   const assets = [...entry.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)].map(match => match[1]);
   assert.ok(assets.length >= 2);
   for (const asset of assets) {
-    for (const id of ['moma_5.13.0_estack', 'moma_5.11.0_estack', 'moma_5.10.2_estack']) assert.ok(!asset.includes(id));
+    for (const id of retiredVersions) assert.ok(!asset.includes(id));
     assert.ok(fs.existsSync(path.join(root, 'dist/client', asset)), asset);
   }
 });

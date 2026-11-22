@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { startLocalBackend } from '../database/local-runtime.js';
-import { API_PREFIX } from '../api-path.js';
 import { domainModelWorkspace } from '../src/mock/model-fields.js';
 import { providerRemovalPlan } from '../src/admin-v2/provider-removal.js';
 import { channelManagementDirectory, supplierModelChannelRows } from '../src/admin-v2/supplier-model-channel-table.js';
@@ -13,7 +12,7 @@ test('HTTP/D1 last-channel retirement survives reload and replay, preserves comm
   const local = await startLocalBackend({ demo: true, loginHashes: { 'admin-001': hash, 'admin-002': hash } });
   let cookie;
   const request = async (path, body, token = cookie) => {
-    const response = await local.runtime.dispatchFetch('https://example.test' + API_PREFIX + path, {
+    const response = await local.runtime.dispatchFetch('https://example.test/api/5120' + path, {
       method: body ? 'POST' : 'GET', headers: { ...(token ? { cookie: token } : {}), ...(body ? { origin: 'https://example.test', 'x-moma-request': '1', 'content-type': 'application/json', 'idempotency-key': body.operationId || crypto.randomUUID() } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });

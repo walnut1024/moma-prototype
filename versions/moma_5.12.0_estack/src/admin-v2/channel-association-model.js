@@ -8,7 +8,13 @@ export function resolveChannelAssociationModel(state, provider, association) {
   if (entry?.libraryId) {
     const master = libraryRecord(state, entry.libraryId);
     if (!master) throw new Error('模型资料引用已失效，请重新关联主档');
-    return master;
+    const snapshot = association.modelSnapshot || entry.modelSnapshot;
+    if (!snapshot) return master;
+    return {
+      ...master, ...snapshot,
+      name: snapshot?.name || entry.displayName || entry.name || master.name,
+      type: association.type || snapshot?.type || entry.type || master.type,
+    };
   }
   const ids = [...new Set(state.modelSupplies.filter(row => row.status !== '已移除' && row.endpointId === endpoint.id && (!row.providerId || row.providerId === provider.id) && row.upstreamModelId === association.upstreamModelId && (row.catalogueModelId || row.upstreamModelId) === association.modelId).map(row => row.modelId))];
   if (ids.length > 1) throw new Error('精确供给引用对应多个模型资料，请先明确关联主档');

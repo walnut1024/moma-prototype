@@ -33,7 +33,7 @@ test('retry only registers a model whose material was already committed', async 
     }
     return state;
   };
-  const rows = materialImportRows('model', [['模型展示名', '模型编码', '模型类型'], [model.name, model.modelId, '文本']]);
+  const rows = materialImportRows('model', [['模型资料名称', '模型编码', '模型类型'], [model.name, model.modelId, '文本']]);
   const submit = async retry => {
     const preview = previewMaterialRows(state, 'model', rows, { providerId: provider.id, retry });
     assert.equal(preview[0].status, 'ready');

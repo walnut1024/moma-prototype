@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { Button, Input, Select, Space, Tabs, Tag, TextArea, Typography } from '@douyinfe/semi-ui';
+import { Button, Input, Select, Space, Tag, TextArea, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import Table from './AdminTable';
 import { modelLibrary } from './model-library';
-import { classificationIndex, modelClassification, modelClassificationFor } from './model-classification';
+import { CLASSIFICATION_KINDS, classificationIndex, modelClassification, modelClassificationFor } from './model-classification';
 
-export default function ModelClassificationDictionary({ state, ops }) {
-  const [kind, setKind] = useState('authors'), [draft, setDraft] = useState(null), [busy, setBusy] = useState(false);
+export default function ModelClassificationDictionary({ kind, state, ops }) {
+  const [draft, setDraft] = useState(null), [busy, setBusy] = useState(false);
   const dictionary = modelClassification(state);
   const index = classificationIndex(dictionary);
-  const series = kind === 'series', label = series ? '模型系列' : '模型作者';
+  const series = kind === 'series', label = CLASSIFICATION_KINDS[kind];
   const counts = new Map();
   for (const model of modelLibrary(state)) {
     const classified = modelClassificationFor(index, model);
@@ -37,10 +37,6 @@ export default function ModelClassificationDictionary({ state, ops }) {
   const authors = dictionary.authors.filter(row => row.active || row.id === draft?.authorId);
   return <>
     <div className="materials-toolbar">
-      <Tabs type="button" activeKey={kind} onChange={setKind} aria-label="字典类别">
-        <Tabs.TabPane itemKey="authors" tab="模型作者"/>
-        <Tabs.TabPane itemKey="series" tab="模型系列"/>
-      </Tabs>
       <Button theme="solid" disabled={!ops.can || busy} onClick={() => edit()}>新增{label}</Button>
     </div>
     <Table rowKey="id" dataSource={dictionary[kind]} pagination={{ pageSize: 20, showTotal: true }} scroll={{ x: 850 }} empty={`暂无${label}`} columns={[

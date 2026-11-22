@@ -12,7 +12,7 @@ import { connectionFingerprint, connectionTestPassed, connectionBlockReason } fr
 import { providerCataloguePrice } from './moma-catalogue-prices.js';
 import { cataloguePurchasePrice, billingItemKey, parseSaleAmount } from './provider-catalogue-pricing.js';
 import { activeChannelProcurement } from './channel-change-management.js';
-import { libraryRecord } from './model-library.js';
+import { modelMaterial } from './model-library.js';
 import { platformPublicationCheck, platformPublicationFingerprint } from './platform-publication-state.js';
 
 export const MODEL_TYPES = { text: '语言模型', multimodal: '视觉理解', image: '图像生成', video: '视频生成', audio: '语音模型', embedding: '向量模型', rerank: '重排模型' };
@@ -222,8 +222,8 @@ export function modelTransaction(state, action) {
   if(model?.archivedAt && !action.catalogue)throw Error('服务已归档，请先恢复服务');
   let objectId = model?.id;
   if (creating || operation === 'basic' || operation === 'serviceBasics') {
-    const libraryId = creatingService ? data.libraryId : model?.templateId;
-    const source = libraryId ? libraryRecord(state, libraryId) : null;
+    const libraryId = creatingService ? data.libraryId : null;
+    const source = libraryId ? modelMaterial(state, libraryId) : null;
     if (creatingService && !draftId && (!libraryId || !serviceModelSources(state).some(record=>record.id===libraryId))) throw new Error('请选择模型接入中已登记的模型；供应关系可能已变化');
     if (libraryId && !source) throw new Error('来源模型资料已变化，请重新选择');
     if (creatingService && source && serviceSourceIds(state).has(source.id)) throw new Error('该模型资料已有模型服务，请进入现有服务配置');

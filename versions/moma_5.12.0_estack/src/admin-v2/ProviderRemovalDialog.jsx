@@ -21,7 +21,7 @@ export default function ProviderRemovalDialog({ state, ops, target, close, remov
   try { plan = providerRemovalPlan(state, target); } catch (error) { missing = error.message; }
   const stale = step === 1 && accepted !== plan?.signature;
   const blocked = !ops.can || busy || Boolean(ops.conflict) || !plan;
-  const channelScope = Boolean(target.endpointId || target.associationIds);
+  const channelScope = Boolean(target.catalogueId || target.endpointId || target.associationIds);
   const retained = plan ? (plan.provider.catalogConnections || []).filter(row => !row.deletedAt && plan.endpoints.some(endpoint => endpoint.id === row.endpointId) && !plan.ids.has(row.id)) : [];
   const run = async operation => {
     if (blocked) return;
@@ -33,7 +33,7 @@ export default function ProviderRemovalDialog({ state, ops, target, close, remov
     finally { setBusy(false); }
   };
   const cancel = () => { if (!busy) { ops.setError(''); close(); } };
-  return <AdminModal visible title={(title || (target.associationIds ? '批量删除模型渠道' : channelScope ? '删除模型渠道' : '删除服务商')) + (plan ? ' · ' + plan.name : '')}
+  return <AdminModal visible title={(title || (target.catalogueId ? '删除供应模型' : target.associationIds ? '批量删除模型渠道' : channelScope ? '删除模型渠道' : '删除服务商')) + (plan ? ' · ' + plan.name : '')}
     width="min(1120px, calc(100vw - 32px))" className="provider-removal-modal" onCancel={cancel} closeOnEsc
     footer={<Space><Button disabled={busy} onClick={cancel}>取消</Button>{step === 1
       ? <><Button disabled={busy} onClick={() => { setStep(0); setError(''); ops.setError(''); }}>返回检查</Button>
@@ -66,7 +66,7 @@ export default function ProviderRemovalDialog({ state, ops, target, close, remov
     </> : <>
       <Banner type="warning" description="删除后，该供给将不能再被调用或订购。重新录入后仍需验证并明确启用、上架。"/>
       <dl className="provider-removal-facts"><div><dt>服务商</dt><dd>{plan.provider.name}</dd></div>
-        <div><dt>删除范围</dt><dd>{channelScope ? '所选渠道' : '服务商及其全部供给配置'}</dd></div>
+        <div><dt>删除范围</dt><dd>{target.catalogueId ? '当前服务商的该模型供应登记及关联模型渠道' : channelScope ? '所选渠道' : '服务商及其全部供给配置'}</dd></div>
         <div><dt>渠道 / 连接</dt><dd>{plan.associations.length} 条渠道 · {plan.endpoints.length} 个连接</dd></div></dl>
       <Typography.Paragraph>删除模型最后一条渠道时，同步归档该服务商的模型供应登记。模型资料主档、模型服务配置、其他服务商、历史价格、订单及审计记录均保留。失去供给的服务保持禁用或下架，并显示“渠道未接入”。</Typography.Paragraph>
       <Button theme="borderless" disabled={busy} onClick={() => downloadJsonFile(exportProviderJson(state, plan.provider), plan.provider.code + '-provider.json')}>导出当前 JSON</Button>

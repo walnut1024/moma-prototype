@@ -63,6 +63,7 @@ test('model details keep selected model and provider call ID, final outcomes and
   assert.equal(summary.count, 2); assert.equal(summary.successRate, 50); assert.equal(summary.p95, 50);
   assert.equal(summary.ttft, 10);
   assert.equal(modelUsageSummary([], { modelKey: 'm' }, now).p95, null);
+  assert.equal(modelUsageSummary(records, { modelKey: 'material-id', serviceModelId: 'm', type: 'text', mode: 'provider', callId: 'provider/a' }, now).count, 2);
 });
 
 test('identity trend counts each bucket independently instead of summing daily active counts', () => {

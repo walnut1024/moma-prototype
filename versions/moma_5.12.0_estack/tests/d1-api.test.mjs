@@ -1,3 +1,4 @@
+import { marketCardFixture } from './market-card-fixture.mjs';
 import assert from 'node:assert/strict';
 import { isResourceId, resourceId } from '../src/resource-id.mjs';
 import {domainModelWorkspace} from '../src/mock/model-fields.js';
@@ -181,7 +182,8 @@ test('expired or revoked sessions cannot read data or replay a success', async (
   assert.equal((await request('/does-not-exist', { session: null })).status, 404);
 });
 
-test('card updates persist through HTTP without requiring hidden tasks or discarding technical data',async()=>{
+test('reference edits persist through HTTP without requiring hidden tasks or discarding technical data',async()=>{
+ const { modelMaterial }=await import('../src/admin-v2/model-library.js');
  const {metadata,materialBase}=await import('../src/admin-v2/model-operations.js');
  let state=(await request('/model-operations')).data;
  const model=state.models.find(row=>row.id==='model-2'),code='card-contract-'+randomBytes(6).toString('hex');
@@ -191,11 +193,47 @@ test('card updates persist through HTTP without requiring hidden tasks or discar
  const record=state.modelTemplates.find(row=>row.modelId===code),before=structuredClone(record),id=crypto.randomUUID();
  const body={operationId:id,expectedRevision:state.revision,action:{type:'modelOperations',operation:'templatePublish',data:{id:record.id,expectedBase:materialBase(state,record),confirmed:true,value:{...metadata(record),name:'卡片修改已保存',profile:{...record.profile,tasks:[],releaseDate:'2026-11-03'}}}}};
  const saved=await request('/model-operations/commands',{method:'POST',key:id,body});assert.equal(saved.status,200,JSON.stringify(saved.data));
- const next=(await request('/model-operations')).data,current=next.modelTemplates.find(row=>row.id===record.id);
+ const next=(await request('/model-operations')).data,current=modelMaterial(next,record.id);
  assert.equal(current.name,'卡片修改已保存');assert.equal(current.profile.releaseDate,'2026-11-03');assert.equal(current.profile.tasks?.length || 0,0);
  for(const key of ['license','architecture','supportedParameters'])assert.deepEqual(current.profile[key],before.profile[key]);
  assert.deepEqual(current.capabilities,before.capabilities);assert.deepEqual(next.providers,state.providers);
  assert.equal((await request('/model-operations/commands',{method:'POST',session:readonlyToken,key:crypto.randomUUID(),body:{...body,operationId:crypto.randomUUID(),expectedRevision:next.revision}})).status,403);
+});
+
+test('model material stores its English description and tags and rejects invalid tag input', async () => {
+  const { materialBase, metadata } = await import('../src/admin-v2/model-operations.js');
+  const { modelMaterial } = await import('../src/admin-v2/model-library.js');
+  let state = (await request('/model-operations')).data;
+  const send = (operation, data) => {
+    const id = crypto.randomUUID();
+    return request('/model-operations/commands', { method: 'POST', key: id, body: {
+      operationId: id, expectedRevision: state.revision, action: { type: 'modelOperations', operation, data },
+    } });
+  };
+  const modelId = 'material-copy-' + randomBytes(5).toString('hex');
+  const value = { modelId, name: '双语资料', type: 'text', description: '中文简介', profile: {
+    descriptionEn: ' English description ', tags: ['示例', ' 示例 ', 'API'], license: 'MIT',
+  }, capabilities: { context: 134217728 } };
+  const created = await send('templateSave', value);
+  assert.equal(created.status, 200, JSON.stringify(created.data));
+  state = (await request('/model-operations')).data;
+  const record = state.modelTemplates.find(row => row.modelId === modelId);
+  assert.equal(record.profile.descriptionEn, 'English description');
+  assert.deepEqual(record.profile.tags, ['示例', 'API']);
+  assert.equal(record.capabilities.context, 134217728);
+  const edit = profile => send('templatePublish', {
+    id: record.id, expectedBase: materialBase(state, record), confirmed: true,
+    value: { ...metadata(record), profile: { ...record.profile, ...profile } },
+  });
+  const invalid = await edit({ tags: 'API' });
+  assert.equal(invalid.status, 422, JSON.stringify(invalid.data));
+  assert.match(invalid.data.error.message, /模型标签/);
+  const updated = await edit({ descriptionEn: 'Updated description', tags: ['更新'] });
+  assert.equal(updated.status, 200, JSON.stringify(updated.data));
+  const saved = modelMaterial((await request('/model-operations')).data, record.id);
+  assert.equal(saved.profile.descriptionEn, 'Updated description');
+  assert.deepEqual(saved.profile.tags, ['更新']);
+  assert.equal(saved.profile.license, 'MIT');
 });
 
 test('provider material commands preserve stable identities, validate display fields and register a model without a channel', async () => {
@@ -777,7 +815,7 @@ test('model channel connectivity changes take effect only when a passing candida
   assert.deepEqual(supplierChannelAssociations(state, owner(), endpointId)[0].pricing, mapping.pricing);
 });
 
-test('market card creation persists without a service and rejects duplicates, stale writes and foreign services', async () => {
+test('market cards save manual and edited imports as independent drafts', async () => {
   let state = (await request('/model-operations')).data;
   const { modelCatalogue } = await import('../src/admin-v2/model-library.js');
   const material = modelCatalogue(state).find(row =>
@@ -787,21 +825,49 @@ test('market card creation persists without a service and rejects duplicates, st
     const operationId = crypto.randomUUID();
     return request('/model-operations/commands', { method: 'POST', key: operationId, session, body: {
       operationId, expectedRevision: state.revision, action: {
-        type: 'modelOperations', operation, modelId: material.id, data: { expectedRevision: state.revision, ...data },
+        type: 'modelOperations', operation, data: { expectedRevision: state.revision, ...data },
       },
     } });
   };
-  const content = { name: '展示草稿', description: '独立模型卡片验收', logo: '' };
+  const content = marketCardFixture;
   assert.equal((await submit('marketCardCreate', content, readonlyToken)).status, 403);
   assert.equal((await submit('marketCardCreate', { ...content, expectedRevision: state.revision - 1 })).status, 422);
+  for (const key of ['name','description','description_en','type','context_length','family','input_modalities','output_modalities','precision','tags','release_date']) {
+    assert.equal((await submit('marketCardCreate', { ...content, [key]: '' })).status, 422, key);
+  }
+  assert.equal((await submit('marketCardCreate', { ...content, release_date: '2026-02-30' })).status, 422);
+  const unknown = await submit('marketCardCreate', { ...content, source_model_id: 'missing-material' });
+  assert.equal(unknown.status, 422);
   const result = await submit('marketCardCreate', content);
   assert.equal(result.status, 200, JSON.stringify(result.data));
   const oldModels = state.models;
   state = (await request('/model-operations')).data;
   assert.deepEqual(state.models, oldModels);
-  assert.equal(state.modelData.marketCards[material.id].status, 'draft');
-  assert.equal(state.modelData.marketCards[material.id].content.name, content.name);
-  assert.equal((await submit('marketCardCreate', content)).status, 422);
-  assert.equal((await submit('marketCardLink', { serviceIds: ['service-of-another-model'] })).status, 422);
-  assert.equal((await submit('marketCardList', { serviceIds: [], scope: { type: 'all', tenantIds: [] } })).status, 422);
+  const cardId = state.audits[0].objectId;
+  assert.match(cardId, /^model-card-/);
+  const manual = state.modelData.marketCards[cardId];
+  assert.equal(manual.status, 'draft');
+  assert.equal(manual.model_id, undefined);
+  assert.equal(manual.content.name, content.name);
+  assert.ok(Object.values(manual.content.features).every(value => value === false));
+
+  const imported = { ...content, source_model_id: material.id, name: '导入后保存', description: '修改后的简介' };
+  assert.equal((await submit('marketCardCreate', imported)).status, 200);
+  state = (await request('/model-operations')).data;
+  const importId = state.audits[0].objectId;
+  assert.notEqual(importId, cardId);
+  assert.equal(state.modelData.marketCards[importId].model_id, undefined);
+  assert.equal(state.modelData.marketCards[importId].content.description, imported.description);
+  assert.deepEqual(modelCatalogue(state).find(row => row.id === material.id), material);
+  assert.deepEqual(state.models, oldModels);
+
+  assert.equal((await submit('marketCardLink', { card_id: cardId, serviceIds: ['service-of-another-model'] })).status, 422);
+  assert.equal((await submit('marketCardSetStatus', { card_id: cardId, listing_stage: 'formal', serviceIds: [] })).status, 422);
+  assert.equal((await submit('marketCardSetStatus', { card_id: cardId, listing_stage: 'preview' })).status, 200);
+  const catalogue = (await request('/market/catalogue')).data;
+  const preview = catalogue.cards.find(row => row.card_id === cardId);
+  assert.equal(preview?.preview, true);
+  assert.equal(preview?.name, content.name);
+  assert.equal(preview?.model_id, null);
+  assert.equal(catalogue.cards.some(row => row.card_id === importId), false);
 });

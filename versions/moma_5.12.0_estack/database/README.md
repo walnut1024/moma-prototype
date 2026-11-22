@@ -64,7 +64,7 @@
 
 ## 永久编号整改
 
-新建与存量对象均遵守 MODEL_OPERATIONS_IDENTITIES.md。模型服务只允许 model_service-UUID v4；不保留 offer- 编号或公开别名。日常命令发现旧服务身份映射时拒绝保存，须先完成专用整改。
+新建与存量对象均遵守 ../MODEL_OPERATIONS_DATA_CONTRACT.md。模型服务只允许 model_service-UUID v4；不保留 offer- 编号或公开别名。日常命令发现旧服务身份映射时拒绝保存，须先完成专用整改。
 
 先导出完整 D1 SQL 到权限受限目录，执行 `node versions/moma_5.12.0_estack/database/normalize-identities.mjs backup.sql normalize.sql`。脚本盘点五类公开身份，对存量 ID 生成一次性映射并扫描全部持久表及文本/JSON引用，在独立 SQLite 事务演练后逐字段比较全库业务内容。输出 SQL 含修订冲突检查、外键延迟验证、服务编号写入触发器；生产库使用 `wrangler d1 execute --remote --command` 在一次查询中执行演练通过的整份 SQL，不能拆分执行，也不使用文件导入（文件导入可能跨事务导致延迟外键校验失败）。历史内容只同步编号引用，不改费用、调用标识、状态或记录数量。备份文件不进入静态产物或版本控制。
 

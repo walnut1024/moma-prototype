@@ -23,13 +23,12 @@
   background: var(--semi-color-bg-0);
 }
 .v2-sidebar-desktop > .v2-sidebar { flex: 1; overflow-y: auto; scrollbar-width: thin; }
-.v2-sidebar-toggle { align-self: flex-end; }
+.v2-sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 2px; width: 100%; }
 .v2-sidebar nav { display: grid; gap: 12px; margin-top: 12px; }
 .v2-sidebar nav section { display: grid; gap: 2px; }
 .v2-sidebar nav section > span { margin: 0 8px 2px; }
 .v2-sidebar .semi-button { justify-content: flex-start; }
 .v2-sidebar-desktop[data-collapsed="true"] { width: 80px; padding-inline: 4px; }
-.v2-sidebar-desktop[data-collapsed="true"] .v2-sidebar-toggle { align-self: center; }
 .v2-sidebar-desktop[data-collapsed="true"] nav .semi-button { width: 48px; justify-content: center; }
 .v2-sidebar-desktop[data-collapsed="true"] .semi-tabs-bar { display: flex; justify-content: center; gap: 2px; }
 .v2-sidebar-desktop[data-collapsed="true"] .v2-sidebar .semi-tabs-bar .semi-tabs-tab {

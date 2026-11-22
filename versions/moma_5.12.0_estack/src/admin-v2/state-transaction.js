@@ -41,7 +41,7 @@ export function canMutate(role, action) {
 
 export function commitAdminState(state, action, actor = state.currentRole) {
   const archivingAcceptance = action.type === 'modelOperations' && action.operation === 'archiveAcceptanceFixture';
-  const writingMarketCard = action.type === 'modelOperations' && ['marketCardCreate', 'marketCardEdit', 'marketCardLink', 'marketCardList', 'marketCardUnlist'].includes(action.operation);
+  const writingMarketCard = action.type === 'modelOperations' && ['marketCardCreate', 'marketCardEdit', 'marketCardLink', 'marketCardSetStatus'].includes(action.operation);
   const reorderingMarket = action.type === 'modelOperations' && action.operation === 'marketReorder';
   if (action.type === 'setRole') throw new Error('请通过后台 mock 账号切换身份');
   if (action.type === 'enterAdmin') {
@@ -57,7 +57,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   const ordinaryListing = action.type === 'modelOperation' && ['publish', 'unlist'].includes(action.operation);
   // Supplier controls must not cancel in-flight tasks belonging to other suppliers.
   const supplierLifecycle = action.type === 'modelOperations' && ['pauseSales','serviceProviderListing','serviceProviderServing','removeServiceProvider','providerRemovalPrepare','providerRemovalCommit'].includes(action.operation);
-  const deletingLibrary = action.type === 'modelOperations' && action.operation === 'templateDelete';
+  const changingReferenceMaterial = action.type === 'modelOperations' && ['templateSave', 'templatePublish', 'templateDelete'].includes(action.operation);
   const savingClassification = action.type === 'modelOperations' && action.operation === 'modelClassificationSave';
   const directChanges=action.type==='batch'?action.changes:[action];
   if (directChanges?.some(change => change.type === 'setSettings' && Object.hasOwn(change.changes || {}, 'trafficLimits')
@@ -113,7 +113,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
         const index = next[change.collection].findIndex(item => item.id === change.id);
         if (index < 0) throw new Error("记录不存在");
         if (change.type === 'remove') {
-          if (change.collection !== 'tariffDictionary' && !(deletingLibrary && change.collection === 'modelTemplates') && !(archivingAcceptance && ['providers','endpoints','models','modelSupplies','modelVersions','validations','serviceRoutes'].includes(change.collection))) throw new Error('不支持删除此集合');
+          if (change.collection !== 'tariffDictionary' && !(archivingAcceptance && ['providers','endpoints','models','modelSupplies','modelVersions','validations','serviceRoutes'].includes(change.collection))) throw new Error('不支持删除此集合');
           next[change.collection].splice(index, 1);
         } else next[change.collection][index] = { ...next[change.collection][index], ...change.changes, updatedAt: timestamp };
       }
@@ -133,9 +133,14 @@ export function commitAdminState(state, action, actor = state.currentRole) {
     }
   }
   if (['users', 'tenants', 'memberships', 'grants'].some(key => JSON.stringify(state[key]) !== JSON.stringify(next[key]))) next.identityGeneration = (state.identityGeneration || 0) + 1;
-  if (action.marketCard && action.type === 'batch' && action.marketCard.modelId === action.objectId && writingMarketCard) {
-    const { modelId, card } = action.marketCard;
-    next.modelData = { ...next.modelData, marketCards: { ...next.modelData?.marketCards, [modelId]: card } };
+  if (action.marketCard && action.type === 'batch' && action.marketCard.cardId === action.objectId && writingMarketCard) {
+    const { cardId, card } = action.marketCard;
+    next.modelData = { ...next.modelData, marketCards: { ...next.modelData?.marketCards, [cardId]: card } };
+  }
+  if (changingReferenceMaterial && action.referenceMaterial && action.referenceMaterial.id === action.objectId) {
+    next.modelData = { ...next.modelData, referenceMaterials: {
+      ...next.modelData?.referenceMaterials, [action.objectId]: action.referenceMaterial,
+    } };
   }
   if (savingClassification) next.modelData = { ...next.modelData, modelClassification: action.modelClassification };
   const currentAdmin = next.admins.find(row => row.id === next.adminSession?.accountId);

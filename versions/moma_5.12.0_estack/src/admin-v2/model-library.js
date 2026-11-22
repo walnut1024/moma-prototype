@@ -1,5 +1,4 @@
 import catalogue from '../data/builtin-model-catalogue.json' with { type: 'json' };
-import { providerCatalogueIds } from './moma-provider.js';
 export const MODEL_CATALOGUE_TYPES = { text: '文本', visual: '视觉', multimodal: '多模态', audio: '语音', embedding: '向量', rerank: '重排' };
 export function libraryRecord(state, id) {
   const record = state.models.find(item => item.id === id) || state.modelTemplates.find(item => item.id === id);
@@ -15,7 +14,17 @@ export function modelReleaseOrder(a,b) {
   const date=row=>/^\d{4}-\d{2}(?:-\d{2})?$/.test(row.profile?.releaseDate || '')?row.profile.releaseDate:'';
   return date(b).localeCompare(date(a));
 }
-export function modelCatalogue(state) {
+function materialFromIdentity(state, identity) {
+  if (!identity || state.modelData?.archivedCatalogueIds?.includes(identity.id)) return;
+  const material = state.modelData?.referenceMaterials?.[identity.id] || identity;
+  if (!material.referenceDeletedAt) return material;
+}
+
+export function modelMaterial(state, id) {
+  return materialFromIdentity(state, libraryRecord(state, id));
+}
+
+export function modelIdentityCatalogue(state) {
   const archived = new Set(state.modelData?.archivedCatalogueIds || []);
   const records = modelLibrary(state).filter(row => !archived.has(row.id));
   if (!state.modelData?.archivedCatalogueIds) return records;
@@ -24,15 +33,13 @@ export function modelCatalogue(state) {
   return records.sort((a, b) => rank(a) - rank(b));
 }
 
+export function modelCatalogue(state) {
+  return modelIdentityCatalogue(state).flatMap(row => materialFromIdentity(state, row) || []);
+}
+
 export function libraryRemovalIssue(state, id) {
-  const record = libraryRecord(state, id);
+  const record = modelMaterial(state, id);
   if (!record) return '模型资料不存在';
-  if (Object.hasOwn(state.modelData?.marketCards || {}, record.id)) return '模型资料仍被广场卡片引用';
-  if (state.models.some(row => row.id === record.id || row.templateId === record.id)) return '已进入服务管理，不能删除模型资料';
-  if (state.providers.some(provider => providerCatalogueIds(provider).some(code => {
-    const entry = provider.catalogModels?.find(row => row.modelId === code);
-    return entry?.libraryId ? libraryRecord(state, entry.libraryId)?.id === record.id : code.toLowerCase() === record.modelId.toLowerCase();
-  }))) return '模型资料仍被供应关系引用，请先移除供应关系';
   if (state.modelOnboardings.some(row => !['已完成', '已放弃'].includes(row.status) && (libraryRecord(state, row.libraryId)?.id === record.id || row.kind === 'supplier-channel' && row.rows.some(item => libraryRecord(state, item.libraryId)?.id === record.id)))) return '模型资料仍被配置草稿引用';
   return '';
 }

@@ -107,7 +107,19 @@ export function providerIntakeTransaction(state, { data = {} }) {
       changes.push(...created.changes); apply(created.changes);
       groupId = providerKeyGroups(working.providers.find(row => row.id === plan.provider.id)).find(row => row.name === data.key_group_name.trim()).id;
     }
-    if (data.apiKeys.length) changes.push(...providerTransaction(working, { operation: 'addApiKeys', objectId: plan.provider.id, data: { apiKeys: data.apiKeys, groupId } }).changes);
+    if (data.apiKeys.length) {
+      const added = providerTransaction(working, { operation: 'addApiKeys', objectId: plan.provider.id,
+        data: { apiKeys: data.apiKeys, ...(data.key_group_name == null ? { standalone: true } : { groupId }) } });
+      changes.push(...added.changes);
+      if (data.key_group_name == null) {
+        const first = added.changes.find(change => change.collection === 'providers').changes.apiKeys.find(key => key.fingerprint === data.apiKeys[0].fingerprint);
+        for (const change of changes) {
+          if (change.type === 'add' && change.collection === 'endpoints' && change.record.keyGroupId === 'default') {
+            Object.assign(change.record, { authMode: 'specific', apiKeyId: first.id, keyGroupId: '' });
+          }
+        }
+      }
+    }
   }
   return { type: 'batch', objectId: plan.provider.id, label: '录入服务商', changes };
 }

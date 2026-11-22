@@ -284,6 +284,8 @@ export function providerTransaction(state, action) {
     if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
     if (!Array.isArray(data.apiKeys) || !data.apiKeys.length || data.apiKeys.length > PROVIDER_API_KEY_LIMIT || data.apiKeys.some(item => !item || !/^[\x21-\x7e]{4}•{8}[\x21-\x7e]{4}$/.test(item.maskedKey || '') || !/^[a-f0-9]{64}$/.test(item.fingerprint || ''))) throw new Error('API 密钥配置无效，请重新输入。');
     const keys = provider.apiKeys || [];
+    const standalone = data.standalone === true;
+    if (standalone && data.groupId) throw Error('添加独立密钥时不能指定分组');
     const groupId = data.groupId || 'default', groups = providerKeyGroups(provider, providerApiKeyRows(state, provider).map(row => row.apiKey));
     const group = groups.find(row => row.id === groupId);
     if (!group) throw new Error('API 密钥组不存在，请重新选择');
@@ -299,10 +301,10 @@ export function providerTransaction(state, action) {
       const name = `API 密钥 ${index}`; names.add(name);
       const id = resourceId('credential');
       if (item.accountRpm != null && (!Number.isSafeInteger(item.accountRpm) || item.accountRpm < 1)) throw new Error('账号 RPM 必须为正整数');
-      return { id, name, maskedKey: item.maskedKey, fingerprint: item.fingerprint, ...(item.accountRpm != null ? { accountRpm: item.accountRpm } : {}), createdAt };
+      return { id, name, maskedKey: item.maskedKey, fingerprint: item.fingerprint, ...(standalone ? { standalone: true } : {}), ...(item.accountRpm != null ? { accountRpm: item.accountRpm } : {}), createdAt };
     });
-    changes.push(update('providers', provider.id, { apiKeys: [...keys, ...added], ...(data.groupId || provider.apiKeyGroups ? { apiKeyGroups: groups.map(row => row.id === groupId ? { ...row, keyIds: [...row.keyIds, ...added.map(key => key.id)] } : row) } : {}), ...(groupId === 'default' && !group.keyIds.length && !provider.defaultApiKeyId ? { defaultApiKeyId: added[0].id } : {}) }));
-    if (!group.keyIds.length) changes.push(...invalidateSupplierChannels(state, provider, state.endpoints.filter(row => !row.deletedAt && row.providerId === provider.id && (row.authMode === 'group' && row.keyGroupId === groupId || groupId === 'default' && row.authMode === 'inherit')).map(row => row.id)));
+    changes.push(update('providers', provider.id, { apiKeys: [...keys, ...added], ...(!standalone && (data.groupId || provider.apiKeyGroups) ? { apiKeyGroups: groups.map(row => row.id === groupId ? { ...row, keyIds: [...row.keyIds, ...added.map(key => key.id)] } : row) } : {}), ...(!standalone && groupId === 'default' && !group.keyIds.length && !provider.defaultApiKeyId ? { defaultApiKeyId: added[0].id } : {}) }));
+    if (!standalone && !group.keyIds.length) changes.push(...invalidateSupplierChannels(state, provider, state.endpoints.filter(row => !row.deletedAt && row.providerId === provider.id && (row.authMode === 'group' && row.keyGroupId === groupId || groupId === 'default' && row.authMode === 'inherit')).map(row => row.id)));
     return { type: 'batch', label: '添加 API 密钥', objectId: provider.id, changes };
   }
   if (operation === 'editApiKey' || operation === 'deleteApiKey') {

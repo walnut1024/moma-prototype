@@ -1,7 +1,7 @@
 import ModelResourceJsonPage from './ModelResourceJsonPage';
 import ModelResourceTransfer, { openResourceJson } from './ModelResourceTransfer';
 import MarketCardDialogs from './MarketCardDialogs';
-import { marketCardIndex, scopeFields } from '../market-cards.mjs';
+import { marketCardIndex, marketCardStatus, marketCardStatuses, scopeFields } from '../market-cards.mjs';
 import { modelIdentity, modelServiceIdentity } from '../model-identities.mjs';
 import { serviceReferences } from '../service-access.mjs';
 import AdminStatus from './AdminStatus';
@@ -26,9 +26,10 @@ import { marketSupplyGroups } from './model-market-supplies';
 import { orderedMarketModels } from './model-market-order';
 import './model-market.css';
 
+const displayStatus = { draft: '未上架', ...marketCardStatuses };
 const filters = [
   { key: 'type', label: '模型类型', options: [['all', '全部类型'], ...Object.entries(MODEL_CATALOGUE_TYPES)] },
-  { key: 'status', label: '上架状态', options: [['all', '全部状态'], ...Object.entries({draft:'未上架', listed:'已上架', withdrawn:'已下架'})] },
+  { key: 'status', label: '上架状态', options: [['all', '全部状态'], ...Object.entries(displayStatus)] },
   { key: 'visibility', label: '广场展示', options: [['all', '全部展示设置'], ['visible', '允许展示'], ['hidden', '隐藏']] },
 ];
 const pageSize = 20;
@@ -36,9 +37,10 @@ const cardSupplierLimit = 3;
 const viewOptions = [{ label: '列表', value: 'list' }, { label: '卡片', value: 'cards' }];
 const emptyMessage = '没有符合条件的模型卡片';
 const cardCollision = args => args.pointerCoordinates ? pointerWithin(args) : closestCenter(args);
-const displayStatus = { draft: '未上架', listed: '已上架', withdrawn: '已下架' };
 function scopeLabel(card) {
   if (card.status === 'draft') return '未设置';
+  if (card.status === 'withdrawn') return '—';
+  if (card.status === 'preview') return '全部用户';
   if (card.scope.type === 'all') return '全部用户';
   return Object.entries(scopeFields).flatMap(([key, label]) => card.scope[key]?.length ? [label + '（' + card.scope[key].length + '）'] : []).join('、');
 }
@@ -100,7 +102,7 @@ function MarketCard({ state, model, position, canReorder, savingOrder, actions, 
   return <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} data-dragging={isDragging || undefined}>
     <Card className="market-model-card" footer={<div className="market-card-footer">
       <Space wrap>
-        <AdminStatus value={displayStatus[model.card.status]}/>
+        <AdminStatus value={displayStatus[marketCardStatus(model.card)]}/>
       </Space>
       {actions}
     </div>}>
@@ -120,9 +122,9 @@ function MarketCard({ state, model, position, canReorder, savingOrder, actions, 
       <Typography.Paragraph className="market-card-description" type="secondary" ellipsis={{ rows: 2, showTooltip: true }}>{source.description || '暂无简介'}</Typography.Paragraph>
       <div className="market-card-facts">
         <dl>
-          <div><dt>输入类型</dt><dd title={profile.inputModalities?.join('、')}><MarketModalities values={profile.inputModalities}/></dd></div>
-          <div><dt>输出类型</dt><dd title={outputs.join('、')}><MarketModalities values={outputs}/></dd></div>
-          <div><dt>上下文</dt><dd>{context > 0 ? `${Number(context).toLocaleString('zh-CN')} Token` : '—'}</dd></div>
+          <div><dt>输入模态</dt><dd title={profile.inputModalities?.join('、')}><MarketModalities values={profile.inputModalities}/></dd></div>
+          <div><dt>输出模态</dt><dd title={outputs.join('、')}><MarketModalities values={outputs}/></dd></div>
+          <div><dt>上下文长度</dt><dd>{context > 0 ? `${Number(context).toLocaleString('zh-CN')} Token` : '—'}</dd></div>
           <div><dt>模型作者</dt><dd title={profile.author}>{profile.author || '—'}</dd></div>
           <div><dt>关联服务</dt><dd>{model.card.linked.length} 个服务</dd></div>
           <div><dt>可见范围</dt><dd>{scopeLabel(model.card)}</dd></div>
@@ -166,15 +168,12 @@ export default function ModelMarket(props) {
   const search = query.trim().toLowerCase();
   const type = params.get('type'), status = params.get('status'), visibility = params.get('visibility');
   const ordered = useMemo(() => marketCardIndex(props.state, orderedMarketModels(props.state)), [props.state]);
-  const cardsByModel = new Map(ordered.map(row => [row.modelId, row]));
-  const materials = useMemo(() => {
-    const ids = new Set(ordered.map(row => row.modelId));
-    return modelCatalogue(props.state).map(row => ({ ...row, hasCard: ids.has(row.id) }));
-  }, [props.state, ordered]);
-  const openCard = (kind, modelId, button) => ops.proceed(() => {
+  const cardsById = new Map(ordered.map(row => [row.cardId, row]));
+  const materials = useMemo(() => modelCatalogue(props.state), [props.state]);
+  const openCard = (kind, cardId, button) => ops.proceed(() => {
     if (button) trigger.current = button;
     ops.setError('');
-    setCardDialog({ kind, modelId });
+    setCardDialog({ kind, cardId });
   });
   const closeCard = () => {
     setCardDialog(null);
@@ -182,13 +181,13 @@ export default function ModelMarket(props) {
     ops.dirty(false);
     requestAnimationFrame(() => trigger.current?.focus());
   };
-  const cardRow = cardsByModel.get(cardDialog?.modelId);
+  const cardRow = cardsById.get(cardDialog?.cardId);
   const positions = new Map(ordered.map((model, index) => [model.id, index + 1]));
   const rows = ordered.filter(model =>
     [model.name, model.description, modelIdentity(props.state,model).id, modelIdentity(props.state,model).canonical_slug, ...serviceReferences({ ...props.state, models:[model] }).map(service=>service.model_service_id), ...serviceCallIdentifiers(model)].join(' ').toLowerCase().includes(search) &&
     (!type || modelCategory(model.type) === type) &&
-    (!status || model.card.status === status) &&
-    (!visibility || (model.card.status === 'listed' ? 'visible' : 'hidden') === visibility));
+    (!status || marketCardStatus(model.card) === status) &&
+    (!visibility || (['listed', 'preview'].includes(model.card.status) ? 'visible' : 'hidden') === visibility));
   const currentPage = Math.min(Math.max(1, Number.parseInt(params.get('page'), 10) || 1), Math.ceil(rows.length / pageSize) || 1);
   const pageRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const view = params.get('view') === 'cards' ? 'cards' : 'list';
@@ -248,11 +247,9 @@ export default function ModelMarket(props) {
     }
   };
   const actions = (row, inList = false) => <Space wrap={!inList} spacing={inList ? 4 : 8} className={inList ? 'market-list-actions' : undefined}>
-    <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('edit', row.modelId, event.currentTarget)}>展示信息</Button>
-    <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('link', row.modelId, event.currentTarget)}>关联服务</Button>
-    <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('list', row.modelId, event.currentTarget)}>{row.card.status === 'listed' ? '调整上架' : '上架'}</Button>
-    {row.card.status === 'listed' && <Button size="small" theme="borderless" disabled={!ops.can || busy}
-      onClick={event => openCard('unlist', row.modelId, event.currentTarget)}>下架</Button>}
+    <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('edit', row.cardId, event.currentTarget)}>编辑信息</Button>
+    <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('link', row.cardId, event.currentTarget)}>关联服务</Button>
+    <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('status', row.cardId, event.currentTarget)}>上架状态设置</Button>
     {row.serviceMode && <AdminActionMenu label={`${row.name} 的更多操作`} items={[
       { node: 'item', name: '查看 JSON', onClick: () => openResourceJson(ops, { level: 'model', model_id: row.modelId }) },
       { node: 'item', name: '服务商与渠道', onClick: button => { trigger.current = button; setSupplyDetail({ modelId: row.id, displayCard: !row.legacy }); } },
@@ -319,18 +316,18 @@ export default function ModelMarket(props) {
       { title: '序号', width: '9%', render: (_, row) => orderButton(row) },
       { title: '模型', render: (_, row) => <Space className="market-list-identity" vertical align="start" spacing={2}>
         <Typography.Text strong ellipsis={{ showTooltip: true }}>{row.name}</Typography.Text>
-        <CopyId value={row.canonicalSlug} label="模型编码" ellipsis={{ showTooltip: true }}/>
+        {row.canonicalSlug && <CopyId value={row.canonicalSlug} label="模型编码" ellipsis={{ showTooltip: true }}/>}
       </Space> },
       { title: '类型', width: '8%', render: (_, row) => MODEL_CATALOGUE_TYPES[modelCategory(row.type)] || row.type },
       { title: '关联服务', width: '12%', render: (_, row) => row.card.linked.length
-        ? <Button size="small" theme="borderless" onClick={event => openCard('link', row.modelId, event.currentTarget)}>{row.card.linked.length} 个服务</Button>
+        ? <Button size="small" theme="borderless" onClick={event => openCard('link', row.cardId, event.currentTarget)}>{row.card.linked.length} 个服务</Button>
         : '未关联' },
       { title: '可见范围', width: '14%', render: (_, row) => scopeLabel(row.card) },
-      { title: '上架状态', width: '9%', render: (_, row) => <AdminStatus value={displayStatus[row.card.status]}/> },
+      { title: '上架状态', width: '9%', render: (_, row) => <AdminStatus value={displayStatus[marketCardStatus(row.card)]}/> },
       { title: '操作', width: 320, render: (_, row) => actions(row, true) },
     ]}/>}
     {cardDialog && (cardDialog.kind === 'create' || cardRow) && <MarketCardDialogs
-      key={cardDialog.kind + ':' + cardDialog.modelId} kind={cardDialog.kind} row={cardRow} state={props.state}
+      key={cardDialog.kind + ':' + cardDialog.cardId} kind={cardDialog.kind} row={cardRow} state={props.state}
       materials={materials} internal={props.internal} ops={ops} close={closeCard} open={openCard}/>}
     {supplyModel && <Modal title="服务商与渠道" description={supplyModel.name} wide centered onClose={() => !busy && closeSupplies()}
       footer={<Button disabled={busy} onClick={closeSupplies}>关闭</Button>}>

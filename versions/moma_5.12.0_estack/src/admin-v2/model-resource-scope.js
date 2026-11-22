@@ -1,6 +1,6 @@
 import { modelIdentity, modelServiceIdentity, modelDisplayName } from '../model-identities.mjs';
 import { serviceReferences, offerKey } from '../service-access.mjs';
-import { modelCatalogue } from './model-library.js';
+import { modelIdentityCatalogue } from './model-library.js';
 import { registeredResourceModels } from './model-resource-registration.js';
 
 export const RESOURCE_SCHEMA = 'moma.model-operations/v2';
@@ -11,7 +11,7 @@ export function validateResourceTarget(state, scope, target) {
   if (!target || !Object.hasOwn(fields, target.level) || Object.keys(target).sort().join() !== ['level', ...fields[target.level]].sort().join()
     || fields[target.level].some(key => typeof target[key] !== 'string' || !target[key])) throw Error('JSON 对象范围无效');
   if (target.provider_id && !state.providers.some(row => row.id === target.provider_id && !row.deletedAt)) throw Error('指定服务商不存在');
-  if (target.model_id && !modelCatalogue(state).some(row => row.id === target.model_id)) throw Error('指定模型不存在或模型关联不明确');
+  if (target.model_id && !modelIdentityCatalogue(state).some(row => row.id === target.model_id)) throw Error('指定模型不存在或模型关联不明确');
   if (scope === 'channels') {
     if (target.level === 'model_service') throw Error('渠道管理不支持模型服务范围');
     if (target.model_id && !state.providers.filter(row => !row.deletedAt && (!target.provider_id || row.id === target.provider_id)).some(provider => registeredResourceModels(state, provider).some(row => row.model_id === target.model_id))) throw Error('指定模型不属于当前服务商或尚未登记');

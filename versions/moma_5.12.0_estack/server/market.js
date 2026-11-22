@@ -1,4 +1,4 @@
-import { marketAudience, marketCardVisible } from '../src/market-cards.mjs';
+import { marketAudience, marketCardCatalogueEntry, marketCardVisible } from '../src/market-cards.mjs';
 import { internalEnterprise } from '../src/admin-v2/enterprise.js';
 import { servicePurpose } from '../src/admin-v2/service-purpose.js';
 import { modelPresentation } from '../src/model-identities.mjs';
@@ -59,7 +59,7 @@ export async function createMarketSession(db, tenant, member) {
 const selectOffers = ({ includeCard = false } = {}) => `
   SELECT o.record_id,o.id AS call_id,o.mode,o.listing_stage,o.gray_tenants_json,o.market_visible,
          o.calls_enabled,
-         ${includeCard ? "(SELECT mc.value FROM model_workspace w, json_each(w.meta_json,'$.modelData.marketCards') mc WHERE w.id=1 AND mc.key=m.id) AS market_card," : ''}
+         ${includeCard ? "(SELECT mc.value FROM model_workspace w, json_each(w.meta_json,'$.modelData.marketCards') mc WHERE w.id=1 AND COALESCE(json_extract(mc.value,'$.model_id'),mc.key)=m.id) AS market_card," : ''}
          s.id AS service_id,s.record_json AS service_json,m.id AS material_id,m.record_json AS material_json,
          o.supplier_id AS provider_id,p.name AS provider_name,COALESCE(json_extract(cm.mapping_json,'$.sourceName'),c.name) AS source_name,
          (o.channel_model_id IS NULL OR (p.enabled=1 AND p.deleted_at IS NULL AND cm.enabled=1 AND cm.removed_at IS NULL
@@ -126,18 +126,31 @@ export async function marketCatalogue(db, session, { projectId, commercial = tru
   const tenant = session?.tenant || null;
   const context = session?.member ? await marketReference(db) : {};
   if (!commercial && (!session?.member || internalEnterprise(context)?.id !== tenant?.id)) {
-    return { tenant: null, services: [], orders: [], projects: [] };
+    return { tenant: null, cards: [], services: [], orders: [], projects: [] };
   }
   const audience = marketAudience(context, { tenantId: tenant?.id, member: session?.member, projectId });
   if (projectId && !audience.projectId) fail(403, 'PROJECT_FORBIDDEN', '当前成员无权查看此项目');
   const projects = audience.projects.map(({id, name}) => ({ id, name }));
-  const [{ results }, { results: [workspace] }] = await db.batch([
+  const [{ results }, { results: [workspace] }, { results: cardRows }] = await db.batch([
     db.prepare(selectOffers({ includeCard: true }) + " AND (market_card IS NOT NULL OR (o.listing_stage IN ('gray','formal') AND o.market_visible=1 AND s.market_visible=1)) ORDER BY m.name,p.created_at,p.name,o.created_at,o.record_id").bind(tenant?.id || ''),
     db.prepare("SELECT json_extract(meta_json,'$.modelData.modelClassification') AS dictionary FROM model_workspace WHERE id=1"),
+    db.prepare(`SELECT mc.key AS card_id, m.id AS model_id, m.canonical_slug, mc.value AS card
+      FROM model_workspace w, json_each(w.meta_json,'$.modelData.marketCards') mc
+      LEFT JOIN materials m ON m.id=COALESCE(json_extract(mc.value,'$.model_id'),mc.key) AND m.deleted_at IS NULL
+      WHERE w.id=1 AND json_extract(mc.value,'$.status') IN ('preview','listed')
+        AND (m.id IS NOT NULL OR (mc.key GLOB 'model-card-*' AND json_type(mc.value,'$.model_id') IS NULL))`),
   ]);
   const materials = new Map();
   for (const row of results) if (!materials.has(row.material_id)) materials.set(row.material_id, domainModel(JSON.parse(row.material_json)));
   const classification = classificationIndex(workspace?.dictionary ? JSON.parse(workspace.dictionary) : existingClassification(materials.values()));
+  const classificationFor = material => {
+    const { author, series } = modelClassificationFor(classification, material);
+    return { authorId: author?.id, author: author?.name, seriesId: series?.id, series: series?.name };
+  };
+  const cards = cardRows.flatMap(row => {
+    const card = marketCardCatalogueEntry(JSON.parse(row.card), row.model_id, row.canonical_slug || '', audience, row.card_id);
+    return card ? [{ ...card, classification: classificationFor(card) }] : [];
+  });
   const offers = results.flatMap(row => {
     const card = row.market_card && JSON.parse(row.market_card);
     const offer = marketOffer(row, tenant);
@@ -153,22 +166,22 @@ export async function marketCatalogue(db, session, { projectId, commercial = tru
     const prices = procurement && offer.released && offer.ready ? marketSalePrices(offer,procurement,at) : null;
     if (!card && !prices) return [];
     const master = materials.get(row.material_id);
-    const { author, series } = modelClassificationFor(classification, master);
     const material = modelPresentation(null, { ...master,
       marketContent: card?.content || JSON.parse(row.service_json).marketContent });
     return [{
       id:row.record_id, model_service_id:row.record_id, model_id:row.material_id, canonical_slug:material.modelId, call_id:row.call_id, provider_id:row.provider_id || MOMA_PROVIDER.id, callId:row.call_id, modelId:material.modelId, modelKey:row.material_id, mode:row.mode, name:material.name,
       providerId:row.provider_id || MOMA_PROVIDER.id, provider:row.provider_name || MOMA_PROVIDER.name, channelName:row.source_name,
       maker:material.profile?.author || material.maker || '', type:material.type, description:material.description || '',
-      classification: { authorId: author?.id, author: author?.name, seriesId: series?.id, series: series?.name },
+      classification: classificationFor(card ? material : master),
       profile:material.profile || {}, capabilities:material.capabilities || {},
+      ...(card && { features: card.content.features, description_en: card.content.description_en, heat: card.content.heat, tags: card.content.tags }),
       salePrices:(prices || []).map(({amount,currency,unit,effectiveAt,expiresAt})=>({amount,currency,unit,effectiveAt,expiresAt})),
       canOrder:Boolean(commerceWritable && !session?.member && !offer.paused && prices && offer.allowed), ordered:Boolean(commercial && !session?.member && row.order_id), orderedAt:commercial && !session?.member ? row.order_created_at : null, callable:Boolean(!session?.member && prices && tenant && row.order_id), stage:row.listing_stage,
     }];
   });
   const orders=commercial && tenant && !session?.member?(await db.prepare(`SELECT purchase.id,purchase.offer_id AS offerId,offer.id AS callId,purchase.created_at AS createdAt,CASE WHEN offer.retired_at IS NULL THEN offer.listing_stage ELSE 'withdrawn' END AS stage
     FROM market_orders purchase JOIN offers offer ON offer.record_id=purchase.offer_id WHERE purchase.tenant_id=? ORDER BY purchase.created_at DESC`).bind(tenant.id).all()).results:[];
-  return { tenant, services, orders, projects };
+  return { tenant, cards, services, orders, projects };
 }
 
 async function checkedOffer(db, session, field, value, { ordering = false } = {}) {

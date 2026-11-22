@@ -6,15 +6,18 @@ import Table from './AdminTable';
 import { Choice, Notice } from './ServiceUI';
 import { SearchBox, useOperations } from './ModelOperationsUI';
 import AdminPageHeading from './AdminPageHeading';
-import { materialOperationsUi } from './MaterialsHeader';
+import MaterialsHeader, { materialOperationsUi } from './MaterialsHeader';
 import ProviderMaterialProfile from './ProviderMaterialProfile';
+import { RemovalButton } from './ProviderRemovalDialog';
 import MaterialLogo from './MaterialLogo';
 import ModelBatchImport from './ModelBatchImport';
 import SupplyRegistrationDialog from './SupplyRegistrationDialog';
 import { providerCode, PROVIDER_TYPES } from './provider-management';
+import { SupplierOfferEditor, SupplierOfferImport } from './SupplierOfferEditor';
+import { offerFields } from './supplier-offer-fields';
 import { catalogueType } from './SupplierModelMultiSelect';
 import { operationsReturn } from './model-pricing-workspace';
-import { materialChannelCount, materialProviders, materialSource, providerMaterialModels, viewMaterialChannels } from './provider-materials';
+import { materialProviders, providerMaterialModels, viewMaterialChannels } from './provider-materials';
 
 const pageSize = 20;
 const pageNumber = (value, count) => Math.min(Math.max(1, Number.parseInt(value, 10) || 1), Math.ceil(count / pageSize) || 1);
@@ -61,15 +64,16 @@ function ProviderList({ state, ops, providers }) {
 
 function ProviderModels({ state, ops, provider }) {
   const [registering, setRegistering] = useState(false);
+  const [editing,setEditing] = useState(null);
   const trigger = useRef(null);
   const query = ops.params.get('modelQ') || '';
-  const rows = providerMaterialModels(state, provider).filter(({ master }) =>
-    (master.name + ' ' + master.modelId).toLowerCase().includes(query.trim().toLowerCase()));
+  const rows = providerMaterialModels(state, provider).map(row => ({ ...row, offer:offerFields(row,provider) })).filter(({ offer }) =>
+    [offer.name,offer.code,...offer.bindings.map(b => b.upstream)].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
   const page = pageNumber(ops.params.get('modelPage'), rows.length);
   const update = patch => ops.go(patch, { replace: true, preserveScroll: true });
   return <>
     <div className="materials-toolbar">
-      <div className="materials-filters"><SearchBox placeholder="搜索模型展示名或模型编码" value={query}
+      <div className="materials-filters"><SearchBox placeholder="搜索模型展示名、标识或编码" value={query}
         onChange={modelQ => update({ modelQ: modelQ || null, modelPage: null })}/></div>
       <Space wrap>
         <Button disabled={!ops.can} onClick={() => ops.go({ view: 'modelImport' })}>批量导入并登记</Button>
@@ -78,13 +82,14 @@ function ProviderModels({ state, ops, provider }) {
     </div>
     <Table rowKey="id" dataSource={pageRows(rows, page)} scroll={{ x: 'max(100%, 730px)' }} empty={query ? '没有符合条件的模型' : '暂无已登记模型'}
       pagination={{ pageSize, currentPage: page, total: rows.length, onPageChange: modelPage => update({ modelPage }) }} columns={[
-      { title: '模型展示名', width: 200, render: (_, { master }) => <Button theme="borderless" onClick={() =>
-        ops.go({ view: 'template', template: master.id, materialMode: 'view', returnTo: materialSource(location.hash) }, { base: 'model-templates', reset: true })}>{master.name}</Button> },
-      { title: '模型编码', width: 220, render: (_, { master }) => <Typography.Text className="materials-code">{master.modelId}</Typography.Text> },
+      { title: '模型展示名', width: 170, render: (_, { offer }) => offer.name },
+      { title: '模型标识', width: 170, render: (_, { offer }) => [...new Set(offer.bindings.map(b => b.upstream).filter(Boolean))].join('、') || '—' },
+      { title: '模型编码', width: 160, render: (_, { master }) => <Typography.Text className="materials-code">{master.modelId}</Typography.Text> },
       { title: '模型类型', width: 120, render: (_, { master }) => catalogueType(master.type) },
-      { title: '渠道数', align: 'right', width: 80, render: (_, row) => materialChannelCount(row) },
-      { title: '操作', width: 110, render: (_, { master }) => <Button theme="borderless" onClick={() => viewMaterialChannels(ops, provider.id, master.id)}>查看渠道</Button> },
+      { title: '协议及 URL', width: 300, render: (_, { offer }) => offer.bindings.length ? offer.bindings.map((b,i) => <div key={i}>{b.protocol} · {b.url}</div>) : '—' },
+      { title: '操作', width: 110, render: (_, row) => <Space><RemovalButton state={state} ops={ops} target={{ providerId: provider.id, catalogueId: row.modelId }} ariaLabel={"删除供应模型 " + row.master.name}/><Button theme="borderless" disabled={!ops.can} onClick={() => setEditing(row.offer)}>编辑</Button></Space> },
     ]}/>
+    {editing && <SupplierOfferEditor offer={editing} provider={provider} ops={ops} close={() => setEditing(null)}/>}
     {registering && <SupplyRegistrationDialog state={state} ops={ops} provider={provider} close={() => {
       setRegistering(false);
       ops.setError('');
@@ -109,17 +114,17 @@ export default function ProviderMaterials(props) {
   const saved = id => go({ provider: id, view: null, edit: null, tab: view === 'new' ? null : 'profile' }, { saved: true });
   const importKind = view === 'modelImport' && provider ? 'model' : view === 'import' ? 'provider' : view === 'relations' ? 'relation' : null;
   return <div className="semi-materials materials-page">
-    <AdminPageHeading title="服务商资料" className="materials-heading"/>
+    {view || (providerId && !provider) ? <AdminPageHeading title="服务商资料" className="materials-heading"/> : !provider && <MaterialsHeader active="provider-materials" ops={ops}/>}
     {!importKind && ops.conflict && <div className="materials-description"><Notice error>资料已有修订，当前输入保留。<Button theme="borderless" onClick={ops.reload}>载入最新数据</Button></Notice></div>}
-    {(providerId || view) && <div className="materials-description">
+    {(view || (providerId && !provider)) && <div className="materials-description">
       <Button theme="borderless" onClick={importKind && provider ? () => go({ view: null }) : back}>
         {importKind && provider ? '返回供应模型' : returnTo?.startsWith('#/admin-2/providers-reference') ? '返回渠道管理' : returnTo ? '返回来源页面' : '返回服务商列表'}
       </Button>
     </div>}
     {importKind ? <div className="materials-description">
       <Typography.Title heading={4}><span ref={title} tabIndex={-1}>{importKind === 'provider' ? '批量导入服务商资料' : importKind === 'relation' ? '批量导入供应关系' : '批量导入并登记'}</span></Typography.Title>
-      <ModelBatchImport key={view + (provider?.id || '')} kind={importKind} providerId={provider?.id} state={state} ops={ops} transact={transact}
-        close={saved => provider ? go({ view: null }, { saved }) : go(listParams, { saved })}/>
+      {importKind === 'model' ? <SupplierOfferImport provider={provider} ops={ops} done={() => go({ view:null }, { saved:true })}/> : <ModelBatchImport key={view + (provider?.id || '')} kind={importKind} providerId={provider?.id} state={state} ops={ops} transact={transact}
+        close={saved => provider ? go({ view: null }, { saved }) : go(listParams, { saved })}/>}
     </div> : view === 'new' ? <>
       <Typography.Title heading={4}><span ref={title} tabIndex={-1}>添加服务商</span></Typography.Title>
       <ProviderMaterialProfile key="new" editing ops={ops} cancel={back} saved={saved}/>

@@ -2,9 +2,10 @@ import { callObservations, summarizeObservations } from './admin-v2/call-observa
 
 export function modelUsageSummary(records, service, now = Date.now()) {
   const start = now - 7 * 86400000;
-  const candidates = records.filter(row => row.modelId === service.modelKey);
+  const modelId = service.serviceModelId || service.modelKey;
+  const candidates = records.filter(row => row.modelId === modelId);
   const selected = candidates.filter(row => service.mode !== 'provider' || (row.publicModelId || row.callId) === service.callId);
-  const { requests } = callObservations({ requests: selected, models: [{ id: service.modelKey, type: service.type }] });
+  const { requests } = callObservations({ requests: selected, models: [{ id: modelId, type: service.type }] });
   const rows = requests.filter(row => row.at >= start && row.at < now);
   const summary = summarizeObservations(rows);
   return { ...summary, start, end: now, pendingTokens: rows.filter(row => row.tokenMeter && row.total == null).length,

@@ -5,19 +5,17 @@ import { startLocalBackend } from '../database/local-runtime.js';
 import { adminSections, canAccessPage, commercialPage, isOrganizationPage } from '../src/admin-v2/navigation.mjs';
 import { deploymentLicense } from '../src/deployment-license.mjs';
 
-test('both operations sections are adjacent and scoped links keep deployment permissions', () => {
+test('tenant management is the only access-control entry and scoped links keep deployment permissions', () => {
   const internal = deploymentLicense({ MOMA_LICENSE_EDITION: 'internal' });
   const commercial = deploymentLicense({ MOMA_LICENSE_EDITION: 'commercial' });
-  const index = adminSections.findIndex(({ id }) => id === 'commerce');
-  const [commercialGroup, internalGroup] = adminSections.slice(index, index + 2);
-  assert.equal(internalGroup.id, 'organization');
-  assert.equal(internalGroup.workspace, commercialGroup.workspace);
-  assert.equal(commercialGroup.title, '商业运营');
-  assert.deepEqual(commercialGroup.items.map(row => row.label), ['模型销售', '客户管理', '套餐管理']);
-  assert.equal(internalGroup.title, '组织运营');
-  assert.deepEqual(internalGroup.items.map(row => row.label), ['本组织', '项目管理']);
-  assert(canAccessPage('运营人员', 'projects', commercial));
-  assert(canAccessPage('运营人员', 'projects', internal));
+  const commerce = adminSections.find(row => row.id === 'commerce');
+  const access = adminSections.find(row => row.id === 'customers');
+  assert.deepEqual(commerce.items.map(row => row.label), ['模型销售', '套餐管理']);
+  assert.deepEqual(access.items.map(row => row.label), ['租户管理']);
+  assert(!adminSections.some(row => row.id === 'organization'));
+  assert(!canAccessPage('平台管理员', 'users', commercial));
+  assert(!canAccessPage('运营人员', 'projects', commercial));
+  assert(canAccessPage('平台管理员', 'projects', internal));
   assert.equal(canAccessPage('运维人员', 'projects', internal), false);
   const scope = new URLSearchParams('scope=organization');
   assert(isOrganizationPage('projects', scope, false));
@@ -73,7 +71,7 @@ for (const spec of [
       }
       if (spec.edition === 'internal') {
         const scope = await request('/model-operations/commands', {
-          action:{ type:'modelOperations', operation:'marketCardList', data:{ scope:{ tenantIds:['another-tenant'] } } },
+          action:{ type:'modelOperations', operation:'marketCardSetStatus', data:{ listing_stage:'gray', scope:{ tenantIds:['another-tenant'] } } },
         });
         assert.equal(scope.status,403);
         assert.deepEqual((await request('/market/catalogue')).body.services, []);

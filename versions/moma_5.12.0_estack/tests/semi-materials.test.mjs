@@ -2,13 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import config from '../vite.config.mjs';
-import {materialModalitiesLabel} from '../src/admin-v2/material-catalogue.js';
-
-test('incomplete model material modalities render as missing facts without crashing the table',()=>{
-  assert.equal(materialModalitiesLabel({}),'未填写 → 未填写');
-  assert.equal(materialModalitiesLabel({inputModalities:['文本','图片'],outputModalities:['文本']}),'文本、图片 → 文本');
-  assert.equal(materialModalitiesLabel({inputModalities:[],outputModalities:['视频']}),'未填写 → 视频');
-});
 
 test('Semi date-fns-tz resolves version two in both Vite builds and development without changing app version four',()=>{
   const require=createRequire(import.meta.url),source='date-fns/_lib/cloneObject/index.js',importer='/node_modules/date-fns-tz/esm/zonedTimeToUtc/index.js';

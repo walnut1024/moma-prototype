@@ -70,13 +70,14 @@ export function Modal({ title, description, children, onClose, wide, drawer = fa
 export function useOperations({ state, transact, conflict, reload, notify = message => Toast.success(message), renderLeaveDialog = serviceOperationsUi.renderLeaveDialog }, base) {
   const [params, setParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
   const [dirty, setDirty] = useState(false), [leave, setLeave] = useState(null), [error, setError] = useState('');
+  const [discardCount, setDiscardCount] = useState(0);
   const running = useRef(false);
   const accepted = useRef(location.hash), bypass = useRef(false), dirtyRef = useRef(dirty); dirtyRef.current = dirty;
   const proceed = callback => { if (dirtyRef.current) setLeave(() => callback); else callback(); };
   useEffect(() => {
-    const sync = () => { const next = location.hash; if (dirtyRef.current && !bypass.current) { history.replaceState(null, '', accepted.current); setLeave(() => () => { accepted.current = next; location.hash = next; setParams(new URLSearchParams(next.split('?')[1] || '')); }); } else { accepted.current = next; setParams(new URLSearchParams(next.split('?')[1] || '')); } };
+    const sync = () => { const next = location.hash; if (dirtyRef.current && !bypass.current && next !== accepted.current) { history.replaceState(null, '', accepted.current); setLeave(() => () => { accepted.current = next; location.hash = next; setParams(new URLSearchParams(next.split('?')[1] || '')); }); } else { accepted.current = next; setParams(new URLSearchParams(next.split('?')[1] || '')); } };
     const guard = event => { if (dirtyRef.current) { event.preventDefault(); event.returnValue = ''; } };
-    const click = event => { const target = event.target.closest('.v2-sidebar button, .v2-sidebar [role="tab"], .v2-sidebar a, [data-model-list-breadcrumb]'); if (dirtyRef.current && target && !bypass.current) { event.preventDefault(); event.stopPropagation(); setLeave(() => () => { bypass.current = true; target.click(); bypass.current = false; }); } };
+    const click = event => { const target = event.target.closest('.v2-sidebar button, .v2-sidebar [role="tab"], .v2-sidebar a, .channel-management-tabs [role="tab"], [data-model-list-breadcrumb]'); if (dirtyRef.current && target && !bypass.current) { event.preventDefault(); event.stopPropagation(); setLeave(() => () => { bypass.current = true; target.click(); bypass.current = false; }); } };
     addEventListener('hashchange', sync); addEventListener('beforeunload', guard); document.addEventListener('click', click, true);
     return () => { removeEventListener('hashchange', sync); removeEventListener('beforeunload', guard); document.removeEventListener('click', click, true); };
   }, []);
@@ -87,8 +88,10 @@ export function useOperations({ state, transact, conflict, reload, notify = mess
       const hash = `#/admin-2/${options.base || base}${next.size ? '?' + next : ''}`;
       accepted.current = hash;
       setError('');
-      setDirty(false);
-      dirtyRef.current = false;
+      if (!options.preserveDraft) {
+        setDirty(false);
+        dirtyRef.current = false;
+      }
       if (!options.replace) {
         location.hash = hash;
         if (!options.preserveScroll) window.scrollTo(0, 0);
@@ -100,7 +103,7 @@ export function useOperations({ state, transact, conflict, reload, notify = mess
       }
       setParams(next);
     };
-    if (options.saved) navigate(); else proceed(navigate);
+    if (options.saved || options.preserveDraft) navigate(); else proceed(navigate);
   };
   const isCurrent = () => { if(state.cloudOperations)return !conflict && canMutate(state.currentRole,{type:'modelOperations'}); try { const fresh = readLinkedState(); const account = activeAdmin(fresh); return fresh.revision === state.revision && account.id === state.adminSession?.accountId && canMutate(account.role, { type: 'modelOperations' }); } catch { return false; } };
   const can = !conflict && !state.storageError && isCurrent();
@@ -114,10 +117,10 @@ export function useOperations({ state, transact, conflict, reload, notify = mess
     setError(message); return null;
   } finally { running.current=false; } };
   const cancelLeave = () => setLeave(null);
-  const discardLeave = () => { const next = leave; setLeave(null); setDirty(false); dirtyRef.current = false; next(); };
+  const discardLeave = () => { const next = leave; setLeave(null); setDirty(false); dirtyRef.current = false; setDiscardCount(count => count + 1); next(); };
   const leaveDialog = leave && (renderLeaveDialog ? renderLeaveDialog({ cancel: cancelLeave, discard: discardLeave }) : null);
 
-  return { params, go, proceed, dirty: setDirty, hasUnsaved: () => dirtyRef.current, can, isCurrent, run, error, setError, leaveDialog, conflict, reload };
+  return { params, go, proceed, dirty: setDirty, discardCount, hasUnsaved: () => dirtyRef.current, can, isCurrent, run, error, setError, leaveDialog, conflict, reload };
 }
 export const emptyConnection = () => ({ name: '', protocol: 'OpenAI', baseUrl: '', credentialRef: '', capacity: '', timeoutSeconds: 60, apiKeys: [], keyInputs: [{ id: crypto.randomUUID(), value: '' }] });
 export function ConnectionFields({ value, onChange, disabled, optionalKey = false, prefix = '' }) {

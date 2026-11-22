@@ -5,7 +5,7 @@ import { acceptAdminSession, createAdminSeed, serializeAdminState, STORAGE_KEY }
 import { cloudAdminRequest } from '../src/admin-v2/admin-client.mjs';
 
 test('one login entry preserves a complete local return address, including order and detail parameters', () => {
-  for (const source of [LOGIN_BASE + '?page=experience&project=p', LOGIN_BASE + '#/admin-2/listing?model=a', LOGIN_BASE + 'order/serviceOrder/?model=a']) {
+  for (const source of [LOGIN_BASE + '?page=experience&project=p', LOGIN_BASE + '#/admin-2/listing-new?service=a', LOGIN_BASE + 'order/serviceOrder/?model=a']) {
     const url = new URL(loginLocation(source), 'https://moma.invalid');
     assert.equal(url.pathname, LOGIN_BASE);
     assert.equal(new URLSearchParams(url.hash.split('?')[1]).get('returnTo'), source);
@@ -30,7 +30,7 @@ test('backend identities land on an allowed home and only resume pages permitted
   assert.equal(loginDestination('', {role:'平台管理员'}), LOGIN_BASE + '#/admin-2/dashboard');
   assert.equal(loginDestination('', {role:'运营人员'}), LOGIN_BASE + '#/admin-2/dashboard');
   assert.equal(loginDestination('', {role:'运维人员'}), LOGIN_BASE + '#/admin-2/call-analysis');
-  const source = LOGIN_BASE + '#/admin-2/listing?model=a';
+  const source = LOGIN_BASE + '#/admin-2/listing-new?service=a';
   assert.equal(loginDestination(source, {role:'运营人员'}), source);
   assert.equal(loginDestination(source, {role:'运维人员'}), LOGIN_BASE + '#/admin-2/call-analysis');
   assert.throws(() => loginDestination(source, {role:'普通成员'}), /没有可访问/);

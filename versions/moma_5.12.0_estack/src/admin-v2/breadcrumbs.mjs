@@ -1,5 +1,6 @@
-import { pages, sections } from './navigation.mjs';
+import { channelManagementListRoute, pages, sections } from './navigation.mjs';
 import { TARIFF_KINDS } from './tariff-dictionary.js';
+import { CLASSIFICATION_KINDS, classificationKind } from './model-classification.js';
 
 export function adminBreadcrumbs(active, params, names = {}) {
   const page = pages[active];
@@ -23,8 +24,8 @@ export function adminBreadcrumbs(active, params, names = {}) {
   const groupHome = group.home || group.items[0].children[0][0];
   const crumbs = [];
   const add = (label, target) => crumbs.push({ label, ...(target && target !== currentHref ? { href: target } : {}) });
-  add(names.internal ? '组织运营' : page.group,
-    names.internal || group.direct || ['models', 'commerce'].includes(group.id) ? null : `#/admin-2/${groupHome}`);
+  add(names.internal ? '访问控制' : page.group,
+    names.internal || group.direct || ['models', 'commerce', 'getting-started'].includes(group.id) ? null : `#/admin-2/${groupHome}`);
   const view = params.get('view');
   if (active === 'package-production') {
     const labels = { new: '新增套餐', edit: '编辑套餐', detail: '套餐详情' };
@@ -34,13 +35,15 @@ export function adminBreadcrumbs(active, params, names = {}) {
   } else if (active === 'package-data' && params.get('package')) {
     add(page.label, href(active, {}, ['package']));
     add('套餐详情');
-  } else if (active === 'providers-reference') {
-    const detail = Boolean(params.get('connection'));
-    add(page.label, detail ? href(active, {}, ['connection', 'tab', 'modelQ', 'keyGroup']) : null);
+  } else if (active === 'providers-reference' || active === 'providers-health') {
+    const listRoute = '#/admin-2/' + channelManagementListRoute('providers-reference', params);
+    const detail = active === 'providers-reference' && Boolean(params.get('connection'));
+    add(page.areaLabel, active === 'providers-health' ? listRoute : null);
+    add(page.label, detail ? listRoute : null);
     if (detail) add(names.connection || '渠道不存在');
   } else if (active === 'provider-materials') {
     const provider = params.has('provider');
-    add('模型资料', '#/admin-2/model-templates');
+    add('基础资料', '#/admin-2/model-templates');
     add('服务商', provider || view ? href(active, {}, ['provider', 'view', 'tab', 'edit', 'returnTo', 'modelQ', 'modelPage']) : null);
     if (provider) add(names.provider || '服务商不存在', view === 'modelImport' ? href(active, { tab: 'models' }, ['view', 'edit']) : null);
     const label = { new: '添加服务商', import: '批量导入服务商资料', relations: '批量导入供应关系', modelImport: '批量导入并登记' };
@@ -49,8 +52,9 @@ export function adminBreadcrumbs(active, params, names = {}) {
     add(page.label, href(active, {}, ['service', 'tab']));
     add('服务详情');
   } else if (active === 'model-templates') {
-    add('模型资料', '#/admin-2/model-templates');
-    add(view === 'classification' ? '分类字典' : page.label, view && !['templates', 'classification'].includes(view) ? listHref : null);
+    add('基础资料', '#/admin-2/model-templates');
+    const label = view === 'classification' ? CLASSIFICATION_KINDS[classificationKind(params)] : page.label;
+    add(label, view && !['templates', 'classification'].includes(view) ? listHref : null);
     if (view === 'template') add(params.has('template') ? names.model || '模型资料不存在' : '新建模型资料');
     else if (view === 'templateImport') add('批量导入模型资料');
   } else if (active === 'model-prices' && params.has('service')) {
@@ -58,7 +62,7 @@ export function adminBreadcrumbs(active, params, names = {}) {
     add('销售配置');
   } else if (active === 'tariff-dictionary') {
     const tab = params.get('tab');
-    add('模型资料', '#/admin-2/model-templates');
+    add('基础资料', '#/admin-2/model-templates');
     add(TARIFF_KINDS[Object.hasOwn(TARIFF_KINDS, tab) ? tab : 'scenario']);
   } else if (active === 'deployments') {
     add('模型部署', params.has('deployment') || view === 'create' ? href(active, {}, ['deployment', 'view', 'tab']) : null);
@@ -79,12 +83,12 @@ export function adminBreadcrumbs(active, params, names = {}) {
   } else if (active === 'projects') {
     add(page.label, params.has('project') ? href(active, {}, ['project']) : null);
     if (params.has('project')) add('项目详情');
-  } else if (active === 'tenants' || active === 'users') {
-    const key = active === 'tenants' ? params.has('personal') ? 'personal' : 'enterprise' : 'user';
-    add(active === 'tenants' && names.internal ? '本组织' : page.label,
+  } else if (active === 'tenants') {
+    const key = params.has('personal') ? 'personal' : 'enterprise';
+    add(page.label,
       params.has(key) ? href(active, {}, [key, 'tab', 'project', 'create']) : null);
     if (params.has('create')) add('开通租户');
-    if (params.has(key)) add(names[key] || (key === 'user' ? '用户不存在' : '租户不存在'));
+    if (params.has(key)) add(names[key] || '租户不存在');
   } else {
     if (page.areaLabel !== page.label) {
       const module = sections.flatMap(group => group.items).find(item => item.id === page.area);

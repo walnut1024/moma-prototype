@@ -1,6 +1,6 @@
 import { channelIdentity, modelDisplayName } from '../model-identities.mjs';
 import { providerCatalogueModel } from './moma-provider.js';
-import { modelCatalogue } from './model-library.js';
+import { modelIdentityCatalogue } from './model-library.js';
 import { supplyModelDirectory } from './supply-models.js';
 import { catalogueChannels, channelUrl } from './provider-channels.js';
 import { supplierChannelResources, supplierChannelAssociations } from './supplier-resources.js';
@@ -23,12 +23,13 @@ export function supplierModelChannelGroups(state, provider) {
 
 export function channelManagementDirectory(state, providers, relations = state.supplyRelations) {
   const byProvider = new Map(), byModel = new Map();
-  const masters = new Map(modelCatalogue(state).map(master => [master.id, master]));
+  const masters = new Map(modelIdentityCatalogue(state).map(row => [row.id, row]));
   for (const owner of providers) {
     const metadata = new Map(supplierModelChannelGroups(state, owner).map(group => [group.id, group]));
     const channelOrder = new Map((owner.catalogConnections || []).map((row, index) => [row.id, index]));
     const groups = relations.models.filter(row => row.providerId === owner.id && masters.has(row.materialId)).map(relation => {
-      const master = masters.get(relation.materialId), existing = metadata.get(master.id);
+      const existing = metadata.get(relation.materialId);
+      const master = existing?.master || masters.get(relation.materialId);
       const channels = relations.channels.filter(row => row.supplierModelId === relation.id).flatMap(row => {
         const endpoint = state.endpoints.find(endpoint => endpoint.id === row.endpointId && endpoint.providerId === owner.id && !endpoint.deletedAt);
         if (!endpoint) return [];

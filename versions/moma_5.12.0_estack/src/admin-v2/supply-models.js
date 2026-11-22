@@ -1,10 +1,13 @@
-import { libraryRecord, modelLibrary, modelCatalogue } from './model-library.js';
+import { libraryRecord, modelIdentityCatalogue, modelLibrary, modelMaterial } from './model-library.js';
 import { resourceId } from '../resource-id.mjs';
 import { displayedCatalogueIds, providerCatalogueModel, supplierDirectory, providerCatalogueIds } from './moma-provider.js';
 
 export function supplyModelRecord(state, provider, modelId) {
   const entry = providerCatalogueModel(provider, modelId);
-  if (entry?.libraryId) return libraryRecord(state, entry.libraryId);
+  if (entry?.libraryId) {
+    const identity = libraryRecord(state, entry.libraryId);
+    return identity && (entry.modelSnapshot ? { ...identity, ...entry.modelSnapshot, name: entry.displayName || entry.name, type: entry.type } : identity);
+  }
   // Match a unique model code, never a display name or a shortened version name.
   const matches = modelLibrary(state).filter(model => model.modelId?.toLowerCase() === modelId.toLowerCase() && (!entry?.type || entry.type === model.type));
   return matches.length === 1 ? matches[0] : undefined;
@@ -25,19 +28,28 @@ export function retiredSupplierModelIds(state, provider, remainingChannels, mode
   return [...removed];
 }
 export function supplyModelDirectory(state, providers = supplierDirectory(state).filter(row => !row.id.startsWith('service-review-provider-'))) {
-  const groups = new Map(modelCatalogue(state).map(master => [master.id, { id: master.id, master, name: master.name, code: master.modelId, entries: [] }]));
+  const groups = new Map(modelIdentityCatalogue(state).map(master => [master.id, { id: master.id, master, name: master.name, code: master.modelId, entries: [] }]));
   for (const provider of providers) for (const modelId of displayedCatalogueIds(provider, state)) {
     const master = supplyModelRecord(state, provider, modelId), entry = providerCatalogueModel(provider, modelId);
     if (state.modelData?.archivedCatalogueIds && (!master || !groups.has(master.id))) continue;
     const id = master?.id || JSON.stringify([provider.id, modelId]);
     if (!groups.has(id)) groups.set(id, { id, master, name: master?.name || entry?.name || modelId, code: master?.modelId || modelId, entries: [] });
-    groups.get(id).entries.push({ provider, modelId });
+    const group = groups.get(id);
+    if (master && !group.entries.length) Object.assign(group, { master, name: master.name, code: master.modelId });
+    group.entries.push({ provider, modelId });
   }
   const registered = [...groups.values()].filter(row => row.entries.length > 0);
   return state.modelData?.archivedCatalogueIds ? registered : registered.sort((a,b) => a.name.localeCompare(b.name, 'zh-CN'));
 }
+export function supplyModelSnapshot(material) {
+  return structuredClone({
+    name: material.name, modelId: material.modelId, type: material.type,
+    capabilities: material.capabilities || {}, profile: { tasks: material.profile?.tasks || [] },
+  });
+}
+
 export function supplierModelFields(state, provider, libraryId) {
-  const master = libraryRecord(state, libraryId);
+  const master = modelMaterial(state, libraryId);
   if (!master) throw new Error('模型资料不存在，请重新选择模型');
   const ids = providerCatalogueIds(provider), existing = [...ids, ...(provider.removedCatalogModelIds || [])].find(id => supplyModelRecord(state, provider, id)?.id === master.id);
   const modelId = existing || master.modelId;
@@ -48,8 +60,8 @@ export function supplierModelFields(state, provider, libraryId) {
   return { modelId, fields: {
     catalogModelIds: ids.includes(modelId) ? ids : [...ids, modelId],
     removedCatalogModelIds: (provider.removedCatalogModelIds || []).filter(id => id !== modelId),
-    catalogModels: [...(provider.catalogModels || []).filter(row => row.modelId !== modelId), { ...current, ...(current ? {} : { id: resourceId('provider-model') }), modelId, name: current?.name || master.name, type: current?.type || master.type, libraryId: master.id }],
+    catalogModels: [...(provider.catalogModels || []).filter(row => row.modelId !== modelId), { ...current, ...(current ? {} : { id: resourceId('provider-model'), modelSnapshot: supplyModelSnapshot(master) }), modelId, name: current?.name || master.name, type: current?.type || master.type, libraryId: master.id }],
   } };
 }
 
-export const serviceModelSources = state => supplyModelDirectory(state).flatMap(group=>group.master?[group.master]:[]);
+export const serviceModelSources = state => supplyModelDirectory(state).flatMap(group => modelMaterial(state, group.id) || []);

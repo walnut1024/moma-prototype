@@ -1,4 +1,4 @@
-import { channelIdentity, modelDisplayName } from '../model-identities.mjs';
+import { channelIdentity } from '../model-identities.mjs';
 import { CHANNEL_INTERFACES, modelTaskUrl, prepareChannelInterface } from './channel-interface.js';
 import { directoryDisabledKind } from './channel-directory-archive.js';
 import { connectionKeys, connectionTestCurrent, connectionTestPending } from './connection-state.js';
@@ -120,7 +120,7 @@ export function connectionDirectoryRows(state, providers) {
     return supplierChannelResources(state, provider).map(endpoint => {
       const models = costs.filter(cost => cost.association.endpointId === endpoint.id).map(cost => ({
         ...cost,
-        modelName: modelDisplayName(state, cost.master?.id) || cost.modelName,
+        modelName: cost.association.modelSnapshot?.name || cost.modelName,
         modelCode: cost.master?.modelId || cost.association.modelId,
         channelId: channelIdentity(state, cost.association.id),
       }));

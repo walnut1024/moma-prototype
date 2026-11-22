@@ -127,8 +127,8 @@ const prototypeVersions = [
   {
     id: "moma_5.12.0_estack",
     state: "当前版本",
+    label: "5.12.0",
     releaseDate: "10月8日",
-    changes: "基于 5.11.0 复制，独立迭代。",
   },
 ];
 
@@ -688,7 +688,6 @@ function VersionIndex() {
               <tr>
                 <th>版本号</th>
                 <th>发布时间</th>
-                <th>迭代内容</th>
                 <th>状态</th>
                 <th><span className="sr-only">操作</span></th>
               </tr>
@@ -696,9 +695,8 @@ function VersionIndex() {
             <tbody>
               {prototypeVersions.map((version) => (
                 <tr key={version.id}>
-                  <td><strong>{version.id}</strong></td>
+                  <td><strong>{version.label}</strong></td>
                   <td><time>{version.releaseDate}</time></td>
-                  <td><p>{version.changes}</p></td>
                   <td>
                     <span className={`version-state ${version.state === "历史版本" ? "archived" : ""}`}>
                       {version.state}
@@ -754,16 +752,20 @@ function PrototypeApp({ version }) {
   const workspaceCatalogue = Boolean(owner) || internal && !deploymentLicense?.managed;
   const personal = projectTenant.identity?.spaceId === 'personal';
   const market=useCloudMarket(admin==='front' && !workspaceCatalogue && !auth.route && ['模型广场','模型详情'].includes(activePage));
-  const marketServices=market.services;
-  const projectOffers = new Map(activePage === '模型详情' && owner ? marketServices.flatMap(offer => {
-    const local = directory.models.find(row => row.callable && row.callId === offer.callId && row.modelId === offer.modelId);
-    return local ? [[offer.id, local]] : [];
-  }) : []);
-  const models = useMemo(() => marketModels(marketServices, catalogueScope), [marketServices, catalogueScope]);
-  const marketProviders = new Map(models.flatMap(model => [...model.providers]));
   const selectedCard = useRef('');
   const projects = owner && projectTenant.identity?.key === owner ? projectTenant.projects : [];
   const { project, select:rememberProject } = useProjectSelection(owner, projects, activePage, projectScope);
+  const marketCards = useMemo(() => workspaceCatalogue
+    ? (directory.cards || []).filter(card => card.marketVisible || card.marketProjectIds.includes(project?.id))
+    : market.cards, [workspaceCatalogue, directory.cards, project?.id, market.cards]);
+  const marketServices = useMemo(() => workspaceCatalogue
+    ? directory.models.filter(service => service.marketCardManaged &&
+      (service.marketVisible || service.marketProjectIds.includes(project?.id)))
+      .map(service => ({ ...service, modelKey: service.marketModelKey, offerName: service.provider, canOrder: service.orderable }))
+    : market.services, [workspaceCatalogue, directory.models, project?.id, market.services]);
+  const models = useMemo(() => marketModels(marketServices, catalogueScope, marketCards), [marketServices, catalogueScope, marketCards]);
+  const marketProviders = new Map(models.flatMap(model => [...model.providers]));
+  const projectOffers = new Map(activePage === '模型详情' && workspaceCatalogue ? directory.models.filter(row => row.callable).map(row => [row.id, row]) : []);
   const projectParams = new URLSearchParams(location.search);
   const projectSource = !personal && projectTenant.canManage && (activePage === '项目管理' || projectParams.get('from') === 'projects') ? 'projects'
     : projectParams.get('from') === 'api-keys' ? 'api-keys' : 'my-projects';
@@ -820,11 +822,12 @@ function PrototypeApp({ version }) {
     history.replaceState(history.state, '', modelDetailLocation(location.href, service));
   };
   const openModelDetails = (_event, model) => {
-    const service = model.services.find(row => row.providerId === filters.provider) || model.services.find(row => row.callable) || model.services[0];
+    const target = marketCards.some(card => card.modelKey === model.modelKey) ? { modelKey: model.modelKey } :
+      model.services.find(row => row.providerId === filters.provider) || model.services.find(row => row.callable) || model.services[0];
     selectedCard.current = model.modelKey;
     history.replaceState(null, '', modelDetailLocation(location.href));
-    history.pushState({ marketFromList: true }, '', modelDetailLocation(location.href, service));
-    setSelected({ modelKey: service.modelKey, id: service.id }); setActivePage('模型详情');
+    history.pushState({ marketFromList: true }, '', modelDetailLocation(location.href, target));
+    setSelected({ modelKey: target.modelKey, id: target.id }); setActivePage('模型详情');
   };
   const returnToMarket = () => {
     if (history.state?.marketFromList) { history.back(); return; }
@@ -927,7 +930,7 @@ function PrototypeApp({ version }) {
       marketSeries.set(item.seriesId, filters.author ? item.series : `${item.series} · ${item.author}`);
     }
   }
-  const meta = m => ({ task: ({ text: ['文本与代码'], multimodal: ['多模态', '文本与代码'], image: ['图像'], video: ['视频'], voice: ['音频'], embedding: ['向量'], rerank: ['重排'] })[m.type] || [], input: m.input, output: m.outputModalities, author: m.classification?.authorId });
+  const meta = m => ({ task: ({ text: ['文本与代码'], multimodal: ['多模态', '文本与代码'], image: ['图像'], video: ['视频'], voice: ['音频'], audio: ['音频'], embedding: ['向量'], rerank: ['重排'] })[m.type] || [], input: m.input, output: m.outputModalities, author: m.classification?.authorId });
   const visible = useMemo(
     () =>
       models
@@ -953,7 +956,7 @@ function PrototypeApp({ version }) {
         .sort((a, b) =>
           sortMode === "latest"
             ? (b.releaseDate || b.date).localeCompare(a.releaseDate || a.date)
-            : Number(Boolean(b.hot)) - Number(Boolean(a.hot)) ||
+            : (b.heat ?? 0) - (a.heat ?? 0) ||
               models.indexOf(a) - models.indexOf(b),
         ),
     [query, filters, sortMode, models],
@@ -1047,6 +1050,58 @@ function PrototypeApp({ version }) {
     {(query.trim() || activeFilters.length > 0) && <div className="catalogue-conditions" aria-label="已选条件"><span>已选条件</span>{query.trim() && <SemiButton theme="outline" size="small" aria-label="移除搜索条件" onClick={() => setQuery('')}>搜索：{query.trim()}<X/></SemiButton>}{activeFilters.map(([group,value]) => <SemiButton key={group} theme="outline" size="small" aria-label={'移除' + (filterLabels[group] || group) + '条件'} onClick={() => removeFilter(group)}>{filterLabels[group] || group}：{group === 'provider' ? marketProviders.get(value) || '服务商已不可用' : value}{group === 'context' ? 'K' : ''}<X/></SemiButton>)}<SemiButton theme="borderless" size="small" onClick={resetFilters}>清空</SemiButton></div>}
   </section>;
 
+  const cardGrid = <div className="cards">
+    {visible.map((m) => {
+      const data = meta(m),
+        icons = {
+          文本: FileText,
+          图像: Image,
+          视频: Video,
+          音频: AudioLines,
+        },
+        outputs = data.output;
+      const caption = m.preview ? '敬请期待' : m.callable && m.features?.online_experience !== false ? '可体验' : m.reason;
+      return (
+        <article
+          className="model-card"
+          data-model-key={m.modelKey}
+          key={m.modelKey}
+          {...(!m.preview && { tabIndex: 0, role: "button", onKeyDown: event => {
+            if (["Enter", " "].includes(event.key)) { event.preventDefault(); openModelDetails(event, m); }
+          }, onClick: event => openModelDetails(event, m) })}
+        >
+          {m.hot && (
+            <img className="hot" alt="热门" src={`${A}hot-7601e629.svg`} />
+          )}{" "}
+          {m.score != null && <span className="score">{m.score}</span>}
+          <h4>
+            {m.logo ? <img className="model-card-logo" src={m.logo} alt="" onError={event => { event.currentTarget.hidden = true; }}/> : <FileText aria-hidden="true" />}
+            {m.name}
+          </h4>
+          <small>{[m.typeLabel, m.provider].filter(Boolean).join(' · ')}</small><p>{m.desc}</p>
+          <div
+            className="modalities"
+            aria-label={`${data.input.join("+")} 转 ${data.output.join("+")}`}
+          >
+            <span>
+              {data.input.map((type) => {
+                const InputIcon = icons[type] || FileText;
+                return <InputIcon key={type} />;
+              })}
+            </span>
+            <img
+              className="arrow"
+              src={`${A}modelArrow-ae18ab15.svg`}
+            />
+            <span>{outputs.map(type => { const OutputIcon = icons[type] || FileText; return <OutputIcon key={type} aria-label={type}/>; })}</span>
+          </div>
+          <div className="context">上下文长度：{m.context}</div>
+          {caption && <footer>{caption}</footer>}
+        </article>
+      );
+    })}
+  </div>;
+
   const shell = (
     <AdminUIContext.Provider value={admin === "v2"}><div ref={tenantShell} className={`app-shell ${admin === "front" ? "tenant-semi" : ""} ${auth.route ? "auth-shell auth-enterprise-shell" : ""}`}>
       <header className={admin === "v2" ? "admin-banner" : auth.route ? undefined : "tenant-banner"}>
@@ -1131,25 +1186,24 @@ function PrototypeApp({ version }) {
             renderKeys={(row,onModels,onAudit) => <UnifiedApiKeys key={row.id} project={row} onModels={onModels} onAudit={onAudit} internal={internal} embedded />} />
         ) : activePage === '空间总览' ? (
           <UsageStatistics key={owner} workspaceOverview internal={internal}/>
-        ) : (workspaceCatalogue && ['模型广场','模型详情'].includes(activePage)) ||
+        ) : (workspaceCatalogue && activePage === '模型广场') ||
           (['模型订购','订购与账单'].includes(activePage) && Boolean(owner)) ? (
           <WorkspaceCommerce key={owner + ':' + activePage} tenant={projectTenant} services={directory.models} internal={internal}
+            catalogue={activePage === '模型广场' && models.length ? cardGrid : null}
             view={activePage === '订购与账单' ? 'billing' : activePage === '模型订购' ? 'order' : 'catalogue'}
             onLogin={() => auth.navigate('login')} onOrder={() => openProjectPage(null, 'model-order')}
             onBilling={() => openProjectPage(null, 'billing')} onProjects={() => showProjects(project)}
             project={project} onExperience={projectExperience} onConfigure={row => showProjects(row, 'models')}
             onPlanOrder={() => window.open('/moma_5.12.0_estack/order/serviceOrder/', '_blank', 'noopener,noreferrer')}/>
         ) : activePage === "模型详情" ? (
-          <><div className="market-detail-session"><MarketSessionControl market={market} onLogin={openMarketLogin}/></div>{market.loading || market.error ? <p className="content" role="status">{market.error || '正在加载模型广场…'}</p> : <MarketModelDetail internal={internal} services={marketServices} selected={selected} onSelect={selectDetailService} onBack={returnToMarket}
-            projectOffers={projectOffers} onProjectExperience={offer => {
-              if (!project) { showProjects(); return; }
-              const local = projectOffers.get(offer.id);
-              if (!local) return;
-              setEntryService(local.id);
-              setTextCompare(false);
-              setActivePage(experiencePages[local.tasks[0]]);
-            }} onExperience={service=>setMarketAction({kind:'call',service})} onOrder={service=>setMarketAction({kind:'order',service})}/>}
-          {marketAction && <MarketAction key={marketAction.kind+marketAction.service.id} action={marketAction} market={market} close={()=>setMarketAction(null)}/>}</>
+          <>{!workspaceCatalogue && <div className="market-detail-session"><MarketSessionControl market={market} onLogin={openMarketLogin}/></div>}
+            {!workspaceCatalogue && (market.loading || market.error) ? <p className="content" role="status">{market.error || '正在加载模型广场…'}</p> :
+              <MarketModelDetail internal={internal} services={marketServices} cards={marketCards} selected={selected}
+                onSelect={selectDetailService} onBack={returnToMarket} projectOffers={projectOffers}
+                onProjectExperience={offer => project ? projectExperience(project, projectOffers.get(offer.id)) : showProjects()}
+                onExperience={workspaceCatalogue ? undefined : service => setMarketAction({kind:'call',service})}
+                onOrder={workspaceCatalogue ? () => openProjectPage(null, 'model-order') : service => setMarketAction({kind:'order',service})}/>}
+            {marketAction && <MarketAction key={marketAction.kind+marketAction.service.id} action={marketAction} market={market} close={()=>setMarketAction(null)}/>}</>
         ) : activePage === "智能路由" ? (
           <SmartRouting key={JSON.stringify([owner, projectScope.projectRules])}
             tenant={projectTenant} projectId={project?.id || projectScope.id}
@@ -1217,55 +1271,7 @@ function PrototypeApp({ version }) {
             <section className={`catalog catalogue-layout ${compactFilters || !filtersExpanded ? 'catalogue-collapsed' : ''}`}>
               {!compactFilters && <div hidden={!filtersExpanded}>{catalogueFilters}</div>}
               <div className="results">
-                <div className="cards">
-                  {visible.map((m) => {
-                    const data = meta(m),
-                      icons = {
-                        文本: FileText,
-                        图像: Image,
-                        视频: Video,
-                        音频: AudioLines,
-                      },
-                      outputs = data.output;
-                    return (
-                      <article
-                        className="model-card"
-                        data-model-key={m.modelKey}
-                        key={m.id}
-                        tabIndex={0} role="button" onKeyDown={event => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); openModelDetails(event, m); } }}
-                        onClick={event => openModelDetails(event, m)}
-                      >
-                        {m.hot && (
-                          <img className="hot" src={`${A}hot-7601e629.svg`} />
-                        )}{" "}
-                        {m.score && <span className="score">{m.score}</span>}
-                        <h4>
-                          {m.logo ? <img className="model-card-logo" src={m.logo} alt="" onError={event => { event.currentTarget.hidden = true; }}/> : <FileText aria-hidden="true" />}
-                          {m.name}
-                        </h4>
-                        <small>{[m.typeLabel, m.provider].filter(Boolean).join(' · ')}</small><p>{m.desc}</p>
-                        <div
-                          className="modalities"
-                          aria-label={`${data.input.join("+")} 转 ${data.output.join("+")}`}
-                        >
-                          <span>
-                            {data.input.map((type) => {
-                              const InputIcon = icons[type] || FileText;
-                              return <InputIcon key={type} />;
-                            })}
-                          </span>
-                          <img
-                            className="arrow"
-                            src={`${A}modelArrow-ae18ab15.svg`}
-                          />
-                          <span>{outputs.map(type => { const OutputIcon = icons[type] || FileText; return <OutputIcon key={type} aria-label={type}/>; })}</span>
-                        </div>
-                        <div className="context">上下文窗口：{m.context}</div>
-                        <footer>{m.callable ? "可体验" : m.reason}{m.date && ` · 更新于 ${m.date}`}</footer>
-                      </article>
-                    );
-                  })}
-                </div>
+                {cardGrid}
                 {!visible.length && <div className="empty">未找到符合条件的模型<SemiButton theme="borderless" onClick={resetFilters}>清空条件</SemiButton></div>}
               </div>
             </section>

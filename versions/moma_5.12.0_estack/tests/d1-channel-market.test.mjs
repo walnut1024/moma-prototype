@@ -1,3 +1,4 @@
+import { marketCardFixture } from './market-card-fixture.mjs';
 import { isResourceId, resourceId } from '../src/resource-id.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -318,9 +319,9 @@ test('fresh D1 imports MoMA and DeepSeek before GLM-5.3 pricing, ordering and su
     const selectedScope = { type: 'selected', tenantIds: [a] };
     const modelBeforeCard = structuredClone(model());
     const pricesBeforeCard = structuredClone(state.modelSalePrices);
-    await command('marketCardEdit', { ...cardData(), name: cardName, description: '广场展示验收。', logo: '' }, cardModelId);
-    await command('marketCardList', { ...cardData(), scope: selectedScope, serviceIds: ['missing'] }, cardModelId, 422);
-    await command('marketCardList', { ...cardData(), scope: selectedScope, serviceIds: [third.id, displayOnly.id] }, cardModelId);
+    await command('marketCardEdit', { ...marketCardFixture, ...cardData(), name: cardName, description: '广场展示验收。', heat: 7, features: { online_experience: true } }, cardModelId);
+    await command('marketCardSetStatus', { ...cardData(), listing_stage: 'gray', scope: selectedScope, serviceIds: ['missing'] }, cardModelId, 422);
+    await command('marketCardSetStatus', { ...cardData(), listing_stage: 'gray', scope: selectedScope, serviceIds: [third.id, displayOnly.id] }, cardModelId);
     assert.deepEqual(new Set((await catalogue(customer)).map(offer => offer.id)), new Set([third.id, displayOnly.id]));
     assert.equal((await catalogue(customer)).find(offer => offer.id === displayOnly.id).canOrder, false);
     assert.equal((await catalogue(customer)).find(offer => offer.id === third.id).name, cardName);
@@ -329,7 +330,7 @@ test('fresh D1 imports MoMA and DeepSeek before GLM-5.3 pricing, ordering and su
     await command('marketCardLink', { ...cardData(), serviceIds: [displayOnly.id] }, cardModelId, 422);
     const orgCookie = await login('/market/login', orgMember);
     const projectCookie = await login('/market/login', projectMember);
-    await command('marketCardList', { ...cardData(), scope:{ type:'selected', organizationIds:[org], projectIds:[projectId] }, serviceIds:[third.id] }, cardModelId);
+    await command('marketCardSetStatus', { ...cardData(), listing_stage: 'gray', scope:{ type:'selected', organizationIds:[org], projectIds:[projectId] }, serviceIds:[third.id] }, cardModelId);
     assert.equal((await catalogue(customer)).length, 0);
     assert.equal((await catalogue(orgCookie))[0]?.id, third.id);
     assert.equal((await catalogue(projectCookie)).length, 0);
@@ -340,14 +341,29 @@ test('fresh D1 imports MoMA and DeepSeek before GLM-5.3 pricing, ordering and su
     assert.equal((await request('/market/catalogue?project=' + projectId, { cookie:other })).status,403);
     assert.equal((await request('/market/catalogue?project=' + projectId, { cookie:orgCookie })).status,403);
     assert.equal((await order(third.id, projectCookie)).status,403);
-    await command('marketCardUnlist', { ...cardData(), confirmed: true }, cardModelId);
+    const cards = async(cookie) => (await request('/market/catalogue', { cookie })).data.cards;
+    assert.equal((await cards(customer)).length, 0);
+    assert.equal((await cards(orgCookie))[0]?.model_id, cardModelId);
+    assert.equal(projectCatalogue.data.cards[0]?.model_id, cardModelId);
+    await command('marketCardSetStatus', { ...cardData(), listing_stage: 'formal', serviceIds: [third.id] }, cardModelId);
+    for (const cookie of [undefined, customer, other]) {
+      const [row] = await cards(cookie);
+      assert.equal(row?.model_id, cardModelId);
+      assert.equal(row.description_en, marketCardFixture.description_en);
+      assert.equal(row.capabilities.context, marketCardFixture.context_length);
+      assert.equal(row.features.online_experience, true);
+      assert.equal(row.heat, 7);
+      assert.equal(row.preview, false);
+    }
+    await command('marketCardSetStatus', { ...cardData(), listing_stage: 'withdrawn' }, cardModelId);
+    assert.deepEqual(await cards(customer), []);
     assert.equal((await catalogue(customer)).length, 0);
     assert.deepEqual(model(), modelBeforeCard);
     assert.deepEqual(state.modelSalePrices, pricesBeforeCard);
     const stillCallable = await call(body(third.callId), other);
     assert.equal(stillCallable.status, 200);
     successful.push({source:sources[2],id:stillCallable.data.id});
-    await command('marketCardList', { ...cardData(), scope: selectedScope, serviceIds: [third.id] }, cardModelId);
+    await command('marketCardSetStatus', { ...cardData(), listing_stage: 'gray', scope: selectedScope, serviceIds: [third.id] }, cardModelId);
     const pauses = () => ({offerKey:keys[2],expectedUpdatedAt:model().updatedAt,confirmed:true});
     await command('pauseSales', pauses(), modelId);
     assert.equal(salesStatus(state,model(),keys[2]), '已停售');

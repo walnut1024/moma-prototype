@@ -1,6 +1,6 @@
-# 模型运营字段、永久 ID 与批量维护规范
+# 模型运营数据契约
 
-适用于渠道管理、模型服务、模型广场、模型售价、模型资料及其共用表单、预览和导入导出。本文件是字段命名、身份引用和编号规则的约束；[字段字典](MODEL_OPERATIONS_FIELD_DICTIONARY.md)补充旧键映射，[术语表](GLOSSARY.md)解释业务概念。
+适用于渠道管理、模型服务、模型广场、模型售价和基础资料的永久 ID、对象引用、维护接口和批量导入导出。
 
 ## 必须遵守
 
@@ -8,9 +8,9 @@
 - 新建和存量对象均按下表前缀加 UUID v4 编号。模型服务统一使用 `model_service-<UUID v4>`，不允许保留 `offer-…` 或历史组合键作为公开永久 ID。存量整改必须备份、原子迁移主键及全库引用，并验证外键、记录数量和业务内容一致；日常操作不重编号。
 - 列表、详情、复制内容、维护文件、关联和计量引用使用同一个完整 ID。省略显示必须能查看和复制完整值；禁止只在界面替换前缀。
 - 导入按已存在的完整 ID 及归属定位，不得接受旧前缀、截取 UUID、用调用值匹配，或把未知 ID 当作新增。首次接入与已有对象维护分开。
-- 新增管理字段使用下表中的名称和 `snake_case` 引用键。现有物理表、内部 `camelCase` 键、历史数据及审计原文保留，用明确映射衔接；不得再新增含义不明的通用 `modelId` 字段。
+- 新增管理字段使用 `snake_case` 引用键，界面名称按[关键概念和字段](MODEL_OPERATIONS_GUIDE_FIELDS.md)。现有物理表、内部 `camelCase` 键、历史数据及审计原文保留，用明确映射衔接；不得再新增含义不明的通用 `modelId` 字段。
 - 模型展示名可重复。模型编码跨服务商统一；平台调用标识、上游调用标识分别维护，均不承担永久外键职责。
-- 共享身份和参考资料不授予资料库最终展示内容的维护权；运营展示内容由模型广场维护。
+- 稳定模型身份用于对象关联。业务模块从基础资料复制的字段随各自对象保存，读取时使用本对象的已保存值。字段归属遵守[版本约束](AGENTS.md#关键业务约束)。
 
 ## 对象和存储映射
 
@@ -32,27 +32,11 @@
 
 `services.id` 是模型级技术配置的现有键，既有 `service-…` 编号保持原值；它与具体对外入口的 `model_service_id` 分层关联。`offers`、`offer_id` 等现有物理名称不因新增 ID 前缀而改表或改键。
 
-## 中英文字段与取值
+## 字段引用规则
 
-| 统一中文名 | 管理字段／引用键 | 归属和规则 | 命名来源 |
-| --- | --- | --- | --- |
-| 模型展示名 | name | 广场维护，其他运营模块读取；未维护时沿用现有内容。资料库的 name 是参考内容，更新不覆盖广场 | OpenRouter Model.name 同名字段 |
-| 模型类型 | type | 按现有类型字典维护，不按名称或是否支持图片推断；服务从所选模型继承 | MoMA 分类字段 |
-| 模型简介／模型作者 | description／profile.author | 广场维护最终展示内容，资料库维护参考内容；作者与接入服务商分别表达 | description 沿用 OpenRouter 同名字段，profile.author 为 MoMA 资料字段 |
-| 模型编码 | canonical_slug | 如 glm-5.3，同一型号与版本跨服务商一致。新录入去除首尾空白，1–80 字符，小写字母或数字开头，允许小写字母、数字及 . _ : / -；不随接入服务商添加命名空间 | 沿用 OpenRouter 字段名；跨服务商取值规则为 MoMA 约定 |
-| 模型调用标识 | call_id | 平台对外调用值，可按生命周期规则修改，保留大小写；兼容目录的 id 和推理请求的 model 使用此值 | call_id 为 MoMA 管理字段；id／model 为协议字段 |
-| 上游模型调用标识 | upstream_model_id | 渠道维护的实际上游调用值，保留大小写及完整字符串，可因渠道不同而不同 | MoMA 自有字段 |
-| 模型服务配置 ID | model_service_config_id | 关联模型级技术配置；不替代具体入口的 model_service_id | MoMA 自有字段 |
-| 服务商名称／服务商编码 | provider.name／slug | 名称可编辑，编码创建后固定；现有内部 code 保留 | MoMA 管理约定 |
-| 连接名称／服务根地址 | connection.name／base_url | 属于一个 Provider，多个模型渠道可复用；任务完整地址另按协议维护 | MoMA 管理约定 |
-| 连接编码 | connection.code | 既有业务别名，物理字段为 channels.code，旧内部键为 channelCode／endpointId；独立显示，不替代连接 ID，不增加到现有维护文件 | MoMA 自有字段 |
-| 渠道名称 | channel.name | 识别实际供给来源；上游调用值、采购版本和容量按渠道独立维护 | MoMA 管理约定 |
-| API 密钥组 ID／密钥组名称 | key_group_id／key_group_name | 服务商密钥池维护，内部映射 apiKeyGroups[].id／name 与渠道 keyGroupId；录入服务商时可选择默认组或提交 key_group_name 新建组，按输入顺序加入密钥，不保存明文 | MoMA 自有字段 |
-| 上架状态／广场展示 | listing_stage／market_visible | 广场服务维护字段，与技术启停、销售状态分别管理 | MoMA 自有字段 |
-| 价格版本 ID／价格项 ID | price_version_id／price_item_id | 售价或采购的版本及计费项引用；价格变更创建新版本，历史不追改 | MoMA 自有字段 |
-| 计费项 ID／计费单位 ID／币种 ID | billing_item_id／unit_id／currency_id | 引用计量字典；单位、数量、币种和金额分别表达 | MoMA 自有字段 |
+界面字段采用[关键概念和字段](MODEL_OPERATIONS_GUIDE_FIELDS.md)。管理接口中的模型编码使用 `canonical_slug`，模型调用标识使用 `call_id`，上游模型调用标识使用 `upstream_model_id`。模型编码新录入去除首尾空白，允许 1–80 个字符，以小写字母或数字开头，后续可用小写字母、数字及 . _ : / -。
 
-OpenRouter 字段依据：[模型目录接口](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties)。同名字段不表示两端值域完全相同，也不把其调用 id 解释为 MoMA 永久主键。表中的管理字段按对象限定含义；维护文件的 provider 行用 name／slug，connection、channel 行用各自的 name。
+OpenRouter 兼容接口使用调用标识作为 `id` 或请求体 `model`，MoMA 管理接口按 `model_id` 和 `model_service_id` 定位。接入管理使用 `base_url` 和 `key_group_id` 识别服务地址和密钥组，分别沿用现有物理字段。
 
 既有模型编码、调用值和 ID 不做批量格式修复。旧内部键 `modelTemplates.modelId` 表示模型编码，`models.modelId` 在统一服务中表示调用值，关联记录的 `modelId` 可能表示内部引用；必须按对象解析，不能按同名键直接联表。
 
@@ -65,12 +49,14 @@ OpenRouter 字段依据：[模型目录接口](https://openrouter.ai/docs/api/ap
 | 模块 | 稳定关联 | 本模块维护 |
 | --- | --- | --- |
 | 渠道管理 | provider.id、connection.id、channel.id、model_id | 来源、连接配置、上游调用值、实际能力、采购配置 |
-| 模型服务 | model_service.id、model_id；映射和路由的渠道引用 | 平台调用值、模式、路由、技术配置及启停 |
+| 模型服务 | model_service.id、model_id；映射和路由的渠道引用 | 服务名称、保存的模型字段、平台调用值、模式、路由、技术配置及启停 |
 | 模型广场 | model_id 管理公共内容，model_service_id 管理具体服务 | 展示名、介绍、图标、作者等展示内容及上架、展示设置 |
 | 模型售价 | model_service_id、价格版本、计费项／单位／币种 ID | 销售价格、条件、价格版本和销售范围 |
-| 模型资料 | 保留既有参考资料记录与模型身份引用 | 参考内容及来源，不覆盖已经维护的广场内容 |
+| 基础资料 → 模型 | 保留既有档案记录与模型身份引用 | 参考名称、类型、规格、能力及来源 |
 
-模型卡片按模型资料 ID 保存至工作区的 marketCards。卡片保存独立展示内容、关联及展示服务 ID、展示状态和可见范围。指定范围分别保存 `organizationIds`、`projectIds` 和 `tenantIds`；组织和项目按同源记录校验，命中任一范围即可查看。已有卡片读出历史服务记录的 marketContent 和展示许可，首次通过卡片表单保存后读取卡片配置。模型资料、模型服务、价格、订购和调用保留原身份与数据。批量维护 JSON 中的服务销售上架阶段和历史展示字段仍属于服务配置。
+新建卡片使用 `model-card-` 加 UUID v4 的独立 ID，保存至工作区的 `marketCards`。卡片可独立存为草稿，首次关联服务后写入对应模型 ID（`model_id`）。已有卡片沿用原键。卡片单独保存展示字段、关联及展示服务 ID、上架状态和可见范围。卡片命令使用 `listing_stage`，取值为 `preview`、`gray`、`formal`、`withdrawn`。持久化的 `listed` 分别通过指定范围和全部用户表达灰度上架和正式上架。指定范围分别保存 `organizationIds`、`projectIds` 和 `tenantIds`；组织和项目按同源记录校验，命中任一范围即可查看。已有卡片读出历史服务记录的 marketContent 和展示许可，首次通过卡片表单保存后读取卡片配置。模型资料、模型服务、价格、订购和调用保留原身份与数据。批量维护 JSON 中的服务销售上架阶段和历史展示字段仍属于服务配置。
+
+卡片维护请求的 `name` 对应模型展示名，`description` 和 `description_en` 分别对应中文和英文简介。`context_length` 以 Token 为单位，存入 `capabilities.context`；`family`、`precision`、`release_date` 和 `parameters` 分别保存至 `profile.family`、`profile.precision`、`profile.releaseDate` 和 `profile.parameters`。`input_modalities` 对应 `profile.inputModalities`，输出选项按模态和结果类型分别保存至 `profile.outputModalities` 和 `profile.resultTypes`。`heat` 为热度，`tags` 为标签列表。`features` 中保存 `online_experience`、`smart_routing`、`supports_agent`、`supports_mcp` 和 `file_upload` 的布尔值。导入复制当前参考资料，后续编辑只更新卡片。
 
 模型服务、广场及售价展示并复制同一 model_service_id；渠道展示 channel_id，连接和 Provider 的 ID 在相应配置或详情可查。模型编码及永久 ID 纳入搜索。历史审计原文和已有 ID 不因文案统一而改写。
 

@@ -11,7 +11,7 @@ const dateTime = new Intl.DateTimeFormat('zh-CN', { timeZone:'Asia/Shanghai', da
 const time = value => Number.isFinite(Date.parse(value)) ? dateTime.format(new Date(value)) : '—';
 
 export default function WorkspaceCommerce({ tenant, services, internal, view, onLogin, onOrder, onBilling, onProjects,
-  project, onExperience, onConfigure, onPlanOrder }) {
+  project, onExperience, onConfigure, onPlanOrder, catalogue }) {
   const [confirmation, setConfirmation] = useState(null);
   const [entry, setEntry] = useState(null);
   const [projectId, setProjectId] = useState('');
@@ -22,6 +22,7 @@ export default function WorkspaceCommerce({ tenant, services, internal, view, on
   const billing = view === 'billing';
   const title = billing ? '订购与账单' : view === 'order' ? '开通模型服务' : '模型广场';
   const rows = services.filter(service => {
+    if (view === 'catalogue' && service.marketCardManaged) return false;
     const visible = service.marketVisible || service.marketProjectIds?.includes(project?.id);
     return internal ? service.serviceAvailable && (!service.marketCardManaged || visible)
       : visible && (service.orderable || service.ordered);
@@ -87,7 +88,9 @@ export default function WorkspaceCommerce({ tenant, services, internal, view, on
             ]}/>
         </>}
       </section>
-    </> : <p>请由企业管理员查看订购与账单。</p> : <section className="project-panel">
+    </> : <p>请由企业管理员查看订购与账单。</p> : <>
+      {catalogue}
+      {(rows.length > 0 || !catalogue) && <section className="project-panel">
       {feedback && <p role="status">{feedback}</p>}
       <Table aria-label="模型服务" rowKey="id" size="small" pagination={false} scroll={{x:680}} dataSource={rows} empty="暂无可用模型服务"
         columns={[
@@ -103,7 +106,8 @@ export default function WorkspaceCommerce({ tenant, services, internal, view, on
               : <span>由企业管理员开通</span>)}
           </>},
         ]}/>
-    </section>}
+      </section>}
+    </>}
     <Modal visible={Boolean(entry)} title={'体验 ' + (entry?.name || '')} onCancel={() => setEntry(null)} footer={null}>
       {entry && <div className="project-form">
         {!personal && <label>使用项目<Select aria-label="体验使用项目" placeholder="选择项目" value={projectId || undefined}

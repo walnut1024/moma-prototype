@@ -1,13 +1,18 @@
+import { marketCardFixture } from './market-card-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes,createHash} from 'node:crypto';
 import {startLocalBackend} from '../database/local-runtime.js';
 import {domainModelWorkspace} from '../src/mock/model-fields.js';
-import {libraryRecord} from '../src/admin-v2/model-library.js';
+import {libraryRecord,modelMaterial} from '../src/admin-v2/model-library.js';
 import {serviceMetadataMissingFields,serviceModelSourceDraft} from '../src/admin-v2/model-profile.js';
 import {materialBase} from '../src/admin-v2/model-operations.js';
 import {providerApiKeysDraft} from '../src/admin-v2/provider-management.js';
 import {connectionKeys} from '../src/admin-v2/connection-state.js';
+import {marketCardIndex} from '../src/market-cards.mjs';
+import {connectionDirectoryRows} from '../src/admin-v2/channel-connection-directory.js';
+import {mappingCandidates} from '../src/admin-v2/service-model-mappings.js';
+import {exportModelResources} from '../src/admin-v2/model-resource-transfer.js';
 
 test('HTTP and D1 preserve canonical material, explicit channel protocol and candidate edits across the first onboarding stage',{timeout:60000},async()=>{
   const accessCode=randomBytes(24).toString('hex');
@@ -40,6 +45,21 @@ test('HTTP and D1 preserve canonical material, explicit channel protocol and can
         authMode: 'group', keyGroupId: 'default', models: [{ libraryId: material.id, upstreamModelId: 'vendor/manual-glm' }],
       },
     };
+    const beforeInvalidGroup = structuredClone(state);
+    const invalidGroup = await command('channelQuickCreate', {
+      newProvider: quick.newProvider,
+      newApiKey: channelApiKey,
+      values: { ...quick.values, keyGroupId: 'foreign-group', models: [
+        { newModel: { modelId: 'invalid-group-reference', name: '无效密钥组验证模型', type: 'text' }, upstreamModelId: 'vendor/manual-glm' },
+      ] },
+    });
+    assert.equal(invalidGroup.status, 422, invalidGroup.data.error?.message);
+    assert.match(invalidGroup.data.error.message, /当前服务商的 API 密钥组/);
+    await refresh();
+    assert.equal(state.revision, beforeInvalidGroup.revision);
+    for (const key of ['providers', 'endpoints', 'modelTemplates', 'modelOnboardings', 'audits']) {
+      assert.deepEqual(state[key], beforeInvalidGroup[key], key);
+    }
     const rejected = await command('channelQuickCreate', { ...quick, channelApiKey: { ...channelApiKey, raw: privateInput } });
     assert.equal(rejected.status, 422);
     await refresh();
@@ -59,13 +79,50 @@ test('HTTP and D1 preserve canonical material, explicit channel protocol and can
     const edit={providerId:owner.id,endpointId:endpoint.id,associationId:association.id,modelId:catalogue.modelId,upstreamModelId:channel.upstreamModelId,name:endpoint.name,protocol:'OpenAI',baseUrl:channel.baseUrl,expectedUpdatedAt:endpoint.updatedAt,expectedProviderUpdatedAt:state.providers.find(row=>row.id===owner.id).updatedAt};
     const changed=await command('supplierChannelEdit',edit);assert.equal(changed.status,200,JSON.stringify(changed.data));await refresh();
     const pending=state.endpoints.find(row=>row.id===endpoint.id);assert.equal(pending.protocol,'Anthropic');assert.equal(pending.baseUrl,channel.baseUrl);assert.equal(pending.candidateConfiguration.config.protocol,'OpenAI');
+    const cardResult=await command('marketCardCreate',{...marketCardFixture,expectedRevision:state.revision,name:material.name,description:material.description,source_model_id:material.id});
+    assert.equal(cardResult.status,200,JSON.stringify(cardResult.data));await refresh();
     const create=await command('createServiceModel',{...serviceModelSourceDraft(state,material),libraryId:material.id,name:'GLM-5.5 业务服务',modelId:'glm-5.5-service',serviceMode:'standard'});assert.equal(create.status,200,JSON.stringify(create.data));await refresh();
     const service=state.models.find(row=>row.templateId===material.id);assert.equal(service.name,material.name);assert.equal(service.serviceName,'GLM-5.5 业务服务');assert.equal(service.description,material.description);assert.equal(service.serviceMode,'standard');assert.equal(service.callsEnabled,false);assert.equal(service.listingStatus,'已下架');assert.equal(service.modelId,'glm-5.5-service');
-    const renamed=await command('templatePublish',{id:material.id,expectedBase:materialBase(state,material),confirmed:true,value:{...material,name:'GLM-5.5 模型资料'}});assert.equal(renamed.status,200,JSON.stringify(renamed.data));await refresh();
-    assert.equal(libraryRecord(state,service.id).name,'GLM-5.5 模型资料');
+    const configured=structuredClone(state);
+    const businessExports = current => ['channels','services','market','prices'].map(scope => {
+      const { rows, references } = exportModelResources(current,scope,{level:'model',model_id:material.id});
+      return { rows, references };
+    });
+    const beforeExports=businessExports(configured);
+    assert.ok(beforeExports[0].rows.some(row=>row.type==='provider_model'));
+    assert.ok(beforeExports[2].rows.some(row=>row.type==='market_model'));
+    const beforeCandidates=mappingCandidates(configured,{modelId:material.id});
+    const renamed=await command('templatePublish',{id:material.id,expectedBase:materialBase(state,material),confirmed:true,value:{...material,name:'GLM-5.5 模型资料',capabilities:{...material.capabilities,context:65536}}});assert.equal(renamed.status,200,JSON.stringify(renamed.data));await refresh();
+    assert.equal(modelMaterial(state,material.id).name,'GLM-5.5 模型资料');
+    assert.equal(modelMaterial(state,material.id).capabilities.context,65536);
+    assert.deepEqual(businessExports(state),beforeExports);
+    const persisted=await command('templateDelete',{id:material.id,confirmed:true});assert.equal(persisted.status,200,JSON.stringify(persisted.data));await refresh();
+    assert.equal(modelMaterial(state,material.id),undefined);
+    assert.deepEqual(businessExports(state),beforeExports);
+    for(const key of ['models','providers','endpoints','modelSupplies','validations','serviceRoutes','supplyRelations']) assert.deepEqual(state[key],configured[key],key);
+    assert.deepEqual(state.modelData.marketCards,configured.modelData.marketCards);
+    assert.equal(marketCardIndex(state,state.models).find(row=>row.modelId===null && row.name===material.name).name,material.name);
+    const savedChannel=connectionDirectoryRows(state,state.providers).find(row=>row.id===privateChannel.id);
+    assert.equal(savedChannel.models[0].modelName,material.name);
+    assert.deepEqual(mappingCandidates(state,{modelId:material.id}),beforeCandidates);
     assert.equal(state.models.find(row=>row.id===service.id).serviceName,service.serviceName);
     const duplicate=await command('createServiceModel',{...serviceModelSourceDraft(state,material),libraryId:material.id,modelId:'another',serviceMode:'provider'});assert.equal(duplicate.status,422);
-    await refresh();for(const key of ['modelSalePrices','supplyPrices','serviceRoutes'])assert.deepEqual(state[key],baseline[key],key);for(const row of baseline.endpoints)assert.deepEqual(state.endpoints.find(current=>current.id===row.id),row);
+    await refresh();
+    const currentOwner=state.providers.find(row=>row.id===privateOwner.id);
+    const currentAssociation=currentOwner.catalogConnections.find(row=>row.endpointId===privateChannel.id);
+    const ownName='渠道独立维护的展示名称';
+    const channelRename=await command('supplierChannelEdit',{
+      providerId:currentOwner.id,endpointId:privateChannel.id,associationId:currentAssociation.id,
+      modelId:currentAssociation.modelId,name:privateChannel.name,upstreamModelId:currentAssociation.upstreamModelId,
+      baseUrl:privateChannel.baseUrl,modelDisplayName:ownName,expectedUpdatedAt:privateChannel.updatedAt,expectedProviderUpdatedAt:currentOwner.updatedAt,
+    });
+    assert.equal(channelRename.status,200,JSON.stringify(channelRename.data));await refresh();
+    const renamedChannel=connectionDirectoryRows(state,state.providers).find(row=>row.id===privateChannel.id);
+    assert.equal(renamedChannel.models[0].modelName,ownName);
+    assert.deepEqual(renamedChannel.endpoint,privateChannel);
+    assert.deepEqual(state.models,configured.models);
+    assert.deepEqual(state.modelData.marketCards,configured.modelData.marketCards);
+    for(const key of ['modelSalePrices','supplyPrices','serviceRoutes'])assert.deepEqual(state[key],baseline[key],key);for(const row of baseline.endpoints)assert.deepEqual(state.endpoints.find(current=>current.id===row.id),row);
     const ocr=libraryRecord(state,'builtin-pp-ocrv6'), missing=serviceMetadataMissingFields(ocr);
     assert.ok(missing.includes('模型作者'));
     const ocrData={...serviceModelSourceDraft(state,ocr),libraryId:ocr.id,serviceMode:'provider'};

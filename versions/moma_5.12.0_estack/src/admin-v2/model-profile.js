@@ -20,7 +20,7 @@ export const IDENTITY_FIELDS = [field('family', '模型系列'), field('version'
 export const TECHNICAL_FIELDS = [field('license', '许可协议', 'license'), field('architecture', '模型架构', 'architecture'), { ...field('parameters', '总参数', 'decimal'), unit: 'B' }, { ...field('activeParameters', '激活参数', 'decimal'), unit: 'B' }, field('openWeights', '开放权重', 'support'), field('baseModel', '基础模型'), field('precision', '量化精度'), field('knowledgeCutoff', '知识截止日期', 'date'), field('huggingFaceId', 'Hugging Face 模型标识'), field('instructType', '指令格式')];
 export const PRESENTATION_FIELDS = [field('author', '模型作者'), field('logo', '模型 Logo', 'image'), field('scenarios', '适用场景', 'scenarios'), field('languages', '支持语言', 'languages')];
 export const COMMON_FIELDS = [field('tasks', '支持任务', 'tasks'), field('inputModalities', '输入模态', 'modalities'), field('outputModalities', '输出模态', 'modalities'), field('resultTypes', '结果类型', 'results')];
-export const INTERFACE_FIELDS = [field('inputFormats', '输入文件格式', 'text', '例如 PDF、PNG、WAV'), field('inputMethods', '输入方式', 'methods'), field('supportedParameters', '支持参数', 'parameters'), field('defaultParameters', '默认参数', 'json'), field('parameterRules', '参数范围与组合限制', 'text', '例如 1080P 仅支持 5 秒和 10 秒')];
+export const INTERFACE_FIELDS = [field('inputFormats', '输入文件格式', 'text', '例如 PDF、PNG、WAV'), field('inputMethods', '输入方式', 'methods'), field('supportedParameters', '支持的参数', 'parameters'), field('defaultParameters', '默认参数', 'json'), field('parameterRules', '参数范围与组合限制', 'text', '例如 1080P 仅支持 5 秒和 10 秒')];
 export const RECORD_FIELDS = [field('documentation', '资料链接', 'url', 'https://'), field('sourceUpdated', '最近核对日期', 'date'), field('sourceStatus', '资料状态', 'confirmation'), field('benchmark', '评测任务与指标'), field('benchmarkResult', '评测结果'), field('benchmarkDataset', '数据集与版本'), field('benchmarkConditions', '测试条件'), field('benchmarkDate', '测试日期', 'date')];
 export const FEATURE_FIELDS = [field('reasoning', '深度思考', 'support'), field('structured', '结构化输出', 'support'), field('cache', '提示词缓存', 'support'), field('batch', '批量调用', 'support')];
 export function normalizeModelLogo(value, label = '模型 Logo', maxBytes = 1048576) {
@@ -97,6 +97,16 @@ export function normalizeModelProfile(value = {}, type, usageUnit) {
   for (const key of ['authorId', 'familyId']) {
     if (typeof value[key] === 'string' && value[key]) result[key] = value[key];
   }
+  if (value.descriptionEn != null && value.descriptionEn !== '') {
+    if (typeof value.descriptionEn !== 'string' || value.descriptionEn.length > 5000) throw Error('模型英文简介最多 5000 字');
+    if (value.descriptionEn.trim()) result.descriptionEn = value.descriptionEn.trim();
+  }
+  if (value.tags != null) {
+    if (!Array.isArray(value.tags) || value.tags.length > 20 || value.tags.some(tag => typeof tag !== 'string' || !tag.trim() || tag.length > 50)) {
+      throw Error('模型标签最多 20 个，每个最多 50 字');
+    }
+    if (value.tags.length) result.tags = [...new Set(value.tags.map(tag => tag.trim()))];
+  }
   return result;
 }
 export function modelProfileDraft(model) {
@@ -145,7 +155,7 @@ export function serviceModelSourceDraft(state, model) {
 export function serviceMetadataMissingFields(model) {
   const data=serviceModelDraft(model);
   return [
-    [data.name.trim(), '模型展示名'],
+    [data.name.trim(), '模型资料名称'],
     [data.modelId.trim(), '模型编码'],
     [data.type, '模型类型'],
     [data.author.trim(), '模型作者'],
@@ -153,7 +163,7 @@ export function serviceMetadataMissingFields(model) {
     [data.tasks.length, '支持任务'],
     [data.inputModalities.length, '输入模态'],
     [data.outputModalities.length, '输出模态或结果类型'],
-    [data.description.trim(), '简短介绍'],
+    [data.description.trim(), '模型描述'],
   ].filter(([present]) => !present).map(([, label]) => label);
 }
 export function serviceMetadataReady(model) {

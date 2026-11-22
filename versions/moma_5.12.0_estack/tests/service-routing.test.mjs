@@ -175,7 +175,7 @@ test('only operators can configure service routes; generic collection writes can
   for (const role of ['平台管理员', '运营人员', '运维人员', '财务人员', '只读观察员']) assert.equal(canAccessPage(role, 'service-routing'), false);
   for (const role of ['平台管理员', '运营人员']) {
     assert.equal(pageFromHash('#/admin-2/service-routing?service=old', role), 'dashboard');
-    assert.equal(canAccessPage(role, 'listing'), true);
+    assert.equal(canAccessPage(role, 'listing-new'), true);
   }
   for (const role of ['运维人员', '财务人员', '只读观察员']) {
     assert.throws(() => commitAdminState({ ...state, currentRole: role }, action(state, service, config)), /无权/);

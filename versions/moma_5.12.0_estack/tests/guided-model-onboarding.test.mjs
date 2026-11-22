@@ -26,10 +26,15 @@ function environment(t) {
   setMockRuntimeState(null); t.after(() => setMockRuntimeState(null));
   return storage;
 }
-async function connected(t, {supplyOnly=false,intent='onboard',baseState,providerId,libraryId}={}) {
+async function connected(t, {supplyOnly=false,intent='onboard',baseState,providerId,apiKeyId,libraryId}={}) {
   let state = baseState || withAdminSession(parseAdminState(null));
   const value = { newProvider: { name: '接入流程验证服务商' }, name: '新手渠道', interfaceType: 'openai', baseUrl: 'https://novice.example.invalid/v1', authMode: 'group', keyGroupId: 'default', taskUrls: {}, adapterOptions: {} };
-  if(providerId){delete value.newProvider;value.providerId=providerId;value.name='新增供应'+crypto.randomUUID().slice(0,8);}
+  if (providerId) {
+    assert.ok(apiKeyId);
+    delete value.newProvider;
+    delete value.keyGroupId;
+    Object.assign(value, { providerId, name: '新增供应' + crypto.randomUUID().slice(0, 8), authMode: 'specific', apiKeyId });
+  }
   const rows = [{ id: 'one-model', newModel: { modelId: 'guided-chat-v1', name: '接入流程验证模型', type: 'text' }, upstreamModelId: 'vendor/actual-chat', selected: true, confirmed: true, scenarios: costs }];
   if(libraryId){delete rows[0].newModel;rows[0].libraryId=libraryId;rows[0].upstreamModelId='vendor/backup-chat';}
   state = run(state, 'channelDraftSave', { guided: true, value, rows, step: 1, intent });
@@ -99,7 +104,7 @@ for (const mode of ['standard', 'provider']) test(`${mode}: one exact model comp
   assert.equal(guidedOnboarding(downlisted,id).completed,true,'later maintenance does not reopen a completed task');
   assert.equal(JSON.stringify(state).includes('mock-guided-onboarding-only-key'), false);
   const online=guidedOnboarding(state,id),originalModel=structuredClone(online.model),prices=structuredClone(state.modelSalePrices),oldRoutes=structuredClone(state.serviceRoutes);
-  const reserve=await connected(t,{baseState:state,providerId:online.provider.id,libraryId:online.master.id,supplyOnly:true,intent:'reserve'});state=reserve.state;
+  const reserve=await connected(t,{baseState:state,providerId:online.provider.id,apiKeyId:online.endpoint.apiKeyId,libraryId:online.master.id,supplyOnly:true,intent:'reserve'});state=reserve.state;
   let standby=guidedOnboarding(state,reserve.id);assert.equal(standby.supplyReady,true);assert.equal(standby.supply,undefined);assert.equal(standby.completed,false);
   state=run(state,'guidedReserveComplete',{draftId:reserve.id,expectedDraftRevision:standby.draft.draftRevision});assert.equal(guidedOnboarding(state,reserve.id).completed,true);
   assert.deepEqual(state.models.find(row=>row.id===originalModel.id),originalModel);assert.deepEqual(state.modelSalePrices,prices);assert.deepEqual(state.serviceRoutes,oldRoutes);

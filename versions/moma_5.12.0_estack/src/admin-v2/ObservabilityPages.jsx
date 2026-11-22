@@ -120,8 +120,8 @@ export function Sla({ state }) {
   </div>;
 }
 
-const pages = { monitoring: ServiceMonitoringPage, logs: CallLogsPage, alerts: Alerts, incidents: Incidents, sla: Sla };
+const pages = { 'providers-health': ServiceMonitoringPage, monitoring: ServiceMonitoringPage, logs: CallLogsPage, alerts: Alerts, incidents: Incidents, sla: Sla };
 export default function ObservabilityPage({ pageId, params, ...props }) {
   const Page = pages[pageId];
-  return <Page key={params.toString()} params={params} {...props}/>;
+  return <Page key={pageId + params.toString()} pageId={pageId} params={params} {...props}/>;
 }

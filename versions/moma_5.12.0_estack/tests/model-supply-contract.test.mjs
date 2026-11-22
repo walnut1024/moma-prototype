@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAdminState, commitAdminState } from '../src/admin-v2/store.js';
-import { modelLibrary, libraryRecord, libraryRemovalIssue } from '../src/admin-v2/model-library.js';
+import { modelLibrary, libraryRecord, libraryRemovalIssue, modelMaterial } from '../src/admin-v2/model-library.js';
 import { supplyModelDirectory, supplyModelRecord } from '../src/admin-v2/supply-models.js';
 import { catalogueChannels } from '../src/admin-v2/provider-channels.js';
 const op = (s, operation, data) => commitAdminState(s, {type:'modelOperations',operation,data});
@@ -23,7 +23,10 @@ test('creating library data does not register supply, channels or services; regi
  for(const field of ['providers','endpoints','models','modelSupplies','modelSalePrices','serviceRoutes'])assert.deepEqual(s[field],initial[field]);
  const next=supplyOp(s,'provider-zhipu-direct','supplierModelAdd',{libraryId:id});
  assert.equal(supplyModelDirectory(next).find(row=>row.id===id).entries.length,1);assert.deepEqual(next.endpoints,s.endpoints);
- assert.throws(()=>op(next,'templateDelete',{id,confirmed:true}),/供应关系/);
+ const deleted=op(next,'templateDelete',{id,confirmed:true});
+ assert.equal(modelMaterial(deleted,id),undefined);
+ assert.deepEqual(deleted.providers,next.providers);
+ assert.deepEqual(supplyModelDirectory(deleted),supplyModelDirectory(next));
 });
 test('removing one supplier preserves the master and other suppliers; final removal permits unused library deletion',()=>{
  let s=create(parseAdminState(null)), id=s.audits[0].objectId;
@@ -33,17 +36,20 @@ test('removing one supplier preserves the master and other suppliers; final remo
  s=supplyOp(s,'provider-kimi-official','catalogueRemove',{modelId:'contract-new-model',confirmed:true});
  assert.ok(!supplyModelDirectory(s).some(row=>row.id===id));assert.equal(libraryRemovalIssue(s,id),'');
  assert.throws(()=>op(s,'templateDelete',{id}),/确认/);s=op(s,'templateDelete',{id,confirmed:true});
- assert.equal(libraryRecord(parseAdminState(JSON.stringify(s)),id),undefined);
+ assert.equal(modelMaterial(parseAdminState(JSON.stringify(s)),id),undefined);
 });
-test('library edits synchronize both supply views without touching channels or prices',()=>{
+test('reference edits preserve both supply views and channel and price records',()=>{
  const s=parseAdminState(null), master=s.models.find(row=>row.id==='model-2');
  const next=op(s,'templateSave',{...master,name:'统一名称更新'});
- assert.equal(supplyModelDirectory(next).find(row=>row.id===master.id).name,'统一名称更新');
+ assert.equal(modelMaterial(next,master.id).name,'统一名称更新');
+ assert.deepEqual(supplyModelDirectory(next),supplyModelDirectory(s));
  for(const id of ['provider-moma','provider-zhipu-direct']){
-  const p=provider(next,id),code=id==='provider-moma'?'GLM-5.2':'glm-5.2';assert.equal(supplyModelRecord(next,p,code).name,'统一名称更新');
+  const p=provider(next,id),code=id==='provider-moma'?'GLM-5.2':'glm-5.2';assert.equal(supplyModelRecord(next,p,code).name,supplyModelRecord(s,provider(s,id),code).name);
  }
  for(const field of ['providers','endpoints','modelSalePrices','serviceRoutes'])assert.deepEqual(next[field],s[field]);
- assert.throws(()=>op(next,'templateDelete',{id:master.id,confirmed:true}),/服务管理/);
+ const deleted=op(next,'templateDelete',{id:master.id,confirmed:true});
+ assert.equal(modelMaterial(deleted,master.id),undefined);
+ assert.deepEqual(deleted.models,next.models);
 });
 test('batch registration rejects unknown data atomically and never creates placeholder channels',()=>{
  const s=parseAdminState(null), before=structuredClone(s);
@@ -61,4 +67,4 @@ test('saved mock edits and removals are not reset on refresh',()=>{
 
 test('removed relationships can be registered again without new identity or restored channels',()=>{let s=create(parseAdminState(null)),id=s.audits[0].objectId;s=supplyOp(s,'provider-zhipu-direct','supplierModelAdd',{libraryId:id});s=supplyOp(s,'provider-zhipu-direct','catalogueRemove',{modelId:'contract-new-model',confirmed:true});s=supplyOp(s,'provider-zhipu-direct','supplierModelAdd',{libraryId:id});assert.equal(supplyModelDirectory(s).find(row=>row.id===id).entries.length,1);assert.equal(catalogueChannels(s,provider(s,'provider-zhipu-direct'),'contract-new-model').length,0);assert.throws(()=>commitAdminState(s,{type:'batch',changes:[{type:'remove',collection:'modelTemplates',id}]}),/删除/);});
 
-test('new mock library records can be edited through the same validation as real form submissions',()=>{let s=parseAdminState(null);for(const record of s.modelTemplates.filter(row=>row.id.startsWith('supplier-template-'))){const next=op(s,'templateSave',{...record,name:record.name+' 编辑'});assert.equal(libraryRecord(next,record.id).name,record.name+' 编辑');assert.deepEqual(next.providers,s.providers);s=next;}});
+test('new mock library records can be edited through the same validation as real form submissions',()=>{let s=parseAdminState(null);for(const record of s.modelTemplates.filter(row=>row.id.startsWith('supplier-template-'))){const next=op(s,'templateSave',{...record,name:record.name+' 编辑'});assert.equal(modelMaterial(next,record.id).name,record.name+' 编辑');assert.deepEqual(next.providers,s.providers);s=next;}});

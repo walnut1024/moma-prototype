@@ -1,3 +1,5 @@
+import { modelMaterial } from './model-library.js';
+
 const names = { models: '模型', modelTemplates: '模型资料', providers: '服务商', endpoints: '渠道', modelSupplies: '模型渠道关联', serviceRoutes: '模型路由', modelSalePrices: '平台售价', modelOnboardings: '接入任务' };
 export const MODEL_OPERATION_NAMES = {startSales:'上架销售',salesSettings:'保存销售设置',enableService:'启用技术服务',disableService:'停用技术服务',stopSales:'停止销售',servicePurpose:'变更服务用途',serviceRouteConfigure:'保存模型映射与路由',guidedRouteConfigure:'保存接入路由',serviceArchive:'归档模型服务',serviceRestore:'恢复已归档服务',configureServiceModelIdentity:'修改模型调用标识', serviceMappingCreate:"新增模型映射", serviceMappingSave:"保存模型映射", serviceMappingValidate:"验证模型映射", serviceMappingApply:"应用模型映射", serviceMappingDiscard:"放弃映射变更", serviceMappingEnable:"启用模型映射", serviceMappingDisable:"停用模型映射", serviceMappingRemove:"解除模型映射", serviceProviderListing:'修改渠道服务展示', serviceProviderServing:'修改渠道服务技术状态', marketVisibility: '修改模型广场可见性', templateDraft: '保存资料草稿', templatePublish: '发布模型资料', templateDiscard: '丢弃资料草稿', commercialDraft: '保存销售配置草稿', commercialPublish: '发布销售配置', commercialDiscard: '丢弃销售配置草稿', serviceMode: '设置服务模式', configureServiceIdentity: '保存模型调用标识', configureServiceProvider: '配置服务商服务', associateServiceProvider: '关联服务商', removeServiceProvider: '移除服务商关联', removeServiceChannel: '移除渠道关联', associateServiceChannels: '关联供应渠道', associateServiceChannelsBatch: '批量关联供应渠道', serviceRouteDraft: '保存路由草稿', serviceRoutePublish: '发布路由', serviceRouteRollback: '回滚路由', serviceRouteStop: '停用路由', serviceRouteRestore:'恢复路由', serviceFailoverConfigure:'保存故障转移', recordPlatformPublication: '保存平台验证结果', publish: '模型上架', unlist: '模型下架' };
 
@@ -7,8 +9,9 @@ export function modelOperationTarget(state, modelId, data) {
 }
 
 export function modelAuditContext(state, action) {
+  if (action.referenceMaterial) return { relatedModelIds: [], relatedEndpointIds: [], objectLabel: '模型资料：' + action.referenceMaterial.name };
   const changes = action.type === 'batch' ? action.changes : [action];
-  const references = new Set([action.objectId, action.modelId, action.record?.id, action.id].filter(Boolean));
+  const references = new Set([action.objectId, action.modelId, action.marketCard?.card.model_id, action.record?.id, action.id].filter(Boolean));
   const related = new Set(), endpoints = new Set();
   for (const change of changes) {
     const record = change.record || state[change.collection]?.find(row => row.id === change.id);
@@ -31,6 +34,7 @@ export function modelAuditContext(state, action) {
       if ([supply.id, supply.endpointId, endpoint?.providerId].some(id => id && references.has(id))) related.add(model.id);
     }
   }
+  if (action.marketCard) return { relatedModelIds: [...related], relatedEndpointIds: [], objectLabel: '模型卡片：' + action.marketCard.card.content.name };
   let objectLabel = action.objectId || action.record?.id || action.id || '批量操作';
   for (const [collection, label] of Object.entries(names)) {
     const object = state[collection]?.find(row => row.id === objectLabel);
@@ -73,9 +77,22 @@ function auditValue(value,key,state) {
   return Object.fromEntries(Object.entries(value).filter(([field])=>auditFields[field]).map(([field,item])=>[auditFields[field],auditValue(item,field,state)]));
 }
 export function modelAuditChanges(state,action) {
+  if (action.referenceMaterial) {
+    const after = action.referenceMaterial;
+    const before = modelMaterial(state, after.id);
+    const fields = { name: '模型资料名称', type: '模型类型', description: '模型描述',
+      capabilities: '调用能力资料', referenceDeletedAt: '删除时间' };
+    const values = Object.entries(fields).filter(([key]) => JSON.stringify(before?.[key]) !== JSON.stringify(after[key]))
+      .map(([key, field]) => ({ object: after.name, field, before: before?.[key] ?? null, after: after[key] }));
+    if (JSON.stringify(before?.profile) !== JSON.stringify(after.profile)) {
+      const profile = ({ logo, ...metadata } = {}) => ({ ...metadata, ...(logo && { logo: '已设置' }) });
+      values.push({ object: after.name, field: '模型资料字段', before: profile(before?.profile), after: profile(after.profile) });
+    }
+    return values;
+  }
   if (action.marketCard) {
-    const { modelId, card } = action.marketCard;
-    const before = state.modelData?.marketCards?.[modelId];
+    const { cardId, card } = action.marketCard;
+    const before = state.modelData?.marketCards?.[cardId];
     const fields = { status: '展示状态', linked: '关联服务', shown: '展示服务', scope: '可见范围' };
     return Object.entries(fields).filter(([key]) => JSON.stringify(before?.[key]) !== JSON.stringify(card[key]))
       .map(([key, field]) => ({ object: card.content.name, field, before: before?.[key] ?? null, after: card[key] }));

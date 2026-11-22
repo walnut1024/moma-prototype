@@ -13,7 +13,6 @@ import { channelCheckCurrent, channelInterfaceIssue } from './provider-channels'
 import { modelTaskUrl } from './channel-interface';
 import { redactDiagnostic } from './channel-selection';
 import { moneyDisplay } from './model-management';
-import { SupplierKeyGroupField } from './SupplierKeyGroupField';
 import { connectionCredentialsReady, connectionFingerprint, connectionTestKey, connectionTestPassed } from './connection-state';
 import { prepareServerChannel, onboardingApi } from './onboarding-client';
 import OnboardingScenarioControl from './OnboardingScenarioControl';
@@ -347,7 +346,6 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
     {navigation}
     <div className="supplier-onboarding-context"><strong>{provider.name}</strong><span>{endpoint?.name}</span><ChannelTestProgress batch={batch} running={busy || running}>通过 {rows.filter(passed).length} / {rows.length}</ChannelTestProgress>{!reference && <OnboardingScenarioControl disabled={busy || running || confirming}/>}</div>
     {viewingConnection && !reference && <Field label="当前生效地址"><CopyId copyAtStart value={endpoint?.baseUrl} label="上游 API 地址"/></Field>}
-    {!reference && ['group', 'inherit'].includes(endpoint?.authMode) && <SupplierKeyGroupField channelId={endpoint.id} fixed ops={ops} state={state} provider={provider} value={endpoint.authMode === 'group' ? endpoint.keyGroupId : 'default'} disabled={!ops.can || busy || running || confirming} onChange={() => {}}/>}
     {!ready && <Notice error>渠道缺少可用 API 密钥，请添加密钥后重新测试。</Notice>}
     <>
       {!reference && <div className="supplier-channel-fields"><Field label="验证内容"><Choice label="验证内容" value={check || 'basic'} options={checkOptions} disabled={!canPlan || !ops.can} onChange={value => { setCheck(value === 'basic' ? '' : value); setPlannedIds(null); setConsent(false); }}/></Field><div className="supplier-row-actions"><span>本次 {plannedModels.length} 个模型，预估费用未知</span>{plannedIds && !embedded && <Button theme="borderless" type="tertiary" disabled={!canPlan} onClick={() => planRetry(null)}>选择全部可测试模型</Button>}</div></div>}

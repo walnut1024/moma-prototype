@@ -4,10 +4,10 @@ import { Banner, Button, Input, Select, Space, Tooltip, Typography } from '@douy
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { libraryRemovalIssue, modelCatalogue, modelReleaseOrder, MODEL_CATALOGUE_TYPES } from './model-library';
-import { modelCategory } from './model-management';
-import { modelProfileDraft } from './model-profile';
-import { materialModalitiesLabel } from './material-catalogue';
+import { MODEL_TYPES, modelCategory } from './model-management';
 import { materialDrawerSide } from './model-material-drawer';
+import { materialContextLabel } from './model-material-fields';
+import { modelProfileDraft } from './model-profile';
 import { classificationIndex, modelClassification, modelClassificationFor } from './model-classification';
 import MaterialLogo from './MaterialLogo';
 
@@ -41,22 +41,28 @@ export default function MaterialCatalogue({ state, ops }) {
   const { pageSize } = pagination;
   const currentPage = Math.min(pagination.currentPage, Math.ceil(rows.length / pageSize) || 1);
   const columns = [
-    { title: '模型展示名', dataIndex: 'name', width: 230, render: (name, row) => <Button theme="borderless" onClick={event => open(event, row, 'view')}>{name}</Button> },
+    { title: '模型展示名称', dataIndex: 'name', width: 230, render: (name, row) =>
+      <Button className="materials-model-name" theme="borderless" onClick={event => open(event, row, 'view')}>{name}</Button> },
     { title: '模型编码', dataIndex: 'modelId', width: 240, render: value => <Typography.Text className="materials-code" copyable>{value}</Typography.Text> },
-    { title: '作者', width: 140, render: (_, { classification: { author, authorName } }) => author?.name || (authorName && authorName + '（待核对）') || '—' },
-    { title: '模型系列', width: 140, render: (_, { classification: { series, seriesName } }) => series?.name || (seriesName && seriesName + '（待核对）') || '—' },
-    { title: '模型版本', width: 120, render: (_, row) => row.profile?.version || '—' },
-    { title: '原厂发布日期', width: 130, render: (_, row) => modelProfileDraft(row).releaseDate || '—' },
-    { title: '模型类型', width: 100, render: (_, row) => MODEL_CATALOGUE_TYPES[modelCategory(row.type)] },
-    { title: '模型展示 Logo', width: 130, render: (_, row) => <MaterialLogo key={modelProfileDraft(row).logo || ''} src={modelProfileDraft(row).logo} alt={row.name+'的模型展示 Logo'}/> },
-    { title: '输入 / 输出', width: 200, render: (_, row) => { const profile = modelProfileDraft(row); return materialModalitiesLabel(profile); } },
-    { title: '上下文窗口', width: 130, render: (_, row) => row.capabilities.context ? `${row.capabilities.context / 1024}K Token` : '—' },
-    { title: '操作', width: 140, fixed: 'right', render: (_, row) => <Space><Button theme="borderless" disabled={!ops.can} onClick={event => open(event, row, 'edit')}>编辑</Button><Tooltip content={libraryRemovalIssue(state, row.id) || '删除未被引用的模型资料'}><span><Button theme="borderless" type="danger" disabled={!ops.can || Boolean(libraryRemovalIssue(state, row.id))} aria-label={'删除模型资料：' + row.name} onClick={event => { trigger.current = event.currentTarget; ops.setError(''); setRemoving(row); }}>删除</Button></span></Tooltip></Space> },
+    { title: '模型作者', width: 135, render: (_, { classification: { author, authorName } }) => author?.name || (authorName ? authorName + '（待核对）' : '—') },
+    { title: '模型系列', width: 130, render: (_, { classification: { series, seriesName } }) => series?.name || (seriesName ? seriesName + '（待核对）' : '—') },
+    { title: '模型发布日期', width: 122, render: (_, row) => row.profile?.releaseDate || '—' },
+    { title: '模型类型', width: 120, render: (_, row) => MODEL_TYPES[row.type] || '—' },
+    { title: '模型图标', width: 94, render: (_, row) =>
+      <MaterialLogo key={row.profile?.logo} src={row.profile?.logo} alt={row.name + '的图标'}/> },
+    { title: '输入模态/输出模态', width: 180, render: (_, row) => {
+      const profile = modelProfileDraft(row);
+      const inputs = profile.inputModalities?.join('、') || '—';
+      const outputs = [...new Set([...(profile.outputModalities || []), ...(profile.resultTypes || [])])].join('、') || '—';
+      return inputs + ' / ' + outputs;
+    } },
+    { title: '上下文长度', width: 132, render: (_, row) => materialContextLabel(row.capabilities?.context) },
+    { title: '操作', width: 140, fixed: 'right', render: (_, row) => <Space><Button theme="borderless" disabled={!ops.can} onClick={event => open(event, row, 'edit')}>编辑</Button><Tooltip content={libraryRemovalIssue(state, row.id) || '删除参考档案'}><span><Button theme="borderless" type="danger" disabled={!ops.can || Boolean(libraryRemovalIssue(state, row.id))} aria-label={'删除模型资料：' + row.name} onClick={event => { trigger.current = event.currentTarget; ops.setError(''); setRemoving(row); }}>删除</Button></span></Tooltip></Space> },
   ];
   const close = () => { setRemoving(null); ops.setError(''); requestAnimationFrame(() => trigger.current?.isConnected && trigger.current.focus()); };
   return <>
     <div className="materials-toolbar"><div className="materials-filters">
-      <Input prefix={<IconSearch aria-hidden/>} showClear aria-label="搜索模型名称、编码、作者或系列" placeholder="搜索模型名称 / 编码 / 作者 / 系列" value={query} onChange={value => { setQuery(value); firstPage(); }}/>
+      <Input prefix={<IconSearch aria-hidden/>} showClear aria-label="搜索模型展示名称、编码、作者或系列" placeholder="搜索模型展示名称 / 编码 / 作者 / 系列" value={query} onChange={value => { setQuery(value); firstPage(); }}/>
       <Typography.Text id="material-type-filter" className="sr-only">模型类型</Typography.Text>
       <Select aria-labelledby="material-type-filter" value={type} onChange={value => { setType(value); firstPage(); }} optionList={[[ 'all', '全部类型' ], ...Object.entries(MODEL_CATALOGUE_TYPES)].map(([value, label]) => ({value, label}))}/>
       <Typography.Text id="material-author-filter" className="sr-only">模型作者</Typography.Text>
@@ -69,13 +75,15 @@ export default function MaterialCatalogue({ state, ops }) {
           classified.some(({ classification: item }) => item.seriesName && !item.series && (!authorId || item.author?.id === authorId || authorId === 'pending' && !item.author)))}
         onChange={value => { setSeriesId(value); firstPage(); }}/>
       <Button onClick={() => { setQuery(''); setType('all'); setAuthorId(undefined); setSeriesId(undefined); firstPage(); }}>重置筛选</Button>
-    </div></div>
-    <Table rowKey="id" columns={columns} dataSource={rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)} scroll={{ x: 1800 }}
+    </div>
+      <Button disabled={!ops.can} onClick={() => ops.go({ view: 'templateImport' })} style={{ marginInlineStart: 'auto' }}>批量导入模型资料</Button>
+    </div>
+    <Table rowKey="id" columns={columns} dataSource={rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)} scroll={{ x: 'max(100%, 1523px)' }}
       pagination={{ pageSize, currentPage, total: rows.length, showSizeChanger: true, pageSizeOpts: [20, 50, 100], showTotal: true }}
       onChange={({ pagination }) => setPagination({ currentPage: pagination.currentPage, pageSize: pagination.pageSize })}
       empty="没有符合条件的模型资料"/>
     <Modal visible={Boolean(removing)} className="semi-materials" title="删除模型资料" onCancel={close} okText="确认删除资料" cancelText="取消" okButtonProps={{type:'danger',disabled:!ops.can || Boolean(removing && libraryRemovalIssue(state, removing.id))}} confirmLoading={busy} onOk={async () => { setBusy(true); try { if (await ops.run('templateDelete', { id: removing.id, confirmed: true })) close(); } finally { setBusy(false); } }}>
-      <Typography.Paragraph>确认删除“{removing?.name}”？仅可删除未被引用的模型资料，已有供应关系与历史引用不能直接删除。</Typography.Paragraph>{ops.error && <Banner type="danger" description={ops.error}/>}
+      <Typography.Paragraph>确认删除“{removing?.name}”？已保存的模型服务、渠道配置和广场展示将保留。</Typography.Paragraph>{ops.error && <Banner type="danger" description={ops.error}/>}
     </Modal>
   </>;
 }

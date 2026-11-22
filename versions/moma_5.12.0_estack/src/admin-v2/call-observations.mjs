@@ -175,11 +175,14 @@ export function callObservations(state) {
       const attemptOutcome = item.isCanceled === true || item.isTimeout === true || item.streamInterrupted === true || item.finishReason === 'error'
         ? requestOutcome(item, attemptStatus) : explicit || (code ? 'failed' : attemptStatus != null
           ? requestOutcome(item, attemptStatus) : item.error === null ? 'success' : 'unknown');
+      const usage = usageFields(item, model);
+      const cached = usage.input == null ? null : number(item.usage?.cached);
       observedAttempts.push({
         ...request, id: JSON.stringify([id, index + 1]), parentId: id, index: index + 1,
         at: timeOf(item.startedAt ?? item.createdAt), upstreamRequestId: item.upstreamRequestId, upstreamModelId: item.upstreamModelId,
         provider, providerName: item.providerName || providerName(provider), channel, channelName: item.channelName || endpoints.get(channel)?.name || channel,
         endpoint: item.endpointId, endpointName: item.endpointName || endpoint?.endpointId || item.endpointId,
+        endpointBaseUrl: endpoint?.baseUrl,
         channelModel: JSON.stringify([provider ?? null, channel ?? null, item.upstreamModelId ?? null]),
         channelModelName: [item.channelName || endpoints.get(channel)?.name || channel || '渠道未采集',
           item.upstreamModelId || '模型未采集'].join(' · '),
@@ -190,7 +193,7 @@ export function callObservations(state) {
         code, errorReason: item.errorMessage || item.message, errorSource: item.errorSource || (attemptOutcome === 'failed' ? '上游调用' : null),
         timeout: timeout(item, code), fallback: item.fallback === true, fallbackReason: item.fallbackReason,
         recordedFallbackReason: item.fallbackReason,
-        ...usageFields(item, model),
+        ...usage, cached: cached != null && cached <= usage.input ? cached : null,
       });
     });
     observedAttempts.forEach((attempt, index) => {
