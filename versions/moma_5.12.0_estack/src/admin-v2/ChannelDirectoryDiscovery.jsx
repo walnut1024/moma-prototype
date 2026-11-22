@@ -14,7 +14,8 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
   const [selection, setSelection] = useState(initialSelection || {});
   const selectionSummaryId = useId();
   const [policyDraft, setPolicyDraft] = useState(null), [review, setReview] = useState(null), [applying, setApplying] = useState(false);
-  const [activeId, setActiveId] = useState(initialConnectionId || (connections.length === 1 ? connections[0].id : ''));
+  const [activeId, setActiveId] = useState(() => connections.some(row => row.id === initialConnectionId)
+    ? initialConnectionId : connections.length === 1 ? connections[0].id : '');
   const [error, setError] = useState('');
   const stop = useRef(false), mounted = useRef(true), lock = useRef(false);
   const scope = useRef({}); scope.current = { ops, connections };
@@ -189,8 +190,8 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
     <Button disabled={applying} onClick={() => setPolicyDraft(null)}>取消</Button>
     <Button theme="solid" disabled={applying || !ops.can || !active} onClick={savePolicy}>保存同步策略</Button>
   </>}>
-    <Notice>本地后台按间隔检测到期连接。仅完整列表中身份唯一、在采购白名单内的模型会自动接入为待验证供给。</Notice>
-    <Checkbox checked={policyDraft.enabled} disabled={applying} onChange={event => setPolicyDraft(value => ({ ...value, enabled: event.target.checked }))}>定期检测</Checkbox>
+    <Notice>使用「检查到期连接」运行扫描。仅完整列表中身份唯一、在采购白名单内的模型会自动接入为待验证供给。</Notice>
+    <Checkbox checked={policyDraft.enabled} disabled={applying} onChange={event => setPolicyDraft(value => ({ ...value, enabled: event.target.checked }))}>启用到期检测规则</Checkbox>
     <Field label="间隔（分钟）"><InputNumber aria-label="检测间隔" min={5} max={1440} value={policyDraft.intervalMinutes}
       disabled={applying} onChange={intervalMinutes => setPolicyDraft(value => ({ ...value, intervalMinutes: Number(intervalMinutes) }))}/></Field>
     <Field label="忽略模型（每行一项）"><TextArea aria-label="忽略模型" value={policyDraft.ignored} placeholder="模型标识、test-model-* 或 re:^test-[0-9]+$"

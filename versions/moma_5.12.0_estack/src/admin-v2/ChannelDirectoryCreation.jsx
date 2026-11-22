@@ -206,7 +206,11 @@ export default function ChannelDirectoryCreation({ state, providers, connections
           expectedProviderUpdatedAt: provider.updatedAt, rules: copyOptions.rules, commercial: copyOptions.commercial } } : {}),
         models: models.map(row => ({ ...row, upstreamModelId: row.upstreamModelId.trim() })) };
       if (reference && !batch) {
-        if (await ops.run('channelDirectoryCreate', next)) close();
+        const savedState = await ops.run('channelDirectoryCreate', next);
+        if (savedState) {
+          const id = savedState.endpoints.find(item => item.providerId === providerId && item.directoryCreationId === rows[0].creationId)?.id;
+          if (id) setCreatedId(id); else close();
+        }
         return;
       }
       if (!reference) saveBatchDraft(next, saved, Object.fromEntries(rows.filter(row => row.error).map(row => [row.creationId, row.error])));
@@ -224,7 +228,6 @@ export default function ChannelDirectoryCreation({ state, providers, connections
     try {
       const next = await ops.run('channelDirectoryCreate', { ...preview, rows });
       if (!next) return;
-      if (reference) { close(); return; }
       if (!batch) {
         const id = next.endpoints.find(item => item.providerId === providerId && item.directoryCreationId === rows[0].creationId)?.id;
         if (id) setCreatedId(id); else close();
@@ -235,6 +238,10 @@ export default function ChannelDirectoryCreation({ state, providers, connections
         endpointId: next.endpoints.find(item => item.providerId === providerId && item.directoryCreationId === row.creationId)?.id,
         modelCount: preview.models.length,
       })).filter(row => row.endpointId);
+      if (reference) {
+        if (created.length) { setSaved(created); setPreview(null); } else close();
+        return;
+      }
       setSaved(previous => [...previous, ...created]);
       setInputs(items => items.map(row => created.some(item => item.creationId === row.id) ? { ...row, raw: '' } : row));
       setFailed(Object.fromEntries(preview.rows.filter(row => row.error).map(row => [row.creationId, row.error])));
@@ -243,6 +250,27 @@ export default function ChannelDirectoryCreation({ state, providers, connections
       ops.dirty(preview.rows.some(row => row.error));
     } finally { lock.current = false; setBusy(false); }
   };
+
+  const createdConnections = <Table size="small" rowKey="endpointId" pagination={false} dataSource={saved} columns={[
+        { title: '连接名称', dataIndex: 'name' }, { title: '凭证摘要', dataIndex: 'credential' }, { title: '连接 ID', dataIndex: 'endpointId' },
+        { title: '待验证模型', dataIndex: 'modelCount' },
+        { title: '操作', render: (_, row) => <Button theme="borderless" size="small" onClick={() => locate(row.endpointId, true)}>打开连接（新页签）</Button> },
+      ]}/>;
+
+  if (createdId) return <Modal drawer wide title="连接已创建" description={[provider?.name, value.name.trim()].filter(Boolean).join(' / ')}
+    onClose={close} footer={<>
+      <Button onClick={close}>返回连接列表</Button>
+      <Button theme="solid" onClick={() => locate(createdId)}>查看新连接</Button>
+    </>}>
+    <Typography.Paragraph>{pendingType ? '连接已保存为待适配草稿。' : models.length
+      ? `已接入 ${models.length} 款待验证模型。测试通过后可启用连接。`
+      : '连接尚未启用。打开连接后可接入模型，再测试并启用。'}</Typography.Paragraph>
+  </Modal>;
+
+  if (reference && saved.length) return <Modal drawer wide title={t('批量创建完成')} description={provider?.name}
+    onClose={close} footer={<Button onClick={close}>{t('返回连接列表')}</Button>}>
+    {createdConnections}
+  </Modal>;
 
   if (reference && !preview) return <SupplierCreationDialog wide className="channel-directory-create-dialog"
     title={t('添加新的渠道')} cancelLabel={t('取消')} cancel={() => !busy && ops.proceed(close)}
@@ -292,16 +320,6 @@ export default function ChannelDirectoryCreation({ state, providers, connections
     {ops.error && <Notice error>{ops.error}</Notice>}
   </SupplierCreationDialog>;
 
-  if (createdId) return <Modal drawer wide title="连接已创建" description={[provider?.name, value.name.trim()].filter(Boolean).join(' / ')}
-    onClose={close} footer={<>
-      <Button onClick={close}>返回连接列表</Button>
-      <Button theme="solid" onClick={() => locate(createdId)}>查看新连接</Button>
-    </>}>
-    <Typography.Paragraph>{pendingType ? '连接已保存为待适配草稿。' : models.length
-      ? `已接入 ${models.length} 款待验证模型。测试通过后可启用连接。`
-      : '连接尚未启用。打开连接后可接入模型，再测试并启用。'}</Typography.Paragraph>
-  </Modal>;
-
   if (preview) {
     const createCount = preview.rows.filter(row => !row.error).length;
     const duplicateCount = preview.rows.filter(row => row.duplicate).length;
@@ -337,11 +355,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
     {batch && recoverable && inputs.some(row => !row.raw && !saved.some(item => item.creationId === row.id)) &&
       <Notice>刷新后可继续编辑失败行。待重试的密钥需重新输入。</Notice>}
     {saved.length > 0 && <><Typography.Title heading={5}>已创建 {saved.length} 条连接</Typography.Title>
-      <Table size="small" rowKey="endpointId" pagination={false} dataSource={saved} columns={[
-        { title: '连接名称', dataIndex: 'name' }, { title: '凭证摘要', dataIndex: 'credential' }, { title: '连接 ID', dataIndex: 'endpointId' },
-        { title: '待验证模型', dataIndex: 'modelCount' },
-        { title: '操作', render: (_, row) => <Button theme="borderless" size="small" onClick={() => locate(row.endpointId, true)}>打开连接（新页签）</Button> },
-      ]}/></>}
+      {createdConnections}</>}
     {(!batch || saved.length !== inputs.length) && <>
       {source && <Notice>复制接口和地址设置。请重新选择凭证，并核对要复制的模型。新连接以未启用的状态保存。</Notice>}
       {source && <Space wrap>

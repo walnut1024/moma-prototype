@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import test from 'node:test';
-import { runLocalChannelDiscovery } from '../server/local-channel-discovery.js';
 import { startLocalBackend } from '../database/local-runtime.js';
 import { domainModelWorkspace } from '../src/mock/model-fields.js';
 import { routingChannels, routingServices, serviceRoute } from '../src/admin-v2/service-routing.js';
@@ -332,32 +331,6 @@ test('the channel directory persists credential scopes, retries batches and main
     assert.equal(discovered[0].enabled, false);
     assert.equal(get(custom).directoryDiscoveryApply.modelIds.length, 1);
     await assert.rejects(applyDiscovery(['glm-5.3']), /过期|不完整/);
-    const scheduled = row('关闭页面后仍定期检测', [copyKey]);
-    await command('channelDirectoryCreate', { ...common, rows: [scheduled] });
-    const syncPolicy = (endpoint, whitelist) => command('channelDirectoryDiscoveryPolicy', {
-      providerId: endpoint.providerId, endpointId: endpoint.id, expectedUpdatedAt: endpoint.updatedAt,
-      policy: { enabled: true, intervalMinutes: 5, ignored: ['bge-*'], whitelist },
-    });
-    const scheduledEndpoint = get(scheduled);
-    const scheduledKey = connectionKeys(scheduledEndpoint, provider())[0];
-    await mock('/channels', { providerId, name: '定期检测模拟上游列表', clientChannelId: scheduledEndpoint.id,
-      clientSignature: connectionFingerprint(scheduledEndpoint), interfaceType: 'openai', baseUrl: scheduledEndpoint.baseUrl,
-      credential: { id: scheduledKey.id, version: scheduledKey.fingerprint }, authMode: 'key',
-      mockModels: ['deepseek-v4-pro', 'glm-5.3', 'bge-m3'] });
-    await load();
-    await syncPolicy(get(scheduled), ['deepseek-v4-pro', 'glm-5.3']);
-    assert.equal(get(scheduled).directoryDiscoveryPolicy.ownerId, 'admin-001');
-    const liveVersion = state.serviceRoutes.map(row => [row.id, row.activeVersion]);
-    const ticks = await runLocalChannelDiscovery(local.db, {});
-    assert(ticks.some(row => row.endpointId === get(scheduled).id && row.complete));
-    await load();
-    assert.equal(get(scheduled).directoryDiscovery.result.complete, true);
-    assert.deepEqual(get(scheduled).directoryDiscoveryApply.modelIds, ['glm-5.3']);
-    const autoRows = supplierChannelAssociations(state, provider(), get(scheduled).id);
-    assert.deepEqual(autoRows.map(row => [row.upstreamModelId, row.enabled]), [['glm-5.3', false]]);
-    assert.deepEqual(state.serviceRoutes.map(row => [row.id, row.activeVersion]), liveVersion);
-    assert(state.audits.some(row => row.objectId === get(scheduled).id && row.executionSource === '本地定期检测'));
-    assert(!(await runLocalChannelDiscovery(local.db, {})).some(row => row.endpointId === get(scheduled).id));
     const plugin = row('插件验收', [copyKey]);
     await command('channelDirectoryCreate', { ...common, interfaceType: 'custom', protocol: '其他', baseUrl: 'https://example.invalid/plugin', rows: [plugin] });
     const pluginTarget = { providerId, endpointId: get(plugin).id, expectedRevision: 0 };

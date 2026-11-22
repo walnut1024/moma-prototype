@@ -119,7 +119,7 @@ export function ChannelManagementNew(props) {
       return;
     }
     close();
-    go({ connection: id, tab: null, modelQ: null, keyGroup: null });
+    go({ connection: id, tab: null, modelQ: null, keyGroup: null }, { saved: true });
   };
   const openDiscovered = (connectionId, initialRows, selection) => ops.proceed(() => {
     setOperation({ type: 'add', connectionId, initialRows, back: { ...operation, activeId: connectionId, selection } });

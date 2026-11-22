@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Banner, Button, Modal, Select, Table, Tabs } from '@douyinfe/semi-ui';
 import { ShoppingCart, Store } from 'lucide-react';
 import FrontPageHeader from './FrontPageHeader';
-import { chargeTotals, formatRequestCharge } from '../project-call.mjs';
+import { formatRequestCharge } from '../project-call.mjs';
 import { projectModelEnabled } from '../project-access.mjs';
 import { customerPriceRows } from '../service-directory.mjs';
 import { orderTenantServices } from '../tenant-data.mjs';
@@ -77,7 +77,7 @@ export default function WorkspaceCommerce({ tenant, services, internal, view, on
             ]}/>
         </>}
         {tab === 'bills' && <>
-          <div className="project-panel-heading"><h2>按量用量账单</h2><strong>已核算 {chargeTotals(billRows.map(row => row.charge)) || '—'}</strong></div>
+          <div className="project-panel-heading"><h2>按量用量账单</h2></div>
           <Table rowKey="id" size="small" pagination={false} scroll={{x:640}} dataSource={billRows} empty="暂无按量调用费用"
             columns={[
               {title:'调用时间', dataIndex:'createdAt', render:time},
