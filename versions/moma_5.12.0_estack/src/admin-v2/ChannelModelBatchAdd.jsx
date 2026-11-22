@@ -148,6 +148,12 @@ export default function ChannelModelBatchAdd({ state, channel, ops, close, manua
   ];
 
   const cancel = () => { if (!saveLock.current) ops.proceed(close); };
+  const channelDetails = [
+    [t('目标渠道'), channel.name],
+    [t('已绑定服务商'), provider.name],
+    [t('接口格式'), sourceFormatLabel(targetFormat)],
+    ['Base URL', endpoint.baseUrl],
+  ];
   return <Modal drawer wide title={t('添加渠道模型')} description="" onClose={cancel} className="channel-model-batch-add"
     footer={<div className="channel-model-batch-footer">
       <Space wrap>
@@ -162,13 +168,22 @@ export default function ChannelModelBatchAdd({ state, channel, ops, close, manua
           onClick={submit}>{ready.length ? t('添加 {0} 款').replace('{0}', ready.length) : t('添加')}</Button>
       </Space>
     </div>}>
-    <Typography.Paragraph type="tertiary" className="channel-model-batch-context">
-      {[channel.name, provider.name !== channel.name && provider.name, sourceFormatLabel(targetFormat), endpoint.baseUrl].filter(Boolean).join(' · ')}
-    </Typography.Paragraph>
+    <dl className="channel-model-batch-context">
+      {channelDetails.map(([label, value]) => <div key={label}>
+        <dt><Typography.Text type="secondary" size="small">{label}</Typography.Text></dt>
+        <dd><Typography.Text strong>{value || '—'}</Typography.Text></dd>
+      </div>)}
+    </dl>
     <Tabs activeKey={tab} onChange={key => { setOnlySelected(false); changeFilter(setTab, key); }}>
-      <Tabs.TabPane itemKey="provider" tab={t('从服务商选择')}/>
-      <Tabs.TabPane itemKey="library" tab={t('从基础资料选择')}/>
+      <Tabs.TabPane itemKey="provider" tab={t('当前服务商模型')}/>
+      <Tabs.TabPane itemKey="library" tab={t('全部模型')}/>
     </Tabs>
+    <Space wrap>
+      <Typography.Text type="secondary">{t('模型资料来自「基础资料 → 模型」')}</Typography.Text>
+      <Typography.Text link={{ href: '#/admin-2/model-templates', target: '_blank', rel: 'noopener noreferrer' }}>
+        {t('维护模型')}
+      </Typography.Text>
+    </Space>
     <div className="channel-model-batch-filters">
       <SearchBox value={query} onChange={value => changeFilter(setQuery, value)} placeholder={t('搜索名称、编码、类型或上游标识')}/>
       <Select insetLabel={t('接口格式')} insetLabelId={filterId + '-format'} aria-labelledby={filterId + '-format'}
