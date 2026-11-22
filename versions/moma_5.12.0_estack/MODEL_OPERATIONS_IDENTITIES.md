@@ -21,7 +21,7 @@
 | provider／Provider ID | provider.id | provider_id | provider- | suppliers.id |
 | connection／连接 ID | connection.id | connection_id | connection- | channels.id |
 | channel／渠道 ID | channel.id | channel_id | channel- | channel_models.id |
-| model／模型 ID | model.id | model_id | model- | materials.id |
+| model／模型档案 ID | model.id | model_id | model- | materials.id |
 | model_service／模型服务 ID | model_service.id | model_service_id | model_service- | offers.record_id |
 
 保留物理表结构；存量主键按上述专用整改统一，资源映射从 modelData.resourceIds、mappingIds 读取，读取不生成新 ID。模型级服务配置仍保留 services.id；管理导出使用 model_service_config_id 区分这层内部配置。
@@ -40,7 +40,7 @@
 | 模型类型 | type | 按现有类型字典维护，不按名称或是否支持图片推断；服务从所选模型继承 | MoMA 分类字段 |
 | 模型简介／模型作者 | description／profile.author | 广场维护最终展示内容，资料库维护参考内容；作者与接入服务商分别表达 | description 沿用 OpenRouter 同名字段，profile.author 为 MoMA 资料字段 |
 | 模型编码 | canonical_slug | 如 glm-5.3，同一型号与版本跨服务商一致。新录入去除首尾空白，1–80 字符，小写字母或数字开头，允许小写字母、数字及 . _ : / -；不随接入服务商添加命名空间 | 沿用 OpenRouter 字段名；跨服务商取值规则为 MoMA 约定 |
-| 模型调用标识 | call_id | 平台对外调用值，可按生命周期规则修改，保留大小写；兼容目录的 id 和推理请求的 model 使用此值 | call_id 为 MoMA 管理字段；id／model 为协议字段 |
+| 模型 ID | call_id | 平台对外调用值，可按生命周期规则修改，保留大小写；兼容目录的 id 和推理请求的 model 使用此值 | call_id 为 MoMA 管理字段；id／model 为协议字段 |
 | 上游模型调用标识 | upstream_model_id | 渠道维护的实际上游调用值，保留大小写及完整字符串，可因渠道不同而不同 | MoMA 自有字段 |
 | 模型服务配置 ID | model_service_config_id | 关联模型级技术配置；不替代具体入口的 model_service_id | MoMA 自有字段 |
 | 服务商名称／服务商编码 | provider.name／slug | 名称可编辑，编码创建后固定；现有内部 code 保留 | MoMA 管理约定 |
@@ -56,7 +56,7 @@ OpenRouter 字段依据：[模型目录接口](https://openrouter.ai/docs/api/ap
 
 既有模型编码、调用值和 ID 不做批量格式修复。旧内部键 `modelTemplates.modelId` 表示模型编码，`models.modelId` 在统一服务中表示调用值，关联记录的 `modelId` 可能表示内部引用；必须按对象解析，不能按同名键直接联表。
 
-旧服务商目录接口中的 `catalogModels[].modelId`、`catalogModelIds` 是服务商范围内的目录标识，保留已有大小写及专用输入校验；它既不是模型永久 ID，也不能直接充当全局模型编码。当前接入通过 `libraryId`／明确模型 ID 建立身份引用，新流程不新增通用“Model ID”同义字段。
+旧服务商目录接口中的 `catalogModels[].modelId`、`catalogModelIds` 是服务商范围内的目录标识，保留已有大小写及专用输入校验；它既不是模型永久 ID，也不能直接充当全局模型编码。当前接入通过 `libraryId`／明确模型档案 ID 建立身份引用，新流程不新增通用“Model ID”同义字段。
 
 服务商目录首次导入按模型编码精确匹配参考资料：同编码复用原 model.id 并保留已有内容，不同编码独立登记。模型展示名允许重复，不作为冲突判断或合并依据；上游调用值也不用于推断模型身份。后续维护使用永久 ID。
 
@@ -76,7 +76,7 @@ OpenRouter 字段依据：[模型目录接口](https://openrouter.ai/docs/api/ap
 
 ## 批量维护 JSON
 
-四模块的“查看 JSON”进入独立下钻页，完整内容按页面自然高度展示，不截断、不使用固定高度文本框。对象和数组支持逐层展开／收起以及全部展开／收起，默认全部展开；收起后显示字段或项目数量，空对象、空数组及基本值完整保留。折叠仅影响浏览，完整复制与批量维护始终使用完整 JSON。总表入口位于模块页头；服务商、模型和服务详情入口位于当前对象信息区右侧。广场模型卡片／列表操作提供模型级入口。JSON 页标题显示当前对象，支持完整复制；渠道管理服务商详情及对应 JSON 页只提供查看和复制，不提供批量维护，渠道表的批量操作保持；渠道管理其他范围、模型广场和模型售价保留批量维护，模型服务不提供批量维护入口；返回及面包屑恢复来源筛选、页码、详情和滚动位置。
+提供“查看 JSON”的模块通过该入口进入独立下钻页，完整内容按页面自然高度展示，不截断、不使用固定高度文本框。对象和数组支持逐层展开／收起以及全部展开／收起，默认全部展开；收起后显示字段或项目数量，空对象、空数组及基本值完整保留。折叠仅影响浏览，完整复制与批量维护始终使用完整 JSON。总表入口位于模块页头；服务商、模型和服务详情入口位于当前对象信息区右侧。JSON 页标题显示当前对象，支持完整复制；渠道管理服务商详情及对应 JSON 页只提供查看和复制，不提供批量维护，渠道表的批量操作保持；渠道管理其他范围和模型售价保留批量维护，模型服务页面不提供批量维护入口，模型广场页面不提供查看及批量维护 JSON 的入口；返回及面包屑恢复来源筛选、页码、详情和滚动位置。
 
 ### 范围与结构
 
@@ -144,4 +144,4 @@ UUID 和主键约束之外，所有普通更新入口禁止改写永久 ID。价
 
 批量启用、停用和移除均使用所选渠道关联的原 ID；启停与地址共享修改分开，停用不改共享连接及未选关联。恢复连接时未选关联保持停用，须展示范围并确认。批量移除以全部所选关联的并集校验引用，沿用关联处理与风险确认，软归档保留原 ID；只有没有其他实际关联的连接才可归档。服务商、模型资料、价格和历史不随渠道移除。
 
-新增渠道的模型展示名与模型编码联动引用同一已有模型 ID；目录外新模型显式填写类型并通过既有接入事务创建，不按同名合并、重写或重建存量 ID。上游地址选择项与服务商 Base URL 展示同源；新建取首项，已有配置保留原值。
+新增渠道的模型展示名与模型编码联动引用同一已有模型档案 ID；目录外新模型显式填写类型并通过既有接入事务创建，不按同名合并、重写或重建存量 ID。上游地址选择项与服务商 Base URL 展示同源；新建取首项，已有配置保留原值。

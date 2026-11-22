@@ -16,7 +16,6 @@ import { canAccessPage } from './navigation.mjs';
 import { adminProjectHref } from './access-control.mjs';
 import { useTenantData } from '../useTenantData';
 import { ProjectCreateDialog } from '../components/ProjectConfiguration';
-import AdminActionMenu from './AdminActionMenu';
 
 const { Text, Title } = Typography;
 const time = value => Number.isFinite(Date.parse(value))
@@ -181,8 +180,9 @@ export default function CustomerProjectDetails({ state, tenant, projectId, navig
       ...(page==='customer-usage-detail' && {period:'today',...(internal && {scope:'organization'})}),
       ...(page==='logs' && {view:'requests'}),
     });
-    return {node:'item',key:page,name:internal && page==='customer-usage-detail' ? '项目成本归集' : label,
-      onClick:()=>window.open('#/admin-2/'+page+'?'+params,'_blank','noopener')};
+    return <Button key={page} onClick={() => window.open('#/admin-2/'+page+'?'+params,'_blank','noopener')}>
+      {internal && page==='customer-usage-detail' ? '项目成本归集' : label}
+    </Button>;
   });
   const spendBudget = activeProjectSpendBudget(project);
   const spend = spendBudget && projectSpend(state, project, null, Date.now(), internal);
@@ -201,7 +201,7 @@ export default function CustomerProjectDetails({ state, tenant, projectId, navig
       </Space>
       <Space wrap>
         {enterprise && <Button theme="borderless" type="tertiary" onClick={()=>navigate({project:''})}>返回项目列表</Button>}
-        {records.length>0 && <AdminActionMenu label="查看项目记录" items={records}>查看记录</AdminActionMenu>}
+        {records}
         {manageProjects && project.status!=='已删除' && <Button onClick={()=>
           window.open(adminProjectHref({tenant:tenant.id,project:project.id}),'_blank','noopener')}>配置项目</Button>}
       </Space>

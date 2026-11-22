@@ -833,8 +833,8 @@ export function operationsTransaction(state, action) {
         if (directoryTags.length > 10) throw Error(name + '：每条连接最多设置 10 个标签');
         if (JSON.stringify(directoryTags) !== JSON.stringify(previous)) update('endpoints', endpoint.id, { directoryTags });
       } else {
-        if (endpoint.frozen || endpoint.candidateConfiguration || endpoint.serverTestJobs?.some(job => !job.receivedAt && !job.canceledAt)) throw Error(name + '：请先处理冻结、待验证配置或未完成的测试');
         if (data.action === 'enable') {
+          if (endpoint.frozen || endpoint.candidateConfiguration || endpoint.serverTestJobs?.some(job => !job.receivedAt && !job.canceledAt)) throw Error(name + '：请先处理冻结、待验证配置或未完成的测试');
           if (!supplierChannelAssociations(working, provider, endpoint.id).length) throw Error(name + '：请先新增模型渠道');
           providerOp('supplierChannelEnable', provider.id, { endpointId: endpoint.id });
           if (data.associationIds?.length) {

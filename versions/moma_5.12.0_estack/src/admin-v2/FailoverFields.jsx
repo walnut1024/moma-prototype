@@ -1,0 +1,63 @@
+import { InputNumber, Table, Tag } from '@douyinfe/semi-ui';
+import { failoverFields, retryTypes, savedRetryPolicy } from './global-routing-parameters.mjs';
+
+import './failover-fields.css';
+
+const parameterNames = { numRetries: 'num_retries', retryAfter: 'retry_after', timeout: 'timeout',
+  allowedFails: 'allowed_fails', cooldownTime: 'cooldown_time', max_fallbacks: 'max_fallbacks' };
+
+const retryStatus = {
+  RateLimitErrorRetries: '429 · 请求受到限流',
+  TimeoutErrorRetries: '408 · 也可能是 SDK 等待超时，未收到 HTTP 响应',
+  InternalServerErrorRetries: '5xx · 常见为 500，且被归类为内部错误',
+  ServiceUnavailableErrorRetries: '503 · 服务暂时不可用',
+  BadRequestErrorRetries: '400 · 参数或请求格式有误',
+  AuthenticationErrorRetries: '401 · 上游凭证无效',
+  ContentPolicyViolationErrorRetries: '400 · 错误详情表明触发内容策略',
+  NotFoundErrorRetries: '404 · 模型或资源不存在',
+  DefaultRetries: '无固定状态码 · 未命中已配置的具体重试规则',
+};
+
+export default function FailoverFields({ values, change, disabled, showRetryInterval = false }) {
+  const policy = savedRetryPolicy(values);
+  const fields = [...failoverFields];
+  if (showRetryInterval) fields.splice(1, 0, ['retryAfter', '最短重试间隔', '秒']);
+  fields.push(['max_fallbacks', '最大降级次数', '次']);
+  function updateRetry(key, count) {
+    const next = { ...policy };
+    if (count === '' || count == null) delete next[key];
+    else next[key] = count;
+    change({ retry_policy: next });
+  }
+  function parameter([key, label, unit]) {
+    const value = key === 'max_fallbacks' && values[key] === undefined ? (values.failoverEnabled ? 5 : 0) : values[key];
+    return <div className="fp-parameter" key={key}>
+      <div>{label}<code>{parameterNames[key]}</code></div>
+      {disabled ? <strong aria-label={label}>{value} <small>{unit}</small></strong> :
+        <InputNumber aria-label={label} min={0} value={value ?? ''} suffix={unit}
+          disabled={key === 'retryAfter' && values.numRetries === 0 && !Object.values(policy).some(n => n > 0)}
+          onChange={number => change({ [key]: number === '' ? null : number })}/>}
+    </div>;
+  }
+  const rows = Object.entries(retryTypes).map(([key,label]) => {
+    const [status, detail] = retryStatus[key].split(' · ');
+    return {key,label,status,detail};
+  });
+  return <div className="failover-policy">
+    <div className="fp-groups">
+      <section><h3>请求与重试</h3>{fields.filter(([key]) => ['numRetries','retryAfter','timeout'].includes(key)).map(parameter)}</section>
+      <section><h3>故障判定与降级</h3>{fields.filter(([key]) => ['allowedFails','cooldownTime','max_fallbacks'].includes(key)).map(parameter)}</section>
+    </div>
+    <h3 className="fp-title">异常重试规则 <code>retry_policy</code></h3>
+    <p>未指定时使用 Router 的其余重试规则，0 次表示该类异常不重试。</p>
+    <Table className="fp-retry-table" size="small" rowKey="key" pagination={false} dataSource={rows} columns={[
+      {title:'异常类型', width:284, render:(_,row) => <div>{row.label}<code>{row.key}</code></div>},
+      {title:'典型 HTTP 状态码', width:144, render:(_,row) => <Tag>{row.status}</Tag>},
+      {title:'判断依据', render:(_,row) => row.detail},
+      {title:'重试次数', width:120, render:(_,row) => disabled
+        ? <span aria-label={row.key}>{policy[row.key] == null ? '未指定' : policy[row.key] + ' 次'}</span>
+        : <InputNumber aria-label={row.key} min={0} step={1} value={policy[row.key] ?? ''} placeholder="未指定"
+            onChange={value => updateRetry(row.key,value)}/>}
+    ]}/>
+  </div>;
+}

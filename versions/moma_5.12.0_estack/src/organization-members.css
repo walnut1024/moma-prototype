@@ -55,6 +55,11 @@
 .front-members-workspace .org-members-panel>.org-member-scroll{flex:1;min-height:0;overflow:auto}
 .front-members-workspace .org-department-head{padding:12px 16px}
 .org-head-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.admin-members-workspace .org-department-head{flex-wrap:wrap}
+.admin-members-workspace .org-head-actions{max-width:100%}
+.admin-members-workspace .org-row-actions{flex-wrap:wrap}
+.admin-members-workspace .org-tree-select{padding-right:48px}
+.admin-members-workspace .org-expand{right:26px}
 .front-members-workspace .org-department-info h2{overflow-wrap:anywhere}
 .front-members-workspace .org-filters{padding:8px 16px}
 .front-members-workspace .org-filters .org-search{min-width:170px}

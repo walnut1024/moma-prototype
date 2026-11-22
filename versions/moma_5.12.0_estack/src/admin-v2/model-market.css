@@ -3,6 +3,9 @@
 .market-list-identity,
 .market-list-identity > .semi-typography { width: 100%; min-width: 0; }
 .market-list-actions .semi-button { padding-inline: 4px; white-space: nowrap; }
+.market-link-dialog .ss-dialog-content > section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.market-link-service-identity { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.market-context-field { display: grid; grid-template-columns: minmax(0, 1fr) 80px; gap: 8px; }
 
 .market-card-grid {
   display: grid;

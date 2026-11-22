@@ -5,7 +5,7 @@ import { parseAdminState, commitAdminState, serializeAdminState } from '../src/a
 import { channelOnboardingTransaction, channelDrafts, channelDraftIssue, previewChannelModels, validateChannelRows } from '../src/admin-v2/channel-onboarding.js';
 import { libraryRemovalIssue } from '../src/admin-v2/model-library.js';
 import { resolveChannelAssociationModel } from '../src/admin-v2/channel-association-model.js';
-import { channelEvidenceSignature, candidateTestPlan } from '../src/admin-v2/channel-change-management.js';
+import { channelChangeImpact, channelEvidenceSignature, candidateTestPlan } from '../src/admin-v2/channel-change-management.js';
 import { catalogueChannels, channelBlockReason } from '../src/admin-v2/provider-channels.js';
 import { connectionFingerprint, connectionTestKey } from '../src/admin-v2/connection-state.js';
 import { activeSupplyPrice, priceItems } from '../src/admin-v2/model-management.js';
@@ -325,3 +325,28 @@ test('temporary receipts retain the same safe execution summary without changing
   for (const raw of ['temporary-sensitive-value', 'temporary-raw-prompt', 'temporary-raw-response']) assert.ok(!JSON.stringify(next).includes(raw));
   assert.deepEqual(next.providers, before.providers); assert.deepEqual(next.serviceRoutes, before.serviceRoutes); assert.deepEqual(next.endpoints.find(row => row.id === f.endpointId).connectionTest, before.endpoints.find(row => row.id === f.endpointId).connectionTest);
 });
+
+for (const result of ['passed', 'failed']) {
+  test('manual disable survives a pending detection receipt: ' + result, () => {
+    const f = ordinaryFixture(true);
+    const job = ordinaryJob(f.s, f);
+    const batch = ordinaryBatch(job, result);
+    const endpoint = state => state.endpoints.find(row => row.id === f.endpointId);
+    const pending = run(run(f.s, 'channelTestEvidenceJob', job), 'channelTestEvidenceJob', { ...job, batchId: batch.id });
+    function operate(state, action, confirmed = true) {
+      const target = { providerId: f.providerId, endpointId: f.endpointId, expectedUpdatedAt: endpoint(state).updatedAt,
+        expectedImpactRevision: channelChangeImpact(state, f.providerId, f.endpointId).revision };
+      return run(state, 'channelDirectoryOperate', { action, confirmed, targets: [target] });
+    }
+    assert.throws(() => operate(pending, 'disable', false), /确认/);
+    const stopped = operate(pending, 'disable');
+    assert.equal(endpoint(stopped).status, '停用');
+    assert.throws(() => operate(stopped, 'enable'), /未完成/);
+    const received = ordinaryReceive(stopped, f, batch);
+    assert.ok(endpoint(received).serverTestJobs.find(row => row.batchId === batch.id).receivedAt);
+    assert.equal(ordinaryRow(received, f).health.result, result === 'passed' ? '通过' : '失败');
+    assert.equal(endpoint(received).status, '停用');
+    assert.equal(endpoint(received).activationSource, 'manual');
+    assert.equal(endpoint(received).activationChangedAt, endpoint(stopped).activationChangedAt);
+  });
+}

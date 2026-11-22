@@ -1,3 +1,4 @@
+import TableFieldHelp from '../components/TableFieldHelp';
 import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
@@ -109,9 +110,9 @@ export function Sla({ state }) {
       <Table size="small" rowKey="id" pagination={false} dataSource={rows} scroll={{ x: 'max(100%, 840px)' }} columns={[
         { title: 'Model ID', dataIndex: 'model' },
         { title: '样本数', dataIndex: 'count', align: 'right' },
-        { title: '可用率', dataIndex: 'available', align: 'right', render: value => `${value.toFixed(2)}%` },
-        { title: 'P50 延迟', dataIndex: 'p50', align: 'right', render: value => `${value} ms` },
-        { title: 'P95 延迟', dataIndex: 'p95', align: 'right', render: value => `${value} ms` },
+        { title: <TableFieldHelp name="可用率" description="HTTP 状态码低于 400 的请求样本占全部样本的比例。"/>, dataIndex: 'available', align: 'right', render: value => `${value.toFixed(2)}%` },
+        { title: <TableFieldHelp name="P50 延迟" description="请求耗时的中位数，单位为毫秒。"/>, dataIndex: 'p50', align: 'right', render: value => `${value} ms` },
+        { title: <TableFieldHelp name="P95 延迟" description="请求耗时的第 95 百分位，单位为毫秒。"/>, dataIndex: 'p95', align: 'right', render: value => `${value} ms` },
         { title: '故障事件', dataIndex: 'incidents', align: 'right' },
         { title: 'SLA 目标', align: 'right', render: () => '≥ 99.00%' },
         { title: '结果', render: (_, row) => <AdminStatus value={row.available >= 99 ? '达标' : '未达标'}/> },

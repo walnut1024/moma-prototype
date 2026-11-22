@@ -95,7 +95,7 @@ test('reads browser records for explicit import with all original fields', () =>
 test('service creation permits an unlinked record and limits new or updated descriptions to 300 characters', () => {
   const draft = { name: '模型服务', callId: 'example/model', description: '字'.repeat(300) };
   const longer = { ...draft, description: draft.description + '字' };
-  assert.match(serviceFormIssue({ ...draft, callId: '' }, []), /请填写模型调用标识/);
+  assert.equal(serviceFormIssue({ ...draft, callId: '' }, []), '请填写模型 ID');
   assert.equal(serviceFormIssue(draft, []), '');
   assert.match(serviceFormIssue(longer, []), /不能超过 300 字/);
   assert.equal(serviceFormIssue({ ...longer, name: '更名' }, [{ ...longer, id: 'old' }], 'old'), '');

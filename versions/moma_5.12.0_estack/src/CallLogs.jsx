@@ -1,3 +1,5 @@
+import TableFieldHelp from './components/TableFieldHelp';
+import { callLogFieldHelp } from './components/call-log-field-help';
 import {useTenantData} from './useTenantData';
 import {tenantLogRecords} from './call-log-data.mjs';
 import FrontPageHeader from "./components/FrontPageHeader";
@@ -116,17 +118,17 @@ export default function CallLogs({ billing = '全部', projectId, requestId, spa
         onClick={()=>setSelected(log.id)}><code>{log.id.slice(0,8)}…{log.id.slice(-4)}</code></Button>
       <IconAction label={`复制 Request ID ${log.id}`} icon={Copy} onClick={()=>copyId(log.id)} />
     </div> },
-    { title:'模型 ID',width:165,dataIndex:'model' },
+    { title: <TableFieldHelp name="模型 ID" description={callLogFieldHelp.callId}/>, width:165,dataIndex:'model' },
     { title:'服务 / 套餐',width:170,render:(_,log)=><>{log.resource || log.endpointName || '—'}
       <small className="cl-cell-sub" title={[log.billing, log.resourceId || log.endpointId].filter(Boolean).join(' · ')}>
         {log.billing}{(log.resourceId || log.endpointId) && ` · ${log.resourceId || log.endpointId}`}</small></> },
     { title:'API Key',width:108,render:(_,log)=><code>{maskApiKey(log.apiKey)}</code> },
     { title:'状态码',width:80,render:(_,log)=><Tag color={log.status===200?'green':'red'} title={logStatuses[log.status]?.[0] || '未定义状态'}>{log.status ?? '—'}</Tag> },
     ...[['输入 Tokens','input'],['输出 Tokens','output'],['缓存命中 Tokens','cache']].map(([title,key])=>({
-      title,width:112,align:'right',render:(_,log)=><span title={log[key]==null?'本次请求未返回此用量字段':undefined}>{number(log[key])}</span>,
+      title: key === 'cache' ? <TableFieldHelp name={title} description={callLogFieldHelp.cache}/> : title, width:112, align:'right',render:(_,log)=><span title={log[key]==null?'本次请求未返回此用量字段':undefined}>{number(log[key])}</span>,
     })),
-    { title:'首 Token 时延',width:105,align:'right',render:(_,log)=>number(log.first) },
-    { title:'总时延',width:86,align:'right',render:(_,log)=>number(log.duration) },
+    { title: <TableFieldHelp name="首 Token 时延" description={callLogFieldHelp.ttft}/>, width:105,align:'right',render:(_,log)=>number(log.first) },
+    { title: <TableFieldHelp name="总时延" description={callLogFieldHelp.duration}/>, width:86,align:'right',render:(_,log)=>number(log.duration) },
     { title:'操作',width:64,fixed:'right',align:'center',render:(_,log)=>
       <IconAction label={`查看请求详情 ${log.id}`} icon={Eye} onClick={()=>setSelected(log.id)} /> },
   ];

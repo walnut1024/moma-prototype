@@ -1,16 +1,22 @@
 import { useId, useMemo, useState } from 'react';
 import { Button, Checkbox, DatePicker, Input, InputNumber, RadioGroup, Select, Space, TagInput, TextArea, Typography } from '@douyinfe/semi-ui';
+import { IconSearch } from '@douyinfe/semi-icons';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { CopyId, Field, Modal, Notice } from './ServiceUI';
 import { marketCardFeatures, marketCardFieldError, marketCardFieldValues, marketCardIssues, marketCardOutputOptions,
-  marketCardLinkableServices, marketCardServices, marketCardStatus, marketCardStatuses, marketScopeOptions, scopeFields } from '../market-cards.mjs';
+  marketCardLinkableServices, marketCardServices, marketCardStatus, marketCardStatuses, marketScopeOptions } from '../market-cards.mjs';
 import { MODEL_TYPES } from './model-management';
 import { INPUT_MODALITY_OPTIONS } from './model-profile';
+import { materialContextUnit, materialContextUnits } from './model-material-fields';
 
 const options = entries => Object.entries(entries).map(([value, label]) => ({ value, label }));
 const modalityOptions = values => values.map(value => ({ value, label: value }));
-const blankScope = { type: 'selected', tenantIds: [] };
+const contextOptions = modalityOptions(Object.keys(materialContextUnits));
+const cardContext = tokens => {
+  const unit = materialContextUnit(tokens);
+  return { unit, amount: tokens > 0 ? String(tokens / materialContextUnits[unit]) : '' };
+};
 
 export default function MarketCardDialogs({ kind, row, state, ops, materials, internal, close, open }) {
   const creating = kind === 'create';
@@ -18,13 +24,14 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
   const [sourceId, setSourceId] = useState('');
   const [revision] = useState(state.revision);
   const [values, setValues] = useState(() => marketCardFieldValues(row));
+  const [context, setContext] = useState(() => cardContext(values.context_length));
   const [importMaterial, setImportMaterial] = useState(false);
   const formId = useId();
   const services = useMemo(() => linking ? marketCardLinkableServices(state, row.modelId)
     : row?.modelId ? marketCardServices(state, row.modelId) : [], [state, linking, row?.modelId]);
-  const [linked, setLinked] = useState(() => (row?.card.linked || []).filter(id => services.some(service => service.id === id)));
+  const [linked, setLinked] = useState(row?.card.linked || []);
   const [status, setStatus] = useState(() => row && marketCardStatus(row.card));
-  const [scope, setScope] = useState(() => row?.card.scope.type === 'selected' ? row.card.scope : blankScope);
+  const [tenantIds, setTenantIds] = useState(() => row?.card.scope.tenantIds || []);
   const [shown, setShown] = useState(() => row?.card.shown.length
     ? row.card.shown.filter(id => linked.includes(id))
     : services.filter(service => service.started && linked.includes(service.id)).map(service => service.id));
@@ -58,24 +65,26 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
   </>;
 
   if (creating || kind === 'edit') {
-    const disabled = unavailable || creating && importMaterial && !sourceId;
+    const disabled = unavailable || importMaterial && !sourceId;
+    const tokens = context.amount.trim() ? Number(context.amount) * materialContextUnits[context.unit] : '';
     const submit = (goNext = false) => {
       if (disabled) return;
-      const error = marketCardFieldError(values);
+      const data = { ...values, context_length: tokens, ...(importMaterial && { source_model_id: sourceId }) };
+      const error = marketCardFieldError(data);
       if (error) { ops.setError(error); return; }
-      void save(creating ? 'marketCardCreate' : 'marketCardEdit', {
-        ...values, ...(creating && importMaterial && { source_model_id: sourceId }),
-      }, goNext);
+      void save(creating ? 'marketCardCreate' : 'marketCardEdit', data, goNext);
     };
     const chooseModel = id => {
       setSourceId(id);
-      copyCardInfo(materials.find(item => item.id === id));
-      ops.dirty(true);
-    };
-    const copyCardInfo = model => {
+      const model = materials.find(item => item.id === id);
       if (!model) return;
       const info = marketCardFieldValues(model);
-      setValues(current => ({ ...info, name: current.name, heat: current.heat, features: current.features }));
+      const provided = Object.fromEntries(Object.entries(info).filter(([key, value]) =>
+        !['name', 'heat', 'features', 'context_length'].includes(key) && (Array.isArray(value) ? value.length : value !== '')));
+      setValues(current => ({ ...current, ...provided }));
+      if (Number.isSafeInteger(info.context_length) && info.context_length > 0) setContext(cardContext(info.context_length));
+      ops.setError('');
+      ops.dirty(true);
     };
     const numberField = (key, properties = {}) => <InputNumber style={{ width: '100%' }} {...properties}
       value={values[key]} onChange={value => update(key, value === '' ? '' : Number(value))}/>;
@@ -85,7 +94,7 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
       footer={creating ? <>
         <Button disabled={busy} onClick={cancel}>取消</Button>
         <Button form={formId} htmlType="submit" disabled={disabled}>仅创建</Button>
-        <Button theme="solid" loading={busy} disabled={disabled} onClick={() => submit(true)}>创建并关联服务</Button>
+        <Button theme="solid" loading={busy} disabled={disabled} onClick={() => submit(true)}>创建并关联模型服务</Button>
       </> : <>
         <Button disabled={busy} onClick={cancel}>取消</Button>
         <Button form={formId} htmlType="submit" theme="solid" loading={busy} disabled={disabled}>保存修改</Button>
@@ -97,15 +106,15 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
         </div>
         <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
           <Typography.Title heading={6}>卡片信息</Typography.Title>
-          {creating && <RadioGroup type="button" aria-label="卡片信息填写方式"
+          <RadioGroup type="button" aria-label="卡片信息填写方式" disabled={unavailable}
             value={importMaterial ? 'import' : 'manual'} options={options({ manual: '手动填写', import: '从基础资料导入' })}
             onChange={event => {
               setImportMaterial(event.target.value === 'import');
               setSourceId('');
               ops.dirty(true);
-            }}/>}
+            }}/>
         </Space>
-        {creating && importMaterial && <Field label="模型资料名称" required>
+        {importMaterial && <Field label="模型资料名称" required>
           <Select filter style={{ width: '100%' }} placeholder="请选择模型资料" value={sourceId || undefined}
             optionList={materials.map(item => ({ value: item.id, label: `${item.name} · ${item.modelId}` }))}
             onChange={chooseModel}/>
@@ -115,7 +124,17 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
           <Field label="模型中文简介" required><TextArea rows={3} value={values.description} maxLength={5000} onChange={value => update('description', value)}/></Field>
           <Field label="模型英文简介" required><TextArea rows={3} value={values.description_en} maxLength={5000} onChange={value => update('description_en', value)}/></Field>
           <Field label="模型类型" required><Select style={{ width: '100%' }} optionList={options(MODEL_TYPES)} value={values.type || undefined} onChange={value => update('type', value)}/></Field>
-          <Field label="上下文长度" required>{numberField('context_length', { min: 1, suffix: 'Token' })}</Field>
+          <Field label="上下文长度" required>
+            <div className="market-context-field">
+              <Input aria-label="上下文长度" aria-required inputMode="decimal" value={context.amount}
+                onChange={amount => { setContext({ ...context, amount }); ops.dirty(true); }}/>
+              <Select aria-label="上下文长度单位" value={context.unit} optionList={contextOptions}
+                onChange={unit => {
+                  setContext({ unit, amount: Number.isFinite(tokens) ? String(tokens / materialContextUnits[unit]) : context.amount });
+                  ops.dirty(true);
+                }}/>
+            </div>
+          </Field>
           <Field label="模型系列" required><Input value={values.family} maxLength={100} onChange={value => update('family', value)}/></Field>
           <Field label="模型精度" required><Input value={values.precision} maxLength={100} onChange={value => update('precision', value)}/></Field>
           <Field label="输入模态" required>{multi('input_modalities', INPUT_MODALITY_OPTIONS)}</Field>
@@ -137,56 +156,87 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
   }
 
   const listing = status === 'formal' || status === 'gray';
-  const selected = linking ? linked : shown;
-  const selectedModel = linking && services.find(service => linked.includes(service.id))?.modelId;
-  const entries = (linking ? services : services.filter(service => linked.includes(service.id)))
-    .filter(service => `${service.name} ${service.callId}`.toLowerCase().includes(search.trim().toLowerCase()));
-  const scopeOptions = marketScopeOptions(state);
-  const companyId = internal ? state.spacePolicy?.internalTenantId : null;
-  const updateScope = value => { setScope(value); ops.dirty(true); };
+  const savedLinks = new Set(row.card.linked);
+  const selectedModel = row.modelId || services.find(service => linked.includes(service.id))?.modelId;
+  const serviceById = new Map(services.map(service => [service.id, service]));
+  const linkedRows = linked.filter(id => savedLinks.has(id)).map(id => serviceById.get(id) || { id });
+  const candidates = services.filter(service => !(savedLinks.has(service.id) && linked.includes(service.id)));
+  const matches = service => [service.serviceName, service.name, service.callId, service.id].join(' ')
+    .toLowerCase().includes(search.trim().toLowerCase());
+  const showing = service => row.card.status === 'listed' && row.card.shown.includes(service.id) && serviceById.has(service.id);
+  const changeLink = id => { setLinked(current => toggle(current, id)); ops.dirty(true); };
+  const callIdColumn = { title: '模型 ID', render: (_, service) => <CopyId value={service.callId} label="模型 ID" copyAtStart ellipsis/> };
+  const stateColumn = { title: '服务状态', width: 100, render: (_, service) =>
+    service.callId ? <AdminStatus value={service.started ? '已启用' : '已停止'}/> : '不可用' };
+  const serviceColumns = [
+    { title: '模型服务名称 / ID', render: (_, service) => <div className="market-link-service-identity">
+      {service.serviceName && <Typography.Text ellipsis={{ showTooltip: true }}>{service.serviceName}</Typography.Text>}
+      <CopyId value={service.id} label="模型服务 ID" copyAtStart ellipsis/>
+    </div> },
+    ...(!row.modelId ? [{ title: '模型', dataIndex: 'name' }] : []),
+    callIdColumn, stateColumn,
+  ];
+  const scopeOptions = marketScopeOptions(state).filter(row => !internal || row.value === state.spacePolicy?.internalTenantId);
+  const scope = { type: 'selected', tenantIds };
   const issues = linking || !listing ? [] : marketCardIssues({
     ...row.card, content: row.card.content || { name: row.name, description: row.description }, shown,
     scope: status === 'gray' ? scope : { type: 'all' },
   }, services);
   const linkChanged = linked.length !== row.card.linked.length || linked.some(id => !row.card.linked.includes(id));
-  return <Modal wide centered={!linking} drawer={linking} title={linking ? '关联服务' : '上架状态设置'}
+  return <Modal wide centered={!linking} drawer={linking} className={linking ? 'market-link-dialog' : ''} title={linking ? '关联模型服务' : '设置可见性'}
     description={row.name} onClose={cancel}
     footer={linking ? footer('保存关联', () => save('marketCardLink', { serviceIds: linked }), !linkChanged)
-      : footer(status === 'withdrawn' ? '确认下架' : '保存状态', () => save('marketCardSetStatus', {
+      : footer('保存可见性', () => save('marketCardSetStatus', {
         listing_stage: status, ...(listing && { serviceIds: shown }), ...(status === 'gray' && { scope }),
       }), !Object.hasOwn(marketCardStatuses, status) || issues.length > 0, status === 'withdrawn')}>
-    {linking && <Field label="筛选服务"><Input value={search} placeholder="搜索模型或模型调用标识" onChange={setSearch}/></Field>}
-    {!linking && <Field label="上架状态" required><Select style={{ width: '100%' }} optionList={options(marketCardStatuses)}
-      placeholder="请选择上架状态" value={Object.hasOwn(marketCardStatuses, status) ? status : undefined}
+    {linking && <>
+      <section aria-label="已关联模型服务">
+        <Typography.Title heading={6}>已关联模型服务（{linkedRows.length}）</Typography.Title>
+        <Table rowKey="id" dataSource={linkedRows} pagination={false} scroll={{ x: 'max(100%, 600px)' }}
+          empty="还没有关联模型服务" columns={[...serviceColumns, {
+            title: '操作', width: 88, fixed: 'right', render: (_, service) => showing(service)
+              ? <Typography.Text type="tertiary">展示中</Typography.Text>
+              : <Button theme="borderless" size="small" type="danger" disabled={unavailable}
+                aria-label={`移除 ${service.callId || service.id}`} onClick={() => changeLink(service.id)}>移除</Button>,
+          }]}/>
+        {linkedRows.some(showing) && <Typography.Text type="tertiary">展示中的服务需先在「设置可见性」中取消展示，再移除关联。</Typography.Text>}
+      </section>
+      <section aria-label="添加模型服务">
+        <Typography.Title heading={6}>添加模型服务</Typography.Title>
+        <Input showClear prefix={<IconSearch aria-hidden="true"/>} aria-label="搜索可关联模型服务" value={search}
+          placeholder="搜索服务名称、模型 ID 或模型服务 ID" onChange={setSearch}/>
+        {!row.modelId && <Typography.Text type="tertiary">可选择同一模型下的多个服务。</Typography.Text>}
+        <Table rowKey="id" dataSource={candidates.filter(matches)} pagination={false} scroll={{ x: 'max(100%, 600px)' }}
+          empty={search.trim() ? '没有匹配的模型服务' : '暂无可添加的模型服务'}
+          columns={[{ title: '选择', width: 64, render: (_, service) => <Checkbox aria-label={`选择 ${service.callId}`}
+            checked={linked.includes(service.id)} disabled={unavailable || Boolean(selectedModel && selectedModel !== service.modelId)}
+            onChange={() => changeLink(service.id)}/> }, ...serviceColumns]}/>
+        {linked.length > linkedRows.length && <Typography.Text type="tertiary">已选 {linked.length - linkedRows.length} 个待添加服务</Typography.Text>}
+      </section>
+    </>}
+    {!linking && <Field label="可见性" required><Select style={{ width: '100%' }} optionList={options(marketCardStatuses)}
+      placeholder="请选择可见性" value={Object.hasOwn(marketCardStatuses, status) ? status : undefined}
       onChange={value => { setStatus(value); ops.dirty(true); }}/></Field>}
-    {!linking && status === 'preview' && <p>前台卡片显示「敬请期待」，用户无法进入详情。</p>}
-    {!linking && status === 'withdrawn' && <p>卡片将从前台模型广场移除。</p>}
+    {!linking && status === 'preview' && <p>前台卡片显示「敬请期待」，用户无法进入详情。关联服务会同时停售。</p>}
+    {!linking && status === 'withdrawn' && <p>卡片将从前台模型广场移除，关联服务会同时停售。</p>}
     {!linking && listing && <Typography.Title heading={6}>展示服务</Typography.Title>}
-    {(linking || listing) && <Table size="small" rowKey="id" dataSource={entries} pagination={false}
-      empty={linking ? '暂无可关联的模型服务' : '请先关联模型服务'} columns={[
+    {!linking && listing && <Table size="small" rowKey="id" dataSource={services.filter(service => linked.includes(service.id))} pagination={false}
+      empty="请先关联可用于展示的模型服务" columns={[
         { title: '选择', width: 70, render: (_, service) => <Checkbox aria-label={`选择 ${service.callId}`}
-          checked={selected.includes(service.id)} disabled={unavailable || (linking
-            ? (selectedModel && selectedModel !== service.modelId) || row.card.status === 'listed' && row.card.shown.includes(service.id)
-            : !service.started && !selected.includes(service.id))}
+          checked={shown.includes(service.id)} disabled={unavailable || !service.started && !shown.includes(service.id)}
           onChange={() => {
-            (linking ? setLinked : setShown)(toggle(selected, service.id));
+            setShown(current => toggle(current, service.id));
             ops.dirty(true);
           }}/> },
-        ...(linking && !row.modelId ? [{ title: '模型', dataIndex: 'name' }] : []),
-        { title: '模型调用标识', render: (_, service) => <CopyId value={service.callId}/> },
-        { title: '服务状态', render: (_, service) => <AdminStatus value={service.started ? '已启动' : '已停止'}/> },
-        ...(linking ? [{ title: '当前展示', render: (_, service) => row.card.status === 'listed' && row.card.shown.includes(service.id) ? '展示中' : '未展示' }] : []),
+        callIdColumn, stateColumn,
       ]}/>}
-    {linking ? <Typography.Text type="tertiary">已选择 {linked.length} 个服务。解除关联前，请先在「上架状态设置」中移除正在展示的服务。</Typography.Text>
-    : listing && <>
+    {!linking && listing && <>
       {status === 'formal' && <Typography.Text>可见范围为全部用户。</Typography.Text>}
-      {status === 'gray' && Object.entries(scopeFields).filter(([key]) => !internal || key !== 'tenantIds').map(([key, label]) => (
-        <Field key={key} label={'可见' + label}>
-          <Select multiple filter maxTagCount={3} showRestTagsPopover style={{ width: '100%' }} value={scope[key] || []}
-            optionList={scopeOptions[key].filter(row => !internal || row.tenantId === companyId)}
-            placeholder={'选择' + label} onChange={ids => updateScope({ ...scope, [key]: ids })}/>
-        </Field>
-      ))}
+      {status === 'gray' && <Field label="可见租户" required>
+        <Select multiple filter searchPosition="dropdown" searchPlaceholder="搜索租户名称或 ID" maxTagCount={3} showRestTagsPopover
+          style={{ width: '100%' }} value={tenantIds} optionList={scopeOptions} placeholder="选择租户"
+          onChange={ids => { setTenantIds(ids); ops.dirty(true); }}/>
+      </Field>}
       {issues.map(issue => <Notice key={issue} error>{issue}</Notice>)}
     </>}
     {errors}

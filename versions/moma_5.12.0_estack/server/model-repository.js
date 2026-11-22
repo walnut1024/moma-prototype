@@ -354,6 +354,9 @@ export const stoppedOfferSql = `COALESCE((SELECT NOT json_extract(n.record_json,
 async function workspacePayload(db,actor,command=false,simulation=true){
   const fields=[`'supplyRelations',${supplyRelationsSql}`];
   fields.push(`'stoppedModelOfferIds',${arraySql(`SELECT json_quote(o.record_id) AS record_json FROM offers o WHERE o.retired_at IS NULL AND ${stoppedOfferSql}`)}`);
+  fields.push(`'marketModelServices',${arraySql(`SELECT json_object('id',id,'modelId',json_extract(record_json,'$.modelId'),
+    'name',json_extract(record_json,'$.name'),'callId',call_id,'listed',json_extract(record_json,'$.listed')) AS record_json
+    FROM new_model_services WHERE deleted_at IS NULL AND json_extract(record_json,'$.modelId') IS NOT NULL ORDER BY created_at DESC,id`)}`);
   fields.push(`'marketProjects',${arraySql("SELECT json_object('id',json_extract(value,'$.id'),'tenantId',json_extract(value,'$.tenantId'),'name',json_extract(value,'$.name'),'status',json_extract(value,'$.status')) AS record_json FROM json_each(w.reference_json,'$.projects')")}`);
   fields.push(`'marketOrganizations',${arraySql("SELECT json_object('id',json_extract(value,'$.id'),'tenantId',json_extract(value,'$.tenantId'),'name',json_extract(value,'$.name'),'status',json_extract(value,'$.status')) AS record_json FROM json_each(w.reference_json,'$.organizations')")}`);
   fields.push("'spacePolicy',json((SELECT payload_json FROM simulation_records WHERE kind='project-space-policy' AND id='published'))");

@@ -1,3 +1,5 @@
+import TableFieldHelp from '../components/TableFieldHelp';
+import { customerUsageFieldHelp } from './customer-usage-field-help';
 import Table from './AdminTable';
 import { useId, useState } from 'react';
 import { Button, Card, Descriptions, Popover, Progress, Select, Toast, Typography } from '@douyinfe/semi-ui';
@@ -65,7 +67,9 @@ export default function UserCallDetails({ state, rows, start, end, draft, onDraf
     {detailColumns.filter(([key]) => !['maxInput', 'avgInput', 'maxOutput', 'avgOutput'].includes(key) || row.unit === 'Token')
       .filter(([key]) => !['ttft', 'maxTtft', 'ttftSamples'].includes(key) || row.ttftSamples > 0)
       .map(([key, label]) => <div key={key}>
-        <dt><Typography.Text type="tertiary">{label}</Typography.Text></dt>
+        <dt><Typography.Text type="tertiary">{key === 'avgRpm'
+          ? <TableFieldHelp name={label} description="请求记录数除以区间分钟数，包含无调用分钟。"/>
+          : label}</Typography.Text></dt>
         <dd><Typography.Text strong>{display(row[key])}{['dailyUsage', 'endUsage'].includes(key) && row[key] != null ? ` ${row.unit}` : ''}</Typography.Text></dd>
       </div>)}
   </dl>;
@@ -81,8 +85,8 @@ export default function UserCallDetails({ state, rows, start, end, draft, onDraf
   };
   const tableColumns = columns.map(([key, label]) => ({
     key,
-    title: <Button size="small" theme="borderless" type="tertiary" icon={<IconSort aria-hidden="true"/>} iconPosition="right"
-      onClick={() => { setSort({ key, direction: sort.key === key ? -sort.direction : -1 }); setPage(0); }}>{label}</Button>,
+    title: <TableFieldHelp name={label} description={customerUsageFieldHelp[key]} sortIcon={<IconSort aria-hidden="true"/>}
+      onSort={() => { setSort({ key, direction: sort.key === key ? -sort.direction : -1 }); setPage(0); }}/>,
     onHeaderCell: () => ({ 'aria-sort': sort.key === key ? (sort.direction === 1 ? 'ascending' : 'descending') : 'none' }),
     align: ['model', 'customer', 'customerId'].includes(key) ? 'left' : 'right',
     render: (_, row) => renderValue(key, row),
@@ -99,7 +103,6 @@ export default function UserCallDetails({ state, rows, start, end, draft, onDraf
         </FilterToolbar>
       </form>
       {conditionGroups && <SelectedConditions groups={conditionGroups} label="已选条件（仅调用明细）"/>}
-      <Typography.Paragraph type="tertiary">计量用量仅汇总已确认请求，并按模型单位分别统计；TPM 仅适用于 Token 模型。区间平均 TPM／RPM 包含无调用分钟。</Typography.Paragraph>
       <Table rowKey="id" size="small" scroll={{ x: 'max(100%, 1120px)' }} dataSource={data.slice(current * size, (current + 1) * size)}
         hideExpandedColumn expandIcon={false}
         expandedRowKeys={expanded ? [expanded] : []} expandedRowRender={detail}

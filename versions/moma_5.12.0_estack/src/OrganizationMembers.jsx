@@ -31,7 +31,7 @@ function RoleFields({ form, setForm, departments }) {
   </>;
 }
 
-export default function OrganizationMembers({ tenant }) {
+export default function OrganizationMembers({ tenant, admin }) {
   const canManage = tenant.canManageOrganization ?? tenant.canManage;
   const departmentOnly = canManage && !tenant.canManage;
   const canEditMember = member => canManage && (!departmentOnly || member.role === '普通成员');
@@ -126,7 +126,7 @@ export default function OrganizationMembers({ tenant }) {
       <div className={`org-tree-row ${id === "root" ? "org-root" : ""} ${children.length ? "org-parent" : ""} ${selectedDepartment === id ? "is-selected" : ""}`}>
         <Button type="tertiary" theme="borderless" className="org-tree-select" aria-label={`查看部门：${node.name}`} aria-current={selectedDepartment === id ? "true" : undefined} onClick={() => selectDepartment(id)} title={departmentPath(departments, id)}><Icon aria-hidden="true" /><span>{node.name}</span><small title="本部门及子部门成员数，含待加入成员">{count}</small></Button>
         {children.length > 0 && <Button theme="borderless" type="tertiary" size="small" disabled={Boolean(treeQuery)} className="org-expand" aria-label={`${expanded ? "收起" : "展开"}${node.name}`} aria-expanded={!!expanded} onClick={() => setCollapsed(collapsed.includes(id) ? collapsed.filter(i => i !== id) : [...collapsed, id])}>{expanded ? <ChevronDown /> : <ChevronRight />}</Button>}
-        {id !== "root" && tenant.canManage && <Dropdown trigger="click" clickToHide menu={[
+        {!admin && id !== "root" && tenant.canManage && <Dropdown trigger="click" clickToHide menu={[
           { node: 'item', name: '新建子部门', onClick: () => newDepartment(id) },
           { node: 'item', name: '部门设置', onClick: () => editDepartment(node) },
         ]}><Button size="small" theme="borderless" type="tertiary" className="org-tree-more" aria-label={node.name + '操作'} icon={<MoreHorizontal size={14}/>}/></Dropdown>}
@@ -178,8 +178,9 @@ export default function OrganizationMembers({ tenant }) {
       {error && <p className="org-form-error" role="alert">{error}</p>}
   </>;
   const centerModal = modal?.type === 'confirm' || modal?.isNew;
+  const batchAdd = () => { setDraftRevision(tenant.revision); setBatchOpen(true); };
 
-  return <div className="org-page front-members-workspace">
+  return <div className={`org-page front-members-workspace${admin ? ' admin-members-workspace' : ''}`}>
     {!canManage&&!tenant.error&&<p className="org-demo-note">当前身份可查看组织；成员和部门由企业管理员维护。</p>}
     {tenant.error&&<p role="alert">{tenant.error}</p>}
     {storageError && <div className="org-demo-note" role="alert"><strong>数据保存失败，本次修改无法保存，请稍后重试。</strong></div>}
@@ -195,10 +196,21 @@ export default function OrganizationMembers({ tenant }) {
         </div>
       </aside>
       <section className="org-members-panel" aria-label="成员列表">
-        <div className="org-department-head"><div className="org-department-icon">{department ? <Folder /> : selectedDepartment === "admins" ? <ShieldCheck /> : <Users />}</div><div className="org-department-info"><h2>{title}</h2>{department?.id !== "root" && <p>{department ? departmentPath(departments, department.id) : selectedDepartment === "all" ? "查看企业内所有部门及未分配部门的成员" : selectedDepartment === "admins" ? "查看企业管理员及成员状态" : "已加入企业，尚未设置主部门的成员"}</p>}<small>{department && <>负责人：{members.find(m => m.id === department.ownerId)?.name || "未设置"}<i /> </>}已加入 {scopedMembers.filter(m => m.status === "已加入").length} 人 <i />待加入 {scopedMembers.filter(m => m.status === "待加入").length} 人 <i />已停用 {scopedMembers.filter(m => m.status === "已停用").length} 人</small></div><div className="org-head-actions">{department && department.id !== "root" && tenant.canManage && <Button theme="outline" onClick={() => editDepartment(department)}>部门设置</Button>}<Dropdown trigger="click" clickToHide position="bottomRight" menu={[
-          { node: 'item', name: '单个添加', onClick: addMember },
-          { node: 'item', name: '批量添加', onClick: () => { setDraftRevision(tenant.revision); setBatchOpen(true); } },
-        ]}><Button disabled={!canManage} theme="solid" icon={<UserPlus size={15}/>}>添加成员<ChevronDown size={14}/></Button></Dropdown></div></div>
+        <div className="org-department-head"><div className="org-department-icon">{department ? <Folder /> : selectedDepartment === "admins" ? <ShieldCheck /> : <Users />}</div><div className="org-department-info"><h2>{title}</h2>{department?.id !== "root" && <p>{department ? departmentPath(departments, department.id) : selectedDepartment === "all" ? "查看企业内所有部门及未分配部门的成员" : selectedDepartment === "admins" ? "查看企业管理员及成员状态" : "已加入企业，尚未设置主部门的成员"}</p>}<small>{department && <>负责人：{members.find(m => m.id === department.ownerId)?.name || "未设置"}<i /> </>}已加入 {scopedMembers.filter(m => m.status === "已加入").length} 人 <i />待加入 {scopedMembers.filter(m => m.status === "待加入").length} 人 <i />已停用 {scopedMembers.filter(m => m.status === "已停用").length} 人</small></div>
+          <div className="org-head-actions">
+            {department && department.id !== "root" && tenant.canManage && <>
+              {admin && <Button onClick={() => newDepartment(department.id)}>新建子部门</Button>}
+              <Button theme="outline" onClick={() => editDepartment(department)}>部门设置</Button>
+            </>}
+            {admin ? <>
+              <Button disabled={!canManage} onClick={batchAdd}>批量添加成员</Button>
+              <Button disabled={!canManage} theme="solid" onClick={addMember}>添加成员</Button>
+            </> : <Dropdown trigger="click" clickToHide position="bottomRight" menu={[
+              { node: 'item', name: '单个添加', onClick: addMember },
+              { node: 'item', name: '批量添加', onClick: batchAdd },
+            ]}><Button disabled={!canManage} theme="solid" icon={<UserPlus size={15}/>}>添加成员<ChevronDown size={14}/></Button></Dropdown>}
+          </div>
+        </div>
         <form className="org-filters" onSubmit={e => { e.preventDefault(); setApplied(filters); setPage(1); setSelectedMembers([]); }}>
           <div className="org-search"><Input prefix={<Search size={14}/>} aria-label="搜索成员" placeholder="姓名、手机号或登录账号" value={filters.query} onChange={value => setFilters({ ...filters, query: value })} /></div>
           <Choice label="成员状态" value={filters.status} onChange={status => setFilters({ ...filters, status })} options={[{ value: "all", label: "全部状态" }, ...statuses.map(s => ({ value: s, label: s }))]} />
@@ -228,9 +240,8 @@ export default function OrganizationMembers({ tenant }) {
               { title: '管理角色', dataIndex: 'role', render: (role, m) => <><span className="org-role">{role !== '普通成员' && <ShieldCheck/>}{role}</span>
                 {role === '部门管理员' && <small className="org-cell-sub" title={roleScope(m)}>{departments.find(d => d.id === m.scopeId)?.name}{m.includeChildren ? ' · 含子部门' : ' · 仅本部门'}</small>}</> },
               { title: '状态', dataIndex: 'status', render: status => <Tag color={status === '已加入' ? 'green' : status === '待加入' ? 'amber' : 'grey'}>{status}</Tag> },
-              { title: '操作', key: 'actions', render: (_, m) => <div className="org-row-actions">
-                <Button theme="borderless" size="small" disabled={!canEditMember(m)} onClick={() => open({ type: 'member', title: '编辑成员' }, { ...m })}>编辑</Button>
-                <AdminActionMenu label={m.name + '更多操作'} items={[
+              { title: '操作', key: 'actions', width: admin ? 270 : undefined, render: (_, m) => {
+                const items = [
                   { node: 'item', name: '成员详情', onClick: () => open({ type: 'detail', title: '成员详情', member: m }) },
                   ...(canEditMember(m) ? [
                     { node: 'item', name: '移动部门', onClick: () => move([m.id]) },
@@ -247,8 +258,13 @@ export default function OrganizationMembers({ tenant }) {
                         { type: 'member.remove', ids: [m.id] }, pending ? '邀请已撤销' : '成员已移除');
                     } },
                   ] : []),
-                ]}/>
-              </div> },
+                ];
+                return <div className="org-row-actions">
+                  <Button theme="borderless" size="small" disabled={!canEditMember(m)} onClick={() => open({ type: 'member', title: '编辑成员' }, { ...m })}>编辑</Button>
+                  {admin ? items.map(({ name, type, onClick }) => <Button key={name} theme="borderless" type={type || 'tertiary'}
+                    size="small" onClick={onClick}>{name}</Button>) : <AdminActionMenu label={m.name + '更多操作'} items={items}/>}
+                </div>;
+              } },
             ]}/>
         </div>
         <div className="org-pagination"><FilterPagination total={filtered.length} page={currentPage} size={pageSize}

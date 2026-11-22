@@ -4,7 +4,7 @@ import { CLASSIFICATION_KINDS, classificationKind } from './model-classification
 
 export function adminBreadcrumbs(active, params, names = {}) {
   const page = pages[active];
-  if (['model-market', 'model-prices'].includes(active) && params.get('resourceJson') === '1') {
+  if (active === 'model-prices' && params.get('resourceJson') === '1') {
     const origin = new URLSearchParams(params);
     origin.delete('resourceJson');
     origin.delete('resourceTarget');

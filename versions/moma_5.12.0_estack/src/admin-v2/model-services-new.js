@@ -4,6 +4,7 @@ import { MODEL_TYPE_LABELS, modelCategory } from '../model-types.mjs';
 const storageKey = workspaceStoragePrefix + 'model-services-new:v1';
 const simulatedChannelNames = ['渠道 A', '渠道 B', '备用渠道'];
 export const SERVICE_DESCRIPTION_LIMIT = 300;
+export const MODEL_ID_LABEL = '模型 ID';
 
 export const MODEL_SERVICE_TYPES = {
   text: [MODEL_TYPE_LABELS.text, '普通对话、文本生成、推理、代码生成'],
@@ -80,9 +81,9 @@ export function readNewServices(storage) {
 
 export function serviceFormIssue(values, rows, id) {
   if (!values.name.trim()) return '请填写模型服务名称';
-  if (!values.callId) return '请填写模型调用标识';
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(values.callId)) return '模型调用标识需以字母或数字开头，最多 128 个字符，可使用 . _ : / -';
-  if (rows.some(row => row.id !== id && row.callId === values.callId)) return '模型调用标识已存在';
+  if (!values.callId) return `请填写${MODEL_ID_LABEL}`;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(values.callId)) return `${MODEL_ID_LABEL} 需以字母或数字开头，最多 128 个字符，可使用 . _ : / -`;
+  if (rows.some(row => row.id !== id && row.callId === values.callId)) return `${MODEL_ID_LABEL} 已存在`;
   if (values.description?.length > SERVICE_DESCRIPTION_LIMIT
     && !rows.some(row => row.id === id && row.description === values.description)) return '描述不能超过 300 字';
   return '';

@@ -1,0 +1,15 @@
+.table-field-help-label {
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
+  cursor: help;
+}
+.semi-button.table-field-sort-trigger {
+  padding-inline: 0;
+  height: auto;
+  font: inherit;
+  color: inherit;
+  cursor: help;
+}
+.table-field-help-text {
+  white-space: pre-line;
+}

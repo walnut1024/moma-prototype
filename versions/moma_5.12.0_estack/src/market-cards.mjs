@@ -3,25 +3,29 @@ import { isResourceId, resourceId } from './resource-id.mjs';
 import { modelLibrary, modelMaterial } from './admin-v2/model-library.js';
 import { MODEL_TYPES } from './admin-v2/model-management.js';
 import { INPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, modelProfileDraft } from './admin-v2/model-profile.js';
-import { modelIdentity, modelPresentation } from './model-identities.mjs';
-import { activeCustomer, offerGrayTenants, offerKey, offerStage, providerOffer, serviceCallsEnabled, serviceReferences } from './service-access.mjs';
+import { modelIdentity, modelPresentation, modelServiceIdentity } from './model-identities.mjs';
+import { activeCustomer, offerGrayTenants, offerKey, offerStage, providerOffer, salesPaused, serviceCallsEnabled, serviceReferences } from './service-access.mjs';
 
-export const marketCardStatuses = { preview: '预告', gray: '灰度上架', formal: '正式上架', withdrawn: '下架' };
+export const marketCardStatuses = { withdrawn: '不可见', preview: '预告可见', gray: '灰度可见', formal: '全部可见' };
 export const marketCardFeatures = { online_experience: '在线体验', smart_routing: '智能路由', supports_agent: '支持Agent', supports_mcp: '支持MCP', file_upload: '上传文件' };
 export const marketCardOutputOptions = [...INPUT_MODALITY_OPTIONS, ...RESULT_TYPE_OPTIONS];
 
 export function marketCardStatus(card) {
+  if (card.status === 'draft') return 'withdrawn';
   return card.status === 'listed' ? card.scope.type === 'selected' ? 'gray' : 'formal' : card.status;
 }
 
+export const marketCardStopsSales = card => Boolean(card && card.status !== 'listed');
+
 export function marketCardFieldValues(model) {
   const profile = modelProfileDraft(model);
+  const tags = !model?.card && Array.isArray(profile.tags) && profile.tags.length ? profile.tags : model?.tags;
   return {
     name: model?.name || '', heat: model?.heat ?? '', description: model?.description || '',
-    description_en: model?.description_en || '', type: model?.type || '', context_length: model?.capabilities?.context ?? '',
+    description_en: model?.description_en || profile.descriptionEn || '', type: model?.type || '', context_length: model?.capabilities?.context ?? '',
     family: profile.family || '', input_modalities: profile.inputModalities || [],
     output_modalities: [...new Set([...(profile.outputModalities || []), ...(profile.resultTypes || [])])],
-    precision: profile.precision || '', tags: Array.isArray(model?.tags) ? model.tags : [], release_date: profile.releaseDate || '',
+    precision: profile.precision || '', tags: Array.isArray(tags) ? tags : [], release_date: profile.releaseDate || '',
     parameters: Number.isFinite(profile.parameters) ? profile.parameters : '', features: model?.features || {},
   };
 }
@@ -35,7 +39,7 @@ export function marketCardFieldError(data) {
     [filled('description', 5000), '请填写模型中文简介（最多 5000 字）'],
     [filled('description_en', 5000), '请填写模型英文简介（最多 5000 字）'],
     [typeof data.type === 'string' && Object.hasOwn(MODEL_TYPES, data.type), '请选择模型类型'],
-    [Number.isSafeInteger(data.context_length) && data.context_length > 0, '上下文长度须为正整数（Token）'],
+    [Number.isSafeInteger(data.context_length) && data.context_length > 0, '上下文长度换算后须为正整数 Token'],
     [filled('family', 100), '请填写模型系列（最多 100 字）'],
     [selected(data.input_modalities, INPUT_MODALITY_OPTIONS), '请选择输入模态'],
     [selected(data.output_modalities, marketCardOutputOptions), '请选择输出模态'],
@@ -61,6 +65,7 @@ export function marketCardServices(state, modelId, references = serviceReference
         id: service.model_service_id,
         modelId: service.model_id,
         name: service.model.name,
+        serviceName: service.model.serviceName || service.model.name,
         callId: service.callId,
         started: serviceCallsEnabled(service.model, entry) && !state.stoppedModelOfferIds?.includes(service.model_service_id),
         stage, grayTenantIds: offerGrayTenants(service.model, entry),
@@ -80,10 +85,19 @@ export function marketCardsByModel(cards = {}) {
 
 export function marketCardLinkableServices(state, modelId) {
   const services = marketCardServices(state, modelId);
-  if (modelId) return services;
+  const models = new Map(modelLibrary(state).filter(row => !row.archivedAt).map(row => [row.id, row]));
+  const existingCalls = new Set(services.map(row => JSON.stringify([row.modelId, row.callId])));
+  const configured = (state.marketModelServices || []).flatMap(row => {
+    const model = models.get(row.modelId);
+    if (!model || (modelId && row.modelId !== modelId) || existingCalls.has(JSON.stringify([row.modelId, row.callId]))) return [];
+    return [{ id: row.id, modelId: row.modelId, name: model.name, serviceName: row.name,
+      callId: row.callId, started: Boolean(row.listed) }];
+  });
+  const candidates = [...services, ...configured];
+  if (modelId) return candidates;
   const occupied = marketCardsByModel(state.modelData?.marketCards);
   const listed = new Set(services.filter(service => service.legacyShown).map(service => service.modelId));
-  return services.filter(service => service.modelId && !occupied.has(service.modelId) && !listed.has(service.modelId));
+  return candidates.filter(service => service.modelId && !occupied.has(service.modelId) && !listed.has(service.modelId));
 }
 
 export function marketCardIndex(state, orderedModels) {
@@ -121,33 +135,19 @@ export function marketCardIndex(state, orderedModels) {
   }).sort((a, b) => rank(a) - rank(b));
 }
 
-export const scopeFields = { organizationIds: '组织', projectIds: '项目', tenantIds: '客户' };
 const emptyScope = { type: 'all', tenantIds: [], organizationIds: [], projectIds: [] };
-const countScope = scope => Object.keys(scopeFields).reduce((count, key) => count + (scope[key]?.length || 0), 0);
+const countScope = scope => (scope.tenantIds?.length || 0) + (scope.organizationIds?.length || 0) + (scope.projectIds?.length || 0);
 
 export function marketScopeOptions(state) {
-  const tenants = new Map((state.tenants || []).filter(activeCustomer).map(row => [row.id, row]));
-  const option = row => ({ value: row.id, label: row.name, tenantId: row.tenantId });
-  const qualified = row => ({ ...option(row), label: tenants.get(row.tenantId).name + ' · ' + row.name });
-  return {
-    tenantIds: [...tenants.values()].map(option),
-    organizationIds: (state.marketOrganizations || state.organizations || []).filter(row => row.status === '正常' && tenants.has(row.tenantId)).map(qualified),
-    projectIds: (state.marketProjects || state.projects || []).filter(row => row.status === '正常' && tenants.has(row.tenantId)).map(qualified),
-  };
+  return (state.tenants || []).filter(activeCustomer).map(row => ({ value: row.id, label: `${row.name} · ${row.id}` }));
 }
 
 function checkedMarketScope(state, input) {
-  if (!['all', 'selected'].includes(input?.type)) throw Error('请选择可见范围');
-  const choices = marketScopeOptions(state);
-  const scope = { ...emptyScope, type: input.type };
-  for (const key of Object.keys(scopeFields)) {
-    const ids = input[key] ?? [];
-    if (!Array.isArray(ids) || ids.length > 100 || new Set(ids).size !== ids.length ||
-      ids.some(id => !choices[key].some(row => row.value === id))) throw Error('可见范围包含无效的' + scopeFields[key]);
-    scope[key] = ids;
-  }
-  if ((scope.type === 'all') === Boolean(countScope(scope))) throw Error('可见范围无效');
-  return scope;
+  const tenants = new Set(marketScopeOptions(state).map(row => row.value));
+  const ids = input?.tenantIds;
+  if (!Array.isArray(ids) || !ids.length || ids.length > 100 || new Set(ids).size !== ids.length ||
+    ids.some(id => !tenants.has(id))) throw Error('请选择有效的可见租户（最多 100 个）');
+  return { ...emptyScope, type: 'selected', tenantIds: ids };
 }
 
 export function marketAudience(state, { tenantId, member, projectId } = {}) {
@@ -187,8 +187,30 @@ export function marketCardIssues(card, services) {
     !card.content?.name?.trim() || !card.content?.description?.trim() ? '请补齐模型展示名和简介' : '',
     !card.shown.length || card.shown.some(id => !card.linked.includes(id) || !available.has(id))
       ? '请至少选择一个已启动的关联服务' : '',
-    card.scope.type === 'selected' && !countScope(card.scope) ? '请选择可见范围' : '',
+    card.scope.type === 'selected' && !countScope(card.scope) ? '请至少选择一个可见租户' : '',
   ].filter(Boolean);
+}
+
+export function marketCardBlocksServiceSales(state, model, key) {
+  const serviceId = modelServiceIdentity(state, model, key);
+  const card = marketCardsByModel(state.modelData?.marketCards).get(modelIdentity(state, model).id);
+  return marketCardStopsSales(card) && card.linked.includes(serviceId);
+}
+
+function pauseLinkedSales(state, card) {
+  const paused = new Map();
+  for (const service of serviceReferences(state)) {
+    const { model } = service, key = offerKey(service);
+    const entry = providerOffer(model, key);
+    if (!card.linked.includes(service.model_service_id) || !['gray', 'formal'].includes(offerStage(model, entry)) || salesPaused(model, key)) continue;
+    if (!paused.has(model.id)) paused.set(model.id, { model, keys: new Set() });
+    paused.get(model.id).keys.add(key);
+  }
+  return [...paused.values()].map(({ model, keys }) => ({
+    type: 'update', collection: 'models', id: model.id, changes: model.serviceMode === 'provider'
+      ? { serviceProviders: model.serviceProviders.map(row => keys.has(offerKey(row)) && row.status !== '已移除' ? { ...row, salesPaused: true } : row) }
+      : { salesPaused: true },
+  }));
 }
 
 export function marketCardTransaction(state, action, orderedModels) {
@@ -197,7 +219,7 @@ export function marketCardTransaction(state, action, orderedModels) {
   const creating = operation === 'marketCardCreate';
   const existing = creating ? null : marketCardIndex(state, orderedModels).find(row => row.cardId === (data.card_id ?? modelId));
   if (!creating && !existing) throw Error('模型卡片不存在');
-  if (creating && data.source_model_id && !modelMaterial(state, data.source_model_id)) throw Error('模型资料不存在');
+  if ((creating || operation === 'marketCardEdit') && data.source_model_id && !modelMaterial(state, data.source_model_id)) throw Error('模型资料不存在');
   const cardId = existing?.cardId || resourceId('model-card');
   let card = existing ? {
     ...existing.card, content: existing.card.content || {
@@ -228,7 +250,8 @@ export function marketCardTransaction(state, action, orderedModels) {
     if (operation === 'marketCardLink') {
       const ids = data.serviceIds;
       const services = marketCardLinkableServices(state, existing.modelId);
-      if (!Array.isArray(ids) || new Set(ids).size !== ids.length || ids.some(id => !services.some(row => row.id === id))) {
+      const valid = new Set([...services.map(row => row.id), ...card.linked]);
+      if (!Array.isArray(ids) || new Set(ids).size !== ids.length || ids.some(id => !valid.has(id))) {
         throw Error('请选择该模型下的有效服务');
       }
       const models = new Set(services.filter(service => ids.includes(service.id)).map(service => service.modelId));
@@ -239,16 +262,18 @@ export function marketCardTransaction(state, action, orderedModels) {
       label = '保存模型卡片关联服务';
     } else if (operation === 'marketCardSetStatus') {
       const { listing_stage: status, serviceIds } = data;
-      if (typeof status !== 'string' || !Object.hasOwn(marketCardStatuses, status)) throw Error('请选择上架状态');
+      if (typeof status !== 'string' || !Object.hasOwn(marketCardStatuses, status)) throw Error('请选择可见性');
       if (status === 'formal' || status === 'gray') {
         if (!Array.isArray(serviceIds) || new Set(serviceIds).size !== serviceIds.length) throw Error('展示服务无效');
-        const scope = status === 'formal' ? emptyScope : checkedMarketScope(state, { ...data.scope, type: 'selected' });
+        const scope = status === 'formal' ? emptyScope : checkedMarketScope(state, data.scope);
         card = { ...card, shown: serviceIds, scope, status: 'listed' };
         const issues = marketCardIssues(card, marketCardServices(state, existing.modelId));
         if (issues.length) throw Error(issues.join('、'));
       } else card = { ...card, status };
-      label = `${marketCardStatuses[status]}模型卡片`;
+      label = '设置模型卡片可见性';
     }
   }
-  return { type: 'batch', label, objectId: cardId, changes: [], marketCard: { cardId, card } };
+  const changes = ['marketCardSetStatus', 'marketCardLink'].includes(operation) && marketCardStopsSales(card)
+    ? pauseLinkedSales(state, card) : [];
+  return { type: 'batch', label, objectId: cardId, changes, marketCard: { cardId, card } };
 }

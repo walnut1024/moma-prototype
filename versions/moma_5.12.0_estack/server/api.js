@@ -648,11 +648,9 @@ async function route(request, env, requestId) {
     const body = await bodyJson(request,10*1024*1024+65536);
     if (commercialModelWrite(body.action)) requireCommerce(true);
     if (!license.commercial && body.action?.operation === 'marketCardSetStatus' && body.action.data?.listing_stage === 'gray') {
-      const scope = body.action.data?.scope;
+      const tenantIds = body.action.data?.scope?.tenantIds;
       const { internalTenantId } = await readProjectSpacePolicy(db);
-      const reference = JSON.parse(await db.prepare('SELECT reference_json FROM model_workspace WHERE id=1').first('reference_json'));
-      if (scope?.tenantIds?.length || Object.entries({ organizationIds:'organizations', projectIds:'projects' }).some(([key, collection]) =>
-        Array.isArray(scope?.[key]) && scope[key].some(id => !(reference[collection] || []).some(row => row.id === id && row.tenantId === internalTenantId)))) requireCommerce();
+      if (Array.isArray(tenantIds) && tenantIds.some(id => id !== internalTenantId)) requireCommerce();
     }
     return json(await modelCommand(db,actor,body,request.headers.get('idempotency-key'),license));
   }

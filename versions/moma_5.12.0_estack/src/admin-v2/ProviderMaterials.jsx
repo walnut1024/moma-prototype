@@ -2,7 +2,6 @@ import { PROTOCOL_ENDPOINT_LABEL, protocolAndEndpoint } from './workbench-protoc
 import { useEffect, useRef, useState } from 'react';
 import { Button, Empty, Space, Tabs, Typography } from '@douyinfe/semi-ui';
 import { IconPlus } from '@douyinfe/semi-icons';
-import AdminActionMenu from './AdminActionMenu';
 import Table from './AdminTable';
 import { Choice, Notice } from './ServiceUI';
 import { SearchBox, useOperations } from './ModelOperationsUI';
@@ -41,10 +40,8 @@ function ProviderList({ state, ops, providers }) {
           onChange={type => update({ type: type === 'all' ? null : type, page: null })}/>
       </div>
       <Space wrap>
-        <AdminActionMenu label="批量导入" disabled={!ops.can} items={[
-          { node: 'item', name: '服务商资料', onClick: () => ops.go({ view: 'import' }) },
-          { node: 'item', name: '供应关系', onClick: () => ops.go({ view: 'relations' }) },
-        ]}>批量导入</AdminActionMenu>
+        <Button disabled={!ops.can} onClick={() => ops.go({ view: 'import' })}>批量导入服务商资料</Button>
+        <Button disabled={!ops.can} onClick={() => ops.go({ view: 'relations' })}>批量导入供应关系</Button>
         <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can} onClick={() => ops.go({ view: 'new' })}>添加服务商</Button>
       </Space>
     </div>

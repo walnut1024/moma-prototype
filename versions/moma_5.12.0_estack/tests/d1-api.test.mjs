@@ -4,6 +4,7 @@ import { before, after, test } from 'node:test';
 import { randomBytes, createHash } from 'node:crypto';
 import { startLocalBackend } from '../database/local-runtime.js';
 import { createSeed, initializeDatabase } from '../database/seed.js';
+import { resourceId } from '../src/resource-id.mjs';
 
 const adminCode = 'Test@' + randomBytes(8).toString('hex'), opsCode = 'Test@' + randomBytes(8).toString('hex');
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -711,31 +712,76 @@ test('model channel connectivity changes take effect only when a passing candida
   assert.deepEqual(supplierChannelAssociations(state, owner(), endpointId)[0].pricing, mapping.pricing);
 });
 
-test('market card creation persists without a service and rejects duplicates, stale writes and foreign services', async () => {
+test('market card associations persist multiple configured services and support removal', async () => {
+  const content = {
+    name: '关联验收卡片', description: '独立模型卡片验收', description_en: 'Service associations',
+    type: 'text', context_length: 32768, family: '验收系列', input_modalities: ['文本'],
+    output_modalities: ['文本'], precision: 'BF16', tags: ['验收'], release_date: '2026-11-21',
+  };
   let state = (await request('/model-operations')).data;
   const { modelCatalogue } = await import('../src/admin-v2/model-library.js');
-  const material = modelCatalogue(state).find(row =>
+  const [material, otherMaterial] = modelCatalogue(state).filter(row =>
     !state.models.some(model => model.id === row.id || model.templateId === row.id));
-  assert.ok(material);
+  assert.ok(material && otherMaterial);
+  const serviceCommand = (action, id, revision, row) => {
+    const operationId = resourceId('operation');
+    return request('/model-services-new', { method: 'POST', key: operationId,
+      body: { action, id, revision, row, operationId } });
+  };
+  const addService = async (modelId, callId) => {
+    const id = resourceId('model-service');
+    const result = await serviceCommand('save', id, 0, {
+      id, modelId, name: callId, callId, type: 'text', listed: false, channels: [],
+    });
+    assert.equal(result.status, 200, JSON.stringify(result.data));
+    return id;
+  };
+  const first = await addService(material.id, 'market-link-qa-1');
+  const second = await addService(material.id, 'market-link-qa-2');
+  const foreign = await addService(otherMaterial.id, 'market-link-qa-other');
+  const refresh = async () => { state = (await request('/model-operations')).data; };
+  await refresh();
+  assert.ok(state.marketModelServices.some(service => service.id === first));
   const submit = (operation, data, session = token) => {
     const operationId = crypto.randomUUID();
     return request('/model-operations/commands', { method: 'POST', key: operationId, session, body: {
       operationId, expectedRevision: state.revision, action: {
-        type: 'modelOperations', operation, modelId: material.id, data: { expectedRevision: state.revision, ...data },
+        type: 'modelOperations', operation, data: { expectedRevision: state.revision, ...data },
       },
     } });
   };
-  const content = { name: '展示草稿', description: '独立模型卡片验收', logo: '' };
   assert.equal((await submit('marketCardCreate', content, readonlyToken)).status, 403);
   assert.equal((await submit('marketCardCreate', { ...content, expectedRevision: state.revision - 1 })).status, 422);
   const result = await submit('marketCardCreate', content);
   assert.equal(result.status, 200, JSON.stringify(result.data));
-  const oldModels = state.models;
-  state = (await request('/model-operations')).data;
-  assert.deepEqual(state.models, oldModels);
-  assert.equal(state.modelData.marketCards[material.id].status, 'draft');
-  assert.equal(state.modelData.marketCards[material.id].content.name, content.name);
-  assert.equal((await submit('marketCardCreate', content)).status, 422);
-  assert.equal((await submit('marketCardLink', { serviceIds: ['service-of-another-model'] })).status, 422);
-  assert.equal((await submit('marketCardList', { serviceIds: [], scope: { type: 'all', tenantIds: [] } })).status, 422);
+  await refresh();
+  const cardId = state.audits[0].objectId;
+  const link = serviceIds => submit('marketCardLink', { card_id: cardId, serviceIds });
+  assert.equal((await link([first, foreign])).status, 422);
+  assert.equal((await link([first, first])).status, 422);
+  const linked = await link([first, second]);
+  assert.equal(linked.status, 200, JSON.stringify(linked.data));
+  await refresh();
+  const card = () => state.modelData.marketCards[cardId];
+  assert.equal(card().model_id, material.id);
+  assert.deepEqual(card().linked, [first, second]);
+  assert.equal(card().status, 'draft');
+  const edit = { ...content, card_id: cardId, source_model_id: otherMaterial.id, context_length: 1572864,
+    description_en: 'Updated after importing reference data' };
+  assert.equal((await submit('marketCardEdit', { ...edit, source_model_id: 'missing-material' })).status, 422);
+  assert.equal((await submit('marketCardEdit', edit)).status, 200);
+  await refresh();
+  assert.equal(card().model_id, material.id);
+  assert.deepEqual(card().linked,[first,second]);
+  assert.equal(card().content.description_en, edit.description_en);
+  assert.equal(card().content.capabilities.context, 1572864);
+  assert.equal((await submit('marketCardSetStatus', { card_id: cardId, listing_stage: 'formal', serviceIds: [first] })).status, 422);
+  const inspect = async id => (await request('/model-services-new?inspect=' + id)).data;
+  assert.equal((await inspect(first)).marketLinked, true);
+  assert.equal((await serviceCommand('delete', first, 1)).status, 400);
+  assert.equal((await link([second])).status, 200);
+  await refresh();
+  assert.deepEqual(card().linked, [second]);
+  assert.equal((await inspect(first)).marketLinked, false);
+  assert.equal((await inspect(second)).marketLinked, true);
 });

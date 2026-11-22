@@ -39,6 +39,7 @@ import ModelPrices from './admin-v2/ModelPrices';
 import ModelMarket from './admin-v2/ModelMarket';
 import { managedEnterpriseTenants } from "./admin-v2/enterprise";
 import { useDeploymentLicense } from './useDeploymentLicense';
+import GlobalRouting from './admin-v2/GlobalRouting.jsx';
 import { LICENSE_UNAVAILABLE } from './deployment-license.mjs';
 import LicensePage from './admin-v2/LicensePage';
 import CommerceAnalysis from './admin-v2/CommerceAnalysis';
@@ -88,6 +89,7 @@ const NAVIGATION_ICONS = {
   'commerce-orders': IconChecklistStroked,
   'business-analysis': IconBarChartVStroked,
   license: IconShield,
+  'global-routing': IconSetting,
   'site-configuration': IconSetting,
   'model-operations-guide': IconBookOpenStroked,
 };
@@ -299,6 +301,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === 'audit-logs' ? <AuditLogsPage key={state.adminSession.accountId + ':' + detailParams.toString()}
               accountId={state.adminSession.accountId} params={detailParams} tenants={state.tenants} projects={state.projects}/>
             : active === 'site-configuration' ? <Suspense fallback={<AdminPageLoading label="站点配置"/>}><SiteConfiguration key={state.adminSession.accountId} dirtyRef={draftDirty}/></Suspense>
+            : active === 'global-routing' ? <GlobalRouting saved={state.globalRoutingParameters} revision={state.revision} transact={transact} conflict={conflict} dirtyRef={draftDirty}/>
             : active === 'license' ? <LicensePage license={license}/>
             : active === 'business-analysis' ? <CommerceAnalysis state={state}/>
             : active === "model-market" ? <ModelMarket state={state} transact={transactModel} conflict={conflict} internal={internalSite}/>

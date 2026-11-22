@@ -1,3 +1,4 @@
+import TableFieldHelp from '../components/TableFieldHelp';
 import { useChannelText } from './channel-language';
 import { Popover, Button, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { Chart } from '../components/AnalyticsCharts';
@@ -27,9 +28,7 @@ const headers = {
   cacheRate: '所选时段内，上游已采集样本的缓存读取 Token 数占输入 Token 总数的比例。',
 };
 function metricHeader(label, help) {
-  return <Tooltip content={help.includes('\n') ? <span style={{ whiteSpace: 'pre-line' }}>{help}</span> : help} position="top">
-    <span className="channel-health-metric-label" tabIndex={0} aria-description={help}>{label}</span>
-  </Tooltip>;
+  return <TableFieldHelp name={label} description={help}/>;
 }
 
 function byMetric(value) {

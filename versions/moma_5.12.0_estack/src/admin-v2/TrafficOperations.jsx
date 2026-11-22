@@ -1,3 +1,4 @@
+import TableFieldHelp from '../components/TableFieldHelp';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
@@ -163,7 +164,7 @@ function TrafficVisualization({ account, models, projects, settings, close }) {
       if (rule.rpm == null && rule.tpm == null) return '项目未设上限';
       return <RatePair limit={rule}/>;
     } }] : []),
-    { title: <FieldLabel name={project ? '账号与模型额度' : '最终上限'} description={finalLimitHelp}/>,  width: 186, className: 'traffic-final-cell',
+    { title: <TableFieldHelp name={project ? '账号与模型额度' : '最终上限'} description={finalLimitHelp}/>,  width: 186, className: 'traffic-final-cell',
       render: (_, row) => <RatePair limit={row.finalLimit} strong/> },
   ];
   return <AdminSideSheet visible title="限流可视化" width="min(1000px, 100vw)" closeOnEsc onCancel={close}

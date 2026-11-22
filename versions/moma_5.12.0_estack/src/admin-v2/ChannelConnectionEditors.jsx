@@ -3,7 +3,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Button, Input, TextArea } from '@douyinfe/semi-ui';
 import AdminStatus from './AdminStatus';
 import CandidateProbePanel from './CandidateProbePanel';
-import { ChannelKeySummary, ChannelPoolFields, channelKeyMode, channelKeyStrategyLabel } from './ChannelCredentials';
+import { ChannelKeySummary } from './ChannelCredentials';
+import ChannelKeyPoolEditor from './ChannelKeyPoolEditor';
 import ChannelProtocolFields from './ChannelProtocolFields';
 import { Cell, CopyId, GridTable, Modal, Notice, Row } from './ModelOperationsUI';
 import { Choice, Field } from './ServiceUI';
@@ -18,14 +19,23 @@ import { normalizeChannelRequestRules } from './channel-request-rules';
 import { defaultChannelNetwork, normalizeChannelNetwork } from './channel-network-settings';
 import { modelChannelName } from './model-channel-name';
 import { connectionKeys } from './connection-state';
-import { providerApiKeysDraft } from './provider-management';
 import { supplierChannelName } from './supplier-resources';
 
-const previewKeys = keys => keys.map((key, index) => ({
-  ...key, id: 'new-' + index, scope: 'channel',
-}));
+function candidateChangesCredentials(connection) {
+  const { endpoint, provider } = connection;
+  if (!endpoint.candidateConfiguration) return false;
+  const signature = value => JSON.stringify([
+    value.authMode || null, value.keyGroupId || null, value.apiKeyId || null,
+    connectionKeys(value, provider, true).map(key => [key.id, key.fingerprint]),
+    value.authMode === 'pool' ? [
+      value.keyPool?.map(row => [row.keyId, row.priority, row.enabled]),
+      value.keyStrategy || 'priority', Boolean(value.poolPaused),
+    ] : null,
+  ]);
+  return signature(endpoint) !== signature({ ...endpoint, ...endpoint.candidateConfiguration.config });
+}
 
-function ConnectionChanges({ connection, next, name, note, sourceType }) {
+function ConnectionChanges({ connection, next, name, note, sourceType, showCredentials }) {
   const t = useChannelText();
   const { endpoint, provider } = connection;
   const after = { ...endpoint, ...next };
@@ -37,26 +47,19 @@ function ConnectionChanges({ connection, next, name, note, sourceType }) {
     ['接口格式', format(endpoint), format(after)],
     ['接口端点', paths(endpoint), paths(after)],
     ['服务地址', endpoint.baseUrl, after.baseUrl],
-    ['密钥配置', t(channelKeyMode(endpoint)), t(channelKeyMode(after))],
     ['简介', endpoint.directoryNote || '', note],
   ].filter(([, before, after]) => before !== after);
-  const credentials = value => JSON.stringify([value.authMode, value.keyPool || [], Boolean(value.poolPaused),
-    connectionKeys(value, provider, true).map(key => [key.id, key.fingerprint])]);
-  const oldStrategy = endpoint.authMode === 'pool' ? t(channelKeyStrategyLabel(endpoint.keyStrategy)) : '';
-  const newStrategy = after.authMode === 'pool' ? t(channelKeyStrategyLabel(after.keyStrategy)) : '';
-  const credentialsChanged = credentials(endpoint) !== credentials(after);
   const keyIds = value => new Set(connectionKeys(value, provider, true).map(key => key.id));
   const adapterRemoved = endpoint.customAdapter && !after.customAdapter;
   return <GridTable headings={[t('字段'), t('改前'), t('改后')]}
-    empty={!fields.length && !credentialsChanged && oldStrategy === newStrategy && !adapterRemoved} emptyMessage={t('暂无可显示的字段变更')}>
+    empty={!fields.length && !showCredentials && !adapterRemoved} emptyMessage={t('暂无可显示的字段变更')}>
     {fields.map(([label, before, after]) => <Row key={label}><Cell>{t(label)}</Cell><Cell>{before || '—'}</Cell><Cell>{after || '—'}</Cell></Row>)}
-    {credentialsChanged && <Row><Cell>{t('API 密钥')}</Cell>
+    {showCredentials && <Row><Cell>{t('API 密钥')}</Cell>
       <Cell><ChannelKeySummary endpoint={endpoint} provider={provider}
         difference={{ label: '移除', color: 'grey', otherIds: keyIds(after) }}/></Cell>
       <Cell><ChannelKeySummary endpoint={after} provider={provider}
         difference={{ label: '新增', color: 'green', otherIds: keyIds(endpoint) }}/></Cell>
     </Row>}
-    {oldStrategy !== newStrategy && <Row><Cell>{t('密钥选择策略')}</Cell><Cell>{oldStrategy || '—'}</Cell><Cell>{newStrategy || '—'}</Cell></Row>}
     {adapterRemoved && <Row><Cell>{t('自定义接口')}</Cell><Cell>{t('使用自定义适配器')}</Cell><Cell>{t('移除自定义适配器')}</Cell></Row>}
   </GridTable>;
 }
@@ -86,16 +89,12 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
   const candidate = endpoint.candidateConfiguration;
   const initialType = endpoint.interfaceType || CHANNEL_INTERFACES.find(row => row.protocol === endpoint.protocol)?.id || '';
   const initialSelection = CHANNEL_LIST_TYPES.find(row => row.label === channelListType(connection))?.id || initialType;
-  const initialAuth = ['none', 'pending'].includes(endpoint.authMode) ? endpoint.authMode : 'current';
+  const credentialCandidate = candidateChangesCredentials(connection);
   const sourceType = endpoint.channelSourceType ?? provider.sourceType;
   const [initialSourceType] = useState(sourceType);
   const [draft, setDraft] = useState(() => ({
-    name, type: initialSelection, url: endpoint.baseUrl || '', auth: initialAuth, endpointPath: endpoint.endpointPath ?? null,
-    key: '', sourceType,
-  }));
-  const pooled = endpoint.authMode === 'pool';
-  const [pool, setPool] = useState(() => ({
-    rows: endpoint.keyPool || [], inputs: [], strategy: endpoint.keyStrategy || 'priority',
+    name, type: initialSelection, url: endpoint.baseUrl || '', endpointPath: endpoint.endpointPath ?? null,
+    sourceType,
   }));
   const [base] = useState(() => ({ expectedUpdatedAt: endpoint.updatedAt, expectedProviderUpdatedAt: provider.updatedAt }));
   const [note, setNote] = useState(() => endpoint.directoryNote || '');
@@ -105,12 +104,6 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
   useEffect(() => { stageContent.current?.focus(); }, [stage]);
-  useEffect(() => {
-    if (!ops.can) {
-      setDraft(value => ({ ...value, key: '' }));
-      setPool(value => ({ ...value, inputs: [] }));
-    }
-  }, [ops.can]);
   const impact = channelChangeImpact(state, provider.id, endpoint.id);
   const [reviewRevision, setReviewRevision] = useState(impact.revision);
   const [reviewDraft, setReviewDraft] = useState(null);
@@ -127,21 +120,16 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
   const endpointPath = draft.endpointPath ?? channelProtocolPaths({
     interfaceType: draft.type, baseUrl: draft.url, allowHttp,
   }, kindChanged ? undefined : connection)[0];
-  const keyEntered = draft.auth === 'specific' && Boolean(draft.key.trim());
-  const newKeys = pool.inputs.filter(row => row.raw.trim());
-  const poolChanged = pooled && (newKeys.length > 0 || pool.rows.length !== endpoint.keyPool?.length ||
-    pool.strategy !== (endpoint.keyStrategy || 'priority'));
   const sourceTypeChanged = draft.sourceType !== initialSourceType;
   const staleType = sourceTypeChanged && sourceType !== initialSourceType;
   const noteChanged = note.trim() !== initialNote;
   const staleNote = noteChanged && (endpoint.directoryNote || '') !== initialNote;
   const keepAdapter = draftType === 'custom' && !replacingProtocol;
   const customChanged = !keepAdapter && Boolean(endpoint.customAdapter);
-  const connectionChanged = kindChanged || pathChanged || addressChanged || draft.auth !== initialAuth || keyEntered || poolChanged || customChanged;
+  const connectionChanged = kindChanged || pathChanged || addressChanged || customChanged;
   const setInterface = replacingProtocol || kindChanged || !endpoint.interfaceType && connectionChanged;
-  const incomplete = !draft.name.trim() || (connectionChanged && (!draft.url.trim() || !draft.type || draft.type === 'unselected' ||
-    listedType && !endpointPath?.trim() || draft.auth === 'specific' && !keyEntered ||
-    draft.auth === 'pending')) || poolChanged && pool.rows.length + newKeys.length < 2;
+  const incomplete = !draft.name.trim() ||
+    connectionChanged && (!draft.url.trim() || !draft.type || draft.type === 'unselected' || listedType && !endpointPath?.trim());
   const unlinked = !impact.mappings.length && !state.modelSupplies.some(row => row.endpointId === endpoint.id && row.status !== '已移除');
   const staleName = nameChanged && name !== initialName;
   const blocked = !ops.can || busy || testing && !status?.ready;
@@ -150,10 +138,8 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
   const stale = staleName || staleNote || staleType;
   const hasEdits = infoChanged || connectionChanged;
   const update = patch => { setDraft(value => ({ ...value, ...patch })); ops.dirty(true); ops.setError(''); };
-  const updatePool = patch => { setPool(value => ({ ...value, ...patch })); ops.dirty(true); ops.setError(''); };
   const cancel = () => { if (!busy && !testing) ops.proceed(close); };
-  const submitReview = async () => {
-    setBusy(true);
+  const submitReview = () => {
     try {
       const legacyRoot = listedType?.task && !channelProtocolUsesFullAddress(draft.type, connection);
       const next = { baseUrl: draft.url.trim(), ...(customChanged ? { customAdapter: null } : {}) };
@@ -170,28 +156,13 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
         if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 600) throw Error('超时须为 1–600 秒');
       }
       if (kindChanged && endpoint.requestRules) normalizeChannelRequestRules(endpoint.requestRules, draftType);
-      const newApiKey = keyEntered ? (await providerApiKeysDraft([draft.key])).apiKeys[0] : undefined;
-      const addedKeys = poolChanged && newKeys.length ? (await providerApiKeysDraft(newKeys.map(row => row.raw))).apiKeys : [];
       if (!ops.isCurrent()) throw Error('权限或数据已有变化，请重新核对');
-      if (keyEntered) {
-        const [key] = previewKeys([newApiKey]);
-        Object.assign(next, { authMode: 'specific', apiKeyId: key.id, apiKeys: [key], keyPool: [] });
-      }
-      if (poolChanged) {
-        const added = previewKeys(addedKeys);
-        const offset = Math.max(0, ...pool.rows.map(row => row.priority));
-        Object.assign(next, { authMode: 'pool', poolPaused: false, keyStrategy: pool.strategy,
-          apiKeys: [...endpoint.apiKeys || [], ...added], keyPool: [...pool.rows,
-            ...added.map((key, index) => ({ keyId: key.id, priority: Math.min(100, offset + index + 1), enabled: true }))] });
-      }
-      setReviewDraft({ config: next, newApiKey, addedKeys });
+      setReviewDraft(next);
       setReviewRevision(impact.revision);
       ops.setError('');
       setStage('review');
     } catch (error) {
       ops.setError(error.message);
-    } finally {
-      setBusy(false);
     }
   };
   const rename = nameChanged ? { name: draft.name.trim(), connectionNameOnly: true } : {};
@@ -202,23 +173,18 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
     if (blocked || stale || connectionChanged && reviewRevision !== impact.revision) return;
     setBusy(true);
     try {
-      const { newApiKey, addedKeys } = connectionChanged ? reviewDraft : {};
       if (!ops.isCurrent()) throw Error('权限或数据已有变化，请重新核对');
       const kind = CHANNEL_INTERFACES.find(option => option.id === draftType) || (draftType === 'custom' ? { id: 'custom', protocol: '其他' } : null);
       const next = await ops.run('supplierChannelEdit', { ...base, ...(connectionChanged ? rename : directoryInfo), providerId: provider.id, endpointId: endpoint.id,
         baseUrl: draft.url, ...(connectionChanged ? { prepareConnection: true } : {}),
         ...(connectionChanged ? { allAssociations: true } : {}),
-        ...(!setInterface && !newApiKey && !poolChanged && !customChanged && connectionChanged ? { addressOnly: true } : {}),
+        ...(!setInterface && !customChanged && connectionChanged ? { addressOnly: true } : {}),
         ...(replacingProtocol ? { modelProtocol: draft.type, endpointPath } : setInterface && kind ? { protocol: kind.protocol, interfaceType: kind.id } : {}),
         ...(customChanged ? { customAdapter: null } : {}),
-        ...(customChanged || poolChanged ? { expectedImpactRevision: reviewRevision } : {}),
-        ...(newApiKey ? { newApiKey, channelOwned: true } : {}),
-        ...(poolChanged ? { pool: { keyPool: pool.rows, keyStrategy: pool.strategy, newKeys: addedKeys } } : {}),
+        ...(customChanged ? { expectedImpactRevision: reviewRevision } : {}),
       });
       if (next) {
         if (!connectionChanged) { close(); return; }
-        setDraft(value => ({ ...value, key: '' }));
-        setPool(value => ({ ...value, inputs: [] }));
         ops.dirty(infoChanged);
         setStage('test');
       }
@@ -239,8 +205,7 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
   const pending = status?.checks.filter(check => !check.passed).map(check => check.associationId) || [];
   const cannotApply = !candidate || stale || Boolean(status?.reason) || (unlinked ? Boolean(status?.credentialError) : !status?.ready);
   const disabled = locked || incomplete || stale || !hasEdits;
-  const proposed = review ? reviewDraft?.config : candidate?.config;
-  const prepared = candidate ? { ...endpoint, ...candidate.config } : null;
+  const proposed = review ? reviewDraft : candidate?.config;
   const typeLabel = t('渠道类型');
   const title = t(edit ? '编辑信息' : review ? '核对连接变更' : '验证连接变更');
   const actions = edit ? <>
@@ -254,6 +219,8 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
       {t(unlinked ? '保存未启用渠道' : '应用配置')}
     </Button>}
   </>;
+  if (stage === 'pool' && candidate) return <ChannelKeyPoolEditor
+    state={state} provider={provider} endpoint={endpoint} ops={ops} close={close} directory/>;
   return <Modal drawer wide title={title} description="" onClose={cancel} footer={actions}>
     <div ref={stageContent} tabIndex={-1}>
       {edit ? <form id={formId} className="supplier-configuration-form" noValidate onSubmit={event => {
@@ -279,25 +246,17 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
             endpointPath={draft.endpointPath} onEndpointPathChange={endpointPath => update({ endpointPath })}
             onProtocolChange={type => update({ type, endpointPath: type === initialSelection ? endpoint.endpointPath ?? null : null })}
             onBaseUrlChange={url => update({ url })}/>
-          <Field label={t('密钥配置')}>{t(channelKeyMode(prepared || endpoint))}</Field>
-          {prepared ? <>
-            <Field label={t('API 密钥')}><ChannelKeySummary endpoint={prepared} provider={provider}/></Field>
-            {prepared.authMode === 'pool' && <Field label={t('密钥选择策略')}>{t(channelKeyStrategyLabel(prepared.keyStrategy))}</Field>}
-          </> : pooled ? <>
-            <ChannelPoolFields endpoint={endpoint} provider={provider} pool={pool} disabled={locked} update={updatePool} setError={ops.setError}/>
-            {poolChanged && pool.rows.length + newKeys.length < 2 && <Notice error>{t('请保留至少两把不同的 API 密钥')}</Notice>}
-          </> : <>
-            <Field label={t('API 密钥')}><ChannelKeySummary endpoint={endpoint} provider={provider}/></Field>
-            <Field label={t('新 API 密钥')}><Input aria-label={t('新 API 密钥')} mode="password" autoComplete="new-password" maxLength={512}
-              value={draft.key} disabled={locked} onChange={key => update({ key, auth: key.trim() ? 'specific' : initialAuth })}
-              placeholder={t('留空保留当前凭证')}/></Field>
-          </>}
           <Field label={t('简介')}><TextArea aria-label={t('简介')} value={note} maxLength={300} disabled={locked}
             onChange={value => { setNote(value); ops.dirty(true); ops.setError(''); }}/></Field>
-          {candidate && <Notice>{t('此渠道有待验证的配置。')}<Button theme="borderless" onClick={() => setStage('test')}>{t('核对待验证配置')}</Button></Notice>}
+          {candidate && <Notice>{t('此渠道有待验证的配置。')}
+            <Button theme="borderless" onClick={() => setStage(credentialCandidate && candidate.config.authMode === 'pool' ? 'pool' : 'test')}>
+              {t('核对待验证配置')}
+            </Button>
+          </Notice>}
         </div>
       </form> : <>
-        {proposed && <ConnectionChanges connection={connection} next={proposed} name={draft.name.trim()} note={note.trim()} sourceType={draft.sourceType}/>}
+        {proposed && <ConnectionChanges connection={connection} next={proposed} name={draft.name.trim()} note={note.trim()}
+          sourceType={draft.sourceType} showCredentials={!review && credentialCandidate}/>}
         {review ? <>
           <Notice>当前配置继续生效。核对 {impact.mappings.length} 条模型渠道及 {impact.services.length} 个关联服务。</Notice>
           <AffectedModels connection={connection} impact={impact} checks={[]}/>

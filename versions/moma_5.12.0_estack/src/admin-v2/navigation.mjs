@@ -47,6 +47,7 @@ export const sections = [
   { id: "platform", title: "平台管理", items: [
     { id: "accounts", label: "后台账号", children: [["admins", "后台账号"]] },
     { id: "audit-logs", label: "审计日志", children: [["audit-logs", "审计日志"]] },
+    { id: "global-routing", label: "路由设置（全局）", children: [["global-routing", "路由设置（全局）"]] },
     { id: "site-configuration", label: "站点配置", children: [["site-configuration", "站点配置"]] },
     { id: "license", label: "License 管理", children: [["license", "License 管理"]] },
   ]},

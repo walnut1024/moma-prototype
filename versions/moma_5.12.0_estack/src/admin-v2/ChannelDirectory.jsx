@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Space, Table, Typography } from '@douyinfe/semi-ui';
+import { cloudAdminRequest } from './admin-client.mjs';
 import AdminStatus from './AdminStatus';
 import ChannelDirectoryDiscovery from './ChannelDirectoryDiscovery';
 import ChannelCapacityEditor from './ChannelCapacity';
@@ -14,7 +15,7 @@ import SupplierChannelConfiguration from './SupplierChannelConfiguration';
 import { channelChangeImpact } from './channel-change-management';
 import { channelStatus } from './channel-selection';
 import { channelCheckCurrent } from './provider-channels';
-import { connectionRecoveryIssue, connectionTestPassed } from './connection-state';
+import { connectionRecoveryIssue } from './connection-state';
 import { connectionDirectoryRows } from './channel-connection-directory';
 import { routingServices } from './service-routing';
 import { supplierDirectory } from './moma-provider.js';
@@ -23,9 +24,23 @@ import './channel-directory.css';
 function ConnectionOperation({ connection, action, state, ops, close, retest }) {
   const { id, endpoint, provider, models } = connection;
   const enabling = action === 'enable';
-  const title = enabling ? '启用连接' : '停用连接';
+  const title = enabling ? '启用渠道' : '停用渠道';
   const impact = channelChangeImpact(state, provider.id, id);
-  const services = routingServices(state).filter(service => impact.services.some(reference => reference.id === service.id));
+  const [catalogue, setCatalogue] = useState(null);
+  const [loadError, setLoadError] = useState('');
+  useEffect(() => {
+    if (enabling) return;
+    const request = new AbortController();
+    cloudAdminRequest('/model-services-new', { signal: request.signal })
+      .then(({ rows }) => { if (!request.signal.aborted) setCatalogue(rows); })
+      .catch(error => { if (!request.signal.aborted) setLoadError(error.message); });
+    return () => request.abort();
+  }, [enabling, id]);
+  const channelIds = new Set(models.map(model => model.association.id));
+  const linked = (catalogue || []).filter(service => service.channels?.some(channel =>
+    channel.enabled && !channel.simulated && channelIds.has(channel.channelId)));
+  const routed = routingServices(state).filter(service => impact.services.some(reference => reference.id === service.id));
+  const services = [...new Map([...routed, ...linked].map(service => [service.id, service])).values()];
   const target = { providerId: provider.id, endpointId: id, expectedUpdatedAt: endpoint.updatedAt, expectedImpactRevision: impact.revision };
   const [expected] = useState(target);
   const [confirmed, setConfirmed] = useState(false);
@@ -33,13 +48,11 @@ function ConnectionOperation({ connection, action, state, ops, close, retest }) 
   const [busy, setBusy] = useState(false);
   const stale = JSON.stringify(expected) !== JSON.stringify(target);
   const recovery = enabling && connectionRecoveryIssue(endpoint);
-  const result = () => {
-    if (endpoint.frozen || endpoint.candidateConfiguration || endpoint.serverTestJobs?.some(job => !job.receivedAt && !job.canceledAt)) return '请先处理冻结、候选配置或未完成检测';
-    if (!enabling) return '可提交';
-    if (provider.status !== '已启用') return '服务商停用';
-    if (!models.length) return '请先接入模型';
-    return recovery || (connectionTestPassed(endpoint) ? '可提交' : '当前配置待测试');
-  };
+  const blocked = !enabling ? false : endpoint.frozen ? '请先解除渠道冻结。'
+    : endpoint.candidateConfiguration ? '请先处理渠道的候选配置。'
+    : endpoint.serverTestJobs?.some(job => !job.receivedAt && !job.canceledAt) ? '请先完成渠道检测。'
+    : provider.status !== '已启用' ? '请先启用服务商。'
+    : !models.length ? '请先接入模型。' : recovery;
   const submit = async () => {
     setBusy(true);
     try {
@@ -50,17 +63,23 @@ function ConnectionOperation({ connection, action, state, ops, close, retest }) 
   return <Modal drawer wide title={title} description={connection.name} onClose={() => !busy && close()}
     footer={<Space><Button disabled={busy} onClick={close}>取消</Button>
       <Button theme="solid" type={enabling ? 'primary' : 'danger'} loading={busy}
-        disabled={busy || !ops.can || !confirmed || stale || Boolean(recovery)}
-        onClick={submit}>{associationIds.length ? '启用连接及所选模型' : '确认' + title}</Button></Space>}>
-    <Typography.Paragraph>{enabling ? '启用前需新增模型渠道并通过当前连接测试。' : '停用后，以下模型无法通过所选连接调用。恢复连接后，保留各模型原有启停设置。'}</Typography.Paragraph>
+        disabled={busy || !ops.can || !confirmed || stale || Boolean(blocked) || (!enabling && !catalogue)}
+        onClick={submit}>{associationIds.length ? '启用渠道及所选模型' : '确认' + title}</Button></Space>}>
     <Table size="small" rowKey="id" pagination={false} dataSource={[connection]} columns={[
-      { title: '连接名称', dataIndex: 'name' },
+      { title: '渠道名称 / ID', render: (_, row) => <div className="channel-identity"><strong>{row.name}</strong>
+        <Typography.Text size="small" ellipsis={{ showTooltip: true }}>{row.id}</Typography.Text></div> },
       { title: '服务商', render: () => provider.name },
-      { title: '当前状态', render: (_, row) => <AdminStatus value={row.status}/> },
-      { title: '已接入模型', render: () => models.map(model => model.modelName).join('、') || '—' },
-      { title: '准备结果', render: result },
+      { title: '状态', render: (_, row) => <AdminStatus value={row.status === '已启用' ? row.status : '已停用'}/> },
+      { title: '已接入模型', render: () => models.length + ' 款' },
     ]}/>
-    {services.length > 0 && <Typography.Paragraph>涉及 {services.length} 项服务 · {services.map(service => service.name || service.callId || service.id).join('、')}</Typography.Paragraph>}
+    {!enabling && <><Typography.Paragraph>停用后，以下模型服务将无法通过该渠道调用。</Typography.Paragraph>
+      {loadError ? <Notice error>加载受影响的模型服务失败，请重新打开抽屉。{loadError}</Notice>
+        : !catalogue ? <Typography.Text>正在加载模型服务…</Typography.Text>
+        : <Table size="small" rowKey="id" pagination={false} dataSource={services} empty="暂无受影响的模型服务" columns={[
+          { title: '模型服务名称', dataIndex: 'name' },
+          { title: '模型 ID', render: (_, service) => service.callId || '—' },
+        ]}/>}</>}
+    {blocked && <Notice error>{blocked}</Notice>}
     {enabling && endpoint.activationSource === 'automatic' && <Notice>
       {endpoint.activationReason || '自动停用'} · {endpoint.activationChangedAt &&
         new Date(endpoint.activationChangedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}
@@ -77,9 +96,9 @@ function ConnectionOperation({ connection, action, state, ops, close, retest }) 
           setConfirmed(false);
         }}/> },
     ]}/>}
-    {stale && <Notice error>连接或关联服务已变化，请关闭后重新核对。</Notice>}
+    {stale && <Notice error>渠道或关联服务已变化，请关闭后重新核对。</Notice>}
     <Checkbox checked={confirmed} disabled={busy || stale || !ops.can}
-      onChange={event => setConfirmed(event.target.checked)}>我已核对模型及关联服务</Checkbox>
+      onChange={event => setConfirmed(event.target.checked)}>{enabling ? '我已核对渠道及接入模型' : '我已核对受影响的模型服务'}</Checkbox>
     {ops.error && <Notice error>{ops.error}</Notice>}
   </Modal>;
 }

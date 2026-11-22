@@ -46,9 +46,11 @@ test('new model services share D1, preserve the imported ID, and protect concurr
   assert.equal((await run({ ...imported, row: { ...model, callId: 'invalid call id ' } })).status, 400);
   assert.deepEqual((await request(endpoint, { cookie: chrome })).data.rows, []);
 
+  assert.equal((await run(command('import', { ...model, priorityGroups: [0.5] }))).status, 400);
+  assert.equal((await run(command('import', { ...model, priorityGroups: [2, 2] }))).status, 400);
   const first = await run(imported);
   assert.equal(first.status, 200);
-  assert.deepEqual(first.data.row, { ...model, revision: 1 });
+  assert.deepEqual(first.data.row, { ...model, routingCustom:false, failoverCustom:false, revision: 1 });
   assert.deepEqual((await request(endpoint, { cookie: chrome })).data.rows, [first.data.row]);
   assert.deepEqual((await run(imported)).data, first.data);
   assert.deepEqual((await request('/operations/' + imported.operationId, { cookie: inApp })).data, first.data);
@@ -57,31 +59,37 @@ test('new model services share D1, preserve the imported ID, and protect concurr
   assert.equal(invalidListing.status, 400);
 
   const edits = await Promise.all([
-    run(command('save', { ...model, note: 'first edit' }, 1)),
-    run(command('save', { ...model, note: 'second edit' }, 1), chrome),
+    run(command('save', { ...model, priorityGroups: [0, 2], note: 'first edit' }, 1)),
+    run(command('save', { ...model, priorityGroups: [0, 2], note: 'second edit' }, 1), chrome),
   ]);
   assert.deepEqual(edits.map(result => result.status).sort(), [200, 409]);
   const [saved] = (await request(endpoint, { cookie: chrome })).data.rows;
   assert.equal(saved.revision, 2);
+  assert.deepEqual(saved.priorityGroups, [0, 2]);
+  assert.ok(saved.channels.every(channel => channel.priority !== 2));
   assert.equal(saved.createdAt, model.createdAt);
   assert.equal(saved.createdBy, model.createdBy);
   assert.deepEqual((await run(command('import', model))).data.row, saved);
-  const strategy = command('save', { ...saved, routingStrategy: 'latency-based-routing' }, 2);
+  const failover = {retry_policy:{TimeoutErrorRetries:0,RateLimitErrorRetries:3},max_fallbacks:1,timeout:20,numRetries:4,allowedFails:3,cooldownTime:60,retryConditions:['429'],failoverEnabled:true};
+  assert.equal((await run(command('save',{...saved,failoverCustom:true,failover:{...failover,retryConditions:['404']}},2))).status,400);
+  const strategy = command('save', { ...saved, routingCustom:true, failoverCustom:true, failover, routingStrategy: 'latency-based-routing' }, 2);
   assert.equal((await run({ ...strategy, row: { ...saved, routingStrategy: ['least-busy'] } })).status, 400);
   assert.equal((await run({ ...strategy, row: { ...saved, routingStrategy: 'round-robin' } })).status, 400);
   const changed = await run(strategy);
   assert.equal(changed.status, 200);
-  assert.deepEqual(changed.data.row, { ...saved, routingStrategy: 'latency-based-routing', revision: 3 });
+  assert.deepEqual(changed.data.row, { ...saved, routingCustom:true, failoverCustom:true, failover, routingStrategy: 'latency-based-routing', revision: 3 });
   assert.deepEqual((await run(strategy)).data, changed.data);
   assert.deepEqual((await request(endpoint, { cookie: chrome })).data.rows, [changed.data.row]);
-  const reset = await run(command('save', { ...changed.data.row, routingStrategy: 'simple-shuffle' }, 3));
+  const reset = await run(command('save', { ...changed.data.row, routingCustom:false, routingStrategy: 'simple-shuffle' }, 3));
   assert.equal(reset.status, 200);
+  assert.equal(reset.data.row.routingCustom,false);
+  assert.deepEqual(reset.data.row.failover,failover);
   assert.deepEqual(reset.data.row.channels, model.channels);
   assert.equal(reset.data.row.routingStrategy, 'simple-shuffle');
   assert.equal((await run(command('delete', undefined, 1, model.id))).status, 409);
   assert.equal((await run(command('delete', undefined, 4, model.id))).status, 200);
   assert.deepEqual((await run(command('import', model))).data, { id: model.id, row: null });
-  assert.deepEqual((await request(endpoint, { cookie: chrome })).data, { rows: [], deletedIds: [model.id] });
+  assert.deepEqual((await request(endpoint, { cookie: chrome })).data, { defaults: {timeout:60,numRetries:2,allowedFails:3,cooldownTime:30,retryConditions:['429','超时','5xx'],failoverEnabled:true,strategy:'simple-shuffle'}, rows: [], deletedIds: [model.id] });
   assert.equal(await db.prepare("SELECT COUNT(*) AS n FROM audit_events WHERE entity_type='new-model-service'").first('n'), 5);
   assert.equal((await request('/health')).data.schemaVersion, 18);
 });

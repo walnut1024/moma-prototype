@@ -21,7 +21,7 @@
 | provider／Provider ID | provider.id | provider_id | provider- | suppliers.id |
 | connection／连接 ID | connection.id | connection_id | connection- | channels.id |
 | channel／渠道 ID | channel.id | channel_id | channel- | channel_models.id |
-| model／模型 ID | model.id | model_id | model- | materials.id |
+| model／模型档案 ID | model.id | model_id | model- | materials.id |
 | model_service／模型服务 ID | model_service.id | model_service_id | model_service- | offers.record_id |
 
 保留物理表结构；存量主键按上述专用整改统一，资源映射从 modelData.resourceIds、mappingIds 读取，读取不生成新 ID。模型级服务配置仍保留 services.id；管理导出使用 model_service_config_id 区分这层内部配置。
@@ -34,13 +34,13 @@
 
 ## 字段引用规则
 
-界面字段采用[关键概念和字段](MODEL_OPERATIONS_GUIDE_FIELDS.md)。管理接口中的模型编码使用 `canonical_slug`，模型调用标识使用 `call_id`，上游模型调用标识使用 `upstream_model_id`。模型编码新录入去除首尾空白，允许 1–80 个字符，以小写字母或数字开头，后续可用小写字母、数字及 . _ : / -。
+界面字段采用[关键概念和字段](MODEL_OPERATIONS_GUIDE_FIELDS.md)。管理接口中的模型编码使用 `canonical_slug`，模型 ID 使用 `call_id`，上游模型调用标识使用 `upstream_model_id`。模型编码新录入去除首尾空白，允许 1–80 个字符，以小写字母或数字开头，后续可用小写字母、数字及 . _ : / -。
 
 OpenRouter 兼容接口使用调用标识作为 `id` 或请求体 `model`，MoMA 管理接口按 `model_id` 和 `model_service_id` 定位。接入管理使用 `base_url` 和 `key_group_id` 识别服务地址和密钥组，分别沿用现有物理字段。
 
 既有模型编码、调用值和 ID 不做批量格式修复。旧内部键 `modelTemplates.modelId` 表示模型编码，`models.modelId` 在统一服务中表示调用值，关联记录的 `modelId` 可能表示内部引用；必须按对象解析，不能按同名键直接联表。
 
-旧服务商目录接口中的 `catalogModels[].modelId`、`catalogModelIds` 是服务商范围内的目录标识，保留已有大小写及专用输入校验；它既不是模型永久 ID，也不能直接充当全局模型编码。当前接入通过 `libraryId`／明确模型 ID 建立身份引用，新流程不新增通用“Model ID”同义字段。
+旧服务商目录接口中的 `catalogModels[].modelId`、`catalogModelIds` 是服务商范围内的目录标识，保留已有大小写及专用输入校验；它既不是模型永久 ID，也不能直接充当全局模型编码。当前接入通过 `libraryId`／明确模型档案 ID 建立身份引用，新流程不新增通用“Model ID”同义字段。
 
 服务商目录首次导入按模型编码精确匹配参考资料：同编码复用原 model.id 并保留已有内容，不同编码独立登记。模型展示名允许重复，不作为冲突判断或合并依据；上游调用值也不用于推断模型身份。后续维护使用永久 ID。
 
@@ -54,15 +54,15 @@ OpenRouter 兼容接口使用调用标识作为 `id` 或请求体 `model`，MoMA
 | 模型售价 | model_service_id、价格版本、计费项／单位／币种 ID | 销售价格、条件、价格版本和销售范围 |
 | 基础资料 → 模型 | 保留既有档案记录与模型身份引用 | 参考名称、类型、规格、能力及来源 |
 
-新建卡片使用 `model-card-` 加 UUID v4 的独立 ID，保存至工作区的 `marketCards`。卡片可独立存为草稿，首次关联服务后写入对应模型 ID（`model_id`）。已有卡片沿用原键。卡片单独保存展示字段、关联及展示服务 ID、上架状态和可见范围。卡片命令使用 `listing_stage`，取值为 `preview`、`gray`、`formal`、`withdrawn`。持久化的 `listed` 分别通过指定范围和全部用户表达灰度上架和正式上架。指定范围分别保存 `organizationIds`、`projectIds` 和 `tenantIds`；组织和项目按同源记录校验，命中任一范围即可查看。已有卡片读出历史服务记录的 marketContent 和展示许可，首次通过卡片表单保存后读取卡片配置。模型资料、模型服务、价格、订购和调用保留原身份与数据。批量维护 JSON 中的服务销售上架阶段和历史展示字段仍属于服务配置。
+新建卡片使用 `model-card-` 加 UUID v4 的独立 ID，保存至工作区的 `marketCards`。卡片可独立存为草稿，首次关联服务后写入对应模型档案 ID（`model_id`）。已有卡片沿用原键。卡片单独保存展示字段、关联及展示服务 ID、上架状态和可见范围。卡片命令的 `listing_stage` 使用 `withdrawn`、`preview`、`gray`、`formal`，分别对应不可见、预告可见、灰度可见和全部可见。新建存为 `draft`，对客不可见。持久化的 `listed` 通过指定租户和全部用户区分灰度可见与全部可见。新设置的灰度范围保存 `tenantIds`，按有效租户校验，已有组织和项目范围在重新设置前仍按存量规则读取。设为不可见或预告可见时，关联在售服务原子设置 `salesPaused=true`，拦截新订购，保留调用状态和已有订单。恢复卡片可见后由运营人员重新开售。已有卡片读出历史服务记录的 marketContent 和展示许可，首次通过卡片表单保存后读取卡片配置。模型资料、模型服务、价格、订购和调用保留原身份与数据。批量维护 JSON 中的服务销售上架阶段和历史展示字段仍属于服务配置。
 
-卡片维护请求的 `name` 对应模型展示名，`description` 和 `description_en` 分别对应中文和英文简介。`context_length` 以 Token 为单位，存入 `capabilities.context`；`family`、`precision`、`release_date` 和 `parameters` 分别保存至 `profile.family`、`profile.precision`、`profile.releaseDate` 和 `profile.parameters`。`input_modalities` 对应 `profile.inputModalities`，输出选项按模态和结果类型分别保存至 `profile.outputModalities` 和 `profile.resultTypes`。`heat` 为热度，`tags` 为标签列表。`features` 中保存 `online_experience`、`smart_routing`、`supports_agent`、`supports_mcp` 和 `file_upload` 的布尔值。导入复制当前参考资料，后续编辑只更新卡片。
+卡片维护请求的 `name` 对应模型展示名，`description` 和 `description_en` 分别对应中文和英文简介。表单用 K 或 M 表示上下文长度，提交前以 1,024 或 1,048,576 为系数换算。`context_length` 以整数 Token 提交，存入 `capabilities.context`；`family`、`precision`、`release_date` 和 `parameters` 分别保存至 `profile.family`、`profile.precision`、`profile.releaseDate` 和 `profile.parameters`。`input_modalities` 对应 `profile.inputModalities`，输出选项按模态和结果类型分别保存至 `profile.outputModalities` 和 `profile.resultTypes`。`heat` 为热度，`tags` 为标签列表。`features` 中保存 `online_experience`、`smart_routing`、`supports_agent`、`supports_mcp` 和 `file_upload` 的布尔值。新建及编辑均可复制基础资料中的模型字段，保存更新当前卡片，沿用原身份及关联。
 
 模型服务、广场及售价展示并复制同一 model_service_id；渠道展示 channel_id，连接和 Provider 的 ID 在相应配置或详情可查。模型编码及永久 ID 纳入搜索。历史审计原文和已有 ID 不因文案统一而改写。
 
 ## 批量维护 JSON
 
-四模块的“查看 JSON”进入独立下钻页，完整内容按页面自然高度展示，不截断、不使用固定高度文本框。对象和数组支持逐层展开／收起以及全部展开／收起，默认全部展开；收起后显示字段或项目数量，空对象、空数组及基本值完整保留。折叠仅影响浏览，完整复制与批量维护始终使用完整 JSON。总表入口位于模块页头；服务商、模型和服务详情入口位于当前对象信息区右侧。广场模型卡片／列表操作提供模型级入口。JSON 页标题显示当前对象，支持完整复制；渠道管理服务商详情及对应 JSON 页只提供查看和复制，不提供批量维护，渠道表的批量操作保持；渠道管理其他范围、模型广场和模型售价保留批量维护，模型服务不提供批量维护入口；返回及面包屑恢复来源筛选、页码、详情和滚动位置。
+提供“查看 JSON”的模块通过该入口进入独立下钻页，完整内容按页面自然高度展示，不截断、不使用固定高度文本框。对象和数组支持逐层展开／收起以及全部展开／收起，默认全部展开；收起后显示字段或项目数量，空对象、空数组及基本值完整保留。折叠仅影响浏览，完整复制与批量维护始终使用完整 JSON。总表入口位于模块页头；服务商、模型和服务详情入口位于当前对象信息区右侧。JSON 页标题显示当前对象，支持完整复制；渠道管理服务商详情及对应 JSON 页只提供查看和复制，不提供批量维护，渠道表的批量操作保持；渠道管理其他范围和模型售价保留批量维护，模型服务页面不提供批量维护入口，模型广场页面不提供查看及批量维护 JSON 的入口；返回及面包屑恢复来源筛选、页码、详情和滚动位置。
 
 ### 范围与结构
 
@@ -130,4 +130,4 @@ UUID 和主键约束之外，所有普通更新入口禁止改写永久 ID。价
 
 批量启用、停用和移除均使用所选渠道关联的原 ID；启停与地址共享修改分开，停用不改共享连接及未选关联。恢复连接时未选关联保持停用，须展示范围并确认。批量移除以全部所选关联的并集校验引用，沿用关联处理与风险确认，软归档保留原 ID；只有没有其他实际关联的连接才可归档。服务商、模型资料、价格和历史不随渠道移除。
 
-新增渠道的模型展示名与模型编码联动引用同一已有模型 ID；目录外新模型显式填写类型并通过既有接入事务创建，不按同名合并、重写或重建存量 ID。上游地址选择项与服务商 Base URL 展示同源；新建取首项，已有配置保留原值。
+新增渠道的模型展示名与模型编码联动引用同一已有模型档案 ID；目录外新模型显式填写类型并通过既有接入事务创建，不按同名合并、重写或重建存量 ID。上游地址选择项与服务商 Base URL 展示同源；新建取首项，已有配置保留原值。

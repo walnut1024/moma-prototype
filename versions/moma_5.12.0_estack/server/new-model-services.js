@@ -1,3 +1,4 @@
+import { failoverError, failoverValues, initialRoutingParameters, globalPolicyDefaults } from '../src/admin-v2/global-routing-parameters.mjs';
 import { isResourceId, resourceId } from '../src/resource-id.mjs';
 import { MODEL_TYPES, SERVICE_MODEL_TYPES } from '../src/admin-v2/model-management.js';
 import { mappingCandidates } from '../src/admin-v2/service-model-mappings.js';
@@ -6,6 +7,7 @@ import { modelLibrary, modelMaterial } from '../src/admin-v2/model-library.js';
 import { serviceModelFields } from '../src/admin-v2/model-services-new.js';
 import { ROUTING_STRATEGIES } from '../src/admin-v2/service-routing-strategies.mjs';
 import { loadModelWorkspace } from './model-repository.js';
+import { marketCardsByModel } from '../src/market-cards.mjs';
 
 const types = { ...MODEL_TYPES, ...SERVICE_MODEL_TYPES };
 const editable = { name: 120, callId: 128, modelId: 200, modelName: 240, type: 32, note: 240, description: 300, tags: 160, tokenizer: 120 };
@@ -59,7 +61,10 @@ function validatedModelDetails(input, previous) {
 export async function newModelServices(db) {
   const { results } = await db.prepare(`SELECT id,revision,CASE WHEN deleted_at IS NULL THEN record_json END AS record_json
     FROM new_model_services ORDER BY created_at DESC,id`).all();
+  const stored = await db.prepare("SELECT json_extract(reference_json,'$.globalRoutingParameters') AS policy FROM model_workspace WHERE id=1").first('policy');
+  const defaults = { ...initialRoutingParameters, ...globalPolicyDefaults, ...JSON.parse(stored ?? '{}') };
   return {
+    defaults: { ...failoverValues(defaults), strategy: defaults.strategy },
     rows: results.filter(row => row.record_json).map(exposedRow),
     deletedIds: results.filter(row => !row.record_json).map(row => row.id),
   };
@@ -73,7 +78,7 @@ async function lifecycleCheck(db, row) {
       WHERE o.material_id=? AND o.id=? AND o.retired_at IS NULL AND s.deleted_at IS NULL`).bind(row.modelId || '', row.callId),
   ]);
   const cards = JSON.parse(workspace.results[0]?.cards || '{}');
-  const card = Object.hasOwn(cards, row.modelId) ? cards[row.modelId] : null;
+  const card = marketCardsByModel(cards).get(row.modelId);
   const offer = offers.results[0];
   const ids = [row.id, ...offers.results.map(item => item.record_id)];
   const shown = card?.shown?.some(id => ids.includes(id));
@@ -135,6 +140,11 @@ export async function changeNewModelService(db, actor, command, key) {
     const routingStrategy = row.routingStrategy === undefined ? before?.routingStrategy : row.routingStrategy;
     if (routingStrategy !== undefined && (typeof routingStrategy !== 'string'
       || !Object.hasOwn(ROUTING_STRATEGIES, routingStrategy))) invalid('请选择有效的路由策略');
+    const routingCustom = row.routingCustom ?? before?.routingCustom ?? false;
+    const failoverCustom = row.failoverCustom ?? before?.failoverCustom ?? false;
+    const failover = row.failover ?? before?.failover;
+    if (typeof routingCustom !== 'boolean' || typeof failoverCustom !== 'boolean' ||
+        (routingCustom && !routingStrategy) || ((failoverCustom || failover !== undefined) && failoverError(failover))) invalid('模型服务策略无效');
     if (!config.name?.trim() || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(config.callId || '')
       || (config.type && config.type !== 'other' && !Object.hasOwn(types, config.type)) || !Array.isArray(row.channels)
       || typeof row.listed !== 'boolean' || (row.contextPaused !== undefined && typeof row.contextPaused !== 'boolean')) invalid('模型服务基本信息无效');
@@ -163,6 +173,9 @@ export async function changeNewModelService(db, actor, command, key) {
     if (!imported && config.tokenizer && !row.contextPaused && channels.some(channel => channel.enabled && !positiveInteger(channel.context))) {
       invalid('请为每条已启用的渠道模型配置上下文长度');
     }
+    const priorities = row.priorityGroups === undefined ? before?.priorityGroups : row.priorityGroups;
+    if (priorities !== undefined && (!Array.isArray(priorities) || priorities.some(value => !Number.isSafeInteger(value) || value < 0)
+      || new Set(priorities).size !== priorities.length)) invalid('优先级组需为不重复的非负整数');
     const previousChannels = new Map(before?.channels.map(channel => [channel.id, channel]));
     const verify = channels.filter(channel => {
       const saved = previousChannels.get(channel.id);
@@ -204,7 +217,9 @@ export async function changeNewModelService(db, actor, command, key) {
     } else if (before?.modelName !== undefined) config.modelName = before.modelName;
     const history = imported ? row : before;
     next = { id, ...config, listed: row.listed, channels,
+      ...(priorities !== undefined && { priorityGroups: [...new Set([...priorities, ...channels.map(channel => channel.priority)])].sort((a,b) => a-b) }),
       ...(controlledOfferId && { controlledOfferId }),
+      routingCustom, failoverCustom, ...(failover && { failover: failoverValues(failover) }),
       ...(routingStrategy !== undefined && { routingStrategy }),
       ...(row.contextPaused !== undefined && { contextPaused: row.contextPaused }),
       ...Object.fromEntries(['grants', 'limits', 'batch'].filter(name => history && Object.hasOwn(history, name)).map(name => [name, history[name]])),

@@ -45,7 +45,7 @@ function CredentialVerification({ endpoint, credential, reload, close }) {
   </Modal>;
 }
 
-export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, close, directory = false, closeLabel = '关闭' }) {
+export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, close, directory = false, closeLabel = '关闭', replaceKeyId }) {
   const candidate = endpoint.candidateConfiguration;
   const active = new Set(connectionKeys(endpoint, provider).map(key => key.id));
   const [rows, setRows] = useState(() => structuredClone(candidate?.config.authMode === 'pool' ? candidate.config.keyPool : endpoint.authMode === 'pool' ? endpoint.keyPool : connectionKeys(endpoint, provider, true).filter(key => !key.revokedAt).map((key, index) => ({ keyId: key.id, priority: index + 1, enabled: active.has(key.id) }))));
@@ -55,7 +55,9 @@ export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, c
     ...(provider.apiKeys || []),
   ].map(key => [key.id, key])).values()];
   const [edited, setEdited] = useState(false), [testing, setTesting] = useState(false);
-  const [saving, setSaving] = useState(false), [keyChange, setKeyChange] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [keyChange, setKeyChange] = useState(() => !candidate && replaceKeyId && rows.some(row => row.keyId === replaceKeyId)
+    ? { mode: 'rotate', keyId: replaceKeyId, inputs: [keyInput()] } : null);
   const [stateFilter, setStateFilter] = useState('all'), [probeKey, setProbeKey] = useState('');
   const [verifying, setVerifying] = useState(null), [audit, setAudit] = useState(false);
   const [balanceKey, setBalanceKey] = useState(null);
@@ -144,7 +146,7 @@ export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, c
       if (await ops.run('channelCandidateApply', { ...context, confirmed: true, ...(unlinked ? { unlinked: true } : {}) })) close();
     } finally { lock.current = false; if (mounted.current) setSaving(false); }
   };
-  return <><Modal drawer wide title={directory ? '连接密钥池' : '渠道密钥池'} description={`${provider.name} · ${endpoint.name}`}
+  return <><Modal drawer wide title={replaceKeyId ? '替换 API 密钥' : directory ? '连接密钥池' : '渠道密钥池'} description={`${provider.name} · ${endpoint.name}`}
     onClose={() => !saving && ops.proceed(close)} footer={<>
       <Button theme="light" disabled={saving} onClick={() => ops.proceed(close)}>{closeLabel}</Button>
       <Button theme="light" disabled={disabledForWrite} onClick={save}>保存密钥池候选</Button>
@@ -179,8 +181,10 @@ export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, c
       {keyChange.mode === 'rotate' && <Notice>候选池将替换 {keys.find(key => key.id === keyChange.keyId)?.maskedKey || '此密钥'}，保留其他绑定和该条优先级。</Notice>}
       {keyChange.inputs.map((row, index) => <Field key={row.id} label={'新 API 密钥 ' + (index + 1)}>
         <Space><Input mode="password" autoComplete="new-password" maxLength={512} aria-label={'新 API 密钥 ' + (index + 1)}
-          value={row.value} disabled={disabledForWrite} onChange={value =>
-            setKeyChange(current => ({ ...current, inputs: current.inputs.map(item => item.id === row.id ? { ...item, value } : item) }))}/>
+          value={row.value} disabled={disabledForWrite} onChange={value => {
+            ops.dirty(true);
+            setKeyChange(current => ({ ...current, inputs: current.inputs.map(item => item.id === row.id ? { ...item, value } : item) }));
+          }}/>
           {keyChange.inputs.length > 1 && <Button theme="borderless" disabled={disabledForWrite} onClick={() =>
             setKeyChange(current => ({ ...current, inputs: current.inputs.filter(item => item.id !== row.id) }))}>移除此行</Button>}
         </Space>

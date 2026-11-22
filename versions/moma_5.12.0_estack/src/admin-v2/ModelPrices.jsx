@@ -17,6 +17,7 @@ import { CommercialDialog } from './ServiceWorkspaceDialogs';
 import PricingFilters from './PricingFilters';
 import { priceRecords, filterPricingRecords, pricingTableRows, operationsReturn } from './model-pricing-workspace';
 import { salesScope, salesStatus } from './service-sales';
+import { marketCardBlocksServiceSales } from '../market-cards.mjs';
 import { servicePurpose } from './service-purpose';
 import { displayTime, moneyDisplay, priceItems } from './model-management';
 import './model-pricing-workspace.css';
@@ -36,15 +37,16 @@ export default function ModelPrices(props) {
   const model=service?.model,key=offerKey(service);
   const versions=service?state.modelSalePrices.filter(row=>row.modelId===model.id && (service.providerId?row.scope==='provider' && offerKey(row)===key:row.scope==='model')).slice().sort((a,b)=>b.version-a.version):[];
   const saleStage = row => offerStage(row.model, providerOffer(row.model, offerKey(row)));
-  const onSale = row => ['gray', 'formal'].includes(saleStage(row)) && !salesPaused(row.model, offerKey(row));
+  const saleBlocked = row => marketCardBlocksServiceSales(state, row.model, offerKey(row));
+  const onSale = row => ['gray', 'formal'].includes(saleStage(row)) && !salesPaused(row.model, offerKey(row)) && !saleBlocked(row);
   const configure = (row, tab = 'pricing') => go({ service: row.id, tab, add: null, edit: null }, { preserveScroll: true });
   const showSales = (row, stage) => setSalesDialog({ row, stage, revision: row.model.updatedAt });
   const closeSales = () => ops.proceed(() => { setSalesDialog(null); ops.setError(''); });
   const saleRow = salesDialog && services.find(row => row.id === salesDialog.row.id);
   const saleActions = row => servicePurpose(row.model, offerKey(row)) === 'commercial' && <Space spacing={4} wrap>
     {onSale(row) ? <Button size="small" theme="borderless" disabled={!ops.can} onClick={() => showSales(row, 'pause')}>停售</Button>
-      : <Button size="small" theme="borderless" disabled={!ops.can} onClick={() => showSales(row, 'formal')}>开售</Button>}
-    <Button size="small" theme="borderless" disabled={!ops.can} onClick={() => showSales(row, 'gray')}>灰度开售</Button>
+      : <Button size="small" theme="borderless" disabled={!ops.can || saleBlocked(row)} onClick={() => showSales(row, 'formal')}>开售</Button>}
+    <Button size="small" theme="borderless" disabled={!ops.can || saleBlocked(row)} onClick={() => showSales(row, 'gray')}>灰度开售</Button>
   </Space>;
   const eligible = services.filter(row => !row.price && servicePurpose(row.model, offerKey(row)) === 'commercial');
   const merged=render=>(_,row)=>({children:render(row),props:{rowSpan:row.recordSpan}});

@@ -20,7 +20,6 @@
 .admin-v2 .channel-health-value { text-align: right; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .admin-v2 .channel-health-value-missing { grid-column: 2; color: var(--semi-color-text-2); }
 .admin-v2 .channel-health-trend:is(:hover, :focus-visible) .channel-health-value { color: var(--semi-color-primary); }
-.admin-v2 .channel-health-metric-label { text-decoration: underline dotted; text-underline-offset: 4px; cursor: help; }
 .channel-health-prices { padding: 12px; max-width: min(340px, 85vw); max-height: 45vh; overflow: auto; }
 .channel-health-prices .supplier-cost-line,
 .admin-v2 [data-admin-page="providers-health"] .supplier-cost-line { display: block; overflow-wrap: anywhere; }

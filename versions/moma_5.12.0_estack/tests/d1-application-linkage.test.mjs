@@ -238,6 +238,12 @@ test('the preset administrator and customers share D1 while their workspaces sta
       const revision=(await request('application',{cookie:admin.cookie})).data.revision;
       return request('application/commands',{cookie:admin.cookie,body:{operationId:randomUUID(),expectedRevision:revision,action}});
     };
+    const values = {retry_policy:{ServiceUnavailableErrorRetries:3,DefaultRetries:0},max_fallbacks:2,strategy:"least-busy",retryConditions:["429"],failoverEnabled:false,timeout:90.5,numRetries:4,retryAfter:3,allowedFails:5,cooldownTime:45};
+    assert.equal((await adminCommand({type:'saveGlobalRoutingParameters',values})).status,200);
+    assert.deepEqual((await request('application',{cookie:admin.cookie})).data.globalRoutingParameters,values);
+    for (const invalid of [{retry_policy:{TimeoutErrorRetries:-1}},{retry_policy:{Other:2}},{max_fallbacks:0.5},{strategy:"unknown"},{retryConditions:["404"]},{failoverEnabled:1},{retryAfter:-1},{numRetries:1.5},{timeout:0},{allowedFails:null},{cooldownTime:-1},{extra:3}]) {
+      assert.equal((await adminCommand({type:'saveGlobalRoutingParameters',values:{...values,...invalid}})).status,400);
+    }
     const enterpriseData={companyName:'验收开通企业',type:'企业',taxId:'DEMO2026',
       countryRegion:'中国',province:'江苏省',contactName:'演示管理员',contactPhone:phone,phone};
     const newEnterprise={type:'enterprise',operation:'create',
@@ -308,6 +314,10 @@ test('the preset administrator and customers share D1 while their workspaces sta
     assert(operationsView.tenants.length>0);
     assert(!Object.hasOwn(operationsView,'routes'));
     assert(operationsView.admins.every(row=>!Object.hasOwn(row,'account')));
+    assert.equal(operationsView.globalRoutingParameters,undefined);
+    assert.equal((await request('model-services-new',{cookie:operator.cookie})).data.defaults.strategy,values.strategy);
+    assert.equal((await request('application/commands',{cookie:operator.cookie,body:{operationId:randomUUID(),
+      expectedRevision:operationsView.revision,action:{type:'saveGlobalRoutingParameters',values}}})).status,403);
     assert.equal((await request('application/commands',{cookie:operator.cookie,body:{operationId:randomUUID(),
       expectedRevision:createdAdmin.data.revision,action:{type:'adminAccount',operation:'toggle',id:'yyg'}}})).status,403);
 

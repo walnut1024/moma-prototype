@@ -1,3 +1,5 @@
+import TableFieldHelp from '../components/TableFieldHelp';
+import { callLogFieldHelp } from '../components/call-log-field-help';
 import { workspaceStoragePrefix } from '../workspace-storage.mjs';
 import { projectCallErrors } from '../project-call.mjs';
 import { useEffect, useMemo, useState } from 'react';
@@ -162,15 +164,18 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
   };
   const columns = visibleFields.map(([title, dataIndex, format]) => {
     const width = requestWidths[dataIndex];
-    const column = { title, dataIndex, width };
+    const description = view === 'upstream' && dataIndex === 'duration'
+      ? '单次上游请求尝试从开始到结束的时间，单位为毫秒。'
+      : callLogFieldHelp[dataIndex];
+    const column = { title: description ? <TableFieldHelp name={title} description={description}/> : title, dataIndex, width };
     if (sortFields.has(dataIndex)) {
       const active = sort.field === dataIndex;
       const Icon = active ? (sort.direction === 1 ? IconArrowUp : IconArrowDown) : IconSort;
-      column.title = <Button size="small" theme="borderless" type="tertiary" icon={<Icon aria-hidden="true"/>}
-        iconPosition="right" onClick={() => {
+      column.title = <TableFieldHelp name={title} description={description} sortIcon={<Icon aria-hidden="true"/>}
+        onSort={() => {
           setViewSorts(current => ({ ...current, [view]: { field: dataIndex, direction: active ? -sort.direction : -1 } }));
           setPage(1);
-        }}>{title}</Button>;
+        }}/>;
       column.onHeaderCell = () => ({ 'aria-label': title, 'aria-sort': active ? (sort.direction === 1 ? 'ascending' : 'descending') : undefined });
     }
     if (dataIndex === 'requestId') return { ...column, render: requestIdCell, fixed: 'left' };

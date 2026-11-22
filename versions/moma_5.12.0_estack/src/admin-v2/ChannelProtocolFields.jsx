@@ -7,7 +7,7 @@ import { Choice, Field } from './ServiceUI';
 const options = CHANNEL_LIST_TYPES.map(({ id, label }) => [id, workbenchProtocolLabel(label)]);
 
 export default function ChannelProtocolFields({
-  protocol, baseUrl, allowHttp, disabled, current, root, allowCustom, endpointPath, onProtocolChange, onBaseUrlChange, onEndpointPathChange, showHelp,
+  protocol, baseUrl, allowHttp, disabled, current, root, allowCustom, endpointPath, onProtocolChange, onBaseUrlChange, onEndpointPathChange, showHelp, showPaths,
 }) {
   const t = useChannelText();
   const paths = channelProtocolPaths({ interfaceType: protocol, baseUrl, allowHttp }, current);
@@ -17,7 +17,10 @@ export default function ChannelProtocolFields({
     <Field label={t('接口格式')} required help={showHelp ? t('选择上游 API 使用的接口格式。') : undefined}><Choice label={t('接口格式')}
       value={protocol && protocol !== 'custom' ? protocol : undefined}
       placeholder={t(protocol === 'custom' ? '自定义 API' : '请选择接口格式')}
-      disabled={disabled} options={options} showClear={allowCustom}
+      disabled={disabled} options={showPaths ? options.map(([id, label]) => {
+        const path = id === protocol ? endpointPath ?? paths[0] : channelProtocolPaths({ interfaceType: id, baseUrl, allowHttp })[0];
+        return [id, path ? label + ' (' + path + ')' : label];
+      }) : options} showClear={allowCustom}
       onChange={value => onProtocolChange(value ?? 'custom')}/></Field>
     <Field label={t('接口端点')} required={editable || showHelp} help={pathHelp}>
       {onEndpointPathChange && (editable || !protocol) ?

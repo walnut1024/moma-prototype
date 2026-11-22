@@ -93,7 +93,7 @@ export function modelAuditChanges(state,action) {
   if (action.marketCard) {
     const { cardId, card } = action.marketCard;
     const before = state.modelData?.marketCards?.[cardId];
-    const fields = { status: '展示状态', linked: '关联服务', shown: '展示服务', scope: '可见范围' };
+    const fields = { status: '可见性', linked: '关联服务', shown: '展示服务', scope: '可见范围' };
     return Object.entries(fields).filter(([key]) => JSON.stringify(before?.[key]) !== JSON.stringify(card[key]))
       .map(([key, field]) => ({ object: card.content.name, field, before: before?.[key] ?? null, after: card[key] }));
   }

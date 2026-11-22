@@ -56,7 +56,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   const commercialKind = publishingCommercial ? action.data?.kind : null;
   const ordinaryListing = action.type === 'modelOperation' && ['publish', 'unlist'].includes(action.operation);
   // Supplier controls must not cancel in-flight tasks belonging to other suppliers.
-  const supplierLifecycle = action.type === 'modelOperations' && ['pauseSales','serviceProviderListing','serviceProviderServing','removeServiceProvider','providerRemovalPrepare','providerRemovalCommit'].includes(action.operation);
+  const supplierLifecycle = action.type === 'modelOperations' && ['pauseSales','marketCardSetStatus','marketCardLink','serviceProviderListing','serviceProviderServing','removeServiceProvider','providerRemovalPrepare','providerRemovalCommit'].includes(action.operation);
   const changingReferenceMaterial = action.type === 'modelOperations' && ['templateSave', 'templatePublish', 'templateDelete'].includes(action.operation);
   const savingClassification = action.type === 'modelOperations' && action.operation === 'modelClassificationSave';
   const directChanges=action.type==='batch'?action.changes:[action];

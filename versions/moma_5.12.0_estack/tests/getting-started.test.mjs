@@ -50,5 +50,5 @@ test('model operations opens a single glossary with complete definitions in both
   assert(table.rows.every(row => row.length === 4 && row.every(Boolean)));
   const names = new Set(table.rows.map(([name]) => name));
   assert.equal(names.size, table.rows.length);
-  for (const name of ['模型档案 ID', '模型调用标识', '上游模型调用标识']) assert(names.has(name));
+  for (const name of ['模型档案 ID', '模型 ID', '上游模型调用标识']) assert(names.has(name));
 });

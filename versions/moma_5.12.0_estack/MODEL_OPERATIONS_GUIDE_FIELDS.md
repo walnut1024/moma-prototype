@@ -7,7 +7,7 @@
 | 模型 | Model | 由开发者发布的 AI 模型或具体版本，其档案记录能力、模态和技术规格。 | An AI model or model version published by its developer. Its record describes its capabilities, modalities and technical specifications. |
 | 模型资料 | Model Record | 基础资料中的参考档案。创建模型服务、登记渠道模型或新建广场卡片时可复制所需字段。保存后，各模块分别维护自己的字段值。 | A reference record in Basic Data. When creating a model service, registering a channel model, or creating a marketplace card, you can copy the fields you need. Each module maintains its own saved values. |
 | 渠道模型 | Channel Model | 某款模型在某条渠道上的供给记录，保存模型身份、上游模型调用标识和该来源的采购价。 | A model offering on a specific channel. The record stores the model identity, the upstream invocation ID and the purchase price from that source. |
-| 模型服务 | Model Service | MoMA 提供给客户的调用入口，通过模型调用标识接收请求，并关联可使用的渠道模型。 | An entry point MoMA exposes to customers. It accepts requests by the model invocation identifier and links to the channel models it can use. |
+| 模型服务 | Model Service | MoMA 提供给客户的调用入口，按模型 ID 接收请求，并关联可使用的渠道模型。 | An entry point MoMA exposes to customers. It accepts requests by the requested model ID and links to the channel models it can use. |
 | 模型档案 ID | Model Record ID | 系统用于关联同一款模型档案的永久编号。 | A permanent identifier for linking records to the same model. |
 | 模型编码 | Model Code | 在同一个 MoMA 实例的模型资料库中，唯一标识一个确定的模型型号和版本。多个服务商提供同一型号、同一版本时，共用同一个模型编码。不同型号或版本使用不同编码。用于模型资料登记、导入和匹配。 | A unique code for a specific model and version within the model library of a MoMA instance. Providers offering the same model and version share the code. Different models or versions have different codes. Used to register, import and match model records. |
 | 模型资料名称 | Model Record Name | 在基础资料中维护的可读名称，供运营人员查找和选取模型。名称可以重复。 | A readable name maintained in Basic Data to help operators find and select models. Multiple records may share the same name. |
@@ -36,9 +36,9 @@
 | 渠道 ID | Channel ID | 标识一条共享接入连接的编号，用于定位渠道列表中的具体连接。 | An identifier for a shared connection that locates the corresponding entry in the channel list. |
 | 渠道名称 | Channel Name | 运营人员为连接设置的名称，用于区分同一服务商的不同接入配置。 | An operator-defined name that distinguishes connections for the same provider. |
 | 渠道类型 | Channel Type | 按供给来源对渠道进行的业务分类。 | A business classification based on the source of inference capacity. |
-| 服务地址 | Base URL | 上游 API 的基础访问地址，与接口路径共同确定请求目的地。 | The upstream API's base address. Together with the endpoint path, it determines the request destination. |
+| 服务地址 | Base URL | API 的基础访问地址，与接口端点共同确定请求地址。渠道管理中指上游服务的地址，模型服务中指 MoMA 网关的地址。 | The base address of an API. Together with the API endpoint, it determines the request URL. In Channel Management it refers to the upstream service. In Model Services it refers to the MoMA gateway. |
 | 接口格式 | API Format | 上游接口采用的请求、响应和调用约定，例如 OpenAI Chat Completions。 | The upstream API's request, response and invocation conventions, such as OpenAI Chat Completions. |
-| 接口端点 | API Endpoint | 某项接口的具体请求路径或地址，例如 /v1/chat/completions。 | The request path or address for a specific API operation, such as /v1/chat/completions. |
+| 接口端点 | API Endpoint | API 的具体请求路径或地址，例如 /v1/chat/completions。渠道管理中指上游接口，模型服务中指 MoMA 对外接口。 | The request path or address for a specific API operation, such as /v1/chat/completions. In Channel Management it refers to the upstream API. In Model Services it refers to the API MoMA exposes to clients. |
 | 接口版本 | API Version | 上游 API 要求指定的接口规范版本。 | The API specification version required by the upstream provider. |
 | 服务区域 | Region | 上游服务提供访问的地理区域。 | The geographic region where the upstream service is available. |
 | 认证方式 | Authentication Method | 平台向上游证明调用身份的方式。 | The method MoMA uses to prove its identity to the upstream service. |
@@ -51,10 +51,8 @@
 | 已接入模型数 | Connected Model Count | 当前渠道中已完成接入的模型数量。 | The number of models connected through the channel. |
 | 模型服务名称 | Model Service Name | 运营人员为具体模型服务设置的管理名称。 | An administrative name assigned to a specific model service. |
 | 模型服务 ID | Model Service ID | 系统标识具体服务记录的永久编号，供广场、销售等模块关联。 | A permanent identifier for a model service record. The marketplace, sales and other modules use it to link to the service. |
-| 模型调用标识 | Model Invocation ID | 客户调用 MoMA 时在请求参数 model 中填写的值，由模型服务维护。 | The value a customer puts in the model parameter when calling MoMA. The model service maintains it. |
+| 模型 ID | Model ID | 客户调用 MoMA 时在请求参数 model 中填写的值，由模型服务维护。 | The value a customer puts in the model parameter when calling MoMA. The model service maintains it. |
 | 模型映射 | Model Mapping | 模型服务与渠道模型之间的绑定关系，决定该服务可以使用哪些上游来源。 | The association between a model service and a channel model. It determines which upstream sources the service can use. |
-| 平台 API 地址 | Platform API Base URL | 客户访问 MoMA 网关的基础地址。 | The base URL clients use to access the MoMA gateway. |
-| 平台 API 路径 | Platform API Path | MoMA 对外接口的请求路径，例如 /v1/chat/completions。 | The request path of a MoMA API operation, for example /v1/chat/completions. |
 | 渠道模型状态 | Channel Model Status | 一条已关联渠道在当前服务中的状态。已启用的渠道在来源配置可用时可参与路由。 | The state of a linked channel model in the current service. An enabled channel can participate when its upstream configuration is available. |
 | 服务描述 | Service Description | 在模型服务中维护的该服务说明。 | A description maintained on the model service. |
 | 路由模式 | Routing Mode | 服务对外组织调用入口的方式，例如统一模型服务或渠道直选。 | How the service exposes its entry points, such as a unified model service or direct channel selection. |
@@ -66,9 +64,8 @@
 | 重试次数 | Max Retries | 首次尝试失败后，策略允许额外尝试的最大次数。 | The maximum number of additional attempts allowed by the policy after the first attempt fails. |
 | 超时时间 | Timeout | 调用策略允许等待的最长时间，具体值需同时标明单位和作用范围。 | The longest wait the call policy allows. The value has a unit and an applicable scope. |
 | 服务状态 | Service Status | 模型服务的调用开关，表示服务已启动或已停止。 | Whether the model service is started or stopped for calls. |
-| 广场展示 | Market Visibility | 控制模型卡片是否在模型广场展示的开关。 | Whether the model card is displayed in the model marketplace. |
 | 可见范围 | Visibility Scope | 允许看到该模型卡片的客户、组织或项目范围。 | The customers, organizations or projects that can see the model card. |
-| 上架状态 | Listing Status | 模型卡片的展示阶段。预告可见且无法进入详情，灰度上架限指定范围，正式上架对全部用户可见，下架后从模型广场移除。 | The model card’s display stage: preview without details, visible to a selected audience, visible to all, or delisted. |
+| 可见性 | Visibility | 模型卡片在广场的展示范围，分为不可见、预告可见、灰度可见和全部可见。灰度可见面向指定租户。 | The visibility of a model card: hidden, preview without details, visible to selected tenants, or visible to all. |
 | 计费项 | Billing Item | 独立计价的资源项目，例如输入 Token、输出 Token 或缓存读取。 | A resource billed separately, such as input tokens, output tokens or cache reads. |
 | 计费单位 | Billing Unit | 单价对应的资源数量单位，例如百万 Token、次、张或秒。 | The quantity a unit price applies to, such as one million tokens, a request, an image or a second. |
 | 币种 | Currency | 价格使用的货币代码，例如 CNY 或 USD。 | The currency code used for a price, such as CNY or USD. |

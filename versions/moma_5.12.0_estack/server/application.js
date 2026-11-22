@@ -1,3 +1,5 @@
+import { ROUTING_STRATEGIES } from "../src/admin-v2/service-routing-strategies.mjs";
+import { failoverError, globalPolicyDefaults, initialRoutingParameters, parameterError, routingParameters } from '../src/admin-v2/global-routing-parameters.mjs';
 import { assertPersonalProjects } from '../src/personal-project.mjs';
 import { isResourceId, resourceId } from '../src/resource-id.mjs';
 import { activeTenantVersion, changeTenantRoute, isTenantRouteCall, keyTenantRoute, visibleProjectRoutes } from '../src/tenant-routing.mjs';
@@ -208,6 +210,13 @@ export async function applicationBootstrap(db, actor, configured = []) {
     .map(({requestBody:_request,responseBody:_response,requestHash:_hash,rejection:_rejection,...fact}) => withRequestScope(state,fact));
   if(maintenance)return maintenanceView(state,row.model_revision,requests,events);
   const { cloudMockState: _snapshot, projectRoutes: _projectRoutes, ...view } = state;
+  const effectivePolicy = { ...initialRoutingParameters, ...globalPolicyDefaults, retryAfter: state.globalRetryAfter ?? 0, ...state.globalRoutingParameters };
+  if (actor.role === '平台管理员') {
+    view.globalRoutingParameters = effectivePolicy;
+  } else {
+    delete view.globalRoutingParameters;
+  }
+  delete view.globalRetryAfter;
   if(actor.role==='运营人员'){
     for(const key of ['routes','limits','fallbacks','releases','caches','clusters','artifacts','incidents','integrations'])delete view[key];
     view.deployments=[];
@@ -240,6 +249,10 @@ export async function applicationBootstrap(db, actor, configured = []) {
 
 function referenceWrite(before, after, reference) {
   const next = { ...reference, identityGeneration: after.identityGeneration || 0 };
+  if (before.globalRoutingParameters !== after.globalRoutingParameters) {
+    next.globalRoutingParameters = after.globalRoutingParameters;
+    delete next.globalRetryAfter;
+  }
   for (const key of collections) if (before[key] !== after[key]) next[key] = after[key];
   for (const key of ['requests','ledger','audits','identityEvents']) {
     const rows=next[key] || [], cutoff=Date.now()-week;
@@ -375,7 +388,21 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins,
     issue(403,'LICENSE_REQUIRED','商业运营授权不可用');
   }
   try {
-    if (action.type==='cancelMarketOrder' && canMutate(actor.role,{type:'update',collection:'orders'})) {
+    if (action.type === 'saveGlobalRoutingParameters') {
+      if (actor.role !== '平台管理员') issue(403, 'FORBIDDEN', '仅系统管理员可配置全局路由');
+      const values = action.values;
+      if (!values || typeof values !== 'object' || Array.isArray(values) ||
+          Object.keys(values).some(key => !Object.hasOwn(initialRoutingParameters, key) && !Object.hasOwn(globalPolicyDefaults, key))) {
+        issue(400, 'INVALID_INPUT', '路由参数格式无效');
+      }
+      if (failoverError(values) || !Object.hasOwn(ROUTING_STRATEGIES, values.strategy)) issue(400, 'INVALID_INPUT', '路由策略或故障转移参数无效');
+      for (const field of routingParameters) {
+        const error = parameterError(field, values[field.key]);
+        if (error) issue(400, 'INVALID_INPUT', error);
+      }
+      next = { ...state, revision: state.revision + 1, globalRoutingParameters: values,
+        audits: [{ action: '修改全局路由设置', objectId: 'global-routing', result: '成功', createdAt: new Date().toISOString() }, ...state.audits] };
+    } else if (action.type==='cancelMarketOrder' && canMutate(actor.role,{type:'update',collection:'orders'})) {
       if(!validId(action.id)) throw Error('订单标识无效');
       cancellation=await db.prepare('SELECT id,cancelled_at FROM market_orders WHERE id=?').bind(action.id).first();
       if(!cancellation) throw Error('订单不存在');

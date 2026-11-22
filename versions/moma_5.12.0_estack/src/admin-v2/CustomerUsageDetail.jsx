@@ -1,3 +1,5 @@
+import TableFieldHelp from '../components/TableFieldHelp';
+import { customerUsageFieldHelp } from './customer-usage-field-help';
 import Table from './AdminTable';
 import { internalSpace } from '../operating-space.mjs';
 import { requestCharge } from '../project-call.mjs';
@@ -72,11 +74,11 @@ export default function CustomerUsageDetail({ state }) {
   const modelColumns = [
     { title: '模型', dataIndex: 'model' },
     { title: '调用次数', dataIndex: 'calls', align: 'right', render: amount },
-    { title: '计量用量', dataIndex: 'total', align: 'right', render: (total, model) => total == null ? '待确认'
+    { title: <TableFieldHelp name="计量用量" description={customerUsageFieldHelp.total}/>, dataIndex: 'total', align: 'right', render: (total, model) => total == null ? '待确认'
       : `${amount(total)} ${model.unit}${model.pending > 0 ? ` · ${model.pending} 条待确认` : ''}` },
-    { title: 'HTTP 请求成功率', dataIndex: 'success', align: 'right', render: value => value == null ? '—' : `${value.toFixed(2)}%` },
-    { title: '区间峰值 TPM', dataIndex: 'peakTpm', align: 'right', render: amount },
-    { title: '区间平均 TPM', dataIndex: 'avgTpm', align: 'right', render: amount },
+    { title: <TableFieldHelp name="HTTP 请求成功率" description={customerUsageFieldHelp.success}/>, dataIndex: 'success', align: 'right', render: value => value == null ? '—' : `${value.toFixed(2)}%` },
+    { title: <TableFieldHelp name="区间峰值 TPM" description={customerUsageFieldHelp.peakTpm}/>, dataIndex: 'peakTpm', align: 'right', render: amount },
+    { title: <TableFieldHelp name="区间平均 TPM" description={customerUsageFieldHelp.avgTpm}/>, dataIndex: 'avgTpm', align: 'right', render: amount },
   ];
   const canViewLogs = canAccessPage(state.currentRole, 'logs');
   const logHref = (targetProject, query) => {

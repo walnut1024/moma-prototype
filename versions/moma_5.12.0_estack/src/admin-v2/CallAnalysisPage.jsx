@@ -1,3 +1,4 @@
+import TableFieldHelp from '../components/TableFieldHelp';
 import { useEffect, useMemo, useState } from 'react';
 import { Banner, Button, Card, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconArrowRight } from '@douyinfe/semi-icons';
@@ -119,9 +120,10 @@ export default function CallAnalysisPage({ state }) {
   const statusRows = [...failures].map(([id, value]) => ({ id, value, name: httpLabel(id === 'unreported' ? null : Number(id)) }))
     .sort((a, b) => b.value - a.value || a.id.localeCompare(b.id));
   const lengths = inputLengthDistribution(rows.map(row => ({ usage: { input: row.input } })));
+  const failureRateHelp = '失败数除以成功与失败请求之和。取消、进行中和未采集单列。';
   const stats = [
     ['请求数', fmt(summary.count)],
-    ['最终失败率', percent(summary.failureRate), fmt(summary.failed) + ' 次失败', '失败数除以成功与失败请求之和。取消、进行中和未采集单列。'],
+    ['最终失败率', percent(summary.failureRate), fmt(summary.failed) + ' 次失败', failureRateHelp],
     ['P95 总耗时', millis(summary.p95)],
     ['Token 用量', fmt(summary.total), '输入 ' + fmt(summary.input) + ' / 输出 ' + fmt(summary.output)],
     ...(summary.ttftSamples ? [['P95 首 Token 时延', millis(summary.ttft), fmt(summary.ttftSamples) + ' 个有效样本']] : []),
@@ -131,8 +133,10 @@ export default function CallAnalysisPage({ state }) {
       onClick={() => drill(window, observationGroupScope(groupBy, row))}>{row.name}</Button> },
     { title: '请求数', dataIndex: 'count', align: 'right', sorter: (a, b) => a.count - b.count, render: fmt },
     { title: '失败数', dataIndex: 'failed', align: 'right', sorter: (a, b) => a.failed - b.failed, render: fmt },
-    { title: '失败率', dataIndex: 'failureRate', align: 'right', render: percent },
-    ...[['P95 总耗时（ms）', 'p95'], ['输入 Token', 'input'], ['输出 Token', 'output']].map(([title, dataIndex]) =>
+    { title: <TableFieldHelp name="失败率" description={failureRateHelp}/>, dataIndex: 'failureRate', align: 'right', render: percent },
+    { title: <TableFieldHelp name="P95 总耗时（ms）" description="有耗时记录的请求中，约 95% 的请求耗时不超过此值。"/>,
+      dataIndex: 'p95', align: 'right', render: fmt },
+    ...[['输入 Token', 'input'], ['输出 Token', 'output']].map(([title, dataIndex]) =>
       ({ title, dataIndex, align: 'right', render: fmt })),
   ];
   return <div className="admin-page-stack">

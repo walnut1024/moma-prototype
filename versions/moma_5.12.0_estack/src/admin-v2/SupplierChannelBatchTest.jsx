@@ -4,7 +4,7 @@ import { resolveChannelAssociationModel } from './channel-association-model';
 import { channelEnableConfirmationIssue, channelDirectEnableIssue, prepareChannelEnableConfirmation, prepareChannelDirectEnableConfirmation } from './channel-enable-confirmation';
 import { basicChannelUsageButton, channelTestUsageAuthorized } from './channel-test-authorization';
 import { cloneElement, useEffect, useRef, useState } from 'react';
-import { Button, Checkbox, Space, Table, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Checkbox, Space, Table, Typography } from '@douyinfe/semi-ui';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import { Choice, Field } from './ServiceUI';
 import { CopyId, Disclosure, GridTable, Row, Cell, Modal, Notice } from './ModelOperationsUI';
@@ -27,7 +27,7 @@ const isMediaTest = row => ['image', 'audio', 'video'].includes(row.type);
 const checkOptions = [['basic', '基础调用'], ['streaming', '流式响应'], ['tools', '工具调用'], ['structured', '结构化输出']];
 const audioOptions = [['speech', '语音合成'], ['transcription', '语音识别']];
 
-export default function SupplierChannelBatchTest({ state, provider, endpointId, associationIds, ops, close, navigation, embedded = false, fromService = false, onContinue, continueDisabled = false, continueLabel = '下一步：配置销售', testOnly = false, startToken, onComplete, onProgress, directory = false, onRemove, reference = false, title = '测试连接' }) {
+function ModelCallTest({ state, provider, endpointId, associationIds, ops, close, navigation, embedded = false, fromService = false, onContinue, continueDisabled = false, continueLabel = '下一步：配置销售', testOnly = false, startToken, onComplete, onProgress, directory = false, onRemove, reference = false, title = '测试连接', modeSelector, httpProbe }) {
   const endpoint = state.endpoints.find(row => row.id === endpointId);
   const viewingConnection = testOnly && !embedded;
   const directoryTest = directory && viewingConnection && !reference;
@@ -37,7 +37,8 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
   const records = rows.map(row => { let master; try { master = resolveChannelAssociationModel(state, provider, row); } catch { /* The plan reports the missing identity without guessing a match. */ } return { associationId: row.id, modelId: master?.id, modelName: master?.name, upstreamModelId: row.upstreamModelId, type: master?.type }; });
   const restored = recentChannelTestJob(endpoint?.serverTestJobs, associationIds);
   const [job, setJob] = useState(restored), [batch, setBatch] = useState(null);
-  const [selected, setSelected] = useState([]), [confirmation, setConfirmation] = useState(null), [check, setCheck] = useState(reference ? '' : restored?.check || '');
+  const [selected, setSelected] = useState([]), [confirmation, setConfirmation] = useState(null);
+  const [check, setCheck] = useState(directoryTest || reference ? '' : restored?.check || '');
   const [expensiveIds, setExpensiveIds] = useState([]), [audioProbes, setAudioProbes] = useState({}),
     [plannedIds, setPlannedIds] = useState(() => directory && !reference && associationIds.includes(endpoint?.directoryDefaultTestAssociationId) ? [endpoint.directoryDefaultTestAssociationId] : null),
     [consent, setConsent] = useState(false);
@@ -55,17 +56,16 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
   const availableEndpoints = [...new Set(recordEndpoints?.values() || [])].filter(Boolean);
   const scopedRecords = directory && endpointFilter ? records.filter(row => recordEndpoints.get(row.associationId) === endpointFilter) : records;
   const testableRecords = directoryTest ? scopedRecords.filter(row => row.modelId && row.upstreamModelId && row.type &&
-    (!check || ['text', 'multimodal'].includes(row.type)) &&
     !channelInterfaceIssue(provider, rowsById.get(row.associationId))) : [];
   const selectedForTest = testableRecords.filter(row => plannedIds
     ? plannedIds.includes(row.associationId) : associationIds.length === 1 || !isMediaTest(row));
   const selectedTestIds = selectedForTest.map(row => row.associationId);
-  const allBasic = directoryTest && !check ? channelTestModels(testableRecords.filter(row => !isMediaTest(row))) : [];
+  const allBasic = channelTestModels(testableRecords.filter(row => !isMediaTest(row)));
   let plannedModels = [], planError = '';
   try {
     if (!directoryTest) plannedModels = channelTestModels(scopedRecords, { check, expensiveIds, audioProbes, plannedIds });
     else if (associationIds.length > 1 || !selectedForTest.some(row => row.type === 'audio' && !audioProbes[row.associationId])) {
-      plannedModels = channelTestModels(selectedForTest, { check, expensiveIds: selectedTestIds, audioProbes });
+      plannedModels = channelTestModels(selectedForTest, { expensiveIds: selectedTestIds, audioProbes });
     }
   } catch (issue) { planError = issue.message; }
   const basicUsageButton=basicChannelUsageButton(plannedModels,check),mediaRecords=records.filter(isMediaTest);
@@ -81,7 +81,7 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
   };
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
-    if (!activeJob?.batchId) return;
+    if (httpProbe || !activeJob?.batchId) return;
     let stopped = false, timer; const controller = new AbortController();
     const poll = async () => {
       try {
@@ -93,7 +93,7 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
     };
     void poll();
     return () => { stopped = true; clearTimeout(timer); controller.abort(); };
-  }, [activeJob?.batchId, pollRevision]);
+  }, [activeJob?.batchId, pollRevision, Boolean(httpProbe)]);
 
   const submitRequest = async tracked => {
     const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15000);
@@ -176,15 +176,13 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
   if (directoryTest) {
     const canChange = canPlan && ops.can;
     const canTest = canChange && ready && provider.status === '已启用';
-    const results = !stale && (activeJob?.check || '') === check ? batch?.items || [] : [];
+    const results = !stale ? batch?.items || [] : [];
     const resultsById = new Map(results.map(item => [item.model.associationId, item]));
     const retryFailures = new Set(results.filter(item => item.status === 'failed' || item.status === 'unknown')
       .map(item => item.model.associationId));
     const failedBasicModels = allBasic.filter(row => retryFailures.has(row.associationId));
     const testRows = scopedRecords.filter(row => !failureOnly || retryFailures.has(row.associationId));
     const canTestDifferentScope = allBasic.length > 1 && allBasic.length <= 50 && allBasic.some(row => !selectedTestIds.includes(row.associationId));
-    const showCheck = scopedRecords.some(row => ['text', 'multimodal'].includes(row.type));
-    const shownResults = results.filter(item => selectedTestIds.includes(item.model.associationId));
     const usage = details?.usage;
     const usageText = [
       usage?.input_tokens == null ? null : `输入 ${usage.input_tokens} Token`,
@@ -198,7 +196,7 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
       catch { setError('复制失败，请重试。'); }
     };
     return <SupplierCreationDialog wide title={title} description="" cancel={close} cancelLabel="关闭"
-      className="channel-test-dialog" footer={<>
+      className="channel-test-dialog" footer={httpProbe ? httpProbe.action : <>
         {running && <Button disabled={busy || !ops.can} onClick={cancelTask}>停止后续测试</Button>}
         {canPlan && canTestDifferentScope && <Button disabled={!canTest}
           onClick={() => start({ basicModels: allBasic, explicitBasicClick: true })}>
@@ -209,19 +207,16 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
           {associationIds.length === 1 ? '开始测试' : '测试所选'}{associationIds.length > 1 && '（' + selectedTestIds.length + '）'}
         </Button>}
       </>}>
-      <Typography.Text type="secondary">{provider.name} / {endpoint?.name}</Typography.Text>
-      {(availableEndpoints.length > 1 || showCheck) && <div className="channel-test-fields">
-        {availableEndpoints.length > 1 && <Field label="测试接口"><Choice label="测试接口" value={endpointFilter || 'auto'}
+      {modeSelector(httpProbe ? httpProbe.running : !canPlan)}
+      {httpProbe ? httpProbe.content : <>
+      {availableEndpoints.length > 1 && <div className="channel-test-fields">
+        <Field label="测试接口"><Choice label="测试接口" value={endpointFilter || 'auto'}
           options={[[ 'auto', '自动选择' ], ...availableEndpoints.map(url => [url, new URL(url).pathname + new URL(url).search])]}
           disabled={!canChange} onChange={value => {
-            const next = value === 'auto' ? '' : value;
-            setEndpointFilter(next);
-            if (next && !records.some(row => ['text', 'multimodal'].includes(row.type) && recordEndpoints.get(row.associationId) === next)) setCheck('');
+            setEndpointFilter(value === 'auto' ? '' : value);
             setFailureOnly(false);
             setConsent(false);
-          }}/></Field>}
-        {showCheck && <Field label="测试方式"><Choice label="测试方式" value={check || 'basic'} options={checkOptions}
-          disabled={!canChange} onChange={value => { setCheck(value === 'basic' ? '' : value); setFailureOnly(false); setConsent(false); }}/></Field>}
+          }}/></Field>
       </div>}
       <OnboardingScenarioControl disabled={!canChange}/>
       {!ready && <Notice error>渠道缺少可用 API 密钥。请在密钥管理中配置后再测试。</Notice>}
@@ -233,7 +228,8 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
         {notSubmitted && <Button theme="solid" disabled={busy || !ops.can || !ready || stale} onClick={resumeOriginal}>继续原提交</Button>}
       </Space>}
       {(busy || running || error && activeJob?.batchId) && <Space wrap>
-        <ChannelTestProgress batch={batch} running={busy || running}/>
+        <ChannelTestProgress batch={busy ? null : batch} running={busy || running}/>
+        {running && <Typography.Text type="secondary">关闭后可重新打开查看进度</Typography.Text>}
         {error && activeJob?.batchId && <Button theme="borderless" onClick={() => setPollRevision(value => value + 1)}>刷新进度</Button>}
       </Space>}
       {stale && <Notice>连接配置已变化，请重新测试。</Notice>}
@@ -272,7 +268,7 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
             const row = rowsById.get(record.associationId);
             const item = resultsById.get(row.id);
             const issue = channelInterfaceIssue(provider, row);
-            const previousPass = !check && passed(row);
+            const previousPass = passed(row);
             const result = issue ? '接口不匹配' : item ? CHANNEL_TEST_STATUS[item.status] : previousPass ? '通过' : '待测试';
             return <div className="channel-test-result">
               <AdminStatus value={result || '结果未知'}/>
@@ -299,7 +295,7 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
             </Space>;
           } },
         ]}/>
-      {(retryFailures.size > 0 || selectedTestIds.length > 0) && <Space wrap className="channel-test-tools">
+      {(retryFailures.size > 0 || selectedForTest.length > 1) && <Space wrap className="channel-test-tools">
         {retryFailures.size > 0 && <Checkbox checked={failureOnly} onChange={event => {
           setFailureOnly(event.target.checked);
           if (event.target.checked) setPlannedIds(selectedTestIds.filter(id => retryFailures.has(id)));
@@ -309,15 +305,13 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
           onClick={() => start({ basicModels: failedBasicModels, explicitBasicClick: true })}>重试未通过项</Button>}
         {selectedForTest.length > 1 && <Button size="small" theme="borderless"
           onClick={() => copy(selectedForTest.map(row => row.upstreamModelId).join('\n'))}>复制所选模型</Button>}
-        {shownResults.length > 0 && <Button size="small" theme="borderless" onClick={() => copy(JSON.stringify(shownResults.map(item => ({
-          model: item.model.upstreamModelId, result: item.status, statusCode: item.upstreamStatus, durationMs: item.durationMs,
-          message: redactDiagnostic(item.message),
-        })), null, 2))}>复制所选结果</Button>}
+
       </Space>}
       {canPlan && plannedModels.length > 0 && !basicUsageButton && <Checkbox checked={consent}
         disabled={!canTest} onChange={event => setConsent(event.target.checked)}>确认执行所选模拟测试</Checkbox>}
       {error && <Notice error>{error}</Notice>}
       {ops.error && ops.error !== error && <Notice error>{ops.error}</Notice>}
+      <Banner type="warning" closeIcon={null} description="模型调用测试会消耗 Token，并可能产生费用。 实际费用按上游服务商计费规则计算。"/>
       {details && <Modal title="测试详情" description={details.model.upstreamModelId} onClose={() => setDetails(null)}
         footer={<><Button onClick={() => setDetails(null)}>关闭</Button>{onRemove && details.status === 'failed' &&
           <Button theme="borderless" type="danger" disabled={!canChange} onClick={() => onRemove(details.model.associationId)}>删除模型渠道</Button>}</>}>
@@ -340,6 +334,7 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
           {details.taskId && <><dt>上游任务 ID</dt><dd><CopyId copyAtStart value={details.taskId} label="上游任务 ID"/></dd></>}
         </dl>
       </Modal>}
+      </>}
     </SupplierCreationDialog>;
   }
   return <SupplierCreationDialog wide embedded={embedded} title={title} description={testOnly ? "测试当前已保存配置，不自动启用供给。" : "检测通过后，单独启用模型供给。"} cancel={close} cancelLabel={embedded ? '退出检测' : '关闭'} disabled={!ops.can || busy || running || unresolved || embedded && singleEnabled && (!rows.every(passed) || continueDisabled) || (!singleEnabled && ((firstEnable ? !rows.every(passed) : confirming ? Boolean(confirmationIssue) : !selectedReady) || provider.status !== '已启用'))} action={testOnly ? null : singleEnabled ? embedded ? continueLabel : null : firstEnable?'启用供给':confirming ? confirmation.restoring ? '确认启用渠道及所选' : '确认启用所选' : ['停用', '已停用'].includes(endpoint?.status) ? '启用渠道并启用所选' : '启用所选'} submit={singleEnabled && embedded ? onContinue : enable} footer={<>{confirming && <Button theme="light" onClick={() => { setConfirmation(null); setSelected([]); setError(''); }}>重新选择</Button>}{!embedded && <Button theme="light" disabled={!ops.can || busy || running || unresolved || confirming || !failedIds.length} onClick={() => planRetry(failedIds)}>重试未通过项</Button>}</>}>
@@ -375,4 +370,49 @@ export default function SupplierChannelBatchTest({ state, provider, endpointId, 
     {details && <Modal title="检查详情" description={details.model.upstreamModelId} onClose={() => setDetails(null)} footer={<>{directory && !reference && onRemove && details && details.status === 'failed' && <Button theme="borderless" type="danger"
       disabled={!ops.can || !canPlan} onClick={() => onRemove(details.model.associationId)}>核对移除此模型渠道的影响</Button>}</>}><dl className="supplier-test-details"><dt>状态</dt><dd><AdminStatus value={CHANNEL_TEST_STATUS[details.status] || '结果未知'}/></dd><dt>请求阶段</dt><dd>{({ queued: '等待执行', request: '请求上游', parse: '响应解析', poll: '等待异步任务', artifact: '结果文件检查' })[details.stage] || '未记录'}</dd><dt>建议</dt><dd>{details.suggestion || (details.status === 'passed' ? '无需处理' : details.message || '请核对配置后重试')}</dd>{details.retryAfter != null && <><dt>建议等待</dt><dd>{details.retryAfter} 秒</dd></>}<dt>验证内容</dt><dd>{({ streaming: '流式响应', tools: '工具调用', structured: '结构化输出', text: '文本生成', multimodal: '图像理解', embedding: '向量', rerank: '重排', image: '图片生成', video: '视频生成', speech: '语音合成', transcription: '语音识别' })[details.model.check || details.model.probe || details.model.type] || '任务检查'}</dd><dt>上游状态</dt><dd>{details.upstreamStatus ?? '—'}</dd>{details.mappedStatus != null && <><dt>规则输出状态码</dt><dd>{details.mappedStatus}</dd></>}<dt>耗时</dt><dd>{details.durationMs == null ? '—' : `${details.durationMs} ms`}</dd><dt>用量</dt><dd>{showUsage(details.usage)}</dd><dt>费用</dt><dd>{showUsage(details.cost)}</dd>{details.upstreamRequestId && <><dt>上游请求 ID</dt><dd><CopyId copyAtStart value={details.upstreamRequestId} label="上游请求 ID"/></dd></>}<dt>追踪 ID</dt><dd><CopyId copyAtStart value={details.traceId} label="追踪 ID"/></dd>{details.taskId && <><dt>上游任务 ID</dt><dd><CopyId copyAtStart value={details.taskId} label="上游任务 ID"/></dd></>}{details.message && <><dt>检查结果</dt><dd>{details.message}</dd></>}</dl></Modal>}
   </SupplierCreationDialog>;
+}
+
+const directoryModes = [['http', 'HTTP 连通性探测'], ['model', '模型调用测试']];
+
+function DirectoryTest({ title, ...props }) {
+  const { state, endpointId, provider, ops } = props;
+  const endpoint = state.endpoints.find(row => row.id === endpointId);
+  const [mode, setMode] = useState('http');
+  const [probe, setProbe] = useState('');
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const modeSelector = disabled => <>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+      <Typography.Text type="secondary">{provider.name} / {endpoint?.name}</Typography.Text>
+      <Typography.Text type="secondary">模拟数据</Typography.Text>
+    </div>
+    <Field label="测试方式"><Choice label="测试方式" options={directoryModes} value={mode}
+      disabled={disabled} onChange={setMode}/></Field>
+  </>;
+  const probing = probe === '正在探测…';
+  const start = () => {
+    if (timer.current || !ops.can) return;
+    setProbe('正在探测…');
+    timer.current = setTimeout(() => {
+      const scenario = state.cloudMockState?.scenario;
+      setProbe(scenario === 'timeout' ? '探测超时' : '已收到 HTTP 响应');
+      timer.current = null;
+    }, 350);
+  };
+  const httpProbe = mode === 'http' ? {
+    running: probing,
+    action: <Button theme="solid" disabled={!ops.can || !endpoint?.baseUrl || probing} onClick={start}>开始探测</Button>,
+    content: <>
+      <Field label="服务地址"><Typography.Text>{endpoint?.baseUrl || '—'}</Typography.Text></Field>
+      {probe && <Typography.Text role="status">{probe}</Typography.Text>}
+    </>,
+  } : null;
+  return <ModelCallTest {...props} title={title} reference={false} modeSelector={modeSelector} httpProbe={httpProbe}/>;
+}
+
+export default function SupplierChannelBatchTest(props) {
+  if (props.directory && props.testOnly && !props.embedded) {
+    return <DirectoryTest key={props.endpointId} {...props}/>;
+  }
+  return <ModelCallTest {...props}/>;
 }

@@ -7,15 +7,17 @@ const build = (page, query = '', names = {}) => adminBreadcrumbs(page, new URLSe
 const labels = crumbs => crumbs.map(c => c.label);
 const params = crumb => new URLSearchParams(crumb.href.split('?')[1]);
 
-test('maintenance JSON is a drill-down with an exact return to its module context', () => {
-  for (const [page, query] of [['model-market', 'view=list&q=GLM&status=gray&page=2'], ['model-prices', 'service=s1&tab=history&q=GLM&page=3']]) {
-    const base = build(page, query, { provider: 'MoMA', model: 'GLM' });
-    const rows = build(page, query + '&resourceJson=1&resourceTarget=' + encodeURIComponent(JSON.stringify({ level: 'module' })), { provider: 'MoMA', model: 'GLM' });
-    assert.deepEqual(rows.slice(0, -2), base.slice(0, -1));
-    assert.equal(rows.at(-2).label, base.at(-1).label);
-    assert.equal(rows.at(-2).href, '#/admin-2/' + page + '?' + query);
-    assert.deepEqual(rows.at(-1), { label: '维护 JSON' });
-  }
+test('price JSON preserves its list context and removed market JSON opens the market list', () => {
+  const query = 'service=s1&tab=history&q=GLM&page=3';
+  const suffix = '&resourceJson=1&resourceTarget=' + encodeURIComponent(JSON.stringify({ level: 'module' }));
+  const base = build('model-prices', query, { model: 'GLM' });
+  const rows = build('model-prices', query + suffix, { model: 'GLM' });
+  assert.deepEqual(rows.slice(0, -2), base.slice(0, -1));
+  assert.equal(rows.at(-2).label, base.at(-1).label);
+  assert.equal(rows.at(-2).href, '#/admin-2/model-prices?' + query);
+  assert.deepEqual(rows.at(-1), { label: '维护 JSON' });
+  const market = 'view=list&q=GLM&status=gray&page=2';
+  assert.deepEqual(build('model-market', market + suffix), build('model-market', market));
 });
 
 test('channel detail entry preserves the list search and pagination in its breadcrumb', () => {

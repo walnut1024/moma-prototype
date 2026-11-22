@@ -1,0 +1,17 @@
+.failover-policy {width:100%;min-width:0;container-type:inline-size;color:var(--semi-color-text-0)}
+.failover-policy .fp-groups {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.failover-policy .fp-groups section {border:1px solid var(--semi-color-border);border-radius:8px;padding:14px 18px;background:var(--semi-color-bg-0)}
+.failover-policy h3 {margin:0;font-size:15px;line-height:24px}
+.failover-policy code {display:block;color:var(--semi-color-text-2);font:12px/1.5 ui-monospace,monospace;overflow-wrap:anywhere}
+.failover-policy .fp-parameter {display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--semi-color-border)}
+.failover-policy .fp-parameter:last-child {border:0;padding-bottom:0}
+.failover-policy strong {font-size:17px;font-variant-numeric:tabular-nums}
+.failover-policy small {color:var(--semi-color-text-2);font-size:12px;font-weight:400}
+.failover-policy .semi-input-number {width:90px}
+.failover-policy .fp-title {margin-top:24px}
+.failover-policy .fp-title code {display:inline}
+.failover-policy p {margin:4px 0 12px;color:var(--semi-color-text-2);font-size:13px}
+@container (max-width:620px) {.failover-policy .fp-groups {grid-template-columns:1fr}}
+.failover-policy .fp-retry-table {width:100%;overflow-x:auto}
+.failover-policy .fp-retry-table table {width:100%;min-width:840px;table-layout:fixed}
+.failover-policy .fp-retry-table code {white-space:nowrap;overflow-wrap:normal}

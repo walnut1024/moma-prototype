@@ -12,7 +12,8 @@ import ReferenceProviderApiKeys from './ReferenceProviderApiKeys';
 import { CopyId, SearchBox } from './ModelOperationsUI';
 import { workbenchProtocolLabel } from './workbench-protocol';
 import { channelListPaths, channelListType, channelSourceTypeLabel } from './channel-connection-directory';
-import { ChannelKeySummary, channelKeyMode, channelKeyStrategyLabel } from './ChannelCredentials';
+import { channelKeyMode, channelKeyStrategyLabel } from './ChannelCredentials';
+import { connectionKeys } from './connection-state';
 import { CHANNEL_PROCUREMENT_BATCH_LIMIT } from './channel-change-management';
 import { modelTypeLabel } from '../model-types.mjs';
 import { operationsReturn } from './model-pricing-workspace';
@@ -30,7 +31,7 @@ function ChannelModels({ channel, ops, open }) {
       <SearchBox placeholder={t('搜索模型标识、展示名称')} value={query}
         onChange={value => ops.go({ modelQ: value || null }, { replace: true })}/>
       <Space wrap spacing={8}>
-        <Button disabled={!ops.can || !channel.models.length} onClick={event => open(event, 'test', channel.id)}>{t('批量测试')}</Button>
+        <Button disabled={!ops.can} onClick={event => open(event, 'test', channel.id)}>{t('批量测试')}</Button>
         <Button disabled={!canAdd} onClick={event => open(event, 'discovery', channel.id)}>{t('获取模型列表')}</Button>
         <Button theme="solid" disabled={!canAdd} onClick={event => open(event, 'add', channel.id)}>{t('自定义添加模型')}</Button>
       </Space>
@@ -101,6 +102,9 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
   const requestedTab = ops.params.get('tab');
   const tabs = ['models', ...(modelCosts ? ['model-costs'] : []), ...(keyPool ? ['api-keys'] : [])];
   const tab = tabs.includes(requestedTab) ? requestedTab : 'overview';
+  const selectTab = value => ops.go({ tab: value === 'overview' ? null : value,
+    ...(value !== 'api-keys' && { keyGroup: null }) }, { replace: true });
+  const keyCount = connectionKeys(endpoint, channel.provider, true).length + t(' 个');
   const fields = [
     [t('渠道名称 / ID'), <div className="channel-identity"><span>{name}</span><CopyId value={id} label={t('渠道 ID')}/></div>],
     [t('服务商'), channel.provider.name],
@@ -108,7 +112,8 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
     [t('接口格式'), workbenchProtocolLabel(channelListType(channel))], [t('接口端点'), channelListPaths(channel).join('、')],
     [t('服务地址'), endpoint.baseUrl],
     [t('密钥配置'), t(channelKeyMode(endpoint))],
-    [t('API 密钥'), <ChannelKeySummary endpoint={endpoint} provider={channel.provider}/>],
+    [t('API 密钥'), keyPool ? <Button size="small" theme="borderless" type="primary"
+      aria-label={keyCount + ' · ' + t('服务商 API 密钥池')} onClick={() => selectTab('api-keys')}>{keyCount}</Button> : keyCount],
     ...(endpoint.authMode === 'pool' ? [[t('密钥选择策略'), t(channelKeyStrategyLabel(endpoint.keyStrategy))]] : []),
     [t('简介'), endpoint.directoryNote],
     [t('状态'), <AdminStatus value={status} label={t(status)}/>],
@@ -127,7 +132,7 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
     </AdminPageHeading>
     <Card className="channel-management-card">
       <Tabs type="line" activeKey={tab} lazyRender keepDOM={false} tabPaneMotion={false} aria-label={t('渠道详情')}
-        onChange={value => ops.go({ tab: value === 'overview' ? null : value, ...(value !== 'api-keys' && { keyGroup: null }) }, { replace: true })}>
+        onChange={selectTab}>
         <Tabs.TabPane tab={t('基本信息')} itemKey="overview">
           <dl className="channel-management-facts">
             {(modelList ? connectionFields : fields).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}
@@ -190,7 +195,7 @@ export default function ChannelManagementView({ state, connections, ops, open, f
     const channel = connections.find(row => row.id === connectionId);
     return <div className="admin-page-stack" ref={focusTarget} tabIndex={-1} aria-label={channel?.name || '渠道详情'}>
       {channel ? <ChannelDetails state={state} channel={channel} creation={creationFor(channel)} ops={ops} open={open} modelCosts
-        keyPool={<ReferenceProviderApiKeys key={channel.id} state={state} provider={channel.provider}
+        keyPool={<ReferenceProviderApiKeys key={channel.id} state={state} connection={channel}
           ops={ops}/>}/>
         : <Card><Empty description={t('该渠道不存在或已删除')}><Button
           onClick={() => go({ connection: null, tab: null, modelQ: null, keyGroup: null })}>{t('返回渠道列表')}</Button></Empty></Card>}
@@ -259,7 +264,7 @@ export default function ChannelManagementView({ state, connections, ops, open, f
             const enabled = row.status === '已启用';
             const label = t(enabled ? '停用' : '启用');
             return <Space spacing={2}>
-              <Button size="small" theme="borderless" disabled={!ops.can || !row.models.length} aria-label={t('测试连接') + ' ' + row.name}
+              <Button size="small" theme="borderless" disabled={!ops.can} aria-label={t('测试连接') + ' ' + row.name}
                 onClick={event => open(event, 'testConnection', row.id)}>{t('测试连接')}</Button>
               <Button size="small" theme="borderless" disabled={!ops.can} aria-label={t(enabled ? '停用渠道' : '启用渠道') + ' ' + row.name}
                 onClick={event => open(event, enabled ? 'disable' : 'enable', row.id)}>{t(label)}</Button>

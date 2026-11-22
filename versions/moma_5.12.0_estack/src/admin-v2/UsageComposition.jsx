@@ -1,3 +1,4 @@
+import TableFieldHelp from '../components/TableFieldHelp';
 import Table from './AdminTable';
 import { useState } from 'react';
 import { Button, Card, Space, Typography } from '@douyinfe/semi-ui';
@@ -56,7 +57,7 @@ export function UsageShare({ state, range, clock, filters, onChange, volume = fa
       </div>;
     } },
     { title: volume ? 'Token 用量' : '调用次数', dataIndex: 'value', align: 'right', render: amount },
-    { title: '占比', key: 'percent', align: 'right', render: (_, row) => percent(row.value, share.total) },
+    { title: <TableFieldHelp name="占比" description={usageNote}/>, key: 'percent', align: 'right', render: (_, row) => percent(row.value, share.total) },
   ];
   const description = `${range.start}—${range.end} · ${usageDimensions.find(([id]) => id === settings.dimension)[1]} · ${metricLabel}合计 ${valueText(share.total)}`;
   return <Card title={<Space wrap><Title heading={5} component="h2">{title}</Title><AnalysisHelp label={`${title}统计`}>{usageNote}</AnalysisHelp></Space>}

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Button, Checkbox, Empty, InputNumber, Pagination, Space, Table, TextArea, Typography } from '@douyinfe/semi-ui';
+import { Button, Checkbox, Descriptions, Empty, Input, InputNumber, Pagination, Space, Table, TextArea, Typography } from '@douyinfe/semi-ui';
+import { IconSearch } from '@douyinfe/semi-icons';
 import { Modal, Notice, CopyId } from './ModelOperationsUI';
 import { channelDiscoveryPreview, directoryDiscoveryPolicy, directoryDiscoveryReceipt, directoryDiscoverySignature, ignoredDiscoveryModel } from './channel-discovery-diff';
 import { connectionCredentialsReady } from './connection-state';
@@ -8,11 +9,114 @@ import { onboardingApi, prepareServerChannel } from './onboarding-client';
 import OnboardingScenarioControl from './OnboardingScenarioControl';
 import { Field } from './ServiceUI';
 
+const sampleModels = ['demo-chat', 'demo-vision', 'demo-embedding'].map(upstreamModelId => ({ upstreamModelId }));
+
+function modelListRequest(endpoint) {
+  const baseUrl = endpoint?.baseUrl;
+  const custom = endpoint?.interfaceType === 'custom';
+  const adapter = custom ? endpoint.customAdapter?.models : null;
+  const configured = Boolean(endpoint?.interfaceType && (!custom || adapter?.path));
+  const protocol = adapter ? '自定义 API' : configured ? 'OpenAI 兼容' : '未配置';
+  let url;
+  if (baseUrl && configured) {
+    try {
+      const base = new URL(baseUrl);
+      if (adapter) url = new URL(adapter.path, base).href;
+      else {
+        base.pathname = base.pathname.replace(/\/+$/, '') + '/models';
+        url = base.href;
+      }
+    } catch { /* A missing or invalid address has no request preview. */ }
+  }
+  return { baseUrl, protocol, url, method: adapter?.method || 'GET' };
+}
+
+function ReferenceModelList({ active, canEdit, checking, selected, onSelect, onRefresh, onConfigure, configureDisabled, close, error }) {
+  const [search, setSearch] = useState('');
+  const [demo, setDemo] = useState(null);
+  const selectionSummaryId = useId();
+  const { baseUrl, protocol, url, method } = modelListRequest(active?.endpoint);
+  const result = active?.result;
+  const models = demo ? sampleModels : result?.rows ?? [];
+  const query = demo ? demo.search : search;
+  const visible = models.filter(row => row.upstreamModelId.toLowerCase().includes(query.trim().toLowerCase()));
+  const displayedSelection = demo ? demo.selected : selected;
+  const candidateIds = new Set((demo ? sampleModels : active?.additions ?? []).map(row => row.upstreamModelId));
+  const visibleIds = visible.filter(row => candidateIds.has(row.upstreamModelId)).map(row => row.upstreamModelId);
+  const visibleSelectedCount = visibleIds.filter(id => displayedSelection.includes(id)).length;
+  const allSelected = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
+  const canSelect = !checking && (demo || canEdit);
+  const changeSelection = (ids, checked) => {
+    const next = checked ? [...new Set([...displayedSelection, ...ids])] : displayedSelection.filter(id => !ids.includes(id));
+    if (demo) setDemo({ ...demo, selected: next });
+    else onSelect(next);
+  };
+  const discoveredAt = result && active.receipt.discoveredAt;
+  const listSummary = demo ? `共 ${models.length} 个模型` : result ? [
+    `共 ${models.length} 个模型`,
+    result.complete ? '完整列表' : '部分列表',
+    discoveredAt && '最近获取 ' + new Date(discoveredAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
+  ].filter(Boolean).join(' · ') : '';
+  const empty = checking ? '正在获取模型列表…' : query ? '没有匹配的模型' : result ? '未获取到模型' : '尚未获取模型列表';
+  return <Modal drawer wide title="获取模型列表" description={active?.name} onClose={() => !checking && close()}
+    footer={<Space wrap>
+      <Button disabled={checking} onClick={close}>关闭</Button>
+      <Button theme="solid" disabled={Boolean(demo) || configureDisabled} onClick={onConfigure}>配置所选模型</Button>
+    </Space>}>
+    <Notice>{protocol === '自定义 API'
+      ? '自动获取模型列表需要上游服务商提供当前渠道配置的模型列表接口。如果上游未提供该接口，无法自动获取，可通过「自定义添加模型」录入上游模型调用标识。'
+      : '自动获取模型列表需要上游服务商提供 OpenAI 兼容的模型列表接口（GET /models）。如果上游未提供该接口，无法自动获取，可通过「自定义添加模型」录入上游模型调用标识。'}</Notice>
+    <Descriptions align="left" data={[
+      { key: '模型列表协议', value: protocol },
+      { key: '服务地址（Base URL）', value: <CopyId copyAtStart value={baseUrl} label="服务地址"/> },
+      { key: '模型列表请求地址', value: <CopyId copyAtStart value={url} displayValue={method + ' ' + url} label="模型列表请求地址"/> },
+    ]}/>
+    <section className="supplier-change-section" aria-label="上游模型" aria-busy={checking} style={{ display: 'grid', gap: 12 }}>
+      <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <div>
+          <Typography.Title heading={5}>上游模型</Typography.Title>
+          {listSummary && <Typography.Text type="tertiary" aria-live="polite">{listSummary}</Typography.Text>}
+        </div>
+        <Space wrap>
+          <Button theme="light" disabled={checking} onClick={() => setDemo(demo ? null : { search: '', selected: [] })}>
+            {demo ? '退出模拟' : '模拟数据'}
+          </Button>
+          <Button theme="solid" loading={checking} disabled={Boolean(demo) || !canEdit || !active}
+            onClick={onRefresh}>{result ? '更新模型列表' : '获取模型列表'}</Button>
+        </Space>
+      </Space>
+      {demo ? <Notice>当前显示模拟数据，仅供预览。</Notice> : <>
+        {active?.outdated && <Notice>连接配置或模型关联已变化，请重新获取模型列表。</Notice>}
+        {active?.receipt?.reason && <Notice error>{active.receipt.reason}</Notice>}
+        {result?.source === 'mock' && <Notice>上游模型列表为模拟结果。</Notice>}
+        {error && <Notice error>{error}</Notice>}
+      </>}
+      {models.length > 0 && <Input aria-label="搜索上游模型调用标识" placeholder="搜索上游模型调用标识"
+        prefix={<IconSearch aria-hidden="true"/>} style={{ width: 280, maxWidth: '100%' }} showClear value={query}
+        onChange={value => demo ? setDemo({ ...demo, search: value }) : setSearch(value)}/>}
+      <Table size="small" rowKey="upstreamModelId" dataSource={visible} empty={<Empty description={empty}/>}
+        pagination={visible.length > 10 && { pageSize: 10, hideOnSinglePage: true }}
+        renderPagination={pagination => <Pagination {...pagination} showTotal={false} style={{ marginInlineStart: 'auto' }}/>}
+        columns={[
+          { title: <Checkbox aria-label="全选上游模型" aria-describedby={selectionSummaryId} checked={allSelected}
+            indeterminate={visibleSelectedCount > 0 && !allSelected} disabled={!canSelect || !visibleIds.length}
+            onChange={event => changeSelection(visibleIds, event.target.checked)}>全选</Checkbox>,
+            width: 96,
+            render: (_, row) => row.existingAssociationId ? '已添加' : candidateIds.has(row.upstreamModelId) &&
+              <Checkbox aria-label={'选择上游模型 ' + row.upstreamModelId} checked={displayedSelection.includes(row.upstreamModelId)}
+                disabled={!canSelect} onChange={event => changeSelection([row.upstreamModelId], event.target.checked)}/> },
+          { title: '上游模型调用标识', render: (_, row) => <CopyId value={row.upstreamModelId} label="上游模型调用标识"/> },
+        ]}/>
+      <span className="sr-only" id={selectionSummaryId}>已选 {displayedSelection.length} 款，可选 {visibleIds.length} 款</span>
+      {!demo && selected.length > 50 && <Typography.Text type="secondary" role="status">每批最多接入 50 款模型，请减少所选模型。</Typography.Text>}
+    </section>
+  </Modal>;
+}
+
 export default function ChannelDirectoryDiscovery({ state, connections, ops, close, append, initialConnectionId, initialSelection, reference = false }) {
   const [checking, setChecking] = useState(false);
   const [progress, setProgress] = useState(null);
   const [selection, setSelection] = useState(initialSelection || {});
-  const selectionSummaryId = useId();
   const [policyDraft, setPolicyDraft] = useState(null), [review, setReview] = useState(null), [applying, setApplying] = useState(false);
   const [activeId, setActiveId] = useState(() => connections.some(row => row.id === initialConnectionId)
     ? initialConnectionId : connections.length === 1 ? connections[0].id : '');
@@ -38,8 +142,6 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
   const active = rows.find(row => row.id === activeId);
   const selected = selection[activeId] || [];
   const chosen = active?.additions.filter(row => selected.includes(row.upstreamModelId)) || [];
-  const hasCandidates = Boolean(active?.additions.length);
-  const allSelected = hasCandidates && chosen.length === active.additions.length;
   const configureDisabled = !ops.can || checking || !chosen.length || chosen.length > 50 || Boolean(active?.endpoint.candidateConfiguration);
   const configureSelected = event => append(event, active.id, chosen.map(row => ({ ...row, selected: true, confirmed: false })), selection);
   const bulk = rows.flatMap(row => {
@@ -125,22 +227,25 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
       }
     } finally { setApplying(false); }
   };
+  if (reference) return <ReferenceModelList active={active} canEdit={ops.can} checking={checking} selected={selected}
+    onSelect={ids => setSelection(current => ({ ...current, [active.id]: ids }))} onRefresh={() => load(rows)}
+    onConfigure={configureSelected} configureDisabled={configureDisabled} close={close} error={error || ops.error}/>;
+
   const summary = active?.result && [...active.additions.map(row => ({ ...row, kind: row.libraryId ? '可新增' : '待核对' })),
     ...active.ignored.map(row => ({ ...row, kind: '已忽略' })),
     ...active.result.missing.map(row => ({ ...row, kind: '疑似移除' })),
     ...active.result.rows.filter(row => row.existingAssociationId && row.attributes.some(item => item.different)).map(row => ({ ...row, kind: '属性差异' }))];
-  return <><Modal drawer wide title={reference ? '获取模型列表' : connections.length === 1 ? '上游模型更新' : '上游变更任务'} description={connections.length === 1 ? connections[0].name : connections.length + ' 条连接'}
+  return <><Modal drawer wide title={connections.length === 1 ? '上游模型更新' : '上游变更任务'} description={connections.length === 1 ? connections[0].name : connections.length + ' 条连接'}
     onClose={() => !checking && close()} footer={<Space wrap>
       <Button disabled={checking} onClick={close}>关闭</Button>
       {checking ? <Button disabled={stop.current} onClick={() => { stop.current = true; }}>完成当前检测后停止</Button> :
-        <Button theme={reference && hasCandidates ? 'light' : 'solid'} disabled={!ops.can || !connections.length} onClick={() => load(rows)}>{reference ? '获取上游模型' : connections.length === 1 ? '立即检测' : '检测全部所选连接'}</Button>}
-      {reference && hasCandidates && <Button theme="solid" disabled={configureDisabled} onClick={configureSelected}>配置所选模型</Button>}
-      {!reference && !checking && <Button disabled={!ops.can || !due().length} onClick={() => load(due().slice(0, 10), true)}>检查到期连接</Button>}
-      {!reference && !checking && <Button disabled={!ops.can || !bulk.length || bulk.length > 10 || bulk.reduce((n, row) => n + row.modelIds.length, 0) > 25}
+        <Button theme="solid" disabled={!ops.can || !connections.length} onClick={() => load(rows)}>{connections.length === 1 ? '立即检测' : '检测全部所选连接'}</Button>}
+      {!checking && <Button disabled={!ops.can || !due().length} onClick={() => load(due().slice(0, 10), true)}>检查到期连接</Button>}
+      {!checking && <Button disabled={!ops.can || !bulk.length || bulk.length > 10 || bulk.reduce((n, row) => n + row.modelIds.length, 0) > 25}
         onClick={() => setReview(bulk)}>核对批量接入</Button>}
     </Space>}>
-    {!reference && <OnboardingScenarioControl disabled={checking}/>}
-    <Notice>{reference ? '上游模型列表为模拟结果。接入所选模型前需核对模型资料和采购范围。' : '检测使用本地模拟列表。新增模型需核对资料和采购范围。疑似移除项保留当前供给。'}</Notice>
+    <OnboardingScenarioControl disabled={checking}/>
+    <Notice>检测使用本地模拟列表。新增模型需核对资料和采购范围。疑似移除项保留当前供给。</Notice>
     {progress && <Typography.Text aria-live="polite">已完成 {progress.done} / {progress.total} 条 · 正在检测 {progress.name}</Typography.Text>}
     {connections.length > 1 && <Table size="small" rowKey="id" dataSource={rows} pagination={{ pageSize: 10, hideOnSinglePage: true }} columns={[
       { title: '连接', dataIndex: 'name' },
@@ -152,36 +257,28 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
         <Button theme="borderless" size="small" disabled={!ops.can || checking} onClick={() => load([row])}>检测此连接</Button>
       </Space> },
     ]}/>}
-    {!reference && active && <Space wrap>
+    {active && <Space wrap>
       <Button theme="light" disabled={!ops.can || checking} onClick={openPolicy}>同步策略</Button>
       {active.endpoint.directoryDiscoveryApply && <Typography.Text>上次接入 {active.endpoint.directoryDiscoveryApply.modelIds.length} 款 · {new Date(active.endpoint.directoryDiscoveryApply.appliedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</Typography.Text>}
     </Space>}
-    {active?.outdated && <Notice>{reference ? '连接配置或模型关联已变化，请重新获取模型列表。' : '连接配置或模型关联已变化，请重新检测获取差异。'}</Notice>}
+    {active?.outdated && <Notice>连接配置或模型关联已变化，请重新检测获取差异。</Notice>}
     {active?.receipt?.reason && <Notice error>{active.receipt.reason}</Notice>}
     {active?.result && <section className="supplier-change-section">
-      <Typography.Title heading={5}>{reference ? '上游模型' : active.name + ' · 模型差异'}</Typography.Title>
-      <Typography.Text>{active.result.complete ? '完整列表' : reference ? '部分列表' : '部分列表 · 无法判断移除项'} · {new Date(active.receipt.discoveredAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</Typography.Text>
-      <Table size="small" rowKey="upstreamModelId" dataSource={reference ? active.result.rows : summary} empty={<Empty description={reference ? '未获取到模型' : '未发现模型差异'}/>}
-        pagination={reference && active.result.rows.length <= 10 ? false : { pageSize: 10, hideOnSinglePage: true }}
-        renderPagination={reference ? pagination => <Pagination {...pagination} showTotal={false} style={{ marginInlineStart: 'auto' }}/> : undefined} columns={[
-          ...(!reference ? [{ title: '变化', dataIndex: 'kind' }] : []),
+      <Typography.Title heading={5}>{active.name + ' · 模型差异'}</Typography.Title>
+      <Typography.Text>{active.result.complete ? '完整列表' : '部分列表 · 无法判断移除项'} · {new Date(active.receipt.discoveredAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</Typography.Text>
+      <Table size="small" rowKey="upstreamModelId" dataSource={summary} empty={<Empty description="未发现模型差异"/>}
+        pagination={{ pageSize: 10, hideOnSinglePage: true }} columns={[
+          { title: '变化', dataIndex: 'kind' },
           { title: '上游模型调用标识', render: (_, row) => <CopyId value={row.upstreamModelId} label="上游模型调用标识"/> },
-          { title: '当前资料', render: (_, row) => archivedModel(row) ? '模型资料已归档' : libraryRecord(state, row.libraryId)?.name || row.modelId || '待关联资料' },
-          ...(!reference ? [{ title: '处理方式', render: (_, row) => row.kind === '疑似移除' ? '保留现有供给，经复测与影响核对再处理' :
-            row.kind === '属性差异' ? row.attributes.filter(item => item.different).map(item => item.label + '：' + item.current + ' → ' + item.observed).join('、') : '确认采购范围和模型身份' }] : []),
-          { title: reference ? <>
-            <Checkbox aria-label="全选上游模型" aria-describedby={selectionSummaryId} checked={allSelected} indeterminate={chosen.length > 0 && !allSelected}
-              disabled={!ops.can || checking || !hasCandidates} onChange={event => setSelection(current => ({
-                ...current, [active.id]: event.target.checked ? active.additions.map(row => row.upstreamModelId) : [],
-              }))}>全选</Checkbox>
-            <span className="sr-only" id={selectionSummaryId}>已选 {chosen.length} 款，可选 {active.additions.length} 款</span>
-          </> : '选择',
-            render: (_, row) => reference && row.existingAssociationId ? '已添加' : active.additions.some(item => item.upstreamModelId === row.upstreamModelId) &&
+          { title: '当前资料', render: (_, row) => libraryRecord(state, row.libraryId)?.name || row.modelId || '待关联资料' },
+          { title: '处理方式', render: (_, row) => row.kind === '疑似移除' ? '保留现有供给，经复测与影响核对再处理' :
+            row.kind === '属性差异' ? row.attributes.filter(item => item.different).map(item => item.label + '：' + item.current + ' → ' + item.observed).join('、') : '确认采购范围和模型身份' },
+          { title: '选择',
+            render: (_, row) => active.additions.some(item => item.upstreamModelId === row.upstreamModelId) &&
             <Checkbox aria-label={'选择上游模型 ' + row.upstreamModelId} checked={selected.includes(row.upstreamModelId)} disabled={!ops.can || checking}
               onChange={event => setSelection(current => ({ ...current, [active.id]: event.target.checked ? [...selected, row.upstreamModelId] : selected.filter(id => id !== row.upstreamModelId) }))}/> },
         ]}/>
-      {reference && chosen.length > 50 && <Typography.Text type="secondary" role="status">每批最多接入 50 款模型，请减少所选模型。</Typography.Text>}
-      {!reference && <Button theme="light" disabled={configureDisabled} onClick={configureSelected}>核对所选 {chosen.length} 款模型</Button>}
+      <Button theme="light" disabled={configureDisabled} onClick={configureSelected}>核对所选 {chosen.length} 款模型</Button>
     </section>}
     {(error || ops.error) && <Notice error>{error || ops.error}</Notice>}
   </Modal>

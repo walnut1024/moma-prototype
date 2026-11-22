@@ -1,3 +1,4 @@
+import TableFieldHelp from '../components/TableFieldHelp';
 import { workspaceStoragePrefix } from "../workspace-storage.mjs";
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
@@ -230,9 +231,9 @@ export default function UsageAnalysisPage({ state }) {
     ...[['Token 调用量', 'total'], ['输入 Token', 'input'], ['输出 Token', 'output']].map(([title, dataIndex]) => ({
       title, dataIndex, align: 'right', render: (value, row) => amount(row.tokenCalls ? value : null),
     })),
-    { title: '其他用量', key: 'other', align: 'right', render: (_, row) => otherUsage(row) },
+    { title: <TableFieldHelp name="其他用量" description="非 Token 用量按各自单位分别显示，例如张、秒或字符。"/>, key: 'other', align: 'right', render: (_, row) => otherUsage(row) },
     { title: '模型调用次数', dataIndex: 'calls', align: 'right', render: amount },
-    { title: 'Token 占比', key: 'share', align: 'right', render: (_, row) => row.tokenCalls ? percent(row.total, totalTokens) : '—' },
+    { title: <TableFieldHelp name="Token 占比" description="该行 Token 调用量占当前筛选范围内 Token 总量的比例。"/>, key: 'share', align: 'right', render: (_, row) => row.tokenCalls ? percent(row.total, totalTokens) : '—' },
   ];
   const renderCard = id => {
     const filters = panelFilters[id], onChange = value => setPanelFilter(id, value);

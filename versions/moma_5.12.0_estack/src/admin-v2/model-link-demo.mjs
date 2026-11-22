@@ -19,7 +19,7 @@ export const channels = {
   MiniMax: { enabled: true, format: 'minimax', origin: 'https://minimax.example.com' }
 };
 export const services = [
-  { id: 'video', name: '视频生成服务', callId: 'video-gen', type: '视觉模型 · 视频生成', enabled: true, protocols: ['ark', 'dashscope', 'minimax'],
+  { id: 'video', name: 'Seedance', callId: 'video-gen', type: '视觉模型 · 视频生成', enabled: true, protocols: ['ark', 'dashscope', 'minimax'],
     policy: '加权随机', weighted: true, detail: '先按接口格式筛选，再比较优先级与权重',
     routes: [
       { channel: 'Ark', model: 'seedance-video-demo', enabled: true, priority: 0, weight: 50 },
@@ -44,7 +44,7 @@ export const services = [
   { id: 'r1', name: 'DeepSeek R1', callId: 'deepseek-r1', enabled: false, protocols: ['messages'],
     policy: '最低 TPM', detail: '已配置 · 服务已停止',
     routes: [{ channel: 'A', model: 'vendor-a/deepseek-r1', enabled: true, priority: 0, weight: 100 }] },
-  { id: 'embedding', name: '文本向量服务', callId: 'text-embedding', type: '向量模型', enabled: true, protocols: ['embeddings'],
+  { id: 'embedding', name: 'BGE-M3', callId: 'text-embedding', type: '向量模型', enabled: true, protocols: ['embeddings'],
     policy: '加权随机', weighted: true, detail: '先选优先级，再按组内权重分流',
     routes: [{ channel: 'F', model: 'vendor-f/text-embedding', enabled: true, priority: 0, weight: 100 }] }
 ];

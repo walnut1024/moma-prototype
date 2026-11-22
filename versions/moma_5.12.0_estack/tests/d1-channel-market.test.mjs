@@ -215,18 +215,36 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     const workspace=async cookie=>(await request('/market/workspace',{cookie})).data;
     const project=(await workspace(customer)).projectRouting.projects.find(row=>row.canEdit);
     assert(project);
-    const org = state.marketOrganizations.find(row=>row.tenantId===a);
-    assert(org && state.marketProjects.some(row=>row.id===project.id));
-    const scope = { type:'selected', organizationIds:[], tenantIds:[], projectIds:[project.id] };
     const serviceIds = services.map(row=>row.id);
-    const setCardScope = scope => command('marketCardSetStatus',{ listing_stage:'gray', scope, serviceIds, expectedRevision:state.revision },material.id);
-    await setCardScope(scope);
-    assert.deepEqual((await catalogue(customer)),[]);
-    const projectCatalogue = await request('/market/catalogue?project='+project.id,{cookie:customer});
-    assert.deepEqual(projectCatalogue.data.services.map(row=>row.id).sort(),serviceIds.sort());
+    const setCardVisibility = (listing_stage, scope, expected) => command('marketCardSetStatus',
+      { listing_stage, scope, serviceIds, expectedRevision:state.revision }, material.id, expected);
+    await setCardVisibility('gray', { tenantIds: [] }, 422);
+    await setCardVisibility('gray', { tenantIds: [a, 'missing-tenant'] }, 422);
+    await setCardVisibility('gray', { tenantIds: [a,c] });
+    assert.deepEqual(state.modelData.marketCards[material.id].scope.tenantIds,[a,c]);
+    assert.deepEqual((await catalogue(customer)).map(row=>row.id).sort(),[...serviceIds].sort());
+    assert.deepEqual((await catalogue(other)),[]);
     assert.equal((await request('/market/catalogue?project='+project.id,{cookie:other})).status,403);
-    await setCardScope({ ...scope, projectIds:[], organizationIds:[org.id] });
-    assert.equal((await catalogue(customer)).length,3);
+
+    const startAll = () => command('startSales', release(sources.map(source=>source.channelId),[a]), modelId);
+    const saleBlocked = async () => {
+      assert(model().serviceProviders.every(row=>row.salesPaused === true && row.callsEnabled !== false));
+      assert.equal((await order(serviceIds[0])).data.error.message,'此模型服务已停售');
+    };
+    await setCardVisibility('preview');
+    const preview = (await request('/market/catalogue',{cookie:customer})).data;
+    assert.equal(preview.cards.find(card=>card.model_id===material.id)?.preview,true);
+    assert.deepEqual(preview.services,[]);
+    await saleBlocked();
+    await command('startSales', release([sources[0].channelId],[a]), modelId, 422);
+    await setCardVisibility('formal');
+    assert((await catalogue(customer)).every(row=>row.canOrder===false));
+    await startAll();
+    await setCardVisibility('withdrawn');
+    assert(!(await request('/market/catalogue',{cookie:customer})).data.cards.some(card=>card.model_id===material.id));
+    await saleBlocked();
+    await setCardVisibility('formal');
+    await startAll();
     await local.db.prepare("UPDATE model_workspace SET meta_json=json_remove(meta_json,?) WHERE id=1")
       .bind('$.modelData.marketCards.'+JSON.stringify(material.id)).run();
     await reload();

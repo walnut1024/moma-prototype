@@ -1,8 +1,7 @@
 import { useChannelText } from './channel-language';
 import { channelManagementListRoute } from './navigation.mjs';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Banner, Button, Card, Dropdown, Empty, Space, Tag, Typography } from '@douyinfe/semi-ui';
-import { IconChevronDown } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Empty, Space, Tag, Typography } from '@douyinfe/semi-ui';
 import Table from './AdminTable';
 import AdminStatus from './AdminStatus';
 import AdminPageHeading from './AdminPageHeading';
@@ -245,12 +244,9 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
   return <div className="admin-page-stack admin-service-monitor">
     <AdminPageHeading title={healthPage ? t('渠道健康') : "服务监控"}>
       <Space wrap>
-        <Button theme="light" onClick={toggleSimulation}>{simulation ? '退出模拟' : '模拟日志'}</Button>
-        {!healthPage && <Dropdown trigger="click" position="bottomRight" render={<Dropdown.Menu>
-          {monitoringLinks.map(([id, label]) => <Dropdown.Item key={id} onClick={() => navigate(id)}>{label}</Dropdown.Item>)}
-        </Dropdown.Menu>}>
-          <Button icon={<IconChevronDown aria-hidden="true"/>} iconPosition="right">更多</Button>
-        </Dropdown>}
+        <Button theme="light" onClick={toggleSimulation}>{simulation ? '退出模拟' : '模拟数据'}</Button>
+        {!healthPage && monitoringLinks.filter(([id]) => canAccessPage(state.currentRole, id)).map(([id, label]) =>
+          <Button key={id} onClick={() => navigate(id)}>{label}</Button>)}
       </Space>
     </AdminPageHeading>
     {(!healthPage || !window) && <Card>{filterPanel}</Card>}

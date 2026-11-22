@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button, Card, Checkbox, Input, Popover, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
-import { IconMaximize, IconMore } from '@douyinfe/semi-icons';
+import { IconMaximize } from '@douyinfe/semi-icons';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import { chartColor } from '../components/chart-style.mjs';
 import { AnalysisHelp } from './AnalysisMetric';
@@ -35,42 +35,37 @@ export default function UsageTrend({ state, range, clock, filters, onChange, cal
     {grouped && `默认显示本时段累计${calls ? '调用次数' : 'Token 用量'}前 5 项。隐藏曲线不改变范围合计。`}
     调用次数按最终请求去重；服务商按实际渠道归属。Token 仅包含 Token 计量记录。
   </AnalysisHelp>;
-  const picker = <Popover trigger="click" position="bottomRight" visible={menuOpen} motion={false} zIndex={1200}
+  const picker = grouped && <Popover trigger="click" position="bottomRight" visible={menuOpen} motion={false} zIndex={1200}
     onVisibleChange={open => { setMenuOpen(open); if (open) setQuery(''); }}
     content={({ initialFocusRef }) => <div ref={initialFocusRef} tabIndex={-1} className="admin-analytics-picker admin-analytics-fields" aria-label={`${title}曲线设置`}>
-      {grouped && <>
-        <Input aria-label={`${title}搜索曲线`} placeholder="搜索名称或 ID" value={query} onChange={setQuery}/>
-        <Space wrap>
-          <Button theme="borderless" size="small" aria-label="显示全部曲线" onClick={() => selectSetting('curves', trend.groups.map(item => item.id))}>全选</Button>
-          <Button theme="borderless" size="small" aria-label="恢复默认曲线" onClick={() => selectSetting('curves', null)}>重置</Button>
-          {curveHelp}
-        </Space>
-        <div className="admin-analytics-options" role="group" aria-label="显示曲线">
-          {matching.map(item => <Checkbox key={item.id} aria-label={`显示 ${item.label}`} checked={selected.includes(item.id)}
-            onChange={event => selectSetting('curves', event.target.checked ? [...selected, item.id] : selected.filter(id => id !== item.id))}>
-            <Text title={item.label}>{item.label}</Text>
-          </Checkbox>)}
-          {!matching.length && <Text type="secondary" role="status">暂无匹配曲线</Text>}
-        </div>
-      </>}
+      <Input aria-label={`${title}搜索曲线`} placeholder="搜索名称或 ID" value={query} onChange={setQuery}/>
+      <Space wrap>
+        <Button theme="borderless" size="small" aria-label="显示全部曲线" onClick={() => selectSetting('curves', trend.groups.map(item => item.id))}>全选</Button>
+        <Button theme="borderless" size="small" aria-label="恢复默认曲线" onClick={() => selectSetting('curves', null)}>重置</Button>
+        {curveHelp}
+      </Space>
+      <div className="admin-analytics-options" role="group" aria-label="显示曲线">
+        {matching.map(item => <Checkbox key={item.id} aria-label={`显示 ${item.label}`} checked={selected.includes(item.id)}
+          onChange={event => selectSetting('curves', event.target.checked ? [...selected, item.id] : selected.filter(id => id !== item.id))}>
+          <Text title={item.label}>{item.label}</Text>
+        </Checkbox>)}
+        {!matching.length && <Text type="secondary" role="status">暂无匹配曲线</Text>}
+      </div>
       <div className="admin-analytics-picker-footer">
-        {grouped && <>
-          <Text type="secondary">已选 {selected.length}/{trend.groups.length}</Text>
-          <Checkbox aria-label="同时显示范围合计" checked={settings.showTotal}
-            onChange={event => selectSetting('showTotal', event.target.checked)}>叠加合计</Checkbox>
-        </>}
-        <Button theme="borderless" size="small" aria-label="将筛选条件应用到另一张趋势图"
-          onClick={() => { onCopy(); setMenuOpen(false); Toast.success('已将筛选条件应用到另一张趋势图'); }}>同步筛选</Button>
-        {!grouped && curveHelp}
+        <Text type="secondary">已选 {selected.length}/{trend.groups.length}</Text>
+        <Checkbox aria-label="同时显示范围合计" checked={settings.showTotal}
+          onChange={event => selectSetting('showTotal', event.target.checked)}>叠加合计</Checkbox>
       </div>
     </div>}>
-    <Button size="small" theme={grouped ? 'light' : 'borderless'} aria-expanded={menuOpen}
-      aria-label={grouped ? `${title}选择曲线` : `${title}更多设置`}
-      icon={grouped ? undefined : <IconMore aria-hidden="true"/>}>
-      {grouped ? `曲线 ${selected.length}/${trend.groups.length}` : undefined}
+    <Button size="small" theme="light" aria-expanded={menuOpen} aria-label={`${title}选择曲线`}>
+      曲线 {selected.length}/{trend.groups.length}
     </Button>
   </Popover>;
-  const filterBar = <UsageFilterBar state={state} filters={filters} onChange={change} title={title} controls={metricControl}>{picker}</UsageFilterBar>;
+  const filterBar = <UsageFilterBar state={state} filters={filters} onChange={change} title={title} controls={metricControl}>
+    <Button theme="borderless" size="small" aria-label="将筛选条件应用到另一张趋势图"
+      onClick={() => { onCopy(); Toast.success('已将筛选条件应用到另一张趋势图'); }}>同步筛选</Button>
+    {grouped ? picker : curveHelp}
+  </UsageFilterBar>;
   const plot = height => <>
     {empty ? <Paragraph type="secondary" className="ua-native-chart-empty" style={{ minHeight: height }} role="status">{empty}</Paragraph> :
       <TimeSeriesChart compact height={height} showData={false} label={title} labels={trend.buckets.map(bucket => bucket.label)}
