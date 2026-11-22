@@ -174,7 +174,7 @@ export function businessFacts(state, rows) {
     const cost = notDispatched ? {currency:sale?.currency || prices.sale?.items?.[0]?.currency || null,amount:0,breakdown:[],versionId:'not-dispatched'} : costsComplete ? {currency:costCurrencies[0] || sale?.currency || null,amount:sumMoney(purchases.map(item=>item.cost.amount)),breakdown:purchases.flatMap(item=>item.cost.breakdown),versionId:purchases.map(item=>item.cost.versionId).join(' / ')} : null;
     const complete = !!(serviceId && sale && cost && sale.currency && sale.currency === cost.currency);
     const reasons = [!serviceId ? '销售服务未关联' : '', !sale ? !prices.sale ? '销售价格快照缺失' : row.httpStatus >= 400 ? '客户计费结果待确认' : '销售计量或计费项无法核算' : '', !cost ? !purchases.length ? '上游调用记录缺失' : purchases.some(item=>!item.cost) ? '上游采购成本未完整核算' : '采购成本币种不一致' : '',sale && cost && sale.currency !== cost.currency ? '采购与销售币种不同，未换汇' : ''].filter(Boolean);
-    return {...row,serviceId,serviceName:row.callId || serviceId || '未归属销售服务',serviceMode:serviceId?.startsWith('standard:') ? '统一模型服务模式' : serviceId?.startsWith('provider:') ? '渠道直选模式' : '未确认',modelName:model?.name || row.modelId,customer:state.tenants?.find(item=>item.id===row.tenantId)?.name || row.tenantId || '未归属客户',sale,cost,purchases,complete,currency:sale?.currency || cost?.currency || null,profit:complete ? sumMoney([sale.amount,-cost.amount]) : null,reason:reasons.join('；')};
+    return {...row,serviceId,serviceName:row.callId || serviceId || '未归属销售服务',modelName:model?.name || row.modelId,customer:state.tenants?.find(item=>item.id===row.tenantId)?.name || row.tenantId || '未归属客户',sale,cost,purchases,complete,currency:sale?.currency || cost?.currency || null,profit:complete ? sumMoney([sale.amount,-cost.amount]) : null,reason:reasons.join('；')};
   });
 }
 export function businessCurrencyRows(rows, currency) {
@@ -212,7 +212,7 @@ export function businessGroups(state, rows, dimension = 'serviceId', currency) {
     if (!groups.has(key)) groups.set(key,[]);
     groups.get(key).push(row);
   }
-  return [...groups].map(([id,facts])=>({id,serviceId:facts[0].serviceId,name:facts[0].serviceName,model:facts[0].modelName,mode:facts[0].serviceMode,currency:currency || facts[0].currency,customers:new Set(facts.map(row=>row.tenantId).filter(Boolean)).size,...businessSummary(facts,currency || facts[0].currency),rows:facts})).sort((a,b)=>(b.income ?? -Infinity)-(a.income ?? -Infinity));
+  return [...groups].map(([id,facts])=>({id,serviceId:facts[0].serviceId,name:facts[0].serviceName,model:facts[0].modelName,currency:currency || facts[0].currency,customers:new Set(facts.map(row=>row.tenantId).filter(Boolean)).size,...businessSummary(facts,currency || facts[0].currency),rows:facts})).sort((a,b)=>(b.income ?? -Infinity)-(a.income ?? -Infinity));
 }
 export function procurementGroups(rows, currency) {
   const groups = new Map();

@@ -1,3 +1,4 @@
+import {seedExistingService} from './legacy-service-fixture.mjs';
 import test from 'node:test';
 import {resourceId} from '../src/resource-id.mjs';
 import assert from 'node:assert/strict';
@@ -17,7 +18,7 @@ test('HTTP permanent-ID deletion isolates siblings, rejects history and forged I
  try{
   const login=await request('/auth/login',{accountId:'admin-001',accessCode:code});assert.equal(login.status,200);cookie=login.headers.get('set-cookie').split(';')[0];
   let state=await read();await send(command(state,{providerId:'provider-moma',libraryIds:['builtin-pp-ocrv6']},undefined,'supplierModelsRegister'));state=await read();
-  await send(command(state,{libraryIds:['builtin-pp-ocrv6'],serviceMode:'provider'},undefined,'createServiceModels'));state=await read();
+  await seedExistingService(local.db,state,{libraryIds:['builtin-pp-ocrv6'],serviceMode:'provider'});state=await read();
   const configured=structuredClone(state),model=configured.models.find(row=>row.templateId==='builtin-pp-ocrv6'),owners=configured.providers.slice(0,2);
   Object.assign(model,{callsEnabled:false,listingStatus:'已下架',serviceProviders:owners.map((provider,index)=>({providerId:provider.id,callId:'delete-entry-'+index,callsEnabled:false,marketVisible:false,listingStage:'unlisted',status:'已关联'}))});
   const priceId=resourceId('sale-price-version');configured.modelSalePrices.push({id:priceId,modelId:model.id,scope:'provider',providerId:owners[1].id,serviceModeRevision:model.serviceModeRevision || 1,version:1,status:'已发布',effectiveAt:'2026-01-01T00:00:00.000Z',items:[{name:state.tariffDictionary.find(row=>row.kind==='scenario').name,unit:state.tariffDictionary.find(row=>row.kind==='unit').name,currency:'CNY',amount:1000000}]});

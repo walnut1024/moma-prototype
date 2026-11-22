@@ -26,7 +26,7 @@ const metric=(values,integer=false)=>values.find(value=>typeof value==='number' 
 
 // Existing public model IDs and supplier call IDs are read-only service references.
 export function routingServices(state) {
-  return state.models.flatMap(model=>model.serviceMode==='standard' ? [{id:'standard:'+model.id,modelId:model.id,name:'统一模型服务模式',mode:'standard',callId:model.modelId,model,providerId:null}] : model.serviceMode==='provider' ? providerServices(model).map(entry=>({id:providerServiceId(model.id,offerKey(entry)),modelId:model.id,name:(state.providers.find(provider=>provider.id===entry.providerId)?.name || '服务商已不存在') + (entry.channelName ? `（${entry.channelName}）` : ''),mode:'provider',callId:entry.callId,model,providerId:entry.providerId,...(entry.channelId ? {channelId:entry.channelId} : {})})) : []);
+  return state.models.flatMap(model=>model.serviceMode==='standard' ? [{id:'standard:'+model.id,modelId:model.id,name:model.serviceName || model.name,mode:'standard',callId:model.modelId,model,providerId:null}] : model.serviceMode==='provider' ? providerServices(model).map(entry=>({id:providerServiceId(model.id,offerKey(entry)),modelId:model.id,name:(state.providers.find(provider=>provider.id===entry.providerId)?.name || '服务商已不存在') + (entry.channelName ? `（${entry.channelName}）` : ''),mode:'provider',callId:entry.callId,model,providerId:entry.providerId,...(entry.channelId ? {channelId:entry.channelId} : {})})) : []);
 }
 
 export function routingChannels(state, service, at = Date.now(), { runtime = false } = {}) {
@@ -150,13 +150,13 @@ function validateModeSelection(service, config) {
   const selected = config.channels.filter(row => row.enabled);
   const backups = config.channels.filter(row => row.backup);
   if (service.mode === 'standard') {
-    if (config.forwarding) throw Error('接口路由仅适用于渠道直选服务');
-    if (!unifiedRouteStrategies.includes(config.strategy)) throw Error('统一模型服务模式仅支持加权随机、最少并发、最低 TPM、最低延迟和最低成本五种路由策略');
-    if (backups.length) throw Error('统一模型服务模式在参与路由的渠道内执行故障转移');
+    if (config.forwarding) throw Error('当前路由不支持按接口转发');
+    if (!unifiedRouteStrategies.includes(config.strategy)) throw Error('当前路由仅支持加权随机、最少并发、最低 TPM、最低延迟和最低成本五种路由策略');
+    if (backups.length) throw Error('当前路由在参与路由的渠道内执行故障转移');
   } else {
-    if (config.strategy !== 'fixed') throw Error('渠道直选模式只能选择一个主渠道');
-    if (config.retry) throw Error('渠道直选服务不支持优先级组重试');
-    if (selected.filter(row => !row.backup).length > 1) throw Error('渠道直选模式只能选择一个主渠道');
+    if (config.strategy !== 'fixed') throw Error('固定路由只能选择一个主渠道');
+    if (config.retry) throw Error('固定路由不支持优先级组重试');
+    if (selected.filter(row => !row.backup).length > 1) throw Error('固定路由只能选择一个主渠道');
     if (backups.length > 1 || backups.some(row => !row.enabled) || backups.length && !config.autoFailover) throw Error('故障转移只能启用一个备用渠道');
   }
 }
@@ -303,7 +303,7 @@ export function routingTransaction(state, { operation, data = {} }) {
         if (typeof data.backupSupplyId !== 'string' || !data.backupSupplyId || active.config.channels.some(row => row.enabled && !row.backup && row.supplyId === data.backupSupplyId)) throw Error('请选择与主渠道不同的备用渠道');
         channels.push({supplyId:data.backupSupplyId, groupId:channels.find(row=>row.enabled)?.groupId || routeGroups(active.config)[0].id, enabled:true, backup:true, weight:0, priority:2});
       } else if (data.backupSupplyId) throw Error('当前设置不接受独立备用渠道');
-      if (data.retry != null && service.mode !== 'standard') throw Error('渠道直选服务不支持优先级组重试');
+      if (data.retry != null && service.mode !== 'standard') throw Error('固定路由不支持优先级组重试');
       input = {...active.config, channels, autoFailover:data.enabled, ...(data.retry != null ? {retry:data.retry} : {})};
     }
     const config = validateRouteConfig(state, service, input, !configuringFailover);

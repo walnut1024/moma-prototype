@@ -24,7 +24,7 @@ const fail = (status, code, message) => { throw Object.assign(new Error(message)
 const digest = async value => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), byte => byte.toString(16).padStart(2, '0')).join('');
 const activeStages = ['gray', 'formal'];
 const selectOffers = `
-  SELECT o.record_id,o.id AS call_id,o.mode,o.listing_stage,o.gray_tenants_json,o.market_visible,
+  SELECT o.record_id,o.id AS call_id,o.listing_stage,o.gray_tenants_json,o.market_visible,
          o.calls_enabled,${stoppedOfferSql} AS stopped,s.id AS service_id,s.record_json AS service_json,m.id AS material_id,m.record_json AS material_json,
          EXISTS (SELECT 1 FROM model_workspace w, json_each(w.meta_json,'$.modelData.marketCards') card,
            json_each(card.value,'$.linked') linked WHERE w.id=1 AND linked.value=o.record_id
@@ -145,7 +145,7 @@ export async function marketCatalogue(db, session, { display = false, projectId,
     const material = modelPresentation(null, { ...master, marketContent: card?.content || JSON.parse(row.service_json).marketContent });
     const { author, series } = modelClassificationFor(classification, card ? material : master);
     return [{
-      id:row.record_id, model_service_id:row.record_id, model_id:row.material_id, canonical_slug:material.modelId, call_id:row.call_id, provider_id:row.provider_id || MOMA_PROVIDER.id, callId:row.call_id, modelId:material.modelId, modelKey:row.material_id, serviceModelId:row.service_id, mode:row.mode, name:material.name,
+      id:row.record_id, model_service_id:row.record_id, model_id:row.material_id, canonical_slug:material.modelId, call_id:row.call_id, provider_id:row.provider_id || MOMA_PROVIDER.id, callId:row.call_id, modelId:material.modelId, modelKey:row.material_id, serviceModelId:row.service_id, name:material.name,
       providerId:row.provider_id || MOMA_PROVIDER.id, providerName:row.provider_name || MOMA_PROVIDER.name,
       provider:row.source_name ? `${row.provider_name}（${row.source_name}）` : row.provider_name || 'MoMA',
       maker:material.profile?.author || material.maker || '', type:material.type, description:material.description || '',
@@ -369,8 +369,7 @@ export async function marketCompletion(db, session, body) {
   if (routed) {
     const reason=failedAttempts[0]?.error;
     const first=targets[0];
-    const provider=row.mode==='standard' ? '平台调度'
-      : row.source_name ? row.provider_name + '（' + row.source_name + '）' : row.provider_name || 'MoMA';
+    const provider=row.source_name ? row.provider_name + '（' + row.source_name + '）' : row.provider_name || 'MoMA';
     const skippedModel=route.kind==='preset' && version.config.models[0]!==row.material_id;
     response.routing={id:route.callId,version:version.number,modelName:material.name,provider,
       ...(row.call_id!==first.callId || skippedModel || reason ? {

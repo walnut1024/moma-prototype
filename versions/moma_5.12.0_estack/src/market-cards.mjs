@@ -207,7 +207,7 @@ function pauseLinkedSales(state, card) {
     paused.get(model.id).keys.add(key);
   }
   return [...paused.values()].map(({ model, keys }) => ({
-    type: 'update', collection: 'models', id: model.id, changes: model.serviceMode === 'provider'
+    type: 'update', collection: 'models', id: model.id, changes: !keys.has('')
       ? { serviceProviders: model.serviceProviders.map(row => keys.has(offerKey(row)) && row.status !== '已移除' ? { ...row, salesPaused: true } : row) }
       : { salesPaused: true },
   }));

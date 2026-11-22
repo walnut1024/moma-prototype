@@ -59,10 +59,7 @@ import { serviceMappingTransaction, mappingSourceVersion } from './service-model
 export { providerCode } from './provider-management.js';
 export const callModelId = (provider, model) => `${providerCode(provider)}/${modelCode(model)}`;
 export const listed = model => model.listingStatus === '已上架';
-export const SERVICE_MODES = {
-  standard: { englishName:'Provider-Agnostic Routing', label: '统一模型服务模式', description: '用户只选择模型，平台在后台完成服务商选择、负载均衡及故障转移。' },
-  provider: { englishName:'Provider-Explicit Routing', label: '渠道直选模式', description: '用户能够感知并指定模型服务商或服务渠道；平台在指定范围内调度，不跨越用户选择。' },
-};
+const storedServiceModes = new Set(['standard', 'provider']);
 export const supplySalesStatus = supply => supply.status !== '已启用' ? '停止服务' : supply.salesEnabled ? '上架售卖' : '下架停售';
 function channelPrivateKey(key) {
   if (!key || typeof key !== 'object' || Array.isArray(key) || Object.keys(key).some(field => !['maskedKey', 'fingerprint'].includes(field))) throw new Error('独立密钥只接受脱敏元数据');
@@ -306,7 +303,7 @@ export function operationsTransaction(state, action) {
       if(!model.archivedAt)throw Error('服务未归档');
       update('models',modelId,{archivedAt:null,callsEnabled:false,listingStatus:'已下架'});label='恢复已归档服务';
     } else {
-      if(model.serviceMode!=='standard')throw Error('请在统一模型服务模式中修改此标识');
+      if(model.serviceMode!=='standard')throw Error('请在对应模型服务中修改调用标识');
       if(model.listingStatus==='已上架' || model.callsEnabled===true)throw Error('先下架并停用服务，再修改模型调用标识');
       const callId=checkedServiceCallId(working,model,'',data.callId);
       // A legacy service can also own the master; retain that identity before changing its public ID.
@@ -909,6 +906,7 @@ export function operationsTransaction(state, action) {
     const values = { ...input };
     if (data.newApiKey) {
       if (input.authMode === 'none') throw new Error('无需认证的渠道不能同时新增密钥');
+      if (input.apiKeyId || (input.keyGroupId && input.keyGroupId !== 'default')) throw new Error('新增密钥不能同时指定已有密钥或密钥组');
       if (Object.keys(data.newApiKey).some(key => !['maskedKey', 'fingerprint', 'accountRpm'].includes(key))) throw new Error('新增密钥只接受掩码、指纹和账号上限');
       providerOp('addApiKeys', provider.id, { apiKeys: [data.newApiKey], standalone: true });
       const added = working.providers.find(row => row.id === provider.id).apiKeys.find(row => row.fingerprint === data.newApiKey.fingerprint);
@@ -997,7 +995,7 @@ export function operationsTransaction(state, action) {
     if (context.draft.draftRevision !== data.expectedDraftRevision || model.updatedAt !== data.expectedUpdatedAt || (context.association.procurementRevision || 0) !== data.expectedPriceRevision || modelSaleRevision(working, modelId) !== data.expectedSaleVersion || providerPriceRevision(working, modelId, context.provider.id) !== data.expectedProviderSaleVersion) throw new Error('模型、采购价或平台售价已有修订，请重新核对');
     if (data.confirmed !== true) throw new Error('请确认采购价及平台售价');
     if (!context.supplyReady) throw new Error('请先在接通供应阶段确认有效采购条件');
-    if (!Object.hasOwn(SERVICE_MODES, model.serviceMode)) apply(operationsTransaction(working, { operation: 'serviceMode', modelId, data: { serviceMode: data.serviceMode, expectedUpdatedAt: model.updatedAt } }));
+    if (!storedServiceModes.has(model.serviceMode)) apply(operationsTransaction(working, { operation: 'serviceMode', modelId, data: { serviceMode: data.serviceMode, expectedUpdatedAt: model.updatedAt } }));
     else if (model.serviceMode !== data.serviceMode) throw new Error('服务模式设置后不可修改');
     if (data.serviceMode === 'standard') apply(operationsTransaction(working, { operation: 'unifiedPrice', modelId, data: { items: data.prices, expectedUpdatedAt: model.updatedAt, expectedSaleVersion: data.expectedSaleVersion } }));
     else {
@@ -1180,8 +1178,7 @@ export function operationsTransaction(state, action) {
     const supply = modelSupplies(working, modelId).find(item => item.id === data.id);
     if (!model || !supply) throw new Error('服务商模型不存在');
     if (operation === 'publishSupply') {
-      if (model.serviceMode === 'standard') throw new Error('统一模型服务模式请通过模型统一上架，不能独立售卖渠道');
-      if (model.serviceMode === 'provider') throw new Error('渠道直选模式请通过模型统一上架，不能独立售卖渠道');
+      if (storedServiceModes.has(model.serviceMode)) throw new Error('请通过模型服务上架，不能独立售卖渠道');
       if (!supplyPriceReady(working, model, supply.id)) throw new Error('请先配置完整的采购价与对外售价');
       modelOp('enableSupply', modelId, { id: supply.id });
       update('modelSupplies', supply.id, { salesEnabled: true });
@@ -1215,7 +1212,7 @@ export function operationsTransaction(state, action) {
     modelOp('serviceBasics',modelId,data); objectId=modelId; label='修改模型资料';
   } else if (operation === 'unifiedPrice') {
     const model = working.models.find(item => item.id === modelId);
-    if (!model || model.serviceMode !== 'standard') throw new Error('仅统一模型服务模式可配置统一售价');
+    if (!model || model.serviceMode !== 'standard') throw new Error('请为具体模型服务配置售价');
     if (data.expectedUpdatedAt !== model.updatedAt || data.expectedSaleVersion !== modelSaleRevision(working, modelId)) throw new Error('模型或统一售价已有并发修订，请重新打开配置');
     const items = retailItems(working,data.items,activeModelSalePrice(working,modelId)?.items);
     const version = Math.max(0,...working.modelSalePrices.filter(price => price.modelId === modelId && price.scope === 'model').map(price => price.version)) + 1;
@@ -1244,7 +1241,7 @@ export function operationsTransaction(state, action) {
     label=operation==='serviceProviderListing'?(data.enabled?'展示渠道服务':'隐藏渠道服务'):(data.enabled?'启动渠道服务':'停止渠道服务');objectId=modelId;
   } else if (['associateServiceProvider','configureServiceProvider','configureServiceIdentity','removeServiceProvider'].includes(operation)) {
     const model=working.models.find(item=>item.id===modelId);
-    if (!model || model.serviceMode!=='provider') throw new Error('请在渠道直选模式选择已有服务商');
+    if (!model || model.serviceMode!=='provider') throw new Error('请选择已关联的服务商');
     const key=(operation==='associateServiceProvider' && data.channelId) || data.providerId, entries=model.serviceProviders || [];
     const current=entries.find(item=>offerKey(item)===key), serviceId=providerServiceId(modelId,key);
     const provider=working.providers.find(item=>item.id===(current?.providerId || data.providerId));
@@ -1295,7 +1292,7 @@ export function operationsTransaction(state, action) {
     update('modelSupplies',supply.id,{status:'已移除',salesEnabled:false});objectId=modelId;label='解除渠道关联';
   } else if (operation === 'associateServiceChannelsBatch') {
     const model=working.models.find(item=>item.id===modelId);
-    if (!model || model.serviceMode!=='standard') throw new Error('请在统一模型服务模式关联渠道');
+    if (!model || model.serviceMode!=='standard') throw new Error('请在对应模型服务关联渠道');
     if (data.expectedUpdatedAt!==model.updatedAt) throw new Error('模型已有并发修订，请重新打开关联');
     if (!Array.isArray(data.groups) || !data.groups.length || data.groups.some(group=>!group || !Array.isArray(group.channelIds) || !group.channelIds.length) || data.groups.reduce((count,group)=>count+group.channelIds.length,0)>20) throw new Error('请选择 1–20 个渠道');
     for (const group of data.groups) apply(operationsTransaction(working,{operation:'associateServiceChannels',modelId,data:{providerId:group.providerId,catalogueModelId:group.catalogueModelId,channelIds:group.channelIds,confirmedIdentity:data.confirmedIdentity,expectedUpdatedAt:working.models.find(item=>item.id===modelId).updatedAt}}));
@@ -1321,12 +1318,12 @@ export function operationsTransaction(state, action) {
   } else if (operation === 'serviceMode') {
     const model = working.models.find(item => item.id === modelId);
     if (!model) throw new Error('模型不存在');
-    if (Object.hasOwn(SERVICE_MODES, model.serviceMode)) throw new Error('服务模式设置后不可修改');
+    if (storedServiceModes.has(model.serviceMode)) throw new Error('服务模式设置后不可修改');
     if (!['已上架','已下架'].includes(model.listingStatus)) throw new Error('模型上架状态无效，请重新载入数据');
     if (data.expectedUpdatedAt !== model.updatedAt) throw new Error('模型已有并发修订，请重新打开配置后核对');
-    if (typeof data.serviceMode !== 'string' || !Object.hasOwn(SERVICE_MODES, data.serviceMode)) throw new Error('请选择一种有效的服务模式');
+    if (typeof data.serviceMode !== 'string' || !storedServiceModes.has(data.serviceMode)) throw new Error('请选择一种有效的服务模式');
     const configureCallId = Object.hasOwn(data,'callId');
-    if (configureCallId && data.serviceMode!=='standard') throw Error('渠道直选模式需在各渠道服务中设置模型调用标识');
+    if (configureCallId && data.serviceMode!=='standard') throw Error('请在对应模型服务设置调用标识');
     if (model.listingStatus==='已上架') {
       if (data.confirmDownlist!==true) throw new Error('请确认模型下架后再设置服务模式');
       modelOp('unlist',modelId,{});
@@ -1353,7 +1350,7 @@ export function operationsTransaction(state, action) {
     update('models', modelId, { name: data.name.trim(), description: data.description.trim(), visibility: data.visibility });
     objectId = modelId; label = '配置模型展示信息';
   } else if (operation === 'reprice') {
-    if (working.models.find(item=>item.id===modelId)?.serviceMode === 'standard') throw new Error('统一模型服务模式请配置模型统一售价');
+    if (working.models.find(item=>item.id===modelId)?.serviceMode === 'standard') throw new Error('请配置模型服务售价');
     if (data.selected || data.openScope || data.publish || data.salesEnabled != null) throw new Error('调价只允许修改售价');
     if (!Array.isArray(data.items)) throw new Error('请按完整计费项设置售价');
     modelOp('pricePublish', modelId, data);

@@ -76,7 +76,7 @@ test('explicit supply references and shared template copies resolve the same can
 });
 
 test('unified candidates reject fixed and priority strategies before creating a platform candidate', () => {
- for(const strategy of ['fixed','priority','priority_weighted']){const env=fixture(),before=structuredClone(env.state);env.config.strategy=strategy;assert.throws(()=>env.plan(),/统一模型服务模式/);env.config.strategy='weighted';assert.deepEqual(env.state,before);}
+ for(const strategy of ['fixed','priority','priority_weighted']){const env=fixture(),before=structuredClone(env.state);env.config.strategy=strategy;assert.throws(()=>env.plan(),/当前路由仅支持/);env.config.strategy='weighted';assert.deepEqual(env.state,before);}
  for(const strategy of ['load','tpm','latency']){const env=fixture();env.config.strategy=strategy;assert.throws(()=>env.plan(),/实际/);}
 });
 

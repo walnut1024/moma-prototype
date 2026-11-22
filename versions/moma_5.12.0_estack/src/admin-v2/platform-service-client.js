@@ -84,7 +84,7 @@ function platformRoute(state, service, version, rows) {
 
 export function platformCandidatePlan(state, model, { serviceId, tenantIds = [], supplyIds = [], audioProbe = '', technical = false, at = Date.now() }) {
   const service = platformServices(state, model).find(row => row.id === serviceId);
-  if (!service) issue('服务模式', '请选择当前模型的统一模型服务模式或服务商服务');
+  if (!service) issue('模型服务', '请选择要验证的模型服务');
   if (!service.callId || /\s/.test(service.callId)) issue('模型调用标识', '请先完善当前服务的模型调用标识');
   if (!tenantIds.length || new Set(tenantIds).size !== tenantIds.length || tenantIds.some(id => !state.tenants?.some(tenant => tenant.id === id && !['已删除', '已停用', '停用'].includes(tenant.status)))) issue('客户范围', '请明确选择有效租户');
   const version = activeRouteVersion(serviceRoute(state, service.id));

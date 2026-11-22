@@ -26,7 +26,7 @@
 
 保留物理表结构；存量主键按上述专用整改统一，资源映射从 modelData.resourceIds、mappingIds 读取，读取不生成新 ID。模型级服务配置仍保留 services.id；管理导出使用 model_service_config_id 区分这层内部配置。
 
-连接属于 Provider，模型渠道通过 provider_id、connection_id、model_id 明确归属。一个模型可有多个渠道及具体对外模型服务；统一服务可在允许渠道内路由，渠道直选遵守已绑定供给边界。关联不自动发布路由或上架。
+连接属于 Provider，模型渠道通过 provider_id、connection_id、model_id 明确归属。一个模型可有多个渠道及具体对外模型服务；服务在已关联的可用渠道内路由。关联不自动发布路由或上架。
 
 管理侧 model.id 是模型内部永久编号。OpenRouter 兼容模型目录中的 Model.id 是调用值；管理维护文件使用 model_service.call_id，兼容目录及推理请求分别投影为 id 和 model。模型编码 canonical_slug 沿用 glm-5.3 等跨服务商形式。
 
@@ -92,7 +92,7 @@ OpenRouter 兼容接口使用调用标识作为 `id` 或请求体 `model`，MoMA
 | provider_model | id、provider_id、catalogue_model_id、catalogue_model_ids、model_id、canonical_slug、name、model_type、capabilities、registered | 全部只读；新增登记走已有接入／登记流程 |
 | connection | id、provider_id、name、base_url、protocol、interface_type、address_mode、task_urls、timeout_seconds、adapter_options、auth_mode、key_group_id、api_key_id、key_pool、configuration_revision | name、base_url、protocol、interface_type、task_urls；其余只读。协议和接口类型须一致；配置变更遵守原共享影响、候选、验证及依赖规则 |
 | channel | id、provider_id、connection_id、model_id、canonical_slug、name、upstream_model_id、enabled、api_addresses、capacity_limits、capacity_revision、procurement、procurement_history；异常关联包含 association_issue | name、upstream_model_id、capacity_limits、procurement 中的计费项和生效／到期时间；身份、状态、修订及历史只读 |
-| model_service | id、model_id、canonical_slug、model_service_config_id、call_id、provider_id、channel_id、service_mode、calls_enabled、interface、mappings、routing | 仅 call_id；须满足原停用及下架等条件。模式、状态、映射和路由只读，变更仍走验证和发布流程 |
+| model_service | id、model_id、canonical_slug、model_service_config_id、call_id、provider_id、channel_id、calls_enabled、interface、mappings、routing | 仅 call_id；须满足原停用及下架等条件。模式、状态、映射和路由只读，变更仍走验证和发布流程 |
 | market_model | id、model_id、canonical_slug、name、description、profile | name、description、profile；不回写模型资料库 |
 | market_service | id、model_id、model_service_id、model_service_config_id、canonical_slug、call_id、listing_stage、market_visible、gray_customer_ids | listing_stage、market_visible、gray_customer_ids；沿用上架／下架及灰度校验 |
 | sale_price | id、model_id、model_service_id、model_service_config_id、canonical_slug、call_id、price_version_id、effective_at、expires_at、sales_scope、items | 仅 items；销售范围和时间等当前信息只读，仍在原销售设置流程维护 |
@@ -112,7 +112,7 @@ references 中模型的 name、canonical_slug、model_type 用于识别，不能
 
 ### 批量关联
 
-模型服务的“填入渠道关联模板”从当前范围导出最新 v2 元数据和只读 references，将 operation 设为 link，rows 使用 model_service_id、channel_id 两个已有稳定 ID。校验模型一致及渠道直选归属，服务必须属于当前 target；按二者组合去重。已有映射保持原值，新映射为待验证、已停用，不自动发布路由或上架。
+模型服务的“填入渠道关联模板”从当前范围导出最新 v2 元数据和只读 references，将 operation 设为 link，rows 使用 model_service_id、channel_id 两个已有稳定 ID。校验模型一致及目标服务归属，服务必须属于当前 target；按二者组合去重。已有映射保持原值，新映射为待验证、已停用，不自动发布路由或上架。
 
 ### 来源接入与资料模板
 

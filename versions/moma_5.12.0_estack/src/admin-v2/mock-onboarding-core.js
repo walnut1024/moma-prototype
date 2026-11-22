@@ -125,11 +125,11 @@ function normalizeCandidate(state, body, previous = {}) {
   if (route.retry != null) {
     try { normalizeRouteRetry(route.retry); }
     catch (error) { fail('invalid_route', error.message); }
-    if (input.mode !== 'standard') fail('invalid_route', '渠道直选服务不支持分组重试');
+    if (input.mode !== 'standard') fail('invalid_route', '固定路由不支持分组重试');
   }
   const backups = route.channels.filter(row=>row.backup === true);
   if (backups.length) {
-    if (input.mode !== 'provider' || route.strategy !== 'fixed' || route.autoFailover !== true || route.channels.length !== 2 || backups.length !== 1 || route.channels.some(row=>row.enabled === false)) fail('invalid_route', '渠道直选故障转移须指定一个主渠道和一个备用渠道');
+    if (input.mode !== 'provider' || route.strategy !== 'fixed' || route.autoFailover !== true || route.channels.length !== 2 || backups.length !== 1 || route.channels.some(row=>row.enabled === false)) fail('invalid_route', '固定路由故障转移须指定一个主渠道和一个备用渠道');
     const sources = route.channels.map(row=>channelById(state, bindings.find(binding=>binding.id===row.bindingId).channelId));
     if (sources[0].providerId !== sources[1].providerId || (sources[0].clientChannelId || sources[0].id) === (sources[1].clientChannelId || sources[1].id)) fail('invalid_route', '主渠道和备用渠道须属于同一服务商且互不相同');
   }

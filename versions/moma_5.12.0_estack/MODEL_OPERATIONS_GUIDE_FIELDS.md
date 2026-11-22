@@ -55,7 +55,6 @@
 | 模型映射 | Model Mapping | 模型服务与渠道模型之间的绑定关系，决定该服务可以使用哪些上游来源。 | The association between a model service and a channel model. It determines which upstream sources the service can use. |
 | 渠道模型状态 | Channel Model Status | 一条已关联渠道在当前服务中的状态。已启用的渠道在来源配置可用时可参与路由。 | The state of a linked channel model in the current service. An enabled channel can participate when its upstream configuration is available. |
 | 服务描述 | Service Description | 在模型服务中维护的该服务说明。 | A description maintained on the model service. |
-| 路由模式 | Routing Mode | 服务对外组织调用入口的方式，例如统一模型服务或渠道直选。 | How the service exposes its entry points, such as a unified model service or direct channel selection. |
 | 路由策略 | Routing Strategy | 从符合条件的渠道模型中选择本次请求目标的规则。 | The rule that chooses a target for the current request from the eligible channel models. |
 | 参与路由 | Routing Enabled | 控制某条渠道模型绑定是否参与该服务的路由选择。 | Whether a linked channel model can participate in routing for this service. |
 | 优先级 | Priority | 渠道模型被选择的先后顺序，数值越小越优先。 | The order in which channel models are preferred. Lower numbers have higher priority. |

@@ -24,7 +24,7 @@
         "name": "GLM-5.3",
         "maker": "智谱",
         "type": "text",
-        "description": "渠道直选模式演示：通过 glm-5.3-moma 指定移动云 MoMA 自营渠道，或通过 glm-5.3-zhipu 指定智谱原厂渠道。",
+        "description": "GLM-5.3 提供文本生成服务。在服务报价中选择调用入口，可查看对应的模型调用标识。",
         "capabilities": {
           "context": 131072,
           "output": 8192,

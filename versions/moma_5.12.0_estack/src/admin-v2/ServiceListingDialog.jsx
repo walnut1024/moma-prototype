@@ -10,15 +10,17 @@ import { routingServices } from './service-routing';
 import { offerKey, offerStage, providerOffer, salesCustomer } from '../service-access.mjs';
 
 export default function ServiceListingDialog({state,model,ops,stage,close,initialOfferKey}) {
-  const [tenantIds,setTenantIds]=useState(model.serviceMode==='provider' ? [] : model.releaseTenantIds || []),[revision]=useState(model.updatedAt),[busy,setBusy]=useState(false);
+  const services = routingServices(state).filter(row => row.modelId === model.id);
+  const selectOffers = services.some(service => offerKey(service));
+  const [tenantIds,setTenantIds]=useState(selectOffers ? [] : model.releaseTenantIds || []),[revision]=useState(model.updatedAt),[busy,setBusy]=useState(false);
   const [selected,setSelected]=useState(initialOfferKey ? [initialOfferKey] : []),[validation,setValidation]=useState(null);
-  const gray=stage==='gray',withdraw=stage==='withdrawn',selectOffers=model.serviceMode==='provider';
+  const gray=stage==='gray',withdraw=stage==='withdrawn';
   const label=withdraw?'下架':gray?'灰度开售':'开售模型服务';
   const tenants=scopeTenants(state).filter(tenant=>!selectOffers || salesCustomer(model,tenant.id));
   const changed=revision!==model.updatedAt;
   const groups=new Map();
   if (selectOffers) {
-    for (const service of routingServices(state).filter(row=>row.modelId===model.id)) {
+    for (const service of services) {
       const entry=providerOffer(model,offerKey(service)), listed=['gray','formal'].includes(offerStage(model,entry));
       if (withdraw && !listed) continue;
       const group=groups.get(service.providerId) || [];

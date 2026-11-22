@@ -35,7 +35,7 @@ export function serviceResourceFields(state, service) {
   const route = state.serviceRoutes?.find(row => row.serviceId === service.id), mappings = state.modelSupplies.filter(row => row.modelId === service.model.id && row.status !== '已移除'
     && (!service.providerId || (row.providerId || state.endpoints.find(endpoint => endpoint.id === row.endpointId)?.providerId) === service.providerId)
     && (!service.channelId || row.channelId === service.channelId || row.id === service.channelId));
-  return { service_mode: service.model.serviceMode || null, calls_enabled: serviceReferenceStarted(service.model, service), interface: platformRouteInterface(service.model),
+  return { calls_enabled: serviceReferenceStarted(service.model, service), interface: platformRouteInterface(service.model),
     mappings: mappings.map(row => ({ mapping_id: row.id, channel_id: channelIdentity(state, row.channelId || row.id), connection_id: row.endpointId,
       provider_id: row.providerId || state.endpoints.find(endpoint => endpoint.id === row.endpointId)?.providerId || null, upstream_model_id: row.upstreamModelId,
       name: row.mappingName || '', mapping_revision: row.mappingRevision || 0, status: row.status, validation_status: row.validationStatus || null,

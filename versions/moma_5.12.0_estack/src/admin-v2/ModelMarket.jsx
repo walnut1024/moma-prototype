@@ -350,7 +350,7 @@ export default function ModelMarket(live) {
       footer={<Button disabled={busy} onClick={closeSupplies}>关闭</Button>}>
       <div className="market-supply-detail">
         <MarketSupplies groups={marketSupplyGroups(props.state, supplyModel)} expandedProviderId={supplyDetail.providerId}/>
-        {supplyModel.serviceMode === 'provider' && providerServices(supplyModel).length > 0 && (
+        {providerServices(supplyModel).length > 0 && (
           <Table rowKey={offerKey} dataSource={providerServices(supplyModel)} pagination={false}
             columns={[
               { title: '渠道', render: (_, row) => row.channelName || props.state.providers.find(provider => provider.id === row.providerId)?.name || '—' },

@@ -313,8 +313,8 @@ export function modelTransaction(state, action) {
       changes.push(update('modelSupplies', supply.id, { validationStatus: passed ? '通过' : '失败', verifiedAt: at, validationCases: ['协议兼容', '基础推理', ...(supply.capabilities.streaming ? ['流式响应'] : []), ...(supply.capabilities.tools ? ['工具调用'] : [])].map(name => ({ name, passed })), ...(passed ? {} : { status: '已停用' }) }));
     } else changes.push(update('modelSupplies', supply.id, { status: { enableSupply: '已启用', disableSupply: '已停用', removeSupply: '已移除' }[operation] }));
   } else if (['priceDraft', 'pricePublish'].includes(operation)) {
-    if (model.serviceMode === 'standard') throw new Error('统一模型服务模式只能配置统一售价');
-    if (model.serviceMode === 'provider') throw new Error('渠道直选模式请在服务商服务配置维护平台售价');
+    if (model.serviceMode === 'standard') throw new Error('请在模型售价中维护服务售价');
+    if (model.serviceMode === 'provider') throw new Error('请在模型售价中维护服务售价');
     if (!Array.isArray(data.items)) throw new Error('请按完整计费项设置售价');
     const supply = modelSupplies(state, model.id).find(item => item.id === data.supplyId);
     if (!supply) throw new Error('供应服务不存在');

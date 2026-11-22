@@ -1,3 +1,4 @@
+import {seedExistingService} from './legacy-service-fixture.mjs';
 import assert from 'node:assert/strict';
 import {domainModelWorkspace} from '../src/mock/model-fields.js';
 import {test} from 'node:test';
@@ -67,7 +68,7 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     assert.ok(channelModel.serviceProviders.every(offer=>offer.listingStage==='formal'));
     const unifiedService=routingServices(state).find(row=>row.mode==='standard'),unifiedRoute=state.serviceRoutes.find(row=>row.serviceId===unifiedService.id),unifiedConfig=unifiedRoute.versions.find(row=>row.version===unifiedRoute.activeVersion).config;
     const beforeInvalidPolicy=(await api('/model-operations')).data;
-    await assert.rejects(save(state,{type:'modelOperations',operation:'serviceRoutePublish',modelId:unifiedService.modelId,data:{serviceId:unifiedService.id,expectedVersion:unifiedRoute.activeVersion,sourceVersion:routeSourceVersion(state,unifiedService),config:{...unifiedConfig,strategy:'fixed'}}}),/统一模型服务模式/);
+    await assert.rejects(save(state,{type:'modelOperations',operation:'serviceRoutePublish',modelId:unifiedService.modelId,data:{serviceId:unifiedService.id,expectedVersion:unifiedRoute.activeVersion,sourceVersion:routeSourceVersion(state,unifiedService),config:{...unifiedConfig,strategy:'fixed'}}}),/当前路由仅支持/);
     assert.deepEqual((await api('/model-operations')).data,beforeInvalidPolicy);
     const telemetry=structuredClone(state);
     for(const [index,channel] of routingChannels(state,unifiedService).entries())telemetry.endpoints.find(row=>row.id===channel.endpointId).metrics={activeRequests:index,requestsPerMinute:index,tokensPerMinute:index*10,p95LatencyMs:10+index,rpmLimit:100,tpmLimit:1000};
@@ -212,23 +213,23 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     await assert.rejects(save(state, {
       type: 'modelOperations', operation: 'serviceMode', modelId: model.id,
       data: { serviceMode: 'standard', expectedUpdatedAt: currentMode.updatedAt, confirmedReset: true },
-    }), { status: 422, message: /服务模式设置后不可修改/ });
+    }), { status: 422, message: /请在「模型服务」/ });
     assert.deepEqual((await api('/model-operations')).data, beforeModeChange);
     assert((await local.db.prepare('SELECT count(*) AS n FROM publications').first()).n>=3);
     const unregistered=state.modelTemplates.find(row=>row.id==='builtin-pp-ocrv6'),beforeRejected=structuredClone(state);
-    await assert.rejects(save(state,{type:'modelOperations',operation:'createServiceModel',data:{...serviceModelSourceDraft(state,unregistered),libraryId:unregistered.id}}),/已登记/);
+    await assert.rejects(save(state,{type:'modelOperations',operation:'createServiceModel',data:{...serviceModelSourceDraft(state,unregistered),libraryId:unregistered.id}}),/请在「模型服务」/);
     assert.deepEqual(state,beforeRejected);
     state=await save(state,{type:'modelOperations',operation:'supplierModelsRegister',data:{providerId:'provider-moma',libraryIds:['model-2']}});
     state=(await api('/model-operations')).data;
     const source=serviceModelSources(state).find(row=>row.id==='model-2'),beforeCreate=structuredClone(state);
-    state=await save(state,{type:'modelOperations',operation:'createServiceModel',data:{...serviceModelSourceDraft(state,source),libraryId:source.id,name:'  GLM-5.2 验收服务  ',serviceMode:'standard'}});
+    state=await seedExistingService(local.db,state,{...serviceModelSourceDraft(state,source),libraryId:source.id,name:'  GLM-5.2 验收服务  ',serviceMode:'standard'});
     const reloaded=(await api('/model-operations')).data,created=reloaded.models.find(row=>row.templateId===source.id);
     assert(created);assert.equal(created.serviceName,'GLM-5.2 验收服务');assert.equal(created.serviceMode,'standard');assert.equal(created.id,source.id);assert.equal(created.modelId,source.modelId);assert.equal(created.callsEnabled,false);assert.equal(created.listingStatus,'已下架');
     const retained=reloaded.modelTemplates.find(row=>row.id===source.id);
     for(const key of ['id','modelId','name','profile','capabilities'])assert.deepEqual(retained[key],source[key],key);
     const sorted=rows=>[...rows].sort((a,b)=>a.id.localeCompare(b.id));
     for(const key of ['providers','endpoints','modelSupplies','modelSalePrices','serviceRoutes'])assert.deepEqual(sorted(reloaded[key]),sorted(beforeCreate[key]),key);
-    await assert.rejects(save(state,{type:'modelOperations',operation:'createServiceModel',data:{...serviceModelSourceDraft(state,source),libraryId:source.id}}),/已有模型服务/);
+    await assert.rejects(save(state,{type:'modelOperations',operation:'createServiceModel',data:{...serviceModelSourceDraft(state,source),libraryId:source.id}}),/请在「模型服务」/);
     {
     const commit=(operation,data,modelId)=>save(state,{type:['recordPlatformPublication','enableService'].includes(operation)?'modelOperation':'modelOperations',operation,data,modelId});
     state=await commit('channelMetadataCreate',{name:'D1内部无价格',modelId:'d1-internal-no-price',type:'text',profile:{tasks:['对话'],inputModalities:['文本'],outputModalities:['文本']}});
@@ -248,8 +249,10 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     assert(batch.items.every(row=>row.status==='passed'));
     state=await commit('channelTestEvidenceReceipt',{providerId:owner().id,endpointId:ep.id,batch});
     state=await commit('provider',{operation:'supplierModelsEnable',objectId:owner().id,values:{endpointId:ep.id,associationIds:[association.id]}});
-    state=await commit('createServiceModel',{...serviceModelDraft(material),libraryId:material.id,author:modelAuthors(state)[0],releaseDate:'2026-11-06',description:'内部技术服务',serviceMode:'standard',purpose:'internal'});
-    const internalId=state.audits[0].objectId,internal=()=>state.models.find(row=>row.id===internalId);
+    state=await seedExistingService(local.db,state,{...serviceModelDraft(material),libraryId:material.id,author:modelAuthors(state)[0],releaseDate:'2026-11-06',description:'内部技术服务',serviceMode:'standard',purpose:'internal'});
+    const internalId=state.audits[0].objectId;
+    state=(await api('/model-operations')).data;
+    const internal=()=>state.models.find(row=>row.id===internalId);
     state=await commit('associateServiceChannels',{providerId:owner().id,catalogueModelId:association.modelId,channelIds:[association.id],confirmedIdentity:true,expectedUpdatedAt:internal().updatedAt},internalId);
     const service=routingServices(state).find(row=>row.modelId===internalId),supply=state.modelSupplies.find(row=>row.modelId===internalId);
     state=await commit('serviceRoutePublish',{serviceId:service.id,expectedVersion:0,sourceVersion:routeSourceVersion(state,service),config:{strategy:'weighted',autoFailover:false,channels:[{supplyId:supply.id,enabled:true,priority:1,weight:100}]}},internalId);

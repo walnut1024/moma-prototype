@@ -1,3 +1,5 @@
+import {resourceId} from '../src/resource-id.mjs';
+import {seedExistingService} from './legacy-service-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes,createHash} from 'node:crypto';
@@ -59,18 +61,8 @@ test('D1 maintenance and reused-connection commands preserve existing records an
     const attached=await command('supplierChannelRegister',data);assert.equal(attached.result.status,200,JSON.stringify(attached.result.data));assert.equal((await api('/model-operations/commands',attached.body,attached.id)).status,200);
     assert.deepEqual(s.endpoints,beforeEndpoints);assert.deepEqual(s.models,beforeModels);assert.equal((await command('supplierChannelRegister',data)).result.status,422);
     const serviceData = { ...serviceModelSourceDraft(s, master), libraryId: master.id, name: '  验收模型服务  ' };
-    for (const data of [serviceData, { ...serviceData, serviceMode: ['standard', 'provider'] }]) {
-      const rejected = await command('createServiceModel', data);
-      assert.equal(rejected.result.status, 422);
-      assert.match(rejected.result.data.error.message, /服务模式/);
-      assert.deepEqual(s.models, beforeModels);
-    }
-    const blankName = await command('createServiceModel', { ...serviceData, name: '  ', serviceMode: 'standard' });
-    assert.equal(blankName.result.status, 422);
-    assert.match(blankName.result.data.error.message, /名称/);
-    assert.deepEqual(s.models, beforeModels);
-    const created = await command('createServiceModel', { ...serviceData, serviceMode: 'standard' });
-    assert.equal(created.result.status, 200, JSON.stringify(created.result.data));
+    await seedExistingService(local.db,s,{ ...serviceData, serviceMode:'standard' });
+    await reload();
     let m = s.models.find(row => row.templateId === master.id && row.serviceManaged);
     assert.ok(m);
     assert.equal(m.serviceName, '验收模型服务');
@@ -100,7 +92,7 @@ test('D1 maintenance and reused-connection commands preserve existing records an
 
 test('call guides can use complete setup while current platform verification is still pending',()=>{const s=state(),m=s.models.find(row=>row.serviceMode==='standard' && serviceConfiguration(s,row).setupIssues.length===0);assert.ok(m);const status=serviceConfiguration(s,m);assert.equal(status.label,'待验证');assert.ok(status.issues.some(row=>row.tab==='platform'));assert.deepEqual(status.setupIssues,[]);});
 
-test('D1 creates a service before supplier registration and keeps its type, mode and stable identity', { timeout: 60000 }, async () => {
+test('D1 creates independent services before supplier registration and preserves existing records', { timeout: 60000 }, async () => {
   const accessCode = randomBytes(24).toString('hex');
   const local = await startLocalBackend({ demo: true, loginHashes: { 'admin-001': createHash('sha256').update(accessCode).digest('hex') } });
   let cookie;
@@ -116,59 +108,30 @@ test('D1 creates a service before supplier registration and keeps its type, mode
     const login = await api('/auth/login', { accountId: 'admin-001', accessCode });
     assert.equal(login.status, 200);
     cookie = login.headers.get('set-cookie').split(';')[0];
-    let current = await reload();
-    const before = current;
-    const command = (operation, data, modelId) => api('/model-operations/commands', {
-      operationId: crypto.randomUUID(), expectedRevision: current.revision, action: { type: 'modelOperations', operation, modelId, data },
+    const before = await reload();
+    const save = row => api('/model-services-new', {
+      action:'save', id:row.id, row, revision:0, operationId:resourceId('operation'),
     });
-    const input = { name: '  独立测试服务  ', type: 'text', serviceMode: 'standard' };
-    for (const patch of [{ name: ' ' }, { type: '' }, { type: 'constructor' }, { serviceMode: '' }]) {
-      assert.equal((await command('createServiceModel', { ...input, ...patch })).status, 422);
+    const input = {id:resourceId('model-service'), name:'独立测试服务', callId:'qa-independent',
+      type:'text', modelId:'', channels:[], listed:false};
+    for (const serviceMode of ['standard','provider']) {
+      assert.equal((await save({...input,serviceMode})).status,400);
     }
-    const created = await command('createServiceModel', input);
-    assert.equal(created.status, 200, await created.text());
-    current = await reload();
-    const model = current.models.find(row => row.serviceName === '独立测试服务');
-    assert.ok(model);
-    assert.deepEqual([model.type, model.serviceMode, model.callsEnabled, model.listingStatus], ['text', 'standard', false, '已下架']);
-    assert.ok(serviceIndexModels(current, new URLSearchParams({ type: 'text' })).some(row => row.id === model.id));
-    for (const key of ['providers', 'modelSupplies', 'serviceRoutes']) assert.deepEqual(current[key], before[key], key);
-    const material = current.modelTemplates.find(row => row.id === model.templateId);
-    assert.ok(material);
-    assert.deepEqual([material.modelId, material.name, material.type], [model.modelId, model.name, model.type]);
-    assert.deepEqual(current.modelTemplates.filter(row => row.id !== material.id), before.modelTemplates);
-    const visualName = 'Vision QA';
-    const visual = await command('createServiceModel', { name: visualName, type: 'visual', serviceMode: 'provider' });
-    assert.equal(visual.status, 200, await visual.text());
-    current = await reload();
-    const visualModel = serviceIndexModels(current, new URLSearchParams({ type: 'visual', mode: 'provider' }))
-      .find(row => row.serviceName === visualName);
-    assert.equal(visualModel.type, 'visual');
-    const archive = await command('serviceArchive', { confirmed: true, expectedUpdatedAt: visualModel.updatedAt }, visualModel.id);
-    assert.equal(archive.status, 200, await archive.text());
-    current = await reload();
-    assert.ok(current.models.find(row => row.id === visualModel.id)?.archivedAt);
-    const legacy = current.models.find(row => !row.serviceName && row.name);
-    assert.ok(legacy);
-    for (const name of [model.serviceName, '  vision qa  ', legacy.name]) {
-      const duplicate = await command('createServiceModel', { name, type: 'audio', serviceMode: 'provider' });
-      assert.equal(duplicate.status, 422);
-      assert.equal((await duplicate.json()).error.message, '模型服务名称已存在');
+    const created = await save(input);
+    assert.equal(created.status,200,await created.clone().text());
+    const visual = {...input,id:resourceId('model-service'),name:'Vision QA',callId:'qa-vision',type:'visual'};
+    assert.equal((await save(visual)).status,200);
+    const catalogue = await (await api('/model-services-new')).json();
+    for (const expected of [input,visual]) {
+      const record = catalogue.rows.find(row=>row.id===expected.id);
+      assert.equal(record.callId,expected.callId);
+      assert.equal(record.type,expected.type);
+      assert.equal(record.listed,false);
+      assert.deepEqual(record.channels,[]);
+      assert.equal(Object.hasOwn(record,'serviceMode'),false);
     }
-    assert.equal((await reload()).revision, current.revision);
-    const providerId = 'provider-moma';
-    const registered = await command('supplierModelsRegister', { providerId, libraryIds: [material.id] });
-    assert.equal(registered.status, 200, await registered.text());
-    current = await reload();
-    const source = current.providers.find(row => row.id === providerId).catalogModels.find(row => row.libraryId === material.id);
-    const endpoint = current.endpoints.find(row => row.providerId === providerId && row.interfaceType === 'openai');
-    const channel = await command('supplierChannelRegister', {
-      providerId, modelId: source.modelId, endpointId: endpoint.id, expectedEndpointUpdatedAt: endpoint.updatedAt, upstreamModelId: 'test/upstream',
-    });
-    assert.equal(channel.status, 200, await channel.text());
-    current = await reload();
-    assert.ok(current.providers.find(row => row.id === providerId).catalogConnections.some(row => row.modelId === source.modelId && row.upstreamModelId === 'test/upstream'));
-    assert.equal(current.models.find(row => row.id === model.id).callsEnabled, false);
+    const after=await reload();
+    for(const key of ['models','providers','modelTemplates','modelSupplies','serviceRoutes']) assert.deepEqual(after[key],before[key],key);
     assert.equal((await local.db.prepare('PRAGMA foreign_key_check').all()).results.length, 0);
   } finally {
     await local.runtime.dispose();

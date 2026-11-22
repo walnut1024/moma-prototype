@@ -7,9 +7,6 @@ import { startLocalBackend } from '../database/local-runtime.js';
 import { domainModelWorkspace } from '../src/mock/model-fields.js';
 import { commitAdminState } from '../src/admin-v2/state-transaction.js';
 import { serviceModelSources } from '../src/admin-v2/supply-models.js';
-import { isResourceId } from '../src/resource-id.mjs';
-import { exportModelResources } from '../src/admin-v2/model-resource-transfer.js';
-import { serviceDirectoryRows } from '../src/admin-v2/service-directory.js';
 
 const libraryIds = ['builtin-pp-ocrv6', 'model-2', 'model-14', 'builtin-qwen-audio-3.0-asr-flash', 'catalog-demo-kimi'];
 const action = (operation, data) => ({ type: 'modelOperations', operation, data });
@@ -48,7 +45,7 @@ test('a conflicting name in the batch rejects all services and preserves the sou
   assert.deepEqual(state, before);
 });
 
-test('D1 batch creation validates every selection, rolls back failures, persists all five services and replays once', { timeout: 60000 }, async () => {
+test('D1 rejects retired batch mode commands and preserves stored offers and orders', { timeout: 60000 }, async () => {
   const accessCode = randomBytes(24).toString('hex');
   const local = await startLocalBackend({ demo: true, loginHashes: { 'admin-001': createHash('sha256').update(accessCode).digest('hex') } });
   let cookie = '';
@@ -69,38 +66,16 @@ test('D1 batch creation validates every selection, rolls back failures, persists
     state = await reload();
     const baseline = structuredClone(state);
     const existingOffers = (await local.db.prepare('SELECT * FROM offers ORDER BY record_id').all()).results;
-    for (const invalid of [batch([]), batch([...libraryIds, 'sixth']), batch([libraryIds[0], libraryIds[0]]), batch([libraryIds[0], 'missing']), batch([libraryIds[0], 'model-21']), batch(libraryIds, 'invalid'), batch([libraryIds[0], state.models.find(model => model.serviceMode)?.templateId])]) {
-      const response = await api('/model-operations/commands', command(state, invalid));
-      assert.equal(response.status, 422, await response.text());
-      assert.deepEqual(await reload(), baseline);
+    const orders = (await local.db.prepare('SELECT * FROM market_orders ORDER BY id').all()).results;
+    for (const mode of ['standard','provider']) {
+      const input = command(state,batch(libraryIds,mode));
+      const response = await api('/model-operations/commands',input);
+      assert.equal(response.status,422);
+      assert.match((await response.json()).error.message,/请在「模型服务」/);
+      assert.deepEqual(await reload(),baseline);
     }
-    const stale = command(state, batch());
-    stale.expectedRevision--;
-    assert.equal((await api('/model-operations/commands', stale)).status, 409);
-    assert.deepEqual(await reload(), baseline);
-    const input = command(state, batch()), response = await api('/model-operations/commands', input);
-    assert.equal(response.status, 200, await response.text());
-    const saved = await reload();
-    const services = saved.models.filter(model => libraryIds.includes(model.templateId));
-    assert.equal(services.length, 5);
-    for (const service of services) {
-      const source = serviceModelSources(state).find(model => model.id === service.templateId);
-      assert.deepEqual([service.serviceName, service.type], [source.name, source.type]);
-      assert.equal(await local.db.prepare('SELECT material_id FROM services WHERE id=?').bind(service.id).first('material_id'), source.id);
-      const offer = await local.db.prepare('SELECT record_id FROM offers WHERE service_id=?').bind(service.id).first();
-      assert(isResourceId(offer.record_id, 'model_service'));
-      assert.equal(serviceDirectoryRows([service], saved)[0].model_service_id, offer.record_id);
-      for (const scope of ['services', 'market', 'prices']) {
-        assert(exportModelResources(saved, scope).rows.some(row => row.id === offer.record_id));
-      }
-    }
-    for (const offer of existingOffers) assert.deepEqual(await local.db.prepare('SELECT * FROM offers WHERE record_id=?').bind(offer.record_id).first(), offer);
-    assert.equal(saved.revision, state.revision + 1);
-    assert.equal((await api('/model-operations/commands', input)).status, 200);
-    assert.deepEqual(await reload(), saved);
-    const duplicate = await api('/model-operations/commands', command(saved, batch()));
-    assert.equal(duplicate.status, 422, await duplicate.text());
-    assert.deepEqual(await reload(), saved);
+    assert.deepEqual((await local.db.prepare('SELECT * FROM offers ORDER BY record_id').all()).results,existingOffers);
+    assert.deepEqual((await local.db.prepare('SELECT * FROM market_orders ORDER BY id').all()).results,orders);
     assert.equal((await local.db.prepare('PRAGMA foreign_key_check').all()).results.length, 0);
   } finally { await local.runtime.dispose(); }
 });

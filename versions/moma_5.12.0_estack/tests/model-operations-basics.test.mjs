@@ -1,14 +1,15 @@
+import {seedExistingService} from './legacy-service-fixture.mjs';
+import {serviceModelSourceDraft} from '../src/admin-v2/model-profile.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes,createHash} from 'node:crypto';
 import {startLocalBackend} from '../database/local-runtime.js';
 import {domainModelWorkspace} from '../src/mock/model-fields.js';
 import {libraryRecord,modelMaterial} from '../src/admin-v2/model-library.js';
-import {serviceModelSourceDraft} from '../src/admin-v2/model-profile.js';
 import {materialBase} from '../src/admin-v2/model-operations.js';
 import {providerApiKeysDraft} from '../src/admin-v2/provider-management.js';
 import {connectionKeys} from '../src/admin-v2/connection-state.js';
-import {marketCardIndex} from '../src/market-cards.mjs';
+import {marketCardIndex,marketCardFieldValues} from '../src/market-cards.mjs';
 import {connectionDirectoryRows} from '../src/admin-v2/channel-connection-directory.js';
 import {mappingCandidates} from '../src/admin-v2/service-model-mappings.js';
 import {exportModelResources} from '../src/admin-v2/model-resource-transfer.js';
@@ -64,10 +65,13 @@ test('HTTP and D1 preserve canonical material, explicit channel protocol and can
     const edit={providerId:owner.id,endpointId:endpoint.id,associationId:association.id,modelId:catalogue.modelId,upstreamModelId:channel.upstreamModelId,name:endpoint.name,protocol:'OpenAI',baseUrl:channel.baseUrl,expectedUpdatedAt:endpoint.updatedAt,expectedProviderUpdatedAt:state.providers.find(row=>row.id===owner.id).updatedAt};
     const changed=await command('supplierChannelEdit',edit);assert.equal(changed.status,200,JSON.stringify(changed.data));await refresh();
     const pending=state.endpoints.find(row=>row.id===endpoint.id);assert.equal(pending.protocol,'Anthropic');assert.equal(pending.baseUrl,channel.baseUrl);assert.equal(pending.candidateConfiguration.config.protocol,'OpenAI');
-    const cardResult=await command('marketCardCreate',{expectedRevision:state.revision,name:material.name,description:material.description,logo:material.profile?.logo || ''},material.id);
+    const cardResult=await command('marketCardCreate',{expectedRevision:state.revision,...marketCardFieldValues(material),source_model_id:material.id,description_en:'GLM model for testing',family:'GLM',precision:'BF16',tags:['对话']},material.id);
     assert.equal(cardResult.status,200,JSON.stringify(cardResult.data));await refresh();
-    const create=await command('createServiceModel',{...serviceModelSourceDraft(state,material),libraryId:material.id,name:'GLM-5.5 业务服务',modelId:'glm-5.5-service',serviceMode:'standard'});assert.equal(create.status,200,JSON.stringify(create.data));await refresh();
-    const service=state.models.find(row=>row.templateId===material.id);assert.equal(service.name,material.name);assert.equal(service.serviceName,'GLM-5.5 业务服务');assert.equal(service.description,material.description);assert.equal(service.serviceMode,'standard');assert.equal(service.callsEnabled,false);assert.equal(service.listingStatus,'已下架');assert.equal(service.modelId,'glm-5.5-service');
+    const cardId=state.audits[0].objectId;
+    assert.ok(state.modelData.marketCards[cardId]);
+    // Keep an existing sales service in the export scope while its source material changes.
+    await seedExistingService(local.db,state,{...serviceModelSourceDraft(state,material),libraryId:material.id,serviceMode:'standard'});
+    await refresh();
     const newServiceRow={
       id:resourceId('model-service'), name:'从资料复制的新模型服务', callId:'qa-copy-new-service',
       modelId:material.id, type:material.type, listed:false, channels:[],
@@ -76,6 +80,8 @@ test('HTTP and D1 preserve canonical material, explicit channel protocol and can
       const operationId=resourceId('operation');
       return api('/model-services-new',{action:'save',id:row.id,revision,row,operationId},operationId);
     };
+    const invalidMode=await persistNewService({...newServiceRow,serviceMode:'provider'});
+    assert.equal(invalidMode.status,400);
     const invalidDetails=await persistNewService({...newServiceRow, modelDetails:{context:-1}});
     assert.equal(invalidDetails.status,400);
     const copied=await persistNewService(newServiceRow);
@@ -104,11 +110,11 @@ test('HTTP and D1 preserve canonical material, explicit channel protocol and can
     assert.deepEqual(businessExports(state),beforeExports);
     for(const key of ['models','providers','endpoints','modelSupplies','validations','serviceRoutes','supplyRelations']) assert.deepEqual(state[key],configured[key],key);
     assert.deepEqual(state.modelData.marketCards,configured.modelData.marketCards);
-    assert.equal(marketCardIndex(state,state.models).find(row=>row.modelId===material.id).name,material.name);
+    assert.equal(marketCardIndex(state,state.models).find(row=>row.cardId===cardId).name,material.name);
     const savedChannel=connectionDirectoryRows(state,state.providers).find(row=>row.id===privateChannel.id);
     assert.equal(savedChannel.models[0].modelName,material.name);
     assert.deepEqual(mappingCandidates(state,{modelId:material.id}),beforeCandidates);
-    assert.equal(state.models.find(row=>row.id===service.id).serviceName,service.serviceName);
+    assert.equal((await readNewService()).name,newServiceRow.name);
     const editOwn=await persistNewService({...copied.data.row,modelDetails:{name:'服务自己维护',context:16384}},1);
     assert.equal(editOwn.status,200,JSON.stringify(editOwn.data));
     assert.equal((await readNewService()).modelDetails.name,'服务自己维护');
@@ -117,7 +123,6 @@ test('HTTP and D1 preserve canonical material, explicit channel protocol and can
     await refresh();
     const deletedSource=await persistNewService({...newServiceRow,id:resourceId('model-service'),callId:'qa-use-deleted-reference'});
     assert.equal(deletedSource.status,400);
-    const duplicate=await command('createServiceModel',{...serviceModelSourceDraft(state,material),libraryId:material.id,modelId:'another',serviceMode:'provider'});assert.equal(duplicate.status,422);
     await refresh();
     const currentOwner=state.providers.find(row=>row.id===privateOwner.id);
     const currentAssociation=currentOwner.catalogConnections.find(row=>row.endpointId===privateChannel.id);

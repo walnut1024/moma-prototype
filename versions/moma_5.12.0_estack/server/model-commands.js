@@ -290,6 +290,9 @@ export async function modelCommand(db,actor,body,key,license){
   if(importingDemo && actor.role!=='平台管理员')issue(403,'FORBIDDEN','当前账号无演示包导入权限');
   rejectSecrets(body.action);
   const hash=await digest(body),prior=await receipt(db,actor,key,hash,body.operationId);if(prior)return prior;
+  if (['serviceMode', 'createServiceModel', 'createServiceModels', 'guidedServiceConfigure', 'guidedProfileSave'].includes(body.action.operation)) {
+    issue(422, 'BUSINESS_BLOCKED', '请在「模型服务」中创建和配置服务');
+  }
   const before=await loadModelWorkspace(db,actor,{command:true});
   if(before.revision!==body.expectedRevision)issue(409,'REVISION_CONFLICT','模型运营已有修订，请载入最新数据；当前输入保留');
   let indexRepairs = [];
@@ -318,11 +321,6 @@ export async function modelCommand(db,actor,body,key,license){
     if (target !== undefined && !validId(target)) issue(422, 'INVALID_INPUT', '模型服务 ID 无效');
     const history = await db.prepare('SELECT 1 FROM offers f WHERE f.service_id=?' + (target === undefined ? '' : ' AND f.record_id=?') + ' AND (EXISTS(SELECT 1 FROM market_orders o WHERE o.offer_id=f.record_id) OR EXISTS(SELECT 1 FROM market_calls c WHERE c.offer_id=f.record_id)) LIMIT 1').bind(body.action.modelId, ...(target === undefined ? [] : [target])).first();
     if (history) issue(422, 'BUSINESS_BLOCKED', '服务已有订单或调用记录，请使用归档保留历史关联');
-  }
-  if (body.action.operation === 'createServiceModels' && Array.isArray(body.action.data?.libraryIds) && body.action.data.libraryIds.length <= 5) {
-    const { results } = await db.prepare("SELECT record_json FROM services WHERE deleted_at IS NOT NULL AND json_extract(record_json,'$.templateId') IN (SELECT value FROM json_each(?))")
-      .bind(JSON.stringify(body.action.data.libraryIds)).all();
-    for (const row of results) { const model = domainModel(JSON.parse(row.record_json), true); if (!before.models.some(item => item.id === model.id)) before.models.push(model); }
   }
   if (dictionaryChange?.operation === 'delete' && typeof dictionaryChange.id === 'string') {
     const reference = await db.prepare(`SELECT 1 FROM token_package_model_factors f

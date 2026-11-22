@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { directorySnapshot, marketModels, customerPriceRows } from '../src/service-directory.mjs';
+import { modelUsageSummary } from '../src/model-usage.mjs';
 import { ADMIN_DATA_KEY } from '../src/service-access.mjs';
 
 function fixture(t, patch = {}) {
@@ -93,7 +94,7 @@ test('customer prices preserve free and missing distinctions and exclude future 
   assert.deepEqual(customerPriceRows([base, { ...base, amount: 0, unit: 'million_output_tokens' }, { ...base, amount: null }, { ...base, expiresAt: '2026-10-01' }, { ...base, effectiveAt: '2027-01-01' }], at), [{ name: '输入 Token', amount: 3, currency: 'CNY', unit: '百万 Token' }, { name: '输出 Token', amount: 0, currency: 'CNY', unit: '百万 Token' }]);
 });
 
-test('default gallery limits existing marked examples to the two requested modes without deleting old services', t => {
+test('default gallery shows the selected examples without deleting old services', t => {
   const env = fixture(t, { modelId: 'deepseek-v4-flash-0731', serviceShowcase: 'service-showcase-20261102' });
   env.state.models.push({ ...structuredClone(env.model), id: 'old-kimi', modelId: 'kimi-k2.7-code' });
   env.state.modelData={builtinIds:{models:['old-kimi']},activeIds:{models:[env.model.id]},userIds:{}};
@@ -102,8 +103,8 @@ test('default gallery limits existing marked examples to the two requested modes
   assert.equal(rows.length, 2);
   assert.deepEqual(marketModels(rows).map(row => row.modelId), ['deepseek-v4-flash-0731']);
   assert.equal(marketModels(rows, 'all').length, 2);
-  assert.equal(rows[0].mode, 'standard');
-  assert.equal(rows[0].provider, '平台统一模型服务模式');
+  assert.equal(Object.hasOwn(rows[0], 'mode'), false);
+  assert.equal(rows[0].provider, '中国移动 MoMA');
 });
 
 test('hidden provider and unified models stay in the service directory but never appear in either gallery scope', t => {
@@ -120,4 +121,17 @@ test('downlisted suppliers disappear from front choices while other providers re
  assert.equal(env.model.serviceProviders.length,2);
  env.model.serviceProviders[0].marketVisible=true;env.storage.setItem(ADMIN_DATA_KEY,JSON.stringify(env.state));
  assert.equal(env.snapshot().models.length,2);
+});
+
+test('detail usage follows the saved service ID across renames and isolates sibling services', () => {
+  const now = Date.parse('2026-11-22T12:00:00Z');
+  const service = { id:'offer-a', modelKey:'model', type:'text', callId:'current-a' };
+  const event = (id, fields) => ({ id, requestId:id, modelId:'model', createdAt:new Date(now-1000).toISOString(), httpStatus:200, ...fields });
+  const records = [
+    event('renamed', {model_service_id:'offer-a', publicModelId:'old-a'}),
+    event('legacy', {publicModelId:'current-a'}),
+    event('sibling', {model_service_id:'offer-b', publicModelId:'current-a'}),
+    event('other-call', {publicModelId:'other'}),
+  ];
+  assert.equal(modelUsageSummary(records, service, now).count, 2);
 });

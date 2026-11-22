@@ -1,3 +1,4 @@
+import {seedExistingService} from './legacy-service-fixture.mjs';
 import { isResourceId, resourceId } from '../src/resource-id.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -137,7 +138,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
       }
       await command('provider',{operation:'supplierModelsEnable',objectId:providerId,values:{endpointId,associationIds:records.map(row=>row.associationId)}});
     }
-    await command('createServiceModel',{...serviceModelSourceDraft(state,material),libraryId:material.id,serviceMode:'provider',purpose:'commercial'});
+    state=await seedExistingService(local.db,state,{...serviceModelSourceDraft(state,material),libraryId:material.id,serviceMode:'provider',purpose:'commercial'});
     const modelId=state.audits[0].objectId,model=()=>state.models.find(row=>row.id===modelId);
     for (const source of sources) {
       await command('associateServiceProvider',{providerId:source.providerId,channelId:source.channelId,catalogueModelId:source.modelId,expectedUpdatedAt:model().updatedAt},modelId);

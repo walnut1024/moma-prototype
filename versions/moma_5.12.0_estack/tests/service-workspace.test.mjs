@@ -119,11 +119,11 @@ test('unified pricing rejects blanks, negatives, invalid units, duplicate items 
  for(const amount of ['', '-1','0.0000001','NaN'])assert.throws(()=>transact(state,'unifiedPrice',model.id,{...valid,items:[{...valid.items[0],amount}]}));
  for(const patch of [{items:[]},{items:[{...valid.items[0],unit:''}]},{items:[valid.items[0],valid.items[0]]},{expectedUpdatedAt:'stale'},{expectedSaleVersion:'stale'}])assert.throws(()=>transact(state,'unifiedPrice',model.id,{...valid,...patch}));
  assert.deepEqual(state,before);
- model.serviceMode='provider';assert.throws(()=>transact(state,'unifiedPrice',model.id,valid),/仅统一/);
+ model.serviceMode='provider';assert.throws(()=>transact(state,'unifiedPrice',model.id,valid),/具体模型服务配置售价/);
 });
 test('a unified model cannot edit or publish a channel retail offer',()=>{
  const {state,model}=setup(), supply=modelSupplies(state,model.id)[0];
- assert.throws(()=>transact(state,'reprice',model.id,{}),/统一售价/);
+ assert.throws(()=>transact(state,'reprice',model.id,{}),/模型服务售价/);
  assert.throws(()=>transact(state,'publishSupply',model.id,{id:supply.id}),/不能独立售卖/);
 });
 test('unified billing always snapshots the model price, independent of the chosen supplier price',()=>{

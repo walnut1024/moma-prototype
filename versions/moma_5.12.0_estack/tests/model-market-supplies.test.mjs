@@ -22,5 +22,5 @@ test('market groups existing model mappings by provider and keeps linked direct 
   assert.deepEqual(view({
     serviceMode: 'provider',
     serviceProviders: [{ providerId: 'p1' }, { providerId: 'p2', status: '已移除' }, { providerId: 'p3' }],
-  }), [['p1', [['e1', '主渠道']]], ['p3', []]]);
+  }), [['p1', [['e1', '主渠道']]], ['p3', []], ['p2', [['e2', '主渠道']]]]);
 });

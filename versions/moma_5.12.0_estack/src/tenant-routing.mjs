@@ -65,9 +65,8 @@ export function routeModels(services) {
 
 function allowedServices(config, model) {
   return (model?.services || []).filter(service => service.callable &&
-    (service.mode !== 'provider' ||
-      (!config.providers.length || config.providers.includes(service.providerId)) &&
-      !config.excludedProviders?.includes(service.providerId)));
+    (!config.providers.length || config.providers.includes(service.providerId)) &&
+    !config.excludedProviders?.includes(service.providerId));
 }
 
 function inputPrice(service, now) {
@@ -98,7 +97,7 @@ export function routeTargets(config, services, callId, { inputTokens = 0, now = 
     if (config.sort === 'price') candidates = sortByPrice(candidates, now);
     if (config.allowProviderFallbacks === false && candidates.length > 1) {
       const first = candidates[0];
-      candidates = candidates.filter(service => service.mode === first.mode && service.providerId === first.providerId);
+      candidates = candidates.filter(service => service.providerId === first.providerId);
     }
     return { id, candidates };
   }).filter(group => group.candidates.length);
@@ -133,7 +132,7 @@ export function routeConfiguration(config, services, kind, publish, callId) {
   }
   const validList = (ids, valid) => Array.isArray(ids) && ids.length <= 50 && new Set(ids).size === ids.length && ids.every(valid);
   const availableProvider = id => kind !== 'auto' && catalogue.some(model => models.includes(model.id) &&
-    model.services.some(row => row.callable && row.mode === 'provider' && row.providerId === id));
+    model.services.some(row => row.callable && row.providerId === id));
   if (![providers, excludedProviders, providerOrder].every(ids => validList(ids, availableProvider)) || typeof allowProviderFallbacks !== 'boolean') {
     throw Error('请选择所选模型下的可用供应商');
   }

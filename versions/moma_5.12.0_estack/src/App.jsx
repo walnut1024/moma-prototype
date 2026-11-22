@@ -213,7 +213,7 @@ function ModelOrderList({
   const byCallId=new Map(orderServices.map(service=>[service.callId,service]));
   const allRows=orderServices.map(service=>{
     const prices=customerPriceRows(service.salePrices);
-    return [service.callId,service.mode==='standard'?'统一模型服务模式':'渠道直选模式',service.typeLabel,service.providerName,prices.map(row=>row.name).join(' / '),prices.map(row=>row.currency+' '+row.amount+' / '+row.unit).join('\n'),service.ordered?'使用中':'未订购',service.orderedAt ? shanghaiDate(new Date(service.orderedAt)) : '—','长期有效',`service:${service.id}`];
+    return [service.callId,service.name,service.typeLabel,service.providerName,prices.map(row=>row.name).join(' / '),prices.map(row=>row.currency+' '+row.amount+' / '+row.unit).join('\n'),service.ordered?'使用中':'未订购',service.orderedAt ? shanghaiDate(new Date(service.orderedAt)) : '—','长期有效',`service:${service.id}`];
   });
   const historicalRows=market.orders.filter(order=>order.stage==='cancelled' || !market.services.some(service=>service.id===order.offerId)).map(order=>[order.callId,'—','—','—','—','—',order.stage==='cancelled'?'已退订':['gray','formal'].includes(order.stage)?'已订购':'已下架',shanghaiDate(new Date(order.createdAt)),'—',`order:${order.id}`]);
   const subscriptions = {'Token Plan订阅':tenant.plans.filter(row=>!row.product.name.includes('Coding')).map(row=>[row.product.name,'平台','Token Plan','平台','套餐权益',String(row.amount),'已订购',row.createdAt || '—',row.expiresAt || '长期有效',`subscription:${row.id}`]),'Coding Plan订阅':tenant.plans.filter(row=>row.product.name.includes('Coding')).map(row=>[row.product.name,'平台','Coding Plan','平台','套餐权益',String(row.amount),'已订购',row.createdAt || '—',row.expiresAt || '长期有效',`subscription:${row.id}`])};
@@ -221,7 +221,7 @@ function ModelOrderList({
   const options=values=>values.map(value=>({value,label:value}));
   const billingOptions=Object.entries(MODEL_ORDER_BILLING_TYPES).map(([key,value])=>({value,label:MODEL_ORDER_BILLING_LABELS[key]}));
   const lines=value=>value.split("\n").map((text,index)=><small key={index}>{text}</small>);
-  const rows = (payg ? [...allRows,...historicalRows] : subscriptions[tab] || []).filter(row => row[0].toLowerCase().includes(query.trim().toLowerCase()));
+  const rows = (payg ? [...allRows,...historicalRows] : subscriptions[tab] || []).filter(row => [row[0], row[1]].some(value => value.toLowerCase().includes(query.trim().toLowerCase())));
   const current = Math.min(page, Math.max(1, Math.ceil(rows.length / size)));
   const visibleRows = rows.slice((current - 1) * size, current * size);
   const changeTab = value => { setTab(value); setQuery(""); setPage(1); };
@@ -265,7 +265,7 @@ function ModelOrderList({
       Number(row.quota).toLocaleString('zh-CN')+' 万 Token','CNY '+row.price,'未订购']);
     const orderRows=(payg ? allRows : packageRows).filter(row=>
       (!hideOrdered || row[6]==='未订购') &&
-      (payg?row[0]:row[1]).toLowerCase().includes(query.toLowerCase()) &&
+      (payg ? [row[0], row[1]] : [row[1]]).some(value => value.toLowerCase().includes(query.trim().toLowerCase())) &&
       (!payg || ((series==='全部模型系列' || row[0].toLowerCase().startsWith(series.toLowerCase())) &&
         (modelType==='全部模型类别' || row[2]===modelType) && (!provider || byCallId.get(row[0])?.providerId===provider))),
     );
@@ -297,7 +297,7 @@ function ModelOrderList({
           ? [...new Set([...previous,...available])] : previous.filter(id=>!available.includes(id)))}/>,
       width:48,render:(_,row)=><Checkbox aria-label={'选择 '+(payg?row[0]:row[1])}
         disabled={row[6]!=='未订购'} checked={selectedOrders.includes(row[0])} onChange={()=>toggleOrder(row[0])}/>},
-      {title:payg?'模型名称':'套餐名称',width:220,render:(_,row)=><><strong>{payg?row[0]:row[1]}</strong><small>{payg?row[1]:row[0]}</small></>},
+      {title:payg?'模型名称':'套餐名称',width:220,render:(_,row)=><><strong>{row[1]}</strong><small>{row[0]}</small></>},
       {title:'模型服务商',width:130,render:(_,row)=>row[3]},
       {title:'模型类别',width:105,render:(_,row)=>row[2]},
       {title:'状态',width:86,render:(_,row)=><Tag color={row[6]==='未订购'?'blue':'green'}>{row[6]==='未订购'?'可订购':'已订购'}</Tag>},
@@ -386,7 +386,7 @@ function ModelOrderList({
     </div></ConfigProvider>;
   }
   const columns=[
-    {title:payg?'模型名称':'套餐名称',width:210,render:(_,row)=><><strong>{row[0]}</strong><small>{row[1]}</small></>},
+    {title:payg?'模型名称':'套餐名称',width:210,render:(_,row)=><><strong>{payg && row[1] !== '—' ? row[1] : row[0]}</strong><small>{payg ? row[1] !== '—' && row[0] : row[1]}</small></>},
     ...MODEL_ORDER_COLUMNS.slice(0,-1).map((title,index)=>({
       title,width:[116,115,170,180,94,112,112][index],
       render:(_,row)=>index===4 ? <Tag color={['使用中','已订购'].includes(row[index+2])?'green':'grey'}>{row[index+2]}</Tag> : lines(row[index+2]),

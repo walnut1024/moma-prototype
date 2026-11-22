@@ -99,13 +99,13 @@ test('tenant category filters isolate model types and retain recorded audio unit
  assert.deepEqual(tenantUsageTypes('视觉模型','视觉理解'),['multimodal']);assert.deepEqual(tenantUsageTypes('视觉模型','视频生成'),['video']);
  const audio=tenantUsageData({...options,types:tenantUsageTypes('语音模型')});assert.equal(audio.summary.audio,7);assert.equal(audio.summary.characters,12);assert.equal(audio.summary.total,undefined);
 });
-test('two published modes share tenant keys, orders, routes and request facts with the admin store without secrets or cross-customer data',async t=>{
+test('published model services share tenant keys, orders, routes and request facts with the admin store without secrets or cross-customer data',async t=>{
  const storage=environment(t);linked(storage);t.mock.method(globalThis,'fetch',()=>assert.fail('No real upstream'));
  const {completeServiceShowcase}=await import('../src/admin-v2/service-showcase-client.js');
  let state=tenantContext(storage).state;state=withAdminSession(state);state=await completeServiceShowcase(state,(current,action)=>persistModelAction(current,action,storage));
  let data=tenantData(storage);assert.equal(data.services.length,3);
  const projectId=projectAdministrator(storage);
- const offer=data.services.find(row=>row.mode==='provider'),key={id:'key-tenant-qa',name:'前后台同源',key:'sk-mock-qa-never-persist',enabled:true,models:[offer.modelId],ips:[]};
+ const offer=data.services.find(row=>row.providerId==='provider-zhipu-direct'),key={id:'key-tenant-qa',name:'前后台同源',key:'sk-mock-qa-never-persist',enabled:true,models:[offer.modelId],ips:[]};
  saveTenantKeys([key],{projectId,expectedRevision:data.revision},storage);let saved=JSON.parse(storage.getItem(STORAGE_KEY));assert.equal(saved.apiKeys.find(row=>row.id===key.id).tenantId,'tenant-gov');assert.ok(!JSON.stringify(saved).includes(key.key));
  data=tenantData(storage);assert.ok(data.keys.some(row=>row.id===key.id));const raw=storage.getItem(STORAGE_KEY);assert.throws(()=>saveTenantKeys([{...key,id:'key-001'}],{projectId,expectedRevision:data.revision},storage),/无权/);assert.equal(storage.getItem(STORAGE_KEY),raw);
  saveTenantKeys([{...key,quotaEnabled:false}],{projectId,expectedRevision:data.revision},storage);data=tenantData(storage);

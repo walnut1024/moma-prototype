@@ -113,7 +113,7 @@ erDiagram
 - `GET /model-operations`：当前原型资源视图；由 SQLite 组合 JSON，Worker 直接返回，避免整库解析再序列化。
 - `POST /model-operations/commands`：模型运营、模型服务和供应维护命令；不接受客户端身份或任意集合替换。
 - `GET /package-management`、`POST /package-management/commands` 处理套餐读写和生命周期命令。模型选项来自未归档的模型服务，规则和套餐关联使用模型主档 ID。平台管理员可管理共享套餐类型。「套餐数据」读取 D1 的订购和权益。
-- `saveFactorDraft` 保存「允许加入套餐」状态和抵扣规则草稿。 `publishFactorRules` 校验草稿后原子切换生效版本并写入审计。计费项来自模型当前服务模式下的生效售价，保存和发布均校验归属。允许加入套餐至少需要一条规则，且不能关闭被套餐引用的模型。已有规则且被套餐引用的旧配置保留可选状态。 `GET /package-management/factor-history?model=<模型主档ID>` 读取该模型的发布记录。
+- `saveFactorDraft` 保存「允许加入套餐」状态和抵扣规则草稿。 `publishFactorRules` 校验草稿后原子切换生效版本并写入审计。计费项来自模型服务的生效售价，保存和发布均校验归属。允许加入套餐至少需要一条规则，且不能关闭被套餐引用的模型。已有规则且被套餐引用的旧配置保留可选状态。 `GET /package-management/factor-history?model=<模型主档ID>` 读取该模型的发布记录。
 - `GET /application`、`POST /application/open`、`POST /application/commands` 提供后台客户、业务、网关和运维工作区。
 - `GET /market/workspace` 和 `POST /market/commands` 提供当前客户的组织、Key、智能路由、套餐订购与本人认证申请。
 - `POST /market/invitations` 由企业管理员生成成员链接，`POST /market/invitations/inspect` 和 `/market/invitations/accept` 验证及接受邀请。体验选项通过 `GET /market/experience-options?task=…` 读取，`GET /market/conversations` 返回当前用户与空间的文本历史。

@@ -45,7 +45,7 @@ function OrderedSelection({ label, options, values, onChange, reorder = true, ro
 function RoutingConfig({ config, models, auto, callId, onChange, onOrder }) {
   const fieldId = useId();
   const offers = models.filter(model => config.models.includes(model.id)).flatMap(model => model.services).filter(row => row.callable);
-  const providerOptions = [...new Map(offers.filter(row => row.mode === 'provider')
+  const providerOptions = [...new Map(offers.filter(row => row.providerId)
     .map(row => [row.providerId, option(row.providerId, row.providerName || row.provider)])).values()];
   const modelOptions = models.map(row => {
     const callable = row.services.some(service => service.callable);
@@ -53,7 +53,7 @@ function RoutingConfig({ config, models, auto, callId, onChange, onOrder }) {
   });
   const changeModels = selected => {
     const available = new Set(models.filter(model => selected.includes(model.id)).flatMap(model =>
-      model.services.filter(row => row.callable && row.mode === 'provider').map(row => row.providerId)));
+      model.services.filter(row => row.callable && row.providerId).map(row => row.providerId)));
     const providerOrder = config.providerOrder.filter(id => available.has(id));
     onChange({ models: selected, providers:config.providers.filter(id => available.has(id)),
       excludedProviders:config.excludedProviders.filter(id => available.has(id)), providerOrder,
@@ -78,7 +78,6 @@ function RoutingConfig({ config, models, auto, callId, onChange, onOrder }) {
         onChange={value => onChange({ fallbackModel: value })} /></div>}
     </section>
     <section><h3>供应商路由</h3>
-      {offers.some(row => row.mode === 'standard') && <Tag size="small">统一模型服务 · 平台调度</Tag>}
       {!auto && providerOptions.length > 0 && <>
         <OrderedSelection label="仅允许供应商" options={providerOptions} values={config.providers} reorder={false} onChange={providers => onChange({providers})} />
         <OrderedSelection label="排除供应商" options={providerOptions} values={config.excludedProviders} reorder={false}

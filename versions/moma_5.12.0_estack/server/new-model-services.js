@@ -136,6 +136,7 @@ export async function changeNewModelService(db, actor, command, key) {
     label = '删除模型服务';
   } else {
     const imported = action === 'import';
+    if (!imported && Object.hasOwn(row, 'serviceMode')) invalid('模型服务不接受服务模式设置');
     const config = readFields(row, imported ? { ...editable, description: 1200 } : editable, before || {});
     const routingStrategy = row.routingStrategy === undefined ? before?.routingStrategy : row.routingStrategy;
     if (routingStrategy !== undefined && (typeof routingStrategy !== 'string'

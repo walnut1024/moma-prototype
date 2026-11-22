@@ -3,8 +3,9 @@ import { callObservations, summarizeObservations } from './admin-v2/call-observa
 export function modelUsageSummary(records, service, now = Date.now()) {
   const start = now - 7 * 86400000;
   const modelId = service.serviceModelId || service.modelKey;
-  const candidates = records.filter(row => row.modelId === modelId);
-  const selected = candidates.filter(row => service.mode !== 'provider' || (row.publicModelId || row.callId) === service.callId);
+  const selected = records.filter(row => row.model_service_id
+    ? row.model_service_id === (service.model_service_id || service.id)
+    : row.modelId === modelId && (row.publicModelId || row.callId) === service.callId);
   const { requests } = callObservations({ requests: selected, models: [{ id: modelId, type: service.type }] });
   const rows = requests.filter(row => row.at >= start && row.at < now);
   const summary = summarizeObservations(rows);

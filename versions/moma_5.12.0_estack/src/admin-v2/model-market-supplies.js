@@ -11,16 +11,12 @@ export function marketSupplyGroups(state, model) {
     return groups.get(id);
   };
 
-  const direct = model.serviceMode === 'provider';
-  if (direct) {
-    for (const { providerId, providerName } of providerServices(model)) {
-      add(providerId, state.providers.find(row => row.id === providerId) || (providerName ? { name: providerName } : null));
-    }
+  for (const { providerId, providerName } of providerServices(model)) {
+    add(providerId, state.providers.find(row => row.id === providerId) || (providerName ? { name: providerName } : null));
   }
 
   for (const supply of modelSupplies(state, model.id)) {
     const id = supply.endpoint?.providerId || supply.providerId;
-    if (direct && !groups.has(id)) continue;
     const provider = supply.provider || state.providers.find(row => row.id === id);
     const channel = supply.endpoint;
     const source = provider?.catalogConnections?.find(row => row.id===supply.channelId && !row.deletedAt);

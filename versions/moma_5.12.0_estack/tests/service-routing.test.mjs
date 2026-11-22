@@ -68,7 +68,7 @@ test('only explicit model service modes and Provider associations expose routing
 
 test('unified mode rejects fixed routing even with a single healthy source, provider mode keeps explicit single-channel routing', () => {
  const {state,service,config}=baseline(),before=structuredClone(state);
- assert.throws(()=>validateRouteConfig(state,service,{...config,strategy:'fixed',channels:[config.channels[0]]}),/统一模型服务模式/);
+ assert.throws(()=>validateRouteConfig(state,service,{...config,strategy:'fixed',channels:[config.channels[0]]}),/当前路由仅支持/);
  assert.deepEqual(state,before);
  service.model.serviceMode='provider';service.model.serviceProviders=[{providerId:routingChannels(state,service)[0].provider.id,callId:'explicit-provider',status:'已关联'}];
  const explicit=routingServices(state).find(row=>row.modelId===service.modelId && row.mode==='provider'),sources=routingChannels(state,explicit);
@@ -83,7 +83,7 @@ test('flow preview keeps normal weighted selection separate from failover and re
   assert.deepEqual(routePreview(state, service, config).map(item => item.share), [70, 30]);
   assert.deepEqual(routePreview(state, service, config, config.channels[0].supplyId).map(item => item.share), [0, 100]);
   assert.deepEqual(routePreview(state, service, { ...config, autoFailover: false }, config.channels[0].supplyId).map(item => item.share), [0, 30]);
-  assert.throws(()=>routePreview(state,service,{...config,strategy:'priority'}),/统一模型服务模式/);
+  assert.throws(()=>routePreview(state,service,{...config,strategy:'priority'}),/当前路由仅支持/);
   state.modelSupplies.find(item => item.id === config.channels[0].supplyId).status = '已停用';
   assert.deepEqual(routePreview(state, service, config).map(item => item.share), [0, 100]);
   state.modelSupplies.find(item => item.id === config.channels[1].supplyId).status = '已停用';
@@ -175,7 +175,7 @@ test('only operators can configure service routes; generic collection writes can
   for (const role of ['平台管理员', '运营人员', '运维人员', '财务人员', '只读观察员']) assert.equal(canAccessPage(role, 'service-routing'), false);
   for (const role of ['平台管理员', '运营人员']) {
     assert.equal(pageFromHash('#/admin-2/service-routing?service=old', role), 'dashboard');
-    assert.equal(canAccessPage(role, 'listing'), true);
+    assert.equal(canAccessPage(role, 'listing-new'), true);
   }
   for (const role of ['运维人员', '财务人员', '只读观察员']) {
     assert.throws(() => commitAdminState({ ...state, currentRole: role }, action(state, service, config)), /无权/);
@@ -227,13 +227,13 @@ test('retry settings use the existing route version transaction and reject inval
 });
 test('obsolete unified priority policy cannot activate or overwrite its stored history',()=>{
  const {state,service,config}=threeChannels(),before=structuredClone(state),source=structuredClone(config);
- assert.throws(()=>routePreview(state,service,config),/统一模型服务模式/);
- assert.throws(()=>commitAdminState(state,action(state,service,config)),/统一模型服务模式/);
+ assert.throws(()=>routePreview(state,service,config),/当前路由仅支持/);
+ assert.throws(()=>commitAdminState(state,action(state,service,config)),/当前路由仅支持/);
  assert.deepEqual(state,before);assert.deepEqual(config,source);
 });
 test('random and metric strategies use equal shares or measured minima, never fabricated statistics',()=>{
   const {state,service,config,channels}=baseline();
-  assert.throws(()=>routePreview(state,service,{...config,strategy:'random'}),/统一模型服务模式/);
+  assert.throws(()=>routePreview(state,service,{...config,strategy:'random'}),/当前路由仅支持/);
   for (const strategy of ['latency','load']) assert.throws(()=>validateRouteConfig(state,service,{...config,strategy}),/实际/);
   state.endpoints.find(item=>item.id===channels[0].endpointId).metrics={p95LatencyMs:80,activeRequests:4};
   state.endpoints.find(item=>item.id===channels[1].endpointId).metrics={p95LatencyMs:120,activeRequests:0};

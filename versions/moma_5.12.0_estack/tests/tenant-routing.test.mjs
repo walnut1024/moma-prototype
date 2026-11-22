@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { activeTenantVersion, autoStrategies, changeTenantRoute, routeTargets, tenantRouteVisible, keyTenantRoute } from '../src/tenant-routing.mjs';
 
 const service = (callId, modelKey, providerId, price, context) => ({
-  callId, modelKey, providerId, mode: 'provider', name: modelKey, type: 'text', callable: true,
+  callId, modelKey, providerId, name: modelKey, type: 'text', callable: true,
   capabilities: { context, output: 512 }, salePrices: [{ unit: 'million_input_tokens', currency: 'CNY', amount: price }],
 });
 const offers = [service('a-1', 'model-a', 'a', 7, 1000), service('a-2', 'model-a', 'b', 4, 1000),
