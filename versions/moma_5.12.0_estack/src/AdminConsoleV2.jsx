@@ -8,9 +8,9 @@ import {
   IconMenu, IconMonitorStroked, IconPlayCircle, IconPriceTag, IconPulse, IconServerStroked, IconSetting,
   IconShield, IconUserGroup, IconUserSetting, IconUserStroked,
 } from '@douyinfe/semi-icons';
+import ModelPrices from './admin-v2/ModelPrices';
 import CloudModelOperations from './admin-v2/CloudModelOperations';
 import { modelOperationsView } from './mock/model-data.js';
-import { ModelOperationsGuide } from './admin-v2/GettingStarted';
 import { Badge, Banner, Breadcrumb, Button, ConfigProvider, Dropdown, Tabs, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './admin-v2/AdminOverlay';
 import enUS from '@douyinfe/semi-ui/lib/es/locale/source/en_US.js';
@@ -18,45 +18,49 @@ import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import { adminSections, sections, pages, WORKSPACES, WORKSPACE_HOME, availableWorkspaces, pageWorkspace, canAccessPage, commercialPage, isOrganizationPage, pageFromHash, channelManagementListRoute } from './admin-v2/navigation.mjs';
 import { adminBreadcrumbs } from './admin-v2/breadcrumbs.mjs';
 import { modelMaterial } from './admin-v2/model-library';
-import OperationsOverview from './admin-v2/OperationsOverview';
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import AnalyticsPages from "./admin-v2/AnalyticsPages";
 import "./admin-v2/admin-shell.css";
-import { ClusterManagement, ModelDeployments, ModelObservability } from "./admin-v2/InferencePages";
-import { ChannelManagementNew } from "./admin-v2/ChannelDirectory";
-const CustomerAnalysis = lazy(() => import('./admin-v2/CustomerAnalysis'));
-const TrafficOperations = lazy(() => import('./admin-v2/TrafficOperations'));
-const SiteConfiguration = lazy(() => import('./admin-v2/SiteConfiguration'));
-const ModelMaterials = lazy(()=>import('./admin-v2/ModelMaterials'));
-const ModelServicesNew = lazy(()=>import('./admin-v2/ModelServicesNew'));
-const ModelLinks = lazy(() => import('./admin-v2/ModelLinks'));
-const ProviderMaterials = lazy(()=>import('./admin-v2/ProviderMaterials'));
-const MaterialDictionaryPage = lazy(()=>import('./admin-v2/MaterialDictionaryPage'));
-import CustomerPage from "./admin-v2/CustomerPages";
 import { managedIndividualAccounts } from "./admin-v2/individual-users";
-import CustomerUsageDetail from "./admin-v2/CustomerUsageDetail";
-import ModelPrices from './admin-v2/ModelPrices';
-import ModelMarket from './admin-v2/ModelMarket';
 import { managedEnterpriseTenants } from "./admin-v2/enterprise";
 import { useDeploymentLicense } from './useDeploymentLicense';
-import GlobalRouting from './admin-v2/GlobalRouting.jsx';
 import { LICENSE_UNAVAILABLE } from './deployment-license.mjs';
-import LicensePage from './admin-v2/LicensePage';
-import CommerceAnalysis from './admin-v2/CommerceAnalysis';
 import { Toast } from '@douyinfe/semi-ui';
-import GatewayPage, { gatewaySettingsPages } from "./admin-v2/GatewayPages";
-import ObservabilityPage from "./admin-v2/ObservabilityPages";
-import ArtifactManagement from './admin-v2/ArtifactManagement';
-import BusinessOperationsPage from "./admin-v2/BusinessOperationsPages";
-import PackageProduction from "./admin-v2/PackageProduction";
-import PackageData from "./admin-v2/PackageData";
 import AdminPageBoundary from "./admin-v2/AdminPageBoundary";
-import AdminAccounts from "./admin-v2/AdminAccounts";
-import AuditLogsPage from './admin-v2/AuditLogsPage';
-import TenantResources from './admin-v2/TenantResources';
 import { tenantHref } from './admin-v2/access-control.mjs';
 import { AdminUIContext } from "./components/admin-ui-context";
 import { serviceOperationsUi } from "./admin-v2/ServiceUI";
+
+const OperationsOverview = lazy(() => import('./admin-v2/OperationsOverview'));
+const AnalyticsPages = lazy(() => import('./admin-v2/AnalyticsPages'));
+const CustomerPage = lazy(() => import('./admin-v2/CustomerPages'));
+const CustomerUsageDetail = lazy(() => import('./admin-v2/CustomerUsageDetail'));
+const ModelMarket = lazy(() => import('./admin-v2/ModelMarket'));
+const GlobalRouting = lazy(() => import('./admin-v2/GlobalRouting.jsx'));
+const LicensePage = lazy(() => import('./admin-v2/LicensePage'));
+const CommerceAnalysis = lazy(() => import('./admin-v2/CommerceAnalysis'));
+const ObservabilityPage = lazy(() => import('./admin-v2/ObservabilityPages'));
+const ArtifactManagement = lazy(() => import('./admin-v2/ArtifactManagement'));
+const BusinessOperationsPage = lazy(() => import('./admin-v2/BusinessOperationsPages'));
+const PackageProduction = lazy(() => import('./admin-v2/PackageProduction'));
+const PackageData = lazy(() => import('./admin-v2/PackageData'));
+const AdminAccounts = lazy(() => import('./admin-v2/AdminAccounts'));
+const AuditLogsPage = lazy(() => import('./admin-v2/AuditLogsPage'));
+const TenantResources = lazy(() => import('./admin-v2/TenantResources'));
+const ModelOperationsGuide = lazy(() => import('./admin-v2/GettingStarted').then(module => ({ default: module.ModelOperationsGuide })));
+const ClusterManagement = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ClusterManagement })));
+const ModelDeployments = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ModelDeployments })));
+const ModelObservability = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ModelObservability })));
+const ChannelManagementNew = lazy(() => import('./admin-v2/ChannelDirectory').then(module => ({ default: module.ChannelManagementNew })));
+const GatewayPage = lazy(() => import('./admin-v2/GatewayPages'));
+const CustomerAnalysis = lazy(() => import('./admin-v2/CustomerAnalysis'));
+const TrafficOperations = lazy(() => import('./admin-v2/TrafficOperations'));
+const SiteConfiguration = lazy(() => import('./admin-v2/SiteConfiguration'));
+const ModelMaterials = lazy(() => import('./admin-v2/ModelMaterials'));
+const loadModelServices = () => import('./admin-v2/ModelServicesNew');
+const ModelServicesNew = lazy(loadModelServices);
+const ModelLinks = lazy(() => import('./admin-v2/ModelLinks'));
+const ProviderMaterials = lazy(() => import('./admin-v2/ProviderMaterials'));
+const MaterialDictionaryPage = lazy(() => import('./admin-v2/MaterialDictionaryPage'));
 
 const NAVIGATION_ICONS = {
   overview: IconGridStroked,
@@ -114,6 +118,11 @@ export default function AdminConsoleV2(props) {
   };
   useEffect(()=>{const sync=()=>setHash(location.hash);addEventListener('hashchange',sync);return()=>removeEventListener('hashchange',sync);},[]);
   const cloud=/^#\/admin-2\/(listing-new|providers-reference|model-market|model-prices|model-templates|provider-materials|tariff-dictionary)(?:[/?]|$)/.test(hash);
+  // Fetch the requested module while its workspace data is loading.
+  const routeId = pageFromHash(hash);
+  useEffect(() => {
+    if (routeId === 'listing-new') loadModelServices().catch(() => {}); // The page boundary handles rendering failures.
+  }, [routeId]);
   const packageWorkspace=license?.commercial && /^#\/admin-2\/(?:package-production|package-data)(?:[/?]|$)/.test(hash);
   const area = packageWorkspace ? 'packages' : cloud ? 'models' : 'application';
   if (!license) return <AdminPageLoading label="部署授权"/>;
@@ -217,7 +226,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const breadcrumbs = !canVisit ? [{ label: '无访问权限' }] : adminBreadcrumbs(active, detailParams, { internal:organizationView, onboardingIntent: state.modelOnboardings.find(row=>row.id===detailParams.get('draft'))?.intent, provider: detailProvider?.name, connection: detailConnection && (detailConnection.name || detailConnection.id), model: detailModel?.serviceName || detailModel?.name, deployment: state.deployments.find(item => item.id === detailParams.get('deployment'))?.name, enterprise: detailEnterprise?.name, personal: personalTenant?.name, customer: detailTenant?.name });
   const hasAccount = state.admins.some(account => account.id === state.adminSession?.accountId && account.status === '已启用');
   const showPage = hasAccount && canVisit;
-  const gatewaySettings = gatewaySettingsPages.includes(active);
+  const gatewaySettings = activeArea === 'gateway';
   const renderMenu = collapsed => <nav aria-label="后台导航">{adminSections.filter(group =>
     group.workspace === currentWorkspace || (group.id === 'platform' && state.currentRole === '平台管理员')).map(group => {
       const reason = group.id === 'commerce' && !license.commercial ? '未授权' : '';
@@ -290,7 +299,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
         <AdminPageBoundary key={active}>
           {!hasAccount ? <Banner title="后台账号不可用" description={<a href="#/auth/login">重新登录</a>} closeIcon={null}/> : !canVisit ? (
             <Banner type="warning" title="无访问权限" description={<Button onClick={() => navigate(WORKSPACE_HOME[allowedWorkspaces[0]] || 'dashboard')}>返回首页</Button>} closeIcon={null}/>
-          ) : organizationView && !organizationTenant ? <Banner type="warning" title="尚未配置默认政企租户" closeIcon={null}/> : <>
+          ) : organizationView && !organizationTenant ? <Banner type="warning" title="尚未配置默认政企租户" closeIcon={null}/> : <Suspense fallback={<AdminPageLoading label={pages[active].label}/>}>
             {active === "model-operations-guide" ? <ModelOperationsGuide english={english}/>
             : active === "dashboard" ? <OperationsOverview state={factState} workbenchName={workbenchName} onNavigate={navigate}
               shortcuts={overviewShortcuts.filter(({ id }) => canAccessPage(state.currentRole, id, license))}/>
@@ -300,21 +309,21 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === "admins" ? <AdminAccounts state={state} transact={transactAdminAccount} conflict={conflict}/>
             : active === 'audit-logs' ? <AuditLogsPage key={state.adminSession.accountId + ':' + detailParams.toString()}
               accountId={state.adminSession.accountId} params={detailParams} tenants={state.tenants} projects={state.projects}/>
-            : active === 'site-configuration' ? <Suspense fallback={<AdminPageLoading label="站点配置"/>}><SiteConfiguration key={state.adminSession.accountId} dirtyRef={draftDirty}/></Suspense>
+            : active === 'site-configuration' ? <SiteConfiguration key={state.adminSession.accountId} dirtyRef={draftDirty}/>
             : active === 'global-routing' ? <GlobalRouting saved={state.globalRoutingParameters} revision={state.revision} transact={transact} conflict={conflict} dirtyRef={draftDirty}/>
             : active === 'license' ? <LicensePage license={license}/>
             : active === 'business-analysis' ? <CommerceAnalysis state={state}/>
             : active === "model-market" ? <ModelMarket state={state} transact={transactModel} conflict={conflict} internal={internalSite}/>
             : active === "model-prices" ? <ModelPrices state={state} transact={transactModel} conflict={conflict} reload={reload} readOnly={commerceReadOnly}/>
-            : active === "tariff-dictionary" ? <Suspense fallback={<AdminPageLoading label="基础资料"/>}><MaterialDictionaryPage state={state} transact={transactModel} conflict={conflict}/></Suspense>
+            : active === "tariff-dictionary" ? <MaterialDictionaryPage state={state} transact={transactModel} conflict={conflict}/>
             : active === 'providers-reference' ? <ChannelManagementNew state={state} transact={transactModel} conflict={conflict} reload={reload}/>
-            : active === 'provider-materials' ? <Suspense fallback={<AdminPageLoading label="服务商资料"/>}><ProviderMaterials state={state} transact={transactModel} conflict={conflict} reload={reload}/></Suspense>
-            : active === 'model-templates' ? <Suspense fallback={<AdminPageLoading label="基础资料"/>}><ModelMaterials state={modelOperationsView(state,'all')} transact={transactModel} conflict={conflict} reload={reload}/></Suspense>
-            : active === 'listing-new' ? <Suspense fallback={<AdminPageLoading label={pages[active].label}/>}><ModelServicesNew state={factState} params={detailParams} dirtyRef={draftDirty} sourceConflict={conflict} reloadWorkspace={reload}/></Suspense>
-            : active === 'model-links' ? <Suspense fallback={<AdminPageLoading label={pages[active].label}/>}><ModelLinks/></Suspense>
+            : active === 'provider-materials' ? <ProviderMaterials state={state} transact={transactModel} conflict={conflict} reload={reload}/>
+            : active === 'model-templates' ? <ModelMaterials state={modelOperationsView(state,'all')} transact={transactModel} conflict={conflict} reload={reload}/>
+            : active === 'listing-new' ? <ModelServicesNew state={factState} params={detailParams} dirtyRef={draftDirty} sourceConflict={conflict} reloadWorkspace={reload}/>
+            : active === 'model-links' ? <ModelLinks/>
             : active === "package-data" ? <PackageData state={state} params={detailParams}/>
             : active === "package-production" ? <PackageProduction state={state} transact={transact} conflict={conflict} params={detailParams} dirty={draftDirty}/>
-            : active === 'traffic-limits' ? <Suspense fallback={<AdminPageLoading label="限流配置"/>}><TrafficOperations key={state.adminSession.accountId} state={state} dirtyRef={draftDirty}/></Suspense>
+            : active === 'traffic-limits' ? <TrafficOperations key={state.adminSession.accountId} state={state} dirtyRef={draftDirty}/>
             : active === "tenants" ? <CustomerPage key={organizationView ? 'organization' : 'customers'} state={pageState} transact={transact} transactIndividual={transactIndividual} reload={reload} conflict={conflict} dirtyRef={draftDirty} internal={organizationView}/>
             : ['organization-members','projects'].includes(active) ? <TenantResources key={[active,resourceTenant?.id,detailParams.get('project')].join(':')}
               page={active} tenantId={resourceTenant?.id} tenantName={resourceTenant?.name} tab={detailParams.get('tab')}
@@ -330,7 +339,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === "deployments" ? <ModelDeployments state={state} dispatch={dispatch} conflict={conflict}/>
             : active === "artifacts" ? <ArtifactManagement state={state} dispatch={dispatch}/>
             : active === "model-observability" ? <ModelObservability state={state}/> : <BusinessOperationsPage key={active} pageId={active} state={state} params={detailParams} dispatch={dispatch}/>}
-          </>}
+          </Suspense>}
         </AdminPageBoundary>
       </main>
     </div>
