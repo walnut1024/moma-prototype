@@ -1,7 +1,7 @@
 import { failoverError, failoverValues, initialRoutingParameters, globalPolicyDefaults } from '../src/admin-v2/global-routing-parameters.mjs';
 import { isResourceId, resourceId } from '../src/resource-id.mjs';
 import { MODEL_TYPES, SERVICE_MODEL_TYPES } from '../src/admin-v2/model-management.js';
-import { mappingCandidates } from '../src/admin-v2/service-model-mappings.js';
+import { registeredServiceUpstreams } from '../src/admin-v2/service-model-mappings.js';
 import { channelFingerprint } from '../src/admin-v2/provider-channels.js';
 import { modelLibrary, modelMaterial } from '../src/admin-v2/model-library.js';
 import { serviceModelFields } from '../src/admin-v2/model-services-new.js';
@@ -188,21 +188,20 @@ export async function changeNewModelService(db, actor, command, key) {
     const releaseChanged = row.listed && (!before?.listed || JSON.stringify(channels) !== JSON.stringify(before.channels));
     if (releaseChanged || (!imported && (verify.length || linkingModel))) {
       const workspace = await loadModelWorkspace(db, actor, { simulation: false });
-      const model = modelLibrary(workspace).find(record => record.id === config.modelId && !record.archivedAt);
-      if (!model) invalid('请选择有效的模型资料');
       if (!imported && linkingModel) {
-        const material = modelMaterial(workspace, model.id);
+        const model = modelLibrary(workspace).find(record => record.id === config.modelId && !record.archivedAt);
+        const material = model && modelMaterial(workspace, model.id);
         if (!material) invalid('请选择有效的模型资料');
         const defaults = serviceModelFields(material);
         details = validatedModelDetails(row.modelDetails, defaults);
         config.type ||= material.type;
       }
-      const candidates = mappingCandidates(workspace, { modelId: model.id });
+      const candidates = registeredServiceUpstreams(workspace);
       const usable = channel => !channel.simulated && candidates.some(candidate =>
         candidate.id === channel.channelId && !candidate.reason && channelFingerprint(candidate) === channel.fingerprint);
       for (const channel of imported ? [] : verify) {
         if (channel.simulated) {
-          if (!['1', '2', '3'].some(index => channel.channelId === 'mock-service-channel:' + model.id + ':' + index)
+          if (!config.modelId || !['1', '2', '3'].some(index => channel.channelId === 'mock-service-channel:' + config.modelId + ':' + index)
             || channel.fingerprint !== channel.channelId) invalid('模拟连接无效');
         } else if (!usable(channel)) invalid('上游模型不可用，请更新连接配置');
       }

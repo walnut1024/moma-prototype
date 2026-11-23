@@ -23,7 +23,6 @@
 .new-model-services .new-service-cell > * { justify-self: start; max-width: 100%; }
 .new-model-services .new-service-channel-actions .semi-button { padding-inline: 4px; }
 .new-service-form { display: grid; gap: 12px; }
-.new-service-form .new-service-fields { display: flex; flex-wrap: wrap; gap: 12px; }
 .new-service-form .new-service-weight-table { min-width: 0; }
 .new-service-form .semi-input-number { width: 100%; }
 

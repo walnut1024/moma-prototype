@@ -96,6 +96,18 @@ export const mappingConfig = (supply,model) => ({
     additionalInterfaces:supply.serviceMapping?.additionalInterfaces,
   }),
 });
+// Independent services link to a registered upstream by its connection and association ID.
+export function registeredServiceUpstreams(state) {
+  return supplierDirectory(state).filter(provider => !provider.deletedAt).flatMap(provider =>
+    displayedCatalogueIds(provider, state).flatMap(modelId =>
+      catalogueChannels(state, provider, modelId)
+        .filter(channel => channel.endpoint.id && !channel.endpoint.deletedAt)
+        .map(channel => ({
+          ...channel, provider, type: channel.type || provider.catalogModels?.find(row => row.modelId === modelId)?.type,
+          reason: channelBlockReason(provider, channel),
+        }))));
+}
+
 export function mappingCandidates(state,service) {
   const modelId = libraryRecord(state, service.modelId)?.id || service.modelId;
   return supplierDirectory(state).filter(provider=>!service.providerId || provider.id===service.providerId).flatMap(provider=>displayedCatalogueIds(provider,state).flatMap(catalogueModelId=>catalogueChannels(state,provider,catalogueModelId).flatMap(channel=>{

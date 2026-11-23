@@ -2,13 +2,12 @@ import { useChannelText } from './channel-language';
 import { API_PREFIX } from '../../api-path';
 import { callLogFieldHelp } from '../components/call-log-field-help';
 import TableFieldHelp from '../components/TableFieldHelp';
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  Banner, Button, Card, Collapse, Descriptions, Empty, Input, InputNumber, RadioGroup, Radio, Select,
+  Banner, Button, Card, Descriptions, Empty, Input, InputNumber, RadioGroup, Radio, Select,
   Space, Tabs, Tag, TextArea, Toast, Tooltip, Typography,
 } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
-import AdminCollapsePanel from './AdminCollapsePanel';
 import { resourceId } from '../resource-id.mjs';
 import { cloudAdminRequest } from './admin-client.mjs';
 import AdminPageHeading from './AdminPageHeading';
@@ -18,10 +17,12 @@ import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { Choice, CopyId, Field, FieldLabel, Modal, Notice } from './ServiceUI';
 import { displayTime } from './model-management';
+import { CHANNEL_LIST_TYPES, channelListType, connectionDirectoryRows } from './channel-connection-directory';
+import { supplierDirectory } from './moma-provider';
+import { workbenchProtocolLabel } from './workbench-protocol';
 import { channelFingerprint } from './provider-channels';
-import { additionalMappingOptions, mappingCandidates, mappingInterfaces } from './service-model-mappings';
+import { additionalMappingOptions, registeredServiceUpstreams, mappingInterfaces } from './service-model-mappings';
 import { libraryRecord, modelCatalogue } from './model-library';
-import { INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, TASK_OPTIONS } from './model-profile';
 import { pages } from './navigation.mjs';
 import { DEFAULT_ROUTING_STRATEGY, ROUTING_STRATEGIES } from './service-routing-strategies.mjs';
 import {
@@ -42,7 +43,7 @@ const priorityHelp = <>
   <div><strong>组内选择</strong>　同组上游模型按当前路由策略选择。使用「加权随机」时，按可用上游模型的权重比例分配请求。</div>
 </>;
 const endpointLabel = '接口端点';
-const blank = { name: '', callId: '', modelId: '', type: '', note: '', description: '' };
+const blank = { name: '', callId: '', type: '', note: '', description: '' };
 const typeOptions = Object.entries(MODEL_SERVICE_TYPES).map(([value, [label]]) => ({ value, label }));
 const pagination = { pageSize: 10, hideOnSinglePage: true };
 const typeLabel = type => MODEL_SERVICE_TYPES[modelServiceType(type)]?.[0] || '—';
@@ -51,7 +52,6 @@ const searchMatches = (query, ...fields) => fields.join(' ').toLowerCase().inclu
 const sourceFingerprint = source => source.simulated ? source.id : channelFingerprint(source);
 const shareFormat = new Intl.NumberFormat('zh-CN', { style: 'percent', maximumFractionDigits: 1 });
 const contextLabel = '上游模型上下文长度（Token）';
-const fieldOptions = values => values.map(value => ({ value, label: value }));
 const weightHelp = '仅在「加权随机」策略下生效，用于在同优先级的可用上游模型之间分配请求。';
 const defaultChannelWeight = 100;
 const numericValue = value => value === '' || value == null ? null : Number(value);
@@ -66,20 +66,47 @@ function channelKey(row) {
   return row.simulated ? row.id : JSON.stringify([row.provider.id, row.endpointId || row.endpoint.id]);
 }
 
-function BatchChannelFields({ candidates, linked, values, change }) {
+function BatchChannelFields({ state, candidates, linked, values, change }) {
   const t = useChannelText();
-  const groups = Map.groupBy(candidates, channelKey);
-  const options = Array.from(groups, ([value, [row]]) => ({
-    value, label: row.simulated ? t(row.name) + ' · ' + t('模拟连接') : row.endpoint.name + ' · ' + row.provider.name,
-  }));
+  const connections = useMemo(() => {
+    const providers = supplierDirectory(state).filter(row => !row.deletedAt);
+    return connectionDirectoryRows(state, providers).map(row => ({
+      value: channelKey(row),
+      label: row.name + ' · ' + row.provider.name,
+      format: workbenchProtocolLabel(channelListType(row)),
+    }));
+  }, [state]);
+  const options = [...connections, ...candidates.filter(row => row.simulated).map(row => ({
+    value: channelKey(row), label: t(row.name) + ' · ' + t('模拟连接'), format: '未配置接口格式',
+  }))];
+  const formats = [...new Set([
+    ...CHANNEL_LIST_TYPES.map(type => workbenchProtocolLabel(type.label)),
+    ...options.map(row => row.format),
+  ])];
+  const selectedFormats = values.formats;
+  const availableConnections = options.filter(row => selectedFormats.includes(row.format));
+  const connectionPrompt = !selectedFormats.length ? '请选择接口格式'
+    : availableConnections.length ? '选择连接' : '所选接口格式下暂无连接';
   const models = candidates.filter(row => values.connections.includes(channelKey(row)));
   const reason = row => linked.some(link => link.channelId === row.id) ? '已关联' : row.reason;
+  function selectionFor(connections) {
+    const ids = values.ids.filter(id => models.some(row => row.id === id && connections.includes(channelKey(row))));
+    return { connections, ids };
+  }
+  function changeFormats(formats) {
+    const allowed = options.filter(row => formats.includes(row.format)).map(row => row.value);
+    change({ formats, ...selectionFor(values.connections.filter(id => allowed.includes(id))) });
+  }
   return <>
-    <Field label="连接" required><Select multiple filter aria-label="选择连接" placeholder="先选择连接"
-      optionList={options} value={values.connections} style={{ width: '100%' }}
-      onChange={connections => change({ connections, ids: values.ids.filter(id =>
-        candidates.some(row => row.id === id && connections.includes(channelKey(row)))) })}/></Field>
-    <Table rowKey="id" dataSource={models} pagination={false} empty={values.connections.length ? '暂无匹配模型' : '请先选择连接'}
+    <Field label={t('接口格式')} required><Select multiple filter aria-label={t('接口格式')}
+      placeholder={t('选择接口格式（可多选）')} style={{ width: '100%' }}
+      optionList={formats.map(format => ({ value: format, label: t(format) }))} value={selectedFormats} onChange={changeFormats}/></Field>
+    <Field label={t('连接')} required><Select multiple filter aria-label={t('选择连接')} disabled={!availableConnections.length}
+      placeholder={t(connectionPrompt)} emptyContent={t('没有匹配的连接')}
+      optionList={availableConnections.map(row => ({ value: row.value, label: row.label + ' · ' + t(row.format) }))}
+      value={values.connections} style={{ width: '100%' }}
+      onChange={connections => change(selectionFor(connections))}/></Field>
+    <Table rowKey="id" dataSource={models} pagination={false} empty={t(!availableConnections.length ? connectionPrompt : values.connections.length ? '所选连接下没有匹配的上游模型' : '请先选择连接')}
       rowSelection={{ selectedRowKeys: values.ids, getCheckboxProps: row => ({ disabled: Boolean(reason(row)) }),
         onChange: ids => change({ ids: ids.filter(id => models.some(row => row.id === id && !reason(row))) }) }}
       columns={[
@@ -176,10 +203,12 @@ function NumberField({ label, value, onChange, min = 0, disabled = false }) {
 }
 
 function serviceEndpoints(service, model, sources) {
-  const supported = new Set(model ? [
-    ...mappingInterfaces(model).map(([path]) => path),
-    ...sources.flatMap(source => additionalMappingOptions(model, source).map(({ path }) => path)),
-  ] : []);
+  const supported = new Set(model ? mappingInterfaces(model).map(([path]) => path) : []);
+  for (const source of sources) {
+    const descriptor = model || { type: service.type || source.type, profile: service.modelDetails };
+    for (const [path] of mappingInterfaces(descriptor)) supported.add(path);
+    for (const { path } of additionalMappingOptions(descriptor, source)) supported.add(path);
+  }
   return { supported, endpoints: ['text', 'multimodal'].includes(service.type) ? chatEndpoints : [...supported] };
 }
 
@@ -229,7 +258,7 @@ function ChannelModels({ service, rows, canEdit, open }) {
   const columns = [
     { title: t('上游模型 / 服务商'), width: 148, render: (_, row) => <div className="new-service-cell"><Text strong>{row.name}</Text><Text type="tertiary">{row.provider}</Text></div> },
     { title: '上游模型 ID', width: 220, render: (_, row) => <CopyId label="上游模型 ID" value={row.upstreamId}/> },
-    { title: '模型类型', width: 96, render: () => <Tag color="blue">{typeLabel(service.type)}</Tag> },
+    { title: '模型类型', width: 96, render: (_, row) => <Tag color="blue">{typeLabel(row.type || (row.simulated && service.type))}</Tag> },
     { title: t('关联上游模型状态'), width: 132, render: (_, row) => <div className="new-service-cell"><AdminStatus value={row.enabled ? '已启用' : '已停用'}/>{row.reason && <Text type="tertiary">{row.reason}</Text>}</div> },
     routingNumberColumn('权重', 'weight', 80, weightHelp, !weighted),
     { title: '操作', fixed: 'right', width: 160, render: (_, row) => <Space className="new-service-channel-actions" spacing={4}>
@@ -251,7 +280,7 @@ function ChannelModels({ service, rows, canEdit, open }) {
           showClear aria-label={t('搜索上游模型')} placeholder={t('搜索连接或模型')}/>
       </div>
       <Space wrap>
-        <Button disabled={!canEdit || !service.modelId} theme="solid" icon={<IconPlus/>}
+        <Button disabled={!canEdit} theme="solid" icon={<IconPlus/>}
           onClick={() => open('newGroup', { priority: Math.max(-1, ...priorities) + 1 })}>新增优先级组</Button>
       </Space>
     </div>
@@ -267,13 +296,13 @@ function ChannelModels({ service, rows, canEdit, open }) {
             priority, originalPriority: priority, ...Object.fromEntries(group.map(row => [row.id, row.weight]))
           })}>配置优先级与权重</Button>
           <Button size="small" disabled={!canEdit || group.length >= 100} onClick={() => open('addChannels', {
-            ids: [], connections: [], priority
+            ids: [], connections: [], formats: [], priority
           })}>{t('添加关联上游模型')}</Button></Space>
         </div>
         <Table empty="本组暂无上游模型" columns={columns} dataSource={matches} rowKey="id" scroll={{ x: 762 }} pagination={matches.length > pagination.pageSize ? pagination : false}/>
       </section>;
     })}
-    {!visibleGroups.length && <Empty description={service.modelId ? '暂无匹配的上游模型' : '请先在「编辑信息」中选择模型编码'}/>}
+    {!visibleGroups.length && <Empty description="暂无匹配的上游模型"/>}
     {preview && <div className="new-service-toolbar new-service-route-preview">
       <InputNumber min={1} step={1} hideButtons value={tokens ?? ''} aria-label="预览请求 Token 数"
         placeholder={weighted ? '输入 Token 数预览分流' : '输入 Token 数预览候选上游模型'} onChange={value => {
@@ -283,34 +312,6 @@ function ChannelModels({ service, rows, canEdit, open }) {
       <Text type="secondary" aria-live="polite">{preview.join('、') || '没有符合条件的上游模型'}</Text>
     </div>}
   </>;
-}
-
-function ServiceModelDetails({ values, change }) {
-  const details = values.modelDetails || serviceModelFields();
-  const update = (key, value) => change({ modelDetails: { ...details, [key]: value } });
-  return <Collapse>
-    <AdminCollapsePanel itemKey="model-fields" header="模型资料字段">
-      <div className="new-service-fields">
-        {[['name', '模型展示名称'], ['author', '模型作者'], ['family', '模型系列'], ['version', '模型版本']].map(([key, label]) =>
-          <Field key={key} label={label}><Input aria-label={label} value={details[key]} maxLength={100} onChange={value => update(key, value)}/></Field>)}
-        {[
-          ['inputModalities', '输入模态', INPUT_MODALITY_OPTIONS], ['outputModalities', '输出模态', OUTPUT_MODALITY_OPTIONS],
-          ['resultTypes', '结果类型', RESULT_TYPE_OPTIONS], ['tasks', '支持任务', TASK_OPTIONS[values.type] || []],
-        ].map(([key, label, choices]) => <Field key={key} label={label}>
-          <Select multiple showClear value={details[key]} optionList={fieldOptions([...new Set([...choices, ...details[key]])])}
-            onChange={value => update(key, value)}/>
-        </Field>)}
-        {[['context', '上下文长度（Token）'], ['output', '最大输出 Token 数']].map(([key, label]) => <Field key={key} label={label}>
-          <InputNumber aria-label={label} min={1} hideButtons value={details[key] ?? ''} onChange={value => update(key, numericValue(value))}/>
-        </Field>)}
-        {[['streaming', '流式响应'], ['tools', '工具调用']].map(([key, label]) => <Field key={key} label={label}>
-          <Choice label={label} options={[[ 'unknown', '未填写'], ['true', '支持'], ['false', '不支持']]}
-            value={details[key] == null ? 'unknown' : String(details[key])}
-            onChange={value => update(key, value === 'unknown' ? null : value === 'true')}/>
-        </Field>)}
-      </div>
-    </AdminCollapsePanel>
-  </Collapse>;
 }
 
 function loadLocalServices() {
@@ -363,9 +364,9 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
   const dialog = editState?.serviceId === serviceId ? editState : null;
   const canEdit = !data.loading && !data.error && !sourceConflict && ['平台管理员', '运营人员'].includes(state.currentRole);
   const models = modelCatalogue(state).filter(row => !row.archivedAt);
-  const allowModelSelection = dialog?.kind === 'create' || (dialog?.kind === 'editDetails' && !service?.modelId);
+  const allowModelSelection = dialog?.kind === 'editDetails' && !service?.modelId;
   const model = savedServiceModel(service);
-  const registeredChannels = model ? mappingCandidates(state, { modelId: model.id }) : [];
+  const registeredChannels = useMemo(() => registeredServiceUpstreams(state), [state]);
   const simulatedChannels = simulatedServiceChannels(model, registeredChannels, service?.channels);
   const candidates = [...registeredChannels, ...simulatedChannels];
   const candidatesById = new Map(candidates.map(channel => [channel.id, channel]));
@@ -376,7 +377,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
     const source = candidatesById.get(row.channelId);
     const needsReview = Boolean(source && !source.reason && row.fingerprint !== sourceFingerprint(source));
     const reason = !source ? '上游模型已不可用' : source.reason || (needsReview ? '连接配置已变更，请重新核对' : '');
-    return { ...row, weight: normalizedWeights[row.id] ?? row.weight, reason, needsReview };
+    return { ...row, type: source?.type, weight: normalizedWeights[row.id] ?? row.weight, reason, needsReview };
   }) || [];
   const dirty = Boolean(dialog?.dirty);
   useLayoutEffect(() => {
@@ -448,9 +449,8 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
         const fields = Object.fromEntries(['name', 'callId', 'note', 'description'].map(key => [key, values[key]?.trim() || '']));
         const issue = serviceFormIssue(fields, data.rows, service?.id);
         if (issue) throw Error(issue);
-        if (kind === 'create' || (allowModelSelection && values.modelId)) {
-          if (values.modelId && !models.some(row => row.id === values.modelId)) throw Error('请选择有效的模型资料');
-          if (values.type && !Object.hasOwn(MODEL_SERVICE_TYPES, modelServiceType(values.type))) throw Error('请选择有效的模型类型');
+        if (allowModelSelection && values.modelId) {
+          if (!models.some(row => row.id === values.modelId)) throw Error('请选择有效的模型资料');
           const modelDetails = values.modelDetails || serviceModelFields();
           if ([modelDetails.context, modelDetails.output].some(value => value != null && !validContextLength(value))) {
             throw Error('上下文长度和最大输出 Token 数须为正整数');
@@ -460,10 +460,11 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
           fields.modelDetails = modelDetails;
         }
         if (kind === 'create') {
-          const initial = { ...fields, id: values.id, listed: false, channels: [] };
-          if (await save(initial)) location.hash = detailHref(initial.id, 'basic');
+          if (values.type && !Object.hasOwn(MODEL_SERVICE_TYPES, modelServiceType(values.type))) throw Error('请选择有效的模型类型');
+          const initial = { ...fields, type: values.type || '', id: values.id, listed: false, channels: [], priorityGroups: [0] };
+          if (await save(initial)) location.hash = detailHref(initial.id, 'channels');
         } else {
-          await save({ ...service, ...fields, tags: values.tags?.trim() || '' });
+          await save({ ...service, ...fields });
         }
         return;
       }
@@ -473,7 +474,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
         if (kind === 'unlist' && (dialog.check?.revision !== record.revision || dialog.check.stopIssue)) {
           throw Error(dialog.check?.stopIssue || '服务配置已变化，请重新检查');
         }
-        const sources = mappingCandidates(state, { modelId: record.modelId });
+        const sources = registeredChannels;
         if (kind === 'list' && !record.channels.some(row => row.enabled && sources.some(source =>
           source.id === row.channelId && !source.reason && channelFingerprint(source) === row.fingerprint))) {
           throw Error('请先添加并启用通过验证的已登记上游模型');
@@ -546,8 +547,8 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
 
   const endpointValues = row => {
     const master = savedServiceModel(withModelDetails(row));
-    const sources = master && row.channels.some(channel => channel.enabled && !channel.simulated)
-      ? mappingCandidates(state, { modelId: master.id }).filter(source => !source.reason && row.channels.some(channel =>
+    const sources = row.channels.some(channel => channel.enabled && !channel.simulated)
+      ? registeredChannels.filter(source => !source.reason && row.channels.some(channel =>
         channel.enabled && !channel.simulated && channel.channelId === source.id && channel.fingerprint === sourceFingerprint(source)))
       : [];
     return [...serviceEndpoints(row, master, sources).supported];
@@ -670,7 +671,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
           <Field label={<FieldLabel name={MODEL_ID_LABEL} description="调用方在 API 请求的 model 字段填写此值。"/>} required>
             <Input aria-label={MODEL_ID_LABEL} value={values.callId} disabled={Boolean(values.controlledOfferId)} maxLength={128} onChange={value => change({ callId: value })}/>
           </Field>
-          {allowModelSelection && <Field label={kind === 'create' ? '从基础资料带入' : '模型编码'}>
+          {allowModelSelection && <Field label="模型编码">
             <Select filter showClear value={values.modelId || undefined} placeholder="选择模型资料"
               dropdownMatchSelectWidth dropdownClassName="service-model-select-dropdown"
               dropdownStyle={{ width: 'min-content' }}
@@ -687,12 +688,10 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
                 : typeOptions}
               onChange={type => change({ type: type || '' })} style={{ width: '100%' }}/>
           </Field>}
-          {kind === 'editDetails' && <Field label="标签"><Input aria-label="标签" value={values.tags || ''} maxLength={160} onChange={value => change({ tags: value })}/></Field>}
           <Field label="备注"><Input aria-label="备注" value={values.note} maxLength={240} onChange={value => change({ note: value })}/></Field>
           <Field label="服务描述"><TextArea aria-label="服务描述" value={values.description}
             maxLength={SERVICE_DESCRIPTION_LIMIT} maxCount={SERVICE_DESCRIPTION_LIMIT}
             onChange={value => change({ description: value })}/></Field>
-          {kind === 'create' && <ServiceModelDetails values={values} change={change}/>}
         </>}
         {kind === 'channel' && values.id && reviewSource && <>
           <Text strong>{values.name}</Text>
@@ -706,7 +705,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
         </>}
         {kind === 'newGroup' && <GroupPriorityField hint="数值越小越优先，例如 0 优先于 1" value={values.priority} onChange={priority => change({ priority })}/>}
         {kind === 'addChannels' && <>
-          <BatchChannelFields candidates={candidates} linked={channels} values={values} change={change}/>
+          <BatchChannelFields state={state} candidates={candidates} linked={channels} values={values} change={change}/>
           {contextRoutingEnabled(service) && <NumberField label={t(contextLabel)} min={1} value={values.context} onChange={context => change({ context })}/>}
         </>}
         {kind === 'weights' && <><GroupPriorityField value={values.priority} onChange={priority => change({ priority })}/>

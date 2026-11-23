@@ -116,14 +116,24 @@ test('new model services share D1, protect imported records, and inherit the per
     name: candidate.name, upstreamId: candidate.upstreamModelId, provider: candidate.provider.name,
     enabled: true, priority: 2, weight: index ? 30 : 70,
   }));
-  const update = { ...created.data.row, modelId: materialId, channels, priorityGroups: [0, 2] };
+  const update = { ...created.data.row, channels, priorityGroups: [0, 2] };
   assert.equal((await run(command('save', { ...update, channels: [channels[0], channels[0]] }, 1))).status, 400);
   assert.equal((await run(command('save', { ...update, channels: [{ ...channels[0], fingerprint: 'stale' }] }, 1))).status, 400);
   const linked = await run(command('save', update, 1));
   assert.equal(linked.status, 200, JSON.stringify(linked.data));
   assert.deepEqual(linked.data.row.channels, channels);
   assert.deepEqual(linked.data.row.priorityGroups, [0, 2]);
-  assert.equal(linked.data.row.modelId, materialId);
+  assert.equal(linked.data.row.modelId, '');
+  const reloaded = (await request(endpoint, { cookie: inApp })).data.rows.find(row => row.id === service.id);
+  assert.deepEqual(reloaded.channels, channels);
+  const started = await run(command('save', { ...reloaded, listed: true }, reloaded.revision));
+  assert.equal(started.status, 200, JSON.stringify(started.data));
+  assert.equal(started.data.row.modelId, '');
+  assert.equal(started.data.row.listed, true);
+  const referenced = await run(command('save', { ...started.data.row, modelId: materialId }, started.data.row.revision));
+  assert.equal(referenced.status, 200, JSON.stringify(referenced.data));
+  assert.equal(referenced.data.row.modelId, materialId);
+  assert.deepEqual(referenced.data.row.channels, channels);
 
   await initializeApplication(db);
   const app = await request('/application', { cookie: chrome });
@@ -136,6 +146,6 @@ test('new model services share D1, protect imported records, and inherit the per
   assert.equal(global.status, 200, JSON.stringify(global.data));
   const refreshed = (await request(endpoint, { cookie: inApp })).data;
   assert.equal(refreshed.defaults.strategy, 'least-busy');
-  assert.deepEqual(refreshed.rows.find(row => row.id === service.id), linked.data.row);
+  assert.deepEqual(refreshed.rows.find(row => row.id === service.id), referenced.data.row);
 
 });
