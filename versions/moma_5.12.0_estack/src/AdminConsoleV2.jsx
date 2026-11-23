@@ -8,9 +8,7 @@ import {
   IconMenu, IconMonitorStroked, IconPlayCircle, IconPriceTag, IconPulse, IconServerStroked, IconSetting,
   IconShield, IconUserGroup, IconUserSetting, IconUserStroked,
 } from '@douyinfe/semi-icons';
-import ModelPrices from './admin-v2/ModelPrices';
 import CloudModelOperations from './admin-v2/CloudModelOperations';
-import { modelOperationsView } from './mock/model-data.js';
 import { Badge, Banner, Breadcrumb, Button, ConfigProvider, Dropdown, Tabs, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './admin-v2/AdminOverlay';
 import enUS from '@douyinfe/semi-ui/lib/es/locale/source/en_US.js';
@@ -22,7 +20,6 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import "./admin-v2/admin-shell.css";
 import { managedIndividualAccounts } from "./admin-v2/individual-users";
 import { managedEnterpriseTenants } from "./admin-v2/enterprise";
-import { useDeploymentLicense } from './useDeploymentLicense';
 import { LICENSE_UNAVAILABLE } from './deployment-license.mjs';
 import { Toast } from '@douyinfe/semi-ui';
 import AdminPageBoundary from "./admin-v2/AdminPageBoundary";
@@ -30,7 +27,8 @@ import { tenantHref } from './admin-v2/access-control.mjs';
 import { AdminUIContext } from "./components/admin-ui-context";
 import { serviceOperationsUi } from "./admin-v2/ServiceUI";
 
-const OperationsOverview = lazy(() => import('./admin-v2/OperationsOverview'));
+const loadOverview = () => import('./admin-v2/OperationsOverview');
+const OperationsOverview = lazy(loadOverview);
 const AnalyticsPages = lazy(() => import('./admin-v2/AnalyticsPages'));
 const CustomerPage = lazy(() => import('./admin-v2/CustomerPages'));
 const CustomerUsageDetail = lazy(() => import('./admin-v2/CustomerUsageDetail'));
@@ -51,7 +49,9 @@ const ModelOperationsGuide = lazy(() => import('./admin-v2/GettingStarted').then
 const ClusterManagement = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ClusterManagement })));
 const ModelDeployments = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ModelDeployments })));
 const ModelObservability = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ModelObservability })));
-const ChannelManagementNew = lazy(() => import('./admin-v2/ChannelDirectory').then(module => ({ default: module.ChannelManagementNew })));
+const loadModelConnections = () => import('./admin-v2/ChannelDirectory');
+const ChannelManagementNew = lazy(() => loadModelConnections().then(module => ({ default: module.ChannelManagementNew })));
+const ModelPrices = lazy(() => import('./admin-v2/ModelPrices'));
 const GatewayPage = lazy(() => import('./admin-v2/GatewayPages'));
 const CustomerAnalysis = lazy(() => import('./admin-v2/CustomerAnalysis'));
 const TrafficOperations = lazy(() => import('./admin-v2/TrafficOperations'));
@@ -105,7 +105,7 @@ const overviewShortcuts = ['usage-analysis', 'user-analysis', 'listing-new', 'pr
 
 
 export default function AdminConsoleV2(props) {
-  const license = useDeploymentLicense();
+  const { license } = props;
   const [hash,setHash]=useState(location.hash);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { english, changeLanguage } = props;
@@ -114,7 +114,8 @@ export default function AdminConsoleV2(props) {
   // Fetch the requested module while its workspace data is loading.
   const routeId = pageFromHash(hash);
   useEffect(() => {
-    if (routeId === 'listing-new') loadModelServices().catch(() => {}); // The page boundary handles rendering failures.
+    const loadPage = { dashboard: loadOverview, 'listing-new': loadModelServices, 'providers-reference': loadModelConnections, 'providers-health': loadModelConnections }[routeId];
+    loadPage?.().catch(() => {}); // The page boundary handles rendering failures.
   }, [routeId]);
   const packageWorkspace=license?.commercial && /^#\/admin-2\/(?:package-production|package-data)(?:[/?]|$)/.test(hash);
   const area = packageWorkspace ? 'packages' : cloud ? 'models' : 'application';
@@ -319,7 +320,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === "tariff-dictionary" ? <MaterialDictionaryPage state={state} transact={transactModel} conflict={conflict}/>
             : active === 'providers-reference' ? <ChannelManagementNew state={state} transact={transactModel} conflict={conflict} reload={reload}/>
             : active === 'provider-materials' ? <ProviderMaterials state={state} transact={transactModel} conflict={conflict} reload={reload}/>
-            : active === 'model-templates' ? <ModelMaterials state={modelOperationsView(state,'all')} transact={transactModel} conflict={conflict} reload={reload}/>
+            : active === 'model-templates' ? <ModelMaterials state={state} transact={transactModel} conflict={conflict} reload={reload}/>
             : active === 'listing-new' ? <ModelServicesNew state={factState} params={detailParams} dirtyRef={draftDirty} sourceConflict={conflict} reloadWorkspace={reload}/>
             : active === 'model-links' ? <ModelLinks/>
             : active === "package-data" ? <PackageData state={state} params={detailParams}/>

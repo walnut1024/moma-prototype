@@ -550,9 +550,10 @@ main:where(.front-main, .version-main) {
 .content {
   min-width: 990px;
   padding: 36px 28px 70px;
-  background: #fff url("../public/assets/model-list-bg-676a9b63.png") center 250px /
-    cover no-repeat;
+  background: #fff;
 }
+.model-catalogue { background: #fff url("./media/model-list-bg.webp") center 250px / cover no-repeat; }
+.route-loading { margin: 0; padding: 24px; }
 .title-row {
   display: flex;
   align-items: center;

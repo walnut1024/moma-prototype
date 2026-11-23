@@ -1,5 +1,5 @@
 import { useChannelText } from './admin-v2/channel-language';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, ChevronDown, Clock3, LogOut, UserRound } from 'lucide-react';
 import { Button, Checkbox, Input, Popover, RadioGroup, Select, Steps, Toast } from '@douyinfe/semi-ui';
 import { AuthBrand, LoginPage, PasswordLoginForm } from './components/LoginPage';
@@ -9,28 +9,40 @@ import { cloudAdminRequest } from './admin-v2/admin-client.mjs';
 import SiteAgreementLinks from './components/SiteAgreementLinks';
 import { PRIVATE_SITE } from './site-config.mjs';
 import { chinaRegions, industries } from './admin-v2/enterprise-options';
-import { maskMemberPhone } from './organization-data.mjs';
+import { maskMemberPhone } from './member-phone.mjs';
 import { authRoute, applicationErrors } from './auth-state.mjs';
-import AccountCenter from './AccountCenter';
 import { useTenantData } from './useTenantData';
 import { marketRequest } from './CloudMarket';
 import './auth.css';
 
+const AccountCenter = lazy(() => import('./AccountCenter'));
+
 const isPublicAuthRoute = route => ['login','password','invite'].includes(route);
 export function useAuthNavigation() {
   const [hash,setHash]=useState(()=>location.hash);
-  const [adminAccount,setAdminAccount]=useState(null);
+  const [adminSession, setAdminSession] = useState(null);
+  const adminRoute = hash.startsWith('#/admin');
   const returnTo=useRef(authRoute(location.hash)?'':location.pathname+location.search+location.hash);
   const route=authRoute(hash);
   useEffect(()=>{const sync=()=>setHash(location.hash);addEventListener('hashchange',sync);return()=>removeEventListener('hashchange',sync);},[]);
   useEffect(()=>{
+    if (!adminRoute) {
+      setAdminSession(null);
+      return;
+    }
     const controller=new AbortController();
     const refresh=()=>cloudAdminRequest('/auth/me',{signal:controller.signal})
-      .then(({account})=>{if(!controller.signal.aborted)setAdminAccount(account);},()=>{if(!controller.signal.aborted)setAdminAccount(null);});
+      .then(({account}) => {
+        if (!controller.signal.aborted) setAdminSession({ account });
+      }, error => {
+        if (controller.signal.aborted) return;
+        if (error.status === 401 && location.hash.startsWith('#/admin')) openLogin();
+        else setAdminSession({ account: null });
+      });
     void refresh();
     addEventListener('focus',refresh);
     return()=>{controller.abort();removeEventListener('focus',refresh);};
-  },[route]);
+  },[adminRoute]);
   const requireLogin=useCallback(()=>{if(!isPublicAuthRoute(authRoute(location.hash))&&!location.hash.startsWith('#/admin'))openLogin();},[]);
   const navigate=(target,params='')=>{
     if(!authRoute(location.hash))returnTo.current=location.pathname+location.search+location.hash;
@@ -41,7 +53,7 @@ export function useAuthNavigation() {
     if(location.pathname!==LOGIN_BASE)location.assign(LOGIN_BASE+next);else location.hash=next;
   };
   const close=()=>location.assign(loginReturn(new URLSearchParams(location.hash.split('?')[1]||'').get('returnTo'))||loginReturn(returnTo.current)||LOGIN_BASE);
-  return {route,requiresSession:!isPublicAuthRoute(route),params:new URLSearchParams(hash.split('?')[1]||''),navigate,close,requireLogin,adminAccount};
+  return {route,requiresSession:!isPublicAuthRoute(route),params:new URLSearchParams(hash.split('?')[1]||''),navigate,close,requireLogin,adminAccount:adminSession?.account,checkingAdmin:adminRoute && !adminSession};
 }
 
 export function CustomerSessionGate({auth,market}) {
@@ -123,7 +135,7 @@ export default function AuthExperience({auth,market,accountTitle='账号中心'}
   if(market.loading)return <section className="auth-account-center"><h1>{accountTitle}</h1><p role="status">正在读取账号信息…</p></section>;
   if(auth.route==='password')return <TenantPassword auth={auth} market={market}/>;
   if(auth.route==='invite')return <TenantInvite auth={auth} market={market}/>;
-  if(market.tenant)return <TenantAccount auth={auth} title={accountTitle}/>;
+  if(market.tenant)return <Suspense fallback={<p role="status">正在读取账号信息…</p>}><TenantAccount auth={auth} title={accountTitle}/></Suspense>;
   return <section className="auth-account-center"><h1>{accountTitle}</h1>
     {market.error && <p role="alert">{market.error}</p>}
     <Button onClick={()=>auth.navigate('login','?next=account')}>登录</Button>

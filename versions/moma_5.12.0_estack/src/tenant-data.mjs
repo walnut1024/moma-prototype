@@ -7,7 +7,7 @@ import { AUTH_DATA_KEY, ADMIN_DATA_KEY, resolveUserIdentity, notifyLinkedState, 
 import { loadAdminState, serializeAdminState } from './admin-v2/store.js';
 import { trackUserConfiguration } from './mock/application-data.js';
 import {sharedRequests} from './business-facts.mjs';
-import { directorySnapshot } from './service-directory.mjs';
+import { directorySnapshot } from './demo-service-directory.mjs';
 
 export function tenantContext(storage = globalThis.localStorage) {
   const state = loadAdminState(storage);

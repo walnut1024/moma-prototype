@@ -24,6 +24,7 @@ export default defineConfig({
   server: { host: '127.0.0.1', proxy: { [API_PREFIX]: { target:'http://127.0.0.1:'+Number(process.env.MOMA_5120_BACKEND_PORT || 15120), changeOrigin: false } } },
   build: {
     outDir,
+    assetsDir: "assets/compiled",
     emptyOutDir: true,
   },
   plugins: [{

@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Banner, Button, Select, Table } from '@douyinfe/semi-ui';
+import { Button, Select, Table } from '@douyinfe/semi-ui';
 import { TimeSeriesChart } from './AnalyticsCharts';
 import { shanghaiDate } from '../call-log-data.mjs';
 import { bucketLabel } from '../usage-data.mjs';
 import { tenantUsageReport, usageMoney, usageRanking, usageSuccessRate, UNASSIGNED, USAGE_OVERVIEW } from '../tenant-usage-report.mjs';
 import { experienceKeyId, projectModelEnabled } from '../project-access.mjs';
-import { activeProjectSpendBudget } from '../project-token-budget.mjs';
+import ProjectBudgetNotice from './ProjectBudgetNotice';
 import { projectMoney, projectTime } from './ProjectConfiguration';
 
 const DAY = 86_400_000;
@@ -17,16 +17,6 @@ function change(value, previous, points = false) {
   if (value == null || previous == null || !points && previous === 0) return '较上期 —';
   const delta = points ? value - previous : (value / previous - 1) * 100;
   return `较上期 ${delta > 0 ? '+' : ''}${delta.toFixed(1)}${points ? ' 个百分点' : '%'}`;
-}
-
-export function ProjectBudgetNotice({ project, spend }) {
-  const budget=activeProjectSpendBudget(project);
-  if (!budget?.amountMicros || !spend) return null;
-  const percentUsed=spend.spent/budget.amountMicros*100;
-  if (percentUsed < budget.warnAt) return null;
-  const label=percentUsed >= 100 ? budget.stop ? '项目预算已达上限，按量调用已停止' : '项目预算已达上限'
-    : '项目预算已达到预警阈值';
-  return <Banner className="project-budget-alert" type="warning" description={label + ' · 已用 ' + percent(percentUsed)} />;
 }
 
 export default function ProjectOverview({ tenant, project, department, openTab, onNavigate }) {

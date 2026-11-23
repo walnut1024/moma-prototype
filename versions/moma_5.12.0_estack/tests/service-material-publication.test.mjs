@@ -1,7 +1,8 @@
 import { linkedAccountFixture } from '../src/linked-accounts.mjs';
 import { emptyAuthState, loginAuthAccount } from '../src/auth-state.mjs';
 import { AUTH_DATA_KEY } from '../src/service-access.mjs';
-import { directorySnapshot, marketModels, beginExperience, validateExperience } from '../src/service-directory.mjs';
+import { marketModels } from '../src/service-directory.mjs';
+import { directorySnapshot, beginExperience, validateExperience } from '../src/demo-service-directory.mjs';
 import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';

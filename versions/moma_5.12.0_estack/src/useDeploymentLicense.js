@@ -20,18 +20,19 @@ function refresh() {
     .finally(() => { loading = null; });
 }
 
-export function useDeploymentLicense() {
+export function useDeploymentLicense(enabled = true) {
   const license = useSyncExternalStore(subscribe, licenseSnapshot);
   useEffect(() => {
+    if (!enabled) return;
     if (!licenseSnapshot()) void refresh();
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
-  }, []);
+  }, [enabled]);
   useEffect(() => {
-    if (!license?.expiresAt || license.status !== 'active') return;
+    if (!enabled || !license?.expiresAt || license.status !== 'active') return;
     const delay = Date.parse(license.expiresAt) - Date.now();
     const timeout = setTimeout(refresh, Math.max(0, Math.min(delay + 50, 2147483647)));
     return () => clearTimeout(timeout);
-  }, [license]);
+  }, [enabled, license]);
   return license;
 }

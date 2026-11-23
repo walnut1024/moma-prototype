@@ -51,9 +51,10 @@ test('the built 5.12.0 entry loads only its own JS and CSS', () => {
 });
 
 test('the built 5.12.0 keeps order table, checkout and confirmation layout', () => {
-  const html = fs.readFileSync(path.join(root, 'dist/client/moma_5.12.0_estack/index.html'), 'utf8');
-  const cssPath = [...html.matchAll(/href="([^"]+\.css)"/g)][0][1];
-  const css = fs.readFileSync(path.join(root, 'dist/client', cssPath), 'utf8');
+  const assets = path.join(root, 'dist/client/moma_5.12.0_estack/assets/compiled');
+  const orderStylesheet = fs.readdirSync(assets).find(file => /^ModelOrderList-.*\.css$/.test(file));
+  assert.ok(orderStylesheet, 'Missing model order route CSS');
+  const css = fs.readFileSync(path.join(assets, orderStylesheet), 'utf8');
   for (const selector of ['.model-order-table', '.service-order-table', '.service-order-footer', '.order-confirm-modal', '.order-quote']) {
     assert.match(css, new RegExp(selector.replace('.', '\\.') + '(?=[,{\\s])'), 'Missing order layout: ' + selector);
   }

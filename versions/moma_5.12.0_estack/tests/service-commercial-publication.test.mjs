@@ -13,7 +13,7 @@ import { platformCandidatePlan, runPlatformTrial, publishPlatformCandidate } fro
 import { onboardingApi, prepareServerChannel } from '../src/admin-v2/onboarding-client.js';
 import { setMockScenario, getMockServiceSnapshots, inspectMockPublication, getMockOperationalRequests } from '../src/admin-v2/mock-onboarding-service.js';
 import { platformPublicationFingerprint } from '../src/admin-v2/platform-publication-state.js';
-import { directorySnapshot } from '../src/service-directory.mjs';
+import { directorySnapshot } from '../src/demo-service-directory.mjs';
 import { lifecycleAccess } from '../src/service-access.mjs';
 import { simulateRequest } from '../src/admin-v2/domain.js';
 const parseAdminState=(...args)=>withAdminSession(baseParseAdminState(...args));

@@ -8,7 +8,7 @@ export function AuthBrand({ title, description }) {
   const { loginImage } = useSiteConfig();
   return <section className="auth-enterprise-brand">
     <h1>{title}</h1>{description && <p>{description}</p>}
-    <img src={loginImage || DEFAULT_LOGIN_IMAGE} alt="" width="1478" height="1064"
+    <img src={loginImage || DEFAULT_LOGIN_IMAGE} alt="" width="1478" height="1064" decoding="async"
       onError={event => restoreSiteImage(event, DEFAULT_LOGIN_IMAGE)} />
   </section>;
 }

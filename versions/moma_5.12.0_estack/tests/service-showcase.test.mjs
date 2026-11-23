@@ -8,7 +8,8 @@ import { routingServices, routingChannels, activeRouteVersion, serviceRoute } fr
 import { platformCandidatePlan } from '../src/admin-v2/platform-service-client.js';
 import { serviceGuideRequest } from '../src/admin-v2/service-guide.js';
 import { libraryRecord } from '../src/admin-v2/model-library.js';
-import { directorySnapshot, marketModels, customerPriceRows, beginExperience, validateExperience } from '../src/service-directory.mjs';
+import { marketModels, customerPriceRows } from '../src/service-directory.mjs';
+import { directorySnapshot, beginExperience, validateExperience } from '../src/demo-service-directory.mjs';
 import { linkedAccountFixture } from '../src/linked-accounts.mjs';
 import { emptyAuthState, loginAuthAccount } from '../src/auth-state.mjs';
 import { AUTH_DATA_KEY } from '../src/service-access.mjs';

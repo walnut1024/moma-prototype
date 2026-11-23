@@ -5,7 +5,8 @@ import AdminStatus from '../admin-v2/AdminStatus';
 import FrontPageHeader from './FrontPageHeader';
 import { projectModelEnabled, projectRoleLabel } from '../project-access.mjs';
 import { departmentPath } from '../organization-data.mjs';
-import ProjectOverview, { ProjectBudgetNotice } from './ProjectOverview';
+import ProjectOverview from './ProjectOverview';
+import ProjectBudgetNotice from './ProjectBudgetNotice';
 import { ProjectCreateDialog, ProjectLifecycleDialog, ProjectMembers, ProjectModels, ProjectSettings, ProjectTokenBudget, projectLifecycle, projectTime } from './ProjectConfiguration';
 import './project-workspace.css';
 

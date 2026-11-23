@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { directorySnapshot, marketModels, customerPriceRows } from '../src/service-directory.mjs';
+import { marketModels, customerPriceRows } from '../src/service-directory.mjs';
+import { directorySnapshot } from '../src/demo-service-directory.mjs';
 import { modelUsageSummary } from '../src/model-usage.mjs';
 import { ADMIN_DATA_KEY } from '../src/service-access.mjs';
 

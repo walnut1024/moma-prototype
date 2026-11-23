@@ -1,3 +1,5 @@
+import { shanghaiDate } from './shanghai-date.mjs';
+export { shanghaiDate } from './shanghai-date.mjs';
 import mockConfig from './mock/catalogues.json' with {type:'json'};
 import { usagePreset } from "./admin-v2/usage-analysis.js";
 import { maskApiKey } from './api-key-utils.mjs';
@@ -9,10 +11,6 @@ export const logStatuses = {
   500: ['服务异常', 'Service.InternalError', '建议稍后重试；若持续失败，请将 Request ID 提供给管理员排查。'],
   504: ['上游超时', 'Service.UpstreamTimeout', '请稍后重试，或将 Request ID 提供给管理员排查上游响应。'],
 };
-
-export function shanghaiDate(now = new Date()) {
-  return new Date(now.getTime() + 8 * 3600000).toISOString().slice(0, 10);
-}
 
 // Prototype records are dated relative to the preview day so recent-date filters remain useful.
 export function createLogRecords(today = shanghaiDate()) {

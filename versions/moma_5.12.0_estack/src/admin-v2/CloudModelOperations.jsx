@@ -2,16 +2,17 @@ import AdminPageLoading from './AdminPageLoading';
 import {useEffect,useRef,useState} from 'react';
 import {Banner, Button, Toast} from '@douyinfe/semi-ui';
 import { cloudAdminRequest as api } from './admin-client.mjs';
-import {configureOnboardingTransport} from './onboarding-client.js';
-import {useCloudMockSnapshot,clearCloudMockSnapshot} from './mock-onboarding-service.js';
-import {completeServiceShowcase} from './service-showcase-client.js';
 import './cloud-model-login.css';
 
 let currentCloudState,acceptCloudState;
 export const loadAdminState=()=>currentCloudState || {models:[]};
 async function saveCloudState(previous,action){const operationId=crypto.randomUUID();const result=await api('/model-operations/commands',{method:'POST',operationId,body:{operationId,expectedRevision:previous.revision,action}});const next=applyResult(previous,result);acceptCloudState?.(next);return next;}
 export async function prepareModelServiceShowcase(){if(!currentCloudState)throw Error('请先进入模型运营并登录');if(currentCloudState.modelData?.datasetId || currentCloudState.models.some(m=>m.serviceShowcase))return false;await saveCloudState(currentCloudState,{type:'modelOperations',operation:'prepareServiceShowcase',data:{confirmed:true}});return true;}
-export async function completeModelServiceShowcase(onProgress){if(!currentCloudState)throw Error('请先进入模型运营并登录');return completeServiceShowcase(currentCloudState,saveCloudState,{onProgress});}
+export async function completeModelServiceShowcase(onProgress) {
+  const { completeServiceShowcase } = await import('./service-showcase-client.js');
+  if (!currentCloudState) throw Error('请先进入模型运营并登录');
+  return completeServiceShowcase(currentCloudState, saveCloudState, { onProgress });
+}
 
 function applyResult(state,result){
   if(result.revision<state.revision)return state;
@@ -26,32 +27,44 @@ function applyResult(state,result){
 export default function CloudModelOperations({children, packageWorkspace=false, applicationWorkspace=false}){
   const [state,setState]=useState(null),[error,setError]=useState(''),[conflict,setConflict]=useState(false);
   const current=useRef(null),queue=useRef(Promise.resolve()),alive=useRef(true);
+  const simulation = useRef(null);
   const modelWorkspace = !packageWorkspace && !applicationWorkspace;
   const workspacePath=applicationWorkspace?'/application':packageWorkspace?'/package-management':'/model-operations';
   const workspaceLabel=applicationWorkspace?'平台后台':packageWorkspace?'套餐运营':'模型运营';
   const accept=next=>{
     if(!alive.current)return;
     current.current=next;
-    if(modelWorkspace){currentCloudState=next;useCloudMockSnapshot(next,next.cloudMockState);}
+    if(modelWorkspace){currentCloudState=next;simulation.current.useCloudMockSnapshot(next,next.cloudMockState);}
     setState(next);
   };
-  const load=async()=>{try{const next=await (applicationWorkspace?api('/application/open',{method:'POST',body:{}}):api(workspacePath));accept(next);setConflict(false);setError('');}catch(issue){setError(issue.message);}};
+  const load = async () => {
+    try {
+      const [next, runtime] = await Promise.all([
+        applicationWorkspace ? api('/application/open', { method:'POST', body:{} }) : api(workspacePath),
+        modelWorkspace ? import('./model-workspace-simulation.js') : null,
+      ]);
+      if (!alive.current) return;
+      if (runtime && !simulation.current) {
+        simulation.current = runtime;
+        runtime.startModelWorkspaceSimulation(api, current);
+      }
+      accept(next);
+      setConflict(false);
+      setError('');
+    } catch (issue) {
+      if (alive.current) setError(issue.message);
+    }
+  };
   useEffect(()=>{
     alive.current=true;
-    if(modelWorkspace) acceptCloudState=accept;
-    if(modelWorkspace) configureOnboardingTransport(async(path,options={})=>{
-      const method=options.method || 'GET',operationId=method==='GET'?undefined:options.body?.operationId || crypto.randomUUID();
-      const response=await api('/simulation'+path,{method,body:method==='GET'?undefined:{...options.body,operationId},operationId,signal:options.signal});
-      if(current.current && response.mockState){current.current.cloudMockState=response.mockState;useCloudMockSnapshot(current.current,response.mockState);}
-      return response.result;
-    });
+    if (modelWorkspace) acceptCloudState=accept;
     void load();
     const focus=async()=>{if(!current.current)return;try{const next=await api(workspacePath);if(next.revision!==current.current.revision || next.modelRevision!==current.current.modelRevision)setConflict(true);else if(applicationWorkspace)accept(next);}catch(issue){setError(issue.message);}};
     addEventListener('focus',focus);
     return()=>{
       alive.current=false;
       removeEventListener('focus',focus);
-      if(modelWorkspace){currentCloudState=undefined;acceptCloudState=undefined;configureOnboardingTransport(null);clearCloudMockSnapshot();}
+      if(modelWorkspace){currentCloudState=undefined;acceptCloudState=undefined;simulation.current?.stopModelWorkspaceSimulation();simulation.current=null;}
     };
   },[]);
   const transact=(action, expectedRevision)=>{
