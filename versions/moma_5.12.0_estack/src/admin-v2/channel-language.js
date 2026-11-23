@@ -13,6 +13,8 @@ const englishText = new Map(Object.entries({
   '渠道名称前缀': 'Channel Name Prefix',
   '渠道 ID': 'Channel ID',
   '渠道类型': 'Channel Type',
+  '服务地址已包含接口端点，请删除服务地址末尾的重复部分': 'Remove the repeated endpoint from the end of the base URL.',
+  '完整请求地址': 'Full Request URL',
   '接口格式': 'API Format',
   '接口端点': 'API Endpoint',
   '上游接口': 'Upstream API',

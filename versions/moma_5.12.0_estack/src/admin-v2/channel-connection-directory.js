@@ -1,6 +1,6 @@
 import { workbenchProtocolLabel } from './workbench-protocol.js';
 import { channelIdentity } from '../model-identities.mjs';
-import { CHANNEL_INTERFACES, modelTaskUrl, prepareChannelInterface } from './channel-interface.js';
+import { CHANNEL_INTERFACES, connectionRequestUrl, modelTaskUrl, prepareChannelInterface } from './channel-interface.js';
 import { directoryDisabledKind } from './channel-directory-archive.js';
 import { connectionKeys, connectionTestCurrent, connectionTestPending } from './connection-state.js';
 import { costRecords } from './model-pricing-workspace.js';
@@ -22,7 +22,7 @@ export function channelSourceTypeLabel(sourceType) {
 export const CHANNEL_LIST_TYPES = [
   { id: 'openai', label: 'OpenAI Chat Completions', paths: ['/chat/completions'] },
   { id: 'openai-responses', label: 'OpenAI Responses', paths: ['/responses'] },
-  { id: 'anthropic', label: 'Anthropic Messages', paths: ['/messages'] },
+  { id: 'anthropic', label: 'Anthropic Messages', paths: ['/v1/messages'] },
   { id: 'openai-embeddings', label: 'OpenAI Embeddings', paths: ['/embeddings'], task: true },
   { id: 'ark-video', label: '火山方舟 Video Generation', paths: ['/contents/generations/tasks'], task: true, prefix: '/api/v3' },
   { id: 'dashscope-video', label: 'DashScope Video Generation', prefix: '/api/v1', paths: [
@@ -64,29 +64,35 @@ export function channelListType({ endpoint, models, interfaceLabel }) {
   return channelTypeForUrl(endpoint.taskUrls?.video)?.label || interfaceLabel || '—';
 }
 
-export function channelListPaths(row) {
+export function channelRequestUrls(row) {
   const { endpoint } = row;
   if (endpoint.adapterDraft) return [];
   const { interfaceType, baseUrl, taskUrls, customAdapter, addressMode } = endpoint;
+  if (endpoint.endpointPath) return [connectionRequestUrl(baseUrl, endpoint.endpointPath)];
   const urls = Object.values(taskUrls || {});
   if (CHANNEL_INTERFACES.some(option => option.id === interfaceType)) {
     const task = channelListType(row) === channelTypeById('openai-embeddings').label ? 'embedding' : 'text';
     try { urls.push(modelTaskUrl(endpoint, task)); }
     catch { if (channelTypeForUrl(baseUrl)) urls.push(baseUrl); }
-  } else if (endpoint.endpointPath) {
-    urls.push(new URL(baseUrl).origin + endpoint.endpointPath);
   } else if (interfaceType === 'custom' || addressMode === 'task' || channelTypeForUrl(baseUrl)) {
     urls.push(baseUrl);
   }
-  const paths = new Set();
-  for (const url of urls) {
-    try {
-      const path = new URL(url).pathname.replace(/\/+$/, '');
-      if (path) paths.add(path);
-    } catch { /* 遗留记录可能缺少完整地址。 */ }
+  for (const { path } of customAdapter?.routes || []) {
+    try { urls.push(new URL(path, baseUrl).href); } catch { /* Incomplete adapter. */ }
   }
-  for (const { path } of customAdapter?.routes || []) paths.add(path);
-  return [...paths];
+  return [...new Set(urls.filter(Boolean))];
+}
+
+export function channelListPaths(row) {
+  if (row.endpoint.endpointPath) return [row.endpoint.endpointPath];
+  return [...new Set(channelRequestUrls(row).flatMap(address => {
+    try {
+      const base = row.endpoint.baseUrl?.replace(/\/+$/, '');
+      const path = base && address.length > base.length + 1 && address.startsWith(base + '/') ? address.slice(base.length) : new URL(address).pathname;
+      return [path.replace(/\/+$/, '')].filter(Boolean);
+    }
+    catch { return []; }
+  }))];
 }
 
 export function channelProtocolUsesFullAddress(interfaceType, current) {
@@ -96,19 +102,9 @@ export function channelProtocolUsesFullAddress(interfaceType, current) {
   return !current?.endpoint.endpointPath && (interfaceType === 'custom' || Boolean(type?.task && !legacyEmbeddingsRoot));
 }
 
-export function channelProtocolPaths({ interfaceType, baseUrl, allowHttp }, current) {
+export function channelProtocolPaths({ interfaceType }, current) {
   if (current?.endpoint.endpointPath && current.endpoint.modelProtocol === interfaceType) return [current.endpoint.endpointPath];
-  if (current && baseUrl.trim() === (current.endpoint.baseUrl || '')) return channelListPaths(current);
-  if (!interfaceType) return [];
-  const type = channelTypeById(interfaceType);
-  try {
-    const endpoint = !type || type.task && !channelProtocolUsesFullAddress(interfaceType, current)
-      ? prepareChannelInterface({ ...current?.endpoint, interfaceType: type ? 'openai' : 'custom', baseUrl, allowHttp })
-      : prepareListedChannelInterface({ interfaceType, baseUrl, allowHttp });
-    return channelListPaths({ ...current, endpoint: { ...current?.endpoint, ...endpoint, allowHttp }, models: current?.models || [] });
-  } catch {
-    return type ? type.paths.map(path => (type.prefix || '/v1') + path) : [];
-  }
+  return channelTypeById(interfaceType)?.paths ?? [];
 }
 
 export function connectionDirectoryRows(state, providers) {

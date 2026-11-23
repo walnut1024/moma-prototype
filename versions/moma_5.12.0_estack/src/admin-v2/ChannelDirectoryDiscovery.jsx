@@ -9,6 +9,8 @@ import { onboardingApi, prepareServerChannel } from './onboarding-client';
 import OnboardingScenarioControl from './OnboardingScenarioControl';
 import { Field } from './ServiceUI';
 
+import { modelListRequestUrl } from './channel-interface';
+
 const sampleModels = ['demo-chat', 'demo-vision', 'demo-embedding'].map(upstreamModelId => ({ upstreamModelId }));
 
 function modelListRequest(endpoint) {
@@ -20,12 +22,7 @@ function modelListRequest(endpoint) {
   let url;
   if (baseUrl && configured) {
     try {
-      const base = new URL(baseUrl);
-      if (adapter) url = new URL(adapter.path, base).href;
-      else {
-        base.pathname = base.pathname.replace(/\/+$/, '') + '/models';
-        url = base.href;
-      }
+      url = modelListRequestUrl(endpoint);
     } catch { /* A missing or invalid address has no request preview. */ }
   }
   return { baseUrl, protocol, url, method: adapter?.method || 'GET' };

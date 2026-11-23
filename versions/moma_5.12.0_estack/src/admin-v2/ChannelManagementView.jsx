@@ -11,7 +11,7 @@ import BatchProcurementEditor from './BatchProcurementEditor';
 import ReferenceProviderApiKeys from './ReferenceProviderApiKeys';
 import { CopyId, SearchBox } from './ModelOperationsUI';
 import { workbenchProtocolLabel } from './workbench-protocol';
-import { channelListPaths, channelListType, channelSourceTypeLabel } from './channel-connection-directory';
+import { channelRequestUrls, channelListPaths, channelListType, channelSourceTypeLabel } from './channel-connection-directory';
 import { channelKeyMode, channelKeyStrategyLabel } from './ChannelCredentials';
 import { connectionKeys } from './connection-state';
 import { CHANNEL_PROCUREMENT_BATCH_LIMIT } from './channel-change-management';
@@ -36,7 +36,7 @@ function ChannelModels({ channel, ops, open }) {
         <Button theme="solid" disabled={!canAdd} onClick={event => open(event, 'quickAdd', channel.id)}>{t('添加渠道模型')}</Button>
       </Space>
     </div>
-    <Typography.Paragraph type="tertiary">自动获取模型列表需要渠道提供 OpenAI 兼容的模型列表接口（GET /v1/models）。</Typography.Paragraph>
+    <Typography.Paragraph type="tertiary">自动获取模型列表需要渠道提供 OpenAI 兼容的模型列表接口（GET /models）。</Typography.Paragraph>
     <AdminTable aria-label={t('渠道模型列表')} rowKey="key" pagination={false} dataSource={models}
       empty={keyword ? '没有匹配的模型' : '该渠道尚未接入模型'}
       scroll={{ x: 'max(100%, 932px)' }} columns={[
@@ -111,6 +111,7 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
     [t('渠道类型'), t(channelSourceTypeLabel(endpoint.channelSourceType ?? channel.provider.sourceType))],
     [t('接口格式'), workbenchProtocolLabel(channelListType(channel))], [t('接口端点'), channelListPaths(channel).join('、')],
     [t('服务地址'), endpoint.baseUrl],
+    [t('完整请求地址'), channelRequestUrls(channel).join('、')],
     [t('密钥配置'), t(channelKeyMode(endpoint))],
     [t('API 密钥'), keyPool ? <Button size="small" theme="borderless" type="primary"
       aria-label={keyCount + ' · ' + t('服务商 API 密钥池')} onClick={() => selectTab('api-keys')}>{keyCount}</Button> : keyCount],

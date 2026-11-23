@@ -4,6 +4,8 @@ import { CHANNEL_LIST_TYPES, channelProtocolPaths, channelProtocolUsesFullAddres
 import { workbenchProtocolLabel } from './workbench-protocol';
 import { Choice, Field } from './ServiceUI';
 
+import { connectionRequestUrl } from './channel-interface';
+
 const options = CHANNEL_LIST_TYPES.map(({ id, label }) => [id, workbenchProtocolLabel(label)]);
 
 export default function ChannelProtocolFields({
@@ -12,6 +14,9 @@ export default function ChannelProtocolFields({
   const t = useChannelText();
   const paths = channelProtocolPaths({ interfaceType: protocol, baseUrl, allowHttp }, current);
   const editable = Boolean(onEndpointPathChange && options.some(([id]) => id === protocol));
+  const displayedPath = endpointPath ?? paths[0];
+  const repeated = editable && displayedPath && baseUrl.trim().replace(/\/+$/, '').endsWith(displayedPath);
+  const suggestedBase = repeated ? baseUrl.trim().replace(/\/+$/, '').slice(0, -displayedPath.length) : root;
   const pathHelp = showHelp ? t('接口端点随接口格式带出。可填写自定义路径，以 / 开头。') : undefined;
   return <>
     <Field label={t('接口格式')} required help={showHelp ? t('选择上游 API 使用的接口格式。') : undefined}><Choice label={t('接口格式')}
@@ -36,6 +41,10 @@ export default function ChannelProtocolFields({
       ? t('填写完整接口地址') : t('填写服务根地址') : undefined}>
       <Input aria-label={t('服务地址')} value={baseUrl} maxLength={2048} disabled={disabled} onChange={onBaseUrlChange}/>
     </Field>
-    {root && <Button theme="borderless" disabled={disabled} onClick={() => onBaseUrlChange(root)}>{t('使用根地址')} {root}</Button>}
+    {repeated && <Typography.Text type="danger" role="alert">{t('服务地址已包含接口端点，请删除服务地址末尾的重复部分')}</Typography.Text>}
+    {editable && !repeated && baseUrl.trim() && displayedPath && <Field label={t('完整请求地址')}>
+      <Typography.Text code aria-live="polite">{connectionRequestUrl(baseUrl.trim(), displayedPath)}</Typography.Text>
+    </Field>}
+    {suggestedBase && <Button theme="borderless" disabled={disabled} onClick={() => onBaseUrlChange(suggestedBase)}>{t('使用根地址')} {suggestedBase}</Button>}
   </>;
 }

@@ -4,7 +4,7 @@ import { commitAdminState } from "./state-transaction.js";
 import { usageTotal } from "./observability.js";
 import { tenantModelAllowed, tenantQuotaEnabled, tenantQuotaError } from '../tenant-service-policy.mjs';
 import { enterpriseGrant, enterpriseTokenUsage } from './enterprise.js';
-import { availableSupplies, activeSupplySalePrice, activeSupplyPrice, priceItems, procurementVersion } from "./model-management.js";
+import { supplyModelUrl, availableSupplies, activeSupplySalePrice, activeSupplyPrice, priceItems, procurementVersion } from "./model-management.js";
 import { activeModelSalePrice, activeProviderPrice } from './service-workspace.js';
 import { routingServices, routingChannels, serviceRoute, activeRouteVersion } from './service-routing.js';
 import { channelProcurementSnapshot } from './channel-change-management.js';
@@ -184,7 +184,7 @@ function simulateModelRequest(state, { requestId, keyId, modelId:requestedModelI
   if (!error && forceTimeout) {
     const first = candidates.find(supply => supply.endpointId === endpointId);
     attempts.push({ dispatched:true, startedAt:at, serviceId:service?.id, modelId, providerId:first.provider?.id, endpointId, supplyId:first.id,
-      durationMs:3000, error:'upstream_timeout', procurementSnapshot:structuredClone(procurementSnapshots.get(first.id)),
+      requestUrl:supplyModelUrl(first, model) || null, durationMs:3000, error:'upstream_timeout', procurementSnapshot:structuredClone(procurementSnapshots.get(first.id)),
       configurationRevision:first.endpoint.configurationRevision || 0 });
     const fallback = !service && state.fallbacks.find(item => item.routeId === route?.id && item.status === "已启用");
     const next = service ? routeConfig.autoFailover && candidates.find(supply => supply.endpointId !== endpointId)?.endpointId : fallback?.chain.find(candidate => candidate !== endpointId && candidateIds.includes(candidate));
@@ -198,6 +198,7 @@ function simulateModelRequest(state, { requestId, keyId, modelId:requestedModelI
   const fulfilledSupply = candidates.find(supply => supply.endpointId === endpointId);
   const procurementSnapshot = fulfilledSupply && structuredClone(procurementSnapshots.get(fulfilledSupply.id));
   attempts.push({ dispatched:!error, startedAt:new Date().toISOString(), serviceId:service?.id, modelId, providerId:fulfilledSupply?.provider?.id,
+    ...(fulfilledSupply && !error && { requestUrl:supplyModelUrl(fulfilledSupply, model) || null }),
     endpointId:endpointId || null, durationMs:error ? 0 : 680, error:error || null, ...(error ? {} : {usage}), ...(fulfilledSupply ?
       { supplyId:fulfilledSupply.id, procurementSnapshot:structuredClone(procurementSnapshot),
         configurationRevision:fulfilledSupply.endpoint.configurationRevision || 0 } : {}) });

@@ -4,7 +4,7 @@
 
 ## 本地运行
 
-在原型仓库运行 `npm run dev:backend:5120`，另开终端运行 `npm run dev:5120`。在 Vite 输出的地址打开 `/moma_5.12.0_estack/`。如果端口 8787 已使用，在两个命令前设相同的 `MOMA_5120_BACKEND_PORT`。
+在原型仓库运行 `npm run dev:backend:5120`，另开终端运行 `npm run dev:5120`。在 Vite 输出的地址打开 `/moma_5.12.0_estack/`。如果端口 15120 已使用，在两个命令前设相同的 `MOMA_5120_BACKEND_PORT`。
 
 | 内置账号 | 使用入口 |
 | --- | --- |
@@ -149,3 +149,7 @@ erDiagram
 模型广场沿用已有的登录账号和空间会话。服务端读取当前有效成员、组织及项目角色，并从「使用空间」读取企业内用版的本企业空间。卡片配置存入现有模型工作区，继续使用 schema 17。项目调用沿用原有权限和 Key 校验。
 
 配置 `MOMA_LICENSE_PUBLIC_KEY`（P-256 公钥 JWK）与 `MOMA_LICENSE_DEPLOYMENT_ID` 以启用页面导入。签发方提供紧凑格式的 ES256 JWS，载荷含 `aud`（部署 ID）、`edition`（`internal` 或 `commercial`）、`jti`（授权编号）、`sub`（授权对象）及 Unix 秒级时间 `nbf`、`exp`。成功导入后以持久化授权为准，系统仅保存已验签的授权信息，不记录原始 License。未配置签发公钥时继续使用现有部署配置。
+
+### 连接地址拆分
+
+从升级前的一致性 D1 导出生成 SQLite 副本，执行 `node connection-address-migration.mjs <副本.sqlite> <新输出目录>`。脚本只读副本，输出逐条复核清单、正向 SQL 和回滚 SQL。核对清单里的旧连接，尤其是带有测试记录、自定义转发或关联模型的记录，确认切换后的完整目标地址与原值逐字一致。正向和回滚 SQL 各作为一次数据库事务执行，任一旧值检查失败时整批回滚。保留导出和迁移记录。

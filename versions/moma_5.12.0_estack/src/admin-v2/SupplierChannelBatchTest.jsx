@@ -1,3 +1,4 @@
+import { channelRequestUrls } from './channel-connection-directory';
 import AdminStatus from './AdminStatus';
 import ChannelTestProgress from './ChannelTestProgress';
 import { resolveChannelAssociationModel } from './channel-association-model';
@@ -211,7 +212,7 @@ function ModelCallTest({ state, provider, endpointId, associationIds, ops, close
       {httpProbe ? httpProbe.content : <>
       {availableEndpoints.length > 1 && <div className="channel-test-fields">
         <Field label="测试接口"><Choice label="测试接口" value={endpointFilter || 'auto'}
-          options={[[ 'auto', '自动选择' ], ...availableEndpoints.map(url => [url, new URL(url).pathname + new URL(url).search])]}
+          options={[[ 'auto', '自动选择' ], ...availableEndpoints.map(url => [url, url])]}
           disabled={!canChange} onChange={value => {
             setEndpointFilter(value === 'auto' ? '' : value);
             setFailureOnly(false);
@@ -262,7 +263,7 @@ function ModelCallTest({ state, provider, endpointId, associationIds, ops, close
                   if (endpointFilter) setEndpointFilter('');
                   setConsent(false);
                 }}/>
-              : url ? <Typography.Text ellipsis={{ showTooltip: true }}>{new URL(url).pathname}</Typography.Text> : '—';
+              : url ? <Typography.Text ellipsis={{ showTooltip: true }}>{url}</Typography.Text> : '—';
           } },
           { title: '测试结果', width: 106, render: (_, record) => {
             const row = rowsById.get(record.associationId);
@@ -318,6 +319,7 @@ function ModelCallTest({ state, provider, endpointId, associationIds, ops, close
         <dl className="supplier-test-details">
           <dt>测试结果</dt><dd><AdminStatus value={CHANNEL_TEST_STATUS[details.status] || '结果未知'}/></dd>
           {(details.evidenceSource || batch?.source) === 'mock' && <><dt>结果来源</dt><dd>模拟测试</dd></>}
+          {details.request?.url && <><dt>完整请求地址</dt><dd><CopyId value={details.request.url} label="完整请求地址"/></dd></>}
           {details.upstreamStatus != null && <><dt>HTTP 状态</dt><dd>{details.upstreamStatus}</dd></>}
           {details.durationMs != null && <><dt>耗时</dt><dd>{details.durationMs} ms</dd></>}
           {details.stage && details.status !== 'passed' && <><dt>失败阶段</dt><dd>{({ queued: '排队', request: '请求上游', parse: '解析响应',
@@ -359,7 +361,7 @@ function ModelCallTest({ state, provider, endpointId, associationIds, ops, close
         const interfaceIssue = channelInterfaceIssue(provider, row);
         const result = interfaceIssue ? '接口不匹配' : stale ? '配置已变化，待重测' : item ? CHANNEL_TEST_STATUS[item.status] || '结果未知' : passed(row) ? '通过' : '待测试';
         const explanation = interfaceIssue || (!stale && !item && !passed(row) ? row.health?.message : '');
-        return <Row key={row.id}>{showSelection && <Cell><Checkbox aria-label={`选择启用 ${row.upstreamModelId}`} checked={selected.includes(row.id)} disabled={!ops.can || busy || running || unresolved || confirming || !passed(row) && !selected.includes(row.id)} onChange={event => { setSelected(current => event.target.checked ? [...current, row.id] : current.filter(id => id !== row.id)); setConfirmation(null); }}/></Cell>}{viewingConnection && <Cell>{records.find(record => record.associationId === row.id)?.modelName || row.modelId}</Cell>}<Cell><CopyId copyAtStart value={row.upstreamModelId} label="上游模型调用标识"/></Cell>{directory && !embedded && !reference && <Cell>{recordEndpoints.get(row.id) ? new URL(recordEndpoints.get(row.id)).pathname : '—'}</Cell>}<Cell><AdminStatus value={result}/>{explanation && <small>{explanation}</small>}{(item?.evidenceSource === 'mock' || item && batch?.source === 'mock' || !item && (row.health?.source === 'mock' || row.health?.simulated)) && <small>模拟检测</small>}{embedded && item && item.status !== 'passed' && <small className="onboarding-test-repair">{item.suggestion || item.message}</small>}</Cell>{directory && !embedded && !reference && <Cell>{item ? [item.durationMs == null ? null : item.durationMs + ' ms', item.upstreamStatus].filter(value => value != null).join(' · ') || '—' : '—'}</Cell>}{!reference && <Cell><AdminStatus value={row.enabled && ['运行中','需关注'].includes(endpoint.status) ? '已启用' : '未启用'}/></Cell>}{!embedded && !reference && <Cell><AdminStatus value={row.pricing?.scenarios?.length ? '已配置' : '待配置'}/></Cell>}<Cell><div className="supplier-row-actions">{!embedded && <Button theme="borderless" type="tertiary" disabled={!ops.can || !ready || busy || running || unresolved || confirming} onClick={() => planRetry([row.id])}>选择重测</Button>}{item && <Button theme="borderless" type="tertiary" onClick={() => setDetails(item)}>检查详情</Button>}</div></Cell></Row>; })}
+        return <Row key={row.id}>{showSelection && <Cell><Checkbox aria-label={`选择启用 ${row.upstreamModelId}`} checked={selected.includes(row.id)} disabled={!ops.can || busy || running || unresolved || confirming || !passed(row) && !selected.includes(row.id)} onChange={event => { setSelected(current => event.target.checked ? [...current, row.id] : current.filter(id => id !== row.id)); setConfirmation(null); }}/></Cell>}{viewingConnection && <Cell>{records.find(record => record.associationId === row.id)?.modelName || row.modelId}</Cell>}<Cell><CopyId copyAtStart value={row.upstreamModelId} label="上游模型调用标识"/></Cell>{directory && !embedded && !reference && <Cell>{recordEndpoints.get(row.id) || '—'}</Cell>}<Cell><AdminStatus value={result}/>{explanation && <small>{explanation}</small>}{(item?.evidenceSource === 'mock' || item && batch?.source === 'mock' || !item && (row.health?.source === 'mock' || row.health?.simulated)) && <small>模拟检测</small>}{embedded && item && item.status !== 'passed' && <small className="onboarding-test-repair">{item.suggestion || item.message}</small>}</Cell>{directory && !embedded && !reference && <Cell>{item ? [item.durationMs == null ? null : item.durationMs + ' ms', item.upstreamStatus].filter(value => value != null).join(' · ') || '—' : '—'}</Cell>}{!reference && <Cell><AdminStatus value={row.enabled && ['运行中','需关注'].includes(endpoint.status) ? '已启用' : '未启用'}/></Cell>}{!embedded && !reference && <Cell><AdminStatus value={row.pricing?.scenarios?.length ? '已配置' : '待配置'}/></Cell>}<Cell><div className="supplier-row-actions">{!embedded && <Button theme="borderless" type="tertiary" disabled={!ops.can || !ready || busy || running || unresolved || confirming} onClick={() => planRetry([row.id])}>选择重测</Button>}{item && <Button theme="borderless" type="tertiary" onClick={() => setDetails(item)}>检查详情</Button>}</div></Cell></Row>; })}
     </GridTable>
     {confirming && <Notice>将启用渠道及所选 {confirmation.selections.length} 个模型。{confirmation.restoring && '未选模型保持停用。'}采购价待配置的模型暂不能用于正式服务。</Notice>}
     {confirming && confirmation.restoring && confirmation.serviceImpact.length > 0 && <div className="supplier-batch-confirmation"><p>可能恢复 {confirmation.serviceImpact.length} 项已发布服务：</p><ul>{confirmation.serviceImpact.map(service => <li key={service.id}><strong>{service.name}</strong> · <CopyId copyAtStart value={service.callId} label="模型调用标识"/> · 路由 v{service.routeVersion}</li>)}</ul></div>}
@@ -379,6 +381,9 @@ function DirectoryTest({ title, ...props }) {
   const endpoint = state.endpoints.find(row => row.id === endpointId);
   const [mode, setMode] = useState('http');
   const [probe, setProbe] = useState('');
+  const urls = endpoint ? channelRequestUrls({ endpoint, models: [] }) : [];
+  const [selectedUrl, setSelectedUrl] = useState('');
+  const target = urls.includes(selectedUrl) ? selectedUrl : urls[0];
   const timer = useRef(null);
   useEffect(() => () => clearTimeout(timer.current), []);
   const modeSelector = disabled => <>
@@ -391,7 +396,7 @@ function DirectoryTest({ title, ...props }) {
   </>;
   const probing = probe === '正在探测…';
   const start = () => {
-    if (timer.current || !ops.can) return;
+    if (timer.current || !ops.can || !target) return;
     setProbe('正在探测…');
     timer.current = setTimeout(() => {
       const scenario = state.cloudMockState?.scenario;
@@ -401,9 +406,10 @@ function DirectoryTest({ title, ...props }) {
   };
   const httpProbe = mode === 'http' ? {
     running: probing,
-    action: <Button theme="solid" disabled={!ops.can || !endpoint?.baseUrl || probing} onClick={start}>开始探测</Button>,
+    action: <Button theme="solid" disabled={!ops.can || !target || probing} onClick={start}>开始探测</Button>,
     content: <>
-      <Field label="服务地址"><Typography.Text>{endpoint?.baseUrl || '—'}</Typography.Text></Field>
+      <Field label="完整请求地址">{urls.length > 1 ? <Choice label="探测地址" value={target} disabled={probing}
+        options={urls.map(url => [url, url])} onChange={url => { setSelectedUrl(url); setProbe(''); }}/> : <Typography.Text>{target || '—'}</Typography.Text>}</Field>
       {probe && <Typography.Text role="status">{probe}</Typography.Text>}
     </>,
   } : null;

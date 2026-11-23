@@ -31,7 +31,7 @@ export const MODEL_CATEGORY_DESCRIPTIONS = {
 export { modelCategory };
 export const modelCode = model => model.modelId;
 export function supplyModelUrl(supply, model) {
-  if (supply.endpoint?.interfaceType && model?.type) { try { return modelTaskUrl(supply.endpoint, model.type); } catch { return ''; } }
+  if (supply.endpoint?.interfaceType && model?.type) { try { return modelTaskUrl(supply.endpoint, model.type, { upstreamModelId: supply.upstreamModelId }); } catch { return ''; } }
   const path = supply.provider?.catalogModels?.find(item => item.modelId === (supply.catalogueModelId || supply.upstreamModelId))?.endpoint?.trim();
   const base = supply.endpoint?.baseUrl?.trim() || '';
   if (path) { try { return new URL(path, base || undefined).href; } catch { return ''; } }

@@ -12,7 +12,7 @@ if (!extraLoginHashes || typeof extraLoginHashes !== 'object' || Array.isArray(e
   throw new Error('MODEL_OPS_LOGIN_HASHES 须为账号到 SHA-256 摘要的映射');
 }
 const loginHashes = { ...extraLoginHashes, ...Object.fromEntries(demoAccountIds.map(id => [id, demoPasswordHash])) };
-const local=await startLocalBackend({persistPath,loginHashes,port:Number(process.env.MOMA_5120_BACKEND_PORT || 8787),presets:true});
+const local=await startLocalBackend({persistPath,loginHashes,port:Number(process.env.MOMA_5120_BACKEND_PORT || 15120),presets:true});
 // A password reset during a demo applies until the next local startup.
 await local.db.batch([
   local.db.prepare("INSERT OR IGNORE INTO admin_accounts(id,name,role,enabled) VALUES('admin-003','模型运营','运营人员',1)"),

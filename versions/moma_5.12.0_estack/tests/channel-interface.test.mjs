@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CHANNEL_INTERFACES, prepareChannelInterface, suggestChannelRoot, modelTaskUrl, prepareChannelAdapterOptions } from '../src/admin-v2/channel-interface.js';
+import { CHANNEL_INTERFACES, channelConversationRequest, modelListRequestUrl, prepareChannelInterface, suggestChannelRoot, modelTaskUrl, prepareChannelAdapterOptions } from '../src/admin-v2/channel-interface.js';
 
 const openai = { interfaceType: 'openai', baseUrl: 'https://api.example.com/v1' };
 
@@ -99,4 +99,14 @@ test('all model supply address readers respect the selected Responses task',asyn
  const endpoint={interfaceType:'openai-responses',protocol:'OpenAI',baseUrl:'https://example.invalid/v1'};
  assert.equal(supplyModelUrl({endpoint},{type:'text'}),'https://example.invalid/v1/responses');
  assert.equal(supplyModelUrl({endpoint},{type:'embedding'}),'');
+});
+
+test('configured endpoints preserve provider prefixes in simulated discovery and inference requests', () => {
+  const baseUrl = 'https://example.invalid/api/v3/';
+  const options = { interfaceType: 'openai', endpointPath: '/chat/completions', baseUrl };
+  const endpoint = prepareChannelInterface(options);
+  assert.equal(modelListRequestUrl(endpoint), 'https://example.invalid/api/v3/models');
+  const request = channelConversationRequest(endpoint, { type: 'text', upstreamModelId: 'example' });
+  assert.equal(request.url, 'https://example.invalid/api/v3/chat/completions');
+  assert.throws(() => prepareChannelInterface({ ...options, baseUrl: request.url }), /已包含接口端点/);
 });

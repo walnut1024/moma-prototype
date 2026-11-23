@@ -27,7 +27,7 @@ export function channelMaterialOptions(provider) {
           row.paths.some(path => endpointPath.endsWith(path)));
         if (type) {
           const suffix = type.paths.find(path => endpointPath.endsWith(path));
-          add(type.id, baseUrl.replace(/\/+$/, '').slice(0, -suffix.length), endpointPath);
+          add(type.id, baseUrl.replace(/\/+$/, '').slice(0, -suffix.length), suffix);
         }
       }
     }

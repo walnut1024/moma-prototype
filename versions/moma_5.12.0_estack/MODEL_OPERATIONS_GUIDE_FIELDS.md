@@ -36,9 +36,9 @@
 | 渠道 ID | Channel ID | 标识一条共享接入连接的编号，用于定位渠道列表中的具体连接。 | An identifier for a shared connection that locates the corresponding entry in the channel list. |
 | 渠道名称 | Channel Name | 运营人员为连接设置的名称，用于区分同一服务商的不同接入配置。 | An operator-defined name that distinguishes connections for the same provider. |
 | 渠道类型 | Channel Type | 按供给来源对渠道进行的业务分类。 | A business classification based on the source of inference capacity. |
-| 服务地址 | Base URL | API 的基础访问地址，与接口端点共同确定请求地址。渠道管理中指上游服务的地址，模型服务中指 MoMA 网关的地址。 | The base address of an API. Together with the API endpoint, it determines the request URL. In Channel Management it refers to the upstream service. In Model Services it refers to the MoMA gateway. |
+| 服务地址 | Base URL | 按服务商文档填写的基础地址，保留路径和版本前缀。渠道管理中指上游服务的地址，模型服务中指 MoMA 网关的地址。 | The API base URL, including the provider’s path and version prefix. In Channel Management it refers to the upstream service. In Model Services it refers to the MoMA gateway. |
 | 接口格式 | API Format | 上游接口采用的请求、响应和调用约定，例如 OpenAI Chat Completions。 | The upstream API's request, response and invocation conventions, such as OpenAI Chat Completions. |
-| 接口端点 | API Endpoint | API 的具体请求路径或地址，例如 /v1/chat/completions。渠道管理中指上游接口，模型服务中指 MoMA 对外接口。 | The request path or address for a specific API operation, such as /v1/chat/completions. In Channel Management it refers to the upstream API. In Model Services it refers to the API MoMA exposes to clients. |
+| 接口端点 | API Endpoint | 追加在服务地址之后的路径，例如 /chat/completions。渠道管理中指上游接口，模型服务中指 MoMA 对外接口。 | The path appended to the base URL, such as /chat/completions. In Channel Management it refers to the upstream API. In Model Services it refers to the API MoMA exposes to clients. |
 | 接口版本 | API Version | 上游 API 要求指定的接口规范版本。 | The API specification version required by the upstream provider. |
 | 服务区域 | Region | 上游服务提供访问的地理区域。 | The geographic region where the upstream service is available. |
 | 认证方式 | Authentication Method | 平台向上游证明调用身份的方式。 | The method MoMA uses to prove its identity to the upstream service. |

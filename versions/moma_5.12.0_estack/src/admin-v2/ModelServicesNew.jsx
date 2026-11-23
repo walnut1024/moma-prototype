@@ -1,3 +1,4 @@
+import { API_PREFIX } from '../../api-path';
 import { callLogFieldHelp } from '../components/call-log-field-help';
 import TableFieldHelp from '../components/TableFieldHelp';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
@@ -33,6 +34,7 @@ const pageHref = '#/admin-2/listing-new';
 const pageTitle = pages['listing-new'].label;
 const { Text } = Typography;
 const tabs = [['basic', '基本信息'], ['channels', '渠道模型'], ['failover', '故障转移策略']];
+const platformEndpoint = path => path.replace(/^\/v1(?=\/)/, '');
 const chatEndpoints = ['/v1/chat/completions', '/v1/messages', '/v1/responses', '/v1/completions'];
 const priorityHelp = <>
   <div><strong>组间顺序</strong>　数值越小，优先级越高。优先使用当前请求可用的最高优先级组；该组没有可用渠道模型，或调用失败且满足故障转移条件时，再尝试下一组。</div>
@@ -184,14 +186,14 @@ function BasicInformation({ service, model, sources }) {
   const { supported, endpoints } = serviceEndpoints(service, model, sources);
   const endpointList = endpoints.length ? <Space wrap>
     {endpoints.map(path => supported.has(path)
-      ? <Tag key={path}><CopyId label={endpointLabel} value={path}/></Tag>
-      : <Tag key={path} type="ghost">{path} · 未配置</Tag>)}
+      ? <Tag key={path}><CopyId label={endpointLabel} value={platformEndpoint(path)}/></Tag>
+      : <Tag key={path} type="ghost">{platformEndpoint(path)} · 未配置</Tag>)}
   </Space> : null;
   const details = [
     ['模型服务名称', service.name],
     ['模型服务 ID', <CopyId label="模型服务 ID" value={service.id}/>],
     [MODEL_ID_LABEL, <CopyId label={MODEL_ID_LABEL} value={service.callId}/>],
-    ['服务地址', '待接入网关'],
+    ['服务地址', window.location.origin + API_PREFIX],
     [endpointLabel, endpointList],
     ['模型编码', fields.code && <CopyId label="模型编码" value={fields.code}/>],
     ['服务状态', <AdminStatus value={serviceStatus(service)}/>],
@@ -556,7 +558,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
     },
     { title: endpointLabel, width: 200, render: (_, row) => {
       const paths = endpointValues(row);
-      return paths.length ? <div className="new-service-cell">{paths.map(path => <CopyId key={path} label={endpointLabel} value={path} ellipsis copyAtStart/>)}</div> : '—';
+      return paths.length ? <div className="new-service-cell">{paths.map(path => <CopyId key={path} label={endpointLabel} value={platformEndpoint(path)} ellipsis copyAtStart/>)}</div> : '—';
     } },
     { title: '模型类型', width: 110, render: (_, row) => {
       const type = MODEL_SERVICE_TYPES[modelServiceType(row.type)];

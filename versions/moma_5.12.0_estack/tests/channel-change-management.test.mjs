@@ -41,7 +41,7 @@ test('the connection directory groups models by ID and keeps empty connections a
   const empty = rows.find(row => row.id === 'empty-connection');
   assert.equal(shared.modelCount, 2);
   assert.equal(channelListType(shared), 'OpenAI Chat Completions');
-  assert.deepEqual(channelListPaths(shared), ['/v1/chat/completions']);
+  assert.deepEqual(channelListPaths(shared), ['/chat/completions']);
   assert.deepEqual(shared.models.map(row => row.association.id), mappings(state).map(row => row.id));
   assert.equal(shared.name, empty.name);
   assert.equal(empty.modelCount, 0);
@@ -84,9 +84,10 @@ test('the channel creation choices round-trip to the same list type and model re
     assert.equal(endpoint.baseUrl, origin + basePath);
     assert.equal(channelListType({ endpoint, models: [] }), label);
     assert.equal(modelTaskUrl(endpoint, modelType), origin + taskPath);
-    assert.deepEqual(channelListPaths({ endpoint, models: [] }), [taskPath]);
-    assert.deepEqual(channelProtocolPaths({ interfaceType, baseUrl: origin + basePath }), [taskPath]);
-    assert.equal(channelProtocolPaths({ interfaceType, baseUrl: '' })[0], taskPath);
+    assert.deepEqual(channelListPaths({ endpoint, models: [] }), [taskPath.startsWith(basePath + '/') ? taskPath.slice(basePath.length) : taskPath]);
+    const relative = CHANNEL_LIST_TYPES.find(type => type.id === interfaceType).paths[0];
+    assert.equal(channelProtocolPaths({ interfaceType, baseUrl: origin + basePath })[0], relative);
+    assert.equal(channelProtocolPaths({ interfaceType, baseUrl: '' })[0], relative);
   }
   assert.throws(() => prepareListedChannelInterface({ interfaceType: 'ark-video', baseUrl: origin + '/v1/video_generation' }), /完整接口地址/);
   assert.throws(() => prepareListedChannelInterface({ interfaceType: 'openai-embeddings', baseUrl: origin + '/v1' }), /完整/);
@@ -96,12 +97,12 @@ test('the channel creation choices round-trip to the same list type and model re
 test('endpoint previews honor gateway prefixes, configured tasks, and saved embedding roots', () => {
   const baseUrl = 'https://api.example.invalid/tenant/v2';
   assert.deepEqual(channelProtocolPaths({ interfaceType: '', baseUrl }), []);
-  assert.deepEqual(channelProtocolPaths({ interfaceType: 'openai-responses', baseUrl }), ['/tenant/v2/responses']);
+  assert.deepEqual(channelProtocolPaths({ interfaceType: 'openai-responses', baseUrl }), ['/responses']);
   const taskPath = '/api/v1/services/aigc/image2video/video-synthesis';
-  assert.deepEqual(channelProtocolPaths({ interfaceType: 'dashscope-video', baseUrl: 'https://api.example.invalid' + taskPath }), [taskPath]);
+  assert.deepEqual(channelProtocolPaths({ interfaceType: 'dashscope-video', baseUrl: 'https://api.example.invalid' + taskPath })[1], taskPath.slice('/api/v1'.length));
   const current = { endpoint: { interfaceType: 'openai', baseUrl: baseUrl + '/old' }, models: [{ master: { type: 'embedding' } }] };
   assert.equal(channelProtocolUsesFullAddress('openai-embeddings', current), false);
-  assert.deepEqual(channelProtocolPaths({ interfaceType: 'openai-embeddings', baseUrl }, current), ['/tenant/v2/embeddings']);
+  assert.deepEqual(channelProtocolPaths({ interfaceType: 'openai-embeddings', baseUrl }, current), ['/embeddings']);
 });
 
 test('a shared connection change checks even disabled model mappings and preserves each model channel name', () => {
@@ -431,7 +432,7 @@ test('channel list paths retain gateway prefixes and configured task paths witho
   const origin = 'https://api.example.invalid';
   const paths = (endpoint, models = []) => channelListPaths({ endpoint, models });
   assert.deepEqual(paths({ interfaceType: 'openai', baseUrl: origin + '/tenant/gateway/v2' },
-    [{ master: { type: 'embedding' } }]), ['/tenant/gateway/v2/embeddings']);
+    [{ master: { type: 'embedding' } }]), ['/embeddings']);
   const dashscopePath = '/api/v1/services/aigc/image2video/video-synthesis';
   assert.deepEqual(paths({ baseUrl: origin + dashscopePath + '/' }), [dashscopePath]);
   assert.deepEqual(paths({ interfaceType: 'custom', baseUrl: origin + '/v2/generate',

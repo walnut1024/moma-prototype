@@ -1,4 +1,4 @@
-import { channelConversationRequest, channelConversationText, modelTaskUrl, prepareChannelInterface } from './channel-interface.js';
+import { channelConversationRequest, channelConversationText, modelListRequestUrl, modelTaskUrl, prepareChannelInterface } from './channel-interface.js';
 import { customForwarding, normalizeCustomAdapter, parseCustomManagement } from './channel-custom-adapter.js';
 import { normalizeChannelRequestRules } from './channel-request-rules.js';
 import { modelIdentity, channelIdentity } from '../model-identities.mjs';
@@ -216,12 +216,13 @@ function pipeline(state, service, config, proofs, { identityType, identityId, me
     groupAttempts.set(group, (groupAttempts.get(group) ?? 0) + 1);
     const binding = config.bindings.find(item => item.id === route.bindingId), channel = channelById(state, binding.channelId);
     const startedAt = now();
-    let dispatched=false;
+    let dispatched=false, requestUrl;
     let retryReason;
     try {
       assertAvailable(state, channel, { live: identityType === 'client', model: binding.model });
       if (proofs.find(item => item.bindingId === binding.id)?.signature !== channelSignature(state, channel)) fail('supply_changed', '供给配置已变化，请重新检查发布');
       const procurement = activePrices(binding.procurementPrices, started); if (!technical && !procurement) fail('procurement_price_expired', '采购价已到期');
+      if (channel.endpointPath) requestUrl = modelTaskUrl(channel, binding.model.type, { upstreamModelId: binding.model.upstreamModelId });
       dispatched=true;
       const result = resultFor(state.scenario, binding.model, state.scenario === 'partial' ? attempt++ === 0 ? 1 : 0 : 0);
       if (result.status !== 'passed') {
@@ -230,13 +231,13 @@ function pipeline(state, service, config, proofs, { identityType, identityId, me
         fail(result.code, result.message);
       }
       const context=operationalContext(service,binding,channel);
-      attempts.push({ attempt_no:attempts.length+1,model_service_id:context?.model_service_id ?? null,channel_id:context?.channel_id ?? null,connection_id:context?.connection_id ?? null,provider_id:channel.providerId,dispatched:true, startedAt, bindingId: binding.id, channelId: channel.id, endpointId:channel.clientChannelId || null, status: 'passed', usage:result.usage || null, procurementSnapshot:procurement?{...operationalPrice(procurement,context,started),providerId:channel.providerId,endpointId:channel.clientChannelId || null,supplyId:binding.id}:null });
+      attempts.push({ attempt_no:attempts.length+1,model_service_id:context?.model_service_id ?? null,channel_id:context?.channel_id ?? null,connection_id:context?.connection_id ?? null,provider_id:channel.providerId,...(requestUrl && { requestUrl }),dispatched:true, startedAt, bindingId: binding.id, channelId: channel.id, endpointId:channel.clientChannelId || null, status: 'passed', usage:result.usage || null, procurementSnapshot:procurement?{...operationalPrice(procurement,context,started),providerId:channel.providerId,endpointId:channel.clientChannelId || null,supplyId:binding.id}:null });
       const usage = result.usage || null, cost = result.meteringUnknown ? null : totalPrice(procurement,usage), record = { id: resourceId('usage-record'), requestId: resourceId('request'), source: 'mock', evidenceSource: 'mock', serviceId: service.id, publicModelId: config.publicModelId, serviceVersion: identityType === 'trial' ? service.candidateVersion : service.published.version, routeVersion: config.route.version, identityType, identityId, operational:context, priceSnapshot:sale?operationalPrice(sale,context,started):null,billingStatus:technical?'not_applicable':identityType==='client'?'billable':'trial',costStatus:cost?'confirmed':'pending', tenantId:identityType === 'client' ? tenantId || state.clientKeys.find(row=>row.id===identityId)?.tenantId || null : null, attempts: copy(attempts), startedAt: new Date(started).toISOString(), endedAt: now(), providerId: channel.providerId, channelId: channel.id, upstreamModelId: binding.model.upstreamModelId, usage, cost, saleTrial: result.meteringUnknown ? null : totalPrice(sale, usage), customerDebited: false, traceId: uid() };
       state.usage.push(record);
       return { id: record.id, model: config.publicModelId, choices: [{ message: { role: 'assistant', content: `已处理：${messages?.at(-1)?.content || '连接检查'}` } }], usage, traceId: record.traceId, source: 'mock', attempts: copy(attempts), actualSupply: { providerId: channel.providerId, channelId: channel.id, upstreamModelId: binding.model.upstreamModelId }, routeVersion: config.route.version, cost: record.cost, saleTrial: record.saleTrial, technicalReady: true, billingReady: Boolean(record.cost && record.saleTrial), customerDebited: false };
     } catch (error) {
       const selected=activePrices(binding.procurementPrices,started),context=operationalContext(service,binding,channel);
-      attempts.push({ attempt_no:attempts.length+1,model_service_id:context?.model_service_id ?? null,channel_id:context?.channel_id ?? null,connection_id:context?.connection_id ?? null,provider_id:channel.providerId,dispatched, startedAt, bindingId: binding.id, channelId: channel.id, endpointId:channel.clientChannelId || null, status: 'failed', code: error.code || 'request_failed', usage:null, procurementSnapshot:selected?{...operationalPrice(selected,context,started),providerId:channel.providerId,endpointId:channel.clientChannelId || null}:null });
+      attempts.push({ attempt_no:attempts.length+1,model_service_id:context?.model_service_id ?? null,channel_id:context?.channel_id ?? null,connection_id:context?.connection_id ?? null,provider_id:channel.providerId,...(requestUrl && { requestUrl }),dispatched, startedAt, bindingId: binding.id, channelId: channel.id, endpointId:channel.clientChannelId || null, status: 'failed', code: error.code || 'request_failed', usage:null, procurementSnapshot:selected?{...operationalPrice(selected,context,started),providerId:channel.providerId,endpointId:channel.clientChannelId || null}:null });
       error.attempts = copy(attempts);
       lastIssue = error;
       const eligible = retry ? retry.reasons.includes(retryReason) : error.code !== 'request_timeout' || config.mode === 'provider';
@@ -304,7 +305,7 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
     const parsed = channel.customAdapter?.models ? parseCustomManagement(channel.customAdapter, 'models', {
       data: data.map(model => typeof model === 'string' ? { id: model } : model), complete: scenario !== 'partial',
     }) : { models: data, complete: scenario !== 'partial' };
-    return { ...parsed, models: copy(parsed.models), source: 'mock', signature: channelSignature(state, channel), discoveredAt: now() };
+    return { ...parsed, request: { method: channel.customAdapter?.models?.method || 'GET', url: modelListRequestUrl(channel) }, models: copy(parsed.models), source: 'mock', signature: channelSignature(state, channel), discoveredAt: now() };
   }
   if (method === 'POST' && route === '/balance') {
     const channel = channelById(state, body.channelId);

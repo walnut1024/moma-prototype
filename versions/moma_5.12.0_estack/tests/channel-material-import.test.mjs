@@ -25,7 +25,7 @@ test('provider references retain distinct addresses and omit unsupported task in
 test('a known provider preset fills the interface, while an unconfigured provider has no interface reference', () => {
   const preset = channelMaterialOptions({ id: 'provider-moma', code: 'moma', sourceType: 'thirdParty' });
   assert.deepEqual(preset, [{
-    interfaceType: 'openai', baseUrl: 'https://moma.cmecloud.cn/v1', endpointPath: '/v1/chat/completions',
+    interfaceType: 'openai', baseUrl: 'https://moma.cmecloud.cn/v1', endpointPath: '/chat/completions',
   }]);
   assert.deepEqual(channelMaterialOptions({ id: 'manual-provider', sourceType: 'selfHosted' }), []);
 });
