@@ -63,8 +63,8 @@ test('deep detail links highlight their original navigation entry without mergin
   }
 });
 
-test('access control exposes tenant management',()=>{
-  assert.deepEqual(adminSections.find(group=>group.title==='访问控制').items.map(item=>item.label),['租户管理']);
+test('access control exposes tenant management and project management',()=>{
+  assert.deepEqual(adminSections.find(group=>group.title==='访问控制').items.map(item=>item.label),['租户管理','项目管理']);
   assert(canAccessPage('平台管理员','organization-members'));
   assert(!canAccessPage('运维人员','organization-members'));
 });
