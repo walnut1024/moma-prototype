@@ -57,8 +57,12 @@ test('catalogue import requires only the current form basics and preserves unkno
 
 test('rich metadata survives validation and the existing atomic catalogue transaction without creating services or supply', () => {
   const state = createAdminSeed();
-  const author = saveClassification(modelClassification(state), { kind: 'authors', name: '测试作者', aliases: ['Test Author'], active: true });
-  const series = saveClassification(author.dictionary, { kind: 'series', authorId: author.entry.id, name: '测试系列', aliases: ['Test Series'], active: true });
+  const author = saveClassification(modelClassification(state), { kind: 'authors', name: '测试作者', aliases: ['Test Author'] });
+  // Older dictionaries could disable authors. Their existing references still resolve.
+  author.entry.active = false;
+  const series = saveClassification(author.dictionary, { kind: 'series', authorId: author.entry.id, name: '测试系列', aliases: ['Test Series'] });
+  assert.equal(Object.hasOwn(series.entry, "active"), false);
+  series.entry.active = false; // Previously stopped series can still classify new imports.
   state.modelData.modelClassification = series.dictionary;
   const before = structuredClone(state);
   const values = { ...base, '模型作者': '测试作者', '原厂发布日期': '2026-10', '知识截止日期': '2026-09', '模型系列': '测试系列', '模型版本': 'v2', '模型 Logo': 'https://example.test/logo.png', '模型描述': '用于校验资料导入', '支持任务': '对话、代码生成', '输入模态': '文本', '输出模态': '文本', '结果类型': '结构化数据', '支持语言': '中文、英文', '适用场景': '编程、办公', '上下文长度（Token）': 32768, '最大输出 Token 数（Token）': 8192, '流式响应': '支持', '工具调用': '不支持', '深度思考': '支持', '支持的参数': 'temperature、max_tokens', '默认参数': '{"temperature":0.7,"max_tokens":4096}', '模型架构': 'MoE（混合专家）', '许可协议': 'Apache 2.0', '总参数（B）': 100, '激活参数（B）': 10, '版本状态': '稳定版', '资料状态': '已核对', '资料链接': 'https://example.test/docs', '详细介绍': '第一行\n第二行，含"引号"' };

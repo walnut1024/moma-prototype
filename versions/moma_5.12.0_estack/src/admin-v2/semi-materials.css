@@ -34,3 +34,8 @@
   .semi-materials .semi-table-pagination-info { flex: 0 0 100%; }
   .semi-materials .semi-table-pagination-wrapper { width: 100%; }
 }
+.semi-materials .materials-model-name.semi-button { padding-inline: 0; }
+.semi-materials .materials-model-name .materials-logo { margin-inline-end: 6px; }
+.semi-materials .materials-model-name .materials-logo { width: 22px; height: 22px; flex: none; vertical-align: middle; }
+.materials-logo-empty { box-sizing: border-box; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed var(--semi-color-border); border-radius: 4px; color: var(--semi-color-text-2); background: var(--semi-color-fill-0); }
+.materials-logo-empty small { font-size: 10px; }

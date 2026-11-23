@@ -7,7 +7,6 @@ import Table from './AdminTable';
 import AdminStatus from './AdminStatus';
 import ChannelCostCell from './ChannelCostCell';
 import { availabilityDefinition } from './channel-health-observations.mjs';
-import { observationDrill, observationKey } from './call-observations.mjs';
 
 const seconds = new Intl.NumberFormat('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const tokensPerSecond = new Intl.NumberFormat('zh-CN', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
@@ -83,10 +82,8 @@ function Availability({ uptime }) {
   </div>;
 }
 
-export default function ChannelHealthTable({ rows, labels, summaries, filters, window, simulated, canManageChannels, canViewLogs, onTrend, loading }) {
+export default function ChannelHealthTable({ rows, labels, summaries, simulated, canManageChannels, onTrend, loading }) {
   const t = useChannelText();
-  const logs = row => observationDrill(filters, window, { view: 'upstream', provider: [observationKey(row, 'provider')],
-    channel: [observationKey(row, 'channel')], upstreamModelId: [observationKey(row, 'upstreamModelId')] });
   const trend = (field, label, format) => ({
     title: headers[field] ? metricHeader(label, headers[field]) : label, dataIndex: field, width: metricColumnWidth,
     sorter: byMetric(row => row[field]),
@@ -94,7 +91,7 @@ export default function ChannelHealthTable({ rows, labels, summaries, filters, w
   });
   const columns = [
     { title: t('上游模型/服务商'), width: 150, fixed: 'left', render: (_, row) => <div className="channel-health-identity">
-      <Typography.Text strong ellipsis={{ showTooltip: true }} link={canViewLogs && row.count ? { href: logs(row) } : undefined}>
+      <Typography.Text strong ellipsis={{ showTooltip: true }}>
         {row.upstreamModelId || '模型未采集'}
       </Typography.Text>
       <Typography.Text size="small" type="secondary" ellipsis={{ showTooltip: true }}>{row.providerName || '服务商未采集'}</Typography.Text>

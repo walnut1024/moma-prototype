@@ -174,11 +174,12 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     const catalogue=async(cookie)=>{const result=await request('/market/catalogue',{cookie});assert.equal(result.status,200,JSON.stringify(result.data));return result.data.services;};
     const { author, series } = modelClassificationFor(classificationIndex(modelClassification(state)), material);
     assert.ok(author);
-    await command('modelClassificationSave', { ...author, kind: 'authors', name: '智谱（目录标准名称）' });
+    await command('modelClassificationSave', { kind: 'authors', id: author.id, aliases: author.aliases, name: '智谱（目录标准名称）' });
     const savedAuthor = state.modelData.modelClassification.authors.find(row => row.id === author.id);
     assert.equal(savedAuthor.name, '智谱（目录标准名称）');
+    assert.equal(Object.hasOwn(savedAuthor, 'active'), false);
     assert.ok(savedAuthor.formerNames.includes(author.name));
-    await command('modelClassificationSave', { kind: 'authors', name: author.name, aliases: [], active: true }, undefined, 422);
+    await command('modelClassificationSave', { kind: 'authors', name: author.name, aliases: [] }, undefined, 422);
     const services=await catalogue(customer);
 
     assert.deepEqual(marketModels(services).map(row=>[row.name,row.services.length,[...row.providers.values()]]),[['GLM-5.3',3,['甲云','乙云']]]);

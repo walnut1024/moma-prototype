@@ -1,11 +1,30 @@
 import { useState } from 'react';
+import { IconImageStroked } from '@douyinfe/semi-icons';
 import { normalizeModelLogo } from './model-profile';
 
-export default function MaterialLogo({ src, alt, preview = false, fallback = '—' }) {
-  const [failed, setFailed] = useState(false);
-  return src && !failed
-    ? <img className={preview ? 'materials-logo-preview' : 'materials-logo'} src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)}/>
-    : fallback;
+const brandIcons = import.meta.glob('./model-icons/*.svg', { eager: true, import: 'default' });
+const modelFamilies = [
+  [/^deepseek/i, 'deepseek-color'], [/^kimi/i, 'kimi'], [/^(?:chatglm|glm)/i, 'zhipu-color'],
+  [/^qwen/i, 'qwen-color'], [/^minimax/i, 'minimax-color'], [/^doubao/i, 'doubao-color'],
+];
+
+export function modelFamilyIcon(model) {
+  for (const value of [model?.modelId?.split('/').pop(), model?.profile?.family, model?.name]) {
+    const family = modelFamilies.find(([pattern]) => pattern.test(value || ''));
+    if (family) return brandIcons['./model-icons/' + family[1] + '.svg'];
+  }
+}
+
+export default function MaterialLogo({ src, alt, preview = false, model }) {
+  const [failedSrc, setFailedSrc] = useState(null);
+  const image = src || modelFamilyIcon(model);
+  const size = preview ? 'materials-logo-preview' : 'materials-logo';
+  if (image && image !== failedSrc) return <img className={size} src={image} alt={alt}
+    loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedSrc(image)}/>;
+  const label = image ? '图标加载失败' : '未上传图标';
+  return <span className={size + ' materials-logo-empty'} role="img" aria-label={label} title={label}>
+    <IconImageStroked aria-hidden="true"/>{preview && <small>{label}</small>}
+  </span>;
 }
 
 export async function readMaterialLogo(file, maxSize = 1024 * 1024, thumbnailSize) {

@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Button, Input, Select, Space, TextArea, Typography } from '@douyinfe/semi-ui';
+import { Button, Input, Select, TextArea, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { AdminModal as Modal } from './AdminOverlay';
-import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { modelLibrary } from './model-library';
 import { CLASSIFICATION_KINDS, classificationIndex, modelClassification, modelClassificationFor } from './model-classification';
@@ -21,7 +20,7 @@ export default function ModelClassificationDictionary({ kind, state, ops }) {
   }
   const edit = row => {
     ops.setError('');
-    setDraft(row ? { ...row, aliases: row.aliases.join('\n') } : { name: '', aliases: '', active: true });
+    setDraft(row ? { ...row, aliases: row.aliases.join('\n') } : { name: '', aliases: '' });
   };
   const change = (key, value) => {
     setDraft(row => ({ ...row, [key]: value }));
@@ -31,13 +30,12 @@ export default function ModelClassificationDictionary({ kind, state, ops }) {
   const save = async row => {
     setBusy(true);
     try {
-      const { id, name, aliases, active, authorId } = row;
-      if (await ops.run('modelClassificationSave', { kind, id, name, aliases, active, authorId })) close();
+      const { id, name, aliases, authorId } = row;
+      if (await ops.run('modelClassificationSave', { kind, id, name, aliases, ...(series && { authorId }) })) close();
     } finally {
       setBusy(false);
     }
   };
-  const authors = dictionary.authors.filter(row => row.active || row.id === draft?.authorId);
   const keyword = query.trim().toLowerCase();
   const rows = dictionary[kind].filter(row => [
     row.name, ...row.aliases, ...(row.formerNames || []), series ? index.authors.get(row.authorId)?.name : '',
@@ -56,18 +54,13 @@ export default function ModelClassificationDictionary({ kind, state, ops }) {
     </div>
     <Table rowKey="id" dataSource={rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)}
       pagination={{ pageSize, currentPage, total: rows.length, onPageChange: setPage }}
-      scroll={{ x: series ? 'max(100%, 950px)' : 'max(100%, 790px)' }}
+      scroll={{ x: series ? 'max(100%, 800px)' : 'max(100%, 640px)' }}
       empty={keyword ? `没有符合条件的${label}` : `暂无${label}`} columns={[
+      { title: series ? '系列名称' : '作者名称', dataIndex: 'name', width: 170 },
       ...(series ? [{ title: '所属作者', width: 160, render: (_, row) => index.authors.get(row.authorId)?.name || '—' }] : []),
-      { title: '标准名称', dataIndex: 'name', width: 170 },
       { title: '别名', width: 270, render: (_, row) => [...new Set([...row.aliases, ...(row.formerNames || [])])].join('、') || '—' },
       { title: '关联模型数', width: 110, align: 'right', render: (_, row) => counts.get(row.id) || 0 },
-      { title: '状态', width: 90, render: (_, row) => <AdminStatus value={row.active ? '已启用' : '已停用'}/> },
-      { title: '操作', width: 150, fixed: 'right', render: (_, row) => <Space>
-        <Button theme="borderless" disabled={!ops.can || busy} onClick={() => edit(row)}>编辑</Button>
-        <Button theme="borderless" disabled={!ops.can || busy || series && !row.active && !index.authors.get(row.authorId)?.active}
-          onClick={() => save({ ...row, active: !row.active })}>{row.active ? '停用' : '启用'}</Button>
-      </Space> },
+      { title: '操作', width: 90, fixed: 'right', render: (_, row) => <Button theme="borderless" disabled={!ops.can || busy} onClick={() => edit(row)}>编辑</Button> },
     ]}/>
     {draft && <Modal visible className="semi-materials" title={(draft.id ? '编辑' : '新增') + label}
       onCancel={() => ops.proceed(close)} onOk={() => save({ ...draft, aliases: draft.aliases.split(/\n/u).map(value => value.trim()).filter(Boolean) })}
@@ -76,9 +69,9 @@ export default function ModelClassificationDictionary({ kind, state, ops }) {
       <div className="materials-classification-fields">
         {series && <div><span id="classification-owner-label">所属作者</span>
           <Select aria-labelledby="classification-owner-label" placeholder="请选择作者" filter value={draft.authorId} disabled={Boolean(draft.id)}
-            optionList={authors.map(row => ({ value: row.id, label: row.name }))} onChange={value => change('authorId', value)}/>
+            optionList={dictionary.authors.map(row => ({ value: row.id, label: row.name }))} onChange={value => change('authorId', value)}/>
         </div>}
-        <label>标准名称<Input aria-label="标准名称" value={draft.name} maxLength={100} onChange={value => change('name', value)}/></label>
+        <label>{series ? '系列名称' : '作者名称'}<Input aria-label={series ? '系列名称' : '作者名称'} value={draft.name} maxLength={100} onChange={value => change('name', value)}/></label>
         <label><span>别名<Typography.Text type="tertiary" size="small">（每行一个）</Typography.Text></span>
           <TextArea aria-label="别名" rows={3} value={draft.aliases} onChange={value => change('aliases', value)}/>
         </label>

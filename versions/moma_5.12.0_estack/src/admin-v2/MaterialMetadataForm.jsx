@@ -6,7 +6,7 @@ import { modelMetadataDraft } from './model-metadata-draft';
 import { MODEL_TYPES } from './model-management';
 import { INPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, TASK_OPTIONS } from './model-profile';
 import { materialContextLabel, materialContextUnit, materialContextUnits } from './model-material-fields';
-import { readMaterialLogo } from './MaterialLogo';
+import MaterialLogo, { readMaterialLogo } from './MaterialLogo';
 import { classificationHref, classificationIndex, classificationKey, modelClassification, modelClassificationFor } from './model-classification';
 
 const choices = values => values.map(value => ({ value, label: value }));
@@ -32,7 +32,7 @@ export default function MaterialMetadataForm({state, conflict, reload, model, in
   const dictionary = modelClassification(state);
   const index = classificationIndex(dictionary);
   const { series, seriesName } = modelClassificationFor(index, form);
-  const seriesOptions = dictionary.series.filter(option => option.id === series?.id || option.active && index.authors.get(option.authorId)?.active)
+  const seriesOptions = dictionary.series.filter(option => index.authors.has(option.authorId))
     .map(option => ({
       value: option.id,
       label: option.name + ' · ' + index.authors.get(option.authorId)?.name,
@@ -104,7 +104,7 @@ export default function MaterialMetadataForm({state, conflict, reload, model, in
       {input('code', '模型编码', form.modelId, value => change('modelId', value), { readonly: Boolean(model) })}
       <Form.Slot label={{ text: '模型图标' + (readOnly ? '' : ' *') }} className="materials-wide-field">
         <Space align="start">
-          {profile.logo ? <img src={profile.logo} alt="模型图标" className="materials-logo-preview"/> : readOnly ? '—' : null}
+          <MaterialLogo src={profile.logo} model={form} alt="模型图标" preview/>
           {!readOnly && <Upload accept="image/png,image/jpeg,image/webp" uploadTrigger="custom" fileList={[]} showUploadList={false}
             disabled={!editable || uploading} onFileChange={uploadLogo}>
             <Button icon={<IconUpload aria-hidden/>} loading={uploading} disabled={!editable}>{profile.logo ? '更换图片' : '上传图片'}</Button>

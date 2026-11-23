@@ -259,9 +259,9 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
               <Choice label={t('对比分组')} value="channelModel" options={[['channelModel', t('按渠道模型')]]}/>
             }>
               <div className="channel-health-filters">{filterPanel}</div>
-              <ChannelHealthTable loading={loadingCatalogue} rows={visibleHealthRows} filters={filters} window={window} labels={labels} summaries={summaries}
+              <ChannelHealthTable loading={loadingCatalogue} rows={visibleHealthRows} labels={labels} summaries={summaries}
                 simulated={Boolean(simulation)} canManageChannels={canAccessPage(state.currentRole, 'providers-reference')}
-                canViewLogs={canAccessPage(state.currentRole, 'logs')} onTrend={id => {
+                onTrend={id => {
                   setTrendGroupId(id); requestAnimationFrame(() => trendPanel.current?.focus());
                 }}/>
             </Card>

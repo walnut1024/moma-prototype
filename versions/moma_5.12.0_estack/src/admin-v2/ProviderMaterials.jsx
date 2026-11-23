@@ -45,14 +45,13 @@ function ProviderList({ state, ops, providers }) {
         <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can} onClick={() => ops.go({ view: 'new' })}>添加服务商</Button>
       </Space>
     </div>
-    <Table rowKey="id" dataSource={pageRows(rows, page)} scroll={{ x: 'max(100%, 900px)' }} empty="没有符合条件的服务商"
+    <Table rowKey="id" dataSource={pageRows(rows, page)} scroll={{ x: 'max(100%, 780px)' }} empty="没有符合条件的服务商"
       pagination={{ pageSize, currentPage: page, total: rows.length, onPageChange: page => update({ page }) }} columns={[
-      { title: '服务商名称', width: 220, render: (_, row) => <Button theme="borderless" onClick={() => open(row)}>{row.name}</Button> },
-      { title: '服务商编码', width: 160, render: (_, row) => <Typography.Text className="materials-code">{providerCode(row)}</Typography.Text> },
-      { title: '服务商 Logo', width: 120, render: (_, row) => <MaterialLogo key={row.logo || ''} src={row.logo} alt={row.name + '的服务商 Logo'}/> },
+      { title: '服务商名称', width: 220, render: (_, row) => <Button className="materials-model-name" theme="borderless" onClick={() => open(row)}><MaterialLogo key={row.logo} src={row.logo} alt=""/>{row.name}</Button> },
+      { title: '服务商编码', width: 160, render: (_, row) => <Typography.Text className="materials-code" copyable>{providerCode(row)}</Typography.Text> },
       { title: '供给类型', width: 150, render: (_, row) => PROVIDER_TYPES[row.sourceType] || '—' },
       { title: '已登记模型数', align: 'right', width: 130, render: (_, row) => <Button theme="borderless" aria-label={`查看 ${row.name} 的模型列表`} onClick={() => open(row)}>{providerMaterialModels(state, row).length}</Button> },
-      { title: '操作', width: 150, render: (_, row) => <Space>
+      { title: '操作', width: 150, fixed: 'right', render: (_, row) => <Space>
         <Button theme="borderless" disabled={!ops.can} onClick={() => open(row, true)}>编辑</Button>
         <Button theme="borderless" onClick={() => viewMaterialChannels(ops, row.id)}>查看渠道</Button>
       </Space> },
@@ -71,7 +70,7 @@ function ProviderModels({ state, ops, provider }) {
   const update = patch => ops.go(patch, { replace: true, preserveScroll: true });
   return <>
     <div className="materials-toolbar">
-      <div className="materials-filters"><SearchBox placeholder="搜索模型展示名、标识或编码" value={query}
+      <div className="materials-filters"><SearchBox placeholder="搜索模型名称、上游模型 ID 或模型编码" value={query}
         onChange={modelQ => update({ modelQ: modelQ || null, modelPage: null })}/></div>
       <Space wrap className="materials-toolbar-actions">
         <Button disabled={!ops.can} onClick={() => ops.go({ view: 'modelImport' })}>批量导入并登记</Button>
@@ -80,12 +79,12 @@ function ProviderModels({ state, ops, provider }) {
     </div>
     <Table rowKey="id" dataSource={pageRows(rows, page)} scroll={{ x: 'max(100%, 730px)' }} empty={query ? '没有符合条件的模型' : '暂无已登记模型'}
       pagination={{ pageSize, currentPage: page, total: rows.length, onPageChange: modelPage => update({ modelPage }) }} columns={[
-      { title: '模型展示名', width: 170, render: (_, { offer }) => offer.name },
-      { title: '模型标识', width: 170, render: (_, { offer }) => [...new Set(offer.bindings.map(b => b.upstream).filter(Boolean))].join('、') || '—' },
+      { title: '模型名称', width: 170, render: (_, { offer }) => offer.name },
+      { title: '上游模型 ID', width: 170, render: (_, { offer }) => [...new Set(offer.bindings.map(b => b.upstream).filter(Boolean))].join('、') || '—' },
       { title: '模型编码', width: 160, render: (_, { master }) => <Typography.Text className="materials-code">{master.modelId}</Typography.Text> },
       { title: '模型类型', width: 120, render: (_, { master }) => catalogueType(master.type) },
       { title: PROTOCOL_ENDPOINT_LABEL, width: 300, render: (_, { offer }) => offer.bindings.length ? offer.bindings.map((b,i) => <div key={i}>{protocolAndEndpoint(b.protocol, b.url)}</div>) : '—' },
-      { title: '操作', width: 110, render: (_, row) => <Space><RemovalButton state={state} ops={ops} target={{ providerId: provider.id, catalogueId: row.modelId }} ariaLabel={"删除供应模型 " + row.master.name}/><Button theme="borderless" disabled={!ops.can} onClick={() => setEditing(row.offer)}>编辑</Button></Space> },
+      { title: '操作', width: 110, fixed: 'right', render: (_, row) => <Space><Button theme="borderless" disabled={!ops.can} onClick={() => setEditing(row.offer)}>编辑</Button><RemovalButton state={state} ops={ops} target={{ providerId: provider.id, catalogueId: row.modelId }} ariaLabel={"删除供应模型 " + row.master.name}/></Space> },
     ]}/>
     {editing && <SupplierOfferEditor offer={editing} provider={provider} ops={ops} close={() => setEditing(null)}/>}
     {registering && <SupplyRegistrationDialog state={state} ops={ops} provider={provider} close={() => {

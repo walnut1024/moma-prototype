@@ -87,12 +87,12 @@ export function validateModelRows(state, rows, { catalogue = true, reuseExisting
       if (identity && !reuseExisting) throw new Error('模型编码已存在，请维护已有模型资料');
       if (identity && !active.has(identity.id)) throw new Error('模型编码已被归档资料使用，请核对');
       const existing = identity && modelMaterial(state, identity.id);
-      data.profile = classifiedProfile(classification, data.profile, { strict: true, existing });
+      data.profile = classifiedProfile(classification, data.profile, { strict: true });
       const validationState = existing ? { ...state, models: state.models.filter(model => model.modelId.toLowerCase() !== code) } : state;
       const record = modelTransaction(validationState, { operation: 'create', data, catalogue }).changes[0].record;
       if (seen.has(code)) throw new Error('批次内模型编码重复');
       if (existing) {
-        const existingProfile = classifiedProfile(classification, existing.profile, { existing });
+        const existingProfile = classifiedProfile(classification, existing.profile);
         const same = (left, right) => JSON.stringify(Array.isArray(left) ? [...left].sort() : left)
           === JSON.stringify(Array.isArray(right) ? [...right].sort() : right);
         const differences = MODEL_IMPORT_FIELDS.filter(({ target, key, header }) => {

@@ -16,11 +16,11 @@ export function existingClassification(models) {
     const name = text(model.profile?.author) || text(model.maker);
     if (!name) continue;
     const key = classificationKey(name);
-    if (!authors.has(key)) authors.set(key, { id: 'existing-author:' + key, name, aliases: [], active: true });
+    if (!authors.has(key)) authors.set(key, { id: 'existing-author:' + key, name, aliases: [] });
     const family = text(model.profile?.family);
     if (!family) continue;
     const authorId = authors.get(key).id, familyKey = scopedKey(authorId, family);
-    if (!series.has(familyKey)) series.set(familyKey, { id: 'existing-series:' + familyKey, authorId, name: family, aliases: [], active: true });
+    if (!series.has(familyKey)) series.set(familyKey, { id: 'existing-series:' + familyKey, authorId, name: family, aliases: [] });
   }
   return { authors: [...authors.values()], series: [...series.values()] };
 }
@@ -45,26 +45,24 @@ export function modelClassificationFor(index, model) {
   return { author, series, authorName, seriesName };
 }
 
-export function classifiedProfile(index, profile, { strict = false, existing } = {}) {
+export function classifiedProfile(index, profile, { strict = false } = {}) {
   if (!profile) return profile;
   const { author, series, authorName, seriesName } = modelClassificationFor(index, { profile });
-  const previous = existing && modelClassificationFor(index, existing);
-  if ((strict || profile.authorId) && (authorName || profile.authorId) &&
-      (!author || !author.active && previous?.author?.id !== author.id)) throw Error('请选择已启用的模型作者');
-  if ((strict || profile.familyId) && (seriesName || profile.familyId) &&
-      (!series || !series.active && previous?.series?.id !== series.id)) throw Error('请选择该作者下已启用的模型系列');
+  if ((strict || profile.authorId) && (authorName || profile.authorId) && !author) throw Error('请选择已有模型作者');
+  if ((strict || profile.familyId) && (seriesName || profile.familyId) && !series) throw Error('请选择该作者下已有的模型系列');
   return { ...profile, ...(author && { author: author.name, authorId: author.id }), ...(series && { family: series.name, familyId: series.id }) };
 }
 
 export function saveClassification(dictionary, data) {
-  const { kind, id, active } = data;
-  const authorId = kind === 'series' ? data.authorId : undefined;
-  if (!['authors', 'series'].includes(kind) || typeof active !== 'boolean') throw Error('分类及状态无效');
+  const { kind, id } = data;
+  const series = kind === 'series';
+  const authorId = series ? data.authorId : undefined;
+  if (!['authors', 'series'].includes(kind)) throw Error('分类无效');
   const rows = dictionary[kind], current = rows.find(row => row.id === id);
   if (id && !current) throw Error('分类已变化，请重新核对');
-  if (kind === 'series') {
+  if (series) {
     const owner = dictionary.authors.find(row => row.id === authorId);
-    if (!owner || current && current.authorId !== authorId || active && !owner.active && current?.active !== true) throw Error('请选择已启用的所属作者');
+    if (!owner || current && current.authorId !== authorId) throw Error('请选择有效的所属作者');
   }
   const name = text(data.name);
   if (!name || name.length > 100) throw Error('分类名称必填，最多 100 字');
@@ -80,6 +78,6 @@ export function saveClassification(dictionary, data) {
   if (rows.some(row => row.id !== id && row.authorId === authorId && names(row).some(value => values.has(classificationKey(value))))) {
     throw Error('名称或别名已存在');
   }
-  const entry = { id: current?.id || resourceId(kind === 'authors' ? 'model-author' : 'model-series'), name, aliases: [...aliases.values()], formerNames, active, ...(kind === 'series' && { authorId }) };
+  const entry = { id: current?.id || resourceId(series ? 'model-series' : 'model-author'), name, aliases: [...aliases.values()], formerNames, ...(series && { authorId }) };
   return { entry, dictionary: { ...dictionary, [kind]: current ? rows.map(row => row.id === id ? entry : row) : [...rows, entry] } };
 }

@@ -1093,7 +1093,7 @@ export function operationsTransaction(state, action) {
         throw new Error('模型资料版本已变化，请重新核对后保存');
       }
       const value = publishing ? data.value : input;
-      const entry = { ...value, profile: classifiedProfile(classification, value?.profile, { strict: operation === 'templateImport', existing: current }) };
+      const entry = { ...value, profile: classifiedProfile(classification, value?.profile, { strict: operation === 'templateImport' }) };
       if (modelLibrary(working).some(record => record.id !== current?.id && record.modelId.toLowerCase() === entry.modelId?.trim().toLowerCase())) throw new Error('相同模型编码的资料已存在，请维护已有资料');
       const validated = validatedMaterial(working, current, { ...entry, modelId: current?.modelId || entry.modelId });
       const fields = { ...metadata(validated), revision: (current?.revision || 0) + 1, updatedAt: new Date().toISOString() };
