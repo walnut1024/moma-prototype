@@ -22,7 +22,7 @@ export function Heading({ title, description, children }) {
     {children && <div className="mo-actions">{children}</div>}
   </AdminPageHeading>;
 }
-export function SearchBox({ value, onChange, placeholder = '搜索模型展示名 / 模型调用标识 / 作者' }) { return <Input className="mo-search" prefix={<IconSearch aria-hidden="true"/>} aria-label={placeholder} placeholder={placeholder} value={value} onChange={onChange}/>; }
+export function SearchBox({ value, onChange, placeholder = '搜索模型展示名称 / 模型 ID / 作者' }) { return <Input className="mo-search" prefix={<IconSearch aria-hidden="true"/>} aria-label={placeholder} placeholder={placeholder} value={value} onChange={onChange}/>; }
 export function GridTable({ headings, children, empty, emptyMessage = '没有符合条件的记录', className = '', scrollProps }) {
   const rows = Children.toArray(children).filter(child => isValidElement(child) && child.type === Row);
   const cellsOf = row => Children.toArray(row.props.children).flatMap(node => {
@@ -123,7 +123,7 @@ export const emptyConnection = () => ({ name: '', protocol: 'OpenAI', baseUrl: '
 export function ConnectionFields({ value, onChange, disabled, optionalKey = false, prefix = '' }) {
   const set = (key, input) => onChange({ ...value, [key]: input });
   return <div className="mo-form-grid supplier-connection-fields">
-    <Field label="协议 *"><Choice label={prefix + '协议'} value={value.protocol} options={PROTOCOLS.map(value => [value, value])} disabled={disabled} onChange={value => set('protocol', value)}/></Field>
+    <Field label="接口格式 *"><Choice label={prefix + '接口格式'} value={value.protocol} options={PROTOCOLS.map(value => [value, value])} disabled={disabled} onChange={value => set('protocol', value)}/></Field>
     <Field label="服务地址（Base URL） *"><Input required aria-label={prefix + '服务地址（Base URL）'} placeholder="https://api.example.com/v1" value={value.baseUrl} disabled={disabled} onChange={value => set('baseUrl', value)}/></Field>
     <ConnectionApiKeys value={value} onChange={onChange} disabled={disabled} optionalKey={optionalKey} prefix={prefix}/>
   </div>;
@@ -136,7 +136,7 @@ export function ConnectionApiKeys({ value, onChange, disabled, optionalKey = fal
       {value.credentialRef && <div className="supplier-key-row"><span>已配置凭证引用</span><Button type="tertiary" theme="borderless" disabled={disabled} onClick={() => set('credentialRef', '')}>移除凭证</Button></div>}
       {inputs.map((row, index) => <div className="supplier-key-row" key={row.id}><Field label={'API 密钥 ' + (keys.length + index + 1)}><Input aria-label={prefix + 'API 密钥 ' + (index + 1)} mode="password" autoComplete="new-password" maxLength={512} required={!optionalKey && !keys.length && !value.credentialRef && index === 0} placeholder="请输入 API 密钥" value={row.value} disabled={disabled} onChange={value => set('keyInputs', inputs.map(item => item.id === row.id ? { ...item, value } : item))}/></Field><Button icon={<IconDelete aria-hidden="true"/>} theme="borderless" size="small" disabled={disabled || inputs.length === 1} aria-label={prefix + '移除 API 密钥 ' + (index + 1)} onClick={() => set('keyInputs', inputs.filter(item => item.id !== row.id))}/></div>)}
       <Button type="tertiary" theme="borderless" disabled={disabled || keys.length + inputs.length >= 20} icon={<IconPlus size="small" aria-hidden="true"/>} onClick={() => set('keyInputs', [...inputs, { id: crypto.randomUUID(), value: '' }])}>添加 API 密钥</Button>
-      <p className="supplier-key-hint">{optionalKey ? '自有推理服务可不配置 API 密钥。' : '第三方推理服务至少配置一个 API 密钥。'}每个连接最多 20 个，保存后仅展示脱敏值。</p>
+      <p className="supplier-key-hint">{optionalKey ? '自有模型推理服务可不配置 API 密钥。' : '第三方模型服务至少配置一个 API 密钥。'}每个连接最多 20 个，保存后仅展示脱敏值。</p>
     </fieldset>;
 }
 export function ValidationNote({ endpoint, supply }) { return <div className="mo-stack"><AdminStatus value={!connectionTestPassed(endpoint) ? '连接待验证' : supply?.validationStatus === '通过' ? '已通过' : supply?.validationStatus || '待验证'}/><small>{supply?.verifiedAt ? new Date(supply.verifiedAt).toLocaleString('zh-CN') : '尚无验证记录'}</small></div>; }

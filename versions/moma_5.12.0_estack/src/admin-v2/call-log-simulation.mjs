@@ -1,7 +1,7 @@
 const model = { id: 'demo-log-model', name: 'DeepSeek V4 Pro', modelId: 'deepseek-v4-pro', type: 'text' };
 const backupModel = { id: 'demo-log-backup-model', name: 'DeepSeek V4 Flash', modelId: 'deepseek-v4-flash', type: 'text' };
 export const routingDemoRequestId = 'req-ROUTE-001';
-const tenant = { id: 'demo-log-tenant', name: '示例客户' };
+const tenant = { id: 'demo-log-tenant', name: '示例租户' };
 const project = { id: 'demo-log-project', name: '客服机器人' };
 const provider = { id: 'demo-log-provider', name: '示例服务商' };
 const day = 86_400_000;
@@ -103,7 +103,7 @@ export function createCallLogSimulation(now = Date.now(), { channelTrend = false
       attempt(c, { startedAt: startedAt+540, durationMs: 310, isTimeout: true, code: 'upstream_timeout',
         errorMessage: '备用优先级组等待首包超时', fallback: true, fallbackReason: '主模型服务已达到总尝试上限' }),
       attempt(d, { startedAt: startedAt+860, durationMs: 400, httpStatus: 200, ttftMs: 214, generationDurationMs: 180,
-        usage: { input: 42, output: 44, cached: 0 }, successReason: '备用模型返回首个 Token，响应正常结束', nextAction: '向客户返回结果',
+        usage: { input: 42, output: 44, cached: 0 }, successReason: '备用模型返回首个 Token，响应正常结束', nextAction: '向租户返回结果',
         upstreamModelId: backupModel.modelId, upstreamRequestId: 'up-D-ROUTE-001' }),
     ],
   });
@@ -202,10 +202,10 @@ export function createCallLogSimulation(now = Date.now(), { channelTrend = false
         traceState: 'complete', attemptCount: 1,
         nodes: [...routeNodes(b), point('first-token', '返回首个 Token', 260), point('end', '响应结束', 620)],
         body: { allowed: true, segments: [
-          segment('client-request', '客户请求', { model: 'support-chat', messages: [{ role: 'user', content: '列出三个服务巡检项。' }] }),
+          segment('client-request', '请求', { model: 'support-chat', messages: [{ role: 'user', content: '列出三个服务巡检项。' }] }),
           segment('upstream-request', '上游尝试 1 · 上游模型 B · 请求', { model: 'deepseek-v4-pro', input: '列出三个服务巡检项。' }, 1),
           segment('upstream-response', '上游尝试 1 · 上游模型 B · 响应', { id: 'up-B-17E', status: 200, output: '检查可用性、延迟和错误率。' }, 1),
-          segment('client-response', '返回客户的最终响应', { id: 'req-61AE', status: 200, message: '检查可用性、延迟和错误率。' }),
+          segment('client-response', '返回租户的最终响应', { id: 'req-61AE', status: 200, message: '检查可用性、延迟和错误率。' }),
         ] },
       },
       [blocked.requestId]: {
@@ -269,8 +269,8 @@ export function simulateLogRequest(simulation, now = Date.now(), { preflight = f
   });
   const capture = next.policy.captureBody && (next.policy.projectId === 'all' || next.policy.projectId === row.projectId);
   const evidence = capture ? { ...summaryOnly, body: { allowed: true, segments: [
-    segment('request', '客户请求', { model: row.publicModelId, messages: [{ role: 'user', content: '执行一次服务巡检。' }] }),
-    segment('response', '返回客户的最终响应', { id: row.requestId, status: 200, message: '巡检完成。' }),
+    segment('request', '请求', { model: row.publicModelId, messages: [{ role: 'user', content: '执行一次服务巡检。' }] }),
+    segment('response', '返回租户的最终响应', { id: row.requestId, status: 200, message: '巡检完成。' }),
   ] } } : summaryOnly;
   return {
     ...next, data: { ...next.data, requests: [row, ...next.data.requests] },

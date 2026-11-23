@@ -148,7 +148,7 @@ function channelCosts(provider, modelId, scenarios, normalize, draft = false) {
   if (!Array.isArray(scenarios)) throw new Error('请填写上游模型的服务商成本价');
   // Channel cost is the entered amount; old model-level discount and manual overrides remain separate.
   const quote = normalize(provider, { modelId, discountFactor: '1', scenarios: scenarios.map(row => ({ ...row, purchasePrice: undefined })) });
-  if (!draft && quote.scenarios.some(row => row.listPrice == null)) throw new Error('请填写完整的采购价，免费请填 0');
+  if (!draft && quote.scenarios.some(row => row.listPrice == null)) throw new Error('请填写完整的服务商成本价，免费请填 0');
   return quote;
 }
 
@@ -179,8 +179,8 @@ export function providerChannelTransaction(state, { operation, objectId, data = 
     if (channels.some(item => item.id !== current?.id && item.name === name)) throw new Error('同一模型的上游模型名称不可重复');
     if (!Object.hasOwn(CHANNEL_ORIGINS, data.origin)) throw new Error('请选择有效的来源类型');
     const upstreamProvider = data.origin === 'resale' ? text(data.upstreamProvider || '', '上游服务商', 100, false) : '';
-    const upstreamModelId = text(data.upstreamModelId, '上游模型调用标识', 200);
-    if (/\s/.test(upstreamModelId)) throw new Error('上游模型调用标识 不能包含空格');
+    const upstreamModelId = text(data.upstreamModelId, '上游模型 ID', 200);
+    if (/\s/.test(upstreamModelId)) throw new Error('上游模型 ID 不能包含空格');
     const apiKeys = current?.endpoint.apiKeys || [];
     const credentialRef = current?.endpoint.credentialRef || '';
     const fields = { name, protocol: data.protocol, baseUrl: data.baseUrl, providerId: provider.id, apiKeys, credentialRef, capacity: current?.endpoint.capacity, timeoutSeconds: current?.endpoint.timeoutSeconds || 60 };
@@ -188,14 +188,14 @@ export function providerChannelTransaction(state, { operation, objectId, data = 
     const endpointChange = transaction.changes.find(item => item.collection === 'endpoints');
     const normalizedEndpoint = current?.endpointId ? { ...current.endpoint, ...endpointChange.changes } : endpointChange.record;
     const addresses = data.apiAddresses || [{ protocol: data.protocol, baseUrl: data.baseUrl }, ...(current?.apiAddresses || []).slice(1)];
-    if (!Array.isArray(addresses) || addresses.length < 1 || addresses.length > 5) throw new Error('每个上游模型须配置 1–5 个协议地址');
+    if (!Array.isArray(addresses) || addresses.length < 1 || addresses.length > 5) throw new Error('每个上游模型须配置 1–5 个接口格式地址');
     const apiAddresses = addresses.map(address => {
-      if (!address || typeof address.baseUrl !== 'string') throw new Error('请填写协议及 API 地址');
+      if (!address || typeof address.baseUrl !== 'string') throw new Error('请填写接口格式及 API 地址');
       connect(state, { operation: 'connection', objectId: current?.endpointId, data: { ...fields, protocol: address.protocol, baseUrl: address.baseUrl } });
       return { protocol: address.protocol, baseUrl: new URL(address.baseUrl).toString().replace(/\/$/, '') };
     });
-    if (apiAddresses[0].protocol !== normalizedEndpoint.protocol || apiAddresses[0].baseUrl !== normalizedEndpoint.baseUrl) throw new Error('默认协议地址与连接配置不一致');
-    if (new Set(apiAddresses.map(item => item.protocol)).size !== apiAddresses.length) throw new Error('同一上游模型每种协议只能配置一个地址');
+    if (apiAddresses[0].protocol !== normalizedEndpoint.protocol || apiAddresses[0].baseUrl !== normalizedEndpoint.baseUrl) throw new Error('默认接口格式地址与连接配置不一致');
+    if (new Set(apiAddresses.map(item => item.protocol)).size !== apiAddresses.length) throw new Error('同一上游模型每种接口格式只能配置一个地址');
     const connectionChanged = current && requestIdentity(normalizedEndpoint) !== requestIdentity(current.endpoint);
     const endpoint = current?.endpointId && !connectionChanged ? current.endpoint : normalizedEndpoint;
     const candidate = { endpoint, upstreamModelId };
@@ -221,14 +221,14 @@ export function providerChannelTransaction(state, { operation, objectId, data = 
       const pricing = channelCosts(provider, data.modelId, data.scenarios, normalizePrice);
       next.pricing = pricing; label = '保存上游模型的服务商成本价';
     } else if (operation === 'channelTest') {
-      if (!current.endpointId) throw new Error('请先配置连接 API 地址');
+      if (!current.endpointId) throw new Error('请先配置服务地址');
       if (!connectionCredentialsReady(current.endpoint, provider)) throw new Error('请先通过独立的 API 凭证操作配置密钥，再进行检测');
       if (channelInterfaceIssue(provider, current)) throw new Error(channelInterfaceIssue(provider, current));
       if (current.endpoint.supplierChannel && (!connectionTestPassed(current.endpoint) || !['运行中', '需关注'].includes(current.endpoint.status))) throw new Error('请先完成连接测试并启用连接');
       // The prototype checks configuration and stores a preview; it makes no upstream request.
       connect(state, { operation: 'connection', objectId: current.endpointId, data: { ...current.endpoint, providerId: provider.id, timeoutSeconds: current.endpoint.timeoutSeconds || 60 } });
       const addressIndex = data.addressIndex ?? 0, address = channelAddresses(provider, current)[addressIndex];
-      if (!Number.isInteger(addressIndex) || !address) throw new Error('请选择当前上游模型的协议地址');
+      if (!Number.isInteger(addressIndex) || !address) throw new Error('请选择当前上游模型的接口格式地址');
       const result = preview({ modelId: data.modelId, upstreamId: current.upstreamModelId, endpointId: current.endpointId, ...address }, data.scenario);
       const qualification = channelQualification(current);
       if (qualification) next.qualification = structuredClone(qualification);

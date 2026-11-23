@@ -24,8 +24,8 @@ test('audit labels distinguish canonical, platform and relation identifiers with
     {collection:'modelSupplies',id:'supply',changes:{modelId:'new-service-id',upstreamModelId:'supplier/api-model'}},
   ] };
   assert.deepEqual(modelAuditChanges(state,action).map(({field,after})=>({field,after})), [
-    {field:'模型编码',after:'canonical/new'}, {field:'模型调用标识',after:'platform/new'},
-    {field:'模型关联 ID',after:'new-service-id'}, {field:'上游模型调用标识',after:'supplier/api-model'},
+    {field:'模型编码',after:'canonical/new'}, {field:'模型 ID',after:'platform/new'},
+    {field:'模型关联 ID',after:'new-service-id'}, {field:'上游模型 ID',after:'supplier/api-model'},
   ]);
   assert.deepEqual(state, before);
 });

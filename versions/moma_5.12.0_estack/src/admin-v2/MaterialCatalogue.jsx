@@ -41,7 +41,7 @@ export default function MaterialCatalogue({ state, ops }) {
   const { pageSize } = pagination;
   const currentPage = Math.min(pagination.currentPage, Math.ceil(rows.length / pageSize) || 1);
   const columns = [
-    { title: '模型名称', dataIndex: 'name', width: 230, render: (name, row) =>
+    { title: '模型展示名称', dataIndex: 'name', width: 230, render: (name, row) =>
       <Button className="materials-model-name" theme="borderless" onClick={event => open(event, row, 'view')}><MaterialLogo key={row.profile?.logo} src={row.profile?.logo} alt="" model={row}/>{name}</Button> },
     { title: '模型编码', dataIndex: 'modelId', width: 240, render: value => <Typography.Text className="materials-code" copyable>{value}</Typography.Text> },
     { title: '模型作者', width: 135, render: (_, { classification: { author, authorName } }) => author?.name || (authorName ? authorName + '（待核对）' : '—') },
@@ -55,7 +55,7 @@ export default function MaterialCatalogue({ state, ops }) {
       return <><div>输入：{inputs}</div><div>输出：{outputs}</div></>;
     } },
     { title: '上下文长度', width: 132, render: (_, row) => materialContextLabel(row.capabilities?.context) },
-    { title: '操作', width: 140, fixed: 'right', render: (_, row) => <Space><Button theme="borderless" disabled={!ops.can} onClick={event => open(event, row, 'edit')}>编辑</Button><Tooltip content={libraryRemovalIssue(state, row.id) || '删除参考档案'}><span><Button theme="borderless" type="danger" disabled={!ops.can || Boolean(libraryRemovalIssue(state, row.id))} aria-label={'删除模型资料：' + row.name} onClick={event => { trigger.current = event.currentTarget; ops.setError(''); setRemoving(row); }}>删除</Button></span></Tooltip></Space> },
+    { title: '操作', width: 140, fixed: 'right', render: (_, row) => <Space><Button theme="borderless" disabled={!ops.can} onClick={event => open(event, row, 'edit')}>编辑</Button><Tooltip content={libraryRemovalIssue(state, row.id) || '删除模型资料'}><span><Button theme="borderless" type="danger" disabled={!ops.can || Boolean(libraryRemovalIssue(state, row.id))} aria-label={'删除模型资料：' + row.name} onClick={event => { trigger.current = event.currentTarget; ops.setError(''); setRemoving(row); }}>删除</Button></span></Tooltip></Space> },
   ];
   const close = () => { setRemoving(null); ops.setError(''); requestAnimationFrame(() => trigger.current?.isConnected && trigger.current.focus()); };
   return <>

@@ -89,7 +89,7 @@ test('the channel creation choices round-trip to the same list type and model re
     assert.equal(channelProtocolPaths({ interfaceType, baseUrl: origin + basePath })[0], relative);
     assert.equal(channelProtocolPaths({ interfaceType, baseUrl: '' })[0], relative);
   }
-  assert.throws(() => prepareListedChannelInterface({ interfaceType: 'ark-video', baseUrl: origin + '/v1/video_generation' }), /完整接口地址/);
+  assert.throws(() => prepareListedChannelInterface({ interfaceType: 'ark-video', baseUrl: origin + '/v1/video_generation' }), /完整请求地址/);
   assert.throws(() => prepareListedChannelInterface({ interfaceType: 'openai-embeddings', baseUrl: origin + '/v1' }), /完整/);
   assert.throws(() => prepareListedChannelInterface({ interfaceType: 'anthropic', baseUrl: origin + '/v1/embeddings' }), /不匹配/);
 });
@@ -173,7 +173,7 @@ test('editing a named task protocol replaces previous task addresses only after 
   const newPath = '/api/v3/contents/generations/tasks';
   const data = { ...args(state), expectedUpdatedAt: current.updatedAt, expectedProviderUpdatedAt: provider.updatedAt,
     prepareConnection: true, allAssociations: true, modelProtocol: 'ark-video', baseUrl: 'https://candidate.example.invalid' + newPath };
-  assert.throws(() => run(state, 'supplierChannelEdit', { ...data, baseUrl: current.baseUrl }), /完整接口地址/);
+  assert.throws(() => run(state, 'supplierChannelEdit', { ...data, baseUrl: current.baseUrl }), /完整请求地址/);
   const staged = run(state, 'supplierChannelEdit', data);
   assert.equal(endpoint(staged).baseUrl, current.baseUrl);
   assert.deepEqual(endpoint(staged).taskUrls, current.taskUrls);

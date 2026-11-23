@@ -21,7 +21,7 @@ export default function ProcurementPriceFields({ state, scenarios, disabled, onC
           <Choice label={`连接第 ${item.index + 1} 条计费项`} filter allowCreate value={item.name || undefined} placeholder="请选择或输入计费项" options={options('scenario', item.name)} disabled={disabled} onChange={name => update(item.index, { name, unit: tariffScenarioUnit(state, name) })}/>
           <Input aria-label={`连接第 ${item.index + 1} 条适用条件`} maxLength={160} value={item.condition || ''} placeholder="适用条件（选填）" disabled={disabled} onChange={condition => update(item.index, { condition })}/>
         </div> },
-        { title: '采购价', width: 260, render: (_, item) => <div className="procurement-cost-price">
+        { title: '服务商成本价', width: 260, render: (_, item) => <div className="procurement-cost-price">
           <Choice label={`连接第 ${item.index + 1} 条货币`} value={item.currency} options={options('currency', item.currency)} disabled={disabled} onChange={currency => update(item.index, { currency })}/>
           <Input aria-label={`连接第 ${item.index + 1} 条价格`} inputMode="decimal" placeholder="输入单价" value={item.listPrice} disabled={disabled} onChange={listPrice => update(item.index, { listPrice })}/>
         </div> },

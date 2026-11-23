@@ -42,7 +42,7 @@ export function ObservationIdentitySearch({ dimension, label, rows, filters, onC
   const [query, setQuery] = useState('');
   const id = useId();
   const scoped = Boolean(filters.tenant?.length);
-  const hint = scoped ? `按名称或完整 ID 搜索${label}` : `按完整 ID 搜索${label}，或先选客户`;
+  const hint = scoped ? `按名称或完整 ID 搜索${label}` : `按完整 ID 搜索${label}，或先选租户`;
   const { items, hasMore } = searchObservationIdentities(rows, dimension, filters.tenant, query);
   const selected = filters[dimension] || [];
   return <>

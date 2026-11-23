@@ -38,7 +38,7 @@ export default function UserAnalysisPage({ state }) {
   const rows = useMemo(() => filterAnalytics(state, { start: range.start, end: range.end }), [state, range]);
   const selectPeriod = value => { const current = Date.now(); setClock(current); setPeriod(value); setRange(usagePreset(value, current)); };
   const timeGroup = { label:'时间', text:`${presets.find(([id]) => id === period)?.[1] || '自定义'}（${range.start} — ${range.end}）`, scope:'全页' };
-  const detailGroups = [{label:'模型',text:detailFilter.model || '全部模型',scope:'仅调用明细'}, {label:'客户',text:state.tenants.find(item => item.id === detailFilter.customer)?.name || detailFilter.customer || '全部客户',scope:'仅调用明细'}];
+  const detailGroups = [{label:'模型',text:detailFilter.model || '全部模型',scope:'仅调用明细'}, {label:'租户',text:state.tenants.find(item => item.id === detailFilter.customer)?.name || detailFilter.customer || '全部租户',scope:'仅调用明细'}];
   const applyView = view => {
     if (!view) return;
     const current = Date.now();
@@ -67,7 +67,7 @@ export default function UserAnalysisPage({ state }) {
       <div className="admin-analysis-view-row">
         <SavedFilterViews notify={Toast} scope="admin-user-analysis" value={{ period, range, detailFilter }} onApply={applyView}
           groups={[timeGroup, ...detailGroups]} currentGroups={[timeGroup]}
-          saveDescription="保存全页时间和调用明细的模型、客户条件。模型／客户仅影响调用明细，不影响上方用户指标。保存后可快速应用已保存的筛选条件。"/>
+          saveDescription="保存全页时间和调用明细的模型、租户条件。模型／租户仅影响调用明细，不影响上方用户指标。保存后可快速应用已保存的筛选条件。"/>
       </div>
     </Card>
     <div className="admin-analysis-metrics">

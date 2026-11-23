@@ -43,7 +43,7 @@ test('same-name distinct canonical identities are not conflated by supplier regi
 });
 test('channel registration requires an existing supplier model, explicit identifier, address and usable shared credential', () => {
   const state = initial(), before = structuredClone(state);
-  for (const scenarios of [null, {}]) assert.throws(() => run(state, 'supplierChannelRegister', channel(state, { scenarios })), /采购成本须为计费项列表/);
+  for (const scenarios of [null, {}]) assert.throws(() => run(state, 'supplierChannelRegister', channel(state, { scenarios })), /服务商成本价须为计费项列表/);
   for (const scenarios of [undefined, []]) {
     const next=run(state,'supplierChannelRegister',channel(state,{scenarios}));
     const endpoint=next.endpoints.find(row=>!state.endpoints.some(old=>old.id===row.id));

@@ -24,7 +24,7 @@ export function customerModelIds(state, tenantId) {
 export function keyProjectAccess(tenant, project, key, allowedModels, at = Date.now()) {
   const models = project && project.tenantId === tenant.id && key.tenantId === tenant.id && key.projectId === project.id
     ? (key.modelIds || []).filter(id => allowedModels.has(id) && projectModelEnabled(tenant.type === '个人' ? {...project,inheritsSpaceModels:true} : project, id)) : [];
-  const reason = !activeCustomer(tenant) ? '客户已冻结'
+  const reason = !activeCustomer(tenant) ? '租户已冻结'
     : !project || project.tenantId !== tenant.id || key.tenantId !== tenant.id || key.projectId !== project.id ? '项目归属异常'
     : project.status !== '正常' ? '项目当前不可用'
     : key.status !== '有效' ? 'API 密钥当前不可用'

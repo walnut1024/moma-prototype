@@ -119,15 +119,15 @@ export default function ChannelModelBatchAdd({ state, channel, ops, close, manua
     render: (_, row) => <Checkbox aria-label={t('选择模型') + ' ' + row.displayName}
       disabled={locked || !row.selected && (row.status === 'added' || row.status === 'incompatible' || atLimit)}
       checked={row.selected} onChange={event => toggleRows([row], event.target.checked)}/> },
-    { title: t('模型名称 / 编码'), width: 190, render: (_, { model, displayName }) => <div className="channel-identity">
+    { title: t('模型展示名称 / 模型编码'), width: 190, render: (_, { model, displayName }) => <div className="channel-identity">
       <Typography.Text strong ellipsis={{ showTooltip: true }}>{displayName}</Typography.Text>
       <Typography.Text type="tertiary" size="small" ellipsis={{ showTooltip: true }}>{model.modelId}</Typography.Text>
     </div> },
-    { title: t('上游模型调用标识'), width: 250, render: (_, row) => {
+    { title: t('上游模型 ID'), width: 250, render: (_, row) => {
       const candidates = options(row.sources.map(source => source.upstreamModelId)).filter(validUpstreamId);
       if (row.status === 'added' || row.status === 'incompatible') return row.value || '—';
-      const props = { 'aria-label': t('上游模型调用标识') + ' · ' + row.displayName, size: 'small',
-        placeholder: t(candidates.length ? '选择或填写标识' : '填写上游模型调用标识'),
+      const props = { 'aria-label': t('上游模型 ID') + ' · ' + row.displayName, size: 'small',
+        placeholder: t(candidates.length ? '选择或填写标识' : '填写上游模型 ID'),
         disabled: locked || atLimit && !row.selected, value: row.value, onChange: value => editId(row, value) };
       return candidates.length ? <AutoComplete {...props} data={candidates} style={{ width: '100%' }}/>
         : <Input {...props} maxLength={200}/>;
@@ -191,7 +191,7 @@ export default function ChannelModelBatchAdd({ state, channel, ops, close, manua
       </Typography.Text>
     </Space>
     <div className="channel-model-batch-filters">
-      <SearchBox value={query} onChange={value => changeFilter(setQuery, value)} placeholder={t('搜索名称、编码、类型或上游标识')}/>
+      <SearchBox value={query} onChange={value => changeFilter(setQuery, value)} placeholder={t('搜索名称、编码、类型或上游模型 ID')}/>
       <Select insetLabel={t('接口格式')} insetLabelId={filterId + '-format'} aria-labelledby={filterId + '-format'}
         value={format} disabled={saving || onlySelected}
         onChange={value => changeFilter(setFormat, value)} optionList={[
@@ -201,7 +201,7 @@ export default function ChannelModelBatchAdd({ state, channel, ops, close, manua
       <Select insetLabel="Base URL" insetLabelId={filterId + '-url'} aria-labelledby={filterId + '-url'}
         value={baseUrl} disabled={saving || onlySelected} filter
         onChange={value => changeFilter(setBaseUrl, value)} optionList={[
-          { value: '', label: t('全部 Base URL') },
+          { value: '', label: t('全部服务地址') },
           ...options([targetBaseUrl, ...sources.map(row => row.baseUrl)]).map(value => ({ value, label: value })),
         ]}/>
     </div>

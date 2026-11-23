@@ -901,8 +901,8 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert(projectChoicesBefore.includes(third.id));
     await setTestCard(testCard);
     assert.deepEqual(await inspectLifecycle(),{revision:1,marketLinked:true,marketListed:true,
-      stopIssue:'请先在模型广场下架关联模型',deleteIssue:'请先停止模型服务'});
-    assert.match((await updateLifecycle('save',1,{...lifecycleRow,listed:false})).data.error.message,/下架/);
+      stopIssue:'请先在模型广场取消展示该服务',deleteIssue:'请先停止模型服务'});
+    assert.match((await updateLifecycle('save',1,{...lifecycleRow,listed:false})).data.error.message,/取消展示该服务/);
     await setTestCard({...testCard,status:'withdrawn'});
     const stopped = await updateLifecycle('save',1,{...lifecycleRow,listed:false});
     assert.equal(stopped.status,200,JSON.stringify(stopped.data));

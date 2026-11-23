@@ -11,7 +11,7 @@ function TariffChoice({ label, kind, value, options, entries = [], disabled, onC
   return <Select className="supplier-tariff-choice" aria-label={label} allowCreate={kind !== 'currency'} placeholder={kind === 'currency' ? '请选择货币' : '请选择或输入'} value={value || undefined} disabled={disabled} optionList={options.map(name => ({ value: name, label: display(name) }))} emptyContent={kind === 'currency' ? '暂无匹配货币，请在“模型资料 → 货币”中维护。' : '暂无常用项，请输入自定义值。'} filter={(input, option) => [option.value, entry(option.value)?.name, entry(option.value)?.englishName].join(' ').toLowerCase().includes(input.trim().toLowerCase())} onChange={name => onChange(name)}/>;
 }
 
-export default function ChannelPrices({ state, scenarios, disabled, onChange, ops, priceLabel = '采购价', separateCurrency = false, batchOnly = false, title = '计费项', modelType }) {
+export default function ChannelPrices({ state, scenarios, disabled, onChange, ops, priceLabel = '服务商成本价', separateCurrency = false, batchOnly = false, title = '计费项', modelType }) {
   const entries = tariffDictionaryEntries(state), available = tariffOptions(state, 'scenario');
   const row = (index, patch) => onChange(scenarios.map((item, i) => i === index ? { ...item, ...patch } : item));
   const currency = (item, index) => <Choice label={`连接第 ${index + 1} 条币种`} value={item.currency} options={[...new Set([...tariffOptions(state, 'currency'), item.currency])].map(value => [value, value])} disabled={disabled} onChange={value => row(index, { currency: value })}/>;

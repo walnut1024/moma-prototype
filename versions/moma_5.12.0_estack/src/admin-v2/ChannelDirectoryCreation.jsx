@@ -125,13 +125,13 @@ export default function ChannelDirectoryCreation({ state, providers, connections
         typeof entry.name !== 'string' || !entry.name.trim() || entry.name.length > 60 ||
         typeof entry.baseUrl !== 'string' || entry.baseUrl.length > 2048 || !Array.isArray(entry.keys) || !entry.keys.length ||
         entry.keys.length > 20 || entry.keys.some(raw => typeof raw !== 'string' || raw.length > 512)) {
-        throw Error('请填写连接名称、根地址和 1–20 把密钥，模型可选');
+        throw Error('请填写连接名称、服务地址和 1–20 把密钥，模型可选');
       }
       if (entry.models !== undefined && (!Array.isArray(entry.models) || entry.models.length > 50 ||
         new Set(entry.models.map(row => row?.modelId)).size !== entry.models.length ||
         entry.models.some(row => !row || !provider?.catalogModels?.some(item => item.modelId === row.modelId && item.libraryId) ||
           typeof row.upstreamModelId !== 'string' || !row.upstreamModelId.trim() ||
-          Object.keys(row).some(key => !['modelId', 'upstreamModelId'].includes(key))))) throw Error('请使用当前服务商已登记的模型和上游调用标识');
+          Object.keys(row).some(key => !['modelId', 'upstreamModelId'].includes(key))))) throw Error('请使用当前服务商已登记的模型和上游模型 ID');
       set({ name: entry.name, baseUrl: entry.baseUrl, authMode: 'independent', mode: entry.keys.length > 1 ? 'multi' : 'single' });
       setInputs(entry.keys.map(raw => ({ ...keyInput(), raw })));
       setModels(entry.models || []);
@@ -154,7 +154,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
       const adapterOptions = adapterDraft ? {} : prepareChannelAdapterOptions(value.adapterOptions);
       const name = channelName.trim();
       if (models.some(row => !row.upstreamModelId.trim() || row.upstreamModelId.length > 200 || /\s/u.test(row.upstreamModelId.trim())) ||
-        new Set(models.map(row => row.upstreamModelId.trim())).size !== models.length) throw Error('请填写不重复且有效的上游模型调用标识');
+        new Set(models.map(row => row.upstreamModelId.trim())).size !== models.length) throw Error('请填写不重复且有效的上游模型 ID');
       const validateName = input => {
         if (!input || input.length > 60 || /[\r\n]/.test(input)) throw Error('请填写有效的连接名称，最多 60 字');
         if (connections.some(row => row.provider.id === providerId && row.name === input)) throw Error('此服务商已有同名连接');
@@ -307,8 +307,8 @@ export default function ChannelDirectoryCreation({ state, providers, connections
         <Field label={t('连接名称')} required help={t('填写便于识别的名称，同一服务商下不可重复。')}>
           <Input aria-label={t('连接名称')} value={channelName} maxLength={60} disabled={writing} onChange={name => set({ name })}/>
         </Field>
-        <Field label={t('服务商 API 密钥')} required hint={t('每行一把密钥，支持粘贴多行。')}>
-          <TextArea aria-label={t('服务商 API 密钥')} value={keyText} rows={4} autoComplete="off" spellCheck={false}
+        <Field label={t('上游 API 密钥')} required hint={t('每行一把密钥，支持粘贴多行。')}>
+          <TextArea aria-label={t('上游 API 密钥')} value={keyText} rows={4} autoComplete="off" spellCheck={false}
             disabled={writing} onChange={text => { setKeyText(text); change(); }}/>
         </Field>
         <Field label={t('简介')}><TextArea aria-label={t('简介')} value={value.note} rows={2} maxLength={300} disabled={writing} onChange={note => set({ note })}/></Field>
@@ -336,7 +336,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
         { title: '预检结果', render: (_, row) => row.error || (preview.adapterDraft ? '待适配 · 未启用' : '待创建 · 未启用') },
       ]}/>
       <Typography.Paragraph type="tertiary">{preview.models.length ? '每条连接加入 ' + preview.models.length + ' 款待验证模型。' : '可在创建后新增上游模型，再进行验证和启用。'}</Typography.Paragraph>
-      {preview.copyFrom && <Typography.Paragraph>请求规则：{preview.copyFrom.rules ? '复制' : '不复制'} · 容量和采购价：{preview.copyFrom.commercial ? '复制容量和报价草稿' : '后续配置'}</Typography.Paragraph>}
+      {preview.copyFrom && <Typography.Paragraph>请求规则：{preview.copyFrom.rules ? '复制' : '不复制'} · 容量和服务商成本价：{preview.copyFrom.commercial ? '复制容量和报价草稿' : '后续配置'}</Typography.Paragraph>}
       {ops.error && <Notice error>{ops.error}</Notice>}
     </SupplierCreationDialog>;
   }
@@ -357,7 +357,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
       {source && <Notice>复制接口和地址设置。请重新选择凭证，并核对要复制的模型。新连接以未启用的状态保存。</Notice>}
       {source && <Space wrap>
         <Checkbox checked={copyOptions.rules} disabled={writing} onChange={event => { setCopyOptions(current => ({ ...current, rules: event.target.checked })); change(); }}>复制请求规则</Checkbox>
-        <Checkbox checked={copyOptions.commercial} disabled={writing || !models.length} onChange={event => { setCopyOptions(current => ({ ...current, commercial: event.target.checked })); change(); }}>复制容量与采购价草稿</Checkbox>
+        <Checkbox checked={copyOptions.commercial} disabled={writing || !models.length} onChange={event => { setCopyOptions(current => ({ ...current, commercial: event.target.checked })); change(); }}>复制容量与服务商成本价草稿</Checkbox>
       </Space>}
       {!source && !configuring && <>
       <div className="channel-operation-fields">
@@ -409,8 +409,8 @@ export default function ChannelDirectoryCreation({ state, providers, connections
           disabled={writing} onChange={name => set({ name })}/></Field>
         {source && <Field label="名称后缀"><Input aria-label="名称后缀" value={copyOptions.suffix} maxLength={20} disabled={writing}
           onChange={suffix => { setCopyOptions(current => ({ ...current, suffix })); set({ name: source.name.slice(0, 60 - suffix.length) + suffix }); }}/></Field>}
-        <Field label={value.interfaceType === 'custom' ? '完整任务地址 *' : 'API 根地址 *'}>
-          <Input aria-label="上游 API 地址" value={value.baseUrl} placeholder="https://api.example.com/v1" maxLength={2048}
+        <Field label={value.interfaceType === 'custom' ? '完整任务地址 *' : '服务地址 *'}>
+          <Input aria-label="服务地址" value={value.baseUrl} placeholder="https://api.example.com/v1" maxLength={2048}
             disabled={writing} onChange={baseUrl => set({ baseUrl })}/>
         </Field>
         {!source && !pendingType && reusableAddresses.length > 0 && <Field label="沿用已有地址"><Choice label="沿用已有地址"
@@ -418,7 +418,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
           options={[[ 'manual', '手工填写' ], ...reusableAddresses.map(url => [url, url])]}
           onChange={baseUrl => set({ baseUrl: baseUrl === 'manual' ? '' : baseUrl })}/></Field>}
         {!pendingType && <Field label="凭证来源"><Choice label="凭证来源" value={value.authMode} disabled={writing || Boolean(saved.length)} options={[
-          ['independent', '连接专属密钥'], ['specific', '选择服务商密钥'],
+          ['independent', '连接专属密钥'], ['specific', '选择上游 API 密钥'],
           ...(provider?.sourceType === 'selfHosted' ? [['none', '无需认证']] : []),
         ]} onChange={authMode => {
           setInputs([keyInput()]);
@@ -434,7 +434,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
           disabled={writing} options={[['priority', '按优先级'], ['random', '随机'], ['roundRobin', '轮询']]}
           onChange={keyStrategy => set({ keyStrategy })}/></Field>}
       </div>
-      {suggestedRoot && <Button disabled={writing} onClick={() => set({ baseUrl: suggestedRoot })}>使用根地址 {suggestedRoot}</Button>}
+      {suggestedRoot && <Button disabled={writing} onClick={() => set({ baseUrl: suggestedRoot })}>使用建议的服务地址 {suggestedRoot}</Button>}
       {pendingType && <><Notice>此类型可保存为未启用草稿。完成适配后再接入模型并测试。</Notice>
         {pendingType.fields.map(([key, title]) => <Field key={key} label={title}><Input aria-label={title} maxLength={100} disabled={writing}
           value={pendingValues[key] || ''} onChange={text => { setPendingValues(current => ({ ...current, [key]: text })); change(); }}/></Field>)}</>}
@@ -459,7 +459,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
           disabled={writing} value={models.map(row => row.modelId)}
           optionList={(provider.catalogModels || []).filter(row => row.libraryId).map(row => ({ value: row.modelId, label: row.name || row.modelId }))}
           onChange={ids => { setModels(ids.map(modelId => models.find(row => row.modelId === modelId) || { modelId, upstreamModelId: modelId })); change(); }}/></Field>
-        {models.map(row => <Field key={row.modelId} label={row.modelId + ' · 上游调用标识'}><Input aria-label={row.modelId + ' 上游调用标识'}
+        {models.map(row => <Field key={row.modelId} label={row.modelId + ' · 上游模型 ID'}><Input aria-label={row.modelId + ' 上游模型 ID'}
           value={row.upstreamModelId} maxLength={200} disabled={writing} onChange={upstreamModelId => {
             setModels(items => items.map(model => model.modelId === row.modelId ? { ...model, upstreamModelId } : model)); change();
           }}/></Field>)}

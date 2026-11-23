@@ -73,7 +73,7 @@ test('testing an alternate protocol never verifies or enables the default route'
   assert.equal(channel(saved).protocolTests.Anthropic.protocol, 'Anthropic');
   assert.equal(channel(saved).protocolTests.Anthropic.baseUrl, 'https://api.deepseek.com/anthropic/v1/messages');
   assert.equal(channel(saved).enabled, false);
-  assert.throws(() => commitAdminState(saved, act('channelTest', item.endpoint.providerId, { modelId: item.modelId, channelId: item.id, addressIndex: 7, scenario: 'success' })), /协议地址/);
+  assert.throws(() => commitAdminState(saved, act('channelTest', item.endpoint.providerId, { modelId: item.modelId, channelId: item.id, addressIndex: 7, scenario: 'success' })), /接口格式地址/);
 });
 
 test('channel and model removal require confirmation, retain history and never resurrect implicit channels', () => {

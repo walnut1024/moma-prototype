@@ -4,7 +4,7 @@ import AdminPageHeading from './AdminPageHeading';
 import { protocols, channels, services, examples, branchId, canForward, endpoint, planDemoRequest } from './model-link-demo.mjs';
 import './model-links.css';
 
-const columns = ['协议', '网关', '模型服务', '路由策略', '协议转换', '连接', '上游模型'];
+const columns = ['接口格式', '网关', '模型服务', '路由策略', '接口格式转换', '连接', '上游模型'];
 const gateway = 'gateway';
 const plans = examples.map(planDemoRequest);
 const options = examples.map((example, value) => ({
@@ -17,7 +17,7 @@ const edgeKey = (from, to) => from + '/' + to;
 const stepTime = step => step.stage ? 1150 : step.tone === 'request' ? 640 : 390;
 
 function Status({ enabled, service }) {
-  return <Tag size="small" color={enabled ? 'green' : 'grey'}>{enabled ? '已启用' : service ? '已停止' : '已停用'}</Tag>;
+  return <Tag size="small" color={enabled ? 'green' : 'grey'}>{enabled ? (service ? '服务中' : '已启用') : service ? '已停服' : '已停用'}</Tag>;
 }
 
 export default function ModelLinks() {
@@ -131,7 +131,7 @@ export default function ModelLinks() {
                 const captions = branchState(id);
                 const format = protocols[channel.format].name;
                 return <div className="model-links-branch" key={id}>
-                  {node(id + '-conversion', <><strong>{native ? '原生转发' : compatible ? '跨协议转换' : '缺少转换配置'}</strong>
+                  {node(id + '-conversion', <><strong>{native ? '原生转发' : compatible ? '跨接口格式转换' : '缺少转换配置'}</strong>
                     <small>{protocols[input].name}{!native && ' → ' + format}</small></>, captions + (compatible ? '' : ' model-links-unavailable'))}
                   {node(id + '-channel', <><div className="model-links-node-heading"><strong>连接 {route.channel}</strong><Status enabled={channel.enabled}/></div>
                     <dl className="model-links-channel-fields">

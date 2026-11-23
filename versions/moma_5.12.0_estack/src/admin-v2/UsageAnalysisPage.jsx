@@ -1,3 +1,4 @@
+import { modelIdentity } from '../model-identities.mjs';
 import TableFieldHelp from '../components/TableFieldHelp';
 import { workspaceStoragePrefix } from "../workspace-storage.mjs";
 import Table from './AdminTable';
@@ -144,9 +145,16 @@ export default function UsageAnalysisPage({ state }) {
   const groups = useMemo(() => usageGroups(current, detailMode), [current, detailMode]);
   const projectMode = detailMode === 'projectId';
   const collection = { tenantId: state.tenants, modelId: state.models, projectId: projects }[detailMode];
-  const detailLabel = { tenantId: '客户名称/ID', modelId: '模型展示名/ID', projectId: '项目名称/ID' }[detailMode];
+  const detailLabel = { tenantId: '租户名称/ID', modelId: '模型展示名称 / 模型编码', projectId: '项目名称/ID' }[detailMode];
   const projectFor = id => projects.find(project => project.id === (id === '__unknown__' ? unassignedProject : id));
-  const name = id => projectMode && id === '__unknown__' ? '未记录项目' : labelFor(collection, id);
+  const name = id => {
+    if (projectMode && id === '__unknown__') return '未记录项目';
+    if (detailMode === 'modelId') {
+      const model = collection.find(item => item.id === id);
+      if (model) return [model.name, modelIdentity(state, model).canonical_slug].filter(Boolean).join(' / ') || '未记录';
+    }
+    return labelFor(collection, id);
+  };
   const detailRows = groups.filter(row => (name(row.id) + ' ' + row.id).toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => b[sort] - a[sort] || a.id.localeCompare(b.id));
   const projectHref = id => {
@@ -171,7 +179,7 @@ export default function UsageAnalysisPage({ state }) {
   const detailPage = Math.min(page, detailPages - 1);
   const periodName = period === 'custom' ? `${range.start}—${range.end}` : presets.find(([id]) => id === period)?.[1];
   const viewGroups = [
-    { label: '客户', text: scope.tenant ? labelFor(state.tenants, scope.tenant) : '全部客户' },
+    { label: '租户', text: scope.tenant ? labelFor(state.tenants, scope.tenant) : '全部租户' },
     { label: '项目', text: scope.project ? labelFor(projects, scope.project) : '全部项目' },
     { label: '时间', text: `${period === 'custom' ? '自定义' : periodName}（${range.start} — ${range.end}）` },
   ];
@@ -182,9 +190,9 @@ export default function UsageAnalysisPage({ state }) {
   ].map(([key, label, items]) => key === 'channels' && value.providers.length ? supplySummary(value, filterOptions, true) : value[key] === null ? `全部${label}` : value[key].map(item => labelFor(items, item)).join('、') || `未选择${label}`).concat(trends[id] ? [trendDimensions.find(([key]) => key === trends[id].dimension)[1], ...(id === 'usage-token-trend' ? [tokenMetrics.find(([key]) => key === trends[id].metric)[1]] : []), trends[id].showTotal ? '显示范围合计' : '', trends[id].dimension !== 'total' ? trends[id].curves === null ? '默认曲线' : `已选曲线：${trends[id].curves.map(key => labelFor(curveOptions[trends[id].dimension] || [], key)).join('、') || '无'}` : ''] : shares[id] ? [usageDimensions.find(([key]) => key === shares[id].dimension)[1], ...(id === 'usage-volume-share' ? [tokenMetrics.find(([key]) => key === shares[id].metric)[1]] : [])] : []).filter(Boolean).join(' · ') }))];
   const exportCsv = () => {
     try {
-    const header = [detailLabel, ...(projectMode ? ['项目 ID', '客户 ID'] : []), 'Token 调用量', '输入 Token', '输出 Token', '其他用量（分单位）', '模型调用次数', 'Token 占比'];
+    const header = [detailLabel, ...(projectMode ? ['项目 ID', '租户 ID'] : []), 'Token 调用量', '输入 Token', '输出 Token', '其他用量（分单位）', '模型调用次数', 'Token 占比'];
     const data = detailRows.map(row => [name(row.id), ...(projectMode ? [row.id === '__unknown__' ? '' : row.id, projectFor(row.id)?.tenantId || ''] : []), row.tokenCalls ? row.total : '—', row.tokenCalls ? row.input : '—', row.tokenCalls ? row.output : '—', otherUsage(row), row.calls, row.tokenCalls ? percent(row.total, totalTokens) : '—']);
-    const csv = logCsv([[`统计范围：${range.start}—${range.end}`, '北京时间', '客户 ID', scope.tenant, '项目 ID', scope.project], header, ...data]);
+    const csv = logCsv([[`统计范围：${range.start}—${range.end}`, '北京时间', '租户 ID', scope.tenant, '项目 ID', scope.project], header, ...data]);
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a'); link.href = url; link.download = `用量明细-${range.start}-${range.end}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 0); Toast.success("已开始下载用量明细");
     } catch { Toast.error("导出失败，请重试"); }
@@ -224,7 +232,7 @@ export default function UsageAnalysisPage({ state }) {
       const href = projectMode && projectHref(id);
       return href ? <Text link={{ href }}>{name(id)}</Text> : name(id);
     } },
-    ...(projectMode ? [{ title: '客户', dataIndex: 'id', key: 'tenant', render: id => {
+    ...(projectMode ? [{ title: '租户', dataIndex: 'id', key: 'tenant', render: id => {
       const tenant = projectFor(id)?.tenantId;
       return tenant ? labelFor(state.tenants, tenant) : '—';
     } }] : []),
@@ -266,7 +274,7 @@ export default function UsageAnalysisPage({ state }) {
               trigger={<Button icon={<IconCalendar aria-hidden="true"/>} aria-label="日期范围">{range.start} — {range.end}</Button>} allowLongRange onChange={applyDate}/>}
           <FilterPresets label="统计时间范围" value={period} onChange={choosePeriod} items={presets}/>
           <Text type="secondary" title="时间范围作用于全部图表与明细">北京时间</Text>
-          <Choice label="客户" value={scope.tenant} options={[[ '', '全部客户' ], ...state.tenants.map(row => [row.id, row.name])]}
+          <Choice label="租户" value={scope.tenant} options={[[ '', '全部租户' ], ...state.tenants.map(row => [row.id, row.name])]}
             onSelect={tenant => changeScope({ tenant, project: '' })}/>
           <Choice label="项目" value={scope.project} options={[[ '', '全部项目' ], ...projects.map(row => [row.id, row.id === unassignedProject ? row.name : row.name + ' · ' + row.id]),
             ...(scope.project && !projects.some(row => row.id === scope.project) ? [[scope.project, scope.project]] : [])]}
@@ -304,7 +312,7 @@ export default function UsageAnalysisPage({ state }) {
                 <nav aria-label="跳转及排序图表">
                   {!live && <Button block size="small" theme={activeSection === 'usage-distribution' ? 'light' : 'borderless'}
                     aria-current={activeSection === 'usage-distribution' ? 'location' : undefined}
-                    onClick={() => goTo('usage-distribution')}>{single ? '客户分层与 Token 分段' : '客户调用量分层'}</Button>}
+                    onClick={() => goTo('usage-distribution')}>{single ? '租户分层与 Token 分段' : '租户调用量分层'}</Button>}
                   {Object.entries(defaultCardOrder).map(([group]) => (
                     <SortableContext key={group} items={cardOrder[group]} strategy={verticalListSortingStrategy}>
                       {cardOrder[group].map(id => <SortableNavItem key={id} id={id} label={navLabels[id]} active={activeSection === id}
@@ -327,7 +335,7 @@ export default function UsageAnalysisPage({ state }) {
               headerExtraContent={<Button icon={<IconDownload aria-hidden="true"/>} disabled={!detailRows.length} onClick={exportCsv}>导出</Button>}>
               <div className="admin-list-toolbar">
                 <div className="admin-time-presets" role="group" aria-label="明细汇总维度">
-                  {[[ 'tenantId', '按客户' ], [ 'modelId', '按模型' ], [ 'projectId', '按项目' ]].map(([value, label]) => (
+                  {[[ 'tenantId', '按租户' ], [ 'modelId', '按模型' ], [ 'projectId', '按项目' ]].map(([value, label]) => (
                     <Button key={value} size="small" theme={detailMode === value ? 'solid' : 'light'} aria-pressed={detailMode === value}
                       onClick={() => { if (value !== detailMode) { setDetailMode(value); setPage(0); setQuery(''); } }}>{label}</Button>
                   ))}

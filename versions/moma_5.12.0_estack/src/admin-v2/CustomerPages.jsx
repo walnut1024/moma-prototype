@@ -29,7 +29,7 @@ export default function CustomerPage(props) {
   return <div className="admin-page-stack admin-enterprise-page">
     <AdminPageHeading title="租户管理"><Space wrap>
       {state.spacePolicy?.personalEnabled!==false && <Button disabled={!canWrite} onClick={() => { location.hash = '#/admin-2/tenants?create=personal'; }}>开通个人租户</Button>}
-      <Button theme="solid" disabled={!canWrite} onClick={() => { location.hash = '#/admin-2/tenants?create=enterprise'; }}>开通企业租户</Button>
+      <Button theme="solid" disabled={!canWrite} onClick={() => { location.hash = '#/admin-2/tenants?create=enterprise'; }}>开通政企租户</Button>
     </Space></AdminPageHeading>
     {(conflict || state.storageError) && <Banner type="warning" closeIcon={null} description={conflict ? '数据已变化，请载入新版本后再操作。' : '数据读取失败，请恢复数据后再操作。'}/>}
     <Card><FilterToolbar>

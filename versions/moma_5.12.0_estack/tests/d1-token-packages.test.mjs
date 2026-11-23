@@ -210,7 +210,7 @@ test('D1 validates and publishes model factor drafts with history while packages
   }
   for (const [rules, reason] of [
     [[rule('missing', '1')], /有效计费项/],
-    [[rule(outOfScope.id, '1')], /当前模型售价/],
+    [[rule(outOfScope.id, '1')], /当前模型刊例价/],
     [[rule(input, '1', '', '256000'), rule(input, '2', '255999')], /规则重叠/],
     [[rule(input, '1'), rule(input, '2', '256000')], /规则重叠/],
     [[rule(input, '1', '100', '100')], /下限须小于上限/],
@@ -297,7 +297,7 @@ test('package model choices come from unarchived model services, with stable mat
   const unpriced = state.packageModels.find(row => !row.billingItemIds.length);
   const withoutPrice = await post(command(state.revision, 'saveFactorDraft', { modelId: unpriced.id, enabled: false, rules: [] }));
   assert.equal(withoutPrice.status, 422);
-  assert.match(withoutPrice.data.error.message, /暂无生效售价计费项/);
+  assert.match(withoutPrice.data.error.message, /暂无生效的模型刊例价/);
 
   const model = state.packageModels.find(row => state.tokenPackages.some(pack => pack.modelIds.includes(row.id)));
   const service = services.models.find(row => row.id === model.code);
@@ -387,7 +387,7 @@ test('a custom billing item cannot be deleted while a draft or effective package
   assert.equal(rejected.status, 422);
   assert.match(rejected.data.error.message, /套餐抵扣规则引用/);
   await removePriceItem();
-  assert.match((await publishFactor(saved.data.revision, model.id)).data.error.message, /当前模型售价/);
+  assert.match((await publishFactor(saved.data.revision, model.id)).data.error.message, /当前模型刊例价/);
   await addPriceItem();
   const published = await publishFactor(saved.data.revision, model.id);
   assert.equal(published.status, 200);

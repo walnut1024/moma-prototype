@@ -145,7 +145,7 @@ test('cost editing stays on the list and sale detail returns to its filtered lis
 
 test('customer data drill-down returns to the customer analysis date range', () => {
   const crumbs = build('customer-analysis-detail', 'customer=demo-7&source=history&mode=range&start=2026-11-15&end=2026-11-18');
-  assert.deepEqual(labels(crumbs), ['运营分析', '客户数据', '客户详情']);
+  assert.deepEqual(labels(crumbs), ['运营分析', '租户数据', '租户详情']);
   assert.equal(crumbs[1].href, '#/admin-2/customer-analysis?mode=range&start=2026-11-15&end=2026-11-18');
 });
 

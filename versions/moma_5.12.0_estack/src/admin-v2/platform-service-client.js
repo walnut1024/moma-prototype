@@ -85,8 +85,8 @@ function platformRoute(state, service, version, rows) {
 export function platformCandidatePlan(state, model, { serviceId, tenantIds = [], supplyIds = [], audioProbe = '', technical = false, at = Date.now() }) {
   const service = platformServices(state, model).find(row => row.id === serviceId);
   if (!service) issue('模型服务', '请选择要验证的模型服务');
-  if (!service.callId || /\s/.test(service.callId)) issue('模型调用标识', '请先完善当前服务的模型调用标识');
-  if (!tenantIds.length || new Set(tenantIds).size !== tenantIds.length || tenantIds.some(id => !state.tenants?.some(tenant => tenant.id === id && !['已删除', '已停用', '停用'].includes(tenant.status)))) issue('客户范围', '请明确选择有效租户');
+  if (!service.callId || /\s/.test(service.callId)) issue('模型 ID', '请先完善当前服务的模型 ID');
+  if (!tenantIds.length || new Set(tenantIds).size !== tenantIds.length || tenantIds.some(id => !state.tenants?.some(tenant => tenant.id === id && !['已删除', '已停用', '停用'].includes(tenant.status)))) issue('租户范围', '请明确选择有效租户');
   const version = activeRouteVersion(serviceRoute(state, service.id));
   if (!version) issue('路由配置', '请先发布当前服务的路由');
   const allowed = platformAllowedChannels(state, service);
@@ -95,25 +95,25 @@ export function platformCandidatePlan(state, model, { serviceId, tenantIds = [],
   const sale = service.providerId ? activeProviderPrice(state, model.id, offerKey(service), at) : activeModelSalePrice(state, model.id, at);
   let salePrices = [];
   if (technical) {
-    if (servicePurpose(model,offerKey(service))!=='internal') { try { salePrices=platformPriceVersions(sale,model,'销售价格',at); } catch { /* Missing sale prices do not block technical verification. */ } }
-  } else salePrices=platformPriceVersions(sale,model,'销售价格',at);
+    if (servicePurpose(model,offerKey(service))!=='internal') { try { salePrices=platformPriceVersions(sale,model,'模型刊例价',at); } catch { /* Missing sale prices do not block technical verification. */ } }
+  } else salePrices=platformPriceVersions(sale,model,'模型刊例价',at);
   const bindings = rows.map(row => {
     const { supply, association } = row, path = `上游模型 ${supply?.provider?.name || row.id}`;
     if (!supply?.provider || !supply.endpoint || supply.provider.status !== '已启用' || supply.status !== '已启用' || !['运行中', '需关注'].includes(supply.endpoint.status)) issue(path, '服务商、连接或模型关联未启用');
     if (service.providerId && supply.provider.id !== service.providerId) issue(path, '上游模型不属于当前服务商服务');
-    if (!association || association.enabled === false) issue(path, '请在模型供应中建立并启用明确的模型映射');
+    if (!association || association.enabled === false) issue(path, '请在上游模型中建立并启用明确的模型映射');
     let master;
     try { master = resolveChannelAssociationModel(state, supply.provider, association); }
-    catch (error) { issue(path, `主档关联无效：${error.message}`); }
+    catch (error) { issue(path, `模型资料关联无效：${error.message}`); }
     const sameTemplate = model.templateId && (master.id === model.templateId || master.templateId === model.templateId);
-    if (master.id !== model.id && !sameTemplate) issue(path, '主档关联与当前服务模型不一致，请重新关联模型资料');
-    if (!association.upstreamModelId || /\s/.test(association.upstreamModelId)) issue(path, '上游模型调用标识 未配置');
+    if (master.id !== model.id && !sameTemplate) issue(path, '模型资料关联与当前服务模型不一致，请重新关联模型资料');
+    if (!association.upstreamModelId || /\s/.test(association.upstreamModelId)) issue(path, '上游模型 ID 未配置');
     if (!supply.endpoint.interfaceType) issue(path, '接口类型未配置');
     if (supply.endpoint.authMode !== 'none' && !connectionKeys(supply.endpoint, supply.provider)[0] && !(!supply.endpoint.authMode && supply.endpoint.credentialRef)) issue(path, '缺少可用且未撤销的主要密钥');
     let procurementPrices = [];
     if (technical) {
-      try { procurementPrices = platformPriceVersions(activeSupplyPrice(state, supply.id, at), model, `${path} / 采购价格`, at); } catch { /* Unsupported cost remains unknown during technical verification. */ }
-    } else procurementPrices = platformPriceVersions(activeSupplyPrice(state, supply.id, at), model, `${path} / 采购价格`, at);
+      try { procurementPrices = platformPriceVersions(activeSupplyPrice(state, supply.id, at), model, `${path} / 服务商成本价`, at); } catch { /* Unsupported cost remains unknown during technical verification. */ }
+    } else procurementPrices = platformPriceVersions(activeSupplyPrice(state, supply.id, at), model, `${path} / 服务商成本价`, at);
     const measures = prices => prices.map(item => `${item.unit}:${item.currency}`).sort().join('|');
     if (!technical && measures(procurementPrices) !== measures(salePrices)) issue(`${path} / 价格`, '采购与销售的计量字段或币种不可比，请调整价格配置');
     let probe;
@@ -144,7 +144,7 @@ export async function runPlatformTrial(plan, { confirmExpensive = false, isCurre
   current(); onProgress('保存服务候选');
   const existing = (await api('/services')).services.find(row => row.candidate.publicModelId === candidate.publicModelId || row.published?.config.publicModelId === candidate.publicModelId);
   const canonicalIds = new Set(candidate.bindings.map(row => row.model.id));
-  if (existing?.candidate.bindings.some(row => !canonicalIds.has(row.model.id))) issue('模型调用标识', '该模型调用标识 已被其他模型候选占用');
+  if (existing?.candidate.bindings.some(row => !canonicalIds.has(row.model.id))) issue('模型 ID', '该模型 ID 已被其他模型候选占用');
   current();
   const service = await api(existing ? `/services/${existing.id}` : '/services', { method: existing ? 'PATCH' : 'POST', body: { ...candidate, operationId: crypto.randomUUID(), ...(existing ? { expectedRevision: existing.revision } : {}) } });
   onCandidate(service); current(); onProgress('创建受限测试身份');

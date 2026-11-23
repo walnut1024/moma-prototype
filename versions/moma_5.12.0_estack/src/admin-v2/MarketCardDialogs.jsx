@@ -121,7 +121,7 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
       </>}>
       <form id={formId} onSubmit={event => { event.preventDefault(); submit(); }}>
         <div className="ss-form-grid">
-          <Field label="模型展示名" required><Input value={values.name} maxLength={100} onChange={value => update('name', value)}/></Field>
+          <Field label="模型展示名称" required><Input value={values.name} maxLength={100} onChange={value => update('name', value)}/></Field>
           <Field label="热度设置">{numberField('heat', { min: 0 })}</Field>
         </div>
         <Field label="图标" hint="支持 PNG、JPEG、WebP，最大 1 MB。" error={logoError}>
@@ -148,7 +148,7 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
               ops.dirty(true);
             }}/>
         </Space>
-        {importMaterial && <Field label="模型资料名称" required>
+        {importMaterial && <Field label="模型展示名称" required>
           <Select filter style={{ width: '100%' }} placeholder="请选择模型资料" value={sourceId || undefined} disabled={unavailable || uploading}
             optionList={materials.map(item => ({ value: item.id, label: `${item.name} · ${item.modelId}` }))}
             onChange={chooseModel}/>
@@ -201,7 +201,7 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
   const changeLink = id => { setLinked(current => toggle(current, id)); ops.dirty(true); };
   const callIdColumn = { title: '模型 ID', render: (_, service) => <CopyId value={service.callId} label="模型 ID" copyAtStart ellipsis/> };
   const stateColumn = { title: '服务状态', width: 100, render: (_, service) =>
-    service.callId ? <AdminStatus value={service.started ? '已启用' : '已停止'}/> : '不可用' };
+    service.callId ? <AdminStatus value={service.started ? '服务中' : '已停服'}/> : '不可用' };
   const serviceColumns = [
     { title: '模型服务名称 / ID', render: (_, service) => <div className="market-link-service-identity">
       {service.serviceName && <Typography.Text ellipsis={{ showTooltip: true }}>{service.serviceName}</Typography.Text>}
@@ -266,7 +266,7 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
       ]}/>}
     {!linking && listing && <>
       {status === 'formal' && <Typography.Text>可见范围为全部用户。</Typography.Text>}
-      {status === 'gray' && <Field label="可见租户" required>
+      {status === 'gray' && <Field label="可见范围" required>
         <Select multiple filter searchPosition="dropdown" searchPlaceholder="搜索租户名称或 ID" maxTagCount={3} showRestTagsPopover
           style={{ width: '100%' }} value={tenantIds} optionList={scopeOptions} placeholder="选择租户"
           onChange={ids => { setTenantIds(ids); ops.dirty(true); }}/>

@@ -100,7 +100,7 @@ function RuleEditor({ model, candidates, billingItems, save, close, canWrite, di
             }}/>
         </div>}
       {selected && (!activeItems.length && !model ? <Banner type="warning" closeIcon={null}
-        description="该模型暂无生效售价计费项，请先在「模型售价」配置并发布售价。"/> : <>
+        description="该模型暂无生效的模型刊例价，请先在「模型销售」配置并发布。"/> : <>
       <div className="admin-list-toolbar">
         <Typography.Text id={`${labelId}-enabled`}>允许加入套餐</Typography.Text>
         <Switch aria-labelledby={`${labelId}-enabled`} checked={enabled} disabled={locked} onChange={checked => {
@@ -113,14 +113,14 @@ function RuleEditor({ model, candidates, billingItems, save, close, canWrite, di
       {model?.legacyFactor && !model.rules.length && <Banner type="info" closeIcon={null}
         description={`原模型系数为 ${model.legacyFactor} 倍，请为它明确配置适用的计费项。`}/>}
       {unavailable.length > 0 && <Banner type="warning" closeIcon={null} description={<>
-        下列规则对应的计费项已不在当前售价中，移除后可保存新草稿。
+        下列规则对应的计费项已不在当前模型刊例价中，移除后可保存新草稿。
         {unavailable.map(row => <div key={row.key}>
           {billingItems.find(item => item.id === row.billingItemId)?.name ?? row.billingItemId} · {row.factor} 倍
           <Button type="danger" theme="borderless" size="small" disabled={locked}
             onClick={() => update(current => current.filter(item => item.key !== row.key))}>移除</Button>
         </div>)}
       </>}/>}
-      {activeItems.length > 0 && <Typography.Paragraph type="secondary">计费项来自该模型当前生效的售价。留空表示该计费项未配置系数。分档时按本次请求的输入 Token 数选档，整笔使用命中系数。</Typography.Paragraph>}
+      {activeItems.length > 0 && <Typography.Paragraph type="secondary">计费项来自该模型当前生效的模型刊例价。留空表示该计费项未配置系数。分档时按本次请求的输入 Token 数选档，整笔使用命中系数。</Typography.Paragraph>}
       {activeItems.map(item => {
         const group = rows.filter(row => row.billingItemId === item.id);
         return <Card key={item.id} title={item.name} headerExtraContent={
@@ -265,7 +265,7 @@ export default function PackageModelFactors({ state, transact, conflict, dirty }
       description="套餐扣减额度 = 各计费项实际用量 × 对应抵扣系数，再将结果相加。例如，输入 1,000 Token，输入系数为 1.5，则输入部分扣减 1,500 套餐 Token。分档时按本次请求的输入 Token 数选档，整笔按命中的系数计算。"/>
     <Card>
       <div className="admin-list-toolbar">
-        <Input className="admin-list-search" prefix={<IconSearch aria-hidden="true"/>} aria-label="搜索模型" placeholder="搜索模型名称或标识" value={query}
+        <Input className="admin-list-search" prefix={<IconSearch aria-hidden="true"/>} aria-label="搜索模型" placeholder="搜索模型展示名称或模型 ID" value={query}
           onChange={value => { setQuery(value); setPage(1); }}/>
         <Button ref={addButton} theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite}
           onClick={event => setEditor({ trigger: event.currentTarget })}>添加模型</Button>

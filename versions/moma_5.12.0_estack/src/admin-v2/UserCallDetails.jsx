@@ -9,8 +9,8 @@ import { SelectedConditions } from '../components/SavedFilterViews';
 import { customerModelDetails } from './analytics';
 import { formatUsageNumber } from './usage-analysis';
 
-const columns = [['model','模型'],['customer','客户名称'],['customerId','客户 ID'],['total','计量用量'],['calls','请求记录数'],['success','HTTP 请求成功率'],['peakTpm','区间峰值 TPM'],['avgTpm','区间平均 TPM'],['activeDays','有调用天数']];
-const detailColumns = [['dailyUsage','日均用量'],['endUsage','结束日用量'],['avgRpm','区间平均 RPM'],['maxRpm','区间峰值 RPM'],['ttft','平均 TTFT (ms)'],['maxTtft','最大 TTFT (ms)'],['ttftSamples','TTFT 样本数'],['maxInput','最大输入 Token'],['avgInput','平均输入 Token'],['maxOutput','最大输出 Token'],['avgOutput','平均输出 Token'],['customerType','客户类型'],['pending','待确认请求数']];
+const columns = [['model','模型'],['customer','租户名称'],['customerId','租户 ID'],['total','计量用量'],['calls','请求记录数'],['success','HTTP 请求成功率'],['peakTpm','区间峰值 TPM'],['avgTpm','区间平均 TPM'],['activeDays','有调用天数']];
+const detailColumns = [['dailyUsage','日均用量'],['endUsage','结束日用量'],['avgRpm','区间平均 RPM'],['maxRpm','区间峰值 RPM'],['ttft','平均 TTFT (ms)'],['maxTtft','最大 TTFT (ms)'],['ttftSamples','TTFT 样本数'],['maxInput','最大输入 Token'],['avgInput','平均输入 Token'],['maxOutput','最大输出 Token'],['avgOutput','平均输出 Token'],['customerType','租户类型'],['pending','待确认请求数']];
 const display = value => value == null ? '—' : typeof value === 'number' ? value > 0 && value < 0.01 ? '<0.01' : formatUsageNumber(value) : value;
 const statusLabels = ['成功','400','5xx','0','其他'];
 
@@ -47,7 +47,7 @@ export default function UserCallDetails({ state, rows, start, end, draft, onDraf
   const [sort,setSort]=useState({key:'total',direction:-1}), [page,setPage]=useState(0), [size,setSize]=useState(DEFAULT_PAGE_SIZE), [expanded,setExpanded]=useState(null);
   const details=customerModelDetails(state,rows,start,end);
   const modelOptions=[{value:'',label:'全部模型'},...[...new Set(state.models.map(model=>model.name))].sort((a,b)=>a.localeCompare(b,'zh-CN')).map(value=>({value,label:value}))];
-  const customerOptions=[{value:'',label:'全部客户'},...[...new Map(state.tenants.map(row=>[row.id,{value:row.id,label:`${row.name} · ${row.id}`}])).values()].sort((a,b)=>a.label.localeCompare(b.label,'zh-CN'))];
+  const customerOptions=[{value:'',label:'全部租户'},...[...new Map(state.tenants.map(row=>[row.id,{value:row.id,label:`${row.name} · ${row.id}`}])).values()].sort((a,b)=>a.label.localeCompare(b.label,'zh-CN'))];
   const data=details.filter(r=>(!query.model||r.model===query.model)&&(!query.customer||r.customerId===query.customer)).sort((a,b)=>{
     if(a[sort.key]==null)return b[sort.key]==null?0:1;
     if(b[sort.key]==null)return -1;
@@ -60,7 +60,7 @@ export default function UserCallDetails({ state, rows, start, end, draft, onDraf
     const exportColumns=[...columns,['unit','计量单位'],...detailColumns];
     const csv=[exportColumns.map(([,label])=>label),...data.map(r=>exportColumns.map(([key])=>key==='success'&&r.success!=null?`${r.success.toFixed(2)}%`:r[key]))].map(row=>row.map(escape).join(',')).join('\r\n');
     const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));
-    const link=document.createElement('a');link.href=url;link.download=`客户模型调用明细_${start}_${end}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000); Toast.success("已开始下载调用明细");
+    const link=document.createElement('a');link.href=url;link.download=`租户模型调用明细_${start}_${end}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000); Toast.success("已开始下载调用明细");
     } catch { Toast.error("导出失败，请重试"); }
   }
   const detail = row => <dl className="admin-analysis-detail-fields">
@@ -96,7 +96,7 @@ export default function UserCallDetails({ state, rows, start, end, draft, onDraf
       <form onSubmit={event => { event.preventDefault(); onQueryChange(draft); setPage(0); }}>
         <FilterToolbar>
           <DetailPick label="调用明细模型" value={draft.model} onChange={model => onDraftChange({ ...draft, model })} options={modelOptions}/>
-          <DetailPick label="调用明细客户名称或 ID" value={draft.customer} onChange={customer => onDraftChange({ ...draft, customer })} options={customerOptions}/>
+          <DetailPick label="调用明细租户名称或 ID" value={draft.customer} onChange={customer => onDraftChange({ ...draft, customer })} options={customerOptions}/>
           <Button theme="solid" htmlType="submit">查询</Button>
           <FilterReset onClick={() => { onDraftChange({ model: '', customer: '' }); onQueryChange({ model: '', customer: '' }); setPage(0); }}/>
           <Button icon={<IconDownload aria-hidden="true"/>} disabled={!data.length} onClick={exportCsv}>导出表格</Button>
@@ -108,7 +108,7 @@ export default function UserCallDetails({ state, rows, start, end, draft, onDraf
         expandedRowKeys={expanded ? [expanded] : []} expandedRowRender={detail}
         pagination={{ currentPage: current + 1, total: data.length, pageSize: size, pageSizeOpts: PAGE_SIZES, showTotal: true, showSizeChanger: true,
           onPageChange: page => setPage(page - 1), onPageSizeChange: value => { setSize(value); setPage(0); } }}
-        empty="暂无匹配记录，请调整模型、客户或上方日期筛选。" columns={[
+        empty="暂无匹配记录，请调整模型、租户或上方日期筛选。" columns={[
           ...tableColumns,
           { title: '详情', key: 'details', render: (_, row) => <Button theme="borderless" size="small" type="tertiary"
             icon={expanded === row.id ? <IconChevronDown aria-hidden="true"/> : <IconChevronRight aria-hidden="true"/>}

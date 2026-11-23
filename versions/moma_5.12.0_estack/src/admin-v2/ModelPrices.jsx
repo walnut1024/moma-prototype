@@ -54,44 +54,44 @@ export default function ModelPrices(props) {
   return <div className="admin-page-stack semi-services">
     <ModelModuleHeading module="prices" title={service?`${model.name} · ${service.offerName}`:"模型销售"}><div className="sp-actions">{!params.has('service') && <>
         <Button icon={<IconPlus/>} theme="solid" disabled={!ops.can || !eligible.length}
-          onClick={() => { setSalePick(''); go({ add:'1' }, { preserveScroll:true }); }}>添加销售服务</Button>
+          onClick={() => { setSalePick(''); go({ add:'1' }, { preserveScroll:true }); }}>添加模型售卖</Button>
         <ModelResourceTransfer state={state} ops={ops} scope="prices"/>
       </>}{back && <Button onClick={()=>ops.proceed(()=>{location.hash=back;})}>返回来源页面</Button>}<Button onClick={()=>go({returnTo:location.hash,tab:'scenario'},{base:'tariff-dictionary',reset:true})}>计量配置</Button></div></ModelModuleHeading>
     {params.has('service') ? service ? <Card>
       <div className="ss-body">
       <div className="ss-section-bar"><Typography.Title heading={5}>销售配置</Typography.Title>{saleActions(service)}<ModelResourceTransfer state={state} ops={ops} scope="prices"/></div>
-      <Descriptions data={[{key:'模型服务 ID',value:<CopyId value={service.model_service_id} label="模型服务 ID"/>},{key:'模型编码',value:service.canonical_slug},{key:'模型调用标识',value:service.callId || '待配置'},{key:'服务状态',value:<AdminStatus value={callStateLabel(serviceReferenceStarted(model, service))}/>},{key:'销售状态',value:<AdminStatus value={salesStatus(state,model,key)}/>},{key:'售价版本',value:service.price?`v${service.price.version}`:'待配置'}]}/>
+      <Descriptions data={[{key:'模型服务 ID',value:<CopyId value={service.model_service_id} label="模型服务 ID"/>},{key:'模型编码',value:service.canonical_slug},{key:'模型 ID',value:service.callId || '待配置'},{key:'服务状态',value:<AdminStatus value={callStateLabel(serviceReferenceStarted(model, service))}/>},{key:'售卖状态',value:<AdminStatus value={salesStatus(state,model,key)}/>},{key:'模型刊例价版本',value:service.price?`v${service.price.version}`:'待配置'}]}/>
       {servicePurpose(model,key)==='internal' && <Notice>内部服务可在「模型服务」完成技术验证与启用。</Notice>}
       <Tabs activeKey={tab} keepDOM={false} onChange={tab=>go({tab,edit:null},{preserveScroll:true})}>
-        <Tabs.TabPane itemKey="pricing" tab="售价配置"><div className="ss-tab-content ss-body"><CommercialDialog key={service.id+params.get('edit')} state={state} model={model} providerId={key} ops={ops} readOnly={readOnly || params.get('edit')!=='1'} onEdit={()=>go({edit:'1'},{preserveScroll:true})} close={()=>ops.proceed(()=>go({edit:null},{saved:true,preserveScroll:true}))}/></div></Tabs.TabPane>
+        <Tabs.TabPane itemKey="pricing" tab="模型刊例价配置"><div className="ss-tab-content ss-body"><CommercialDialog key={service.id+params.get('edit')} state={state} model={model} providerId={key} ops={ops} readOnly={readOnly || params.get('edit')!=='1'} onEdit={()=>go({edit:'1'},{preserveScroll:true})} close={()=>ops.proceed(()=>go({edit:null},{saved:true,preserveScroll:true}))}/></div></Tabs.TabPane>
         <Tabs.TabPane itemKey="scope" tab="销售对象">
           <SalesAudience key={model.id + ':' + model.updatedAt} state={state} model={model} services={services} ops={ops}/>
         </Tabs.TabPane>
-        <Tabs.TabPane itemKey="history" tab="变更记录"><div className="ss-tab-content ss-body"><Typography.Title heading={5}>售价版本</Typography.Title><Table size="small" rowKey="id" dataSource={versions} pagination={false} scroll={{x:760,y:420}} empty="尚无售价版本。" columns={[{title:'价格版本 ID',dataIndex:'id',width:280,render:value=><CopyId value={value} label="价格版本 ID"/>},{title:'版本',dataIndex:'version',width:80},{title:'生效时间',dataIndex:'effectiveAt',width:180,render:displayTime},{title:'计费项与售价',render:(_,version)=>priceItems(version,model).map((item,index)=><Typography.Paragraph key={index}>{item.name}：{moneyDisplay(item.amount)} {item.currency} / {item.unit}</Typography.Paragraph>)}]}/></div></Tabs.TabPane>
+        <Tabs.TabPane itemKey="history" tab="变更记录"><div className="ss-tab-content ss-body"><Typography.Title heading={5}>模型刊例价版本</Typography.Title><Table size="small" rowKey="id" dataSource={versions} pagination={false} scroll={{x:760,y:420}} empty="尚无模型刊例价版本。" columns={[{title:'价格版本 ID',dataIndex:'id',width:280,render:value=><CopyId value={value} label="价格版本 ID"/>},{title:'版本',dataIndex:'version',width:80},{title:'生效时间',dataIndex:'effectiveAt',width:180,render:displayTime},{title:'计费项与模型刊例价',render:(_,version)=>priceItems(version,model).map((item,index)=><Typography.Paragraph key={index}>{item.name}：{moneyDisplay(item.amount)} {item.currency} / {item.unit}</Typography.Paragraph>)}]}/></div></Tabs.TabPane>
       </Tabs>
       </div>
-    </Card> : <Notice error>指定服务不存在或已归档，请返回售价列表。</Notice> : <Card>
+    </Card> : <Notice error>指定服务不存在或已归档，请返回模型刊例价列表。</Notice> : <Card>
       <PricingFilters records={services} ops={ops} kind="price"/>
       <Table size="small" rowKey="tableKey" pagination={false} scroll={{x:1740,y:'calc(100vh - 330px)'}} dataSource={pricingTableRows(rows,row=>priceItems(row.price,row.model))} empty="没有符合条件的记录" columns={[
-        {title:'模型展示名',width:160,render:(_,row)=>({children:row.modelName,props:{rowSpan:row.modelSpan}})},
+        {title:'模型展示名称',width:160,render:(_,row)=>({children:row.modelName,props:{rowSpan:row.modelSpan}})},
         {title:'模型编码',width:140,render:merged(row=><CopyId value={row.canonical_slug} label="模型编码" ellipsis={{showTooltip:true}}/>)},
         {title:'模型服务 ID',width:190,render:merged(row=><CopyId value={row.model_service_id} label="模型服务 ID" ellipsis={{showTooltip:true}}/>)},
         {title:'服务商 / 连接',width:120,render:merged(row=>row.offerName)},
-        {title:'模型调用标识',width:160,render:merged(row=>row.callId || '待配置')},
+        {title:'模型 ID',width:160,render:merged(row=>row.callId || '待配置')},
         {title:'计费项',width:130,render:(_,row)=><div>{row.item?.name || '—'}{row.item?.condition && <Typography.Paragraph type="tertiary">{row.item.condition}</Typography.Paragraph>}</div>},
-        {title:'售价',width:110,align:'right',render:(_,row)=>row.item?.amount == null?'—':moneyDisplay(row.item.amount)},
+        {title:'模型刊例价',width:110,align:'right',render:(_,row)=>row.item?.amount == null?'—':moneyDisplay(row.item.amount)},
         {title:'计费单位',width:140,render:(_,row)=>row.item?.unit || '—'},
         {title:'货币',width:90,render:(_,row)=>row.item?.currency || '—'},
-        {title:'售价版本',width:100,render:merged(row=>row.price?`v${row.price.version}`:'待配置')},
-        {title:'销售状态',width:120,render:merged(row=><AdminStatus value={row.status}/>)},
+        {title:'模型刊例价版本',width:100,render:merged(row=>row.price?`v${row.price.version}`:'待配置')},
+        {title:'售卖状态',width:120,render:merged(row=><AdminStatus value={row.status}/>)},
         {title:'销售对象',width:140,render:merged(row=><Button theme="borderless" size="small" onClick={() => configure(row, 'scope')}>{salesAudienceLabel(state, salesScope(row.model))}</Button>)},
         {title:'操作',width:230,fixed:'right',render:merged(row=><Space wrap spacing={4}>
-          <Button theme="borderless" size="small" onClick={() => configure(row)}>{readOnly ? '查看配置' : row.price ? '维护售价' : '配置售价'}</Button>
+          <Button theme="borderless" size="small" onClick={() => configure(row)}>{readOnly ? '查看配置' : row.price ? '维护模型刊例价' : '配置模型刊例价'}</Button>
           {saleActions(row)}
         </Space>)},
       ]}/><Typography.Text type="tertiary">共 {rows.length} 项服务</Typography.Text>
     </Card>}
-    {candidatesVisible && !readOnly && <Modal wide title="添加销售服务" onClose={() => go({ add:null }, { preserveScroll:true })} footer={<>
+    {candidatesVisible && !readOnly && <Modal wide title="添加模型售卖" onClose={() => go({ add:null }, { preserveScroll:true })} footer={<>
       <Button onClick={() => go({ add:null }, { preserveScroll:true })}>取消</Button>
       <Button theme="solid" disabled={!eligible.some(row => row.id === salePick) || !ops.can} onClick={() => configure(eligible.find(row => row.id === salePick))}>添加并配置</Button>
     </>}>

@@ -92,7 +92,7 @@ export function prepareChannelInterface({ interfaceType, baseUrl, taskUrls = {},
     if (!taskUrls || typeof taskUrls !== 'object' || Array.isArray(taskUrls) || Object.keys(taskUrls).length) throw new Error('预设接口按模型任务生成地址，不能覆盖任务地址');
     const suggestedBaseUrl = suggestChannelRoot({ interfaceType, baseUrl, allowHttp });
     if (suggestedBaseUrl) {
-      const error = new Error('当前地址为完整任务接口，请确认使用识别出的服务根地址');
+      const error = new Error('当前地址为完整任务接口，请确认使用识别出的服务地址');
       error.code = 'full_task_url';
       error.suggestedBaseUrl = suggestedBaseUrl;
       throw error;

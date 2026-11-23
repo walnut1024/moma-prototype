@@ -21,7 +21,7 @@ import { assertDirectChannelMutation } from './channel-change-management.js';
 export { connectionFingerprint, connectionTestCurrent } from './connection-state.js';
 
 export const providerCode = provider => provider.code || ({ mobile: 'cmcc', unicom: 'cucc', telecom: 'ctcc', alibaba: 'bailian' }[provider.id.replace(/^(catalog-provider-|provider-)/, '')] || provider.id.replace(/^(catalog-provider-|provider-)/, ''));
-export const PROVIDER_TYPES = { thirdParty: '第三方推理服务', selfHosted: '自有推理服务' };
+export const PROVIDER_TYPES = { thirdParty: '第三方模型服务', selfHosted: '自有模型推理服务' };
 export const PROTOCOLS = ['OpenAI', 'Anthropic', '其他'];
 export { SUPPLIER_MODEL_TYPES };
 export function normalizeProviderCatalogue(ids = []) {
@@ -32,7 +32,7 @@ export function normalizeProviderCatalogue(ids = []) {
 }
 
 export function appendProviderCatalogue(current, text) {
-  if (typeof text !== 'string' || !text.trim()) throw new Error('请输入上游模型调用标识，每行一个。');
+  if (typeof text !== 'string' || !text.trim()) throw new Error('请输入上游模型 ID，每行一个。');
   const result = normalizeProviderCatalogue([...current, ...text.split(/\r?\n/)]);
   if (result.length === current.length) throw new Error('输入的服务商目录标识均已存在。');
   return result;
@@ -99,7 +99,7 @@ export function providerModelConnectivityTest(state, { providerId, keyId, endpoi
   if (keyId && !key || !key && !connectionCredentialsReady({ ...endpoint, apiKeys: [] }, provider)) throw new Error('API 密钥不存在或不适用于当前接入地址');
   // A saved key's display mask is not its credential identity.
   if (key && (!/^[a-f0-9]{64}$/.test(key.fingerprint || '') || key.status === 'disabled' || key.revokedAt)) throw new Error('API 密钥不可用，请重新核对');
-  if (!PROTOCOLS.includes(endpoint.protocol)) throw new Error('接入协议无效，请在模型目录中修改');
+  if (!PROTOCOLS.includes(endpoint.protocol)) throw new Error('接入接口格式无效，请在模型目录中修改');
   let url;
   try { url = new URL(endpoint.baseUrl); } catch { throw new Error('接入地址无效，请在模型目录中修改'); }
   if ((url.protocol !== 'https:' && !(provider.sourceType === 'selfHosted' && url.protocol === 'http:')) || url.username || url.password || url.search || url.hash) throw new Error('接入地址无效，请在模型目录中修改');
@@ -107,7 +107,7 @@ export function providerModelConnectivityTest(state, { providerId, keyId, endpoi
   const configured = catalogueConnections(state, provider, modelId);
   if (configured.length && !configured.some(item => item.id === endpointId)) throw new Error('接入地址与所选目录模型不匹配');
   const callId = typeof upstreamId === 'string' ? upstreamId.trim() : '';
-  if (!callId || callId.length > 200 || /\s/.test(callId)) throw new Error('上游模型调用标识 须为 1–200 位字符，不含空格或换行');
+  if (!callId || callId.length > 200 || /\s/.test(callId)) throw new Error('上游模型 ID 须为 1–200 位字符，不含空格或换行');
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 2000) throw new Error('请填写测试内容，最多 2000 字');
   if (!Object.hasOwn(MODEL_CONNECTIVITY_SCENARIOS, scenario)) throw new Error('请选择有效的结果预览状态');
   const type = provider.catalogModels?.find(row => row.modelId === modelId)?.type;
@@ -119,7 +119,7 @@ export function modelConnectivityPreview(context, scenario) {
   const responses = {
     success: { result: '通过', title: '测试成功', status: 200, durationMs: 486, message: '模型已返回测试响应。', response: { model: callId, choices: [{ message: { role: 'assistant', content: 'OK' } }] } },
     unauthorized: { result: '失败', title: '鉴权失败', status: 401, durationMs: 128, message: 'API 密钥无效或没有访问该模型的权限。', hint: '请核对 API 密钥的有效期、服务商账号权限与模型授权。', response: { error: { code: 'invalid_api_key', message: 'Authentication failed' } } },
-    unavailable: { result: '失败', title: '模型不可用', status: 404, durationMs: 156, message: '当前地址下未找到该模型，或模型尚未开放。', hint: '请核对上游模型调用标识 的大小写、接入地址与服务商模型目录。', response: { error: { code: 'model_not_found', message: 'Model is unavailable' } } },
+    unavailable: { result: '失败', title: '模型不可用', status: 404, durationMs: 156, message: '当前地址下未找到该模型，或模型尚未开放。', hint: '请核对上游模型 ID 的大小写、接入地址与服务商模型目录。', response: { error: { code: 'model_not_found', message: 'Model is unavailable' } } },
     timeout: { result: '失败', title: '请求超时', status: null, durationMs: 10000, message: '等待模型响应超过 10 秒。', hint: '请检查服务状态与网络连接，稍后重新测试。', response: { error: { code: 'request_timeout', message: 'No response received within 10 seconds' } } },
   };
   return { ...responses[scenario], ...context, simulated: true };
@@ -230,13 +230,13 @@ export function providerTransaction(state, action) {
     const channelName = typeof data.channelName === 'string' ? data.channelName.trim() : '';
     if (!channelName || channelName.length > 60 || /\p{Cc}/u.test(channelName)) throw new Error('请填写连接名称，最多 60 字');
     const modelName = typeof data.modelName === 'string' ? data.modelName.trim() : '';
-    if (modelName.length > 100 || /\p{Cc}/u.test(modelName)) throw new Error('模型展示名最多 100 字，不能包含控制字符');
+    if (modelName.length > 100 || /\p{Cc}/u.test(modelName)) throw new Error('模型展示名称最多 100 字，不能包含控制字符');
     const apiUrl = typeof data.apiUrl === 'string' ? data.apiUrl.trim() : '';
     let url;
-    try { url = new URL(apiUrl); } catch { throw new Error('请填写包含协议、域名和接口路径的完整 API URL'); }
+    try { url = new URL(apiUrl); } catch { throw new Error('请填写包含接口格式、域名和接口路径的完整 API URL'); }
     if (apiUrl.length > 2048 || /[\s\\\p{Cc}]/u.test(apiUrl) || !/^https?:\/\//i.test(apiUrl) || url.pathname === '/' || /^\/v\d+\/?$/i.test(url.pathname)) throw new Error('请填写包含完整接口路径的 API URL，不能只填写服务地址（Base URL）');
     const protocol = data.modelType === 'text' ? data.protocol ?? 'OpenAI' : '其他';
-    if (data.modelType === 'text' && protocol !== 'OpenAI') throw new Error('语言模型目前仅支持 OpenAI 协议');
+    if (data.modelType === 'text' && protocol !== 'OpenAI') throw new Error('语言模型目前仅支持 OpenAI 接口格式');
     const currentIds = providerCatalogueIds(provider);
     if (currentIds.includes(modelId) || provider.catalogModelIds?.includes(modelId) || provider.catalogModels?.some(item => item.modelId === modelId)) throw new Error('该 服务商目录标识 已在服务商目录或历史记录中，请使用其他 ID');
     const catalogModelIds = normalizeProviderCatalogue([...currentIds, modelId]);
@@ -388,10 +388,10 @@ export function providerTransaction(state, action) {
       if (!provider) throw new Error('服务商不存在');
       if (objectId && (!endpoint || endpoint.providerId !== provider.id)) throw new Error('接入配置不存在或不属于该服务商');
       if (!data.name?.trim()) throw new Error('请填写接入名称');
-      if (!PROTOCOLS.includes(data.protocol)) throw new Error('请选择有效的接入协议');
+      if (!PROTOCOLS.includes(data.protocol)) throw new Error('请选择有效的接入接口格式');
       let url;
       try { url = new URL(data.baseUrl); } catch { throw new Error('请填写有效的服务地址'); }
-      if (url.protocol !== 'https:' && !(provider.sourceType === 'selfHosted' && url.protocol === 'http:')) throw new Error('第三方服务地址须使用 HTTPS；自有推理服务可使用 HTTP');
+      if (url.protocol !== 'https:' && !(provider.sourceType === 'selfHosted' && url.protocol === 'http:')) throw new Error('第三方服务地址须使用 HTTPS；自有模型推理服务可使用 HTTP');
       if (url.username || url.password || url.search || url.hash) throw new Error('服务地址不能包含账号、密码、查询参数或片段');
       const credentialRef = data.credentialRef?.trim() || '';
       const apiKeys = checkedConnectionKeys(data.apiKeys ?? endpoint?.apiKeys ?? [], endpoint?.apiKeys);
@@ -413,8 +413,8 @@ export function providerTransaction(state, action) {
       const owner = state.providers.find(item => item.id === endpoint.providerId);
       if (operation === 'testConnection') {
         if (endpoint.adapterDraft) throw Error('请先为待适配连接配置可用适配器');
-        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在服务商密钥页签配置此接入地址的凭证');
-        const scenarios = { 成功: ['通过', '服务地址、凭证和协议检查通过'], 超时: ['失败', '上游连接超时，请检查服务地址与网络'], 鉴权失败: ['失败', '鉴权失败，请检查凭证引用与权限'], 协议错误: ['失败', '协议不兼容，请核对接入协议'] };
+        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在上游 API 密钥页签配置此接入地址的凭证');
+        const scenarios = { 成功: ['通过', '服务地址、凭证和接口格式检查通过'], 超时: ['失败', '上游连接超时，请检查服务地址与网络'], 鉴权失败: ['失败', '鉴权失败，请检查凭证引用与权限'], 接口格式错误: ['失败', '接口格式不兼容，请核对接入接口格式'] };
         const result = scenarios[data.scenario];
         if (!result) throw new Error('请选择测试场景');
         const qualification = connectionQualification(endpoint);
@@ -423,7 +423,7 @@ export function providerTransaction(state, action) {
         const recovery = connectionRecoveryIssue(endpoint);
         if (recovery) throw Error(recovery);
         if (connectionTestPending(endpoint)) throw new Error('当前配置的测试尚未完成，请等待结果');
-        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在服务商密钥页签配置此接入地址的凭证');
+        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在上游 API 密钥页签配置此接入地址的凭证');
         if (owner?.status !== '已启用') throw new Error('请先启用服务商');
         if (!connectionTestPassed(endpoint)) throw new Error('当前接入配置须先通过连接测试');
         changes.push(update('endpoints', endpoint.id, { status: '运行中', activationSource: null, activationChangedAt: new Date().toISOString(), connectionQualification: structuredClone(endpoint.connectionTest) }));

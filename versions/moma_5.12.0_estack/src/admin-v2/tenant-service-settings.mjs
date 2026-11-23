@@ -49,7 +49,7 @@ export function tenantServiceTransaction(state, action, at = Date.now()) {
     if (operation==='open-models') {
       const { modelIds } = data;
       if (!Array.isArray(modelIds) || !modelIds.length || new Set(modelIds).size!==modelIds.length) throw Error('请选择要开通的模型');
-      if (modelIds.some(id=>opened.has(id))) throw Error('模型已开通，请刷新后重试');
+      if (modelIds.some(id=>opened.has(id))) throw Error('已授权，请刷新后重试');
       if (modelIds.some(id=>!catalogue.get(id)?.availability)) throw Error('存在当前租户无法开通的模型');
       return save('开通租户模型服务',[...modelIds.map(modelId=>({modelId,rpm:null,tpm:null})),...rules]);
     }

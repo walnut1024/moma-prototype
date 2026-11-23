@@ -179,7 +179,7 @@ function TrafficVisualization({ account, models, projects, settings, close }) {
       <div className="admin-list-toolbar">
         <Choice label="项目" value={projectId} options={[[ '', '查看项目限流' ], ...projects.map(row => [row.id, row.name + ' · ' + row.id])]}
           onSelect={setProjectId} disabled={!projects.length}/>
-        <Input className="admin-list-search" showClear aria-label="搜索模型" placeholder="搜索模型展示名或模型编码"
+        <Input className="admin-list-search" showClear aria-label="搜索模型" placeholder="搜索模型展示名称或模型编码"
           value={query} onChange={setQuery}/>
       </div>
       <Table key={query} rowKey="id" scroll={{ x: 'max(100%, 760px)' }} empty="暂无匹配模型"
@@ -400,7 +400,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
     ...row, ...modelTraffic(settings, row.id),
   }));
   const modelColumns = [
-    { title: '模型展示名', dataIndex: 'name' }, { title: '模型编码', dataIndex: 'modelId' },
+    { title: '模型展示名称', dataIndex: 'name' }, { title: '模型编码', dataIndex: 'modelId' },
     { title: '默认值', width: ratePairWidth, render: () => <RatePair limit={modelDefault}/> },
     { title: '生效值', width: ratePairWidth, render: (_, row) => <RatePair limit={row.limit} strong/> },
     { title: '规则来源', width: 98, render: (_, row) => row.custom ? '模型自定义' : '模型默认' },
@@ -476,7 +476,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
       <Tabs.TabPane tab="模型限流" itemKey="models">
         {tab === 'models' && <div className="traffic-tab"><Card className="traffic-list">
           <div className="admin-list-toolbar">
-            <Input className="admin-list-search" showClear value={modelQuery} aria-label="搜索模型" placeholder="搜索模型展示名或模型编码"
+            <Input className="admin-list-search" showClear value={modelQuery} aria-label="搜索模型" placeholder="搜索模型展示名称或模型编码"
               onChange={setModelQuery} disabled={Boolean(draft)}/>
             <DefaultInline title="模型默认" description={modelDefaultHelp}>
               {modelDefault ? <>
@@ -518,7 +518,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
           <Text strong id={modelPickerId + '-label'}>添加模型策略</Text>
           {!draft.rows.length && choices.length > 0 &&
             <Text type="secondary">选择模型后，填写 RPM 和 TPM，再保存。</Text>}
-          <Select aria-labelledby={modelPickerId + '-label'} placeholder={choices.length ? '搜索模型展示名或规范模型标识' : '没有可添加的模型'}
+          <Select aria-labelledby={modelPickerId + '-label'} placeholder={choices.length ? '搜索模型展示名称或模型编码' : '没有可添加的模型'}
             filter motion={false} value="" defaultOpen={openModelPicker} autoFocus={openModelPicker}
             position="bottomLeft" getPopupContainer={() => document.getElementById(modelPickerId)}
             disabled={saving || !account || !choices.length}

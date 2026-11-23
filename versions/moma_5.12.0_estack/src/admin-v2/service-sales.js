@@ -23,7 +23,7 @@ export function salesChecks(state, model, keys) {
     try {
       const tenantIds = state.tenants.filter(row => ['正常','需关注'].includes(row.status)).map(row => row.id);
       platformCandidatePlan(state,model,{serviceId:service.id,tenantIds,supplyIds:platformAllowedChannels(state,service).map(row => row.id),audioProbe:model.profile?.tasks?.includes('语音合成')?'speech':model.profile?.tasks?.includes('语音识别')?'transcription':''});
-      checks.push({label:`${service.name}：成本与售价有效`,passed:true,tab:'pricing',providerId:offerKey(service)});
+      checks.push({label:`${service.name}：成本与模型刊例价有效`,passed:true,tab:'pricing',providerId:offerKey(service)});
     } catch (error) {
       checks.push({label:`${service.name}：${error.message}`,passed:false,tab:'pricing',providerId:offerKey(service)});
     }
@@ -37,7 +37,7 @@ export function salesStatus(state, model, providerId) {
   if (servicePurpose(model,providerId) === 'internal') return '不销售';
   if (salesPaused(model, providerId) || marketCardBlocksServiceSales(state, model, providerId)) return '已停售';
   const entry=providerOffer(model,providerId), stage=offerStage(model,entry);
-  if (stage==='unlisted' || stage==='withdrawn') return stage==='withdrawn'?'已停售':'未上架';
+  if (stage==='unlisted' || stage==='withdrawn') return stage==='withdrawn'?'已停售':'未开售';
   if (!model.callsEnabled || entry?.callsEnabled===false) return '服务不可用';
   return salesChecks(state,model,entry?.listingStage?[providerId]:undefined).every(row => row.passed) ? stage==='gray'?'灰度在售':'在售' : '不可销售';
 }

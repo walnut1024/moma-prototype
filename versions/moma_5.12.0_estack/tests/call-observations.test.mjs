@@ -12,17 +12,18 @@ import {
 
 const now = Date.parse('2026-11-08T11:15:15+08:00');
 const time = offset => new Date(now + offset).toISOString();
-const base = { modelId: 'model', publicModelId: 'model/v1', createdAt: time(-180_000), userId: 'user' };
+const base = { modelId: 'model', publicModelId: 'demo-chat', createdAt: time(-180_000), userId: 'user' };
 const attempts = [
   { dispatched: true, startedAt: time(-75_000), channelId: 'a', providerId: 'provider-a', endpointId: 'ea',
     httpStatus: 429, durationMs: 4, error: 'upstream_rate_limited', usage: { input: 0, output: 0 } },
   { dispatched: true, startedAt: time(-62_000), channelId: 'b', providerId: 'provider-b', endpointId: 'eb',
-    httpStatus: 200, durationMs: 110, usage: { input: 12, output: 8, cached: 5 } },
+    upstreamModelId: 'vendor/demo-chat-0901', httpStatus: 200, durationMs: 110, usage: { input: 12, output: 8, cached: 5 } },
 ];
 const success = { ...base, requestId: 'req-fallback', httpStatus: 200, durationMs: 200,
   stream: true, ttftMs: 40, firstPacketMs: -1, usage: { input: 12, output: 8, cached: 5 }, attempts };
 const state = {
-  models: [{ id: 'model', name: '示例模型', modelId: 'model-default', type: 'text' }],
+  modelTemplates: [{ id: 'material', modelId: 'demo-model' }],
+  models: [{ id: 'model', name: '示例模型', templateId: 'material', modelId: 'model-default', type: 'text' }],
   users: [{ id: 'user', name: '示例用户' }],
   apiKeys: [{ id: 'key', keyId: 'ak-fixture', name: '生产 Key', secretPreview: 'sensitive-fixture' }],
   requests: [
@@ -175,11 +176,13 @@ test('request outcome and duration observations are independent of attempts and 
   assert.equal(request.channel, 'b');
   assert.equal(request.userName, '示例用户');
   assert.equal(request.keyName, '生产 Key');
-  assert.equal(request.callId, 'model/v1');
+  assert.equal(request.callId, 'demo-chat');
+  assert.equal(request.registeredModelId, 'demo-model');
+  assert.equal(request.attempts[1].upstreamModelId, 'vendor/demo-chat-0901');
   assert.equal(request.keyDisplayId, 'ak-fixture');
   assert.equal(request.keyMasked, 'sensitiv*****ture');
   assert.equal(rejected.callId, undefined);
-  assert.equal(rejected.registeredModelId, 'model-default');
+  assert.equal(rejected.registeredModelId, 'demo-model');
   assert.equal(rejected.keyMasked, null);
   assert.equal(rejected.provider, null);
   assert.equal(rejected.attempts.length, 0);

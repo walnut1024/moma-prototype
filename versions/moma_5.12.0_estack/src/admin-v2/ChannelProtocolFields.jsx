@@ -38,13 +38,13 @@ export default function ChannelProtocolFields({
     </Field>
     <Field label={t('服务地址')} required help={showHelp ? t('填写上游服务的基础地址，端点路径单独配置。') : undefined}
       hint={protocol && !editable ? channelProtocolUsesFullAddress(protocol, current)
-      ? t('填写完整接口地址') : t('填写服务根地址') : undefined}>
+      ? t('填写完整请求地址') : t('填写服务地址') : undefined}>
       <Input aria-label={t('服务地址')} value={baseUrl} maxLength={2048} disabled={disabled} onChange={onBaseUrlChange}/>
     </Field>
     {repeated && <Typography.Text type="danger" role="alert">{t('服务地址已包含接口端点，请删除服务地址末尾的重复部分')}</Typography.Text>}
     {editable && !repeated && baseUrl.trim() && displayedPath && <Field label={t('完整请求地址')}>
       <Typography.Text code aria-live="polite">{connectionRequestUrl(baseUrl.trim(), displayedPath)}</Typography.Text>
     </Field>}
-    {suggestedBase && <Button theme="borderless" disabled={disabled} onClick={() => onBaseUrlChange(suggestedBase)}>{t('使用根地址')} {suggestedBase}</Button>}
+    {suggestedBase && <Button theme="borderless" disabled={disabled} onClick={() => onBaseUrlChange(suggestedBase)}>{t('使用建议的服务地址')} {suggestedBase}</Button>}
   </>;
 }

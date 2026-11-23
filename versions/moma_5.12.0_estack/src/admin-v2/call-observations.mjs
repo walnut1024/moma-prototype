@@ -9,7 +9,7 @@ const minute = 60_000, hour = 60 * minute, day = 24 * hour, week = 7 * day, beij
 const grains = [['minute', '按分钟', minute, 2 * hour], ['hour', '按小时', hour, week],
   ['day', '按天', day, 31 * day], ['week', '按周', week, 365 * day]];
 export const callPresets = [['today', '今日'], ['1h', '近 1 小时'], ['24h', '近 24 小时'], ['7d', '近 7 天'], ['30d', '近 30 天']];
-export const purposeLabels = { customer: '客户调用', diagnostic: '测试调用' };
+export const purposeLabels = { customer: '租户调用', diagnostic: '测试调用' };
 export const outcomes = { success: '成功', failed: '失败', canceled: '已取消', pending: '进行中', unknown: '未采集' };
 export const modelTypes = [['', '全部类型'], ...Object.entries(MODEL_TASK_LABELS)];
 export const errorSignals = [['rate-limit', '429'], ['timeout', '超时'], ['fallback', '回退']];
@@ -132,6 +132,10 @@ function usageFields(row, model, usage = row.usage) {
 }
 
 export function callObservations(state) {
+  const materialCodes = new Map((state.modelTemplates || []).map(row => [row.id, row.modelId]));
+  for (const row of state.models || []) {
+    if (!materialCodes.has(row.id)) materialCodes.set(row.id, row.modelId);
+  }
   const [models, users, tenants, keys, providers, endpoints, projects] =
     [state.models, state.users, state.tenants, state.gatewayKeyOptions ?? state.apiKeys, state.providers, state.endpoints, state.projects]
       .map(collection => new Map((collection || []).map(row => [row.id, row])));
@@ -219,7 +223,7 @@ export function callObservations(state) {
     rows.push({
       ...request, provider, providerName: routed ? final?.providerName || record.providerName || providerName(provider) : null,
       channel, channelName: routed ? final?.channelName || record.channelName || endpoints.get(channel)?.name || channel : null,
-      registeredModelId: model?.modelId,
+      registeredModelId: materialCodes.get(model?.templateId || model?.id),
       keyMasked: typeof key?.secretPreview === 'string' && key.secretPreview.trim() ? maskApiKey(key.secretPreview) : null,
       endpoint, endpointName: final?.endpointName || endpoints.get(endpoint)?.endpointId || endpoint,
       code, errorReason: record.errorMessage || rejected?.errorMessage || (outcome === 'failed' ? final?.errorReason : null),
@@ -264,7 +268,7 @@ export function searchObservationIdentities(rows, dimension, tenants, input, lim
     const exact = id.toLowerCase() === query || displayId.toLowerCase() === query;
     if (!exact && (!tenants?.length || !name.toLowerCase().includes(query))) continue;
     if (items.size === limit) return { items: [...items.values()], hasMore: true };
-    items.set(id, { id, label: [...new Set([name, row.tenantName || '客户未采集', displayId])].join(' · ') });
+    items.set(id, { id, label: [...new Set([name, row.tenantName || '租户未采集', displayId])].join(' · ') });
   }
   return { items: [...items.values()], hasMore: false };
 }

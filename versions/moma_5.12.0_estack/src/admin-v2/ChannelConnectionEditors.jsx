@@ -67,7 +67,7 @@ function ConnectionChanges({ connection, next, name, note, sourceType, showCrede
 function AffectedModels({ connection, impact, checks }) {
   const { models } = connection;
   const byId = new Map(models.map(model => [model.association.id, model]));
-  return <GridTable headings={['模型', '上游模型调用标识', '关联服务', '验证状态']} empty={!impact.mappings.length} emptyMessage="暂无已接入模型">
+  return <GridTable headings={['模型', '上游模型 ID', '关联服务', '验证状态']} empty={!impact.mappings.length} emptyMessage="暂无已接入模型">
     {impact.mappings.map(mapping => {
       const check = checks.find(record => record.associationId === mapping.id);
       const services = impact.services.filter(service => service.associationIds.includes(mapping.id));
@@ -305,11 +305,11 @@ export function ChannelModelEditor({ model, connection, ops, close }) {
   };
   return <SupplierCreationDialog title="编辑模型" cancel={() => !busy && ops.proceed(close)}
     submit={save} action="保存" disabled={disabled || !value.upstream.trim() || !value.displayName.trim() || (!upstreamChanged && !displayNameChanged)}>
-    <Field label="模型标识 *"><Input aria-label="模型标识" value={value.upstream} maxLength={200} disabled={disabled}
+    <Field label="上游模型 ID *"><Input aria-label="上游模型 ID" value={value.upstream} maxLength={200} disabled={disabled}
       onChange={upstream => update({ upstream })}/></Field>
-    <Field label="展示名称 *"><Input aria-label="展示名称" value={value.displayName} maxLength={120} disabled={disabled}
+    <Field label="模型展示名称 *"><Input aria-label="模型展示名称" value={value.displayName} maxLength={120} disabled={disabled}
       onChange={displayName => update({ displayName })}/></Field>
-    {upstreamChanged && <Notice>修改模型标识后，需重新测试该模型。</Notice>}
+    {upstreamChanged && <Notice>修改上游模型 ID后，需重新测试该模型。</Notice>}
     {ops.error && <Notice error>{ops.error}</Notice>}
   </SupplierCreationDialog>;
 }

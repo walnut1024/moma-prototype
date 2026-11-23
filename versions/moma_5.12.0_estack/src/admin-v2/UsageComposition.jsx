@@ -16,7 +16,7 @@ const { Text, Title, Paragraph } = Typography;
 const percent = (value, total) => total > 0 ? `${(value / total * 100).toFixed(2)}%` : '—';
 const amount = value => formatUsageNumber(value).replace('w', '万');
 const bandLabel = label => label.replace(/^(has|no)VideoInput/, '$1Video\nInput\n').replace('/', '/\n').replace('-', '-\n');
-const subjects = { category: '模型类型', providerId: '服务商', modelId: '模型', tenantId: '客户' };
+const subjects = { category: '模型类型', providerId: '服务商', modelId: '模型', tenantId: '租户' };
 
 export function UsageShare({ state, range, clock, filters, onChange, volume = false, settings, onSettings }) {
   const [showAll, setShowAll] = useState(false);
@@ -99,9 +99,9 @@ export function UsageDistribution({ facts, single }) {
   const data = usageDistributions(facts);
   const excluded = [data.pendingTokenCalls ? `${amount(data.pendingTokenCalls)} 次计量待确认` : '', data.nonTokenCalls ? `${amount(data.nonTokenCalls)} 次非 Token 计量` : ''].filter(Boolean);
   const charts = [
-    { id: 'customer', title: single ? '客户调用量分层统计' : '客户调用量分层', subtitle: '按每客户已确认的 Token 总量分档，含各档下限', rows: data.tokenCustomers, unit: '个客户', total: `${amount(data.tokenCustomerCount)} 个客户`,
-      note: [data.customerCount > data.tokenCustomerCount && `${amount(data.customerCount - data.tokenCustomerCount)} 个客户无已确认 Token`,
-        data.unknownCustomerCalls > 0 && `${amount(data.unknownCustomerCalls)} 次调用未归属客户`].filter(Boolean).join(' · ') },
+    { id: 'customer', title: single ? '租户调用量分层统计' : '租户调用量分层', subtitle: '按每租户已确认的 Token 总量分档，含各档下限', rows: data.tokenCustomers, unit: '个租户', total: `${amount(data.tokenCustomerCount)} 个租户`,
+      note: [data.customerCount > data.tokenCustomerCount && `${amount(data.customerCount - data.tokenCustomerCount)} 个租户无已确认 Token`,
+        data.unknownCustomerCalls > 0 && `${amount(data.unknownCustomerCalls)} 次调用未归属租户`].filter(Boolean).join(' · ') },
     ...(single ? [{ id: 'segment', title: 'Token 分段统计 — 调用次数（万次）', subtitle: segment === 'billing' ? '按请求记录的计费档位汇总' : '按单次请求的实际总 Token 分段',
       rows: segment === 'billing' ? data.billingBands : data.tokens, unit: '次',
       total: `${amount(segment === 'billing' ? facts.length : data.tokenCalls)} 次调用`,
@@ -109,7 +109,7 @@ export function UsageDistribution({ facts, single }) {
         ? data.missingBillingBands > 0 && `其他含 ${amount(data.missingBillingBands)} 次未记录档位的调用`
         : excluded.length > 0 && `${excluded.join('、')}，未计入分段。` }] : []),
   ];
-  return <Card title={<Title heading={5} component="h2">{single ? '客户调用量分层与 Token 分段' : '客户调用量分层'}</Title>}>
+  return <Card title={<Title heading={5} component="h2">{single ? '租户调用量分层与 Token 分段' : '租户调用量分层'}</Title>}>
     {!facts.length ? <Paragraph type="secondary" className="ua-native-chart-empty">所选条件下暂无调用记录</Paragraph> :
       <div className={single ? 'admin-analysis-plot-grid' : undefined}>{charts.map(chart => <div key={chart.id}>
         <div className="ua-native-fact-row">
@@ -126,9 +126,9 @@ export function UsageDistribution({ facts, single }) {
           <TimeSeriesChart className={chart.id === 'segment' && segment === 'billing' ? 'ua-report-bands' : undefined}
             compact showData={false} type="bar" height={250} label={chart.title}
             labels={chart.rows.map(row => bandLabel(row.label.replace('及以上', '+')))}
-            series={[{ label: chart.id === 'segment' ? '调用次数' : '客户数量',
+            series={[{ label: chart.id === 'segment' ? '调用次数' : '租户数量',
               values: chart.rows.map(row => chart.id === 'segment' ? row.value / 10000 : row.value), total: true, showValues: chart.id === 'customer' }]}
-            unit={chart.id === 'segment' ? '万次' : '个客户'}/>
+            unit={chart.id === 'segment' ? '万次' : '个租户'}/>
         </div>
         <span className="sr-only">{chart.rows.map(row => `${row.label}：${row.value}${chart.unit}`).join('；')}</span>
         {chart.note && <Paragraph size="small" type="tertiary">{chart.note}</Paragraph>}

@@ -102,7 +102,7 @@ export function deploymentTransaction(state, action) {
         let endpointId = endpoint?.id;
         if (endpoint) updateEndpoint('运行中');
         else {
-          if (!state.providers.some(row => row.id === 'provider-self')) throw new Error('自有推理服务商未登记，不能生成服务端点');
+          if (!state.providers.some(row => row.id === 'provider-self')) throw new Error('自有模型推理服务的服务商未登记，不能生成服务端点');
           endpointId = resourceId('connection');
           changes.push({ type: 'add', collection: 'endpoints', record: { id: endpointId, endpointId: `ep-${item.deploymentId}`, name: item.name, providerId: 'provider-self', protocol: 'OpenAI', baseUrl: `https://inference.demo.invalid/${item.deploymentId}/v1`, credentialRef: 'managed-by-platform', modelIds: [item.modelId], capacity: null, health: null, status: '运行中' } });
         }

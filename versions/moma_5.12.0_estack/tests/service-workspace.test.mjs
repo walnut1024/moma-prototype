@@ -51,10 +51,10 @@ test('service list keeps independent public call references and shows each chann
  ]);
  assert.ok(serviceDirectoryRows([{ ...model, callsEnabled: false }], { providers }).every(row => !row.started));
  assert.deepEqual(serviceDirectoryRows([model], { providers }, 'stopped').map(row => [row.callId, callStateLabel(row.started)]), [
-  ['moma/west', '已停止'], ['', '已停止'],
+  ['moma/west', '已停服'], ['', '已停服'],
  ]);
- assert.equal(callStateLabel(modelServiceStarted({ ...model, marketVisible: false, listingStatus: '已下架' })), '已启动');
- assert.equal(callStateLabel(modelServiceStarted({ ...model, serviceProviders: serviceProviders.slice(1) })), '已停止');
+ assert.equal(callStateLabel(modelServiceStarted({ ...model, marketVisible: false, listingStatus: '已下架' })), '服务中');
+ assert.equal(callStateLabel(modelServiceStarted({ ...model, serviceProviders: serviceProviders.slice(1) })), '已停服');
 });
 
 test('model directory keeps custom records and existing examples visible without deleting data',()=>{
@@ -82,11 +82,11 @@ test('unified pricing rejects blanks, negatives, invalid units, duplicate items 
  for(const amount of ['', '-1','0.0000001','NaN'])assert.throws(()=>transact(state,'unifiedPrice',model.id,{...valid,items:[{...valid.items[0],amount}]}));
  for(const patch of [{items:[]},{items:[{...valid.items[0],unit:''}]},{items:[valid.items[0],valid.items[0]]},{expectedUpdatedAt:'stale'},{expectedSaleVersion:'stale'}])assert.throws(()=>transact(state,'unifiedPrice',model.id,{...valid,...patch}));
  assert.deepEqual(state,before);
- model.serviceMode='provider';assert.throws(()=>transact(state,'unifiedPrice',model.id,valid),/具体模型服务配置售价/);
+ model.serviceMode='provider';assert.throws(()=>transact(state,'unifiedPrice',model.id,valid),/具体模型服务配置模型刊例价/);
 });
 test('a unified model cannot edit or publish a channel retail offer',()=>{
  const {state,model}=setup(), supply=modelSupplies(state,model.id)[0];
- assert.throws(()=>transact(state,'reprice',model.id,{}),/模型服务售价/);
+ assert.throws(()=>transact(state,'reprice',model.id,{}),/模型刊例价/);
  assert.throws(()=>transact(state,'publishSupply',model.id,{id:supply.id}),/不能独立售卖/);
 });
 test('unified billing always snapshots the model price, independent of the chosen supplier price',()=>{

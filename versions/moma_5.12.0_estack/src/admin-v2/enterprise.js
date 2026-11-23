@@ -121,7 +121,7 @@ export function enterpriseTransaction(state, command) {
     let targetId = tenantId;
     if (operation === 'create') {
       const name = required(data.companyName, '公司/机构名称', 120);
-      if (!['企业', '政府'].includes(data.type)) throw new Error('请选择有效的客户类型');
+      if (!['企业', '政府'].includes(data.type)) throw new Error('请选择有效的租户类型');
       if (String(data.notes || '').length > 500) throw new Error('备注不能超过 500 个字符');
       if (deploymentMode !== undefined && !['私有云','私有化'].includes(deploymentMode)) throw Error('请选择有效的部署方式');
       targetId = requireId('tenant');
@@ -136,7 +136,7 @@ export function enterpriseTransaction(state, command) {
     if (!tenant) throw new Error('企业不存在，请返回列表');
     if (operation === 'edit') {
       const name = required(data.companyName, '公司/机构名称', 120);
-      if (!['企业', '政府'].includes(data.type)) throw new Error('请选择有效的客户类型');
+      if (!['企业', '政府'].includes(data.type)) throw new Error('请选择有效的租户类型');
       if (String(data.notes || '').length > 500) throw new Error('备注不能超过 500 个字符');
       changes.push({ type: 'update', collection: 'tenants', id: tenantId, changes: { name, ...metadata(data), type: data.type, notes: data.notes?.trim() || '' } });
       const adminIds = [...new Set(enterpriseAdmins(state, tenant).map(member => member.userId))];

@@ -64,7 +64,7 @@ function ReferenceModelList({ active, canEdit, checking, selected, onSelect, onR
       ? '自动获取模型列表需要上游服务商提供当前连接配置的模型列表接口。如果上游未提供该接口，可从「添加上游模型」选择或录入。'
       : '自动获取模型列表需要上游服务商提供 OpenAI 兼容的模型列表接口（GET /models）。如果上游未提供该接口，可从「添加上游模型」选择或录入。'}</Notice>
     <Descriptions align="left" data={[
-      { key: '模型列表协议', value: protocol },
+      { key: '模型列表接口格式', value: protocol },
       { key: '服务地址（Base URL）', value: <CopyId copyAtStart value={baseUrl} label="服务地址"/> },
       { key: '模型列表请求地址', value: <CopyId copyAtStart value={url} displayValue={method + ' ' + url} label="模型列表请求地址"/> },
     ]}/>
@@ -88,7 +88,7 @@ function ReferenceModelList({ active, canEdit, checking, selected, onSelect, onR
         {result?.source === 'mock' && <Notice>上游模型列表为模拟结果。</Notice>}
         {error && <Notice error>{error}</Notice>}
       </>}
-      {models.length > 0 && <Input aria-label="搜索上游模型调用标识" placeholder="搜索上游模型调用标识"
+      {models.length > 0 && <Input aria-label="搜索上游模型 ID" placeholder="搜索上游模型 ID"
         prefix={<IconSearch aria-hidden="true"/>} style={{ width: 280, maxWidth: '100%' }} showClear value={query}
         onChange={value => demo ? setDemo({ ...demo, search: value }) : setSearch(value)}/>}
       <Table size="small" rowKey="upstreamModelId" dataSource={visible} empty={<Empty description={empty}/>}
@@ -102,7 +102,7 @@ function ReferenceModelList({ active, canEdit, checking, selected, onSelect, onR
             render: (_, row) => row.existingAssociationId ? '已添加' : candidateIds.has(row.upstreamModelId) &&
               <Checkbox aria-label={'选择上游模型 ' + row.upstreamModelId} checked={displayedSelection.includes(row.upstreamModelId)}
                 disabled={!canSelect} onChange={event => changeSelection([row.upstreamModelId], event.target.checked)}/> },
-          { title: '上游模型调用标识', render: (_, row) => <CopyId value={row.upstreamModelId} label="上游模型调用标识"/> },
+          { title: '上游模型 ID', render: (_, row) => <CopyId value={row.upstreamModelId} label="上游模型 ID"/> },
         ]}/>
       <span className="sr-only" id={selectionSummaryId}>已选 {displayedSelection.length} 款，可选 {visibleIds.length} 款</span>
       {!demo && selected.length > 50 && <Typography.Text type="secondary" role="status">每批最多接入 50 款模型，请减少所选模型。</Typography.Text>}
@@ -266,7 +266,7 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
       <Table size="small" rowKey="upstreamModelId" dataSource={summary} empty={<Empty description="未发现模型差异"/>}
         pagination={{ pageSize: 10, hideOnSinglePage: true }} columns={[
           { title: '变化', dataIndex: 'kind' },
-          { title: '上游模型调用标识', render: (_, row) => <CopyId value={row.upstreamModelId} label="上游模型调用标识"/> },
+          { title: '上游模型 ID', render: (_, row) => <CopyId value={row.upstreamModelId} label="上游模型 ID"/> },
           { title: '当前资料', render: (_, row) => libraryRecord(state, row.libraryId)?.name || row.modelId || '待关联资料' },
           { title: '处理方式', render: (_, row) => row.kind === '疑似移除' ? '保留现有供给，经复测与影响核对再处理' :
             row.kind === '属性差异' ? row.attributes.filter(item => item.different).map(item => item.label + '：' + item.current + ' → ' + item.observed).join('、') : '确认采购范围和模型身份' },
@@ -287,9 +287,9 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
     <Checkbox checked={policyDraft.enabled} disabled={applying} onChange={event => setPolicyDraft(value => ({ ...value, enabled: event.target.checked }))}>启用到期检测规则</Checkbox>
     <Field label="间隔（分钟）"><InputNumber aria-label="检测间隔" min={5} max={1440} value={policyDraft.intervalMinutes}
       disabled={applying} onChange={intervalMinutes => setPolicyDraft(value => ({ ...value, intervalMinutes: Number(intervalMinutes) }))}/></Field>
-    <Field label="忽略模型（每行一项）"><TextArea aria-label="忽略模型" value={policyDraft.ignored} placeholder="模型标识、test-model-* 或 re:^test-[0-9]+$"
+    <Field label="忽略模型（每行一项）"><TextArea aria-label="忽略模型" value={policyDraft.ignored} placeholder="上游模型 ID、test-model-* 或 re:^test-[0-9]+$"
       disabled={applying} maxLength={5000} onChange={ignored => setPolicyDraft(value => ({ ...value, ignored }))}/></Field>
-    <Field label="采购白名单（每行一个精确上游标识）"><TextArea aria-label="采购白名单" value={policyDraft.whitelist}
+    <Field label="采购白名单（每行一个精确上游模型 ID）"><TextArea aria-label="采购白名单" value={policyDraft.whitelist}
       disabled={applying} maxLength={5000} onChange={whitelist => setPolicyDraft(value => ({ ...value, whitelist }))}/></Field>
     {(error || ops.error) && <Notice error>{error || ops.error}</Notice>}
   </Modal>}

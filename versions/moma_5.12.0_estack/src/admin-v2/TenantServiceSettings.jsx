@@ -9,7 +9,7 @@ import { EnterpriseDialog, EnterpriseTable } from './EnterpriseUI';
 
 const { Text } = Typography;
 const label = {
-  level:'设置服务等级', 'open-models':'开通新模型', 'model-limits':'限流设置', 'remove-model':'移除模型',
+  level:'设置服务等级', 'open-models':'授权模型服务', 'model-limits':'限流设置', 'remove-model':'移除模型',
 };
 const amount = value => value == null ? '未设置' : value.toLocaleString('zh-CN');
 const limitValue = value => value === '' ? null : Number(value);
@@ -49,7 +49,7 @@ export function TenantServiceSettings({ state, tenant, section, canWrite, transa
       await transact({type:'tenantServiceSettings',tenantId:tenant.id,operation,data:input},revision);
       if (operation==='open-models') { setQuery(''); setPage(1); }
       setEditor(null);
-      Toast.success(({level:'服务等级已保存','open-models':'模型已开通','model-limits':'限流已保存','remove-model':'模型已移除'})[operation]);
+      Toast.success(({level:'服务等级已保存','open-models':'已授权','model-limits':'限流已保存','remove-model':'模型已移除'})[operation]);
     } catch (issue) { setError(issue.message); }
     finally { setSaving(false); }
   }
@@ -66,9 +66,9 @@ export function TenantServiceSettings({ state, tenant, section, canWrite, transa
     </Space>}
     {section==='models' && <>
       <div className="admin-page-heading">
-        <Input className="admin-list-search" aria-label="搜索已开通模型" prefix={<IconSearch aria-hidden="true"/>}
-          placeholder="搜索模型名称或调用标识" value={query} onChange={value=>{setQuery(value);setPage(1);}} showClear/>
-        {writable && <Button theme="solid" onClick={()=>open('open-models',{modelIds:[]})}>开通新模型</Button>}
+        <Input className="admin-list-search" aria-label="搜索已授权的模型服务" prefix={<IconSearch aria-hidden="true"/>}
+          placeholder="搜索模型服务名称或模型 ID" value={query} onChange={value=>{setQuery(value);setPage(1);}} showClear/>
+        {writable && <Button theme="solid" onClick={()=>open('open-models',{modelIds:[]})}>授权模型服务</Button>}
       </div>
       <EnterpriseTable columns={['模型服务','状态','模型级限流','操作']}
         rows={rows.slice((current-1)*size,current*size).map(({modelId,rpm,tpm})=>({id:modelId,cells:[
@@ -82,7 +82,7 @@ export function TenantServiceSettings({ state, tenant, section, canWrite, transa
             <Button size="small" theme="borderless" type="danger" aria-label={'移除 '+name(modelId)}
               onClick={()=>open('remove-model',{modelId})}>移除</Button>
           </Space> : '—',
-        ]}))} empty={query.trim() ? '暂无匹配的模型' : '当前租户暂无已开通的模型服务'}
+        ]}))} empty={query.trim() ? '暂无匹配的模型' : '当前租户暂无已授权的模型服务'}
         pagination={{currentPage:current,pageSize:size,total:rows.length,pageSizeOpts:PAGE_SIZES,showTotal:true,showSizeChanger:true,
           onPageChange:setPage,onPageSizeChange:value=>{setSize(value);setPage(1);}}}/>
     </>}
@@ -90,15 +90,15 @@ export function TenantServiceSettings({ state, tenant, section, canWrite, transa
       footer={<><Button onClick={close} disabled={saving}>取消</Button>
         {!(operation==='open-models' && !options.length) && <Button form={'tenant-service-'+section} htmlType="submit"
           theme="solid" type={removing ? 'danger' : 'primary'} loading={saving} disabled={submitDisabled}>
-          {removing ? '确认移除' : operation==='open-models' ? '开通' : '保存'}
+          {removing ? '确认移除' : operation==='open-models' ? '授权' : '保存'}
         </Button>}</>}>
       <form id={'tenant-service-'+section} className="admin-analytics-fields" onSubmit={submit}>
         {operation==='level' && <Select aria-label="服务等级" optionList={levelOptions} value={data.level}
           placeholder="请选择服务等级" onChange={value=>set('level',value)} disabled={saving}/>}
         {operation==='open-models' && (options.length
           ? <Select aria-label="选择模型服务" multiple filter showClear optionList={options} value={data.modelIds}
-              placeholder="搜索并选择可开通的模型服务" onChange={value=>set('modelIds',value || [])} disabled={saving}/>
-          : <Text type="secondary">当前租户暂无可新增开通的模型服务。</Text>)}
+              placeholder="搜索并选择可授权的模型服务" onChange={value=>set('modelIds',value || [])} disabled={saving}/>
+          : <Text type="secondary">当前租户暂无可授权的模型服务。</Text>)}
         {operation==='model-limits' && <>
           <Text strong>{name(data.modelId)}</Text>
           <label>RPM（每分钟请求数）<Input type="number" min={1} step={1} aria-label="RPM" placeholder="未设置"

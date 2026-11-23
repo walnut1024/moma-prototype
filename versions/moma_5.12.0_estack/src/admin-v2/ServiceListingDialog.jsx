@@ -15,7 +15,7 @@ export default function ServiceListingDialog({state,model,ops,stage,close,initia
   const [tenantIds,setTenantIds]=useState(selectOffers ? [] : model.releaseTenantIds || []),[revision]=useState(model.updatedAt),[busy,setBusy]=useState(false);
   const [selected,setSelected]=useState(initialOfferKey ? [initialOfferKey] : []),[validation,setValidation]=useState(null);
   const gray=stage==='gray',withdraw=stage==='withdrawn';
-  const label=withdraw?'下架':gray?'灰度开售':'开售模型服务';
+  const label=withdraw?'停售':gray?'灰度开售':'开售模型服务';
   const tenants=scopeTenants(state).filter(tenant=>!selectOffers || salesCustomer(model,tenant.id));
   const changed=revision!==model.updatedAt;
   const groups=new Map();
@@ -45,7 +45,7 @@ export default function ServiceListingDialog({state,model,ops,stage,close,initia
   if (validation) return <PlatformTrialDialog state={state} model={model} ops={ops} providerId={validation.providerId} close={()=>setValidation(null)} onPublished={close}/>;
   return <Modal wide title={label} description={model.name} onClose={()=>!busy && close()} footer={<>
     <Button disabled={busy} onClick={close}>取消</Button>
-    <Button loading={busy} disabled={!ops.can || Boolean(ops.conflict) || busy || changed || invalid || checks.some(row=>!row.passed)} onClick={submit}>{withdraw ? "确认下架" : gray ? "确认灰度开售" : "确认开售"}</Button>
+    <Button loading={busy} disabled={!ops.can || Boolean(ops.conflict) || busy || changed || invalid || checks.some(row=>!row.passed)} onClick={submit}>{withdraw ? "确认停售" : gray ? "确认灰度开售" : "确认开售"}</Button>
   </>}>
     {selectOffers && <div>
       <Typography.Title heading={6}>模型服务</Typography.Title>
@@ -63,8 +63,8 @@ export default function ServiceListingDialog({state,model,ops,stage,close,initia
     </div>}
     {withdraw && <Typography.Paragraph>所选模型服务将停止新订购和新调用。</Typography.Paragraph>}
     {gray && <>
-      <Typography.Title heading={6}>灰度客户</Typography.Title>
-      <Table pagination={false} rowKey="id" dataSource={tenants} columns={[{title:'选择',width:80,render:(_,tenant)=><Checkbox aria-label={`灰度客户 ${tenant.name}`} checked={tenantIds.includes(tenant.id)} disabled={!ops.can || busy} onChange={event=>{setTenantIds(ids=>event.target.checked?[...ids,tenant.id]:ids.filter(id=>id!==tenant.id));ops.dirty(true);}}/>},{title:'客户名称',dataIndex:'name'},{title:'客户 ID',dataIndex:'id'}]} empty="暂无有效客户。"/>
+      <Typography.Title heading={6}>销售对象</Typography.Title>
+      <Table pagination={false} rowKey="id" dataSource={tenants} columns={[{title:'选择',width:80,render:(_,tenant)=><Checkbox aria-label={`销售对象 ${tenant.name}`} checked={tenantIds.includes(tenant.id)} disabled={!ops.can || busy} onChange={event=>{setTenantIds(ids=>event.target.checked?[...ids,tenant.id]:ids.filter(id=>id!==tenant.id));ops.dirty(true);}}/>},{title:'租户名称',dataIndex:'name'},{title:'租户 ID',dataIndex:'id'}]} empty="暂无有效租户。"/>
     </>}
     {(!selectOffers || selectedKeys.length>0) && <ul className="ss-checks">{checks.map((check,index)=><li key={index}><span>{check.passed?'✓':'待完成'} {check.label}</span>{!check.passed && (check.tab==='platform' || serviceConfigurationTarget(model,check)) && <Button theme="borderless" disabled={busy || (check.tab==='platform' && !ops.can)} onClick={()=>ops.proceed(()=>{
       if(check.tab==='platform'){setValidation(check);return;}

@@ -57,7 +57,7 @@ export function MultiChoice({ label, choices, value = [], onChange, disabled, gr
     </Select>
   </>;
 }
-export function CopyId({ value, label = '模型调用标识', ellipsis, displayValue = value, alignCopy = false, copyAtStart = false }) {
+export function CopyId({ value, label = '模型 ID', ellipsis, displayValue = value, alignCopy = false, copyAtStart = false }) {
   const copied = `${label} 已复制`;
   if (copyAtStart) {
     if (!value) return '—';

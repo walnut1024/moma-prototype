@@ -9,7 +9,7 @@ export const sections = [
   { id: "analytics", workspace: "operations", title: "运营分析", items: [
     { id: "usage", label: "用量数据", children: [["usage-analysis", "用量数据"]] },
     { id: "users-analysis", label: "用户数据", children: [["user-analysis", "用户数据"]] },
-    { id: "customers-analysis", label: "客户数据", children: [["customer-analysis", "客户数据"]] },
+    { id: "customers-analysis", label: "租户数据", children: [["customer-analysis", "租户数据"]] },
   ]},
   { id: "models", workspace: "operations", title: "模型运营", items: [
     { id: "channels-reference", label: "模型接入", children: [["providers-reference", "连接列表"], ["providers-health", "连接健康"]] },
@@ -62,8 +62,8 @@ export const pages = {
   projects: {id:'projects',label:'项目管理',area:'enterprise',areaLabel:'租户管理',group:'访问控制',groupId:'customers'},
   ...Object.fromEntries(monitoringLinks.map(([id, label]) => [id, { id, label, area: 'monitoring', areaLabel: '服务监控', group: '网关管理', groupId: 'gateway' }])),
   ...Object.fromEntries([['goods', '商品与套餐'], ['announcements', '公告与服务通知'], ['ledger', '账户与额度流水'], ['settlement', '服务商对账与结算'], ['adjustments', '退款与调账']].map(([id, label]) => [id, { id, label, area: 'commerce-orders', areaLabel: '订购与账单', group: '商业运营', groupId: 'commerce' }])),
-  'customer-analysis-detail': { id: 'customer-analysis-detail', label: '客户详情', area: 'customers-analysis', areaLabel: '客户数据', group: '运营分析', groupId: 'analytics' },
-  'customer-usage-detail': { id: 'customer-usage-detail', label: '客户详情', area: 'users-analysis', areaLabel: '用户数据', group: '运营分析', groupId: 'analytics' },
+  'customer-analysis-detail': { id: 'customer-analysis-detail', label: '租户详情', area: 'customers-analysis', areaLabel: '租户数据', group: '运营分析', groupId: 'analytics' },
+  'customer-usage-detail': { id: 'customer-usage-detail', label: '租户详情', area: 'users-analysis', areaLabel: '用户数据', group: '运营分析', groupId: 'analytics' },
 };
 
 export const WORKSPACES = { operations: '运营', maintenance: '运维' };

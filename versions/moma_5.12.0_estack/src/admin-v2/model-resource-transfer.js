@@ -173,7 +173,7 @@ export function importModelResources(state, file, run, expectedTarget) {
       if (!same(row.capacity_limits, original.capacity_limits)) apply(run(working, { operation: 'channelCapacitySave', data: {
         providerId: provider.id, endpointId: association.endpointId, associationId: association.id, expectedCapacityRevision: row.capacity_revision, limits: row.capacity_limits } }));
       if (!same(row.procurement, original.procurement)) {
-        if (!row.procurement || !same(Object.keys(row.procurement).sort(), Object.keys(original.procurement).sort()) || row.procurement.price_version_id !== original.procurement.price_version_id || row.procurement.revision !== original.procurement.revision) throw Error('采购价格版本及关联字段不可修改');
+        if (!row.procurement || !same(Object.keys(row.procurement).sort(), Object.keys(original.procurement).sort()) || row.procurement.price_version_id !== original.procurement.price_version_id || row.procurement.revision !== original.procurement.revision) throw Error('服务商成本价版本及关联字段不可修改');
         validatePriceItems(working, row.procurement.items, original.procurement.items);
         apply(channelChangeTransaction(working, { operation: 'channelProcurementPublish', data: { providerId: provider.id, endpointId: association.endpointId,
           associationId: association.id, expectedPriceRevision: row.procurement.revision, effectiveAt: row.procurement.effective_at, expiresAt: row.procurement.expires_at,

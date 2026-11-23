@@ -17,7 +17,7 @@ const header = field => field.label + (field.unit ? `（${field.unit}）` : '');
 const profileFields = [...IDENTITY_FIELDS, ...TECHNICAL_FIELDS, ...PRESENTATION_FIELDS, ...COMMON_FIELDS, ...INTERFACE_FIELDS, ...FEATURE_FIELDS, ...Object.keys(TASK_OPTIONS).flatMap(type => specificationFields(type, '', { tasks: TASK_OPTIONS[type] })), ...RECORD_FIELDS, column('detailDescription', '详细介绍')];
 const basicProfileFields = [...PRESENTATION_FIELDS, ...COMMON_FIELDS, ...IDENTITY_FIELDS.filter(field => ['family', 'version', 'releaseDate'].includes(field.key))];
 export const MODEL_IMPORT_FIELDS = [
-  column('modelId', '模型编码', 'model'), column('name', '模型资料名称', 'model'), column('type', '模型类型', 'model'), column('visualType', '视觉任务类型', 'model'),
+  column('modelId', '模型编码', 'model'), column('name', '模型展示名称', 'model'), column('type', '模型类型', 'model'), column('visualType', '视觉任务类型', 'model'),
   ...PRESENTATION_FIELDS.filter(field => ['author', 'logo'].includes(field.key)),
   ...IDENTITY_FIELDS.filter(field => ['family', 'version', 'releaseDate'].includes(field.key)), column('description', '模型描述', 'model'),
   ...COMMON_FIELDS, ...PRESENTATION_FIELDS.filter(field => ['languages', 'scenarios'].includes(field.key)),
@@ -26,7 +26,7 @@ export const MODEL_IMPORT_FIELDS = [
   ...profileFields.filter((field, index, all) => !basicProfileFields.some(item => item.key === field.key) && all.findIndex(item => header(item) === header(field)) === index),
 ].map(field => ({ target: 'profile', ...field, header: header(field) }));
 export const MODEL_IMPORT_HEADERS = MODEL_IMPORT_FIELDS.map(field => field.header);
-export const MODEL_IMPORT_REQUIRED_HEADERS = ['模型编码', '模型资料名称', '模型类型'];
+export const MODEL_IMPORT_REQUIRED_HEADERS = ['模型编码', '模型展示名称', '模型类型'];
 export const MODEL_IMPORT_TEMPLATE_HEADERS = MODEL_IMPORT_HEADERS.map(label => MODEL_IMPORT_REQUIRED_HEADERS.includes(label) ? `${label}（必填）` : label === '视觉任务类型' ? `${label}（视觉模型必填）` : label);
 export const MODEL_IMPORT_TEMPLATE = [MODEL_IMPORT_HEADERS, ...mockConfig['admin-v2/model-import.js'].MODEL_IMPORT_EXAMPLES.map(example =>
   MODEL_IMPORT_HEADERS.map(label => label === '模型类型' ? MODEL_CATALOGUE_TYPES[importedTypes.get(example[label])] : example[label] ?? ''))];
@@ -34,7 +34,7 @@ export const MODEL_IMPORT_TEMPLATE = [MODEL_IMPORT_HEADERS, ...mockConfig['admin
 export function modelRowsFromCells(cells) {
   const clean = cells.map(row => row.map(cell => cell instanceof Date ? cell.toISOString().slice(0, 10) : String(cell ?? '').trim()));
   const labels = (clean[0] || []).map(label => MODEL_IMPORT_HEADERS[MODEL_IMPORT_TEMPLATE_HEADERS.indexOf(label)] || label);
-  if (MODEL_IMPORT_REQUIRED_HEADERS.some(label => !labels.includes(label))) throw new Error('表头不匹配，请下载最新模板，保留模型编码、模型资料名称和模型类型');
+  if (MODEL_IMPORT_REQUIRED_HEADERS.some(label => !labels.includes(label))) throw new Error('表头不匹配，请下载最新模板，保留模型编码、模型展示名称和模型类型');
   if (new Set(labels).size !== labels.length || labels.some(label => !MODEL_IMPORT_HEADERS.includes(label) && !IMPORT_REPORT_HEADERS.includes(label))) throw new Error('表头含重复或未知字段，请使用最新模板，可删除不需要的可选列');
   const rows = clean.slice(1).map((row, index) => ({ rowNumber: index + 2, cells: row })).filter(row => row.cells.some(Boolean));
   if (!rows.length) throw new Error('没有可导入的模型，请填写至少一条记录');
@@ -60,7 +60,7 @@ export function validateModelRows(state, rows, { catalogue = true, reuseExisting
   return rows.map(row => {
     const values = Object.fromEntries(MODEL_IMPORT_HEADERS.map((label, index) => [label, row.cells[index] || '']));
     const tasks = split(values['支持任务']);
-    const data = { modelId: values['模型编码'], name: values['模型资料名称'], description: values['模型描述'], type: importedTypes.get(values['模型类型']), profile: {}, capabilities: { streaming: null, tools: null, context: null, output: null } };
+    const data = { modelId: values['模型编码'], name: values['模型展示名称'], description: values['模型描述'], type: importedTypes.get(values['模型类型']), profile: {}, capabilities: { streaming: null, tools: null, context: null, output: null } };
     try {
       if (data.type === 'visual') {
         data.type = { '图像': 'image', '视频': 'video' }[values['视觉任务类型']];
@@ -83,7 +83,7 @@ export function validateModelRows(state, rows, { catalogue = true, reuseExisting
         data[field.target][field.key] = value;
       }
       const code = data.modelId.toLowerCase(), identity = catalogue ? library.get(code) : null;
-      if (catalogue && identity === null) throw new Error('模型编码匹配到多份资料，请先核对主档');
+      if (catalogue && identity === null) throw new Error('模型编码匹配到多份资料，请先核对模型资料');
       if (identity && !reuseExisting) throw new Error('模型编码已存在，请维护已有模型资料');
       if (identity && !active.has(identity.id)) throw new Error('模型编码已被归档资料使用，请核对');
       const existing = identity && modelMaterial(state, identity.id);

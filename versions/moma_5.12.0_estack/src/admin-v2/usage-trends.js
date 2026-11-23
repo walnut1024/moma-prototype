@@ -1,7 +1,7 @@
 import { usageBuckets, usageFilterOptions, usageModelTypes, usageMeter } from './usage-analysis.js';
 import { usageTokenValue } from './usage-distributions.js';
 
-export const usageDimensions = [['category', '按模型类型'], ['providerId', '按服务商'], ['modelId', '按模型'], ['tenantId', '按客户']];
+export const usageDimensions = [['category', '按模型类型'], ['providerId', '按服务商'], ['modelId', '按模型'], ['tenantId', '按租户']];
 export const trendDimensions = [['total', '合计'], ...usageDimensions];
 export const tokenMetrics = [['total', '总Token'], ['input', '输入Token'], ['output', '输出Token']];
 export const defaultTrend = () => ({ dimension: 'total', metric: 'total', showTotal: false, curves: null });
@@ -35,7 +35,7 @@ export function trendSeries(state, facts, filters, settings, calls = false) {
   const candidates = new Map();
   const add = id => {
     const item = collections[dimension]?.find(item => item.id === id);
-    const name = item?.name || (id === '__unknown__' ? `未归属${dimension === 'tenantId' ? '客户' : dimension === 'providerId' ? '服务商' : '模型'}` : id);
+    const name = item?.name || (id === '__unknown__' ? `未归属${dimension === 'tenantId' ? '租户' : dimension === 'providerId' ? '服务商' : '模型'}` : id);
     const label = collections[dimension]?.filter(candidate => candidate.name === name).length > 1 ? `${name}（${item.code || id}）` : name;
     if (!candidates.has(id)) candidates.set(id, { id, label, code: item?.code || id, color: dimension === 'category' ? item?.color : undefined, values: buckets.map(() => 0), sum: 0 });
   };

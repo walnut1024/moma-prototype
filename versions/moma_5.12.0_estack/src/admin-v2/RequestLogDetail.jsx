@@ -45,7 +45,7 @@ function RequestFacts({ row, trace, resultLabel }) {
 
 function RequestMetadata({ row }) {
   const extra = [
-    ['登记的模型标识', row.registeredModelId],
+    ['模型编码', row.registeredModelId],
     ['错误类型', row.code], ['错误来源', row.errorSource], ['失败原因', row.errorReason],
     ...(row.taskStatus == null ? [] : [['任务终态', row.taskStatus]]),
   ];
@@ -84,9 +84,9 @@ function TraceNodeDetails({ node, complete }) {
       ...(attempt.outcome === 'success' ? [['成功原因', attempt.successReason]]
         : attempt.outcome === 'failed' ? [['失败原因', attempt.errorReason ?? attempt.code]] : []),
       ...[['选中原因', attempt.selectionReason], ['后续动作', node.next]].filter(([, value]) => value != null),
-      ['上游 HTTP 状态', httpLabel(attempt.status)], ['上游 Request ID', attempt.upstreamRequestId],
+      ['上游 HTTP 状态', httpLabel(attempt.status)], ['上游请求 ID', attempt.upstreamRequestId],
       ['尝试开始时间', observationTime(attempt.at)], ['服务商', attempt.providerName], ['连接', attempt.channelName],
-      ['端点', attempt.endpointName], ['上游模型调用标识', attempt.upstreamModelId],
+      ['端点', attempt.endpointName], ['上游模型 ID', attempt.upstreamModelId],
       ...(attempt.serviceId ? [['目标服务 ID', attempt.serviceId]] : []),
       ...[['错误来源', attempt.errorSource], ['错误类型', attempt.code], ['回退原因', attempt.recordedFallbackReason],
         ['最后一次尝试', complete == null ? null : complete ? '是' : '否']].filter(([, value]) => value != null),

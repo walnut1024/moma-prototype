@@ -16,7 +16,7 @@ const dongwu = liveCustomers[0][1];
 const idb = 'deepseek-v4.1-flash-1017';
 const glm = 'glm-5.3';
 const flash = 'glm-5.3-flash';
-const enterpriseCustomer = '企业客户';
+const enterpriseCustomer = '政企租户';
 const usageRanks = [
   [dongwu, '4139.43'], [iot, '392.75'], [central, '385.17'], [neusoft, '337.44'],
   [sale, '296.62'], [guiping, '285.42'], [jingdong, '274.03'], [beijing, '258.23'],
@@ -50,13 +50,13 @@ const swings = rows => rows.map(([name, region, channel, model, amount, delta]) 
   [name, region + ' · ' + enterpriseCustomer + ' · 通过' + channel + '调用 ' + model, amount, delta]);
 
 const metrics = [
-  ['日活跃客户总数', '3,554', '个'], ['日活跃客户数变化量', '1,282', '个'],
-  ['周日均活跃客户数', '3,413', '个'], ['月日均活跃客户数', '3,037', '个'],
+  ['日活跃租户总数', '3,554', '个'], ['日活跃租户数变化量', '1,282', '个'],
+  ['周日均活跃租户数', '3,413', '个'], ['月日均活跃租户数', '3,037', '个'],
   ['夜间 Token 调用量', '2746.97', '亿 Token'], ['日间 Token 调用量', '1.15', '万亿 Token'],
   ['忙时 Token 调用量', '6829.72', '亿 Token'], ['闲时 Token 调用量', '7446.92', '亿 Token'],
 ];
 const categories = [
-  ['个人客户', 2053, '2,053', '57.8%', '#dceafe'],
+  ['个人租户', 2053, '2,053', '57.8%', '#dceafe'],
   [enterpriseCustomer, 1494, '1,494', '42.0%', '#73a9ff'],
   ['其他', 7, '7', '0.2%', '#0874f8'],
 ];

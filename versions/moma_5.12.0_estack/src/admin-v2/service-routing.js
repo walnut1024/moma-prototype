@@ -39,7 +39,7 @@ export function routingChannels(state, service, at = Date.now(), { runtime = fal
     let reason=!supply.provider || !supply.endpoint ? '服务商或接入已不存在' : supply.status!=='已启用' ? '上游模型已停用' : channel ? channelBlockReason(supply.provider,channel,{runtime}) : connectionBlockReason(supply.endpoint,supply.provider);
     if (!reason && !ready.has(supply.id)) reason='平台模型映射或能力需验证';
     if (!reason && !url) reason='请求地址待完善';
-    if (!reason && runtime && (!costs.length || costs.some(item=>item.amount==null))) reason='上游模型供应成本待配置';
+    if (!reason && runtime && (!costs.length || costs.some(item=>item.amount==null))) reason='上游上游模型成本待配置';
     const row={...supply,apiAddresses:channel?.apiAddresses,channelId:channel ? serviceChannelId(channel) : supply.channelId || supply.endpointId,channelUpdatedAt:channel?.updatedAt,channelHealth:channel?.health,channelName:channel?.name || supply.endpoint?.name,verifiedAt:channel?.health?.testedAt || supply.verifiedAt,url,costItems:costs,costVersion:costRevision([channel?.pricing,activeSupplyPrice(state,supply.id,at)]),p95LatencyMs:metric([channel?.p95LatencyMs,channel?.metrics?.p95LatencyMs,supply.endpoint?.p95LatencyMs,supply.endpoint?.metrics?.p95LatencyMs]),activeRequests:metric([channel?.activeRequests,channel?.metrics?.activeRequests,supply.endpoint?.activeRequests,supply.endpoint?.metrics?.activeRequests],true)};
     for(const key of ['tokensPerMinute','requestsPerMinute','rpmLimit','tpmLimit'])row[key]=key.endsWith('Limit')?[channel?.[key],channel?.metrics?.[key],supply.endpoint?.[key],supply.endpoint?.metrics?.[key]].find(value=>value!=null) ?? null:metric([channel?.[key],channel?.metrics?.[key],supply.endpoint?.[key],supply.endpoint?.metrics?.[key]],true);
     const mapping=routeMappingStatus(state,{...service,callId},row);
@@ -285,7 +285,7 @@ export function routingTransaction(state, { operation, data = {} }) {
     changes = { draft, draftUpdatedAt: new Date().toISOString() };
     label = '保存路由草稿';
   } else if (['serviceRoutePublish','serviceRouteRollback','serviceRouteRestore','serviceFailoverConfigure'].includes(operation)) {
-    if (!service.callId) throw new Error('请先在服务内容配置模型调用标识');
+    if (!service.callId) throw new Error('请先在服务内容配置模型 ID');
     if (data.sourceVersion !== routeSourceVersion(state, service)) throw new Error('上游模型、模型或成本已变化，请重新校验并确认');
     const restoring=operation==='serviceRouteRestore';
     if(restoring && (current || !lastRouteVersion(route)))throw new Error('当前路由未停用或没有可恢复的配置');

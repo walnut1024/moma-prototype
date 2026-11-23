@@ -22,8 +22,8 @@ test('retail dictionaries require enabled selections, preserve saved snapshots a
 test('scope explicitly selects active clients and never silently expands invalid or empty selections',()=>{
   const state={tenants:[{id:'active',status:'正常'},{id:'stopped',status:'已停用'},{id:'deleted',status:'已删除'},{id:'unknown'}]};
   assert.deepEqual(serviceScope(state,{openScope:'selected',tenantIds:['active','active']}),{openScope:'selected',tenantIds:['active']});
-  for(const tenantIds of [[],['stopped'],['deleted'],['missing'],['unknown'],'active']) assert.throws(()=>serviceScope(state,{openScope:'selected',tenantIds}),/客户/);
-  assert.throws(()=>serviceScope(state,{openScope:'unknown',tenantIds:[]}),/客户/);
+  for(const tenantIds of [[],['stopped'],['deleted'],['missing'],['unknown'],'active']) assert.throws(()=>serviceScope(state,{openScope:'selected',tenantIds}),/租户/);
+  assert.throws(()=>serviceScope(state,{openScope:'unknown',tenantIds:[]}),/租户/);
 });
 test('listing repairs target current mappings without linking to removed sales settings',()=>{
   const model={id:'canonical',serviceMode:'standard'};

@@ -54,7 +54,7 @@ export function previewMaterialRows(state, kind, rows, { providerId, retry = fal
       if (!providerId) return row.modelId ? result(row, 'skip', '模型资料已存在') : row;
       if (!owner) return result(row, 'error', '当前服务商已移除');
       if (registered.has(row.modelId)) return result(row, 'skip', '已关联');
-      return result(row, 'ready', row.modelId ? '复用已有模型并登记' : '新建模型资料并登记', { providerId });
+      return result(row, 'ready', row.modelId ? '复用已有模型资料并登记' : '新建模型资料并登记', { providerId });
     });
   }
   const byCode = uniqueCodes(providers, providerCode);
@@ -80,7 +80,7 @@ export function previewMaterialRows(state, kind, rows, { providerId, retry = fal
         return result(row, 'ready', '可新增服务商资料', { data });
       }
       const provider = byCode.get(row.cells[0].toLowerCase()), model = models.get(row.cells[1].toLowerCase());
-      if (provider === null || model === null) throw Error('服务商编码或模型编码匹配到多份资料，请先核对主档');
+      if (provider === null || model === null) throw Error('服务商编码或模型编码匹配到多份资料，请先核对模型资料');
       if (!provider || !model) throw Error([!provider && '服务商编码找不到', !model && '模型编码找不到'].filter(Boolean).join('，'));
       const key = JSON.stringify([provider.id, model.id]);
       if (seen.has(key)) return result(row, 'skip', '文件内重复，按首行处理');

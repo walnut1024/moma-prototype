@@ -5,7 +5,7 @@ import { enterpriseAdmins, enterpriseDisplayValue, enterpriseMetadataFields } fr
 import { TenantServiceSettings } from './TenantServiceSettings';
 import TenantResources from './TenantResources';
 
-const enterpriseTabs = { info:'基本资料', admins:'租户管理员', organization:'组织及成员', models:'模型开通', projects:'项目', keys:'API 密钥' };
+const enterpriseTabs = { info:'基本资料', admins:'租户管理员', organization:'组织及成员', models:'模型授权', projects:'项目', keys:'API 密钥' };
 const { Title } = Typography;
 const time = value => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—';
 

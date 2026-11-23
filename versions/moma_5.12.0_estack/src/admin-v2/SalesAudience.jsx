@@ -6,7 +6,7 @@ import { salesScope } from './service-sales';
 import { scopeTenants } from './service-commercial';
 
 export function salesAudienceLabel(state, scope) {
-  if (scope.openScope === 'all') return '全部客户';
+  if (scope.openScope === 'all') return '全部租户';
   return scope.tenantIds.map(id => state.tenants.find(row => row.id === id)?.name || id).join('、') || '未设置';
 }
 
@@ -23,18 +23,18 @@ export default function SalesAudience({ state, model, services, ops }) {
     value.tenantIds.every(id => choices.some(row => row.value === id));
   return <div className="ss-body">
     <Typography.Text>当前范围：{salesAudienceLabel(state, current)}</Typography.Text>
-    <Field label="共享销售对象">
-      <RadioGroup value={value.openScope} disabled={locked} aria-label="共享销售对象"
-        options={[{ value: 'all', label: '全部客户' }, { value: 'selected', label: '指定客户' }]}
+    <Field label="销售对象">
+      <RadioGroup value={value.openScope} disabled={locked} aria-label="销售对象"
+        options={[{ value: 'all', label: '全部租户' }, { value: 'selected', label: '指定租户' }]}
         onChange={event => update({ openScope: event.target.value, tenantIds: [] })}/>
     </Field>
-    {value.openScope === 'selected' && <Field label="销售客户" required>
+    {value.openScope === 'selected' && <Field label="销售对象租户" required>
       <Select multiple filter value={value.tenantIds} optionList={choices} disabled={locked}
         style={{ width: '100%' }} onChange={tenantIds => update({ tenantIds })}/>
     </Field>}
     <Typography.Title heading={6}>受影响服务</Typography.Title>
     <Table size="small" rowKey="id" dataSource={services.filter(row => row.modelId === model.id)} pagination={false}
-      columns={[{ title: '服务商 / 连接', dataIndex: 'offerName' }, { title: '模型调用标识', dataIndex: 'callId' }]}/>
+      columns={[{ title: '服务商 / 连接', dataIndex: 'offerName' }, { title: '模型 ID', dataIndex: 'callId' }]}/>
     <div className="ss-footer"><Button theme="solid" disabled={locked || !valid || JSON.stringify(current) === JSON.stringify(value)}
       onClick={() => setPreview(true)}>预览变更</Button></div>
     {preview && <Modal wide title="确认销售对象变更" description={model.name} onClose={() => !busy && setPreview(false)} footer={<>
@@ -48,7 +48,7 @@ export default function SalesAudience({ state, model, services, ops }) {
     </>}>
       <p>当前范围：{salesAudienceLabel(state, current)}</p>
       <p>调整后：{salesAudienceLabel(state, value)}</p>
-      <p>将更新同一模型的 {services.filter(row => row.modelId === model.id).length} 项销售服务。</p>
+      <p>将更新同一模型的 {services.filter(row => row.modelId === model.id).length} 项模型服务。</p>
       {ops.error && <Notice error>{ops.error}</Notice>}
     </Modal>}
   </div>;

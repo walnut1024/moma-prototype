@@ -119,7 +119,7 @@ export default function UsageReport({ state, range, result, filters, clock, live
             {top.length ? <HorizontalBarChart rows={top} unit="Token" label={rankingTitle} showData/> :
               <Paragraph type="secondary" className="ua-native-chart-empty">所选范围暂无已确认 Token 用量</Paragraph>}
           </Card>
-          <Breakdown title="各厂商 Token 使用量" unit="Token" total={data.providers.total}
+          <Breakdown title="各服务商 Token 使用量" unit="Token" total={data.providers.total}
             rows={providerRows.map((row, index) => ({ ...row, label: row.id === '__unknown__' ? '未归属服务商' : providers.get(row.id) || row.id, color: chartPalette[index % chartPalette.length] }))}
             onChoose={id => { if (id !== '__unknown__') onProvider(id); }}/>
         </div>

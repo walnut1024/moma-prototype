@@ -16,7 +16,7 @@ export const MODEL_SERVICE_TYPES = {
   other: [MODEL_TYPE_LABELS.other, '文本分类、内容审核、翻译、3D生成'],
 };
 export { modelCategory as modelServiceType };
-export const serviceStatus = row => row.listed ? '已启用' : '已停止';
+export const serviceStatus = row => row.listed ? '服务中' : '已停服';
 
 export const contextRoutingEnabled = service => typeof service.tokenizer === 'string' && Boolean(service.tokenizer.trim()) && !service.contextPaused;
 export const validContextLength = value => Number.isSafeInteger(value) && value > 0;

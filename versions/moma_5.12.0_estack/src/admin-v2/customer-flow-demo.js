@@ -16,8 +16,8 @@ const clusterSpecs = [
       { id: 'h100-01', name: '智算-上海-H100-01', gpu: 'nvidia-h100', cards: 64, capacity: 280000000 },
       { id: 'h200-01', name: '智算-上海-H200-01', gpu: 'nvidia-h200', cards: 64, capacity: 336000000 },
     ] },
-  { id: 'ali-flash', name: '阿里云', model: idb, tag: '供应商' },
-  { id: 'ali-glm', name: '阿里云', model: glm, tag: '供应商' },
+  { id: 'ali-flash', name: '阿里云', model: idb, tag: '服务商' },
+  { id: 'ali-glm', name: '阿里云', model: glm, tag: '服务商' },
   { id: 'unknown', name: '未知集群', model: '', tag: '未归属' },
 ];
 const frames = [

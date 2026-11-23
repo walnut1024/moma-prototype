@@ -88,8 +88,8 @@ export default function OperationsOverview({ state, workbenchName, shortcuts, on
             ]}/>
         </OverviewPlot>
       </div>
-      <OverviewPlot title="月度活跃客户数" note={'按自然月去重 · 最后统计日 ' + data.daily.at(-1).date}>
-        <TimeSeriesChart label="月度活跃客户数" labels={data.months.map(row => row.label)}
+      <OverviewPlot title="月度活跃租户数" note={'按自然月去重 · 最后统计日 ' + data.daily.at(-1).date}>
+        <TimeSeriesChart label="月度活跃租户数" labels={data.months.map(row => row.label)}
           compact legendAtTop showData={false} type="bar" stacked unit="个" height={224}
           series={data.customerTypes.flatMap(({ label, color }, index) =>
             index !== 2 || data.months.some(row => row.customers[index] > 0)
@@ -107,8 +107,8 @@ export default function OperationsOverview({ state, workbenchName, shortcuts, on
 
     <section className="ov-section" aria-labelledby="ov-customers-title">
       <div className="ov-heading ov-customer-heading">
-        <Title heading={4} component="h2" id="ov-customers-title">客户核心指标</Title>
-        <Space spacing={4} role="group" aria-label="客户统计周期">
+        <Title heading={4} component="h2" id="ov-customers-title">租户核心指标</Title>
+        <Space spacing={4} role="group" aria-label="租户统计周期">
           {[['day', '昨日'], ['month', '按月']].map(([id, label]) => <Button key={id} size="small"
             theme={mode === id ? 'light' : 'borderless'} type={mode === id ? 'primary' : 'tertiary'}
             aria-pressed={mode === id} onClick={() => setMode(id)}>{label}</Button>)}
@@ -126,7 +126,7 @@ export default function OperationsOverview({ state, workbenchName, shortcuts, on
         <Card className="ov-panel ov-tiers-panel">
           <div className="ov-panel-heading">
             <Title heading={6} component="h3">按日均 Token 用量分级</Title>
-            <AnalysisHelp label="按日均 Token 用量分级">按客户已计量 Token 除以所选周期内的完整自然日数分档。计量待确认与无 Token 类调用分别列示。</AnalysisHelp>
+            <AnalysisHelp label="按日均 Token 用量分级">按租户已计量 Token 除以所选周期内的完整自然日数分档。计量待确认与无 Token 类调用分别列示。</AnalysisHelp>
           </div>
           <div className="ov-tiers">
             <CustomerDonut rows={customers.tiers} count={customers.count} label="日均 Token 用量分级" />
@@ -138,9 +138,9 @@ export default function OperationsOverview({ state, workbenchName, shortcuts, on
         </Card>
       </div>
       <Card className="ov-panel ov-types-panel">
-        <Title heading={6} component="h3">客户类型分布</Title>
+        <Title heading={6} component="h3">租户类型分布</Title>
         <div className="ov-types">
-          <CustomerDonut rows={customers.types} count={customers.count} label="客户类型分布" />
+          <CustomerDonut rows={customers.types} count={customers.count} label="租户类型分布" />
           {customers.types.filter((row, index) => index < 2 || row.value > 0).map(row => <div className="ov-mini" key={row.label}>
             <Text size="small" type="secondary"><span className="ov-dot" style={{ backgroundColor: row.color }} aria-hidden="true"/>{row.label}</Text>
             <strong>{number(row.value)} <small>个</small></strong>
@@ -172,11 +172,11 @@ function OverviewPlot({ title, note, children }) {
 function CustomerActivity({ activity }) {
   const peak = Math.max(activity.count, activity.previous);
   return <Card className="ov-panel ov-active-panel">
-    <Title heading={6} component="h3">调用活跃客户数</Title>
+    <Title heading={6} component="h3">调用活跃租户数</Title>
     <div className="ov-active-value" aria-live="polite">
       <div className="ov-kpi-value"><strong>{number(activity.count)}</strong><span>个</span></div>
       <Change value={overviewChange(activity.count, activity.previous)}/>
-      <Text size="small" type="secondary">新增客户 {number(activity.added)} 个</Text>
+      <Text size="small" type="secondary">新增租户 {number(activity.added)} 个</Text>
     </div>
     <div className="ov-activity-bars">
       {[[activity.label, activity.count], [activity.previousLabel, activity.previous]].map(([label, value], index) =>
@@ -188,10 +188,10 @@ function CustomerActivity({ activity }) {
         </div>)}
     </div>
     <div className="ov-grid ov-activity-minis">
-      {[['期末近 7 日活跃', activity.recent7], ['期末近 30 日活跃', activity.recent30], ['沉默客户', activity.dormant]].map(([label, value]) =>
+      {[['期末近 7 日活跃', activity.recent7], ['期末近 30 日活跃', activity.recent30], ['沉默租户', activity.dormant]].map(([label, value]) =>
         <div className="ov-mini" key={label}>
           <div><Text type="secondary" size="small">{label}</Text>
-            {label === '沉默客户' && <AnalysisHelp label="沉默客户">截至期末已开户满 30 天，最近 30 天无调用记录。</AnalysisHelp>}
+            {label === '沉默租户' && <AnalysisHelp label="沉默租户">截至期末已开户满 30 天，最近 30 天无调用记录。</AnalysisHelp>}
           </div>
           <strong>{number(value)}</strong>
         </div>)}
@@ -201,8 +201,8 @@ function CustomerActivity({ activity }) {
 
 function CustomerDonut({ rows, count, label }) {
   return count > 0 ? <DonutChart rows={rows.filter(row => row.value > 0)} unit="个" label={label} height={142}
-    centerValue={number(count)} centerLabel="活跃客户" showData={false}/>
-    : <div className="ov-donut-empty"><Text type="secondary" size="small">暂无活跃客户</Text></div>;
+    centerValue={number(count)} centerLabel="活跃租户" showData={false}/>
+    : <div className="ov-donut-empty"><Text type="secondary" size="small">暂无活跃租户</Text></div>;
 }
 
 function OverviewHistory({ state, activity, onClose }) {
@@ -211,7 +211,7 @@ function OverviewHistory({ state, activity, onClose }) {
   const [selected, setSelected] = useState(null);
   const historyContent = useRef(null);
   const lastRank = useRef(null);
-  const label = kind === 'customer' ? '客户' : '模型';
+  const label = kind === 'customer' ? '租户' : '模型';
   const otherKind = kind === 'customer' ? 'model' : 'customer';
   const ranked = useMemo(() => overviewRanks(activity.rows, kind, state, metric), [activity.rows, kind, state, metric]);
   const related = useMemo(() => selected
@@ -248,13 +248,13 @@ function OverviewHistory({ state, activity, onClose }) {
         <Space wrap><Text>已计量 Token {number(selected.total)}</Text><Text>请求次数 {number(selected.calls)}</Text></Space>
         <Table size="small" pagination={false} rowKey="id" dataSource={related} scroll={{ x: 410, y: 360 }}
           columns={[
-            { title: kind === 'customer' ? '模型' : '客户', dataIndex: 'name' },
+            { title: kind === 'customer' ? '模型' : '租户', dataIndex: 'name' },
             { title: '已计量 Token', dataIndex: 'total', align: 'right', render: renderToken },
             { title: '请求次数', dataIndex: 'calls', align: 'right', render: number },
           ]}/>
       </> : <>
         <Tabs type="button" size="small" activeKey={kind} onChange={setKind} aria-label="排行对象">
-          <Tabs.TabPane tab="客户排行" itemKey="customer"/>
+          <Tabs.TabPane tab="租户排行" itemKey="customer"/>
           <Tabs.TabPane tab="模型排行" itemKey="model"/>
         </Tabs>
         <div>

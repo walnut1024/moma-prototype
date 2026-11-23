@@ -45,7 +45,7 @@ export function CustomerProjectKeys({ state, tenant, projectId = '', onProjectCh
   if (tenant.type === '个人') {
     try {
       const fixed=personalDefaultProject(state,tenant.id);
-      if(projectId && projectId !== fixed.id) throw Error('项目不存在或不属于当前客户。');
+      if(projectId && projectId !== fixed.id) throw Error('项目不存在或不属于当前租户。');
       projectId=fixed.id;
     } catch(error) { scopeError=error.message; }
   }
@@ -74,7 +74,7 @@ export function CustomerProjectKeys({ state, tenant, projectId = '', onProjectCh
         ...(projectId && !byProject.has(projectId) ? [[projectId, '项目归属异常']] : [])]}
         onChange={value => { onProjectChange(value); setInspectId(null); setPage(1); }}/>}
     </FilterToolbar>
-    {projectId && !byProject.has(projectId) ? <Banner type="warning" closeIcon={null} description="项目不存在或不属于当前客户。"/>
+    {projectId && !byProject.has(projectId) ? <Banner type="warning" closeIcon={null} description="项目不存在或不属于当前租户。"/>
       : <EnterpriseTable minWidth={880} columns={columns} empty="暂无匹配的 API 密钥"
         rows={rows.slice((current - 1) * size, current * size).map(key => {
           const { models, reason } = access(key);
@@ -106,7 +106,7 @@ export function CustomerProjectKeys({ state, tenant, projectId = '', onProjectCh
   </>;
 }
 
-export function EnterpriseProjectTable({ state, tenant, projects, onProject, onKeys, pagination, empty = "该客户尚无项目" }) {
+export function EnterpriseProjectTable({ state, tenant, projects, onProject, onKeys, pagination, empty = "该租户尚无项目" }) {
   const available = customerModelIds(state,tenant.id);
   const keyCounts = new Map();
   for (const key of customerKeys(state, tenant.id)) keyCounts.set(key.projectId, (keyCounts.get(key.projectId) || 0) + 1);
@@ -143,7 +143,7 @@ export default function CustomerProjectDetails({ state, tenant, projectId, navig
   if (!enterprise) {
     try {
       const fixed = personalDefaultProject(state,tenant.id);
-      if (projectId && projectId !== fixed.id) return <Banner type="warning" closeIcon={null} description="项目不存在或不属于当前客户。"/>;
+      if (projectId && projectId !== fixed.id) return <Banner type="warning" closeIcon={null} description="项目不存在或不属于当前租户。"/>;
       projectId = fixed.id;
     } catch (error) { return <Banner type="warning" closeIcon={null} description={error.message}/>; }
   }
@@ -166,7 +166,7 @@ export default function CustomerProjectDetails({ state, tenant, projectId, navig
   const project = projects.find(row => row.id === projectId);
   if (!project) return <>
     <Button onClick={() => navigate({ project:'' })}>返回项目列表</Button>
-    <Banner type="warning" closeIcon={null} description="项目不存在或不属于当前客户。"/>
+    <Banner type="warning" closeIcon={null} description="项目不存在或不属于当前租户。"/>
   </>;
   const allowedModels = customerModelIds(state, tenant.id);
   const models = new Map(state.models.map(model => [model.id, model.name]));
@@ -229,11 +229,11 @@ export default function CustomerProjectDetails({ state, tenant, projectId, navig
       <EnterpriseTable columns={['成员', '项目角色', '企业成员状态', '登录身份状态']} rows={members} empty="暂无明确分配的项目成员"/>
     </>}
     <Title heading={5} component="h2">模型权限与限流</Title>
-    {(project.inheritsSpaceModels || project.modelPermissions == null) && <Text type="secondary">继承客户模型授权</Text>}
-    <EnterpriseTable columns={['模型', '项目 RPM', '项目 TPM', '授权状态']} empty="暂无已开通的模型"
+    {(project.inheritsSpaceModels || project.modelPermissions == null) && <Text type="secondary">继承租户模型授权</Text>}
+    <EnterpriseTable columns={['模型', '项目 RPM', '项目 TPM', '授权状态']} empty="暂无已授权的模型"
       rows={permissions.map(({ modelId, rpm, tpm }) => ({ id:modelId, cells:[models.get(modelId) || modelId,
         quantity(rpm, '次/分钟'), quantity(tpm, 'Token/分钟'), project.status !== '正常' ? '项目当前不可用'
-          : allowedModels.has(modelId) ? '已开通' : '空间订购、授权或服务状态受限',
+          : allowedModels.has(modelId) ? '已授权' : '空间订购、授权或服务状态受限',
       ] }))}/>
     <CustomerProjectKeys key={project.id} state={state} tenant={tenant} projectId={project.id}/>
   </>;

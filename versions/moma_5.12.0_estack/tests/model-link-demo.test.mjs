@@ -13,7 +13,7 @@ test('model link replay picks an available priority group before weighting and f
   assert.equal(plan.steps[fromGroup + 2].message, 'OpenAI Chat → Anthropic Messages');
   const stopped = planDemoRequest(examples.find(example => example.service === 'r1'));
   assert(!stopped.steps.some(step => step.to?.endsWith('-policy')));
-  assert.match(stopped.steps.at(-1).message, /服务已停止/);
+  assert.match(stopped.steps.at(-1).message, /服务已停服/);
 });
 
 test('all seven formats have playable examples and video submissions end with a task id', () => {

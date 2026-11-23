@@ -28,7 +28,7 @@ function ChannelModels({ channel, ops, open }) {
   const canAdd = ops.can && !channel.endpoint.candidateConfiguration && !channel.endpoint.adapterDraft;
   return <>
     <div className="channel-management-toolbar">
-      <SearchBox placeholder={t('搜索模型标识、展示名称')} value={query}
+      <SearchBox placeholder={t('搜索上游模型 ID、模型展示名称')} value={query}
         onChange={value => ops.go({ modelQ: value || null }, { replace: true })}/>
       <Space wrap spacing={8}>
         <Button disabled={!ops.can} onClick={event => open(event, 'test', channel.id)}>{t('批量测试')}</Button>
@@ -40,9 +40,9 @@ function ChannelModels({ channel, ops, open }) {
     <AdminTable aria-label={t('上游模型列表')} rowKey="key" pagination={false} dataSource={models}
       empty={keyword ? '没有匹配的模型' : '该连接尚未接入模型'}
       scroll={{ x: 'max(100%, 932px)' }} columns={[
-        { title: t('模型标识'), width: 240, render: (_, { association }) =>
+        { title: t('上游模型 ID'), width: 240, render: (_, { association }) =>
           <Typography.Text ellipsis={{ showTooltip: true }}>{association.upstreamModelId}</Typography.Text> },
-        { title: t('展示名称'), dataIndex: 'modelName', width: 160 },
+        { title: t('模型展示名称'), dataIndex: 'modelName', width: 160 },
         { title: t('模型类型'), width: 112, render: (_, { master }) => {
           const label = modelTypeLabel(master?.type);
           return label ? <Tag color="blue" size="small">{label}</Tag> : '—';
@@ -83,11 +83,11 @@ function ChannelModelCosts({ state, channel, ops, open }) {
     <AdminTable aria-label={t('模型成本')} rowKey="key" pagination={false} dataSource={channel.models}
       rowSelection={{ selectedRowKeys: selected.map(model => model.key), onChange: setCheckedKeys, getCheckboxProps: () => ({ disabled: !ops.can }) }}
       empty={t('该连接尚未接入模型')} scroll={{ x: 'max(100%, 704px)' }} columns={[
-      { title: t('模型展示名/标识'), width: 220, render: (_, model) => <div className="channel-identity">
+      { title: t('模型展示名称 / 上游模型 ID'), width: 220, render: (_, model) => <div className="channel-identity">
         <Typography.Text strong ellipsis={{ showTooltip: true }}>{model.modelName}</Typography.Text>
-        <CopyId copyAtStart ellipsis label="上游模型调用标识" value={model.association.upstreamModelId}/>
+        <CopyId copyAtStart ellipsis label="上游模型 ID" value={model.association.upstreamModelId}/>
       </div> },
-      { title: t('采购成本'), width: 320, render: (_, model) => <ChannelCostCell cost={model}/> },
+      { title: t('服务商成本价'), width: 320, render: (_, model) => <ChannelCostCell cost={model}/> },
       { title: t('操作'), width: 120, render: (_, model) =>
         <Button size="small" theme="borderless" type="primary" aria-label={'成本设置模型 ' + model.modelName}
           disabled={!ops.can} onClick={event => open(event, 'cost', channel.id, model.key)}>{t('成本设置')}</Button> },
@@ -117,15 +117,15 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
     [t('完整请求地址'), channelRequestUrls(channel).join('、')],
     [t('密钥配置'), t(channelKeyMode(endpoint))],
     [t('API 密钥'), keyPool ? <Button size="small" theme="borderless" type="primary"
-      aria-label={keyCount + ' · ' + t('服务商 API 密钥池')} onClick={() => selectTab('api-keys')}>{keyCount}</Button> : keyCount],
+      aria-label={keyCount + ' · ' + t('上游 API 密钥池')} onClick={() => selectTab('api-keys')}>{keyCount}</Button> : keyCount],
     ...(endpoint.authMode === 'pool' ? [[t('密钥选择策略'), t(channelKeyStrategyLabel(endpoint.keyStrategy))]] : []),
     [t('简介'), endpoint.directoryNote],
     [t('状态'), <AdminStatus value={status} label={t(status)}/>],
     ...(creation ? [[t('创建人 / 创建时间'), <CreationInfo creation={creation}/>]] : []),
   ];
   const connectionFields = [
-    ['服务商', channel.provider.name], ['连接 ID', id], ['协议', workbenchProtocolLabel(interfaceLabel)],
-    ['上游 API 地址', endpoint.baseUrl],
+    ['服务商', channel.provider.name], ['连接 ID', id], ['接口格式', workbenchProtocolLabel(interfaceLabel)],
+    ['服务地址', endpoint.baseUrl],
     ['API 密钥', credentials.join('、') || (endpoint.authMode === 'none' ? '无需认证' : '')],
     ['启停状态', <AdminStatus value={status}/>], ['连接检测', <AdminStatus value={channel.testStatus}/>],
     ...(endpoint.directoryNote ? [['内部备注', endpoint.directoryNote]] : []),
@@ -148,7 +148,7 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
         {modelCosts && <Tabs.TabPane tab={t('模型成本')} itemKey="model-costs">
           {tab === 'model-costs' && <ChannelModelCosts key={id} state={state} channel={channel} ops={ops} open={open}/>}
         </Tabs.TabPane>}
-        {keyPool && <Tabs.TabPane tab={t('服务商 API 密钥池')} itemKey="api-keys">
+        {keyPool && <Tabs.TabPane tab={t('上游 API 密钥池')} itemKey="api-keys">
           {tab === 'api-keys' && keyPool}
         </Tabs.TabPane>}
       </Tabs>

@@ -84,13 +84,13 @@ export default function MaterialMetadataForm({state, conflict, reload, model, in
     const required = [
       ['模型展示名称', form.name.trim()], ['模型编码', form.modelId.trim()], ['模型图标', profile.logo],
       ['模型中文简介', form.description.trim()], ['模型英文简介', profile.descriptionEn?.trim()],
-      ['模型类型', Object.hasOwn(MODEL_TYPES, form.type)], ['上下文窗口', tokens !== null],
+      ['模型类型', Object.hasOwn(MODEL_TYPES, form.type)], ['上下文长度', tokens !== null],
       ['模型系列', series], ['输入模态', profile.inputModalities?.length], ['输出模态', outputs.length],
       ['模型精度', profile.precision?.trim()], ['模型标签', profile.tags?.length], ['模型发布日期', profile.releaseDate],
     ];
     const missing = required.filter(([, value]) => !value).map(([label]) => label);
     if (missing.length) { setError('请填写必填项：' + missing.join('、')); return; }
-    if (!Number.isSafeInteger(tokens) || tokens < 1) { setError('上下文窗口换算后须为正整数 Token'); return; }
+    if (!Number.isSafeInteger(tokens) || tokens < 1) { setError('上下文长度换算后须为正整数 Token'); return; }
     const tasks = profile.tasks?.filter(task => TASK_OPTIONS[form.type].includes(task));
     setSaving(true);
     try {
@@ -115,11 +115,11 @@ export default function MaterialMetadataForm({state, conflict, reload, model, in
       {textArea('description-en', '模型英文简介', profile.descriptionEn, value => changeProfile({ descriptionEn: value }))}
       {slot('type', '模型类型', MODEL_TYPES[form.type],
         <Select value={form.type} optionList={typeOptions} disabled={!editable} onChange={value => change('type', value)}/>)}
-      {slot('context', '上下文窗口', materialContextLabel(tokens),
+      {slot('context', '上下文长度', materialContextLabel(tokens),
         <Space className="materials-context-field">
-          <Input aria-label="上下文窗口" aria-required inputMode="decimal" value={context} disabled={!editable}
+          <Input aria-label="上下文长度" aria-required inputMode="decimal" value={context} disabled={!editable}
             onChange={value => { setContext(value); markDirty(); }}/>
-          <span id={formId + '-context-unit'} className="sr-only">上下文窗口单位</span>
+          <span id={formId + '-context-unit'} className="sr-only">上下文长度单位</span>
           <Select className="materials-context-unit" aria-labelledby={formId + '-context-unit'} value={unit} optionList={contextOptions} disabled={!editable}
             onChange={value => {
               if (tokens !== null && Number.isFinite(tokens)) setContext(String(tokens / materialContextUnits[value]));

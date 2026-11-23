@@ -171,7 +171,7 @@ export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, c
       <Choice label="密钥状态" value={stateFilter} options={Object.entries(filters)} onChange={setStateFilter}/>
       <Button theme="borderless" onClick={() => window.open('#/admin-2/providers-reference?' + new URLSearchParams({
         connection: endpoint.id, tab: 'api-keys',
-      }), '_blank', 'noopener')}>打开服务商 API 密钥池</Button>
+      }), '_blank', 'noopener')}>打开上游 API 密钥池</Button>
       {state.currentRole === '平台管理员' && <Button theme="borderless" onClick={() => setAudit(true)}>查看凭证审计</Button>}
     </Space>}
     {directory && endpoint.poolPaused && <Notice>当前连接的密钥已全部停用。应用已通过验证的密钥池候选后，可另行启用连接。</Notice>}
@@ -201,7 +201,7 @@ export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, c
     <Notice>影响 {impact.mappings.length} 个模型、{impact.services.length} 项服务。{candidate && candidate.config.authMode !== 'pool' ? '已有候选配置将保留，密钥池配置一并验证。' : ''}</Notice>
     {!impact.mappings.length && <Notice>{unlinked ? '未接入模型的连接可以保存密钥池草稿。接入模型后再完成检测与启用。' : '请先在连接的“模型”中接入模型，再验证并应用密钥池。'}</Notice>}
     <GridTable className="supplier-pool-table" headings={['选用', 'API 密钥', '优先级', '池内状态', ...(directory ? ['逐钥验证'] : []), '操作']}
-      empty={!visibleKeys.length} emptyMessage={directory ? '没有符合条件的密钥' : '请先在服务商密钥页添加密钥。'}>{visibleKeys.map(key => {
+      empty={!visibleKeys.length} emptyMessage={directory ? '没有符合条件的密钥' : '请先在上游 API 密钥页添加密钥。'}>{visibleKeys.map(key => {
       const row = lookup.get(key.id), disabled = disabledForWrite || Boolean(key.revokedAt);
       const change = patch => set(rows.map(item => item.keyId === key.id ? { ...item, ...patch } : item));
       const index = available.findIndex(item => item.id === key.id);
@@ -212,7 +212,7 @@ export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, c
       return <Row key={key.id}>
         <Cell><Checkbox aria-label={`选用密钥 ${key.id}`} checked={Boolean(row)} disabled={disabled}
           onChange={event => set(event.target.checked ? [...rows, { keyId: key.id, priority: rows.length + 1, enabled: key.status !== 'disabled' }] : rows.filter(item => item.keyId !== key.id))}/></Cell>
-        <Cell><strong>{key.name || (directory ? key.scope === 'channel' ? '连接专属' : '服务商密钥' : key.id)}</strong><code>{key.maskedKey}</code>
+        <Cell><strong>{key.name || (directory ? key.scope === 'channel' ? '连接专属' : '上游 API 密钥' : key.id)}</strong><code>{key.maskedKey}</code>
           <small>{key.revokedAt ? '已撤销' : key.status === 'disabled' ? 'API 密钥已停用' : directory ? active.has(key.id) ? '当前生效' : '可选或候选' : key.id}</small></Cell>
         <Cell>{row ? <InputNumber min={1} max={100} aria-label={`密钥 ${key.id} 优先级`} value={row.priority} disabled={disabled}
           onChange={value => change({ priority: Number(value) })}/> : '—'}</Cell>
