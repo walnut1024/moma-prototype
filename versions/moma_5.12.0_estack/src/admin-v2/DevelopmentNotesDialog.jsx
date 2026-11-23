@@ -14,7 +14,7 @@ function AdminNotesHeading({ children }) {
 
 const noteAreas = ['前台与服务', '模型接入', '模型资料'];
 
-export default function DevelopmentNotesDialog({ admin, close }) {
+export default function DevelopmentNotesDialog({ admin, open, close }) {
   const translateLabel = useChannelText();
   const Button = AdminNotesButton;
   const Heading = AdminNotesHeading;
@@ -22,6 +22,7 @@ export default function DevelopmentNotesDialog({ admin, close }) {
   const [area, setArea] = useState('前台与服务');
   const [mockNotice, setMockNotice] = useState('');
   const [mockBusy, setMockBusy] = useState(false);
+  if (!open) return null;
   const fresh = loadAdminState().modelData?.sourceScope === 'reference-only-v2';
   const service = area === '前台与服务';
   const supply = area === '模型接入';
