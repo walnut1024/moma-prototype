@@ -23,7 +23,7 @@ export default function GlobalRouting({ saved, revision, transact, conflict, dir
     try {
       await transact({ type: 'saveGlobalRoutingParameters', values: draft }, baseRevision);
       setDraft(null);
-      Toast.success('全局配置已保存');
+      Toast.success(t('全局配置已保存'));
     } catch (error) {
       Toast.error(error.message);
     } finally {
@@ -33,17 +33,17 @@ export default function GlobalRouting({ saved, revision, transact, conflict, dir
 
   const actions = <Space style={{ justifyContent: 'flex-end' }}>
           {draft ? <>
-            <Button disabled={saving} onClick={() => setDraft(null)}>取消</Button>
-            <Button theme="solid" loading={saving} disabled={!dirty || invalid || saving || conflict} onClick={save}>保存</Button>
+            <Button disabled={saving} onClick={() => setDraft(null)}>{t('取消')}</Button>
+            <Button theme="solid" loading={saving} disabled={!dirty || invalid || saving || conflict} onClick={save}>{t('保存')}</Button>
           </> : <Button theme="solid" disabled={conflict} onClick={() => {
             setBaseRevision(revision);
             setDraft({ ...saved });
-          }}>编辑</Button>}
+          }}>{t('编辑')}</Button>}
         </Space>;
   const change = patch => setDraft(current => ({ ...current, ...patch }));
   const [tab, setTab] = useState("failover");
-  return <Tabs activeKey={tab} onChange={next => { if (!saving && (!dirty || window.confirm("放弃未保存的修改？"))) { setDraft(null); setTab(next); } }}>
-    <Tabs.TabPane itemKey="failover" tab={t('全局故障转移策略')}><Card title="故障转移配置" headerExtraContent={actions}>
+  return <Tabs activeKey={tab} onChange={next => { if (!saving && (!dirty || window.confirm(t('放弃未保存的修改？')))) { setDraft(null); setTab(next); } }}>
+    <Tabs.TabPane itemKey="failover" tab={t('全局故障转移策略')}><Card title={t('故障转移配置')} headerExtraContent={actions}>
       <FailoverFields showRetryInterval values={values} change={change} disabled={!draft || saving || conflict}/>
     </Card></Tabs.TabPane>
     <Tabs.TabPane itemKey="routing" tab={t('全局路由策略')}><Card title={t('上游模型选择')} headerExtraContent={actions}>

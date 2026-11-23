@@ -118,6 +118,6 @@ export default function ChannelHealthTable({ rows, labels, summaries, simulated,
         </Popover>}</div>) ?? '—' }] : []),
   ];
   return <Table className="channel-health-table" loading={loading} aria-label={t('上游模型观测列表')} rowKey="id" size="small" columns={columns} dataSource={rows}
-    empty="没有匹配的上游模型" pagination={rows.length > DEFAULT_PAGE_SIZE ? { pageSize: DEFAULT_PAGE_SIZE } : false}
+    empty={t('没有匹配的上游模型')} pagination={rows.length > DEFAULT_PAGE_SIZE ? { pageSize: DEFAULT_PAGE_SIZE } : false}
     scroll={{ x: columns.reduce((total, column) => total + column.width, 0) }}/>;
 }
