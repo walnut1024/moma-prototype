@@ -85,7 +85,7 @@ export default function MaterialCatalogue({ state, ops }) {
       onChange={({ pagination }) => setPagination({ currentPage: pagination.currentPage, pageSize: pagination.pageSize })}
       empty="没有符合条件的模型资料"/>
     <Modal visible={Boolean(removing)} className="semi-materials" title="删除模型资料" onCancel={close} okText="确认删除资料" cancelText="取消" okButtonProps={{type:'danger',disabled:!ops.can || Boolean(removing && libraryRemovalIssue(state, removing.id))}} confirmLoading={busy} onOk={async () => { setBusy(true); try { if (await ops.run('templateDelete', { id: removing.id, confirmed: true })) close(); } finally { setBusy(false); } }}>
-      <Typography.Paragraph>确认删除“{removing?.name}”？已保存的模型服务、渠道配置和广场展示将保留。</Typography.Paragraph>{ops.error && <Banner type="danger" description={ops.error}/>}
+      <Typography.Paragraph>确认删除“{removing?.name}”？已保存的模型服务、连接配置和广场展示将保留。</Typography.Paragraph>{ops.error && <Banner type="danger" description={ops.error}/>}
     </Modal>
   </>;
 }

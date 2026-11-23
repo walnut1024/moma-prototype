@@ -66,7 +66,7 @@ export async function createSeed(dataset = MODEL_DATASET) {
   for (const s of c.modelSupplies) {
     const material = c.models.find(m => m.id === s.modelId)?.templateId;
     const association = c.providers.find(p => p.id === s.providerId)?.catalogConnections.find(a => a.id === s.channelId);
-    if (!association || association.endpointId !== s.endpointId) throw Error('供应映射缺少精确渠道关联');
+    if (!association || association.endpointId !== s.endpointId) throw Error('供应映射缺少精确上游模型关联');
     add('channel_models', { id: s.id, channel_id: s.endpointId, supplier_id: s.providerId, supplier_model_id: `supplier-model:${s.providerId}:${material}`, material_id: material,
       upstream_model_id: s.upstreamModelId, mapping_json: json({ sourceAssociationId: s.channelId, capabilities: s.capabilities || {} }), enabled: Number(s.status === '已启用'), created_at: timestamp(s.createdAt), updated_at: timestamp(s.updatedAt) });
     for (const v of association.procurementVersions || []) {

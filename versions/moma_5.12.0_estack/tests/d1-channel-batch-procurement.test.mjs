@@ -39,7 +39,7 @@ test('publishing batch procurement prices is scoped, atomic and keeps version hi
     assert.equal(modelInputs.length, 3);
     await send(command(created, 'channelQuickCreate', {
       providerId: provider.id,
-      values: { name: '批量成本测试渠道', authMode: 'group', keyGroupId: 'default', interfaceType: 'openai', protocol: 'OpenAI', baseUrl: 'https://vendor.example.test/v1', models: modelInputs },
+      values: { name: '批量成本测试连接', authMode: 'group', keyGroupId: 'default', interfaceType: 'openai', protocol: 'OpenAI', baseUrl: 'https://vendor.example.test/v1', models: modelInputs },
     }));
     const scope = state => state.providers.find(row => row.id === provider.id).catalogConnections;
     const connected = await read();

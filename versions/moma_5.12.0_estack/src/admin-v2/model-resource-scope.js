@@ -13,7 +13,7 @@ export function validateResourceTarget(state, scope, target) {
   if (target.provider_id && !state.providers.some(row => row.id === target.provider_id && !row.deletedAt)) throw Error('指定服务商不存在');
   if (target.model_id && !modelIdentityCatalogue(state).some(row => row.id === target.model_id)) throw Error('指定模型不存在或模型关联不明确');
   if (scope === 'channels') {
-    if (target.level === 'model_service') throw Error('渠道管理不支持模型服务范围');
+    if (target.level === 'model_service') throw Error('模型接入不支持模型服务范围');
     if (target.model_id && !state.providers.filter(row => !row.deletedAt && (!target.provider_id || row.id === target.provider_id)).some(provider => registeredResourceModels(state, provider).some(row => row.model_id === target.model_id))) throw Error('指定模型不属于当前服务商或尚未登记');
   } else {
     if (['provider', 'provider_model'].includes(target.level)) throw Error('当前模块不支持服务商范围');
@@ -54,7 +54,7 @@ export function resourcePageTarget(state, scope, params) {
 }
 
 export function resourceTargetLabel(state, scope, target) {
-  const module = { channels: '渠道管理', services: '模型服务', market: '模型广场', prices: '模型售价' }[scope];
+  const module = { channels: '模型接入', services: '模型服务', market: '模型广场', prices: '模型售价' }[scope];
   const provider = target.provider_id && state.providers.find(row => row.id === target.provider_id)?.name;
   const model = target.model_id && modelDisplayName(state, target.model_id);
   const service = target.model_service_id && serviceReferences(state).find(row => modelServiceIdentity(state, row.model, offerKey(row)) === target.model_service_id);

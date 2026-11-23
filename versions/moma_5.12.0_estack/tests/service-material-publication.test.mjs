@@ -35,8 +35,8 @@ test('minimal material → channel → mock B → referenced service → mock C 
   const initialMaterial=state.modelTemplates.find(row=>row.id===state.audits[0].objectId);
   state=run(state,'templateSave',{...initialMaterial,description:'明确文本对话任务',profile:{...initialMaterial.profile,tasks:['对话'],inputModalities:['文本'],outputModalities:['文本']}});
   const material=structuredClone(state.modelTemplates.find(row=>row.id===initialMaterial.id));
-  state=providerRun(state,'supplierChannelCreate',{name:'资料全流程渠道',interfaceType:'openai',protocol:'OpenAI',baseUrl:'https://e2e.example.invalid/v1',authMode:'group',keyGroupId:'default',models:[{libraryId:material.id,upstreamModelId:'vendor/unmodified-upstream',scenarios:quote}]});
-  const endpointId=state.endpoints.find(row=>row.name==='资料全流程渠道').id;
+  state=providerRun(state,'supplierChannelCreate',{name:'资料全流程连接',interfaceType:'openai',protocol:'OpenAI',baseUrl:'https://e2e.example.invalid/v1',authMode:'group',keyGroupId:'default',models:[{libraryId:material.id,upstreamModelId:'vendor/unmodified-upstream',scenarios:quote}]});
+  const endpointId=state.endpoints.find(row=>row.name==='资料全流程连接').id;
   const association=()=>catalogueChannels(state,owner(state),material.modelId).find(row=>row.endpointId===endpointId);
   const mapping=association();assert.ok(mapping);
   const endpoint=()=>state.endpoints.find(row=>row.id===endpointId);

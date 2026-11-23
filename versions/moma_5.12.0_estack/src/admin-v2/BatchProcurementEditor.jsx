@@ -59,7 +59,7 @@ export default function BatchProcurementEditor({ state, channel, models, ops, cl
       <Button theme="solid" form={formId} htmlType="submit" disabled={blocked || !scenarios.length}>下一步：预览发布</Button>
     </>}>
     <div className="ss-body">
-      <Typography.Paragraph>为「{channel.name}」渠道的 {models.length} 款所选模型设置同一套计费项和采购价。</Typography.Paragraph>
+      <Typography.Paragraph>为「{channel.name}」连接的 {models.length} 款所选模型设置同一套计费项和采购价。</Typography.Paragraph>
       {stale && <Notice error>所选模型或采购价已有变化，请重新选择。</Notice>}
       {pricing ? <>
         <div className="procurement-cost-dates">

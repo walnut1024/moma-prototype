@@ -57,10 +57,10 @@ export default function ChannelCapacityEditor({ provider, association, modelName
       <Button theme="solid" form={formId} htmlType="submit" disabled={blocked} loading={busy}>保存</Button>
     </>}>
     <Typography.Paragraph type="tertiary">{provider.name} · {modelName || association.modelId}</Typography.Paragraph>
-    {stale && <Notice error>该渠道容量已有修订，当前输入保留，请关闭并重新打开。</Notice>}
+    {stale && <Notice error>该上游模型容量已有修订，当前输入保留，请关闭并重新打开。</Notice>}
     <form id={formId} className="channel-capacity-form" noValidate onSubmit={save}>
       <div className="channel-capacity-heading"><Typography.Title heading={5} component="h3">容量限额</Typography.Title></div>
-      <Table aria-label="渠道容量设置" rowKey="key" pagination={false} dataSource={CAPACITY_METRICS.filter(metric => Object.hasOwn(limits, metric.key))}
+      <Table aria-label="上游模型容量设置" rowKey="key" pagination={false} dataSource={CAPACITY_METRICS.filter(metric => Object.hasOwn(limits, metric.key))}
         columns={[
           { title: '指标', dataIndex: 'label', width: 200 },
           { title: '限额', render: (_, metric) => <Input aria-label={metric.label + ' 限额'} inputMode={metric.tokenRate ? 'decimal' : 'numeric'} placeholder="未配置" disabled={blocked}

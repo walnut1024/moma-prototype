@@ -39,7 +39,7 @@ export async function save(db,actor,state,key,id,hash,command,response,statement
   const time=Date.now();
   const operation=db.prepare('INSERT INTO operations(id,actor_id,session_id,idempotency_key,command,request_hash,expected_commit_seq,http_status,response_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(id,actor.id,actor.session_id,key,command,hash,state.commitSeq,200,JSON.stringify(response),time);
   const auditId=audit?.id || resourceId('audit-event'),event=audit || {id:auditId,action:command,objectId:id,result:'成功',createdAt:new Date(time).toISOString(),actor:actor.role,actorId:actor.id};
-  if ([response, event].some(value => new TextEncoder().encode(JSON.stringify(value)).byteLength > 1900000)) issue(413,'SCOPE_TOO_LARGE','本次完整数据超出单次保存上限，请减少本次录入的模型或渠道；文件与输入保留');
+  if ([response, event].some(value => new TextEncoder().encode(JSON.stringify(value)).byteLength > 1900000)) issue(413,'SCOPE_TOO_LARGE','本次完整数据超出单次保存上限，请减少本次录入的模型或连接；文件与输入保留');
   const write=[db.prepare('PRAGMA defer_foreign_keys=ON'),operation,...statements,
     db.prepare('INSERT INTO audit_events(id,operation_id,entity_type,entity_id,action,diff_json,created_at,record_json) VALUES(?,?,?,?,?,?,?,?)').bind(auditId,id,entityType,event.objectId || id,event.action,JSON.stringify({result:event.result}),time,JSON.stringify(event))];
   const materialIds = [...new Set((event.relatedModelIds || []).flatMap(id => {
@@ -49,7 +49,7 @@ export async function save(db,actor,state,key,id,hash,command,response,statement
   if (materialIds.length) write.push(db.prepare('INSERT OR IGNORE INTO audit_models(audit_id,material_id,created_at) SELECT ?,value,? FROM json_each(?)').bind(auditId,time,JSON.stringify(materialIds)));
   if(write.length>26)issue(413,'SCOPE_TOO_LARGE','本次原子修改范围过大，请减少批量数量');
   try{await db.batch(write);}catch(error){
-    if (/SQLITE_TOOBIG|string or blob too big/.test(String(error))) issue(413,'SCOPE_TOO_LARGE','本次完整数据超出单次保存上限，请减少本次录入的模型或渠道；文件与输入保留');
+    if (/SQLITE_TOOBIG|string or blob too big/.test(String(error))) issue(413,'SCOPE_TOO_LARGE','本次完整数据超出单次保存上限，请减少本次录入的模型或连接；文件与输入保留');
     if(String(error).includes('session_invalid'))issue(401,'SESSION_EXPIRED','会话已失效');
     if(/commit_conflict|UNIQUE constraint/.test(String(error))){const replay=await receipt(db,actor,key,hash,id);if(replay)return replay;console.warn('Model transaction constraint:',String(error).slice(0,250));issue(409,'REVISION_CONFLICT','数据已有并发提交，请重新核对；当前输入保留');}
     throw error;
@@ -371,7 +371,7 @@ export async function simulationRequest(db,actor,path,method,body,key){
   if(method!=='GET'){const prior=await receipt(db,actor,key,hash,id);if(prior)return prior;}
   const dispatch=method==='POST' && (/^\/services\/[^/]+\/trial$/.test(path) || path==='/client/completions');
   const state=dispatch?await loadModelWorkspace(db,actor):await loadSimulationWorkspace(db),engine=createMockEngine({initialState:state.cloudMockState,localState:state});engine.setMockRuntimeState(state);
-  if(body?.clientChannelId && !state.endpoints.some(e=>e.providerId===body.providerId && (e.id===body.clientChannelId || body.clientChannelId.startsWith(e.id+'-temporary-'))))issue(422,'BUSINESS_BLOCKED','模拟渠道必须关联当前服务商的实际渠道');
+  if(body?.clientChannelId && !state.endpoints.some(e=>e.providerId===body.providerId && (e.id===body.clientChannelId || body.clientChannelId.startsWith(e.id+'-temporary-'))))issue(422,'BUSINESS_BLOCKED','模拟连接必须关联当前服务商的实际连接');
   if(method==='GET' && path.startsWith('/tests?operationId=')){const operationId=new URL('https://simulation.test'+path).searchParams.get('operationId'),prior=await db.prepare('SELECT response_json FROM operations WHERE actor_id=? AND id=?').bind(actor.id,operationId).first();if(!prior)issue(404,'submission_not_found','未找到此操作 ID 的测试提交');const batchId=JSON.parse(prior.response_json).result?.id;if(!batchId)issue(404,'submission_not_found','未找到此操作 ID 的测试提交');path='/tests/'+batchId;}
   let result;
   try{if(path==='/scenario'){engine.setMockScenario(body.scenario);result={scenario:body.scenario};}else result=engine.invoke(path,{method,body});}catch(error){

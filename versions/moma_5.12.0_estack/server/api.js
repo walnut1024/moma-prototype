@@ -494,7 +494,7 @@ async function route(request, env, requestId) {
     if (path==='/market/orders') {
       requireCommerce(true);
       fields(body,['offerIds','tenantId','salePriceIds']);
-      if (!Array.isArray(body.offerIds) || !body.offerIds.length || body.offerIds.length>20 || new Set(body.offerIds).size!==body.offerIds.length || body.offerIds.some(id=>typeof id!=='string' || !/^[A-Za-z0-9:_.-]{1,512}$/.test(id))) fail(400,'INVALID_INPUT','请选择 1–20 项不同的渠道服务');
+      if (!Array.isArray(body.offerIds) || !body.offerIds.length || body.offerIds.length>20 || new Set(body.offerIds).size!==body.offerIds.length || body.offerIds.some(id=>typeof id!=='string' || !/^[A-Za-z0-9:_.-]{1,512}$/.test(id))) fail(400,'INVALID_INPUT','请选择 1–20 项不同的模型服务');
       if ((body.tenantId!==undefined && !identifier(body.tenantId)) || (body.salePriceIds!==undefined &&
           (!body.salePriceIds || Array.isArray(body.salePriceIds) || Object.keys(body.salePriceIds).length!==body.offerIds.length || body.offerIds.some(id=>!Object.hasOwn(body.salePriceIds,id) || !identifier(body.salePriceIds[id]))))) fail(400,'INVALID_INPUT','订单售价或客户无效');
       return json(await marketOrder(db,session,body.offerIds,body));
@@ -689,7 +689,7 @@ async function route(request, env, requestId) {
         db.prepare('SELECT * FROM channels WHERE id=? AND deleted_at IS NULL').bind(id),
         db.prepare('SELECT * FROM channel_models WHERE channel_id=? AND removed_at IS NULL AND id>? ORDER BY id LIMIT ?').bind(id, p.after, p.limit + 1),
       ]);
-      if (!result[0].results.length) fail(404, 'NOT_FOUND', '渠道不存在');
+      if (!result[0].results.length) fail(404, 'NOT_FOUND', '连接不存在');
       if (action) fail(404, 'NOT_FOUND', '此动作尚未接入');
       return json({ channel: decode(result[0].results[0]), models: page(result[1].results, p.limit) });
     }

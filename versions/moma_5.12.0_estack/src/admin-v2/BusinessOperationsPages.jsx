@@ -27,7 +27,7 @@ const configs = {
     ['code', '商品编码'], ['name', '商品名称'], ['billingMode', '计费方式'], ['price', '基础价格', 'number'],
   ] },
   announcements: { collection: 'announcements', fields: [
-    ['title', '标题'], ['audience', '受众'], ['channel', '渠道'], ['effectiveAt', '生效时间', 'date'],
+    ['title', '标题'], ['audience', '受众'], ['channel', '连接'], ['effectiveAt', '生效时间', 'date'],
   ] },
 };
 const editable = (state, collection) => !state.commerceReadOnly && !state.storageError && canMutate(state.currentRole, { type: 'update', collection });

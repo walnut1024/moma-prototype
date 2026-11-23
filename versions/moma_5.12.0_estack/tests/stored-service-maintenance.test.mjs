@@ -37,15 +37,15 @@ const providerRun=(state,operation,values)=>run(state,'provider',{operation,obje
 async function supplyFixture(){
  let state=createAdminSeed();const keys=await providerApiKeysDraft(['sk-compact-local-only-00000001']);state=providerRun(state,'addApiKeys',keys);
  for(let index=0;index<2;index++){
-  state=providerRun(state,'channelSave',{name:`渠道 ${index+1}`,origin:'direct',upstreamModelId:catalogueModelId,protocol:'OpenAI',baseUrl:`https://compact-${index}.example.invalid/v1/chat/completions`,scenarios:[{name:'输入',unit:'百万 Token',currency:'CNY',listPrice:'1.5'},{name:'输出',unit:'百万 Token',currency:'CNY',listPrice:'4'}]});
-  let provider=state.providers.find(item=>item.id===providerId),channel=catalogueChannels(state,provider,catalogueModelId).find(item=>item.name===`渠道 ${index+1}`);
+  state=providerRun(state,'channelSave',{name:`连接 ${index+1}`,origin:'direct',upstreamModelId:catalogueModelId,protocol:'OpenAI',baseUrl:`https://compact-${index}.example.invalid/v1/chat/completions`,scenarios:[{name:'输入',unit:'百万 Token',currency:'CNY',listPrice:'1.5'},{name:'输出',unit:'百万 Token',currency:'CNY',listPrice:'4'}]});
+  let provider=state.providers.find(item=>item.id===providerId),channel=catalogueChannels(state,provider,catalogueModelId).find(item=>item.name===`连接 ${index+1}`);
   state=providerRun(state,'connectionKeys',{endpointId:channel.endpointId,apiKeys:[provider.apiKeys[0]],confirmed:true});
   state=providerRun(state,'channelTest',{channelId:channel.id,scenario:'success'});
   state=providerRun(state,'channelEnable',{channelId:channel.id});
  }
  state=create(state);let model=state.models.find(item=>item.id===state.audits[0].objectId);
  state=run(state,'associateServiceProvider',{providerId,expectedUpdatedAt:model.updatedAt},model.id);model=state.models.find(item=>item.id===model.id);
- const provider=state.providers.find(item=>item.id===providerId), channels=availableServiceChannels(state,provider,catalogueModelId).filter(item=>item.name.startsWith('渠道 '));
+ const provider=state.providers.find(item=>item.id===providerId), channels=availableServiceChannels(state,provider,catalogueModelId).filter(item=>item.name.startsWith('连接 '));
  assert.equal(channels.length,2);assert.ok(channels.every(item=>!item.reason));
  const data={providerId,catalogueModelId,expectedUpdatedAt:model.updatedAt,confirmedIdentity:true,channelIds:channels.map(channel=>channel.id)};
  return {state,model,data};

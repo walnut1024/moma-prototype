@@ -17,11 +17,11 @@ export function channelBatchInterface(state, provider, row, baseUrl = row.endpoi
 export function supplierChannelBatchPlan(state, providerId, associationIds) {
   const provider = state.providers.find(row => row.id === providerId && !row.deletedAt);
   if (!provider) throw Error('服务商不存在或已移除');
-  if (!Array.isArray(associationIds) || !associationIds.length || associationIds.length > 500 || associationIds.some(id => typeof id !== 'string') || new Set(associationIds).size !== associationIds.length) throw Error('请选择 1–500 条不重复的模型渠道');
+  if (!Array.isArray(associationIds) || !associationIds.length || associationIds.length > 500 || associationIds.some(id => typeof id !== 'string') || new Set(associationIds).size !== associationIds.length) throw Error('请选择 1–500 条不重复的上游模型');
   const all = supplierChannelAssociations(state, provider);
   const selected = associationIds.map(id => {
     const row = all.find(row => row.id === id);
-    if (!row) throw Error('模型渠道已变化，请重新选择');
+    if (!row) throw Error('上游模型已变化，请重新选择');
     const master = resolveChannelAssociationModel(state, provider, row);
     if (master.archivedAt) throw Error('模型资料已归档，请重新选择');
     return row;
@@ -71,7 +71,7 @@ export function channelBatchRowResult(tasks, results, associationId, activeKey, 
 }
 
 export function supplierChannelLifecyclePlan(state, providerId, associationIds, action, { modelOnly = false } = {}) {
-  if (!['enable', 'disable'].includes(action)) throw Error('请选择启用或停用渠道');
+  if (!['enable', 'disable'].includes(action)) throw Error('请选择启用或停用连接');
   const plan = supplierChannelBatchPlan(state, providerId, associationIds);
   const selections = plan.selected.map(association => channelSelectionSnapshot({ provider: plan.provider, modelId: association.modelId, association }));
   const references = providerRemovalPlan(state, { providerId, associationIds });
@@ -86,7 +86,7 @@ export function supplierChannelLifecyclePlan(state, providerId, associationIds, 
   }
   const serviceImpact = channelSelectionServiceImpact(state, selections);
   const shared = plan.connections.flatMap(({ endpoint, rows }) => rows.filter(row => !associationIds.includes(row.id)).map(row => ({ ...row,
-    effect: action === 'enable' && !['运行中', '需关注'].includes(endpoint.status) ? '连接恢复，未选渠道保持停用' : '保持原状' })));
+    effect: action === 'enable' && !['运行中', '需关注'].includes(endpoint.status) ? '连接恢复，未选连接保持停用' : '保持原状' })));
   const signature = JSON.stringify([plan.signature, action, modelOnly, selections, plan.selected.map(row => row.enabled), references.signature, serviceImpact]);
   return { ...plan, selections, serviceImpact, references, shared, blockers: [...new Set(blockers)], signature };
 }

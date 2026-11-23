@@ -16,7 +16,7 @@ const channels = state => catalogueChannels(state, provider(state), modelId);
 const service = state => { state.models.find(item=>item.id==='model-1').serviceMode='standard'; return routingServices(state).find(item => item.modelId === 'model-1' && item.mode === 'standard'); };
 const associateChannel=(state,channel)=>{const svc=service(state);return commitAdminState(state,{type:'modelOperations',operation:'associateServiceChannels',modelId:svc.modelId,data:{providerId,catalogueModelId:modelId,channelIds:[channel.id],confirmedIdentity:true,expectedUpdatedAt:svc.model.updatedAt}});};
 const price = [{ name: '输入', listPrice: '1.5', unit: '百万 Token', currency: 'CNY' }, { name: '输出', listPrice: '4', unit: '百万 Token', currency: 'CNY' }];
-const draft = { name: '转售渠道', origin: 'resale', upstreamProvider: '已披露服务商', upstreamModelId: 'upstream-v4', protocol: 'OpenAI', baseUrl: 'https://resale.example.invalid/v1/chat/completions', scenarios: price };
+const draft = { name: '转售连接', origin: 'resale', upstreamProvider: '已披露服务商', upstreamModelId: 'upstream-v4', protocol: 'OpenAI', baseUrl: 'https://resale.example.invalid/v1/chat/completions', scenarios: price };
 async function prepared() {
   const seed = createAdminSeed();
   const endpoint = seed.endpoints.find(item => item.id === 'endpoint-ds');
@@ -40,11 +40,11 @@ const untouched = (before, after) => {
 
 test('batch channel creation commits once, keeps independent prices and preserves existing supply data', () => {
   const state = createAdminSeed(), before = structuredClone(state), original = channels(state);
-  const rows = [draft, { ...draft, name: '第二渠道', origin: 'direct', protocol: 'Anthropic', baseUrl: 'https://second.example.invalid/v1/messages', scenarios: [{ name: '输入', listPrice: '0', unit: '百万 Token', currency: 'USD' }] }];
+  const rows = [draft, { ...draft, name: '第二连接', origin: 'direct', protocol: 'Anthropic', baseUrl: 'https://second.example.invalid/v1/messages', scenarios: [{ name: '输入', listPrice: '0', unit: '百万 Token', currency: 'USD' }] }];
   const next = addBatch(state, rows), saved = channels(next);
   assert.equal(saved.length, original.length + 2);
   assert.equal(next.revision, state.revision + 1); assert.equal(next.audits.length, state.audits.length + 1);
-  const second = saved.find(item => item.name === '第二渠道');
+  const second = saved.find(item => item.name === '第二连接');
   assert.equal(second.endpoint.protocol, 'Anthropic'); assert.equal(second.pricing.scenarios[0].listPrice, 0);
   assert.equal(second.pricing.scenarios[0].currency, 'USD'); assert.equal(second.enabled, false);
   assert.deepEqual(saved.find(item => item.name === draft.name).pricing, channels(add(state, draft)).find(item => item.name === draft.name).pricing);
@@ -56,15 +56,15 @@ test('batch channel creation commits once, keeps independent prices and preserve
 test('batch validates later rows against earlier rows without partial persistence', () => {
   const state = createAdminSeed(), before = structuredClone(state);
   for (const [row, message] of [
-    [{ ...draft, name: '第二渠道', baseUrl: 'bad-url' }, /第 2 行.*地址/],
+    [{ ...draft, name: '第二连接', baseUrl: 'bad-url' }, /第 2 行.*地址/],
     [{ ...draft, baseUrl: 'https://second.example.invalid/v1/chat/completions' }, /第 2 行.*名称不可重复/],
-    [{ ...draft, name: '第二渠道' }, /第 2 行.*调用配置相同/],
-    [{ ...draft, name: '第二渠道', baseUrl: 'https://second.example.invalid/v1/chat/completions', scenarios: [{ ...price[0], listPrice: '-1' }] }, /第 2 行/],
-    [{ ...draft, channelId: channels(state)[0].id }, /第 2 行.*仅支持新渠道/],
+    [{ ...draft, name: '第二连接' }, /第 2 行.*调用配置相同/],
+    [{ ...draft, name: '第二连接', baseUrl: 'https://second.example.invalid/v1/chat/completions', scenarios: [{ ...price[0], listPrice: '-1' }] }, /第 2 行/],
+    [{ ...draft, channelId: channels(state)[0].id }, /第 2 行.*仅支持新的上游模型/],
   ]) { assert.throws(() => addBatch(state, [draft, row]), message); assert.deepEqual(state, before); }
   assert.throws(() => addBatch(state, []), /1–20/);
   assert.throws(() => addBatch(state, Array(21).fill(draft)), /1–20/);
-  const rows = Array.from({ length: 20 - channels(state).length + 1 }, (_, index) => ({ ...draft, name: `渠道 ${index}`, upstreamModelId: `upstream-${index}` }));
+  const rows = Array.from({ length: 20 - channels(state).length + 1 }, (_, index) => ({ ...draft, name: `连接 ${index}`, upstreamModelId: `upstream-${index}` }));
   assert.throws(() => addBatch(state, rows), /最多配置 20/); assert.deepEqual(state, before);
 });
 
@@ -84,9 +84,9 @@ test('channel association uses exact provider, catalogue, endpoint and upstream 
 test('new catalogue models get one unenabled named channel; old records are only read and names preserve identity', () => {
   const seed = createAdminSeed(), before = structuredClone(seed), old = channels(seed);
   assert.ok(old.length); assert.deepEqual(seed, before);
-  const added = commitAdminState(seed, operation('catalogueAdd', { modelId: 'new-model', modelType: 'text', channelName: '国内渠道', modelName: '模型显示名称', protocol: 'OpenAI', apiUrl: 'https://new.example.invalid/v1/chat/completions', scenarios: price }));
+  const added = commitAdminState(seed, operation('catalogueAdd', { modelId: 'new-model', modelType: 'text', channelName: '国内连接', modelName: '模型显示名称', protocol: 'OpenAI', apiUrl: 'https://new.example.invalid/v1/chat/completions', scenarios: price }));
   const defaults = catalogueChannels(added, provider(added), 'new-model');
-  assert.equal(defaults.length, 1); assert.equal(defaults[0].name, '国内渠道'); assert.equal(defaults[0].enabled, false);
+  assert.equal(defaults.length, 1); assert.equal(defaults[0].name, '国内连接'); assert.equal(defaults[0].enabled, false);
   assert.equal(catalogueChannels(parseAdminState(JSON.stringify(added)), provider(added), 'new-model')[0].id, defaults[0].id);
   const imported = commitAdminState(seed, operation('catalogueImport', { mode: 'batch', text: 'batch-one\nbatch-two' }));
   assert.equal(catalogueChannels(imported, provider(imported), 'batch-one').length, 0);
@@ -121,11 +121,11 @@ test('adding a second channel never replaces a historical model connection witho
 
 test('identical call configurations cannot be split using source labels or names; Model ID can distinguish a channel', async () => {
   const { state, value } = await prepared(), saved = add(state, value), before = structuredClone(saved);
-  assert.throws(() => add(saved, { ...value, name: '自营渠道', origin: 'direct' }), /调用配置相同/);
+  assert.throws(() => add(saved, { ...value, name: '自营连接', origin: 'direct' }), /调用配置相同/);
   assert.deepEqual(saved, before);
   const bound = ready(saved, channels(saved).find(item => item.name === value.name));
-  assert.throws(() => add(bound, { ...value, name: '缺少密钥也不能拆成新渠道' }), /调用配置相同/);
-  const next = add(saved, { ...value, name: '另一模型标识渠道', upstreamModelId: 'upstream-v4-special' });
+  assert.throws(() => add(bound, { ...value, name: '缺少密钥也不能拆成新连接' }), /调用配置相同/);
+  const next = add(saved, { ...value, name: '另一模型标识连接', upstreamModelId: 'upstream-v4-special' });
   assert.equal(channels(next).length, channels(saved).length + 1);
 });
 
@@ -191,7 +191,7 @@ test('channel configuration saves without key fields and cannot replace or clear
   let next = add(state, withoutKey), channel = channels(next).find(item => item.name === value.name);
   assert.deepEqual(channel.endpoint.apiKeys, []);
   next = ready(next, channel); channel = channels(next).find(item => item.id === channel.id);
-  const saved = add(next, { ...withoutKey, channelId: channel.id, name: '改名渠道', keyFingerprints: ['foreign'], keepCredentialRef: false });
+  const saved = add(next, { ...withoutKey, channelId: channel.id, name: '改名连接', keyFingerprints: ['foreign'], keepCredentialRef: false });
   const updated = channels(saved).find(item => item.id === channel.id);
   assert.deepEqual(updated.endpoint.apiKeys, channel.endpoint.apiKeys);
   assert.equal(updated.endpoint.credentialRef, channel.endpoint.credentialRef);
@@ -230,7 +230,7 @@ test('channel costs feed the mapped current procurement view without rewriting p
 test('non-call edits preserve existing endpoint defaults and model checks instead of rewriting shared connections', async () => {
   const { state, value } = await prepared(); let next = add(state, value), channel = channels(next).find(item => item.name === value.name);
   next = ready(next, channel); channel = channels(next).find(item => item.id === channel.id);
-  const saved = add(next, { ...value, channelId: channel.id, name: '渠道新名称', origin: 'undisclosed', scenarios: price.map(item => ({ ...item, listPrice: '2' })) });
+  const saved = add(next, { ...value, channelId: channel.id, name: '连接新名称', origin: 'undisclosed', scenarios: price.map(item => ({ ...item, listPrice: '2' })) });
   assert.deepEqual(saved.endpoints, next.endpoints); assert.deepEqual(saved.modelSupplies, next.modelSupplies);
   assert.equal(channels(saved).find(item => item.id === channel.id).enabled, true);
   assert.deepEqual(channels(saved).find(item => item.id === channel.id).health, channel.health);
@@ -238,7 +238,7 @@ test('non-call edits preserve existing endpoint defaults and model checks instea
 
 test('channel maintenance respects role, stale revisions and failed storage without partial endpoint creation', async () => {
   const { state, value } = await prepared(), before = JSON.stringify(state);
-  for (const action of [operation('channelSave', value), { type: 'modelOperations', operation: 'providerChannelBatch', data: { providerId, modelId, channels: [value, { ...value, name: '第二渠道', upstreamModelId: 'second-model' }] } }]) {
+  for (const action of [operation('channelSave', value), { type: 'modelOperations', operation: 'providerChannelBatch', data: { providerId, modelId, channels: [value, { ...value, name: '第二连接', upstreamModelId: 'second-model' }] } }]) {
     assert.throws(() => commitAdminState({ ...state, currentRole: '运维人员' }, action), /无权/);
     assert.throws(() => persistModelAction(state, action, { getItem: () => JSON.stringify({ ...state, revision: state.revision + 1 }), setItem: () => assert.fail() }), /数据已变化/);
     assert.throws(() => persistModelAction(state, action, { getItem: () => before, setItem: () => { throw new Error('quota'); } }), /quota/);
@@ -255,9 +255,9 @@ test('editing channel connection keeps its independent list-price versions', asy
   const { state: initial, value } = await prepared();
   let state = add(initial, value);
   const channel = channels(state).find(row => row.name === value.name);
-  state = commitAdminState(state, operation('supplierChannelListPricePublish', { associationId: channel.id, endpointId: channel.endpointId, expectedRevision: 0, confirmed: true, source: '渠道报价', effectiveAt: '2020-01-01', scenarios: price }));
+  state = commitAdminState(state, operation('supplierChannelListPricePublish', { associationId: channel.id, endpointId: channel.endpointId, expectedRevision: 0, confirmed: true, source: '连接报价', effectiveAt: '2020-01-01', scenarios: price }));
   const before = channels(state).find(row => row.id === channel.id);
-  state = add(state, { ...value, name: '新渠道名称', channelId: channel.id });
+  state = add(state, { ...value, name: '新连接名称', channelId: channel.id });
   const after = channels(state).find(row => row.id === channel.id);
   assert.equal(after.listPriceRevision, before.listPriceRevision);
   assert.deepEqual(after.listPriceVersions, before.listPriceVersions);

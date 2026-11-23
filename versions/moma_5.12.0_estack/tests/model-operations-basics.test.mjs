@@ -30,7 +30,7 @@ test('HTTP and D1 preserve canonical material, explicit channel protocol and can
     const material=state.modelTemplates.find(row=>row.modelId==='glm-5.5');assert.ok(material);
     const registered=await command('supplierModelsRegister',{providerId:'provider-moma',libraryIds:[material.id]});assert.equal(registered.status,200,JSON.stringify(registered.data));await refresh();
     const owner=state.providers.find(row=>row.id==='provider-moma'),catalogue=owner.catalogModels.find(row=>row.libraryId===material.id);
-    const channel={providerId:owner.id,modelId:catalogue.modelId,name:'阶段一测试渠道',upstreamModelId:'vendor/glm-5.5',protocol:'Anthropic',baseUrl:'https://phase-one.example.invalid/v1',authMode:'group',keyGroupId:'default',scenarios:[{name:'输入 Token',listPrice:'0',unit:'百万 Token',currency:'CNY'}]};
+    const channel={providerId:owner.id,modelId:catalogue.modelId,name:'阶段一测试连接',upstreamModelId:'vendor/glm-5.5',protocol:'Anthropic',baseUrl:'https://phase-one.example.invalid/v1',authMode:'group',keyGroupId:'default',scenarios:[{name:'输入 Token',listPrice:'0',unit:'百万 Token',currency:'CNY'}]};
     const invalid=await command('supplierChannelRegister',{...channel,protocol:'unknown'});assert.equal(invalid.status,422);await refresh();assert.equal(state.revision,registered.data.revision);
     const fullTask=await command('supplierChannelRegister',{...channel,baseUrl:channel.baseUrl+'/messages'});assert.equal(fullTask.status,422);await refresh();assert.equal(state.revision,registered.data.revision);
     const connected=await command('supplierChannelRegister',channel);assert.equal(connected.status,200,JSON.stringify(connected.data));await refresh();
@@ -42,7 +42,7 @@ test('HTTP and D1 preserve canonical material, explicit channel protocol and can
       newProvider: { name: '手动接入服务商' },
       channelApiKey,
       values: {
-        name: '手动接入渠道', interfaceType: 'openai', baseUrl: 'https://manual.example.invalid/v1',
+        name: '手动接入连接', interfaceType: 'openai', baseUrl: 'https://manual.example.invalid/v1',
         authMode: 'group', keyGroupId: 'default', models: [{ libraryId: material.id, upstreamModelId: 'vendor/manual-glm' }],
       },
     };
@@ -126,7 +126,7 @@ test('HTTP and D1 preserve canonical material, explicit channel protocol and can
     await refresh();
     const currentOwner=state.providers.find(row=>row.id===privateOwner.id);
     const currentAssociation=currentOwner.catalogConnections.find(row=>row.endpointId===privateChannel.id);
-    const ownName='渠道独立维护的展示名称';
+    const ownName='连接独立维护的展示名称';
     const channelRename=await command('supplierChannelEdit',{
       providerId:currentOwner.id,endpointId:privateChannel.id,associationId:currentAssociation.id,
       modelId:currentAssociation.modelId,name:privateChannel.name,upstreamModelId:currentAssociation.upstreamModelId,

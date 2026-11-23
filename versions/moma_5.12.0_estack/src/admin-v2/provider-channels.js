@@ -27,7 +27,7 @@ export function catalogueChannels(state, provider, modelId) {
       const version = activeChannelProcurement(item);
       return {
       ...item, id: item.id || channelIdentity(provider.id, modelId, endpoint.id),
-      name: item.sourceName || (endpoint.supplierChannel ? endpoint.name : item.name || (endpoints.length > 1 ? `默认渠道 ${index + 1}` : '默认渠道')), origin: item.origin || 'undisclosed', upstreamProvider: item.upstreamProvider || '',
+      name: item.sourceName || (endpoint.supplierChannel ? endpoint.name : item.name || (endpoints.length > 1 ? `默认连接 ${index + 1}` : '默认连接')), origin: item.origin || 'undisclosed', upstreamProvider: item.upstreamProvider || '',
       ...(endpoint.supplierChannel ? { apiAddresses: [
         { protocol: endpoint.protocol, baseUrl: channelModelUrl(endpoint, item.type || provider.catalogModels?.find(row => row.modelId === modelId)?.type, { probe: channelProbe(item) }) },
         ...(item.apiAddresses || []).slice(1),
@@ -77,15 +77,15 @@ export function channelQualification(channel) {
 }
 export function channelBlockReason(provider, channel, { runtime = false } = {}) {
   if (provider.status !== '已启用') return '服务商已停用';
-  if (channel.endpoint?.frozen) return '渠道已冻结';
+  if (channel.endpoint?.frozen) return '连接已冻结';
   if (channelInterfaceIssue(provider, channel)) return channelInterfaceIssue(provider, channel);
-  if (!channel.enabled) return '渠道已停用';
+  if (!channel.enabled) return '上游模型已停用';
   if (!connectionCredentialsReady(channel.endpoint, provider)) return 'API 凭证待配置';
   if (!runtime && channelTestPending(channel)) return '当前模型测试尚未完成';
-  if (channel.endpoint.supplierChannel && !(runtime ? connectionQualified(channel.endpoint) : connectionTestPassed(channel.endpoint))) return '渠道连接测试待通过';
-  if (channel.endpoint.supplierChannel && !['运行中', '需关注'].includes(channel.endpoint.status)) return '渠道待启用';
+  if (channel.endpoint.supplierChannel && !(runtime ? connectionQualified(channel.endpoint) : connectionTestPassed(channel.endpoint))) return '连接测试待通过';
+  if (channel.endpoint.supplierChannel && !['运行中', '需关注'].includes(channel.endpoint.status)) return '连接待启用';
   const evidence = runtime ? channelQualification(channel) : channel.health;
-  if (!(runtime ? channel.managed ? evidence : connectionQualified(channel.endpoint) : channelCheckCurrent(channel))) return '渠道配置已变化，需检测';
+  if (!(runtime ? channel.managed ? evidence : connectionQualified(channel.endpoint) : channelCheckCurrent(channel))) return '连接配置已变化，需检测';
   if (evidence && evidence.result !== '通过') return evidence.message || '健康检测未通过';
   return '';
 }
@@ -96,7 +96,7 @@ export function channelRouteRefs(state, provider, channel) {
 export function supplierDeletionBlock(state, provider, modelId, channel) {
   const modelIds = modelId ? channel ? [modelId] : supplierModelIds(state, provider, modelId) : [];
   const channels = modelIds.flatMap(id => catalogueChannels(state, provider, id));
-  if (!channel && channels.some(row => row.endpointId)) return { message: '请先删除该模型的全部渠道，再删除模型。', models: [] };
+  if (!channel && channels.some(row => row.endpointId)) return { message: '请先移除该模型的全部上游模型记录，再删除模型。', models: [] };
   const master = modelId && supplyModelRecord(state, provider, modelId);
   const wholeEndpoint = channel && !providerCatalogueIds(provider).some(id => catalogueChannels(state, provider, id).some(row => row.endpointId === channel.endpointId && row.id !== channel.id));
   const mappingOnly = channel && channel.id !== channel.endpointId;
@@ -116,13 +116,13 @@ export function supplierDeletionBlock(state, provider, modelId, channel) {
     return row.status !== '已移除' && config?.providerId === provider.id &&
       (mappingOnly ? config.associationId === channel.id : channel ? config.endpointId === channel.endpointId : modelIds.includes(config.catalogueModelId));
   });
-  if(pendingMappings.length)return {message:'该渠道仍被模型服务的待验证映射引用，请先应用或放弃映射变更。',models:state.models.filter(model=>pendingMappings.some(row=>row.modelId===model.id))};
+  if(pendingMappings.length)return {message:'该上游模型仍被模型服务的待验证映射引用，请先应用或放弃映射变更。',models:state.models.filter(model=>pendingMappings.some(row=>row.modelId===model.id))};
   const linked = supplies.filter(row => row.status !== '已移除');
   const serviceIds = new Set(related.flatMap(model => ['standard:' + model.id, `provider:${model.id}:${provider.id}`]));
   const references = (route, rows) => rows?.some(row => ids.has(row.supplyId) || (wholeEndpoint || serviceIds.has(route.serviceId)) && endpoints.has(row.supplyId));
   const routes = (state.serviceRoutes || []).filter(route => references(route, route.versions?.find(row => row.version === route.activeVersion)?.config?.channels) || references(route, route.draft?.channels));
   if (services.length || linked.length || routes.length) {
-    return { message: '该服务商或渠道已在“模型服务”中关联，无法删除。下架或停服不会解除关联，请先移除对应的服务商、渠道映射及路由引用。', models: related.filter(model => services.includes(model) || linked.some(row => row.modelId === model.id) || routes.some(route => ['standard:' + model.id, `provider:${model.id}:${provider.id}`].includes(route.serviceId))) };
+    return { message: '该服务商或上游模型已在“模型服务”中关联，无法删除。下架或停服不会解除关联，请先移除对应的服务商、上游模型映射及路由引用。', models: related.filter(model => services.includes(model) || linked.some(row => row.modelId === model.id) || routes.some(route => ['standard:' + model.id, `provider:${model.id}:${provider.id}`].includes(route.serviceId))) };
   }
   const pending = state.modelOnboardings.some(row => {
     if (row.status === '已放弃' || (row.guided ? row.completion : row.status === '已完成') || (row.providerId || row.value?.providerId) !== provider.id) return false;
@@ -130,7 +130,7 @@ export function supplierDeletionBlock(state, provider, modelId, channel) {
     return channel ? row.createdAssociationIds?.includes(channel.id) || endpoints.has(row.endpointId || row.createdEndpointId) && (wholeEndpoint || !modelId || sameModel) : sameModel;
   });
   const testing = state.endpoints.some(endpoint => endpoints.has(endpoint.id) && endpoint.serverTestJobs?.some(job => !job.receivedAt && (wholeEndpoint || job.associationIds?.some(id => ids.has(id)))));
-  return { message: pending ? '该模型或渠道仍有未完成的接入任务，请先完成或放弃任务后再删除。' : testing ? '该渠道仍有检测任务未完成，请先查询或取消检测后再删除。' : '', models: [] };
+  return { message: pending ? '该模型或连接仍有未完成的接入任务，请先完成或放弃任务后再删除。' : testing ? '该连接仍有检测任务未完成，请先查询或取消检测后再删除。' : '', models: [] };
 }
 const text = (value, label, maximum, required = true) => {
   if (typeof value !== 'string' || (required && !value.trim()) || value.trim().length > maximum || /[\r\n]/.test(value)) throw new Error(`${label}${required ? '必填，' : ''}最多 ${maximum} 字，不能换行`);
@@ -145,7 +145,7 @@ const sameCall = (left, right) => {
 };
 const currentHealth = channel => channel.health || (connectionTestPassed(channel.endpoint) ? { ...channel.endpoint.connectionTest, fingerprint: channelFingerprint(channel) } : null);
 function channelCosts(provider, modelId, scenarios, normalize, draft = false) {
-  if (!Array.isArray(scenarios)) throw new Error('请填写渠道价格');
+  if (!Array.isArray(scenarios)) throw new Error('请填写上游模型的服务商成本价');
   // Channel cost is the entered amount; old model-level discount and manual overrides remain separate.
   const quote = normalize(provider, { modelId, discountFactor: '1', scenarios: scenarios.map(row => ({ ...row, purchasePrice: undefined })) });
   if (!draft && quote.scenarios.some(row => row.listPrice == null)) throw new Error('请填写完整的采购价，免费请填 0');
@@ -157,26 +157,26 @@ export function providerChannelTransaction(state, { operation, objectId, data = 
   if (!provider || !providerCatalogueIds(provider).includes(data.modelId)) throw new Error('服务商或目录模型不存在');
   const channels = catalogueChannels(state, provider, data.modelId);
   const current = channels.find(item => item.id === data.channelId);
-  if (data.channelId && !current) throw new Error('渠道已不存在，请重新载入');
+  if (data.channelId && !current) throw new Error('上游模型已不存在，请重新载入');
   const changes = [], entries = provider.catalogConnections || [];
   if (operation === 'catalogueRemove' || operation === 'channelDelete') {
     if (!data.confirmed) throw new Error('请确认删除对象及关联影响');
     const targets = operation === 'channelDelete' ? current ? [current] : [] : channels;
-    if (operation === 'channelDelete' && !current) throw new Error('请选择供应渠道');
+    if (operation === 'channelDelete' && !current) throw new Error('请选择上游模型');
     const block = supplierDeletionBlock(state, provider, data.modelId, operation === 'channelDelete' ? current : null);
     if (block.message) throw new Error(block.message);
     const deletedAt = new Date().toISOString(), ids = new Set(targets.map(item => item.id));
     const catalogConnections = entries.map(item => ids.has(item.id || channelIdentity(provider.id, item.modelId, item.endpointId)) ? { ...item, deletedAt, enabled: false } : item);
     for (const channel of targets) if (!catalogConnections.some(item => (item.id || channelIdentity(provider.id, item.modelId, item.endpointId)) === channel.id)) catalogConnections.push({ id: channel.id, modelId: channel.modelId, endpointId: channel.endpointId, name: channel.name, deletedAt, enabled: false });
     const remaining = providerCatalogueIds(provider).flatMap(id => catalogueChannels(state, provider, id)).filter(row => !ids.has(row.id));
-    return { type: 'batch', objectId: current?.id || data.modelId, label: operation === 'channelDelete' ? '删除供应渠道' : '删除供应模型', changes: [{ type: 'update', collection: 'providers', id: provider.id, changes: { catalogConnections,
+    return { type: 'batch', objectId: current?.id || data.modelId, label: operation === 'channelDelete' ? '删除上游模型' : '删除供应模型', changes: [{ type: 'update', collection: 'providers', id: provider.id, changes: { catalogConnections,
       removedCatalogModelIds: retiredSupplierModelIds(state, provider, remaining, [data.modelId]) } }] };
   }
   let next, label;
   if (operation === 'channelSave') {
-    if (!current && channels.length >= 20) throw new Error('每个模型最多配置 20 个供应渠道');
-    const name = text(data.name, '渠道名称', 60);
-    if (channels.some(item => item.id !== current?.id && item.name === name)) throw new Error('同一模型的渠道名称不可重复');
+    if (!current && channels.length >= 20) throw new Error('每个模型最多配置 20 个上游模型');
+    const name = text(data.name, '上游模型名称', 60);
+    if (channels.some(item => item.id !== current?.id && item.name === name)) throw new Error('同一模型的上游模型名称不可重复');
     if (!Object.hasOwn(CHANNEL_ORIGINS, data.origin)) throw new Error('请选择有效的来源类型');
     const upstreamProvider = data.origin === 'resale' ? text(data.upstreamProvider || '', '上游服务商', 100, false) : '';
     const upstreamModelId = text(data.upstreamModelId, '上游模型调用标识', 200);
@@ -188,18 +188,18 @@ export function providerChannelTransaction(state, { operation, objectId, data = 
     const endpointChange = transaction.changes.find(item => item.collection === 'endpoints');
     const normalizedEndpoint = current?.endpointId ? { ...current.endpoint, ...endpointChange.changes } : endpointChange.record;
     const addresses = data.apiAddresses || [{ protocol: data.protocol, baseUrl: data.baseUrl }, ...(current?.apiAddresses || []).slice(1)];
-    if (!Array.isArray(addresses) || addresses.length < 1 || addresses.length > 5) throw new Error('每个渠道须配置 1–5 个协议地址');
+    if (!Array.isArray(addresses) || addresses.length < 1 || addresses.length > 5) throw new Error('每个上游模型须配置 1–5 个协议地址');
     const apiAddresses = addresses.map(address => {
       if (!address || typeof address.baseUrl !== 'string') throw new Error('请填写协议及 API 地址');
       connect(state, { operation: 'connection', objectId: current?.endpointId, data: { ...fields, protocol: address.protocol, baseUrl: address.baseUrl } });
       return { protocol: address.protocol, baseUrl: new URL(address.baseUrl).toString().replace(/\/$/, '') };
     });
-    if (apiAddresses[0].protocol !== normalizedEndpoint.protocol || apiAddresses[0].baseUrl !== normalizedEndpoint.baseUrl) throw new Error('默认协议地址与渠道接入不一致');
-    if (new Set(apiAddresses.map(item => item.protocol)).size !== apiAddresses.length) throw new Error('同一渠道每种协议只能配置一个地址');
+    if (apiAddresses[0].protocol !== normalizedEndpoint.protocol || apiAddresses[0].baseUrl !== normalizedEndpoint.baseUrl) throw new Error('默认协议地址与连接配置不一致');
+    if (new Set(apiAddresses.map(item => item.protocol)).size !== apiAddresses.length) throw new Error('同一上游模型每种协议只能配置一个地址');
     const connectionChanged = current && requestIdentity(normalizedEndpoint) !== requestIdentity(current.endpoint);
     const endpoint = current?.endpointId && !connectionChanged ? current.endpoint : normalizedEndpoint;
     const candidate = { endpoint, upstreamModelId };
-    if (channels.some(item => item.id !== current?.id && sameCall(item, candidate))) throw new Error('调用配置相同，不能仅凭名称或来源标签拆成两个渠道');
+    if (channels.some(item => item.id !== current?.id && sameCall(item, candidate))) throw new Error('调用配置相同，不能仅凭名称或来源标签拆成两个上游模型');
     const shared = current?.endpointId && (state.modelSupplies.some(item => item.endpointId === current.endpointId && item.status !== '已移除') || entries.some(item => item.endpointId === current.endpointId && item.modelId !== data.modelId));
     if (shared && connectionChanged && !data.confirmed) throw new Error('请确认共享接入地址变更会使关联模型需要重新验证');
     const pricing = channelCosts(provider, data.modelId, data.scenarios, normalizePrice, true);
@@ -213,22 +213,22 @@ export function providerChannelTransaction(state, { operation, objectId, data = 
     if (changed) { next.enabled = false; next.health = null; }
     if (pricing.scenarios.some(row => row.listPrice == null)) next.enabled = false;
     if (!current?.endpointId || connectionChanged) changes.push(...transaction.changes);
-    label = current ? '保存供应渠道' : '添加供应渠道';
+    label = current ? '保存上游模型' : '添加上游模型';
   } else {
-    if (!current) throw new Error('请选择供应渠道');
+    if (!current) throw new Error('请选择上游模型');
     next = { ...current, health: currentHealth(current) }; delete next.endpoint; delete next.managed;
     if (operation === 'channelPrice') {
       const pricing = channelCosts(provider, data.modelId, data.scenarios, normalizePrice);
-      next.pricing = pricing; label = '保存渠道价格';
+      next.pricing = pricing; label = '保存上游模型的服务商成本价';
     } else if (operation === 'channelTest') {
-      if (!current.endpointId) throw new Error('请先配置渠道 API 地址');
+      if (!current.endpointId) throw new Error('请先配置连接 API 地址');
       if (!connectionCredentialsReady(current.endpoint, provider)) throw new Error('请先通过独立的 API 凭证操作配置密钥，再进行检测');
       if (channelInterfaceIssue(provider, current)) throw new Error(channelInterfaceIssue(provider, current));
-      if (current.endpoint.supplierChannel && (!connectionTestPassed(current.endpoint) || !['运行中', '需关注'].includes(current.endpoint.status))) throw new Error('请先完成渠道连接测试并启用渠道');
+      if (current.endpoint.supplierChannel && (!connectionTestPassed(current.endpoint) || !['运行中', '需关注'].includes(current.endpoint.status))) throw new Error('请先完成连接测试并启用连接');
       // The prototype checks configuration and stores a preview; it makes no upstream request.
       connect(state, { operation: 'connection', objectId: current.endpointId, data: { ...current.endpoint, providerId: provider.id, timeoutSeconds: current.endpoint.timeoutSeconds || 60 } });
       const addressIndex = data.addressIndex ?? 0, address = channelAddresses(provider, current)[addressIndex];
-      if (!Number.isInteger(addressIndex) || !address) throw new Error('请选择当前渠道的协议地址');
+      if (!Number.isInteger(addressIndex) || !address) throw new Error('请选择当前上游模型的协议地址');
       const result = preview({ modelId: data.modelId, upstreamId: current.upstreamModelId, endpointId: current.endpointId, ...address }, data.scenario);
       const qualification = channelQualification(current);
       if (qualification) next.qualification = structuredClone(qualification);
@@ -236,17 +236,17 @@ export function providerChannelTransaction(state, { operation, objectId, data = 
       next.testHistory = [...(current.testHistory || []), structuredClone(health)];
       next.protocolTests = { ...current.protocolTests, [address.protocol]: health };
       if (addressIndex === 0) next.health = health;
-      label = '检测供应渠道';
+      label = '检测上游模型';
     } else if (operation === 'channelEnable') {
       if (channelTestPending(current)) throw new Error('当前模型测试尚未完成，不能使用先前证据启用');
       if (channelInterfaceIssue(provider, current)) throw new Error(channelInterfaceIssue(provider, current));
-      if (current.endpoint.supplierChannel && (!connectionTestPassed(current.endpoint) || !['运行中', '需关注'].includes(current.endpoint.status))) throw new Error('请先完成渠道连接测试并启用渠道');
-      if (provider.status !== '已启用' || !connectionCredentialsReady(current.endpoint, provider) || !channelCheckCurrent(current) || !current.health || current.health.result !== '通过' || current.health.fingerprint !== channelFingerprint(current)) throw new Error('当前渠道须先完成有效的健康检测');
-      next.enabled = true; next.activationChangedAt = new Date().toISOString(); next.qualification = structuredClone(current.health); label = '启用供应渠道';
+      if (current.endpoint.supplierChannel && (!connectionTestPassed(current.endpoint) || !['运行中', '需关注'].includes(current.endpoint.status))) throw new Error('请先完成连接测试并启用连接');
+      if (provider.status !== '已启用' || !connectionCredentialsReady(current.endpoint, provider) || !channelCheckCurrent(current) || !current.health || current.health.result !== '通过' || current.health.fingerprint !== channelFingerprint(current)) throw new Error('当前上游模型须先完成有效的健康检测');
+      next.enabled = true; next.activationChangedAt = new Date().toISOString(); next.qualification = structuredClone(current.health); label = '启用上游模型';
     } else if (operation === 'channelDisable') {
-      if (!data.confirmed) throw new Error('请确认全局停用渠道及服务影响');
-      next.enabled = false; next.activationChangedAt = new Date().toISOString(); label = '停用供应渠道';
-    } else throw new Error('未知渠道操作');
+      if (!data.confirmed) throw new Error('请确认全局停用上游模型及服务影响');
+      next.enabled = false; next.activationChangedAt = new Date().toISOString(); label = '停用上游模型';
+    } else throw new Error('未知上游模型操作');
     next.updatedAt = new Date().toISOString();
   }
   const implicit = channels.filter(item => item.id !== current?.id && !entries.some(row => row.modelId === item.modelId && (row.id === item.id || row.endpointId === item.endpointId))).map(item => ({ id: item.id, modelId: item.modelId, endpointId: item.endpointId, name: item.name }));

@@ -65,7 +65,7 @@ test('channel perspectives exclude zero-channel registrations without deleting r
 });
 
 test('legacy single-channel delete also retires the last registration atomically', () => {
-  let state = run(initialModelWorkspace(), 'provider', { operation: 'create', values: { name: '单渠道回归', code: 'last-channel-test', sourceType: 'thirdParty', catalogModelIds: [] } });
+  let state = run(initialModelWorkspace(), 'provider', { operation: 'create', values: { name: '单连接回归', code: 'last-channel-test', sourceType: 'thirdParty', catalogModelIds: [] } });
   const provider = state.providers.find(p => p.code === 'last-channel-test');
   state = run(state, 'provider', { operation: 'supplierChannelCreate', objectId: provider.id, values: { name: '自营', protocol: 'OpenAI', baseUrl: 'https://last.example.invalid/v1/chat/completions', authMode: 'inherit', models: [{ libraryId: 'model-2', upstreamModelId: 'vendor/last', scenarios: [] }] } });
   const channel = supplierChannelAssociations(state, state.providers.find(p => p.id === provider.id))[0];

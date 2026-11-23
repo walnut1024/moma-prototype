@@ -138,7 +138,7 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     assert.ok(backup);
     const saveFailover = (enabled, backupSupplyId, overrides={}) => save(state,{type:'modelOperations',operation:'serviceFailoverConfigure',modelId:model.id,data:{serviceId:explicit.id,expectedVersion:serviceRoute(state,explicit.id).activeVersion,sourceVersion:routeSourceVersion(state,explicit),confirmed:true,enabled,backupSupplyId,...overrides}});
     const beforeFailover = (await api('/model-operations')).data;
-    await assert.rejects(saveFailover(true,primary.supplyId),/不同的备用渠道/);
+    await assert.rejects(saveFailover(true,primary.supplyId),/不同的备用上游模型/);
     const foreign = routingServices(state).find(row=>row.modelId===model.id && row.providerId==='provider-zhipu-direct');
     await assert.rejects(saveFailover(true,routingChannels(state,foreign)[0].id),/指定服务商/);
     assert.deepEqual((await api('/model-operations')).data,beforeFailover);
@@ -177,10 +177,10 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     assert(!JSON.stringify(state).includes(secret));
     assert.equal((await local.db.prepare('SELECT count(*) AS n FROM key_group_members WHERE group_id=? AND supplier_id=?').bind(group.id,'provider-moma').first()).n,1);
     const previousChannelCount=await local.db.prepare('SELECT count(*) AS n FROM channel_models WHERE removed_at IS NULL').first('n');
-    state=await provider('supplierChannelCreate',{name:'D1验收渠道',protocol:'OpenAI',baseUrl:'https://qa.example.invalid/v1/chat/completions',keyGroupId:group.id,models:[{libraryId:'template-glm-5.3',upstreamModelId:'glm-d1-qa',scenarios:[{name:'输入 Token',listPrice:'0',unit:'百万 Token',currency:'CNY'},{name:'输出 Token',listPrice:'8.5',unit:'百万 Token',currency:'CNY'}]}]});
+    state=await provider('supplierChannelCreate',{name:'D1验收连接',protocol:'OpenAI',baseUrl:'https://qa.example.invalid/v1/chat/completions',keyGroupId:group.id,models:[{libraryId:'template-glm-5.3',upstreamModelId:'glm-d1-qa',scenarios:[{name:'输入 Token',listPrice:'0',unit:'百万 Token',currency:'CNY'},{name:'输出 Token',listPrice:'8.5',unit:'百万 Token',currency:'CNY'}]}]});
     assert.equal(state.endpoints.length,baseline.endpoints.length+1);assert.equal(state.modelSupplies.length,baseline.modelSupplies.length);
     assert.equal((await local.db.prepare('SELECT count(*) AS n FROM channel_models WHERE removed_at IS NULL').first()).n,previousChannelCount+1);
-    const channel=state.endpoints.find(e=>e.name==='D1验收渠道');
+    const channel=state.endpoints.find(e=>e.name==='D1验收连接');
     const association=()=>state.providers.find(p=>p.id==='provider-moma').catalogConnections.find(a=>a.endpointId===channel.id);
     const procurement=amount=>save(state,{type:'modelOperations',operation:'channelProcurementPublish',data:{confirmed:true,providerId:'provider-moma',endpointId:channel.id,associationId:association().id,expectedPriceRevision:association().procurementRevision || 0,effectiveAt:new Date().toISOString(),scenarios:[{name:'输入 Token',listPrice:amount,unit:'百万 Token',currency:'CNY'},{name:'输出 Token',listPrice:'0',unit:'百万 Token',currency:'CNY'}]}});
     state=await procurement('1.25');
@@ -235,8 +235,8 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     state=await commit('channelMetadataCreate',{name:'D1内部无价格',modelId:'d1-internal-no-price',type:'text',profile:{tasks:['对话'],inputModalities:['文本'],outputModalities:['文本']}});
     const material=state.modelTemplates.find(row=>row.modelId==='d1-internal-no-price');
     state=await commit('templatePublish',{id:material.id,confirmed:true,expectedBase:materialBase(state,material),value:{...material,description:'内部技术服务',profile:{...material.profile,tasks:['对话'],inputModalities:['文本'],outputModalities:['文本']}}});
-    state=await commit('provider',{operation:'supplierChannelCreate',objectId:'provider-moma',values:{name:'D1无价格渠道',protocol:'OpenAI',interfaceType:'openai',baseUrl:'https://internal.example.invalid/v1',authMode:'group',keyGroupId:group.id,models:[{libraryId:material.id,upstreamModelId:'vendor/internal',scenarios:[]}]}});
-    const ep=state.endpoints.find(row=>row.name==='D1无价格渠道'),owner=()=>state.providers.find(row=>row.id==='provider-moma');
+    state=await commit('provider',{operation:'supplierChannelCreate',objectId:'provider-moma',values:{name:'D1无价格连接',protocol:'OpenAI',interfaceType:'openai',baseUrl:'https://internal.example.invalid/v1',authMode:'group',keyGroupId:group.id,models:[{libraryId:material.id,upstreamModelId:'vendor/internal',scenarios:[]}]}});
+    const ep=state.endpoints.find(row=>row.name==='D1无价格连接'),owner=()=>state.providers.find(row=>row.id==='provider-moma');
     const association=owner().catalogConnections.find(row=>row.endpointId===ep.id);
     const channel=await prepareServerChannel(owner(),ep),request={operationId:crypto.randomUUID(),channelId:channel.id,models:[{id:material.id,associationId:association.id,upstreamModelId:association.upstreamModelId,type:'text'}]};
     const job={providerId:owner().id,endpointId:ep.id,operationId:request.operationId,serverChannelId:channel.id,signature:connectionFingerprint(ep),associationIds:[association.id],request};

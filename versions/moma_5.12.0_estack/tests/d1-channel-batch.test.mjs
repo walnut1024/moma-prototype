@@ -31,7 +31,7 @@ test('HTTP/D1 batch names and shared addresses preserve IDs, rollback failures, 
     let state = await read(); const original = structuredClone(state), provider = state.providers.find(row => row.id === 'provider-moma');
     const rows = supplierChannelAssociations(state, provider), first = rows[0], other = rows.find(row => row.endpointId !== first.endpointId), ids = [first.id, other.id];
     const values = patch => ({ providerId: provider.id, associationIds: ids, expectedSignature: supplierChannelBatchPlan(state, provider.id, ids).signature, confirmed: true, ...patch });
-    const name = values({ field: 'name', value: 'HTTP批量渠道' });
+    const name = values({ field: 'name', value: 'HTTP批量连接' });
     assert.equal((await request('/model-operations/commands', { operationId: crypto.randomUUID(), expectedRevision: state.revision, action: { type: 'modelOperations', operation: 'supplierChannelBatchEdit', data: name } }, readonly.cookie)).status, 403);
     for (const patch of [{ value: '' }, { value: 'a\nb' }, { associationIds: [...ids, 'foreign'] }, { expectedSignature: 'stale' }, { confirmed: false }]) assert.equal((await command('supplierChannelBatchEdit', { ...name, ...patch })).status, 422);
     assert.deepEqual(await read(), original);

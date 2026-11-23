@@ -38,16 +38,16 @@ export function routeMappingStatus(state,service,channel) {
   if (contract.reason) return reject(contract.unsupported?'待适配':'待配置',contract.reason);
   if (!result.platformModelId) return reject('待配置','请先配置当前服务的模型调用标识。');
   if (!result.upstreamModelId || /\s/.test(result.upstreamModelId)) return reject('待配置','请先在供应管理配置有效的上游模型调用标识。');
-  if (!endpoint || !provider || (channel.modelId && channel.modelId!==model.id) || (service.providerId && service.providerId!==provider.id)) return reject('待配置','渠道与当前模型服务或服务商的关联不完整。');
-  if (!upstreamProtocol) return reject('待配置','请先在供应管理明确渠道协议。');
+  if (!endpoint || !provider || (channel.modelId && channel.modelId!==model.id) || (service.providerId && service.providerId!==provider.id)) return reject('待配置','连接与当前模型服务或服务商的关联不完整。');
+  if (!upstreamProtocol) return reject('待配置','请先在供应管理明确连接协议。');
   if (!url) return reject('待配置','请先在供应管理配置完整的请求地址。');
   if (!['http:','https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname==='/' || /^\/v\d+\/?$/.test(url.pathname)) return reject('待配置','请求地址 需为无嵌入凭据的完整接口地址。');
   if (upstreamType && !contract.types.includes(upstreamType)) return reject('待适配','供应模型类型与平台接口不同，尚未提供对应的数据转换适配。');
   const normalizedPath=url.pathname.replace(/\/$/,''),knownPath=contract.suffixes.some(suffix=>normalizedPath===suffix || normalizedPath.endsWith(suffix));
-  if (!knownPath) return reject('待适配','渠道接口路径不在当前支持的同类接口范围，需先完成协议适配。');
+  if (!knownPath) return reject('待适配','连接接口路径不在当前支持的同类接口范围，需先完成协议适配。');
   if (upstreamProtocol==='OpenAI') return {...result,valid:true,status:'已配置'};
   if (upstreamProtocol==='其他' && contract!==interfaces.text) {
-    if (!upstreamType) return reject('待配置','渠道使用其他协议，请先明确供应模型类型，确认接口数据格式。');
+    if (!upstreamType) return reject('待配置','连接使用其他协议，请先明确供应模型类型，确认接口数据格式。');
     return {...result,valid:true,status:'已配置'};
   }
   return reject('待适配',`尚未提供 ${contract.protocol} 到 ${upstreamProtocol} 的协议转换适配。`);

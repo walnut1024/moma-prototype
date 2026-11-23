@@ -43,7 +43,7 @@ export function serviceSupplyRows(state, model) {
   if (!['standard','provider'].includes(model.serviceMode)) return [];
   return modelSupplies(state, model.id).map(supply => {
     const channel = supply.provider && catalogueChannels(state, supply.provider, supply.catalogueModelId || supply.upstreamModelId).find(item => item.endpointId === supply.endpointId && item.upstreamModelId === supply.upstreamModelId);
-    return { ...supply, channelId: channel ? serviceChannelId(channel) : supply.channelId || supply.endpointId, channelName: channel?.name || supply.endpoint?.name || '渠道待配置', url: channel ? channelUrl(supply.provider, channel) : supplyModelUrl(supply, model), cost: channel?.managed ? {items:serviceChannelCosts(channel)} : activeSupplyPrice(state, supply.id), sale: activeSupplySalePrice(state, model.id, supply.id) };
+    return { ...supply, channelId: channel ? serviceChannelId(channel) : supply.channelId || supply.endpointId, channelName: channel?.name || supply.endpoint?.name || '连接待配置', url: channel ? channelUrl(supply.provider, channel) : supplyModelUrl(supply, model), cost: channel?.managed ? {items:serviceChannelCosts(channel)} : activeSupplyPrice(state, supply.id), sale: activeSupplySalePrice(state, model.id, supply.id) };
   }).sort((a,b) => String(a.provider?.name).localeCompare(String(b.provider?.name), 'zh-CN'));
 }
 export function availableServiceChannels(state, provider, catalogueModelId) {

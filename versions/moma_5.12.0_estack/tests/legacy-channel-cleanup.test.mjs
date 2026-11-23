@@ -13,7 +13,7 @@ test('fresh local and D1 workspaces never recreate the two retired sample channe
 });
 test('removing sample defaults preserves explicitly saved historical or manually edited channels on reload', () => {
   const state=legacySupplierState(),endpoint=state.endpoints.find(row=>ids.has(row.id));
-  endpoint.name='手工维护的已有渠道';endpoint.baseUrl='https://manual.example.invalid/v1';
+  endpoint.name='手工维护的已有连接';endpoint.baseUrl='https://manual.example.invalid/v1';
   const before=structuredClone(state),restored=parseAdminState(JSON.stringify(state));
   assert.deepEqual(restored.endpoints.find(row=>row.id===endpoint.id),endpoint);
   assert.deepEqual(state,before);

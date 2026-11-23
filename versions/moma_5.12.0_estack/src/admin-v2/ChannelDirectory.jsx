@@ -25,7 +25,7 @@ import './channel-directory.css';
 function ConnectionOperation({ connection, action, state, ops, close, retest }) {
   const { id, endpoint, provider, models } = connection;
   const enabling = action === 'enable';
-  const title = enabling ? '启用渠道' : '停用渠道';
+  const title = enabling ? '启用连接' : '停用连接';
   const impact = channelChangeImpact(state, provider.id, id);
   const [catalogue, setCatalogue] = useState(null);
   const [loadError, setLoadError] = useState('');
@@ -49,9 +49,9 @@ function ConnectionOperation({ connection, action, state, ops, close, retest }) 
   const [busy, setBusy] = useState(false);
   const stale = JSON.stringify(expected) !== JSON.stringify(target);
   const recovery = enabling && connectionRecoveryIssue(endpoint);
-  const blocked = !enabling ? false : endpoint.frozen ? '请先解除渠道冻结。'
-    : endpoint.candidateConfiguration ? '请先处理渠道的候选配置。'
-    : endpoint.serverTestJobs?.some(job => !job.receivedAt && !job.canceledAt) ? '请先完成渠道检测。'
+  const blocked = !enabling ? false : endpoint.frozen ? '请先解除连接冻结。'
+    : endpoint.candidateConfiguration ? '请先处理连接的候选配置。'
+    : endpoint.serverTestJobs?.some(job => !job.receivedAt && !job.canceledAt) ? '请先完成连接检测。'
     : provider.status !== '已启用' ? '请先启用服务商。'
     : !models.length ? '请先接入模型。' : recovery;
   const submit = async () => {
@@ -65,15 +65,15 @@ function ConnectionOperation({ connection, action, state, ops, close, retest }) 
     footer={<Space><Button disabled={busy} onClick={close}>取消</Button>
       <Button theme="solid" type={enabling ? 'primary' : 'danger'} loading={busy}
         disabled={busy || !ops.can || !confirmed || stale || Boolean(blocked) || (!enabling && !catalogue)}
-        onClick={submit}>{associationIds.length ? '启用渠道及所选模型' : '确认' + title}</Button></Space>}>
+        onClick={submit}>{associationIds.length ? '启用连接及所选模型' : '确认' + title}</Button></Space>}>
     <Table size="small" rowKey="id" pagination={false} dataSource={[connection]} columns={[
-      { title: '渠道名称 / ID', render: (_, row) => <div className="channel-identity"><strong>{row.name}</strong>
+      { title: '连接名称 / ID', render: (_, row) => <div className="channel-identity"><strong>{row.name}</strong>
         <Typography.Text size="small" ellipsis={{ showTooltip: true }}>{row.id}</Typography.Text></div> },
       { title: '服务商', render: () => provider.name },
       { title: '状态', render: (_, row) => <AdminStatus value={row.status === '已启用' ? row.status : '已停用'}/> },
       { title: '已接入模型', render: () => models.length + ' 款' },
     ]}/>
-    {!enabling && <><Typography.Paragraph>停用后，以下模型服务将无法通过该渠道调用。</Typography.Paragraph>
+    {!enabling && <><Typography.Paragraph>停用后，以下模型服务将无法通过该连接调用。</Typography.Paragraph>
       {loadError ? <Notice error>加载受影响的模型服务失败，请重新打开抽屉。{loadError}</Notice>
         : !catalogue ? <Typography.Text>正在加载模型服务…</Typography.Text>
         : <Table size="small" rowKey="id" pagination={false} dataSource={services} empty="暂无受影响的模型服务" columns={[
@@ -97,9 +97,9 @@ function ConnectionOperation({ connection, action, state, ops, close, retest }) 
           setConfirmed(false);
         }}/> },
     ]}/>}
-    {stale && <Notice error>渠道或关联服务已变化，请关闭后重新核对。</Notice>}
+    {stale && <Notice error>连接或关联服务已变化，请关闭后重新核对。</Notice>}
     <Checkbox checked={confirmed} disabled={busy || stale || !ops.can}
-      onChange={event => setConfirmed(event.target.checked)}>{enabling ? '我已核对渠道及接入模型' : '我已核对受影响的模型服务'}</Checkbox>
+      onChange={event => setConfirmed(event.target.checked)}>{enabling ? '我已核对连接及接入模型' : '我已核对受影响的模型服务'}</Checkbox>
     {ops.error && <Notice error>{ops.error}</Notice>}
   </Modal>;
 }
@@ -158,7 +158,7 @@ export function ChannelManagementNew(props) {
       ops={ops} close={finish} manual={event => open(event, 'add', connection.id, null, operation)}/>}
     {connection && operation.type === 'add' && <SupplierChannelConfiguration state={state} provider={connection.provider}
       endpoint={connection.endpoint} initialRows={operation.initialRows} ops={ops} close={close} onConnected={finish} directory reference
-      cancelLabel={operation.back?.type === 'discovery' ? '返回获取模型列表' : operation.back ? '返回添加渠道模型' : undefined}/>}
+      cancelLabel={operation.back?.type === 'discovery' ? '返回获取模型列表' : operation.back ? '返回添加上游模型' : undefined}/>}
     {model && operation.type === 'model' && <ChannelModelEditor key={model.key} model={model} connection={connection} ops={ops} close={close}/>}
     {model && operation.type === 'capacity' && <ChannelCapacityEditor key={model.key} provider={connection.provider}
       association={model.association} modelName={model.modelName} ops={ops} close={close}/>}
@@ -172,7 +172,7 @@ export function ChannelManagementNew(props) {
     {connection && ['enable', 'disable'].includes(operation.type) && <ConnectionOperation connection={connection} action={operation.type}
       state={state} ops={ops} close={close} retest={(event, id) => open(event, 'test', id, null, operation)}/>}
     {connection && operation.type === 'remove' && (!operation.modelKey || model) && <ProviderRemovalDialog state={state} ops={ops} close={close} removed={close}
-      title={model ? '删除模型渠道' : '删除连接'}
+      title={model ? '删除上游模型' : '删除连接'}
       target={{ providerId: connection.provider.id, endpointId: connection.id, ...(model ? { associationId: model.association.id, keepEndpoint: true } : {}) }}/>}
     {ops.error && <Notice error>{ops.error}</Notice>}{ops.leaveDialog}
   </div>;

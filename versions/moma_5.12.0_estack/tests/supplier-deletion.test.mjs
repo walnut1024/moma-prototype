@@ -10,13 +10,13 @@ function fixture() {
   let state = withAdminSession(parseAdminState(null));
   state = run(state, null, 'create', { name: '删除校验服务商', code: 'delete-contract', sourceType: 'thirdParty', description: '', catalogModelIds: [] });
   const providerId = state.providers.find(row => row.code === 'delete-contract').id;
-  state = run(state, providerId, 'supplierChannelCreate', { name: '删除校验渠道', protocol: 'OpenAI', baseUrl: 'https://delete.example.invalid/v1/chat/completions', authMode: 'inherit', models: [{ libraryId: 'model-2', upstreamModelId: 'vendor/delete', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] }] });
+  state = run(state, providerId, 'supplierChannelCreate', { name: '删除校验连接', protocol: 'OpenAI', baseUrl: 'https://delete.example.invalid/v1/chat/completions', authMode: 'inherit', models: [{ libraryId: 'model-2', upstreamModelId: 'vendor/delete', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] }] });
   const provider = state.providers.find(row => row.id === providerId), channel = catalogueChannels(state, provider, provider.catalogModelIds[0])[0];
   return { state, providerId, modelId: channel.modelId, channel, values: { modelId: channel.modelId, endpointId: channel.endpointId, associationId: channel.id, confirmed: true } };
 }
 test('deleting the last channel retires its registration and retains immutable records through refresh', () => {
   const { state, providerId, modelId, channel, values } = fixture(), before = structuredClone(state);
-  assert.throws(() => run(state, providerId, 'catalogueRemove', { modelId, confirmed: true }), /先删除.*全部渠道/);
+  assert.throws(() => run(state, providerId, 'catalogueRemove', { modelId, confirmed: true }), /先移除.*全部上游模型记录/);
   const next = run(state, providerId, 'supplierCatalogueChannelDelete', values), provider = next.providers.find(row => row.id === providerId);
   assert.equal(catalogueChannels(next, provider, modelId).length, 0);
   const archived = provider.catalogConnections.find(row => row.id === channel.id);

@@ -51,16 +51,16 @@ function CardVisibility({ card }) {
 }
 
 function MarketSupplies({ groups, expandedProviderId = null }) {
-  if (!groups.length) return <Typography.Text type="tertiary">待关联服务商和渠道</Typography.Text>;
-  return <ul className="market-supplies" aria-label="服务商与渠道">{groups.map(({ id, name, channels }) => <li key={id || 'missing'}>
+  if (!groups.length) return <Typography.Text type="tertiary">待关联服务商和上游模型</Typography.Text>;
+  return <ul className="market-supplies" aria-label="服务商与上游模型">{groups.map(({ id, name, channels }) => <li key={id || 'missing'}>
     {channels.size ? <Collapse defaultActiveKey={expandedProviderId && id === expandedProviderId ? [id || 'missing'] : []}>
       <AdminCollapsePanel itemKey={id || 'missing'} header={<span className="market-supply-row">
-        <span>{name}</span><Typography.Text type="tertiary" size="small">{channels.size} 条渠道</Typography.Text>
+        <span>{name}</span><Typography.Text type="tertiary" size="small">{channels.size} 个上游模型</Typography.Text>
       </span>}>
         <ul className="market-channel-names">{[...channels].map(([channelId, label]) => <li key={channelId}>{label}</li>)}</ul>
       </AdminCollapsePanel>
     </Collapse> : <div className="market-supply-row">
-      <Typography.Text>{name}</Typography.Text><Typography.Text type="tertiary" size="small">待关联渠道</Typography.Text>
+      <Typography.Text>{name}</Typography.Text><Typography.Text type="tertiary" size="small">待关联上游模型</Typography.Text>
     </div>}
   </li>)}</ul>;
 }
@@ -136,8 +136,8 @@ function MarketCard({ state, model, position, canReorder, savingOrder, actions, 
         </dl>
         <div className="market-card-supply">
           <div className="market-card-supply-title">
-            <span>服务商与渠道<small>{groups.length} 家服务商 · {channelCount} 条渠道</small></span>
-            {groups.length > 0 && <Button theme="borderless" size="small" aria-label={`查看 ${model.name} 的全部服务商与渠道`}
+            <span>服务商与上游模型<small>{groups.length} 家服务商 · {channelCount} 个上游模型</small></span>
+            {groups.length > 0 && <Button theme="borderless" size="small" aria-label={`查看 ${model.name} 的全部服务商与上游模型`}
               onClick={event => openSupplies(event, model.id)}>查看全部</Button>}
           </div>
           <ul className="market-supplies market-card-supply-preview" aria-label="服务商摘要">
@@ -145,10 +145,10 @@ function MarketCard({ state, model, position, canReorder, savingOrder, actions, 
               <Button block theme="borderless" type="tertiary" size="small" title={name}
                 onClick={event => openSupplies(event, model.id, id)}>
                 <span className="market-supply-row"><span>{name}</span>
-                  <span className="market-channel-count">{channels.size ? `${channels.size} 条渠道` : '待关联渠道'} <IconChevronRight size="small" aria-hidden="true"/></span>
+                  <span className="market-channel-count">{channels.size ? `${channels.size} 个上游模型` : '待关联上游模型'} <IconChevronRight size="small" aria-hidden="true"/></span>
                 </span>
               </Button>
-            </li>) : <li className="market-supply-row">待关联服务商和渠道</li>}
+            </li>) : <li className="market-supply-row">待关联服务商和上游模型</li>}
           </ul>
         </div>
       </div>
@@ -346,14 +346,14 @@ export default function ModelMarket(live) {
     {cardDialog && (cardDialog.kind === 'create' || cardRow) && <MarketCardDialogs
       key={cardDialog.kind + ':' + cardDialog.cardId} kind={cardDialog.kind} row={cardRow} state={props.state}
       materials={materials} internal={props.internal} ops={ops} close={closeCard} open={openCard}/>}
-    {supplyModel && <Modal title="服务商与渠道" description={supplyModel.name} wide centered onClose={() => !busy && closeSupplies()}
+    {supplyModel && <Modal title="服务商与上游模型" description={supplyModel.name} wide centered onClose={() => !busy && closeSupplies()}
       footer={<Button disabled={busy} onClick={closeSupplies}>关闭</Button>}>
       <div className="market-supply-detail">
         <MarketSupplies groups={marketSupplyGroups(props.state, supplyModel)} expandedProviderId={supplyDetail.providerId}/>
         {providerServices(supplyModel).length > 0 && (
           <Table rowKey={offerKey} dataSource={providerServices(supplyModel)} pagination={false}
             columns={[
-              { title: '渠道', render: (_, row) => row.channelName || props.state.providers.find(provider => provider.id === row.providerId)?.name || '—' },
+              { title: '连接', render: (_, row) => row.channelName || props.state.providers.find(provider => provider.id === row.providerId)?.name || '—' },
               { title: '模型服务 ID', render: (_,row)=><CopyId value={modelServiceIdentity(props.state,supplyModel,offerKey(row))} label="模型服务 ID"/> },
               { title: '模型调用标识', dataIndex: 'callId', render: value => value || '待配置' },
               { title: '上架状态', render: (_, row) => <Space vertical align="start" spacing={4}><AdminStatus value={row.listingStage === 'formal' ? '正式上架' : row.listingStage === 'gray' ? '灰度上架' : '已下架'}/>{row.callsEnabled === false && row.channelUnavailableReason && <Typography.Text type="tertiary" size="small">{row.channelUnavailableReason}</Typography.Text>}</Space> },

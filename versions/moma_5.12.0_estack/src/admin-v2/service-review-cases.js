@@ -42,11 +42,11 @@ function prepareServiceCases(source, cases, prefix) {
     if (!provider.catalogModelIds.includes(catalogueId)) provider.catalogModelIds.push(catalogueId);
     if (!provider.catalogModels.some(item=>item.modelId===catalogueId)) provider.catalogModels.push({modelId:catalogueId,name:model.name,type:model.type});
     const path=model.type==='video'?'videos/generations':model.type==='image'?'images/generations':model.type==='audio'?'audio/speech':'chat/completions';
-    const name=index===1?`${supplierNames[key]}主渠道`:`${supplierNames[key]}备用渠道 ${index}`;
+    const name=index===1?`${supplierNames[key]}主连接`:`${supplierNames[key]}备用连接 ${index}`;
     const endpoint=record(endpointId,{endpointId,name,providerId:provider.id,protocol:['text','multimodal'].includes(model.type)?'OpenAI':'其他',baseUrl:`https://${key}-${model.serviceReviewCase}-${index}.service-review.example.invalid/v1/${path}`,credentialRef:'local-service-review-placeholder',modelIds:linked?[model.id]:[],capacity:10000,timeoutSeconds:60,status:'运行中'});
     endpoint.connectionTest={fingerprint:connectionFingerprint(endpoint),result:'通过',message:'连接配置检查通过',testedAt:at,simulated:true};
     state.endpoints.push(endpoint);
-    const entry=record(id,{modelId:catalogueId,endpointId,name,origin:index===1?'direct':'resale',upstreamProvider:index===1?'':supplierNames[key],upstreamModelId:catalogueId,enabled:true,pricing:{discountFactor:1000000,scenarios:costs.map(({amount,...item})=>({...item,condition:'',listPrice:amount}))}});
+    const entry=record(id,{modelId:catalogueId,endpointId,name:index===1 ? supplierNames[key]+'主上游模型' : supplierNames[key]+'备用上游模型 '+index,origin:index===1?'direct':'resale',upstreamProvider:index===1?'':supplierNames[key],upstreamModelId:catalogueId,enabled:true,pricing:{discountFactor:1000000,scenarios:costs.map(({amount,...item})=>({...item,condition:'',listPrice:amount}))}});
     entry.health={fingerprint:channelFingerprint({...entry,endpoint}),result:'通过',message:'当前配置检查通过',testedAt:at};
     provider.catalogConnections.push(entry);
     if (linked) state.modelSupplies.push(record(`${prefix}-supply-${model.serviceReviewCase}-${key}-${index}`,{modelId:model.id,endpointId,providerId:provider.id,catalogueModelId:catalogueId,channelId:id,upstreamModelId:catalogueId,capabilities:structuredClone(model.capabilities),status:'已启用',validationStatus:'通过',validationCases:[{name:'模型身份及能力',passed:true}],verifiedAt:at,salesEnabled:false}));

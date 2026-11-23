@@ -96,11 +96,11 @@ export default function ChannelHealthTable({ rows, labels, summaries, simulated,
       </Typography.Text>
       <Typography.Text size="small" type="secondary" ellipsis={{ showTooltip: true }}>{row.providerName || '服务商未采集'}</Typography.Text>
     </div> },
-    { title: t('渠道'), dataIndex: 'channelName', width: 90, render: (value, row) =>
+    { title: t('连接'), dataIndex: 'channelName', width: 90, render: (value, row) =>
       <Typography.Text ellipsis={{ showTooltip: true }} link={!simulated && canManageChannels && row.enabledLabel ? {
         href: '#/admin-2/providers-reference?' + new URLSearchParams({ connection: row.channel }), target: '_blank', rel: 'noopener',
       } : undefined}>{value || '—'}</Typography.Text> },
-    { title: metricHeader(t('服务地址'), t('当前渠道配置的服务地址。实际请求路径可能因接口或模型映射而不同。')),
+    { title: metricHeader(t('服务地址'), t('当前连接配置的服务地址。实际请求路径可能因接口或模型映射而不同。')),
       dataIndex: 'baseUrl', width: 180, render: value =>
         <Typography.Text className="channel-health-url" ellipsis={{ rows: 2, showTooltip: true }}>{value || '—'}</Typography.Text> },
     { title: t('状态'), width: 72, render: (_, row) => <AdminStatus value={row.enabledLabel} label={t(row.enabledLabel)}/> },
@@ -117,7 +117,7 @@ export default function ChannelHealthTable({ rows, labels, summaries, simulated,
           <Button theme="borderless" size="small">全部 {cost.items.length} 项</Button>
         </Popover>}</div>) ?? '—' }] : []),
   ];
-  return <Table className="channel-health-table" loading={loading} aria-label={t('渠道模型观测列表')} rowKey="id" size="small" columns={columns} dataSource={rows}
-    empty="没有匹配的渠道模型" pagination={rows.length > DEFAULT_PAGE_SIZE ? { pageSize: DEFAULT_PAGE_SIZE } : false}
+  return <Table className="channel-health-table" loading={loading} aria-label={t('上游模型观测列表')} rowKey="id" size="small" columns={columns} dataSource={rows}
+    empty="没有匹配的上游模型" pagination={rows.length > DEFAULT_PAGE_SIZE ? { pageSize: DEFAULT_PAGE_SIZE } : false}
     scroll={{ x: columns.reduce((total, column) => total + column.width, 0) }}/>;
 }

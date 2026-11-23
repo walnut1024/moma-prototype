@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Select, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
 import FailoverFields from "./FailoverFields";
@@ -5,6 +6,7 @@ import { ROUTING_STRATEGIES } from "./service-routing-strategies.mjs";
 import { failoverError, parameterError, routingParameters } from './global-routing-parameters.mjs';
 
 export default function GlobalRouting({ saved, revision, transact, conflict, dirtyRef }) {
+  const t = useChannelText();
   const [draft, setDraft] = useState(null);
   const [baseRevision, setBaseRevision] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -41,14 +43,14 @@ export default function GlobalRouting({ saved, revision, transact, conflict, dir
   const change = patch => setDraft(current => ({ ...current, ...patch }));
   const [tab, setTab] = useState("failover");
   return <Tabs activeKey={tab} onChange={next => { if (!saving && (!dirty || window.confirm("放弃未保存的修改？"))) { setDraft(null); setTab(next); } }}>
-    <Tabs.TabPane itemKey="failover" tab="全局故障转移策略"><Card title="故障转移配置" headerExtraContent={actions}>
+    <Tabs.TabPane itemKey="failover" tab={t('全局故障转移策略')}><Card title="故障转移配置" headerExtraContent={actions}>
       <FailoverFields showRetryInterval values={values} change={change} disabled={!draft || saving || conflict}/>
     </Card></Tabs.TabPane>
-    <Tabs.TabPane itemKey="routing" tab="全局路由策略"><Card title="渠道选择" headerExtraContent={actions}>
-      <Space vertical align="start"><Select aria-label="全局路由策略" value={values.strategy} disabled={!draft || saving || conflict}
-        optionList={Object.entries(ROUTING_STRATEGIES).map(([value, item]) => ({ value, label: item.label }))}
+    <Tabs.TabPane itemKey="routing" tab={t('全局路由策略')}><Card title={t('上游模型选择')} headerExtraContent={actions}>
+      <Space vertical align="start"><Select aria-label={t('全局路由策略')} value={values.strategy} disabled={!draft || saving || conflict}
+        optionList={Object.entries(ROUTING_STRATEGIES).map(([value, item]) => ({ value, label: t(item.label) }))}
         onChange={strategy => change({ strategy })}/>
-        <Typography.Text type="secondary">{ROUTING_STRATEGIES[values.strategy].description}</Typography.Text>
+        <Typography.Text type="secondary">{t(ROUTING_STRATEGIES[values.strategy].description)}</Typography.Text>
       </Space>
     </Card></Tabs.TabPane>
   </Tabs>;

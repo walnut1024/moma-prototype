@@ -24,7 +24,7 @@ function fixture(count = 2) {
   state.modelSupplies = state.modelSupplies.filter(row => row.modelId !== model.id);
   const supplies = [];
   for (let index = 0; index < count; index++) {
-    const name = `运行报价渠道 ${index + 1}`;
+    const name = `运行报价连接 ${index + 1}`;
     state = provider(state, 'supplierChannelCreate', { name, interfaceType: 'openai', protocol: 'OpenAI', baseUrl: `https://runtime-${index}.example.invalid/v1`, authMode: 'group', keyGroupId: 'default', models: [{ libraryId: model.id, upstreamModelId: `runtime-model-${index}`, scenarios: price(index + 1) }] });
     const ep = state.endpoints.find(row => row.name === name), row = mapping(state, ep.id), selected = { endpointId: ep.id, associationIds: [row.id] };
     state = provider(state, 'supplierModelsTest', selected); state = provider(state, 'supplierModelsEnable', selected);
@@ -184,7 +184,7 @@ test('manual diagnostic failure blocks new activation and publication while froz
   assert.equal(routingChannels(failed, service)[0].available, false);
   assert.equal(routingChannels(failed, service, Date.now(), { runtime: true })[0].available, true);
   assert.throws(() => provider(failed, 'supplierModelsEnable', { endpointId: ep, associationIds: [original.id] }), /健康检测/);
-  assert.throws(() => validateRouteConfig(failed, service, { strategy:'weighted', autoFailover: true, channels: [{ supplyId: f.supplies[0].id, enabled: true, weight: 100 }] }), /密钥|健康|检测|渠道/);
+  assert.throws(() => validateRouteConfig(failed, service, { strategy:'weighted', autoFailover: true, channels: [{ supplyId: f.supplies[0].id, enabled: true, weight: 100 }] }), /密钥|健康|检测|连接/);
   assert.equal(call(f, failed).request.httpStatus, 200);
   const connectionFailed = provider(f.state, 'supplierModelTest', { endpointId: ep, associationId: original.id, modelId: original.modelId, scenario: '鉴权失败' });
   const currentEndpoint = connectionFailed.endpoints.find(row => row.id === ep);

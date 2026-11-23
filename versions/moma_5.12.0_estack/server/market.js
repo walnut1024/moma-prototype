@@ -269,7 +269,7 @@ export async function marketCompletion(db, session, body) {
   if ((body.task && !experienceTasks({ ...material, profile }).includes(body.task)) || (body.images && !profile?.inputModalities?.includes('图片'))) {
     fail(422,'TASK_UNSUPPORTED','所选模型不支持当前任务');
   }
-  if (!tenant.internal && !row.order_id) fail(403,'ORDER_REQUIRED','请先订购此渠道服务');
+  if (!tenant.internal && !row.order_id) fail(403,'ORDER_REQUIRED','请先订购此模型服务');
   projectState.models=offers.map(offer=>offer.model);
   const savedFact = projectState.requests.find(request => request.requestId === body.requestId);
   function replayFact(fact) {
@@ -334,7 +334,7 @@ export async function marketCompletion(db, session, body) {
         failedAttempts.push({dispatched:false,startedAt:new Date().toISOString(),serviceId:service.id,modelId:model.id,error:'PUBLICATION_REQUIRED'});
         continue;
       }
-      fail(409,'PUBLICATION_REQUIRED','当前渠道配置需要重新验证');
+      fail(409,'PUBLICATION_REQUIRED','当前连接配置需要重新验证');
     }
     const sale=state.modelSalePrices.find(item=>item.id===row.sale_id);
     try {
@@ -350,7 +350,7 @@ export async function marketCompletion(db, session, body) {
     } catch (error) {
       const attempts=(error.attempts || []).map(({dispatched,startedAt,endpointId,channelId,bindingId,code}) =>
         ({dispatched,startedAt,endpointId,channelId,supplyId:bindingId,serviceId:service.id,modelId:model.id,error:code}));
-      if (!routed) return reject(409,'CALL_UNAVAILABLE','当前渠道无法完成调用，请检查服务和价格状态',attempts);
+      if (!routed) return reject(409,'CALL_UNAVAILABLE','当前连接无法完成调用，请检查服务和价格状态',attempts);
       failedAttempts.push(...(attempts.length ? attempts : [
         {dispatched:false,startedAt:new Date().toISOString(),serviceId:service.id,modelId:model.id,error:error.code || 'CALL_UNAVAILABLE'},
       ]));

@@ -6,8 +6,8 @@ test('market groups existing model mappings by provider and keeps linked direct 
   const state = {
     providers: [{ id: 'p1', name: '甲' }, { id: 'p2', name: '乙' }, { id: 'p3', name: '丙' }],
     endpoints: [
-      { id: 'e1', providerId: 'p1', name: '主渠道' },
-      { id: 'e2', providerId: 'p2', name: '主渠道' },
+      { id: 'e1', providerId: 'p1', name: '主连接' },
+      { id: 'e2', providerId: 'p2', name: '主连接' },
     ],
     modelSupplies: [
       { modelId: 'm', endpointId: 'e1' },
@@ -18,9 +18,9 @@ test('market groups existing model mappings by provider and keeps linked direct 
     ],
   };
   const view = model => marketSupplyGroups(state, { id: 'm', ...model }).map(({ id, channels }) => [id, [...channels]]);
-  assert.deepEqual(view({ serviceMode: 'standard' }), [['p1', [['e1', '主渠道']]], ['p2', [['e2', '主渠道']]]]);
+  assert.deepEqual(view({ serviceMode: 'standard' }), [['p1', [['e1', '主连接']]], ['p2', [['e2', '主连接']]]]);
   assert.deepEqual(view({
     serviceMode: 'provider',
     serviceProviders: [{ providerId: 'p1' }, { providerId: 'p2', status: '已移除' }, { providerId: 'p3' }],
-  }), [['p1', [['e1', '主渠道']]], ['p3', []], ['p2', [['e2', '主渠道']]]]);
+  }), [['p1', [['e1', '主连接']]], ['p3', []], ['p2', [['e2', '主连接']]]]);
 });

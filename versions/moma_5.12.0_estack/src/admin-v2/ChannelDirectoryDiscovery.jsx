@@ -61,8 +61,8 @@ function ReferenceModelList({ active, canEdit, checking, selected, onSelect, onR
       <Button theme="solid" disabled={Boolean(demo) || configureDisabled} onClick={onConfigure}>配置所选模型</Button>
     </Space>}>
     <Notice>{protocol === '自定义 API'
-      ? '自动获取模型列表需要上游服务商提供当前渠道配置的模型列表接口。如果上游未提供该接口，可从「添加渠道模型」选择或录入。'
-      : '自动获取模型列表需要上游服务商提供 OpenAI 兼容的模型列表接口（GET /models）。如果上游未提供该接口，可从「添加渠道模型」选择或录入。'}</Notice>
+      ? '自动获取模型列表需要上游服务商提供当前连接配置的模型列表接口。如果上游未提供该接口，可从「添加上游模型」选择或录入。'
+      : '自动获取模型列表需要上游服务商提供 OpenAI 兼容的模型列表接口（GET /models）。如果上游未提供该接口，可从「添加上游模型」选择或录入。'}</Notice>
     <Descriptions align="left" data={[
       { key: '模型列表协议', value: protocol },
       { key: '服务地址（Base URL）', value: <CopyId copyAtStart value={baseUrl} label="服务地址"/> },

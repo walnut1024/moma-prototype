@@ -37,8 +37,8 @@ test('custom task endpoints retain complete paths and isolate host boundaries', 
   assert.equal(modelTaskUrl(custom, 'text'), custom.baseUrl);
   assert.equal(modelTaskUrl(custom, 'rerank'), custom.taskUrls.rerank);
   assert.throws(() => prepareChannelInterface({ ...custom, baseUrl: 'https://api.example.com/v1' }), /完整任务/);
-  assert.throws(() => prepareChannelInterface({ ...custom, taskUrls: { text: 'https://other.example.com/task' } }), /不同渠道/);
-  assert.throws(() => prepareChannelInterface({ ...custom, taskUrls: { text: 'https://api.example.com:8443/task' } }), /不同渠道/);
+  assert.throws(() => prepareChannelInterface({ ...custom, taskUrls: { text: 'https://other.example.com/task' } }), /不同连接/);
+  assert.throws(() => prepareChannelInterface({ ...custom, taskUrls: { text: 'https://api.example.com:8443/task' } }), /不同连接/);
   assert.throws(() => prepareChannelInterface({ ...custom, taskUrls: { unknown: custom.baseUrl } }), /未支持/);
 });
 

@@ -25,7 +25,7 @@ export default function UsageTrend({ state, range, clock, filters, onChange, cal
   const matching = trend.groups.filter(item => `${item.label} ${item.code} ${item.id}`.toLowerCase().includes(query.trim().toLowerCase()));
   const change = value => { onChange(value); onSettings({ ...settings, curves: null }); };
   const selectSetting = (key, value) => onSettings({ ...settings, [key]: value, ...(key === 'dimension' ? { curves: null } : {}) });
-  const empty = filters.model?.length === 0 ? '未选择模型，请调整筛选' : filters.channels?.length === 0 && !filters.providers.length ? '未选择服务商或渠道，请调整筛选' : filters.user?.length === 0 ? '未选择用户，请调整筛选' : !trend.applicable ? '所选模型不按 Token 计量' : !facts.current.length ? '所选条件下暂无调用记录' : grouped && !names.length ? '暂无可显示曲线，请选择曲线或恢复默认' : null;
+  const empty = filters.model?.length === 0 ? '未选择模型，请调整筛选' : filters.channels?.length === 0 && !filters.providers.length ? '未选择服务商或连接，请调整筛选' : filters.user?.length === 0 ? '未选择用户，请调整筛选' : !trend.applicable ? '所选模型不按 Token 计量' : !facts.current.length ? '所选条件下暂无调用记录' : grouped && !names.length ? '暂无可显示曲线，请选择曲线或恢复默认' : null;
   const unknown = settings.dimension === 'tenantId' && facts.current.some(row => !row.tenantId);
   const metricControl = !calls && <Choice label={`${title}Token口径`} size="small" value={settings.metric}
     options={tokenMetrics} onSelect={value => selectSetting('metric', value)} zIndex={1200}/>;
@@ -33,7 +33,7 @@ export default function UsageTrend({ state, range, clock, filters, onChange, cal
     options={trendDimensions} onSelect={value => selectSetting('dimension', value)} zIndex={1200}/>;
   const curveHelp = <AnalysisHelp label={`${title}曲线`}>
     {grouped && `默认显示本时段累计${calls ? '调用次数' : 'Token 用量'}前 5 项。隐藏曲线不改变范围合计。`}
-    调用次数按最终请求去重；服务商按实际渠道归属。Token 仅包含 Token 计量记录。
+    调用次数按最终请求去重；服务商按实际连接归属。Token 仅包含 Token 计量记录。
   </AnalysisHelp>;
   const picker = grouped && <Popover trigger="click" position="bottomRight" visible={menuOpen} motion={false} zIndex={1200}
     onVisibleChange={open => { setMenuOpen(open); if (open) setQuery(''); }}

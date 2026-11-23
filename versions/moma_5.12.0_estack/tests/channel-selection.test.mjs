@@ -4,7 +4,7 @@ import { channelRowsPage, channelSelectionId, filterChannelRows, selectChannelRo
 
 const row = (index, overrides = {}) => ({
   provider: { id: `provider-${index % 2}`, name: `服务商 ${index % 2}` }, modelId: `model-${index}`, model: { name: `模型 ${index}`, modelId: `model-${index}` },
-  association: { id: `mapping-${index}`, endpointId: `channel-${index % 3}`, upstreamModelId: `vendor/model-${index}`, name: `渠道 ${index % 3}`, endpoint: { baseUrl: `https://example.invalid/${index}`, protocol: 'OpenAI' } },
+  association: { id: `mapping-${index}`, endpointId: `channel-${index % 3}`, upstreamModelId: `vendor/model-${index}`, name: `连接 ${index % 3}`, endpoint: { baseUrl: `https://example.invalid/${index}`, protocol: 'OpenAI' } },
   ...overrides,
 });
 

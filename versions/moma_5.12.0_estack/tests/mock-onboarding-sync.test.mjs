@@ -55,8 +55,8 @@ async function fixture(t) {
   t.after(() => { setMockRuntimeState(null); if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor); else delete globalThis.localStorage; });
   let state = parseAdminState(null);
   const run = (operation, data) => { state = commitAdminState(state, { type: 'modelOperations', operation, data }); };
-  run('provider', { operation: 'supplierChannelCreate', objectId: 'provider-moma', values: { name: 'Mock同步渠道', interfaceType: 'openai', baseUrl: 'https://old-sync.example.invalid/v1', protocol: 'OpenAI', authMode: 'group', keyGroupId: 'default', models: [{ libraryId: 'model-2', upstreamModelId: 'vendor/chat', scenarios: [] }] } });
-  const endpoint = () => state.endpoints.find(row => row.name === 'Mock同步渠道'), provider = () => state.providers.find(row => row.id === 'provider-moma');
+  run('provider', { operation: 'supplierChannelCreate', objectId: 'provider-moma', values: { name: 'Mock同步连接', interfaceType: 'openai', baseUrl: 'https://old-sync.example.invalid/v1', protocol: 'OpenAI', authMode: 'group', keyGroupId: 'default', models: [{ libraryId: 'model-2', upstreamModelId: 'vendor/chat', scenarios: [] }] } });
+  const endpoint = () => state.endpoints.find(row => row.name === 'Mock同步连接'), provider = () => state.providers.find(row => row.id === 'provider-moma');
   const mapping = () => provider().catalogConnections.find(row => row.endpointId === endpoint().id);
   const args = () => ({ providerId: provider().id, endpointId: endpoint().id, expectedRevision: endpoint().configurationRevision || 0, candidateId: endpoint().candidateConfiguration?.id });
   run('provider', { operation: 'supplierModelsTest', objectId: provider().id, values: { endpointId: endpoint().id, associationIds: [mapping().id] } });

@@ -174,7 +174,7 @@ export function planProviderJsonModel(state, providerId, { model, connections })
     if (!config) throw Error('模型映射引用了不存在的连接');
     const upstreamModelId = upstreamId(mapping.upstream_model_id);
     const key = JSON.stringify([config.config.interfaceType, config.config.baseUrl, config.keyGroupId, upstreamModelId]);
-    if (seen.has(key)) throw Error('模型内渠道映射重复');
+    if (seen.has(key)) throw Error('模型内连接映射重复');
     seen.add(key);
     const sameConnection = row => row.interfaceType === config.config.interfaceType && row.protocol === config.config.protocol && row.baseUrl === config.config.baseUrl
       && row.authMode === 'group' && row.keyGroupId === config.keyGroupId && JSON.stringify(row.taskUrls || {}) === JSON.stringify(config.config.taskUrls || {}) && !Object.keys(row.adapterOptions || {}).length;
@@ -182,7 +182,7 @@ export function planProviderJsonModel(state, providerId, { model, connections })
     const matching = endpoints.filter(sameConnection);
     const saved = catalogueChannels(working, owner(), linked.modelId).find(row => matching.some(item => item.id === row.endpointId) && row.upstreamModelId === upstreamModelId);
     if (saved) { mappingPreview.push({ baseUrl: config.config.baseUrl, upstreamModelId, existing: true }); continue; }
-    if (matching.length > 1) throw Error('找到多条相同连接，请先核对渠道');
+    if (matching.length > 1) throw Error('找到多条相同连接，请先核对连接');
     let endpoint = matching[0];
     if (!endpoint) {
       const baseName = `导入 ${config.id.slice(0, 48)}`;
@@ -196,7 +196,7 @@ export function planProviderJsonModel(state, providerId, { model, connections })
     const issue = channelInterfaceIssue(owner(), { type, modelId: linked.modelId, endpoint });
     if (issue) throw Error(issue);
     const associated = providerTransaction(working, { operation: 'supplierAssociationSave', objectId: providerId, data: {
-      modelId: linked.modelId, endpointId: endpoint.id, upstreamModelId, scenarios: [], sourceName: mapping.channel_name ? string(mapping.channel_name, '渠道名称', 60) : config.id.slice(0, 48),
+      modelId: linked.modelId, endpointId: endpoint.id, upstreamModelId, scenarios: [], sourceName: mapping.channel_name ? string(mapping.channel_name, '上游模型名称', 60) : config.id.slice(0, 48),
     } });
     stage(associated.changes);
     const associationId = associated.changes.find(change => change.collection === 'providers').changes.catalogConnections.find(row => row.endpointId === endpoint.id && row.modelId === linked.modelId && row.upstreamModelId === upstreamModelId && !row.deletedAt)?.id;
@@ -232,8 +232,8 @@ export function previewProviderJsonRows(state, providerId, rows) {
       seen.add(code);
       working = plan.state;
       const count = plan.mappingPreview.filter(item => !item.existing).length;
-      const message = [plan.existing ? plan.register ? '复用主档并登记' : '已登记，保留已有主档' : '新建主档并登记', count ? `新增 ${count} 条待验证渠道映射` : '', plan.reference ? '保留上游参考' : ''].filter(Boolean).join(' · ');
-      return { ...row, status: plan.changes.length ? 'ready' : 'skip', message: plan.changes.length ? message : '模型与渠道已导入', mappingPreview: plan.mappingPreview, reference: plan.reference };
+      const message = [plan.existing ? plan.register ? '复用主档并登记' : '已登记，保留已有主档' : '新建主档并登记', count ? `新增 ${count} 条待验证连接映射` : '', plan.reference ? '保留上游参考' : ''].filter(Boolean).join(' · ');
+      return { ...row, status: plan.changes.length ? 'ready' : 'skip', message: plan.changes.length ? message : '模型与连接已导入', mappingPreview: plan.mappingPreview, reference: plan.reference };
     } catch (error) { return { ...row, status: 'error', message: error.message }; }
   });
 }

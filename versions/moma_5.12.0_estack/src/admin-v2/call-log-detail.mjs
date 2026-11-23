@@ -7,7 +7,7 @@ export const requestLogSections = [
     ['总耗时（ms）', 'duration'], ['首包延迟（ms）', 'firstPacket'], ['首 Token 时延（ms）', 'ttft'],
   ]],
   ['路由归属', [
-    ['供应商名称', 'providerName'], ['渠道名称', 'channelName'], ['供应商 ID', 'provider'], ['渠道 ID', 'channel'],
+    ['供应商名称', 'providerName'], ['连接名称', 'channelName'], ['供应商 ID', 'provider'], ['连接 ID', 'channel'],
   ]],
   ['Token 用量', [['总 Token', 'total'], ['输入 Token', 'input'], ['输出 Token', 'output']]],
   ['调用方', [
@@ -53,7 +53,7 @@ export function buildRequestTrace(row, evidence) {
   const attempts = row.attempts.map(attempt => {
     const node = withTiming({
       id: attempt.id,
-      label: '第 ' + attempt.index + ' 次 · ' + (attempt.channelName ?? '渠道未采集'),
+      label: '第 ' + attempt.index + ' 次 · ' + (attempt.channelName ?? '连接未采集'),
       status: outcomes[attempt.outcome],
       tone: attempt.outcome === 'failed' ? 'red' : attempt.outcome === 'success' ? 'green' : 'grey',
       offset: Number.isFinite(row.at) && Number.isFinite(attempt.at) ? attempt.at - row.at : null,

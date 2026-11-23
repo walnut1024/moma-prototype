@@ -9,10 +9,10 @@ export const defaultTrend = () => ({ dimension: 'total', metric: 'total', showTo
 export function supplySummary(filters, options, full = false) {
   const providers = filters.providers || [];
   if (filters.channels === null && !providers.length) return '服务商：全部';
-  if (full) return [...providers.map(id => `${options.providers.find(item => item.id === id)?.name || id}：全部渠道`), ...(filters.channels || []).map(id => options.channels.find(item => item.id === id)?.name || id)].join('、') || '未选择供给';
+  if (full) return [...providers.map(id => `${options.providers.find(item => item.id === id)?.name || id}：全部连接`), ...(filters.channels || []).map(id => options.channels.find(item => item.id === id)?.name || id)].join('、') || '未选择供给';
   const partial = new Set((filters.channels || []).map(id => options.channels.find(item => item.id === id)?.groupId || '__unknown__'));
   const count = new Set([...providers, ...partial]).size;
-  return partial.size ? `服务商：${count}家／部分渠道` : `服务商：${count}个`;
+  return partial.size ? `服务商：${count}家／部分连接` : `服务商：${count}个`;
 }
 
 // Whole suppliers remain identities; individual channels never promote themselves to a supplier scope.

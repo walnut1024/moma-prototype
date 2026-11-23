@@ -45,15 +45,15 @@ export function normalizeChannelCapacity(limits) {
 export function channelCapacityTransaction(state, { data = {} }) {
   const provider = state.providers.find(row => row.id === data.providerId && !row.deletedAt);
   const endpoint = state.endpoints.find(row => row.id === data.endpointId && row.providerId === provider?.id && !row.deletedAt);
-  if (!provider || !endpoint) throw new Error('当前渠道不存在或不属于该服务商');
+  if (!provider || !endpoint) throw new Error('当前连接不存在或不属于该服务商');
   const projected = supplierChannelAssociations(state, provider, endpoint.id).find(row => row.id === data.associationId);
-  if (!projected) throw new Error('容量配置不属于当前模型渠道');
+  if (!projected) throw new Error('容量配置不属于当前上游模型');
   const entries = provider.catalogConnections || [];
   const saved = entries.find(row => !row.deletedAt && row.endpointId === endpoint.id && (row.id === projected.id || !row.id && row.modelId === projected.modelId));
-  if (data.expectedCapacityRevision !== (saved?.capacityRevision || 0)) throw new Error('该渠道容量已有修订，请重新打开；当前输入保留');
+  if (data.expectedCapacityRevision !== (saved?.capacityRevision || 0)) throw new Error('该上游模型容量已有修订，请重新打开；当前输入保留');
   const capacityLimits = normalizeChannelCapacity(data.limits);
   const association = { ...saved, id: projected.id, modelId: projected.modelId, endpointId: endpoint.id,
     capacityLimits, capacityRevision: (saved?.capacityRevision || 0) + 1 };
-  return { type: 'batch', objectId: projected.id, label: '保存渠道容量', changes: [{ type: 'update', collection: 'providers', id: provider.id,
+  return { type: 'batch', objectId: projected.id, label: '保存上游模型容量', changes: [{ type: 'update', collection: 'providers', id: provider.id,
     changes: { catalogConnections: saved ? entries.map(row => row === saved ? association : row) : [...entries, association] } }] };
 }

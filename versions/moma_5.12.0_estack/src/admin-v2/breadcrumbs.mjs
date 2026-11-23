@@ -40,7 +40,7 @@ export function adminBreadcrumbs(active, params, names = {}) {
     const detail = active === 'providers-reference' && Boolean(params.get('connection'));
     add(page.areaLabel, active === 'providers-health' ? listRoute : null);
     add(page.label, detail ? listRoute : null);
-    if (detail) add(names.connection || '渠道不存在');
+    if (detail) add(names.connection || '连接不存在');
   } else if (active === 'provider-materials') {
     const provider = params.has('provider');
     add('基础资料', '#/admin-2/model-templates');

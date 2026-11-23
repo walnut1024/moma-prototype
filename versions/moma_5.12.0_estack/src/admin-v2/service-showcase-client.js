@@ -36,7 +36,7 @@ export async function completeServiceShowcase(initial, save, { onProgress = () =
         await new Promise(resolve => setTimeout(resolve, 200)); current();
         batch = await onboardingApi(`/tests/${batch.id}`);
       }
-      if (!channelBatchTerminal(batch)) throw new Error('渠道测试仍在进行，请在测试与启用中查询原任务');
+      if (!channelBatchTerminal(batch)) throw new Error('连接测试仍在进行，请在测试与启用中查询原任务');
       await commit('channelTestEvidenceReceipt', { providerId: provider.id, endpointId, batch });
       if (batch.items.some(row => row.status !== 'passed')) throw new Error(`${provider.name} · ${endpoint.name} 检查未通过，请查看测试结果`);
     }

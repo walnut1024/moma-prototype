@@ -4,7 +4,7 @@ export function serviceGuideRequest(model,callId,providerId='') {
     video:{path:'/videos',body:{prompt:'镜头缓慢掠过清晨的城市公园',duration:5}},
     audio:{path:'/audio/speech',body:{input:'欢迎使用模型服务。',voice:'default',response_format:'mp3'}},
     embedding:{path:'/embeddings',body:{input:'这是一段需要向量化的文本。'}},
-    rerank:{path:'/rerank',body:{query:'模型服务',documents:['统一模型接口','模型供应渠道']}},
+    rerank:{path:'/rerank',body:{query:'模型服务',documents:['统一模型接口','模型连接']}},
   };
   const request=requests[model.type] || {path:'/chat/completions',body:{messages:[{role:'user',content:'你好，请介绍一下你的能力。'}]}};
   const configured=model.apiGuides?.[providerId || 'standard'];

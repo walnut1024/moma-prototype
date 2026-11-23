@@ -47,7 +47,7 @@ export async function initializePrototypeCatalogue(db, actor) {
       sourceType:code==='mobile'?'selfHosted':'thirdParty',onboardingPresetId:'prototype-linkage',catalogModelIds:sources.map(([,slug])=>slug),catalogModels:[],catalogConnections:[],apiKeys:[] };
     for (const [origin, slug] of sources) {
       const match=modelLibrary(after).find(row=>row.modelId===slug), material=match && libraryRecord(after,match.id);
-      if (!material) throw Error('演示渠道缺少模型资料：'+slug);
+      if (!material) throw Error('演示连接缺少模型资料：'+slug);
       const endpointId='preset-connection-'+code+'-'+origin, sourceName=origin==='direct'?'自营':'原厂转售';
       const video=slug==='seedance-2.5';
       after.endpoints.push({ ...stamp,id:endpointId,providerId:id,channelCode:endpointId,name:sourceName,

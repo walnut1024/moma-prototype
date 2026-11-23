@@ -220,14 +220,14 @@ export async function channelIndexPlan(db, state) {
     const ownership = ['channel_id', 'supplier_id', 'supplier_model_id', 'material_id'];
     const unsafe = have && ownership.some(key => have[key] !== want[key]);
     if (!have || unsafe || fields.some(key => have[key] !== want[key])) {
-      issues.push({ id: 'channel/' + want.id, type: '模型渠道索引', endpointId: want.channel_id,
-        reference: want.id, reason: unsafe ? '索引归属和供应登记不一致' : have ? '索引字段与供应登记不一致' : '缺少模型渠道索引',
+      issues.push({ id: 'channel/' + want.id, type: '上游模型索引', endpointId: want.channel_id,
+        reference: want.id, reason: unsafe ? '索引归属和供应登记不一致' : have ? '索引字段与供应登记不一致' : '缺少上游模型索引',
         repairable: !unsafe, before: have && Object.fromEntries([...ownership, ...fields].map(key => [key, have[key]])),
         row: have ? { ...have, ...Object.fromEntries(fields.map(key => [key, want[key]])) } : want });
     }
   }
   for (const have of channelRows) if (!have.removed_at && !desiredChannels.has(have.id) && JSON.parse(have.mapping_json).sourceAssociationId) {
-    issues.push({ id: 'channel/' + have.id, type: '模型渠道索引', endpointId: have.channel_id, reference: have.id,
+    issues.push({ id: 'channel/' + have.id, type: '上游模型索引', endpointId: have.channel_id, reference: have.id,
       reason: '找不到对应的当前供应登记', repairable: false, before: { channel_id: have.channel_id, supplier_id: have.supplier_id } });
   }
   for (const want of expectedMembers) {
@@ -246,7 +246,7 @@ export async function channelIndexPlan(db, state) {
 }
 
 export function channelIndexRepairStatements(db, issues) {
-  const channelRows = issues.filter(issue => issue.type === '模型渠道索引').map(issue => issue.row);
+  const channelRows = issues.filter(issue => issue.type === '上游模型索引').map(issue => issue.row);
   const routeRows = issues.filter(issue => issue.type === '生效路由索引' && !issue.remove).map(issue => issue.row);
   const extras = issues.filter(issue => issue.remove).map(issue => issue.before);
   return [

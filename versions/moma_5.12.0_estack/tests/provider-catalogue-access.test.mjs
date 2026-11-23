@@ -5,7 +5,7 @@ import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelA
 import { catalogueConnections } from '../src/admin-v2/provider-model-connections.js';
 import { providerCataloguePrice } from '../src/admin-v2/moma-catalogue-prices.js';
 const providerId = 'provider-moma', modelId = 'Access-New-Model';
-const draft = { modelId, modelType: 'text', channelName: '国内渠道', modelName: '模型显示名称', protocol: 'OpenAI', apiUrl: 'https://model.example.invalid/v1/chat/completions', discountFactor: '1', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] };
+const draft = { modelId, modelType: 'text', channelName: '国内连接', modelName: '模型显示名称', protocol: 'OpenAI', apiUrl: 'https://model.example.invalid/v1/chat/completions', discountFactor: '1', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] };
 const action = (values = draft, operation = 'catalogueAdd') => ({ type: 'modelOperations', operation: 'provider', data: { operation, objectId: providerId, values } });
 const owner = state => state.providers.find(item => item.id === providerId);
 

@@ -48,20 +48,20 @@ export default function ServiceListingDialog({state,model,ops,stage,close,initia
     <Button loading={busy} disabled={!ops.can || Boolean(ops.conflict) || busy || changed || invalid || checks.some(row=>!row.passed)} onClick={submit}>{withdraw ? "确认下架" : gray ? "确认灰度开售" : "确认开售"}</Button>
   </>}>
     {selectOffers && <div>
-      <Typography.Title heading={6}>渠道服务</Typography.Title>
+      <Typography.Title heading={6}>模型服务</Typography.Title>
       {[...groups].map(([id,services])=>{
         const name=state.providers.find(row=>row.id===id)?.name || id;
         const keys=services.map(offerKey), count=keys.filter(key=>selected.includes(key)).length;
         return <div key={id} style={{marginBottom:12}}>
-          <Checkbox aria-label={name+'全部渠道'} disabled={busy || !ops.can} checked={count===keys.length} indeterminate={count>0 && count<keys.length} onChange={event=>select(keys,event.target.checked)}>{name}（{keys.length} 条渠道）</Checkbox>
+          <Checkbox aria-label={name+'全部模型服务'} disabled={busy || !ops.can} checked={count===keys.length} indeterminate={count>0 && count<keys.length} onChange={event=>select(keys,event.target.checked)}>{name}（{keys.length} 个模型服务）</Checkbox>
           <div style={{paddingInlineStart:24}}>
             {services.map(service=><div key={service.id}><Checkbox disabled={busy || !ops.can} checked={selected.includes(offerKey(service))} onChange={event=>select([offerKey(service)],event.target.checked)}>{service.name} {service.callId}</Checkbox></div>)}
           </div>
         </div>;
       })}
-      {!groups.size && <Typography.Paragraph>暂无可操作的渠道服务。</Typography.Paragraph>}
+      {!groups.size && <Typography.Paragraph>暂无可操作的模型服务。</Typography.Paragraph>}
     </div>}
-    {withdraw && <Typography.Paragraph>所选渠道将停止新订购和新调用。</Typography.Paragraph>}
+    {withdraw && <Typography.Paragraph>所选模型服务将停止新订购和新调用。</Typography.Paragraph>}
     {gray && <>
       <Typography.Title heading={6}>灰度客户</Typography.Title>
       <Table pagination={false} rowKey="id" dataSource={tenants} columns={[{title:'选择',width:80,render:(_,tenant)=><Checkbox aria-label={`灰度客户 ${tenant.name}`} checked={tenantIds.includes(tenant.id)} disabled={!ops.can || busy} onChange={event=>{setTenantIds(ids=>event.target.checked?[...ids,tenant.id]:ids.filter(id=>id!==tenant.id));ops.dirty(true);}}/>},{title:'客户名称',dataIndex:'name'},{title:'客户 ID',dataIndex:'id'}]} empty="暂无有效客户。"/>

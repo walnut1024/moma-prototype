@@ -192,8 +192,8 @@ test('removing a supplier model checks every canonical alias and removes the reg
   const endpoint=next.endpoints.find(row=>row.providerId===provider.id);
   owner.catalogConnections.push({id:'alias-deletion-check',modelId:'pp-ocr-alias',endpointId:endpoint.id,enabled:false});
   const remove={type:'modelOperations',operation:'provider',data:{operation:'catalogueRemove',objectId:provider.id,values:{modelId:'pp-ocrv6',confirmed:true}}};
-  assert.match(supplierDeletionBlock(next,owner,'pp-ocrv6').message,/全部渠道/);
-  assert.throws(()=>commitAdminState(next,remove,'平台管理员'),/全部渠道/);
+  assert.match(supplierDeletionBlock(next,owner,'pp-ocrv6').message,/全部上游模型记录/);
+  assert.throws(()=>commitAdminState(next,remove,'平台管理员'),/全部上游模型记录/);
   owner.catalogConnections.find(row=>row.id==='alias-deletion-check').deletedAt='2026-11-01';
   const before=structuredClone(next);
   next=commitAdminState(next,remove,'平台管理员');

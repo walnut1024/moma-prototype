@@ -62,9 +62,9 @@ test('shared channel history freezes affected models and retains them after unli
   let state=withAdminSession(createAdminSeed());
   const supply=state.modelSupplies[0], model=state.models.find(row=>row.id===supply.modelId), unrelated=state.models.find(row=>!state.modelSupplies.some(link=>link.modelId===row.id && link.endpointId===supply.endpointId));
   assert.ok(model);assert.ok(unrelated);
-  state=commitAdminState(state,{type:'update',collection:'endpoints',id:supply.endpointId,changes:{name:'共享渠道重命名'}});
+  state=commitAdminState(state,{type:'update',collection:'endpoints',id:supply.endpointId,changes:{name:'共享连接重命名'}});
   const event=state.audits[0];assert.ok(event.relatedModelIds.includes(model.id));assert.equal(event.relatedModelIds.includes(unrelated.id),false);
-  assert.match(event.objectLabel,/渠道/);
+  assert.match(event.objectLabel,/连接/);
   state.modelSupplies=state.modelSupplies.filter(link=>link.modelId!==model.id);
   assert.ok(modelOperationHistory(state,model).some(row=>row.id===event.id));
   state.modelSupplies.push({...supply,id:'later-link',modelId:unrelated.id});
@@ -80,7 +80,7 @@ test('operation history includes shared material and has no silent 100-row cutof
 test('historical records use recorded model identities rather than current supply associations', () => {
   const state=withAdminSession(createAdminSeed()), supply=state.modelSupplies[0], model=state.models.find(row=>row.id===supply.modelId);
   state.audits=[
-    {id:'old-endpoint',objectId:supply.endpointId,after:[{type:'update',collection:'endpoints',id:supply.endpointId,changes:{name:'历史渠道'}}]},
+    {id:'old-endpoint',objectId:supply.endpointId,after:[{type:'update',collection:'endpoints',id:supply.endpointId,changes:{name:'历史连接'}}]},
     {id:'old-supply',objectId:supply.id,after:[{type:'add',collection:'modelSupplies',record:{...supply}}]},
     {id:'old-route',objectId:'route-id',after:[{type:'add',collection:'serviceRoutes',record:{serviceId:`standard:${model.id}`}}]},
   ];

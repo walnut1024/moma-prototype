@@ -252,7 +252,7 @@ test('provider material commands preserve stable identities, validate display fi
   for (const key of ['sourceType', 'contact', 'documentation', 'catalogModels', 'apiKeys']) assert.deepEqual(updated[key], edited[key]);
   assert.equal(await local.db.prepare('SELECT code FROM suppliers WHERE id=?').bind(provider.id).first('code'), summary.code);
 
-  assert.equal((await commit('provider', { operation: 'connection', values: { providerId: provider.id, name: '待配置渠道', protocol: 'OpenAI', baseUrl: 'https://initial.example.test/v1', timeoutSeconds: 60 } })).status, 200);
+  assert.equal((await commit('provider', { operation: 'connection', values: { providerId: provider.id, name: '待配置连接', protocol: 'OpenAI', baseUrl: 'https://initial.example.test/v1', timeoutSeconds: 60 } })).status, 200);
   state = (await request('/model-operations')).data;
   const endpoint = state.endpoints.find(row => row.providerId === provider.id);
   const changeAddress = values => commit('supplierChannelEdit', { providerId: provider.id, endpointId: endpoint.id, unlinkedAddress: true, expectedUpdatedAt: endpoint.updatedAt, ...values });
@@ -324,11 +324,11 @@ test('channel name and upstream identifier save together through HTTP and D1 wit
  const suffix=randomBytes(6).toString('hex'),providerId='provider-moma';
  async function command(state,values,operation='supplierChannelSave',session=token){const id=crypto.randomUUID();return request('/model-operations/commands',{method:'POST',session,key:id,body:{operationId:id,expectedRevision:state.revision,action:{type:'modelOperations',operation:'provider',data:{operation,objectId:providerId,values}}}});}
  let state=(await request('/model-operations')).data;
- const created=await command(state,{name:'HTTP渠道-'+suffix,protocol:'OpenAI',baseUrl:'https://contract.example.invalid/v1/chat/completions',keyGroupId:'default',models:[{libraryId:'template-glm-5.3',upstreamModelId:'contract-'+suffix,scenarios:[{name:'输入 Token',listPrice:'1.2',unit:'百万 Token',currency:'CNY'}]}]},'supplierChannelCreate');
+ const created=await command(state,{name:'HTTP连接-'+suffix,protocol:'OpenAI',baseUrl:'https://contract.example.invalid/v1/chat/completions',keyGroupId:'default',models:[{libraryId:'template-glm-5.3',upstreamModelId:'contract-'+suffix,scenarios:[{name:'输入 Token',listPrice:'1.2',unit:'百万 Token',currency:'CNY'}]}]},'supplierChannelCreate');
  assert.equal(created.status,200,JSON.stringify(created.data));
  state=(await request('/model-operations')).data;
- const endpoint=state.endpoints.find(row=>row.name==='HTTP渠道-'+suffix),provider=state.providers.find(row=>row.id===providerId),mapping=provider.catalogConnections.find(row=>row.endpointId===endpoint.id),before=structuredClone(mapping);
- const values={mode:'info',endpointId:endpoint.id,name:'HTTP修改渠道-'+suffix,modelId:mapping.modelId,associationId:mapping.id,upstreamModelId:'contract-v2-'+suffix,expectedUpdatedAt:endpoint.updatedAt,expectedProviderUpdatedAt:provider.updatedAt};
+ const endpoint=state.endpoints.find(row=>row.name==='HTTP连接-'+suffix),provider=state.providers.find(row=>row.id===providerId),mapping=provider.catalogConnections.find(row=>row.endpointId===endpoint.id),before=structuredClone(mapping);
+ const values={mode:'info',endpointId:endpoint.id,name:'HTTP修改连接-'+suffix,modelId:mapping.modelId,associationId:mapping.id,upstreamModelId:'contract-v2-'+suffix,expectedUpdatedAt:endpoint.updatedAt,expectedProviderUpdatedAt:provider.updatedAt};
  const saved=await command(state,values);assert.equal(saved.status,200,JSON.stringify(saved.data));
  const fresh=(await request('/model-operations')).data,owner=fresh.providers.find(row=>row.id===providerId),current=owner.catalogConnections.find(row=>row.id===mapping.id);
  assert.equal(fresh.endpoints.find(row=>row.id===endpoint.id).name,values.name);assert.equal(current.upstreamModelId,values.upstreamModelId);assert.equal(current.enabled,false);
@@ -374,7 +374,7 @@ test('split supplier registration commits batch models and channel-owned keys th
   const provider = fresh.providers.find(row => row.id === providerId), model = provider.catalogModels.find(row => row.libraryId === master.id);
   assert.deepEqual(fresh.endpoints, state.endpoints); assert.deepEqual(fresh.models, state.models); assert.deepEqual(fresh.modelTemplates, state.modelTemplates);
   const secret = 'contract-private-key-' + randomBytes(12).toString('hex'), apiKey = (await providerApiKeysDraft([secret])).apiKeys[0];
-  const values = { providerId, modelId: model.modelId, name: 'HTTP独立渠道', upstreamModelId: 'vendor/image', baseUrl: 'https://contract.example.invalid/v1/images/generations', authMode: 'independent', apiKey, scenarios: [] };
+  const values = { providerId, modelId: model.modelId, name: 'HTTP独立连接', upstreamModelId: 'vendor/image', baseUrl: 'https://contract.example.invalid/v1/images/generations', authMode: 'independent', apiKey, scenarios: [] };
   for (const scenarios of [null, {}, [{ name: '图像生成', listPrice: '', unit: '张', currency: 'CNY' }], [{ name: '图像生成', listPrice: '1', unit: '', currency: 'CNY' }]]) {
     const rejected = await command(fresh, 'supplierChannelRegister', { ...values, scenarios });
     assert.equal(rejected.status, 422, JSON.stringify(rejected.data));
@@ -400,7 +400,7 @@ test('adding a channel keeps the explicitly selected registered model when histo
   const state = (await request('/model-operations')).data, provider = state.providers.find(row => row.id === 'provider-moma');
   assert.ok(provider.catalogModels.some(row => row.modelId === 'GLM-5.3'));
   assert.ok(provider.catalogModels.some(row => row.modelId === 'glm-5.3'));
-  const id = crypto.randomUUID(), name = '明确别名渠道-' + randomBytes(4).toString('hex');
+  const id = crypto.randomUUID(), name = '明确别名连接-' + randomBytes(4).toString('hex');
   const result = await request('/model-operations/commands', { method: 'POST', key: id, body: { operationId: id, expectedRevision: state.revision, action: { type: 'modelOperations', operation: 'supplierChannelRegister', data: { providerId: provider.id, modelId: 'glm-5.3', name, upstreamModelId: 'vendor/explicit', baseUrl: 'https://explicit.example.invalid/v1/chat/completions', authMode: 'group', keyGroupId: 'default', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] } } } });
   assert.equal(result.status, 200, JSON.stringify(result.data));
   const fresh = (await request('/model-operations')).data, current = fresh.providers.find(row => row.id === provider.id), endpoint = fresh.endpoints.find(row => row.name === name);
@@ -421,7 +421,7 @@ test('deletion HTTP contract requires service unbinding even after delisting and
   assert.equal(result.status, 200, JSON.stringify(result.data)); state = await fresh();
   const providerId = state.providers.find(row => row.code === code).id;
   const providerCommand = (state, operation, values, session = token) => command(state, 'provider', { operation, objectId: providerId, values }, undefined, session);
-  result = await providerCommand(state, 'supplierChannelCreate', { name: '可删除渠道', protocol: 'OpenAI', baseUrl: 'https://delete-http.example.invalid/v1/chat/completions', authMode: 'inherit', models: [{ libraryId: 'template-glm-5.3', upstreamModelId: 'vendor/delete-http', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] }] });
+  result = await providerCommand(state, 'supplierChannelCreate', { name: '可删除连接', protocol: 'OpenAI', baseUrl: 'https://delete-http.example.invalid/v1/chat/completions', authMode: 'inherit', models: [{ libraryId: 'template-glm-5.3', upstreamModelId: 'vendor/delete-http', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] }] });
   assert.equal(result.status, 200, JSON.stringify(result.data)); state = await fresh();
   const provider = state.providers.find(row => row.id === providerId), mapping = provider.catalogConnections[0], endpointId = mapping.endpointId, values = { modelId: mapping.modelId, associationId: mapping.id, endpointId, confirmed: true };
   assert.equal((await providerCommand(state, 'catalogueRemove', { modelId: mapping.modelId, confirmed: true })).status, 422);
@@ -455,7 +455,7 @@ test('channel editor HTTP saves costs and candidate address atomically with hist
   const { supplierChannelAssociations } = await import('../src/admin-v2/supplier-resources.js');
   let state = (await request('/model-operations')).data;
   const provider = state.providers.find(row=>row.id==='provider-moma'), mapping = supplierChannelAssociations(state,provider)[0], endpoint=mapping.endpoint;
-  const values={providerId:provider.id,endpointId:endpoint.id,associationId:mapping.id,modelId:mapping.modelId,name:'HTTP完整编辑渠道',upstreamModelId:mapping.upstreamModelId,baseUrl:'https://edited-http.example.invalid/v1/chat/completions',expectedUpdatedAt:endpoint.updatedAt,expectedProviderUpdatedAt:provider.updatedAt,expectedPriceRevision:mapping.procurementRevision || 0,scenarios:[{name:'输入 Token',listPrice:'0',currency:'CNY',unit:'百万 Token'}]};
+  const values={providerId:provider.id,endpointId:endpoint.id,associationId:mapping.id,modelId:mapping.modelId,name:'HTTP完整编辑连接',upstreamModelId:mapping.upstreamModelId,baseUrl:'https://edited-http.example.invalid/v1/chat/completions',expectedUpdatedAt:endpoint.updatedAt,expectedProviderUpdatedAt:provider.updatedAt,expectedPriceRevision:mapping.procurementRevision || 0,scenarios:[{name:'输入 Token',listPrice:'0',currency:'CNY',unit:'百万 Token'}]};
   const command=(data, session=token, id=crypto.randomUUID())=>request('/model-operations/commands',{method:'POST',session,key:id,body:{operationId:id,expectedRevision:state.revision,action:{type:'modelOperations',operation:'supplierChannelEdit',data}}});
   const invalid=await command({...values,scenarios:[{...values.scenarios[0],listPrice:''}]});assert.equal(invalid.status,422,JSON.stringify(invalid.data));
   const untouched=(await request('/model-operations')).data;assert.equal(untouched.revision,state.revision);assert.deepEqual(untouched.endpoints,state.endpoints);assert.deepEqual(untouched.providers,state.providers);
@@ -566,11 +566,11 @@ test('supplier model removal over HTTP checks canonical aliases and preserves th
   let state=(await request('/model-operations')).data;
   const fixture=structuredClone(state),providerId='alignment-contract-provider',libraryId='builtin-pp-ocrv6';
   fixture.providers.push({id:providerId,name:'别名删除合同',code:'alignment-contract',status:'已启用',catalogueScope:'managed',catalogModelIds:['pp-ocrv6','pp-ocr-alias'],catalogModels:[{modelId:'pp-ocrv6',libraryId},{modelId:'pp-ocr-alias',libraryId}],catalogConnections:[{id:'alignment-mapping',modelId:'pp-ocr-alias',endpointId:'alignment-endpoint',enabled:false}],apiKeys:[]});
-  fixture.endpoints.push({id:'alignment-endpoint',providerId,name:'别名渠道',protocol:'OpenAI',baseUrl:'https://alignment.example.invalid/v1',status:'草稿',apiKeys:[]});
+  fixture.endpoints.push({id:'alignment-endpoint',providerId,name:'别名连接',protocol:'OpenAI',baseUrl:'https://alignment.example.invalid/v1',status:'草稿',apiKeys:[]});
   await local.db.batch(modelChanges(local.db,state,fixture));
   state=(await request('/model-operations')).data;
   async function remove(session=token){const id=crypto.randomUUID();return request('/model-operations/commands',{method:'POST',session,key:id,body:{operationId:id,expectedRevision:state.revision,action:{type:'modelOperations',operation:'provider',data:{operation:'catalogueRemove',objectId:providerId,values:{modelId:'pp-ocrv6',confirmed:true}}}}});}
-  const blocked=await remove();assert.equal(blocked.status,422);assert.match(JSON.stringify(blocked.data),/全部渠道/);
+  const blocked=await remove();assert.equal(blocked.status,422);assert.match(JSON.stringify(blocked.data),/全部上游模型记录/);
   assert.deepEqual((await request('/model-operations')).data.providers,state.providers);
   const closed=structuredClone(state);closed.providers.find(row=>row.id===providerId).catalogConnections[0].deletedAt='2026-11-01';
   await local.db.batch(modelChanges(local.db,state,closed));
@@ -639,8 +639,8 @@ test('model channel connectivity changes take effect only when a passing candida
   const { supplierChannelAssociations } = await import('../src/admin-v2/supplier-resources.js');
   const { providerApiKeysDraft } = await import('../src/admin-v2/provider-management.js');
   const providerId = 'provider-moma';
-  const name = 'HTTP连通性验证渠道';
-  const savedName = 'HTTP已验证渠道';
+  const name = 'HTTP连通性验证连接';
+  const savedName = 'HTTP已验证连接';
   const initialAddress = 'https://initial-connectivity.example.invalid/v1';
   const newAddress = 'https://verified-connectivity.example.invalid/v1';
   const read = async () => (await request('/model-operations')).data;

@@ -8,7 +8,7 @@ import { catalogueChannels } from '../src/admin-v2/provider-channels.js';
 import { SUPPLIER_MODEL_TYPES } from '../src/admin-v2/provider-management.js';
 import { providerCataloguePrice } from '../src/admin-v2/moma-catalogue-prices.js';
 import { cataloguePurchasePrice } from '../src/admin-v2/provider-catalogue-pricing.js';
-const draft = { protocol: 'OpenAI', apiUrl: 'https://catalogue.example.invalid/v1/chat/completions', modelId: ' New-Complete-Model ', modelType: 'text', channelName: '国内渠道', modelName: '模型显示名称', discountFactor: '0.8', scenarios: [{ name: '输入 Token', listPrice: '1.25', unit: '百万 Token', currency: 'CNY' }, { name: '输出 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] };
+const draft = { protocol: 'OpenAI', apiUrl: 'https://catalogue.example.invalid/v1/chat/completions', modelId: ' New-Complete-Model ', modelType: 'text', channelName: '国内连接', modelName: '模型显示名称', discountFactor: '0.8', scenarios: [{ name: '输入 Token', listPrice: '1.25', unit: '百万 Token', currency: 'CNY' }, { name: '输出 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] };
 const action = (values = draft, objectId = 'provider-moma') => ({ type: 'modelOperations', operation: 'provider', data: { operation: 'catalogueAdd', objectId, values } });
 const provider = state => state.providers.find(item => item.id === 'provider-moma');
 
@@ -24,7 +24,7 @@ test('one save appends a case-preserved model and all quote rows atomically, per
   assert.ok(isResourceId(id, 'provider-model'));
   assert.deepEqual(supplierModel, { modelId: 'New-Complete-Model', name: '模型显示名称', type: 'text' });
   const channel = provider(state).catalogConnections.find(item => item.modelId === 'New-Complete-Model');
-  assert.equal(channel.name, '国内渠道');
+  assert.equal(channel.name, '国内连接');
   assert.equal(state.endpoints.find(item => item.id === channel.endpointId).baseUrl, draft.apiUrl);
   assert.equal(cataloguePurchasePrice(entry.scenarios[0].listPrice, entry.discountFactor), 1000000);
   assert.equal(cataloguePurchasePrice(entry.scenarios[1].listPrice, entry.discountFactor), 0);

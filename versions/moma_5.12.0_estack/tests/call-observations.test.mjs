@@ -157,7 +157,7 @@ test('independent maintenance navigation keeps the gateway configuration tabs', 
   }
   assert.equal(pages.alerts.area, 'monitoring');
   const channelManagement = sections.find(section => section.id === 'models').items.find(item => item.id === 'channels-reference');
-  assert.deepEqual(channelManagement.children, [['providers-reference', '渠道列表'], ['providers-health', '渠道健康']]);
+  assert.deepEqual(channelManagement.children, [['providers-reference', '连接列表'], ['providers-health', '连接健康']]);
   assert.equal(canAccessPage('运营人员', 'providers-health'), true);
   assert.equal(canAccessPage('运维人员', 'providers-health'), false);
   assert.equal(canAccessPage('平台管理员', 'providers-health'), true);
@@ -283,9 +283,9 @@ test('monitor counts and details share actual attempts even when the parent reco
   const parent = data.requests.find(row => row.id === attempt.parentId);
   const trace = buildRequestTrace(parent, simulation.evidence[parent.requestId]);
   assert.equal(parent.outcome, 'success');
-  assert.equal(parent.channelName, '渠道 B');
+  assert.equal(parent.channelName, '连接 B');
   assert.equal(attempt.outcome, 'failed');
-  assert.equal(trace.nodes.find(node => node.id === attempt.id).attempt.channelName, '渠道 A');
+  assert.equal(trace.nodes.find(node => node.id === attempt.id).attempt.channelName, '连接 A');
 });
 
 test('preflight requires an observed gateway rejection before any dispatch', () => {
@@ -315,7 +315,7 @@ test('log sort keeps uncollected values last in both directions and breaks ties 
 });
 
 test('CSV keeps missing and zero distinct, quotes names and prevents formula execution', () => {
-  assert.equal(logCsv([['渠道,"A"', null, 0, '  =formula']]), '\ufeff"渠道,""A""","","0","\'  =formula"');
+  assert.equal(logCsv([['连接,"A"', null, 0, '  =formula']]), '\ufeff"连接,""A""","","0","\'  =formula"');
 });
 
 test('the routing demo shows group retry, cross-group switching and backup model under one request', () => {
@@ -324,7 +324,7 @@ test('the routing demo shows group retry, cross-group switching and backup model
   const trace = buildRequestTrace(parent, simulation.evidence[parent.requestId]);
   assert.equal(parent.status, 200);
   assert.equal(trace.attemptCount, 4);
-  assert.deepEqual(trace.nodes.filter(row => row.attempt).map(row => row.attempt.channelName), ['渠道 A','渠道 B','渠道 C','渠道 D']);
+  assert.deepEqual(trace.nodes.filter(row => row.attempt).map(row => row.attempt.channelName), ['连接 A','连接 B','连接 C','连接 D']);
   assert.deepEqual(trace.nodes.filter(row => row.attempt).map(row => row.attempt.upstreamModelId), [
     'deepseek-v4-pro','deepseek-v4-pro','deepseek-v4-pro','deepseek-v4-flash',
   ]);

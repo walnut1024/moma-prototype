@@ -55,7 +55,7 @@ test('D1 provider intake and two-step removal are atomic, conflict checked and p
     assert.equal(state.modelTemplates.length, original.modelTemplates.length);
     const configured = structuredClone(state), service = configured.models.find(row => row.id === model.id);
     Object.assign(service, { serviceMode: 'provider', callsEnabled: true, listingStatus: '已上架', releaseStage: 'gray',
-      serviceProviders: [{ providerId: provider.id, channelId: channel.id, channelName: '目标渠道', callId: 'removal-contract-call', status: '已关联', callsEnabled: true, listingStage: 'gray', grayTenantIds: [] }] });
+      serviceProviders: [{ providerId: provider.id, channelId: channel.id, channelName: '目标连接', callId: 'removal-contract-call', status: '已关联', callsEnabled: true, listingStage: 'gray', grayTenantIds: [] }] });
     await local.db.batch(modelChanges(local.db, state, configured));
     state = await reload();
     const preserved = await history(), oldAudits = (await local.db.prepare('SELECT id,record_json FROM audit_events ORDER BY id').all()).results;
@@ -70,7 +70,7 @@ test('D1 provider intake and two-step removal are atomic, conflict checked and p
     assert.equal((await remove(prepared, target, 'providerRemovalCommit')).status, 200);
     state = await reload();
     assert.ok(!state.providers.some(row => row.id === provider.id));
-    assert.equal(state.models.find(row => row.id === model.id).serviceProviders[0].channelUnavailableReason, '渠道未接入');
+    assert.equal(state.models.find(row => row.id === model.id).serviceProviders[0].channelUnavailableReason, '连接未接入');
     assert.deepEqual(state.modelTemplates, prepared.modelTemplates);
     assert.deepEqual(await history(), preserved);
     for (const audit of oldAudits) assert.equal(await local.db.prepare('SELECT record_json FROM audit_events WHERE id=?').bind(audit.id).first('record_json'), audit.record_json);

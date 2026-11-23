@@ -59,7 +59,7 @@ test('existing parallel supplies remain independent and cannot collapse through 
   assert.equal(catalogueConnections(state, provider, modelId).length, 2);
   assert.throws(() => configure(state, { endpointId: second.id, baseUrl: second.baseUrl }), /确认/);
   const before = structuredClone(state);
-  assert.throws(() => configure(state, { endpointId: second.id, baseUrl: second.baseUrl, confirmed: true }), /管理渠道/);
+  assert.throws(() => configure(state, { endpointId: second.id, baseUrl: second.baseUrl, confirmed: true }), /连接列表/);
   assert.deepEqual(state, before);
   assert.equal(catalogueConnections(state, provider, modelId).length, 2);
 });

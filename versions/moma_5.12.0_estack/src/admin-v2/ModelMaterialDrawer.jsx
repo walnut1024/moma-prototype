@@ -22,8 +22,8 @@ function ModelSuppliers({ state, model, ops }) {
       { title: '服务商编码', width: 130, render: (_, { owner }) => <Typography.Text className="materials-code">{providerCode(owner)}</Typography.Text> },
       { title: '服务商 Logo', width: 100, render: (_, { owner }) => <MaterialLogo key={owner.logo || ''} src={owner.logo} alt={owner.name + '的服务商 Logo'}/> },
       { title: '供给类型', width: 130, render: (_, { owner }) => PROVIDER_TYPES[owner.sourceType] || '—' },
-      { title: '渠道数', align: 'right', width: 80, render: (_, row) => materialChannelCount(row) },
-      { title: '操作', width: 110, render: (_, { owner }) => <Button theme="borderless" onClick={() => viewMaterialChannels(ops, owner.id, model.id)}>查看渠道</Button> },
+      { title: '连接数', align: 'right', width: 80, render: (_, row) => materialChannelCount(row) },
+      { title: '操作', width: 110, render: (_, { owner }) => <Button theme="borderless" onClick={() => viewMaterialChannels(ops, owner.id, model.id)}>查看连接</Button> },
     ]}/>
     {registering && <SupplyRegistrationDialog state={state} ops={ops} model={model} close={() => {
       setRegistering(false);

@@ -13,7 +13,7 @@ import { supplierChannelAssociations } from '../src/admin-v2/supplier-resources.
 
 const run = (state, operation, data) => commitAdminState(state, { type: 'modelOperations', operation, data });
 const clean = () => { const state = parseAdminState(null); for (const key of ['providers', 'endpoints', 'models', 'modelTemplates', 'modelSupplies', 'supplyPrices', 'modelSalePrices', 'serviceRoutes', 'modelOnboardings']) state[key] = []; return state; };
-const values = (extra = {}) => ({ name: '快捷渠道', interfaceType: 'openai', baseUrl: 'https://quick.example.invalid/v1', authMode: 'group', keyGroupId: 'default', models: [{ modelPresetId: 'model-2', upstreamModelId: 'vendor/raw:model.v2', scenarios: [] }], ...extra });
+const values = (extra = {}) => ({ name: '快捷连接', interfaceType: 'openai', baseUrl: 'https://quick.example.invalid/v1', authMode: 'group', keyGroupId: 'default', models: [{ modelPresetId: 'model-2', upstreamModelId: 'vendor/raw:model.v2', scenarios: [] }], ...extra });
 const created = state => state.endpoints.find(row => row.id === state.audits[0].objectId);
 const keyMetadata = async value => (await providerApiKeysDraft([value])).apiKeys[0];
 
@@ -146,7 +146,7 @@ test('a pending preset draft reuses supplier and material registered by another 
   const state = clean(), originalAlias = 'vendor/original-draft', draftValue = { providerId: '', providerPresetId: 'baichuan', name: '先保存的预设草稿', interfaceType: 'openai', baseUrl: 'https://quick.example.invalid/v1', authMode: 'group', keyGroupId: 'default' };
   const saved = run(state, 'channelDraftSave', { value: draftValue, rows: [{ id: 'pending-model', libraryId: '', modelPresetId: 'model-2', upstreamModelId: originalAlias, scenarios: [], source: 'reference', confirmed: true }], step: 0 }), draft = channelDrafts(saved)[0];
   assert.equal(saved.providers.length, 0); assert.equal(saved.modelTemplates.length, 0);
-  const registered = run(saved, 'channelQuickCreate', { providerPresetId: 'baichuan', newApiKey: await keyMetadata('temporary-other-registration-key'), values: values({ name: '期间新增的另一个渠道', models: [{ modelPresetId: 'model-2', upstreamModelId: 'vendor/other-registration' }] }) });
+  const registered = run(saved, 'channelQuickCreate', { providerPresetId: 'baichuan', newApiKey: await keyMetadata('temporary-other-registration-key'), values: values({ name: '期间新增的另一个连接', models: [{ modelPresetId: 'model-2', upstreamModelId: 'vendor/other-registration' }] }) });
   const firstEndpoint = created(registered), supplierId = firstEndpoint.providerId, materialId = registered.modelTemplates[0].id, currentDraft = channelDrafts(registered).find(row => row.id === draft.id);
   assert.equal(channelDraftIssue(registered, currentDraft), '');
   const next = run(registered, 'channelQuickCreate', { providerPresetId: currentDraft.value.providerPresetId, draftId: currentDraft.id, expectedDraftRevision: currentDraft.draftRevision, values: { ...currentDraft.value, authMode:'specific', apiKeyId:firstEndpoint.apiKeyId, models: currentDraft.rows.map(({ modelPresetId, upstreamModelId, scenarios }) => ({ modelPresetId, upstreamModelId, scenarios })) } }), secondEndpoint = created(next), supplier = next.providers.find(row => row.id === supplierId);

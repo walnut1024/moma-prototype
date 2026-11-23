@@ -50,7 +50,7 @@ test('HTTP channel rename survives refresh and replay without renaming the conne
     const association=supplierChannelAssociations(state,provider).find(row=>supplierChannelAssociations(state,provider,row.endpointId).length>1);
     assert(association,'fixture must exercise a shared connection');
     const endpoint=association.endpoint,values={providerId:provider.id,endpointId:endpoint.id,associationId:association.id,modelId:association.modelId,
-      name:supplierChannelName(provider,endpoint),sourceName:'转售渠道',upstreamModelId:association.upstreamModelId,baseUrl:endpoint.baseUrl,
+      name:supplierChannelName(provider,endpoint),sourceName:'转售连接',upstreamModelId:association.upstreamModelId,baseUrl:endpoint.baseUrl,
       expectedUpdatedAt:endpoint.updatedAt,expectedProviderUpdatedAt:provider.updatedAt};
     const command=(data,token=login.cookie,id=crypto.randomUUID())=>request('/model-operations/commands',{
       operationId:id,expectedRevision:state.revision,action:{type:'modelOperations',operation:'supplierChannelEdit',data},
@@ -63,9 +63,9 @@ test('HTTP channel rename survives refresh and replay without renaming the conne
     assert.deepEqual((await command(values,login.cookie,id)).data,saved.data);assert.equal((await command(values)).status,409);
     const fresh=await read(),owner=fresh.providers.find(row=>row.id===provider.id);
     const original=provider.catalogConnections.find(row=>row.id===association.id),current=owner.catalogConnections.find(row=>row.id===association.id);
-    assert.deepEqual(current,{...original,sourceName:'转售渠道',updatedAt:current.updatedAt});
-    assert.equal(supplierChannelAssociations(fresh,owner,endpoint.id).find(row=>row.id===association.id).name,'转售渠道');
-    assert.equal(resourceRows(fresh,'channels').find(row=>row.type==='channel'&&row.id===channelIdentity(fresh,association.id)).name,'转售渠道');
+    assert.deepEqual(current,{...original,sourceName:'转售连接',updatedAt:current.updatedAt});
+    assert.equal(supplierChannelAssociations(fresh,owner,endpoint.id).find(row=>row.id===association.id).name,'转售连接');
+    assert.equal(resourceRows(fresh,'channels').find(row=>row.type==='channel'&&row.id===channelIdentity(fresh,association.id)).name,'转售连接');
     assert.equal(channelIdentity(fresh,association.id),channelIdentity(state,association.id));
     assert.deepEqual(fresh.endpoints,state.endpoints);
     assert.deepEqual(owner.catalogConnections.filter(row=>row.id!==association.id),provider.catalogConnections.filter(row=>row.id!==association.id));

@@ -64,7 +64,7 @@ export function connectionQualification(endpoint) {
 export const connectionQualified = endpoint => Boolean(connectionQualification(endpoint));
 export function connectionBlockReason(endpoint, provider) {
   if (provider?.status !== '已启用') return '先启用服务商';
-  if (endpoint?.frozen) return '渠道已冻结';
+  if (endpoint?.frozen) return '连接已冻结';
   if (!connectionCredentialsReady(endpoint, provider)) return 'API 凭证待配置或已撤销';
   if (!connectionQualified(endpoint)) return '先通过当前配置的连接测试';
   if (!['运行中', '需关注'].includes(endpoint?.status)) return '先启用接入';

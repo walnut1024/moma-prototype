@@ -16,21 +16,21 @@ test('independent model channel names take precedence over their shared connecti
 });
 
 test('channels without a separate name retain their current connection label and pending state', () => {
-  const provider = { catalogConnections: [] }, endpoint = { id: 'connection-a', name: '标准渠道', supplierChannel: true };
-  assert.equal(modelChannelName(provider, { endpointId: endpoint.id, endpoint }), '标准渠道');
-  assert.equal(modelChannelName(provider, null), '待添加渠道');
+  const provider = { catalogConnections: [] }, endpoint = { id: 'connection-a', name: '标准连接', supplierChannel: true };
+  assert.equal(modelChannelName(provider, { endpointId: endpoint.id, endpoint }), '标准连接');
+  assert.equal(modelChannelName(provider, null), '待添加连接');
 });
 
 test('both directory perspectives retain identical channel names, identities, capacities and costs without changing state', () => {
   const state = initialModelWorkspace(), provider = state.providers.find(row => row.id === 'provider-moma');
   const saved = provider.catalogConnections.find(row => !row.deletedAt && row.endpointId);
-  saved.sourceName = '独立模型渠道'; saved.capacityLimits = { rpm: 300, tpm: 1000000 };
+  saved.sourceName = '独立上游模型'; saved.capacityLimits = { rpm: 300, tpm: 1000000 };
   const relations = modelSupplyRelations(state), before = structuredClone(state);
   const directory = channelManagementDirectory(state, [provider], relations);
   const groups = directory.byProvider.get(provider.id), supplierRows = supplierModelChannelRows(state, groups);
   const providerCosts = new Map(costRecords(state, groups).map(row => [row.key, row]));
   const modelRows = supplyCostTableRows(directory.models, costRecords(state, directory.models.flatMap(model => model.groups))).filter(row => row.channel);
-  assert(supplierRows.some(row => row.channel.id === saved.id && modelChannelName(provider, row.channel) === '独立模型渠道'));
+  assert(supplierRows.some(row => row.channel.id === saved.id && modelChannelName(provider, row.channel) === '独立上游模型'));
   assert.equal(modelRows.length, supplierRows.length);
   for (const row of supplierRows) {
     const modelRow = modelRows.find(other => other.channel.id === row.channel.id);

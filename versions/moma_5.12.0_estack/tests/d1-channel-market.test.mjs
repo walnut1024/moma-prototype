@@ -201,7 +201,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
       const upstreamModelId = shared ? 'vendor/unused-shared' : 'vendor/unused-separate';
       await command('supplierChannelRegister', { providerId: attached.providerId, modelId: attached.modelId, upstreamModelId, sourceName: '闲置来源',
         ...(shared ? { endpointId: endpoint.id, expectedEndpointUpdatedAt: state.endpoints.find(row => row.id === endpoint.id).updatedAt }
-          : { name: '闲置渠道', baseUrl: 'https://unused.example.invalid/v1', protocol: 'OpenAI', authMode: 'group', keyGroupId: 'default' }) });
+          : { name: '闲置连接', baseUrl: 'https://unused.example.invalid/v1', protocol: 'OpenAI', authMode: 'group', keyGroupId: 'default' }) });
       const unused = owner(attached.providerId).catalogConnections.find(row => row.upstreamModelId === upstreamModelId);
       await deleteMapping(unused.id, unused.endpointId);
       assert.ok(owner(attached.providerId).catalogConnections.find(row => row.id === unused.id).deletedAt);
@@ -965,7 +965,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.deepEqual(JSON.parse(await local.db.prepare('SELECT record_json FROM service_supply_records WHERE id=?').bind(supply.id).first('record_json')),supply);
     const retiredNumber=await local.db.prepare("SELECT MAX(CAST(substr(code,4) AS INTEGER)) AS number FROM channels WHERE code GLOB 'CH-[0-9]*'").first('number');
     await command('supplierModelsRegister',{providerId:retired.providerId,libraryIds:[model().templateId || modelId]});
-    await command('supplierChannelRegister',{providerId:retired.providerId,modelId:retired.modelId,name:'替换渠道',
+    await command('supplierChannelRegister',{providerId:retired.providerId,modelId:retired.modelId,name:'替换连接',
       upstreamModelId:'vendor/after-retirement',baseUrl:'https://after-retirement.example.invalid/v1',protocol:'OpenAI',authMode:'group',keyGroupId:'default'});
     const replacement=owner(retired.providerId).catalogConnections.find(row=>row.upstreamModelId==='vendor/after-retirement');
     assert.equal(Number(state.endpoints.find(row=>row.id===replacement.endpointId).channelCode.slice(3)),retiredNumber+1);

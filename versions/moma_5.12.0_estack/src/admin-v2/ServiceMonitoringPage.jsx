@@ -169,7 +169,7 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
       <div><Text type="tertiary" size="small">第 {attempt.index} 次</Text></div>
     </> },
     { title: '发起时间', dataIndex: 'at', width: 168, render: observationTime },
-    { title: '实际渠道', dataIndex: 'channelName', width: 148, render: value => value ?? '未采集' },
+    { title: '实际连接', dataIndex: 'channelName', width: 148, render: value => value ?? '未采集' },
     { title: '上游模型', dataIndex: 'upstreamModelId', width: 160, render: value => value ?? '未采集' },
     { title: '上游结果', dataIndex: 'outcome', width: 140, render: (value, attempt) => <>
       <AdminStatus value={outcomes[value]}/>
@@ -233,7 +233,7 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
           options={['', '异常', '健康', '样本不足', '暂无观测'].map(value => [value, value || '全部健康状态'])} onChange={setHealthFilter}/>
       </>}
     </>}>
-      <ObservationFilterGroup label={healthPage ? '请求范围' : '模型与渠道'}>
+      <ObservationFilterGroup label={healthPage ? '请求范围' : '模型与连接'}>
         {healthPage && requestFilters}
         {filtersShown.filter(([dimension]) => !healthPage || dimension !== 'endpoint' || filters.endpoint != null)
           .map(([dimension, label]) => <ObservationPick key={dimension} dimension={dimension} label={label}
@@ -242,7 +242,7 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
     </ObservationFilterLayout>
   </div>;
   return <div className="admin-page-stack admin-service-monitor">
-    <AdminPageHeading title={healthPage ? t('渠道健康') : "服务监控"}>
+    <AdminPageHeading title={healthPage ? t('连接健康') : "服务监控"}>
       <Space wrap>
         <Button theme="light" onClick={toggleSimulation}>{simulation ? '退出模拟' : '模拟数据'}</Button>
         {!healthPage && monitoringLinks.filter(([id]) => canAccessPage(state.currentRole, id)).map(([id, label]) =>
@@ -250,13 +250,13 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
       </Space>
     </AdminPageHeading>
     {(!healthPage || !window) && <Card>{filterPanel}</Card>}
-    {catalogueError && <Banner type="danger" closeIcon={null} description={<Space>渠道清单加载失败：{catalogueError}
+    {catalogueError && <Banner type="danger" closeIcon={null} description={<Space>连接清单加载失败：{catalogueError}
       <Button size="small" onClick={() => setRetry(value => value + 1)}>重新加载</Button></Space>}/>}
     {!window ? <Banner type="danger" closeIcon={null} description="请选择不超过 365 天的有效时间范围。"/> :
       healthPage ?
           <div className="admin-page-stack">
-            <Card title={<Title heading={5} component="h2">{t('渠道模型观测列表')}</Title>} headerExtraContent={
-              <Choice label={t('对比分组')} value="channelModel" options={[['channelModel', t('按渠道模型')]]}/>
+            <Card title={<Title heading={5} component="h2">{t('上游模型观测列表')}</Title>} headerExtraContent={
+              <Choice label={t('对比分组')} value="channelModel" options={[['channelModel', t('按上游模型')]]}/>
             }>
               <div className="channel-health-filters">{filterPanel}</div>
               <ChannelHealthTable loading={loadingCatalogue} rows={visibleHealthRows} labels={labels} summaries={summaries}
@@ -266,7 +266,7 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
                 }}/>
             </Card>
             {attemptDetails}
-            {rows.length > 0 && trendGroup && <section ref={trendPanel} tabIndex={-1} aria-label="渠道趋势" className="admin-page-stack">
+            {rows.length > 0 && trendGroup && <section ref={trendPanel} tabIndex={-1} aria-label="上游模型趋势" className="admin-page-stack">
               <div className="admin-monitor-section-title">
                 <Title heading={5} component="h2">{seriesName(trendGroup)} 趋势</Title>
                 <Button size="small" theme="borderless" onClick={() => setTrendGroupId(null)}>查看全部</Button>

@@ -85,7 +85,7 @@ function TraceNodeDetails({ node, complete }) {
         : attempt.outcome === 'failed' ? [['失败原因', attempt.errorReason ?? attempt.code]] : []),
       ...[['选中原因', attempt.selectionReason], ['后续动作', node.next]].filter(([, value]) => value != null),
       ['上游 HTTP 状态', httpLabel(attempt.status)], ['上游 Request ID', attempt.upstreamRequestId],
-      ['尝试开始时间', observationTime(attempt.at)], ['服务商', attempt.providerName], ['渠道', attempt.channelName],
+      ['尝试开始时间', observationTime(attempt.at)], ['服务商', attempt.providerName], ['连接', attempt.channelName],
       ['端点', attempt.endpointName], ['上游模型调用标识', attempt.upstreamModelId],
       ...(attempt.serviceId ? [['目标服务 ID', attempt.serviceId]] : []),
       ...[['错误来源', attempt.errorSource], ['错误类型', attempt.code], ['回退原因', attempt.recordedFallbackReason],
@@ -112,7 +112,7 @@ function RequestTrace({ trace, state, finalChannel, selected, onSelect, onSummar
   const complete = trace.attemptCount === trace.recordedCount;
   const lastAttempt = trace.nodes.reduce((last, item) =>
     item.attempt && (!last || item.attempt.index > last.attempt.index) ? item : last, null);
-  const caption = trace.attemptCount === 0 ? '未发起上游尝试' : [finalChannel && '最终渠道 · ' + finalChannel,
+  const caption = trace.attemptCount === 0 ? '未发起上游尝试' : [finalChannel && '最终连接 · ' + finalChannel,
     trace.incomplete && '仅展示已记录的节点'].filter(Boolean).join(' · ');
   return <section ref={root} aria-label="请求链路" className={trace.hasChart ? 'admin-request-trace has-chart' : 'admin-request-trace'}>
     <div className="admin-request-trace-heading">

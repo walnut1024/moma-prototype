@@ -15,14 +15,14 @@ for (const providerId of ['provider-deepseek-official','provider-moma']) {
   const providerRun=(operation,values)=>{prepared=run(prepared,'provider',null,{operation,objectId:providerId,values:{modelId:catalogueModelId,...values}});};
   providerRun('addApiKeys',await providerApiKeysDraft(['sk-unified-content-local-test-000001']));
   for (let index=0;index<5;index++) {
-    providerRun('channelSave',{name:`模型服务渠道 ${index+1}`,origin:'direct',upstreamModelId:catalogueModelId,protocol:'OpenAI',baseUrl:`https://${providerId}-${index}.example.invalid/v1/chat/completions`,scenarios:[{name:'输入',unit:'百万 Token',currency:'CNY',listPrice:'2'},{name:'输出',unit:'百万 Token',currency:'CNY',listPrice:'8'}]});
-    const channel=storedServiceChannels(prepared).find(item=>item.provider.id===providerId && item.name===`模型服务渠道 ${index+1}`);
+    providerRun('channelSave',{name:`模型服务连接 ${index+1}`,origin:'direct',upstreamModelId:catalogueModelId,protocol:'OpenAI',baseUrl:`https://${providerId}-${index}.example.invalid/v1/chat/completions`,scenarios:[{name:'输入',unit:'百万 Token',currency:'CNY',listPrice:'2'},{name:'输出',unit:'百万 Token',currency:'CNY',listPrice:'8'}]});
+    const channel=storedServiceChannels(prepared).find(item=>item.provider.id===providerId && item.name===`模型服务连接 ${index+1}`);
     providerRun('connectionKeys',{endpointId:channel.endpointId,apiKeys:[prepared.providers.find(item=>item.id===providerId).apiKeys[0]],confirmed:true});
     providerRun('channelTest',{channelId:channel.id,scenario:'success'});
     providerRun('channelEnable',{channelId:channel.id});
   }
 }
-const ready=state=>storedServiceChannels(state).filter(channel=>channel.name.startsWith('模型服务渠道 '));
+const ready=state=>storedServiceChannels(state).filter(channel=>channel.name.startsWith('模型服务连接 '));
 const batch=state=>({groups:['provider-deepseek-official','provider-moma'].map(providerId=>({providerId,catalogueModelId:providerId==='provider-moma'?'DeepSeek-V4-Flash-0731':'deepseek-v4-pro',channelIds:ready(state).filter(channel=>channel.provider.id===providerId).map(channel=>channel.id)})),confirmedIdentity:true,expectedUpdatedAt:state.models.find(item=>item.id===model.id).updatedAt});
 
 test('one batch associates ten channels across suppliers with a single commit and no price or route changes',()=>{

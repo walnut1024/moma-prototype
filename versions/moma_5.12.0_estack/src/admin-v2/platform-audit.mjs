@@ -24,7 +24,7 @@ export const AUDIT_ACTIONS = {
   'service_route.publish': '发布路由',
   'supplier_key_group.rotate': '轮换共享密钥',
   'supplier_key.replace': '替换 API 密钥',
-  'model_supply.disable': '批量停用渠道',
+  'model_supply.disable': '批量停用上游模型',
   ...PROJECT_AUDIT_ACTIONS,
   'site.personal_space.configure': '变更个人空间开关',
 };
@@ -42,7 +42,7 @@ export const AUDIT_RESOURCES = {
   supplier_connection: '连接配置',
   supplier: '服务商',
   model_material: '模型资料',
-  model_supply: '模型渠道供给',
+  model_supply: '上游模型供给',
   project: '项目',
   project_member: '项目成员',
   project_key: '项目 API Key',
