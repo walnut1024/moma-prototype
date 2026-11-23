@@ -3,33 +3,32 @@ import { useState } from 'react';
 import { Button, Checkbox, Typography } from '@douyinfe/semi-ui';
 import { Modal, Notice } from './ServiceUI';
 import { PlatformTrialDialog } from './ServicePlatformTrial';
+import { servicePurpose } from './service-purpose';
 import { salesChecks } from './service-sales';
 import { scopeTenants } from './service-commercial';
 import { serviceConfigurationTarget } from './service-workspace';
 import { routingServices } from './service-routing';
-import { offerKey, offerStage, providerOffer, salesCustomer } from '../service-access.mjs';
+import { offerKey, salesCustomer } from '../service-access.mjs';
 
 export default function ServiceListingDialog({state,model,ops,stage,close,initialOfferKey}) {
-  const services = routingServices(state).filter(row => row.modelId === model.id);
+  const services = routingServices(state).filter(row => row.modelId === model.id && servicePurpose(model, offerKey(row)) === 'commercial');
   const selectOffers = services.some(service => offerKey(service));
   const [tenantIds,setTenantIds]=useState(selectOffers ? [] : model.releaseTenantIds || []),[revision]=useState(model.updatedAt),[busy,setBusy]=useState(false);
   const [selected,setSelected]=useState(initialOfferKey ? [initialOfferKey] : []),[validation,setValidation]=useState(null);
-  const gray=stage==='gray',withdraw=stage==='withdrawn';
-  const label=withdraw?'停售':gray?'灰度开售':'开售模型服务';
+  const gray=stage==='gray';
+  const label=gray?'灰度开售':'开售模型服务';
   const tenants=scopeTenants(state).filter(tenant=>!selectOffers || salesCustomer(model,tenant.id));
   const changed=revision!==model.updatedAt;
   const groups=new Map();
   if (selectOffers) {
     for (const service of services) {
-      const entry=providerOffer(model,offerKey(service)), listed=['gray','formal'].includes(offerStage(model,entry));
-      if (withdraw && !listed) continue;
       const group=groups.get(service.providerId) || [];
       group.push(service);
       groups.set(service.providerId,group);
     }
   }
   const selectedKeys=selectOffers ? selected.filter(key=>[...groups.values()].some(rows=>rows.some(row=>offerKey(row)===key))) : undefined;
-  const checks=withdraw?[]:salesChecks(state,model,selectedKeys);
+  const checks=salesChecks(state,model,selectedKeys);
   const invalid=(selectOffers && !selectedKeys.length) || (gray && (!tenantIds.length || tenantIds.some(id=>!tenants.some(row=>row.id===id))));
   const select=(keys,checked)=>{
     setSelected(current=>checked?[...new Set([...current,...keys])]:current.filter(key=>!keys.includes(key)));
@@ -39,13 +38,13 @@ export default function ServiceListingDialog({state,model,ops,stage,close,initia
     setBusy(true);
     try {
       const data={releaseStage:stage,releaseTenantIds:gray?tenantIds:[],confirmed:true,expectedUpdatedAt:revision,...(selectOffers?{offerKeys:selectedKeys}:{})};
-      if(await ops.run(withdraw?'stopSales':'startSales',data,model.id)) close();
+      if(await ops.run('startSales',data,model.id)) close();
     } finally { setBusy(false); }
   }
   if (validation) return <PlatformTrialDialog state={state} model={model} ops={ops} providerId={validation.providerId} close={()=>setValidation(null)} onPublished={close}/>;
   return <Modal wide title={label} description={model.name} onClose={()=>!busy && close()} footer={<>
     <Button disabled={busy} onClick={close}>取消</Button>
-    <Button loading={busy} disabled={!ops.can || Boolean(ops.conflict) || busy || changed || invalid || checks.some(row=>!row.passed)} onClick={submit}>{withdraw ? "确认停售" : gray ? "确认灰度开售" : "确认开售"}</Button>
+    <Button loading={busy} disabled={!ops.can || Boolean(ops.conflict) || busy || changed || invalid || checks.some(row=>!row.passed)} onClick={submit}>{gray ? "确认灰度开售" : "确认开售"}</Button>
   </>}>
     {selectOffers && <div>
       <Typography.Title heading={6}>模型服务</Typography.Title>
@@ -61,7 +60,6 @@ export default function ServiceListingDialog({state,model,ops,stage,close,initia
       })}
       {!groups.size && <Typography.Paragraph>暂无可操作的模型服务。</Typography.Paragraph>}
     </div>}
-    {withdraw && <Typography.Paragraph>所选模型服务将停止新订购和新调用。</Typography.Paragraph>}
     {gray && <>
       <Typography.Title heading={6}>销售对象</Typography.Title>
       <Table pagination={false} rowKey="id" dataSource={tenants} columns={[{title:'选择',width:80,render:(_,tenant)=><Checkbox aria-label={`销售对象 ${tenant.name}`} checked={tenantIds.includes(tenant.id)} disabled={!ops.can || busy} onChange={event=>{setTenantIds(ids=>event.target.checked?[...ids,tenant.id]:ids.filter(id=>id!==tenant.id));ops.dirty(true);}}/>},{title:'租户名称',dataIndex:'name'},{title:'租户 ID',dataIndex:'id'}]} empty="暂无有效租户。"/>

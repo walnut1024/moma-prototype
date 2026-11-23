@@ -3,8 +3,8 @@ import { isResourceId, resourceId } from './resource-id.mjs';
 import { modelLibrary, modelMaterial } from './admin-v2/model-library.js';
 import { MODEL_TYPES } from './admin-v2/model-management.js';
 import { INPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, modelProfileDraft, normalizeModelLogo } from './admin-v2/model-profile.js';
-import { modelIdentity, modelPresentation, modelServiceIdentity } from './model-identities.mjs';
-import { activeCustomer, offerGrayTenants, offerKey, offerStage, providerOffer, salesPaused, serviceCallsEnabled, serviceReferences } from './service-access.mjs';
+import { modelIdentity, modelPresentation } from './model-identities.mjs';
+import { activeCustomer, offerGrayTenants, offerKey, offerStage, providerOffer, serviceCallsEnabled, serviceReferences } from './service-access.mjs';
 
 export const marketCardStatuses = { withdrawn: '不可见', preview: '预告可见', gray: '灰度可见', formal: '全部可见' };
 export const marketCardFeatures = { online_experience: '在线体验', smart_routing: '智能路由', supports_agent: '支持Agent', supports_mcp: '支持MCP', file_upload: '上传文件' };
@@ -14,8 +14,6 @@ export function marketCardStatus(card) {
   if (card.status === 'draft') return 'withdrawn';
   return card.status === 'listed' ? card.scope.type === 'selected' ? 'gray' : 'formal' : card.status;
 }
-
-export const marketCardStopsSales = card => Boolean(card && card.status !== 'listed');
 
 export function marketCardFieldValues(model) {
   const profile = modelProfileDraft(model);
@@ -196,28 +194,6 @@ export function marketCardIssues(card, services) {
   ].filter(Boolean);
 }
 
-export function marketCardBlocksServiceSales(state, model, key) {
-  const serviceId = modelServiceIdentity(state, model, key);
-  const card = marketCardsByModel(state.modelData?.marketCards).get(modelIdentity(state, model).id);
-  return marketCardStopsSales(card) && card.linked.includes(serviceId);
-}
-
-function pauseLinkedSales(state, card) {
-  const paused = new Map();
-  for (const service of serviceReferences(state)) {
-    const { model } = service, key = offerKey(service);
-    const entry = providerOffer(model, key);
-    if (!card.linked.includes(service.model_service_id) || !['gray', 'formal'].includes(offerStage(model, entry)) || salesPaused(model, key)) continue;
-    if (!paused.has(model.id)) paused.set(model.id, { model, keys: new Set() });
-    paused.get(model.id).keys.add(key);
-  }
-  return [...paused.values()].map(({ model, keys }) => ({
-    type: 'update', collection: 'models', id: model.id, changes: !keys.has('')
-      ? { serviceProviders: model.serviceProviders.map(row => keys.has(offerKey(row)) && row.status !== '已移除' ? { ...row, salesPaused: true } : row) }
-      : { salesPaused: true },
-  }));
-}
-
 export function marketCardTransaction(state, action, orderedModels) {
   const { modelId, data = {}, operation } = action;
   if (data.expectedRevision !== state.revision) throw Error('模型广场已有修订，请载入最新数据后重试');
@@ -280,7 +256,5 @@ export function marketCardTransaction(state, action, orderedModels) {
       label = '设置模型卡片可见性';
     }
   }
-  const changes = ['marketCardSetStatus', 'marketCardLink'].includes(operation) && marketCardStopsSales(card)
-    ? pauseLinkedSales(state, card) : [];
-  return { type: 'batch', label, objectId: cardId, changes, marketCard: { cardId, card } };
+  return { type: 'batch', label, objectId: cardId, changes: [], marketCard: { cardId, card } };
 }

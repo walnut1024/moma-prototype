@@ -10,7 +10,7 @@ import { routeMappingStatus } from './service-route-mapping.js';
 import { forwardingTargets, mappingReadiness } from './service-model-mappings.js';
 import { normalizeForwarding, validateForwarding } from './service-route-forwarding.js';
 
-export const ROUTING_STRATEGIES = { fixed:'固定', random:'随机分流', weighted:'加权随机路由', priority_weighted:'优先级 + 加权分流', latency:'最低延迟路由', load:'最少并发路由', tpm:'最低 TPM 路由', cost:'最低成本路由', priority:'主备优先', ...Object.fromEntries(Object.entries(ROUTING_POLICIES).map(([id,item])=>[id,item.label])) };
+export const ROUTING_STRATEGIES = { fixed:'固定', random:'随机分流', priority_weighted:'优先级 + 加权分流', priority:'主备优先', ...Object.fromEntries(Object.entries(ROUTING_POLICIES).map(([id,item])=>[id,item.label])) };
 const GROUP_STRATEGIES=['fixed','random','weighted','latency','load','tpm','cost'];
 export const ROUTE_ADVANCED_DEFAULTS={timeoutSeconds:60,maxRetries:0,failureThreshold:3,recoverySeconds:30,latencyWindowSeconds:60,costBasis:'input'};
 export const ROUTE_RETRY_REASONS = [['timeout', '上游超时'], ['429', '上游限流（429）'], ['5xx', '上游服务异常（5xx）']];
@@ -139,9 +139,9 @@ function validateSelectionStrategy(strategy,rows,candidates,config) {
   if (strategy==='fixed') {
     if (rows.length!==1) throw new Error('固定策略只能选择一个上游模型');
   }
-  if (strategy==='latency' && channels.some(channel=>channel.p95LatencyMs==null)) throw new Error('最低延迟策略需要每个上游模型的实际 P95 延迟数据');
+  if (strategy==='latency' && channels.some(channel=>channel.p95LatencyMs==null)) throw new Error('低延迟优先策略需要每个上游模型的实际 P95 延迟数据');
   if (strategy==='load' && channels.some(channel=>channel.activeRequests==null)) throw new Error('最少并发路由需要每个上游模型的实际并发请求数据');
-  if (strategy==='tpm' && channels.some(channel=>channel.tokensPerMinute==null)) throw new Error('最低 TPM 路由需要每个上游模型的实际分钟 Token 用量');
+  if (strategy==='tpm' && channels.some(channel=>channel.tokensPerMinute==null)) throw new Error('按用量分流需要每个上游模型的实际分钟 Token 用量');
   for(const channel of channels)withinRouteLimits(channel);
   if (strategy==='cost') comparableRouteCosts(channels,config.advanced.costBasis);
 }
@@ -151,7 +151,7 @@ function validateModeSelection(service, config) {
   const backups = config.channels.filter(row => row.backup);
   if (service.mode === 'standard') {
     if (config.forwarding) throw Error('当前路由不支持按接口转发');
-    if (!unifiedRouteStrategies.includes(config.strategy)) throw Error('当前路由仅支持加权随机、最少并发、最低 TPM、最低延迟和最低成本五种路由策略');
+    if (!unifiedRouteStrategies.includes(config.strategy)) throw Error('当前路由仅支持加权随机、最少并发、按用量分流、低延迟优先和成本优先五种路由策略');
     if (backups.length) throw Error('当前路由在参与路由的上游模型内执行故障转移');
   } else {
     if (config.strategy !== 'fixed') throw Error('固定路由只能选择一个主上游模型');

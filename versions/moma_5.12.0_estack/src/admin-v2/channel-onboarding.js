@@ -1,6 +1,6 @@
 import { resourceId } from '../resource-id.mjs';
 import { resolveOnboardingProvider, onboardingModelPreset, resolveOnboardingModel } from './onboarding-presets.js';
-import { libraryRecord, modelLibrary } from './model-library.js';
+import { requireModelSlug, libraryRecord, modelLibrary } from './model-library.js';
 import { MODEL_TYPES } from './model-management.js';
 import { TASK_OPTIONS, INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, modelProfileDraft } from './model-profile.js';
 import { connectionFingerprint, connectionKeys, connectionQualification } from './connection-state.js';
@@ -108,7 +108,7 @@ export function directoryDiscoveryReceipt(result) {
   }
   const models = result.models.map(model => {
     const id = typeof model === 'string' ? model : model?.id;
-    if (typeof id !== 'string' || !id || id.length > 200 || /\s|\p{Cc}/u.test(id) || /\bsk-[\w-]{6,}/i.test(id)) throw Error('上游列表含无效模型标识');
+    if (typeof id !== 'string' || !id || id.length > 200 || /\s|\p{Cc}/u.test(id) || /\bsk-[\w-]{6,}/i.test(id)) throw Error('上游列表含无效的上游模型 ID');
     if (typeof model === 'string') return { id };
     return {
       id,
@@ -193,7 +193,7 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
   if (operation === 'channelMetadataCreate') {
     assertNoSecrets(data);
     const name = text(data.name, '模型展示名称', 100), modelId = text(data.modelId, '模型编码', 80), type = data.type;
-    if (!/^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('模型编码须由小写字母、数字及 . _ : / - 组成，最多80字');
+    requireModelSlug(modelId);
     if (!Object.hasOwn(MODEL_TYPES, type)) throw new Error('请选择模型类型');
     if (modelLibrary(state).some(row => row.modelId.toLowerCase() === modelId.toLowerCase())) throw new Error('相同模型编码的资料已存在');
     const profile = modelProfileDraft({ profile: data.profile || {} });

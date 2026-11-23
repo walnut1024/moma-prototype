@@ -15,7 +15,7 @@ function ImportHelp() {
     <Typography.Title heading={5} component="h3" id="model-import-help-title">填写提示</Typography.Title>
     <dl className="materials-import-rules">
       <div><dt>必填信息</dt><dd>模型编码、模型展示名称、模型类型。视觉模型还需填写视觉任务类型：图像或视频。其他字段未知时留空，不用填写 0 或“不支持”。</dd></div>
-      <div><dt>模型编码</dt><dd>以小写字母或数字开头，可使用 . _ : / -，最多 80 字符。已有标识不覆盖，同一批次不能重复。</dd></div>
+      <div><dt>模型编码</dt><dd>以小写字母或数字开头，仅可使用小写字母、数字、点和中划线，最多 80 字符。已有标识不覆盖，同一批次不能重复。</dd></div>
       <div><dt>模型作者与系列</dt><dd>填写「模型作者」和「模型系列」页签中的标准名称或别名。填写系列时一并填写所属作者。</dd></div>
       <div><dt>模板与字段</dt><dd>XLSX 模板将必填项排在最前：红色表头为必填，橙色表头为视觉模型必填，其余为选填。模板包含全部资料字段及“填写说明”工作表。可删除不需要的可选列或调整列顺序，请保留原表头；模板示例行请替换或删除。</dd></div>
       <div><dt>多选与能力</dt><dd>多项用“、”分隔。输入与输出模态：{INPUT_MODALITY_OPTIONS.join('、')}。结果类型：{RESULT_TYPE_OPTIONS.join('、')}。流式响应、工具调用等能力填写“支持”或“不支持”，留空表示未填写。</dd></div>

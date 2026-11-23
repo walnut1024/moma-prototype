@@ -222,7 +222,7 @@ function ChannelModels({ service, rows, canEdit, open }) {
     ? rows.filter(row => shares.has(row.id)).map(row => row.name + ' ' + shareFormat.format(shares.get(row.id)))
     : preferredServiceChannels(rows, tokens).map(row => row.name));
   const filtered = rows.filter(row => searchMatches(input, row.provider, row.name, row.upstreamId)
-    && (status === 'all' || status === (row.reason ? 'unavailable' : row.enabled ? 'enabled' : 'disabled')));
+    && (status === 'all' || status === (row.enabled ? 'enabled' : 'disabled')));
   const priorities = groupPriorities(service);
   const matchingGroups = Map.groupBy(filtered, row => row.priority);
   const visibleGroups = !input.trim() && status === 'all' ? priorities : priorities.filter(priority => matchingGroups.has(priority));
@@ -230,7 +230,7 @@ function ChannelModels({ service, rows, canEdit, open }) {
     { title: t('上游模型 / 服务商'), width: 148, render: (_, row) => <div className="new-service-cell"><Text strong>{row.name}</Text><Text type="tertiary">{row.provider}</Text></div> },
     { title: '上游模型 ID', width: 220, render: (_, row) => <CopyId label="上游模型 ID" value={row.upstreamId}/> },
     { title: '模型类型', width: 96, render: () => <Tag color="blue">{typeLabel(service.type)}</Tag> },
-    { title: t('关联上游模型状态'), width: 132, render: (_, row) => <div className="new-service-cell"><AdminStatus value={row.reason ? '不可用' : row.enabled ? '已启用' : '已停用'}/>{row.reason && <Text type="tertiary">{row.reason}</Text>}</div> },
+    { title: t('关联上游模型状态'), width: 132, render: (_, row) => <div className="new-service-cell"><AdminStatus value={row.enabled ? '已启用' : '已停用'}/>{row.reason && <Text type="tertiary">{row.reason}</Text>}</div> },
     routingNumberColumn('权重', 'weight', 80, weightHelp, !weighted),
     { title: '操作', fixed: 'right', width: 160, render: (_, row) => <Space className="new-service-channel-actions" spacing={4}>
       {row.needsReview && <Button size="small" theme="borderless" disabled={!canEdit} onClick={() => open('channel', row)}>核对连接配置</Button>}
@@ -246,7 +246,7 @@ function ChannelModels({ service, rows, canEdit, open }) {
     </div>
     <div className="new-service-toolbar">
       <div className="new-service-filters">
-        <Choice label={t('关联上游模型状态')} options={[['all', '全部状态'], ['enabled', '已启用'], ['disabled', '已停用'], ['unavailable', '不可用']]} value={status} onChange={setStatus}/>
+        <Choice label={t('关联上游模型状态')} options={[['all', '全部状态'], ['enabled', '已启用'], ['disabled', '已停用']]} value={status} onChange={setStatus}/>
         <Input className="new-service-search" prefix={<IconSearch aria-hidden="true"/>} value={input} onChange={setInput}
           showClear aria-label={t('搜索上游模型')} placeholder={t('搜索连接或模型')}/>
       </div>

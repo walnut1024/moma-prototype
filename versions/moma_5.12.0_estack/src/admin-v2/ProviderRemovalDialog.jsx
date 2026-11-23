@@ -43,7 +43,7 @@ export default function ProviderRemovalDialog({ state, ops, target, close, remov
     {missing ? <Banner type="danger" description={missing}/> : step === 0 ? <>
       {target.associationIds && <><Typography.Paragraph>已选 {plan.associations.length} 条上游模型记录，涉及 {plan.endpoints.length} 个连接；共用连接的其他 {retained.length} 条上游模型记录保留。连接下的所有上游模型移除后才会归档连接。</Typography.Paragraph>
         <Table size="small" rowKey="id" dataSource={plan.associations} pagination={false} columns={[
-          { title: '上游模型名称', render: (_, row) => row.sourceName || row.name },
+          { title: '模型展示名称', render: (_, row) => row.sourceName || row.name },
           { title: '上游模型 ID', dataIndex: 'upstreamModelId' },
         ]}/></>}
       <div className="provider-removal-summary"><Typography.Text strong>检查到 {plan.rows.length} 项关联服务</Typography.Text>

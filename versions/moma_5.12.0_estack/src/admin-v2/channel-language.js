@@ -292,7 +292,6 @@ const englishText = new Map(Object.entries({
   '放弃候选配置': 'Discard Candidate',
   '候选配置已变化，请退出后重新编辑。': 'The candidate changed. Close the editor and reopen it.',
   '连接资料已变化，请重新打开后编辑。': 'Connection information changed. Reopen the editor and try again.',
-  '当前生效地址': 'Current Base URL',
   '新地址': 'New Base URL',
   '候选地址': 'Proposed Base URL',
   '创建方式': 'Creation Mode',

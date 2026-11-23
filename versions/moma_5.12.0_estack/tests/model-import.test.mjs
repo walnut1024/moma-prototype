@@ -9,7 +9,7 @@ import { MODEL_IMPORT_FIELDS, MODEL_IMPORT_HEADERS, MODEL_IMPORT_REQUIRED_HEADER
 import { IDENTITY_FIELDS, TECHNICAL_FIELDS, PRESENTATION_FIELDS, COMMON_FIELDS, INTERFACE_FIELDS, RECORD_FIELDS, FEATURE_FIELDS, TASK_OPTIONS, specificationFields } from '../src/admin-v2/model-profile.js';
 
 const row = values => MODEL_IMPORT_HEADERS.map(label => values[label] ?? '');
-const base = { '模型编码': 'qa/import-001', '模型展示名称': '资料导入测试', '模型类型': '文本' };
+const base = { '模型编码': 'qa-import-001', '模型展示名称': '资料导入测试', '模型类型': '文本' };
 const validate = (...values) => validateModelRows(createAdminSeed(), modelRowsFromCells([MODEL_IMPORT_HEADERS, ...values.map(value => row({ ...base, ...value }))]));
 
 test('downloadable XLSX puts required columns first and round-trips all fields and examples through the real reader', async () => {
@@ -31,9 +31,9 @@ test('downloadable XLSX puts required columns first and round-trips all fields a
 
 test('required text markers work with reordered or reduced columns and cannot hide duplicate headers', () => {
   const headers = ['模型展示名称（必填）', '模型类型（必填）', '模型编码（必填）'];
-  const rows = modelRowsFromCells([headers, ['基础资料', '文本', 'qa/decorated']]);
+  const rows = modelRowsFromCells([headers, ['基础资料', '文本', 'qa-decorated']]);
   assert.equal(validateModelRows(createAdminSeed(), rows)[0].status, 'ready');
-  assert.throws(() => modelRowsFromCells([[...headers, '模型编码'], ['x', '文本', 'qa/x', 'qa/y']]), /重复/);
+  assert.throws(() => modelRowsFromCells([[...headers, '模型编码'], ['x', '文本', 'qa-x', 'qa-y']]), /重复/);
 });
 
 test('template covers all editable metadata, task-specific specifications and capability fields without duplicate headers', () => {
@@ -51,6 +51,9 @@ test('catalogue import requires only the current form basics and preserves unkno
   assert.deepEqual(result.data.profile, {});
   assert.deepEqual(result.data.capabilities, { context: null, output: null, streaming: null, tools: null });
   for (const label of ['模型编码', '模型展示名称', '模型类型']) assert.equal(validate({ [label]: '' })[0].status, 'error', label);
+  for (const slug of ['a/b', 'a:b', 'a_b', '.abc', 'A', 'a'.repeat(81)]) {
+    assert.match(validate({ '模型编码': slug })[0].message, /模型编码须以/);
+  }
   const service = validateModelRows(createAdminSeed(), modelRowsFromCells([MODEL_IMPORT_HEADERS, row(base)]), { catalogue: false })[0];
   assert.equal(service.status, 'error');
 });
@@ -68,8 +71,8 @@ test('rich metadata survives validation and the existing atomic catalogue transa
   const values = { ...base, '模型作者': '测试作者', '原厂发布日期': '2026-10', '知识截止日期': '2026-09', '模型系列': '测试系列', '模型版本': 'v2', '模型 Logo': 'https://example.test/logo.png', '模型描述': '用于校验资料导入', '支持任务': '对话、代码生成', '输入模态': '文本', '输出模态': '文本', '结果类型': '结构化数据', '支持语言': '中文、英文', '适用场景': '编程、办公', '上下文长度（Token）': 32768, '最大输出 Token 数（Token）': 8192, '流式响应': '支持', '工具调用': '不支持', '深度思考': '支持', '支持的参数': 'temperature、max_tokens', '默认参数': '{"temperature":0.7,"max_tokens":4096}', '模型架构': 'MoE（混合专家）', '许可协议': 'Apache 2.0', '总参数（B）': 100, '激活参数（B）': 10, '版本状态': '稳定版', '资料状态': '已核对', '资料链接': 'https://example.test/docs', '详细介绍': '第一行\n第二行，含"引号"' };
   const [result, mismatch, unknown] = validateModelRows(state, parseModelText(modelCsv([MODEL_IMPORT_HEADERS,
     row({ ...values, '模型作者': 'Test Author', '模型系列': 'Test Series' }),
-    row({ ...values, '模型编码': 'qa/mismatched-series', '模型作者': '' }),
-    row({ ...values, '模型编码': 'qa/unknown-author', '模型作者': '未登记作者' }),
+    row({ ...values, '模型编码': 'qa-mismatched-series', '模型作者': '' }),
+    row({ ...values, '模型编码': 'qa-unknown-author', '模型作者': '未登记作者' }),
   ])));
   assert.equal(result.status, 'ready', result.message);
   assert.equal(result.data.profile.author, '测试作者');
@@ -130,11 +133,11 @@ test('invalid parameter JSON, enum, dates, type tasks and numeric bounds block i
 
 test('headers support optional columns and reordering; source row numbers and Excel dates remain accurate', () => {
   const labels = ['模型展示名称', '原厂发布日期', '模型类型', '模型编码'];
-  const rows = modelRowsFromCells([labels, [], ['最小资料', new Date('2026-10-01T00:00:00Z'), '文本', 'qa/minimal']]);
+  const rows = modelRowsFromCells([labels, [], ['最小资料', new Date('2026-10-01T00:00:00Z'), '文本', 'qa-minimal']]);
   assert.equal(rows[0].rowNumber, 3);
   assert.equal(rows[0].cells[MODEL_IMPORT_HEADERS.indexOf('原厂发布日期')], '2026-10-01');
   assert.equal(validateModelRows(createAdminSeed(), rows)[0].status, 'ready');
-  for (const input of [[['模型展示名称'], ['无必填表头']], [[...labels, '旧字段'], ['x']], [[...labels, '模型展示名称'], ['x']], [labels, ['x', '', '文本', 'qa/x', '越界数据']], [labels], [labels, ...Array.from({ length: 501 }, () => ['x', '', '文本', 'qa/x'])]]) assert.throws(() => modelRowsFromCells(input));
+  for (const input of [[['模型展示名称'], ['无必填表头']], [[...labels, '旧字段'], ['x']], [[...labels, '模型展示名称'], ['x']], [labels, ['x', '', '文本', 'qa-x', '越界数据']], [labels], [labels, ...Array.from({ length: 501 }, () => ['x', '', '文本', 'qa-x'])]]) assert.throws(() => modelRowsFromCells(input));
 });
 
 test('duplicates are isolated in preview and rejected atomically on final import', () => {

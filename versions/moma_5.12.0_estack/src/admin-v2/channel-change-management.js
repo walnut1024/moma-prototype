@@ -160,7 +160,8 @@ function candidateChecks(state, provider, endpoint, candidate, { at = Date.now()
     const real = evidenceByKey.every(row => row?.source === 'server-receipt' && row.simulated === false && row.serverBatchId && row.serverSignature);
     const fresh = evidenceByKey.every(row => row && at - Date.parse(row.testedAt) >= 0 && at - Date.parse(row.testedAt) <= CHANNEL_EVIDENCE_MAX_AGE_MS);
     const passed = !impactChanged && !pending && covered && fresh && evidence?.result === '通过' && (!requireReal || real);
-    return { associationId: id, modelId: mapping.modelId, passed, evidence, evidenceByKey, reason: impactChanged ? '关联模型或服务引用已变化，请重新保存候选配置' : pending ? '候选测试尚未完成' : !covered ? projected.authMode === 'pool' ? '候选配置尚未完成全部启用密钥的测试' : '候选配置尚未测试' : evidence.result !== '通过' ? evidence.message || '最近一次测试未通过' : !fresh ? '测试证据已过期，请重新测试' : requireReal && !real ? '正式接入需要真实上游测试证据' : '' };
+    const testResult = !covered ? '未测试' : evidence.result !== '通过' ? evidence.result : fresh ? '通过' : '已过期';
+    return { associationId: id, modelId: mapping.modelId, passed, testResult, evidence, evidenceByKey, reason: impactChanged ? '关联模型或服务引用已变化，请重新保存候选配置' : pending ? '候选测试尚未完成' : !covered ? projected.authMode === 'pool' ? '候选配置尚未完成全部启用密钥的测试' : '候选配置尚未测试' : evidence.result !== '通过' ? evidence.message || '最近一次测试未通过' : !fresh ? '测试证据已过期，请重新测试' : requireReal && !real ? '正式接入需要真实上游测试证据' : '' };
   });
   let credentialError = '';
   try { assertCredentials(projected, provider); } catch (error) { credentialError = error.message; }

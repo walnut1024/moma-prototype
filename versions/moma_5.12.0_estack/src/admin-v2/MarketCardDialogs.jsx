@@ -251,8 +251,8 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
     {!linking && <Field label="可见性" required><Select style={{ width: '100%' }} optionList={options(marketCardStatuses)}
       placeholder="请选择可见性" value={Object.hasOwn(marketCardStatuses, status) ? status : undefined}
       onChange={value => { setStatus(value); ops.dirty(true); }}/></Field>}
-    {!linking && status === 'preview' && <p>前台卡片显示「敬请期待」，用户无法进入详情。关联服务会同时停售。</p>}
-    {!linking && status === 'withdrawn' && <p>卡片将从前台模型广场移除，关联服务会同时停售。</p>}
+    {!linking && status === 'preview' && <p>前台卡片显示「敬请期待」，用户无法进入详情。关联服务的售卖状态保持不变。</p>}
+    {!linking && status === 'withdrawn' && <p>卡片将从前台模型广场移除，关联服务的售卖状态保持不变。</p>}
     {!linking && listing && <Typography.Title heading={6}>展示服务</Typography.Title>}
     {!linking && listing && <Table size="small" rowKey="id" dataSource={services.filter(service => linked.includes(service.id))} pagination={false}
       empty="请先关联可用于展示的模型服务" columns={[

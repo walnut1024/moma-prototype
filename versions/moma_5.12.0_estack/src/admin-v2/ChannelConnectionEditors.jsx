@@ -74,7 +74,7 @@ function AffectedModels({ connection, impact, checks }) {
       return <Row key={mapping.id}>
         <Cell>{byId.get(mapping.id)?.modelName || mapping.modelId}</Cell><Cell>{mapping.upstreamModelId}</Cell>
         <Cell>{services.map(service => <div key={service.id}><CopyId value={service.id} label="模型服务 ID"/></div>)}{!services.length && '—'}</Cell>
-        <Cell><AdminStatus value={check?.passed ? '通过' : check?.evidence?.result || '待测试'}/>
+        <Cell><AdminStatus value={check?.testResult || '未测试'}/>
           {check?.reason && <div>{check.reason}</div>}</Cell>
       </Row>;
     })}

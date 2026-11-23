@@ -27,9 +27,9 @@ test('default parameters validate supported names and JSON object shape and pres
 
 test('catalogue identity can be registered before optional capability facts are known',()=>{
   const before=initialModelWorkspace();
-  const result=operationsTransaction(before,{operation:'templateSave',data:{name:'手工建档',modelId:'manual/catalogue',type:'text',description:'',profile:{},capabilities:{}}});
+  const result=operationsTransaction(before,{operation:'templateSave',data:{name:'手工建档',modelId:'manual-catalogue',type:'text',description:'',profile:{},capabilities:{}}});
   const record=result.changes.find(row=>row.collection==='modelTemplates' && row.type==='add').record;
-  assert.equal(record.name,'手工建档');assert.equal(record.modelId,'manual/catalogue');assert.equal(record.capabilities.context,null);
+  assert.equal(record.name,'手工建档');assert.equal(record.modelId,'manual-catalogue');assert.equal(record.capabilities.context,null);
   assert.equal(before.modelTemplates.some(row=>row.name==='手工建档'),false);
 });
 

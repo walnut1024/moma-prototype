@@ -223,22 +223,21 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal((await request('/market/catalogue?project='+project.id,{cookie:other})).status,403);
 
     const startAll = () => command('startSales', release(sources.map(source=>source.channelId),[a]), modelId);
-    const saleBlocked = async () => {
-      assert(model().serviceProviders.every(row=>row.salesPaused === true && row.callsEnabled !== false));
-      assert.equal((await order(serviceIds[0])).data.error.message,'此模型服务已停售');
-    };
+    const stillOnSale = () => assert(model().serviceProviders.every(row => !row.salesPaused));
     await setCardVisibility('preview');
     const preview = (await request('/market/catalogue',{cookie:customer})).data;
     assert.equal(preview.cards.find(card=>card.model_id===material.id)?.preview,true);
     assert.deepEqual(preview.services,[]);
-    await saleBlocked();
-    await command('startSales', release([sources[0].channelId],[a]), modelId, 422);
+    stillOnSale();
+    await command('startSales', release([sources[0].channelId],[a]), modelId);
     await setCardVisibility('formal');
-    assert((await catalogue(customer)).every(row=>row.canOrder===false));
+    assert((await catalogue(customer)).every(row=>row.canOrder));
     await startAll();
     await setCardVisibility('withdrawn');
     assert(!(await request('/market/catalogue',{cookie:customer})).data.cards.some(card=>card.model_id===material.id));
-    await saleBlocked();
+    stillOnSale();
+    const staleQuote=await request('/market/orders',{cookie:customer,body:{tenantId:a,offerIds:[services[0].id],salePriceIds:{[services[0].id]:'old-price'}}});
+    assert.equal(staleQuote.data.error.code,'PRICE_CHANGED');
     await setCardVisibility('formal');
     await startAll();
     await local.db.prepare("UPDATE model_workspace SET meta_json=json_remove(meta_json,?) WHERE id=1")
@@ -253,8 +252,6 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal((await order(services[0].id,admin)).status,401);
     assert.equal((await order(services[0].id,other)).status,403);
     assert.equal((await call(body(services[0].callId))).data.error.code,'ORDER_REQUIRED');
-    const staleQuote=await request('/market/orders',{cookie:customer,body:{tenantId:a,offerIds:[services[0].id],salePriceIds:{[services[0].id]:'old-price'}}});
-    assert.equal(staleQuote.data.error.code,'PRICE_CHANGED');
     const successful=[], conversationId=crypto.randomUUID();
     for (const source of sources.slice(0,2)) {
       const offer=services.find(row=>row.callId===source.callId);
@@ -579,7 +576,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     await new Promise(resolve=>setTimeout(resolve,Math.max(0,expires-Date.now()+10)));
     assert.deepEqual((await catalogue(other)).map(row=>row.callId),[third.callId]);
     assert.deepEqual(new Set((await catalogue(customer)).map(row=>row.callId)),new Set([sources[1].callId,third.callId]));
-    assert.equal(salesStatus(state,model(),keys[0]),'不可销售');
+    assert.equal(salesStatus(model(),keys[0]),'灰度在售');
     const rejected=await request('/market/orders',{cookie:other,body:{offerIds:[expiringOffer.id,third.id]}});
     assert.equal(rejected.status,409);
     assert.equal(rejected.data.error.code,'MODEL_UNAVAILABLE');

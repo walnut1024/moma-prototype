@@ -249,7 +249,9 @@ test('apply atomically switches a validated configuration while preserving mappi
 
 test('candidate evidence expires after 24 hours and depends on actual key version, upstream ID and capability', () => {
   const state = testCandidate(createCandidate(fixture())), ep = endpoint(state), mapping = mappings(state)[0];
-  assert.equal(channelCandidateStatus(state, providerId, ep.id, { at: Date.now() + CHANNEL_EVIDENCE_MAX_AGE_MS + 1000 }).ready, false);
+  const expired = channelCandidateStatus(state, providerId, ep.id, { at: Date.now() + CHANNEL_EVIDENCE_MAX_AGE_MS + 1000 });
+  assert.equal(expired.ready, false);
+  assert.ok(expired.checks.some(check => check.testResult === '已过期'));
   const signature = channelEvidenceSignature(state, providerId, mapping, { ...ep, ...ep.candidateConfiguration.config });
   const changed = structuredClone(state); owner(changed).apiKeys.find(row => row.id === owner(changed).defaultApiKeyId).fingerprint = 'a'.repeat(64);
   assert.notEqual(channelEvidenceSignature(changed, providerId, mappings(changed)[0], { ...endpoint(changed), ...endpoint(changed).candidateConfiguration.config }), signature);

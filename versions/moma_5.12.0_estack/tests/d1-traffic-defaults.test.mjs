@@ -127,7 +127,8 @@ test('both defaults share session, role, revision and idempotency rules', async 
 });
 
 test('batch account limits, per-model policies and overrides persist and restore independently', async () => {
-  const accountIds = ['tenant-gov', 'tenant-demo'];
+  const app = (await request('/application/open', { body: {} })).data;
+  const accountIds = app.users.slice(0, 2).map(user => user.id);
   const [accountId] = accountIds;
   const current = (await request(path)).data;
   const [model, other] = current.catalogue;
@@ -140,6 +141,7 @@ test('batch account limits, per-model policies and overrides persist and restore
   assert.equal((await write(command(current, 'exceptions', { exceptions: [exception, exception] }, accountId))).status, 400);
   assert.deepEqual((await request(path)).data, current);
 
+  assert.equal((await write(command(current, 'batchAccounts', { accountIds: ['tenant-gov'], limit: accountLimit }))).status, 404);
   await apply('batchAccounts', { accountIds, limit: accountLimit });
   const latest = (await request(historyPath + '?limit=1')).data;
   assert.equal(latest.items.length, 2);
@@ -175,9 +177,10 @@ test('batch account limits, per-model policies and overrides persist and restore
 
 test('a failed batch leaves both its policy rows and its operation receipt untouched', async () => {
   const current = (await request(path)).data;
-  const body = command(current, 'batchAccounts', { accountIds: ['tenant-gov', 'failed-account'], limit: rate(80, 4_000_000) });
+  const accountIds = (await request('/application')).data.users.slice(0,2).map(user => user.id);
+  const body = command(current, 'batchAccounts', { accountIds, limit: rate(80, 4_000_000) });
   await local.db.prepare(`CREATE TRIGGER test_traffic_failure BEFORE INSERT ON traffic_limit_rules
-    WHEN NEW.object_id='failed-account' BEGIN SELECT RAISE(ABORT, 'test traffic write failure'); END`).run();
+    WHEN NEW.rpm=80 BEGIN SELECT RAISE(ABORT, 'test traffic write failure'); END`).run();
   try {
     assert.equal((await request(path, { body })).status, 503);
     assert.deepEqual((await request(path)).data, current);

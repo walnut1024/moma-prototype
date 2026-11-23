@@ -12,7 +12,7 @@ import { connectionFingerprint, connectionTestPassed, connectionBlockReason } fr
 import { providerCataloguePrice } from './moma-catalogue-prices.js';
 import { cataloguePurchasePrice, billingItemKey, parseSaleAmount } from './provider-catalogue-pricing.js';
 import { activeChannelProcurement } from './channel-change-management.js';
-import { modelMaterial, MODEL_CATALOGUE_TYPES } from './model-library.js';
+import { requireModelSlug, modelMaterial, MODEL_CATALOGUE_TYPES } from './model-library.js';
 import { platformPublicationCheck, platformPublicationFingerprint } from './platform-publication-state.js';
 import { MODEL_TASK_LABELS as MODEL_TYPES, MODEL_TYPE_LABELS, modelCategory } from '../model-types.mjs';
 
@@ -247,6 +247,7 @@ export function modelTransaction(state, action) {
     if(compact) data={...normalizeServiceModel(state,data,creatingService && model?{...model,modelId:data.modelId}:model,allowIncompleteProfile),serviceMode:data.serviceMode,purpose:data.purpose};
     const modelId = creating ? data.modelId?.trim() : model.modelId;
     const identifierLabel = action.catalogue ? '模型编码' : '模型 ID';
+    if (creating && action.catalogue) requireModelSlug(modelId);
     if (!modelId || !compact && !/^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error(identifierLabel + '需使用小写字母、数字或 . _ : / -，最多 80 字符');
     if (!data.name?.trim() || !draftId && !action.catalogue && !allowIncompleteProfile && !data.description?.trim()) throw new Error('模型展示名称和介绍必填');
     if (!draftId && (typeof data.type !== 'string' || (data.type !== 'other' && !Object.hasOwn(MODEL_TYPES, data.type)))) {

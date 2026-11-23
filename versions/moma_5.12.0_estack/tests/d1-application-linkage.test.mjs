@@ -50,7 +50,7 @@ test('the preset administrator and customers share D1 while their workspaces sta
     assert.deepEqual(filterIndividualAccounts(beforeLogin,{source:'builtin'}).map(row=>row.tenant.id),['grzh']);
     assert.deepEqual(filterIndividualAccounts(beforeLogin,{source:'registration'}),[]);
     assert.ok(beforeLogin.memberships.some(row=>row.tenantId==='tenant-gov'));
-    for(const id of ['tenant-gov','personal-demo-002']) assert.ok(trafficAccounts(beforeLogin).some(row=>row.id===id));
+    for(const id of ['tenant-gov','personal-demo-002']) assert.ok(trafficAccounts(beforeLogin).some(user=>user.id !== id && user.tenants.some(tenant=>tenant.id===id)));
     const [business,personal]=await Promise.all([signIn('zqzh'),signIn('grzh')]);
     assert.equal(business.status,200);
     assert.equal(personal.status,200);
