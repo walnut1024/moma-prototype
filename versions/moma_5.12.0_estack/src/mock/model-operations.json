@@ -249,7 +249,7 @@
                 "baseUrl": "https://moma-self.example.invalid/v1/messages"
               }
             ],
-            "name": "自营渠道",
+            "name": "自营连接",
             "origin": "direct",
             "enabled": true,
             "pricing": {
@@ -318,7 +318,7 @@
             "modelId": "glm-5.3",
             "endpointId": "showcase-channel-moma-resale",
             "upstreamModelId": "glm-5.3",
-            "name": "转售渠道",
+            "name": "转售连接",
             "origin": "resale",
             "enabled": true,
             "pricing": {
@@ -387,7 +387,7 @@
             "modelId": "deepseek-v4-flash-0731",
             "endpointId": "showcase-channel-moma-self",
             "upstreamModelId": "deepseek-v4-flash-0731",
-            "name": "自营渠道",
+            "name": "自营连接",
             "origin": "direct",
             "enabled": true,
             "pricing": {
@@ -456,7 +456,7 @@
             "modelId": "deepseek-v4-flash-0731",
             "endpointId": "showcase-channel-moma-resale",
             "upstreamModelId": "deepseek-v4-flash-0731",
-            "name": "转售渠道",
+            "name": "转售连接",
             "origin": "resale",
             "enabled": true,
             "pricing": {
@@ -565,7 +565,7 @@
             "modelId": "glm-5.3",
             "endpointId": "showcase-channel-zhipu-official",
             "upstreamModelId": "glm-5.3",
-            "name": "原厂渠道",
+            "name": "原厂连接",
             "origin": "direct",
             "enabled": true,
             "pricing": {
@@ -666,7 +666,7 @@
             "modelId": "deepseek-v4-flash-0731",
             "endpointId": "showcase-channel-deepseek-official",
             "upstreamModelId": "deepseek-v4-flash-0731",
-            "name": "原厂渠道",
+            "name": "原厂连接",
             "origin": "direct",
             "enabled": true,
             "pricing": {
@@ -750,7 +750,7 @@
         "providerId": "provider-moma",
         "supplierChannel": true,
         "channelCode": "showcase-moma-self",
-        "name": "自营渠道",
+        "name": "自营连接",
         "protocol": "OpenAI",
         "interfaceType": "openai",
         "baseUrl": "https://moma-self.example.invalid/v1",
@@ -780,7 +780,7 @@
         "providerId": "provider-moma",
         "supplierChannel": true,
         "channelCode": "showcase-moma-resale",
-        "name": "转售渠道",
+        "name": "转售连接",
         "protocol": "OpenAI",
         "interfaceType": "openai",
         "baseUrl": "https://moma-resale.example.invalid/v1",
@@ -810,7 +810,7 @@
         "providerId": "provider-zhipu-direct",
         "supplierChannel": true,
         "channelCode": "showcase-zhipu-official",
-        "name": "原厂渠道",
+        "name": "原厂连接",
         "protocol": "OpenAI",
         "interfaceType": "openai",
         "baseUrl": "https://zhipu-official.example.invalid/v1",
@@ -839,7 +839,7 @@
         "providerId": "provider-deepseek-official",
         "supplierChannel": true,
         "channelCode": "showcase-deepseek-official",
-        "name": "原厂渠道",
+        "name": "原厂连接",
         "protocol": "OpenAI",
         "interfaceType": "openai",
         "baseUrl": "https://deepseek-official.example.invalid/v1",

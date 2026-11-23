@@ -84,8 +84,8 @@ export function supplierModelMaintenance(state, { operation, objectId, data = {}
   }
   if (operation === 'supplierChannelListPricePublish') {
     const association = catalogueChannels(state, provider, data.modelId).find(row => row.id === data.associationId && row.endpointId === data.endpointId);
-    if (!association || !association.endpointId) throw new Error('模型与渠道关联已变化，请重新选择');
-    if (data.expectedRevision !== (association.listPriceRevision || 0)) throw new Error('渠道刊例价已变化，请重新载入');
+    if (!association || !association.endpointId) throw new Error('模型与连接关联已变化，请重新选择');
+    if (data.expectedRevision !== (association.listPriceRevision || 0)) throw new Error('连接刊例价已变化，请重新载入');
     if (data.confirmed !== true) throw new Error('请确认发布刊例价');
     const price = supplierListPriceDraft(data, data.modelId);
     if (price.expiresAt && Date.parse(price.expiresAt) <= Date.now()) throw new Error('刊例价已经到期，不能发布');
@@ -94,7 +94,7 @@ export function supplierModelMaintenance(state, { operation, objectId, data = {}
     const records = provider.catalogConnections || [];
     const stored = records.find(row => !row.deletedAt && row.modelId === data.modelId && row.endpointId === data.endpointId && (row.id || association.id) === association.id);
     const record = { ...(stored || { id: association.id, modelId: data.modelId, endpointId: data.endpointId }), listPriceRevision: revision, listPriceVersions: [...(association.listPriceVersions || []), next] };
-    return update(provider, { catalogConnections: stored ? records.map(row => row === stored ? record : row) : [...records, record] }, '发布模型渠道刊例价');
+    return update(provider, { catalogConnections: stored ? records.map(row => row === stored ? record : row) : [...records, record] }, '发布上游模型刊例价');
   }
   if (data.expectedRevision !== (current.listPriceRevision || 0)) throw new Error('刊例价已变化，请重新载入');
   const versions = current.listPriceVersions || [], revision = (current.listPriceRevision || 0) + 1;

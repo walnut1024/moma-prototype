@@ -127,8 +127,8 @@ test('freezing a shared channel persists without changing its credentials, evide
  const {state,provider,endpoint}=fixture(),before=structuredClone(state);
  const action={type:'modelOperations',operation:'provider',data:{operation:'supplierChannelFreeze',objectId:provider.id,values:{endpointId:endpoint.id,frozen:true,confirmed:true,expectedUpdatedAt:endpoint.updatedAt}}};
  const next=commitAdminState(state,action),saved=next.endpoints.find(row=>row.id===endpoint.id),owner=next.providers.find(row=>row.id===provider.id);
- assert.equal(saved.frozen,true);assert.equal(connectionBlockReason(saved,owner),'渠道已冻结');
- for(const modelId of displayedCatalogueIds(owner,next))for(const channel of catalogueChannels(next,owner,modelId).filter(row=>row.endpointId===endpoint.id))assert.equal(channelBlockReason(owner,channel,{runtime:true}),'渠道已冻结');
+ assert.equal(saved.frozen,true);assert.equal(connectionBlockReason(saved,owner),'连接已冻结');
+ for(const modelId of displayedCatalogueIds(owner,next))for(const channel of catalogueChannels(next,owner,modelId).filter(row=>row.endpointId===endpoint.id))assert.equal(channelBlockReason(owner,channel,{runtime:true}),'连接已冻结');
  assert.deepEqual({...saved,updatedAt:endpoint.updatedAt,frozen:undefined},{...endpoint,frozen:undefined});
  assert.deepEqual(next.endpoints.filter(row=>row.id!==endpoint.id),state.endpoints.filter(row=>row.id!==endpoint.id));
  for(const field of ['providers','models','modelTemplates','modelSupplies','serviceRoutes','modelSalePrices','supplyPrices','orders','requests'])assert.deepEqual(next[field],before[field]);
@@ -169,7 +169,7 @@ test('billing preview is read-only and uses exactly the publication validation a
 import { channelStatus } from '../src/admin-v2/channel-selection.js';
 test('channel status reports frozen, missing association and supplier-disabled facts before readiness',()=>{
  const provider={status:'已启用'};
- assert.equal(channelStatus(provider,null),'未配置渠道');
+ assert.equal(channelStatus(provider,null),'未配置连接');
  assert.equal(channelStatus(provider,{endpoint:{frozen:true}}),'已冻结');
  assert.equal(channelStatus(provider,{unlinked:true,endpoint:{}}),'未关联模型');
  assert.equal(channelStatus({status:'已停用'},{unlinked:true,endpoint:{frozen:true}}),'服务商已停用');

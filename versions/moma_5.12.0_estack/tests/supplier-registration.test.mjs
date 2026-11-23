@@ -16,7 +16,7 @@ function models(state, libraryIds) {
 }
 function channel(state, patch = {}) {
   const model = supplierModelChannelGroups(state, owner(state)).find(row => row.master?.type === 'text');
-  return { providerId: owner(state).id, modelId: model.modelId, name: '新增测试渠道', upstreamModelId: 'vendor/test-model', baseUrl: 'https://new.example.invalid/v1/chat/completions', authMode: 'group', keyGroupId: 'default', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }], ...patch };
+  return { providerId: owner(state).id, modelId: model.modelId, name: '新增测试连接', upstreamModelId: 'vendor/test-model', baseUrl: 'https://new.example.invalid/v1/chat/completions', authMode: 'group', keyGroupId: 'default', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }], ...patch };
 }
 test('batch selection shares canonical identities atomically without creating materials, services or channels', () => {
   const state = initial(), before = structuredClone(state);

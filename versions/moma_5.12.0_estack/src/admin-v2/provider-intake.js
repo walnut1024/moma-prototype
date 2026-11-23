@@ -12,7 +12,7 @@ const allowed = [...profileKeys, 'connections', 'models', 'catalogue_source', 'c
 export const PROVIDER_JSON_TEMPLATE = { provider: { name: '示例推理服务商', code: 'example-provider', source_type: 'thirdParty',
   connections: [{ connection_id: 'openai', base_url: 'https://api.example.com/v1', protocol: 'OpenAI', interface_type: 'openai' }],
   models: [{ canonical_slug: 'example-model', model_name: '示例模型', model_type: 'text', model_info: {},
-    mappings: [{ connection_id: 'openai', upstream_model_id: 'example-model', channel_name: '标准渠道', capacity_limits: { rpm: 300, tpm: 10000000 } }] }] } };
+    mappings: [{ connection_id: 'openai', upstream_model_id: 'example-model', channel_name: '标准连接', capacity_limits: { rpm: 300, tpm: 10000000 } }] }] } };
 
 function inputProvider(file) {
   if (!file || typeof file !== 'object' || Array.isArray(file) || Object.keys(file).some(key => key !== 'provider')) throw Error('请使用服务商完整 JSON，顶层字段为 provider');
@@ -65,7 +65,7 @@ export function planProviderIntake(state, file) {
     } catch (error) { errors.push({ path: 'provider.connections[' + index + ']', message: error.message }); }
   }
   const models = input.models || [];
-  if (models.reduce((sum, row) => sum + (Array.isArray(row?.mappings) ? row.mappings.length : 0), 0) > 1000) throw Error('每份文件最多录入 1000 条模型渠道');
+  if (models.reduce((sum, row) => sum + (Array.isArray(row?.mappings) ? row.mappings.length : 0), 0) > 1000) throw Error('每份文件最多录入 1000 条上游模型');
   if (models.length && !errors.length) {
     const rows = providerJsonRows({ provider: { ...input, id: provider.id, code: provider.code } }, provider);
     const seen = new Set();
@@ -81,9 +81,9 @@ export function planProviderIntake(state, file) {
   }
   provider = working.providers.find(row => row.id === provider.id);
   const channels = (provider.catalogConnections || []).filter(row => !row.deletedAt);
-  if (channels.some(row => !Object.keys(row.capacityLimits || {}).length)) warnings.push('部分渠道未配置容量限额，将保留为未配置');
-  if (channels.some(row => !row.pricing?.scenarios?.length && !row.procurementVersions?.length)) warnings.push('部分渠道未配置采购成本，将保留为未配置；官方报价不会自动作为采购成本');
-  if (channels.length) warnings.push('渠道录入后保持待验证，不自动启用、上架或恢复已停用服务');
+  if (channels.some(row => !Object.keys(row.capacityLimits || {}).length)) warnings.push('部分上游模型未配置容量限额，将保留为未配置');
+  if (channels.some(row => !row.pricing?.scenarios?.length && !row.procurementVersions?.length)) warnings.push('部分上游模型未配置采购成本，将保留为未配置；官方报价不会自动作为采购成本');
+  if (channels.length) warnings.push('上游模型录入后保持待验证，不自动启用、上架或恢复已停用服务');
   return { provider, changes: [...changes.values()], errors, warnings, models: models.map(row => ({ code: row.canonical_slug, name: row.model_name, type: row.model_type, channels: row.mappings?.length || 0 })),
     connections: supplierChannelResources(working, provider), channels, modelCount: models.length };
 }

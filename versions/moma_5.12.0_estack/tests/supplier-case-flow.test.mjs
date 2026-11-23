@@ -14,7 +14,7 @@ const run=(s,id,operation,values)=>commitAdminState(s,{type:'modelOperations',op
 function workspaceWithUnassociatedChannel() {
  const state = legacySupplierState();
  const existing = state.endpoints.find(row => row.channelCode === 'CH-001');
- const endpoint = { ...existing, id: 'endpoint-moma', endpointId: 'endpoint-moma', channelCode: 'legacy-unassociated', name: '未关联历史渠道',
+ const endpoint = { ...existing, id: 'endpoint-moma', endpointId: 'endpoint-moma', channelCode: 'legacy-unassociated', name: '未关联历史连接',
    authMode: undefined, apiKeys: [], apiKeyId: '', credentialRef: '', modelIds: [], connectionTest: null };
  state.endpoints.push(endpoint);
  return { state, endpoint };
@@ -48,9 +48,9 @@ test('the credential warning is scoped to the actual affected models and Kimi re
  const key=await providerApiKeysDraft(['test-kimi-case-local-only-1234']);
  s=run(s,id,'addApiKeys',key);p=owner(s,id);ep=s.endpoints.find(row=>row.id===ep.id);
  assert.deepEqual(supplierCredentialIssues(s,p),[]);assert.equal(supplierChannelReadiness(ep,p).label,'待连接测试');
- assert.throws(()=>run(s,id,'channelTest',{modelId:'kimi-k2',channelId:link.id,scenario:'success'}),/渠道连接测试/);
+ assert.throws(()=>run(s,id,'channelTest',{modelId:'kimi-k2',channelId:link.id,scenario:'success'}),/连接测试/);
  s=run(s,id,'supplierChannelTest',{endpointId:ep.id});
- assert.equal(supplierChannelReadiness(s.endpoints.find(row=>row.id===ep.id),owner(s,id)).label,'待启用渠道');
+ assert.equal(supplierChannelReadiness(s.endpoints.find(row=>row.id===ep.id),owner(s,id)).label,'待启用连接');
  s=run(s,id,'supplierChannelEnable',{endpointId:ep.id});
  link=catalogueChannels(s,owner(s,id),'kimi-k2')[0];assert.equal(link.enabled,false);
  s=run(s,id,'channelTest',{modelId:'kimi-k2',channelId:link.id,scenario:'success'});
@@ -76,7 +76,7 @@ test('failed or inactive shared resources block service selection even when a mo
  const failed=run(s,p.id,'supplierChannelTest',{endpointId:ep.id,scenario:'超时'}),failedProvider=owner(failed);
  assert.equal(catalogueChannels(failed,failedProvider,link.modelId).find(row=>row.id===link.id).enabled,true);
  assert.equal(supplierChannelReadiness(failed.endpoints.find(row=>row.id===ep.id),failedProvider).ready,false);
- assert.match(availableServiceChannels(failed,failedProvider,link.modelId).find(row=>row.id===link.id).reason,/渠道连接测试/);
+ assert.match(availableServiceChannels(failed,failedProvider,link.modelId).find(row=>row.id===link.id).reason,/连接测试/);
  const inactive=structuredClone(s);inactive.endpoints.find(row=>row.id===ep.id).status='停用';
- assert.match(availableServiceChannels(inactive,owner(inactive),link.modelId).find(row=>row.id===link.id).reason,/渠道待启用/);
+ assert.match(availableServiceChannels(inactive,owner(inactive),link.modelId).find(row=>row.id===link.id).reason,/连接待启用/);
 });

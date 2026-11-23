@@ -41,7 +41,7 @@ export function channelDraftIssue(state, draft) {
     if (row.modelPresetId) onboardingModelPreset(row.modelPresetId);
     if (row.newModel && typeof row.newModel.modelId === 'string' && /^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(row.newModel.modelId.trim()) && Object.hasOwn(MODEL_TYPES, row.newModel.type)) resolveOnboardingModel(state, row);
   } } catch (error) { return error.message; }
-  if (draft.endpointId && !state.endpoints.some(row => row.id === draft.endpointId && row.providerId === provider.id && !row.deletedAt)) return '原渠道已不存在或归属已变化';
+  if (draft.endpointId && !state.endpoints.some(row => row.id === draft.endpointId && row.providerId === provider.id && !row.deletedAt)) return '原连接已不存在或归属已变化';
   if (draft.rows.some(row => row.libraryId && !libraryRecord(state, row.libraryId))) return '部分模型资料已不存在，请重新匹配';
   return '';
 }
@@ -52,7 +52,7 @@ function draftFields(state, data) {
   if (!modelOnly && [input.providerId, input.providerPresetId, input.newProvider].filter(Boolean).length !== 1) throw new Error('草稿服务商引用与新服务商只能选择一项');
   if (input.newProvider && (typeof input.newProvider !== 'object' || Array.isArray(input.newProvider) || Object.keys(input.newProvider).some(key => key !== 'name'))) throw new Error('新服务商草稿包含不支持的字段');
   const provider = modelOnly ? { id: '', isDraft: true } : input.newProvider ? { id: 'new-provider', isDraft: true } : resolveOnboardingProvider(state, input);
-  const value = { ...(input.newProvider ? { providerId: '', newProvider: { name: text(input.newProvider.name || '', '服务商名称', 100, false) } } : input.providerPresetId ? { providerId: '', providerPresetId: input.providerPresetId } : { providerId: provider.id }), name: text(input.name || '', '渠道名称', 60, !data.guided), interfaceType: input.interfaceType || 'unselected', baseUrl: text(input.baseUrl || '', 'API 地址', 2048, false), apiKeyId: text(input.apiKeyId || '', 'API 密钥 ID', 100, false), authMode: input.authMode === 'none' ? 'none' : 'specific', capacity: text(String(input.capacity ?? ''), '账号请求上限', 20, false), timeoutSeconds: text(String(input.timeoutSeconds ?? 60), '请求超时', 20, false) };
+  const value = { ...(input.newProvider ? { providerId: '', newProvider: { name: text(input.newProvider.name || '', '服务商名称', 100, false) } } : input.providerPresetId ? { providerId: '', providerPresetId: input.providerPresetId } : { providerId: provider.id }), name: text(input.name || '', '连接名称', 60, !data.guided), interfaceType: input.interfaceType || 'unselected', baseUrl: text(input.baseUrl || '', 'API 地址', 2048, false), apiKeyId: text(input.apiKeyId || '', 'API 密钥 ID', 100, false), authMode: input.authMode === 'none' ? 'none' : 'specific', capacity: text(String(input.capacity ?? ''), '账号请求上限', 20, false), timeoutSeconds: text(String(input.timeoutSeconds ?? 60), '请求超时', 20, false) };
   // Drafts retain unfinished text; request validation runs when the connection is committed.
   const draftUrl = input => {
     const raw = text(input || '', 'API 地址', 2048, false);
@@ -77,7 +77,7 @@ function draftFields(state, data) {
     return { id: text(row.id || `row-${index + 1}`, '模型行标识', 100), libraryId: row.libraryId || '', ...(row.modelPresetId ? { modelPresetId: text(row.modelPresetId, '模型参考预设', 100) } : {}), ...(newModel ? { newModel } : {}), upstreamModelId: text(row.upstreamModelId || '', '上游模型调用标识', 200, false), selected: row.selected !== false, confirmed: row.confirmed === true, source: ['upstream', 'reference', 'manual'].includes(row.source) ? row.source : 'manual', scenarios };
   });
   const endpoint = data.endpointId && state.endpoints.find(row => row.id === data.endpointId && row.providerId === provider.id && !row.deletedAt);
-  if (data.endpointId && !endpoint) throw new Error('草稿渠道不属于当前服务商');
+  if (data.endpointId && !endpoint) throw new Error('草稿连接不属于当前服务商');
   if (data.guided && rows.length !== 1) throw new Error('接入模型流程每次仅配置一个模型');
   return { kind: 'supplier-channel', guided: data.guided === true, intent: ['onboard','reserve','activate'].includes(data.intent) ? data.intent : 'onboard', value, rows, endpointId: endpoint?.id || '', endpointFingerprint: endpoint ? connectionFingerprint(endpoint) : '', step: data.step === 1 ? 1 : 0, status: '配置中' };
 }
@@ -127,7 +127,7 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
   const now = new Date().toISOString(), finish = (label, objectId, changes) => ({ type: 'batch', label, objectId, changes });
   if (/^channelTemporaryTest(Job|Receipt)$/.test(operation)) {
     const endpoint = state.endpoints.find(row => row.id === data.endpointId && row.providerId === data.providerId && !row.deletedAt);
-    if (!endpoint) throw new Error('临时测试渠道已变化');
+    if (!endpoint) throw new Error('临时测试连接已变化');
     const jobs = endpoint.temporaryTestJobs || [];
     if (operation.endsWith('Job')) {
       assertNoSecrets(data.request);
@@ -155,7 +155,7 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
     for (const entry of data.selections) {
       const provider = state.providers.find(row => row.id === entry.providerId);
       const association = provider && catalogueChannels(state, provider, entry.modelId).find(row => row.id === entry.associationId && row.endpointId === entry.endpointId);
-      if (!association || channelFingerprint(association) !== entry.expectedFingerprint || seen.has(entry.associationId)) throw new Error('所选模型渠道已变化或重复，请重新选择');
+      if (!association || channelFingerprint(association) !== entry.expectedFingerprint || seen.has(entry.associationId)) throw new Error('所选上游模型已变化或重复，请重新选择');
       if (data.action === 'test' && data.allowHighCost !== true && ['image', 'video', 'audio'].includes(provider.catalogModels?.find(row => row.modelId === entry.modelId)?.type)) throw new Error('高成本任务须单独勾选并确认测试用量');
       seen.add(entry.associationId);
       const key = JSON.stringify([entry.providerId, entry.endpointId]), group = groups.get(key) || { providerId: entry.providerId, endpointId: entry.endpointId, associations: [] };
@@ -222,13 +222,13 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
   if (operation === 'channelDiscoveryPreview') {
     assertNoSecrets(data);
     const endpoint = data.endpointId && state.endpoints.find(row => row.id === data.endpointId && row.providerId === data.providerId && !row.deletedAt);
-    if (data.endpointId && !endpoint) throw new Error('渠道归属已变化');
+    if (data.endpointId && !endpoint) throw new Error('连接归属已变化');
     const preview = previewChannelModels(state, data.providerId, data.models, data);
-    return finish('预览渠道模型变更', data.endpointId || data.providerId, [update('providers', data.providerId, { lastModelDiscovery: { ...preview, endpointId: data.endpointId || '', fingerprint: endpoint ? connectionFingerprint(endpoint) : '', discoveredAt: now } })]);
+    return finish('预览上游模型变更', data.endpointId || data.providerId, [update('providers', data.providerId, { lastModelDiscovery: { ...preview, endpointId: data.endpointId || '', fingerprint: endpoint ? connectionFingerprint(endpoint) : '', discoveredAt: now } })]);
   }
   if (operation === 'channelTestEvidenceJob' || operation === 'channelTestEvidenceReceipt') {
     const provider = state.providers.find(row => row.id === data.providerId), endpoint = state.endpoints.find(row => row.id === data.endpointId && row.providerId === provider?.id && !row.deletedAt);
-    if (!provider || !endpoint) throw new Error('测试渠道已变化');
+    if (!provider || !endpoint) throw new Error('测试连接已变化');
     const jobs = endpoint.serverTestJobs || [];
     if (operation === 'channelTestEvidenceJob') {
       const batchId = data.batchId ? text(data.batchId, '测试任务 ID', 120) : '', operationId = text(data.operationId || data.batchId, '提交操作 ID', 120), signature = text(data.signature, '配置签名', 40000);
@@ -238,12 +238,12 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
       if (data.request && (!Array.isArray(data.request.models) || data.request.models.some(model => !model || typeof model !== 'object'))) throw new Error('测试请求快照格式无效');
       const request = data.request && { operationId, channelId: data.serverChannelId, confirmExpensive: data.request.confirmExpensive === true, models: data.request.models.map(model => Object.fromEntries(testModelFields.filter(key => Object.hasOwn(model, key)).map(key => [key, model[key]]))) };
       if (!request || request.models.length !== data.associationIds.length || new Set(request.models.map(model => model.associationId)).size !== request.models.length) throw new Error('待确认提交须保留原始请求快照');
-      const serverChannelId = text(data.serverChannelId, '服务端渠道 ID', 120);
+      const serverChannelId = text(data.serverChannelId, '服务端连接 ID', 120);
       if (previous && (previous.signature !== signature || previous.serverChannelId !== serverChannelId || requestSignature(previous.request) !== requestSignature(request) || JSON.stringify(previous.associationIds) !== JSON.stringify(data.associationIds) || previous.batchId && batchId && previous.batchId !== batchId)) throw new Error('同一提交操作不能替换配置、请求或测试任务');
       const known = supplierChannelAssociations(state, provider, endpoint.id), associationSignatures = {};
       if (!previous) for (const id of data.associationIds) {
         const association = known.find(row => row.id === id), model = request.models.find(row => row.associationId === id);
-        if (!association || !model) throw new Error('任务模型不属于此渠道');
+        if (!association || !model) throw new Error('任务模型不属于此连接');
         const master = resolveChannelAssociationModel(state, provider, association);
         if (model.id !== master.id || model.upstreamModelId !== association.upstreamModelId || model.type !== master.type) throw new Error('测试模型身份与当前精确关联不一致');
         associationSignatures[id] = channelEvidenceSignature(state, provider.id, association, endpoint);
@@ -260,7 +260,7 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
     const passed = [], evaluated = [], connections = structuredClone(provider.catalogConnections || []), changed = [], known = supplierChannelAssociations(state, provider, endpoint.id);
     for (const item of batch.items) {
       const projection = known.find(row => row.id === item.model?.associationId);
-      if (!projection || !job.associationIds.includes(projection.id)) throw new Error('测试回执含其他渠道模型');
+      if (!projection || !job.associationIds.includes(projection.id)) throw new Error('测试回执含其他上游模型');
       const submitted = job.request?.models.find(row => row.associationId === projection.id);
       if (!submitted || ['id', 'associationId', 'upstreamModelId', 'type', 'check', 'dimensions'].some(key => submitted[key] !== item.model[key]) || (submitted.probe || submitted.type) !== (item.model.probe || item.model.type)) throw new Error('测试回执模型身份与原请求不一致');
       let master, evidenceSignature;

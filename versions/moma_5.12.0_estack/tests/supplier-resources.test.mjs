@@ -83,10 +83,10 @@ test('missing Kimi credentials guide configuration, and the first added key is i
  const added=run(s,'addApiKeys',keys,id);
  assert.equal(connectionKeys(endpoint(added,'CH-301'),owner(added,id)).length,1);
  const channel=catalogueChannels(added,owner(added,id),'kimi-k2')[0];
- assert.throws(()=>run(added,'channelTest',{modelId:channel.modelId,channelId:channel.id,scenario:'success'},id),/连接测试并启用渠道/);
+ assert.throws(()=>run(added,'channelTest',{modelId:channel.modelId,channelId:channel.id,scenario:'success'},id),/连接测试并启用连接/);
  const tested=run(added,'supplierChannelTest',{endpointId:ep.id},id);
  assert.equal(connectionTestPassed(endpoint(tested,'CH-301')),true);
- assert.throws(()=>run(tested,'channelEnable',{modelId:channel.modelId,channelId:channel.id},id),/连接测试并启用渠道/);
+ assert.throws(()=>run(tested,'channelEnable',{modelId:channel.modelId,channelId:channel.id},id),/连接测试并启用连接/);
  const enabled=run(tested,'supplierChannelEnable',{endpointId:ep.id},id);
  const associationTested=run(enabled,'channelTest',{modelId:channel.modelId,channelId:channel.id,scenario:'success'},id);
  const complete=run(associationTested,'channelEnable',{modelId:channel.modelId,channelId:channel.id},id);
@@ -96,7 +96,7 @@ test('missing Kimi credentials guide configuration, and the first added key is i
 
 test('create resource separately, then associate a Zhipu model without duplicating the endpoint',()=>{
  const s=legacySupplierState(),id='provider-zhipu-direct';
- const created=run(s,'supplierChannelSave',{name:'新增渠道',protocol:'OpenAI',baseUrl:'https://zhipu.example.invalid/v1/chat/completions',authMode:'inherit'},id);
+ const created=run(s,'supplierChannelSave',{name:'新增连接',protocol:'OpenAI',baseUrl:'https://zhipu.example.invalid/v1/chat/completions',authMode:'inherit'},id);
  const ep=supplierChannelResources(created,owner(created,id))[0];
  assert.equal(supplierChannelAssociations(created,owner(created,id)).length,0);
  const linked=run(created,'supplierAssociationSave',{modelId:'glm-4-7',endpointId:ep.id,upstreamModelId:'glm-4.7',scenarios:price(0)},id);
@@ -107,7 +107,7 @@ test('create resource separately, then associate a Zhipu model without duplicati
 
 test('supplier registration places its first key in the central library and makes the initial channel inherit it',async()=>{
  const s=legacySupplierState(),keys=await providerApiKeysDraft(['test-registration-local-only-443322']);
- const next=commitAdminState(s,{type:'modelOperations',operation:'providerRegistration',data:{provider:{name:'新增服务商',code:'supplier-new-review',sourceType:'thirdParty',description:''},connections:[{name:'初始渠道',protocol:'OpenAI',baseUrl:'https://new.example.invalid/v1/chat/completions',apiKeys:keys.apiKeys,timeoutSeconds:60}]}});
+ const next=commitAdminState(s,{type:'modelOperations',operation:'providerRegistration',data:{provider:{name:'新增服务商',code:'supplier-new-review',sourceType:'thirdParty',description:''},connections:[{name:'初始连接',protocol:'OpenAI',baseUrl:'https://new.example.invalid/v1/chat/completions',apiKeys:keys.apiKeys,timeoutSeconds:60}]}});
  const p=next.providers.find(row=>row.code==='supplier-new-review'),ep=supplierChannelResources(next,p)[0];
  assert.equal(p.defaultApiKeyId,p.apiKeys[0].id);assert.equal(p.apiKeys[0].fingerprint,keys.apiKeys[0].fingerprint);assert.equal(ep.authMode,'inherit');assert.equal(connectionKeys(ep,p)[0].id,p.defaultApiKeyId);assert.equal(supplierKeyChannels(next,p,p.defaultApiKeyId).length,1);
 });
@@ -118,14 +118,14 @@ test('editing a shared channel affects all mappings after confirmation and name-
  const next=run(s,'supplierChannelSave',{...v,confirmed:true});
  assert.equal(supplierChannelAssociations(next,owner(next),ep.id).length,2);assert.ok(supplierChannelAssociations(next,owner(next),ep.id).every(row=>!row.health&&!row.enabled));
  assert.ok(catalogueChannels(next,owner(next),'DeepSeek-V4-Flash-0731')[0].apiAddresses[0].baseUrl.includes('new.example.invalid'));
- const renamed=run(s,'supplierChannelSave',{...v,baseUrl:ep.baseUrl,name:'生产渠道改名'});
- assert.ok(connectionTestPassed(endpoint(renamed,'CH-001')));assert.equal(catalogueChannels(renamed,owner(renamed),'DeepSeek-V4-Flash-0731')[0].name,'生产渠道改名');
+ const renamed=run(s,'supplierChannelSave',{...v,baseUrl:ep.baseUrl,name:'生产连接改名'});
+ assert.ok(connectionTestPassed(endpoint(renamed,'CH-001')));assert.equal(catalogueChannels(renamed,owner(renamed),'DeepSeek-V4-Flash-0731')[0].name,'生产连接改名');
  const renamedEndpoint=endpoint(renamed,'CH-001'),references=supplierChannelAssociations(s,owner(s),ep.id);
  assert.equal(renamedEndpoint.id,ep.id);assert.equal(renamedEndpoint.channelCode,ep.channelCode);
  assert.deepEqual(renamedEndpoint.connectionTest,ep.connectionTest);assert.equal(renamedEndpoint.status,ep.status);
  for(const reference of references){
   const current=catalogueChannels(renamed,owner(renamed),reference.modelId).find(row=>row.id===reference.id);
-  assert.equal(current.name,'生产渠道改名');assert.equal(current.endpointId,ep.id);assert.deepEqual(current.pricing,reference.pricing);
+  assert.equal(current.name,'生产连接改名');assert.equal(current.endpointId,ep.id);assert.deepEqual(current.pricing,reference.pricing);
  }
  unchangedServices(s,renamed);
 });
@@ -150,7 +150,7 @@ test('focused channel information edits preserve legacy credential references an
   const s=legacySupplierState(),id='provider-ark-official',p=owner(s,id),ep=endpoint(s,'CH-201');
   delete ep.authMode;delete ep.apiKeyId;delete ep.supplierChannel;
   ep.credentialRef=keyPool?'':'env:LEGACY_CHANNEL_KEY';ep.apiKeys=keyPool?structuredClone(p.apiKeys.slice(0,2)):[];
-  const before=structuredClone(s),name='只修改渠道名称';
+  const before=structuredClone(s),name='只修改连接名称';
   const next=run(s,'supplierChannelSave',{mode:'info',endpointId:ep.id,name,authMode:'inherit',apiKeyId:''},id);
   assert.deepEqual(endpoint(next,'CH-201'),{...ep,name,updatedAt:endpoint(next,'CH-201').updatedAt});
   assert.deepEqual(owner(next,id).catalogConnections,p.catalogConnections.map(row=>row.endpointId===ep.id&&!row.deletedAt?{...row,name}:row));
@@ -226,7 +226,7 @@ test('cross-supplier keys and resources, incomplete URLs and invalid association
 test('existing endpoint-only credentials can be selected into the supplier library without losing their identity',async()=>{
  const s=legacySupplierState(),p=owner(s),keys=await providerApiKeysDraft(['test-legacy-local-only-556677']);
  keys.apiKeys[0].id='legacy-key-local';
- const legacy={id:'legacy-endpoint',providerId:p.id,name:'旧渠道',protocol:'OpenAI',baseUrl:'https://old.example.invalid/v1/chat/completions',apiKeys:keys.apiKeys,status:'停用'};
+ const legacy={id:'legacy-endpoint',providerId:p.id,name:'旧连接',protocol:'OpenAI',baseUrl:'https://old.example.invalid/v1/chat/completions',apiKeys:keys.apiKeys,status:'停用'};
  s.endpoints.push(legacy);p.catalogConnections.push({id:'legacy-link',modelId:'Kimi/miKimi-K3',endpointId:legacy.id,upstreamModelId:'kimi-old'});
  const next=run(s,'supplierChannelSave',{endpointId:legacy.id,name:legacy.name,protocol:legacy.protocol,baseUrl:legacy.baseUrl,authMode:'specific',apiKeyId:keys.apiKeys[0].id,confirmed:true});
  assert.deepEqual(owner(next).apiKeys.find(row=>row.id===keys.apiKeys[0].id),keys.apiKeys[0]);
@@ -265,16 +265,16 @@ test('supplier resource writes retain role, conflict and storage failure guards'
 test('model removal requires all channels to be unlinked, including disabled channels',()=>{
  const s=legacySupplierState(),before=structuredClone(s),modelId='GLM-5.2';
  assert.equal(catalogueChannels(s,owner(s),modelId).length,2);
- assert.throws(()=>run(s,'catalogueRemove',{modelId,confirmed:true}),/请先删除.*全部渠道/);
+ assert.throws(()=>run(s,'catalogueRemove',{modelId,confirmed:true}),/请先移除.*全部上游模型记录/);
  assert.deepEqual(s,before);
  const disabled=structuredClone(s);
  owner(disabled).catalogConnections=owner(disabled).catalogConnections.map(link=>({...link,enabled:false}));
- assert.throws(()=>run(disabled,'catalogueRemove',{modelId,confirmed:true}),/请先删除.*全部渠道/);
+ assert.throws(()=>run(disabled,'catalogueRemove',{modelId,confirmed:true}),/请先移除.*全部上游模型记录/);
  let next=s;
  const links=catalogueChannels(s,owner(s),modelId);
  for(const [index,link] of links.entries()){
   next=run(next,'supplierAssociationRemove',{modelId,endpointId:link.endpointId,associationId:link.id,confirmed:true});
-  if(index===0)assert.throws(()=>run(next,'catalogueRemove',{modelId,confirmed:true}),/请先删除.*全部渠道/);
+  if(index===0)assert.throws(()=>run(next,'catalogueRemove',{modelId,confirmed:true}),/请先移除.*全部上游模型记录/);
  }
  assert.equal(catalogueChannels(next,owner(next),modelId).length,0);
  assert.ok(!displayedCatalogueIds(owner(next),next).includes(modelId));
@@ -291,7 +291,7 @@ function parseAdminState(...args) { return withAdminSession(baseParseAdminState(
 test('channel editor saves shared name and the selected upstream identity atomically without changing cost, history or other mappings',()=>{
  const state=legacySupplierState(),p=owner(state),ep=endpoint(state,'CH-001'),mapping=supplierChannelAssociations(state,p,ep.id)[0];
  state.modelSupplies=[];state.serviceRoutes=[];
- const before=structuredClone(state),values={mode:'info',endpointId:ep.id,name:'渠道编辑核验',associationId:mapping.id,modelId:mapping.modelId,upstreamModelId:'renamed/upstream-v2',expectedUpdatedAt:ep.updatedAt,expectedProviderUpdatedAt:p.updatedAt};
+ const before=structuredClone(state),values={mode:'info',endpointId:ep.id,name:'连接编辑核验',associationId:mapping.id,modelId:mapping.modelId,upstreamModelId:'renamed/upstream-v2',expectedUpdatedAt:ep.updatedAt,expectedProviderUpdatedAt:p.updatedAt};
  const next=run(state,'supplierChannelSave',values),saved=owner(next).catalogConnections.find(row=>row.id===mapping.id),old=p.catalogConnections.find(row=>row.id===mapping.id);
  assert.equal(next.endpoints.find(row=>row.id===ep.id).name,values.name);assert.equal(saved.upstreamModelId,values.upstreamModelId);assert.equal(saved.enabled,false);assert.equal(saved.health,null);
  for(const key of ['pricing','procurementVersions','procurementRevision','listPriceVersions','listPriceRevision','qualification'])assert.deepEqual(saved[key],old[key]);

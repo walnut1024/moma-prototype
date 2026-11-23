@@ -22,13 +22,13 @@ test('provider rows retain one record per model channel, including shared connec
 
 test('channel search filters individual sources and supports canonical names, permanent IDs and actual upstream URLs', () => {
   const {state,groups}=fixture(),all=supplierModelChannelRows(state,groups),first=all[0];
-  first.channel.sourceName='仅此渠道';
-  assert.deepEqual(supplierModelChannelRows(state,groups,'仅此渠道').map(row=>row.id),[first.id]);
+  first.channel.sourceName='仅此连接';
+  assert.deepEqual(supplierModelChannelRows(state,groups,'仅此连接').map(row=>row.id),[first.id]);
   assert.deepEqual(supplierModelChannelRows(state,groups,channelIdentity(state,first.id)).map(row=>row.id),[first.id]);
   const model=first.group.master.modelId;
   assert(supplierModelChannelRows(state,groups,model).every(row=>row.group.master.modelId===model));
   assert(supplierModelChannelRows(state,groups,first.channel.endpoint.baseUrl).some(row=>row.id===first.id));
-  assert.deepEqual(supplierModelChannelRows(state,groups,'不存在的模型或渠道'),[]);
+  assert.deepEqual(supplierModelChannelRows(state,groups,'不存在的模型或连接'),[]);
 });
 
 test('zero-channel registrations remain pending and can be removed without introducing fake channel records or deleting other suppliers', () => {

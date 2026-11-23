@@ -72,7 +72,7 @@ export function tariffPriceReferences(state, entry) {
     if (!Array.isArray(value) && typeof value.name === 'string' && typeof value.unit === 'string' && value[field] === (entry.kind === 'currency' ? entry.code : entry.name)) return true;
     return Object.values(value).some(matches);
   };
-  return [['modelSalePrices','平台售价及历史'],['supplyPrices','采购价格及历史'],['providers','服务商价格或草稿'],['endpoints','渠道配置或草稿'],['modelOnboardings','接入草稿']].filter(([key]) => matches(state[key])).map(([,label]) => label);
+  return [['modelSalePrices','平台售价及历史'],['supplyPrices','采购价格及历史'],['providers','服务商价格或草稿'],['endpoints','连接配置或草稿'],['modelOnboardings','接入草稿']].filter(([key]) => matches(state[key])).map(([,label]) => label);
 }
 
 export function tariffDictionaryTransaction(state, data) {

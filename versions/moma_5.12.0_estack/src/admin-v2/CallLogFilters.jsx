@@ -9,7 +9,7 @@ import { callPresets, changeObservationTenant, httpLabel, modelTypes, observatio
 
 const labels = {
   query: 'Request ID', request: 'Request ID', period: '时间范围', outcome: '请求结果', preflightType: '错误类型',
-  tenant: '客户', project: '项目', model: '模型', upstreamModelId: '上游模型', supply: '服务商 / 渠道',
+  tenant: '客户', project: '项目', model: '模型', upstreamModelId: '上游模型', supply: '服务商 / 连接',
   http: 'HTTP 状态码', user: '调用用户', key: 'API 密钥', userRecord: '用户标识采集', source: '请求来源',
   purpose: '调用类型', callId: '模型调用标识', endpoint: '端点', errorCode: '错误码', type: '模型类型',
 };

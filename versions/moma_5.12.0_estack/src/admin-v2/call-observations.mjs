@@ -183,7 +183,7 @@ export function callObservations(state) {
         serviceId: item.serviceId, endpoint: item.endpointId, endpointName: item.endpointName || endpoint?.endpointId || item.endpointId,
         endpointBaseUrl: endpoint?.baseUrl,
         channelModel: JSON.stringify([provider ?? null, channel ?? null, item.upstreamModelId ?? null]),
-        channelModelName: [item.channelName || endpoints.get(channel)?.name || channel || '渠道未采集',
+        channelModelName: [item.channelName || endpoints.get(channel)?.name || channel || '连接未采集',
           item.upstreamModelId || '模型未采集'].join(' · '),
         outcome: attemptOutcome, status: attemptStatus, duration: number(item.durationMs),
         ttft: item.stream === false ? null : number(item.ttftMs),

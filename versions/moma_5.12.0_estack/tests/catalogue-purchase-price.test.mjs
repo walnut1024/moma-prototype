@@ -9,7 +9,7 @@ import { activeSupplyPrice, activeSupplySalePrice, procurementVersion, latestSal
 
 const modelId = 'Purchase-Editable';
 const row = { name: '输入 Token', unit: '百万 Token', currency: 'CNY', listPrice: '4' };
-const draft = { protocol: 'OpenAI', apiUrl: 'https://catalogue.example.invalid/v1/chat/completions', modelId, modelType: 'text', channelName: '国内渠道', modelName: '模型显示名称', discountFactor: '0.8', scenarios: [row, { ...row, name: '输出 Token', purchasePrice: '2.9' }, { ...row, name: '缓存读取 Token', purchasePrice: '0' }] };
+const draft = { protocol: 'OpenAI', apiUrl: 'https://catalogue.example.invalid/v1/chat/completions', modelId, modelType: 'text', channelName: '国内连接', modelName: '模型显示名称', discountFactor: '0.8', scenarios: [row, { ...row, name: '输出 Token', purchasePrice: '2.9' }, { ...row, name: '缓存读取 Token', purchasePrice: '0' }] };
 const action = (operation, values) => ({ type: 'modelOperations', operation: 'provider', data: { operation, objectId: 'provider-moma', values } });
 const quote = state => providerCataloguePrice(state.providers.find(item => item.id === 'provider-moma'), modelId);
 const effective = entry => entry.scenarios.map(item => cataloguePurchasePrice(item.listPrice, entry.discountFactor, item.purchasePrice));

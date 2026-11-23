@@ -20,9 +20,9 @@ export function marketSupplyGroups(state, model) {
     const provider = supply.provider || state.providers.find(row => row.id === id);
     const channel = supply.endpoint;
     const source = provider?.catalogConnections?.find(row => row.id===supply.channelId && !row.deletedAt);
-    const name = !channel || channel.deletedAt ? '渠道已不存在'
+    const name = !channel || channel.deletedAt ? '连接已不存在'
       : source?.sourceName || (provider ? supplierChannelName(provider, channel) : channel.name);
-    add(id, provider).channels.set(supply.channelId || supply.endpointId, name || '渠道名称未配置');
+    add(id, provider).channels.set(supply.channelId || supply.endpointId, name || '连接名称未配置');
   }
   return [...groups.values()];
 }

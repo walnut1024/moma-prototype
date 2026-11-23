@@ -108,7 +108,7 @@ test('endpoint previews honor gateway prefixes, configured tasks, and saved embe
 test('a shared connection change checks even disabled model mappings and preserves each model channel name', () => {
   const state = fixture(), [first, second] = mappings(state);
   const disabled = owner(state).catalogConnections.find(row => row.id === second.id);
-  Object.assign(disabled, { enabled: false, sourceName: '保留模型渠道名' });
+  Object.assign(disabled, { enabled: false, sourceName: '保留上游模型名' });
   const prepared = run(state, 'channelCandidateSave', { ...args(state), allAssociations: true, config: { baseUrl: 'https://candidate.example.invalid/v1' } });
   const staged = testCandidate(prepared, { associationIds: [first.id] });
   const applyConnection = current => run(current, 'supplierChannelEdit', {
@@ -414,11 +414,11 @@ test('publishing one channel cost preserves another channel for the same model a
   let state = fixture();
   state = commitAdminState(state, { type: 'modelOperations', operation: 'provider', data: {
     operation: 'supplierChannelCreate', objectId: providerId, values: {
-      name: '独立成本渠道', interfaceType: 'openai', protocol: 'OpenAI', baseUrl: 'https://independent-cost.example.invalid/v1',
+      name: '独立成本连接', interfaceType: 'openai', protocol: 'OpenAI', baseUrl: 'https://independent-cost.example.invalid/v1',
       authMode: 'group', keyGroupId: 'default', models: [{ libraryId: 'model-2', upstreamModelId: 'vendor/chat', scenarios: price(7) }],
     },
   } });
-  const independent = state.endpoints.find(row => row.name === '独立成本渠道');
+  const independent = state.endpoints.find(row => row.name === '独立成本连接');
   const before = structuredClone(supplierChannelAssociations(state, owner(state), independent.id));
   const connection = structuredClone(endpoint(state));
   const saved = run(state, 'channelProcurementPublish', { ...quoteArgs(state), confirmed: true, scenarios: price(0) });

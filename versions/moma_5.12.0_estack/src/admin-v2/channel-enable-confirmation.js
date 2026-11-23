@@ -29,7 +29,7 @@ export function channelEnableConfirmationIssue(state, confirmation) {
   if(confirmation.directActivation){const first=selections[0],issue=channelDirectEnableIssue(state,first.providerId,first.endpointId,selections.map(row=>row.associationId));if(issue)return issue;}
   for (const selected of selections) {
     const provider = state.providers.find(row => row.id === selected.providerId), association = provider && catalogueChannels(state, provider, selected.modelId).find(row => row.id === selected.associationId && row.endpointId === selected.endpointId);
-    if (!association || channelFingerprint(association) !== selected.expectedFingerprint || association.endpoint.status !== confirmation.endpointStatus) return '所选模型渠道已变化，本次不能启用。请重新选择。';
+    if (!association || channelFingerprint(association) !== selected.expectedFingerprint || association.endpoint.status !== confirmation.endpointStatus) return '所选上游模型已变化，本次不能启用。请重新选择。';
     if (channelTestPending(association) || !['可用', '未启用', '已停用'].includes(channelStatus(provider, association))) return '所选模型尚未全部通过当前配置验证，本次不能启用。请重新选择。';
   }
   if (serviceScope(channelSelectionServiceImpact(state, selections)) !== serviceScope(confirmation.serviceImpact)) return '所选模型的服务引用已变化，请重新选择并确认影响。';
@@ -38,7 +38,7 @@ export function channelEnableConfirmationIssue(state, confirmation) {
 
 export function prepareChannelEnableConfirmation(state, providerId, endpointId, associationIds) {
   const provider = state.providers.find(row => row.id === providerId), endpoint = state.endpoints.find(row => row.id === endpointId && row.providerId === providerId && !row.deletedAt);
-  if (!provider || !endpoint || !Array.isArray(associationIds) || !associationIds.length) throw new Error('请选择当前渠道的模型关联。');
+  if (!provider || !endpoint || !Array.isArray(associationIds) || !associationIds.length) throw new Error('请选择当前连接的模型关联。');
   const rows = supplierChannelAssociations(state, provider, endpointId);
   const selections = associationIds.map(id => {
     const association = rows.find(row => row.id === id);

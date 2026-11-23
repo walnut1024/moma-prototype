@@ -36,11 +36,11 @@ test('batch plan deduplicates connections, lists unselected shared channels and 
 
 test('batch names update only the selected associations atomically, preserving shared connections, evidence and prices', () => {
   const { state, first, other, provider } = fixture();
-  const ids = [first.id, other.id], next = edit(state, ids, { field: 'name', value: '统一渠道名称' });
+  const ids = [first.id, other.id], next = edit(state, ids, { field: 'name', value: '统一连接名称' });
   const owner = next.providers.find(row => row.id === provider.id);
   for (const row of provider.catalogConnections) {
     const saved = owner.catalogConnections.find(item => item.id === row.id);
-    assert.deepEqual(saved, ids.includes(row.id) ? { ...row, sourceName: '统一渠道名称', updatedAt: saved.updatedAt } : row);
+    assert.deepEqual(saved, ids.includes(row.id) ? { ...row, sourceName: '统一连接名称', updatedAt: saved.updatedAt } : row);
   }
   for (const key of ['endpoints', 'models', 'modelTemplates', 'modelSupplies', 'modelSalePrices', 'supplyPrices', 'serviceRoutes']) assert.deepEqual(next[key], state[key]);
   const before = structuredClone(state);

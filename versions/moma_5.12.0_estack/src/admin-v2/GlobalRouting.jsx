@@ -44,7 +44,7 @@ export default function GlobalRouting({ saved, revision, transact, conflict, dir
     <Tabs.TabPane itemKey="failover" tab="全局故障转移策略"><Card title="故障转移配置" headerExtraContent={actions}>
       <FailoverFields showRetryInterval values={values} change={change} disabled={!draft || saving || conflict}/>
     </Card></Tabs.TabPane>
-    <Tabs.TabPane itemKey="routing" tab="全局路由策略"><Card title="渠道选择" headerExtraContent={actions}>
+    <Tabs.TabPane itemKey="routing" tab="全局路由策略"><Card title="上游模型选择" headerExtraContent={actions}>
       <Space vertical align="start"><Select aria-label="全局路由策略" value={values.strategy} disabled={!draft || saving || conflict}
         optionList={Object.entries(ROUTING_STRATEGIES).map(([value, item]) => ({ value, label: item.label }))}
         onChange={strategy => change({ strategy })}/>

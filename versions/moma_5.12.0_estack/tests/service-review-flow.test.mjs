@@ -30,7 +30,7 @@ test('new service saves its selected mode and requires routing before publicatio
   assert.equal(model.serviceName,'新增服务');assert.equal(model.serviceMode,'standard');assert.equal(modelServiceStarted(model),false);
   assert.equal(saved.modelSupplies.some(item=>item.modelId===model.id),false);
   assert.equal(publicationChecks(saved,model).some(check=>check.tab==='routing' && !check.passed),true);
-  assert.throws(()=>commitAdminState(saved,{type:'modelOperation',operation:'publish',modelId:model.id,data:{}}),/供应渠道/);
+  assert.throws(()=>commitAdminState(saved,{type:'modelOperation',operation:'publish',modelId:model.id,data:{}}),/供应连接/);
   assert.equal(serviceDirectoryModels(saved).length,state.models.length+1);
 });
 test('scenario preparation is explicit, atomic, permission checked and saved edits survive later parsing',()=>{

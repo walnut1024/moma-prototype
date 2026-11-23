@@ -26,11 +26,11 @@ test('channel detail entry preserves the list search and pagination in its bread
   assert.equal(canAccessPage('运营人员', route), true);
   assert.equal(canAccessPage('平台管理员', route), true);
   assert.equal(canAccessPage('运维人员', route), false);
-  assert.deepEqual(labels(build(route)), ['模型运营', '渠道管理', '渠道列表']);
+  assert.deepEqual(labels(build(route)), ['模型运营', '模型接入', '连接列表']);
   const detail = build(route, 'q=GLM&page=2&size=20&connection=c1&tab=models&modelQ=glm-5', { connection: 'GLM 接入' });
-  assert.deepEqual(labels(detail), ['模型运营', '渠道管理', '渠道列表', 'GLM 接入']);
+  assert.deepEqual(labels(detail), ['模型运营', '模型接入', '连接列表', 'GLM 接入']);
   assert.equal(detail[2].href, '#/admin-2/' + route + '?q=GLM&page=2&size=20');
-  assert.equal(build(route, 'connection=invalid').at(-1).label, '渠道不存在');
+  assert.equal(build(route, 'connection=invalid').at(-1).label, '连接不存在');
 });
 
 test('supplier material drill-down preserves list filters', () => {
@@ -109,7 +109,7 @@ test('section breadcrumbs open a real landing page and current pages remain plai
   assert.equal(organizationProject[1].href, '#/admin-2/tenants');
   assert.equal(build('deployments')[0].href, '#/admin-2/clusters');
   assert.deepEqual(labels(build('monitoring')), ['网关管理', '服务监控']);
-  assert.deepEqual(labels(build('providers-health')), ['模型运营', '渠道管理', '渠道健康']);
+  assert.deepEqual(labels(build('providers-health')), ['模型运营', '模型接入', '连接健康']);
   assert.equal(build('limits')[1].href, '#/admin-2/routes');
   const alerts = build('alerts');
   assert.equal(alerts[1].href, '#/admin-2/monitoring');
@@ -155,11 +155,11 @@ test('channel detail entry preserves the list search and pagination in its bread
   assert.equal(canAccessPage('运营人员', route), true);
   assert.equal(canAccessPage('平台管理员', route), true);
   assert.equal(canAccessPage('运维人员', route), false);
-  assert.deepEqual(labels(build(route)), ['模型运营', '渠道管理', '渠道列表']);
+  assert.deepEqual(labels(build(route)), ['模型运营', '模型接入', '连接列表']);
   const detail = build(route, 'q=GLM&page=2&size=20&connection=c1&tab=api-keys&keyGroup=example-group&modelQ=glm-5', { connection: 'GLM 接入' });
-  assert.deepEqual(labels(detail), ['模型运营', '渠道管理', '渠道列表', 'GLM 接入']);
+  assert.deepEqual(labels(detail), ['模型运营', '模型接入', '连接列表', 'GLM 接入']);
   assert.equal(detail[2].href, '#/admin-2/' + route + '?q=GLM&page=2&size=20');
   const costs = build(route, 'q=GLM&page=2&size=20&connection=c1&tab=model-costs', { connection: 'GLM 接入' });
   assert.deepEqual(costs, detail);
-  assert.equal(build(route, 'connection=invalid').at(-1).label, '渠道不存在');
+  assert.equal(build(route, 'connection=invalid').at(-1).label, '连接不存在');
 });

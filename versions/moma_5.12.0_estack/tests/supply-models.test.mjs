@@ -5,7 +5,7 @@ import { supplyModelDirectory, supplyModelRecord } from '../src/admin-v2/supply-
 import { catalogueChannels } from '../src/admin-v2/provider-channels.js';
 const owner = (state, id) => state.providers.find(row => row.id === id);
 const run = (state, provider, operation, values) => commitAdminState(state, {type:'modelOperations', operation:'provider', data:{operation, objectId:provider, values}});
-const values = {name:'统一模型渠道', baseUrl:'https://qa.example.invalid/v1/chat/completions', protocol:'OpenAI', keyGroupId:'default', models:[{libraryId:'model-2', upstreamModelId:'vendor/glm-52', scenarios:[{name:'输入 Token', listPrice:'0', currency:'CNY', unit:'百万 Token'}]}]};
+const values = {name:'统一上游模型', baseUrl:'https://qa.example.invalid/v1/chat/completions', protocol:'OpenAI', keyGroupId:'default', models:[{libraryId:'model-2', upstreamModelId:'vendor/glm-52', scenarios:[{name:'输入 Token', listPrice:'0', currency:'CNY', unit:'百万 Token'}]}]};
 
 test('one canonical model collects independent suppliers and preserves service publication and channel identity', () => {
  const state=parseAdminState(null), before=structuredClone(state);

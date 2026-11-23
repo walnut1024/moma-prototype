@@ -51,7 +51,7 @@ function KeyEditor({ provider, record, ops, close }) {
   };
   const description = adding ? provider.name : [
     providerApiKeyId(record.apiKey),
-    record.endpoints.length ? `影响 ${record.endpoints.length} 个绑定渠道，保存时验证。` : null,
+    record.endpoints.length ? `影响 ${record.endpoints.length} 个绑定连接，保存时验证。` : null,
   ].filter(Boolean).join(' · ');
   return <SupplierCreationDialog wide={adding} className={adding ? 'channel-directory-create-dialog' : undefined}
     title={adding ? '添加 API 密钥' : '替换 API 密钥'} description={description}
@@ -99,7 +99,7 @@ export default function ReferenceProviderApiKeys({ state, connection, ops }) {
         onClick={event => open(event, { kind: 'add' })}>添加 API 密钥</Button>
     </div>
     <GridTable className="supplier-key-table supplier-flat-key-table"
-      headings={['密钥名称 / ID', 'API 密钥', '当前绑定渠道', '状态', '操作']} empty={!rows.length} emptyMessage="暂无 API 密钥">
+      headings={['密钥名称 / ID', 'API 密钥', '当前绑定连接', '状态', '操作']} empty={!rows.length} emptyMessage="暂无 API 密钥">
       {rows.map(row => {
         const { apiKey } = row;
         const keyId = providerApiKeyId(apiKey);
@@ -107,10 +107,10 @@ export default function ReferenceProviderApiKeys({ state, connection, ops }) {
         return <Row key={apiKey.id}>
           <Cell><span>{providerApiKeyName(apiKey)}</span><small><CopyId copyAtStart value={apiKey.id} displayValue={keyId} label="密钥 ID"/></small></Cell>
           <Cell><code>{maskProviderApiKey(apiKey.maskedKey)}</code></Cell>
-          <Cell><AdminActionMenu label={`查看密钥 ${keyId} 当前绑定渠道`} items={channels.length ? channels.map(channel => ({
+          <Cell><AdminActionMenu label={`查看密钥 ${keyId} 当前绑定连接`} items={channels.length ? channels.map(channel => ({
             node: 'item', name: supplierChannelCode(channel) + ' · ' + supplierChannelName(provider, channel),
             onClick: () => ops.go({ connection: channel.id, tab: null, modelQ: null }),
-          })) : [{ node: 'title', name: '暂无渠道绑定' }]}>{channels.length} 个</AdminActionMenu></Cell>
+          })) : [{ node: 'title', name: '暂无连接绑定' }]}>{channels.length} 个</AdminActionMenu></Cell>
           <Cell><AdminStatus value={apiKey.revokedAt ? '已撤销' : apiKey.status === 'disabled' ? '已停用' : '已配置'}/></Cell>
           <Cell><div className="supplier-row-actions">
             <Button theme="borderless" type="tertiary" size="small" aria-label={`测试连接 ${apiKey.id}`}
@@ -134,12 +134,12 @@ export default function ReferenceProviderApiKeys({ state, connection, ops }) {
           values: { keyId: id, expectedFingerprint: fingerprint, confirmed: true } })) close();
       }}>确认删除</Button>
     </>}>
-      <p>确认删除此密钥？{deleting.endpoints.length > 0 && `影响 ${deleting.endpoints.length} 个渠道，相关模型需要重新验证。`}</p>
+      <p>确认删除此密钥？{deleting.endpoints.length > 0 && `影响 ${deleting.endpoints.length} 个连接，相关模型需要重新验证。`}</p>
       {ops.error && <Notice error>{ops.error}</Notice>}
     </Modal>}
     {dialog?.kind === 'test' && <ChannelHealthDialog state={state} provider={provider} apiKey={dialog.apiKey} ops={ops} close={close}/>}
-    {dialog?.kind === 'choosePool' && <Modal title="选择替换渠道" onClose={close}>
-      <p>选择要替换密钥的渠道。共享密钥的各渠道分别验证和应用。</p>
+    {dialog?.kind === 'choosePool' && <Modal title="选择替换连接" onClose={close}>
+      <p>选择要替换密钥的连接。共享密钥的各连接分别验证和应用。</p>
       {dialog.pools.map(endpoint => <Button key={endpoint.id} theme="borderless" type="tertiary"
         onClick={() => setDialog({ kind: 'pool', record: dialog.record, endpointId: endpoint.id })}>
         {supplierChannelName(provider, endpoint)}

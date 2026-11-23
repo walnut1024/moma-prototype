@@ -105,7 +105,7 @@ export function prepareChannelInterface({ interfaceType, baseUrl, taskUrls = {},
   for (const [type, value] of Object.entries(taskUrls)) {
     if (!modelTypes.includes(type)) throw new Error('任务地址包含未支持的模型类型');
     const taskUrl = checkedUrl(value, allowHttp);
-    if (taskUrl.origin !== url.origin) throw new Error('不同主机或认证边界的任务地址须使用不同渠道');
+    if (taskUrl.origin !== url.origin) throw new Error('不同主机或认证边界的任务地址须使用不同连接');
     if (taskUrl.pathname === '/' || /^\/v\d+\/?$/.test(taskUrl.pathname)) throw new Error('任务地址需要包含完整接口路径');
     preparedTasks[type] = urlText(taskUrl);
   }

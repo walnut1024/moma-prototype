@@ -46,7 +46,7 @@ export function lifecycleAccess(state, service, tenantId) {
   }
   if (!['formal', 'gray'].includes(stage) || model.visibility !== '公开') return reject('model_unavailable', '模型服务已下架，请选择其他模型');
   if (service.providerId) {
-    if (!entry || !serviceCallsEnabled(model, entry)) return reject('provider_unavailable', '该渠道服务已停止，请选择其他渠道');
+    if (!entry || !serviceCallsEnabled(model, entry)) return reject('provider_unavailable', '该模型服务已停止，请选择其他模型服务');
   }
   const tenant = state.tenants?.find(row => row.id === tenantId);
   if (!activeCustomer(tenant)) return reject('customer_unavailable', '当前用户或组织不可用');

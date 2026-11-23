@@ -164,15 +164,15 @@ export async function changeNewModelService(db, actor, command, key) {
         || !Number.isSafeInteger(channel.priority) || channel.priority < 0 || !positiveInteger(channel.weight)
         || !channel.channelId || !channel.fingerprint
         || (channel.context != null && !positiveInteger(channel.context))
-        || (channel.simulated !== undefined && typeof channel.simulated !== 'boolean')) invalid('渠道模型配置无效');
+        || (channel.simulated !== undefined && typeof channel.simulated !== 'boolean')) invalid('上游模型配置无效');
       return { ...readFields(channel, channelText), enabled: channel.enabled, priority: channel.priority, weight: channel.weight,
         ...(channel.context !== undefined && { context: channel.context }),
         ...(channel.simulated && { simulated: true }) };
     });
     if (new Set(channels.map(channel => channel.id)).size !== channels.length
-      || new Set(channels.map(channel => channel.channelId)).size !== channels.length) invalid('渠道模型重复');
+      || new Set(channels.map(channel => channel.channelId)).size !== channels.length) invalid('上游模型重复');
     if (!imported && config.tokenizer && !row.contextPaused && channels.some(channel => channel.enabled && !positiveInteger(channel.context))) {
-      invalid('请为每条已启用的渠道模型配置上下文长度');
+      invalid('请为每条已启用的上游模型配置上下文长度');
     }
     const priorities = row.priorityGroups === undefined ? before?.priorityGroups : row.priorityGroups;
     if (priorities !== undefined && (!Array.isArray(priorities) || priorities.some(value => !Number.isSafeInteger(value) || value < 0)
@@ -203,10 +203,10 @@ export async function changeNewModelService(db, actor, command, key) {
       for (const channel of imported ? [] : verify) {
         if (channel.simulated) {
           if (!['1', '2', '3'].some(index => channel.channelId === 'mock-service-channel:' + model.id + ':' + index)
-            || channel.fingerprint !== channel.channelId) invalid('模拟渠道无效');
-        } else if (!usable(channel)) invalid('渠道模型不可用，请更新渠道配置');
+            || channel.fingerprint !== channel.channelId) invalid('模拟连接无效');
+        } else if (!usable(channel)) invalid('上游模型不可用，请更新连接配置');
       }
-      if (releaseChanged && !channels.some(channel => channel.enabled && usable(channel))) invalid('请先添加并启用通过验证的已登记渠道');
+      if (releaseChanged && !channels.some(channel => channel.enabled && usable(channel))) invalid('请先添加并启用通过验证的已登记上游模型');
     }
     if (imported && (!Number.isFinite(Date.parse(row.createdAt)) || typeof row.createdBy !== 'string' || !row.createdBy
       || (row.grants !== undefined && (!Array.isArray(row.grants) || row.grants.some(grant => !object(grant) || typeof grant.tenantId !== 'string')))

@@ -48,7 +48,7 @@ export function validateModelDataset(data = scenario) {
     find('models', supply.modelId);
     const endpoint = find('endpoints', supply.endpointId), provider = find('providers', supply.providerId);
     const mapping = provider.catalogConnections?.find(row => row.id === supply.channelId);
-    if (endpoint.providerId !== provider.id || !mapping || mapping.endpointId !== endpoint.id || mapping.upstreamModelId !== supply.upstreamModelId) fail('供应与渠道映射不一致');
+    if (endpoint.providerId !== provider.id || !mapping || mapping.endpointId !== endpoint.id || mapping.upstreamModelId !== supply.upstreamModelId) fail('供应与连接映射不一致');
   }
   const services = c.models.flatMap(model => model.serviceMode === 'standard' ? [`standard:${model.id}`] : model.serviceProviders.map(row => `provider:${model.id}:${row.providerId}`));
   for (const price of c.modelSalePrices) {
@@ -132,7 +132,7 @@ export function validateSystemModelData(data = system) {
     const rows=data.collections[key];
     if (!Array.isArray(rows) || rows.some(row=>!row.id) || new Set(rows.map(row=>row.id)).size!==rows.length) throw Error(`系统初始模型配置 ${key} ID 无效`);
   }
-  for (const endpoint of data.collections.endpoints) if (!data.collections.providers.some(row=>row.id===endpoint.providerId)) throw Error('系统初始渠道缺少供应商');
+  for (const endpoint of data.collections.endpoints) if (!data.collections.providers.some(row=>row.id===endpoint.providerId)) throw Error('系统初始连接缺少供应商');
   for (const supply of data.collections.modelSupplies) if (!data.collections.models.some(row=>row.id===supply.modelId) || !data.collections.endpoints.some(row=>row.id===supply.endpointId)) throw Error('系统初始供应关系引用无效');
   if (data === system) validateSystemModelData({ collections: instantiateWorkspace('2026-11-02T00:00:00.000Z') });
   return data;

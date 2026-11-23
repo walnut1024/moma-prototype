@@ -22,7 +22,7 @@ export function ChannelKeyStrategyField({ value, onChange, disabled }) {
 }
 
 export function channelKeyMode(endpoint) {
-  if (endpoint.authMode === 'pool') return '一个渠道使用多把密钥';
+  if (endpoint.authMode === 'pool') return '一个连接使用多把密钥';
   if (endpoint.authMode === 'group') return '服务商密钥组';
   if (endpoint.authMode === 'inherit') return '服务商默认密钥';
   if (endpoint.authMode === 'none') return '无需认证';

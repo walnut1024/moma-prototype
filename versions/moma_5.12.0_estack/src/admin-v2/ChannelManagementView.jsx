@@ -33,12 +33,12 @@ function ChannelModels({ channel, ops, open }) {
       <Space wrap spacing={8}>
         <Button disabled={!ops.can} onClick={event => open(event, 'test', channel.id)}>{t('批量测试')}</Button>
         <Button disabled={!canAdd} onClick={event => open(event, 'discovery', channel.id)}>{t('获取模型列表')}</Button>
-        <Button theme="solid" disabled={!canAdd} onClick={event => open(event, 'quickAdd', channel.id)}>{t('添加渠道模型')}</Button>
+        <Button theme="solid" disabled={!canAdd} onClick={event => open(event, 'quickAdd', channel.id)}>{t('添加上游模型')}</Button>
       </Space>
     </div>
-    <Typography.Paragraph type="tertiary">自动获取模型列表需要渠道提供 OpenAI 兼容的模型列表接口（GET /models）。</Typography.Paragraph>
-    <AdminTable aria-label={t('渠道模型列表')} rowKey="key" pagination={false} dataSource={models}
-      empty={keyword ? '没有匹配的模型' : '该渠道尚未接入模型'}
+    <Typography.Paragraph type="tertiary">自动获取模型列表需要连接提供 OpenAI 兼容的模型列表接口（GET /models）。</Typography.Paragraph>
+    <AdminTable aria-label={t('上游模型列表')} rowKey="key" pagination={false} dataSource={models}
+      empty={keyword ? '没有匹配的模型' : '该连接尚未接入模型'}
       scroll={{ x: 'max(100%, 932px)' }} columns={[
         { title: t('模型标识'), width: 240, render: (_, { association }) =>
           <Typography.Text ellipsis={{ showTooltip: true }}>{association.upstreamModelId}</Typography.Text> },
@@ -82,7 +82,7 @@ function ChannelModelCosts({ state, channel, ops, open }) {
     </div>
     <AdminTable aria-label={t('模型成本')} rowKey="key" pagination={false} dataSource={channel.models}
       rowSelection={{ selectedRowKeys: selected.map(model => model.key), onChange: setCheckedKeys, getCheckboxProps: () => ({ disabled: !ops.can }) }}
-      empty={t('该渠道尚未接入模型')} scroll={{ x: 'max(100%, 704px)' }} columns={[
+      empty={t('该连接尚未接入模型')} scroll={{ x: 'max(100%, 704px)' }} columns={[
       { title: t('模型展示名/标识'), width: 220, render: (_, model) => <div className="channel-identity">
         <Typography.Text strong ellipsis={{ showTooltip: true }}>{model.modelName}</Typography.Text>
         <CopyId copyAtStart ellipsis label="上游模型调用标识" value={model.association.upstreamModelId}/>
@@ -106,9 +106,9 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
     ...(value !== 'api-keys' && { keyGroup: null }) }, { replace: true });
   const keyCount = connectionKeys(endpoint, channel.provider, true).length + t(' 个');
   const fields = [
-    [t('渠道名称 / ID'), <div className="channel-identity"><span>{name}</span><CopyId value={id} label={t('渠道 ID')}/></div>],
+    [t('连接名称 / ID'), <div className="channel-identity"><span>{name}</span><CopyId value={id} label={t('连接 ID')}/></div>],
     [t('服务商'), channel.provider.name],
-    [t('渠道类型'), t(channelSourceTypeLabel(endpoint.channelSourceType ?? channel.provider.sourceType))],
+    [t('连接类型'), t(channelSourceTypeLabel(endpoint.channelSourceType ?? channel.provider.sourceType))],
     [t('接口格式'), workbenchProtocolLabel(channelListType(channel))], [t('接口端点'), channelListPaths(channel).join('、')],
     [t('服务地址'), endpoint.baseUrl],
     [t('完整请求地址'), channelRequestUrls(channel).join('、')],
@@ -132,7 +132,7 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
       {tab === 'overview' && <Button disabled={!ops.can} onClick={event => open(event, 'edit', id)}>{t('编辑信息')}</Button>}
     </AdminPageHeading>
     <Card className="channel-management-card">
-      <Tabs type="line" activeKey={tab} lazyRender keepDOM={false} tabPaneMotion={false} aria-label={t('渠道详情')}
+      <Tabs type="line" activeKey={tab} lazyRender keepDOM={false} tabPaneMotion={false} aria-label={t('连接详情')}
         onChange={selectTab}>
         <Tabs.TabPane tab={t('基本信息')} itemKey="overview">
           <dl className="channel-management-facts">
@@ -185,7 +185,7 @@ export default function ChannelManagementView({ state, connections, ops, open, f
 
   const creationAudits = new Map();
   for (const audit of state.audits) {
-    if (audit.action === '创建渠道连接' && audit.result === '成功') creationAudits.set(audit.objectId, audit);
+    if (['创建连接', '创建渠道连接'].includes(audit.action) && audit.result === '成功') creationAudits.set(audit.objectId, audit);
   }
   const creationFor = row => {
     const audit = creationAudits.get(row.id);
@@ -194,12 +194,12 @@ export default function ChannelManagementView({ state, connections, ops, open, f
   };
   if (connectionId) {
     const channel = connections.find(row => row.id === connectionId);
-    return <div className="admin-page-stack" ref={focusTarget} tabIndex={-1} aria-label={channel?.name || '渠道详情'}>
+    return <div className="admin-page-stack" ref={focusTarget} tabIndex={-1} aria-label={channel?.name || '连接详情'}>
       {channel ? <ChannelDetails state={state} channel={channel} creation={creationFor(channel)} ops={ops} open={open} modelCosts
         keyPool={<ReferenceProviderApiKeys key={channel.id} state={state} connection={channel}
           ops={ops}/>}/>
-        : <Card><Empty description={t('该渠道不存在或已删除')}><Button
-          onClick={() => go({ connection: null, tab: null, modelQ: null, keyGroup: null })}>{t('返回渠道列表')}</Button></Empty></Card>}
+        : <Card><Empty description={t('该连接不存在或已删除')}><Button
+          onClick={() => go({ connection: null, tab: null, modelQ: null, keyGroup: null })}>{t('返回连接列表')}</Button></Empty></Card>}
     </div>;
   }
 
@@ -224,23 +224,23 @@ export default function ChannelManagementView({ state, connections, ops, open, f
   return <div className="admin-page-stack" ref={focusTarget}>
     <Space spacing={6} align="center">
       <AdminPageHeading title={t(pages['providers-reference'].label)}/>
-      <Tooltip closeOnEsc content={<>{t('渠道是模型服务的接入配置，由')}<strong>{t('服务地址、接口协议及端点、API 密钥')}</strong>{t('共同决定。多个模型的上述配置完全一致时，可共用同一渠道；任一配置不同时，需创建独立渠道。')}</>}>
-        <Button size="small" theme="borderless" type="tertiary" aria-label={t('渠道定义')} icon={<IconHelpCircle aria-hidden="true"/>}/>
+      <Tooltip closeOnEsc content={<>{t('模型连接是平台访问上游模型服务的一套配置，由')}<strong>{t('服务商、服务地址、接口格式、接口端点和上游 API 密钥')}</strong>{t('共同决定。一个连接只对应一种接口格式和一个接口端点，可接入多个上游模型；任一配置不同时，需创建独立的连接。')}</>}>
+        <Button size="small" theme="borderless" type="tertiary" aria-label={t('连接定义')} icon={<IconHelpCircle aria-hidden="true"/>}/>
       </Tooltip>
     </Space>
     <Card className="channel-management-card">
       <div className="channel-management-toolbar">
-        <SearchBox placeholder={t('按渠道名称搜索')} value={query}
+        <SearchBox placeholder={t('按连接名称搜索')} value={query}
           onChange={value => go({ q: value || null, page: null }, { replace: true })}/>
         {filtered && <Button theme="borderless" onClick={() => go({ channelProvider: null, channelModel: null, page: null })}>{t('清除来源筛选')}</Button>}
         {returnTo && <Button theme="borderless" onClick={() => ops.proceed(() => { location.hash = returnTo; })}>{t('返回来源页面')}</Button>}
         <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can}
-          onClick={event => open(event, 'create')}>{t('添加新的渠道')}</Button>
+          onClick={event => open(event, 'create')}>{t('添加新的连接')}</Button>
       </div>
-      <AdminTable aria-label={t('渠道列表')} rowKey="id" pagination={false} dataSource={rows}
-        empty={t(query.trim() || filtered ? '没有匹配的渠道' : '暂无渠道')}
+      <AdminTable aria-label={t('连接列表')} rowKey="id" pagination={false} dataSource={rows}
+        empty={t(query.trim() || filtered ? '没有匹配的连接' : '暂无连接')}
         scroll={{ x: 'max(100%, 1432px)' }} columns={[
-          { title: t('渠道名称 / ID'), width: 196, render: (_, row) => <div className="channel-identity">
+          { title: t('连接名称 / ID'), width: 196, render: (_, row) => <div className="channel-identity">
             <Button size="small" theme="borderless" className="channel-name-link" data-channel-id={row.id}
               onClick={() => view(row.id)}>
               <span className="channel-identity">
@@ -249,7 +249,7 @@ export default function ChannelManagementView({ state, connections, ops, open, f
               </span>
             </Button>
           </div> },
-          { title: t('渠道类型'), width: 148, render: (_, { provider, endpoint }) => t(channelSourceTypeLabel(endpoint.channelSourceType ?? provider.sourceType)) },
+          { title: t('连接类型'), width: 148, render: (_, { provider, endpoint }) => t(channelSourceTypeLabel(endpoint.channelSourceType ?? provider.sourceType)) },
           { title: t('接口格式'), width: 200, render: (_, row) =>
             <Typography.Text ellipsis={{ showTooltip: true }}>{workbenchProtocolLabel(channelListType(row))}</Typography.Text> },
           { title: t('接口端点'), width: 184, render: (_, row) =>
@@ -267,9 +267,9 @@ export default function ChannelManagementView({ state, connections, ops, open, f
             return <Space spacing={2}>
               <Button size="small" theme="borderless" disabled={!ops.can} aria-label={t('测试连接') + ' ' + row.name}
                 onClick={event => open(event, 'testConnection', row.id)}>{t('测试连接')}</Button>
-              <Button size="small" theme="borderless" disabled={!ops.can} aria-label={t(enabled ? '停用渠道' : '启用渠道') + ' ' + row.name}
+              <Button size="small" theme="borderless" disabled={!ops.can} aria-label={t(enabled ? '停用连接' : '启用连接') + ' ' + row.name}
                 onClick={event => open(event, enabled ? 'disable' : 'enable', row.id)}>{t(label)}</Button>
-              <Button size="small" theme="borderless" type="danger" disabled={!ops.can} aria-label={t('删除渠道') + ' ' + row.name}
+              <Button size="small" theme="borderless" type="danger" disabled={!ops.can} aria-label={t('删除连接') + ' ' + row.name}
                 onClick={event => open(event, 'remove', row.id)}>{t('删除')}</Button>
             </Space>;
           } },

@@ -49,7 +49,7 @@ export function modelOperationsExamplesTransaction(source) {
     }
     const ids = [...(provider.catalogModelIds || [])], catalogue = [...(provider.catalogModels || [])], connections = [...(provider.catalogConnections || [])];
     const offered = MODEL_OPERATIONS_EXAMPLES.filter(model => spec.key === 'moma' || model.supplier === spec.key);
-    const channels = spec.key === 'moma' ? [{ key: 'self', name: '自营渠道', origin: 'direct' }, { key: 'resale', name: '转售渠道', origin: 'resale' }] : [{ key: 'official', name: '原厂渠道', origin: 'direct' }];
+    const channels = spec.key === 'moma' ? [{ key: 'self', name: '自营连接', origin: 'direct' }, { key: 'resale', name: '转售连接', origin: 'resale' }] : [{ key: 'official', name: '原厂连接', origin: 'direct' }];
     for (const channel of channels) {
       const endpointId = `mock-channel-${spec.key}-${channel.key}`;
       add('endpoints', record(endpointId, { endpointId, providerId: provider.id, channelCode: `${spec.key}-${channel.key}`, supplierChannel: true, name: channel.name, protocol: 'OpenAI', baseUrl: '', authMode: 'specific', apiKeyId: '', apiKeys: [], credentialRef: '', modelIds: [], timeoutSeconds: 60, status: '草稿', connectionTest: null }));

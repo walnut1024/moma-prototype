@@ -35,12 +35,12 @@ test('simple JSON and visual rules normalize together and reject protected field
 });
 
 test('request processing filters fields, respects client prompts and rejects incompatible passthrough', () => {
-  const rules = { processing: { systemPrompt: '渠道提示', promptMode: 'prepend', passHeaders: ['X-Request-ID'],
+  const rules = { processing: { systemPrompt: '连接提示', promptMode: 'prepend', passHeaders: ['X-Request-ID'],
     removeFields: ['store'], forceOpenAI: true, reasoningToContent: true }, headers: { 'x-workspace': '{{model}}' } };
   const sample = { model: 'kimi/k3', store: true, messages: [{ role: 'system', content: '客户端提示' }] };
   const result = previewChannelRequestRules(rules, sample, 200, { interfaceType: 'openai',
     headers: { 'X-Request-ID': 'client-id', Authorization: 'Bearer dummy' } });
-  assert.equal(result.request.body.messages[0].content, '渠道提示\n客户端提示');
+  assert.equal(result.request.body.messages[0].content, '连接提示\n客户端提示');
   assert.equal(Object.hasOwn(result.request.body, 'store'), false);
   assert.deepEqual(result.request.headers, { 'x-request-id': 'client-id', 'x-workspace': 'kimi/k3' });
   assert.match(result.response.sample.choices[0].message.content, /<think>/);

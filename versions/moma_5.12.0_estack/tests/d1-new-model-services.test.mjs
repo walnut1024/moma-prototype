@@ -37,7 +37,7 @@ test('new model services share D1, protect imported records, and inherit the per
   const model = { id: resourceId('model-service'), name: 'service example', callId: 'example-local-model', modelId: '',
     modelName: '', type: 'text', note: 'original note', description: '', listed: false,
     channels: [{ id: resourceId('service-channel'), channelId: 'mock-service-channel:original:1',
-      fingerprint: 'mock-service-channel:original:1', name: 'original channel', provider: '模拟渠道',
+      fingerprint: 'mock-service-channel:original:1', name: 'original channel', provider: '模拟连接',
       upstreamId: 'mock/original', enabled: true, simulated: true, priority: 0, weight: 37, context: 32000 }],
     createdBy: 'original creator', createdAt: '2026-11-20T11:37:24.000Z', tags: '' };
   const command = (action, row, revision = 0, id = row?.id) => ({ action, id, row, revision, operationId: resourceId('operation') });

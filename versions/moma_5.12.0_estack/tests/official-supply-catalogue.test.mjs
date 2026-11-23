@@ -82,7 +82,7 @@ test('channel and model removal require confirmation, retain history and never r
   const deleted = commitAdminState(seed, act('channelDelete', owner.id, { modelId: 'kimi-k3', channelId: item.id, confirmed: true }));
   assert.equal(catalogueChannels(deleted, provider(deleted, owner.id), 'kimi-k3').length, 1);
   assert.ok(provider(deleted, owner.id).catalogConnections.find(c => c.id === item.id).deletedAt);
-  assert.throws(() => commitAdminState(deleted, act('catalogueRemove', owner.id, { modelId: 'kimi-k3', confirmed: true })), /请先删除.*全部渠道/);
+  assert.throws(() => commitAdminState(deleted, act('catalogueRemove', owner.id, { modelId: 'kimi-k3', confirmed: true })), /请先移除.*全部上游模型记录/);
   const remaining = catalogueChannels(deleted, provider(deleted, owner.id), 'kimi-k3')[0];
   const cleared = commitAdminState(deleted, act('channelDelete', owner.id, { modelId: 'kimi-k3', channelId: remaining.id, confirmed: true }));
   const removed = cleared;

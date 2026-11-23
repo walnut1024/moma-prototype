@@ -42,7 +42,7 @@ function prepareServiceCases(source, cases, prefix) {
     if (!provider.catalogModelIds.includes(catalogueId)) provider.catalogModelIds.push(catalogueId);
     if (!provider.catalogModels.some(item=>item.modelId===catalogueId)) provider.catalogModels.push({modelId:catalogueId,name:model.name,type:model.type});
     const path=model.type==='video'?'videos/generations':model.type==='image'?'images/generations':model.type==='audio'?'audio/speech':'chat/completions';
-    const name=index===1?`${supplierNames[key]}主渠道`:`${supplierNames[key]}备用渠道 ${index}`;
+    const name=index===1?`${supplierNames[key]}主连接`:`${supplierNames[key]}备用连接 ${index}`;
     const endpoint=record(endpointId,{endpointId,name,providerId:provider.id,protocol:['text','multimodal'].includes(model.type)?'OpenAI':'其他',baseUrl:`https://${key}-${model.serviceReviewCase}-${index}.service-review.example.invalid/v1/${path}`,credentialRef:'local-service-review-placeholder',modelIds:linked?[model.id]:[],capacity:10000,timeoutSeconds:60,status:'运行中'});
     endpoint.connectionTest={fingerprint:connectionFingerprint(endpoint),result:'通过',message:'连接配置检查通过',testedAt:at,simulated:true};
     state.endpoints.push(endpoint);

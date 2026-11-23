@@ -70,7 +70,7 @@ export default function ProcurementVersionEditor({ state, provider, association,
       <dl><div><dt>服务商</dt><dd>{provider.name}</dd></div><div><dt>模型</dt><dd>{modelName || association.modelId}</dd></div></dl>
       <AdminStatus value={quote?.scenarios?.length ? '已配置' : draft ? '报价草稿' : active === null ? '已失效' : '待配置'}/>
     </div>
-    {stale && <Notice error>该渠道采购价已有新版本，当前输入保留，请关闭并重新打开。</Notice>}
+    {stale && <Notice error>该连接采购价已有新版本，当前输入保留，请关闭并重新打开。</Notice>}
     {publishing ? <section className="ss-body">
       <Typography.Title heading={5} component="h3">预览发布</Typography.Title>
       <div className="procurement-cost-dates">

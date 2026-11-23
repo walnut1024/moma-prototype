@@ -23,7 +23,7 @@ export function validateOffer(offer, provider) {
   for (const { protocol, url, upstream } of offer.bindings) {
     if (typeof upstream !== 'string' || !upstream.trim() || upstream.length > 256 || /\s/.test(upstream)) throw Error('请填写有效的模型标识');
     const type = CHANNEL_LIST_TYPES.find(item => item.label === protocol);
-    if (!type || typeof url !== 'string' || !type.paths.some(path => url.replace(/\/$/, '').endsWith(path))) throw Error('请填写与渠道协议匹配的完整 URL');
+    if (!type || typeof url !== 'string' || !type.paths.some(path => url.replace(/\/$/, '').endsWith(path))) throw Error('请填写与连接协议匹配的完整 URL');
     prepareChannelInterface({ interfaceType:'custom', baseUrl:url, allowHttp:provider.sourceType === 'selfHosted' });
     const key = JSON.stringify([upstream, protocol, url]);
     if (seen.has(key)) throw Error('模型标识、协议及端点重复');

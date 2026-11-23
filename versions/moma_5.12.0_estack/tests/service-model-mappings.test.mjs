@@ -63,7 +63,7 @@ test('active routes and drafts block disable, target edits and removal; stopping
  const f=fixture(),s=create(f);f.state=command(f,'serviceMappingValidate',{id:s.id});f.state=command(f,'serviceMappingEnable',{id:s.id});
  f.state.serviceRoutes.push({id:'test-route',serviceId:f.service.id,activeVersion:0,versions:[],draft:{channels:[{supplyId:s.id,enabled:false}]}});assert.equal(mappingReferences(f.state,s)[0].kind,'路由草稿');
  for(const op of ['serviceMappingDisable','serviceMappingRemove'])assert.throws(()=>command(f,op,{id:s.id,confirmed:true}),/路由/);
- assert.throws(()=>command(f,'serviceMappingSave',{id:s.id,name:'换渠道',config:config(f.candidates[1],f.service)}),/路由/);
+ assert.throws(()=>command(f,'serviceMappingSave',{id:s.id,name:'换连接',config:config(f.candidates[1],f.service)}),/路由/);
  f.state.serviceRoutes=[];f.state.modelOnboardings=[{id:'pending',status:'接入中',supplyId:s.id}];assert.throws(()=>command(f,'serviceMappingDisable',{id:s.id,confirmed:true}),/未完成任务/);f.state.modelOnboardings=[];assert.throws(()=>command(f,'serviceMappingRemove',{id:s.id,confirmed:true}),/先停用/);f.state=command(f,'serviceMappingDisable',{id:s.id,confirmed:true});f.state=command(f,'serviceMappingRemove',{id:s.id,confirmed:true});assert.equal(f.state.modelSupplies.find(row=>row.id===s.id).status,'已移除');assert.equal(modelSupplies(f.state,f.service.modelId).length,0);
 });
 test('HTTP/D1 mapping commands retain stable references after reload and reject forged validation and revisions',{timeout:60000},async()=>{

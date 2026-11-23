@@ -130,12 +130,12 @@ export function importModelResources(state, file, run, expectedTarget) {
       const channel = resourceRows(working, 'channels').find(item => item.type === 'channel' && item.id === row.channel_id);
       if (!service || !channel || channel.model_id !== service.model_id) throw Error('关联 ID 不存在或不属于同一模型');
       if (!snapshot.rows.some(item => item.id === row.model_service_id)) throw Error('模型服务不属于当前对象范围');
-      if (service.providerId && (service.providerId !== channel.provider_id || service.channelId && channelIdentity(working, service.channelId) !== channel.id)) throw Error('渠道不属于所选模型服务');
+      if (service.providerId && (service.providerId !== channel.provider_id || service.channelId && channelIdentity(working, service.channelId) !== channel.id)) throw Error('连接不属于所选模型服务');
       if (working.modelSupplies.some(item => item.modelId === service.model.id && item.status !== '已移除' && channelIdentity(working, item.channelId || item.id) === channel.id)) continue;
       const provider = working.providers.find(item => item.id === channel.provider_id);
       const association = provider.catalogConnections.find(item => channelIdentity(working, item.id) === channel.id && !item.deletedAt);
       apply(run(working, { operation: 'serviceMappingCreate', modelId: service.model.id, data: {
-        serviceId: service.id, expectedSource: mappingSourceVersion(working, service), name: (channel.name || '渠道映射').slice(0, 60),
+        serviceId: service.id, expectedSource: mappingSourceVersion(working, service), name: (channel.name || '连接映射').slice(0, 60),
         config: { providerId: provider.id, endpointId: association.endpointId, associationId: association.id,
           catalogueModelId: association.modelId, upstreamModelId: association.upstreamModelId, platformInterface: platformRouteInterface(service.model).path, additionalInterfaces: [] },
       } }));
@@ -164,7 +164,7 @@ export function importModelResources(state, file, run, expectedTarget) {
       if (['base_url','protocol','interface_type','task_urls'].some(field => !same(row[field], original[field]))) apply(providerTransaction(working, { operation: 'supplierChannelSave', objectId: row.provider_id,
         data: { ...endpoint, endpointId: row.id, mode: 'address', baseUrl: row.base_url, protocol: row.protocol, ...(row.interface_type ? { interfaceType: row.interface_type } : {}), taskUrls: row.task_urls, confirmed: true } }));
     } else if (row.type === 'channel') {
-      if (!row.model_id) throw Error('请先修复该渠道的模型关联，再导入维护');
+      if (!row.model_id) throw Error('请先修复该连接的模型关联，再导入维护');
       const provider = working.providers.find(item => item.id === row.provider_id);
       const association = provider.catalogConnections.find(item => channelIdentity(working, item.id) === row.id && !item.deletedAt);
       if (row.name !== original.name || row.upstream_model_id !== original.upstream_model_id) apply(providerTransaction(working, { operation: 'supplierAssociationSave', objectId: provider.id, data: {

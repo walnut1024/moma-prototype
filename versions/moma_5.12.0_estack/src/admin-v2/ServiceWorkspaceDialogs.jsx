@@ -32,7 +32,7 @@ export function CommercialDialog({state,model,ops,close,providerId='',readOnly=f
   const current=providerId?activeProviderPrice(state,model.id,providerId):activeModelSalePrice(state,model.id);
   const change=items=>{if(publishing)return;setValue(row=>({...row,items}));setPreview(false);ops.dirty(true);ops.setError('');};
   const publish=async()=>{if(publishing)return;setPublishing(true);try{if(await ops.run('commercialPublish',{kind:'price',providerId,value,expectedBase:base,confirmed:true},model.id)){setPreview(false);ops.dirty(false);close();}}finally{setPublishing(false);}};
-  return <section className="ss-body" aria-label={providerId?'渠道服务售价':'统一平台售价'}>
+  return <section className="ss-body" aria-label={providerId?'模型服务售价':'统一平台售价'}>
     {ops.conflict && <Notice error>其他页面的数据已变化，当前输入保留。载入后请重新打开配置核对。<Button onClick={ops.reload}>载入最新数据</Button></Notice>}
     {base!==commercialPriceBase(state,model,providerId) && <Notice error>配置已变化，当前输入保留。<Button theme="borderless" disabled={!ops.can} onClick={()=>{setBase(commercialPriceBase(state,model,providerId));setPreview(false);ops.dirty(true);}}>按当前配置重新核对</Button></Notice>}
     <RetailPriceFields state={state} identity={servicePriceIdentity(state,model,providerId)} readOnly={readOnly} onEdit={onEdit} rows={readOnly?initial().items:value.items} setRows={change} ops={{...ops,can:ops.can && !publishing}} prefix="平台售价"/>

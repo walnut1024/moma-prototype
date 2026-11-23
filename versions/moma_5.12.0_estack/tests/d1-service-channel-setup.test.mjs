@@ -102,7 +102,7 @@ test('supplier and service operations share a scoped, redacted audit trail throu
     assert.ok(defaultGroupId);
     assert.deepEqual((await local.db.prepare('SELECT credential_id FROM key_group_members WHERE group_id=? AND supplier_id=? ORDER BY position').bind(defaultGroupId,providerId).all()).results.map(row=>row.credential_id),ordered);
     const staleId=crypto.randomUUID();assert.equal((await api('/model-operations/commands',{...priorityBody,operationId:staleId},staleId)).status,409);
-    await command('supplierChannelRegister',{providerId,modelId:registered.modelId,name:'新供应模型渠道',upstreamModelId:'vendor/GLM-5.3',baseUrl:'https://mapping-contract.example.invalid/v1',protocol:'OpenAI',authMode:'group',keyGroupId:'default',scenarios:[]});
+    await command('supplierChannelRegister',{providerId,modelId:registered.modelId,name:'新供应上游模型',upstreamModelId:'vendor/GLM-5.3',baseUrl:'https://mapping-contract.example.invalid/v1',protocol:'OpenAI',authMode:'group',keyGroupId:'default',scenarios:[]});
     const endpointId=state.audits[0].objectId,endpoint=()=>state.endpoints.find(row=>row.id===endpointId),association=supplierChannelAssociations(state,owner(),endpointId).find(row=>row.modelId===registered.modelId);
     assert.equal(association.enabled,false);assert.equal(serviceRoute(state,service().id),undefined);assert(routeCommandCandidates(state,service()).every(row=>!row.available));
     const server=await prepareServerChannel(owner(),endpoint()),request={operationId:crypto.randomUUID(),channelId:server.id,models:[{id:master.id,associationId:association.id,upstreamModelId:association.upstreamModelId,type:'text'}]},job={providerId,endpointId,operationId:request.operationId,serverChannelId:server.id,signature:connectionFingerprint(endpoint()),associationIds:[association.id],request};
@@ -163,7 +163,7 @@ test('supplier and service operations share a scoped, redacted audit trail throu
     assert.equal(activeRouteVersion(serviceRoute(state,service().id)).version,active.version);
     assert(!JSON.stringify(state).includes(replacementSecret));
 
-    await command('supplierChannelRegister',{providerId,modelId:registered.modelId,name:'第二模型渠道',upstreamModelId:'vendor/GLM-5.3-b',baseUrl:'https://mapping-contract.example.invalid/v2',protocol:'OpenAI',authMode:'group',keyGroupId:'default',scenarios:[]});
+    await command('supplierChannelRegister',{providerId,modelId:registered.modelId,name:'第二上游模型',upstreamModelId:'vendor/GLM-5.3-b',baseUrl:'https://mapping-contract.example.invalid/v2',protocol:'OpenAI',authMode:'group',keyGroupId:'default',scenarios:[]});
     const secondEndpoint=state.audits[0].objectId;
     const selections=[endpointId,secondEndpoint].map(id=>{
       const channel=supplierChannelAssociations(state,owner(),id).find(row=>row.modelId===registered.modelId);

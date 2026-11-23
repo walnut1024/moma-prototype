@@ -51,7 +51,7 @@ const preflightColumns = [
 ];
 const upstreamColumns = [
   ['客户 Request ID', 'requestId'], ['上游 Request ID', 'upstreamRequestId'], ['尝试序号', 'index'], ['开始时间', 'at', observationTime],
-  ['服务商', 'providerName'], ['渠道', 'channelName'], ['上游模型', 'upstreamModelId'], ['上游状态', 'outcome', value => outcomes[value]],
+  ['服务商', 'providerName'], ['连接', 'channelName'], ['上游模型', 'upstreamModelId'], ['上游状态', 'outcome', value => outcomes[value]],
   ['上游 HTTP 状态码', 'status'], ['耗时（ms）', 'duration'], ['错误码', 'code'], ['失败原因', 'errorReason'],
   ['端点', 'endpointName'], ['客户', 'tenantName'], ['项目', 'projectName'],
 ];
@@ -125,7 +125,7 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
   };
   const chooseView = next => {
     setView(next);
-    // 渠道、结果和状态码在客户请求和上游请求中来自不同层级。
+    // 连接、结果和状态码在客户请求和上游请求中来自不同层级。
     change({ outcome: '', http: '', query: '', request: '', preflightType: '', errorCode: '', upstreamModelId: null,
       ...(next === 'preflight' && { supply: null, endpoint: null, user: null, key: null, source: null, purpose: null, userRecord: '' }) }, next);
   };

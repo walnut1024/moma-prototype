@@ -6140,7 +6140,7 @@
         "channels": [
           [
             "CH-101",
-            "官方渠道",
+            "官方连接",
             "https://api.deepseek.com/chat/completions",
             "inherit"
           ]
@@ -6200,20 +6200,20 @@
         "channels": [
           [
             "CH-201",
-            "北京渠道",
+            "北京连接",
             "https://beijing.ark.example.invalid/v1/chat/completions",
             "inherit"
           ],
           [
             "CH-202",
-            "上海渠道",
+            "上海连接",
             "https://shanghai.ark.example.invalid/v1/chat/completions",
             "specific",
             "KEY-202"
           ],
           [
             "CH-203",
-            "海外渠道",
+            "海外连接",
             "https://overseas.ark.example.invalid/v1/chat/completions",
             "specific",
             "KEY-203"
@@ -6313,7 +6313,7 @@
         "channels": [
           [
             "CH-301",
-            "默认渠道",
+            "默认连接",
             "https://api.moonshot.cn/v1/chat/completions",
             "inherit"
           ]

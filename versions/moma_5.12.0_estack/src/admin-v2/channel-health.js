@@ -34,14 +34,14 @@ export function channelHealthTransaction(state, { data }) {
   const { providerId, endpointId, associationId, keyId = '', expectedFingerprint, confirmed, scenario = 'success' } = data;
   const provider = state.providers.find(row => row.id === providerId);
   const endpoint = state.endpoints.find(row => row.id === endpointId && row.providerId === providerId && !row.deletedAt);
-  if (!provider || !endpoint || provider.status !== '已启用') throw new Error('服务商或渠道不可用，请重新核对');
+  if (!provider || !endpoint || provider.status !== '已启用') throw new Error('服务商或连接不可用，请重新核对');
   const association = supplierChannelAssociations(state, provider, endpointId).find(row => row.id === associationId);
-  if (!association) throw new Error('渠道模型关联已变化');
+  if (!association) throw new Error('上游模型关联已变化');
   const key = connectionKeys(endpoint, provider, true).find(row => row.id === keyId);
-  if (endpoint.authMode !== 'none' && (!key || key.revokedAt || key.status === 'disabled')) throw new Error('请选择此渠道绑定的可用 API 密钥');
-  if (endpoint.authMode === 'none' && keyId) throw new Error('此渠道无需密钥');
+  if (endpoint.authMode !== 'none' && (!key || key.revokedAt || key.status === 'disabled')) throw new Error('请选择此连接绑定的可用 API 密钥');
+  if (endpoint.authMode === 'none' && keyId) throw new Error('此连接无需密钥');
   if (confirmed !== true || expectedFingerprint !== healthFingerprint(provider, association, key)) throw new Error('请重新核对当前配置后确认检测');
-  if (channelInterfaceIssue(provider, association)) throw new Error('接口不匹配，请先修正渠道配置');
+  if (channelInterfaceIssue(provider, association)) throw new Error('接口不匹配，请先修正连接配置');
   // Test a group backup key without changing the active group or qualification.
   const testingState = structuredClone(state);
   const testingEndpoint = testingState.endpoints.find(row => row.id === endpointId);
@@ -49,5 +49,5 @@ export function channelHealthTransaction(state, { data }) {
   // shortcut: Browser prototype uses simulated diagnostics; replace this call when a backend probe is available.
   const result = providerModelConnectivityTest(testingState, { providerId, endpointId, keyId, modelId: association.modelId, upstreamId: association.upstreamModelId, prompt: '请只回复 OK。', scenario });
   const record = { id: resourceId('validation-result'), associationId, modelId: association.modelId, upstreamModelId: association.upstreamModelId, keyId, fingerprint: expectedFingerprint, connectionFingerprint: connectionFingerprint(endpoint), testedAt: new Date().toISOString(), result: result.result, status: result.status, durationMs: result.durationMs, message: result.message, hint: result.hint || '', source: 'mock', simulated: true };
-  return { type: 'batch', objectId: endpoint.id, label: '渠道密钥连通检测', changes: [{ type: 'update', collection: 'endpoints', id: endpoint.id, changes: { keyConnectivityTests: [...(endpoint.keyConnectivityTests || []), record] } }] };
+  return { type: 'batch', objectId: endpoint.id, label: '连接密钥连通检测', changes: [{ type: 'update', collection: 'endpoints', id: endpoint.id, changes: { keyConnectivityTests: [...(endpoint.keyConnectivityTests || []), record] } }] };
 }

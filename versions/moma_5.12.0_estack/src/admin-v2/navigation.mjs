@@ -12,7 +12,7 @@ export const sections = [
     { id: "customers-analysis", label: "客户数据", children: [["customer-analysis", "客户数据"]] },
   ]},
   { id: "models", workspace: "operations", title: "模型运营", items: [
-    { id: "channels-reference", label: "渠道管理", children: [["providers-reference", "渠道列表"], ["providers-health", "渠道健康"]] },
+    { id: "channels-reference", label: "模型接入", children: [["providers-reference", "连接列表"], ["providers-health", "连接健康"]] },
     { id: "warehouse-new", label: "模型服务", children: [["listing-new", "模型服务"]] },
     { id: "model-links", label: "模型链路", children: [["model-links", "模型链路"]] },
     { id: "market", label: "模型广场", children: [["model-market", "模型广场"]] },

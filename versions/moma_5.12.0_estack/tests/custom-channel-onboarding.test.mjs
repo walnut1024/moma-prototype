@@ -121,7 +121,7 @@ test('appending a custom model atomically materializes only its metadata and map
   const added = owner.catalogConnections.find(row => row.upstreamModelId === 'Vendor/Appended:V2'); assert.equal(added.enabled, false); assert.equal(next.modelOnboardings.find(row => row.id === draft.id).status, '已完成');
   const master = next.modelTemplates.find(row => row.modelId === 'appended-custom-v2'); assert.equal(owner.catalogModels.find(row => row.modelId === master.modelId).libraryId, master.id);
   assert.throws(() => run(first, 'channelQuickCreate', { ...data, values: { ...data.values, baseUrl: 'https://must-not-override.invalid/v1' } }), /不能同时修改/);
-  assert.throws(() => run(first, 'channelQuickCreate', { ...data, providerId: 'foreign-provider' }), /渠道已变化/);
+  assert.throws(() => run(first, 'channelQuickCreate', { ...data, providerId: 'foreign-provider' }), /连接已变化/);
   assert.throws(() => run(first, 'channelQuickCreate', { ...data, newApiKey: {} }), /不能同时修改/);
   assert.throws(() => run(first, 'channelQuickCreate', { ...data, values: { ...data.values, models: [data.values.models[0], { newModel: { modelId: 'bad-second', type: 'video' } }] } })); assert.deepEqual(first, before);
   assert.throws(() => run(draftState, 'channelQuickCreate', { ...payload({ newProvider: undefined, providerId }), draftId: draft.id, expectedDraftRevision: draft.draftRevision }), /草稿已变化/);

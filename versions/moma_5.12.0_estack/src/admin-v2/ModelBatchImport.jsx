@@ -185,7 +185,7 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
         : <Upload accept=".xlsx,.csv" uploadTrigger="custom" fileList={[]} showUploadList={false} draggable dragIcon={<IconUpload aria-hidden="true"/>}
           dragMainText={'点击上传' + label + '表格或拖拽文件到这里'} dragSubText="支持 XLSX、UTF-8 CSV，单个文件不超过 10 MB"
           disabled={busy || !ops.can} onFileChange={files => readFile(files[0])}/>}
-      {json ? <Typography.Paragraph>JSON 中的 Provider ID 和服务商编码须与当前服务商一致，内容不超过 10 MB。模型映射引用同一份 JSON 中的连接，新增渠道保存为待验证。</Typography.Paragraph>
+      {json ? <Typography.Paragraph>JSON 中的 Provider ID 和服务商编码须与当前服务商一致，内容不超过 10 MB。模型映射引用同一份 JSON 中的连接，新增连接保存为待验证。</Typography.Paragraph>
         : kind === 'model' ? <ImportHelp/> : <Typography.Paragraph>{kind === 'provider'
         ? '填写服务商名称、服务商编码和供给类型。供给类型填写「自有推理服务」或「第三方推理服务」。其余字段选填。'
         : '每行填写已有服务商编码和模型编码，确认后登记一条供给关系。'}</Typography.Paragraph>}
@@ -213,7 +213,7 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
         <Descriptions align="left" data={json ? [
           ...summaryHeaders.model.map(key => ({ key, value: selected.cells[headers.indexOf(key)] })),
           ...(selected.mappingPreview ? Object.entries(selected.payload.model.model_info || {}).filter(([, value]) => value != null).map(([key, value]) => ({ key: jsonDetailLabels[key], value: typeof value === 'object' ? JSON.stringify(value) : String(value) })) : []),
-          ...(selected.mappingPreview || []).map(mapping => ({ key: '渠道映射', value: `${mapping.upstreamModelId} · ${mapping.baseUrl} · ${mapping.existing ? '已存在' : '待验证'}` })),
+          ...(selected.mappingPreview || []).map(mapping => ({ key: '连接映射', value: `${mapping.upstreamModelId} · ${mapping.baseUrl} · ${mapping.existing ? '已存在' : '待验证'}` })),
           ...(selected.reference ? [{ key: '上游参考', value: [selected.reference.upstreamModelId, selected.reference.url].filter(Boolean).join(' · ') }] : []),
         ].filter(field => field.value) : headers.map((key, i) => ({ key, value: selected.cells[i] })).filter(field => field.value)}/>
       </>}

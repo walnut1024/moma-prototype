@@ -19,11 +19,11 @@ const initialFilters = { period: '7', dates: [], event_id: '', actor: '', action
 const periods = { '1': '近 24 小时', '7': '近 7 天', '30': '近 30 天', custom: '自定义日期' };
 const auditModules = {
   'service_route.publish': '模型运营 / 模型服务',
-  'supplier_key_group.rotate': '模型运营 / 渠道管理',
-  'supplier_key.replace': '模型运营 / 渠道管理',
-  'model_supply.disable': '模型运营 / 渠道管理',
+  'supplier_key_group.rotate': '模型运营 / 模型接入',
+  'supplier_key.replace': '模型运营 / 模型接入',
+  'model_supply.disable': '模型运营 / 模型接入',
 };
-const fieldLabels = { active_version: '生效路由版本', strategy: '路由策略', channel_weights: '渠道权重', status: '映射状态',
+const fieldLabels = { active_version: '生效路由版本', strategy: '路由策略', channel_weights: '上游模型权重', status: '映射状态',
   configuration_version: '配置版本', active_key_id: '首位密钥 ID', enabled: '供给状态', validation_id: '验证记录 ID', personal_space_enabled: '开放个人空间' };
 const itemLabels = { succeeded: '已停用', unchanged: '无变化', unknown: '原状态未记录' };
 const roleLabels = { target: '操作目标', changed: '实际变更', related: '关联对象' };
@@ -57,7 +57,7 @@ function AuditChanges({ event }) {
     {event.item_results.length > 0 && <section>
       <Title heading={6}>逐项结果</Title>
       <AdminTable rowKey="resource_ref" pagination={false} dataSource={event.item_results} columns={[
-        { title: '模型渠道供给', dataIndex: 'resource_ref', render: value => resourceName(event.resources.find(resource => resource.type + ':' + resource.id === value)) },
+        { title: '上游模型供给', dataIndex: 'resource_ref', render: value => resourceName(event.resources.find(resource => resource.type + ':' + resource.id === value)) },
         { title: '结果', dataIndex: 'status', render: value => itemLabels[value] },
       ]}/>
     </section>}
@@ -211,7 +211,7 @@ export default function AuditLogsPage({ accountId, params, tenants = [], project
     { title: '项目', width: 70, render: (_, row) => projectName(row.scope?.project_id) || '—' },
     { title: '结果', width: 77, render: (_, row) => resultTag(row.outcome.status) },
     { title: '操作对象', width: 172, render: (_, row) => <>
-      {row.target_count > 1 ? row.target_count + ' 个模型渠道供给'
+      {row.target_count > 1 ? row.target_count + ' 个上游模型供给'
         : row.target?.type === 'project' ? projectName(row.target.id) : resourceName(row.target)}
       {row.matched?.roles.includes('related') && <><br/><Text size="small" type="tertiary">关联命中 · {resourceName(row.matched)}</Text></>}
     </> },

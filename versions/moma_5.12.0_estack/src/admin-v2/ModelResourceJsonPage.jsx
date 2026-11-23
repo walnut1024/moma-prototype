@@ -37,7 +37,7 @@ export default function ModelResourceJsonPage({ state, ops, scope, readOnly = fa
       {!readOnly && !result.error && scope !== 'services' && <ModelResourceTransfer state={state} ops={ops} scope={scope} target={result.target} hideView/>}
     </Space></AdminPageHeading>
     {!result.error && scope === 'channels' && <Typography.Paragraph type="tertiary">
-      {[['provider', '服务商'], ['provider_model', '模型登记'], ['connection', '连接'], ['channel', '模型渠道']].map(([type, label]) => `${label} ${result.rows.filter(row => row.type === type).length}`).join(' · ')}
+      {[['provider', '服务商'], ['provider_model', '模型登记'], ['connection', '连接'], ['channel', '上游模型']].map(([type, label]) => `${label} ${result.rows.filter(row => row.type === type).length}`).join(' · ')}
     </Typography.Paragraph>}
     {result.error ? <Notice error>{result.error}</Notice> : <JsonDocument key={`${scope}:${JSON.stringify(result.target)}:${state.revision}`} text={text}/>}
     {ops.leaveDialog}

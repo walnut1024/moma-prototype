@@ -12,7 +12,7 @@ const owner = state => state.providers.find(row => row.id === providerId);
 const endpoint = (state, code = 'CH-001') => state.endpoints.find(row => row.channelCode === code);
 const action = (operation, values) => ({ type: 'modelOperations', operation: 'provider', data: { operation, objectId: providerId, values } });
 const run = (state, operation, values) => commitAdminState(state, action(operation, values));
-const createValues = { name: '验收专用渠道', protocol: 'OpenAI', baseUrl: 'https://qa.example.invalid/v1/chat/completions', keyGroupId: 'default', models: [{ libraryId: 'model-2', upstreamModelId: 'GLM-5.2', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }, { name: '输出 Token', listPrice: '8.5', unit: '百万 Token', currency: 'CNY' }] }] };
+const createValues = { name: '验收专用连接', protocol: 'OpenAI', baseUrl: 'https://qa.example.invalid/v1/chat/completions', keyGroupId: 'default', models: [{ libraryId: 'model-2', upstreamModelId: 'GLM-5.2', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }, { name: '输出 Token', listPrice: '8.5', unit: '百万 Token', currency: 'CNY' }] }] };
 
 test('group read views preserve old credentials and expose unassigned keys in the default group', () => {
   const state = legacySupplierState(), provider = owner(state), before = structuredClone(state);
@@ -85,7 +85,7 @@ test('only empty, unreferenced custom groups can be deleted; keys never move imp
   assert.deepEqual(added, before);
   assert.throws(() => run(added, 'keyGroupDelete', { groupId: 'default', confirmed: true }), /不可删除/);
   const linked = run(state, 'supplierChannelCreate', { ...createValues, keyGroupId: group.id });
-  assert.throws(() => run(linked, 'keyGroupDelete', { groupId: group.id, confirmed: true }), /仍被渠道引用/);
+  assert.throws(() => run(linked, 'keyGroupDelete', { groupId: group.id, confirmed: true }), /仍被连接引用/);
   const key = providerKeyGroupKeys(owner(added), group.id)[0];
   const emptied = run(added, 'deleteApiKey', { keyId: key.id, expectedFingerprint: key.fingerprint, confirmed: true });
   assert.throws(() => run(emptied, 'keyGroupDelete', { groupId: group.id }), /确认/);

@@ -119,7 +119,7 @@ test('unknown mutable fields cannot smuggle IDs, credentials or lifecycle change
 test('channel metadata maintenance preserves channel IDs, procurement history and connections', () => {
   const state = seed(), file = exportModelResources(state, 'channels');
   const row = file.rows.find(item => item.type === 'channel' && item.model_id);
-  file.rows = [{ ...row, name: '按永久编号维护渠道' }];
+  file.rows = [{ ...row, name: '按永久编号维护连接' }];
   const beforeProvider = state.providers.find(item => item.id === row.provider_id);
   const next = commit(state, file), after = exportModelResources(next, 'channels').rows.find(item => item.type === 'channel' && item.id === row.id);
   assert.equal(after.name, file.rows[0].name); assert.equal(after.connection_id, row.connection_id);

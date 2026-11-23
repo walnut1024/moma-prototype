@@ -130,7 +130,7 @@ test('batch actions reject duplicate IDs, foreign endpoints, foreign association
   const other = supplierChannelAssociations(state, owner(state)).find(row => row.endpointId !== ids.endpointId);
   for (const operation of ['supplierModelsTest', 'supplierModelsEnable']) {
     for (const associationIds of [[], null, [ids.associationIds[0], ids.associationIds[0]], [other.id], Array(51).fill('x')]) assert.throws(() => run(state, operation, { ...ids, associationIds }));
-    assert.throws(() => run(state, operation, ids, 'provider-zhipu-direct'), /渠道/);
+    assert.throws(() => run(state, operation, ids, 'provider-zhipu-direct'), /连接/);
   }
 });
 

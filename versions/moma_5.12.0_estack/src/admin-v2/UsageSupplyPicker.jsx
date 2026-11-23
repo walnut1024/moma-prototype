@@ -30,14 +30,14 @@ export default function UsageSupplyPicker({ filters, options, onChange }) {
   };
   return <Popover trigger="click" position="bottomLeft" motion={false} visible={open} onVisibleChange={openPicker} zIndex={1200}
     content={({ initialFocusRef }) => <div ref={initialFocusRef} tabIndex={-1} className="admin-analytics-picker admin-analytics-fields ua-native-supply-picker"
-      aria-label="服务商与渠道多选">
-      <Input aria-label="搜索服务商或渠道" placeholder="搜索服务商 / 渠道名称或 ID" value={query} onChange={value => {
+      aria-label="服务商与连接多选">
+      <Input aria-label="搜索服务商或连接" placeholder="搜索服务商 / 连接名称或 ID" value={query} onChange={value => {
         setQuery(value);
         setExpanded(value.trim() ? supplyPickerGroups(options, value).map(item => item.id) : []);
       }}/>
       <Checkbox checked={all} indeterminate={!all && Boolean(draft.providers.length || draft.channels.length)}
         onChange={event => { setAll(event.target.checked); setDraft(emptySupply()); }}>全部服务商</Checkbox>
-      <div className="admin-analytics-options" role="group" aria-label="服务商与渠道选项">
+      <div className="admin-analytics-options" role="group" aria-label="服务商与连接选项">
         {groups.map((item, index) => {
           const whole = all || draft.providers.includes(item.id);
           const count = whole ? item.totalChannels : channels.filter(channel => channel.groupId === item.id && draft.channels.includes(channel.id)).length;
@@ -49,21 +49,21 @@ export default function UsageSupplyPicker({ filters, options, onChange }) {
           return <div key={item.id}>
             <div className="ua-native-supply-row">
               <Button theme="borderless" size="small" type="tertiary" icon={isExpanded ? <IconChevronDown aria-hidden="true"/> : <IconChevronRight aria-hidden="true"/>}
-                aria-label={`${isExpanded ? '收起' : '展开'} ${name} 的渠道`} aria-expanded={isExpanded} aria-controls={isExpanded ? panelId : undefined}
+                aria-label={`${isExpanded ? '收起' : '展开'} ${name} 的连接`} aria-expanded={isExpanded} aria-controls={isExpanded ? panelId : undefined}
                 disabled={!item.totalChannels} onClick={() => setExpanded(previous => isExpanded ? previous.filter(id => id !== item.id) : [...previous, item.id])}/>
-              <Checkbox checked={checked} indeterminate={!checked && count > 0} aria-describedby={panelId + "-count"} aria-label={`选择服务商 ${name} 的全部渠道`}
-                title="选择该服务商的全部渠道，包含后续新增渠道" onChange={event => {
+              <Checkbox checked={checked} indeterminate={!checked && count > 0} aria-describedby={panelId + "-count"} aria-label={`选择服务商 ${name} 的全部连接`}
+                title="选择该服务商的全部连接，包含后续新增连接" onChange={event => {
                   setDraft(toggleSupplyGroup(materialized(), item.id, channels, event.target.checked));
                   setAll(false);
                 }}>
                 <Text>{name}</Text>
               </Checkbox>
-              <Text id={panelId + "-count"} size="small" type="tertiary">{!item.totalChannels ? '暂无渠道' : whole ? `全部 ${item.totalChannels} 渠道`
-                : count ? `已选 ${count}/${item.totalChannels} 渠道` : `${item.totalChannels} 渠道`}</Text>
+              <Text id={panelId + "-count"} size="small" type="tertiary">{!item.totalChannels ? '暂无连接' : whole ? `全部 ${item.totalChannels} 连接`
+                : count ? `已选 ${count}/${item.totalChannels} 连接` : `${item.totalChannels} 连接`}</Text>
             </div>
-            {isExpanded && <div className="ua-native-supply-children" id={panelId} role="group" aria-label={`${name}的渠道`}>
+            {isExpanded && <div className="ua-native-supply-children" id={panelId} role="group" aria-label={`${name}的连接`}>
               {item.channels.map(channel => <Checkbox key={channel.id} checked={selected(channel)}
-                aria-label={`选择渠道 ${channel.name} ${channel.code || channel.id}`} onChange={event => {
+                aria-label={`选择连接 ${channel.name} ${channel.code || channel.id}`} onChange={event => {
                   setDraft(toggleSupplyChannel(materialized(), channel, channels, event.target.checked));
                   setAll(false);
                 }}>
@@ -86,7 +86,7 @@ export default function UsageSupplyPicker({ filters, options, onChange }) {
         </Space>
       </div>
     </div>}>
-    <Button size="small" icon={<IconChevronDown aria-hidden="true"/>} iconPosition="right" aria-label="服务商与渠道筛选" aria-expanded={open}
+    <Button size="small" icon={<IconChevronDown aria-hidden="true"/>} iconPosition="right" aria-label="服务商与连接筛选" aria-expanded={open}
       title={supplySummary(filters, options, true)}>{supplySummary(filters, options)}</Button>
   </Popover>;
 }

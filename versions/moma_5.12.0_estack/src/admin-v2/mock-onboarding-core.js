@@ -35,7 +35,7 @@ function save(state) { getStorage?.()?.setItem(STORAGE_KEY, JSON.stringify(state
 const credential = (state, channel) => state.credentials.find(item => item.id === channel.credentialId);
 const requestConfiguration = channel => [channel.interfaceType, channel.baseUrl, channel.taskUrls || {}, channel.authMode, channel.credentialId, channel.apiVersion, channel.workspaceId, channel.tokenLimitField, channel.imageSize, channel.voice, channel.statusPath, ...(channel.endpointPath ? [channel.endpointPath, channel.modelProtocol] : []), ...(channel.customAdapter ? [channel.customAdapter] : []), ...(channel.requestRules ? [channel.requestRules] : [])];
 const channelSignature = (state, channel) => hash([requestConfiguration(channel), credential(state, channel)?.version, credential(state, channel)?.status, channel.configVersion]);
-const channelById = (state, id) => { const channel = state.channels.find(item => item.id === id); if (!channel) fail('channel_not_found', '渠道不存在'); return channel; };
+const channelById = (state, id) => { const channel = state.channels.find(item => item.id === id); if (!channel) fail('channel_not_found', '连接不存在'); return channel; };
 const serviceById = (state, id) => { const service = state.services.find(item => item.id === id); if (!service) fail('service_not_found', '服务不存在'); return service; };
 function audit(state, action, objectId) { state.audits.push({ id: resourceId('audit-event'), action, objectId, at: now(), source: 'mock' }); }
 function once(state, action, body, execute, hideSecret = false, scope = '') {
@@ -129,9 +129,9 @@ function normalizeCandidate(state, body, previous = {}) {
   }
   const backups = route.channels.filter(row=>row.backup === true);
   if (backups.length) {
-    if (input.mode !== 'provider' || route.strategy !== 'fixed' || route.autoFailover !== true || route.channels.length !== 2 || backups.length !== 1 || route.channels.some(row=>row.enabled === false)) fail('invalid_route', '固定路由故障转移须指定一个主渠道和一个备用渠道');
+    if (input.mode !== 'provider' || route.strategy !== 'fixed' || route.autoFailover !== true || route.channels.length !== 2 || backups.length !== 1 || route.channels.some(row=>row.enabled === false)) fail('invalid_route', '固定路由故障转移须指定一个主连接和一个备用连接');
     const sources = route.channels.map(row=>channelById(state, bindings.find(binding=>binding.id===row.bindingId).channelId));
-    if (sources[0].providerId !== sources[1].providerId || (sources[0].clientChannelId || sources[0].id) === (sources[1].clientChannelId || sources[1].id)) fail('invalid_route', '主渠道和备用渠道须属于同一服务商且互不相同');
+    if (sources[0].providerId !== sources[1].providerId || (sources[0].clientChannelId || sources[0].id) === (sources[1].clientChannelId || sources[1].id)) fail('invalid_route', '主连接和备用连接须属于同一服务商且互不相同');
   }
   return { ...(input.technical === true ? { technical: true, purpose: input.purpose === 'internal' ? 'internal' : 'commercial' } : {}), name: input.name || publicModelId, publicModelId, mode: input.mode, tenantIds: [...new Set(input.tenantIds || [])], capabilities: [...new Set(input.capabilities || [])], bindings, salePrices: prices(input.salePrices || []), route: { ...copy(route), strategy: route.strategy || 'priority', channels: route.channels.map((row, index) => ({ bindingId: row.bindingId, priority: row.priority ?? index + 1, weight: row.weight ?? 1, ...(row.backup === true ? { backup:true } : {}), ...(row.enabled === false ? { enabled: false } : {}) })), autoFailover: route.autoFailover === true } };
 }
@@ -146,12 +146,12 @@ function assertAvailable(state, channel, { live = false, model } = {}) {
     }
     if (live) {
       const endpoint = runtime.endpoints.find(row => row.id === channel.clientChannelId);
-      if (!provider || provider.status !== '已启用' || !endpoint || endpoint.deletedAt || endpoint.frozen || !['运行中', '需关注'].includes(endpoint.status)) fail('supply_unavailable', '当前服务商或渠道已停用');
+      if (!provider || provider.status !== '已启用' || !endpoint || endpoint.deletedAt || endpoint.frozen || !['运行中', '需关注'].includes(endpoint.status)) fail('supply_unavailable', '当前服务商或连接已停用');
       const association = runtime.associations.find(row => row.providerId === channel.providerId && row.endpointId === endpoint.id && (model?.associationId ? row.id === model.associationId : row.masterId === model?.id && row.upstreamModelId === model?.upstreamModelId));
       if (!association || association.deletedAt || association.enabled === false) fail('supply_unavailable', '当前模型关联已移除或停用');
     }
   }
-  if (channel.needsValidation || channel.disabled || channel.supersededBy || channel.authMode !== 'none' && credential(state, channel)?.status !== 'active') fail('supply_unavailable', '渠道已停用、已替换或凭证不可用'); }
+  if (channel.needsValidation || channel.disabled || channel.supersededBy || channel.authMode !== 'none' && credential(state, channel)?.status !== 'active') fail('supply_unavailable', '连接已停用、已替换或凭证不可用'); }
 function evidence(state, binding, capabilities = []) {
   const channel = channelById(state, binding.channelId); assertAvailable(state, channel);
   const signature = channelSignature(state, channel), proofs = [];
@@ -176,11 +176,11 @@ function routeOrder(config) {
   const channels=service?routingChannels(local,service,Date.now(),{runtime:true}):[];
   const byId=new Map(channels.map(row=>[row.id,row]));
   if(service){
-    if(allowed.some(row=>!byId.has(row.bindingId)))fail('supply_changed','当前路由引用的渠道已变化');
+    if(allowed.some(row=>!byId.has(row.bindingId)))fail('supply_changed','当前路由引用的连接已变化');
     allowed=allowed.filter(row=>withinRouteLimits(byId.get(row.bindingId)));
   }
   if(['load','tpm','latency','cost'].includes(config.route.strategy)){
-    if(!service || allowed.some(row=>!byId.has(row.bindingId)))fail('routing_metrics_required','缺少当前路由的实际渠道依据');
+    if(!service || allowed.some(row=>!byId.has(row.bindingId)))fail('routing_metrics_required','缺少当前路由的实际连接依据');
     const costs=config.route.strategy==='cost'?new Map(comparableRouteCosts(allowed.map(row=>byId.get(row.bindingId)),config.route.costBasis || 'input').map(row=>[row.supplyId,row.amount])):null;
     const metric=config.route.strategy==='load'?'activeRequests':config.route.strategy==='tpm'?'tokensPerMinute':'p95LatencyMs';
     const value=row=>costs?costs.get(row.bindingId):byId.get(row.bindingId)[metric];
@@ -247,7 +247,7 @@ function pipeline(state, service, config, proofs, { identityType, identityId, me
   throw lastIssue || new Error('没有符合当前允许范围的可用供给');
 }
 function changeSnapshot(state, input) {
-  if (!['channels', 'group'].includes(input.scope || 'channels')) fail('invalid_scope', '请选择渠道或共享组切换范围');
+  if (!['channels', 'group'].includes(input.scope || 'channels')) fail('invalid_scope', '请选择连接或共享组切换范围');
   if (!Array.isArray(input.replacements) || !input.replacements.length) fail('invalid_replacement', '请选择明确替换集合');
   const sources = new Set(), targets = new Set();
   const replacements = input.replacements.map(row => { const source = channelById(state, row.channelId), candidate = channelById(state, row.candidateChannelId); if (source.providerId !== candidate.providerId || source.id === candidate.id || sources.has(source.id) || targets.has(candidate.id) || source.supersededBy || candidate.supersededBy) fail('invalid_replacement', '替换须为同服务商下独立的候选配置'); sources.add(source.id); targets.add(candidate.id); return { channelId: source.id, candidateChannelId: candidate.id }; }).sort((a, b) => a.channelId.localeCompare(b.channelId));
@@ -273,13 +273,13 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
   const channelPath = route.match(/^\/channels\/([^/]+)$/);
   if (method === 'POST' && route === '/channels' || method === 'PATCH' && channelPath) return once(state, channelPath ? 'updateChannel' : 'createChannel', body, () => {
     const current = channelPath ? channelById(state, channelPath[1]) : null;
-    if (current && current.revision !== body.expectedRevision) fail('revision_conflict', '渠道版本已变化');
-    const input = { ...current, ...body }, providerId = text(input.providerId, '服务商'), name = text(input.name, '渠道名称', 60);
-    if (current && current.providerId !== providerId) fail('provider_immutable', '渠道不能变更服务商');
-    if (state.channels.some(row => row.id !== current?.id && row.providerId === providerId && row.name === name)) fail('duplicate_name', '渠道名称重复');
+    if (current && current.revision !== body.expectedRevision) fail('revision_conflict', '连接版本已变化');
+    const input = { ...current, ...body }, providerId = text(input.providerId, '服务商'), name = text(input.name, '连接名称', 60);
+    if (current && current.providerId !== providerId) fail('provider_immutable', '连接不能变更服务商');
+    if (state.channels.some(row => row.id !== current?.id && row.providerId === providerId && row.name === name)) fail('duplicate_name', '连接名称重复');
     if (!['openai', 'openai-responses', 'anthropic', 'custom'].includes(input.interfaceType)) fail('invalid_interface', '请选择明确接口类型');
     const localKeyId = input.credential?.id || null, externalVersion = input.credential?.version || 'initial', credentialId = input.authMode === 'none' ? null : localKeyId ? `${localKeyId}@${hash(externalVersion)}` : input.credentialId;
-    if (input.authMode !== 'none' && !state.credentials.some(row => row.id === credentialId)) { const revoked = localKeyId && state.credentials.some(row => row.localKeyId === localKeyId && row.status === 'revoked'); state.credentials.push({ id: text(credentialId, '密钥引用'), localKeyId, externalVersion, providerId, name: '渠道密钥引用', maskedKey: '*****', status: revoked ? 'revoked' : input.credential?.status || 'active', version: 1, accountRpm: input.credential?.accountRpm || null, source: 'mock' }); }
+    if (input.authMode !== 'none' && !state.credentials.some(row => row.id === credentialId)) { const revoked = localKeyId && state.credentials.some(row => row.localKeyId === localKeyId && row.status === 'revoked'); state.credentials.push({ id: text(credentialId, '密钥引用'), localKeyId, externalVersion, providerId, name: '连接密钥引用', maskedKey: '*****', status: revoked ? 'revoked' : input.credential?.status || 'active', version: 1, accountRpm: input.credential?.accountRpm || null, source: 'mock' }); }
     const key = state.credentials.find(row => row.id === credentialId); if (key && key.providerId !== providerId) fail('credential_scope', '密钥不属于此服务商');
     const channel = { id: current?.id || resourceId('connection'), providerId, name, displayName: input.displayName || name, interfaceType: input.interfaceType, baseUrl: text(input.baseUrl, '接口地址', 2048), taskUrls: copy(input.taskUrls || {}), authMode: input.authMode || 'key', credentialId, clientChannelId: input.clientChannelId || null, clientSignature: input.clientSignature || null, mockModels: copy(input.mockModels || current?.mockModels || []), apiVersion: input.apiVersion || input.adapterOptions?.apiVersion || null, workspaceId: input.workspaceId || input.adapterOptions?.workspaceId || null, tokenLimitField: input.tokenLimitField || input.adapterOptions?.tokenLimitField || null, imageSize: input.imageSize || input.adapterOptions?.imageSize || null, voice: input.voice || input.adapterOptions?.voice || null, statusPath: input.statusPath || input.adapterOptions?.statusPath || null, revision: (current?.revision || 0) + 1, configVersion: (current?.configVersion || 0) + 1, source: 'mock' };
     if (input.endpointPath != null) {
@@ -386,7 +386,7 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
     }, false, 'client:' + key.id);
   }
   const channelAction = route.match(/^\/channels\/([^/]+)\/(disable|enable)$/);
-  if (method === 'POST' && channelAction) return once(state, channelAction[2] + 'Channel', body, () => { const channel = channelById(state, channelAction[1]); if (channel.revision !== body.expectedRevision) fail('revision_conflict', '渠道修订已变化'); channel.disabled = channelAction[2] === 'disable'; channel.revision++; return channel; });
+  if (method === 'POST' && channelAction) return once(state, channelAction[2] + 'Channel', body, () => { const channel = channelById(state, channelAction[1]); if (channel.revision !== body.expectedRevision) fail('revision_conflict', '连接修订已变化'); channel.disabled = channelAction[2] === 'disable'; channel.revision++; return channel; });
   if (method === 'POST' && route === '/configuration-changes/preview') return once(state, 'previewConfigurationChange', body, () => { const snapshot = changeSnapshot(state, body), plan = { id: resourceId('configuration-change'), status: 'preview', source: 'mock', ...snapshot, impactSignature: hash(snapshot), createdAt: now() }; state.changes.push(plan); return plan; });
   const changePath = route.match(/^\/configuration-changes\/([^/]+)$/);
   if (method === 'GET' && changePath) { const plan = state.changes.find(row => row.id === changePath[1]); if (!plan) fail('configuration_plan_not_found', '切换计划不存在'); return plan; }
@@ -498,9 +498,9 @@ function prepareMockConfiguration({ operationId = uid(), scope = 'channels', rep
   }
   for (const update of routeReductions) {
     const service = serviceById(after, update.serviceId), prior = copy(service.published);
-    if (!prior || service.disabled || update.config.bindings.some(binding => !prior.config.bindings.some(old => old.id === binding.id && old.channelId === binding.channelId))) fail('invalid_route_reduction', '移除渠道不能新增供给或替换验证');
+    if (!prior || service.disabled || update.config.bindings.some(binding => !prior.config.bindings.some(old => old.id === binding.id && old.channelId === binding.channelId))) fail('invalid_route_reduction', '移除连接不能新增供给或替换验证');
     service.configurationHistory ||= [];
-    service.configurationHistory.push({ reason: '移除供给渠道', revision: service.revision, candidate: copy(service.candidate), published: prior });
+    service.configurationHistory.push({ reason: '移除供给连接', revision: service.revision, candidate: copy(service.candidate), published: prior });
     handle(after, `/services/${service.id}`, { method: 'PATCH', body: { ...update.config, operationId: operationId + ':route:' + service.id, expectedRevision: service.revision } });
     const identity = handle(after, `/services/${service.id}/test-identities`, { method: 'POST', body: { operationId: operationId + ':identity:' + service.id, expectedRevision: service.revision } });
     handle(after, `/services/${service.id}/trial`, { method: 'POST', body: { operationId: operationId + ':trial:' + service.id, trialToken: identity.token } });

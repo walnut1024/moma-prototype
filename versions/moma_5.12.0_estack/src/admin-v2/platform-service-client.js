@@ -71,13 +71,13 @@ export function platformPriceVersions(price, model, path = '价格配置', at = 
 function platformRoute(state, service, version, rows) {
   const config = validateRouteConfig(state,service,version.config,false);
   if (!['fixed', 'weighted', 'priority', 'priority_weighted', 'load', 'tpm', 'latency', 'cost'].includes(config.strategy)) issue('路由配置', '当前路由策略不能用于平台试调用');
-  if (service.mode === 'provider' && rows.length !== config.channels.filter(row => row.enabled).length) issue('供给范围', '请选择主渠道及已配置的备用渠道');
+  if (service.mode === 'provider' && rows.length !== config.channels.filter(row => row.enabled).length) issue('供给范围', '请选择主连接及已配置的备用连接');
   const grouped = config.strategy === 'weighted' && config.groups.length > 1;
   const strategy = grouped ? 'priority_weighted' : config.strategy;
   return { version: version.version, strategy, strategyCode:ROUTING_POLICIES[strategy]?.code || strategy, costBasis:config.advanced?.costBasis || 'input', autoFailover: config.autoFailover === true, ...(config.retry ? {retry:config.retry} : {}), channels: rows.map(row => {
     const priority = grouped ? config.groups.findIndex(group => group.id === row.route.groupId) : row.route.priority;
     const weighted = ['weighted', 'priority_weighted'].includes(config.strategy);
-    if (!Number.isInteger(priority) || priority < 0 || weighted && (!Number.isFinite(row.route.weight) || row.route.weight <= 0)) issue('路由配置', '渠道的优先级、分组或权重无效');
+    if (!Number.isInteger(priority) || priority < 0 || weighted && (!Number.isFinite(row.route.weight) || row.route.weight <= 0)) issue('路由配置', '连接的优先级、分组或权重无效');
     return { bindingId: row.id, priority, ...(row.route.backup ? { backup:true } : {}), ...(weighted ? { weight: row.route.weight } : {}) };
   }) };
 }
@@ -90,17 +90,17 @@ export function platformCandidatePlan(state, model, { serviceId, tenantIds = [],
   const version = activeRouteVersion(serviceRoute(state, service.id));
   if (!version) issue('路由配置', '请先发布当前服务的路由');
   const allowed = platformAllowedChannels(state, service);
-  if (!supplyIds.length || supplyIds.length > 20 || new Set(supplyIds).size !== supplyIds.length) issue('允许供给', '请选择 1–20 条已发布路由中的渠道');
-  const rows = supplyIds.map(id => allowed.find(row => row.id === id) || issue('允许供给', '选择含未发布或已移除的渠道，请重新选择'));
+  if (!supplyIds.length || supplyIds.length > 20 || new Set(supplyIds).size !== supplyIds.length) issue('允许供给', '请选择 1–20 条已发布路由中的连接');
+  const rows = supplyIds.map(id => allowed.find(row => row.id === id) || issue('允许供给', '选择含未发布或已移除的连接，请重新选择'));
   const sale = service.providerId ? activeProviderPrice(state, model.id, offerKey(service), at) : activeModelSalePrice(state, model.id, at);
   let salePrices = [];
   if (technical) {
     if (servicePurpose(model,offerKey(service))!=='internal') { try { salePrices=platformPriceVersions(sale,model,'销售价格',at); } catch { /* Missing sale prices do not block technical verification. */ } }
   } else salePrices=platformPriceVersions(sale,model,'销售价格',at);
   const bindings = rows.map(row => {
-    const { supply, association } = row, path = `供应渠道 ${supply?.provider?.name || row.id}`;
-    if (!supply?.provider || !supply.endpoint || supply.provider.status !== '已启用' || supply.status !== '已启用' || !['运行中', '需关注'].includes(supply.endpoint.status)) issue(path, '服务商、渠道或模型关联未启用');
-    if (service.providerId && supply.provider.id !== service.providerId) issue(path, '渠道不属于当前服务商服务');
+    const { supply, association } = row, path = `供应连接 ${supply?.provider?.name || row.id}`;
+    if (!supply?.provider || !supply.endpoint || supply.provider.status !== '已启用' || supply.status !== '已启用' || !['运行中', '需关注'].includes(supply.endpoint.status)) issue(path, '服务商、连接或模型关联未启用');
+    if (service.providerId && supply.provider.id !== service.providerId) issue(path, '连接不属于当前服务商服务');
     if (!association || association.enabled === false) issue(path, '请在模型供应中建立并启用明确的模型映射');
     let master;
     try { master = resolveChannelAssociationModel(state, supply.provider, association); }
@@ -134,7 +134,7 @@ export async function runPlatformTrial(plan, { confirmExpensive = false, isCurre
   const current = () => { if (!isCurrent()) issue('当前配置', '配置已经变化，请重新试调用'); };
   current();
   if (plan.expensive && !confirmExpensive) issue('试调用', '图片、视频和语音任务需要明确确认费用');
-  onProgress('同步允许渠道');
+  onProgress('同步允许连接');
   const channels = new Map();
   for (const { supply } of plan.rows) {
     current();

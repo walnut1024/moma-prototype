@@ -34,7 +34,7 @@ export default function SalesAudience({ state, model, services, ops }) {
     </Field>}
     <Typography.Title heading={6}>受影响服务</Typography.Title>
     <Table size="small" rowKey="id" dataSource={services.filter(row => row.modelId === model.id)} pagination={false}
-      columns={[{ title: '服务商 / 渠道', dataIndex: 'offerName' }, { title: '模型调用标识', dataIndex: 'callId' }]}/>
+      columns={[{ title: '服务商 / 连接', dataIndex: 'offerName' }, { title: '模型调用标识', dataIndex: 'callId' }]}/>
     <div className="ss-footer"><Button theme="solid" disabled={locked || !valid || JSON.stringify(current) === JSON.stringify(value)}
       onClick={() => setPreview(true)}>预览变更</Button></div>
     {preview && <Modal wide title="确认销售对象变更" description={model.name} onClose={() => !busy && setPreview(false)} footer={<>

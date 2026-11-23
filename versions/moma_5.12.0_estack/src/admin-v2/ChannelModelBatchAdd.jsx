@@ -151,7 +151,7 @@ export default function ChannelModelBatchAdd({ state, channel, ops, close, manua
 
   const cancel = () => { if (!saveLock.current) ops.proceed(close); };
   const channelDetails = [
-    [t('目标渠道'), channel.name],
+    [t('目标连接'), channel.name],
     [t('已绑定服务商'), provider.name],
     [t('接口格式'), sourceFormatLabel(targetFormat)],
     ['Base URL', endpoint.baseUrl],
@@ -160,7 +160,7 @@ export default function ChannelModelBatchAdd({ state, channel, ops, close, manua
   const maintenanceHref = providerTab
     ? '#/admin-2/provider-materials?' + new URLSearchParams({ provider: provider.id })
     : '#/admin-2/model-templates';
-  return <Modal drawer wide title={t('添加渠道模型')} description="" onClose={cancel} className="channel-model-batch-add"
+  return <Modal drawer wide title={t('添加上游模型')} description="" onClose={cancel} className="channel-model-batch-add"
     footer={<div className="channel-model-batch-footer">
       <Space wrap>
         <Typography.Text aria-live="polite">{t('已选 {0} 款').replace('{0}', selection.size)}
@@ -210,11 +210,11 @@ export default function ChannelModelBatchAdd({ state, channel, ops, close, manua
         onChange={event => changeFilter(setOnlySelected, event.target.checked)}>{t('仅看已选')}</Checkbox>
       <Button theme="borderless" disabled={locked} onClick={manual}>{t('手动录入／粘贴')}</Button>
     </Space>
-    {stale && <Notice error>{t('渠道配置已变化，请关闭后重新选择模型。')}</Notice>}
+    {stale && <Notice error>{t('连接配置已变化，请关闭后重新选择模型。')}</Notice>}
     {atLimit && <Typography.Text type="tertiary">{t('每批最多添加 {0} 款').replace('{0}', batchLimit)}</Typography.Text>}
     {savedCount > 0 && <Notice>{t('已添加 {0} 款，待验证').replace('{0}', savedCount)}</Notice>}
     {ops.error && <Notice error>{ops.error}</Notice>}
-    <AdminTable rowKey="id" aria-label={t('待添加渠道模型')} columns={columns} dataSource={visible}
+    <AdminTable rowKey="id" aria-label={t('待添加上游模型')} columns={columns} dataSource={visible}
       empty={t('没有匹配的模型')} scroll={{ x: 840 }}
       pagination={{ currentPage: page, pageSize: 10, onPageChange: setPage, hideOnSinglePage: true }}/>
   </Modal>;

@@ -42,8 +42,8 @@ function ConnectionChanges({ connection, next, name, note, sourceType, showCrede
   const paths = value => channelListPaths({ ...connection, endpoint: value }).join('、');
   const format = value => workbenchProtocolLabel(channelListType({ ...connection, endpoint: value }));
   const fields = [
-    ['渠道名称', connection.name, name],
-    ['渠道类型', t(channelSourceTypeLabel(endpoint.channelSourceType ?? provider.sourceType)), t(channelSourceTypeLabel(sourceType))],
+    ['连接名称', connection.name, name],
+    ['连接类型', t(channelSourceTypeLabel(endpoint.channelSourceType ?? provider.sourceType)), t(channelSourceTypeLabel(sourceType))],
     ['接口格式', format(endpoint), format(after)],
     ['接口端点', paths(endpoint), paths(after)],
     ['服务地址', endpoint.baseUrl, after.baseUrl],
@@ -206,7 +206,7 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
   const cannotApply = !candidate || stale || Boolean(status?.reason) || (unlinked ? Boolean(status?.credentialError) : !status?.ready);
   const disabled = locked || incomplete || stale || !hasEdits;
   const proposed = review ? reviewDraft : candidate?.config;
-  const typeLabel = t('渠道类型');
+  const typeLabel = t('连接类型');
   const title = t(edit ? '编辑信息' : review ? '核对连接变更' : '验证连接变更');
   const actions = edit ? <>
     <Button type="tertiary" onClick={cancel} disabled={busy || testing}>{t('取消')}</Button>
@@ -216,7 +216,7 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
     {review ? <Button theme="solid" loading={busy} disabled={blocked || stale || reviewRevision !== impact.revision} onClick={prepare}>
       {t(unlinked ? '准备候选配置' : '进入候选测试')}
     </Button> : <Button theme="solid" loading={busy} disabled={blocked || cannotApply} onClick={apply}>
-      {t(unlinked ? '保存未启用渠道' : '应用配置')}
+      {t(unlinked ? '保存未启用连接' : '应用配置')}
     </Button>}
   </>;
   if (stage === 'pool' && candidate) return <ChannelKeyPoolEditor
@@ -232,8 +232,8 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
         }
       }}>
         <div className="supplier-configuration-body">
-          <Field label={t('渠道名称')} required help={t('填写便于识别的名称，同一服务商下不可重复。')}>
-            <Input aria-label={t('渠道名称')} maxLength={60} value={draft.name} onChange={value => update({ name: value })} disabled={locked}/>
+          <Field label={t('连接名称')} required help={t('填写便于识别的名称，同一服务商下不可重复。')}>
+            <Input aria-label={t('连接名称')} maxLength={60} value={draft.name} onChange={value => update({ name: value })} disabled={locked}/>
           </Field>
           <Field label={t('服务商')}>{provider.name}</Field>
           <Field label={typeLabel} required help={t('选择第三方模型服务或自有模型推理服务。')}>
@@ -248,7 +248,7 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
             onBaseUrlChange={url => update({ url })}/>
           <Field label={t('简介')}><TextArea aria-label={t('简介')} value={note} maxLength={300} disabled={locked}
             onChange={value => { setNote(value); ops.dirty(true); ops.setError(''); }}/></Field>
-          {candidate && <Notice>{t('此渠道有待验证的配置。')}
+          {candidate && <Notice>{t('此连接有待验证的配置。')}
             <Button theme="borderless" onClick={() => setStage(credentialCandidate && candidate.config.authMode === 'pool' ? 'pool' : 'test')}>
               {t('核对待验证配置')}
             </Button>
@@ -258,12 +258,12 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
         {proposed && <ConnectionChanges connection={connection} next={proposed} name={draft.name.trim()} note={note.trim()}
           sourceType={draft.sourceType} showCredentials={!review && credentialCandidate}/>}
         {review ? <>
-          <Notice>当前配置继续生效。核对 {impact.mappings.length} 条模型渠道及 {impact.services.length} 个关联服务。</Notice>
+          <Notice>当前配置继续生效。核对 {impact.mappings.length} 条上游模型及 {impact.services.length} 个关联服务。</Notice>
           <AffectedModels connection={connection} impact={impact} checks={[]}/>
           {reviewRevision !== impact.revision && <Notice error>{t('连接或引用已变化，请返回重新核对。')}</Notice>}
         </> : candidate ? <>
-          <Notice>{unlinked ? '此渠道尚无模型，将保存为停用状态。添加模型后再测试。' :
-            status?.ready ? '受影响的模型渠道均已通过测试，可以应用新配置。' : '当前配置继续生效。受影响的模型渠道通过测试后才能应用。'}</Notice>
+          <Notice>{unlinked ? '此连接尚无模型，将保存为停用状态。添加模型后再测试。' :
+            status?.ready ? '受影响的上游模型均已通过测试，可以应用新配置。' : '当前配置继续生效。受影响的上游模型通过测试后才能应用。'}</Notice>
           {JSON.stringify(candidate.config.requestRules || null) !== JSON.stringify(endpoint.requestRules || null) &&
             <Notice>候选配置包含请求与响应规则变更。</Notice>}
           <AffectedModels connection={connection} impact={impact} checks={status?.checks || []}/>
@@ -275,7 +275,7 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
           <Button disabled={blocked} onClick={async () => { if (await ops.run('channelCandidateDiscard', context)) close(); }}>{t('放弃候选配置')}</Button>
         </> : <Notice>{t('候选配置已变化，请退出后重新编辑。')}</Notice>}
       </>}
-      {(ops.error || stale) && <Notice error>{ops.error || t('渠道资料已变化，请重新打开后编辑。')}</Notice>}
+      {(ops.error || stale) && <Notice error>{ops.error || t('连接资料已变化，请重新打开后编辑。')}</Notice>}
     </div>
   </Modal>;
 }

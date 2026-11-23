@@ -35,7 +35,7 @@ export const services = [
       { channel: 'E', model: 'vendor-e/glm-5.3', enabled: true, priority: 0, weight: 100 }
     ] },
   { id: 'kimi', name: 'Kimi K3', callId: 'kimi-k3', enabled: true, protocols: ['chat'],
-    policy: '最低延迟', detail: '从可用渠道中择优',
+    policy: '最低延迟', detail: '从可用上游模型中择优',
     routes: [
       { channel: 'A', model: 'vendor-a/kimi-k3', enabled: true, priority: 0, weight: 100 },
       { channel: 'B', model: 'vendor-b/kimi-k3', enabled: false, priority: 0, weight: 50 },
@@ -88,17 +88,17 @@ export function planDemoRequest(example) {
   const priority = Math.min(...available.map(route => route.priority));
   const group = available.filter(route => route.priority === priority);
   const standby = available.filter(route => route.priority !== priority);
-  walk(service.id, policy, '校验渠道状态与协议兼容性');
+  walk(service.id, policy, '校验连接状态与协议兼容性');
   if (!group.length) {
-    walk(service.id, policy, '无可用渠道模型', 'denied');
+    walk(service.id, policy, '无可用上游模型', 'denied');
     walk('gateway', service.id, '返回拒绝响应', 'denied');
     walk(protocol, 'gateway', '返回拒绝响应', 'denied');
-    steps.push({ stage: 'done', message: '已返回拒绝响应 · 无可用渠道模型' });
+    steps.push({ stage: 'done', message: '已返回拒绝响应 · 无可用上游模型' });
     return { steps, group, standby };
   }
   steps.push({ stage: 'group', message: '优先级 ' + priority + ' 入组 · ' +
-    group.map(route => '渠道 ' + route.channel).join('、') +
-    (standby.length ? ' · 渠道 ' + standby.map(route => route.channel).join('、') + ' 待命' : '') });
+    group.map(route => '连接 ' + route.channel).join('、') +
+    (standby.length ? ' · 连接 ' + standby.map(route => route.channel).join('、') + ' 待命' : '') });
   // shortcut: only one eligible branch in non-weighted sample scenarios; real routing uses engine observations.
   let chosen = group[0];
   if (service.weighted && group.length > 1) {
@@ -107,7 +107,7 @@ export function planDemoRequest(example) {
   }
   steps.push({ stage: 'chosen', message: (service.weighted && group.length > 1
     ? '组内权重 ' + group.map(route => route.channel + ' ' + route.weight).join(' / ') + ' · '
-    : '唯一可用候选 · ') + '命中渠道 ' + chosen.channel });
+    : '唯一可用候选 · ') + '命中连接 ' + chosen.channel });
 
   const channel = channels[chosen.channel];
   const format = protocols[channel.format].name;
@@ -118,12 +118,12 @@ export function planDemoRequest(example) {
   const response = video ? '任务已受理 · 返回任务 ID' : '200 OK';
   walk(policy, conversion, channel.format === protocol ? '原生转发 · ' + format : input.name + ' → ' + format);
   walk(conversion, upstream, '请求转发 · ' + endpoint(channel));
-  walk(upstream, id, (video ? '提交视频生成任务 · ' : '调用渠道模型 · ') + chosen.model);
+  walk(upstream, id, (video ? '提交视频生成任务 · ' : '调用上游模型 · ') + chosen.model);
   for (const [from, to] of [[upstream, id], [conversion, upstream], [policy, conversion],
     [serviceId, policy], ['gateway', serviceId], [protocol, 'gateway']]) {
-    walk(from, to, response + ' · 渠道 ' + chosen.channel, 'response');
+    walk(from, to, response + ' · 连接 ' + chosen.channel, 'response');
   }
-  steps.push({ stage: 'done', message: response + ' · 本次命中渠道 ' + chosen.channel });
+  steps.push({ stage: 'done', message: response + ' · 本次命中连接 ' + chosen.channel });
   return { steps, group: group.map(route => branchId(service, route)),
     standby: standby.map(route => branchId(service, route)), chosen: id };
 }

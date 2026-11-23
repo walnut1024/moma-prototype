@@ -121,7 +121,7 @@ test('foreign and stale mock receipts cannot qualify another model or a changed 
   const result = catalogueChannels(next, next.providers.find(row => row.id === provider.id), 'GLM-5.2')[0];
   assert.equal(result.testHistory.at(-1).current, false); assert.equal(connectionFingerprint(result.endpoint), before);
   assert.deepEqual(result.health, association.health);
-  assert.throws(() => run(s, 'channelTestEvidenceReceipt', { providerId: provider.id, endpointId: association.endpointId, batch: { ...batch, items: [{ ...batch.items[0], model: { ...batch.items[0].model, associationId: 'foreign' } }] } }), /其他渠道/);
+  assert.throws(() => run(s, 'channelTestEvidenceReceipt', { providerId: provider.id, endpointId: association.endpointId, batch: { ...batch, items: [{ ...batch.items[0], model: { ...batch.items[0].model, associationId: 'foreign' } }] } }), /其他上游模型/);
 });
 
 test('temporary group checks retain their own history without replacing official qualification', async () => {

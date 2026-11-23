@@ -33,7 +33,7 @@ function checkedAdditionalInterfaces(model, channel, paths) {
   if (paths === undefined) return [];
   const available = additionalMappingOptions(model, channel);
   if (!Array.isArray(paths) || new Set(paths).size!==paths.length || paths.some(path=>!available.some(option=>option.path===path))) {
-    throw Error('请选择当前渠道已配置的对外接口');
+    throw Error('请选择当前连接已配置的对外接口');
   }
   return available.filter(option=>paths.includes(option.path));
 }
@@ -107,7 +107,7 @@ export function mappingCandidates(state,service) {
 function relation(state,service,config) {
   const provider=state.providers.find(row=>row.id===config.providerId);
   const channel=provider && catalogueChannels(state,provider,config.catalogueModelId).find(row=>row.id===config.associationId && row.endpointId===config.endpointId && row.upstreamModelId===config.upstreamModelId);
-  if(!channel || service.providerId && service.providerId!==provider.id || service.channelId && channel.id!==service.channelId)throw Error('服务商或渠道模型关联已变化，请重新选择');
+  if(!channel || service.providerId && service.providerId!==provider.id || service.channelId && channel.id!==service.channelId)throw Error('服务商或上游模型关联已变化，请重新选择');
   const source=resolveChannelAssociationModel(state,provider,channel),master=libraryRecord(state,service.modelId);
   if(!master || source.id!==master.id)throw Error('只能选择当前模型资料对应的供给，不能按名称关联其他模型');
   return {...channel,provider,catalogueModelId:config.catalogueModelId};
@@ -165,7 +165,7 @@ function checkedConfig(state,service,input,supply) {
   const additional = checkedAdditionalInterfaces(service.model, channel, input.additionalInterfaces);
   if (additional.length) config.additionalInterfaces = additional.map(option=>option.path);
   const duplicate=state.modelSupplies.some(row=>row.id!==supply?.id && row.modelId===service.modelId && row.status!=='已移除' && (row.channelId===config.associationId || !row.channelId && row.endpointId===config.endpointId && row.upstreamModelId===config.upstreamModelId || row.serviceMapping?.pending?.config.associationId===config.associationId));
-  if(duplicate)throw Error('该渠道已建立模型映射，请维护原映射');
+  if(duplicate)throw Error('该连接已建立模型映射，请维护原映射');
   return config;
 }
 export function serviceMappingTransaction(state,{operation,modelId,data={}}) {
@@ -193,7 +193,7 @@ export function serviceMappingTransaction(state,{operation,modelId,data={}}) {
       if(!endpoint.modelIds.includes(modelId))changes.push({type:'update',collection:'endpoints',id:endpoint.id,changes:{modelIds:[...endpoint.modelIds,modelId]}});
       label='新增模型映射';
     } else {
-      if(JSON.stringify(next)!==JSON.stringify(config) && mappingReferences(state,supply).length)throw Error('映射仍被路由引用，更换渠道或接口请新建映射后切换路由');
+      if(JSON.stringify(next)!==JSON.stringify(config) && mappingReferences(state,supply).length)throw Error('映射仍被路由引用，更换连接或接口请新建映射后切换路由');
       if(JSON.stringify(next)===JSON.stringify(config)){const {pending:_pending,...active}=meta;update(supply.id,{mappingName:name,...(meta.pending?{serviceMapping:active}:{})});}
       else update(supply.id,{serviceMapping:{...meta,pending:{name,config:next,validation:JSON.stringify(next)===JSON.stringify(meta.pending?.config)?meta.pending.validation:null,savedAt:time}}});
       label='保存模型映射';

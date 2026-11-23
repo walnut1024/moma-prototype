@@ -101,7 +101,7 @@ export function observationConditions(rows, filters, dimensions, onChange) {
   });
 }
 
-const supplyLabel = '服务商 / 渠道';
+const supplyLabel = '服务商 / 连接';
 const anyProvider = 0;
 const providerValue = provider => provider ?? anyProvider;
 const keyLabel = (id, label, name) => id === uncollectedObservationKey ? '未采集' + label : name || id;
@@ -123,7 +123,7 @@ export function useObservationSupply(rows, selection) {
       }
       const node = providers.get(id);
       if (channel != null && !node.channels.has(channel)) {
-        const label = keyLabel(channel, '渠道', channelName);
+        const label = keyLabel(channel, '连接', channelName);
         node.channels.set(channel, { value: channel, label });
       }
     };
@@ -136,7 +136,7 @@ export function useObservationSupply(rows, selection) {
       add(provider, channel, null, provider == null ? channelNames.get(channel) : null);
     }
     const treeData = distinguishOptions([...providers.values()]).map(({ channels, ...node }) => ({
-      ...node, selectedLabel: node.label + '（全部渠道）',
+      ...node, selectedLabel: node.label + '（全部连接）',
       ...(channels.size > 0 && { children: distinguishOptions([...channels.values()])
         .map(child => ({ ...child, selectedLabel: node.label + ' / ' + child.label })) }),
     }));
@@ -165,7 +165,7 @@ export function ObservationSupplyPick({ treeData, value, group, onChange }) {
   return <Cascader multiple size="small" motion={false} showClear checkRelation="unRelated" filterLeafOnly={false}
     filterTreeNode={(query, path, node) => (path + ' ' + node.value).toLowerCase().includes(query.trim().toLowerCase())}
     maxTagCount={1} showRestTagsPopover displayProp="selectedLabel" insetLabel={supplyLabel} aria-label={supplyLabel + '筛选'}
-    placeholder={placeholder} searchPlaceholder={open ? '搜索服务商或渠道' : placeholder} emptyContent="无匹配结果"
+    placeholder={placeholder} searchPlaceholder={open ? '搜索服务商或连接' : placeholder} emptyContent="无匹配结果"
     onDropdownVisibleChange={setOpen}
     className="admin-observation-supply" dropdownClassName="admin-observation-supply-menu"
     treeData={treeData} value={value} onChange={change}/>;

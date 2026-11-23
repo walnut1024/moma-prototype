@@ -2,7 +2,7 @@ import { workspaceStoragePrefix } from '../workspace-storage.mjs';
 import { MODEL_TYPE_LABELS, modelCategory } from '../model-types.mjs';
 
 const storageKey = workspaceStoragePrefix + 'model-services-new:v1';
-const simulatedChannelNames = ['渠道 A', '渠道 B', '备用渠道'];
+const simulatedChannelNames = ['连接 A', '连接 B', '备用连接'];
 export const SERVICE_DESCRIPTION_LIMIT = 300;
 export const MODEL_ID_LABEL = '模型 ID';
 
@@ -24,7 +24,7 @@ export const validContextLength = value => Number.isSafeInteger(value) && value 
 export function channelSetupIssue(service) {
   if (!contextRoutingEnabled(service)) return '';
   return service.channels.some(row => row.enabled && !validContextLength(row.context))
-    ? '请为每条已启用的渠道模型配置上下文长度' : '';
+    ? '请为每条已启用的上游模型配置上下文长度' : '';
 }
 
 export function preferredServiceChannels(channels, contextTokens = null) {
@@ -64,7 +64,7 @@ export function simulatedServiceChannels(model, registeredChannels, links = []) 
   return simulatedChannelNames.map((name, index) => ({
     id: `mock-service-channel:${model.id}:${index + 1}`,
     name,
-    provider: { name: '模拟渠道' },
+    provider: { name: '模拟连接' },
     upstreamModelId: 'mock/' + (model.modelId || model.id),
     simulated: true,
   })).filter(channel => !hasUsableChannel || links.some(link => link.channelId === channel.id));

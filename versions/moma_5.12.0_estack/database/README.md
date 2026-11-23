@@ -14,9 +14,9 @@
 
 内置账号每次本地启动恢复为约定的统一演示密码。客户账号为 `zqzh`（政企）和 `grzh`（个人）。后台账号为 `yyg`、`admin-001`（系统管理员）、`admin-002`（运维管理员）和 `admin-003`（运营管理员）。通过 `MODEL_OPS_LOGIN_HASHES` 可为其他演示账号配置 SHA-256 摘要。数据库保存在 `database/.local/`，重启保留业务记录。登录使用 HttpOnly、Secure、SameSite Cookie，客户端写入校验同源 Origin 和当前账号。
 
-首次初始化预置下列模拟供给。服务商和模型资料可在后台查看；渠道按原流程验证、启用和关联，验证服务、配置销售范围及价格后才可上架。已有的「研发人员注意 → 导入模型运营演示包」流程仍可使用。
+首次初始化预置下列模拟供给。服务商和模型资料可在后台查看；连接按原流程验证、启用和关联，验证服务、配置销售范围及价格后才可上架。已有的「研发人员注意 → 导入模型运营演示包」流程仍可使用。
 
-| 服务商 | 渠道与模型 |
+| 服务商 | 连接与模型 |
 | --- | --- |
 | 移动云 | 自营：GLM 5.3；原厂转售：DeepSeek V4.1 Flash |
 | 阿里云 | 自营：DeepSeek V4 Pro；原厂转售：Seedance 2.5 |
@@ -27,7 +27,7 @@
 
 ## 数据与事务
 
-渠道管理的公开管理工作区返回 `supplyRelations`，供应登记从 `supplier_models` 关联 `materials`、`suppliers` 读取，模型渠道从 `channel_models` 关联其供应登记及 `channels` 读取，排除已移除或已删除的关系。两个 tab 只改变分组方式，成员及计数共用这一集合。`suppliers.record_json` 内的配置只用于补充已保存的渠道成本、容量、检测及来源信息，不决定列表成员。模型命令的回执使用同一关系投影，字段及 ID 与刷新读取一致。登记移除和恢复同步 `supplier_models.removed_at`，多个别名仍合并为同一服务商／主档关系，不删除历史 JSON 或其他服务商记录。
+模型接入的公开管理工作区返回 `supplyRelations`，供应登记从 `supplier_models` 关联 `materials`、`suppliers` 读取，上游模型从 `channel_models` 关联其供应登记及 `channels` 读取，排除已移除或已删除的关系。两个 tab 只改变分组方式，成员及计数共用这一集合。`suppliers.record_json` 内的配置只用于补充已保存的连接成本、容量、检测及来源信息，不决定列表成员。模型命令的回执使用同一关系投影，字段及 ID 与刷新读取一致。登记移除和恢复同步 `supplier_models.removed_at`，多个别名仍合并为同一服务商／主档关系，不删除历史 JSON 或其他服务商记录。
 
 空 D1 通过 `0001`—`0017` migration 建表，再初始化后台账号定义、`src/data/tariff-dictionary.json` 的 135 条计费字典记录和 `src/data/builtin-model-catalogue.json` 的 17 份参考主档。已有工作区启动时读取原数据。导出的空库初始化 SQL 采用同一数据范围。
 
@@ -43,7 +43,7 @@
 
 `0009` 新增用户全局默认限流记录，初始值为 60 RPM 和 3,000,000 TPM。`0010` 保留已保存的用户全局默认和审计，初始化模型默认 600 RPM 和 30,000,000 TPM，并增加账号额度、一客一策与模型覆盖记录。发布限流页面与接口前先应用 `0010`。
 
-`0011` 允许同一连接下保存同款模型的不同上游标识，并把上架阶段与灰度客户保存到具体渠道服务。客户会话、订单及模拟调用分别写入 `market_sessions`、`market_orders`、`market_calls`；每次调用同时保存使用量、售价和路由引用。
+`0011` 允许同一连接下保存同款模型的不同上游标识，并把上架阶段与灰度客户保存到具体模型服务。客户会话、订单及模拟调用分别写入 `market_sessions`、`market_orders`、`market_calls`；每次调用同时保存使用量、售价和路由引用。
 
 `record_json` 按资源保存标准属性，所有者、稳定身份、有效价格/路由/发布引用仍由关系列和外键检查。模拟资源按 kind/id 保存；幂等回执统一在 operations，模拟器不再重复保存整份回执。源码 JSON 不在刷新时重放，用户浏览器旧存档不隐式导入、合并或删除。
 
@@ -83,7 +83,7 @@ erDiagram
     MONTHLY_CHARGE ||--o| BILL : 生成账单
 ```
 
-`0012` 增加业务工作区修订号、客户操作回执和活动索引，保留渠道订单与其原始售价关联。退订保留订单，释放该客户与服务的活动订单占位。套餐订单冻结当时的套餐版本和抵扣规则。
+`0012` 增加业务工作区修订号、客户操作回执和活动索引，保留连接订单与其原始售价关联。退订保留订单，释放该客户与服务的活动订单占位。套餐订单冻结当时的套餐版本和抵扣规则。
 
 `0013` 记录已删除的 API Key ID，升级时从现有孤立授权识别可追溯的旧 ID。删除 Key 和停用额度在同一事务提交。企业成员的显示姓名和手机号保存在租户成员关系中。运维工作区仅返回诊断和运维配置所需的投影。
 
@@ -117,9 +117,9 @@ erDiagram
 - `GET /application`、`POST /application/open`、`POST /application/commands` 提供后台客户、业务、网关和运维工作区。
 - `GET /market/workspace` 和 `POST /market/commands` 提供当前客户的组织、Key、智能路由、套餐订购与本人认证申请。
 - `POST /market/invitations` 由企业管理员生成成员链接，`POST /market/invitations/inspect` 和 `/market/invitations/accept` 验证及接受邀请。体验选项通过 `GET /market/experience-options?task=…` 读取，`GET /market/conversations` 返回当前用户与空间的文本历史。
-- `GET /market/catalogue` 读取已发布的 D1 目录、当前客户订单和可订购套餐。`GET /market/ranking` 只统计公开正式上架模型的模拟调用。 `POST /market/login`、`/market/logout` 维护独立客户会话；`POST /market/orders` 与 `/market/completions` 校验当前渠道、客户范围及订单归属后写入 D1。后者仅运行原型模拟器。
+- `GET /market/catalogue` 读取已发布的 D1 目录、当前客户订单和可订购套餐。`GET /market/ranking` 只统计公开正式上架模型的模拟调用。 `POST /market/login`、`/market/logout` 维护独立客户会话；`POST /market/orders` 与 `/market/completions` 校验当前连接、客户范围及订单归属后写入 D1。后者仅运行原型模拟器。
 - `/simulation/*`：管理端模拟接入、任务、候选、试调用及发布；轮询读取精简资源，不加载整份编辑工作区。
-- 资料、服务、服务商、渠道及字典的分页查询，服务 workspace/history，可见性命令，账号自己的操作回执查询。
+- 资料、服务、服务商、连接及字典的分页查询，服务 workspace/history，可见性命令，账号自己的操作回执查询。
 
 路径均以 `/api/v1` 开头；角色复用版本内导航规则。网络失败不回退为本地成功。
 

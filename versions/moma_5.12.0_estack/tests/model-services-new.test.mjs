@@ -40,8 +40,8 @@ test('the new service catalogue and detail have independent routes', () => {
 
 test('simulated channel options use the selected model and retain saved choices when registered supply becomes usable', () => {
   const model = { id: 'model-a', modelId: 'glm-5.3' };
-  const simulated = simulatedServiceChannels(model, [{ id: 'channel-a', reason: '渠道未启用' }]);
-  assert.deepEqual(simulated.map(row => row.name), ['渠道 A', '渠道 B', '备用渠道']);
+  const simulated = simulatedServiceChannels(model, [{ id: 'channel-a', reason: '连接未启用' }]);
+  assert.deepEqual(simulated.map(row => row.name), ['连接 A', '连接 B', '备用连接']);
   assert.ok(simulated.every(row => row.simulated && row.upstreamModelId === 'mock/glm-5.3'));
   assert.notEqual(simulatedServiceChannels({ ...model, id: 'model-b' }, [])[0].id, simulated[0].id);
   const registered = [{ id: 'channel-a', reason: '' }];

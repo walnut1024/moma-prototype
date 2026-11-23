@@ -76,7 +76,7 @@ export default function ModelPrices(props) {
         {title:'模型展示名',width:160,render:(_,row)=>({children:row.modelName,props:{rowSpan:row.modelSpan}})},
         {title:'模型编码',width:140,render:merged(row=><CopyId value={row.canonical_slug} label="模型编码" ellipsis={{showTooltip:true}}/>)},
         {title:'模型服务 ID',width:190,render:merged(row=><CopyId value={row.model_service_id} label="模型服务 ID" ellipsis={{showTooltip:true}}/>)},
-        {title:'服务商 / 渠道',width:120,render:merged(row=>row.offerName)},
+        {title:'服务商 / 连接',width:120,render:merged(row=>row.offerName)},
         {title:'模型调用标识',width:160,render:merged(row=>row.callId || '待配置')},
         {title:'计费项',width:130,render:(_,row)=><div>{row.item?.name || '—'}{row.item?.condition && <Typography.Paragraph type="tertiary">{row.item.condition}</Typography.Paragraph>}</div>},
         {title:'售价',width:110,align:'right',render:(_,row)=>row.item?.amount == null?'—':moneyDisplay(row.item.amount)},

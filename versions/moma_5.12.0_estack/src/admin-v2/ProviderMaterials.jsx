@@ -53,7 +53,7 @@ function ProviderList({ state, ops, providers }) {
       { title: '已登记模型数', align: 'right', width: 130, render: (_, row) => <Button theme="borderless" aria-label={`查看 ${row.name} 的模型列表`} onClick={() => open(row)}>{providerMaterialModels(state, row).length}</Button> },
       { title: '操作', width: 150, fixed: 'right', render: (_, row) => <Space>
         <Button theme="borderless" disabled={!ops.can} onClick={() => open(row, true)}>编辑</Button>
-        <Button theme="borderless" onClick={() => viewMaterialChannels(ops, row.id)}>查看渠道</Button>
+        <Button theme="borderless" onClick={() => viewMaterialChannels(ops, row.id)}>查看连接</Button>
       </Space> },
     ]}/>
   </>;
@@ -115,7 +115,7 @@ export default function ProviderMaterials(props) {
     {!importKind && ops.conflict && <div className="materials-description"><Notice error>资料已有修订，当前输入保留。<Button theme="borderless" onClick={ops.reload}>载入最新数据</Button></Notice></div>}
     {(view || (providerId && !provider)) && <div className="materials-description">
       <Button theme="borderless" onClick={importKind && provider ? () => go({ view: null }) : back}>
-        {importKind && provider ? '返回模型列表' : returnTo?.startsWith('#/admin-2/providers-reference') ? '返回渠道管理' : returnTo ? '返回来源页面' : '返回服务商列表'}
+        {importKind && provider ? '返回模型列表' : returnTo?.startsWith('#/admin-2/providers-reference') ? '返回模型接入' : returnTo ? '返回来源页面' : '返回服务商列表'}
       </Button>
     </div>}
     {importKind ? <div className="materials-description">

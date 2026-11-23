@@ -75,7 +75,7 @@ test('provider removal preserves materials, purchase versions, audit history and
 test('two-step removal stops and withdraws the selected offer, not sibling channels; stale commits fail', () => {
   const { state, provider, target } = fixture(), model = state.models[0], channel = provider.catalogConnections[0];
   Object.assign(model, { serviceMode: 'provider', callsEnabled: true, listingStatus: '已上架', releaseStage: 'formal',
-    serviceProviders: [{ providerId: provider.id, channelId: channel.id, channelName: '目标渠道', callId: 'target-call', status: '已关联', callsEnabled: true, listingStage: 'gray' },
+    serviceProviders: [{ providerId: provider.id, channelId: channel.id, channelName: '目标连接', callId: 'target-call', status: '已关联', callsEnabled: true, listingStage: 'gray' },
       { providerId: 'other-provider', channelId: 'other-channel', callId: 'sibling-call', status: '已关联', callsEnabled: true, listingStage: 'formal' }] });
   const sibling = structuredClone(model.serviceProviders[1]), master = structuredClone(state.modelTemplates);
   assert.equal(providerRemovalPlan(state, target).ready, false);
@@ -90,10 +90,10 @@ test('two-step removal stops and withdraws the selected offer, not sibling chann
   const concurrent = structuredClone(prepared); concurrent.models[0].serviceProviders[0].callsEnabled = true;
   assert.throws(() => op(concurrent, 'providerRemovalCommit', { target, expectedSignature: plan.signature, confirmed: true }), /变化/);
   const next = removal(prepared, target);
-  assert.equal(next.models[0].serviceProviders[0].channelUnavailableReason, '渠道未接入');
+  assert.equal(next.models[0].serviceProviders[0].channelUnavailableReason, '连接未接入');
   assert.deepEqual(next.models[0].serviceProviders[1], sibling);
   assert.deepEqual(next.modelTemplates, master);
-  assert.equal(serviceDirectoryRows([next.models[0]], next).find(row => row.callId === 'target-call').stopReason, '渠道未接入');
+  assert.equal(serviceDirectoryRows([next.models[0]], next).find(row => row.callId === 'target-call').stopReason, '连接未接入');
   const resumed = structuredClone(next.models[0]); resumed.serviceProviders[0].callsEnabled = true;
   assert.equal(serviceDirectoryRows([resumed], next).find(row => row.callId === 'target-call').stopReason, '');
 });

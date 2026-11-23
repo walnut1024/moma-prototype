@@ -104,7 +104,7 @@ export function MarketAction({ action, market, project, close }) {
       disabled={ordering?!accepted:!message.trim()}>{busy?'提交中…':ordering?'确认订购':'发送'}</Button>}>
       <form id={formId} className="market-action-form" onSubmit={submit}>
         <p>{service.name} · {service.provider} · <code>{service.callId}</code></p>
-        {ordering ? <Checkbox checked={accepted} disabled={busy} onChange={event=>setAccepted(event.target.checked)}>确认按此渠道公布的单价按量计费</Checkbox> :
+        {ordering ? <Checkbox checked={accepted} disabled={busy} onChange={event=>setAccepted(event.target.checked)}>确认按此模型服务公布的单价按量计费</Checkbox> :
           <label className="market-call-field" htmlFor={formId+'-message'}>消息
             <TextArea id={formId+'-message'} maxLength={2000} rows={4} value={message} disabled={busy} onChange={setMessage}/>
           </label>}

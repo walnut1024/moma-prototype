@@ -29,7 +29,7 @@ export function usageFilterOptions(state) {
   const users = new Map();
   for (const row of state.requests) {
     const channelId = row.endpointId || '__unknown__';
-    if (!channels.has(channelId)) channels.set(channelId, { id: channelId, name: row.endpointId || '未归属渠道', groupId: '__unknown__' });
+    if (!channels.has(channelId)) channels.set(channelId, { id: channelId, name: row.endpointId || '未归属连接', groupId: '__unknown__' });
     const userId = row.userId || '__unknown__';
     users.set(userId, { id: userId, name: row.userId || '未归属用户' });
   }

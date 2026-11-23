@@ -85,7 +85,7 @@ export function prepareMockOnboardingSync(previous, next, action) {
     const endpoint = next.endpoints.find(row => row.id === source.clientChannelId);
     const provider = next.providers.find(row => row.id === endpoint.providerId);
     const [key] = connectionKeys(endpoint, provider);
-    if (!key) throw new Error('替换后的渠道缺少可用密钥');
+    if (!key) throw new Error('替换后的连接缺少可用密钥');
     return { channelId, clientSignature: connectionFingerprint(endpoint), credential: {
       id: key.id, version: key.version || key.fingerprint, status: 'active', accountRpm: key.accountRpm ?? endpoint.capacity ?? null,
     } };

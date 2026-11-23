@@ -79,7 +79,7 @@ export function supplierModelTestPreview(state, providerId, associationId, model
   const provider = state.providers.find(row => row.id === providerId);
   if (!provider) throw new Error('服务商不存在');
   const association = catalogueChannels(state, provider, modelId).find(row => row.id === associationId);
-  if (!association?.endpointId) throw new Error('模型与渠道关联已变化');
+  if (!association?.endpointId) throw new Error('模型与连接关联已变化');
   const issue = channelInterfaceIssue(provider, association);
   if (issue) throw new Error(issue);
   const owner = { ...provider, apiKeys: providerApiKeyRows(state, provider).map(row => row.apiKey) };
@@ -94,7 +94,7 @@ export function providerModelConnectivityTest(state, { providerId, keyId, endpoi
   const endpoint = state.endpoints.find(item => item.id === endpointId && item.providerId === providerId);
   if (!provider || !endpoint) throw new Error('请选择当前服务商的接入地址');
   const groupKey = endpoint.authMode === 'group' ? connectionKeys(endpoint, provider)[0] : null;
-  if (endpoint.authMode === 'group' && (!groupKey || keyId && keyId !== groupKey.id)) throw new Error('请使用当前渠道 API 密钥组中可用的主要密钥');
+  if (endpoint.authMode === 'group' && (!groupKey || keyId && keyId !== groupKey.id)) throw new Error('请使用当前连接 API 密钥组中可用的主要密钥');
   const key = groupKey || [...(provider.apiKeys || []), ...(endpoint.apiKeys || [])].find(item => item.id === keyId);
   if (keyId && !key || !key && !connectionCredentialsReady({ ...endpoint, apiKeys: [] }, provider)) throw new Error('API 密钥不存在或不适用于当前接入地址');
   // A saved key's display mask is not its credential identity.
@@ -202,13 +202,13 @@ export function providerTransaction(state, action) {
     const rebinding = operation === 'catalogueConnection' && supplies.some(item => item.endpointId !== endpoint?.id);
     const shared = changed && (connectionCatalogueIds(state, provider, endpoint.id).some(id => operation === 'connectionKeys' || id !== data.modelId) || state.modelSupplies.some(item => item.endpointId === endpoint.id && item.status !== '已移除'));
     if ((shared || rebinding) && !data.confirmed) throw new Error('请确认接入变更会影响关联模型，需要重新验证');
-    if (operation === 'catalogueConnection' && previous.length > 1) throw new Error('此模型已有多个渠道，请在管理渠道中逐个编辑，不能合并接入');
+    if (operation === 'catalogueConnection' && previous.length > 1) throw new Error('此模型已有多个连接，请在连接列表中逐个编辑，不能合并接入');
     const transaction = !endpoint || changed ? providerTransaction(state, { operation: 'connection', objectId: endpoint?.id, data: { ...fields, timeoutSeconds: endpoint?.timeoutSeconds || 60 } }) : { changes: [] };
     changes.push(...transaction.changes);
     const endpointId = endpoint?.id || changes.find(item => item.collection === 'endpoints').record.id;
     if (operation === 'catalogueConnection') {
       const existing = provider.catalogConnections?.find(item => item.modelId === data.modelId);
-      changes.push(update('providers', provider.id, { catalogConnections: [...(provider.catalogConnections || []).filter(item => item.modelId !== data.modelId), { ...existing, id: existing ? existing.id || channelIdentity(provider.id, data.modelId, existing.endpointId) : resourceId('channel'), modelId: data.modelId, endpointId, name: existing?.name || '默认渠道', origin: existing?.origin || 'undisclosed', upstreamModelId: existing?.upstreamModelId || data.modelId, enabled: false, health: null }] }));
+      changes.push(update('providers', provider.id, { catalogConnections: [...(provider.catalogConnections || []).filter(item => item.modelId !== data.modelId), { ...existing, id: existing ? existing.id || channelIdentity(provider.id, data.modelId, existing.endpointId) : resourceId('channel'), modelId: data.modelId, endpointId, name: existing?.name || '默认连接', origin: existing?.origin || 'undisclosed', upstreamModelId: existing?.upstreamModelId || data.modelId, enabled: false, health: null }] }));
       supplies.filter(item => item.endpointId !== endpointId).forEach(item => changes.push(update('modelSupplies', item.id, { endpointId, status: '已停用', validationStatus: '待验证', verifiedAt: null, validationCases: [] })));
       if (rebinding) {
         const movedIds = new Set(supplies.map(item => item.id));
@@ -219,7 +219,7 @@ export function providerTransaction(state, action) {
         }
       }
     }
-    return { type: 'batch', label: operation === 'catalogueConnection' ? '保存模型接入地址' : '保存接入 API 密钥', objectId: provider.id, changes };
+    return { type: 'batch', label: operation === 'catalogueConnection' ? '保存上游模型接入地址' : '保存接入 API 密钥', objectId: provider.id, changes };
   }
   if (operation === 'catalogueAdd') {
     if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
@@ -228,7 +228,7 @@ export function providerTransaction(state, action) {
     const [modelId] = normalizeProviderCatalogue([data.modelId]);
     if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/.test(modelId)) throw new Error('服务商目录标识仅支持英文字母、数字和中划线，中划线不能在首尾或连续出现');
     const channelName = typeof data.channelName === 'string' ? data.channelName.trim() : '';
-    if (!channelName || channelName.length > 60 || /\p{Cc}/u.test(channelName)) throw new Error('请填写渠道名称，最多 60 字');
+    if (!channelName || channelName.length > 60 || /\p{Cc}/u.test(channelName)) throw new Error('请填写连接名称，最多 60 字');
     const modelName = typeof data.modelName === 'string' ? data.modelName.trim() : '';
     if (modelName.length > 100 || /\p{Cc}/u.test(modelName)) throw new Error('模型展示名最多 100 字，不能包含控制字符');
     const apiUrl = typeof data.apiUrl === 'string' ? data.apiUrl.trim() : '';
