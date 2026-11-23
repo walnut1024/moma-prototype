@@ -17,9 +17,9 @@ const { Text, Title } = Typography;
 const historicalDay = '2026-11-18';
 const liveDay = '2026-11-19';
 const weekStart = '2026-11-13';
-const titleHome = '客户数据';
-const titleInfo = '客户信息总览';
-const titleFlow = '客户流量拓扑';
+const titleHome = '租户数据';
+const titleInfo = '租户信息总览';
+const titleFlow = '租户流量拓扑';
 const names = [...new Set([
   ...sample.liveCustomers.map(row => row[1]),
   ...[...sample.usageRanks, ...sample.gains, ...sample.drops].map(row => row[0]),
@@ -122,13 +122,13 @@ function Overview({ params }) {
   const metrics = sample.metrics.map(([label, value, unit], index) => [
     label, hasSnapshot ? value : index === 0 && hasSelectedDay ? fmt(amount) : '—', unit,
   ]);
-  const download = () => exportCsv('客户数据_' + range.end, ['统计日期', '区块', '指标或客户', '数值', '单位或占比'], [
+  const download = () => exportCsv('租户数据_' + range.end, ['统计日期', '区块', '指标或租户', '数值', '单位或占比'], [
     ...sample.liveCustomers.map(([, name, value]) => [liveDay, '今日实时', name, Number(value), '亿 Token']),
     ...metrics.map(([label, value, unit]) => [range.end, '数据概览', label, value, unit]),
-    ...points.map(([day, count]) => [day, '日活跃客户数趋势', '日活跃客户数', count, '个']),
+    ...points.map(([day, count]) => [day, '日活跃租户数趋势', '日活跃租户数', count, '个']),
     ...(hasSnapshot ? [
-      ...sample.categories.map(([label, count, , percent]) => [range.end, '客户分类情况', label, count, percent]),
-      ...[['客户调用量排行榜', sample.usageRanks], ['Token 用量增长', sample.gains], ['Token 用量下降', sample.drops]]
+      ...sample.categories.map(([label, count, , percent]) => [range.end, '租户分类情况', label, count, percent]),
+      ...[['租户调用量排行榜', sample.usageRanks], ['Token 用量增长', sample.gains], ['Token 用量下降', sample.drops]]
         .flatMap(([group, rows]) => rows.map(([name, , value, change]) => [range.end, group, name, Number(value), change || '亿 Token'])),
     ] : []),
   ]);
@@ -145,7 +145,7 @@ function Overview({ params }) {
   }
   return <>
     <AdminPageHeading title={titleHome}><Space><Text type="tertiary" size="small">演示数据</Text><ExportButton onClick={download}/></Space></AdminPageHeading>
-    <Section title="客户 Token 总调用量" note="今日实时">
+    <Section title="租户 Token 总调用量" note="今日实时">
       <div className="ca-live">{sample.liveCustomers.map(([code, name, value], index) => <a
         href={detailHref(name, range, 'live')} onClick={openCustomer} className={'ca-live-customer ca-top-' + (index + 1)} key={code}>
         <span className="ca-place">{index + 1}</span>
@@ -163,17 +163,17 @@ function Overview({ params }) {
     </form></Section>
     <Section title="数据概览"><Metrics rows={metrics}/></Section>
     <div className="ca-two">
-      <Ring title="客户分类情况" data={sample.categories} number="3,554" center="总客户数" available={hasSnapshot}/>
-      <Section title="日活跃客户数趋势（个）">
-        {points.length ? <TimeSeriesChart compact legendAtTop showData={false} type="area" unit="个" label="日活跃客户数趋势"
+      <Ring title="租户分类情况" data={sample.categories} number="3,554" center="总租户数" available={hasSnapshot}/>
+      <Section title="日活跃租户数趋势（个）">
+        {points.length ? <TimeSeriesChart compact legendAtTop showData={false} type="area" unit="个" label="日活跃租户数趋势"
           height={238} domain={[0, 5000]} labels={points.map(row => row[0])}
-          series={[{ label: '日活跃客户数', color: '#0874f8', values: points.map(row => row[1]), smooth: true }]}/> : empty('所选日期暂无趋势样本')}
+          series={[{ label: '日活跃租户数', color: '#0874f8', values: points.map(row => row[1]), smooth: true }]}/> : empty('所选日期暂无趋势样本')}
       </Section>
     </div>
     <div className="ca-three">
-      <Rankings onOpen={openCustomer} title="客户调用量排行榜" rows={hasSnapshot ? sample.usageRanks : []} range={range}/>
-      <Rankings onOpen={openCustomer} title="Token 用量增长 TOP10 客户" rows={hasSnapshot ? sample.gains : []} range={range} direction="up"/>
-      <Rankings onOpen={openCustomer} title="Token 用量下降 TOP10 客户" rows={hasSnapshot ? sample.drops : []} range={range} direction="down"/>
+      <Rankings onOpen={openCustomer} title="租户调用量排行榜" rows={hasSnapshot ? sample.usageRanks : []} range={range}/>
+      <Rankings onOpen={openCustomer} title="Token 用量增长 TOP10 租户" rows={hasSnapshot ? sample.gains : []} range={range} direction="up"/>
+      <Rankings onOpen={openCustomer} title="Token 用量下降 TOP10 租户" rows={hasSnapshot ? sample.drops : []} range={range} direction="down"/>
     </div>
   </>;
 }
@@ -208,7 +208,7 @@ function Traffic({ initialCustomer }) {
     <form id="ca-flow-export" hidden onSubmit={event => {
       event.preventDefault();
       if (!observed || view !== 'current' || !snapshot.edges.length) { Toast.info('暂无可导出的流量样本'); return; }
-      exportCsv('客户流量拓扑', ['起点', '去向', '模型', '实时 TPM', '占上游流量'],
+      exportCsv('租户流量拓扑', ['起点', '去向', '模型', '实时 TPM', '占上游流量'],
         snapshot.edges.map(edge => [edge.fromName, edge.toName, edge.model, edge.tpm, flowPercent(edge.tpm, edge.total)]));
     }}/>
     <Section className="ca-filter"><form onSubmit={event => {
@@ -218,7 +218,7 @@ function Traffic({ initialCustomer }) {
       setFocus(initialFocus(customerFlowSnapshot(0, draft.model)));
       setNodeId(null);
     }}>
-      <label>客户 <Select aria-label="客户" filter optionList={customerOptions} value={draft.customer}
+      <label>租户 <Select aria-label="租户" filter optionList={customerOptions} value={draft.customer}
         onChange={customer => setDraft({ ...draft, customer })}/></label>
       <label>模型 <Select aria-label="拓扑模型" filter showClear placeholder="全部模型 / 输入关键词" optionList={modelOptions}
         value={draft.model || undefined} onChange={model => setDraft({ ...draft, model: model || '' })}/></label>
@@ -257,7 +257,7 @@ function Traffic({ initialCustomer }) {
               </Space>}
             </div>
             {observed ? <CustomerFlow snapshot={snapshot} focus={focus} onFocus={setFocus} onDetails={setNodeId} running={active}/>
-              : empty('所选客户暂无流量观测样本')}
+              : empty('所选租户暂无流量观测样本')}
           </div>
         </Tabs.TabPane>
         <Tabs.TabPane tab="历史流量" itemKey="history">{empty('暂无历史流量样本')}</Tabs.TabPane>
@@ -291,8 +291,8 @@ function CustomerInfo({ customer, initial }) {
     ? sample.detailRows.filter(row => row[1].toLowerCase().includes(keyword)) : [], [ownsSample, query, keyword]);
   const limits = ownsSample ? limitRows.filter(row => matchesModel(row.model)) : [];
   const identity = [
-    ['客户名称', customer.name], ['客户 ID', ownsSample ? 'CIDC-A-e99586…22556' : '—'],
-    ['客户类型', ownsSample ? sample.enterpriseCustomer : '—'],
+    ['租户名称', customer.name], ['租户 ID', ownsSample ? 'CIDC-A-e99586…22556' : '—'],
+    ['租户类型', ownsSample ? sample.enterpriseCustomer : '—'],
     ['省份 / 城市 / 区县', ownsSample ? '江苏　苏州　相城区分公司' : '—'],
     ['活跃天数', hasSummary ? '7 天' : '—'], ['专业公司名称', '—'],
   ];
@@ -312,16 +312,16 @@ function CustomerInfo({ customer, initial }) {
       else Toast.info('所选条件暂无可导出的样本');
     }}/>
     <Section className="ca-filter"><form onSubmit={event => { event.preventDefault(); setQuery(draft); }}>
-      <label>模型 <Input aria-label="模型名称" placeholder="输入模型名称" value={draft.model}
+      <label>模型 <Input aria-label="模型展示名称" placeholder="输入模型展示名称" value={draft.model}
         onChange={model => setDraft({ ...draft, model })}/></label>
       <label>日期范围 <DateFields draft={draft} onChange={setDraft}/></label>
       <Button theme="solid" htmlType="submit">查询</Button>
       <ExportButton onClick={downloads[section]} disabled={!canExport}>导出表格</ExportButton>
     </form></Section>
-    <Section title="客户基础信息">
+    <Section title="租户基础信息">
       <dl className="ca-identity">{identity.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>
-        {value}{label === '客户类型' && ownsSample && (tagged ? <Tag size="small" color="blue">大客户</Tag>
-          : <Button theme="borderless" size="small" onClick={() => setTagged(true)}>添加大客户标签</Button>)}
+        {value}{label === '租户类型' && ownsSample && (tagged ? <Tag size="small" color="blue">大租户</Tag>
+          : <Button theme="borderless" size="small" onClick={() => setTagged(true)}>添加大租户标签</Button>)}
       </dd></div>)}</dl>
     </Section>
     <div className="ca-two">
@@ -338,13 +338,13 @@ function CustomerInfo({ customer, initial }) {
           columns={modelColumns} dataSource={models.map(row => Object.fromEntries(modelColumns.map((column, index) => [column.dataIndex, row[index]])))}
           empty={empty('所选条件暂无模型用量样本')}/>
       </Section></Tabs.TabPane>
-      <Tabs.TabPane itemKey="calls" tab="客户调用明细"><Section>
+      <Tabs.TabPane itemKey="calls" tab="租户调用明细"><Section>
         {section === 'calls' && <CustomerCallDetail rows={minutes} grain={grain} setGrain={setGrain}
           showSampleTrend={whole} matchesModel={matchesModel}/>}
       </Section></Tabs.TabPane>
       <Tabs.TabPane itemKey="limits" tab="用户模型限流信息"><Section>
         <Table size="small" rowKey="model" columns={limitColumns} pagination={false} dataSource={limits}
-          empty={empty('暂无该客户的用户模型限流样本')}/>
+          empty={empty('暂无该租户的用户模型限流样本')}/>
       </Section></Tabs.TabPane>
     </Tabs></div>
   </div>;
@@ -368,14 +368,14 @@ export default function CustomerAnalysis({ detail, params }) {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
   return <div className="admin-page-stack ca-page">
-    <div className="ca-detail-heading"><Button icon={<IconChevronLeft/>} aria-label="返回客户数据" theme="borderless" onClick={returnToList}/>
-      <AdminPageHeading title="客户详情"><Space><Text type="tertiary" size="small">演示数据</Text>
+    <div className="ca-detail-heading"><Button icon={<IconChevronLeft/>} aria-label="返回租户数据" theme="borderless" onClick={returnToList}/>
+      <AdminPageHeading title="租户详情"><Space><Text type="tertiary" size="small">演示数据</Text>
         <Button htmlType="submit" form={tab === 'flow' ? 'ca-flow-export' : 'ca-info-export'} theme="light" type="tertiary"
           icon={<IconDownloadStroked/>} disabled={!customer}>数据导出</Button></Space></AdminPageHeading></div>
     {customer ? <Tabs activeKey={tab} onChange={setTab}>
       <Tabs.TabPane itemKey="info" tab={titleInfo}><CustomerInfo key={customer.id} customer={customer} initial={initial}/></Tabs.TabPane>
       <Tabs.TabPane itemKey="flow" tab={titleFlow}><Traffic key={customer.id} initialCustomer={customer}/></Tabs.TabPane>
-    </Tabs> : empty('客户不存在，请返回客户数据重新选择')}
+    </Tabs> : empty('租户不存在，请返回租户数据重新选择')}
   </div>;
 }
 

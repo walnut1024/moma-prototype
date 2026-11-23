@@ -41,22 +41,22 @@ const requestColumns = [
 const preflightNames = new Map(preflightTypes);
 const preflightCodeNames = {
   auth_rejected: 'API Key 无效', invalid_request: '请求参数不正确', rate_limit_exceeded: '请求超过限流阈值',
-  key_expired: 'API Key 已到期', ip_not_allowed: '来源 IP 不在白名单内', customer_unavailable: '客户空间不可用',
+  key_expired: 'API Key 已到期', ip_not_allowed: '来源 IP 不在白名单内', customer_unavailable: '租户空间不可用',
   INTERNAL_SPACE: '密钥类型不适用',
 };
 const preflightColumns = [
   ...requestColumns.slice(0, 3), ['前置错误类型', 'preflightType', value => preflightNames.get(value)],
   ['HTTP 状态码', 'status'], ['失败原因', 'errorReason', (value, row) => value ?? row.code ?? '未采集'],
-  ['错误码', 'code'], ['客户', 'tenantName'],
+  ['错误码', 'code'], ['所属租户', 'tenantName'],
 ];
 const upstreamColumns = [
-  ['客户 Request ID', 'requestId'], ['上游 Request ID', 'upstreamRequestId'], ['尝试序号', 'index'], ['开始时间', 'at', observationTime],
+  ['请求 ID', 'requestId'], ['上游请求 ID', 'upstreamRequestId'], ['尝试序号', 'index'], ['开始时间', 'at', observationTime],
   ['服务商', 'providerName'], ['连接', 'channelName'], ['上游模型', 'upstreamModelId'], ['上游状态', 'outcome', value => outcomes[value]],
   ['上游 HTTP 状态码', 'status'], ['耗时（ms）', 'duration'], ['错误码', 'code'], ['失败原因', 'errorReason'],
-  ['端点', 'endpointName'], ['客户', 'tenantName'], ['项目', 'projectName'],
+  ['端点', 'endpointName'], ['所属租户', 'tenantName'], ['项目', 'projectName'],
 ];
 const logViews = {
-  requests: { label: '客户请求', title: '请求记录', columns: requestColumns },
+  requests: { label: '请求', title: '请求记录', columns: requestColumns },
   upstream: { label: '上游请求', title: '请求尝试', columns: upstreamColumns },
   preflight: { label: '前置错误', title: '留存样本', columns: preflightColumns },
 };
@@ -125,7 +125,7 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
   };
   const chooseView = next => {
     setView(next);
-    // 连接、结果和状态码在客户请求和上游请求中来自不同层级。
+    // 连接、结果和状态码在请求和上游请求中来自不同层级。
     change({ outcome: '', http: '', query: '', request: '', preflightType: '', errorCode: '', upstreamModelId: null,
       ...(next === 'preflight' && { supply: null, endpoint: null, user: null, key: null, source: null, purpose: null, userRecord: '' }) }, next);
   };

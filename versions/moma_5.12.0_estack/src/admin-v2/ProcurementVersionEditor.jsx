@@ -38,7 +38,7 @@ export default function ProcurementVersionEditor({ state, provider, association,
     if (blocked) return;
     try {
       const pricing = normalizeProviderPrice(provider, { modelId: association.modelId, discountFactor: '1', scenarios });
-      if (!pricing.scenarios.length || pricing.scenarios.some(item => item.listPrice == null)) throw new Error('请补齐计费项和采购价，免费请明确填写 0');
+      if (!pricing.scenarios.length || pricing.scenarios.some(item => item.listPrice == null)) throw new Error('请补齐计费项和服务商成本价，免费请明确填写 0');
       setPublishing({ ...args, scenarios: structuredClone(scenarios), pricing });
       ops.setError('');
     } catch (error) { ops.setError(error.message); }
@@ -49,7 +49,7 @@ export default function ProcurementVersionEditor({ state, provider, association,
     if (blocked || !publishing) return;
     try {
       const start = Date.parse(effectiveAt + '+08:00'), end = expiresAt ? Date.parse(expiresAt + '+08:00') : null;
-      if (!Number.isFinite(start)) throw new Error('请填写有效的采购价生效时间');
+      if (!Number.isFinite(start)) throw new Error('请填写有效的服务商成本价生效时间');
       if (expiresAt && (!Number.isFinite(end) || end <= start)) throw new Error('到期时间须晚于生效时间');
       setBusy(true);
       const saved = await ops.run('channelProcurementPublish', { ...publishing, pricing: undefined, effectiveAt: new Date(start).toISOString(), expiresAt: end == null ? null : new Date(end).toISOString(), confirmed: true });
@@ -70,21 +70,21 @@ export default function ProcurementVersionEditor({ state, provider, association,
       <dl><div><dt>服务商</dt><dd>{provider.name}</dd></div><div><dt>模型</dt><dd>{modelName || association.modelId}</dd></div></dl>
       <AdminStatus value={quote?.scenarios?.length ? '已配置' : draft ? '报价草稿' : active === null ? '已失效' : '待配置'}/>
     </div>
-    {stale && <Notice error>该连接采购价已有新版本，当前输入保留，请关闭并重新打开。</Notice>}
+    {stale && <Notice error>该连接服务商成本价已有新版本，当前输入保留，请关闭并重新打开。</Notice>}
     {publishing ? <section className="ss-body">
       <Typography.Title heading={5} component="h3">预览发布</Typography.Title>
       <div className="procurement-cost-dates">
-        <Field label="生效时间（北京时间） *"><Input type="datetime-local" aria-label="采购价生效时间" value={effectiveAt} disabled={blocked} onChange={changed(setEffectiveAt)}/></Field>
-        <Field label="到期时间（选填，北京时间）"><Input type="datetime-local" aria-label="采购价到期时间" value={expiresAt} disabled={blocked} onChange={changed(setExpiresAt)}/></Field>
+        <Field label="生效时间（北京时间） *"><Input type="datetime-local" aria-label="服务商成本价生效时间" value={effectiveAt} disabled={blocked} onChange={changed(setEffectiveAt)}/></Field>
+        <Field label="到期时间（选填，北京时间）"><Input type="datetime-local" aria-label="服务商成本价到期时间" value={expiresAt} disabled={blocked} onChange={changed(setExpiresAt)}/></Field>
       </div>
       <Table size="small" rowKey="index" pagination={false} dataSource={publishing.pricing.scenarios.map((item, index) => ({ ...item, index }))} columns={[
         { title: '计费项', render: (_, item) => <div>{item.name}{item.condition && <Typography.Paragraph type="tertiary">{item.condition}</Typography.Paragraph>}</div> },
-        { title: '采购价', render: (_, item) => item.currency + ' ' + catalogueMoneyDisplay(item.listPrice) },
+        { title: '服务商成本价', render: (_, item) => item.currency + ' ' + catalogueMoneyDisplay(item.listPrice) },
         { title: '计费单位', dataIndex: 'unit' },
       ]}/>
     </section> : history ? <section className="ss-body">
       <Typography.Title heading={5} component="h3">历史版本</Typography.Title>
-      <Table size="small" rowKey="id" pagination={false} scroll={{ x: 780 }} dataSource={versions.slice().reverse()} empty="尚无采购价版本记录。" columns={[
+      <Table size="small" rowKey="id" pagination={false} scroll={{ x: 780 }} dataSource={versions.slice().reverse()} empty="尚无服务商成本价版本记录。" columns={[
         { title: '版本', dataIndex: 'version', width: 70 },
         { title: '生效 / 到期（北京时间）', width: 200, render: (_, version) => <div>{time(version.effectiveAt)}<Typography.Paragraph type="tertiary">{version.expiresAt ? time(version.expiresAt) : '未设置到期时间'}</Typography.Paragraph></div> },
         { title: '采购计费项', width: 300, render: (_, version) => version.pricing?.scenarios.map((item, index) => <Typography.Paragraph key={index}>

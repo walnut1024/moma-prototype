@@ -38,7 +38,7 @@ test('changing a public call ID preserves canonical master and requires stopping
   assert.throws(()=>checkedServiceCallId(s,m,'',s.models.find(row=>row.id!==m.id).modelId),/存在/);
   s=run(s,'configureServiceModelIdentity',m,{callId:'ux/model:variant'});m=s.models.find(row=>row.id===stable);
   assert.equal(m.modelId,'ux/model:variant');assert.equal(s.modelTemplates.find(row=>row.id===m.templateId).modelId,master.modelId);
-  assert.equal(s.audits[0].changes.find(row=>row.field==='模型调用标识' && row.after==='ux/model:variant').after,'ux/model:variant');
+  assert.equal(s.audits[0].changes.find(row=>row.field==='模型 ID' && row.after==='ux/model:variant').after,'ux/model:variant');
 });
 test('audit summaries expose business changes without credential material, and common tariffs keep all as an explicit option',()=>{
   const raw='do-not-expose',changes=modelAuditChanges({endpoints:[{id:'ep',name:'old',baseUrl:'https://old.invalid'}]},{type:'batch',changes:[{collection:'endpoints',type:'update',id:'ep',changes:{name:'new',baseUrl:'https://new.invalid',apiKeys:[{maskedKey:raw,fingerprint:raw}],candidateConfiguration:{apiKey:raw}}}]});
@@ -75,7 +75,7 @@ test('D1 maintenance and reused-connection commands preserve existing records an
     for (const callId of ['', 'bad alias', duplicate]) {
       const rejected = await command('configureServiceModelIdentity', { callId, confirmed: true, expectedUpdatedAt: m.updatedAt }, m.id);
       assert.equal(rejected.result.status, 422);
-      assert.match(rejected.result.data.error.message, /模型调用标识/);
+      assert.match(rejected.result.data.error.message, /模型 ID/);
       assert.deepEqual(s.models.find(row => row.id === m.id), beforeIdentity);
     }
     assert.equal((await command('configureServiceModelIdentity', { callId: 'ux-d1-renamed', confirmed: true, expectedUpdatedAt: m.updatedAt }, m.id)).result.status, 200);

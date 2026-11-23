@@ -42,7 +42,7 @@ export const AUDIT_RESOURCES = {
   supplier_connection: '连接配置',
   supplier: '服务商',
   model_material: '模型资料',
-  model_supply: '上游模型供给',
+  model_supply: '上游模型',
   project: '项目',
   project_member: '项目成员',
   project_key: '项目 API Key',

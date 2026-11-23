@@ -3,7 +3,7 @@ import { initialPersonalData } from '../mock/application-data.js';
 import { enterpriseDisplayValue, validateDemoAdminCode } from './enterprise.js';
 import { accountDataSource, isManagedCustomerAccount } from './account-data-source.js';
 
-export const individualTabs = { info: '基本信息', models:'模型开通', projects:'项目', keys:'API 密钥' };
+export const individualTabs = { info: '基本信息', models:'模型授权', projects:'项目', keys:'API 密钥' };
 export const individualAccounts = state => state.tenants.filter(tenant => tenant.type === '个人').map(tenant => ({ tenant, user: state.users.find(user => user.id === tenant.ownerId) }));
 export const managedIndividualAccounts = state => individualAccounts(state).filter(({ tenant }) => isManagedCustomerAccount(tenant));
 export const individualName = ({ tenant, user }) => user?.nickname || tenant.name || '未设置昵称';
@@ -32,12 +32,12 @@ export function individualTransaction(state, command, actor = state.currentRole)
     const phone=newAccount ? normalizeMemberPhone(data.phone || '') : existing?.phone;
     const userId=newAccount ? ids.user : existing?.id;
     if (!['new','existing'].includes(data.accountMode) || !ids.tenant || !ids.project || !userId || !name || name.length>40) {
-      throw Error('请填写个人客户信息或选择有效的登录账号');
+      throw Error('请填写个人租户信息或选择有效的登录账号');
     }
     if (newAccount && memberPhoneError(phone)) throw Error(memberPhoneError(phone));
-    if (state.tenants.some(row=>row.type==='个人' && row.ownerId===userId)) throw Error('该账号已开通个人空间');
+    if (state.tenants.some(row=>row.type==='个人' && row.ownerId===userId)) throw Error('该账号已授权个人空间');
     const at=new Date().toISOString();
-    return { type:'batch', objectId:ids.tenant, label:'开通个人客户', changes:[
+    return { type:'batch', objectId:ids.tenant, label:'开通个人租户', changes:[
       ...(newAccount ? [{type:'add',collection:'users',record:{id:userId,name,nickname:name,phone,login:phone,status:'正常',
         initialized:Boolean(loginProof),registeredAt:at,createdAt:at,updatedAt:at}}] : []),
       {type:'add',collection:'tenants',record:{id:ids.tenant,ownerId:userId,defaultProjectId:ids.project,name,type:'个人',status:'正常',source:'后台创建',createdAt:at,updatedAt:at}},
@@ -55,10 +55,10 @@ export function individualTransaction(state, command, actor = state.currentRole)
     const reason = String(data.reason || '').trim();
     if (!reason || reason.length > 500) throw new Error('请填写操作原因，最多 500 个字符');
     validateDemoAdminCode(data.challenge, { code: data.code, scope: individualFreezeScope(ids), actor });
-    return { type: 'batch', objectId: ids.slice().sort().join(','), label: '批量冻结个人客户', changes: targets.map(({ tenant }) => ({ type: 'update', collection: 'tenants', id: tenant.id, changes: { status: '停用', freezeReason: reason, statusReason: reason } })) };
+    return { type: 'batch', objectId: ids.slice().sort().join(','), label: '批量冻结个人租户', changes: targets.map(({ tenant }) => ({ type: 'update', collection: 'tenants', id: tenant.id, changes: { status: '停用', freezeReason: reason, statusReason: reason } })) };
   }
   const account = individualAccounts(state).find(item => item.tenant.id === tenantId);
-  if (!account) throw new Error('个人客户不存在，请返回列表');
+  if (!account) throw new Error('个人租户不存在，请返回列表');
   const { tenant, user } = account;
   const changes = [];
   if (operation === 'edit') {
@@ -75,8 +75,8 @@ export function individualTransaction(state, command, actor = state.currentRole)
     if (!reason || reason.length > 500) throw new Error('请填写操作原因，最多 500 个字符');
     if (data.status === '停用') validateDemoAdminCode(data.challenge, { code: data.code, scope: `individual:${tenant.id}:freeze`, actor });
     changes.push({ type: 'update', collection: 'tenants', id: tenant.id, changes: { status: data.status, freezeReason: data.status === '停用' ? reason : '', statusReason: reason } });
-  } else throw new Error('不支持的个人客户操作');
-  return { type: 'batch', objectId: tenant.id, label: operation === 'edit' ? '编辑个人客户资料' : data.status === '停用' ? '冻结个人客户' : '解冻个人客户', changes };
+  } else throw new Error('不支持的个人租户操作');
+  return { type: 'batch', objectId: tenant.id, label: operation === 'edit' ? '编辑个人租户资料' : data.status === '停用' ? '冻结个人租户' : '解冻个人租户', changes };
 }
 
 

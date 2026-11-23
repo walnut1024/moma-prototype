@@ -26,7 +26,7 @@ export function assertNewMockPublications(previous, next, action, snapshot = nul
   if (['basic', 'serviceBasics'].includes(action?.operation) || action?.operation === 'templateSave' && action.data?.id) throw new Error('已有模型资料请核对共享影响后提交发布');
   const changes = action?.type === 'batch' ? action.changes : [action];
   if (!['modelOperation', 'modelOperations'].includes(action?.type) && changes?.some(row => ['models', 'modelTemplates'].includes(row?.collection) && ['name','modelId','templateId','type','maker','description','profile','capabilities','usageUnit'].some(key => Object.hasOwn(row.changes || row.record || {}, key)))) throw new Error('模型资料须通过资料预览与发布操作维护');
-  if (['unifiedPrice', 'configureServiceProvider'].includes(action?.operation) && previous.models.find(row => row.id === action.modelId)?.listingStatus === '已上架') throw new Error('已上架服务请先保存售价或客户范围草稿，再明确发布');
+  if (['unifiedPrice', 'configureServiceProvider'].includes(action?.operation) && previous.models.find(row => row.id === action.modelId)?.listingStatus === '已上架') throw new Error('已上架服务请先保存模型刊例价或租户范围草稿，再明确发布');
   if (action?.operation === 'recordPlatformPublication') {
     const model = next.models.find(row=>row.id===action.modelId);
     if (!model) throw new Error('待记录平台验证的模型不存在');

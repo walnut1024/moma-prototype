@@ -2,7 +2,7 @@ import { resourceId } from '../resource-id.mjs';
 export const PACKAGE_KINDS = { subscription: '订阅套餐', pack: '资源包' };
 export const PACKAGE_STATUS = { draft: '草稿', ready: '待上架', listed: '已上架', unlisted: '已下架' };
 export const PACKAGE_PERIODS = { month: '月', quarter: '季', year: '年' };
-export const PACKAGE_USER_TYPES = { enterprise: '政企用户', individual: '个人用户' };
+export const PACKAGE_USER_TYPES = { enterprise: '政企租户', individual: '个人租户' };
 export const MAX_PACKAGE_DISPLAY_ORDER = 200;
 export const MAX_PACKAGE_TYPE_LENGTH = 24;
 export const MAX_PACKAGE_USAGE_LENGTH = 500;
@@ -87,7 +87,7 @@ export function packageFactorRules(rows, billingItems) {
   const byItem = new Map();
   for (const [index, row] of rows.entries()) {
     try {
-      if (!names.has(row?.billingItemId)) throw new Error('请选择当前模型售价中的有效计费项');
+      if (!names.has(row?.billingItemId)) throw new Error('请选择当前模型刊例价中的有效计费项');
       const bound = (value, label) => {
         const result = integer(value, label, 0);
         return result === '' ? null : Number(result);
@@ -135,9 +135,9 @@ export function packageConfig(values, publish, packageTypes, eligibleModels) {
   if (price && !/^\d+(\.\d{1,2})?$/.test(price)) throw new Error('售价须为非负金额，最多保留两位小数');
   const userTypes = values.userTypes ?? [];
   if (!Array.isArray(userTypes) || userTypes.some(type => typeof type !== 'string' || !Object.hasOwn(PACKAGE_USER_TYPES, type))) {
-    throw new Error('支持订购的用户类型无效');
+    throw new Error('支持订购的租户类型无效');
   }
-  if (publish && !userTypes.length) throw new Error('请至少选择一种支持订购的用户类型');
+  if (publish && !userTypes.length) throw new Error('请至少选择一种支持订购的租户类型');
   const packageType = text(values.packageType, '套餐类型', 80);
   if (packageType && !packageTypes.some(([id]) => id === packageType)) throw new Error('请选择已有的套餐类型');
   const modelIds = values.modelIds ?? [];
@@ -182,7 +182,7 @@ export function tokenPackageTransaction(state, action) {
     if (operation === 'saveFactorDraft') {
       const { enabled } = values;
       if (typeof enabled !== 'boolean') throw new Error('允许加入套餐须为布尔值');
-      if (!previous && !billingItems.length) throw new Error('该模型暂无生效售价计费项，请先配置并发布模型售价');
+      if (!previous && !billingItems.length) throw new Error('该模型暂无生效的模型刊例价，请先配置并发布');
       const rules = packageFactorRules(values.rules, billingItems);
       if (enabled && !rules.length) throw new Error('允许加入套餐前，请至少配置一条抵扣规则');
       if (!previous && !rules.length) throw new Error('添加模型前，请至少配置一条抵扣规则');

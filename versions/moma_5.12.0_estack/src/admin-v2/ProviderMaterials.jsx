@@ -70,7 +70,7 @@ function ProviderModels({ state, ops, provider }) {
   const update = patch => ops.go(patch, { replace: true, preserveScroll: true });
   return <>
     <div className="materials-toolbar">
-      <div className="materials-filters"><SearchBox placeholder="搜索模型名称、上游模型 ID 或模型编码" value={query}
+      <div className="materials-filters"><SearchBox placeholder="搜索模型展示名称、上游模型 ID 或模型编码" value={query}
         onChange={modelQ => update({ modelQ: modelQ || null, modelPage: null })}/></div>
       <Space wrap className="materials-toolbar-actions">
         <Button disabled={!ops.can} onClick={() => ops.go({ view: 'modelImport' })}>批量导入并登记</Button>
@@ -79,7 +79,7 @@ function ProviderModels({ state, ops, provider }) {
     </div>
     <Table rowKey="id" dataSource={pageRows(rows, page)} scroll={{ x: 'max(100%, 730px)' }} empty={query ? '没有符合条件的模型' : '暂无已登记模型'}
       pagination={{ pageSize, currentPage: page, total: rows.length, onPageChange: modelPage => update({ modelPage }) }} columns={[
-      { title: '模型名称', width: 170, render: (_, { offer }) => offer.name },
+      { title: '模型展示名称', width: 170, render: (_, { offer }) => offer.name },
       { title: '上游模型 ID', width: 170, render: (_, { offer }) => [...new Set(offer.bindings.map(b => b.upstream).filter(Boolean))].join('、') || '—' },
       { title: '模型编码', width: 160, render: (_, { master }) => <Typography.Text className="materials-code">{master.modelId}</Typography.Text> },
       { title: '模型类型', width: 120, render: (_, { master }) => catalogueType(master.type) },

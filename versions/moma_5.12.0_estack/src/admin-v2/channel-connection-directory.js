@@ -40,7 +40,7 @@ export function prepareListedChannelInterface({ interfaceType, baseUrl, endpoint
   const type = channelTypeById(interfaceType);
   if (!type) throw Error('请选择接口格式');
   if (endpointPath == null && type.task && channelTypeForUrl(baseUrl?.trim()) !== type) {
-    throw Error(`请填写 ${workbenchProtocolLabel(type.label)} 的完整接口地址，路径以 ${type.paths.join(' 或 ')} 结尾`);
+    throw Error(`请填写 ${workbenchProtocolLabel(type.label)} 的完整请求地址，路径以 ${type.paths.join(' 或 ')} 结尾`);
   }
   const config = prepareChannelInterface({ interfaceType: type.task ? 'custom' : type.id, baseUrl, endpointPath, allowHttp });
   const addressType = channelTypeForUrl(config.baseUrl);

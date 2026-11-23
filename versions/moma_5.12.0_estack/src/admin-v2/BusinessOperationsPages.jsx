@@ -7,7 +7,7 @@ import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus, IconSearch, IconUpload } from '@douyinfe/semi-icons';
 import { DEFAULT_PAGE_SIZE, FilterReset, FilterToolbar, PAGE_SIZES } from '../components/FilterControls';
 import OperationInputDialog from '../components/OperationInputDialog';
-import { displayBusinessCopy } from '../display-copy.mjs';
+import { displayAdminBusinessCopy } from '../display-copy.mjs';
 import AdminPageHeading from './AdminPageHeading';
 import { Choice } from './ServiceUI';
 import { latestRequests, requestIdentity } from '../request-identity.mjs';
@@ -59,7 +59,7 @@ function Managed({ pageId, state, dispatch }) {
   const columns = [
     ...fields.map(([dataIndex, title, type]) => ({
       title, dataIndex, align: type === 'number' ? 'right' : 'left',
-      render: value => Array.isArray(value) ? value.length : displayBusinessCopy(value),
+      render: value => Array.isArray(value) ? value.length : displayAdminBusinessCopy(value),
     })),
     statusColumn,
     actionColumn(row => <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => toggle(row)}>
@@ -111,7 +111,7 @@ function Orders({ state, dispatch }) {
   const create = () => {
     const product = state.products.find(item => item.code === 'TOKEN-100M' && item.status === '已上架');
     const tenant = state.tenants[0];
-    if (!product || !tenant) return Toast.error('缺少可订购商品或客户');
+    if (!product || !tenant) return Toast.error('缺少可订购商品或租户');
     dispatch({ type: 'add', collection: 'orders', record: {
       id: resourceId('order'), orderNo: `ORD-${Date.now()}`, tenantId: tenant.id, productId: product.id, amount: product.price,
       entitlement: 100000000, quotaUnit: 'Token', status: '待开通', timeline: ['订单创建'],
@@ -126,7 +126,7 @@ function Orders({ state, dispatch }) {
     </AdminPageHeading>
     <BusinessTable rows={rows} minWidth={1100} columns={[
       { title: '订单号', dataIndex: 'orderNo', render: value => value || '—' },
-      { title: '租户', render: (_, order) => state.tenants.find(item => item.id === order.tenantId)?.name || '未记录' },
+      { title: '所属租户', render: (_, order) => state.tenants.find(item => item.id === order.tenantId)?.name || '未记录' },
       { title: '商品', render: (_, order) => order.serviceName || productFor(order)?.name || '未记录' },
       { title: '金额', dataIndex: 'amount', align: 'right', render: amount =>
         Number.isFinite(amount) ? money(amount.toLocaleString('zh-CN')) : '未记录' },
@@ -181,7 +181,7 @@ function Metering({ state, dispatch }) {
     <BusinessTable rows={latestRequests(state.requests).toSorted((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 40)}
       rowKey={requestIdentity} minWidth={1080} columns={[
       { title: 'Request ID', dataIndex: 'requestId', render: value => <Text code>{value}</Text> },
-      { title: '客户', render: (_, row) => state.tenants.find(tenant => tenant.id === row.tenantId)?.name },
+      { title: '所属租户', render: (_, row) => state.tenants.find(tenant => tenant.id === row.tenantId)?.name },
       { title: '项目', render: (_, row) => state.projects.find(project => project.id === row.projectId && project.tenantId === row.tenantId)?.name || row.projectId || '未归属' },
       { title: 'Model ID', render: (_, row) => row.publicModelId || modelFor(row).modelId || row.modelId || '—' },
       { title: '计量用量', align:'right', render: (_, row) => {
@@ -200,12 +200,18 @@ function Metering({ state, dispatch }) {
 }
 
 function Ledger({ state }) {
+  const owners = new Map((state.apiKeys || []).map(key => [key.id, 'API 密钥']));
+  for (const tenant of state.tenants) owners.set(tenant.id, '租户');
+  const accountLabel = (id, row) => {
+    const kind = owners.get(id) || { '调用扣减': 'API 密钥', '企业额度扣减': '租户', '套餐抵扣': '套餐' }[row.type];
+    return kind ? kind + ' · ' + id : id;
+  };
   const count = (value, row) => [value?.toLocaleString(), row.unit].filter(Boolean).join(' ') || '—';
   return <>
     <AdminPageHeading title={titles.ledger}/>
     <BusinessTable rows={state.ledger} minWidth={980} columns={[
       { title: '流水 ID', dataIndex: 'id', render: value => <Text code>{value}</Text> },
-      { title: '账户', dataIndex: 'accountId' },
+      { title: '额度归属', dataIndex: 'accountId', render: accountLabel },
       { title: '来源', dataIndex: 'sourceId' },
       { title: '类型', dataIndex: 'type' },
       { title: '变动', dataIndex: 'delta', align: 'right', render: count },
@@ -253,12 +259,12 @@ function Bills({ state, dispatch, params }) {
     <AdminPageHeading title={titles.bills}>
       <Button theme="solid" disabled={!canWrite || scopeInvalid} onClick={() => dispatch({type:'generateBills', ...(scopedTenant && {tenantId:scopedTenant})})}>生成 {period} 模拟账单</Button>
     </AdminPageHeading>
-    {scopeInvalid && <Banner type="warning" closeIcon={null} description="所选客户或项目不存在，请调整筛选条件。"/>}
+    {scopeInvalid && <Banner type="warning" closeIcon={null} description="所选租户或项目不存在，请调整筛选条件。"/>}
     <BusinessTable rows={rows} minWidth={project ? 1110 : 940} tableKey={params.toString()} columns={[
       { title: '账单号', dataIndex: 'billNo', width: 240 },
-      { title: '客户', render: (_, row) => tenants.get(row.tenantId)?.name || row.tenantId },
+      { title: '所属租户', render: (_, row) => tenants.get(row.tenantId)?.name || row.tenantId },
       { title: '账期', dataIndex: 'period' },
-      { title: '客户应收', dataIndex: 'amount', align: 'right', render: money },
+      { title: '租户应收', dataIndex: 'amount', align: 'right', render: money },
       ...(project ? [{ title: '项目金额', align: 'right', render: (_, row) => yuanMicros(projectBillAmount(row, project.id)) }] : []),
       { title: '优惠', dataIndex: 'discount', align: 'right', render: money },
       { title: '实收', dataIndex: 'paid', align: 'right', render: money },
@@ -270,8 +276,8 @@ function Bills({ state, dispatch, params }) {
       </Space>),
     ]}>
       <FilterToolbar>
-        <Choice label="账单客户" value={scopedTenant} options={[[ '', '全部客户' ],
-          ...state.tenants.map(row => [row.id, row.name]), ...(customerId && !tenants.has(customerId) ? [[customerId, '客户不存在']] : [])]}
+        <Choice label="账单租户" value={scopedTenant} options={[[ '', '全部租户' ],
+          ...state.tenants.map(row => [row.id, row.name]), ...(customerId && !tenants.has(customerId) ? [[customerId, '租户不存在']] : [])]}
           onChange={tenant => select({ tenant, project:'', period:'' })}/>
         <Choice label="账单项目" value={projectId} options={[[ '', '全部项目' ],
           ...projects.map(row => [row.id, scopedTenant ? row.name : row.name + ' · ' + (tenants.get(row.tenantId)?.name || row.tenantId)]),
@@ -287,8 +293,8 @@ function Bills({ state, dispatch, params }) {
       closeOnEsc maskClosable={false} footer={<Button onClick={() => setInspectId(null)}>关闭</Button>}>
       <div className="admin-analytics-fields">
         <Descriptions align="left" data={[
-          { key:'账单号', value:inspect.billNo }, { key:'客户', value:tenants.get(inspect.tenantId)?.name || inspect.tenantId },
-          { key:'账期', value:inspect.period }, { key:'客户应收', value:money(inspect.amount) },
+          { key:'账单号', value:inspect.billNo }, { key:'所属租户', value:tenants.get(inspect.tenantId)?.name || inspect.tenantId },
+          { key:'账期', value:inspect.period }, { key:'租户应收', value:money(inspect.amount) },
         ]}/>
         <Title heading={5}>项目费用明细</Title>
         {billItems ? <Table size="small" rowKey="id" dataSource={billItems} pagination={false} empty="本期没有已归集的项目费用"

@@ -290,7 +290,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
         <AdminPageBoundary key={active}>
           {!hasAccount ? <Banner title="后台账号不可用" description={<a href="#/auth/login">重新登录</a>} closeIcon={null}/> : !canVisit ? (
             <Banner type="warning" title="无访问权限" description={<Button onClick={() => navigate(WORKSPACE_HOME[allowedWorkspaces[0]] || 'dashboard')}>返回首页</Button>} closeIcon={null}/>
-          ) : organizationView && !organizationTenant ? <Banner type="warning" title="尚未配置默认企业租户" closeIcon={null}/> : <>
+          ) : organizationView && !organizationTenant ? <Banner type="warning" title="尚未配置默认政企租户" closeIcon={null}/> : <>
             {active === "model-operations-guide" ? <ModelOperationsGuide english={english}/>
             : active === "dashboard" ? <OperationsOverview state={factState} workbenchName={workbenchName} onNavigate={navigate}
               shortcuts={overviewShortcuts.filter(({ id }) => canAccessPage(state.currentRole, id, license))}/>

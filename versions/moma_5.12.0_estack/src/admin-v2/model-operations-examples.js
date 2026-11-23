@@ -21,7 +21,7 @@ export function modelOperationsExamplesTransaction(source) {
   const models = new Map();
   for (const spec of MODEL_OPERATIONS_EXAMPLES) {
     const matches = modelLibrary(state).filter(row => row.modelId?.toLowerCase() === spec.code);
-    if (matches.length > 1) throw new Error(`${spec.name} 存在多份同编码主档，请先明确身份`);
+    if (matches.length > 1) throw new Error(`${spec.name} 存在多份同编码模型资料，请先明确身份`);
     let master = matches[0];
     if (master?.materialDraft) throw new Error(`${spec.name} 存在未发布资料草稿，请先处理后准备 Mock 数据`);
     const profile = { ...master?.profile, author: spec.author, releaseDate: spec.date, sourceStatus: 'pending', ...(spec.note ? { detailDescription: [master?.profile?.detailDescription, spec.note].filter(Boolean).join('\n') } : {}), ...(spec.parameters ? { parameters: spec.parameters, activeParameters: spec.activeParameters } : {}) };
@@ -45,7 +45,7 @@ export function modelOperationsExamplesTransaction(source) {
     if (provider && provider.code !== spec.code) throw new Error(`${spec.name} 的Provider ID 已被其他编码占用`);
     if (!provider) {
       if (state.providers.some(row => row.code === spec.code || row.name === spec.name)) throw new Error(`${spec.name} 已存在其他身份，请先核对，不能按名称合并`);
-      provider = add('providers', record(spec.id, { name: spec.name, code: spec.code, sourceType: 'thirdParty', integrationType: '云厂商模型服务', status: '已启用', catalogModelIds: [], catalogModels: [], catalogConnections: [], apiKeys: [], catalogueScope: 'managed' }));
+      provider = add('providers', record(spec.id, { name: spec.name, code: spec.code, sourceType: 'thirdParty', integrationType: '云服务商模型服务', status: '已启用', catalogModelIds: [], catalogModels: [], catalogConnections: [], apiKeys: [], catalogueScope: 'managed' }));
     }
     const ids = [...(provider.catalogModelIds || [])], catalogue = [...(provider.catalogModels || [])], connections = [...(provider.catalogConnections || [])];
     const offered = MODEL_OPERATIONS_EXAMPLES.filter(model => spec.key === 'moma' || model.supplier === spec.key);
@@ -56,7 +56,7 @@ export function modelOperationsExamplesTransaction(source) {
       for (const model of offered.filter(model => channel.key !== 'self' || !model.resaleOnly)) {
         const master = models.get(model.code);
         let entry = catalogue.find(row => row.libraryId && libraryRecord(state, row.libraryId)?.id === master.id || row.modelId?.toLowerCase() === model.code);
-        if (entry?.libraryId && libraryRecord(state, entry.libraryId)?.id !== master.id) throw new Error(`${spec.name} 的 ${model.name} 主档引用冲突`);
+        if (entry?.libraryId && libraryRecord(state, entry.libraryId)?.id !== master.id) throw new Error(`${spec.name} 的 ${model.name} 模型资料引用冲突`);
         if (!entry) { entry = { modelId: model.code, name: model.name, type: master.type, libraryId: master.id }; catalogue.push(entry); }
         else entry = { ...entry, libraryId: master.id, name: model.name, type: master.type };
         const index = catalogue.findIndex(row => row.modelId === entry.modelId); catalogue[index] = entry;

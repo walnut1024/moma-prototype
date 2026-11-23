@@ -45,7 +45,7 @@ function url(value, protocols, label, allowQuery = false) {
   let parsed;
   try { parsed = new URL(text); } catch { throw Error(`${label}无效`); }
   const credentialQuery = [...parsed.searchParams.keys()].some(key => /^(?:api[-_]?key|access[-_]?token|token|secret|password|authorization|credential|signature)$/i.test(key));
-  if (!protocols.includes(parsed.protocol) || parsed.username || parsed.password || credentialQuery || !allowQuery && /[?#]/.test(text)) throw Error(`${label}不支持该协议或包含凭据、查询参数或片段`);
+  if (!protocols.includes(parsed.protocol) || parsed.username || parsed.password || credentialQuery || !allowQuery && /[?#]/.test(text)) throw Error(`${label}不支持该 URL 协议或包含凭据、查询参数或片段`);
   return text;
 }
 
@@ -59,7 +59,7 @@ export function providerJsonConnection(provider, input) {
   const row = object(input, 'connection', '连接');
   const id = string(row.connection_id, '连接标识', 100, /^[\w.:-]+$/);
   const config = prepareChannelInterface({ interfaceType: row.interface_type, baseUrl: row.base_url, taskUrls: row.task_urls || {}, allowHttp: provider.sourceType === 'selfHosted' });
-  if (row.protocol !== config.protocol) throw Error('连接协议与接口类型不一致');
+  if (row.protocol !== config.protocol) throw Error('连接接口格式与接口类型不一致');
   const keyGroupId = row.key_group_id ?? 'default';
   if (!providerKeyGroups(provider).some(group => group.id === keyGroupId)) throw Error('API 密钥组不属于当前服务商');
   return { id, config, keyGroupId };
@@ -80,7 +80,7 @@ export function providerJsonRows(file, provider) {
   }
   return catalogue.models.map((model, index) => {
     const type = typeof model?.model_type === 'string' ? model.model_type : '';
-    const summary = { '模型编码': model?.canonical_slug, '模型资料名称': model?.model_name, '模型类型': MODEL_CATALOGUE_TYPES[type] || MODEL_TYPES[type] };
+    const summary = { '模型编码': model?.canonical_slug, '模型展示名称': model?.model_name, '模型类型': MODEL_CATALOGUE_TYPES[type] || MODEL_TYPES[type] };
     const cells = MODEL_IMPORT_HEADERS.map(label => typeof summary[label] === 'string' ? summary[label] : '');
     try {
       object(model, 'model', '模型');
@@ -103,7 +103,7 @@ function modelData(provider, model, existing) {
     return values.map(value => modalities[value]);
   };
   const inputModalities = list('input_modalities'), outputModalities = list('output_modalities');
-  const name = string(model.model_name, '模型展示名', 100);
+  const name = string(model.model_name, '模型展示名称', 100);
   const builtin = isBuiltinMoma(provider) && MOMA_BUILTIN_MODELS.find(row => row.modelId === model.canonical_slug);
   let type = model.model_type;
   if (type === 'visual') {
@@ -112,7 +112,7 @@ function modelData(provider, model, existing) {
     if (!['image', 'video'].includes(type)) throw Error('视觉模型需填写 model_info.visual_type（image 或 video）');
   } else if (info.visual_type != null) throw Error('仅视觉模型填写 visual_type');
   if (!Object.hasOwn(MODEL_TYPES, type)) throw Error('请选择有效的模型类型');
-  if (existing && existing.type !== type) throw Error('模型类型与已有主档不一致，请核对模型编码');
+  if (existing && existing.type !== type) throw Error('模型类型与已有模型资料不一致，请核对模型编码');
   const capabilities = { context: info.context_length_tokens, output: info.max_output_tokens, streaming: info.streaming, tools: info.tools };
   if (['context', 'output'].some(key => capabilities[key] != null && (!Number.isSafeInteger(capabilities[key]) || capabilities[key] < 1)) || ['streaming', 'tools'].some(key => capabilities[key] != null && typeof capabilities[key] !== 'boolean')) throw Error('模型 Token 上限须为正整数，流式和工具调用须为布尔值');
   if (capabilities.context && capabilities.output > capabilities.context) throw Error('最大输出不能超过上下文上限');
@@ -128,7 +128,7 @@ function upstreamReference(input) {
     ...(row.upstream_model_id == null ? {} : { upstreamModelId: upstreamId(row.upstream_model_id) }) };
 }
 
-const upstreamId = value => string(value, '上游模型调用标识', 200, /^\S+$/u);
+const upstreamId = value => string(value, '上游模型 ID', 200, /^\S+$/u);
 
 export function planProviderJsonModel(state, providerId, { model, connections }) {
   const provider = state.providers.find(row => row.id === providerId && !row.deletedAt);
@@ -136,7 +136,7 @@ export function planProviderJsonModel(state, providerId, { model, connections })
   object(model, 'model', '模型');
   const code = string(model.canonical_slug, '模型编码', 80, /^[a-z0-9][a-z0-9._:/-]*$/);
   const matches = modelLibrary(state).filter(row => row.modelId.toLowerCase() === code);
-  if (matches.length > 1) throw Error('模型编码匹配到多份主档');
+  if (matches.length > 1) throw Error('模型编码匹配到多份模型资料');
   const existing = matches[0] && modelCatalogue(state).find(row => row.id === matches[0].id);
   if (matches[0] && !existing) throw Error('模型编码已被归档资料使用，请核对');
   const { material, listedAt } = modelData(provider, model, existing);
@@ -211,7 +211,7 @@ export function planProviderJsonModel(state, providerId, { model, connections })
       const transaction = channelChangeTransaction(working, { operation: 'channelProcurementPublish', data: { providerId, endpointId: endpoint.id, associationId, expectedPriceRevision: 0, scenarios: input.scenarios, effectiveAt: input.effective_at, expiresAt: input.expires_at, confirmed: true } });
       const quote = transaction.changes.find(change => change.collection === 'providers')?.changes.catalogConnections.find(row => row.id === associationId)?.procurementVersions?.at(-1)?.pricing;
       for (const item of quote?.scenarios || []) {
-        if (!working.tariffDictionary.some(row => row.kind === 'scenario' && row.name === item.name) || !working.tariffDictionary.some(row => row.kind === 'unit' && row.name === item.unit) || !working.tariffDictionary.some(row => row.kind === 'currency' && row.code === item.currency)) throw Error('采购成本引用了未维护的计费项、单位或币种：' + item.name);
+        if (!working.tariffDictionary.some(row => row.kind === 'scenario' && row.name === item.name) || !working.tariffDictionary.some(row => row.kind === 'unit' && row.name === item.unit) || !working.tariffDictionary.some(row => row.kind === 'currency' && row.code === item.currency)) throw Error('服务商成本价引用了未维护的计费项、单位或币种：' + item.name);
       }
       stage(transaction.changes);
     }
@@ -232,7 +232,7 @@ export function previewProviderJsonRows(state, providerId, rows) {
       seen.add(code);
       working = plan.state;
       const count = plan.mappingPreview.filter(item => !item.existing).length;
-      const message = [plan.existing ? plan.register ? '复用主档并登记' : '已登记，保留已有主档' : '新建主档并登记', count ? `新增 ${count} 条待验证连接映射` : '', plan.reference ? '保留上游参考' : ''].filter(Boolean).join(' · ');
+      const message = [plan.existing ? plan.register ? '复用模型资料并登记' : '已登记，保留已有模型资料' : '新建模型资料并登记', count ? `新增 ${count} 条待验证连接映射` : '', plan.reference ? '保留上游参考' : ''].filter(Boolean).join(' · ');
       return { ...row, status: plan.changes.length ? 'ready' : 'skip', message: plan.changes.length ? message : '模型与连接已导入', mappingPreview: plan.mappingPreview, reference: plan.reference };
     } catch (error) { return { ...row, status: 'error', message: error.message }; }
   });

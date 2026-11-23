@@ -89,7 +89,7 @@ test('the channel creation choices round-trip to the same list type and model re
     assert.equal(channelProtocolPaths({ interfaceType, baseUrl: origin + basePath })[0], relative);
     assert.equal(channelProtocolPaths({ interfaceType, baseUrl: '' })[0], relative);
   }
-  assert.throws(() => prepareListedChannelInterface({ interfaceType: 'ark-video', baseUrl: origin + '/v1/video_generation' }), /完整接口地址/);
+  assert.throws(() => prepareListedChannelInterface({ interfaceType: 'ark-video', baseUrl: origin + '/v1/video_generation' }), /完整请求地址/);
   assert.throws(() => prepareListedChannelInterface({ interfaceType: 'openai-embeddings', baseUrl: origin + '/v1' }), /完整/);
   assert.throws(() => prepareListedChannelInterface({ interfaceType: 'anthropic', baseUrl: origin + '/v1/embeddings' }), /不匹配/);
 });
@@ -173,7 +173,7 @@ test('editing a named task protocol replaces previous task addresses only after 
   const newPath = '/api/v3/contents/generations/tasks';
   const data = { ...args(state), expectedUpdatedAt: current.updatedAt, expectedProviderUpdatedAt: provider.updatedAt,
     prepareConnection: true, allAssociations: true, modelProtocol: 'ark-video', baseUrl: 'https://candidate.example.invalid' + newPath };
-  assert.throws(() => run(state, 'supplierChannelEdit', { ...data, baseUrl: current.baseUrl }), /完整接口地址/);
+  assert.throws(() => run(state, 'supplierChannelEdit', { ...data, baseUrl: current.baseUrl }), /完整请求地址/);
   const staged = run(state, 'supplierChannelEdit', data);
   assert.equal(endpoint(staged).baseUrl, current.baseUrl);
   assert.deepEqual(endpoint(staged).taskUrls, current.taskUrls);
@@ -249,7 +249,9 @@ test('apply atomically switches a validated configuration while preserving mappi
 
 test('candidate evidence expires after 24 hours and depends on actual key version, upstream ID and capability', () => {
   const state = testCandidate(createCandidate(fixture())), ep = endpoint(state), mapping = mappings(state)[0];
-  assert.equal(channelCandidateStatus(state, providerId, ep.id, { at: Date.now() + CHANNEL_EVIDENCE_MAX_AGE_MS + 1000 }).ready, false);
+  const expired = channelCandidateStatus(state, providerId, ep.id, { at: Date.now() + CHANNEL_EVIDENCE_MAX_AGE_MS + 1000 });
+  assert.equal(expired.ready, false);
+  assert.ok(expired.checks.some(check => check.testResult === '已过期'));
   const signature = channelEvidenceSignature(state, providerId, mapping, { ...ep, ...ep.candidateConfiguration.config });
   const changed = structuredClone(state); owner(changed).apiKeys.find(row => row.id === owner(changed).defaultApiKeyId).fingerprint = 'a'.repeat(64);
   assert.notEqual(channelEvidenceSignature(changed, providerId, mappings(changed)[0], { ...endpoint(changed), ...endpoint(changed).candidateConfiguration.config }), signature);

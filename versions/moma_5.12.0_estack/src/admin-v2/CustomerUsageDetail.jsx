@@ -63,7 +63,7 @@ export default function CustomerUsageDetail({ state }) {
     return value.complete ? `${amount(value.total)} ${meter.unit}` : '待确认';
   };
   const recent = [...rows].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 10);
-  if (!tenant) return <Banner type="warning" title="客户不存在" closeIcon={null}
+  if (!tenant) return <Banner type="warning" title="租户不存在" closeIcon={null}
     description={<Typography.Text link={{ href: '#/admin-2/user-analysis' }}>返回用户数据重新选择</Typography.Text>}/>;
   const counts = new Map();
   if (!projectId) for (const row of rows) {
@@ -100,7 +100,7 @@ export default function CustomerUsageDetail({ state }) {
     { title: '状态码', dataIndex: 'httpStatus', align: 'right', render: value => value ?? '—' },
   ];
   return <div className="admin-page-stack">
-    <AdminPageHeading title={internal ? '内部成本归集'+(project ? ' · '+project.name : '') : project && project.id!==unassignedProject ? '项目用量 · '+project.name : '客户用量'}>
+    <AdminPageHeading title={internal ? '内部成本归集'+(project ? ' · '+project.name : '') : project && project.id!==unassignedProject ? '项目用量 · '+project.name : '租户用量'}>
       {tenant && <Typography.Text type="secondary">{tenant.name}</Typography.Text>}
       {canViewLogs && <Typography.Text link={{ href: logHref(projectId) }}>查看调用日志</Typography.Text>}
     </AdminPageHeading>
@@ -113,7 +113,7 @@ export default function CustomerUsageDetail({ state }) {
         <FilterReset onClick={() => selectPeriod('yesterday')}/>
       </FilterToolbar>
     </Card>
-    {projectId && !project && <Banner type="warning" closeIcon={null} description="该项目不在当前客户的可查询范围。"/>}
+    {projectId && !project && <Banner type="warning" closeIcon={null} description="该项目不在当前租户的可查询范围。"/>}
     <div className="admin-analysis-metrics admin-analysis-metrics-four">
       <AnalysisMetric title="Token 调用量" value={amount(tokenTotal)}/>
       <AnalysisMetric title="模型调用次数" value={amount(rows.length)}/>

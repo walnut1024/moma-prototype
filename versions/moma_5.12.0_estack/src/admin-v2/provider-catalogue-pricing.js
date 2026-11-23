@@ -65,7 +65,7 @@ export const saleItemsDraft = (cost, current = []) => cost.map(item => ({ name: 
 export function markedUpItems(cost, percentage) {
   const ratio = decimal(percentage, '加价比例', 10000 * scale);
   if (ratio == null) throw new Error('请填写加价比例');
-  if (!cost.length || cost.some(item => item.amount == null)) throw new Error('采购价缺失，不能按零成本计算');
+  if (!cost.length || cost.some(item => item.amount == null)) throw new Error('服务商成本价缺失，不能按零成本计算');
   return cost.map(item => {
     const amount = (BigInt(item.amount) * (100000000n + BigInt(ratio)) + 50000000n) / 100000000n;
     if (amount > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('加价后的售价超出范围');

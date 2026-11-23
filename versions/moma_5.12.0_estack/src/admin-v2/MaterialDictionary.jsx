@@ -12,7 +12,7 @@ function DictionaryEditor({entry,kind,ops,close}) {
   const change=(key,input)=>{setValue(current=>({...current,[key]:input}));ops.dirty(true);ops.setError('');};
   const cancel=()=>ops.proceed(close);
   return <Modal visible className="semi-materials" title={entry?'编辑'+TARIFF_KINDS[kind]:kind==='unit'?'新增计费单位':'新增货币'} onCancel={cancel} footer={<><Button onClick={cancel}>取消</Button><Button form={formId} htmlType="submit" theme="solid" loading={saving} disabled={!ops.can}>保存字典项</Button></>}>
-    <Typography.Paragraph type="secondary">{kind==='scenario'?'成本与售价共用此计费项。已被引用的名称不能更改。':'用于采购与平台售价。已被引用的名称、单位及货币代码不能更改；停止选用后已有配置和历史保留。'}</Typography.Paragraph>
+    <Typography.Paragraph type="secondary">{kind==='scenario'?'服务商成本价与模型刊例价共用此计费项。已被引用的名称不能更改。':'用于服务商成本价与模型刊例价。已被引用的名称、单位及货币代码不能更改；停止选用后已有配置和历史保留。'}</Typography.Paragraph>
     <Form id={formId} onSubmit={async()=>{if(saving || !ops.can)return;setSaving(true);try{if(await ops.run('tariffDictionary',{operation:'save',id:entry?.id,kind,...value}))close();}finally{setSaving(false);}}}>
       <Form.Slot label={kind==='scenario'?'计费项名称':'中文名称'}><Input aria-label={kind==='scenario'?'计费项名称':'中文名称'} maxLength={kind==='unit'?40:80} value={value.name} disabled={!ops.can} onChange={input=>change('name',input)}/></Form.Slot>
       {kind!=='scenario' && <Form.Slot label="英文名称"><Input aria-label="英文名称" maxLength={80} value={value.englishName} disabled={!ops.can} onChange={input=>change('englishName',input)}/></Form.Slot>}

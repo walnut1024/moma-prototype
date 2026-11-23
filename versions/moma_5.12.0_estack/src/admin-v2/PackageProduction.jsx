@@ -222,7 +222,7 @@ function PackageEditor({ record, mode, canWrite, canManageTypes, packageTypes, c
           <fieldset><legend>购买与展示</legend>
             <div className="package-fields">
               <fieldset className="package-span">
-                <legend>支持订购的用户类型{mark}{!readOnly && <span className="sr-only">，发布时至少选择一项</span>}</legend>
+                <legend>支持订购的租户类型{mark}{!readOnly && <span className="sr-only">，发布时至少选择一项</span>}</legend>
                 <div className="package-audience">
                   {userTypes.map(([type, label]) => <Checkbox key={type} checked={selectedUserTypes.includes(type)} disabled={locked}
                     onChange={event => change('userTypes', event.target.checked ? [...selectedUserTypes, type] : selectedUserTypes.filter(value => value !== type))}>

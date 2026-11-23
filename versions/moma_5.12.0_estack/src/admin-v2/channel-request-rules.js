@@ -32,7 +32,7 @@ export function normalizeChannelRequestRules(input, interfaceType) {
   if (!record(parameters) || !record(headers) || !record(statusCodes)) throw Error('参数、请求头和状态码须为 JSON 对象');
   const modelName = name => typeof name === 'string' && /^[\w./:-]{1,200}$/.test(name) && !secretName.test(name) && !secretValue.test(name);
   if (!record(aliases) || Object.keys(aliases).length > 50 || Object.entries(aliases).some(([from, to]) => !modelName(from) || !modelName(to) || from === to)) {
-    throw Error('重定向最多配置 50 条，须填写不同且有效的模型调用标识');
+    throw Error('重定向最多配置 50 条，须填写不同且有效的模型 ID');
   }
   if (!Array.isArray(plugins) || new Set(plugins).size !== plugins.length ||
     plugins.some(key => !channelDemoPlugins.some(([id]) => id === key))) throw Error('请求处理插件未安装或重复');
@@ -54,7 +54,7 @@ export function normalizeChannelRequestRules(input, interfaceType) {
     const invalid = message => { throw Error(`第 ${index + 1} 条参数规则：${message}`); };
     if (!exactFields(rule, ['mode', 'path', 'value', 'conditions', 'logic']) || !RULE_MODES.some(([mode]) => rule.mode === mode)) invalid('操作类型或字段无效');
     const { mode, path, value, conditions = [], logic = 'OR' } = rule;
-    if (mode !== 'return_error' && (!parameterPath(path) || ['model', 'stream'].includes(path.split('.')[0]))) invalid('字段无效；模型调用标识、stream 和敏感字段受保护');
+    if (mode !== 'return_error' && (!parameterPath(path) || ['model', 'stream'].includes(path.split('.')[0]))) invalid('字段无效；模型 ID、stream 和敏感字段受保护');
     if (mode === 'set' && !ruleValue(value)) invalid('设置值须为安全、有限大小的 JSON');
     if (mode === 'return_error' && (!exactFields(value, ['message', 'statusCode']) || typeof value.message !== 'string' || !value.message.trim() || value.message.length > 300 || secretValue.test(value.message) || !statusCode(value.statusCode))) invalid('错误须包含 400–599 状态码和非敏感提示');
     if (!['AND', 'OR'].includes(logic) || !Array.isArray(conditions) || conditions.length > 10) invalid('请指定 AND 或 OR，每条规则最多 10 项条件');

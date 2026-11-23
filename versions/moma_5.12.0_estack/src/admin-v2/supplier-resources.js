@@ -52,10 +52,10 @@ function modelBatch(state, models) {
   return models.map((row, index) => {
     const master = row && modelMaterial(state, row.libraryId);
     if (!master) throw new Error(`第 ${index + 1} 行模型资料不存在，请重新选择`);
-    const upstreamModelId = required(row.upstreamModelId, '上游模型调用标识');
-    if (/\s|\p{Cc}/u.test(upstreamModelId)) throw new Error(`第 ${index + 1} 行上游模型调用标识 不能包含空白或控制字符`);
+    const upstreamModelId = required(row.upstreamModelId, '上游模型 ID');
+    if (/\s|\p{Cc}/u.test(upstreamModelId)) throw new Error(`第 ${index + 1} 行上游模型 ID 不能包含空白或控制字符`);
     if (masters.has(master.id)) throw new Error(`第 ${index + 1} 行重复选择模型资料`);
-    if (upstreamIds.has(upstreamModelId)) throw new Error(`第 ${index + 1} 行上游模型调用标识 重复`);
+    if (upstreamIds.has(upstreamModelId)) throw new Error(`第 ${index + 1} 行上游模型 ID 重复`);
     masters.add(master.id); upstreamIds.add(upstreamModelId);
     return { ...row, libraryId: master.id, upstreamModelId, scenarios: row.scenarios === undefined ? [] : row.scenarios };
   });
@@ -205,7 +205,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
         });
         changes.push(...invalidateSupplierChannels(state, { ...provider, catalogConnections }, [endpoint.id]));
       }
-      return finish('保存连接 API 地址', changes);
+      return finish('保存服务地址', changes);
     }
     const name = mode === 'credentials' ? endpoint.name : required(data.name, '连接名称', 60);
     if (mode === 'info' && data.connectionNameOnly === true) {
@@ -216,7 +216,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     }
     if (mode !== 'credentials' && resources.some(row => row.id !== endpoint?.id && supplierChannelName(provider, row) === name)) throw new Error('服务商的连接名称不可重复');
     if (mode === 'info') {
-      if (data.expectedUpdatedAt !== undefined && data.expectedUpdatedAt !== endpoint.updatedAt || data.expectedProviderUpdatedAt !== undefined && data.expectedProviderUpdatedAt !== provider.updatedAt) throw new Error('连接或上游模型调用标识已变化，请重新载入后编辑');
+      if (data.expectedUpdatedAt !== undefined && data.expectedUpdatedAt !== endpoint.updatedAt || data.expectedProviderUpdatedAt !== undefined && data.expectedProviderUpdatedAt !== provider.updatedAt) throw new Error('连接或上游模型 ID已变化，请重新载入后编辑');
       const sourceName = data.sourceName === undefined ? undefined : required(data.sourceName, '上游模型名称', 60);
       const modelDisplayName = data.modelDisplayName === undefined ? undefined : required(data.modelDisplayName, '展示名称', 120);
       const associationOnly = sourceName !== undefined || modelDisplayName !== undefined;
@@ -227,12 +227,12 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
       if (data.associationId) {
         const associations = supplierChannelAssociations(state, provider, endpoint.id), current = associations.find(row => row.id === data.associationId);
         if (!current || current.modelId !== data.modelId) throw new Error('模型与连接的关联已变化');
-        const upstreamModelId = required(data.upstreamModelId, '上游模型调用标识');
-        if (/\s|\p{Cc}/u.test(upstreamModelId)) throw new Error('上游模型调用标识不能包含空白或控制字符');
-        if (associations.some(row => row.id !== current.id && row.upstreamModelId === upstreamModelId)) throw new Error('同一连接的上游模型调用标识不可重复');
+        const upstreamModelId = required(data.upstreamModelId, '上游模型 ID');
+        if (/\s|\p{Cc}/u.test(upstreamModelId)) throw new Error('上游模型 ID不能包含空白或控制字符');
+        if (associations.some(row => row.id !== current.id && row.upstreamModelId === upstreamModelId)) throw new Error('同一连接的上游模型 ID不可重复');
         const upstreamChanged = current.upstreamModelId !== upstreamModelId;
         if (upstreamChanged || associationOnly) {
-          if (upstreamChanged && (channelRouteRefs(state, provider, current).length || state.modelSupplies.some(row => row.endpointId === endpoint.id && (row.catalogueModelId || row.upstreamModelId) === current.modelId && row.status !== '已移除'))) throw new Error('此关联仍被服务引用，请先解除服务映射再修改上游模型调用标识');
+          if (upstreamChanged && (channelRouteRefs(state, provider, current).length || state.modelSupplies.some(row => row.endpointId === endpoint.id && (row.catalogueModelId || row.upstreamModelId) === current.modelId && row.status !== '已移除'))) throw new Error('此关联仍被服务引用，请先解除服务映射再修改上游模型 ID');
           const index = catalogConnections.findIndex(row => !row.deletedAt && row.endpointId === endpoint.id && row.modelId === current.modelId && (!row.id || row.id === current.id));
           const record = { ...(index < 0 ? { name } : catalogConnections[index]), id: current.id, modelId: current.modelId, endpointId: endpoint.id, upstreamModelId,
             ...(sourceName === undefined ? { name } : { sourceName }),
@@ -248,7 +248,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     const adapterDraft = mode === 'all' && !endpoint && data.authMode === 'pending' && data.protocol === '其他' &&
       !data.interfaceType && data.adapterDraft ? normalizeAdapterDraft(data.adapterDraft) : null;
     if (!adapterDraft && !['inherit', 'specific', 'none', 'group'].includes(data.authMode)) throw new Error('请选择 API 凭证方式');
-    if (data.authMode === 'none' && provider.sourceType !== 'selfHosted') throw new Error('仅自有推理服务可选择无需认证');
+    if (data.authMode === 'none' && provider.sourceType !== 'selfHosted') throw new Error('仅自有模型推理服务可选择无需认证');
     const knownKeys = knownSupplierKeys(provider, resources);
     const groups = data.authMode === 'group' ? providerKeyGroups(provider, knownKeys) : null;
     const selectedGroup = groups?.find(row => row.id === data.keyGroupId);
@@ -344,15 +344,15 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
   const sourceName = data.sourceName == null ? existing?.sourceName : required(data.sourceName, '连接来源名称');
   if (!existing && !sourceName && catalogueChannels(state,provider,modelId).some(row=>row.endpointId===endpoint.id)) throw Error('此模型已关联该连接，新增来源须填写连接来源名称');
   if (sourceName && (sourceName.length > 60 || /[\r\n]/.test(sourceName))) throw new Error('连接来源名称最多60字，不能换行');
-  const upstreamModelId = required(data.upstreamModelId, '上游模型调用标识');
-  if (/\s|\p{Cc}/u.test(upstreamModelId)) throw new Error('上游模型调用标识 不能包含空白或控制字符');
-  if (supplierChannelAssociations(state, provider, endpoint.id).some(row => row.id !== existing?.id && row.upstreamModelId === upstreamModelId)) throw new Error('同一连接的上游模型调用标识不可重复');
-  if (existing && existing.upstreamModelId !== upstreamModelId && state.modelSupplies.some(row => row.endpointId === endpoint.id && (row.catalogueModelId || row.upstreamModelId) === modelId && row.status !== '已移除')) throw new Error('此关联仍被服务引用，请先解除服务映射再修改上游模型调用标识');
+  const upstreamModelId = required(data.upstreamModelId, '上游模型 ID');
+  if (/\s|\p{Cc}/u.test(upstreamModelId)) throw new Error('上游模型 ID 不能包含空白或控制字符');
+  if (supplierChannelAssociations(state, provider, endpoint.id).some(row => row.id !== existing?.id && row.upstreamModelId === upstreamModelId)) throw new Error('同一连接的上游模型 ID不可重复');
+  if (existing && existing.upstreamModelId !== upstreamModelId && state.modelSupplies.some(row => row.endpointId === endpoint.id && (row.catalogueModelId || row.upstreamModelId) === modelId && row.status !== '已移除')) throw new Error('此关联仍被服务引用，请先解除服务映射再修改上游模型 ID');
   if (existing?.upstreamModelId === upstreamModelId && data.preservePricing === true && data.sourceName !== undefined && sourceName !== existing.sourceName) return finish('保存上游模型名称', [update('providers', objectId, { catalogConnections: provider.catalogConnections.map(row => row.id === existing.id ? { ...row, sourceName } : row) })]);
   if (existing?.upstreamModelId === upstreamModelId) return { ...connect(state, { operation: 'channelPrice', objectId, data: { modelId, channelId: existing.id, scenarios: data.scenarios } }), label: '保存上游模型关联' };
   if (!Array.isArray(data.scenarios)) throw new Error('请填写有效的采购计费项');
   const pricing = existing && data.preservePricing === true ? existing.pricing : normalizePrice(provider, { modelId, discountFactor: '1', scenarios: data.scenarios.map(row => ({ ...row, purchasePrice: undefined })) });
-  if (!data.preservePricing && pricing.scenarios.some(row => row.listPrice == null)) throw new Error('请填写完整采购价，免费请填 0');
+  if (!data.preservePricing && pricing.scenarios.some(row => row.listPrice == null)) throw new Error('请填写完整服务商成本价，免费请填 0');
   const entry = provider.catalogModels?.find(row => row.modelId === modelId);
   const material = !existing && entry?.libraryId && modelMaterial(state, entry.libraryId);
   if (!existing && entry?.libraryId && !material) throw Error('模型资料不存在，请重新选择');

@@ -1,5 +1,5 @@
-import { enterpriseTenants } from './enterprise.js';
-import { individualAccounts, individualName } from './individual-users.js';
+import { projectRole, tenantProjectAdmin } from '../project-access.mjs';
+import { personalDefaultProject } from '../personal-project.mjs';
 import { validTrafficLimit } from './traffic-rates.js';
 
 export function accountTraffic(settings, accountId) {
@@ -7,10 +7,33 @@ export function accountTraffic(settings, accountId) {
   return { limit: rules.find(row => row.scope === 'account') ?? null, exceptions: rules.filter(row => row.scope === 'policy') };
 }
 
-export const trafficAccounts = state => [
-  ...enterpriseTenants(state).map(tenant => ({ ...tenant, name: tenant.name, kind: '政企' })),
-  ...individualAccounts(state).map(account => ({ ...account.tenant, name: individualName(account), kind: '个人' })),
-];
+export function trafficAccounts(state) {
+  const memberships = new Map();
+  const attach = (userId, tenant) => {
+    if (!memberships.has(userId)) memberships.set(userId, new Set());
+    memberships.get(userId).add(tenant);
+  };
+  const tenants = new Map(state.tenants.map(tenant => [tenant.id, tenant]));
+  for (const tenant of tenants.values()) {
+    if (tenant.ownerId) attach(tenant.ownerId, tenant);
+  }
+  for (const member of state.memberships) {
+    const tenant = tenants.get(member.tenantId);
+    if (tenant && member.status === '正常') attach(member.userId, tenant);
+  }
+  return state.users.map(user => ({ ...user, tenants: [...(memberships.get(user.id) || [])] }));
+}
+
+export function trafficProjects(state, user) {
+  return user.tenants.flatMap(tenant => {
+    if (tenant.type === '个人') {
+      return [personalDefaultProject(state, tenant.id)];
+    }
+    const member = state.memberships.find(row => row.status === '正常' && row.tenantId === tenant.id && row.userId === user.id);
+    return state.projects.filter(project => project.tenantId === tenant.id && project.status !== '已删除' &&
+      (tenant.ownerId === user.id || tenantProjectAdmin(member) || projectRole(project, member)));
+  });
+}
 
 export function modelTraffic(settings, modelId) {
   const override = settings?.rules.find(row => row.scope === 'model' && row.objectId === modelId);

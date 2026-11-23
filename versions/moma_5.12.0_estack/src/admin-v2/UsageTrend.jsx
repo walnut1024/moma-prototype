@@ -76,7 +76,7 @@ export default function UsageTrend({ state, range, clock, filters, onChange, cal
       {grouped && `共 ${trend.groups.length} 项，${settings.curves === null && trend.groups.length > 5
         ? `按本时段累计${calls ? '调用次数' : 'Token 用量'}显示前 5 项` : `显示 ${selected.length} 项`}。`}
       {trend.pending > 0 && ` ${trend.pending} 条记录计量待确认，涉及时间点显示断点。`}
-      {unknown && ' 缺少客户 ID 的请求计入未归属客户。'}
+      {unknown && ' 缺少租户 ID 的请求计入未归属租户。'}
     </Paragraph>}
   </>;
   const close = () => { setMenuOpen(false); setExpanded(false); };

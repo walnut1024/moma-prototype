@@ -170,7 +170,7 @@ function checkedConfig(state,service,input,supply) {
 }
 export function serviceMappingTransaction(state,{operation,modelId,data={}}) {
   const service=routingServices(state).find(row=>row.modelId===modelId && row.id===data.serviceId);
-  if(!service || !service.callId)throw Error('请先配置当前服务的模式和模型调用标识');
+  if(!service || !service.callId)throw Error('请先配置当前服务的模式和模型 ID');
   if(data.expectedSource!==mappingSourceVersion(state,service))throw Error('模型或供给已变化，请载入最新数据后核对，当前输入保留');
   if(operation==='serviceMappingCreate' && data.id)throw Error('新增映射不能提交已有映射标识');
   const supply=data.id && state.modelSupplies.find(row=>row.id===data.id && row.modelId===modelId && row.status!=='已移除');

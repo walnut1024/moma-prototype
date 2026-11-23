@@ -20,7 +20,7 @@ import { materialContextLabel } from './model-material-fields';
 import { marketDemoState } from './model-market-demo';
 import { commitAdminState } from './state-transaction';
 import { providerServices, serviceCallIdentifiers } from './service-workspace';
-import { offerKey } from '../service-access.mjs';
+import { offerKey, offerStage } from '../service-access.mjs';
 import ModelModuleHeading from './ModelModuleHeading';
 import { marketSupplyGroups } from './model-market-supplies';
 import { orderedMarketModels } from './model-market-order';
@@ -72,7 +72,7 @@ function MarketVisibility({ model }) {
 function ModelCallIdentifiers({ model }) {
   const identifiers = serviceCallIdentifiers(model);
   return identifiers.length ? <Space vertical align="start" spacing={4}>{identifiers.map(value =>
-    <CopyId key={value} value={value} label="模型调用标识" ellipsis={{ showTooltip: true }}/>)}</Space> : <Typography.Text type="tertiary">未配置</Typography.Text>;
+    <CopyId key={value} value={value} label="模型 ID" ellipsis={{ showTooltip: true }}/>)}</Space> : <Typography.Text type="tertiary">未配置</Typography.Text>;
 }
 
 const modalityIcons = { 文本: IconTextStroked, 图片: IconImageStroked, 音频: IconMicrophoneStroked, 视频: IconVideoStroked };
@@ -284,7 +284,7 @@ export default function ModelMarket(live) {
     </ModelModuleHeading>
     {demo && <Notice>模拟数据仅用于当前页面，退出后清除。</Notice>}
     <div className="sp-filters">
-      <Input prefix={<IconSearch aria-hidden="true"/>} showClear aria-label="搜索模型展示名、模型编码、模型服务 ID 或模型调用标识" placeholder="模型展示名 / 模型编码 / 模型服务 ID / 模型调用标识" value={query} onChange={q => changeFilters({ q: q || null })}/>
+      <Input prefix={<IconSearch aria-hidden="true"/>} showClear aria-label="搜索模型展示名称、模型编码、模型服务 ID 或模型 ID" placeholder="模型展示名称 / 模型编码 / 模型服务 ID / 模型 ID" value={query} onChange={q => changeFilters({ q: q || null })}/>
       {filters.map(({ key, label, options }) => <Field key={key} label={label}>
         <Choice label={`筛选${label}`} value={params.get(key) || 'all'} options={options}
           onChange={value => changeFilters({ [key]: value === 'all' ? null : value })}/>
@@ -355,8 +355,8 @@ export default function ModelMarket(live) {
             columns={[
               { title: '连接', render: (_, row) => row.channelName || props.state.providers.find(provider => provider.id === row.providerId)?.name || '—' },
               { title: '模型服务 ID', render: (_,row)=><CopyId value={modelServiceIdentity(props.state,supplyModel,offerKey(row))} label="模型服务 ID"/> },
-              { title: '模型调用标识', dataIndex: 'callId', render: value => value || '待配置' },
-              { title: '上架状态', render: (_, row) => <Space vertical align="start" spacing={4}><AdminStatus value={row.listingStage === 'formal' ? '正式上架' : row.listingStage === 'gray' ? '灰度上架' : '已下架'}/>{row.callsEnabled === false && row.channelUnavailableReason && <Typography.Text type="tertiary" size="small">{row.channelUnavailableReason}</Typography.Text>}</Space> },
+              { title: '模型 ID', dataIndex: 'callId', render: value => value || '待配置' },
+              { title: '售卖状态', render: (_, row) => <Space vertical align="start" spacing={4}><AdminStatus value={row.salesPaused ? '已停售' : { formal: '在售', gray: '灰度在售', withdrawn: '已停售', unlisted: '未开售' }[offerStage(supplyModel, row)]}/>{row.callsEnabled === false && row.channelUnavailableReason && <Typography.Text type="tertiary" size="small">{row.channelUnavailableReason}</Typography.Text>}</Space> },
               ...(!supplyDetail.displayCard ? [{ title: '广场展示', render: (_, row) => <MarketVisibility model={row}/> },
               { title: '操作', render: (_, row) => <Button theme="borderless" disabled={!ops.can} aria-disabled={busy}
                 aria-label={`${row.marketVisible === false ? '允许展示' : '隐藏'} ${row.callId || row.channelName || row.providerId}`}

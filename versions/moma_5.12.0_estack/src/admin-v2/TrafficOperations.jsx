@@ -8,7 +8,7 @@ import { AdminModal as Modal, AdminSideSheet } from './AdminOverlay';
 import { cloudAdminRequest } from './admin-client.mjs';
 import { openLogin } from '../login-navigation.mjs';
 import { Choice, FieldLabel } from './ServiceUI.jsx';
-import { accountTraffic, effectiveTraffic, modelTraffic, trafficAccounts } from './traffic-limits.js';
+import { accountTraffic, effectiveTraffic, modelTraffic, trafficAccounts, trafficProjects } from './traffic-limits.js';
 import { parseTrafficRate, trafficRateText, trafficUnits, validTrafficLimit } from './traffic-rates.js';
 import './traffic-operations.css';
 
@@ -179,7 +179,7 @@ function TrafficVisualization({ account, models, projects, settings, close }) {
       <div className="admin-list-toolbar">
         <Choice label="项目" value={projectId} options={[[ '', '查看项目限流' ], ...projects.map(row => [row.id, row.name + ' · ' + row.id])]}
           onSelect={setProjectId} disabled={!projects.length}/>
-        <Input className="admin-list-search" showClear aria-label="搜索模型" placeholder="搜索模型展示名或模型编码"
+        <Input className="admin-list-search" showClear aria-label="搜索模型" placeholder="搜索模型展示名称或模型编码"
           value={query} onChange={setQuery}/>
       </div>
       <Table key={query} rowKey="id" scroll={{ x: 'max(100%, 760px)' }} empty="暂无匹配模型"
@@ -365,11 +365,12 @@ export default function TrafficOperations({ state, dirtyRef }) {
       : <Button size="small" onClick={refresh}>重新加载</Button>)}
   </>;
   const accountRule = row => effectiveTraffic(settings, accountTraffic(settings, row.id)).hit;
-  const accountRows = accounts.filter(row => match(accountQuery, row.name, row.id) && (type === 'all' || row.kind === type));
+  const accountRows = accounts.filter(row => match(accountQuery, row.name, row.id, ...row.tenants.map(tenant => tenant.name)) &&
+    (type === 'all' || row.tenants.some(tenant => (tenant.type === '个人' ? '个人' : '政企') === type)));
   const accountColumns = [
     { title: '账号名称', dataIndex: 'name' },
-    { title: '账号 ID', dataIndex: 'id' },
-    { title: '账号类型', dataIndex: 'kind', width: 82 },
+    { title: '用户 ID', dataIndex: 'id' },
+    { title: '所属租户', render: (_, row) => row.tenants.map(tenant => tenant.name + '（' + (tenant.type === '个人' ? '个人' : '政企') + '）').join('、') || '—' },
     { title: '默认值', width: ratePairWidth, render: () => <RatePair limit={global}/> },
     { title: '生效值', width: ratePairWidth, render: (_, row) => <RatePair limit={accountRule(row)?.limit} strong/> },
     { title: '规则来源', width: 98, render: (_, row) => accountRule(row)?.name || '—' },
@@ -400,7 +401,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
     ...row, ...modelTraffic(settings, row.id),
   }));
   const modelColumns = [
-    { title: '模型展示名', dataIndex: 'name' }, { title: '模型编码', dataIndex: 'modelId' },
+    { title: '模型展示名称', dataIndex: 'name' }, { title: '模型编码', dataIndex: 'modelId' },
     { title: '默认值', width: ratePairWidth, render: () => <RatePair limit={modelDefault}/> },
     { title: '生效值', width: ratePairWidth, render: (_, row) => <RatePair limit={row.limit} strong/> },
     { title: '规则来源', width: 98, render: (_, row) => row.custom ? '模型自定义' : '模型默认' },
@@ -449,9 +450,9 @@ export default function TrafficOperations({ state, dirtyRef }) {
         {tab === 'users' && <div className="traffic-tab">
           <Card className="traffic-list">
             <div className="admin-list-toolbar">
-              <Input className="admin-list-search" showClear value={accountQuery} aria-label="搜索账号" placeholder="搜索账号名称或 ID"
+              <Input className="admin-list-search" showClear value={accountQuery} aria-label="搜索账号" placeholder="搜索账号名称、用户 ID 或所属租户"
                 onChange={value => { setAccountQuery(value); clearSelection(); }} disabled={Boolean(draft)}/>
-              <Choice label="筛选账号类型" options={[[ 'all', '全部账号类型' ], ['个人', '个人'], ['政企', '政企']]} value={type}
+              <Choice label="筛选所属租户类型" options={[[ 'all', '全部租户类型' ], ['个人', '个人'], ['政企', '政企']]} value={type}
                 onSelect={value => { setType(value); clearSelection(); }} disabled={Boolean(draft)}/>
               <DefaultInline title="全局默认" description={userDefaultHelp}>
                 {global ? <>
@@ -476,7 +477,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
       <Tabs.TabPane tab="模型限流" itemKey="models">
         {tab === 'models' && <div className="traffic-tab"><Card className="traffic-list">
           <div className="admin-list-toolbar">
-            <Input className="admin-list-search" showClear value={modelQuery} aria-label="搜索模型" placeholder="搜索模型展示名或模型编码"
+            <Input className="admin-list-search" showClear value={modelQuery} aria-label="搜索模型" placeholder="搜索模型展示名称或模型编码"
               onChange={setModelQuery} disabled={Boolean(draft)}/>
             <DefaultInline title="模型默认" description={modelDefaultHelp}>
               {modelDefault ? <>
@@ -518,7 +519,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
           <Text strong id={modelPickerId + '-label'}>添加模型策略</Text>
           {!draft.rows.length && choices.length > 0 &&
             <Text type="secondary">选择模型后，填写 RPM 和 TPM，再保存。</Text>}
-          <Select aria-labelledby={modelPickerId + '-label'} placeholder={choices.length ? '搜索模型展示名或规范模型标识' : '没有可添加的模型'}
+          <Select aria-labelledby={modelPickerId + '-label'} placeholder={choices.length ? '搜索模型展示名称或模型编码' : '没有可添加的模型'}
             filter motion={false} value="" defaultOpen={openModelPicker} autoFocus={openModelPicker}
             position="bottomLeft" getPopupContainer={() => document.getElementById(modelPickerId)}
             disabled={saving || !account || !choices.length}
@@ -531,7 +532,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
       </div>
     </AdminSideSheet>}
     {visualizationAccount && <TrafficVisualization key={visualizationAccount.id} account={visualizationAccount} models={models}
-      projects={(state.projects || []).filter(row => row.tenantId === visualizationAccount.id)} settings={settings} close={() => setVisualizationId(null)}/>}
+      projects={trafficProjects(state, visualizationAccount)} settings={settings} close={() => setVisualizationId(null)}/>}
     {historyOpen && <TrafficHistory accountId={accountId} accounts={accounts} models={models} session={settings}
       requestLogin={() => openLogin()} close={() => setHistoryOpen(false)}/>}
     {confirmation && <Modal visible title={confirmation.title} okText={confirmation.okText}

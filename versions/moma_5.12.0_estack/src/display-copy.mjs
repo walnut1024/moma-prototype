@@ -34,3 +34,8 @@ export function displayBusinessCopy(value) {
   if (typeof value !== 'string') return value;
   return phrases.reduce((text, [from, to]) => text.replaceAll(from, to), value);
 }
+
+export function displayAdminBusinessCopy(value) {
+  const text = displayBusinessCopy(value);
+  return typeof text === 'string' ? text.replaceAll('供应商', '服务商') : text;
+}

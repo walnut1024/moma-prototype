@@ -161,7 +161,7 @@ export function procurementFacts(state, row) {
     const free = attempt.billingStatus === 'not_billable';
     const measured = usage ? usageValue({...row,usage,usageConfirmed:true},usageMeter(model,{...row,usage}).fields) : null;
     const cost = free ? {currency:price?.items?.[0]?.currency || null,amount:0,breakdown:[],versionId:price?.id || 'not-billable'} : usage ? priceRequest(price,{...row,usage,usageConfirmed:true,value:measured},model) : null;
-    return [{id:JSON.stringify([requestIdentity(row), index]),requestId:row.requestId || row.id,modelId:row.modelId,modelName:model.name || row.modelId,createdAt:row.createdAt,error:attempt.error || attempt.code || '',order:index+1,providerId,provider:state.providers.find(item=>item.id===providerId)?.name || providerId || '未归属',endpointId:attempt.endpointId,channel:state.endpoints.find(item=>item.id===attempt.endpointId)?.name || attempt.endpointId,status:upstreamOutcome(attempt) === true ? '成功' : upstreamOutcome(attempt) === false ? '失败' : '结果待确认',durationMs:attempt.durationMs ?? null,usage,cost,reason:cost ? '' : !usage ? '上游计量缺失' : !price ? '采购价格快照缺失' : '采购计费项或计量无法核算',price,final:index===final}];
+    return [{id:JSON.stringify([requestIdentity(row), index]),requestId:row.requestId || row.id,modelId:row.modelId,modelName:model.name || row.modelId,createdAt:row.createdAt,error:attempt.error || attempt.code || '',order:index+1,providerId,provider:state.providers.find(item=>item.id===providerId)?.name || providerId || '未归属',endpointId:attempt.endpointId,channel:state.endpoints.find(item=>item.id===attempt.endpointId)?.name || attempt.endpointId,status:upstreamOutcome(attempt) === true ? '成功' : upstreamOutcome(attempt) === false ? '失败' : '结果待确认',durationMs:attempt.durationMs ?? null,usage,cost,reason:cost ? '' : !usage ? '上游计量缺失' : !price ? '服务商成本价快照缺失' : '采购计费项或计量无法核算',price,final:index===final}];
   });
 }
 export function businessFacts(state, rows) {
@@ -173,8 +173,8 @@ export function businessFacts(state, rows) {
     const notDispatched = row.attempts?.length > 0 && row.attempts.every(attempt=>attempt.dispatched===false);
     const cost = notDispatched ? {currency:sale?.currency || prices.sale?.items?.[0]?.currency || null,amount:0,breakdown:[],versionId:'not-dispatched'} : costsComplete ? {currency:costCurrencies[0] || sale?.currency || null,amount:sumMoney(purchases.map(item=>item.cost.amount)),breakdown:purchases.flatMap(item=>item.cost.breakdown),versionId:purchases.map(item=>item.cost.versionId).join(' / ')} : null;
     const complete = !!(serviceId && sale && cost && sale.currency && sale.currency === cost.currency);
-    const reasons = [!serviceId ? '销售服务未关联' : '', !sale ? !prices.sale ? '销售价格快照缺失' : row.httpStatus >= 400 ? '客户计费结果待确认' : '销售计量或计费项无法核算' : '', !cost ? !purchases.length ? '上游调用记录缺失' : purchases.some(item=>!item.cost) ? '上游采购成本未完整核算' : '采购成本币种不一致' : '',sale && cost && sale.currency !== cost.currency ? '采购与销售币种不同，未换汇' : ''].filter(Boolean);
-    return {...row,serviceId,serviceName:row.callId || serviceId || '未归属销售服务',modelName:model?.name || row.modelId,customer:state.tenants?.find(item=>item.id===row.tenantId)?.name || row.tenantId || '未归属客户',sale,cost,purchases,complete,currency:sale?.currency || cost?.currency || null,profit:complete ? sumMoney([sale.amount,-cost.amount]) : null,reason:reasons.join('；')};
+    const reasons = [!serviceId ? '未关联模型服务' : '', !sale ? !prices.sale ? '模型刊例价快照缺失' : row.httpStatus >= 400 ? '租户计费结果待确认' : '销售计量或计费项无法核算' : '', !cost ? !purchases.length ? '上游调用记录缺失' : purchases.some(item=>!item.cost) ? '上游采购成本未完整核算' : '采购成本币种不一致' : '',sale && cost && sale.currency !== cost.currency ? '采购与销售币种不同，未换汇' : ''].filter(Boolean);
+    return {...row,serviceId,serviceName:row.callId || serviceId || '未归属模型服务',modelName:model?.name || row.modelId,customer:state.tenants?.find(item=>item.id===row.tenantId)?.name || row.tenantId || '未归属租户',sale,cost,purchases,complete,currency:sale?.currency || cost?.currency || null,profit:complete ? sumMoney([sale.amount,-cost.amount]) : null,reason:reasons.join('；')};
   });
 }
 export function businessCurrencyRows(rows, currency) {
@@ -196,7 +196,7 @@ export function businessSummary(rows, currency) {
 export function callMarginWaterfall(row) {
   if (!row.complete || !row.sale?.currency || row.sale.currency!==row.cost?.currency || !Number.isFinite(row.sale.amount) || !Number.isFinite(row.cost.amount)) return null;
   const income=row.sale.amount,cost=row.cost.amount,profit=sumMoney([income,-cost]);
-  return {currency:row.sale.currency,steps:[{name:'应计收入',value:income,base:0,amount:income},{name:'采购成本扣减',value:cost,base:profit,amount:-cost},{name:'调用毛利',value:profit,base:0,amount:profit}]};
+  return {currency:row.sale.currency,steps:[{name:'应计收入',value:income,base:0,amount:income},{name:'服务商成本扣减',value:cost,base:profit,amount:-cost},{name:'调用毛利',value:profit,base:0,amount:profit}]};
 }
 export function businessBuckets(rows, gaps, range, now, currency) {
   const missing=operationBuckets(gaps,range,now);

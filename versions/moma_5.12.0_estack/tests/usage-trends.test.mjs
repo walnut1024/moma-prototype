@@ -49,7 +49,7 @@ test('all four grouping dimensions reconcile with totals, preserve zero buckets 
   assert.equal(plot('total').total.label, '全部模型合计');
   assert.equal(plot('tenantId', true).groups.find(row => row.id === 'customer-u1').label, 'Customer A');
   assert.equal(plot('providerId', true).groups.some(row => row.label.includes(' / ')), false);
-  assert.equal(plot('tenantId', true).groups.find(row => row.id === '__unknown__').label, '未归属客户');
+  assert.equal(plot('tenantId', true).groups.find(row => row.id === '__unknown__').label, '未归属租户');
 });
 
 test('token metric selection separates input/output and non-Token requests', () => {

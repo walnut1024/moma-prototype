@@ -21,7 +21,7 @@ function prepareServiceCases(source, cases, prefix) {
     const id=`${prefix}-provider-${key}`;
     let provider=state.providers.find(item=>item.id===id);
     if (!provider) {
-      provider=record(id,{name:supplierNames[key],code:`review-${key}`,sourceType:'thirdParty',integrationType:'云厂商模型服务',baseUrl:`https://${key}.service-review.example.invalid`,status:'已启用',catalogModelIds:[],catalogModels:[],catalogConnections:[],contact:'',contractEnd:null});
+      provider=record(id,{name:supplierNames[key],code:`review-${key}`,sourceType:'thirdParty',integrationType:'云服务商模型服务',baseUrl:`https://${key}.service-review.example.invalid`,status:'已启用',catalogModelIds:[],catalogModels:[],catalogConnections:[],contact:'',contractEnd:null});
       state.providers.push(provider);
     }
     return provider;

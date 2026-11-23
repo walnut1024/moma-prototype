@@ -10,7 +10,7 @@ import { routeMappingStatus } from './service-route-mapping.js';
 import { forwardingTargets, mappingReadiness } from './service-model-mappings.js';
 import { normalizeForwarding, validateForwarding } from './service-route-forwarding.js';
 
-export const ROUTING_STRATEGIES = { fixed:'固定', random:'随机分流', weighted:'加权随机路由', priority_weighted:'优先级 + 加权分流', latency:'最低延迟路由', load:'最少并发路由', tpm:'最低 TPM 路由', cost:'最低成本路由', priority:'主备优先', ...Object.fromEntries(Object.entries(ROUTING_POLICIES).map(([id,item])=>[id,item.label])) };
+export const ROUTING_STRATEGIES = { fixed:'固定', random:'随机分流', priority_weighted:'优先级 + 加权分流', priority:'主备优先', ...Object.fromEntries(Object.entries(ROUTING_POLICIES).map(([id,item])=>[id,item.label])) };
 const GROUP_STRATEGIES=['fixed','random','weighted','latency','load','tpm','cost'];
 export const ROUTE_ADVANCED_DEFAULTS={timeoutSeconds:60,maxRetries:0,failureThreshold:3,recoverySeconds:30,latencyWindowSeconds:60,costBasis:'input'};
 export const ROUTE_RETRY_REASONS = [['timeout', '上游超时'], ['429', '上游限流（429）'], ['5xx', '上游服务异常（5xx）']];
@@ -39,7 +39,7 @@ export function routingChannels(state, service, at = Date.now(), { runtime = fal
     let reason=!supply.provider || !supply.endpoint ? '服务商或接入已不存在' : supply.status!=='已启用' ? '上游模型已停用' : channel ? channelBlockReason(supply.provider,channel,{runtime}) : connectionBlockReason(supply.endpoint,supply.provider);
     if (!reason && !ready.has(supply.id)) reason='平台模型映射或能力需验证';
     if (!reason && !url) reason='请求地址待完善';
-    if (!reason && runtime && (!costs.length || costs.some(item=>item.amount==null))) reason='上游模型供应成本待配置';
+    if (!reason && runtime && (!costs.length || costs.some(item=>item.amount==null))) reason='上游上游模型成本待配置';
     const row={...supply,apiAddresses:channel?.apiAddresses,channelId:channel ? serviceChannelId(channel) : supply.channelId || supply.endpointId,channelUpdatedAt:channel?.updatedAt,channelHealth:channel?.health,channelName:channel?.name || supply.endpoint?.name,verifiedAt:channel?.health?.testedAt || supply.verifiedAt,url,costItems:costs,costVersion:costRevision([channel?.pricing,activeSupplyPrice(state,supply.id,at)]),p95LatencyMs:metric([channel?.p95LatencyMs,channel?.metrics?.p95LatencyMs,supply.endpoint?.p95LatencyMs,supply.endpoint?.metrics?.p95LatencyMs]),activeRequests:metric([channel?.activeRequests,channel?.metrics?.activeRequests,supply.endpoint?.activeRequests,supply.endpoint?.metrics?.activeRequests],true)};
     for(const key of ['tokensPerMinute','requestsPerMinute','rpmLimit','tpmLimit'])row[key]=key.endsWith('Limit')?[channel?.[key],channel?.metrics?.[key],supply.endpoint?.[key],supply.endpoint?.metrics?.[key]].find(value=>value!=null) ?? null:metric([channel?.[key],channel?.metrics?.[key],supply.endpoint?.[key],supply.endpoint?.metrics?.[key]],true);
     const mapping=routeMappingStatus(state,{...service,callId},row);
@@ -139,9 +139,9 @@ function validateSelectionStrategy(strategy,rows,candidates,config) {
   if (strategy==='fixed') {
     if (rows.length!==1) throw new Error('固定策略只能选择一个上游模型');
   }
-  if (strategy==='latency' && channels.some(channel=>channel.p95LatencyMs==null)) throw new Error('最低延迟策略需要每个上游模型的实际 P95 延迟数据');
+  if (strategy==='latency' && channels.some(channel=>channel.p95LatencyMs==null)) throw new Error('低延迟优先策略需要每个上游模型的实际 P95 延迟数据');
   if (strategy==='load' && channels.some(channel=>channel.activeRequests==null)) throw new Error('最少并发路由需要每个上游模型的实际并发请求数据');
-  if (strategy==='tpm' && channels.some(channel=>channel.tokensPerMinute==null)) throw new Error('最低 TPM 路由需要每个上游模型的实际分钟 Token 用量');
+  if (strategy==='tpm' && channels.some(channel=>channel.tokensPerMinute==null)) throw new Error('按用量分流需要每个上游模型的实际分钟 Token 用量');
   for(const channel of channels)withinRouteLimits(channel);
   if (strategy==='cost') comparableRouteCosts(channels,config.advanced.costBasis);
 }
@@ -151,7 +151,7 @@ function validateModeSelection(service, config) {
   const backups = config.channels.filter(row => row.backup);
   if (service.mode === 'standard') {
     if (config.forwarding) throw Error('当前路由不支持按接口转发');
-    if (!unifiedRouteStrategies.includes(config.strategy)) throw Error('当前路由仅支持加权随机、最少并发、最低 TPM、最低延迟和最低成本五种路由策略');
+    if (!unifiedRouteStrategies.includes(config.strategy)) throw Error('当前路由仅支持加权随机、最少并发、按用量分流、低延迟优先和成本优先五种路由策略');
     if (backups.length) throw Error('当前路由在参与路由的上游模型内执行故障转移');
   } else {
     if (config.strategy !== 'fixed') throw Error('固定路由只能选择一个主上游模型');
@@ -285,7 +285,7 @@ export function routingTransaction(state, { operation, data = {} }) {
     changes = { draft, draftUpdatedAt: new Date().toISOString() };
     label = '保存路由草稿';
   } else if (['serviceRoutePublish','serviceRouteRollback','serviceRouteRestore','serviceFailoverConfigure'].includes(operation)) {
-    if (!service.callId) throw new Error('请先在服务内容配置模型调用标识');
+    if (!service.callId) throw new Error('请先在服务内容配置模型 ID');
     if (data.sourceVersion !== routeSourceVersion(state, service)) throw new Error('上游模型、模型或成本已变化，请重新校验并确认');
     const restoring=operation==='serviceRouteRestore';
     if(restoring && (current || !lastRouteVersion(route)))throw new Error('当前路由未停用或没有可恢复的配置');

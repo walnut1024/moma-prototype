@@ -58,7 +58,7 @@ function Editor({ pageId, state, dispatch, close }) {
       }
       if (endpointA === endpointB) return setError('两个路由端点不能重复');
       if (targets.some(target => !state.endpoints.find(endpoint => endpoint.id === target.endpointId)?.modelIds.includes(modelId))) {
-        return setError('路由端点必须映射所选 Model ID');
+        return setError('路由端点必须映射所选模型 ID');
       }
       record = { id, routeId, name, modelId, targets, mode: '加权', status: '已启用', releaseId: null };
     }
@@ -98,7 +98,7 @@ function Editor({ pageId, state, dispatch, close }) {
           {pageId === 'routes' && <>
             <Form.Input field="routeId" label="Route ID"/>
             <Form.Input field="name" label="名称"/>
-            <Form.Select motion={false} field="modelId" label="Model ID" optionList={modelOptions}/>
+            <Form.Select motion={false} field="modelId" label="模型 ID" optionList={modelOptions}/>
             <Form.Select motion={false} field="endpointA" label="主端点" optionList={endpointOptions}/>
             <Form.InputNumber field="weightA" label="主端点权重"/>
             <Form.Select motion={false} field="endpointB" label="次端点" optionList={endpointOptions}/>
@@ -205,7 +205,7 @@ function Simulator({ state, dispatch }) {
       </div>
       <Space wrap>
         <Choice label="API 密钥 ID" value={keyId} options={keys.map(item => [item.id, item.keyId])} onSelect={setKeyId}/>
-        <Choice label="模型调用标识" value={modelId} options={modelIds.map(id=>[id,id])} onSelect={setModelId}/>
+        <Choice label="模型 ID" value={modelId} options={modelIds.map(id=>[id,id])} onSelect={setModelId}/>
         {modelId.startsWith('project@') && <Input aria-label="用户标签" placeholder="用户标签" maxLength={128} value={userLabel} onChange={setUserLabel} />}
         <Checkbox checked={timeout} onChange={event => setTimeoutFlag(event.target.checked)}>主端点超时场景</Checkbox>
         <Button theme="solid" disabled={!key || !modelId} onClick={run}>发送请求</Button>
@@ -215,7 +215,7 @@ function Simulator({ state, dispatch }) {
 }
 
 const listColumns = {
-  routes: ['Route ID', '名称', 'Model ID', '方式', '端点 / 权重'],
+  routes: ['Route ID', '名称', '模型 ID', '方式', '端点 / 权重'],
   limits: ['规则名称', '层级 / 对象', 'RPM', 'TPM', '并发'],
   fallback: ['规则名称', '路由', '超时', '错误率', '回退链'],
   cache: ['策略名称', '隔离范围', 'TTL', '排除规则', '命中率', '节省 Token'],

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAdminSeed, parseAdminState, serializeAdminState, STORAGE_KEY } from '../src/admin-v2/store.js';
 import { commitAdminState } from '../src/admin-v2/state-transaction.js';
-import { accountTraffic, effectiveTraffic, trafficAccounts } from '../src/admin-v2/traffic-limits.js';
+import { accountTraffic, effectiveTraffic, trafficAccounts, trafficProjects } from '../src/admin-v2/traffic-limits.js';
 import { parseTrafficRate, trafficRateText } from '../src/admin-v2/traffic-rates.js';
 import { emptyAuthState, persistAuthState, registerAuthAccount } from '../src/auth-state.mjs';
 import { withAdminSession } from './admin-session-fixture.mjs';
@@ -22,7 +22,11 @@ test('personal signup and enterprise onboarding use the current global default',
   const auth = emptyAuthState();
   const registered = persistAuthState(auth, registerAuthAccount(auth, { phone: '13800001234' }), storage);
   state = parseAdminState(storage.getItem(STORAGE_KEY));
-  const accountIds = ['traffic-test-company', `personal:${registered.currentUserId}`];
+  const personal = state.tenants.find(tenant => tenant.id === 'personal:' + registered.currentUserId);
+  const accounts = trafficAccounts(state);
+  assert.ok(accounts.find(user => user.id === owner.id).tenants.some(tenant => tenant.id === 'traffic-test-company'));
+  assert.ok(accounts.find(user => user.id === personal.ownerId).tenants.some(tenant => tenant.id === personal.id));
+  const accountIds = [owner.id, personal.ownerId];
   for (const id of accountIds) {
     assert.ok(trafficAccounts(state).some(account => account.id === id));
     const policy = accountTraffic({ rules: [] }, id);
@@ -30,6 +34,29 @@ test('personal signup and enterprise onboarding use the current global default',
     assert.equal(effectiveTraffic({ global: pair(10), rules: [] }, policy).hit.limit.rpm, 10);
     assert.equal(effectiveTraffic({ global: pair(15), rules: [] }, policy).hit.limit.rpm, 15);
   }
+});
+
+test('members of one tenant have independent limits and a user in two tenants appears once', () => {
+  const state = {
+    users: [{ id: 'alice' }, { id: 'bob' }],
+    tenants: [{ id: 'company', type: '企业', ownerId: 'alice' }, { id: 'personal', type: '个人', ownerId: 'alice' }],
+    memberships: [
+      { id: 'member-a', userId: 'alice', tenantId: 'company', status: '正常' },
+      { id: 'member-b', userId: 'bob', tenantId: 'company', status: '正常' },
+    ],
+    projects: [
+      { id: 'private', tenantId: 'personal', ownerId: 'alice' },
+      { id: 'shared', tenantId: 'company', memberRoles: { 'member-b': '项目成员' } },
+      { id: 'other', tenantId: 'company', memberRoles: {} },
+    ],
+  };
+  const [alice, bob] = trafficAccounts(state);
+  assert.deepEqual(alice.tenants.map(row => row.id), ['company', 'personal']);
+  assert.deepEqual(bob.tenants.map(row => row.id), ['company']);
+  assert.deepEqual(trafficProjects(state, bob).map(row => row.id), ['shared']);
+  const settings = { rules: [{ scope: 'account', objectId: alice.id, ...pair(10) }] };
+  assert.equal(accountTraffic(settings, alice.id).limit.rpm, 10);
+  assert.equal(accountTraffic(settings, bob.id).limit, null);
 });
 
 test('unread model limits do not imply an effective per-model limit', () => {

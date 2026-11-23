@@ -1,7 +1,7 @@
 // Catalogue metadata is separate from verified supply capabilities and routing.
 const field = (key, label, kind = 'text', placeholder = '待确认') => ({ key, label, kind, placeholder });
 export const ARCHITECTURE_OPTIONS = [['Dense', 'Dense（稠密）'], ['MoE', 'MoE（混合专家）'], ['Diffusion', 'Diffusion（扩散）'], ['Autoregressive', 'Autoregressive（自回归）'], ['Hybrid', 'Hybrid（混合架构）'], ['Other', '其他架构']];
-export const LICENSE_OPTIONS = [['Apache-2.0', 'Apache 2.0'], ['MIT', 'MIT'], ['BSD-3-Clause', 'BSD 3-Clause'], ['CC-BY-4.0', 'CC BY 4.0'], ['CC-BY-NC-4.0', 'CC BY-NC 4.0'], ['Proprietary', '专有协议'], ['Custom', '厂商自定义协议']];
+export const LICENSE_OPTIONS = [['Apache-2.0', 'Apache 2.0'], ['MIT', 'MIT'], ['BSD-3-Clause', 'BSD 3-Clause'], ['CC-BY-4.0', 'CC BY 4.0'], ['CC-BY-NC-4.0', 'CC BY-NC 4.0'], ['Proprietary', '专有协议'], ['Custom', '服务商自定义协议']];
 export const LANGUAGE_OPTIONS = ['中文', '中文繁体', '英文', '日文', '韩文', '法文', '德文', '西班牙文', '葡萄牙文', '俄文', '阿拉伯文', '印地文', '越南文', '泰文', '印尼文', '粤语'];
 export const INPUT_MODALITY_OPTIONS = ['文本', '图片', '音频', '视频'];
 export const OUTPUT_MODALITY_OPTIONS = INPUT_MODALITY_OPTIONS;
@@ -156,7 +156,7 @@ export function serviceModelSourceDraft(state, model) {
 export function serviceMetadataMissingFields(model) {
   const data=serviceModelDraft(model);
   return [
-    [data.name.trim(), '模型资料名称'],
+    [data.name.trim(), '模型展示名称'],
     [data.modelId.trim(), '模型编码'],
     [data.type, '模型类型'],
     [data.author.trim(), '模型作者'],
@@ -176,8 +176,8 @@ export function normalizeServiceModel(state, data, existing, allowIncompleteProf
     if (typeof value !== 'string' || (required && !value.trim()) || value.length > max) throw new Error(`${label}${required ? '必填，' : ''}最多 ${max} 字符`);
     return value.trim();
   };
-  const name=text(data.name,'模型服务名称',100), modelId=existing?.modelId || text(data.modelId,'模型调用标识',80);
-  if(!existing && !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('模型调用标识须为英文字母、数字或 . _ : / -，最多 80 字符');
+  const name=text(data.name,'模型服务名称',100), modelId=existing?.modelId || text(data.modelId,'模型 ID',80);
+  if(!existing && !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('模型 ID须为英文字母、数字或 . _ : / -，最多 80 字符');
   const author=text(data.author,'模型作者',100,!allowIncompleteProfile);
   if(author && !modelAuthors(state).includes(author)) throw new Error('请选择已有模型作者');
   const releaseDate=text(data.releaseDate,'发布时间',10,!allowIncompleteProfile);

@@ -71,7 +71,7 @@ const callColumns = [
 ];
 
 export function exportCalls(rows, grain, end, download) {
-  download('客户调用明细_' + end, callColumns.map(column => column.title), bucketRows(rows, grain)
+  download('租户调用明细_' + end, callColumns.map(column => column.title), bucketRows(rows, grain)
     .map(row => callColumns.map(({ dataIndex }) => dataIndex === 'success' ? format(row.success, 2) + '%' : row[dataIndex])));
 }
 const chartKeys = {
@@ -169,7 +169,7 @@ export default function CustomerCallDetail({ rows, grain, setGrain, showSampleTr
     </div>
     <Trend rows={data} metric={metric} grain={grain} showSampleTrend={showSampleTrend} matchesModel={matchesModel}/>
     <section className="ca-trend">
-      <Typography.Title heading={5} component="h3">客户调用明细</Typography.Title>
+      <Typography.Title heading={5} component="h3">租户调用明细</Typography.Title>
       <Table size="small" columns={callColumns} dataSource={data.map(row => ({ ...row, id: row.time + '|' + row.model }))}
         rowKey="id" scroll={{ x: 'max(100%, 1200px)' }} pagination={{ pageSize: 10, showSizeChanger: true,
           showQuickJumper: true, showTotal: true, pageSizeOpts: [10, 20, 50] }}

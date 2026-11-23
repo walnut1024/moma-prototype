@@ -2,7 +2,7 @@ import { REAL_PROVIDERS, BAICHUAN_PROVIDER } from './real-provider-catalogue.js'
 import { REAL_MODELS } from './real-model-catalogue.js';
 import { supplierDirectory } from './moma-provider.js';
 import { OFFICIAL_CHANNEL_PRESETS } from './official-channel-presets.js';
-import { modelMaterial, modelLibrary, modelCatalogue } from './model-library.js';
+import { requireModelSlug, modelMaterial, modelLibrary, modelCatalogue } from './model-library.js';
 import { MODEL_TYPES } from './model-management.js';
 
 // Presets are reference metadata, never registered supply, account entitlements or validation.
@@ -45,16 +45,16 @@ export function resolveOnboardingModel(state, { libraryId, modelPresetId, newMod
   if ([libraryId, modelPresetId, newModel].filter(Boolean).length !== 1) throw new Error('请选择模型资料、模型参考预设或新模型，不能同时选择');
   if (newModel) {
     newFields(newModel, ['modelId', 'name', 'type'], '新模型');
-    const modelId = identityText(newModel.modelId, '模型编码', 80), name = identityText(newModel.name || modelId, '模型展示名', 100);
-    if (!/^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('模型编码须由小写字母、数字及 . _ : / - 组成，最多80字');
+    const modelId = identityText(newModel.modelId, '模型编码', 80), name = identityText(newModel.name || modelId, '模型展示名称', 100);
+    requireModelSlug(modelId);
     if (!Object.hasOwn(MODEL_TYPES, newModel.type)) throw new Error('请选择模型类型');
     if (modelLibrary(state).some(row => row.modelId?.toLowerCase() === modelId.toLowerCase())) throw new Error('相同模型编码的资料已存在，请明确选择已有资料');
     return { isDraft: true, record: { id: 'new-model:' + modelId, modelId, name, type: newModel.type, maker: '', description: '', metadataStatus: '待完善', profile: { tasks: [], inputModalities: [], outputModalities: [], resultTypes: [] }, capabilities: { context: null, output: null, streaming: null, tools: null } } };
   }
   if (libraryId) { const record = modelMaterial(state, libraryId); if (!record) throw new Error('模型资料已不存在，请重新选择'); return { record: structuredClone(record), isDraft: false }; }
   const preset = onboardingModelPreset(modelPresetId), matches = modelLibrary(state).filter(row => row.onboardingPresetId === modelPresetId || row.modelId?.toLowerCase() === preset.modelId.toLowerCase());
-  if (matches.length > 1) throw new Error('模型预设对应多个同编码资料，请明确选择已有主档');
-  if (matches[0]) { if (matches[0].type !== preset.type || matches[0].modelId?.toLowerCase() !== preset.modelId.toLowerCase()) throw new Error('模型参考预设与已有资料身份或类型冲突，请明确选择主档'); const record = modelMaterial(state, matches[0].id); if (!record) throw Error('模型资料已归档，请重新选择'); return { record: structuredClone(record), isDraft: false }; }
+  if (matches.length > 1) throw new Error('模型预设对应多个同编码资料，请明确选择已有模型资料');
+  if (matches[0]) { if (matches[0].type !== preset.type || matches[0].modelId?.toLowerCase() !== preset.modelId.toLowerCase()) throw new Error('模型参考预设与已有资料身份或类型冲突，请明确选择模型资料'); const record = modelMaterial(state, matches[0].id); if (!record) throw Error('模型资料已归档，请重新选择'); return { record: structuredClone(record), isDraft: false }; }
   return { record: preset, isDraft: true };
 }
 export function onboardingModelOptions(state) {

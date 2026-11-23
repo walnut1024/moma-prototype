@@ -8,7 +8,7 @@ import { IconSearch } from '@douyinfe/semi-icons';
 import { TenantServiceSettings } from './TenantServiceSettings';
 import CustomerProjectDetails, { CustomerProjectKeys } from './CustomerProjectDetails';
 import { PAGE_SIZES, normalizePageSize, FilterReset, FilterToolbar } from '../components/FilterControls';
-import { displayBusinessCopy } from '../display-copy.mjs';
+import { displayAdminBusinessCopy } from '../display-copy.mjs';
 import AdminPageHeading from './AdminPageHeading';
 import { Choice, CopyId, serviceOperationsUi } from './ServiceUI';
 import { accountDataSourceLabel, accountDataSourceOptions } from './account-data-source';
@@ -47,7 +47,7 @@ function OpenIndividual({ state, transact, close, complete, canWrite }) {
     } catch (issue) {setError(issue.message);setBusy(false);}
   }
   return <>
-    <Modal visible title="开通个人客户" onCancel={cancel} footer={<>
+    <Modal visible title="开通个人租户" onCancel={cancel} footer={<>
       <Button onClick={cancel} disabled={busy}>取消</Button>
       <Button form={formId} htmlType="submit" theme="solid" loading={busy} disabled={!canWrite || existing && !form.userId}>开通</Button>
     </>}>
@@ -101,14 +101,14 @@ function UserEditor({ account, transact, canWrite, close, complete }) {
     setError('');
     try {
       await transact({ type: 'individual', operation: 'edit', tenantId: account.tenant.id, data: form });
-      complete('个人客户资料已保存');
+      complete('个人租户资料已保存');
     } catch (err) {
       setError(err.message);
       setBusy(false);
     }
   };
   return <>
-    <Modal visible title="编辑个人客户资料" width="min(560px, calc(100vw - 32px))" closeOnEsc={!discard}
+    <Modal visible title="编辑个人租户资料" width="min(560px, calc(100vw - 32px))" closeOnEsc={!discard}
       maskClosable={false} onCancel={requestClose} footer={<>
         <Button onClick={requestClose} disabled={busy}>取消</Button>
         <Button form={formId} htmlType="submit" theme="solid" loading={busy} disabled={!canWrite || !dirty}>保存</Button>
@@ -180,18 +180,18 @@ function StatusDialog({ account, accounts, role, transact, canWrite, close, comp
       setBusy(false);
     }
   };
-  return <Modal visible title={bulk ? `批量冻结个人客户（${targets.length} 个）` : `${action}个人客户`}
+  return <Modal visible title={bulk ? `批量冻结个人租户（${targets.length} 个）` : `${action}个人租户`}
     width="min(620px, calc(100vw - 32px))" closeOnEsc maskClosable={false} onCancel={close} footer={<>
       <Button disabled={busy} onClick={close}>取消</Button>
       <Button form={formId} htmlType="submit" theme="solid" type={freezing ? 'danger' : 'primary'} disabled={disabled} loading={busy}>确认{action}</Button>
     </>}>
     <form id={formId} className="admin-analytics-fields admin-individual-dialog" onSubmit={submit}>
-      {bulk ? <RecordTable columns={['客户 / 用户 ID', '手机号码']}
+      {bulk ? <RecordTable columns={['个人租户', '租户 ID', '用户 ID', '手机号码']}
         rows={targets.map(item => [item.tenant.id, <div className="admin-table-record">
-          <Text>{individualName(item)}</Text><Text type="secondary" size="small">{item.tenant.ownerId}</Text>
-        </div>, maskIndividualValue('phone', item.user?.phone)])}/>
+          <Text>{individualName(item)}</Text>
+        </div>, item.tenant.id, item.user?.id || item.tenant.ownerId, maskIndividualValue('phone', item.user?.phone)])}/>
         : <Facts rows={[
-          ['个人客户', individualName(account)], ['用户 ID', account.tenant.ownerId || '未关联'],
+          ['个人租户', individualName(account)], ['用户 ID', account.tenant.ownerId || '未关联'],
           ['手机号', maskIndividualValue('phone', account.user?.phone)], ['操作角色', role],
         ]}/>}
       <Banner type={freezing ? 'warning' : 'info'} closeIcon={null} description={freezing
@@ -229,11 +229,11 @@ function UserDetails({ account, state, tab, projectId, navigate, canWrite, trans
     </Tabs>
     <div className="admin-analytics-fields">
       {tab === 'info' && <>
-        <Title heading={5} component="h2">客户信息</Title>
+        <Title heading={5} component="h2">租户信息</Title>
         <Facts rows={[
-          ['客户 ID', <CopyId value={tenant.id} label="客户 ID"/>], ['客户状态', <AccountStatus tenant={tenant}/>],
+          ['租户 ID', <CopyId value={tenant.id} label="租户 ID"/>], ['租户状态', <AccountStatus tenant={tenant}/>],
           ['服务等级', <TenantServiceSettings state={state} tenant={tenant} section="level" canWrite={canWrite} transact={transact}/>],
-          ['备注', tenant.notes || '未填写'], ...(tenant.status === '停用' ? [['冻结原因', displayBusinessCopy(tenant.freezeReason) || '未记录']] : []),
+          ['备注', tenant.notes || '未填写'], ...(tenant.status === '停用' ? [['冻结原因', displayAdminBusinessCopy(tenant.freezeReason) || '未记录']] : []),
         ]}/>
         <div className="admin-page-heading">
           <Title heading={5} component="h2">登录账号</Title>
@@ -312,24 +312,24 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
   const openAccount = item => navigate({ create:"", personal: item.tenant.ownerId, tab: '', project:'' });
 
   return <div className="admin-page-stack admin-individual-page">
-    <AdminPageHeading title={userId ? account ? individualName(account) : '个人客户不存在' : '个人客户'}
+    <AdminPageHeading title={userId ? account ? individualName(account) : '个人租户不存在' : '个人租户'}
       description={userId ? account?.tenant.ownerId : undefined}>
       {account && <Space wrap>
         <AccountStatus tenant={account.tenant}/>
         <Button disabled={!canWrite} type={account.tenant.status === '停用' ? 'primary' : 'danger'} onClick={() => setConfirmation(account)}>
-          {account.tenant.status === '停用' ? '解冻客户' : '冻结客户'}
+          {account.tenant.status === '停用' ? '解冻租户' : '冻结租户'}
         </Button>
       </Space>}
-      {!userId && !selecting && state.spacePolicy?.personalEnabled && <Button theme="solid" disabled={!canWrite} onClick={()=>setOpening(true)}>开通个人客户</Button>}
+      {!userId && !selecting && state.spacePolicy?.personalEnabled && <Button theme="solid" disabled={!canWrite} onClick={()=>setOpening(true)}>开通个人租户</Button>}
       {!userId && !selecting && <Button id="iu-bulk-action" disabled={!canWrite} onClick={() => { setSelected([]); setBulkMode(true); }}>批量操作</Button>}
     </AdminPageHeading>
     {!canWrite && <Banner type="info" closeIcon={null} description={conflict ? '数据已变化，请载入新版本后再操作。'
-      : state.storageError ? '数据读取失败，请恢复数据后再操作。' : `${state.currentRole}仅可查看个人客户资料。`}/>}
+      : state.storageError ? '数据读取失败，请恢复数据后再操作。' : `${state.currentRole}仅可查看个人租户资料。`}/>}
     {!userId ? <Card>
       <FilterToolbar className="admin-list-toolbar">
-        <Input className="admin-list-search" prefix={<IconSearch aria-hidden="true"/>} showClear aria-label="搜索个人客户"
+        <Input className="admin-list-search" prefix={<IconSearch aria-hidden="true"/>} showClear aria-label="搜索个人租户"
           value={filters.q} placeholder="搜索手机号、昵称或用户 ID" onChange={q => navigate({ q, page: '' }, true)}/>
-        <Choice label="客户状态" value={filters.status || 'all'}
+        <Choice label="租户状态" value={filters.status || 'all'}
           options={[[ 'all', '全部状态' ], [ '正常', '正常' ], [ '停用', '已冻结' ]]}
           onChange={value => navigate({ status: value === 'all' ? '' : value, page: '' }, true)}/>
         <Choice label="数据来源" value={filters.source || 'all'} options={accountDataSourceOptions}
@@ -337,28 +337,28 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
         <FilterReset onClick={() => navigate({ q: '', status: '', source: '', page: '' }, true)}/>
       </FilterToolbar>
       {selecting && <div className="admin-list-toolbar">
-        <Text id="iu-selection-count" type="secondary" role="status">已选 {selectedAccounts.length} / {eligible.length} 位正常客户</Text>
+        <Text id="iu-selection-count" type="secondary" role="status">已选 {selectedAccounts.length} / {eligible.length} 位正常租户</Text>
         <Button type="danger" disabled={!selectedAccounts.length} onClick={() => setConfirmation({ accounts: selectedAccounts })}>批量冻结</Button>
         <Button theme="borderless" type="tertiary" onClick={() => { setSelected([]); setBulkMode(false); restoreBulkFocus(); }}>
           取消批量操作
         </Button>
       </div>}
       <RecordTable minWidth={selecting ? 1080 : 1040} columns={[
-        ...(selecting ? [<Checkbox aria-label="选择本页全部正常客户" aria-describedby="iu-selection-count" disabled={!eligible.length}
+        ...(selecting ? [<Checkbox aria-label="选择本页全部正常租户" aria-describedby="iu-selection-count" disabled={!eligible.length}
           checked={selectAll} indeterminate={!selectAll && selectedAccounts.length > 0}
           onChange={event => setSelected(event.target.checked ? eligible.map(item => item.tenant.id) : [])}/>] : []),
-        '客户 / 用户 ID', '手机号码', '数据来源', '客户状态', '注册时间', '最近登录时间', '操作',
+        '个人租户', '租户 ID', '用户 ID', '手机号码', '数据来源', '租户状态', '注册时间', '最近登录时间', '操作',
       ]} rows={pageRows.map(item => [
         item.tenant.id,
-        ...(selecting ? [<Checkbox aria-label={`选择客户 ${individualName(item)}`} disabled={item.tenant.status !== '正常'}
+        ...(selecting ? [<Checkbox aria-label={`选择租户 ${individualName(item)}`} disabled={item.tenant.status !== '正常'}
           checked={selected.includes(item.tenant.id)} onChange={event => toggle(item.tenant.id, event.target.checked)}/>] : []),
         <Space>
           <Avatar size="extra-small" aria-hidden="true">{Array.from(individualName(item))[0]}</Avatar>
           <div className="admin-table-record">
             <Button size="small" theme="borderless" onClick={() => openAccount(item)}>{individualName(item)}</Button>
-            <Text size="small" type="secondary" code>{item.user?.id || item.tenant.ownerId || '未关联身份'}</Text>
+
           </div>
-        </Space>,
+        </Space>, item.tenant.id, item.user?.id || item.tenant.ownerId,
         maskIndividualValue('phone', item.user?.phone), accountDataSourceLabel(item.tenant),
         <AccountStatus tenant={item.tenant}/>, time(item.user?.registeredAt),
         item.user?.lastLoginAt ? time(item.user.lastLoginAt) : '未记录',
@@ -368,12 +368,12 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
             {item.tenant.status === '停用' ? '解冻' : '冻结'}
           </Button>
         </Space>,
-      ])} empty={Object.values(filters).some(Boolean) ? '没有匹配的个人客户，请调整或重置筛选条件。' : '尚无个人客户。'}
+      ])} empty={Object.values(filters).some(Boolean) ? '没有匹配的个人租户，请调整或重置筛选条件。' : '尚无个人租户。'}
         pagination={{ currentPage: page, pageSize: size, total: rows.length, pageSizeOpts: PAGE_SIZES, showTotal: true, showSizeChanger: true,
           onPageChange: value => navigate({ page: String(value) }, true), onPageSizeChange: value => navigate({ size: String(value), page: '' }, true) }}/>
-    </Card> : !account ? <Banner type="warning" closeIcon={null} description="请通过面包屑返回个人客户列表。"/> : <>
+    </Card> : !account ? <Banner type="warning" closeIcon={null} description="请通过面包屑返回个人租户列表。"/> : <>
       {account.tenant.status === '停用' && <Banner type="warning" closeIcon={null} description={
-        `个人客户已冻结，个人空间访问和个人 API 密钥调用受限。${account.tenant.freezeReason ? `原因：${displayBusinessCopy(account.tenant.freezeReason)}` : ''}`
+        `个人租户已冻结，个人空间访问和个人 API 密钥调用受限。${account.tenant.freezeReason ? `原因：${displayAdminBusinessCopy(account.tenant.freezeReason)}` : ''}`
       }/>}
       <UserDetails key={account.tenant.id} account={account} state={state} tab={tab} projectId={params.get('project') || ''}
         navigate={navigate} canWrite={canWrite} transact={transact} setEditor={setEditing}/>

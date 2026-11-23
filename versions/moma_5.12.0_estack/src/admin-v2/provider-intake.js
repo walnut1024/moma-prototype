@@ -82,7 +82,7 @@ export function planProviderIntake(state, file) {
   provider = working.providers.find(row => row.id === provider.id);
   const channels = (provider.catalogConnections || []).filter(row => !row.deletedAt);
   if (channels.some(row => !Object.keys(row.capacityLimits || {}).length)) warnings.push('部分上游模型未配置容量限额，将保留为未配置');
-  if (channels.some(row => !row.pricing?.scenarios?.length && !row.procurementVersions?.length)) warnings.push('部分上游模型未配置采购成本，将保留为未配置；官方报价不会自动作为采购成本');
+  if (channels.some(row => !row.pricing?.scenarios?.length && !row.procurementVersions?.length)) warnings.push('部分上游模型未配置服务商成本价，将保留为未配置；官方报价不会自动作为服务商成本价');
   if (channels.length) warnings.push('上游模型录入后保持待验证，不自动启用、上架或恢复已停用服务');
   return { provider, changes: [...changes.values()], errors, warnings, models: models.map(row => ({ code: row.canonical_slug, name: row.model_name, type: row.model_type, channels: row.mappings?.length || 0 })),
     connections: supplierChannelResources(working, provider), channels, modelCount: models.length };

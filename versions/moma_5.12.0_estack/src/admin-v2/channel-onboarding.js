@@ -1,6 +1,6 @@
 import { resourceId } from '../resource-id.mjs';
 import { resolveOnboardingProvider, onboardingModelPreset, resolveOnboardingModel } from './onboarding-presets.js';
-import { libraryRecord, modelLibrary } from './model-library.js';
+import { requireModelSlug, libraryRecord, modelLibrary } from './model-library.js';
 import { MODEL_TYPES } from './model-management.js';
 import { TASK_OPTIONS, INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, modelProfileDraft } from './model-profile.js';
 import { connectionFingerprint, connectionKeys, connectionQualification } from './connection-state.js';
@@ -69,12 +69,12 @@ function draftFields(state, data) {
   for (const [type, url] of Object.entries(input.taskUrls || {})) { if (!Object.hasOwn(MODEL_TYPES, type)) throw new Error('任务地址类型无效'); value.taskUrls[type] = draftUrl(url); }
   if (!Array.isArray(data.rows) || !data.rows.length || data.rows.length > 50) throw new Error('每个接入草稿包含 1–50 个模型行');
   const rows = data.rows.map((row, index) => {
-    if (!Array.isArray(row.scenarios || [])) throw new Error('采购价格式无效');
+    if (!Array.isArray(row.scenarios || [])) throw new Error('服务商成本价式无效');
     if ([row.libraryId, row.modelPresetId, row.newModel].filter(Boolean).length > 1) throw new Error('草稿模型资料、参考预设与新模型只能选择一项');
     if (row.newModel && (typeof row.newModel !== 'object' || Array.isArray(row.newModel) || Object.keys(row.newModel).some(key => !['modelId', 'name', 'type'].includes(key)))) throw new Error('新模型草稿包含不支持的字段');
-    const newModel = row.newModel && { modelId: text(row.newModel.modelId || '', '模型编码', 80, false), ...(row.newModel.name ? { name: text(row.newModel.name, '模型展示名', 100, false) } : {}), type: text(row.newModel.type || '', '模型类型', 20, false) };
+    const newModel = row.newModel && { modelId: text(row.newModel.modelId || '', '模型编码', 80, false), ...(row.newModel.name ? { name: text(row.newModel.name, '模型展示名称', 100, false) } : {}), type: text(row.newModel.type || '', '模型类型', 20, false) };
     const scenarios = (row.scenarios || []).map(item => ({ name: text(item.name || '', '计费项', 100, false), listPrice: String(item.listPrice ?? ''), unit: text(item.unit || '', '计费单位', 100, false), currency: text(item.currency || 'CNY', '币种', 10), condition: text(item.condition || '', '条件', 160, false) }));
-    return { id: text(row.id || `row-${index + 1}`, '模型行标识', 100), libraryId: row.libraryId || '', ...(row.modelPresetId ? { modelPresetId: text(row.modelPresetId, '模型参考预设', 100) } : {}), ...(newModel ? { newModel } : {}), upstreamModelId: text(row.upstreamModelId || '', '上游模型调用标识', 200, false), selected: row.selected !== false, confirmed: row.confirmed === true, source: ['upstream', 'reference', 'manual'].includes(row.source) ? row.source : 'manual', scenarios };
+    return { id: text(row.id || `row-${index + 1}`, '模型行标识', 100), libraryId: row.libraryId || '', ...(row.modelPresetId ? { modelPresetId: text(row.modelPresetId, '模型参考预设', 100) } : {}), ...(newModel ? { newModel } : {}), upstreamModelId: text(row.upstreamModelId || '', '上游模型 ID', 200, false), selected: row.selected !== false, confirmed: row.confirmed === true, source: ['upstream', 'reference', 'manual'].includes(row.source) ? row.source : 'manual', scenarios };
   });
   const endpoint = data.endpointId && state.endpoints.find(row => row.id === data.endpointId && row.providerId === provider.id && !row.deletedAt);
   if (data.endpointId && !endpoint) throw new Error('草稿连接不属于当前服务商');
@@ -88,8 +88,8 @@ export function previewChannelModels(state, providerId, models, { source = 'upst
   const seen = new Set(), library = modelLibrary(state);
   const existing = endpointId ? (provider.catalogConnections || []).filter(row => row.endpointId === endpointId && !row.deletedAt) : [];
   return { source, complete, rows: models.flatMap(input => {
-    const id = text(typeof input === 'string' ? input : input.id, '上游模型调用标识', 200);
-    if (/\s/u.test(id)) throw new Error('上游模型调用标识 不能包含空白');
+    const id = text(typeof input === 'string' ? input : input.id, '上游模型 ID', 200);
+    if (/\s/u.test(id)) throw new Error('上游模型 ID 不能包含空白');
     if (seen.has(id)) return []; seen.add(id);
     const saved = existing.find(row => row.upstreamModelId === id);
     const candidates = library.filter(model => model.modelId === id || model.profile?.upstreamAliases?.[providerId]?.includes(id));
@@ -108,7 +108,7 @@ export function directoryDiscoveryReceipt(result) {
   }
   const models = result.models.map(model => {
     const id = typeof model === 'string' ? model : model?.id;
-    if (typeof id !== 'string' || !id || id.length > 200 || /\s|\p{Cc}/u.test(id) || /\bsk-[\w-]{6,}/i.test(id)) throw Error('上游列表含无效模型标识');
+    if (typeof id !== 'string' || !id || id.length > 200 || /\s|\p{Cc}/u.test(id) || /\bsk-[\w-]{6,}/i.test(id)) throw Error('上游列表含无效的上游模型 ID');
     if (typeof model === 'string') return { id };
     return {
       id,
@@ -192,8 +192,8 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
   }
   if (operation === 'channelMetadataCreate') {
     assertNoSecrets(data);
-    const name = text(data.name, '模型展示名', 100), modelId = text(data.modelId, '模型编码', 80), type = data.type;
-    if (!/^[a-z0-9][a-z0-9._:/-]{0,79}$/.test(modelId)) throw new Error('模型编码须由小写字母、数字及 . _ : / - 组成，最多80字');
+    const name = text(data.name, '模型展示名称', 100), modelId = text(data.modelId, '模型编码', 80), type = data.type;
+    requireModelSlug(modelId);
     if (!Object.hasOwn(MODEL_TYPES, type)) throw new Error('请选择模型类型');
     if (modelLibrary(state).some(row => row.modelId.toLowerCase() === modelId.toLowerCase())) throw new Error('相同模型编码的资料已存在');
     const profile = modelProfileDraft({ profile: data.profile || {} });
@@ -330,12 +330,12 @@ export function validateChannelRows(state, rows, endpoint) {
   for (const row of selected) {
     const master = libraryRecord(state, row.libraryId), id = row.upstreamModelId.trim();
     if (!master) errors.push({ rowId: row.id, field: 'libraryId', message: '请选择有效的模型资料' });
-    if (!id || /\s|\p{Cc}/u.test(id)) errors.push({ rowId: row.id, field: 'upstreamModelId', message: '填写有效的上游模型调用标识，不能有空白或控制字符' });
+    if (!id || /\s|\p{Cc}/u.test(id)) errors.push({ rowId: row.id, field: 'upstreamModelId', message: '填写有效的上游模型 ID，不能有空白或控制字符' });
     if (master && masters.has(master.id)) errors.push({ rowId: row.id, field: 'libraryId', message: '重复的模型资料' });
-    if (ids.has(id)) errors.push({ rowId: row.id, field: 'upstreamModelId', message: '重复的上游模型调用标识' });
+    if (ids.has(id)) errors.push({ rowId: row.id, field: 'upstreamModelId', message: '重复的上游模型 ID' });
     if (master) masters.add(master.id); ids.add(id);
     if (['upstream', 'reference'].includes(row.source) && !row.confirmed) errors.push({ rowId: row.id, field: 'confirmed', message: '请确认模型身份匹配' });
-    if (row.scenarios.some(item => !item.name?.trim() || !item.unit?.trim() || String(item.listPrice).trim() === '' || !Number.isFinite(Number(item.listPrice)) || Number(item.listPrice) < 0)) errors.push({ rowId: row.id, field: 'scenarios', message: '补齐已填写的采购价，或清空后稍后配置' });
+    if (row.scenarios.some(item => !item.name?.trim() || !item.unit?.trim() || String(item.listPrice).trim() === '' || !Number.isFinite(Number(item.listPrice)) || Number(item.listPrice) < 0)) errors.push({ rowId: row.id, field: 'scenarios', message: '补齐已填写的服务商成本价，或清空后稍后配置' });
     if (master && endpoint?.interfaceType) {
       const task = ['anthropic','openai-responses'].includes(endpoint.interfaceType) ? ['text', 'multimodal'] : endpoint.interfaceType === 'openai' ? ['text', 'multimodal', 'embedding', 'image', 'audio'] : Object.keys(MODEL_TYPES);
       if (!task.includes(master.type)) errors.push({ rowId: row.id, field: 'libraryId', message: '当前接口类型不支持此模型任务' });

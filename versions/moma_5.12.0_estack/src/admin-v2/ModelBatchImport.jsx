@@ -14,8 +14,8 @@ function ImportHelp() {
   return <section className="materials-import-help" aria-labelledby="model-import-help-title">
     <Typography.Title heading={5} component="h3" id="model-import-help-title">填写提示</Typography.Title>
     <dl className="materials-import-rules">
-      <div><dt>必填信息</dt><dd>模型编码、模型资料名称、模型类型。视觉模型还需填写视觉任务类型：图像或视频。其他字段未知时留空，不用填写 0 或“不支持”。</dd></div>
-      <div><dt>模型编码</dt><dd>以小写字母或数字开头，可使用 . _ : / -，最多 80 字符。已有标识不覆盖，同一批次不能重复。</dd></div>
+      <div><dt>必填信息</dt><dd>模型编码、模型展示名称、模型类型。视觉模型还需填写视觉任务类型：图像或视频。其他字段未知时留空，不用填写 0 或“不支持”。</dd></div>
+      <div><dt>模型编码</dt><dd>以小写字母或数字开头，仅可使用小写字母、数字、点和中划线，最多 80 字符。已有标识不覆盖，同一批次不能重复。</dd></div>
       <div><dt>模型作者与系列</dt><dd>填写「模型作者」和「模型系列」页签中的标准名称或别名。填写系列时一并填写所属作者。</dd></div>
       <div><dt>模板与字段</dt><dd>XLSX 模板将必填项排在最前：红色表头为必填，橙色表头为视觉模型必填，其余为选填。模板包含全部资料字段及“填写说明”工作表。可删除不需要的可选列或调整列顺序，请保留原表头；模板示例行请替换或删除。</dd></div>
       <div><dt>多选与能力</dt><dd>多项用“、”分隔。输入与输出模态：{INPUT_MODALITY_OPTIONS.join('、')}。结果类型：{RESULT_TYPE_OPTIONS.join('、')}。流式响应、工具调用等能力填写“支持”或“不支持”，留空表示未填写。</dd></div>
@@ -27,7 +27,7 @@ function ImportHelp() {
 }
 
 const importNames = { model: '模型资料', provider: '服务商资料', relation: '供应关系' };
-const summaryHeaders = { model: ['模型资料名称', '模型编码', '模型类型'], provider: ['服务商名称', '服务商编码', '供给类型'], relation: materialImportHeaders.relation };
+const summaryHeaders = { model: ['模型展示名称', '模型编码', '模型类型'], provider: ['服务商名称', '服务商编码', '供给类型'], relation: materialImportHeaders.relation };
 const ready = row => row.status === 'ready';
 const issue = row => row.status === 'error' || row.status === 'failed';
 const count = (rows, status) => rows.filter(row => row.status === status).length;
@@ -155,7 +155,7 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
       { title: '模型系列', width: 140, render: (_, row) => row.data?.profile?.family || '—' },
     ] : []),
     { title: step === 'result' ? '处理结果' : '校验结果', width: 310, render: (_, row) => <Typography.Text type={issue(row) ? 'danger' : row.status === 'done' ? 'success' : row.status === 'skip' ? 'tertiary' : undefined}>
-      {row.masterCreated && providerId ? '主档已新增 · ' : row.modelId && providerId && row.status === 'done' ? '复用已有模型 · ' : ''}{row.message}
+      {row.masterCreated && providerId ? '模型资料已新增 · ' : row.modelId && providerId && row.status === 'done' ? '复用已有模型资料 · ' : ''}{row.message}
     </Typography.Text> },
     { title: '操作', width: 170, render: (_, row) => <Space>
       <Button theme="borderless" aria-label={'查看第 ' + row.rowNumber + ' 行资料'} onClick={() => setExpandedRow(expandedRow === row.rowNumber ? null : row.rowNumber)}>查看</Button>
@@ -187,7 +187,7 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
           disabled={busy || !ops.can} onFileChange={files => readFile(files[0])}/>}
       {json ? <Typography.Paragraph>JSON 中的 Provider ID 和服务商编码须与当前服务商一致，内容不超过 10 MB。模型映射引用同一份 JSON 中的连接，新增连接保存为待验证。</Typography.Paragraph>
         : kind === 'model' ? <ImportHelp/> : <Typography.Paragraph>{kind === 'provider'
-        ? '填写服务商名称、服务商编码和供给类型。供给类型填写「自有推理服务」或「第三方推理服务」。其余字段选填。'
+        ? '填写服务商名称、服务商编码和供给类型。供给类型填写「自有模型推理服务」或「第三方模型服务」。其余字段选填。'
         : '每行填写已有服务商编码和模型编码，确认后登记一条供给关系。'}</Typography.Paragraph>}
     </> : <>
       <Typography.Title heading={6}><span ref={previewTitle} tabIndex={-1}>{fileName}</span></Typography.Title>

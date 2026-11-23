@@ -107,9 +107,9 @@ test('model previews reject invalid identities, model-address links and request 
   assert.throws(() => providerModelConnectivityTest(state, { ...request, endpointId: state.endpoints.find(item => item.providerId !== provider.id).id }), /当前服务商/);
   for (const patch of [{ baseUrl: 'bad' }, { baseUrl: 'http://example.com/v1' }, { baseUrl: 'https://user:pass@example.com' }, { baseUrl: 'https://example.com?key=secret' }, { protocol: 'invalid' }]) {
     const invalid = { ...state, endpoints: state.endpoints.map(item => item.id === endpoint.id ? { ...item, ...patch } : item) };
-    assert.throws(() => providerModelConnectivityTest(invalid, request), /地址无效|协议无效/);
+    assert.throws(() => providerModelConnectivityTest(invalid, request), /地址无效|接口格式无效/);
   }
-  for (const patch of [{ modelId: 'missing' }, { upstreamId: '' }, { upstreamId: 'bad id' }, { upstreamId: 'a'.repeat(201) }, { prompt: '' }, { prompt: 'a'.repeat(2001) }, { scenario: '__proto__' }]) assert.throws(() => providerModelConnectivityTest(state, { ...request, ...patch }), /目录模型|上游模型调用标识|测试内容|预览状态/);
+  for (const patch of [{ modelId: 'missing' }, { upstreamId: '' }, { upstreamId: 'bad id' }, { upstreamId: 'a'.repeat(201) }, { prompt: '' }, { prompt: 'a'.repeat(2001) }, { scenario: '__proto__' }]) assert.throws(() => providerModelConnectivityTest(state, { ...request, ...patch }), /目录模型|上游模型 ID|测试内容|预览状态/);
   const addressKey = (await providerApiKeysDraft([second])).apiKeys[0];
   const addressState = { ...state, endpoints: state.endpoints.map(item => item.id === endpoint.id ? { ...item, apiKeys: [addressKey] } : item) };
   assert.equal(providerModelConnectivityTest(addressState, { ...request, keyId: addressKey.id }).result, '通过');

@@ -57,7 +57,7 @@ function AuditChanges({ event }) {
     {event.item_results.length > 0 && <section>
       <Title heading={6}>逐项结果</Title>
       <AdminTable rowKey="resource_ref" pagination={false} dataSource={event.item_results} columns={[
-        { title: '上游模型供给', dataIndex: 'resource_ref', render: value => resourceName(event.resources.find(resource => resource.type + ':' + resource.id === value)) },
+        { title: '上游模型', dataIndex: 'resource_ref', render: value => resourceName(event.resources.find(resource => resource.type + ':' + resource.id === value)) },
         { title: '结果', dataIndex: 'status', render: value => itemLabels[value] },
       ]}/>
     </section>}
@@ -211,7 +211,7 @@ export default function AuditLogsPage({ accountId, params, tenants = [], project
     { title: '项目', width: 70, render: (_, row) => projectName(row.scope?.project_id) || '—' },
     { title: '结果', width: 77, render: (_, row) => resultTag(row.outcome.status) },
     { title: '操作对象', width: 172, render: (_, row) => <>
-      {row.target_count > 1 ? row.target_count + ' 个上游模型供给'
+      {row.target_count > 1 ? row.target_count + ' 个上游模型'
         : row.target?.type === 'project' ? projectName(row.target.id) : resourceName(row.target)}
       {row.matched?.roles.includes('related') && <><br/><Text size="small" type="tertiary">关联命中 · {resourceName(row.matched)}</Text></>}
     </> },
@@ -239,8 +239,8 @@ export default function AuditLogsPage({ accountId, params, tenants = [], project
         <Button theme="solid" htmlType="submit">查询</Button>
         <Button onClick={() => { setDraft(initialFilters); changeFilters(initialFilters); }}>重置</Button>
         {more && <div className="audit-log-extra-filters">
-          <Choice label="客户" value={draft.tenant} onChange={value => update('tenant',value)}
-            options={scopeOptions(tenants,draft.tenant,'全部客户')}/>
+          <Choice label="租户" value={draft.tenant} onChange={value => update('tenant',value)}
+            options={scopeOptions(tenants,draft.tenant,'全部租户')}/>
           <Choice label="项目" value={draft.project} onChange={value => update('project',value)}
             options={scopeOptions(availableProjects,draft.project,'全部项目')}/>
 

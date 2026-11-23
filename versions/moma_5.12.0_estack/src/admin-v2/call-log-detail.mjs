@@ -2,16 +2,16 @@ import { observationTime, outcomes, purposeLabels } from './call-observations.mj
 
 export const requestLogSections = [
   ['请求与结果', [
-    ['请求 ID', 'requestId'], ['开始时间', 'at', observationTime], ['模型名称', 'modelName'], ['模型调用标识', 'callId'],
+    ['请求 ID', 'requestId'], ['开始时间', 'at', observationTime], ['模型展示名称', 'modelName'], ['模型 ID', 'callId'],
     ['请求状态', 'outcome', value => outcomes[value]], ['状态码', 'status'],
     ['总耗时（ms）', 'duration'], ['首包延迟（ms）', 'firstPacket'], ['首 Token 时延（ms）', 'ttft'],
   ]],
   ['路由归属', [
-    ['供应商名称', 'providerName'], ['连接名称', 'channelName'], ['供应商 ID', 'provider'], ['连接 ID', 'channel'],
+    ['服务商名称', 'providerName'], ['连接名称', 'channelName'], ['服务商 ID', 'provider'], ['连接 ID', 'channel'],
   ]],
   ['Token 用量', [['总 Token', 'total'], ['输入 Token', 'input'], ['输出 Token', 'output']]],
   ['调用方', [
-    ['请求来源', 'source'], ['调用类型', 'purpose', value => purposeLabels[value]], ['客户', 'tenantName'],
+    ['请求来源', 'source'], ['调用类型', 'purpose', value => purposeLabels[value]], ['所属租户', 'tenantName'],
     ['项目', 'projectName'], ['项目 ID', 'project'], ['调用用户', 'userName'], ['调用用户 ID', 'user'],
     ['API 密钥名称', 'keyName'], ['API 密钥 ID', 'keyDisplayId'], ['API 密钥（脱敏）', 'keyMasked'],
   ]],

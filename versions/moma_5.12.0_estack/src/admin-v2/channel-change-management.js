@@ -71,7 +71,7 @@ function configuredEndpoint(state, provider, endpoint, input, extraOwnedKeys = [
     if (value.keyStrategy !== undefined && !['priority', 'random', 'roundRobin'].includes(value.keyStrategy)) throw Error('请选择多密钥选择策略');
   } else if (Object.hasOwn(input, 'keyStrategy')) throw Error('多密钥选择策略仅适用于密钥池');
   if (value.authMode !== 'pool' && value.poolPaused) value.poolPaused = false;
-  if (value.authMode === 'none' && provider.sourceType !== 'selfHosted') throw new Error('仅自有推理服务可无需认证');
+  if (value.authMode === 'none' && provider.sourceType !== 'selfHosted') throw new Error('仅自有模型推理服务可无需认证');
   if (value.authMode === 'group' && !providerKeyGroups(provider).some(group => group.id === value.keyGroupId)) throw new Error('密钥组不属于当前服务商');
   const selectedOwnedKey = value.authMode === 'specific' && ownedKeys.find(key => key.id === value.apiKeyId);
   if (value.authMode === 'specific' && !selectedOwnedKey && !provider.apiKeys?.some(key => key.id === value.apiKeyId)) throw new Error('指定密钥不属于当前服务商或连接');
@@ -160,7 +160,8 @@ function candidateChecks(state, provider, endpoint, candidate, { at = Date.now()
     const real = evidenceByKey.every(row => row?.source === 'server-receipt' && row.simulated === false && row.serverBatchId && row.serverSignature);
     const fresh = evidenceByKey.every(row => row && at - Date.parse(row.testedAt) >= 0 && at - Date.parse(row.testedAt) <= CHANNEL_EVIDENCE_MAX_AGE_MS);
     const passed = !impactChanged && !pending && covered && fresh && evidence?.result === '通过' && (!requireReal || real);
-    return { associationId: id, modelId: mapping.modelId, passed, evidence, evidenceByKey, reason: impactChanged ? '关联模型或服务引用已变化，请重新保存候选配置' : pending ? '候选测试尚未完成' : !covered ? projected.authMode === 'pool' ? '候选配置尚未完成全部启用密钥的测试' : '候选配置尚未测试' : evidence.result !== '通过' ? evidence.message || '最近一次测试未通过' : !fresh ? '测试证据已过期，请重新测试' : requireReal && !real ? '正式接入需要真实上游测试证据' : '' };
+    const testResult = !covered ? '未测试' : evidence.result !== '通过' ? evidence.result : fresh ? '通过' : '已过期';
+    return { associationId: id, modelId: mapping.modelId, passed, testResult, evidence, evidenceByKey, reason: impactChanged ? '关联模型或服务引用已变化，请重新保存候选配置' : pending ? '候选测试尚未完成' : !covered ? projected.authMode === 'pool' ? '候选配置尚未完成全部启用密钥的测试' : '候选配置尚未测试' : evidence.result !== '通过' ? evidence.message || '最近一次测试未通过' : !fresh ? '测试证据已过期，请重新测试' : requireReal && !real ? '正式接入需要真实上游测试证据' : '' };
   });
   let credentialError = '';
   try { assertCredentials(projected, provider); } catch (error) { credentialError = error.message; }
@@ -484,9 +485,9 @@ function procurementTransaction(state, operation, data) {
       working = { ...working, providers: working.providers.map(item =>
         item.id === provider.id ? { ...item, ...changes[0].changes } : item) };
     }
-    return { type: 'batch', objectId: endpointId, label: '批量发布连接采购价', changes };
+    return { type: 'batch', objectId: endpointId, label: '批量发布连接服务商成本价', changes };
   }
-  if (operation !== 'channelProcurementPublish') throw new Error('未知采购价版本操作');
+  if (operation !== 'channelProcurementPublish') throw new Error('未知服务商成本价版本操作');
   const { provider, endpoint } = context(state, data.providerId, data.endpointId);
   const projected = supplierChannelAssociations(state, provider, endpoint.id).find(row => row.id === data.associationId);
   if (!projected) throw new Error('采购报价不属于当前上游模型');
@@ -499,18 +500,18 @@ function procurementTransaction(state, operation, data) {
   if (data.expectedPriceRevision !== (association.procurementRevision || 0)) throw new Error('采购报价已有修订，请重新载入');
   const at = new Date().toISOString();
   let versions = structuredClone(association.procurementVersions || [{ id: `baseline-${association.id}`, version: 0, pricing: structuredClone(association.pricing), status: '已发布', effectiveAt: association.updatedAt || endpoint.createdAt || new Date(0).toISOString(), publishedAt: association.updatedAt || endpoint.createdAt || new Date(0).toISOString(), expiresAt: null }]);
-  if (data.confirmed !== true) throw new Error('请确认发布采购价');
+  if (data.confirmed !== true) throw new Error('请确认发布服务商成本价');
   const pricing = normalizeProviderPrice(provider, { modelId: association.modelId, discountFactor: '1', scenarios: data.scenarios });
   const effectiveAt = data.effectiveAt || at, expiresAt = data.expiresAt || null;
-  if (!Number.isFinite(Date.parse(effectiveAt)) || expiresAt && (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.parse(effectiveAt))) throw new Error('请填写有效的采购价生效和到期时间');
+  if (!Number.isFinite(Date.parse(effectiveAt)) || expiresAt && (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.parse(effectiveAt))) throw new Error('请填写有效的服务商成本价生效和到期时间');
   if (!pricing.scenarios.length || pricing.scenarios.some(row => row.listPrice == null)) throw new Error('请补齐采购计费项，免费请明确填写 0');
-  if (expiresAt && Date.parse(expiresAt) <= Date.parse(at)) throw new Error('采购价已经到期，不能发布');
+  if (expiresAt && Date.parse(expiresAt) <= Date.parse(at)) throw new Error('服务商成本价已经到期，不能发布');
   versions.push({ id: resourceId('purchase-price-version'), version: Math.max(...versions.map(row => row.version)) + 1, pricing, effectiveAt, expiresAt, status: '已发布', createdAt: at, publishedAt: at });
   const next = { ...association, procurementVersions: versions, procurementRevision: (association.procurementRevision || 0) + 1 };
   const active = activeChannelProcurement(next);
   if (active) next.pricing = structuredClone(active.pricing);
   const catalogConnections = saved ? entries.map(row => row === saved ? next : row) : [...entries, next];
-  return { type: 'batch', objectId: association.id, label: '发布采购价版本', changes: [update('providers', provider.id, { catalogConnections })] };
+  return { type: 'batch', objectId: association.id, label: '发布服务商成本价版本', changes: [update('providers', provider.id, { catalogConnections })] };
 }
 
 function stageCredentialChanges(state, changes) {

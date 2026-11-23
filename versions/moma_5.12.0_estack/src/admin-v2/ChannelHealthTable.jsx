@@ -104,14 +104,14 @@ export default function ChannelHealthTable({ rows, labels, summaries, simulated,
       dataIndex: 'baseUrl', width: 180, render: value =>
         <Typography.Text className="channel-health-url" ellipsis={{ rows: 2, showTooltip: true }}>{value || '—'}</Typography.Text> },
     { title: t('状态'), width: 72, render: (_, row) => <AdminStatus value={row.enabledLabel} label={t(row.enabledLabel)}/> },
-    { title: metricHeader(t('健康状态'), headers.health), width: 80,
+    { title: metricHeader(t('健康度'), headers.health), width: 80,
       render: (_, row) => <AdminStatus value={row.health} label={t(row.health)} color={row.health === '健康' ? 'green' : undefined}/> },
     { title: metricHeader(t('可用率'), availabilityDefinition), dataIndex: 'uptime', width: metricColumnWidth,
       sorter: byMetric(row => row.uptime?.available), render: uptime => <Availability uptime={uptime}/> },
     trend('ttft', 'TTFT (P50)', value => seconds.format(value / 1000) + 's'),
     trend('otps', t('吞吐量 (P50)'), value => tokensPerSecond.format(value) + 'tps'),
     trend('cacheRate', t('缓存命中率'), availabilityPercent),
-    ...(canManageChannels ? [{ title: t('采购价'), width: 184, render: (_, row) => row.costs?.map(cost =>
+    ...(canManageChannels ? [{ title: t('服务商成本价'), width: 184, render: (_, row) => row.costs?.map(cost =>
       <div key={cost.key}><ChannelCostCell cost={{ ...cost, items: cost.items.slice(0, 2) }}/>
         {cost.items.length > 2 && <Popover trigger="click" position="left" content={<div className="channel-health-prices"><ChannelCostCell cost={cost}/></div>}>
           <Button theme="borderless" size="small">全部 {cost.items.length} 项</Button>

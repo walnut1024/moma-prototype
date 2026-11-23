@@ -85,7 +85,7 @@ async function lifecycleCheck(db, row) {
   const marketLinked = Boolean(card ? shown || card.linked?.some(id => ids.includes(id)) : offer);
   const marketListed = Boolean(card ? card.status === 'listed' && shown : offers.results.some(item => item.listed));
   return { marketLinked, marketListed, offerId: offer?.record_id,
-    stopIssue: marketListed ? '请先在模型广场下架关联模型' : '',
+    stopIssue: marketListed ? '请先在模型广场取消展示该服务' : '',
     deleteIssue: row.listed ? '请先停止模型服务'
       : marketLinked ? '请先解除模型广场关联' : row.grants?.length ? '请先移除租户授权' : '' };
 }
@@ -245,7 +245,7 @@ export async function changeNewModelService(db, actor, command, key) {
     ]);
   } catch (error) {
     if (String(error).includes('session_invalid')) fail(401, 'SESSION_EXPIRED', '会话已失效');
-    if (String(error).includes('new_model_services.call_id')) fail(409, 'DUPLICATE_CALL_ID', '模型调用标识已存在');
+    if (String(error).includes('new_model_services.call_id')) fail(409, 'DUPLICATE_CALL_ID', '模型 ID已存在');
     if (/commit_conflict|UNIQUE constraint/.test(String(error))) {
       const result = await replay();
       if (result) return result;

@@ -3,8 +3,8 @@ import { isResourceId, resourceId } from './resource-id.mjs';
 import { modelLibrary, modelMaterial } from './admin-v2/model-library.js';
 import { MODEL_TYPES } from './admin-v2/model-management.js';
 import { INPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, modelProfileDraft, normalizeModelLogo } from './admin-v2/model-profile.js';
-import { modelIdentity, modelPresentation, modelServiceIdentity } from './model-identities.mjs';
-import { activeCustomer, offerGrayTenants, offerKey, offerStage, providerOffer, salesPaused, serviceCallsEnabled, serviceReferences } from './service-access.mjs';
+import { modelIdentity, modelPresentation } from './model-identities.mjs';
+import { activeCustomer, offerGrayTenants, offerKey, offerStage, providerOffer, serviceCallsEnabled, serviceReferences } from './service-access.mjs';
 
 export const marketCardStatuses = { withdrawn: '不可见', preview: '预告可见', gray: '灰度可见', formal: '全部可见' };
 export const marketCardFeatures = { online_experience: '在线体验', smart_routing: '智能路由', supports_agent: '支持Agent', supports_mcp: '支持MCP', file_upload: '上传文件' };
@@ -14,8 +14,6 @@ export function marketCardStatus(card) {
   if (card.status === 'draft') return 'withdrawn';
   return card.status === 'listed' ? card.scope.type === 'selected' ? 'gray' : 'formal' : card.status;
 }
-
-export const marketCardStopsSales = card => Boolean(card && card.status !== 'listed');
 
 export function marketCardFieldValues(model) {
   const profile = modelProfileDraft(model);
@@ -34,7 +32,7 @@ export function marketCardFieldError(data) {
   const filled = (key, max) => typeof data[key] === 'string' && data[key].trim() && data[key].length <= max;
   const selected = (values, choices) => Array.isArray(values) && values.length > 0 && values.every(value => choices.includes(value));
   const checks = [
-    [filled('name', 100), '请填写模型展示名（最多 100 字）'],
+    [filled('name', 100), '请填写模型展示名称（最多 100 字）'],
     [data.heat == null || data.heat === '' || Number.isFinite(data.heat) && data.heat >= 0, '热度须为非负数'],
     [filled('description', 5000), '请填写模型中文简介（最多 5000 字）'],
     [filled('description_en', 5000), '请填写模型英文简介（最多 5000 字）'],
@@ -151,7 +149,7 @@ function checkedMarketScope(state, input) {
   const tenants = new Set(marketScopeOptions(state).map(row => row.value));
   const ids = input?.tenantIds;
   if (!Array.isArray(ids) || !ids.length || ids.length > 100 || new Set(ids).size !== ids.length ||
-    ids.some(id => !tenants.has(id))) throw Error('请选择有效的可见租户（最多 100 个）');
+    ids.some(id => !tenants.has(id))) throw Error('请选择有效的可见范围（最多 100 个租户）');
   return { ...emptyScope, type: 'selected', tenantIds: ids };
 }
 
@@ -189,33 +187,11 @@ export function marketCardCatalogueEntry(card, modelId, canonicalSlug, audience,
 export function marketCardIssues(card, services) {
   const available = new Set(services.filter(row => row.started).map(row => row.id));
   return [
-    !card.content?.name?.trim() || !card.content?.description?.trim() ? '请补齐模型展示名和简介' : '',
+    !card.content?.name?.trim() || !card.content?.description?.trim() ? '请补齐模型展示名称和简介' : '',
     !card.shown.length || card.shown.some(id => !card.linked.includes(id) || !available.has(id))
       ? '请至少选择一个已启动的关联服务' : '',
-    card.scope.type === 'selected' && !countScope(card.scope) ? '请至少选择一个可见租户' : '',
+    card.scope.type === 'selected' && !countScope(card.scope) ? '请至少选择一个租户' : '',
   ].filter(Boolean);
-}
-
-export function marketCardBlocksServiceSales(state, model, key) {
-  const serviceId = modelServiceIdentity(state, model, key);
-  const card = marketCardsByModel(state.modelData?.marketCards).get(modelIdentity(state, model).id);
-  return marketCardStopsSales(card) && card.linked.includes(serviceId);
-}
-
-function pauseLinkedSales(state, card) {
-  const paused = new Map();
-  for (const service of serviceReferences(state)) {
-    const { model } = service, key = offerKey(service);
-    const entry = providerOffer(model, key);
-    if (!card.linked.includes(service.model_service_id) || !['gray', 'formal'].includes(offerStage(model, entry)) || salesPaused(model, key)) continue;
-    if (!paused.has(model.id)) paused.set(model.id, { model, keys: new Set() });
-    paused.get(model.id).keys.add(key);
-  }
-  return [...paused.values()].map(({ model, keys }) => ({
-    type: 'update', collection: 'models', id: model.id, changes: !keys.has('')
-      ? { serviceProviders: model.serviceProviders.map(row => keys.has(offerKey(row)) && row.status !== '已移除' ? { ...row, salesPaused: true } : row) }
-      : { salesPaused: true },
-  }));
 }
 
 export function marketCardTransaction(state, action, orderedModels) {
@@ -280,7 +256,5 @@ export function marketCardTransaction(state, action, orderedModels) {
       label = '设置模型卡片可见性';
     }
   }
-  const changes = ['marketCardSetStatus', 'marketCardLink'].includes(operation) && marketCardStopsSales(card)
-    ? pauseLinkedSales(state, card) : [];
-  return { type: 'batch', label, objectId: cardId, changes, marketCard: { cardId, card } };
+  return { type: 'batch', label, objectId: cardId, changes: [], marketCard: { cardId, card } };
 }

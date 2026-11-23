@@ -64,7 +64,7 @@ test('preset interfaces retain explicit root-address confirmation before staging
   const state=initial(), {endpoint}=context(state);
   Object.assign(endpoint,{interfaceType:'openai',addressMode:'base',baseUrl:'https://root.example.invalid/v1',taskUrls:{}});
   const before=structuredClone(state);
-  assert.throws(()=>run(state,{baseUrl:'https://changed-root.example.invalid/v1/chat/completions'}),/确认.*根地址/);
+  assert.throws(()=>run(state,{baseUrl:'https://changed-root.example.invalid/v1/chat/completions'}),/确认.*服务地址/);
   assert.deepEqual(state,before);
   const next=run(state,{baseUrl:'https://changed-root.example.invalid/v1'});
   assert.equal(next.endpoints.find(row=>row.id===endpoint.id).candidateConfiguration.config.baseUrl,'https://changed-root.example.invalid/v1');

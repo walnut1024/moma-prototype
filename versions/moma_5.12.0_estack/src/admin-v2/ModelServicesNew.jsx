@@ -84,7 +84,7 @@ function BatchChannelFields({ candidates, linked, values, change }) {
         onChange: ids => change({ ids: ids.filter(id => models.some(row => row.id === id && !reason(row))) }) }}
       columns={[
         { title: '连接', render: (_, row) => row.simulated ? row.name : row.endpoint.name },
-        { title: '上游模型调用标识', dataIndex: 'upstreamModelId' },
+        { title: '上游模型 ID', dataIndex: 'upstreamModelId' },
         { title: '状态', render: (_, row) => reason(row) || '可添加' },
       ]}/>
     <Text type="secondary">已选 {values.ids.length} 个上游模型。添加后组内权重合计为 100。</Text>
@@ -126,7 +126,7 @@ function changedChannelSettings(saved, current) {
   try {
     const previous = JSON.parse(saved);
     const next = JSON.parse(sourceFingerprint(current));
-    const labels = ['关联模型', '上游模型调用标识', '连接配置', '接口地址'];
+    const labels = ['关联模型', '上游模型 ID', '连接配置', '接口格式或地址'];
     return labels.filter((_, index) => JSON.stringify(previous[index]) !== JSON.stringify(next[index])).join('、') || '接入配置';
   } catch {
     return '接入配置';
@@ -184,6 +184,7 @@ function serviceEndpoints(service, model, sources) {
 }
 
 function BasicInformation({ service, model, sources }) {
+  const t = useChannelText();
   const fields = service.modelDetails;
   const { supported, endpoints } = serviceEndpoints(service, model, sources);
   const endpointList = endpoints.length ? <Space wrap>
@@ -198,7 +199,7 @@ function BasicInformation({ service, model, sources }) {
     ['服务地址', window.location.origin + API_PREFIX],
     [endpointLabel, endpointList],
     ['模型编码', fields.code && <CopyId label="模型编码" value={fields.code}/>],
-    ['服务状态', <AdminStatus value={serviceStatus(service)}/>],
+    ['服务状态', <AdminStatus value={serviceStatus(service)} label={t(serviceStatus(service))}/>],
     ['标签', service.tags],
     ['备注', service.note],
     ['服务描述', service.description],
@@ -221,15 +222,15 @@ function ChannelModels({ service, rows, canEdit, open }) {
     ? rows.filter(row => shares.has(row.id)).map(row => row.name + ' ' + shareFormat.format(shares.get(row.id)))
     : preferredServiceChannels(rows, tokens).map(row => row.name));
   const filtered = rows.filter(row => searchMatches(input, row.provider, row.name, row.upstreamId)
-    && (status === 'all' || status === (row.reason ? 'unavailable' : row.enabled ? 'enabled' : 'disabled')));
+    && (status === 'all' || status === (row.enabled ? 'enabled' : 'disabled')));
   const priorities = groupPriorities(service);
   const matchingGroups = Map.groupBy(filtered, row => row.priority);
   const visibleGroups = !input.trim() && status === 'all' ? priorities : priorities.filter(priority => matchingGroups.has(priority));
   const columns = [
     { title: t('上游模型 / 服务商'), width: 148, render: (_, row) => <div className="new-service-cell"><Text strong>{row.name}</Text><Text type="tertiary">{row.provider}</Text></div> },
-    { title: '上游模型调用标识', width: 220, render: (_, row) => <CopyId label="上游模型调用标识" value={row.upstreamId}/> },
+    { title: '上游模型 ID', width: 220, render: (_, row) => <CopyId label="上游模型 ID" value={row.upstreamId}/> },
     { title: '模型类型', width: 96, render: () => <Tag color="blue">{typeLabel(service.type)}</Tag> },
-    { title: t('上游模型状态'), width: 132, render: (_, row) => <div className="new-service-cell"><AdminStatus value={row.reason ? '不可用' : row.enabled ? '已启用' : '已停用'}/>{row.reason && <Text type="tertiary">{row.reason}</Text>}</div> },
+    { title: t('关联上游模型状态'), width: 132, render: (_, row) => <div className="new-service-cell"><AdminStatus value={row.enabled ? '已启用' : '已停用'}/>{row.reason && <Text type="tertiary">{row.reason}</Text>}</div> },
     routingNumberColumn('权重', 'weight', 80, weightHelp, !weighted),
     { title: '操作', fixed: 'right', width: 160, render: (_, row) => <Space className="new-service-channel-actions" spacing={4}>
       {row.needsReview && <Button size="small" theme="borderless" disabled={!canEdit} onClick={() => open('channel', row)}>核对连接配置</Button>}
@@ -241,11 +242,11 @@ function ChannelModels({ service, rows, canEdit, open }) {
   return <>
     <div className="new-service-routing-summary">
       <Space wrap><Text>路由策略</Text><Text strong>{ROUTING_STRATEGIES[strategy].label}</Text><Tag>继承全局</Tag></Space>
-      <Space wrap><Text>请求模型 ID（model）</Text><CopyId label={MODEL_ID_LABEL} value={service.callId}/></Space>
+      <Space wrap><Text>模型 ID</Text><CopyId label={MODEL_ID_LABEL} value={service.callId}/></Space>
     </div>
     <div className="new-service-toolbar">
       <div className="new-service-filters">
-        <Choice label={t('上游模型状态')} options={[['all', '全部状态'], ['enabled', '已启用'], ['disabled', '已停用'], ['unavailable', '不可用']]} value={status} onChange={setStatus}/>
+        <Choice label={t('关联上游模型状态')} options={[['all', '全部状态'], ['enabled', '已启用'], ['disabled', '已停用']]} value={status} onChange={setStatus}/>
         <Input className="new-service-search" prefix={<IconSearch aria-hidden="true"/>} value={input} onChange={setInput}
           showClear aria-label={t('搜索上游模型')} placeholder={t('搜索连接或模型')}/>
       </div>
@@ -290,7 +291,7 @@ function ServiceModelDetails({ values, change }) {
   return <Collapse>
     <AdminCollapsePanel itemKey="model-fields" header="模型资料字段">
       <div className="new-service-fields">
-        {[['name', '模型资料名称'], ['author', '模型作者'], ['family', '模型系列'], ['version', '模型版本']].map(([key, label]) =>
+        {[['name', '模型展示名称'], ['author', '模型作者'], ['family', '模型系列'], ['version', '模型版本']].map(([key, label]) =>
           <Field key={key} label={label}><Input aria-label={label} value={details[key]} maxLength={100} onChange={value => update(key, value)}/></Field>)}
         {[
           ['inputModalities', '输入模态', INPUT_MODALITY_OPTIONS], ['outputModalities', '输出模态', OUTPUT_MODALITY_OPTIONS],
@@ -569,11 +570,11 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
       return type ? <Tooltip content={type[1]}><Tag color="blue" tabIndex={0} aria-label={type.join('，')}>{type[0]}</Tag></Tooltip> : '—';
     } },
     { title: <TableFieldHelp name="服务状态" description="服务状态用于控制模型服务是否可在模型广场、项目授权和调用链路中使用。"/>,
-      width: 110, render: (_, row) => <AdminStatus value={serviceStatus(row)}/> },
+      width: 110, render: (_, row) => <AdminStatus value={serviceStatus(row)} label={t(serviceStatus(row))}/> },
     { title: '创建人/时间', width: 155, render: (_, row) => <div className="new-service-cell"><Text>{row.createdBy}</Text><Text type="tertiary">{displayTime(row.createdAt)}</Text></div> },
     { title: '备注', dataIndex: 'note', width: 100, ellipsis: true, render: value => value || '—' },
     { title: '操作', width: 164, fixed: 'right', render: (_, row) => <Space spacing={2}>
-      <Button theme="borderless" size="small" disabled={!canEdit} onClick={() => open(row.listed ? 'unlist' : 'list', { target: row.id })}>{row.listed ? '停止' : '启用'}</Button>
+      <Button theme="borderless" size="small" disabled={!canEdit} onClick={() => open(row.listed ? 'unlist' : 'list', { target: row.id })}>{t(row.listed ? '停止服务' : '启动服务')}</Button>
       <Button theme="borderless" size="small" disabled={!canEdit} onClick={() => open('edit', { name: row.name, target: row.id })}>编辑</Button>
       <Button theme="borderless" type="danger" size="small" disabled={!canEdit || row.listed} onClick={() => open('remove', { target: row.id })}>删除</Button>
     </Space> },
@@ -589,7 +590,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
   const checkIssue = kind === 'unlist' ? dialog?.check?.stopIssue : dialog?.check?.deleteIssue;
   const checkBlocked = requiresCheck && (!dialog.check || dialog.check.revision !== target?.revision || Boolean(checkIssue));
   const titles = {
-    import: '导入浏览器记录', create: '添加模型服务', edit: '编辑模型服务名称', editDetails: '编辑信息', list: '启用模型服务', unlist: '停止模型服务',
+    import: '导入浏览器记录', create: '添加模型服务', edit: '编辑模型服务名称', editDetails: '编辑信息', list: '启动服务', unlist: '停止服务',
     channel: '核对连接配置', newGroup: '新增优先级组', addChannels: '添加关联上游模型至优先级 ' + values?.priority, startChannel: '启用上游模型', stopChannel: '停用上游模型',
     removeChannel: '移除上游模型', weights: '配置优先级与权重', remove: '删除模型服务', failover: '配置故障转移策略',
   };
@@ -657,7 +658,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
       maskClosable={false} footer={<>
         <Button disabled={saving} onClick={() => dirty ? setEditState(current => ({ ...current, discard: true })) : close()}>取消</Button>
         <Button theme="solid" disabled={!canEdit || dialog.discard || checkBlocked || ((kind === 'weights' || kind === 'newGroup') && !Number.isSafeInteger(values.priority)) || (kind === 'addChannels' && !values.ids.length) || (kind === 'weights' && (!dirty || editingGroup.length > 0 && weighted && !weightsValid))} loading={saving} form={formId} htmlType="submit">{
-          kind === 'import' ? '确认导入' : kind === 'create' ? '创建模型服务' : kind === 'list' ? '确认启用' : kind === 'unlist' ? '确认停止'
+          kind === 'import' ? '确认导入' : kind === 'create' ? '创建模型服务' : kind === 'list' ? '确认启动' : kind === 'unlist' ? '确认停服'
             : kind === 'remove' ? '确认删除' : kind === 'channel' && values.id ? '确认更新关联' : '保存'
         }</Button>
       </>}>
@@ -699,7 +700,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
           <Descriptions data={[
             { key: '变更项', value: changedChannelSettings(values.fingerprint, reviewSource) },
             { key: '服务商', value: reviewSource.provider.name },
-            { key: '上游模型调用标识', value: reviewSource.upstreamModelId === values.upstreamId ? values.upstreamId : values.upstreamId + ' → ' + reviewSource.upstreamModelId },
+            { key: '上游模型 ID', value: reviewSource.upstreamModelId === values.upstreamId ? values.upstreamId : values.upstreamId + ' → ' + reviewSource.upstreamModelId },
             { key: '模型连接', value: reviewSource.endpoint.name },
           ]}/>
         </>}
@@ -715,7 +716,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
         {requiresCheck && dialog.checking && <Text role="status">正在检查模型广场关联…</Text>}
         {requiresCheck && dialog.check && <div role="status" className="new-service-cell">
           <Text>{dialog.check.marketLinked
-            ? dialog.check.marketListed ? '已关联模型广场，关联模型已上架' : '已关联模型广场，关联模型未上架'
+            ? dialog.check.marketListed ? '已关联模型卡片，正在展示该服务' : '已关联模型卡片，未展示该服务'
             : '未关联模型广场'}</Text>
           {checkIssue ? <Notice error>{checkIssue}</Notice>
             : dialog.check.revision === target?.revision ? <Text>检查通过</Text> : <Notice error>其他页面已更新模型服务，请载入最新配置</Notice>}

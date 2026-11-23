@@ -22,9 +22,9 @@ import {
 } from './call-observations.mjs';
 
 const { Title, Text, Paragraph } = Typography;
-const grouping = [['callId', '模型调用标识'], ['tenant', '客户'], ['project', '项目'], ['provider', '最终服务商'], ['channel', '最终连接']];
+const grouping = [['callId', '模型 ID'], ['tenant', '租户'], ['project', '项目'], ['provider', '最终服务商'], ['channel', '最终连接']];
 const labels = new Map(grouping);
-const selectors = [['model', '模型'], ['tenant', '客户'], ['project', '项目'], ['callId', '模型调用标识'], ['purpose', '调用类型']];
+const selectors = [['model', '模型'], ['tenant', '租户'], ['project', '项目'], ['callId', '模型 ID'], ['purpose', '调用类型']];
 const customerPurpose = ['customer'];
 const latencyChoices = [['p95', 'P95 总耗时'], ['ttft', 'P95 首 Token 时延']];
 const countChoices = [['count', '请求数'], ['tokens', '输入 Token']];
@@ -151,7 +151,7 @@ export default function CallAnalysisPage({ state }) {
         </FilterToolbar>
         <ObservationFilterLayout primary={<>
           <ObservationPick dimension="model" label="模型" rows={modelRows} filters={filters} onChange={changeModel}/>
-          <ObservationPick dimension="tenant" label="客户" rows={requests} filters={filters} onChange={changeTenant}/>
+          <ObservationPick dimension="tenant" label="租户" rows={requests} filters={filters} onChange={changeTenant}/>
           <ObservationPick dimension="project" label="项目" rows={projectRows} filters={filters} onChange={change}/>
         </>} actions={<SavedFilterViews notify={Toast} scope="admin-call-analysis" legacyKey="moma-admin2-5120-analytics-views" showCurrent={false}
           disabled={!window} groups={viewGroups} value={{ period: filters.period, filters, granularity, groupBy }} onApply={applyView}/>}>
@@ -161,7 +161,7 @@ export default function CallAnalysisPage({ state }) {
           <ObservationFilterGroup label="模型与连接">
             <Choice size="small" label="模型类型" value={filters.type || 'all'} options={modelTypes.map(([id, label]) => [id || 'all', label])}
               onChange={value => change({ type: value === 'all' ? '' : value, callId: null, model: null })}/>
-            <ObservationPick dimension="callId" label="模型调用标识" rows={callRows} filters={filters} onChange={change}/>
+            <ObservationPick dimension="callId" label="模型 ID" rows={callRows} filters={filters} onChange={change}/>
             <ObservationSupplyPick {...supply} onChange={change}/>
           </ObservationFilterGroup>
         </ObservationFilterLayout>

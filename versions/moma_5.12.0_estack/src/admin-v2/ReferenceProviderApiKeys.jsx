@@ -57,10 +57,10 @@ function KeyEditor({ provider, record, ops, close }) {
     title={adding ? '添加 API 密钥' : '替换 API 密钥'} description={description}
     cancel={() => !saving && ops.proceed(close)} submit={save} action={saving ? '保存中…' : '保存'}
     disabled={disabled || !value.trim() || Boolean(limitError)}>
-    <Field label={adding ? '服务商 API 密钥' : '新 API 密钥'} required error={limitError}
+    <Field label={adding ? '上游 API 密钥' : '新 API 密钥'} required error={limitError}
       hint={adding ? '每行一把密钥，支持粘贴多行。保存后仅展示脱敏值。' : undefined}>
       {adding
-        ? <TextArea aria-label="服务商 API 密钥" rows={4} autoComplete="off" spellCheck={false}
+        ? <TextArea aria-label="上游 API 密钥" rows={4} autoComplete="off" spellCheck={false}
           autoFocus value={value} disabled={disabled || !limit} onChange={change}/>
         : <Input aria-label="新 API 密钥" mode="password" autoComplete="new-password" maxLength={512}
           autoFocus value={value} disabled={disabled} onChange={change}/>}

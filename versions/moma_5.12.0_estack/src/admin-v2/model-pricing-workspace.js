@@ -5,6 +5,7 @@ import { activeChannelProcurement } from './channel-change-management.js';
 import { serviceChannelCosts, activeModelSalePrice, activeProviderPrice } from './service-workspace.js';
 import { activeSupplyPrice, priceItems } from './model-management.js';
 import { routingServices } from './service-routing.js';
+import { servicePurpose } from './service-purpose.js';
 import { salesStatus } from './service-sales.js';
 
 export function costRecords(state, groups) {
@@ -23,9 +24,10 @@ export function costRecords(state, groups) {
   return [...rows.values()];
 }
 
-export const priceRecords = state => routingServices(state).filter(row => !row.model.archivedAt).map(service => {
+export const priceRecords = state => routingServices(state).filter(row =>
+  !row.model.archivedAt && servicePurpose(row.model, offerKey(row)) === 'commercial').map(service => {
   const supplierId=service.providerId || MOMA_PROVIDER.id;
-  return {...service,modelKey:JSON.stringify(['master',service.model.templateId || service.modelId]),modelName:modelPresentation(state,service.model).name,canonical_slug:modelIdentity(state,service.model).canonical_slug,model_service_id:modelServiceIdentity(state,service.model,offerKey(service)),supplierId,supplierName:state.providers.find(row=>row.id===supplierId)?.name || (service.providerId ? service.name : MOMA_PROVIDER.name),offerName:service.providerId?service.name:(state.providers.find(row=>row.id===supplierId)?.name || MOMA_PROVIDER.name),status:salesStatus(state,service.model,offerKey(service)),price:service.providerId ? activeProviderPrice(state,service.modelId,offerKey(service)) : activeModelSalePrice(state,service.modelId)};
+  return {...service,modelKey:JSON.stringify(['master',service.model.templateId || service.modelId]),modelName:modelPresentation(state,service.model).name,canonical_slug:modelIdentity(state,service.model).canonical_slug,model_service_id:modelServiceIdentity(state,service.model,offerKey(service)),supplierId,supplierName:state.providers.find(row=>row.id===supplierId)?.name || (service.providerId ? service.name : MOMA_PROVIDER.name),offerName:service.providerId?service.name:(state.providers.find(row=>row.id===supplierId)?.name || MOMA_PROVIDER.name),status:salesStatus(service.model,offerKey(service)),price:service.providerId ? activeProviderPrice(state,service.modelId,offerKey(service)) : activeModelSalePrice(state,service.modelId)};
 });
 
 export function filterPricingRecords(records,params) {

@@ -69,15 +69,15 @@ export function adminBreadcrumbs(active, params, names = {}) {
     if (params.has('deployment')) add(names.deployment || '部署不存在', view === 'edit' ? href(active, { view: null, tab: 'overview' }) : null);
     if (view === 'create' || view === 'edit') add(view === 'edit' ? '更新部署配置' : '部署模型');
   } else if (active === 'customer-analysis-detail') {
-    add('客户数据', href('customer-analysis', {}, ['customer', 'source']));
-    add('客户详情');
+    add('租户数据', href('customer-analysis', {}, ['customer', 'source']));
+    add('租户详情');
   } else if (active === 'customer-usage-detail') {
     if (names.internal) {
       add('租户管理', '#/admin-2/tenants');
     } else {
       add('用户数据', href('user-analysis', {}, ['customer']));
     }
-    add(names.customer || '客户不存在');
+    add(names.customer || '租户不存在');
   } else if (['projects','organization-members'].includes(active)) {
     add('租户管理', '#/admin-2/tenants');
     add(page.label);

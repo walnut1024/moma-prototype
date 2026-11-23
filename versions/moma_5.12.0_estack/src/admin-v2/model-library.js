@@ -1,6 +1,10 @@
 import catalogue from '../data/builtin-model-catalogue.json' with { type: 'json' };
 import { MODEL_TYPE_LABELS } from '../model-types.mjs';
 export const MODEL_CATALOGUE_TYPES = MODEL_TYPE_LABELS;
+export function requireModelSlug(value) {
+  if (!/^[a-z0-9][a-z0-9.-]{0,79}$/.test(value || '')) throw new Error('模型编码须以小写字母或数字开头，仅可使用小写字母、数字、点和中划线，最多 80 字符');
+}
+
 export function libraryRecord(state, id) {
   const record = state.models.find(item => item.id === id) || state.modelTemplates.find(item => item.id === id);
   if (record?.templateId) return state.modelTemplates.find(item => item.id === record.templateId) || state.models.find(item => item.id === record.templateId);

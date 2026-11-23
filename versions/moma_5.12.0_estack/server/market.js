@@ -26,9 +26,6 @@ const activeStages = ['gray', 'formal'];
 const selectOffers = `
   SELECT o.record_id,o.id AS call_id,o.listing_stage,o.gray_tenants_json,o.market_visible,
          o.calls_enabled,${stoppedOfferSql} AS stopped,s.id AS service_id,s.record_json AS service_json,m.id AS material_id,m.record_json AS material_json,
-         EXISTS (SELECT 1 FROM model_workspace w, json_each(w.meta_json,'$.modelData.marketCards') card,
-           json_each(card.value,'$.linked') linked WHERE w.id=1 AND linked.value=o.record_id
-           AND json_extract(card.value,'$.status') IN ('draft','withdrawn','preview')) AS card_stops_sales,
          o.supplier_id AS provider_id,p.name AS provider_name,COALESCE(json_extract(cm.mapping_json,'$.sourceName'),c.name) AS source_name,
          (o.channel_model_id IS NULL OR (p.enabled=1 AND p.deleted_at IS NULL AND cm.enabled=1 AND cm.removed_at IS NULL
            AND c.deleted_at IS NULL AND COALESCE(json_extract(c.record_json,'$.frozen'),0)=0
@@ -54,7 +51,7 @@ function marketOffer(row, tenant, at = Date.now()) {
   const released=accessible && activeStages.includes(row.listing_stage) && !model.archivedAt &&
     (row.listing_stage!=='gray' || tenant && JSON.parse(row.gray_tenants_json).includes(tenant.id));
   const key = offerKey(model.serviceProviders?.find(entry => entry.callId === row.call_id));
-  return { model, price, supplyIds, released, allowed, key, paused:Boolean(row.card_stops_sales) || salesPaused(model,key),
+  return { model, price, supplyIds, released, allowed, key, paused:salesPaused(model,key),
     ready: Boolean(model.visibility==='公开' && model.callsEnabled && row.calls_enabled && row.source_ready && supplyIds.length && row.active_publication_id && price) };
 }
 

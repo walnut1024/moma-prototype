@@ -26,7 +26,7 @@ import {
 const { Title, Text } = Typography;
 const emptyCatalogue = [];
 const customerPurpose = ['customer'];
-const filtersShown = [['endpoint', '端点'], ['callId', '模型调用标识']];
+const filtersShown = [['endpoint', '端点'], ['callId', '模型 ID']];
 const capacityOptions = [['Rpm', 'RPM'], ['Tpm', 'TPM']];
 const metricLabels = { failed: '全部失败', rateLimit: '上游 429', timeout: '超时', fallback: '回退', ttft: '已采集首 Token', otps: '已采集输出速率' };
 const pct = value => value == null ? '—' : fmt(value) + '%';
@@ -210,7 +210,7 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
     if (!simulation) updateObservationRoute('#/admin-2/' + pageId);
   };
   const requestFilters = <>
-    <ObservationPick dimension="tenant" label="客户" rows={attempts} filters={filters}
+    <ObservationPick dimension="tenant" label="租户" rows={attempts} filters={filters}
       onChange={({ tenant }) => change(changeObservationTenant(attempts, filters, tenant))}/>
     <ObservationPick dimension="project" label="项目" rows={projectRows} filters={filters} onChange={change}/>
     <ObservationPick dimension="purpose" label="调用类型" rows={attempts} filters={filters} onChange={change}/>
@@ -229,8 +229,8 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
       {healthPage && <>
         <Choice label={t('状态')} size="small" value={statusFilter}
           options={['', '已启用', '已停用'].map(value => [value, t(value || '全部状态')])} onChange={setStatusFilter}/>
-        <Choice label={t('健康状态')} size="small" value={healthFilter}
-          options={['', '异常', '健康', '样本不足', '暂无观测'].map(value => [value, t(value || '全部健康状态')])} onChange={setHealthFilter}/>
+        <Choice label={t('健康度')} size="small" value={healthFilter}
+          options={['', '异常', '健康', '样本不足', '暂无观测'].map(value => [value, t(value || '全部健康度')])} onChange={setHealthFilter}/>
       </>}
     </>}>
       <ObservationFilterGroup label={healthPage ? t('请求范围') : '模型与连接'}>

@@ -58,8 +58,8 @@ test('candidate uses canonical and upstream IDs separately and only explicit pub
 });
 
 test('missing tenant authorization, mismatched master and incomparable quote do not produce a candidate', () => {
-  let env = fixture(); env.selection.tenantIds = []; assert.throws(env.plan, /客户范围/);
-  env = fixture(); env.provider.catalogModels[0].libraryId = 'missing'; assert.throws(env.plan, /主档关联/);
+  let env = fixture(); env.selection.tenantIds = []; assert.throws(env.plan, /租户范围/);
+  env = fixture(); env.provider.catalogModels[0].libraryId = 'missing'; assert.throws(env.plan, /模型资料关联/);
   env = fixture(); env.state.modelSalePrices[0].items[0].currency = 'USD'; env.state.modelSalePrices[0].items[1].currency = 'USD'; assert.throws(env.plan, /不可比/);
   env = fixture(); env.association.procurementVersions.push({ ...env.association.procurementVersions[0], id: 'cost-expired-latest', version: 2, effectiveAt: '2026-10-31T00:00:00Z', expiresAt: '2026-10-31T01:00:00Z' }); assert.throws(env.plan, /先发布价格/);
 });
@@ -72,7 +72,7 @@ test('explicit supply references and shared template copies resolve the same can
   env.state.models.unshift(canonical); env.state.modelTemplates.push({ ...canonical, id: 'template-reference' }); env.provider.catalogModels[0].libraryId = 'template-reference';
   assert.equal(env.plan().candidate.bindings[0].model.id, 'template-reference');
   delete env.model.templateId;
-  assert.throws(env.plan, /主档关联与当前服务模型不一致/);
+  assert.throws(env.plan, /模型资料关联与当前服务模型不一致/);
 });
 
 test('unified candidates reject fixed and priority strategies before creating a platform candidate', () => {

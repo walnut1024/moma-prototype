@@ -6,7 +6,7 @@ const platformEndpoints = [
   { protocol: 'OpenAI Chat', method: 'POST', path: '/api/v1/chat/completions', modelTypes: ['text', 'multimodal'] },
 ];
 
-export const callStateLabel = started => started ? '已启动' : '已停止';
+export const callStateLabel = started => started ? '服务中' : '已停服';
 export const matchesCallStatus = (status, started) => status !== 'started' && status !== 'stopped' || started === (status === 'started');
 
 export function serviceReferenceStarted(model, service) {

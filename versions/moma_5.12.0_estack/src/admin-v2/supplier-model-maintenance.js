@@ -99,7 +99,7 @@ export function supplierModelMaintenance(state, { operation, objectId, data = {}
   if (data.expectedRevision !== (current.listPriceRevision || 0)) throw new Error('刊例价已变化，请重新载入');
   const versions = current.listPriceVersions || [], revision = (current.listPriceRevision || 0) + 1;
   if (operation === 'supplierListPricePublish') {
-    if (data.confirmed !== true) throw new Error('请确认发布刊例价，采购价和客户售价保持不变');
+    if (data.confirmed !== true) throw new Error('请确认发布刊例价，采购价和租户售价保持不变');
     const price = supplierListPriceDraft(data, data.modelId);
     if (price.expiresAt && Date.parse(price.expiresAt) <= Date.now()) throw new Error('刊例价已经到期，不能发布');
     const next = { ...price, id: resourceId('list-price-version'), version: revision, status: '已发布', publishedAt: new Date().toISOString(), createdAt: new Date().toISOString(), operator: state.currentRole };

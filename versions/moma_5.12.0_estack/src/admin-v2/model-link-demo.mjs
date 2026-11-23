@@ -35,14 +35,14 @@ export const services = [
       { channel: 'E', model: 'vendor-e/glm-5.3', enabled: true, priority: 0, weight: 100 }
     ] },
   { id: 'kimi', name: 'Kimi K3', callId: 'kimi-k3', enabled: true, protocols: ['chat'],
-    policy: '最低延迟', detail: '从可用上游模型中择优',
+    policy: '低延迟优先', detail: '从可用上游模型中择优',
     routes: [
       { channel: 'A', model: 'vendor-a/kimi-k3', enabled: true, priority: 0, weight: 100 },
       { channel: 'B', model: 'vendor-b/kimi-k3', enabled: false, priority: 0, weight: 50 },
       { channel: 'C', model: 'vendor-c/kimi-k3', enabled: true, priority: 1, weight: 100 }
     ] },
   { id: 'r1', name: 'DeepSeek R1', callId: 'deepseek-r1', enabled: false, protocols: ['messages'],
-    policy: '最低 TPM', detail: '已配置 · 服务已停止',
+    policy: '按用量分流', detail: '已配置 · 服务已停服',
     routes: [{ channel: 'A', model: 'vendor-a/deepseek-r1', enabled: true, priority: 0, weight: 100 }] },
   { id: 'embedding', name: 'BGE-M3', callId: 'text-embedding', type: '向量模型', enabled: true, protocols: ['embeddings'],
     policy: '加权随机', weighted: true, detail: '先选优先级，再按组内权重分流',
@@ -75,9 +75,9 @@ export function planDemoRequest(example) {
   walk(protocol, 'gateway', input.name + ' · POST ' + input.path);
   walk('gateway', service.id, '匹配模型服务 · ' + service.callId);
   if (!service.enabled) {
-    walk('gateway', service.id, service.name + ' 已停止', 'denied');
+    walk('gateway', service.id, service.name + ' 已停服', 'denied');
     walk(protocol, 'gateway', '返回拒绝响应', 'denied');
-    steps.push({ stage: 'done', message: '已返回拒绝响应 · 服务已停止' });
+    steps.push({ stage: 'done', message: '已返回拒绝响应 · 服务已停服' });
     return { steps, group: [], standby: [] };
   }
 

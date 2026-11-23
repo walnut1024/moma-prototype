@@ -30,15 +30,15 @@ export default function CommerceAnalysis({ state }) {
       <Descriptions data={[
         { key: '账单应收', value: money(sum(rows.map(row => row.billed))) },
         { key: '账单实收', value: money(sum(rows.map(row => row.paid))) },
-        { key: '账单客户数', value: byCustomer.size },
+        { key: '账单租户数', value: byCustomer.size },
       ]}/>
     </Card>
     {activePeriods.length > 0 && <Card title="月度账单"><TimeSeriesChart labels={activePeriods}
       series={[{ label: '应收金额', values: activePeriods.map(month => sum(byMonth.get(month).map(bill => bill.amount))) }]}
       label="月度账单" unit="元" type="bar"/></Card>}
-    <Card title="客户账单排行">
+    <Card title="租户账单排行">
       <Table size="small" rowKey="id" dataSource={rows} pagination={false} empty="暂无账单"
-        columns={[{ title: '客户', dataIndex: 'name' }, { title: '应收金额', dataIndex: 'billed', render: money }, { title: '实收金额', dataIndex: 'paid', render: money }]}/>
+        columns={[{ title: '租户', dataIndex: 'name' }, { title: '应收金额', dataIndex: 'billed', render: money }, { title: '实收金额', dataIndex: 'paid', render: money }]}/>
     </Card>
   </div>;
 }

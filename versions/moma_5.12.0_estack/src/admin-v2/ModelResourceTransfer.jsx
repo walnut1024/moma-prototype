@@ -18,8 +18,8 @@ export function openResourceJson(ops, target, onView) {
 }
 
 const channelTypes = { provider: '服务商', provider_model: '模型登记', connection: '连接', channel: '上游模型' };
-const channelFields = { name: '名称', base_url: '上游 API 地址', protocol: '协议', interface_type: '接口类型',
-  upstream_model_id: '上游模型调用标识', capacity_limits: '容量限额', procurement: '采购成本', enabled: '启用状态' };
+const channelFields = { name: '名称', base_url: '服务地址', protocol: '协议', interface_type: '接口类型',
+  upstream_model_id: '上游模型 ID', capacity_limits: '容量限额', procurement: '服务商成本价', enabled: '启用状态' };
 const fieldValue = value => value == null || value === '' ? '—' : typeof value === 'string' ? value : JSON.stringify(value);
 
 export default function ModelResourceTransfer({ state, ops, scope, target: selectedTarget, onView, hideView = false, reviewFields = false }) {
@@ -97,15 +97,15 @@ export default function ModelResourceTransfer({ state, ops, scope, target: selec
           rows={18} spellCheck={false} placeholder="粘贴完整的模型运营维护 JSON" onChange={edit}/>
         {plan && <><Notice>{plan.value.rows.length} 行已校验，{plan.changes ? '存在待保存变更' : '与当前记录一致，无需保存'}。</Notice>
           <Table scroll={{ x: 900 }} rowKey={row => row.id ? resourceKey(row) : row.model_service_id + ':' + row.channel_id} pagination={{ pageSize: 10 }} dataSource={plan.value.rows} columns={[
-            { title: '对象', render: (_,row) => ({provider:'服务商',provider_model:'模型登记（只读）',connection:'连接',channel:'上游模型',model_service:'模型服务',market_model:'广场展示信息',market_service:'广场服务设置',sale_price:'服务售价'})[row.type] || '模型服务与上游模型关联', width: 150 },
+            { title: '对象', render: (_,row) => ({provider:'服务商',provider_model:'模型登记（只读）',connection:'连接',channel:'上游模型',model_service:'模型服务',market_model:'广场展示信息',market_service:'广场服务设置',sale_price:'模型刊例价'})[row.type] || '模型服务与上游模型关联', width: 150 },
             { title: '对象 ID／标识', render: (_,row) => row.id || row.model_service_id, width: 300 },
             { title: '模型编码', dataIndex: 'canonical_slug', width: 160 },
-            { title: scope === 'channels' ? '上游模型调用标识' : '模型调用标识', dataIndex: scope === 'channels' ? 'upstream_model_id' : 'call_id', width: 190 },
+            { title: scope === 'channels' ? '上游模型 ID' : '模型 ID', dataIndex: scope === 'channels' ? 'upstream_model_id' : 'call_id', width: 190 },
           ]}/>{plan.impacts.length > 0 && <>
             <Notice>共享连接变更将影响以下 {plan.impacts.length} 条上游模型记录，相关技术验证需重新完成。</Notice>
             <Table rowKey={resourceKey} pagination={{ pageSize: 10 }} dataSource={plan.impacts} scroll={{ x: 900 }} columns={[
               { title: '模型编码', dataIndex: 'canonical_slug', width: 180 }, { title: '上游模型记录 ID', dataIndex: 'id', width: 300 },
-              { title: '上游模型调用标识', dataIndex: 'upstream_model_id', width: 220 }, { title: 'Provider ID', dataIndex: 'provider_id', width: 280 },
+              { title: '上游模型 ID', dataIndex: 'upstream_model_id', width: 220 }, { title: 'Provider ID', dataIndex: 'provider_id', width: 280 },
             ]}/>
           </>}</>}
         </>}

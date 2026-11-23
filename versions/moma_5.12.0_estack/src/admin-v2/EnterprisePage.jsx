@@ -102,16 +102,16 @@ function EnterpriseEditor({ state, tenant, kind, deploymentMode, apply, close, c
   </>;
   const content = <>
     <form id={formId} className="admin-analytics-fields admin-enterprise-form" onSubmit={submit}
-      aria-label={edit ? '编辑政企客户信息' : addAdmin ? '添加企业管理员' : '开通政企客户'}>
+      aria-label={edit ? '编辑政企租户信息' : addAdmin ? '添加企业管理员' : '开通政企租户'}>
       {inline && <div className="admin-page-heading">
-        <div><Title heading={5} component="h2">编辑信息</Title><Text type="secondary">客户 ID：{tenant.id}</Text></div>
+        <div><Title heading={5} component="h2">编辑信息</Title><Text type="secondary">租户 ID：{tenant.id}</Text></div>
         <div className="admin-form-actions">{buttons}</div>
       </div>}
       {edit && <>
         <section className="admin-enterprise-form-section">
-          <Title heading={5} component="h3">客户信息</Title>
+          <Title heading={5} component="h3">租户信息</Title>
           <div className="admin-enterprise-fields">
-            <DropdownField label="客户类型" value={form.type} options={['政府', '企业'].map(value => ({ value, label: value }))}
+            <DropdownField label="租户类型" value={form.type} options={['政府', '企业'].map(value => ({ value, label: value }))}
               onChange={value => update('type', value)} disabled={!canWrite}/>
             {notes}
           </div>
@@ -223,7 +223,7 @@ function EnterpriseEditor({ state, tenant, kind, deploymentMode, apply, close, c
     </form>
     {discard && serviceOperationsUi.renderLeaveDialog({ cancel: () => { pendingLeave.current = null; setDiscard(false); }, discard: abandon })}
   </>;
-  return inline ? content : <EnterpriseDialog wide title={addAdmin ? '添加企业管理员' : '开通政企客户'} close={requestClose} closeOnEsc={!discard} footer={buttons}
+  return inline ? content : <EnterpriseDialog wide title={addAdmin ? '添加企业管理员' : '开通政企租户'} close={requestClose} closeOnEsc={!discard} footer={buttons}
     description={addAdmin ? `所属企业：${tenant.name}` : '建立政企主体，并开通首位企业管理员。'}>{content}</EnterpriseDialog>;
 }
 
@@ -273,7 +273,7 @@ export default function EnterprisePage({ state, transact, reload, conflict }) {
   const open = (item, tab = '') => navigate({ enterprise: item.id, tab, project: '', create: '' });
   const editing = editor?.kind === 'edit';
   const handover = result ? [
-    '【政企客户账号交接信息】', `企业：${result.tenant.name}`, `客户 ID：${result.tenant.id}`, `管理员：${result.user.name}`,
+    '【政企租户账号交接信息】', `企业：${result.tenant.name}`, `租户 ID：${result.tenant.id}`, `管理员：${result.user.name}`,
     `登录账号：${result.user.login}`, `手机号码：${result.user.phone || '未填写'}`,
     `账号初始化：${result.user.initialized ? '已完成' : '待设置密码'}`,
   ].join('\n') : '';
@@ -286,27 +286,27 @@ export default function EnterprisePage({ state, transact, reload, conflict }) {
       {tenant && <Space wrap>
         <EnterpriseStatus value={tenant.status} enterprise/>
         <Button type={tenant.status === '停用' ? 'primary' : 'danger'} disabled={!canWrite || editing} onClick={() => askToggle(tenant)}>
-          {tenant.status === '停用' ? '解冻客户' : '冻结客户'}
+          {tenant.status === '停用' ? '解冻租户' : '冻结租户'}
         </Button>
       </Space>}
       {!detailId && !internalSite && <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite}
         title={!canWrite ? '当前角色仅可查看' : undefined}
-        onClick={() => setEditor({ kind: 'create' })}>开通政企客户</Button>}
+        onClick={() => setEditor({ kind: 'create' })}>开通政企租户</Button>}
     </AdminPageHeading>
     {!canWrite && (!internalSite || state.storageError) && <Banner type="info" closeIcon={null} description={state.storageError ? '数据读取失败，请恢复数据后再操作。'
       : conflict ? '租户数据已更新，请载入最新版本后再操作。' : '当前角色仅可查看租户信息。'}/>}
     {!detailId ? <Card>
       <FilterToolbar className="admin-list-toolbar">
-        <Input className="admin-list-search" aria-label="搜索政企客户" prefix={<IconSearch aria-hidden="true"/>} showClear value={query}
-          placeholder="搜索客户名称或客户 ID" onChange={q => navigate({ q, page: '' }, true)}/>
-        <Choice label="客户状态" value={status || 'all'} options={[[ 'all', '全部状态' ], [ '正常', '已启用' ], [ '需关注', '需关注' ], [ '停用', '已冻结' ]]}
+        <Input className="admin-list-search" aria-label="搜索政企租户" prefix={<IconSearch aria-hidden="true"/>} showClear value={query}
+          placeholder="搜索租户名称或租户 ID" onChange={q => navigate({ q, page: '' }, true)}/>
+        <Choice label="租户状态" value={status || 'all'} options={[[ 'all', '全部状态' ], [ '正常', '已启用' ], [ '需关注', '需关注' ], [ '停用', '已冻结' ]]}
           onChange={value => navigate({ status: value === 'all' ? '' : value, page: '' }, true)}/>
         <Choice label="数据来源" value={source || 'all'} options={accountDataSourceOptions}
           onChange={value => navigate({ source: value === 'all' ? '' : value, page: '' }, true)}/>
         <FilterReset onClick={() => navigate({ q: '', status: '', source: '', page: '' }, true)}/>
       </FilterToolbar>
       <EnterpriseTable minWidth={1050} columns={[
-        { title: '客户名称 / 客户 ID', width: 275 }, { title:'客户类型',width:95 }, { title:'部署方式',width:95 }, { title:'企业管理员', width: 175 },
+        { title: '租户名称 / 租户 ID', width: 275 }, { title:'租户类型',width:95 }, { title:'部署方式',width:95 }, { title:'企业管理员', width: 175 },
         { title: '成员数', width: 80, align: 'right' }, { title: '数据来源', width: 100 }, { title: '状态', width: 100 }, { title: '操作', width: 185 },
       ]} rows={rows.slice((page - 1) * size, page * size).map(item => {
         const members = enterpriseAdmins(state, item);
@@ -331,7 +331,7 @@ export default function EnterprisePage({ state, transact, reload, conflict }) {
             <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => askToggle(item)}>{item.status === '停用' ? '解冻' : '冻结'}</Button>
           </Space>,
         ] };
-      })} empty={query || status || source ? '没有匹配的企业，请调整筛选条件。' : '尚未创建企业，点击“开通政企客户”开始开户。'}
+      })} empty={query || status || source ? '没有匹配的企业，请调整筛选条件。' : '尚未创建企业，点击“开通政企租户”开始开户。'}
         pagination={{ currentPage: page, pageSize: size, total: rows.length, pageSizeOpts: PAGE_SIZES, showTotal: true, showSizeChanger: true,
           onPageChange: value => navigate({ page: String(value) }, true), onPageSizeChange: value => navigate({ size: String(value), page: '' }, true) }}/>
     </Card> : !tenant ? <Banner type="warning" closeIcon={null} description="租户不存在，请返回租户列表。"/> : <>
@@ -339,18 +339,18 @@ export default function EnterprisePage({ state, transact, reload, conflict }) {
       <EnterpriseDetails key={tenant.id} state={state} tenant={tenant} params={params} navigate={navigate} canWrite={canWrite} transact={transact} reload={reload}
         setEditor={setEditor} askToggle={askToggle} editing={editing}
         editForm={editing && <EnterpriseEditor key={`edit-${tenant.id}`} inline state={state} tenant={tenant} kind="edit" deploymentMode={deploymentMode}
-          apply={apply} canWrite={canWrite} close={() => setEditor(null)} complete={() => { setEditor(null); Toast.success('政企客户信息已保存'); }}/>}/>
+          apply={apply} canWrite={canWrite} close={() => setEditor(null)} complete={() => { setEditor(null); Toast.success('政企租户信息已保存'); }}/>}/>
     </>}
     {editor && !editing && <EnterpriseEditor key={`${editor.kind}-${editor.tenant?.id || 'new'}`} state={state} tenant={editor.tenant}
       kind={editor.kind} deploymentMode={deploymentMode} apply={apply} canWrite={canWrite} close={() => { setEditor(null); if (params.has('create')) location.hash = '#/admin-2/tenants'; }}
       complete={value => { setEditor(null); setResult(value); }}/>}
-    {result && <EnterpriseDialog title={result.handover ? '账号交接信息' : result.added ? '企业管理员已添加' : '政企客户已开通'}
+    {result && <EnterpriseDialog title={result.handover ? '账号交接信息' : result.added ? '企业管理员已添加' : '政企租户已开通'}
       description="请核对企业与管理员信息，妥善保管账号交接资料。" close={() => { setResult(null); if (params.has('create')) location.hash = '#/admin-2/tenants'; }} footer={<>
       <Button onClick={copy}>复制交接信息</Button>
       <Button theme="solid" onClick={() => { open(result.tenant, result.added ? 'admins' : 'info'); setResult(null); }}>查看企业</Button>
     </>}>
       <EnterpriseFacts rows={[
-        ['客户名称', result.tenant.name], ['客户 ID', result.tenant.id], ['管理员', result.user.name],
+        ['租户名称', result.tenant.name], ['租户 ID', result.tenant.id], ['管理员', result.user.name],
         ['登录账号', result.user.login], ['手机号码', result.user.phone || '未填写'],
         ['账号初始化', result.user.initialized ? '已完成' : '待设置密码'],
       ]}/>

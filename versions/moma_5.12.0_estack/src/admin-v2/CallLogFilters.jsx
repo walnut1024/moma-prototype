@@ -9,9 +9,9 @@ import { callPresets, changeObservationTenant, httpLabel, modelTypes, observatio
 
 const labels = {
   query: 'Request ID', request: 'Request ID', period: '时间范围', outcome: '请求结果', preflightType: '错误类型',
-  tenant: '客户', project: '项目', model: '模型', upstreamModelId: '上游模型', supply: '服务商 / 连接',
+  tenant: '所属租户', project: '项目', model: '模型', upstreamModelId: '上游模型', supply: '服务商 / 连接',
   http: 'HTTP 状态码', user: '调用用户', key: 'API 密钥', userRecord: '用户标识采集', source: '请求来源',
-  purpose: '调用类型', callId: '模型调用标识', endpoint: '端点', errorCode: '错误码', type: '模型类型',
+  purpose: '调用类型', callId: '模型 ID', endpoint: '端点', errorCode: '错误码', type: '模型类型',
 };
 const layouts = {
   requests: [['query', 'period', 'outcome'],
@@ -31,7 +31,7 @@ function LogFilterField({ id, view, pool, values, window, errors, onChange }) {
   const supply = useObservationSupply(id === 'supply' ? pool : [], id === 'supply' ? value : null);
   const change = patch => onChange('tenant' in patch ? changeObservationTenant(pool, values, patch.tenant) : patch);
   if (id === 'query') return <Input aria-label={label} prefix={<IconSearch aria-hidden="true"/>}
-    placeholder={view === 'upstream' ? '客户或上游 Request ID' : '搜索 Request ID'} value={value} showClear
+    placeholder={view === 'upstream' ? '请求 ID 或上游请求 ID' : '搜索 Request ID'} value={value} showClear
     onChange={query => change({ query, request: '' })}/>;
   if (id === 'period') return <div className="admin-log-period">
     <Select aria-label={label} motion={false} value={value}
@@ -111,7 +111,7 @@ export default function CallLogFilters({ view, pool, filters, window, errors, on
           <Button theme="borderless" onClick={closeDraft}>取消</Button>
           <Button theme="solid" onClick={() => {
             if ('tenant' in draft && Object.keys(changeObservationTenant(pool, filters, draft.tenant)).length > 1) {
-              Toast.info('已移除新客户范围之外的调用方条件');
+              Toast.info('已移除新租户范围之外的调用方条件');
             }
             onChange(draft);
             closeDraft();

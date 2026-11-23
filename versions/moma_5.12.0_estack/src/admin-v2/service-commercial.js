@@ -5,8 +5,8 @@ import { tariffOptions, normalizeCurrency } from './tariff-dictionary.js';
 
 export const scopeTenants = state => state.tenants.filter(activeCustomer);
 export function serviceScope(state, value) {
-  if (!value || !['all', 'selected'].includes(value.openScope) || !Array.isArray(value.tenantIds) || value.tenantIds.some(id => typeof id !== 'string')) throw Error('请选择有效的开放客户');
-  if (value.openScope === 'selected' && (!value.tenantIds.length || value.tenantIds.some(id => !scopeTenants(state).some(row => row.id === id)))) throw Error('请选择至少一个有效客户；已停用或删除的客户不可选');
+  if (!value || !['all', 'selected'].includes(value.openScope) || !Array.isArray(value.tenantIds) || value.tenantIds.some(id => typeof id !== 'string')) throw Error('请选择有效的开放租户');
+  if (value.openScope === 'selected' && (!value.tenantIds.length || value.tenantIds.some(id => !scopeTenants(state).some(row => row.id === id)))) throw Error('请选择至少一个有效租户；已停用或删除的租户不可选');
   return { openScope: value.openScope, tenantIds: value.openScope === 'selected' ? [...new Set(value.tenantIds)] : [] };
 }
 export function retailItems(state, rows, previous = []) {

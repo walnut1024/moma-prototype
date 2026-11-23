@@ -170,8 +170,8 @@ function DeploymentEditor({ state, existing, can, run, go, dirty }) {
               </AdminCollapsePanel>
             </Collapse>
             <Title heading={5} component="h2">服务访问</Title>
-            <Text>OpenAI 兼容协议 · 平台内部端点</Text>
-            <Paragraph type="secondary">服务就绪后生成端点。对外接入、售价与上架在模型运营中维护。</Paragraph>
+            <Text>OpenAI 兼容接口格式 · 平台内部端点</Text>
+            <Paragraph type="secondary">服务就绪后生成端点。对外接入在模型运营中维护，模型刊例价和开售在商业运营 → 模型销售中维护。</Paragraph>
           </>}
           {step === 2 && <>
             <Title heading={5} component="h2">核对部署配置</Title>
@@ -181,7 +181,7 @@ function DeploymentEditor({ state, existing, can, run, go, dirty }) {
               ['权重来源', values.weightId ? weights.find(item => item.id === values.weightId)?.name : values.weightPath],
               ['集群 / 命名空间', `${cluster?.name} / ${values.namespace}`], ['副本 / 每副本 GPU', `${values.replicas} / ${values.gpuPerReplica}`],
               ['并行配置', `TP ${values.tensorParallel} × PP ${values.pipelineParallel}`],
-              ['上下文上限', values.maxModelLen ? `${values.maxModelLen} Token` : '沿用模型配置'], ['访问协议', 'OpenAI · 内部端点'],
+              ['上下文上限', values.maxModelLen ? `${values.maxModelLen} Token` : '沿用模型配置'], ['访问接口格式', 'OpenAI · 内部端点'],
             ]}/>
             <Banner type={preflightError ? 'danger' : 'success'} closeIcon={null} title="配置预检"
               description={preflightError || `必填配置、制品状态和 GPU 数量检查通过，提交后将预留 ${required} 张 GPU。`}/>
@@ -252,7 +252,7 @@ function DeploymentDetail({ item, state, can, go, ask, tab }) {
         {tab === 'config' ? <>
           <Title heading={5} component="h2">模型与运行环境</Title>
           <Facts values={[
-            ['模型展示名', model?.name], ['模型调用标识', model ? serviceCallIdentifiers(model).join('、') : '—'], ['模型权重', item.weightId ? artifactName(item.weightId) : item.weightPath],
+            ['模型展示名称', model?.name], ['模型 ID', model ? serviceCallIdentifiers(model).join('、') : '—'], ['模型权重', item.weightId ? artifactName(item.weightId) : item.weightPath],
             ['运行时镜像', artifactName(item.runtimeId)], ['原登记制品', artifactName(item.artifactId)], ['命名空间', item.namespace],
             ['集群', cluster?.name], ['GPU 型号', cluster?.gpuType], ['目标副本数', item.replicas], ['每副本 GPU', item.gpuPerReplica],
             ['张量并行 / 流水线并行', item.tensorParallel ? `${item.tensorParallel} / ${item.pipelineParallel}` : '—'],
@@ -291,12 +291,12 @@ function DeploymentDetail({ item, state, can, go, ask, tab }) {
             <section className="admin-analytics-fields">
               <Title heading={5} component="h2">服务端点</Title>
               <Facts values={[
-                ['协议', endpoint?.protocol || 'OpenAI'], ['端点状态', endpoint?.status || '尚未生成'],
+                ['接口格式', endpoint?.protocol || 'OpenAI'], ['端点状态', endpoint?.status || '尚未生成'],
                 ['端点编码', endpoint?.endpointId], ['Model ID', model?.modelId],
               ]}/>
               {endpoint?.baseUrl ? <div className="admin-deployment-endpoint"><CopyId value={endpoint.baseUrl} label="服务地址"/></div>
                 : <Paragraph type="secondary">服务就绪后生成内部 OpenAI 兼容地址。</Paragraph>}
-              <Paragraph type="secondary">对外供给、售价和上架在服务管理中配置。</Paragraph>
+              <Paragraph type="secondary">服务就绪后生成端点。对外接入在模型运营中维护，模型刊例价和开售在商业运营 → 模型销售中维护。</Paragraph>
             </section>
           </div>
           <ErrorNote message={item.failureReason}/>
@@ -372,7 +372,7 @@ function DeploymentList({ state, params, can, go, ask }) {
   ];
 
   return <>
-    <AdminPageHeading title="模型部署" description="部署和管理自有推理服务，查看资源、就绪状态与部署事件。">
+    <AdminPageHeading title="模型部署" description="部署和管理自有模型推理服务，查看资源、就绪状态与部署事件。">
       <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!can} onClick={() => go({ view: 'create' })}>部署模型</Button>
     </AdminPageHeading>
     <Card>

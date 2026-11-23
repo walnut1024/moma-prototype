@@ -54,7 +54,7 @@ export function resourcePageTarget(state, scope, params) {
 }
 
 export function resourceTargetLabel(state, scope, target) {
-  const module = { channels: '模型接入', services: '模型服务', market: '模型广场', prices: '模型售价' }[scope];
+  const module = { channels: '模型接入', services: '模型服务', market: '模型广场', prices: '模型销售' }[scope];
   const provider = target.provider_id && state.providers.find(row => row.id === target.provider_id)?.name;
   const model = target.model_id && modelDisplayName(state, target.model_id);
   const service = target.model_service_id && serviceReferences(state).find(row => modelServiceIdentity(state, row.model, offerKey(row)) === target.model_service_id);

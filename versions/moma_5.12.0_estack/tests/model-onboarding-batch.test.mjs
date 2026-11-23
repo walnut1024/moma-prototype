@@ -176,7 +176,7 @@ test('batch creation and enable preserve role, revision and storage failure boun
 
 test('only self-hosted suppliers can create channels without authentication', () => {
   const initial = legacySupplierState();
-  assert.throws(() => run(initial, 'supplierChannelCreate', { ...draft, authMode: 'none' }), /自有推理/);
+  assert.throws(() => run(initial, 'supplierChannelCreate', { ...draft, authMode: 'none' }), /自有模型推理/);
   const created = run(initial, 'create', { name: '本地供给', code: 'batch-self-hosted', sourceType: 'selfHosted', description: '' }, null), id = created.audits[0].objectId;
   const state = run(created, 'supplierChannelCreate', { ...draft, authMode: 'none', baseUrl: 'http://inference.example.invalid/v1', models: [models[0]] }, id);
   const ep = state.endpoints.find(row => row.name === draft.name);

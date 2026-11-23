@@ -81,7 +81,7 @@ test('real supplier fixtures use official URLs and accept OpenAI, Anthropic and 
   }
   const endpoint=state.endpoints[0];
   assert.doesNotThrow(()=>op(state,'provider',{operation:'connection',objectId:endpoint.id,values:{...endpoint,protocol:'Anthropic',timeoutSeconds:60}}));
-  assert.throws(()=>op(state,'provider',{operation:'connection',objectId:endpoint.id,values:{...endpoint,protocol:'unknown',timeoutSeconds:60}}),/接入协议/);
+  assert.throws(()=>op(state,'provider',{operation:'connection',objectId:endpoint.id,values:{...endpoint,protocol:'unknown',timeoutSeconds:60}}),/接入接口格式/);
   for(const supply of state.modelSupplies){
     const endpoint=state.endpoints.find(item=>item.id===supply.endpointId);
     const provider=state.providers.find(item=>item.id===endpoint.providerId);
@@ -161,7 +161,7 @@ test('same catalogue model and relation are reused across entry points',()=>{
  let {state,id,supply,draftId}=connected();const counts=[state.models.length,state.modelSupplies.length];state=op(state,'saveOnboarding',{...state.modelOnboardings.find(d=>d.id===draftId),targetRevision:state.models.find(m=>m.id===id).updatedAt});state=op(state,'onboardModel',{draftId,model:state.models.find(m=>m.id===id)});assert.deepEqual([state.models.length,state.modelSupplies.length],counts);assert.equal(state.modelOnboardings.find(d=>d.id===draftId).supplyId,supply.id);
 });
 test('blank and zero stay distinct; missing procurement never means zero cost',()=>{
- let {state,id,supply}=connected();assert.throws(()=>op(state,'reprice',priced(state,id,supply,''),id),/必填/);state=op(state,'reprice',priced(state,id,supply,'0'),id);assert.ok(activeSupplySalePrice(state,id,supply.id).items.every(item=>item.amount===0));const provider=supply.provider;state=op(state,'provider',{operation:'cataloguePrice',objectId:provider.id,values:{modelId:'upstream-v1',scenarios:[{name:'输入',unit:'百万 Token',currency:'CNY',listPrice:''}]}});assert.throws(()=>op(state,'reprice',priced(state,id,supply),id),/采购价缺失/);
+ let {state,id,supply}=connected();assert.throws(()=>op(state,'reprice',priced(state,id,supply,''),id),/必填/);state=op(state,'reprice',priced(state,id,supply,'0'),id);assert.ok(activeSupplySalePrice(state,id,supply.id).items.every(item=>item.amount===0));const provider=supply.provider;state=op(state,'provider',{operation:'cataloguePrice',objectId:provider.id,values:{modelId:'upstream-v1',scenarios:[{name:'输入',unit:'百万 Token',currency:'CNY',listPrice:''}]}});assert.throws(()=>op(state,'reprice',priced(state,id,supply),id),/服务商成本价缺失/);
 });
 test('repricing changes only prices, preserving sales, listing, scope and immutable history',()=>{
  let {state,id,supply}=connected();const before=structuredClone({models:state.models,supplies:state.modelSupplies,costs:state.supplyPrices,providers:state.providers});state=op(state,'reprice',priced(state,id,supply),id);const first=structuredClone(activeSupplySalePrice(state,id,supply.id));state=op(state,'reprice',{...priced(state,id,supply,'4'),effectiveAt:new Date(Date.now()+86400000).toISOString()},id);assert.deepEqual({models:state.models,supplies:state.modelSupplies,costs:state.supplyPrices,providers:state.providers},before);assert.equal(activeSupplySalePrice(state,id,supply.id).id,first.id);assert.deepEqual(state.modelSalePrices.find(p=>p.id===first.id),first);assert.equal(activeSupplySalePrice(state,id,supply.id,Date.now()+86400001).items[0].amount,4000000);assert.throws(()=>op(state,'reprice',{...priced(state,id,supply),selected:[supply.id]},id),/只允许/);

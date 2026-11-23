@@ -157,6 +157,14 @@ export async function updateTrafficLimits(db, actor, body, key) {
   const current = await loadTrafficLimits(db);
   if (current.revision !== expectedRevision) issue(409, 'REVISION_CONFLICT', '限流配置已更新，请载入最新值；当前输入保留');
   const changes = trafficChanges(current, body);
+  if (body.operation === 'batchAccounts' || body.operation === 'exceptions') {
+    const ids = body.operation === 'exceptions' ? [id] : body.data.accountIds;
+    const count = await db.prepare(`SELECT COUNT(DISTINCT json_extract(u.value,'$.id')) AS n
+      FROM model_workspace w, json_each(w.reference_json,'$.users') u
+      WHERE w.id=1 AND json_extract(u.value,'$.id') IN (SELECT value FROM json_each(?))`)
+      .bind(JSON.stringify(ids)).first('n');
+    if (count !== ids.length) issue(404, 'NOT_FOUND', '用户不存在，请重新选择');
+  }
   const global = changes.find(change => change.scope === 'user-default')?.after || current.global;
   const model = changes.find(change => change.scope === 'model-default')?.after || current.modelDefault;
   const rules = changes.filter(change => ['account', 'model', 'policy'].includes(change.scope));

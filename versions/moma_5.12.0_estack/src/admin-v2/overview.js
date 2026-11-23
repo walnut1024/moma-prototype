@@ -45,8 +45,8 @@ function performance(rows) {
 }
 
 const customerTypes = [
-  { label: '政企客户', color: '#2668dc' },
-  { label: '个人客户', color: '#a38bed' },
+  { label: '政企租户', color: '#2668dc' },
+  { label: '个人租户', color: '#a38bed' },
   { label: '类型未归属', color: '#8498b3' },
 ];
 
