@@ -31,7 +31,7 @@ test('deletion hides the service, preserves master, supply and history, and re-c
 test('deletion requires confirmation, current revision and permission, and refuses active configuration', () => {
   const { state, model } = fixture(), data = { expectedUpdatedAt: model.updatedAt, confirmed: true };
   for (const patch of [{ confirmed: false }, { expectedUpdatedAt: 'stale' }]) assert.throws(() => run(state, 'serviceDelete', { ...data, ...patch }, model.id), /修订|确认/);
-  for (const patch of [{ callsEnabled: true }, { listingStatus: '已上架' }]) assert.throws(() => run({ ...state, models: state.models.map(row => row.id === model.id ? { ...row, ...patch } : row) }, 'serviceDelete', data, model.id), /停止|下架/);
+  for (const patch of [{ callsEnabled: true }, { listingStatus: '已上架' }]) assert.throws(() => run({ ...state, models: state.models.map(row => row.id === model.id ? { ...row, ...patch } : row) }, 'serviceDelete', data, model.id), /停止|停售/);
   assert.throws(() => commitAdminState(state, { type: 'modelOperations', operation: 'serviceDelete', modelId: model.id, data }, '只读观察员'), /无权/);
   const deleted = run(state, 'serviceDelete', data, model.id);
   assert.throws(() => run(deleted, 'serviceRestore', data, model.id), /已删除/);
@@ -57,7 +57,7 @@ test('permanent service ID deletion preserves sibling entries and guards launch,
  for(const model_service_id of ['',null,'model_service-missing'])assert.throws(()=>run(state,'serviceDelete',{...data,model_service_id},model.id),/ID|归属/);
  for(const patch of [{confirmed:false},{expectedUpdatedAt:'stale'}])assert.throws(()=>run(state,'serviceDelete',{...data,...patch},model.id),/确认|修订/);
  const started=structuredClone(state);started.models.find(row=>row.id===model.id).callsEnabled=true;started.models.find(row=>row.id===model.id).serviceProviders[0].callsEnabled=true;assert.throws(()=>run(started,'serviceDelete',data,model.id),/停止/);
- const listed=structuredClone(state);listed.models.find(row=>row.id===model.id).serviceProviders[0].listingStage='formal';assert.throws(()=>run(listed,'serviceDelete',data,model.id),/下架/);
+ const listed=structuredClone(state);listed.models.find(row=>row.id===model.id).serviceProviders[0].listingStage='formal';assert.throws(()=>run(listed,'serviceDelete',data,model.id),/停售/);
  const routed={...state,serviceRoutes:[{id:'route-a',serviceId:first.id,draft:{}}]};assert.throws(()=>run(routed,'serviceDelete',data,model.id),/路由/);
  assert.deepEqual(state,before);
 });

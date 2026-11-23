@@ -116,7 +116,7 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
     [t('服务地址'), endpoint.baseUrl],
     [t('完整请求地址'), channelRequestUrls(channel).join('、')],
     [t('密钥配置'), t(channelKeyMode(endpoint))],
-    [t('API 密钥'), keyPool ? <Button size="small" theme="borderless" type="primary"
+    [t('上游 API 密钥'), keyPool ? <Button size="small" theme="borderless" type="primary"
       aria-label={keyCount + ' · ' + t('上游 API 密钥池')} onClick={() => selectTab('api-keys')}>{keyCount}</Button> : keyCount],
     ...(endpoint.authMode === 'pool' ? [[t('密钥选择策略'), t(channelKeyStrategyLabel(endpoint.keyStrategy))]] : []),
     [t('简介'), endpoint.directoryNote],
@@ -126,7 +126,7 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
   const connectionFields = [
     ['服务商', channel.provider.name], ['连接 ID', id], ['接口格式', workbenchProtocolLabel(interfaceLabel)],
     ['服务地址', endpoint.baseUrl],
-    ['API 密钥', credentials.join('、') || (endpoint.authMode === 'none' ? '无需认证' : '')],
+    ['上游 API 密钥', credentials.join('、') || (endpoint.authMode === 'none' ? '无需认证' : '')],
     ['启停状态', <AdminStatus value={status}/>], ['连接检测', <AdminStatus value={channel.testStatus}/>],
     ...(endpoint.directoryNote ? [['内部备注', endpoint.directoryNote]] : []),
   ];

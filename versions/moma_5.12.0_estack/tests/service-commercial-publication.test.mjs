@@ -217,7 +217,7 @@ test('management sales settings do not expand call access and selling cannot ena
   assert.equal(env.model().marketVisible,false);
   assert.deepEqual(env.model().salesScope,{openScope:'selected',tenantIds:['tenant-gov']});assert.deepEqual({openScope:env.model().openScope,tenantIds:env.model().tenantIds},scope);
   env.save('stopSales',{expectedUpdatedAt:env.model().updatedAt});env.save('disableService',{expectedUpdatedAt:env.model().updatedAt});
-  assert.throws(()=>env.save('startSales',{confirmed:true,expectedUpdatedAt:env.model().updatedAt}),/技术服务已启用/);
+  assert.throws(()=>env.save('startSales',{confirmed:true,expectedUpdatedAt:env.model().updatedAt}),/模型服务为服务中/);
   assert.equal(env.model().callsEnabled,false);assert.equal(env.model().listingStatus,'已下架');
   env.save('enableService',{expectedUpdatedAt:env.model().updatedAt});env.save('startSales',{confirmed:true,expectedUpdatedAt:env.model().updatedAt});
   assert.equal(env.model().callsEnabled,true);assert.equal(env.model().listingStatus,'已上架');assert.deepEqual(env.state.modelSalePrices,storedPrices);

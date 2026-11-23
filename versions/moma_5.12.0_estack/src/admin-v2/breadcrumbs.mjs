@@ -52,7 +52,7 @@ export function adminBreadcrumbs(active, params, names = {}) {
     else if (view === 'templateImport') add('批量导入模型资料');
   } else if (active === 'model-prices' && params.has('service')) {
     add(page.label,href(active,{},['association','provider','service','edit','tab','add']));
-    add('销售配置');
+    add('模型售卖');
   } else if (active === 'tariff-dictionary') {
     const tab = params.get('tab');
     add('基础资料', '#/admin-2/model-templates');

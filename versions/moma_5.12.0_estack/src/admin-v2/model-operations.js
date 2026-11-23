@@ -182,7 +182,7 @@ export function operationsTransaction(state, action) {
     if (!model || (provider ? !entry : model.serviceMode !== 'standard' || key) ||
       data.confirmed !== true || data.expectedUpdatedAt !== model.updatedAt ||
       !['gray', 'formal'].includes(offerStage(model, entry)) || salesPaused(model, key)) {
-      throw Error('销售状态已变化，请重新核对要停售的服务');
+      throw Error('售卖状态已变化，请重新核对要停售的服务');
     }
     update('models', model.id, provider ? {
       serviceProviders: model.serviceProviders.map(row => row === entry ? { ...row, salesPaused: true } : row),
@@ -193,11 +193,11 @@ export function operationsTransaction(state, action) {
     if (data.expectedUpdatedAt!==model.updatedAt || data.confirmed!==true) throw Error('销售配置已变化，请核对并明确确认');
     if (!Array.isArray(keys) || !keys.length || keys.length>20 || new Set(keys).size!==keys.length || keys.some(key=>typeof key!=='string' || !providerOffer(model,key))) throw Error('请选择有效模型服务');
     const stage=operation==='stopSales'?'withdrawn':data.releaseStage;
-    if (!['withdrawn','gray','formal'].includes(stage) || operation==='startSales' && stage==='withdrawn') throw Error('请选择有效的上架阶段');
+    if (!['withdrawn','gray','formal'].includes(stage) || operation==='startSales' && stage==='withdrawn') throw Error('请选择有效的售卖阶段');
     const grayTenantIds=stage==='gray'?serviceScope(working,{openScope:'selected',tenantIds:data.releaseTenantIds}).tenantIds:[];
     if (grayTenantIds.some(id=>!salesCustomer(model,id))) throw Error('灰度开售的租户须在当前销售对象范围内');
     if (operation==='startSales') {
-      const failed=salesChecks(working,model,keys).filter(row=>!row.passed);
+      const failed=salesChecks(working,model,keys,stage).filter(row=>!row.passed);
       if (failed.length) throw Error(failed.map(row=>row.label).join('；'));
     } else if (keys.some(key=>!['formal','gray'].includes(offerStage(model,providerOffer(model,key))))) {
       throw Error('所选模型服务当前未在售，请刷新后重新选择');
@@ -217,11 +217,12 @@ export function operationsTransaction(state, action) {
     if (operation==='salesSettings') {
       update('models',modelId,{salesScope:serviceScope(working,data.scope)});label='保存销售设置';
     } else {
-      const failed=salesChecks(working,model).filter(row=>!row.passed);
+      const failed=salesChecks(working,model,undefined,data.releaseStage).filter(row=>!row.passed);
       if(failed.length)throw Error(failed.map(row=>row.label).join('；'));
       const releaseStage=data.releaseStage || 'formal';
-      if(!['gray','formal'].includes(releaseStage))throw Error('请选择灰度上架或正式上架');
+      if(!['gray','formal'].includes(releaseStage))throw Error('请选择灰度开售或开售');
       const releaseTenantIds=releaseStage==='gray'?serviceScope(working,{openScope:'selected',tenantIds:data.releaseTenantIds}).tenantIds:[];
+      if (releaseTenantIds.some(id=>!salesCustomer(model,id))) throw Error('灰度开售的租户须在当前销售对象范围内');
       update('models',modelId,{listingStatus:'已上架',visibility:'公开',releaseStage,releaseTenantIds,salesPaused:false,firstPublishedAt:model.firstPublishedAt || new Date().toISOString()});label=releaseStage==='gray'?'灰度上架':'正式上架';
     }
   } else if (['enableService','disableService','stopSales'].includes(operation)) {

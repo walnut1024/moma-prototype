@@ -17,7 +17,7 @@ export function retailItems(state, rows, previous = []) {
     const row = { name: item.name.trim(), unit: item.unit.trim(), condition: item.condition.trim(), currency: normalizeCurrency(item.currency), amount: parseSaleAmount(item.amount, true) };
     // Stored price snapshots remain usable after a dictionary entry is retired.
     if (!previous.some(old => billingItemKey(old) === billingItemKey(row))) {
-      for (const [kind, value] of [['scenario', row.name], ['unit', row.unit], ['currency', row.currency]]) if (!tariffOptions(state, kind).includes(value)) throw Error('新增计费项须从模型资料字典选择，计费单位和货币须选择已启用项');
+      for (const [kind, value] of [['scenario', row.name], ['unit', row.unit], ['currency', row.currency]]) if (!tariffOptions(state, kind).includes(value)) throw Error('添加的计费项须从模型资料字典选择，计费单位和货币须选择已启用项');
     }
     const refs = priceItemReferences(state, row);
     for (const key of ['billing_item_id', 'unit_id', 'currency_id']) if (item[key] != null && item[key] !== refs[key]) throw Error('计费项、单位或币种 ID 与当前字典不一致');

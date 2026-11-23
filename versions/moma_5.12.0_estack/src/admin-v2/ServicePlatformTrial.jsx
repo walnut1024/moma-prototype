@@ -14,7 +14,7 @@ import { getMockServiceSnapshots } from './mock-onboarding-service';
 import { callStateLabel, serviceReferenceStarted } from './service-directory';
 
 function trialIssueText(message) {
-  if (message === '模型服务已下架，请选择其他模型') return '当前模型服务不可用，请选择其他模型服务';
+  if (['模型服务已下架，请选择其他模型','模型服务未上架或不可用'].includes(message)) return '当前模型服务不可用，请选择其他模型服务';
   if (message === '模型服务已停止，请选择其他模型' || message === '该模型服务已停止，请选择其他模型服务') {
     return '模型服务已停服，请选择其他模型服务';
   }

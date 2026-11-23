@@ -235,13 +235,13 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
           }]}/>
         {linkedRows.some(showing) && <Typography.Text type="tertiary">展示中的服务需先在「设置可见性」中取消展示，再移除关联。</Typography.Text>}
       </section>
-      <section aria-label="添加模型服务">
-        <Typography.Title heading={6}>添加模型服务</Typography.Title>
+      <section aria-label="可关联的模型服务">
+        <Typography.Title heading={6}>可关联的模型服务</Typography.Title>
         <Input showClear prefix={<IconSearch aria-hidden="true"/>} aria-label="搜索可关联模型服务" value={search}
           placeholder="搜索服务名称、模型 ID 或模型服务 ID" onChange={setSearch}/>
         {!row.modelId && <Typography.Text type="tertiary">可选择同一模型下的多个服务。</Typography.Text>}
         <Table rowKey="id" dataSource={candidates.filter(matches)} pagination={false} scroll={{ x: 'max(100%, 600px)' }}
-          empty={search.trim() ? '没有匹配的模型服务' : '暂无可添加的模型服务'}
+          empty={search.trim() ? '没有匹配的模型服务' : '暂无可关联的模型服务'}
           columns={[{ title: '选择', width: 64, render: (_, service) => <Checkbox aria-label={`选择 ${service.callId}`}
             checked={linked.includes(service.id)} disabled={unavailable || Boolean(selectedModel && selectedModel !== service.modelId)}
             onChange={() => changeLink(service.id)}/> }, ...serviceColumns]}/>

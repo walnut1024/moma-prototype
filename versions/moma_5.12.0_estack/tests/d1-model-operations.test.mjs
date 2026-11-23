@@ -127,7 +127,7 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     const afterSettings=(await api('/model-operations')).data.models.find(m=>m.id===model.id);
     assert.deepEqual(afterSettings.salesScope,{openScope:'selected',tenantIds:['tenant-gov']});
     assert.deepEqual({openScope:afterSettings.openScope,tenantIds:afterSettings.tenantIds},callScope);
-    await assert.rejects(save(state,{type:'modelOperations',operation:'startSales',modelId:model.id,data:{offerKeys,releaseStage:'formal',confirmed:true,expectedUpdatedAt:afterSettings.updatedAt}}),/技术服务已启用/);
+    await assert.rejects(save(state,{type:'modelOperations',operation:'startSales',modelId:model.id,data:{offerKeys,releaseStage:'formal',confirmed:true,expectedUpdatedAt:afterSettings.updatedAt}}),/模型服务为服务中/);
     assert.equal((await api('/model-operations')).data.models.find(m=>m.id===model.id).callsEnabled,false);
     assert.equal(state.models.find(m=>m.id===model.id).listingStatus,'已下架');
     assert.deepEqual(state.modelSalePrices,prices);

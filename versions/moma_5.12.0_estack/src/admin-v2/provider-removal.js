@@ -108,7 +108,7 @@ export function providerRemovalTransaction(state, { operation, data = {} }) {
   if (plan.blockers.length) throw Error(plan.blockers.join('；'));
   if (!['providerRemovalPrepare', 'providerRemovalCommit'].includes(operation)) throw Error('未知移除操作');
   const commit = operation === 'providerRemovalCommit';
-  if (commit && !plan.ready) throw Error('仍有启用服务、上架连接或活动路由，请先停服并下架');
+  if (commit && !plan.ready) throw Error('仍有服务中的模型服务、在售模型服务或活动路由，请先停服、停售并处理活动路由');
   const { provider, ids, supplies, routes, endpoints, associations } = plan, at = new Date().toISOString(), changes = [];
   const changedModels = new Map();
   for (const model of state.models) {
@@ -157,5 +157,5 @@ export function providerRemovalTransaction(state, { operation, data = {} }) {
     if (plan.wholeEndpoints.has(endpoint.id)) changes.push(update('endpoints', endpoint.id, { deletedAt: at, status: '停用' }));
   }
   return { type: 'batch', objectId: data.target.associationId || data.target.endpointId || provider.id,
-    label: commit ? data.target.catalogueId ? '删除供应模型' : entireProvider ? '移除服务商' : '移除上游模型' : '停服并下架待移除连接', changes };
+    label: commit ? data.target.catalogueId ? '删除供应模型' : entireProvider ? '移除服务商' : '移除上游模型' : '停止待移除连接的服务并停售', changes };
 }

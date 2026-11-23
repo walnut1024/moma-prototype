@@ -54,15 +54,15 @@ function KeyEditor({ provider, record, ops, close }) {
     record.endpoints.length ? `影响 ${record.endpoints.length} 个绑定连接，保存时验证。` : null,
   ].filter(Boolean).join(' · ');
   return <SupplierCreationDialog wide={adding} className={adding ? 'channel-directory-create-dialog' : undefined}
-    title={adding ? '添加 API 密钥' : '替换 API 密钥'} description={description}
+    title={adding ? '添加上游 API 密钥' : '替换上游 API 密钥'} description={description}
     cancel={() => !saving && ops.proceed(close)} submit={save} action={saving ? '保存中…' : '保存'}
     disabled={disabled || !value.trim() || Boolean(limitError)}>
-    <Field label={adding ? '上游 API 密钥' : '新 API 密钥'} required error={limitError}
+    <Field label={adding ? '上游 API 密钥' : '新上游 API 密钥'} required error={limitError}
       hint={adding ? '每行一把密钥，支持粘贴多行。保存后仅展示脱敏值。' : undefined}>
       {adding
         ? <TextArea aria-label="上游 API 密钥" rows={4} autoComplete="off" spellCheck={false}
           autoFocus value={value} disabled={disabled || !limit} onChange={change}/>
-        : <Input aria-label="新 API 密钥" mode="password" autoComplete="new-password" maxLength={512}
+        : <Input aria-label="新上游 API 密钥" mode="password" autoComplete="new-password" maxLength={512}
           autoFocus value={value} disabled={disabled} onChange={change}/>}
     </Field>
     {ops.error && <Notice error>{ops.error}</Notice>}
@@ -96,10 +96,10 @@ export default function ReferenceProviderApiKeys({ state, connection, ops }) {
   return <>
     <div className="supplier-key-pool-toolbar">
       <Button id={addTriggerId} size="small" theme="solid" disabled={!ops.can} icon={<IconPlus size="small" aria-hidden="true"/>}
-        onClick={event => open(event, { kind: 'add' })}>添加 API 密钥</Button>
+        onClick={event => open(event, { kind: 'add' })}>添加上游 API 密钥</Button>
     </div>
     <GridTable className="supplier-key-table supplier-flat-key-table"
-      headings={['密钥名称 / ID', 'API 密钥', '当前绑定连接', '状态', '操作']} empty={!rows.length} emptyMessage="暂无 API 密钥">
+      headings={['密钥名称 / ID', '上游 API 密钥', '当前绑定连接', '状态', '操作']} empty={!rows.length} emptyMessage="暂无上游 API 密钥">
       {rows.map(row => {
         const { apiKey } = row;
         const keyId = providerApiKeyId(apiKey);
@@ -126,7 +126,7 @@ export default function ReferenceProviderApiKeys({ state, connection, ops }) {
     </GridTable>
     {(dialog?.kind === 'add' || dialog?.kind === 'replace') &&
       <KeyEditor provider={provider} record={dialog.record} ops={ops} close={close}/>}
-    {deleting && <Modal title="删除 API 密钥" description={providerApiKeyId(deleting.apiKey)} onClose={close} footer={<>
+    {deleting && <Modal title="删除上游 API 密钥" description={providerApiKeyId(deleting.apiKey)} onClose={close} footer={<>
       <Button theme="light" onClick={close}>取消</Button>
       <Button type="danger" disabled={!ops.can} onClick={async () => {
         const { id, fingerprint } = deleting.apiKey;
