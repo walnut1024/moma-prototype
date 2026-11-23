@@ -60,7 +60,7 @@ test('batch validates later rows against earlier rows without partial persistenc
     [{ ...draft, baseUrl: 'https://second.example.invalid/v1/chat/completions' }, /第 2 行.*名称不可重复/],
     [{ ...draft, name: '第二连接' }, /第 2 行.*调用配置相同/],
     [{ ...draft, name: '第二连接', baseUrl: 'https://second.example.invalid/v1/chat/completions', scenarios: [{ ...price[0], listPrice: '-1' }] }, /第 2 行/],
-    [{ ...draft, channelId: channels(state)[0].id }, /第 2 行.*仅支持新连接/],
+    [{ ...draft, channelId: channels(state)[0].id }, /第 2 行.*仅支持新的上游模型/],
   ]) { assert.throws(() => addBatch(state, [draft, row]), message); assert.deepEqual(state, before); }
   assert.throws(() => addBatch(state, []), /1–20/);
   assert.throws(() => addBatch(state, Array(21).fill(draft)), /1–20/);

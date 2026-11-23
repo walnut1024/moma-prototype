@@ -145,13 +145,13 @@ test('directory reordering saves only a scoped draft, validates membership and r
   const [first, second] = plan.rows.map(row => row.supplyId);
   const patch = { groupId: 'P1', expectedSignature: plan.signature, order: [second, first], weights: { [first]: 70, [second]: 40 }, confirmed: true };
   const save = action(live, service, null, 'serviceRouteDirectoryOrder', patch);
-  assert.throws(() => commitAdminState(live, action(live, service, null, 'serviceRouteDirectoryOrder', { ...patch, order: [first, 'foreign'] })), /所选连接/);
+  assert.throws(() => commitAdminState(live, action(live, service, null, 'serviceRouteDirectoryOrder', { ...patch, order: [first, 'foreign'] })), /所选上游模型/);
   const next = commitAdminState(live, save);
   const current = serviceRoute(next, service.id);
   assert.equal(current.activeVersion, 1);
   assert.deepEqual(activeRouteVersion(current), activeRouteVersion(serviceRoute(live, service.id)));
   assert.deepEqual(current.draft.channels.map(row => [row.supplyId, row.priority, row.weight]), [[first, 2, 70], [second, 1, 40]]);
-  assert.throws(() => commitAdminState(next, save), /草稿或连接范围/);
+  assert.throws(() => commitAdminState(next, save), /草稿或上游模型范围/);
 });
 
 test('rollback revalidates live channels and creates a new version without deleting history', () => {

@@ -2,7 +2,7 @@ import { workspaceStoragePrefix } from '../workspace-storage.mjs';
 import { MODEL_TYPE_LABELS, modelCategory } from '../model-types.mjs';
 
 const storageKey = workspaceStoragePrefix + 'model-services-new:v1';
-const simulatedChannelNames = ['连接 A', '连接 B', '备用连接'];
+const simulatedChannelNames = ['上游模型 A', '上游模型 B', '备用上游模型'];
 export const SERVICE_DESCRIPTION_LIMIT = 300;
 export const MODEL_ID_LABEL = '模型 ID';
 

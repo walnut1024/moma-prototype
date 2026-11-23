@@ -169,7 +169,7 @@ test('list joins only the service channels and never substitutes connection IDs 
  const provider = {id:'provider-a',name:'服务商 A',catalogConnections:[{id:'channel-a',endpointId:'connection-a',modelId:'source-model',upstreamModelId:'source-call',sourceName:'独立账号'}]};
  const state = {models:[model],providers:[provider],modelTemplates:[],endpoints:[{id:'connection-a',providerId:provider.id},{id:'connection-missing-id',providerId:provider.id}],modelSupplies:[{id:'supply-a',modelId:model.id,endpointId:'connection-a',upstreamModelId:'source-call',catalogueModelId:'source-model',status:'已启用'},{id:'supply-b',modelId:model.id,endpointId:'connection-missing-id',status:'已停用'},{id:'supply-removed',modelId:model.id,endpointId:'connection-a',status:'已移除'}]};
  const before=structuredClone(state), row=serviceDirectoryRows([model],state)[0];
- assert.deepEqual(row.channels,[{key:'channel-a',id:'channel-a',providerName:'服务商 A',name:'独立账号'},{key:'supply-b',id:'',providerName:'服务商 A',name:'连接名称未配置'}]);
+ assert.deepEqual(row.channels,[{key:'channel-a',id:'channel-a',providerName:'服务商 A',name:'独立账号'},{key:'supply-b',id:'',providerName:'服务商 A',name:'上游模型名称未配置'}]);
  assert.deepEqual(row.endpoints.map(({method,protocol,path})=>[method,protocol,path]),[['POST','OpenAI Chat','/api/v1/chat/completions']]);
  model.serviceMode='provider';model.serviceProviders=[{providerId:'provider-a',channelId:'channel-a',channelName:'旧名称',callId:'entry-a'},{providerId:'provider-a',channelId:'channel-b',channelName:'另一个账号',callId:'entry-b'}];
  const rows=serviceDirectoryRows([model],state);

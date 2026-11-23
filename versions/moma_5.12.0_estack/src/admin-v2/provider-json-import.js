@@ -196,7 +196,7 @@ export function planProviderJsonModel(state, providerId, { model, connections })
     const issue = channelInterfaceIssue(owner(), { type, modelId: linked.modelId, endpoint });
     if (issue) throw Error(issue);
     const associated = providerTransaction(working, { operation: 'supplierAssociationSave', objectId: providerId, data: {
-      modelId: linked.modelId, endpointId: endpoint.id, upstreamModelId, scenarios: [], sourceName: mapping.channel_name ? string(mapping.channel_name, '连接名称', 60) : config.id.slice(0, 48),
+      modelId: linked.modelId, endpointId: endpoint.id, upstreamModelId, scenarios: [], sourceName: mapping.channel_name ? string(mapping.channel_name, '上游模型名称', 60) : config.id.slice(0, 48),
     } });
     stage(associated.changes);
     const associationId = associated.changes.find(change => change.collection === 'providers').changes.catalogConnections.find(row => row.endpointId === endpoint.id && row.modelId === linked.modelId && row.upstreamModelId === upstreamModelId && !row.deletedAt)?.id;

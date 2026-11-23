@@ -96,6 +96,9 @@ function ChannelModelCosts({ state, channel, ops, open }) {
   </>;
 }
 
+// 旧版审计动作保留原值，以便读取已经保存的创建记录。
+const legacyConnectionCreatedAction = '创建渠道连接';
+
 export function ChannelDetails({ state, channel, creation, ops, open, modelList, keyPool, modelCosts = false }) {
   const t = useChannelText();
   const { id, name, endpoint, credentials, interfaceLabel, status } = channel;
@@ -185,7 +188,7 @@ export default function ChannelManagementView({ state, connections, ops, open, f
 
   const creationAudits = new Map();
   for (const audit of state.audits) {
-    if (['创建连接', '创建渠道连接'].includes(audit.action) && audit.result === '成功') creationAudits.set(audit.objectId, audit);
+    if (['创建连接', legacyConnectionCreatedAction].includes(audit.action) && audit.result === '成功') creationAudits.set(audit.objectId, audit);
   }
   const creationFor = row => {
     const audit = creationAudits.get(row.id);

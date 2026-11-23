@@ -129,9 +129,9 @@ function normalizeCandidate(state, body, previous = {}) {
   }
   const backups = route.channels.filter(row=>row.backup === true);
   if (backups.length) {
-    if (input.mode !== 'provider' || route.strategy !== 'fixed' || route.autoFailover !== true || route.channels.length !== 2 || backups.length !== 1 || route.channels.some(row=>row.enabled === false)) fail('invalid_route', '固定路由故障转移须指定一个主连接和一个备用连接');
+    if (input.mode !== 'provider' || route.strategy !== 'fixed' || route.autoFailover !== true || route.channels.length !== 2 || backups.length !== 1 || route.channels.some(row=>row.enabled === false)) fail('invalid_route', '固定路由故障转移须指定一个主上游模型和一个备用上游模型');
     const sources = route.channels.map(row=>channelById(state, bindings.find(binding=>binding.id===row.bindingId).channelId));
-    if (sources[0].providerId !== sources[1].providerId || (sources[0].clientChannelId || sources[0].id) === (sources[1].clientChannelId || sources[1].id)) fail('invalid_route', '主连接和备用连接须属于同一服务商且互不相同');
+    if (sources[0].providerId !== sources[1].providerId || (sources[0].clientChannelId || sources[0].id) === (sources[1].clientChannelId || sources[1].id)) fail('invalid_route', '主上游模型和备用上游模型须属于同一服务商且互不相同');
   }
   return { ...(input.technical === true ? { technical: true, purpose: input.purpose === 'internal' ? 'internal' : 'commercial' } : {}), name: input.name || publicModelId, publicModelId, mode: input.mode, tenantIds: [...new Set(input.tenantIds || [])], capabilities: [...new Set(input.capabilities || [])], bindings, salePrices: prices(input.salePrices || []), route: { ...copy(route), strategy: route.strategy || 'priority', channels: route.channels.map((row, index) => ({ bindingId: row.bindingId, priority: row.priority ?? index + 1, weight: row.weight ?? 1, ...(row.backup === true ? { backup:true } : {}), ...(row.enabled === false ? { enabled: false } : {}) })), autoFailover: route.autoFailover === true } };
 }

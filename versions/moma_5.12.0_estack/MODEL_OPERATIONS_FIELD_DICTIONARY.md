@@ -9,7 +9,7 @@
 | 模型档案 ID | 内部模型标识、资料 ID | 模型内部永久关联键，不是调用参数；现存资料记录仍承载同一身份引用 | 模型 `id`、服务 `templateId`；对外管理引用为 `model_id` |
 | 模型编码 | 规范模型标识、规范 ID | 跨服务商识别同一型号与版本的业务编码；永久关联仍使用模型档案 ID | `canonical_slug`；既有资料中的 `modelId` 保留 |
 | 模型 ID | 模型调用标识、模型调用名、对外调用标识、调用 Model ID、平台 Model ID、调用 ID | 客户向平台请求时填写的 `model` | 具体模型服务的 call_id |
-| 上游模型调用标识 | 上游模型 ID、上游模型标识、上游 Model ID | 平台请求服务商时填写的模型参数 | 连接关联／供给 `upstreamModelId`；目录登记的 `modelId` 不直接替代它 |
+| 上游模型调用标识 | 上游调用标识、上游模型调用名 | 平台请求服务商时填写的模型参数 | 连接关联／供给 `upstreamModelId`；目录登记的 `modelId` 不直接替代它 |
 | 模型作者 | 厂商、发布方、服务商 | 模型研发或发布团队，与提供接入的服务商区分 | 主档 `profile.author`／`maker` |
 | 服务商／Provider ID | 供应商、服务商 ID、服务提供方 | 服务商是供给主体，Provider ID 是其永久身份 | `providers[].id/name`；永久引用为 `provider_id` |
 | 服务商编码 | 供应商编码、Provider 编码 | 服务商主体的业务编码；内部 ID 不以中文名称替代 | `providerCode`／服务商 `code` |

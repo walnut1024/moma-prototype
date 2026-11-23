@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { API_PREFIX } from '../../api-path';
 import { callLogFieldHelp } from '../components/call-log-field-help';
 import TableFieldHelp from '../components/TableFieldHelp';
@@ -66,9 +67,10 @@ function channelKey(row) {
 }
 
 function BatchChannelFields({ candidates, linked, values, change }) {
+  const t = useChannelText();
   const groups = Map.groupBy(candidates, channelKey);
   const options = Array.from(groups, ([value, [row]]) => ({
-    value, label: row.simulated ? row.name + ' · 模拟连接' : row.endpoint.name + ' · ' + row.provider.name,
+    value, label: row.simulated ? t(row.name) + ' · ' + t('模拟连接') : row.endpoint.name + ' · ' + row.provider.name,
   }));
   const models = candidates.filter(row => values.connections.includes(channelKey(row)));
   const reason = row => linked.some(link => link.channelId === row.id) ? '已关联' : row.reason;
@@ -124,7 +126,7 @@ function changedChannelSettings(saved, current) {
   try {
     const previous = JSON.parse(saved);
     const next = JSON.parse(sourceFingerprint(current));
-    const labels = ['关联模型', '上游模型调用标识', '接入连接配置', '接口地址'];
+    const labels = ['关联模型', '上游模型调用标识', '连接配置', '接口地址'];
     return labels.filter((_, index) => JSON.stringify(previous[index]) !== JSON.stringify(next[index])).join('、') || '接入配置';
   } catch {
     return '接入配置';
@@ -207,6 +209,7 @@ function BasicInformation({ service, model, sources }) {
 }
 
 function ChannelModels({ service, rows, canEdit, open }) {
+  const t = useChannelText();
   const [input, setInput] = useState('');
   const [status, setStatus] = useState('all');
   const [tokens, setTokens] = useState(null);
@@ -223,10 +226,10 @@ function ChannelModels({ service, rows, canEdit, open }) {
   const matchingGroups = Map.groupBy(filtered, row => row.priority);
   const visibleGroups = !input.trim() && status === 'all' ? priorities : priorities.filter(priority => matchingGroups.has(priority));
   const columns = [
-    { title: '上游模型 / 服务商', width: 148, render: (_, row) => <div className="new-service-cell"><Text strong>{row.name}</Text><Text type="tertiary">{row.provider}</Text></div> },
+    { title: t('上游模型 / 服务商'), width: 148, render: (_, row) => <div className="new-service-cell"><Text strong>{row.name}</Text><Text type="tertiary">{row.provider}</Text></div> },
     { title: '上游模型调用标识', width: 220, render: (_, row) => <CopyId label="上游模型调用标识" value={row.upstreamId}/> },
     { title: '模型类型', width: 96, render: () => <Tag color="blue">{typeLabel(service.type)}</Tag> },
-    { title: '上游模型状态', width: 132, render: (_, row) => <div className="new-service-cell"><AdminStatus value={row.reason ? '不可用' : row.enabled ? '已启用' : '已停用'}/>{row.reason && <Text type="tertiary">{row.reason}</Text>}</div> },
+    { title: t('上游模型状态'), width: 132, render: (_, row) => <div className="new-service-cell"><AdminStatus value={row.reason ? '不可用' : row.enabled ? '已启用' : '已停用'}/>{row.reason && <Text type="tertiary">{row.reason}</Text>}</div> },
     routingNumberColumn('权重', 'weight', 80, weightHelp, !weighted),
     { title: '操作', fixed: 'right', width: 160, render: (_, row) => <Space className="new-service-channel-actions" spacing={4}>
       {row.needsReview && <Button size="small" theme="borderless" disabled={!canEdit} onClick={() => open('channel', row)}>核对连接配置</Button>}
@@ -242,9 +245,9 @@ function ChannelModels({ service, rows, canEdit, open }) {
     </div>
     <div className="new-service-toolbar">
       <div className="new-service-filters">
-        <Choice label="上游模型状态" options={[['all', '全部状态'], ['enabled', '已启用'], ['disabled', '已停用'], ['unavailable', '不可用']]} value={status} onChange={setStatus}/>
+        <Choice label={t('上游模型状态')} options={[['all', '全部状态'], ['enabled', '已启用'], ['disabled', '已停用'], ['unavailable', '不可用']]} value={status} onChange={setStatus}/>
         <Input className="new-service-search" prefix={<IconSearch aria-hidden="true"/>} value={input} onChange={setInput}
-          showClear aria-label="搜索上游模型" placeholder="搜索连接或模型"/>
+          showClear aria-label={t('搜索上游模型')} placeholder={t('搜索连接或模型')}/>
       </div>
       <Space wrap>
         <Button disabled={!canEdit || !service.modelId} theme="solid" icon={<IconPlus/>}
@@ -264,7 +267,7 @@ function ChannelModels({ service, rows, canEdit, open }) {
           })}>配置优先级与权重</Button>
           <Button size="small" disabled={!canEdit || group.length >= 100} onClick={() => open('addChannels', {
             ids: [], connections: [], priority
-          })}>添加关联上游模型</Button></Space>
+          })}>{t('添加关联上游模型')}</Button></Space>
         </div>
         <Table empty="本组暂无上游模型" columns={columns} dataSource={matches} rowKey="id" scroll={{ x: 762 }} pagination={matches.length > pagination.pageSize ? pagination : false}/>
       </section>;
@@ -315,6 +318,7 @@ function loadLocalServices() {
 }
 
 export default function ModelServicesNew({ state, params, dirtyRef, sourceConflict, reloadWorkspace }) {
+  const t = useChannelText();
   const [data, setData] = useState({ rows: [], deletedIds: [], error: '', loading: true });
   const [legacy] = useState(loadLocalServices);
   const [saving, setSaving] = useState(false);
@@ -614,7 +618,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
       </AdminPageHeading>
       <Card>
         <Tabs activeKey={activeTab} keepDOM={false} onChange={tab => { location.hash = detailHref(service.id, tab); }}>
-          {tabs.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={label}>
+          {tabs.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={t(label)}>
           {activeTab === id && <div className="new-service-tab">
           {activeTab === 'basic' && <BasicInformation service={service} model={model}
             sources={channels.filter(row => row.enabled && !row.reason && !row.simulated).map(row => candidatesById.get(row.channelId))}/>}
@@ -696,13 +700,13 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
             { key: '变更项', value: changedChannelSettings(values.fingerprint, reviewSource) },
             { key: '服务商', value: reviewSource.provider.name },
             { key: '上游模型调用标识', value: reviewSource.upstreamModelId === values.upstreamId ? values.upstreamId : values.upstreamId + ' → ' + reviewSource.upstreamModelId },
-            { key: '接入连接', value: reviewSource.endpoint.name },
+            { key: '模型连接', value: reviewSource.endpoint.name },
           ]}/>
         </>}
         {kind === 'newGroup' && <GroupPriorityField hint="数值越小越优先，例如 0 优先于 1" value={values.priority} onChange={priority => change({ priority })}/>}
         {kind === 'addChannels' && <>
           <BatchChannelFields candidates={candidates} linked={channels} values={values} change={change}/>
-          {contextRoutingEnabled(service) && <NumberField label={contextLabel} min={1} value={values.context} onChange={context => change({ context })}/>}
+          {contextRoutingEnabled(service) && <NumberField label={t(contextLabel)} min={1} value={values.context} onChange={context => change({ context })}/>}
         </>}
         {kind === 'weights' && <><GroupPriorityField value={values.priority} onChange={priority => change({ priority })}/>
           {editingGroup.length > 0 && <ChannelWeightFields rows={editingGroup} total={draftTotal} valid={weightsValid} values={values} change={change} disabled={saving || !canEdit || !weighted}/>}</>}

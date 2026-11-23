@@ -129,7 +129,7 @@ export function publicationChecks(state, model, { technical = false, serviceId }
         const channels=routingChannels(state,service);
         const priceReady=provider?.status==='已启用' && Boolean(entry.callId) && (technical || servicePurpose(model,offerKey(entry))!=='internal' && Boolean(price?.items.length) && price.items.every(item=>item.amount!=null)), routeReady=routingStatus(state,service).good;
         return [{label:`${provider?.name || '服务商'}：${technical?(entry.callId?'模型调用标识 已配置':'模型调用标识 待配置'):priceReady?'模型调用标识和售价已配置':!entry.callId?'模型调用标识 待配置':'缺少对外售价'}`,passed:priceReady,tab:'pricing',providerId:offerKey(entry)},
-          {label:`${provider?.name || '服务商'}：${routeReady?'已发布可用连接路由':channels.length?'路由尚未发布':'未关联可用连接'}`,passed:routeReady,tab:'routing',providerId:offerKey(entry),mapping:!channels.length}];
+          {label:`${provider?.name || '服务商'}：${routeReady?'已发布可用上游模型路由':channels.length?'路由尚未发布':'未关联可用上游模型'}`,passed:routeReady,tab:'routing',providerId:offerKey(entry),mapping:!channels.length}];
       }),
       platformPublicationCheck(state,model,Date.now(),serviceId),
     ];
@@ -140,7 +140,7 @@ export function publicationChecks(state, model, { technical = false, serviceId }
     const routeReady=routingStatus(state,service).good, priceReady=prices.length>0 && prices.every(item=>item.amount!=null);
     return [
       {label:metadataReady?'模型资料完整':'模型资料待完善',passed:metadataReady,tab:'basic'},
-      {label:routeReady?'已发布有效的服务商与连接路由映射':channels.length?'连接路由待配置或发布':'尚未关联供应连接',passed:routeReady,tab:'routing',mapping:!channels.length},
+      {label:routeReady?'已发布有效的服务商与上游模型路由映射':channels.length?'上游模型路由待配置或发布':'尚未关联上游模型',passed:routeReady,tab:'routing',mapping:!channels.length},
       ...(!technical?[{label:servicePurpose(model)==='internal'?'内部服务无需销售上架':priceReady?'统一售价与计量规则完整':'统一售价待配置',passed:servicePurpose(model)!=='internal' && priceReady,tab:'pricing'}]:[]),
       platformPublicationCheck(state,model),
     ];
@@ -295,7 +295,7 @@ export function modelTransaction(state, action) {
   } else if (operation === 'supply') {
     const endpoint = state.endpoints.find(item => item.id === data.endpointId), supply = data.id && state.modelSupplies.find(item => item.id === data.id && item.modelId === model.id);
     if (data.id && !supply) throw new Error('供应服务不存在');
-    if (!endpoint) throw new Error('请选择有效接入连接');
+    if (!endpoint) throw new Error('请选择有效的连接');
     if (!data.upstreamModelId?.trim() || /\s/.test(data.upstreamModelId)) throw new Error('上游模型调用标识 必填且不能包含空格');
     if (state.modelSupplies.some(item => item.id !== supply?.id && item.modelId === model.id && item.endpointId === endpoint.id && item.status !== '已移除')) throw new Error('该连接已关联此模型');
     const fields = { modelId: model.id, endpointId: endpoint.id, upstreamModelId: data.upstreamModelId.trim(), capabilities: capabilities(data.capabilities, model.type, true), validationStatus: '待验证', verifiedAt: null, validationCases: [], status: '已停用' };

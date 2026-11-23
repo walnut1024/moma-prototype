@@ -46,7 +46,7 @@
 | 服务商名称／服务商编码 | provider.name／slug | 名称可编辑，编码创建后固定；现有内部 code 保留 | MoMA 管理约定 |
 | 连接名称／服务根地址 | connection.name／base_url | 属于一个 Provider，多个上游模型可复用；任务完整地址另按协议维护 | MoMA 管理约定 |
 | 连接编码 | connection.code | 既有业务别名，物理字段为 channels.code，旧内部键为 channelCode／endpointId；独立显示，不替代连接 ID，不增加到现有维护文件 | MoMA 自有字段 |
-| 上游模型名称 | channel.name | 识别实际供给来源；上游调用值、采购版本和容量按连接独立维护 | MoMA 管理约定 |
+| 上游模型名称 | channel.name | 识别实际供给来源；上游调用值、采购版本和容量按上游模型独立维护 | MoMA 管理约定 |
 | API 密钥组 ID／密钥组名称 | key_group_id／key_group_name | 服务商密钥池维护，内部映射 apiKeyGroups[].id／name 与连接 keyGroupId；录入服务商时可选择默认组或提交 key_group_name 新建组，按输入顺序加入密钥，不保存明文 | MoMA 自有字段 |
 | 上架状态／广场展示 | listing_stage／market_visible | 广场服务维护字段，与技术启停、销售状态分别管理 | MoMA 自有字段 |
 | 价格版本 ID／价格项 ID | price_version_id／price_item_id | 售价或采购的版本及计费项引用；价格变更创建新版本，历史不追改 | MoMA 自有字段 |

@@ -53,7 +53,7 @@ export default function ServiceListingDialog({state,model,ops,stage,close,initia
         const name=state.providers.find(row=>row.id===id)?.name || id;
         const keys=services.map(offerKey), count=keys.filter(key=>selected.includes(key)).length;
         return <div key={id} style={{marginBottom:12}}>
-          <Checkbox aria-label={name+'全部连接'} disabled={busy || !ops.can} checked={count===keys.length} indeterminate={count>0 && count<keys.length} onChange={event=>select(keys,event.target.checked)}>{name}（{keys.length} 条连接）</Checkbox>
+          <Checkbox aria-label={name+'全部模型服务'} disabled={busy || !ops.can} checked={count===keys.length} indeterminate={count>0 && count<keys.length} onChange={event=>select(keys,event.target.checked)}>{name}（{keys.length} 个模型服务）</Checkbox>
           <div style={{paddingInlineStart:24}}>
             {services.map(service=><div key={service.id}><Checkbox disabled={busy || !ops.can} checked={selected.includes(offerKey(service))} onChange={event=>select([offerKey(service)],event.target.checked)}>{service.name} {service.callId}</Checkbox></div>)}
           </div>
@@ -61,7 +61,7 @@ export default function ServiceListingDialog({state,model,ops,stage,close,initia
       })}
       {!groups.size && <Typography.Paragraph>暂无可操作的模型服务。</Typography.Paragraph>}
     </div>}
-    {withdraw && <Typography.Paragraph>所选连接将停止新订购和新调用。</Typography.Paragraph>}
+    {withdraw && <Typography.Paragraph>所选模型服务将停止新订购和新调用。</Typography.Paragraph>}
     {gray && <>
       <Typography.Title heading={6}>灰度客户</Typography.Title>
       <Table pagination={false} rowKey="id" dataSource={tenants} columns={[{title:'选择',width:80,render:(_,tenant)=><Checkbox aria-label={`灰度客户 ${tenant.name}`} checked={tenantIds.includes(tenant.id)} disabled={!ops.can || busy} onChange={event=>{setTenantIds(ids=>event.target.checked?[...ids,tenant.id]:ids.filter(id=>id!==tenant.id));ops.dirty(true);}}/>},{title:'客户名称',dataIndex:'name'},{title:'客户 ID',dataIndex:'id'}]} empty="暂无有效客户。"/>

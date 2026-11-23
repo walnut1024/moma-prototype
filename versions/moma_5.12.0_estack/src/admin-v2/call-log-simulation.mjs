@@ -43,7 +43,7 @@ const channelTrendCatalogue = channelTrendProfiles.map(({ model: upstream, endpo
 
 export const defaultLogPolicy = { captureBody: false, projectId: 'all', sampleRate: 25, retentionDays: 30, maxSamples: 5000 };
 const channels = ['A', 'B', 'C', 'D'].map(letter => ({
-  id: 'demo-channel-' + letter, name: '连接 ' + letter, endpointId: 'endpoint-' + letter, providerId: provider.id,
+  id: 'demo-channel-' + letter, name: '连接 ' + letter, providerModelName: '上游模型 ' + letter, endpointId: 'endpoint-' + letter, providerId: provider.id,
   baseUrl: 'https://channel-' + letter.toLowerCase() + '.example.test/v1',
 }));
 
@@ -59,7 +59,7 @@ const point = (id, label, offset) => ({ id, label, offset, point: true });
 const routeNodes = channel => [
   phase('admission', '鉴权与权限校验', 0, 12),
   phase('project-route', '项目路由', 12, 3, [['策略标识', 'support-chat'], ['命中规则', '默认规则'], ['目标模型服务', model.name]]),
-  phase('channel-route', '连接选路', 15, 5, [['模型服务', model.name], ['所选连接', channel.name], ['选路依据', '上下文长度、优先级']]),
+  phase('channel-route', '上游模型选路', 15, 5, [['模型服务', model.name], ['所选上游模型', channel.providerModelName], ['选路依据', '上下文长度、优先级']]),
 ];
 const summaryOnly = { traceState: 'not-retained', body: { state: 'not-retained' } };
 const segment = (id, label, value, attemptIndex) => ({ id, label, attemptIndex, text: JSON.stringify(value, null, 2) });
@@ -111,15 +111,15 @@ export function createCallLogSimulation(now = Date.now(), { channelTrend = false
     durationMs: 1220, firstPacketMs: 1005, ttftMs: 1015, httpStatus: 200, usage: { input: 42, output: 44 },
     attempts: [
       attempt(a, { startedAt: age(2) + 20, durationMs: 800, httpStatus: 0, isTimeout: true, code: 'upstream_timeout',
-        errorMessage: '等待首包超时', fallback: true, fallbackReason: '首选连接超时' }),
+        errorMessage: '等待首包超时', fallback: true, fallbackReason: '首选上游模型超时' }),
       attempt(b, { startedAt: age(2) + 835, durationMs: 385, httpStatus: 200, ttftMs: 176, generationDurationMs: 205,
-        usage: { input: 42, output: 44, cached: 12 }, successReason: '连接回退后响应正常结束', upstreamRequestId: 'up-B-29D' }),
+        usage: { input: 42, output: 44, cached: 12 }, successReason: '上游模型回退后响应正常结束', upstreamRequestId: 'up-B-29D' }),
     ],
   });
   const full = request('req-61AE', age(4), {
     durationMs: 620, ttftMs: 260, httpStatus: 200, usage: { input: 20, output: 22 },
     attempts: [attempt(b, { startedAt: age(4) + 20, durationMs: 600, httpStatus: 200, ttftMs: 232, generationDurationMs: 360,
-      usage: { input: 20, output: 22, cached: 8 }, successReason: '首选连接响应正常结束', upstreamRequestId: 'up-B-17E' })],
+      usage: { input: 20, output: 22, cached: 8 }, successReason: '首选上游模型响应正常结束', upstreamRequestId: 'up-B-17E' })],
   });
   const blocked = request('req-49C1', age(6), {
     durationMs: 16, httpStatus: 429, errorMessage: '超过项目的模型请求速率限制',
@@ -144,7 +144,7 @@ export function createCallLogSimulation(now = Date.now(), { channelTrend = false
   const upstreamLimited = request('req-52C0', age(12), {
     durationMs: 78, httpStatus: 429,
     attempts: [attempt(a, { startedAt: age(12) + 20, durationMs: 58, httpStatus: 429,
-      upstreamRequestId: 'up-A-6C0', errorMessage: '连接触发速率限制' })],
+      upstreamRequestId: 'up-A-6C0', errorMessage: '上游模型触发速率限制' })],
   });
   const interrupted = request('req-82D1', age(14), {
     durationMs: 420, ttftMs: 110, httpStatus: 200, streamInterrupted: true, errorMessage: '流式输出中断',
@@ -176,26 +176,26 @@ export function createCallLogSimulation(now = Date.now(), { channelTrend = false
             ['目标模型服务', model.name], ['备用模型服务', backupModel.name],
           ]),
           phase('channel-route', '优先级组 P1 选路', 15, 5, [
-            ['组内权重', '连接 A 70%，连接 B 30%'], ['选中连接', '连接 A'], ['选中原因', '连接 A 在 P1 候选组内按权重命中'],
+            ['组内权重', '上游模型 A 70%，上游模型 B 30%'], ['选中上游模型', '上游模型 A'], ['选中原因', '上游模型 A 在 P1 候选组内按权重命中'],
             ['重试条件', '上游超时、上游 5xx'], ['每组重试次数', '1 次'],
             ['跨组切换次数', '1 次'], ['主模型总尝试上限', '3 次'],
           ]),
-          phase('group-retry', '组内重试', 320, 10, [['原因', '连接 A 超时'], ['下一次尝试', 'P1 · 连接 B']]),
-          phase('group-switch', '跨组切换', 530, 10, [['原因', 'P1 已达到组内重试上限'], ['下一次尝试', 'P2 · 连接 C']]),
+          phase('group-retry', '组内重试', 320, 10, [['原因', '上游模型 A 超时'], ['下一次尝试', 'P1 · 上游模型 B']]),
+          phase('group-switch', '跨组切换', 530, 10, [['原因', 'P1 已达到组内重试上限'], ['下一次尝试', 'P2 · 上游模型 C']]),
           phase('model-fallback', '切换备用模型服务', 850, 10, [
-            ['原因', 'P2 超时，主模型服务已达到总尝试上限'], ['备用模型服务', backupModel.name], ['下一次尝试', '连接 D'],
+            ['原因', 'P2 超时，主模型服务已达到总尝试上限'], ['备用模型服务', backupModel.name], ['下一次尝试', '上游模型 D'],
           ]),
           point('first-token', '返回首个 Token', 1080),
           point('end', '响应结束 · HTTP 200', 1260),
         ],
-        attemptActions: { 1: '组内重试至 P1 · 连接 B', 2: '跨组切换至 P2 · 连接 C', 3: '切换备用模型服务 · 连接 D' },
+        attemptActions: { 1: '组内重试至 P1 · 上游模型 B', 2: '跨组切换至 P2 · 上游模型 C', 3: '切换备用模型服务 · 上游模型 D' },
         body: { state: 'not-retained' },
       },
       [recovered.requestId]: {
         traceState: 'complete', attemptCount: 2, resultLabel: '回退后成功',
-        nodes: [...routeNodes(a), phase('fallback', '连接回退', 820, 15, [['回退原因', '首选连接超时'], ['切换去向', '连接 A → 连接 B']]),
+        nodes: [...routeNodes(a), phase('fallback', '上游模型回退', 820, 15, [['回退原因', '首选上游模型超时'], ['切换去向', '上游模型 A → 上游模型 B']]),
           point('first-token', '返回首个 Token', 1015), point('end', '响应结束', 1220)],
-        attemptActions: { 1: '同一模型服务内切换至连接 B' },
+        attemptActions: { 1: '同一模型服务内切换至上游模型 B' },
         body: { state: 'not-retained' },
       },
       [full.requestId]: {
@@ -203,8 +203,8 @@ export function createCallLogSimulation(now = Date.now(), { channelTrend = false
         nodes: [...routeNodes(b), point('first-token', '返回首个 Token', 260), point('end', '响应结束', 620)],
         body: { allowed: true, segments: [
           segment('client-request', '客户请求', { model: 'support-chat', messages: [{ role: 'user', content: '列出三个服务巡检项。' }] }),
-          segment('upstream-request', '上游尝试 1 · 连接 B · 请求', { model: 'deepseek-v4-pro', input: '列出三个服务巡检项。' }, 1),
-          segment('upstream-response', '上游尝试 1 · 连接 B · 响应', { id: 'up-B-17E', status: 200, output: '检查可用性、延迟和错误率。' }, 1),
+          segment('upstream-request', '上游尝试 1 · 上游模型 B · 请求', { model: 'deepseek-v4-pro', input: '列出三个服务巡检项。' }, 1),
+          segment('upstream-response', '上游尝试 1 · 上游模型 B · 响应', { id: 'up-B-17E', status: 200, output: '检查可用性、延迟和错误率。' }, 1),
           segment('client-response', '返回客户的最终响应', { id: 'req-61AE', status: 200, message: '检查可用性、延迟和错误率。' }),
         ] },
       },
@@ -220,8 +220,8 @@ export function createCallLogSimulation(now = Date.now(), { channelTrend = false
       [upstreamLimited.requestId]: {
         traceState: 'partial', attemptCount: 1,
         body: { allowed: true, segments: [
-          { id: 'upstream-request', label: '上游尝试 1 · 连接 A · 请求', attemptIndex: 1, state: 'expired' },
-          segment('upstream-response', '上游尝试 1 · 连接 A · 响应', { id: 'up-A-6C0', status: 429, error: 'rate_limit' }, 1),
+          { id: 'upstream-request', label: '上游尝试 1 · 上游模型 A · 请求', attemptIndex: 1, state: 'expired' },
+          segment('upstream-response', '上游尝试 1 · 上游模型 A · 响应', { id: 'up-A-6C0', status: 429, error: 'rate_limit' }, 1),
         ] },
       },
       [interrupted.requestId]: {

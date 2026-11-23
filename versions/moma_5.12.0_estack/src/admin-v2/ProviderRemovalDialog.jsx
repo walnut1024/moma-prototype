@@ -54,8 +54,8 @@ export default function ProviderRemovalDialog({ state, ops, target, close, remov
         pagination={{ pageSize: 10, hideOnSinglePage: true }} empty="没有关联的模型服务或广场连接，可以进入风险确认。" columns={[
           { title: '模型服务', dataIndex: 'name', width: 155 }, { title: '模型调用标识', dataIndex: 'callId', width: 160 },
           { title: '受影响连接', dataIndex: 'channelName', width: 160 },
-          { title: '调用状态', width: 135, render: (_, row) => !row.callsEnabled ? '已停服' : row.keepServing ? row.routeActive ? '待退出当前连接路由' : '其他连接继续服务' : '已启用' },
-          { title: '广场状态', width: 130, render: (_, row) => !row.listed ? '未上架 / 已下架' : row.keepServing ? '其他供给保持上架' : '已上架（含灰度）' },
+          { title: '调用状态', width: 135, render: (_, row) => !row.callsEnabled ? '已停服' : row.keepServing ? row.routeActive ? '待退出当前路由' : '其他上游模型继续服务' : '已启用' },
+          { title: '广场状态', width: 130, render: (_, row) => !row.listed ? '未上架 / 已下架' : row.keepServing ? '模型服务保持上架' : '已上架（含灰度）' },
         ]}/>
       {plan.blockers.map(message => <Banner type="danger" description={message} key={message}/>)}
       {plan.routes.some(row => row.remainingError) && <Banner type="warning" description="部分剩余路由无法通过校验，对应服务将停服并下架；其他服务不受影响。"/>}

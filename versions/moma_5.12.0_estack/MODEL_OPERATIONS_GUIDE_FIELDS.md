@@ -53,7 +53,7 @@
 | 模型服务 ID | Model Service ID | 系统标识具体服务记录的永久编号，供广场、销售等模块关联。 | A permanent identifier for a model service record. The marketplace, sales and other modules use it to link to the service. |
 | 模型 ID | Model ID | 客户调用 MoMA 时在请求参数 model 中填写的值，由模型服务维护。 | The value a customer puts in the model parameter when calling MoMA. The model service maintains it. |
 | 模型映射 | Model Mapping | 模型服务与上游模型之间的绑定关系，决定该服务可以使用哪些上游来源。 | The association between a model service and a provider model. It determines which upstream sources the service can use. |
-| 上游模型状态 | Provider Model Status | 一条已关联上游模型在当前服务中的状态。已启用的连接在来源配置可用时可参与路由。 | The state of a linked provider model in the current service. An enabled connection can participate when its upstream configuration is available. |
+| 上游模型状态 | Provider Model Status | 一条已关联上游模型在当前服务中的状态。已启用的上游模型可在连接可用且参与路由时被选中。 | The state of a linked provider model in the current service. An enabled provider model can be selected when its connection is available and routing is enabled for the binding. |
 | 服务描述 | Service Description | 在模型服务中维护的该服务说明。 | A description maintained on the model service. |
 | 路由策略 | Routing Strategy | 从符合条件的上游模型中选择本次请求目标的规则。 | The rule that chooses a target for the current request from the eligible provider models. |
 | 参与路由 | Routing Enabled | 控制某条上游模型绑定是否参与该服务的路由选择。 | Whether a linked provider model can participate in routing for this service. |
@@ -68,7 +68,7 @@
 | 计费项 | Billing Item | 独立计价的资源项目，例如输入 Token、输出 Token 或缓存读取。 | A resource billed separately, such as input tokens, output tokens or cache reads. |
 | 计费单位 | Billing Unit | 单价对应的资源数量单位，例如百万 Token、次、张或秒。 | The quantity a unit price applies to, such as one million tokens, a request, an image or a second. |
 | 币种 | Currency | 价格使用的货币代码，例如 CNY 或 USD。 | The currency code used for a price, such as CNY or USD. |
-| 采购单价 | Purchase Unit Price | 平台从指定连接采购一个计费单位资源的价格。 | The price MoMA pays to procure one billing unit from a specified connection. |
+| 采购单价 | Purchase Unit Price | 平台使用指定上游模型时，每个计费单位对应的服务商成本价。 | The price MoMA pays the provider per billing unit for the selected provider model. |
 | 销售单价 | Sales Unit Price | 平台向客户收取的每个计费单位的价格，由模型销售维护。 | The price the platform charges customers per billing unit. It is maintained in model sales. |
 | 价格版本 | Price Version | 一组采购价或销售价在某个生效期内的记录，供历史计价追溯。 | A set of purchase or sales prices valid for a specified period and retained for historical billing. |
 | 请求 ID | Request ID | 标识一次客户请求的编号，用于关联该请求产生的各次上游尝试。 | An identifier for a customer request that links all upstream attempts made for that request. |

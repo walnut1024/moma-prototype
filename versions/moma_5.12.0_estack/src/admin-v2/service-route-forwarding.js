@@ -54,7 +54,7 @@ export function validateForwarding(model, rows, targets) {
   const allowed = forwardingInterfaces(model, targets);
   for (const {path, upstreamPath} of rows) {
     if (!allowed.some(row => row.path === path) || !targets.some(row => row.path === upstreamPath)) {
-      throw Error('主连接没有匹配的上游接口，请重新选择转换方向和上游接口');
+      throw Error('主上游模型没有匹配的上游接口，请重新选择转换方向和上游接口');
     }
   }
 }

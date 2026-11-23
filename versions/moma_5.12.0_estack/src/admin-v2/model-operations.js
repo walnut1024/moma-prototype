@@ -256,7 +256,7 @@ export function operationsTransaction(state, action) {
     const config=structuredClone(data.config), keys=new Set();
     const mapping=(op,supply,extra={})=>apply(serviceMappingTransaction(working,{operation:op,modelId,data:{serviceId:service.id,id:supply?.id,expectedRevision:supply?.mappingRevision || 0,expectedSource:mappingSourceVersion(working,service),...extra}}));
     for(const source of data.sources) {
-      if(typeof source?.key!=='string' || !source.key.startsWith('candidate:') || keys.has(source.key) || !config.channels.some(row=>row.enabled && row.supplyId===source.key))throw Error('所选连接重复或不属于本次路由');
+      if(typeof source?.key!=='string' || !source.key.startsWith('candidate:') || keys.has(source.key) || !config.channels.some(row=>row.enabled && row.supplyId===source.key))throw Error('所选上游模型重复或不属于本次路由');
       keys.add(source.key);
       const created=mapping('serviceMappingCreate',null,{name:working.endpoints.find(row=>row.id===source.config?.endpointId)?.name?.trim().slice(0,60) || '模型映射',config:source.config});
       const id=created.changes.find(change=>change.collection==='modelSupplies' && change.type==='add').record.id;
@@ -385,7 +385,7 @@ export function operationsTransaction(state, action) {
           name: supplierChannelName(provider, row.endpoint), sourceName: data.value, upstreamModelId: row.upstreamModelId,
         } }));
       }
-      label = '批量编辑连接名称';
+      label = '批量编辑上游模型名称';
     } else if (data.field === 'address' && data.phase === 'prepare') {
       if (typeof data.value !== 'string' || !data.value.trim()) throw Error('请填写新的上游 API 地址');
       const targets = plan.connections.filter(({ endpoint }) => endpoint.baseUrl !== data.value.trim());
@@ -758,7 +758,7 @@ export function operationsTransaction(state, action) {
         config: { ...config, channels: config.channels.map(row => supplyIds.has(row.supplyId) ? { ...row, groupId: data.groupId } : row) } } }));
       return { type: 'batch', objectId: route.id, label: '按标签保存服务路由分组草稿', changes };
     }
-    if (!['append', 'replace'].includes(data.mode) || typeof data.upstreamModelId !== 'string' || !data.upstreamModelId.trim()) throw Error('请选择模型接入方式及上游调用标识');
+    if (!['append', 'replace'].includes(data.mode) || typeof data.upstreamModelId !== 'string' || !data.upstreamModelId.trim()) throw Error('请选择上游模型的追加或替换方式，并填写上游模型调用标识');
     const directoryOperationResults = data.targets.map(target => {
       try {
         const endpoint = working.endpoints.find(row => row.id === target?.endpointId && !row.deletedAt && row.directoryTags?.includes(data.tag));
@@ -1128,7 +1128,7 @@ export function operationsTransaction(state, action) {
     if (!provider || !providerCatalogueIds(provider).includes(draft.catalogueModelId)) throw new Error('服务商目录模型已变化，请重新选择');
     const endpoint = working.endpoints.find(item => item.id === draft.endpointId && item.providerId === provider.id);
     const configured = provider.catalogConnections?.find(item => item.modelId === draft.catalogueModelId);
-    if (configured && configured.endpointId !== draft.endpointId) throw new Error('目录模型接入地址已变化，请重新核对并选择最新接入');
+    if (configured && configured.endpointId !== draft.endpointId) throw new Error('该目录模型关联的连接已变化，请核对并重新选择连接');
     if (!endpoint?.baseUrl || !connectionCredentialsReady(endpoint, provider)) throw new Error('连接或 API 密钥配置缺失，请补齐服务商连接设置；当前进度已保存');
     const matched = catalogueModelMatch(working, provider.id, draft.catalogueModelId);
     const master = draft.libraryId ? modelMaterial(working, draft.libraryId) : matched.model || matched.template;
@@ -1285,11 +1285,11 @@ export function operationsTransaction(state, action) {
     objectId=modelId;
   } else if (operation==='removeServiceChannel') {
     const model=working.models.find(item=>item.id===modelId), supply=modelSupplies(working,modelId).find(item=>item.id===data.supplyId);
-    if (!model || !supply) throw new Error('模型或连接关联不存在');
+    if (!model || !supply) throw new Error('模型或上游模型关联不存在');
     if (!['standard','provider'].includes(model.serviceMode)) throw new Error('请先配置服务模式');
     if (data.expectedUpdatedAt!==model.updatedAt) throw new Error('模型服务已有并发修订，请重新核对');
-    if (serviceBindingInUse(working,modelId,[supply])) throw new Error('连接仍被生效路由或路由草稿引用，暂时无法解除关联');
-    update('modelSupplies',supply.id,{status:'已移除',salesEnabled:false});objectId=modelId;label='解除连接关联';
+    if (serviceBindingInUse(working,modelId,[supply])) throw new Error('上游模型仍被生效路由或路由草稿引用，暂时无法解除关联');
+    update('modelSupplies',supply.id,{status:'已移除',salesEnabled:false});objectId=modelId;label='解除上游模型关联';
   } else if (operation === 'associateServiceChannelsBatch') {
     const model=working.models.find(item=>item.id===modelId);
     if (!model || model.serviceMode!=='standard') throw new Error('请在对应模型服务关联上游模型');
@@ -1300,15 +1300,15 @@ export function operationsTransaction(state, action) {
   } else if (operation === 'associateServiceChannels') {
     const model = working.models.find(item => item.id === modelId), provider=working.providers.find(item => item.id===data.providerId);
     if (!model || !['standard','provider'].includes(model.serviceMode)) throw new Error('请先配置服务模式');
-    if (model.serviceMode==='provider' && !providerServices(model).some(item=>item.providerId===data.providerId)) throw new Error('请先关联该 Provider，再配置其连接');
+    if (model.serviceMode==='provider' && !providerServices(model).some(item=>item.providerId===data.providerId)) throw new Error('请先关联该服务商，再配置其上游模型');
     if (data.expectedUpdatedAt !== model.updatedAt) throw new Error('模型已有并发修订，请重新打开关联');
     if (!data.confirmedIdentity) throw new Error('请核对上游模型与当前模型的身份及能力');
-    if (!Array.isArray(data.channelIds) || !data.channelIds.length || data.channelIds.length > 20 || new Set(data.channelIds).size !== data.channelIds.length) throw new Error('请选择 1–20 个不重复的连接');
+    if (!Array.isArray(data.channelIds) || !data.channelIds.length || data.channelIds.length > 20 || new Set(data.channelIds).size !== data.channelIds.length) throw new Error('请选择 1–20 个不重复的上游模型');
     const candidates=availableServiceChannels(working,provider,data.catalogueModelId);
     for (const id of data.channelIds) {
       const channel=candidates.find(item=>item.id===id);
-      if (!channel || channel.reason) throw new Error(channel?.reason || '所选连接已不存在或不属于服务商模型');
-      if (modelSupplies(working,modelId).some(item=>item.channelId===channel.id || !item.channelId && item.endpointId===channel.endpointId && item.upstreamModelId===channel.upstreamModelId)) throw new Error('该连接已关联当前模型');
+      if (!channel || channel.reason) throw new Error(channel?.reason || '所选上游模型已不存在或不属于当前服务商模型');
+      if (modelSupplies(working,modelId).some(item=>item.channelId===channel.id || !item.channelId && item.endpointId===channel.endpointId && item.upstreamModelId===channel.upstreamModelId)) throw new Error('该上游模型已关联当前模型');
       const result=modelOp('supply',modelId,{endpointId:channel.endpointId,upstreamModelId:channel.upstreamModelId,capabilities:model.capabilities});
       const supply=result.changes.find(item=>item.collection==='modelSupplies').record;
       update('modelSupplies',supply.id,{catalogueModelId:data.catalogueModelId,channelId:channel.id,salesEnabled:false});
@@ -1391,7 +1391,7 @@ export function operationsTransaction(state, action) {
   } else if (operation === 'checkConnection') {
     providerOp('testConnection', data.endpointId, { scenario: data.scenario || '成功' });
     if (connectionTestPassed(working.endpoints.find(item => item.id === data.endpointId))) providerOp('enableConnection', data.endpointId, {});
-    objectId = working.endpoints.find(item => item.id === data.endpointId).providerId; label = '检查接入连接';
+    objectId = working.endpoints.find(item => item.id === data.endpointId).providerId; label = '检查连接';
   } else if (operation === 'tariffDictionary') {
     const result = apply(tariffDictionaryTransaction(working, data));
     objectId = result.objectId; label = result.label;
@@ -1399,11 +1399,11 @@ export function operationsTransaction(state, action) {
     if (!Array.isArray(data.channels) || !data.channels.length || data.channels.length > 20) throw new Error('每批请添加 1–20 个连接');
     for (const [index, channel] of data.channels.entries()) {
       try {
-        if (!channel || typeof channel !== 'object' || channel.channelId) throw new Error('批量添加仅支持新连接');
+        if (!channel || typeof channel !== 'object' || channel.channelId) throw new Error('批量添加仅支持新的上游模型');
         providerOp('channelSave', data.providerId, { ...channel, modelId: data.modelId });
       } catch (error) { throw new Error(`第 ${index + 1} 行：${error.message}`); }
     }
-    objectId = data.providerId; label = `批量添加 ${data.channels.length} 个供应连接`;
+    objectId = data.providerId; label = `批量添加 ${data.channels.length} 个上游模型`;
   } else if (operation === 'provider') {
     const result = providerOp(data.operation, data.objectId, data.values);
     objectId = result.objectId; label = result.label;

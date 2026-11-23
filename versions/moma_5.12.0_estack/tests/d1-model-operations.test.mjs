@@ -138,7 +138,7 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     assert.ok(backup);
     const saveFailover = (enabled, backupSupplyId, overrides={}) => save(state,{type:'modelOperations',operation:'serviceFailoverConfigure',modelId:model.id,data:{serviceId:explicit.id,expectedVersion:serviceRoute(state,explicit.id).activeVersion,sourceVersion:routeSourceVersion(state,explicit),confirmed:true,enabled,backupSupplyId,...overrides}});
     const beforeFailover = (await api('/model-operations')).data;
-    await assert.rejects(saveFailover(true,primary.supplyId),/不同的备用连接/);
+    await assert.rejects(saveFailover(true,primary.supplyId),/不同的备用上游模型/);
     const foreign = routingServices(state).find(row=>row.modelId===model.id && row.providerId==='provider-zhipu-direct');
     await assert.rejects(saveFailover(true,routingChannels(state,foreign)[0].id),/指定服务商/);
     assert.deepEqual((await api('/model-operations')).data,beforeFailover);

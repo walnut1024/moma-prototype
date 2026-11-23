@@ -217,7 +217,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     if (mode !== 'credentials' && resources.some(row => row.id !== endpoint?.id && supplierChannelName(provider, row) === name)) throw new Error('服务商的连接名称不可重复');
     if (mode === 'info') {
       if (data.expectedUpdatedAt !== undefined && data.expectedUpdatedAt !== endpoint.updatedAt || data.expectedProviderUpdatedAt !== undefined && data.expectedProviderUpdatedAt !== provider.updatedAt) throw new Error('连接或上游模型调用标识已变化，请重新载入后编辑');
-      const sourceName = data.sourceName === undefined ? undefined : required(data.sourceName, '连接名称', 60);
+      const sourceName = data.sourceName === undefined ? undefined : required(data.sourceName, '上游模型名称', 60);
       const modelDisplayName = data.modelDisplayName === undefined ? undefined : required(data.modelDisplayName, '展示名称', 120);
       const associationOnly = sourceName !== undefined || modelDisplayName !== undefined;
       if (associationOnly && (!data.associationId || name !== supplierChannelName(provider, endpoint))) throw new Error('上游模型编辑须定位当前关联并保留连接名称');
@@ -276,7 +276,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     const fields = { supplierChannel: true, channelCode, authMode: data.authMode, ...(adapterDraft ? { adapterDraft } : {}), apiKeyId: data.authMode === 'specific' ? data.apiKeyId : '', ...(data.authMode === 'group' ? { keyGroupId: data.keyGroupId } : endpoint?.authMode === 'group' ? { keyGroupId: '' } : {}), credentialVersion: changed ? crypto.randomUUID() : endpoint?.credentialVersion, ...(changed ? { connectionTest: null, status: '草稿' } : { connectionTest: endpoint.connectionTest, status: endpoint.status }) };
     if (change.type === 'add') Object.assign(change.record, fields); else Object.assign(change.changes, fields);
     const ids = endpoint && changed ? [endpoint.id] : [];
-    return finish(endpoint ? '保存供应连接' : '创建供应连接', [...transaction.changes.filter(row => changed || row.collection === 'endpoints'), ...groupChanges, ...(selectedKey && !provider.apiKeys?.some(key => key.id === selectedKey.id) ? [update('providers', objectId, { apiKeys: [...(provider.apiKeys || []), selectedKey] })] : []), ...(ids.length ? invalidateSupplierChannels(state, provider, ids) : [])]);
+    return finish(endpoint ? '保存连接' : '创建连接', [...transaction.changes.filter(row => changed || row.collection === 'endpoints'), ...groupChanges, ...(selectedKey && !provider.apiKeys?.some(key => key.id === selectedKey.id) ? [update('providers', objectId, { apiKeys: [...(provider.apiKeys || []), selectedKey] })] : []), ...(ids.length ? invalidateSupplierChannels(state, provider, ids) : [])]);
   }
   if (!endpoint) throw new Error('请选择当前服务商的连接');
   if (operation === 'supplierCatalogueChannelDelete') {
@@ -291,7 +291,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
   if (operation === 'supplierChannelFreeze') {
     if (typeof data.frozen!=='boolean' || !data.confirmed) throw new Error('请确认连接冻结或解冻及其影响');
     if (data.expectedUpdatedAt!==endpoint.updatedAt) throw new Error('连接已有并发修改，请重新打开核对');
-    return finish(data.frozen?'冻结供应连接':'解冻供应连接',[update('endpoints',endpoint.id,{frozen:data.frozen})]);
+    return finish(data.frozen?'冻结连接':'解冻连接',[update('endpoints',endpoint.id,{frozen:data.frozen})]);
   }
   if (operation === 'supplierAssociationRemove') {
     if (!catalogueChannels(state, provider, data.modelId).some(row => row.id === data.associationId && row.endpointId === endpoint.id)) throw new Error('模型与连接关联不匹配');
@@ -302,7 +302,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     const block = supplierDeletionBlock(state, provider, null, { id: endpoint.id, endpointId: endpoint.id });
     if (block.message) throw new Error(block.message);
     if (supplierChannelAssociations(state, provider, endpoint.id).length || state.modelSupplies.some(row => row.endpointId === endpoint.id && row.status !== '已移除')) throw new Error('连接仍被模型或服务引用，请先解除关联');
-    return finish('删除供应连接', [update('endpoints', endpoint.id, { deletedAt: new Date().toISOString(), status: '停用' })]);
+    return finish('删除连接', [update('endpoints', endpoint.id, { deletedAt: new Date().toISOString(), status: '停用' })]);
   }
   if (operation === 'supplierModelTest' || operation === 'supplierModelEnable') {
     const association = catalogueChannels(state, provider, data.modelId).find(row => row.id === data.associationId && row.endpointId === endpoint.id);
@@ -333,7 +333,7 @@ export function supplierResourceTransaction(state, { operation, objectId, data =
     if (provider.status !== '已启用') throw new Error('请先启用服务商');
     if (connectionTestPending(endpoint)) throw new Error('当前连接测试尚未完成，不能使用先前证据启用');
     if (!connectionCredentialsReady(endpoint, provider) || !connectionTestPassed(endpoint)) throw new Error('请先配置凭证并通过连接测试');
-    return finish('启用供应连接', [update('endpoints', endpoint.id, { status: '运行中', activationSource: null, activationChangedAt: new Date().toISOString(), connectionQualification: structuredClone(endpoint.connectionTest) })]);
+    return finish('启用连接', [update('endpoints', endpoint.id, { status: '运行中', activationSource: null, activationChangedAt: new Date().toISOString(), connectionQualification: structuredClone(endpoint.connectionTest) })]);
   }
   if (operation !== 'supplierAssociationSave') throw new Error('未知供应资源操作');
   const modelId = required(data.modelId, '服务商目录标识');
