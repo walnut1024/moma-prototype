@@ -4,13 +4,6 @@ import { CLASSIFICATION_KINDS, classificationKind } from './model-classification
 
 export function adminBreadcrumbs(active, params, names = {}) {
   const page = pages[active];
-  if (active === 'model-prices' && params.get('resourceJson') === '1') {
-    const origin = new URLSearchParams(params);
-    origin.delete('resourceJson');
-    origin.delete('resourceTarget');
-    const crumbs = adminBreadcrumbs(active, origin, names);
-    return [...crumbs.slice(0, -1), { ...crumbs.at(-1), href: `#/admin-2/${active}${origin.size ? '?' + origin : ''}` }, { label: '维护 JSON' }];
-  }
   const href = (id, patch = {}, omit = []) => {
     const next = new URLSearchParams(params);
     omit.forEach(key => next.delete(key));
@@ -28,7 +21,7 @@ export function adminBreadcrumbs(active, params, names = {}) {
     names.internal || group.direct || ['models', 'commerce', 'customers'].includes(group.id) ? null : `#/admin-2/${groupHome}`);
   const view = params.get('view');
   if (active === 'package-production') {
-    const labels = { new: '新增套餐', edit: '编辑套餐', detail: '套餐详情' };
+    const labels = { new: '新建套餐', edit: '编辑套餐', detail: '套餐详情' };
     const label = Object.hasOwn(labels, view) ? labels[view] : null;
     add(page.label, label ? href(active, {}, ['view', 'package']) : null);
     if (label) add(label);
@@ -46,7 +39,7 @@ export function adminBreadcrumbs(active, params, names = {}) {
     add('基础资料', '#/admin-2/model-templates');
     add('服务商', provider || view ? href(active, {}, ['provider', 'view', 'tab', 'edit', 'returnTo', 'modelQ', 'modelPage']) : null);
     if (provider) add(names.provider || '服务商不存在', view === 'modelImport' ? href(active, { tab: 'models' }, ['view', 'edit']) : null);
-    const label = { new: '添加服务商', import: '批量导入服务商资料', relations: '批量导入供应关系', modelImport: '批量导入并登记' };
+    const label = { new: '新建服务商', import: '批量导入服务商资料', relations: '批量导入供应关系', modelImport: '批量导入并登记' };
     if (Object.hasOwn(label, view)) add(label[view]);
   } else if (active === 'listing-new' && params.has('service')) {
     add(page.label, href(active, {}, ['service', 'tab']));

@@ -157,7 +157,7 @@ export default function MaterialMetadataForm({state, conflict, reload, model, in
     {error && <Banner type="danger" description={error}/>}
     {footerTarget && createPortal(<>
       <Button onClick={onCancel}>{readOnly ? '关闭' : '取消'}</Button>
-      {!readOnly && <Button form={formId} htmlType="submit" theme="solid" loading={saving} disabled={!editable || uploading}>保存</Button>}
+      {!readOnly && <Button form={formId} htmlType="submit" theme="solid" loading={saving} disabled={!editable || uploading}>{model ? '保存' : '创建模型资料'}</Button>}
     </>, footerTarget)}
   </Form>;
 }

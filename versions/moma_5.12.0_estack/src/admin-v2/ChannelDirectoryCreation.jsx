@@ -269,8 +269,8 @@ export default function ChannelDirectoryCreation({ state, providers, connections
 
   if (reference && !preview) return (
     <SupplierCreationDialog wide className="channel-directory-create-dialog" description=""
-      title={t('添加新的连接')} cancelLabel={t('取消')} cancel={() => !busy && ops.proceed(close)}
-      submit={review} action={t('创建连接')}
+      title={t('新建连接')} cancelLabel={t('取消')} cancel={() => !busy && ops.proceed(close)}
+      submit={review} action={t(batch ? '预览批量创建' : '创建连接')}
       disabled={writing || !eligibleProvider || !listedType || !channelName.trim() || !value.baseUrl.trim() || !endpointPath.trim() ||
         !keyText.trim()}>
       <Field label={t('连接类型')} required>
@@ -335,13 +335,13 @@ export default function ChannelDirectoryCreation({ state, providers, connections
         { title: '凭证摘要', render: (_, row) => row.keys.map(key => key.maskedKey).join('、') || (pendingType ? '待适配' : independent ? '—' : value.authMode === 'none' ? '无需认证' : maskProviderApiKey(provider.apiKeys?.find(key => key.id === value.apiKeyId)?.maskedKey)) },
         { title: '预检结果', render: (_, row) => row.error || (preview.adapterDraft ? '待适配 · 未启用' : '待创建 · 未启用') },
       ]}/>
-      <Typography.Paragraph type="tertiary">{preview.models.length ? '每条连接加入 ' + preview.models.length + ' 款待验证模型。' : '可在创建后新增上游模型，再进行验证和启用。'}</Typography.Paragraph>
+      <Typography.Paragraph type="tertiary">{preview.models.length ? '每条连接加入 ' + preview.models.length + ' 款待验证模型。' : '可在创建后添加上游模型，再进行验证和启用。'}</Typography.Paragraph>
       {preview.copyFrom && <Typography.Paragraph>请求规则：{preview.copyFrom.rules ? '复制' : '不复制'} · 容量和服务商成本价：{preview.copyFrom.commercial ? '复制容量和报价草稿' : '后续配置'}</Typography.Paragraph>}
       {ops.error && <Notice error>{ops.error}</Notice>}
     </SupplierCreationDialog>;
   }
 
-  return <><SupplierCreationDialog drawer wide title={source ? '复制连接' : '创建连接'}
+  return <><SupplierCreationDialog drawer wide title={source ? '复制连接' : '新建连接'}
     description={configuring ? [provider?.name, pendingType?.name || adapters.find(row => row.id === value.interfaceType)?.label].filter(Boolean).join(' / ') : '选择服务商与上游接口'}
     cancel={() => !busy && ops.proceed(close)}
     footer={!source && configuring && !saved.length && <Button disabled={busy} onClick={() => setConfiguring(false)}>返回选择接口</Button>}

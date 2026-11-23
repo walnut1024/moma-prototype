@@ -111,7 +111,7 @@ test('forged targets, wider files, unknown IDs and immutable statuses cannot esc
   assert.throws(() => resourcePageTarget(state, 'channels', new URLSearchParams('provider=missing')), /不存在/);
   assert.throws(() => exportModelResources(state, 'channels', { level: 'module', provider_id: provider.id }), /范围无效/);
   assert.throws(() => plan(state, { ...exportModelResources(state, 'channels'), operation: 'link', rows: [] }), /只适用于模型服务/);
-  assert.throws(() => resourcePageTarget(state, 'channels', new URLSearchParams({ provider: provider.id, resourceJson: '1', resourceTarget: JSON.stringify({ level: 'module' }) })), /来源页面不一致/);
+  assert.deepEqual(resourcePageTarget(state, 'channels', new URLSearchParams({ provider: provider.id, resourceJson: '1', resourceTarget: JSON.stringify({ level: 'module' }) })), { level: 'provider', provider_id: provider.id });
   assert.deepEqual(state, before);
 });
 

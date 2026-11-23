@@ -63,12 +63,12 @@ function PackageTypeDialog({ target, save, close, canWrite, focusAfterDelete }) 
     });
   };
   const cancel = () => { if (!busy) finish(false); };
-  return <Modal visible title={deleting ? '删除套餐类型' : '添加套餐类型'} width="min(520px, calc(100vw - 32px))"
+  return <Modal visible title={deleting ? '删除套餐类型' : '新建套餐类型'} width="min(520px, calc(100vw - 32px))"
     closable={!busy} maskClosable={!busy} closeOnEsc={!busy} onCancel={cancel}
     footer={<>
       <Button type="tertiary" onClick={cancel} disabled={busy} autoFocus={deleting}>取消</Button>
       <Button htmlType="submit" form="package-type-editor" theme="solid" type={deleting ? 'danger' : 'primary'} loading={busy}
-        disabled={!canWrite || busy || (!deleting && !name.trim())}>{deleting ? '确认删除' : '确认添加'}</Button>
+        disabled={!canWrite || busy || (!deleting && !name.trim())}>{deleting ? '确认删除' : '创建套餐类型'}</Button>
     </>}>
     <form id="package-type-editor" onSubmit={submit} className="package-rule-editor">
       <Typography.Paragraph type="secondary">{deleting
@@ -178,7 +178,7 @@ function PackageEditor({ record, mode, canWrite, canManageTypes, packageTypes, c
     <Typography.Text>{label}{props.required && mark}</Typography.Text><Input value={values[key] ?? ''} onChange={value => change(key, value)} disabled={locked} {...props}/>
   </label>;
   return <>
-    <AdminPageHeading title={<span tabIndex={-1} ref={heading}>{readOnly ? '套餐详情' : record ? '编辑套餐' : '新增套餐'}</span>}/>
+    <AdminPageHeading title={<span tabIndex={-1} ref={heading}>{readOnly ? '套餐详情' : record ? '编辑套餐' : '新建套餐'}</span>}/>
     <Card><form onSubmit={submit} noValidate>
       <div className="package-layout">
         <div className="package-sections">
@@ -191,7 +191,7 @@ function PackageEditor({ record, mode, canWrite, canManageTypes, packageTypes, c
               {input('name', '套餐名称', { maxLength: 40, required: true })}
               <div className="package-field"><span>套餐类型</span><div className="flex items-center gap-2">
                 <Choice label="套餐类型" value={values.packageType || 'none'} options={ [['none', '未设置'], ...packageTypes] } onChange={value => change('packageType', value === 'none' ? '' : value)} disabled={locked}/>
-                {canManageTypes && !readOnly && <Button type="tertiary" disabled={busy} onClick={event => setTypeDialog({ trigger: event.currentTarget })}>添加类型</Button>}
+                {canManageTypes && !readOnly && <Button type="tertiary" disabled={busy} onClick={event => setTypeDialog({ trigger: event.currentTarget })}>新建套餐类型</Button>}
               </div></div>
               {canManageTypes && !readOnly && selectedCustomType && <div className="package-span flex justify-end">
                 <Button type="tertiary" disabled={busy} onClick={event => setTypeDialog({ ...selectedCustomType, trigger: event.currentTarget })}>删除类型</Button>
@@ -261,7 +261,7 @@ function PackageEditor({ record, mode, canWrite, canManageTypes, packageTypes, c
       {!readOnly && <footer className="admin-form-actions">
         <Typography.Text type="tertiary" size="small">星号表示发布必填</Typography.Text>
         <Button type="tertiary" disabled={busy} onClick={close}>取消</Button>
-        <Button htmlType="submit" theme="solid" disabled={!canWrite || busy}>保存</Button>
+        <Button htmlType="submit" theme="solid" disabled={!canWrite || busy}>{record ? '保存' : '创建套餐'}</Button>
       </footer>}
     </form></Card>
     {typeDialog && <PackageTypeDialog target={typeDialog} canWrite={canManageTypes} focusAfterDelete={() => heading.current?.focus()} close={() => setTypeDialog(null)} save={typeDialog.id ? async id => {
@@ -402,7 +402,7 @@ export default function PackageProduction({ state, transact, conflict, params, d
   return <div className="admin-page-stack">
     <AdminPageHeading title={<span tabIndex={-1} ref={listTitle}>套餐管理</span>}>
       {tab === 'packages' && <Button id="package-new" theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite}
-        onClick={event => open('new', null, event.currentTarget)}>新增套餐</Button>}
+        onClick={event => open('new', null, event.currentTarget)}>新建套餐</Button>}
     </AdminPageHeading>
     <Tabs type="line" activeKey={tab} keepDOM={false} aria-label="套餐管理"
       onChange={key => { location.hash = key === 'factors' ? `${route}?tab=factors` : route; }}>
@@ -416,7 +416,7 @@ export default function PackageProduction({ state, transact, conflict, params, d
           <section aria-label="套餐列表">
             <Table size="small" rowKey="id" columns={columns} dataSource={rows.slice((currentPage - 1) * size, currentPage * size)}
               scroll={{ x: 'max(100%, 1224px)' }}
-              empty={keyword || kind !== 'all' || status !== 'all' ? '暂无符合筛选条件的套餐' : '暂无套餐，点击「新增套餐」开始制作。'}
+              empty={keyword || kind !== 'all' || status !== 'all' ? '暂无符合筛选条件的套餐' : '暂无套餐，点击「新建套餐」开始制作。'}
               pagination={{ currentPage, pageSize: size, total: rows.length, pageSizeOpts: PAGE_SIZES, showSizeChanger: true, showTotal: true,
                 preventPageChangeOnPageSizeChange: true, onPageChange: setPage, onPageSizeChange: filter(setSize) }}/>
           </section>

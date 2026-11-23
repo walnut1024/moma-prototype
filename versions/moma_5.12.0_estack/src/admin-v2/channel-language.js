@@ -15,7 +15,6 @@ const englishText = new Map(Object.entries({
   '关联上游模型状态': 'Linked Provider Model Status',
   '搜索上游模型': 'Search provider models',
   '搜索连接或模型': 'Search connections or models',
-  '添加关联上游模型': 'Link Provider Models',
   '全局路由策略': 'Global Routing Strategy',
   '全局故障转移策略': 'Global Failover Policy',
   '故障转移策略': 'Failover Policy',
@@ -233,7 +232,7 @@ const englishText = new Map(Object.entries({
   '无需认证': 'No authentication required',
   '简介': 'Description',
   '创建人 / 创建时间': 'Created By / Created At',
-  '添加新的连接': 'Add Connection',
+  '新建连接': 'New Connection',
   '编辑信息': 'Edit Details',
   '测试连接': 'Test Connection',
   '启用': 'Enable',
@@ -336,5 +335,5 @@ const englishText = new Map(Object.entries({
 }));
 
 const chinese = label => label;
-export const channelEnglish = label => englishText.get(label) ?? label;
+export const channelEnglish = (label, actionLabel) => typeof actionLabel === 'string' ? actionLabel : englishText.get(label) ?? label;
 export const useChannelText = () => useContext(ChannelLanguageContext) ? channelEnglish : chinese;

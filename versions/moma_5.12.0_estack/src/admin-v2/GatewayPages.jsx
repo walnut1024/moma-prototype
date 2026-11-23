@@ -19,6 +19,7 @@ const meta = {
   cache: ['缓存策略', '按权限上下文控制缓存、TTL 和命中统计。'],
   releases: ['配置版本与发布', '校验配置差异，发布或生成可追溯的回滚版本。'],
 };
+const ruleNames = { routes: '路由策略', limits: '限流规则', fallback: '熔断与回退规则', cache: '缓存策略' };
 const limitScopes = [
   { value: 'tenant', label: '租户' }, { value: 'project', label: '项目' }, { value: 'key', label: 'API 密钥' }, { value: 'model', label: '模型' },
 ];
@@ -83,11 +84,11 @@ function Editor({ pageId, state, dispatch, close }) {
   };
   const initial = initialValues[pageId];
   return <>
-    <Modal visible width="min(560px, calc(100vw - 32px))" title={`新建${meta[pageId][0]}`}
+    <Modal visible width="min(560px, calc(100vw - 32px))" title={`新建${ruleNames[pageId]}`}
       closeOnEsc={!discarding} maskClosable={false} onCancel={dismiss}
       footer={<div className="gateway-editor-actions">
         <Button theme="light" onClick={dismiss}>取消</Button>
-        <Button theme="solid" htmlType="submit" form={formId}>保存并生效</Button>
+        <Button theme="solid" htmlType="submit" form={formId}>创建并生效</Button>
       </div>}>
       <div ref={formBody}>
         <Form id={formId} initValues={initial} onSubmit={save} onValueChange={values => {
@@ -240,7 +241,7 @@ export default function GatewayPage({ pageId, state, dispatch }) {
   return (
     <div className="gateway-settings admin-page-stack">
       <AdminPageHeading title={title} description={description}>
-        {!releases && <Button icon={<IconPlus aria-hidden="true"/>} theme="solid" onClick={() => setCreating(true)}>新建</Button>}
+        {!releases && <Button icon={<IconPlus aria-hidden="true"/>} theme="solid" onClick={() => setCreating(true)}>新建{ruleNames[pageId]}</Button>}
       </AdminPageHeading>
       {releases ? <Releases state={state} dispatch={dispatch}/> : <>
         {['routes', 'fallback', 'cache'].includes(pageId) && <Simulator state={state} dispatch={dispatch}/>}

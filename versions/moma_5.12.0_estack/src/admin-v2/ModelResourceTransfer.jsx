@@ -8,21 +8,12 @@ import { operationsTransaction } from './model-operations.js';
 import './model-resource-transfer.css';
 import { RESOURCE_SCHEMA, resourcePageTarget, resourceTargetLabel, resourceKey } from './model-resource-scope.js';
 
-export function openResourceJson(ops, target, onView) {
-  ops.proceed(() => {
-    onView?.();
-    const scrollY = window.scrollY;
-    ops.go({ resourceJson: '1', resourceTarget: JSON.stringify(target) }, { saved: true, preserveScroll: true });
-    history.replaceState({ ...history.state, modelResourceJsonScroll: scrollY }, '');
-  });
-}
-
 const channelTypes = { provider: '服务商', provider_model: '模型登记', connection: '连接', channel: '上游模型' };
 const channelFields = { name: '名称', base_url: '服务地址', protocol: '协议', interface_type: '接口类型',
   upstream_model_id: '上游模型 ID', capacity_limits: '容量限额', procurement: '服务商成本价', enabled: '启用状态' };
 const fieldValue = value => value == null || value === '' ? '—' : typeof value === 'string' ? value : JSON.stringify(value);
 
-export default function ModelResourceTransfer({ state, ops, scope, target: selectedTarget, onView, hideView = false, reviewFields = false }) {
+export default function ModelResourceTransfer({ state, ops, scope, target: selectedTarget, reviewFields = false }) {
   const [open, setOpen] = useState(false), [text, setText] = useState(''), [plan, setPlan] = useState(null);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const close = () => { if (!busy) ops.proceed(() => { setOpen(false); setText(''); setPlan(null); setError(''); ops.dirty(false); }); };
@@ -59,8 +50,7 @@ export default function ModelResourceTransfer({ state, ops, scope, target: selec
     catch { Toast.error('复制失败，请选择文本复制'); }
   };
   return <>
-    <Space>{!hideView && <Button disabled={Boolean(targetError)} onClick={() => openResourceJson(ops, target, onView)}>查看 JSON</Button>}
-      {scope !== 'services' && !(scope === 'channels' && target?.level === 'provider') && <Button disabled={!ops.can || Boolean(targetError)} onClick={openEditor}>批量维护</Button>}</Space>
+          {scope !== 'services' && !(scope === 'channels' && target?.level === 'provider') && <Button disabled={!ops.can || Boolean(targetError)} onClick={openEditor}>批量维护</Button>}
     {open && <AdminSideSheet visible title={resourceTargetLabel(state, scope, target) + ' · 批量维护'}
       width="min(1440px, 96vw)" className="semi-services model-resource-sheet" closeOnEsc onCancel={close} footer={<>
         <Button disabled={busy} onClick={close}>取消</Button>

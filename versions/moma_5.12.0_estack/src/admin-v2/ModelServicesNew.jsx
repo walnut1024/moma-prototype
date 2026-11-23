@@ -281,7 +281,7 @@ function ChannelModels({ service, rows, canEdit, open }) {
       </div>
       <Space wrap>
         <Button disabled={!canEdit} theme="solid" icon={<IconPlus/>}
-          onClick={() => open('newGroup', { priority: Math.max(-1, ...priorities) + 1 })}>新增优先级组</Button>
+          onClick={() => open('newGroup', { priority: Math.max(-1, ...priorities) + 1 })}>添加优先级组</Button>
       </Space>
     </div>
     {visibleGroups.map(priority => {
@@ -297,7 +297,7 @@ function ChannelModels({ service, rows, canEdit, open }) {
           })}>配置优先级与权重</Button>
           <Button size="small" disabled={!canEdit || group.length >= 100} onClick={() => open('addChannels', {
             ids: [], connections: [], formats: [], priority
-          })}>{t('添加关联上游模型')}</Button></Space>
+          })}>{t('关联上游模型', 'Link Provider Models')}</Button></Space>
         </div>
         <Table empty="本组暂无上游模型" columns={columns} dataSource={matches} rowKey="id" scroll={{ x: 762 }} pagination={matches.length > pagination.pageSize ? pagination : false}/>
       </section>;
@@ -591,8 +591,8 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
   const checkIssue = kind === 'unlist' ? dialog?.check?.stopIssue : dialog?.check?.deleteIssue;
   const checkBlocked = requiresCheck && (!dialog.check || dialog.check.revision !== target?.revision || Boolean(checkIssue));
   const titles = {
-    import: '导入浏览器记录', create: '添加模型服务', edit: '编辑模型服务名称', editDetails: '编辑信息', list: '启动服务', unlist: '停止服务',
-    channel: '核对连接配置', newGroup: '新增优先级组', addChannels: '添加关联上游模型至优先级 ' + values?.priority, startChannel: '启用上游模型', stopChannel: '停用上游模型',
+    import: '导入浏览器记录', create: '新建模型服务', edit: '编辑模型服务名称', editDetails: '编辑信息', list: '启动服务', unlist: '停止服务',
+    channel: '核对连接配置', newGroup: '添加优先级组', addChannels: '关联上游模型至优先级 ' + values?.priority, startChannel: '启用上游模型', stopChannel: '停用上游模型',
     removeChannel: '移除上游模型', weights: '配置优先级与权重', remove: '删除模型服务', failover: '配置故障转移策略',
   };
   return <div className="admin-page-stack new-model-services">
@@ -609,7 +609,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
         <div className="new-service-toolbar">
           <Input className="new-service-search" prefix={<IconSearch aria-hidden="true"/>} showClear
             aria-label="搜索模型服务" placeholder={`搜索服务名称 / 服务 ID / ${MODEL_ID_LABEL}`} value={query} onChange={setQuery}/>
-          <Button theme="solid" icon={<IconPlus/>} disabled={!canEdit} onClick={() => open('create', { ...blank, id: resourceId('model-service') })}>添加模型服务</Button>
+          <Button theme="solid" icon={<IconPlus/>} disabled={!canEdit} onClick={() => open('create', { ...blank, id: resourceId('model-service') })}>新建模型服务</Button>
         </div>
         <Table columns={columns} dataSource={data.rows.filter(row => searchMatches(query, row.name, row.id, row.callId))}
           rowKey="id" scroll={{ x: columns.reduce((width, column) => width + column.width, 0) }} pagination={pagination} empty="暂无匹配的模型服务"/>
@@ -660,7 +660,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
         <Button disabled={saving} onClick={() => dirty ? setEditState(current => ({ ...current, discard: true })) : close()}>取消</Button>
         <Button theme="solid" disabled={!canEdit || dialog.discard || checkBlocked || ((kind === 'weights' || kind === 'newGroup') && !Number.isSafeInteger(values.priority)) || (kind === 'addChannels' && !values.ids.length) || (kind === 'weights' && (!dirty || editingGroup.length > 0 && weighted && !weightsValid))} loading={saving} form={formId} htmlType="submit">{
           kind === 'import' ? '确认导入' : kind === 'create' ? '创建模型服务' : kind === 'list' ? '确认启动' : kind === 'unlist' ? '确认停服'
-            : kind === 'remove' ? '确认删除' : kind === 'channel' && values.id ? '确认更新关联' : '保存'
+            : kind === 'remove' ? '确认删除' : kind === 'channel' && values.id ? '确认更新关联' : kind === 'newGroup' ? '添加优先级组' : kind === 'addChannels' ? '确认关联' : '保存'
         }</Button>
       </>}>
       <form id={formId} className="new-service-form" onSubmit={event => { event.preventDefault(); apply(); }}>

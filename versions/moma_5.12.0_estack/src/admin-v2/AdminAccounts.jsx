@@ -66,7 +66,7 @@ function AccountEditor({ account, revision, canWrite, transact, close, complete 
   return (
     <Modal visible width={modalWidth} title={account ? '编辑后台账号' : '新建后台账号'} footer={<>
         <Button onClick={close}>取消</Button>
-        <Button theme="solid" form={formId} htmlType="submit" disabled={!canWrite}>{account ? '保存账号' : '新建账号'}</Button>
+        <Button theme="solid" form={formId} htmlType="submit" disabled={!canWrite}>{account ? '保存账号' : '创建后台账号'}</Button>
       </>} closeOnEsc maskClosable={false} onCancel={close}>
       <Typography.Paragraph type="secondary">{account ? '维护后台人员姓名、角色及联系资料。' : '使用手机号码或邮箱登录，创建成功后自动生成初始密码。'}</Typography.Paragraph>
       <form id={formId} noValidate onSubmit={submit}>
@@ -199,7 +199,7 @@ export default function AdminAccounts({ state, transact, conflict }) {
   return (
     <div className="aa-page admin-page-stack">
       <AdminPageHeading title="后台账号" description="管理后台人员的账号、手机号码、角色及启停状态。">
-        <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite} onClick={() => setEditor({ account: null, revision: state.revision })}>新建账号</Button>
+        <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite} onClick={() => setEditor({ account: null, revision: state.revision })}>新建后台账号</Button>
       </AdminPageHeading>
       {!canWrite && <Banner type="warning" closeIcon={null}
         description={conflict ? '数据已变化，请载入新版本后再操作。' : state.storageError ? '数据读取失败，请恢复数据后再操作。' : '仅系统管理员可新建、编辑、启停后台账号或重置密码。'}/>}

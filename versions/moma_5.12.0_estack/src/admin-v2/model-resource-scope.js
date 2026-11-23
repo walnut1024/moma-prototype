@@ -26,16 +26,6 @@ export function validateResourceTarget(state, scope, target) {
 
 // URL model values can identify the existing technical configuration; exported targets always use permanent model identities.
 export function resourcePageTarget(state, scope, params) {
-  if (params.get('resourceJson') === '1' && params.has('resourceTarget')) {
-    let target;
-    try { target = JSON.parse(params.get('resourceTarget')); } catch { throw Error('JSON 对象范围无效'); }
-    validateResourceTarget(state, scope, target);
-    const origin = new URLSearchParams(params);
-    origin.delete('resourceJson'); origin.delete('resourceTarget');
-    const source = resourcePageTarget(state, scope, origin);
-    if (source.level !== 'module' && JSON.stringify(Object.entries(source).sort()) !== JSON.stringify(Object.entries(target).sort())) throw Error('JSON 对象范围与来源页面不一致');
-    return target;
-  }
   const modelId = value => {
     const service = state.models.find(row => row.id === value);
     return service ? modelIdentity(state, service).id : value;
@@ -49,7 +39,7 @@ export function resourcePageTarget(state, scope, params) {
     const selected = serviceReferences(state).find(row => row.id === params.get('service') || modelServiceIdentity(state, row.model, offerKey(row)) === params.get('service'));
     if (!selected) throw Error('指定模型服务不存在');
     target = { level: 'model_service', model_service_id: modelServiceIdentity(state, selected.model, offerKey(selected)) };
-  } else if (params.has('model') && (scope !== 'market' || params.get('resourceJson') === '1')) target = { level: 'model', model_id: modelId(params.get('model')) };
+  } else if (params.has('model') && scope !== 'market') target = { level: 'model', model_id: modelId(params.get('model')) };
   return validateResourceTarget(state, scope, target);
 }
 

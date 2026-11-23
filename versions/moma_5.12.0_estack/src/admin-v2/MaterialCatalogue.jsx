@@ -77,7 +77,7 @@ export default function MaterialCatalogue({ state, ops }) {
       <Space wrap className="materials-toolbar-actions">
         <Button disabled={!ops.can} onClick={() => ops.go({ view: 'templateImport' })}>批量导入模型资料</Button>
         <Button theme="solid" icon={<IconPlus aria-hidden/>} disabled={!ops.can}
-          onClick={event => ops.go({ view: 'template', template: null, materialMode: 'edit', drawerSide: materialDrawerSide(event.currentTarget.getBoundingClientRect(), window.innerWidth) }, { preserveScroll: true })}>新建资料</Button>
+          onClick={event => ops.go({ view: 'template', template: null, materialMode: 'edit', drawerSide: materialDrawerSide(event.currentTarget.getBoundingClientRect(), window.innerWidth) }, { preserveScroll: true })}>新建模型资料</Button>
       </Space>
     </div>
     <Table rowKey="id" columns={columns} dataSource={rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)} scroll={{ x: 'max(100%, 1429px)' }}

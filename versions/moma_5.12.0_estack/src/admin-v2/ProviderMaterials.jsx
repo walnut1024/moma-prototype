@@ -42,7 +42,7 @@ function ProviderList({ state, ops, providers }) {
       <Space wrap className="materials-toolbar-actions">
         <Button disabled={!ops.can} onClick={() => ops.go({ view: 'import' })}>批量导入服务商资料</Button>
         <Button disabled={!ops.can} onClick={() => ops.go({ view: 'relations' })}>批量导入供应关系</Button>
-        <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can} onClick={() => ops.go({ view: 'new' })}>添加服务商</Button>
+        <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can} onClick={() => ops.go({ view: 'new' })}>新建服务商</Button>
       </Space>
     </div>
     <Table rowKey="id" dataSource={pageRows(rows, page)} scroll={{ x: 'max(100%, 780px)' }} empty="没有符合条件的服务商"
@@ -123,7 +123,7 @@ export default function ProviderMaterials(props) {
       {importKind === 'model' ? <SupplierOfferImport provider={provider} ops={ops} done={() => go({ view:null }, { saved:true })}/> : <ModelBatchImport key={view + (provider?.id || '')} kind={importKind} providerId={provider?.id} state={state} ops={ops} transact={transact}
         close={saved => provider ? go({ view: null }, { saved }) : go(listParams, { saved })}/>}
     </div> : view === 'new' ? <>
-      <Typography.Title heading={4}><span ref={title} tabIndex={-1}>添加服务商</span></Typography.Title>
+      <Typography.Title heading={4}><span ref={title} tabIndex={-1}>新建服务商</span></Typography.Title>
       <ProviderMaterialProfile key="new" editing ops={ops} cancel={back} saved={saved}/>
     </> : provider ? <>
       <Typography.Title heading={4}><span ref={title} tabIndex={-1}>{provider.name}</span></Typography.Title>

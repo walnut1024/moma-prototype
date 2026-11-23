@@ -50,7 +50,7 @@ export default function ModelClassificationDictionary({ kind, state, ops }) {
           onChange={value => { setQuery(value); setPage(1); }}/>
       </div>
       <Button className="materials-toolbar-actions" theme="solid" icon={<IconPlus aria-hidden/>}
-        disabled={!ops.can || busy} onClick={() => edit()}>新增{label}</Button>
+        disabled={!ops.can || busy} onClick={() => edit()}>新建{label}</Button>
     </div>
     <Table rowKey="id" dataSource={rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)}
       pagination={{ pageSize, currentPage, total: rows.length, onPageChange: setPage }}
@@ -62,9 +62,9 @@ export default function ModelClassificationDictionary({ kind, state, ops }) {
       { title: '关联模型数', width: 110, align: 'right', render: (_, row) => counts.get(row.id) || 0 },
       { title: '操作', width: 90, fixed: 'right', render: (_, row) => <Button theme="borderless" disabled={!ops.can || busy} onClick={() => edit(row)}>编辑</Button> },
     ]}/>
-    {draft && <Modal visible className="semi-materials" title={(draft.id ? '编辑' : '新增') + label}
+    {draft && <Modal visible className="semi-materials" title={(draft.id ? '编辑' : '新建') + label}
       onCancel={() => ops.proceed(close)} onOk={() => save({ ...draft, aliases: draft.aliases.split(/\n/u).map(value => value.trim()).filter(Boolean) })}
-      okText="保存" cancelText="取消" confirmLoading={busy}
+      okText={draft.id ? '保存' : '创建' + label} cancelText="取消" confirmLoading={busy}
       okButtonProps={{ disabled: !ops.can || !draft.name.trim() || series && !draft.authorId }}>
       <div className="materials-classification-fields">
         {series && <div><span id="classification-owner-label">所属作者</span>

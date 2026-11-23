@@ -99,7 +99,7 @@ export default function ProviderMaterialProfile({ provider, editing, ops, edit, 
     {stale && <Notice error>服务商资料已有修订，请重新打开核对。</Notice>}
     {editing && <div className="materials-actions"><Space>
       <Button disabled={busy} onClick={cancel}>取消</Button>
-      <Button htmlType="submit" theme="solid" loading={busy} disabled={disabled || uploading || !values.name.trim() || !values.code.trim() || !values.sourceType}>保存</Button>
+      <Button htmlType="submit" theme="solid" loading={busy} disabled={disabled || uploading || !values.name.trim() || !values.code.trim() || !values.sourceType}>{provider ? '保存' : '创建服务商'}</Button>
     </Space></div>}
   </Form>;
 }

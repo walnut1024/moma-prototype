@@ -11,7 +11,7 @@ function DictionaryEditor({entry,kind,ops,close}) {
   const [saving,setSaving]=useState(false);
   const change=(key,input)=>{setValue(current=>({...current,[key]:input}));ops.dirty(true);ops.setError('');};
   const cancel=()=>ops.proceed(close);
-  return <Modal visible className="semi-materials" title={entry?'编辑'+TARIFF_KINDS[kind]:kind==='unit'?'新增计费单位':'新增货币'} onCancel={cancel} footer={<><Button onClick={cancel}>取消</Button><Button form={formId} htmlType="submit" theme="solid" loading={saving} disabled={!ops.can}>保存字典项</Button></>}>
+  return <Modal visible className="semi-materials" title={entry?'编辑'+TARIFF_KINDS[kind]:kind==='unit'?'新建计费单位':'新建货币'} onCancel={cancel} footer={<><Button onClick={cancel}>取消</Button><Button form={formId} htmlType="submit" theme="solid" loading={saving} disabled={!ops.can}>{entry ? '保存' : '创建' + TARIFF_KINDS[kind]}</Button></>}>
     <Typography.Paragraph type="secondary">{kind==='scenario'?'服务商成本价与模型刊例价共用此计费项。已被引用的名称不能更改。':'用于服务商成本价与模型刊例价。已被引用的名称、单位及货币代码不能更改；停止选用后已有配置和历史保留。'}</Typography.Paragraph>
     <Form id={formId} onSubmit={async()=>{if(saving || !ops.can)return;setSaving(true);try{if(await ops.run('tariffDictionary',{operation:'save',id:entry?.id,kind,...value}))close();}finally{setSaving(false);}}}>
       <Form.Slot label={kind==='scenario'?'计费项名称':'中文名称'}><Input aria-label={kind==='scenario'?'计费项名称':'中文名称'} maxLength={kind==='unit'?40:80} value={value.name} disabled={!ops.can} onChange={input=>change('name',input)}/></Form.Slot>
@@ -39,7 +39,7 @@ export default function MaterialDictionary({state,ops,kind}) {
   return <>
     <div className="materials-toolbar">
       <div className="materials-filters"><Input prefix={<IconSearch aria-hidden/>} showClear aria-label={'搜索'+label} placeholder={kind==='scenario'?'搜索计费项名称':kind==='unit'?'搜索单位名称或英文名':'搜索货币名称、英文名或代码'} value={query} onChange={value=>{setQuery(value);setPage(1);}}/></div>
-      {kind!=='scenario' && <Button className="materials-toolbar-actions" theme="solid" icon={<IconPlus aria-hidden/>} disabled={!ops.can} onClick={event=>{trigger.current=event.currentTarget;ops.setError('');setEditing({kind});}}>{kind==='unit'?'新增计费单位':'新增货币'}</Button>}
+      {kind!=='scenario' && <Button className="materials-toolbar-actions" theme="solid" icon={<IconPlus aria-hidden/>} disabled={!ops.can} onClick={event=>{trigger.current=event.currentTarget;ops.setError('');setEditing({kind});}}>{kind==='unit'?'新建计费单位':'新建货币'}</Button>}
     </div>
     <Table rowKey="id" columns={columns} dataSource={rows.slice((currentPage-1)*pageSize,currentPage*pageSize)} scroll={{x:kind==='currency'?'max(100%, 670px)':'max(100%, 550px)'}}
       pagination={{currentPage,pageSize,total:rows.length,onPageChange:setPage}} empty={'没有符合条件的'+label}/>

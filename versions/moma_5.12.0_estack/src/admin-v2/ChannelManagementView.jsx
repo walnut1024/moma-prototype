@@ -238,7 +238,7 @@ export default function ChannelManagementView({ state, connections, ops, open, f
         {filtered && <Button theme="borderless" onClick={() => go({ channelProvider: null, channelModel: null, page: null })}>{t('清除来源筛选')}</Button>}
         {returnTo && <Button theme="borderless" onClick={() => ops.proceed(() => { location.hash = returnTo; })}>{t('返回来源页面')}</Button>}
         <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can}
-          onClick={event => open(event, 'create')}>{t('添加新的连接')}</Button>
+          onClick={event => open(event, 'create')}>{t('新建连接')}</Button>
       </div>
       <AdminTable aria-label={t('连接列表')} rowKey="id" pagination={false} dataSource={rows}
         empty={t(query.trim() || filtered ? '没有匹配的连接' : '暂无连接')}

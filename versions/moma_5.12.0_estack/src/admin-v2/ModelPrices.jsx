@@ -1,4 +1,3 @@
-import ModelResourceJsonPage from './ModelResourceJsonPage';
 import ModelResourceTransfer from './ModelResourceTransfer';
 import { useState } from 'react';
 import { IconPlus } from '@douyinfe/semi-icons';
@@ -47,11 +46,10 @@ export default function ModelPrices(props) {
   </Space>;
   const eligible = services.filter(row => !row.price);
   const merged=render=>(_,row)=>({children:render(row),props:{rowSpan:row.recordSpan}});
-  if (params.get('resourceJson') === '1') return <ModelResourceJsonPage state={state} ops={ops} scope="prices"/>;
   return <div className="admin-page-stack semi-services">
     <ModelModuleHeading module="prices" title={service?`${model.name} · ${service.offerName}`:"模型销售"}><div className="sp-actions">{!params.has('service') && <>
         <Button icon={<IconPlus/>} theme="solid" disabled={!ops.can || !eligible.length}
-          onClick={() => { setSalePick(''); go({ add:'1' }, { preserveScroll:true }); }}>添加模型售卖</Button>
+          onClick={() => { setSalePick(''); go({ add:'1' }, { preserveScroll:true }); }}>配置模型售卖</Button>
         <ModelResourceTransfer state={state} ops={ops} scope="prices"/>
       </>}{back && <Button onClick={()=>ops.proceed(()=>{location.hash=back;})}>返回来源页面</Button>}<Button onClick={()=>go({returnTo:location.hash,tab:'scenario'},{base:'tariff-dictionary',reset:true})}>计量配置</Button></div></ModelModuleHeading>
     {params.has('service') ? service ? <Card>
@@ -87,9 +85,9 @@ export default function ModelPrices(props) {
         </Space>)},
       ]}/><Typography.Text type="tertiary">共 {rows.length} 项服务</Typography.Text>
     </Card>}
-    {candidatesVisible && !readOnly && <Modal wide title="添加模型售卖" onClose={() => go({ add:null }, { preserveScroll:true })} footer={<>
+    {candidatesVisible && !readOnly && <Modal wide title="配置模型售卖" onClose={() => go({ add:null }, { preserveScroll:true })} footer={<>
       <Button onClick={() => go({ add:null }, { preserveScroll:true })}>取消</Button>
-      <Button theme="solid" disabled={!eligible.some(row => row.id === salePick) || !ops.can} onClick={() => configure(eligible.find(row => row.id === salePick))}>添加并配置</Button>
+      <Button theme="solid" disabled={!eligible.some(row => row.id === salePick) || !ops.can} onClick={() => configure(eligible.find(row => row.id === salePick))}>进入配置</Button>
     </>}>
       <Field label="模型服务" required><Select value={salePick || undefined} filter style={{ width:'100%' }}
         placeholder="选择已有模型服务" optionList={eligible.map(row => ({ value:row.id, label:row.name + ' · ' + row.callId }))} onChange={setSalePick}/></Field>

@@ -60,7 +60,7 @@ test('package management routes are in commercial operations and legacy browser 
   assert.equal(canAccessPage('运维人员', 'package-data'), false);
   assert.deepEqual(adminBreadcrumbs('package-data', new URLSearchParams()), [{ label: '商业运营' }, { label: '套餐管理', href: '#/admin-2/package-production' }, { label: '套餐数据' }]);
   assert.deepEqual(adminBreadcrumbs('package-production', new URLSearchParams('view=new')), [
-    { label: '商业运营' }, { label: '套餐管理', href: '#/admin-2/package-production' }, { label: '新增套餐' },
+    { label: '商业运营' }, { label: '套餐管理', href: '#/admin-2/package-production' }, { label: '新建套餐' },
   ]);
   const legacy = { ...createAdminSeed(), tokenPackages: [{ id: 'TP-0001', name: '旧套餐' }] };
   assert.deepEqual(parseAdminState(serializeAdminState(legacy)).tokenPackages, legacy.tokenPackages);

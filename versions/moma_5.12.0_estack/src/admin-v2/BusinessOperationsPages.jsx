@@ -23,10 +23,10 @@ const { Text, Title } = Typography;
 const titles = { goods: '商品与套餐', orders: '订购记录', announcements: '公告与服务通知', metering: '消费明细',
   ledger: '账户与额度流水', bills: '账单', settlement: '服务商对账与结算', adjustments: '退款与调账' };
 const configs = {
-  goods: { collection: 'products', fields: [
+  goods: { noun: '商品', collection: 'products', fields: [
     ['code', '商品编码'], ['name', '商品名称'], ['billingMode', '计费方式'], ['price', '基础价格', 'number'],
   ] },
-  announcements: { collection: 'announcements', fields: [
+  announcements: { noun: '公告', collection: 'announcements', fields: [
     ['title', '标题'], ['audience', '受众'], ['channel', '连接'], ['effectiveAt', '生效时间', 'date'],
   ] },
 };
@@ -46,7 +46,7 @@ function BusinessTable({ rows, columns, minWidth = 850, children, empty = '暂�
 
 function Managed({ pageId, state, dispatch }) {
   const formId = useId();
-  const { collection, fields } = configs[pageId];
+  const { collection, fields, noun } = configs[pageId];
   const title = titles[pageId];
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState(false);
@@ -80,7 +80,7 @@ function Managed({ pageId, state, dispatch }) {
   };
   return <>
     <AdminPageHeading title={title}>
-      <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite} onClick={() => setEditing(true)}>新建</Button>
+      <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite} onClick={() => setEditing(true)}>新建{noun}</Button>
     </AdminPageHeading>
     <BusinessTable tableKey={query} rows={rows} columns={columns} minWidth={760} empty={query ? '没有符合条件的记录' : '暂无记录'}>
       <FilterToolbar className="admin-list-toolbar">
@@ -89,10 +89,10 @@ function Managed({ pageId, state, dispatch }) {
         <FilterReset onClick={() => setQuery('')}/>
       </FilterToolbar>
     </BusinessTable>
-    {editing && <Modal visible title={`新建${title}`} width="min(520px, calc(100vw - 32px))"
+    {editing && <Modal visible title={`新建${noun}`} width="min(520px, calc(100vw - 32px))"
       maskClosable={false} closeOnEsc footer={<>
         <Button onClick={close}>取消</Button>
-        <Button form={formId} htmlType="submit" theme="solid" disabled={!canWrite}>保存</Button>
+        <Button form={formId} htmlType="submit" theme="solid" disabled={!canWrite}>创建{noun}</Button>
       </>} onCancel={close}>
       <Form id={formId} onSubmit={save} onValueChange={() => setError('')}>
         {fields.map(([field, label, type]) => type === 'date'
