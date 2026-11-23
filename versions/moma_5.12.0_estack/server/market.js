@@ -475,7 +475,8 @@ export async function marketRanking(db) {
     SUM(MAX(0,(julianday(json_extract(f.payload_json,'$.endedAt'))-julianday(json_extract(f.payload_json,'$.startedAt')))*86400000)) AS duration
     FROM market_calls c JOIN offers o ON o.record_id=c.offer_id JOIN services s ON s.id=o.service_id
     JOIN materials m ON m.id=o.material_id JOIN simulation_records f ON f.kind='usage' AND f.id=c.usage_id
-    LEFT JOIN json_each((SELECT meta_json FROM model_workspace WHERE id=1),'$.modelData.marketCards') card ON card.key=m.id
+    LEFT JOIN json_each((SELECT meta_json FROM model_workspace WHERE id=1),'$.modelData.marketCards') card
+      ON COALESCE(NULLIF(json_extract(card.value,'$.model_id'),''),card.key)=m.id
     WHERE c.created_at>=? AND json_extract(f.payload_json,'$.publicAtCall')=1
       AND o.retired_at IS NULL AND o.listing_stage='formal' AND o.market_visible=1 AND s.market_visible=1 AND s.deleted_at IS NULL
       AND (card.key IS NULL OR (json_extract(card.value,'$.status')='listed' AND json_extract(card.value,'$.scope.type')='all'

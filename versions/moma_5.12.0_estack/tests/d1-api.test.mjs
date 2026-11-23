@@ -792,4 +792,40 @@ test('market card icons and service associations persist and can be removed inde
   assert.deepEqual(card().linked, [second]);
   assert.equal((await inspect(first)).marketLinked, false);
   assert.equal((await inspect(second)).marketLinked, true);
+
+  const deletion = { card_id: cardId, confirmed: true };
+  assert.equal((await submit('marketCardDelete', deletion, readonlyToken)).status, 403);
+  assert.equal((await submit('marketCardDelete', { ...deletion, expectedRevision: state.revision - 1 })).status, 422);
+  assert.equal((await submit('marketCardDelete', { card_id: cardId })).status, 422);
+  assert.equal((await submit('marketCardSetStatus', { card_id: cardId, listing_stage: 'preview' })).status, 200);
+  await refresh();
+  assert.equal((await submit('marketCardDelete', deletion)).status, 422);
+  assert.equal((await submit('marketCardSetStatus', { card_id: cardId, listing_stage: 'withdrawn' })).status, 200);
+  await refresh();
+  const deleted = await submit('marketCardDelete', deletion);
+  assert.equal(deleted.status, 200, JSON.stringify(deleted.data));
+  await refresh();
+  assert.equal(card(), undefined);
+  assert.equal(state.audits[0].objectId, cardId);
+  assert.equal(state.audits[0].action, '删除模型卡片');
+  assert.equal((await inspect(second)).marketLinked, false);
+  assert.ok(state.marketModelServices.some(service => service.id === second));
+  assert.equal((await submit('marketCardDelete', deletion)).status, 422);
+
+  assert.equal((await submit('marketCardCreate', content)).status, 200);
+  await refresh();
+  const replacement = state.audits[0].objectId;
+  assert.notEqual(replacement, cardId);
+  assert.equal(state.modelData.marketCards[replacement].model_id, undefined);
+  assert.equal((await submit('marketCardDelete', { card_id: replacement, confirmed: true })).status, 200);
+  await refresh();
+  assert.equal(state.modelData.marketCards[replacement], undefined);
+
+  assert.equal((await submit('marketCardCreate', content)).status, 200);
+  await refresh();
+  const newCardId = state.audits[0].objectId;
+  assert.equal((await submit('marketCardLink', { card_id: newCardId, serviceIds: [second] })).status, 200);
+  await refresh();
+  assert.deepEqual(state.modelData.marketCards[newCardId].linked, [second]);
+  assert.equal((await inspect(second)).marketLinked, true);
 });

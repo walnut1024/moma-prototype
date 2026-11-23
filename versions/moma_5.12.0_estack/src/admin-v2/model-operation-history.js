@@ -11,7 +11,7 @@ export function modelOperationTarget(state, modelId, data) {
 export function modelAuditContext(state, action) {
   if (action.referenceMaterial) return { relatedModelIds: [], relatedEndpointIds: [], objectLabel: '模型资料：' + action.referenceMaterial.name };
   const changes = action.type === 'batch' ? action.changes : [action];
-  const references = new Set([action.objectId, action.modelId, action.marketCard?.card.model_id, action.record?.id, action.id].filter(Boolean));
+  const references = new Set([action.objectId, action.modelId, action.marketCard?.card?.model_id, action.marketCard?.modelId, action.record?.id, action.id].filter(Boolean));
   const related = new Set(), endpoints = new Set();
   for (const change of changes) {
     const record = change.record || state[change.collection]?.find(row => row.id === change.id);
@@ -34,7 +34,7 @@ export function modelAuditContext(state, action) {
       if ([supply.id, supply.endpointId, endpoint?.providerId].some(id => id && references.has(id))) related.add(model.id);
     }
   }
-  if (action.marketCard) return { relatedModelIds: [...related], relatedEndpointIds: [], objectLabel: '模型卡片：' + action.marketCard.card.content.name };
+  if (action.marketCard) return { relatedModelIds: [...related], relatedEndpointIds: [], objectLabel: '模型卡片：' + (action.marketCard.card?.content.name ?? action.marketCard.name) };
   let objectLabel = action.objectId || action.record?.id || action.id || '批量操作';
   for (const [collection, label] of Object.entries(names)) {
     const object = state[collection]?.find(row => row.id === objectLabel);
@@ -91,7 +91,8 @@ export function modelAuditChanges(state,action) {
     return values;
   }
   if (action.marketCard) {
-    const { cardId, card } = action.marketCard;
+    const { cardId, card, name, linked } = action.marketCard;
+    if (card === null) return [{ object: name, field: '关联服务', before: linked, after: [] }];
     const before = state.modelData?.marketCards?.[cardId];
     const fields = { status: '可见性', linked: '关联服务', shown: '展示服务', scope: '可见范围' };
     return Object.entries(fields).filter(([key]) => JSON.stringify(before?.[key]) !== JSON.stringify(card[key]))

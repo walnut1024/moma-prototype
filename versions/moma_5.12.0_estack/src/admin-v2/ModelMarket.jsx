@@ -177,6 +177,7 @@ export default function ModelMarket(live) {
   const [dropTarget, setDropTarget] = useState(null);
   const [busy, setBusy] = useState(false);
   const trigger = useRef(null);
+  const searchInput = useRef(null);
   const cardDragRevision = useRef(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
@@ -191,11 +192,11 @@ export default function ModelMarket(live) {
     ops.setError('');
     setCardDialog({ kind, cardId });
   });
-  const closeCard = () => {
+  const closeCard = (deleted = false) => {
     setCardDialog(null);
     ops.setError('');
     ops.dirty(false);
-    requestAnimationFrame(() => trigger.current?.focus());
+    requestAnimationFrame(() => (deleted ? searchInput.current : trigger.current)?.focus());
   };
   const cardRow = cardsById.get(cardDialog?.cardId);
   const positions = new Map(ordered.map((model, index) => [model.id, index + 1]));
@@ -275,6 +276,8 @@ export default function ModelMarket(live) {
     <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('edit', row.cardId, event.currentTarget)}>{t('编辑信息')}</Button>
     <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('link', row.cardId, event.currentTarget)}>{t('关联模型服务')}</Button>
     <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('status', row.cardId, event.currentTarget)}>{t('设置可见性')}</Button>
+    <Button size="small" theme="borderless" type="danger" disabled={!ops.can || busy}
+      onClick={event => openCard('delete', row.cardId, event.currentTarget)}>{t('删除')}</Button>
   </Space>;
   return <div className="semi-services sp-workspace">
     <ModelModuleHeading module="market" className="market-heading">
@@ -288,7 +291,7 @@ export default function ModelMarket(live) {
     </ModelModuleHeading>
     {demo && <Notice>模拟数据仅用于当前页面，退出后清除。</Notice>}
     <div className="sp-filters">
-      <Input prefix={<IconSearch aria-hidden="true"/>} showClear aria-label={t("搜索模型展示名称、模型编码、模型服务 ID 或模型 ID")} placeholder={t('模型展示名称 / 模型编码 / 模型服务 ID / 模型 ID')} value={query} onChange={q => changeFilters({ q: q || null })}/>
+      <Input ref={searchInput} prefix={<IconSearch aria-hidden="true"/>} showClear aria-label={t("搜索模型展示名称、模型编码、模型服务 ID 或模型 ID")} placeholder={t('模型展示名称 / 模型编码 / 模型服务 ID / 模型 ID')} value={query} onChange={q => changeFilters({ q: q || null })}/>
       {filters.map(({ key, label, options }) => <Field key={key} label={label}>
         <Choice translateOptions label={`筛选${label}`} value={params.get(key) || 'all'} options={options}
           onChange={value => changeFilters({ [key]: value === 'all' ? null : value })}/>
@@ -345,7 +348,7 @@ export default function ModelMarket(live) {
         : t('未关联') },
       { title: '可见范围', width: '14%', render: (_, row) => scopeLabel(row.card, t) },
       { title: '可见性', width: '9%', render: (_, row) => <CardVisibility card={row.card}/> },
-      { title: '操作', width: 280, render: (_, row) => actions(row, true) },
+      { title: '操作', width: 320, render: (_, row) => actions(row, true) },
     ]}/>}
     {cardDialog && (cardDialog.kind === 'create' || cardRow) && <MarketCardDialogs
       key={cardDialog.kind + ':' + cardDialog.cardId} kind={cardDialog.kind} row={cardRow} state={props.state}

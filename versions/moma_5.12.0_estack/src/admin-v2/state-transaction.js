@@ -41,7 +41,7 @@ export function canMutate(role, action) {
 
 export function commitAdminState(state, action, actor = state.currentRole) {
   const archivingAcceptance = action.type === 'modelOperations' && action.operation === 'archiveAcceptanceFixture';
-  const writingMarketCard = action.type === 'modelOperations' && ['marketCardCreate', 'marketCardEdit', 'marketCardLink', 'marketCardSetStatus'].includes(action.operation);
+  const writingMarketCard = action.type === 'modelOperations' && ['marketCardCreate', 'marketCardEdit', 'marketCardLink', 'marketCardSetStatus', 'marketCardDelete'].includes(action.operation);
   const reorderingMarket = action.type === 'modelOperations' && action.operation === 'marketReorder';
   if (action.type === 'setRole') throw new Error('请通过后台 mock 账号切换身份');
   if (action.type === 'enterAdmin') {
@@ -133,8 +133,17 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   }
   if (['users', 'tenants', 'memberships', 'grants'].some(key => JSON.stringify(state[key]) !== JSON.stringify(next[key]))) next.identityGeneration = (state.identityGeneration || 0) + 1;
   if (action.marketCard && action.type === 'batch' && action.marketCard.cardId === action.objectId && writingMarketCard) {
-    const { cardId, card } = action.marketCard;
-    next.modelData = { ...next.modelData, marketCards: { ...next.modelData?.marketCards, [cardId]: card } };
+    const { cardId, card, modelId } = action.marketCard;
+    const marketCards = { ...next.modelData?.marketCards };
+    if (card === null) {
+      delete marketCards[cardId];
+      // Prevent the service-derived card from reappearing after deletion.
+      if (modelId) marketCards[modelId] = { status: 'deleted' };
+    } else {
+      if (card.model_id && marketCards[card.model_id]?.status === 'deleted') delete marketCards[card.model_id];
+      marketCards[cardId] = card;
+    }
+    next.modelData = { ...next.modelData, marketCards, ...(action.marketOrder && { marketOrder: action.marketOrder }) };
   }
   if (changingReferenceMaterial && action.referenceMaterial && action.referenceMaterial.id === action.objectId) {
     next.modelData = { ...next.modelData, referenceMaterials: {

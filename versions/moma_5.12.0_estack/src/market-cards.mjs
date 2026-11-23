@@ -15,6 +15,8 @@ export function marketCardStatus(card) {
   return card.status === 'listed' ? card.scope.type === 'selected' ? 'gray' : 'formal' : card.status;
 }
 
+export const marketCardDeleteIssue = card => marketCardStatus(card) === 'withdrawn' ? '' : '请先将卡片设为不可见，再删除。';
+
 export function marketCardFieldValues(model) {
   const profile = modelProfileDraft(model);
   const tags = !model?.card && Array.isArray(profile.tags) && profile.tags.length ? profile.tags : model?.tags;
@@ -100,7 +102,8 @@ export function marketCardLinkableServices(state, modelId) {
   if (modelId) return candidates;
   const occupied = marketCardsByModel(state.modelData?.marketCards);
   const listed = new Set(services.filter(service => service.legacyShown).map(service => service.modelId));
-  return candidates.filter(service => service.modelId && !occupied.has(service.modelId) && !listed.has(service.modelId));
+  return candidates.filter(({ modelId }) => modelId && (occupied.get(modelId)?.status === 'deleted' ||
+    !occupied.has(modelId) && !listed.has(modelId)));
 }
 
 export function marketCardIndex(state, orderedModels) {
@@ -118,6 +121,7 @@ export function marketCardIndex(state, orderedModels) {
   const rank = row => ranks.get(row.id) ?? ranks.get(row.cardId) ?? ranks.size;
   return [...new Set([...services.keys(), ...saved.keys()])].flatMap(key => {
     const { cardId = key, card } = saved.get(key) || {};
+    if (card?.status === 'deleted') return [];
     const modelId = card ? marketCardModelId(cardId, card) : key;
     const serviceModel = services.get(modelId), material = materials.get(modelId);
     const model = serviceModel || material;
@@ -174,7 +178,7 @@ export function marketCardInScope(card, audience) {
 }
 
 export function marketCardVisible(card, serviceId, audience) {
-  return card.shown.includes(serviceId) && marketCardInScope(card, audience);
+  return marketCardInScope(card, audience) && card.shown.includes(serviceId);
 }
 
 export function marketCardCatalogueEntry(card, modelId, canonicalSlug, audience, cardId = modelId) {
@@ -200,6 +204,15 @@ export function marketCardTransaction(state, action, orderedModels) {
   const creating = operation === 'marketCardCreate';
   const existing = creating ? null : marketCardIndex(state, orderedModels).find(row => row.cardId === (data.card_id ?? modelId));
   if (!creating && !existing) throw Error('模型卡片不存在');
+  if (operation === 'marketCardDelete') {
+    const issue = marketCardDeleteIssue(existing.card);
+    if (issue) throw Error(issue);
+    if (data.confirmed !== true) throw Error('请确认删除模型卡片');
+    const { cardId, modelId, name, id } = existing;
+    const marketOrder = state.modelData?.marketOrder?.filter(key => key !== id && key !== cardId);
+    return { type: 'batch', label: '删除模型卡片', objectId: cardId, changes: [], marketOrder,
+      marketCard: { cardId, card: null, modelId, name, linked: existing.card.linked } };
+  }
   if ((creating || operation === 'marketCardEdit') && data.source_model_id && !modelMaterial(state, data.source_model_id)) throw Error('模型资料不存在');
   const cardId = existing?.cardId || resourceId('model-card');
   let card = existing ? {

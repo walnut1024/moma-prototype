@@ -14,6 +14,8 @@ import { materialBase } from '../src/admin-v2/model-operations.js';
 import { classificationIndex, modelClassification, modelClassificationFor } from '../src/admin-v2/model-classification.js';
 import { BUILTIN_MODEL_CATALOGUE } from '../src/mock/builtin-model-catalogue.js';
 import { marketModels } from '../src/service-directory.mjs';
+import { marketCardIndex } from '../src/market-cards.mjs';
+import { orderedMarketModels } from '../src/admin-v2/model-market-order.js';
 import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
 import { supplierModelChannelGroups } from '../src/admin-v2/supplier-model-channel-table.js';
 import { supplierChannelAssociations } from '../src/admin-v2/supplier-resources.js';
@@ -240,9 +242,13 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal(staleQuote.data.error.code,'PRICE_CHANGED');
     await setCardVisibility('formal');
     await startAll();
-    await local.db.prepare("UPDATE model_workspace SET meta_json=json_remove(meta_json,?) WHERE id=1")
-      .bind('$.modelData.marketCards.'+JSON.stringify(material.id)).run();
-    await reload();
+    const deleteCard = expected => command('marketCardDelete', { card_id: material.id, confirmed: true, expectedRevision: state.revision }, undefined, expected);
+    await deleteCard(422);
+    await setCardVisibility('withdrawn');
+    await deleteCard(200);
+    assert.ok(!marketCardIndex(state, orderedMarketModels(state)).some(row => row.cardId === material.id));
+    assert.deepEqual(await catalogue(customer), []);
+    stillOnSale();
     const body=(model)=>({requestId:crypto.randomUUID(),projectId:project.id,model,messages:[{role:'user',content:'验收请求'}]});
     const call=(input,cookie=customer)=>request('/market/completions',{cookie,body:input});
     const pausedOffer = services.find(row=>row.callId===sources[2].callId);
@@ -277,6 +283,12 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal(history.data.conversations[0].id,conversationId);
     assert.deepEqual(history.data.conversations[0].messages.map(row=>row.question),successful.map(row=>row.input.textTurn.question));
     assert(history.data.conversations[0].messages.every(row=>row.answer==='D1 模拟结果'));
+    const hiddenCatalogue = (await request('/market/catalogue', { cookie: customer })).data;
+    assert.deepEqual(hiddenCatalogue.services, []);
+    assert.equal(hiddenCatalogue.orders.length, 2);
+    await local.db.prepare("UPDATE model_workspace SET meta_json=json_remove(meta_json,?) WHERE id=1")
+      .bind('$.modelData.marketCards.'+JSON.stringify(material.id)).run();
+    await reload();
     assert.deepEqual((await request('/market/conversations',{cookie:other})).data.conversations,[]);
     assert.equal((await request('/market/conversations')).status,401);
     const application=async()=>(await request('/application',{cookie:admin})).data;

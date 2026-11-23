@@ -6,7 +6,7 @@ import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { CopyId, Field, Modal, Notice } from './ServiceUI';
 import { marketCardFeatures, marketCardFieldError, marketCardFieldValues, marketCardIssues, marketCardOutputOptions,
-  marketCardLinkableServices, marketCardServices, marketCardStatus, marketCardStatuses, marketScopeOptions } from '../market-cards.mjs';
+  marketCardDeleteIssue, marketCardLinkableServices, marketCardServices, marketCardStatus, marketCardStatuses, marketScopeOptions } from '../market-cards.mjs';
 import { MODEL_TYPES } from './model-management';
 import { INPUT_MODALITY_OPTIONS } from './model-profile';
 import { materialContextUnit, materialContextUnits } from './model-material-fields';
@@ -52,7 +52,7 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
       const next = await ops.run(operation, { ...data, ...(row && { card_id: row.cardId }), expectedRevision: revision }, row?.modelId);
       if (next) {
         if (goNext) open('link', next.audits[0].objectId);
-        else close();
+        else close(kind === 'delete');
       }
     } finally {
       setBusy(false);
@@ -70,6 +70,16 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
     <Button theme="solid" type={danger ? 'danger' : 'primary'} loading={busy} disabled={unavailable || disabled}
       onClick={onClick}>{translateLabel(label)}</Button>
   </>;
+
+  if (kind === 'delete') {
+    const issue = marketCardDeleteIssue(row.card);
+    return <Modal title="删除模型卡片" description={row.name} centered onClose={cancel}
+      footer={footer('确认删除', () => save('marketCardDelete', { confirmed: true }), Boolean(issue), true)}>
+      {issue ? <Notice error>{translateLabel(issue)}</Notice>
+        : <Typography.Paragraph>{translateLabel('删除后，卡片信息及其服务关联将移除，关联服务和销售配置会保留。')}</Typography.Paragraph>}
+      {errors}
+    </Modal>;
+  }
 
   if (creating || kind === 'edit') {
     const disabled = unavailable || uploading || importMaterial && !sourceId;
