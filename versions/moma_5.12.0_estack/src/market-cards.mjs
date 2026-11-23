@@ -2,7 +2,7 @@ import { projectRole } from './project-access.mjs';
 import { isResourceId, resourceId } from './resource-id.mjs';
 import { modelLibrary, modelMaterial } from './admin-v2/model-library.js';
 import { MODEL_TYPES } from './admin-v2/model-management.js';
-import { INPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, modelProfileDraft } from './admin-v2/model-profile.js';
+import { INPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, modelProfileDraft, normalizeModelLogo } from './admin-v2/model-profile.js';
 import { modelIdentity, modelPresentation, modelServiceIdentity } from './model-identities.mjs';
 import { activeCustomer, offerGrayTenants, offerKey, offerStage, providerOffer, salesPaused, serviceCallsEnabled, serviceReferences } from './service-access.mjs';
 
@@ -21,7 +21,7 @@ export function marketCardFieldValues(model) {
   const profile = modelProfileDraft(model);
   const tags = !model?.card && Array.isArray(profile.tags) && profile.tags.length ? profile.tags : model?.tags;
   return {
-    name: model?.name || '', heat: model?.heat ?? '', description: model?.description || '',
+    name: model?.name || '', heat: model?.heat ?? '', logo: profile.logo || '', description: model?.description || '',
     description_en: model?.description_en || profile.descriptionEn || '', type: model?.type || '', context_length: model?.capabilities?.context ?? '',
     family: profile.family || '', input_modalities: profile.inputModalities || [],
     output_modalities: [...new Set([...(profile.outputModalities || []), ...(profile.resultTypes || [])])],
@@ -52,7 +52,12 @@ export function marketCardFieldError(data) {
     [data.features == null || typeof data.features === 'object' && !Array.isArray(data.features) && Object.entries(data.features)
       .every(([key, value]) => Object.hasOwn(marketCardFeatures, key) && typeof value === 'boolean'), '模型功能设置无效'],
   ];
-  return checks.find(([valid]) => !valid)?.[1];
+  const error = checks.find(([valid]) => !valid)?.[1];
+  if (error) return error;
+  if (data.logo == null || data.logo === '') return;
+  if (typeof data.logo !== 'string') return '模型图标数据无效';
+  try { normalizeModelLogo(data.logo, '模型图标'); }
+  catch (error) { return error.message; }
 }
 
 export function marketCardServices(state, modelId, references = serviceReferences(state)) {
@@ -234,6 +239,8 @@ export function marketCardTransaction(state, action, orderedModels) {
     const source = creating ? null : card.content;
     const profile = modelProfileDraft(source);
     if (profile.family !== data.family.trim()) delete profile.familyId;
+    if (data.logo === '') delete profile.logo;
+    else if (data.logo) profile.logo = data.logo;
     card = { ...card, content: {
       type: data.type, name: data.name.trim(), description: data.description.trim(), description_en: data.description_en.trim(),
       heat: Number.isFinite(data.heat) ? data.heat : null, tags: [...new Set(data.tags.map(tag => tag.trim()))],

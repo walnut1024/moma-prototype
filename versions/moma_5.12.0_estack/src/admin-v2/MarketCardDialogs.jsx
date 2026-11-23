@@ -1,6 +1,6 @@
-import { useId, useMemo, useState } from 'react';
-import { Button, Checkbox, DatePicker, Input, InputNumber, RadioGroup, Select, Space, TagInput, TextArea, Typography } from '@douyinfe/semi-ui';
-import { IconSearch } from '@douyinfe/semi-icons';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Button, Checkbox, DatePicker, Input, InputNumber, RadioGroup, Select, Space, TagInput, TextArea, Typography, Upload } from '@douyinfe/semi-ui';
+import { IconSearch, IconUpload } from '@douyinfe/semi-icons';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { CopyId, Field, Modal, Notice } from './ServiceUI';
@@ -9,6 +9,7 @@ import { marketCardFeatures, marketCardFieldError, marketCardFieldValues, market
 import { MODEL_TYPES } from './model-management';
 import { INPUT_MODALITY_OPTIONS } from './model-profile';
 import { materialContextUnit, materialContextUnits } from './model-material-fields';
+import { readMaterialLogo } from './MaterialLogo';
 
 const options = entries => Object.entries(entries).map(([value, label]) => ({ value, label }));
 const modalityOptions = values => values.map(value => ({ value, label: value }));
@@ -37,6 +38,10 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
     : services.filter(service => service.started && linked.includes(service.id)).map(service => service.id));
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [logoError, setLogoError] = useState('');
+  const logoUpload = useRef(0);
+  useEffect(() => () => { logoUpload.current++; }, []);
   const changed = revision !== state.revision;
   const cancel = () => { if (!busy) ops.proceed(close); };
   const save = async (operation, data, goNext = false) => {
@@ -65,7 +70,21 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
   </>;
 
   if (creating || kind === 'edit') {
-    const disabled = unavailable || importMaterial && !sourceId;
+    const disabled = unavailable || uploading || importMaterial && !sourceId;
+    const uploadLogo = async ([file]) => {
+      if (!file || unavailable || uploading) return;
+      const request = ++logoUpload.current;
+      setUploading(true);
+      setLogoError('');
+      try {
+        const logo = await readMaterialLogo(file, 1024 * 1024, 128);
+        if (logoUpload.current === request) update('logo', logo);
+      } catch (error) {
+        if (logoUpload.current === request) setLogoError(error.message);
+      } finally {
+        if (logoUpload.current === request) setUploading(false);
+      }
+    };
     const tokens = context.amount.trim() ? Number(context.amount) * materialContextUnits[context.unit] : '';
     const submit = (goNext = false) => {
       if (disabled) return;
@@ -82,6 +101,7 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
       const provided = Object.fromEntries(Object.entries(info).filter(([key, value]) =>
         !['name', 'heat', 'features', 'context_length'].includes(key) && (Array.isArray(value) ? value.length : value !== '')));
       setValues(current => ({ ...current, ...provided }));
+      setLogoError('');
       if (Number.isSafeInteger(info.context_length) && info.context_length > 0) setContext(cardContext(info.context_length));
       ops.setError('');
       ops.dirty(true);
@@ -104,9 +124,23 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
           <Field label="模型展示名" required><Input value={values.name} maxLength={100} onChange={value => update('name', value)}/></Field>
           <Field label="热度设置">{numberField('heat', { min: 0 })}</Field>
         </div>
+        <Field label="图标" hint="支持 PNG、JPEG、WebP，最大 1 MB。" error={logoError}>
+          <Space>
+            {values.logo && <img src={values.logo} alt="模型卡片图标预览" width={64} height={64}
+              style={{ objectFit: 'contain' }} referrerPolicy="no-referrer"/>}
+            <Upload accept="image/png,image/jpeg,image/webp" uploadTrigger="custom" fileList={[]} showUploadList={false}
+              disabled={unavailable || uploading} onFileChange={uploadLogo}>
+              <Button icon={<IconUpload aria-hidden/>} loading={uploading} disabled={unavailable}>
+                {values.logo ? '更换图片' : '上传图片'}
+              </Button>
+            </Upload>
+            {values.logo && <Button theme="borderless" disabled={unavailable || uploading}
+              onClick={() => { setLogoError(''); update('logo', ''); }}>移除图片</Button>}
+          </Space>
+        </Field>
         <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
           <Typography.Title heading={6}>卡片信息</Typography.Title>
-          <RadioGroup type="button" aria-label="卡片信息填写方式" disabled={unavailable}
+          <RadioGroup type="button" aria-label="卡片信息填写方式" disabled={unavailable || uploading}
             value={importMaterial ? 'import' : 'manual'} options={options({ manual: '手动填写', import: '从基础资料导入' })}
             onChange={event => {
               setImportMaterial(event.target.value === 'import');
@@ -115,7 +149,7 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
             }}/>
         </Space>
         {importMaterial && <Field label="模型资料名称" required>
-          <Select filter style={{ width: '100%' }} placeholder="请选择模型资料" value={sourceId || undefined}
+          <Select filter style={{ width: '100%' }} placeholder="请选择模型资料" value={sourceId || undefined} disabled={unavailable || uploading}
             optionList={materials.map(item => ({ value: item.id, label: `${item.name} · ${item.modelId}` }))}
             onChange={chooseModel}/>
         </Field>}

@@ -712,7 +712,8 @@ test('model channel connectivity changes take effect only when a passing candida
   assert.deepEqual(supplierChannelAssociations(state, owner(), endpointId)[0].pricing, mapping.pricing);
 });
 
-test('market card associations persist multiple configured services and support removal', async () => {
+test('market card icons and service associations persist and can be removed independently', async () => {
+  const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBTsAAAAASUVORK5CYII=';
   const content = {
     name: '关联验收卡片', description: '独立模型卡片验收', description_en: 'Service associations',
     type: 'text', context_length: 32768, family: '验收系列', input_modalities: ['文本'],
@@ -752,7 +753,8 @@ test('market card associations persist multiple configured services and support 
   };
   assert.equal((await submit('marketCardCreate', content, readonlyToken)).status, 403);
   assert.equal((await submit('marketCardCreate', { ...content, expectedRevision: state.revision - 1 })).status, 422);
-  const result = await submit('marketCardCreate', content);
+  assert.equal((await submit('marketCardCreate', { ...content, logo: 'data:image/svg+xml;base64,PHN2Zy8+' })).status, 422);
+  const result = await submit('marketCardCreate', { ...content, logo });
   assert.equal(result.status, 200, JSON.stringify(result.data));
   await refresh();
   const cardId = state.audits[0].objectId;
@@ -766,6 +768,7 @@ test('market card associations persist multiple configured services and support 
   assert.equal(card().model_id, material.id);
   assert.deepEqual(card().linked, [first, second]);
   assert.equal(card().status, 'draft');
+  assert.equal(card().content.profile.logo, logo);
   const edit = { ...content, card_id: cardId, source_model_id: otherMaterial.id, context_length: 1572864,
     description_en: 'Updated after importing reference data' };
   assert.equal((await submit('marketCardEdit', { ...edit, source_model_id: 'missing-material' })).status, 422);
@@ -775,6 +778,11 @@ test('market card associations persist multiple configured services and support 
   assert.deepEqual(card().linked,[first,second]);
   assert.equal(card().content.description_en, edit.description_en);
   assert.equal(card().content.capabilities.context, 1572864);
+  assert.equal(card().content.profile.logo, logo);
+  assert.equal((await submit('marketCardEdit', { ...edit, logo: '' })).status, 200);
+  await refresh();
+  assert.equal(card().content.profile.logo, undefined);
+  assert.deepEqual(card().linked, [first, second]);
   assert.equal((await submit('marketCardSetStatus', { card_id: cardId, listing_stage: 'formal', serviceIds: [first] })).status, 422);
   const inspect = async id => (await request('/model-services-new?inspect=' + id)).data;
   assert.equal((await inspect(first)).marketLinked, true);

@@ -8,7 +8,7 @@ export default function MaterialLogo({ src, alt, preview = false, fallback = '�
     : fallback;
 }
 
-export async function readMaterialLogo(file, maxSize = 1024 * 1024) {
+export async function readMaterialLogo(file, maxSize = 1024 * 1024, thumbnailSize) {
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > maxSize) {
     const limit = maxSize === 1024 * 1024 ? '1 MB' : maxSize / 1024 + ' KB';
     throw Error(`Logo 仅支持 ${limit} 以内的 PNG、JPEG 或 WebP 图片`);
@@ -23,5 +23,11 @@ export async function readMaterialLogo(file, maxSize = 1024 * 1024) {
   const image = new Image();
   image.src = logo;
   await image.decode().catch(() => { throw Error('图片无法读取，请选择有效的 PNG、JPEG 或 WebP 图片'); });
-  return logo;
+  if (!thumbnailSize) return logo;
+  const scale = Math.min(1, thumbnailSize / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/webp', 0.9);
 }

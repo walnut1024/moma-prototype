@@ -58,6 +58,8 @@ OpenRouter 兼容接口使用调用标识作为 `id` 或请求体 `model`，MoMA
 
 卡片维护请求的 `name` 对应模型展示名，`description` 和 `description_en` 分别对应中文和英文简介。表单用 K 或 M 表示上下文长度，提交前以 1,024 或 1,048,576 为系数换算。`context_length` 以整数 Token 提交，存入 `capabilities.context`；`family`、`precision`、`release_date` 和 `parameters` 分别保存至 `profile.family`、`profile.precision`、`profile.releaseDate` 和 `profile.parameters`。`input_modalities` 对应 `profile.inputModalities`，输出选项按模态和结果类型分别保存至 `profile.outputModalities` 和 `profile.resultTypes`。`heat` 为热度，`tags` 为标签列表。`features` 中保存 `online_experience`、`smart_routing`、`supports_agent`、`supports_mcp` 和 `file_upload` 的布尔值。新建及编辑均可复制基础资料中的模型字段，保存更新当前卡片，沿用原身份及关联。
 
+卡片命令的可选字段 `logo` 保存到 `profile.logo`，可使用图片数据或资料导入的 HTTP(S) 图片地址。表单上传支持 1 MB 以内的 PNG、JPEG 和 WebP，保存等比缩小后的图标。编辑时省略该字段会保留原图标，提交空字符串会移除图标。
+
 模型服务、广场及售价展示并复制同一 model_service_id；渠道展示 channel_id，连接和 Provider 的 ID 在相应配置或详情可查。模型编码及永久 ID 纳入搜索。历史审计原文和已有 ID 不因文案统一而改写。
 
 ## 批量维护 JSON
