@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import AdminStatus from './AdminStatus';
 import ChannelTestProgress from './ChannelTestProgress';
 import { useEffect, useRef, useState } from 'react';
@@ -11,6 +12,7 @@ import { MODEL_CONNECTIVITY_SCENARIOS } from './provider-management';
 
 const time = value => value ? new Date(value).toLocaleString('zh-CN') : '—';
 export default function ChannelHealthDialog({ state, provider, endpoint: initialEndpoint, apiKey, associationId, ops, close }) {
+  const translateLabel = useChannelText();
   const endpoints = supplierChannelResources(state, provider).filter(row => !apiKey || connectionKeys(row, provider, true).some(key => key.id === apiKey.id));
   const [endpointId, setEndpointId] = useState(initialEndpoint?.id || endpoints[0]?.id || '');
   const endpoint = endpoints.find(row => row.id === endpointId), associations = endpoint ? supplierChannelAssociations(state, provider, endpoint.id) : [];
@@ -46,12 +48,12 @@ export default function ChannelHealthDialog({ state, provider, endpoint: initial
     }, 800);
   };
   return <Modal drawer wide title="连接健康与密钥检测" description={provider.name} onClose={exit} footer={confirming ? <>
-      <Button theme="light" onClick={() => { setConfirming(null); returnFocus(); }}>取消</Button>
+      <Button theme="light" onClick={() => { setConfirming(null); returnFocus(); }}>{translateLabel("取消")}</Button>
       <Button theme="solid" disabled={!ops.can} onClick={start}>确认检测</Button>
-    </> : <Button theme="light" onClick={exit}>关闭</Button>}>
+    </> : <Button theme="light" onClick={exit}>{translateLabel("关闭")}</Button>}>
     <div className="supplier-resource-form">
       <div className="supplier-channel-fields"><Field label="连接"><Choice label="检测连接" disabled={Boolean(initialEndpoint) || Boolean(running)} value={endpointId || 'none'} options={endpoints.length ? endpoints.map(row => [row.id,row.name]) : [['none','暂无绑定连接']]} onChange={id => { setEndpointId(id); setModelId(''); setConfirming(null); setMessage(''); }}/></Field><Field label="上游模型"><Choice label="检测上游模型" disabled={!association || Boolean(running)} value={association?.id || 'none'} options={associations.length ? associations.map(row => [row.id,row.upstreamModelId]) : [['none','请先关联模型']]} onChange={id => { setModelId(id); setConfirming(null); setMessage(''); }}/></Field></div>
-      {endpoint && <dl className="supplier-test-facts"><div><dt>请求地址</dt><dd>{endpoint.baseUrl}</dd></div><div><dt>接口格式</dt><dd>{endpoint.protocol}</dd></div><div><dt>结果有效期</dt><dd>24 小时，配置变化须复测</dd></div></dl>}
+      {endpoint && <dl className="supplier-test-facts"><div><dt>请求地址</dt><dd>{endpoint.baseUrl}</dd></div><div><dt>{translateLabel("接口格式")}</dt><dd>{endpoint.protocol}</dd></div><div><dt>结果有效期</dt><dd>24 小时，配置变化须复测</dd></div></dl>}
       <GridTable headings={['上游 API 密钥','检测状态','最近检测','响应耗时','操作']} empty={!rows.length} emptyMessage={!endpoints.length ? '此密钥尚未绑定连接，请先配置连接。' : '请先配置上游模型和上游 API 密钥。'}>{rows.map(({key,label,record}) => <Row key={key?.id || 'none'}><Cell>{key?.name || key?.id || '无需认证'}{key && <small>{key.maskedKey}</small>}</Cell><Cell><AdminStatus value={running?.keyId === (key?.id || 'none') ? '检测中' : label}/>{record?.simulated && <small>模拟检测</small>}</Cell><Cell>{time(record?.testedAt)}</Cell><Cell>{record?.durationMs == null ? '—' : `${record.durationMs} ms`}</Cell><Cell><Button type="tertiary" theme="borderless" disabled={!ops.can || Boolean(running) || Boolean(key?.revokedAt) || key?.status === 'disabled'} onClick={event => { trigger.current = event.currentTarget; ops.setError(''); setConfirming({ providerId: provider.id, endpointId: endpoint.id, associationId: association.id, keyId: key?.id || '', expectedFingerprint: healthFingerprint(provider,association,key), scenario, confirmed: true }); }}>检测</Button></Cell></Row>)}</GridTable>
       {rows.filter(row => row.record).map(({key,record}) => <Disclosure key={key?.id || 'none'} title={`${key?.name || key?.id || '连接'} · ${record.result === '通过' ? '检测详情' : '失败详情'}`}><p>结果来源：{record.source === 'mock' || record.simulated ? '模拟检测' : '未记录'}</p><p>{record.message}</p><p>HTTP {record.status ?? '无响应'}{record.hint && ` · ${record.hint}`}</p></Disclosure>)}
       {new URLSearchParams(location.hash.split('?')[1] || '').get('devtools') === '1' && <Choice label="检测模拟结果" value={scenario} options={Object.entries(MODEL_CONNECTIVITY_SCENARIOS)} onChange={setScenario} disabled={Boolean(running)}/>}

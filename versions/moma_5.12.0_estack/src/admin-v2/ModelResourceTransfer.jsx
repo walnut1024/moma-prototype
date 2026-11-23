@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useState } from 'react';
 import { Button, Space, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
 import Table from './AdminTable';
@@ -14,6 +15,7 @@ const channelFields = { name: '名称', base_url: '服务地址', protocol: '协
 const fieldValue = value => value == null || value === '' ? '—' : typeof value === 'string' ? value : JSON.stringify(value);
 
 export default function ModelResourceTransfer({ state, ops, scope, target: selectedTarget, reviewFields = false }) {
+  const translateLabel = useChannelText();
   const [open, setOpen] = useState(false), [text, setText] = useState(''), [plan, setPlan] = useState(null);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const close = () => { if (!busy) ops.proceed(() => { setOpen(false); setText(''); setPlan(null); setError(''); ops.dirty(false); }); };
@@ -50,10 +52,10 @@ export default function ModelResourceTransfer({ state, ops, scope, target: selec
     catch { Toast.error('复制失败，请选择文本复制'); }
   };
   return <>
-          {scope !== 'services' && !(scope === 'channels' && target?.level === 'provider') && <Button disabled={!ops.can || Boolean(targetError)} onClick={openEditor}>批量维护</Button>}
+          {scope !== 'services' && !(scope === 'channels' && target?.level === 'provider') && <Button disabled={!ops.can || Boolean(targetError)} onClick={openEditor}>{translateLabel("批量维护")}</Button>}
     {open && <AdminSideSheet visible title={resourceTargetLabel(state, scope, target) + ' · 批量维护'}
       width="min(1440px, 96vw)" className="semi-services model-resource-sheet" closeOnEsc onCancel={close} footer={<>
-        <Button disabled={busy} onClick={close}>取消</Button>
+        <Button disabled={busy} onClick={close}>{translateLabel("取消")}</Button>
         <Button theme="solid" loading={busy} disabled={!ops.can || busy || !plan?.changes || plan.value.revision !== state.revision || Boolean(ops.conflict)} onClick={async () => {
           setBusy(true);
           try { if (await ops.run('importModelResources', { file: plan.value, target })) { setOpen(false); setPlan(null); setText(''); ops.dirty(false); } }

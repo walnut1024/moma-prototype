@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button, Checkbox, DatePicker, Input, InputNumber, RadioGroup, Select, Space, TagInput, TextArea, Typography, Upload } from '@douyinfe/semi-ui';
 import { IconSearch, IconUpload } from '@douyinfe/semi-icons';
@@ -11,7 +12,6 @@ import { INPUT_MODALITY_OPTIONS } from './model-profile';
 import { materialContextUnit, materialContextUnits } from './model-material-fields';
 import { readMaterialLogo } from './MaterialLogo';
 
-const options = entries => Object.entries(entries).map(([value, label]) => ({ value, label }));
 const modalityOptions = values => values.map(value => ({ value, label: value }));
 const contextOptions = modalityOptions(Object.keys(materialContextUnits));
 const cardContext = tokens => {
@@ -20,6 +20,8 @@ const cardContext = tokens => {
 };
 
 export default function MarketCardDialogs({ kind, row, state, ops, materials, internal, close, open }) {
+  const translateLabel = useChannelText();
+  const options = entries => Object.entries(entries).map(([value, label]) => ({ value, label:translateLabel(label) }));
   const creating = kind === 'create';
   const linking = kind === 'link';
   const [sourceId, setSourceId] = useState('');
@@ -64,9 +66,9 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
     {ops.error && <Notice error>{ops.error}</Notice>}
   </>;
   const footer = (label, onClick, disabled, danger = false) => <>
-    <Button disabled={busy} onClick={cancel}>取消</Button>
+    <Button disabled={busy} onClick={cancel}>{translateLabel("取消")}</Button>
     <Button theme="solid" type={danger ? 'danger' : 'primary'} loading={busy} disabled={unavailable || disabled}
-      onClick={onClick}>{label}</Button>
+      onClick={onClick}>{translateLabel(label)}</Button>
   </>;
 
   if (creating || kind === 'edit') {
@@ -112,12 +114,12 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
       value={values[key]} onChange={value => update(key, value)}/>;
     return <Modal wide centered title={creating ? '新建模型卡片' : '编辑信息'} onClose={cancel}
       footer={creating ? <>
-        <Button disabled={busy} onClick={cancel}>取消</Button>
-        <Button form={formId} htmlType="submit" disabled={disabled}>仅创建</Button>
-        <Button theme="solid" loading={busy} disabled={disabled} onClick={() => submit(true)}>创建并关联模型服务</Button>
+        <Button disabled={busy} onClick={cancel}>{translateLabel("取消")}</Button>
+        <Button form={formId} htmlType="submit" disabled={disabled}>{translateLabel("仅创建")}</Button>
+        <Button theme="solid" loading={busy} disabled={disabled} onClick={() => submit(true)}>{translateLabel("创建并关联模型服务")}</Button>
       </> : <>
-        <Button disabled={busy} onClick={cancel}>取消</Button>
-        <Button form={formId} htmlType="submit" theme="solid" loading={busy} disabled={disabled}>保存修改</Button>
+        <Button disabled={busy} onClick={cancel}>{translateLabel("取消")}</Button>
+        <Button form={formId} htmlType="submit" theme="solid" loading={busy} disabled={disabled}>{translateLabel("保存修改")}</Button>
       </>}>
       <form id={formId} onSubmit={event => { event.preventDefault(); submit(); }}>
         <div className="ss-form-grid">
@@ -131,15 +133,15 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
             <Upload accept="image/png,image/jpeg,image/webp" uploadTrigger="custom" fileList={[]} showUploadList={false}
               disabled={unavailable || uploading} onFileChange={uploadLogo}>
               <Button icon={<IconUpload aria-hidden/>} loading={uploading} disabled={unavailable}>
-                {values.logo ? '更换图片' : '上传图片'}
+                {values.logo ? translateLabel('更换图片') : translateLabel('上传图片')}
               </Button>
             </Upload>
             {values.logo && <Button theme="borderless" disabled={unavailable || uploading}
-              onClick={() => { setLogoError(''); update('logo', ''); }}>移除图片</Button>}
+              onClick={() => { setLogoError(''); update('logo', ''); }}>{translateLabel("移除图片")}</Button>}
           </Space>
         </Field>
         <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Typography.Title heading={6}>卡片信息</Typography.Title>
+          <Typography.Title heading={6}>{translateLabel("卡片信息")}</Typography.Title>
           <RadioGroup type="button" aria-label="卡片信息填写方式" disabled={unavailable || uploading}
             value={importMaterial ? 'import' : 'manual'} options={options({ manual: '手动填写', import: '从基础资料导入' })}
             onChange={event => {
@@ -149,7 +151,7 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
             }}/>
         </Space>
         {importMaterial && <Field label="模型展示名称" required>
-          <Select filter style={{ width: '100%' }} placeholder="请选择模型资料" value={sourceId || undefined} disabled={unavailable || uploading}
+          <Select filter style={{ width: '100%' }} placeholder={translateLabel("请选择模型资料")} value={sourceId || undefined} disabled={unavailable || uploading}
             optionList={materials.map(item => ({ value: item.id, label: `${item.name} · ${item.modelId}` }))}
             onChange={chooseModel}/>
         </Field>}
@@ -160,9 +162,9 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
           <Field label="模型类型" required><Select style={{ width: '100%' }} optionList={options(MODEL_TYPES)} value={values.type || undefined} onChange={value => update('type', value)}/></Field>
           <Field label="上下文长度" required>
             <div className="market-context-field">
-              <Input aria-label="上下文长度" aria-required inputMode="decimal" value={context.amount}
+              <Input aria-label={translateLabel("上下文长度")} aria-required inputMode="decimal" value={context.amount}
                 onChange={amount => { setContext({ ...context, amount }); ops.dirty(true); }}/>
-              <Select aria-label="上下文长度单位" value={context.unit} optionList={contextOptions}
+              <Select aria-label={translateLabel("上下文长度单位")} value={context.unit} optionList={contextOptions}
                 onChange={unit => {
                   setContext({ unit, amount: Number.isFinite(tokens) ? String(tokens / materialContextUnits[unit]) : context.amount });
                   ops.dirty(true);
@@ -173,15 +175,15 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
           <Field label="模型精度" required><Input value={values.precision} maxLength={100} onChange={value => update('precision', value)}/></Field>
           <Field label="输入模态" required>{multi('input_modalities', INPUT_MODALITY_OPTIONS)}</Field>
           <Field label="输出模态" required>{multi('output_modalities', marketCardOutputOptions)}</Field>
-          <Field label="模型标签" required><TagInput aria-label="模型标签" max={20} maxLength={50} addOnBlur
-            placeholder="输入后按回车添加" value={values.tags} onChange={value => update('tags', value)}/></Field>
-          <Field label={<span id={formId + '-release'}>模型发布日期</span>} required><DatePicker style={{ width: '100%' }}
+          <Field label="模型标签" required><TagInput aria-label={translateLabel("模型标签")} max={20} maxLength={50} addOnBlur
+            placeholder={translateLabel("输入后按回车添加")} value={values.tags} onChange={value => update('tags', value)}/></Field>
+          <Field label={<span id={formId + '-release'}>{translateLabel("模型发布日期")}</span>} required><DatePicker style={{ width: '100%' }}
             aria-labelledby={formId + '-release'} aria-required type="date" onChangeWithDateFirst={false} format="yyyy-MM-dd"
             value={values.release_date.length === 10 ? values.release_date : undefined}
             placeholder={values.release_date || '选择日期'} onChange={value => update('release_date', value || '')}/></Field>
           <Field label="参数量">{numberField('parameters', { min: 0, step: 0.1, suffix: 'B' })}</Field>
         </div>
-        <Typography.Title heading={6}>功能</Typography.Title>
+        <Typography.Title heading={6}>{translateLabel("功能")}</Typography.Title>
         <Space wrap>{Object.entries(marketCardFeatures).map(([key, label]) => <Checkbox key={key} checked={values.features[key] === true}
           onChange={event => update('features', { ...values.features, [key]: event.target.checked })}>{label}</Checkbox>)}</Space>
         {errors}
@@ -224,19 +226,19 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
         listing_stage: status, ...(listing && { serviceIds: shown }), ...(status === 'gray' && { scope }),
       }), !Object.hasOwn(marketCardStatuses, status) || issues.length > 0, status === 'withdrawn')}>
     {linking && <>
-      <section aria-label="已关联模型服务">
+      <section aria-label={translateLabel("已关联模型服务")}>
         <Typography.Title heading={6}>已关联模型服务（{linkedRows.length}）</Typography.Title>
         <Table rowKey="id" dataSource={linkedRows} pagination={false} scroll={{ x: 'max(100%, 600px)' }}
           empty="还没有关联模型服务" columns={[...serviceColumns, {
             title: '操作', width: 88, fixed: 'right', render: (_, service) => showing(service)
-              ? <Typography.Text type="tertiary">展示中</Typography.Text>
+              ? <Typography.Text type="tertiary">{translateLabel("展示中")}</Typography.Text>
               : <Button theme="borderless" size="small" type="danger" disabled={unavailable}
-                aria-label={`移除 ${service.callId || service.id}`} onClick={() => changeLink(service.id)}>移除</Button>,
+                aria-label={`移除 ${service.callId || service.id}`} onClick={() => changeLink(service.id)}>{translateLabel("移除")}</Button>,
           }]}/>
         {linkedRows.some(showing) && <Typography.Text type="tertiary">展示中的服务需先在「设置可见性」中取消展示，再移除关联。</Typography.Text>}
       </section>
-      <section aria-label="可关联的模型服务">
-        <Typography.Title heading={6}>可关联的模型服务</Typography.Title>
+      <section aria-label={translateLabel("可关联的模型服务")}>
+        <Typography.Title heading={6}>{translateLabel("可关联的模型服务")}</Typography.Title>
         <Input showClear prefix={<IconSearch aria-hidden="true"/>} aria-label="搜索可关联模型服务" value={search}
           placeholder="搜索服务名称、模型 ID 或模型服务 ID" onChange={setSearch}/>
         {!row.modelId && <Typography.Text type="tertiary">可选择同一模型下的多个服务。</Typography.Text>}
@@ -253,7 +255,7 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
       onChange={value => { setStatus(value); ops.dirty(true); }}/></Field>}
     {!linking && status === 'preview' && <p>前台卡片显示「敬请期待」，用户无法进入详情。关联服务的售卖状态保持不变。</p>}
     {!linking && status === 'withdrawn' && <p>卡片将从前台模型广场移除，关联服务的售卖状态保持不变。</p>}
-    {!linking && listing && <Typography.Title heading={6}>展示服务</Typography.Title>}
+    {!linking && listing && <Typography.Title heading={6}>{translateLabel("展示服务")}</Typography.Title>}
     {!linking && listing && <Table size="small" rowKey="id" dataSource={services.filter(service => linked.includes(service.id))} pagination={false}
       empty="请先关联可用于展示的模型服务" columns={[
         { title: '选择', width: 70, render: (_, service) => <Checkbox aria-label={`选择 ${service.callId}`}
@@ -268,7 +270,7 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
       {status === 'formal' && <Typography.Text>可见范围为全部用户。</Typography.Text>}
       {status === 'gray' && <Field label="可见范围" required>
         <Select multiple filter searchPosition="dropdown" searchPlaceholder="搜索租户名称或 ID" maxTagCount={3} showRestTagsPopover
-          style={{ width: '100%' }} value={tenantIds} optionList={scopeOptions} placeholder="选择租户"
+          style={{ width: '100%' }} value={tenantIds} optionList={scopeOptions} placeholder={translateLabel("选择租户")}
           onChange={ids => { setTenantIds(ids); ops.dirty(true); }}/>
       </Field>}
       {issues.map(issue => <Notice key={issue} error>{issue}</Notice>)}

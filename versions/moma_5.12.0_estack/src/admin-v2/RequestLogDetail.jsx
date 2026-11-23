@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Banner, Button, Collapse, Descriptions, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
+import Descriptions from './AdminDescriptions';
+import { Banner, Button, Collapse, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconCopy } from '@douyinfe/semi-icons';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import { AdminSideSheet } from './AdminOverlay';

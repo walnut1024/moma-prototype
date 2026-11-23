@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useId, useState } from 'react';
 import { Button, Input, Typography } from '@douyinfe/semi-ui';
 import Table from './AdminTable';
@@ -10,6 +11,7 @@ import { catalogueMoneyDisplay } from './provider-catalogue-pricing';
 import './procurement-cost.css';
 
 export default function BatchProcurementEditor({ state, channel, models, ops, close }) {
+  const translateLabel = useChannelText();
   const formId = useId();
   const [scenarios, setScenarios] = useState([]);
   const [pricing, setPricing] = useState(null);
@@ -50,12 +52,12 @@ export default function BatchProcurementEditor({ state, channel, models, ops, cl
     } catch (error) { ops.setError(error.message); }
     finally { setBusy(false); }
   };
-  return <AdminSideSheet visible className="semi-services procurement-cost-sheet" title="批量设置成本"
+  return <AdminSideSheet visible className="semi-services procurement-cost-sheet" title={translateLabel("批量设置成本")}
     width="min(960px, 100vw)" onCancel={cancel} closeOnEsc footer={pricing ? <>
-      <Button type="tertiary" disabled={busy} onClick={() => { setPricing(null); ops.setError(''); }}>返回编辑</Button>
+      <Button type="tertiary" disabled={busy} onClick={() => { setPricing(null); ops.setError(''); }}>{translateLabel("返回编辑")}</Button>
       <Button theme="solid" loading={busy} disabled={blocked} onClick={publish}>确认发布</Button>
     </> : <>
-      <Button type="tertiary" onClick={cancel}>取消</Button>
+      <Button type="tertiary" onClick={cancel}>{translateLabel("取消")}</Button>
       <Button theme="solid" form={formId} htmlType="submit" disabled={blocked || !scenarios.length}>下一步：预览发布</Button>
     </>}>
     <div className="ss-body">

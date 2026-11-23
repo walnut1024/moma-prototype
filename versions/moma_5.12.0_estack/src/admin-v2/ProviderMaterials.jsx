@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { PROTOCOL_ENDPOINT_LABEL, protocolAndEndpoint } from './workbench-protocol';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Empty, Space, Tabs, Typography } from '@douyinfe/semi-ui';
@@ -25,6 +26,7 @@ const pageRows = (rows, page) => rows.slice((page - 1) * pageSize, page * pageSi
 const listParams = { provider: null, view: null, tab: null, edit: null, returnTo: null, modelQ: null, modelPage: null };
 
 function ProviderList({ state, ops, providers }) {
+  const translateLabel = useChannelText();
   const query = ops.params.get('q') || '';
   const sourceType = ops.params.get('type') || 'all';
   const rows = providers.filter(row => (sourceType === 'all' || sourceType === row.sourceType)
@@ -35,31 +37,32 @@ function ProviderList({ state, ops, providers }) {
   return <>
     <div className="materials-toolbar">
       <div className="materials-filters">
-        <SearchBox placeholder="搜索服务商名称或编码" value={query} onChange={q => update({ q: q || null, page: null })}/>
-        <Choice label="筛选供给类型" value={sourceType} options={[[ 'all', '全部供给类型' ], ...Object.entries(PROVIDER_TYPES)]}
+        <SearchBox placeholder={translateLabel("搜索服务商名称或编码")} value={query} onChange={q => update({ q: q || null, page: null })}/>
+        <Choice translateOptions label="筛选供给类型" value={sourceType} options={[[ 'all', '全部供给类型' ], ...Object.entries(PROVIDER_TYPES)]}
           onChange={type => update({ type: type === 'all' ? null : type, page: null })}/>
       </div>
       <Space wrap className="materials-toolbar-actions">
-        <Button disabled={!ops.can} onClick={() => ops.go({ view: 'import' })}>批量导入服务商资料</Button>
-        <Button disabled={!ops.can} onClick={() => ops.go({ view: 'relations' })}>批量导入供应关系</Button>
-        <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can} onClick={() => ops.go({ view: 'new' })}>新建服务商</Button>
+        <Button disabled={!ops.can} onClick={() => ops.go({ view: 'import' })}>{translateLabel("批量导入服务商资料")}</Button>
+        <Button disabled={!ops.can} onClick={() => ops.go({ view: 'relations' })}>{translateLabel("批量导入供应关系")}</Button>
+        <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can} onClick={() => ops.go({ view: 'new' })}>{translateLabel("新建服务商")}</Button>
       </Space>
     </div>
     <Table rowKey="id" dataSource={pageRows(rows, page)} scroll={{ x: 'max(100%, 780px)' }} empty="没有符合条件的服务商"
       pagination={{ pageSize, currentPage: page, total: rows.length, onPageChange: page => update({ page }) }} columns={[
       { title: '服务商名称', width: 220, render: (_, row) => <Button className="materials-model-name" theme="borderless" onClick={() => open(row)}><MaterialLogo key={row.logo} src={row.logo} alt=""/>{row.name}</Button> },
       { title: '服务商编码', width: 160, render: (_, row) => <Typography.Text className="materials-code" copyable>{providerCode(row)}</Typography.Text> },
-      { title: '供给类型', width: 150, render: (_, row) => PROVIDER_TYPES[row.sourceType] || '—' },
+      { title: '供给类型', width: 150, render: (_, row) => translateLabel(PROVIDER_TYPES[row.sourceType]) || '—' },
       { title: '已登记模型数', align: 'right', width: 130, render: (_, row) => <Button theme="borderless" aria-label={`查看 ${row.name} 的模型列表`} onClick={() => open(row)}>{providerMaterialModels(state, row).length}</Button> },
       { title: '操作', width: 150, fixed: 'right', render: (_, row) => <Space>
-        <Button theme="borderless" disabled={!ops.can} onClick={() => open(row, true)}>编辑</Button>
-        <Button theme="borderless" onClick={() => viewMaterialChannels(ops, row.id)}>查看连接</Button>
+        <Button theme="borderless" disabled={!ops.can} onClick={() => open(row, true)}>{translateLabel("编辑")}</Button>
+        <Button theme="borderless" onClick={() => viewMaterialChannels(ops, row.id)}>{translateLabel("查看连接")}</Button>
       </Space> },
     ]}/>
   </>;
 }
 
 function ProviderModels({ state, ops, provider }) {
+  const translateLabel = useChannelText();
   const [registering, setRegistering] = useState(false);
   const [editing,setEditing] = useState(null);
   const trigger = useRef(null);
@@ -84,7 +87,7 @@ function ProviderModels({ state, ops, provider }) {
       { title: '模型编码', width: 160, render: (_, { master }) => <Typography.Text className="materials-code">{master.modelId}</Typography.Text> },
       { title: '模型类型', width: 120, render: (_, { master }) => catalogueType(master.type) },
       { title: PROTOCOL_ENDPOINT_LABEL, width: 300, render: (_, { offer }) => offer.bindings.length ? offer.bindings.map((b,i) => <div key={i}>{protocolAndEndpoint(b.protocol, b.url)}</div>) : '—' },
-      { title: '操作', width: 110, fixed: 'right', render: (_, row) => <Space><Button theme="borderless" disabled={!ops.can} onClick={() => setEditing(row.offer)}>编辑</Button><RemovalButton state={state} ops={ops} target={{ providerId: provider.id, catalogueId: row.modelId }} ariaLabel={"删除供应模型 " + row.master.name}/></Space> },
+      { title: '操作', width: 110, fixed: 'right', render: (_, row) => <Space><Button theme="borderless" disabled={!ops.can} onClick={() => setEditing(row.offer)}>{translateLabel("编辑")}</Button><RemovalButton state={state} ops={ops} target={{ providerId: provider.id, catalogueId: row.modelId }} ariaLabel={"删除供应模型 " + row.master.name}/></Space> },
     ]}/>
     {editing && <SupplierOfferEditor offer={editing} provider={provider} ops={ops} close={() => setEditing(null)}/>}
     {registering && <SupplyRegistrationDialog state={state} ops={ops} provider={provider} close={() => {
@@ -96,6 +99,7 @@ function ProviderModels({ state, ops, provider }) {
 }
 
 export default function ProviderMaterials(props) {
+  const translateLabel = useChannelText();
   const { state, transact } = props;
   const ops = useOperations({ ...props, ...materialOperationsUi }, 'provider-materials');
   const { params, go } = ops;
@@ -123,13 +127,13 @@ export default function ProviderMaterials(props) {
       {importKind === 'model' ? <SupplierOfferImport provider={provider} ops={ops} done={() => go({ view:null }, { saved:true })}/> : <ModelBatchImport key={view + (provider?.id || '')} kind={importKind} providerId={provider?.id} state={state} ops={ops} transact={transact}
         close={saved => provider ? go({ view: null }, { saved }) : go(listParams, { saved })}/>}
     </div> : view === 'new' ? <>
-      <Typography.Title heading={4}><span ref={title} tabIndex={-1}>新建服务商</span></Typography.Title>
+      <Typography.Title heading={4}><span ref={title} tabIndex={-1}>{translateLabel("新建服务商")}</span></Typography.Title>
       <ProviderMaterialProfile key="new" editing ops={ops} cancel={back} saved={saved}/>
     </> : provider ? <>
       <Typography.Title heading={4}><span ref={title} tabIndex={-1}>{provider.name}</span></Typography.Title>
       <Tabs activeKey={tab} onChange={tab => go({ tab: tab === 'profile' ? tab : null, edit: null }, { preserveScroll: true })} aria-label="服务商资料详情">
-        <Tabs.TabPane itemKey="models" tab="模型列表">{tab === 'models' && <ProviderModels key={provider.id} state={state} ops={ops} provider={provider}/>}</Tabs.TabPane>
-        <Tabs.TabPane itemKey="profile" tab="基础资料">{tab === 'profile' && <ProviderMaterialProfile
+        <Tabs.TabPane itemKey="models" tab={translateLabel("模型列表")}>{tab === 'models' && <ProviderModels key={provider.id} state={state} ops={ops} provider={provider}/>}</Tabs.TabPane>
+        <Tabs.TabPane itemKey="profile" tab={translateLabel("基础资料")}>{tab === 'profile' && <ProviderMaterialProfile
           key={provider.id + (editing ? ':edit' : ':view:' + provider.updatedAt)} provider={provider}
           editing={editing} ops={ops} saved={saved} edit={() => go({ edit: '1' })} cancel={() => go({ edit: null })}/>}</Tabs.TabPane>
       </Tabs>

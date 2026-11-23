@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import AdminPageHeading from './AdminPageHeading';
 
 const modules = {
@@ -8,6 +9,7 @@ const modules = {
 };
 
 export default function ModelModuleHeading({ module, title, description, className = 'ss-heading', children }) {
+  const t = useChannelText();
   const [name, defaultDescription] = modules[module];
-  return <AdminPageHeading className={className} title={title ?? name} description={description === undefined ? defaultDescription : description}>{children}</AdminPageHeading>;
+  return <AdminPageHeading className={className} title={title ?? t(name)} description={description === undefined ? t(defaultDescription) : description}>{children}</AdminPageHeading>;
 }

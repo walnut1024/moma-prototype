@@ -1,7 +1,11 @@
+import { useChannelText } from '../admin-v2/channel-language';
 import { Button, Tooltip } from '@douyinfe/semi-ui';
 import './table-field-help.css';
 
 export default function TableFieldHelp({ name, description, sortable = false, sortIcon, onSort }) {
+  const t = useChannelText();
+  name = t(name);
+  description = t(description);
   const accessibleDescription = typeof description === 'string' ? description : undefined;
   const trigger = sortable || onSort
     ? <Button className={description ? 'table-field-sort-trigger' : undefined}

@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { providerOffer } from '../service-access.mjs';
 import Table from './AdminTable';
 import { useState } from 'react';
@@ -11,10 +12,11 @@ import { priceItems } from './model-management';
 import { itemMoney } from './SupplyPriceEditor';
 
 export function RetailPriceFields({state,rows,setRows,ops,prefix,readOnly=false,onEdit,identity}) {
+  const translateLabel = useChannelText();
   const update=(index,patch)=>setRows(rows.map((item,i)=>i===index?{...item,...patch}:item));
   const options=(kind,value)=>[['unselected','请选择'],...tariffOptions(state,kind).map(name=>[name,name]),...(value && !tariffOptions(state,kind).includes(value)?[[value,value+'（已保存）']]:[])];
   const text=value=>value==null || value===''?'—':value;
-  return <div className="ss-body"><div className="ss-section-bar">{readOnly?<Button disabled={!ops.can} onClick={onEdit}>编辑模型刊例价</Button>:<Button icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can || rows.length>=100} onClick={()=>setRows([...rows,{name:'',condition:'',unit:'',currency:'CNY',amount:''}])}>添加计费项</Button>}</div>
+  return <div className="ss-body"><div className="ss-section-bar">{readOnly?<Button disabled={!ops.can} onClick={onEdit}>{translateLabel("编辑模型刊例价")}</Button>:<Button icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can || rows.length>=100} onClick={()=>setRows([...rows,{name:'',condition:'',unit:'',currency:'CNY',amount:''}])}>添加计费项</Button>}</div>
     <Table size="small" rowKey="index" pagination={false} scroll={{x:identity?1060:820}} empty={readOnly?'尚未配置模型刊例价。':'请添加对外计费项，0 表示免费，金额必填。'} dataSource={rows.map((item,index)=>({...item,index}))} columns={[
       ...(identity?[{title:'服务商',width:140,render:(_,item)=>({children:identity.supplierName,props:{rowSpan:item.index===0?rows.length:0}})},{title:'模型 ID',width:200,render:(_,item)=>({children:identity.callId || '待配置',props:{rowSpan:item.index===0?rows.length:0}})}]:[]),
       {title:'计费项',width:210,render:(_,item)=>readOnly?<div>{text(item.name)}{item.condition && <Typography.Paragraph type="tertiary">{item.condition}</Typography.Paragraph>}</div>:<div className="ss-field-stack"><Choice label={`${prefix}第 ${item.index+1} 项计费项`} filter value={item.name || 'unselected'} disabled={!ops.can} options={options('scenario',item.name)} onChange={name=>update(item.index,{name:name==='unselected'?'':name,unit:tariffScenarioUnit(state,name) || item.unit})}/>{item.condition && <Typography.Paragraph type="tertiary">{item.condition}</Typography.Paragraph>}</div>},
@@ -26,6 +28,7 @@ export function RetailPriceFields({state,rows,setRows,ops,prefix,readOnly=false,
   </div>;
 }
 export function CommercialDialog({state,model,ops,close,providerId='',readOnly=false,onEdit}) {
+  const translateLabel = useChannelText();
   const initial=()=>({callId:providerId?providerOffer(model,providerId)?.callId || '':model.modelId,items:providerId?priceItems(activeProviderPrice(state,model.id,providerId),model).map(item=>({...item,condition:item.condition || '',amount:item.amount==null?'':String(item.amount/1000000)})):unifiedBillingDraft(state,model)});
   const [value,setValue]=useState(()=>structuredClone(initial())),[base,setBase]=useState(()=>commercialPriceBase(state,model,providerId));
   const [preview,setPreview]=useState(false),[publishing,setPublishing]=useState(false);
@@ -43,7 +46,7 @@ export function CommercialDialog({state,model,ops,close,providerId='',readOnly=f
         <Button type="tertiary" disabled={publishing} onClick={() => setPreview(false)}>取消预览</Button>
         <Button theme="solid" disabled={!ops.can || publishing} loading={publishing} onClick={publish}>确认发布模型刊例价</Button>
       </> : <>
-        <Button type="tertiary" disabled={publishing} onClick={close}>取消</Button>
+        <Button type="tertiary" disabled={publishing} onClick={close}>{translateLabel("取消")}</Button>
         <Button theme="solid" disabled={!ops.can || publishing} onClick={() => {
           try { retailItems(state, value.items, current?.items); ops.setError(''); setPreview(true); }
           catch (issue) { setPreview(false); ops.setError(issue.message); }

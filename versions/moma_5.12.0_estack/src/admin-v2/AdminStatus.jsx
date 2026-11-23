@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { Tag } from '@douyinfe/semi-ui';
 
 const statusColors = new Map([
@@ -14,6 +15,7 @@ const statusColors = new Map([
 ].flatMap(([color, labels]) => labels.map(label => [label, color])));
 
 export default function AdminStatus({ value, label = value, prefix, color = statusColors.get(value) ?? 'grey' }) {
+  const t = useChannelText();
   if (value == null || value === '' || value === '—') return '—';
-  return <Tag size="small" color={color}>{prefix ? `${prefix}：${label}` : label}</Tag>;
+  return <Tag size="small" color={color}>{prefix ? `${prefix}：${t(label)}` : t(label)}</Tag>;
 }

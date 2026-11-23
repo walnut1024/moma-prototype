@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { customerProject, personalDefaultProject } from '../personal-project.mjs';
 import { useState } from 'react';
 import { internalSpace } from '../operating-space.mjs';
@@ -36,6 +37,7 @@ const links = [
 ];
 
 export function CustomerProjectKeys({ state, tenant, projectId = '', onProjectChange }) {
+  const translateLabel = useChannelText();
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
@@ -65,7 +67,7 @@ export function CustomerProjectKeys({ state, tenant, projectId = '', onProjectCh
     '可用模型范围', 'API 密钥状态', '有效期', '操作'];
   if (scopeError) return <Banner type="warning" closeIcon={null} description={scopeError}/>;
   return <>
-    <Title heading={5} component="h2">API 密钥</Title>
+    <Title heading={5} component="h2">{translateLabel("API 密钥")}</Title>
     <FilterToolbar>
       <Input className="admin-list-search" aria-label="搜索 API 密钥" placeholder="API 密钥名称或完整 ID" showClear
         prefix={<IconSearch aria-hidden="true"/>} value={query} onChange={value => { setQuery(value); setPage(1); }}/>
@@ -83,13 +85,13 @@ export function CustomerProjectKeys({ state, tenant, projectId = '', onProjectCh
             maskApiKey(key.secretPreview), ...(onProjectChange ? [byProject.get(key.projectId)?.name || '归属异常'] : []),
             reason ? '不可用' : models.length + ' 个',
             <EnterpriseStatus value={key.status}/>, key.expiresAt ? time(key.expiresAt) : '长期有效',
-            <Button size="small" theme="borderless" aria-label={'查看 '+key.name+' 密钥详情'} onClick={()=>setInspectId(key.id)}>详情</Button>,
+            <Button size="small" theme="borderless" aria-label={'查看 '+key.name+' 密钥详情'} onClick={()=>setInspectId(key.id)}>{translateLabel("详情")}</Button>,
           ] };
         })}
         pagination={{ currentPage:current, pageSize:size, total:rows.length, pageSizeOpts:PAGE_SIZES, showTotal:true, showSizeChanger:true,
           onPageChange:setPage, onPageSizeChange:value => { setSize(value); setPage(1); } }}/>}
     {inspect && <EnterpriseDialog title="API 密钥详情" description={inspect.name} close={() => setInspectId(null)}
-      footer={<Button onClick={() => setInspectId(null)}>关闭</Button>}>
+      footer={<Button onClick={() => setInspectId(null)}>{translateLabel("关闭")}</Button>}>
       <EnterpriseFacts rows={[
         ['API 密钥 ID', inspect.keyId], ['所属项目', byProject.get(inspect.projectId)?.name || '归属异常'],
         ['API 密钥状态', <EnterpriseStatus value={inspect.status}/>], ['有效期', inspect.expiresAt ? time(inspect.expiresAt) : '长期有效'],
@@ -127,9 +129,10 @@ export function EnterpriseProjectTable({ state, tenant, projects, onProject, onK
 }
 
 function TenantProjectCreate({ tenantId, onClose, onCreated }) {
+  const translateLabel = useChannelText();
   const tenant = useTenantData({adminTenantId:tenantId});
   if (tenant.identity && tenant.canCreateProject) return <ProjectCreateDialog tenant={tenant} onClose={onClose} onCreated={onCreated}/>;
-  return <EnterpriseDialog title="新建项目" close={onClose} footer={<Button onClick={onClose}>取消</Button>}>
+  return <EnterpriseDialog title="新建项目" close={onClose} footer={<Button onClick={onClose}>{translateLabel("取消")}</Button>}>
     {tenant.error || tenant.identity
       ? <Banner type="warning" closeIcon={null} description={tenant.error || '当前租户不可新建项目'}/>
       : <Spin spinning aria-label="正在加载租户项目配置"/>}

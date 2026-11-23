@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
@@ -10,6 +11,7 @@ import { deploymentUsesArtifact } from './deployments';
 const categories = ['模型制品', '基础镜像', '运行时镜像'];
 
 export default function ArtifactManagement({ state, dispatch }) {
+  const translateLabel = useChannelText();
   const [category, setCategory] = useState(categories[0]);
   const rows = state.artifacts.filter(row => row.type === category).map(row => ({
     ...row, refs: state.deployments.filter(deployment => deploymentUsesArtifact(deployment, row.id)).length,
@@ -28,7 +30,7 @@ export default function ArtifactManagement({ state, dispatch }) {
   };
 
   return <div className="admin-page-stack">
-    <AdminPageHeading title="制品镜像" description="管理部署所需的模型制品与运行镜像，查看验证状态及部署引用。">
+    <AdminPageHeading title={translateLabel("制品镜像")} description="管理部署所需的模型制品与运行镜像，查看验证状态及部署引用。">
       <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} onClick={add}>登记制品</Button>
     </AdminPageHeading>
     <Card>
@@ -47,7 +49,7 @@ export default function ArtifactManagement({ state, dispatch }) {
           { title: '操作', render: (_, row) => <Space spacing={4}>
             {row.validation !== '通过' && <Button size="small" theme="borderless"
               onClick={() => update(row, { validation: '通过', status: '可运行' })}>校验</Button>}
-            <Button size="small" type="danger" theme="borderless" onClick={() => remove(row)}>删除</Button>
+            <Button size="small" type="danger" theme="borderless" onClick={() => remove(row)}>{translateLabel("删除")}</Button>
           </Space> },
         ]}/>
     </Card>

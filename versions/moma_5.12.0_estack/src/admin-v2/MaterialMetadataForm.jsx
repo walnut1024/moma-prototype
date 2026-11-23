@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { cloneElement, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Banner, Button, DatePicker, Form, Input, InputNumber, Select, Space, TagInput, TextArea, Typography, Upload } from '@douyinfe/semi-ui';
@@ -17,6 +18,7 @@ const contextOptions = choices(Object.keys(materialContextUnits));
 const display = value => Array.isArray(value) ? value.join('、') || '—' : value || '—';
 
 export default function MaterialMetadataForm({state, conflict, reload, model, initial, readOnly, can, dirty, onCancel, onSubmit, footerTarget}) {
+  const translateLabel = useChannelText();
   const [form, setForm] = useState(() => modelMetadataDraft(model || initial));
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -117,9 +119,9 @@ export default function MaterialMetadataForm({state, conflict, reload, model, in
         <Select value={form.type} optionList={typeOptions} disabled={!editable} onChange={value => change('type', value)}/>)}
       {slot('context', '上下文长度', materialContextLabel(tokens),
         <Space className="materials-context-field">
-          <Input aria-label="上下文长度" aria-required inputMode="decimal" value={context} disabled={!editable}
+          <Input aria-label={translateLabel("上下文长度")} aria-required inputMode="decimal" value={context} disabled={!editable}
             onChange={value => { setContext(value); markDirty(); }}/>
-          <span id={formId + '-context-unit'} className="sr-only">上下文长度单位</span>
+          <span id={formId + '-context-unit'} className="sr-only">{translateLabel("上下文长度单位")}</span>
           <Select className="materials-context-unit" aria-labelledby={formId + '-context-unit'} value={unit} optionList={contextOptions} disabled={!editable}
             onChange={value => {
               if (tokens !== null && Number.isFinite(tokens)) setContext(String(tokens / materialContextUnits[value]));
@@ -140,14 +142,14 @@ export default function MaterialMetadataForm({state, conflict, reload, model, in
           })}/>)}
       {input('precision', '模型精度', profile.precision, value => changeProfile({ precision: value }))}
       {slot('tags', '模型标签', profile.tags,
-        <TagInput aria-label="模型标签" value={profile.tags || []} max={20} maxLength={50} addOnBlur disabled={!editable}
+        <TagInput aria-label={translateLabel("模型标签")} value={profile.tags || []} max={20} maxLength={50} addOnBlur disabled={!editable}
           placeholder="输入后按回车" onChange={value => changeProfile({ tags: value })}/>)}
       {slot('release-date', '模型发布日期', profile.releaseDate,
         <DatePicker aria-labelledby={formId + '-release-date'} aria-required type="date" onChangeWithDateFirst={false} format="yyyy-MM-dd" disabled={!editable}
           value={profile.releaseDate?.length === 10 ? profile.releaseDate : undefined} placeholder={profile.releaseDate || '选择日期'}
           onChange={value => changeProfile({ releaseDate: value || '' })}/>)}
       {slot('parameters', '参数量（B）', profile.parameters,
-        <InputNumber aria-label="参数量（B）" value={profile.parameters ?? ''} min={0} step={0.1} suffix="B" disabled={!editable}
+        <InputNumber aria-label={translateLabel("参数量（B）")} value={profile.parameters ?? ''} min={0} step={0.1} suffix="B" disabled={!editable}
           onChange={value => changeProfile({ parameters: value })}/>, { required: false })}
     </div>
     {!readOnly && <Space>

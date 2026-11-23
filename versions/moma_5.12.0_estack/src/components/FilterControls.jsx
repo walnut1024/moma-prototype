@@ -1,3 +1,4 @@
+import { useChannelText } from '../admin-v2/channel-language';
 import { useContext } from 'react';
 import { Button, Pagination } from '@douyinfe/semi-ui';
 import { AdminUIContext } from './admin-ui-context';
@@ -26,9 +27,10 @@ export function FilterPresets({ label = '时间筛选', value, onChange, items =
 }
 
 export function FilterReset({ onClick, label = '重置筛选' }) {
+  const t = useChannelText();
   const admin = useContext(AdminUIContext);
   return <Button type="tertiary" theme="borderless" size={admin ? 'default' : 'small'}
-    className={admin ? undefined : 'filter-reset'} onClick={onClick}>{label}</Button>;
+    className={admin ? undefined : 'filter-reset'} onClick={onClick}>{t(label)}</Button>;
 }
 
 export function FilterField({ label, labelId, children, className = '' }) {

@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useState } from 'react';
 import { Button, Checkbox, Empty, Input, RadioGroup, Select, Space, Typography } from '@douyinfe/semi-ui';
 import { IconDelete, IconPlus, IconExternalOpenStroked } from '@douyinfe/semi-icons';
@@ -27,6 +28,7 @@ export default function ChannelPrices({ state, scenarios, disabled, onChange, op
 }
 
 export function CommonTariffBatchButton({ state, scenarios, disabled, onChange, label = '批量添加计费项', modelType }) {
+  const translateLabel = useChannelText();
   const [batch, setBatch] = useState(false);
   const [selected, setSelected] = useState([]);
   const [query, setQuery] = useState('');
@@ -53,7 +55,7 @@ export function CommonTariffBatchButton({ state, scenarios, disabled, onChange, 
       setSelected([]); setQuery(''); setError(''); setBatch(true);
     }}>{label}</Button>
     {batch && <Modal title={label} description={null} onClose={close} footer={<>
-      <Button theme="light" onClick={close}>取消</Button>
+      <Button theme="light" onClick={close}>{translateLabel("取消")}</Button>
       <Button theme="solid" disabled={disabled || !selected.length} onClick={add}>添加所选项</Button>
     </>}>
       <Input autoFocus aria-label="搜索常用计费项" placeholder="搜索中文 / 英文名称" value={query} onChange={setQuery}/>

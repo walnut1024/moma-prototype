@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { channelRequestUrls } from './channel-connection-directory';
 import AdminStatus from './AdminStatus';
 import ChannelTestProgress from './ChannelTestProgress';
@@ -29,6 +30,7 @@ const checkOptions = [['basic', '基础调用'], ['streaming', '流式响应'], 
 const audioOptions = [['speech', '语音合成'], ['transcription', '语音识别']];
 
 function ModelCallTest({ state, provider, endpointId, associationIds, ops, close, navigation, embedded = false, fromService = false, onContinue, continueDisabled = false, continueLabel = '下一步：配置销售', testOnly = false, startToken, onComplete, onProgress, directory = false, onRemove, reference = false, title = '测试连接', modeSelector, httpProbe }) {
+  const translateLabel = useChannelText();
   const endpoint = state.endpoints.find(row => row.id === endpointId);
   const viewingConnection = testOnly && !embedded;
   const directoryTest = directory && viewingConnection && !reference;
@@ -288,7 +290,7 @@ function ModelCallTest({ state, provider, endpointId, associationIds, ops, close
             const basic = allBasic.find(model => model.associationId === row.associationId);
             const label = item || passed(rowsById.get(row.associationId)) ? '重测' : '测试';
             return <Space wrap spacing={4}>
-              {item && <Button size="small" theme="borderless" aria-label={'测试详情 ' + row.modelName} onClick={() => setDetails(item)}>详情</Button>}
+              {item && <Button size="small" theme="borderless" aria-label={'测试详情 ' + row.modelName} onClick={() => setDetails(item)}>{translateLabel("详情")}</Button>}
               {associationIds.length > 1 && basic && <Button size="small" theme="borderless" disabled={!canTest}
                 aria-label={label + ' ' + (row.modelName || row.upstreamModelId)}
                 onClick={() => start({ basicModels: [basic], explicitBasicClick: true })}>{label}</Button>}
@@ -314,19 +316,19 @@ function ModelCallTest({ state, provider, endpointId, associationIds, ops, close
       {ops.error && ops.error !== error && <Notice error>{ops.error}</Notice>}
       <Banner type="warning" closeIcon={null} description="模型调用测试会消耗 Token，并可能产生费用。 实际费用按上游服务商计费规则计算。"/>
       {details && <Modal title="测试详情" description={details.model.upstreamModelId} onClose={() => setDetails(null)}
-        footer={<><Button onClick={() => setDetails(null)}>关闭</Button>{onRemove && details.status === 'failed' &&
+        footer={<><Button onClick={() => setDetails(null)}>{translateLabel("关闭")}</Button>{onRemove && details.status === 'failed' &&
           <Button theme="borderless" type="danger" disabled={!canChange} onClick={() => onRemove(details.model.associationId)}>删除上游模型</Button>}</>}>
         <dl className="supplier-test-details">
-          <dt>测试结果</dt><dd><AdminStatus value={CHANNEL_TEST_STATUS[details.status] || '结果未知'}/></dd>
+          <dt>{translateLabel("测试结果")}</dt><dd><AdminStatus value={CHANNEL_TEST_STATUS[details.status] || '结果未知'}/></dd>
           {(details.evidenceSource || batch?.source) === 'mock' && <><dt>结果来源</dt><dd>模拟测试</dd></>}
-          {details.request?.url && <><dt>完整请求地址</dt><dd><CopyId value={details.request.url} label="完整请求地址"/></dd></>}
+          {details.request?.url && <><dt>{translateLabel("完整请求地址")}</dt><dd><CopyId value={details.request.url} label="完整请求地址"/></dd></>}
           {details.upstreamStatus != null && <><dt>HTTP 状态</dt><dd>{details.upstreamStatus}</dd></>}
           {details.durationMs != null && <><dt>耗时</dt><dd>{details.durationMs} ms</dd></>}
           {details.stage && details.status !== 'passed' && <><dt>失败阶段</dt><dd>{({ queued: '排队', request: '请求上游', parse: '解析响应',
             poll: '等待任务完成', artifact: '检查结果文件' })[details.stage] || '未记录'}</dd></>}
           {details.message && <><dt>回执</dt><dd>{redactDiagnostic(details.message)}</dd></>}
           {details.suggestion && details.suggestion !== details.message && <><dt>处理建议</dt><dd>{redactDiagnostic(details.suggestion)}</dd></>}
-          {details.retryAfter != null && <><dt>建议等待</dt><dd>{details.retryAfter} 秒</dd></>}
+          {details.retryAfter != null && <><dt>建议等待</dt><dd>{details.retryAfter}{translateLabel("秒")}</dd></>}
           {details.mappedStatus != null && <><dt>转换后状态码</dt><dd>{details.mappedStatus}</dd></>}
           {usageText && <><dt>用量</dt><dd>{usageText}</dd></>}
           {cost?.amount != null && <><dt>费用</dt><dd>{moneyDisplay(cost.amount)} {cost.currency}</dd></>}
@@ -370,13 +372,14 @@ function ModelCallTest({ state, provider, endpointId, associationIds, ops, close
     {error && <Notice error>{error}</Notice>}{ops.error && <Notice error>{ops.error}</Notice>}
     {!embedded && !fromService && !viewingConnection && <Button theme="borderless" type="tertiary" onClick={() => { close(); ops.go({}, { base: 'listing-new', reset: true }); }}>前往模型服务</Button>}
     {details && <Modal title="检查详情" description={details.model.upstreamModelId} onClose={() => setDetails(null)} footer={<>{directory && !reference && onRemove && details && details.status === 'failed' && <Button theme="borderless" type="danger"
-      disabled={!ops.can || !canPlan} onClick={() => onRemove(details.model.associationId)}>核对移除此上游模型的影响</Button>}</>}><dl className="supplier-test-details"><dt>状态</dt><dd><AdminStatus value={CHANNEL_TEST_STATUS[details.status] || '结果未知'}/></dd><dt>请求阶段</dt><dd>{({ queued: '等待执行', request: '请求上游', parse: '响应解析', poll: '等待异步任务', artifact: '结果文件检查' })[details.stage] || '未记录'}</dd><dt>建议</dt><dd>{details.suggestion || (details.status === 'passed' ? '无需处理' : details.message || '请核对配置后重试')}</dd>{details.retryAfter != null && <><dt>建议等待</dt><dd>{details.retryAfter} 秒</dd></>}<dt>验证内容</dt><dd>{({ streaming: '流式响应', tools: '工具调用', structured: '结构化输出', text: '文本生成', multimodal: '图像理解', embedding: '向量', rerank: '重排', image: '图片生成', video: '视频生成', speech: '语音合成', transcription: '语音识别' })[details.model.check || details.model.probe || details.model.type] || '任务检查'}</dd><dt>上游状态</dt><dd>{details.upstreamStatus ?? '—'}</dd>{details.mappedStatus != null && <><dt>规则输出状态码</dt><dd>{details.mappedStatus}</dd></>}<dt>耗时</dt><dd>{details.durationMs == null ? '—' : `${details.durationMs} ms`}</dd><dt>用量</dt><dd>{showUsage(details.usage)}</dd><dt>费用</dt><dd>{showUsage(details.cost)}</dd>{details.upstreamRequestId && <><dt>上游请求 ID</dt><dd><CopyId copyAtStart value={details.upstreamRequestId} label="上游请求 ID"/></dd></>}<dt>追踪 ID</dt><dd><CopyId copyAtStart value={details.traceId} label="追踪 ID"/></dd>{details.taskId && <><dt>上游任务 ID</dt><dd><CopyId copyAtStart value={details.taskId} label="上游任务 ID"/></dd></>}{details.message && <><dt>检查结果</dt><dd>{details.message}</dd></>}</dl></Modal>}
+      disabled={!ops.can || !canPlan} onClick={() => onRemove(details.model.associationId)}>核对移除此上游模型的影响</Button>}</>}><dl className="supplier-test-details"><dt>{translateLabel("状态")}</dt><dd><AdminStatus value={CHANNEL_TEST_STATUS[details.status] || '结果未知'}/></dd><dt>请求阶段</dt><dd>{({ queued: '等待执行', request: '请求上游', parse: '响应解析', poll: '等待异步任务', artifact: '结果文件检查' })[details.stage] || '未记录'}</dd><dt>建议</dt><dd>{details.suggestion || (details.status === 'passed' ? '无需处理' : details.message || '请核对配置后重试')}</dd>{details.retryAfter != null && <><dt>建议等待</dt><dd>{details.retryAfter}{translateLabel("秒")}</dd></>}<dt>验证内容</dt><dd>{({ streaming: '流式响应', tools: '工具调用', structured: '结构化输出', text: '文本生成', multimodal: '图像理解', embedding: '向量', rerank: '重排', image: '图片生成', video: '视频生成', speech: '语音合成', transcription: '语音识别' })[details.model.check || details.model.probe || details.model.type] || '任务检查'}</dd><dt>上游状态</dt><dd>{details.upstreamStatus ?? '—'}</dd>{details.mappedStatus != null && <><dt>规则输出状态码</dt><dd>{details.mappedStatus}</dd></>}<dt>耗时</dt><dd>{details.durationMs == null ? '—' : `${details.durationMs} ms`}</dd><dt>用量</dt><dd>{showUsage(details.usage)}</dd><dt>费用</dt><dd>{showUsage(details.cost)}</dd>{details.upstreamRequestId && <><dt>上游请求 ID</dt><dd><CopyId copyAtStart value={details.upstreamRequestId} label="上游请求 ID"/></dd></>}<dt>追踪 ID</dt><dd><CopyId copyAtStart value={details.traceId} label="追踪 ID"/></dd>{details.taskId && <><dt>上游任务 ID</dt><dd><CopyId copyAtStart value={details.taskId} label="上游任务 ID"/></dd></>}{details.message && <><dt>检查结果</dt><dd>{details.message}</dd></>}</dl></Modal>}
   </SupplierCreationDialog>;
 }
 
 const directoryModes = [['http', 'HTTP 连通性探测'], ['model', '模型调用测试']];
 
 function DirectoryTest({ title, ...props }) {
+  const translateLabel = useChannelText();
   const { state, endpointId, provider, ops } = props;
   const endpoint = state.endpoints.find(row => row.id === endpointId);
   const [mode, setMode] = useState('http');
@@ -389,7 +392,7 @@ function DirectoryTest({ title, ...props }) {
   const modeSelector = disabled => <>
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
       <Typography.Text type="secondary">{provider.name} / {endpoint?.name}</Typography.Text>
-      <Typography.Text type="secondary">模拟数据</Typography.Text>
+      <Typography.Text type="secondary">{translateLabel("模拟数据")}</Typography.Text>
     </div>
     <Field label="测试方式"><Choice label="测试方式" options={directoryModes} value={mode}
       disabled={disabled} onChange={setMode}/></Field>

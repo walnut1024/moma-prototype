@@ -1,9 +1,11 @@
+import { useChannelText } from './channel-language';
 import { useId, useEffect, useState } from 'react';
 import { Banner, Button, Form, Input, Space, Typography } from '@douyinfe/semi-ui';
 import { EnterpriseDialog, EnterpriseFacts } from './EnterpriseUI';
 import { validateDemoAdminCode } from './enterprise';
 
 export default function EnterpriseStatusDialog({ state, confirmation, apply, close, complete, canWrite }) {
+  const translateLabel = useChannelText();
   const formId = useId();
   const { tenant, member, key } = confirmation;
   const collection = key ? 'apiKeys' : member ? 'memberships' : 'tenants';
@@ -46,7 +48,7 @@ export default function EnterpriseStatusDialog({ state, confirmation, apply, clo
       : disabling ? '该企业访问和所属 API 密钥调用将被拒绝，历史记录及管理员在其他企业的登录身份和成员关系保留。'
         : '恢复企业访问，已单独停用的管理员、项目和 API 密钥保持原状态。';
   return <EnterpriseDialog title={`${action}${type}`} description="请核对操作对象和影响范围后确认。" close={close} footer={<>
-      <Button onClick={close} disabled={busy}>取消</Button>
+      <Button onClick={close} disabled={busy}>{translateLabel("取消")}</Button>
       <Button form={formId} htmlType="submit" theme="solid" type={disabling ? 'danger' : 'primary'} loading={busy}
         disabled={!canWrite || !target || (disabling && (!challenge || code.length !== 6 || expired))}>确认{action}</Button>
     </>}>

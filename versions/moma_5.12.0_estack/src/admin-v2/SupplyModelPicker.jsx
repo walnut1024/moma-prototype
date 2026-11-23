@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useId, useRef, useState } from 'react';
 import { Button, Select } from '@douyinfe/semi-ui';
 import { libraryRecord, modelCatalogue } from './model-library';
@@ -6,6 +7,7 @@ import { onboardingModelOptions } from './onboarding-presets';
 import MinimalModelForm from './MinimalModelForm';
 
 export default function SupplyModelPicker({ state, value, disabled, onChange, ops, includePresets = false, referenceModelIds = [], onCreateInline }) {
+  const translateLabel = useChannelText();
   const [creating, setCreating] = useState(false), [discarding, setDiscarding] = useState(false), options = (includePresets ? onboardingModelOptions(state) : modelCatalogue(state)).sort((left, right) => Number(referenceModelIds.includes(right.modelId)) - Number(referenceModelIds.includes(left.modelId))), selected = options.find(row => row.id === value) || libraryRecord(state, value);
   const extra = selected && !options.some(row => row.id === selected.id) ? [{ value: String(selected.id), label: selected.name, name: selected.name, modelId: selected.modelId || '', reference: false, preset: false }] : [];
   const formId = useId();
@@ -18,8 +20,8 @@ export default function SupplyModelPicker({ state, value, disabled, onChange, op
     <Button theme="light" autoFocus onClick={resume}>继续编辑</Button>
     <Button type="danger" theme="solid" onClick={close}>放弃修改</Button>
   </> : <>
-    <Button theme="light" onClick={cancel}>取消</Button>
+    <Button theme="light" onClick={cancel}>{translateLabel("取消")}</Button>
     <Button form={formId} htmlType="submit" theme="solid" disabled={!ops.can}>创建模型资料</Button>
   </>;
-  return <><Select ref={trigger} className="supplier-configuration-model" aria-label="选择模型" placeholder="请选择模型" value={selected ? String(selected.id) : ''} disabled={disabled} filter={(input, option) => `${option.name} ${option.modelId}`.toLowerCase().includes(String(input).trim().toLowerCase())} emptyContent={<span role="status">没有匹配的模型</span>} optionList={[...extra, ...options.map(model => ({ value: String(model.id), label: model.name, name: model.name, modelId: model.modelId, reference: referenceModelIds.includes(model.modelId), preset: Boolean(model.modelPresetId) }))]} renderItem={option => <span>{option.name}<small>{option.modelId}{option.reference ? ' · 服务商参考' : option.preset ? ' · 内置目录' : ''}</small></span>} onChange={id => onChange(id)} outerBottomSlot={<Button type="tertiary" theme="borderless" disabled={disabled} onClick={() => { if (onCreateInline) { onCreateInline(); return; } parentDirty.current = ops.hasUnsaved(); childDirty.current = false; ops.setError(''); setCreating(true); }}>{onCreateInline ? '输入新模型编码' : '新建模型资料'}</Button>}/>{creating && <Modal wide title="新建模型资料" description="保存后返回当前表单，不自动登记供应关系。" onClose={cancel} footer={footer}><div ref={form} hidden={discarding} onSubmit={event => event.stopPropagation()}><MinimalModelForm ops={childOps} formId={formId} onSaved={(next, id) => { close(); onChange(id, next); }}/></div>{discarding && <Notice>放弃未保存的模型资料？</Notice>}</Modal>}</>;
+  return <><Select ref={trigger} className="supplier-configuration-model" aria-label={translateLabel("选择模型")} placeholder="请选择模型" value={selected ? String(selected.id) : ''} disabled={disabled} filter={(input, option) => `${option.name} ${option.modelId}`.toLowerCase().includes(String(input).trim().toLowerCase())} emptyContent={<span role="status">{translateLabel("没有匹配的模型")}</span>} optionList={[...extra, ...options.map(model => ({ value: String(model.id), label: model.name, name: model.name, modelId: model.modelId, reference: referenceModelIds.includes(model.modelId), preset: Boolean(model.modelPresetId) }))]} renderItem={option => <span>{option.name}<small>{option.modelId}{option.reference ? ' · 服务商参考' : option.preset ? ' · 内置目录' : ''}</small></span>} onChange={id => onChange(id)} outerBottomSlot={<Button type="tertiary" theme="borderless" disabled={disabled} onClick={() => { if (onCreateInline) { onCreateInline(); return; } parentDirty.current = ops.hasUnsaved(); childDirty.current = false; ops.setError(''); setCreating(true); }}>{onCreateInline ? '输入新模型编码' : '新建模型资料'}</Button>}/>{creating && <Modal wide title={translateLabel("新建模型资料")} description="保存后返回当前表单，不自动登记供应关系。" onClose={cancel} footer={footer}><div ref={form} hidden={discarding} onSubmit={event => event.stopPropagation()}><MinimalModelForm ops={childOps} formId={formId} onSaved={(next, id) => { close(); onChange(id, next); }}/></div>{discarding && <Notice>放弃未保存的模型资料？</Notice>}</Modal>}</>;
 }

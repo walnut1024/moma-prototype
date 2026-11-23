@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useEffect, useId, useRef, useState } from 'react';
 import { IconPlus } from '@douyinfe/semi-icons';
 import { Button, Input, TextArea } from '@douyinfe/semi-ui';
@@ -14,6 +15,7 @@ import { PROVIDER_API_KEY_LIMIT, providerApiKeysDraft, providerApiKeyRows, provi
 import './supplier-key-pool.css';
 
 function KeyEditor({ provider, record, ops, close }) {
+  const translateLabel = useChannelText();
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const active = useRef(true);
@@ -60,7 +62,7 @@ function KeyEditor({ provider, record, ops, close }) {
     <Field label={adding ? '上游 API 密钥' : '新上游 API 密钥'} required error={limitError}
       hint={adding ? '每行一把密钥，支持粘贴多行。保存后仅展示脱敏值。' : undefined}>
       {adding
-        ? <TextArea aria-label="上游 API 密钥" rows={4} autoComplete="off" spellCheck={false}
+        ? <TextArea aria-label={translateLabel("上游 API 密钥")} rows={4} autoComplete="off" spellCheck={false}
           autoFocus value={value} disabled={disabled || !limit} onChange={change}/>
         : <Input aria-label="新上游 API 密钥" mode="password" autoComplete="new-password" maxLength={512}
           autoFocus value={value} disabled={disabled} onChange={change}/>}
@@ -70,6 +72,7 @@ function KeyEditor({ provider, record, ops, close }) {
 }
 
 export default function ReferenceProviderApiKeys({ state, connection, ops }) {
+  const translateLabel = useChannelText();
   const { provider } = connection;
   const [dialog, setDialog] = useState(null);
   const trigger = useRef(null), addTriggerId = useId();
@@ -96,7 +99,7 @@ export default function ReferenceProviderApiKeys({ state, connection, ops }) {
   return <>
     <div className="supplier-key-pool-toolbar">
       <Button id={addTriggerId} size="small" theme="solid" disabled={!ops.can} icon={<IconPlus size="small" aria-hidden="true"/>}
-        onClick={event => open(event, { kind: 'add' })}>添加上游 API 密钥</Button>
+        onClick={event => open(event, { kind: 'add' })}>{translateLabel("添加上游 API 密钥")}</Button>
     </div>
     <GridTable className="supplier-key-table supplier-flat-key-table"
       headings={['密钥名称 / ID', '上游 API 密钥', '当前绑定连接', '状态', '操作']} empty={!rows.length} emptyMessage="暂无上游 API 密钥">
@@ -115,11 +118,11 @@ export default function ReferenceProviderApiKeys({ state, connection, ops }) {
           <Cell><div className="supplier-row-actions">
             <Button theme="borderless" type="tertiary" size="small" aria-label={`测试连接 ${apiKey.id}`}
               disabled={!ops.can || !channels.length || Boolean(apiKey.revokedAt) || apiKey.status === 'disabled'}
-              onClick={event => open(event, { kind: 'test', apiKey })}>测试连接</Button>
+              onClick={event => open(event, { kind: 'test', apiKey })}>{translateLabel("测试连接")}</Button>
             <Button theme="borderless" type="tertiary" size="small" disabled={!ops.can || Boolean(apiKey.revokedAt)}
               aria-label={`替换 ${keyId}`} onClick={event => replace(event, row, channels)}>替换</Button>
             <Button theme="borderless" type="danger" size="small" disabled={!ops.can} aria-label={`删除 ${keyId}`}
-              onClick={event => open(event, { kind: 'delete', record: { ...row, endpoints: supplierKeyChannels(state, provider, apiKey.id) } })}>删除</Button>
+              onClick={event => open(event, { kind: 'delete', record: { ...row, endpoints: supplierKeyChannels(state, provider, apiKey.id) } })}>{translateLabel("删除")}</Button>
           </div></Cell>
         </Row>;
       })}
@@ -127,7 +130,7 @@ export default function ReferenceProviderApiKeys({ state, connection, ops }) {
     {(dialog?.kind === 'add' || dialog?.kind === 'replace') &&
       <KeyEditor provider={provider} record={dialog.record} ops={ops} close={close}/>}
     {deleting && <Modal title="删除上游 API 密钥" description={providerApiKeyId(deleting.apiKey)} onClose={close} footer={<>
-      <Button theme="light" onClick={close}>取消</Button>
+      <Button theme="light" onClick={close}>{translateLabel("取消")}</Button>
       <Button type="danger" disabled={!ops.can} onClick={async () => {
         const { id, fingerprint } = deleting.apiKey;
         if (await ops.run('provider', { operation: 'deleteApiKey', objectId: provider.id,

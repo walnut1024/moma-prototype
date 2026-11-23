@@ -1,9 +1,11 @@
+import { useChannelText } from './channel-language';
 import { offerKey } from '../service-access.mjs';
 import Table from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import SupplierChannelBatchTest from './SupplierChannelBatchTest';
 import { useEffect, useRef, useState } from 'react';
-import { Button, Checkbox, Typography, Descriptions, Collapse } from '@douyinfe/semi-ui';
+import Descriptions from './AdminDescriptions';
+import { Button, Checkbox, Typography, Collapse } from '@douyinfe/semi-ui';
 import {Choice, Field} from './ServiceUI';
 import { Modal, Notice } from './ServiceUI';
 import { displayTime } from './model-management';
@@ -24,6 +26,7 @@ function trialIssueText(message) {
 const safe = value => JSON.stringify(redactDiagnostic(value), null, 2);
 
 export function PlatformTrialDialog({ state, model, ops, providerId, onPublished, close }) {
+  const translateLabel = useChannelText();
   const services = platformServices(state, model);
   const initialService = services.find(row => offerKey(row) === (providerId || '')) || services[0];
   const [serviceId, setServiceId] = useState(() => initialService?.id || '');
@@ -83,14 +86,14 @@ export function PlatformTrialDialog({ state, model, ops, providerId, onPublished
   const footer = <><Button htmlType="button" theme="light" disabled={busy} onClick={close}>退出试调用</Button><Button htmlType="button" disabled={!ops.can || unsaved || !passed || busy || Boolean(pendingReceipt)} onClick={publish}>保存验证结果</Button></>;
   const body = <div className="ss-change-dialog">
       <Notice>试调用使用模拟请求。用量与费用为试算结果。</Notice>
-      <Descriptions data={[{key:<>服务状态</>,value:<>{callStateLabel(serviceReferenceStarted(model, service))}</>},{key:<>验证配置</>,value:<>{passed?'验证通过':visibleServer?'等待验证':'待验证'}<small>{publication ? `上次验证生效：${displayTime(publication.publishedAt)}` : '尚无有效验证记录'}</small></>}]}/>
+      <Descriptions data={[{key:<>{translateLabel("服务状态")}</>,value:<>{callStateLabel(serviceReferenceStarted(model, service))}</>},{key:<>验证配置</>,value:<>{passed?'验证通过':visibleServer?'等待验证':'待验证'}<small>{publication ? `上次验证生效：${displayTime(publication.publishedAt)}` : '尚无有效验证记录'}</small></>}]}/>
       <div className="ss-change-fields"><Field label="调用服务"><Choice label="平台试调用服务" value={service ? serviceId : 'unselected'} options={[...(!service ? [['unselected', services.length ? '请选择当前服务' : '请先配置模型服务']] : []), ...services.map(row => [row.id, `${row.name} · ${row.callId || '模型 ID待配置'}`])]} disabled={busy || !services.length} onChange={id => { setServiceId(id); setSupplyIds(platformAllowedChannels(state, services.find(row => row.id === id)).map(row => row.id)); reset(); }}/></Field><OnboardingScenarioControl disabled={busy} onConnected={reset}/></div>
       {!ops.can && <Notice error>当前没有试调用或发布权限，可查看配置。</Notice>}{unsaved && <Notice error>请先保存或取消当前服务修改，再执行试调用。</Notice>}
       {model.type === 'audio' && <Field label="语音测试任务"><Choice label="平台语音测试任务" value={audioProbe || 'unselected'} options={[[ 'unselected', '请选择语音测试任务' ], ['speech', '语音合成'], ['transcription', '语音识别']]} disabled={busy} onChange={value => { setAudioProbe(value === 'unselected' ? '' : value); reset(); }}/></Field>}
       <div className="onboarding-trial-scope">
         <section className="ss-change-section"><Typography.Title heading={6}>本次允许供给</Typography.Title><Table pagination={false} rowKey="id" scroll={{x:640}} empty="尚无生效路由连接，请返回服务配置。" columns={['服务商 / 连接', '上游模型 ID', '路由方式','操作'].map((title,index)=>({title,render:(_,row)=>row['c'+index]}))} dataSource={rows.map(row => ({id:row.id,c0: <>{row.supply?.provider?.name}<small>{row.supply?.endpoint?.name}</small></>,c1: <><code>{row.association?.upstreamModelId}</code></>,c2: <>{row.route.backup?'故障转移备用':rows.length===1?'单连接':`优先级 ${row.route.priority} / 权重 ${row.route.weight}`}</>,c3: <><Button htmlType="button" theme="borderless" disabled={busy || !ops.can || !row.association} onClick={()=>setTestingRow(row)}>检查供给</Button></>}))}/></section>
       </div>
-      {plan && <Descriptions data={[{key:<>模型 ID</>,value:<><code>{plan.candidate.publicModelId}</code></>},{key:<>验证范围</>,value:<>{plan.candidate.bindings.length} 条供给，{tenantIds.length} 个租户</>},{key:<>模型刊例价</>,value:<>{'技术验证不要求售价'}</>},{key:<>能力检查</>,value:<>{plan.candidate.capabilities.length ? plan.candidate.capabilities.join('、') : '基础调用'}</>}]}/>}
+      {plan && <Descriptions data={[{key:<>{translateLabel("模型 ID")}</>,value:<><code>{plan.candidate.publicModelId}</code></>},{key:<>验证范围</>,value:<>{plan.candidate.bindings.length} 条供给，{tenantIds.length} 个租户</>},{key:<>{translateLabel("模型刊例价")}</>,value:<>{'技术验证不要求售价'}</>},{key:<>能力检查</>,value:<>{plan.candidate.capabilities.length ? plan.candidate.capabilities.join('、') : '基础调用'}</>}]}/>}
       {blocker && <Notice error>{trialIssueText(blocker)}</Notice>}
       {recovered && <Notice>已有当前配置的有效验证结果，可核对后继续，无需重复产生用量。<Button htmlType="button" theme="borderless" onClick={()=>{setReceipt(recovered);setPhase('已恢复通过的验证');}}>恢复已通过的验证</Button></Notice>}
       <Checkbox checked={consent} disabled={busy} onChange={event => { const checked=event.target.checked; return setConsent(checked === true)}}>确认执行模拟试调用</Checkbox>

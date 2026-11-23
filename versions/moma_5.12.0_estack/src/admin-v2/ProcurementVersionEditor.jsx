@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useId, useState } from 'react';
 import { Button, Input, Typography } from '@douyinfe/semi-ui';
 import AdminStatus from './AdminStatus';
@@ -15,6 +16,7 @@ const time = value => value && Number.isFinite(Date.parse(value)) ? new Date(val
 const localTime = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 16);
 
 export default function ProcurementVersionEditor({ state, provider, association, modelName, ops, close, directory = false }) {
+  const translateLabel = useChannelText();
   const current = provider.catalogConnections?.find(row => row.id === association.id && !row.deletedAt) || association;
   const active = activeChannelProcurement(current);
   const quote = active === undefined ? current.pricing : active?.pricing;
@@ -60,14 +62,14 @@ export default function ProcurementVersionEditor({ state, provider, association,
   const showHistory = value => { setHistory(value); ops.setError(''); };
   return <AdminSideSheet visible className="semi-services procurement-cost-sheet" title={modelChannelName(provider, association) + ' · 成本设置'}
     width="min(960px, 100vw)" onCancel={cancel} closeOnEsc footer={publishing ? <>
-      <Button type="tertiary" disabled={busy} onClick={() => setPublishing(null)}>返回编辑</Button>
+      <Button type="tertiary" disabled={busy} onClick={() => setPublishing(null)}>{translateLabel("返回编辑")}</Button>
       <Button theme="solid" loading={busy} disabled={blocked} onClick={publish}>确认发布</Button>
     </> : history ? <Button onClick={() => showHistory(false)}>返回成本设置</Button> : <>
-      <Button type="tertiary" onClick={cancel}>取消</Button>
+      <Button type="tertiary" onClick={cancel}>{translateLabel("取消")}</Button>
       <Button theme="solid" form={formId} htmlType="submit" disabled={blocked || !scenarios.length}>下一步：预览发布</Button>
     </>}>
     <div className="procurement-cost-scope">
-      <dl><div><dt>服务商</dt><dd>{provider.name}</dd></div><div><dt>模型</dt><dd>{modelName || association.modelId}</dd></div></dl>
+      <dl><div><dt>{translateLabel("服务商")}</dt><dd>{provider.name}</dd></div><div><dt>{translateLabel("模型")}</dt><dd>{modelName || association.modelId}</dd></div></dl>
       <AdminStatus value={quote?.scenarios?.length ? '已配置' : draft ? '报价草稿' : active === null ? '已失效' : '待配置'}/>
     </div>
     {stale && <Notice error>该连接服务商成本价已有新版本，当前输入保留，请关闭并重新打开。</Notice>}
@@ -97,7 +99,7 @@ export default function ProcurementVersionEditor({ state, provider, association,
         }}>沿用报价</Button> },
       ]}/>
     </section> : <form id={formId} className="ss-body" noValidate onSubmit={save}>
-      <div className="procurement-cost-heading"><Typography.Title heading={5} component="h3">计费项</Typography.Title>
+      <div className="procurement-cost-heading"><Typography.Title heading={5} component="h3">{translateLabel("计费项")}</Typography.Title>
         {versions.length > 0 && <Button theme="borderless" size="small" onClick={() => showHistory(true)}>历史版本</Button>}
       </div>
       <ProcurementPriceFields state={state} ops={ops} scenarios={scenarios} disabled={blocked} onChange={changed(setScenarios)}/>

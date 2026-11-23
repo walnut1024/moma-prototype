@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useLayoutEffect, useRef, useState } from 'react';
@@ -49,6 +50,7 @@ const entitlementColumns = [
 ];
 
 export default function PackageData({ state, params }) {
+  const translateLabel = useChannelText();
   const [page, setPage] = useState(1);
   const [dateError, setDateError] = useState('');
   const heading = useRef(null);
@@ -131,12 +133,12 @@ export default function PackageData({ state, params }) {
         <div className="admin-list-toolbar package-data-filters" role="group" aria-label="套餐数据筛选">
           <RadioGroup type="button" aria-label="统计时间范围" value={period} options={presets}
             onChange={event => changeOverview({ period: event.target.value, start: null, end: null })}/>
-          <span id="package-data-date-label" className="sr-only">自定义日期范围</span>
+          <span id="package-data-date-label" className="sr-only">{translateLabel("自定义日期范围")}</span>
           <DatePicker className="package-data-dates" aria-labelledby="package-data-date-label" type="dateRange"
             value={[range.start, range.end]} format="yyyy-MM-dd" showClear={false}
             disabledDate={date => Boolean(date && format(date, 'yyyy-MM-dd') > today)}
             onChange={(_, dates) => { if (Array.isArray(dates)) changeRange(...dates); }}/>
-          <Typography.Text type="tertiary">北京时间</Typography.Text>
+          <Typography.Text type="tertiary">{translateLabel("北京时间")}</Typography.Text>
           <span id="package-data-kind-label" className="sr-only">套餐类型</span>
           <Select aria-labelledby="package-data-kind-label" value={kind} optionList={kinds}
             onChange={value => changeOverview({ kind: value === 'all' ? null : value })}/>

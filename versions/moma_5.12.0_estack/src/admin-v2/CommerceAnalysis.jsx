@@ -1,5 +1,7 @@
+import { useChannelText } from './channel-language';
 import { useState } from 'react';
-import { Card, Descriptions, Space } from '@douyinfe/semi-ui';
+import Descriptions from './AdminDescriptions';
+import { Card, Space } from '@douyinfe/semi-ui';
 import AdminPageHeading from './AdminPageHeading';
 import Table from './AdminTable';
 import { Choice } from './ServiceUI';
@@ -12,6 +14,7 @@ function sum(values) {
 const money = value => value?.toLocaleString('zh-CN', { style: 'currency', currency: 'CNY' }) ?? '—';
 
 export default function CommerceAnalysis({ state }) {
+  const translateLabel = useChannelText();
   const [period, setPeriod] = useState('');
   const periods = [...new Set(state.bills.map(row => row.period).filter(Boolean))].sort();
   const facts = state.bills.filter(row => !period || row.period === period);
@@ -24,7 +27,7 @@ export default function CommerceAnalysis({ state }) {
   })).sort((a, b) => (b.billed ?? -Infinity) - (a.billed ?? -Infinity));
   const activePeriods = periods.filter(month => !period || month === period);
   return <div className="admin-page-stack">
-    <AdminPageHeading title="经营分析"/>
+    <AdminPageHeading title={translateLabel("经营分析")}/>
     <Card>
       <Space wrap><Choice label="账期" value={period} options={[['', '全部账期'], ...periods.map(value => [value, value])]} onChange={setPeriod}/></Space>
       <Descriptions data={[

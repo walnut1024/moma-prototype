@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import Table from './AdminTable';
 import { useState } from 'react';
 import { Button, Checkbox, Typography } from '@douyinfe/semi-ui';
@@ -9,6 +10,7 @@ import { routingServices } from './service-routing';
 import { offerKey, salesCustomer } from '../service-access.mjs';
 
 export default function ServiceListingDialog({state,model,ops,stage,close,initialOfferKey}) {
+  const translateLabel = useChannelText();
   const services = routingServices(state).filter(row => row.modelId === model.id);
   const selectOffers = services.some(service => offerKey(service));
   const [tenantIds,setTenantIds]=useState(selectOffers ? [] : model.releaseTenantIds || []),[revision]=useState(model.updatedAt),[busy,setBusy]=useState(false);
@@ -40,11 +42,11 @@ export default function ServiceListingDialog({state,model,ops,stage,close,initia
     } finally { setBusy(false); }
   }
   return <Modal wide title={label} description={model.name} onClose={()=>!busy && close()} footer={<>
-    <Button disabled={busy} onClick={close}>取消</Button>
+    <Button disabled={busy} onClick={close}>{translateLabel("取消")}</Button>
     <Button loading={busy} disabled={!ops.can || Boolean(ops.conflict) || busy || changed || invalid || checks.some(row=>!row.passed)} onClick={submit}>{gray ? "确认灰度开售" : "确认开售"}</Button>
   </>}>
     {selectOffers && <div>
-      <Typography.Title heading={6}>模型服务</Typography.Title>
+      <Typography.Title heading={6}>{translateLabel("模型服务")}</Typography.Title>
       {[...groups].map(([id,services])=>{
         const name=state.providers.find(row=>row.id===id)?.name || id;
         const keys=services.map(offerKey), count=keys.filter(key=>selected.includes(key)).length;
@@ -58,7 +60,7 @@ export default function ServiceListingDialog({state,model,ops,stage,close,initia
       {!groups.size && <Typography.Paragraph>暂无可操作的模型服务。</Typography.Paragraph>}
     </div>}
     {gray && <>
-      <Typography.Title heading={6}>销售对象</Typography.Title>
+      <Typography.Title heading={6}>{translateLabel("销售对象")}</Typography.Title>
       <Table pagination={false} rowKey="id" dataSource={tenants} columns={[{title:'选择',width:80,render:(_,tenant)=><Checkbox aria-label={`销售对象 ${tenant.name}`} checked={tenantIds.includes(tenant.id)} disabled={!ops.can || busy} onChange={event=>{setTenantIds(ids=>event.target.checked?[...ids,tenant.id]:ids.filter(id=>id!==tenant.id));ops.dirty(true);}}/>},{title:'租户名称',dataIndex:'name'},{title:'租户 ID',dataIndex:'id'}]} empty="暂无有效租户。"/>
     </>}
     {(!selectOffers || selectedKeys.length>0) && <ul className="ss-checks">{checks.map((check,index)=><li key={index}><span>{check.passed?'✓':'待完成'} {check.label}</span>{!check.passed && serviceConfigurationTarget(model,check) && <Button theme="borderless" disabled={busy} onClick={()=>ops.proceed(()=>{

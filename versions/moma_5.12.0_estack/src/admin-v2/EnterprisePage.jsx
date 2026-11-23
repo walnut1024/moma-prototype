@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { resourceId } from '../resource-id.mjs';
 import { useId, useEffect, useRef, useState } from 'react';
 import { Avatar, Banner, Button, Card, Form, Input, Radio, RadioGroup, Space, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
@@ -25,6 +26,7 @@ function DropdownField({ label, value, options, onChange, placeholder = '请选�
 }
 
 function EnterpriseEditor({ state, tenant, kind, deploymentMode, apply, close, complete, inline = false, canWrite = true }) {
+  const translateLabel = useChannelText();
   const admins = tenant ? enterpriseAdmins(state, tenant) : [];
   const [form, setForm] = useState({ type: tenant?.type || '企业', notes: tenant?.notes || '', ...Object.fromEntries(enterpriseMetadataFields.map(field => [field.key, tenant?.[field.key] || (field.key === 'countryRegion' ? '中国' : field.key === 'companyName' && kind === 'edit' ? tenant.name : '')])), accountMode: 'new', adminName: '', login: '', email: '', phone: '', userId: '', adminPhones: Object.fromEntries(admins.map(member => [member.userId, state.users.find(user => user.id === member.userId)?.phone || ''])) });
   const [initialPassword,setInitialPassword]=useState('');
@@ -95,7 +97,7 @@ function EnterpriseEditor({ state, tenant, kind, deploymentMode, apply, close, c
   </Form.Slot>;
   const formId = useId();
   const buttons = <>
-    <Button disabled={busy} onClick={requestClose}>取消</Button>
+    <Button disabled={busy} onClick={requestClose}>{translateLabel("取消")}</Button>
     <Button form={formId} htmlType="submit" theme="solid" disabled={!canWrite} loading={busy}>
       {edit ? '保存修改' : addAdmin ? '添加管理员' : '创建并开通'}
     </Button>
@@ -104,7 +106,7 @@ function EnterpriseEditor({ state, tenant, kind, deploymentMode, apply, close, c
     <form id={formId} className="admin-analytics-fields admin-enterprise-form" onSubmit={submit}
       aria-label={edit ? '编辑政企租户信息' : addAdmin ? '添加企业管理员' : '开通政企租户'}>
       {inline && <div className="admin-page-heading">
-        <div><Title heading={5} component="h2">编辑信息</Title><Text type="secondary">租户 ID：{tenant.id}</Text></div>
+        <div><Title heading={5} component="h2">{translateLabel("编辑信息")}</Title><Text type="secondary">租户 ID：{tenant.id}</Text></div>
         <div className="admin-form-actions">{buttons}</div>
       </div>}
       {edit && <>
@@ -228,6 +230,7 @@ function EnterpriseEditor({ state, tenant, kind, deploymentMode, apply, close, c
 }
 
 export default function EnterprisePage({ state, transact, reload, conflict }) {
+  const translateLabel = useChannelText();
   const [params, setParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
   const [editor, setEditor] = useState(() => state.spacePolicy?.operatingMode !== 'internal' &&
     new URLSearchParams(location.hash.split('?')[1] || '').get('create') === 'enterprise' ? { kind: 'create' } : null);
@@ -291,7 +294,7 @@ export default function EnterprisePage({ state, transact, reload, conflict }) {
       </Space>}
       {!detailId && !internalSite && <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite}
         title={!canWrite ? '当前角色仅可查看' : undefined}
-        onClick={() => setEditor({ kind: 'create' })}>开通政企租户</Button>}
+        onClick={() => setEditor({ kind: 'create' })}>{translateLabel("开通政企租户")}</Button>}
     </AdminPageHeading>
     {!canWrite && (!internalSite || state.storageError) && <Banner type="info" closeIcon={null} description={state.storageError ? '数据读取失败，请恢复数据后再操作。'
       : conflict ? '租户数据已更新，请载入最新版本后再操作。' : '当前角色仅可查看租户信息。'}/>}
@@ -326,8 +329,8 @@ export default function EnterprisePage({ state, transact, reload, conflict }) {
           accountDataSourceLabel(item),
           <EnterpriseStatus value={item.status} enterprise/>,
           <Space spacing={4}>
-            <Button size="small" theme="borderless" onClick={() => open(item)}>详情</Button>
-            <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => { open(item, 'info'); setEditor({ kind: 'edit', tenant: item }); }}>编辑</Button>
+            <Button size="small" theme="borderless" onClick={() => open(item)}>{translateLabel("详情")}</Button>
+            <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => { open(item, 'info'); setEditor({ kind: 'edit', tenant: item }); }}>{translateLabel("编辑")}</Button>
             <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => askToggle(item)}>{item.status === '停用' ? '解冻' : '冻结'}</Button>
           </Space>,
         ] };

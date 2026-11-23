@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useId, useRef, useState } from 'react';
 import { Button, Input, Select, Tag, Toast } from '@douyinfe/semi-ui';
 import { IconFilter, IconSearch } from '@douyinfe/semi-icons';
@@ -26,6 +27,7 @@ const optionList = entries => entries.map(([value, label]) => ({ value, label })
 const httpCodeLabel = code => httpLabel(code === 'unreported' ? null : Number(code));
 
 function LogFilterField({ id, view, pool, values, window, errors, onChange }) {
+  const translateLabel = useChannelText();
   const label = labels[id];
   const value = values[id];
   const supply = useObservationSupply(id === 'supply' ? pool : [], id === 'supply' ? value : null);
@@ -39,7 +41,7 @@ function LogFilterField({ id, view, pool, values, window, errors, onChange }) {
       onChange={period => { if (period !== 'custom') change({ period, start: '', end: '' }); }}/>
     <SemiDateRange start={dayOf(window?.start ?? Date.now())} end={dayOf((window?.end ?? Date.now()) - 1)}
       maxDays={365} presets={[]} rangeHint="单次最多 365 天"
-      trigger={<Button aria-label="自定义日期范围">{value === 'custom' ? '修改日期' : '自定义'}</Button>}
+      trigger={<Button aria-label={translateLabel("自定义日期范围")}>{value === 'custom' ? '修改日期' : '自定义'}</Button>}
       onChange={dates => change({ ...dates, period: 'custom' })}/>
   </div>;
   if (id === 'supply') return <ObservationSupplyPick {...supply} onChange={change}/>;
@@ -63,12 +65,13 @@ function LogFilterField({ id, view, pool, values, window, errors, onChange }) {
     && (id !== 'callId' || values.model == null || values.model.includes(observationKey(row, 'model'))));
   const available = observationOptions(scoped, id);
   const selected = (value ?? []).filter(key => !available.some(item => item.id === key));
-  return <Select multiple filter showClear maxTagCount={1} aria-label={label} placeholder="全部" motion={false}
+  return <Select multiple filter showClear maxTagCount={1} aria-label={label} placeholder={translateLabel("全部")} motion={false}
     optionList={optionList([...available.map(item => [item.id, item.name]), ...selected.map(key => [key, key])])}
     value={value || []} onChange={ids => change({ [id]: ids?.length ? ids : null, ...(id === 'model' && { callId: null }) })}/>;
 }
 
 export default function CallLogFilters({ view, pool, filters, window, errors, onChange, onReset }) {
+  const translateLabel = useChannelText();
   const [draft, setDraft] = useState(null);
   const moreId = useId();
   const moreButton = useRef(null);
@@ -108,7 +111,7 @@ export default function CallLogFilters({ view, pool, filters, window, errors, on
           {fields(extra, { ...filters, ...draft }, patch => setDraft(current => ({ ...current, ...patch })))}
         </div>
         <div className="admin-log-filter-actions admin-log-apply">
-          <Button theme="borderless" onClick={closeDraft}>取消</Button>
+          <Button theme="borderless" onClick={closeDraft}>{translateLabel("取消")}</Button>
           <Button theme="solid" onClick={() => {
             if ('tenant' in draft && Object.keys(changeObservationTenant(pool, filters, draft.tenant)).length > 1) {
               Toast.info('已移除新租户范围之外的调用方条件');

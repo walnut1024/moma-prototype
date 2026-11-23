@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { Children, cloneElement, isValidElement, useId } from 'react';
 import { Banner, Button, Form, Input, InputNumber, Select, TextArea, Space, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { IconCopy, IconHelpCircle, IconTick } from '@douyinfe/semi-icons';
@@ -12,6 +13,7 @@ const textControls = new Set([Input, InputNumber, TextArea]);
 const fieldControls = new Set([...textControls, Select, Choice, MultiChoice]);
 
 export function Field({ label, hint, error, help, required, children }) {
+  const t = useChannelText();
   const id = useId();
   const labelId = id + '-label';
   const elements = Children.toArray(children);
@@ -32,15 +34,16 @@ export function Field({ label, hint, error, help, required, children }) {
   }
   const name = markedRequired ? label.slice(0, -2) : label;
   return <Form.Slot className="admin-form-field" label={{ id: labelId, name: inputId,
-    text: help ? <FieldLabel name={name} description={help}/> : name, required: isRequired }}
+    text: help ? <FieldLabel name={name} description={help}/> : t(name), required: isRequired }}
     error={error ? <span id={id + '-error'} role="alert">{error}</span> : undefined}>
     {elements}
-    {hint && <Typography.Paragraph id={id + '-hint'} type="tertiary">{hint}</Typography.Paragraph>}
+    {hint && <Typography.Paragraph id={id + '-hint'} type="tertiary">{t(hint)}</Typography.Paragraph>}
   </Form.Slot>;
 }
-export function Choice({ label, options, ...props }) {
+export function Choice({ label, options, translateOptions = false, ...props }) {
+  const t = useChannelText();
   const id = useId();
-  return <><span id={id} className="sr-only">{label}</span><Select aria-labelledby={id} optionList={options.map(([value, text]) => ({ value, label: text }))} {...props}/></>;
+  return <><span id={id} className="sr-only">{t(label)}</span><Select aria-labelledby={id} optionList={options.map(([value, text]) => ({ value, label: translateOptions ? t(text) : text }))} {...props}/></>;
 }
 export function MultiChoice({ label, choices, value = [], onChange, disabled, groups = [], ...props }) {
   const id = useId();
@@ -58,17 +61,18 @@ export function MultiChoice({ label, choices, value = [], onChange, disabled, gr
   </>;
 }
 export function CopyId({ value, label = '模型 ID', ellipsis, displayValue = value, alignCopy = false, copyAtStart = false }) {
-  const copied = `${label} 已复制`;
+  const t = useChannelText();
+  const copied = t('{field} 已复制').replace('{field}', t(label));
   if (copyAtStart) {
     if (!value) return '—';
-    const copyLabel = '复制 ' + label;
+    const copyLabel = t('复制 {field}').replace('{field}', t(label));
     const button = <Button theme="borderless" size="small" aria-label={copyLabel} icon={<IconCopy aria-hidden="true"/>}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(value);
           Toast.success(copied);
         } catch {
-          Toast.error('复制失败，请选择文本复制');
+          Toast.error(t('复制失败，请选择文本复制'));
         }
       }}/>;
     if (ellipsis) {
@@ -83,20 +87,22 @@ export function CopyId({ value, label = '模型 ID', ellipsis, displayValue = va
   }
   const successTip = alignCopy ? <span role="status"><IconTick aria-hidden="true"/><span className="sr-only">{copied}</span></span> : copied;
   return <Typography.Text className={alignCopy ? 'ss-code ss-code-aligned' : 'ss-code'} ellipsis={ellipsis}
-    copyable={{ content: value, successTip, onError: () => Toast.error('复制失败，请选择文本复制') }}>{displayValue}</Typography.Text>;
+    copyable={{ content: value, successTip, onError: () => Toast.error(t('复制失败，请选择文本复制')) }}>{displayValue}</Typography.Text>;
 }
 export function FieldLabel({ name, description }) {
-  const help = description || modelFieldDescriptions[name];
-  return <Space spacing={4}>{name}{help && <Tooltip content={help} closeOnEsc><Button size="small" theme="borderless" type="tertiary" icon={<IconHelpCircle aria-hidden="true"/>} aria-label={`${name}说明`}/></Tooltip>}</Space>;
+  const t = useChannelText();
+  const help = t(description || modelFieldDescriptions[name]);
+  return <Space spacing={4}>{t(name)}{help && <Tooltip content={help} closeOnEsc><Button size="small" theme="borderless" type="tertiary" icon={<IconHelpCircle aria-hidden="true"/>} aria-label={t('{field}说明').replace('{field}',t(name))}/></Tooltip>}</Space>;
 }
 export function Modal({ title, description, children, onClose, wide, centered, drawer = false, drawerSide = 'right', footer, className = '', maskClosable }) {
+  const t = useChannelText();
   const content = <div className="ss-dialog-content">
     {description && <Typography.Paragraph type="tertiary">{description}</Typography.Paragraph>}{children}
   </div>;
   return drawer
-    ? <AdminSideSheet visible className={`semi-services ${className}`} title={title} placement={drawerSide}
+    ? <AdminSideSheet visible className={`semi-services ${className}`} title={t(title)} placement={drawerSide}
         width={`min(${wide ? 1000 : 720}px, 100vw)`} onCancel={onClose} closeOnEsc maskClosable={maskClosable} footer={footer}>{content}</AdminSideSheet>
-    : <AdminModal visible centered={centered} className={`semi-services ${className}`} title={title}
+    : <AdminModal visible centered={centered} className={`semi-services ${className}`} title={t(title)}
         width={`min(${wide ? 960 : 448}px, calc(100vw - 32px))`} onCancel={onClose} maskClosable={maskClosable} footer={footer ?? null}>{content}</AdminModal>;
 }
 export const serviceOperationsUi = {

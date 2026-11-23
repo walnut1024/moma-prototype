@@ -1,5 +1,7 @@
+import { useChannelText } from './channel-language';
 import { useEffect, useId, useState } from 'react';
-import { Banner, Button, Card, DatePicker, Descriptions, Empty, Input, Space, Spin, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import Descriptions from './AdminDescriptions';
+import { Banner, Button, Card, DatePicker, Empty, Input, Space, Spin, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconRefresh, IconSearch } from '@douyinfe/semi-icons';
 import AdminPageHeading from './AdminPageHeading';
 import AdminTable from './AdminTable';
@@ -152,6 +154,7 @@ function AuditDetails({ row, accountId, close, onLogin, tenantName, projectName 
 }
 
 export default function AuditLogsPage({ accountId, params, tenants = [], projects = [] }) {
+  const translateLabel = useChannelText();
   const initialScope = { ...initialFilters, tenant:params?.get('tenant') || '', project:params?.get('project') || '',
     action:Object.hasOwn(AUDIT_ACTIONS,params?.get('action')) ? params.get('action') : '' };
   const [draft, setDraft] = useState(initialScope);
@@ -217,7 +220,7 @@ export default function AuditLogsPage({ accountId, params, tenants = [], project
     </> },
   ];
   return <div className="admin-page-stack audit-logs-page">
-    <AdminPageHeading title="审计日志">
+    <AdminPageHeading title={translateLabel("审计日志")}>
       <Button icon={<IconRefresh aria-hidden="true"/>} onClick={() => { setCursors(['']); refresh(); }}>刷新</Button>
     </AdminPageHeading>
     <Card>
@@ -258,10 +261,10 @@ export default function AuditLogsPage({ accountId, params, tenants = [], project
         : <AdminTable className="audit-log-table" rowKey="event_id" dataSource={loaded?.items || []} columns={columns} loading={!loaded}
           empty={hasFilters ? '没有符合筛选条件的审计记录' : '暂无审计记录'}
           scroll={{ x: `max(100%, ${columns.reduce((width, column) => width + column.width, 0)}px)` }} tableLayout="fixed" pagination={false}/>}
-      {loaded && !loaded.issue && (cursors.length > 1 || loaded.nextCursor) && <Space className="audit-log-pagination" role="group" aria-label="分页">
-        <Button size="small" disabled={cursors.length < 2} onClick={() => page(cursors.slice(0, -1))}>上一页</Button>
+      {loaded && !loaded.issue && (cursors.length > 1 || loaded.nextCursor) && <Space className="audit-log-pagination" role="group" aria-label={translateLabel("分页")}>
+        <Button size="small" disabled={cursors.length < 2} onClick={() => page(cursors.slice(0, -1))}>{translateLabel("上一页")}</Button>
         <Text aria-live="polite">第 {cursors.length} 页</Text>
-        <Button size="small" disabled={!loaded.nextCursor} onClick={() => page([...cursors, loaded.nextCursor])}>下一页</Button>
+        <Button size="small" disabled={!loaded.nextCursor} onClick={() => page([...cursors, loaded.nextCursor])}>{translateLabel("下一页")}</Button>
       </Space>}
     </Card>
     {detail && <AuditDetails row={detail} accountId={accountId} tenantName={tenantName} projectName={projectName} close={() => setDetail(null)} onLogin={() => openLogin()}/>}

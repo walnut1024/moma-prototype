@@ -254,7 +254,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
 
   if (createdId) return <Modal drawer wide title="连接已创建" description={[provider?.name, channelName.trim()].filter(Boolean).join(' / ')}
     onClose={close} footer={<>
-      <Button onClick={close}>返回连接列表</Button>
+      <Button onClick={close}>{t("返回连接列表")}</Button>
       <Button theme="solid" onClick={() => locate(createdId)}>查看新连接</Button>
     </>}>
     <Typography.Paragraph>{pendingType ? '连接已保存为待适配草稿。' : models.length
@@ -403,14 +403,14 @@ export default function ChannelDirectoryCreation({ state, providers, connections
       </div>}
       {configuring && <>
       {!source && !pendingType && <Button theme="light" disabled={writing || !provider || Boolean(saved.length)} onClick={() => setImportText('')}>粘贴连接信息</Button>}
-      <Typography.Title heading={5} component="h3">连接信息</Typography.Title>
+      <Typography.Title heading={5} component="h3">{t("连接信息")}</Typography.Title>
       <div className="channel-operation-fields">
         <Field label={batch ? '批量命名前缀' : '连接名称 *'}><Input aria-label={batch ? '批量命名前缀' : '连接名称'} value={value.name} maxLength={60}
           disabled={writing} onChange={name => set({ name })}/></Field>
         {source && <Field label="名称后缀"><Input aria-label="名称后缀" value={copyOptions.suffix} maxLength={20} disabled={writing}
           onChange={suffix => { setCopyOptions(current => ({ ...current, suffix })); set({ name: source.name.slice(0, 60 - suffix.length) + suffix }); }}/></Field>}
         <Field label={value.interfaceType === 'custom' ? '完整任务地址 *' : '服务地址 *'}>
-          <Input aria-label="服务地址" value={value.baseUrl} placeholder="https://api.example.com/v1" maxLength={2048}
+          <Input aria-label={t("服务地址")} value={value.baseUrl} placeholder="https://api.example.com/v1" maxLength={2048}
             disabled={writing} onChange={baseUrl => set({ baseUrl })}/>
         </Field>
         {!source && !pendingType && reusableAddresses.length > 0 && <Field label="沿用已有地址"><Choice label="沿用已有地址"
@@ -434,7 +434,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
           disabled={writing} options={[['priority', '按优先级'], ['random', '随机'], ['roundRobin', '轮询']]}
           onChange={keyStrategy => set({ keyStrategy })}/></Field>}
       </div>
-      {suggestedRoot && <Button disabled={writing} onClick={() => set({ baseUrl: suggestedRoot })}>使用建议的服务地址 {suggestedRoot}</Button>}
+      {suggestedRoot && <Button disabled={writing} onClick={() => set({ baseUrl: suggestedRoot })}>{t("使用建议的服务地址")}{suggestedRoot}</Button>}
       {pendingType && <><Notice>此类型可保存为未启用草稿。完成适配后再接入模型并测试。</Notice>
         {pendingType.fields.map(([key, title]) => <Field key={key} label={title}><Input aria-label={title} maxLength={100} disabled={writing}
           value={pendingValues[key] || ''} onChange={text => { setPendingValues(current => ({ ...current, [key]: text })); change(); }}/></Field>)}</>}
@@ -451,7 +451,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
             onClick={() => { setInputs(items => items.filter(row => row.id !== input.id)); change(); }}>移除此行</Button></Space>}
         </div>])}
         {value.mode !== 'single' && <Button theme="light" disabled={writing || inputs.length >= 20}
-          onClick={() => { setInputs(items => [...items, keyInput()]); change(); }}>添加一把密钥</Button>}
+          onClick={() => { setInputs(items => [...items, keyInput()]); change(); }}>{t("添加一把密钥")}</Button>}
       </>}
       {!pendingType && provider && <>
         <Typography.Title heading={5} component="h3">接入模型（选填）</Typography.Title>
@@ -470,7 +470,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
     {ops.error && <Notice error>{ops.error}</Notice>}
   </SupplierCreationDialog>
   {importText !== null && <Modal wide title="粘贴连接信息" onClose={() => setImportText(null)} footer={<>
-    <Button onClick={() => setImportText(null)}>取消</Button>
+    <Button onClick={() => setImportText(null)}>{t("取消")}</Button>
     <Button theme="solid" disabled={!importText.trim() || writing} onClick={importConnection}>带入创建表单</Button>
   </>}>
     <Field label="连接信息 JSON"><TextArea aria-label="连接信息 JSON" value={importText} maxLength={30000}

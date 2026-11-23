@@ -281,6 +281,7 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
 }
 
 export function ChannelModelEditor({ model, connection, ops, close }) {
+  const translateLabel = useChannelText();
   const { endpoint, provider } = connection;
   const { association, modelName } = model;
   const savedName = provider.catalogConnections?.find(row => row.id === association.id)?.name;
@@ -305,9 +306,9 @@ export function ChannelModelEditor({ model, connection, ops, close }) {
   };
   return <SupplierCreationDialog title="编辑模型" cancel={() => !busy && ops.proceed(close)}
     submit={save} action="保存" disabled={disabled || !value.upstream.trim() || !value.displayName.trim() || (!upstreamChanged && !displayNameChanged)}>
-    <Field label="上游模型 ID *"><Input aria-label="上游模型 ID" value={value.upstream} maxLength={200} disabled={disabled}
+    <Field label="上游模型 ID *"><Input aria-label={translateLabel("上游模型 ID")} value={value.upstream} maxLength={200} disabled={disabled}
       onChange={upstream => update({ upstream })}/></Field>
-    <Field label="模型展示名称 *"><Input aria-label="模型展示名称" value={value.displayName} maxLength={120} disabled={disabled}
+    <Field label="模型展示名称 *"><Input aria-label={translateLabel("模型展示名称")} value={value.displayName} maxLength={120} disabled={disabled}
       onChange={displayName => update({ displayName })}/></Field>
     {upstreamChanged && <Notice>修改上游模型 ID后，需重新测试该模型。</Notice>}
     {ops.error && <Notice error>{ops.error}</Notice>}

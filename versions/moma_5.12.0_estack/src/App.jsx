@@ -1,3 +1,4 @@
+import { ChannelLanguageContext } from './admin-v2/channel-language';
 import {useTenantData} from './useTenantData';
 import { marketModels, customerPriceRows } from './service-directory.mjs';
 import MarketModelDetail from './MarketModelDetail';
@@ -507,6 +508,15 @@ function frontDestination(label) {
 
 function PrototypeApp({ version }) {
   const site = useSiteConfig();
+  const [english, setEnglish] = useState(() => {
+    try { return localStorage.getItem('moma-5120-admin-guide-language') === 'en'; }
+    catch { return false; }
+  });
+  const changeLanguage = value => {
+    setEnglish(value);
+    try { localStorage.setItem('moma-5120-admin-guide-language', value ? 'en' : 'zh-CN'); }
+    catch { /* The current selection still applies when storage is unavailable. */ }
+  };
   const workbenchName = site.workbenchName || DEFAULT_WORKBENCH_NAME;
   useSiteChrome(site);
   const auth = useAuthNavigation();
@@ -878,7 +888,7 @@ function PrototypeApp({ version }) {
         <div className="brand-mark">
           <img src={site.logo || DEFAULT_SITE_LOGO} alt="" onError={event => restoreSiteImage(event, DEFAULT_SITE_LOGO)} />
           {admin === "v2"
-            ? <SemiTypography.Text strong>{workbenchName}</SemiTypography.Text>
+            ? <SemiTypography.Text strong>{english && workbenchName === DEFAULT_WORKBENCH_NAME ? 'Token Admin Workbench' : workbenchName}</SemiTypography.Text>
             : <span>{site.userConsoleName || DEFAULT_USER_CONSOLE_NAME}</span>}
         </div>
         <div className="top-actions">
@@ -895,7 +905,7 @@ function PrototypeApp({ version }) {
             onSwitchSpace={()=>openProjectPage(undefined,'home',{},true)}/> : null}
         </div>
         {admin === "v2" && (
-          <SemiButton className="admin-banner-return" type="tertiary" theme="borderless" size="small" onClick={() => navigateAdmin("front")}>返回前台</SemiButton>
+          <SemiButton className="admin-banner-return" type="tertiary" theme="borderless" size="small" onClick={() => navigateAdmin("front")}>{english ? 'Return to Console' : '返回前台'}</SemiButton>
         )}
       </header>
       {admin === "front" && !auth.route && !waitingForSession && (
@@ -921,7 +931,7 @@ function PrototypeApp({ version }) {
         ) : auth.route ? (
           <AuthExperience key={auth.route} auth={auth} market={market} />
         ) : admin === "v2" ? (
-          <AdminConsoleV2 bannerTarget={adminBannerTarget} workbenchName={workbenchName} adminAccount={auth.adminAccount} />
+          <AdminConsoleV2 english={english} changeLanguage={changeLanguage} bannerTarget={adminBannerTarget} workbenchName={workbenchName} adminAccount={auth.adminAccount} />
         ) : internal && ['model-order','billing'].includes(activeRoute) ? (
           <div className="project-panel project-experience-empty"><h2>企业内用</h2><p>模型使用权限由项目管理员分配。</p>
             <SemiButton theme="solid" onClick={()=>openProjectPage(undefined,'model-market')}>返回模型广场</SemiButton></div>
@@ -1102,7 +1112,7 @@ function PrototypeApp({ version }) {
 
     </div></AdminUIContext.Provider>
   );
-  return admin === "front" ? <ConfigProvider locale={zhCN} getPopupContainer={getTenantPopupContainer}>{shell}</ConfigProvider> : shell;
+  return admin === "front" ? <ConfigProvider locale={zhCN} getPopupContainer={getTenantPopupContainer}>{shell}</ConfigProvider> : <ChannelLanguageContext.Provider value={english}>{shell}</ChannelLanguageContext.Provider>;
 }
 
 function subscribeAgreementRoute(update) {

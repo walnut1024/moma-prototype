@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { Button, Card, Tabs, Typography } from '@douyinfe/semi-ui';
 import { EnterpriseFacts, EnterpriseStatus, EnterpriseTable } from './EnterpriseUI';
 import CustomerProjectDetails, { CustomerProjectKeys } from './CustomerProjectDetails';
@@ -18,9 +19,10 @@ function MetadataFacts({ title,tenant,fields }) {
 }
 
 function TenantAdministrators({ state, tenant, canWrite, setEditor, askToggle }) {
+  const translateLabel = useChannelText();
   return <>
     <div className="admin-page-heading">
-      <Title heading={5} component="h2">租户管理员</Title>
+      <Title heading={5} component="h2">{translateLabel("租户管理员")}</Title>
       <Button theme="solid" disabled={!canWrite} onClick={()=>setEditor({kind:'add-admin',tenant})}>指定管理员</Button>
     </div>
     <EnterpriseTable columns={['姓名','登录账号','手机号','邮箱','管理员状态','操作']} empty="暂无租户管理员"
@@ -40,6 +42,7 @@ function TenantAdministrators({ state, tenant, canWrite, setEditor, askToggle })
 }
 
 export default function EnterpriseDetails({ state, tenant, params, navigate, canWrite, transact, reload, setEditor, askToggle, editing, editForm }) {
+  const translateLabel = useChannelText();
   const canManageResources = state.currentRole==='平台管理员' && ['正常','需关注'].includes(tenant.status);
   const tabs = Object.entries(enterpriseTabs).filter(([id])=>id!=='organization' || canManageResources);
   const tab = tabs.some(([id])=>id===params.get('tab')) ? params.get('tab') : 'info';
@@ -52,7 +55,7 @@ export default function EnterpriseDetails({ state, tenant, params, navigate, can
       {tab==='info' && (editing ? editForm : <>
         <div className="admin-page-heading">
           <Title heading={5} component="h2">租户信息</Title>
-          <Button disabled={!canWrite} onClick={()=>setEditor({kind:'edit',tenant})}>编辑信息</Button>
+          <Button disabled={!canWrite} onClick={()=>setEditor({kind:'edit',tenant})}>{translateLabel("编辑信息")}</Button>
         </div>
         <EnterpriseFacts rows={[
           ['租户名称', tenant.name], ['租户 ID', tenant.id], ['租户类型', tenant.type],

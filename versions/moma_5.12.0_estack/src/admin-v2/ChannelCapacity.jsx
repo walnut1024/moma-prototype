@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useId, useState } from 'react';
 import { Button, Checkbox, Input, Popover, Space, Table, Typography } from '@douyinfe/semi-ui';
 import { IconChevronDown, IconDelete, IconPlus } from '@douyinfe/semi-icons';
@@ -29,6 +30,7 @@ export function ChannelCapacityCell({ provider, channel, modelName }) {
 }
 
 export default function ChannelCapacityEditor({ provider, association, modelName, ops, close }) {
+  const translateLabel = useChannelText();
   const current = provider.catalogConnections?.find(row => row.id === association.id && !row.deletedAt) || association;
   const [limits, setLimits] = useState(() => ({ rpm: '', tpm: '', ...channelCapacityDraft(current.capacityLimits) }));
   const [expectedRevision] = useState(current.capacityRevision || 0);
@@ -53,8 +55,8 @@ export default function ChannelCapacityEditor({ provider, association, modelName
   };
   return <AdminSideSheet visible className="semi-services channel-capacity-sheet" title={modelChannelName(provider, association) + ' · 容量设置'}
     width="min(960px, 100vw)" onCancel={cancel} closeOnEsc footer={<>
-      <Button type="tertiary" disabled={busy} onClick={cancel}>取消</Button>
-      <Button theme="solid" form={formId} htmlType="submit" disabled={blocked} loading={busy}>保存</Button>
+      <Button type="tertiary" disabled={busy} onClick={cancel}>{translateLabel("取消")}</Button>
+      <Button theme="solid" form={formId} htmlType="submit" disabled={blocked} loading={busy}>{translateLabel("保存")}</Button>
     </>}>
     <Typography.Paragraph type="tertiary">{provider.name} · {modelName || association.modelId}</Typography.Paragraph>
     {stale && <Notice error>该上游模型容量已有修订，当前输入保留，请关闭并重新打开。</Notice>}
@@ -74,7 +76,7 @@ export default function ChannelCapacityEditor({ provider, association, modelName
     </form>
     {ops.error && <Notice error>{ops.error}</Notice>}
     {adding && <Modal title="添加容量指标" onClose={() => setAdding(false)} footer={<>
-      <Button theme="light" onClick={() => setAdding(false)}>取消</Button>
+      <Button theme="light" onClick={() => setAdding(false)}>{translateLabel("取消")}</Button>
       <Button theme="solid" disabled={blocked || !selected.length} onClick={() => {
         change(appendCapacityMetrics(limits, selected)); setAdding(false);
       }}>添加所选项</Button>

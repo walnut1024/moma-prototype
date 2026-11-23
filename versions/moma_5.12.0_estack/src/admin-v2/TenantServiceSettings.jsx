@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useState } from 'react';
 import { Banner, Button, Input, Select, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconSearch } from '@douyinfe/semi-icons';
@@ -14,6 +15,7 @@ const label = {
 const levelOptions = TENANT_SERVICE_LEVELS.map(level=>({value:level,label:level}));
 
 export function TenantServiceSettings({ state, tenant, section, canWrite, transact }) {
+  const translateLabel = useChannelText();
   const [editor,setEditor] = useState(null);
   const [query,setQuery] = useState('');
   const [page,setPage] = useState(1);
@@ -64,7 +66,7 @@ export function TenantServiceSettings({ state, tenant, section, canWrite, transa
       <div className="admin-page-heading">
         <Input className="admin-list-search" aria-label="搜索已授权的模型服务" prefix={<IconSearch aria-hidden="true"/>}
           placeholder="搜索模型服务名称或模型 ID" value={query} onChange={value=>{setQuery(value);setPage(1);}} showClear/>
-        {writable && <Button theme="solid" onClick={()=>open('open-models',{modelIds:[]})}>授权模型服务</Button>}
+        {writable && <Button theme="solid" onClick={()=>open('open-models',{modelIds:[]})}>{translateLabel("授权模型服务")}</Button>}
       </div>
       <EnterpriseTable columns={['模型服务','状态','操作']}
         rows={rows.slice((current-1)*size,current*size).map(({modelId})=>({id:modelId,cells:[
@@ -72,20 +74,20 @@ export function TenantServiceSettings({ state, tenant, section, canWrite, transa
           <AdminStatus value={catalogue.get(modelId)?.availability || '暂不可用'}/>,
           writable ?
             <Button size="small" theme="borderless" type="danger" aria-label={'移除授权 '+name(modelId)}
-              onClick={()=>open('remove-model',{modelId})}>移除授权</Button>
+              onClick={()=>open('remove-model',{modelId})}>{translateLabel("移除授权")}</Button>
           : '—',
         ]}))} empty={query.trim() ? '暂无匹配的模型' : '当前租户暂无已授权的模型服务'}
         pagination={{currentPage:current,pageSize:size,total:rows.length,pageSizeOpts:PAGE_SIZES,showTotal:true,showSizeChanger:true,
           onPageChange:setPage,onPageSizeChange:value=>{setSize(value);setPage(1);}}}/>
     </>}
     {editor && <EnterpriseDialog title={label[operation]} close={close} closeOnEsc={!saving}
-      footer={<><Button onClick={close} disabled={saving}>取消</Button>
+      footer={<><Button onClick={close} disabled={saving}>{translateLabel("取消")}</Button>
         {!(operation==='open-models' && !options.length) && <Button form={'tenant-service-'+section} htmlType="submit"
           theme="solid" type={removing ? 'danger' : 'primary'} loading={saving} disabled={submitDisabled}>
           {removing ? '确认移除授权' : operation==='open-models' ? '授权' : '保存'}
         </Button>}</>}>
       <form id={'tenant-service-'+section} className="admin-analytics-fields" onSubmit={submit}>
-        {operation==='level' && <Select aria-label="服务等级" optionList={levelOptions} value={data.level}
+        {operation==='level' && <Select aria-label={translateLabel("服务等级")} optionList={levelOptions} value={data.level}
           placeholder="请选择服务等级" onChange={value=>set('level',value)} disabled={saving}/>}
         {operation==='open-models' && (options.length
           ? <Select aria-label="选择模型服务" multiple filter showClear optionList={options} value={data.modelIds}

@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
@@ -129,9 +130,10 @@ export function ConnectionFields({ value, onChange, disabled, optionalKey = fals
   </div>;
 }
 export function ConnectionApiKeys({ value, onChange, disabled, optionalKey = false, prefix = '' }) {
+  const translateLabel = useChannelText();
   const set = (key, input) => onChange({ ...value, [key]: input });
   const keys = value.apiKeys || [], inputs = value.keyInputs || [];
-  return <fieldset className="mo-span supplier-connection-key-group"><legend>API 密钥{optionalKey ? '（选填）' : ' *'}</legend>
+  return <fieldset className="mo-span supplier-connection-key-group"><legend>{translateLabel("API 密钥")}{optionalKey ? '（选填）' : ' *'}</legend>
       {keys.map((key, index) => <div className="supplier-key-row" key={key.id}><Field label={'已配置 API 密钥 ' + (index + 1)}><Input aria-label={prefix + '已配置 API 密钥 ' + (index + 1)} readOnly value={key.maskedKey}/></Field><Button icon={<IconDelete aria-hidden="true"/>} theme="borderless" size="small" disabled={disabled} aria-label={prefix + '移除已配置 API 密钥 ' + (index + 1)} onClick={() => set('apiKeys', keys.filter(item => item.id !== key.id))}/></div>)}
       {value.credentialRef && <div className="supplier-key-row"><span>已配置凭证引用</span><Button type="tertiary" theme="borderless" disabled={disabled} onClick={() => set('credentialRef', '')}>移除凭证</Button></div>}
       {inputs.map((row, index) => <div className="supplier-key-row" key={row.id}><Field label={'API 密钥 ' + (keys.length + index + 1)}><Input aria-label={prefix + 'API 密钥 ' + (index + 1)} mode="password" autoComplete="new-password" maxLength={512} required={!optionalKey && !keys.length && !value.credentialRef && index === 0} placeholder="请输入 API 密钥" value={row.value} disabled={disabled} onChange={value => set('keyInputs', inputs.map(item => item.id === row.id ? { ...item, value } : item))}/></Field><Button icon={<IconDelete aria-hidden="true"/>} theme="borderless" size="small" disabled={disabled || inputs.length === 1} aria-label={prefix + '移除 API 密钥 ' + (index + 1)} onClick={() => set('keyInputs', inputs.filter(item => item.id !== row.id))}/></div>)}

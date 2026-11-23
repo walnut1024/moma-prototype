@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useId, useState } from 'react';
 import { Button, Checkbox, Input, Popover, Space, Typography } from '@douyinfe/semi-ui';
 import { IconChevronDown, IconChevronRight } from '@douyinfe/semi-icons';
@@ -8,6 +9,7 @@ const { Text } = Typography;
 const emptySupply = () => ({ providers: [], channels: [] });
 
 export default function UsageSupplyPicker({ filters, options, onChange }) {
+  const translateLabel = useChannelText();
   const treeId = useId();
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState([]);
@@ -31,12 +33,12 @@ export default function UsageSupplyPicker({ filters, options, onChange }) {
   return <Popover trigger="click" position="bottomLeft" motion={false} visible={open} onVisibleChange={openPicker} zIndex={1200}
     content={({ initialFocusRef }) => <div ref={initialFocusRef} tabIndex={-1} className="admin-analytics-picker admin-analytics-fields ua-native-supply-picker"
       aria-label="服务商与连接多选">
-      <Input aria-label="搜索服务商或连接" placeholder="搜索服务商 / 连接名称或 ID" value={query} onChange={value => {
+      <Input aria-label={translateLabel("搜索服务商或连接")} placeholder="搜索服务商 / 连接名称或 ID" value={query} onChange={value => {
         setQuery(value);
         setExpanded(value.trim() ? supplyPickerGroups(options, value).map(item => item.id) : []);
       }}/>
       <Checkbox checked={all} indeterminate={!all && Boolean(draft.providers.length || draft.channels.length)}
-        onChange={event => { setAll(event.target.checked); setDraft(emptySupply()); }}>全部服务商</Checkbox>
+        onChange={event => { setAll(event.target.checked); setDraft(emptySupply()); }}>{translateLabel("全部服务商")}</Checkbox>
       <div className="admin-analytics-options" role="group" aria-label="服务商与连接选项">
         {groups.map((item, index) => {
           const whole = all || draft.providers.includes(item.id);
@@ -77,12 +79,12 @@ export default function UsageSupplyPicker({ filters, options, onChange }) {
       <div className="admin-analytics-picker-footer">
         <Text type="secondary" title={summary}>{summary}</Text>
         <Space>
-          <Button size="small" theme="borderless" onClick={() => { setAll(false); setDraft(emptySupply()); }}>清空</Button>
-          <Button size="small" onClick={() => setOpen(false)}>取消</Button>
+          <Button size="small" theme="borderless" onClick={() => { setAll(false); setDraft(emptySupply()); }}>{translateLabel("清空")}</Button>
+          <Button size="small" onClick={() => setOpen(false)}>{translateLabel("取消")}</Button>
           <Button size="small" theme="solid" onClick={() => {
             onChange({ ...filters, providers: all ? [] : draft.providers, channels: all ? null : draft.channels });
             setOpen(false);
-          }}>确定</Button>
+          }}>{translateLabel("确定")}</Button>
         </Space>
       </div>
     </div>}>

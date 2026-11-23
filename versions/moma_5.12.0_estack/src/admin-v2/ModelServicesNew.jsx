@@ -3,10 +3,10 @@ import { API_PREFIX } from '../../api-path';
 import { callLogFieldHelp } from '../components/call-log-field-help';
 import TableFieldHelp from '../components/TableFieldHelp';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import Descriptions from './AdminDescriptions';
 import {
-  Banner, Button, Card, Descriptions, Empty, Input, InputNumber, RadioGroup, Radio, Select,
-  Space, Tabs, Tag, TextArea, Toast, Tooltip, Typography,
-} from '@douyinfe/semi-ui';
+  Banner, Button, Card, Empty, Input, InputNumber, RadioGroup, Radio, Select,
+  Space, Tabs, Tag, TextArea, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { resourceId } from '../resource-id.mjs';
 import { cloudAdminRequest } from './admin-client.mjs';
@@ -265,13 +265,13 @@ function ChannelModels({ service, rows, canEdit, open }) {
       {row.needsReview && <Button size="small" theme="borderless" disabled={!canEdit} onClick={() => open('channel', row)}>核对连接配置</Button>}
       <Button size="small" theme="borderless" disabled={!canEdit || !row.enabled && Boolean(row.reason)}
         onClick={() => open(row.enabled ? 'stopChannel' : 'startChannel', row)}>{row.enabled ? '停用' : '启用'}</Button>
-      <Button size="small" theme="borderless" type="danger" disabled={!canEdit} onClick={() => open('removeChannel', row)}>移除</Button>
+      <Button size="small" theme="borderless" type="danger" disabled={!canEdit} onClick={() => open('removeChannel', row)}>{t("移除")}</Button>
     </Space> },
   ];
   return <>
     <div className="new-service-routing-summary">
-      <Space wrap><Text>路由策略</Text><Text strong>{ROUTING_STRATEGIES[strategy].label}</Text><Tag>继承全局</Tag></Space>
-      <Space wrap><Text>模型 ID</Text><CopyId label={MODEL_ID_LABEL} value={service.callId}/></Space>
+      <Space wrap><Text>{t("路由策略")}</Text><Text strong>{ROUTING_STRATEGIES[strategy].label}</Text><Tag>继承全局</Tag></Space>
+      <Space wrap><Text>{t("模型 ID")}</Text><CopyId label={MODEL_ID_LABEL} value={service.callId}/></Space>
     </div>
     <div className="new-service-toolbar">
       <div className="new-service-filters">
@@ -568,7 +568,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
     } },
     { title: '模型类型', width: 110, render: (_, row) => {
       const type = MODEL_SERVICE_TYPES[modelServiceType(row.type)];
-      return type ? <Tooltip content={type[1]}><Tag color="blue" tabIndex={0} aria-label={type.join('，')}>{type[0]}</Tag></Tooltip> : '—';
+      return type ? <Tooltip content={type[1]}><Tag color="blue" tabIndex={0} aria-label={type.join('，')}>{t(type[0])}</Tag></Tooltip> : '—';
     } },
     { title: <TableFieldHelp name="服务状态" description="服务状态用于控制模型服务是否可在模型广场、项目授权和调用链路中使用。"/>,
       width: 110, render: (_, row) => <AdminStatus value={serviceStatus(row)} label={t(serviceStatus(row))}/> },
@@ -576,8 +576,8 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
     { title: '备注', dataIndex: 'note', width: 100, ellipsis: true, render: value => value || '—' },
     { title: '操作', width: 164, fixed: 'right', render: (_, row) => <Space spacing={2}>
       <Button theme="borderless" size="small" disabled={!canEdit} onClick={() => open(row.listed ? 'unlist' : 'list', { target: row.id })}>{t(row.listed ? '停止服务' : '启动服务')}</Button>
-      <Button theme="borderless" size="small" disabled={!canEdit} onClick={() => open('edit', { name: row.name, target: row.id })}>编辑</Button>
-      <Button theme="borderless" type="danger" size="small" disabled={!canEdit || row.listed} onClick={() => open('remove', { target: row.id })}>删除</Button>
+      <Button theme="borderless" size="small" disabled={!canEdit} onClick={() => open('edit', { name: row.name, target: row.id })}>{t("编辑")}</Button>
+      <Button theme="borderless" type="danger" size="small" disabled={!canEdit || row.listed} onClick={() => open('remove', { target: row.id })}>{t("删除")}</Button>
     </Space> },
   ];
 
@@ -592,31 +592,31 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
   const checkBlocked = requiresCheck && (!dialog.check || dialog.check.revision !== target?.revision || Boolean(checkIssue));
   const titles = {
     import: '导入浏览器记录', create: '新建模型服务', edit: '编辑模型服务名称', editDetails: '编辑信息', list: '启动服务', unlist: '停止服务',
-    channel: '核对连接配置', newGroup: '添加优先级组', addChannels: '关联上游模型至优先级 ' + values?.priority, startChannel: '启用上游模型', stopChannel: '停用上游模型',
+    channel: '核对连接配置', newGroup: '添加优先级组', addChannels: t('关联上游模型至优先级 {priority}').replace('{priority}', values?.priority), startChannel: '启用上游模型', stopChannel: '停用上游模型',
     removeChannel: '移除上游模型', weights: '配置优先级与权重', remove: '删除模型服务', failover: '配置故障转移策略',
   };
   return <div className="admin-page-stack new-model-services">
     {data.error && <Banner type="danger" closeIcon={null} description={<Space>{data.error}
       <Button onClick={reload}>重新加载</Button></Space>}/>}
     {data.loading ? <Card>正在读取模型服务…</Card> : !serviceId ? <>
-      <AdminPageHeading title={pageTitle}/>
+      <AdminPageHeading title={t(pageTitle)}/>
       {canEdit && importable.length > 0 && <Banner type="info" closeIcon={null} description={<Space wrap>
         <Text>检测到此浏览器保存的模型服务</Text>
-        {importable.map(row => <Button key={row.id} size="small" onClick={() => open('import', row)}>导入 {row.name}</Button>)}
+        {importable.map(row => <Button key={row.id} size="small" onClick={() => open('import', row)}>{t("导入")}{row.name}</Button>)}
       </Space>}/>}
       {legacy.error && <Banner type="warning" description={legacy.error} closeIcon={null}/>}
       <Card>
         <div className="new-service-toolbar">
           <Input className="new-service-search" prefix={<IconSearch aria-hidden="true"/>} showClear
-            aria-label="搜索模型服务" placeholder={`搜索服务名称 / 服务 ID / ${MODEL_ID_LABEL}`} value={query} onChange={setQuery}/>
-          <Button theme="solid" icon={<IconPlus/>} disabled={!canEdit} onClick={() => open('create', { ...blank, id: resourceId('model-service') })}>新建模型服务</Button>
+            aria-label={t("搜索模型服务")} placeholder={`搜索服务名称 / 服务 ID / ${MODEL_ID_LABEL}`} value={query} onChange={setQuery}/>
+          <Button theme="solid" icon={<IconPlus/>} disabled={!canEdit} onClick={() => open('create', { ...blank, id: resourceId('model-service') })}>{t("新建模型服务")}</Button>
         </div>
         <Table columns={columns} dataSource={data.rows.filter(row => searchMatches(query, row.name, row.id, row.callId))}
-          rowKey="id" scroll={{ x: columns.reduce((width, column) => width + column.width, 0) }} pagination={pagination} empty="暂无匹配的模型服务"/>
+          rowKey="id" scroll={{ x: columns.reduce((width, column) => width + column.width, 0) }} pagination={pagination} empty={t("暂无匹配的模型服务")}/>
       </Card>
     </> : service ? <>
       <AdminPageHeading title={service.name}>
-        {activeTab === 'basic' && <Button disabled={!canEdit} onClick={() => open('editDetails', service)}>编辑信息</Button>}
+        {activeTab === 'basic' && <Button disabled={!canEdit} onClick={() => open('editDetails', service)}>{t("编辑信息")}</Button>}
       </AdminPageHeading>
       <Card>
         <Tabs activeKey={activeTab} keepDOM={false} onChange={tab => { location.hash = detailHref(service.id, tab); }}>
@@ -629,14 +629,14 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
               <Space><Text strong>策略来源</Text>{kind === 'failover'
                 ? <RadioGroup aria-label="策略来源" disabled={saving || !canEdit} value={values.custom ? 'custom' : 'global'}
                     onChange={event => change({ custom: event.target.value === 'custom' })}>
-                    <Radio value="global">继承全局</Radio><Radio value="custom">自定义</Radio>
+                    <Radio value="global">继承全局</Radio><Radio value="custom">{t("自定义")}</Radio>
                   </RadioGroup>
                 : <Tag>{service.failoverCustom ? '自定义' : '继承全局'}</Tag>}</Space>
               {kind === 'failover' ? <Space>
-                <Button disabled={saving} onClick={close}>取消</Button>
-                <Button theme="solid" disabled={!canEdit || !dirty} loading={saving} onClick={apply}>保存</Button>
+                <Button disabled={saving} onClick={close}>{t("取消")}</Button>
+                <Button theme="solid" disabled={!canEdit || !dirty} loading={saving} onClick={apply}>{t("保存")}</Button>
               </Space> : <Button theme="solid" disabled={!canEdit} onClick={() => open('failover', { custom: !!service.failoverCustom,
-                policy: service.failover ?? failoverValues(defaults) })}>编辑</Button>}
+                policy: service.failover ?? failoverValues(defaults) })}>{t("编辑")}</Button>}
             </div>
             {kind === 'failover' && dialog.error && <Notice error>{dialog.error}</Notice>}
             {kind === 'failover' && dialog.error.includes('其他页面') && <Button onClick={() => { reload(); close(); }}>放弃本次修改并载入最新配置</Button>}
@@ -657,19 +657,19 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
       else close();
     }}
       maskClosable={false} footer={<>
-        <Button disabled={saving} onClick={() => dirty ? setEditState(current => ({ ...current, discard: true })) : close()}>取消</Button>
-        <Button theme="solid" disabled={!canEdit || dialog.discard || checkBlocked || ((kind === 'weights' || kind === 'newGroup') && !Number.isSafeInteger(values.priority)) || (kind === 'addChannels' && !values.ids.length) || (kind === 'weights' && (!dirty || editingGroup.length > 0 && weighted && !weightsValid))} loading={saving} form={formId} htmlType="submit">{
+        <Button disabled={saving} onClick={() => dirty ? setEditState(current => ({ ...current, discard: true })) : close()}>{t("取消")}</Button>
+        <Button theme="solid" disabled={!canEdit || dialog.discard || checkBlocked || ((kind === 'weights' || kind === 'newGroup') && !Number.isSafeInteger(values.priority)) || (kind === 'addChannels' && !values.ids.length) || (kind === 'weights' && (!dirty || editingGroup.length > 0 && weighted && !weightsValid))} loading={saving} form={formId} htmlType="submit">{t(
           kind === 'import' ? '确认导入' : kind === 'create' ? '创建模型服务' : kind === 'list' ? '确认启动' : kind === 'unlist' ? '确认停服'
             : kind === 'remove' ? '确认删除' : kind === 'channel' && values.id ? '确认更新关联' : kind === 'newGroup' ? '添加优先级组' : kind === 'addChannels' ? '确认关联' : '保存'
-        }</Button>
+        )}</Button>
       </>}>
       <form id={formId} className="new-service-form" onSubmit={event => { event.preventDefault(); apply(); }}>
         {['create', 'edit', 'editDetails'].includes(kind) &&
-          <Field label="模型服务名称" required><Input aria-label="模型服务名称" value={values.name} maxLength={120} onChange={value => change({ name: value })}/></Field>
+          <Field label="模型服务名称" required><Input aria-label={t("模型服务名称")} value={values.name} maxLength={120} onChange={value => change({ name: value })}/></Field>
         }
         {['create', 'editDetails'].includes(kind) && <>
-          <Field label={<FieldLabel name={MODEL_ID_LABEL} description="调用方在 API 请求的 model 字段填写此值。"/>} required>
-            <Input aria-label={MODEL_ID_LABEL} value={values.callId} disabled={Boolean(values.controlledOfferId)} maxLength={128} onChange={value => change({ callId: value })}/>
+          <Field label={<FieldLabel name={MODEL_ID_LABEL} description={t("调用方在 API 请求的 model 字段填写此值。")}/>} required>
+            <Input aria-label={t(MODEL_ID_LABEL)} value={values.callId} disabled={Boolean(values.controlledOfferId)} maxLength={128} onChange={value => change({ callId: value })}/>
           </Field>
           {allowModelSelection && <Field label="模型编码">
             <Select filter showClear value={values.modelId || undefined} placeholder="选择模型资料"
@@ -688,8 +688,8 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
                 : typeOptions}
               onChange={type => change({ type: type || '' })} style={{ width: '100%' }}/>
           </Field>}
-          <Field label="备注"><Input aria-label="备注" value={values.note} maxLength={240} onChange={value => change({ note: value })}/></Field>
-          <Field label="服务描述"><TextArea aria-label="服务描述" value={values.description}
+          <Field label="备注"><Input aria-label={t("备注")} value={values.note} maxLength={240} onChange={value => change({ note: value })}/></Field>
+          <Field label="服务描述"><TextArea aria-label={t("服务描述")} value={values.description}
             maxLength={SERVICE_DESCRIPTION_LIMIT} maxCount={SERVICE_DESCRIPTION_LIMIT}
             onChange={value => change({ description: value })}/></Field>
         </>}

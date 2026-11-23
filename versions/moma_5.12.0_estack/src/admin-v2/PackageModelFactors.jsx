@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import Table, { AdminPagination } from './AdminTable';
 import { useEffect, useId, useRef, useState } from 'react';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
@@ -20,6 +21,7 @@ function initialRuleRows(rules, billingItems) {
 }
 
 function RuleEditor({ model, candidates, billingItems, save, close, canWrite, dirty }) {
+  const translateLabel = useChannelText();
   const config = model?.draft ?? model;
   const [modelId, setModelId] = useState(model?.id);
   const selected = model ?? candidates.find(item => item.id === modelId);
@@ -81,7 +83,7 @@ function RuleEditor({ model, candidates, billingItems, save, close, canWrite, di
         else { selectModel(discard.modelId); setDiscard(null); }
       }}>放弃本次修改</Button>
     </> : <>
-      <Button key="cancel" type="tertiary" disabled={busy} onClick={cancel}>取消</Button>
+      <Button key="cancel" type="tertiary" disabled={busy} onClick={cancel}>{translateLabel("取消")}</Button>
       <Button theme="solid" htmlType="submit" form="package-rule-editor" loading={busy}
         disabled={locked || !selected || unavailable.length > 0 || ((!model || enabled) && !entered.length)}>保存草稿</Button>
     </>}>
@@ -89,7 +91,7 @@ function RuleEditor({ model, candidates, billingItems, save, close, canWrite, di
     <form id="package-rule-editor" className="package-rule-editor" onSubmit={submit}>
       {model ? <Typography.Text strong>{model.name} · {model.code}</Typography.Text> :
         <div className="package-field">
-          <Typography.Text id={`${labelId}-model`}>模型服务</Typography.Text>
+          <Typography.Text id={`${labelId}-model`}>{translateLabel("模型服务")}</Typography.Text>
           <Select aria-labelledby={`${labelId}-model`} value={modelId} filter disabled={locked} placeholder="搜索或选择模型服务"
             emptyContent={candidates.length ? '暂无匹配的模型服务' : '没有可添加的未归档模型'}
             optionList={candidates.map(item => ({ value: item.id, label: `${item.name} · ${item.code}` }))}
@@ -117,7 +119,7 @@ function RuleEditor({ model, candidates, billingItems, save, close, canWrite, di
         {unavailable.map(row => <div key={row.key}>
           {billingItems.find(item => item.id === row.billingItemId)?.name ?? row.billingItemId} · {row.factor} 倍
           <Button type="danger" theme="borderless" size="small" disabled={locked}
-            onClick={() => update(current => current.filter(item => item.key !== row.key))}>移除</Button>
+            onClick={() => update(current => current.filter(item => item.key !== row.key))}>{translateLabel("移除")}</Button>
         </div>)}
       </>}/>}
       {activeItems.length > 0 && <Typography.Paragraph type="secondary">计费项来自该模型当前生效的模型刊例价。留空表示该计费项未配置系数。分档时按本次请求的输入 Token 数选档，整笔使用命中系数。</Typography.Paragraph>}
@@ -205,6 +207,7 @@ function FactorHistory({ model, billingItems, close }) {
 }
 
 export default function PackageModelFactors({ state, transact, conflict, dirty }) {
+  const translateLabel = useChannelText();
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
@@ -251,7 +254,7 @@ export default function PackageModelFactors({ state, transact, conflict, dirty }
     { title: '待发布变更', width: 100, render: (_, row) => grouped(row, row.item.draft ? <Tag size="small" color="orange">待发布</Tag> : '—') },
     { title: '操作', width: 172, fixed: 'right', render: (_, row) => grouped(row, <div className="package-actions">
       <Button id={`factor-edit-${row.item.id}`} theme="borderless" size="small" disabled={!canWrite}
-        aria-label={`编辑 ${row.item.name} 抵扣系数`} onClick={event => setEditor({ model: row.item, trigger: event.currentTarget })}>编辑</Button>
+        aria-label={`编辑 ${row.item.name} 抵扣系数`} onClick={event => setEditor({ model: row.item, trigger: event.currentTarget })}>{translateLabel("编辑")}</Button>
       {row.item.draft && <Button theme="borderless" size="small" disabled={!canWrite}
         aria-label={`发布 ${row.item.name} 抵扣系数`} onClick={event => setPublication({ model: row.item, trigger: event.currentTarget })}>发布</Button>}
       <Button theme="borderless" size="small" aria-label={`查看 ${row.item.name} 修改历史`}

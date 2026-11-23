@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { loadAdminState, prepareModelServiceShowcase, completeModelServiceShowcase } from './CloudModelOperations';
 import { useRef, useState } from 'react';
 import { Banner, Button as SemiButton, Tabs as SemiTabs, Typography } from '@douyinfe/semi-ui';
@@ -15,6 +16,7 @@ function AdminNotesHeading({ children }) {
 const noteAreas = ['前台与服务', '模型接入', '模型资料'];
 
 export default function DevelopmentNotes({ admin = false }) {
+  const translateLabel = useChannelText();
   const Button = AdminNotesButton;
   const Heading = AdminNotesHeading;
   const Paragraph = Typography.Paragraph;
@@ -64,8 +66,8 @@ export default function DevelopmentNotes({ admin = false }) {
   return <>
     <Button size="small" variant="outline" className={admin ? undefined : 'development-notes-trigger'}
       aria-label="研发人员注意：功能说明（非产品功能）" title="研发说明 · 非产品功能"
-      onClick={event => { trigger.current = event.currentTarget; setOpen(true); }}>研发人员注意</Button>
-    {open && <Modal wide maskClosable={!admin} title="研发人员注意" description="研发专用 · 非产品功能" onClose={close} footer={<Button variant="outline" onClick={close}>关闭说明</Button>}>
+      onClick={event => { trigger.current = event.currentTarget; setOpen(true); }}>{translateLabel("研发人员注意")}</Button>
+    {open && <Modal wide maskClosable={!admin} title={translateLabel("研发人员注意")} description="研发专用 · 非产品功能" onClose={close} footer={<Button variant="outline" onClick={close}>关闭说明</Button>}>
       <div className="development-notes-semi">
         <Banner type="warning" closeIcon={null} description="此入口仅用于原型评审与研发对齐，不纳入正式产品功能。"/>
         <SemiTabs activeKey={area} onChange={setArea} className="development-notes-tabs" aria-label="研发说明分类">

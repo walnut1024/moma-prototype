@@ -1,9 +1,11 @@
+import { useChannelText } from './channel-language';
 import { useId, useState } from 'react';
 import { Button, Checkbox, Input, Popover, Space, Typography } from '@douyinfe/semi-ui';
 import { IconChevronDown } from '@douyinfe/semi-icons';
 import { Choice } from './ServiceUI';
 
 export default function UsageCascade({ label, parentLabel, groups, items, value, onChange }) {
+  const translateLabel = useChannelText();
   const id = useId();
   const [open, setOpen] = useState(false);
   const [group, setGroup] = useState(null);
@@ -49,9 +51,9 @@ export default function UsageCascade({ label, parentLabel, groups, items, value,
       <div className="admin-analytics-picker-footer">
         <Typography.Text type="secondary">已选 {draft.length} 个{label}</Typography.Text>
         <Space>
-          <Button theme="borderless" size="small" disabled={!draft.length} onClick={() => setDraft([])}>清空</Button>
-          <Button size="small" onClick={() => setOpen(false)}>取消</Button>
-          <Button size="small" theme="solid" onClick={apply}>确定</Button>
+          <Button theme="borderless" size="small" disabled={!draft.length} onClick={() => setDraft([])}>{translateLabel("清空")}</Button>
+          <Button size="small" onClick={() => setOpen(false)}>{translateLabel("取消")}</Button>
+          <Button size="small" theme="solid" onClick={apply}>{translateLabel("确定")}</Button>
         </Space>
       </div>
     </div>}>

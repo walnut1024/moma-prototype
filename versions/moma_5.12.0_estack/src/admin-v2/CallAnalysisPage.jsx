@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import TableFieldHelp from '../components/TableFieldHelp';
 import { useEffect, useMemo, useState } from 'react';
 import { Banner, Button, Card, Toast, Typography } from '@douyinfe/semi-ui';
@@ -35,6 +36,7 @@ const percent = value => value == null ? '—' : fmt(value) + '%';
 const millis = value => value == null ? '—' : fmt(value) + ' ms';
 
 export default function CallAnalysisPage({ state }) {
+  const translateLabel = useChannelText();
   const [initial] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
   const [filters, setFilters] = useState(() => observationFilters(initial, 'today', customerPurpose));
   const [grain, setGrain] = useState(() => initial.get('grain'));
@@ -140,7 +142,7 @@ export default function CallAnalysisPage({ state }) {
       ({ title, dataIndex, align: 'right', render: fmt })),
   ];
   return <div className="admin-page-stack">
-    <AdminPageHeading title="调用数据"/>
+    <AdminPageHeading title={translateLabel("调用数据")}/>
     <Card>
       <div className="admin-analytics-fields">
         <FilterToolbar>

@@ -1,8 +1,10 @@
+import { useChannelText } from './channel-language';
 import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useId, useState } from 'react';
-import { Banner, Button, Card, Descriptions, Form, Input, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import Descriptions from './AdminDescriptions';
+import { Banner, Button, Card, Form, Input, Space, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus, IconSearch, IconUpload } from '@douyinfe/semi-icons';
 import { DEFAULT_PAGE_SIZE, FilterReset, FilterToolbar, PAGE_SIZES } from '../components/FilterControls';
@@ -45,6 +47,7 @@ function BusinessTable({ rows, columns, minWidth = 850, children, empty = '暂�
 }
 
 function Managed({ pageId, state, dispatch }) {
+  const translateLabel = useChannelText();
   const formId = useId();
   const { collection, fields, noun } = configs[pageId];
   const title = titles[pageId];
@@ -91,7 +94,7 @@ function Managed({ pageId, state, dispatch }) {
     </BusinessTable>
     {editing && <Modal visible title={`新建${noun}`} width="min(520px, calc(100vw - 32px))"
       maskClosable={false} closeOnEsc footer={<>
-        <Button onClick={close}>取消</Button>
+        <Button onClick={close}>{translateLabel("取消")}</Button>
         <Button form={formId} htmlType="submit" theme="solid" disabled={!canWrite}>创建{noun}</Button>
       </>} onCancel={close}>
       <Form id={formId} onSubmit={save} onValueChange={() => setError('')}>
@@ -223,6 +226,7 @@ function Ledger({ state }) {
 }
 
 function Bills({ state, dispatch, params }) {
+  const translateLabel = useChannelText();
   const [inspectId, setInspectId] = useState(null);
   const canWrite = editable(state, 'bills');
   const period = billingPeriod();
@@ -270,7 +274,7 @@ function Bills({ state, dispatch, params }) {
       { title: '实收', dataIndex: 'paid', align: 'right', render: money },
       statusColumn,
       actionColumn(row => <Space>
-        <Button size="small" theme="borderless" onClick={() => setInspectId(row.id)}>详情</Button>
+        <Button size="small" theme="borderless" onClick={() => setInspectId(row.id)}>{translateLabel("详情")}</Button>
         {row.status === '待出账' && <Button size="small" theme="borderless" disabled={!canWrite}
           onClick={() => dispatch({ type:'update', collection:'bills', id:row.id, changes:{ status:'已出账' } })}>确认出账</Button>}
       </Space>),
@@ -290,7 +294,7 @@ function Bills({ state, dispatch, params }) {
       </FilterToolbar>
     </BusinessTable>
     {inspect && <Modal visible title="账单详情" width="min(680px, calc(100vw - 32px))" onCancel={() => setInspectId(null)}
-      closeOnEsc maskClosable={false} footer={<Button onClick={() => setInspectId(null)}>关闭</Button>}>
+      closeOnEsc maskClosable={false} footer={<Button onClick={() => setInspectId(null)}>{translateLabel("关闭")}</Button>}>
       <div className="admin-analytics-fields">
         <Descriptions align="left" data={[
           { key:'账单号', value:inspect.billNo }, { key:'所属租户', value:tenants.get(inspect.tenantId)?.name || inspect.tenantId },

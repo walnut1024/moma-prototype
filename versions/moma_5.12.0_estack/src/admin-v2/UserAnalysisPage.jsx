@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import AdminPageHeading from './AdminPageHeading';
 import {userBusinessData} from '../business-facts.mjs';
 import { Card, Space, Toast, Typography } from '@douyinfe/semi-ui';
@@ -28,6 +29,7 @@ function change(current, previous) {
 }
 
 export default function UserAnalysisPage({ state }) {
+  const translateLabel = useChannelText();
   const [clock, setClock] = useState(() => Date.now());
   const [initialPeriod] = useState(() => operationsPeriodFromQuery(new URLSearchParams(location.hash.split('?')[1] || '')));
   const [period, setPeriod] = useState(initialPeriod.period);
@@ -51,7 +53,7 @@ export default function UserAnalysisPage({ state }) {
     setDetailDraft(detail);
   };
   return <div className="admin-page-stack">
-    <AdminPageHeading title="用户数据"/>
+    <AdminPageHeading title={translateLabel("用户数据")}/>
     <Card>
       <FilterToolbar>
         <FilterPresets label="时间筛选" value={period} onChange={selectPeriod} items={presets}/>
@@ -78,8 +80,8 @@ export default function UserAnalysisPage({ state }) {
         const delta = change(value, before);
         return <AnalysisMetric key={key} title={title} value={formatUsageNumber(value)} help={note}>
           {daily && <Space wrap>
-            <Typography.Text size="small">企业 {formatUsageNumber(metrics?.[`${key}ByType`].企业.at(-1) ?? 0)}</Typography.Text>
-            <Typography.Text size="small">个人 {formatUsageNumber(metrics?.[`${key}ByType`].个人.at(-1) ?? 0)}</Typography.Text>
+            <Typography.Text size="small">{translateLabel("企业")}{formatUsageNumber(metrics?.[`${key}ByType`].企业.at(-1) ?? 0)}</Typography.Text>
+            <Typography.Text size="small">{translateLabel("个人")}{formatUsageNumber(metrics?.[`${key}ByType`].个人.at(-1) ?? 0)}</Typography.Text>
           </Space>}
           <Typography.Text type="tertiary" size="small" title={`对比${comparisonLabel[period]}`}>环比 {delta.amount}　{delta.rate}</Typography.Text>
         </AnalysisMetric>;

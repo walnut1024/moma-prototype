@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import TableFieldHelp from '../components/TableFieldHelp';
 import { callLogFieldHelp } from '../components/call-log-field-help';
 import { workspaceStoragePrefix } from '../workspace-storage.mjs';
@@ -82,6 +83,7 @@ function readHiddenColumns() {
 }
 
 export default function CallLogsPage({ state, params, simulation, setSimulation, canViewFullLog }) {
+  const translateLabel = useChannelText();
   const [view, setView] = useState(() => Object.hasOwn(logViews, params.get('view')) ? params.get('view') : 'requests');
   const [filters, setFilters] = useState(() => logFilters(params));
   const [detail, setDetail] = useState(null);
@@ -199,7 +201,7 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
     } catch { Toast.error('导出失败，请重试'); }
   };
   return <div className="admin-page-stack admin-call-logs">
-    <AdminPageHeading title="调用日志">
+    <AdminPageHeading title={translateLabel("调用日志")}>
       {canViewFullLog && <Button className="admin-log-policy-entry" theme="outline" type="tertiary" icon={<IconSetting aria-hidden="true"/>}
         onClick={() => {
           const session = simulation ?? createCallLogSimulation();
@@ -214,7 +216,7 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
         onChange={change} onReset={reset}/>
       {!window && <Banner type="danger" closeIcon={null} description="请选择不超过 365 天的有效时间范围。"/>}
       {trend && <ObservationPlot title="前置错误趋势" height={218} compact={false} type="bar" stacked unit="次" labels={trend.map(bucket => bucket.label)}
-        actions={<Space wrap><Text type="secondary">共 {fmt(trendRows.length)} 次</Text>
+        actions={<Space wrap><Text type="secondary">共 {fmt(trendRows.length)}{translateLabel("次")}</Text>
           <AnalysisHelp label="什么是前置错误">请求在发送到模型前被拒绝，例如密钥失效、参数错误或超出频率限制。</AnalysisHelp>
         </Space>}
         series={[...new Set(trendRows.map(row => row.code))].map(code => ({ label: errors.get(code),
@@ -246,7 +248,7 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
       okText="保存" onOk={applyColumns} onCancel={() => setColumnDraft(null)}>
       <CheckboxGroup className="admin-log-column-options" aria-label="显示的日志列" value={columnDraft} onChange={setColumnDraft}
         options={fields.map(([label, value]) => ({ label, value, disabled: value === 'requestId' }))}/>
-      <Button size="small" theme="borderless" onClick={() => setColumnDraft(fields.map(([, field]) => field))}>恢复默认</Button>
+      <Button size="small" theme="borderless" onClick={() => setColumnDraft(fields.map(([, field]) => field))}>{translateLabel("恢复默认")}</Button>
     </Modal>}
     {settingsSource && canViewFullLog && <LogPolicyDialog simulation={settingsSource}
       close={() => setSettingsSource(null)} onSave={updated => {

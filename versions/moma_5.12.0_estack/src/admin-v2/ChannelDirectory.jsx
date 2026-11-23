@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Space, Table, Typography } from '@douyinfe/semi-ui';
 import { cloudAdminRequest } from './admin-client.mjs';
@@ -23,6 +24,7 @@ import { supplierDirectory } from './moma-provider.js';
 import './channel-directory.css';
 
 function ConnectionOperation({ connection, action, state, ops, close, retest }) {
+  const translateLabel = useChannelText();
   const { id, endpoint, provider, models } = connection;
   const enabling = action === 'enable';
   const title = enabling ? '启用连接' : '停用连接';
@@ -62,7 +64,7 @@ function ConnectionOperation({ connection, action, state, ops, close, retest }) 
     } finally { setBusy(false); }
   };
   return <Modal drawer wide title={title} description={connection.name} onClose={() => !busy && close()}
-    footer={<Space><Button disabled={busy} onClick={close}>取消</Button>
+    footer={<Space><Button disabled={busy} onClick={close}>{translateLabel("取消")}</Button>
       <Button theme="solid" type={enabling ? 'primary' : 'danger'} loading={busy}
         disabled={busy || !ops.can || !confirmed || stale || Boolean(blocked) || (!enabling && !catalogue)}
         onClick={submit}>{associationIds.length ? '启用连接及所选模型' : '确认' + title}</Button></Space>}>

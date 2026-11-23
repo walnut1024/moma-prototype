@@ -166,7 +166,7 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
       <Button theme="borderless" size="small" className="admin-log-request-id"
         aria-label={`查看请求详情 ${value ?? ''} 第 ${attempt.index} 次尝试`}
         onClick={() => setSelectedAttempt(attempt)}>{value ?? '查看详情'}</Button>
-      <div><Text type="tertiary" size="small">第 {attempt.index} 次</Text></div>
+      <div><Text type="tertiary" size="small">第 {attempt.index}{t("次")}</Text></div>
     </> },
     { title: '发起时间', dataIndex: 'at', width: 168, render: observationTime },
     { title: '实际连接', dataIndex: 'channelName', width: 148, render: value => value ?? '未采集' },
@@ -269,7 +269,7 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
             {rows.length > 0 && trendGroup && <section ref={trendPanel} tabIndex={-1} aria-label="上游模型趋势" className="admin-page-stack">
               <div className="admin-monitor-section-title">
                 <Title heading={5} component="h2">{seriesName(trendGroup)} 趋势</Title>
-                <Button size="small" theme="borderless" onClick={() => setTrendGroupId(null)}>查看全部</Button>
+                <Button size="small" theme="borderless" onClick={() => setTrendGroupId(null)}>{t("查看全部")}</Button>
               </div>
               <div className="admin-analysis-plot-grid">
                   <ObservationPlot title="TTFT (P50) 趋势" labels={labels} unit="ms" series={groupedSeries('ttft')}/>

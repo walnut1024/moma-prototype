@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
@@ -186,6 +187,7 @@ function initialFocus(snapshot) {
   return { gateway: cluster?.gateway || '', cluster: cluster?.id || '' };
 }
 function Traffic({ initialCustomer }) {
+  const translateLabel = useChannelText();
   const initial = { customer: initialCustomer.id, model: '' };
   const [draft, setDraft] = useState(initial);
   const [applied, setApplied] = useState(initial);
@@ -218,16 +220,16 @@ function Traffic({ initialCustomer }) {
       setFocus(initialFocus(customerFlowSnapshot(0, draft.model)));
       setNodeId(null);
     }}>
-      <label>租户 <Select aria-label="租户" filter optionList={customerOptions} value={draft.customer}
+      <label>{translateLabel("租户")}<Select aria-label={translateLabel("租户")} filter optionList={customerOptions} value={draft.customer}
         onChange={customer => setDraft({ ...draft, customer })}/></label>
-      <label>模型 <Select aria-label="拓扑模型" filter showClear placeholder="全部模型 / 输入关键词" optionList={modelOptions}
+      <label>{translateLabel("模型")}<Select aria-label="拓扑模型" filter showClear placeholder="全部模型 / 输入关键词" optionList={modelOptions}
         value={draft.model || undefined} onChange={model => setDraft({ ...draft, model: model || '' })}/></label>
       <Button theme="solid" htmlType="submit">查询</Button>
     </form></Section>
     <div className="ca-rate-columns">
       <Section className="ca-rate">
         <div className="ca-title ca-spread"><Title heading={5} component="h2">实时调用速率</Title>
-          <Button theme="borderless" size="small" href="#/admin-2/traffic-limits">限流配置</Button>
+          <Button theme="borderless" size="small" href="#/admin-2/traffic-limits">{translateLabel("限流配置")}</Button>
         </div>
         <Metrics rows={[[ 'RPM', observed ? fmt(snapshot.calls / observationMinutes) : '—'], ['TPM', observed ? flowAmount(snapshot.tpm) : '—']]}/>
       </Section>
@@ -265,7 +267,7 @@ function Traffic({ initialCustomer }) {
       <Modal title={node?.name} visible={Boolean(node)} footer={null} onCancel={() => setNodeId(null)}>
         {node && <dl className="ca-node-modal">
           <div><dt>网关</dt><dd>{node.gateway || '—'}</dd></div><div><dt>请求数</dt><dd>{fmt(node.requests)}</dd></div>
-          <div><dt>实时 TPM</dt><dd>{flowAmount(node.tpm)}</dd></div><div><dt>模型</dt><dd>{node.model || '—'}</dd></div>
+          <div><dt>实时 TPM</dt><dd>{flowAmount(node.tpm)}</dd></div><div><dt>{translateLabel("模型")}</dt><dd>{node.model || '—'}</dd></div>
           <div><dt>产能 TPM</dt><dd>{flowAmount(node.capacity)}</dd></div>
           <div><dt>剩余 TPM</dt><dd>{flowAmount(node.capacity == null ? null : Math.max(0, node.capacity - node.tpm))}</dd></div>
           <div><dt>负载</dt><dd>{node.capacity ? flowPercent(node.tpm, node.capacity) : '—'}</dd></div>
@@ -277,6 +279,7 @@ function Traffic({ initialCustomer }) {
 }
 
 function CustomerInfo({ customer, initial }) {
+  const translateLabel = useChannelText();
   const [draft, setDraft] = useState(initial);
   const [query, setQuery] = useState(initial);
   const [section, setSection] = useState('models');
@@ -312,9 +315,9 @@ function CustomerInfo({ customer, initial }) {
       else Toast.info('所选条件暂无可导出的样本');
     }}/>
     <Section className="ca-filter"><form onSubmit={event => { event.preventDefault(); setQuery(draft); }}>
-      <label>模型 <Input aria-label="模型展示名称" placeholder="输入模型展示名称" value={draft.model}
+      <label>{translateLabel("模型")}<Input aria-label={translateLabel("模型展示名称")} placeholder="输入模型展示名称" value={draft.model}
         onChange={model => setDraft({ ...draft, model })}/></label>
-      <label>日期范围 <DateFields draft={draft} onChange={setDraft}/></label>
+      <label>{translateLabel("日期范围")}<DateFields draft={draft} onChange={setDraft}/></label>
       <Button theme="solid" htmlType="submit">查询</Button>
       <ExportButton onClick={downloads[section]} disabled={!canExport}>导出表格</ExportButton>
     </form></Section>

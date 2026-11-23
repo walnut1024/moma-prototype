@@ -1,8 +1,10 @@
+import { useChannelText } from './channel-language';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useEffect, useRef, useState } from 'react';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
-import { Banner, Button, Card, Checkbox, Descriptions, Input, RadioGroup, Select, Tabs, Tag, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
+import Descriptions from './AdminDescriptions';
+import { Banner, Button, Card, Checkbox, Input, RadioGroup, Select, Tabs, Tag, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '../components/FilterControls';
 import AdminPageHeading from './AdminPageHeading';
@@ -39,6 +41,7 @@ function summarize(plan) {
 }
 
 function PackageTypeDialog({ target, save, close, canWrite, focusAfterDelete }) {
+  const translateLabel = useChannelText();
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -66,7 +69,7 @@ function PackageTypeDialog({ target, save, close, canWrite, focusAfterDelete }) 
   return <Modal visible title={deleting ? '删除套餐类型' : '新建套餐类型'} width="min(520px, calc(100vw - 32px))"
     closable={!busy} maskClosable={!busy} closeOnEsc={!busy} onCancel={cancel}
     footer={<>
-      <Button type="tertiary" onClick={cancel} disabled={busy} autoFocus={deleting}>取消</Button>
+      <Button type="tertiary" onClick={cancel} disabled={busy} autoFocus={deleting}>{translateLabel("取消")}</Button>
       <Button htmlType="submit" form="package-type-editor" theme="solid" type={deleting ? 'danger' : 'primary'} loading={busy}
         disabled={!canWrite || busy || (!deleting && !name.trim())}>{deleting ? '确认删除' : '创建套餐类型'}</Button>
     </>}>
@@ -122,6 +125,7 @@ function PackageModelSelection({ models, selected, change, locked, readOnly }) {
 }
 
 function PackageEditor({ record, mode, canWrite, canManageTypes, packageTypes, customTypes, models, addType, deleteType, setDirty, save, close }) {
+  const translateLabel = useChannelText();
   const [baseRecord] = useState(record);
   const [values, setValues] = useState(() => ({
     ...EMPTY_PACKAGE, ...record,
@@ -260,7 +264,7 @@ function PackageEditor({ record, mode, canWrite, canManageTypes, packageTypes, c
       {error && <Banner className="package-editor-error" type="danger" closeIcon={null} description={error}/>}
       {!readOnly && <footer className="admin-form-actions">
         <Typography.Text type="tertiary" size="small">星号表示发布必填</Typography.Text>
-        <Button type="tertiary" disabled={busy} onClick={close}>取消</Button>
+        <Button type="tertiary" disabled={busy} onClick={close}>{translateLabel("取消")}</Button>
         <Button htmlType="submit" theme="solid" disabled={!canWrite || busy}>{record ? '保存' : '创建套餐'}</Button>
       </footer>}
     </form></Card>
@@ -272,6 +276,7 @@ function PackageEditor({ record, mode, canWrite, canManageTypes, packageTypes, c
 }
 
 export default function PackageProduction({ state, transact, conflict, params, dirty }) {
+  const translateLabel = useChannelText();
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('all');
   const [status, setStatus] = useState('all');
@@ -395,16 +400,16 @@ export default function PackageProduction({ state, transact, conflict, params, d
             else setConfirmation({ item, label, operation, source: event.currentTarget });
           }}>{label}</Button>
         {canWrite && canDeletePackage(item) && <Button type="danger" size="small" theme="borderless" disabled={busy} aria-label={`删除 ${name}`}
-          onClick={event => setConfirmation({ item, label: '删除', operation: 'deletePackage', source: event.currentTarget })}>删除</Button>}
+          onClick={event => setConfirmation({ item, label: '删除', operation: 'deletePackage', source: event.currentTarget })}>{translateLabel("删除")}</Button>}
       </div>;
     } },
   ];
   return <div className="admin-page-stack">
-    <AdminPageHeading title={<span tabIndex={-1} ref={listTitle}>套餐管理</span>}>
+    <AdminPageHeading title={<span tabIndex={-1} ref={listTitle}>{translateLabel("套餐管理")}</span>}>
       {tab === 'packages' && <Button id="package-new" theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite}
         onClick={event => open('new', null, event.currentTarget)}>新建套餐</Button>}
     </AdminPageHeading>
-    <Tabs type="line" activeKey={tab} keepDOM={false} aria-label="套餐管理"
+    <Tabs type="line" activeKey={tab} keepDOM={false} aria-label={translateLabel("套餐管理")}
       onChange={key => { location.hash = key === 'factors' ? `${route}?tab=factors` : route; }}>
       <Tabs.TabPane itemKey="packages" tab="套餐列表">
         <Card>

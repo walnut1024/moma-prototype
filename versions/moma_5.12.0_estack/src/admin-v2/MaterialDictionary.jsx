@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import Table from './AdminTable';
 import {useId, useRef, useState} from 'react';
 import { Tag, Button, Form, Input, Space, Typography } from '@douyinfe/semi-ui';
@@ -6,12 +7,13 @@ import {IconPlus, IconSearch} from '@douyinfe/semi-icons';
 import {TARIFF_KINDS, tariffDictionaryEntries} from './tariff-dictionary';
 
 function DictionaryEditor({entry,kind,ops,close}) {
+  const translateLabel = useChannelText();
   const formId = useId();
   const [value,setValue]=useState({name:entry?.name || '',englishName:entry?.englishName || '',code:entry?.code || '',description:entry?.description || ''});
   const [saving,setSaving]=useState(false);
   const change=(key,input)=>{setValue(current=>({...current,[key]:input}));ops.dirty(true);ops.setError('');};
   const cancel=()=>ops.proceed(close);
-  return <Modal visible className="semi-materials" title={entry?'编辑'+TARIFF_KINDS[kind]:kind==='unit'?'新建计费单位':'新建货币'} onCancel={cancel} footer={<><Button onClick={cancel}>取消</Button><Button form={formId} htmlType="submit" theme="solid" loading={saving} disabled={!ops.can}>{entry ? '保存' : '创建' + TARIFF_KINDS[kind]}</Button></>}>
+  return <Modal visible className="semi-materials" title={entry?'编辑'+TARIFF_KINDS[kind]:kind==='unit'?'新建计费单位':'新建货币'} onCancel={cancel} footer={<><Button onClick={cancel}>{translateLabel("取消")}</Button><Button form={formId} htmlType="submit" theme="solid" loading={saving} disabled={!ops.can}>{entry ? '保存' : '创建' + TARIFF_KINDS[kind]}</Button></>}>
     <Typography.Paragraph type="secondary">{kind==='scenario'?'服务商成本价与模型刊例价共用此计费项。已被引用的名称不能更改。':'用于服务商成本价与模型刊例价。已被引用的名称、单位及货币代码不能更改；停止选用后已有配置和历史保留。'}</Typography.Paragraph>
     <Form id={formId} onSubmit={async()=>{if(saving || !ops.can)return;setSaving(true);try{if(await ops.run('tariffDictionary',{operation:'save',id:entry?.id,kind,...value}))close();}finally{setSaving(false);}}}>
       <Form.Slot label={kind==='scenario'?'计费项名称':'中文名称'}><Input aria-label={kind==='scenario'?'计费项名称':'中文名称'} maxLength={kind==='unit'?40:80} value={value.name} disabled={!ops.can} onChange={input=>change('name',input)}/></Form.Slot>
@@ -24,6 +26,7 @@ function DictionaryEditor({entry,kind,ops,close}) {
 }
 
 export default function MaterialDictionary({state,ops,kind}) {
+  const translateLabel = useChannelText();
   const [query,setQuery]=useState(''),[editing,setEditing]=useState(null),[removing,setRemoving]=useState(null),[page,setPage]=useState(1),[busy,setBusy]=useState(false);
   const trigger=useRef(null),entries=tariffDictionaryEntries(state),label=TARIFF_KINDS[kind];
   const rows=entries.filter(row=>row.kind===kind && [row.name,kind==='scenario'?'':row.englishName,row.code].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
@@ -34,7 +37,7 @@ export default function MaterialDictionary({state,ops,kind}) {
     {title:kind==='scenario'?'计费项名称':kind==='unit'?'单位名称':'货币名称',width:230,render:(_,row)=><Space><Typography.Text strong>{row.name}</Typography.Text>{kind!=='scenario' && row.status==='已停用' && <Tag>已停止选用</Tag>}</Space>},
     ...(kind==='currency'?[{title:'货币代码',dataIndex:'code',width:120}]:[]),
     {title:'来源',width:100,render:(_,row)=>row.builtin?'内置':'自定义'},
-    {title:'操作',width:220,fixed:'right',render:(_,row)=>row.builtin?<Typography.Text type="tertiary">—</Typography.Text>:<Space><Button theme="borderless" disabled={!ops.can} aria-label={'编辑 '+row.name} onClick={event=>{trigger.current=event.currentTarget;ops.setError('');setEditing({entry:row,kind});}}>编辑</Button>{kind!=='scenario' && <Button theme="borderless" disabled={!ops.can || busy} aria-label={(row.status==='已启用'?'停止选用 ':'恢复选用 ')+row.name} onClick={async()=>{setBusy(true);try{await ops.run('tariffDictionary',{operation:'status',id:row.id,status:row.status==='已启用'?'已停用':'已启用'});}finally{setBusy(false);}}}>{row.status==='已启用'?'停止选用':'恢复选用'}</Button>}<Button type="danger" theme="borderless" disabled={!ops.can} aria-label={'删除 '+row.name} onClick={event=>{trigger.current=event.currentTarget;ops.setError('');setRemoving(row);}}>删除</Button></Space>},
+    {title:'操作',width:220,fixed:'right',render:(_,row)=>row.builtin?<Typography.Text type="tertiary">—</Typography.Text>:<Space><Button theme="borderless" disabled={!ops.can} aria-label={'编辑 '+row.name} onClick={event=>{trigger.current=event.currentTarget;ops.setError('');setEditing({entry:row,kind});}}>{translateLabel("编辑")}</Button>{kind!=='scenario' && <Button theme="borderless" disabled={!ops.can || busy} aria-label={(row.status==='已启用'?'停止选用 ':'恢复选用 ')+row.name} onClick={async()=>{setBusy(true);try{await ops.run('tariffDictionary',{operation:'status',id:row.id,status:row.status==='已启用'?'已停用':'已启用'});}finally{setBusy(false);}}}>{row.status==='已启用'?'停止选用':'恢复选用'}</Button>}<Button type="danger" theme="borderless" disabled={!ops.can} aria-label={'删除 '+row.name} onClick={event=>{trigger.current=event.currentTarget;ops.setError('');setRemoving(row);}}>{translateLabel("删除")}</Button></Space>},
   ];
   return <>
     <div className="materials-toolbar">

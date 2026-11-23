@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import { useId, useMemo, useState } from 'react';
@@ -22,6 +23,7 @@ const monitorMetrics = [
 ];
 
 export function ClusterManagement({ state, dispatch }) {
+  const translateLabel = useChannelText();
   const formId = useId();
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
@@ -46,7 +48,7 @@ export function ClusterManagement({ state, dispatch }) {
     } })) setCreating(false);
   };
   return <div className="admin-page-stack">
-    <AdminPageHeading title="集群纳管" description="统一纳管自有推理集群，查看节点、GPU 容量和部署占用。">
+    <AdminPageHeading title={translateLabel("集群纳管")} description="统一纳管自有推理集群，查看节点、GPU 容量和部署占用。">
       <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} onClick={() => { setError(''); setCreating(true); }}>纳管集群</Button>
     </AdminPageHeading>
     <div className="admin-analysis-metrics admin-analysis-metrics-three">
@@ -90,7 +92,7 @@ export function ClusterManagement({ state, dispatch }) {
     </Card>
     {creating && <Modal visible title="纳管推理集群" width="min(480px, calc(100vw - 32px))" closeOnEsc maskClosable={false}
       footer={<>
-        <Button onClick={() => setCreating(false)}>取消</Button>
+        <Button onClick={() => setCreating(false)}>{translateLabel("取消")}</Button>
         <Button form={formId} htmlType="submit" theme="solid">确认纳管</Button>
       </>} onCancel={() => setCreating(false)}>
       <Form id={formId} initValues={{ zone: '南京', gpuType: 'H20', totalGpu: 8, nodes: 1 }} onSubmit={save} onValueChange={() => setError('')}>
@@ -113,13 +115,14 @@ function ObservabilityChart({ deployments, metric }) {
 }
 
 export function ModelObservability({ state }) {
+  const translateLabel = useChannelText();
   const running = state.deployments.filter(item => item.status !== '停止');
   const [selected, setSelected] = useState(() => running.map(item => item.id));
   const [metric, setMetric] = useState('GPU 利用率');
   const visible = useMemo(() => running.filter(item => selected.includes(item.id)), [running, selected]);
   const summary = deploymentSummary(visible);
   return <div className="admin-page-stack">
-    <AdminPageHeading title="生产观测" description="按部署实例对比资源与推理性能，图表每个部署对应独立序列。"/>
+    <AdminPageHeading title={translateLabel("生产观测")} description="按部署实例对比资源与推理性能，图表每个部署对应独立序列。"/>
     <Card>
       <FilterToolbar>
         <Choice label="监控指标" value={metric} options={monitorMetrics} onSelect={setMetric}/>

@@ -1,5 +1,7 @@
+import { useChannelText } from './channel-language';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Button, Checkbox, Descriptions, Empty, Input, InputNumber, Pagination, Space, Table, TextArea, Typography } from '@douyinfe/semi-ui';
+import Descriptions from './AdminDescriptions';
+import { Button, Checkbox, Empty, Input, InputNumber, Pagination, Space, Table, TextArea, Typography } from '@douyinfe/semi-ui';
 import { IconSearch } from '@douyinfe/semi-icons';
 import { Modal, Notice, CopyId } from './ModelOperationsUI';
 import { channelDiscoveryPreview, directoryDiscoveryPolicy, directoryDiscoveryReceipt, directoryDiscoverySignature, ignoredDiscoveryModel } from './channel-discovery-diff';
@@ -29,6 +31,7 @@ function modelListRequest(endpoint) {
 }
 
 function ReferenceModelList({ active, canEdit, checking, selected, onSelect, onRefresh, onConfigure, configureDisabled, close, error }) {
+  const translateLabel = useChannelText();
   const [search, setSearch] = useState('');
   const [demo, setDemo] = useState(null);
   const selectionSummaryId = useId();
@@ -55,9 +58,9 @@ function ReferenceModelList({ active, canEdit, checking, selected, onSelect, onR
     discoveredAt && '最近获取 ' + new Date(discoveredAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
   ].filter(Boolean).join(' · ') : '';
   const empty = checking ? '正在获取模型列表…' : query ? '没有匹配的模型' : result ? '未获取到模型' : '尚未获取模型列表';
-  return <Modal drawer wide title="获取模型列表" description={active?.name} onClose={() => !checking && close()}
+  return <Modal drawer wide title={translateLabel("获取模型列表")} description={active?.name} onClose={() => !checking && close()}
     footer={<Space wrap>
-      <Button disabled={checking} onClick={close}>关闭</Button>
+      <Button disabled={checking} onClick={close}>{translateLabel("关闭")}</Button>
       <Button theme="solid" disabled={Boolean(demo) || configureDisabled} onClick={onConfigure}>配置所选模型</Button>
     </Space>}>
     <Notice>{protocol === '自定义 API'
@@ -68,10 +71,10 @@ function ReferenceModelList({ active, canEdit, checking, selected, onSelect, onR
       { key: '服务地址（Base URL）', value: <CopyId copyAtStart value={baseUrl} label="服务地址"/> },
       { key: '模型列表请求地址', value: <CopyId copyAtStart value={url} displayValue={method + ' ' + url} label="模型列表请求地址"/> },
     ]}/>
-    <section className="supplier-change-section" aria-label="上游模型" aria-busy={checking} style={{ display: 'grid', gap: 12 }}>
+    <section className="supplier-change-section" aria-label={translateLabel("上游模型")} aria-busy={checking} style={{ display: 'grid', gap: 12 }}>
       <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
         <div>
-          <Typography.Title heading={5}>上游模型</Typography.Title>
+          <Typography.Title heading={5}>{translateLabel("上游模型")}</Typography.Title>
           {listSummary && <Typography.Text type="tertiary" aria-live="polite">{listSummary}</Typography.Text>}
         </div>
         <Space wrap>
@@ -111,6 +114,7 @@ function ReferenceModelList({ active, canEdit, checking, selected, onSelect, onR
 }
 
 export default function ChannelDirectoryDiscovery({ state, connections, ops, close, append, initialConnectionId, initialSelection, reference = false }) {
+  const translateLabel = useChannelText();
   const [checking, setChecking] = useState(false);
   const [progress, setProgress] = useState(null);
   const [selection, setSelection] = useState(initialSelection || {});
@@ -234,7 +238,7 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
     ...active.result.rows.filter(row => row.existingAssociationId && row.attributes.some(item => item.different)).map(row => ({ ...row, kind: '属性差异' }))];
   return <><Modal drawer wide title={connections.length === 1 ? '上游模型更新' : '上游变更任务'} description={connections.length === 1 ? connections[0].name : connections.length + ' 条连接'}
     onClose={() => !checking && close()} footer={<Space wrap>
-      <Button disabled={checking} onClick={close}>关闭</Button>
+      <Button disabled={checking} onClick={close}>{translateLabel("关闭")}</Button>
       {checking ? <Button disabled={stop.current} onClick={() => { stop.current = true; }}>完成当前检测后停止</Button> :
         <Button theme="solid" disabled={!ops.can || !connections.length} onClick={() => load(rows)}>{connections.length === 1 ? '立即检测' : '检测全部所选连接'}</Button>}
       {!checking && <Button disabled={!ops.can || !due().length} onClick={() => load(due().slice(0, 10), true)}>检查到期连接</Button>}
@@ -280,7 +284,7 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
     {(error || ops.error) && <Notice error>{error || ops.error}</Notice>}
   </Modal>
   {policyDraft && <Modal wide title="上游模型同步策略" description={active?.name} onClose={() => !applying && setPolicyDraft(null)} footer={<>
-    <Button disabled={applying} onClick={() => setPolicyDraft(null)}>取消</Button>
+    <Button disabled={applying} onClick={() => setPolicyDraft(null)}>{translateLabel("取消")}</Button>
     <Button theme="solid" disabled={applying || !ops.can || !active} onClick={savePolicy}>保存同步策略</Button>
   </>}>
     <Notice>使用「检查到期连接」运行扫描。仅完整列表中身份唯一、在采购白名单内的模型会自动接入为待验证供给。</Notice>

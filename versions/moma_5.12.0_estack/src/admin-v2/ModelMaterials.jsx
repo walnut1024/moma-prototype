@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import {Banner, Typography} from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import MaterialsHeader, {materialOperationsUi} from './MaterialsHeader';
@@ -11,6 +12,7 @@ import {modelMaterial} from './model-library';
 import {operationsReturn} from './model-pricing-workspace';
 
 export default function ModelMaterials(props) {
+  const translateLabel = useChannelText();
   const {state}=props,ops=useOperations({...props,...materialOperationsUi},'model-templates'),{params,go}=ops;
   const view=params.get('view') || 'templates',template=modelMaterial(state,params.get('template'));
   const kind=view==='classification' ? classificationKind(params) : null;
@@ -21,7 +23,7 @@ export default function ModelMaterials(props) {
   };
   const fromElsewhere=Boolean(operationsReturn(params.get('returnTo')));
   return <div className="semi-materials materials-page">
-    {view==='templateImport'?<><Typography.Title heading={4}>批量导入模型资料</Typography.Title><section className="materials-description"><ModelBatchImport kind="model" state={state} ops={ops} transact={props.transact} close={saved=>go({view:'templates'},{saved:saved===true})}/></section></>:<>
+    {view==='templateImport'?<><Typography.Title heading={4}>{translateLabel("批量导入模型资料")}</Typography.Title><section className="materials-description"><ModelBatchImport kind="model" state={state} ops={ops} transact={props.transact} close={saved=>go({view:'templates'},{saved:saved===true})}/></section></>:<>
       <MaterialsHeader active={kind || 'model-templates'} ops={ops}/>
       {kind ? <ModelClassificationDictionary key={kind} kind={kind} state={state} ops={ops}/> : <>
         <MaterialCatalogue state={state} ops={ops}/>

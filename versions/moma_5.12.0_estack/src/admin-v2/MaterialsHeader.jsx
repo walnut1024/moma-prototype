@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { Button, Space, Tabs, Toast } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import ModelModuleHeading from './ModelModuleHeading';
@@ -12,6 +13,7 @@ export const materialOperationsUi = {
 };
 
 export default function MaterialsHeader({ active, ops, children }) {
+  const t = useChannelText();
   return <>
     <ModelModuleHeading module="materials" className="materials-heading"><Space wrap>{children}</Space></ModelModuleHeading>
     <Tabs type="line" activeKey={active} onChange={id => {
@@ -20,7 +22,7 @@ export default function MaterialsHeader({ active, ops, children }) {
       const query = dictionary ? { tab: id } : Object.hasOwn(CLASSIFICATION_KINDS, id) ? classificationQuery(id) : {};
       ops.go(query, { base: dictionary ? 'tariff-dictionary' : 'model-templates', reset: !dictionary || !Object.hasOwn(TARIFF_KINDS, active) });
     }} aria-label="资料分类">
-      {materialPages.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={label}/>)}
+      {materialPages.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={t(label)}/>)}
     </Tabs>
   </>;
 }

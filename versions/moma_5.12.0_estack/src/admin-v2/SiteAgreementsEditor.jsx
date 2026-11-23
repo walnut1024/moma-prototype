@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useEffect, useRef, useState } from 'react';
 import { Banner, Button, Card, Form, Input, Radio, RadioGroup, Space, Tabs, TextArea, Toast } from '@douyinfe/semi-ui';
 import { AdminModal } from './AdminOverlay';
@@ -17,6 +18,7 @@ function activeAgreement(agreement) {
 }
 
 export default function SiteAgreementsEditor({ legacy, onDirtyChange }) {
+  const translateLabel = useChannelText();
   const [selected, setSelected] = useState('terms');
   const [published, setPublished] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -131,7 +133,7 @@ export default function SiteAgreementsEditor({ legacy, onDirtyChange }) {
             setPreview(agreementWithDefault(selected, { ...value, url: nextUrl }));
           }}>预览</Button>
           <Button aria-label={'恢复默认' + label} disabled={busy || (agreementMode(agreement) === 'text' && !agreement.url && agreement.text === defaultAgreement(selected).text)}
-            onClick={() => update(defaultAgreement(selected))}>恢复默认</Button>
+            onClick={() => update(defaultAgreement(selected))}>{translateLabel("恢复默认")}</Button>
         </Space>
       </div>
       {agreementMode(agreement) === 'url'
@@ -146,7 +148,7 @@ export default function SiteAgreementsEditor({ legacy, onDirtyChange }) {
         </Form.Slot>}
     </Card> : !error && <p role="status">正在加载协议…</p>}
     {preview && <AdminModal visible title={label} width="min(1040px, calc(100vw - 32px))" closeOnEsc
-      footer={<Button onClick={() => setPreview(null)}>关闭</Button>} onCancel={() => setPreview(null)}>
+      footer={<Button onClick={() => setPreview(null)}>{translateLabel("关闭")}</Button>} onCancel={() => setPreview(null)}>
       <div className="site-config-preview" tabIndex={0}><AgreementContent agreement={preview} /></div>
     </AdminModal>}
   </div>;

@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Input } from '@douyinfe/semi-ui';
 import { Choice, Field } from './ServiceUI';
@@ -19,6 +20,7 @@ export default function ChannelCredentialRotation({ state, provider, endpoint: f
   return <Modal title="替换连接专属密钥" description={provider.name} onClose={close}><Field label="替换范围"><Choice label="选择替换密钥的连接" value={selectedId} options={[[ 'unselected', '请选择连接' ], ...available.map(row => [row.id, supplierChannelName(provider, row)])]} disabled={!ops.can} onChange={setSelectedId}/></Field><p>每次只切换明确选中的连接，其他引用继续使用原密钥。</p>{!available.length && <Notice error>连接或密钥绑定已变化，请关闭后重新选择。</Notice>}</Modal>;
 }
 function EndpointCredentialRotation({ state, provider, endpoint, ops, close }) {
+  const translateLabel = useChannelText();
   const [rawKey, setRawKey] = useState(''), [edited, setEdited] = useState(false), [testing, setTesting] = useState(false), [preparing, setPreparing] = useState(false), [rollback, setRollback] = useState('unselected'), [applied, setApplied] = useState(null);
   const mounted = useRef(true), latest = useRef(null); latest.current = { state, provider, endpoint, ops };
   const candidate = endpoint.candidateConfiguration, key = connectionKeys(endpoint, provider, true)[0], impact = channelChangeImpact(state, provider.id, endpoint.id);
@@ -42,7 +44,7 @@ function EndpointCredentialRotation({ state, provider, endpoint, ops, close }) {
       return { state: next, context: { ...context, candidateId: saved.candidateConfiguration.id } };
     } finally { if (mounted.current) setPreparing(false); }
   };
-  return <Modal wide title="修改连接密钥" description={`${provider.name} · ${supplierChannelName(provider, endpoint)}`} onClose={() => ops.proceed(close)} footer={<><Button theme="light" onClick={() => ops.proceed(close)}>关闭</Button>{candidate && <Button disabled={!ops.can || !status.ready || edited || testing || preparing} onClick={async () => { const next = await ops.run('channelCandidateApply', { ...context, confirmed: true }); if (next) { const updated = next.endpoints.find(row => row.id === endpoint.id); setApplied({ keyId: updated.apiKeyId, version: updated.configurationRevision }); ops.dirty(false); } }}>应用新密钥</Button>}</>}>
+  return <Modal wide title="修改连接密钥" description={`${provider.name} · ${supplierChannelName(provider, endpoint)}`} onClose={() => ops.proceed(close)} footer={<><Button theme="light" onClick={() => ops.proceed(close)}>{translateLabel("关闭")}</Button>{candidate && <Button disabled={!ops.can || !status.ready || edited || testing || preparing} onClick={async () => { const next = await ops.run('channelCandidateApply', { ...context, confirmed: true }); if (next) { const updated = next.endpoints.find(row => row.id === endpoint.id); setApplied({ keyId: updated.apiKeyId, version: updated.configurationRevision }); ops.dirty(false); } }}>应用新密钥</Button>}</>}>
     <div className="supplier-resource-form">
       {applied && <Notice>新密钥已应用至当前连接，配置版本 {applied.version}，密钥 ID {applied.keyId}。</Notice>}
       <dl className="supplier-test-facts"><div><dt>当前密钥 ID</dt><dd>{key ? providerApiKeyId(key) : '未配置'}</dd></div><div><dt>替换范围</dt><dd>仅当前连接 · {impact.mappings.length} 个模型 · {impact.services.length} 项服务</dd></div></dl>

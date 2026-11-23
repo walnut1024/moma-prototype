@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useMemo } from 'react';
 import { Button, Card, Space, Typography } from '@douyinfe/semi-ui';
 import { DonutChart, HorizontalBarChart, TimeSeriesChart } from '../components/AnalyticsCharts';
@@ -44,6 +45,7 @@ function Breakdown({ title, rows, unit, total, onChoose }) {
 }
 
 export default function UsageReport({ state, range, result, filters, clock, live, provider, onProvider }) {
+  const translateLabel = useChannelText();
   const data = useMemo(() => usageReport(state, range, result, filters, clock), [state, range, result, filters, clock]);
   const { selected, prior } = data;
   const single = range.start === range.end;
@@ -115,7 +117,7 @@ export default function UsageReport({ state, range, result, filters, clock, live
             series={modelFamilies.map(([id, label], index) => ({ label, color: chartPalette[index], values: data.weeks.map(week => week.values[id]) }))}/>
         </Card>
         <div className="ua-report-pair">
-          <Card title={heading(rankingTitle)} headerExtraContent={provider && <Button onClick={() => onProvider(null)} size="small">全部服务商</Button>}>
+          <Card title={heading(rankingTitle)} headerExtraContent={provider && <Button onClick={() => onProvider(null)} size="small">{translateLabel("全部服务商")}</Button>}>
             {top.length ? <HorizontalBarChart rows={top} unit="Token" label={rankingTitle} showData/> :
               <Paragraph type="secondary" className="ua-native-chart-empty">所选范围暂无已确认 Token 用量</Paragraph>}
           </Card>

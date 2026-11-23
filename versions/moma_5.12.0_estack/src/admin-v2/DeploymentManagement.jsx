@@ -1,8 +1,10 @@
+import { useChannelText } from './channel-language';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import { useEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, Collapse, Descriptions, Form, Input, Space, Steps, Tabs, Timeline, Typography } from '@douyinfe/semi-ui';
+import Descriptions from './AdminDescriptions';
+import { Banner, Button, Card, Collapse, Form, Input, Space, Steps, Tabs, Timeline, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { FilterToolbar, FilterReset, PAGE_SIZES, normalizePageSize } from '../components/FilterControls';
@@ -41,6 +43,7 @@ function ErrorNote({ message }) {
 }
 
 function DeploymentEditor({ state, existing, can, run, go, dirty }) {
+  const translateLabel = useChannelText();
   const [values, setValues] = useState(() => existing ? {
     ...blank, ...deploymentConfig(existing), name: existing.name, deploymentId: existing.deploymentId,
     runtimeId: existing.runtimeId || '', weightId: existing.weightId || '', weightPath: existing.weightPath || '',
@@ -191,7 +194,7 @@ function DeploymentEditor({ state, existing, can, run, go, dirty }) {
           <ErrorNote message={error}/>
         </div>
         <div className="admin-form-actions">
-          <Button onClick={() => go({ view: null, deployment: existing?.id || null })}>取消</Button>
+          <Button onClick={() => go({ view: null, deployment: existing?.id || null })}>{translateLabel("取消")}</Button>
           {step > 0 && <Button onClick={() => { setStep(step - 1); setError(''); }}>上一步</Button>}
           <Button htmlType="submit" theme="solid" disabled={!can || (step === 2 && Boolean(preflightError))}>
             {step < 2 ? '下一步' : existing ? '确认重建更新' : '开始部署'}
@@ -320,6 +323,7 @@ const listTabs = [['all', '全部部署'], ['运行中', '运行中'], ['progres
 const matchesStatus = (item, status) => status === 'all' || (status === 'progress' ? inProgress(item) : item.status === status);
 
 function DeploymentList({ state, params, can, go, ask }) {
+  const translateLabel = useChannelText();
   const query = params.get('q') || '';
   const filter = params.get('status') || 'all';
   const cluster = params.get('cluster') || 'all';
@@ -364,7 +368,7 @@ function DeploymentList({ state, params, can, go, ask }) {
       </div>;
     } },
     { title: '操作', width: 143, render: (_, item) => <Space spacing={4}>
-      <Button size="small" theme="borderless" onClick={() => details(item, item.status === '失败' ? 'events' : 'overview')}>详情</Button>
+      <Button size="small" theme="borderless" onClick={() => details(item, item.status === '失败' ? 'events' : 'overview')}>{translateLabel("详情")}</Button>
       <Button size="small" theme="borderless" disabled={!can} onClick={() => ask(item, primaryOperation(item))}>
         {primaryOperation(item) === 'start' ? '启动' : confirmTitles[primaryOperation(item)]}
       </Button>
@@ -372,7 +376,7 @@ function DeploymentList({ state, params, can, go, ask }) {
   ];
 
   return <>
-    <AdminPageHeading title="模型部署" description="部署和管理自有模型推理服务，查看资源、就绪状态与部署事件。">
+    <AdminPageHeading title={translateLabel("模型部署")} description="部署和管理自有模型推理服务，查看资源、就绪状态与部署事件。">
       <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!can} onClick={() => go({ view: 'create' })}>部署模型</Button>
     </AdminPageHeading>
     <Card>
@@ -396,6 +400,7 @@ function DeploymentList({ state, params, can, go, ask }) {
 }
 
 export default function ModelDeployments({ state, dispatch, conflict }) {
+  const translateLabel = useChannelText();
   const [params, setParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
   const [error, setError] = useState('');
   const [confirm, setConfirm] = useState(null);
@@ -499,7 +504,7 @@ export default function ModelDeployments({ state, dispatch, conflict }) {
     {!confirm && <ErrorNote message={error}/>}
     {confirm && <Modal visible title={confirmTitles[confirm.operation]} width="min(520px, calc(100vw - 32px))"
       closeOnEsc maskClosable={false} onCancel={closeConfirm} footer={<Space>
-        <Button onClick={closeConfirm}>取消</Button>
+        <Button onClick={closeConfirm}>{translateLabel("取消")}</Button>
         <Button theme="solid" type={confirm.operation === 'stop' ? 'danger' : 'primary'} disabled={!can || !current}
           onClick={async () => { if (await run(confirm.operation, { replicas }, current?.id)) closeConfirm(); }}>
           确认{confirmActions[confirm.operation]}

@@ -114,7 +114,7 @@ export default function ChannelHealthTable({ rows, labels, summaries, simulated,
     ...(canManageChannels ? [{ title: t('服务商成本价'), width: 184, render: (_, row) => row.costs?.map(cost =>
       <div key={cost.key}><ChannelCostCell cost={{ ...cost, items: cost.items.slice(0, 2) }}/>
         {cost.items.length > 2 && <Popover trigger="click" position="left" content={<div className="channel-health-prices"><ChannelCostCell cost={cost}/></div>}>
-          <Button theme="borderless" size="small">全部 {cost.items.length} 项</Button>
+          <Button theme="borderless" size="small">{t("全部")}{cost.items.length} 项</Button>
         </Popover>}</div>) ?? '—' }] : []),
   ];
   return <Table className="channel-health-table" loading={loading} aria-label={t('上游模型观测列表')} rowKey="id" size="small" columns={columns} dataSource={rows}

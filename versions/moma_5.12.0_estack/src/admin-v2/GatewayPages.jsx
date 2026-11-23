@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
@@ -27,6 +28,7 @@ const cacheScopes = ['tenant+model', 'project+model', 'key+model'].map(value => 
 
 
 function Editor({ pageId, state, dispatch, close }) {
+  const translateLabel = useChannelText();
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
   const [discarding, setDiscarding] = useState(false);
@@ -87,7 +89,7 @@ function Editor({ pageId, state, dispatch, close }) {
     <Modal visible width="min(560px, calc(100vw - 32px))" title={`新建${ruleNames[pageId]}`}
       closeOnEsc={!discarding} maskClosable={false} onCancel={dismiss}
       footer={<div className="gateway-editor-actions">
-        <Button theme="light" onClick={dismiss}>取消</Button>
+        <Button theme="light" onClick={dismiss}>{translateLabel("取消")}</Button>
         <Button theme="solid" htmlType="submit" form={formId}>创建并生效</Button>
       </div>}>
       <div ref={formBody}>

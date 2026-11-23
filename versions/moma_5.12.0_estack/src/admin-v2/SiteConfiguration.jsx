@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useEffect, useRef, useState } from 'react';
 import { IconUpload } from '@douyinfe/semi-icons';
 import { Banner, Button, Card, Form, Image, Input, Space, Tabs, Toast } from '@douyinfe/semi-ui';
@@ -39,6 +40,7 @@ async function checkImage(src, label) {
 }
 
 function SiteImageField({ field, value, disabled, onChange, onUpload }) {
+  const translateLabel = useChannelText();
   const [key, label, fallback] = field;
   const id = 'site-image-' + key;
   const fileInput = useRef(null);
@@ -60,8 +62,8 @@ function SiteImageField({ field, value, disabled, onChange, onUpload }) {
               event.currentTarget.value = '';
               if (file) onUpload(file);
             }} />
-          <Button icon={<IconUpload />} disabled={disabled} aria-label={'上传' + label} onClick={() => fileInput.current.click()}>上传图片</Button>
-          <Button disabled={disabled || !value} aria-label={'恢复默认' + label} onClick={() => onChange('')}>恢复默认</Button>
+          <Button icon={<IconUpload />} disabled={disabled} aria-label={'上传' + label} onClick={() => fileInput.current.click()}>{translateLabel("上传图片")}</Button>
+          <Button disabled={disabled || !value} aria-label={'恢复默认' + label} onClick={() => onChange('')}>{translateLabel("恢复默认")}</Button>
         </Space>
       </div>
     </div>
@@ -69,6 +71,7 @@ function SiteImageField({ field, value, disabled, onChange, onUpload }) {
 }
 
 export default function SiteConfiguration({ dirtyRef }) {
+  const translateLabel = useChannelText();
   const raw = useSiteConfigSnapshot();
   const [draft, setDraft] = useState(null);
   const [tab, setTab] = useState('basic');
@@ -161,13 +164,13 @@ export default function SiteConfiguration({ dirtyRef }) {
   }
 
   return <section className="admin-page-stack site-config">
-    <AdminPageHeading title="站点配置">
+    <AdminPageHeading title={translateLabel("站点配置")}>
       {tab === 'basic' && <Button theme="solid" onClick={save} disabled={(!draft && portalDraft === null) ||
-        Boolean(busy) || conflict || (portalDraft !== null && (!portal || Boolean(portalError)))} loading={busy === 'save'}>保存</Button>}
+        Boolean(busy) || conflict || (portalDraft !== null && (!portal || Boolean(portalError)))} loading={busy === 'save'}>{translateLabel("保存")}</Button>}
     </AdminPageHeading>
     {conflict && <Banner type="warning" closeIcon={null} description={<>配置已在其他页面更新。 <Button disabled={Boolean(busy)} onClick={() => { setDraft(null); setError(''); }}>载入已保存配置</Button></>} />}
     {error && <Banner type="danger" closeIcon={null} description={<span role="alert">{error}</span>} />}
-    <Tabs keepDOM type="line" activeKey={tab} onChange={setTab} aria-label="站点配置">
+    <Tabs keepDOM type="line" activeKey={tab} onChange={setTab} aria-label={translateLabel("站点配置")}>
       <Tabs.TabPane tab="基础配置" itemKey="basic">
         <Card className="site-config-card">
           <Form.Slot label={{ text: '用户控制台展示名称', name: 'site-user-console-name' }}>

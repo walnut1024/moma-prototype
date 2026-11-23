@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useState } from 'react';
 import { Button, RadioGroup, Select, Typography } from '@douyinfe/semi-ui';
 import { Field, Modal, Notice } from './ServiceUI';
@@ -11,6 +12,7 @@ export function salesAudienceLabel(state, scope) {
 }
 
 export default function SalesAudience({ state, model, services, ops }) {
+  const translateLabel = useChannelText();
   const current = salesScope(model);
   const [value, setValue] = useState(current);
   const [revision] = useState(model.updatedAt);
@@ -24,7 +26,7 @@ export default function SalesAudience({ state, model, services, ops }) {
   return <div className="ss-body">
     <Typography.Text>当前范围：{salesAudienceLabel(state, current)}</Typography.Text>
     <Field label="销售对象">
-      <RadioGroup value={value.openScope} disabled={locked} aria-label="销售对象"
+      <RadioGroup value={value.openScope} disabled={locked} aria-label={translateLabel("销售对象")}
         options={[{ value: 'all', label: '全部租户' }, { value: 'selected', label: '指定租户' }]}
         onChange={event => update({ openScope: event.target.value, tenantIds: [] })}/>
     </Field>

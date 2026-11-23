@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { modelIdentity } from '../model-identities.mjs';
 import TableFieldHelp from '../components/TableFieldHelp';
 import { workspaceStoragePrefix } from "../workspace-storage.mjs";
@@ -68,6 +69,7 @@ function SortableNavItem({ id, label, active, onSelect, onMove }) {
 const emptyFilters = () => ({ types: null, tenant: null, model: null, providers: [], channels: null, user: null });
 
 export default function UsageAnalysisPage({ state }) {
+  const translateLabel = useChannelText();
   const route = new URLSearchParams(location.hash.split('?')[1] || '');
   const [scope, setScope] = useState(() => ({ tenant: route.get('tenant') || '', project: route.get('project') || '' }));
   const routeUser = route.get('user'), routeModel = route.get('model');
@@ -255,7 +257,7 @@ export default function UsageAnalysisPage({ state }) {
       }}/>;
   };
   return <div className="admin-page-stack ua-native-usage">
-    <AdminPageHeading title="用量数据"><Button icon={<IconDownload aria-hidden="true"/>} disabled={!detailRows.length} onClick={exportCsv}>导出用量明细</Button></AdminPageHeading>
+    <AdminPageHeading title={translateLabel("用量数据")}><Button icon={<IconDownload aria-hidden="true"/>} disabled={!detailRows.length} onClick={exportCsv}>导出用量明细</Button></AdminPageHeading>
     <Tabs type="line" activeKey={tab} onChange={changeTab} aria-label="用量数据视图" tabList={[{ itemKey: 'history', tab: '历史数据' }, { itemKey: 'live', tab: '今日实时预测' }]}/>
     <Card className="ua-native-time">
       <div className="admin-analysis-filter-row">
@@ -271,9 +273,9 @@ export default function UsageAnalysisPage({ state }) {
             onChangeWithDateFirst={false} disabledDate={date => calendarDay.format(date) > dayOf(Date.now())}
             onChange={date => { if (typeof date === 'string' && date) applyDate({ start: date, end: date }); }}/> :
             <DateRange presets={presets} start={range.start} end={range.end} granularity={usageWindow?.weekly ? 'week' : 'day'}
-              trigger={<Button icon={<IconCalendar aria-hidden="true"/>} aria-label="日期范围">{range.start} — {range.end}</Button>} allowLongRange onChange={applyDate}/>}
+              trigger={<Button icon={<IconCalendar aria-hidden="true"/>} aria-label={translateLabel("日期范围")}>{range.start} — {range.end}</Button>} allowLongRange onChange={applyDate}/>}
           <FilterPresets label="统计时间范围" value={period} onChange={choosePeriod} items={presets}/>
-          <Text type="secondary" title="时间范围作用于全部图表与明细">北京时间</Text>
+          <Text type="secondary" title="时间范围作用于全部图表与明细">{translateLabel("北京时间")}</Text>
           <Choice label="租户" value={scope.tenant} options={[[ '', '全部租户' ], ...state.tenants.map(row => [row.id, row.name])]}
             onSelect={tenant => changeScope({ tenant, project: '' })}/>
           <Choice label="项目" value={scope.project} options={[[ '', '全部项目' ], ...projects.map(row => [row.id, row.id === unassignedProject ? row.name : row.name + ' · ' + row.id]),

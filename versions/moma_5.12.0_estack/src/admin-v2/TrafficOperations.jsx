@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import TableFieldHelp from '../components/TableFieldHelp';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
@@ -75,6 +76,7 @@ function HistoryValue({ value, scope }) {
 }
 
 function TrafficHistory({ accountId, accounts, models, session, requestLogin, close }) {
+  const translateLabel = useChannelText();
   const [history, setHistory] = useState({ items: [], loading: true });
   const request = useRef(null);
 
@@ -121,8 +123,8 @@ function TrafficHistory({ accountId, accounts, models, session, requestLogin, cl
     </div> },
   ];
 
-  return <AdminSideSheet visible title="变更历史" width="min(1120px, 100vw)" closeOnEsc onCancel={close}
-    footer={<Button onClick={close}>关闭</Button>}>
+  return <AdminSideSheet visible title={translateLabel("变更历史")} width="min(1120px, 100vw)" closeOnEsc onCancel={close}
+    footer={<Button onClick={close}>{translateLabel("关闭")}</Button>}>
     <div className="traffic-policy-drawer">
       {history.loading && <Text role="status" type="secondary">正在读取限流变更…</Text>}
       {history.error && <Banner type="warning" closeIcon={null} description={loginRequired(history.error)
@@ -138,6 +140,7 @@ function TrafficHistory({ accountId, accounts, models, session, requestLogin, cl
 }
 
 function TrafficVisualization({ account, models, projects, settings, close }) {
+  const translateLabel = useChannelText();
   const [query, setQuery] = useState('');
   const [projectId, setProjectId] = useState('');
   const project = projects.find(row => row.id === projectId);
@@ -167,12 +170,12 @@ function TrafficVisualization({ account, models, projects, settings, close }) {
     { title: <TableFieldHelp name={project ? '账号与模型额度' : '最终上限'} description={finalLimitHelp}/>,  width: 186, className: 'traffic-final-cell',
       render: (_, row) => <RatePair limit={row.finalLimit} strong/> },
   ];
-  return <AdminSideSheet visible title="限流可视化" width="min(1000px, 100vw)" closeOnEsc onCancel={close}
-    footer={<Button onClick={close}>关闭</Button>}>
+  return <AdminSideSheet visible title={translateLabel("限流可视化")} width="min(1000px, 100vw)" closeOnEsc onCancel={close}
+    footer={<Button onClick={close}>{translateLabel("关闭")}</Button>}>
     <div className="traffic-policy-drawer">
       <AccountIdentity account={account}/>
       <div className="traffic-resolution-summary" aria-label="通用额度" role="group">
-        <div className="traffic-rate-cell"><Text type="secondary">全局默认</Text><RatePair limit={settings.global}/></div>
+        <div className="traffic-rate-cell"><Text type="secondary">{translateLabel("全局默认")}</Text><RatePair limit={settings.global}/></div>
         <div className="traffic-rate-cell"><Text type="secondary">账号自定义</Text><RatePair limit={policy.limit}/></div>
         <div className="traffic-rate-cell"><Text type="secondary">通用生效额度</Text><RatePair limit={general?.limit} strong/></div>
       </div>
@@ -189,6 +192,7 @@ function TrafficVisualization({ account, models, projects, settings, close }) {
 }
 
 export default function TrafficOperations({ state, dirtyRef }) {
+  const translateLabel = useChannelText();
   const accountId = state.adminSession.accountId;
   const modelPickerId = useId();
   const [remote, setRemote] = useState(null);
@@ -352,7 +356,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
 
   const revisionConflict = error?.code === 'REVISION_CONFLICT';
   const actionsDisabled = Boolean(draft || saving || !settings || revisionConflict || loginRequired(error));
-  const editButton = (label, action) => <Button size="small" theme="borderless" onClick={action} disabled={actionsDisabled} aria-label={label}>编辑</Button>;
+  const editButton = (label, action) => <Button size="small" theme="borderless" onClick={action} disabled={actionsDisabled} aria-label={label}>{translateLabel("编辑")}</Button>;
   const errorBanner = error && <Banner type="danger" description={<>{error.message}
     {revisionConflict && <Button size="small" disabled={saving} onClick={() => discard(() => { finish(); clearSelection(); refresh(); })}>载入最新配置</Button>}
     {loginRequired(error) && <Button size="small" onClick={() => openLogin()}>重新登录</Button>}
@@ -385,9 +389,9 @@ export default function TrafficOperations({ state, dirtyRef }) {
     } },
     { title: '操作', width: 236, className: 'traffic-row-actions', render: (_, row) => <Space spacing={4}>
       {editButton('编辑 ' + row.name, event => begin(event, 'batchAccounts', row.id, [accountRule(row)?.limit || {}]))}
-      <Button size="small" theme="borderless" aria-label={row.name + '限流可视化'} onClick={() => setVisualizationId(row.id)} disabled={actionsDisabled}>限流可视化</Button>
+      <Button size="small" theme="borderless" aria-label={row.name + '限流可视化'} onClick={() => setVisualizationId(row.id)} disabled={actionsDisabled}>{translateLabel("限流可视化")}</Button>
       <Button size="small" theme="borderless" aria-label={'恢复 ' + row.name + ' 的默认额度'}
-        disabled={actionsDisabled || !accountTraffic(settings, row.id).limit} onClick={event => restoreDefaults(event, { account: row })}>恢复默认</Button>
+        disabled={actionsDisabled || !accountTraffic(settings, row.id).limit} onClick={event => restoreDefaults(event, { account: row })}>{translateLabel("恢复默认")}</Button>
     </Space> },
   ];
   const rowSelection = {
@@ -408,7 +412,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
     { title: '操作', width: 144, className: 'traffic-row-actions', render: (_, row) => <Space spacing={4}>
       {editButton('编辑 ' + row.name, event => begin(event, 'model', row.id, [row.limit]))}
       <Button size="small" theme="borderless" aria-label={'恢复 ' + row.name + ' 的默认额度'}
-        disabled={actionsDisabled || !row.custom} onClick={event => restoreDefaults(event, { model: row })}>恢复默认</Button>
+        disabled={actionsDisabled || !row.custom} onClick={event => restoreDefaults(event, { model: row })}>{translateLabel("恢复默认")}</Button>
     </Space> },
   ];
   const pagination = { pageSize: 10, hideOnSinglePage: true, showTotal: true, disabled: Boolean(draft) };
@@ -430,7 +434,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
     })),
     { title: '操作', width: 76, render: (_, row) => <Button size="small" theme="borderless" type="danger"
       aria-label={'移除 ' + (modelById.get(row.modelId)?.name || row.modelId)} disabled={saving}
-      onClick={() => updateRows(draft.rows.filter(rule => rule.modelId !== row.modelId))}>移除</Button> },
+      onClick={() => updateRows(draft.rows.filter(rule => rule.modelId !== row.modelId))}>{translateLabel("移除")}</Button> },
   ];
   const defaultsEditing = draft?.operation === 'defaults';
   const batchEditing = draft?.operation === 'batchAccounts' && !draft.id;
@@ -440,21 +444,21 @@ export default function TrafficOperations({ state, dirtyRef }) {
     ? '编辑模型限流 · ' + modelById.get(draft.id)?.name : '编辑账号限流 · ' + account?.name;
 
   return <section className="traffic-page admin-page-stack">
-    <AdminPageHeading title="限流配置">
-      <Button disabled={Boolean(draft || saving)} onClick={() => setHistoryOpen(true)}>变更历史</Button>
+    <AdminPageHeading title={translateLabel("限流配置")}>
+      <Button disabled={Boolean(draft || saving)} onClick={() => setHistoryOpen(true)}>{translateLabel("变更历史")}</Button>
     </AdminPageHeading>
     <Tabs type="line" activeKey={tab} onChange={value => {
       if (value !== tab) discard(() => { finish(false); clearSelection(); setTab(value); });
-    }} aria-label="限流配置">
-      <Tabs.TabPane tab="用户限流" itemKey="users">
+    }} aria-label={translateLabel("限流配置")}>
+      <Tabs.TabPane tab={translateLabel("用户限流")} itemKey="users">
         {tab === 'users' && <div className="traffic-tab">
           <Card className="traffic-list">
             <div className="admin-list-toolbar">
               <Input className="admin-list-search" showClear value={accountQuery} aria-label="搜索账号" placeholder="搜索账号名称、用户 ID 或所属租户"
                 onChange={value => { setAccountQuery(value); clearSelection(); }} disabled={Boolean(draft)}/>
-              <Choice label="筛选所属租户类型" options={[[ 'all', '全部租户类型' ], ['个人', '个人'], ['政企', '政企']]} value={type}
+              <Choice translateOptions label="筛选所属租户类型" options={[[ 'all', '全部租户类型' ], ['个人', '个人'], ['政企', '政企']]} value={type}
                 onSelect={value => { setType(value); clearSelection(); }} disabled={Boolean(draft)}/>
-              <DefaultInline title="全局默认" description={userDefaultHelp}>
+              <DefaultInline title={translateLabel("全局默认")} description={userDefaultHelp}>
                 {global ? <>
                   <RatePair limit={global} strong/>
                   {editButton('编辑全局默认', event => begin(event, 'defaults', '', [global]))}
@@ -464,8 +468,8 @@ export default function TrafficOperations({ state, dirtyRef }) {
             <div className="admin-list-toolbar">
               <Text aria-live="polite">已选 {selectedIds.length} 个账号</Text>
               <Space wrap>
-                <Button disabled={batchDisabled} onClick={event => begin(event, 'batchAccounts', '', [{}])}>批量修改额度</Button>
-                <Button disabled={batchDisabled} onClick={event => restoreDefaults(event)}>恢复默认</Button>
+                <Button disabled={batchDisabled} onClick={event => begin(event, 'batchAccounts', '', [{}])}>{translateLabel("批量修改额度")}</Button>
+                <Button disabled={batchDisabled} onClick={event => restoreDefaults(event)}>{translateLabel("恢复默认")}</Button>
               </Space>
             </div>
             {!draft && errorBanner}
@@ -474,7 +478,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
           </Card>
         </div>}
       </Tabs.TabPane>
-      <Tabs.TabPane tab="模型限流" itemKey="models">
+      <Tabs.TabPane tab={translateLabel("模型限流")} itemKey="models">
         {tab === 'models' && <div className="traffic-tab"><Card className="traffic-list">
           <div className="admin-list-toolbar">
             <Input className="admin-list-search" showClear value={modelQuery} aria-label="搜索模型" placeholder="搜索模型展示名称或模型编码"
@@ -508,10 +512,10 @@ export default function TrafficOperations({ state, dirtyRef }) {
         <button type="submit" hidden disabled={saveBlocked}/>
       </form>
     </Modal>}
-    {drawer && <AdminSideSheet visible title="一客一策" width="min(1000px, 100vw)" closeOnEsc={!confirmation} onCancel={() => discard()}
+    {drawer && <AdminSideSheet visible title={translateLabel("一客一策")} width="min(1000px, 100vw)" closeOnEsc={!confirmation} onCancel={() => discard()}
       footer={<>
         <Button onClick={() => discard()} disabled={saving}>{isDirty ? '取消' : '关闭'}</Button>
-        <Button theme="solid" onClick={save} loading={saving} disabled={saveBlocked}>保存</Button>
+        <Button theme="solid" onClick={save} loading={saving} disabled={saveBlocked}>{translateLabel("保存")}</Button>
       </>}>
       <div className="traffic-policy-drawer">
         <AccountIdentity account={account || { id: draft.id }}/>

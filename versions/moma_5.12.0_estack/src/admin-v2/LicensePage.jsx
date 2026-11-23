@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useEffect, useState } from 'react';
 import { IconShield } from '@douyinfe/semi-icons';
 import { Banner, Button, Card, Tag, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
@@ -18,6 +19,7 @@ const dateTime = new Intl.DateTimeFormat('sv-SE', {
 const showTime = value => value ? dateTime.format(new Date(value)) : '—';
 
 export default function LicensePage({ license }) {
+  const translateLabel = useChannelText();
   const [details, setDetails] = useState(null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
@@ -86,7 +88,7 @@ export default function LicensePage({ license }) {
   };
 
   return <div className="admin-page-stack license-page">
-    <AdminPageHeading title="License 管理">
+    <AdminPageHeading title={translateLabel("License 管理")}>
       <Button id="edit-deployment-license" theme="solid" onClick={() => setOpen(true)}>{action}</Button>
     </AdminPageHeading>
     <Card className="license-card" bodyStyle={{ padding:0 }}>

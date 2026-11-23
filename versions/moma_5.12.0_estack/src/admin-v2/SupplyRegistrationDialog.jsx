@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useState } from 'react';
 import { Button, Typography } from '@douyinfe/semi-ui';
 import { AdminModal } from './AdminOverlay';
@@ -7,6 +8,7 @@ import { registeredSupplierModelIds } from './supplier-model-registration';
 import { materialProviders } from './provider-materials';
 
 export default function SupplyRegistrationDialog({ state, ops, provider, model, close }) {
+  const translateLabel = useChannelText();
   const [providerId, setProviderId] = useState(provider?.id || '');
   const [selected, setSelected] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -21,12 +23,12 @@ export default function SupplyRegistrationDialog({ state, ops, provider, model, 
     finally { setSaving(false); }
   };
   return <AdminModal visible centered title={model ? '关联服务商' : '登记供应模型'} width="min(660px, calc(100vw - 32px))" onCancel={() => !saving && close()}
-    footer={<><Button onClick={close} disabled={saving}>取消</Button><Button theme="solid" loading={saving}
+    footer={<><Button onClick={close} disabled={saving}>{translateLabel("取消")}</Button><Button theme="solid" loading={saving}
       disabled={!ops.can || saving || !current || !libraryIds.length || exists} onClick={submit}>确认登记</Button></>}>
     {model ? <>
       <Typography.Paragraph>{model.name}</Typography.Paragraph>
       <Field label="服务商" required>
-        <Choice label="服务商" placeholder="请选择服务商" filter value={providerId || undefined}
+        <Choice label="服务商" placeholder={translateLabel("请选择服务商")} filter value={providerId || undefined}
           options={providers.map(row => [row.id, registeredSupplierModelIds(state, row).includes(model.id) ? row.name + '（已关联）' : row.name])}
           disabled={saving} onChange={value => { setProviderId(value); ops.setError(''); }}/>
       </Field>

@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
@@ -24,6 +25,7 @@ const loginDigest=async password=>Array.from(new Uint8Array(await crypto.subtle.
 const modalWidth = 'min(480px, calc(100vw - 32px))';
 
 function AccountEditor({ account, revision, canWrite, transact, close, complete }) {
+  const translateLabel = useChannelText();
   const formId = useId();
   const [draft, setDraft] = useState(() => ({ account: '', accountType: 'phone', name: '', phone: '', email: '', role: '运营人员', ...account }));
   const [error, setError] = useState('');
@@ -65,7 +67,7 @@ function AccountEditor({ account, revision, canWrite, transact, close, complete 
   };
   return (
     <Modal visible width={modalWidth} title={account ? '编辑后台账号' : '新建后台账号'} footer={<>
-        <Button onClick={close}>取消</Button>
+        <Button onClick={close}>{translateLabel("取消")}</Button>
         <Button theme="solid" form={formId} htmlType="submit" disabled={!canWrite}>{account ? '保存账号' : '创建后台账号'}</Button>
       </>} closeOnEsc maskClosable={false} onCancel={close}>
       <Typography.Paragraph type="secondary">{account ? '维护后台人员姓名、角色及联系资料。' : '使用手机号码或邮箱登录，创建成功后自动生成初始密码。'}</Typography.Paragraph>
@@ -136,6 +138,7 @@ function PasswordResult({ result, close }) {
 }
 
 export default function AdminAccounts({ state, transact, conflict }) {
+  const translateLabel = useChannelText();
   const [query, setQuery] = useState('');
   const [role, setRole] = useState('all');
   const [status, setStatus] = useState('all');
@@ -186,7 +189,7 @@ export default function AdminAccounts({ state, transact, conflict }) {
     { title: '操作', key: 'actions', render: (_, account) => {
       const protectedAdmin = lastEnabledAdmin(state, account.id);
       return <Space spacing={4}>
-        <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => setEditor({ account, revision: state.revision })}>编辑</Button>
+        <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => setEditor({ account, revision: state.revision })}>{translateLabel("编辑")}</Button>
         <Button size="small" theme="borderless" disabled={!canWrite || protectedAdmin} title={protectedAdmin ? '至少保留一个启用的系统管理员' : undefined}
           onClick={() => askConfirm(account, 'toggle')}>{account.status === '已启用' ? '停用' : '启用'}</Button>
         <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => askConfirm(account, 'resetPassword')}>重置密码</Button>
@@ -198,7 +201,7 @@ export default function AdminAccounts({ state, transact, conflict }) {
   const verb = resetting ? '重置' : disabling ? '停用' : '启用';
   return (
     <div className="aa-page admin-page-stack">
-      <AdminPageHeading title="后台账号" description="管理后台人员的账号、手机号码、角色及启停状态。">
+      <AdminPageHeading title={translateLabel("后台账号")} description="管理后台人员的账号、手机号码、角色及启停状态。">
         <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!canWrite} onClick={() => setEditor({ account: null, revision: state.revision })}>新建后台账号</Button>
       </AdminPageHeading>
       {!canWrite && <Banner type="warning" closeIcon={null}
@@ -213,11 +216,11 @@ export default function AdminAccounts({ state, transact, conflict }) {
               onSelect={value => { setRole(value); setPage(1); }}/>
           </Space>
           <Space>
-            <Typography.Text id="aa-filter-status-label" type="secondary">状态</Typography.Text>
+            <Typography.Text id="aa-filter-status-label" type="secondary">{translateLabel("状态")}</Typography.Text>
             <Select aria-labelledby="aa-filter-status-label" value={status} optionList={statusOptions}
               onSelect={value => { setStatus(value); setPage(1); }}/>
           </Space>
-          <Button theme="borderless" type="tertiary" onClick={reset}>重置筛选</Button>
+          <Button theme="borderless" type="tertiary" onClick={reset}>{translateLabel("重置筛选")}</Button>
         </div>
         <Table size="small" rowKey="id" dataSource={rows.slice((currentPage - 1) * size, currentPage * size)}
           columns={columns} scroll={{ x: 'max(100%, 880px)' }}

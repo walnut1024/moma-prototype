@@ -1,8 +1,10 @@
+import { useChannelText } from './channel-language';
 import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useId, useEffect, useState } from 'react';
-import { Avatar, Banner, Button, Card, Checkbox, Descriptions, Form, Input, Space, Tabs, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
+import Descriptions from './AdminDescriptions';
+import { Avatar, Banner, Button, Card, Checkbox, Form, Input, Space, Tabs, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconSearch } from '@douyinfe/semi-icons';
 import { TenantServiceSettings } from './TenantServiceSettings';
@@ -26,6 +28,7 @@ const time = value => value && Number.isFinite(Date.parse(value)) ? beijingDate.
 const restoreBulkFocus = () => requestAnimationFrame(() => document.getElementById('iu-bulk-action')?.focus());
 
 function OpenIndividual({ state, transact, close, complete, canWrite }) {
+  const translateLabel = useChannelText();
   const [form,setForm]=useState({accountMode:'existing',userId:'',name:'',phone:''});
   const [password,setPassword]=useState(''), [busy,setBusy]=useState(false), [error,setError]=useState('');
   const [discard,setDiscard]=useState(false);
@@ -47,8 +50,8 @@ function OpenIndividual({ state, transact, close, complete, canWrite }) {
     } catch (issue) {setError(issue.message);setBusy(false);}
   }
   return <>
-    <Modal visible title="开通个人租户" onCancel={cancel} footer={<>
-      <Button onClick={cancel} disabled={busy}>取消</Button>
+    <Modal visible title={translateLabel("开通个人租户")} onCancel={cancel} footer={<>
+      <Button onClick={cancel} disabled={busy}>{translateLabel("取消")}</Button>
       <Button form={formId} htmlType="submit" theme="solid" loading={busy} disabled={!canWrite || existing && !form.userId}>开通</Button>
     </>}>
       <form id={formId} className="admin-individual-dialog" onSubmit={submit}>
@@ -86,6 +89,7 @@ function RecordTable({ columns, rows, empty, pagination = false, minWidth = 520 
 }
 
 function UserEditor({ account, transact, canWrite, close, complete }) {
+  const translateLabel = useChannelText();
   const formId = useId();
   const [form, setForm] = useState({ nickname: account.user.nickname || '', email: account.user.email || '', notes: account.tenant.notes || '' });
   const [dirty, setDirty] = useState(false);
@@ -110,8 +114,8 @@ function UserEditor({ account, transact, canWrite, close, complete }) {
   return <>
     <Modal visible title="编辑个人租户资料" width="min(560px, calc(100vw - 32px))" closeOnEsc={!discard}
       maskClosable={false} onCancel={requestClose} footer={<>
-        <Button onClick={requestClose} disabled={busy}>取消</Button>
-        <Button form={formId} htmlType="submit" theme="solid" loading={busy} disabled={!canWrite || !dirty}>保存</Button>
+        <Button onClick={requestClose} disabled={busy}>{translateLabel("取消")}</Button>
+        <Button form={formId} htmlType="submit" theme="solid" loading={busy} disabled={!canWrite || !dirty}>{translateLabel("保存")}</Button>
       </>}>
       <form id={formId} className="admin-individual-dialog" onSubmit={submit}>
         <Paragraph type="secondary">用户 ID：{account.user.id}</Paragraph>
@@ -136,6 +140,7 @@ function UserEditor({ account, transact, canWrite, close, complete }) {
 }
 
 function StatusDialog({ account, accounts, role, transact, canWrite, close, complete }) {
+  const translateLabel = useChannelText();
   const formId = useId();
   const bulk = Boolean(accounts);
   const targets = accounts || [account];
@@ -182,7 +187,7 @@ function StatusDialog({ account, accounts, role, transact, canWrite, close, comp
   };
   return <Modal visible title={bulk ? `批量冻结个人租户（${targets.length} 个）` : `${action}个人租户`}
     width="min(620px, calc(100vw - 32px))" closeOnEsc maskClosable={false} onCancel={close} footer={<>
-      <Button disabled={busy} onClick={close}>取消</Button>
+      <Button disabled={busy} onClick={close}>{translateLabel("取消")}</Button>
       <Button form={formId} htmlType="submit" theme="solid" type={freezing ? 'danger' : 'primary'} disabled={disabled} loading={busy}>确认{action}</Button>
     </>}>
     <form id={formId} className="admin-analytics-fields admin-individual-dialog" onSubmit={submit}>
@@ -262,6 +267,7 @@ function UserDetails({ account, state, tab, projectId, navigate, canWrite, trans
 }
 
 export default function IndividualUsersPage({ state, transact, conflict }) {
+  const translateLabel = useChannelText();
   const [params, setParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
   const [editing, setEditing] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
@@ -320,7 +326,7 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
           {account.tenant.status === '停用' ? '解冻租户' : '冻结租户'}
         </Button>
       </Space>}
-      {!userId && !selecting && state.spacePolicy?.personalEnabled && <Button theme="solid" disabled={!canWrite} onClick={()=>setOpening(true)}>开通个人租户</Button>}
+      {!userId && !selecting && state.spacePolicy?.personalEnabled && <Button theme="solid" disabled={!canWrite} onClick={()=>setOpening(true)}>{translateLabel("开通个人租户")}</Button>}
       {!userId && !selecting && <Button id="iu-bulk-action" disabled={!canWrite} onClick={() => { setSelected([]); setBulkMode(true); }}>批量操作</Button>}
     </AdminPageHeading>
     {!canWrite && <Banner type="info" closeIcon={null} description={conflict ? '数据已变化，请载入新版本后再操作。'
@@ -363,7 +369,7 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
         <AccountStatus tenant={item.tenant}/>, time(item.user?.registeredAt),
         item.user?.lastLoginAt ? time(item.user.lastLoginAt) : '未记录',
         <Space spacing={4}>
-          <Button size="small" theme="borderless" onClick={() => openAccount(item)}>详情</Button>
+          <Button size="small" theme="borderless" onClick={() => openAccount(item)}>{translateLabel("详情")}</Button>
           <Button size="small" theme="borderless" disabled={!canWrite} onClick={() => setConfirmation(item)}>
             {item.tenant.status === '停用' ? '解冻' : '冻结'}
           </Button>

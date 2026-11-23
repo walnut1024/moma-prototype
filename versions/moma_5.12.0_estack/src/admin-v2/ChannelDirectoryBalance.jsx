@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useRef, useState } from 'react';
 import { Button, Space, Table, Typography } from '@douyinfe/semi-ui';
 import { Modal, Notice } from './ModelOperationsUI';
@@ -8,6 +9,7 @@ import OnboardingScenarioControl from './OnboardingScenarioControl';
 const time = value => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '—';
 
 export default function ChannelDirectoryBalance({ state, connections, ops, close, credential, scope }) {
+  const translateLabel = useChannelText();
   const [busy, setBusy] = useState(false), [progress, setProgress] = useState(null);
   const lock = useRef(false);
   const usageByConnection = new Map();
@@ -50,7 +52,7 @@ export default function ChannelDirectoryBalance({ state, connections, ops, close
   const scopeLabel = scope === 'all' ? '全部连接' : scope === 'selected' ? '所选连接' : '';
   return <Modal drawer wide title={credential ? '查询密钥余额' : scopeLabel ? '查询余额 · ' + scopeLabel : '查询余额'}
     description={credential ? connections[0].name + ' · ' + credential.maskedKey : scopeLabel ? connections.length + ' 条连接' : connections[0]?.name} onClose={() => !busy && close()}
-    footer={<Space><Button disabled={busy} onClick={close}>关闭</Button>
+    footer={<Space><Button disabled={busy} onClick={close}>{translateLabel("关闭")}</Button>
       <Button theme="solid" disabled={!ops.can || !connections.length || connections.length > 100 || busy} onClick={() => query(connections)}>
         {scopeLabel ? `查询${scopeLabel}余额` : '刷新余额'}
       </Button></Space>}>

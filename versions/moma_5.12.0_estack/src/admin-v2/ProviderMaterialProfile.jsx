@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Form, Input, Space, TextArea, Typography, Upload } from '@douyinfe/semi-ui';
 import { IconUpload } from '@douyinfe/semi-icons';
@@ -6,6 +7,7 @@ import { providerCode, PROVIDER_TYPES } from './provider-management';
 import MaterialLogo, { readMaterialLogo } from './MaterialLogo';
 
 export default function ProviderMaterialProfile({ provider, editing, ops, edit, cancel, saved }) {
+  const translateLabel = useChannelText();
   const [values, setValues] = useState(() => ({
     name: provider?.name || '', code: provider ? providerCode(provider) : '', sourceType: provider?.sourceType || (provider ? '' : 'thirdParty'),
     logo: provider?.logo || '', introduction: provider?.introduction || '', website: provider?.website || '', documentation: provider?.documentation || '',
@@ -60,7 +62,7 @@ export default function ProviderMaterialProfile({ provider, editing, ops, edit, 
   };
   return <Form className="provider-material-profile" onSubmit={submit}>
     <div className="materials-actions"><Typography.Title heading={5} component="h3">主体信息</Typography.Title>
-      {!editing && <Button disabled={!ops.can} onClick={edit}>编辑</Button>}
+      {!editing && <Button disabled={!ops.can} onClick={edit}>{translateLabel("编辑")}</Button>}
     </div>
     <div className="materials-field-grid">
       {text('name', '服务商名称', { required: true })}
@@ -80,7 +82,7 @@ export default function ProviderMaterialProfile({ provider, editing, ops, edit, 
               disabled={disabled || uploading} onFileChange={uploadLogo}>
               <Button icon={<IconUpload aria-hidden="true"/>} loading={uploading} disabled={disabled}>{values.logo ? '更换图片' : '上传图片'}</Button>
             </Upload>
-            {values.logo && <Button theme="borderless" type="danger" disabled={disabled || uploading} onClick={() => set('logo', '')}>移除图片</Button>}
+            {values.logo && <Button theme="borderless" type="danger" disabled={disabled || uploading} onClick={() => set('logo', '')}>{translateLabel("移除图片")}</Button>}
           </>}
         </Space>
         {editing && <Input aria-label="服务商图标 URL" placeholder="或输入图片 URL" value={values.logo.startsWith('data:') ? '' : values.logo} disabled={disabled || uploading} onChange={value => set('logo', value)}/>}
@@ -98,7 +100,7 @@ export default function ProviderMaterialProfile({ provider, editing, ops, edit, 
     {ops.error && <Notice error>{ops.error}</Notice>}
     {stale && <Notice error>服务商资料已有修订，请重新打开核对。</Notice>}
     {editing && <div className="materials-actions"><Space>
-      <Button disabled={busy} onClick={cancel}>取消</Button>
+      <Button disabled={busy} onClick={cancel}>{translateLabel("取消")}</Button>
       <Button htmlType="submit" theme="solid" loading={busy} disabled={disabled || uploading || !values.name.trim() || !values.code.trim() || !values.sourceType}>{provider ? '保存' : '创建服务商'}</Button>
     </Space></div>}
   </Form>;

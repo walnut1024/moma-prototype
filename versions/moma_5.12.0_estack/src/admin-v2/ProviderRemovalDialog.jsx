@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useState } from 'react';
 import { Banner, Button, Space, Steps, Typography } from '@douyinfe/semi-ui';
 import { AdminModal } from './AdminOverlay';
@@ -16,6 +17,7 @@ export function RemovalButton({ state, ops, target, label = '删除', onRemoved,
 }
 
 export default function ProviderRemovalDialog({ state, ops, target, close, removed, title }) {
+  const translateLabel = useChannelText();
   const [step, setStep] = useState(0), [accepted, setAccepted] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
   let plan, missing;
   try { plan = providerRemovalPlan(state, target); } catch (error) { missing = error.message; }
@@ -35,7 +37,7 @@ export default function ProviderRemovalDialog({ state, ops, target, close, remov
   const cancel = () => { if (!busy) { ops.setError(''); close(); } };
   return <AdminModal visible title={(title || (target.catalogueId ? '删除供应模型' : target.associationIds ? '批量删除上游模型' : channelScope ? '删除上游模型' : '删除服务商')) + (plan ? ' · ' + plan.name : '')}
     width="min(1120px, calc(100vw - 32px))" className="provider-removal-modal" onCancel={cancel} closeOnEsc
-    footer={<Space><Button disabled={busy} onClick={cancel}>取消</Button>{step === 1
+    footer={<Space><Button disabled={busy} onClick={cancel}>{translateLabel("取消")}</Button>{step === 1
       ? <><Button disabled={busy} onClick={() => { setStep(0); setError(''); ops.setError(''); }}>返回检查</Button>
         <Button theme="solid" type="danger" loading={busy} disabled={blocked || stale || !plan?.ready} onClick={() => run('providerRemovalCommit')}>确认删除</Button></>
       : <Button theme="solid" disabled={blocked || !plan?.ready} onClick={() => { setAccepted(plan.signature); setStep(1); }}>下一步：风险确认</Button>}</Space>}>
@@ -65,7 +67,7 @@ export default function ProviderRemovalDialog({ state, ops, target, close, remov
       {plan.ready && <Banner type="success" description="关联检查通过：没有待停服、待停售的模型服务或活动依赖。"/>}
     </> : <>
       <Banner type="warning" description="删除后，该供给将不能再被调用或订购。重新录入后仍需验证、启用供给并重新开售。"/>
-      <dl className="provider-removal-facts"><div><dt>服务商</dt><dd>{plan.provider.name}</dd></div>
+      <dl className="provider-removal-facts"><div><dt>{translateLabel("服务商")}</dt><dd>{plan.provider.name}</dd></div>
         <div><dt>删除范围</dt><dd>{target.catalogueId ? '当前服务商的该上游模型登记及关联上游模型' : channelScope ? '所选上游模型' : '服务商及其全部供给配置'}</dd></div>
         <div><dt>上游模型 / 连接</dt><dd>{plan.associations.length} 条上游模型记录 · {plan.endpoints.length} 个连接</dd></div></dl>
       <Typography.Paragraph>移除模型最后一条接入记录时，同步归档该服务商的上游模型登记。模型资料、模型服务配置、其他服务商、历史价格、订单及审计记录均保留。失去供给的服务保持停服或停售，并显示“连接未接入”。</Typography.Paragraph>

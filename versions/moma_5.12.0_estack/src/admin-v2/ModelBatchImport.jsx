@@ -1,5 +1,7 @@
+import { useChannelText } from './channel-language';
 import Table from './AdminTable';
-import { Banner, Button, Checkbox, Descriptions, RadioGroup, Space, Steps, TextArea, Toast, Typography, Upload } from '@douyinfe/semi-ui';
+import Descriptions from './AdminDescriptions';
+import { Banner, Button, Checkbox, RadioGroup, Space, Steps, TextArea, Toast, Typography, Upload } from '@douyinfe/semi-ui';
 import { useEffect, useRef, useState } from 'react';
 import { IconDownload, IconUpload } from '@douyinfe/semi-icons';
 import { IMPORT_REPORT_HEADERS, MODEL_IMPORT_LIMIT, downloadModelCsv } from './model-import';
@@ -11,11 +13,12 @@ import { MODEL_TYPES } from './model-management';
 import { MODEL_TYPE_LABELS, modelTypeLabel } from '../model-types.mjs';
 
 function ImportHelp() {
+  const translateLabel = useChannelText();
   return <section className="materials-import-help" aria-labelledby="model-import-help-title">
     <Typography.Title heading={5} component="h3" id="model-import-help-title">填写提示</Typography.Title>
     <dl className="materials-import-rules">
       <div><dt>必填信息</dt><dd>模型编码、模型展示名称、模型类型。视觉模型还需填写视觉任务类型：图像或视频。其他字段未知时留空，不用填写 0 或“不支持”。</dd></div>
-      <div><dt>模型编码</dt><dd>以小写字母或数字开头，仅可使用小写字母、数字、点和中划线，最多 80 字符。已有标识不覆盖，同一批次不能重复。</dd></div>
+      <div><dt>{translateLabel("模型编码")}</dt><dd>以小写字母或数字开头，仅可使用小写字母、数字、点和中划线，最多 80 字符。已有标识不覆盖，同一批次不能重复。</dd></div>
       <div><dt>模型作者与系列</dt><dd>填写「模型作者」和「模型系列」页签中的标准名称或别名。填写系列时一并填写所属作者。</dd></div>
       <div><dt>模板与字段</dt><dd>XLSX 模板将必填项排在最前：红色表头为必填，橙色表头为视觉模型必填，其余为选填。模板包含全部资料字段及“填写说明”工作表。可删除不需要的可选列或调整列顺序，请保留原表头；模板示例行请替换或删除。</dd></div>
       <div><dt>多选与能力</dt><dd>多项用“、”分隔。输入与输出模态：{INPUT_MODALITY_OPTIONS.join('、')}。结果类型：{RESULT_TYPE_OPTIONS.join('、')}。流式响应、工具调用等能力填写“支持”或“不支持”，留空表示未填写。</dd></div>
@@ -37,6 +40,7 @@ const jsonDetailLabels = {
 };
 
 export default function ModelBatchImport({ state, ops, transact, close, kind, providerId, builtinCatalogue }) {
+  const translateLabel = useChannelText();
   const [mode, setMode] = useState('table');
   const [jsonText, setJsonText] = useState('');
   const [step, setStep] = useState('input'), [preview, setPreview] = useState([]), [fileName, setFileName] = useState('');
@@ -165,7 +169,7 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
   const startOver = () => { setStep('input'); setError(''); setPreview([]); setResults({}); ops.dirty(json && Boolean(jsonText.trim())); };
   return <div className="materials-import" aria-busy={busy}>
     <Steps type="basic" current={['input', 'preview', 'result'].indexOf(step)}><Steps.Step title={json ? '粘贴 JSON' : '上传表格'}/><Steps.Step title="校验预览"/><Steps.Step title="导入结果"/></Steps>
-    {provider && <Typography.Text strong>服务商 {provider.name}</Typography.Text>}
+    {provider && <Typography.Text strong>{translateLabel("服务商")}{provider.name}</Typography.Text>}
     {(ops.conflict || failed.some(row => row.message.includes('提交结果待确认'))) && <Banner type="warning" description={
       <>请核对最新数据后重试。<Button theme="borderless" disabled={busy} onClick={ops.reload}>载入最新数据</Button></>}/>}
     {step === 'input' ? <>
@@ -222,7 +226,7 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
     </>}
     {error && <Banner type="danger" description={error}/>}
     <div className="materials-actions"><Space wrap>
-      {step === 'input' ? <><Button disabled={busy} onClick={() => close(false)}>取消</Button>
+      {step === 'input' ? <><Button disabled={busy} onClick={() => close(false)}>{translateLabel("取消")}</Button>
         {json && <Button theme="solid" loading={busy} disabled={busy || !ops.can || !jsonText.trim()} onClick={() => readJson()}>校验并预览</Button>}</> : <>
         <Button disabled={busy} onClick={startOver}>{json ? '编辑 JSON' : '重新上传'}</Button>
         {step === 'result'

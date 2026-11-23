@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import MarketCardDialogs from './MarketCardDialogs';
 import { marketCardIndex, marketCardStatus, marketCardStatuses } from '../market-cards.mjs';
 import { modelIdentity, modelServiceIdentity } from '../model-identities.mjs';
@@ -37,12 +38,12 @@ const cardSupplierLimit = 3;
 const viewOptions = [{ label: '列表', value: 'list' }, { label: '卡片', value: 'cards' }];
 const emptyMessage = '没有符合条件的模型卡片';
 const cardCollision = args => args.pointerCoordinates ? pointerWithin(args) : closestCenter(args);
-function scopeLabel(card) {
+function scopeLabel(card, t) {
   if (marketCardStatus(card) === 'withdrawn') return '—';
-  if (card.status === 'preview') return '全部用户';
-  if (card.scope.type === 'all') return '全部用户';
+  if (card.status === 'preview') return t('全部用户');
+  if (card.scope.type === 'all') return t('全部用户');
   return Object.entries({ tenantIds: '租户', organizationIds: '组织', projectIds: '项目' })
-    .flatMap(([key, label]) => card.scope[key]?.length ? [label + '（' + card.scope[key].length + '）'] : []).join('、');
+    .flatMap(([key, label]) => card.scope[key]?.length ? [t(label) + '（' + card.scope[key].length + '）'] : []).join('、');
 }
 
 function CardVisibility({ card }) {
@@ -51,8 +52,9 @@ function CardVisibility({ card }) {
 }
 
 function MarketSupplies({ groups, expandedProviderId = null }) {
-  if (!groups.length) return <Typography.Text type="tertiary">待关联服务商和上游模型</Typography.Text>;
-  return <ul className="market-supplies" aria-label="服务商与上游模型">{groups.map(({ id, name, channels }) => <li key={id || 'missing'}>
+  const translateLabel = useChannelText();
+  if (!groups.length) return <Typography.Text type="tertiary">{translateLabel("待关联服务商和上游模型")}</Typography.Text>;
+  return <ul className="market-supplies" aria-label={translateLabel("服务商与上游模型")}>{groups.map(({ id, name, channels }) => <li key={id || 'missing'}>
     {channels.size ? <Collapse defaultActiveKey={expandedProviderId && id === expandedProviderId ? [id || 'missing'] : []}>
       <AdminCollapsePanel itemKey={id || 'missing'} header={<span className="market-supply-row">
         <span>{name}</span><Typography.Text type="tertiary" size="small">{channels.size} 个上游模型</Typography.Text>
@@ -60,7 +62,7 @@ function MarketSupplies({ groups, expandedProviderId = null }) {
         <ul className="market-channel-names">{[...channels].map(([channelId, label]) => <li key={channelId}>{label}</li>)}</ul>
       </AdminCollapsePanel>
     </Collapse> : <div className="market-supply-row">
-      <Typography.Text>{name}</Typography.Text><Typography.Text type="tertiary" size="small">待关联上游模型</Typography.Text>
+      <Typography.Text>{name}</Typography.Text><Typography.Text type="tertiary" size="small">{translateLabel("待关联上游模型")}</Typography.Text>
     </div>}
   </li>)}</ul>;
 }
@@ -93,6 +95,7 @@ function MarketLogo({ src }) {
 }
 
 function MarketCard({ state, model, position, canReorder, savingOrder, actions, openSupplies }) {
+  const translateLabel = useChannelText();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: model.id, disabled: !canReorder || savingOrder, data: { name: model.name },
   });
@@ -127,18 +130,18 @@ function MarketCard({ state, model, position, canReorder, savingOrder, actions, 
       <Typography.Paragraph className="market-card-description" type="secondary" ellipsis={{ rows: 2, showTooltip: true }}>{source.description || '暂无简介'}</Typography.Paragraph>
       <div className="market-card-facts">
         <dl>
-          <div><dt>输入模态</dt><dd title={profile.inputModalities?.join('、')}><MarketModalities values={profile.inputModalities}/></dd></div>
-          <div><dt>输出模态</dt><dd title={outputs.join('、')}><MarketModalities values={outputs}/></dd></div>
-          <div><dt>上下文长度</dt><dd>{materialContextLabel(context) || '—'}</dd></div>
-          <div><dt>模型作者</dt><dd title={profile.author}>{profile.author || '—'}</dd></div>
-          <div><dt>关联服务</dt><dd>{model.card.linked.length} 个服务</dd></div>
-          <div><dt>可见范围</dt><dd>{scopeLabel(model.card)}</dd></div>
+          <div><dt>{translateLabel("输入模态")}</dt><dd title={profile.inputModalities?.join('、')}><MarketModalities values={profile.inputModalities}/></dd></div>
+          <div><dt>{translateLabel("输出模态")}</dt><dd title={outputs.join('、')}><MarketModalities values={outputs}/></dd></div>
+          <div><dt>{translateLabel("上下文长度")}</dt><dd>{materialContextLabel(context) || '—'}</dd></div>
+          <div><dt>{translateLabel("模型作者")}</dt><dd title={profile.author}>{profile.author || '—'}</dd></div>
+          <div><dt>{translateLabel("关联服务")}</dt><dd>{translateLabel(model.card.linked.length === 1 ? '1 个服务' : '{count} 个服务').replace('{count}', model.card.linked.length)}</dd></div>
+          <div><dt>{translateLabel("可见范围")}</dt><dd>{scopeLabel(model.card, translateLabel)}</dd></div>
         </dl>
         <div className="market-card-supply">
           <div className="market-card-supply-title">
-            <span>服务商与上游模型<small>{groups.length} 家服务商 · {channelCount} 个上游模型</small></span>
+            <span>{translateLabel("服务商与上游模型")}<small>{groups.length} 家服务商 · {channelCount} 个上游模型</small></span>
             {groups.length > 0 && <Button theme="borderless" size="small" aria-label={`查看 ${model.name} 的全部服务商与上游模型`}
-              onClick={event => openSupplies(event, model.id)}>查看全部</Button>}
+              onClick={event => openSupplies(event, model.id)}>{translateLabel("查看全部")}</Button>}
           </div>
           <ul className="market-supplies market-card-supply-preview" aria-label="服务商摘要">
             {groups.length ? groups.slice(0, cardSupplierLimit).map(({ id, name, channels }) => <li key={id || 'missing'}>
@@ -148,7 +151,7 @@ function MarketCard({ state, model, position, canReorder, savingOrder, actions, 
                   <span className="market-channel-count">{channels.size ? `${channels.size} 个上游模型` : '待关联上游模型'} <IconChevronRight size="small" aria-hidden="true"/></span>
                 </span>
               </Button>
-            </li>) : <li className="market-supply-row">待关联服务商和上游模型</li>}
+            </li>) : <li className="market-supply-row">{translateLabel("待关联服务商和上游模型")}</li>}
           </ul>
         </div>
       </div>
@@ -157,6 +160,7 @@ function MarketCard({ state, model, position, canReorder, savingOrder, actions, 
 }
 
 export default function ModelMarket(live) {
+  const t = useChannelText();
   const [demo, setDemo] = useState(null);
   const savedFilters = useRef(null);
   const props = demo ? { ...live, state: demo, conflict: false, transact: action => {
@@ -268,28 +272,28 @@ export default function ModelMarket(live) {
     }
   };
   const actions = (row, inList = false) => <Space wrap={!inList} spacing={inList ? 4 : 8} className={inList ? 'market-list-actions' : undefined}>
-    <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('edit', row.cardId, event.currentTarget)}>编辑信息</Button>
-    <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('link', row.cardId, event.currentTarget)}>关联模型服务</Button>
-    <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('status', row.cardId, event.currentTarget)}>设置可见性</Button>
+    <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('edit', row.cardId, event.currentTarget)}>{t('编辑信息')}</Button>
+    <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('link', row.cardId, event.currentTarget)}>{t('关联模型服务')}</Button>
+    <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('status', row.cardId, event.currentTarget)}>{t('设置可见性')}</Button>
   </Space>;
   return <div className="semi-services sp-workspace">
     <ModelModuleHeading module="market" className="market-heading">
       <Space wrap spacing={12} className="market-heading-actions">
-        <Button theme="light" onClick={toggleDemo}>{demo ? '退出模拟' : '模拟数据'}</Button>
+        <Button theme="light" onClick={toggleDemo}>{t(demo ? '退出模拟' : '模拟数据')}</Button>
         <Button theme="solid" icon={<IconPlus/>} disabled={!ops.can || busy}
-          onClick={event => openCard('create', null, event.currentTarget)}>新建模型卡片</Button>
-        <RadioGroup type="button" aria-label="模型广场视图" options={viewOptions} value={view}
+          onClick={event => openCard('create', null, event.currentTarget)}>{t('新建模型卡片')}</Button>
+        <RadioGroup type="button" aria-label={t("模型广场视图")} options={viewOptions.map(option => ({ ...option, label:t(option.label) }))} value={view}
           onChange={event => go({ view: event.target.value === 'cards' ? 'cards' : null }, { replace: true, preserveScroll: true })}/>
       </Space>
     </ModelModuleHeading>
     {demo && <Notice>模拟数据仅用于当前页面，退出后清除。</Notice>}
     <div className="sp-filters">
-      <Input prefix={<IconSearch aria-hidden="true"/>} showClear aria-label="搜索模型展示名称、模型编码、模型服务 ID 或模型 ID" placeholder="模型展示名称 / 模型编码 / 模型服务 ID / 模型 ID" value={query} onChange={q => changeFilters({ q: q || null })}/>
+      <Input prefix={<IconSearch aria-hidden="true"/>} showClear aria-label={t("搜索模型展示名称、模型编码、模型服务 ID 或模型 ID")} placeholder={t('模型展示名称 / 模型编码 / 模型服务 ID / 模型 ID')} value={query} onChange={q => changeFilters({ q: q || null })}/>
       {filters.map(({ key, label, options }) => <Field key={key} label={label}>
-        <Choice label={`筛选${label}`} value={params.get(key) || 'all'} options={options}
+        <Choice translateOptions label={`筛选${label}`} value={params.get(key) || 'all'} options={options}
           onChange={value => changeFilters({ [key]: value === 'all' ? null : value })}/>
       </Field>)}
-      <Button onClick={() => changeFilters({ q: null, type: null, visibility: null })}>重置筛选</Button>
+      <Button onClick={() => changeFilters({ q: null, type: null, visibility: null })}>{t('重置筛选')}</Button>
     </div>
     {!orderEdit && !cardDialog && ops.error && <Notice error>{ops.error}</Notice>}
     {view === 'cards' ? rows.length ? <>
@@ -306,14 +310,14 @@ export default function ModelMarket(live) {
           if (over && active.id !== over.id) void saveOrder(active.id, positions.get(over.id), cardDragRevision.current);
         }}>
         <SortableContext items={pageRows.map(row => row.id)} strategy={rectSortingStrategy}>
-          <ul className="market-card-grid" aria-label="模型卡片">
+          <ul className="market-card-grid" aria-label={t("模型卡片")}>
             {pageRows.map(row => <MarketCard key={row.id} state={props.state} model={row} position={positions.get(row.id)}
               canReorder={ops.can && pageRows.length > 1} savingOrder={busy} actions={actions(row)} openSupplies={openSupplies}/>)}
           </ul>
         </SortableContext>
       </DndContext>
       <AdminPagination className="market-card-pagination" total={rows.length} pageSize={pageSize} currentPage={currentPage} onPageChange={changePage}/>
-    </> : <Empty description={emptyMessage}/> : <Table className="market-model-table" size="small" rowKey="id" dataSource={pageRows}
+    </> : <Empty description={t(emptyMessage)}/> : <Table className="market-model-table" size="small" rowKey="id" dataSource={pageRows}
       scroll={{ x: '100%' }} pagination={{ pageSize, currentPage, total: rows.length, onPageChange: changePage }} empty={emptyMessage}
       onRow={row => ({
         className: dropTarget === row.id ? 'market-order-target' : undefined,
@@ -335,19 +339,19 @@ export default function ModelMarket(live) {
         <Typography.Text strong ellipsis={{ showTooltip: true }}>{row.name}</Typography.Text>
         {row.canonicalSlug && <CopyId value={row.canonicalSlug} label="模型编码" ellipsis={{ showTooltip: true }}/>}
       </Space> },
-      { title: '类型', width: '8%', render: (_, row) => MODEL_CATALOGUE_TYPES[modelCategory(row.type)] || row.type },
+      { title: '类型', width: '8%', render: (_, row) => t(MODEL_CATALOGUE_TYPES[modelCategory(row.type)] || row.type) },
       { title: '关联服务', width: '12%', render: (_, row) => row.card.linked.length
-        ? <Button size="small" theme="borderless" onClick={event => openCard('link', row.cardId, event.currentTarget)}>{row.card.linked.length} 个服务</Button>
-        : '未关联' },
-      { title: '可见范围', width: '14%', render: (_, row) => scopeLabel(row.card) },
+        ? <Button size="small" theme="borderless" onClick={event => openCard('link', row.cardId, event.currentTarget)}>{t(row.card.linked.length === 1 ? '1 个服务' : '{count} 个服务').replace('{count}', row.card.linked.length)}</Button>
+        : t('未关联') },
+      { title: '可见范围', width: '14%', render: (_, row) => scopeLabel(row.card, t) },
       { title: '可见性', width: '9%', render: (_, row) => <CardVisibility card={row.card}/> },
       { title: '操作', width: 280, render: (_, row) => actions(row, true) },
     ]}/>}
     {cardDialog && (cardDialog.kind === 'create' || cardRow) && <MarketCardDialogs
       key={cardDialog.kind + ':' + cardDialog.cardId} kind={cardDialog.kind} row={cardRow} state={props.state}
       materials={materials} internal={props.internal} ops={ops} close={closeCard} open={openCard}/>}
-    {supplyModel && <Modal title="服务商与上游模型" description={supplyModel.name} wide centered onClose={() => !busy && closeSupplies()}
-      footer={<Button disabled={busy} onClick={closeSupplies}>关闭</Button>}>
+    {supplyModel && <Modal title={t("服务商与上游模型")} description={supplyModel.name} wide centered onClose={() => !busy && closeSupplies()}
+      footer={<Button disabled={busy} onClick={closeSupplies}>{t("关闭")}</Button>}>
       <div className="market-supply-detail">
         <MarketSupplies groups={marketSupplyGroups(props.state, supplyModel)} expandedProviderId={supplyDetail.providerId}/>
         {providerServices(supplyModel).length > 0 && (
@@ -367,9 +371,9 @@ export default function ModelMarket(live) {
       </div>
     </Modal>}
     {orderEdit && <Modal title="调整序号" description={orderEdit.name} onClose={() => !busy && closeOrder()} footer={<>
-      <Button theme="light" disabled={busy} onClick={closeOrder}>取消</Button>
+      <Button theme="light" disabled={busy} onClick={closeOrder}>{t("取消")}</Button>
       <Button loading={busy} disabled={!ops.can || busy || orderChanged || !validPosition || position === positions.get(orderEdit.id)}
-        onClick={async () => { if (await saveOrder(orderEdit.id, position, orderEdit.revision)) closeOrder(); }}>保存</Button>
+        onClick={async () => { if (await saveOrder(orderEdit.id, position, orderEdit.revision)) closeOrder(); }}>{t("保存")}</Button>
     </>}>
       <Field label="新序号">
         <InputNumber aria-label="新序号" autoFocus value={orderEdit.position} disabled={busy || orderChanged}

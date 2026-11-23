@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Checkbox, Input, InputNumber, Space, Typography } from '@douyinfe/semi-ui';
 import { CopyId, GridTable, Row, Cell, Modal, Notice } from './ModelOperationsUI';
@@ -14,6 +15,7 @@ const keyInput = () => ({ id: crypto.randomUUID(), value: '' });
 const keyChangeNames = { append: '追加密钥', replace: '替换整池', rotate: '替换此密钥' };
 
 function CredentialVerification({ endpoint, credential, reload, close }) {
+  const translateLabel = useChannelText();
   const [value, setValue] = useState(''), [proof, setProof] = useState(null), [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -34,7 +36,7 @@ function CredentialVerification({ endpoint, credential, reload, close }) {
     finally { setBusy(false); await reload?.(); }
   };
   return <Modal title="验证身份后查看凭证" description={endpoint.name} onClose={() => !busy && close()}
-    footer={<><Button disabled={busy} onClick={close}>关闭</Button>
+    footer={<><Button disabled={busy} onClick={close}>{translateLabel("关闭")}</Button>
       {!proof && <Button theme="solid" loading={busy} disabled={value.length < 8 || busy} onClick={verify}>验证后查看</Button>}</>}>
     {proof ? <>
       <Notice>验证通过，30 秒后结束查看。本地原型显示凭证摘要。</Notice>
@@ -46,6 +48,7 @@ function CredentialVerification({ endpoint, credential, reload, close }) {
 }
 
 export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, close, directory = false, closeLabel = '关闭', replaceKeyId }) {
+  const translateLabel = useChannelText();
   const candidate = endpoint.candidateConfiguration;
   const active = new Set(connectionKeys(endpoint, provider).map(key => key.id));
   const [rows, setRows] = useState(() => structuredClone(candidate?.config.authMode === 'pool' ? candidate.config.keyPool : endpoint.authMode === 'pool' ? endpoint.keyPool : connectionKeys(endpoint, provider, true).filter(key => !key.revokedAt).map((key, index) => ({ keyId: key.id, priority: index + 1, enabled: active.has(key.id) }))));
@@ -217,7 +220,7 @@ export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, c
         <Cell>{row ? <InputNumber min={1} max={100} aria-label={`密钥 ${key.id} 优先级`} value={row.priority} disabled={disabled}
           onChange={value => change({ priority: Number(value) })}/> : '—'}</Cell>
         <Cell>{row ? <Checkbox aria-label={`密钥 ${key.id} 池内启用`} checked={row.enabled && (!endpoint.poolPaused || pendingEdits || prepared)} disabled={disabled || key.status === 'disabled'}
-          onChange={event => change({ enabled: event.target.checked })}>启用</Checkbox> : '未选用'}
+          onChange={event => change({ enabled: event.target.checked })}>{translateLabel("启用")}</Checkbox> : '未选用'}
           {directory && stopped[key.id] && <small>{stopped[key.id].reason} · {new Date(stopped[key.id].stoppedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</small>}</Cell>
         {directory && <Cell>{receipts.length ? <><div>{passed} / {status.checks.length} 通过</div>{failed && <small>{failed.message || '未通过'}</small>}
           {tokens.length > 0 && <small>检测用量 {tokens.reduce((sum, value) => sum + value, 0)} Token</small>}</> :
@@ -254,21 +257,21 @@ export default function ChannelKeyPoolEditor({ state, provider, endpoint, ops, c
       {(status.credentialError || status.reason) && <Notice error>{status.credentialError || status.reason}</Notice>}
       <Button theme="light" disabled={disabledForWrite} onClick={() => ops.proceed(async () => {
         if (await ops.run('channelCandidateDiscard', context)) close();
-      })}>放弃候选配置</Button>
+      })}>{translateLabel("放弃候选配置")}</Button>
     </>}
     {ops.error && <Notice error>{ops.error}</Notice>}</div>
   </Modal>
   {balanceKey && <ChannelDirectoryBalance state={state} connections={[{ id: endpoint.id, provider, endpoint, name: endpoint.name }]}
     ops={ops} close={() => setBalanceKey(null)} credential={balanceKey}/>}
   {pauseAsk && <Modal title="停用全部密钥" description={endpoint.name} onClose={() => !saving && setPauseAsk(false)}
-    footer={<><Button disabled={saving} onClick={() => setPauseAsk(false)}>取消</Button><Button theme="solid" type="danger" disabled={!ops.can || saving} onClick={pause}>确认停用</Button></>}>
+    footer={<><Button disabled={saving} onClick={() => setPauseAsk(false)}>{translateLabel("取消")}</Button><Button theme="solid" type="danger" disabled={!ops.can || saving} onClick={pause}>确认停用</Button></>}>
     <Notice>此连接的 {impact.mappings.length} 个模型将不可用，涉及 {impact.services.length} 项服务。服务商的共享密钥及其他连接不受影响。</Notice>
     {ops.error && <Notice error>{ops.error}</Notice>}
   </Modal>}
   {verifying && state.currentRole === '平台管理员' && <CredentialVerification endpoint={endpoint} credential={verifying}
     reload={ops.reload} close={() => setVerifying(null)}/>}
   {audit && directory && state.currentRole === '平台管理员' && <Modal wide title="凭证查看审计" description={endpoint.name}
-    onClose={() => setAudit(false)} footer={<Button onClick={() => setAudit(false)}>关闭</Button>}>
+    onClose={() => setAudit(false)} footer={<Button onClick={() => setAudit(false)}>{translateLabel("关闭")}</Button>}>
     <GridTable headings={['凭证 ID', '结果', '操作人', '时间（北京时间）']}
       empty={!state.audits.some(row => row.endpointId === endpoint.id && row.action === '凭证查看身份验证')} emptyMessage="暂无查看记录">
       {state.audits.filter(row => row.endpointId === endpoint.id && row.action === '凭证查看身份验证').slice(0, 30).map(row => <Row key={row.id}>

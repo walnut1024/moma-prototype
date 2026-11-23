@@ -1,4 +1,4 @@
-import { ChannelLanguageContext, channelEnglish } from './admin-v2/channel-language';
+import { channelEnglish } from './admin-v2/channel-language';
 import AdminPageLoading from './admin-v2/AdminPageLoading';
 import {
   IconActivity, IconApartment, IconAppCenter, IconBarChartVStroked, IconBellStroked,
@@ -101,21 +101,13 @@ const overviewShortcuts = ['usage-analysis', 'user-analysis', 'listing-new', 'pr
   id, label: id === 'providers-reference' ? pages[id].areaLabel : pages[id].label, Icon: NAVIGATION_ICONS[pages[id].area],
 }));
 
-const GUIDE_LANGUAGE_KEY = 'moma-5120-admin-guide-language';
+
 
 export default function AdminConsoleV2(props) {
   const license = useDeploymentLicense();
   const [hash,setHash]=useState(location.hash);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [english, setEnglish] = useState(() => {
-    try { return localStorage.getItem(GUIDE_LANGUAGE_KEY) === 'en'; }
-    catch { return false; }
-  });
-  const changeLanguage = value => {
-    setEnglish(value);
-    try { localStorage.setItem(GUIDE_LANGUAGE_KEY, value ? 'en' : 'zh-CN'); }
-    catch { /* The current selection still applies when storage is unavailable. */ }
-  };
+  const { english, changeLanguage } = props;
   useEffect(()=>{const sync=()=>setHash(location.hash);addEventListener('hashchange',sync);return()=>removeEventListener('hashchange',sync);},[]);
   const cloud=/^#\/admin-2\/(listing-new|providers-reference|model-market|model-prices|model-templates|provider-materials|tariff-dictionary)(?:[/?]|$)/.test(hash);
   // Fetch the requested module while its workspace data is loading.
@@ -126,7 +118,7 @@ export default function AdminConsoleV2(props) {
   const packageWorkspace=license?.commercial && /^#\/admin-2\/(?:package-production|package-data)(?:[/?]|$)/.test(hash);
   const area = packageWorkspace ? 'packages' : cloud ? 'models' : 'application';
   if (!license) return <AdminPageLoading label="部署授权"/>;
-  return <ChannelLanguageContext.Provider value={english}><ConfigProvider locale={english && ['providers-reference', 'providers-health', 'global-routing'].includes(pageFromHash(hash)) ? enUS : zhCN}><CloudModelOperations key={area} packageWorkspace={packageWorkspace} applicationWorkspace={!cloud && !packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store} license={license} sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} english={english} changeLanguage={changeLanguage}/>}</CloudModelOperations></ConfigProvider></ChannelLanguageContext.Provider>;
+  return <ConfigProvider locale={english ? enUS : zhCN}><CloudModelOperations key={area} packageWorkspace={packageWorkspace} applicationWorkspace={!cloud && !packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store} license={license} sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} english={english} changeLanguage={changeLanguage}/>}</CloudModelOperations></ConfigProvider>;
 }
 function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sidebarCollapsed,setSidebarCollapsed,english,changeLanguage}) {
   const { state: workspaceState, dispatch: persist, transact, transactModel, transactIndividual, transactAdminAccount, reload, conflict } = store;
@@ -224,21 +216,25 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const detailEnterprise = enterpriseDetailId ? managedEnterpriseTenants(pageState).find(item => item.id === enterpriseDetailId) : null;
   const personalTenant = canVisit && active === 'tenants' ? managedIndividualAccounts(state).find(row => row.tenant.ownerId === detailParams.get('personal'))?.tenant : null;
   const breadcrumbs = !canVisit ? [{ label: '无访问权限' }] : adminBreadcrumbs(active, detailParams, { internal:organizationView, onboardingIntent: state.modelOnboardings.find(row=>row.id===detailParams.get('draft'))?.intent, provider: detailProvider?.name, connection: detailConnection && (detailConnection.name || detailConnection.id), model: detailModel?.serviceName || detailModel?.name, deployment: state.deployments.find(item => item.id === detailParams.get('deployment'))?.name, enterprise: detailEnterprise?.name, personal: personalTenant?.name, customer: detailTenant?.name });
+  const resourceNames = new Set([detailProvider?.name, detailConnection?.name, detailEnterprise?.name,
+    personalTenant?.name, detailTenant?.name, detailModel?.name, detailModel?.serviceName,
+    state.deployments.find(item => item.id === detailParams.get('deployment'))?.name]);
+  const breadcrumbLabel = label => english && !resourceNames.has(label) ? channelEnglish(label) : label;
   const hasAccount = state.admins.some(account => account.id === state.adminSession?.accountId && account.status === '已启用');
   const showPage = hasAccount && canVisit;
   const gatewaySettings = activeArea === 'gateway';
   const renderMenu = collapsed => <nav aria-label="后台导航">{adminSections.filter(group =>
     group.workspace === currentWorkspace || (group.id === 'platform' && state.currentRole === '平台管理员')).map(group => {
       const reason = group.id === 'commerce' && !license.commercial ? '未授权' : '';
-      return <section key={group.id} aria-label={group.title}>
-        {!collapsed && !group.direct && <Typography.Text type="tertiary" size="small">{group.title}{reason && `（${reason}）`}</Typography.Text>}
+      return <section key={group.id} aria-label={english ? channelEnglish(group.title) : group.title}>
+        {!collapsed && !group.direct && <Typography.Text type="tertiary" size="small">{english ? channelEnglish(group.title) : group.title}{reason && `（${reason}）`}</Typography.Text>}
         {group.items
           .filter(item => reason || canAccessPage(state.currentRole, item.children[0][0], license)).map(item => {
           const Icon = NAVIGATION_ICONS[item.id];
           const selected = activeGroup === group.id && activeArea === item.id;
           const target = item.children[0][0];
-          const label = english && ['channels-reference','global-routing'].includes(item.id) ? channelEnglish(item.label) : item.label;
-          const collapsedLabel = (item.id === 'projects' ? `${group.title} · ${label}` : label) + (reason ? `（${reason}）` : '');
+          const label = english ? channelEnglish(item.label) : item.label;
+          const collapsedLabel = (item.id === 'projects' ? `${english ? channelEnglish(group.title) : group.title} · ${label}` : label) + (reason ? `（${reason}）` : '');
           const button = <Button key={item.id} disabled={Boolean(reason)} block icon={<Icon aria-hidden="true"/>} type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'}
             aria-current={selected ? 'page' : undefined} aria-label={collapsed ? collapsedLabel : undefined} onClick={() => navigate(target)}>{collapsed ? null : label}</Button>;
           return collapsed ? <Tooltip key={item.id} content={collapsedLabel} position="right" clickToHide closeOnEsc>{button}</Tooltip> : button;
@@ -246,7 +242,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
       </section>;
     })}</nav>;
   const renderNavigation = (collapsed = false) => <Tabs type="button" size="small" activeKey={currentWorkspace} onChange={switchWorkspace}>
-    {allowedWorkspaces.map(id => <Tabs.TabPane key={id} itemKey={id} tab={WORKSPACES[id]}>{id === currentWorkspace && renderMenu(collapsed)}</Tabs.TabPane>)}
+    {allowedWorkspaces.map(id => <Tabs.TabPane key={id} itemKey={id} tab={english ? channelEnglish(WORKSPACES[id]) : WORKSPACES[id]}>{id === currentWorkspace && renderMenu(collapsed)}</Tabs.TabPane>)}
   </Tabs>;
   useEffect(() => { const media = matchMedia('(min-width: 901px)'); const close = () => { if (media.matches) setNavOpen(false); }; media.addEventListener('change', close); return () => media.removeEventListener('change', close); }, []);
   const alertCount = state.alerts.filter(item => !["已恢复", "已转事件"].includes(item.status)).length;
@@ -279,7 +275,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
         <Button className="admin-nav-toggle" type="tertiary" theme="borderless" icon={<IconMenu aria-hidden="true"/>} aria-label="展开后台导航" aria-haspopup="dialog" aria-expanded={navOpen} onClick={() => setNavOpen(true)}/>
         <div className="admin-breadcrumb">
           <Breadcrumb aria-label="面包屑">{breadcrumbs.map(({ label, href }, index) => (
-            <Breadcrumb.Item key={index} noLink>{href ? <a data-model-list-breadcrumb data-admin-breadcrumb href={href}>{english && (activeArea === 'global-routing' || activeArea === 'channels-reference' && (href || index < 2 || !detailParams.has('connection'))) ? channelEnglish(label) : label}</a> : <span title={english && (activeArea === 'global-routing' || activeArea === 'channels-reference' && (href || index < 2 || !detailParams.has('connection'))) ? channelEnglish(label) : label} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{english && (activeArea === 'global-routing' || activeArea === 'channels-reference' && (href || index < 2 || !detailParams.has('connection'))) ? channelEnglish(label) : label}</span>}</Breadcrumb.Item>
+            <Breadcrumb.Item key={index} noLink>{href ? <a data-model-list-breadcrumb data-admin-breadcrumb href={href}>{breadcrumbLabel(label)}</a> : <span title={breadcrumbLabel(label)} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{breadcrumbLabel(label)}</span>}</Breadcrumb.Item>
           ))}</Breadcrumb>
           {detailTenant && <Typography.Text type="tertiary" size="small" className="us-breadcrumb-meta">{detailTenant.id} · {detailTenant.type} · {detailTenant.status}</Typography.Text>}
         </div>
@@ -292,7 +288,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
         !(active === 'providers-reference' && detailParams.get('connection')) && (
         <Tabs className={activeArea === 'channels-reference' ? 'v2-module-tabs channel-management-tabs' : 'v2-module-tabs'}
           activeKey={active} onChange={activeArea === 'channels-reference' ? id => navigate(channelManagementListRoute(id, new URLSearchParams(location.hash.split('?')[1]))) : navigate}>
-          {activeModule.children.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={english && activeArea === 'channels-reference' ? channelEnglish(label) : label}/>)}
+          {activeModule.children.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={english ? channelEnglish(label) : label}/>)}
         </Tabs>
       )}
       <main data-admin-page={active}>

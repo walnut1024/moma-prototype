@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useId, useLayoutEffect, useEffect, useRef, useState } from 'react';
 import { Card, Select, Tag, Typography } from '@douyinfe/semi-ui';
 import AdminPageHeading from './AdminPageHeading';
@@ -21,6 +22,7 @@ function Status({ enabled, service }) {
 }
 
 export default function ModelLinks() {
+  const translateLabel = useChannelText();
   const [sample, setSample] = useState(0);
   const [index, setIndex] = useState(0);
   const [paths, setPaths] = useState({});
@@ -86,7 +88,7 @@ export default function ModelLinks() {
   const reverse = current?.tone !== 'request';
 
   return <div className="admin-page-stack model-links">
-    <AdminPageHeading title="模型链路"/>
+    <AdminPageHeading title={translateLabel("模型链路")}/>
     <Card className="model-links-card">
       <div className="model-links-toolbar">
         <div><h2>模型服务调用链路</h2><small>模拟配置与请求</small></div>
@@ -133,13 +135,13 @@ export default function ModelLinks() {
                 return <div className="model-links-branch" key={id}>
                   {node(id + '-conversion', <><strong>{native ? '原生转发' : compatible ? '跨接口格式转换' : '缺少转换配置'}</strong>
                     <small>{protocols[input].name}{!native && ' → ' + format}</small></>, captions + (compatible ? '' : ' model-links-unavailable'))}
-                  {node(id + '-channel', <><div className="model-links-node-heading"><strong>连接 {route.channel}</strong><Status enabled={channel.enabled}/></div>
+                  {node(id + '-channel', <><div className="model-links-node-heading"><strong>{translateLabel("连接")}{route.channel}</strong><Status enabled={channel.enabled}/></div>
                     <dl className="model-links-channel-fields">
                       <dt>API Format</dt><dd>{format}</dd>
                       <dt>API Endpoint</dt><dd><code>{endpoint(channel)}</code></dd>
                     </dl></>, captions)}
                   {node(id, <><div className="model-links-node-heading"><code>{route.model}</code><Status enabled={route.enabled}/></div>
-                    <div className="model-links-weights"><span>优先级 {route.priority}</span>
+                    <div className="model-links-weights"><span>{translateLabel("优先级")}{route.priority}</span>
                       <Typography.Text size="small" type={service.weighted ? 'primary' : 'tertiary'}>
                         权重 {route.weight}{!service.weighted && ' · 不生效'}
                       </Typography.Text>
