@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useId, useMemo, useState } from 'react';
 import { Button, Card, Cascader, Select, Space, Tag, Typography } from '@douyinfe/semi-ui';
 import { IconCalendar, IconFilter } from '@douyinfe/semi-icons';
@@ -11,27 +12,29 @@ import { SemiDateRange, SemiMultiPick } from './SemiAnalyticsFilters';
 import { AnalysisHelp } from './AnalysisMetric';
 
 export function ObservationTimeRange({ filters, window, onChange, children }) {
+  const t = useChannelText();
   const custom = filters.period === 'custom';
   const time = window ? observationTime(window.start).slice(0, 16) + ' — ' + observationTime(window.end).slice(0, 16) : '自定义';
   const start = window ? dayOf(window.start) : dayOf(Date.now());
   const end = window ? dayOf(Math.max(window.start, window.end - 1)) : start;
   return <>
-    <FilterPresets items={callPresets} value={filters.period} onChange={period => onChange({ period, start: '', end: '' })}>
-      <SemiDateRange start={start} end={end} maxDays={365} presets={[]} rangeHint="单次最多 365 天"
-        trigger={<Button icon={<IconCalendar aria-hidden="true"/>} aria-pressed={custom} aria-label="自定义日期范围">{custom ? time : '自定义'}</Button>}
+    <FilterPresets label={t('时间筛选')} items={callPresets.map(([id,label]) => [id,t(label)])} value={filters.period} onChange={period => onChange({ period, start: '', end: '' })}>
+      <SemiDateRange start={start} end={end} maxDays={365} presets={[]} rangeHint={t('单次最多 365 天')}
+        trigger={<Button icon={<IconCalendar aria-hidden="true"/>} aria-pressed={custom} aria-label={t('自定义日期范围')}>{custom ? time : t('自定义')}</Button>}
         onChange={dates => onChange({ ...dates, period: 'custom' })}/>
     </FilterPresets>
-    <Typography.Text type="secondary">北京时间</Typography.Text>
-    {window && <AnalysisHelp label="统计时间">{time}</AnalysisHelp>}
+    <Typography.Text type="secondary">{t('北京时间')}</Typography.Text>
+    {window && <AnalysisHelp label={t('统计时间')}>{time}</AnalysisHelp>}
     {children}
   </>;
 }
 
 export function ObservationPick({ dimension, label, rows, filters, onChange }) {
+  const t = useChannelText();
   const options = useMemo(() => observationOptions(rows, dimension), [rows, dimension]);
   const value = filters[dimension] ?? null;
   const selected = (value || []).filter(id => !options.some(item => item.id === id)).map(id => ({ id, name: id }));
-  return <SemiMultiPick compact label={label} items={selected.length ? [...options, ...selected] : options}
+  return <SemiMultiPick compact label={t(label)} items={selected.length ? [...options, ...selected] : options}
     value={value} onChange={ids => onChange({ [dimension]: ids })}/>;
 }
 
@@ -55,6 +58,7 @@ export function ObservationIdentitySearch({ dimension, label, rows, filters, onC
 }
 
 export function ObservationFilterLayout({ primary, actions, children }) {
+  const t = useChannelText();
   const [open, setOpen] = useState(false);
   const id = useId();
   return <>
@@ -62,7 +66,7 @@ export function ObservationFilterLayout({ primary, actions, children }) {
       <FilterToolbar>
         {primary}
         <Button size="small" icon={<IconFilter aria-hidden="true"/>} aria-expanded={open} aria-controls={id}
-          onClick={() => setOpen(value => !value)}>{open ? '收起筛选' : '更多筛选'}</Button>
+          onClick={() => setOpen(value => !value)}>{t(open ? '收起筛选' : '更多筛选')}</Button>
       </FilterToolbar>
       {actions}
     </div>
@@ -113,17 +117,18 @@ function distinguishOptions(nodes) {
 }
 
 export function useObservationSupply(rows, selection) {
+  const t = useChannelText();
   return useMemo(() => {
     const providers = new Map(), channelNames = new Map();
     const add = (provider, channel, providerName, channelName) => {
       const id = providerValue(provider);
       if (!providers.has(id)) {
-        const label = provider == null ? '全部服务商' : keyLabel(provider, '服务商', providerName);
+        const label = provider == null ? t('全部服务商') : keyLabel(provider, t('服务商'), providerName);
         providers.set(id, { value: id, label, channels: new Map() });
       }
       const node = providers.get(id);
       if (channel != null && !node.channels.has(channel)) {
-        const label = keyLabel(channel, '连接', channelName);
+        const label = keyLabel(channel, t('连接'), channelName);
         node.channels.set(channel, { value: channel, label });
       }
     };
@@ -136,7 +141,7 @@ export function useObservationSupply(rows, selection) {
       add(provider, channel, null, provider == null ? channelNames.get(channel) : null);
     }
     const treeData = distinguishOptions([...providers.values()]).map(({ channels, ...node }) => ({
-      ...node, selectedLabel: node.label + '（全部连接）',
+      ...node, selectedLabel: node.label + t('（全部连接）'),
       ...(channels.size > 0 && { children: distinguishOptions([...channels.values()])
         .map(child => ({ ...child, selectedLabel: node.label + ' / ' + child.label })) }),
     }));
@@ -146,11 +151,12 @@ export function useObservationSupply(rows, selection) {
       const node = treeData.find(item => item.value === provider);
       return channel == null ? node.selectedLabel : node.children.find(item => item.value === channel).selectedLabel;
     });
-    return { treeData, value, group: { label: supplyLabel, items } };
-  }, [rows, selection]);
+    return { treeData, value, group: { label: t(supplyLabel), items } };
+  }, [rows, selection, t]);
 }
 
 export function ObservationSupplyPick({ treeData, value, group, onChange }) {
+  const t = useChannelText();
   const [open, setOpen] = useState(false);
   const placeholder = group.items === null ? '全部' : '未选择';
   const change = paths => {
@@ -164,8 +170,8 @@ export function ObservationSupplyPick({ treeData, value, group, onChange }) {
   };
   return <Cascader multiple size="small" motion={false} showClear checkRelation="unRelated" filterLeafOnly={false}
     filterTreeNode={(query, path, node) => (path + ' ' + node.value).toLowerCase().includes(query.trim().toLowerCase())}
-    maxTagCount={1} showRestTagsPopover displayProp="selectedLabel" insetLabel={supplyLabel} aria-label={supplyLabel + '筛选'}
-    placeholder={placeholder} searchPlaceholder={open ? '搜索服务商或连接' : placeholder} emptyContent="无匹配结果"
+    maxTagCount={1} showRestTagsPopover displayProp="selectedLabel" insetLabel={t(supplyLabel)} aria-label={t('服务商 / 连接筛选')}
+    placeholder={t(placeholder)} searchPlaceholder={t(open ? '搜索服务商或连接' : placeholder)} emptyContent={t('无匹配结果')}
     onDropdownVisibleChange={setOpen}
     className="admin-observation-supply" dropdownClassName="admin-observation-supply-menu"
     treeData={treeData} value={value} onChange={change}/>;

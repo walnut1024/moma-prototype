@@ -25,10 +25,10 @@ export function FilterPresets({ label = '时间筛选', value, onChange, items =
   </div>;
 }
 
-export function FilterReset({ onClick }) {
+export function FilterReset({ onClick, label = '重置筛选' }) {
   const admin = useContext(AdminUIContext);
   return <Button type="tertiary" theme="borderless" size={admin ? 'default' : 'small'}
-    className={admin ? undefined : 'filter-reset'} onClick={onClick}>重置筛选</Button>;
+    className={admin ? undefined : 'filter-reset'} onClick={onClick}>{label}</Button>;
 }
 
 export function FilterField({ label, labelId, children, className = '' }) {

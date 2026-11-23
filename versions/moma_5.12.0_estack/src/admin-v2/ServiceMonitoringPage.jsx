@@ -222,18 +222,18 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
       </ObservationTimeRange>
       {!healthPage && <FilterReset onClick={resetFromToolbar}/>}
     </FilterToolbar>
-    <ObservationFilterLayout actions={healthPage ? <FilterReset onClick={resetFromToolbar}/> : undefined} primary={<>
+    <ObservationFilterLayout actions={healthPage ? <FilterReset label={t('重置筛选')} onClick={resetFromToolbar}/> : undefined} primary={<>
       {!healthPage && requestFilters}
       <ObservationSupplyPick {...supply} onChange={change}/>
       <ObservationPick dimension="upstreamModelId" label="上游模型" rows={supplyOptions} filters={filters} onChange={change}/>
       {healthPage && <>
-        <Choice label="状态" size="small" value={statusFilter}
-          options={['', '已启用', '已停用'].map(value => [value, value || '全部状态'])} onChange={setStatusFilter}/>
-        <Choice label="健康状态" size="small" value={healthFilter}
-          options={['', '异常', '健康', '样本不足', '暂无观测'].map(value => [value, value || '全部健康状态'])} onChange={setHealthFilter}/>
+        <Choice label={t('状态')} size="small" value={statusFilter}
+          options={['', '已启用', '已停用'].map(value => [value, t(value || '全部状态')])} onChange={setStatusFilter}/>
+        <Choice label={t('健康状态')} size="small" value={healthFilter}
+          options={['', '异常', '健康', '样本不足', '暂无观测'].map(value => [value, t(value || '全部健康状态')])} onChange={setHealthFilter}/>
       </>}
     </>}>
-      <ObservationFilterGroup label={healthPage ? '请求范围' : '模型与连接'}>
+      <ObservationFilterGroup label={healthPage ? t('请求范围') : '模型与连接'}>
         {healthPage && requestFilters}
         {filtersShown.filter(([dimension]) => !healthPage || dimension !== 'endpoint' || filters.endpoint != null)
           .map(([dimension, label]) => <ObservationPick key={dimension} dimension={dimension} label={label}
@@ -244,7 +244,7 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
   return <div className="admin-page-stack admin-service-monitor">
     <AdminPageHeading title={healthPage ? t('连接健康') : "服务监控"}>
       <Space wrap>
-        <Button theme="light" onClick={toggleSimulation}>{simulation ? '退出模拟' : '模拟数据'}</Button>
+        <Button theme="light" onClick={toggleSimulation}>{t(simulation ? '退出模拟' : '模拟数据')}</Button>
         {!healthPage && monitoringLinks.filter(([id]) => canAccessPage(state.currentRole, id)).map(([id, label]) =>
           <Button key={id} onClick={() => navigate(id)}>{label}</Button>)}
       </Space>

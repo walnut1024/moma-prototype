@@ -1,3 +1,4 @@
+import { useChannelText } from './channel-language';
 import { useEffect, useId, useState } from 'react';
 import { Banner, Button, Checkbox, DatePicker, Input, Popover, Space, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
@@ -12,6 +13,7 @@ const stamp = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padSt
 
 export function SemiDateRange({ start, end, onChange, granularity = 'day', allowLongRange = false, label = '自定义', trigger,
   latest, rangeHint, presets = TIME_PRESETS, maxDays = allowLongRange || granularity === 'week' ? 365 : 30 }) {
+  const t = useChannelText();
   const [open, setOpen] = useState(false);
   const [range, setRange] = useState([start, end]);
   const [narrow, setNarrow] = useState(() => matchMedia('(max-width: 600px)').matches);
@@ -32,23 +34,23 @@ export function SemiDateRange({ start, end, onChange, granularity = 'day', allow
       aria-label={trigger?.props['aria-label'] || '日期范围'} aria-pressed={trigger?.props['aria-pressed']} onClick={launch}>
       {trigger?.props.children || `${label ? label + ' · ' : ''}${start} — ${end}`}
     </Button>
-    {open && <Modal visible title="日期范围" width="min(560px, calc(100vw - 32px))" closeOnEsc maskClosable={false}
-      okText="应用日期" okButtonProps={{ disabled: !valid, 'aria-label': '应用日期' }} cancelButtonProps={{ 'aria-label': '取消' }}
+    {open && <Modal visible title={t('日期范围')} width="min(560px, calc(100vw - 32px))" closeOnEsc maskClosable={false}
+      okText={t('应用日期')} cancelText={t('取消')} okButtonProps={{ disabled: !valid, 'aria-label': t('应用日期') }} cancelButtonProps={{ 'aria-label': t('取消') }}
       onOk={() => { if (valid) { onChange({ start: range[0], end: range[1] }); setOpen(false); } }} onCancel={() => setOpen(false)}>
       <div className="admin-analytics-fields">
         {presets.length > 0 && <Space wrap>{presets.map(([id, name]) => <Button key={id} size="small"
           onClick={() => { const value = usagePreset(id); setRange([value.start, value.end]); }}>{name}</Button>)}</Space>}
         {narrow ? <div className="admin-date-pair">
           {['开始日期', '结束日期'].map((name, index) => <div key={name}>
-            <Text id={`${dateId}-${index}`} type="secondary">{name}</Text>
+            <Text id={`${dateId}-${index}`} type="secondary">{t(name)}</Text>
             <DatePicker aria-labelledby={`${dateId}-${index}`} type="date" onChangeWithDateFirst={false} format="yyyy-MM-dd" value={range[index] || ''}
               onChange={value => setRange(current => index === 0 ? [value || '', current[1] || ''] : [current[0] || '', value || ''])}
-              disabledDate={disabledDate} placeholder={name} zIndex={1200}/>
+              disabledDate={disabledDate} placeholder={t(name)} zIndex={1200}/>
           </div>)}
         </div> : <DatePicker type="dateRange" onChangeWithDateFirst={false} format="yyyy-MM-dd" value={range} onChange={value => setRange(Array.isArray(value) ? value : [])}
-          disabledDate={disabledDate} placeholder={['开始日期', '结束日期']} zIndex={1200}/>}
-        <Paragraph type="secondary">北京时间 · {rangeHint || (allowLongRange ? '单日按小时，2–30 天按日，31–365 天按周'
-          : granularity === 'week' ? '周粒度最多 1 年（365 天）' : `单次最多 ${maxDays} 天`)} · 当日从 00:00 至当前时刻</Paragraph>
+          disabledDate={disabledDate} placeholder={[t('开始日期'), t('结束日期')]} zIndex={1200}/>}
+        <Paragraph type="secondary">{t('北京时间')} · {rangeHint || (allowLongRange ? '单日按小时，2–30 天按日，31–365 天按周'
+          : granularity === 'week' ? '周粒度最多 1 年（365 天）' : `单次最多 ${maxDays} 天`)} · {t('当日从 00:00 至当前时刻')}</Paragraph>
         {latest && <Paragraph type="tertiary">记录截至 {latest}，之后的范围可能暂无数据。</Paragraph>}
         {range.length === 2 && range.every(Boolean) && !valid && <Banner type="danger" closeIcon={null}
           description={range[0] > range[1] ? "结束日期不能早于开始日期。" : `请选择不晚于今天且不超过 ${maxDays} 天的日期范围。`}/>}
@@ -58,6 +60,7 @@ export function SemiDateRange({ start, end, onChange, granularity = 'day', allow
 }
 
 export function SemiMultiPick({ label, value, onChange, items, searchPlaceholder, compact = false, hint }) {
+  const t = useChannelText();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [onlySelected, setOnlySelected] = useState(false);
@@ -77,32 +80,32 @@ export function SemiMultiPick({ label, value, onChange, items, searchPlaceholder
     if (next) { setDraft(value); setQuery(''); setOnlySelected(false); }
   }} content={({ initialFocusRef }) => <div ref={initialFocusRef} tabIndex={-1} className="admin-analytics-picker admin-analytics-fields" aria-label={`${label}多选`}>
     {hint && <Paragraph type="tertiary" size="small">{hint}</Paragraph>}
-    <Input aria-label={`搜索${label}`} placeholder={searchPlaceholder || `搜索${label}名称或 ID`} value={query} onChange={setQuery}/>
+    <Input aria-label={`搜索${label}`} placeholder={searchPlaceholder || t('搜索{label}名称或 ID').replace('{label}',label)} value={query} onChange={setQuery}/>
     <Checkbox checked={allChecked} disabled={!matches.length}
       onChange={event => toggle(matches.map(item => item.id), event.target.checked)}>
-      {query ? `全选搜索结果（${matches.length}）` : `全选全部${label}（${items.length}）`}
+      {query ? t('全选搜索结果（{count}）').replace('{count}',matches.length) : t('全选全部{label}（{count}）').replace('{label}',label).replace('{count}',items.length)}
     </Checkbox>
     <Space wrap>
-      <Text type="secondary">已选择 {selectedIds.length} 项</Text>
-      <Button size="small" theme="borderless" aria-pressed={onlySelected} onClick={() => setOnlySelected(!onlySelected)}>仅看已选</Button>
-      <Button size="small" theme="borderless" disabled={!selectedIds.length} onClick={() => setDraft([])}>清空</Button>
+      <Text type="secondary">{t('已选择 {count} 项').replace('{count}', selectedIds.length)}</Text>
+      <Button size="small" theme="borderless" aria-pressed={onlySelected} onClick={() => setOnlySelected(!onlySelected)}>{t('仅看已选')}</Button>
+      <Button size="small" theme="borderless" disabled={!selectedIds.length} onClick={() => setDraft([])}>{t('清空')}</Button>
     </Space>
     <div className="admin-analytics-options">
       {visible.map(item => <Checkbox key={item.id} checked={selected.has(item.id)}
         onChange={event => toggle([item.id], event.target.checked)}>{item.name}</Checkbox>)}
-      {!visible.length && <Text type="secondary">无匹配结果</Text>}
+      {!visible.length && <Text type="secondary">{t('无匹配结果')}</Text>}
     </div>
     <div className="admin-analytics-picker-footer">
-      <Text type="secondary">共 {visible.length} 项{onlySelected ? '（已选）' : query ? '（搜索结果）' : ''}</Text>
+      <Text type="secondary">{t('共 {count} 项').replace('{count}',visible.length)}{t(onlySelected ? '（已选）' : query ? '（搜索结果）' : '')}</Text>
       <Space>
-        <Button size="small" onClick={() => { setDraft(value); setOpen(false); }}>取消</Button>
+        <Button size="small" onClick={() => { setDraft(value); setOpen(false); }}>{t('取消')}</Button>
         <Button size="small" theme="solid" onClick={() => { onChange(selectedIds.length === items.length ? null : selectedIds); setOpen(false); }}>
-          确定（{selectedIds.length}）
+          {t('确定')} ({selectedIds.length})
         </Button>
       </Space>
     </div>
   </div>}>
     <Button size={compact ? 'small' : 'default'} icon={<IconChevronDown aria-hidden="true"/>} iconPosition="right"
-      aria-label={`${label}筛选`} aria-expanded={open}>{compact ? `${label}：${value === null ? '全部' : value.length + '个'}` : display}</Button>
+      aria-label={`${label}筛选`} aria-expanded={open}>{compact ? t('{label}：{selection}').replace('{label}',label).replace('{selection}',value === null ? t('全部') : t('{count}个').replace('{count}',value.length)) : display}</Button>
   </Popover>;
 }

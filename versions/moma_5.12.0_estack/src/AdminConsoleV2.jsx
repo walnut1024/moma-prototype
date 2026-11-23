@@ -117,7 +117,7 @@ export default function AdminConsoleV2(props) {
   const packageWorkspace=license?.commercial && /^#\/admin-2\/(?:package-production|package-data)(?:[/?]|$)/.test(hash);
   const area = packageWorkspace ? 'packages' : cloud ? 'models' : 'application';
   if (!license) return <AdminPageLoading label="部署授权"/>;
-  return <ChannelLanguageContext.Provider value={english}><ConfigProvider locale={english && ['providers-reference', 'providers-health'].includes(pageFromHash(hash)) ? enUS : zhCN}><CloudModelOperations key={area} packageWorkspace={packageWorkspace} applicationWorkspace={!cloud && !packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store} license={license} sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} english={english} changeLanguage={changeLanguage}/>}</CloudModelOperations></ConfigProvider></ChannelLanguageContext.Provider>;
+  return <ChannelLanguageContext.Provider value={english}><ConfigProvider locale={english && ['providers-reference', 'providers-health', 'global-routing'].includes(pageFromHash(hash)) ? enUS : zhCN}><CloudModelOperations key={area} packageWorkspace={packageWorkspace} applicationWorkspace={!cloud && !packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store} license={license} sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} english={english} changeLanguage={changeLanguage}/>}</CloudModelOperations></ConfigProvider></ChannelLanguageContext.Provider>;
 }
 function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sidebarCollapsed,setSidebarCollapsed,english,changeLanguage}) {
   const { state: workspaceState, dispatch: persist, transact, transactModel, transactIndividual, transactAdminAccount, reload, conflict } = store;
@@ -228,7 +228,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
           const Icon = NAVIGATION_ICONS[item.id];
           const selected = activeGroup === group.id && activeArea === item.id;
           const target = item.children[0][0];
-          const label = english && item.id === 'channels-reference' ? channelEnglish(item.label) : item.label;
+          const label = english && ['channels-reference','global-routing'].includes(item.id) ? channelEnglish(item.label) : item.label;
           const collapsedLabel = (item.id === 'projects' ? `${group.title} · ${label}` : label) + (reason ? `（${reason}）` : '');
           const button = <Button key={item.id} disabled={Boolean(reason)} block icon={<Icon aria-hidden="true"/>} type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'}
             aria-current={selected ? 'page' : undefined} aria-label={collapsed ? collapsedLabel : undefined} onClick={() => navigate(target)}>{collapsed ? null : label}</Button>;
@@ -270,7 +270,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
         <Button className="admin-nav-toggle" type="tertiary" theme="borderless" icon={<IconMenu aria-hidden="true"/>} aria-label="展开后台导航" aria-haspopup="dialog" aria-expanded={navOpen} onClick={() => setNavOpen(true)}/>
         <div className="admin-breadcrumb">
           <Breadcrumb aria-label="面包屑">{breadcrumbs.map(({ label, href }, index) => (
-            <Breadcrumb.Item key={index} noLink>{href ? <a data-model-list-breadcrumb data-admin-breadcrumb href={href}>{english && activeArea === 'channels-reference' && (href || index < 2 || !detailParams.has('connection')) ? channelEnglish(label) : label}</a> : <span title={english && activeArea === 'channels-reference' && (href || index < 2 || !detailParams.has('connection')) ? channelEnglish(label) : label} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{english && activeArea === 'channels-reference' && (href || index < 2 || !detailParams.has('connection')) ? channelEnglish(label) : label}</span>}</Breadcrumb.Item>
+            <Breadcrumb.Item key={index} noLink>{href ? <a data-model-list-breadcrumb data-admin-breadcrumb href={href}>{english && (activeArea === 'global-routing' || activeArea === 'channels-reference' && (href || index < 2 || !detailParams.has('connection'))) ? channelEnglish(label) : label}</a> : <span title={english && (activeArea === 'global-routing' || activeArea === 'channels-reference' && (href || index < 2 || !detailParams.has('connection'))) ? channelEnglish(label) : label} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{english && (activeArea === 'global-routing' || activeArea === 'channels-reference' && (href || index < 2 || !detailParams.has('connection'))) ? channelEnglish(label) : label}</span>}</Breadcrumb.Item>
           ))}</Breadcrumb>
           {detailTenant && <Typography.Text type="tertiary" size="small" className="us-breadcrumb-meta">{detailTenant.id} · {detailTenant.type} · {detailTenant.status}</Typography.Text>}
         </div>
