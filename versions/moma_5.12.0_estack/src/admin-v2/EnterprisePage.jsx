@@ -12,6 +12,7 @@ import { encodeAuthPassword } from '../auth-state.mjs';
 import { accountDataSource, accountDataSourceLabel, accountDataSourceOptions } from './account-data-source';
 import { EnterpriseDialog, EnterpriseFacts, EnterpriseStatus, EnterpriseTable } from './EnterpriseUI';
 import EnterpriseDetails from './EnterpriseDetails';
+import { adminProjectHref } from './access-control.mjs';
 import EnterpriseStatusDialog from './EnterpriseStatusDialog';
 import { countries, chinaRegions, industries, changeEnterpriseLocation } from './enterprise-options';
 
@@ -73,7 +74,12 @@ function EnterpriseEditor({ state, tenant, kind, deploymentMode, apply, close, c
   const provinceOptions = regions.length ? regions.map(region => ({ value: region.name, label: region.name })) : regionLoaded ? [{ value: '不适用', label: '不适用（无省份/州）' }] : [];
   const cities = regions.find(region => region.name === form.province)?.cities || [];
   const locationChange = (key, value) => { setForm(current => changeEnterpriseLocation(current, key, value)); setDirty(true); setError(''); };
-  const candidates = state.users.filter(user => user.status === '正常' && `${user.name} ${user.login}`.toLowerCase().includes(query.toLowerCase()));
+  const accountQuery = query.trim().toLowerCase();
+  const tenantMemberIds = new Set(state.memberships.filter(member => member.tenantId === tenant?.id && member.status === '正常')
+    .map(member => member.userId));
+  const candidates = state.users.filter(user => user.status === '正常' && (accountQuery
+    ? `${user.name} ${user.login}`.toLowerCase().includes(accountQuery)
+    : !addAdmin || tenantMemberIds.has(user.id) && !admins.some(member => member.userId === user.id)));
   const selected = state.users.find(user => user.id === form.userId);
   const sameName = !addAdmin && state.tenants.find(item => item.id !== tenant?.id && item.name.trim() === form.companyName.trim());
   const submit = async event => {
@@ -98,7 +104,7 @@ function EnterpriseEditor({ state, tenant, kind, deploymentMode, apply, close, c
   const formId = useId();
   const buttons = <>
     <Button disabled={busy} onClick={requestClose}>{translateLabel("取消")}</Button>
-    <Button form={formId} htmlType="submit" theme="solid" disabled={!canWrite} loading={busy}>
+    <Button form={formId} htmlType="submit" theme="solid" disabled={!canWrite || !edit && form.accountMode === 'existing' && !selected} loading={busy}>
       {edit ? '保存修改' : addAdmin ? '添加管理员' : '创建并开通'}
     </Button>
   </>;
@@ -177,7 +183,9 @@ function EnterpriseEditor({ state, tenant, kind, deploymentMode, apply, close, c
                 {user.name} · {user.login}{relation && (relation.status === '停用' ? '（已停用）' : '（已是本企业管理员）')}
               </Button>;
             })}
-            {!candidates.length && <Text type="secondary">没有匹配的账号，请调整搜索或创建新账号。</Text>}
+            {!candidates.length && <Text type="secondary">{translateLabel(addAdmin && !accountQuery
+              ? '本企业暂无可选成员，可按姓名或登录账号搜索。'
+              : '没有匹配的账号，请调整搜索或创建新账号。')}</Text>}
           </div>
           {selected && <div className="admin-enterprise-fields">
             <Form.Slot label="已选登录账号"><Text>{selected.name} · {selected.login}</Text></Form.Slot>
@@ -229,7 +237,7 @@ function EnterpriseEditor({ state, tenant, kind, deploymentMode, apply, close, c
     description={addAdmin ? `所属企业：${tenant.name}` : '建立政企主体，并开通首位企业管理员。'}>{content}</EnterpriseDialog>;
 }
 
-export default function EnterprisePage({ state, transact, reload, conflict }) {
+export default function EnterprisePage({ state, transact, conflict }) {
   const translateLabel = useChannelText();
   const [params, setParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
   const [editor, setEditor] = useState(() => state.spacePolicy?.operatingMode !== 'internal' &&
@@ -273,7 +281,7 @@ export default function EnterprisePage({ state, transact, reload, conflict }) {
   const size = normalizePageSize(params.get('size'));
   const page = Math.max(1, Math.min(Math.floor(Number(params.get('page'))) || 1, Math.ceil(rows.length / size) || 1));
   const askToggle = (tenant, member) => setConfirmation({ tenant, member });
-  const open = (item, tab = '') => navigate({ enterprise: item.id, tab, project: '', create: '' });
+  const open = (item, tab = '') => navigate({ enterprise: item.id, tab, create: '' });
   const editing = editor?.kind === 'edit';
   const handover = result ? [
     '【政企租户账号交接信息】', `企业：${result.tenant.name}`, `租户 ID：${result.tenant.id}`, `管理员：${result.user.name}`,
@@ -288,6 +296,7 @@ export default function EnterprisePage({ state, transact, reload, conflict }) {
     <AdminPageHeading title={detailId ? tenant?.name || '租户详情' : '租户管理'}>
       {tenant && <Space wrap>
         <EnterpriseStatus value={tenant.status} enterprise/>
+        <Button disabled={editing} onClick={()=>{location.hash=adminProjectHref({tenant:tenant.id});}}>{translateLabel('查看项目')}</Button>
         <Button type={tenant.status === '停用' ? 'primary' : 'danger'} disabled={!canWrite || editing} onClick={() => askToggle(tenant)}>
           {tenant.status === '停用' ? '解冻租户' : '冻结租户'}
         </Button>
@@ -339,7 +348,7 @@ export default function EnterprisePage({ state, transact, reload, conflict }) {
           onPageChange: value => navigate({ page: String(value) }, true), onPageSizeChange: value => navigate({ size: String(value), page: '' }, true) }}/>
     </Card> : !tenant ? <Banner type="warning" closeIcon={null} description="租户不存在，请返回租户列表。"/> : <>
       {tenant.status === '停用' && <Banner type="warning" closeIcon={null} description="企业账号已冻结，所属成员和资源记录保留。解冻后可继续管理账号。"/>}
-      <EnterpriseDetails key={tenant.id} state={state} tenant={tenant} params={params} navigate={navigate} canWrite={canWrite} transact={transact} reload={reload}
+      <EnterpriseDetails key={tenant.id} state={state} tenant={tenant} params={params} navigate={navigate} canWrite={canWrite} transact={transact}
         setEditor={setEditor} askToggle={askToggle} editing={editing}
         editForm={editing && <EnterpriseEditor key={`edit-${tenant.id}`} inline state={state} tenant={tenant} kind="edit" deploymentMode={deploymentMode}
           apply={apply} canWrite={canWrite} close={() => setEditor(null)} complete={() => { setEditor(null); Toast.success('政企租户信息已保存'); }}/>}/>

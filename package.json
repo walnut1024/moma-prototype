@@ -6,6 +6,7 @@
   "scripts": {
     "dev:5120": "vite --config versions/moma_5.12.0_estack/vite.config.mjs",
     "dev:backend:5120": "node versions/moma_5.12.0_estack/database/dev.js",
+    "dev:tenant-demo:5120": "node versions/moma_5.12.0_estack/database/tenant-demo.js",
     "test:backend:5120": "node --test versions/moma_5.12.0_estack/tests/d1-*.test.mjs",
     "build": "npm run build:5.12.0 && node scripts/prepare-sites-build.mjs",
     "build:5.12.0": "vite build --config versions/moma_5.12.0_estack/vite.config.mjs",

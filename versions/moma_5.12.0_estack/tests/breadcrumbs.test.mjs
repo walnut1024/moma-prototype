@@ -101,9 +101,12 @@ test('section breadcrumbs open a real landing page and current pages remain plai
   assert.equal(build('tenants')[0].href, undefined);
   assert.deepEqual(labels(build('tenants')), ['访问控制', '租户管理']);
   assert.deepEqual(labels(build('tenants', 'scope=organization', { internal: true })), ['访问控制', '租户管理']);
-  const organizationProject = build('projects', 'tenant=test', { internal: true });
-  assert.deepEqual(labels(organizationProject), ['访问控制', '租户管理', '项目管理']);
-  assert.equal(organizationProject[1].href, '#/admin-2/tenants');
+  assert.deepEqual(labels(build('projects','tenant=test',{internal:true})), ['访问控制', '项目管理']);
+  const scopedProject = build('projects','tenant=test&project=p1&tab=members&q=help',{project:'热线项目'});
+  assert.deepEqual(labels(scopedProject), ['访问控制','项目管理','热线项目']);
+  assert.equal(scopedProject[1].href, '#/admin-2/projects?tenant=test&q=help');
+  const allProjects = build('projects','tenant=test&project=p1&fromList=all&tab=keys&page=2',{project:'热线项目'});
+  assert.equal(allProjects[1].href, '#/admin-2/projects?page=2');
   assert.equal(build('deployments')[0].href, '#/admin-2/clusters');
   assert.deepEqual(labels(build('monitoring')), ['网关管理', '服务监控']);
   assert.deepEqual(labels(build('providers-health')), ['模型运营', '模型接入', '连接健康']);

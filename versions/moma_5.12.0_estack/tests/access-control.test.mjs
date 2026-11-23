@@ -5,13 +5,13 @@ import { sections, canAccessPage } from '../src/admin-v2/navigation.mjs';
 import { tenantServiceTransaction } from '../src/admin-v2/tenant-service-settings.mjs';
 
 test('tenant detail links preserve list filters and distinguish accounts from tenants', () => {
-  const href = tenantHref({ id:'personal-space', ownerId:'u1', type:'个人' }, { tab:'projects' }, new URLSearchParams('q=Alice&type=个人&enterprise=old&create=personal'));
+  const href = tenantHref({ id:'personal-space', ownerId:'u1', type:'个人' }, { tab:'models' }, new URLSearchParams('q=Alice&type=个人&enterprise=old&create=personal'));
   const params = new URLSearchParams(href.split('?')[1]);
   assert.equal(params.get('personal'), 'u1');
   assert.equal(params.get('q'), 'Alice');
   assert.equal(params.has('enterprise'), false);
   assert.equal(params.has('create'), false);
-  assert.equal(params.get('tab'), 'projects');
+  assert.equal(params.get('tab'), 'models');
 });
 
 test('user project affiliations stay inside explicit tenant membership', () => {
@@ -24,14 +24,17 @@ test('user project affiliations stay inside explicit tenant membership', () => {
   assert.deepEqual(userAffiliations(state, 'missing'), []);
 });
 
-test('access control owns tenant management while resource pages require the system administrator', () => {
+test('access control lists tenant and project management and keeps operations project reads tenant-scoped', () => {
   const group = sections.find(row => row.title === '访问控制');
-  assert.deepEqual(group.items.map(row => row.children[0]), [['tenants', '租户管理']]);
+  assert.deepEqual(group.items.map(row => row.children[0]), [['tenants', '租户管理'], ['projects', '项目管理']]);
   assert(!sections.find(row => row.id === 'commerce').items.some(row=>row.id==='enterprise'));
   assert.equal(canAccessPage('运营人员', 'tenants'), true);
   assert.equal(canAccessPage('运维人员', 'tenants'), false);
   assert.equal(canAccessPage('运营人员', 'organization-members'), false);
   assert.equal(canAccessPage('平台管理员', 'organization-members'), true);
+  assert.equal(canAccessPage('平台管理员', 'projects'), true);
+  assert.equal(canAccessPage('运营人员', 'projects'), false);
+  assert.equal(canAccessPage('运营人员', 'projects', undefined, new URLSearchParams('tenant=a')), true);
 });
 
 test('opening, limiting and removing a model preserve other models already granted to the tenant', () => {

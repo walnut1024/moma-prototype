@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Checkbox, Input, Modal, Select, Table, TextArea } from '@douyinfe/semi-ui';
 import { PROJECT_ADMIN, PROJECT_MEMBER, projectRoleLabel } from '../project-access.mjs';
 import { departmentPath } from '../organization-data.mjs';
@@ -60,7 +60,7 @@ export function ProjectCreateDialog({ tenant, onClose, onCreated }) {
   </Modal>;
 }
 
-export function ProjectMembers({ tenant, project }) {
+export function ProjectMembers({ tenant, project, adminMembers }) {
   const members = tenant.projectMembers[project.id] || [];
   const canManage = project.canManage && project.status !== '已删除';
   const [choice, setChoice] = useState('');
@@ -80,15 +80,20 @@ export function ProjectMembers({ tenant, project }) {
     finally { setSaving(false); }
   };
   const eligible = members.filter(row => !row.role);
+  const statuses = new Map(adminMembers?.map(row=>[row.id,row]));
   const columns = [
     { title:'成员', render:(_, row) => <span id={'project-member-' + row.id}>{row.name}{row.self ? '（本人）' : ''}</span> },
     { title:'所属部门', render:(_, row) => row.departmentId
       ? departmentPath(tenant.organization.departments, row.departmentId === tenant.organization.rootId ? 'root' : row.departmentId) : '—' },
-    { title:<span id="project-member-role">项目角色</span>, dataIndex:'role', render:(value, row) => canManage
+    { title:<span id="project-member-role">项目角色</span>, dataIndex:'role', render:(value, row) => canManage && !row.inactive
       ? <Select size="small" aria-labelledby={'project-member-' + row.id + ' project-member-role'} value={value}
         optionList={projectRoleOptions} disabled={saving} onChange={value => save(row.id, value)} />
       : projectRoleLabel(value) },
-    ...(canManage ? [{ title:'操作', render:(_, row) => <Button theme="borderless" disabled={saving} onClick={() => {
+    ...(adminMembers ? [
+      { title:'企业成员状态', render:(_,row)=>statuses.get(row.id)?.memberStatus ?? '已启用' },
+      { title:'登录身份状态', render:(_,row)=>statuses.get(row.id)?.loginStatus ?? '已启用' },
+    ] : []),
+    ...(canManage ? [{ title:'操作', render:(_, row) => row.inactive ? '—' : <Button theme="borderless" disabled={saving} onClick={() => {
       setFeedback(null);
       setRemoving({ ...row, options:saveOptions(tenant) });
     }}>移除</Button> }] : []),
@@ -104,7 +109,10 @@ export function ProjectMembers({ tenant, project }) {
       <Button htmlType="submit" theme="solid" disabled={saving || !eligible.some(row => row.id === choice)}>添加成员</Button>
     </form>}
     {feedback && !removing && <p className={feedback.error ? 'project-error' : undefined} role={feedback.error ? 'alert' : 'status'}>{feedback.text}</p>}
-    <Table columns={columns} dataSource={members.filter(row => row.role)} rowKey="id" pagination={false} size="small"
+    <Table columns={columns} dataSource={[
+      ...members.filter(row=>row.role),
+      ...(adminMembers || []).filter(row=>row.inactive && !members.some(member=>member.id===row.id)),
+    ]} rowKey="id" pagination={false} size="small"
       scroll={{x:500}} empty="暂无项目成员" />
     <Modal visible={Boolean(removing)} title="移除项目成员" maskClosable={false} closable={!saving} closeOnEsc={!saving}
       onCancel={() => setRemoving(null)} onOk={() => save(removing.id,null,removing.options)}
@@ -115,7 +123,7 @@ export function ProjectMembers({ tenant, project }) {
   </section>;
 }
 
-export function ProjectModels({ tenant, project, onExperience }) {
+export function ProjectModels({ tenant, project, onExperience, dirtyRef }) {
   const personal = tenant.identity.spaceId === 'personal';
   const available = new Map();
   for (const service of tenant.projectServices) {
@@ -128,6 +136,12 @@ export function ProjectModels({ tenant, project, onExperience }) {
   const [draft, setDraft] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [saving, setSaving] = useState(false);
+  const dirty = Boolean(draft);
+  useEffect(()=>{
+    if (!dirtyRef || !dirty) return;
+    dirtyRef.current=true;
+    return ()=>{dirtyRef.current=false;};
+  },[dirtyRef,dirty]);
   const permissions = draft?.permissions ?? saved;
   const ids = [...new Set([...available.keys(), ...saved.map(row => row.modelId)])];
   const update = (modelId, permission) => {
@@ -304,7 +318,7 @@ export function ProjectTokenBudget({ tenant, project }) {
   </section>;
 }
 
-export function ProjectSettings({ tenant, project, mode = 'personal' }) {
+export function ProjectSettings({ tenant, project, mode = 'personal', showAudit = true }) {
   const editable = project.canManage && project.status !== '已删除';
   const editingDetails = mode === 'details';
   const fields = mode === 'personal' || editingDetails;
@@ -387,7 +401,7 @@ export function ProjectSettings({ tenant, project, mode = 'personal' }) {
       </>}
       {message}
     </section>}
-    {project.canManage && (mode === 'personal' || mode === 'audit') && <section className="project-panel" aria-label="项目操作记录">
+    {showAudit && project.canManage && (mode === 'personal' || mode === 'audit') && <section className="project-panel" aria-label="项目操作记录">
       <h2>项目操作记录</h2>
       <Table columns={auditColumns} dataSource={audits.slice(0,30)} rowKey="id" pagination={false} size="small"
         scroll={{x:500}} empty="暂无项目操作记录" />

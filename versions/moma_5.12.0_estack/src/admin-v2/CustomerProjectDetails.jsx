@@ -1,22 +1,23 @@
 import { useChannelText } from './channel-language';
-import { customerProject, personalDefaultProject } from '../personal-project.mjs';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { internalSpace } from '../operating-space.mjs';
-import { Banner, Button, Input, Space, Spin, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Input, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
+import { IconArrowLeft, IconSearch } from '@douyinfe/semi-icons';
 import { maskApiKey } from '../api-key-utils.mjs';
 import { DEFAULT_PAGE_SIZE, FilterToolbar, PAGE_SIZES } from '../components/FilterControls';
-import { projectModelEnabled, projectRole } from '../project-access.mjs';
+import { PROJECT_ADMIN, projectModelEnabled, projectRole, projectRoleLabel } from '../project-access.mjs';
 import { projectSpend } from '../project-call.mjs';
 import { activeProjectSpendBudget, millionTokens, PROJECT_BUDGET_PERIODS } from '../project-token-budget.mjs';
 import { EnterpriseDialog, EnterpriseFacts, EnterpriseStatus, EnterpriseTable } from './EnterpriseUI';
-import { Choice } from './ServiceUI';
+import { Choice, CopyId } from './ServiceUI';
 import { customerKeys, customerModelIds, keyProjectAccess, yuanMicros } from './customer-projects.mjs';
 import { enterpriseProjectDepartment } from './enterprise-members';
 import { canAccessPage } from './navigation.mjs';
-import { adminProjectHref } from './access-control.mjs';
+import { tenantHref } from './access-control.mjs';
 import { useTenantData } from '../useTenantData';
-import { ProjectCreateDialog } from '../components/ProjectConfiguration';
+import { ProjectLifecycleDialog, ProjectMembers, ProjectModels, ProjectSettings, ProjectTokenBudget, projectLifecycle } from '../components/ProjectConfiguration';
+import AdminPageHeading from './AdminPageHeading';
+import '../components/project-workspace.css';
 
 const { Text, Title } = Typography;
 const time = value => Number.isFinite(Date.parse(value))
@@ -27,73 +28,53 @@ const budget = project => Object.hasOwn(project,'tokenBudget')
   : project.spendBudget ? yuanMicros(project.spendBudget.amountMicros)
   : project.budget > 0 ? quantity(project.budget, 'Token') : '未配置';
 const owner = (state, project) => state.users.find(row => row.id === project.ownerId)?.name || project.ownerId || '未记录';
-const projectRows = (state, tenant) => state.projects.filter(row => row.tenantId === tenant.id).map(row => {
-  try { return customerProject(state,row) || row; } catch { return row; }
-});
 const links = [
   ['customer-usage-detail', '项目用量', 'customer'],
   ['logs', '调用日志', 'tenant'],
   ['audit-logs', '审计日志', 'tenant'],
 ];
+const projectViews = { overview:'项目概览', members:'项目成员', limits:'预算与限流', keys:'API 密钥' };
 
-export function CustomerProjectKeys({ state, tenant, projectId = '', onProjectChange }) {
+function CustomerProjectKeys({ state, tenant, project }) {
   const translateLabel = useChannelText();
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
   const [inspectId, setInspectId] = useState(null);
-  const projects = projectRows(state, tenant);
-  let scopeError='';
-  if (tenant.type === '个人') {
-    try {
-      const fixed=personalDefaultProject(state,tenant.id);
-      if(projectId && projectId !== fixed.id) throw Error('项目不存在或不属于当前租户。');
-      projectId=fixed.id;
-    } catch(error) { scopeError=error.message; }
-  }
-  const byProject = new Map(projects.map(project => [project.id, project]));
-  const keys = customerKeys(state, tenant.id);
+  const keys = customerKeys(state, tenant.id).filter(key=>key.projectId===project.id);
   const allowedModels = customerModelIds(state, tenant.id);
   const byModel = new Map(state.models.map(model => [model.id, model.name]));
-  const rows = keys.filter(key => (!projectId || key.projectId === projectId) &&
-    `${key.name} ${key.keyId}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const rows = keys.filter(key => `${key.name} ${key.keyId}`.toLowerCase().includes(query.trim().toLowerCase()));
   const current = Math.max(1, Math.min(page, Math.ceil(rows.length / size) || 1));
   const inspect = keys.find(key => key.id === inspectId);
-  const access = key => keyProjectAccess(tenant, byProject.get(key.projectId), key, allowedModels);
+  const access = key => keyProjectAccess(tenant, project, key, allowedModels);
   const inspectedAccess = inspect && access(inspect);
   const keyGrant = inspect && state.grants.find(row => row.subjectType === 'key' && row.subjectId === inspect.id && row.status === '生效中');
   const modelNames = ids => (ids || []).map(id => byModel.get(id) || id).join('、') || '无';
-  const columns = ['API 密钥名称 / ID', 'API 密钥', ...(onProjectChange ? ['所属项目'] : []),
+  const columns = ['API 密钥名称 / ID', 'API 密钥',
     '可用模型范围', 'API 密钥状态', '有效期', '操作'];
-  if (scopeError) return <Banner type="warning" closeIcon={null} description={scopeError}/>;
   return <>
-    <Title heading={5} component="h2">{translateLabel("API 密钥")}</Title>
     <FilterToolbar>
       <Input className="admin-list-search" aria-label="搜索 API 密钥" placeholder="API 密钥名称或完整 ID" showClear
         prefix={<IconSearch aria-hidden="true"/>} value={query} onChange={value => { setQuery(value); setPage(1); }}/>
-      {onProjectChange && <Choice label="所属项目" value={projectId} options={[[ '', '全部项目' ],
-        ...projects.map(project => [project.id, project.name]),
-        ...(projectId && !byProject.has(projectId) ? [[projectId, '项目归属异常']] : [])]}
-        onChange={value => { onProjectChange(value); setInspectId(null); setPage(1); }}/>}
     </FilterToolbar>
-    {projectId && !byProject.has(projectId) ? <Banner type="warning" closeIcon={null} description="项目不存在或不属于当前租户。"/>
-      : <EnterpriseTable minWidth={880} columns={columns} empty="暂无匹配的 API 密钥"
+    <EnterpriseTable minWidth={760} columns={columns} empty="暂无匹配的 API 密钥"
         rows={rows.slice((current - 1) * size, current * size).map(key => {
           const { models, reason } = access(key);
           return { id:key.id, cells:[
             <div className="admin-table-record"><Text>{key.name}</Text><Text type="secondary" size="small">{key.keyId}</Text></div>,
-            maskApiKey(key.secretPreview), ...(onProjectChange ? [byProject.get(key.projectId)?.name || '归属异常'] : []),
+            maskApiKey(key.secretPreview),
             reason ? '不可用' : models.length + ' 个',
             <EnterpriseStatus value={key.status}/>, key.expiresAt ? time(key.expiresAt) : '长期有效',
             <Button size="small" theme="borderless" aria-label={'查看 '+key.name+' 密钥详情'} onClick={()=>setInspectId(key.id)}>{translateLabel("详情")}</Button>,
           ] };
         })}
         pagination={{ currentPage:current, pageSize:size, total:rows.length, pageSizeOpts:PAGE_SIZES, showTotal:true, showSizeChanger:true,
-          onPageChange:setPage, onPageSizeChange:value => { setSize(value); setPage(1); } }}/>}
+          onPageChange:setPage, onPageSizeChange:value => { setSize(value); setPage(1); } }}/>
     {inspect && <EnterpriseDialog title="API 密钥详情" description={inspect.name} close={() => setInspectId(null)}
       footer={<Button onClick={() => setInspectId(null)}>{translateLabel("关闭")}</Button>}>
       <EnterpriseFacts rows={[
-        ['API 密钥 ID', inspect.keyId], ['所属项目', byProject.get(inspect.projectId)?.name || '归属异常'],
+        ['API 密钥 ID', inspect.keyId], ['所属项目', project.name],
         ['API 密钥状态', <EnterpriseStatus value={inspect.status}/>], ['有效期', inspect.expiresAt ? time(inspect.expiresAt) : '长期有效'],
         ['Key 配置模型', modelNames(inspect.modelIds)], ['可用模型范围', inspectedAccess.reason ? '无' : modelNames(inspectedAccess.models)],
         ['调用条件', inspectedAccess.reason || '受额度、限流、订购及网关规则约束'],
@@ -108,69 +89,97 @@ export function CustomerProjectKeys({ state, tenant, projectId = '', onProjectCh
   </>;
 }
 
-export function EnterpriseProjectTable({ state, tenant, projects, onProject, onKeys, pagination, empty = "该租户尚无项目" }) {
-  const available = customerModelIds(state,tenant.id);
+export function AdminProjectTable({ state, tenants, projects, onProject, pagination, empty }) {
+  const available = new Map();
+  const byTenant = new Map(tenants.map(tenant=>[tenant.id,tenant]));
   const keyCounts = new Map();
-  for (const key of customerKeys(state, tenant.id)) keyCounts.set(key.projectId, (keyCounts.get(key.projectId) || 0) + 1);
-  return <EnterpriseTable pagination={pagination} minWidth={990} columns={['项目名称 / ID', '所属部门', '负责人',
-    '项目预算', '可用模型数', 'API 密钥', '创建人', '创建时间', '状态']} empty={empty}
+  for (const key of customerKeys(state)) {
+    const keyScope = key.tenantId + '/' + key.projectId;
+    keyCounts.set(keyScope, (keyCounts.get(keyScope) || 0) + 1);
+  }
+  return <EnterpriseTable pagination={pagination} minWidth={1160} columns={[
+    {title:'项目名称 / ID',width:210}, {title:'所属租户',width:124}, {title:'所属部门',width:144}, {title:'负责人',width:92},
+    {title:'项目预算',width:102}, {title:'可用模型数',width:96}, {title:'API 密钥',width:88},
+    {title:'创建人',width:85}, {title:'创建时间',width:158}, {title:'状态',width:82},
+  ]} empty={empty}
     rows={projects.map(project => {
-      const keyCount = keyCounts.get(project.id) || 0;
+      const tenant = byTenant.get(project.tenantId);
+      const keyCount = keyCounts.get(project.tenantId + '/' + project.id) || 0;
+      if (!available.has(project.tenantId)) available.set(project.tenantId, customerModelIds(state,project.tenantId));
       return {id:project.id,cells:[
-        <div className="admin-table-record"><Button size="small" theme="borderless" onClick={()=>onProject(project.id)}>
+        <div className="admin-table-record"><Button size="small" theme="borderless" onClick={()=>onProject(project)}>
           {project.name}</Button><Text size="small" type="secondary">{project.id}</Text></div>,
-        enterpriseProjectDepartment(state,project), owner(state,project), budget(project),
-        project.status==='正常' ? [...available].filter(modelId=>projectModelEnabled(project,modelId)).length : 0,
+        tenant.name,
+        tenant.type==='个人' ? '—' : enterpriseProjectDepartment(state,project), owner(state,project), budget(project),
+        project.status==='正常' ? [...available.get(project.tenantId)].filter(modelId=>projectModelEnabled(project,modelId)).length : 0,
         keyCount ? <Button size="small" theme="borderless" aria-label={'查看 '+project.name+' 的 API 密钥'}
-          onClick={()=>onKeys(project.id)}>{keyCount} 个</Button> : '0 个',
+          onClick={()=>onProject(project,'keys')}>{keyCount} 个</Button> : '0 个',
         project.createdBy || '未记录', time(project.createdAt), <EnterpriseStatus value={project.status}/>,
       ]};
     })}/>;
 }
 
-function TenantProjectCreate({ tenantId, onClose, onCreated }) {
-  const translateLabel = useChannelText();
-  const tenant = useTenantData({adminTenantId:tenantId});
-  if (tenant.identity && tenant.canCreateProject) return <ProjectCreateDialog tenant={tenant} onClose={onClose} onCreated={onCreated}/>;
-  return <EnterpriseDialog title="新建项目" close={onClose} footer={<Button onClick={onClose}>{translateLabel("取消")}</Button>}>
-    {tenant.error || tenant.identity
-      ? <Banner type="warning" closeIcon={null} description={tenant.error || '当前租户不可新建项目'}/>
-      : <Spin spinning aria-label="正在加载租户项目配置"/>}
+function ProjectAdministratorDialog({ tenant, project, close, onSaved }) {
+  const t = useChannelText();
+  const [selection, setSelection] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const accounts = new Map(tenant.organization.members.map(row=>[row.id,row.account]));
+  const choices = (tenant.projectMembers[project.id] || []).filter(row=>row.role!==PROJECT_ADMIN)
+    .map(row=>[row.id,[row.name,accounts.get(row.id)].filter(Boolean).join(' · ')]);
+  const selected = choices.some(([id])=>id===selection?.memberId);
+  const dismiss = () => { if (!saving) close(); };
+  async function save() {
+    if (saving || !selected) return;
+    setSaving(true);
+    setError('');
+    try {
+      const { memberId, ...options } = selection;
+      await tenant.updateProject(project.id,'members',{memberId,role:PROJECT_ADMIN},options);
+    } catch (issue) {
+      setError(issue.message);
+      setSaving(false);
+      return;
+    }
+    onSaved();
+  }
+
+  return <EnterpriseDialog title={t('指定项目管理员')} description={project.name} close={dismiss} closeOnEsc={!saving}
+    footer={<>
+      <Button onClick={dismiss} disabled={saving}>{t('取消')}</Button>
+      {!!choices.length && <Button theme="solid" onClick={()=>void save()} loading={saving} disabled={!selected}>{t('确认指定')}</Button>}
+    </>}>
+    {choices.length ? <Choice label="选择企业成员" placeholder={t('选择企业成员')} filter showClear disabled={saving}
+      options={choices} value={selection?.memberId} onChange={memberId=>{
+        setSelection(memberId ? {memberId,expectedRevision:tenant.revision,identityKey:tenant.identity.key} : null);
+        setError('');
+      }}/> : <Text type="secondary">{t('暂无可指定的企业成员')}</Text>}
+    {error && <Banner type="danger" closeIcon={null} description={error}/>}
   </EnterpriseDialog>;
 }
 
-export default function CustomerProjectDetails({ state, tenant, projectId, navigate, manageProjects, createProjects, reload }) {
-  const [creating,setCreating] = useState(false);
-  const projects = projectRows(state, tenant);
+export default function CustomerProjectDetails({ state, tenant, project, tab, onTabChange, back, canWrite, reload, dirtyRef }) {
+  const translateLabel = useChannelText();
+  const [assigning,setAssigning] = useState(false);
+  const [lifecycle,setLifecycle] = useState('');
+  const assignTrigger = useRef(null);
   const enterprise = tenant.type !== '个人';
-  if (!enterprise) {
-    try {
-      const fixed = personalDefaultProject(state,tenant.id);
-      if (projectId && projectId !== fixed.id) return <Banner type="warning" closeIcon={null} description="项目不存在或不属于当前租户。"/>;
-      projectId = fixed.id;
-    } catch (error) { return <Banner type="warning" closeIcon={null} description={error.message}/>; }
-  }
-  if (!projectId) {
-    return <>
-      <div className="admin-page-heading">
-        <Title heading={5} component="h2">项目列表</Title>
-        {createProjects && <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} onClick={()=>setCreating(true)}>新建项目</Button>}
-      </div>
-      <EnterpriseProjectTable state={state} tenant={tenant} projects={projects}
-        onProject={project => navigate({ project })} onKeys={project => navigate({ tab:'keys', project })}/>
-      {creating && <TenantProjectCreate tenantId={tenant.id} onClose={()=>setCreating(false)}
-        onCreated={()=>{
-          setCreating(false);
-          Toast.success('项目已创建');
-          void reload();
-        }}/>}
-    </>;
-  }
-  const project = projects.find(row => row.id === projectId);
-  if (!project) return <>
-    <Button onClick={() => navigate({ project:'' })}>返回项目列表</Button>
-    <Banner type="warning" closeIcon={null} description="项目不存在或不属于当前租户。"/>
-  </>;
+  const canConfigure = canWrite && ['正常','需关注'].includes(tenant.status) && project.status!=='已删除';
+  const workspace = useTenantData({adminTenantId:tenant.id,enabled:canConfigure});
+  const current = canConfigure && workspace.projects.find(row=>row.id===project.id && row.canManage && row.status!=='已删除');
+  const editor = {
+    ...workspace,
+    updateProject:async (...args)=>{
+      const result = await workspace.updateProject(...args);
+      void reload();
+      return result;
+    },
+  };
+  const canAssign = enterprise && current;
+  const closeAssignment = () => {
+    setAssigning(false);
+    requestAnimationFrame(()=>assignTrigger.current?.focus({preventScroll:true}));
+  };
   const allowedModels = customerModelIds(state, tenant.id);
   const models = new Map(state.models.map(model => [model.id, model.name]));
   const permissions = project.inheritsSpaceModels ? [...allowedModels].map(modelId =>
@@ -184,7 +193,7 @@ export default function CustomerProjectDetails({ state, tenant, projectId, navig
       ...(page==='logs' && {view:'requests'}),
     });
     return <Button key={page} onClick={() => window.open('#/admin-2/'+page+'?'+params,'_blank','noopener')}>
-      {internal && page==='customer-usage-detail' ? '项目成本归集' : label}
+      {translateLabel(internal && page==='customer-usage-detail' ? '项目成本归集' : label)}
     </Button>;
   });
   const spendBudget = activeProjectSpendBudget(project);
@@ -193,27 +202,24 @@ export default function CustomerProjectDetails({ state, tenant, projectId, navig
     const role = projectRole(project, { ...member, status:'正常' });
     if (!role) return [];
     const user = state.users.find(row => row.id === member.userId);
-    return [{ id:member.id, cells:[member.memberName || user?.name || member.name || member.userId, role,
-      <EnterpriseStatus value={member.status}/>, user ? <EnterpriseStatus value={user.status}/> : '身份不存在'] }];
+    return [{ id:member.id, name:member.memberName || user?.name || member.name || member.userId, role,
+      inactive:member.status!=='正常' || user?.status!=='正常',
+      memberStatus:<EnterpriseStatus value={member.status}/>, loginStatus:user ? <EnterpriseStatus value={user.status}/> : '身份不存在' }];
   }) : [];
-  return <>
-    <div className="admin-page-heading">
-      <Space wrap>
-        <Title heading={5} component="h2">{project.name}</Title>
-        <EnterpriseStatus value={project.status}/>
-      </Space>
-      <Space wrap>
-        {enterprise && <Button theme="borderless" type="tertiary" onClick={()=>navigate({project:''})}>返回项目列表</Button>}
-        {records}
-        {manageProjects && project.status!=='已删除' && <Button onClick={()=>
-          window.open(adminProjectHref({tenant:tenant.id,project:project.id}),'_blank','noopener')}>配置项目</Button>}
-      </Space>
-    </div>
+  const overview = <div className="admin-tenant-project-facts">
     <EnterpriseFacts rows={[
-      ['项目 ID', project.id], ['项目说明', project.description || '—'], ['负责人', owner(state, project)],
+      ['项目说明', project.description || '—'], ['负责人', owner(state, project)],
       ...(enterprise ? [['所属部门', enterpriseProjectDepartment(state, project)]] : []),
-      ['创建人', project.createdBy || '未记录'], ['创建时间', time(project.createdAt)],
-      ['最近更新', time(project.updatedAt)], ['项目预算', budget(project)],
+      ['输入输出留存', project.retainContent ? '已开启' : '仅保存元数据'],
+    ]}/>
+    <EnterpriseFacts rows={[
+      ['项目 ID', <CopyId value={project.id} label="项目 ID" copyAtStart/>],
+      ['创建人', project.createdBy || '未记录'], ['创建时间', time(project.createdAt)], ['最近更新', time(project.updatedAt)],
+    ]}/>
+  </div>;
+  const limits = <div className="admin-analytics-fields">
+    <EnterpriseFacts rows={[
+      ['项目预算', budget(project)],
       ...(project.tokenBudget ? [
         ['预算周期', PROJECT_BUDGET_PERIODS[project.tokenBudget.period]],
         ['项目 TPM', quantity(project.tokenBudget.tpm, 'Tokens/分钟')],
@@ -225,19 +231,73 @@ export default function CustomerProjectDetails({ state, tenant, projectId, navig
         ...(spend.unpriced ? [['未核算调用', quantity(spend.unpriced, '次')]] : []),
         ['预警阈值', quantity(spendBudget.warnAt, '%')],
         ['达到上限后', spendBudget.stop ? '停止按量调用' : '继续调用']] : []),
-      ['输入输出留存', project.retainContent ? '已开启' : '仅保存元数据'],
     ]}/>
-    {enterprise && <>
-      <Title heading={5} component="h2">项目成员</Title>
-      <EnterpriseTable columns={['成员', '项目角色', '企业成员状态', '登录身份状态']} rows={members} empty="暂无明确分配的项目成员"/>
-    </>}
-    <Title heading={5} component="h2">模型权限与限流</Title>
+    <Title heading={6} component="h3">{translateLabel('模型权限与限流')}</Title>
     {(project.inheritsSpaceModels || project.modelPermissions == null) && <Text type="secondary">继承租户模型授权</Text>}
     <EnterpriseTable columns={['模型', '项目 RPM', '项目 TPM', '授权状态']} empty="暂无已授权的模型"
       rows={permissions.map(({ modelId, rpm, tpm }) => ({ id:modelId, cells:[models.get(modelId) || modelId,
         quantity(rpm, '次/分钟'), quantity(tpm, 'Token/分钟'), project.status !== '正常' ? '项目当前不可用'
           : allowedModels.has(modelId) ? '已授权' : '空间订购、授权或服务状态受限',
       ] }))}/>
-    <CustomerProjectKeys key={project.id} state={state} tenant={tenant} projectId={project.id}/>
-  </>;
+  </div>;
+  const selectedTab = Object.hasOwn(projectViews,tab) && (enterprise || tab!=='members') ? tab : 'overview';
+  const lifecycleActions = current && workspace.canCreateProject ? current.status==='停用' ? ['start','delete'] : ['delete'] : [];
+  return <div className="admin-page-stack">
+    <div>
+      <Button theme="borderless" type="tertiary" icon={<IconArrowLeft aria-hidden="true"/>} onClick={back}>{translateLabel('返回项目列表')}</Button>
+    </div>
+    <AdminPageHeading title={project.name} description={<Text link={{href:tenantHref(tenant)}}>{tenant.name}</Text>}>
+      <Space wrap>
+        <EnterpriseStatus value={project.status}/>
+        {records}
+      </Space>
+    </AdminPageHeading>
+    {canConfigure && workspace.error && <Banner type="warning" closeIcon={null} description={<>
+      {workspace.error} <Button onClick={workspace.reload}>{translateLabel('重试')}</Button>
+    </>}/>}
+    <Card>
+      <Tabs className="admin-tenant-project-tabs" tabPaneMotion={false} keepDOM={false}
+        aria-label={translateLabel('项目详情')} activeKey={selectedTab} onChange={onTabChange}>
+      <Tabs.TabPane itemKey="overview" tab={translateLabel(projectViews.overview)}>
+        {current && enterprise && <div className="admin-tenant-project-actions">
+          <ProjectSettings tenant={editor} project={current} mode="details"/>
+          {lifecycleActions.map(intent=><Button key={intent} type={intent==='delete' ? 'danger' : 'primary'}
+            onClick={()=>setLifecycle(intent)}>{translateLabel(projectLifecycle[intent].label)}</Button>)}
+        </div>}
+        {overview}
+      </Tabs.TabPane>
+      {enterprise && <Tabs.TabPane itemKey="members" tab={translateLabel(projectViews.members)}>
+        <div className="admin-analytics-fields">
+          {canAssign && <div className="admin-tenant-project-actions">
+            <Button theme="solid" onClick={event=>{
+              assignTrigger.current=event.currentTarget;
+              setAssigning(true);
+            }}>{translateLabel('指定项目管理员')}</Button>
+          </div>}
+          {current ? <ProjectMembers tenant={editor} project={current} adminMembers={members}/>
+            : <EnterpriseTable columns={['成员', '项目角色', '企业成员状态', '登录身份状态']} empty="暂无明确分配的项目成员"
+              rows={members.map(row=>({id:row.id,cells:[row.name,translateLabel(projectRoleLabel(row.role)),row.memberStatus,row.loginStatus]}))}/>}
+        </div>
+      </Tabs.TabPane>}
+      <Tabs.TabPane itemKey="limits" tab={translateLabel(projectViews.limits)}>
+        {current ? <div className="admin-analytics-fields">
+          {enterprise ? <ProjectTokenBudget tenant={editor} project={current}/>
+            : <ProjectSettings tenant={editor} project={current} showAudit={false}/>}
+          <Title heading={6} component="h3">{translateLabel('模型权限与限流')}</Title>
+          <ProjectModels tenant={editor} project={current} dirtyRef={dirtyRef}/>
+        </div> : limits}
+      </Tabs.TabPane>
+      <Tabs.TabPane itemKey="keys" tab={translateLabel(projectViews.keys)}>
+        <div className="admin-analytics-fields"><CustomerProjectKeys state={state} tenant={tenant} project={project}/></div>
+      </Tabs.TabPane>
+      </Tabs>
+    </Card>
+    {canAssign && assigning && <ProjectAdministratorDialog tenant={editor} project={current} close={closeAssignment}
+      onSaved={()=>{
+        closeAssignment();
+        Toast.success(translateLabel('项目管理员已指定'));
+      }}/>}
+    {current && lifecycle && <ProjectLifecycleDialog tenant={editor} project={current} intent={lifecycle}
+      onClose={()=>setLifecycle('')} onDone={()=>setLifecycle('')}/>}
+  </div>;
 }

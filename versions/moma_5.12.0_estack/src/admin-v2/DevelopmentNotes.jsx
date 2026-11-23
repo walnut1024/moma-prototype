@@ -29,7 +29,7 @@ export default function DevelopmentNotes({ admin = false }) {
   const supply = area === '模型接入';
   const close = () => { setOpen(false); requestAnimationFrame(() => trigger.current?.focus()); };
   const content = open && (service ? <>
-      {admin && <Paragraph>在「访问控制 → 租户管理」统一办理开户和查阅租户资料。对内直接进入默认企业详情。租户管理员在用户控制台管理组织、成员和项目。系统管理员在后台租户详情管理组织及成员，在「项目」里直接新建项目，点开指定项目后配置或查看记录，并可在「模型授权」按模型添加授权、配置 RPM / TPM 或移除。</Paragraph>}
+      {admin && <Paragraph>在「访问控制 → 租户管理」办理开户、管理组织及成员和授权模型。对内直接进入默认企业详情。系统管理员在「访问控制 → 项目管理」新建项目，并在项目详情管理成员、预算和限流及查看 API 密钥。租户详情的「查看项目」直接筛选本租户，个人租户可打开默认项目。租户管理员在用户控制台管理本租户组织、成员和项目。</Paragraph>}
       {!fresh && <><Heading>统一登录</Heading><Paragraph>个人、企业和后台共用一个登录入口。后台按角色进入运营或运维，各模块共用服务端会话；过期回统一登录并保留有权访问的原地址，无权限时显示拒绝访问。退出和账号切换撤销旧会话。</Paragraph><Heading>模型运营演示包</Heading>
       <Button disabled={mockBusy} onClick={async () => {
         setMockBusy(true);

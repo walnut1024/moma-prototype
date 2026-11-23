@@ -46,6 +46,7 @@ const PackageData = lazy(() => import('./admin-v2/PackageData'));
 const AdminAccounts = lazy(() => import('./admin-v2/AdminAccounts'));
 const AuditLogsPage = lazy(() => import('./admin-v2/AuditLogsPage'));
 const TenantResources = lazy(() => import('./admin-v2/TenantResources'));
+const AdminProjects = lazy(() => import('./admin-v2/AdminProjects'));
 const ModelOperationsGuide = lazy(() => import('./admin-v2/GettingStarted').then(module => ({ default: module.ModelOperationsGuide })));
 const ClusterManagement = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ClusterManagement })));
 const ModelDeployments = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ModelDeployments })));
@@ -177,7 +178,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const lastVisits = useRef({ operations: '#/admin-2/dashboard', maintenance: '#/admin-2/call-analysis' });
   const previousRole = useRef(state.currentRole);
   const allowedWorkspaces = availableWorkspaces(state.currentRole);
-  const canVisit = canAccessPage(state.currentRole, active, license);
+  const canVisit = canAccessPage(state.currentRole, active, license, detailParams);
   const currentWorkspace = allowedWorkspaces.includes(workspace) ? workspace : allowedWorkspaces[0] || 'operations';
   const navigate = id => { setNavOpen(false); location.hash = '/admin-2/' + id; window.scrollTo({ top: 0, behavior: 'instant' }); };
   useEffect(() => {
@@ -185,13 +186,14 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
       const id = pageFromHash(location.hash, state.currentRole), nextWorkspace = pageWorkspace(id);
       const params = new URLSearchParams(location.hash.split('?')[1] || '');
       setNavOpen(false); setActive(id); setDetailParams(params);
-      if (canAccessPage(state.currentRole, id, license)) {
+      if (canAccessPage(state.currentRole, id, license, params)) {
         if (nextWorkspace) { setWorkspace(nextWorkspace); lastVisits.current[nextWorkspace] = location.hash; }
       }
     };
     if (previousRole.current !== state.currentRole) {
       previousRole.current = state.currentRole;
-      if (!canAccessPage(state.currentRole, pageFromHash(location.hash, state.currentRole))) navigate(WORKSPACE_HOME[availableWorkspaces(state.currentRole)[0]] || 'dashboard');
+      const params = new URLSearchParams(location.hash.split('?')[1] || '');
+      if (!canAccessPage(state.currentRole, pageFromHash(location.hash, state.currentRole), license, params)) navigate(WORKSPACE_HOME[availableWorkspaces(state.currentRole)[0]] || 'dashboard');
     }
     // Let page leave guards restore the address before changing the rendered page.
     let pendingHash;
@@ -215,9 +217,12 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const enterpriseDetailId = canVisit && active === 'tenants' ? (organizationView ? organizationTenant?.id : detailParams.get('enterprise')) : null;
   const detailEnterprise = enterpriseDetailId ? managedEnterpriseTenants(pageState).find(item => item.id === enterpriseDetailId) : null;
   const personalTenant = canVisit && active === 'tenants' ? managedIndividualAccounts(state).find(row => row.tenant.ownerId === detailParams.get('personal'))?.tenant : null;
-  const breadcrumbs = !canVisit ? [{ label: '无访问权限' }] : adminBreadcrumbs(active, detailParams, { internal:organizationView, onboardingIntent: state.modelOnboardings.find(row=>row.id===detailParams.get('draft'))?.intent, provider: detailProvider?.name, connection: detailConnection && (detailConnection.name || detailConnection.id), model: detailModel?.serviceName || detailModel?.name, deployment: state.deployments.find(item => item.id === detailParams.get('deployment'))?.name, enterprise: detailEnterprise?.name, personal: personalTenant?.name, customer: detailTenant?.name });
+  const projectTenant = resourceTenant || (organizationView && !detailParams.has('tenant') ? organizationTenant : null);
+  const detailProject = active==='projects' && projectTenant && state.projects.find(row=>row.id===detailParams.get('project') && row.tenantId===projectTenant.id);
+  const projectName = detailProject && (projectTenant.type==='个人' ? '默认项目' : detailProject.name);
+  const breadcrumbs = !canVisit ? [{ label: '无访问权限' }] : adminBreadcrumbs(active, detailParams, { internal:organizationView, onboardingIntent: state.modelOnboardings.find(row=>row.id===detailParams.get('draft'))?.intent, provider: detailProvider?.name, connection: detailConnection && (detailConnection.name || detailConnection.id), model: detailModel?.serviceName || detailModel?.name, deployment: state.deployments.find(item => item.id === detailParams.get('deployment'))?.name, enterprise: detailEnterprise?.name, personal: personalTenant?.name, customer: detailTenant?.name, project:projectName });
   const resourceNames = new Set([detailProvider?.name, detailConnection?.name, detailEnterprise?.name,
-    personalTenant?.name, detailTenant?.name, detailModel?.name, detailModel?.serviceName,
+    personalTenant?.name, detailTenant?.name, detailModel?.name, detailModel?.serviceName, projectName,
     state.deployments.find(item => item.id === detailParams.get('deployment'))?.name]);
   const breadcrumbLabel = label => english && !resourceNames.has(label) ? channelEnglish(label) : label;
   const hasAccount = state.admins.some(account => account.id === state.adminSession?.accountId && account.status === '已启用');
@@ -321,11 +326,11 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === "package-production" ? <PackageProduction state={state} transact={transact} conflict={conflict} params={detailParams} dirty={draftDirty}/>
             : active === 'traffic-limits' ? <TrafficOperations key={state.adminSession.accountId} state={state} dirtyRef={draftDirty}/>
             : active === "tenants" ? <CustomerPage key={organizationView ? 'organization' : 'customers'} state={pageState} transact={transact} transactIndividual={transactIndividual} reload={reload} conflict={conflict} dirtyRef={draftDirty} internal={organizationView}/>
-            : ['organization-members','projects'].includes(active) ? <TenantResources key={[active,resourceTenant?.id,detailParams.get('project')].join(':')}
-              page={active} tenantId={resourceTenant?.id} tenantName={resourceTenant?.name} tab={detailParams.get('tab')}
-              requestedProject={detailParams.get('project')}
-              returnHref={resourceTenant && tenantHref(resourceTenant,active==='projects'
-                ? {tab:'projects',...(detailParams.get('project') && {project:detailParams.get('project')})} : {tab:'organization'})}
+            : active === 'projects' ? <AdminProjects state={pageState} params={detailParams} internal={internalSite}
+              reload={reload} conflict={conflict} dirtyRef={draftDirty}/>
+            : active === 'organization-members' ? <TenantResources key={resourceTenant?.id}
+              tenantId={resourceTenant?.id} tenantName={resourceTenant?.name} tab={detailParams.get('tab')}
+              returnHref={resourceTenant && tenantHref(resourceTenant,{tab:'organization'})}
               onTabChange={tab=>navigate(active + '?' + new URLSearchParams({tenant:resourceTenant.id,tab}))}/>
             : gatewaySettings ? <GatewayPage key={active} pageId={active} state={state} dispatch={dispatch}/>
             : ["providers-health", "monitoring", "logs", "alerts", "incidents", "sla"].includes(active) ? <ObservabilityPage pageId={active} params={detailParams}

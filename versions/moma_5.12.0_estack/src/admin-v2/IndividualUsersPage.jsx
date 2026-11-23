@@ -8,7 +8,8 @@ import { Avatar, Banner, Button, Card, Checkbox, Form, Input, Space, Tabs, TextA
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconSearch } from '@douyinfe/semi-icons';
 import { TenantServiceSettings } from './TenantServiceSettings';
-import CustomerProjectDetails, { CustomerProjectKeys } from './CustomerProjectDetails';
+import { adminProjectHref } from './access-control.mjs';
+import { personalDefaultProject } from '../personal-project.mjs';
 import { PAGE_SIZES, normalizePageSize, FilterReset, FilterToolbar } from '../components/FilterControls';
 import { displayAdminBusinessCopy } from '../display-copy.mjs';
 import AdminPageHeading from './AdminPageHeading';
@@ -222,14 +223,14 @@ function StatusDialog({ account, accounts, role, transact, canWrite, close, comp
   </Modal>;
 }
 
-function UserDetails({ account, state, tab, projectId, navigate, canWrite, transact, setEditor }) {
+function UserDetails({ account, state, tab, navigate, canWrite, transact, setEditor }) {
   const { tenant, user } = account;
   const memberships = state.memberships.filter(member => member.userId === tenant.ownerId)
     .map(member => ({ member, enterprise: state.tenants.find(item => item.id === member.tenantId && ['企业', '政府'].includes(item.type)) }))
     .filter(item => item.enterprise);
   const userId = user?.id || tenant.ownerId;
   return <Card>
-    <Tabs activeKey={tab} onChange={tab => navigate({ tab, project:'' }, true)}>
+    <Tabs activeKey={tab} onChange={tab => navigate({ tab }, true)}>
       {Object.entries(individualTabs).map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={label}/>)}
     </Tabs>
     <div className="admin-analytics-fields">
@@ -258,10 +259,6 @@ function UserDetails({ account, state, tab, projectId, navigate, canWrite, trans
         </>}
       </>}
       {tab==='models' && <TenantServiceSettings state={state} tenant={tenant} section="models" canWrite={canWrite} transact={transact}/>}
-      {tab==='projects' && <CustomerProjectDetails state={state} tenant={tenant} projectId={projectId} navigate={navigate}
-        manageProjects={state.currentRole==='平台管理员' && ['正常','需关注'].includes(tenant.status)}/>}
-      {tab === 'keys' && <CustomerProjectKeys state={state} tenant={tenant} projectId={projectId}
-        />}
     </div>
   </Card>;
 }
@@ -315,13 +312,22 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
   const selectedAccounts = eligible.filter(item => selected.includes(item.tenant.id));
   const selectAll = selectedAccounts.length > 0 && selectedAccounts.length === eligible.length;
   const toggle = (id, checked) => setSelected(current => checked ? [...new Set([...current, id])] : current.filter(value => value !== id));
-  const openAccount = item => navigate({ create:"", personal: item.tenant.ownerId, tab: '', project:'' });
+  const openAccount = item => navigate({ create:"", personal: item.tenant.ownerId, tab: '' });
+  const openDefaultProject = () => {
+    try {
+      const project = personalDefaultProject(state,account.tenant.id);
+      location.hash = adminProjectHref({tenant:account.tenant.id,project:project.id});
+    } catch (error) {
+      Toast.error(error.message);
+    }
+  };
 
   return <div className="admin-page-stack admin-individual-page">
     <AdminPageHeading title={userId ? account ? individualName(account) : '个人租户不存在' : '个人租户'}
       description={userId ? account?.tenant.ownerId : undefined}>
       {account && <Space wrap>
         <AccountStatus tenant={account.tenant}/>
+        <Button onClick={openDefaultProject}>{translateLabel('查看默认项目')}</Button>
         <Button disabled={!canWrite} type={account.tenant.status === '停用' ? 'primary' : 'danger'} onClick={() => setConfirmation(account)}>
           {account.tenant.status === '停用' ? '解冻租户' : '冻结租户'}
         </Button>
@@ -381,11 +387,11 @@ export default function IndividualUsersPage({ state, transact, conflict }) {
       {account.tenant.status === '停用' && <Banner type="warning" closeIcon={null} description={
         `个人租户已冻结，个人空间访问和个人 API 密钥调用受限。${account.tenant.freezeReason ? `原因：${displayAdminBusinessCopy(account.tenant.freezeReason)}` : ''}`
       }/>}
-      <UserDetails key={account.tenant.id} account={account} state={state} tab={tab} projectId={params.get('project') || ''}
+      <UserDetails key={account.tenant.id} account={account} state={state} tab={tab}
         navigate={navigate} canWrite={canWrite} transact={transact} setEditor={setEditing}/>
     </>}
     {opening && <OpenIndividual state={state} transact={transact} canWrite={canWrite} close={()=>{setOpening(false);if(params.has("create"))location.hash="#/admin-2/tenants";}}
-      complete={tenant=>{setOpening(false);Toast.success('个人空间和默认项目已开通');navigate({personal:tenant.ownerId,create:'',tab:'projects',project:''});}}/>}
+      complete={tenant=>{setOpening(false);Toast.success('个人空间和默认项目已开通');navigate({personal:tenant.ownerId,create:'',tab:''});}}/>}
     {editing && account?.user && <UserEditor account={account} transact={transact} canWrite={canWrite} close={() => setEditing(false)} complete={complete}/>}
     {confirmation && <StatusDialog key={confirmation.accounts ? 'bulk' : confirmation.tenant.id} accounts={confirmation.accounts}
       account={confirmation.accounts ? undefined : managedIndividualAccounts(state).find(item => item.tenant.id === confirmation.tenant.id) || confirmation}

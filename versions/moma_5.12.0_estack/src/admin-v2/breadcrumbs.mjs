@@ -1,6 +1,7 @@
 import { channelManagementListRoute, pages, sections } from './navigation.mjs';
 import { TARIFF_KINDS } from './tariff-dictionary.js';
 import { CLASSIFICATION_KINDS, classificationKind } from './model-classification.js';
+import { adminProjectListHref } from './access-control.mjs';
 
 export function adminBreadcrumbs(active, params, names = {}) {
   const page = pages[active];
@@ -71,13 +72,17 @@ export function adminBreadcrumbs(active, params, names = {}) {
       add('用户数据', href('user-analysis', {}, ['customer']));
     }
     add(names.customer || '租户不存在');
-  } else if (['projects','organization-members'].includes(active)) {
+  } else if (active === 'projects') {
+    const detail = params.has('project');
+    add(page.label, detail ? adminProjectListHref(params) : null);
+    if (detail) add(names.project || '项目不存在');
+  } else if (active === 'organization-members') {
     add('租户管理', '#/admin-2/tenants');
     add(page.label);
   } else if (active === 'tenants') {
     const key = params.has('personal') ? 'personal' : 'enterprise';
     add(page.label,
-      params.has(key) ? href(active, {}, [key, 'tab', 'project', 'create']) : null);
+      params.has(key) ? href(active, {}, [key, 'tab', 'create']) : null);
     if (params.has('create')) add('开通租户');
     if (params.has(key)) add(names[key] || '租户不存在');
   } else {

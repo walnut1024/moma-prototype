@@ -12,13 +12,16 @@ test('tenant management is shared and resource management requires the system ad
   const commercialGroup = adminSections.find(row=>row.id==='commerce');
   const access = adminSections.find(row=>row.id==='customers');
   assert.deepEqual(commercialGroup.items.map(row=>row.label), ['模型销售','套餐管理']);
-  assert.deepEqual(access.items.map(row=>row.label), ['租户管理']);
+  assert.deepEqual(access.items.map(row=>row.label), ['租户管理','项目管理']);
   assert(!adminSections.some(row=>row.id==='organization'));
   assert(canAccessPage('平台管理员','projects',commercial));
   assert(canAccessPage('平台管理员','organization-members',internal));
   assert(!canAccessPage('运营人员','projects',commercial));
+  assert(canAccessPage('运营人员','projects',commercial,new URLSearchParams('tenant=customer-a')));
+  assert(!canAccessPage('运维人员','projects',commercial,new URLSearchParams('tenant=customer-a')));
   assert(!canAccessPage('运维人员','organization-members',internal));
   assert(isOrganizationPage('tenants', true));
+  assert(isOrganizationPage('projects', true));
   assert(!isOrganizationPage('projects', false));
   assert(!isOrganizationPage('orders', false));
   assert.equal(canAccessPage('运营人员', 'customer-analysis', internal), false);

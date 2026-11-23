@@ -5,6 +5,13 @@ export function adminProjectHref(filters = {}) {
   return '#/admin-2/projects' + (params.size ? '?' + params : '');
 }
 
+export function adminProjectListHref(filters) {
+  const params = new URLSearchParams(filters);
+  if (params.get('fromList') === 'all') params.delete('tenant');
+  for (const key of ['fromList','project','tab']) params.delete(key);
+  return adminProjectHref(params);
+}
+
 export function tenantHref(tenant, patch = {}, filters) {
   const params = new URLSearchParams(filters);
   ['enterprise','personal','user','tab','project','create','organizationView'].forEach(key => params.delete(key));

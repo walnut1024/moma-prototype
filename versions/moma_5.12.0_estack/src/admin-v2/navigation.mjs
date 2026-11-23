@@ -29,6 +29,7 @@ export const sections = [
   ]},
   { id: "customers", workspace: "operations", title: "访问控制", items: [
     { id: "enterprise", label: "租户管理", children: [["tenants", "租户管理"]] },
+    { id: "projects", label: "项目管理", children: [["projects", "项目管理"]] },
   ]},
   { id: "runtime", workspace: "maintenance", title: "运行分析", items: [
     { id: "calls", label: "调用数据", children: [["call-analysis", "调用数据"]] },
@@ -59,7 +60,6 @@ export const sections = [
 export const pages = {
   ...Object.fromEntries(sections.flatMap(group => group.items.flatMap(item => item.children.map(([id, label]) => [id, { id, label, area: item.id, areaLabel: item.label, group: group.title, groupId: group.id }])))),
   'organization-members': {id:'organization-members',label:'组织及成员',area:'enterprise',areaLabel:'租户管理',group:'访问控制',groupId:'customers'},
-  projects: {id:'projects',label:'项目管理',area:'enterprise',areaLabel:'租户管理',group:'访问控制',groupId:'customers'},
   ...Object.fromEntries(monitoringLinks.map(([id, label]) => [id, { id, label, area: 'monitoring', areaLabel: '服务监控', group: '网关管理', groupId: 'gateway' }])),
   ...Object.fromEntries([['goods', '商品与套餐'], ['announcements', '公告与服务通知'], ['ledger', '账户与额度流水'], ['settlement', '服务商对账与结算'], ['adjustments', '退款与调账']].map(([id, label]) => [id, { id, label, area: 'commerce-orders', areaLabel: '订购与账单', group: '商业运营', groupId: 'commerce' }])),
   'customer-analysis-detail': { id: 'customer-analysis-detail', label: '租户详情', area: 'customers-analysis', areaLabel: '租户数据', group: '运营分析', groupId: 'analytics' },
@@ -85,15 +85,16 @@ export const adminSections = sections.map(group => {
 });
 
 export function isOrganizationPage(id, internalSite) {
-  return internalSite && ['tenants','customer-usage-detail'].includes(id);
+  return internalSite && ['tenants','projects','customer-usage-detail'].includes(id);
 }
 
-export function canAccessPage(role, id, license) {
+export function canAccessPage(role, id, license, params) {
   if (license && !license.commercial && (
     commercialPage(id) && !['tenants','projects'].includes(id) ||
     ['customer-analysis','customer-analysis-detail'].includes(id)
   )) return false;
-  if (['organization-members','projects'].includes(id) && role !== '平台管理员') return false;
+  if (id === 'organization-members' && role !== '平台管理员') return false;
+  if (id === 'projects' && role !== '平台管理员' && !(role === '运营人员' && params?.get('tenant'))) return false;
   if (!Object.hasOwn(pages, id) || (id === 'site-configuration' && !PRIVATE_SITE)) return false;
   return pages[id].groupId === 'platform' ? role === '平台管理员' : availableWorkspaces(role).includes(pageWorkspace(id));
 }

@@ -3,7 +3,7 @@ import { initialPersonalData } from '../mock/application-data.js';
 import { enterpriseDisplayValue, validateDemoAdminCode } from './enterprise.js';
 import { accountDataSource, isManagedCustomerAccount } from './account-data-source.js';
 
-export const individualTabs = { info: '基本信息', models:'模型授权', projects:'项目', keys:'API 密钥' };
+export const individualTabs = { info: '基本资料', models:'模型授权' };
 export const individualAccounts = state => state.tenants.filter(tenant => tenant.type === '个人').map(tenant => ({ tenant, user: state.users.find(user => user.id === tenant.ownerId) }));
 export const managedIndividualAccounts = state => individualAccounts(state).filter(({ tenant }) => isManagedCustomerAccount(tenant));
 export const individualName = ({ tenant, user }) => user?.nickname || tenant.name || '未设置昵称';

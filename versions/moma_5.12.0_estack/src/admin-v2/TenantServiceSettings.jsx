@@ -29,7 +29,8 @@ export function TenantServiceSettings({ state, tenant, section, canWrite, transa
   const opened = new Set(rules.map(rule=>rule.modelId));
   const name = id => models.get(id)?.name || id;
   const codes = id => [...(catalogue.get(id)?.calls || [])].join('、') || models.get(id)?.modelId || id;
-  const options = [...catalogue].filter(([id,model])=>model.availability && !opened.has(id))
+  const eligible = [...catalogue].filter(([,model])=>model.availability);
+  const options = eligible.filter(([id])=>!opened.has(id))
     .map(([id])=>({value:id,label:name(id)+' · '+codes(id)}));
   const rows = rules.filter(({modelId})=>[name(modelId),codes(modelId),modelId].some(value=>value.toLowerCase().includes(query.trim().toLowerCase())));
   const current = Math.min(page,Math.max(1,Math.ceil(rows.length/size)));
@@ -92,7 +93,9 @@ export function TenantServiceSettings({ state, tenant, section, canWrite, transa
         {operation==='open-models' && (options.length
           ? <Select aria-label="选择模型服务" multiple filter showClear optionList={options} value={data.modelIds}
               placeholder="搜索并选择可授权的模型服务" onChange={value=>set('modelIds',value || [])} disabled={saving}/>
-          : <Text type="secondary">当前租户暂无可授权的模型服务。</Text>)}
+          : <Text type="secondary">{translateLabel(eligible.length
+            ? '符合条件的模型服务均已授权。'
+            : '请先上架模型服务，并将当前租户加入销售范围。')}</Text>)}
         {removing && <Text>移除「{name(data.modelId)}」后，该租户下的项目将无法调用此模型。</Text>}
         {error && <Banner type="danger" closeIcon={null} description={error}/>}
       </form>

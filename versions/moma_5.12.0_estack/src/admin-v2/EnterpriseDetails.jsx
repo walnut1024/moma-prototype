@@ -1,12 +1,11 @@
 import { useChannelText } from './channel-language';
 import { Button, Card, Tabs, Typography } from '@douyinfe/semi-ui';
 import { EnterpriseFacts, EnterpriseStatus, EnterpriseTable } from './EnterpriseUI';
-import CustomerProjectDetails, { CustomerProjectKeys } from './CustomerProjectDetails';
 import { enterpriseAdmins, enterpriseDisplayValue, enterpriseMetadataFields } from './enterprise';
 import { TenantServiceSettings } from './TenantServiceSettings';
 import TenantResources from './TenantResources';
 
-const enterpriseTabs = { info:'基本资料', admins:'租户管理员', organization:'组织及成员', models:'模型授权', projects:'项目', keys:'API 密钥' };
+const enterpriseTabs = { info:'基本资料', admins:'租户管理员', organization:'组织及成员', models:'模型授权' };
 const { Title } = Typography;
 const time = value => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—';
 
@@ -41,16 +40,12 @@ function TenantAdministrators({ state, tenant, canWrite, setEditor, askToggle })
   </>;
 }
 
-export default function EnterpriseDetails({ state, tenant, params, navigate, canWrite, transact, reload, setEditor, askToggle, editing, editForm }) {
+export default function EnterpriseDetails({ state, tenant, params, navigate, canWrite, transact, setEditor, askToggle, editing, editForm }) {
   const translateLabel = useChannelText();
   const canManageResources = state.currentRole==='平台管理员' && ['正常','需关注'].includes(tenant.status);
   const tabs = Object.entries(enterpriseTabs).filter(([id])=>id!=='organization' || canManageResources);
   const tab = tabs.some(([id])=>id===params.get('tab')) ? params.get('tab') : 'info';
-  const projectId = params.get('project') || '';
-  return <Card>
-    <Tabs activeKey={tab} onChange={value=>navigate({tab:value,project:'',organizationView:''})}>
-      {tabs.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={label} disabled={editing}/>)}
-    </Tabs>
+  const content = (
     <div className="admin-analytics-fields">
       {tab==='info' && (editing ? editForm : <>
         <div className="admin-page-heading">
@@ -67,16 +62,16 @@ export default function EnterpriseDetails({ state, tenant, params, navigate, can
         <MetadataFacts title="业务联系" tenant={tenant} fields={enterpriseMetadataFields.slice(7)}/>
       </>)}
       {tab==='admins' && <TenantAdministrators state={state} tenant={tenant} canWrite={canWrite && tenant.status!=='停用'} setEditor={setEditor} askToggle={askToggle}/>}
-      {tab==='organization' && <TenantResources tenantId={tenant.id} page="organization-members" embedded
+      {tab==='organization' && <TenantResources tenantId={tenant.id} embedded
         tab={params.get('organizationView')} onTabChange={organizationView=>navigate({organizationView},true)}/>}
       {tab==='models' && <TenantServiceSettings state={state} tenant={tenant} section="models" canWrite={canWrite} transact={transact}/>}
-      {tab==='projects' && <CustomerProjectDetails state={state} tenant={tenant} projectId={projectId} navigate={navigate}
-        manageProjects={canManageResources} createProjects={canManageResources && canWrite} reload={reload}/>}
-      {tab==='keys' && <>
-        {projectId && <Button onClick={()=>navigate({tab:'projects',project:projectId})}>返回项目</Button>}
-        <CustomerProjectKeys key={projectId} state={state} tenant={tenant} projectId={projectId}
-          onProjectChange={project=>navigate({project})}/>
-      </>}
     </div>
+  );
+  return <Card>
+    <Tabs activeKey={tab} onChange={value=>navigate({tab:value,organizationView:''})}>
+      {tabs.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={translateLabel(label)} disabled={editing}>
+        {id===tab && content}
+      </Tabs.TabPane>)}
+    </Tabs>
   </Card>;
 }
