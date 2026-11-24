@@ -9,7 +9,7 @@ import { supplierChannelResources } from '../src/admin-v2/supplier-resources.js'
 import { modelChanges } from '../server/model-repository.js';
 import { resourceId } from '../src/resource-id.mjs';
 
-test('HTTP/D1 saves multiple provider URLs and keys atomically, and protects its master and price history after deleting a service', { timeout: 60000 }, async () => {
+test('HTTP/D1 saves provider URLs and masked keys and protects model and price history after deleting a service', { timeout: 60000 }, async () => {
   const accessCode = randomBytes(24).toString('hex');
   const local = await startLocalBackend({ demo: true, loginHashes: { 'admin-001': createHash('sha256').update(accessCode).digest('hex') } });
   let cookie = '';
@@ -18,22 +18,49 @@ test('HTTP/D1 saves multiple provider URLs and keys atomically, and protects its
   });
   const read = async () => domainModelWorkspace(await (await request('/model-operations')).json());
   const command = (state, operation, data, modelId) => ({ operationId: crypto.randomUUID(), expectedRevision: state.revision, action: { type: 'modelOperations', operation, modelId, data } });
-  const send = async (body, expected = 200) => { const response = await request('/model-operations/commands', body); assert.equal(response.status, expected, await response.clone().text()); return response.json(); };
+  const send = async (body, expected = 200) => {
+    const response = await request('/model-operations/commands', body);
+    const data = await response.json();
+    assert.equal(response.status, expected, data.error?.message);
+    return data;
+  };
   try {
     await send(command({ revision: 0 }, 'serviceDelete', {}, 'missing'), 401);
     const login = await request('/auth/login', { accountId: 'admin-001', accessCode }); assert.equal(login.status, 200); cookie = login.headers.get('set-cookie').split(';')[0];
     let state = await read();
-    const secrets = ['d1-first-intake-secret-123456', 'd1-second-intake-secret-654321'], { apiKeys } = await providerApiKeysDraft(secrets);
-    const document = { provider: { name: 'D1 多地址密钥', code: 'd1-multiple-keys', source_type: 'thirdParty', website: 'https://example.invalid', description: '描'.repeat(300), models: [], connections: [1, 2].map(index => ({ connection_id: 'address-' + index, base_url: `https://api${index}.example.invalid/v1`, protocol: 'OpenAI', interface_type: 'openai' })) } };
+    const secrets = ['d1-first-fixture-key-123456', 'd1-second-fixture-key-654321'];
+    const { apiKeys } = await providerApiKeysDraft(secrets);
+    const profile = { name: 'D1 多地址密钥', code: 'd1-multiple-keys', sourceType: 'thirdParty', website: 'https://example.invalid', description: '描'.repeat(300) };
+    await send(command(state, 'provider', { operation: 'create', values: profile }));
+    state = await read();
+    const providerId = state.providers.find(row => row.code === profile.code).id;
+    const providerCommand = (operation, values) => command(state, 'provider', { operation, objectId: providerId, values });
     const before = structuredClone(state);
-    await send(command(state, 'providerIntake', { document, apiKeys: [apiKeys[0], apiKeys[0]], confirmed: true }), 422);
+    await send(providerCommand('addApiKeys', { apiKeys: [apiKeys[0], apiKeys[0]] }), 422);
+    await send(providerCommand('addApiKeys', { apiKeys: [{ ...apiKeys[0], secret: secrets[0] }] }), 400);
     assert.deepEqual(await read(), before);
-    const intake = command(state, 'providerIntake', { document, apiKeys, confirmed: true }); await send(intake); await send(intake);
-    state = await read(); const provider = state.providers.find(row => row.code === 'd1-multiple-keys');
-    assert.equal(providerApiKeyRows(state, provider).length, 2); assert.equal(supplierChannelResources(state, provider).length, 2);
+    const addKeys = providerCommand('addApiKeys', { apiKeys, standalone: true });
+    await send(addKeys);
+    await send(addKeys);
+    state = await read();
+    const apiKeyId = state.providers.find(row => row.id === providerId).apiKeys[0].id;
+    for (const index of [1, 2]) {
+      await send(providerCommand('supplierChannelSave', {
+        name: '连接 ' + index, baseUrl: `https://api${index}.example.invalid/v1`, protocol: 'OpenAI',
+        interfaceType: 'openai', authMode: 'specific', apiKeyId,
+      }));
+      state = await read();
+    }
+    const provider = state.providers.find(row => row.id === providerId);
+    assert.equal(provider.website, profile.website);
+    assert.equal(provider.description, profile.description);
+    assert.equal(providerApiKeyRows(state, provider).length, 2);
+    assert.deepEqual(supplierChannelResources(state, provider).map(row => row.baseUrl).sort(),
+      ['https://api1.example.invalid/v1', 'https://api2.example.invalid/v1']);
+    const records = await local.db.prepare('SELECT record_json FROM audit_events').all();
     for (const secret of secrets) {
       assert(!JSON.stringify(state).includes(secret));
-      const records = await local.db.prepare('SELECT record_json FROM audit_events').all(); assert(!JSON.stringify(records.results).includes(secret));
+      assert(!JSON.stringify(records.results).includes(secret));
     }
     await send(command(state, 'provider', { operation: 'summary', objectId: provider.id, values: { name: provider.name, code: 'renamed-code', expectedUpdatedAt: provider.updatedAt } }), 422);
     assert.equal((await read()).providers.find(row => row.id === provider.id).code, provider.code);

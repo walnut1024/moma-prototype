@@ -93,7 +93,13 @@ test('new model services share D1, protect imported records, and inherit the per
   assert.equal(reset.data.row.routingStrategy, 'simple-shuffle');
   assert.equal((await run(command('delete', undefined, 1, model.id))).status, 409);
   assert.equal((await run(command('delete', undefined, 4, model.id))).status, 200);
+  const deleted = await db.prepare('SELECT deleted_at,revision FROM new_model_services WHERE id=?').bind(model.id).first();
+  assert.ok(deleted.deleted_at);
+  const editDeleted = await run(command('save', reset.data.row, deleted.revision));
+  assert.equal(editDeleted.status, 409);
+  assert.equal(editDeleted.data.error.code, 'REVISION_CONFLICT');
   assert.deepEqual((await run(command('import', model))).data, { id: model.id, row: null });
+  assert.deepEqual(await db.prepare('SELECT deleted_at,revision FROM new_model_services WHERE id=?').bind(model.id).first(), deleted);
   assert.deepEqual((await request(endpoint, { cookie: chrome })).data, { defaults: {timeout:60,numRetries:2,allowedFails:3,cooldownTime:30,retryConditions:['429','超时','5xx'],failoverEnabled:true,strategy:'simple-shuffle'}, rows: [], deletedIds: [model.id] });
   assert.equal(await db.prepare("SELECT COUNT(*) AS n FROM audit_events WHERE entity_type='new-model-service'").first('n'), 5);
   assert.equal((await request('/health')).data.schemaVersion, 18);

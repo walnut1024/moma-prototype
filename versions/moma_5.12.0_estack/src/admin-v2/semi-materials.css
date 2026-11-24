@@ -21,7 +21,6 @@
 .materials-import { display: flex; flex-direction: column; gap: 24px; }
 .materials-import > .semi-radio-group { align-self: flex-start; }
 .materials-import-preview { min-width: 0; overflow-x: auto; }
-.materials-json-input .semi-input-textarea { min-height: 360px; font: 12px/1.65 ui-monospace, monospace; tab-size: 2; }
 .materials-import-help { display: grid; gap: 12px; padding: 20px; background: var(--semi-color-fill-0); border-radius: var(--semi-border-radius-medium); }
 .materials-import-help p { margin: 0; line-height: 1.7; }
 .materials-logo { width: 32px; height: 32px; object-fit: contain; }

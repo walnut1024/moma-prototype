@@ -119,8 +119,8 @@ references 中模型的 name、canonical_slug、model_type 用于识别，不能
 ### 来源接入与资料模板
 
 - 日常新建服务商通过「基础资料 → 服务商」的表单办理。批量导入服务商资料和供应关系使用各自表格模板，连接和上游模型在「模型接入」维护。模型资料 CSV／XLSX 继续使用“模型展示名”“模型编码”字段。
-- 既有整包命令 `providerIntake` 保留「导出当前 JSON」的重建用途。导出包含服务商资料、连接及模型接入配置，以及可导出的容量和成本价。导出文件不含密钥。移除后以同一服务商编码重新录入，可复用原服务商 ID。新建的接入记录处于待验证状态，旧连接、服务条目及历史记录按原状态保留。重建不会为模型服务恢复调用或开售。
-- 整包接入文件沿用既有格式。`models[].model_name` 和 `models[].model_type` 对应模型展示名及类型，`models[].canonical_slug` 表示模型编码。`connections[].connection_id` 和 `mappings[].connection_id` 仅为文件内别名，`mappings[].upstream_model_id` 原样保留大小写。`moma.model-operations/v2` 按永久 ID 维护既有对象。
+- 删除流程通过「导出 JSON 留档」保存服务商资料、连接及模型接入配置，以及可导出的容量和成本价。文件不含密钥。旧服务商整包导入 `providerIntake` 和旧服务商模型 JSON 导入 `supplierJsonImport` 已退役，导出文件不支持整包回导。
+- 留档文件沿用既有格式。`models[].model_name` 和 `models[].model_type` 对应模型展示名及类型，`models[].canonical_slug` 表示模型编码。`connections[].connection_id` 和 `mappings[].connection_id` 仅为文件内别名，`mappings[].upstream_model_id` 原样保留大小写。`moma.model-operations/v2` 按永久 ID 维护既有对象。
 
 ## 计量和历史
 

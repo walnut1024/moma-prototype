@@ -302,13 +302,14 @@ test('package model choices come from unarchived model services, with stable mat
   const model = state.packageModels.find(row => state.tokenPackages.some(pack => pack.modelIds.includes(row.id)));
   const service = services.models.find(row => row.id === model.code);
   const operationId = randomUUID();
-  const archive = await request('/model-operations/commands', { key: operationId, body: {
+  const deletion = await request('/model-operations/commands', { key: operationId, body: {
     operationId, expectedRevision: services.revision,
-    action: { type: 'modelOperations', operation: 'serviceArchive', modelId: model.serviceId,
+    action: { type: 'modelOperations', operation: 'serviceDelete', modelId: model.serviceId,
       data: { confirmed: true, expectedUpdatedAt: service.updatedAt } },
   } });
-  assert.equal(archive.status, 422);
-  assert.match(archive.data.error.message, /仍被套餐引用/);
+  assert.equal(deletion.status, 422);
+  assert.match(deletion.data.error.message, /仍被套餐引用/);
+  assert.equal((await request('/model-operations')).data.revision, services.revision);
 });
 
 test('only administrators can delete unused custom types, and deletion persists without reusing IDs', async () => {

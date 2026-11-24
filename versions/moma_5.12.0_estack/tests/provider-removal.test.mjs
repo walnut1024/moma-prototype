@@ -2,57 +2,62 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAdminState, createAdminSeed, commitAdminState } from '../src/admin-v2/store.js';
 import { withAdminSession } from './admin-session-fixture.mjs';
-import { planProviderIntake, exportProviderJson, PROVIDER_JSON_TEMPLATE } from '../src/admin-v2/provider-intake.js';
+import { exportProviderJson } from '../src/admin-v2/provider-export.js';
+import { modelCatalogue } from '../src/admin-v2/model-library.js';
+import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
 import { providerRemovalPlan } from '../src/admin-v2/provider-removal.js';
 import { routingServices, routingChannels, routeSourceVersion } from '../src/admin-v2/service-routing.js';
 import { serviceDirectoryRows } from '../src/admin-v2/service-directory.js';
 import { connectionFingerprint } from '../src/admin-v2/connection-state.js';
 
 const op = (state, operation, data) => commitAdminState(state, { type: 'modelOperations', operation, data });
-const document = () => structuredClone(PROVIDER_JSON_TEMPLATE);
-function intake(state, file = document()) { return op(state, 'providerIntake', { document: file, confirmed: true }); }
 function removal(state, target, operation = 'providerRemovalCommit') {
   return op(state, operation, { target, expectedSignature: providerRemovalPlan(state, target).signature, confirmed: true });
 }
-function fixture() {
-  const before = withAdminSession(parseAdminState(null)), file = document();
-  file.provider.models[0].mappings[0].procurement = { scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] };
-  const state = intake(before, file), provider = state.providers.find(row => row.code === file.provider.code);
-  return { before, state, provider, target: { providerId: provider.id } };
+const profile = { name: '删除测试服务商', code: 'provider-removal-fixture', sourceType: 'thirdParty' };
+function fixture(modelCount = 1) {
+  const base = withAdminSession(parseAdminState(null));
+  const created = op(base, 'provider', { operation: 'create', values: profile });
+  const providerId = created.providers.find(row => row.code === profile.code).id;
+  const owner = state => state.providers.find(row => row.id === providerId);
+  const models = modelCatalogue(base).filter(row => row.type === 'text').slice(0, modelCount)
+    .map((row, index) => ({ libraryId: row.id, upstreamModelId: 'fixture-model-' + index }));
+  const connected = op(created, 'provider', { operation: 'supplierChannelCreate', objectId: providerId, values: {
+    name: '删除测试连接', baseUrl: 'https://api.example.com/v1', protocol: 'OpenAI', interfaceType: 'openai',
+    authMode: 'inherit', models,
+  } });
+  const { id: associationId, endpointId } = owner(connected).catalogConnections[0];
+  const channel = { providerId, endpointId, associationId };
+  const priced = op(connected, 'channelProcurementPublish', { ...channel, expectedPriceRevision: 0, confirmed: true,
+    scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }],
+  });
+  const state = op(priced, 'channelCapacitySave', { ...channel, expectedCapacityRevision: 0, limits: { tpm: 10000000 } });
+  return { state, provider: owner(state), target: { providerId } };
 }
 
-test('intake stores one complete provider atomically, preserves zero cost, capacity and unrelated materials', () => {
-  const { before, state, provider } = fixture(), channel = provider.catalogConnections[0];
-  assert.deepEqual(before.modelTemplates, state.modelTemplates.filter(row => before.modelTemplates.some(old => old.id === row.id)));
-  assert.equal(channel.capacityLimits.tpm, 10000000);
-  assert.equal(channel.procurementVersions.at(-1).pricing.scenarios[0].listPrice, 0);
-  assert.equal(channel.enabled, false);
-  assert.equal(state.endpoints.find(row => row.id === channel.endpointId).status, '草稿');
-  assert.deepEqual(state.models, before.models);
-  assert.deepEqual(state.modelSalePrices, before.modelSalePrices);
-  assert.equal(state.providers.filter(row => row.code === 'example-provider').length, 1);
-  assert.throws(() => intake(state), /名称已存在|编码/);
+test('provider JSON export links connection aliases, preserves zero cost and capacity, and omits credential metadata', async () => {
+  const { state, provider } = fixture();
+  const secret = 'export-fixture-key-123456';
+  const { apiKeys } = await providerApiKeysDraft([secret]);
+  const keyed = op(state, 'provider', { operation: 'addApiKeys', objectId: provider.id, values: { apiKeys } });
+  const owner = keyed.providers.find(row => row.id === provider.id);
+  const exported = exportProviderJson(keyed, owner).provider;
+  assert.equal(exported.code, profile.code);
+  assert.equal(exported.id, undefined);
+  assert.equal(exported.connections.length, 1);
+  const [connection] = exported.connections;
+  const [mapping] = exported.models[0].mappings;
+  assert.notEqual(connection.connection_id, provider.catalogConnections[0].endpointId);
+  assert.equal(mapping.connection_id, connection.connection_id);
+  assert.equal(mapping.upstream_model_id, 'fixture-model-0');
+  assert.deepEqual(mapping.capacity_limits, { tpm: 10000000 });
+  assert.equal(mapping.procurement.scenarios[0].listPrice, '0');
+  const serialized = JSON.stringify(exported);
+  const [key] = owner.apiKeys;
+  for (const value of [secret, key.id, key.maskedKey, key.fingerprint]) assert(!serialized.includes(value));
 });
 
-test('JSON validation rejects foreign connections, duplicate models, invalid capacity and secrets without partial state', () => {
-  const state = withAdminSession(parseAdminState(null)), before = structuredClone(state);
-  for (const change of [
-    file => { file.provider.models[0].mappings[0].connection_id = 'missing'; },
-    file => { file.provider.models.push(structuredClone(file.provider.models[0])); },
-    file => { file.provider.models[0].mappings[0].capacity_limits.rpm = -1; },
-    file => { file.provider.connections[0].api_key = 'not-allowed'; },
-  ]) {
-    const file = document(); change(file);
-    const plan = planProviderIntake(state, file);
-    assert.ok(plan.errors.length);
-    assert.throws(() => intake(state, file));
-    assert.deepEqual(state, before);
-  }
-  assert.throws(() => planProviderIntake(state, { provider: { ...document().provider, id: 'foreign-id' } }), /不填写本地/);
-  assert.throws(() => intake({ ...state, currentRole: '只读审计员' }), /无权/);
-});
-
-test('provider removal preserves materials, purchase versions, audit history and allows same-code fresh intake', () => {
+test('provider removal preserves materials, purchase versions and audit history', () => {
   const { state, provider, target } = fixture(), before = structuredClone(state), quote = provider.catalogConnections[0].procurementVersions;
   assert.equal(providerRemovalPlan(state, target).ready, true);
   const next = removal(state, target), archived = next.providers.find(row => row.id === provider.id);
@@ -61,15 +66,6 @@ test('provider removal preserves materials, purchase versions, audit history and
   assert.deepEqual(archived.catalogConnections[0].procurementVersions, quote);
   for (const key of ['models', 'modelSalePrices', 'supplyPrices', 'serviceRoutes']) assert.deepEqual(next[key], before[key]);
   for (const audit of before.audits) assert.deepEqual(next.audits.find(row => row.id === audit.id), audit);
-  const exported = exportProviderJson(state, provider);
-  assert.equal(exported.provider.id, undefined);
-  const restored = intake(next, exported), owner = restored.providers.find(row => row.id === provider.id);
-  assert.equal(owner.deletedAt, null);
-  assert.equal(owner.catalogConnections.filter(row => !row.deletedAt).length, 1);
-  assert.equal(owner.catalogConnections.filter(row => row.deletedAt).length, 1);
-  assert.deepEqual(owner.catalogConnections.find(row => row.deletedAt).procurementVersions, quote);
-  assert.equal(owner.catalogConnections.find(row => !row.deletedAt).enabled, false);
-  assert.deepEqual(restored.modelTemplates, next.modelTemplates);
 });
 
 test('two-step removal stops and withdraws the selected offer, not sibling channels; stale commits fail', () => {
@@ -99,14 +95,12 @@ test('two-step removal stops and withdraws the selected offer, not sibling chann
 });
 
 test('removing one shared connection mapping keeps siblings; pending tests block both steps', () => {
-  const state = withAdminSession(parseAdminState(null)), file = document();
-  file.provider.models.push({ ...structuredClone(file.provider.models[0]), canonical_slug: 'another-model', model_name: '另一个模型',
-    mappings: [{ connection_id: 'openai', upstream_model_id: 'another-model' }] });
-  const next = intake(state, file), provider = next.providers.find(row => row.code === 'example-provider');
+  const { state: next, provider } = fixture(2);
   const [channel, sibling] = provider.catalogConnections, endpoint = next.endpoints.find(row => row.id === channel.endpointId);
   const target = { providerId: provider.id, endpointId: endpoint.id, associationId: channel.id };
   endpoint.serverTestJobs = [{ operationId: 'pending', associationIds: [channel.id] }];
   assert.ok(providerRemovalPlan(next, target).blockers.length);
+  assert.throws(() => removal(next, target, 'providerRemovalPrepare'), /未完成检测/);
   assert.throws(() => removal(next, target), /未完成检测/);
   endpoint.serverTestJobs = [];
   const removed = removal(next, target);
@@ -138,17 +132,6 @@ test('unified service retains a validated alternative route and immutable old ve
   const next = removal(prepared, target);
   assert.equal(next.models.find(row => row.id === model.id).callsEnabled, true);
   assert.deepEqual(next.modelTemplates, state.modelTemplates);
-});
-
-test('large intake previews 500 models against one connection without mutating the source state', () => {
-  const state = withAdminSession(parseAdminState(null)), before = JSON.stringify(state), file = document();
-  file.provider.models = Array.from({ length: 500 }, (_, i) => ({ canonical_slug: 'bulk-' + i, model_name: '批量模型 ' + i, model_type: 'text', model_info: {},
-    mappings: [{ connection_id: 'openai', upstream_model_id: 'bulk-' + i }] }));
-  const plan = planProviderIntake(state, file);
-  assert.deepEqual(plan.errors, []);
-  assert.equal(plan.modelCount, 500); assert.equal(plan.channels.length, 500); assert.equal(plan.connections.length, 1);
-  assert.equal(JSON.stringify(state), before);
-  assert.equal(plan.changes.filter(row => row.collection === 'providers').length, 1);
 });
 
 test('removing a registered supplier model preserves its provider, connection and model material', () => {

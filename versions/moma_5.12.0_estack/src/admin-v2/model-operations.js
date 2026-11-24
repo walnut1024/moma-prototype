@@ -6,7 +6,6 @@ import { normalizeAdapterDraft } from './channel-adapter-catalogue.js';
 import { supplierChannelBatchPlan, supplierChannelLifecyclePlan } from './supplier-channel-batch.js';
 import { importModelResources } from './model-resource-transfer.js';
 import { normalizeModelLogo } from './model-profile.js';
-import { providerIntakeTransaction } from './provider-intake.js';
 import { resourceId } from '../resource-id.mjs';
 import { offerKey, offerStage, offerGrayTenants, providerOffer, serviceReferences, salesCustomer, salesPaused } from '../service-access.mjs';
 import { channelBlockReason } from './provider-channels.js';
@@ -17,11 +16,11 @@ import { marketCardTransaction } from '../market-cards.mjs';
 import { serviceScope } from './service-commercial.js';
 import { publicationChecks } from './model-management.js';
 import { SERVICE_PURPOSES, servicePurpose } from './service-purpose.js';
-import { serviceArchiveIssues, serviceDeleteIssues, checkedServiceCallId } from './service-maintenance.js';
+import { serviceDeleteIssues, checkedServiceCallId } from './service-maintenance.js';
 import { retailItems } from './service-commercial.js';
 import { channelHealthTransaction } from './channel-health.js';
 import { resolveOnboardingProvider, resolveOnboardingModel, assertOnboardingMetadata } from './onboarding-presets.js';
-import { libraryRecord, modelLibrary, libraryRemovalIssue, modelMaterial } from './model-library.js';
+import { libraryRecord, modelLibrary, libraryRemovalIssue, modelMaterial, requireModelSlug } from './model-library.js';
 export { libraryRecord, modelLibrary } from './model-library.js';
 import { routingTransaction, routingServices, routingChannels, routeSourceVersion } from './service-routing.js';
 import { prepareServiceShowcase, SERVICE_SHOWCASE_ID } from './service-showcase.js';
@@ -41,8 +40,7 @@ import { providerTransaction, providerCode, modelConnectivityPreview, PROTOCOLS,
 import { builtinModelCatalogueChanges, cleanModelCatalogueTransaction } from '../mock/builtin-model-catalogue.js';
 import { archiveAcceptanceFixture } from './acceptance-cleanup.js';
 import { supplierModelRegistration } from './supplier-model-registration.js';
-import { planProviderJsonModel } from './provider-json-import.js';
-import { supplyModelRecord, serviceModelSources } from './supply-models.js';
+import { supplyModelRecord, serviceModelSources, supplierModelFields } from './supply-models.js';
 import { providerKeyGroupKeys } from './provider-key-groups.js';
 import { connectionTestPassed, connectionTestPending, connectionCredentialsReady, connectionFingerprint, connectionKeys } from './connection-state.js';
 import { providerCatalogueIds } from './moma-provider.js';
@@ -130,7 +128,7 @@ export function operationsTransaction(state, action) {
   if (state.modelData?.sourceScope === 'reference-only-v2' && ['prepareServiceReviewCases', 'prepareModelOperationsExamples'].includes(action.operation)) throw Error('当前工作区请通过模型接入导入内置服务商目录');
   const target=action.modelId || (action.data?.serviceId && state.models.find(row=>action.data.serviceId===`standard:${row.id}` || action.data.serviceId.startsWith(`provider:${row.id}:`))?.id);
   if (state.models.find(row => row.id === target)?.deletedAt) throw Error('模型服务已删除');
-  if(state.models.find(row=>row.id===target)?.archivedAt && !['serviceRestore','serviceDelete','recordFailedOperation'].includes(action.operation) && !action.operation.startsWith('template'))throw Error('服务已归档，请先恢复服务');
+  if(state.models.find(row=>row.id===target)?.archivedAt && !['serviceDelete','recordFailedOperation'].includes(action.operation) && !action.operation.startsWith('template'))throw Error('服务已归档，无法修改');
   if (['marketCardCreate', 'marketCardEdit', 'marketCardLink', 'marketCardSetStatus', 'marketCardDelete'].includes(action.operation)) {
     return marketCardTransaction(state, action, orderedMarketModels(state));
   }
@@ -142,7 +140,6 @@ export function operationsTransaction(state, action) {
   if (action.operation === 'channelDirectoryRepair' && state.cloudOperations) {
     return { type: 'batch', label: '修复连接派生索引', objectId: 'channel-index', changes: [] };
   }
-  if (action.operation === 'providerIntake') return providerIntakeTransaction(state, action);
   if (action.operation === 'supplierChannelBatchLifecycle') {
     const data = action.data || {}, plan = supplierChannelLifecyclePlan(state, data.providerId, data.associationIds, data.action, { modelOnly: data.modelOnly === true });
     if (data.confirmed !== true || data.expectedSignature !== plan.signature) throw Error('连接或引用范围已变化，请重新预览并确认');
@@ -281,7 +278,7 @@ export function operationsTransaction(state, action) {
       mapping('serviceMappingRemove',working.modelSupplies.find(row=>row.id===id),{confirmed:true});
     }
     objectId=modelId;label='保存模型映射与路由';
-  } else if (['serviceArchive','serviceDelete','serviceRestore','configureServiceModelIdentity'].includes(operation)) {
+  } else if (['serviceDelete','configureServiceModelIdentity'].includes(operation)) {
     const model=working.models.find(row=>row.id===modelId);
     if(!model || data.expectedUpdatedAt!==model.updatedAt || data.confirmed!==true)throw Error('服务已有修订，请重新核对后确认');
     if(operation==='serviceDelete') {
@@ -294,15 +291,9 @@ export function operationsTransaction(state, action) {
           return { ...operationsTransaction(working, { ...action, operation: 'removeServiceProvider', data: { providerId: key, expectedUpdatedAt: data.expectedUpdatedAt } }), label: '删除模型服务' };
         }
       }
-      const issues=serviceArchiveIssues(working,model);if(issues.length)throw Error(issues.join('；'));
+      const issues=serviceDeleteIssues(working,model);if(issues.length)throw Error(issues.join('；'));
       if(!model.templateId && !working.modelTemplates.some(row=>row.id===model.id))add('modelTemplates',structuredClone(model));
       update('models',modelId,{templateId:model.templateId || model.id,deletedAt:new Date().toISOString(),callsEnabled:false,marketVisible:false,listingStatus:'已下架',status:'停用'});label='删除模型服务';
-    } else if(operation==='serviceArchive') {
-      const issues=serviceArchiveIssues(working,model);if(issues.length)throw Error(issues.join('；'));
-      update('models',modelId,{archivedAt:new Date().toISOString(),callsEnabled:false,marketVisible:false});label='归档模型服务';
-    } else if(operation==='serviceRestore') {
-      if(!model.archivedAt)throw Error('服务未归档');
-      update('models',modelId,{archivedAt:null,callsEnabled:false,listingStatus:'已下架'});label='恢复已归档服务';
     } else {
       if(model.serviceMode!=='standard')throw Error('请在对应模型服务中修改模型 ID');
       if(model.listingStatus==='已上架' || model.callsEnabled===true)throw Error('先下架并停用服务，再修改模型 ID');
@@ -344,28 +335,35 @@ export function operationsTransaction(state, action) {
       objectId = providerOp('create', null, { name, code, sourceType, introduction, website, documentation, contact, contactInfo, description }).objectId;
     }
     label = `批量导入 ${data.profiles.length} 个服务商`;
-  } else if (operation === 'supplierJsonImport') {
-    const provider = working.providers.find(row => row.id === data.providerId && !row.deletedAt);
-    if (!provider || providerCode(provider) !== data.expectedProviderCode) throw Error('服务商已变化，请重新核对文件中的 ID 和编码');
-    if (!Array.isArray(data.rows) || !data.rows.length || data.rows.length > 5) throw Error('每次提交 1–5 个模型');
-    const slugs = new Set();
-    for (const row of data.rows) {
-      if (!row || typeof row !== 'object' || Array.isArray(row) || Object.keys(row).some(key => !['model', 'connections'].includes(key))) throw Error('模型导入数据格式无效');
-      const slug = row.model?.canonical_slug;
-      if (slugs.has(slug)) throw Error('批次内模型编码重复');
-      slugs.add(slug);
-      apply(planProviderJsonModel(working, data.providerId, row));
-    }
-    objectId = data.providerId; label = '导入服务商模型及连接';
   } else if (operation === 'supplierOffersSave') {
     const provider = working.providers.find(row => row.id === data.providerId && !row.deletedAt);
     if (!provider || !Array.isArray(data.offers) || !data.offers.length || data.offers.length > 5) throw Error('每批可保存 1–5 个供应模型');
     for (const offer of data.offers) {
       validateOffer(offer, provider);
-      apply(planProviderJsonModel(working, provider.id, { model: { canonical_slug: offer.code, model_name: offer.name, model_type: offer.type }, connections: [] }));
+      const { code, name, type, bindings } = offer;
+      if (typeof code !== 'string') throw Error('请填写有效的模型编码');
+      requireModelSlug(code);
+      if (/\p{Cc}/u.test(name)) throw Error('请填写有效的模型展示名称');
+      if (type === 'other') throw Error('请选择有效的模型类型');
+      const matches = modelLibrary(working).filter(row => row.modelId.toLowerCase() === code);
+      if (matches.length > 1) throw Error('模型编码匹配到多份模型资料');
+      let master = matches[0] && modelMaterial(working, matches[0].id);
+      if (matches[0] && master?.id !== matches[0].id) throw Error('模型编码已被归档资料使用，请核对');
+      if (master && master.type !== type) throw Error('模型类型与已有模型资料不一致，请核对模型编码');
+      if (!master) {
+        const material = validatedMaterial(working, null, { modelId: code, name, type });
+        master = { id: resourceId('model'), modelId: material.modelId, name: material.name, maker: material.maker,
+          type: material.type, description: material.description, profile: material.profile, capabilities: material.capabilities, revision: 1 };
+        add('modelTemplates', master);
+      }
       const owner = working.providers.find(row => row.id === provider.id);
-      const master = modelLibrary(working).find(row => row.modelId === offer.code);
-      update('providers', owner.id, { catalogModels: owner.catalogModels.map(entry => entry.libraryId === master.id ? { ...entry, offerFields: { name: offer.name, code: offer.code, type: offer.type, bindings: offer.bindings.map(({ upstream, protocol, url }) => ({ upstream, protocol, url })) } } : entry) });
+      const linked = supplierModelFields(working, owner, master.id);
+      const declaration = owner.catalogModels?.find(row => row.modelId === linked.modelId);
+      const register = declaration?.libraryId !== master.id || !owner.catalogModelIds?.includes(linked.modelId) || owner.removedCatalogModelIds?.includes(linked.modelId);
+      const fields = register ? linked.fields : {};
+      const offerFields = { name, code, type, bindings: bindings.map(({ upstream, protocol, url }) => ({ upstream, protocol, url })) };
+      const catalogModels = (fields.catalogModels || owner.catalogModels).map(entry => entry.libraryId === master.id ? { ...entry, offerFields } : entry);
+      update('providers', owner.id, { ...fields, catalogModels });
     }
     objectId = provider.id; label = '保存供应模型';
   } else if (operation === 'supplierModelsRegister') {

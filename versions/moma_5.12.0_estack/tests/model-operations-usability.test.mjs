@@ -6,7 +6,7 @@ import {randomBytes,createHash} from 'node:crypto';
 import {parseAdminState,commitAdminState} from '../src/admin-v2/store.js';
 import {withAdminSession} from './admin-session-fixture.mjs';
 import {serviceModelSourceDraft} from '../src/admin-v2/model-profile.js';
-import {serviceArchiveIssues,checkedServiceCallId} from '../src/admin-v2/service-maintenance.js';
+import {serviceDeleteIssues,checkedServiceCallId} from '../src/admin-v2/service-maintenance.js';
 import {serviceConfiguration} from '../src/admin-v2/service-workspace.js';
 import {modelAuditChanges} from '../src/admin-v2/model-operation-history.js';
 import {commonTariffNames} from '../src/admin-v2/tariff-dictionary.js';
@@ -15,20 +15,19 @@ import {startLocalBackend} from '../database/local-runtime.js';
 const state=()=>withAdminSession(parseAdminState(null));
 const run=(s,operation,model,data)=>commitAdminState(s,{type:'modelOperations',operation,modelId:model.id,data:{expectedUpdatedAt:model.updatedAt,confirmed:true,...data}});
 
-test('archive retains stable identity and history, checks all dependencies, and restores without enabling calls',()=>{
-  let s=state(),m={...structuredClone(s.models[0]),id:'ux-service',modelId:'ux-call',serviceProviders:[],listingStatus:'已下架',callsEnabled:false,serviceManaged:true};s.models.push(m);
-  assert.deepEqual(serviceArchiveIssues(s,m),[]);
-  const before=structuredClone(s);s=run(s,'serviceArchive',m);m=s.models.find(row=>row.id===m.id);
-  assert.ok(m.archivedAt);
-  for(const key of ['providers','endpoints','modelTemplates','modelSupplies','modelSalePrices','orders','serviceRoutes'])assert.deepEqual(s[key],before[key],key);
+test('historical archived services keep their identity and reject changes',()=>{
+  const s=state(),archivedAt='2026-11-01T00:00:00.000Z';
+  const m={...structuredClone(s.models[0]),id:'ux-service',modelId:'ux-call',serviceProviders:[],listingStatus:'已下架',callsEnabled:false,marketVisible:false,serviceManaged:true,archivedAt};
+  s.models.push(m);
+  const before=structuredClone(s);
+  assert.deepEqual(domainModel(storedModel(m,true),true),m);
+  assert.throws(()=>run(s,'serviceRestore',m),/服务已归档，无法修改/);
   assert.throws(()=>run(s,'marketVisibility',m,{visible:true}),/归档/);
   assert.throws(()=>commitAdminState(s,{type:'modelOperation',operation:'publish',modelId:m.id}),/归档/);
-  s=run(s,'serviceRestore',m);m=s.models.find(row=>row.id===m.id);assert.equal(m.archivedAt,null);assert.equal(m.callsEnabled,false);assert.equal(m.listingStatus,'已下架');
-  assert.equal(domainModel(storedModel(m,true),true).archivedAt,null);
-  for(const patch of [{listingStatus:'已上架'},{callsEnabled:true},{serviceProviders:[{status:'已关联'}]}])assert.ok(serviceArchiveIssues(s,{...m,...patch}).length);
-  for(const patch of [{serviceRoutes:[{serviceId:'standard:'+m.id,activeVersion:1}]},{modelSupplies:[{modelId:m.id,status:'已启用'}]},{modelOnboardings:[{modelId:m.id,status:'配置中'}]}])assert.ok(serviceArchiveIssues({...s,...patch},m).length);
-  assert.throws(()=>run(s,'serviceArchive',m,{expectedUpdatedAt:'stale'}),/修订/);
-  assert.throws(()=>run({...s,currentRole:'只读观察员'},'serviceArchive',m),/无权/);
+  assert.deepEqual(s,before);
+  assert.deepEqual(serviceDeleteIssues(s,m),[]);
+  for(const patch of [{listingStatus:'已上架'},{callsEnabled:true},{serviceProviders:[{status:'已关联'}]}])assert.ok(serviceDeleteIssues(s,{...m,...patch}).length);
+  for(const patch of [{serviceRoutes:[{serviceId:'standard:'+m.id,activeVersion:1}]},{modelSupplies:[{modelId:m.id,status:'已启用'}]},{modelOnboardings:[{modelId:m.id,status:'配置中'}]}])assert.ok(serviceDeleteIssues({...s,...patch},m).length);
 });
 test('changing a public call ID preserves canonical master and requires stopping and confirmation',()=>{
   let s=state(),m=s.models.find(row=>row.serviceMode==='standard');
@@ -78,14 +77,36 @@ test('D1 maintenance and reused-connection commands preserve existing records an
       assert.match(rejected.result.data.error.message, /模型 ID/);
       assert.deepEqual(s.models.find(row => row.id === m.id), beforeIdentity);
     }
-    assert.equal((await command('configureServiceModelIdentity', { callId: 'ux-d1-renamed', confirmed: true, expectedUpdatedAt: m.updatedAt }, m.id)).result.status, 200);
+    const renamed=await command('configureServiceModelIdentity', { callId: 'ux-d1-renamed', confirmed: true, expectedUpdatedAt: m.updatedAt }, m.id);
+    assert.equal(renamed.result.status, 200);
     m = s.models.find(row => row.id === m.id);
     assert.equal(m.modelId, 'ux-d1-renamed');
     assert.equal(m.serviceMode, 'standard');
     for(const supply of s.modelSupplies.filter(row=>row.modelId===m.id && row.status!=='已移除')){assert.equal((await command('removeServiceChannel',{supplyId:supply.id,expectedUpdatedAt:m.updatedAt},m.id)).result.status,200);m=s.models.find(row=>row.id===m.id);}
-    const archived=await command('serviceArchive',{confirmed:true,expectedUpdatedAt:m.updatedAt},m.id);assert.equal(archived.result.status,200,JSON.stringify(archived.result.data));m=s.models.find(row=>row.id===m.id);assert.ok(m.archivedAt);
-    assert.ok(s.audits.some(row=>row.changes?.some(field=>field.field==='归档时间')));assert.equal((await api('/model-operations/commands',archived.body,archived.id)).status,200);
-    assert.equal((await command('serviceRestore',{confirmed:true,expectedUpdatedAt:m.updatedAt},m.id)).result.status,200);assert.equal(s.models.find(row=>row.id===m.id).callsEnabled,false);
+    const beforeArchive=structuredClone(s);
+    const archive=await command('serviceArchive',{confirmed:true,expectedUpdatedAt:m.updatedAt},m.id);
+    assert.equal(archive.result.status,422);
+    assert.equal(archive.result.data.error.code,'BUSINESS_BLOCKED');
+    assert.match(archive.result.data.error.message,/未知模型运营操作/);
+    assert.deepEqual(s,beforeArchive);
+
+    const archivedAt=new Date().toISOString();
+    const history={id:resourceId('audit-event'),action:'归档模型服务',objectId:m.id,createdAt:archivedAt,result:'成功',
+      changes:[{object:m.serviceName,field:'归档时间',before:'未设置',after:archivedAt}]};
+    await local.db.batch([
+      local.db.prepare("UPDATE services SET market_visible=0,record_json=json_set(record_json,'$.marketVisible',json('false'),'$.archivedAt',?) WHERE id=?").bind(archivedAt,m.id),
+      local.db.prepare('INSERT INTO audit_events(id,operation_id,entity_type,entity_id,action,diff_json,created_at,record_json) VALUES(?,?,?,?,?,?,?,?)')
+        .bind(history.id,renamed.id,'model-operations',m.id,history.action,'{}',Date.parse(archivedAt),JSON.stringify(history)),
+    ]);
+    await reload();
+    assert.equal(s.models.find(row=>row.id===m.id).archivedAt,archivedAt);
+    assert.deepEqual(s.audits.find(row=>row.id===history.id),history);
+    const beforeRestore=structuredClone(s);
+    const restore=await command('serviceRestore',{confirmed:true,expectedUpdatedAt:m.updatedAt},m.id);
+    assert.equal(restore.result.status,422);
+    assert.equal(restore.result.data.error.code,'BUSINESS_BLOCKED');
+    assert.match(restore.result.data.error.message,/服务已归档，无法修改/);
+    assert.deepEqual(s,beforeRestore);
     assert.equal((await local.db.prepare('PRAGMA foreign_key_check').all()).results.length,0);
   }finally{await local.runtime.dispose();}
 });

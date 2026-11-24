@@ -317,18 +317,16 @@ export async function modelCommand(db,actor,body,key,license){
     if (indexRepairs.some(item => !item)) issue(422, 'BUSINESS_BLOCKED', '所选问题不存在或需要人工核对');
   }
   const dictionaryChange = body.action.operation === 'tariffDictionary' ? body.action.data : null;
-  if (['serviceArchive','serviceDelete'].includes(body.action.operation) && typeof body.action.modelId === 'string') {
+  if (body.action.operation === 'serviceDelete' && typeof body.action.modelId === 'string') {
     const reference = await db.prepare(`SELECT 1 FROM token_package_records p, json_each(p.record_json, '$.modelIds') model
       JOIN services s ON s.material_id=model.value
       WHERE p.collection='tokenPackages' AND json_extract(p.record_json, '$.deletedAt') IS NULL AND s.id=? LIMIT 1`)
       .bind(body.action.modelId).first();
     if (reference) issue(422, 'BUSINESS_BLOCKED', '该模型服务仍被套餐引用，请先调整套餐的支持模型');
-  }
-  if (body.action.operation === 'serviceDelete' && typeof body.action.modelId === 'string') {
     const target = body.action.data?.model_service_id;
     if (target !== undefined && !validId(target)) issue(422, 'INVALID_INPUT', '模型服务 ID 无效');
     const history = await db.prepare('SELECT 1 FROM offers f WHERE f.service_id=?' + (target === undefined ? '' : ' AND f.record_id=?') + ' AND (EXISTS(SELECT 1 FROM market_orders o WHERE o.offer_id=f.record_id) OR EXISTS(SELECT 1 FROM market_calls c WHERE c.offer_id=f.record_id)) LIMIT 1').bind(body.action.modelId, ...(target === undefined ? [] : [target])).first();
-    if (history) issue(422, 'BUSINESS_BLOCKED', '服务已有订单或调用记录，请使用归档保留历史关联');
+    if (history) issue(422, 'BUSINESS_BLOCKED', '服务已有订单或调用记录，无法删除');
   }
   if (dictionaryChange?.operation === 'delete' && typeof dictionaryChange.id === 'string') {
     const reference = await db.prepare(`SELECT 1 FROM token_package_model_factors f
@@ -336,11 +334,6 @@ export async function modelCommand(db,actor,body,key,license){
          OR EXISTS (SELECT 1 FROM json_each(f.record_json, '$.draft.rules') WHERE json_extract(value, '$.billingItemId')=?1)
       LIMIT 1`).bind(dictionaryChange.id).first();
     if (reference) issue(422, 'BUSINESS_BLOCKED', '该计费项仍被套餐抵扣规则引用，请先调整规则再删除');
-  }
-  if (body.action.operation === 'providerIntake' && typeof body.action.data?.document?.provider?.code === 'string') {
-    const code = body.action.data.document.provider.code.trim().toLowerCase();
-    const archived = await db.prepare('SELECT record_json FROM suppliers WHERE code=? AND deleted_at IS NOT NULL').bind(code).first('record_json');
-    if (archived && !before.providers.some(row => row.code === code)) before.providers.push(JSON.parse(archived));
   }
   const engine=createMockEngine({initialState:before.cloudMockState,localState:before});engine.setMockRuntimeState(before);engine.invoke('/audits');before.cloudMockState=engine.snapshot();
   const action=structuredClone(body.action);

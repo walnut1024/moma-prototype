@@ -40,7 +40,6 @@ export default function ChannelDirectoryCreation({ state, providers, connections
   const [models, setModels] = useState(() => [...new Map((source?.models || []).map(({ association }) =>
     [association.modelId, { modelId: association.modelId, upstreamModelId: association.upstreamModelId }])).values()]);
   const [copyOptions, setCopyOptions] = useState({ rules: true, commercial: false, suffix: '-副本' });
-  const [importText, setImportText] = useState(null), [importError, setImportError] = useState('');
   const draftKey = workspaceStoragePrefix + 'channel-directory-batch:' + (state.adminSession?.accountId || state.currentRole);
   const [recoverable, setRecoverable] = useState(() => {
     try { return !source && JSON.parse(localStorage.getItem(draftKey)); } catch { return null; }
@@ -70,7 +69,6 @@ export default function ChannelDirectoryCreation({ state, providers, connections
       setKeyText('');
       setInputs(items => items.map(row => ({ ...row, raw: '' })));
       setPreview(null);
-      setImportText(null);
     }
   }, [ops.can]);
   const writing = busy || !ops.can;
@@ -117,27 +115,6 @@ export default function ChannelDirectoryCreation({ state, providers, connections
     setConfiguring(true);
     ops.setError('');
   });
-  const importConnection = () => {
-    try {
-      const entry = JSON.parse(importText);
-      if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
-        Object.keys(entry).some(key => !['name', 'baseUrl', 'keys', 'models'].includes(key)) ||
-        typeof entry.name !== 'string' || !entry.name.trim() || entry.name.length > 60 ||
-        typeof entry.baseUrl !== 'string' || entry.baseUrl.length > 2048 || !Array.isArray(entry.keys) || !entry.keys.length ||
-        entry.keys.length > 20 || entry.keys.some(raw => typeof raw !== 'string' || raw.length > 512)) {
-        throw Error('请填写连接名称、服务地址和 1–20 把密钥，模型可选');
-      }
-      if (entry.models !== undefined && (!Array.isArray(entry.models) || entry.models.length > 50 ||
-        new Set(entry.models.map(row => row?.modelId)).size !== entry.models.length ||
-        entry.models.some(row => !row || !provider?.catalogModels?.some(item => item.modelId === row.modelId && item.libraryId) ||
-          typeof row.upstreamModelId !== 'string' || !row.upstreamModelId.trim() ||
-          Object.keys(row).some(key => !['modelId', 'upstreamModelId'].includes(key))))) throw Error('请使用当前服务商已登记的模型和上游模型 ID');
-      set({ name: entry.name, baseUrl: entry.baseUrl, authMode: 'independent', mode: entry.keys.length > 1 ? 'multi' : 'single' });
-      setInputs(entry.keys.map(raw => ({ ...keyInput(), raw })));
-      setModels(entry.models || []);
-      setImportText(null); setImportError('');
-    } catch (error) { setImportError(error instanceof SyntaxError ? '连接信息须为有效 JSON' : error.message); }
-  };
   const review = async () => {
     if (lock.current || writing) return;
     lock.current = true;
@@ -341,7 +318,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
     </SupplierCreationDialog>;
   }
 
-  return <><SupplierCreationDialog drawer wide title={source ? '复制连接' : '新建连接'}
+  return <SupplierCreationDialog drawer wide title={source ? '复制连接' : '新建连接'}
     description={configuring ? [provider?.name, pendingType?.name || adapters.find(row => row.id === value.interfaceType)?.label].filter(Boolean).join(' / ') : '选择服务商与上游接口'}
     cancel={() => !busy && ops.proceed(close)}
     footer={!source && configuring && !saved.length && <Button disabled={busy} onClick={() => setConfiguring(false)}>返回选择接口</Button>}
@@ -402,7 +379,6 @@ export default function ChannelDirectoryCreation({ state, providers, connections
           }}/></Field>
       </div>}
       {configuring && <>
-      {!source && !pendingType && <Button theme="light" disabled={writing || !provider || Boolean(saved.length)} onClick={() => setImportText('')}>粘贴连接信息</Button>}
       <Typography.Title heading={5} component="h3">{t("连接信息")}</Typography.Title>
       <div className="channel-operation-fields">
         <Field label={batch ? '批量命名前缀' : '连接名称 *'}><Input aria-label={batch ? '批量命名前缀' : '连接名称'} value={value.name} maxLength={60}
@@ -468,14 +444,5 @@ export default function ChannelDirectoryCreation({ state, providers, connections
       </>}
     </>}
     {ops.error && <Notice error>{ops.error}</Notice>}
-  </SupplierCreationDialog>
-  {importText !== null && <Modal wide title="粘贴连接信息" onClose={() => setImportText(null)} footer={<>
-    <Button onClick={() => setImportText(null)}>{t("取消")}</Button>
-    <Button theme="solid" disabled={!importText.trim() || writing} onClick={importConnection}>带入创建表单</Button>
-  </>}>
-    <Field label="连接信息 JSON"><TextArea aria-label="连接信息 JSON" value={importText} maxLength={30000}
-      placeholder='{"name":"示例连接","baseUrl":"https://example.invalid/v1","keys":["占位密钥"],"models":[]}'
-      autosize={{ minRows: 6, maxRows: 12 }} onChange={value => { setImportText(value); setImportError(''); }}/></Field>
-    {importError && <Notice error>{importError}</Notice>}
-  </Modal>}</>;
+  </SupplierCreationDialog>;
 }

@@ -13,7 +13,7 @@ function fixture() {
   return { state, model: state.models.find(row => row.templateId === 'builtin-pp-ocrv6') };
 }
 
-test('deletion hides the service, preserves master, supply and history, and re-creation reuses stable identity with a new mode revision', () => {
+test('deletion hides the service, preserves master, supply and history, and prevents legacy re-creation', () => {
   const { state, model } = fixture(), before = structuredClone(state);
   const deleted = run(state, 'serviceDelete', { expectedUpdatedAt: model.updatedAt, confirmed: true }, model.id);
   assert.ok(deleted.models.find(row => row.id === model.id).deletedAt);
@@ -21,11 +21,9 @@ test('deletion hides the service, preserves master, supply and history, and re-c
   assert(!serviceSourceIds(deleted).has(model.templateId));
   for (const key of ['modelTemplates', 'providers', 'endpoints', 'modelVersions', 'modelSalePrices', 'serviceRoutes']) assert.deepEqual(deleted[key], before[key]);
   assert.deepEqual(state, before);
-  const recreated = run(deleted, 'createServiceModels', { libraryIds: [model.templateId], serviceMode: 'provider' });
-  const current = recreated.models.find(row => row.id === model.id);
-  assert.equal(current.deletedAt, null); assert.equal(current.type, model.type); assert.equal(current.serviceMode, 'provider');
-  assert.equal(current.serviceModeRevision, (model.serviceModeRevision || 1) + 1);
-  assert.equal(recreated.models.filter(row => row.templateId === model.templateId).length, 1);
+  const removed = structuredClone(deleted);
+  assert.throws(() => run(deleted, 'createServiceModels', { libraryIds: [model.templateId], serviceMode: 'provider' }), /删除后不可恢复/);
+  assert.deepEqual(deleted, removed);
 });
 
 test('deletion requires confirmation, current revision and permission, and refuses active configuration', () => {
@@ -34,15 +32,16 @@ test('deletion requires confirmation, current revision and permission, and refus
   for (const patch of [{ callsEnabled: true }, { listingStatus: '已上架' }]) assert.throws(() => run({ ...state, models: state.models.map(row => row.id === model.id ? { ...row, ...patch } : row) }, 'serviceDelete', data, model.id), /停止|停售/);
   assert.throws(() => commitAdminState(state, { type: 'modelOperations', operation: 'serviceDelete', modelId: model.id, data }, '只读观察员'), /无权/);
   const deleted = run(state, 'serviceDelete', data, model.id);
-  assert.throws(() => run(deleted, 'serviceRestore', data, model.id), /已删除/);
+  assert.throws(() => run(deleted, 'serviceDelete', data, model.id), /已删除/);
 });
 
-test('an archived unused service can be deleted without restoring it first', () => {
+test('existing deletion rules still allow deleting an unused historical archived service', () => {
   const { state, model } = fixture();
-  const archived = run(state, 'serviceArchive', { expectedUpdatedAt: model.updatedAt, confirmed: true }, model.id);
-  const current = archived.models.find(row => row.id === model.id);
-  const deleted = run(archived, 'serviceDelete', { expectedUpdatedAt: current.updatedAt, confirmed: true }, model.id);
-  assert.ok(deleted.models.find(row => row.id === model.id).deletedAt);
+  model.archivedAt = '2026-11-01T00:00:00.000Z';
+  const deleted = run(state, 'serviceDelete', { expectedUpdatedAt: model.updatedAt, confirmed: true }, model.id);
+  const removed = deleted.models.find(row => row.id === model.id);
+  assert.ok(removed.deletedAt);
+  assert.equal(removed.archivedAt, model.archivedAt);
   assert(!serviceDirectoryModels(deleted).some(row => row.id === model.id));
 });
 

@@ -1,10 +1,3 @@
-.semi-services.provider-intake-sheet .semi-sidesheet-body{padding:0 24px 24px}
-.provider-intake-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 32px}
-.provider-intake-form{max-width:1080px;padding-top:24px}
-.provider-intake-rows{display:grid;gap:8px;width:100%}
-.provider-intake-row{display:flex;gap:8px;align-items:center;min-width:0}
-.provider-intake-row>.semi-input-wrapper{flex:1;min-width:0}
-.provider-intake-add{justify-self:start}
 .provider-removal-modal .semi-modal-body{max-height:72vh;overflow:auto}
 .provider-removal-modal .semi-steps{margin-bottom:24px}
 .provider-removal-summary{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-block:20px 12px}
@@ -15,5 +8,4 @@
 .provider-removal-facts>div{display:grid;grid-template-columns:100px 1fr;gap:16px}
 .provider-removal-facts dt{color:var(--semi-color-text-2)}
 .provider-removal-facts dd{margin:0}
-@media(max-width:900px){.provider-intake-fields{grid-template-columns:minmax(0,1fr)}}
 

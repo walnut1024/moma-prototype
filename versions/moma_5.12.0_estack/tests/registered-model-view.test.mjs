@@ -14,7 +14,6 @@ import { channelManagementDirectory, filterChannelDirectory, supplierModelChanne
 import { MOMA_BUILTIN_MODELS, OFFICIAL_CHANNEL_PRESETS } from '../src/admin-v2/official-channel-presets.js';
 import { supplierDeletionBlock } from '../src/admin-v2/provider-channels.js';
 import { referenceWorkspace } from '../src/mock/reference-workspace.js';
-import { planProviderJsonModel } from '../src/admin-v2/provider-json-import.js';
 
 test('materials contain seventeen masters while model onboarding lists only registered models and their actual supplier channels', () => {
   const state=initialModelWorkspace(),before=structuredClone(state),directory=supplyModelDirectory(state);
@@ -55,26 +54,29 @@ test('empty registrations stay empty in both perspectives while reference catalo
   assert.deepEqual(state, before);
 });
 
-test('JSON imports match canonical codes and preserve distinct identities with the same display name', () => {
+test('saving supplier offers matches canonical codes and preserves distinct identities with the same display name', () => {
   const state = referenceWorkspace(), before = structuredClone(state), provider = state.providers[0], master = state.modelTemplates[0];
-  const input = { canonical_slug: 'another-model-version', model_name: master.name, model_type: master.type };
-  const created = planProviderJsonModel(state, provider.id, { model: input, connections: [] });
-  const added = created.state.modelTemplates.find(row => row.modelId === input.canonical_slug);
-  assert.equal(created.existing, false);
+  const input = { code: 'another-model-version', name: master.name, type: master.type,
+    bindings: [{ upstream: 'vendor/model-version', protocol: 'OpenAI Chat Completions', url: 'https://example.invalid/v1/chat/completions' }] };
+  const save = (current, offer) => commitAdminState(current, { type: 'modelOperations', operation: 'supplierOffersSave',
+    data: { providerId: provider.id, offers: [offer] } }, '平台管理员');
+  const created = save(state, input);
+  const added = created.modelTemplates.find(row => row.modelId === input.code);
   assert.equal(added.name, master.name);
   assert.notEqual(added.id, master.id);
-  assert.equal(created.state.modelTemplates.length, state.modelTemplates.length + 1);
-  assert.deepEqual(created.state.modelTemplates.filter(row => row.id !== added.id), before.modelTemplates);
-  assert.equal(created.state.providers[0].catalogModels[0].libraryId, added.id);
-  const repeated = planProviderJsonModel(created.state, provider.id, { model: { ...input, model_name: '新的展示名' }, connections: [] });
-  assert.equal(repeated.existing, true);
-  assert.deepEqual(repeated.changes, []);
-  assert.deepEqual(repeated.state, created.state);
-  const reused = planProviderJsonModel(state, provider.id, { model: { ...input, canonical_slug: master.modelId, model_name: '另一个展示名' }, connections: [] });
-  assert.equal(reused.existing, true);
-  assert.equal(reused.state.providers[0].catalogModels[0].libraryId, master.id);
-  assert.equal(reused.state.modelTemplates.length, state.modelTemplates.length);
-  assert.deepEqual(reused.state.modelTemplates, before.modelTemplates);
+  assert.equal(created.modelTemplates.length, state.modelTemplates.length + 1);
+  assert.deepEqual(created.modelTemplates.filter(row => row.id !== added.id), before.modelTemplates);
+  const newRegistration = created.providers[0].catalogModels.find(row => row.modelId === input.code);
+  assert.equal(newRegistration.libraryId, added.id);
+  const repeated = save(created, { ...input, name: '新的展示名' });
+  assert.deepEqual(repeated.modelTemplates, created.modelTemplates);
+  assert.equal(repeated.providers[0].catalogModels.filter(row => row.modelId === input.code).length, 1);
+  const updated = repeated.providers[0].catalogModels.find(row => row.modelId === input.code);
+  assert.equal(updated.id, newRegistration.id);
+  assert.equal(updated.offerFields.name, '新的展示名');
+  const reused = save(state, { ...input, code: master.modelId, name: '另一个展示名' });
+  assert.equal(reused.providers[0].catalogModels.find(row => row.modelId === master.modelId).libraryId, master.id);
+  assert.deepEqual(reused.modelTemplates, before.modelTemplates);
   assert.deepEqual(state, before);
 });
 

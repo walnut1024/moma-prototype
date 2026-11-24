@@ -221,7 +221,7 @@ export function modelTransaction(state, action) {
   const creating = operation === 'create' || creatingService;
   let model = creating ? null : state.models.find(item => item.id === action.modelId);
   if (!creating && !model) throw new Error('模型不存在');
-  if(model?.archivedAt && !action.catalogue)throw Error('服务已归档，请先恢复服务');
+  if(model?.archivedAt && !action.catalogue)throw Error('服务已归档，无法修改');
   let objectId = model?.id;
   if (creating || operation === 'basic' || operation === 'serviceBasics') {
     const libraryId = creatingService ? data.libraryId : null;
@@ -229,9 +229,8 @@ export function modelTransaction(state, action) {
     if (creatingService && !draftId && (!libraryId || !serviceModelSources(state).some(record=>record.id===libraryId))) throw new Error('请选择已登记的上游模型；供应关系可能已变化');
     if (libraryId && !source) throw new Error('来源模型资料已变化，请重新选择');
     if (creatingService && source && serviceSourceIds(state).has(source.id)) throw new Error('该模型资料已有模型服务，请进入现有服务配置');
-    const deletedService = creatingService && source && state.models.find(row => row.deletedAt && (row.templateId || row.id) === source.id);
-    if (deletedService) { model = deletedService; objectId = model.id; }
-    if(creatingService && source && !deletedService && state.models.some(row=>row.id===source.id)){
+    if (creatingService && source && state.models.some(row => row.deletedAt && (row.templateId || row.id) === source.id)) throw Error('模型服务删除后不可恢复');
+    if(creatingService && source && state.models.some(row=>row.id===source.id)){
       model=state.models.find(row=>row.id===source.id);objectId=model.id;
       // A historical master already owns a unique D1 service; preserve its master under the same stable ID.
       changes.push(add('modelTemplates',structuredClone(source)));
@@ -266,7 +265,6 @@ export function modelTransaction(state, action) {
       ...(creatingService && { serviceManaged: true, purpose: data.purpose || 'commercial' }),
       ...(creatingService && source && { templateId: source.id }),
       ...(initializingService && { serviceName: data.name, serviceMode: data.serviceMode }),
-      ...(deletedService && { deletedAt: null, archivedAt: null, serviceModeRevision: (deletedService.serviceModeRevision || 1) + 1 }),
     };
     if (model) {
       changes.push(update('models', model.id, fields));

@@ -29,8 +29,8 @@ test('publishing batch procurement prices is scoped, atomic and keeps version hi
     assert.equal(login.status, 200);
     cookie = login.headers.get('set-cookie').split(';')[0];
     const seed = await read();
-    await send(command(seed, 'providerIntake', { confirmed: true, document: {
-      provider: { name: '批量成本测试', code: 'batch-cost-fixture', source_type: 'thirdParty' },
+    await send(command(seed, 'provider', { operation: 'create', values: {
+      name: '批量成本测试', code: 'batch-cost-fixture', sourceType: 'thirdParty',
     } }));
     const created = await read();
     const provider = created.providers.find(row => row.code === 'batch-cost-fixture');

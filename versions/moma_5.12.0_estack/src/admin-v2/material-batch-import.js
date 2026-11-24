@@ -98,7 +98,7 @@ function batches(rows, size) {
   return groups;
 }
 
-export async function submitMaterialRows({ state, kind, providerId, providerCode: expectedProviderCode, rows, transact, onResult, active }) {
+export async function submitMaterialRows({ state, kind, providerId, rows, transact, onResult, active }) {
   let current = state, paused = false;
   const failed = new Set(), created = new Set();
   const report = (group, status, message) => {
@@ -123,14 +123,6 @@ export async function submitMaterialRows({ state, kind, providerId, providerCode
   if (kind === 'provider') {
     for (const group of batches(rows, 5)) {
       if (await commit(group, 'supplierProfilesImport', { profiles: group.map(row => row.data) })) report(group, 'done', '已新增服务商资料');
-    }
-    return;
-  }
-  if (kind === 'providerJson') {
-    for (const group of batches(rows, SUPPLIER_REGISTRATION_LIMIT)) {
-      if (await commit(group, 'supplierJsonImport', { providerId, expectedProviderCode, rows: group.map(row => row.payload) })) {
-        report(group, 'done', '已导入');
-      }
     }
     return;
   }

@@ -1,7 +1,7 @@
 import { offerKey, offerStage, salesPaused, providerOffer, serviceCallsEnabled } from '../service-access.mjs';
 
 export function serviceDeleteIssues(state, model, key) {
-  if (!key) return serviceArchiveIssues(state, model);
+  if (!key) return serviceRecordDeleteIssues(state, model);
   const entry = providerOffer(model, key), issues = [];
   if (!entry) return ['模型服务关联已不存在'];
   if (serviceCallsEnabled(model, entry)) issues.push('请先停止当前模型服务');
@@ -12,7 +12,7 @@ export function serviceDeleteIssues(state, model, key) {
   return issues;
 }
 
-export function serviceArchiveIssues(state, model) {
+function serviceRecordDeleteIssues(state, model) {
   const issues=[];
   if(model.listingStatus==='已上架' && !salesPaused(model))issues.push('请先停售模型服务');
   if(model.serviceMode!=='provider' && model.callsEnabled===true)issues.push('请先停止服务');

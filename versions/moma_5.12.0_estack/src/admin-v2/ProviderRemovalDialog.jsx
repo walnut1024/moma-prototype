@@ -4,9 +4,9 @@ import { Banner, Button, Space, Steps, Typography } from '@douyinfe/semi-ui';
 import { AdminModal } from './AdminOverlay';
 import Table from './AdminTable';
 import { providerRemovalPlan } from './provider-removal';
-import { exportProviderJson } from './provider-intake';
+import { exportProviderJson } from './provider-export';
 import { downloadJsonFile } from './provider-files';
-import './provider-intake.css';
+import './provider-removal.css';
 
 export function RemovalButton({ state, ops, target, label = '删除', onRemoved, disabled, ariaLabel }) {
   const [open, setOpen] = useState(false);
@@ -71,7 +71,7 @@ export default function ProviderRemovalDialog({ state, ops, target, close, remov
         <div><dt>删除范围</dt><dd>{target.catalogueId ? '当前服务商的该上游模型登记及关联上游模型' : channelScope ? '所选上游模型' : '服务商及其全部供给配置'}</dd></div>
         <div><dt>上游模型 / 连接</dt><dd>{plan.associations.length} 条上游模型记录 · {plan.endpoints.length} 个连接</dd></div></dl>
       <Typography.Paragraph>移除模型最后一条接入记录时，同步归档该服务商的上游模型登记。模型资料、模型服务配置、其他服务商、历史价格、订单及审计记录均保留。失去供给的服务保持停服或停售，并显示“连接未接入”。</Typography.Paragraph>
-      <Button theme="borderless" disabled={busy} onClick={() => downloadJsonFile(exportProviderJson(state, plan.provider), plan.provider.code + '-provider.json')}>导出当前 JSON</Button>
+      <Button theme="borderless" disabled={busy} onClick={() => downloadJsonFile(exportProviderJson(state, plan.provider), plan.provider.code + '-provider.json')}>导出 JSON 留档</Button>
       {stale && <Banner type="danger" description="关联数据已有变化，请返回第一步重新检查。"/>}
     </>}
     {(error || ops.error) && <Banner type="danger" description={error || ops.error}/>}

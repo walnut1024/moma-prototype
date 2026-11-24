@@ -8,9 +8,6 @@ import { Miniflare } from 'miniflare';
 import { migrateEmptyDatabase, startLocalBackend } from '../database/local-runtime.js';
 import { createSeed, initializeDatabase } from '../database/seed.js';
 import { isResourceId } from '../src/resource-id.mjs';
-import { builtinProviderCatalogue } from '../src/mock/reference-workspace.js';
-import { providerJsonRows, previewProviderJsonRows } from '../src/admin-v2/provider-json-import.js';
-import { domainModelWorkspace } from '../src/mock/model-fields.js';
 
 test('initialization is atomic, refuses an incompatible seed, and preserves zero/unknown price semantics', async () => {
   const runtime = new Miniflare({ modules: true, script: "export default {fetch(){return new Response('test')}}", compatibilityDate: '2026-07-30', d1Databases: ['MODEL_OPS_DB'] });
@@ -54,7 +51,7 @@ test('D1 state survives runtime restart and reinitialization never replaces an e
   } finally { await local?.runtime.dispose(); await rm(dir, { recursive: true, force: true }); }
 });
 
-test('fresh D1 starts with UUID references and imports both provider catalogues without legacy business data', async () => {
+test('fresh D1 initializes and preserves built-in references without loading legacy business data', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'moma-5120-reference-'));
   const accessCode = randomBytes(32).toString('hex');
   const hash = createHash('sha256').update(accessCode).digest('hex');
@@ -105,44 +102,11 @@ test('fresh D1 starts with UUID references and imports both provider catalogues 
     assert.deepEqual(await snapshot(), before);
 
     assert.equal((await command('demo-import', 0, 'prepareServiceShowcase', { confirmed: true })).status, 422);
-    for (const [code, expected, mappings] of [['moma', 26, 12], ['deepseek-official', 2, 2]]) {
-      const current = domainModelWorkspace(await snapshot());
-      const provider = current.providers.find(row=>row.code===code);
-      const input = { provider: { ...builtinProviderCatalogue(provider), id: provider.id } };
-      const preview = previewProviderJsonRows(current, provider.id, providerJsonRows(input, provider));
-      assert.equal(preview.length, expected);
-      assert(preview.every(row=>row.status==='ready'), JSON.stringify(preview.filter(row=>row.status!=='ready')));
-      assert.deepEqual(domainModelWorkspace(await snapshot()), current);
-      let revision = current.revision;
-      for (let i=0;i<preview.length;i+=5) {
-        const imported = await command('builtin-' + code + '-' + i, revision, 'supplierJsonImport', {
-          providerId: provider.id, expectedProviderCode: provider.code, rows: preview.slice(i,i+5).map(row=>row.payload),
-        });
-        assert.equal(imported.status, 200, JSON.stringify(imported.data.error));
-        revision = imported.data.revision;
-      }
-      const read = domainModelWorkspace(await snapshot()), saved = read.providers.find(row=>row.id===provider.id);
-      assert.deepEqual(current.modelTemplates.map(model => read.modelTemplates.find(row => row.id === model.id)), current.modelTemplates);
-      assert.equal(saved.catalogModels.length, expected);
-      assert.equal(saved.catalogConnections.length, mappings);
-      assert(saved.catalogModels.every(row=>isResourceId(row.id,'provider-model') && read.modelTemplates.some(model=>model.id===row.libraryId && model.modelId===row.modelId)));
-      assert(saved.catalogConnections.every(row=>isResourceId(row.id,'channel') && isResourceId(row.endpointId,'connection') && !row.enabled));
-      assert(previewProviderJsonRows(read, provider.id, providerJsonRows(input, saved)).every(row=>row.status==='skip'));
-    }
-    const state = await snapshot();
-    assert.equal(state.models.length, 0);
-    assert.equal(state.providers.length, 2);
-    assert.equal(state.endpoints.length, 4);
-    assert.deepEqual(state.tenants, []);
-    assert(state.endpoints.every(row=>row.status==='草稿'));
-    assert(state.modelTemplates.every(row=>isResourceId(row.record_id,'model')));
-    assert.deepEqual(state.tariffDictionary, before.tariffDictionary);
-    assert.deepEqual(state.cloudMockState.batches, []);
-    assert.deepEqual(state.cloudMockState.usage, []);
+    assert.deepEqual(await snapshot(), before);
     assert.deepEqual((await local.db.prepare('PRAGMA foreign_key_check').all()).results, []);
     await local.runtime.dispose();
     local = await startLocalBackend(options);
     assert.equal(local.initialization.initialized, false);
-    assert.deepEqual(await snapshot(), state);
+    assert.deepEqual(await snapshot(), before);
   } finally { await local?.runtime.dispose(); await rm(dir, { recursive: true, force: true }); }
 });

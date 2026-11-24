@@ -5,6 +5,8 @@ import { randomBytes, createHash } from 'node:crypto';
 import { startLocalBackend } from '../database/local-runtime.js';
 import { createSeed, initializeDatabase } from '../database/seed.js';
 import { resourceId } from '../src/resource-id.mjs';
+import { modelCatalogue } from '../src/admin-v2/model-library.js';
+import { excelOffers, offerHeaders } from '../src/admin-v2/supplier-offer-fields.js';
 
 const adminCode = 'Test@' + randomBytes(8).toString('hex'), opsCode = 'Test@' + randomBytes(8).toString('hex');
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -283,59 +285,57 @@ test('provider material commands preserve stable identities, validate display fi
   assert.deepEqual(savedEndpoint.apiKeys, endpoint.apiKeys);
 });
 
-test('provider JSON import validates ownership, atomically imports shared draft mappings and is safe to repeat', async () => {
-  const { providerJsonRows, previewProviderJsonRows } = await import('../src/admin-v2/provider-json-import.js');
-  let state = (await request('/model-operations')).data;
-  const provider = state.providers.find(row => row.id === 'provider-deepseek-official');
+test('D1 rejects retired supplier JSON and atomically saves Excel offer metadata without making a connection', async () => {
+  const before = (await request('/model-operations')).data;
+  const provider = before.providers.find(row => row.id === 'provider-deepseek-official');
+  const existing = modelCatalogue(before).find(row => row.type === 'text');
   const suffix = randomBytes(4).toString('hex');
-  const connection = { connection_id: 'qa-openai', interface_type: 'openai', protocol: 'OpenAI', base_url: `https://${suffix}.import.example.invalid/v1` };
-  const model = index => ({ canonical_slug: `qa-json-${suffix}-${index}`, model_name: `JSON 验收 ${index}`, model_type: 'text',
-    model_info: { architecture: { input_modalities: ['text'], output_modalities: ['text'] } },
-    mappings: [{ connection_id: connection.connection_id, upstream_model_id: `vendor/model-${index}` }] });
-  const file = { provider: { id: provider.id, code: provider.code, models: [model(1), model(2)], connections: [connection] } };
-  const preview = rows => previewProviderJsonRows(state, provider.id, providerJsonRows(rows, provider));
-  assert.throws(() => preview({ provider: { ...file.provider, id: 'provider-moma' } }), /Provider ID 或编码/);
-  assert.throws(() => preview({ provider: { ...file.provider, connections: [{ ...connection, api_key: 'forbidden' }] } }), /未知字段/);
-  const duplicate = { ...file.provider, models: [model(1), model(1)] };
-  assert.deepEqual(preview({ provider: duplicate }).map(row => row.status), ['ready', 'error']);
-  const archived = state.modelTemplates.find(row => state.modelData.archivedCatalogueIds.includes(row.id));
-  assert.match(preview({ provider: { ...file.provider, models: [{ ...model(1), canonical_slug: archived.modelId.toLowerCase() }] } })[0].message, /归档/);
-  const sensitive = { ...model(1), model_info: { documentation: 'https://example.test/docs?access_token=do-not-import' } };
-  assert.match(preview({ provider: { ...file.provider, models: [sensitive] } })[0].message, /凭据/);
-  const rows = preview(file);
-  assert.deepEqual(rows.map(row => row.status), ['ready', 'ready']);
-  const commit = async (rows, session, expectedRevision = state.revision, expectedProviderCode = provider.code) => {
-    const operationId = crypto.randomUUID();
-    return request('/model-operations/commands', { method: 'POST', session, key: operationId,
-      body: { operationId, expectedRevision, action: { type: 'modelOperations', operation: 'supplierJsonImport', data: { providerId: provider.id, expectedProviderCode, rows } } } });
-  };
-  const payload = rows.map(row => row.payload);
-  assert.equal((await commit(payload, readonlyToken)).status, 403);
-  assert.equal((await commit(payload, token, state.revision - 1)).status, 409);
-  assert.equal((await commit(payload, token, state.revision, 'wrong-provider')).status, 422);
-  const invalid = { ...payload[1], model: { ...model(2), mappings: [{ connection_id: 'not-in-file', upstream_model_id: 'vendor/model-2' }] } };
-  assert.equal((await commit([payload[0], invalid])).status, 422);
-  assert.equal((await request('/model-operations')).data.revision, state.revision);
-  const result = await commit(payload);
+  const newCode = `qa-offer-${suffix}`;
+  const url = `https://${suffix}.import.example.invalid/v1/chat/completions`;
+  const offers = excelOffers([
+    offerHeaders,
+    ['复用资料的供应名称', 'vendor/existing', existing.modelId, 'text', 'OpenAI Chat Completions', url],
+    ['新供应模型', 'vendor/new', newCode, 'text', 'OpenAI Chat Completions', url],
+  ], provider);
+  const commit = (operation, data, { session = token, expectedRevision = before.revision, operationId = crypto.randomUUID() } = {}) =>
+    request('/model-operations/commands', { method: 'POST', session, key: operationId,
+      body: { operationId, expectedRevision, action: { type: 'modelOperations', operation, data } } });
+  const form = { providerId: provider.id, offers };
+  assert.equal((await commit('supplierOffersSave', form, { session: readonlyToken })).status, 403);
+  assert.equal((await commit('supplierOffersSave', form, { expectedRevision: before.revision - 1 })).status, 409);
+  const retired = await commit('supplierJsonImport', {
+    providerId: provider.id, expectedProviderCode: provider.code,
+    rows: [{ model: { canonical_slug: newCode, model_name: '新供应模型', model_type: 'text' }, connections: [] }],
+  });
+  assert.equal(retired.status, 422);
+  assert.equal(retired.data.error.code, 'BUSINESS_BLOCKED');
+  const invalid = { ...offers[1], bindings: [{ ...offers[1].bindings[0], url: 'https://invalid.example.test/v1/embeddings' }] };
+  const rejected = await commit('supplierOffersSave', { ...form, offers: [offers[0], invalid] });
+  assert.equal(rejected.status, 422);
+  assert.match(rejected.data.error.message, /接口格式/);
+  assert.deepEqual((await request('/model-operations')).data, before);
+
+  const operationId = crypto.randomUUID();
+  const result = await commit('supplierOffersSave', form, { operationId });
   assert.equal(result.status, 200, JSON.stringify(result.data.error));
-  state = (await request('/model-operations')).data;
-  const endpoints = state.endpoints.filter(row => row.providerId === provider.id && row.baseUrl === connection.base_url);
-  assert.equal(endpoints.length, 1);
-  assert.equal(endpoints[0].status, '草稿');
-  assert.equal(endpoints[0].connectionTest, null);
-  assert.deepEqual(endpoints[0].apiKeys, []);
-  const saved = state.providers.find(row => row.id === provider.id);
+  const after = (await request('/model-operations')).data;
+  const saved = after.providers.find(row => row.id === provider.id);
+  const added = after.modelTemplates.find(row => row.modelId === newCode);
+  assert.ok(added);
+  assert.deepEqual(modelCatalogue(after).find(row => row.id === existing.id), existing);
+  for (const [offer, materialId] of [[offers[0], existing.id], [offers[1], added.id]]) {
+    const entry = saved.catalogModels.find(row => row.modelId === offer.code);
+    assert.equal(entry.libraryId, materialId);
+    assert.deepEqual(entry.offerFields, offer);
+    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM supplier_models WHERE supplier_id=? AND material_id=? AND removed_at IS NULL')
+      .bind(provider.id, materialId).first('n'), 1);
+  }
   assert.deepEqual(saved.apiKeys, provider.apiKeys);
-  const mappings = saved.catalogConnections.filter(row => row.endpointId === endpoints[0].id);
-  assert.equal(mappings.length, 2);
-  assert.ok(mappings.every(row => row.enabled === false && !row.pricing.scenarios.length));
-  assert.equal(await local.db.prepare('SELECT COUNT(*) AS count FROM channel_models WHERE channel_id=?').bind(endpoints[0].id).first('count'), 2);
-  assert.deepEqual(preview(file).map(row => row.status), ['skip', 'skip']);
-  assert.equal((await commit(payload)).status, 200);
-  const again = (await request('/model-operations')).data;
-  assert.deepEqual(again.providers, state.providers);
-  assert.deepEqual(again.endpoints, state.endpoints);
-  assert.deepEqual(again.modelTemplates, state.modelTemplates);
+  assert.deepEqual(saved.catalogConnections, provider.catalogConnections);
+  assert.deepEqual(after.endpoints, before.endpoints);
+  assert.deepEqual(after.models, before.models);
+  assert.deepEqual((await commit('supplierOffersSave', form, { operationId })).data, result.data);
+  assert.deepEqual((await request('/model-operations')).data, after);
 });
 
 test('channel name and upstream identifier save together through HTTP and D1 without changing procurement history',async()=>{
