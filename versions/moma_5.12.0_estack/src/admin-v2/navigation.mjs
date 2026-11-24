@@ -33,6 +33,7 @@ export const sections = [
   ]},
   { id: "runtime", workspace: "maintenance", title: "运行分析", items: [
     { id: "calls", label: "调用数据", children: [["call-analysis", "调用数据"]] },
+    { id: "model-performance", label: "模型性能", children: [["model-performance", "模型性能"]] },
   ]},
   { id: "gateway", workspace: "maintenance", title: "网关管理", items: [
     { id: "gateway", label: "网关配置", children: [["routes", "路由策略"], ["limits", "限流与并发"], ["fallback", "熔断与回退"], ["cache", "缓存策略"], ["releases", "配置版本与发布"]] },

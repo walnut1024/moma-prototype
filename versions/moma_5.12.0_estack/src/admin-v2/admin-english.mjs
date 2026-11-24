@@ -252,6 +252,7 @@ const englishText = new Map(Object.entries({
   '租户管理': 'Tenant Management',
   '运行分析': 'Runtime Analytics',
   '调用数据': 'Request Analytics',
+  '模型性能': 'Model Performance',
   '网关管理': 'Gateway Management',
   '网关配置': 'Gateway Configuration',
   '限流与并发': 'Rate Limits and Concurrency',

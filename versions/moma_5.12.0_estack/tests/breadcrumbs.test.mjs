@@ -124,6 +124,16 @@ test('retired model operations addresses resolve to the role workspace home', ()
   }
 });
 
+test('model performance is a maintenance page beside the request analytics home', () => {
+  const page = 'model-performance';
+  assert.deepEqual(labels(build(page)), ['运行分析', '模型性能']);
+  assert.equal(build(page)[0].href, '#/admin-2/call-analysis');
+  assert.equal(pageFromHash('#/admin-2/' + page, '运维人员'), page);
+  assert.equal(canAccessPage('运维人员', page), true);
+  assert.equal(canAccessPage('平台管理员', page), true);
+  assert.equal(canAccessPage('运营人员', page), false);
+});
+
 test('model operations is a navigation group, not a link to a sibling model-service page', () => {
   for (const page of ['providers-reference', 'listing-new', 'model-market', 'model-templates', 'tariff-dictionary', 'provider-materials']) {
     for (const query of ['', 'perspective=models', 'provider=p1&listQ=MoMA&listPage=2']) {

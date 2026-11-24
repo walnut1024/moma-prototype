@@ -30,6 +30,7 @@ import { serviceOperationsUi } from "./admin-v2/ServiceUI";
 const loadOverview = () => import('./admin-v2/OperationsOverview');
 const OperationsOverview = lazy(loadOverview);
 const AnalyticsPages = lazy(() => import('./admin-v2/AnalyticsPages'));
+const ModelPerformancePage = lazy(() => import('./admin-v2/ModelPerformancePage'));
 const CustomerPage = lazy(() => import('./admin-v2/CustomerPages'));
 const CustomerUsageDetail = lazy(() => import('./admin-v2/CustomerUsageDetail'));
 const ModelMarket = lazy(() => import('./admin-v2/ModelMarket'));
@@ -82,6 +83,7 @@ const NAVIGATION_ICONS = {
   individual: IconUserStroked,
   'organization-members': IconUserGroup,
   calls: IconPulse,
+  'model-performance': IconBarChartVStroked,
   gateway: IconFlowChartStroked,
   logs: IconChecklistStroked,
   monitoring: IconMonitorStroked,
@@ -306,6 +308,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === "dashboard" ? <OperationsOverview state={factState} workbenchName={workbenchName} onNavigate={navigate}
               shortcuts={overviewShortcuts.filter(({ id }) => canAccessPage(state.currentRole, id, license))}/>
             : ["usage-analysis", "user-analysis", "call-analysis"].includes(active) ? <AnalyticsPages pageId={active} state={factState}/>
+            : active === 'model-performance' ? <ModelPerformancePage state={factState}/>
             : ['customer-analysis', 'customer-analysis-detail'].includes(active) ? <CustomerAnalysis key={active + detailParams.toString()} detail={active === 'customer-analysis-detail'} params={detailParams}/>
             : active === 'customer-usage-detail' ? <CustomerUsageDetail state={pageState}/>
             : active === "admins" ? <AdminAccounts state={state} transact={transactAdminAccount} conflict={conflict}/>
