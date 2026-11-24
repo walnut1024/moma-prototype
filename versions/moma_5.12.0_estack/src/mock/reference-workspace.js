@@ -4,8 +4,6 @@ import { BUILTIN_MODEL_CATALOGUE } from './builtin-model-catalogue.js';
 import providerCatalogues from '../data/builtin-provider-catalogues.json' with { type: 'json' };
 import { resourceId } from '../resource-id.mjs';
 
-export const builtinProviderCatalogue = provider => providerCatalogues.find(row => row.code === provider?.builtinCatalogue);
-
 export function referenceWorkspace() {
   const initial = initialApplicationData(0);
   const state = Object.fromEntries(Object.entries(initial).map(([key, value]) => [key, Array.isArray(value) ? [] : value]));

@@ -44,6 +44,16 @@ test('mock credentials and normal requests never fetch or persist raw secrets', 
   const env = fixture(t), secret = 'temporary-not-a-production-secret-12345';
   const key = await env.post('/credentials', { providerId: 'supplier', name: 'Key', secret });
   assert.equal(key.source, 'mock'); assert.equal('secret' in key, false); assert.equal([...env.stored.values()].join('').includes(secret), false);
+  const before = env.stored.get(mockStorageKey);
+  await assert.rejects(env.post(`/credentials/${key.id}/revoke`, { expectedRevision: key.version }), issue => issue.code === 'not_found');
+  await assert.rejects(env.channel('forged-revocation', 'another-key', {
+    credential: { id: 'another-key', version: 'fingerprint', status: 'revoked' },
+  }), issue => issue.code === 'credential_revoked');
+  assert.equal(env.stored.get(mockStorageKey), before);
+  const disabled = await env.post(`/credentials/${key.id}/disable`, { expectedRevision: key.version });
+  assert.equal(disabled.status, 'disabled');
+  const enabled = await env.post(`/credentials/${key.id}/enable`, { expectedRevision: disabled.version });
+  assert.equal(enabled.status, 'active');
   const ch = await env.channel('channel', key.id); await env.prove(ch); const current = await env.service(ch); await env.publish(current);
   const client = await env.post('/client-keys', { tenantId: 'tenant-a', serviceIds: [current.id] });
   const response = await api('/client/completions', { method: 'POST', token: client.clientKey, body: { operationId: env.op(), model: current.candidate.publicModelId, messages: [{ role: 'user', content: 'customer text remains visible' }] } });
@@ -109,15 +119,33 @@ test('group switching rejects partial coverage and missing candidate evidence wi
   const after = (await api('/services')).services; assert.equal(after.find(row => row.id === sa.id).published.config.bindings[0].channelId, ca.id); assert.deepEqual(after.find(row => row.id === sa.id).published.config.salePrices, before.find(row => row.id === sa.id).published.config.salePrices);
 });
 
-test('new references invalidate a preview and revoked credentials stop queued work and later runtime', async t => {
-  const env = fixture(t), old = await env.channel('old'), candidate = await env.channel('candidate', 'new-key'); await env.prove(old); await env.prove(candidate); const current = await env.service(old); await env.publish(current);
+test('new references invalidate a preview and historically revoked credentials stop queued work', async t => {
+  const env = fixture(t), old = await env.channel('old', 'historical-key', {
+    credential: { id: 'historical-key', version: 'old-version', status: 'active' },
+  });
+  const candidate = await env.channel('candidate', 'new-key'); await env.prove(old); await env.prove(candidate); const current = await env.service(old); await env.publish(current);
   const plan = await env.post('/configuration-changes/preview', { replacements: [{ channelId: old.id, candidateChannelId: candidate.id }] }); await env.service(old);
   await assert.rejects(env.post('/configuration-changes/apply', { previewId: plan.id, impactSignature: plan.impactSignature }), issue => issue.code === 'configuration_impact_changed');
   const batch = await env.post('/tests', { channelId: old.id, models: Array.from({ length: 4 }, (_, i) => ({ ...env.model, id: `model-${i}`, upstreamModelId: `up-${i}` })) });
-  const key = (await api('/credentials')).credentials.find(row => row.id === old.credentialId); await env.post(`/credentials/${key.id}/revoke`, { expectedRevision: key.version }); env.advance(3000); const result = await api(`/tests/${batch.id}`); assert.ok(result.items.some(item => item.status === 'failed' && item.code === 'supply_unavailable'));
+  const snapshot = JSON.parse(env.stored.get(mockStorageKey));
+  const key = snapshot.credentials.find(row => row.id === old.credentialId);
+  key.status = 'revoked';
+  key.version++;
+  env.stored.set(mockStorageKey, JSON.stringify(snapshot));
+  for (const action of ['disable', 'enable']) {
+    await assert.rejects(env.post(`/credentials/${key.id}/${action}`, { expectedRevision: key.version }), issue => issue.code === 'credential_revoked');
+  }
+  await assert.rejects(env.channel('rebind-revoked', key.id), issue => issue.code === 'credential_revoked');
+  await assert.rejects(env.channel('revived-version', 'historical-key', {
+    credential: { id: 'historical-key', version: 'new-version', status: 'active' },
+  }), issue => issue.code === 'credential_revoked');
+  assert.equal(env.stored.get(mockStorageKey), JSON.stringify(snapshot));
+  env.advance(3000);
+  const result = await api(`/tests/${batch.id}`);
+  assert.ok(result.items.some(item => item.status === 'failed' && item.code === 'supply_unavailable'));
 });
 
-test('local emergency revoke and provider/channel/model stops gate the same mock runtime, while stopped channels can still be checked', async t => {
+test('historical local revocation and provider/channel/model stops gate mock runtime', async t => {
   const env = fixture(t), ch = await env.channel('channel', 'local-key', { clientChannelId: 'local-endpoint', credential: { id: 'local-key', version: 'fingerprint-v1', status: 'active' } });
   const local = { providers: [{ id: 'supplier', status: '已启用', apiKeys: [{ id: 'local-key', status: 'enabled' }], catalogModels: [{ modelId: 'catalog-model', libraryId: env.model.id }], catalogConnections: [{ id: env.model.associationId, modelId: 'catalog-model', endpointId: 'local-endpoint', upstreamModelId: env.model.upstreamModelId, enabled: true }] }], endpoints: [{ id: 'local-endpoint', providerId: 'supplier', status: '运行中' }] };
   setMockRuntimeState(local); await env.prove(ch); const current = await env.service(ch); await env.publish(current); const key = await env.post('/client-keys', { tenantId: 'tenant-a', serviceIds: [current.id] });

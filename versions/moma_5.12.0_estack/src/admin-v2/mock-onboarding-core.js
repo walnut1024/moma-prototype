@@ -267,8 +267,19 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
   if (method === 'GET' && route === '/health') return { status: 'healthy', source: 'mock' };
   if (method === 'GET' && route === '/credentials') return { credentials: state.credentials };
   if (method === 'POST' && route === '/credentials') return once(state, 'createCredential', body, () => { const secret = body.secret || '', row = { id: resourceId('credential'), providerId: text(body.providerId, '服务商'), name: text(body.name, '密钥名称'), maskedKey: secret.length > 12 ? `${secret.slice(0, 8)}*****${secret.slice(-4)}` : '*****', version: 1, status: 'active', source: 'mock', accountRpm: body.accountRpm || null }; state.credentials.push(row); return row; });
-  const credentialAction = route.match(/^\/credentials\/([^/]+)\/(revoke|disable|enable)$/);
-  if (method === 'POST' && credentialAction) return once(state, credentialAction[2] + 'Credential', body, () => { const row = state.credentials.find(item => item.id === credentialAction[1]); if (!row) fail('credential_not_found', '凭证引用不存在'); if (row.version !== body.expectedRevision) fail('revision_conflict', '凭证版本已变化'); if (row.status === 'revoked' && credentialAction[2] !== 'revoke') fail('credential_revoked', '已撤销凭证不能恢复'); const status = ({ revoke: 'revoked', disable: 'disabled', enable: 'active' })[credentialAction[2]]; if (row.status !== status) { row.status = status; row.version++; } return row; });
+  const credentialAction = route.match(/^\/credentials\/([^/]+)\/(disable|enable)$/);
+  if (method === 'POST' && credentialAction) {
+    const [, credentialId, action] = credentialAction;
+    return once(state, action + 'Credential', body, () => {
+      const row = state.credentials.find(item => item.id === credentialId);
+      if (!row) fail('credential_not_found', '凭证引用不存在');
+      if (row.version !== body.expectedRevision) fail('revision_conflict', '凭证版本已变化');
+      if (row.status === 'revoked') fail('credential_revoked', '已撤销凭证不能恢复');
+      const status = action === 'disable' ? 'disabled' : 'active';
+      if (row.status !== status) { row.status = status; row.version++; }
+      return row;
+    });
+  }
   if (method === 'GET' && route === '/channels') return { channels: state.channels.map(channel => ({ ...channel, signature: channelSignature(state, channel) })) };
   const channelPath = route.match(/^\/channels\/([^/]+)$/);
   if (method === 'POST' && route === '/channels' || method === 'PATCH' && channelPath) return once(state, channelPath ? 'updateChannel' : 'createChannel', body, () => {
@@ -279,8 +290,20 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
     if (state.channels.some(row => row.id !== current?.id && row.providerId === providerId && row.name === name)) fail('duplicate_name', '连接名称重复');
     if (!['openai', 'openai-responses', 'anthropic', 'custom'].includes(input.interfaceType)) fail('invalid_interface', '请选择明确接口类型');
     const localKeyId = input.credential?.id || null, externalVersion = input.credential?.version || 'initial', credentialId = input.authMode === 'none' ? null : localKeyId ? `${localKeyId}@${hash(externalVersion)}` : input.credentialId;
-    if (input.authMode !== 'none' && !state.credentials.some(row => row.id === credentialId)) { const revoked = localKeyId && state.credentials.some(row => row.localKeyId === localKeyId && row.status === 'revoked'); state.credentials.push({ id: text(credentialId, '密钥引用'), localKeyId, externalVersion, providerId, name: '连接密钥引用', maskedKey: '*****', status: revoked ? 'revoked' : input.credential?.status || 'active', version: 1, accountRpm: input.credential?.accountRpm || null, source: 'mock' }); }
-    const key = state.credentials.find(row => row.id === credentialId); if (key && key.providerId !== providerId) fail('credential_scope', '密钥不属于此服务商');
+    const key = state.credentials.find(row => row.id === credentialId);
+    if (key && key.providerId !== providerId) fail('credential_scope', '密钥不属于此服务商');
+    if (input.authMode !== 'none') {
+      const previouslyRevoked = localKeyId && (
+        state.credentials.some(row => row.providerId === providerId && row.localKeyId === localKeyId && row.status === 'revoked') ||
+        runtime?.keys.some(row => row.providerId === providerId && row.id === localKeyId && row.revokedAt)
+      );
+      if (key?.status === 'revoked' || previouslyRevoked || input.credential?.status === 'revoked') {
+        fail('credential_revoked', '已撤销凭证不能用于连接');
+      }
+      if (!key) state.credentials.push({ id: text(credentialId, '密钥引用'), localKeyId, externalVersion, providerId,
+        name: '连接密钥引用', maskedKey: '*****', status: input.credential?.status || 'active', version: 1,
+        accountRpm: input.credential?.accountRpm || null, source: 'mock' });
+    }
     const channel = { id: current?.id || resourceId('connection'), providerId, name, displayName: input.displayName || name, interfaceType: input.interfaceType, baseUrl: text(input.baseUrl, '接口地址', 2048), taskUrls: copy(input.taskUrls || {}), authMode: input.authMode || 'key', credentialId, clientChannelId: input.clientChannelId || null, clientSignature: input.clientSignature || null, mockModels: copy(input.mockModels || current?.mockModels || []), apiVersion: input.apiVersion || input.adapterOptions?.apiVersion || null, workspaceId: input.workspaceId || input.adapterOptions?.workspaceId || null, tokenLimitField: input.tokenLimitField || input.adapterOptions?.tokenLimitField || null, imageSize: input.imageSize || input.adapterOptions?.imageSize || null, voice: input.voice || input.adapterOptions?.voice || null, statusPath: input.statusPath || input.adapterOptions?.statusPath || null, revision: (current?.revision || 0) + 1, configVersion: (current?.configVersion || 0) + 1, source: 'mock' };
     if (input.endpointPath != null) {
       const config = prepareChannelInterface({ ...input, allowHttp: input.allowHttp === true });

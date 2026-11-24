@@ -1,7 +1,6 @@
 import { workbenchProtocolLabel } from './workbench-protocol.js';
 import { channelIdentity } from '../model-identities.mjs';
 import { CHANNEL_INTERFACES, connectionRequestUrl, modelTaskUrl, prepareChannelInterface } from './channel-interface.js';
-import { directoryDisabledKind } from './channel-directory-archive.js';
 import { connectionKeys, connectionTestCurrent, connectionTestPending } from './connection-state.js';
 import { costRecords } from './model-pricing-workspace.js';
 import { supplyModelRecord } from './supply-models.js';
@@ -10,6 +9,12 @@ import { supplierChannelAssociations, supplierChannelResources } from './supplie
 export const CONNECTION_STATUSES = ['已启用', '已停用', '自动停用', '未启用'];
 
 export const CHANNEL_SOURCE_TYPES = ['thirdParty', 'selfHosted'];
+
+function directoryDisabledKind(endpoint) {
+  if (endpoint.status === '自动停用' || ['停用', '已停用'].includes(endpoint.status) && endpoint.activationSource === 'automatic') return 'automatic';
+  if (['停用', '已停用'].includes(endpoint.status) && endpoint.activationSource === 'manual') return 'manual';
+  return '';
+}
 
 export function channelSourceTypeLabel(sourceType) {
   switch (sourceType) {

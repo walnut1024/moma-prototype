@@ -40,7 +40,6 @@ export function canMutate(role, action) {
 }
 
 export function commitAdminState(state, action, actor = state.currentRole) {
-  const archivingAcceptance = action.type === 'modelOperations' && action.operation === 'archiveAcceptanceFixture';
   const writingMarketCard = action.type === 'modelOperations' && ['marketCardCreate', 'marketCardEdit', 'marketCardLink', 'marketCardSetStatus', 'marketCardDelete'].includes(action.operation);
   const reorderingMarket = action.type === 'modelOperations' && action.operation === 'marketReorder';
   if (action.type === 'setRole') throw new Error('请通过后台 mock 账号切换身份');
@@ -113,7 +112,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
         const index = next[change.collection].findIndex(item => item.id === change.id);
         if (index < 0) throw new Error("记录不存在");
         if (change.type === 'remove') {
-          if (change.collection !== 'tariffDictionary' && !(archivingAcceptance && ['providers','endpoints','models','modelSupplies','modelVersions','validations','serviceRoutes'].includes(change.collection))) throw new Error('不支持删除此集合');
+          if (change.collection !== 'tariffDictionary') throw new Error('不支持删除此集合');
           next[change.collection].splice(index, 1);
         } else next[change.collection][index] = { ...next[change.collection][index], ...change.changes, updatedAt: timestamp };
       }
@@ -158,7 +157,6 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   const auditBefore = modelAuditContext(state, action), auditAfter = modelAuditContext(next, action);
   if (action.type !== "setRole") next.audits.unshift(record(resourceId('audit-event'), { createdAt: timestamp, updatedAt: timestamp, actor, action: action.label || action.type, objectId: action.record?.id || action.id || action.objectId || "batch", objectLabel: auditAfter.objectLabel, relatedModelIds: [...new Set([...auditBefore.relatedModelIds, ...auditAfter.relatedModelIds])], relatedEndpointIds:[...new Set([...auditBefore.relatedEndpointIds,...auditAfter.relatedEndpointIds])], result: action.auditFailure ? '失败' : '成功', changes: modelAuditChanges(state,action), ...(action.auditFailure ? { reason: action.auditFailure } : {}), before: isEnterprise ? action.changes.filter(change => change.type === 'update').map(change => ({ collection: change.collection, id: change.id, values: Object.fromEntries(Object.keys(change.changes).map(key => [key, state[change.collection].find(item => item.id === change.id)?.[key]])) })) : null, after: action.record || action.changes,
   }));
-  if (action.archiveResults) next.audits[0].archiveResults = action.archiveResults;
   if (savingClassification) {
     next.audits[0].before = action.classificationBefore;
     next.audits[0].after = action.classificationEntry;
@@ -168,7 +166,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   else if (installingCatalogue) {
     const added = next.modelTemplates.filter(row => !state.modelTemplates.some(before => before.id === row.id)).map(row => row.id);
     next.modelData = { ...next.modelData, builtinIds: { ...next.modelData?.builtinIds, modelTemplates: [...new Set([...(next.modelData?.builtinIds?.modelTemplates || []), ...added])] }, catalogueIds: [...new Set([...(next.modelData?.catalogueIds || []), ...action.catalogueIds])] };
-  } else if (cleaningCatalogue || archivingAcceptance) next.modelData = { ...next.modelData, archivedCatalogueIds: action.archivedCatalogueIds };
+  } else if (cleaningCatalogue) next.modelData = { ...next.modelData, archivedCatalogueIds: action.archivedCatalogueIds };
   else if (reorderingMarket) next.modelData = { ...next.modelData, marketOrder: action.marketOrder };
   else trackModelUserChanges(state, next);
   assertPersonalProjects(state, next);

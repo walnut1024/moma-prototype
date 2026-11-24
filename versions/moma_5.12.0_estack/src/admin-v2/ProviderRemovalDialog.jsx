@@ -66,7 +66,7 @@ export default function ProviderRemovalDialog({ state, ops, target, close, remov
         <Typography.Paragraph type="tertiary">处理立即生效。取消删除后，已停服的模型服务和已停售的模型售卖不会自动恢复。</Typography.Paragraph></div>}
       {plan.ready && <Banner type="success" description="关联检查通过：没有待停服、待停售的模型服务或活动依赖。"/>}
     </> : <>
-      <Banner type="warning" description="删除后，该供给将不能再被调用或订购。重新录入后仍需验证、启用供给并重新开售。"/>
+      <Banner type="warning" description="删除后，该供给将不能再被调用或订购。如需再次接入，请在模型接入中配置并测试对应的连接和上游模型。启用后可按需开售。"/>
       <dl className="provider-removal-facts"><div><dt>{translateLabel("服务商")}</dt><dd>{plan.provider.name}</dd></div>
         <div><dt>删除范围</dt><dd>{target.catalogueId ? '当前服务商的该上游模型登记及关联上游模型' : channelScope ? '所选上游模型' : '服务商及其全部供给配置'}</dd></div>
         <div><dt>上游模型 / 连接</dt><dd>{plan.associations.length} 条上游模型记录 · {plan.endpoints.length} 个连接</dd></div></dl>

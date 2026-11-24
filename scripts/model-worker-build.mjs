@@ -4,13 +4,6 @@ import {fileURLToPath} from 'node:url';
 
 const version = fileURLToPath(new URL('../versions/moma_5.12.0_estack/', import.meta.url));
 const snapshots = {
-  "33a772f0": new Set([
-    "src/admin-v2/workbench-protocol.js",
-    "src/admin-v2/channel-connection-directory.js",
-    "src/admin-v2/model-operations.js",
-    "src/service-directory.mjs",
-    "src/admin-v2/navigation.mjs",
-  ]),
   '7e451843': new Set([
     'src/mock/catalogues.json',
     'src/deployment-license.mjs',

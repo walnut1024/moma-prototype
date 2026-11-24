@@ -1,6 +1,5 @@
 import { validateOffer } from './supplier-offer-fields.js';
 import { providerRemovalTransaction } from './provider-removal.js';
-import { directoryArchiveBatch } from './channel-directory-archive.js';
 import { channelSpecialtyTransaction, ollamaCurrentRows } from './channel-directory-specialty.js';
 import { normalizeAdapterDraft } from './channel-adapter-catalogue.js';
 import { supplierChannelBatchPlan, supplierChannelLifecyclePlan } from './supplier-channel-batch.js';
@@ -38,7 +37,6 @@ import { channelOnboardingTransaction } from './channel-onboarding.js';
 import { channelDiscoveryPreview, directoryDiscoveryPolicy, directoryDiscoverySignature, ignoredDiscoveryModel } from './channel-discovery-diff.js';
 import { providerTransaction, providerCode, modelConnectivityPreview, PROTOCOLS, checkedConnectionKeys } from './provider-management.js';
 import { builtinModelCatalogueChanges, cleanModelCatalogueTransaction } from '../mock/builtin-model-catalogue.js';
-import { archiveAcceptanceFixture } from './acceptance-cleanup.js';
 import { supplierModelRegistration } from './supplier-model-registration.js';
 import { supplyModelRecord, serviceModelSources, supplierModelFields } from './supply-models.js';
 import { providerKeyGroupKeys } from './provider-key-groups.js';
@@ -133,7 +131,6 @@ export function operationsTransaction(state, action) {
     return marketCardTransaction(state, action, orderedMarketModels(state));
   }
   if (action.operation === 'marketReorder') return marketOrderTransaction(state, action);
-  if (action.operation === 'archiveAcceptanceFixture') return archiveAcceptanceFixture(state, action.data);
   if (action.operation === 'cleanModelCatalogue') return cleanModelCatalogueTransaction(state);
   if (action.operation === 'installModelCatalogue') return builtinModelCatalogueChanges(state, action.data?.catalogueIds);
   if (action.operation === 'channelHealthTest') return channelHealthTransaction(state, action);
@@ -711,10 +708,6 @@ export function operationsTransaction(state, action) {
     }
     objectId ||= provider.id;
     label = '创建连接';
-  } else if (operation === 'channelDirectoryArchive') {
-    const archiveResults = directoryArchiveBatch(working, data, apply);
-    return { type: 'batch', label: !changes.length ? '核对连接归档范围' : data.mode === 'disabled' ? '清理已停用连接' : '批量删除连接',
-      objectId: data.targets[0].endpointId, archiveResults, changes };
   } else if (operation === 'channelDirectorySpecialty') {
     if (data.action === 'replaceModel') {
       const provider = working.providers.find(row => row.id === data.providerId && !row.deletedAt);

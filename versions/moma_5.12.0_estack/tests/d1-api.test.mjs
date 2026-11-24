@@ -77,7 +77,6 @@ test('the retired credential revocation command cannot write through the model o
   assert.deepEqual(after.providers.find(row => row.id === provider.id).apiKeys, provider.apiKeys);
   assert.equal(await local.db.prepare('SELECT id FROM operations WHERE id=?').bind(operationId).first(), null);
 });
-
 test('login uses a secure cookie and never returns an access code or token in JSON', async () => {
   const result = await request('/auth/login', { method: 'POST', session: null, body: { accountId: 'admin-001', accessCode: adminCode } });
   assert.match(result.headers.get('set-cookie'), /HttpOnly; Secure; SameSite=Lax; Path=\/api\/v1(?:;|$)/);
@@ -601,30 +600,25 @@ test('supplier model removal over HTTP checks canonical aliases and preserves th
   for(const key of ['models','modelTemplates','endpoints','modelSupplies','modelSalePrices','serviceRoutes'])assert.deepEqual(next[key],state[key]);
 });
 
-test('acceptance cleanup is scoped, atomic, replayable and soft-archives only the three confirmed fixture graphs', async () => {
-  const {modelChanges,initialModelWorkspace}=await import('../server/model-repository.js');
-  const {withAcceptanceFixtures,fixtures}=await import('./acceptance-fixture-state.mjs');
-  const templates=withAcceptanceFixtures(initialModelWorkspace());
-  const before=(await request('/model-operations')).data,seeded=structuredClone(before);
-  for(const [key,field]of [['providers','providerId'],['endpoints','endpointId'],['models','modelId'],['modelSupplies','supplyId'],['modelTemplates','libraryId']])seeded[key].push(...templates[key].filter(row=>fixtures.some(spec=>spec[field]===row.id)));
-  seeded.modelVersions.push(...templates.modelVersions.filter(row=>fixtures.some(spec=>spec.modelId===row.modelId)));
-  await local.db.batch([local.db.prepare('PRAGMA defer_foreign_keys=ON'),...modelChanges(local.db,before,seeded)]);
-  let state=(await request('/model-operations')).data;
-  async function command(providerId,confirmed,session=token){const id=crypto.randomUUID(),body={operationId:id,expectedRevision:state.revision,action:{type:'modelOperations',operation:'archiveAcceptanceFixture',data:{providerId,confirmed}}};return {id,body,result:await request('/model-operations/commands',{method:'POST',key:id,session,body})};}
-  assert.equal((await command('provider-moma',true)).result.status,422);
-  assert.equal((await command(fixtures[0].providerId,false)).result.status,422);
-  assert.equal((await command(fixtures[0].providerId,true,readonlyToken)).result.status,403);
-  const baseline=structuredClone(state);
-  for(const spec of fixtures){
-    const {id,body,result}=await command(spec.providerId,true);assert.equal(result.status,200,JSON.stringify(result.data));
-    const replay=await request('/model-operations/commands',{method:'POST',key:id,body});assert.equal(replay.status,200);assert.deepEqual(replay.data,result.data);
-    state=(await request('/model-operations')).data;
-    assert.ok(!state.providers.some(row=>row.id===spec.providerId));assert.ok(!state.models.some(row=>row.id===spec.modelId));assert.ok(state.modelData.archivedCatalogueIds.includes(spec.libraryId));
-    for(const [table,field]of [['suppliers','providerId'],['channels','endpointId'],['services','modelId']])assert.ok((await local.db.prepare(`SELECT deleted_at FROM ${table} WHERE id=?`).bind(spec[field]).first()).deleted_at);
+test('retired connection and acceptance cleanup commands cannot write or create audit receipts', async () => {
+  const before = (await request('/model-operations')).data;
+  const endpoint = before.endpoints.find(row => !row.deletedAt);
+  const operations = [
+    ['archiveAcceptanceFixture', { providerId: endpoint.providerId, confirmed: true }],
+    ['channelDirectoryArchive', { mode: 'selected', includeAutomatic: false, confirmed: true,
+      targets: [{ providerId: endpoint.providerId, endpointId: endpoint.id, signature: '' }] }],
+  ];
+  for (const [operation, data] of operations) {
+    const operationId = crypto.randomUUID();
+    const result = await request('/model-operations/commands', { method: 'POST', key: operationId, body: {
+      operationId, expectedRevision: before.revision, action: { type: 'modelOperations', operation, data },
+    } });
+    assert.equal(result.status, 422);
+    assert.equal(result.data.error.message, '未知模型运营操作');
+    assert.equal(await local.db.prepare('SELECT id FROM operations WHERE id=?').bind(operationId).first(), null);
+    assert.equal(await local.db.prepare('SELECT id FROM audit_events WHERE operation_id=?').bind(operationId).first(), null);
   }
-  for(const key of ['modelTemplates','modelSalePrices','supplyPrices','orders','requests','tariffDictionary'])assert.deepEqual(state[key],baseline[key]);
-  for(const [key,field]of [['providers','providerId'],['endpoints','endpointId'],['models','modelId'],['modelSupplies','supplyId']])assert.deepEqual(state[key],baseline[key].filter(row=>!fixtures.some(spec=>spec[field]===row.id)));
-  assert.equal(state.revision,baseline.revision+3);
+  assert.deepEqual((await request('/model-operations')).data, before);
 });
 
 test('model market reordering persists across bootstrap without changing service records', async () => {
@@ -846,4 +840,27 @@ test('market card icons and service associations persist and can be removed inde
   await refresh();
   assert.deepEqual(state.modelData.marketCards[newCardId].linked, [second]);
   assert.equal((await inspect(second)).marketLinked, true);
+});
+
+test('the simulation API rejects credential revocation without changing the mock or business state', async () => {
+  const creationId = crypto.randomUUID();
+  const created = await request('/simulation/credentials', { method: 'POST', key: creationId, body: {
+    operationId: creationId, providerId: 'provider-moma', name: '模拟撤销拒绝验证',
+  } });
+  assert.equal(created.status, 200);
+  const readCredentials = async () => (await request('/simulation/credentials')).data.result.credentials;
+  const before = await readCredentials();
+  const commitSequence = () => local.db.prepare('SELECT commit_seq FROM db_state WHERE id=1').first('commit_seq');
+  const sequenceBefore = await commitSequence();
+  const operationId = crypto.randomUUID();
+  const { id, version } = created.data.result;
+  const result = await request(`/simulation/credentials/${id}/revoke`, { method: 'POST', key: operationId, body: {
+    operationId, expectedRevision: version,
+  } });
+  assert.equal(result.status, 422);
+  assert.equal(result.data.error.code, 'not_found');
+  assert.deepEqual(await readCredentials(), before);
+  assert.equal(await commitSequence(), sequenceBefore);
+  assert.equal(await local.db.prepare('SELECT id FROM operations WHERE id=?').bind(operationId).first(), null);
+  assert.equal(await local.db.prepare('SELECT id FROM audit_events WHERE operation_id=?').bind(operationId).first(), null);
 });
