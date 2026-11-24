@@ -15,14 +15,14 @@
 | 资料 ID | 模型资料编辑页把只读内部 `record.id` 写成“模型 ID”；改为“资料 ID”，不与业务编码或调用参数混用 | [ModelLibraryEditor](src/admin-v2/ModelLibraryEditor.jsx) |
 | 模型编码 | 资料 `modelId` 称模型编码，服务表单与搜索却叫模型 ID；现统一显示“模型编码”，每个表单保留实际格式约束 | `ModelMetadataForm`、`ServiceModelForm`、[model-profile](src/admin-v2/model-profile.js) |
 | 上游模型 ID | 服务渠道表、路由映射及供应侧混用 Model ID；统一“上游模型 ID”，仅指向供应商请求的模型参数 | `ServiceContent`、`ServiceRouting`、[service-route-mapping](src/admin-v2/service-route-mapping.js) |
-| 对外调用 ID | 同一 `service.callId` 在调用指南、平台试调用及映射中被称为对外 Model ID、平台 Model ID；统一“对外调用 ID”。不再宣称必须采用发布方/模型名格式 | `ServiceCallGuide`、[ServicePlatformTrial](src/admin-v2/ServicePlatformTrial.jsx)；[路由服务](src/admin-v2/service-routing.js) |
+| 对外调用 ID | 同一 `service.callId` 在调用指南、平台试调用及映射中被称为对外 Model ID、平台 Model ID；统一“对外调用 ID”。不再宣称必须采用发布方/模型名格式 | `ServiceCallGuide`、旧 `ServicePlatformTrial`；[路由服务](src/admin-v2/service-routing.js) |
 | 供应商与模型作者 | 服务头部“厂商”取的是作者；改“模型作者”。关联服务中的 Provider 名称／标识对应供应商主体及其编码，统一“供应商名称／供应商编码” | `ServiceManagementWorkspace`、[ServiceWorkspaceDialogs](src/admin-v2/ServiceWorkspaceDialogs.jsx)、[model-operations](src/admin-v2/model-operations.js) |
 | 渠道与请求地址 | 渠道不是供应商或一把 Key；说明明确一渠道可接多模型。完整任务 URL 统一“请求地址”，编辑动作“API 地址”和标准接口输入“服务根地址”保留各自含义 | `ProviderManagement`、`ProviderCatalogue`、`SupplierChannelDetails`、`ServiceContent` |
 | 密钥绑定 | “当前使用渠道”实际统计配置绑定，包含未启用或停用渠道；改“当前绑定渠道”，不修改统计、删除及撤销算法 | `ProviderApiKeys`、[credential-rotation-scope](src/admin-v2/credential-rotation-scope.js) |
 | 采购价与平台售价 | 服务关联渠道表把 `item.cost` 写成“供应商售价”；改“采购价”。客户价格统一“平台售价”，清除 Provider 售价、平台目录价等旧称 | [service-workspace](src/admin-v2/service-workspace.js)、`ServiceContent`、[SupplyPriceEditor](src/admin-v2/SupplyPriceEditor.jsx)、`SupplierModelListing`、`SupplierModelBatch` |
 | 采购参考价与采购价 | 目录 `listPrice` 是折扣前基准，采购覆盖单价是 `purchasePrice`；分别标采购参考价、采购价。直接关联输入固定系数 1，其输入值称采购价 | [provider-management](src/admin-v2/provider-management.js)、[supplier-resources](src/admin-v2/supplier-resources.js)、`supplier-listing.js` |
 | 输出模态与结果类型 | 服务输出选择同时包含图片／音频与向量／分数／排序结果；表单、详情和错误消息明确“输出模态 / 结果类型”，没有把结果类型伪称内容模态 | `ServiceModelForm`、`ServiceManagementWorkspace`、[model-profile](src/admin-v2/model-profile.js) |
-| 上架与生效路由 | 平台试调用“当前服务”实际显示上架状态，“已发布渠道”取当前生效路由中的参与渠道；改“上架状态／生效路由渠道” | [ServicePlatformTrial](src/admin-v2/ServicePlatformTrial.jsx) |
+| 上架与生效路由 | 平台试调用“当前服务”实际显示上架状态，“已发布渠道”取当前生效路由中的参与渠道；改“上架状态／生效路由渠道” | 旧 `ServicePlatformTrial` |
 | 导入模板 | CSV 首两列“模型ID／模型展示名称”统一为“模型编码／模型名称”；生成模板、导入校验和现有合同同步。旧表头会被拒绝，需重新下载模板 | [model-import](src/admin-v2/model-import.js)、[ModelBatchImport](src/admin-v2/ModelBatchImport.jsx)、[导入合同](tests/model-categories.test.mjs) |
 
 ## 已解释的实际差异

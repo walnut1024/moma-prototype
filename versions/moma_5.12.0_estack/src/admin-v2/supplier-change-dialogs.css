@@ -1,6 +1,0 @@
-/* Layout shared by channel candidate and credential change panels. */
-.supplier-change-dialog, .supplier-change-section { display: grid; gap: 16px; min-width: 0; }
-.supplier-change-dialog :is(code, small) { overflow-wrap: anywhere; }
-.supplier-change-section { border-block-start: 1px solid var(--semi-color-border); padding-block-start: 16px; }
-.supplier-change-section ul { list-style: disc; padding-inline-start: 20px; }
-.supplier-change-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }

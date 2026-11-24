@@ -1,8 +1,0 @@
-.getting-started { max-width: 1280px; min-width: 0; margin-inline: auto; }
-.gs-copy { display: grid; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
-.gs-copy:not(:empty), .gs-tasks { margin-top: 12px; }
-.gs-copy :is(ol, ul) { display: grid; gap: 8px; padding-inline-start: 24px; }
-.gs-copy ol { list-style: decimal; }
-.gs-copy ul { list-style: disc; }
-.getting-started :is([role="button"], h2, .gs-anchor) { scroll-margin-top: 72px; }
-.gs-anchor { height: 0; }
