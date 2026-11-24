@@ -3,7 +3,7 @@ import { prepareChannelInterface, prepareChannelAdapterOptions } from './channel
 import { resolveChannelAssociationModel, channelAssociationPricing, materializeChannelAssociation } from './channel-association-model.js';
 import { connectionFingerprint, connectionKeys, connectionCredentialsReady, normalizeChannelKeyPool } from './connection-state.js';
 import { channelFingerprint, channelInterfaceIssue, channelModelUrl } from './provider-channels.js';
-import { supplierChannelAssociations, supplierKeyChannels, invalidateSupplierChannels } from './supplier-resources.js';
+import { supplierChannelAssociations } from './supplier-resources.js';
 import { providerKeyGroups } from './provider-key-groups.js';
 import { credentialRotationChannels } from './credential-rotation-scope.js';
 import { checkedConnectionKeys, providerTransaction, providerApiKeyRows, modelConnectivityPreview, normalizeProviderPrice } from './provider-management.js';
@@ -690,14 +690,6 @@ export function channelChangeTransaction(state, { operation, data = {} }) {
   if (/^(channel|keyGroup)CandidateTest(Job|Receipt)$/.test(operation)) return candidateReceiptTransaction(state, operation, data);
   if (operation.startsWith('keyGroupCandidate') || operation === 'keyGroupPriority') return keyGroupTransaction(state, operation, data);
   if (operation.startsWith('channelProcurement')) return procurementTransaction(state, operation, data);
-  if (operation === 'credentialEmergencyRevoke') {
-    const provider = state.providers.find(row => row.id === data.providerId);
-    const key = provider?.apiKeys?.find(row => row.id === data.keyId);
-    if (!key || key.fingerprint !== data.expectedFingerprint) throw new Error('密钥已变化或不属于当前服务商');
-    if (data.confirmed !== true) throw new Error('请确认紧急撤销密钥及其全部调用影响');
-    const affected = supplierKeyChannels(state, provider, key.id).map(row => row.id), at = new Date().toISOString();
-    return { type: 'batch', objectId: key.id, label: '紧急撤销供应凭证', changes: [update('providers', provider.id, { apiKeys: provider.apiKeys.map(row => row.id === key.id ? { ...row, status: 'disabled', revokedAt: at } : row) }), ...invalidateSupplierChannels(state, provider, affected)] };
-  }
   if (operation === 'channelCandidateSave' || operation === 'channelCandidateRollback') {
     const { provider, endpoint } = context(state, data.providerId, data.endpointId);
     expectedRevision(endpoint, data.expectedRevision);

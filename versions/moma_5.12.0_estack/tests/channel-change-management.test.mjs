@@ -297,22 +297,40 @@ test('credential group candidates refer only to the same supplier and temporary 
   assert.equal(owner(next).defaultApiKeyId, owner(initial).defaultApiKeyId);
 });
 
-test('emergency revoke disables all referencing channels and mappings but keeps history, routes and sale prices', () => {
+test('a previously revoked credential fingerprint cannot be added to a connection key pool', () => {
   const state = fixture(), key = owner(state).apiKeys.find(row => row.id === owner(state).defaultApiKeyId);
-  const data = { providerId, keyId: key.id, expectedFingerprint: key.fingerprint, confirmed: true };
-  const next = run(state, 'credentialEmergencyRevoke', data);
-  assert.equal(owner(next).apiKeys.find(row => row.id === key.id).status, 'disabled');
-  assert.ok(owner(next).apiKeys.find(row => row.id === key.id).revokedAt);
-  assert.equal(endpoint(next).status, '停用'); assert.ok(mappings(next).every(row => !row.enabled && !row.health));
-  assert.throws(() => run(state, 'credentialEmergencyRevoke', { ...data, confirmed: false }), /确认/);
-  stableBusiness(state, next);
+  key.revokedAt = '2026-01-01T00:00:00.000Z';
+  const { maskedKey, fingerprint } = key;
+  assert.throws(() => run(state, 'channelCandidatePoolSave', {
+    ...args(state), expectedImpactRevision: channelChangeImpact(state, providerId, endpoint(state).id).revision,
+    mode: 'replace', keyStrategy: 'priority', keyPool: [], newKeys: [{ maskedKey, fingerprint }],
+  }), /该密钥已撤销/);
+});
+
+test('pausing a connection key pool leaves the shared keys and other connections intact', () => {
+  const state = fixture(), current = endpoint(state);
+  current.authMode = 'pool';
+  current.keyPool = [{ keyId: owner(state).defaultApiKeyId, priority: 1, enabled: true }];
+  const next = run(state, 'channelCandidatePoolPause', {
+    ...args(state), expectedImpactRevision: channelChangeImpact(state, providerId, current.id).revision, confirmed: true,
+  });
+  assert.equal(endpoint(next).poolPaused, true);
+  assert.equal(endpoint(next).status, '停用');
+  assert.deepEqual(owner(next).apiKeys, owner(state).apiKeys);
+  assert.deepEqual(next.endpoints.filter(row => row.id !== current.id), state.endpoints.filter(row => row.id !== current.id));
 });
 
 test('revoked credentials cannot qualify for candidate application or revive through rollback', () => {
-  let state = testCandidate(createCandidate(fixture()));
-  const key = owner(state).apiKeys.find(row => row.id === owner(state).defaultApiKeyId);
-  state = run(state, 'credentialEmergencyRevoke', { providerId, keyId: key.id, expectedFingerprint: key.fingerprint, confirmed: true });
-  assert.throws(() => applyCandidate(state), /凭证已变化|修订|验证/);
+  const initial = fixture(), previousKeyId = owner(initial).defaultApiKeyId;
+  const replacementKeyId = owner(initial).apiKeys.find(row => row.id !== previousKeyId).id;
+  const active = applyCandidate(testCandidate(createCandidate(initial, { authMode: 'specific', apiKeyId: replacementKeyId })));
+  const rollback = testCandidate(run(active, 'channelCandidateRollback', { ...args(active), targetVersion: 0 }));
+  const revoked = owner(rollback).apiKeys.find(row => row.id === previousKeyId);
+  revoked.revokedAt = '2026-01-01T00:00:00.000Z';
+  assert.throws(() => applyCandidate(rollback), /凭证|密钥|验证/);
+  const retry = run(rollback, 'channelCandidateRollback', { ...args(rollback), targetVersion: 0 });
+  assert.equal(channelCandidateStatus(retry, providerId, endpoint(retry).id).ready, false);
+  assert.equal(endpoint(retry).apiKeyId, replacementKeyId);
 });
 
 test('candidate writes respect supplier ownership, revision, roles and failed persistence', () => {

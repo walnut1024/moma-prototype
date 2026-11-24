@@ -152,7 +152,7 @@ export function operationsTransaction(state, action) {
   if (['providerRemovalPrepare', 'providerRemovalCommit'].includes(action.operation)) return providerRemovalTransaction(state, action);
   if (action.operation === 'channelCapacitySave') return channelCapacityTransaction(state, action);
   if (/^channel(Draft|Discovery|Metadata|TestEvidence|TemporaryTest)/.test(action.operation) || action.operation === 'supplierSelection') return channelOnboardingTransaction(state, action);
-  if (/^channel(Candidate|Procurement)/.test(action.operation) || action.operation.startsWith('keyGroupCandidate') || ['keyGroupPriority', 'credentialReplace', 'credentialEmergencyRevoke'].includes(action.operation)) return channelChangeTransaction(state, action);
+  if (/^channel(Candidate|Procurement)/.test(action.operation) || action.operation.startsWith('keyGroupCandidate') || ['keyGroupPriority', 'credentialReplace'].includes(action.operation)) return channelChangeTransaction(state, action);
   if (action.operation.startsWith('serviceMapping')) return serviceMappingTransaction(state,action);
   if (['serviceRouteDraft', 'serviceRouteDirectoryOrder', 'serviceRoutePublish', 'serviceRouteRollback','serviceRouteStop','serviceRouteRestore','serviceFailoverConfigure'].includes(action.operation)) return routingTransaction(state, action);
   // Cloud commands keep simulation history and reference data read-only.

@@ -7,7 +7,7 @@ import { activeSupplyPrice, priceItems, modelSupplies } from '../src/admin-v2/mo
 import { serviceChannelCosts, availableServiceChannels } from '../src/admin-v2/service-workspace.js';
 import { routingServices, routingChannels, validateRouteConfig } from '../src/admin-v2/service-routing.js';
 import { connectionKeys, connectionCredentialsReady, connectionFingerprint, connectionBlockReason } from '../src/admin-v2/connection-state.js';
-import { catalogueChannels, channelFingerprint, channelQualification } from '../src/admin-v2/provider-channels.js';
+import { catalogueChannels, channelQualification } from '../src/admin-v2/provider-channels.js';
 import { enterpriseGrant } from '../src/admin-v2/enterprise.js';
 import { providerCatalogueIds } from '../src/admin-v2/moma-provider.js';
 
@@ -121,19 +121,14 @@ test('scheduled procurement is read at request start and does not change an alre
   assert.equal(second.state.requests.find(row => row.id === first.request.id).procurementSnapshot.items[0].amount, 1000000);
 });
 
-test('revocation remains a hard stop even if an old toggle re-enables the credential metadata', () => {
-  const f = fixture(1), key = owner(f.state).apiKeys.find(row => row.id === owner(f.state).defaultApiKeyId);
-  let state = transact(f.state, 'credentialEmergencyRevoke', { providerId, keyId: key.id, expectedFingerprint: key.fingerprint, confirmed: true });
-  state = provider(state, 'toggleApiKey', { keyId: key.id, expectedFingerprint: key.fingerprint, enabled: true, confirmed: true });
+test('a previously revoked credential is excluded from calls even with enabled metadata', () => {
+  const f = fixture(1), state = f.state;
+  const key = owner(state).apiKeys.find(row => row.id === owner(state).defaultApiKeyId);
+  key.status = 'enabled';
+  key.revokedAt = '2026-01-01T00:00:00.000Z';
   const ep = state.endpoints.find(row => row.id === f.supplies[0].endpointId);
-  assert.ok(owner(state).apiKeys.find(row => row.id === key.id).revokedAt);
   assert.equal(connectionKeys(ep, owner(state)).length, 0); assert.equal(connectionCredentialsReady(ep, owner(state)), false);
   assert.ok(connectionKeys(ep, owner(state), true).some(row => row.id === key.id));
-  ep.status = '运行中'; ep.connectionTest = { result: '通过', fingerprint: connectionFingerprint(ep) };
-  for (const supply of state.modelSupplies.filter(row => row.endpointId === ep.id)) { supply.status = '已启用'; supply.validationStatus = '通过'; }
-  for (const row of owner(state).catalogConnections.filter(row => row.endpointId === ep.id)) {
-    row.enabled = true; row.health = { result: '通过', fingerprint: channelFingerprint({ ...row, endpoint: ep }) };
-  }
   assert.match(connectionBlockReason(ep, owner(state)), /撤销/);
   assert.equal(call(f, state).request.httpStatus, 503);
 });

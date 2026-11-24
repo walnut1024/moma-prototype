@@ -47,7 +47,7 @@
 | 连接名称／服务根地址 | connection.name／base_url | 属于一个 Provider，多个上游模型可复用；任务完整地址另按协议维护 | MoMA 管理约定 |
 | 连接编码 | connection.code | 既有业务别名，物理字段为 channels.code，旧内部键为 channelCode／endpointId；独立显示，不替代连接 ID，不增加到现有维护文件 | MoMA 自有字段 |
 | 上游模型名称 | channel.name | 识别实际供给来源；上游调用值、采购版本和容量按上游模型独立维护 | MoMA 管理约定 |
-| API 密钥组 ID／密钥组名称 | key_group_id／key_group_name | 服务商密钥池维护，内部映射 apiKeyGroups[].id／name 与连接 keyGroupId；录入服务商时可选择默认组或提交 key_group_name 新建组，按输入顺序加入密钥，不保存明文 | MoMA 自有字段 |
+| API 密钥组 ID／密钥组名称 | key_group_id／key_group_name | 服务商密钥池维护，内部映射 apiKeyGroups[].id／name 与连接 keyGroupId。既有整包 `providerIntake` 命令可用 key_group_name 新建组，将另行提交的脱敏密钥元数据按输入顺序加入该组 | MoMA 自有字段 |
 | 上架状态／广场展示 | listing_stage／market_visible | 广场服务维护字段，与技术启停、销售状态分别管理 | MoMA 自有字段 |
 | 价格版本 ID／价格项 ID | price_version_id／price_item_id | 售价或采购的版本及计费项引用；价格变更创建新版本，历史不追改 | MoMA 自有字段 |
 | 计费项 ID／计费单位 ID／币种 ID | billing_item_id／unit_id／currency_id | 引用计量字典；单位、数量、币种和金额分别表达 | MoMA 自有字段 |
@@ -130,7 +130,7 @@ references 中模型的 name、canonical_slug、model_type 用于识别，不能
 
 ### 来源接入与资料模板
 
-首次接入继续使用已有服务商／模型接入契约，不是 OpenRouter 响应或运营维护 JSON。models[].model_name／model_type 对应模型展示名／类型，models[].canonical_slug 为模型编码；connections[].connection_id 与 mappings[].connection_id 是来源文件内的连接别名，不能作为本地永久 ID；mappings[].upstream_model_id 原样保留大小写。CSV／XLSX 继续使用“模型展示名”“模型编码”。删除接入资料的重建 JSON 与保留 ID 的维护用途分开。
+日常新建及批量导入使用[数据契约中的表单与模板](MODEL_OPERATIONS_DATA_CONTRACT.md#来源接入与资料模板)。既有 `providerIntake` 命令保留导出文件重建能力。移除后用同一编码重建时复用服务商 ID，文件内连接别名只用于定位新建的连接和关联。现有对象维护使用 `moma.model-operations/v2` 和永久 ID。
 
 ## 计量和历史
 

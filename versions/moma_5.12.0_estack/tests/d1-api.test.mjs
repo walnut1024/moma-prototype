@@ -58,6 +58,24 @@ test('requires current server identity and follows existing navigation roles', a
   assert.equal(forged.status, 400);
 });
 
+test('the retired credential revocation command cannot write through the model operations API', async () => {
+  const state = (await request('/model-operations')).data;
+  const provider = state.providers.find(row => row.id === 'provider-moma');
+  const key = provider.apiKeys.find(row => row.fingerprint && !row.revokedAt);
+  const operationId = crypto.randomUUID();
+  const result = await request('/model-operations/commands', { method: 'POST', key: operationId, body: {
+    operationId, expectedRevision: state.revision, action: { type: 'modelOperations', operation: 'credentialEmergencyRevoke',
+      data: { providerId: provider.id, keyId: key.id, expectedFingerprint: key.fingerprint, confirmed: true } },
+  } });
+  assert.equal(result.status, 422);
+  assert.equal(result.data.error.code, 'BUSINESS_BLOCKED');
+  assert.equal(result.data.error.message, '未知模型运营操作');
+  const after = (await request('/model-operations')).data;
+  assert.equal(after.revision, state.revision);
+  assert.deepEqual(after.providers.find(row => row.id === provider.id).apiKeys, provider.apiKeys);
+  assert.equal(await local.db.prepare('SELECT id FROM operations WHERE id=?').bind(operationId).first(), null);
+});
+
 test('login uses a secure cookie and never returns an access code or token in JSON', async () => {
   const result = await request('/auth/login', { method: 'POST', session: null, body: { accountId: 'admin-001', accessCode: adminCode } });
   assert.match(result.headers.get('set-cookie'), /HttpOnly; Secure; SameSite=Lax; Path=\/api\/v1(?:;|$)/);
