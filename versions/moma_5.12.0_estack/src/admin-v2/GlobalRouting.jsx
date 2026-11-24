@@ -5,6 +5,8 @@ import FailoverFields from "./FailoverFields";
 import { ROUTING_STRATEGIES } from "./service-routing-strategies.mjs";
 import { failoverError, parameterError, routingParameters } from './global-routing-parameters.mjs';
 
+const routingOptions = Object.entries(ROUTING_STRATEGIES).filter(([value]) => value !== 'cost-based-routing');
+
 export default function GlobalRouting({ saved, revision, transact, conflict, dirtyRef }) {
   const t = useChannelText();
   const [draft, setDraft] = useState(null);
@@ -48,7 +50,8 @@ export default function GlobalRouting({ saved, revision, transact, conflict, dir
     </Card></Tabs.TabPane>
     <Tabs.TabPane itemKey="routing" tab={t('全局路由策略')}><Card title={t('上游模型选择')} headerExtraContent={actions}>
       <Space vertical align="start"><Select aria-label={t('全局路由策略')} value={values.strategy} disabled={!draft || saving || conflict}
-        optionList={Object.entries(ROUTING_STRATEGIES).map(([value, item]) => ({ value, label: t(item.label) }))}
+        optionList={routingOptions.map(([value, item]) => ({ value, label: t(item.label) }))}
+        renderSelectedItem={({ value }) => t(ROUTING_STRATEGIES[value].label)}
         onChange={strategy => change({ strategy })}/>
         <Typography.Text type="secondary">{t(ROUTING_STRATEGIES[values.strategy].description)}</Typography.Text>
       </Space>
