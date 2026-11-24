@@ -1,0 +1,77 @@
+.admin-request-log-sheet.admin-call-log-detail .semi-sidesheet-header { padding: 16px 20px; }
+.admin-request-log-sheet.admin-call-log-detail .semi-sidesheet-body { padding: 14px 20px 22px; }
+
+.admin-call-log-detail-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.admin-call-log-detail-heading .admin-request-log-title { gap: 2px; }
+.admin-call-log-detail-heading .admin-request-log-title code { font-size: 16px; }
+
+.admin-request-log-sheet.admin-call-log-detail .admin-request-log-context { padding: 0; }
+.admin-request-log-sheet.admin-call-log-detail .admin-request-log-facts {
+  gap: 16px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  border: 0;
+  border-radius: 4px;
+  background: #f6f7fb;
+}
+
+.admin-request-log-sheet.admin-call-log-detail .admin-request-log-pane section > h3,
+.admin-request-log-sheet.admin-call-log-detail .admin-request-trace-heading > h3 {
+  border-inline-start: 3px solid #1a6aff;
+  padding-inline-start: 8px;
+}
+
+.admin-call-log-detail .semi-descriptions table { width: 100%; }
+.admin-call-log-detail .semi-descriptions-double tbody {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 20px;
+}
+.admin-call-log-detail .semi-descriptions-double tr {
+  display: grid;
+  grid-template-columns: minmax(88px, 1fr) minmax(0, 2fr);
+  align-items: start;
+  gap: 6px;
+}
+.admin-call-log-detail .semi-descriptions-double .semi-descriptions-item { padding: 0; }
+.admin-call-log-detail .semi-descriptions-double .semi-descriptions-value { font-size: 14px; font-weight: 400; }
+
+.admin-request-log-sheet.admin-call-log-detail .admin-request-trace-node.semi-button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 4px;
+}
+
+.admin-request-log-sheet.admin-call-log-detail .admin-request-trace-node[aria-pressed="true"] {
+  box-shadow: none;
+  background: #edf4ff;
+}
+
+.admin-request-log-sheet.admin-call-log-detail .admin-request-trace-node .admin-request-trace-track {
+  height: 13px;
+  border: 0;
+  border-radius: 3px;
+  background: #eff1f7;
+}
+
+.admin-request-log-sheet.admin-call-log-detail :is(.admin-request-trace-bar, .admin-request-trace-point) {
+  top: 1px;
+  height: 11px;
+  min-width: 3px;
+  background: #598cff;
+}
+.admin-request-log-sheet.admin-call-log-detail .admin-request-trace-bar[data-tone="red"] { background: #e57073; }
+.admin-request-log-sheet.admin-call-log-detail .admin-request-trace-bar[data-tone="green"] { background: #46a982; }
+.admin-request-log-sheet.admin-call-log-detail .admin-request-trace-point { width: 5px; border-radius: 3px; transform: translateX(-50%); }
+
+@media (max-width: 600px) {
+  .admin-call-log-detail .semi-descriptions-double tbody { grid-template-columns: minmax(0, 1fr); }
+}

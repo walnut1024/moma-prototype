@@ -55,6 +55,14 @@ export default function CloudModelOperations({children, packageWorkspace=false, 
       if (alive.current) setError(issue.message);
     }
   };
+  const refreshRead = async signal => {
+    const previous = current.current;
+    const next = await api(workspacePath, { signal });
+    if (signal?.aborted || !alive.current || previous !== current.current) return;
+    accept(next);
+    setConflict(false);
+    setError('');
+  };
   useEffect(()=>{
     alive.current=true;
     if (modelWorkspace) acceptCloudState=accept;
@@ -95,5 +103,5 @@ export default function CloudModelOperations({children, packageWorkspace=false, 
   if(!state)return <div className="mo-cloud-login">{error
     ? <Banner type="danger" closeIcon={null} description={<>{error} <Button onClick={()=>void load()}>重新加载</Button></>}/>
     : <AdminPageLoading label={workspaceLabel}/>}</div>;
-  return children({state,transactModel:transact,transact,dispatch,transactIndividual:transact,transactAdminAccount:transact,reload:load,conflict});
+  return children({state,transactModel:transact,transact,dispatch,transactIndividual:transact,transactAdminAccount:transact,reload:load,refreshRead,conflict});
 }

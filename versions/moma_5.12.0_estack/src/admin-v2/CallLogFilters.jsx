@@ -1,12 +1,11 @@
 import { useChannelText } from './channel-language';
 import { useId, useRef, useState } from 'react';
-import { Button, Input, Select, Tag, Toast } from '@douyinfe/semi-ui';
-import { IconFilter, IconSearch } from '@douyinfe/semi-icons';
+import { Button, DatePicker, Input, Select, Tag, Toast } from '@douyinfe/semi-ui';
+import { IconFilter, IconRefresh, IconSearch } from '@douyinfe/semi-icons';
 import { ObservationIdentitySearch, ObservationSupplyPick, useObservationSupply } from './CallObservationControls';
-import { SemiDateRange } from './SemiAnalyticsFilters';
-import { dayOf } from './analytics';
+import { logMinuteRange } from './call-log-filters.mjs';
 import { callPresets, changeObservationTenant, httpLabel, modelTypes, observationKey, observationOptions,
-  observationTime, outcomes, preflightTypes } from './call-observations.mjs';
+  observationTime, observationWindow, outcomes, preflightTypes } from './call-observations.mjs';
 
 const labels = {
   query: 'Request ID', request: 'Request ID', period: '时间范围', outcome: '请求结果', preflightType: '错误类型',
@@ -16,15 +15,43 @@ const labels = {
 };
 const layouts = {
   requests: [['query', 'period', 'outcome'],
-    ['tenant', 'project', 'model', 'supply', 'callId', 'endpoint', 'user', 'key', 'userRecord', 'source', 'purpose', 'http']],
+    ['tenant', 'project', 'model', 'type', 'supply', 'endpoint', 'key', 'source', 'purpose', 'http', 'callId', 'user', 'userRecord']],
   upstream: [['query', 'period', 'supply'],
-    ['outcome', 'upstreamModelId', 'http', 'tenant', 'project', 'callId', 'endpoint', 'user', 'key', 'userRecord', 'source', 'purpose']],
+    ['outcome', 'model', 'upstreamModelId', 'http', 'tenant', 'project', 'endpoint', 'key', 'source', 'purpose', 'callId', 'user', 'userRecord']],
   preflight: [['query', 'period', 'preflightType'], ['tenant', 'project', 'model', 'callId', 'errorCode', 'http']],
 };
 const outcomeOptions = [...Object.entries(outcomes), ['other', '其他状态']];
 const userRecordOptions = [['recorded', '已采集'], ['uncollected', '未采集']];
 const optionList = entries => entries.map(([value, label]) => ({ value, label }));
 const httpCodeLabel = code => httpLabel(code === 'unreported' ? null : Number(code));
+
+function CallLogPeriod({ view, filters, window, change }) {
+  const range = filters.period === 'custom' ? observationWindow(filters, Infinity) : null;
+  const dates = range ? [new Date(range.start), new Date(range.end - 1)] : [];
+  const presets = callPresets.filter(([id]) => id !== '1h' || view !== 'preflight' || filters.period === id);
+  const choosePeriod = period => {
+    if (period !== 'custom') {
+      change({ period, start: '', end: '' });
+    } else if (window) {
+      const initial = logMinuteRange(window.start, window.end - 1);
+      if (initial) change(initial);
+    }
+  };
+  const chooseDates = ([start, end] = []) => {
+    if (!start || !end) return;
+    const selection = logMinuteRange(start.getTime(), end.getTime());
+    if (selection) change(selection);
+    else Toast.warning('请选择不超过 30 天的有效时间范围。');
+  };
+  return <div className="admin-log-period">
+    <Select aria-label="时间范围" motion={false} value={filters.period}
+      optionList={optionList([...presets, ['custom', '自定义']])} onSelect={choosePeriod}/>
+    {filters.period === 'custom' && <DatePicker className="admin-log-date-range" dropdownClassName="admin-log-date-popup"
+      aria-label="自定义时间范围" type="dateTimeRange" format="yyyy-MM-dd HH:mm" rangeSeparatorNode="–"
+      timeZone="Asia/Shanghai" timePickerOpts={{ format: 'HH:mm' }} showClear={false} inputReadOnly needConfirm
+      value={dates} onChangeWithDateFirst onChange={chooseDates}/>}
+  </div>;
+}
 
 function LogFilterField({ id, view, pool, values, window, errors, onChange }) {
   const translateLabel = useChannelText();
@@ -35,15 +62,7 @@ function LogFilterField({ id, view, pool, values, window, errors, onChange }) {
   if (id === 'query') return <Input aria-label={label} prefix={<IconSearch aria-hidden="true"/>}
     placeholder={view === 'upstream' ? '请求 ID 或上游请求 ID' : '搜索 Request ID'} value={value} showClear
     onChange={query => change({ query, request: '' })}/>;
-  if (id === 'period') return <div className="admin-log-period">
-    <Select aria-label={label} motion={false} value={value}
-      optionList={optionList(value === 'custom' ? [...callPresets, ['custom', '自定义']] : callPresets)}
-      onChange={period => { if (period !== 'custom') change({ period, start: '', end: '' }); }}/>
-    <SemiDateRange start={dayOf(window?.start ?? Date.now())} end={dayOf((window?.end ?? Date.now()) - 1)}
-      maxDays={365} presets={[]} rangeHint="单次最多 365 天"
-      trigger={<Button aria-label={translateLabel("自定义日期范围")}>{value === 'custom' ? '修改日期' : '自定义'}</Button>}
-      onChange={dates => change({ ...dates, period: 'custom' })}/>
-  </div>;
+  if (id === 'period') return <CallLogPeriod view={view} filters={values} window={window} change={change}/>;
   if (id === 'supply') return <ObservationSupplyPick {...supply} onChange={change}/>;
   if (id === 'user' || id === 'key') return <div className="admin-log-identity">
     <ObservationIdentitySearch key={JSON.stringify(values.tenant)} dimension={id} label={label} rows={pool} filters={values}
@@ -52,7 +71,7 @@ function LogFilterField({ id, view, pool, values, window, errors, onChange }) {
       onClick={() => change({ [id]: null })}>清除</Button></div>}
   </div>;
   const scalarOptions = {
-    outcome: outcomeOptions, preflightType: preflightTypes, userRecord: userRecordOptions,
+    outcome: outcomeOptions, preflightType: preflightTypes, userRecord: userRecordOptions, type: modelTypes.slice(1),
     http: () => [...new Set([...pool.map(row => String(row.status ?? 'unreported')), value].filter(Boolean))]
       .sort((a, b) => a.localeCompare(b, 'zh-CN', { numeric: true })).map(code => [code, httpCodeLabel(code)]),
     errorCode: () => [...errors.keys()].map(code => [code, code]),
@@ -70,7 +89,7 @@ function LogFilterField({ id, view, pool, values, window, errors, onChange }) {
     value={value || []} onChange={ids => change({ [id]: ids?.length ? ids : null, ...(id === 'model' && { callId: null }) })}/>;
 }
 
-export default function CallLogFilters({ view, pool, filters, window, errors, onChange, onReset }) {
+export default function CallLogFilters({ view, pool, filters, window, errors, onChange, onReset, onRefresh, refreshing }) {
   const translateLabel = useChannelText();
   const [draft, setDraft] = useState(null);
   const moreId = useId();
@@ -103,11 +122,13 @@ export default function CallLogFilters({ view, pool, filters, window, errors, on
             setDraft(draft === null ? {} : null);
           }}>{draft === null ? '更多筛选' : '收起筛选'}{active.length ? ' · ' + active.length : ''}</Button>
         <Button type="tertiary" theme="borderless" onClick={() => { setDraft(null); onReset(); }}>重置</Button>
+        {onRefresh && <Button className="admin-log-refresh" aria-label="刷新" title="刷新" theme="borderless"
+          icon={<IconRefresh aria-hidden="true"/>} loading={refreshing} onClick={onRefresh}/>}
       </div>
     </div>
     <div id={moreId} hidden={draft === null}>
       {draft !== null && <div className="admin-log-filter-draft">
-        <div className="admin-log-extra-fields">
+        <div className={`admin-log-extra-fields${view === 'requests' ? ' admin-log-extra-fields-inline' : ''}`}>
           {fields(extra, { ...filters, ...draft }, patch => setDraft(current => ({ ...current, ...patch })))}
         </div>
         <div className="admin-log-filter-actions admin-log-apply">
@@ -123,7 +144,7 @@ export default function CallLogFilters({ view, pool, filters, window, errors, on
       </div>}
     </div>
     {(active.length > 0 || filters.period === 'custom' && window) && <div className="admin-log-active-values" role="group" aria-label="已选条件">
-      {filters.period === 'custom' && window && <span>{observationTime(window.start)} 至 {observationTime(window.end)}</span>}
+      {filters.period === 'custom' && window && <span>{observationTime(window.start)} 至 {observationTime(Math.max(window.start, window.end - 1))}</span>}
       {active.map(id => <Tag key={id} color="blue" closable onClose={() => {
         setDraft(null);
         onChange(id === 'tenant' ? changeObservationTenant(pool, filters, null) : { [id]: Array.isArray(filters[id]) ? null : '' });

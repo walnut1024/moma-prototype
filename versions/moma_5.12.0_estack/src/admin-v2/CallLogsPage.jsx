@@ -3,41 +3,42 @@ import TableFieldHelp from '../components/TableFieldHelp';
 import { callLogFieldHelp } from '../components/call-log-field-help';
 import { workspaceStoragePrefix } from '../workspace-storage.mjs';
 import { projectCallErrors } from '../project-call.mjs';
-import { useEffect, useMemo, useState } from 'react';
-import { Banner, Button, Card, CheckboxGroup, Empty, InputNumber, Space, Switch, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconArrowDown, IconArrowUp, IconDownload, IconSetting, IconSort } from '@douyinfe/semi-icons';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Banner, Button, CheckboxGroup, Empty, InputNumber, Space, Switch, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { IconArrowDown, IconArrowUp, IconSetting, IconSort } from '@douyinfe/semi-icons';
 import Table from './AdminTable';
 import AdminStatus from './AdminStatus';
-import AdminPageHeading from './AdminPageHeading';
 import { AdminModal as Modal } from './AdminOverlay';
 import RequestLogDetail from './RequestLogDetail';
-import { readRequestBody, requestLogSections } from './call-log-detail.mjs';
+import { readRequestBody } from './call-log-detail.mjs';
 import CallLogFilters from './CallLogFilters';
 import { Choice } from './ServiceUI';
-import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '../components/FilterControls';
-import { ObservationPlot } from './CallObservationControls';
-import { AnalysisHelp } from './AnalysisMetric';
+import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import {
-  callObservations, compareLogRows, defaultObservationGrain, httpLabel, logCsv,
-  observationBuckets, observationHash, observationNumber as fmt, observationTime, observationWindow, outcomes, preflightTypes,
+  callObservations, compareLogRows, httpLabel, observationBuckets, observationHash, observationNumber as fmt,
+  observationTime, outcomes, preflightTypes, purposeLabels,
 } from './call-observations.mjs';
-import { filterCallLogs, logFilters } from './call-log-filters.mjs';
-import { applyLogPolicy, createCallLogSimulation } from './call-log-simulation.mjs';
+import { filterCallLogs, logFilters, logWindow } from './call-log-filters.mjs';
+import { applyLogPolicy, createCallLogSimulation, simulateLogRequest } from './call-log-simulation.mjs';
 
 const { Text } = Typography;
 const unknown = value => value ?? '未采集';
 const statusColumn = value => <AdminStatus value={httpLabel(value)}
   color={value == null ? 'grey' : value >= 200 && value < 300 ? 'green' : 'red'}/>;
-const requestWidths = { requestId: 166, at: 174, modelName: 154, callId: 156, outcome: 92, status: 102, duration: 116,
-  firstPacket: 130, providerName: 124, channelName: 130, provider: 136, channel: 144, total: 96, input: 104, output: 104,
-  source: 104, purpose: 104, tenantName: 140, projectName: 140, project: 150, ttft: 136,
-  userName: 100, user: 144, keyName: 128, keyDisplayId: 160, keyMasked: 140,
-  preflightType: 136, code: 205, errorReason: 238, upstreamRequestId: 190, index: 80, upstreamModelId: 200, endpointName: 160 };
-const allRequestColumns = requestLogSections.flatMap(([, fields]) => fields);
-const primaryFields = ['requestId', 'at', 'modelName', 'outcome', 'duration', 'channelName', 'tenantName'];
+const requestWidths = { requestId: 178, sessionId: 164, at: 172, modelName: 216, outcome: 108, status: 132, duration: 140,
+  firstPacket: 140, providerName: 156, channelName: 108, provider: 156, channel: 126, total: 108, input: 108, output: 108,
+  source: 112, purpose: 112, tenantName: 132, projectName: 138, project: 164, ttft: 148,
+  userName: 128, user: 144, keyName: 168, keyMasked: 152,
+  preflightType: 140, code: 186, errorReason: 224, upstreamRequestId: 190, index: 114, upstreamModelId: 182, endpointName: 238 };
+const combinedFields = { modelName: 'callId', keyName: 'keyDisplayId' };
 const requestColumns = [
-  ...primaryFields.map(key => allRequestColumns.find(([, field]) => field === key)),
-  ...allRequestColumns.filter(([, field]) => !primaryFields.includes(field)),
+  ['Request ID', 'requestId'], ['开始时间', 'at', observationTime], ['模型名称/调用标识', 'modelName'],
+  ['请求结果', 'outcome', value => outcomes[value]], ['总耗时（ms）', 'duration'], ['连接', 'channelName'],
+  ['所属租户', 'tenantName'], ['HTTP 状态码', 'status'], ['首包延迟（ms）', 'firstPacket'], ['首 Token 时延（ms）', 'ttft'],
+  ['服务商', 'providerName'], ['服务商 ID', 'provider'], ['连接 ID', 'channel'],
+  ['总 Token', 'total'], ['输入 Token', 'input'], ['输出 Token', 'output'],
+  ['请求来源', 'source'], ['调用类型', 'purpose', value => purposeLabels[value]], ['项目', 'projectName'], ['项目 ID', 'project'],
+  ['API Key/ID', 'keyName'], ['API Key（脱敏）', 'keyMasked'], ['调用用户', 'userName'], ['调用用户 ID', 'user'],
 ];
 const preflightNames = new Map(preflightTypes);
 const preflightCodeNames = {
@@ -51,19 +52,23 @@ const preflightColumns = [
   ['错误码', 'code'], ['所属租户', 'tenantName'],
 ];
 const upstreamColumns = [
-  ['请求 ID', 'requestId'], ['上游请求 ID', 'upstreamRequestId'], ['尝试序号', 'index'], ['开始时间', 'at', observationTime],
+  ['客户 Request ID', 'requestId'], ['Session ID', 'sessionId'], ['上游 Request ID', 'upstreamRequestId'],
+  ['尝试序号', 'index'], ['开始时间', 'at', observationTime],
   ['服务商', 'providerName'], ['连接', 'channelName'], ['上游模型', 'upstreamModelId'], ['上游状态', 'outcome', value => outcomes[value]],
-  ['上游 HTTP 状态码', 'status'], ['耗时（ms）', 'duration'], ['错误码', 'code'], ['失败原因', 'errorReason'],
+  ['上游 HTTP 状态码', 'status'], ['耗时（ms）', 'duration'], ['错误码', 'code'],
+  ['失败/成功原因', 'errorReason', (value, row) => row.outcome === 'success' ? row.successReason || '上游响应成功' : value],
   ['端点', 'endpointName'], ['所属租户', 'tenantName'], ['项目', 'projectName'],
 ];
 const logViews = {
-  requests: { label: '请求', title: '请求记录', columns: requestColumns },
+  requests: { label: '客户请求', title: '请求记录', columns: requestColumns },
   upstream: { label: '上游请求', title: '请求尝试', columns: upstreamColumns },
   preflight: { label: '前置错误', title: '留存样本', columns: preflightColumns },
 };
 const numericFields = new Set(['total', 'input', 'output', 'firstPacket', 'ttft', 'duration', 'index']);
 const sortFields = new Set(['at', 'status', ...numericFields]);
 const defaultSort = { field: 'at', direction: -1 };
+const trendColors = ['#1a6aff', '#ff9d46', '#6780db', '#8493a8'];
+const logPageSizes = [10, 20, 50, 100];
 const columnStorageKey = workspaceStoragePrefix + 'call-log-columns';
 const policyStorageKey = workspaceStoragePrefix + 'call-log-simulation-policy';
 
@@ -82,7 +87,7 @@ function readHiddenColumns() {
   ]));
 }
 
-export default function CallLogsPage({ state, params, simulation, setSimulation, canViewFullLog }) {
+export default function CallLogsPage({ state, params, simulation, setSimulation, canViewFullLog, refreshRead }) {
   const translateLabel = useChannelText();
   const [view, setView] = useState(() => Object.hasOwn(logViews, params.get('view')) ? params.get('view') : 'requests');
   const [filters, setFilters] = useState(() => logFilters(params));
@@ -93,7 +98,11 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
   const [simulationPolicy, setSimulationPolicy] = useState(readSimulationPolicy);
   const [viewSorts, setViewSorts] = useState({});
   const [page, setPage] = useState(1);
-  const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
+  const [size, setSize] = useState(20);
+  const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const refreshRequest = useRef(null);
+  useEffect(() => () => refreshRequest.current?.abort(), []);
   const source = simulation?.data ?? state;
   useEffect(() => {
     if (simulation && simulationPolicy && simulation.policy !== simulationPolicy) {
@@ -109,12 +118,12 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
   const pool = preflightView ? requests.filter(row => row.preflightType) : view === 'upstream' ? attempts : requests;
   const preflightEvents = useMemo(() => simulation && callObservations({ ...source, requests: simulation.preflightEvents }).requests,
     [source, simulation]);
-  const window = observationWindow(filters);
+  const window = logWindow(filters);
   const rows = filterCallLogs(pool, filters, window, view === 'upstream')
     .sort((a, b) => compareLogRows(a, b, sort.field, sort.direction));
   const trendRows = preflightView && preflightEvents ? filterCallLogs(preflightEvents, filters, window) : rows;
   const trend = preflightView && window && !filters.query.trim() && !filters.request
-    ? observationBuckets(trendRows, window, defaultObservationGrain(filters, window)) : null;
+    ? observationBuckets(trendRows, window, window.end - window.start < 48 * 60 * 60 * 1000 ? 'hour' : 'day') : null;
   const errors = new Map((preflightView ? preflightEvents ?? pool : []).map(row => [row.code,
     [preflightCodeNames[row.code] ?? projectCallErrors[row.code]?.[1] ?? preflightNames.get(row.preflightType), row.code]
       .filter(Boolean).join(' · ')]));
@@ -129,7 +138,8 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
     setView(next);
     // 连接、结果和状态码在请求和上游请求中来自不同层级。
     change({ outcome: '', http: '', query: '', request: '', preflightType: '', errorCode: '', upstreamModelId: null,
-      ...(next === 'preflight' && { supply: null, endpoint: null, user: null, key: null, source: null, purpose: null, userRecord: '' }) }, next);
+      ...(next === 'preflight' && { supply: null, endpoint: null, user: null, key: null, source: null, purpose: null, userRecord: '',
+        ...(filters.period === '1h' && { period: '7d', start: '', end: '' }) }) }, next);
   };
   const reset = () => {
     setFilters(logFilters());
@@ -138,14 +148,33 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
   };
   const lookup = useMemo(() => new Map(requests.map(row => [row.id, row])), [requests]);
   const request = lookup.get(detail?.requestId);
+  const openDetail = row => setDetail({ requestId: row.parentId ?? row.id, attemptId: row.parentId ? row.id : undefined });
+  const refresh = async () => {
+    if (simulation) {
+      if (canViewFullLog) setSimulation(current => current && simulateLogRequest(current, Date.now(), { preflight: preflightView }));
+      setPage(1);
+      return;
+    }
+    if (refreshRequest.current) return;
+    const controller = new AbortController();
+    refreshRequest.current = controller;
+    setRefreshing(true);
+    try {
+      await refreshRead(controller.signal);
+      setPage(1);
+    } catch {
+      if (!controller.signal.aborted) Toast.error('刷新失败，请重试');
+    } finally {
+      refreshRequest.current = null;
+      setRefreshing(false);
+    }
+  };
   const requestIdCell = (value, row) => {
-    const requestId = row.parentId ?? row.id;
-    const attemptId = row.parentId ? row.id : undefined;
-    const hasBody = canViewFullLog && readRequestBody(simulation?.evidence[value]).segments
+    const hasBody = canViewFullLog && view !== 'upstream' && readRequestBody(simulation?.evidence[value]).segments
       .some(segment => segment.text != null && /(^|-)request$/.test(segment.id));
     return <>
-      <Button className="admin-log-request-id" size="small" theme="borderless" onClick={() => setDetail({ requestId, attemptId })}
-        title={value || undefined} aria-label={['查看请求详情', value, attemptId && `第 ${row.index} 次尝试`].filter(Boolean).join(' ')}>
+      <Button className="admin-log-request-id" size="small" theme="borderless" onClick={() => openDetail(row)}
+        title={value || undefined} aria-label={['查看请求详情', value, row.parentId && `第 ${row.index} 次尝试`].filter(Boolean).join(' ')}>
         {value || '查看详情'}
       </Button>
       {hasBody && <div><Text size="small" type="tertiary">含请求正文</Text></div>}
@@ -184,71 +213,89 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
     if (dataIndex === 'status') return { ...column, render: statusColumn };
     if (dataIndex === 'outcome') return { ...column, render: value => <AdminStatus value={outcomes[value]}/> };
     if (numericFields.has(dataIndex)) return { ...column, render: fmt, align: 'right' };
+    if (combinedFields[dataIndex]) return { ...column, render: (value, row) => <div className="admin-log-stacked-cell">
+      <span title={value}>{unknown(value)}</span>
+      <span title={row[combinedFields[dataIndex]]}>{unknown(row[combinedFields[dataIndex]])}</span>
+    </div> };
     return { ...column, render: (value, row) => unknown(format ? format(value, row) : value), ellipsis: { showTitle: true } };
   });
-  const exportCsv = () => {
-    const data = [fields.map(([title]) => title), ...rows.map(row => fields.map(([, key, format]) => format ? format(row[key], row) : row[key]))];
+  columns.push({ title: '操作', dataIndex: 'action', fixed: 'right', width: 86, render: (_, row) =>
+    <Button theme="borderless" size="small" onClick={() => openDetail(row)}>详情</Button> });
+  const exportXlsx = async () => {
+    if (exporting || !rows.length) return;
+    setExporting(true);
     try {
-      const href = URL.createObjectURL(new Blob([logCsv(data)], { type: 'text/csv;charset=utf-8' }));
+      const { callLogWorkbook } = await import('./call-log-xlsx.mjs');
+      const data = [fields.map(([title]) => title), ...rows.map(row => fields.map(([, key, format]) => {
+        if (key === 'status') return httpLabel(row[key]);
+        const value = format ? format(row[key], row) : row[key];
+        return combinedFields[key] ? `${unknown(value)} / ${unknown(row[combinedFields[key]])}` : value;
+      }))];
+      const href = URL.createObjectURL(new Blob([callLogWorkbook(data, label)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
       const link = document.createElement('a');
       link.href = href;
-      link.download = label + '.csv';
+      link.download = `${label}_${observationTime(Date.now()).replace(/[-:]/g, '').replace(' ', '_')}.xlsx`;
       document.body.append(link);
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(href), 0);
       Toast.success('已开始下载');
     } catch { Toast.error('导出失败，请重试'); }
+    finally { setExporting(false); }
   };
+  const settings = canViewFullLog && <Button className="admin-log-policy-entry" theme="outline" type="tertiary"
+    icon={<IconSetting aria-hidden="true"/>} onClick={() => {
+      const session = simulation ?? createCallLogSimulation();
+      setSettingsSource(simulationPolicy ? { ...session, policy: simulationPolicy } : session);
+    }}>日志设置</Button>;
+  const trendSeries = trend && preflightTypes.map(([kind, name], index) => ({ label: name, color: trendColors[index],
+    values: trend.map(bucket => bucket.rows.filter(row => row.preflightType === kind).length) }));
   return <div className="admin-page-stack admin-call-logs">
-    <AdminPageHeading title={translateLabel("调用日志")}>
-      {canViewFullLog && <Button className="admin-log-policy-entry" theme="outline" type="tertiary" icon={<IconSetting aria-hidden="true"/>}
-        onClick={() => {
-          const session = simulation ?? createCallLogSimulation();
-          setSettingsSource(simulationPolicy ? { ...session, policy: simulationPolicy } : session);
-        }}>日志设置</Button>}
-    </AdminPageHeading>
-    <section className="admin-call-logs-panel">
-      <Tabs activeKey={view} onChange={chooseView} aria-label="调用日志视图">
+    <section className="admin-call-logs-panel" aria-label={translateLabel('调用日志')}>
+      <Tabs activeKey={view} onChange={chooseView} aria-label="调用日志视图"
+        tabBarExtraContent={<Space>{simulation && <Tag color="blue">模拟数据</Tag>}{settings}</Space>}>
         {Object.entries(logViews).map(([id, item]) => <Tabs.TabPane key={id} itemKey={id} tab={item.label}/>)}
       </Tabs>
       <CallLogFilters key={view} view={view} pool={pool} filters={filters} window={window} errors={errors}
-        onChange={change} onReset={reset}/>
-      {!window && <Banner type="danger" closeIcon={null} description="请选择不超过 365 天的有效时间范围。"/>}
-      {trend && <ObservationPlot title="前置错误趋势" height={218} compact={false} type="bar" stacked unit="次" labels={trend.map(bucket => bucket.label)}
-        actions={<Space wrap><Text type="secondary">共 {fmt(trendRows.length)}{translateLabel("次")}</Text>
-          <AnalysisHelp label="什么是前置错误">请求在发送到模型前被拒绝，例如密钥失效、参数错误或超出频率限制。</AnalysisHelp>
-        </Space>}
-        series={[...new Set(trendRows.map(row => row.code))].map(code => ({ label: errors.get(code),
-          values: trend.map(bucket => bucket.rows.filter(row => row.code === code).length),
-        }))}
-        onChoose={(index, label) => {
-          const bucket = trend[index];
-          if (bucket) change({ period: 'custom', start: new Date(bucket.start).toISOString(), end: new Date(bucket.end).toISOString(),
-            errorCode: [...errors].find(([, name]) => name === label)?.[0] ?? '' });
-        }}/>}
-      <Card className="admin-log-results" headerLine={false}
-        title={<span>{title} <small role="status">{fmt(rows.length)} 条</small></span>}
-        headerExtraContent={
-        <Space wrap>
-          <Button theme="solid" icon={<IconDownload aria-hidden="true"/>} onClick={exportCsv} disabled={!rows.length}>导出筛选结果</Button>
-          <Button theme="light" icon={<IconSetting aria-hidden="true"/>}
-            onClick={() => setColumnDraft(visibleFields.map(([, field]) => field))}>列设置</Button>
-        </Space>}>
+        onChange={change} onReset={reset} onRefresh={refresh} refreshing={refreshing}/>
+      {!window && <Banner type="danger" closeIcon={null} description="请选择有效的起止时间。"/>}
+      {trend?.length > 0 && <section className="admin-log-trend" aria-label="前置错误趋势">
+        <div className="admin-log-trend-heading"><h2>前置错误趋势</h2><span>共 {fmt(trendRows.length)} 次</span></div>
+        <p>统计已采集事件。点击柱形查看对应时段、类型的留存样本。</p>
+        <TimeSeriesChart label="前置错误趋势" height={209} type="bar" stacked compact legendAtTop
+          unit="次" labels={trend.map(bucket => bucket.label)} series={trendSeries}
+          onChoose={(index, label) => {
+            const bucket = trend[index];
+            const kind = preflightTypes.find(([, name]) => name === label)?.[0];
+            if (bucket?.rows.some(row => row.preflightType === kind)) change({ period: 'custom', start: new Date(bucket.start).toISOString(),
+              end: new Date(bucket.end).toISOString(), preflightType: kind });
+          }}/>
+      </section>}
+      <section className="admin-log-results" aria-label={title}>
+        <div className="admin-log-results-heading">
+          <div className="admin-log-results-title"><h2>{title}</h2><span role="status">共 {fmt(rows.length)} 条</span></div>
+          <Space wrap>
+            <Button theme="solid" onClick={exportXlsx} disabled={!rows.length} loading={exporting}>导出筛选结果</Button>
+            <Button theme="outline" type="tertiary" onClick={() => setColumnDraft(visibleFields.map(([, field]) => field))}>列设置</Button>
+          </Space>
+        </div>
       <Table size="small" rowKey="id" columns={columns} dataSource={rows.slice((currentPage - 1) * size, currentPage * size)}
         scroll={{ x: 'max(100%, ' + columns.reduce((width, column) => width + column.width, 0) + 'px)' }}
         empty={<Empty description="没有符合条件的记录">
           <Button size="small" theme="borderless" onClick={reset}>清除筛选</Button>
         </Empty>}
-        pagination={{ currentPage, total: rows.length, pageSize: size, showTotal: true, showSizeChanger: true, pageSizeOpts: PAGE_SIZES,
+        pagination={rows.length > 0 && { currentPage, total: rows.length, pageSize: size, showTotal: true, showSizeChanger: true, pageSizeOpts: logPageSizes,
           onPageChange: setPage, onPageSizeChange: value => { setSize(value); setPage(1); } }}/>
-      </Card>
+      </section>
     </section>
-    {columnDraft && <Modal visible title="列设置" width="min(500px, calc(100vw - 32px))" closeOnEsc
-      okText="保存" onOk={applyColumns} onCancel={() => setColumnDraft(null)}>
+    {columnDraft && <Modal visible title="列设置" width="min(560px, calc(100vw - 32px))" closeOnEsc
+      onCancel={() => setColumnDraft(null)} footer={<div className="admin-log-column-footer">
+        <Button size="small" theme="borderless" onClick={() => setColumnDraft(fields.map(([, field]) => field))}>{translateLabel('恢复默认')}</Button>
+        <Space><Button theme="outline" onClick={() => setColumnDraft(null)}>取消</Button>
+          <Button theme="solid" onClick={applyColumns}>保存</Button></Space>
+      </div>}>
       <CheckboxGroup className="admin-log-column-options" aria-label="显示的日志列" value={columnDraft} onChange={setColumnDraft}
         options={fields.map(([label, value]) => ({ label, value, disabled: value === 'requestId' }))}/>
-      <Button size="small" theme="borderless" onClick={() => setColumnDraft(fields.map(([, field]) => field))}>{translateLabel("恢复默认")}</Button>
     </Modal>}
     {settingsSource && canViewFullLog && <LogPolicyDialog simulation={settingsSource}
       close={() => setSettingsSource(null)} onSave={updated => {

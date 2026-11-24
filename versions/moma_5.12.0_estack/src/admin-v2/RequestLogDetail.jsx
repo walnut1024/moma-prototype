@@ -1,15 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import Descriptions from './AdminDescriptions';
 import { Banner, Button, Collapse, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconCopy } from '@douyinfe/semi-icons';
+import { IconCopy, IconDownload } from '@douyinfe/semi-icons';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import { AdminSideSheet } from './AdminOverlay';
 import AdminStatus from './AdminStatus';
 import { httpLabel, observationNumber as fmt, observationTime, outcomes } from './call-observations.mjs';
 import { buildRequestTrace, readRequestBody, requestLogSections } from './call-log-detail.mjs';
+import { downloadJsonFile } from './provider-files';
+import './call-log-xa-detail.css';
 
 const { Text, Title } = Typography;
 const headerFields = new Set(['requestId', 'outcome', 'status', 'duration']);
+const summaryFields = new Map(requestLogSections.flatMap(([, fields]) => fields).map(field => [field[1], field]));
+const callLogSummary = [
+  ['基本信息', ['at', 'modelName', 'callId', 'providerName', 'channelName', 'provider', 'channel', 'source', 'purpose',
+    'tenantName', 'projectName', 'project', 'userName', 'user', 'keyName', 'keyDisplayId', 'keyMasked']],
+  ['Token 用量', ['total', 'input', 'output']],
+  ['性能指标', ['firstPacket', 'ttft', 'duration', 'status']],
+].map(([title, keys]) => [title, keys.map(key => summaryFields.get(key))]);
+const callLogMetadataKeys = ['requestId', 'outcome', 'preflightType', ...callLogSummary.flatMap(([, fields]) => fields.map(([, key]) => key))];
 const traceNotices = { 'not-retained': '本次请求未留存链路明细', expired: '本次请求的链路明细已过期' };
 const bodyNotices = {
   'not-retained': '本次请求未留存正文', expired: '本次请求的完整日志已过期',
@@ -44,24 +54,44 @@ function RequestFacts({ row, trace, resultLabel }) {
   </dl>;
 }
 
-function RequestMetadata({ row }) {
+function RequestMetadata({ row, fromCallLogs }) {
   const extra = [
     ['模型编码', row.registeredModelId],
     ['错误类型', row.code], ['错误来源', row.errorSource], ['失败原因', row.errorReason],
     ...(row.taskStatus == null ? [] : [['任务终态', row.taskStatus]]),
   ];
+  const sections = fromCallLogs ? callLogSummary : requestLogSections;
+  const metadata = () => Object.fromEntries(callLogMetadataKeys.map(key => {
+    const value = row[key];
+    return [key, typeof value === 'string' || Number.isFinite(value) ? value : null];
+  }));
+  const downloadMetadata = () => {
+    try { downloadJsonFile(metadata(), `call-log-${row.requestId ?? 'request'}.json`); }
+    catch { Toast.error('下载失败，请重试'); }
+  };
   return <div className="admin-request-log-pane admin-analytics-fields">
-    {requestLogSections.map(([title, fields]) => <section key={title}>
+    {sections.map(([title, fields]) => <section key={title}>
       <Title heading={6} component="h3">{title}</Title>
-      <Descriptions data={fields.filter(([, field]) => !headerFields.has(field)).map(([key, field, format]) => {
+      <Descriptions align={fromCallLogs ? 'left' : undefined} size={fromCallLogs ? 'small' : undefined} row={fromCallLogs}
+        data={fields.filter(([, field]) => fromCallLogs || !headerFields.has(field)).map(([key, field, format]) => {
         const value = row[field];
-        return { key, value: valueOrUnknown(format ? format(value) : typeof value === 'number' ? fmt(value) : value) };
+        const formatted = fromCallLogs && field === 'status' ? httpLabel(value)
+          : format ? format(value) : typeof value === 'number' ? fmt(value) : value;
+        return { key, value: valueOrUnknown(formatted) };
       })}/>
     </section>)}
     <section>
       <Title heading={6} component="h3">补充信息</Title>
-      <Descriptions data={extra.map(([key, value]) => ({ key, value: valueOrUnknown(value) }))}/>
+      <Descriptions align={fromCallLogs ? 'left' : undefined} size={fromCallLogs ? 'small' : undefined} row={fromCallLogs}
+        data={extra.map(([key, value]) => ({ key, value: valueOrUnknown(value) }))}/>
     </section>
+    {fromCallLogs && <section>
+      <Title heading={6} component="h3">JSON 元数据</Title>
+      <Space wrap>
+        <Button icon={<IconCopy aria-hidden="true"/>} onClick={() => copyText(JSON.stringify(metadata(), null, 2), '元数据已复制')}>复制 JSON</Button>
+        <Button icon={<IconDownload aria-hidden="true"/>} onClick={downloadMetadata}>下载 JSON</Button>
+      </Space>
+    </section>}
   </div>;
 }
 
@@ -103,7 +133,7 @@ function TraceNodeDetails({ node, complete }) {
 
 const ticks = [0, 25, 50, 75, 100];
 
-function RequestTrace({ trace, state, finalChannel, selected, onSelect, onSummary }) {
+function RequestTrace({ trace, state, finalChannel, selected, onSelect, onSummary, fromCallLogs }) {
   const root = useRef(null);
   useEffect(() => {
     root.current?.querySelector('button[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -123,7 +153,9 @@ function RequestTrace({ trace, state, finalChannel, selected, onSelect, onSummar
     <div className="admin-request-trace-grid admin-request-trace-axis" aria-hidden="true">
       <span>阶段</span>
       {trace.hasChart && <span className="admin-request-trace-track">
-        {ticks.map(tick => <span key={tick} style={{ left: tick + '%' }}>{fmt(trace.total * tick / 100)}</span>)}
+        {(fromCallLogs ? [0, 50, 100] : ticks).map(tick => <span key={tick} style={{ left: tick + '%' }}>
+          {fmt(trace.total * tick / 100)}{fromCallLogs && tick === 100 ? ' ms' : ''}
+        </span>)}
       </span>}
       <span>耗时 / 时点</span>
     </div>
@@ -149,14 +181,16 @@ function RequestTrace({ trace, state, finalChannel, selected, onSelect, onSummar
   </section>;
 }
 
-function RequestBody({ body, attemptIndex, onSummary }) {
+function RequestBody({ body, attemptIndex, onSummary, includeClientRequest, maskedKey }) {
   if (body.state !== 'available') {
     return <LogNotice title={bodyNotices[body.state] ?? bodyNotices.unavailable} onSummary={onSummary}/>;
   }
-  const matching = body.segments.filter(segment => attemptIndex != null && segment.attemptIndex === attemptIndex);
+  const matching = body.segments.filter(segment => (attemptIndex != null && segment.attemptIndex === attemptIndex)
+    || (includeClientRequest && ['client-request', 'request'].includes(segment.id)));
   const open = matching.length ? matching : body.segments.slice(0, 1);
   return <section className="admin-request-log-pane" aria-label="已留存的请求与响应">
     <Title heading={6} component="h3">已留存的请求与响应</Title>
+    {maskedKey && <Space wrap><Text type="secondary">API Key（脱敏）</Text><Text code>{maskedKey}</Text></Space>}
     <Collapse defaultActiveKey={open.map(segment => segment.id)} keepDOM={false}>
       {body.segments.map(segment => <AdminCollapsePanel key={segment.id} itemKey={segment.id} header={segment.label}>
         {segment.text != null ? <>
@@ -170,8 +204,9 @@ function RequestBody({ body, attemptIndex, onSummary }) {
 
 export default function RequestLogDetail({ row, attemptId, evidence, canViewFullLog, close, fromCallLogs = false }) {
   const trace = buildRequestTrace(row, evidence);
-  const [tab, setTab] = useState(() => fromCallLogs && !trace.nodes.length ? 'summary' : 'trace');
+  const [tab, setTab] = useState(() => fromCallLogs && !attemptId ? 'summary' : 'trace');
   const [selected, setSelected] = useState(() => attemptId
+    ?? (fromCallLogs ? row.attempts.at(-1)?.id : undefined)
     ?? trace.nodes.find(node => node.tone === 'red')?.id
     ?? trace.nodes.find(node => node.attempt)?.id
     ?? trace.nodes[0]?.id);
@@ -180,33 +215,41 @@ export default function RequestLogDetail({ row, attemptId, evidence, canViewFull
     setTab('summary');
     requestAnimationFrame(() => tabsRoot.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus());
   };
-  const title = <div className="admin-request-log-title">
+  const requestId = <Text code>{row.requestId ?? 'Request ID 未采集'}</Text>;
+  const owner = (row.tenantName || row.projectName) && <Text type="secondary" title={row.project}>
+    {[row.tenantName, row.projectName].filter(Boolean).join(fromCallLogs ? ' / ' : ' · ')}
+  </Text>;
+  const copyId = row.requestId && <Button size="small" theme="borderless" icon={<IconCopy aria-hidden="true"/>}
+    onClick={() => copyText(row.requestId, 'Request ID 已复制')}>复制 Request ID</Button>;
+  const title = fromCallLogs ? '请求详情' : <div className="admin-request-log-title">
     <Title heading={5} component="h2">请求详情</Title>
-    {(row.tenantName || row.projectName) && <Text type="secondary" title={row.project}>
-      {[row.tenantName, row.projectName].filter(Boolean).join(' · ')}
-    </Text>}
-    <Space wrap>
-      <Text code>{row.requestId ?? 'Request ID 未采集'}</Text>
-      {row.requestId && <Button size="small" theme="borderless" icon={<IconCopy aria-hidden="true"/>}
-        onClick={() => copyText(row.requestId, 'Request ID 已复制')}>复制 Request ID</Button>}
-    </Space>
+    {owner}
+    <Space wrap>{requestId}{copyId}</Space>
   </div>;
   const attemptIndex = row.attempts.find(attempt => attempt.id === selected)?.index;
-  return <AdminSideSheet visible closeOnEsc width="min(920px, 100vw)"
+  const activeTab = tab === 'raw' && !canViewFullLog ? (fromCallLogs ? 'summary' : 'trace') : tab;
+  return <AdminSideSheet visible closeOnEsc width={fromCallLogs ? 'min(820px, 100vw)' : 'min(920px, 100vw)'}
     className={fromCallLogs ? 'admin-request-log-sheet admin-call-log-detail' : 'admin-request-log-sheet'}
     label="请求详情" title={title} onCancel={close}>
     <div ref={tabsRoot}>
-      <Tabs activeKey={tab === 'raw' && !canViewFullLog ? 'trace' : tab} onChange={setTab} keepDOM={false} tabPaneMotion={false}
+      {fromCallLogs && <div className="admin-call-log-detail-heading">
+        <div className="admin-request-log-title">{requestId}{owner}</div>
+        {copyId}
+      </div>}
+      <Tabs activeKey={activeTab} onChange={setTab} keepDOM={false} tabPaneMotion={false}
         aria-label="请求详情视图" renderTabBar={(props, TabBar) => <div className="admin-request-log-context">
-          <TabBar {...props}/>
+          {!fromCallLogs && <TabBar {...props}/>}
           <RequestFacts row={row} trace={trace} resultLabel={evidence?.resultLabel}/>
+          {fromCallLogs && <TabBar {...props}/>}
         </div>}>
-        <Tabs.TabPane itemKey="summary" tab="摘要日志"><RequestMetadata row={row}/></Tabs.TabPane>
+        <Tabs.TabPane itemKey="summary" tab="摘要日志"><RequestMetadata row={row} fromCallLogs={fromCallLogs}/></Tabs.TabPane>
         <Tabs.TabPane itemKey="trace" tab="请求链路">
-          <RequestTrace trace={trace} state={evidence?.traceState} finalChannel={row.channelName} selected={selected} onSelect={setSelected} onSummary={showSummary}/>
+          <RequestTrace trace={trace} state={evidence?.traceState} finalChannel={row.channelName} selected={selected}
+            onSelect={setSelected} onSummary={showSummary} fromCallLogs={fromCallLogs}/>
         </Tabs.TabPane>
         {canViewFullLog && <Tabs.TabPane itemKey="raw" tab="完整日志">
-          {tab === 'raw' && <RequestBody body={readRequestBody(evidence)} attemptIndex={attemptIndex} onSummary={showSummary}/>}
+          {tab === 'raw' && <RequestBody body={readRequestBody(evidence)} attemptIndex={attemptIndex} onSummary={showSummary}
+            includeClientRequest={fromCallLogs && !attemptId} maskedKey={fromCallLogs ? row.keyMasked : undefined}/>}
         </Tabs.TabPane>}
       </Tabs>
     </div>
