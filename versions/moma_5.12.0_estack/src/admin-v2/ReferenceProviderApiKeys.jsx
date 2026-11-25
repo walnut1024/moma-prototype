@@ -1,14 +1,14 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useId, useRef, useState } from 'react';
 import { IconPlus } from '@douyinfe/semi-icons';
-import { Button, Input, TextArea } from '@douyinfe/semi-ui';
+import { Button, TextArea } from '@douyinfe/semi-ui';
 import AdminActionMenu from './AdminActionMenu';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import { credentialRotationChannels } from './credential-rotation-scope';
 import { CopyId, GridTable, Row, Cell, Modal, Notice } from './ModelOperationsUI';
 import { supplierChannelCode, supplierChannelName, supplierKeyChannels } from './supplier-resources';
 import { Field } from './ServiceUI';
-import { UPSTREAM_API_KEY_LIMIT, providerApiKeysDraft, providerApiKeyRows, providerApiKeyName, providerApiKeyId, maskProviderApiKey, normalizeProviderApiKeyName } from './provider-management';
+import { UPSTREAM_API_KEY_LIMIT, providerApiKeysDraft, providerApiKeyRows, maskProviderApiKey } from './provider-management';
 import './supplier-key-pool.css';
 
 function KeyEditor({ provider, keyCount, ops, close }) {
@@ -55,54 +55,6 @@ function KeyEditor({ provider, keyCount, ops, close }) {
   </SupplierCreationDialog>;
 }
 
-function KeyNameEditor({ providerId, apiKey, ops, close }) {
-  const t = useChannelText();
-  const currentName = providerApiKeyName(apiKey);
-  const [value, setValue] = useState(currentName);
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const input = useRef(null);
-  const save = async () => {
-    let name;
-    try {
-      name = normalizeProviderApiKeyName(value);
-    } catch (issue) {
-      setError(t(issue.message));
-      input.current?.focus();
-      return;
-    }
-    if (name === currentName) {
-      ops.dirty(false);
-      close();
-      return;
-    }
-    setSaving(true);
-    try {
-      const next = await ops.run('provider', {
-        operation: 'renameApiKey', objectId: providerId,
-        values: { keyId: apiKey.id, expectedFingerprint: apiKey.fingerprint, name },
-      });
-      if (next) close();
-    } finally {
-      setSaving(false);
-    }
-  };
-  return <SupplierCreationDialog title="修改密钥名称" description={providerApiKeyId(apiKey)}
-    cancel={() => !saving && ops.proceed(close)} cancelLabel={t('取消')} submit={save}
-    action={saving ? t('保存中…') : t('保存')} disabled={saving || !ops.can}>
-    <Field label="密钥名称" required error={error}>
-      <Input ref={input} name="name" autoFocus required value={value} disabled={saving || !ops.can}
-        onChange={name => {
-          setValue(name);
-          setError('');
-          ops.setError('');
-          ops.dirty(name !== currentName);
-        }}/>
-    </Field>
-    {ops.error && <Notice error>{ops.error}</Notice>}
-  </SupplierCreationDialog>;
-}
-
 export default function ReferenceProviderApiKeys({ state, connection, ops }) {
   const translateLabel = useChannelText();
   const { provider } = connection;
@@ -126,30 +78,25 @@ export default function ReferenceProviderApiKeys({ state, connection, ops }) {
         onClick={event => open(event, { kind: 'add' })}>{translateLabel("添加上游 API 密钥")}</Button>
     </div>
     <GridTable className="supplier-key-table supplier-flat-key-table"
-      headings={['密钥名称 / ID', '上游 API 密钥', '当前绑定连接', '操作']} empty={!rows.length} emptyMessage="暂无上游 API 密钥">
+      headings={['密钥 ID', '上游 API 密钥', '当前绑定连接', '操作']} empty={!rows.length} emptyMessage="暂无上游 API 密钥">
       {rows.map(row => {
         const { apiKey } = row;
-        const keyId = providerApiKeyId(apiKey);
+        const keyId = apiKey.id;
         const channels = credentialRotationChannels(state, provider, apiKey.id);
         return <Row key={apiKey.id}>
-          <Cell><span>{providerApiKeyName(apiKey)}</span><small><CopyId copyAtStart value={apiKey.id} displayValue={keyId} label="密钥 ID"/></small></Cell>
+          <Cell><CopyId copyAtStart ellipsis value={keyId} label="密钥 ID"/></Cell>
           <Cell><code>{maskProviderApiKey(apiKey.maskedKey)}</code></Cell>
           <Cell><AdminActionMenu label={`查看密钥 ${keyId} 当前绑定连接`} items={channels.length ? channels.map(channel => ({
             node: 'item', name: supplierChannelCode(channel) + ' · ' + supplierChannelName(provider, channel),
             onClick: () => ops.go({ connection: channel.id, tab: null, modelQ: null }),
           })) : [{ node: 'title', name: '暂无连接绑定' }]}>{channels.length} 个</AdminActionMenu></Cell>
-          <Cell><div className="supplier-row-actions">
-            <Button theme="borderless" size="small" disabled={!ops.can} aria-label={`${translateLabel('修改名称')} ${keyId}`}
-              onClick={event => open(event, { kind: 'rename', apiKey })}>{translateLabel('修改名称')}</Button>
-            <Button theme="borderless" type="danger" size="small" disabled={!ops.can} aria-label={`删除 ${keyId}`}
-              onClick={event => open(event, { kind: 'delete', record: { ...row, endpoints: supplierKeyChannels(state, provider, apiKey.id) } })}>{translateLabel("删除")}</Button>
-          </div></Cell>
+          <Cell><Button theme="borderless" type="danger" size="small" disabled={!ops.can} aria-label={`删除 ${keyId}`}
+            onClick={event => open(event, { kind: 'delete', record: { ...row, endpoints: supplierKeyChannels(state, provider, apiKey.id) } })}>{translateLabel("删除")}</Button></Cell>
         </Row>;
       })}
     </GridTable>
     {dialog?.kind === 'add' && <KeyEditor provider={provider} keyCount={rows.length} ops={ops} close={close}/>}
-    {dialog?.kind === 'rename' && <KeyNameEditor providerId={provider.id} apiKey={dialog.apiKey} ops={ops} close={close}/>}
-    {deleting && <Modal title="删除上游 API 密钥" description={providerApiKeyId(deleting.apiKey)} onClose={close} footer={<>
+    {deleting && <Modal title="删除上游 API 密钥" description={deleting.apiKey.id} onClose={close} footer={<>
       <Button theme="light" onClick={close}>{translateLabel("取消")}</Button>
       <Button type="danger" disabled={!ops.can} onClick={async () => {
         const { id, fingerprint } = deleting.apiKey;

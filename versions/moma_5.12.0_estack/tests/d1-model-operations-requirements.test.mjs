@@ -16,7 +16,13 @@ test('the requirements document is readable only by an active operations or plat
     '',
     '[目录](#模型接入)',
     '',
+    '[创建连接](#req-3.1.1.1.2-06)',
+    '',
     '## 模型接入',
+    '',
+    '<a id="req-3.1.1.1.2-06"></a>',
+    '',
+    '**3.1.1.1.2-06 「创建连接」按钮**',
     '',
     '| 字段 | 值 |',
     '| --- | --- |',
@@ -86,6 +92,8 @@ test('the requirements document is readable only by an active operations or plat
     assert.match(body.html, /<h1(?:\s[^>]*)?>Published requirement fixture<\/h1>/);
     assert.match(body.html, /href="about:srcdoc#%E6%A8%A1%E5%9E%8B%E6%8E%A5%E5%85%A5"/);
     assert.match(body.html, /<h2 id="模型接入">模型接入<\/h2>/);
+    assert.match(body.html, /href="about:srcdoc#req-3\.1\.1\.1\.2-06"/);
+    assert.match(body.html, /<p id="req-3\.1\.1\.1\.2-06"><strong>3\.1\.1\.1\.2-06 「创建连接」按钮<\/strong><\/p>/);
     assert.match(body.html, /<table>/);
     assert.doesNotMatch(body.html, /<span data-raw=/);
   }

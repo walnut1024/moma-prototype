@@ -43,7 +43,10 @@ test('HTTP/D1 saves provider URLs and masked keys and protects model and price h
     await send(addKeys);
     await send(addKeys);
     state = await read();
-    const apiKeyId = state.providers.find(row => row.id === providerId).apiKeys[0].id;
+    const addedKeys = state.providers.find(row => row.id === providerId).apiKeys;
+    assert.equal(addedKeys.length, 2);
+    assert.ok(addedKeys.every(key => !Object.hasOwn(key, 'name')));
+    const apiKeyId = addedKeys[0].id;
     for (const index of [1, 2]) {
       await send(providerCommand('supplierChannelSave', {
         name: '连接 ' + index, baseUrl: `https://api${index}.example.invalid/v1`, protocol: 'OpenAI',
@@ -64,27 +67,15 @@ test('HTTP/D1 saves provider URLs and masked keys and protects model and price h
     await local.db.batch([local.db.prepare('PRAGMA defer_foreign_keys=ON'), ...modelChanges(local.db, state, withArchived)]);
     state = await read();
     const storedCredential = () => local.db.prepare('SELECT * FROM credentials WHERE id=?').bind(apiKeyId).first();
-    const credentialBeforeRename = await storedCredential();
-    const channelsBeforeRename = structuredClone(state.endpoints);
-    const rename = {
-      keyId: apiKeyId, expectedFingerprint: previousKey.fingerprint, name: '  主密钥  ',
-    };
-    await send(providerCommand('renameApiKey', { ...rename, name: ' ' }), 422);
-    await send(providerCommand('renameApiKey', { ...rename, expectedFingerprint: 'stale' }), 422);
+    const credentialBefore = await storedCredential();
+    assert.equal(credentialBefore.name, apiKeyId);
+    await send(providerCommand('renameApiKey', { keyId: apiKeyId, expectedFingerprint: previousKey.fingerprint, name: '主密钥' }), 422);
     assert.deepEqual(await read(), state);
-    const renameCommand = providerCommand('renameApiKey', rename);
-    const renamed = await send(renameCommand);
-    assert.deepEqual(await send(renameCommand), renamed);
-    state = await read();
-    const renamedProvider = state.providers.find(row => row.id === providerId);
-    assert.deepEqual(renamedProvider.apiKeys[0], { ...previousKey, name: '主密钥' });
-    assert.deepEqual(await storedCredential(), { ...credentialBeforeRename, name: '主密钥' });
-    assert.deepEqual(state.endpoints, channelsBeforeRename);
+    assert.deepEqual(await storedCredential(), credentialBefore);
     const archivedRecord = JSON.parse(await local.db.prepare('SELECT record_json FROM channels WHERE id=?').bind(archivedConnection.id).first('record_json'));
     assert.deepEqual(archivedRecord.apiKeys, [previousKey]);
-    assert.equal(providerApiKeyRows(state, renamedProvider)[0].endpoints.length, 2);
-    assert.equal(state.audits[0].action, '修改密钥名称');
     const provider = state.providers.find(row => row.id === providerId);
+    assert.equal(providerApiKeyRows(state, provider)[0].endpoints.length, 2);
     assert.equal(provider.website, profile.website);
     assert.equal(provider.description, profile.description);
     assert.equal(providerApiKeyRows(state, provider).length, 2);

@@ -2,7 +2,7 @@ import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction, parseAdminState as baseParseAdminState } from '../src/admin-v2/store.js';
-import { providerApiKeysDraft, providerApiKeyRows, providerApiKeyName, connectionFingerprint } from '../src/admin-v2/provider-management.js';
+import { checkedConnectionKeys, providerApiKeysDraft, providerApiKeyRows, connectionFingerprint } from '../src/admin-v2/provider-management.js';
 
 const secrets = ['local-prototype-key-alpha-0001', 'local-prototype-key-beta-0002', 'local-prototype-key-rotated-0003'];
 const op = (state, operation, values, providerId = 'provider-moma') => commitAdminState(state, { type: 'modelOperations', operation: 'provider', data: { operation, objectId: providerId, values } });
@@ -19,62 +19,49 @@ async function fixture() {
   return { state, provider, key, endpoints: [endpoint, second], input: { keyId: key.id, expectedFingerprint: key.fingerprint } };
 }
 
-test('the list deduplicates shared credential references, preserves scopes and assigns stable automatic names', async () => {
+test('the list deduplicates unnamed shared credentials by stable ID and preserves their references', async () => {
   const { state, provider, key } = await fixture(), before = structuredClone(state);
   const rows = providerApiKeyRows(state, provider);
   assert.equal(rows.length, 2);
   assert.equal(rows[0].endpoints.length, 2);
   assert.equal(rows[0].apiKey.id, key.id);
-  assert.equal(providerApiKeyName(rows[0].apiKey), 'API 密钥 1');
-  assert.equal(providerApiKeyName(rows[1].apiKey), 'API 密钥 2');
-  const legacy = { ...key }; delete legacy.name;
-  const name = providerApiKeyName(legacy);
-  assert.equal(providerApiKeyName(legacy), name);
+  assert.notEqual(rows[0].apiKey.id, rows[1].apiKey.id);
+  assert.ok(rows.every(row => !Object.hasOwn(row.apiKey, 'name')));
   assert.deepEqual(state, before);
 });
 
-test('adding one credential never renames existing records and rejects a key already present only at an endpoint', async () => {
+test('adding a credential leaves existing records intact and rejects duplicates held at an endpoint', async () => {
   const { state, provider, key } = await fixture();
+  key.name = '历史上游密钥';
   const next = op(state, 'addApiKeys', await providerApiKeysDraft([secrets[2]]));
   assert.deepEqual(providerOf(next).apiKeys.slice(0, 2), provider.apiKeys);
-  assert.equal(providerOf(next).apiKeys[2].name, 'API 密钥 3');
+  assert.ok(!Object.hasOwn(providerOf(next).apiKeys[2], 'name'));
   provider.apiKeys = provider.apiKeys.filter(item => item.id !== key.id);
   assert.throws(() => op(state, 'addApiKeys', { apiKeys: [key] }), /相同的 API 密钥/);
 });
 
-test('renaming a shared key preserves credential data, its legacy aliases and the existing test results', async () => {
-  const { state, provider, key, endpoints, input } = await fixture();
-  const dedicated = { ...key, id: 'connection-own-key', scope: 'channel' };
-  endpoints[0].apiKeys.push(dedicated);
-  const deleted = { ...structuredClone(endpoints[1]), id: 'deleted-key-endpoint', deletedAt: '2026-11-25T00:00:00.000Z' };
-  state.endpoints.push(deleted);
+test('renaming a shared key is unsupported and leaves its existing records intact', async () => {
+  const { state, key, endpoints, input } = await fixture();
+  key.name = '历史上游密钥';
+  endpoints[0].apiKeys[0].name = '历史连接别名';
   const before = structuredClone(state);
-  for (const name of ['', '  ', '密钥'.repeat(51), '名字\n测试']) {
-    assert.throws(() => op(state, 'renameApiKey', { ...input, name }), /密钥名称须为/);
-  }
-  assert.throws(() => op(state, 'renameApiKey', { ...input, expectedFingerprint: 'stale', name: '生产' }), /已变化/);
-  assert.throws(() => op(state, 'renameApiKey', { ...input, keyId: dedicated.id, name: '生产' }), /已变化/);
-  assert.throws(() => op({ ...state, currentRole: '运维人员' }, 'renameApiKey', { ...input, name: '生产' }), /无权/);
-
-  const next = op(state, 'renameApiKey', { ...input, name: '  生产主密钥  ' });
-  const name = '生产主密钥';
-  assert.deepEqual(providerOf(next).apiKeys, [{ ...key, name }, provider.apiKeys[1]]);
-  for (const endpoint of endpoints) {
-    const changed = next.endpoints.find(row => row.id === endpoint.id);
-    assert.deepEqual(changed, {
-      ...endpoint, updatedAt: changed.updatedAt,
-      apiKeys: [{ ...endpoint.apiKeys[0], name }, ...endpoint.apiKeys.slice(1)],
-    });
-    assert.equal(connectionFingerprint(changed), connectionFingerprint(endpoint));
-    assert.deepEqual(changed.connectionTest, endpoint.connectionTest);
-  }
-  assert.deepEqual(next.endpoints.find(row => row.id === deleted.id), deleted);
-  assert.deepEqual(next.modelSupplies, before.modelSupplies);
+  assert.throws(() => op(state, 'renameApiKey', { ...input, name: '生产密钥' }), /未知服务商操作/);
   assert.deepEqual(state, before);
 });
 
+test('connection key changes keep saved names without accepting new names', async () => {
+  const { apiKeys: [draft] } = await providerApiKeysDraft([secrets[0]]);
+  const [added] = checkedConnectionKeys([{ ...draft, name: '提交的名称' }]);
+  assert.ok(!Object.hasOwn(added, 'name'));
+  const [saved] = checkedConnectionKeys([{ ...added, name: '要改的名称' }], [{ ...added, name: '历史连接密钥' }]);
+  assert.deepEqual(saved, { ...added, name: '历史连接密钥' });
+});
+
 test('rotating a referenced key requires confirmation, updates all copies in place and invalidates associated models', async () => {
-  const { state, provider, key, endpoints, input } = await fixture(), before = structuredClone(state);
+  const { state, provider, key, endpoints, input } = await fixture();
+  key.name = '历史上游密钥';
+  endpoints[0].apiKeys[0].name = '历史连接密钥';
+  const before = structuredClone(state);
   const apiKey = (await providerApiKeysDraft([secrets[2]])).apiKeys[0];
   assert.throws(() => op(state, 'editApiKey', { ...input, apiKey }), /确认/);
   const next = op(state, 'editApiKey', { ...input, apiKey, confirmed: true });
@@ -85,7 +72,7 @@ test('rotating a referenced key requires confirmation, updates all copies in pla
     const changed = next.endpoints.find(item => item.id === endpoint.id);
     assert.equal(changed.apiKeys[0].id, endpoint.apiKeys[0].id);
     assert.equal(changed.apiKeys[0].fingerprint, apiKey.fingerprint);
-    assert.equal(changed.apiKeys[0].name, key.name);
+    assert.equal(changed.apiKeys[0].name, endpoint.apiKeys[0].name);
     assert.equal(changed.credentialRef, endpoint.credentialRef);
     assert.equal(changed.baseUrl, endpoint.baseUrl);
     assert.equal(changed.status, '停用'); assert.equal(changed.connectionTest, null);
@@ -113,12 +100,13 @@ test('deletion requires confirmation and removes only the selected credential an
   assert.equal(next.modelSupplies.length, state.modelSupplies.length);
 });
 
-test('editing an unbound key has no effect on unrelated connection validation or original names', async () => {
+test('editing an unbound key keeps it unnamed and preserves unrelated connection validation', async () => {
   const { state, provider } = await fixture(), key = provider.apiKeys[1];
   const apiKey = (await providerApiKeysDraft([secrets[2]])).apiKeys[0];
   const next = op(state, 'editApiKey', { keyId: key.id, expectedFingerprint: key.fingerprint, apiKey });
   assert.deepEqual(next.endpoints, state.endpoints); assert.deepEqual(next.modelSupplies, state.modelSupplies);
-  assert.equal(providerOf(next).apiKeys[1].name, key.name);
+  assert.equal(providerOf(next).apiKeys[1].id, key.id);
+  assert.ok(!Object.hasOwn(providerOf(next).apiKeys[1], 'name'));
 });
 
 test('stale, foreign, duplicate and malformed changes fail atomically', async () => {

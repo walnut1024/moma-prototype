@@ -49,6 +49,11 @@ export function renderModelOperationsRequirements(markdown) {
       anchors.add(id);
       return '<h' + rank + ' id="' + id + '">' + content + '</h' + rank + '>';
     })
+    .replace(/^<p>&lt;a id=&quot;(req-(3\.1(?:\.\d+){3}-\d+))&quot;&gt;&lt;\/a&gt;<\/p>\n<p>(?=<strong>\2 「)/gm, (_, id) => {
+      if (anchors.has(id)) throw Error('需求文档包含重复的需求锚点');
+      anchors.add(id);
+      return '<p id="' + id + '">';
+    })
     .replace(/<a href="#([^"]+)"/g, (_, fragment) => {
       if (!anchors.has(decodeURIComponent(fragment))) throw Error('需求文档包含无法定位的章节链接');
       return '<a href="about:srcdoc#' + fragment + '"';

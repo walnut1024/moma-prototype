@@ -48,13 +48,6 @@ const add = (collection, record) => ({ type: 'add', collection, record });
 const update = (collection, id, changes) => ({ type: 'update', collection, id, changes });
 
 export const maskProviderApiKey = value => typeof value === 'string' && value.length > 8 ? `${value.slice(0, 4)}••••••••${value.slice(-4)}` : '••••••••';
-export const providerApiKeyName = key => typeof key.name === 'string' && key.name.trim() ? key.name : `API 密钥 ${(key.id || key.fingerprint).slice(-6)}`;
-export function normalizeProviderApiKeyName(value) {
-  const name = typeof value === 'string' ? value.trim() : '';
-  if (!name || [...name].length > 100 || /\p{Cc}/u.test(name)) throw new Error('密钥名称须为 1–100 个字符，不含控制字符。');
-  return name;
-}
-
 export function providerApiKeyId(key) {
   const uuid = key.id.match(/^(?:(?:provider-key|credential)-)?([a-f0-9]{8})(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i)?.[1];
   if (uuid || key.id.length <= 12) return uuid || key.id;
@@ -135,7 +128,7 @@ export function checkedConnectionKeys(keys, savedKeys = []) {
   if (new Set(keys.map(item => item.fingerprint)).size !== keys.length) throw new Error('同一连接不能配置相同的 API 密钥');
   const normalized = keys.map(item => {
     const saved = savedKeys.find(saved => saved.id === item.id) || savedKeys.find(saved => saved.fingerprint === item.fingerprint);
-    return { id: saved?.id || resourceId('credential'), maskedKey: item.maskedKey, fingerprint: item.fingerprint, ...(item.name ? { name: item.name } : {}), ...(item.createdAt ? { createdAt: item.createdAt } : {}) };
+    return { id: saved?.id || resourceId('credential'), maskedKey: item.maskedKey, fingerprint: item.fingerprint, ...(saved?.name ? { name: saved.name } : {}), ...(item.createdAt ? { createdAt: item.createdAt } : {}) };
   });
   if (new Set(normalized.map(item => item.id)).size !== normalized.length) throw new Error('同一连接不能重复引用同一个 API 密钥');
   return normalized;
@@ -301,36 +294,14 @@ export function providerTransaction(state, action) {
     const fingerprints = new Set([...existing, ...data.apiKeys.map(item => item.fingerprint)]);
     if (fingerprints.size !== existing.length + data.apiKeys.length) throw new Error('此服务商已配置相同的 API 密钥，或本次输入有重复项。');
     const createdAt = new Date().toISOString();
-    const names = new Set(poolKeys.map(providerApiKeyName));
     const added = data.apiKeys.map(item => {
-      let index = 1;
-      while (names.has(`API 密钥 ${index}`)) index++;
-      const name = `API 密钥 ${index}`; names.add(name);
       const id = resourceId('credential');
       if (item.accountRpm != null && (!Number.isSafeInteger(item.accountRpm) || item.accountRpm < 1)) throw new Error('账号 RPM 必须为正整数');
-      return { id, name, maskedKey: item.maskedKey, fingerprint: item.fingerprint, ...(standalone ? { standalone: true } : {}), ...(item.accountRpm != null ? { accountRpm: item.accountRpm } : {}), createdAt };
+      return { id, maskedKey: item.maskedKey, fingerprint: item.fingerprint, ...(standalone ? { standalone: true } : {}), ...(item.accountRpm != null ? { accountRpm: item.accountRpm } : {}), createdAt };
     });
     changes.push(update('providers', provider.id, { apiKeys: [...keys, ...added], ...(!standalone && (data.groupId || provider.apiKeyGroups) ? { apiKeyGroups: groups.map(row => row.id === groupId ? { ...row, keyIds: [...row.keyIds, ...added.map(key => key.id)] } : row) } : {}), ...(!standalone && groupId === 'default' && !group.keyIds.length && !provider.defaultApiKeyId ? { defaultApiKeyId: added[0].id } : {}) }));
     if (!standalone && !group.keyIds.length) changes.push(...invalidateSupplierChannels(state, provider, state.endpoints.filter(row => !row.deletedAt && row.providerId === provider.id && (row.authMode === 'group' && row.keyGroupId === groupId || groupId === 'default' && row.authMode === 'inherit')).map(row => row.id)));
     return { type: 'batch', label: '添加上游 API 密钥', objectId: provider.id, changes };
-  }
-  if (operation === 'renameApiKey') {
-    if (!provider || provider.deletedAt || provider.id !== objectId) throw new Error('服务商不存在');
-    if (Object.keys(data).some(key => !['keyId', 'expectedFingerprint', 'name'].includes(key))) throw new Error('修改密钥名称时只能提交名称和密钥标识');
-    const key = providerApiKeyRows(state, provider).find(row => row.apiKey.id === data.keyId)?.apiKey;
-    if (!key || !data.expectedFingerprint || key.fingerprint !== data.expectedFingerprint) throw new Error('API 密钥已变化或不存在，请重新打开后操作');
-    const name = normalizeProviderApiKeyName(data.name);
-    const pooled = provider.apiKeys || [];
-    const pooledIds = new Set(pooled.map(record => record.id));
-    const matches = record => record.scope !== 'channel' && (record.id === key.id || !pooledIds.has(record.id) && record.fingerprint === key.fingerprint);
-    const rename = records => records.map(record => matches(record) ? { ...record, name } : record);
-    if (pooled.some(record => matches(record) && record.name !== name)) changes.push(update('providers', provider.id, { apiKeys: rename(pooled) }));
-    for (const endpoint of state.endpoints) {
-      if (endpoint.providerId === provider.id && !endpoint.deletedAt && endpoint.apiKeys?.some(record => matches(record) && record.name !== name)) {
-        changes.push(update('endpoints', endpoint.id, { apiKeys: rename(endpoint.apiKeys) }));
-      }
-    }
-    return { type: 'batch', label: '修改密钥名称', objectId: key.id, changes };
   }
   if (operation === 'editApiKey' || operation === 'deleteApiKey') {
     if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
@@ -341,7 +312,7 @@ export function providerTransaction(state, action) {
     const affectedEndpoints = replacement ? credentialRotationChannels(state, provider, row.apiKey.id) : row.endpoints;
     if ((operation === 'deleteApiKey' || changed && affectedEndpoints.length) && data.confirmed !== true) throw new Error('请确认密钥变更及关联模型需要重新验证');
     if (replacement && providerApiKeyRows(state, provider).some(item => item.apiKey.fingerprint !== row.apiKey.fingerprint && item.apiKey.fingerprint === replacement.fingerprint)) throw new Error('此服务商已配置相同的 API 密钥');
-    const replace = keys => (keys || []).filter(key => replacement || key.fingerprint !== row.apiKey.fingerprint).map(key => key.fingerprint === row.apiKey.fingerprint ? { ...key, name: providerApiKeyName(row.apiKey), maskedKey: replacement.maskedKey, fingerprint: replacement.fingerprint } : key);
+    const replace = keys => (keys || []).filter(key => replacement || key.fingerprint !== row.apiKey.fingerprint).map(key => key.fingerprint === row.apiKey.fingerprint ? { ...key, maskedKey: replacement.maskedKey, fingerprint: replacement.fingerprint } : key);
     if (provider.apiKeys?.some(key => key.fingerprint === row.apiKey.fingerprint)) changes.push(update('providers', provider.id, { apiKeys: replace(provider.apiKeys) }));
     if (!replacement) {
       const removedIds = new Set([...(provider.apiKeys || []), ...state.endpoints.filter(endpoint => endpoint.providerId === provider.id).flatMap(endpoint => endpoint.apiKeys || [])].filter(key => key.fingerprint === row.apiKey.fingerprint).map(key => key.id));

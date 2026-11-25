@@ -1,3 +1,2 @@
 .admin-v2 .supplier-key-pool-toolbar { display: flex; justify-content: flex-end; padding-block: 12px; }
 .admin-v2 .supplier-flat-key-table :is(th, td):last-child { width: 140px; }
-.admin-v2 .supplier-flat-key-table .supplier-row-actions { flex-wrap: wrap; gap: 4px 8px; }

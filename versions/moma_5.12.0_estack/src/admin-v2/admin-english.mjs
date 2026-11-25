@@ -171,6 +171,7 @@ const englishText = new Map(Object.entries({
   '授权模型服务': 'Authorize Model Services',
   '移除授权': 'Revoke Authorization',
   '添加上游 API 密钥': 'Add Provider API Key',
+  '密钥 ID': 'Key ID',
   '修改名称': 'Rename',
   '修改密钥名称': 'Rename API Key',
   '密钥名称': 'Key Name',
