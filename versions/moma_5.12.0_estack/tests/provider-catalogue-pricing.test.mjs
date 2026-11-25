@@ -99,16 +99,12 @@ test('catalogue saves preserve permissions, concurrent revision checks and faile
   assert.equal(JSON.stringify(seed), before);
 });
 
-test('each scenario keeps its currency through discounts, reload and dictionary edits with no conversion', () => {
+test('each scenario keeps its currency through discounts and reload with no conversion', () => {
   const values = { ...draft, scenarios: ['CNY', 'EUR'].map(currency => ({ name: '输入', unit: '百万 Token', currency, listPrice: '1.25' })) };
-  let state = commitAdminState(createAdminSeed(), { type: 'modelOperations', operation: 'tariffDictionary', data: { operation: 'save', kind: 'currency', name: '欧元', englishName: 'Euro', code: 'EUR' } });
-  const currencyId = state.tariffDictionary.find(item => item.code === 'EUR').id;
-  state = commitAdminState(state, action(values));
+  let state = commitAdminState(createAdminSeed(), action(values));
   state = commitAdminState(state, discountAction('0.8'));
   const entry = provider(state).catalogPricing[0];
   assert.deepEqual(entry.scenarios.map(item => [item.currency, cataloguePurchasePrice(item.listPrice, entry.discountFactor)]), [['CNY', 1000000], ['EUR', 1000000]]);
-  state = commitAdminState(state, { type: 'modelOperations', operation: 'tariffDictionary', data: { operation: 'save', id: currencyId, name: '欧元报价', englishName: 'Euro', code: 'EUR' } });
-  state = commitAdminState(state, { type: 'modelOperations', operation: 'tariffDictionary', data: { operation: 'status', id: currencyId, status: '已停用' } });
   assert.deepEqual(provider(parseAdminState(JSON.stringify(state))).catalogPricing[0], entry);
   assert.deepEqual(provider(commitAdminState(state, action(values))).catalogPricing[0], entry);
   for (const currency of [undefined, '', 'usd', 'ZZZ']) assert.throws(() => commitAdminState(state, action({ ...values, scenarios: [{ ...values.scenarios[0], currency }] })), /货币代码/);

@@ -3,9 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAdminState, commitAdminState, serializeAdminState } from '../src/admin-v2/store.js';
 import { channelOnboardingTransaction, channelDrafts, channelDraftIssue, previewChannelModels, validateChannelRows } from '../src/admin-v2/channel-onboarding.js';
-import { libraryRemovalIssue } from '../src/admin-v2/model-library.js';
+import { libraryRemovalIssue, libraryRecord, modelMaterial } from '../src/admin-v2/model-library.js';
 import { resolveChannelAssociationModel } from '../src/admin-v2/channel-association-model.js';
-import { channelChangeImpact, channelEvidenceSignature, candidateTestPlan } from '../src/admin-v2/channel-change-management.js';
+import { channelEvidenceSignature, candidateTestPlan } from '../src/admin-v2/channel-change-management.js';
 import { catalogueChannels, channelBlockReason } from '../src/admin-v2/provider-channels.js';
 import { connectionFingerprint, connectionTestKey } from '../src/admin-v2/connection-state.js';
 import { activeSupplyPrice, priceItems } from '../src/admin-v2/model-management.js';
@@ -28,13 +28,17 @@ test('secret payloads and unsafe credential URLs cannot enter persisted draft or
   for (const data of [{ value: { ...value, secret: 'sensitive' }, rows }, { value, rows: [{ ...rows[0], secret: 'sensitive' }] }, { value: { ...value, baseUrl: 'https://example.com/v1?api_key=sensitive' }, rows }]) assert.throws(() => channelOnboardingTransaction(state(), { operation: 'channelDraftSave', data }), /密钥|认证|查询/);
 });
 
-test('draft references protect minimal metadata until explicitly discarded', () => {
+test('deleting model reference data preserves draft rows and the stable model identity', () => {
   let s = state();
   s = run(s, 'channelMetadataCreate', { name: 'Minimal', modelId: 'minimal-record', type: 'embedding', profile: { tasks: ['文本向量化'], inputModalities: ['文本'], resultTypes: ['向量'] } });
   const id = s.audits[0].objectId; assert.equal(s.modelTemplates.find(row => row.id === id).description, '');
   s = run(s, 'channelDraftSave', { value, rows: [{ ...rows[0], libraryId: id }] });
-  assert.match(libraryRemovalIssue(s, id), /草稿/);
-  const draft = channelDrafts(s)[0]; s = run(s, 'channelDraftDiscard', { id: draft.id, expectedRevision: 1 }); assert.equal(libraryRemovalIssue(s, id), '');
+  const draft = channelDrafts(s)[0], identity = libraryRecord(s, id);
+  assert.equal(libraryRemovalIssue(s, id), '');
+  const deleted = run(s, 'templateDelete', { id, confirmed: true });
+  assert.equal(modelMaterial(deleted, id), undefined);
+  assert.deepEqual(libraryRecord(deleted, id), identity);
+  assert.deepEqual(channelDrafts(deleted)[0], draft);
 });
 
 test('minimal model validates identity and explicit task/input/output without guessing capabilities', () => {
@@ -95,6 +99,8 @@ test('mock test job pending request survives refresh and binds a later canonical
   const { catalogueChannels } = await import('../src/admin-v2/provider-channels.js');
   const { connectionFingerprint } = await import('../src/admin-v2/connection-state.js');
   let s = state(); const provider = s.providers.find(row => row.id === value.providerId), association = catalogueChannels(s, provider, 'GLM-5.2')[0];
+  const endpoint = s.endpoints.find(row => row.id === association.endpointId);
+  Object.assign(endpoint, { status: '草稿', connectionTest: null, connectionQualification: null });
   const masterId = provider.catalogModels.find(row => row.modelId === association.modelId).libraryId;
   const model = { id: masterId, associationId: association.id, upstreamModelId: association.upstreamModelId, type: 'text' };
   const job = { providerId: provider.id, endpointId: association.endpointId, operationId: 'stable-operation-id', serverChannelId: 'server-channel', associationIds: [association.id], signature: connectionFingerprint(association.endpoint), request: { models: [model] } };
@@ -104,6 +110,8 @@ test('mock test job pending request survives refresh and binds a later canonical
   const batch = { id: 'canonical-batch', channelId: job.serverChannelId, providerId: provider.id, status: 'completed', source: 'mock', signature: 'server-signature', items: [{ id: 'canonical-item', model, status: 'passed', usage: null, cost: null }] };
   s = run(s, 'channelTestEvidenceReceipt', { providerId: provider.id, endpointId: association.endpointId, batch });
   const row = catalogueChannels(s, s.providers.find(row => row.id === provider.id), 'GLM-5.2')[0];
+  assert.equal(row.endpoint.status, '运行中');
+  assert.equal(row.enabled, association.enabled);
   assert.equal(row.testHistory.at(-1).source, 'mock'); assert.equal(row.testHistory.at(-1).usage, null);
   const replay = run(s, 'channelTestEvidenceReceipt', { providerId: provider.id, endpointId: association.endpointId, batch });
   assert.equal(catalogueChannels(replay, replay.providers.find(row => row.id === provider.id), 'GLM-5.2')[0].testHistory.length, row.testHistory.length);
@@ -172,18 +180,18 @@ test('opted-in single-key connections stop after consecutive auth failures and r
     const job = ordinaryJob(s, f);
     const batch = ordinaryBatch(job, status, new Date(baseline + seconds * 1000).toISOString());
     batch.items[0].upstreamStatus = code;
-    return ordinaryReceive(run(s, 'channelTestEvidenceJob', { ...job, batchId: batch.id }), f, batch);
+    const pending = run(s, 'channelTestEvidenceJob', { ...job, batchId: batch.id });
+    get(pending).serverTestJobs.find(row => row.batchId === batch.id).createdAt = new Date(Date.parse(batch.endedAt) - 500).toISOString();
+    return ordinaryReceive(pending, f, batch);
   };
   let current = attempt(f.s, 'failed', 401, 1);
   assert.equal(get(current).status, '运行中');
   current = attempt(current, 'failed', 403, 2);
   assert.equal(get(current).activationSource, 'automatic');
   assert.equal(get(current).status, '停用');
-  const enable = s => run(s, 'provider', { operation: 'supplierChannelEnable', objectId: f.providerId, values: { endpointId: f.endpointId } });
-  assert.throws(() => enable(current), /复测/);
   current = attempt(current, 'passed', 200, 3);
-  assert.equal(get(current).status, '停用');
-  assert.equal(get(enable(current)).status, '运行中');
+  assert.equal(get(current).status, '运行中');
+  assert.equal(get(current).activationSource, null);
 });
 
 test('round-robin simulation counts matching jobs and isolates the opted-in failing key', () => {
@@ -327,21 +335,19 @@ test('temporary receipts retain the same safe execution summary without changing
 });
 
 for (const result of ['passed', 'failed']) {
-  test('manual disable survives a pending detection receipt: ' + result, () => {
+  test('an existing manually stopped connection stays unavailable after a test submitted before the stop: ' + result, () => {
     const f = ordinaryFixture(true);
     const job = ordinaryJob(f.s, f);
     const batch = ordinaryBatch(job, result);
     const endpoint = state => state.endpoints.find(row => row.id === f.endpointId);
     const pending = run(run(f.s, 'channelTestEvidenceJob', job), 'channelTestEvidenceJob', { ...job, batchId: batch.id });
-    function operate(state, action, confirmed = true) {
-      const target = { providerId: f.providerId, endpointId: f.endpointId, expectedUpdatedAt: endpoint(state).updatedAt,
-        expectedImpactRevision: channelChangeImpact(state, f.providerId, f.endpointId).revision };
-      return run(state, 'channelDirectoryOperate', { action, confirmed, targets: [target] });
+    const stopped = structuredClone(pending);
+    Object.assign(endpoint(stopped), { status: '停用', activationSource: 'manual',
+      activationChangedAt: new Date(Date.parse(endpoint(pending).serverTestJobs.find(row => row.batchId === batch.id).createdAt) + 1).toISOString() });
+    const target = { providerId: f.providerId, endpointId: f.endpointId, expectedUpdatedAt: endpoint(stopped).updatedAt };
+    for (const action of ['enable', 'disable']) {
+      assert.throws(() => run(stopped, 'channelDirectoryOperate', { action, confirmed: true, targets: [target] }), /不支持此连接操作/);
     }
-    assert.throws(() => operate(pending, 'disable', false), /确认/);
-    const stopped = operate(pending, 'disable');
-    assert.equal(endpoint(stopped).status, '停用');
-    assert.throws(() => operate(stopped, 'enable'), /未完成/);
     const received = ordinaryReceive(stopped, f, batch);
     assert.ok(endpoint(received).serverTestJobs.find(row => row.batchId === batch.id).receivedAt);
     assert.equal(ordinaryRow(received, f).health.result, result === 'passed' ? '通过' : '失败');

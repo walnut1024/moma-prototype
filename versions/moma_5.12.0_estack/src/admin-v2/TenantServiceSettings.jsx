@@ -77,7 +77,7 @@ export function TenantServiceSettings({ state, tenant, section, canWrite, transa
             <Button size="small" theme="borderless" type="danger" aria-label={'移除授权 '+name(modelId)}
               onClick={()=>open('remove-model',{modelId})}>{translateLabel("移除授权")}</Button>
           : '—',
-        ]}))} empty={query.trim() ? '暂无匹配的模型' : '当前租户暂无已授权的模型服务'}
+        ]}))} empty={query.trim() ? '暂无匹配的模型服务' : '当前租户暂无已授权的模型服务'}
         pagination={{currentPage:current,pageSize:size,total:rows.length,pageSizeOpts:PAGE_SIZES,showTotal:true,showSizeChanger:true,
           onPageChange:setPage,onPageSizeChange:value=>{setSize(value);setPage(1);}}}/>
     </>}
@@ -85,7 +85,7 @@ export function TenantServiceSettings({ state, tenant, section, canWrite, transa
       footer={<><Button onClick={close} disabled={saving}>{translateLabel("取消")}</Button>
         {!(operation==='open-models' && !options.length) && <Button form={'tenant-service-'+section} htmlType="submit"
           theme="solid" type={removing ? 'danger' : 'primary'} loading={saving} disabled={submitDisabled}>
-          {removing ? '确认移除授权' : operation==='open-models' ? '授权' : '保存'}
+          {removing ? '确认移除' : operation==='open-models' ? '授权' : '保存'}
         </Button>}</>}>
       <form id={'tenant-service-'+section} className="admin-analytics-fields" onSubmit={submit}>
         {operation==='level' && <Select aria-label={translateLabel("服务等级")} optionList={levelOptions} value={data.level}

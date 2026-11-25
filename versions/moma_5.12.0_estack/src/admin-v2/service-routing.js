@@ -5,14 +5,13 @@ import { modelSupplies, availableSupplies, activeSupplyPrice, supplyModelUrl, pr
 import { connectionFingerprint, connectionBlockReason } from './connection-state.js';
 import { catalogueChannels, channelBlockReason, channelUrl } from './provider-channels.js';
 import { providerServices, providerServiceId, serviceChannelId, serviceChannelCosts } from './service-workspace.js';
-import { billingItemKey } from './provider-catalogue-pricing.js';
 import { routeMappingStatus } from './service-route-mapping.js';
 import { forwardingTargets, mappingReadiness } from './service-model-mappings.js';
 import { normalizeForwarding, validateForwarding } from './service-route-forwarding.js';
 
 export const ROUTING_STRATEGIES = { fixed:'固定', random:'随机分流', priority_weighted:'优先级 + 加权分流', priority:'主备优先', ...Object.fromEntries(Object.entries(ROUTING_POLICIES).map(([id,item])=>[id,item.label])) };
-const GROUP_STRATEGIES=['fixed','random','weighted','latency','load','tpm','cost'];
-export const ROUTE_ADVANCED_DEFAULTS={timeoutSeconds:60,maxRetries:0,failureThreshold:3,recoverySeconds:30,latencyWindowSeconds:60,costBasis:'input'};
+const GROUP_STRATEGIES=['fixed','random','weighted','latency','load','tpm'];
+export const ROUTE_ADVANCED_DEFAULTS={timeoutSeconds:60,maxRetries:0,failureThreshold:3,recoverySeconds:30,latencyWindowSeconds:60};
 export const ROUTE_RETRY_REASONS = [['timeout', '上游超时'], ['429', '上游限流（429）'], ['5xx', '上游服务异常（5xx）']];
 export const ROUTE_RETRY_DEFAULTS = { withinGroup: 0, acrossGroups: 0, maxAttempts: 1, reasons: [] };
 // shortcut: these service-level prototype versions do not execute gateway traffic; production needs a server-side publisher.
@@ -40,7 +39,7 @@ export function routingChannels(state, service, at = Date.now(), { runtime = fal
     if (!reason && !ready.has(supply.id)) reason='平台模型映射或能力需验证';
     if (!reason && !url) reason='请求地址待完善';
     if (!reason && runtime && (!costs.length || costs.some(item=>item.amount==null))) reason='上游上游模型成本待配置';
-    const row={...supply,apiAddresses:channel?.apiAddresses,channelId:channel ? serviceChannelId(channel) : supply.channelId || supply.endpointId,channelUpdatedAt:channel?.updatedAt,channelHealth:channel?.health,channelName:channel?.name || supply.endpoint?.name,verifiedAt:channel?.health?.testedAt || supply.verifiedAt,url,costItems:costs,costVersion:costRevision([channel?.pricing,activeSupplyPrice(state,supply.id,at)]),p95LatencyMs:metric([channel?.p95LatencyMs,channel?.metrics?.p95LatencyMs,supply.endpoint?.p95LatencyMs,supply.endpoint?.metrics?.p95LatencyMs]),activeRequests:metric([channel?.activeRequests,channel?.metrics?.activeRequests,supply.endpoint?.activeRequests,supply.endpoint?.metrics?.activeRequests],true)};
+    const row={...supply,apiAddresses:channel?.apiAddresses,channelId:channel ? serviceChannelId(channel) : supply.channelId || supply.endpointId,channelUpdatedAt:channel?.updatedAt,channelHealth:channel?.health,channelName:channel?.name || supply.endpoint?.name,verifiedAt:channel?.health?.testedAt || supply.verifiedAt,url,costVersion:costRevision([channel?.pricing,activeSupplyPrice(state,supply.id,at)]),p95LatencyMs:metric([channel?.p95LatencyMs,channel?.metrics?.p95LatencyMs,supply.endpoint?.p95LatencyMs,supply.endpoint?.metrics?.p95LatencyMs]),activeRequests:metric([channel?.activeRequests,channel?.metrics?.activeRequests,supply.endpoint?.activeRequests,supply.endpoint?.metrics?.activeRequests],true)};
     for(const key of ['tokensPerMinute','requestsPerMinute','rpmLimit','tpmLimit'])row[key]=key.endsWith('Limit')?[channel?.[key],channel?.metrics?.[key],supply.endpoint?.[key],supply.endpoint?.metrics?.[key]].find(value=>value!=null) ?? null:metric([channel?.[key],channel?.metrics?.[key],supply.endpoint?.[key],supply.endpoint?.metrics?.[key]],true);
     const mapping=routeMappingStatus(state,{...service,callId},row);
     if (!reason && !mapping.valid) reason=mapping.reason;
@@ -51,6 +50,12 @@ export function routingChannels(state, service, at = Date.now(), { runtime = fal
 
 export const serviceRoute = (state, serviceId) => (state.serviceRoutes || []).find(item => item.serviceId === serviceId);
 export const activeRouteVersion = route => route?.versions.find(item => item.version === route.activeVersion);
+
+export function activeRouteSupplyIds(config) {
+  const weighted = ['weighted', 'priority_weighted'].includes(config?.strategy);
+  return (config?.channels || []).filter(row => row.enabled !== false && (!weighted || row.weight > 0))
+    .map(row => row.supplyId);
+}
 export const lastRouteVersion = route => route?.versions.reduce((last,item)=>!last || item.version>last.version?item:last,null);
 export const routeStopReason = service => serviceCallsEnabled(service.model, providerOffer(service.model, offerKey(service)))
   ? '请先停止服务，再停用对应路由。' : '';
@@ -96,8 +101,6 @@ export function normalizeRouteConfig(input) {
     if (!/^\d+$/.test(String(value)) || Number(value)<min || Number(value)>max) throw new Error(`${label}须为 ${min}–${max} 的整数`);
     advanced[key]=Number(value);
   }
-  advanced.costBasis=input.advanced?.costBasis ?? advanced.costBasis;
-  if (!['input','output','total'].includes(advanced.costBasis)) throw new Error('请选择输入、输出或合计成本口径');
   const retry = input.retry == null ? null : normalizeRouteRetry(input.retry);
   const forwarding = input.forwarding === undefined ? [] : normalizeForwarding(input.forwarding);
   return { strategy: input.strategy, groups, channels, autoFailover: input.autoFailover === true, excludeAbnormal:input.excludeAbnormal!==false, autoRecover:input.autoRecover!==false, advanced, ...(retry ? {retry} : {}), ...(forwarding.length ? {forwarding} : {}) };
@@ -117,23 +120,7 @@ export function normalizeRouteRetry(input) {
   return {withinGroup, acrossGroups, maxAttempts, reasons};
 }
 
-export function comparableRouteCosts(channels,basis) {
-  if (!['input','output','total'].includes(basis)) throw new Error('请选择输入、输出或合计成本口径');
-  let reference='';
-  return channels.map(channel=>{
-    const items=(channel.costItems || []).filter(item=>basis==='total' || (basis==='input'?/输入|input/i:/输出|output/i).test(item.name));
-    if (!items.length || items.some(item=>!Number.isSafeInteger(item.amount) || item.amount<0 || typeof item.unit!=='string' || !item.unit.trim())) throw new Error('所选成本口径缺少完整服务商报价');
-    if (new Set(items.map(item=>item.unit)).size!==1 || new Set(items.map(item=>item.currency || 'CNY')).size!==1) throw new Error('成本计费项单位或币种不同，不能比较');
-    const identity=JSON.stringify(items.map(billingItemKey).sort());
-    if (reference && identity!==reference) throw new Error('上游模型计费项、适用条件、单位或币种不一致，不能比较成本');
-    reference=identity;
-    const amount=items.reduce((sum,item)=>sum+item.amount,0);
-    if (!Number.isSafeInteger(amount)) throw new Error('成本合计超出可精确比较的范围');
-    return {supplyId:channel.id,amount};
-  });
-}
-
-function validateSelectionStrategy(strategy,rows,candidates,config) {
+function validateSelectionStrategy(strategy,rows,candidates) {
   if (strategy==='weighted' && rows.some(row=>row.weight<=0)) throw new Error('参与分流的上游模型权重须大于 0');
   const channels=rows.map(row=>candidates.find(item=>item.id===row.supplyId));
   if (strategy==='fixed') {
@@ -143,7 +130,6 @@ function validateSelectionStrategy(strategy,rows,candidates,config) {
   if (strategy==='load' && channels.some(channel=>channel.activeRequests==null)) throw new Error('最少并发路由需要每个上游模型的实际并发请求数据');
   if (strategy==='tpm' && channels.some(channel=>channel.tokensPerMinute==null)) throw new Error('按用量分流需要每个上游模型的实际分钟 Token 用量');
   for(const channel of channels)withinRouteLimits(channel);
-  if (strategy==='cost') comparableRouteCosts(channels,config.advanced.costBasis);
 }
 
 function validateModeSelection(service, config) {
@@ -151,7 +137,7 @@ function validateModeSelection(service, config) {
   const backups = config.channels.filter(row => row.backup);
   if (service.mode === 'standard') {
     if (config.forwarding) throw Error('当前路由不支持按接口转发');
-    if (!unifiedRouteStrategies.includes(config.strategy)) throw Error('当前路由仅支持加权随机、最少并发、按用量分流、低延迟优先和成本优先五种路由策略');
+    if (!unifiedRouteStrategies.includes(config.strategy)) throw Error('当前路由仅支持加权随机、最少并发、按用量分流和低延迟优先');
     if (backups.length) throw Error('当前路由在参与路由的上游模型内执行故障转移');
   } else {
     if (config.strategy !== 'fixed') throw Error('固定路由只能选择一个主上游模型');
@@ -184,9 +170,9 @@ export function validateRouteConfig(state, service, input, requireHealthy = true
     const rows=selected.filter(row=>row.groupId===group.id);
     if (!rows.length) throw new Error(`${routeGroupLabel(index + 1)} 至少需要一个参与调度的上游模型`);
     if (group.strategy !== 'weighted') throw Error('优先级组仅支持按权重分流');
-    validateSelectionStrategy('weighted',rows,candidates,config);
+    validateSelectionStrategy('weighted',rows,candidates);
   }
-  else validateSelectionStrategy(config.strategy,selected.filter(row=>!row.backup),candidates,config);
+  else validateSelectionStrategy(config.strategy,selected.filter(row=>!row.backup),candidates);
   const backup = selected.find(row=>row.backup);
   if (backup) {
     const primary = candidates.find(item=>item.id===selected.find(row=>!row.backup)?.supplyId);
@@ -221,9 +207,9 @@ export function routePreview(state, service, input, failedSupplyId = '') {
     if (strategy==='weighted') return relativeWeightShares(rows);
     if (strategy==='random') return new Map(rows.map(row=>[row.supplyId,100/rows.length]));
     let chosen=rows.slice().sort((a,b)=>a.priority-b.priority).slice(0,1);
-    if (['latency','load','tpm','cost'].includes(strategy)) {
-      const costs=strategy==='cost'?new Map(comparableRouteCosts(rows.map(row=>channels.find(channel=>channel.id===row.supplyId)),config.advanced.costBasis).map(item=>[item.supplyId,item.amount])):null;
-      const value=row=>costs?costs.get(row.supplyId):channels.find(channel=>channel.id===row.supplyId)[strategy==='latency'?'p95LatencyMs':strategy==='tpm'?'tokensPerMinute':'activeRequests'];
+    if (['latency','load','tpm'].includes(strategy)) {
+      const metric=strategy==='latency'?'p95LatencyMs':strategy==='tpm'?'tokensPerMinute':'activeRequests';
+      const value=row=>channels.find(channel=>channel.id===row.supplyId)[metric];
       const minimum=Math.min(...rows.map(value));chosen=rows.filter(row=>value(row)===minimum);
     }
     return new Map(chosen.map(row=>[row.supplyId,100/chosen.length]));
@@ -275,8 +261,8 @@ export function routingTransaction(state, { operation, data = {} }) {
   if (operation==='serviceRouteStop') {
     if (!route || !route.activeVersion && !route.draft) throw new Error('当前没有可停用的路由或草稿');
     const reason=routeStopReason(service);if(reason)throw new Error(reason);
-    if (data.confirmed!==true) throw new Error('请确认停用路由并清空未发布草稿');
-    changes={activeVersion:0,draft:null,draftUpdatedAt:null};label='停用服务路由并清空草稿';
+    if (data.confirmed!==true) throw new Error('请确认停用路由并放弃未发布草稿');
+    changes={activeVersion:0,draft:null,draftUpdatedAt:null};label='停用服务路由并放弃草稿';
   } else if (operation === 'serviceRouteDraft') {
     const draft = normalizeRouteConfig(data.config);
     validateModeSelection(service, draft);

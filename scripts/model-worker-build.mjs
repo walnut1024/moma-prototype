@@ -1,6 +1,7 @@
 import {readFile} from 'node:fs/promises';
 import {dirname, join, relative} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {loadModelOperationsRequirements} from './model-operations-requirements.mjs';
 
 const version = fileURLToPath(new URL('../versions/moma_5.12.0_estack/', import.meta.url));
 const snapshots = {
@@ -15,6 +16,14 @@ const snapshots = {
 
 // Large browser seed catalogues must not allocate all their objects on a free Worker cold start.
 export const modelWorkerDataPlugin={name:'lazy-model-reference-data',setup(build){
+  build.onLoad({filter:/\/server\/model-operations-requirements-content\.js$/}, async () => {
+    const { html, source } = await loadModelOperationsRequirements();
+    return {
+      contents: 'export default ' + JSON.stringify(html) + ';',
+      loader: 'js',
+      watchFiles: source ? [source] : [],
+    };
+  });
   const snapshot = process.env.MOMA_WORKER_SNAPSHOT;
   if (snapshot && !Object.hasOwn(snapshots, snapshot)) throw new Error('Unknown Worker source snapshot: ' + snapshot);
   const input = path => {

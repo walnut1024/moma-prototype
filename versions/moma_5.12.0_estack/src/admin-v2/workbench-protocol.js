@@ -1,4 +1,4 @@
-export const PROTOCOL_ENDPOINT_LABEL = '协议及端点（Endpoint）';
+export const PROTOCOL_ENDPOINT_LABEL = '接口格式及接口端点';
 
 const shortNames = new Map([
   ['OpenAI Chat Completions', 'OpenAI Chat'],

@@ -1,6 +1,5 @@
-import { ROUTING_STRATEGIES } from "../src/admin-v2/service-routing-strategies.mjs";
-import { failoverError, globalPolicyDefaults, initialRoutingParameters, parameterError, routingParameters } from '../src/admin-v2/global-routing-parameters.mjs';
-import { assertPersonalProjects } from '../src/personal-project.mjs';
+import { effectiveRoutingStrategy, failoverError, globalPolicyDefaults, globalRoutingStrategies, initialRoutingParameters, parameterError, routingParameters } from '../src/admin-v2/global-routing-parameters.mjs';
+import { assertPersonalProjects, customerProject } from '../src/personal-project.mjs';
 import { isResourceId, resourceId } from '../src/resource-id.mjs';
 import { activeTenantVersion, changeTenantRoute, isTenantRouteCall, keyTenantRoute, visibleProjectRoutes } from '../src/tenant-routing.mjs';
 import { initialApplicationData } from '../src/mock/application-data.js';
@@ -16,6 +15,7 @@ import { diagnosticCall, mockTextUsage, projectBudgetUsage, projectCallErrors, p
 import { mergeProjectFacts, projectChargeWrites, projectFactWrite, readProjectFact, readProjectFacts } from './project-facts.js';
 import { loadModelWorkspace, modelChanges } from './model-repository.js';
 import { marketCatalogue } from './market.js';
+import { invokeModelService, marketModelService } from './model-service-market.js';
 import { addPackageOrders } from './market-packages.js';
 import { receipt, save } from './model-commands.js';
 import { addPrototypeAccounts } from './prototype-presets.js';
@@ -24,6 +24,7 @@ import { submitEnterpriseCertification, submitRealNameCertification } from '../s
 import { activeCustomer } from '../src/service-access.mjs';
 import { customerCredential, customerIdentity, customerSecretHash, dualDemoUserId, dualDemoAdminLogin, dualDemoTenantId } from './customer-identity.js';
 import { readProjectSpacePolicy } from './project-space-policy.js';
+import { trafficAdmission } from './traffic-calls.js';
 import { normalizeMemberPhone } from '../src/organization-data.mjs';
 import { allowsSpace, internalSpace } from '../src/operating-space.mjs';
 
@@ -122,15 +123,18 @@ async function marketFacts(db, tenantId, { includeOrders = true } = {}) {
     const statement = db.prepare(sql + scope + tail);
     return tenantId ? statement.bind(tenantId) : statement;
   };
-  const [requests, orders] = await db.batch([
+  const [requests, orders, modernOrders] = await db.batch([
     query(`SELECT t.tenant_id,t.request_id,t.created_at,t.offer_id,t.sale_price_id,o.id AS call_id,o.service_id,s.payload_json
       FROM market_calls t JOIN offers o ON o.record_id=t.offer_id JOIN simulation_records s ON s.kind='usage' AND s.id=t.usage_id`, ' ORDER BY t.created_at DESC LIMIT 400'),
     ...(includeOrders ? [query(`SELECT t.id,t.tenant_id,t.offer_id,t.created_at,t.cancelled_at,t.sale_price_id,o.service_id,o.id AS call_id,m.name,p.record_json AS price_json,s.name AS provider_name
       FROM market_orders t JOIN offers o ON o.record_id=t.offer_id JOIN materials m ON m.id=o.material_id
       LEFT JOIN suppliers s ON s.id=o.supplier_id LEFT JOIN price_versions p ON p.id=t.sale_price_id`, ' ORDER BY t.created_at DESC')] : []),
+    ...(includeOrders ? [query(`SELECT t.id,t.tenant_id,t.service_id AS offer_id,t.created_at,t.cancelled_at,t.sale_price_id,
+      t.service_id,n.call_id,json_extract(n.record_json,'$.name') AS name,t.sale_price_json AS price_json
+      FROM model_service_orders t JOIN new_model_services n ON n.id=t.service_id`, ' ORDER BY t.created_at DESC')] : []),
   ]);
   return {
-    orders: (orders?.results || []).map(row => ({ id:row.id, orderNo:row.id, tenantId:row.tenant_id, serviceId:row.offer_id, marketOrder:true,
+    orders: [...(orders?.results || []),...(modernOrders?.results || [])].sort((a,b)=>b.created_at-a.created_at).map(row => ({ id:row.id, orderNo:row.id, tenantId:row.tenant_id, serviceId:row.offer_id, marketOrder:true,
       billingType:'payg', status:row.cancelled_at?'已退订':'生效中', modelIds:[row.service_id], providerName:row.provider_name, serviceName:row.name,
       priceVersionId:row.sale_price_id, priceSnapshot:JSON.parse(row.price_json || 'null'), createdAt:new Date(row.created_at).toISOString(),
       timeline:['订单创建','服务开通',...(row.cancelled_at?['用户退订']:[])] })),
@@ -211,6 +215,7 @@ export async function applicationBootstrap(db, actor, configured = []) {
   if(maintenance)return maintenanceView(state,row.model_revision,requests,events);
   const { cloudMockState: _snapshot, projectRoutes: _projectRoutes, ...view } = state;
   const effectivePolicy = { ...initialRoutingParameters, ...globalPolicyDefaults, retryAfter: state.globalRetryAfter ?? 0, ...state.globalRoutingParameters };
+  effectivePolicy.strategy = effectiveRoutingStrategy(effectivePolicy.strategy);
   if (actor.role === '平台管理员') {
     view.globalRoutingParameters = effectivePolicy;
   } else {
@@ -289,6 +294,14 @@ export async function customerInvocation(db,credentialDigest,body,clientIp,priva
   const {requestId,model,messages,metadata}=body;
   const answer='模拟调用已完成。';
   const requestHash=await hash([key.id,key.credentialVersion,model,messages,metadata?._user?.trim(),...(body.routing ? [body.routing] : [])]);
+  const direct = await marketModelService(db,key.tenantId,model);
+  if (direct) {
+    const project = customerProject(state,state.projects.find(item=>item.id===key.projectId && item.tenantId===key.tenantId));
+    const facts = await readProjectFacts(db,key.tenantId);
+    const projectState = {...state,requests:mergeProjectFacts(facts,state.requests)};
+    return invokeModelService(db,direct,{tenant:{...tenant,internal},user:{id:key.ownerId},project,projectState,
+      body,requestHash,key,expectedSequence:row.commit_seq});
+  }
   const route = isTenantRouteCall(model) && keyTenantRoute(state, key, model);
   const version = route?.enabled ? activeTenantVersion(route) : null;
   const input = messages.map(item => item.content).join('\n');
@@ -319,7 +332,20 @@ export async function customerInvocation(db,credentialDigest,body,clientIp,priva
   const fact={...result.request,requestHash};
   delete fact.userId;
   const at=Date.parse(fact.createdAt);
-  const writes=result.changes.filter(change=>['grants','ledger','orders'].includes(change.collection));
+  const traffic = fact.httpStatus === 200
+    ? await trafficAdmission(db, { callId: fact.callId, userId: key.ownerId, usage: fact.usage, at })
+    : {};
+  if (traffic.error) {
+    Object.assign(fact, {
+      httpStatus: 429, error: traffic.error, billingStatus: 'not_billable', usage: null, usageConfirmed: false,
+      attempts: [{ dispatched: false, startedAt: fact.createdAt, error: traffic.error }], durationMs: 0, ttftMs: null,
+      endpointId: null, supplyId: null, providerId: null, charge: null, internalCost: null,
+    });
+    for (const field of ['admittedAt','planTokens','requestBody','responseBody','contentRetained','procurementSnapshot','procurementVersionId']) delete fact[field];
+  } else {
+    Object.assign(fact, traffic.evidence);
+  }
+  const writes=traffic.error ? [] : result.changes.filter(change=>['grants','ledger','orders'].includes(change.collection));
   for (const change of writes.filter(item=>item.collection==='ledger')) {
     const entry=result.state.ledger.find(item=>item.id===change.record.id);
     if (entry) entry.prototypeFact=true;
@@ -395,16 +421,20 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins,
           Object.keys(values).some(key => !Object.hasOwn(initialRoutingParameters, key) && !Object.hasOwn(globalPolicyDefaults, key))) {
         issue(400, 'INVALID_INPUT', '路由参数格式无效');
       }
-      if (failoverError(values) || !Object.hasOwn(ROUTING_STRATEGIES, values.strategy)) issue(400, 'INVALID_INPUT', '路由策略或故障转移参数无效');
+      if (failoverError(values) || Object.hasOwn(values, 'strategy') && !globalRoutingStrategies.includes(values.strategy)) {
+        issue(400, 'INVALID_INPUT', '路由策略或故障转移参数无效');
+      }
       for (const field of routingParameters) {
         const error = parameterError(field, values[field.key]);
         if (error) issue(400, 'INVALID_INPUT', error);
       }
-      next = { ...state, revision: state.revision + 1, globalRoutingParameters: values,
+      const strategy = values.strategy ?? effectiveRoutingStrategy(state.globalRoutingParameters?.strategy);
+      next = { ...state, revision: state.revision + 1, globalRoutingParameters: { ...values, strategy },
         audits: [{ action: '修改全局路由设置', objectId: 'global-routing', result: '成功', createdAt: new Date().toISOString() }, ...state.audits] };
     } else if (action.type==='cancelMarketOrder' && canMutate(actor.role,{type:'update',collection:'orders'})) {
       if(!validId(action.id)) throw Error('订单标识无效');
-      cancellation=await db.prepare('SELECT id,cancelled_at FROM market_orders WHERE id=?').bind(action.id).first();
+      cancellation=await db.prepare(`SELECT id,cancelled_at,0 AS independent FROM market_orders WHERE id=?
+        UNION ALL SELECT id,cancelled_at,1 FROM model_service_orders WHERE id=? LIMIT 1`).bind(action.id,action.id).first();
       if(!cancellation) throw Error('订单不存在');
       if(cancellation.cancelled_at)return {operationId,revision:state.revision};
       next={...state,revision:state.revision+1,audits:[{action:'退订模型服务',objectId:action.id,result:'成功',createdAt:new Date().toISOString()},...state.audits]};
@@ -525,7 +555,9 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins,
   const statements=[db.prepare('UPDATE model_workspace SET reference_json=?,application_revision=application_revision+1 WHERE id=1').bind(referenceWrite(state,next,reference))];
   if (initialCredential) statements.push(initialCredential);
   if (invocationFact) statements.push(projectFactWrite(db, invocationFact));
-  if(cancellation)statements.push(db.prepare('UPDATE market_orders SET cancelled_at=? WHERE id=? AND cancelled_at IS NULL').bind(Date.now(),action.id));
+  if (cancellation) statements.push(db.prepare(cancellation.independent
+    ? 'UPDATE model_service_orders SET cancelled_at=? WHERE id=? AND cancelled_at IS NULL'
+    : 'UPDATE market_orders SET cancelled_at=? WHERE id=? AND cancelled_at IS NULL').bind(Date.now(),action.id));
   if (action.type==='adminAccount') {
     const withSecret=['create','resetPassword'].includes(action.operation);
     if(withSecret && !/^[a-f0-9]{64}$/.test(action.loginDigest || ''))issue(400,'INVALID_INPUT','缺少演示账号密码摘要');
@@ -741,7 +773,10 @@ export async function tenantWorkspace(db, session) {
     }]));
   const projectServices = catalogue.services.filter(service => service.canOrder || service.callable);
   const ids = new Set([...keys.flatMap(row=>row.modelIds || []), ...requests.map(row => row.modelId), ...catalogue.services.map(row => row.serviceModelId)]);
-  const models = state.models.filter(row => ids.has(row.id)).map(row => pick(row,['id','modelId','name','type','usageUnit']));
+  const models = [
+    ...state.models.filter(row=>ids.has(row.id)).map(row=>pick(row,['id','modelId','name','type','usageUnit'])),
+    ...catalogue.services.filter(row=>row.independentService).map(row=>({id:row.id,modelId:row.callId,name:row.name,type:row.type})),
+  ];
   const report = {
     asOf:new Date(), models, keys:logKeys.map(row=>pick(row,['id','name','projectId','billingType'])),
     records:visible.map(row => ({ ...pick(row,['id','requestId','tenantId','projectId','modelId','modelType','publicModelId',
@@ -860,13 +895,13 @@ export async function tenantCommand(db, session, body) {
       const pending=new Set(next.memberships.filter(member=>member.tenantId===tenant.id && member.status==='待加入').map(member=>member.id));
       revokedInvitations=state.memberships.filter(member=>member.tenantId===tenant.id && member.status==='待加入' && !pending.has(member.id)).map(member=>member.id);
     } else if (action === 'projectRoute') {
-      const routeServices = services.filter(row=>row.projectServiceId).map(row=>({...row,id:row.projectServiceId}));
+      const routeServices = services.filter(row=>!row.independentService && row.projectServiceId).map(row=>({...row,id:row.projectServiceId}));
       next = projectRouteChanges(context, data?.route, {remove:data?.remove === true, operationId}, routeServices);
       projectAudits = [{ projectId:data.route.projectId, action:data.remove ? '删除项目路由' : data.route.id ? '编辑项目路由' : '创建项目路由',
         objectId:data.route.id || 'project-route-' + operationId }];
     } else {
       if (!data || data.id != null && !validId(data.id)) throw Error('路由配置无效');
-      next = changeTenantRoute(context, data, catalogue.services, 'route-' + operationId);
+      next = changeTenantRoute(context, data, catalogue.services.filter(row=>!row.independentService), 'route-' + operationId);
       projectAudits = [{ projectId:data.projectId, action:'维护智能路由', objectId:data.id || 'route-' + operationId }];
     }
     assertPersonalProjects(state, next);

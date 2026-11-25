@@ -1,3 +1,0 @@
-.model-resource-sheet .model-resource-content { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.model-resource-sheet .model-resource-json textarea { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; line-height: 1.6; tab-size: 2; }
-.model-resource-sheet .semi-table-wrapper { min-width: 0; }

@@ -68,7 +68,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   const isEnterprise = ['enterprise', 'individual', 'adminAccount'].includes(action.type);
   if (action.type !== 'adminAccount' && (action.collection === 'admins' || Array.isArray(action.changes) && action.changes.some(change => change.collection === 'admins'))) throw new Error('后台账号须通过账号管理操作');
   if (action.type !== 'modelOperations' && (action.collection === 'serviceRoutes' || Array.isArray(action.changes) && action.changes.some(change => change.collection === 'serviceRoutes'))) throw new Error('服务路由须通过路由管理操作');
-  if (action.type !== 'modelOperations' && (action.collection === 'tariffDictionary' || Array.isArray(action.changes) && action.changes.some(change => change.collection === 'tariffDictionary'))) throw new Error('资费字典须通过字典维护操作');
+  if (action.type !== 'modelOperations' && (action.collection === 'tariffDictionary' || Array.isArray(action.changes) && action.changes.some(change => change.collection === 'tariffDictionary'))) throw new Error('计费字典仅提供内置项');
   if (!canMutate(actor, action)) throw new Error(`${actor}无权执行此操作`);
   if (action.type === "enterprise") action = enterpriseTransaction(state, action);
   if (action.type === "individual") action = individualTransaction(state, action, actor);

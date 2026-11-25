@@ -21,9 +21,10 @@ const ratePairWidth = 168;
 const match = (query, ...fields) => fields.some(value => String(value ?? '').toLowerCase().includes(query.trim().toLowerCase()));
 const loginRequired = issue => issue?.status === 401;
 const rateLabel = metric => metric.toUpperCase() + '（' + trafficUnits[metric] + '）';
-const userDefaultHelp = '账号未单独设置时使用的通用额度。对应模型的一客一策优先。';
-const modelDefaultHelp = '模型未单独设置时使用的共享上限。调用同一模型的所有账号共用该额度。';
-const finalLimitHelp = 'RPM 和 TPM 分别取账号侧额度与模型共享上限中较小的值。共享额度由调用同一模型的账号共用。';
+const userDefaultHelp = '账号未单独设置时使用的通用额度。对应模型服务的一客一策优先。';
+const modelDefaultHelp = '模型服务未单独设置时使用的共享上限。调用同一模型服务的所有账号共用该额度。';
+const finalLimitHelp = 'RPM 和 TPM 分别取账号侧额度与模型共享上限中较小的值。共享额度由调用同一模型服务的账号共用。';
+const serviceSearch = '搜索模型服务名称或模型 ID';
 const historyTime = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', dateStyle: 'short', timeStyle: 'medium' });
 
 function inputRows(rows) {
@@ -103,13 +104,16 @@ function TrafficHistory({ accountId, accounts, models, session, requestLogin, cl
   }, [load, session]);
 
   const accountNames = new Map(accounts.map(row => [row.id, row.name]));
-  const modelNames = new Map(models.map(row => [row.id, row.name]));
+  const modelById = new Map(models.map(row => [row.id, row]));
   const objectName = row => {
     if (row.scope === 'user-default') return '用户全局默认';
     if (row.scope === 'model-default') return '模型默认';
-    if (row.scope === 'model') return modelNames.get(row.objectId) || row.objectId;
-    const name = accountNames.get(row.objectId) || row.objectId;
-    return row.modelId ? name + ' · ' + (modelNames.get(row.modelId) || row.modelId) : name;
+    const modelId = row.scope === 'model' ? row.objectId : row.modelId;
+    const model = modelById.get(modelId);
+    const service = row.modelName || model?.name;
+    const callId = row.callId || model?.modelId || modelId;
+    const account = row.scope === 'model' ? '' : accountNames.get(row.objectId) || row.objectId;
+    return [account, service, callId].filter(Boolean).join(' · ');
   };
   const columns = [
     { title: '变更时间', width: 166, render: (_, row) => Number.isFinite(Date.parse(row.createdAt)) ? historyTime.format(new Date(row.createdAt)) : '—' },
@@ -151,7 +155,8 @@ function TrafficVisualization({ account, models, projects, settings, close }) {
     ...row, ...effectiveTraffic(settings, policy, row.id),
   }));
   const columns = [
-    { title: '模型', dataIndex: 'name' },
+    { title: '模型服务名称', dataIndex: 'name' },
+    { title: '模型 ID', dataIndex: 'modelId' },
     { title: '账号侧额度', width: 186, render: (_, row) => <div className="traffic-rate-cell">
       <RatePair limit={row.hit?.limit}/>
       {row.hit && <Text size="small" type="secondary">{row.hit.name}</Text>}
@@ -161,7 +166,7 @@ function TrafficVisualization({ account, models, projects, settings, close }) {
       <Text size="small" type="secondary">{row.model.custom ? '模型自定义' : '模型默认'}</Text>
     </div> },
     ...(project ? [{ title: '项目模型限流', width: 186, render: (_, row) => {
-      const rule = projectRules.get(row.id);
+      const rule = projectRules.get(row.id) ?? projectRules.get(row.projectModelId);
       if (project.status !== '正常') return '项目不可用';
       if (!rule) return Array.isArray(project.modelPermissions) ? '项目未开通' : '继承空间授权';
       if (rule.rpm == null && rule.tpm == null) return '项目未设上限';
@@ -182,10 +187,10 @@ function TrafficVisualization({ account, models, projects, settings, close }) {
       <div className="admin-list-toolbar">
         <Choice label="项目" value={projectId} options={[[ '', '查看项目限流' ], ...projects.map(row => [row.id, row.name + ' · ' + row.id])]}
           onSelect={setProjectId} disabled={!projects.length}/>
-        <Input className="admin-list-search" showClear aria-label="搜索模型" placeholder="搜索模型展示名称或模型编码"
+        <Input className="admin-list-search" showClear aria-label={serviceSearch} placeholder={serviceSearch}
           value={query} onChange={setQuery}/>
       </div>
-      <Table key={query} rowKey="id" scroll={{ x: 'max(100%, 760px)' }} empty="暂无匹配模型"
+      <Table key={query} rowKey="id" scroll={{ x: 'max(100%, 880px)' }} empty="暂无匹配模型服务"
         columns={columns} dataSource={rows} pagination={{ pageSize: 10, hideOnSinglePage: true, showTotal: true }}/>
     </div>
   </AdminSideSheet>;
@@ -405,7 +410,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
     ...row, ...modelTraffic(settings, row.id),
   }));
   const modelColumns = [
-    { title: '模型展示名称', dataIndex: 'name' }, { title: '模型编码', dataIndex: 'modelId' },
+    { title: '模型服务名称', dataIndex: 'name' }, { title: '模型 ID', dataIndex: 'modelId' },
     { title: '默认值', width: ratePairWidth, render: () => <RatePair limit={modelDefault}/> },
     { title: '生效值', width: ratePairWidth, render: (_, row) => <RatePair limit={row.limit} strong/> },
     { title: '规则来源', width: 98, render: (_, row) => row.custom ? '模型自定义' : '模型默认' },
@@ -426,7 +431,8 @@ export default function TrafficOperations({ state, dirtyRef }) {
     updateRows(draft.rows.map((row, i) => i === index ? { ...row, [metric]: value } : row));
   }
   const policyColumns = [
-    { title: '模型', render: (_, row) => modelById.get(row.modelId)?.name || row.modelId },
+    { title: '模型服务名称', render: (_, row) => modelById.get(row.modelId)?.name || row.modelId },
+    { title: '模型 ID', render: (_, row) => modelById.get(row.modelId)?.modelId || row.modelId },
     ...metrics.map(metric => ({
       title: rateLabel(metric), align: 'right', width: rateWidths[metric],
       render: (_, row, index) => <RateInput metric={metric} value={row[metric]} modelName={modelById.get(row.modelId)?.name || row.modelId}
@@ -481,7 +487,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
       <Tabs.TabPane tab={translateLabel("模型限流")} itemKey="models">
         {tab === 'models' && <div className="traffic-tab"><Card className="traffic-list">
           <div className="admin-list-toolbar">
-            <Input className="admin-list-search" showClear value={modelQuery} aria-label="搜索模型" placeholder="搜索模型展示名称或模型编码"
+            <Input className="admin-list-search" showClear value={modelQuery} aria-label={serviceSearch} placeholder={serviceSearch}
               onChange={setModelQuery} disabled={Boolean(draft)}/>
             <DefaultInline title="模型默认" description={modelDefaultHelp}>
               {modelDefault ? <>
@@ -492,7 +498,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
           </div>
           {!draft && errorBanner}
           <Table key={modelQuery} rowKey="id" scroll={{ x: 'max(100%, 880px)' }}
-            empty={settings ? '暂无模型' : remote?.error ? '模型限流暂不可用' : '正在读取模型限流…'}
+            empty={settings ? '暂无模型服务' : remote?.error ? '模型限流暂不可用' : '正在读取模型限流…'}
             dataSource={modelRows} columns={modelColumns} pagination={pagination}/>
         </Card></div>}
       </Tabs.TabPane>
@@ -522,8 +528,8 @@ export default function TrafficOperations({ state, dirtyRef }) {
         <div id={modelPickerId} className="traffic-policy-model-picker">
           <Text strong id={modelPickerId + '-label'}>添加模型策略</Text>
           {!draft.rows.length && choices.length > 0 &&
-            <Text type="secondary">选择模型后，填写 RPM 和 TPM，再保存。</Text>}
-          <Select aria-labelledby={modelPickerId + '-label'} placeholder={choices.length ? '搜索模型展示名称或模型编码' : '没有可添加的模型'}
+            <Text type="secondary">选择模型服务后，填写 RPM 和 TPM，再保存。</Text>}
+          <Select aria-labelledby={modelPickerId + '-label'} placeholder={choices.length ? serviceSearch : '没有可添加的模型服务'}
             filter motion={false} value="" defaultOpen={openModelPicker} autoFocus={openModelPicker}
             position="bottomLeft" getPopupContainer={() => document.getElementById(modelPickerId)}
             disabled={saving || !account || !choices.length}

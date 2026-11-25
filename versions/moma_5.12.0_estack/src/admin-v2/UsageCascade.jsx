@@ -51,7 +51,7 @@ export default function UsageCascade({ label, parentLabel, groups, items, value,
       <div className="admin-analytics-picker-footer">
         <Typography.Text type="secondary">已选 {draft.length} 个{label}</Typography.Text>
         <Space>
-          <Button theme="borderless" size="small" disabled={!draft.length} onClick={() => setDraft([])}>{translateLabel("清空")}</Button>
+          <Button theme="borderless" size="small" disabled={!draft.length} onClick={() => setDraft([])}>{translateLabel("清除")}</Button>
           <Button size="small" onClick={() => setOpen(false)}>{translateLabel("取消")}</Button>
           <Button size="small" theme="solid" onClick={apply}>{translateLabel("确定")}</Button>
         </Space>

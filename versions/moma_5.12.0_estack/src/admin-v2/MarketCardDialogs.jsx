@@ -30,8 +30,7 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
   const [context, setContext] = useState(() => cardContext(values.context_length));
   const [importMaterial, setImportMaterial] = useState(false);
   const formId = useId();
-  const services = useMemo(() => linking ? marketCardLinkableServices(state, row.modelId)
-    : row?.modelId ? marketCardServices(state, row.modelId) : [], [state, linking, row?.modelId]);
+  const services = useMemo(() => row ? marketCardServices(state) : [], [state, row]);
   const [linked, setLinked] = useState(row?.card.linked || []);
   const [status, setStatus] = useState(() => row && marketCardStatus(row.card));
   const [tenantIds, setTenantIds] = useState(() => row?.card.scope.tenantIds || []);
@@ -76,13 +75,14 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
     return <Modal title="删除模型卡片" description={row.name} centered onClose={cancel}
       footer={footer('确认删除', () => save('marketCardDelete', { confirmed: true }), Boolean(issue), true)}>
       {issue ? <Notice error>{translateLabel(issue)}</Notice>
-        : <Typography.Paragraph>{translateLabel('删除后，卡片信息及其服务关联将移除，关联服务和销售配置会保留。')}</Typography.Paragraph>}
+        : <Typography.Paragraph>{translateLabel('删除后，卡片信息及其与模型服务的关联一并删除，模型服务和模型售卖保留，不可恢复。')}</Typography.Paragraph>}
       {errors}
     </Modal>;
   }
 
   if (creating || kind === 'edit') {
     const disabled = unavailable || uploading || importMaterial && !sourceId;
+    const canonicalSlug = materials.find(item => item.id === sourceId)?.modelId || row?.canonicalSlug;
     const uploadLogo = async ([file]) => {
       if (!file || unavailable || uploading) return;
       const request = ++logoUpload.current;
@@ -160,12 +160,12 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
               ops.dirty(true);
             }}/>
         </Space>
-        {importMaterial && <Field label="模型展示名称" required>
+        {importMaterial && <Field label="模型资料" required>
           <Select filter style={{ width: '100%' }} placeholder={translateLabel("请选择模型资料")} value={sourceId || undefined} disabled={unavailable || uploading}
             optionList={materials.map(item => ({ value: item.id, label: `${item.name} · ${item.modelId}` }))}
             onChange={chooseModel}/>
         </Field>}
-        {!creating && row.canonicalSlug && <Field label="模型编码"><Input readOnly value={row.canonicalSlug}/></Field>}
+        {canonicalSlug && <Field label="模型编码"><Input readOnly value={canonicalSlug}/></Field>}
         <div className="ss-form-grid">
           <Field label="模型中文简介" required><TextArea rows={3} value={values.description} maxLength={5000} onChange={value => update('description', value)}/></Field>
           <Field label="模型英文简介" required><TextArea rows={3} value={values.description_en} maxLength={5000} onChange={value => update('description_en', value)}/></Field>
@@ -203,10 +203,10 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
 
   const listing = status === 'formal' || status === 'gray';
   const savedLinks = new Set(row.card.linked);
-  const selectedModel = row.modelId || services.find(service => linked.includes(service.id))?.modelId;
   const serviceById = new Map(services.map(service => [service.id, service]));
   const linkedRows = linked.filter(id => savedLinks.has(id)).map(id => serviceById.get(id) || { id });
-  const candidates = services.filter(service => !(savedLinks.has(service.id) && linked.includes(service.id)));
+  const candidates = marketCardLinkableServices(services, linked, row.card.linked)
+    .filter(service => !(savedLinks.has(service.id) && linked.includes(service.id)));
   const matches = service => [service.serviceName, service.name, service.callId, service.id].join(' ')
     .toLowerCase().includes(search.trim().toLowerCase());
   const showing = service => row.card.status === 'listed' && row.card.shown.includes(service.id) && serviceById.has(service.id);
@@ -219,7 +219,6 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
       {service.serviceName && <Typography.Text ellipsis={{ showTooltip: true }}>{service.serviceName}</Typography.Text>}
       <CopyId value={service.id} label="模型服务 ID" copyAtStart ellipsis/>
     </div> },
-    ...(!row.modelId ? [{ title: '模型', dataIndex: 'name' }] : []),
     callIdColumn, stateColumn,
   ];
   const scopeOptions = marketScopeOptions(state).filter(row => !internal || row.value === state.spacePolicy?.internalTenantId);
@@ -251,11 +250,11 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
         <Typography.Title heading={6}>{translateLabel("可关联的模型服务")}</Typography.Title>
         <Input showClear prefix={<IconSearch aria-hidden="true"/>} aria-label="搜索可关联模型服务" value={search}
           placeholder="搜索服务名称、模型 ID 或模型服务 ID" onChange={setSearch}/>
-        {!row.modelId && <Typography.Text type="tertiary">可选择同一模型下的多个服务。</Typography.Text>}
+        <Typography.Text type="tertiary">{translateLabel("请确认所选服务与卡片展示的是同一款模型。")}</Typography.Text>
         <Table rowKey="id" dataSource={candidates.filter(matches)} pagination={false} scroll={{ x: 'max(100%, 600px)' }}
           empty={search.trim() ? '没有匹配的模型服务' : '暂无可关联的模型服务'}
           columns={[{ title: '选择', width: 64, render: (_, service) => <Checkbox aria-label={`选择 ${service.callId}`}
-            checked={linked.includes(service.id)} disabled={unavailable || Boolean(selectedModel && selectedModel !== service.modelId)}
+            checked={linked.includes(service.id)} disabled={unavailable}
             onChange={() => changeLink(service.id)}/> }, ...serviceColumns]}/>
         {linked.length > linkedRows.length && <Typography.Text type="tertiary">已选 {linked.length - linkedRows.length} 个待添加服务</Typography.Text>}
       </section>
@@ -274,7 +273,7 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
             setShown(current => toggle(current, service.id));
             ops.dirty(true);
           }}/> },
-        callIdColumn, stateColumn,
+        ...serviceColumns,
       ]}/>}
     {!linking && listing && <>
       {status === 'formal' && <Typography.Text>可见范围为全部用户。</Typography.Text>}

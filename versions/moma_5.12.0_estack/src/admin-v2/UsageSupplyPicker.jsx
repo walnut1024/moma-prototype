@@ -79,7 +79,7 @@ export default function UsageSupplyPicker({ filters, options, onChange }) {
       <div className="admin-analytics-picker-footer">
         <Text type="secondary" title={summary}>{summary}</Text>
         <Space>
-          <Button size="small" theme="borderless" onClick={() => { setAll(false); setDraft(emptySupply()); }}>{translateLabel("清空")}</Button>
+          <Button size="small" theme="borderless" onClick={() => { setAll(false); setDraft(emptySupply()); }}>{translateLabel("清除")}</Button>
           <Button size="small" onClick={() => setOpen(false)}>{translateLabel("取消")}</Button>
           <Button size="small" theme="solid" onClick={() => {
             onChange({ ...filters, providers: all ? [] : draft.providers, channels: all ? null : draft.channels });

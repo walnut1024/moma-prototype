@@ -2,7 +2,7 @@ import { offerKey, providerOffer } from '../service-access.mjs';
 import { modelOperationsView } from '../mock/model-data.js';
 import { modelSupplies, activeSupplyPrice, activeSupplySalePrice, priceItems, supplyModelUrl, publicationChecks } from './model-management.js';
 import { catalogueChannels, channelUrl, channelBlockReason, channelFingerprint } from './provider-channels.js';
-import { MOMA_PROVIDER, providerCatalogueIds } from './moma-provider.js';
+import { MOMA_PROVIDER } from './moma-provider.js';
 import { cataloguePurchasePrice } from './provider-catalogue-pricing.js';
 import { activeChannelProcurement } from './channel-change-management.js';
 
@@ -47,7 +47,7 @@ export function serviceSupplyRows(state, model) {
   }).sort((a,b) => String(a.provider?.name).localeCompare(String(b.provider?.name), 'zh-CN'));
 }
 export function availableServiceChannels(state, provider, catalogueModelId) {
-  if (!provider || !providerCatalogueIds(provider).includes(catalogueModelId)) return [];
+  if (!provider || provider.deletedAt) return [];
   return catalogueChannels(state, provider, catalogueModelId).map(channel => ({ ...channel, reason: channelBlockReason(provider, channel) }));
 }
 export const serviceChannelRevision = channel => JSON.stringify([channelFingerprint(channel), channel.pricing, channel.enabled, channel.health]);

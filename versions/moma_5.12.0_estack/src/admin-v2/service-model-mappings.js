@@ -1,8 +1,9 @@
 import { resourceId } from '../resource-id.mjs';
 import { libraryRecord } from './model-library.js';
 import { resolveChannelAssociationModel } from './channel-association-model.js';
-import { supplierDirectory, displayedCatalogueIds } from './moma-provider.js';
+import { supplierDirectory } from './moma-provider.js';
 import { catalogueChannels, channelBlockReason, channelFingerprint, channelUrl } from './provider-channels.js';
+import { supplierChannelAssociations } from './supplier-resources.js';
 import { routingServices } from './service-routing.js';
 import { platformRouteInterface, routeMappingStatus } from './service-route-mapping.js';
 import { forwardingRows } from './service-route-forwarding.js';
@@ -99,22 +100,19 @@ export const mappingConfig = (supply,model) => ({
 // Independent services link to a registered upstream by its connection and association ID.
 export function registeredServiceUpstreams(state) {
   return supplierDirectory(state).filter(provider => !provider.deletedAt).flatMap(provider =>
-    displayedCatalogueIds(provider, state).flatMap(modelId =>
-      catalogueChannels(state, provider, modelId)
-        .filter(channel => channel.endpoint.id && !channel.endpoint.deletedAt)
-        .map(channel => ({
-          ...channel, provider, type: channel.type || provider.catalogModels?.find(row => row.modelId === modelId)?.type,
-          reason: channelBlockReason(provider, channel),
-        }))));
+    supplierChannelAssociations(state, provider).map(channel => ({
+      ...channel, provider, type: channel.type || provider.catalogModels?.find(row => row.modelId === channel.modelId)?.type,
+      reason: channelBlockReason(provider, channel),
+    })));
 }
 
 export function mappingCandidates(state,service) {
   const modelId = libraryRecord(state, service.modelId)?.id || service.modelId;
-  return supplierDirectory(state).filter(provider=>!service.providerId || provider.id===service.providerId).flatMap(provider=>displayedCatalogueIds(provider,state).flatMap(catalogueModelId=>catalogueChannels(state,provider,catalogueModelId).flatMap(channel=>{
+  return supplierDirectory(state).filter(provider=>!provider.deletedAt && (!service.providerId || provider.id===service.providerId)).flatMap(provider=>supplierChannelAssociations(state,provider).flatMap(channel=>{
     let source;try{source=resolveChannelAssociationModel(state,provider,channel);}catch{return [];}
     if(!modelId || source.id!==modelId || service.channelId && channel.id!==service.channelId)return [];
-    return [{...channel,provider,catalogueModelId,selectionId:JSON.stringify([provider.id,channel.id]),reason:channelBlockReason(provider,channel)}];
-  })));
+    return [{...channel,provider,catalogueModelId:channel.modelId,selectionId:JSON.stringify([provider.id,channel.id]),reason:channelBlockReason(provider,channel)}];
+  }));
 }
 function relation(state,service,config) {
   const provider=state.providers.find(row=>row.id===config.providerId);
@@ -183,7 +181,7 @@ function checkedConfig(state,service,input,supply) {
 export function serviceMappingTransaction(state,{operation,modelId,data={}}) {
   const service=routingServices(state).find(row=>row.modelId===modelId && row.id===data.serviceId);
   if(!service || !service.callId)throw Error('请先配置当前服务的模式和模型 ID');
-  if(data.expectedSource!==mappingSourceVersion(state,service))throw Error('模型或供给已变化，请载入最新数据后核对，当前输入保留');
+  if(data.expectedSource!==mappingSourceVersion(state,service))throw Error('模型或上游模型已变化，请载入最新数据后核对，当前输入保留');
   if(operation==='serviceMappingCreate' && data.id)throw Error('新增映射不能提交已有映射标识');
   const supply=data.id && state.modelSupplies.find(row=>row.id===data.id && row.modelId===modelId && row.status!=='已移除');
   const providerId=supply && (supply.providerId || state.endpoints.find(row=>row.id===supply.endpointId)?.providerId);
@@ -203,12 +201,12 @@ export function serviceMappingTransaction(state,{operation,modelId,data={}}) {
       changes.push({type:'add',collection:'modelSupplies',record:{id:resourceId('service-channel'),modelId,providerId:next.providerId,endpointId:next.endpointId,channelId:next.associationId,catalogueModelId:next.catalogueModelId,upstreamModelId:next.upstreamModelId,capabilities:structuredClone(service.model.capabilities),status:'已停用',validationStatus:'待验证',verifiedAt:null,validationCases:[],salesEnabled:false,mappingName:name,mappingRevision:1,serviceMapping:{...interfaceConfig(next),validation:null},createdAt:time,updatedAt:time}});
       const endpoint=state.endpoints.find(row=>row.id===next.endpointId);
       if(!endpoint.modelIds.includes(modelId))changes.push({type:'update',collection:'endpoints',id:endpoint.id,changes:{modelIds:[...endpoint.modelIds,modelId]}});
-      label='新增模型映射';
+      label='关联上游模型';
     } else {
       if(JSON.stringify(next)!==JSON.stringify(config) && mappingReferences(state,supply).length)throw Error('映射仍被路由引用，更换连接或接口请新建映射后切换路由');
       if(JSON.stringify(next)===JSON.stringify(config)){const {pending:_pending,...active}=meta;update(supply.id,{mappingName:name,...(meta.pending?{serviceMapping:active}:{})});}
       else update(supply.id,{serviceMapping:{...meta,pending:{name,config:next,validation:JSON.stringify(next)===JSON.stringify(meta.pending?.config)?meta.pending.validation:null,savedAt:time}}});
-      label='保存模型映射';
+      label='保存上游模型关联';
     }
   } else {
     if(!supply)throw Error('请选择已有模型映射');
@@ -224,7 +222,7 @@ export function serviceMappingTransaction(state,{operation,modelId,data={}}) {
       const pending=meta.pending;if(!pending)throw Error('没有待应用的映射变更');
       checkedConfig(state,service,pending.config,supply);
       if(mappingReferences(state,supply).length || mappingPendingTasks(state,supply))throw Error('映射仍有路由或未完成任务引用，请先处理依赖');
-      if(!pending.validation || pending.validation.signature!==mappingSignature(state,service,pending.config))throw Error('请先验证当前映射变更');
+      if(!pending.validation || pending.validation.signature!==mappingSignature(state,service,pending.config))throw Error('请先验证当前关联上游模型变更');
       if(data.confirmed!==true)throw Error('请确认映射变更的影响范围');
       const next=pending.config;
       update(supply.id,{providerId:next.providerId,endpointId:next.endpointId,channelId:next.associationId,catalogueModelId:next.catalogueModelId,upstreamModelId:next.upstreamModelId,mappingName:pending.name,serviceMapping:{...interfaceConfig(next),validation:pending.validation},validationStatus:'通过',verifiedAt:time});
@@ -233,19 +231,19 @@ export function serviceMappingTransaction(state,{operation,modelId,data={}}) {
       label='应用模型映射';
     } else if(operation==='serviceMappingDiscard') {
       if(!meta.pending)throw Error('没有待放弃的映射变更');
-      const {pending:_pending,...rest}=meta;update(supply.id,{serviceMapping:rest});label='放弃模型映射变更';
+      const {pending:_pending,...rest}=meta;update(supply.id,{serviceMapping:rest});label='放弃关联上游模型变更';
     } else if(operation==='serviceMappingEnable') {
       if(meta.pending)throw Error('请先应用或放弃待验证的映射变更');
       const preview=mappingPreview(state,service,config),reason=channelBlockReason(preview.channel.provider,preview.channel) || mappingReadiness(state,service,supply);
       if(reason || supply.validationStatus!=='通过')throw Error(reason || '请先验证当前模型映射');
       if(!meta.validation)throw Error('请先验证当前模型映射');
-      update(supply.id,{status:'已启用'});label='启用模型映射';
+      update(supply.id,{status:'已启用'});label='启用关联上游模型';
     } else if(['serviceMappingDisable','serviceMappingRemove'].includes(operation)) {
       if(mappingReferences(state,supply).length)throw Error('映射仍被生效路由或草稿引用，请先替换路由或停服后停用路由');
       if(mappingPendingTasks(state,supply))throw Error('映射仍有未完成任务，请先处理后再操作');
       if(data.confirmed!==true)throw Error('请确认模型映射的操作影响');
-      if(operation==='serviceMappingRemove' && supply.status==='已启用')throw Error('请先停用映射再解除关系');
-      update(supply.id,{status:operation==='serviceMappingRemove'?'已移除':'已停用',salesEnabled:false});label=operation==='serviceMappingRemove'?'解除模型映射':'停用模型映射';
+      if(operation==='serviceMappingRemove' && supply.status==='已启用')throw Error('请先停用再移除');
+      update(supply.id,{status:operation==='serviceMappingRemove'?'已移除':'已停用',salesEnabled:false});label=operation==='serviceMappingRemove'?'移除关联上游模型':'停用关联上游模型';
     } else throw Error('不支持的模型映射操作');
   }
   return {type:'batch',objectId:modelId,label,changes};

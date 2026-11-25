@@ -45,7 +45,7 @@ test('opening, limiting and removing a model preserve other models already grant
   const state = {tenants:[tenant],grants:[],models:[model('alpha'),model('beta'),
     model('restricted',{openScope:'selected',tenantIds:['b']})]};
   const apply = (operation,data) => tenantServiceTransaction(state,{tenantId:'a',operation,data}).changes[0].changes.modelRules;
-  assert.throws(()=>apply('open-models',{modelIds:['beta','restricted']}),/无法开通/);
+  assert.throws(()=>apply('open-models',{modelIds:['beta','restricted']}),/无法授权的模型服务/);
   assert.deepEqual(tenant.modelRules,[existing]);
   tenant.modelRules = apply('open-models',{modelIds:['beta']});
   assert.deepEqual(tenant.modelRules,[{modelId:'beta',rpm:null,tpm:null},existing]);

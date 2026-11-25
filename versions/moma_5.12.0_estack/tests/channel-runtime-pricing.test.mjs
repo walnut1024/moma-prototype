@@ -206,7 +206,6 @@ test('a pending test blocks new enable and route publication while existing qual
   const service = routingServices(f.state).find(item => item.modelId === f.modelId);
   assert.equal(routingChannels(f.state, service)[0].reason, '当前模型测试尚未完成');
   assert.throws(() => provider(f.state, 'supplierModelsEnable', { endpointId: ep.id, associationIds: [row.id] }), /尚未完成/);
-  assert.throws(() => provider(f.state, 'supplierChannelEnable', { endpointId: ep.id }), /尚未完成/);
   assert.throws(() => validateRouteConfig(f.state, service, { strategy:'weighted', autoFailover: true, channels: [{ supplyId: f.supplies[0].id, enabled: true, weight: 100 }] }), /测试尚未完成/);
   assert.equal(call(f).request.httpStatus, 200);
   ep.serverTestJobs[0].receivedAt = new Date().toISOString();

@@ -19,7 +19,7 @@ function referenceChannels(model, service, state) {
   const entry = service?.providerId ? providerOffer(model, offerKey(service)) : null;
   if (service?.channelId) {
     const provider = providers.get(service.providerId), channel = provider?.catalogConnections?.find(row => row.id === service.channelId);
-    return [{ key: service.channelId, id: service.channelId, providerName: provider?.name || entry?.providerName || '服务商已不存在', name: channel?.sourceName || channel?.name || entry?.channelName || '上游模型名称未配置' }];
+    return [{ key: service.channelId, id: service.channelId, providerName: provider?.name || entry?.providerName || '服务商已不存在', name: channel?.sourceName || channel?.name || entry?.channelName || '模型展示名称未配置' }];
   }
   const channels = (state.modelSupplies || []).filter(row => row.modelId === model.id && row.status !== '已移除').flatMap(supply => {
     const endpoint = state.endpoints?.find(row => row.id === supply.endpointId), providerId = supply.providerId || endpoint?.providerId;
@@ -27,7 +27,7 @@ function referenceChannels(model, service, state) {
     const provider = providers.get(providerId);
     const matches = (provider?.catalogConnections || []).filter(row => supply.channelId ? row.id === supply.channelId : row.endpointId === supply.endpointId && row.upstreamModelId === supply.upstreamModelId && row.modelId === (supply.catalogueModelId || supply.upstreamModelId));
     const channel = matches.length === 1 ? matches[0] : null, id = supply.channelId || channel?.id || '';
-    return [{ key: id || supply.id, id, providerName: provider?.name || '服务商已不存在', name: channel?.sourceName || channel?.name || entry?.channelName || '上游模型名称未配置' }];
+    return [{ key: id || supply.id, id, providerName: provider?.name || '服务商已不存在', name: channel?.sourceName || channel?.name || entry?.channelName || '模型展示名称未配置' }];
   });
   return [...new Map(channels.map(row => [row.key, row])).values()];
 }

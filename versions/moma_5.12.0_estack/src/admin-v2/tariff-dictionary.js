@@ -1,5 +1,6 @@
-import { isResourceId, resourceId } from '../resource-id.mjs';
+import { isResourceId } from '../resource-id.mjs';
 import { initialTariffDictionary } from '../mock/application-data.js';
+import { tariffUnitBase } from './tariff-metering.js';
 
 export const TARIFF_KINDS = { scenario: '计费项', unit: '计费单位', currency: '货币' };
 export async function tariffDictionaryId(id) {
@@ -24,7 +25,7 @@ export function tariffDictionarySeed() {
 }
 
 export function tariffDictionaryEntries(state) {
-  const saved = state.tariffDictionary.filter(item => item.kind !== 'scenario' || !removedScenarioNames.has(item.name));
+  const saved = state.tariffDictionary.filter(item => item.builtin && (item.kind !== 'scenario' || !removedScenarioNames.has(item.name)));
   const ids = new Set(saved.map(item => item.id)), names = new Set(saved.map(item => item.kind + ':' + item.name.toLowerCase())), codes = new Set(saved.filter(item => item.kind === 'currency').map(item => item.code));
   const seed = tariffDictionarySeed();
   return [...saved, ...seed.filter(item => !ids.has(item.id) && !names.has(item.kind + ':' + item.name.toLowerCase()) && (item.kind !== 'currency' || !codes.has(item.code)))].map(item => {
@@ -53,6 +54,14 @@ export function tariffScenarioUnit(state, name) {
   return tariffDictionaryEntries(state).find(item => item.kind === 'unit' && item.id === scene?.unitId && item.status === '已启用')?.name || '';
 }
 
+export function tariffScenarioUnits(state, name) {
+  const unit = tariffScenarioUnit(state, name);
+  if (!unit) return [];
+  const base = tariffUnitBase(unit);
+  if (!base || name.endsWith('（按秒）')) return [unit];
+  return tariffOptions(state, 'unit').filter(option => tariffUnitBase(option) === base);
+}
+
 export function appendCommonTariffScenarios(rows, selected, state, currency) {
   const available = tariffOptions(state, 'scenario');
   if (!Array.isArray(selected) || !selected.length) throw new Error('请至少选择一个常用计费项');
@@ -63,53 +72,6 @@ export function appendCommonTariffScenarios(rows, selected, state, currency) {
   const retained = rows.filter(item => item.name.trim() || item.listPrice !== '' && item.listPrice != null || item.unit || item.currency && item.currency !== currency);
   if (retained.length + additions.length > 100) throw new Error('每个模型最多配置 100 条计费项，请减少选择');
   return [...retained, ...additions.map(name => ({ name, unit: tariffScenarioUnit(state, name), currency, listPrice: '' }))];
-}
-
-export function tariffPriceReferences(state, entry) {
-  const field = {scenario:'name',unit:'unit',currency:'currency'}[entry.kind];
-  const matches = value => {
-    if (!value || typeof value !== 'object') return false;
-    if (!Array.isArray(value) && typeof value.name === 'string' && typeof value.unit === 'string' && value[field] === (entry.kind === 'currency' ? entry.code : entry.name)) return true;
-    return Object.values(value).some(matches);
-  };
-  return [['modelSalePrices','模型刊例价及历史'],['supplyPrices','服务商成本价及历史'],['providers','服务商价格或草稿'],['endpoints','连接配置或草稿'],['modelOnboardings','接入草稿']].filter(([key]) => matches(state[key])).map(([,label]) => label);
-}
-
-export function tariffDictionaryTransaction(state, data) {
-  const current = tariffDictionaryEntries(state).find(item => item.id === data.id);
-  if (current?.builtin) throw new Error('内置字典项只读，不可编辑、停用或删除');
-  let change, label;
-  if (data.operation === 'save') {
-    if (data.id && !current) throw new Error('字典条目不存在，请重新载入');
-    const kind = current?.kind || data.kind, name = normalizeTariffName(kind, data.name);
-    if (kind === 'scenario' && removedScenarioNames.has(name)) throw new Error('该旧计费项已移除，请使用明确计量对象的名称，如输入 Token、视频输出时长');
-    const englishName = typeof data.englishName === 'string' ? data.englishName.trim().replace(/[\t ]+/g, ' ') : '';
-    if (kind !== 'scenario' && (!/^[\x20-\x7e]{1,80}$/.test(englishName) || !/[a-z]/i.test(englishName))) throw new Error('英文名称须为 1–80 个英文字符，至少包含一个字母，不能换行');
-    const fields = { name, ...(kind === 'scenario' ? {} : {englishName}), ...(kind === 'currency' ? { code: normalizeCurrency(data.code) } : {}) };
-    if (current && (kind === 'currency' ? fields.code !== current.code : name !== current.name) && tariffPriceReferences(state,current).length) throw new Error('该字典项已被价格或草稿引用，不能修改名称或货币代码；请新增字典项，原配置及历史保留');
-    if (tariffDictionaryEntries(state).some(item => item.id !== current?.id && item.kind === kind && (item.name.toLowerCase() === name.toLowerCase() || kind === 'currency' && item.code === fields.code))) throw new Error('同类字典名称或货币代码已存在，请编辑或启用已有条目');
-    if (kind === 'scenario') {
-      const description = data.description == null ? '' : data.description;
-      if (typeof description !== 'string' || /[\r\n]/.test(description) || description.trim().length > 160) throw new Error('计费说明最多 160 字，不能换行');
-      fields.description = description.trim();
-    }
-    if (!current && tariffDictionaryEntries(state).filter(item => item.kind === kind).length >= 200) throw new Error('每类字典最多维护 200 个条目');
-    change = current ? { type: 'update', collection: 'tariffDictionary', id: current.id, changes: fields } : { type: 'add', collection: 'tariffDictionary', record: { id: resourceId({ scenario: 'billing-item', unit: 'billing-unit', currency: 'currency' }[kind]), kind, ...fields, ...(kind === 'scenario' ? {} : {status: '已启用'}), builtin: false } };
-    label = `保存${TARIFF_KINDS[kind]}`;
-  } else if (data.operation === 'status') {
-    if (current?.kind === 'scenario') throw new Error('计费项不设启用或停用状态');
-    if (!current || !['已启用', '已停用'].includes(data.status)) throw new Error('字典条目或状态无效');
-    change = { type: 'update', collection: 'tariffDictionary', id: current.id, changes: { status: data.status } };
-    label = `${data.status === '已启用' ? '启用' : '停用'}${TARIFF_KINDS[current.kind]}`;
-  } else if (data.operation === 'delete') {
-    if (!current) throw new Error('字典条目不存在，请重新载入');
-    if (current.kind === 'unit' && tariffDictionaryEntries(state).some(item => item.kind === 'scenario' && item.unitId === current.id)) throw new Error('该计费单位仍被计费项引用，请先更换关联单位');
-    const references = tariffPriceReferences(state,current);
-    if (references.length) throw new Error(`该字典项仍被${references.join('、')}引用，不能删除；已有配置和历史保留${current.kind === 'scenario' ? '' : '，可停用以停止新增选用'}`);
-    change = { type: 'remove', collection: 'tariffDictionary', id: current.id };
-    label = `删除自定义${TARIFF_KINDS[current.kind]}`;
-  } else throw new Error('未知资费字典操作');
-  return { type: 'batch', objectId: current?.id || change.record.id, label, changes: [change] };
 }
 
 export function commonTariffNames(names,modelType) {

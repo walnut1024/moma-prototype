@@ -3,10 +3,9 @@ import { providerRemovalTransaction } from './provider-removal.js';
 import { channelSpecialtyTransaction, ollamaCurrentRows } from './channel-directory-specialty.js';
 import { normalizeAdapterDraft } from './channel-adapter-catalogue.js';
 import { supplierChannelBatchPlan, supplierChannelLifecyclePlan } from './supplier-channel-batch.js';
-import { importModelResources } from './model-resource-transfer.js';
 import { normalizeModelLogo } from './model-profile.js';
 import { resourceId } from '../resource-id.mjs';
-import { offerKey, offerStage, offerGrayTenants, providerOffer, serviceReferences, salesCustomer, salesPaused } from '../service-access.mjs';
+import { offerKey, offerStage, offerGrayTenants, providerOffer, serviceReferences, salesPaused } from '../service-access.mjs';
 import { channelBlockReason } from './provider-channels.js';
 import { resolveChannelAssociationModel } from './channel-association-model.js';
 import { salesChecks } from './service-sales.js';
@@ -28,19 +27,18 @@ import { commercialPriceKey, commercialPriceBase, modelSaleRevision, availableSe
 import { modelTransaction, modelCode, modelSupplies, availableSupplies, supplyPriceReady, supplyModelUrl, latestSaleRevision, activeSupplyPrice } from './model-management.js';
 import { modelProfileDraft, requireModelBasics, serviceModelSourceDraft } from './model-profile.js';
 import { MODEL_OPERATION_NAMES } from './model-operation-history.js';
-import { tariffDictionaryTransaction } from './tariff-dictionary.js';
 import { classificationIndex, classifiedProfile, modelClassification, saveClassification } from './model-classification.js';
 import { activeChannelProcurement, channelChangeTransaction, channelChangeImpact, channelCandidateStatus, prepareKeyPoolCandidate } from './channel-change-management.js';
 import { normalizeChannelRequestRules } from './channel-request-rules.js';
 import { channelCapacityTransaction } from './channel-capacity.js';
 import { channelOnboardingTransaction } from './channel-onboarding.js';
 import { channelDiscoveryPreview, directoryDiscoveryPolicy, directoryDiscoverySignature, ignoredDiscoveryModel } from './channel-discovery-diff.js';
-import { providerTransaction, providerCode, modelConnectivityPreview, PROTOCOLS, checkedConnectionKeys } from './provider-management.js';
+import { providerTransaction, providerCode, modelConnectivityPreview, PROTOCOLS, checkedConnectionKeys, UPSTREAM_API_KEY_LIMIT } from './provider-management.js';
 import { builtinModelCatalogueChanges, cleanModelCatalogueTransaction } from '../mock/builtin-model-catalogue.js';
 import { supplierModelRegistration } from './supplier-model-registration.js';
 import { supplyModelRecord, serviceModelSources, supplierModelFields } from './supply-models.js';
 import { providerKeyGroupKeys } from './provider-key-groups.js';
-import { connectionTestPassed, connectionTestPending, connectionCredentialsReady, connectionFingerprint, connectionKeys } from './connection-state.js';
+import { connectionActive, connectionTestPassed, connectionTestPending, connectionCredentialsReady, connectionFingerprint, connectionKeys } from './connection-state.js';
 import { providerCatalogueIds } from './moma-provider.js';
 import { catalogueMetadata, REAL_MODELS, RECENT_TEMPLATE_CODES } from './real-model-catalogue.js';
 import { guidedOnboarding } from './guided-onboarding.js';
@@ -48,7 +46,7 @@ import { channelFingerprint, channelInterfaceIssue } from './provider-channels.j
 import { supplierChannelAssociations, supplierChannelName } from './supplier-resources.js';
 import { platformPriceVersions } from './platform-service-client.js';
 import { modelOperationsExamplesTransaction } from './model-operations-examples.js';
-import { CHANNEL_SOURCE_TYPES, channelListType, prepareListedChannelInterface } from './channel-connection-directory.js';
+import { CHANNEL_SOURCE_TYPES, channelListType, channelProtocolPaths, prepareListedChannelInterface } from './channel-connection-directory.js';
 import { CHANNEL_INTERFACES } from './channel-interface.js';
 import { serviceMappingTransaction, mappingSourceVersion } from './service-model-mappings.js';
 
@@ -122,7 +120,6 @@ export function operationsTransaction(state, action) {
     return { type: 'batch', label: '保存模型分类', objectId: entry.id, changes: [],
       modelClassification: dictionary, classificationEntry: entry, classificationBefore: before[data.kind].find(row => row.id === entry.id) || null };
   }
-  if (action.operation === 'importModelResources') return importModelResources(state, action.data?.file, operationsTransaction, action.data?.target);
   if (state.modelData?.sourceScope === 'reference-only-v2' && ['prepareServiceReviewCases', 'prepareModelOperationsExamples'].includes(action.operation)) throw Error('当前工作区请通过模型接入导入内置服务商目录');
   const target=action.modelId || (action.data?.serviceId && state.models.find(row=>action.data.serviceId===`standard:${row.id}` || action.data.serviceId.startsWith(`provider:${row.id}:`))?.id);
   if (state.models.find(row => row.id === target)?.deletedAt) throw Error('模型服务已删除');
@@ -138,7 +135,7 @@ export function operationsTransaction(state, action) {
     return { type: 'batch', label: '修复连接派生索引', objectId: 'channel-index', changes: [] };
   }
   if (action.operation === 'supplierChannelBatchLifecycle') {
-    const data = action.data || {}, plan = supplierChannelLifecyclePlan(state, data.providerId, data.associationIds, data.action, { modelOnly: data.modelOnly === true });
+    const data = action.data || {}, plan = supplierChannelLifecyclePlan(state, data.providerId, data.associationIds, data.action);
     if (data.confirmed !== true || data.expectedSignature !== plan.signature) throw Error('连接或引用范围已变化，请重新预览并确认');
     if (plan.blockers.length) throw Error(plan.blockers.join('；'));
     return channelOnboardingTransaction(state, { operation: 'supplierSelection', data: { action: data.action, selections: plan.selections, confirmed: true } });
@@ -184,14 +181,13 @@ export function operationsTransaction(state, action) {
     label = '停售模型服务';
   } else if (['startSales','stopSales'].includes(operation) && modelForSale?.serviceMode==='provider' && (data.offerKeys || providerServices(modelForSale).some(row=>row.channelId))) {
     const model=modelForSale, keys=data.offerKeys;
-    if (data.expectedUpdatedAt!==model.updatedAt || data.confirmed!==true) throw Error('销售配置已变化，请核对并明确确认');
+    if (data.expectedUpdatedAt!==model.updatedAt || data.confirmed!==true) throw Error('模型售卖已变化，请核对并明确确认');
     if (!Array.isArray(keys) || !keys.length || keys.length>20 || new Set(keys).size!==keys.length || keys.some(key=>typeof key!=='string' || !providerOffer(model,key))) throw Error('请选择有效模型服务');
     const stage=operation==='stopSales'?'withdrawn':data.releaseStage;
     if (!['withdrawn','gray','formal'].includes(stage) || operation==='startSales' && stage==='withdrawn') throw Error('请选择有效的售卖阶段');
     const grayTenantIds=stage==='gray'?serviceScope(working,{openScope:'selected',tenantIds:data.releaseTenantIds}).tenantIds:[];
-    if (grayTenantIds.some(id=>!salesCustomer(model,id))) throw Error('灰度开售的租户须在当前销售对象范围内');
     if (operation==='startSales') {
-      const failed=salesChecks(working,model,keys,stage).filter(row=>!row.passed);
+      const failed=salesChecks(working,model,keys).filter(row=>!row.passed);
       if (failed.length) throw Error(failed.map(row=>row.label).join('；'));
     } else if (keys.some(key=>!['formal','gray'].includes(offerStage(model,providerOffer(model,key))))) {
       throw Error('所选模型服务当前未在售，请刷新后重新选择');
@@ -204,20 +200,19 @@ export function operationsTransaction(state, action) {
     update('models',modelId,{serviceProviders,listingStatus:active.length?'已上架':'已下架',releaseStage:formal?'formal':active.length?'gray':null,
       releaseTenantIds:[...new Set(active.flatMap(row=>offerGrayTenants(model,row)))],
       ...(operation==='startSales'?{visibility:'公开',firstPublishedAt:model.firstPublishedAt || new Date().toISOString()}:{})});
-    label=stage==='gray'?'灰度上架模型服务':stage==='formal'?'正式上架模型服务':'下架模型服务';
+    label=stage==='gray'?'灰度开售模型服务':stage==='formal'?'开售模型服务':'停售模型服务';
   } else if (['startSales','salesSettings'].includes(operation)) {
     const model=modelForSale;
-    if (!model || data.expectedUpdatedAt!==model.updatedAt || data.confirmed!==true) throw Error('销售配置已变化，请核对并明确确认');
+    if (!model || data.expectedUpdatedAt!==model.updatedAt || data.confirmed!==true) throw Error('模型售卖已变化，请核对并明确确认');
     if (operation==='salesSettings') {
       update('models',modelId,{salesScope:serviceScope(working,data.scope)});label='保存销售设置';
     } else {
-      const failed=salesChecks(working,model,undefined,data.releaseStage).filter(row=>!row.passed);
+      const failed=salesChecks(working,model).filter(row=>!row.passed);
       if(failed.length)throw Error(failed.map(row=>row.label).join('；'));
       const releaseStage=data.releaseStage || 'formal';
       if(!['gray','formal'].includes(releaseStage))throw Error('请选择灰度开售或开售');
       const releaseTenantIds=releaseStage==='gray'?serviceScope(working,{openScope:'selected',tenantIds:data.releaseTenantIds}).tenantIds:[];
-      if (releaseTenantIds.some(id=>!salesCustomer(model,id))) throw Error('灰度开售的租户须在当前销售对象范围内');
-      update('models',modelId,{listingStatus:'已上架',visibility:'公开',releaseStage,releaseTenantIds,salesPaused:false,firstPublishedAt:model.firstPublishedAt || new Date().toISOString()});label=releaseStage==='gray'?'灰度上架':'正式上架';
+      update('models',modelId,{listingStatus:'已上架',visibility:'公开',releaseStage,releaseTenantIds,salesPaused:false,firstPublishedAt:model.firstPublishedAt || new Date().toISOString()});label=releaseStage==='gray'?'灰度开售':'开售';
     }
   } else if (['enableService','disableService','stopSales'].includes(operation)) {
     label=modelOp(operation,modelId,data).label;
@@ -245,7 +240,7 @@ export function operationsTransaction(state, action) {
     return { type: 'batch', label: Object.hasOwn(MODEL_OPERATION_NAMES, data.operation) ? MODEL_OPERATION_NAMES[data.operation] : '模型配置操作', objectId: modelId, auditFailure: data.reason.trim(), changes: [] };
   } else if (operation === 'serviceRouteConfigure') {
     const service=routingServices(working).find(row=>row.id===data.serviceId && row.modelId===modelId);
-    if(!service || data.sourceVersion!==routeSourceVersion(working,service) || data.mappingSource!==mappingSourceVersion(working,service))throw Error('模型或供给已变化，请载入最新配置后核对');
+    if(!service || data.sourceVersion!==routeSourceVersion(working,service) || data.mappingSource!==mappingSourceVersion(working,service))throw Error('模型或上游模型已变化，请载入最新配置后核对');
     if(data.confirmed!==true)throw Error('请核对模型映射和路由后确认保存');
     if(!Array.isArray(data.config?.channels) || data.config.channels.length>20 || !Array.isArray(data.sources) || data.sources.length>20 || !Array.isArray(data.removeIds) || data.removeIds.length>20)throw Error('路由连接配置无效');
     const config=structuredClone(data.config), keys=new Set();
@@ -381,7 +376,7 @@ export function operationsTransaction(state, action) {
           name: supplierChannelName(provider, row.endpoint), sourceName: data.value, upstreamModelId: row.upstreamModelId,
         } }));
       }
-      label = '批量编辑上游模型名称';
+      label = '批量编辑模型展示名称';
     } else if (data.field === 'address' && data.phase === 'prepare') {
       if (typeof data.value !== 'string' || !data.value.trim()) throw Error('请填写新的服务地址');
       const targets = plan.connections.filter(({ endpoint }) => endpoint.baseUrl !== data.value.trim());
@@ -464,7 +459,7 @@ export function operationsTransaction(state, action) {
     if(data.protocol!==undefined && !['OpenAI','Anthropic','其他'].includes(data.protocol)) throw Error('请选择已支持的上游协议');
     const interfaceType=data.interfaceType || CHANNEL_INTERFACES.find(row=>row.protocol===data.protocol)?.id;
     if(data.interfaceType && !(data.interfaceType === 'custom' && data.protocol === '其他') &&
-      !CHANNEL_INTERFACES.some(row=>row.id===data.interfaceType && row.protocol===data.protocol)) throw Error('上游接口类型与协议不匹配');
+      !CHANNEL_INTERFACES.some(row=>row.id===data.interfaceType && row.protocol===data.protocol)) throw Error('上游接口格式与协议不匹配');
     const listedProtocol = data.modelProtocol !== undefined;
     if (listedProtocol && (!data.prepareConnection || data.addressOnly || data.allAssociations !== true || association ||
       data.protocol !== undefined || data.interfaceType !== undefined)) throw Error('请核对整个连接后修改模型协议');
@@ -625,10 +620,17 @@ export function operationsTransaction(state, action) {
   } else if (operation === 'channelDirectoryCreate') {
     const provider = working.providers.find(row => row.id === data.providerId && !row.deletedAt);
     if (!provider || provider.status !== '已启用') throw Error('请选择已启用的服务商');
-    if (data.channelSourceType !== undefined && !CHANNEL_SOURCE_TYPES.includes(data.channelSourceType)) throw Error('请选择有效的连接类型');
-    if (data.endpointPath !== undefined && data.modelProtocol === undefined) throw Error('请随接口格式提交接口端点');
+    let endpointPath = data.endpointPath;
+    if (data.channelSourceType !== undefined) {
+      if (!CHANNEL_SOURCE_TYPES.includes(data.channelSourceType)) throw Error('请选择有效的连接类型');
+      const presetPath = channelProtocolPaths({ interfaceType: data.modelProtocol })[0];
+      if (!presetPath) throw Error('请选择接口格式');
+      if (endpointPath !== undefined && endpointPath !== presetPath) throw Error('接口端点由接口格式决定');
+      endpointPath = presetPath;
+    }
+    if (endpointPath !== undefined && data.modelProtocol === undefined) throw Error('请随接口格式提交接口端点');
     const selectedProtocol = data.modelProtocol === undefined ? null : prepareListedChannelInterface({
-      interfaceType: data.modelProtocol, baseUrl: data.baseUrl, endpointPath: data.endpointPath, allowHttp: provider.sourceType === 'selfHosted',
+      interfaceType: data.modelProtocol, baseUrl: data.baseUrl, endpointPath, allowHttp: provider.sourceType === 'selfHosted',
     });
     const note = data.note === undefined ? undefined : channelDirectoryNote(data.note);
     if (!Array.isArray(data.rows) || !data.rows.length || data.rows.length > 20) throw Error('每次请提交 1–20 条连接');
@@ -636,8 +638,8 @@ export function operationsTransaction(state, action) {
       data.models.some(row => !row || Object.keys(row).some(key => !['modelId', 'upstreamModelId'].includes(key))) ||
       new Set(data.models.map(row => row.modelId)).size !== data.models.length)) throw Error('请核对不重复的上游模型接入范围，每批最多新增 50 条上游模型');
     const adapterDraft = data.adapterDraft ? normalizeAdapterDraft(data.adapterDraft) : null;
-    if (adapterDraft && (data.rows.length !== 1 || data.models?.length || data.authMode !== 'pending' || data.copyFrom || data.interfaceType)) throw Error('待适配连接只能保存为未启用草稿');
-    if (!['group', 'specific', 'independent', 'none', ...(adapterDraft ? ['pending'] : [])].includes(data.authMode)) throw Error('请选择连接的凭证来源');
+    if (adapterDraft && (data.rows.length !== 1 || data.models?.length || data.authMode !== 'pending' || data.copyFrom || data.interfaceType)) throw Error('待适配连接只能保存为草稿');
+    if (!['group', 'specific', 'independent', 'none', ...(adapterDraft ? ['pending'] : [])].includes(data.authMode)) throw Error('请选择连接的上游 API 密钥来源');
     const from = data.copyFrom;
     const copySource = from && working.endpoints.find(row => row.id === from.endpointId && row.providerId === provider.id && !row.deletedAt);
     if (from && (!copySource || data.rows.length !== 1 || from.expectedUpdatedAt !== copySource.updatedAt ||
@@ -657,7 +659,8 @@ export function operationsTransaction(state, action) {
       if (!row || typeof row.creationId !== 'string' || !/^[a-f0-9-]{36}$/.test(row.creationId) || creationIds.has(row.creationId)) throw Error('创建条目标识无效');
       creationIds.add(row.creationId);
       if (working.endpoints.some(endpoint => endpoint.providerId === provider.id && endpoint.directoryCreationId === row.creationId)) continue;
-      if (!Array.isArray(row.keys) || row.keys.length > 20 || (data.authMode === 'independent') !== Boolean(row.keys.length) || data.perCredential && row.keys.length !== 1) throw Error('独立密钥数量与创建方式不匹配');
+      if (!Array.isArray(row.keys) || (data.authMode === 'independent') !== Boolean(row.keys.length) || data.perCredential && row.keys.length !== 1) throw Error('独立密钥数量与创建方式不匹配');
+      if (row.keys.length > UPSTREAM_API_KEY_LIMIT) throw Error(`每个连接最多配置 ${UPSTREAM_API_KEY_LIMIT} 把上游 API 密钥`);
       const keys = row.keys.map(channelPrivateKey);
       for (const key of keys) {
         if (seen.has(key.fingerprint) || data.perCredential && working.endpoints.some(endpoint => !endpoint.deletedAt && endpoint.providerId === provider.id && endpoint.directoryBatchCredential === key.fingerprint)) throw Error('连接包含重复的密钥');
@@ -777,23 +780,11 @@ export function operationsTransaction(state, action) {
     });
     return { type: 'batch', objectId: data.targets[0]?.endpointId, label: '按标签核对模型与映射', directoryOperationResults, changes };
   } else if (operation === 'channelDirectoryOperate') {
-    const labels = { enable: '启用连接', disable: '停用连接', tag: '添加运维标签', untag: '移除运维标签',
+    const labels = { tag: '添加运维标签', untag: '移除运维标签',
       renameTag: '重命名运维标签', dissolveTag: '解散运维标签', replaceTags: '替换运维标签', clearTags: '清除运维标签' };
-    if (!Object.hasOwn(labels, data.action) || data.confirmed !== true || !Array.isArray(data.targets) || !data.targets.length ||
+    if (!Object.hasOwn(labels, data.action)) throw Error('不支持此连接操作');
+    if (data.confirmed !== true || !Array.isArray(data.targets) || !data.targets.length ||
       data.targets.length > 100 || new Set(data.targets.map(row => row?.endpointId)).size !== data.targets.length) throw Error('请核对并确认 1–100 条不重复的连接');
-    if (data.associationIds !== undefined && (data.action !== 'enable' || data.targets.length !== 1 || !Array.isArray(data.associationIds) ||
-      new Set(data.associationIds).size !== data.associationIds.length)) throw Error('请选择此连接内不重复的上游模型');
-    if (data.report === true && ['enable', 'disable'].includes(data.action) && data.sourceTag === undefined && data.associationIds === undefined) {
-      const directoryOperationResults = data.targets.map(target => {
-        try {
-          if (!target?.endpointId || typeof target.endpointId !== 'string') throw Error('连接标识无效');
-          apply(operationsTransaction(working, { operation, data: { ...data, report: false, targets: [target] } }));
-          return { endpointId: target.endpointId, status: '已完成' };
-        } catch (error) { return { endpointId: target?.endpointId || '', status: '已跳过', reason: error.message }; }
-      });
-      return { type: 'batch', objectId: data.targets[0]?.endpointId, label: '批量' + labels[data.action], directoryOperationResults, changes };
-    }
-    const tagging = ['tag', 'untag', 'renameTag', 'dissolveTag', 'replaceTags', 'clearTags'].includes(data.action);
     const tag = typeof data.tag === 'string' ? data.tag.trim() : '';
     const replacement = data.action === 'replaceTags' ? [...new Set(tag.split(/[,，]/u).map(value => value.trim()).filter(Boolean))] : [];
     const groupAction = ['renameTag', 'dissolveTag'].includes(data.action) || data.sourceTag !== undefined;
@@ -805,33 +796,20 @@ export function operationsTransaction(state, action) {
       if (!sourceTag || members.length !== selectedIds.size || members.some(row => !selectedIds.has(row.id))) throw Error('标签成员已变化，请重新核对整个标签');
     }
     if (data.action === 'replaceTags' ? !replacement.length || replacement.length > 10 || replacement.some(value => value.length > 32 || /\p{Cc}/u.test(value)) :
-      tagging && !['dissolveTag', 'clearTags'].includes(data.action) && (!tag || tag.length > 32 || /\p{Cc}/u.test(tag))) throw Error('请输入有效的运维标签，每条最多 32 字，每个连接最多 10 条');
+      !['dissolveTag', 'clearTags'].includes(data.action) && (!tag || tag.length > 32 || /\p{Cc}/u.test(tag))) throw Error('请输入有效的运维标签，每条最多 32 字，每个连接最多 10 条');
     if (data.action === 'renameTag' && liveRows.some(row => row.directoryTags?.includes(tag))) throw Error('新标签名称已存在，请使用不同名称');
     for (const target of data.targets) {
       const provider = working.providers.find(row => row.id === target?.providerId && !row.deletedAt);
       const endpoint = working.endpoints.find(row => row.id === target?.endpointId && row.providerId === provider?.id && !row.deletedAt);
       if (!endpoint) throw Error('当前连接不存在');
       const name = endpoint.name;
-      if (endpoint.updatedAt !== target.expectedUpdatedAt || !tagging &&
-        channelChangeImpact(working, provider.id, endpoint.id).revision !== target.expectedImpactRevision) throw Error(name + '：连接或影响范围已变化，请重新核对');
-      if (tagging) {
-        const previous = endpoint.directoryTags || [];
-        const directoryTags = data.action === 'clearTags' ? [] : data.action === 'replaceTags' ? replacement : data.action === 'tag' ? [...new Set([...previous, tag])]
-          : data.action === 'renameTag' ? previous.map(value => value === sourceTag ? tag : value)
-          : previous.filter(value => value !== (data.action === 'dissolveTag' ? sourceTag : tag));
-        if (directoryTags.length > 10) throw Error(name + '：每条连接最多设置 10 个标签');
-        if (JSON.stringify(directoryTags) !== JSON.stringify(previous)) update('endpoints', endpoint.id, { directoryTags });
-      } else {
-        if (data.action === 'enable') {
-          if (endpoint.frozen || endpoint.candidateConfiguration || endpoint.serverTestJobs?.some(job => !job.receivedAt && !job.canceledAt)) throw Error(name + '：请先处理冻结、待验证配置或未完成的测试');
-          if (!supplierChannelAssociations(working, provider, endpoint.id).length) throw Error(name + '：请先新增上游模型');
-          providerOp('supplierChannelEnable', provider.id, { endpointId: endpoint.id });
-          if (data.associationIds?.length) {
-            providerOp('supplierModelsEnable', provider.id, { endpointId: endpoint.id, associationIds: data.associationIds });
-          }
-          if (endpoint.directoryStopEvidence) update('endpoints', endpoint.id, { directoryStopEvidence: null, activationReason: null });
-        } else providerOp('disableConnection', endpoint.id, { confirmed: true });
-      }
+      if (endpoint.updatedAt !== target.expectedUpdatedAt) throw Error(name + '：连接已变化，请重新核对');
+      const previous = endpoint.directoryTags || [];
+      const directoryTags = data.action === 'clearTags' ? [] : data.action === 'replaceTags' ? replacement : data.action === 'tag' ? [...new Set([...previous, tag])]
+        : data.action === 'renameTag' ? previous.map(value => value === sourceTag ? tag : value)
+        : previous.filter(value => value !== (data.action === 'dissolveTag' ? sourceTag : tag));
+      if (directoryTags.length > 10) throw Error(name + '：每条连接最多设置 10 个标签');
+      if (JSON.stringify(directoryTags) !== JSON.stringify(previous)) update('endpoints', endpoint.id, { directoryTags });
       objectId ||= endpoint.id;
     }
     label = labels[data.action];
@@ -852,7 +830,7 @@ export function operationsTransaction(state, action) {
       objectId=endpoint.id;label='复用连接接入上游模型';
     }else{
     if(data.protocol!==undefined && !['OpenAI','Anthropic','其他'].includes(data.protocol)) throw Error('请选择已支持的上游协议');
-    if (!['group', 'specific', 'independent'].includes(data.authMode)) throw new Error('请选择 API 密钥方式');
+    if (!['group', 'specific', 'independent'].includes(data.authMode)) throw new Error('请选择上游 API 密钥方式');
     let privateKey;
     if (data.authMode === 'independent') {
       privateKey = channelPrivateKey(data.apiKey);
@@ -1159,8 +1137,8 @@ export function operationsTransaction(state, action) {
     const endpoint = working.endpoints.find(item => item.id === supply.endpointId);
     if (!endpoint?.baseUrl || !connectionCredentialsReady(endpoint, working.providers.find(item => item.id === endpoint.providerId))) throw new Error('连接地址或 API 密钥配置缺失，请补齐服务商连接设置');
     providerOp('testConnection', endpoint.id, { scenario: data.scenario || '成功' });
-    if (connectionTestPassed(working.endpoints.find(item => item.id === endpoint.id))) {
-      providerOp('enableConnection', endpoint.id, {});
+    const tested = working.endpoints.find(item => item.id === endpoint.id);
+    if (connectionTestPassed(tested) && connectionActive(tested)) {
       modelOp('verify', modelId, { id: supply.id, result: data.modelResult || '通过' });
       if (data.modelResult !== '失败') modelOp('enableSupply', modelId, { id: supply.id });
     }
@@ -1252,7 +1230,7 @@ export function operationsTransaction(state, action) {
       if (operation==='removeServiceProvider') {
         if (current.channelId ? ['formal','gray'].includes(offerStage(model,current)) : current.marketVisible!==false) throw new Error('请先下架当前服务商连接，再解绑');
         const supplies=modelSupplies(working,modelId).filter(item=>item.provider?.id===provider.id && (!current.channelId || item.channelId===current.channelId));
-        if (serviceBindingInUse({...working,serviceRoutes:working.serviceRoutes.filter(route=>route.serviceId!==serviceId)},modelId,supplies)) throw new Error('服务商连接仍被其他服务路由引用，请先解除引用');
+        if (serviceBindingInUse({...working,serviceRoutes:working.serviceRoutes.filter(route=>route.serviceId!==serviceId)},modelId,supplies)) throw new Error('服务商连接仍被其他服务路由引用，请先移除引用');
         for (const route of working.serviceRoutes.filter(item=>item.serviceId===serviceId)) update('serviceRoutes',route.id,{activeVersion:0,draft:null,draftUpdatedAt:null});
         for (const supply of supplies) update('modelSupplies',supply.id,{status:'已移除',salesEnabled:false});
         entry={...current,status:'已移除',callsEnabled:false};label='解绑服务商';
@@ -1280,8 +1258,8 @@ export function operationsTransaction(state, action) {
     if (!model || !supply) throw new Error('模型或上游模型关联不存在');
     if (!['standard','provider'].includes(model.serviceMode)) throw new Error('请先配置服务模式');
     if (data.expectedUpdatedAt!==model.updatedAt) throw new Error('模型服务已有并发修订，请重新核对');
-    if (serviceBindingInUse(working,modelId,[supply])) throw new Error('上游模型仍被生效路由或路由草稿引用，暂时无法解除关联');
-    update('modelSupplies',supply.id,{status:'已移除',salesEnabled:false});objectId=modelId;label='解除上游模型关联';
+    if (serviceBindingInUse(working,modelId,[supply])) throw new Error('上游模型仍被生效路由或路由草稿引用，暂时无法移除关联');
+    update('modelSupplies',supply.id,{status:'已移除',salesEnabled:false});objectId=modelId;label='移除关联上游模型';
   } else if (operation === 'associateServiceChannelsBatch') {
     const model=working.models.find(item=>item.id===modelId);
     if (!model || model.serviceMode!=='standard') throw new Error('请在对应模型服务关联上游模型');
@@ -1311,7 +1289,7 @@ export function operationsTransaction(state, action) {
     const model = working.models.find(item => item.id === modelId);
     if (!model) throw new Error('模型不存在');
     if (storedServiceModes.has(model.serviceMode)) throw new Error('服务模式设置后不可修改');
-    if (!['已上架','已下架'].includes(model.listingStatus)) throw new Error('模型上架状态无效，请重新载入数据');
+    if (!['已上架','已下架'].includes(model.listingStatus)) throw new Error('模型售卖状态无效，请重新载入数据');
     if (data.expectedUpdatedAt !== model.updatedAt) throw new Error('模型已有并发修订，请重新打开配置后核对');
     if (typeof data.serviceMode !== 'string' || !storedServiceModes.has(data.serviceMode)) throw new Error('请选择一种有效的服务模式');
     const configureCallId = Object.hasOwn(data,'callId');
@@ -1382,11 +1360,9 @@ export function operationsTransaction(state, action) {
     label = data.providerId ? '更新服务商资料' : '新增服务商';
   } else if (operation === 'checkConnection') {
     providerOp('testConnection', data.endpointId, { scenario: data.scenario || '成功' });
-    if (connectionTestPassed(working.endpoints.find(item => item.id === data.endpointId))) providerOp('enableConnection', data.endpointId, {});
     objectId = working.endpoints.find(item => item.id === data.endpointId).providerId; label = '检查连接';
   } else if (operation === 'tariffDictionary') {
-    const result = apply(tariffDictionaryTransaction(working, data));
-    objectId = result.objectId; label = result.label;
+    throw Error('计费字典仅提供内置项，不支持修改');
   } else if (operation === 'providerChannelBatch') {
     if (!Array.isArray(data.channels) || !data.channels.length || data.channels.length > 20) throw new Error('每批请添加 1–20 个连接');
     for (const [index, channel] of data.channels.entries()) {

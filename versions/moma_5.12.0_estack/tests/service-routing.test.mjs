@@ -2,7 +2,7 @@ import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction, parseAdminState as baseParseAdminState } from '../src/admin-v2/store.js';
-import { routingServices, routingChannels, serviceRoute, activeRouteVersion, routeSourceVersion, normalizeRouteConfig, validateRouteConfig, routingStatus, routePreview, routeGroups, comparableRouteCosts, routeDirectoryOrder } from '../src/admin-v2/service-routing.js';
+import { routingServices, routingChannels, serviceRoute, activeRouteVersion, routeSourceVersion, normalizeRouteConfig, validateRouteConfig, routingStatus, routePreview, routeGroups, routeDirectoryOrder } from '../src/admin-v2/service-routing.js';
 import { activeSupplyPrice } from '../src/admin-v2/model-management.js';
 import { connectionFingerprint } from '../src/admin-v2/connection-state.js';
 import { canAccessPage, pageFromHash, pages } from '../src/admin-v2/navigation.mjs';
@@ -245,23 +245,15 @@ test('random and metric strategies use equal shares or measured minima, never fa
   state.endpoints.find(item=>item.id===channels[0].endpointId).metrics.activeRequests=-1;
   assert.equal(routingChannels(state,service).find(item=>item.id===channels[0].id).activeRequests,null);
 });
-test('cost ranking compares only identical billing keys, units and currencies for the chosen basis',()=>{
-  const {state,service,config,channels}=baseline();
-  Object.assign(activeSupplyPrice(state,channels[0].id),{inputPrice:1000000,outputPrice:4000000});
-  Object.assign(activeSupplyPrice(state,channels[1].id),{inputPrice:2000000,outputPrice:2000000});
-  assert.deepEqual(routePreview(state,service,{...config,strategy:'cost',advanced:{costBasis:'input'}}).map(row=>row.share),[100,0]);
-  assert.deepEqual(routePreview(state,service,{...config,strategy:'cost',advanced:{costBasis:'output'}}).map(row=>row.share),[0,100]);
-  assert.deepEqual(routePreview(state,service,{...config,strategy:'cost',advanced:{costBasis:'total'}}).map(row=>row.share),[0,100]);
-  const candidate=id=>({id,costItems:[{name:'生成',unit:'元/秒',currency:'CNY',amount:100}]});
-  for (const patch of [{unit:'元/次'},{currency:'USD'},{condition:'长视频'},{name:'请求'},{unit:''},{amount:null}]) {
-    const left=candidate('a'),right=candidate('b');Object.assign(right.costItems[0],patch);
-    assert.throws(()=>comparableRouteCosts([left,right],'total'),/不能比较|缺少/);
-  }
-  assert.throws(()=>comparableRouteCosts([candidate('a')],'input'),/缺少/);
+test('a retired cost strategy is rejected before preview and persistence',()=>{
+  const {state,service,config}=baseline();
+  const retired = {...config,strategy:'cost'};
+  assert.throws(()=>routePreview(state,service,retired),/调度策略/);
+  assert.throws(()=>commitAdminState(state,action(state,service,retired)),/调度策略/);
 });
 test('mapping incompatibility blocks publication and all advanced limits are validated before persistence',()=>{
   const {state,service,config,channels}=baseline(),before=structuredClone(state);
-  for (const advanced of [{timeoutSeconds:0},{timeoutSeconds:601},{maxRetries:-1},{failureThreshold:0},{recoverySeconds:0},{latencyWindowSeconds:'1e2'},{costBasis:'cheapest'},[]]) assert.throws(()=>commitAdminState(state,action(state,service,{...config,advanced})));
+  for (const advanced of [{timeoutSeconds:0},{timeoutSeconds:601},{maxRetries:-1},{failureThreshold:0},{recoverySeconds:0},{latencyWindowSeconds:'1e2'},[]]) assert.throws(()=>commitAdminState(state,action(state,service,{...config,advanced})));
   const next=commitAdminState(state,action(state,service,{...config,excludeAbnormal:false,autoRecover:false,advanced:{timeoutSeconds:120,maxRetries:2}}));
   const saved=activeRouteVersion(serviceRoute(next,service.id)).config;
   assert.equal(saved.excludeAbnormal,false);assert.equal(saved.autoRecover,false);assert.equal(saved.advanced.timeoutSeconds,120);assert.equal(saved.advanced.maxRetries,2);

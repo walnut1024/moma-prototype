@@ -358,21 +358,11 @@ test('v7 migration retains the original factor and package references without in
   assert.equal(migrated.revision, nextRevision);
 });
 
-test('a custom billing item cannot be deleted while a draft or effective package rule references it', async () => {
-  const modelPath = '/model-operations';
-  const changeDictionary = (revision, data) => {
-    const operationId = randomUUID();
-    return request(modelPath + '/commands', { key: operationId, body: {
-      operationId, expectedRevision: revision, action: { type: 'modelOperations', operation: 'tariffDictionary', data },
-    } });
-  };
-  const { data: before } = await request(modelPath);
-  const added = await changeDictionary(before.revision, { operation: 'save', kind: 'scenario', name: '套餐测试 Token' });
-  assert.equal(added.status, 200);
-  const item = added.data.patches.tariffDictionary.upsert[0];
+test('a package draft requires its billing item to remain in the effective model price', async () => {
   const { data: packageState } = await request(workspace);
-  assert(packageState.packageBillingItems.some(row => row.id === item.id));
   const model = packageState.packageModels.find(row => row.billingItemIds.length);
+  const item = packageState.packageBillingItems.find(row => !model.billingItemIds.includes(row.id));
+  assert.ok(item);
   const baseRule = rule(model.billingItemIds[0], '1.25');
   const addPriceItem = () => local.db.prepare(`INSERT INTO price_items(id,price_version_id,billing_item_id,unit_id,currency_id,amount_micros,unit_quantity,condition_json,condition_hash,labels_json,position)
     SELECT 'package-test-item',p.price_version_id,?,p.unit_id,p.currency_id,p.amount_micros,p.unit_quantity,p.condition_json,'package-test',p.labels_json,99
@@ -383,19 +373,10 @@ test('a custom billing item cannot be deleted while a draft or effective package
   const setRules = (revision, rules) => post(command(revision, 'saveFactorDraft', { modelId: model.id, enabled: true, rules }));
   const saved = await setRules(packageState.revision, [baseRule, rule(item.id, '1.5', '256000')]);
   assert.equal(saved.status, 200);
-  const deletion = { operation: 'delete', id: item.id };
-  const rejected = await changeDictionary(added.data.revision, deletion);
-  assert.equal(rejected.status, 422);
-  assert.match(rejected.data.error.message, /套餐抵扣规则引用/);
   await removePriceItem();
   assert.match((await publishFactor(saved.data.revision, model.id)).data.error.message, /当前模型刊例价/);
   await addPriceItem();
   const published = await publishFactor(saved.data.revision, model.id);
   assert.equal(published.status, 200);
   await removePriceItem();
-  const cleared = await setRules(published.data.revision, [baseRule]);
-  assert.equal(cleared.status, 200);
-  assert.equal((await changeDictionary(added.data.revision, deletion)).status, 422);
-  assert.equal((await publishFactor(cleared.data.revision, model.id)).status, 200);
-  assert.equal((await changeDictionary(added.data.revision, deletion)).status, 200);
 });

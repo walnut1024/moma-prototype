@@ -4,6 +4,7 @@ import { after, before, test } from 'node:test';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { migrateEmptyDatabase, startLocalBackend } from '../database/local-runtime.js';
 import { accountTraffic, effectiveTraffic, modelTraffic } from '../src/admin-v2/traffic-limits.js';
+import { resourceId } from '../src/resource-id.mjs';
 
 const path = '/traffic-limits';
 const historyPath = path + '/history';
@@ -45,6 +46,16 @@ async function apply(operation, data, id) {
   return saved;
 }
 
+async function createService(callId) {
+  const id = resourceId('model-service');
+  const result = await request('/model-services-new', { body: {
+    action: 'save', id, revision: 0, operationId: resourceId('operation'),
+    row: { id, callId, name: callId, type: 'text', listed: false, channels: [] },
+  } });
+  assert.equal(result.status, 200, JSON.stringify(result.data));
+  return result.data.row;
+}
+
 before(async () => {
   local = await startLocalBackend({ loginHashes: { 'admin-001': hash, 'admin-002': hash, 'test-operator': hash } });
   await local.db.prepare("INSERT INTO admin_accounts(id,name,role) VALUES('test-operator','运营验收','运营人员')").run();
@@ -57,7 +68,7 @@ test('D1 seeds both defaults and upgrades a v9 database without changing its sav
   assert.deepEqual(fresh.global, rate(60, 3_000_000));
   assert.deepEqual(fresh.modelDefault, rate(600, 30_000_000));
   assert.deepEqual(fresh.rules, []);
-  assert.ok(fresh.catalogue.length > 1);
+  assert.deepEqual(fresh.catalogue, []);
   const legacy = rate(75, 3_250_000);
   const actor = await local.db.prepare("SELECT s.id,s.actor_id FROM admin_sessions s JOIN admin_accounts a ON a.id=s.actor_id WHERE a.login_name='admin-001'").first();
   const { commit_seq } = await local.db.prepare('SELECT commit_seq FROM db_state WHERE id=1').first();
@@ -77,7 +88,7 @@ test('D1 seeds both defaults and upgrades a v9 database without changing its sav
       .bind(time, JSON.stringify({ before: fresh.global, after: legacy })),
   ]);
   await migrateEmptyDatabase(local.db);
-  assert.equal((await request('/health')).data.schemaVersion, 18);
+  assert.equal((await request('/health')).data.schemaVersion, 19);
   const upgraded = (await request(path)).data;
   assert.deepEqual(upgraded.global, legacy);
   assert.deepEqual(upgraded.modelDefault, fresh.modelDefault);
@@ -130,14 +141,22 @@ test('batch account limits, per-model policies and overrides persist and restore
   const app = (await request('/application/open', { body: {} })).data;
   const accountIds = app.users.slice(0, 2).map(user => user.id);
   const [accountId] = accountIds;
+  const { record_id: materialId } = (await request('/materials')).data.items[0];
+  await createService('traffic-x');
+  await createService('traffic-y');
+  await local.db.prepare(`INSERT INTO traffic_limit_rules(scope,object_id,model_id,rpm,tpm)
+    VALUES ('model',?,'',20,20000),('policy',?,?,10,10000)`).bind(materialId, accountId, materialId).run();
   const current = (await request(path)).data;
   const [model, other] = current.catalogue;
+  assert.deepEqual(current.catalogue.map(row => row.modelId), ['traffic-x','traffic-y']);
+  assert.deepEqual(modelTraffic(current, model.id), { limit: current.modelDefault, custom: false });
+  assert.deepEqual(current.rules, []);
   const accountLimit = rate(100, 8_000_000);
   const modelLimit = rate(80, 4_000_000);
   const exception = { modelId: model.id, ...rate(90, 3_000_000) };
   const write = body => request(path, { body });
   assert.equal((await write(command(current, 'batchAccounts', { accountIds: [accountId, accountId], limit: accountLimit }))).status, 400);
-  assert.equal((await write(command(current, 'model', modelLimit, 'missing-material'))).status, 404);
+  assert.equal((await write(command(current, 'model', modelLimit, materialId))).status, 404);
   assert.equal((await write(command(current, 'exceptions', { exceptions: [exception, exception] }, accountId))).status, 400);
   assert.deepEqual((await request(path)).data, current);
 
@@ -155,6 +174,10 @@ test('batch account limits, per-model policies and overrides persist and restore
 
   await apply('model', modelLimit, model.id);
   let saved = await apply('exceptions', { exceptions: [exception] }, accountId);
+  assert.deepEqual(await local.db.prepare('SELECT rpm,tpm FROM traffic_limit_rules WHERE model_id=? AND object_id=?')
+    .bind(materialId,accountId).first(), rate(10, 10000));
+  assert.deepEqual(await local.db.prepare("SELECT rpm,tpm FROM traffic_limit_rules WHERE scope='model' AND object_id=?")
+    .bind(materialId).first(), rate(20, 20000));
   const resolve = id => effectiveTraffic(saved, accountTraffic(saved, accountId), id);
   assert.equal(resolve(model.id).hit.id, 'exception');
   assert.deepEqual(resolve(model.id).finalLimit, rate(80, 3_000_000));
@@ -172,7 +195,20 @@ test('batch account limits, per-model policies and overrides persist and restore
   assert.deepEqual(saved.rules, []);
   const { items } = (await request(historyPath + '?limit=10')).data;
   assert.ok(items.some(row => row.scope === 'model' && row.action === '恢复模型默认额度' && row.after === null));
-  assert.ok(items.some(row => row.scope === 'policy' && row.action === '移除一客一策' && row.modelId === model.id && row.after === null));
+  assert.ok(items.some(row => row.scope === 'policy' && row.action === '移除一客一策' && row.modelId === model.id &&
+    row.modelName === 'traffic-x' && row.callId === 'traffic-x' && row.after === null));
+
+  const workspace = (await request('/model-operations')).data;
+  await apply('model', modelLimit, model.id);
+  const removed = await request('/model-operations/commands', { body: {
+    operationId: randomUUID(), expectedRevision: workspace.revision,
+    action: { type: 'modelOperations', operation: 'templateDelete', data: { id: materialId, confirmed: true } },
+  } });
+  assert.equal(removed.status, 200, JSON.stringify(removed.data));
+  saved = (await request(path)).data;
+  assert.deepEqual(saved.catalogue.map(row => row.id), [model.id, other.id]);
+  assert.deepEqual(rate(modelTraffic(saved, model.id).limit.rpm, modelTraffic(saved, model.id).limit.tpm), modelLimit);
+  await apply('model', null, model.id);
 });
 
 test('a failed batch leaves both its policy rows and its operation receipt untouched', async () => {

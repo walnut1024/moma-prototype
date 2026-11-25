@@ -17,10 +17,19 @@ test('market groups existing model mappings by provider and keeps linked direct 
       { modelId: 'different-model', endpointId: 'e2' },
     ],
   };
-  const view = model => marketSupplyGroups(state, { id: 'm', ...model }).map(({ id, channels }) => [id, [...channels]]);
+  const view = model => marketSupplyGroups(state, { sources: [{ model: { id: 'm', ...model } }] })
+    .map(({ id, channels }) => [id, [...channels]]);
   assert.deepEqual(view({ serviceMode: 'standard' }), [['p1', [['e1', '主连接']]], ['p2', [['e2', '主连接']]]]);
   assert.deepEqual(view({
     serviceMode: 'provider',
     serviceProviders: [{ providerId: 'p1' }, { providerId: 'p2', status: '已移除' }, { providerId: 'p3' }],
   }), [['p1', [['e1', '主连接']]], ['p3', []], ['p2', [['e2', '主连接']]]]);
+});
+
+test('an independent card groups by its linked services’ actual upstreams', () => {
+  const provider = { id: 'p1', name: '甲' };
+  const channel = { id: 'c1', provider, upstreamModelId: 'upstream-a' };
+  const groups = marketSupplyGroups({}, { upstreams: [{ channel }, { channel }] });
+  assert.deepEqual(groups, [{ id: provider.id, name: provider.name,
+    channels: new Map([[channel.id, channel.upstreamModelId]]) }]);
 });

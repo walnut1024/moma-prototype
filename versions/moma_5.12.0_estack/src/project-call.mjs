@@ -11,6 +11,8 @@ export const projectCallErrors = {
   project_unavailable: [403, '该项目当前不可用'],
   project_model_not_enabled: [403, '该模型未在当前项目开通'],
   project_model_rate_limit_exceeded: [429, '已达到项目模型限流上限，请稍后重试'],
+  model_service_rate_limit_exceeded: [429, '已达到该模型服务的共享上限，请稍后重试'],
+  user_model_rate_limit_exceeded: [429, '已达到账号在该模型服务的额度上限，请稍后重试'],
   project_budget_exceeded: [402, '已达到项目消费预算上限'],
   project_token_budget_exceeded: [402, '已达到项目 Token 预算上限'],
   project_rate_limit_exceeded: [429, '已达到项目速率上限，请稍后重试'],

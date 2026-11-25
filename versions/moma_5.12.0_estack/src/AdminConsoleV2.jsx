@@ -47,6 +47,7 @@ const AuditLogsPage = lazy(() => import('./admin-v2/AuditLogsPage'));
 const TenantResources = lazy(() => import('./admin-v2/TenantResources'));
 const AdminProjects = lazy(() => import('./admin-v2/AdminProjects'));
 const ModelOperationsGuide = lazy(() => import('./admin-v2/GettingStarted').then(module => ({ default: module.ModelOperationsGuide })));
+const ModelOperationsRequirements = lazy(() => import('./admin-v2/ModelOperationsRequirements'));
 const ClusterManagement = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ClusterManagement })));
 const ModelDeployments = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ModelDeployments })));
 const ModelObservability = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ModelObservability })));
@@ -99,6 +100,7 @@ const NAVIGATION_ICONS = {
   'global-routing': IconSetting,
   'site-configuration': IconSetting,
   'model-operations-guide': IconBookOpenStroked,
+  'model-operations-requirements': IconBookStroked,
 };
 const overviewShortcuts = ['usage-analysis', 'user-analysis', 'listing-new', 'providers-reference'].map(id => ({
   id, label: id === 'providers-reference' ? pages[id].areaLabel : pages[id].label, Icon: NAVIGATION_ICONS[pages[id].area],
@@ -305,6 +307,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             <Banner type="warning" title="无访问权限" description={<Button onClick={() => navigate(WORKSPACE_HOME[allowedWorkspaces[0]] || 'dashboard')}>返回首页</Button>} closeIcon={null}/>
           ) : organizationView && !organizationTenant ? <Banner type="warning" title="尚未配置默认政企租户" closeIcon={null}/> : <Suspense fallback={<AdminPageLoading label={pages[active].label}/>}>
             {active === "model-operations-guide" ? <ModelOperationsGuide english={english}/>
+            : active === "model-operations-requirements" ? <ModelOperationsRequirements english={english}/>
             : active === "dashboard" ? <OperationsOverview state={factState} workbenchName={workbenchName} onNavigate={navigate}
               shortcuts={overviewShortcuts.filter(({ id }) => canAccessPage(state.currentRole, id, license))}/>
             : ["usage-analysis", "user-analysis", "call-analysis"].includes(active) ? <AnalyticsPages pageId={active} state={factState}/>

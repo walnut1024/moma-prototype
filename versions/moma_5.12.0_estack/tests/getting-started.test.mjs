@@ -2,18 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sections, canAccessPage, pageFromHash, pageWorkspace } from '../src/admin-v2/navigation.mjs';
 import { adminBreadcrumbs } from '../src/admin-v2/breadcrumbs.mjs';
+import { LOGIN_BASE, loginDestination, loginLocation } from '../src/login-navigation.mjs';
 import { readFileSync } from 'node:fs';
 import { parseOperationsGuide } from '../src/admin-v2/model-operations-guide.mjs';
 
-test('getting started is the last operations group with role access and reloadable route', () => {
+test('engineering notes is the last operations group with role access and reloadable routes', () => {
   const group = sections.find(item => item.id === 'getting-started');
   assert.equal(Boolean(group.direct), false);
   for (const role of ['平台管理员', '运营人员']) {
     const visible = sections.filter(item => item.workspace === 'operations' || item.id === 'platform' && role === '平台管理员');
     assert.equal(visible.at(-1).id, 'getting-started');
   }
-  assert.equal(group.title, '入门指导');
-  assert.deepEqual(group.items.map(item => item.label), ['模型运营']);
+  assert.equal(group.title, '研发须知');
+  assert.deepEqual(group.items.map(item => item.label), ['平台术语', '需求文档']);
   assert.equal(pageWorkspace('model-operations-guide'), 'operations');
   assert.equal(pageFromHash('#/admin-2/getting-started', '运营人员'), 'dashboard');
   assert.equal(pageFromHash('#/admin-2/model-operations-guide', '运营人员'), 'model-operations-guide');
@@ -37,7 +38,7 @@ test('guide treats unsupported HTML as text and never turns it into an executabl
 test('model operations opens a single glossary with complete definitions in both languages', () => {
   const route = 'model-operations-guide';
   assert.equal(pageFromHash('#/admin-2/' + route, '运营人员'), route);
-  assert.deepEqual(adminBreadcrumbs(route, new URLSearchParams()), [{ label: '入门指导' }, { label: '模型运营' }]);
+  assert.deepEqual(adminBreadcrumbs(route, new URLSearchParams()), [{ label: '研发须知' }, { label: '平台术语' }]);
   const content = readFileSync(new URL('../MODEL_OPERATIONS_GUIDE_FIELDS.md', import.meta.url), 'utf8');
   const guides = parseOperationsGuide(content);
   assert.equal(guides.length, 1);
@@ -51,4 +52,24 @@ test('model operations opens a single glossary with complete definitions in both
   const names = new Set(table.rows.map(([name]) => name));
   assert.equal(names.size, table.rows.length);
   for (const name of ['模型档案 ID', '模型 ID', '上游模型 ID', '模型连接', '上游模型', '关联上游模型']) assert(names.has(name));
+});
+
+test('requirements can be shared as a direct link and return to the document after allowed admin sign-in', () => {
+  const route = 'model-operations-requirements';
+  const hash = '#/admin-2/' + route;
+  const target = LOGIN_BASE + hash;
+  const signInHash = new URL(loginLocation(target), 'https://example.test').hash;
+  const returnTo = new URLSearchParams(signInHash.split('?')[1]).get('returnTo');
+  assert.equal(pageWorkspace(route), 'operations');
+  assert.equal(pageFromHash(hash, '运营人员'), route);
+  assert.deepEqual(adminBreadcrumbs(route, new URLSearchParams()), [
+    { label: '研发须知', href: '#/admin-2/model-operations-guide' }, { label: '需求文档' },
+  ]);
+  for (const role of ['平台管理员', '运营人员']) {
+    assert.equal(canAccessPage(role, route), true);
+    assert.equal(loginDestination(returnTo, { role }), target);
+  }
+  for (const role of ['运维人员', '未知角色']) assert.equal(canAccessPage(role, route), false);
+  assert.equal(loginDestination(returnTo, { role: '运维人员' }), LOGIN_BASE + '#/admin-2/call-analysis');
+  assert.equal(loginDestination(returnTo), LOGIN_BASE + '?page=home');
 });

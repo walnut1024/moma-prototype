@@ -304,7 +304,7 @@ export function modelTransaction(state, action) {
     const supply = state.modelSupplies.find(item => item.id === data.id && item.modelId === model.id && item.status !== '已移除');
     if (!supply) throw new Error('供应服务不存在');
     const endpoint = state.endpoints.find(item => item.id === supply.endpointId), provider = state.providers.find(item => item.id === endpoint?.providerId);
-    if (operation === 'enableSupply' && (supply.validationStatus !== '通过' || connectionBlockReason(endpoint, provider))) throw new Error('供应服务需验证通过，且当前接入配置测试通过并启用、服务商已启用，才能启用');
+    if (operation === 'enableSupply' && (supply.validationStatus !== '通过' || connectionBlockReason(endpoint, provider))) throw new Error('供应服务和当前连接均须验证通过，且服务商须已启用');
     if (operation === 'verify') {
       const reason = connectionBlockReason(endpoint, provider);
       if (reason) throw new Error(reason);
@@ -346,6 +346,6 @@ export function modelTransaction(state, action) {
     const fields = { publish: { listingStatus: '已上架', visibility: '公开', callsEnabled: true, status: '运行中', firstPublishedAt:model.firstPublishedAt || at, lifecycleStopReason: null }, unlist: { listingStatus: '已下架', visibility: '内部', callsEnabled: false, status: '停用', lifecycleStopReason: 'operator' } }[operation];
     changes.push(update('models', model.id, fields));
   } else throw new Error('未知模型操作');
-  const labels = { enableService:'启动模型服务', disableService:'停止模型服务', stopSales:'停止销售', recordPlatformPublication:'记录平台发布验证', createServiceModel:'添加模型', serviceBasics:'修改模型资料', create: '创建模型', basic: '编辑模型', supply: '保存供应服务', verify: '验证供应服务', enableSupply: '启用供应服务', disableSupply: '停用供应服务', removeSupply: '移除供应服务', priceDraft: '保存价格草稿', pricePublish: '发布模型刊例价', publish: '模型上架', unlist: '模型下架' };
+  const labels = { enableService:'启动模型服务', disableService:'停止模型服务', stopSales:'停止销售', recordPlatformPublication:'记录平台发布验证', createServiceModel:'添加模型', serviceBasics:'修改模型资料', create: '创建模型', basic: '编辑模型', supply: '保存供应服务', verify: '验证供应服务', enableSupply: '启用供应服务', disableSupply: '停用供应服务', removeSupply: '移除关联上游模型', priceDraft: '保存价格草稿', pricePublish: '发布模型刊例价', publish: '模型上架', unlist: '模型下架' };
   return { type: 'batch', label: labels[operation], objectId, changes };
 }

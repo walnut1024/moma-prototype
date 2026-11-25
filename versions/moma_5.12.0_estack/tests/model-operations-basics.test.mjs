@@ -12,7 +12,6 @@ import {connectionKeys} from '../src/admin-v2/connection-state.js';
 import {marketCardIndex,marketCardFieldValues} from '../src/market-cards.mjs';
 import {connectionDirectoryRows} from '../src/admin-v2/channel-connection-directory.js';
 import {mappingCandidates} from '../src/admin-v2/service-model-mappings.js';
-import {exportModelResources} from '../src/admin-v2/model-resource-transfer.js';
 import {resourceId} from '../src/resource-id.mjs';
 
 test('HTTP and D1 preserve canonical material, explicit channel protocol and candidate edits across the first onboarding stage',{timeout:60000},async()=>{
@@ -73,8 +72,8 @@ test('HTTP and D1 preserve canonical material, explicit channel protocol and can
     await seedExistingService(local.db,state,{...serviceModelSourceDraft(state,material),libraryId:material.id,serviceMode:'standard'});
     await refresh();
     const newServiceRow={
-      id:resourceId('model-service'), name:'从资料复制的新模型服务', callId:'qa-copy-new-service',
-      modelId:material.id, type:material.type, listed:false, channels:[],
+      id:resourceId('model-service'), name:'独立创建的新模型服务', callId:'qa-independent-service',
+      type:material.type, listed:false, channels:[],
     };
     const persistNewService=(row,revision=0)=>{
       const operationId=resourceId('operation');
@@ -84,44 +83,36 @@ test('HTTP and D1 preserve canonical material, explicit channel protocol and can
     assert.equal(invalidMode.status,400);
     const invalidDetails=await persistNewService({...newServiceRow, modelDetails:{context:-1}});
     assert.equal(invalidDetails.status,400);
-    const copied=await persistNewService(newServiceRow);
-    assert.equal(copied.status,200,JSON.stringify(copied.data));
+    assert.equal((await persistNewService({...newServiceRow,modelId:material.id})).status,400);
+    const newService=await persistNewService(newServiceRow);
+    assert.equal(newService.status,200,JSON.stringify(newService.data));
     const readNewService=async()=> (await api('/model-services-new')).data.rows.find(row=>row.id===newServiceRow.id);
-    assert.equal(copied.data.row.modelDetails.name,material.name);
-    assert.equal(copied.data.row.modelDetails.context,material.capabilities.context);
+    assert.equal(Object.hasOwn(newService.data.row,'modelId'),false);
+    assert.equal(Object.hasOwn(newService.data.row,'modelDetails'),false);
     await refresh();
     const configured=structuredClone(state);
-    const businessExports = current => ['channels','services','market','prices'].map(scope => {
-      const { rows, references } = exportModelResources(current,scope,{level:'model',model_id:material.id});
-      return { rows, references };
-    });
-    const beforeExports=businessExports(configured);
-    assert.ok(beforeExports[0].rows.some(row=>row.type==='provider_model'));
-    assert.ok(beforeExports[2].rows.some(row=>row.type==='market_model'));
+    const businessFields = ['models','providers','endpoints','modelSupplies','validations','serviceRoutes','supplyRelations','modelSalePrices','supplyPrices'];
     const beforeCandidates=mappingCandidates(configured,{modelId:material.id});
     const renamed=await command('templatePublish',{id:material.id,expectedBase:materialBase(state,material),confirmed:true,value:{...material,name:'GLM-5.5 模型资料',capabilities:{...material.capabilities,context:65536}}});assert.equal(renamed.status,200,JSON.stringify(renamed.data));await refresh();
     assert.equal(modelMaterial(state,material.id).name,'GLM-5.5 模型资料');
     assert.equal(modelMaterial(state,material.id).capabilities.context,65536);
-    assert.deepEqual(await readNewService(),copied.data.row);
-    assert.deepEqual(businessExports(state),beforeExports);
+    assert.deepEqual(await readNewService(),newService.data.row);
+    for (const key of businessFields) assert.deepEqual(state[key],configured[key],key);
     const persisted=await command('templateDelete',{id:material.id,confirmed:true});assert.equal(persisted.status,200,JSON.stringify(persisted.data));await refresh();
     assert.equal(modelMaterial(state,material.id),undefined);
-    assert.deepEqual(await readNewService(),copied.data.row);
-    assert.deepEqual(businessExports(state),beforeExports);
-    for(const key of ['models','providers','endpoints','modelSupplies','validations','serviceRoutes','supplyRelations']) assert.deepEqual(state[key],configured[key],key);
+    assert.deepEqual(await readNewService(),newService.data.row);
+    for (const key of businessFields) assert.deepEqual(state[key],configured[key],key);
     assert.deepEqual(state.modelData.marketCards,configured.modelData.marketCards);
     assert.equal(marketCardIndex(state,state.models).find(row=>row.cardId===cardId).name,material.name);
     const savedChannel=connectionDirectoryRows(state,state.providers).find(row=>row.id===privateChannel.id);
     assert.equal(savedChannel.models[0].modelName,material.name);
     assert.deepEqual(mappingCandidates(state,{modelId:material.id}),beforeCandidates);
     assert.equal((await readNewService()).name,newServiceRow.name);
-    const editOwn=await persistNewService({...copied.data.row,modelDetails:{name:'服务自己维护',context:16384}},1);
+    const editOwn=await persistNewService({...newService.data.row,name:'服务自己维护'},1);
     assert.equal(editOwn.status,200,JSON.stringify(editOwn.data));
-    assert.equal((await readNewService()).modelDetails.name,'服务自己维护');
-    assert.equal((await readNewService()).modelDetails.context,16384);
-    assert.equal((await readNewService()).modelDetails.code,material.modelId);
+    assert.equal((await readNewService()).name,'服务自己维护');
     await refresh();
-    const deletedSource=await persistNewService({...newServiceRow,id:resourceId('model-service'),callId:'qa-use-deleted-reference'});
+    const deletedSource=await persistNewService({...newServiceRow,id:resourceId('model-service'),callId:'qa-use-deleted-reference',modelId:material.id});
     assert.equal(deletedSource.status,400);
     await refresh();
     const currentOwner=state.providers.find(row=>row.id===privateOwner.id);

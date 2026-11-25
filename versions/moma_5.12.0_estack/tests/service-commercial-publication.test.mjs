@@ -226,12 +226,12 @@ test('management sales settings do not expand call access and selling cannot ena
 for(const mode of ['standard','provider'])test(mode+' gray listing uses its own valid customers and formal listing removes the gray restriction',async t=>{
   const env=await fixture(t,mode),before=structuredClone(env.model()),prices=structuredClone(env.state.modelSalePrices),publications=structuredClone(env.model().platformPublications);
   const list=(releaseStage,releaseTenantIds)=>env.save('startSales',{releaseStage,releaseTenantIds,confirmed:true,expectedUpdatedAt:env.model().updatedAt});
-  assert.throws(()=>list('gray',['tenant-gov']),/销售对象有效/);
-  env.save('salesSettings',{scope:{openScope:'all',tenantIds:[]},confirmed:true,expectedUpdatedAt:env.model().updatedAt});
   list('gray',['tenant-gov']);assert.equal(env.model().releaseStage,'gray');await env.call();
   assert.deepEqual(env.model().releaseTenantIds,['tenant-gov']);
+  assert.deepEqual(env.model().salesScope,before.salesScope);
   assert.equal(lifecycleAccess(env.state,{...env.service,model:env.model()},'tenant-nanjing').allowed,false);
   list('gray',['tenant-nanjing']);await assert.rejects(env.call(),error=>error.code==='model_forbidden');
+  assert(lifecycleAccess(env.state,{...env.service,model:env.model()},'tenant-gov',{commercialOrder:true}).allowed);
   list('formal',[]);await env.call();assert.equal(env.model().releaseStage,'formal');assert.deepEqual(env.model().releaseTenantIds,[]);
   assert.deepEqual({openScope:env.model().openScope,tenantIds:env.model().tenantIds},{openScope:before.openScope,tenantIds:before.tenantIds});assert.deepEqual(env.model().platformPublications,publications);assert.deepEqual(env.state.modelSalePrices,prices);
   const stable=structuredClone(env.state);for(const ids of [[],['missing'],['tenant-gov','missing']])assert.throws(()=>list('gray',ids));

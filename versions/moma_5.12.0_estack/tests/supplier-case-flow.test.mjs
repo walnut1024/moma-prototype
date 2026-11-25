@@ -25,7 +25,7 @@ test('an unassociated legacy resource does not make configured supplier models a
  assert.ok(legacy);assert.equal(connectionCredentialsReady(legacy,p),false);
  assert.equal(supplierChannelAssociations(s,p,legacy.id).length,0);
  assert.deepEqual(supplierCredentialIssues(s,p,displayedCatalogueIds(p,s)),[]);
- assert.equal(supplierChannelReadiness(legacy,p).label,'凭证待配置');
+ assert.equal(supplierChannelReadiness(legacy,p).label,'上游 API 密钥待配置');
  assert.equal(supplierChannelResources(s,p).some(row=>row.id===legacy.id),true);
 });
 
@@ -50,8 +50,7 @@ test('the credential warning is scoped to the actual affected models and Kimi re
  assert.deepEqual(supplierCredentialIssues(s,p),[]);assert.equal(supplierChannelReadiness(ep,p).label,'待连接测试');
  assert.throws(()=>run(s,id,'channelTest',{modelId:'kimi-k2',channelId:link.id,scenario:'success'}),/连接测试/);
  s=run(s,id,'supplierChannelTest',{endpointId:ep.id});
- assert.equal(supplierChannelReadiness(s.endpoints.find(row=>row.id===ep.id),owner(s,id)).label,'待启用连接');
- s=run(s,id,'supplierChannelEnable',{endpointId:ep.id});
+ assert.equal(supplierChannelReadiness(s.endpoints.find(row=>row.id===ep.id),owner(s,id)).label,'连接可用');
  link=catalogueChannels(s,owner(s,id),'kimi-k2')[0];assert.equal(link.enabled,false);
  s=run(s,id,'channelTest',{modelId:'kimi-k2',channelId:link.id,scenario:'success'});
  s=run(s,id,'channelEnable',{modelId:'kimi-k2',channelId:link.id});
@@ -78,5 +77,5 @@ test('failed or inactive shared resources block service selection even when a mo
  assert.equal(supplierChannelReadiness(failed.endpoints.find(row=>row.id===ep.id),failedProvider).ready,false);
  assert.match(availableServiceChannels(failed,failedProvider,link.modelId).find(row=>row.id===link.id).reason,/连接测试/);
  const inactive=structuredClone(s);inactive.endpoints.find(row=>row.id===ep.id).status='停用';
- assert.match(availableServiceChannels(inactive,owner(inactive),link.modelId).find(row=>row.id===link.id).reason,/连接待启用/);
+ assert.match(availableServiceChannels(inactive,owner(inactive),link.modelId).find(row=>row.id===link.id).reason,/连接待复测/);
 });

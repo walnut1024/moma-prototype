@@ -172,7 +172,7 @@ test('cost and sale changes preserve technical evidence while connections and ro
   assert.equal(signature(),before);env.endpoint.baseUrl+='/changed';assert.notEqual(signature(),before);
 });
 
-test('all five unified policies emit their configuration identifiers and rank actual metrics without inventing missing data', async()=>{
+test('all four unified policies emit their configuration identifiers and rank actual metrics without inventing missing data', async()=>{
  const {ROUTING_POLICIES}=await import('../src/admin-v2/routing-policy.js');
  const env=fixture(),second={...structuredClone(env.endpoint),id:'endpoint-2',name:'Second'};
  env.state.endpoints.push(second);
@@ -183,7 +183,7 @@ test('all five unified policies emit their configuration identifiers and rank ac
  env.config.channels[0].weight=70;env.config.channels.push({...env.config.channels[0],supplyId:supply.id,weight:30,priority:2});
  env.endpoint.metrics={activeRequests:5,tokensPerMinute:100,p95LatencyMs:10,requestsPerMinute:1,rpmLimit:100,tpmLimit:1000};
  second.metrics={activeRequests:0,tokensPerMinute:200,p95LatencyMs:30,requestsPerMinute:2,rpmLimit:100,tpmLimit:1000};
- for(const strategy of ['weighted','load','tpm','latency','cost']){
+ for(const strategy of ['weighted','load','tpm','latency']){
   env.config.strategy=strategy;
   assert.equal(env.plan().candidate.route.strategyCode,ROUTING_POLICIES[strategy].code);
  }

@@ -88,7 +88,7 @@ export function planDemoRequest(example) {
   const priority = Math.min(...available.map(route => route.priority));
   const group = available.filter(route => route.priority === priority);
   const standby = available.filter(route => route.priority !== priority);
-  walk(service.id, policy, '校验连接状态与协议兼容性');
+  walk(service.id, policy, '校验连接状态与接口格式兼容性');
   if (!group.length) {
     walk(service.id, policy, '无可用上游模型', 'denied');
     walk('gateway', service.id, '返回拒绝响应', 'denied');

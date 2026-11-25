@@ -41,7 +41,7 @@ test('twenty canonical models share one connection and credential reference thro
   const batch = { endpointId: channel.id, associationIds: rows().map(row => row.id) };
   state = run(state, 'supplierModelsTest', batch);
   assert.ok(rows().every(row => row.health?.result === '通过' && row.health.simulated === true && !row.enabled));
-  assert.equal(state.endpoints.find(row => row.id === channel.id).status, '草稿');
+  assert.equal(state.endpoints.find(row => row.id === channel.id).status, '运行中');
   state = run(state, 'supplierModelsEnable', batch);
   assert.equal(state.endpoints.find(row => row.id === channel.id).status, '运行中');
   assert.ok(rows().every(row => row.enabled));

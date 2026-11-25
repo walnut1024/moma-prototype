@@ -241,9 +241,18 @@ test('the preset administrator and customers share D1 while their workspaces sta
     const values = {retry_policy:{ServiceUnavailableErrorRetries:3,DefaultRetries:0},max_fallbacks:2,strategy:"least-busy",retryConditions:["429"],failoverEnabled:false,timeout:90.5,numRetries:4,retryAfter:3,allowedFails:5,cooldownTime:45};
     assert.equal((await adminCommand({type:'saveGlobalRoutingParameters',values})).status,200);
     assert.deepEqual((await request('application',{cookie:admin.cookie})).data.globalRoutingParameters,values);
-    for (const invalid of [{retry_policy:{TimeoutErrorRetries:-1}},{retry_policy:{Other:2}},{max_fallbacks:0.5},{strategy:"unknown"},{retryConditions:["404"]},{failoverEnabled:1},{retryAfter:-1},{numRetries:1.5},{timeout:0},{allowedFails:null},{cooldownTime:-1},{extra:3}]) {
+    for (const invalid of [{retry_policy:{TimeoutErrorRetries:-1}},{retry_policy:{Other:2}},{max_fallbacks:0.5},{strategy:"unknown"},{strategy:'cost-based-routing'},{retryConditions:["404"]},{failoverEnabled:1},{retryAfter:-1},{numRetries:1.5},{timeout:0},{allowedFails:null},{cooldownTime:-1},{extra:3}]) {
       assert.equal((await adminCommand({type:'saveGlobalRoutingParameters',values:{...values,...invalid}})).status,400);
     }
+    await local.db.prepare("UPDATE model_workspace SET reference_json=json_set(reference_json,'$.globalRoutingParameters.strategy','cost-based-routing') WHERE id=1").run();
+    assert.equal((await request('application',{ cookie: admin.cookie })).data.globalRoutingParameters.strategy, 'simple-shuffle');
+    assert.equal((await request('model-services-new',{ cookie: admin.cookie })).data.defaults.strategy, 'simple-shuffle');
+    const { strategy: _strategy, ...failover } = values;
+    failover.timeout += 1;
+    assert.equal((await adminCommand({ type: 'saveGlobalRoutingParameters', values: failover })).status, 200);
+    assert.deepEqual((await request('application',{ cookie: admin.cookie })).data.globalRoutingParameters, { ...failover, strategy: 'simple-shuffle' });
+    assert.equal((await adminCommand({ type: 'saveGlobalRoutingParameters', values: { ...failover, strategy: 'cost-based-routing' } })).status, 400);
+    assert.equal((await adminCommand({ type: 'saveGlobalRoutingParameters', values })).status, 200);
     const enterpriseData={companyName:'验收开通企业',type:'企业',taxId:'DEMO2026',
       countryRegion:'中国',province:'江苏省',contactName:'演示管理员',contactPhone:phone,phone};
     const newEnterprise={type:'enterprise',operation:'create',

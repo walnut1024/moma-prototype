@@ -4,10 +4,14 @@ const eventSource = `WITH events AS (
   SELECT e.id, e.operation_id, e.entity_id, e.created_at, e.action, e.record_json, o.command, o.actor_id,
     NULL AS tenant_id, NULL AS project_id, 'model_operations' AS domain
   FROM audit_events e JOIN operations o ON o.id=e.operation_id
-  WHERE e.entity_type='model-operations' AND (
+  WHERE (e.entity_type='model-operations' AND (
     o.command IN ('serviceRouteConfigure','serviceRoutePublish','keyGroupCandidateApply','credentialReplace')
+    OR (o.command IN ('serviceMappingDiscard','serviceMappingEnable','serviceMappingDisable','serviceMappingRemove')
+      AND json_type(e.record_json,'$.platformAudit')='object')
     OR (o.command='supplierSelection' AND e.action='批量停用所选模型')
-  )
+    OR (o.command='new-model-service.save' AND e.action='因停服自动停售')
+  )) OR (e.entity_type='new-model-service' AND (e.action IN ('启动服务','停止服务')
+    OR json_type(e.record_json,'$.platformAudit')='object'))
   UNION ALL
   SELECT 'project:' || json_extract(a.value,'$.id'), json_extract(a.value,'$.id'), json_extract(a.value,'$.objectId'),
     CAST(ROUND((julianday(json_extract(a.value,'$.createdAt'))-2440587.5)*86400000) AS INTEGER),
@@ -90,6 +94,28 @@ async function historicalEvidence(db, row, record) {
 async function eventFromRow(db, row) {
   const record = JSON.parse(row.record_json);
   if (row.domain !== 'model_operations') return scopedEvent(row, record);
+  const serviceState = row.command === 'new-model-service.save' && ['启动服务','停止服务'].includes(row.action);
+  if (serviceState && !record.platformAudit) {
+    const name = await db.prepare(`SELECT json_extract(response_json,'$.row.name') AS name
+      FROM operations WHERE id=?`).bind(row.operation_id).first('name');
+    const started = row.action === '启动服务';
+    record.result = '成功';
+    record.platformAudit ??= {
+      action_code: started ? 'model_service.start' : 'model_service.stop',
+      resources: [{ ...ref('model_service', row.entity_id, 'target'), name, roles: ['target','changed'] }],
+      changes: [field('model_service', row.entity_id, 'service_running', !started, started)],
+    };
+  }
+  if (row.action === '因停服自动停售' && record.sourceModelServiceId) {
+    const diff = await db.prepare('SELECT diff_json FROM audit_events WHERE id=?').bind(row.id).first('diff_json');
+    const { before, after } = JSON.parse(diff);
+    record.platformAudit = {
+      action_code: 'model_sale.stop_with_service',
+      resources: [{ ...ref('model_sale', row.entity_id, 'target'), name: record.objectLabel, roles: ['target','changed'] },
+        ref('model_service', record.sourceModelServiceId, 'related')],
+      changes: [field('model_sale', row.entity_id, 'sale_status', before, after)],
+    };
+  }
   const evidence = record.platformAudit || await historicalEvidence(db, row, record);
   if (!evidence) return null;
   const occurred_at = new Date(row.created_at).toISOString();
@@ -138,8 +164,12 @@ export async function auditLogDetail(db, id) {
 
 function matches(event, { action, status, type, q, actor }) {
   const includes = (query, values) => values.some(value => typeof value === 'string' && value.toLowerCase().includes(query));
+  const changed = (type, field) => event.changes.some(change => change.resource_ref.startsWith(type + ':') && change.field === field);
+  const matchesType = type === 'model_supply_status' ? changed('model_supply', 'enabled')
+    : type === 'service_mapping_status' ? changed('service_mapping', 'status')
+    : !type || event.resources.some(resource => resource.type === type);
   return (!action || action === event.action_code) && (!status || status === event.outcome.status)
-    && (!type || event.resources.some(resource => resource.type === type))
+    && matchesType
     && (!actor || includes(actor, [event.actor.id, event.actor.name]))
     && (!q || includes(q, [event.event_id, event.operation_id, AUDIT_ACTIONS[event.action_code],
       ...event.resources.flatMap(resource => [resource.id, resource.name, resource.type + ':' + resource.id])]));

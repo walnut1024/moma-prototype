@@ -19,12 +19,13 @@ test('one newly created model can explicitly enable after testing without a sele
  const env=fixture(1),before=structuredClone(env.state),args=[env.providerId,env.endpointId,env.ids];
  assert.equal(env.state.endpoints.find(row=>row.id===env.endpointId).onboardingCreated,true);
  assert.equal(channelDirectEnableIssue(env.state,...args),'');
- assert.throws(()=>prepareChannelDirectEnableConfirmation(env.untested,...args),/尚未全部通过/);
+ assert.throws(()=>prepareChannelDirectEnableConfirmation(env.untested,...args),/连接测试/);
+ assert.equal(env.state.endpoints.find(row=>row.id===env.endpointId).status,'运行中');
  assert.ok(env.rows(env.state).every(row=>row.enabled===false));
  const confirmation=prepareChannelDirectEnableConfirmation(env.state,...args);
  assert.equal(confirmation.directActivation,true);assert.deepEqual(confirmation.selections.map(row=>row.associationId),env.ids);
  const enabled=env.enable(env.state,confirmation);
- assert.equal(env.rows(enabled)[0].enabled,true);assert.ok(env.rows(enabled)[0].activationChangedAt);assert.ok(enabled.endpoints.find(row=>row.id===env.endpointId).activationChangedAt);
+ assert.equal(env.rows(enabled)[0].enabled,true);assert.ok(env.rows(enabled)[0].activationChangedAt);assert.deepEqual(enabled.endpoints,env.state.endpoints);
  assert.ok(channelDirectEnableIssue(enabled,...args));assert.deepEqual(env.state,before);
 });
 
@@ -47,7 +48,7 @@ test('one newly appended model can explicitly enable on a running channel withou
 
 test('history, an old origin and a shared channel retain the full selection and impact confirmation path',()=>{
  const env=fixture(1),args=[env.providerId,env.endpointId,env.ids];
- for(const mutate of [s=>{delete s.endpoints.find(row=>row.id===env.endpointId).onboardingCreated;},s=>{s.endpoints.find(row=>row.id===env.endpointId).activationChangedAt='2026-10-31';},s=>{env.provider(s).catalogConnections.find(row=>row.id===env.ids[0]).activationChangedAt='2026-10-31';},s=>{s.endpoints.find(row=>row.id===env.endpointId).status='停用';}]){
+ for(const mutate of [s=>{delete s.endpoints.find(row=>row.id===env.endpointId).onboardingCreated;},s=>{s.endpoints.find(row=>row.id===env.endpointId).activationChangedAt='2026-10-31';},s=>{env.provider(s).catalogConnections.find(row=>row.id===env.ids[0]).activationChangedAt='2026-10-31';}]){
   const state=structuredClone(env.state);mutate(state);assert.ok(channelDirectEnableIssue(state,...args));assert.throws(()=>prepareChannelDirectEnableConfirmation(state,...args));assert.doesNotThrow(()=>env.prepare(state));
  }
  const shared=fixture();assert.ok(channelDirectEnableIssue(shared.state,shared.providerId,shared.endpointId,[shared.ids[0]]));
@@ -67,7 +68,7 @@ test('a newly published service reference after the first-enable snapshot requir
 test('confirmation freezes the complete selected ID order and fingerprints for the existing atomic transaction', () => {
   const env = fixture(), selected = [...env.ids].reverse(), confirmation = env.prepare(env.state, selected), frozen = structuredClone(confirmation);
   selected.splice(0, 1); assert.deepEqual(confirmation, frozen); assert.deepEqual(confirmation.selections.map(row => row.associationId), [...env.ids].reverse());
-  assert.equal(channelEnableConfirmationIssue(env.state, confirmation), ''); assert.equal(confirmation.restoring, false);
+  assert.equal(channelEnableConfirmationIssue(env.state, confirmation), '');
   const enabled = env.enable(env.state, confirmation); assert.ok(env.rows(enabled).every(row => row.enabled)); assert.equal(enabled.endpoints.find(row => row.id === env.endpointId).status, '运行中');
 });
 
@@ -94,16 +95,28 @@ test('pending tests, stopped supplier, credential removal and endpoint state cha
   assert.throws(() => env.prepare(env.state, [...env.ids, env.ids[0]]), /不重复/); assert.throws(() => env.prepare(env.state, [env.ids[0], 'missing']), /已变化/);
 });
 
-test('restoring a stopped channel shows only services of the frozen selected mappings and leaves unselected mappings stopped', () => {
-  const env = fixture(), state = structuredClone(env.state); state.endpoints.find(row => row.id === env.endpointId).status = '停用';
+test('retesting a historically stopped connection allows selecting verified models and reviewing only their affected services', () => {
+  const env = fixture(), state = structuredClone(env.state);
+  Object.assign(state.endpoints.find(row => row.id === env.endpointId), { status: '停用', activationSource: 'manual', activationChangedAt: new Date(Date.now() - 1000).toISOString() });
   for (const [index, libraryId] of ['model-2', 'model-6'].entries()) {
     state.models.find(row => row.id === libraryId).serviceMode = 'standard';
     const association = env.rows(state).find(row => row.id === env.ids[index]), supplyId = 'restore-supply-' + index;
     state.modelSupplies.push({ id: supplyId, providerId: env.providerId, modelId: libraryId, endpointId: env.endpointId, catalogueModelId: association.modelId, upstreamModelId: association.upstreamModelId, status: '已启用', validationStatus: '通过', capabilities: {} });
     state.serviceRoutes.push({ serviceId: 'standard:' + libraryId, activeVersion: 3, versions: [{ version: 3, config: { strategy:'weighted', autoFailover: false, channels: [{ supplyId, enabled: true, priority: 1, weight: 1 }] } }] });
   }
-  const confirmation = env.prepare(state, [env.ids[0]]); assert.equal(confirmation.restoring, true); assert.equal(confirmation.serviceImpact.length, 1); assert.equal(confirmation.serviceImpact[0].id, 'standard:model-2'); assert.equal(confirmation.serviceImpact[0].routeVersion, 3);
-  const next = env.enable(state, confirmation); assert.equal(env.rows(next).find(row => row.id === env.ids[0]).enabled, true); assert.equal(env.rows(next).find(row => row.id === env.ids[1]).enabled, false);
-  const changed = structuredClone(state), route = changed.serviceRoutes.find(row => row.serviceId === 'standard:model-2'); route.activeVersion = 4; route.versions.push({ version: 4, config: structuredClone(route.versions[0].config) });
+  assert.throws(() => env.prepare(state, [env.ids[0]]), /连接测试/);
+  assert.throws(() => env.enable(state, env.prepare(env.state, [env.ids[0]])), /连接测试/);
+  const retested = env.run(state, 'supplierChannelTest', { endpointId: env.endpointId });
+  assert.equal(retested.endpoints.find(row => row.id === env.endpointId).status, '运行中');
+  assert.ok(env.rows(retested).every(row => !row.enabled));
+  const confirmation = env.prepare(retested, [env.ids[0]]);
+  assert.equal(confirmation.serviceImpact.length, 1);
+  assert.equal(confirmation.serviceImpact[0].id, 'standard:model-2');
+  assert.equal(confirmation.serviceImpact[0].routeVersion, 3);
+  const next = env.enable(retested, confirmation);
+  assert.equal(env.rows(next).find(row => row.id === env.ids[0]).enabled, true);
+  assert.equal(env.rows(next).find(row => row.id === env.ids[1]).enabled, false);
+  assert.deepEqual(next.endpoints, retested.endpoints);
+  const changed = structuredClone(retested), route = changed.serviceRoutes.find(row => row.serviceId === 'standard:model-2'); route.activeVersion = 4; route.versions.push({ version: 4, config: structuredClone(route.versions[0].config) });
   assert.match(channelEnableConfirmationIssue(changed, confirmation), /服务引用已变化/);
 });

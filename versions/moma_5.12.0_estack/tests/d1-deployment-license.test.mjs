@@ -64,7 +64,7 @@ for (const spec of [
       assert.equal(login.status,200);
       cookie=login.cookie.split(';')[0];
       assert.equal((await request('/model-operations')).status,200);
-      assert.equal((await request('/health')).body.schemaVersion,18);
+      assert.equal((await request('/health')).body.schemaVersion,19);
       assert.equal((await request('/package-management')).status,spec.packages);
       assert.equal((await request('/package-management/commands',{})).body.error.code,'LICENSE_REQUIRED');
       for (const operation of ['startSales', 'pauseSales', 'salesSettings', 'commercialPublish']) {

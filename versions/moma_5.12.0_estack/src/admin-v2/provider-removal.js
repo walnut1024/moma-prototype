@@ -1,34 +1,32 @@
 import { resourceId } from '../resource-id.mjs';
 import { offerKey, offerStage } from '../service-access.mjs';
 import { supplierChannelAssociations, supplierChannelResources } from './supplier-resources.js';
-import { providerCatalogueIds } from './moma-provider.js';
-import { supplierModelIds, retiredSupplierModelIds } from './supply-models.js';
+import { linkedModelServiceNames } from './provider-channels.js';
 import { routingServices, routingChannels, validateRouteConfig } from './service-routing.js';
+import { isBuiltinMoma } from './moma-provider.js';
 
 const update = (collection, id, changes) => ({ type: 'update', collection, id, changes });
 const active = row => row && !row.deletedAt;
 const published = (model, entry) => ['formal', 'gray'].includes(offerStage(model, entry));
 
 function removalScope(state, target) {
-  if (!target || Object.keys(target).some(key => !['providerId', 'endpointId', 'associationId', 'associationIds', 'keepEndpoint', 'catalogueId'].includes(key)) ||
-    target.keepEndpoint !== undefined && (target.keepEndpoint !== true || !target.associationId || !target.endpointId)) throw Error('移除对象无效');
-  if (target.associationIds !== undefined && (target.endpointId || target.associationId || !Array.isArray(target.associationIds) || !target.associationIds.length || target.associationIds.length > 500 || target.associationIds.some(id => typeof id !== 'string') || new Set(target.associationIds).size !== target.associationIds.length)) throw Error('请选择 1–500 条不重复的连接');
+  if (!target || Object.keys(target).some(key => !['providerId', 'endpointId', 'associationId', 'associationIds'].includes(key)) ||
+    target.associationId && !target.endpointId) throw Error('删除对象无效');
+  if (target.associationIds !== undefined && (target.endpointId || target.associationId || !Array.isArray(target.associationIds) || !target.associationIds.length || target.associationIds.length > 500 || target.associationIds.some(id => typeof id !== 'string') || new Set(target.associationIds).size !== target.associationIds.length)) throw Error('请选择 1–500 条不重复的上游模型');
   const provider = state.providers.find(row => row.id === target.providerId && active(row));
   if (!provider) throw Error('服务商已移除，请重新载入');
-  const modelScope = Object.hasOwn(target, 'catalogueId');
-  if (modelScope && (Object.keys(target).length !== 2 || !providerCatalogueIds(provider).includes(target.catalogueId))) throw Error('供应模型已变化，请重新载入');
-  const aliases = modelScope ? supplierModelIds(state, provider, target.catalogueId) : [];
+  if (!target.endpointId && !target.associationIds && isBuiltinMoma(provider)) throw Error('内置服务商不可删除');
   const resources = supplierChannelResources(state, provider);
   const all = supplierChannelAssociations(state, provider);
-  const associations = modelScope ? all.filter(row => aliases.includes(row.modelId)) : target.associationIds ? all.filter(row => target.associationIds.includes(row.id)) : target.associationId ? all.filter(row => row.id === target.associationId && row.endpointId === target.endpointId)
+  const associations = target.associationIds ? all.filter(row => target.associationIds.includes(row.id)) : target.associationId ? all.filter(row => row.id === target.associationId && row.endpointId === target.endpointId)
     : target.endpointId ? all.filter(row => row.endpointId === target.endpointId) : all;
   if (target.associationId && associations.length !== 1 || target.endpointId && !resources.some(row => row.id === target.endpointId)) throw Error('连接已变化或不属于当前服务商');
   if (target.associationIds && associations.length !== target.associationIds.length) throw Error('连接已变化或不属于当前服务商');
-  const scoped = Boolean(modelScope || target.associationId || target.associationIds);
-  const endpoints = modelScope || target.associationIds ? resources.filter(row => associations.some(channel => channel.endpointId === row.id)) : target.endpointId ? resources.filter(row => row.id === target.endpointId) : resources;
+  const scoped = Boolean(target.associationId || target.associationIds);
+  const endpoints = target.associationIds ? resources.filter(row => associations.some(channel => channel.endpointId === row.id)) : target.endpointId ? resources.filter(row => row.id === target.endpointId) : resources;
   const ids = new Set(associations.flatMap(row => [row.id, row.relationId].filter(Boolean)));
   for (const row of state.supplyRelations?.channels || []) if (row.providerId === provider.id && associations.some(a => a.id === row.associationId)) ids.add(row.id);
-  const wholeEndpoints = new Set(endpoints.filter(endpoint => !modelScope && !target.keepEndpoint && (!scoped || !all.some(row => row.endpointId === endpoint.id && !ids.has(row.id)))).map(row => row.id));
+  const wholeEndpoints = new Set(scoped ? [] : endpoints.map(row => row.id));
   const supplies = state.modelSupplies.filter(row => row.status !== '已移除' && (row.providerId || state.endpoints.find(e => e.id === row.endpointId)?.providerId) === provider.id &&
     (!target.endpointId || row.endpointId === target.endpointId) && (!scoped || (row.channelId ? ids.has(row.channelId) : associations.some(a => a.endpointId === row.endpointId && a.modelId === (row.catalogueModelId || row.upstreamModelId) && a.upstreamModelId === row.upstreamModelId))));
   supplies.forEach(row => ids.add(row.id));
@@ -58,7 +56,7 @@ export function providerRemovalPlan(state, target) {
     const affected = supplies.filter(row => row.modelId === model.id);
     const entries = model.serviceMode === 'provider' ? (model.serviceProviders || []).filter(entry => {
       if (entry.status === '已移除' || entry.providerId !== provider.id) return false;
-      if (!target.catalogueId && !target.endpointId && !target.associationIds) return true;
+      if (!target.endpointId && !target.associationIds) return true;
       return entry.channelId ? ids.has(entry.channelId) : affected.length > 0;
     }) : [];
     if (model.serviceMode === 'standard' && !affected.length && !routes.some(row => row.service.modelId === model.id)) continue;
@@ -84,21 +82,23 @@ export function providerRemovalPlan(state, target) {
     }
   }
   const blockers = [];
+  const independentServices = linkedModelServiceNames(state, ids);
+  if (independentServices.length) blockers.push('请先在模型服务中移除待删除的关联上游模型：' + independentServices.join('、'));
   for (const endpoint of endpoints) {
     const jobs = [...(endpoint.serverTestJobs || []), ...(endpoint.candidateConfiguration?.pendingTests || [])];
     if (jobs.some(job => !job.receivedAt && (!(target.associationId || target.associationIds) || !job.associationIds?.length || job.associationIds.some(id => ids.has(id))))) blockers.push('连接「' + endpoint.name + '」仍有未完成检测，请先查询或取消检测');
   }
   if ((provider.keyGroupCandidates || []).some(candidate => candidate.pendingTests?.some(job => !job.receivedAt && endpoints.some(endpoint => endpoint.id === job.endpointId)))) blockers.push('服务商仍有未完成的密钥组检测');
   if (state.modelOnboardings.some(task => task.status !== '已放弃' && !(task.guided ? task.completion : task.status === '已完成') &&
-    (task.providerId || task.value?.providerId) === provider.id && (!target.catalogueId && !target.endpointId && !target.associationIds || endpoints.some(endpoint => endpoint.id === task.endpointId || endpoint.id === task.createdEndpointId) || task.createdAssociationIds?.some(id => ids.has(id))))) blockers.push('仍有未完成的接入任务，请先完成或放弃任务');
+    (task.providerId || task.value?.providerId) === provider.id && (!target.endpointId && !target.associationIds || endpoints.some(endpoint => endpoint.id === task.endpointId || endpoint.id === task.createdEndpointId) || task.createdAssociationIds?.some(id => ids.has(id))))) blockers.push('仍有未完成的接入任务，请先完成或放弃任务');
   if ((state.routes || []).some(route => route.targets?.some(member => scope.wholeEndpoints.has(typeof member === 'string' ? member : member.endpointId))) ||
     (state.fallbacks || []).some(route => route.chain?.some(id => scope.wholeEndpoints.has(id)))) blockers.push('仍被网关路由或故障转移引用，请先调整对应配置');
   const needsProcessing = rows.some(row => row.needsStop || row.routeActive) || routes.some(row => row.draft) ||
     supplies.some(row => row.status === '已启用');
   const signature = JSON.stringify([target, provider.updatedAt, associations.map(row => [row.id, row.updatedAt, row.enabled]),
     endpoints.map(row => [row.id, row.updatedAt]), rows, routes.map(row => [row.route.id, row.route.updatedAt, row.route.activeVersion, row.route.draft]), supplies.map(row => [row.id, row.updatedAt, row.status]), blockers]);
-  return { ...scope, rows, routes, blockers, needsProcessing, ready: !blockers.length && !needsProcessing, signature,
-    name: target.catalogueId || (target.associationIds ? `${associations.length} 条上游模型` : target.associationId ? associations[0].sourceName || associations[0].name || associations[0].upstreamModelId : target.endpointId ? endpoints[0].name : provider.name) };
+  return { ...scope, rows, routes, blockers, independentServices, needsProcessing, ready: !blockers.length && !needsProcessing, signature,
+    name: target.associationIds ? `${associations.length} 条上游模型` : target.associationId ? associations[0].sourceName || associations[0].name || associations[0].upstreamModelId : target.endpointId ? endpoints[0].name : provider.name };
 }
 
 export function providerRemovalTransaction(state, { operation, data = {} }) {
@@ -131,7 +131,7 @@ export function providerRemovalTransaction(state, { operation, data = {} }) {
     if (current) {
       if (remainingConfig) {
         const version = Math.max(0, ...(route.versions || []).map(row => row.version)) + 1;
-        patch.versions = [...route.versions, { id: resourceId('route-version'), version, config: remainingConfig, publishedAt: at, actor: state.currentRole, reason: '移除供给连接', costVersions: Object.fromEntries(routingChannels(state, service).filter(row => remainingConfig.channels.some(member => member.supplyId === row.id)).map(row => [row.id, row.costVersion])) }];
+        patch.versions = [...route.versions, { id: resourceId('route-version'), version, config: remainingConfig, publishedAt: at, actor: state.currentRole, reason: '移除关联上游模型', costVersions: Object.fromEntries(routingChannels(state, service).filter(row => remainingConfig.channels.some(member => member.supplyId === row.id)).map(row => [row.id, row.costVersion])) }];
         patch.activeVersion = version;
       } else patch.activeVersion = 0;
     }
@@ -146,10 +146,8 @@ export function providerRemovalTransaction(state, { operation, data = {} }) {
   const all = provider.catalogConnections || [];
   const catalogConnections = all.map(row => ids.has(row.id) ? { ...row, enabled: false, ...(commit ? { deletedAt: at } : {}) } : row);
   for (const row of associations) if (!catalogConnections.some(saved => saved.id === row.id)) catalogConnections.push({ ...row, endpoint: undefined, enabled: false, ...(commit ? { deletedAt: at } : {}) });
-  const entireProvider = !data.target.catalogueId && !data.target.endpointId && !data.target.associationIds;
+  const entireProvider = !data.target.endpointId && !data.target.associationIds;
   const providerPatch = { catalogConnections };
-  if (commit) providerPatch.removedCatalogModelIds = retiredSupplierModelIds(state, provider,
-    supplierChannelAssociations(state, provider).filter(row => !ids.has(row.id) && !ids.has(row.relationId)), data.target.catalogueId ? [data.target.catalogueId] : associations.map(row => row.modelId));
   if (commit && entireProvider) Object.assign(providerPatch, { deletedAt: at, status: '已停用', catalogueScope: 'managed', catalogModelIds: [],
     catalogModels: (provider.catalogModels || []).map(row => ({ ...row, deletedAt: row.deletedAt || at })) });
   changes.push(update('providers', provider.id, providerPatch));
@@ -157,5 +155,5 @@ export function providerRemovalTransaction(state, { operation, data = {} }) {
     if (plan.wholeEndpoints.has(endpoint.id)) changes.push(update('endpoints', endpoint.id, { deletedAt: at, status: '停用' }));
   }
   return { type: 'batch', objectId: data.target.associationId || data.target.endpointId || provider.id,
-    label: commit ? data.target.catalogueId ? '删除供应模型' : entireProvider ? '移除服务商' : '移除上游模型' : '停止待移除连接的服务并停售', changes };
+    label: commit ? entireProvider ? '移除服务商' : data.target.endpointId && !data.target.associationId ? '删除连接' : '删除上游模型' : '停止待移除连接的服务并停售', changes };
 }

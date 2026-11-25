@@ -52,21 +52,34 @@ export function connectionCredentialsReady(endpoint, provider) {
 }
 export const connectionTestCurrent = endpoint => Boolean(endpoint && endpoint.connectionTest?.fingerprint === connectionFingerprint(endpoint));
 export const connectionTestPassed = endpoint => connectionTestCurrent(endpoint) && endpoint.connectionTest.result === '通过';
-export const connectionRecoveryIssue = endpoint => endpoint.activationSource === 'automatic' &&
-  (!connectionTestPassed(endpoint) || !(Date.parse(endpoint.connectionTest.testedAt) > Date.parse(endpoint.activationChangedAt)))
-  ? '自动停用后请先通过一次当前配置的复测，再恢复连接' : '';
+export const connectionActive = endpoint => ['运行中', '需关注'].includes(endpoint?.status);
+export const connectionRecoveryRequired = endpoint => !connectionActive(endpoint) &&
+  Boolean(endpoint?.activationSource || endpoint?.status === '自动停用');
+
+export function connectionTestPatch(endpoint, connectionTest, startedAt = connectionTest.testedAt) {
+  const qualification = connectionQualification(endpoint);
+  const patch = { ...(qualification ? { connectionQualification: structuredClone(qualification) } : {}), connectionTest };
+  if (connectionTest.result !== '通过') return connectionActive(endpoint) ? { ...patch, status: '需关注' } : patch;
+  if (endpoint.frozen || endpoint.poolPaused || endpoint.candidateConfiguration) return patch;
+  const held = connectionRecoveryRequired(endpoint);
+  // A test already in flight when the restriction was applied cannot clear it.
+  if (held && !(Date.parse(startedAt) > Date.parse(endpoint.activationChangedAt))) return patch;
+  return { ...patch, status: connectionActive(endpoint) ? endpoint.status : '运行中',
+    connectionQualification: structuredClone(held ? connectionTest : qualification || connectionTest),
+    ...(held ? { activationSource: null, activationReason: null, directoryStopEvidence: null } : {}) };
+}
 export const connectionTestPending = endpoint => endpoint?.serverTestJobs?.some(job => !job.receivedAt && job.signature === connectionFingerprint(endpoint));
 export function connectionQualification(endpoint) {
   const qualification = endpoint?.connectionQualification;
   if (qualification?.result === '通过' && qualification.fingerprint === connectionFingerprint(endpoint)) return qualification;
-  return ['运行中', '需关注'].includes(endpoint?.status) && connectionTestPassed(endpoint) ? endpoint.connectionTest : null;
+  return connectionActive(endpoint) && connectionTestPassed(endpoint) ? endpoint.connectionTest : null;
 }
 export const connectionQualified = endpoint => Boolean(connectionQualification(endpoint));
 export function connectionBlockReason(endpoint, provider) {
   if (provider?.status !== '已启用') return '先启用服务商';
   if (endpoint?.frozen) return '连接已冻结';
-  if (!connectionCredentialsReady(endpoint, provider)) return 'API 凭证待配置或已撤销';
+  if (!connectionCredentialsReady(endpoint, provider)) return '上游 API 密钥待配置或已撤销';
   if (!connectionQualified(endpoint)) return '先通过当前配置的连接测试';
-  if (!['运行中', '需关注'].includes(endpoint?.status)) return '先启用接入';
+  if (!connectionActive(endpoint)) return '请重新通过当前配置的连接测试';
   return '';
 }

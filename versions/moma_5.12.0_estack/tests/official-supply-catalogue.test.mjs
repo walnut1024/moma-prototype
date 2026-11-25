@@ -82,10 +82,10 @@ test('channel and model removal require confirmation, retain history and never r
   const deleted = commitAdminState(seed, act('channelDelete', owner.id, { modelId: 'kimi-k3', channelId: item.id, confirmed: true }));
   assert.equal(catalogueChannels(deleted, provider(deleted, owner.id), 'kimi-k3').length, 1);
   assert.ok(provider(deleted, owner.id).catalogConnections.find(c => c.id === item.id).deletedAt);
-  assert.throws(() => commitAdminState(deleted, act('catalogueRemove', owner.id, { modelId: 'kimi-k3', confirmed: true })), /请先移除.*全部上游模型记录/);
   const remaining = catalogueChannels(deleted, provider(deleted, owner.id), 'kimi-k3')[0];
-  const cleared = commitAdminState(deleted, act('channelDelete', owner.id, { modelId: 'kimi-k3', channelId: remaining.id, confirmed: true }));
-  const removed = cleared;
+  const withoutRegistration = commitAdminState(deleted, act('catalogueRemove', owner.id, { modelId: 'kimi-k3', confirmed: true }));
+  assert.deepEqual(catalogueChannels(withoutRegistration, provider(withoutRegistration, owner.id), 'kimi-k3'), [remaining]);
+  const removed = commitAdminState(withoutRegistration, act('channelDelete', owner.id, { modelId: 'kimi-k3', channelId: remaining.id, confirmed: true }));
   assert.deepEqual(providerCatalogueIds(provider(removed, owner.id)), []);
   assert.deepEqual(removed.modelSalePrices, seed.modelSalePrices);
   assert.deepEqual(removed.endpoints, seed.endpoints);

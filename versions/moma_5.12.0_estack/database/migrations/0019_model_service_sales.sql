@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS model_service_sales (service_id TEXT PRIMARY KEY NOT NULL REFERENCES new_model_services(id), revision INTEGER NOT NULL CHECK(revision>0), record_json TEXT NOT NULL CHECK(json_valid(record_json)));
+CREATE TABLE IF NOT EXISTS model_service_orders (id TEXT PRIMARY KEY NOT NULL, tenant_id TEXT NOT NULL, service_id TEXT NOT NULL REFERENCES new_model_services(id), sale_price_id TEXT NOT NULL, sale_price_json TEXT NOT NULL CHECK(json_valid(sale_price_json)), created_at INTEGER NOT NULL, cancelled_at INTEGER);
+CREATE UNIQUE INDEX IF NOT EXISTS model_service_active_order ON model_service_orders(tenant_id,service_id) WHERE cancelled_at IS NULL;
+CREATE INDEX IF NOT EXISTS model_service_order_history ON model_service_orders(service_id,created_at);
+CREATE TABLE IF NOT EXISTS model_service_calls (tenant_id TEXT NOT NULL, request_id TEXT NOT NULL, request_hash TEXT NOT NULL, service_id TEXT NOT NULL REFERENCES new_model_services(id), sale_price_id TEXT, response_json TEXT NOT NULL CHECK(json_valid(response_json)), created_at INTEGER NOT NULL, history_user_id TEXT, history_json TEXT CHECK(history_json IS NULL OR json_valid(history_json)), PRIMARY KEY(tenant_id,request_id));
+CREATE INDEX IF NOT EXISTS model_service_call_history ON model_service_calls(tenant_id,history_user_id,created_at DESC) WHERE history_user_id IS NOT NULL;
+UPDATE db_state SET schema_version=19 WHERE id=1 AND schema_version=18;

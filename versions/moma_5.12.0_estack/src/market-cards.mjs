@@ -60,7 +60,7 @@ export function marketCardFieldError(data) {
   catch (error) { return error.message; }
 }
 
-export function marketCardServices(state, modelId, references = serviceReferences(state)) {
+function legacyCardServices(state, modelId, references = serviceReferences(state)) {
   return references.filter(service => (!modelId || service.model_id === modelId) &&
     !service.model.deletedAt && !service.model.archivedAt && service.callId)
     .map(service => {
@@ -68,7 +68,9 @@ export function marketCardServices(state, modelId, references = serviceReference
       const stage = offerStage(service.model, entry);
       return {
         id: service.model_service_id,
-        modelId: service.model_id,
+        sourceId: service.model.id,
+        providerId: service.providerId,
+        channelId: service.channelId,
         name: service.model.name,
         serviceName: service.model.serviceName || service.model.name,
         callId: service.callId,
@@ -88,22 +90,30 @@ export function marketCardsByModel(cards = {}) {
   }));
 }
 
-export function marketCardLinkableServices(state, modelId) {
-  const services = marketCardServices(state, modelId);
-  const models = new Map(modelLibrary(state).filter(row => !row.archivedAt).map(row => [row.id, row]));
-  const existingCalls = new Set(services.map(row => JSON.stringify([row.modelId, row.callId])));
+export function marketCardsForService(cards = {}, serviceId) {
+  return Object.entries(cards).flatMap(([cardId, card]) =>
+    card.status !== 'deleted' && card.linked.includes(serviceId) ? [{ cardId, card }] : []);
+}
+
+export function marketCardServices(state) {
+  const legacy = legacyCardServices(state);
+  const prior = new Map(legacy.map(service => [service.id, service]));
   const configured = (state.marketModelServices || []).flatMap(row => {
-    const model = models.get(row.modelId);
-    if (!model || (modelId && row.modelId !== modelId) || existingCalls.has(JSON.stringify([row.modelId, row.callId]))) return [];
-    return [{ id: row.id, modelId: row.modelId, name: model.name, serviceName: row.name,
-      callId: row.callId, started: Boolean(row.listed) }];
+    if (row.controlledOfferId) {
+      const offer = prior.get(row.controlledOfferId);
+      return offer?.callId === row.callId ? [{ ...offer, id: row.id, controlledOfferId: offer.id }] : [];
+    }
+    return [{ id: row.id, name: row.name, serviceName: row.name, callId: row.callId, started: Boolean(row.listed), inServiceList: true,
+      channelIds: row.channelIds, saleStage: row.saleStage }];
   });
-  const candidates = [...services, ...configured];
-  if (modelId) return candidates;
-  const occupied = marketCardsByModel(state.modelData?.marketCards);
-  const listed = new Set(services.filter(service => service.legacyShown).map(service => service.modelId));
-  return candidates.filter(({ modelId }) => modelId && (occupied.get(modelId)?.status === 'deleted' ||
-    !occupied.has(modelId) && !listed.has(modelId)));
+  const listedOfferIds = new Set(configured.map(row => row.controlledOfferId).filter(Boolean));
+  return [...configured, ...legacy.map(row => ({ ...row, inServiceList: listedOfferIds.has(row.id) }))];
+}
+
+export function marketCardLinkableServices(services, linked, saved = []) {
+  const aliases = new Set(services.filter(row => row.controlledOfferId && linked.includes(row.id))
+    .map(row => row.controlledOfferId));
+  return services.filter(row => !row.controlledOfferId && !aliases.has(row.id) && (row.inServiceList || saved.includes(row.id)));
 }
 
 export function marketCardIndex(state, orderedModels) {
@@ -126,9 +136,10 @@ export function marketCardIndex(state, orderedModels) {
     const serviceModel = services.get(modelId), material = materials.get(modelId);
     const model = serviceModel || material;
     const canonicalSlug = material?.modelId || (model ? modelIdentity(state, model).canonical_slug || model.modelId : '');
-    if (!model && modelId) return [];
-    if (card) return [{ ...(model || { id: cardId }), ...card.content, card, cardId, modelId, canonicalSlug, legacy: false }];
-    const linked = marketCardServices(state, modelId, references);
+    if (card) return [{ ...(model || { id: cardId }), ...card.content, card, cardId, modelId,
+      canonicalSlug: card.content?.canonical_slug || canonicalSlug, legacy: false }];
+    if (!model) return [];
+    const linked = legacyCardServices(state, modelId, references);
     const displayed = linked.filter(row => row.legacyShown);
     const shown = displayed.map(row => row.id);
     return [{
@@ -183,9 +194,10 @@ export function marketCardVisible(card, serviceId, audience) {
 
 export function marketCardCatalogueEntry(card, modelId, canonicalSlug, audience, cardId = modelId) {
   const preview = card.status === 'preview';
-  if (!preview && (!modelId || !marketCardInScope(card, audience))) return;
+  if (!preview && !marketCardInScope(card, audience)) return;
   const { name, type, description, description_en, profile, capabilities, features, tags, heat } = card.content;
-  return { card_id: cardId, model_id: modelId, canonical_slug: canonicalSlug, name, type, description, description_en, profile, capabilities, features, tags, heat, preview };
+  return { card_id: cardId, model_id: modelId || cardId, canonical_slug: card.content.canonical_slug || canonicalSlug,
+    name, type, description, description_en, profile, capabilities, features, tags, heat, preview };
 }
 
 export function marketCardIssues(card, services) {
@@ -213,7 +225,6 @@ export function marketCardTransaction(state, action, orderedModels) {
     return { type: 'batch', label: '删除模型卡片', objectId: cardId, changes: [], marketOrder,
       marketCard: { cardId, card: null, modelId, name, linked: existing.card.linked } };
   }
-  if ((creating || operation === 'marketCardEdit') && data.source_model_id && !modelMaterial(state, data.source_model_id)) throw Error('模型资料不存在');
   const cardId = existing?.cardId || resourceId('model-card');
   let card = existing ? {
     ...existing.card, content: existing.card.content || {
@@ -223,15 +234,21 @@ export function marketCardTransaction(state, action, orderedModels) {
   } : { linked: [], shown: [], status: 'draft', scope: emptyScope };
   let label;
   if (operation === 'marketCardCreate' || operation === 'marketCardEdit') {
+    const material = data.source_model_id ? modelMaterial(state, data.source_model_id) : null;
+    if (data.source_model_id && !material) throw Error('模型资料不存在');
     const error = marketCardFieldError(data);
     if (error) throw Error(error);
     const source = creating ? null : card.content;
+    const canonicalSlug = material?.modelId || source?.canonical_slug || existing?.canonicalSlug;
     const profile = modelProfileDraft(source);
+    const author = material && modelProfileDraft(material).author;
+    if (author) profile.author = author;
     if (profile.family !== data.family.trim()) delete profile.familyId;
     if (data.logo === '') delete profile.logo;
     else if (data.logo) profile.logo = data.logo;
     card = { ...card, content: {
       type: data.type, name: data.name.trim(), description: data.description.trim(), description_en: data.description_en.trim(),
+      ...(canonicalSlug && { canonical_slug: canonicalSlug }),
       heat: Number.isFinite(data.heat) ? data.heat : null, tags: [...new Set(data.tags.map(tag => tag.trim()))],
       features: Object.fromEntries(Object.keys(marketCardFeatures).map(key => [key, data.features?.[key] === true])),
       capabilities: { ...source?.capabilities, context: data.context_length },
@@ -245,16 +262,14 @@ export function marketCardTransaction(state, action, orderedModels) {
   } else {
     if (operation === 'marketCardLink') {
       const ids = data.serviceIds;
-      const services = marketCardLinkableServices(state, existing.modelId);
-      const valid = new Set([...services.map(row => row.id), ...card.linked]);
-      if (!Array.isArray(ids) || new Set(ids).size !== ids.length || ids.some(id => !valid.has(id))) {
-        throw Error('请选择该模型下的有效服务');
+      const services = marketCardServices(state);
+      const aliases = new Map(services.filter(row => row.controlledOfferId).map(row => [row.id, row.controlledOfferId]));
+      const valid = new Set([...marketCardLinkableServices(services, []).map(row => row.id), ...card.linked]);
+      if (!Array.isArray(ids) || new Set(ids.map(id => aliases.get(id) || id)).size !== ids.length || ids.some(id => !valid.has(id))) {
+        throw Error('请从模型服务列表选择有效服务');
       }
-      const models = new Set(services.filter(service => ids.includes(service.id)).map(service => service.modelId));
-      if (models.size > 1) throw Error('请选择同一模型下的服务');
-      if (card.status === 'listed' && card.shown.some(id => !ids.includes(id) && services.some(row => row.id === id))) throw Error('请先从展示服务中移除，再解除关联');
+      if (card.status === 'listed' && card.shown.some(id => !ids.includes(id) && services.some(row => row.id === id))) throw Error('请先在「设置可见性」中取消展示该服务，再移除关联');
       card = { ...card, linked: ids, shown: card.shown.filter(id => ids.includes(id)) };
-      if (!existing.modelId && models.size) card.model_id = services.find(row => ids.includes(row.id)).modelId;
       label = '保存模型卡片关联服务';
     } else if (operation === 'marketCardSetStatus') {
       const { listing_stage: status, serviceIds } = data;
@@ -263,7 +278,7 @@ export function marketCardTransaction(state, action, orderedModels) {
         if (!Array.isArray(serviceIds) || new Set(serviceIds).size !== serviceIds.length) throw Error('展示服务无效');
         const scope = status === 'formal' ? emptyScope : checkedMarketScope(state, data.scope);
         card = { ...card, shown: serviceIds, scope, status: 'listed' };
-        const issues = marketCardIssues(card, marketCardServices(state, existing.modelId));
+        const issues = marketCardIssues(card, marketCardServices(state));
         if (issues.length) throw Error(issues.join('、'));
       } else card = { ...card, status };
       label = '设置模型卡片可见性';

@@ -28,7 +28,7 @@ test('batch selection shares canonical identities atomically without creating ma
   for (const key of ['modelTemplates', 'models', 'endpoints', 'modelSupplies', 'modelSalePrices', 'serviceRoutes']) assert.deepEqual(next[key], state[key]);
   for (const input of [undefined, '', [], ['foreign'], [ids[0], ids[0]], available.slice(0, 6).map(row => row.id)]) assert.throws(() => models(state, input));
   assert.throws(() => run(state, 'supplierModelsRegister', { providerId: owner(state).id, libraryIds: [ids[0], 'missing'] }), /变化/);
-  assert.throws(() => models(next, [ids[0]]), /已登记/);
+  assert.throws(() => models(next, [ids[0]]), /已添加该模型，不能重复添加/);
   assert.deepEqual(state, before);
   const restored = parseAdminState(JSON.stringify(next));
   assert.deepEqual(owner(restored).catalogModels, owner(next).catalogModels);

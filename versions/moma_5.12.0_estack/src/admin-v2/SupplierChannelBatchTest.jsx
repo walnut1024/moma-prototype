@@ -15,7 +15,7 @@ import { channelCheckCurrent, channelInterfaceIssue } from './provider-channels'
 import { modelTaskUrl } from './channel-interface';
 import { redactDiagnostic } from './channel-selection';
 import { moneyDisplay } from './model-management';
-import { connectionCredentialsReady, connectionFingerprint, connectionTestKey, connectionTestPassed } from './connection-state';
+import { connectionRecoveryRequired, connectionCredentialsReady, connectionFingerprint, connectionTestKey, connectionTestPassed } from './connection-state';
 import { prepareServerChannel, onboardingApi } from './onboarding-client';
 import OnboardingScenarioControl from './OnboardingScenarioControl';
 import { CHANNEL_TEST_STATUS, channelBatchRunning, channelBatchTerminal, channelTestItem, channelTestModels, channelTestRequest, recentChannelTestJob } from './channel-test-jobs';
@@ -186,6 +186,7 @@ function ModelCallTest({ state, provider, endpointId, associationIds, ops, close
     const failedBasicModels = allBasic.filter(row => retryFailures.has(row.associationId));
     const testRows = scopedRecords.filter(row => !failureOnly || retryFailures.has(row.associationId));
     const canTestDifferentScope = allBasic.length > 1 && allBasic.length <= 50 && allBasic.some(row => !selectedTestIds.includes(row.associationId));
+    const recovery = provider.status === '已启用' && !endpoint?.frozen && !endpoint?.poolPaused && !endpoint?.candidateConfiguration && connectionRecoveryRequired(endpoint);
     const usage = details?.usage;
     const usageText = [
       usage?.input_tokens == null ? null : `输入 ${usage.input_tokens} Token`,
@@ -224,6 +225,7 @@ function ModelCallTest({ state, provider, endpointId, associationIds, ops, close
       <OnboardingScenarioControl disabled={!canChange}/>
       {!ready && <Notice error>连接缺少可用 API 密钥。请在密钥管理中配置后再测试。</Notice>}
       {provider.status !== '已启用' && <Notice error>请先启用服务商。</Notice>}
+      {recovery && <Notice>{translateLabel('此次复测通过后，连接将恢复可用。')}</Notice>}
       {planError && <Notice error>{planError}。</Notice>}
       {plannedModels.length > 50 && <Notice error>每次最多测试 50 个模型，请减少选择。</Notice>}
       {unresolved && <Space wrap>
@@ -341,7 +343,7 @@ function ModelCallTest({ state, provider, endpointId, associationIds, ops, close
       </>}
     </SupplierCreationDialog>;
   }
-  return <SupplierCreationDialog wide embedded={embedded} title={title} description={testOnly ? "测试当前已保存配置，不自动启用供给。" : "检测通过后，单独启用模型供给。"} cancel={close} cancelLabel={embedded ? '退出检测' : '关闭'} disabled={!ops.can || busy || running || unresolved || embedded && singleEnabled && (!rows.every(passed) || continueDisabled) || (!singleEnabled && ((firstEnable ? !rows.every(passed) : confirming ? Boolean(confirmationIssue) : !selectedReady) || provider.status !== '已启用'))} action={testOnly ? null : singleEnabled ? embedded ? continueLabel : null : firstEnable?'启用供给':confirming ? confirmation.restoring ? '确认启用连接及所选' : '确认启用所选' : ['停用', '已停用'].includes(endpoint?.status) ? '启用连接并启用所选' : '启用所选'} submit={singleEnabled && embedded ? onContinue : enable} footer={<>{confirming && <Button theme="light" onClick={() => { setConfirmation(null); setSelected([]); setError(''); }}>重新选择</Button>}{!embedded && <Button theme="light" disabled={!ops.can || busy || running || unresolved || confirming || !failedIds.length} onClick={() => planRetry(failedIds)}>重试未通过项</Button>}</>}>
+  return <SupplierCreationDialog wide embedded={embedded} title={title} description={testOnly ? "测试当前已保存配置，不自动启用上游模型。" : "测试通过后，单独启用上游模型。"} cancel={close} cancelLabel={embedded ? '退出检测' : '关闭'} disabled={!ops.can || busy || running || unresolved || embedded && singleEnabled && (!rows.every(passed) || continueDisabled) || (!singleEnabled && ((firstEnable ? !rows.every(passed) : confirming ? Boolean(confirmationIssue) : !selectedReady) || provider.status !== '已启用'))} action={testOnly ? null : singleEnabled ? embedded ? continueLabel : null : firstEnable?'启用上游模型':confirming ? '确认启用所选' : '启用所选'} submit={singleEnabled && embedded ? onContinue : enable} footer={<>{confirming && <Button theme="light" onClick={() => { setConfirmation(null); setSelected([]); setError(''); }}>重新选择</Button>}{!embedded && <Button theme="light" disabled={!ops.can || busy || running || unresolved || confirming || !failedIds.length} onClick={() => planRetry(failedIds)}>重试未通过项</Button>}</>}>
     {navigation}
     <div className="supplier-onboarding-context"><strong>{provider.name}</strong><span>{endpoint?.name}</span><ChannelTestProgress batch={batch} running={busy || running}>通过 {rows.filter(passed).length} / {rows.length}</ChannelTestProgress>{!reference && <OnboardingScenarioControl disabled={busy || running || confirming}/>}</div>
     {viewingConnection && !reference && <Field label="服务地址"><CopyId copyAtStart value={endpoint?.baseUrl} label="服务地址"/></Field>}
@@ -365,8 +367,8 @@ function ModelCallTest({ state, provider, endpointId, associationIds, ops, close
         const explanation = interfaceIssue || (!stale && !item && !passed(row) ? row.health?.message : '');
         return <Row key={row.id}>{showSelection && <Cell><Checkbox aria-label={`选择启用 ${row.upstreamModelId}`} checked={selected.includes(row.id)} disabled={!ops.can || busy || running || unresolved || confirming || !passed(row) && !selected.includes(row.id)} onChange={event => { setSelected(current => event.target.checked ? [...current, row.id] : current.filter(id => id !== row.id)); setConfirmation(null); }}/></Cell>}{viewingConnection && <Cell>{records.find(record => record.associationId === row.id)?.modelName || row.modelId}</Cell>}<Cell><CopyId copyAtStart value={row.upstreamModelId} label="上游模型 ID"/></Cell>{directory && !embedded && !reference && <Cell>{recordEndpoints.get(row.id) || '—'}</Cell>}<Cell><AdminStatus value={result}/>{explanation && <small>{explanation}</small>}{(item?.evidenceSource === 'mock' || item && batch?.source === 'mock' || !item && (row.health?.source === 'mock' || row.health?.simulated)) && <small>模拟检测</small>}{embedded && item && item.status !== 'passed' && <small className="onboarding-test-repair">{item.suggestion || item.message}</small>}</Cell>{directory && !embedded && !reference && <Cell>{item ? [item.durationMs == null ? null : item.durationMs + ' ms', item.upstreamStatus].filter(value => value != null).join(' · ') || '—' : '—'}</Cell>}{!reference && <Cell><AdminStatus value={row.enabled && ['运行中','需关注'].includes(endpoint.status) ? '已启用' : '未启用'}/></Cell>}{!embedded && !reference && <Cell><AdminStatus value={row.pricing?.scenarios?.length ? '已配置' : '待配置'}/></Cell>}<Cell><div className="supplier-row-actions">{!embedded && <Button theme="borderless" type="tertiary" disabled={!ops.can || !ready || busy || running || unresolved || confirming} onClick={() => planRetry([row.id])}>选择重测</Button>}{item && <Button theme="borderless" type="tertiary" onClick={() => setDetails(item)}>检查详情</Button>}</div></Cell></Row>; })}
     </GridTable>
-    {confirming && <Notice>将启用连接及所选 {confirmation.selections.length} 个模型。{confirmation.restoring && '未选模型保持停用。'}服务商成本价待配置的模型暂不能用于正式服务。</Notice>}
-    {confirming && confirmation.restoring && confirmation.serviceImpact.length > 0 && <div className="supplier-batch-confirmation"><p>可能恢复 {confirmation.serviceImpact.length} 项已发布服务：</p><ul>{confirmation.serviceImpact.map(service => <li key={service.id}><strong>{service.name}</strong> · <CopyId copyAtStart value={service.callId} label="模型 ID"/> · 路由 v{service.routeVersion}</li>)}</ul></div>}
+    {confirming && <Notice>将启用所选 {confirmation.selections.length} 个上游模型。服务商成本价待配置的模型暂不能用于正式服务。</Notice>}
+    {confirming && confirmation.serviceImpact.length > 0 && <div className="supplier-batch-confirmation"><p>可能恢复 {confirmation.serviceImpact.length} 项已发布服务：</p><ul>{confirmation.serviceImpact.map(service => <li key={service.id}><strong>{service.name}</strong> · <CopyId copyAtStart value={service.callId} label="模型 ID"/> · 路由 v{service.routeVersion}</li>)}</ul></div>}
     {confirmationIssue && <Notice error>{confirmationIssue}</Notice>}
     {provider.status !== '已启用' && <Notice error>服务商已停用，请先启用服务商。</Notice>}
     {error && <Notice error>{error}</Notice>}{ops.error && <Notice error>{ops.error}</Notice>}

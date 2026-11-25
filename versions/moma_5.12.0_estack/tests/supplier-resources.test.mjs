@@ -83,12 +83,12 @@ test('missing Kimi credentials guide configuration, and the first added key is i
  const added=run(s,'addApiKeys',keys,id);
  assert.equal(connectionKeys(endpoint(added,'CH-301'),owner(added,id)).length,1);
  const channel=catalogueChannels(added,owner(added,id),'kimi-k2')[0];
- assert.throws(()=>run(added,'channelTest',{modelId:channel.modelId,channelId:channel.id,scenario:'success'},id),/连接测试并启用连接/);
+ assert.throws(()=>run(added,'channelTest',{modelId:channel.modelId,channelId:channel.id,scenario:'success'},id),/连接测试/);
  const tested=run(added,'supplierChannelTest',{endpointId:ep.id},id);
  assert.equal(connectionTestPassed(endpoint(tested,'CH-301')),true);
- assert.throws(()=>run(tested,'channelEnable',{modelId:channel.modelId,channelId:channel.id},id),/连接测试并启用连接/);
- const enabled=run(tested,'supplierChannelEnable',{endpointId:ep.id},id);
- const associationTested=run(enabled,'channelTest',{modelId:channel.modelId,channelId:channel.id,scenario:'success'},id);
+ assert.throws(()=>run(tested,'channelEnable',{modelId:channel.modelId,channelId:channel.id},id),/健康检测/);
+ assert.equal(endpoint(tested,'CH-301').status,'运行中');
+ const associationTested=run(tested,'channelTest',{modelId:channel.modelId,channelId:channel.id,scenario:'success'},id);
  const complete=run(associationTested,'channelEnable',{modelId:channel.modelId,channelId:channel.id},id);
  assert.equal(catalogueChannels(complete,owner(complete,id),channel.modelId)[0].enabled,true);
  assert.equal(connectionTestPassed(endpoint(complete,'CH-301')),true);
@@ -133,7 +133,8 @@ test('editing a shared channel affects all mappings after confirmation and name-
 test('editing one model-channel tariff, unit and free price preserves sibling models and other channels',()=>{
  const s=legacySupplierState(),id='provider-ark-official',p=owner(s,id),ep=endpoint(s,'CH-201');
  const target=catalogueChannels(s,p,'doubao-pro').find(row=>row.endpointId===ep.id),before=structuredClone(s);
- const scenarios=[{name:'缓存读取',condition:'命中缓存',listPrice:'0',unit:'千 Token',currency:'CNY'}];
+ const scenarios=[{name:'缓存读取 Token',condition:'命中缓存',listPrice:'0',unit:'百万 Token',currency:'CNY'}];
+ assert.throws(()=>run(s,'channelPrice',{modelId:target.modelId,channelId:target.id,scenarios:[{...scenarios[0],unit:'千 Token'}]},id),/内置字典/);
  const next=run(s,'channelPrice',{modelId:target.modelId,channelId:target.id,scenarios},id);
  const current=catalogueChannels(next,owner(next,id),target.modelId).find(row=>row.id===target.id);
  assert.deepEqual(current.pricing.scenarios,[{...scenarios[0],listPrice:0}]);
@@ -237,11 +238,11 @@ test('live service mappings protect upstream identity while pricing remains edit
  const s=legacySupplierState(),p=owner(s),ep=endpoint(s,'CH-001'),link=catalogueChannels(s,p,'DeepSeek-V4-Flash-0731')[0];
  s.modelSupplies.push({id:'live-map',providerId:p.id,endpointId:ep.id,catalogueModelId:link.modelId,upstreamModelId:link.upstreamModelId,status:'已启用'});
  const values={associationId:link.id,endpointId:ep.id,modelId:link.modelId,upstreamModelId:'different-upstream',scenarios:price(1)};
- assert.throws(()=>run(s,'supplierAssociationSave',values),/先解除服务映射/);
+ assert.throws(()=>run(s,'supplierAssociationSave',values),/先移除关联上游模型/);
  const next=run(s,'supplierAssociationSave',{...values,upstreamModelId:link.upstreamModelId});
  assert.deepEqual(next.modelSupplies,s.modelSupplies);
  assert.throws(()=>run(s,'supplierModelAdd',{libraryId:'missing'}),/模型资料不存在/);
- p.status='已停用';assert.throws(()=>run(s,'supplierChannelEnable',{endpointId:ep.id}),/启用服务商/);
+ p.status='已停用';assert.throws(()=>run(s,'supplierModelEnable',{endpointId:ep.id,modelId:link.modelId,associationId:link.id}),/启用服务商/);
 });
 
 test('an existing service-derived model association remains editable without changing its resource or service history',()=>{
@@ -262,27 +263,21 @@ test('supplier resource writes retain role, conflict and storage failure guards'
 });
 
 
-test('model removal requires all channels to be unlinked, including disabled channels',()=>{
+test('deleting supplier registration preserves enabled and disabled upstream models',()=>{
  const s=legacySupplierState(),before=structuredClone(s),modelId='GLM-5.2';
  assert.equal(catalogueChannels(s,owner(s),modelId).length,2);
- assert.throws(()=>run(s,'catalogueRemove',{modelId,confirmed:true}),/请先移除.*全部上游模型记录/);
- assert.deepEqual(s,before);
- const disabled=structuredClone(s);
- owner(disabled).catalogConnections=owner(disabled).catalogConnections.map(link=>({...link,enabled:false}));
- assert.throws(()=>run(disabled,'catalogueRemove',{modelId,confirmed:true}),/请先移除.*全部上游模型记录/);
- let next=s;
  const links=catalogueChannels(s,owner(s),modelId);
- for(const [index,link] of links.entries()){
+ let next=run(s,'catalogueRemove',{modelId,confirmed:true});
+ assert.ok(!displayedCatalogueIds(owner(next),next).includes(modelId));
+ assert.deepEqual(catalogueChannels(next,owner(next),modelId),links);
+ for(const link of links){
   next=run(next,'supplierAssociationRemove',{modelId,endpointId:link.endpointId,associationId:link.id,confirmed:true});
-  if(index===0)assert.throws(()=>run(next,'catalogueRemove',{modelId,confirmed:true}),/请先移除.*全部上游模型记录/);
  }
  assert.equal(catalogueChannels(next,owner(next),modelId).length,0);
  assert.ok(!displayedCatalogueIds(owner(next),next).includes(modelId));
- const removed=next;
- assert.ok(!displayedCatalogueIds(owner(removed),removed).includes(modelId));
- assert.deepEqual(removed.endpoints,s.endpoints);
- assert.equal(catalogueChannels(removed,owner(removed),'DeepSeek-V4-Flash-0731').length,1);
- unchangedServices(s,removed);
+ assert.deepEqual(next.endpoints,s.endpoints);
+ assert.equal(catalogueChannels(next,owner(next),'DeepSeek-V4-Flash-0731').length,1);
+ unchangedServices(s,next);
  assert.deepEqual(s,before);
 });
 

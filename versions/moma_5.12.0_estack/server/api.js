@@ -1,4 +1,5 @@
 import { changeNewModelService, inspectNewModelService, newModelServices } from './new-model-services.js';
+import { changeModelServiceSale, readModelServiceSales } from './model-service-sales.js';
 import { domainModel } from '../src/mock/model-fields.js';
 import { serviceCallsEnabled, serviceReferences, offerKey, providerOffer } from '../src/service-access.mjs';
 import { resourceId } from '../src/resource-id.mjs';
@@ -18,11 +19,12 @@ import { isTenantRouteCall, validRouteOptions } from '../src/tenant-routing.mjs'
 import { readPublishedSiteSetting, savePublishedSiteSetting, validateAgreements } from './site-settings.js';
 import { PORTAL_HOME_ENDPOINT, portalHomeUrl } from '../src/portal-home.mjs';
 import { readProjectSpacePolicy, saveProjectSpacePolicy } from './project-space-policy.js';
-import { AUDIT_ACTIONS, AUDIT_RESOURCES, AUDIT_RESULTS } from '../src/admin-v2/platform-audit.mjs';
+import { AUDIT_ACTIONS, AUDIT_OBJECT_FILTERS, AUDIT_RESULTS } from '../src/admin-v2/platform-audit.mjs';
 import { loadModelWorkspace } from './model-repository.js';
 import { supplierDirectory } from '../src/admin-v2/moma-provider.js';
 import { connectionDirectoryRows } from '../src/admin-v2/channel-connection-directory.js';
 import { channelHealthCatalogue } from '../src/admin-v2/channel-health-catalogue.mjs';
+import modelOperationsRequirementsContent from './model-operations-requirements-content.js';
 const COOKIE = 'moma5120_v2_session';
 const encoder = new TextEncoder();
 const MAX_BODY = 256 * 1024;
@@ -247,7 +249,9 @@ async function route(request, env, requestId) {
   const spacePolicyPath = path === '/project-space-policy' && (PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1');
   const credentialPath = /^\/channels\/([A-Za-z0-9:_.-]{1,200})\/verify-credential$/.exec(path);
   const newServices = path === '/model-services-new';
-  const known = path === '/channel-health' || newServices || path===CHAT_COMPLETIONS || agreementPath || portalPath || spacePolicyPath || loginField || marketPaths.includes(path) || applicationPaths.includes(path) || tenantResources || trafficPath || trafficHistoryPath || auditPath || credentialPath || packagePath || ['/deployment/license','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-operations','/model-operations/commands','/channels/consistency'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
+  const serviceSalesPath = path === '/model-service-sales';
+  const requirementsPath = path === '/docs/model-operations';
+  const known = path === '/channel-health' || requirementsPath || newServices || serviceSalesPath || path===CHAT_COMPLETIONS || agreementPath || portalPath || spacePolicyPath || loginField || marketPaths.includes(path) || applicationPaths.includes(path) || tenantResources || trafficPath || trafficHistoryPath || auditPath || credentialPath || packagePath || ['/deployment/license','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-operations','/model-operations/commands','/channels/consistency'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
   if (!known) fail(404, 'NOT_FOUND', 'API 不存在');
   if (!env.MODEL_OPS_DB) fail(503, 'DATABASE_UNAVAILABLE', '模型运营数据库尚未绑定');
   const db = env.MODEL_OPS_DB;
@@ -523,6 +527,14 @@ async function route(request, env, requestId) {
     return json(await marketCompletion(db,session,body));
   }
   const actor = await authenticate(request, db);
+  if (requirementsPath) {
+    if (!WRITE_ROLES.includes(actor.role)) fail(403, 'FORBIDDEN', '当前账号无权查看模型运营需求文档');
+    if (method !== 'GET') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    if (!modelOperationsRequirementsContent) fail(503, 'DOCUMENT_UNAVAILABLE', '需求文档暂不可用');
+    const response = json({ html: modelOperationsRequirementsContent });
+    response.headers.set('Cache-Control', 'private, no-store');
+    return response;
+  }
   if (tenantResources) {
     if (actor.role !== '平台管理员') fail(403,'FORBIDDEN','只有系统管理员可以管理指定租户的资源');
     const [,tenantId,resource] = tenantResources;
@@ -543,7 +555,7 @@ async function route(request, env, requestId) {
   }
   if (credentialPath) {
     if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
-    if (actor.role !== '平台管理员') fail(403, 'FORBIDDEN', '仅平台管理员可验证后查看凭证摘要');
+    if (actor.role !== '平台管理员') fail(403, 'FORBIDDEN', '仅平台管理员可验证后查看上游 API 密钥摘要');
     const body = await bodyJson(request, 4096);
     fields(body, ['keyId', 'accessCode']);
     if (!identifier(body.keyId) || typeof body.accessCode !== 'string' || body.accessCode.length < 8 || body.accessCode.length > 128) fail(400, 'INVALID_INPUT', '请输入当前账号访问码');
@@ -590,8 +602,21 @@ async function route(request, env, requestId) {
     }
     if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
     const body = await bodyJson(request);
-    fields(body, ['action', 'id', 'revision', 'row', 'operationId']);
+    fields(body, ['action', 'id', 'revision', 'row', 'operationId', 'expectedSale']);
     return json(await changeNewModelService(db, actor, body, request.headers.get('idempotency-key')));
+  }
+  if (serviceSalesPath) {
+    if (!canAccessPage(actor.role, 'model-prices')) fail(403, 'FORBIDDEN', '当前账号无模型销售访问权限');
+    if (method === 'GET') {
+      requireCommerce();
+      return json(await readModelServiceSales(db, actor));
+    }
+    if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    if (!WRITE_ROLES.includes(actor.role)) fail(403, 'FORBIDDEN', '当前账号无模型销售写入权限');
+    requireCommerce(true);
+    const body = await bodyJson(request);
+    fields(body, ['action','serviceId','revision','operationId','items','stage','grayTenantIds']);
+    return json(await changeModelServiceSale(db, actor, body, request.headers.get('idempotency-key')));
   }
   const pageId = path === '/channel-health' ? 'providers-health' : auditPath ? 'audit-logs' : trafficPath || trafficHistoryPath ? 'traffic-limits' : packagePath ? 'package-production' : dictionary ? 'tariff-dictionary' : path.startsWith('/materials') ? 'model-templates'
     : path.startsWith('/suppliers') || path.startsWith('/channels') ? 'providers-reference' : 'listing-new';
@@ -617,7 +642,7 @@ async function route(request, env, requestId) {
     const tenant=params.get('tenant') || '', project=params.get('project') || '';
     if ((tenant && !identifier(tenant)) || (project && !identifier(project))) fail(400,'INVALID_INPUT','空间或项目筛选无效');
     if ((action && !Object.hasOwn(AUDIT_ACTIONS, action)) || (status && !Object.hasOwn(AUDIT_RESULTS, status)) ||
-        (type && !Object.hasOwn(AUDIT_RESOURCES, type))) fail(400, 'INVALID_INPUT', '审计筛选条件无效');
+        (type && !Object.hasOwn(AUDIT_OBJECT_FILTERS, type))) fail(400, 'INVALID_INPUT', '审计筛选条件无效');
     const account = (params.get('actor') || '').trim();
     if (account.length > 100) fail(400, 'INVALID_INPUT', '操作人搜索内容过长');
     const data = await auditLogPage(db, { limit, after, from, to, action, status, type, tenant, project, q:q.toLowerCase(), actor:account.toLowerCase() });

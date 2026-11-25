@@ -6,7 +6,7 @@ import { serviceReferences } from '../service-access.mjs';
 import { resourceId } from '../resource-id.mjs';
 import { workspaceStoragePrefix } from '../workspace-storage.mjs';
 import { withinRouteLimits } from './routing-policy.js';
-import { routingChannels, routingServices, comparableRouteCosts, normalizeRouteRetry } from './service-routing.js';
+import { routingChannels, routingServices, normalizeRouteRetry } from './service-routing.js';
 import mockConfig from '../mock/catalogues.json' with { type: 'json' };
 import { assertPublishedAccess, readLinkedState as browserReadLinkedState } from '../service-access.mjs';
 export const SCENARIOS = mockConfig["admin-v2/mock-onboarding-service.js"]["SCENARIOS"];
@@ -116,12 +116,14 @@ function totalPrice(selected, usage) {
   if (items.some(item => !item) || new Set(items.map(item => item.currency)).size !== 1) return null;
   return { amount: items.reduce((sum, item) => sum + item.amount, 0), currency: items[0].currency, unit: 'micro', priceVersion: selected.map(item => item.id).join('+'), items };
 }
+const mockRouteStrategies = ['fixed', 'priority', 'weighted', 'priority_weighted', 'load', 'tpm', 'latency'];
+
 function normalizeCandidate(state, body, previous = {}) {
   const input = { ...previous, ...body }, publicModelId = text(input.publicModelId, '模型 ID');
   if (/\s/.test(publicModelId) || !['standard', 'provider'].includes(input.mode)) fail('service_incomplete', '请配置模型 ID 和服务模式');
   const bindings = (input.bindings || []).map(binding => { channelById(state, binding.channelId); return { id: text(binding.id || `${binding.channelId}:${binding.model?.id}`, '供给 ID'), channelId: binding.channelId, model: copy(binding.model), procurementPrices: prices(binding.procurementPrices || []) }; });
   const route = input.route || { version: 1, strategy: 'priority', channels: [] };
-  if (!['fixed', 'priority', 'weighted', 'priority_weighted', 'load', 'tpm', 'latency', 'cost'].includes(route.strategy || 'priority') || !Number.isInteger(route.version) || route.channels.some(row => !bindings.some(binding => binding.id === row.bindingId))) fail('invalid_route', '路由须引用明确关联的供给');
+  if (!mockRouteStrategies.includes(route.strategy || 'priority') || !Number.isInteger(route.version) || route.channels.some(row => !bindings.some(binding => binding.id === row.bindingId))) fail('invalid_route', '路由须引用明确关联的供给');
   if (route.retry != null) {
     try { normalizeRouteRetry(route.retry); }
     catch (error) { fail('invalid_route', error.message); }
@@ -170,20 +172,20 @@ function qualify(state, service) {
   return activeRouteChannels(config).map(row => { const binding = config.bindings.find(item => item.id === row.bindingId); if (!config.technical && !activePrices(binding.procurementPrices, Date.now())) fail('procurement_price_required', '服务商成本价缺失或已过期'); return evidence(state, binding, config.capabilities); });
 }
 function routeOrder(config) {
+  if (!mockRouteStrategies.includes(config.route.strategy || 'priority')) fail('invalid_route', '当前路由策略不可用');
   const weighted = rows => { const pool = [...rows], result = []; while (pool.length) { let target = Math.random() * pool.reduce((sum, row) => sum + row.weight, 0), index = 0; while (index < pool.length - 1 && (target -= pool[index].weight) >= 0) index++; result.push(...pool.splice(index, 1)); } return result; };
   let allowed = activeRouteChannels(config).sort((a, b) => Number(Boolean(a.backup)) - Number(Boolean(b.backup)) || a.priority - b.priority);
-  const local=runtime && readLinkedState(),needsMetrics=['load','tpm','latency','cost'].includes(config.route.strategy) || local?.endpoints?.some(row=>row.rpmLimit!=null || row.tpmLimit!=null || row.metrics?.rpmLimit!=null || row.metrics?.tpmLimit!=null),service=needsMetrics && local && routingServices(local).find(row=>row.callId===config.publicModelId);
+  const local=runtime && readLinkedState(),needsMetrics=['load','tpm','latency'].includes(config.route.strategy) || local?.endpoints?.some(row=>row.rpmLimit!=null || row.tpmLimit!=null || row.metrics?.rpmLimit!=null || row.metrics?.tpmLimit!=null),service=needsMetrics && local && routingServices(local).find(row=>row.callId===config.publicModelId);
   const channels=service?routingChannels(local,service,Date.now(),{runtime:true}):[];
   const byId=new Map(channels.map(row=>[row.id,row]));
   if(service){
     if(allowed.some(row=>!byId.has(row.bindingId)))fail('supply_changed','当前路由引用的连接已变化');
     allowed=allowed.filter(row=>withinRouteLimits(byId.get(row.bindingId)));
   }
-  if(['load','tpm','latency','cost'].includes(config.route.strategy)){
+  if(['load','tpm','latency'].includes(config.route.strategy)){
     if(!service || allowed.some(row=>!byId.has(row.bindingId)))fail('routing_metrics_required','缺少当前路由的实际连接依据');
-    const costs=config.route.strategy==='cost'?new Map(comparableRouteCosts(allowed.map(row=>byId.get(row.bindingId)),config.route.costBasis || 'input').map(row=>[row.supplyId,row.amount])):null;
     const metric=config.route.strategy==='load'?'activeRequests':config.route.strategy==='tpm'?'tokensPerMinute':'p95LatencyMs';
-    const value=row=>costs?costs.get(row.bindingId):byId.get(row.bindingId)[metric];
+    const value=row=>byId.get(row.bindingId)[metric];
     if(allowed.some(row=>value(row)==null))fail('routing_metrics_required','缺少路由所需的实际指标，不能推断为零');
     return weighted(allowed.map(row=>({...row,weight:1}))).sort((a,b)=>value(a)-value(b));
   }
@@ -288,7 +290,7 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
     const input = { ...current, ...body }, providerId = text(input.providerId, '服务商'), name = text(input.name, '连接名称', 60);
     if (current && current.providerId !== providerId) fail('provider_immutable', '连接不能变更服务商');
     if (state.channels.some(row => row.id !== current?.id && row.providerId === providerId && row.name === name)) fail('duplicate_name', '连接名称重复');
-    if (!['openai', 'openai-responses', 'anthropic', 'custom'].includes(input.interfaceType)) fail('invalid_interface', '请选择明确接口类型');
+    if (!['openai', 'openai-responses', 'anthropic', 'custom'].includes(input.interfaceType)) fail('invalid_interface', '请选择上游接口格式');
     const localKeyId = input.credential?.id || null, externalVersion = input.credential?.version || 'initial', credentialId = input.authMode === 'none' ? null : localKeyId ? `${localKeyId}@${hash(externalVersion)}` : input.credentialId;
     const key = state.credentials.find(row => row.id === credentialId);
     if (key && key.providerId !== providerId) fail('credential_scope', '密钥不属于此服务商');
@@ -390,7 +392,7 @@ function handle(state, path, { method = 'GET', body = {}, token } = {}) {
     const key = state.clientKeys.find(row => row.tokenHash === hash(token || body.clientKey || ''));
     if (!key || key.status !== 'active' || key.expiresAt && Date.parse(key.expiresAt) <= Date.now()) fail('client_unauthorized', '租户 Key 无效或已过期');
     const service = state.services.find(row => row.published?.config.publicModelId === body.model && !row.disabled);
-    if (!service) fail('model_unavailable', '模型服务未上架或不可用');
+    if (!service) fail('model_unavailable', '当前模型服务不可用，请选择其他模型服务');
     const local = readLinkedState();
     assertPublishedAccess(local, service, key.tenantId);
     setMockRuntimeState(local);
@@ -523,7 +525,7 @@ function prepareMockConfiguration({ operationId = uid(), scope = 'channels', rep
     const service = serviceById(after, update.serviceId), prior = copy(service.published);
     if (!prior || service.disabled || update.config.bindings.some(binding => !prior.config.bindings.some(old => old.id === binding.id && old.channelId === binding.channelId))) fail('invalid_route_reduction', '移除连接不能新增供给或替换验证');
     service.configurationHistory ||= [];
-    service.configurationHistory.push({ reason: '移除供给连接', revision: service.revision, candidate: copy(service.candidate), published: prior });
+    service.configurationHistory.push({ reason: '移除关联上游模型', revision: service.revision, candidate: copy(service.candidate), published: prior });
     handle(after, `/services/${service.id}`, { method: 'PATCH', body: { ...update.config, operationId: operationId + ':route:' + service.id, expectedRevision: service.revision } });
     const identity = handle(after, `/services/${service.id}/test-identities`, { method: 'POST', body: { operationId: operationId + ':identity:' + service.id, expectedRevision: service.revision } });
     handle(after, `/services/${service.id}/trial`, { method: 'POST', body: { operationId: operationId + ':trial:' + service.id, trialToken: identity.token } });
@@ -582,18 +584,18 @@ function mockServiceReadiness(local, service) {
     setMockRuntimeState(local);
     if (!activePrices(config.salePrices, Date.now())) fail('sale_price_expired', '当前模型刊例价未生效或已过期');
     const routes = routeOrder(config);
-    if (!routes.length) fail('supply_unavailable', '暂无可用供给');
+    if (!routes.length) fail('supply_unavailable', '暂无可用的上游模型');
     let issue;
     for (const route of routes) {
       try {
         const binding = config.bindings.find(item => item.id === route.bindingId);
-        if (!binding || !activePrices(binding.procurementPrices, Date.now())) fail('procurement_price_expired', '当前供给价格不可用');
+        if (!binding || !activePrices(binding.procurementPrices, Date.now())) fail('procurement_price_expired', '当前上游模型的服务商成本价不可用');
         assertAvailable(state, channelById(state, binding.channelId), { live: true, model: binding.model });
         return { allowed: true, reason: '' };
       } catch (error) { issue = error; if (!config.route.autoFailover) break; }
     }
     throw issue;
-  } catch (error) { return { allowed: false, code: error?.code || 'supply_unavailable', reason: error?.message || '暂无可用供给' }; }
+  } catch (error) { return { allowed: false, code: error?.code || 'supply_unavailable', reason: error?.message || '暂无可用的上游模型' }; }
 }
 
 function getMockOperationalRequests() {
@@ -604,7 +606,7 @@ function getMockOperationalRequests() {
 function callForOrder(service,config,{tenantId,orderId,messages}) {
   const state=readForWrite();
   const local=readLinkedState();
-  assertPublishedAccess(local,service,tenantId);
+  assertPublishedAccess(local,service,tenantId,{commercialOrder:Boolean(orderId)});
   setMockRuntimeState(local);
   const result=pipeline(state,service,config,service.published.proofs,{identityType:'client',identityId:orderId,tenantId,messages});
   const {id,model,choices,usage,traceId,source}=result;

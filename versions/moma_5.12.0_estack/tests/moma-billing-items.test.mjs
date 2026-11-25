@@ -5,7 +5,7 @@ import { MOMA_PROVIDER } from '../src/admin-v2/moma-provider.js';
 import { MOMA_CATALOGUE_PRICES, providerCataloguePrice } from '../src/admin-v2/moma-catalogue-prices.js';
 import { createAdminSeed, commitAdminState } from '../src/admin-v2/store.js';
 import { normalizeCataloguePrice, cataloguePriceDraft } from '../src/admin-v2/provider-catalogue-pricing.js';
-import { tariffDictionaryEntries, tariffOptions, tariffScenarioUnit, appendCommonTariffScenarios, tariffDictionaryTransaction } from '../src/admin-v2/tariff-dictionary.js';
+import { tariffDictionaryEntries, tariffOptions, tariffScenarioUnit, appendCommonTariffScenarios } from '../src/admin-v2/tariff-dictionary.js';
 
 const price = id => providerCataloguePrice(MOMA_PROVIDER, id);
 const inputLow = '输入 Token（输入长度 (0,128K]）', outputLow = '输出 Token（输入长度 (0,128K]）';
@@ -32,10 +32,8 @@ test('new dictionary definitions work in existing storage without rewriting cust
   const custom={id:'custom-fee',kind:'scenario',name:'自定义费用',englishName:'Custom fee',unitId:'tariff-unit-1',status:'已停用',builtin:false};state.tariffDictionary.push(custom);
   const before=JSON.stringify(state);
   assert.ok(tariffOptions(state,'scenario').includes(inputLow));
-  assert.ok(tariffOptions(state,'scenario').includes(custom.name));
+  assert.ok(!tariffOptions(state,'scenario').includes(custom.name));
   const rows=appendCommonTariffScenarios([], [inputLow,outputLow], state,'CNY');assert.deepEqual(rows.map(row=>row.unit),['百万 Token','百万 Token']);
-  const item=tariffDictionaryEntries(state).find(item=>item.name===inputLow);
-  for(const operation of ['save','status','delete'])assert.throws(()=>tariffDictionaryTransaction(state,{operation,id:item.id,builtin:false,name:'changed',status:'已停用'}),/内置字典项只读/);
   assert.equal(JSON.stringify(state),before);
 });
 

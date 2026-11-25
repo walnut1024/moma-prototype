@@ -23,8 +23,16 @@ export const PROJECT_AUDIT_ACTIONS = {
 export const AUDIT_ACTIONS = {
   'service_route.publish': '发布路由',
   'supplier_key_group.rotate': '轮换共享密钥',
-  'supplier_key.replace': '替换 API 密钥',
+  'supplier_key.replace': '替换上游 API 密钥',
   'model_supply.disable': '批量停用上游模型',
+  'service_mapping.discard': '放弃关联上游模型变更',
+  'service_mapping.enable': '启用关联上游模型',
+  'service_mapping.disable': '停用关联上游模型',
+  'service_mapping.remove': '移除关联上游模型',
+  'service_mapping.update': '保存关联上游模型',
+  'model_service.start': '启动服务',
+  'model_service.stop': '停止服务',
+  'model_sale.stop_with_service': '因停服自动停售',
   ...PROJECT_AUDIT_ACTIONS,
   'site.personal_space.configure': '变更个人空间开关',
 };
@@ -36,7 +44,8 @@ export const AUDIT_DOMAINS = { model_operations:'模型运营', projects:'项目
 export const AUDIT_RESOURCES = {
   service_route: '服务路由',
   model_service: '模型服务',
-  service_mapping: '服务映射',
+  model_sale: '模型售卖',
+  service_mapping: '关联上游模型',
   supplier_key_group: '供应密钥组',
   supplier_key: '供应密钥',
   supplier_connection: '连接配置',
@@ -48,4 +57,10 @@ export const AUDIT_RESOURCES = {
   project_key: '项目 API Key',
   project_route: '项目路由',
   site: '站点',
+};
+
+export const AUDIT_OBJECT_FILTERS = {
+  ...AUDIT_RESOURCES,
+  model_supply_status: '上游模型状态',
+  service_mapping_status: '关联上游模型状态',
 };

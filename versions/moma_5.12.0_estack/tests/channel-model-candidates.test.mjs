@@ -2,78 +2,91 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { channelModelCandidates, matchesChannelModel } from '../src/admin-v2/channel-model-candidates.js';
 
-test('channel model autofill requires the same provider, base URL and effective API endpoint', () => {
-  const templates = ['match', 'other-address', 'other-format', 'other-path', 'ambiguous', 'missing', 'added', 'library-only'];
-  const modelTemplates = templates.map(modelId => ({ id: modelId, modelId, name: modelId, type: 'text' }));
-  const provider = { id: 'test-provider', catalogModelIds: templates.slice(0, -1) };
-  const endpoint = { id: 'target', providerId: provider.id, interfaceType: 'openai', baseUrl: 'https://same.example/v1/' };
-  const same = { ...endpoint, id: 'same', baseUrl: 'https://same.example/v1' };
-  const otherAddress = { ...same, id: 'address', baseUrl: 'https://other.example/v1' };
-  const otherFormat = { ...same, id: 'format', interfaceType: 'openai-responses' };
-  const otherPath = { ...same, id: 'path', endpointPath: '/custom/chat' };
-  provider.catalogConnections = [
-    [same, 'match', 'vendor/exact'],
-    [same, 'match', 'vendor/exact'],
-    [otherAddress, 'other-address', 'vendor/remote'],
-    [otherFormat, 'other-format', 'vendor/responses'],
-    [otherPath, 'other-path', 'vendor/custom'],
-    [same, 'ambiguous', 'vendor/one'],
-    [same, 'ambiguous', 'vendor/two'],
-    [same, 'missing', undefined],
-    [endpoint, 'added', 'vendor/added'],
-  ].map(([source, modelId, upstreamModelId], index) => ({ id: String(index), modelId, endpointId: source.id, upstreamModelId }));
-  const foreignEndpoint = { ...same, id: 'foreign', providerId: 'another-provider' };
-  const foreignProvider = { id: foreignEndpoint.providerId, catalogModelIds: ['library-only'],
-    catalogConnections: [{ modelId: 'library-only', endpointId: foreignEndpoint.id, upstreamModelId: 'foreign/id' }] };
-  const state = { modelTemplates, models: [], modelSupplies: [], providers: [provider, foreignProvider], modelData: {},
-    endpoints: [endpoint, same, otherAddress, otherFormat, otherPath, foreignEndpoint] };
-  const channel = { provider, endpoint, models: [{ master: modelTemplates.at(-2), association: provider.catalogConnections.at(-1) }] };
-  const rows = new Map(channelModelCandidates(state, channel).map(row => [row.id, row]));
-  assert.equal(rows.get('match').defaultSource.upstreamModelId, 'vendor/exact');
-  for (const id of ['other-address', 'other-format', 'other-path', 'ambiguous', 'missing', 'library-only']) {
-    assert.equal(rows.get(id).defaultSource, undefined, id);
-  }
-  assert.equal(rows.get('missing').sources[0].upstreamModelId, '');
-  assert.equal(rows.get('library-only').supplied, false);
-  assert.equal(rows.get('added').added, true);
-  assert.equal(rows.get('added').currentUpstreamId, 'vendor/added');
-  const filters = { format: 'openai', baseUrl: same.baseUrl, query: '', targetFormat: 'openai', targetBaseUrl: same.baseUrl };
-  assert.equal(matchesChannelModel(rows.get('missing'), filters), true);
-  assert.equal(matchesChannelModel(rows.get('library-only'), filters), true);
-  assert.equal(matchesChannelModel(rows.get('other-address'), filters), false);
-  assert.equal(matchesChannelModel(rows.get('other-address'), { ...filters, baseUrl: otherAddress.baseUrl, query: 'vendor/remote' }), true);
-  assert.equal(matchesChannelModel(rows.get('other-format'), { ...filters, format: 'openai-responses' }), true);
+const chat = 'OpenAI Chat Completions';
+const address = 'https://same.example/v1/chat/completions';
+const binding = (upstream, url = address, protocol = chat) => ({ upstream, url, protocol });
+const offer = (modelId, bindings) => ({
+  modelId, libraryId: modelId,
+  offerFields: { name: '供应 ' + modelId, bindings },
 });
 
-test('provider candidates follow the registered model list and its saved API bindings', () => {
+test('manual addition reads only saved supplier bindings for the current interface and full request address', () => {
+  const catalogModels = [
+    offer('match', [binding('vendor/exact'), binding('vendor/exact', address + '/')]),
+    offer('other-address', [binding('vendor/remote', 'https://other.example/v1/chat/completions')]),
+    offer('other-format', [binding('vendor/responses', address, 'OpenAI Responses')]),
+    offer('other-path', [binding('vendor/custom', 'https://same.example/v1/custom/chat')]),
+    offer('ambiguous', [binding('vendor/one'), binding('vendor/two')]),
+    offer('missing', [binding('')]),
+    offer('invalid', [binding('contains space')]),
+    offer('added', [binding('vendor/saved')]),
+    offer('duplicate', [binding('vendor/connected')]),
+    offer('deleted-material', [binding('vendor/deleted')]),
+    { modelId: 'legacy-connection', libraryId: 'legacy-connection' },
+  ];
   const provider = {
-    id: 'provider-registered', code: 'deepseek', sourceType: 'thirdParty',
+    id: 'provider-deepseek-official', code: 'deepseek',
+    catalogModels, catalogModelIds: catalogModels.map(row => row.modelId),
+    catalogConnections: [
+      { modelId: 'legacy-connection', endpointId: 'same', upstreamModelId: 'vendor/legacy' },
+      { modelId: 'added', endpointId: 'target', upstreamModelId: 'vendor/connected' },
+    ],
+  };
+  const endpoint = { id: 'target', providerId: provider.id, interfaceType: 'openai', baseUrl: 'https://same.example/v1/' };
+  const foreign = offer('foreign', [binding('vendor/foreign')]);
+  const foreignProvider = { id: 'foreign-provider', catalogModelIds: ['foreign'], catalogModels: [foreign] };
+  const ids = [...provider.catalogModelIds, 'foreign', 'library-only', 'deepseek-v4-pro'];
+  const modelTemplates = ids.map(modelId => ({ id: modelId, modelId, name: modelId, type: 'text',
+    ...(modelId === 'deleted-material' && { referenceDeletedAt: '2026-11-25' }),
+  }));
+  const state = {
+    modelTemplates, models: [], modelSupplies: [], providers: [provider, foreignProvider], modelData: {},
+    endpoints: [endpoint, { ...endpoint, id: 'same' }],
+  };
+  const channel = { provider, endpoint, models: [{
+    master: modelTemplates.find(model => model.id === 'added'),
+    association: provider.catalogConnections[1],
+  }] };
+  const rows = new Map(channelModelCandidates(state, channel).map(row => [row.id, row]));
+  assert.deepEqual([...rows.keys()].sort(), ['added', 'deleted-material', 'duplicate', 'match']);
+  assert.equal(rows.get('deleted-material').upstreamModelId, 'vendor/deleted');
+  assert.equal(rows.get('match').upstreamModelId, 'vendor/exact');
+  assert.equal(rows.get('match').displayName, '供应 match');
+  assert.equal(rows.get('added').added, true);
+  assert.equal(rows.get('added').upstreamModelId, 'vendor/saved');
+  assert.equal(rows.get('duplicate').duplicate, true);
+  assert.equal(matchesChannelModel(rows.get('match'), '供应 match'), true);
+  assert.equal(matchesChannelModel(rows.get('match'), 'VENDOR/EXACT'), true);
+  assert.equal(matchesChannelModel(rows.get('match'), 'vendor/remote'), false);
+});
+
+test('manual addition matches the connection path appended to its Base URL', () => {
+  const provider = {
+    id: 'provider-registered',
     catalogModelIds: ['registered-offer'],
-    catalogModels: [{
-      modelId: 'registered-offer', libraryId: 'registered-offer',
-      offerFields: { name: '服务商登记名称', bindings: [{
-        protocol: 'OpenAI Chat Completions', url: 'https://api.deepseek.com/v1/chat/completions', upstream: 'vendor/registered',
-      }] },
-    }],
+    catalogModels: [offer('registered-offer', [binding('vendor/registered')])],
   };
   const endpoint = {
     id: 'channel-target', providerId: provider.id, interfaceType: 'openai',
-    endpointPath: '/v1/chat/completions', baseUrl: 'https://api.deepseek.com',
+    endpointPath: '/v1/chat/completions', baseUrl: 'https://same.example',
   };
-  const modelTemplates = [
-    { id: 'registered-offer', modelId: 'registered-offer', name: '模型库名称', type: 'text' },
-    { id: 'official-only', modelId: 'deepseek-v4-pro', name: 'DeepSeek 官方参考', type: 'text' },
-  ];
+  const modelTemplates = [{ id: 'registered-offer', modelId: 'registered-offer', name: '模型库名称', type: 'text' }];
   const state = { modelTemplates, models: [], modelSupplies: [], providers: [provider], endpoints: [endpoint], modelData: {} };
-  const rows = channelModelCandidates(state, { provider, endpoint, models: [] });
-  assert.deepEqual(rows.filter(row => row.supplied).map(row => row.id), ['registered-offer']);
-  const [registered, official] = rows;
-  assert.equal(registered.providerModelName, '服务商登记名称');
-  assert.equal(registered.defaultSource.upstreamModelId, 'vendor/registered');
-  assert.equal(registered.defaultSource.baseUrl, endpoint.baseUrl);
-  assert.equal(official.sources[0].name, '官方参考');
-  assert.equal(official.supplied, false);
-  assert.equal(matchesChannelModel(registered, {
-    query: '服务商登记', format: 'openai', baseUrl: endpoint.baseUrl, targetFormat: 'openai', targetBaseUrl: endpoint.baseUrl,
-  }), true);
+  const [registered] = channelModelCandidates(state, { provider, endpoint, models: [] });
+  assert.equal(registered.upstreamModelId, 'vendor/registered');
+  const changed = { ...endpoint, endpointPath: '/v2/chat/completions' };
+  assert.deepEqual(channelModelCandidates(state, { provider, endpoint: changed, models: [] }), []);
+});
+
+test('manual addition uses the displayed API format for saved full-address connections', () => {
+  const url = 'https://same.example/v1/embeddings';
+  const provider = {
+    id: 'provider-registered', catalogModelIds: ['embedding-offer'],
+    catalogModels: [offer('embedding-offer', [binding('vendor/embedding', url, 'OpenAI Embeddings')])],
+  };
+  const endpoint = { id: 'legacy-task-url', providerId: provider.id, interfaceType: 'custom', baseUrl: url };
+  const modelTemplates = [{ id: 'embedding-offer', modelId: 'embedding-offer', name: '向量模型', type: 'embedding' }];
+  const state = { modelTemplates, models: [], modelSupplies: [], providers: [provider], endpoints: [endpoint], modelData: {} };
+  const [candidate] = channelModelCandidates(state, { provider, endpoint, models: [] });
+  assert.equal(candidate.upstreamModelId, 'vendor/embedding');
 });

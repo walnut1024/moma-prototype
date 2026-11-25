@@ -4,7 +4,6 @@ import { Button, Input, TextArea } from '@douyinfe/semi-ui';
 import AdminStatus from './AdminStatus';
 import CandidateProbePanel from './CandidateProbePanel';
 import { ChannelKeySummary } from './ChannelCredentials';
-import ChannelKeyPoolEditor from './ChannelKeyPoolEditor';
 import ChannelProtocolFields from './ChannelProtocolFields';
 import { Cell, CopyId, GridTable, Modal, Notice, Row } from './ModelOperationsUI';
 import { Choice, Field } from './ServiceUI';
@@ -216,11 +215,9 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
     {review ? <Button theme="solid" loading={busy} disabled={blocked || stale || reviewRevision !== impact.revision} onClick={prepare}>
       {t(unlinked ? '准备候选配置' : '进入候选测试')}
     </Button> : <Button theme="solid" loading={busy} disabled={blocked || cannotApply} onClick={apply}>
-      {t(unlinked ? '保存未启用连接' : '应用配置')}
+      {t(unlinked ? '保存连接' : '应用配置')}
     </Button>}
   </>;
-  if (stage === 'pool' && candidate) return <ChannelKeyPoolEditor
-    state={state} provider={provider} endpoint={endpoint} ops={ops} close={close} directory/>;
   return <Modal drawer wide title={title} description="" onClose={cancel} footer={actions}>
     <div ref={stageContent} tabIndex={-1}>
       {edit ? <form id={formId} className="supplier-configuration-form" noValidate onSubmit={event => {
@@ -249,7 +246,7 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
           <Field label={t('简介')}><TextArea aria-label={t('简介')} value={note} maxLength={300} disabled={locked}
             onChange={value => { setNote(value); ops.dirty(true); ops.setError(''); }}/></Field>
           {candidate && <Notice>{t('此连接有待验证的配置。')}
-            <Button theme="borderless" onClick={() => setStage(credentialCandidate && candidate.config.authMode === 'pool' ? 'pool' : 'test')}>
+            <Button theme="borderless" onClick={() => setStage('test')}>
               {t('核对待验证配置')}
             </Button>
           </Notice>}
@@ -262,7 +259,7 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
           <AffectedModels connection={connection} impact={impact} checks={[]}/>
           {reviewRevision !== impact.revision && <Notice error>{t('连接或引用已变化，请返回重新核对。')}</Notice>}
         </> : candidate ? <>
-          <Notice>{unlinked ? '此连接尚无模型，将保存为停用状态。添加模型后再测试。' :
+          <Notice>{unlinked ? '此连接尚无模型。添加模型后再测试。' :
             status?.ready ? '受影响的上游模型均已通过测试，可以应用新配置。' : '当前配置继续生效。受影响的上游模型通过测试后才能应用。'}</Notice>
           {JSON.stringify(candidate.config.requestRules || null) !== JSON.stringify(endpoint.requestRules || null) &&
             <Notice>候选配置包含请求与响应规则变更。</Notice>}

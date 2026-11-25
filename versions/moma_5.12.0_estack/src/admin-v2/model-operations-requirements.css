@@ -1,0 +1,19 @@
+.admin-v2 .v2-content:has(> main[data-admin-page="model-operations-requirements"]) {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-v2 .v2-content > main[data-admin-page="model-operations-requirements"] {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.admin-v2 .model-operations-requirements {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 24rem;
+  flex: 1;
+  border: 1px solid var(--semi-color-border);
+  border-radius: var(--semi-border-radius-medium);
+}

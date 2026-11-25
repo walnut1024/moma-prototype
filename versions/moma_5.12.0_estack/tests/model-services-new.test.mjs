@@ -4,7 +4,7 @@ import { adminBreadcrumbs } from '../src/admin-v2/breadcrumbs.mjs';
 import { adminSections, canAccessPage, pageFromHash } from '../src/admin-v2/navigation.mjs';
 import {
   channelSetupIssue, contextRoutingEnabled, preferredServiceChannels, readNewServices,
-  MODEL_SERVICE_TYPES, modelServiceType, savedServiceModel, serviceChannelShares, serviceFormIssue, serviceModelFields, simulatedServiceChannels,
+  MODEL_SERVICE_TYPES, modelServiceType, serviceChannelShares, serviceFormIssue, simulatedServiceChannels,
 } from '../src/admin-v2/model-services-new.js';
 import { MODEL_CATALOGUE_TYPES } from '../src/admin-v2/model-library.js';
 import { MODEL_TASK_LABELS } from '../src/model-types.mjs';
@@ -38,15 +38,15 @@ test('the new service catalogue and detail have independent routes', () => {
   ]);
 });
 
-test('simulated channel options use the selected model and retain saved choices when registered supply becomes usable', () => {
-  const model = { id: 'model-a', modelId: 'glm-5.3' };
-  const simulated = simulatedServiceChannels(model, [{ id: 'channel-a', reason: '连接未启用' }]);
+test('simulated channel options use the service ID and retain saved choices when registered supply becomes usable', () => {
+  const service = { id: 'service-a', callId: 'glm-5.3' };
+  const simulated = simulatedServiceChannels(service, [{ id: 'channel-a', reason: '连接未启用' }]);
   assert.deepEqual(simulated.map(row => row.name), ['上游模型 A', '上游模型 B', '备用上游模型']);
   assert.ok(simulated.every(row => row.simulated && row.upstreamModelId === 'mock/glm-5.3'));
-  assert.notEqual(simulatedServiceChannels({ ...model, id: 'model-b' }, [])[0].id, simulated[0].id);
+  assert.notEqual(simulatedServiceChannels({ ...service, id: 'service-b' }, [])[0].id, simulated[0].id);
   const registered = [{ id: 'channel-a', reason: '' }];
-  assert.deepEqual(simulatedServiceChannels(model, registered), []);
-  assert.deepEqual(simulatedServiceChannels(model, registered, [{ channelId: simulated[1].id }]), [simulated[1]]);
+  assert.deepEqual(simulatedServiceChannels(service, registered), []);
+  assert.deepEqual(simulatedServiceChannels({ ...service, channels: [{ channelId: simulated[1].id, simulated: true }] }, registered), [simulated[1]]);
   assert.deepEqual(simulatedServiceChannels(null, []), []);
 });
 
@@ -100,19 +100,4 @@ test('service creation permits an unlinked record and limits new or updated desc
   assert.match(serviceFormIssue(longer, []), /不能超过 300 字/);
   assert.equal(serviceFormIssue({ ...longer, name: '更名' }, [{ ...longer, id: 'old' }], 'old'), '');
   assert.match(serviceFormIssue({ ...longer, description: longer.description + '字' }, [{ ...longer, id: 'old' }], 'old'), /不能超过 300 字/);
-});
-
-test('a saved service uses its own model metadata for details and route previews after the source changes', () => {
-  const material = { id: 'record-1', modelId: 'speech', name: '语音参考', type: 'audio',
-    profile: { author: '作者', tasks: ['语音合成'] }, capabilities: { context: 32768 } };
-  const details = serviceModelFields(material);
-  const record = { id: 'service-1', modelId: material.id, type: material.type, modelDetails: details, channels: [], listed: true };
-  material.name = '编辑后的参考';
-  material.profile.tasks[0] = '语音识别';
-  material.capabilities.context = 65536;
-  const saved = savedServiceModel(record);
-  assert.equal(saved.name, '语音参考');
-  assert.deepEqual(saved.profile.tasks, ['语音合成']);
-  assert.equal(saved.profile.context, 32768);
-  assert.equal(record.listed, true);
 });

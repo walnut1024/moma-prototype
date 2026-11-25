@@ -63,7 +63,7 @@ test('unknown prices stay unknown through technical test and enable and cannot f
   const initial = legacySupplierState(), created = run(initial, 'supplierChannelCreate', draft);
   const tested = run(created, 'supplierModelsTest', selection(created));
   assert.ok(mappings(tested).every(row => row.health.result === '通过' && row.health.simulated));
-  assert.equal(endpoint(tested).status, '草稿'); assert.ok(mappings(tested).every(row => !row.enabled));
+  assert.equal(endpoint(tested).status, '运行中'); assert.ok(mappings(tested).every(row => !row.enabled));
   const enabled = run(tested, 'supplierModelsEnable', selection(tested));
   assert.equal(endpoint(enabled).status, '运行中'); assert.ok(connectionTestPassed(endpoint(enabled)));
   for (const row of mappings(enabled)) {
@@ -147,12 +147,12 @@ test('adding models to an existing channel preserves existing checks, prices, ac
   assert.throws(() => run(next, 'supplierModelsAdd', { endpointId: endpoint(next).id, models: [{ libraryId: 'model-4', upstreamModelId: models[0].upstreamModelId }] }), /不可重复/);
 });
 
-test('restoring a stopped channel enables only selected mappings rather than reviving all siblings', () => {
+test('model enablement leaves the connection and unselected model flags alone', () => {
   let state = run(legacySupplierState(), 'supplierChannelCreate', draft);
-  state = run(state, 'supplierModelsTest', selection(state)); state = run(state, 'supplierModelsEnable', selection(state));
-  endpoint(state).status = '停用';
-  const ids = selection(state), next = run(state, 'supplierModelsEnable', { ...ids, associationIds: [ids.associationIds[0]] });
-  assert.equal(endpoint(next).status, '运行中');
+  state = run(state, 'supplierModelsTest', selection(state));
+  const ids = selection(state), verified = structuredClone(endpoint(state));
+  const next = run(state, 'supplierModelsEnable', { ...ids, associationIds: [ids.associationIds[0]] });
+  assert.deepEqual(endpoint(next), verified);
   assert.equal(mappings(next).find(row => row.id === ids.associationIds[0]).enabled, true);
   assert.equal(mappings(next).find(row => row.id === ids.associationIds[1]).enabled, false);
 });

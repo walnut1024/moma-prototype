@@ -70,7 +70,11 @@ export function projectModelState(state, previousTables){
   for(const p of state.providers){
     const profile={};for(const k of ['sourceType','integrationType','contact','contactInfo','description','contractEnd','logo','introduction','website','documentation'])if(p[k]!==undefined)profile[k]=p[k];
     add('suppliers',{id:p.id,code:p.code || p.id,name:p.name,profile_json:j(profile),builtin:Number(Boolean(p.builtinCatalogue) || p.id==='provider-moma'),enabled:bool(p.status),origin:'seed',revision:p.revision || 1,created_at:at(p.createdAt),updated_at:at(p.updatedAt),deleted_at:p.deletedAt?at(p.deletedAt):null,record_json:j(p)});
-    for(const k of [...(p.apiKeys || []),...state.endpoints.filter(e=>e.providerId===p.id).flatMap(e=>e.apiKeys || [])]){
+    const providerEndpoints = state.endpoints.filter(endpoint => endpoint.providerId === p.id);
+    const archivedKeys = providerEndpoints.filter(endpoint => endpoint.deletedAt).flatMap(endpoint => endpoint.apiKeys || []);
+    const liveKeys = providerEndpoints.filter(endpoint => !endpoint.deletedAt).flatMap(endpoint => endpoint.apiKeys || []);
+    // Historical aliases can fill missing credential rows without replacing current credential metadata.
+    for(const k of [...archivedKeys, ...(p.apiKeys || []), ...liveKeys]){
       if(!k.fingerprint || !/^[a-f0-9]{64}$/i.test(k.fingerprint))continue;
       add('credentials',{id:k.id,supplier_id:p.id,name:k.name || k.id,masked_value:k.maskedKey || k.mask || '****',fingerprint:k.fingerprint,version:Number.isSafeInteger(k.version)?k.version:1,enabled:Number(!['disabled','已停用'].includes(k.status)),created_at:at(k.createdAt),revoked_at:k.revokedAt?at(k.revokedAt):null});
     }
@@ -182,11 +186,11 @@ export function modelSupplyRelations(state) {
   const tables = projectModelState(state);
   const suppliers = tables.suppliers || new Map(), materials = tables.materials || new Map(), connections = tables.channels || new Map();
   const models = [...(tables.supplier_models?.values() || [])].filter(row => !row.removed_at && !suppliers.get(row.supplier_id)?.deleted_at && !materials.get(row.material_id)?.deleted_at);
-  const ids = new Set(models.map(row => row.id));
   return {
     models: models.map(row => ({ id: row.id, providerId: row.supplier_id, materialId: row.material_id,
       modelId: JSON.parse(row.declaration_json).modelId || materials.get(row.material_id).canonical_slug })).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-    channels: [...(tables.channel_models?.values() || [])].filter(row => !row.removed_at && ids.has(row.supplier_model_id) && !connections.get(row.channel_id)?.deleted_at)
+    channels: [...(tables.channel_models?.values() || [])].filter(row => !row.removed_at && !suppliers.get(row.supplier_id)?.deleted_at &&
+      !materials.get(row.material_id)?.deleted_at && !connections.get(row.channel_id)?.deleted_at)
       .map(row => ({ id: row.id, associationId: JSON.parse(row.mapping_json).sourceAssociationId || row.id,
         supplierModelId: row.supplier_model_id, providerId: row.supplier_id, materialId: row.material_id,
         endpointId: row.channel_id, upstreamModelId: row.upstream_model_id, enabled: Boolean(row.enabled) })).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
@@ -344,23 +348,33 @@ const supplyRelationsSql = `json_object('models',${arraySql(`SELECT json_object(
   'upstreamModelId',cm.upstream_model_id,'enabled',json(CASE WHEN cm.enabled THEN 'true' ELSE 'false' END)) AS record_json
   FROM channel_models cm JOIN supplier_models sm ON sm.id=cm.supplier_model_id AND sm.material_id=cm.material_id AND sm.supplier_id=cm.supplier_id
   JOIN suppliers s ON s.id=cm.supplier_id JOIN materials m ON m.id=cm.material_id JOIN channels c ON c.id=cm.channel_id AND c.supplier_id=cm.supplier_id
-  WHERE cm.removed_at IS NULL AND sm.removed_at IS NULL AND s.deleted_at IS NULL AND m.deleted_at IS NULL AND c.deleted_at IS NULL ORDER BY cm.id`)})`;
+  WHERE cm.removed_at IS NULL AND s.deleted_at IS NULL AND m.deleted_at IS NULL AND c.deleted_at IS NULL ORDER BY cm.id`)})`;
 export const stoppedOfferSql = `COALESCE((SELECT NOT json_extract(n.record_json,'$.listed')
   FROM new_model_services n WHERE n.call_id=o.id
-    AND json_extract(n.record_json,'$.modelId')=o.material_id
     AND json_extract(n.record_json,'$.controlledOfferId')=o.record_id
   ORDER BY (n.deleted_at IS NULL) DESC,n.deleted_at DESC LIMIT 1),0)`;
 
 async function workspacePayload(db,actor,command=false,simulation=true){
   const fields=[`'supplyRelations',${supplyRelationsSql}`];
   fields.push(`'stoppedModelOfferIds',${arraySql(`SELECT json_quote(o.record_id) AS record_json FROM offers o WHERE o.retired_at IS NULL AND ${stoppedOfferSql}`)}`);
-  fields.push(`'marketModelServices',${arraySql(`SELECT json_object('id',id,'modelId',json_extract(record_json,'$.modelId'),
-    'name',json_extract(record_json,'$.name'),'callId',call_id,'listed',json_extract(record_json,'$.listed')) AS record_json
-    FROM new_model_services WHERE deleted_at IS NULL AND json_extract(record_json,'$.modelId') IS NOT NULL ORDER BY created_at DESC,id`)}`);
+  fields.push(`'marketModelServices',${arraySql(`SELECT json_object('id',n.id,'name',json_extract(n.record_json,'$.name'),
+    'callId',n.call_id,'type',json_extract(n.record_json,'$.type'),'listed',json_extract(n.record_json,'$.listed'),
+    'controlledOfferId',json_extract(n.record_json,'$.controlledOfferId'),
+    'channelIds',json((SELECT json_group_array(json_extract(c.value,'$.channelId')) FROM json_each(n.record_json,'$.channels') c
+      WHERE COALESCE(json_extract(c.value,'$.simulated'),0)=0)),
+    'saleStage',COALESCE(json_extract(s.record_json,'$.stage'),'unlisted')) AS record_json
+    FROM new_model_services n LEFT JOIN model_service_sales s ON s.service_id=n.id
+    WHERE n.deleted_at IS NULL ORDER BY n.created_at DESC,n.id`)}`);
   fields.push(`'marketProjects',${arraySql("SELECT json_object('id',json_extract(value,'$.id'),'tenantId',json_extract(value,'$.tenantId'),'name',json_extract(value,'$.name'),'status',json_extract(value,'$.status')) AS record_json FROM json_each(w.reference_json,'$.projects')")}`);
   fields.push(`'marketOrganizations',${arraySql("SELECT json_object('id',json_extract(value,'$.id'),'tenantId',json_extract(value,'$.tenantId'),'name',json_extract(value,'$.name'),'status',json_extract(value,'$.status')) AS record_json FROM json_each(w.reference_json,'$.organizations')")}`);
   fields.push("'spacePolicy',json((SELECT payload_json FROM simulation_records WHERE kind='project-space-policy' AND id='published'))");
-  if(command)fields.push("'lastSupplierChannelNumber',COALESCE((SELECT MAX(CAST(substr(code,4) AS INTEGER)) FROM channels WHERE code GLOB 'CH-[0-9]*' AND substr(code,4) NOT GLOB '*[^0-9]*'),0)");
+  if(command){
+    fields.push("'lastSupplierChannelNumber',COALESCE((SELECT MAX(CAST(substr(code,4) AS INTEGER)) FROM channels WHERE code GLOB 'CH-[0-9]*' AND substr(code,4) NOT GLOB '*[^0-9]*'),0)");
+    fields.push(`'newModelServiceLinks',${arraySql(`SELECT json_object('id',n.id,'name',json_extract(n.record_json,'$.name'),'callId',n.call_id,
+      'channelIds',json((SELECT json_group_array(json_extract(c.value,'$.channelId'))
+        FROM json_each(n.record_json,'$.channels') c WHERE COALESCE(json_extract(c.value,'$.simulated'),0)=0))) AS record_json
+      FROM new_model_services n WHERE n.deleted_at IS NULL AND json_array_length(n.record_json,'$.channels')>0 ORDER BY n.id`)}`);
+  }
   for(const [collection,table]of Object.entries(entityTables)){
     const where=['services','suppliers','channels'].includes(table)?'deleted_at IS NULL':['model_template_records','service_supply_records','model_versions','model_validations','service_route_records'].includes(table)?'removed_at IS NULL':'1';
     fields.push(`'${collection}',${arraySql(`SELECT record_json FROM ${table} WHERE ${where} AND record_json!='{}'`)}`);

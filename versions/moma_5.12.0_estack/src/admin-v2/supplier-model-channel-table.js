@@ -27,10 +27,22 @@ export function channelManagementDirectory(state, providers, relations = state.s
   for (const owner of providers) {
     const metadata = new Map(supplierModelChannelGroups(state, owner).map(group => [group.id, group]));
     const channelOrder = new Map((owner.catalogConnections || []).map((row, index) => [row.id, index]));
-    const groups = relations.models.filter(row => row.providerId === owner.id && masters.has(row.materialId)).map(relation => {
+    const channelsByRegistration = new Map();
+    const registrations = new Map(relations.models.filter(row => row.providerId === owner.id).map(row => [row.id, row]));
+    const ownedChannels = relations.channels.filter(row => row.providerId === owner.id);
+    for (const row of ownedChannels) {
+      if (!channelsByRegistration.has(row.supplierModelId)) channelsByRegistration.set(row.supplierModelId, []);
+      channelsByRegistration.get(row.supplierModelId).push(row);
+      if (!registrations.has(row.supplierModelId)) {
+        const saved = owner.catalogConnections?.find(entry => entry.id === row.associationId);
+        registrations.set(row.supplierModelId, { id: row.supplierModelId, materialId: row.materialId,
+          modelId: saved?.modelId || masters.get(row.materialId)?.modelId });
+      }
+    }
+    const groups = [...registrations.values()].filter(row => masters.has(row.materialId)).map(relation => {
       const existing = metadata.get(relation.materialId);
       const master = existing?.master || masters.get(relation.materialId);
-      const channels = relations.channels.filter(row => row.supplierModelId === relation.id).flatMap(row => {
+      const channels = (channelsByRegistration.get(relation.id) || []).flatMap(row => {
         const endpoint = state.endpoints.find(endpoint => endpoint.id === row.endpointId && endpoint.providerId === owner.id && !endpoint.deletedAt);
         if (!endpoint) return [];
         const saved = owner.catalogConnections?.find(entry => entry.id === row.associationId);
@@ -44,7 +56,7 @@ export function channelManagementDirectory(state, providers, relations = state.s
         modelIds: existing?.modelIds || [relation.modelId], name: existing?.name || master.name,
         master, owner, channels };
     }).filter(group => group.channels.length);
-    const linked = new Set(relations.channels.filter(row => row.providerId === owner.id).map(row => row.endpointId));
+    const linked = new Set(ownedChannels.map(row => row.endpointId));
     const unlinked = supplierChannelResources(state, owner).filter(endpoint => !linked.has(endpoint.id));
     if (unlinked.length) groups.push({ id: 'unlinked-channels', modelId: null, name: '未关联模型', owner,
       channels: unlinked.map(endpoint => ({ id: endpoint.id, endpointId: endpoint.id, endpoint, unlinked: true })) });

@@ -2,9 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAdminState, createAdminSeed, commitAdminState } from '../src/admin-v2/store.js';
 import { withAdminSession } from './admin-session-fixture.mjs';
-import { exportProviderJson } from '../src/admin-v2/provider-export.js';
 import { modelCatalogue } from '../src/admin-v2/model-library.js';
-import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
 import { providerRemovalPlan } from '../src/admin-v2/provider-removal.js';
 import { routingServices, routingChannels, routeSourceVersion } from '../src/admin-v2/service-routing.js';
 import { serviceDirectoryRows } from '../src/admin-v2/service-directory.js';
@@ -35,26 +33,15 @@ function fixture(modelCount = 1) {
   return { state, provider: owner(state), target: { providerId } };
 }
 
-test('provider JSON export links connection aliases, preserves zero cost and capacity, and omits credential metadata', async () => {
-  const { state, provider } = fixture();
-  const secret = 'export-fixture-key-123456';
-  const { apiKeys } = await providerApiKeysDraft([secret]);
-  const keyed = op(state, 'provider', { operation: 'addApiKeys', objectId: provider.id, values: { apiKeys } });
-  const owner = keyed.providers.find(row => row.id === provider.id);
-  const exported = exportProviderJson(keyed, owner).provider;
-  assert.equal(exported.code, profile.code);
-  assert.equal(exported.id, undefined);
-  assert.equal(exported.connections.length, 1);
-  const [connection] = exported.connections;
-  const [mapping] = exported.models[0].mappings;
-  assert.notEqual(connection.connection_id, provider.catalogConnections[0].endpointId);
-  assert.equal(mapping.connection_id, connection.connection_id);
-  assert.equal(mapping.upstream_model_id, 'fixture-model-0');
-  assert.deepEqual(mapping.capacity_limits, { tpm: 10000000 });
-  assert.equal(mapping.procurement.scenarios[0].listPrice, '0');
-  const serialized = JSON.stringify(exported);
-  const [key] = owner.apiKeys;
-  for (const value of [secret, key.id, key.maskedKey, key.fingerprint]) assert(!serialized.includes(value));
+test('the built-in MoMA provider cannot be removed as a whole', () => {
+  const { state } = fixture();
+  const target = { providerId: 'provider-moma' };
+  const before = structuredClone(state);
+  assert.throws(() => providerRemovalPlan(state, target), /内置服务商不可删除/);
+  for (const operation of ['providerRemovalPrepare', 'providerRemovalCommit']) {
+    assert.throws(() => op(state, operation, { target, confirmed: true }), /内置服务商不可删除/);
+  }
+  assert.deepEqual(state, before);
 });
 
 test('provider removal preserves materials, purchase versions and audit history', () => {
@@ -137,12 +124,26 @@ test('unified service retains a validated alternative route and immutable old ve
 test('removing a registered supplier model preserves its provider, connection and model material', () => {
   const { state, provider } = fixture();
   const channel = provider.catalogConnections[0];
-  const next = removal(state, { providerId: provider.id, catalogueId: channel.modelId });
+  const next = op(state, 'provider', { operation: 'catalogueRemove', objectId: provider.id,
+    values: { modelId: channel.modelId, expectedUpdatedAt: provider.updatedAt ?? null, confirmed: true } });
   const saved = next.providers.find(row => row.id === provider.id);
   assert.ok(saved.removedCatalogModelIds.includes(channel.modelId));
   assert.ok(!saved.deletedAt);
   assert.ok(!next.endpoints.find(row => row.id === channel.endpointId).deletedAt);
+  assert.deepEqual(saved.catalogConnections, provider.catalogConnections);
   assert.deepEqual(next.modelTemplates, state.modelTemplates);
+});
+
+test('deleting a connection preserves its supplier registration and procurement history', () => {
+  const { state, provider } = fixture();
+  const channel = provider.catalogConnections[0];
+  const next = removal(state, { providerId: provider.id, endpointId: channel.endpointId });
+  const owner = next.providers.find(row => row.id === provider.id);
+  assert(next.endpoints.find(row => row.id === channel.endpointId).deletedAt);
+  assert.deepEqual(owner.catalogModelIds, provider.catalogModelIds);
+  assert.deepEqual(owner.catalogModels, provider.catalogModels);
+  assert.deepEqual(owner.removedCatalogModelIds, provider.removedCatalogModelIds);
+  assert.deepEqual(owner.catalogConnections.find(row => row.id === channel.id).procurementVersions, channel.procurementVersions);
 });
 
 test('supplier Excel rows preserve protocol-specific URLs through registration and edit', async () => {

@@ -48,6 +48,7 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
   useEffect(() => { if (step !== 'input') previewTitle.current?.focus(); }, [step]);
 
   const label = importNames[kind], headers = materialImportHeaders[kind];
+  const successLabel = { model: providerId ? '已添加供应模型' : '已新建模型资料', provider: '已新建服务商', relation: '已添加供应模型' }[kind];
   const provider = providerId && state.providers.find(row => row.id === providerId);
   const validate = (rows, retry = false) => previewMaterialRows(state, kind, rows, { providerId, retry });
   const display = preview.map(row => {
@@ -131,7 +132,7 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
       { title: '模型系列', width: 140, render: (_, row) => row.data?.profile?.family || '—' },
     ] : []),
     { title: step === 'result' ? '处理结果' : '校验结果', width: 310, render: (_, row) => <Typography.Text type={issue(row) ? 'danger' : row.status === 'done' ? 'success' : row.status === 'skip' ? 'tertiary' : undefined}>
-      {row.masterCreated && providerId ? '模型资料已新增 · ' : row.modelId && providerId && row.status === 'done' ? '复用已有模型资料 · ' : ''}{row.message}
+      {row.masterCreated && providerId ? '模型资料已新建 · ' : row.modelId && providerId && row.status === 'done' ? '复用已有模型资料 · ' : ''}{row.message}
     </Typography.Text> },
     { title: '操作', width: 170, render: (_, row) => <Space>
       <Button theme="borderless" aria-label={'查看第 ' + row.rowNumber + ' 行资料'} onClick={() => setExpandedRow(expandedRow === row.rowNumber ? null : row.rowNumber)}>查看</Button>
@@ -157,12 +158,12 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
         disabled={busy || !ops.can} onFileChange={files => readFile(files[0])}/>
       {kind === 'model' ? <ImportHelp/> : <Typography.Paragraph>{kind === 'provider'
         ? '填写服务商名称、服务商编码和供给类型。供给类型填写「自有模型推理服务」或「第三方模型服务」。其余字段选填。'
-        : '每行填写已有服务商编码和模型编码，确认后登记一条供给关系。'}</Typography.Paragraph>}
+        : '每行填写已有服务商编码和模型编码，确认后添加一条供应模型。'}</Typography.Paragraph>}
     </> : <>
       <Typography.Title heading={6}><span ref={previewTitle} tabIndex={-1}>{fileName}</span></Typography.Title>
       <Banner type={problems.length ? 'warning' : 'success'} description={step === 'preview'
         ? `共 ${display.length} 条，可提交 ${available.length} 条，已存在或重复 ${count(display, 'skip')} 条，待修正 ${problems.length} 条`
-        : `${providerId || kind === 'relation' ? '新增关联' : '新增资料'} ${count(display, 'done')} 条，已存在或重复 ${count(display, 'skip')} 条，待修正 ${count(display, 'error')} 条，待重试 ${failed.length} 条`}/>
+        : `${successLabel} ${count(display, 'done')} 条，已存在或重复 ${count(display, 'skip')} 条，待修正 ${count(display, 'error')} 条，待重试 ${failed.length} 条`}/>
       <div className="materials-actions">
         <Checkbox checked={onlyProblems} onChange={event => {
           setOnlyProblems(event.target.checked); setExpandedRow(null); setPagination(value => ({ ...value, currentPage: 1 }));

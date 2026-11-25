@@ -40,34 +40,21 @@ export function serviceChannelShares(channels, contextTokens = null) {
   return new Map(preferred.map(row => [row.id, row.weight / total]));
 }
 
-export function serviceModelFields(material) {
-  const { author, family, version, tasks, inputModalities, outputModalities, resultTypes } = material?.profile || {};
-  const { context, output, streaming, tools } = material?.capabilities || {};
-  return structuredClone({
-    name: material?.name || '', code: material?.modelId || '', author: author || material?.maker || '',
-    family: family || '', version: version || '', tasks: tasks || [],
-    inputModalities: inputModalities || material?.inputModalities || [], outputModalities: outputModalities || [],
-    resultTypes: resultTypes || [], context: context ?? null, output: output ?? null,
-    streaming: streaming ?? null, tools: tools ?? null,
-  });
-}
-
-export function savedServiceModel(service) {
-  if (!service?.modelId) return null;
-  const details = service.modelDetails;
-  return { id: service.modelId, modelId: details.code, name: details.name, type: service.type, profile: details };
-}
-
-export function simulatedServiceChannels(model, registeredChannels, links = []) {
-  if (!model) return [];
+export function simulatedServiceChannels(service, registeredChannels) {
+  if (!service) return [];
   const hasUsableChannel = registeredChannels.some(channel => !channel.reason);
-  return simulatedChannelNames.map((name, index) => ({
-    id: `mock-service-channel:${model.id}:${index + 1}`,
+  const saved = (service.channels || []).filter(link => link.simulated);
+  const defaults = simulatedChannelNames.map((name, index) => ({
+    id: `mock-service-channel:${service.id}:${index + 1}`,
     name,
     provider: { name: '模拟连接' },
-    upstreamModelId: 'mock/' + (model.modelId || model.id),
+    upstreamModelId: 'mock/' + service.callId,
     simulated: true,
-  })).filter(channel => !hasUsableChannel || links.some(link => link.channelId === channel.id));
+  }));
+  const retained = saved.filter(link => !defaults.some(channel => channel.id === link.channelId))
+    .map(link => ({ id: link.channelId, name: link.name, provider: { name: link.provider },
+      upstreamModelId: link.upstreamId, simulated: true }));
+  return [...defaults.filter(channel => !hasUsableChannel || saved.some(link => link.channelId === channel.id)), ...retained];
 }
 
 export function readNewServices(storage) {

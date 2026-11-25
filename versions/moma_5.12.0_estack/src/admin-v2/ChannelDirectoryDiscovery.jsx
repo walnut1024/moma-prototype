@@ -64,8 +64,8 @@ function ReferenceModelList({ active, canEdit, checking, selected, onSelect, onR
       <Button theme="solid" disabled={Boolean(demo) || configureDisabled} onClick={onConfigure}>配置所选模型</Button>
     </Space>}>
     <Notice>{protocol === '自定义 API'
-      ? '自动获取模型列表需要上游服务商提供当前连接配置的模型列表接口。如果上游未提供该接口，可从「添加上游模型」选择或录入。'
-      : '自动获取模型列表需要上游服务商提供 OpenAI 兼容的模型列表接口（GET /models）。如果上游未提供该接口，可从「添加上游模型」选择或录入。'}</Notice>
+      ? '自动获取模型列表需要上游服务商提供当前连接配置的模型列表接口。如果上游未提供该接口，可通过「手动添加」从基础资料选择模型。'
+      : '自动获取模型列表需要上游服务商提供 OpenAI 兼容的模型列表接口（GET /models）。如果上游未提供该接口，可通过「手动添加」从基础资料选择模型。'}</Notice>
     <Descriptions align="left" data={[
       { key: '模型列表接口格式', value: protocol },
       { key: '服务地址（Base URL）', value: <CopyId copyAtStart value={baseUrl} label="服务地址"/> },
@@ -232,7 +232,7 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
     onSelect={ids => setSelection(current => ({ ...current, [active.id]: ids }))} onRefresh={() => load(rows)}
     onConfigure={configureSelected} configureDisabled={configureDisabled} close={close} error={error || ops.error}/>;
 
-  const summary = active?.result && [...active.additions.map(row => ({ ...row, kind: row.libraryId ? '可新增' : '待核对' })),
+  const summary = active?.result && [...active.additions.map(row => ({ ...row, kind: row.libraryId ? '可添加' : '待核对' })),
     ...active.ignored.map(row => ({ ...row, kind: '已忽略' })),
     ...active.result.missing.map(row => ({ ...row, kind: '疑似移除' })),
     ...active.result.rows.filter(row => row.existingAssociationId && row.attributes.some(item => item.different)).map(row => ({ ...row, kind: '属性差异' }))];
@@ -246,12 +246,12 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
         onClick={() => setReview(bulk)}>核对批量接入</Button>}
     </Space>}>
     <OnboardingScenarioControl disabled={checking}/>
-    <Notice>检测使用本地模拟列表。新增模型需核对资料和采购范围。疑似移除项保留当前供给。</Notice>
+    <Notice>检测使用本地模拟列表。新模型需核对资料和采购范围。疑似移除项保留当前上游模型。</Notice>
     {progress && <Typography.Text aria-live="polite">已完成 {progress.done} / {progress.total} 条 · 正在检测 {progress.name}</Typography.Text>}
     {connections.length > 1 && <Table size="small" rowKey="id" dataSource={rows} pagination={{ pageSize: 10, hideOnSinglePage: true }} columns={[
       { title: '连接', dataIndex: 'name' },
       { title: '本次检测', render: (_, row) => row.result ? row.result.complete ? '完整' : '部分' : row.receipt?.reason || (row.outdated ? '配置已变更' : '待检测') },
-      { title: '新增候选', render: (_, row) => row.result ? row.additions.length : '—' },
+      { title: '新候选', render: (_, row) => row.result ? row.additions.length : '—' },
       { title: '疑似移除', render: (_, row) => row.result?.complete ? row.result.missing.length : '—' },
       { title: '操作', render: (_, row) => <Space>
         <Button theme="borderless" size="small" disabled={checking} onClick={() => setActiveId(row.id)}>查看差异和策略</Button>
@@ -272,7 +272,7 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
           { title: '变化', dataIndex: 'kind' },
           { title: '上游模型 ID', render: (_, row) => <CopyId value={row.upstreamModelId} label="上游模型 ID"/> },
           { title: '当前资料', render: (_, row) => libraryRecord(state, row.libraryId)?.name || row.modelId || '待关联资料' },
-          { title: '处理方式', render: (_, row) => row.kind === '疑似移除' ? '保留现有供给，经复测与影响核对再处理' :
+          { title: '处理方式', render: (_, row) => row.kind === '疑似移除' ? '保留现有上游模型，经复测与影响核对再处理' :
             row.kind === '属性差异' ? row.attributes.filter(item => item.different).map(item => item.label + '：' + item.current + ' → ' + item.observed).join('、') : '确认采购范围和模型身份' },
           { title: '选择',
             render: (_, row) => active.additions.some(item => item.upstreamModelId === row.upstreamModelId) &&
@@ -287,7 +287,7 @@ export default function ChannelDirectoryDiscovery({ state, connections, ops, clo
     <Button disabled={applying} onClick={() => setPolicyDraft(null)}>{translateLabel("取消")}</Button>
     <Button theme="solid" disabled={applying || !ops.can || !active} onClick={savePolicy}>保存同步策略</Button>
   </>}>
-    <Notice>使用「检查到期连接」运行扫描。仅完整列表中身份唯一、在采购白名单内的模型会自动接入为待验证供给。</Notice>
+    <Notice>使用「检查到期连接」运行扫描。仅完整列表中身份唯一、在采购白名单内的模型会自动接入为待验证的上游模型。</Notice>
     <Checkbox checked={policyDraft.enabled} disabled={applying} onChange={event => setPolicyDraft(value => ({ ...value, enabled: event.target.checked }))}>启用到期检测规则</Checkbox>
     <Field label="间隔（分钟）"><InputNumber aria-label="检测间隔" min={5} max={1440} value={policyDraft.intervalMinutes}
       disabled={applying} onChange={intervalMinutes => setPolicyDraft(value => ({ ...value, intervalMinutes: Number(intervalMinutes) }))}/></Field>

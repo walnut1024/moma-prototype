@@ -1,7 +1,7 @@
 import { resourceId } from '../resource-id.mjs';
 import { prepareChannelInterface, prepareChannelAdapterOptions } from './channel-interface.js';
 import { resolveChannelAssociationModel, channelAssociationPricing, materializeChannelAssociation } from './channel-association-model.js';
-import { connectionFingerprint, connectionKeys, connectionCredentialsReady, normalizeChannelKeyPool } from './connection-state.js';
+import { connectionFingerprint, connectionKeys, connectionCredentialsReady, connectionTestPatch, normalizeChannelKeyPool } from './connection-state.js';
 import { channelFingerprint, channelInterfaceIssue, channelModelUrl } from './provider-channels.js';
 import { supplierChannelAssociations } from './supplier-resources.js';
 import { providerKeyGroups } from './provider-key-groups.js';
@@ -11,6 +11,7 @@ import { channelTestDiagnostics } from './channel-test-diagnostics.js';
 import { normalizeChannelRequestRules } from './channel-request-rules.js';
 import { customAdapterCredentialIds, normalizeCustomAdapter } from './channel-custom-adapter.js';
 import { normalizeChannelNetwork } from './channel-network-settings.js';
+import { validateQuoteTariffs } from './provider-catalogue-pricing.js';
 
 export const CHANNEL_EVIDENCE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const connectionFields = ['protocol', 'baseUrl', 'endpointPath', 'modelProtocol', 'interfaceType', 'addressMode', 'taskUrls', 'adapterOptions', 'allowHttp', 'authMode', 'apiKeyId', 'keyGroupId', 'keyPool', 'keyStrategy', 'credentialRef', 'apiKeys', 'capacity', 'timeoutSeconds', 'credentialVersion', 'adapterVersion', 'requestRules', 'networkSettings', 'customAdapter', 'poolPaused', 'adapterDraft'];
@@ -249,7 +250,7 @@ function appliedCandidate(state, provider, endpoint, candidate, data) {
     const health = { ...evidence, fingerprint: channelFingerprint(channel) };
     return { ...row, apiAddresses, ...(evidence.task ? { task: evidence.task } : {}), health, qualification: structuredClone(health), protocolTests: { [next.protocol]: health } };
   })];
-  const changes = [update('endpoints', endpoint.id, { ...candidate.config, ...keyStops, configurationRevision: revision, configurationVersions: [...versions, { version: revision, config: snapshot(next), appliedAt: at, candidateId: candidate.id, rollbackOf: candidate.rollbackOf ?? null, evidenceIds: [...tested.values()].map(row => row.id) }], candidateConfiguration: null, connectionTest: next.connectionTest, connectionQualification: structuredClone(next.connectionTest) }), update('providers', provider.id, { catalogConnections })];
+  const changes = [update('endpoints', endpoint.id, { ...candidate.config, ...keyStops, configurationRevision: revision, configurationVersions: [...versions, { version: revision, config: snapshot(next), appliedAt: at, candidateId: candidate.id, rollbackOf: candidate.rollbackOf ?? null, evidenceIds: [...tested.values()].map(row => row.id) }], candidateConfiguration: null, ...connectionTestPatch({ ...next, candidateConfiguration: null }, next.connectionTest, candidate.createdAt) }), update('providers', provider.id, { catalogConnections })];
   for (const supply of state.modelSupplies.filter(row => row.endpointId === endpoint.id && row.status !== '已移除')) {
     const mapping = mappings.find(row => row.upstreamModelId === supply.upstreamModelId && row.modelId === (supply.catalogueModelId || supply.upstreamModelId));
     const evidence = mapping && tested.get(mapping.id);
@@ -502,9 +503,10 @@ function procurementTransaction(state, operation, data) {
   let versions = structuredClone(association.procurementVersions || [{ id: `baseline-${association.id}`, version: 0, pricing: structuredClone(association.pricing), status: '已发布', effectiveAt: association.updatedAt || endpoint.createdAt || new Date(0).toISOString(), publishedAt: association.updatedAt || endpoint.createdAt || new Date(0).toISOString(), expiresAt: null }]);
   if (data.confirmed !== true) throw new Error('请确认发布服务商成本价');
   const pricing = normalizeProviderPrice(provider, { modelId: association.modelId, discountFactor: '1', scenarios: data.scenarios });
+  validateQuoteTariffs(state, pricing.scenarios, channelProcurementSnapshot(association, Date.parse(at))?.pricing?.scenarios);
   const effectiveAt = data.effectiveAt || at, expiresAt = data.expiresAt || null;
   if (!Number.isFinite(Date.parse(effectiveAt)) || expiresAt && (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.parse(effectiveAt))) throw new Error('请填写有效的服务商成本价生效和到期时间');
-  if (!pricing.scenarios.length || pricing.scenarios.some(row => row.listPrice == null)) throw new Error('请补齐采购计费项，免费请明确填写 0');
+  if (!pricing.scenarios.length || pricing.scenarios.some(row => row.listPrice == null)) throw new Error('请补齐服务商成本价的计费项，免费请明确填写 0');
   if (expiresAt && Date.parse(expiresAt) <= Date.parse(at)) throw new Error('服务商成本价已经到期，不能发布');
   versions.push({ id: resourceId('purchase-price-version'), version: Math.max(...versions.map(row => row.version)) + 1, pricing, effectiveAt, expiresAt, status: '已发布', createdAt: at, publishedAt: at });
   const next = { ...association, procurementVersions: versions, procurementRevision: (association.procurementRevision || 0) + 1 };
@@ -584,7 +586,7 @@ function replaceProviderCredential(state, data) {
   const current = keys.find(row => row.apiKey.id === data.keyId)?.apiKey;
   if (!current || current.fingerprint !== data.expectedFingerprint) throw new Error('API 密钥已变化或不存在，请重新打开后操作');
   const [replacement] = checkedConnectionKeys([checkedNewCredential(data.newApiKey)]);
-  if (replacement.fingerprint === current.fingerprint) throw new Error('请输入不同的新 API 密钥');
+  if (replacement.fingerprint === current.fingerprint) throw new Error('请输入不同的新上游 API 密钥');
   if (keys.some(row => row.apiKey.fingerprint === replacement.fingerprint)) throw new Error('此服务商已配置相同的 API 密钥');
   const endpoints = credentialRotationChannels(state, provider, current.id);
   if (!Array.isArray(data.expectedEndpointIds) || JSON.stringify([...data.expectedEndpointIds].sort()) !== JSON.stringify(endpoints.map(row => row.id).sort())) throw new Error('密钥绑定连接已变化，请重新打开后操作');
@@ -621,7 +623,7 @@ function replaceProviderCredential(state, data) {
     changes.push(...applied);
     working = stageCredentialChanges(working, applied);
   }
-  return { type: 'batch', objectId: current.id, label: '替换 API 密钥', changes };
+  return { type: 'batch', objectId: current.id, label: '替换上游 API 密钥', changes };
 }
 export function keyGroupRotationSignature(state, providerId, groupId) {
   const provider = state.providers.find(row => row.id === providerId);

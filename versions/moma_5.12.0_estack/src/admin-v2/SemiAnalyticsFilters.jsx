@@ -88,7 +88,7 @@ export function SemiMultiPick({ label, value, onChange, items, searchPlaceholder
     <Space wrap>
       <Text type="secondary">{t('已选择 {count} 项').replace('{count}', selectedIds.length)}</Text>
       <Button size="small" theme="borderless" aria-pressed={onlySelected} onClick={() => setOnlySelected(!onlySelected)}>{t('仅看已选')}</Button>
-      <Button size="small" theme="borderless" disabled={!selectedIds.length} onClick={() => setDraft([])}>{t('清空')}</Button>
+      <Button size="small" theme="borderless" disabled={!selectedIds.length} onClick={() => setDraft([])}>{t('清除')}</Button>
     </Space>
     <div className="admin-analytics-options">
       {visible.map(item => <Checkbox key={item.id} checked={selected.has(item.id)}

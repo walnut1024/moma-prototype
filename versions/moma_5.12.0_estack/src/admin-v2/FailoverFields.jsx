@@ -13,7 +13,7 @@ const retryStatus = {
   InternalServerErrorRetries: '5xx · 常见为 500，且被归类为内部错误',
   ServiceUnavailableErrorRetries: '503 · 服务暂时不可用',
   BadRequestErrorRetries: '400 · 参数或请求格式有误',
-  AuthenticationErrorRetries: '401 · 上游凭证无效',
+  AuthenticationErrorRetries: '401 · 上游 API 密钥无效',
   ContentPolicyViolationErrorRetries: '400 · 错误详情表明触发内容策略',
   NotFoundErrorRetries: '404 · 模型或资源不存在',
   DefaultRetries: '无固定状态码 · 未命中已配置的具体重试规则',

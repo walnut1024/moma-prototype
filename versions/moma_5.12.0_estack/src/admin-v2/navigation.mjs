@@ -53,8 +53,9 @@ export const sections = [
     { id: "site-configuration", label: "站点配置", children: [["site-configuration", "站点配置"]] },
     { id: "license", label: "License 管理", children: [["license", "License 管理"]] },
   ]},
-  { id: "getting-started", workspace: "operations", title: "入门指导", items: [
-    { id: "model-operations-guide", label: "模型运营", children: [["model-operations-guide", "模型运营"]] },
+  { id: "getting-started", workspace: "operations", title: "研发须知", items: [
+    { id: "model-operations-guide", label: "平台术语", children: [["model-operations-guide", "平台术语"]] },
+    { id: "model-operations-requirements", label: "需求文档", children: [["model-operations-requirements", "需求文档"]] },
   ]},
 ];
 

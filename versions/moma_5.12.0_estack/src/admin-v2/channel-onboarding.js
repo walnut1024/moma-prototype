@@ -3,7 +3,7 @@ import { resolveOnboardingProvider, onboardingModelPreset, resolveOnboardingMode
 import { requireModelSlug, libraryRecord, modelLibrary } from './model-library.js';
 import { MODEL_TYPES } from './model-management.js';
 import { TASK_OPTIONS, INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, modelProfileDraft } from './model-profile.js';
-import { connectionFingerprint, connectionKeys, connectionQualification } from './connection-state.js';
+import { connectionFingerprint, connectionKeys, connectionQualification, connectionTestPatch } from './connection-state.js';
 import { providerTransaction } from './provider-management.js';
 import { catalogueChannels, channelFingerprint, channelQualification } from './provider-channels.js';
 import { supplierChannelAssociations } from './supplier-resources.js';
@@ -278,9 +278,13 @@ export function channelOnboardingTransaction(state, { operation, data = {} }) {
       if (item.model.check && itemCurrent && (!previousCheck?.testedAt || Date.parse(record.testedAt) >= Date.parse(previousCheck.testedAt))) association.capabilityTests = { ...association.capabilityTests, [item.model.check]: record };
     }
     changed.push(update('providers', provider.id, { catalogConnections: connections }));
-    const endpointPatch = { ...(connectionQualification(endpoint) ? { connectionQualification: structuredClone(connectionQualification(endpoint)) } : {}), serverTestJobs: jobs.map(row => row.batchId === batch.id ? { ...row, receivedAt: now, status: batch.status } : row) };
+    const qualification = connectionQualification(endpoint);
+    const endpointPatch = { ...(qualification ? { connectionQualification: structuredClone(qualification) } : {}), serverTestJobs: jobs.map(row => row.batchId === batch.id ? { ...row, receivedAt: now, status: batch.status } : row) };
     const latestPass = passed.sort((left, right) => Date.parse(right.testedAt) - Date.parse(left.testedAt))[0];
-    if (current && latestPass && !job.check && (!endpoint.connectionTest?.testedAt || Date.parse(latestPass.testedAt) >= Date.parse(endpoint.connectionTest.testedAt))) endpointPatch.connectionTest = { result: '通过', fingerprint: connectionFingerprint(endpoint), testedAt: latestPass.testedAt, durationMs: latestPass.durationMs, source: 'mock', simulated: true, serverBatchId: batch.id };
+    if (current && latestPass && !job.check && (!endpoint.connectionTest?.testedAt || Date.parse(latestPass.testedAt) >= Date.parse(endpoint.connectionTest.testedAt))) {
+      const test = { result: '通过', fingerprint: connectionFingerprint(endpoint), testedAt: latestPass.testedAt, durationMs: latestPass.durationMs, source: 'mock', simulated: true, serverBatchId: batch.id };
+      Object.assign(endpointPatch, connectionTestPatch(endpoint, test, job.createdAt));
+    }
     const policy = endpoint.directoryAutoStop;
     const isPool = endpoint.authMode === 'pool';
     const localKey = isPool ? state.cloudMockState?.credentials?.find(row => row.id === batch.credentialId)?.localKeyId : null;
@@ -335,10 +339,10 @@ export function validateChannelRows(state, rows, endpoint) {
     if (ids.has(id)) errors.push({ rowId: row.id, field: 'upstreamModelId', message: '重复的上游模型 ID' });
     if (master) masters.add(master.id); ids.add(id);
     if (['upstream', 'reference'].includes(row.source) && !row.confirmed) errors.push({ rowId: row.id, field: 'confirmed', message: '请确认模型身份匹配' });
-    if (row.scenarios.some(item => !item.name?.trim() || !item.unit?.trim() || String(item.listPrice).trim() === '' || !Number.isFinite(Number(item.listPrice)) || Number(item.listPrice) < 0)) errors.push({ rowId: row.id, field: 'scenarios', message: '补齐已填写的服务商成本价，或清空后稍后配置' });
+    if (row.scenarios.some(item => !item.name?.trim() || !item.unit?.trim() || String(item.listPrice).trim() === '' || !Number.isFinite(Number(item.listPrice)) || Number(item.listPrice) < 0)) errors.push({ rowId: row.id, field: 'scenarios', message: '补齐已填写的服务商成本价，或清除后稍后配置' });
     if (master && endpoint?.interfaceType) {
       const task = ['anthropic','openai-responses'].includes(endpoint.interfaceType) ? ['text', 'multimodal'] : endpoint.interfaceType === 'openai' ? ['text', 'multimodal', 'embedding', 'image', 'audio'] : Object.keys(MODEL_TYPES);
-      if (!task.includes(master.type)) errors.push({ rowId: row.id, field: 'libraryId', message: '当前接口类型不支持此模型任务' });
+      if (!task.includes(master.type)) errors.push({ rowId: row.id, field: 'libraryId', message: '当前接口格式不支持此模型任务' });
     }
   }
   return errors;

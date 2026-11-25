@@ -35,22 +35,22 @@ export function serviceReferences(state) {
       model_service_config_id: service.model.id, call_id: service.callId }));
 }
 
-export function lifecycleAccess(state, service, tenantId) {
+export function lifecycleAccess(state, service, tenantId, { commercialOrder = false } = {}) {
   if (!service || !state) return reject('model_unavailable', '模型服务当前不可用');
   const { model } = service;
   const entry = service.providerId ? providerOffer(model, offerKey(service)) : null;
   const stage = offerStage(model, entry);
   const serviceId = service.model_service_id || modelServiceIdentity(state, model, offerKey(service));
   if (!serviceCallsEnabled(model) || state.stoppedModelOfferIds?.includes(serviceId)) {
-    return reject('model_unavailable', '模型服务已停止，请选择其他模型');
+    return reject('model_unavailable', '模型服务已停服，请选择其他模型服务');
   }
-  if (!['formal', 'gray'].includes(stage) || model.visibility !== '公开') return reject('model_unavailable', '模型服务已下架，请选择其他模型');
+  if (!['formal', 'gray'].includes(stage) || model.visibility !== '公开') return reject('model_unavailable', '当前模型服务不可用，请选择其他模型服务');
   if (service.providerId) {
-    if (!entry || !serviceCallsEnabled(model, entry)) return reject('provider_unavailable', '该模型服务已停止，请选择其他模型服务');
+    if (!entry || !serviceCallsEnabled(model, entry)) return reject('provider_unavailable', '模型服务已停服，请选择其他模型服务');
   }
   const tenant = state.tenants?.find(row => row.id === tenantId);
   if (!activeCustomer(tenant)) return reject('customer_unavailable', '当前用户或组织不可用');
-  if (stage === 'gray' && !offerGrayTenants(model, entry).includes(tenantId)) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');
+  if (stage === 'gray' && !commercialOrder && !offerGrayTenants(model, entry).includes(tenantId)) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');
   const grant = state.grants?.find(row => row.subjectType === 'tenant' && row.subjectId === tenantId);
   if (!tenantModelAllowed(tenant, grant, model.id)) return reject('model_forbidden', '当前用户或组织未获授权使用此模型');
   return { allowed: true, reason: '' };
@@ -65,8 +65,8 @@ export function assertOrderAccess(state, order) {
   }
 }
 
-export function serviceAccess(state, service, tenantId, published) {
-  const check = lifecycleAccess(state, service, tenantId);
+export function serviceAccess(state, service, tenantId, published, entitlement) {
+  const check = lifecycleAccess(state, service, tenantId, entitlement);
   if (!check.allowed) return check;
   if (serviceReferences(state).filter(row => row.id === service.id || row.callId === service.callId).length !== 1) return reject('model_unavailable', '模型服务引用不完整或存在冲突');
   const { model } = service;
@@ -75,10 +75,10 @@ export function serviceAccess(state, service, tenantId, published) {
   return { allowed: true, code: '', reason: '', generation: model.accessGeneration || 0 };
 }
 
-export function assertPublishedAccess(state, published, tenantId) {
+export function assertPublishedAccess(state, published, tenantId, entitlement) {
   const matches = serviceReferences(state).filter(service => service.callId === published?.published?.config.publicModelId);
   if (matches.length !== 1) throw accessError('model_unavailable', '模型服务引用不完整或存在冲突');
-  const result = serviceAccess(state, matches[0], tenantId, published);
+  const result = serviceAccess(state, matches[0], tenantId, published, entitlement);
   if (!result.allowed) throw accessError(result.code, result.reason);
   return matches[0];
 }

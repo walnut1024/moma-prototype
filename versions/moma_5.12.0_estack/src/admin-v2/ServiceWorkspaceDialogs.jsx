@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Button, Input, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconDelete } from '@douyinfe/semi-icons';
 import { Choice, Notice } from './ServiceUI';
-import { tariffOptions, tariffScenarioUnit } from './tariff-dictionary';
+import { tariffOptions, tariffScenarioUnit, tariffScenarioUnits } from './tariff-dictionary';
 import { retailItems } from './service-commercial';
 import { servicePriceIdentity, commercialPriceBase, activeModelSalePrice, unifiedBillingDraft, activeProviderPrice } from './service-workspace';
 import { priceItems } from './model-management';
@@ -14,22 +14,27 @@ import { itemMoney } from './SupplyPriceEditor';
 export function RetailPriceFields({state,rows,setRows,ops,prefix,readOnly=false,onEdit,identity}) {
   const translateLabel = useChannelText();
   const update=(index,patch)=>setRows(rows.map((item,i)=>i===index?{...item,...patch}:item));
-  const options=(kind,value)=>[['unselected','请选择'],...tariffOptions(state,kind).map(name=>[name,name]),...(value && !tariffOptions(state,kind).includes(value)?[[value,value+'（已保存）']]:[])];
+  const options=(available,value)=>[['unselected','请选择'],...available.map(name=>[name,name]),...(value && !available.includes(value)?[[value,value+'（已保存）']]:[])];
   const text=value=>value==null || value===''?'—':value;
   return <div className="ss-body"><div className="ss-section-bar">{readOnly?<Button disabled={!ops.can} onClick={onEdit}>{translateLabel("编辑模型刊例价")}</Button>:<Button icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can || rows.length>=100} onClick={()=>setRows([...rows,{name:'',condition:'',unit:'',currency:'CNY',amount:''}])}>添加计费项</Button>}</div>
     <Table size="small" rowKey="index" pagination={false} scroll={{x:identity?1060:820}} empty={readOnly?'尚未配置模型刊例价。':'请添加对外计费项，0 表示免费，金额必填。'} dataSource={rows.map((item,index)=>({...item,index}))} columns={[
       ...(identity?[{title:'服务商',width:140,render:(_,item)=>({children:identity.supplierName,props:{rowSpan:item.index===0?rows.length:0}})},{title:'模型 ID',width:200,render:(_,item)=>({children:identity.callId || '待配置',props:{rowSpan:item.index===0?rows.length:0}})}]:[]),
-      {title:'计费项',width:210,render:(_,item)=>readOnly?<div>{text(item.name)}{item.condition && <Typography.Paragraph type="tertiary">{item.condition}</Typography.Paragraph>}</div>:<div className="ss-field-stack"><Choice label={`${prefix}第 ${item.index+1} 项计费项`} filter value={item.name || 'unselected'} disabled={!ops.can} options={options('scenario',item.name)} onChange={name=>update(item.index,{name:name==='unselected'?'':name,unit:tariffScenarioUnit(state,name) || item.unit})}/>{item.condition && <Typography.Paragraph type="tertiary">{item.condition}</Typography.Paragraph>}</div>},
+      {title:'计费项',width:210,render:(_,item)=>readOnly?<div>{text(item.name)}{item.condition && <Typography.Paragraph type="tertiary">{item.condition}</Typography.Paragraph>}</div>:<div className="ss-field-stack"><Choice label={`${prefix}第 ${item.index+1} 项计费项`} filter value={item.name || 'unselected'} disabled={!ops.can} options={options(tariffOptions(state,'scenario'),item.name)} onChange={name=>update(item.index,{name:name==='unselected'?'':name,unit:tariffScenarioUnit(state,name)})}/>{item.condition && <Typography.Paragraph type="tertiary">{item.condition}</Typography.Paragraph>}</div>},
       {title:'模型刊例价',width:170,align:'right',render:(_,item)=>readOnly?text(item.amount):<Input aria-label={`${prefix}第 ${item.index+1} 项金额`} inputMode="decimal" placeholder="必填；0 为免费" value={item.amount} disabled={!ops.can} onChange={amount=>update(item.index,{amount})}/>},
-      {title:'计费单位',width:180,render:(_,item)=>readOnly?text(item.unit):<Choice label={`${prefix}第 ${item.index+1} 项单位`} filter value={item.unit || 'unselected'} options={options('unit',item.unit)} disabled={!ops.can} onChange={unit=>update(item.index,{unit:unit==='unselected'?'':unit})}/>},
-      {title:'货币',width:130,render:(_,item)=>readOnly?text(item.currency):<Choice label={`${prefix}第 ${item.index+1} 项货币`} filter value={item.currency} options={options('currency',item.currency)} disabled={!ops.can} onChange={currency=>update(item.index,{currency})}/>},
+      {title:'计费单位',width:180,render:(_,item)=>readOnly?text(item.unit):<Choice label={`${prefix}第 ${item.index+1} 项单位`} filter value={item.unit || 'unselected'} options={options(tariffScenarioUnits(state,item.name),item.unit)} disabled={!ops.can || !item.name} onChange={unit=>update(item.index,{unit:unit==='unselected'?'':unit})}/>},
+      {title:'货币',width:130,render:(_,item)=>readOnly?text(item.currency):<Choice label={`${prefix}第 ${item.index+1} 项货币`} filter value={item.currency} options={options(tariffOptions(state,'currency'),item.currency)} disabled={!ops.can} onChange={currency=>update(item.index,{currency:currency==='unselected'?'':currency})}/>},
       ...(!readOnly?[{title:'操作',width:90,render:(_,item)=><Button size="small" theme="borderless" type="danger" icon={<IconDelete aria-hidden="true"/>} aria-label={`移除${prefix}第 ${item.index+1} 项`} disabled={!ops.can} onClick={()=>setRows(rows.filter((_,i)=>i!==item.index))}/>}]:[]),
     ]}/>
   </div>;
 }
 export function CommercialDialog({state,model,ops,close,providerId='',readOnly=false,onEdit}) {
   const translateLabel = useChannelText();
-  const initial=()=>({callId:providerId?providerOffer(model,providerId)?.callId || '':model.modelId,items:providerId?priceItems(activeProviderPrice(state,model.id,providerId),model).map(item=>({...item,condition:item.condition || '',amount:item.amount==null?'':String(item.amount/1000000)})):unifiedBillingDraft(state,model)});
+  const initial=()=>({
+    callId:providerId?providerOffer(model,providerId)?.callId || '':model.modelId,
+    items:providerId?priceItems(activeProviderPrice(state,model.id,providerId),model).map(({name,condition,unit,currency,amount})=>({
+      name,condition:condition || '',unit,currency,amount:amount==null?'':String(amount/1000000),
+    })):unifiedBillingDraft(state,model),
+  });
   const [value,setValue]=useState(()=>structuredClone(initial())),[base,setBase]=useState(()=>commercialPriceBase(state,model,providerId));
   const [preview,setPreview]=useState(false),[publishing,setPublishing]=useState(false);
   const current=providerId?activeProviderPrice(state,model.id,providerId):activeModelSalePrice(state,model.id);

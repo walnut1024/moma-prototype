@@ -33,7 +33,7 @@ function ChannelModels({ channel, ops, open }) {
       <Space wrap spacing={8}>
         <Button disabled={!ops.can} onClick={event => open(event, 'test', channel.id)}>{t('批量测试')}</Button>
         <Button disabled={!canAdd} onClick={event => open(event, 'discovery', channel.id)}>{t('获取模型列表')}</Button>
-        <Button theme="solid" disabled={!canAdd} onClick={event => open(event, 'quickAdd', channel.id)}>{t('添加上游模型')}</Button>
+        <Button theme="solid" disabled={!canAdd} onClick={event => open(event, 'quickAdd', channel.id)}>{t('手动添加')}</Button>
       </Space>
     </div>
     <Typography.Paragraph type="tertiary">自动获取模型列表需要连接提供 OpenAI 兼容的模型列表接口（GET /models）。</Typography.Paragraph>
@@ -127,7 +127,7 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
     ['服务商', channel.provider.name], ['连接 ID', id], ['接口格式', workbenchProtocolLabel(interfaceLabel)],
     ['服务地址', endpoint.baseUrl],
     ['上游 API 密钥', credentials.join('、') || (endpoint.authMode === 'none' ? '无需认证' : '')],
-    ['启停状态', <AdminStatus value={status}/>], ['连接检测', <AdminStatus value={channel.testStatus}/>],
+    ['连接状态', <AdminStatus value={status}/>], ['连接检测', <AdminStatus value={channel.testStatus}/>],
     ...(endpoint.directoryNote ? [['内部备注', endpoint.directoryNote]] : []),
   ];
   return <>
@@ -260,22 +260,16 @@ export default function ChannelManagementView({ state, connections, ops, open, f
           { title: t('服务地址'), width: 186, render: (_, { endpoint }) => <CopyId copyAtStart ellipsis value={endpoint.baseUrl} label={t('服务地址')}/> },
           { title: t('服务商'), width: 126, render: (_, { provider }) =>
             <Typography.Text ellipsis={{ showTooltip: true }}>{provider.name}</Typography.Text> },
-          { title: t('状态'), width: 84, render: (_, row) => <AdminStatus value={row.status === '已启用' ? row.status : '已停用'} label={t(row.status === '已启用' ? row.status : '已停用')}/> },
+          { title: t('状态'), width: 128, render: (_, row) => <AdminStatus value={row.status}/> },
           { title: t('已接入模型'), width: 88, render: (_, row) =>
             <Button size="small" theme="borderless" data-channel-models-id={row.id}
               aria-label={row.name + '的' + row.modelCount + '款模型'} onClick={() => view(row.id, 'models')}>{row.modelCount}{t(' 款')}</Button> },
-          { title: t('操作'), width: 220, fixed: 'right', render: (_, row) => {
-            const enabled = row.status === '已启用';
-            const label = t(enabled ? '停用' : '启用');
-            return <Space spacing={2}>
+          { title: t('操作'), width: 164, fixed: 'right', render: (_, row) => <Space spacing={2}>
               <Button size="small" theme="borderless" disabled={!ops.can} aria-label={t('测试连接') + ' ' + row.name}
                 onClick={event => open(event, 'testConnection', row.id)}>{t('测试连接')}</Button>
-              <Button size="small" theme="borderless" disabled={!ops.can} aria-label={t(enabled ? '停用连接' : '启用连接') + ' ' + row.name}
-                onClick={event => open(event, enabled ? 'disable' : 'enable', row.id)}>{t(label)}</Button>
               <Button size="small" theme="borderless" type="danger" disabled={!ops.can} aria-label={t('删除连接') + ' ' + row.name}
                 onClick={event => open(event, 'remove', row.id)}>{t('删除')}</Button>
-            </Space>;
-          } },
+            </Space> },
         ]}/>
       <AdminPagination total={matches.length} currentPage={page} pageSize={pageSize} pageSizeOpts={allowedSizes} showSizeChanger
         onPageChange={page => go({ page }, { replace: true })}

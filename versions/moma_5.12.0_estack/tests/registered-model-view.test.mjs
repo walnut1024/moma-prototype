@@ -12,7 +12,6 @@ import { catalogueMappingRows, channelStatus } from '../src/admin-v2/channel-sel
 import { supplierDirectory } from '../src/admin-v2/moma-provider.js';
 import { channelManagementDirectory, filterChannelDirectory, supplierModelChannelGroups } from '../src/admin-v2/supplier-model-channel-table.js';
 import { MOMA_BUILTIN_MODELS, OFFICIAL_CHANNEL_PRESETS } from '../src/admin-v2/official-channel-presets.js';
-import { supplierDeletionBlock } from '../src/admin-v2/provider-channels.js';
 import { referenceWorkspace } from '../src/mock/reference-workspace.js';
 
 test('materials contain seventeen masters while model onboarding lists only registered models and their actual supplier channels', () => {
@@ -185,7 +184,7 @@ test('aliases of the same master share one supplier group while keeping custom n
   assert.deepEqual(state,before);
 });
 
-test('removing a supplier model checks every canonical alias and removes the registration atomically after channels are deleted', () => {
+test('removing a supplier model removes the registration across aliases while retaining its connected upstream', () => {
   const state=initialModelWorkspace(),provider=state.providers.find(row=>row.id==='provider-moma'),id='builtin-pp-ocrv6';
   let next=commitAdminState(state,{type:'modelOperations',operation:'supplierModelsRegister',data:{providerId:provider.id,libraryIds:[id]}},'平台管理员');
   const owner=next.providers.find(row=>row.id===provider.id);
@@ -194,15 +193,13 @@ test('removing a supplier model checks every canonical alias and removes the reg
   const endpoint=next.endpoints.find(row=>row.providerId===provider.id);
   owner.catalogConnections.push({id:'alias-deletion-check',modelId:'pp-ocr-alias',endpointId:endpoint.id,enabled:false});
   const remove={type:'modelOperations',operation:'provider',data:{operation:'catalogueRemove',objectId:provider.id,values:{modelId:'pp-ocrv6',confirmed:true}}};
-  assert.match(supplierDeletionBlock(next,owner,'pp-ocrv6').message,/全部上游模型记录/);
-  assert.throws(()=>commitAdminState(next,remove,'平台管理员'),/全部上游模型记录/);
-  owner.catalogConnections.find(row=>row.id==='alias-deletion-check').deletedAt='2026-11-01';
   const before=structuredClone(next);
   next=commitAdminState(next,remove,'平台管理员');
   assert.ok(!supplyModelDirectory(next).some(row=>row.id===id));
   const updated=next.providers.find(row=>row.id===provider.id);
   assert.ok(['pp-ocrv6','pp-ocr-alias'].every(code=>updated.removedCatalogModelIds.includes(code)));
   assert.deepEqual(updated.catalogModels,before.providers.find(row=>row.id===provider.id).catalogModels);
+  assert.deepEqual(updated.catalogConnections,owner.catalogConnections);
   for(const key of ['models','modelTemplates','endpoints','modelSupplies','modelSalePrices','serviceRoutes'])assert.deepEqual(next[key],before[key]);
   assert.ok(libraryRecord(next,id));
 });

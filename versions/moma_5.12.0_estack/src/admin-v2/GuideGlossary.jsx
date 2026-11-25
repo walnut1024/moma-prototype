@@ -12,7 +12,7 @@ export default function GuideGlossary({ section, english }) {
     { title: 'Definition', key: 'definition', render: (_, row) => row[3] },
   ];
   return <article className="admin-page-stack" lang={english ? 'en' : 'zh-CN'}>
-    <AdminPageHeading title={english ? 'Model Operations' : '模型运营'}/>
+    <AdminPageHeading title={english ? 'Platform Glossary' : '平台术语'}/>
     <Card><Tabs type="line" defaultActiveKey="fields">
       <Tabs.TabPane itemKey="fields" tab={english ? 'Key Concepts and Fields' : section.title}>
         <Table columns={english ? englishColumns : chineseColumns} dataSource={table.rows} rowKey={row => row[0]} pagination={false}/>

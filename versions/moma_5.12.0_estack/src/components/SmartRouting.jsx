@@ -260,7 +260,7 @@ export default function SmartRouting({ tenant, projectId, projectRules, embedded
   const [error, setError] = useState('');
   const [awaiting, setAwaiting] = useState(null);
   const project = tenant.projects.find(row => row.id === projectId);
-  const services = (tenant.routeServices || tenant.services).map(service => ({ ...service,
+  const services = (tenant.routeServices || tenant.services).filter(service => !service.independentService).map(service => ({ ...service,
     callable: service.callable && Boolean(project) && projectModelEnabled(project,service.serviceModelId || service.modelKey) }));
   const models = routeModels(services);
   const routes = tenant.routes.filter(row => row.projectId === projectId);

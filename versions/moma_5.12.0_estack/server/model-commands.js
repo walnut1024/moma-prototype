@@ -74,16 +74,19 @@ async function loadTrafficLimits(db) {
   const [defaults, rules, catalogue] = await db.batch([
     db.prepare('SELECT t.*,d.commit_seq AS commitSeq FROM traffic_limit_defaults t JOIN db_state d ON d.id=1 WHERE t.id=1'),
     db.prepare('SELECT scope,object_id AS objectId,model_id AS modelId,rpm,tpm FROM traffic_limit_rules ORDER BY scope,object_id,model_id'),
-    db.prepare(`SELECT m.id,m.name,m.canonical_slug AS modelId FROM materials m
-      WHERE m.deleted_at IS NULL AND json_extract(m.record_json,'$.archivedAt') IS NULL
-        AND NOT EXISTS (SELECT 1 FROM model_workspace w, json_each(w.meta_json,'$.modelData.archivedCatalogueIds') archived WHERE archived.value=m.id)
-      ORDER BY m.name,m.id`),
+    db.prepare(`SELECT n.id,json_extract(n.record_json,'$.name') AS name,n.call_id AS modelId,
+        (SELECT o.service_id FROM offers o JOIN services s ON s.id=o.service_id
+          WHERE o.retired_at IS NULL AND s.deleted_at IS NULL AND o.mode_epoch=s.mode_epoch
+            AND o.record_id=json_extract(n.record_json,'$.controlledOfferId')) AS projectModelId
+      FROM new_model_services n WHERE n.deleted_at IS NULL ORDER BY name,n.id`),
   ]);
   const row = defaults.results[0];
   if (!row) issue(503, 'DATABASE_UNAVAILABLE', '限流配置未初始化');
+  const serviceIds = new Set(catalogue.results.map(service => service.id));
   return { commitSeq: row.commitSeq, revision: row.revision,
     global: { rpm: row.rpm, tpm: row.tpm }, modelDefault: { rpm: row.model_rpm, tpm: row.model_tpm },
-    rules: rules.results, catalogue: catalogue.results };
+    rules: rules.results.filter(rule => rule.scope === 'account' ||
+      serviceIds.has(rule.scope === 'model' ? rule.objectId : rule.modelId)), catalogue: catalogue.results };
 }
 
 export async function readTrafficLimits(db, actor) {
@@ -96,15 +99,18 @@ const sameRate = (a, b) => a?.rpm === b?.rpm && a?.tpm === b?.tpm;
 
 function trafficChanges(current, { operation, id, data }) {
   const changes = [];
+  const models = new Map(current.catalogue.map(row => [row.id, row]));
   const add = (scope, objectId, before, after, action, modelId = '') => {
-    if (!sameRate(before, after)) changes.push({ scope, objectId, modelId, before: ratePair(before), after: ratePair(after), action });
+    if (sameRate(before, after)) return;
+    const model = models.get(scope === 'model' ? objectId : modelId);
+    changes.push({ scope, objectId, modelId, before: ratePair(before), after: ratePair(after), action,
+      ...(model && { modelName: model.name, callId: model.modelId }) });
   };
   const requireLimit = (value, allowed = ['rpm', 'tpm']) => {
     if (!validTrafficLimit(value) || Object.keys(value).some(field => !allowed.includes(field))) {
       issue(400, 'INVALID_INPUT', 'RPM 和 TPM 须为有效正整数');
     }
   };
-  const hasModel = id => current.catalogue.some(row => row.id === id);
   if ((operation === 'defaults' || operation === 'modelDefaults') && id === '') {
     requireLimit(data);
     if (operation === 'defaults') add('user-default', 'user-traffic-defaults', current.global, data, '保存全局默认限流');
@@ -120,7 +126,7 @@ function trafficChanges(current, { operation, id, data }) {
     for (const accountId of accountIds) add('account', accountId,
       current.rules.find(rule => rule.scope === 'account' && rule.objectId === accountId), limit, action);
   } else if (operation === 'model' && validId(id)) {
-    if (!hasModel(id)) issue(404, 'NOT_FOUND', '模型资料不存在');
+    if (!models.has(id)) issue(404, 'NOT_FOUND', '模型服务不存在');
     if (data !== null) requireLimit(data);
     add('model', id, current.rules.find(rule => rule.scope === 'model' && rule.objectId === id), data,
       data ? '保存模型共享上限' : '恢复模型默认额度');
@@ -128,13 +134,13 @@ function trafficChanges(current, { operation, id, data }) {
     const exceptions = data?.exceptions;
     if (!Array.isArray(exceptions) || exceptions.some(row => !validId(row?.modelId))
       || new Set(exceptions.map(row => row.modelId)).size !== exceptions.length || Object.keys(data).length !== 1) {
-      issue(400, 'INVALID_INPUT', '同一模型只能配置一条额度');
+      issue(400, 'INVALID_INPUT', '同一模型服务只能配置一条额度');
     }
     const previous = new Map(current.rules.filter(rule => rule.scope === 'policy' && rule.objectId === id).map(rule => [rule.modelId, rule]));
     const next = new Map(exceptions.map(row => [row.modelId, row]));
     for (const [modelId, row] of next) {
       requireLimit(row, ['modelId', 'rpm', 'tpm']);
-      if (!sameRate(previous.get(modelId), row) && !hasModel(modelId)) issue(404, 'NOT_FOUND', '模型资料不存在，无法修改其额度');
+      if (!models.has(modelId)) issue(404, 'NOT_FOUND', '模型服务不存在，无法修改其额度');
     }
     for (const modelId of new Set([...previous.keys(), ...next.keys()])) {
       const before = previous.get(modelId), after = next.get(modelId);
@@ -316,7 +322,6 @@ export async function modelCommand(db,actor,body,key,license){
     indexRepairs = data.issueIds.map(id => current.find(item => item.id === id && item.repairable));
     if (indexRepairs.some(item => !item)) issue(422, 'BUSINESS_BLOCKED', '所选问题不存在或需要人工核对');
   }
-  const dictionaryChange = body.action.operation === 'tariffDictionary' ? body.action.data : null;
   if (body.action.operation === 'serviceDelete' && typeof body.action.modelId === 'string') {
     const reference = await db.prepare(`SELECT 1 FROM token_package_records p, json_each(p.record_json, '$.modelIds') model
       JOIN services s ON s.material_id=model.value
@@ -327,13 +332,6 @@ export async function modelCommand(db,actor,body,key,license){
     if (target !== undefined && !validId(target)) issue(422, 'INVALID_INPUT', '模型服务 ID 无效');
     const history = await db.prepare('SELECT 1 FROM offers f WHERE f.service_id=?' + (target === undefined ? '' : ' AND f.record_id=?') + ' AND (EXISTS(SELECT 1 FROM market_orders o WHERE o.offer_id=f.record_id) OR EXISTS(SELECT 1 FROM market_calls c WHERE c.offer_id=f.record_id)) LIMIT 1').bind(body.action.modelId, ...(target === undefined ? [] : [target])).first();
     if (history) issue(422, 'BUSINESS_BLOCKED', '服务已有订单或调用记录，无法删除');
-  }
-  if (dictionaryChange?.operation === 'delete' && typeof dictionaryChange.id === 'string') {
-    const reference = await db.prepare(`SELECT 1 FROM token_package_model_factors f
-      WHERE EXISTS (SELECT 1 FROM json_each(f.record_json, '$.rules') WHERE json_extract(value, '$.billingItemId')=?1)
-         OR EXISTS (SELECT 1 FROM json_each(f.record_json, '$.draft.rules') WHERE json_extract(value, '$.billingItemId')=?1)
-      LIMIT 1`).bind(dictionaryChange.id).first();
-    if (reference) issue(422, 'BUSINESS_BLOCKED', '该计费项仍被套餐抵扣规则引用，请先调整规则再删除');
   }
   const engine=createMockEngine({initialState:before.cloudMockState,localState:before});engine.setMockRuntimeState(before);engine.invoke('/audits');before.cloudMockState=engine.snapshot();
   const action=structuredClone(body.action);
@@ -387,7 +385,7 @@ export async function simulationRequest(db,actor,path,method,body,key){
 }
 
 export async function channelCredentialAccess(db, actor, endpointId, keyId, verified) {
-  if (actor.role !== '平台管理员') issue(403, 'FORBIDDEN', '仅平台管理员可验证后查看凭证摘要');
+  if (actor.role !== '平台管理员') issue(403, 'FORBIDDEN', '仅平台管理员可验证后查看上游 API 密钥摘要');
   const failureCount = await db.prepare(`SELECT COUNT(*) AS count FROM audit_events a JOIN operations o ON o.id=a.operation_id
     WHERE o.actor_id=? AND o.command='channel.credential.verify' AND a.created_at>? AND json_extract(a.record_json,'$.result')='失败'`)
     .bind(actor.id, Date.now() - 60000).first('count');
@@ -398,7 +396,7 @@ export async function channelCredentialAccess(db, actor, endpointId, keyId, veri
   const key = endpoint && provider && connectionKeys(endpoint, provider, true).find(row => row.id === keyId && !row.revokedAt);
   if (!key) issue(404, 'NOT_FOUND', '凭证不属于当前连接或已撤销');
   const id = resourceId('credential-view'), at = Date.now();
-  const event = { id: resourceId('audit-event'), action: '凭证查看身份验证', objectId: key.id, endpointId, providerId: provider.id,
+  const event = { id: resourceId('audit-event'), action: '上游 API 密钥查看身份验证', objectId: key.id, endpointId, providerId: provider.id,
     result: verified ? '成功' : '失败', createdAt: new Date(at).toISOString(), actor: actor.role, actorId: actor.id };
   const result = verified ? { verified: true, keyId, maskedKey: key.maskedKey, expiresAt: new Date(at + 30000).toISOString() } : { verified: false };
   await save(db, actor, state, id, id, await digest([endpointId, keyId, verified]), 'channel.credential.verify', { recorded: true }, [], event);

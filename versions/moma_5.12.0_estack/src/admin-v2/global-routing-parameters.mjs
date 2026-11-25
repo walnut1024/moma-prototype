@@ -35,7 +35,9 @@ export function savedRetryPolicy(values) {
   return result;
 }
 const retryConditions = ['429', '超时', '5xx'];
+export const globalRoutingStrategies = ['simple-shuffle', 'least-busy', 'latency-based-routing', 'usage-based-routing-v2'];
 export const globalPolicyDefaults = { strategy: 'simple-shuffle', retry_policy: undefined, max_fallbacks: undefined, retryConditions, failoverEnabled: true };
+export const effectiveRoutingStrategy = value => globalRoutingStrategies.includes(value) ? value : globalPolicyDefaults.strategy;
 export const failoverFields = [
   ['numRetries', '最大重试次数', '次'], ['timeout', '请求超时时间', '秒'],
   ['allowedFails', '故障判定阈值', '次'], ['cooldownTime', '故障冷却时间', '秒'],

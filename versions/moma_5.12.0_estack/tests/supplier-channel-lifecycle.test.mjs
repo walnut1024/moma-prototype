@@ -49,12 +49,11 @@ test('batch removal checks the union of selected channels, preserves shared sibl
   assert.deepEqual(removed.providers.filter(p => p.id !== provider.id), state.providers.filter(p => p.id !== provider.id));
 });
 
-test('removing every selected channel can archive unused connections without deleting the provider or any master IDs', () => {
+test('removing every upstream model preserves the provider and its connections', () => {
   const { state, provider, rows } = fixture(), target = { providerId: provider.id, associationIds: rows.map(row => row.id) };
   const prepared = removal(state, target, 'providerRemovalPrepare'), removed = removal(prepared, target, 'providerRemovalCommit');
   assert(!removed.providers.find(p => p.id === provider.id).deletedAt);
-  for (const id of new Set(rows.map(row => row.endpointId))) assert(removed.endpoints.find(row => row.id === id).deletedAt);
-  assert.deepEqual(removed.endpoints.map(row => row.id), state.endpoints.map(row => row.id));
+  assert.deepEqual(removed.endpoints, state.endpoints);
   for (const ids of [[], ['foreign'], [rows[0].id, rows[0].id], [null]]) assert.throws(() => providerRemovalPlan(state, { providerId: provider.id, associationIds: ids }));
   const pending = structuredClone(state); pending.endpoints.find(e => e.id === rows[0].endpointId).serverTestJobs = [{ associationIds: [rows[0].id] }];
   assert.throws(() => removal(pending, target, 'providerRemovalPrepare'), /未完成/);

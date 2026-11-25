@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { isResourceId } from '../src/resource-id.mjs';
 import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistModelAction, parseAdminState as baseParseAdminState } from '../src/admin-v2/store.js';
-import { providerApiKeysDraft, providerApiKeyId, PROVIDER_API_KEY_LIMIT, maskProviderApiKey, providerModelConnectivityTest, MODEL_CONNECTIVITY_SCENARIOS } from '../src/admin-v2/provider-management.js';
+import { providerApiKeysDraft, providerApiKeyId, UPSTREAM_API_KEY_LIMIT, maskProviderApiKey, providerModelConnectivityTest, MODEL_CONNECTIVITY_SCENARIOS } from '../src/admin-v2/provider-management.js';
 
 const first = 'sk-test-only-provider-key-0001', second = 'sk-test-only-provider-key-0002', third = 'sk-test-only-provider-key-0003';
 const action = (values, objectId = 'provider-moma') => ({ type: 'modelOperations', operation: 'provider', data: { operation: 'addApiKeys', objectId, values } });
@@ -63,13 +63,31 @@ test('invalid input and malformed or unmasked batch payloads never commit', asyn
 });
 
 test('batch and accumulated limits are enforced without partial writes', async () => {
-  const values = Array.from({ length: PROVIDER_API_KEY_LIMIT }, (_, index) => `sk-test-only-limit-${String(index).padStart(4, '0')}`);
-  await assert.rejects(providerApiKeysDraft([...values, first]), /最多配置 20/);
-  const state = commitAdminState(createAdminSeed(), action(await providerApiKeysDraft(values))), before = JSON.stringify(state);
-  assert.equal(state.providers.find(p => p.id === 'provider-moma').apiKeys.length, PROVIDER_API_KEY_LIMIT);
+  const values = Array.from({ length: UPSTREAM_API_KEY_LIMIT }, (_, index) => `sk-test-only-limit-${String(index).padStart(4, '0')}`);
+  const seed = createAdminSeed(), overLimit = await providerApiKeysDraft([...values, first]);
+  assert.throws(() => commitAdminState(seed, action(overLimit)), /最多配置 5 把/);
+  const state = commitAdminState(seed, action(await providerApiKeysDraft(values))), before = JSON.stringify(state);
+  assert.equal(state.providers.find(p => p.id === 'provider-moma').apiKeys.length, UPSTREAM_API_KEY_LIMIT);
   const extra = await providerApiKeysDraft([first]);
-  assert.throws(() => commitAdminState(state, action(extra)), /最多配置 20/);
+  assert.throws(() => commitAdminState(state, action(extra)), /最多配置 5 把/);
   assert.equal(JSON.stringify(state), before);
+});
+
+test('legacy pools above the limit keep their keys and allow deleting one', async () => {
+  const state = createAdminSeed();
+  const provider = state.providers.find(row => row.id === 'provider-moma');
+  const inputs = Array.from({length:6}, (_, index) => `sk-test-only-legacy-limit-${index}`);
+  const {apiKeys} = await providerApiKeysDraft(inputs);
+  provider.apiKeys = apiKeys.map((key, index) => ({...key, id:`legacy-key-${index}`, name:`历史密钥 ${index}`}));
+  const extra = await providerApiKeysDraft([first]);
+  assert.throws(() => commitAdminState(state, action(extra)), /最多配置 5 把/);
+  const [remove, ...keep] = provider.apiKeys;
+  const saved = commitAdminState(state, {
+    type:'modelOperations', operation:'provider', data:{operation:'deleteApiKey', objectId:provider.id,
+      values:{keyId:remove.id, expectedFingerprint:remove.fingerprint, confirmed:true}},
+  });
+  assert.deepEqual(saved.providers.find(row => row.id === provider.id).apiKeys, keep);
+  assert.equal(provider.apiKeys.length, 6);
 });
 
 test('batch saves retain role, revision and failed-storage protections', async () => {

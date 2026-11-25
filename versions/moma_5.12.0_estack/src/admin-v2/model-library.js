@@ -43,8 +43,5 @@ export function modelCatalogue(state) {
 }
 
 export function libraryRemovalIssue(state, id) {
-  const record = modelMaterial(state, id);
-  if (!record) return '模型资料不存在';
-  if (state.modelOnboardings.some(row => !['已完成', '已放弃'].includes(row.status) && (libraryRecord(state, row.libraryId)?.id === record.id || row.kind === 'supplier-channel' && row.rows.some(item => libraryRecord(state, item.libraryId)?.id === record.id)))) return '模型资料仍被配置草稿引用';
-  return '';
+  return modelMaterial(state, id) ? '' : '模型资料不存在';
 }

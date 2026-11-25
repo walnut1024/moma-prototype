@@ -7,7 +7,7 @@ import { Field, Notice } from './ServiceUI';
 import ProcurementPriceFields from './ProcurementPriceFields';
 import ChannelCostCell from './ChannelCostCell';
 import { normalizeProviderPrice } from './provider-management';
-import { catalogueMoneyDisplay } from './provider-catalogue-pricing';
+import { catalogueMoneyDisplay, validateQuoteTariffs } from './provider-catalogue-pricing';
 import './procurement-cost.css';
 
 export default function BatchProcurementEditor({ state, channel, models, ops, close }) {
@@ -32,6 +32,7 @@ export default function BatchProcurementEditor({ state, channel, models, ops, cl
     if (blocked) return;
     try {
       const quote = normalizeProviderPrice(channel.provider, { modelId: models[0].association.modelId, discountFactor: '1', scenarios });
+      validateQuoteTariffs(state, quote.scenarios);
       if (!quote.scenarios.length || quote.scenarios.some(item => item.listPrice == null)) throw Error('请补齐计费项和服务商成本价，免费请明确填写 0');
       ops.setError('');
       setPricing(quote);

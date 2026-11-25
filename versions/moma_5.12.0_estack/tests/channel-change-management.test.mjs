@@ -45,7 +45,8 @@ test('the connection directory groups models by ID and keeps empty connections a
   assert.deepEqual(shared.models.map(row => row.association.id), mappings(state).map(row => row.id));
   assert.equal(shared.name, empty.name);
   assert.equal(empty.modelCount, 0);
-  assert.deepEqual(filterConnections(rows, { query: 'vendor/chat', providerId, status: '已启用' }), [shared]);
+  assert.equal(empty.status, '待验证');
+  assert.deepEqual(filterConnections(rows, { query: 'vendor/chat', providerId, status: '可用' }), [shared]);
   assert.deepEqual(filterConnections(rows, { query: 'vendor/chat', providerId: 'other' }), []);
 });
 

@@ -34,14 +34,15 @@ test('new model services share D1, protect imported records, and inherit the per
   const chrome = await login('admin-001');
   const inApp = await login('admin-001');
   const observer = await login('admin-002');
-  const model = { id: resourceId('model-service'), name: 'service example', callId: 'example-local-model', modelId: '',
-    modelName: '', type: 'text', note: 'original note', description: '', listed: false,
+  const model = { id: resourceId('model-service'), name: 'service example', callId: 'example-local-model',
+    type: 'text', note: 'original note', description: '', listed: false,
     channels: [{ id: resourceId('service-channel'), channelId: 'mock-service-channel:original:1',
       fingerprint: 'mock-service-channel:original:1', name: 'original channel', provider: '模拟连接',
       upstreamId: 'mock/original', enabled: true, simulated: true, priority: 0, weight: 37, context: 32000 }],
     createdBy: 'original creator', createdAt: '2026-11-20T11:37:24.000Z', tags: '' };
   const command = (action, row, revision = 0, id = row?.id) => ({ action, id, row, revision, operationId: resourceId('operation') });
-  const imported = command('import', model);
+  const historicalMaterial = { modelId: 'old-record', modelName: 'Original material name', modelDetails: { code: 'legacy-source' } };
+  const imported = command('import', { ...model, ...historicalMaterial });
   const run = (body, cookie = inApp) => request(endpoint, { cookie, body });
 
   assert.equal((await request(endpoint)).status, 401);
@@ -56,6 +57,9 @@ test('new model services share D1, protect imported records, and inherit the per
   const first = await run(imported);
   assert.equal(first.status, 200);
   assert.deepEqual(first.data.row, { ...model, routingCustom:false, failoverCustom:false, revision: 1 });
+  const history = JSON.parse(await db.prepare('SELECT record_json FROM new_model_services WHERE id=?').bind(model.id).first('record_json'));
+  assert.equal(history.modelId, historicalMaterial.modelId);
+  assert.deepEqual(history.modelDetails, historicalMaterial.modelDetails);
   assert.deepEqual((await request(endpoint, { cookie: chrome })).data.rows, [first.data.row]);
   assert.deepEqual((await run(imported)).data, first.data);
   assert.deepEqual((await request('/operations/' + imported.operationId, { cookie: inApp })).data, first.data);
@@ -80,6 +84,7 @@ test('new model services share D1, protect imported records, and inherit the per
   const strategy = command('save', { ...saved, routingCustom:true, failoverCustom:true, failover, routingStrategy: 'latency-based-routing' }, 2);
   assert.equal((await run({ ...strategy, row: { ...saved, routingStrategy: ['least-busy'] } })).status, 400);
   assert.equal((await run({ ...strategy, row: { ...saved, routingStrategy: 'round-robin' } })).status, 400);
+  assert.equal((await run({ ...strategy, row: { ...saved, routingStrategy: 'cost-based-routing' } })).status, 400);
   const changed = await run(strategy);
   assert.equal(changed.status, 200);
   assert.deepEqual(changed.data.row, { ...saved, routingCustom:true, failoverCustom:true, failover, routingStrategy: 'latency-based-routing', revision: 3 });
@@ -102,7 +107,7 @@ test('new model services share D1, protect imported records, and inherit the per
   assert.deepEqual(await db.prepare('SELECT deleted_at,revision FROM new_model_services WHERE id=?').bind(model.id).first(), deleted);
   assert.deepEqual((await request(endpoint, { cookie: chrome })).data, { defaults: {timeout:60,numRetries:2,allowedFails:3,cooldownTime:30,retryConditions:['429','超时','5xx'],failoverEnabled:true,strategy:'simple-shuffle'}, rows: [], deletedIds: [model.id] });
   assert.equal(await db.prepare("SELECT COUNT(*) AS n FROM audit_events WHERE entity_type='new-model-service'").first('n'), 5);
-  assert.equal((await request('/health')).data.schemaVersion, 18);
+  assert.equal((await request('/health')).data.schemaVersion, 19);
 
   const materialId = 'template-glm-5.3';
   const workspace = await request('/model-operations', { cookie: chrome });
@@ -111,7 +116,7 @@ test('new model services share D1, protect imported records, and inherit the per
     .filter(candidate => !candidate.reason);
   assert.ok(candidates.length >= 2);
   const service = { id: resourceId('model-service'), name: 'GLM 新模型服务', callId: 'glm-test-new-service',
-    modelId: '', type: 'text', listed: false, channels: [] };
+    type: 'text', listed: false, channels: [] };
   const created = await run(command('save', service));
   assert.equal(created.status, 200, JSON.stringify(created.data));
   assert.deepEqual(created.data.row.channels, []);
@@ -129,17 +134,16 @@ test('new model services share D1, protect imported records, and inherit the per
   assert.equal(linked.status, 200, JSON.stringify(linked.data));
   assert.deepEqual(linked.data.row.channels, channels);
   assert.deepEqual(linked.data.row.priorityGroups, [0, 2]);
-  assert.equal(linked.data.row.modelId, '');
+  assert.equal(Object.hasOwn(linked.data.row, 'modelId'), false);
   const reloaded = (await request(endpoint, { cookie: inApp })).data.rows.find(row => row.id === service.id);
   assert.deepEqual(reloaded.channels, channels);
   const started = await run(command('save', { ...reloaded, listed: true }, reloaded.revision));
   assert.equal(started.status, 200, JSON.stringify(started.data));
-  assert.equal(started.data.row.modelId, '');
+  assert.equal(Object.hasOwn(started.data.row, 'modelId'), false);
   assert.equal(started.data.row.listed, true);
   const referenced = await run(command('save', { ...started.data.row, modelId: materialId }, started.data.row.revision));
-  assert.equal(referenced.status, 200, JSON.stringify(referenced.data));
-  assert.equal(referenced.data.row.modelId, materialId);
-  assert.deepEqual(referenced.data.row.channels, channels);
+  assert.equal(referenced.status, 400, JSON.stringify(referenced.data));
+  assert.match(referenced.data.error.message, /只关联上游模型/);
 
   await initializeApplication(db);
   const app = await request('/application', { cookie: chrome });
@@ -152,6 +156,6 @@ test('new model services share D1, protect imported records, and inherit the per
   assert.equal(global.status, 200, JSON.stringify(global.data));
   const refreshed = (await request(endpoint, { cookie: inApp })).data;
   assert.equal(refreshed.defaults.strategy, 'least-busy');
-  assert.deepEqual(refreshed.rows.find(row => row.id === service.id), referenced.data.row);
+  assert.deepEqual(refreshed.rows.find(row => row.id === service.id), started.data.row);
 
 });

@@ -128,7 +128,7 @@ test('quick create follows role, revision and storage failure boundaries without
   assert.throws(() => persistModelAction(state, action, { getItem: () => raw, setItem: () => { writes++; } }), /数据已变化/); assert.equal(writes, 0); assert.deepEqual(state, before);
 });
 
-test('only actual enable and disable actions stamp activation history; creation and testing never do', () => {
+test('successful connection testing enables availability while model activation retains its own history', () => {
   let state = run(clean(), 'channelQuickCreate', { providerPresetId: 'deepseek', values: values() });
   const endpointId = created(state).id, providerId = created(state).providerId;
   const provider = current => current.providers.find(row => row.id === providerId), endpoint = current => current.endpoints.find(row => row.id === endpointId), mapping = current => supplierChannelAssociations(current, provider(current), endpointId)[0];
@@ -136,10 +136,18 @@ test('only actual enable and disable actions stamp activation history; creation 
   // This fixture explicitly uses a self-hosted unauthenticated endpoint to isolate activation from secret setup.
   provider(state).sourceType = 'selfHosted'; endpoint(state).authMode = 'none';
   assert.equal(endpoint(state).activationChangedAt, undefined); assert.equal(mapping(state).activationChangedAt, undefined);
-  state = providerRun(state, 'supplierModelsTest', { endpointId, associationIds: [mapping(state).id] }); assert.equal(endpoint(state).activationChangedAt, undefined); assert.equal(mapping(state).activationChangedAt, undefined);
-  state = providerRun(state, 'supplierModelsEnable', { endpointId, associationIds: [mapping(state).id] }); assert.ok(endpoint(state).activationChangedAt); assert.ok(mapping(state).activationChangedAt);
+  state = providerRun(state, 'supplierModelsTest', { endpointId, associationIds: [mapping(state).id] });
+  assert.equal(endpoint(state).status, '运行中');
+  assert.equal(endpoint(state).activationChangedAt, undefined);
+  assert.equal(mapping(state).activationChangedAt, undefined);
+  assert.equal(mapping(state).enabled, false);
+  state = providerRun(state, 'supplierModelsEnable', { endpointId, associationIds: [mapping(state).id] });
+  assert.equal(endpoint(state).activationChangedAt, undefined);
+  assert.ok(mapping(state).activationChangedAt);
+  assert.equal(mapping(state).enabled, true);
   state = providerRun(state, 'channelDisable', { modelId: mapping(state).modelId, channelId: mapping(state).id, confirmed: true }); assert.ok(mapping(state).activationChangedAt);
-  state = run(state, 'provider', { operation: 'disableConnection', objectId: endpointId, values: { confirmed: true } }); assert.ok(endpoint(state).activationChangedAt); assert.equal(endpoint(state).status, '停用');
+  assert.equal(mapping(state).enabled, false);
+  assert.equal(endpoint(state).status, '运行中');
 });
 
 test('a pending preset draft reuses supplier and material registered by another quick create before its own commit', async () => {

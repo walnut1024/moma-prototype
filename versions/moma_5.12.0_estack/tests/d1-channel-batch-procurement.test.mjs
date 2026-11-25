@@ -23,6 +23,7 @@ test('publishing batch procurement prices is scoped, atomic and keeps version hi
   const send = async (command, expected = 200) => {
     const response = await request('/model-operations/commands', command);
     assert.equal(response.status, expected, await response.clone().text());
+    return response.json();
   };
   try {
     const login = await request('/auth/login', { accountId: 'admin-001', accessCode });
@@ -51,6 +52,14 @@ test('publishing batch procurement prices is scoped, atomic and keeps version hi
     const rows = [{ associationId: first.id, expectedPriceRevision: 1 }, { associationId: second.id, expectedPriceRevision: 0 }];
     const data = { ...base, rows, scenarios: quote('7.5') };
     const operation = 'channelProcurementBatchPublish';
+    for (const [change, error] of [[{ name: '自定义计费项' }, /内置字典/], [{ unit: '分钟' }, /不适用于/], [{ currency: 'EUR' }, /内置字典/]]) {
+      const scenarios = [{ ...quote('7.5')[0], ...change }];
+      const single = await send(command(before, 'channelProcurementPublish', { ...base, ...rows[0], scenarios }), 422);
+      const batch = await send(command(before, operation, { ...data, scenarios }), 422);
+      assert.match(single.error.message, error);
+      assert.match(batch.error.message, error);
+      assert.deepEqual(await read(), before);
+    }
     for (const invalid of [
       { rows: [rows[0], { ...rows[1], expectedPriceRevision: 9 }] },
       { rows: [rows[0], { associationId: 'another-channel-model', expectedPriceRevision: 0 }] },

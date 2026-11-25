@@ -70,11 +70,11 @@ export function platformPriceVersions(price, model, path = '价格配置', at = 
 
 function platformRoute(state, service, version, rows) {
   const config = validateRouteConfig(state,service,version.config,false);
-  if (!['fixed', 'weighted', 'priority', 'priority_weighted', 'load', 'tpm', 'latency', 'cost'].includes(config.strategy)) issue('路由配置', '当前路由策略不能用于平台试调用');
+  if (!['fixed', 'weighted', 'priority', 'priority_weighted', 'load', 'tpm', 'latency'].includes(config.strategy)) issue('路由配置', '当前路由策略不能用于平台试调用');
   if (service.mode === 'provider' && rows.length !== config.channels.filter(row => row.enabled).length) issue('供给范围', '请选择主上游模型及已配置的备用上游模型');
   const grouped = config.strategy === 'weighted' && config.groups.length > 1;
   const strategy = grouped ? 'priority_weighted' : config.strategy;
-  return { version: version.version, strategy, strategyCode:ROUTING_POLICIES[strategy]?.code || strategy, costBasis:config.advanced?.costBasis || 'input', autoFailover: config.autoFailover === true, ...(config.retry ? {retry:config.retry} : {}), channels: rows.map(row => {
+  return { version: version.version, strategy, strategyCode:ROUTING_POLICIES[strategy]?.code || strategy, autoFailover: config.autoFailover === true, ...(config.retry ? {retry:config.retry} : {}), channels: rows.map(row => {
     const priority = grouped ? config.groups.findIndex(group => group.id === row.route.groupId) : row.route.priority;
     const weighted = ['weighted', 'priority_weighted'].includes(config.strategy);
     if (!Number.isInteger(priority) || priority < 0 || weighted && (!Number.isFinite(row.route.weight) || row.route.weight <= 0)) issue('路由配置', '上游模型的优先级、分组或权重无效');
@@ -108,14 +108,14 @@ export function platformCandidatePlan(state, model, { serviceId, tenantIds = [],
     const sameTemplate = model.templateId && (master.id === model.templateId || master.templateId === model.templateId);
     if (master.id !== model.id && !sameTemplate) issue(path, '模型资料关联与当前服务模型不一致，请重新关联模型资料');
     if (!association.upstreamModelId || /\s/.test(association.upstreamModelId)) issue(path, '上游模型 ID 未配置');
-    if (!supply.endpoint.interfaceType) issue(path, '接口类型未配置');
+    if (!supply.endpoint.interfaceType) issue(path, '接口格式未配置');
     if (supply.endpoint.authMode !== 'none' && !connectionKeys(supply.endpoint, supply.provider)[0] && !(!supply.endpoint.authMode && supply.endpoint.credentialRef)) issue(path, '缺少可用且未撤销的主要密钥');
     let procurementPrices = [];
     if (technical) {
       try { procurementPrices = platformPriceVersions(activeSupplyPrice(state, supply.id, at), model, `${path} / 服务商成本价`, at); } catch { /* Unsupported cost remains unknown during technical verification. */ }
     } else procurementPrices = platformPriceVersions(activeSupplyPrice(state, supply.id, at), model, `${path} / 服务商成本价`, at);
     const measures = prices => prices.map(item => `${item.unit}:${item.currency}`).sort().join('|');
-    if (!technical && measures(procurementPrices) !== measures(salePrices)) issue(`${path} / 价格`, '采购与销售的计量字段或币种不可比，请调整价格配置');
+    if (!technical && measures(procurementPrices) !== measures(salePrices)) issue(`${path} / 价格`, '服务商成本价与模型刊例价的计量字段或币种不可比，请调整价格配置');
     let probe;
     if (model.type === 'audio') {
       if (!['speech', 'transcription'].includes(audioProbe)) issue('语音测试任务', '请明确选择语音合成或语音识别');

@@ -16,17 +16,6 @@ export function supplierModelIds(state, provider, modelId) {
   const master = supplyModelRecord(state, provider, modelId);
   return master ? providerCatalogueIds(provider).filter(id => supplyModelRecord(state, provider, id)?.id === master.id) : [modelId];
 }
-export function retiredSupplierModelIds(state, provider, remainingChannels, modelIds) {
-  const removed = new Set(provider.removedCatalogModelIds || []);
-  const endpoints = new Set(state.endpoints.filter(row => row.providerId === provider.id && !row.deletedAt).map(row => row.id));
-  for (const modelId of modelIds) {
-    const aliases = supplierModelIds(state, provider, modelId);
-    if (!remainingChannels.some(channel => endpoints.has(channel.endpointId) && aliases.includes(channel.modelId))) {
-      for (const alias of aliases) removed.add(alias);
-    }
-  }
-  return [...removed];
-}
 export function supplyModelDirectory(state, providers = supplierDirectory(state).filter(row => !row.id.startsWith('service-review-provider-'))) {
   const groups = new Map(modelIdentityCatalogue(state).map(master => [master.id, { id: master.id, master, name: master.name, code: master.modelId, entries: [] }]));
   for (const provider of providers) for (const modelId of displayedCatalogueIds(provider, state)) {

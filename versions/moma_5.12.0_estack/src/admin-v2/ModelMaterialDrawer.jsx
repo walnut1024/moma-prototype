@@ -7,25 +7,22 @@ import Table from './AdminTable';
 import MaterialLogo from './MaterialLogo';
 import SupplyRegistrationDialog from './SupplyRegistrationDialog';
 import { providerCode, PROVIDER_TYPES } from './provider-management';
-import { materialChannelCount, materialSource, modelMaterialProviders, viewMaterialChannels } from './provider-materials';
+import { materialSource, modelMaterialProviders } from './provider-materials';
 
 function ModelSuppliers({ state, model, ops }) {
-  const translateLabel = useChannelText();
   const [registering, setRegistering] = useState(false);
   const trigger = useRef(null);
   const rows = modelMaterialProviders(state, model.id);
   return <>
     <div className="materials-toolbar"><Button theme="solid" disabled={!ops.can} onClick={event => {
       trigger.current = event.currentTarget; setRegistering(true);
-    }}>关联服务商</Button></div>
-    <Table rowKey={row => row.owner.id} dataSource={rows} scroll={{ x: 'max(100%, 740px)' }} empty="暂无供应服务商" columns={[
+    }}>添加供应服务商</Button></div>
+    <Table rowKey={row => row.owner.id} dataSource={rows} scroll={{ x: 'max(100%, 540px)' }} empty="暂无供应服务商" columns={[
       { title: '服务商名称', width: 180, render: (_, { owner }) => <Button theme="borderless" onClick={() =>
         ops.go({ provider: owner.id, returnTo: materialSource(location.hash) }, { base: 'provider-materials', reset: true })}>{owner.name}</Button> },
       { title: '服务商编码', width: 130, render: (_, { owner }) => <Typography.Text className="materials-code">{providerCode(owner)}</Typography.Text> },
       { title: '服务商 Logo', width: 100, render: (_, { owner }) => <MaterialLogo key={owner.logo || ''} src={owner.logo} alt={owner.name + '的服务商 Logo'}/> },
       { title: '供给类型', width: 130, render: (_, { owner }) => PROVIDER_TYPES[owner.sourceType] || '—' },
-      { title: '连接数', align: 'right', width: 80, render: (_, row) => materialChannelCount(row) },
-      { title: '操作', width: 110, render: (_, { owner }) => <Button theme="borderless" onClick={() => viewMaterialChannels(ops, owner.id, model.id)}>{translateLabel("查看连接")}</Button> },
     ]}/>
     {registering && <SupplyRegistrationDialog state={state} ops={ops} model={model} close={() => {
       setRegistering(false);

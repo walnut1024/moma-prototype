@@ -1,20 +1,12 @@
 import { workbenchProtocolLabel } from './workbench-protocol.js';
 import { channelIdentity } from '../model-identities.mjs';
 import { CHANNEL_INTERFACES, connectionRequestUrl, modelTaskUrl, prepareChannelInterface } from './channel-interface.js';
-import { connectionKeys, connectionTestCurrent, connectionTestPending } from './connection-state.js';
+import { connectionKeys, connectionTestCurrent, connectionTestPending, connectionRecoveryRequired, connectionBlockReason } from './connection-state.js';
 import { costRecords } from './model-pricing-workspace.js';
 import { supplyModelRecord } from './supply-models.js';
 import { supplierChannelAssociations, supplierChannelResources } from './supplier-resources.js';
 
-export const CONNECTION_STATUSES = ['已启用', '已停用', '自动停用', '未启用'];
-
 export const CHANNEL_SOURCE_TYPES = ['thirdParty', 'selfHosted'];
-
-function directoryDisabledKind(endpoint) {
-  if (endpoint.status === '自动停用' || ['停用', '已停用'].includes(endpoint.status) && endpoint.activationSource === 'automatic') return 'automatic';
-  if (['停用', '已停用'].includes(endpoint.status) && endpoint.activationSource === 'manual') return 'manual';
-  return '';
-}
 
 export function channelSourceTypeLabel(sourceType) {
   switch (sourceType) {
@@ -125,8 +117,11 @@ export function connectionDirectoryRows(state, providers) {
         modelCode: cost.master?.modelId || cost.association.modelId,
         channelId: channelIdentity(state, cost.association.id),
       }));
-      const enabled = ['运行中', '需关注'].includes(endpoint.status);
-      const stopped = endpoint.frozen || provider.status !== '已启用';
+      const block = connectionBlockReason(endpoint, provider);
+      const status = endpoint.frozen ? '已冻结' : provider.status !== '已启用' ? '服务商已停用'
+        : endpoint.adapterDraft ? '待适配' : endpoint.poolPaused ? '密钥池已暂停'
+        : connectionRecoveryRequired(endpoint) ? '待复测' : block ? '待验证'
+        : endpoint.status === '需关注' ? endpoint.status : '可用';
       const tested = connectionTestCurrent(endpoint);
       const credentials = connectionKeys(endpoint, provider, true).map(key => key.maskedKey).filter(Boolean);
       return {
@@ -135,8 +130,7 @@ export function connectionDirectoryRows(state, providers) {
         name: endpoint.name || endpoint.id,
         interfaceLabel: endpoint.adapterDraft ? endpoint.adapterDraft.label + ' · 待适配' :
           CHANNEL_INTERFACES.find(option => option.id === endpoint.interfaceType)?.label || endpoint.protocol,
-        status: directoryDisabledKind(endpoint) === 'automatic' ? '自动停用' : stopped || directoryDisabledKind(endpoint) === 'manual' ? '已停用'
-          : enabled ? '已启用' : endpoint.connectionTest || endpoint.configurationRevision ? '已停用' : '未启用',
+        status,
         testStatus: connectionTestPending(endpoint) ? '测试中' : tested ? endpoint.connectionTest.result === '通过' ? '已通过' : '未通过' : endpoint.connectionTest ? '待复测' : '未测试',
       };
     });

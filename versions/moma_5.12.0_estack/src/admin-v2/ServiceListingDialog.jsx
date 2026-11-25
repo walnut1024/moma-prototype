@@ -3,21 +3,21 @@ import Table from './AdminTable';
 import { useState } from 'react';
 import { Button, Checkbox, Typography } from '@douyinfe/semi-ui';
 import { Modal, Notice } from './ServiceUI';
-import { salesChecks } from './service-sales';
+import { offerSalesScope, salesChecks } from './service-sales';
 import { scopeTenants } from './service-commercial';
 import { serviceConfigurationTarget } from './service-workspace';
 import { routingServices } from './service-routing';
-import { offerKey, salesCustomer } from '../service-access.mjs';
+import { offerKey } from '../service-access.mjs';
 
 export default function ServiceListingDialog({state,model,ops,stage,close,initialOfferKey}) {
   const translateLabel = useChannelText();
   const services = routingServices(state).filter(row => row.modelId === model.id);
   const selectOffers = services.some(service => offerKey(service));
-  const [tenantIds,setTenantIds]=useState(selectOffers ? [] : model.releaseTenantIds || []),[revision]=useState(model.updatedAt),[busy,setBusy]=useState(false);
+  const [tenantIds,setTenantIds]=useState(() => offerSalesScope(model, initialOfferKey || '').tenantIds),[revision]=useState(model.updatedAt),[busy,setBusy]=useState(false);
   const [selected,setSelected]=useState(initialOfferKey ? [initialOfferKey] : []);
   const gray=stage==='gray';
   const label=gray?'灰度开售':'开售';
-  const tenants=scopeTenants(state).filter(tenant=>salesCustomer(model,tenant.id));
+  const tenants=scopeTenants(state);
   const changed=revision!==model.updatedAt;
   const groups=new Map();
   if (selectOffers) {
@@ -28,8 +28,12 @@ export default function ServiceListingDialog({state,model,ops,stage,close,initia
     }
   }
   const selectedKeys=selectOffers ? selected.filter(key=>[...groups.values()].some(rows=>rows.some(row=>offerKey(row)===key))) : undefined;
-  const checks=salesChecks(state,model,selectedKeys,stage);
-  const invalid=(selectOffers && !selectedKeys.length) || (gray && (!tenantIds.length || tenantIds.some(id=>!tenants.some(row=>row.id===id))));
+  const checks=salesChecks(state,model,selectedKeys);
+  if (gray) checks.push({
+    label:'销售对象有效',
+    passed:tenantIds.length > 0 && tenantIds.every(id=>tenants.some(row=>row.id===id)),
+  });
+  const invalid=selectOffers && !selectedKeys.length;
   const select=(keys,checked)=>{
     setSelected(current=>checked?[...new Set([...current,...keys])]:current.filter(key=>!keys.includes(key)));
     ops.dirty(true);

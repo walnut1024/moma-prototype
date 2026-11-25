@@ -22,13 +22,12 @@ import { supplierDirectory } from './moma-provider';
 import { workbenchProtocolLabel } from './workbench-protocol';
 import { channelFingerprint } from './provider-channels';
 import { additionalMappingOptions, registeredServiceUpstreams, mappingInterfaces } from './service-model-mappings';
-import { libraryRecord, modelCatalogue } from './model-library';
 import { pages } from './navigation.mjs';
 import { DEFAULT_ROUTING_STRATEGY, ROUTING_STRATEGIES } from './service-routing-strategies.mjs';
 import {
   channelSetupIssue, contextRoutingEnabled, preferredServiceChannels, readNewServices, SERVICE_DESCRIPTION_LIMIT,
   MODEL_ID_LABEL, MODEL_SERVICE_TYPES, modelServiceType, serviceStatus,
-  savedServiceModel, serviceChannelShares, serviceFormIssue, serviceModelFields, simulatedServiceChannels, validContextLength,
+  serviceChannelShares, serviceFormIssue, simulatedServiceChannels, validContextLength,
 } from './model-services-new';
 import './model-services-new.css';
 
@@ -66,7 +65,7 @@ function channelKey(row) {
   return row.simulated ? row.id : JSON.stringify([row.provider.id, row.endpointId || row.endpoint.id]);
 }
 
-function BatchChannelFields({ state, candidates, linked, values, change }) {
+function BatchChannelFields({ state, candidates, linked, values, change, weighted }) {
   const t = useChannelText();
   const connections = useMemo(() => {
     const providers = supplierDirectory(state).filter(row => !row.deletedAt);
@@ -114,7 +113,7 @@ function BatchChannelFields({ state, candidates, linked, values, change }) {
         { title: '上游模型 ID', dataIndex: 'upstreamModelId' },
         { title: '状态', render: (_, row) => reason(row) || '可添加' },
       ]}/>
-    <Text type="secondary">已选 {values.ids.length} 个上游模型。添加后组内权重合计为 100。</Text>
+    <Text type="secondary">已选 {values.ids.length} 个上游模型。{!weighted && '添加后组内权重合计为 100。'}</Text>
   </>;
 }
 
@@ -160,25 +159,28 @@ function changedChannelSettings(saved, current) {
   }
 }
 
-function ChannelWeightFields({ rows, values, change, disabled, total, valid }) {
+function ChannelWeightFields({ rows, values, change, disabled, total, valid, adding = false }) {
+  const summaryId = useId();
   const draft = rows.filter(row => row.enabled && !row.reason).map(row => ({ ...row, weight: values[row.id] }));
   const shares = draft.every(row => validWeight(row.weight)) ? serviceChannelShares(draft) : new Map();
   const difference = 100 - total;
   return <>
-    <Text role="status" aria-live="polite" type={valid ? 'secondary' : 'warning'}>组内权重合计 {total} / 100{
+    <Text id={summaryId} role="status" aria-live="polite" type={valid ? 'secondary' : 'warning'}>组内权重合计 {total} / 100{
       difference > 0 ? '，还差 ' + difference : difference < 0 ? '，超出 ' + -difference : !valid ? '，请输入正整数' : ''
     }</Text>
     <Table className="new-service-weight-table" rowKey="id" pagination={false} scroll={{ x: 560 }} dataSource={rows}
       columns={[
         { title: '连接', width: 162, render: (_, row) => <Space vertical align="start" spacing={2}>
           <Text strong>{row.name}</Text><Text type="secondary">{row.provider}</Text>
+          {adding && <Text type="secondary">{row.upstreamId}</Text>}
         </Space> },
-        { title: '当前权重', dataIndex: 'weight', width: 86 },
+        { title: '当前权重', dataIndex: 'weight', width: 86, render: (value, row) => row.newLink ? '—' : value },
         { title: '新权重', width: 120, render: (_, row) => {
           const invalid = !validWeight(values[row.id]);
           return <InputNumber size="small" step={1} hideButtons disabled={disabled}
             value={values[row.id] ?? ''} validateStatus={invalid ? 'error' : undefined} aria-invalid={invalid}
-            aria-label={row.provider + ' · ' + row.name + ' 新权重'} onChange={value => change({ [row.id]: numericValue(value) })}/>;
+            aria-label={[row.provider, row.name, ...(adding ? [row.upstreamId] : [])].join(' · ') + ' 新权重'}
+            aria-describedby={summaryId} onChange={value => change({ [row.id]: numericValue(value) })}/>;
         } },
         { title: '组内分流（预览）', width: 140, render: (_, row) =>
           row.reason ? '不可用' : !row.enabled ? '已停用' : shares.has(row.id) ? shareFormat.format(shares.get(row.id)) : '—' },
@@ -202,20 +204,19 @@ function NumberField({ label, value, onChange, min = 0, disabled = false }) {
     onChange={next => onChange(numericValue(next))}/></Field>;
 }
 
-function serviceEndpoints(service, model, sources) {
-  const supported = new Set(model ? mappingInterfaces(model).map(([path]) => path) : []);
+function serviceEndpoints(service, sources) {
+  const supported = new Set();
   for (const source of sources) {
-    const descriptor = model || { type: service.type || source.type, profile: service.modelDetails };
+    const descriptor = { type: source.type || service.type, profile: source.profile };
     for (const [path] of mappingInterfaces(descriptor)) supported.add(path);
     for (const { path } of additionalMappingOptions(descriptor, source)) supported.add(path);
   }
   return { supported, endpoints: ['text', 'multimodal'].includes(service.type) ? chatEndpoints : [...supported] };
 }
 
-function BasicInformation({ service, model, sources }) {
+function BasicInformation({ service, sources }) {
   const t = useChannelText();
-  const fields = service.modelDetails;
-  const { supported, endpoints } = serviceEndpoints(service, model, sources);
+  const { supported, endpoints } = serviceEndpoints(service, sources);
   const endpointList = endpoints.length ? <Space wrap>
     {endpoints.map(path => supported.has(path)
       ? <Tag key={path}><CopyId label={endpointLabel} value={platformEndpoint(path)}/></Tag>
@@ -227,7 +228,6 @@ function BasicInformation({ service, model, sources }) {
     [MODEL_ID_LABEL, <CopyId label={MODEL_ID_LABEL} value={service.callId}/>],
     ['服务地址', window.location.origin + API_PREFIX],
     [endpointLabel, endpointList],
-    ['模型编码', fields.code && <CopyId label="模型编码" value={fields.code}/>],
     ['服务状态', <AdminStatus value={serviceStatus(service)} label={t(serviceStatus(service))}/>],
     ['标签', service.tags],
     ['备注', service.note],
@@ -346,12 +346,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
   const opener = useRef(null);
   const serviceId = params.get('service');
   if (editState && (editState.serviceId !== serviceId || (editState.kind === 'failover' && params.get('tab') !== 'failover'))) setEditState(null);
-  const withModelDetails = row => {
-    if (!row || row.modelDetails) return row;
-    const identity = libraryRecord(state, row.modelId);
-    return { ...row, modelDetails: serviceModelFields(identity && { ...identity, name: row.modelName || identity.name }) };
-  };
-  const service = withModelDetails(data.rows.find(row => row.id === serviceId));
+  const service = data.rows.find(row => row.id === serviceId);
   const defaults = data.defaults ?? { ...initialRoutingParameters, ...globalPolicyDefaults };
   const routingStrategy = defaults.strategy;
   const failover = service?.failoverCustom ? service.failover : failoverValues(defaults);
@@ -363,11 +358,8 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
   }, [requestedTab, serviceId]);
   const dialog = editState?.serviceId === serviceId ? editState : null;
   const canEdit = !data.loading && !data.error && !sourceConflict && ['平台管理员', '运营人员'].includes(state.currentRole);
-  const models = modelCatalogue(state).filter(row => !row.archivedAt);
-  const allowModelSelection = dialog?.kind === 'editDetails' && !service?.modelId;
-  const model = savedServiceModel(service);
   const registeredChannels = useMemo(() => registeredServiceUpstreams(state), [state]);
-  const simulatedChannels = simulatedServiceChannels(model, registeredChannels, service?.channels);
+  const simulatedChannels = simulatedServiceChannels(service, registeredChannels);
   const candidates = [...registeredChannels, ...simulatedChannels];
   const candidatesById = new Map(candidates.map(channel => [channel.id, channel]));
   const channelGroups = Map.groupBy(service?.channels || [], row => row.priority);
@@ -403,12 +395,13 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
   };
   const change = patch => setEditState(current => ({ ...current, values: { ...current.values, ...patch }, error: '', dirty: true }));
   const error = message => setEditState(current => ({ ...current, error: message }));
-  const save = async (record, action = 'save') => {
+  const save = async (record, action = 'save', expectedSale) => {
     if (pending.current) return false;
     pending.current = true;
     setSaving(true);
     const operationId = resourceId('operation');
     const body = { action, id: record.id, revision: record.revision ?? 0, operationId,
+      ...(expectedSale !== undefined && { expectedSale }),
       ...(action !== 'delete' && { row: record }) };
     try {
       let result;
@@ -449,16 +442,6 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
         const fields = Object.fromEntries(['name', 'callId', 'note', 'description'].map(key => [key, values[key]?.trim() || '']));
         const issue = serviceFormIssue(fields, data.rows, service?.id);
         if (issue) throw Error(issue);
-        if (allowModelSelection && values.modelId) {
-          if (!models.some(row => row.id === values.modelId)) throw Error('请选择有效的模型资料');
-          const modelDetails = values.modelDetails || serviceModelFields();
-          if ([modelDetails.context, modelDetails.output].some(value => value != null && !validContextLength(value))) {
-            throw Error('上下文长度和最大输出 Token 数须为正整数');
-          }
-          fields.modelId = values.modelId || '';
-          fields.type = values.type || '';
-          fields.modelDetails = modelDetails;
-        }
         if (kind === 'create') {
           if (values.type && !Object.hasOwn(MODEL_SERVICE_TYPES, modelServiceType(values.type))) throw Error('请选择有效的模型类型');
           const initial = { ...fields, type: values.type || '', id: values.id, listed: false, channels: [], priorityGroups: [0] };
@@ -477,7 +460,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
         const sources = registeredChannels;
         if (kind === 'list' && !record.channels.some(row => row.enabled && sources.some(source =>
           source.id === row.channelId && !source.reason && channelFingerprint(source) === row.fingerprint))) {
-          throw Error('请先添加并启用通过验证的已登记上游模型');
+          throw Error('请先关联并启用测试通过的上游模型');
         }
         next.listed = kind === 'list';
       } else if (kind === 'failover') {
@@ -493,6 +476,8 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
         const previous = service.channels.find(row => row.id === values.id);
         const ids = kind === 'channel' ? [values.channelId] : values.ids;
         if (!ids.length) throw Error('请选择上游模型');
+        if (kind === 'addChannels' && associationGroupTooLarge) throw Error('每组最多支持 100 个上游模型');
+        if (kind === 'addChannels' && weighted && !associationWeightsValid) throw Error('组内权重须为正整数且合计为 100');
         if (kind === 'addChannels' && contextRoutingEnabled(service) && !validContextLength(values.context)) throw Error('请输入正整数的上下文长度');
         const links = ids.map(id => {
           const source = candidatesById.get(id);
@@ -502,11 +487,18 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
             ...previous, id: previous?.id || resourceId('service-channel'), channelId: source.id,
             name: source.sourceName || source.name || source.endpoint.name, provider: source.provider.name,
             upstreamId: source.upstreamModelId, fingerprint: sourceFingerprint(source),
-            ...(source.simulated && { simulated: true }), ...(!previous && values.context != null && { context: values.context }),
-            priority: values.priority, weight: previous?.weight ?? defaultChannelWeight, enabled: previous?.enabled ?? true,
+            simulated: Boolean(source.simulated), ...(!previous && values.context != null && { context: values.context }),
+            priority: values.priority,
+            weight: kind === 'addChannels' && weighted ? associationWeights[id] : previous?.weight ?? defaultChannelWeight,
+            enabled: previous?.enabled ?? true,
           };
         });
-        next.channels = previous ? service.channels.map(row => row.id === previous.id ? links[0] : row) : [...service.channels, ...links];
+        if (previous) next.channels = service.channels.map(row => row.id === previous.id ? links[0] : row);
+        else {
+          const existing = kind === 'addChannels' && weighted ? service.channels.map(row => row.priority === values.priority
+            ? { ...row, weight: associationWeights[row.id] } : row) : service.channels;
+          next.channels = [...existing, ...links];
+        }
       } else if (kind === 'weights') {
         const group = service.channels.filter(row => row.priority === values.originalPriority);
         if (!Number.isSafeInteger(values.priority) || values.priority < 0) throw Error('优先级需为非负整数');
@@ -524,7 +516,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
           if (issue) throw Error(issue);
         }
         if (next.listed && !values.simulated && !next.channels.some(row => row.enabled && !row.simulated && !channels.find(channel => channel.id === row.id)?.reason)) {
-          throw Error('已启用的服务至少需要一个可用上游模型，请先停止服务');
+          throw Error('服务中的模型服务至少需要一个可用的关联上游模型，请先停止服务');
         }
       } else if (kind === 'remove') {
         if (dialog.check?.revision !== record.revision || dialog.check.deleteIssue) {
@@ -535,23 +527,25 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
       }
       if (kind === 'addChannels' || kind === 'removeChannel') {
         next.priorityGroups = groupPriorities(service);
-        const group = next.channels.filter(row => row.priority === values.priority).map(row => ({ ...row, weight: normalizedWeights[row.id] ?? row.weight }));
-        const weights = groupWeights(group);
-        next.channels = next.channels.map(row => row.priority === values.priority ? { ...row, weight: weights[row.id] } : row);
+        if (kind === 'removeChannel' || !weighted) {
+          const group = next.channels.filter(row => row.priority === values.priority).map(row => ({ ...row, weight: normalizedWeights[row.id] ?? row.weight }));
+          const weights = groupWeights(group);
+          next.channels = next.channels.map(row => row.priority === values.priority ? { ...row, weight: weights[row.id] } : row);
+        }
       }
-      if (await save(next) && (kind === 'list' || kind === 'unlist')) void reloadWorkspace();
+      if (await save(next, 'save', kind === 'unlist' ? dialog.check.sale : undefined)
+        && (kind === 'list' || kind === 'unlist')) void reloadWorkspace();
     } catch (issue) {
       error(issue.code === 'DUPLICATE_CALL_ID' ? `${MODEL_ID_LABEL} 已存在` : issue.message);
     }
   };
 
   const endpointValues = row => {
-    const master = savedServiceModel(withModelDetails(row));
     const sources = row.channels.some(channel => channel.enabled && !channel.simulated)
       ? registeredChannels.filter(source => !source.reason && row.channels.some(channel =>
         channel.enabled && !channel.simulated && channel.channelId === source.id && channel.fingerprint === sourceFingerprint(source)))
       : [];
-    return [...serviceEndpoints(row, master, sources).supported];
+    return [...serviceEndpoints(row, sources).supported];
   };
   const columns = [
     { title: '模型服务名称 / 模型服务 ID', width: 230, fixed: 'left', render: (_, row) => <div className="new-service-cell">
@@ -585,6 +579,21 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
   const editingGroup = kind === 'weights' ? channels.filter(row => row.priority === values.originalPriority) : [];
   const draftTotal = editingGroup.reduce((sum, row) => sum + (values[row.id] || 0), 0);
   const weightsValid = draftTotal === 100 && editingGroup.every(row => validWeight(values[row.id]));
+  const associating = kind === 'addChannels';
+  const selectedSources = associating ? values.ids.map(id => candidatesById.get(id)).filter(Boolean) : [];
+  const existingGroup = associating ? channels.filter(row => row.priority === values.priority) : [];
+  const associationGroupTooLarge = associating && existingGroup.length + values.ids.length > 100;
+  const associationGroup = weighted && selectedSources.length ? [...existingGroup, ...selectedSources.map(source => ({
+    id: source.id, name: source.sourceName || source.name || source.endpoint.name, provider: source.provider.name,
+    upstreamId: source.upstreamModelId, priority: values.priority, weight: defaultChannelWeight,
+    enabled: true, reason: source.reason, newLink: true,
+  }))] : [];
+  const associationWeights = associationGroup.length && !associationGroupTooLarge
+    ? { ...groupWeights(associationGroup), ...values.weightEdits } : {};
+  const associationTotal = associationGroup.reduce((sum, row) => sum + (associationWeights[row.id] || 0), 0);
+  const associationWeightsValid = associationTotal === 100 && associationGroup.every(row => validWeight(associationWeights[row.id]));
+  const associationBlocked = associating && (!values.ids.length || associationGroupTooLarge ||
+    selectedSources.length !== values.ids.length || selectedSources.some(source => source.reason) || (weighted && !associationWeightsValid));
   const reviewSource = kind === 'channel' && values.id ? candidatesById.get(values.channelId) : null;
   const target = values?.target ? data.rows.find(row => row.id === values.target) : service;
   const requiresCheck = kind === 'unlist' || kind === 'remove';
@@ -593,7 +602,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
   const titles = {
     import: '导入浏览器记录', create: '新建模型服务', edit: '编辑模型服务名称', editDetails: '编辑信息', list: '启动服务', unlist: '停止服务',
     channel: '核对连接配置', newGroup: '添加优先级组', addChannels: t('关联上游模型至优先级 {priority}').replace('{priority}', values?.priority), startChannel: '启用上游模型', stopChannel: '停用上游模型',
-    removeChannel: '移除上游模型', weights: '配置优先级与权重', remove: '删除模型服务', failover: '配置故障转移策略',
+    removeChannel: '移除关联上游模型', weights: '配置优先级与权重', remove: '删除模型服务', failover: '配置故障转移策略',
   };
   return <div className="admin-page-stack new-model-services">
     {data.error && <Banner type="danger" closeIcon={null} description={<Space>{data.error}
@@ -622,7 +631,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
         <Tabs activeKey={activeTab} keepDOM={false} onChange={tab => { location.hash = detailHref(service.id, tab); }}>
           {tabs.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={t(label)}>
           {activeTab === id && <div className="new-service-tab">
-          {activeTab === 'basic' && <BasicInformation service={service} model={model}
+          {activeTab === 'basic' && <BasicInformation service={service}
             sources={channels.filter(row => row.enabled && !row.reason && !row.simulated).map(row => candidatesById.get(row.channelId))}/>}
           {activeTab === 'failover' && <>
             <div className="new-service-toolbar">
@@ -658,7 +667,7 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
     }}
       maskClosable={false} footer={<>
         <Button disabled={saving} onClick={() => dirty ? setEditState(current => ({ ...current, discard: true })) : close()}>{t("取消")}</Button>
-        <Button theme="solid" disabled={!canEdit || dialog.discard || checkBlocked || ((kind === 'weights' || kind === 'newGroup') && !Number.isSafeInteger(values.priority)) || (kind === 'addChannels' && !values.ids.length) || (kind === 'weights' && (!dirty || editingGroup.length > 0 && weighted && !weightsValid))} loading={saving} form={formId} htmlType="submit">{t(
+        <Button theme="solid" disabled={!canEdit || dialog.discard || checkBlocked || associationBlocked || ((kind === 'weights' || kind === 'newGroup') && !Number.isSafeInteger(values.priority)) || (kind === 'weights' && (!dirty || editingGroup.length > 0 && weighted && !weightsValid))} loading={saving} form={formId} htmlType="submit">{t(
           kind === 'import' ? '确认导入' : kind === 'create' ? '创建模型服务' : kind === 'list' ? '确认启动' : kind === 'unlist' ? '确认停服'
             : kind === 'remove' ? '确认删除' : kind === 'channel' && values.id ? '确认更新关联' : kind === 'newGroup' ? '添加优先级组' : kind === 'addChannels' ? '确认关联' : '保存'
         )}</Button>
@@ -669,18 +678,8 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
         }
         {['create', 'editDetails'].includes(kind) && <>
           <Field label={<FieldLabel name={MODEL_ID_LABEL} description={t("调用方在 API 请求的 model 字段填写此值。")}/>} required>
-            <Input aria-label={t(MODEL_ID_LABEL)} value={values.callId} disabled={Boolean(values.controlledOfferId)} maxLength={128} onChange={value => change({ callId: value })}/>
+            <Input aria-label={t(MODEL_ID_LABEL)} value={values.callId} disabled={kind === 'editDetails'} maxLength={128} onChange={value => change({ callId: value })}/>
           </Field>
-          {allowModelSelection && <Field label="模型编码">
-            <Select filter showClear value={values.modelId || undefined} placeholder="选择模型资料"
-              dropdownMatchSelectWidth dropdownClassName="service-model-select-dropdown"
-              dropdownStyle={{ width: 'min-content' }}
-              optionList={models.map(row => ({ value: row.id, label: row.name + '（' + row.modelId + '）' }))}
-              onChange={id => {
-                const record = models.find(row => row.id === id);
-                change({ modelId: record?.id || '', type: record?.type || '', modelDetails: serviceModelFields(record) });
-              }} style={{ width: '100%' }}/>
-          </Field>}
           {kind === 'create' && <Field label="模型类型">
             <Select showClear value={values.type || undefined} placeholder="选择模型类型"
               optionList={values.type && modelServiceType(values.type) !== values.type
@@ -705,7 +704,14 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
         </>}
         {kind === 'newGroup' && <GroupPriorityField hint="数值越小越优先，例如 0 优先于 1" value={values.priority} onChange={priority => change({ priority })}/>}
         {kind === 'addChannels' && <>
-          <BatchChannelFields state={state} candidates={candidates} linked={channels} values={values} change={change}/>
+          <BatchChannelFields state={state} candidates={candidates} linked={channels} values={values} change={change} weighted={weighted}/>
+          {associationGroupTooLarge ? <Notice error>每组最多支持 100 个上游模型</Notice>
+            : associationGroup.length > 0 && <>
+              <Text strong>{t('设置组内权重')}</Text>
+              <ChannelWeightFields rows={associationGroup} values={associationWeights} total={associationTotal} valid={associationWeightsValid}
+                change={patch => change({ weightEdits: { ...values.weightEdits, ...patch } })}
+                disabled={saving || !canEdit} adding/>
+            </>}
           {contextRoutingEnabled(service) && <NumberField label={t(contextLabel)} min={1} value={values.context} onChange={context => change({ context })}/>}
         </>}
         {kind === 'weights' && <><GroupPriorityField value={values.priority} onChange={priority => change({ priority })}/>
@@ -719,6 +725,9 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
             : '未关联模型广场'}</Text>
           {checkIssue ? <Notice error>{checkIssue}</Notice>
             : dialog.check.revision === target?.revision ? <Text>检查通过</Text> : <Notice error>其他页面已更新模型服务，请载入最新配置</Notice>}
+          {kind === 'unlist' && !checkIssue && dialog.check.sale &&
+            <Notice>将同时停售「{dialog.check.sale.name}」（{dialog.check.sale.callId}，{dialog.check.sale.status}）。
+              停服期间已订购租户无法调用。重新启动服务后，须手动开售。</Notice>}
         </div>}
         {['startChannel', 'stopChannel', 'removeChannel'].includes(kind)
           && <Text>{'确认' + titles[kind] + '「' + values.name + '」？'}</Text>}

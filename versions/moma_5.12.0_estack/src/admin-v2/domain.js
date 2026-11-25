@@ -84,7 +84,8 @@ function simulateTenantRoute(state, input, key) {
 
   const orders = new Set((input.marketOrders || []).filter(row => row.tenantId === key.tenantId).map(row => row.callId));
   const services = routingServices(state).filter(service => project && key.modelIds.includes(service.modelId) &&
-    projectModelEnabled(project, service.modelId) && lifecycleAccess(state, service, key.tenantId).allowed &&
+    projectModelEnabled(project, service.modelId) &&
+    lifecycleAccess(state, service, key.tenantId, { commercialOrder: !input.internal && orders.has(service.callId) }).allowed &&
     (input.internal ? salesCustomer(service.model,key.tenantId) : input.marketOrders === undefined || orders.has(service.callId))).map(service => {
     const { model, mode, modelId } = service;
     const price = mode === 'standard' ? activeModelSalePrice(state, modelId) : activeProviderPrice(state, modelId, offerKey(service));
@@ -114,7 +115,8 @@ function simulateModelRequest(state, { requestId, keyId, modelId:requestedModelI
 
   const key = state.apiKeys.find(item => item.id === keyId && item.kind !== 'experience'), model = state.models.find(item => item.id === modelId), tenant = key && state.tenants.find(item => item.id === key.tenantId), project = key && customerProject(state, state.projects.find(item => item.id === key.projectId && item.tenantId === key.tenantId)), grant = key && state.grants.find(item => item.subjectId === key.id && item.status === '生效中'), route = state.routes.find(item => item.modelId === modelId && item.status === "已生效");
   const quantity = ['text','multimodal','embedding','rerank'].includes(model?.type) ? enterpriseTokenUsage(model,usage) : usageTotal(usage);
-  const access = lifecycleAccess(state, service || (model && { model }), key?.tenantId);
+  const commercialOrder = !internal && Boolean(marketOrders?.some(row => row.tenantId === key?.tenantId && row.callId === service?.callId));
+  const access = lifecycleAccess(state, service || (model && { model }), key?.tenantId, { commercialOrder });
   const previous = state.requests.find(item => item.requestId === requestId && (marketOrders === undefined || item.tenantId === key?.tenantId));
   if (previous) {
     const sameRequest=previous.keyId===keyId&&previous.tenantId===key?.tenantId&&previous.projectId===key?.projectId&&previous.modelId===modelId&&previous.serviceId===(service?.id || null)&&previous.projectRouteId===projectRouteId&&previous.tenantRouteId===tenantRouteId;

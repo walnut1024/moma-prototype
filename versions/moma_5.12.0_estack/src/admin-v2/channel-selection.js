@@ -1,5 +1,5 @@
 import { catalogueChannels, channelCheckCurrent, channelFingerprint, channelInterfaceIssue } from './provider-channels.js';
-import { connectionCredentialsReady, connectionTestCurrent, connectionTestPassed } from './connection-state.js';
+import { connectionCredentialsReady, connectionRecoveryRequired, connectionTestCurrent, connectionTestPassed } from './connection-state.js';
 import { displayedCatalogueIds, providerCatalogueModel } from './moma-provider.js';
 import { supplyModelRecord } from './supply-models.js';
 
@@ -55,12 +55,12 @@ export function channelStatus(provider, association) {
   if (provider.status !== '已启用') return '服务商已停用';
   if (association.endpoint?.frozen) return '已冻结';
   if (association.unlinked) return '未关联模型';
-  if (!connectionCredentialsReady(association.endpoint, provider)) return '凭证待配置';
+  if (!connectionCredentialsReady(association.endpoint, provider)) return '上游 API 密钥待配置';
   if (channelInterfaceIssue(provider, association)) return '接口不匹配';
   if (connectionTestCurrent(association.endpoint) && association.endpoint.connectionTest.result !== '通过') return '测试失败';
   if (association.managed && channelCheckCurrent(association) && association.health?.result !== '通过') return '测试失败';
   if (!channelCheckCurrent(association) || association.endpoint.supplierChannel && !connectionTestPassed(association.endpoint)) return association.health || association.endpoint.connectionTest ? '待复测' : '未测试';
-  if (association.endpoint.status === '停用' || association.endpoint.status === '已停用') return '已停用';
+  if (connectionRecoveryRequired(association.endpoint)) return '待复测';
   if (!association.enabled || !['运行中', '需关注'].includes(association.endpoint.status)) return '未启用';
   return '可用';
 }

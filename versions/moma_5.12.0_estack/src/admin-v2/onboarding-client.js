@@ -10,7 +10,7 @@ export const onboardingApi = (path, options = {}) => transport(path, options);
 
 export async function prepareServerChannel(provider, endpoint, keyId) {
   if (endpoint.adapterDraft) throw new Error('请先为待适配连接配置可用适配器');
-  if (!endpoint.interfaceType) throw new Error('请先为此连接选择明确的接口类型');
+  if (!endpoint.interfaceType) throw new Error('请先为此连接选择接口格式');
   const keys = connectionKeys(endpoint, provider), key = keyId ? keys.find(row => row.id === keyId) : keys[0];
   if (keyId && !key) throw new Error('所选测试密钥不属于当前可用密钥池');
   const signature = connectionFingerprint(endpoint) + (keyId && keyId !== keys[0]?.id ? JSON.stringify([key.id, key.version || key.fingerprint]) : '');

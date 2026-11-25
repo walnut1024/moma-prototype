@@ -8,16 +8,16 @@ import { Modal, Notice } from './ModelOperationsUI';
 import { Choice, Field } from './ServiceUI';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import SupplierApiKeyField from './SupplierApiKeyField';
-import { CHANNEL_LIST_TYPES, CHANNEL_SOURCE_TYPES, channelProtocolPaths, channelSourceTypeLabel, prepareListedChannelInterface } from './channel-connection-directory';
+import { CHANNEL_LIST_TYPES, CHANNEL_SOURCE_TYPES, channelSourceTypeLabel, prepareListedChannelInterface } from './channel-connection-directory';
 import { CHANNEL_INTERFACES, prepareChannelAdapterOptions, prepareChannelInterface, suggestChannelRoot } from './channel-interface';
-import { maskProviderApiKey, providerApiKeysDraft } from './provider-management';
+import { maskProviderApiKey, providerApiKeysDraft, UPSTREAM_API_KEY_LIMIT } from './provider-management';
 import { workspaceStoragePrefix } from '../workspace-storage.mjs';
 import { adapterDraftTypes, normalizeAdapterDraft } from './channel-adapter-catalogue';
 import { channelMaterialOptions } from './channel-material-import';
 
 const keyInput = () => ({ id: crypto.randomUUID(), raw: '', name: '' });
 const adapters = [...CHANNEL_INTERFACES.map(row => ({ ...row, label: workbenchProtocolLabel(row.label) })), { id: 'custom', label: '自定义任务 API', protocol: '其他' }];
-const emptyInterface = { interfaceType: '', endpointPath: null, baseUrl: '' };
+const emptyInterface = { interfaceType: '', baseUrl: '' };
 
 export default function ChannelDirectoryCreation({ state, providers, connections, source, ops, close, locate, reference = false }) {
   const t = useChannelText();
@@ -31,7 +31,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
   const [value, setValue] = useState(() => ({
     name: source ? (source.name.slice(0, 57) + '-副本') : reference ? null : '',
     interfaceType: endpoint?.interfaceType || adapters.find(row => row.protocol === endpoint?.protocol)?.id || (reference ? '' : 'openai'),
-    endpointPath: null, channelSourceType: null,
+    channelSourceType: null,
     baseUrl: endpoint?.baseUrl || '', taskUrls: endpoint?.taskUrls || {}, adapterOptions: endpoint?.adapterOptions || {},
     timeoutSeconds: endpoint?.timeoutSeconds || 60, capacity: '',
     authMode: 'independent', apiKeyId: '', mode: 'single', keyStrategy: 'priority', note: '',
@@ -49,6 +49,10 @@ export default function ChannelDirectoryCreation({ state, providers, connections
   const [suggestedRoot, setSuggestedRoot] = useState('');
   const [busy, setBusy] = useState(false);
   const [keyText, setKeyText] = useState('');
+  const referenceKeys = keyText.split(/\r\n|[\r\n]/).filter(line => line.trim());
+  const keyLimitError = referenceKeys.length > UPSTREAM_API_KEY_LIMIT
+    ? t('每个连接最多配置 {limit} 把上游 API 密钥').replace('{limit}', UPSTREAM_API_KEY_LIMIT)
+    : undefined;
   const listedType = reference ? CHANNEL_LIST_TYPES.find(item => item.id === value.interfaceType) : null;
   const channelSourceType = value.channelSourceType ??
     (CHANNEL_SOURCE_TYPES.includes(provider?.sourceType) ? provider.sourceType : 'thirdParty');
@@ -60,8 +64,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
     ? eligibleProvider.name.slice(0, 60 - formatName.length - 3) + ' - ' + formatName : '';
   const channelName = value.name ?? defaultName;
   const allowHttp = provider?.sourceType === 'selfHosted';
-  const endpointPath = reference ? value.endpointPath ??
-    channelProtocolPaths({ interfaceType: value.interfaceType, baseUrl: value.baseUrl, allowHttp })[0] ?? '' : undefined;
+  const endpointPath = listedType?.paths[0];
   const lock = useRef(false);
   const creationId = useRef(crypto.randomUUID());
   useEffect(() => {
@@ -123,7 +126,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
     try {
       if (!provider) throw Error('请选择服务商');
       if (reference && !eligibleProvider) throw Error(t('请选择匹配连接类型的已启用服务商。'));
-      if (!pendingType && value.authMode === 'specific' && !provider.apiKeys?.some(key => key.id === value.apiKeyId && key.status !== 'disabled' && !key.revokedAt)) throw Error('请选择可用的 API 密钥');
+      if (!pendingType && value.authMode === 'specific' && !provider.apiKeys?.some(key => key.id === value.apiKeyId && key.status !== 'disabled' && !key.revokedAt)) throw Error('请选择可用的上游 API 密钥');
       const adapterDraft = pendingType ? normalizeAdapterDraft({ kind: pendingType.id, values: pendingValues }) : null;
       const address = { ...value, endpointPath, allowHttp };
       const config = adapterDraft ? { protocol: '其他', baseUrl: value.baseUrl.trim() } :
@@ -163,7 +166,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
         }
       } else {
         validateName(name);
-        const rawKeys = reference ? keyText.split(/\r\n|[\r\n]/).filter(line => line.trim())
+        const rawKeys = reference ? referenceKeys
           : (value.mode === 'single' ? remaining.slice(0, 1) : remaining).map(row => row.raw);
         const keys = independent ? (await providerApiKeysDraft(rawKeys)).apiKeys : [];
         if (independent && value.mode === 'multi' && keys.length < 2) throw Error('多密钥模式至少需要两把密钥');
@@ -224,7 +227,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
   };
 
   const createdConnections = <Table size="small" rowKey="endpointId" pagination={false} dataSource={saved} columns={[
-        { title: '连接名称', dataIndex: 'name' }, { title: '凭证摘要', dataIndex: 'credential' }, { title: '连接 ID', dataIndex: 'endpointId' },
+        { title: '连接名称', dataIndex: 'name' }, { title: '上游 API 密钥摘要', dataIndex: 'credential' }, { title: '连接 ID', dataIndex: 'endpointId' },
         { title: '待验证模型', dataIndex: 'modelCount' },
         { title: '操作', render: (_, row) => <Button theme="borderless" size="small" onClick={() => locate(row.endpointId, true)}>打开连接（新页签）</Button> },
       ]}/>;
@@ -235,8 +238,8 @@ export default function ChannelDirectoryCreation({ state, providers, connections
       <Button theme="solid" onClick={() => locate(createdId)}>查看新连接</Button>
     </>}>
     <Typography.Paragraph>{pendingType ? '连接已保存为待适配草稿。' : models.length
-      ? `已接入 ${models.length} 款待验证模型。测试通过后可启用连接。`
-      : '连接尚未启用。打开连接后可接入模型，再测试并启用。'}</Typography.Paragraph>
+      ? `已接入 ${models.length} 款待验证模型。请完成连接测试。`
+      : '打开连接后可添加上游模型并执行连接测试。'}</Typography.Paragraph>
   </Modal>;
 
   if (reference && saved.length) return <Modal drawer wide title={t('批量创建完成')} description={provider?.name}
@@ -248,8 +251,8 @@ export default function ChannelDirectoryCreation({ state, providers, connections
     <SupplierCreationDialog wide className="channel-directory-create-dialog" description=""
       title={t('新建连接')} cancelLabel={t('取消')} cancel={() => !busy && ops.proceed(close)}
       submit={review} action={t(batch ? '预览批量创建' : '创建连接')}
-      disabled={writing || !eligibleProvider || !listedType || !channelName.trim() || !value.baseUrl.trim() || !endpointPath.trim() ||
-        !keyText.trim()}>
+      disabled={writing || !eligibleProvider || !listedType || !channelName.trim() || !value.baseUrl.trim() ||
+        !referenceKeys.length || Boolean(keyLimitError)}>
       <Field label={t('连接类型')} required>
         <Choice label={t('连接类型')} value={channelSourceType} disabled={writing}
           options={CHANNEL_SOURCE_TYPES.map(type => [type, t(channelSourceTypeLabel(type))])}
@@ -269,13 +272,13 @@ export default function ChannelDirectoryCreation({ state, providers, connections
               if (id === providerId) return;
               setProviderId(id);
               const references = channelMaterialOptions(eligibleProviders.find(row => row.id === id));
-              set(references.length === 1 ? references[0] : emptyInterface);
+              const { interfaceType, baseUrl } = references.length === 1 ? references[0] : emptyInterface;
+              set({ interfaceType, baseUrl });
             }}/>
         </Field>
         <ChannelProtocolFields protocol={value.interfaceType} baseUrl={value.baseUrl} allowHttp={allowHttp}
-          disabled={writing} root={suggestedRoot} endpointPath={value.endpointPath} showHelp showPaths
-          onProtocolChange={interfaceType => set({ interfaceType, endpointPath: null })}
-          onEndpointPathChange={endpointPath => set({ endpointPath })} onBaseUrlChange={baseUrl => set({ baseUrl })}/>
+          disabled={writing} root={suggestedRoot} endpointPath={endpointPath} readOnlyEndpoint showHelp showPaths
+          onProtocolChange={interfaceType => set({ interfaceType })} onBaseUrlChange={baseUrl => set({ baseUrl })}/>
       </section>
       <section className="channel-create-section" aria-label={t('连接信息')}>
         <div className="channel-create-section-header">
@@ -284,7 +287,8 @@ export default function ChannelDirectoryCreation({ state, providers, connections
         <Field label={t('连接名称')} required help={t('填写便于识别的名称，同一服务商下不可重复。')}>
           <Input aria-label={t('连接名称')} value={channelName} maxLength={60} disabled={writing} onChange={name => set({ name })}/>
         </Field>
-        <Field label={t('上游 API 密钥')} required hint={t('每行一把密钥，支持粘贴多行。')}>
+        <Field label={t('上游 API 密钥')} required error={keyLimitError}
+          hint={t('每行一把密钥，最多 {limit} 把，支持粘贴多行。').replace('{limit}', UPSTREAM_API_KEY_LIMIT)}>
           <TextArea aria-label={t('上游 API 密钥')} value={keyText} rows={4} autoComplete="off" spellCheck={false}
             disabled={writing} onChange={text => { setKeyText(text); change(); }}/>
         </Field>
@@ -309,7 +313,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
       <Table size="small" rowKey="creationId" pagination={false} dataSource={preview.rows} columns={[
         ...(reference ? [{ title: '行号', dataIndex: 'line' }] : []),
         { title: reference ? '连接名称' : '连接名称', dataIndex: 'name' },
-        { title: '凭证摘要', render: (_, row) => row.keys.map(key => key.maskedKey).join('、') || (pendingType ? '待适配' : independent ? '—' : value.authMode === 'none' ? '无需认证' : maskProviderApiKey(provider.apiKeys?.find(key => key.id === value.apiKeyId)?.maskedKey)) },
+        { title: '上游 API 密钥摘要', render: (_, row) => row.keys.map(key => key.maskedKey).join('、') || (pendingType ? '待适配' : independent ? '—' : value.authMode === 'none' ? '无需认证' : maskProviderApiKey(provider.apiKeys?.find(key => key.id === value.apiKeyId)?.maskedKey)) },
         { title: '预检结果', render: (_, row) => row.error || (preview.adapterDraft ? '待适配 · 未启用' : '待创建 · 未启用') },
       ]}/>
       <Typography.Paragraph type="tertiary">{preview.models.length ? '每条连接加入 ' + preview.models.length + ' 款待验证模型。' : '可在创建后添加上游模型，再进行验证和启用。'}</Typography.Paragraph>
@@ -331,7 +335,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
     {saved.length > 0 && <><Typography.Title heading={5}>已创建 {saved.length} 条连接</Typography.Title>
       {createdConnections}</>}
     {(!batch || saved.length !== inputs.length) && <>
-      {source && <Notice>复制接口和地址设置。请重新选择凭证，并核对要复制的模型。新连接以未启用的状态保存。</Notice>}
+      {source && <Notice>复制接口和地址设置。请重新选择上游 API 密钥，并核对要复制的模型。新连接以未启用的状态保存。</Notice>}
       {source && <Space wrap>
         <Checkbox checked={copyOptions.rules} disabled={writing} onChange={event => { setCopyOptions(current => ({ ...current, rules: event.target.checked })); change(); }}>复制请求规则</Checkbox>
         <Checkbox checked={copyOptions.commercial} disabled={writing || !models.length} onChange={event => { setCopyOptions(current => ({ ...current, commercial: event.target.checked })); change(); }}>复制容量与服务商成本价草稿</Checkbox>
@@ -353,7 +357,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
           else apply();
         }}/></Field>
       </div>
-      <Tabs activeKey={adapterTab} onChange={setAdapterTab} aria-label="接口类型筛选">
+      <Tabs activeKey={adapterTab} onChange={setAdapterTab} aria-label="接口格式筛选">
         {[['common', '常用'], ['all', '全部类型'], ['tasks', '任务插件'], ['gateway', '网关'], ['advanced', '高级自定义']]
           .map(([id, label]) => <TabPane key={id} itemKey={id} tab={label}/>)}
       </Tabs>
@@ -393,7 +397,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
           value={reusableAddresses.includes(value.baseUrl) ? value.baseUrl : 'manual'} disabled={writing}
           options={[[ 'manual', '手工填写' ], ...reusableAddresses.map(url => [url, url])]}
           onChange={baseUrl => set({ baseUrl: baseUrl === 'manual' ? '' : baseUrl })}/></Field>}
-        {!pendingType && <Field label="凭证来源"><Choice label="凭证来源" value={value.authMode} disabled={writing || Boolean(saved.length)} options={[
+        {!pendingType && <Field label="上游 API 密钥来源"><Choice label="上游 API 密钥来源" value={value.authMode} disabled={writing || Boolean(saved.length)} options={[
           ['independent', '连接专属密钥'], ['specific', '选择上游 API 密钥'],
           ...(provider?.sourceType === 'selfHosted' ? [['none', '无需认证']] : []),
         ]} onChange={authMode => {
@@ -421,8 +425,8 @@ export default function ChannelDirectoryCreation({ state, providers, connections
           {batch && <Field label={'连接名称 ' + (index + 1)}><Input aria-label={'连接名称 ' + (index + 1)} value={input.name}
             maxLength={60} placeholder={value.name ? value.name + '-' + String(index + 1).padStart(2, '0') : '填写名称或使用批量前缀'}
             disabled={writing} onChange={name => editInput(input.id, { name })}/></Field>}
-          <Field label={'API 密钥 ' + (index + 1)} error={failed[input.id]}><Input mode="password" autoComplete="new-password" value={input.raw}
-            aria-label={'API 密钥 ' + (index + 1)} maxLength={512} disabled={writing} onChange={raw => editInput(input.id, { raw })}/></Field>
+          <Field label={'上游 API 密钥 ' + (index + 1)} error={failed[input.id]}><Input mode="password" autoComplete="new-password" value={input.raw}
+            aria-label={'上游 API 密钥 ' + (index + 1)} maxLength={512} disabled={writing} onChange={raw => editInput(input.id, { raw })}/></Field>
           {inputs.length > 1 && <Space><Button theme="borderless" disabled={writing}
             onClick={() => { setInputs(items => items.filter(row => row.id !== input.id)); change(); }}>移除此行</Button></Space>}
         </div>])}
@@ -431,7 +435,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
       </>}
       {!pendingType && provider && <>
         <Typography.Title heading={5} component="h3">接入模型（选填）</Typography.Title>
-        <Field label="服务商已登记模型"><Select multiple filter maxTagCount={4} aria-label="上游模型接入范围"
+        <Field label="服务商供应模型"><Select multiple filter maxTagCount={4} aria-label="上游模型接入范围"
           disabled={writing} value={models.map(row => row.modelId)}
           optionList={(provider.catalogModels || []).filter(row => row.libraryId).map(row => ({ value: row.modelId, label: row.name || row.modelId }))}
           onChange={ids => { setModels(ids.map(modelId => models.find(row => row.modelId === modelId) || { modelId, upstreamModelId: modelId })); change(); }}/></Field>

@@ -7,8 +7,7 @@ import { supplierModelFields } from './supply-models.js';
 import { canonicalMomaScenarios } from './moma-billing-items.js';
 import { isBuiltinMoma, providerCatalogueIds } from './moma-provider.js';
 import { availableSupplies, modelTransaction } from './model-management.js';
-import { connectionFingerprint, connectionTestCurrent, connectionTestPassed, connectionCredentialsReady, connectionKeys, connectionQualification, connectionTestPending } from './connection-state.js';
-import { connectionRecoveryIssue } from './connection-state.js';
+import { connectionFingerprint, connectionCredentialsReady, connectionKeys, connectionTestPatch } from './connection-state.js';
 import { supplierResourceTransaction, invalidateSupplierChannels } from './supplier-resources.js';
 import { prepareChannelInterface, prepareChannelAdapterOptions } from './channel-interface.js';
 import { catalogueConnections, connectionCatalogueIds } from './provider-model-connections.js';
@@ -50,6 +49,12 @@ const update = (collection, id, changes) => ({ type: 'update', collection, id, c
 
 export const maskProviderApiKey = value => typeof value === 'string' && value.length > 8 ? `${value.slice(0, 4)}••••••••${value.slice(-4)}` : '••••••••';
 export const providerApiKeyName = key => typeof key.name === 'string' && key.name.trim() ? key.name : `API 密钥 ${(key.id || key.fingerprint).slice(-6)}`;
+export function normalizeProviderApiKeyName(value) {
+  const name = typeof value === 'string' ? value.trim() : '';
+  if (!name || [...name].length > 100 || /\p{Cc}/u.test(name)) throw new Error('密钥名称须为 1–100 个字符，不含控制字符。');
+  return name;
+}
+
 export function providerApiKeyId(key) {
   const uuid = key.id.match(/^(?:(?:provider-key|credential)-)?([a-f0-9]{8})(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i)?.[1];
   if (uuid || key.id.length <= 12) return uuid || key.id;
@@ -73,7 +78,8 @@ export function providerApiKeyRows(state, provider) {
   return [...rows.values()];
 }
 
-export const PROVIDER_API_KEY_LIMIT = 20;
+export const UPSTREAM_API_KEY_LIMIT = 5;
+const API_KEY_PAYLOAD_LIMIT = 20;
 export const MODEL_CONNECTIVITY_SCENARIOS = { success: '测试成功', unauthorized: '鉴权失败', unavailable: '模型不可用', timeout: '请求超时' };
 export function supplierModelTestPreview(state, providerId, associationId, modelId, keyGroupId) {
   const provider = state.providers.find(row => row.id === providerId);
@@ -125,7 +131,7 @@ export function modelConnectivityPreview(context, scenario) {
   return { ...responses[scenario], ...context, simulated: true };
 }
 export function checkedConnectionKeys(keys, savedKeys = []) {
-  if (!Array.isArray(keys) || keys.length > PROVIDER_API_KEY_LIMIT || keys.some(item => !item || !/^[\x21-\x7e]{4}•{8}[\x21-\x7e]{4}$/.test(item.maskedKey || '') || !/^[a-f0-9]{64}$/.test(item.fingerprint || ''))) throw new Error('连接 API 密钥配置无效，请重新输入');
+  if (!Array.isArray(keys) || keys.length > API_KEY_PAYLOAD_LIMIT || keys.some(item => !item || !/^[\x21-\x7e]{4}•{8}[\x21-\x7e]{4}$/.test(item.maskedKey || '') || !/^[a-f0-9]{64}$/.test(item.fingerprint || ''))) throw new Error('连接 API 密钥配置无效，请重新输入');
   if (new Set(keys.map(item => item.fingerprint)).size !== keys.length) throw new Error('同一连接不能配置相同的 API 密钥');
   const normalized = keys.map(item => {
     const saved = savedKeys.find(saved => saved.id === item.id) || savedKeys.find(saved => saved.fingerprint === item.fingerprint);
@@ -141,7 +147,7 @@ export async function providerConnectionDraft(value) {
 }
 // shortcut: Store ordered masked metadata only; real invocation and failover require a server-side credential store.
 export async function providerApiKeysDraft(inputs) {
-  if (!Array.isArray(inputs) || inputs.length > PROVIDER_API_KEY_LIMIT) throw new Error('每个服务商最多配置 20 个 API 密钥');
+  if (!Array.isArray(inputs) || inputs.length > API_KEY_PAYLOAD_LIMIT) throw new Error(`每次最多输入 ${API_KEY_PAYLOAD_LIMIT} 把 API 密钥`);
   const values = inputs.map((input, index) => {
     const value = typeof input === 'string' ? input.trim() : '';
     if (value && !/^[\x21-\x7e]{12,512}$/.test(value)) throw new Error(`第 ${index + 1} 条 API 密钥请输入 12–512 位字符，不要包含空格或换行`);
@@ -184,7 +190,7 @@ export function providerTransaction(state, action) {
   if (['supplierModelProfile', 'supplierModelCopy', 'supplierListPriceDraft', 'supplierListPricePublish', 'supplierChannelListPricePublish'].includes(operation)) return supplierModelMaintenance(state, action);
   assertDirectChannelMutation(state, operation, objectId, data);
   if (operation === 'officialCatalogue') return officialCatalogueTransaction(state);
-  if (['supplierModelLink', 'supplierModelAdd', 'supplierChannelCreate', 'supplierModelsAdd', 'supplierModelsTest', 'supplierModelsEnable', 'supplierChannelSave', 'supplierChannelDelete', 'supplierCatalogueChannelDelete', 'supplierChannelFreeze', 'supplierChannelTest', 'supplierChannelEnable', 'supplierModelTest', 'supplierModelEnable', 'supplierAssociationSave', 'supplierAssociationRemove', 'defaultApiKey', 'toggleApiKey', 'keyGroupSave', 'keyGroupDelete', 'keyGroupPrimary'].includes(operation)) return supplierResourceTransaction(state, action, providerTransaction, normalizeProviderPrice);
+  if (['supplierModelLink', 'supplierModelAdd', 'supplierChannelCreate', 'supplierModelsAdd', 'supplierModelsTest', 'supplierModelsEnable', 'supplierChannelSave', 'supplierChannelDelete', 'supplierCatalogueChannelDelete', 'supplierChannelFreeze', 'supplierChannelTest', 'supplierModelTest', 'supplierModelEnable', 'supplierAssociationSave', 'supplierAssociationRemove', 'defaultApiKey', 'toggleApiKey', 'keyGroupSave', 'keyGroupDelete', 'keyGroupPrimary'].includes(operation)) return supplierResourceTransaction(state, action, providerTransaction, normalizeProviderPrice);
   if (['channelSave', 'channelPrice', 'channelTest', 'channelEnable', 'channelDisable', 'channelDelete', 'catalogueRemove'].includes(operation)) return providerChannelTransaction(state, action, providerTransaction, normalizeProviderPrice, modelConnectivityPreview);
   const changes = [];
   const provider = state.providers.find(item => item.id === (data.providerId || objectId));
@@ -261,7 +267,7 @@ export function providerTransaction(state, action) {
       if (matches.length !== 1) throw new Error(code + ' 未匹配唯一模型资料，请先在模型资料库维护');
       current = { ...current, ...supplierModelFields(state, current, matches[0].id).fields };
     }
-    return { type: 'batch', label: '登记供应模型', objectId: provider.id, changes: [update('providers', provider.id, { catalogModelIds: current.catalogModelIds, catalogModels: current.catalogModels, removedCatalogModelIds: current.removedCatalogModelIds })] };
+    return { type: 'batch', label: '添加供应模型', objectId: provider.id, changes: [update('providers', provider.id, { catalogModelIds: current.catalogModelIds, catalogModels: current.catalogModels, removedCatalogModelIds: current.removedCatalogModelIds })] };
   }
   if (['cataloguePrice', 'catalogueDiscount', 'catalogueCost'].includes(operation)) {
     if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
@@ -282,19 +288,20 @@ export function providerTransaction(state, action) {
   }
   if (operation === 'addApiKeys') {
     if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
-    if (!Array.isArray(data.apiKeys) || !data.apiKeys.length || data.apiKeys.length > PROVIDER_API_KEY_LIMIT || data.apiKeys.some(item => !item || !/^[\x21-\x7e]{4}•{8}[\x21-\x7e]{4}$/.test(item.maskedKey || '') || !/^[a-f0-9]{64}$/.test(item.fingerprint || ''))) throw new Error('API 密钥配置无效，请重新输入。');
+    if (!Array.isArray(data.apiKeys) || !data.apiKeys.length || data.apiKeys.length > API_KEY_PAYLOAD_LIMIT || data.apiKeys.some(item => !item || !/^[\x21-\x7e]{4}•{8}[\x21-\x7e]{4}$/.test(item.maskedKey || '') || !/^[a-f0-9]{64}$/.test(item.fingerprint || ''))) throw new Error('API 密钥配置无效，请重新输入。');
     const keys = provider.apiKeys || [];
+    const poolKeys = providerApiKeyRows(state, provider).map(row => row.apiKey);
     const standalone = data.standalone === true;
     if (standalone && data.groupId) throw Error('添加独立密钥时不能指定分组');
-    const groupId = data.groupId || 'default', groups = providerKeyGroups(provider, providerApiKeyRows(state, provider).map(row => row.apiKey));
+    const groupId = data.groupId || 'default', groups = providerKeyGroups(provider, poolKeys);
     const group = groups.find(row => row.id === groupId);
     if (!group) throw new Error('API 密钥组不存在，请重新选择');
-    if (keys.length + data.apiKeys.length > PROVIDER_API_KEY_LIMIT) throw new Error('每个服务商最多配置 20 个 API 密钥');
-    const existing = [...new Set(providerApiKeyRows(state, provider).map(row => row.apiKey.fingerprint))];
+    if (poolKeys.length + data.apiKeys.length > UPSTREAM_API_KEY_LIMIT) throw new Error(`上游 API 密钥池最多配置 ${UPSTREAM_API_KEY_LIMIT} 把密钥`);
+    const existing = [...new Set(poolKeys.map(key => key.fingerprint))];
     const fingerprints = new Set([...existing, ...data.apiKeys.map(item => item.fingerprint)]);
     if (fingerprints.size !== existing.length + data.apiKeys.length) throw new Error('此服务商已配置相同的 API 密钥，或本次输入有重复项。');
     const createdAt = new Date().toISOString();
-    const names = new Set(providerApiKeyRows(state, provider).map(row => providerApiKeyName(row.apiKey)));
+    const names = new Set(poolKeys.map(providerApiKeyName));
     const added = data.apiKeys.map(item => {
       let index = 1;
       while (names.has(`API 密钥 ${index}`)) index++;
@@ -305,7 +312,25 @@ export function providerTransaction(state, action) {
     });
     changes.push(update('providers', provider.id, { apiKeys: [...keys, ...added], ...(!standalone && (data.groupId || provider.apiKeyGroups) ? { apiKeyGroups: groups.map(row => row.id === groupId ? { ...row, keyIds: [...row.keyIds, ...added.map(key => key.id)] } : row) } : {}), ...(!standalone && groupId === 'default' && !group.keyIds.length && !provider.defaultApiKeyId ? { defaultApiKeyId: added[0].id } : {}) }));
     if (!standalone && !group.keyIds.length) changes.push(...invalidateSupplierChannels(state, provider, state.endpoints.filter(row => !row.deletedAt && row.providerId === provider.id && (row.authMode === 'group' && row.keyGroupId === groupId || groupId === 'default' && row.authMode === 'inherit')).map(row => row.id)));
-    return { type: 'batch', label: '添加 API 密钥', objectId: provider.id, changes };
+    return { type: 'batch', label: '添加上游 API 密钥', objectId: provider.id, changes };
+  }
+  if (operation === 'renameApiKey') {
+    if (!provider || provider.deletedAt || provider.id !== objectId) throw new Error('服务商不存在');
+    if (Object.keys(data).some(key => !['keyId', 'expectedFingerprint', 'name'].includes(key))) throw new Error('修改密钥名称时只能提交名称和密钥标识');
+    const key = providerApiKeyRows(state, provider).find(row => row.apiKey.id === data.keyId)?.apiKey;
+    if (!key || !data.expectedFingerprint || key.fingerprint !== data.expectedFingerprint) throw new Error('API 密钥已变化或不存在，请重新打开后操作');
+    const name = normalizeProviderApiKeyName(data.name);
+    const pooled = provider.apiKeys || [];
+    const pooledIds = new Set(pooled.map(record => record.id));
+    const matches = record => record.scope !== 'channel' && (record.id === key.id || !pooledIds.has(record.id) && record.fingerprint === key.fingerprint);
+    const rename = records => records.map(record => matches(record) ? { ...record, name } : record);
+    if (pooled.some(record => matches(record) && record.name !== name)) changes.push(update('providers', provider.id, { apiKeys: rename(pooled) }));
+    for (const endpoint of state.endpoints) {
+      if (endpoint.providerId === provider.id && !endpoint.deletedAt && endpoint.apiKeys?.some(record => matches(record) && record.name !== name)) {
+        changes.push(update('endpoints', endpoint.id, { apiKeys: rename(endpoint.apiKeys) }));
+      }
+    }
+    return { type: 'batch', label: '修改密钥名称', objectId: key.id, changes };
   }
   if (operation === 'editApiKey' || operation === 'deleteApiKey') {
     if (!provider || provider.id !== objectId) throw new Error('服务商不存在');
@@ -331,7 +356,7 @@ export function providerTransaction(state, action) {
       changes.push(...transaction.changes);
     }
     if (changed) changes.push(...invalidateSupplierChannels(state, provider, affectedEndpoints.filter(endpoint => endpoint.authMode).map(endpoint => endpoint.id)));
-    return { type: 'batch', label: operation === 'editApiKey' ? '编辑 API 密钥' : '删除 API 密钥', objectId: row.apiKey.id, changes };
+    return { type: 'batch', label: operation === 'editApiKey' ? '编辑 API 密钥' : '删除上游 API 密钥', objectId: row.apiKey.id, changes };
   }
   if (['supply', 'verify', 'enableSupply', 'disableSupply'].includes(operation)) {
     const supply = state.modelSupplies.find(item => item.id === data.id);
@@ -408,30 +433,17 @@ export function providerTransaction(state, action) {
         changes.push(update('endpoints', endpoint.id, { ...fields, ...(changed ? { status: '停用', connectionTest: null } : {}) }));
         if (changed) state.modelSupplies.filter(supply => supply.endpointId === endpoint.id && supply.status !== '已移除').forEach(supply => changes.push(update('modelSupplies', supply.id, { status: '已停用', validationStatus: '待验证', verifiedAt: null, validationCases: [] })));
       }
-    } else {
-      if (!endpoint) throw new Error('接入配置不存在');
+    } else if (operation === 'testConnection') {
+      if (!endpoint || endpoint.deletedAt) throw new Error('接入配置不存在');
       const owner = state.providers.find(item => item.id === endpoint.providerId);
-      if (operation === 'testConnection') {
-        if (endpoint.adapterDraft) throw Error('请先为待适配连接配置可用适配器');
-        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在上游 API 密钥页签配置此接入地址的凭证');
-        const scenarios = { 成功: ['通过', '服务地址、凭证和接口格式检查通过'], 超时: ['失败', '上游连接超时，请检查服务地址与网络'], 鉴权失败: ['失败', '鉴权失败，请检查凭证引用与权限'], 接口格式错误: ['失败', '接口格式不兼容，请核对接入接口格式'] };
-        const result = scenarios[data.scenario];
-        if (!result) throw new Error('请选择测试场景');
-        const qualification = connectionQualification(endpoint);
-        changes.push(update('endpoints', endpoint.id, { ...(qualification ? { connectionQualification: structuredClone(qualification) } : {}), connectionTest: { result: result[0], message: result[1], simulated: true, testedAt: new Date().toISOString(), fingerprint: connectionFingerprint(endpoint) }, ...(result[0] !== '通过' && ['运行中', '需关注'].includes(endpoint.status) ? { status: '需关注' } : {}) }));
-      } else if (operation === 'enableConnection') {
-        const recovery = connectionRecoveryIssue(endpoint);
-        if (recovery) throw Error(recovery);
-        if (connectionTestPending(endpoint)) throw new Error('当前配置的测试尚未完成，请等待结果');
-        if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在上游 API 密钥页签配置此接入地址的凭证');
-        if (owner?.status !== '已启用') throw new Error('请先启用服务商');
-        if (!connectionTestPassed(endpoint)) throw new Error('当前接入配置须先通过连接测试');
-        changes.push(update('endpoints', endpoint.id, { status: '运行中', activationSource: null, activationChangedAt: new Date().toISOString(), connectionQualification: structuredClone(endpoint.connectionTest) }));
-      } else if (operation === 'disableConnection') {
-        if (!data.confirmed) throw new Error('请先确认停用影响');
-        changes.push(update('endpoints', endpoint.id, { status: '停用', activationSource: 'manual', activationChangedAt: new Date().toISOString() }));
-      } else throw new Error('未知服务商操作');
-    }
+      if (endpoint.adapterDraft) throw Error('请先为待适配连接配置可用适配器');
+      if (!connectionCredentialsReady(endpoint, owner)) throw new Error('请先在上游 API 密钥页签配置此接入地址的凭证');
+      const scenarios = { 成功: ['通过', '服务地址、凭证和接口格式检查通过'], 超时: ['失败', '上游连接超时，请检查服务地址与网络'], 鉴权失败: ['失败', '鉴权失败，请检查凭证引用与权限'], 接口格式错误: ['失败', '接口格式不兼容，请核对接入接口格式'] };
+      const result = scenarios[data.scenario];
+      if (!result) throw new Error('请选择测试场景');
+      const test = { result: result[0], message: result[1], simulated: true, testedAt: new Date().toISOString(), fingerprint: connectionFingerprint(endpoint) };
+      changes.push(update('endpoints', endpoint.id, connectionTestPatch(endpoint, test)));
+    } else throw new Error('未知服务商操作');
   }
-  return { type: 'batch', label: ({ create: '新增模型服务商', profile: '更新服务商资料', summary: '更新服务商资料', connection: '保存服务商接入配置', testConnection: '连接测试', enableProvider: '启用服务商', disableProvider: '停用服务商', enableConnection: '启用接入', disableConnection: '停用接入' })[operation], objectId: objectId || changes[0]?.record?.id, changes };
+  return { type: 'batch', label: ({ create: '新建服务商', profile: '更新服务商资料', summary: '更新服务商资料', connection: '保存服务商接入配置', testConnection: '连接测试', enableProvider: '启用服务商', disableProvider: '停用服务商' })[operation], objectId: objectId || changes[0]?.record?.id, changes };
 }

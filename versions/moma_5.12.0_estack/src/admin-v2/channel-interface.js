@@ -17,11 +17,11 @@ const completePaths = {
 
 function checkedUrl(value, allowHttp) {
   // eslint-disable-next-line no-control-regex -- URL parsing discards controls before validation.
-  if (typeof value !== 'string' || !value.trim() || value.length > 2048 || /[\u0000-\u001f\u007f]/.test(value)) throw new Error('请填写有效的 API 地址，最多 2048 字符，不能包含控制字符');
+  if (typeof value !== 'string' || !value.trim() || value.length > 2048 || /[\u0000-\u001f\u007f]/.test(value)) throw new Error('请填写有效的服务地址，最多 2048 字符，不能包含控制字符');
   let url;
-  try { url = new URL(value.trim()); } catch { throw new Error('请填写有效的完整 API 地址'); }
-  if (url.protocol !== 'https:' && !(allowHttp && url.protocol === 'http:')) throw new Error('API 地址须使用 HTTPS，自建服务可明确允许 HTTP');
-  if (url.username || url.password || /[?#]/.test(value) || /%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(url.pathname) || /\s/.test(value.trim())) throw new Error('API 地址不能包含账号、查询参数、片段或控制字符');
+  try { url = new URL(value.trim()); } catch { throw new Error('请填写有效的完整服务地址'); }
+  if (url.protocol !== 'https:' && !(allowHttp && url.protocol === 'http:')) throw new Error('第三方模型服务的服务地址须使用 HTTPS，自有模型推理服务可明确允许 HTTP');
+  if (url.username || url.password || /[?#]/.test(value) || /%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(url.pathname) || /\s/.test(value.trim())) throw new Error('服务地址不能包含账号、查询参数、片段或控制字符');
   return url;
 }
 
@@ -78,7 +78,7 @@ function checkedChannelPath(serviceUrl, value) {
 
 export function prepareChannelInterface({ interfaceType, baseUrl, taskUrls = {}, endpointPath, modelProtocol, allowHttp = false }) {
   const preset = CHANNEL_INTERFACES.find(row => row.id === interfaceType) || (interfaceType === 'custom' ? { protocol: '其他' } : null);
-  if (!preset) throw new Error('请选择已支持的接口类型');
+  if (!preset) throw new Error('请选择已支持的接口格式');
   const url = checkedUrl(baseUrl, allowHttp);
   const path = endpointPath == null ? null : checkedChannelPath(url, endpointPath);
   if (modelProtocol != null && (!path || (Object.hasOwn(listedTasks, modelProtocol) ? interfaceType !== 'custom' : modelProtocol !== interfaceType))) {

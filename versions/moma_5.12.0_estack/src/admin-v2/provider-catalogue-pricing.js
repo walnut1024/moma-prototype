@@ -1,4 +1,4 @@
-import { normalizeTariffName, normalizeCurrency } from './tariff-dictionary.js';
+import { normalizeTariffName, normalizeCurrency, tariffOptions, tariffScenarioUnits } from './tariff-dictionary.js';
 
 const scale = 1000000;
 export const catalogueAmountInput = value => value == null ? '' : `${BigInt(value) / 1000000n}.${String(BigInt(value) % 1000000n).padStart(6, '0')}`.replace(/\.?0+$/, '');
@@ -59,6 +59,23 @@ export function cataloguePurchasePriceInput(item, discountFactor) {
 }
 
 export const billingItemKey = item => JSON.stringify([item.name, item.condition || "", item.unit, item.currency || "CNY"]);
+
+export function validateQuoteTariffs(state, rows, previous = []) {
+  const saved = new Set(previous.map(billingItemKey));
+  const added = rows.filter(row => !saved.has(billingItemKey(row)));
+  if (!added.length) return;
+  const items = new Set(tariffOptions(state, 'scenario'));
+  const units = new Set(tariffOptions(state, 'unit'));
+  const currencies = new Set(tariffOptions(state, 'currency'));
+  for (const row of added) {
+    if (!items.has(row.name) || !units.has(row.unit) || !currencies.has(row.currency)) {
+      throw Error('新设或改选的计费项、计费单位和货币须从内置字典选择');
+    }
+    if (!tariffScenarioUnits(state, row.name).includes(row.unit)) {
+      throw Error(`计费单位「${row.unit}」不适用于计费项「${row.name}」`);
+    }
+  }
+}
 export const parseSaleAmount = (value, required = true) => { const amount = decimal(value, "对外售价"); if (required && amount == null) throw new Error("适用售价必填；免费请填写 0"); return amount; };
 
 export const saleItemsDraft = (cost, current = []) => cost.map(item => ({ name: item.name, condition: item.condition || '', unit: item.unit, currency: item.currency || 'CNY', amount: catalogueAmountInput(current.find(row => billingItemKey(row) === billingItemKey(item))?.amount) }));

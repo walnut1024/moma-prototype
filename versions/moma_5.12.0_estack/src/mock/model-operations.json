@@ -1161,8 +1161,7 @@
                 "maxRetries": 0,
                 "failureThreshold": 3,
                 "recoverySeconds": 30,
-                "latencyWindowSeconds": 60,
-                "costBasis": "input"
+                "latencyWindowSeconds": 60
               }
             },
             "publishedAt": "2026-11-02T00:00:00.000Z",
@@ -1212,8 +1211,7 @@
                 "maxRetries": 0,
                 "failureThreshold": 3,
                 "recoverySeconds": 30,
-                "latencyWindowSeconds": 60,
-                "costBasis": "input"
+                "latencyWindowSeconds": 60
               }
             },
             "publishedAt": "2026-11-02T00:00:00.000Z",
@@ -1276,8 +1274,7 @@
                 "maxRetries": 0,
                 "failureThreshold": 3,
                 "recoverySeconds": 30,
-                "latencyWindowSeconds": 60,
-                "costBasis": "input"
+                "latencyWindowSeconds": 60
               }
             },
             "publishedAt": "2026-11-02T00:00:00.000Z",

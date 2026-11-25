@@ -166,7 +166,16 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     await command('salesSettings',{scope:{openScope:'selected',tenantIds:[a,b]},confirmed:true,expectedUpdatedAt:model().updatedAt},modelId);
     const release=(keys,tenantIds)=>({offerKeys:keys,releaseStage:'gray',releaseTenantIds:tenantIds,confirmed:true,expectedUpdatedAt:model().updatedAt});
     const keys=sources.map(row=>row.channelId);
-    await command('startSales',release(keys,[c]),modelId,422);
+    await command('startSales',release(keys,['missing-tenant']),modelId,422);
+    await command('startSales',release(keys,[c]),modelId);
+    assert.deepEqual(model().salesScope.tenantIds,[a,b]);
+    assert(model().serviceProviders.every(row=>row.grayTenantIds.includes(c)));
+    await command('salesSettings',{scope:{openScope:'selected',tenantIds:[a]},confirmed:true,expectedUpdatedAt:model().updatedAt},modelId);
+    const outsidePriorScope = await login('/market/login',b);
+    await command('startSales',{...release([keys[0]],[]),releaseStage:'formal'},modelId);
+    const formal = await request('/market/catalogue',{cookie:outsidePriorScope});
+    assert(formal.data.services.some(service=>service.callId===sources[0].callId && service.canOrder));
+    await command('salesSettings',{scope:{openScope:'selected',tenantIds:[a,b]},confirmed:true,expectedUpdatedAt:model().updatedAt},modelId);
     await command('startSales',release(keys,[a]),modelId);
     const offers=await local.db.prepare("SELECT record_id,id,channel_model_id,listing_stage,active_sale_price_id,active_route_id,active_publication_id FROM offers WHERE service_id=? AND retired_at IS NULL ORDER BY id").bind(modelId).all();
     assert.deepEqual(offers.results.map(row => row.channel_model_id).sort(), [...keys].sort());
@@ -207,7 +216,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
       const unused = owner(attached.providerId).catalogConnections.find(row => row.upstreamModelId === upstreamModelId);
       await deleteMapping(unused.id, unused.endpointId);
       assert.ok(owner(attached.providerId).catalogConnections.find(row => row.id === unused.id).deletedAt);
-      assert.equal(state.endpoints.some(row => row.id === unused.endpointId), shared);
+      assert(state.endpoints.some(row => row.id === unused.endpointId));
     }
     const order=(offerId,cookie=customer)=>request('/market/orders',{cookie,body:{offerIds:[offerId]}});
     const workspace=async cookie=>(await request('/market/workspace',{cookie})).data;
@@ -230,6 +239,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     const preview = (await request('/market/catalogue',{cookie:customer})).data;
     assert.equal(preview.cards.find(card=>card.model_id===material.id)?.preview,true);
     assert.deepEqual(preview.services,[]);
+    assert.equal((await order(services[0].id)).data.error.code,'MODEL_FORBIDDEN');
     stillOnSale();
     await command('startSales', release([sources[0].channelId],[a]), modelId);
     await setCardVisibility('formal');
@@ -238,17 +248,11 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     await setCardVisibility('withdrawn');
     assert(!(await request('/market/catalogue',{cookie:customer})).data.cards.some(card=>card.model_id===material.id));
     stillOnSale();
+    assert.equal((await order(services[0].id)).data.error.code,'MODEL_FORBIDDEN');
+    await setCardVisibility('formal');
     const staleQuote=await request('/market/orders',{cookie:customer,body:{tenantId:a,offerIds:[services[0].id],salePriceIds:{[services[0].id]:'old-price'}}});
     assert.equal(staleQuote.data.error.code,'PRICE_CHANGED');
-    await setCardVisibility('formal');
     await startAll();
-    const deleteCard = expected => command('marketCardDelete', { card_id: material.id, confirmed: true, expectedRevision: state.revision }, undefined, expected);
-    await deleteCard(422);
-    await setCardVisibility('withdrawn');
-    await deleteCard(200);
-    assert.ok(!marketCardIndex(state, orderedMarketModels(state)).some(row => row.cardId === material.id));
-    assert.deepEqual(await catalogue(customer), []);
-    stillOnSale();
     const body=(model)=>({requestId:crypto.randomUUID(),projectId:project.id,model,messages:[{role:'user',content:'验收请求'}]});
     const call=(input,cookie=customer)=>request('/market/completions',{cookie,body:input});
     const pausedOffer = services.find(row=>row.callId===sources[2].callId);
@@ -258,12 +262,32 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal((await order(services[0].id,admin)).status,401);
     assert.equal((await order(services[0].id,other)).status,403);
     assert.equal((await call(body(services[0].callId))).data.error.code,'ORDER_REQUIRED');
+    const ordersByOffer = new Map();
+    for (const source of sources.slice(0,2)) {
+      const offer = services.find(row=>row.callId===source.callId);
+      const ordered = await order(offer.id);
+      assert.equal(ordered.status,200,JSON.stringify(ordered.data));
+      ordersByOffer.set(offer.id,ordered.data);
+    }
+    const deleteCard = expected => command('marketCardDelete', { card_id: material.id, confirmed: true, expectedRevision: state.revision }, undefined, expected);
+    await deleteCard(422);
+    await setCardVisibility('withdrawn');
+    assert.equal((await order(pausedOffer.id)).data.error.code,'MODEL_FORBIDDEN');
+    await deleteCard(200);
+    assert.ok(!marketCardIndex(state, orderedMarketModels(state)).some(row => row.cardId === material.id));
+    assert.deepEqual(await catalogue(customer), []);
+    assert.equal((await order(pausedOffer.id)).data.error.code,'MODEL_FORBIDDEN');
+    const mixedOrder = await request('/market/orders',{cookie:customer,body:{offerIds:[...ordersByOffer.keys(),pausedOffer.id]}});
+    assert.equal(mixedOrder.status,403);
+    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_orders WHERE tenant_id=?').bind(a).first('n'),2);
+    stillOnSale();
     const successful=[], conversationId=crypto.randomUUID();
     for (const source of sources.slice(0,2)) {
       const offer=services.find(row=>row.callId===source.callId);
       assert.equal(offer.salePrices[0].amount,source.retail[0]*1000000);
-      const ordered=await order(offer.id);assert.equal(ordered.status,200,JSON.stringify(ordered.data));
-      assert.deepEqual((await order(offer.id)).data,ordered.data);
+      const repeated=await order(offer.id);
+      assert.equal(repeated.status,200,JSON.stringify(repeated.data));
+      assert.deepEqual(repeated.data,ordersByOffer.get(offer.id));
       const textTurn={conversationId,messageId:crypto.randomUUID(),question:'原型验收问题 '+source.source,images:[],
         temperature:0.7,topP:0.8,deepThinking:false};
       const input={...body(offer.callId),tenantId:a,task:'text',textTurn}, invoked=await call(input);
@@ -545,6 +569,42 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal((await call({...body(presetCallId),task:'text',images:true})).status,400);
     const foreignProject=(await workspace(other)).projects.find(row=>row.status==='正常');
     assert.equal((await call({...body(presetCallId),task:'text',projectId:foreignProject.id})).status,403);
+
+    const servicesForTraffic = [];
+    for (const offer of [firstService, backupService]) {
+      const id = resourceId('model-service');
+      const row = {id,name:offer.callId,callId:offer.callId,controlledOfferId:offer.id,
+        type:'text',listed:true,channels:[],createdAt:new Date().toISOString(),createdBy:'测试管理员'};
+      await local.db.prepare('INSERT INTO new_model_services(id,call_id,revision,record_json,created_at,imported) VALUES(?,?,1,?,?,1)')
+        .bind(id,row.callId,JSON.stringify(row),Date.now()).run();
+      servicesForTraffic.push(row);
+    }
+    async function traffic(operation,id,data) {
+      const config = (await request('/traffic-limits',{cookie:admin})).data;
+      const operationId = crypto.randomUUID();
+      const written = await request('/traffic-limits',{cookie:admin,key:operationId,body:{
+        operationId,expectedRevision:config.revision,accountId:config.accountId,operation,id,data,
+      }});
+      assert.equal(written.status,200,JSON.stringify(written.data));
+    }
+    const limited = servicesForTraffic[0];
+    const counted = await bearer(routingSecret,limited.callId);
+    assert.equal(counted.status,200,JSON.stringify(counted.data));
+    await traffic('exceptions',a,{exceptions:[{modelId:limited.id,rpm:1,tpm:1_000_000}]});
+    const limitedApi = await bearer(splitSecret,limited.callId);
+    assert.equal(limitedApi.status,429,JSON.stringify(limitedApi.data));
+    assert.equal(limitedApi.data.error.code,'user_model_rate_limit_exceeded');
+    const limitedWeb = await call(body(limited.callId));
+    assert.equal(limitedWeb.status,429,JSON.stringify(limitedWeb.data));
+    assert.equal(limitedWeb.data.error.code,'user_model_rate_limit_exceeded');
+    await traffic('exceptions',a,{exceptions:[]});
+    await traffic('model',limited.id,{rpm:1,tpm:1_000_000});
+    assert.equal((await call(body(limited.callId))).data.error.code,'model_service_rate_limit_exceeded');
+    const independent = await bearer(splitSecret,servicesForTraffic[1].callId);
+    assert.equal(independent.status,200,JSON.stringify(independent.data));
+    await traffic('model',limited.id,{rpm:1000,tpm:1});
+    assert.equal((await bearer(routingSecret,limited.callId)).data.error.code,'model_service_rate_limit_exceeded');
+    await traffic('model',limited.id,null);
     }
 
     // Verify that the third offer is callable before withdrawal, while leaving a fresh A order for afterwards.
@@ -557,7 +617,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.deepEqual(new Set(serviceDirectoryRows([model()],state,'started').map(row=>row.callId)),new Set(sources.slice(1).map(row=>row.callId)));
     const rejectedWhileStopped = await call(body(sources[0].callId));
     assert.equal(rejectedWhileStopped.status,409);
-    assert.equal(rejectedWhileStopped.data.error.message,'模型服务已停止');
+    assert.equal(rejectedWhileStopped.data.error.message,'模型服务已停服，请选择其他模型服务');
     const apiStopped=await bearer(routingSecret,sources[0].callId);
     assert.equal(apiStopped.status,403,JSON.stringify(apiStopped.data));
     assert.equal(apiStopped.data.error.code,'provider_unavailable');
@@ -607,7 +667,7 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.deepEqual((await catalogue(customer)).map(row=>row.callId),[third.callId]);
     for (const previous of successful.slice(0,2)) {
       const offer=services.find(row=>row.callId===previous.source.callId);
-      assert.equal((await order(offer.id)).status,409);
+      assert.deepEqual((await order(offer.id)).data,ordersByOffer.get(offer.id));
       assert.equal((await call(body(offer.callId))).status,409);
       assert.equal((await call(previous.input)).status,409);
     }
@@ -890,14 +950,14 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal(await monthly(a),spendBefore);
     const lifecycleEndpoint='/model-services-new';
     const lifecycleId=resourceId('model-service');
-    const lifecycleRow={id:lifecycleId,name:third.name,callId:third.callId,modelId:material.id,
+    const lifecycleRow={id:lifecycleId,name:third.name,callId:third.callId,controlledOfferId:third.id,
       type:'text',listed:true,channels:[],createdAt:new Date().toISOString(),createdBy:'测试管理员'};
     await local.db.prepare('INSERT INTO new_model_services (id,call_id,revision,record_json,created_at,imported) VALUES (?,?,1,?,?,0)')
       .bind(lifecycleId,third.callId,JSON.stringify(lifecycleRow),Date.now()).run();
     const inspectLifecycle=async()=>(await request(lifecycleEndpoint+'?inspect='+lifecycleId,{cookie:admin})).data;
-    const updateLifecycle=(action,revision,row)=>{
+    const updateLifecycle=(action,revision,row,expectedSale)=>{
       const operationId=resourceId('operation');
-      return request(lifecycleEndpoint,{cookie:admin,key:operationId,body:{action,id:lifecycleId,revision,row,operationId}});
+      return request(lifecycleEndpoint,{cookie:admin,key:operationId,body:{action,id:lifecycleId,revision,row,operationId,expectedSale}});
     };
     const metaBefore=await local.db.prepare('SELECT meta_json FROM model_workspace WHERE id=1').first('meta_json');
     const setTestCard=async card=>{
@@ -908,17 +968,56 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     const testCard={linked:[third.id],shown:[third.id],scope:{type:'all'},status:'listed'};
     const projectChoicesBefore=(await workspace(customer)).projectServices.map(row=>row.id);
     assert(projectChoicesBefore.includes(third.id));
+    // An independent card may still refer to an old stable alias when loaded from saved data.
+    const aliasCardId=resourceId('model-card'), aliasMeta=JSON.parse(metaBefore);
+    aliasMeta.modelData.marketCards={...aliasMeta.modelData.marketCards,[aliasCardId]:{
+      ...testCard,linked:[lifecycleId],shown:[lifecycleId],
+      content:{name:'历史服务的独立展示卡片',type:'text',description:'历史引用验收',profile:{},capabilities:{}},
+    }};
+    await local.db.prepare('UPDATE model_workspace SET meta_json=? WHERE id=1').bind(JSON.stringify(aliasMeta)).run();
+    const aliasOffer=(await catalogue(customer)).find(row=>row.card_id===aliasCardId);
+    assert.equal(aliasOffer?.id,third.id);
+    assert.equal(aliasOffer.model_id,aliasCardId);
+    assert.equal(aliasOffer.callId,third.callId);
     await setTestCard(testCard);
-    assert.deepEqual(await inspectLifecycle(),{revision:1,marketLinked:true,marketListed:true,
-      stopIssue:'请先在模型广场取消展示该服务',deleteIssue:'请先停止模型服务'});
+    const inspection = await inspectLifecycle();
+    const sale = inspection.sale;
+    assert.equal(sale.id, third.id);
+    assert.deepEqual(inspection,{revision:1,marketLinked:true,marketListed:true,
+      stopIssue:'请先在模型广场取消展示该服务',deleteIssue:'请先停止模型服务',sale});
     assert.match((await updateLifecycle('save',1,{...lifecycleRow,listed:false})).data.error.message,/取消展示该服务/);
     await setTestCard({...testCard,status:'withdrawn'});
-    const stopped = await updateLifecycle('save',1,{...lifecycleRow,listed:false});
+    assert.deepEqual((await inspectLifecycle()).sale,sale);
+    assert.equal((await updateLifecycle('save',1,{...lifecycleRow,listed:false})).status,409);
+    const beforeCascade = await local.db.prepare('SELECT commit_seq FROM db_state WHERE id=1').first('commit_seq');
+    await local.db.prepare(`CREATE TRIGGER reject_cascade BEFORE INSERT ON audit_events
+      WHEN NEW.action='因停服自动停售' BEGIN SELECT RAISE(ABORT, 'test cascading audit failure'); END`).run();
+    try {
+      const failedStop = await updateLifecycle('save',1,{...lifecycleRow,listed:false},sale);
+      assert.equal(failedStop.status,503);
+      assert.equal(failedStop.data.error.code,'DATABASE_UNAVAILABLE');
+      assert.equal((await inspectLifecycle()).revision,1);
+      assert.deepEqual((await inspectLifecycle()).sale,sale);
+      assert.equal(await local.db.prepare('SELECT commit_seq FROM db_state WHERE id=1').first('commit_seq'),beforeCascade);
+    } finally {
+      await local.db.prepare('DROP TRIGGER reject_cascade').run();
+    }
+    const stopped = await updateLifecycle('save',1,{...lifecycleRow,listed:false},sale);
     assert.equal(stopped.status,200,JSON.stringify(stopped.data));
     assert.equal((await inspectLifecycle()).deleteIssue,'请先解除模型广场关联');
     assert.equal((await updateLifecycle('delete',2)).status,400);
     await reload();
     assert.deepEqual(state.stoppedModelOfferIds,[third.id]);
+    assert.equal(salesStatus(model(),keys[2]),'已停售');
+    const cascade = await local.db.prepare("SELECT entity_id, json_extract(diff_json,'$.sourceModelServiceId') AS source FROM audit_events WHERE action='因停服自动停售'").first();
+    assert.deepEqual(cascade, {entity_id:third.id,source:lifecycleId});
+    const stopAudit = await request('/audit-logs?action=model_service.stop',{cookie:admin});
+    assert.equal(stopAudit.status,200);
+    const stopEvent = stopAudit.data.items.find(event => event.target?.id === lifecycleId);
+    assert.ok(stopEvent);
+    const saleAudit = await request('/audit-logs?action=model_sale.stop_with_service',{cookie:admin});
+    assert.equal(saleAudit.status,200);
+    assert(saleAudit.data.items.some(event => event.target?.id === third.id && event.operation_id === stopEvent.operation_id));
     assert(!(await catalogue(customer)).some(row=>row.id===third.id));
     assert.deepEqual((await workspace(customer)).projectServices.map(row=>row.id),projectChoicesBefore.filter(id=>id!==third.id));
     assert.equal((await call({...internalRequest,requestId:crypto.randomUUID()})).data.error.code,'MODEL_UNAVAILABLE');
@@ -929,9 +1028,17 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
       id:resourceId('service-channel'),channelId:lifecycleSource.id,fingerprint:channelFingerprint(lifecycleSource),enabled:true,priority:0,weight:100,
     }]});
     assert.equal(reenabled.status,200,JSON.stringify(reenabled.data));
+    await reload();
+    assert.equal(salesStatus(model(),keys[2]),'已停售');
+    assert.equal((await inspectLifecycle()).sale,null);
     assert((await workspace(customer)).projectServices.some(row=>row.id===third.id));
     assert.equal((await updateLifecycle('save',3,{...reenabled.data.row,listed:false})).status,200);
     await setTestCard({...testCard,status:'withdrawn',linked:[],shown:[]});
+    assert.equal((await inspectLifecycle()).deleteIssue,'该模型服务仍有有效订单');
+    assert.equal((await updateLifecycle('delete',4)).status,400);
+    const retainedOrders=(await application()).orders.filter(row=>row.serviceId===third.id && row.status==='生效中');
+    assert(retainedOrders.length);
+    for (const order of retainedOrders) assert.equal((await apply({type:'cancelMarketOrder',id:order.id})).status,200);
     assert.equal((await inspectLifecycle()).deleteIssue,'');
     assert.equal((await updateLifecycle('delete',4)).status,200);
     await reload();
@@ -968,12 +1075,11 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.equal(supply.status,'已移除');
     await command('provider',{operation:'supplierCatalogueChannelDelete',objectId:retired.providerId,
       values:{modelId:retired.modelId,endpointId:retired.endpointId,associationId:retired.channelId,confirmed:true}});
-    assert(!state.endpoints.some(row=>row.id===retired.endpointId));
+    assert(state.endpoints.some(row=>row.id===retired.endpointId));
     await command('marketVisibility',{visible:false,expectedUpdatedAt:model().updatedAt},modelId);
     assert.equal(model().marketVisible,false);
     assert.deepEqual(JSON.parse(await local.db.prepare('SELECT record_json FROM service_supply_records WHERE id=?').bind(supply.id).first('record_json')),supply);
     const retiredNumber=await local.db.prepare("SELECT MAX(CAST(substr(code,4) AS INTEGER)) AS number FROM channels WHERE code GLOB 'CH-[0-9]*'").first('number');
-    await command('supplierModelsRegister',{providerId:retired.providerId,libraryIds:[model().templateId || modelId]});
     await command('supplierChannelRegister',{providerId:retired.providerId,modelId:retired.modelId,name:'替换连接',
       upstreamModelId:'vendor/after-retirement',baseUrl:'https://after-retirement.example.invalid/v1',protocol:'OpenAI',authMode:'group',keyGroupId:'default'});
     const replacement=owner(retired.providerId).catalogConnections.find(row=>row.upstreamModelId==='vendor/after-retirement');

@@ -48,14 +48,14 @@ export function tenantServiceTransaction(state, action, at = Date.now()) {
     const save = (label,modelRules)=>({label,changes:updateTenant({modelRules})});
     if (operation==='open-models') {
       const { modelIds } = data;
-      if (!Array.isArray(modelIds) || !modelIds.length || new Set(modelIds).size!==modelIds.length) throw Error('请选择要开通的模型');
+      if (!Array.isArray(modelIds) || !modelIds.length || new Set(modelIds).size!==modelIds.length) throw Error('请选择要授权的模型服务');
       if (modelIds.some(id=>opened.has(id))) throw Error('已授权，请刷新后重试');
-      if (modelIds.some(id=>!catalogue.get(id)?.availability)) throw Error('存在当前租户无法开通的模型');
-      return save('开通租户模型服务',[...modelIds.map(modelId=>({modelId,rpm:null,tpm:null})),...rules]);
+      if (modelIds.some(id=>!catalogue.get(id)?.availability)) throw Error('存在当前租户无法授权的模型服务');
+      return save('授权模型服务',[...modelIds.map(modelId=>({modelId,rpm:null,tpm:null})),...rules]);
     }
     const { modelId, rpm, tpm } = data;
-    if (!opened.has(modelId)) throw Error('该模型尚未开通');
-    if (operation==='remove-model') return save('移除租户模型服务',rules.filter(row=>row.modelId!==modelId));
+    if (!opened.has(modelId)) throw Error('该模型服务尚未授权');
+    if (operation==='remove-model') return save('移除授权',rules.filter(row=>row.modelId!==modelId));
     if ([rpm,tpm].some(value=>value!==null && (!Number.isSafeInteger(value) || value<1))) throw Error('RPM 和 TPM 须为正整数');
     if (tpm!==null && !tenantModelHasTpm(state.models.find(row=>row.id===modelId))) throw Error('该模型不支持 TPM 限流');
     return save('设置租户模型限流',rules.map(row=>row.modelId===modelId ? {...row,rpm,tpm} : row));

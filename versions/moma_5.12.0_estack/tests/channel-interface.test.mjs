@@ -44,7 +44,7 @@ test('custom task endpoints retain complete paths and isolate host boundaries', 
 
 test('address validation rejects credentials, query data, fragments and control characters', () => {
   for (const baseUrl of ['https://user:secret@api.example.com/v1', 'https://api.example.com/v1?key=secret', 'https://api.example.com/v1?', 'https://api.example.com/v1#', 'https://api.example.com/v1\n', 'https://api.example.com/v1/%0A', 'ftp://api.example.com/v1', '//api.example.com/v1', 'https://api.example.com/a b']) assert.throws(() => prepareChannelInterface({ ...openai, baseUrl }));
-  assert.throws(() => prepareChannelInterface({ ...openai, interfaceType: 'unknown' }), /接口类型/);
+  assert.throws(() => prepareChannelInterface({ ...openai, interfaceType: 'unknown' }), /接口格式/);
   assert.throws(() => prepareChannelInterface({ ...openai, baseUrl: 'http://localhost:8000/v1' }), /HTTPS/);
   assert.equal(modelTaskUrl({ ...openai, baseUrl: 'http://localhost:8000/v1', allowHttp: true }, 'text'), 'http://localhost:8000/v1/chat/completions');
   assert.throws(() => prepareChannelInterface({ ...openai, baseUrl: `https://api.example.com/${'a'.repeat(2048)}` }), /2048/);

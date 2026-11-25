@@ -10,7 +10,7 @@ export const isPayAsYouGoPrice = row => !['资源包', '输入 TPM 预留', '输
 export const isMomaCataloguePrice = row => isPayAsYouGoPrice(row) && !/^自营按量·(?!移动云(?:；|$))[^；]+(?:；|$)/.test((row.condition || '').trim());
 
 export function providerCataloguePrice(provider, modelId) {
-  if (!providerCatalogueIds(provider).includes(modelId)) return undefined;
+  if (!providerCatalogueIds(provider).includes(modelId) && !provider.removedCatalogModelIds?.includes(modelId)) return undefined;
   const configured = provider.catalogPricing?.find(item => item.modelId === modelId);
   const moma = isBuiltinMoma(provider);
   const official = moma && Object.hasOwn(MOMA_CATALOGUE_PRICES, modelId) && MOMA_CATALOGUE_PRICES[modelId];

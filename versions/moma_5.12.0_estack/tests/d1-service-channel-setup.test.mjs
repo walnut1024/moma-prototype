@@ -204,6 +204,10 @@ test('supplier and service operations share a scoped, redacted audit trail throu
     assert(routeAudit.changes.some(change=>change.field==='active_version' && change.after.value===active.version));
     assert(routeAudit.resources.some(resource=>resource.type==='service_mapping' && resource.roles.includes('changed')));
     assert(routeAudit.resources.some(resource=>resource.type==='model_supply' && resource.id===association.id));
+    const idsFor = async type => (await api('/audit-logs?type=' + type)).data.items.map(row => row.event_id);
+    assert((await idsFor('service_mapping_status')).includes(routeAudit.event_id));
+    assert((await idsFor('model_supply_status')).includes(established[0].event_id));
+    assert(!(await idsFor('model_supply_status')).includes(routeAudit.event_id));
     const rotateAudit=await detail(established[1]);
     assert.equal(rotateAudit.links.candidate_id,candidateId);
     assert(rotateAudit.changes.some(change=>change.field==='active_key_id' && change.after.value===activeKeyId));

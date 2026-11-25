@@ -18,6 +18,7 @@ import {providerApiKeysDraft} from '../src/admin-v2/provider-management.js';
 import {operationsTransaction,materialBase} from '../src/admin-v2/model-operations.js';
 import {offerKey} from '../src/service-access.mjs';
 import { modelServiceStarted } from '../src/admin-v2/service-directory.js';
+import { activeSupplyPrice } from '../src/admin-v2/model-management.js';
 
 test('rejected cloud mode change preserves the workspace and simulation history',()=>{
   const state=initialModelWorkspace(),before=structuredClone(state),model=state.models.find(m=>m.id==='model-glm53');
@@ -69,13 +70,14 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     const unifiedService=routingServices(state).find(row=>row.mode==='standard'),unifiedRoute=state.serviceRoutes.find(row=>row.serviceId===unifiedService.id),unifiedConfig=unifiedRoute.versions.find(row=>row.version===unifiedRoute.activeVersion).config;
     const beforeInvalidPolicy=(await api('/model-operations')).data;
     await assert.rejects(save(state,{type:'modelOperations',operation:'serviceRoutePublish',modelId:unifiedService.modelId,data:{serviceId:unifiedService.id,expectedVersion:unifiedRoute.activeVersion,sourceVersion:routeSourceVersion(state,unifiedService),config:{...unifiedConfig,strategy:'fixed'}}}),/当前路由仅支持/);
+    await assert.rejects(save(state,{type:'modelOperations',operation:'serviceRoutePublish',modelId:unifiedService.modelId,data:{serviceId:unifiedService.id,expectedVersion:unifiedRoute.activeVersion,sourceVersion:routeSourceVersion(state,unifiedService),config:{...unifiedConfig,strategy:'cost'}}}),/请选择有效的调度策略/);
     assert.deepEqual((await api('/model-operations')).data,beforeInvalidPolicy);
     const telemetry=structuredClone(state);
     for(const [index,channel] of routingChannels(state,unifiedService).entries())telemetry.endpoints.find(row=>row.id===channel.endpointId).metrics={activeRequests:index,requestsPerMinute:index,tokensPerMinute:index*10,p95LatencyMs:10+index,rpmLimit:100,tpmLimit:1000};
     telemetry.revision++;
     await local.db.batch(modelChanges(local.db,state,telemetry));
     state=(await api('/model-operations')).data;useCloudMockSnapshot(state,state.cloudMockState);
-    for(const strategy of ['weighted','load','tpm','latency','cost']){
+    for(const strategy of ['weighted','load','tpm','latency']){
       const service=routingServices(state).find(row=>row.id===unifiedService.id),route=serviceRoute(state,service.id),config={...activeRouteVersion(route).config,strategy};
       state=await save(state,{type:'modelOperations',operation:'serviceRoutePublish',modelId:service.modelId,data:{serviceId:service.id,expectedVersion:route.activeVersion,sourceVersion:routeSourceVersion(state,service),config}});
       const model=state.models.find(row=>row.id===service.modelId),currentService=routingServices(state).find(row=>row.id===service.id);
@@ -98,6 +100,27 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     let releaseModel=current.find(m=>m.serviceMode==='standard'),releaseScope=structuredClone({openScope:releaseModel.openScope,tenantIds:releaseModel.tenantIds});
     fresh=await save(fresh,{type:'modelOperations',operation:'salesSettings',modelId:releaseModel.id,data:{scope:{openScope:'all',tenantIds:[]},confirmed:true,expectedUpdatedAt:releaseModel.updatedAt}});
     releaseModel=fresh.models.find(row=>row.id===releaseModel.id);
+    const [{ supplyId }] = activeRouteVersion(serviceRoute(fresh, unifiedService.id)).config.channels.filter(row => row.enabled);
+    const cost = activeSupplyPrice(fresh, supplyId);
+    assert.ok(cost?.id);
+    const withoutCost = structuredClone(fresh);
+    const storedCosts = [...withoutCost.supplyPrices, ...withoutCost.providers.flatMap(provider =>
+      (provider.catalogConnections || []).flatMap(association => association.procurementVersions || []))];
+    const storedCost = storedCosts.find(row => row.id === cost.id);
+    assert.ok(storedCost);
+    storedCost.expiresAt = '2020-01-01T00:00:00.000Z';
+    withoutCost.revision++;
+    await local.db.batch(modelChanges(local.db, fresh, withoutCost));
+    const unpriced = (await api('/model-operations')).data;
+    const startSale = releaseStage => ({type:'modelOperations',operation:'startSales',modelId:releaseModel.id,
+      data:{releaseStage,releaseTenantIds:releaseStage==='gray'?['tenant-gov']:[],confirmed:true,expectedUpdatedAt:releaseModel.updatedAt}});
+    for (const stage of ['gray', 'formal']) {
+      await assert.rejects(save(unpriced, startSale(stage)), { status: 422, message: /缺少有效的服务商成本价/ });
+      assert.deepEqual((await api('/model-operations')).data, unpriced);
+    }
+    const restored = { ...fresh, revision: unpriced.revision + 1 };
+    await local.db.batch(modelChanges(local.db, unpriced, restored));
+    fresh = (await api('/model-operations')).data;
     state=await save(fresh,{type:'modelOperations',operation:'startSales',modelId:releaseModel.id,data:{releaseStage:'gray',releaseTenantIds:['tenant-gov'],confirmed:true,expectedUpdatedAt:releaseModel.updatedAt}});
     fresh=(await api('/model-operations')).data;const gray=fresh.models.find(m=>m.id===releaseModel.id);assert.equal(gray.releaseStage,'gray');assert.deepEqual(gray.releaseTenantIds,['tenant-gov']);assert.deepEqual({openScope:gray.openScope,tenantIds:gray.tenantIds},releaseScope);
     state=await save(fresh,{type:'modelOperations',operation:'startSales',modelId:gray.id,data:{releaseStage:'formal',confirmed:true,expectedUpdatedAt:gray.updatedAt}});
@@ -195,19 +218,15 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     const stored=await local.db.prepare('SELECT id,version FROM price_versions WHERE channel_model_id=? ORDER BY version').bind(mapping).all();
     assert.deepEqual(stored.results.map(v=>v.version),[1,2]);
     assert.equal((await local.db.prepare('SELECT active_purchase_price_id FROM channel_models WHERE id=?').bind(mapping).first()).active_purchase_price_id,association().procurementVersions[2].id);
-    state=await save(state,{type:'modelOperations',operation:'tariffDictionary',data:{operation:'save',kind:'unit',name:'D1验收单位',englishName:'D1 QA unit'}});
-    assert(state.tariffDictionary.some(r=>r.name==='D1验收单位'));
     const dictionaryBefore=(await api('/model-operations')).data;
-    const dictionaryAction=name=>({type:'modelOperations',operation:'tariffDictionary',data:{operation:'save',kind:'scenario',name}});
-    await assert.rejects(save(state,dictionaryAction('')),/计费项/);
+    for (const kind of ['scenario', 'unit', 'currency']) {
+      for (const operation of ['save', 'delete']) {
+        const id = operation === 'delete' ? dictionaryBefore.tariffDictionary.find(item => item.kind === kind).id : undefined;
+        await assert.rejects(save(state,{type:'modelOperations',operation:'tariffDictionary',data:{operation,kind,id,name:'验收字典项'}}),
+          { status: 422, message: /仅提供内置项/ });
+      }
+    }
     assert.deepEqual((await api('/model-operations')).data,dictionaryBefore);
-    state=await save(state,dictionaryAction('D1计费项'));
-    const entry=(await api('/model-operations')).data.tariffDictionary.find(row=>row.name==='D1计费项');
-    assert.equal(entry.status,undefined);assert.equal(entry.unitId,undefined);assert.equal(entry.englishName,undefined);
-    const afterEntry=(await api('/model-operations')).data;
-    await assert.rejects(save(dictionaryBefore,dictionaryAction('冲突计费项')),/修订|变化/);
-    await assert.rejects(save(state,{type:'modelOperations',operation:'tariffDictionary',data:{operation:'status',id:entry.id,status:'已停用'}}),/计费项不设/);
-    assert.deepEqual((await api('/model-operations')).data,afterEntry);
     const currentMode = state.models.find(m => m.id === model.id);
     const beforeModeChange = (await api('/model-operations')).data;
     await assert.rejects(save(state, {

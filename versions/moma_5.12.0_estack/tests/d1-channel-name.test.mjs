@@ -5,7 +5,6 @@ import { startLocalBackend } from '../database/local-runtime.js';
 import { domainModelWorkspace } from '../src/mock/model-fields.js';
 import { supplierChannelAssociations, supplierChannelName } from '../src/admin-v2/supplier-resources.js';
 import { channelIdentity } from '../src/model-identities.mjs';
-import { resourceRows } from '../src/admin-v2/model-resource-transfer.js';
 
 test('HTTP channel rename survives refresh and replay without renaming the connection or sibling channels', async () => {
   const accessCode=randomBytes(24).toString('hex'), hash=createHash('sha256').update(accessCode).digest('hex');
@@ -65,7 +64,6 @@ test('HTTP channel rename survives refresh and replay without renaming the conne
     const original=provider.catalogConnections.find(row=>row.id===association.id),current=owner.catalogConnections.find(row=>row.id===association.id);
     assert.deepEqual(current,{...original,sourceName:'转售连接',updatedAt:current.updatedAt});
     assert.equal(supplierChannelAssociations(fresh,owner,endpoint.id).find(row=>row.id===association.id).name,'转售连接');
-    assert.equal(resourceRows(fresh,'channels').find(row=>row.type==='channel'&&row.id===channelIdentity(fresh,association.id)).name,'转售连接');
     assert.equal(channelIdentity(fresh,association.id),channelIdentity(state,association.id));
     assert.deepEqual(fresh.endpoints,state.endpoints);
     assert.deepEqual(owner.catalogConnections.filter(row=>row.id!==association.id),provider.catalogConnections.filter(row=>row.id!==association.id));

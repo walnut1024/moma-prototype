@@ -115,6 +115,27 @@ export function auditEvidence(before, next, action, actor) {
     evidence = { action_code: 'supplier_key.replace', resources, changes };
   }
   if (action.operation === 'supplierSelection' && action.data.action === 'disable') evidence = disableEvidence(before, next, action.data.selections);
+  if (action.operation === 'serviceMappingDiscard') {
+    const { id, serviceId } = action.data;
+    const prior = byId(before.modelSupplies, id), current = byId(next.modelSupplies, id);
+    const resources = [], changes = [];
+    fieldsChanged(resources, changes, ref('service_mapping', id, current?.mappingName, 'target'), [
+      ['mapping_pending', Boolean(prior?.serviceMapping?.pending), Boolean(current?.serviceMapping?.pending)],
+    ]);
+    resources.push(ref('model_service', serviceId, null, 'related'));
+    evidence = { action_code: 'service_mapping.discard', resources, changes };
+  }
+  if (['serviceMappingEnable', 'serviceMappingDisable', 'serviceMappingRemove'].includes(action.operation)) {
+    const { id, serviceId } = action.data;
+    const prior = byId(before.modelSupplies, id), current = byId(next.modelSupplies, id);
+    const resources = [], changes = [];
+    fieldsChanged(resources, changes, ref('service_mapping', id, current?.mappingName, 'target'), [
+      ['status', prior?.status, current?.status],
+    ]);
+    resources.push(ref('model_service', serviceId, null, 'related'));
+    const code = action.operation.slice('serviceMapping'.length).toLowerCase();
+    evidence = { action_code: 'service_mapping.' + code, resources, changes };
+  }
   if (!evidence) return null;
   evidence.resources = [...new Map(evidence.resources.map(resource => [resource.type + ':' + resource.id, resource])).values()];
   return { ...evidence, actor_name: actor.name, actor_role: actor.role };

@@ -71,7 +71,7 @@ export function supplierModelMaintenance(state, { operation, objectId, data = {}
     const target = state.providers.find(row => row.id === data.targetProviderId);
     if (!target) throw new Error('请选择目标服务商');
     const { modelId, fields } = supplierModelFields(state, target, data.libraryId);
-    if (providerCatalogueIds(target).includes(modelId)) throw new Error('目标服务商已登记该模型，请直接配置，不能重复创建');
+    if (providerCatalogueIds(target).includes(modelId)) throw new Error('目标服务商已添加该模型，不能重复添加');
     const profile = normalizeSupplyProfile(current.supplyProfile);
     let copiedPrice;
     if (data.copyListPrice) {

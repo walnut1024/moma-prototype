@@ -6,7 +6,7 @@ import Table from './AdminTable';
 import { AdminSideSheet } from './AdminOverlay';
 import { Field, Notice } from './ServiceUI';
 import ProcurementPriceFields from './ProcurementPriceFields';
-import { cataloguePriceDraft, cataloguePurchasePrice, catalogueMoneyDisplay } from './provider-catalogue-pricing';
+import { cataloguePriceDraft, cataloguePurchasePrice, catalogueMoneyDisplay, validateQuoteTariffs } from './provider-catalogue-pricing';
 import { normalizeProviderPrice } from './provider-management';
 import { activeChannelProcurement } from './channel-change-management';
 import { modelChannelName } from './model-channel-name.js';
@@ -40,6 +40,7 @@ export default function ProcurementVersionEditor({ state, provider, association,
     if (blocked) return;
     try {
       const pricing = normalizeProviderPrice(provider, { modelId: association.modelId, discountFactor: '1', scenarios });
+      validateQuoteTariffs(state, pricing.scenarios, quote?.scenarios);
       if (!pricing.scenarios.length || pricing.scenarios.some(item => item.listPrice == null)) throw new Error('请补齐计费项和服务商成本价，免费请明确填写 0');
       setPublishing({ ...args, scenarios: structuredClone(scenarios), pricing });
       ops.setError('');
@@ -89,7 +90,7 @@ export default function ProcurementVersionEditor({ state, provider, association,
       <Table size="small" rowKey="id" pagination={false} scroll={{ x: 780 }} dataSource={versions.slice().reverse()} empty="尚无服务商成本价版本记录。" columns={[
         { title: '版本', dataIndex: 'version', width: 70 },
         { title: '生效 / 到期（北京时间）', width: 200, render: (_, version) => <div>{time(version.effectiveAt)}<Typography.Paragraph type="tertiary">{version.expiresAt ? time(version.expiresAt) : '未设置到期时间'}</Typography.Paragraph></div> },
-        { title: '采购计费项', width: 300, render: (_, version) => version.pricing?.scenarios.map((item, index) => <Typography.Paragraph key={index}>
+        { title: '计费项', width: 300, render: (_, version) => version.pricing?.scenarios.map((item, index) => <Typography.Paragraph key={index}>
           {item.name}{item.condition ? '（' + item.condition + '）' : ''} · {item.currency} {catalogueMoneyDisplay(cataloguePurchasePrice(item.listPrice, version.pricing.discountFactor, item.purchasePrice))} / {item.unit}
         </Typography.Paragraph>) },
         { title: '状态', width: 90, render: (_, version) => <AdminStatus value={status(version)}/> },

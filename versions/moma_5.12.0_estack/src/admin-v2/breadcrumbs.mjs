@@ -40,7 +40,7 @@ export function adminBreadcrumbs(active, params, names = {}) {
     add('基础资料', '#/admin-2/model-templates');
     add('服务商', provider || view ? href(active, {}, ['provider', 'view', 'tab', 'edit', 'returnTo', 'modelQ', 'modelPage']) : null);
     if (provider) add(names.provider || '服务商不存在', view === 'modelImport' ? href(active, { tab: 'models' }, ['view', 'edit']) : null);
-    const label = { new: '新建服务商', import: '批量导入服务商资料', relations: '批量导入供应关系', modelImport: '批量导入并登记' };
+    const label = { new: '新建服务商', import: '批量导入服务商资料', relations: '批量导入供应关系', modelImport: '批量导入并添加' };
     if (Object.hasOwn(label, view)) add(label[view]);
   } else if (active === 'listing-new' && params.has('service')) {
     add(page.label, href(active, {}, ['service', 'tab']));

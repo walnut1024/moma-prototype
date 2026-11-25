@@ -1,8 +1,6 @@
 import { useChannelText } from './channel-language';
 import MarketCardDialogs from './MarketCardDialogs';
-import { marketCardIndex, marketCardStatus, marketCardStatuses } from '../market-cards.mjs';
-import { modelIdentity, modelServiceIdentity } from '../model-identities.mjs';
-import { serviceReferences } from '../service-access.mjs';
+import { marketCardIndex, marketCardServices, marketCardStatus, marketCardStatuses } from '../market-cards.mjs';
 import AdminStatus from './AdminStatus';
 import Table, { AdminPagination } from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
@@ -20,10 +18,10 @@ import { modelProfileDraft } from './model-profile';
 import { materialContextLabel } from './model-material-fields';
 import { marketDemoState } from './model-market-demo';
 import { commitAdminState } from './state-transaction';
-import { providerServices, serviceCallIdentifiers } from './service-workspace';
-import { offerKey, offerStage } from '../service-access.mjs';
+import { offerKey, offerStage, providerOffer } from '../service-access.mjs';
 import ModelModuleHeading from './ModelModuleHeading';
 import { marketSupplyGroups } from './model-market-supplies';
+import { registeredServiceUpstreams } from './service-model-mappings';
 import { orderedMarketModels } from './model-market-order';
 import './model-market.css';
 
@@ -37,6 +35,7 @@ const pageSize = 20;
 const cardSupplierLimit = 3;
 const viewOptions = [{ label: '列表', value: 'list' }, { label: '卡片', value: 'cards' }];
 const emptyMessage = '没有符合条件的模型卡片';
+const saleStages = { formal: '在售', gray: '灰度在售', paused: '已停售', withdrawn: '已停售', unlisted: '未开售' };
 const cardCollision = args => args.pointerCoordinates ? pointerWithin(args) : closestCenter(args);
 function scopeLabel(card, t) {
   if (marketCardStatus(card) === 'withdrawn') return '—';
@@ -71,8 +70,8 @@ function MarketVisibility({ model }) {
   return <AdminStatus value={model.marketVisible === false ? '隐藏' : '允许展示'}/>;
 }
 
-function ModelCallIdentifiers({ model }) {
-  const identifiers = serviceCallIdentifiers(model);
+function ModelCallIdentifiers({ services }) {
+  const identifiers = [...new Set(services.map(service => service.callId))];
   return identifiers.length ? <Space vertical align="start" spacing={4}>{identifiers.map(value =>
     <CopyId key={value} value={value} label="模型 ID" ellipsis={{ showTooltip: true }}/>)}</Space> : <Typography.Text type="tertiary">未配置</Typography.Text>;
 }
@@ -94,7 +93,7 @@ function MarketLogo({ src }) {
     : <IconBox size="large"/>}</span>;
 }
 
-function MarketCard({ state, model, position, canReorder, savingOrder, actions, openSupplies }) {
+function MarketCard({ model, services, groups, position, canReorder, savingOrder, actions, openSupplies }) {
   const translateLabel = useChannelText();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: model.id, disabled: !canReorder || savingOrder, data: { name: model.name },
@@ -105,7 +104,6 @@ function MarketCard({ state, model, position, canReorder, savingOrder, actions, 
   const resultTypes = (profile.resultTypes || []).filter(value => value !== '生成文本' || !outputModalities.includes('文本'));
   const outputs = [...new Set([...outputModalities, ...resultTypes])];
   const context = source.capabilities?.context;
-  const groups = marketSupplyGroups(state, model);
   const channelCount = groups.reduce((count, group) => count + group.channels.size, 0);
   return <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} data-dragging={isDragging || undefined}>
     <Card className="market-model-card" footer={<div className="market-card-footer">
@@ -118,9 +116,9 @@ function MarketCard({ state, model, position, canReorder, savingOrder, actions, 
         <MarketLogo key={profile.logo || ''} src={profile.logo}/>
         <div className="market-card-identity">
           <Typography.Title heading={6} component="h3" ellipsis={{ rows: 2, showTooltip: true }}>{model.name}</Typography.Title>
-          <CopyId value={modelIdentity(state,model).canonical_slug} label="模型编码"/>
-          {serviceReferences({...state,models:[model]}).map(service=><CopyId key={service.id} value={service.model_service_id} label="模型服务 ID" ellipsis={{showTooltip:true}}/>)}
-          <ModelCallIdentifiers model={model}/>
+          {model.canonicalSlug && <CopyId value={model.canonicalSlug} label="模型编码"/>}
+          {services.map(service => <CopyId key={service.id} value={service.id} label="模型服务 ID" ellipsis={{showTooltip:true}}/>)}
+          <ModelCallIdentifiers services={services}/>
         </div>
         <Button theme="borderless" size="small" className="market-order-handle market-card-order"
           icon={<IconHandle size="small" aria-hidden="true"/>} {...attributes} {...listeners}
@@ -184,7 +182,21 @@ export default function ModelMarket(live) {
   const query = params.get('q') || '';
   const search = query.trim().toLowerCase();
   const type = params.get('type'), visibility = params.get('visibility');
+  const view = params.get('view') === 'cards' ? 'cards' : 'list';
   const ordered = useMemo(() => marketCardIndex(props.state, orderedMarketModels(props.state)), [props.state]);
+  const servicesById = useMemo(() => new Map(marketCardServices(props.state).map(service => [service.id, service])), [props.state]);
+  const upstreamsById = useMemo(() => new Map(view === 'cards' && props.state.marketModelServices?.some(service => service.channelIds?.length)
+    ? registeredServiceUpstreams(props.state).map(channel => [channel.id, channel]) : []), [props.state, view]);
+  const linkedServices = model => model.card.linked.map(id => servicesById.get(id)).filter(Boolean);
+  const linkedUpstreams = model => linkedServices(model).flatMap(service => (service.channelIds || []).flatMap(id => {
+    const channel = upstreamsById.get(id);
+    return channel ? [{ id: JSON.stringify([service.id, id]), service, channel }] : [];
+  }));
+  const linkedSources = model => linkedServices(model).flatMap(service => {
+    const source = service.sourceId && props.state.models.find(row => row.id === service.sourceId);
+    return source ? [{ model: source, providerId: service.providerId, channelId: service.channelId, service }] : [];
+  });
+  const supplyGroups = (model, upstreams) => marketSupplyGroups(props.state, { sources: linkedSources(model), upstreams });
   const cardsById = new Map(ordered.map(row => [row.cardId, row]));
   const materials = useMemo(() => modelCatalogue(props.state), [props.state]);
   const openCard = (kind, cardId, button) => ops.proceed(() => {
@@ -201,12 +213,12 @@ export default function ModelMarket(live) {
   const cardRow = cardsById.get(cardDialog?.cardId);
   const positions = new Map(ordered.map((model, index) => [model.id, index + 1]));
   const rows = ordered.filter(model =>
-    [model.name, model.description, modelIdentity(props.state,model).id, modelIdentity(props.state,model).canonical_slug, ...serviceReferences({ ...props.state, models:[model] }).map(service=>service.model_service_id), ...serviceCallIdentifiers(model)].join(' ').toLowerCase().includes(search) &&
+    [model.name, model.description, model.modelId, model.canonicalSlug, ...model.card.linked,
+      ...linkedServices(model).map(service => service.callId)].join(' ').toLowerCase().includes(search) &&
     (!type || modelCategory(model.type) === type) &&
     (!Object.hasOwn(marketCardStatuses, visibility) || marketCardStatus(model.card) === visibility));
   const currentPage = Math.min(Math.max(1, Number.parseInt(params.get('page'), 10) || 1), Math.ceil(rows.length / pageSize) || 1);
   const pageRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const view = params.get('view') === 'cards' ? 'cards' : 'list';
   const changePage = page => go({ page: page === 1 ? null : page }, { replace: true, preserveScroll: true });
   const changeFilters = patch => go({ ...patch, page: null }, { replace: true, preserveScroll: true });
   const toggleDemo = () => ops.proceed(() => {
@@ -219,7 +231,12 @@ export default function ModelMarket(live) {
     setDemo(marketDemoState(live.state.currentRole));
     go(Object.fromEntries(marketFilterKeys.map(key => [key, null])), { saved: true, replace: true, preserveScroll: true });
   });
-  const supplyModel = supplyDetail && props.state.models.find(row => row.id === supplyDetail.modelId);
+  const supplyModel = supplyDetail && ordered.find(row => row.id === supplyDetail.modelId);
+  const supplyUpstreams = supplyModel ? linkedUpstreams(supplyModel) : [];
+  const legacySupplyRows = supplyModel ? linkedSources(supplyModel).flatMap(({ model, providerId, channelId, service }) => {
+    const entry = providerId && providerOffer(model, channelId || providerId);
+    return entry ? [{ model, entry, service }] : [];
+  }) : [];
   const openSupplies = (event, modelId, providerId = null) => {
     trigger.current = event.currentTarget;
     setSupplyDetail({ modelId, providerId, displayCard: ordered.some(row => row.id === modelId && !row.legacy) });
@@ -261,12 +278,12 @@ export default function ModelMarket(live) {
   const orderChanged = orderEdit && orderEdit.revision !== props.state.revision;
   const position = Number(orderEdit?.position);
   const validPosition = Number.isSafeInteger(position) && position >= 1 && position <= ordered.length;
-  const toggleChannelVisibility = async (entry, button) => {
+  const toggleChannelVisibility = async ({ model, entry }, button) => {
     setBusy(true);
     try {
       await ops.run('serviceProviderListing', {
-        providerId: offerKey(entry), enabled: entry.marketVisible === false, expectedUpdatedAt: supplyModel.updatedAt,
-      }, supplyModel.id);
+        providerId: offerKey(entry), enabled: entry.marketVisible === false, expectedUpdatedAt: model.updatedAt,
+      }, model.id);
     } finally {
       setBusy(false);
       requestAnimationFrame(() => button.focus());
@@ -314,7 +331,7 @@ export default function ModelMarket(live) {
         }}>
         <SortableContext items={pageRows.map(row => row.id)} strategy={rectSortingStrategy}>
           <ul className="market-card-grid" aria-label={t("模型卡片")}>
-            {pageRows.map(row => <MarketCard key={row.id} state={props.state} model={row} position={positions.get(row.id)}
+            {pageRows.map(row => <MarketCard key={row.id} model={row} services={linkedServices(row)} groups={supplyGroups(row, linkedUpstreams(row))} position={positions.get(row.id)}
               canReorder={ops.can && pageRows.length > 1} savingOrder={busy} actions={actions(row)} openSupplies={openSupplies}/>)}
           </ul>
         </SortableContext>
@@ -356,18 +373,25 @@ export default function ModelMarket(live) {
     {supplyModel && <Modal title={t("服务商与上游模型")} description={supplyModel.name} wide centered onClose={() => !busy && closeSupplies()}
       footer={<Button disabled={busy} onClick={closeSupplies}>{t("关闭")}</Button>}>
       <div className="market-supply-detail">
-        <MarketSupplies groups={marketSupplyGroups(props.state, supplyModel)} expandedProviderId={supplyDetail.providerId}/>
-        {providerServices(supplyModel).length > 0 && (
-          <Table rowKey={offerKey} dataSource={providerServices(supplyModel)} pagination={false}
+        <MarketSupplies groups={supplyGroups(supplyModel, supplyUpstreams)} expandedProviderId={supplyDetail.providerId}/>
+        {supplyUpstreams.length > 0 && <Table rowKey="id" dataSource={supplyUpstreams} pagination={false} columns={[
+          { title: '服务商', render: (_, row) => row.channel.provider.name },
+          { title: '上游模型 ID', render: (_, row) => <CopyId value={row.channel.upstreamModelId} label="上游模型 ID"/> },
+          { title: '模型服务 ID', render: (_, row) => <CopyId value={row.service.id} label="模型服务 ID"/> },
+          { title: '模型 ID', render: (_, row) => row.service.callId },
+          { title: '售卖状态', render: (_, row) => <AdminStatus value={saleStages[row.service.saleStage] || saleStages.unlisted}/> },
+        ]}/>}
+        {legacySupplyRows.length > 0 && (
+          <Table rowKey={row => row.service.id} dataSource={legacySupplyRows} pagination={false}
             columns={[
-              { title: '连接', render: (_, row) => row.channelName || props.state.providers.find(provider => provider.id === row.providerId)?.name || '—' },
-              { title: '模型服务 ID', render: (_,row)=><CopyId value={modelServiceIdentity(props.state,supplyModel,offerKey(row))} label="模型服务 ID"/> },
-              { title: '模型 ID', dataIndex: 'callId', render: value => value || '待配置' },
-              { title: '售卖状态', render: (_, row) => <Space vertical align="start" spacing={4}><AdminStatus value={row.salesPaused ? '已停售' : { formal: '在售', gray: '灰度在售', withdrawn: '已停售', unlisted: '未开售' }[offerStage(supplyModel, row)]}/>{row.callsEnabled === false && row.channelUnavailableReason && <Typography.Text type="tertiary" size="small">{row.channelUnavailableReason}</Typography.Text>}</Space> },
-              ...(!supplyDetail.displayCard ? [{ title: '广场展示', render: (_, row) => <MarketVisibility model={row}/> },
+              { title: '连接', render: (_, { entry }) => entry.channelName || props.state.providers.find(provider => provider.id === entry.providerId)?.name || '—' },
+              { title: '模型服务 ID', render: (_, { service }) => <CopyId value={service.id} label="模型服务 ID"/> },
+              { title: '模型 ID', render: (_, { service }) => service.callId || '待配置' },
+              { title: '售卖状态', render: (_, { model, entry }) => <Space vertical align="start" spacing={4}><AdminStatus value={entry.salesPaused ? '已停售' : saleStages[offerStage(model, entry)]}/>{entry.callsEnabled === false && entry.channelUnavailableReason && <Typography.Text type="tertiary" size="small">{entry.channelUnavailableReason}</Typography.Text>}</Space> },
+              ...(!supplyDetail.displayCard ? [{ title: '广场展示', render: (_, { entry }) => <MarketVisibility model={entry}/> },
               { title: '操作', render: (_, row) => <Button theme="borderless" disabled={!ops.can} aria-disabled={busy}
-                aria-label={`${row.marketVisible === false ? '允许展示' : '隐藏'} ${row.callId || row.channelName || row.providerId}`}
-                onClick={event => { if (!busy) void toggleChannelVisibility(row, event.currentTarget); }}>{row.marketVisible === false ? '允许展示' : '隐藏'}</Button> }] : []),
+                aria-label={`${row.entry.marketVisible === false ? '允许展示' : '隐藏'} ${row.service.callId || row.entry.channelName || row.entry.providerId}`}
+                onClick={event => { if (!busy) void toggleChannelVisibility(row, event.currentTarget); }}>{row.entry.marketVisible === false ? '允许展示' : '隐藏'}</Button> }] : []),
             ]}/>
         )}
         {ops.error && <Notice error>{ops.error}</Notice>}

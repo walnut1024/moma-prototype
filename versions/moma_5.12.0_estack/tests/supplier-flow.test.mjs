@@ -11,12 +11,12 @@ const channel = s => catalogueChannels(s, owner(s), 'GLM-5.2')[0];
 const args = c => ({modelId:c.modelId,endpointId:c.endpointId,associationId:c.id});
 const unchangedServices = (a,b) => {for (const k of ['models','modelSupplies','modelSalePrices','supplyPrices','serviceRoutes']) assert.deepEqual(b[k],a[k],k);};
 
-test('one model-channel test checks both levels without activating a stopped channel or changing services', () => {
+test('one model-channel test verifies the connection without activating the model or changing services', () => {
  let s = legacySupplierState(), c = channel(s);
  s = run(s,'supplierChannelSave',{endpointId:c.endpointId,mode:'address',protocol:'OpenAI',baseUrl:'https://changed.example.invalid/v1/chat/completions',confirmed:true});
  c = channel(s); const t=run(s,'supplierModelTest',args(c)), checked=channel(t);
  assert.ok(connectionTestPassed(checked.endpoint)); assert.ok(channelCheckCurrent(checked));
- assert.equal(checked.health.result,'通过'); assert.equal(checked.enabled,false);assert.equal(checked.endpoint.status,'停用'); unchangedServices(s,t);
+ assert.equal(checked.health.result,'通过'); assert.equal(checked.enabled,false);assert.equal(checked.endpoint.status,'运行中'); unchangedServices(s,t);
  const enabled=run(t,'supplierModelEnable',args(checked));assert.equal(channel(enabled).enabled,true);assert.equal(channel(enabled).endpoint.status,'运行中');unchangedServices(t,enabled);
 });
 

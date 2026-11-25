@@ -12,16 +12,9 @@ export function modelMaterialProviders(state, materialId) {
   return group ? modelSupplyGroups(state, group.entries) : [];
 }
 
-export const materialChannelCount = group => new Set(group.channels.map(row => row.endpointId).filter(Boolean)).size;
-
 export function materialSource(hash) {
   const [path, query] = hash.split('?');
   const params = new URLSearchParams(query);
   params.delete('returnTo');
   return path + (params.size ? '?' + params : '');
-}
-
-export function viewMaterialChannels(ops, providerId, materialId) {
-  ops.go({ channelProvider: providerId, channelModel: materialId ? JSON.stringify(['master', materialId]) : null, returnTo: materialSource(location.hash) },
-    { base: 'providers-reference', reset: true });
 }

@@ -42,6 +42,37 @@ test('adding one credential never renames existing records and rejects a key alr
   assert.throws(() => op(state, 'addApiKeys', { apiKeys: [key] }), /相同的 API 密钥/);
 });
 
+test('renaming a shared key preserves credential data, its legacy aliases and the existing test results', async () => {
+  const { state, provider, key, endpoints, input } = await fixture();
+  const dedicated = { ...key, id: 'connection-own-key', scope: 'channel' };
+  endpoints[0].apiKeys.push(dedicated);
+  const deleted = { ...structuredClone(endpoints[1]), id: 'deleted-key-endpoint', deletedAt: '2026-11-25T00:00:00.000Z' };
+  state.endpoints.push(deleted);
+  const before = structuredClone(state);
+  for (const name of ['', '  ', '密钥'.repeat(51), '名字\n测试']) {
+    assert.throws(() => op(state, 'renameApiKey', { ...input, name }), /密钥名称须为/);
+  }
+  assert.throws(() => op(state, 'renameApiKey', { ...input, expectedFingerprint: 'stale', name: '生产' }), /已变化/);
+  assert.throws(() => op(state, 'renameApiKey', { ...input, keyId: dedicated.id, name: '生产' }), /已变化/);
+  assert.throws(() => op({ ...state, currentRole: '运维人员' }, 'renameApiKey', { ...input, name: '生产' }), /无权/);
+
+  const next = op(state, 'renameApiKey', { ...input, name: '  生产主密钥  ' });
+  const name = '生产主密钥';
+  assert.deepEqual(providerOf(next).apiKeys, [{ ...key, name }, provider.apiKeys[1]]);
+  for (const endpoint of endpoints) {
+    const changed = next.endpoints.find(row => row.id === endpoint.id);
+    assert.deepEqual(changed, {
+      ...endpoint, updatedAt: changed.updatedAt,
+      apiKeys: [{ ...endpoint.apiKeys[0], name }, ...endpoint.apiKeys.slice(1)],
+    });
+    assert.equal(connectionFingerprint(changed), connectionFingerprint(endpoint));
+    assert.deepEqual(changed.connectionTest, endpoint.connectionTest);
+  }
+  assert.deepEqual(next.endpoints.find(row => row.id === deleted.id), deleted);
+  assert.deepEqual(next.modelSupplies, before.modelSupplies);
+  assert.deepEqual(state, before);
+});
+
 test('rotating a referenced key requires confirmation, updates all copies in place and invalidates associated models', async () => {
   const { state, provider, key, endpoints, input } = await fixture(), before = structuredClone(state);
   const apiKey = (await providerApiKeysDraft([secrets[2]])).apiKeys[0];

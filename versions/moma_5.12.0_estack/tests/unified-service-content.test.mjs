@@ -15,7 +15,7 @@ for (const providerId of ['provider-deepseek-official','provider-moma']) {
   const providerRun=(operation,values)=>{prepared=run(prepared,'provider',null,{operation,objectId:providerId,values:{modelId:catalogueModelId,...values}});};
   providerRun('addApiKeys',await providerApiKeysDraft(['sk-unified-content-local-test-000001']));
   for (let index=0;index<5;index++) {
-    providerRun('channelSave',{name:`模型服务连接 ${index+1}`,origin:'direct',upstreamModelId:catalogueModelId,protocol:'OpenAI',baseUrl:`https://${providerId}-${index}.example.invalid/v1/chat/completions`,scenarios:[{name:'输入',unit:'百万 Token',currency:'CNY',listPrice:'2'},{name:'输出',unit:'百万 Token',currency:'CNY',listPrice:'8'}]});
+    providerRun('channelSave',{name:`模型服务连接 ${index+1}`,origin:'direct',upstreamModelId:catalogueModelId,protocol:'OpenAI',baseUrl:`https://${providerId}-${index}.example.invalid/v1/chat/completions`,scenarios:[{name:'输入 Token',unit:'百万 Token',currency:'CNY',listPrice:'2'},{name:'输出 Token',unit:'百万 Token',currency:'CNY',listPrice:'8'}]});
     const channel=storedServiceChannels(prepared).find(item=>item.provider.id===providerId && item.name===`模型服务连接 ${index+1}`);
     providerRun('connectionKeys',{endpointId:channel.endpointId,apiKeys:[prepared.providers.find(item=>item.id===providerId).apiKeys[0]],confirmed:true});
     providerRun('channelTest',{channelId:channel.id,scenario:'success'});

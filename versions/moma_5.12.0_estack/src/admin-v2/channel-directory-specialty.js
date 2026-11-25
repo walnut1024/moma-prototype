@@ -27,7 +27,7 @@ export function channelSpecialtyTransaction(state, { data }) {
     } else if (action === 'remove') {
       if (state.currentRole !== '平台管理员') throw Error('仅平台管理员可执行删除');
       if (model?.status !== '已安装') throw Error('找不到已安装的模型');
-      if (supplierChannelAssociations(state, provider, endpoint.id).some(row => row.upstreamModelId === model.id)) throw Error('仍有 MoMA 上游模型引用，请先核对并解除引用');
+      if (supplierChannelAssociations(state, provider, endpoint.id).some(row => row.upstreamModelId === model.id)) throw Error('仍有 MoMA 上游模型引用，请先核对并移除引用');
       models = models.filter(row => row !== model);
     } else if (action !== 'refresh') throw Error('专项操作不适用于此连接');
     copy.models = models;

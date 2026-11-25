@@ -65,72 +65,18 @@ OpenRouter 字段依据：[模型目录接口](https://openrouter.ai/docs/api/ap
 | 模块 | 稳定关联 | 本模块维护 |
 | --- | --- | --- |
 | 模型接入 | provider.id、connection.id、channel.id、model_id | 来源、连接配置、上游调用值、实际能力、采购配置 |
-| 模型服务 | model_service.id、model_id；映射和路由的连接引用 | 平台调用值、模式、路由、技术配置及启停 |
-| 模型广场 | model_id 管理公共内容，model_service_id 管理具体服务 | 展示名、介绍、图标、作者等展示内容及上架、展示设置 |
-| 模型售价 | model_service_id、价格版本、计费项／单位／币种 ID | 销售价格、条件、价格版本和销售范围 |
+| 模型服务 | 模型服务 ID、已登记上游模型的稳定关联 ID | 服务名称、模型 ID、类型、路由、故障转移配置及启停 |
+| 模型广场 | 卡片 ID、模型服务 ID | 展示名、介绍、图标、作者等展示内容、可见性和展示服务 |
+| 模型销售 | 模型服务 ID、价格版本、计费项／单位／货币 ID | 每个服务最多一条售卖，维护刊例价、状态和销售范围 |
 | 模型资料 | 保留既有参考资料记录与模型身份引用 | 参考内容及来源，不覆盖已经维护的广场内容 |
 
-模型卡片按模型资料 ID 保存至工作区的 marketCards。卡片保存独立展示内容、关联及展示服务 ID、展示状态和可见范围。指定范围分别保存 `organizationIds`、`projectIds` 和 `tenantIds`；组织和项目按同源记录校验，命中任一范围即可查看。已有卡片读出历史服务记录的 marketContent 和展示许可，首次通过卡片表单保存后读取卡片配置。模型资料、模型服务、价格、订购和调用保留原身份与数据。批量维护 JSON 中的服务销售上架阶段和历史展示字段仍属于服务配置。
+新建模型卡片按独立卡片 ID 保存到工作区的 `marketCards`。运营人员从模型服务列表选取服务，确认同款后按模型服务 ID 保存关联。卡片保存独立展示内容、关联及展示服务 ID、展示状态和可见范围。指定范围分别保存 `organizationIds`、`projectIds` 和 `tenantIds`；组织和项目按同源记录校验，命中任一范围即可查看。已有卡片读出历史服务记录的 marketContent 和展示许可，首次通过卡片表单保存后读取卡片配置。模型资料、模型服务、价格、订购和调用保留原身份与数据。
 
 模型服务、广场及售价展示并复制同一 model_service_id；连接展示 channel_id，连接和 Provider 的 ID 在相应配置或详情可查。模型编码及永久 ID 纳入搜索。历史审计原文和已有 ID 不因文案统一而改写。
 
-## 批量维护 JSON
+## 来源接入与资料模板
 
-模型销售从当前对象进入批量维护，按该对象范围校验和保存 JSON。
-
-### 范围与结构
-
-维护格式统一为 moma.model-operations/v2，顶层严格接受 schema、operation、scope、target、revision、rows、references。旧 v1 维护 JSON 需重新导出；业务数据、永久 ID 和来源接入格式不变。
-
-| 字段 | 约束 |
-| --- | --- |
-| schema | moma.model-operations/v2；属于 MoMA 运营维护契约 |
-| operation | update 更新现有配置；link 显式关联已有模型服务与连接 |
-| scope | channels、services、market、prices |
-| target | level 为 module、provider、model、provider_model、model_service；仅携带该层需要的 provider_id、model_id 或 model_service_id |
-| revision | 当前导出修订；提交时重新核对，过期拒绝 |
-| rows | 当前范围的主体配置；按下表区分可维护字段及只读字段 |
-| references | 必要的只读模型、服务商、连接、密钥组／密钥脱敏元数据、计费字典及价格历史；按对象类型、归属及已有 ID 去重 |
-
-模型接入总表包含全部当前可维护的服务商、模型登记、连接和连接；服务商详情只包含该服务商；全局模型详情包含该模型的各服务商登记和连接；从服务商下钻的模型只包含二者交集。登记与页面使用同一供应关系，内置参考目录不视为已登记；同一服务商与模型的目录别名合并在 catalogue_model_ids。模型级 JSON 将共享连接与服务商放在只读 references，不授予修改共享对象的权限。已登记但尚无连接的模型仍必须包含，未解析的身份保留 null，不通过名称补猜。
-
-模型服务与广场支持模块、模型及具体服务范围；售价详情按具体模型服务定位。层级范围不受搜索、分页、折叠或服务商详情页签影响。URL resourceTarget 只记录已验证的对象上下文，不能扩大真实详情来源范围；无效／不存在的对象显示错误，不回退全量。服务端重新解析 target、验证归属和每行 ID，客户端另检查文件范围与当前页面一致。
-
-### 字段与维护权
-
-所有主体和引用均保留已有完整 ID；读取和导出不生成 UUID。通用 type 区分配置对象，模型类型使用 model_type。配置行的 id 保持原定位规则：model_service／market_service／sale_price 行定位模型服务；market_model 行定位模型；provider_model 行使用供应关系中的登记 ID；本地域状态尚无持久化登记 ID 时沿用既有 supplier-model:服务商ID:模型ID 关联键，不将目录调用标识当作模型永久 ID。
-
-| 对象 type | 主要字段 | JSON 可修改字段 |
-| --- | --- | --- |
-| provider | id、name、slug、source_type、website、documentation、logo、description、introduction、contact、contact_info、status | 名称、供给类型及上述资料字段；id、slug、status 只读 |
-| provider_model | id、provider_id、catalogue_model_id、catalogue_model_ids、model_id、canonical_slug、name、model_type、capabilities、registered | 全部只读；新增登记走已有接入／登记流程 |
-| connection | id、provider_id、name、base_url、protocol、interface_type、address_mode、task_urls、timeout_seconds、adapter_options、auth_mode、key_group_id、api_key_id、key_pool、configuration_revision | name、base_url、protocol、interface_type、task_urls；其余只读。协议和接口类型须一致；配置变更遵守原共享影响、候选、验证及依赖规则 |
-| channel | id、provider_id、connection_id、model_id、canonical_slug、name、upstream_model_id、enabled、api_addresses、capacity_limits、capacity_revision、procurement、procurement_history；异常关联包含 association_issue | name、upstream_model_id、capacity_limits、procurement 中的计费项和生效／到期时间；身份、状态、修订及历史只读 |
-| model_service | id、model_id、canonical_slug、model_service_config_id、call_id、provider_id、channel_id、calls_enabled、interface、mappings、routing | 仅 call_id；须满足原停用及下架等条件。模式、状态、映射和路由只读，变更仍走验证和发布流程 |
-| market_model | id、model_id、canonical_slug、name、description、profile | name、description、profile；不回写模型资料库 |
-| market_service | id、model_id、model_service_id、model_service_config_id、canonical_slug、call_id、listing_stage、market_visible、gray_customer_ids | listing_stage、market_visible、gray_customer_ids；沿用上架／下架及灰度校验 |
-| sale_price | id、model_id、model_service_id、model_service_config_id、canonical_slug、call_id、price_version_id、effective_at、expires_at、sales_scope、items | 仅 items；销售范围和时间等当前信息只读，仍在原销售设置流程维护 |
-
-references 中模型的 name、canonical_slug、model_type 用于识别，不能在连接、服务或售价模块修改广场内容。密钥组保留组名称和组内顺序；密钥仅含已有 ID、名称、脱敏值和状态，不含明文、credentialRef、输入值或令牌。认证、轮换及组排序仍在密钥池执行。路由和映射 configuration 是原业务配置结构的只读快照；永久身份引用以明确的外层字段为准。
-
-采购 procurement 包含 price_version_id、revision、effective_at、expires_at、items；价格版本与修订只读，修改通过现有采购发布事务生成新版本。procurement_history、售价 price_version 引用不回写；历史保留原代际模型服务 ID，无法确认归属时为 null，不挂到当前新服务。
-
-价格项包含 name、condition、amount、unit、currency、billing_item_id、unit_id、currency_id、price_item_id。amount 使用货币单位的十进制文本，0 是有效价格，空值表示未配置；字典 ID 必须与名称、单位、币种一致。price_item_id 是当前价格版本内的标识，不是跨版本永久 ID。新增计费项不伪造已有价格项 ID。容量采用现有指标和基础单位：rpm、tpm、concurrency、rpd、tpd、rps、inputTpm、outputTpm、ipm；Token 速率保存基础 Token 数，沿用正整数校验，未配置不补成 0 或无限。
-
-### 校验与保存
-
-- 未知字段、改写只读字段／references、重复对象、错误归属、过期修订及不存在的 ID 整批拒绝；未知 ID 不自动新增。省略行不代表删除。
-- 查看和复制不受 500 行更新上限限制。提交最多 500 条主体行、10 MB，references 不计行数；超限提示缩小服务商或模型范围，不截断、不自动分批保存。空范围原样校验为无变更，不可保存。
-- 原样回导不产生业务变更；编辑立即使旧预览失效，修订变化后重新校验。共享连接变更预览列出受影响连接，生命周期、权限、冲突、原子保存及未保存保护与原页面一致。
-- 新建、移除、启停、密钥操作、路由发布与历史回滚不由通用 JSON 更新隐式执行；价格变更只生成新版本，保留旧版本和请求快照。
-
-### 批量关联
-
-模型服务的“填入连接关联模板”从当前范围导出最新 v2 元数据和只读 references，将 operation 设为 link，rows 使用 model_service_id、channel_id 两个已有稳定 ID。校验模型一致及目标服务归属，服务必须属于当前 target；按二者组合去重。已有映射保持原值，新映射为待验证、已停用，不自动发布路由或上架。
-
-### 来源接入与资料模板
-
-日常新建及批量导入使用现行表单和模板。服务商整包 JSON 供删除前留档，文件中的连接别名只在该文件内有效。现有对象维护使用 `moma.model-operations/v2` 和永久 ID。见[数据契约](MODEL_OPERATIONS_DATA_CONTRACT.md#来源接入与资料模板)。
+日常新建及批量导入使用现行表单和表格模板。见[数据契约](MODEL_OPERATIONS_DATA_CONTRACT.md#来源接入与资料模板)。
 
 ## 计量和历史
 

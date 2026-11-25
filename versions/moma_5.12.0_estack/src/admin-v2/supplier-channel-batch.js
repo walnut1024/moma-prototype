@@ -16,7 +16,7 @@ export function channelBatchInterface(state, provider, row, baseUrl = row.endpoi
 
 export function supplierChannelBatchPlan(state, providerId, associationIds) {
   const provider = state.providers.find(row => row.id === providerId && !row.deletedAt);
-  if (!provider) throw Error('服务商不存在或已移除');
+  if (!provider) throw Error('服务商不存在或已删除');
   if (!Array.isArray(associationIds) || !associationIds.length || associationIds.length > 500 || associationIds.some(id => typeof id !== 'string') || new Set(associationIds).size !== associationIds.length) throw Error('请选择 1–500 条不重复的上游模型');
   const all = supplierChannelAssociations(state, provider);
   const selected = associationIds.map(id => {
@@ -47,7 +47,7 @@ export function channelBatchTasks(state, plan, candidate = false, endpointIds) {
     const tasks = [];
     for (const keyId of keys.length ? keys : [undefined]) for (let i = 0; i < chosen.length; i += 50) {
       const channels = chosen.slice(i, i + 50);
-      let issue = !projected.interfaceType ? '请先配置明确的上游接口类型' : !connectionCredentialsReady(projected, plan.provider) ? '当前连接缺少可用 API 密钥' : '';
+      let issue = !projected.interfaceType ? '请先配置上游接口格式' : !connectionCredentialsReady(projected, plan.provider) ? '当前连接缺少可用 API 密钥' : '';
       try { channels.forEach(row => resolveChannelAssociationModel(state, plan.provider, row)); } catch (error) { issue = error.message; }
       tasks.push({ key: endpoint.id + ':' + (keyId || '') + ':' + i, endpointId: endpoint.id, keyId,
         associationIds: channels.map(row => row.id), issue });
@@ -70,23 +70,19 @@ export function channelBatchRowResult(tasks, results, associationId, activeKey, 
   return { status: '等待中', message: '' };
 }
 
-export function supplierChannelLifecyclePlan(state, providerId, associationIds, action, { modelOnly = false } = {}) {
-  if (!['enable', 'disable'].includes(action)) throw Error('请选择启用或停用连接');
+export function supplierChannelLifecyclePlan(state, providerId, associationIds, action) {
+  if (!['enable', 'disable'].includes(action)) throw Error('请选择启用或停用上游模型');
   const plan = supplierChannelBatchPlan(state, providerId, associationIds);
   const selections = plan.selected.map(association => channelSelectionSnapshot({ provider: plan.provider, modelId: association.modelId, association }));
   const references = providerRemovalPlan(state, { providerId, associationIds });
   const blockers = [...references.blockers];
   if (action === 'enable') for (const connection of plan.connections) {
-    if (modelOnly && !['运行中', '需关注'].includes(connection.endpoint.status)) {
-      blockers.push('请先在连接行启用连接');
-      continue;
-    }
     try { prepareChannelEnableConfirmation(state, providerId, connection.endpoint.id, connection.selected.map(row => row.id)); }
     catch (error) { blockers.push(error.message); }
   }
   const serviceImpact = channelSelectionServiceImpact(state, selections);
-  const shared = plan.connections.flatMap(({ endpoint, rows }) => rows.filter(row => !associationIds.includes(row.id)).map(row => ({ ...row,
-    effect: action === 'enable' && !['运行中', '需关注'].includes(endpoint.status) ? '连接恢复，未选连接保持停用' : '保持原状' })));
-  const signature = JSON.stringify([plan.signature, action, modelOnly, selections, plan.selected.map(row => row.enabled), references.signature, serviceImpact]);
+  const shared = plan.connections.flatMap(({ rows }) => rows.filter(row => !associationIds.includes(row.id)).map(row => ({ ...row,
+    effect: '保持原状' })));
+  const signature = JSON.stringify([plan.signature, action, selections, plan.selected.map(row => row.enabled), references.signature, serviceImpact]);
   return { ...plan, selections, serviceImpact, references, shared, blockers: [...new Set(blockers)], signature };
 }

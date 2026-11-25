@@ -15,7 +15,7 @@ const provider = state => state.providers.find(item => item.id === providerId);
 const channels = state => catalogueChannels(state, provider(state), modelId);
 const service = state => { state.models.find(item=>item.id==='model-1').serviceMode='standard'; return routingServices(state).find(item => item.modelId === 'model-1' && item.mode === 'standard'); };
 const associateChannel=(state,channel)=>{const svc=service(state);return commitAdminState(state,{type:'modelOperations',operation:'associateServiceChannels',modelId:svc.modelId,data:{providerId,catalogueModelId:modelId,channelIds:[channel.id],confirmedIdentity:true,expectedUpdatedAt:svc.model.updatedAt}});};
-const price = [{ name: '输入', listPrice: '1.5', unit: '百万 Token', currency: 'CNY' }, { name: '输出', listPrice: '4', unit: '百万 Token', currency: 'CNY' }];
+const price = [{ name: '输入 Token', listPrice: '1.5', unit: '百万 Token', currency: 'CNY' }, { name: '输出 Token', listPrice: '4', unit: '百万 Token', currency: 'CNY' }];
 const draft = { name: '转售连接', origin: 'resale', upstreamProvider: '已披露服务商', upstreamModelId: 'upstream-v4', protocol: 'OpenAI', baseUrl: 'https://resale.example.invalid/v1/chat/completions', scenarios: price };
 async function prepared() {
   const seed = createAdminSeed();
@@ -40,7 +40,7 @@ const untouched = (before, after) => {
 
 test('batch channel creation commits once, keeps independent prices and preserves existing supply data', () => {
   const state = createAdminSeed(), before = structuredClone(state), original = channels(state);
-  const rows = [draft, { ...draft, name: '第二连接', origin: 'direct', protocol: 'Anthropic', baseUrl: 'https://second.example.invalid/v1/messages', scenarios: [{ name: '输入', listPrice: '0', unit: '百万 Token', currency: 'USD' }] }];
+  const rows = [draft, { ...draft, name: '第二连接', origin: 'direct', protocol: 'Anthropic', baseUrl: 'https://second.example.invalid/v1/messages', scenarios: [{ ...price[0], listPrice: '0', currency: 'USD' }] }];
   const next = addBatch(state, rows), saved = channels(next);
   assert.equal(saved.length, original.length + 2);
   assert.equal(next.revision, state.revision + 1); assert.equal(next.audits.length, state.audits.length + 1);
@@ -60,6 +60,7 @@ test('batch validates later rows against earlier rows without partial persistenc
     [{ ...draft, baseUrl: 'https://second.example.invalid/v1/chat/completions' }, /第 2 行.*名称不可重复/],
     [{ ...draft, name: '第二连接' }, /第 2 行.*调用配置相同/],
     [{ ...draft, name: '第二连接', baseUrl: 'https://second.example.invalid/v1/chat/completions', scenarios: [{ ...price[0], listPrice: '-1' }] }, /第 2 行/],
+    [{ ...draft, name: '第二连接', baseUrl: 'https://second.example.invalid/v1/chat/completions', scenarios: [{ ...price[0], name: '输入' }] }, /第 2 行.*内置字典/],
     [{ ...draft, channelId: channels(state)[0].id }, /第 2 行.*仅支持新的上游模型/],
   ]) { assert.throws(() => addBatch(state, [draft, row]), message); assert.deepEqual(state, before); }
   assert.throws(() => addBatch(state, []), /1–20/);

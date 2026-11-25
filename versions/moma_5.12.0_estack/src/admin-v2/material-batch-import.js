@@ -54,7 +54,7 @@ export function previewMaterialRows(state, kind, rows, { providerId, retry = fal
       if (!providerId) return row.modelId ? result(row, 'skip', '模型资料已存在') : row;
       if (!owner) return result(row, 'error', '当前服务商已移除');
       if (registered.has(row.modelId)) return result(row, 'skip', '已关联');
-      return result(row, 'ready', row.modelId ? '复用已有模型资料并登记' : '新建模型资料并登记', { providerId });
+      return result(row, 'ready', row.modelId ? '复用已有模型资料并添加' : '新建模型资料并添加', { providerId });
     });
   }
   const byCode = uniqueCodes(providers, providerCode);
@@ -77,7 +77,7 @@ export function previewMaterialRows(state, kind, rows, { providerId, retry = fal
         providerTransaction(state, { operation: 'create', data });
         seen.add(data.code);
         names.add(data.name.toLowerCase());
-        return result(row, 'ready', '可新增服务商资料', { data });
+        return result(row, 'ready', '可新建服务商', { data });
       }
       const provider = byCode.get(row.cells[0].toLowerCase()), model = models.get(row.cells[1].toLowerCase());
       if (provider === null || model === null) throw Error('服务商编码或模型编码匹配到多份资料，请先核对模型资料');
@@ -87,7 +87,7 @@ export function previewMaterialRows(state, kind, rows, { providerId, retry = fal
       seen.add(key);
       if (!registered.has(provider.id)) registered.set(provider.id, new Set(registeredSupplierModelIds(state, provider)));
       if (registered.get(provider.id).has(model.id)) return result(row, 'skip', '已关联');
-      return result(row, 'ready', '可登记供应关系', { providerId: provider.id, modelId: model.id });
+      return result(row, 'ready', '可添加供应模型', { providerId: provider.id, modelId: model.id });
     } catch (error) { return result(row, 'error', error.message); }
   });
 }
@@ -122,7 +122,7 @@ export async function submitMaterialRows({ state, kind, providerId, rows, transa
   };
   if (kind === 'provider') {
     for (const group of batches(rows, 5)) {
-      if (await commit(group, 'supplierProfilesImport', { profiles: group.map(row => row.data) })) report(group, 'done', '已新增服务商资料');
+      if (await commit(group, 'supplierProfilesImport', { profiles: group.map(row => row.data) })) report(group, 'done', '已新建服务商');
     }
     return;
   }
@@ -130,7 +130,7 @@ export async function submitMaterialRows({ state, kind, providerId, rows, transa
     for (const group of batches(rows.filter(row => !row.modelId), 5)) {
       if (await commit(group, 'templateImport', { models: group.map(row => row.data) })) {
         for (const row of group) created.add(row.rowNumber);
-        if (!providerId) report(group, 'done', '已新增模型资料');
+        if (!providerId) report(group, 'done', '已新建模型资料');
       }
     }
     if (!providerId) return;
@@ -150,7 +150,7 @@ export async function submitMaterialRows({ state, kind, providerId, rows, transa
     const registered = new Set(registeredSupplierModelIds(current, providers.get(id)));
     report(entries.filter(row => registered.has(row.modelId)), 'skip', '已关联');
     for (const group of batches(entries.filter(row => !registered.has(row.modelId)), SUPPLIER_REGISTRATION_LIMIT)) {
-      if (await commit(group, 'supplierModelsRegister', { providerId: id, libraryIds: group.map(row => row.modelId) })) report(group, 'done', '已登记供应关系');
+      if (await commit(group, 'supplierModelsRegister', { providerId: id, libraryIds: group.map(row => row.modelId) })) report(group, 'done', '已添加供应模型');
     }
   }
 }

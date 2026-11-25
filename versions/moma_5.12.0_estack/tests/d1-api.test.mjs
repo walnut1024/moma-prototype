@@ -426,7 +426,7 @@ test('adding a channel keeps the explicitly selected registered model when histo
   assert.deepEqual(fresh.models, state.models); assert.deepEqual(fresh.modelTemplates, state.modelTemplates);
 });
 
-test('deletion HTTP contract requires service unbinding even after delisting and stopping, then removes channels before the supplier model', async () => {
+test('upstream deletion requires service unbinding and then preserves its connection and supplier registration', async () => {
   async function command(state, operation, data, modelId, session = token) {
     const id = crypto.randomUUID();
     return request('/model-operations/commands', { method: 'POST', session, key: id, body: { operationId: id, expectedRevision: state.revision, action: { type: 'modelOperations', operation, data, ...(modelId ? { modelId } : {}) } } });
@@ -441,7 +441,6 @@ test('deletion HTTP contract requires service unbinding even after delisting and
   result = await providerCommand(state, 'supplierChannelCreate', { name: '可删除连接', protocol: 'OpenAI', baseUrl: 'https://delete-http.example.invalid/v1/chat/completions', authMode: 'inherit', models: [{ libraryId: 'template-glm-5.3', upstreamModelId: 'vendor/delete-http', scenarios: [{ name: '输入 Token', listPrice: '0', unit: '百万 Token', currency: 'CNY' }] }] });
   assert.equal(result.status, 200, JSON.stringify(result.data)); state = await fresh();
   const provider = state.providers.find(row => row.id === providerId), mapping = provider.catalogConnections[0], endpointId = mapping.endpointId, values = { modelId: mapping.modelId, associationId: mapping.id, endpointId, confirmed: true };
-  assert.equal((await providerCommand(state, 'catalogueRemove', { modelId: mapping.modelId, confirmed: true })).status, 422);
   result = await command(state, 'associateServiceProvider', { providerId, expectedUpdatedAt: state.models.find(row => row.id === serviceId).updatedAt }, serviceId);
   assert.equal(result.status, 200, JSON.stringify(result.data)); state = await fresh();
   for (const operation of ['serviceProviderListing', 'serviceProviderServing']) {
@@ -450,7 +449,7 @@ test('deletion HTTP contract requires service unbinding even after delisting and
   }
   const before = state;
   result = await providerCommand(state, 'supplierCatalogueChannelDelete', values);
-  assert.equal(result.status, 422); assert.match(JSON.stringify(result.data), /下架或停服不会解除关联/);
+  assert.equal(result.status, 422); assert.match(JSON.stringify(result.data), /下架或停服后仍保留关联/);
   state = await fresh(); assert.deepEqual(state.endpoints, before.endpoints); assert.deepEqual(state.providers, before.providers);
   assert.equal((await providerCommand(state, 'supplierCatalogueChannelDelete', values, readonlyToken)).status, 403);
   result = await command(state, 'removeServiceProvider', { providerId, confirmed: true, expectedUpdatedAt: state.models.find(row => row.id === serviceId).updatedAt }, serviceId);
@@ -458,13 +457,14 @@ test('deletion HTTP contract requires service unbinding even after delisting and
   assert.equal((await providerCommand(before, 'supplierCatalogueChannelDelete', values)).status, 409);
   assert.equal((await providerCommand(state, 'supplierCatalogueChannelDelete', { ...values, confirmed: false })).status, 422);
   result = await providerCommand(state, 'supplierCatalogueChannelDelete', values); assert.equal(result.status, 200, JSON.stringify(result.data));
-  state = await fresh(); assert.ok(!state.endpoints.some(row => row.id === endpointId));
+  state = await fresh(); assert.ok(state.endpoints.some(row => row.id === endpointId));
   const archived = state.providers.find(row => row.id === providerId).catalogConnections.find(row => row.id === mapping.id);
   assert.ok(archived.deletedAt); assert.deepEqual(archived.pricing, mapping.pricing);
-  const stored = await local.db.prepare('SELECT deleted_at,record_json FROM channels WHERE id=?').bind(endpointId).first(); assert.ok(stored.deleted_at); assert.equal(JSON.parse(stored.record_json).id, endpointId);
+  const stored = await local.db.prepare('SELECT deleted_at,record_json FROM channels WHERE id=?').bind(endpointId).first(); assert.equal(stored.deleted_at,null); assert.equal(JSON.parse(stored.record_json).id, endpointId);
   const templates = structuredClone(state.modelTemplates), prices = structuredClone(state.modelSalePrices);
-  assert(!state.supplyRelations.models.some(row => row.providerId === providerId && row.modelId === mapping.modelId));
-  state = await fresh(); assert.ok(state.providers.find(row => row.id === providerId).removedCatalogModelIds.includes(mapping.modelId));
+  assert(state.supplyRelations.models.some(row => row.providerId === providerId && row.modelId === mapping.modelId));
+  assert(!state.supplyRelations.channels.some(row => row.associationId === mapping.id));
+  state = await fresh(); assert.ok(!state.providers.find(row => row.id === providerId).removedCatalogModelIds?.includes(mapping.modelId));
   assert.deepEqual(state.modelTemplates, templates); assert.deepEqual(state.modelSalePrices, prices);
 });
 
@@ -578,7 +578,7 @@ test('catalogue cleanup HTTP archives directory membership only, persists the ex
   assert.equal((await request('/model-operations')).data.revision,fresh.revision);
 });
 
-test('supplier model removal over HTTP checks canonical aliases and preserves their historical records', async () => {
+test('supplier model removal over HTTP removes canonical aliases and preserves their live upstream records', async () => {
   const {modelChanges}=await import('../server/model-repository.js');
   let state=(await request('/model-operations')).data;
   const fixture=structuredClone(state),providerId='alignment-contract-provider',libraryId='builtin-pp-ocrv6';
@@ -587,23 +587,23 @@ test('supplier model removal over HTTP checks canonical aliases and preserves th
   await local.db.batch(modelChanges(local.db,state,fixture));
   state=(await request('/model-operations')).data;
   async function remove(session=token){const id=crypto.randomUUID();return request('/model-operations/commands',{method:'POST',session,key:id,body:{operationId:id,expectedRevision:state.revision,action:{type:'modelOperations',operation:'provider',data:{operation:'catalogueRemove',objectId:providerId,values:{modelId:'pp-ocrv6',confirmed:true}}}}});}
-  const blocked=await remove();assert.equal(blocked.status,422);assert.match(JSON.stringify(blocked.data),/全部上游模型记录/);
-  assert.deepEqual((await request('/model-operations')).data.providers,state.providers);
-  const closed=structuredClone(state);closed.providers.find(row=>row.id===providerId).catalogConnections[0].deletedAt='2026-11-01';
-  await local.db.batch(modelChanges(local.db,state,closed));
-  state=(await request('/model-operations')).data;
   assert.equal((await remove(readonlyToken)).status,403);
   const saved=await remove();assert.equal(saved.status,200,JSON.stringify(saved.data));
   const next=(await request('/model-operations')).data,owner=next.providers.find(row=>row.id===providerId);
   assert.deepEqual(owner.removedCatalogModelIds,['pp-ocrv6','pp-ocr-alias']);
+  assert(!next.supplyRelations.models.some(row=>row.providerId===providerId));
+  assert.deepEqual(next.supplyRelations.channels,state.supplyRelations.channels);
+  assert.deepEqual(owner.catalogConnections,state.providers.find(row=>row.id===providerId).catalogConnections);
   assert.deepEqual(owner.catalogModels,state.providers.find(row=>row.id===providerId).catalogModels);
   for(const key of ['models','modelTemplates','endpoints','modelSupplies','modelSalePrices','serviceRoutes'])assert.deepEqual(next[key],state[key]);
 });
 
-test('retired connection and acceptance cleanup commands cannot write or create audit receipts', async () => {
+test('retired JSON maintenance and connection cleanup commands cannot write or create audit receipts', async () => {
   const before = (await request('/model-operations')).data;
   const endpoint = before.endpoints.find(row => !row.deletedAt);
   const operations = [
+    ['importModelResources', { file: { schema: 'moma.model-operations/v2', operation: 'update',
+      scope: 'prices', target: { level: 'module' }, revision: before.revision, rows: [], references: {} } }],
     ['archiveAcceptanceFixture', { providerId: endpoint.providerId, confirmed: true }],
     ['channelDirectoryArchive', { mode: 'selected', includeAutomatic: false, confirmed: true,
       targets: [{ providerId: endpoint.providerId, endpointId: endpoint.id, signature: '' }] }],
@@ -733,28 +733,43 @@ test('market card icons and service associations persist and can be removed inde
   };
   let state = (await request('/model-operations')).data;
   const { modelCatalogue } = await import('../src/admin-v2/model-library.js');
-  const [material, otherMaterial] = modelCatalogue(state).filter(row =>
+  const material = modelCatalogue(state).find(row =>
     !state.models.some(model => model.id === row.id || model.templateId === row.id));
-  assert.ok(material && otherMaterial);
+  assert.ok(material);
+  const { marketCardLinkableServices, marketCardServices } = await import('../src/market-cards.mjs');
+  const legacyOffer = marketCardServices(state).find(row => row.sourceId);
+  const unrelatedOffer = marketCardServices(state).find(row => row.sourceId && row.id !== legacyOffer?.id);
+  assert.ok(legacyOffer);
+  assert.ok(unrelatedOffer);
+  const historicalAlias = resourceId('model-service');
+  await local.db.prepare('INSERT INTO new_model_services (id,call_id,revision,record_json,created_at,imported) VALUES (?,?,1,?,?,0)')
+    .bind(historicalAlias, legacyOffer.callId, JSON.stringify({
+      id: historicalAlias, name: legacyOffer.serviceName, callId: legacyOffer.callId, type: 'text',
+      listed: legacyOffer.started, channels: [], controlledOfferId: legacyOffer.id,
+    }), Date.now()).run();
   const serviceCommand = (action, id, revision, row) => {
     const operationId = resourceId('operation');
     return request('/model-services-new', { method: 'POST', key: operationId,
       body: { action, id, revision, row, operationId } });
   };
-  const addService = async (modelId, callId) => {
+  const addService = async callId => {
     const id = resourceId('model-service');
     const result = await serviceCommand('save', id, 0, {
-      id, modelId, name: callId, callId, type: 'text', listed: false, channels: [],
+      id, name: callId, callId, type: 'text', listed: false, channels: [],
     });
     assert.equal(result.status, 200, JSON.stringify(result.data));
     return id;
   };
-  const first = await addService(material.id, 'market-link-qa-1');
-  const second = await addService(material.id, 'market-link-qa-2');
-  const foreign = await addService(otherMaterial.id, 'market-link-qa-other');
+  const first = await addService('market-link-qa-1');
+  const second = await addService('market-link-qa-2');
   const refresh = async () => { state = (await request('/model-operations')).data; };
   await refresh();
-  assert.ok(state.marketModelServices.some(service => service.id === first));
+  const candidate = state.marketModelServices.find(service => service.id === first);
+  assert.deepEqual(candidate, { id: first, name: 'market-link-qa-1', callId: 'market-link-qa-1',
+    type: 'text', listed: 0, channelIds: [], saleStage: 'unlisted', controlledOfferId: null });
+  const picker = marketCardLinkableServices(marketCardServices(state), []);
+  assert.deepEqual(new Set(picker.map(row => row.id)), new Set([first, second, legacyOffer.id]));
+  assert.deepEqual(picker.filter(row => row.callId === legacyOffer.callId).map(row => row.id), [legacyOffer.id]);
   const submit = (operation, data, session = token) => {
     const operationId = crypto.randomUUID();
     return request('/model-operations/commands', { method: 'POST', key: operationId, session, body: {
@@ -771,29 +786,45 @@ test('market card icons and service associations persist and can be removed inde
   await refresh();
   const cardId = state.audits[0].objectId;
   const link = serviceIds => submit('marketCardLink', { card_id: cardId, serviceIds });
-  assert.equal((await link([first, foreign])).status, 422);
+  assert.equal((await link([first, resourceId('model-service')])).status, 422);
+  assert.equal((await link([unrelatedOffer.id])).status, 422);
   assert.equal((await link([first, first])).status, 422);
+  assert.equal((await link([historicalAlias])).status, 422);
+  assert.equal((await link([legacyOffer.id])).status, 200);
+  await refresh();
+  assert.deepEqual(state.modelData.marketCards[cardId].linked, [legacyOffer.id]);
+  const storedMeta = JSON.parse(await local.db.prepare('SELECT meta_json FROM model_workspace WHERE id=1').first('meta_json'));
+  storedMeta.modelData.marketCards[cardId].linked = [historicalAlias];
+  await local.db.prepare('UPDATE model_workspace SET meta_json=? WHERE id=1').bind(JSON.stringify(storedMeta)).run();
+  await refresh();
+  assert.equal(marketCardServices(state).find(row => row.id === historicalAlias)?.controlledOfferId, legacyOffer.id);
+  assert.equal((await link([historicalAlias, legacyOffer.id])).status, 422);
+  assert.equal((await link([historicalAlias, first])).status, 200);
+  await refresh();
   const linked = await link([first, second]);
   assert.equal(linked.status, 200, JSON.stringify(linked.data));
   await refresh();
   const card = () => state.modelData.marketCards[cardId];
-  assert.equal(card().model_id, material.id);
+  assert.equal(card().model_id, undefined);
   assert.deepEqual(card().linked, [first, second]);
   assert.equal(card().status, 'draft');
   assert.equal(card().content.profile.logo, logo);
-  const edit = { ...content, card_id: cardId, source_model_id: otherMaterial.id, context_length: 1572864,
+  const edit = { ...content, card_id: cardId, source_model_id: material.id, context_length: 1572864,
     description_en: 'Updated after importing reference data' };
   assert.equal((await submit('marketCardEdit', { ...edit, source_model_id: 'missing-material' })).status, 422);
   assert.equal((await submit('marketCardEdit', edit)).status, 200);
   await refresh();
-  assert.equal(card().model_id, material.id);
+  assert.equal(card().model_id, undefined);
+  assert.equal(card().content.canonical_slug, material.modelId);
   assert.deepEqual(card().linked,[first,second]);
   assert.equal(card().content.description_en, edit.description_en);
   assert.equal(card().content.capabilities.context, 1572864);
   assert.equal(card().content.profile.logo, logo);
-  assert.equal((await submit('marketCardEdit', { ...edit, logo: '' })).status, 200);
+  const { source_model_id: _sourceModelId, ...editWithoutImport } = edit;
+  assert.equal((await submit('marketCardEdit', { ...editWithoutImport, logo: '' })).status, 200);
   await refresh();
   assert.equal(card().content.profile.logo, undefined);
+  assert.equal(card().content.canonical_slug, material.modelId);
   assert.deepEqual(card().linked, [first, second]);
   assert.equal((await submit('marketCardSetStatus', { card_id: cardId, listing_stage: 'formal', serviceIds: [first] })).status, 422);
   const inspect = async id => (await request('/model-services-new?inspect=' + id)).data;
@@ -840,6 +871,24 @@ test('market card icons and service associations persist and can be removed inde
   await refresh();
   assert.deepEqual(state.modelData.marketCards[newCardId].linked, [second]);
   assert.equal((await inspect(second)).marketLinked, true);
+  const { registeredServiceUpstreams } = await import('../src/admin-v2/service-model-mappings.js');
+  const { channelFingerprint } = await import('../src/admin-v2/provider-channels.js');
+  const source = registeredServiceUpstreams(state).find(row => !row.reason);
+  assert.ok(source);
+  const service = (await request('/model-services-new')).data.rows.find(row => row.id === second);
+  const started = await serviceCommand('save', second, service.revision, { ...service, listed: true, channels: [{
+    id: resourceId('service-channel'), channelId: source.id, fingerprint: channelFingerprint(source),
+    enabled: true, priority: 0, weight: 100,
+  }] });
+  assert.equal(started.status, 200, JSON.stringify(started.data));
+  await refresh();
+  assert.deepEqual(state.marketModelServices.find(row => row.id === second)?.channelIds, [source.id]);
+  const display = await submit('marketCardSetStatus', { card_id: newCardId, listing_stage: 'formal', serviceIds: [second] });
+  assert.equal(display.status, 200, JSON.stringify(display.data));
+  assert.equal((await inspect(second)).marketListed, true);
+  const stop = await serviceCommand('save', second, started.data.row.revision, { ...started.data.row, listed: false });
+  assert.equal(stop.status, 400);
+  assert.match(stop.data.error.message, /取消展示/);
 });
 
 test('the simulation API rejects credential revocation without changing the mock or business state', async () => {

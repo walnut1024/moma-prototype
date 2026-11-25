@@ -19,13 +19,10 @@ export function deploymentLicense(env = {}, now = Date.now()) {
 
 export function commercialModelWrite(action) {
   if (!action) return false;
-  const { operation, data } = action;
+  const { operation } = action;
   if (['startSales', 'stopSales', 'pauseSales', 'salesSettings', 'publish', 'unlist', 'guidedPublish', 'publishSupplierBatch', 'publishRegisteredSupplierBatch', 'publishSupply', 'unpublishSupply', 'guidedPricingSave', 'unifiedPrice', 'reprice', 'priceDraft', 'pricePublish', 'listSupply', 'unlistSupply'].includes(operation)) return true;
   if (['commercialDraft', 'commercialPublish', 'commercialDiscard'].includes(operation)) return true;
   if (operation === 'completeOnboarding') return true;
-  if (operation === 'importModelResources') {
-    return ['prices', 'market'].includes(data?.target?.scope || data?.file?.scope);
-  }
   return false;
 }
 

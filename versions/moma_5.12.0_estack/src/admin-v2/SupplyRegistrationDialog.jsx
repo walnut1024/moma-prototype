@@ -22,9 +22,9 @@ export default function SupplyRegistrationDialog({ state, ops, provider, model, 
     try { if (await ops.run('supplierModelsRegister', { providerId, libraryIds })) close(); }
     finally { setSaving(false); }
   };
-  return <AdminModal visible centered title={model ? '关联服务商' : '登记供应模型'} width="min(660px, calc(100vw - 32px))" onCancel={() => !saving && close()}
+  return <AdminModal visible centered title={model ? '添加供应服务商' : '添加供应模型'} width="min(660px, calc(100vw - 32px))" onCancel={() => !saving && close()}
     footer={<><Button onClick={close} disabled={saving}>{translateLabel("取消")}</Button><Button theme="solid" loading={saving}
-      disabled={!ops.can || saving || !current || !libraryIds.length || exists} onClick={submit}>确认登记</Button></>}>
+      disabled={!ops.can || saving || !current || !libraryIds.length || exists} onClick={submit}>添加</Button></>}>
     {model ? <>
       <Typography.Paragraph>{model.name}</Typography.Paragraph>
       <Field label="服务商" required>

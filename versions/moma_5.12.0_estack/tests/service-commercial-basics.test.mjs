@@ -13,10 +13,16 @@ test('retail dictionaries require enabled selections, preserve saved snapshots a
   assert.equal(retailItems(state,[row])[0].amount,0);
   assert.throws(()=>retailItems(state,[{...row,amount:''}]),/必填/);
   for(const patch of [{name:'临时输入'},{unit:'临时单位'},{currency:'EUR'}]) assert.throws(()=>retailItems(state,[{...row,...patch}]),/字典/);
-  const legacy={...row,name:'手工计量',unit:'手工单位',amount:1200000};
+  assert.throws(()=>retailItems(state,[{...row,unit:'分钟'}]),/不适用于/);
+  assert.equal(retailItems(state,[{...row,name:'音频输入时长',unit:'秒'}])[0].unit,'秒');
+  assert.throws(()=>retailItems(state,[{...row,name:'音频输入时长（按秒）',unit:'分钟'}]),/不适用于/);
+  const legacy={...row,name:'手工计量',unit:'手工单位',amount:1200000,billing_item_id:'old-item',unit_id:'old-unit'};
   const before=structuredClone(state);
-  assert.equal(retailItems(state,[{...legacy,amount:'1.3'}],[legacy])[0].amount,1300000);
-  assert.throws(()=>retailItems(state,[{...legacy,amount:'1.3'}]),/字典/);
+  const revised = retailItems(state,[{...legacy,amount:'1.3'}],[legacy])[0];
+  assert.equal(revised.amount,1300000);
+  assert.equal(revised.billing_item_id,legacy.billing_item_id);
+  assert.equal(revised.unit_id,legacy.unit_id);
+  assert.throws(()=>retailItems(state,[{...row,name:legacy.name,unit:legacy.unit,amount:'1.3'}]),/字典/);
   assert.deepEqual(state,before);
 });
 test('scope explicitly selects active clients and never silently expands invalid or empty selections',()=>{
@@ -48,6 +54,12 @@ test('D1 commercial commands reject incomplete and stale writes, reject removed 
     const command=async(kind,value,base)=>{const id=crypto.randomUUID(),body={operationId:id,expectedRevision:state.revision,action:{type:'modelOperations',operation:'commercialPublish',modelId,data:{kind,providerId:kind==='price'?providerId:'',value,expectedBase:base??commercialPriceBase(state,model(),providerId),confirmed:true}}};const result=await api('/model-operations/commands',body,id);await reload();return {result,id,body};};
     const price=activeProviderPrice(state,modelId,providerId),value={callId:model().serviceProviders.find(row=>row.providerId===providerId).callId,items:price.items.map(row=>({...row,condition:row.condition || '',amount:String(row.amount/1000000)}))};
     const invalid=structuredClone(value);invalid.items[0].amount='';assert.equal((await command('price',invalid)).result.status,422);assert.deepEqual(state.modelSalePrices,before.modelSalePrices);
+    const wrongUnit = structuredClone(value);
+    wrongUnit.items[0] = { ...wrongUnit.items[0], unit: '分钟', unit_id: undefined };
+    const rejected = (await command('price', wrongUnit)).result;
+    assert.equal(rejected.status, 422);
+    assert.match(rejected.data.error.message, /不适用于/);
+    assert.deepEqual(state.modelSalePrices,before.modelSalePrices);
     value.items[0].amount='0';const saved=await command('price',value);assert.equal(saved.result.status,200,JSON.stringify(saved.result.data));assert.equal((await api('/model-operations/commands',saved.body,saved.id)).status,200);await reload();assert.equal(activeProviderPrice(state,modelId,providerId).items[0].amount,0);
     const beforeRemovedCommand=structuredClone(state);
     const removed=await command('scope',{openScope:'selected',tenantIds:['tenant-gov']});
