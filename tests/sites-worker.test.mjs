@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 import worker from "../worker/index.js";
 
@@ -26,6 +26,21 @@ test('routes API v1 to the backend and never serves its failures as HTML', async
   const unknown = await worker.fetch(new Request('https://example.test/api/v1/unknown', { headers: { accept: 'text/html' } }), env);
   assert.equal(unknown.status, 404);
   assert.equal((await unknown.json()).error.code, 'NOT_FOUND');
+});
+
+test('answers the retired supplier-template URL with 410 without looking up static assets', async () => {
+  const url = 'https://example.test/moma_5.12.0_estack/templates/supplier-offers.xlsx';
+  const env = { ASSETS: { fetch: () => { throw Error('Retired template must not read assets'); } } };
+  for (const request of [
+    new Request(url),
+    new Request(url, { method: 'HEAD' }),
+    new Request(url + '?download=1', { headers: { Range: 'bytes=0-1023' } }),
+  ]) {
+    const response = await worker.fetch(request, env);
+    assert.equal(response.status, 410);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.equal(await response.text(), '');
+  }
 });
 
 test("falls back to index.html for an unknown app route", async () => {
@@ -87,4 +102,17 @@ test("emits the files required by Sites packaging", async () => {
   await access(new URL("../dist/client/index.html", import.meta.url));
   await access(new URL("../dist/server/index.js", import.meta.url));
   await access(new URL("../dist/.openai/hosting.json", import.meta.url));
+});
+
+test('routes only the retired template to the Worker and ships the shared model-material workbook', async () => {
+  const routes = JSON.parse(await readFile(new URL('../dist/client/_routes.json', import.meta.url), 'utf8'));
+  assert.deepEqual(routes, {
+    version: 1,
+    include: ['/api/v1', '/api/v1/*', '/moma_5.12.0_estack/templates/supplier-offers.xlsx'],
+    exclude: [],
+  });
+  const assets = new URL('../dist/client/moma_5.12.0_estack/templates/', import.meta.url);
+  await assert.rejects(access(new URL('supplier-offers.xlsx', assets)), { code: 'ENOENT' });
+  const workbook = await readFile(new URL('model-material-import.xlsx', assets));
+  assert.deepEqual(workbook.subarray(0, 4), Buffer.from([80, 75, 3, 4]));
 });

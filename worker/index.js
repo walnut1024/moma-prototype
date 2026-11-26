@@ -4,6 +4,9 @@ import { handleModelOperations } from '../versions/moma_5.12.0_estack/server/api
 export default {
   async fetch(request, env) {
     const pathname = new URL(request.url).pathname;
+    if (pathname === '/moma_5.12.0_estack/templates/supplier-offers.xlsx') {
+      return new Response(null, { status: 410, headers: { 'Cache-Control': 'no-store' } });
+    }
     if (isApiPath(pathname)) return handleModelOperations(request, env);
     const response = await env.ASSETS.fetch(request);
     const acceptsHtml = request.headers.get("accept")?.includes("text/html");

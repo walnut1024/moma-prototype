@@ -31,7 +31,11 @@ await build({ entryPoints: [worker], outfile: path.join(dist, 'server', 'index.j
   define: { 'import.meta.env': JSON.stringify({ VITE_MOMA_PRIVATE_SITE: process.env.VITE_MOMA_PRIVATE_SITE }) },
   bundle: true, minify: true, format: 'esm', platform: 'browser', target: 'es2022' });
 copyFileSync(path.join(dist, 'server', 'index.js'), path.join(client, '_worker.js'));
-writeFileSync(path.join(client,'_routes.json'),JSON.stringify({version:1,include:[API_PREFIX,API_PREFIX+'/*'],exclude:[]}));
+writeFileSync(path.join(client, '_routes.json'), JSON.stringify({
+  version: 1,
+  include: [API_PREFIX, API_PREFIX + '/*', '/moma_5.12.0_estack/templates/supplier-offers.xlsx'],
+  exclude: [],
+}));
 copyFileSync(hosting, path.join(dist, ".openai", "hosting.json"));
 
 console.log("Prepared Sites build: dist/client, dist/server/index.js and dist/.openai/hosting.json");
