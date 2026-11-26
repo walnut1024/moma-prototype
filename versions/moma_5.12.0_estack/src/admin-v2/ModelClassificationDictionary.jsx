@@ -4,8 +4,7 @@ import { Button, Input, Select, TextArea, Typography } from '@douyinfe/semi-ui';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { AdminModal as Modal } from './AdminOverlay';
 import Table from './AdminTable';
-import { modelLibrary } from './model-library';
-import { CLASSIFICATION_KINDS, classificationIndex, modelClassification, modelClassificationFor } from './model-classification';
+import { CLASSIFICATION_KINDS, classificationIndex, modelClassification } from './model-classification';
 
 export default function ModelClassificationDictionary({ kind, state, ops }) {
   const translateLabel = useChannelText();
@@ -14,12 +13,6 @@ export default function ModelClassificationDictionary({ kind, state, ops }) {
   const dictionary = modelClassification(state);
   const index = classificationIndex(dictionary);
   const series = kind === 'series', label = CLASSIFICATION_KINDS[kind];
-  const counts = new Map();
-  for (const model of modelLibrary(state)) {
-    const classified = modelClassificationFor(index, model);
-    const id = (series ? classified.series : classified.author)?.id;
-    if (id) counts.set(id, (counts.get(id) || 0) + 1);
-  }
   const edit = row => {
     ops.setError('');
     setDraft(row ? { ...row, aliases: row.aliases.join('\n') } : { name: '', aliases: '' });
@@ -56,13 +49,10 @@ export default function ModelClassificationDictionary({ kind, state, ops }) {
     </div>
     <Table rowKey="id" dataSource={rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)}
       pagination={{ pageSize, currentPage, total: rows.length, onPageChange: setPage }}
-      scroll={{ x: series ? 'max(100%, 800px)' : 'max(100%, 640px)' }}
       empty={keyword ? `没有符合条件的${label}` : `暂无${label}`} columns={[
-      { title: series ? '系列名称' : '作者名称', dataIndex: 'name', width: 170 },
+      { title: series ? '系列名称' : '作者名称', dataIndex: 'name' },
       ...(series ? [{ title: '所属作者', width: 160, render: (_, row) => index.authors.get(row.authorId)?.name || '—' }] : []),
-      { title: '别名', width: 270, render: (_, row) => [...new Set([...row.aliases, ...(row.formerNames || [])])].join('、') || '—' },
-      { title: '关联模型数', width: 110, align: 'right', render: (_, row) => counts.get(row.id) || 0 },
-      { title: '操作', width: 90, fixed: 'right', render: (_, row) => <Button theme="borderless" disabled={!ops.can || busy} onClick={() => edit(row)}>{translateLabel("编辑")}</Button> },
+      { title: '操作', width: 90, render: (_, row) => <Button theme="borderless" disabled={!ops.can || busy} onClick={() => edit(row)}>{translateLabel("编辑")}</Button> },
     ]}/>
     {draft && <Modal visible className="semi-materials" title={(draft.id ? '编辑' : '新建') + label}
       onCancel={() => ops.proceed(close)} onOk={() => save({ ...draft, aliases: draft.aliases.split(/\n/u).map(value => value.trim()).filter(Boolean) })}
