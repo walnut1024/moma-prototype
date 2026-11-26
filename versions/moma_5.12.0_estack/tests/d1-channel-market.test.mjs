@@ -1004,8 +1004,13 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     }
     const stopped = await updateLifecycle('save',1,{...lifecycleRow,listed:false},sale);
     assert.equal(stopped.status,200,JSON.stringify(stopped.data));
-    assert.equal((await inspectLifecycle()).deleteIssue,'请先解除模型广场关联');
-    assert.equal((await updateLifecycle('delete',2)).status,400);
+    const saleDeleteIssue='该模型服务已配置模型售卖，不能删除';
+    const stoppedInspection=await inspectLifecycle();
+    assert.equal(stoppedInspection.marketLinked,true);
+    assert.equal(stoppedInspection.deleteIssue,saleDeleteIssue);
+    const blockedDelete=await updateLifecycle('delete',2);
+    assert.equal(blockedDelete.status,400);
+    assert.equal(blockedDelete.data.error.message,saleDeleteIssue);
     await reload();
     assert.deepEqual(state.stoppedModelOfferIds,[third.id]);
     assert.equal(salesStatus(model(),keys[2]),'已停售');
@@ -1034,13 +1039,24 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert((await workspace(customer)).projectServices.some(row=>row.id===third.id));
     assert.equal((await updateLifecycle('save',3,{...reenabled.data.row,listed:false})).status,200);
     await setTestCard({...testCard,status:'withdrawn',linked:[],shown:[]});
-    assert.equal((await inspectLifecycle()).deleteIssue,'该模型服务仍有有效订单');
+    assert.equal((await inspectLifecycle()).deleteIssue,saleDeleteIssue);
     assert.equal((await updateLifecycle('delete',4)).status,400);
     const retainedOrders=(await application()).orders.filter(row=>row.serviceId===third.id && row.status==='生效中');
     assert(retainedOrders.length);
     for (const order of retainedOrders) assert.equal((await apply({type:'cancelMarketOrder',id:order.id})).status,200);
-    assert.equal((await inspectLifecycle()).deleteIssue,'');
-    assert.equal((await updateLifecycle('delete',4)).status,200);
+    assert.equal((await inspectLifecycle()).deleteIssue,saleDeleteIssue);
+    assert.equal((await updateLifecycle('delete',4)).data.error.message,saleDeleteIssue);
+    const retire=await local.db.prepare('SELECT retired_at,active_sale_price_id FROM offers WHERE record_id=?').bind(third.id).first();
+    assert.ok(retire.active_sale_price_id);
+    assert.equal(retire.retired_at,null);
+    await local.db.prepare('UPDATE offers SET retired_at=? WHERE record_id=?').bind(Date.now(),third.id).run();
+    try {
+      assert.equal((await inspectLifecycle()).deleteIssue,'');
+      assert.equal((await updateLifecycle('delete',4)).status,200);
+      assert.equal(await local.db.prepare('SELECT active_sale_price_id FROM offers WHERE record_id=?').bind(third.id).first('active_sale_price_id'),retire.active_sale_price_id);
+    } finally {
+      await local.db.prepare('UPDATE offers SET retired_at=? WHERE record_id=?').bind(retire.retired_at,third.id).run();
+    }
     await reload();
     assert.deepEqual(state.stoppedModelOfferIds,[third.id]);
     await local.db.batch([

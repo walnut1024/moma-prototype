@@ -77,11 +77,9 @@ test('independent services retain separate sale, order, price and call identitie
     return request('/model-service-sales',{cookie:admin,key:operationId,body:{serviceId:service.id,action,revision,operationId,...fields}});
   };
   async function openSale(service, amount) {
-    ok(await saleCommand(service,'create',0));
-    assert.equal((await saleCommand(service,'create',0)).status,409);
     const items = ['输入 Token','输出 Token'].map(name=>({name,condition:'',unit:'百万 Token',currency:'CNY',amount}));
-    ok(await saleCommand(service,'price',1,{items}));
-    ok(await saleCommand(service,'start',2,{stage:'formal',grayTenantIds:[]}));
+    ok(await saleCommand(service,'price',0,{items}));
+    ok(await saleCommand(service,'start',1,{stage:'formal',grayTenantIds:[]}));
   }
   await openSale(a,'2');
   await openSale(b,'9');
@@ -172,10 +170,10 @@ test('independent services retain separate sale, order, price and call identitie
   ok(await invokeAPI(b.callId));
   await setLimit(null);
 
-  ok(await saleCommand(a,'pause',3));
+  ok(await saleCommand(a,'pause',2));
   ok(await invokeWeb(a.callId));
   ok(await invokeAPI(a.callId));
-  ok(await saleCommand(a,'start',4,{stage:'formal',grayTenantIds:[]}));
+  ok(await saleCommand(a,'start',3,{stage:'formal',grayTenantIds:[]}));
   const inspect = () => request('/model-services-new?inspect='+a.id,{cookie:admin}).then(ok);
   const stop = async () => serviceCommand({...a,listed:false},a.revision,(await inspect()).sale);
   assert.equal((await stop()).status,400);

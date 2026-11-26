@@ -185,8 +185,6 @@ const englishText = new Map(Object.entries({
   '开售': 'Start Sales',
   '灰度开售': 'Start Limited Sale',
   '停售': 'Stop Sales',
-  '添加并配置': 'Add and Configure',
-  '添加模型售卖': 'Add Model Sale',
   '新建模型服务': 'Create Model Service',
   '查看全部': 'View All',
   '服务商与上游模型': 'Providers and Provider Models',

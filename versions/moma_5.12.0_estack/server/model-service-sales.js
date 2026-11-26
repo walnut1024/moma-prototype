@@ -18,12 +18,14 @@ const canonical = value => value && typeof value === 'object' && !Array.isArray(
   ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]))
   : Array.isArray(value) ? value.map(canonical) : value;
 
-const legacySalesOwner = `(COALESCE(json_extract(s.record_json,'$.controlledOfferId'),'') <> ''
-    OR EXISTS (SELECT 1 FROM offers WHERE id=s.call_id OR record_id=s.id))`;
+export const legacyModelServiceOfferId = `COALESCE(NULLIF(json_extract(s.record_json,'$.controlledOfferId'),''),
+    (SELECT record_id FROM offers WHERE record_id=s.id),
+    (SELECT record_id FROM offers WHERE id=s.call_id ORDER BY retired_at IS NOT NULL,record_id LIMIT 1))`;
 const serviceSaleColumns = `s.record_json AS service_json, s.id AS service_id,
-  p.record_json, p.revision, ${legacySalesOwner} AS legacy_owner`;
+  p.record_json, p.revision, ${legacyModelServiceOfferId} AS legacy_offer_id`;
 const serviceProjection = ({ id, name, callId, type, listed }) => ({ id, name, callId, type, listed });
 const savedSale = row => row?.record_json ? { ...JSON.parse(row.record_json), revision: row.revision } : null;
+const unlistedSale = serviceId => ({ id: serviceId, serviceId, stage: 'unlisted', grayTenantIds: [], prices: [] });
 
 function usablePrices(price, service, label, at) {
   try { return platformPriceVersions(price, service, label, at); } catch { return null; }
@@ -96,21 +98,24 @@ export async function readModelServiceSales(db, actor) {
   const { results } = await db.prepare(`SELECT ${serviceSaleColumns}
     FROM new_model_services s LEFT JOIN model_service_sales p ON p.service_id=s.id
     WHERE s.deleted_at IS NULL ORDER BY s.created_at DESC,s.id`).all();
-  const rows = [], candidates = [];
-  const hasSales = results.some(row => row.record_json);
-  const workspace = hasSales ? await loadModelWorkspace(db, actor, { command: true, simulation: false }) : null;
-  const upstreams = hasSales ? new Map(registeredServiceUpstreams(workspace).map(row => [row.id, row])) : null;
+  if (!results.length) return { rows: [] };
+  const workspace = await loadModelWorkspace(db, actor, { command: true, simulation: false });
+  const upstreams = new Map(registeredServiceUpstreams(workspace).map(row => [row.id, row]));
   const at = Date.now();
-  for (const row of results) {
-    const service = JSON.parse(row.service_json), sale = savedSale(row);
-    if (sale) rows.push({ ...sale, service: serviceProjection(service), checks: saleChecks(workspace, service, sale, at, upstreams) });
-    else if (!row.legacy_owner) candidates.push(serviceProjection(service));
-  }
-  return { rows, candidates };
+  const rows = results.map(row => {
+    const service = JSON.parse(row.service_json);
+    const sale = savedSale(row) || { ...unlistedSale(row.service_id), revision: 0 };
+    const legacy = sale.revision === 0 && row.legacy_offer_id;
+    return { ...sale, service: serviceProjection(service),
+      ...(legacy && { legacyOfferId: legacy }),
+      checks: legacy ? [] : saleChecks(workspace, service, sale, at, upstreams),
+    };
+  });
+  return { rows };
 }
 
-const labels = { create: '添加模型售卖', price: '发布模型刊例价', start: '开售', pause: '停售', scope: '修改灰度租户' };
-const actionFields = { create: [], price: ['items'], start: ['stage', 'grayTenantIds'], pause: [], scope: ['grayTenantIds'] };
+const labels = { price: '发布模型刊例价', start: '开售', pause: '停售', scope: '修改灰度租户' };
+const actionFields = { price: ['items'], start: ['stage', 'grayTenantIds'], pause: [], scope: ['grayTenantIds'] };
 const saleCommandFields = ['action', 'serviceId', 'revision', 'operationId'];
 
 function selectedTenants(workspace, ids) {
@@ -121,14 +126,16 @@ function selectedTenants(workspace, ids) {
 
 export async function changeModelServiceSale(db, actor, body, key) {
   const { action, serviceId, revision, operationId } = body;
-  if (!Object.hasOwn(actionFields, action) || !isResourceId(serviceId, 'model-service')
+  if (typeof action !== 'string' || !Object.hasOwn(actionFields, action) || !isResourceId(serviceId, 'model-service')
     || !Number.isSafeInteger(revision) || revision < 0 || revision >= Number.MAX_SAFE_INTEGER
     || !isResourceId(operationId, 'operation') || key !== operationId
     || Object.keys(body).some(field => !saleCommandFields.includes(field) && !actionFields[action].includes(field))) invalid('模型售卖操作内容无效');
 
   const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',
     new TextEncoder().encode(JSON.stringify(canonical(body))))), byte => byte.toString(16).padStart(2, '0')).join('');
-  const replay = await receipt(db, actor, key, hash, operationId);
+  const committed = () => receipt(db, actor, key, hash, operationId);
+  const conflictOrReplay = async () => (await committed()) || conflict();
+  const replay = await committed();
   if (replay) return replay;
 
   const [state, services] = await db.batch([
@@ -138,28 +145,31 @@ export async function changeModelServiceSale(db, actor, body, key) {
   ]);
   const row = services.results[0], before = savedSale(row), commitSeq = state.results[0].commit_seq;
   if (!row) fail(404, 'NOT_FOUND', '未找到模型服务');
-  if (action === 'create' && (before || row.legacy_owner)) fail(409, 'SALE_EXISTS', '该模型服务已有售卖记录');
-  if (action !== 'create' && !before) fail(404, 'NOT_FOUND', '未找到模型售卖');
-  if ((before?.revision || 0) !== revision) conflict();
+  if (!before && row.legacy_offer_id) fail(409, 'SALE_EXISTS', '该模型服务已有售卖记录，请维护现有售卖配置');
+  if ((before?.revision ?? 0) !== revision) return conflictOrReplay();
+  if (!before && action !== 'price') {
+    if (action === 'start') fail(409, 'SALE_NOT_READY', '请先发布模型刊例价');
+    fail(404, 'NOT_FOUND', '未找到模型售卖');
+  }
 
   const service = JSON.parse(row.service_json), at = Date.now(), time = new Date(at).toISOString();
   const next = before
     ? { ...before, revision: revision + 1, updatedAt: time }
-    : { id: serviceId, serviceId, revision: 1, stage: 'unlisted', grayTenantIds: [], prices: [], createdAt: time, updatedAt: time };
+    : { ...unlistedSale(serviceId), revision: 1, createdAt: time, updatedAt: time };
   const workspace = ['price', 'start', 'scope'].includes(action)
     ? await loadModelWorkspace(db, actor, { command: true, simulation: false }) : { commitSeq };
-  if (workspace.commitSeq !== commitSeq) conflict();
+  if (workspace.commitSeq !== commitSeq) return conflictOrReplay();
   if (action === 'price') {
     try {
       const current = activeModelServiceSalePrice(before, at);
       const items = retailItems(workspace, body.items, current?.items);
-      const price = { id: resourceId('sale-price'), version: (before.prices.at(-1)?.version || 0) + 1, effectiveAt: time, items };
+      const price = { id: resourceId('sale-price'), version: (next.prices.at(-1)?.version || 0) + 1, effectiveAt: time, items };
       if (modelServiceSaleActive(before)) {
         const sold = platformPriceVersions(price, service, '模型刊例价', at);
         const supply = modelServiceSupply(workspace, service, at);
         if (supply.some(route => !matchingModelServicePrices(route.costPrices, sold))) throw Error('请与可用上游的成本价使用相同计量字段和币种');
       }
-      next.prices = [...before.prices, price];
+      next.prices = [...next.prices, price];
     } catch (error) { invalid(error.message); }
   }
   if (action === 'start') {

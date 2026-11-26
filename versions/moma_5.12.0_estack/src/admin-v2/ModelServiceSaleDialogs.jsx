@@ -54,7 +54,7 @@ function SaleQuote({ state, row, ops, change, busy }) {
     </Notice>}
     <RetailPriceFields state={state} rows={editing ? draft : modelPriceRows(row.price)} readOnly={!editing}
       onEdit={() => ops.go({ edit:'1' }, { preserveScroll: true })} ops={{ ...ops, can: ops.can && !busy }} prefix="模型刊例价"
-      setRows={items => { setDraft(items); setPreview(null); ops.dirty(true); ops.setError(''); }}/>
+      setRows={update => { setDraft(update); setPreview(null); ops.dirty(true); ops.setError(''); }}/>
     {editing && preview && <Notice>
       <Typography.Title heading={5}>模型刊例价变更预览</Typography.Title>
       <Typography.Paragraph>当前模型刊例价{row.price ? ' v' + row.price.version : '未配置'}</Typography.Paragraph>

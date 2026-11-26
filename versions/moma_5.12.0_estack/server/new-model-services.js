@@ -7,6 +7,7 @@ import { commitAdminState } from '../src/admin-v2/state-transaction.js';
 import { domainModel } from '../src/mock/model-fields.js';
 import { offerKey, salesPaused } from '../src/service-access.mjs';
 import { loadModelWorkspace, modelChanges } from './model-repository.js';
+import { legacyModelServiceOfferId } from './model-service-sales.js';
 import { marketCardsByModel, marketCardsForService } from '../src/market-cards.mjs';
 
 const types = { ...MODEL_TYPES, ...SERVICE_MODEL_TYPES };
@@ -82,8 +83,13 @@ async function lifecycleCheck(db, row) {
     db.prepare(`SELECT EXISTS (SELECT 1 FROM model_service_orders WHERE service_id=? AND cancelled_at IS NULL)
         OR EXISTS (SELECT 1 FROM market_orders WHERE offer_id=? AND cancelled_at IS NULL) AS ordered,
       EXISTS (SELECT 1 FROM token_package_records p, json_each(p.record_json,'$.modelIds') model
-        WHERE p.collection='tokenPackages' AND model.value IN (?,?)) AS packaged`)
-      .bind(row.id,row.controlledOfferId || '',row.id,row.controlledOfferId || ''),
+        WHERE p.collection='tokenPackages' AND model.value IN (?,?)) AS packaged,
+      EXISTS (SELECT 1 FROM new_model_services s
+        JOIN offers o ON o.record_id=${legacyModelServiceOfferId}
+        JOIN services owner ON owner.id=o.service_id
+        WHERE s.id=? AND o.retired_at IS NULL AND owner.deleted_at IS NULL
+          AND (o.active_sale_price_id IS NOT NULL OR o.listing_stage <> 'unlisted')) AS legacySale`)
+      .bind(row.id,row.controlledOfferId || '',row.id,row.controlledOfferId || '',row.id),
   ]);
   const cards = JSON.parse(workspace.results[0]?.cards || '{}');
   const offer = offers.results[0];
@@ -104,11 +110,12 @@ async function lifecycleCheck(db, row) {
     ? { id: saleRow ? row.id : offer.record_id, name: row.name, callId: row.callId,
       status: stage === 'gray' ? '灰度在售' : '在售', ...(saleRow && { revision:saleRow.revision }) }
     : null;
-  const {ordered,packaged} = references.results[0];
+  const { ordered, packaged, legacySale } = references.results[0];
   return { marketLinked, marketListed, saleRow, sale, offer, model, key,
     stopIssue: marketListed ? '请先在模型广场取消展示该服务' : '',
     deleteIssue: row.listed ? '请先停止模型服务'
-      : marketLinked ? '请先解除模型广场关联' : row.grants?.length ? '请先移除租户授权'
+      : saleRow || legacySale ? '该模型服务已配置模型售卖，不能删除'
+        : marketLinked ? '请先解除模型广场关联' : row.grants?.length ? '请先移除租户授权'
         : ordered ? '该模型服务仍有有效订单' : packaged ? '该模型服务仍被套餐引用' : '' };
 }
 
