@@ -56,6 +56,8 @@ export default function ChannelDirectoryCreation({ state, providers, connections
   const listedType = reference ? CHANNEL_LIST_TYPES.find(item => item.id === value.interfaceType) : null;
   const channelSourceType = value.channelSourceType ??
     (CHANNEL_SOURCE_TYPES.includes(provider?.sourceType) ? provider.sourceType : 'thirdParty');
+  const apiKeyRequired = channelSourceType === 'thirdParty';
+  const authMode = reference && !apiKeyRequired && referenceKeys.length === 0 ? 'none' : value.authMode;
   const eligibleProviders = reference ? providers.filter(row =>
     row.status === '已启用' && row.sourceType === channelSourceType) : [];
   const eligibleProvider = eligibleProviders.find(row => row.id === providerId);
@@ -86,7 +88,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
   }
   const reusableAddresses = [...savedAddresses].filter(Boolean);
   const pendingType = adapterDraftTypes.find(row => 'draft:' + row.id === value.interfaceType);
-  const independent = !pendingType && value.authMode === 'independent';
+  const independent = !pendingType && authMode === 'independent';
   const batch = independent && value.mode === 'batch';
   const change = () => { setSuggestedRoot(''); ops.setError(''); ops.dirty(true); };
   const set = patch => { setValue(current => ({ ...current, ...patch })); change(); };
@@ -126,7 +128,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
     try {
       if (!provider) throw Error('请选择服务商');
       if (reference && !eligibleProvider) throw Error(t('请选择匹配连接类型的已启用服务商。'));
-      if (!pendingType && value.authMode === 'specific' && !provider.apiKeys?.some(key => key.id === value.apiKeyId && key.status !== 'disabled' && !key.revokedAt)) throw Error('请选择可用的上游 API 密钥');
+      if (!pendingType && authMode === 'specific' && !provider.apiKeys?.some(key => key.id === value.apiKeyId && key.status !== 'disabled' && !key.revokedAt)) throw Error('请选择可用的上游 API 密钥');
       const adapterDraft = pendingType ? normalizeAdapterDraft({ kind: pendingType.id, values: pendingValues }) : null;
       const address = { ...value, endpointPath, allowHttp };
       const config = adapterDraft ? { protocol: '其他', baseUrl: value.baseUrl.trim() } :
@@ -174,7 +176,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
       }
       if (!ops.isCurrent()) throw Error('权限或数据已有变化，请重新核对');
       const next = { providerId, ...config, adapterOptions, timeoutSeconds: value.timeoutSeconds, capacity: value.capacity,
-        authMode: adapterDraft ? 'pending' : value.authMode, ...(value.authMode === 'specific' ? { apiKeyId: value.apiKeyId } : {}), keyStrategy: value.keyStrategy, perCredential: batch, rows,
+        authMode: adapterDraft ? 'pending' : authMode, ...(authMode === 'specific' ? { apiKeyId: value.apiKeyId } : {}), keyStrategy: value.keyStrategy, perCredential: batch, rows,
         ...(reference ? { note: value.note, channelSourceType } : {}),
         ...(adapterDraft ? { adapterDraft } : {}),
         ...(source ? { copyFrom: { endpointId: source.id, expectedUpdatedAt: endpoint.updatedAt,
@@ -252,7 +254,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
       title={t('新建连接')} cancelLabel={t('取消')} cancel={() => !busy && ops.proceed(close)}
       submit={review} action={t(batch ? '预览批量创建' : '创建连接')}
       disabled={writing || !eligibleProvider || !listedType || !channelName.trim() || !value.baseUrl.trim() ||
-        !referenceKeys.length || Boolean(keyLimitError)}>
+        (apiKeyRequired && !referenceKeys.length) || Boolean(keyLimitError)}>
       <Field label={t('连接类型')} required>
         <Choice label={t('连接类型')} value={channelSourceType} disabled={writing}
           options={CHANNEL_SOURCE_TYPES.map(type => [type, t(channelSourceTypeLabel(type))])}
@@ -287,9 +289,10 @@ export default function ChannelDirectoryCreation({ state, providers, connections
         <Field label={t('连接名称')} required help={t('填写便于识别的名称，同一服务商下不可重复。')}>
           <Input aria-label={t('连接名称')} value={channelName} maxLength={60} disabled={writing} onChange={name => set({ name })}/>
         </Field>
-        <Field label={t('上游 API 密钥')} required error={keyLimitError}
-          hint={t('每行一把密钥，最多 {limit} 把，支持粘贴多行。').replace('{limit}', UPSTREAM_API_KEY_LIMIT)}>
-          <TextArea aria-label={t('上游 API 密钥')} value={keyText} rows={4} autoComplete="off" spellCheck={false}
+        <Field label={t('上游 API 密钥')} required={apiKeyRequired} error={keyLimitError}
+          hint={t(apiKeyRequired ? '每行一把密钥，最多 {limit} 把，支持粘贴多行。'
+            : '选填。每行一把密钥，最多 {limit} 把，支持粘贴多行。').replace('{limit}', UPSTREAM_API_KEY_LIMIT)}>
+          <TextArea aria-label={t('上游 API 密钥')} required={apiKeyRequired} value={keyText} rows={4} autoComplete="off" spellCheck={false}
             disabled={writing} onChange={text => { setKeyText(text); change(); }}/>
         </Field>
         <Field label={t('简介')}><TextArea aria-label={t('简介')} value={value.note} rows={2} maxLength={300} disabled={writing} onChange={note => set({ note })}/></Field>

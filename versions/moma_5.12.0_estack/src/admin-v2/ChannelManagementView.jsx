@@ -107,7 +107,7 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
   const tab = tabs.includes(requestedTab) ? requestedTab : 'overview';
   const selectTab = value => ops.go({ tab: value === 'overview' ? null : value,
     ...(value !== 'api-keys' && { keyGroup: null }) }, { replace: true });
-  const keyCount = connectionKeys(endpoint, channel.provider, true).length + t(' 个');
+  const keyCount = connectionKeys(endpoint, channel.provider, true).length + t(' 把');
   const fields = [
     [t('连接名称 / ID'), <div className="channel-identity"><span>{name}</span><CopyId value={id} label={t('连接 ID')}/></div>],
     [t('服务商'), channel.provider.name],

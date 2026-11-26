@@ -6,6 +6,7 @@ import { domainModelWorkspace } from '../src/mock/model-fields.js';
 import { excelOffers, offerHeaders } from '../src/admin-v2/supplier-offer-fields.js';
 import { protocolAndEndpoint, workbenchProtocolLabel } from '../src/admin-v2/workbench-protocol.js';
 import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
+import { connectionKeys } from '../src/admin-v2/connection-state.js';
 
 test('workbench short protocol names display endpoint paths while offer imports retain their canonical protocol', () => {
   const names = [
@@ -108,6 +109,57 @@ test('HTTP/D1 derives new connection endpoints and enforces separate upstream ke
     assert.equal(stored.base_url, modern.baseUrl.slice(0, -1));
     assert.equal(JSON.parse(stored.record_json).endpointPath, path);
   }
+
+  await t.test('self-hosted connections may omit credentials and third-party connections require them', async () => {
+    const profile = {name:'D1 自有推理服务商', code:'d1-self-hosted', sourceType:'selfHosted'};
+    const providerCreated = await command('provider', {operation:'create', values:profile});
+    assert.equal(providerCreated.status, 200, await providerCreated.clone().text());
+    state = await read();
+    const provider = state.providers.find(row => row.code === profile.code);
+    const selfHosted = {providerId:provider.id, channelSourceType:'selfHosted', modelProtocol:'openai',
+      baseUrl:'http://self-hosted.example.invalid/v1', authMode:'none'};
+    const badCases = [
+      [{modelProtocol:'openai'}, /独立密钥数量/],
+      [{modelProtocol:'openai', authMode:'none'}, /仅自有模型推理服务/],
+      [{...selfHosted, channelSourceType:'thirdParty'}, /匹配连接类型/],
+    ];
+    for (const [options, error] of badCases) {
+      const rejected = await create(options, 'D1 拒绝第三方无密钥', []);
+      assert.equal(rejected.status, 422, await rejected.clone().text());
+      assert.match((await rejected.json()).error.message, error);
+    }
+    assert.deepEqual(await read(), state);
+
+    const withoutKeys = await create(selfHosted, 'D1 自有推理无密钥', []);
+    assert.equal(withoutKeys.status, 200, await withoutKeys.clone().text());
+    state = await read();
+    const endpoint = state.endpoints.find(row => row.name === 'D1 自有推理无密钥');
+    assert.equal(endpoint.channelSourceType, 'selfHosted');
+    assert.equal(endpoint.authMode, 'none');
+    assert.equal(connectionKeys(endpoint, provider, true).length, 0);
+    const stored = JSON.parse(await local.db.prepare('SELECT record_json FROM channels WHERE id=?')
+      .bind(endpoint.id).first('record_json'));
+    assert.equal(stored.authMode, 'none');
+    assert.deepEqual(stored.apiKeys, []);
+
+    const edit = {providerId:provider.id, endpointId:endpoint.id, baseUrl:endpoint.baseUrl,
+      expectedUpdatedAt:endpoint.updatedAt, expectedProviderUpdatedAt:provider.updatedAt};
+    const reclassified = await command('supplierChannelEdit', {...edit, channelSourceType:'thirdParty'});
+    assert.equal(reclassified.status, 422, await reclassified.clone().text());
+    assert.match((await reclassified.json()).error.message, /第三方模型服务须配置上游 API 密钥/);
+    assert.deepEqual(await read(), state);
+    const note = await command('supplierChannelEdit', {...edit, note:'无密钥自有推理连接'});
+    assert.equal(note.status, 200, await note.clone().text());
+    state = await read();
+    assert.equal(state.endpoints.find(row => row.id === endpoint.id).directoryNote, '无密钥自有推理连接');
+
+    const withKey = await create({...selfHosted, authMode:'independent'}, 'D1 自有推理带密钥');
+    assert.equal(withKey.status, 200, await withKey.clone().text());
+    state = await read();
+    const authenticated = state.endpoints.find(row => row.name === 'D1 自有推理带密钥');
+    assert.deepEqual(connectionKeys(authenticated, provider, true).map(row => row.fingerprint),
+      defaultKeys.map(row => row.fingerprint));
+  });
 
   const profile = {name:'D1 密钥上限服务商', code:'d1-key-cap', sourceType:'thirdParty'};
   const providerCreated = await command('provider', {operation:'create', values:profile});

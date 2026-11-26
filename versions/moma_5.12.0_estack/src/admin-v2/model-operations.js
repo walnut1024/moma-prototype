@@ -434,6 +434,10 @@ export function operationsTransaction(state, action) {
       data.prepareConnection || endpoint.candidateConfiguration && data.candidateId === undefined)) {
       throw Error('请选择有效的连接类型，并使用当前版本保存');
     }
+    const appliedAuthMode = data.candidateId === undefined ? endpoint.authMode : endpoint.candidateConfiguration?.config.authMode ?? endpoint.authMode;
+    if (channelSourceType === 'thirdParty' && (endpoint.channelSourceType ?? provider.sourceType) === 'selfHosted' && appliedAuthMode === 'none') {
+      throw Error('第三方模型服务须配置上游 API 密钥');
+    }
     const directoryInfo = {
       ...(note === undefined ? {} : { directoryNote: note }),
       ...(channelSourceType === undefined ? {} : { channelSourceType }),
@@ -623,6 +627,7 @@ export function operationsTransaction(state, action) {
     let endpointPath = data.endpointPath;
     if (data.channelSourceType !== undefined) {
       if (!CHANNEL_SOURCE_TYPES.includes(data.channelSourceType)) throw Error('请选择有效的连接类型');
+      if (provider.sourceType !== data.channelSourceType) throw Error('请选择匹配连接类型的已启用服务商。');
       const presetPath = channelProtocolPaths({ interfaceType: data.modelProtocol })[0];
       if (!presetPath) throw Error('请选择接口格式');
       if (endpointPath !== undefined && endpointPath !== presetPath) throw Error('接口端点由接口格式决定');
