@@ -178,8 +178,8 @@ export default function ModelPrices(props) {
       key={saleRow.id + ':' + salesDialog.stage} state={state} row={saleRow} ops={ops} stage={salesDialog.stage}
       revision={salesDialog.revision} change={changeSale} busy={busy} close={closeSales} configure={configure}/>}
     {salesDialog && saleRow && !saleRow.independent && salesDialog.stage !== 'pause' && !readOnly && <ServiceListingDialog state={state} model={saleRow.model}
-      initialOfferKey={offerKey(saleRow)} ops={ops} stage={salesDialog.stage} close={closeSales}/>}
-    {salesDialog?.stage === 'pause' && saleRow && !saleRow.independent && !readOnly && <Modal title={translateLabel("停售")} description={saleRow.callId}
+      initialOfferKey={offerKey(saleRow)} targetService={saleRow.service} ops={ops} stage={salesDialog.stage} close={closeSales}/>}
+    {salesDialog?.stage === 'pause' && saleRow && !saleRow.independent && !readOnly && <Modal title={translateLabel("停售")} description={`${saleRow.modelName}（${saleRow.callId}）`}
       centered onClose={() => !busy && closeSales()} footer={<>
         <Button disabled={busy} onClick={closeSales}>{translateLabel("取消")}</Button>
         <Button theme="solid" type="danger" loading={busy} disabled={!ops.can || saleRow.model.updatedAt !== salesDialog.revision}

@@ -56,6 +56,24 @@ test('retry only registers a model whose material was already committed', async 
   assert.equal(previewMaterialRows(state, 'model', rows, { providerId: provider.id })[0].status, 'skip');
 });
 
+test('the shared materials-only template distinguishes reused, new and duplicate model rows', () => {
+  const state = { ...initial, modelTemplates: [model] };
+  const rows = materialImportRows('model', [
+    ['模型编码', '模型展示名称', '模型类型'],
+    [model.modelId, model.name, '语言模型'],
+    ['model-y', '新模型', '其他专用模型'],
+    ['model-y', '新模型', '其他专用模型'],
+  ]);
+  const supplier = previewMaterialRows(state, 'model', rows, { providerId: provider.id });
+  assert.equal(supplier[0].modelId, model.id);
+  assert.match(supplier[0].message, /复用已有/);
+  assert.match(supplier[1].message, /新建模型资料/);
+  assert.equal(supplier[1].data.type, 'other');
+  assert.equal(supplier[2].status, 'error');
+  assert.match(supplier[2].message, /重复/);
+  assert.match(previewMaterialRows(state, 'model', rows)[0].message, /已存在/);
+});
+
 test('one failed registration batch leaves later valid rows able to commit', async () => {
   const models = Array.from({ length: 6 }, (_, index) => ({ ...model, id: 'template-' + index, modelId: 'model-' + index }));
   const state = { ...initial, modelTemplates: models };

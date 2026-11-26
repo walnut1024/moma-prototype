@@ -187,7 +187,7 @@ export function operationsTransaction(state, action) {
     if (!['withdrawn','gray','formal'].includes(stage) || operation==='startSales' && stage==='withdrawn') throw Error('请选择有效的售卖阶段');
     const grayTenantIds=stage==='gray'?serviceScope(working,{openScope:'selected',tenantIds:data.releaseTenantIds}).tenantIds:[];
     if (operation==='startSales') {
-      const failed=salesChecks(working,model,keys).filter(row=>!row.passed);
+      const failed=salesChecks(working,model,keys).filter(row=>!row.passed && !row.warning);
       if (failed.length) throw Error(failed.map(row=>row.label).join('；'));
     } else if (keys.some(key=>!['formal','gray'].includes(offerStage(model,providerOffer(model,key))))) {
       throw Error('所选模型服务当前未在售，请刷新后重新选择');
@@ -207,7 +207,7 @@ export function operationsTransaction(state, action) {
     if (operation==='salesSettings') {
       update('models',modelId,{salesScope:serviceScope(working,data.scope)});label='保存销售设置';
     } else {
-      const failed=salesChecks(working,model).filter(row=>!row.passed);
+      const failed=salesChecks(working,model).filter(row=>!row.passed && !row.warning);
       if(failed.length)throw Error(failed.map(row=>row.label).join('；'));
       const releaseStage=data.releaseStage || 'formal';
       if(!['gray','formal'].includes(releaseStage))throw Error('请选择灰度开售或开售');
@@ -328,7 +328,7 @@ export function operationsTransaction(state, action) {
     }
     label = `批量导入 ${data.profiles.length} 个服务商`;
   } else if (operation === 'supplierOffersSave') {
-    const provider = working.providers.find(row => row.id === data.providerId && !row.deletedAt);
+    const provider = working.providers.find(row => row.id === data.providerId && !row.deletedAt && !row.profileRemovedAt);
     if (!provider || !Array.isArray(data.offers) || !data.offers.length || data.offers.length > 5) throw Error('每批可保存 1–5 个供应模型');
     for (const offer of data.offers) {
       validateOffer(offer, provider);
@@ -359,7 +359,7 @@ export function operationsTransaction(state, action) {
     }
     objectId = provider.id; label = '保存供应模型';
   } else if (operation === 'supplierModelsRegister') {
-    const provider = working.providers.find(row => row.id === data.providerId);
+    const provider = working.providers.find(row => row.id === data.providerId && !row.deletedAt && !row.profileRemovedAt);
     if (!provider) throw new Error('请选择当前服务商');
     const rows = supplierModelRegistration(working, provider, data.libraryIds);
     for (const row of rows) providerOp('supplierModelAdd', provider.id, { libraryId: row.id });
@@ -622,7 +622,7 @@ export function operationsTransaction(state, action) {
     objectId = endpoint.id;
     label = '保存连接内部备注';
   } else if (operation === 'channelDirectoryCreate') {
-    const provider = working.providers.find(row => row.id === data.providerId && !row.deletedAt);
+    const provider = working.providers.find(row => row.id === data.providerId && !row.deletedAt && !row.profileRemovedAt);
     if (!provider || provider.status !== '已启用') throw Error('请选择已启用的服务商');
     let endpointPath = data.endpointPath;
     if (data.channelSourceType !== undefined) {

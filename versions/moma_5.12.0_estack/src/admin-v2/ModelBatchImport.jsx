@@ -55,7 +55,9 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
     const outcome = results[row.rowNumber];
     return outcome ? { ...row, ...outcome } : row;
   });
-  const available = display.filter(ready), problems = display.filter(issue), failed = display.filter(row => row.status === 'failed');
+  const available = display.filter(ready), errors = display.filter(issue);
+  const problems = display.filter(row => issue(row) || kind === 'model' && row.status === 'skip');
+  const failed = display.filter(row => row.status === 'failed');
   const visible = onlyProblems ? problems : display;
   const selected = display.find(row => row.rowNumber === expandedRow);
   const { pageSize } = pagination;
@@ -110,7 +112,7 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
       const checked = retry ? validate(selectedRows, true) : selectedRows;
       const rows = checked.filter(ready);
       const selectedNumbers = new Set(selectedRows.map(row => row.rowNumber));
-      let pending = checked.some(issue) || problems.some(row => !selectedNumbers.has(row.rowNumber));
+      let pending = checked.some(issue) || errors.some(row => !selectedNumbers.has(row.rowNumber));
       accept(checked.filter(row => !ready(row)).map(({ rowNumber, status, message }) => ({ rowNumber, status, message })));
       await submitMaterialRows({ state, kind, providerId, rows, transact, active: () => mounted.current, onResult: outcome => {
         pending ||= outcome.some(issue);
@@ -162,7 +164,7 @@ export default function ModelBatchImport({ state, ops, transact, close, kind, pr
     </> : <>
       <Typography.Title heading={6}><span ref={previewTitle} tabIndex={-1}>{fileName}</span></Typography.Title>
       <Banner type={problems.length ? 'warning' : 'success'} description={step === 'preview'
-        ? `共 ${display.length} 条，可提交 ${available.length} 条，已存在或重复 ${count(display, 'skip')} 条，待修正 ${problems.length} 条`
+        ? `共 ${display.length} 条，可提交 ${available.length} 条，已存在或重复 ${count(display, 'skip')} 条，待修正 ${errors.length} 条`
         : `${successLabel} ${count(display, 'done')} 条，已存在或重复 ${count(display, 'skip')} 条，待修正 ${count(display, 'error')} 条，待重试 ${failed.length} 条`}/>
       <div className="materials-actions">
         <Checkbox checked={onlyProblems} onChange={event => {

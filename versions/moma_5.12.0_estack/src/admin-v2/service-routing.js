@@ -28,7 +28,7 @@ export function routingServices(state) {
   return state.models.flatMap(model=>model.serviceMode==='standard' ? [{id:'standard:'+model.id,modelId:model.id,name:model.serviceName || model.name,mode:'standard',callId:model.modelId,model,providerId:null}] : model.serviceMode==='provider' ? providerServices(model).map(entry=>({id:providerServiceId(model.id,offerKey(entry)),modelId:model.id,name:(state.providers.find(provider=>provider.id===entry.providerId)?.name || '服务商已不存在') + (entry.channelName ? `（${entry.channelName}）` : ''),mode:'provider',callId:entry.callId,model,providerId:entry.providerId,...(entry.channelId ? {channelId:entry.channelId} : {})})) : []);
 }
 
-export function routingChannels(state, service, at = Date.now(), { runtime = false } = {}) {
+export function routingChannels(state, service, at = Date.now(), { runtime = false, allowMissingCost = false } = {}) {
   const ready=new Set(availableSupplies(state,service.modelId,service.model.capabilities).map(item=>item.id));
   const callId=service.providerId?providerOffer(service.model,offerKey(service))?.callId:service.model.modelId;
   return modelSupplies(state,service.modelId).filter(supply=>(!service.providerId || supply.provider?.id===service.providerId) && (!service.channelId || supply.channelId===service.channelId)).map(supply=>{
@@ -38,7 +38,7 @@ export function routingChannels(state, service, at = Date.now(), { runtime = fal
     let reason=!supply.provider || !supply.endpoint ? '服务商或接入已不存在' : supply.status!=='已启用' ? '上游模型已停用' : channel ? channelBlockReason(supply.provider,channel,{runtime}) : connectionBlockReason(supply.endpoint,supply.provider);
     if (!reason && !ready.has(supply.id)) reason='平台模型映射或能力需验证';
     if (!reason && !url) reason='请求地址待完善';
-    if (!reason && runtime && (!costs.length || costs.some(item=>item.amount==null))) reason='上游上游模型成本待配置';
+    if (!reason && runtime && !allowMissingCost && (!costs.length || costs.some(item=>item.amount==null))) reason='上游模型成本待配置';
     const row={...supply,apiAddresses:channel?.apiAddresses,channelId:channel ? serviceChannelId(channel) : supply.channelId || supply.endpointId,channelUpdatedAt:channel?.updatedAt,channelHealth:channel?.health,channelName:channel?.name || supply.endpoint?.name,verifiedAt:channel?.health?.testedAt || supply.verifiedAt,url,costVersion:costRevision([channel?.pricing,activeSupplyPrice(state,supply.id,at)]),p95LatencyMs:metric([channel?.p95LatencyMs,channel?.metrics?.p95LatencyMs,supply.endpoint?.p95LatencyMs,supply.endpoint?.metrics?.p95LatencyMs]),activeRequests:metric([channel?.activeRequests,channel?.metrics?.activeRequests,supply.endpoint?.activeRequests,supply.endpoint?.metrics?.activeRequests],true)};
     for(const key of ['tokensPerMinute','requestsPerMinute','rpmLimit','tpmLimit'])row[key]=key.endsWith('Limit')?[channel?.[key],channel?.metrics?.[key],supply.endpoint?.[key],supply.endpoint?.metrics?.[key]].find(value=>value!=null) ?? null:metric([channel?.[key],channel?.metrics?.[key],supply.endpoint?.[key],supply.endpoint?.metrics?.[key]],true);
     const mapping=routeMappingStatus(state,{...service,callId},row);

@@ -59,7 +59,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
   const apiKeyRequired = channelSourceType === 'thirdParty';
   const authMode = reference && !apiKeyRequired && referenceKeys.length === 0 ? 'none' : value.authMode;
   const eligibleProviders = reference ? providers.filter(row =>
-    row.status === '已启用' && row.sourceType === channelSourceType) : [];
+    row.status === '已启用' && !row.profileRemovedAt && row.sourceType === channelSourceType) : [];
   const eligibleProvider = eligibleProviders.find(row => row.id === providerId);
   const formatName = listedType ? workbenchProtocolLabel(listedType.label) : '';
   const defaultName = eligibleProvider && formatName
@@ -346,7 +346,7 @@ export default function ChannelDirectoryCreation({ state, providers, connections
       {!source && !configuring && <>
       <div className="channel-operation-fields">
         <Field label="服务商 *"><Choice label="服务商" value={providerId} disabled={writing} options={[
-          ['unselected', t('请选择服务商')], ...providers.filter(row => row.status === '已启用').map(row => [row.id, row.name]),
+          ['unselected', t('请选择服务商')], ...providers.filter(row => row.status === '已启用' && !row.profileRemovedAt).map(row => [row.id, row.name]),
         ]} onChange={id => {
           if (id === providerId) return;
           const apply = () => {

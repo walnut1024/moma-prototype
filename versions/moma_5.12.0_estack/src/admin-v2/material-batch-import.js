@@ -46,7 +46,7 @@ export function materialImportRows(kind, cells) {
 
 export function previewMaterialRows(state, kind, rows, { providerId, retry = false } = {}) {
   const providers = materialProviders(state);
-  const owner = providers.find(row => row.id === providerId) || state.providers.find(row => row.id === providerId && !row.deletedAt);
+  const owner = providers.find(row => row.id === providerId) || state.providers.find(row => row.id === providerId && !row.deletedAt && !row.profileRemovedAt);
   if (kind === 'model') {
     const registered = owner ? new Set(registeredSupplierModelIds(state, owner)) : null;
     return validateModelRows(state, rows, { reuseExisting: Boolean(providerId) || retry }).map(row => {
@@ -136,7 +136,7 @@ export async function submitMaterialRows({ state, kind, providerId, rows, transa
     if (!providerId) return;
   }
   if (!active()) return;
-  const models = modelCodes(current), providers = new Map(current.providers.filter(row => !row.deletedAt).map(row => [row.id, row]));
+  const models = modelCodes(current), providers = new Map(current.providers.filter(row => !row.deletedAt && !row.profileRemovedAt).map(row => [row.id, row]));
   const groups = new Map();
   for (const row of rows) {
     if (failed.has(row.rowNumber)) continue;

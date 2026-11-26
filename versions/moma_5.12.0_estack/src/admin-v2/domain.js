@@ -8,6 +8,7 @@ import { supplyModelUrl, availableSupplies, activeSupplySalePrice, activeSupplyP
 import { activeModelSalePrice, activeProviderPrice } from './service-workspace.js';
 import { routingServices, routingChannels, serviceRoute, activeRouteVersion } from './service-routing.js';
 import { channelProcurementSnapshot } from './channel-change-management.js';
+import { platformPriceVersions } from './platform-service-client.js';
 import { diagnosticCall, planDeduction, projectAccessError, projectCallError, projectCallErrors, requestCharge, retainedProjectText } from '../project-call.mjs';
 import { activeTenantVersion, isTenantRouteCall, routeTargets, keyTenantRoute } from '../tenant-routing.mjs';
 import { customerProject } from '../personal-project.mjs';
@@ -107,7 +108,8 @@ function simulateTenantRoute(state, input, key) {
 
 function simulateModelRequest(state, { requestId, keyId, modelId:requestedModelId, usage = { input:1000, cached:0, output:200 },
   forceTimeout = false, cacheKey = 'demo-prompt', requirements = {}, purpose = 'customer',
-  projectRouteId, routeMatch, routeError, tenantRouteId, tenantRouteVersion, priorAttempts = [], content, marketOrders, allowedModelTypes, internal = false }) {
+  projectRouteId, routeMatch, routeError, tenantRouteId, tenantRouteVersion, priorAttempts = [], content, marketOrders,
+  allowedModelTypes, internal = false, allowMissingCost = false }) {
   const startedAt = Date.now(), services = routingServices(state);
   const selectedService=services.find(item=>item.callId && item.callId===requestedModelId);
   const modelId=selectedService?.modelId || state.models.find(item=>item.id===requestedModelId || item.modelId===requestedModelId)?.id || requestedModelId;
@@ -116,6 +118,8 @@ function simulateModelRequest(state, { requestId, keyId, modelId:requestedModelI
   const key = state.apiKeys.find(item => item.id === keyId && item.kind !== 'experience'), model = state.models.find(item => item.id === modelId), tenant = key && state.tenants.find(item => item.id === key.tenantId), project = key && customerProject(state, state.projects.find(item => item.id === key.projectId && item.tenantId === key.tenantId)), grant = key && state.grants.find(item => item.subjectId === key.id && item.status === '生效中'), route = state.routes.find(item => item.modelId === modelId && item.status === "已生效");
   const quantity = ['text','multimodal','embedding','rerank'].includes(model?.type) ? enterpriseTokenUsage(model,usage) : usageTotal(usage);
   const commercialOrder = !internal && Boolean(marketOrders?.some(row => row.tenantId === key?.tenantId && row.callId === service?.callId));
+  const diagnostic = diagnosticCall({ purpose });
+  const costOptional = allowMissingCost && !internal && !diagnostic;
   const access = lifecycleAccess(state, service || (model && { model }), key?.tenantId, { commercialOrder });
   const previous = state.requests.find(item => item.requestId === requestId && (marketOrders === undefined || item.tenantId === key?.tenantId));
   if (previous) {
@@ -129,8 +133,10 @@ function simulateModelRequest(state, { requestId, keyId, modelId:requestedModelI
   }
   const routeConfig = service && activeRouteVersion(serviceRoute(state,service.id))?.config;
   const mapped = routeConfig?.channels.filter(item => item.enabled && (!item.backup || routeConfig.autoFailover)).sort((a,b)=>Number(Boolean(a.backup))-Number(Boolean(b.backup))).map(item => item.supplyId);
-  const serviceCandidates = service && new Set(routingChannels(state, service, startedAt, { runtime: true }).filter(item => item.available).map(item => item.id));
+  const serviceCandidates = service && new Set(routingChannels(state, service, startedAt, { runtime: true, allowMissingCost: costOptional })
+    .filter(item => item.available).map(item => item.id));
   let candidates = availableSupplies(state, modelId, requirements).filter(supply => !service || mapped?.includes(supply.id) && serviceCandidates.has(supply.id) && (service.mode !== 'provider' || supply.provider?.id === service.providerId)).filter(supply => {
+    if (costOptional) return true;
     const items = priceItems(activeSupplyPrice(state, supply.id, startedAt), model);
     return items.length && items.every(item => item.amount != null);
   });
@@ -138,11 +144,14 @@ function simulateModelRequest(state, { requestId, keyId, modelId:requestedModelI
   const candidateIds = candidates.map(supply => supply.endpointId);
   const procurementSnapshots = new Map(candidates.map(supply => {
     const cost = activeSupplyPrice(state, supply.id, startedAt);
+    if (costOptional) {
+      try { platformPriceVersions(cost, model, '服务商成本价', startedAt); }
+      catch { return [supply.id, null]; }
+    }
     const association = supply.provider?.catalogConnections?.find(row => !row.deletedAt && (supply.channelId ? row.id===supply.channelId : row.endpointId===supply.endpointId && row.upstreamModelId===supply.upstreamModelId));
     const quote = association && channelProcurementSnapshot(association, startedAt);
     return [supply.id, { ...quote, versionId: quote?.versionId || procurementVersion(cost) || null, version: quote?.version ?? cost?.version ?? null, selectedAt: new Date(startedAt).toISOString(), items: structuredClone(priceItems(cost, model)), providerId: supply.provider.id, endpointId: supply.endpointId, supplyId: supply.id, configurationRevision: supply.endpoint.configurationRevision || 0 }];
   }));
-  const diagnostic = diagnosticCall({ purpose });
   const recent=state.requests.filter(row=>!diagnosticCall(row) && row.keyId===keyId&&Date.parse(row.admittedAt || row.createdAt)>startedAt-60000&&Date.parse(row.admittedAt || row.createdAt)<=startedAt && (row.admittedAt || row.httpStatus===200));
   const keyRateExceeded=key?.qpmLimit!=null&&recent.length>=key.qpmLimit || key?.tpmLimit!=null&&recent.reduce((total,row)=>total+enterpriseTokenUsage(state.models.find(item=>item.id===row.modelId),row.usage || {}),0)+quantity>key.tpmLimit;
   const tenantGrant = enterpriseGrant(state, key?.tenantId), tenantQuantity = enterpriseTokenUsage(model, usage);

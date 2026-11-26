@@ -1,6 +1,7 @@
 import { useChannelText } from './channel-language';
+import { useId } from 'react';
 import { InputNumber, Table, Tag } from '@douyinfe/semi-ui';
-import { failoverFields, retryTypes, savedRetryPolicy } from './global-routing-parameters.mjs';
+import { failoverFields, initialRoutingParameters, retryTypes, savedRetryPolicy } from './global-routing-parameters.mjs';
 
 import './failover-fields.css';
 
@@ -21,24 +22,34 @@ const retryStatus = {
 
 export default function FailoverFields({ values, change, disabled, showRetryInterval = false }) {
   const t = useChannelText();
+  const formId = useId();
   const policy = savedRetryPolicy(values);
   const fields = [...failoverFields];
   if (showRetryInterval) fields.splice(1, 0, ['retryAfter', '最短重试间隔', '秒']);
-  fields.push(['max_fallbacks', '最大降级次数', '次']);
   function updateRetry(key, count) {
     const next = { ...policy };
     if (count === '' || count == null) delete next[key];
     else next[key] = count;
-    change({ retry_policy: next });
+    change({ retry_policy: Object.keys(next).length || values.retryConditions ? next : undefined });
   }
   function parameter([key, label, unit]) {
-    const value = key === 'max_fallbacks' && values[key] === undefined ? (values.failoverEnabled ? 5 : 0) : values[key];
+    const inputId = formId + '-' + key;
+    const value = values[key];
+    const fromLegacySwitch = key === 'max_fallbacks' && values.failoverEnabled === false;
+    const fallback = fromLegacySwitch ? 0 : initialRoutingParameters[key];
+    const sourceLabel = fromLegacySwitch ? t('旧设置', 'Legacy setting') : t('默认', 'Default');
+    const hint = value === 0 && ['timeout','cooldownTime'].includes(key)
+      ? t('参考 Router 构造时回落到 {value} 秒。', 'The reference Router normalizes zero to {value} seconds at construction.').replace('{value}', initialRoutingParameters[key])
+      : key === 'allowedFails' && value == null
+        ? t('参考 Router 未显式设置时采用故障率规则。', 'The reference Router uses its error-rate rule when no threshold is configured.')
+        : '';
     return <div className="fp-parameter" key={key}>
-      <div>{t(label)}<code>{parameterNames[key]}</code></div>
-      {disabled ? <strong aria-label={t(label)}>{value} <small>{t(unit)}</small></strong> :
-        <InputNumber aria-label={t(label)} min={0} value={value ?? ''} suffix={t(unit)}
-          disabled={key === 'retryAfter' && values.numRetries === 0 && !Object.values(policy).some(n => n > 0)}
-          onChange={number => change({ [key]: number === '' ? null : number })}/>}
+      <div>{disabled ? t(label) : <label htmlFor={inputId}>{t(label)}</label>}<code>{parameterNames[key]}</code>
+        {hint && <small id={inputId + '-hint'}>{hint}</small>}</div>
+      {disabled ? <strong aria-label={t(label)}>{value ?? fallback} <small>{t(unit)}{value == null && ' · ' + sourceLabel}</small></strong> :
+        <InputNumber id={inputId} aria-describedby={hint ? inputId + '-hint' : undefined}
+          min={0} value={value ?? ''} placeholder={sourceLabel + ' ' + fallback} suffix={t(unit)}
+          onChange={number => change({ [key]: number === '' || number == null ? undefined : number })}/>}
     </div>;
   }
   const rows = Object.entries(retryTypes).map(([key,label]) => {
@@ -46,12 +57,16 @@ export default function FailoverFields({ values, change, disabled, showRetryInte
     return {key,label:t(label),status:t(status),detail:t(detail)};
   });
   return <div className="failover-policy">
+    <p>{t('原型默认值参考 LiteLLM 1.110.2。', 'Prototype defaults reference LiteLLM 1.110.2.')}</p>
+    {!disabled && <p>{t('留空使用默认值。填 0 会保存为显式配置。',
+      'Leave a field blank to use its default. Zero is saved as an explicit value.')}</p>}
     <div className="fp-groups">
       <section><h3>{t('请求与重试')}</h3>{fields.filter(([key]) => ['numRetries','retryAfter','timeout'].includes(key)).map(parameter)}</section>
       <section><h3>{t('故障判定与降级')}</h3>{fields.filter(([key]) => ['allowedFails','cooldownTime','max_fallbacks'].includes(key)).map(parameter)}</section>
     </div>
     <h3 className="fp-title">{t('异常重试规则')} <code>retry_policy</code></h3>
-    <p>{t('未指定时使用 Router 的其余重试规则，0 次表示该类异常不重试。')}</p>
+    <p>{t('清空某个异常的次数会移除该项设置，填 0 会保存 0 次。',
+      'Clearing the retry count removes that setting. Entering zero saves a retry count of zero.')}</p>
     <Table className="fp-retry-table" size="small" rowKey="key" pagination={false} dataSource={rows} columns={[
       {title:t('异常类型'), width:284, render:(_,row) => <div>{row.label}<code>{row.key}</code></div>},
       {title:t('典型 HTTP 状态码'), width:144, render:(_,row) => <Tag>{row.status}</Tag>},

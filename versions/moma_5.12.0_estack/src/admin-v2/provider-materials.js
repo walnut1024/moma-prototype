@@ -3,7 +3,7 @@ import { modelSupplyGroups, supplierModelChannelGroups } from './supplier-model-
 import { supplyModelDirectory } from './supply-models.js';
 
 export const materialProviders = state => supplierDirectory(state)
-  .filter(row => !row.deletedAt && !row.id.startsWith('service-review-provider-'));
+  .filter(row => !row.deletedAt && !row.profileRemovedAt && !row.id.startsWith('service-review-provider-'));
 
 export const providerMaterialModels = (state, provider) => supplierModelChannelGroups(state, provider).filter(row => row.master);
 

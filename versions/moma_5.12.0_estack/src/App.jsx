@@ -508,14 +508,15 @@ function PrototypeApp({ version }) {
       marketSeries.set(item.seriesId, filters.author ? item.series : `${item.series} · ${item.author}`);
     }
   }
-  const meta = m => ({ task: ({ text: ['文本与代码'], multimodal: ['多模态', '文本与代码'], image: ['图像'], video: ['视频'], voice: ['音频'], audio: ['音频'], embedding: ['向量'], rerank: ['重排'] })[m.type] || [], input: m.input, output: m.outputModalities, author: m.classification?.authorId });
+  const meta = m => ({ task: m.type === 'visual' ? [m.outputModalities?.includes('图片') && '图像', m.outputModalities?.includes('视频') && '视频'].filter(Boolean)
+    : ({ text: ['文本与代码'], multimodal: ['多模态', '文本与代码'], image: ['图像'], video: ['视频'], voice: ['音频'], audio: ['音频'], embedding: ['向量'], rerank: ['重排'] })[m.type] || [], input: m.input, output: m.outputModalities, author: m.classification?.authorId });
   const visible = useMemo(
     () =>
       models
         .filter((m) => {
           const data = meta(m);
           return (
-            [m.name, m.modelId, m.id].some(value => String(value ?? '').toLowerCase().includes(query.trim().toLowerCase())) &&
+            [m.name, ...m.services.map(service => service.callId)].some(value => String(value ?? '').toLowerCase().includes(query.trim().toLowerCase())) &&
             Object.entries(filters).every(
               ([group, value]) =>
                 !value ||

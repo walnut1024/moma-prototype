@@ -111,12 +111,12 @@ test('both 5.12.0 modes complete detection, trial, publication and unlisting thr
     storedCost.expiresAt = '2020-01-01T00:00:00.000Z';
     withoutCost.revision++;
     await local.db.batch(modelChanges(local.db, fresh, withoutCost));
-    const unpriced = (await api('/model-operations')).data;
-    const startSale = releaseStage => ({type:'modelOperations',operation:'startSales',modelId:releaseModel.id,
-      data:{releaseStage,releaseTenantIds:releaseStage==='gray'?['tenant-gov']:[],confirmed:true,expectedUpdatedAt:releaseModel.updatedAt}});
+    let unpriced = (await api('/model-operations')).data;
     for (const stage of ['gray', 'formal']) {
-      await assert.rejects(save(unpriced, startSale(stage)), { status: 422, message: /缺少有效的服务商成本价/ });
-      assert.deepEqual((await api('/model-operations')).data, unpriced);
+      const currentModel = unpriced.models.find(row => row.id === releaseModel.id);
+      unpriced = await save(unpriced, {type:'modelOperations',operation:'startSales',modelId:releaseModel.id,
+        data:{releaseStage:stage,releaseTenantIds:stage==='gray'?['tenant-gov']:[],confirmed:true,expectedUpdatedAt:currentModel.updatedAt}});
+      assert.equal(unpriced.models.find(row=>row.id===releaseModel.id).releaseStage,stage);
     }
     const restored = { ...fresh, revision: unpriced.revision + 1 };
     await local.db.batch(modelChanges(local.db, unpriced, restored));

@@ -146,13 +146,12 @@ test('deleting a connection preserves its supplier registration and procurement 
   assert.deepEqual(owner.catalogConnections.find(row => row.id === channel.id).procurementVersions, channel.procurementVersions);
 });
 
-test('supplier Excel rows preserve protocol-specific URLs through registration and edit', async () => {
-  const { excelOffers, offerHeaders } = await import('../src/admin-v2/supplier-offer-fields.js');
+test('supplier offer metadata preserves protocol-specific URLs through registration and edit', () => {
   const { state, provider } = fixture();
-  const rows = [offerHeaders,
-    ['供应名称','vendor-chat','offer-test','文本','OpenAI Chat Completions','https://chat.example/v1/chat/completions'],
-    ['供应名称','vendor-responses','offer-test','文本','OpenAI Responses','https://responses.example/v1/responses']];
-  const offers = excelOffers(rows,provider);
+  const offers = [{ name: '供应名称', code: 'offer-test', type: 'text', bindings: [
+    { upstream: 'vendor-chat', protocol: 'OpenAI Chat Completions', url: 'https://chat.example/v1/chat/completions' },
+    { upstream: 'vendor-responses', protocol: 'OpenAI Responses', url: 'https://responses.example/v1/responses' },
+  ] }];
   const save = (state,offers) => op(state,'supplierOffersSave',{providerId:provider.id,offers});
   const saved = save(state,offers);
   const entry = state => state.providers.find(p => p.id === provider.id).catalogModels.find(m => m.modelId === 'offer-test');
@@ -160,6 +159,6 @@ test('supplier Excel rows preserve protocol-specific URLs through registration a
   const edited = save(saved,[{...offers[0],name:'新名称'}]);
   assert.equal(entry(edited).offerFields.name,'新名称');
   assert.equal(entry(edited).libraryId,entry(saved).libraryId);
-  rows[2][5] = rows[1][5];
-  assert.throws(() => excelOffers(rows,provider),/匹配/);
+  offers[0].bindings[1].url = offers[0].bindings[0].url;
+  assert.throws(() => save(state, offers), /匹配/);
 });

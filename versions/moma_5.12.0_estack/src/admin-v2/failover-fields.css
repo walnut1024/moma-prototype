@@ -8,6 +8,7 @@
 .failover-policy strong {font-size:17px;font-variant-numeric:tabular-nums}
 .failover-policy small {color:var(--semi-color-text-2);font-size:12px;font-weight:400}
 .failover-policy .semi-input-number {width:90px}
+.failover-policy .fp-parameter .semi-input-number {width:136px;flex-shrink:0}
 .failover-policy .fp-title {margin-top:24px}
 .failover-policy .fp-title code {display:inline}
 .failover-policy p {margin:4px 0 12px;color:var(--semi-color-text-2);font-size:13px}

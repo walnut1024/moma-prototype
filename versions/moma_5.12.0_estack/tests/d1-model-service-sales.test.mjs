@@ -7,6 +7,7 @@ import { scopeTenants } from '../src/admin-v2/service-commercial.js';
 import { domainModelWorkspace } from '../src/mock/model-fields.js';
 import { registeredServiceUpstreams } from '../src/admin-v2/service-model-mappings.js';
 import { channelFingerprint } from '../src/admin-v2/provider-channels.js';
+import { modelServiceSupply } from '../server/model-service-sales.js';
 
 test('model sales enforce one stable sale, immutable quotes and real technical prerequisites', async t => {
   const password = randomBytes(18).toString('hex');
@@ -94,7 +95,9 @@ test('model sales enforce one stable sale, immutable quotes and real technical p
 
   const workspace = async () => domainModelWorkspace((await request('/model-operations', { cookie: admin })).data);
   const source = await workspace();
-  const channel = registeredServiceUpstreams(source).find(row => row.type === 'text' && row.managed && !row.reason);
+  const channel = registeredServiceUpstreams(source).find(row => row.type === 'text' && row.managed && !row.reason &&
+    modelServiceSupply(source, { type:'text', channels:[{ channelId:row.id, enabled:true, fingerprint:channelFingerprint(row) }] })
+      .some(route => !route.costPrices));
   assert.ok(channel);
   const attached = {
     id: resourceId('service-channel'), channelId: channel.id, fingerprint: channelFingerprint(channel),
@@ -102,6 +105,16 @@ test('model sales enforce one stable sale, immutable quotes and real technical p
     enabled: true, priority: 0, weight: 100,
   };
   technical = await serviceSave({ ...technical, channels: [attached], listed: true }, technical.revision);
+  const { checks } = (await list()).rows[0];
+  assert.ok(checks.some(check => check.warning && check.upstreamId === channel.id &&
+    check.connectionId === channel.endpointId && check.label.includes(channel.upstreamModelId)));
+  assert.ok(checks.filter(check => !check.warning).every(check => check.passed));
+  const tenantId = scopeTenants(source)[0].id;
+  await command('start', 1, { stage: 'gray', grayTenantIds: ['unknown-tenant'] }, 400);
+  await command('start', 1, { stage: 'gray', grayTenantIds: [tenantId] });
+  assert.equal((await list()).rows[0].stage, 'gray');
+  assert.deepEqual((await list()).rows[0].grayTenantIds, [tenantId]);
+  await command('start', 2, { stage: 'formal' });
   const operationId = crypto.randomUUID();
   await request('/model-operations/commands', { cookie: admin, body: {
     operationId, expectedRevision: source.revision,
@@ -112,12 +125,6 @@ test('model sales enforce one stable sale, immutable quotes and real technical p
     } },
   } });
   assert.ok((await list()).rows[0].checks.every(row => row.passed));
-  const tenantId = scopeTenants(source)[0].id;
-  await command('start', 1, { stage: 'gray', grayTenantIds: ['unknown-tenant'] }, 400);
-  await command('start', 1, { stage: 'gray', grayTenantIds: [tenantId] });
-  assert.equal((await list()).rows[0].stage, 'gray');
-  assert.deepEqual((await list()).rows[0].grayTenantIds, [tenantId]);
-  await command('start', 2, { stage: 'formal' });
   const revised = prices('amount');
   revised[0].amount = '3.25';
   await command('price', 3, { items: revised });

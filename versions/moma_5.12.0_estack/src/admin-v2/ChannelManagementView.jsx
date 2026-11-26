@@ -64,7 +64,9 @@ function ChannelModelCosts({ state, channel, ops, open }) {
   const [checkedKeys, setCheckedKeys] = useState([]);
   const [batch, setBatch] = useState(null);
   const trigger = useRef(null);
-  const selected = channel.models.filter(model => checkedKeys.includes(model.key));
+  const associatedModelId = ops.params.get('modelCost');
+  const models = associatedModelId ? channel.models.filter(model => model.association.id === associatedModelId) : channel.models;
+  const selected = models.filter(model => checkedKeys.includes(model.key));
   const tooMany = selected.length > CHANNEL_PROCUREMENT_BATCH_LIMIT;
   const close = saved => {
     setBatch(null);
@@ -77,12 +79,13 @@ function ChannelModelCosts({ state, channel, ops, open }) {
     <div className="channel-management-toolbar">
       <Typography.Text type="tertiary" aria-live="polite">{tooMany
         ? `每批最多设置 ${CHANNEL_PROCUREMENT_BATCH_LIMIT} 款模型` : `已选 ${selected.length} 款模型`}</Typography.Text>
+      {associatedModelId && <Button theme="borderless" onClick={() => ops.go({ modelCost: null }, { replace: true })}>{t('显示全部模型')}</Button>}
       <Button ref={trigger} theme="light" disabled={!ops.can || !selected.length || tooMany}
         onClick={() => ops.proceed(() => { ops.setError(''); setBatch(selected); })}>{t('批量设置成本')}</Button>
     </div>
-    <AdminTable aria-label={t('模型成本')} rowKey="key" pagination={false} dataSource={channel.models}
+    <AdminTable aria-label={t('模型成本')} rowKey="key" pagination={false} dataSource={models}
       rowSelection={{ selectedRowKeys: selected.map(model => model.key), onChange: setCheckedKeys, getCheckboxProps: () => ({ disabled: !ops.can }) }}
-      empty={t('该连接尚未接入模型')} scroll={{ x: 'max(100%, 704px)' }} columns={[
+      empty={t(associatedModelId ? '未找到指定上游模型' : '该连接尚未接入模型')} scroll={{ x: 'max(100%, 704px)' }} columns={[
       { title: t('模型展示名称 / 上游模型 ID'), width: 220, render: (_, model) => <div className="channel-identity">
         <Typography.Text strong ellipsis={{ showTooltip: true }}>{model.modelName}</Typography.Text>
         <CopyId copyAtStart ellipsis label="上游模型 ID" value={model.association.upstreamModelId}/>
@@ -105,6 +108,7 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
   const requestedTab = ops.params.get('tab');
   const tabs = ['models', ...(modelCosts ? ['model-costs'] : []), ...(keyPool ? ['api-keys'] : [])];
   const tab = tabs.includes(requestedTab) ? requestedTab : 'overview';
+  const returnTo = tab === 'model-costs' && operationsReturn(ops.params.get('returnTo'));
   const selectTab = value => ops.go({ tab: value === 'overview' ? null : value,
     ...(value !== 'api-keys' && { keyGroup: null }) }, { replace: true });
   const keyCount = connectionKeys(endpoint, channel.provider, true).length + t(' 把');
@@ -133,6 +137,7 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
   return <>
     <AdminPageHeading title={name}>
       {tab === 'overview' && <Button disabled={!ops.can} onClick={event => open(event, 'edit', id)}>{t('编辑信息')}</Button>}
+      {returnTo && <Button theme="borderless" onClick={() => ops.proceed(() => { location.hash = returnTo; })}>{t('返回来源页面')}</Button>}
     </AdminPageHeading>
     <Card className="channel-management-card">
       <Tabs type="line" activeKey={tab} lazyRender keepDOM={false} tabPaneMotion={false} aria-label={t('连接详情')}
@@ -202,7 +207,7 @@ export default function ChannelManagementView({ state, connections, ops, open, f
         keyPool={<ReferenceProviderApiKeys key={channel.id} state={state} connection={channel}
           ops={ops}/>}/>
         : <Card><Empty description={t('该连接不存在或已删除')}><Button
-          onClick={() => go({ connection: null, tab: null, modelQ: null, keyGroup: null })}>{t('返回连接列表')}</Button></Empty></Card>}
+          onClick={() => go({ connection: null, tab: null, modelQ: null, modelCost: null, keyGroup: null })}>{t('返回连接列表')}</Button></Empty></Card>}
     </div>;
   }
 
@@ -222,7 +227,7 @@ export default function ChannelManagementView({ state, connections, ops, open, f
   const rows = matches.slice((page - 1) * pageSize, page * pageSize);
   const view = (id, tab = null) => {
     listPosition.current = { id, tab, top: window.scrollY, left: focusTarget.current?.querySelector('.semi-table-body')?.scrollLeft };
-    go({ connection: id, tab, modelQ: null, keyGroup: null });
+    go({ connection: id, tab, modelQ: null, modelCost: null, keyGroup: null });
   };
   return <div className="admin-page-stack" ref={focusTarget}>
     <Space spacing={6} align="center">
@@ -264,12 +269,19 @@ export default function ChannelManagementView({ state, connections, ops, open, f
           { title: t('已接入模型'), width: 88, render: (_, row) =>
             <Button size="small" theme="borderless" data-channel-models-id={row.id}
               aria-label={row.name + '的' + row.modelCount + '款模型'} onClick={() => view(row.id, 'models')}>{row.modelCount}{t(' 款')}</Button> },
-          { title: t('操作'), width: 164, fixed: 'right', render: (_, row) => <Space spacing={2}>
-              <Button size="small" theme="borderless" disabled={!ops.can} aria-label={t('测试连接') + ' ' + row.name}
-                onClick={event => open(event, 'testConnection', row.id)}>{t('测试连接')}</Button>
+          { title: t('操作'), width: 164, fixed: 'right', render: (_, row) => {
+            const hasModels = row.modelCount > 0;
+            const testButton = <Button size="small" theme="borderless" disabled={!ops.can || !hasModels}
+              style={hasModels ? undefined : { pointerEvents: 'none' }} aria-label={t('测试连接') + ' ' + row.name}
+              onClick={event => open(event, 'testConnection', row.id)}>{t('测试连接')}</Button>;
+            return <Space spacing={2}>
+              {hasModels ? testButton : <Tooltip closeOnEsc content={t('当前模型连接下暂未配置上游模型')}>
+                <span tabIndex={0} style={{ display: 'inline-flex' }}>{testButton}</span>
+              </Tooltip>}
               <Button size="small" theme="borderless" type="danger" disabled={!ops.can} aria-label={t('删除连接') + ' ' + row.name}
                 onClick={event => open(event, 'remove', row.id)}>{t('删除')}</Button>
-            </Space> },
+            </Space>;
+          } },
         ]}/>
       <AdminPagination total={matches.length} currentPage={page} pageSize={pageSize} pageSizeOpts={allowedSizes} showSizeChanger
         onPageChange={page => go({ page }, { replace: true })}

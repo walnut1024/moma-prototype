@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Button, Input, Select, Space, Typography } from '@douyinfe/semi-ui';
+import { Button, Input, Select } from '@douyinfe/semi-ui';
 import { AdminModal } from './AdminOverlay';
 import { Field, Notice } from './ServiceUI';
-import { excelOffers, protocolLabels, validateOffer } from './supplier-offer-fields';
+import { protocolLabels, validateOffer } from './supplier-offer-fields';
 import { modelTypeLabel } from '../model-types.mjs';
 import { PROTOCOL_ENDPOINT_LABEL, protocolAndEndpoint, workbenchProtocolLabel } from './workbench-protocol';
 const blank = () => ({ upstream:'', protocol:protocolLabels[0], url:'' });
@@ -33,35 +33,4 @@ export function SupplierOfferEditor({ offer, provider, ops, close }) {
     <Button onClick={() => bindings([...draft.bindings,blank()])}>添加接口格式地址</Button>
     {(error || ops.error) && <Notice error>{error || ops.error}</Notice>}
   </AdminModal>;
-}
-
-export function SupplierOfferImport({ provider, ops, done }) {
-  const [offers,setOffers] = useState([]), [busy,setBusy] = useState(false), [error,setError] = useState('');
-  async function read(file) {
-    setOffers([]); setError('');
-    if (!file) return;
-    setBusy(true);
-    try {
-      if (!/\.xlsx$/i.test(file.name) || file.size > 10*1024*1024) throw Error('请选择 10 MB 以内的 .xlsx 文件');
-      const { readSheet } = await import('read-excel-file/browser');
-      setOffers(excelOffers(await readSheet(file),provider));
-    } catch(e) { setError(e.message); } finally { setBusy(false); }
-  }
-  async function submit() {
-    setBusy(true);
-    try {
-      for (let i=0;i<offers.length;i+=5) {
-        if (!await ops.run('supplierOffersSave',{ providerId:provider.id,offers:offers.slice(i,i+5) })) return;
-        setOffers(offers.slice(i+5));
-      }
-      done();
-    } finally { setBusy(false); }
-  }
-  return <Space vertical align="start">
-    <Typography.Text link={{ href:import.meta.env.BASE_URL+'templates/supplier-offers.xlsx',download:'供应模型.xlsx' }}>下载 Excel 模板</Typography.Text>
-    <input type="file" aria-label="上传供应模型 Excel 表格" accept=".xlsx" disabled={busy} onChange={e => read(e.target.files[0])}/>
-    {offers.map(o => <div key={o.code}>{o.name} · {o.code} · {modelTypeLabel(o.type)}{o.bindings.map(b => <div key={JSON.stringify(b)}>{b.upstream} · {protocolAndEndpoint(b.protocol,b.url)}</div>)}</div>)}
-    {(error || ops.error) && <Notice error>{error || ops.error}</Notice>}
-    <Button theme="solid" disabled={!ops.can || busy || !offers.length} onClick={submit}>确认导入{offers.length ? ' '+offers.length+' 个模型' : ''}</Button>
-  </Space>;
 }

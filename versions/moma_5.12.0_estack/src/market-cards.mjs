@@ -1,7 +1,7 @@
 import { projectRole } from './project-access.mjs';
 import { isResourceId, resourceId } from './resource-id.mjs';
 import { modelLibrary, modelMaterial } from './admin-v2/model-library.js';
-import { MODEL_TYPES } from './admin-v2/model-management.js';
+import { MODEL_TYPE_LABELS, modelCategory } from './model-types.mjs';
 import { INPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, modelProfileDraft, normalizeModelLogo } from './admin-v2/model-profile.js';
 import { modelIdentity, modelPresentation } from './model-identities.mjs';
 import { activeCustomer, offerGrayTenants, offerKey, offerStage, providerOffer, serviceCallsEnabled, serviceReferences } from './service-access.mjs';
@@ -23,7 +23,7 @@ export function marketCardFieldValues(model) {
   return {
     name: model?.name || '', heat: model?.heat ?? '', logo: profile.logo || '', description: model?.description || '',
     description_en: model?.description_en || profile.descriptionEn || '', type: model?.type || '', context_length: model?.capabilities?.context ?? '',
-    family: profile.family || '', input_modalities: profile.inputModalities || [],
+    author: profile.author || '', family: profile.family || '', input_modalities: profile.inputModalities || [],
     output_modalities: [...new Set([...(profile.outputModalities || []), ...(profile.resultTypes || [])])],
     precision: profile.precision || '', tags: Array.isArray(tags) ? tags : [], release_date: profile.releaseDate || '',
     parameters: Number.isFinite(profile.parameters) ? profile.parameters : '', features: model?.features || {},
@@ -38,7 +38,8 @@ export function marketCardFieldError(data) {
     [data.heat == null || data.heat === '' || Number.isFinite(data.heat) && data.heat >= 0, '热度须为非负数'],
     [filled('description', 5000), '请填写模型中文简介（最多 5000 字）'],
     [filled('description_en', 5000), '请填写模型英文简介（最多 5000 字）'],
-    [typeof data.type === 'string' && Object.hasOwn(MODEL_TYPES, data.type), '请选择模型类型'],
+    [typeof data.type === 'string' && Object.hasOwn(MODEL_TYPE_LABELS, modelCategory(data.type)), '请选择模型类型'],
+    [data.author === undefined || typeof data.author === 'string' && data.author.trim().length <= 100, '模型作者最多 100 字'],
     [Number.isSafeInteger(data.context_length) && data.context_length > 0, '上下文长度换算后须为正整数 Token'],
     [filled('family', 100), '请填写模型系列（最多 100 字）'],
     [selected(data.input_modalities, INPUT_MODALITY_OPTIONS), '请选择输入模态'],
@@ -135,15 +136,13 @@ export function marketCardIndex(state, orderedModels) {
     const modelId = card ? marketCardModelId(cardId, card) : key;
     const serviceModel = services.get(modelId), material = materials.get(modelId);
     const model = serviceModel || material;
-    const canonicalSlug = material?.modelId || (model ? modelIdentity(state, model).canonical_slug || model.modelId : '');
-    if (card) return [{ ...(model || { id: cardId }), ...card.content, card, cardId, modelId,
-      canonicalSlug: card.content?.canonical_slug || canonicalSlug, legacy: false }];
+    if (card) return [{ ...(model || { id: cardId }), ...card.content, card, cardId, modelId, legacy: false }];
     if (!model) return [];
     const linked = legacyCardServices(state, modelId, references);
     const displayed = linked.filter(row => row.legacyShown);
     const shown = displayed.map(row => row.id);
     return [{
-      ...modelPresentation(state, model), cardId, modelId, canonicalSlug, legacy: true,
+      ...modelPresentation(state, model), cardId, modelId, legacy: true,
       card: {
         linked: linked.map(row => row.id), shown, status: shown.length ? 'listed' : model.firstPublishedAt ? 'withdrawn' : 'draft',
         scope: displayed.length && displayed.every(row => row.stage === 'gray')
@@ -239,15 +238,21 @@ export function marketCardTransaction(state, action, orderedModels) {
     const error = marketCardFieldError(data);
     if (error) throw Error(error);
     const source = creating ? null : card.content;
-    const canonicalSlug = material?.modelId || source?.canonical_slug || existing?.canonicalSlug;
+    const canonicalSlug = source?.canonical_slug;
     const profile = modelProfileDraft(source);
-    const author = material && modelProfileDraft(material).author;
-    if (author) profile.author = author;
+    if (data.author !== undefined) {
+      const author = data.author.trim();
+      if (author !== profile.author) {
+        delete profile.authorId;
+        delete profile.familyId;
+      }
+      profile.author = author;
+    }
     if (profile.family !== data.family.trim()) delete profile.familyId;
     if (data.logo === '') delete profile.logo;
     else if (data.logo) profile.logo = data.logo;
     card = { ...card, content: {
-      type: data.type, name: data.name.trim(), description: data.description.trim(), description_en: data.description_en.trim(),
+      type: data.type === 'voice' ? modelCategory(data.type) : data.type, name: data.name.trim(), description: data.description.trim(), description_en: data.description_en.trim(),
       ...(canonicalSlug && { canonical_slug: canonicalSlug }),
       heat: Number.isFinite(data.heat) ? data.heat : null, tags: [...new Set(data.tags.map(tag => tag.trim()))],
       features: Object.fromEntries(Object.keys(marketCardFeatures).map(key => [key, data.features?.[key] === true])),

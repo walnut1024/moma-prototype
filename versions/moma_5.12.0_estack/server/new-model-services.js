@@ -1,4 +1,4 @@
-import { effectiveRoutingStrategy, failoverError, failoverValues, initialRoutingParameters, globalPolicyDefaults, globalRoutingStrategies } from '../src/admin-v2/global-routing-parameters.mjs';
+import { effectiveRoutingStrategy, failoverError, failoverValues, globalRoutingStrategies } from '../src/admin-v2/global-routing-parameters.mjs';
 import { isResourceId, resourceId } from '../src/resource-id.mjs';
 import { MODEL_TYPES, SERVICE_MODEL_TYPES } from '../src/admin-v2/model-management.js';
 import { registeredServiceUpstreams } from '../src/admin-v2/service-model-mappings.js';
@@ -64,7 +64,7 @@ export async function newModelServices(db) {
   const { results } = await db.prepare(`SELECT id,revision,CASE WHEN deleted_at IS NULL THEN record_json END AS record_json
     FROM new_model_services ORDER BY created_at DESC,id`).all();
   const stored = await db.prepare("SELECT json_extract(reference_json,'$.globalRoutingParameters') AS policy FROM model_workspace WHERE id=1").first('policy');
-  const defaults = { ...initialRoutingParameters, ...globalPolicyDefaults, ...JSON.parse(stored ?? '{}') };
+  const defaults = JSON.parse(stored ?? '{}');
   return {
     defaults: { ...failoverValues(defaults), strategy: effectiveRoutingStrategy(defaults.strategy) },
     rows: results.filter(row => row.record_json).map(exposedRow),

@@ -6,7 +6,6 @@ import { startLocalBackend } from '../database/local-runtime.js';
 import { createSeed, initializeDatabase } from '../database/seed.js';
 import { resourceId } from '../src/resource-id.mjs';
 import { modelCatalogue } from '../src/admin-v2/model-library.js';
-import { excelOffers, offerHeaders } from '../src/admin-v2/supplier-offer-fields.js';
 
 const adminCode = 'Test@' + randomBytes(8).toString('hex'), opsCode = 'Test@' + randomBytes(8).toString('hex');
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -282,20 +281,35 @@ test('provider material commands preserve stable identities, validate display fi
   assert.equal(savedEndpoint.baseUrl, 'https://new.example.test/v1');
   assert.equal(savedEndpoint.status, '停用');
   assert.deepEqual(savedEndpoint.apiKeys, endpoint.apiKeys);
+
+  state = (await request('/model-operations')).data;
+  const removeProfile = (objectId, expectedUpdatedAt, confirmed = true) =>
+    commit('provider', { operation: 'profileRemove', objectId, values: { expectedUpdatedAt, confirmed } });
+  assert.equal((await removeProfile('provider-moma', null)).status, 422);
+  assert.equal((await removeProfile(provider.id, 'stale')).status, 422);
+  assert.equal((await removeProfile(provider.id, updated.updatedAt, false)).status, 422);
+  assert.equal((await removeProfile(provider.id, updated.updatedAt)).status, 200);
+  state = (await request('/model-operations')).data;
+  const retained = state.providers.find(row => row.id === provider.id);
+  assert.ok(retained.profileRemovedAt);
+  assert.equal(retained.status, updated.status);
+  assert.deepEqual(retained.catalogModels, updated.catalogModels);
+  assert.deepEqual(state.endpoints.find(row => row.id === endpoint.id), savedEndpoint);
+  assert.equal((await commit('channelDirectoryCreate', { providerId: provider.id })).status, 422);
+  assert.equal((await changeAddress({ baseUrl: 'https://after-removal.example.test/v1', expectedUpdatedAt: savedEndpoint.updatedAt })).status, 200);
 });
 
-test('D1 rejects retired supplier JSON and atomically saves Excel offer metadata without making a connection', async () => {
+test('D1 rejects retired supplier JSON and atomically saves offer metadata without making a connection', async () => {
   const before = (await request('/model-operations')).data;
   const provider = before.providers.find(row => row.id === 'provider-deepseek-official');
   const existing = modelCatalogue(before).find(row => row.type === 'text');
   const suffix = randomBytes(4).toString('hex');
   const newCode = `qa-offer-${suffix}`;
   const url = `https://${suffix}.import.example.invalid/v1/chat/completions`;
-  const offers = excelOffers([
-    offerHeaders,
-    ['复用资料的供应名称', 'vendor/existing', existing.modelId, 'text', 'OpenAI Chat Completions', url],
-    ['新供应模型', 'vendor/new', newCode, 'text', 'OpenAI Chat Completions', url],
-  ], provider);
+  const offers = [
+    { name: '复用资料的供应名称', code: existing.modelId, type: 'text', bindings: [{ upstream: 'vendor/existing', protocol: 'OpenAI Chat Completions', url }] },
+    { name: '新供应模型', code: newCode, type: 'text', bindings: [{ upstream: 'vendor/new', protocol: 'OpenAI Chat Completions', url }] },
+  ];
   const commit = (operation, data, { session = token, expectedRevision = before.revision, operationId = crypto.randomUUID() } = {}) =>
     request('/model-operations/commands', { method: 'POST', session, key: operationId,
       body: { operationId, expectedRevision, action: { type: 'modelOperations', operation, data } } });
@@ -728,7 +742,7 @@ test('market card icons and service associations persist and can be removed inde
   const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBTsAAAAASUVORK5CYII=';
   const content = {
     name: '关联验收卡片', description: '独立模型卡片验收', description_en: 'Service associations',
-    type: 'text', context_length: 32768, family: '验收系列', input_modalities: ['文本'],
+    type: 'text', author: '手填作者', context_length: 32768, family: '验收系列', input_modalities: ['文本'],
     output_modalities: ['文本'], precision: 'BF16', tags: ['验收'], release_date: '2026-11-21',
   };
   let state = (await request('/model-operations')).data;
@@ -809,22 +823,26 @@ test('market card icons and service associations persist and can be removed inde
   assert.deepEqual(card().linked, [first, second]);
   assert.equal(card().status, 'draft');
   assert.equal(card().content.profile.logo, logo);
+  assert.equal(card().content.profile.author, content.author);
   const edit = { ...content, card_id: cardId, source_model_id: material.id, context_length: 1572864,
-    description_en: 'Updated after importing reference data' };
+    author: '导入后修改的作者', description_en: 'Updated after importing reference data' };
   assert.equal((await submit('marketCardEdit', { ...edit, source_model_id: 'missing-material' })).status, 422);
   assert.equal((await submit('marketCardEdit', edit)).status, 200);
   await refresh();
   assert.equal(card().model_id, undefined);
-  assert.equal(card().content.canonical_slug, material.modelId);
+  assert.equal(card().content.canonical_slug, undefined);
+  assert.equal(card().content.profile.author, edit.author);
   assert.deepEqual(card().linked,[first,second]);
   assert.equal(card().content.description_en, edit.description_en);
   assert.equal(card().content.capabilities.context, 1572864);
   assert.equal(card().content.profile.logo, logo);
   const { source_model_id: _sourceModelId, ...editWithoutImport } = edit;
-  assert.equal((await submit('marketCardEdit', { ...editWithoutImport, logo: '' })).status, 200);
+  assert.equal((await submit('marketCardEdit', { ...editWithoutImport, logo: '', author: '', type: 'other' })).status, 200);
   await refresh();
   assert.equal(card().content.profile.logo, undefined);
-  assert.equal(card().content.canonical_slug, material.modelId);
+  assert.equal(card().content.canonical_slug, undefined);
+  assert.equal(card().content.profile.author, '');
+  assert.equal(card().content.type, 'other');
   assert.deepEqual(card().linked, [first, second]);
   assert.equal((await submit('marketCardSetStatus', { card_id: cardId, listing_stage: 'formal', serviceIds: [first] })).status, 422);
   const inspect = async id => (await request('/model-services-new?inspect=' + id)).data;

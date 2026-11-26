@@ -9,6 +9,7 @@ import { serviceStatus } from './model-services-new';
 import { displayTime, moneyDisplay } from './model-management';
 import { retailItems, scopeTenants } from './service-commercial';
 import { salesAudienceLabel } from './SalesAudience';
+import { useChannelText } from './channel-language';
 
 const modelPriceRows = price => (price?.items || []).map(({ name, condition, unit, currency, amount }) =>
   ({ name, condition, unit, currency, amount: String(amount / 1_000_000) }));
@@ -142,6 +143,7 @@ export function ModelServiceSaleDetail({ state, row, ops, actions, change, busy,
 }
 
 export function ModelServiceSaleStatusDialog({ state, row, ops, stage, revision, change, busy, close, configure }) {
+  const t = useChannelText();
   const [tenantIds, setTenantIds] = useState(row.grayTenantIds);
   const pause = stage === 'pause', gray = stage === 'gray';
   const title = pause ? '停售' : gray ? '灰度开售' : '开售';
@@ -151,13 +153,13 @@ export function ModelServiceSaleStatusDialog({ state, row, ops, stage, revision,
     service: () => ops.go({ service: row.id, returnTo: location.hash }, { base: 'listing-new', reset: true }),
     pricing: () => configure(row),
     cost: check => ops.go({
-      ...(check.connectionId && { connection: check.connectionId, tab: 'model-costs' }), returnTo: location.hash,
+      ...(check.connectionId && { connection: check.connectionId, tab: 'model-costs', modelCost: check.upstreamId }), returnTo: location.hash,
     }, { base: 'providers-reference', reset: true }),
   };
-  return <Modal wide={!pause} centered={pause} title={title} description={row.callId} onClose={() => !busy && close()} footer={<>
+  return <Modal wide={!pause} centered={pause} title={title} description={`${row.modelName}（${row.callId}）`} onClose={() => !busy && close()} footer={<>
     <Button disabled={busy} onClick={close}>取消</Button>
     <Button theme="solid" type={pause ? 'danger' : 'primary'} loading={busy}
-      disabled={!ops.can || busy || stale || !pause && checks.some(check => !check.passed)} onClick={async () => {
+      disabled={!ops.can || busy || stale || !pause && checks.some(check => !check.passed && !check.warning)} onClick={async () => {
         const result = await change({
           action: pause ? 'pause' : 'start', serviceId: row.id, revision,
           ...(!pause && { stage }), ...(gray && { grayTenantIds: tenantIds }),
@@ -166,9 +168,10 @@ export function ModelServiceSaleStatusDialog({ state, row, ops, stage, revision,
       }}>确认{title}</Button>
   </>}>
     {pause ? <p>停售后暂停新订购，已有订单与调用权限继续有效。</p> : <>
-      {gray && <TenantPicker choices={choices} tenantIds={tenantIds} disabled={busy || !ops.can} change={setTenantIds}/>}
-      <ul className="ss-checks">{checks.map(check => <li key={check.label}>
-        <span>{check.passed ? '✓' : '待完成'} {check.label}</span>
+      {gray ? <TenantPicker choices={choices} tenantIds={tenantIds} disabled={busy || !ops.can} change={setTenantIds}/>
+        : <p>{t('销售范围：全部租户')}</p>}
+      <ul className="ss-checks">{checks.map(check => <li key={check.upstreamId || check.label}>
+        <span>{check.passed ? '✓' : check.warning ? t('提醒') : t('待完成')} {check.label}</span>
         {!check.passed && targets[check.target] && <Button theme="borderless" disabled={busy} onClick={() => { close(); targets[check.target](check); }}>前往配置</Button>}
       </li>)}</ul>
     </>}

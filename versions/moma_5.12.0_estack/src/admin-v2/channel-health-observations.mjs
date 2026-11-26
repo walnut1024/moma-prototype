@@ -1,10 +1,15 @@
 import { displayBaseUrl } from './channel-health-catalogue.mjs';
-import { attemptsForMetric, observationGroups, observationKey, observationTime, filterObservations } from './call-observations.mjs';
+import { attemptsForMetric, observationFilters, observationGroups, observationKey, observationTime, filterObservations } from './call-observations.mjs';
 import { percentile } from './observability.js';
 
 const minuteMs = 60_000;
 const dayMs = 86_400_000;
 export const availabilityDefinition = '最近3天内服务成功响应请求的平均比例。';
+
+export function channelHealthObservationFilters(params) {
+  const { tenant: _tenant, project: _project, purpose: _purpose, ...filters } = observationFilters(params, '24h');
+  return filters;
+}
 
 const successPercent = ({ success, count }) => count ? success * 100 / count : null;
 

@@ -415,6 +415,7 @@ function DirectoryTest({ title, ...props }) {
     content: <>
       <Field label="完整请求地址">{urls.length > 1 ? <Choice label="探测地址" value={target} disabled={probing}
         options={urls.map(url => [url, url])} onChange={url => { setSelectedUrl(url); setProbe(''); }}/> : <Typography.Text>{target || '—'}</Typography.Text>}</Field>
+      <Typography.Paragraph type="secondary">{translateLabel('仅检查是否收到 HTTP 响应，不发起模型调用。')}</Typography.Paragraph>
       {probe && <Typography.Text role="status">{probe}</Typography.Text>}
     </>,
   } : null;

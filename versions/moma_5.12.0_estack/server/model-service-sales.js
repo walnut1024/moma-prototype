@@ -73,19 +73,19 @@ export function modelServiceSupply(workspace, service, at = Date.now(), contextT
 function saleChecks(workspace, service, sale, at, upstreams) {
   const salePrices = usablePrices(activeModelServiceSalePrice(sale, at), service, '模型刊例价', at);
   const supply = modelServiceSupply(workspace, service, at, null, { upstreams });
-  const missingCost = supply.find(row => !row.costPrices);
-  const differentMeasures = salePrices && supply.find(row => !matchingModelServicePrices(row.costPrices, salePrices));
+  const missingCosts = supply.filter(row => !row.costPrices);
+  const differentMeasures = salePrices && supply.find(row => row.costPrices && !matchingModelServicePrices(row.costPrices, salePrices));
   return [
     { label: '模型服务为服务中', passed: service.listed === true, target: 'service' },
     { label: '模型刊例价已发布且生效', passed: Boolean(salePrices), target: 'pricing' },
     { label: '存在已启用且检测通过的上游模型', passed: supply.length > 0, target: 'service' },
-    ...(supply.length ? [{
-      label: '生效路由中的上游模型具有有效的服务商成本价', passed: !missingCost,
-      target: 'cost', connectionId: missingCost?.channel.endpointId,
-    }] : []),
-    ...(salePrices && supply.length && !missingCost ? [{
+    ...missingCosts.map(({ channel }) => ({
+      label: `缺少有效服务商成本价：${channel.modelSnapshot?.name || channel.provider.catalogModels?.find(row => row.modelId === channel.modelId)?.name || channel.upstreamModelId}（${channel.upstreamModelId}）`,
+      passed: false, warning: true, target: 'cost', connectionId: channel.endpointId, upstreamId: channel.id,
+    })),
+    ...(salePrices && supply.some(row => row.costPrices) ? [{
       label: '成本价与模型刊例价的计量字段和币种一致', passed: !differentMeasures,
-      target: 'cost', connectionId: differentMeasures?.channel.endpointId,
+      target: 'cost', connectionId: differentMeasures?.channel.endpointId, upstreamId: differentMeasures?.channel.id,
     }] : []),
   ];
 }
@@ -167,14 +167,14 @@ export async function changeModelServiceSale(db, actor, body, key) {
       if (modelServiceSaleActive(before)) {
         const sold = platformPriceVersions(price, service, '模型刊例价', at);
         const supply = modelServiceSupply(workspace, service, at);
-        if (supply.some(route => !matchingModelServicePrices(route.costPrices, sold))) throw Error('请与可用上游的成本价使用相同计量字段和币种');
+        if (supply.some(route => route.costPrices && !matchingModelServicePrices(route.costPrices, sold))) throw Error('请与可用上游的成本价使用相同计量字段和币种');
       }
       next.prices = [...next.prices, price];
     } catch (error) { invalid(error.message); }
   }
   if (action === 'start') {
     if (!['gray', 'formal'].includes(body.stage)) invalid('请选择有效的开售方式');
-    const issues = saleChecks(workspace, service, before, at).filter(check => !check.passed);
+    const issues = saleChecks(workspace, service, before, at).filter(check => !check.passed && !check.warning);
     if (issues.length) fail(409, 'SALE_NOT_READY', '请先满足开售条件：' + issues.map(check => check.label).join('、'));
     next.stage = body.stage;
     next.grayTenantIds = body.stage === 'gray' ? selectedTenants(workspace, body.grayTenantIds) : [];

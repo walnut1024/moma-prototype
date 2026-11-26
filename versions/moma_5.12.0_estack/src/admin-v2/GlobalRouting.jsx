@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Button, Card, Select, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
 import FailoverFields from "./FailoverFields";
 import { ROUTING_STRATEGIES } from "./service-routing-strategies.mjs";
-import { failoverError, globalRoutingStrategies, parameterError, routingParameters } from './global-routing-parameters.mjs';
+import { failoverError, globalRoutingStrategies } from './global-routing-parameters.mjs';
 
 export default function GlobalRouting({ saved, revision, transact, conflict, dirtyRef }) {
   const t = useChannelText();
@@ -13,13 +13,17 @@ export default function GlobalRouting({ saved, revision, transact, conflict, dir
   const [tab, setTab] = useState('failover');
   const values = draft ?? saved;
   const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(saved);
-  const invalid = failoverError(values) || routingParameters.some(field => parameterError(field, values[field.key]));
   useEffect(() => {
     dirtyRef.current = dirty;
     return () => { dirtyRef.current = false; };
   }, [dirty, dirtyRef]);
 
   async function save() {
+    const invalid = failoverError(draft);
+    if (invalid) {
+      Toast.error(t(invalid));
+      return;
+    }
     setSaving(true);
     try {
       const { strategy: _strategy, ...failover } = draft;
@@ -37,7 +41,7 @@ export default function GlobalRouting({ saved, revision, transact, conflict, dir
   const actions = <Space style={{ justifyContent: 'flex-end' }}>
           {draft ? <>
             <Button disabled={saving} onClick={() => setDraft(null)}>{t('取消')}</Button>
-            <Button theme="solid" loading={saving} disabled={!dirty || invalid || saving || conflict} onClick={save}>{t('保存')}</Button>
+            <Button theme="solid" loading={saving} disabled={!dirty || saving || conflict} onClick={save}>{t('保存')}</Button>
           </> : <Button theme="solid" disabled={conflict} onClick={() => {
             setBaseRevision(revision);
             setDraft({ ...saved });

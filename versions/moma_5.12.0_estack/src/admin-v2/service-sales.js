@@ -1,9 +1,9 @@
 import { offerGrayTenants, offerKey, offerStage, providerOffer, salesPaused } from '../service-access.mjs';
 import { modelServiceIdentity } from '../model-identities.mjs';
-import { platformServices, platformPriceVersions } from './platform-service-client.js';
+import { platformAllowedChannels, platformServices, platformPriceVersions } from './platform-service-client.js';
 import { activeModelSalePrice, activeProviderPrice } from './service-workspace.js';
 import { activeSupplyPrice } from './model-management.js';
-import { activeRouteSupplyIds, activeRouteVersion, serviceRoute } from './service-routing.js';
+import { activeRouteSupplyIds, activeRouteVersion, routingChannels, serviceRoute } from './service-routing.js';
 import { serviceReferenceStarted } from './service-directory.js';
 
 export function offerSalesScope(model, key) {
@@ -31,16 +31,20 @@ export function salesChecks(state, model, keys) {
     } catch (error) {
       checks.push({label:`${service.name}：${error.message}`,passed:false,tab:'pricing',providerId:offerKey(service)});
     }
-    const supplyIds = activeRouteSupplyIds(activeRouteVersion(serviceRoute(state, service.id))?.config);
-    try {
-      if (!supplyIds.length) throw Error('暂无生效路由，请先配置上游模型及服务商成本价');
-      for (const supplyId of supplyIds) {
-        const price = activeSupplyPrice(state, supplyId, at);
-        platformPriceVersions(price, model, '服务商成本价', at);
+    const supplyIds = new Set(activeRouteSupplyIds(activeRouteVersion(serviceRoute(state, service.id))?.config));
+    const available = routingChannels(state, service, at).some(row => supplyIds.has(row.id) && row.available);
+    checks.push({label:'存在已启用且检测通过的上游模型',passed:available,tab:'technical'});
+    for (const { id, supply, association } of platformAllowedChannels(state, service)) {
+      if (!supplyIds.has(id)) continue;
+      try {
+        platformPriceVersions(activeSupplyPrice(state, id, at), model, '服务商成本价', at);
+      } catch {
+        const upstreamId = supply?.upstreamModelId || id;
+        const name = association?.modelSnapshot?.name ||
+          supply?.provider?.catalogModels?.find(row => row.modelId === association?.modelId)?.name || upstreamId;
+        checks.push({label:`缺少有效服务商成本价：${name}（${upstreamId}）`,
+          passed:false,warning:true,connectionId:association?.endpointId,upstreamId:association?.id});
       }
-      checks.push({label:`${service.name}：生效路由的服务商成本价已配置`,passed:true});
-    } catch (error) {
-      checks.push({label:`${service.name}：缺少有效的服务商成本价。${error.message}`,passed:false});
     }
   }
   return checks;

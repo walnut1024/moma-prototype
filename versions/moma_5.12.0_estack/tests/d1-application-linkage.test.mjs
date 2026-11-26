@@ -40,6 +40,7 @@ test('the preset administrator and customers share D1 while their workspaces sta
     assert.equal(admin.status,200);
     assert.match(admin.cookie,/^moma5120_v2_session=/);
     const beforeLogin=(await request('application',{cookie:admin.cookie})).data;
+    assert.deepEqual(beforeLogin.globalRoutingParameters, { strategy: 'simple-shuffle' });
     assert.ok(beforeLogin.adminLoginIds.includes(admin.data.account.id));
     assert.equal(beforeLogin.users.find(row=>row.id==='user-personal-demo-002').lastLoginAt,undefined);
     assert.equal(accountDataSourceLabel(beforeLogin.tenants.find(row=>row.id==='personal-demo-002')),'导入样例');
@@ -238,17 +239,38 @@ test('the preset administrator and customers share D1 while their workspaces sta
       const revision=(await request('application',{cookie:admin.cookie})).data.revision;
       return request('application/commands',{cookie:admin.cookie,body:{operationId:randomUUID(),expectedRevision:revision,action}});
     };
-    const values = {retry_policy:{ServiceUnavailableErrorRetries:3,DefaultRetries:0},max_fallbacks:2,strategy:"least-busy",retryConditions:["429"],failoverEnabled:false,timeout:90.5,numRetries:4,retryAfter:3,allowedFails:5,cooldownTime:45};
-    assert.equal((await adminCommand({type:'saveGlobalRoutingParameters',values})).status,200);
-    assert.deepEqual((await request('application',{cookie:admin.cookie})).data.globalRoutingParameters,values);
-    for (const invalid of [{retry_policy:{TimeoutErrorRetries:-1}},{retry_policy:{Other:2}},{max_fallbacks:0.5},{strategy:"unknown"},{strategy:'cost-based-routing'},{retryConditions:["404"]},{failoverEnabled:1},{retryAfter:-1},{numRetries:1.5},{timeout:0},{allowedFails:null},{cooldownTime:-1},{extra:3}]) {
-      assert.equal((await adminCommand({type:'saveGlobalRoutingParameters',values:{...values,...invalid}})).status,400);
+    const readGlobal = async () => (await request('application', { cookie: admin.cookie })).data.globalRoutingParameters;
+    const saveGlobal = values => adminCommand({ type: 'saveGlobalRoutingParameters', values });
+    const values = {
+      strategy: 'least-busy', timeout: 60, cooldownTime: 30, retryAfter: 3, numRetries: 4, allowedFails: 5, max_fallbacks: 2,
+      retry_policy: { ServiceUnavailableErrorRetries: 3, DefaultRetries: 0 }, retryConditions: ['429'], failoverEnabled: false,
+    };
+    await local.db.prepare("UPDATE model_workspace SET reference_json=json_set(reference_json,'$.globalRetryAfter',7) WHERE id=1").run();
+    assert.deepEqual(await readGlobal(), { strategy: 'simple-shuffle', retryAfter: 7 });
+    assert.equal((await saveGlobal(values)).status, 200);
+    assert.deepEqual(await readGlobal(), values);
+    for (const invalid of [{retry_policy:{TimeoutErrorRetries:-1}},{retry_policy:{Other:2}},{max_fallbacks:0.5},{strategy:"unknown"},{strategy:'cost-based-routing'},{retryConditions:["404"]},{failoverEnabled:1},{retryAfter:-1},{numRetries:1.5},{timeout:-1},{timeout:'0'},{allowedFails:1.5},{cooldownTime:-1},{extra:3}]) {
+      assert.equal((await saveGlobal({ ...values, ...invalid })).status, 400);
     }
+    assert.deepEqual(await readGlobal(), values);
+    const zeros = { timeout: 0, cooldownTime: 0, retryAfter: 0, numRetries: 0, allowedFails: 0, max_fallbacks: 0 };
+    assert.equal((await saveGlobal(zeros)).status, 200);
+    assert.deepEqual(await readGlobal(), { strategy: values.strategy, ...zeros });
+    const cleared = {
+      ...Object.fromEntries(Object.keys(zeros).map(key => [key, null])),
+      retry_policy: { TimeoutErrorRetries: null, DefaultRetries: 0 },
+    };
+    assert.equal((await saveGlobal(cleared)).status, 200);
+    assert.deepEqual(await readGlobal(), { strategy: values.strategy, retry_policy: { DefaultRetries: 0 } });
+    assert.equal((await saveGlobal({ retry_policy: {} })).status, 200);
+    assert.deepEqual(await readGlobal(), { strategy: values.strategy, retry_policy: {} });
+    assert.equal((await saveGlobal({ retry_policy: null })).status, 200);
+    assert.deepEqual(await readGlobal(), { strategy: values.strategy });
     await local.db.prepare("UPDATE model_workspace SET reference_json=json_set(reference_json,'$.globalRoutingParameters.strategy','cost-based-routing') WHERE id=1").run();
     assert.equal((await request('application',{ cookie: admin.cookie })).data.globalRoutingParameters.strategy, 'simple-shuffle');
     assert.equal((await request('model-services-new',{ cookie: admin.cookie })).data.defaults.strategy, 'simple-shuffle');
     const { strategy: _strategy, ...failover } = values;
-    failover.timeout += 1;
+    failover.timeout = 61.5;
     assert.equal((await adminCommand({ type: 'saveGlobalRoutingParameters', values: failover })).status, 200);
     assert.deepEqual((await request('application',{ cookie: admin.cookie })).data.globalRoutingParameters, { ...failover, strategy: 'simple-shuffle' });
     assert.equal((await adminCommand({ type: 'saveGlobalRoutingParameters', values: { ...failover, strategy: 'cost-based-routing' } })).status, 400);
@@ -333,6 +355,7 @@ test('the preset administrator and customers share D1 while their workspaces sta
     await local.runtime.dispose();
     local=null;
     local=await startLocalBackend({ persistPath, loginHashes, presets:true });
+    assert.deepEqual(await readGlobal(), values);
     const registeredAgain=await customerLogin(phone,'personal',password);
     assert.equal(registeredAgain.status,200);
     assert.equal(registeredAgain.data.tenant.id,registered.data.tenant.id);

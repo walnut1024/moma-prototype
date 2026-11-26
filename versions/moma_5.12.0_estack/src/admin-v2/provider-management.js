@@ -339,7 +339,7 @@ export function providerTransaction(state, action) {
   }
   if (['create', 'profile', 'summary'].includes(operation)) {
     const summary = operation === 'summary';
-    if (operation !== 'create' && (!provider || provider.deletedAt || provider.id !== objectId)) throw new Error('服务商不存在');
+    if (operation !== 'create' && (!provider || provider.deletedAt || provider.profileRemovedAt || provider.id !== objectId)) throw new Error('服务商不存在');
     if ((summary || operation === 'profile' && Object.hasOwn(data, 'expectedUpdatedAt')) && data.expectedUpdatedAt !== (provider.updatedAt ?? null)) throw new Error('服务商资料已有修订，请重新打开核对');
     const name = typeof data.name === 'string' ? data.name.trim() : '';
     if (!name) throw new Error('请填写服务商名称');
@@ -374,6 +374,12 @@ export function providerTransaction(state, action) {
       if (!summary && provider.sourceType !== fields.sourceType && state.endpoints.some(endpoint => endpoint.providerId === provider.id)) throw new Error('已有接入配置，不能变更供给类型');
       changes.push(update('providers', provider.id, fields));
     }
+  } else if (operation === 'profileRemove') {
+    if (!provider || provider.deletedAt || provider.profileRemovedAt || provider.id !== objectId) throw new Error('服务商资料不存在');
+    if (isBuiltinMoma(provider)) throw new Error('内置服务商不可删除');
+    if (data.confirmed !== true) throw new Error('请确认删除服务商资料');
+    if (data.expectedUpdatedAt !== (provider.updatedAt ?? null)) throw new Error('服务商资料已有修订，请重新打开核对');
+    changes.push(update('providers', provider.id, { profileRemovedAt: new Date().toISOString() }));
   } else if (['enableProvider', 'disableProvider'].includes(operation)) {
     if (!provider) throw new Error('服务商不存在');
     if (operation === 'disableProvider' && !data.confirmed) throw new Error('请先确认停用影响');
@@ -381,7 +387,7 @@ export function providerTransaction(state, action) {
   } else {
     const endpoint = state.endpoints.find(item => item.id === objectId);
     if (operation === 'connection') {
-      if (!provider) throw new Error('服务商不存在');
+      if (!provider || !objectId && provider.profileRemovedAt) throw new Error('服务商不存在');
       if (objectId && (!endpoint || endpoint.providerId !== provider.id)) throw new Error('接入配置不存在或不属于该服务商');
       if (!data.name?.trim()) throw new Error('请填写接入名称');
       if (!PROTOCOLS.includes(data.protocol)) throw new Error('请选择有效的接入接口格式');
@@ -416,5 +422,5 @@ export function providerTransaction(state, action) {
       changes.push(update('endpoints', endpoint.id, connectionTestPatch(endpoint, test)));
     } else throw new Error('未知服务商操作');
   }
-  return { type: 'batch', label: ({ create: '新建服务商', profile: '更新服务商资料', summary: '更新服务商资料', connection: '保存服务商接入配置', testConnection: '连接测试', enableProvider: '启用服务商', disableProvider: '停用服务商' })[operation], objectId: objectId || changes[0]?.record?.id, changes };
+  return { type: 'batch', label: ({ create: '新建服务商', profile: '更新服务商资料', profileRemove: '删除服务商资料', summary: '更新服务商资料', connection: '保存服务商接入配置', testConnection: '连接测试', enableProvider: '启用服务商', disableProvider: '停用服务商' })[operation], objectId: objectId || changes[0]?.record?.id, changes };
 }

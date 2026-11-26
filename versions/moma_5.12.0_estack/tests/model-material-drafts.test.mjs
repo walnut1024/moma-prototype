@@ -79,3 +79,21 @@ test('editing sparse catalogue descriptions leaves unknown capabilities unset',(
   assert.equal(modelMaterial(edited,record.id).capabilities.context,null);
   assert.deepEqual(edited.models,state.models);
 });
+
+test('custom material types retain explicit author and series IDs and reject mismatched ownership', () => {
+  const state = withAdminSession(createAdminSeed());
+  const author = { id: 'test-author-one', name: '作者一', aliases: [] };
+  const second = { id: 'test-author-two', name: '作者二', aliases: [] };
+  const series = { id: 'test-series', authorId: author.id, name: '选定系列', aliases: [] };
+  state.modelData.modelClassification = { authors: [author, second], series: [series] };
+  const data = { modelId: 'material-other', name: '其他专用模型资料', type: 'other',
+    profile: { author: author.name, authorId: author.id, family: series.name, familyId: series.id } };
+  assert.throws(() => run(state, 'templateSave', { ...data, profile: {
+    ...data.profile, author: second.name, authorId: second.id,
+  } }), /请选择该作者下已有的模型系列/);
+  const next = run(state, 'templateSave', data);
+  const record = modelMaterial(next, next.audits[0].objectId);
+  assert.equal(record.type, 'other');
+  assert.equal(record.profile.authorId, author.id);
+  assert.equal(record.profile.familyId, series.id);
+});

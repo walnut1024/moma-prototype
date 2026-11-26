@@ -12,7 +12,7 @@ import { chartPalette } from '../components/chart-style.mjs';
 import { ObservationFilterGroup, ObservationFilterLayout, ObservationPick, ObservationPlot, ObservationSupplyPick,
   ObservationTimeRange, useObservationSupply } from './CallObservationControls';
 import ChannelHealthTable from './ChannelHealthTable';
-import { channelHealthPerformance, channelHealthRows } from './channel-health-observations.mjs';
+import { channelHealthObservationFilters, channelHealthPerformance, channelHealthRows } from './channel-health-observations.mjs';
 import { cloudAdminRequest } from './admin-client.mjs';
 import { canAccessPage, monitoringLinks } from './navigation.mjs';
 import { createCallLogSimulation } from './call-log-simulation.mjs';
@@ -50,9 +50,10 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
     history.replaceState(history.state, '', pageId === 'providers-health' ? channelManagementListRoute(path, params, query) : hash);
   };
   const healthPage = pageId === 'providers-health';
+  const pageFilters = (params, purpose) => healthPage ? channelHealthObservationFilters(params) : observationFilters(params, '24h', purpose);
   const [statusFilter, setStatusFilter] = useState('');
   const [healthFilter, setHealthFilter] = useState('');
-  const [filters, setFilters] = useState(() => observationFilters(params, '24h', simulation ? null : customerPurpose));
+  const [filters, setFilters] = useState(() => pageFilters(params, simulation ? null : customerPurpose));
   const [grain, setGrain] = useState(() => params.get('grain'));
   const [capacity, setCapacity] = useState('Rpm');
   const [scope, setScope] = useState(null);
@@ -129,7 +130,7 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
     if (!simulation) updateObservationRoute(observationHash(pageId, next, { grain: patch.period ? null : granularity, groupBy: healthPage ? 'channelModel' : null }));
   };
   const reset = (purpose = simulation ? null : customerPurpose) => {
-    setScope(null); setTrendGroupId(null); setFilters(observationFilters(undefined, '24h', purpose)); setGrain(null);
+    setScope(null); setTrendGroupId(null); setFilters(pageFilters(undefined, purpose)); setGrain(null);
     setStatusFilter(''); setHealthFilter('');
   };
   const toggleSimulation = () => {
@@ -147,7 +148,7 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
       realFilters.current = { filters, grain, statusFilter, healthFilter };
       const session = createCallLogSimulation(Date.now(), { channelTrend: healthPage });
       if (session.channelTrendFilters) {
-        setFilters({ ...observationFilters(), ...session.channelTrendFilters });
+        setFilters({ ...channelHealthObservationFilters(), ...session.channelTrendFilters });
       }
       setSimulation(session);
     }
@@ -233,8 +234,7 @@ export default function ServiceMonitoringPage({ pageId, state, navigate, params,
           options={['', '异常', '健康', '样本不足', '暂无观测'].map(value => [value, t(value || '全部健康度')])} onChange={setHealthFilter}/>
       </>}
     </>}>
-      <ObservationFilterGroup label={healthPage ? t('请求范围') : '模型与连接'}>
-        {healthPage && requestFilters}
+      <ObservationFilterGroup label={t('模型与连接')}>
         {filtersShown.filter(([dimension]) => !healthPage || dimension !== 'endpoint' || filters.endpoint != null)
           .map(([dimension, label]) => <ObservationPick key={dimension} dimension={dimension} label={label}
           rows={attempts} filters={filters} onChange={change}/>)}

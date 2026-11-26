@@ -59,10 +59,10 @@ function commerceReadiness(workspace, entry, tenant, at, {contextTokens = null,r
   const price = activeModelServiceSalePrice(sale,at);
   const routes = service.listed && price ? modelServiceSupply(workspace,service,at,contextTokens,{runtime,upstreams}) : [];
   let prices = null;
-  if (routes.length && routes.every(route => route.costPrices?.length)) {
+  if (routes.length && (!internal || routes.every(route => route.costPrices?.length))) {
     try {
       const amounts = platformPriceVersions(price,service,'销售价格',at);
-      if (routes.every(route=>matchingModelServicePrices(route.costPrices,amounts))) prices = amounts;
+      if (routes.every(route => !route.costPrices || matchingModelServicePrices(route.costPrices, amounts))) prices = amounts;
     } catch { /* Inactive or unsupported price. */ }
   }
   return {stage, allowed, authorized, price, prices, routes};
@@ -248,7 +248,8 @@ export async function invokeModelService(db, entry, {
   const model = {id:service.id,name:service.name,type:service.type};
   const cost = denied ? null : priceAmount(supply.costPrice,meter,model,timestamp);
   const retail = denied || internal ? null : priceAmount(price,meter,model,timestamp);
-  if (!denied && (!cost || !internal && !retail)) fail(409,'CALL_UNAVAILABLE','当前模型服务计量或价格不可用');
+  if (!denied && (internal ? !cost : !retail)) fail(409,'CALL_UNAVAILABLE','当前模型服务计量或价格不可用');
+  const procurementSnapshot = cost ? supply.procurementSnapshot : null;
   const operational = {providerId:channel.provider?.id,endpointId:channel.endpointId,supplyId:channel.id};
   const response = {
     id:body.requestId, object:'chat.completion', created:Math.floor(at/1000), model:service.callId, source:'mock',
@@ -261,13 +262,13 @@ export async function invokeModelService(db, entry, {
   const usage = { operational, traceId:body.requestId, routeVersion:row.service_revision, priceSnapshot:price, cost, saleTrial:retail,
     usage:denied ? null : actualUsage, startedAt:timestamp, endedAt:timestamp, billingStatus:denied ? 'not_billable' : internal ? 'not_applicable' : 'billable',
     attempts:denied ? [] : [{dispatched:true,status:'passed',startedAt:timestamp,providerId:operational.providerId,endpointId:operational.endpointId,
-      bindingId:channel.id,channelId:channel.endpointId,upstreamModelId:channel.upstreamModelId,usage:actualUsage,procurementSnapshot:supply.procurementSnapshot}],
+      bindingId:channel.id,channelId:channel.endpointId,upstreamModelId:channel.upstreamModelId,usage:actualUsage,procurementSnapshot}],
   };
   const fact = {
     ...marketProjectFact({project,user,usage,response,request:body,service:{id:service.id,modelId:service.id,callId:service.callId,model},at,internal}),
     requestHash, source, resultSource:'mock', callId:service.callId, ...(key && { keyId:key.id }),
     ...(!internal && {priceVersionId:price.id}),
-    ...(denied ? {} : {procurementSnapshot:supply.procurementSnapshot,procurementVersionId:supply.costPrice.id,
+    ...(denied ? {} : {procurementSnapshot,procurementVersionId:cost?.versionId ?? null,costStatus:cost ? 'confirmed' : 'pending',
       publicAtCall:!internal && stage === 'formal'}),
   };
   const grant = enterpriseGrant(projectState,tenant.id);

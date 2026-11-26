@@ -1,17 +1,17 @@
 export const routingParameters = [
-  { key: 'timeout', label: '请求超时', unit: '秒', section: '请求超时', initial: 60, positive: true },
-  { key: 'numRetries', label: '最多重试次数', unit: '次', section: '失败重试', initial: 2, integer: true },
-  { key: 'retryAfter', label: '最短重试间隔', unit: '秒', section: '失败重试', initial: 0, integer: true },
-  { key: 'allowedFails', label: '允许失败次数', unit: '次', section: '异常部署冷却', initial: 3, integer: true },
-  { key: 'cooldownTime', label: '冷却时长', unit: '秒', section: '异常部署冷却', initial: 30 },
+  { key: 'numRetries', label: '最大重试次数', initial: 2, integer: true },
+  { key: 'retryAfter', label: '最短重试间隔', initial: 0, integer: true },
+  { key: 'timeout', label: '请求超时时间', initial: 6000 },
+  { key: 'allowedFails', label: '故障判定阈值', initial: 3, integer: true },
+  { key: 'cooldownTime', label: '故障冷却时间', initial: 5 },
+  { key: 'max_fallbacks', label: '最大降级次数', initial: 5, integer: true },
 ];
 
 export const initialRoutingParameters = Object.fromEntries(routingParameters.map(field => [field.key, field.initial]));
 
-export function parameterError(field, value) {
-  if (!Number.isFinite(value) || value < 0 || (field.positive && !value) ||
-      (field.integer && !Number.isSafeInteger(value))) {
-    return field.label + (field.integer ? '须为非负整数' : field.positive ? '须大于 0' : '须为非负数');
+function parameterError(field, value) {
+  if (value != null && (!Number.isFinite(value) || value < 0 || (field.integer && !Number.isSafeInteger(value)))) {
+    return field.label + (field.integer ? '须为非负整数' : '须为非负数');
   }
   return '';
 }
@@ -25,36 +25,55 @@ export const retryTypes = {
 };
 
 export function savedRetryPolicy(values) {
-  if (values.retry_policy !== undefined) return values.retry_policy;
+  if (values.retry_policy != null) return values.retry_policy;
   if (!values.retryConditions) return {};
   const result = { DefaultRetries: 0 };
   for (const [condition, keys] of [['429',['RateLimitErrorRetries']], ['超时',['TimeoutErrorRetries']],
     ['5xx',['InternalServerErrorRetries','ServiceUnavailableErrorRetries']]]) {
-    for (const key of keys) result[key] = values.retryConditions.includes(condition) ? values.numRetries : 0;
+    for (const key of keys) result[key] = values.retryConditions.includes(condition)
+      ? values.numRetries ?? initialRoutingParameters.numRetries : 0;
   }
   return result;
 }
 const retryConditions = ['429', '超时', '5xx'];
 export const globalRoutingStrategies = ['simple-shuffle', 'least-busy', 'latency-based-routing', 'usage-based-routing-v2'];
-export const globalPolicyDefaults = { strategy: 'simple-shuffle', retry_policy: undefined, max_fallbacks: undefined, retryConditions, failoverEnabled: true };
+export const globalPolicyDefaults = { strategy: 'simple-shuffle' };
 export const effectiveRoutingStrategy = value => globalRoutingStrategies.includes(value) ? value : globalPolicyDefaults.strategy;
 export const failoverFields = [
   ['numRetries', '最大重试次数', '次'], ['timeout', '请求超时时间', '秒'],
-  ['allowedFails', '故障判定阈值', '次'], ['cooldownTime', '故障冷却时间', '秒'],
+  ['allowedFails', '故障判定阈值', '次'], ['cooldownTime', '故障冷却时间', '秒'], ['max_fallbacks', '最大降级次数', '次'],
 ];
-export function failoverValues(values) {
-  return Object.fromEntries([...failoverFields.map(([key]) => key), 'retryConditions', 'failoverEnabled', 'retry_policy', 'max_fallbacks'].map(key => [key, values[key]]));
+
+const failoverKeys = [...failoverFields.map(([key]) => key), 'retryConditions', 'failoverEnabled', 'retry_policy'];
+export const globalRoutingKeys = ['strategy', 'retryAfter', ...failoverKeys];
+
+function configuredValues(values, keys) {
+  const configured = Object.fromEntries(keys.filter(key => values[key] != null).map(key => [key, values[key]]));
+  if (configured.retry_policy) {
+    configured.retry_policy = Object.fromEntries(Object.entries(configured.retry_policy).filter(([, count]) => count != null));
+  }
+  return configured;
 }
+
+export function failoverValues(values) {
+  return configuredValues(values, failoverKeys);
+}
+
+export function globalRoutingValues(values) {
+  return configuredValues(values, globalRoutingKeys);
+}
+
 export function failoverError(values) {
-  if (!values || typeof values.failoverEnabled !== 'boolean' || !Array.isArray(values.retryConditions)
-    || values.retryConditions.some(value => !retryConditions.includes(value))
-    || new Set(values.retryConditions).size !== values.retryConditions.length) return '故障转移参数无效';
+  if (!values || typeof values !== 'object' || Array.isArray(values) ||
+    (values.failoverEnabled !== undefined && typeof values.failoverEnabled !== 'boolean') ||
+    (values.retryConditions !== undefined && (!Array.isArray(values.retryConditions)
+      || values.retryConditions.some(value => !retryConditions.includes(value))
+      || new Set(values.retryConditions).size !== values.retryConditions.length))) return '故障转移参数无效';
   const policy = values.retry_policy;
-  if (policy !== undefined && (!policy || typeof policy !== 'object' || Array.isArray(policy) ||
-    Object.entries(policy).some(([key,n]) => !Object.hasOwn(retryTypes,key) || !Number.isSafeInteger(n) || n < 0))) return '异常重试次数须为非负整数';
-  if (values.max_fallbacks !== undefined && (!Number.isSafeInteger(values.max_fallbacks) || values.max_fallbacks < 0)) return '最大降级次数须为非负整数';
-  for (const [key] of failoverFields) {
-    const error = parameterError(routingParameters.find(field => field.key === key), values[key]);
+  if (policy != null && (typeof policy !== 'object' || Array.isArray(policy) ||
+    Object.entries(policy).some(([key,n]) => !Object.hasOwn(retryTypes,key) || (n != null && (!Number.isSafeInteger(n) || n < 0))))) return '异常重试次数须为非负整数';
+  for (const field of routingParameters) {
+    const error = parameterError(field, values[field.key]);
     if (error) return error;
   }
   return '';

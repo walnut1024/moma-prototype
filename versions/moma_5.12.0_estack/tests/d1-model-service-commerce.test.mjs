@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import {createHash,randomBytes} from 'node:crypto';
 import test from 'node:test';
 import { startLocalBackend } from '../database/local-runtime.js';
-import { loadModelWorkspace } from '../server/model-repository.js';
+import { loadModelWorkspace, modelChanges } from '../server/model-repository.js';
 import { modelServiceSupply } from '../server/model-service-sales.js';
+import { readProjectFact } from '../server/project-facts.js';
 import { channelFingerprint } from '../src/admin-v2/provider-channels.js';
 import { registeredServiceUpstreams } from '../src/admin-v2/service-model-mappings.js';
 import { resourceId } from '../src/resource-id.mjs';
@@ -141,12 +142,30 @@ test('independent services retain separate sale, order, price and call identitie
   assert.deepEqual(ok(await invokeAPI(a.callId,apiRequest)),api.data);
   assert.equal((await invokeAPI(a.callId,webRequest)).data.error.code,'REQUEST_ID_CONFLICT');
 
+  const adminActor = {id:adminId,role:'平台管理员'};
+  const costed = await loadModelWorkspace(db,adminActor,{command:true,simulation:false});
+  const costId = modelServiceSupply(costed,b)[0].costPrice.id;
+  const uncosted = structuredClone(costed);
+  const findCost = state => [...state.supplyPrices, ...state.providers.flatMap(provider =>
+    (provider.catalogConnections || []).flatMap(row => row.procurementVersions || []))].find(version=>version.id===costId);
+  const activeCost = findCost(uncosted);
+  assert.ok(activeCost);
+  const originalExpiry = activeCost.expiresAt;
+  activeCost.expiresAt = '2020-01-01T00:00:00.000Z';
+  await db.batch(modelChanges(db,costed,uncosted));
+  assert.equal(modelServiceSupply(uncosted,b)[0].costPrices,null);
+
   const priceB = both.find(row=>row.id===b.id).salePriceId;
   const secondOrder = ok(await order(b.id,priceB)).orders[0];
   assert.equal(secondOrder.offerId,b.id);
   assert.notEqual(secondOrder.id,firstOrder.id);
   const bRequest = resourceId('request');
   ok(await invokeAPI(b.callId,bRequest));
+  const bFact = await readProjectFact(db,tenantId,bRequest);
+  assert.equal(bFact.procurementVersionId,null);
+  assert.equal(bFact.procurementSnapshot,null);
+  assert.equal(bFact.costStatus,'pending');
+  assert.ok(bFact.charge.micros > 0);
   const facts = (await read('/market/workspace')).report.records;
   assert.equal(facts.find(row=>row.requestId===webRequest).modelId,a.id);
   assert.equal(facts.find(row=>row.requestId===apiRequest).modelId,a.id);
@@ -156,6 +175,10 @@ test('independent services retain separate sale, order, price and call identitie
   const ownOrders = (await read('/market/workspace')).orders;
   assert.equal(ownOrders.find(row=>row.id===firstOrder.id).priceSnapshot.id,shown.salePriceId);
   assert.equal(ownOrders.find(row=>row.id===secondOrder.id).priceSnapshot.id,priceB);
+  const restored = await loadModelWorkspace(db,adminActor,{command:true,simulation:false});
+  const beforeRestore = structuredClone(restored);
+  findCost(restored).expiresAt = originalExpiry;
+  await db.batch(modelChanges(db,beforeRestore,restored));
 
   async function setLimit(data) {
     const config = ok(await request('/traffic-limits',{cookie:admin}));

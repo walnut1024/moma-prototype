@@ -116,7 +116,6 @@ function MarketCard({ model, services, groups, position, canReorder, savingOrder
         <MarketLogo key={profile.logo || ''} src={profile.logo}/>
         <div className="market-card-identity">
           <Typography.Title heading={6} component="h3" ellipsis={{ rows: 2, showTooltip: true }}>{model.name}</Typography.Title>
-          {model.canonicalSlug && <CopyId value={model.canonicalSlug} label="模型编码"/>}
           {services.map(service => <CopyId key={service.id} value={service.id} label="模型服务 ID" ellipsis={{showTooltip:true}}/>)}
           <ModelCallIdentifiers services={services}/>
         </div>
@@ -213,7 +212,7 @@ export default function ModelMarket(live) {
   const cardRow = cardsById.get(cardDialog?.cardId);
   const positions = new Map(ordered.map((model, index) => [model.id, index + 1]));
   const rows = ordered.filter(model =>
-    [model.name, model.description, model.modelId, model.canonicalSlug, ...model.card.linked,
+    [model.name, model.description, ...model.card.linked,
       ...linkedServices(model).map(service => service.callId)].join(' ').toLowerCase().includes(search) &&
     (!type || modelCategory(model.type) === type) &&
     (!Object.hasOwn(marketCardStatuses, visibility) || marketCardStatus(model.card) === visibility));
@@ -308,7 +307,7 @@ export default function ModelMarket(live) {
     </ModelModuleHeading>
     {demo && <Notice>模拟数据仅用于当前页面，退出后清除。</Notice>}
     <div className="sp-filters">
-      <Input ref={searchInput} prefix={<IconSearch aria-hidden="true"/>} showClear aria-label={t("搜索模型展示名称、模型编码、模型服务 ID 或模型 ID")} placeholder={t('模型展示名称 / 模型编码 / 模型服务 ID / 模型 ID')} value={query} onChange={q => changeFilters({ q: q || null })}/>
+      <Input ref={searchInput} prefix={<IconSearch aria-hidden="true"/>} showClear aria-label={t("搜索模型展示名称、模型服务 ID 或模型 ID")} placeholder={t('模型展示名称 / 模型服务 ID / 模型 ID')} value={query} onChange={q => changeFilters({ q: q || null })}/>
       {filters.map(({ key, label, options }) => <Field key={key} label={label}>
         <Choice translateOptions label={`筛选${label}`} value={params.get(key) || 'all'} options={options}
           onChange={value => changeFilters({ [key]: value === 'all' ? null : value })}/>
@@ -355,10 +354,7 @@ export default function ModelMarket(live) {
         },
       })} columns={[
       { title: '序号', width: '9%', render: (_, row) => orderButton(row) },
-      { title: '模型', render: (_, row) => <Space className="market-list-identity" vertical align="start" spacing={2}>
-        <Typography.Text strong ellipsis={{ showTooltip: true }}>{row.name}</Typography.Text>
-        {row.canonicalSlug && <CopyId value={row.canonicalSlug} label="模型编码" ellipsis={{ showTooltip: true }}/>}
-      </Space> },
+      { title: '模型', render: (_, row) => <Typography.Text className="market-list-identity" strong ellipsis={{ showTooltip: true }}>{row.name}</Typography.Text> },
       { title: '类型', width: '8%', render: (_, row) => t(MODEL_CATALOGUE_TYPES[modelCategory(row.type)] || row.type) },
       { title: '关联服务', width: '12%', render: (_, row) => row.card.linked.length
         ? <Button size="small" theme="borderless" onClick={event => openCard('link', row.cardId, event.currentTarget)}>{t(row.card.linked.length === 1 ? '1 个服务' : '{count} 个服务').replace('{count}', row.card.linked.length)}</Button>

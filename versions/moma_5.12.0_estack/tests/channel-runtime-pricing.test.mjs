@@ -67,6 +67,39 @@ test('versioned procurement drives every commercial gate and expiry cannot resto
   assert.equal(call(f, state).request.httpStatus, 503);
 });
 
+test('an entitled commercial API call bills at retail while missing or expired procurement remains pending', t => {
+  const base = Date.now(); t.mock.timers.enable({ apis: ['Date'], now: base });
+  const f = fixture(1), endpointId = f.supplies[0].endpointId;
+  const tenantId = f.state.apiKeys.find(row => row.id === f.keyId).tenantId;
+  const modelId = f.state.models.find(row => row.id === f.modelId).modelId;
+  const marketOrders = [{ tenantId, callId: modelId }];
+  const options = { modelId, marketOrders, allowMissingCost: true };
+  const expiresAt = new Date(base + 1000).toISOString();
+  const priced = publishPrice(f.state, endpointId, 3, expiresAt);
+  assert.equal(call(f, priced, options).request.procurementSnapshot.items[0].amount, 3000000);
+
+  const missing = structuredClone(priced);
+  owner(missing).catalogConnections.find(row => row.endpointId === endpointId).procurementVersions = [];
+  t.mock.timers.tick(1000);
+  for (const state of [missing, priced]) {
+    const request = call(f, state, options).request;
+    assert.equal(request.httpStatus, 200);
+    assert.equal(request.supplyId, f.supplies[0].id);
+    assert.equal(request.priceVersionId, 'runtime-sale');
+    assert.deepEqual(request.charge, { micros: 11200, currency: 'CNY' });
+    assert.equal(request.procurementSnapshot, null);
+    assert.equal(request.procurementVersionId, null);
+    assert.equal(request.attempts[0].procurementSnapshot, null);
+  }
+  assert.equal(call(f, missing, { ...options, marketOrders: [] }).request.error, 'order_required');
+  assert.equal(call(f, missing, { ...options, purpose: 'gateway-test' }).request.error, 'no_available_endpoint');
+  const internal = structuredClone(missing);
+  internal.models.find(row => row.id === f.modelId).salesScope = { openScope: 'all' };
+  assert.equal(call(f, internal, { ...options, internal: true }).request.error, 'no_available_endpoint');
+  missing.endpoints.find(row => row.id === endpointId).frozen = true;
+  assert.equal(call(f, missing, options).request.error, 'no_available_endpoint');
+});
+
 test('new requests bind their procurement version while earlier requests keep exact price and sale snapshots', () => {
   const f = fixture(1), ep = f.supplies[0].endpointId;
   const firstState = publishPrice(f.state, ep, 3), first = call(f, firstState);

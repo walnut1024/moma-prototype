@@ -86,10 +86,10 @@ async function loadMarketProcurement(db, offers) {
   return state;
 }
 
-function marketSalePrices(offer, procurement, at) {
+function marketSalePrices(offer, at, procurement = null) {
   try {
     const prices = platformPriceVersions(offer.price,offer.model,'销售价格',at);
-    for (const supplyId of offer.supplyIds) {
+    for (const supplyId of procurement ? offer.supplyIds : []) {
       platformPriceVersions(activeSupplyPrice(procurement,supplyId,at),offer.model,'采购价格',at);
     }
     return prices;
@@ -168,11 +168,12 @@ export async function marketCatalogue(db, session, { display = false, projectId,
       return offerInMarketDetail(offer,card,audience,internal,offer.cardId) &&
         serviceCallsEnabled(offer.model) && row.calls_enabled && row.source_ready;
     });
-  const procurement = await loadMarketProcurement(db,offers.filter(offer => offer.ready && offer.released)), at = Date.now();
+  const procurement = internal ? await loadMarketProcurement(db,offers.filter(offer => offer.ready && offer.released)) : null;
+  const at = Date.now();
   const services = offers.flatMap(offer => {
     const { row, card, cardId } = offer;
     const groupedId = cardId ? marketCardModelId(cardId,card) || cardId : row.material_id;
-    const prices = offer.ready && offer.released ? marketSalePrices(offer,procurement,at) : null;
+    const prices = offer.ready && offer.released ? marketSalePrices(offer,at,procurement) : null;
     if (!prices && !card) return [];
     const master = materials.get(row.material_id);
     const material = modelPresentation(null, { ...master, marketContent: card?.content || JSON.parse(row.service_json).marketContent });
@@ -256,9 +257,8 @@ export async function marketOrder(db, session, offerIds, { tenantId, salePriceId
     })) {
       fail(403,'MODEL_FORBIDDEN','该模型服务当前不可在模型广场订购');
     }
-    const procurement = await loadMarketProcurement(db,newOffers);
     const at = Date.now();
-    if (newOffers.some(offer=>!marketSalePrices(offer,procurement,at))) fail(409,'MODEL_UNAVAILABLE','模型服务暂不可订购');
+    if (newOffers.some(offer=>!marketSalePrices(offer,at))) fail(409,'MODEL_UNAVAILABLE','模型服务暂不可订购');
     const pending = newOffers.map(({row}) => ({id:resourceId('order'),offerId:row.record_id,priceId:row.sale_id}));
     const pendingServices = await prepareModelServiceOrders(db,tenant,newServices,marketCards,audience,at);
     if (pendingServices.some(row=>salePriceIds?.[row.offerId]!==row.priceId) ||
@@ -425,7 +425,13 @@ export async function marketCompletion(db, session, body) {
       const config={
         ...snapshot.published.config,
         salePrices:platformPriceVersions(sale,service.model),
-        bindings:snapshot.published.config.bindings.map(binding=>({...binding,procurementPrices:platformPriceVersions(activeSupplyPrice(state,binding.id),service.model,'采购价格')})),
+        bindings:snapshot.published.config.bindings.map(binding=>{
+          try { return {...binding,procurementPrices:platformPriceVersions(activeSupplyPrice(state,binding.id),service.model,'采购价格')}; }
+          catch (error) {
+            if (tenant.internal) throw error;
+            return {...binding,procurementPrices:[]};
+          }
+        }),
       };
       ({ response, usage }=engine.callForOrder(snapshot,config,{tenantId:tenant.id,orderId:tenant.internal ? null : row.order_id,messages}));
       break;

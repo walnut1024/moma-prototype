@@ -4,14 +4,15 @@ import { createPortal } from 'react-dom';
 import { Banner, Button, DatePicker, Form, Input, InputNumber, Select, Space, TagInput, TextArea, Typography, Upload } from '@douyinfe/semi-ui';
 import { IconUpload } from '@douyinfe/semi-icons';
 import { modelMetadataDraft } from './model-metadata-draft';
-import { MODEL_TYPES } from './model-management';
+import { MODEL_TYPE_LABELS, modelCategory } from '../model-types.mjs';
 import { INPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, TASK_OPTIONS } from './model-profile';
 import { materialContextLabel, materialContextUnit, materialContextUnits } from './model-material-fields';
 import MaterialLogo, { readMaterialLogo } from './MaterialLogo';
 import { classificationHref, classificationIndex, classificationKey, modelClassification, modelClassificationFor } from './model-classification';
 
 const choices = values => values.map(value => ({ value, label: value }));
-const typeOptions = Object.entries(MODEL_TYPES).map(([value, label]) => ({ value, label }));
+const typeOptions = Object.entries(MODEL_TYPE_LABELS).map(([value, label]) => ({ value, label }));
+const visualOptions = [{ value: 'image', label: '图像' }, { value: 'video', label: '视频' }];
 const inputOptions = choices(INPUT_MODALITY_OPTIONS);
 const outputOptions = choices([...INPUT_MODALITY_OPTIONS, ...RESULT_TYPE_OPTIONS]);
 const contextOptions = choices(Object.keys(materialContextUnits));
@@ -33,13 +34,17 @@ export default function MaterialMetadataForm({state, conflict, reload, model, in
   const tokens = context.trim() ? Number(context) * materialContextUnits[unit] : null;
   const dictionary = modelClassification(state);
   const index = classificationIndex(dictionary);
-  const { series, seriesName } = modelClassificationFor(index, form);
-  const seriesOptions = dictionary.series.filter(option => index.authors.has(option.authorId))
-    .map(option => ({
-      value: option.id,
-      label: option.name + ' · ' + index.authors.get(option.authorId)?.name,
-      names: [option.name, ...option.aliases, ...(option.formerNames || []), index.authors.get(option.authorId)?.name],
-    }));
+  const { author, series, authorName, seriesName } = modelClassificationFor(index, form);
+  const type = modelCategory(form.type);
+  const visual = visualOptions.find(option => option.value === form.type);
+  const classificationOption = option => ({
+    value: option.id,
+    label: option.name,
+    names: [option.name, ...option.aliases, ...(option.formerNames || [])],
+  });
+  const authorOptions = dictionary.authors.map(classificationOption);
+  const seriesOptions = dictionary.series.filter(option => option.authorId === author?.id).map(classificationOption);
+  const searchClassification = (query, option) => option.names.some(name => classificationKey(name).includes(classificationKey(query)));
   const outputs = [...new Set([...(profile.outputModalities || []), ...(profile.resultTypes || [])])];
 
   const markDirty = () => { setError(''); dirty(true); };
@@ -48,13 +53,17 @@ export default function MaterialMetadataForm({state, conflict, reload, model, in
     setForm(current => ({ ...current, profile: { ...current.profile, ...fields } }));
     markDirty();
   };
-  const changeSeries = id => {
-    const next = index.series.get(id);
-    const author = index.authors.get(next.authorId);
+  const changeAuthor = id => {
+    const next = index.authors.get(id);
+    if (!next || next.id === author?.id) return;
     setForm(current => ({
-      ...current, maker: author.name, profile: { ...current.profile, author: author.name, authorId: author.id, family: next.name, familyId: next.id },
+      ...current, maker: next.name, profile: { ...current.profile, author: next.name, authorId: next.id, family: '', familyId: '' },
     }));
     markDirty();
+  };
+  const changeSeries = id => {
+    const next = index.series.get(id);
+    if (next && next.authorId === author?.id) changeProfile({ family: next.name, familyId: next.id });
   };
   const uploadLogo = async files => {
     if (!files.length) return;
@@ -86,17 +95,20 @@ export default function MaterialMetadataForm({state, conflict, reload, model, in
     const required = [
       ['模型展示名称', form.name.trim()], ['模型编码', form.modelId.trim()], ['模型图标', profile.logo],
       ['模型中文简介', form.description.trim()], ['模型英文简介', profile.descriptionEn?.trim()],
-      ['模型类型', Object.hasOwn(MODEL_TYPES, form.type)], ['上下文长度', tokens !== null],
-      ['模型系列', series], ['输入模态', profile.inputModalities?.length], ['输出模态', outputs.length],
+      ['模型类型', Object.hasOwn(MODEL_TYPE_LABELS, type)], ['上下文长度', tokens !== null],
+      ...(type === 'visual' ? [['视觉任务类型', visual]] : []),
+      ['模型作者', author], ['模型系列', series], ['输入模态', profile.inputModalities?.length], ['输出模态', outputs.length],
       ['模型精度', profile.precision?.trim()], ['模型标签', profile.tags?.length], ['模型发布日期', profile.releaseDate],
     ];
     const missing = required.filter(([, value]) => !value).map(([label]) => label);
     if (missing.length) { setError('请填写必填项：' + missing.join('、')); return; }
     if (!Number.isSafeInteger(tokens) || tokens < 1) { setError('上下文长度换算后须为正整数 Token'); return; }
-    const tasks = profile.tasks?.filter(task => TASK_OPTIONS[form.type].includes(task));
+    const tasks = profile.tasks?.filter(task => TASK_OPTIONS[form.type]?.includes(task));
     setSaving(true);
     try {
-      await onSubmit({ ...form, profile: { ...profile, tasks }, capabilities: { ...form.capabilities, context: tokens } });
+      await onSubmit({ ...form, type: visual?.value || type, maker: author.name, profile: {
+        ...profile, tasks, author: author.name, authorId: author.id, family: series.name, familyId: series.id,
+      }, capabilities: { ...form.capabilities, context: tokens } });
     } finally { setSaving(false); }
   };
 
@@ -115,8 +127,11 @@ export default function MaterialMetadataForm({state, conflict, reload, model, in
       </Form.Slot>
       {textArea('description', '模型中文简介', form.description, value => change('description', value))}
       {textArea('description-en', '模型英文简介', profile.descriptionEn, value => changeProfile({ descriptionEn: value }))}
-      {slot('type', '模型类型', MODEL_TYPES[form.type],
-        <Select value={form.type} optionList={typeOptions} disabled={!editable} onChange={value => change('type', value)}/>)}
+      {slot('type', '模型类型', MODEL_TYPE_LABELS[type],
+        <Select value={type} optionList={typeOptions} disabled={!editable}
+          onChange={value => { if (value !== type) change('type', value); }}/>)}
+      {type === 'visual' && slot('visual-type', '视觉任务类型', visual?.label,
+        <Select value={visual?.value} optionList={visualOptions} disabled={!editable} onChange={value => change('type', value)}/>)}
       {slot('context', '上下文长度', materialContextLabel(tokens),
         <Space className="materials-context-field">
           <Input aria-label={translateLabel("上下文长度")} aria-required inputMode="decimal" value={context} disabled={!editable}
@@ -128,9 +143,12 @@ export default function MaterialMetadataForm({state, conflict, reload, model, in
               setUnit(value);
             }}/>
         </Space>)}
+      {slot('author', '模型作者', author?.name || authorName,
+        <Select value={author?.id} optionList={authorOptions} disabled={!editable} placeholder={authorName || '请选择模型作者'}
+          filter={searchClassification} onChange={changeAuthor}/>)}
       {slot('series', '模型系列', series?.name || seriesName,
-        <Select value={series?.id} optionList={seriesOptions} disabled={!editable} placeholder={seriesName || '请选择'}
-          filter={(query, option) => option.names.some(name => classificationKey(name).includes(classificationKey(query)))} onChange={changeSeries}/>)}
+        <Select value={series?.id} optionList={seriesOptions} disabled={!editable || !author} placeholder={seriesName || '请选择模型系列'}
+          filter={searchClassification} onChange={changeSeries}/>)}
       {slot('input', '输入模态', profile.inputModalities,
         <Select multiple value={profile.inputModalities || []} optionList={inputOptions} disabled={!editable}
           onChange={value => changeProfile({ inputModalities: value })}/>)}
@@ -153,6 +171,7 @@ export default function MaterialMetadataForm({state, conflict, reload, model, in
           onChange={value => changeProfile({ parameters: value })}/>, { required: false })}
     </div>
     {!readOnly && <Space>
+      <a href={classificationHref('authors')} target="_blank" rel="noopener noreferrer">维护模型作者</a>
       <a href={classificationHref('series')} target="_blank" rel="noopener noreferrer">维护模型系列</a>
       {conflict && reload && <Button theme="borderless" onClick={reload}>载入最新数据</Button>}
     </Space>}

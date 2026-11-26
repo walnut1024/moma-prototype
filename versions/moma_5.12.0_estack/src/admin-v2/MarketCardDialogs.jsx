@@ -7,7 +7,7 @@ import Table from './AdminTable';
 import { CopyId, Field, Modal, Notice } from './ServiceUI';
 import { marketCardFeatures, marketCardFieldError, marketCardFieldValues, marketCardIssues, marketCardOutputOptions,
   marketCardDeleteIssue, marketCardLinkableServices, marketCardServices, marketCardStatus, marketCardStatuses, marketScopeOptions } from '../market-cards.mjs';
-import { MODEL_TYPES } from './model-management';
+import { MODEL_TYPE_LABELS, modelCategory } from '../model-types.mjs';
 import { INPUT_MODALITY_OPTIONS } from './model-profile';
 import { materialContextUnit, materialContextUnits } from './model-material-fields';
 import { readMaterialLogo } from './MaterialLogo';
@@ -82,7 +82,6 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
 
   if (creating || kind === 'edit') {
     const disabled = unavailable || uploading || importMaterial && !sourceId;
-    const canonicalSlug = materials.find(item => item.id === sourceId)?.modelId || row?.canonicalSlug;
     const uploadLogo = async ([file]) => {
       if (!file || unavailable || uploading) return;
       const request = ++logoUpload.current;
@@ -165,11 +164,12 @@ export default function MarketCardDialogs({ kind, row, state, ops, materials, in
             optionList={materials.map(item => ({ value: item.id, label: `${item.name} · ${item.modelId}` }))}
             onChange={chooseModel}/>
         </Field>}
-        {canonicalSlug && <Field label="模型编码"><Input readOnly value={canonicalSlug}/></Field>}
         <div className="ss-form-grid">
+          <Field label="模型作者"><Input aria-label={translateLabel("模型作者")} value={values.author} maxLength={100} onChange={value => update('author', value)}/></Field>
           <Field label="模型中文简介" required><TextArea rows={3} value={values.description} maxLength={5000} onChange={value => update('description', value)}/></Field>
           <Field label="模型英文简介" required><TextArea rows={3} value={values.description_en} maxLength={5000} onChange={value => update('description_en', value)}/></Field>
-          <Field label="模型类型" required><Select style={{ width: '100%' }} optionList={options(MODEL_TYPES)} value={values.type || undefined} onChange={value => update('type', value)}/></Field>
+          <Field label="模型类型" required><Select style={{ width: '100%' }} optionList={options(MODEL_TYPE_LABELS)}
+            value={modelCategory(values.type) || undefined} onChange={value => { if (value !== modelCategory(values.type)) update('type', value); }}/></Field>
           <Field label="上下文长度" required>
             <div className="market-context-field">
               <Input aria-label={translateLabel("上下文长度")} aria-required inputMode="decimal" value={context.amount}

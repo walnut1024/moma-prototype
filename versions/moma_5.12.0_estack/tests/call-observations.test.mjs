@@ -38,6 +38,21 @@ const state = {
   ],
 };
 
+test('channel health ignores retired request filters while keeping upstream model scope', async () => {
+  const { channelHealthObservationFilters } = await import('../src/admin-v2/channel-health-observations.mjs');
+  const filters = channelHealthObservationFilters(new URLSearchParams(
+    'tenant=old-tenant&project=old-project&purpose=customer&upstreamModelId=upstream',
+  ));
+  const observed = [
+    { at: now - 1, purpose: 'customer', tenant: 'tenant', project: 'project', upstreamModelId: 'upstream' },
+    { at: now - 1, purpose: 'diagnostic', upstreamModelId: 'upstream' },
+    { at: now - 1, purpose: 'diagnostic', upstreamModelId: 'another' },
+  ];
+  assert.equal(filters.period, '24h');
+  assert.deepEqual(filterObservations(observed, filters, observationWindow(filters, now)), observed.slice(0, 2));
+  assert.equal(observationHash('providers-health', filters), '#/admin-2/providers-health?period=24h&upstreamModelId=upstream');
+});
+
 test('channel health keeps inactive inventory and drills into failed upstream attempts within the same snapshot', async () => {
   const { channelHealthRows } = await import('../src/admin-v2/channel-health-observations.mjs');
   const { channelHealthCatalogue } = await import('../src/admin-v2/channel-health-catalogue.mjs');

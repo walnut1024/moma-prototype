@@ -1,4 +1,4 @@
-import { effectiveRoutingStrategy, failoverError, globalPolicyDefaults, globalRoutingStrategies, initialRoutingParameters, parameterError, routingParameters } from '../src/admin-v2/global-routing-parameters.mjs';
+import { effectiveRoutingStrategy, failoverError, globalRoutingKeys, globalRoutingStrategies, globalRoutingValues } from '../src/admin-v2/global-routing-parameters.mjs';
 import { assertPersonalProjects, customerProject } from '../src/personal-project.mjs';
 import { isResourceId, resourceId } from '../src/resource-id.mjs';
 import { activeTenantVersion, changeTenantRoute, isTenantRouteCall, keyTenantRoute, visibleProjectRoutes } from '../src/tenant-routing.mjs';
@@ -214,10 +214,13 @@ export async function applicationBootstrap(db, actor, configured = []) {
     .map(({requestBody:_request,responseBody:_response,requestHash:_hash,rejection:_rejection,...fact}) => withRequestScope(state,fact));
   if(maintenance)return maintenanceView(state,row.model_revision,requests,events);
   const { cloudMockState: _snapshot, projectRoutes: _projectRoutes, ...view } = state;
-  const effectivePolicy = { ...initialRoutingParameters, ...globalPolicyDefaults, retryAfter: state.globalRetryAfter ?? 0, ...state.globalRoutingParameters };
-  effectivePolicy.strategy = effectiveRoutingStrategy(effectivePolicy.strategy);
   if (actor.role === '平台管理员') {
-    view.globalRoutingParameters = effectivePolicy;
+    const savedPolicy = state.globalRoutingParameters;
+    view.globalRoutingParameters = globalRoutingValues({
+      retryAfter: state.globalRetryAfter,
+      ...savedPolicy,
+      strategy: effectiveRoutingStrategy(savedPolicy?.strategy),
+    });
   } else {
     delete view.globalRoutingParameters;
   }
@@ -315,6 +318,7 @@ export async function customerInvocation(db,credentialDigest,body,clientIp,priva
   const simulationState={...state,requests:mergeProjectFacts(facts,state.requests)};
   const result=simulateRequest(simulationState,{requestId,keyId:key.id,modelId:model,
     metadata:{_user:metadata?._user?.trim()},marketOrders,cacheKey,internal,allowedModelTypes:['text','multimodal'],
+    allowMissingCost:true,
     costTier:body.routing?.cost_tier,
     usage:mockTextUsage(effectiveInput,answer),
     content:{input,output:answer}});
@@ -418,18 +422,14 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins,
       if (actor.role !== '平台管理员') issue(403, 'FORBIDDEN', '仅系统管理员可配置全局路由');
       const values = action.values;
       if (!values || typeof values !== 'object' || Array.isArray(values) ||
-          Object.keys(values).some(key => !Object.hasOwn(initialRoutingParameters, key) && !Object.hasOwn(globalPolicyDefaults, key))) {
+          Object.keys(values).some(key => !globalRoutingKeys.includes(key))) {
         issue(400, 'INVALID_INPUT', '路由参数格式无效');
       }
       if (failoverError(values) || Object.hasOwn(values, 'strategy') && !globalRoutingStrategies.includes(values.strategy)) {
         issue(400, 'INVALID_INPUT', '路由策略或故障转移参数无效');
       }
-      for (const field of routingParameters) {
-        const error = parameterError(field, values[field.key]);
-        if (error) issue(400, 'INVALID_INPUT', error);
-      }
       const strategy = values.strategy ?? effectiveRoutingStrategy(state.globalRoutingParameters?.strategy);
-      next = { ...state, revision: state.revision + 1, globalRoutingParameters: { ...values, strategy },
+      next = { ...state, revision: state.revision + 1, globalRoutingParameters: globalRoutingValues({ ...values, strategy }),
         audits: [{ action: '修改全局路由设置', objectId: 'global-routing', result: '成功', createdAt: new Date().toISOString() }, ...state.audits] };
     } else if (action.type==='cancelMarketOrder' && canMutate(actor.role,{type:'update',collection:'orders'})) {
       if(!validId(action.id)) throw Error('订单标识无效');

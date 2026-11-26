@@ -6,7 +6,7 @@ import Table from './AdminTable';
 import { AdminSideSheet } from './AdminOverlay';
 import { Field, Notice } from './ServiceUI';
 import ProcurementPriceFields from './ProcurementPriceFields';
-import { cataloguePriceDraft, cataloguePurchasePrice, catalogueMoneyDisplay, validateQuoteTariffs } from './provider-catalogue-pricing';
+import { billingItemKey, cataloguePriceDraft, cataloguePurchasePrice, catalogueMoneyDisplay, validateQuoteTariffs } from './provider-catalogue-pricing';
 import { normalizeProviderPrice } from './provider-management';
 import { activeChannelProcurement } from './channel-change-management';
 import { modelChannelName } from './model-channel-name.js';
@@ -14,6 +14,21 @@ import './procurement-cost.css';
 
 const time = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '—';
 const localTime = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 16);
+
+function comparePrices(current, proposed) {
+  const rows = new Map(proposed.scenarios.map(item => {
+    const key = billingItemKey(item);
+    return [key, { ...item, key, proposedPrice: item.listPrice }];
+  }));
+  for (const item of current?.scenarios ?? []) {
+    const key = billingItemKey(item);
+    const price = cataloguePurchasePrice(item.listPrice, current.discountFactor, item.purchasePrice);
+    rows.set(key, { ...(rows.get(key) ?? item), key, currentPrice: price });
+  }
+  return [...rows.values()];
+}
+
+const displayPreviewPrice = (item, amount) => amount == null ? '—' : `${item.currency || 'CNY'} ${catalogueMoneyDisplay(amount)}`;
 
 export default function ProcurementVersionEditor({ state, provider, association, modelName, ops, close, directory = false }) {
   const translateLabel = useChannelText();
@@ -80,9 +95,10 @@ export default function ProcurementVersionEditor({ state, provider, association,
         <Field label="生效时间（北京时间） *"><Input type="datetime-local" aria-label="服务商成本价生效时间" value={effectiveAt} disabled={blocked} onChange={changed(setEffectiveAt)}/></Field>
         <Field label="到期时间（选填，北京时间）"><Input type="datetime-local" aria-label="服务商成本价到期时间" value={expiresAt} disabled={blocked} onChange={changed(setExpiresAt)}/></Field>
       </div>
-      <Table size="small" rowKey="index" pagination={false} dataSource={publishing.pricing.scenarios.map((item, index) => ({ ...item, index }))} columns={[
+      <Table size="small" rowKey="key" pagination={false} dataSource={comparePrices(quote, publishing.pricing)} columns={[
         { title: '计费项', render: (_, item) => <div>{item.name}{item.condition && <Typography.Paragraph type="tertiary">{item.condition}</Typography.Paragraph>}</div> },
-        { title: '服务商成本价', render: (_, item) => item.currency + ' ' + catalogueMoneyDisplay(item.listPrice) },
+        { title: translateLabel('当前服务商成本价'), render: (_, item) => displayPreviewPrice(item, item.currentPrice) },
+        { title: translateLabel('拟发布服务商成本价'), render: (_, item) => displayPreviewPrice(item, item.proposedPrice) },
         { title: '计费单位', dataIndex: 'unit' },
       ]}/>
     </section> : history ? <section className="ss-body">

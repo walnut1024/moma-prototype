@@ -3,12 +3,11 @@ import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { startLocalBackend } from '../database/local-runtime.js';
 import { domainModelWorkspace } from '../src/mock/model-fields.js';
-import { excelOffers, offerHeaders } from '../src/admin-v2/supplier-offer-fields.js';
 import { protocolAndEndpoint, workbenchProtocolLabel } from '../src/admin-v2/workbench-protocol.js';
 import { providerApiKeysDraft } from '../src/admin-v2/provider-management.js';
 import { connectionKeys } from '../src/admin-v2/connection-state.js';
 
-test('workbench short protocol names display endpoint paths while offer imports retain their canonical protocol', () => {
+test('workbench short protocol names display canonical endpoint paths', () => {
   const names = [
     ['OpenAI Chat Completions', 'OpenAI Chat'],
     ['OpenAI Responses', 'OpenAI Responses'],
@@ -21,11 +20,6 @@ test('workbench short protocol names display endpoint paths while offer imports 
   for (const [stored, display] of names) assert.equal(workbenchProtocolLabel(stored), display);
   const address = 'https://gateway.example.test/v1/chat/completions';
   assert.equal(protocolAndEndpoint('OpenAI Chat Completions', address), 'OpenAI Chat：/v1/chat/completions');
-  for (const name of ['OpenAI Chat', 'OpenAI Chat Completions']) {
-    const [offer] = excelOffers([offerHeaders, ['测试模型', 'test/model', 'qa/test', '语言模型', name, address]], {});
-    assert.equal(offer.bindings[0].protocol, 'OpenAI Chat Completions');
-    assert.equal(offer.bindings[0].url, address);
-  }
 });
 
 test('Responses channel selection persists through HTTP/D1 and invalid choices roll back', {timeout:60000},async()=>{

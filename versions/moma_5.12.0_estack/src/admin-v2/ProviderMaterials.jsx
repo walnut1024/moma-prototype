@@ -14,11 +14,12 @@ import MaterialLogo from './MaterialLogo';
 import ModelBatchImport from './ModelBatchImport';
 import SupplyRegistrationDialog from './SupplyRegistrationDialog';
 import { providerCode, PROVIDER_TYPES } from './provider-management';
-import { SupplierOfferEditor, SupplierOfferImport } from './SupplierOfferEditor';
+import { SupplierOfferEditor } from './SupplierOfferEditor';
 import { offerFields } from './supplier-offer-fields';
 import { catalogueType } from './SupplierModelMultiSelect';
 import { operationsReturn } from './model-pricing-workspace';
 import { materialProviders, providerMaterialModels } from './provider-materials';
+import { isBuiltinMoma } from './moma-provider';
 
 const pageSize = 20;
 const pageNumber = (value, count) => Math.min(Math.max(1, Number.parseInt(value, 10) || 1), Math.ceil(count / pageSize) || 1);
@@ -27,6 +28,10 @@ const listParams = { provider: null, view: null, tab: null, edit: null, returnTo
 
 function ProviderList({ state, ops, providers }) {
   const translateLabel = useChannelText();
+  const [removing, setRemoving] = useState(null);
+  const [removingBusy, setRemovingBusy] = useState(false);
+  const trigger = useRef(null);
+  const filters = useRef(null);
   const query = ops.params.get('q') || '';
   const sourceType = ops.params.get('type') || 'all';
   const rows = providers.filter(row => (sourceType === 'all' || sourceType === row.sourceType)
@@ -34,9 +39,26 @@ function ProviderList({ state, ops, providers }) {
   const page = pageNumber(ops.params.get('page'), rows.length);
   const update = patch => ops.go(patch, { replace: true, preserveScroll: true });
   const open = (provider, edit) => ops.go({ provider: provider.id, view: null, tab: edit ? 'profile' : null, edit: edit ? '1' : null });
+  const closeRemoval = () => {
+    setRemoving(null);
+    ops.setError('');
+    requestAnimationFrame(() => {
+      const target = trigger.current?.isConnected ? trigger.current : filters.current?.querySelector('input');
+      target?.focus();
+    });
+  };
+  const remove = async () => {
+    if (!removing || removingBusy) return;
+    setRemovingBusy(true);
+    try {
+      const next = await ops.run('provider', { operation: 'profileRemove', objectId: removing.id,
+        values: { expectedUpdatedAt: removing.updatedAt ?? null, confirmed: true } });
+      if (next) closeRemoval();
+    } finally { setRemovingBusy(false); }
+  };
   return <>
     <div className="materials-toolbar">
-      <div className="materials-filters">
+      <div className="materials-filters" ref={filters}>
         <SearchBox placeholder={translateLabel("搜索服务商名称或编码")} value={query} onChange={q => update({ q: q || null, page: null })}/>
         <Choice translateOptions label="筛选供给类型" value={sourceType} options={[[ 'all', '全部供给类型' ], ...Object.entries(PROVIDER_TYPES)]}
           onChange={type => update({ type: type === 'all' ? null : type, page: null })}/>
@@ -53,9 +75,23 @@ function ProviderList({ state, ops, providers }) {
       { title: '服务商编码', width: 160, render: (_, row) => <Typography.Text className="materials-code" copyable>{providerCode(row)}</Typography.Text> },
       { title: '供给类型', width: 150, render: (_, row) => translateLabel(PROVIDER_TYPES[row.sourceType]) || '—' },
       { title: '供应模型数', align: 'right', width: 130, render: (_, row) => <Button theme="borderless" aria-label={`查看 ${row.name} 的供应模型`} onClick={() => open(row)}>{providerMaterialModels(state, row).length}</Button> },
-      { title: '操作', width: 90, fixed: 'right', render: (_, row) =>
-        <Button theme="borderless" disabled={!ops.can} onClick={() => open(row, true)}>{translateLabel("编辑")}</Button> },
+      { title: '操作', width: 145, fixed: 'right', render: (_, row) => <Space>
+        <Button theme="borderless" disabled={!ops.can} onClick={() => open(row, true)}>{translateLabel("编辑")}</Button>
+        {!isBuiltinMoma(row) && <Button theme="borderless" type="danger" disabled={!ops.can}
+          aria-label={translateLabel("删除") + ' ' + row.name} onClick={event => {
+            trigger.current = event.currentTarget;
+            ops.setError('');
+            setRemoving(row);
+          }}>{translateLabel("删除")}</Button>}
+      </Space> },
     ]}/>
+    {removing && <AdminModal visible title={translateLabel('删除服务商')} okText={translateLabel('确认删除')}
+      confirmLoading={removingBusy} okButtonProps={{ type: 'danger', disabled: !ops.can }}
+      onCancel={() => { if (!removingBusy) closeRemoval(); }} onOk={remove}>
+      <Typography.Paragraph strong>{removing.name}</Typography.Paragraph>
+      <Typography.Paragraph>{translateLabel('删除后，新建连接时将无法选择该服务商。已有连接仍可查看和维护')}</Typography.Paragraph>
+      {ops.error && <Notice error>{ops.error}</Notice>}
+    </AdminModal>}
   </>;
 }
 
@@ -135,7 +171,7 @@ export default function ProviderMaterials(props) {
   const { params, go } = ops;
   const providers = materialProviders(state);
   const providerId = params.get('provider');
-  const provider = providers.find(row => row.id === providerId) || state.providers.find(row => row.id === providerId && !row.deletedAt);
+  const provider = providers.find(row => row.id === providerId) || state.providers.find(row => row.id === providerId && !row.deletedAt && !row.profileRemovedAt);
   const view = params.get('view'), tab = params.get('tab') === 'profile' ? 'profile' : 'models';
   const editing = params.get('edit') === '1';
   const returnTo = operationsReturn(params.get('returnTo'));
@@ -154,8 +190,8 @@ export default function ProviderMaterials(props) {
     </div>}
     {importKind ? <div className="materials-description">
       <Typography.Title heading={4}><span ref={title} tabIndex={-1}>{importKind === 'provider' ? '批量导入服务商资料' : importKind === 'relation' ? '批量导入供应关系' : '批量导入并添加'}</span></Typography.Title>
-      {importKind === 'model' ? <SupplierOfferImport provider={provider} ops={ops} done={() => go({ view:null }, { saved:true })}/> : <ModelBatchImport key={view + (provider?.id || '')} kind={importKind} providerId={provider?.id} state={state} ops={ops} transact={transact}
-        close={saved => provider ? go({ view: null }, { saved }) : go(listParams, { saved })}/>}
+      <ModelBatchImport key={view + (provider?.id || '')} kind={importKind} providerId={provider?.id} state={state} ops={ops} transact={transact}
+        close={saved => provider ? go({ view: null }, { saved }) : go(listParams, { saved })}/>
     </div> : view === 'new' ? <>
       <Typography.Title heading={4}><span ref={title} tabIndex={-1}>{translateLabel("新建服务商")}</span></Typography.Title>
       <ProviderMaterialProfile key="new" editing ops={ops} cancel={back} saved={saved}/>

@@ -644,21 +644,27 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     const start=Date.now(), expires=start+2000;
     await command('channelProcurementPublish',{providerId,endpointId,associationId,expectedPriceRevision:channel.procurementRevision,confirmed:true,
       effectiveAt:new Date(start).toISOString(),expiresAt:new Date(expires).toISOString(),scenarios:prices(1,4,'listPrice')});
-    const seq=state.commitSeq;
     await new Promise(resolve=>setTimeout(resolve,Math.max(0,expires-Date.now()+10)));
-    assert.deepEqual((await catalogue(other)).map(row=>row.callId),[third.callId]);
-    assert.deepEqual(new Set((await catalogue(customer)).map(row=>row.callId)),new Set([sources[1].callId,third.callId]));
+    assert.deepEqual(new Set((await catalogue(other)).map(row=>row.callId)),new Set([expiringOffer.callId,third.callId]));
+    assert.deepEqual(new Set((await catalogue(customer)).map(row=>row.callId)),new Set([expiringOffer.callId,sources[1].callId,third.callId]));
     assert.equal(salesStatus(model(),keys[0]),'灰度在售');
-    const rejected=await request('/market/orders',{cookie:other,body:{offerIds:[expiringOffer.id,third.id]}});
-    assert.equal(rejected.status,409);
-    assert.equal(rejected.data.error.code,'MODEL_UNAVAILABLE');
-    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_orders WHERE tenant_id=?').bind(b).first('n'),0);
+    const ordersWithMissingCost=await request('/market/orders',{cookie:other,body:{offerIds:[expiringOffer.id,third.id]}});
+    assert.equal(ordersWithMissingCost.status,200,JSON.stringify(ordersWithMissingCost.data));
+    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_orders WHERE tenant_id=?').bind(b).first('n'),2);
+    const seq=await local.db.prepare('SELECT commit_seq FROM db_state WHERE id=1').first('commit_seq');
     const expiredInput=body(expiringOffer.callId);
-    assert.equal((await call(expiredInput)).data.error.code,'CALL_UNAVAILABLE');
+    const missingCostCall=await call(expiredInput);
+    assert.equal(missingCostCall.status,200,JSON.stringify(missingCostCall.data));
+    const missingCostUsage=JSON.parse(await local.db.prepare("SELECT payload_json FROM simulation_records WHERE kind='usage' AND id=?")
+      .bind(missingCostCall.data.id).first('payload_json'));
+    assert.equal(missingCostUsage.costStatus,'pending');
+    assert.equal(missingCostUsage.cost,null);
+    assert.ok(missingCostUsage.saleTrial);
     assert.equal(await local.db.prepare('SELECT commit_seq FROM db_state WHERE id=1').first('commit_seq'),seq+1);
-    assert.equal((await workspace(customer)).requests.find(row=>row.requestId===expiredInput.requestId).error,'CALL_UNAVAILABLE');
-    assert.equal((await call(expiredInput)).data.error.code,'CALL_UNAVAILABLE');
+    assert.deepEqual((await call(expiredInput)).data,missingCostCall.data);
     assert.equal(await local.db.prepare('SELECT commit_seq FROM db_state WHERE id=1').first('commit_seq'),seq+1);
+    const apiMissingCost=await bearer(routingSecret,expiringOffer.callId);
+    assert.equal(apiMissingCost.status,200,JSON.stringify(apiMissingCost.data));
     assert.equal((await order(third.id,other)).status,200);
     const otherProject=(await workspace(other)).projects.find(row=>row.status==='正常');
     const before=await call({...body(third.callId),projectId:otherProject.id},other);assert.equal(before.status,200,JSON.stringify(before.data));
@@ -687,8 +693,8 @@ test('GLM-5.3 channel onboarding, pricing, gray sale and supplier withdrawal are
     assert.deepEqual((await catalogue(customer)).map(row=>row.callId),[third.callId]);
     assert.deepEqual((await local.db.prepare('SELECT id,listing_stage FROM offers WHERE service_id=? AND retired_at IS NULL ORDER BY id').bind(modelId).all()).results,
       sources.map((source,index)=>({id:source.callId,listing_stage:index===2?'gray':'withdrawn'})).sort((a,b)=>a.id.localeCompare(b.id)));
-    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_orders').first('n'),4);
-    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_calls').first('n'),8);
+    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_orders').first('n'),5);
+    assert.equal(await local.db.prepare('SELECT COUNT(*) AS n FROM market_calls').first('n'),9);
     const activeOrder=(await request('/market/catalogue',{cookie:customer})).data.orders.find(row=>row.offerId===third.id);
     assert.equal((await apply({type:'cancelMarketOrder',id:activeOrder.id})).status,200);
     assert.equal((await call(body(third.callId))).data.error.code,'ORDER_REQUIRED');

@@ -205,7 +205,7 @@ function operationalPrice(selected, context, at) {
   const meters = {million_tokens:['总 Token','百万 Token'],million_input_tokens:['输入 Token','百万 Token'],million_output_tokens:['输出 Token','百万 Token'],request:['调用次数','次'],second:['时长','秒'],character:['语音合成字符数','字符']};
   return {id:selected.map(row=>row.id).join(' / '),modelId:context?.modelId,serviceId:context?.serviceId,effectiveAt:selected.map(row=>row.effectiveAt).sort((a,b)=>Date.parse(b)-Date.parse(a))[0],expiresAt:selected.map(row=>row.expiresAt).filter(Boolean).sort((a,b)=>Date.parse(a)-Date.parse(b))[0] || null,selectedAt:new Date(at).toISOString(),model_id:context?.model_id ?? null,model_service_id:context?.model_service_id ?? null,items:selected.map(row=>({price_version_id:row.price_version_id ?? null,price_item_id:row.price_item_id ?? null,billing_item_id:row.billing_item_id ?? null,unit_id:row.unit_id ?? null,currency_id:row.currency_id ?? null,name:meters[row.unit]?.[0] || row.unit,unit:meters[row.unit]?.[1] || row.unit,currency:row.currency,amount:row.amount}))};
 }
-function pipeline(state, service, config, proofs, { identityType, identityId, messages, tenantId }) {
+function pipeline(state, service, config, proofs, { identityType, identityId, messages, tenantId, allowMissingCost = false }) {
   const started = Date.now(), technical = config.technical === true && identityType === 'trial', sale = technical ? null : activePrices(config.salePrices, started);
   if (!technical && !sale) fail('sale_price_expired', '当前模型刊例价已过期');
   let lastIssue, attempt = 0; const attempts = [];
@@ -223,7 +223,8 @@ function pipeline(state, service, config, proofs, { identityType, identityId, me
     try {
       assertAvailable(state, channel, { live: identityType === 'client', model: binding.model });
       if (proofs.find(item => item.bindingId === binding.id)?.signature !== channelSignature(state, channel)) fail('supply_changed', '供给配置已变化，请重新检查发布');
-      const procurement = activePrices(binding.procurementPrices, started); if (!technical && !procurement) fail('procurement_price_expired', '服务商成本价已到期');
+      const procurement = activePrices(binding.procurementPrices, started);
+      if (!technical && !allowMissingCost && !procurement) fail('procurement_price_expired', '服务商成本价已到期');
       if (channel.endpointPath) requestUrl = modelTaskUrl(channel, binding.model.type, { upstreamModelId: binding.model.upstreamModelId });
       dispatched=true;
       const result = resultFor(state.scenario, binding.model, state.scenario === 'partial' ? attempt++ === 0 ? 1 : 0 : 0);
@@ -608,7 +609,7 @@ function callForOrder(service,config,{tenantId,orderId,messages}) {
   const local=readLinkedState();
   assertPublishedAccess(local,service,tenantId,{commercialOrder:Boolean(orderId)});
   setMockRuntimeState(local);
-  const result=pipeline(state,service,config,service.published.proofs,{identityType:'client',identityId:orderId,tenantId,messages});
+  const result=pipeline(state,service,config,service.published.proofs,{identityType:'client',identityId:orderId,tenantId,messages,allowMissingCost:Boolean(orderId)});
   const {id,model,choices,usage,traceId,source}=result;
   return {response:{id,model,choices,usage,traceId,source},usage:state.usage.at(-1)};
 }
